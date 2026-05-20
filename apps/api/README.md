@@ -2,5 +2,11 @@
 
 FastAPI-Backend (REST, `/v1/`) fuer Who2Be.
 
-Platzhalter — befuellt in Phase 1 (Core API): Auth + Persona-/Playbook-CRUD.
-Importiert geteilte Pydantic-Models aus `packages/models/`.
+Phase 0: Grundgeruest mit `/v1/health`. Persona-/Playbook-CRUD und Auth
+folgen in Phase 1. Importiert geteilte Pydantic-Models aus `packages/models/`.
+
+## Lokal starten
+
+```bash
+uv run uvicorn who2be_api.main:app --reload
+```

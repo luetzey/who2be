@@ -1,0 +1,44 @@
+[project]
+name = "who2be"
+version = "0"
+description = "Who2Be — self-hosted AgentDB for versioned persona and playbook management"
+requires-python = ">=3.11"
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["apps/api", "apps/mcp", "packages/models"]
+
+[tool.uv.sources]
+who2be-api = { workspace = true }
+who2be-mcp = { workspace = true }
+who2be-models = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "who2be-api",
+    "who2be-mcp",
+    "who2be-models",
+    "pytest>=8.0",
+    "httpx>=0.27",
+    "mypy>=1.10",
+    "ruff>=0.6",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["apps/api/src", "apps/mcp/src", "packages/models/src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+explicit_package_bases = true
+mypy_path = ["apps/api/src", "apps/mcp/src", "packages/models/src"]
+
+[tool.pytest.ini_options]
+testpaths = ["apps/api/tests", "apps/mcp/tests", "packages/models/tests"]
