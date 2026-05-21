@@ -361,10 +361,11 @@ Tasks-DB von PROJ-19 (44 Eintraege).
 
 - **Phase 0 — Setup** *(abgeschlossen)*: Mono-Repo, Geruest, lokale Postgres.
   Offen: Docker-Compose-Stub durch self-hosted Supabase ersetzen (Task T1).
-- **Phase 1 — Core-API:** `core` (config/db/security), Modelle, Repositories,
-  Services, Router fuer Token + Persona + Playbook + Verknuepfung. Web-UI
-  parallel (Login, Liste, Editor).
-- **Phase 2 — MCP:** `client.py` + die drei FastMCP-Tools gegen die API.
+- **Phase 1 — Core-API** *(abgeschlossen)*: `core` (config/db/security),
+  Modelle, Repositories, Services, Router fuer Token + Persona + Playbook +
+  Verknuepfung; Web-UI (Login, Liste, CRUD-Editor).
+- **Phase 2 — MCP** *(abgeschlossen)*: `client.py` + die drei FastMCP-Tools
+  gegen die API.
 - **Phase 3 — Cloud-Deploy:** Hetzner, self-hosted Supabase, Netzwerk-Policy
   Custom + Domain-Allowlist.
 - **Phase 4 — Real-Use-Test:** Brainstormer-Stack migrieren, im Claude-Chat
@@ -392,8 +393,9 @@ geordnet nach Abhaengigkeit, nicht nach Aufwand:
 Querliegend: **self-hosted Supabase** (Task T1) parallel ab Strang 2/3
 hochziehen, sobald Auth und CRUD gegen eine echte DB getestet werden.
 
-Erledigte Vorarbeit: `core` config/db (Phase-1-Fundament) und die
-Migrationen 0001–0004 stehen bereits.
+Stand: Straenge 1–6 sind abgeschlossen (API, MCP und Web-UI stehen). Offen
+bleibt die querliegende Supabase-Infrastruktur (Phase 3) sowie der
+Real-Use-Test (Phase 4).
 
 ## 9. Architecture Decision Records
 

@@ -4,8 +4,10 @@ import { describe, expect, it } from 'vitest'
 import { App } from './App'
 
 describe('App', () => {
-  it('rendert die Ueberschrift', () => {
+  it('zeigt ohne Session die Anmeldeseite', () => {
     render(<App />)
-    expect(screen.getByRole('heading', { name: 'Who2Be' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Who2Be — Anmeldung' }),
+    ).toBeInTheDocument()
   })
 })
