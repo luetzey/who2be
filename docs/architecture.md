@@ -185,6 +185,7 @@ erDiagram
     persona_playbook {
         uuid persona_id FK
         uuid playbook_id FK
+        uuid owner_id FK
         timestamptz created_at
     }
 ```
@@ -197,7 +198,11 @@ Hinweise:
   denormalisiert, damit `list_playbooks` ohne Join filtern kann; der
   vollstaendige Inhalt liegt im jeweiligen `playbook_version.content`.
 - `persona_playbook` ist im MVP eine reine Aktuell-Stand-Verknuepfung und wird
-  nicht unabhaengig versioniert (KISS — siehe ADR-0004, Konsequenzen).
+  nicht unabhaengig versioniert (KISS — siehe ADR-0004, Konsequenzen). Die
+  Tabelle traegt ein eigenes `owner_id`; zwei Composite-Fremdschluessel auf
+  `persona (owner_id, id)` bzw. `playbook (owner_id, id)` erzwingen
+  DB-seitig, dass nur Persona und Playbook desselben Owners verknuepft werden
+  koennen (Defense-in-Depth, zusaetzlich zur Owner-Filterung in den Services).
 - API-Token werden nur als SHA-256-Hash gespeichert; der Klartext wird genau
   einmal bei der Erstellung zurueckgegeben.
 - Migrationen: fortlaufend nummerierte SQL-Dateien (`NNNN_<name>.sql`), beim
