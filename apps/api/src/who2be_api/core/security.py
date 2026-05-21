@@ -85,9 +85,24 @@ async def resolve_owner(token: str, token_repo: TokenRepository) -> UUID:
 
 async def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)],
-    pool: Annotated[asyncpg.Pool, Depends(get_pool)],
 ) -> UUID:
-    """FastAPI-Dependency: owner_id des authentifizierten Aufrufers."""
+    """FastAPI-Dependency: owner_id des authentifizierten Aufrufers.
+
+    Fehlende Anmeldedaten und der JWT-Pfad kommen ohne Datenbank aus; nur die
+    API-Token-Verifikation braucht den Pool. Der Pool wird daher erst hier —
+    nach der Credential-Pruefung — geholt, sonst lieferte ein nicht
+    initialisierter Pool ein 500 statt eines 401/503.
+    """
     if credentials is None:
         raise _credentials_error()
-    return await resolve_owner(credentials.credentials, PgTokenRepository(pool))
+    token = credentials.credentials
+    if not token.startswith(TOKEN_PREFIX):
+        return verify_supabase_jwt(token)
+    try:
+        pool = get_pool()
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Datenbank nicht verfuegbar.",
+        ) from exc
+    return await resolve_owner(token, PgTokenRepository(pool))

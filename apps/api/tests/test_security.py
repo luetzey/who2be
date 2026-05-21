@@ -140,5 +140,5 @@ def test_resolve_owner_via_jwt_leaves_token_table_untouched(jwt_secret: None) ->
 
 def test_get_current_user_rejects_missing_credentials() -> None:
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(get_current_user(credentials=None, pool=None))
+        asyncio.run(get_current_user(credentials=None))
     assert exc.value.status_code == 401
