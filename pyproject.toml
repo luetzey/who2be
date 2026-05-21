@@ -40,5 +40,14 @@ strict = true
 explicit_package_bases = true
 mypy_path = ["apps/api/src", "apps/mcp/src", "packages/models/src"]
 
+# asyncpg liefert keine vollstaendigen Typ-Stubs — bewusste, eng begrenzte
+# Ausnahme; unser eigener Code bleibt strict.
+[[tool.mypy.overrides]]
+module = ["asyncpg.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["apps/api/tests", "apps/mcp/tests", "packages/models/tests"]
+markers = [
+    "integration: Test benoetigt eine erreichbare Datenbank",
+]
