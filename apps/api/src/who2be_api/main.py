@@ -1,7 +1,8 @@
 """Application entrypoint for the Who2Be REST API.
 
-Phase 0/1: Health-Endpoint plus Infrastruktur-Fundament (zentrale Settings,
-asyncpg-Pool). Persona-/Playbook-CRUD und Auth folgen in Phase 1+.
+Phase 1: Health-Endpoint, Infrastruktur-Fundament (zentrale Settings,
+asyncpg-Pool), Auth (`/v1/tokens`), Persona- und Playbook-CRUD inklusive
+Persona-Playbook-Verknuepfung.
 """
 
 from fastapi import FastAPI
@@ -9,8 +10,13 @@ from pydantic import BaseModel
 
 from who2be_api import __version__
 from who2be_api.core.db import database, lifespan
+from who2be_api.routers import persona_playbooks, personas, playbooks, tokens
 
 app = FastAPI(title="Who2Be API", version=__version__, lifespan=lifespan)
+app.include_router(tokens.router)
+app.include_router(personas.router)
+app.include_router(playbooks.router)
+app.include_router(persona_playbooks.router)
 
 
 class Health(BaseModel):

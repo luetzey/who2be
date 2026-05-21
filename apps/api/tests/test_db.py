@@ -1,12 +1,16 @@
-"""Integrationstest fuer den asyncpg-Pool.
+"""Tests rund um den asyncpg-Pool und den Lifespan-Start.
 
-Laeuft nur mit erreichbarer Datenbank (CI-postgres-Service bzw. lokales
-`docker compose up -d`); ohne DB wird der Test uebersprungen.
+Der Integrationstest laeuft nur mit erreichbarer Datenbank (CI-postgres-
+Service bzw. lokales `docker compose up -d`); ohne DB wird er uebersprungen.
 """
+
+import logging
 
 import pytest
 from fastapi.testclient import TestClient
 
+from who2be_api.core import db
+from who2be_api.core.config import Settings
 from who2be_api.main import app
 
 
@@ -18,3 +22,13 @@ def test_health_reports_db_ok_with_lifespan() -> None:
     if body["db"] != "ok":
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
     assert body["db"] == "ok"
+
+
+def test_lifespan_warns_on_weak_jwt_secret(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr(db, "get_settings", lambda: Settings(jwt_secret=""))
+    with caplog.at_level(logging.WARNING), TestClient(app):
+        pass
+    assert any("JWT_SECRET" in record.message for record in caplog.records)
+

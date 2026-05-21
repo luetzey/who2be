@@ -1839,6 +1839,7 @@ dependencies = [
     { name = "asyncpg" },
     { name = "fastapi" },
     { name = "pydantic-settings" },
+    { name = "pyjwt" },
     { name = "uvicorn", extra = ["standard"] },
     { name = "who2be-models" },
 ]
@@ -1848,6 +1849,7 @@ requires-dist = [
     { name = "asyncpg", specifier = ">=0.30" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "pydantic-settings", specifier = ">=2.0" },
+    { name = "pyjwt", specifier = ">=2.8" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34" },
     { name = "who2be-models", editable = "packages/models" },
 ]
@@ -1858,12 +1860,16 @@ version = "0.1.0"
 source = { editable = "apps/mcp" }
 dependencies = [
     { name = "fastmcp" },
+    { name = "httpx" },
+    { name = "pydantic-settings" },
     { name = "who2be-models" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "fastmcp", specifier = ">=2.3" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "pydantic-settings", specifier = ">=2.0" },
     { name = "who2be-models", editable = "packages/models" },
 ]
 
