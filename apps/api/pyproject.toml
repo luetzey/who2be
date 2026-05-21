@@ -6,8 +6,13 @@ requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.34",
+    "asyncpg>=0.30",
+    "pydantic-settings>=2.0",
     "who2be-models",
 ]
+
+[project.scripts]
+who2be-migrate = "who2be_api.core.migrations:cli"
 
 [tool.uv.sources]
 who2be-models = { workspace = true }
