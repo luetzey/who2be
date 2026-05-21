@@ -122,4 +122,17 @@ CI-`postgres`-Job.
 
 ## Status
 
-- [ ] Schritt 1–8
+- [x] Schritt 1–8 abgeschlossen.
+- [x] Nebenbefund: `PersonaService.list` ueberschattete den Builtin `list` in
+  Typannotationen — Methode in `list_all` umbenannt (auch `TokenService`
+  analog, um dieselbe Falle zu vermeiden).
+- [x] Security-Review (`security-reviewer`): keine ausnutzbare Luecke.
+  Owner-Isolation in allen sechs Repo-Methoden serverseitig, SQL nur
+  Parameter-Binding, `insert`/`update` transaktional mit `FOR UPDATE`,
+  durchgaengig 404 (kein Existenz-Leak). Die empfohlene Schema-Absicherung
+  `UNIQUE (persona_id, version)` besteht bereits in Migration `0002`. Keine
+  Codeaenderung noetig.
+- [x] Verifiziert 2026-05-21: `ruff` clean, `mypy` strict clean (36 Dateien),
+  `pytest` 45 passed / 5 skipped (Integrationstests skippen ohne DB).
+- `/v1/personas`-Integrationstest gegen echte DB laeuft im CI-`postgres`-Job.
+- **Abgeschlossen.** Naechster Strang: Playbook-Domaene (§8.1 Strang 4).

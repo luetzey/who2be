@@ -33,7 +33,7 @@ async def create_token(
 
 @router.get("")
 async def list_tokens(owner_id: OwnerId, service: Service) -> list[TokenRead]:
-    return await service.list(owner_id)
+    return await service.list_all(owner_id)
 
 
 @router.delete("/{token_id}", status_code=status.HTTP_204_NO_CONTENT)

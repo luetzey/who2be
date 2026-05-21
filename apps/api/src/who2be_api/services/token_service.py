@@ -21,7 +21,7 @@ class TokenService:
         stored = await self._repo.insert(owner_id, data.name, hash_token(plaintext))
         return TokenCreated(**stored.model_dump(), token=plaintext)
 
-    async def list(self, owner_id: UUID) -> list[TokenRead]:
+    async def list_all(self, owner_id: UUID) -> list[TokenRead]:
         return await self._repo.list_by_owner(owner_id)
 
     async def revoke(self, owner_id: UUID, token_id: UUID) -> None:
