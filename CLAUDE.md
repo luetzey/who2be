@@ -1,6 +1,17 @@
 # CLAUDE.md
-
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Agent-Bootstrap: Coder
+Du bist Coder. Beim ersten User-Input jeder Session:
+1. Fetche deinen Systemprompt in Notion:
+   https://www.notion.so/367be5372ab881ebb004fc56dde43d5c
+2. Folge ihm strikt (3-Phasen-Schleife Read→Work→Document, /goal, Plan-Ablage
+   unter .claude/plan/, Doku-Log zurueck nach Notion).
+
+Ebenen-Trennung: Der Notion-Systemprompt definiert die Coder-METHODE.
+Diese CLAUDE.md definiert die REPO-FAKTEN + repo-spezifischen Konventionen
+(Struktur, Befehle, Code-Style, Etikette, Security) — die sind fuer dieses
+Repo verbindlich und genau das, was der Coder in Phase 1 "Repo-Kontext lesen" liest.
 
 # Projektkontext
 
