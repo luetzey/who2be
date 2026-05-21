@@ -116,5 +116,10 @@ DB, voll lokal pruefbar (reine Modelle).
 
 ## Status
 
-- [ ] Offener Punkt (Content-Schema) mit User klaeren
-- [ ] Schritt 1–7
+- [x] Offener Punkt geklaert: User hat „Konkrete Felder (Vorschlag)" gewaehlt
+  — `PersonaContent` (description, system_prompt, traits[]) und
+  `PlaybookContent` (description, body, type, tags[], triggers) wie im Plan.
+- [x] Schritt 1–7 abgeschlossen.
+- [x] Verifiziert 2026-05-21: `ruff` clean, `mypy` strict clean (22 Dateien),
+  `pytest` 22 passed / 3 skipped.
+- **Abgeschlossen.** Naechster Strang: Auth (architecture.md §8.1 Strang 2).
