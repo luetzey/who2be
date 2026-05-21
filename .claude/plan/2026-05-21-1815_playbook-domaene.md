@@ -142,4 +142,17 @@ skippen lokal ohne DB und laufen im CI-`postgres`-Job.
 
 ## Status
 
-- [ ] Schritt 1–10
+- [x] Schritt 1–10 abgeschlossen.
+- [x] Security-Review (`security-reviewer`): keine ausnutzbare Luecke, drei
+  Punkte behoben:
+  - MEDIUM (TOCTOU) — `set_links` prueft Persona-/Playbook-Owner und schreibt
+    jetzt in **einer** Transaktion (`FOR UPDATE` auf der Persona-Zeile); das
+    Repository liefert ein `SetLinksResult`, der Service mappt es auf 404.
+  - LOW — LIKE-Wildcards (`%`/`_`/`\`) im Trigger-Filter werden maskiert, der
+    Filter bleibt reiner Teilstring (`ESCAPE '\'`).
+  - LOW — Fehlermeldung bei unbekannten Playbooks generisch statt
+    Echo der IDs.
+- [x] Verifiziert 2026-05-21: `ruff` clean, `mypy` strict clean (45 Dateien),
+  `pytest` 59 passed / 6 skipped (Integrationstests skippen ohne DB).
+- `/v1/playbooks`-Integrationstest gegen echte DB laeuft im CI-`postgres`-Job.
+- **Abgeschlossen.** Naechster Strang: MCP-Ziel-Tools (§8.1 Strang 5).
