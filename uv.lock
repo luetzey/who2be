@@ -1860,12 +1860,16 @@ version = "0.1.0"
 source = { editable = "apps/mcp" }
 dependencies = [
     { name = "fastmcp" },
+    { name = "httpx" },
+    { name = "pydantic-settings" },
     { name = "who2be-models" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "fastmcp", specifier = ">=2.3" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "pydantic-settings", specifier = ">=2.0" },
     { name = "who2be-models", editable = "packages/models" },
 ]
 

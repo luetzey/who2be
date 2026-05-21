@@ -1,0 +1,170 @@
+"""Unit-Tests fuer den API-Client des MCP-Servers.
+
+Ohne laufende API: `httpx.MockTransport` simuliert die Who2Be-REST-API.
+"""
+
+import asyncio
+from datetime import UTC, datetime
+from uuid import UUID, uuid4
+
+import httpx
+import pytest
+from fastmcp.exceptions import ToolError
+
+from who2be_mcp.client import ApiClient
+from who2be_models import PersonaRead, PlaybookRead
+
+
+def _now() -> str:
+    return datetime.now(UTC).isoformat()
+
+
+def _persona_json(persona_id: str, name: str) -> dict[str, object]:
+    return {
+        "id": persona_id,
+        "owner_id": str(uuid4()),
+        "name": name,
+        "current_version": 1,
+        "content": {"description": "d", "system_prompt": "s", "traits": []},
+        "created_at": _now(),
+        "updated_at": _now(),
+    }
+
+
+def _playbook_json(playbook_id: str, name: str) -> dict[str, object]:
+    return {
+        "id": playbook_id,
+        "owner_id": str(uuid4()),
+        "name": name,
+        "current_version": 1,
+        "type": "workflow",
+        "tags": ["t"],
+        "triggers": None,
+        "content": {
+            "description": "d",
+            "body": "b",
+            "type": "workflow",
+            "tags": ["t"],
+            "triggers": None,
+        },
+        "created_at": _now(),
+        "updated_at": _now(),
+    }
+
+
+def _client(handler: object) -> ApiClient:
+    transport = httpx.MockTransport(handler)  # type: ignore[arg-type]
+    return ApiClient("http://api.test", "tok", transport=transport)
+
+
+def test_get_persona_by_uuid_sends_token_and_returns_model() -> None:
+    pid = str(uuid4())
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.headers["Authorization"] == "Bearer tok"
+        assert request.url.path == f"/v1/personas/{pid}"
+        return httpx.Response(200, json=_persona_json(pid, "QA"))
+
+    persona = asyncio.run(_client(handler).get_persona(pid))
+    assert isinstance(persona, PersonaRead)
+    assert persona.name == "QA"
+
+
+def test_get_persona_by_name_resolves_via_list() -> None:
+    pid = str(uuid4())
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v1/personas"
+        return httpx.Response(
+            200,
+            json=[_persona_json(str(uuid4()), "Other"), _persona_json(pid, "QA")],
+        )
+
+    persona = asyncio.run(_client(handler).get_persona("QA"))
+    assert persona.name == "QA"
+
+
+def test_get_persona_unknown_name_raises_toolerror() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=[])
+
+    with pytest.raises(ToolError):
+        asyncio.run(_client(handler).get_persona("Ghost"))
+
+
+def test_get_persona_not_found_raises_toolerror() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, json={"detail": "weg"})
+
+    with pytest.raises(ToolError):
+        asyncio.run(_client(handler).get_persona(str(uuid4())))
+
+
+def test_get_persona_playbooks_returns_list() -> None:
+    persona_id = uuid4()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == f"/v1/personas/{persona_id}/playbooks"
+        return httpx.Response(200, json=[_playbook_json(str(uuid4()), "PB")])
+
+    playbooks = asyncio.run(_client(handler).get_persona_playbooks(persona_id))
+    assert len(playbooks) == 1
+    assert isinstance(playbooks[0], PlaybookRead)
+
+
+def test_list_playbooks_forwards_filters() -> None:
+    seen: dict[str, dict[str, str]] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["params"] = dict(request.url.params)
+        return httpx.Response(200, json=[_playbook_json(str(uuid4()), "PB")])
+
+    result = asyncio.run(_client(handler).list_playbooks("onboarding", "new user"))
+    assert seen["params"] == {"tag": "onboarding", "trigger": "new user"}
+    assert len(result) == 1
+
+
+def test_list_playbooks_omits_unset_filters() -> None:
+    seen: dict[str, dict[str, str]] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["params"] = dict(request.url.params)
+        return httpx.Response(200, json=[])
+
+    asyncio.run(_client(handler).list_playbooks(None, None))
+    assert seen["params"] == {}
+
+
+def test_get_playbook_returns_model() -> None:
+    pid = uuid4()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=_playbook_json(str(pid), "PB"))
+
+    playbook = asyncio.run(_client(handler).get_playbook(pid))
+    assert isinstance(playbook, PlaybookRead)
+    assert playbook.name == "PB"
+
+
+def test_unauthorized_raises_toolerror() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401)
+
+    with pytest.raises(ToolError):
+        asyncio.run(_client(handler).get_playbook(uuid4()))
+
+
+def test_server_error_raises_toolerror() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500)
+
+    with pytest.raises(ToolError):
+        asyncio.run(_client(handler).get_playbook(uuid4()))
+
+
+def test_network_error_raises_toolerror() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("Verbindung fehlgeschlagen")
+
+    with pytest.raises(ToolError):
+        asyncio.run(_client(handler).get_playbook(UUID(int=0)))
