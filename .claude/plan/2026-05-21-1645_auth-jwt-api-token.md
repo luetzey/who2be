@@ -133,4 +133,18 @@ ohne DB und laufen im CI-`postgres`-Job.
 
 ## Status
 
-- [ ] Schritt 1–10
+- [x] Schritt 1–10 abgeschlossen.
+- [x] Security-Review (`security-reviewer`):
+  - HIGH „JWT ohne Expiry-Pflicht" — behoben: `require=["exp", "sub"]` in
+    `verify_supabase_jwt`; neuer Test fuer ein JWT ohne `exp`.
+  - MEDIUM „leeres JWT_SECRET stiller Default" — nach Ruecksprache: Startup-
+    WARNING im Lifespan (`db.py`), App bootet weiter; Test ergaenzt.
+  - LOW „touch_last_used ohne Revoke-Filter" — behoben (`AND revoked_at IS
+    NULL`).
+  - MEDIUM „Token-Lookup nicht konstantzeit" — vom Reviewer als akzeptabel
+    eingestuft (256-Bit-Entropie); keine Aenderung.
+- [x] Verifiziert 2026-05-21: `ruff` clean, `mypy` strict clean (31 Dateien),
+  `pytest` 35 passed / 4 skipped (Integrationstests skippen ohne DB).
+- `/v1/tokens`-Integrationstest gegen echte DB laeuft im CI-`postgres`-Job
+  (lokal kein Docker verfuegbar).
+- **Abgeschlossen.** Naechster Strang: Persona-Domaene (§8.1 Strang 3).

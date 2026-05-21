@@ -16,6 +16,8 @@ from who2be_api.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
+_MIN_JWT_SECRET_LEN = 32
+
 
 class Database:
     """Haelt den asyncpg-Pool ueber die Lebensdauer der App."""
@@ -55,6 +57,12 @@ database = Database()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    if len(get_settings().jwt_secret) < _MIN_JWT_SECRET_LEN:
+        logger.warning(
+            "JWT_SECRET fehlt oder ist kuerzer als %d Zeichen — JWT-Auth ist "
+            "nicht sicher nutzbar. Bitte ein starkes Secret konfigurieren.",
+            _MIN_JWT_SECRET_LEN,
+        )
     try:
         await database.connect()
     except (asyncpg.PostgresError, OSError):
