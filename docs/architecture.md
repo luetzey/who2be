@@ -361,14 +361,39 @@ Tasks-DB von PROJ-19 (44 Eintraege).
 
 - **Phase 0 — Setup** *(abgeschlossen)*: Mono-Repo, Geruest, lokale Postgres.
   Offen: Docker-Compose-Stub durch self-hosted Supabase ersetzen (Task T1).
-- **Phase 1 — Core-API:** `core` (config/db/security), Migrationen 0001–0004,
-  Modelle, Repositories, Services, Router fuer Token + Persona + Playbook +
-  Verknuepfung. Web-UI parallel (Login, Liste, Editor).
+- **Phase 1 — Core-API:** `core` (config/db/security), Modelle, Repositories,
+  Services, Router fuer Token + Persona + Playbook + Verknuepfung. Web-UI
+  parallel (Login, Liste, Editor).
 - **Phase 2 — MCP:** `client.py` + die drei FastMCP-Tools gegen die API.
 - **Phase 3 — Cloud-Deploy:** Hetzner, self-hosted Supabase, Netzwerk-Policy
   Custom + Domain-Allowlist.
 - **Phase 4 — Real-Use-Test:** Brainstormer-Stack migrieren, im Claude-Chat
   verifizieren (MVP-Completion-Condition).
+
+### 8.1 Strang-Reihenfolge (Phase 1 → 2)
+
+Innerhalb von Phase 1/2 werden die Bausteine in dieser Reihenfolge gebaut —
+geordnet nach Abhaengigkeit, nicht nach Aufwand:
+
+1. **Pydantic-Models** (`packages/models/`) — geteilte Domaenen- und
+   Request/Response-Schemas. Blockt API und MCP, daher zuerst. *(naechster
+   Strang)*
+2. **Auth** (ADR-0006) — vor den CRUD-Endpunkten, damit `owner_id`-Filter und
+   Dependency-Injection nicht nachtraeglich umgebaut werden muessen. Erst
+   API-Token-Verifikation (lokal testbar), JWT/Supabase zieht nach.
+3. **Persona-Domaene end-to-end** — Repository → Service → Router, CRUD +
+   Versionierung. Persona vor Playbook, weil simpler; etabliert das
+   Schichtmuster (ADR-0002).
+4. **Playbook-Domaene** — analog, plus Tag-Filter und `persona_playbook`.
+5. **MCP-Ziel-Tools** — `get_persona`, `list_playbooks`, `fetch_playbook`
+   (ADR-0005: HTTP-Client zur API, braucht fertige Endpunkte).
+6. **Web-UI** — konsumiert die API; sinnvoll erst mit echten Daten.
+
+Querliegend: **self-hosted Supabase** (Task T1) parallel ab Strang 2/3
+hochziehen, sobald Auth und CRUD gegen eine echte DB getestet werden.
+
+Erledigte Vorarbeit: `core` config/db (Phase-1-Fundament) und die
+Migrationen 0001–0004 stehen bereits.
 
 ## 9. Architecture Decision Records
 
