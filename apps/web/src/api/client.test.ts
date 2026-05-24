@@ -36,4 +36,15 @@ describe('createApi', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
     await expect(createApi('tok').listPersonas()).rejects.toBeInstanceOf(ApiError)
   })
+
+  it('widerruft einen Token per DELETE und 204', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await createApi('tok').revokeToken('t1')
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toContain('/v1/tokens/t1')
+    expect(init.method).toBe('DELETE')
+  })
 })

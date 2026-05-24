@@ -8,6 +8,7 @@ import { PersonaDetailPage } from './pages/PersonaDetailPage'
 import { PersonasPage } from './pages/PersonasPage'
 import { PlaybookDetailPage } from './pages/PlaybookDetailPage'
 import { PlaybooksPage } from './pages/PlaybooksPage'
+import { SettingsTokensPage } from './pages/SettingsTokensPage'
 
 export function App() {
   return (
@@ -21,6 +22,7 @@ export function App() {
               <Route path="/personas/:id" element={<PersonaDetailPage />} />
               <Route path="/playbooks" element={<PlaybooksPage />} />
               <Route path="/playbooks/:id" element={<PlaybookDetailPage />} />
+              <Route path="/settings/tokens" element={<SettingsTokensPage />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

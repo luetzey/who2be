@@ -61,3 +61,19 @@ export interface PlaybookInput {
   name: string
   content: PlaybookContent
 }
+
+export interface Token {
+  id: string
+  name: string
+  created_at: string
+  last_used_at: string | null
+  revoked_at: string | null
+}
+
+export interface TokenCreated extends Token {
+  token: string
+}
+
+export interface TokenInput {
+  name: string
+}

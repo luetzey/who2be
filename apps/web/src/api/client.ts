@@ -6,6 +6,9 @@ import type {
   Playbook,
   PlaybookInput,
   PlaybookVersion,
+  Token,
+  TokenCreated,
+  TokenInput,
 } from './types'
 
 export class ApiError extends Error {
@@ -55,6 +58,9 @@ export interface Api {
   createPlaybook: (input: PlaybookInput) => Promise<Playbook>
   updatePlaybook: (id: string, input: PlaybookInput) => Promise<Playbook>
   listPlaybookVersions: (id: string) => Promise<PlaybookVersion[]>
+  listTokens: () => Promise<Token[]>
+  createToken: (input: TokenInput) => Promise<TokenCreated>
+  revokeToken: (id: string) => Promise<void>
 }
 
 export function createApi(token: string): Api {
@@ -100,5 +106,13 @@ export function createApi(token: string): Api {
       }),
     listPlaybookVersions: (id) =>
       request<PlaybookVersion[]>(token, `/v1/playbooks/${id}/versions`),
+    listTokens: () => request<Token[]>(token, '/v1/tokens'),
+    createToken: (input) =>
+      request<TokenCreated>(token, '/v1/tokens', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    revokeToken: (id) =>
+      request<void>(token, `/v1/tokens/${id}`, { method: 'DELETE' }),
   }
 }
