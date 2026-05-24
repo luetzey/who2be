@@ -6,6 +6,9 @@ import type {
   Playbook,
   PlaybookInput,
   PlaybookVersion,
+  Token,
+  TokenCreated,
+  TokenInput,
 } from './types'
 
 export class ApiError extends Error {
@@ -34,12 +37,27 @@ async function request<T>(token: string, path: string, init?: RequestInit): Prom
     throw new ApiError(0, 'Who2Be-API nicht erreichbar.')
   }
   if (!response.ok) {
-    throw new ApiError(response.status, `Who2Be-API-Fehler (${response.status}).`)
+    throw new ApiError(response.status, await readErrorMessage(response))
   }
   if (response.status === 204) {
     return undefined as T
   }
   return (await response.json()) as T
+}
+
+async function readErrorMessage(response: Response): Promise<string> {
+  const fallback = `Who2Be-API-Fehler (${response.status}).`
+  if (!response.headers.get('content-type')?.includes('application/json')) {
+    return fallback
+  }
+  try {
+    const body = (await response.json()) as { detail?: unknown }
+    return typeof body.detail === 'string' && body.detail.length > 0
+      ? body.detail
+      : fallback
+  } catch {
+    return fallback
+  }
 }
 
 export interface Api {
@@ -55,6 +73,9 @@ export interface Api {
   createPlaybook: (input: PlaybookInput) => Promise<Playbook>
   updatePlaybook: (id: string, input: PlaybookInput) => Promise<Playbook>
   listPlaybookVersions: (id: string) => Promise<PlaybookVersion[]>
+  listTokens: () => Promise<Token[]>
+  createToken: (input: TokenInput) => Promise<TokenCreated>
+  revokeToken: (id: string) => Promise<void>
 }
 
 export function createApi(token: string): Api {
@@ -100,5 +121,13 @@ export function createApi(token: string): Api {
       }),
     listPlaybookVersions: (id) =>
       request<PlaybookVersion[]>(token, `/v1/playbooks/${id}/versions`),
+    listTokens: () => request<Token[]>(token, '/v1/tokens'),
+    createToken: (input) =>
+      request<TokenCreated>(token, '/v1/tokens', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    revokeToken: (id) =>
+      request<void>(token, `/v1/tokens/${id}`, { method: 'DELETE' }),
   }
 }

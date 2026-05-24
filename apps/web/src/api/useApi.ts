@@ -1,10 +1,9 @@
 import { useMemo } from 'react'
 
-import { useSession } from '../auth/session-context'
+import { useAuthToken } from '../auth/useAuthToken'
 import { type Api, createApi } from './client'
 
 export function useApi(): Api {
-  const { session } = useSession()
-  const token = session?.access_token ?? ''
+  const token = useAuthToken()
   return useMemo(() => createApi(token), [token])
 }

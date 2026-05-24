@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { AuthTokenProvider } from '../auth/AuthTokenProvider'
 import { SessionContext } from '../auth/session-context'
 import { PersonasPage } from './PersonasPage'
 
@@ -34,9 +35,11 @@ describe('PersonasPage', () => {
       <SessionContext.Provider
         value={{ session: fakeSession, signIn: vi.fn(), signOut: vi.fn() }}
       >
-        <BrowserRouter>
-          <PersonasPage />
-        </BrowserRouter>
+        <AuthTokenProvider>
+          <BrowserRouter>
+            <PersonasPage />
+          </BrowserRouter>
+        </AuthTokenProvider>
       </SessionContext.Provider>,
     )
 
