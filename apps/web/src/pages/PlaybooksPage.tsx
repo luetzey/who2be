@@ -1,61 +1,33 @@
-import { type FormEvent, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
-import { useApi } from '../api/useApi'
 import { usePlaybooks } from '../hooks/usePlaybooks'
 
-function splitTags(raw: string): string[] {
-  return raw
-    .split(',')
-    .map((tag) => tag.trim())
-    .filter((tag) => tag.length > 0)
-}
-
 export function PlaybooksPage() {
+  const { playbooks, loading, error } = usePlaybooks()
   const [tagFilter, setTagFilter] = useState('')
   const [triggerFilter, setTriggerFilter] = useState('')
-  const { playbooks, loading, error, reload } = usePlaybooks(tagFilter, triggerFilter)
-  const api = useApi()
 
-  const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
-  const [body, setBody] = useState('')
-  const [type, setType] = useState('workflow')
-  const [tags, setTags] = useState('')
-  const [triggers, setTriggers] = useState('')
-  const [formError, setFormError] = useState<string | null>(null)
-
-  async function handleCreate(event: FormEvent) {
-    event.preventDefault()
-    setFormError(null)
-    try {
-      await api.createPlaybook({
-        name,
-        content: {
-          description,
-          body,
-          type,
-          tags: splitTags(tags),
-          triggers: triggers.trim() === '' ? null : triggers.trim(),
-        },
-      })
-      setName('')
-      setDescription('')
-      setBody('')
-      setTags('')
-      setTriggers('')
-      reload()
-    } catch (cause) {
-      setFormError(cause instanceof Error ? cause.message : 'Anlegen fehlgeschlagen.')
-    }
-  }
+  const filtered = useMemo(() => {
+    const tag = tagFilter.trim().toLowerCase()
+    const trigger = triggerFilter.trim().toLowerCase()
+    return playbooks.filter((playbook) => {
+      const tagMatch =
+        tag === '' || playbook.tags.some((entry) => entry.toLowerCase().includes(tag))
+      const triggerMatch =
+        trigger === '' || (playbook.triggers ?? '').toLowerCase().includes(trigger)
+      return tagMatch && triggerMatch
+    })
+  }, [playbooks, tagFilter, triggerFilter])
 
   return (
     <main>
       <header>
         <h1>Playbooks</h1>
         <nav>
-          <Link to="/">Zu den Personae</Link>
+          <Link to="/playbooks/new">Neues Playbook</Link>{' '}
+          <Link to="/">Zu den Personae</Link>{' '}
+          <Link to="/settings/tokens">API-Tokens</Link>
         </nav>
       </header>
 
@@ -63,7 +35,7 @@ export function PlaybooksPage() {
         <label>
           Tag-Filter
           <input value={tagFilter} onChange={(event) => setTagFilter(event.target.value)} />
-        </label>
+        </label>{' '}
         <label>
           Trigger-Filter
           <input
@@ -76,47 +48,23 @@ export function PlaybooksPage() {
       {loading && <p>Lädt…</p>}
       {error !== null && <p role="alert">{error}</p>}
       <ul>
-        {playbooks.map((playbook) => (
+        {filtered.map((playbook) => (
           <li key={playbook.id}>
-            <Link to={`/playbooks/${playbook.id}`}>{playbook.name}</Link> (
-            {playbook.type}, v{playbook.current_version})
+            <Link to={`/playbooks/${playbook.id}`}>{playbook.name}</Link> ({playbook.type},
+            v{playbook.current_version}){' '}
+            {playbook.tags.length > 0 && (
+              <span aria-label="Tags">
+                {playbook.tags.map((tag) => (
+                  <span key={tag} className="tag-chip">
+                    {' '}
+                    [{tag}]
+                  </span>
+                ))}
+              </span>
+            )}
           </li>
         ))}
       </ul>
-
-      <h2>Neues Playbook</h2>
-      <form onSubmit={handleCreate}>
-        <label>
-          Name
-          <input value={name} onChange={(event) => setName(event.target.value)} required />
-        </label>
-        <label>
-          Typ
-          <input value={type} onChange={(event) => setType(event.target.value)} required />
-        </label>
-        <label>
-          Beschreibung
-          <input
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-            required
-          />
-        </label>
-        <label>
-          Inhalt
-          <textarea value={body} onChange={(event) => setBody(event.target.value)} required />
-        </label>
-        <label>
-          Tags (kommagetrennt)
-          <input value={tags} onChange={(event) => setTags(event.target.value)} />
-        </label>
-        <label>
-          Trigger
-          <input value={triggers} onChange={(event) => setTriggers(event.target.value)} />
-        </label>
-        <button type="submit">Anlegen</button>
-      </form>
-      {formError !== null && <p role="alert">{formError}</p>}
     </main>
   )
 }

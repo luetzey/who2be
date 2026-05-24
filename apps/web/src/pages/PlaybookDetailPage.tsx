@@ -92,6 +92,14 @@ export function PlaybookDetailPage() {
         <>
           <h1>{playbook.name}</h1>
           <p>Aktuelle Version: {playbook.current_version}</p>
+          {playbook.tags.length > 0 && (
+            <p aria-label="Tags">
+              Tags:{' '}
+              {playbook.tags.map((tag) => (
+                <span key={tag}> [{tag}]</span>
+              ))}
+            </p>
+          )}
 
           <form onSubmit={handleSave}>
             <label>

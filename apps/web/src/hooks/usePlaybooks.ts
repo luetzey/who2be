@@ -14,7 +14,7 @@ interface PlaybooksState {
   reload: () => void
 }
 
-export function usePlaybooks(tag: string, trigger: string): PlaybooksState {
+export function usePlaybooks(): PlaybooksState {
   const api = useApi()
   const [playbooks, setPlaybooks] = useState<Playbook[]>([])
   const [loading, setLoading] = useState(true)
@@ -24,11 +24,11 @@ export function usePlaybooks(tag: string, trigger: string): PlaybooksState {
     setLoading(true)
     setError(null)
     api
-      .listPlaybooks({ tag: tag || undefined, trigger: trigger || undefined })
+      .listPlaybooks()
       .then(setPlaybooks)
       .catch((cause: unknown) => setError(describeError(cause)))
       .finally(() => setLoading(false))
-  }, [api, tag, trigger])
+  }, [api])
 
   useEffect(reload, [reload])
 
