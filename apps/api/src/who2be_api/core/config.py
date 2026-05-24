@@ -1,8 +1,9 @@
 """Zentrale Konfiguration der Who2Be-API.
 
-Genau eine Quelle fuer alle Einstellungen: Umgebungsvariablen bzw. `.env`.
-`jwt_secret`, `supabase_url` und `cors_origin` werden erst in spaeteren Phasen
-(Auth, Web) genutzt und sind bewusst schon hier verankert.
+Genau eine Quelle fuer alle Einstellungen: Umgebungsvariablen bzw.
+`.env`. `cors_origins` ist eine Liste, damit MS-2 (Hetzner) mehrere
+Origins (App-Domain + ggf. Preview-Deployments) zulassen kann; pydantic-
+settings parst CSV-Strings automatisch (`CORS_ORIGINS=a,b`).
 """
 
 from functools import lru_cache
@@ -18,7 +19,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql://postgres:postgres@localhost:5432/who2be"
     jwt_secret: str = ""
     supabase_url: str = ""
-    cors_origin: str = "http://localhost:5173"
+    cors_origins: list[str] = ["http://localhost:5173"]
 
 
 @lru_cache

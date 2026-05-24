@@ -23,6 +23,7 @@ export function PersonaDetailPage() {
   const [versions, setVersions] = useState<PersonaVersion[]>([])
   const [error, setError] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
 
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -59,6 +60,7 @@ export function PersonaDetailPage() {
     event.preventDefault()
     setStatus(null)
     setError(null)
+    setSaving(true)
     try {
       await api.updatePersona(personaId, {
         name,
@@ -72,6 +74,8 @@ export function PersonaDetailPage() {
       load()
     } catch (cause) {
       setError(describeError(cause))
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -115,7 +119,9 @@ export function PersonaDetailPage() {
               Eigenschaften (kommagetrennt)
               <input value={traits} onChange={(event) => setTraits(event.target.value)} />
             </label>
-            <button type="submit">Speichern (neue Version)</button>
+            <button type="submit" disabled={saving}>
+              Speichern (neue Version)
+            </button>
           </form>
 
           <h2>Versionen</h2>

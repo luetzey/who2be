@@ -32,6 +32,24 @@ describe('createApi', () => {
     await expect(createApi('tok').getPersona('x')).rejects.toBeInstanceOf(ApiError)
   })
 
+  it('reicht das Backend-detail als ApiError-Message durch', async () => {
+    const body = JSON.stringify({ detail: 'Persona nicht gefunden.' })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(body, {
+          status: 404,
+          headers: { 'content-type': 'application/json' },
+        }),
+      ),
+    )
+
+    await expect(createApi('tok').getPersona('x')).rejects.toMatchObject({
+      status: 404,
+      message: 'Persona nicht gefunden.',
+    })
+  })
+
   it('wirft ApiError bei einem Netzwerkfehler', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
     await expect(createApi('tok').listPersonas()).rejects.toBeInstanceOf(ApiError)

@@ -6,13 +6,22 @@ Persona-Playbook-Verknuepfung.
 """
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from who2be_api import __version__
+from who2be_api.core.config import get_settings
 from who2be_api.core.db import database, lifespan
 from who2be_api.routers import persona_playbooks, personas, playbooks, tokens
 
 app = FastAPI(title="Who2Be API", version=__version__, lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=get_settings().cors_origins,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_credentials=False,
+)
 app.include_router(tokens.router)
 app.include_router(personas.router)
 app.include_router(playbooks.router)

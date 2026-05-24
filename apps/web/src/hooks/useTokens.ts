@@ -1,36 +1,12 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback } from 'react'
 
 import type { Token } from '../api/types'
 import { useApi } from '../api/useApi'
+import { useListData } from './useListData'
 
-function describeError(cause: unknown): string {
-  return cause instanceof Error ? cause.message : 'Unbekannter Fehler.'
-}
-
-interface TokensState {
-  tokens: Token[]
-  loading: boolean
-  error: string | null
-  reload: () => void
-}
-
-export function useTokens(): TokensState {
+export function useTokens() {
   const api = useApi()
-  const [tokens, setTokens] = useState<Token[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  const reload = useCallback(() => {
-    setLoading(true)
-    setError(null)
-    api
-      .listTokens()
-      .then(setTokens)
-      .catch((cause: unknown) => setError(describeError(cause)))
-      .finally(() => setLoading(false))
-  }, [api])
-
-  useEffect(reload, [reload])
-
-  return { tokens, loading, error, reload }
+  const loader = useCallback(() => api.listTokens(), [api])
+  const { data, loading, error, reload } = useListData<Token>(loader)
+  return { tokens: data, loading, error, reload }
 }

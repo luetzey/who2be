@@ -37,12 +37,27 @@ async function request<T>(token: string, path: string, init?: RequestInit): Prom
     throw new ApiError(0, 'Who2Be-API nicht erreichbar.')
   }
   if (!response.ok) {
-    throw new ApiError(response.status, `Who2Be-API-Fehler (${response.status}).`)
+    throw new ApiError(response.status, await readErrorMessage(response))
   }
   if (response.status === 204) {
     return undefined as T
   }
   return (await response.json()) as T
+}
+
+async function readErrorMessage(response: Response): Promise<string> {
+  const fallback = `Who2Be-API-Fehler (${response.status}).`
+  if (!response.headers.get('content-type')?.includes('application/json')) {
+    return fallback
+  }
+  try {
+    const body = (await response.json()) as { detail?: unknown }
+    return typeof body.detail === 'string' && body.detail.length > 0
+      ? body.detail
+      : fallback
+  } catch {
+    return fallback
+  }
 }
 
 export interface Api {

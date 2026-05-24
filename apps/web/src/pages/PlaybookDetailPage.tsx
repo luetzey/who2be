@@ -22,6 +22,7 @@ export function PlaybookDetailPage() {
   const [versions, setVersions] = useState<PlaybookVersion[]>([])
   const [error, setError] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
 
   const [name, setName] = useState('')
   const [type, setType] = useState('')
@@ -60,6 +61,7 @@ export function PlaybookDetailPage() {
     event.preventDefault()
     setStatus(null)
     setError(null)
+    setSaving(true)
     try {
       await api.updatePlaybook(playbookId, {
         name,
@@ -75,6 +77,8 @@ export function PlaybookDetailPage() {
       load()
     } catch (cause) {
       setError(describeError(cause))
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -130,7 +134,9 @@ export function PlaybookDetailPage() {
               Trigger
               <input value={triggers} onChange={(event) => setTriggers(event.target.value)} />
             </label>
-            <button type="submit">Speichern (neue Version)</button>
+            <button type="submit" disabled={saving}>
+              Speichern (neue Version)
+            </button>
           </form>
 
           <h2>Versionen</h2>

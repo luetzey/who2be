@@ -23,6 +23,7 @@ export function SettingsTokensPage() {
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [created, setCreated] = useState<TokenCreated | null>(null)
+  const [revokeError, setRevokeError] = useState<string | null>(null)
 
   const [overrideInput, setOverrideInput] = useState('')
 
@@ -43,11 +44,12 @@ export function SettingsTokensPage() {
   }
 
   async function handleRevoke(id: string) {
+    setRevokeError(null)
     try {
       await api.revokeToken(id)
       reload()
     } catch (cause) {
-      setCreateError(describeError(cause))
+      setRevokeError(describeError(cause))
     }
   }
 
@@ -71,6 +73,7 @@ export function SettingsTokensPage() {
 
       {loading && <p>Lädt…</p>}
       {error !== null && <p role="alert">{error}</p>}
+      {revokeError !== null && <p role="alert">{revokeError}</p>}
 
       <ul>
         {tokens.map((token) => {
