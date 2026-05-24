@@ -5,6 +5,7 @@ import { RequireAuth } from './auth/RequireAuth'
 import { SessionProvider } from './auth/SessionProvider'
 import { LoginPage } from './pages/LoginPage'
 import { PersonaDetailPage } from './pages/PersonaDetailPage'
+import { PersonaNewPage } from './pages/PersonaNewPage'
 import { PersonasPage } from './pages/PersonasPage'
 import { PlaybookDetailPage } from './pages/PlaybookDetailPage'
 import { PlaybooksPage } from './pages/PlaybooksPage'
@@ -19,6 +20,7 @@ export function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route element={<RequireAuth />}>
               <Route path="/" element={<PersonasPage />} />
+              <Route path="/personas/new" element={<PersonaNewPage />} />
               <Route path="/personas/:id" element={<PersonaDetailPage />} />
               <Route path="/playbooks" element={<PlaybooksPage />} />
               <Route path="/playbooks/:id" element={<PlaybookDetailPage />} />
