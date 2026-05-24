@@ -96,4 +96,66 @@ describe('PersonaDetailPage', () => {
     })
     expect(screen.getByText(/v2 —/)).toBeInTheDocument()
   })
+
+  it('verknuepft Playbooks via PUT auf /personas/:id/playbooks', async () => {
+    const pb1 = {
+      id: 'pb1',
+      owner_id: 'o1',
+      name: 'Coaching',
+      current_version: 1,
+      type: 'workflow',
+      tags: [],
+      triggers: null,
+      content: { description: '', body: '', type: 'workflow', tags: [], triggers: null },
+      created_at: 't',
+      updated_at: 't',
+    }
+    const pb2 = { ...pb1, id: 'pb2', name: 'Brainstorming' }
+
+    const handlers: Record<string, () => Response> = {
+      [route('GET', '/v1/personas/p1')]: () => jsonResponse(persona(1, 's1')),
+      [route('GET', '/v1/personas/p1/versions')]: () => jsonResponse([]),
+      [route('GET', '/v1/personas/p1/playbooks')]: () => jsonResponse([pb1]),
+      [route('GET', '/v1/playbooks')]: () => jsonResponse([pb1, pb2]),
+    }
+
+    const putCalls: Array<{ url: string; body: unknown }> = []
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const method = init?.method ?? 'GET'
+      const url = String(input)
+      if (method === 'PUT' && url.endsWith('/v1/personas/p1/playbooks')) {
+        putCalls.push({ url, body: JSON.parse(init?.body as string) })
+        return jsonResponse([pb1, pb2])
+      }
+      const key = route(method, new URL(url).pathname)
+      const handler = handlers[key]
+      if (!handler) {
+        throw new Error(`Unmocked ${key}`)
+      }
+      return handler()
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(
+      <SessionContext.Provider value={{ session, signIn: vi.fn(), signOut: vi.fn() }}>
+        <AuthTokenProvider>
+          <MemoryRouter initialEntries={['/personas/p1']}>
+            <Routes>
+              <Route path="/personas/:id" element={<PersonaDetailPage />} />
+            </Routes>
+          </MemoryRouter>
+        </AuthTokenProvider>
+      </SessionContext.Provider>,
+    )
+
+    const checkbox2 = await screen.findByLabelText('Brainstorming')
+    fireEvent.click(checkbox2)
+    fireEvent.click(screen.getByRole('button', { name: 'Verknüpfungen speichern' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Verknüpfungen gespeichert.')).toBeInTheDocument()
+    })
+    expect(putCalls).toHaveLength(1)
+    expect(putCalls[0].body).toEqual({ playbook_ids: ['pb1', 'pb2'] })
+  })
 })

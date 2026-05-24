@@ -1,8 +1,9 @@
 import { type FormEvent, useCallback, useEffect, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 
-import type { Persona, PersonaVersion, Playbook } from '../api/types'
+import type { Persona, PersonaVersion } from '../api/types'
 import { useApi } from '../api/useApi'
+import { usePersonaPlaybooks } from '../hooks/usePersonaPlaybooks'
 
 function describeError(cause: unknown): string {
   return cause instanceof Error ? cause.message : 'Unbekannter Fehler.'
@@ -20,8 +21,6 @@ export function PersonaDetailPage() {
   const api = useApi()
   const [persona, setPersona] = useState<Persona | null>(null)
   const [versions, setVersions] = useState<PersonaVersion[]>([])
-  const [allPlaybooks, setAllPlaybooks] = useState<Playbook[]>([])
-  const [linkedIds, setLinkedIds] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
 
@@ -30,22 +29,17 @@ export function PersonaDetailPage() {
   const [systemPrompt, setSystemPrompt] = useState('')
   const [traits, setTraits] = useState('')
 
+  const links = usePersonaPlaybooks(id)
+
   const load = useCallback(() => {
     if (id === undefined) {
       return
     }
     setError(null)
-    Promise.all([
-      api.getPersona(id),
-      api.listPersonaVersions(id),
-      api.listPersonaPlaybooks(id),
-      api.listPlaybooks(),
-    ])
-      .then(([loaded, versionList, linked, playbooks]) => {
+    Promise.all([api.getPersona(id), api.listPersonaVersions(id)])
+      .then(([loaded, versionList]) => {
         setPersona(loaded)
         setVersions(versionList)
-        setAllPlaybooks(playbooks)
-        setLinkedIds(linked.map((playbook) => playbook.id))
         setName(loaded.name)
         setDescription(loaded.content.description)
         setSystemPrompt(loaded.content.system_prompt)
@@ -76,25 +70,6 @@ export function PersonaDetailPage() {
       })
       setStatus('Gespeichert — neue Version erstellt.')
       load()
-    } catch (cause) {
-      setError(describeError(cause))
-    }
-  }
-
-  function toggleLink(playbookId: string) {
-    setLinkedIds((current) =>
-      current.includes(playbookId)
-        ? current.filter((entry) => entry !== playbookId)
-        : [...current, playbookId],
-    )
-  }
-
-  async function handleSaveLinks() {
-    setStatus(null)
-    setError(null)
-    try {
-      await api.setPersonaPlaybooks(personaId, linkedIds)
-      setStatus('Verknüpfungen gespeichert.')
     } catch (cause) {
       setError(describeError(cause))
     }
@@ -153,21 +128,28 @@ export function PersonaDetailPage() {
           </ul>
 
           <h2>Verknüpfte Playbooks</h2>
+          {links.loading && <p>Lädt…</p>}
+          {links.error !== null && <p role="alert">{links.error}</p>}
+          {links.status !== null && <p role="status">{links.status}</p>}
           <ul>
-            {allPlaybooks.map((playbook) => (
+            {links.playbooks.map((playbook) => (
               <li key={playbook.id}>
                 <label>
                   <input
                     type="checkbox"
-                    checked={linkedIds.includes(playbook.id)}
-                    onChange={() => toggleLink(playbook.id)}
+                    checked={links.linkedIds.includes(playbook.id)}
+                    onChange={() => links.toggle(playbook.id)}
                   />
                   {playbook.name}
                 </label>
               </li>
             ))}
           </ul>
-          <button type="button" onClick={() => void handleSaveLinks()}>
+          <button
+            type="button"
+            onClick={() => void links.save()}
+            disabled={links.saving || links.loading}
+          >
             Verknüpfungen speichern
           </button>
         </>
