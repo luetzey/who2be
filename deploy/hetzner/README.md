@@ -1,0 +1,131 @@
+# Hetzner-Deployment — Who2Be
+
+Compose-Artefakte fuer die produktive Who2Be-Instanz auf einem Hetzner-Host.
+Dieser Ordner deckt **MS-2 C3** (App-Stack + Reverse-Proxy) ab — Tasks C1
+(Server-Provisioning), C2 (self-hosted Supabase), C4 (CI/CD-Deploy) und C5
+(Backup-Runbook) sind disjunkt und kommen in eigenen Iterationen dazu.
+
+## Layout
+
+```
+deploy/hetzner/
+  Caddyfile                # Reverse-Proxy mit Auto-HTTPS + Security-Header
+  .env.example             # Operator-Vars (kopieren nach .env)
+  README.md                # dieses Dokument
+  who2be/
+    docker-compose.yml         # Prod-Compose (api + web + caddy + migrate)
+    docker-compose.local.yml   # Override fuer lokale Smoke ohne C1/C2
+```
+
+## Voraussetzungen
+
+- **C1 fertig:** Hetzner-Host mit Docker + Docker-Compose-v2, Ports 80/443
+  durch Firewall offen, deploy-User mit Docker-Gruppen-Mitgliedschaft.
+- **C2 fertig:** Supabase-Compose laeuft. Daraus ergibt sich:
+  - `docker network create supabase-net` (einmalig) wird vom Supabase-Stack
+    angelegt.
+  - Postgres ist via `db:5432` im `supabase-net` erreichbar.
+  - `JWT_SECRET`-Wert + Supabase-Hostname stehen fest.
+- **DNS:** A-Records `api.<DOMAIN>` und `app.<DOMAIN>` zeigen auf den
+  Hetzner-Host.
+
+## Produktiver Start
+
+1. Repo auf den Host klonen (oder `git pull`).
+2. `.env` anlegen:
+   ```bash
+   cp deploy/hetzner/.env.example deploy/hetzner/.env
+   $EDITOR deploy/hetzner/.env
+   ```
+3. Sobald C4 GHCR-Images pusht: `docker compose ... pull`. Solange noch
+   nicht: `docker compose ... build` baut lokal aus dem Repo:
+   ```bash
+   docker compose \
+     -f deploy/hetzner/who2be/docker-compose.yml \
+     --env-file deploy/hetzner/.env \
+     build api web
+   ```
+4. Stack starten:
+   ```bash
+   docker compose \
+     -f deploy/hetzner/who2be/docker-compose.yml \
+     --env-file deploy/hetzner/.env \
+     up -d --wait
+   ```
+5. Smoke:
+   ```bash
+   curl -fsS https://api.${DOMAIN}/v1/health
+   # erwartete Antwort: {"status":"ok","version":"...","db":"ok"}
+   ```
+6. Logs:
+   ```bash
+   docker compose -f deploy/hetzner/who2be/docker-compose.yml \
+     --env-file deploy/hetzner/.env logs -f caddy api
+   ```
+
+## Lokaler Smoke ohne Hetzner
+
+Override-File spinnt einen lokalen Postgres an und mappt Caddy auf
+Test-Ports 8080/8443:
+
+```bash
+cp deploy/hetzner/.env.example deploy/hetzner/.env  # Defaults reichen
+docker compose \
+  -f deploy/hetzner/who2be/docker-compose.yml \
+  -f deploy/hetzner/who2be/docker-compose.local.yml \
+  --env-file deploy/hetzner/.env up -d --wait
+curl -k -fsS https://localhost:8443/v1/health   # 502 erwartet ohne DNS
+docker compose ... down -v
+```
+
+Caddy stolpert lokal ueber den ACME-Challenge gegen `example.com`; fuer
+einen echten lokalen Smoke entweder `DOMAIN=localhost.test` in der `.env`
+setzen + Caddy auf `auto_https off` umstellen oder direkt die Container
+mit `docker compose exec api curl -fsS http://localhost:8000/v1/health`
+ansprechen.
+
+## MCP-Container (Profile `mcp`)
+
+Der MCP-Server nutzt per Default stdio-Transport — er laeuft nicht als
+Long-Running-Service hinter Caddy. Das Image ist im Compose unter
+`profiles: ["mcp"]` versteckt und wird **nicht** beim normalen `up`
+gestartet. Aufruf als interner Smoke-Harness:
+
+```bash
+docker compose \
+  -f deploy/hetzner/who2be/docker-compose.yml \
+  --env-file deploy/hetzner/.env \
+  run --rm mcp python -c "import who2be_mcp.server as s; print('ok')"
+```
+
+Falls spaeter Remote-MCP via HTTP-Transport gewuenscht ist: Profil von
+`mcp` auf `default` kippen, Caddy-Route `mcp.${DOMAIN}` ergaenzen — eigene
+Folge-Task.
+
+## Security-Header / Proxy-Headers
+
+- Caddy setzt HSTS, `X-Content-Type-Options`, `X-Frame-Options`,
+  `Referrer-Policy`, `Permissions-Policy` und je eine CSP fuer API und Web
+  (siehe `Caddyfile`). Adressiert F-12 aus
+  `docs/security-findings.md`.
+- API laeuft mit `uvicorn --proxy-headers --forwarded-allow-ips *`. Sicher,
+  weil der Container keinen `ports:`-Eintrag hat und nur Caddy ihn im
+  internen Netzwerk erreicht. Adressiert F-02.
+
+## Caddyfile-Syntax offline pruefen
+
+```bash
+docker run --rm \
+  -v $(pwd)/deploy/hetzner/Caddyfile:/etc/caddy/Caddyfile:ro \
+  -e DOMAIN=localhost.test -e ACME_EMAIL=test@example.com \
+  -e VITE_SUPABASE_URL=http://localhost:9999 \
+  caddy:2.8-alpine caddy validate \
+    --config /etc/caddy/Caddyfile --adapter caddyfile
+```
+
+## Verweis
+
+- Backup/Restore-Pfad und Restore-Drill: kommt mit MS-2 C5 in
+  `RUNBOOK.md` (gleicher Ordner).
+- CI/CD-Pipeline (Push auf `main` baut + deployt): kommt mit MS-2 C4 in
+  `.github/workflows/deploy.yml`.

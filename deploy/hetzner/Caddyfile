@@ -1,0 +1,37 @@
+# Reverse-Proxy fuer den Hetzner-App-Stack.
+# Auto-HTTPS via Let's-Encrypt. Erwartete Env-Vars (siehe ../.env.example):
+#   DOMAIN, ACME_EMAIL, VITE_SUPABASE_URL.
+# Adressiert F-12 (security-findings.md): Security-Header werden zentral hier
+# gesetzt, statt in jeder Antwort der API/des Webs.
+
+{
+    email {$ACME_EMAIL}
+}
+
+# Reusable Security-Header — HSTS schon via Caddys Auto-HTTPS gegeben, hier
+# explizit fuer Klarheit; `-Server` versteckt das Caddy-Banner.
+(security_headers) {
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "no-referrer"
+        Permissions-Policy "accelerometer=(), camera=(), geolocation=(), microphone=()"
+        -Server
+    }
+}
+
+api.{$DOMAIN} {
+    import security_headers
+    # API liefert JSON — Inline-Scripts, Frames, externe Connects sind alle aus.
+    header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+    reverse_proxy api:8000
+}
+
+app.{$DOMAIN} {
+    import security_headers
+    # SPA-CSP: Vite-Build hat keine Inline-Scripts, aber Inline-Styles (CSSinJS).
+    # connect-src haelt die eigene API + die Supabase-Instanz erlaubt.
+    header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://api.{$DOMAIN} {$VITE_SUPABASE_URL}; frame-ancestors 'none'; base-uri 'self'"
+    reverse_proxy web:80
+}
