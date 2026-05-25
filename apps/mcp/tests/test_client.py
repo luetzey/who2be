@@ -168,3 +168,19 @@ def test_network_error_raises_toolerror() -> None:
 
     with pytest.raises(ToolError):
         asyncio.run(_client(handler).get_playbook(UUID(int=0)))
+
+
+def test_network_error_log_does_not_leak_token(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("Verbindung fehlgeschlagen")
+
+    import logging
+
+    with caplog.at_level(logging.WARNING, logger="who2be_mcp.client"):
+        with pytest.raises(ToolError):
+            asyncio.run(_client(handler).get_playbook(UUID(int=0)))
+    messages = " ".join(record.getMessage() for record in caplog.records)
+    assert "tok" not in messages
+    assert "Bearer" not in messages

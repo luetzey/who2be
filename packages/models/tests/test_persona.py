@@ -50,6 +50,23 @@ def test_read_round_trip_preserves_nested_content() -> None:
     assert restored == persona
 
 
+def test_content_rejects_oversized_strings() -> None:
+    with pytest.raises(ValidationError):
+        PersonaContent(description="x" * 2_001, system_prompt="s")
+    with pytest.raises(ValidationError):
+        PersonaContent(description="d", system_prompt="x" * 20_001)
+
+
+def test_content_rejects_too_many_traits() -> None:
+    with pytest.raises(ValidationError):
+        PersonaContent(description="d", system_prompt="s", traits=["t"] * 51)
+
+
+def test_content_rejects_oversized_trait_entry() -> None:
+    with pytest.raises(ValidationError):
+        PersonaContent(description="d", system_prompt="s", traits=["x" * 201])
+
+
 def test_version_read_carries_creator_and_version() -> None:
     version = PersonaVersionRead(
         version=3,

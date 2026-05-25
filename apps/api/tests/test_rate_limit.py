@@ -63,7 +63,12 @@ def _cleanup(owner_ids: list[UUID]) -> None:
 
 def _auth(owner_id: UUID) -> dict[str, str]:
     token = jwt.encode(
-        {"sub": str(owner_id), "exp": datetime.now(UTC) + timedelta(hours=1)},
+        {
+            "sub": str(owner_id),
+            "aud": "authenticated",
+            "role": "authenticated",
+            "exp": datetime.now(UTC) + timedelta(hours=1),
+        },
         _TEST_SECRET,
         algorithm="HS256",
     )

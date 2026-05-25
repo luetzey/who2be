@@ -28,9 +28,7 @@ def capture_with_context() -> Iterator[list[dict[str, Any]]]:
     `request_id`/`owner_id` aus contextvars in jedem Record landen."""
     entries: list[dict[str, Any]] = []
 
-    def append(
-        _: Any, __: str, event_dict: MutableMapping[str, Any]
-    ) -> Mapping[str, Any]:
+    def append(_: Any, __: str, event_dict: MutableMapping[str, Any]) -> Mapping[str, Any]:
         entries.append(dict(event_dict))
         raise structlog.DropEvent
 
@@ -87,6 +85,21 @@ def test_access_log_anonymous_has_no_owner_id() -> None:
     http_records = _http_request_records(records)
     assert http_records
     assert "owner_id" not in http_records[-1]
+
+
+def test_request_id_rejects_unsafe_incoming_value() -> None:
+    # Newline → Log-Injection-Vektor; muss verworfen und durch UUID ersetzt werden.
+    with TestClient(app) as client:
+        response = client.get("/v1/health", headers={"X-Request-ID": "bad\r\nInjected: yes"})
+    request_id = response.headers["x-request-id"]
+    assert "\n" not in request_id and "\r" not in request_id
+    assert request_id != "bad\r\nInjected: yes"
+
+
+def test_request_id_rejects_overlong_incoming_value() -> None:
+    with TestClient(app) as client:
+        response = client.get("/v1/health", headers={"X-Request-ID": "x" * 200})
+    assert len(response.headers["x-request-id"]) <= 64
 
 
 def test_console_format_is_not_json(capsys: Any) -> None:

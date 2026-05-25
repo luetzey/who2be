@@ -1,9 +1,14 @@
 """Pydantic-Modelle fuer das Persona-Aggregat."""
 
 from datetime import datetime
+from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+
+# Eingabe-Limits — DoS-Schutz gegen riesige Payloads, da Versions-Inhalte unveraenderlich
+# in `persona_version` eingefroren und in jeder `list_personas`-Antwort retourniert werden.
+TraitStr = Annotated[str, StringConstraints(min_length=1, max_length=200)]
 
 
 class PersonaContent(BaseModel):
@@ -11,9 +16,9 @@ class PersonaContent(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    description: str
-    system_prompt: str
-    traits: list[str] = Field(default_factory=list)
+    description: str = Field(max_length=2_000)
+    system_prompt: str = Field(max_length=20_000)
+    traits: list[TraitStr] = Field(default_factory=list, max_length=50)
 
 
 class PersonaCreate(BaseModel):

@@ -24,7 +24,7 @@ def test_health_reports_db_ok_with_lifespan() -> None:
     assert body["db"] == "ok"
 
 
-def test_lifespan_warns_on_weak_jwt_secret(
+def test_lifespan_warns_on_empty_jwt_secret(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     monkeypatch.setattr(db, "get_settings", lambda: Settings(jwt_secret=""))
@@ -32,3 +32,12 @@ def test_lifespan_warns_on_weak_jwt_secret(
         pass
     assert any("JWT_SECRET" in record.message for record in caplog.records)
 
+
+def test_lifespan_fails_loud_on_short_jwt_secret(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Ein gesetzter, aber zu kurzer Secret darf den Boot nicht still passieren.
+    monkeypatch.setattr(db, "get_settings", lambda: Settings(jwt_secret="too-short"))
+    with pytest.raises(RuntimeError, match="JWT_SECRET"):
+        with TestClient(app):
+            pass

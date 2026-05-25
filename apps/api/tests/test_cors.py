@@ -33,12 +33,26 @@ def test_simple_request_carries_acao_header() -> None:
     assert response.headers.get("access-control-allow-origin") == _WEB_ORIGIN
 
 
+def test_preflight_rejects_disallowed_custom_header() -> None:
+    # `allow_headers` ist eine Whitelist — ein ungelisteter Header darf nicht
+    # erlaubt werden, sonst koennen Skripte beliebige Custom-Header an die API
+    # senden ohne Browser-Schutz.
+    response = client.options(
+        "/v1/personas",
+        headers={
+            "Origin": _WEB_ORIGIN,
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "x-not-allowed",
+        },
+    )
+    allowed = response.headers.get("access-control-allow-headers", "")
+    assert "x-not-allowed" not in allowed.lower()
+
+
 def test_disallowed_origin_is_rejected_by_browser() -> None:
     # Mit `allow_origins=[...]` (kein Wildcard) liefert Starlette fuer eine
     # nicht gelistete Origin gar keinen ACAO-Header — der Browser blockt
     # die Antwort entsprechend.
-    response = client.get(
-        "/v1/health", headers={"Origin": "https://evil.example.com"}
-    )
+    response = client.get("/v1/health", headers={"Origin": "https://evil.example.com"})
     assert response.status_code == 200
     assert "access-control-allow-origin" not in response.headers

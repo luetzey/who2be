@@ -4,7 +4,7 @@ from typing import Annotated
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 
 from who2be_api.core.db import get_pool
 from who2be_api.core.rate_limit import limiter, write_limit
@@ -36,8 +36,8 @@ Service = Annotated[PlaybookService, Depends(get_playbook_service)]
 async def list_playbooks(
     owner_id: OwnerId,
     service: Service,
-    tag: str | None = None,
-    trigger: str | None = None,
+    tag: Annotated[str | None, Query(max_length=100)] = None,
+    trigger: Annotated[str | None, Query(max_length=200)] = None,
 ) -> list[PlaybookRead]:
     return await service.list_all(owner_id, tag, trigger)
 

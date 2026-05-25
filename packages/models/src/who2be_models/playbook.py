@@ -6,9 +6,14 @@ Join filtern kann (siehe architecture.md §3).
 """
 
 from datetime import datetime
+from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+
+# Eingabe-Limits — DoS-Schutz fuer in jsonb persistierte und unveraendert
+# wiedergegebene Versions-Inhalte (siehe Persona-Pendant).
+TagStr = Annotated[str, StringConstraints(min_length=1, max_length=100)]
 
 
 class PlaybookContent(BaseModel):
@@ -16,11 +21,11 @@ class PlaybookContent(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    description: str
-    body: str
-    type: str = Field(min_length=1)
-    tags: list[str] = Field(default_factory=list)
-    triggers: str | None = None
+    description: str = Field(max_length=2_000)
+    body: str = Field(max_length=50_000)
+    type: str = Field(min_length=1, max_length=100)
+    tags: list[TagStr] = Field(default_factory=list, max_length=50)
+    triggers: str | None = Field(default=None, max_length=2_000)
 
 
 class PlaybookCreate(BaseModel):

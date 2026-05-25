@@ -18,3 +18,8 @@ def test_link_set_accepts_playbook_ids() -> None:
 def test_link_set_rejects_non_uuid_entries() -> None:
     with pytest.raises(ValidationError):
         PersonaPlaybookLinkSet(playbook_ids=["not-a-uuid"])  # type: ignore[list-item]
+
+
+def test_link_set_rejects_excessive_count() -> None:
+    with pytest.raises(ValidationError):
+        PersonaPlaybookLinkSet(playbook_ids=[uuid4() for _ in range(201)])
