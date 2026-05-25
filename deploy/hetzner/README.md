@@ -142,9 +142,53 @@ docker run --rm \
     --config /etc/caddy/Caddyfile --adapter caddyfile
 ```
 
+## CI/CD (MS-2 C4)
+
+Workflow `.github/workflows/deploy.yml` triggert auf `push: main` (oder
+manuell per `workflow_dispatch`):
+
+1. **`build-and-push`** baut die drei Images parallel und pushed sie als
+   `ghcr.io/luetzey/who2be-{api,web,mcp}:<sha>` und `:latest` ans
+   GitHub Container Registry. Login per `GITHUB_TOKEN` (`packages: write`).
+2. **`deploy`** ist conditional (`if: vars.DEPLOY_HOST != ''`): solange
+   die Host-Konfig im Repo fehlt (C1 nicht fertig), ueberspringt der
+   Job sich sauber. Sobald `DEPLOY_HOST` gesetzt ist, ruft er via SSH
+   `deploy/hetzner/scripts/deploy.sh <commit-sha>` auf dem Host auf —
+   dieses Skript checkt den SHA aus, setzt die `*_IMAGE_TAG`-Variablen
+   in `.env` und macht `docker compose pull` + `up -d --wait`.
+
+### Repository Variables
+
+In **Settings → Secrets and variables → Actions → Variables** anlegen:
+
+| Name                       | Beispiel                            | Zweck                                |
+| -------------------------- | ----------------------------------- | ------------------------------------ |
+| `VITE_API_BASE_URL`        | `https://api.example.com`           | Web-Build-Arg (Compile-Time)         |
+| `VITE_SUPABASE_URL`        | `https://supabase.example.com`      | Web-Build-Arg                        |
+| `VITE_SUPABASE_ANON_KEY`   | `<ANON_KEY aus supabase/.env>`      | Web-Build-Arg (oeffentlicher Key)    |
+| `DEPLOY_HOST`              | `who2be.example.com`                | SSH-Host fuer Deploy-Job             |
+| `DEPLOY_USER`              | `deploy`                            | SSH-User auf dem Host                |
+| `DEPLOY_PROJECT_DIR`       | `/opt/who2be`                       | Repo-Klon auf dem Host (Default)     |
+| `DEPLOY_SSH_KNOWN_HOSTS`   | Output von `ssh-keyscan -H <host>`  | Optional; sonst Auto-keyscan         |
+
+### Repository Secrets
+
+In **Secrets**:
+
+| Name              | Inhalt                                     |
+| ----------------- | ------------------------------------------ |
+| `DEPLOY_SSH_KEY`  | Privater ED25519-SSH-Key des Deploy-Users  |
+
+### Rollback
+
+Auf dem Host:
+```bash
+/opt/who2be/deploy/hetzner/scripts/deploy.sh <alter-commit-sha>
+```
+Das Skript ist idempotent und kann auf einen frueheren SHA zurueckrollen,
+solange dessen Images noch auf GHCR liegen.
+
 ## Verweis
 
 - Backup/Restore-Pfad und Restore-Drill: kommt mit MS-2 C5 in
   `RUNBOOK.md` (gleicher Ordner).
-- CI/CD-Pipeline (Push auf `main` baut + deployt): kommt mit MS-2 C4 in
-  `.github/workflows/deploy.yml`.
