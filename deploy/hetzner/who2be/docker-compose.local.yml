@@ -1,0 +1,45 @@
+# Override fuer LOKALEN Smoke des Hetzner-App-Stacks ohne C1/C2.
+# Verwendung:
+#   docker compose \
+#     -f deploy/hetzner/who2be/docker-compose.yml \
+#     -f deploy/hetzner/who2be/docker-compose.local.yml \
+#     --env-file deploy/hetzner/.env up -d --wait
+#
+# Spinnt einen lokalen Postgres im `supabase-net` an und macht das Netz
+# bridge statt external. Caddy wird ueber Test-Ports 8080/8443 publiziert,
+# um nicht mit dem System-HTTP-Server zu kollidieren.
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    networks: [supabase-net]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+
+  caddy:
+    ports: !override
+      - "8080:80"
+      - "8443:443"
+
+networks:
+  supabase-net:
+    external: false
+    driver: bridge

@@ -36,5 +36,19 @@ RUN apt-get update \
 
 COPY --from=builder /app /app
 
+# Non-root-User fuer Prod-Container — minimiert Container-Escape-Schaden.
+RUN useradd --system --no-create-home --uid 1000 who2be \
+    && chown -R who2be:who2be /app
+USER who2be
+
 EXPOSE 8000
-CMD ["uvicorn", "who2be_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -fsS http://localhost:8000/v1/health || exit 1
+# `--proxy-headers` + `--forwarded-allow-ips *` adressieren F-02 aus
+# docs/security-findings.md: Hinter Caddy laeuft der Container nur im
+# internen Netzwerk, daher ist `*` mit Network-Isolation akzeptabel.
+CMD ["uvicorn", "who2be_api.main:app", \
+     "--host", "0.0.0.0", \
+     "--port", "8000", \
+     "--proxy-headers", \
+     "--forwarded-allow-ips", "*"]

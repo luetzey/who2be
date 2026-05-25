@@ -1,0 +1,112 @@
+# Prod-App-Stack fuer Hetzner. Postgres + GoTrue + Studio liegen im
+# separaten Supabase-Compose (Task C2, deploy/hetzner/supabase/) — dieser
+# Stack hier konsumiert sie ueber das externe Docker-Netzwerk `supabase-net`.
+#
+# Caddy terminiert HTTPS via Let's-Encrypt auf zwei Subdomains:
+#   api.${DOMAIN} -> api:8000
+#   app.${DOMAIN} -> web:80
+#
+# MCP laeuft im `mcp`-Profil und wird nicht beim normalen `up` gestartet
+# (Default-Transport ist stdio); per `docker compose run --rm mcp ...`
+# als interner Consumer/Smoke-Harness aufrufbar.
+services:
+  migrate:
+    image: ghcr.io/luetzey/who2be-api:${API_IMAGE_TAG:-latest}
+    build:
+      context: ../../..
+      dockerfile: apps/api/Dockerfile
+    command: ["who2be-migrate"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    networks: [supabase-net]
+    restart: "no"
+
+  api:
+    image: ghcr.io/luetzey/who2be-api:${API_IMAGE_TAG:-latest}
+    build:
+      context: ../../..
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      SUPABASE_URL: ${SUPABASE_URL}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      RATE_LIMIT_WRITE: ${RATE_LIMIT_WRITE:-30/minute}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks: [supabase-net, app-net]
+    restart: unless-stopped
+    # Bewusst KEIN ports: — Zugriff nur ueber Caddy. Damit ist
+    # `--forwarded-allow-ips *` (siehe apps/api/Dockerfile) safe.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  web:
+    image: ghcr.io/luetzey/who2be-web:${WEB_IMAGE_TAG:-latest}
+    build:
+      context: ../../..
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
+    networks: [app-net]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  mcp:
+    image: ghcr.io/luetzey/who2be-mcp:${MCP_IMAGE_TAG:-latest}
+    build:
+      context: ../../..
+      dockerfile: apps/mcp/Dockerfile
+    environment:
+      WHO2BE_API_BASE_URL: ${VITE_API_BASE_URL}
+      WHO2BE_API_TOKEN: ${WHO2BE_API_TOKEN:-}
+      WHO2BE_LOG_FORMAT: ${LOG_FORMAT:-json}
+    networks: [app-net]
+    profiles: ["mcp"]
+    restart: "no"
+
+  caddy:
+    image: caddy:2.8-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+      VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+    volumes:
+      - ../Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [app-net]
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    restart: unless-stopped
+
+networks:
+  app-net:
+    driver: bridge
+  # supabase-net wird vom Supabase-Compose (Task C2) angelegt. Bis C2 existiert,
+  # kann fuer den lokalen Smoke das Override-File docker-compose.local.yml
+  # benutzt werden, das den Postgres direkt mit einbringt.
+  supabase-net:
+    external: true
+
+volumes:
+  caddy-data:
+  caddy-config:
