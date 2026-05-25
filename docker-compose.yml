@@ -102,20 +102,23 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
-    environment:
-      VITE_API_BASE_URL: http://localhost:8000
-      VITE_SUPABASE_URL: http://localhost:9999
-      VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:-dev-anon-key-not-used-by-gotrue}
+      # Vite braucht die VITE_*-Werte zur Compile-Zeit; sie muessen
+      # daher Build-Args sein (apps/web/Dockerfile:14-21). Das frueher
+      # genutzte `environment:` wirkte zur Runtime und war fuer den
+      # nginx-Multi-Stage-Build wirkungslos.
+      args:
+        VITE_API_BASE_URL: http://localhost:8000
+        VITE_SUPABASE_URL: http://localhost:9999
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:-dev-anon-key-not-used-by-gotrue}
     ports:
-      - "5173:5173"
-    volumes:
-      - ./apps/web:/app
-      - /app/node_modules
+      # Container hoert mit nginx auf 80; Host-Port bleibt 5173, damit
+      # smoke.sh + CORS-Origin unveraendert bleiben.
+      - "5173:80"
     depends_on:
       api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:5173/"]
+      test: ["CMD", "curl", "-fsS", "http://localhost/healthz"]
       interval: 5s
       timeout: 5s
       retries: 10
