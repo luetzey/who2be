@@ -90,7 +90,9 @@ services:
       - ../Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
-    networks: [app-net]
+    # supabase-net: damit Caddy auch `supabase.<DOMAIN>` auf den
+    # auth-gateway aus dem Supabase-Stack (MS-2 C2) proxy'en kann.
+    networks: [app-net, supabase-net]
     depends_on:
       api:
         condition: service_healthy

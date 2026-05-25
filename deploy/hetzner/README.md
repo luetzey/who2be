@@ -21,13 +21,32 @@ deploy/hetzner/
 
 - **C1 fertig:** Hetzner-Host mit Docker + Docker-Compose-v2, Ports 80/443
   durch Firewall offen, deploy-User mit Docker-Gruppen-Mitgliedschaft.
-- **C2 fertig:** Supabase-Compose laeuft. Daraus ergibt sich:
-  - `docker network create supabase-net` (einmalig) wird vom Supabase-Stack
-    angelegt.
+- **C2 fertig:** Supabase-Compose laeuft (`supabase/docker-compose.yml`,
+  Setup siehe `supabase/README.md`). Konkret bedeutet das:
+  - Das Netzwerk `supabase-net` existiert (wird vom C2-Compose erstellt).
   - Postgres ist via `db:5432` im `supabase-net` erreichbar.
-  - `JWT_SECRET`-Wert + Supabase-Hostname stehen fest.
-- **DNS:** A-Records `api.<DOMAIN>` und `app.<DOMAIN>` zeigen auf den
-  Hetzner-Host.
+  - `JWT_SECRET` (mind. 32 Zeichen) ist gewaehlt — **identischer Wert**
+    in `supabase/.env` und `.env` (dieser Stack hier).
+  - `ANON_KEY` ist mit demselben Secret signiert (per
+    `scripts/gen_test_jwt.py --role anon`).
+- **DNS:** A-Records `api.<DOMAIN>`, `app.<DOMAIN>` und
+  `supabase.<DOMAIN>` zeigen auf den Hetzner-Host.
+
+## Bring-up-Reihenfolge
+
+```bash
+# 1) Supabase-Stack (C2) — erzeugt supabase-net, faehrt Postgres + GoTrue an
+docker compose \
+  -f deploy/hetzner/supabase/docker-compose.yml \
+  --env-file deploy/hetzner/supabase/.env \
+  up -d --wait
+
+# 2) App-Stack (C3) — haengt sich ueber supabase-net (external) ein
+docker compose \
+  -f deploy/hetzner/who2be/docker-compose.yml \
+  --env-file deploy/hetzner/.env \
+  up -d --wait
+```
 
 ## Produktiver Start
 

@@ -1,0 +1,125 @@
+# Self-hosted Supabase-Stack fuer Hetzner (MS-2 C2).
+# Minimaler Scope: Postgres + GoTrue (Auth) + nginx-Gateway. Studio ist
+# unter Profil "studio" registriert (default off) — explizit per
+# `--profile studio up -d` zu aktivieren.
+#
+# Reihenfolge auf dem Server:
+#   1. supabase-Stack starten (dieser File) — erzeugt supabase-net.
+#   2. who2be-Stack (deploy/hetzner/who2be/docker-compose.yml) — haengt
+#      sich per `external: true` ins supabase-net rein.
+services:
+  db:
+    image: supabase/postgres:15.1.1.78
+    environment:
+      POSTGRES_HOST: /var/run/postgresql
+      POSTGRES_DB: postgres
+      POSTGRES_USER: supabase_admin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXP: ${JWT_EXP:-3600}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d:ro
+    networks: [supabase-net]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U supabase_admin -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  auth:
+    image: supabase/gotrue:v2.158.1
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: "9999"
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db:5432/postgres?search_path=auth
+      GOTRUE_SITE_URL: ${SITE_URL}
+      GOTRUE_URI_ALLOW_LIST: ${SITE_URL}
+      GOTRUE_DISABLE_SIGNUP: "false"
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      GOTRUE_JWT_EXP: ${JWT_EXP:-3600}
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_ISSUER: https://supabase.${DOMAIN}/auth/v1
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      # MVP: keine SMTP-Anbindung; Mailer-Autoconfirm laesst Signups
+      # ohne Email-Bestaetigung passieren. Vor Public-Beta umstellen.
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+      API_EXTERNAL_URL: https://supabase.${DOMAIN}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [supabase-net]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9999/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  auth-gateway:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./auth-gateway.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      auth:
+        condition: service_healthy
+    networks: [supabase-net]
+    restart: unless-stopped
+    healthcheck:
+      # nginx-alpine hoert nur IPv4 — `localhost` aufloesst in der
+      # Image-Default zu ::1, daher 127.0.0.1.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9999/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  meta:
+    image: supabase/postgres-meta:v0.83.2
+    profiles: ["studio"]
+    environment:
+      PG_META_PORT: "8080"
+      PG_META_DB_HOST: db
+      PG_META_DB_PORT: "5432"
+      PG_META_DB_NAME: postgres
+      PG_META_DB_USER: supabase_admin
+      PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [supabase-net]
+    restart: unless-stopped
+
+  studio:
+    image: supabase/studio:20240624-2eb04f3
+    profiles: ["studio"]
+    environment:
+      STUDIO_PG_META_URL: http://meta:8080
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      DEFAULT_ORGANIZATION_NAME: Who2Be
+      DEFAULT_PROJECT_NAME: Who2Be
+      SUPABASE_URL: https://supabase.${DOMAIN}
+      SUPABASE_PUBLIC_URL: https://supabase.${DOMAIN}
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      AUTH_JWT_SECRET: ${JWT_SECRET}
+      DASHBOARD_USERNAME: ${DASHBOARD_USERNAME:-admin}
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD}
+    depends_on:
+      - meta
+    networks: [supabase-net]
+    restart: unless-stopped
+
+networks:
+  supabase-net:
+    # Expliziter Name ohne Compose-Projekt-Prefix — der App-Stack
+    # (deploy/hetzner/who2be/docker-compose.yml) bindet sich per
+    # `external: true` exakt auf diesen Namen.
+    name: supabase-net
+    driver: bridge
+
+volumes:
+  db-data:
