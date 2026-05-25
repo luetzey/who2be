@@ -332,6 +332,11 @@ filtert serverseitig nach `owner_id` — Zero-Trust, keine implizite Freigabe.
 - Secrets ausschliesslich ueber Env / `.env` (nicht eingecheckt).
 - API-Token nur gehasht gespeichert, Klartext einmalig.
 - Owner-Grenzen serverseitig bei jedem Zugriff pruefen.
+- Schreib-Endpunkte (`POST /v1/tokens`, `POST`/`PUT` auf `/v1/personas` und
+  `/v1/playbooks`) sind per slowapi auf `RATE_LIMIT_WRITE` (Default `30/minute`)
+  limitiert; Key ist der SHA-256-Praefix des Bearer-Tokens (faktisch per Owner)
+  und faellt auf die Client-IP zurueck. Storage ist In-Memory; Multi-Replica in
+  einer spaeteren Deploy-Stufe erfordert ein Redis-Backend.
 - Fuer Auth, DB-Zugriff, MCP-Tools und externe Inputs bei der Umsetzung den
   Subagent `security-reviewer` einsetzen (Repo-Vorgabe).
 
