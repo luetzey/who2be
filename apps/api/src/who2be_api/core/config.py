@@ -9,6 +9,7 @@ beide akzeptiert.
 
 import json
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -48,6 +49,8 @@ class Settings(BaseSettings):
     # Pro Token-Hash bzw. IP. Slowapi-Limit-Callable liest dieses Feld zur Laufzeit,
     # damit Tests via Settings-Override auf einen niedrigen Wert druecken koennen.
     rate_limit_write: str = "30/minute"
+    # `json` fuer Prod-Aggregation, `console` fuer lesbares Dev-Tail (ADR-0007).
+    log_format: Literal["json", "console"] = "json"
 
     @property
     def cors_origins(self) -> list[str]:

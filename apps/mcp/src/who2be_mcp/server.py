@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from who2be_mcp.client import ApiClient
 from who2be_mcp.config import get_settings
+from who2be_mcp.core_logging import configure_logging, with_tool_log
 from who2be_models import PersonaRead, PlaybookRead
 
 mcp: FastMCP = FastMCP("who2be")
@@ -32,12 +33,14 @@ def build_client() -> ApiClient:
 
 
 @mcp.tool
+@with_tool_log("ping")
 def ping() -> str:
     """Liveness-Check fuer den Who2Be-MCP-Server."""
     return "pong"
 
 
 @mcp.tool
+@with_tool_log("get_persona")
 async def get_persona(identifier: str) -> PersonaWithPlaybooks:
     """Laedt eine Persona (per UUID oder Name) samt verknuepfter Playbooks."""
     client = build_client()
@@ -47,6 +50,7 @@ async def get_persona(identifier: str) -> PersonaWithPlaybooks:
 
 
 @mcp.tool
+@with_tool_log("list_playbooks")
 async def list_playbooks(
     tag: str | None = None, trigger: str | None = None
 ) -> list[PlaybookRead]:
@@ -55,6 +59,7 @@ async def list_playbooks(
 
 
 @mcp.tool
+@with_tool_log("fetch_playbook")
 async def fetch_playbook(playbook_id: str) -> PlaybookRead:
     """Laedt ein einzelnes Playbook per UUID."""
     try:
@@ -65,6 +70,7 @@ async def fetch_playbook(playbook_id: str) -> PlaybookRead:
 
 
 def main() -> None:
+    configure_logging(get_settings().log_format)
     mcp.run()
 
 

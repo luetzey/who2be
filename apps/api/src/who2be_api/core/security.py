@@ -12,6 +12,7 @@ from uuid import UUID
 
 import asyncpg
 import jwt
+import structlog
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -63,9 +64,11 @@ def verify_supabase_jwt(token: str) -> UUID:
     if not isinstance(sub, str):
         raise _credentials_error()
     try:
-        return UUID(sub)
+        owner_id = UUID(sub)
     except ValueError as exc:
         raise _credentials_error() from exc
+    structlog.contextvars.bind_contextvars(owner_id=str(owner_id))
+    return owner_id
 
 
 async def resolve_owner(token: str, token_repo: TokenRepository) -> UUID:
@@ -79,6 +82,7 @@ async def resolve_owner(token: str, token_repo: TokenRepository) -> UUID:
             await token_repo.touch_last_used(token_hash)
         except (asyncpg.PostgresError, OSError):
             logger.warning("last_used_at konnte nicht aktualisiert werden.")
+        structlog.contextvars.bind_contextvars(owner_id=str(owner_id))
         return owner_id
     return verify_supabase_jwt(token)
 
