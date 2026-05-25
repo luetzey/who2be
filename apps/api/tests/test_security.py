@@ -30,9 +30,10 @@ _SECRET = "unit-test-jwt-secret-padding-0123456789"
 
 
 def _encode(claims: dict[str, Any], secret: str = _SECRET) -> str:
-    """Signiert ein JWT; ergaenzt ein gueltiges `exp`, falls nicht gesetzt."""
+    """Signiert ein JWT; ergaenzt `exp` und `aud=authenticated`, falls nicht gesetzt."""
     payload: dict[str, Any] = {
         "exp": datetime.now(UTC) + timedelta(hours=1),
+        "aud": "authenticated",
         **claims,
     }
     return jwt.encode(payload, secret, algorithm="HS256")
@@ -84,9 +85,7 @@ def test_verify_jwt_accepts_valid_token(jwt_secret: None) -> None:
 
 
 def test_verify_jwt_rejects_expired_token(jwt_secret: None) -> None:
-    token = _encode(
-        {"sub": str(uuid4()), "exp": datetime.now(UTC) - timedelta(hours=1)}
-    )
+    token = _encode({"sub": str(uuid4()), "exp": datetime.now(UTC) - timedelta(hours=1)})
     with pytest.raises(HTTPException) as exc:
         verify_supabase_jwt(token)
     assert exc.value.status_code == 401
@@ -94,9 +93,56 @@ def test_verify_jwt_rejects_expired_token(jwt_secret: None) -> None:
 
 def test_verify_jwt_rejects_token_without_exp(jwt_secret: None) -> None:
     # Ohne exp wuerde ein JWT sonst unbegrenzt gelten — require=["exp"].
-    token = jwt.encode({"sub": str(uuid4())}, _SECRET, algorithm="HS256")
+    token = jwt.encode({"sub": str(uuid4()), "aud": "authenticated"}, _SECRET, algorithm="HS256")
     with pytest.raises(HTTPException):
         verify_supabase_jwt(token)
+
+
+def test_verify_jwt_rejects_token_without_aud(jwt_secret: None) -> None:
+    # Ohne aud-Claim wuerde jedes mit demselben Secret signierte Token akzeptiert
+    # (z. B. service_role-Token).
+    token = jwt.encode(
+        {"sub": str(uuid4()), "exp": datetime.now(UTC) + timedelta(hours=1)},
+        _SECRET,
+        algorithm="HS256",
+    )
+    with pytest.raises(HTTPException):
+        verify_supabase_jwt(token)
+
+
+def test_verify_jwt_rejects_wrong_audience(jwt_secret: None) -> None:
+    with pytest.raises(HTTPException):
+        verify_supabase_jwt(_encode({"sub": str(uuid4()), "aud": "anon"}))
+
+
+def test_verify_jwt_rejects_service_role(jwt_secret: None) -> None:
+    # service_role-Token darf nicht als regulaerer Owner durchgehen.
+    with pytest.raises(HTTPException):
+        verify_supabase_jwt(_encode({"sub": str(uuid4()), "role": "service_role"}))
+
+
+def test_verify_jwt_accepts_authenticated_role(jwt_secret: None) -> None:
+    owner = uuid4()
+    token = _encode({"sub": str(owner), "role": "authenticated"})
+    assert verify_supabase_jwt(token) == owner
+
+
+def test_verify_jwt_checks_issuer_when_supabase_url_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        security,
+        "get_settings",
+        lambda: Settings(jwt_secret=_SECRET, supabase_url="https://supa.test"),
+    )
+    owner = uuid4()
+    # Korrekter Issuer akzeptiert.
+    ok = _encode({"sub": str(owner), "iss": "https://supa.test/auth/v1"})
+    assert verify_supabase_jwt(ok) == owner
+    # Falscher Issuer abgelehnt.
+    bad = _encode({"sub": str(owner), "iss": "https://evil.example.com/auth/v1"})
+    with pytest.raises(HTTPException):
+        verify_supabase_jwt(bad)
 
 
 def test_verify_jwt_rejects_wrong_secret(jwt_secret: None) -> None:

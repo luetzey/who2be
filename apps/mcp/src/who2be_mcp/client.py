@@ -46,17 +46,17 @@ class ApiClient:
             ) as client:
                 response = await client.get(path, params=params)
         except httpx.HTTPError as exc:
-            # Detail (interne URLs) nur ins Log, nicht an den Aufrufer.
-            logger.warning("Who2Be-API nicht erreichbar: %s", exc)
+            # Nur den Exception-Typ loggen — die `str(exc)`-Repraesentation kann
+            # je nach httpx-Pfad das Request-Objekt mit `Authorization`-Header
+            # mitfuehren; den Token-Klartext wollen wir nirgends im Log sehen.
+            logger.warning("Who2Be-API nicht erreichbar: %s", type(exc).__name__)
             raise ToolError("Who2Be-API nicht erreichbar.") from exc
         if response.status_code == 404:
             raise ToolError("Angefragte Ressource nicht gefunden.")
         if response.status_code == 401:
             raise ToolError("Nicht autorisiert — WHO2BE_API_TOKEN pruefen.")
         if response.is_error:
-            logger.warning(
-                "Who2Be-API-Fehler %s fuer %s", response.status_code, path
-            )
+            logger.warning("Who2Be-API-Fehler %s fuer %s", response.status_code, path)
             raise ToolError(f"Who2Be-API-Fehler ({response.status_code}).")
         return response.json()
 
@@ -81,9 +81,7 @@ class ApiClient:
         data = await self._get(f"/v1/personas/{persona_id}/playbooks")
         return [PlaybookRead.model_validate(item) for item in data]
 
-    async def list_playbooks(
-        self, tag: str | None, trigger: str | None
-    ) -> list[PlaybookRead]:
+    async def list_playbooks(self, tag: str | None, trigger: str | None) -> list[PlaybookRead]:
         params: dict[str, str] = {}
         if tag is not None:
             params["tag"] = tag

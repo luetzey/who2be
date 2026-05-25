@@ -14,4 +14,6 @@ class PersonaPlaybookLinkSet(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    playbook_ids: list[UUID] = Field(default_factory=list)
+    # Obergrenze deckt jeden realistischen Persona-Fall ab und verhindert,
+    # dass `set_persona_playbooks` mit beliebig grossen UUID-Arrays gegen die DB faehrt.
+    playbook_ids: list[UUID] = Field(default_factory=list, max_length=200)

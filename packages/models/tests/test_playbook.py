@@ -59,6 +59,30 @@ def test_read_round_trip_preserves_denormalised_fields() -> None:
     assert restored == playbook
 
 
+def test_content_rejects_oversized_body() -> None:
+    with pytest.raises(ValidationError):
+        PlaybookContent(description="d", body="x" * 50_001, type="workflow")
+
+
+def test_content_rejects_oversized_description_or_triggers() -> None:
+    with pytest.raises(ValidationError):
+        PlaybookContent(description="x" * 2_001, body="b", type="workflow")
+    with pytest.raises(ValidationError):
+        PlaybookContent(description="d", body="b", type="workflow", triggers="x" * 2_001)
+
+
+def test_content_rejects_too_many_or_too_long_tags() -> None:
+    with pytest.raises(ValidationError):
+        PlaybookContent(description="d", body="b", type="workflow", tags=["t"] * 51)
+    with pytest.raises(ValidationError):
+        PlaybookContent(description="d", body="b", type="workflow", tags=["x" * 101])
+
+
+def test_content_rejects_oversized_type() -> None:
+    with pytest.raises(ValidationError):
+        PlaybookContent(description="d", body="b", type="x" * 101)
+
+
 def test_version_read_carries_version() -> None:
     version = PlaybookVersionRead(
         version=5,

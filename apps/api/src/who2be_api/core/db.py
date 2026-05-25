@@ -38,9 +38,7 @@ class Database:
 
     async def connect(self) -> None:
         settings = get_settings()
-        self._pool = await asyncpg.create_pool(
-            settings.database_url, init=_init_connection
-        )
+        self._pool = await asyncpg.create_pool(settings.database_url, init=_init_connection)
 
     async def disconnect(self) -> None:
         if self._pool is not None:
@@ -70,11 +68,19 @@ database = Database()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    if len(get_settings().jwt_secret) < _MIN_JWT_SECRET_LEN:
+    secret = get_settings().jwt_secret
+    if 0 < len(secret) < _MIN_JWT_SECRET_LEN:
+        # Ein gesetzter, aber zu kurzer JWT_SECRET ist immer ein Konfig-Fehler:
+        # `verify_supabase_jwt` wuerde stillschweigend jedes JWT ablehnen — die
+        # API liefe scheinbar normal, akzeptiert aber keinen Login. Fail loud.
+        raise RuntimeError(
+            f"JWT_SECRET ist {len(secret)} Zeichen lang, mindestens "
+            f"{_MIN_JWT_SECRET_LEN} sind erforderlich."
+        )
+    if not secret:
         logger.warning(
-            "JWT_SECRET fehlt oder ist kuerzer als %d Zeichen — JWT-Auth ist "
-            "nicht sicher nutzbar. Bitte ein starkes Secret konfigurieren.",
-            _MIN_JWT_SECRET_LEN,
+            "JWT_SECRET ist leer — JWT-Auth ist deaktiviert (nur API-Tokens). "
+            "Fuer Produktion ein starkes Secret konfigurieren."
         )
     try:
         await database.connect()

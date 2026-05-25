@@ -49,12 +49,8 @@ def _cleanup(owner_ids: list[UUID]) -> None:
     async def _run() -> None:
         conn = await asyncpg.connect(get_settings().database_url)
         try:
-            await conn.execute(
-                "DELETE FROM persona WHERE owner_id = ANY($1::uuid[])", owner_ids
-            )
-            await conn.execute(
-                "DELETE FROM playbook WHERE owner_id = ANY($1::uuid[])", owner_ids
-            )
+            await conn.execute("DELETE FROM persona WHERE owner_id = ANY($1::uuid[])", owner_ids)
+            await conn.execute("DELETE FROM playbook WHERE owner_id = ANY($1::uuid[])", owner_ids)
         finally:
             await conn.close()
 
@@ -63,7 +59,12 @@ def _cleanup(owner_ids: list[UUID]) -> None:
 
 def _auth(owner_id: UUID) -> dict[str, str]:
     token = jwt.encode(
-        {"sub": str(owner_id), "exp": datetime.now(UTC) + timedelta(hours=1)},
+        {
+            "sub": str(owner_id),
+            "aud": "authenticated",
+            "role": "authenticated",
+            "exp": datetime.now(UTC) + timedelta(hours=1),
+        },
         _TEST_SECRET,
         algorithm="HS256",
     )
@@ -93,9 +94,7 @@ def test_playbook_crud_filters_and_persona_linking(
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
     _prepare_db()
 
-    monkeypatch.setattr(
-        security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET)
-    )
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
     owner = uuid4()
     other = uuid4()
     auth = _auth(owner)
@@ -122,9 +121,7 @@ def test_playbook_crud_filters_and_persona_linking(
             second_id = second.json()["id"]
 
             # Tag-Filter
-            by_tag = client.get(
-                "/v1/playbooks", params={"tag": "onboarding"}, headers=auth
-            ).json()
+            by_tag = client.get("/v1/playbooks", params={"tag": "onboarding"}, headers=auth).json()
             assert [p["id"] for p in by_tag] == [first_id]
 
             # Trigger-Filter (case-insensitive Teilstring)
@@ -142,13 +139,9 @@ def test_playbook_crud_filters_and_persona_linking(
             assert updated.status_code == 200
             assert updated.json()["current_version"] == 2
 
-            versions = client.get(
-                f"/v1/playbooks/{first_id}/versions", headers=auth
-            ).json()
+            versions = client.get(f"/v1/playbooks/{first_id}/versions", headers=auth).json()
             assert [v["version"] for v in versions] == [2, 1]
-            v1 = client.get(
-                f"/v1/playbooks/{first_id}/versions/1", headers=auth
-            ).json()
+            v1 = client.get(f"/v1/playbooks/{first_id}/versions/1", headers=auth).json()
             assert v1["content"]["description"] == "v1"
 
             # Persona anlegen und Playbooks verknuepfen
@@ -172,9 +165,7 @@ def test_playbook_crud_filters_and_persona_linking(
 
             assert {
                 p["id"]
-                for p in client.get(
-                    f"/v1/personas/{persona_id}/playbooks", headers=auth
-                ).json()
+                for p in client.get(f"/v1/personas/{persona_id}/playbooks", headers=auth).json()
             } == {first_id, second_id}
 
             # Verknuepfung vollstaendig ersetzen (leere Liste loest alle)
@@ -196,11 +187,6 @@ def test_playbook_crud_filters_and_persona_linking(
             )
 
             # Owner-Isolation: fremder Owner sieht das Playbook nicht
-            assert (
-                client.get(
-                    f"/v1/playbooks/{first_id}", headers=_auth(other)
-                ).status_code
-                == 404
-            )
+            assert client.get(f"/v1/playbooks/{first_id}", headers=_auth(other)).status_code == 404
     finally:
         _cleanup([owner, other])

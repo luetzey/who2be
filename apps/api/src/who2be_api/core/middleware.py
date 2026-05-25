@@ -9,6 +9,7 @@ als Response-Header zurueck. `AccessLogMiddleware` misst die Bearbeitungszeit
 und emittiert eine strukturierte Log-Zeile pro HTTP-Request.
 """
 
+import re
 import time
 import uuid
 from collections.abc import Awaitable, Callable, MutableMapping
@@ -23,6 +24,11 @@ ASGISend = Callable[[ASGIMessage], Awaitable[None]]
 ASGIApp = Callable[[ASGIScope, ASGIReceive, ASGISend], Awaitable[None]]
 
 _REQUEST_ID_HEADER = b"x-request-id"
+# Akzeptierte Zeichen + Laenge fuer eingehende X-Request-ID. Verhindert
+# Log-Injection (CR/LF) und unbeschraenkte Header-Werte (Speicher in jedem
+# Log-Record). Werte ausserhalb dieser Form werden verworfen und durch eine
+# generierte UUID ersetzt.
+_REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 
 
 class RequestIDMiddleware:
@@ -31,15 +37,17 @@ class RequestIDMiddleware:
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
 
-    async def __call__(
-        self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend
-    ) -> None:
+    async def __call__(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
 
         incoming = _header_value(scope.get("headers") or [], _REQUEST_ID_HEADER)
-        request_id = incoming or uuid.uuid4().hex
+        request_id = (
+            incoming
+            if incoming is not None and _REQUEST_ID_PATTERN.match(incoming)
+            else uuid.uuid4().hex
+        )
         structlog.contextvars.bind_contextvars(request_id=request_id)
 
         async def send_with_header(message: ASGIMessage) -> None:
@@ -62,9 +70,7 @@ class AccessLogMiddleware:
         self.app = app
         self._logger = structlog.get_logger("who2be_api.access")
 
-    async def __call__(
-        self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend
-    ) -> None:
+    async def __call__(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return

@@ -62,12 +62,15 @@ def test_token_lifecycle_and_both_auth_paths(monkeypatch: pytest.MonkeyPatch) ->
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
     _prepare_db()
 
-    monkeypatch.setattr(
-        security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET)
-    )
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
     owner_id = uuid4()
     jwt_token = jwt.encode(
-        {"sub": str(owner_id), "exp": datetime.now(UTC) + timedelta(hours=1)},
+        {
+            "sub": str(owner_id),
+            "aud": "authenticated",
+            "role": "authenticated",
+            "exp": datetime.now(UTC) + timedelta(hours=1),
+        },
         _TEST_SECRET,
         algorithm="HS256",
     )
@@ -77,9 +80,7 @@ def test_token_lifecycle_and_both_auth_paths(monkeypatch: pytest.MonkeyPatch) ->
         with TestClient(app) as client:
             assert client.get("/v1/tokens").status_code == 401
 
-            created = client.post(
-                "/v1/tokens", json={"name": "agent"}, headers=jwt_auth
-            )
+            created = client.post("/v1/tokens", json={"name": "agent"}, headers=jwt_auth)
             assert created.status_code == 201
             body = created.json()
             plaintext = body["token"]
@@ -98,9 +99,6 @@ def test_token_lifecycle_and_both_auth_paths(monkeypatch: pytest.MonkeyPatch) ->
             assert revoke.status_code == 204
 
             assert client.get("/v1/tokens", headers=api_auth).status_code == 401
-            assert (
-                client.delete(f"/v1/tokens/{token_id}", headers=jwt_auth).status_code
-                == 404
-            )
+            assert client.delete(f"/v1/tokens/{token_id}", headers=jwt_auth).status_code == 404
     finally:
         _cleanup(owner_id)

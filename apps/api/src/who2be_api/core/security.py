@@ -24,8 +24,23 @@ logger = logging.getLogger(__name__)
 
 TOKEN_PREFIX = "w2b_"
 _JWT_ALGORITHM = "HS256"
+# Supabase GoTrue setzt fuer signed-in-Endnutzer `aud=authenticated`. Service-Tokens
+# (`role=service_role`) sollen die API NICHT als Owner durchlassen, auch wenn sie
+# zufaellig mit demselben Secret signiert sind.
+_JWT_AUDIENCE = "authenticated"
+_JWT_ALLOWED_ROLES = frozenset({"authenticated"})
 
 _bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def _jwt_issuer(supabase_url: str) -> str | None:
+    """Erwarteter `iss`-Claim eines Supabase-JWT (`<supabase_url>/auth/v1`).
+
+    Gibt `None` zurueck, wenn `SUPABASE_URL` nicht konfiguriert ist — dann wird
+    die Pruefung uebersprungen (Dev-/Test-Mode ohne issuer-Bindung).
+    """
+    base = supabase_url.rstrip("/")
+    return f"{base}/auth/v1" if base else None
 
 
 def new_token() -> str:
@@ -48,18 +63,27 @@ def _credentials_error() -> HTTPException:
 
 def verify_supabase_jwt(token: str) -> UUID:
     """Verifiziert ein Supabase-JWT lokal (HS256) und liest `sub` als owner_id."""
-    secret = get_settings().jwt_secret
+    settings = get_settings()
+    secret = settings.jwt_secret
     if not secret:
         raise _credentials_error()
+    issuer = _jwt_issuer(settings.supabase_url)
     try:
         payload = jwt.decode(
             token,
             secret,
             algorithms=[_JWT_ALGORITHM],
-            options={"verify_aud": False, "require": ["exp", "sub"]},
+            audience=_JWT_AUDIENCE,
+            issuer=issuer,
+            options={"require": ["exp", "sub", "aud"]},
         )
     except jwt.PyJWTError as exc:
         raise _credentials_error() from exc
+    # `role` ist von Supabase per Konvention gesetzt; ohne Whitelist wuerden
+    # `service_role`-Tokens (Admin) hier ebenfalls als Owner durchlaufen.
+    role = payload.get("role")
+    if role is not None and role not in _JWT_ALLOWED_ROLES:
+        raise _credentials_error()
     sub = payload.get("sub")
     if not isinstance(sub, str):
         raise _credentials_error()
