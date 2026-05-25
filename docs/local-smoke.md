@@ -105,6 +105,10 @@ export WHO2BE_API_TOKEN=w2b_<dein-token>
 uv run python -m who2be_mcp.server
 ```
 
+> Fuer **Claude Code** geht die Anbindung sauberer ueber `claude mcp add`
+> statt manuellem Start im Terminal — Setup-Anleitung in
+> `docs/mcp-claude-code.md`.
+
 MCP-Client (z. B. Claude Desktop mit `who2be` in `mcpServers`) aufrufen:
 
 - [ ] `ping` → Pong.
