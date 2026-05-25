@@ -1,72 +1,78 @@
 # Lokaler End-to-End-Smoke
 
 Manueller Happy-Path-Smoke fuer Who2Be **lokal** (vor Hetzner-Deploy).
-Deckt MS-1 ab: Web-UI ↔ API ↔ Postgres ↔ MCP-Server gegen die echte
-lokale Stack-Konfiguration.
+Deckt MS-1 ab: Web-UI ↔ API ↔ Postgres ↔ GoTrue (Auth) ↔ MCP-Server.
 
-> **Wer haakt ab?** Du (User). Der Sandbox-Container kann kein Supabase-
-> Login und keinen Browser fahren — die Abnahme passiert auf deiner
-> Workstation. Plan-Pointer: `.claude/plan/2026-05-24-1535_w6-local-smoke-doc.md`.
+> **Wer haakt ab?** Du (User). Der Sandbox-Container kann den Browser-
+> Happy-Path und das Anlegen eines Test-Users nicht selbst fahren — die
+> Abnahme passiert auf deiner Workstation. Plan-Pointer:
+> `.claude/plan/2026-05-25-1047_compose-smoke-pipeline.md`.
+
+Seit der Compose-Pipeline (Mai 2026) laeuft der ganze Stack als ein
+einziger `docker compose`-Aufruf — kein Supabase-Cloud-Projekt mehr
+noetig fuer den lokalen Smoke.
 
 ---
 
 ## 0 — Voraussetzungen
 
-- `uv` installiert (`uv --version` ≥ 0.4).
-- `node` + `npm` installiert (Node 20+).
-- `docker` + `docker compose` lauffaehig.
-- Ein Supabase-Projekt (Cloud reicht fuer den lokalen Smoke) mit:
-  - `Project URL` + `anon`-Key (Project Settings → API).
-  - `JWT Secret` (Project Settings → API → JWT Settings).
-  - Mindestens ein Test-User mit Email/Password (Authentication → Users).
+- `docker` + `docker compose` lauffaehig (Docker Desktop oder Engine).
+- Browser fuer den Web-Happy-Path.
+- Optional: `curl`, `python3` auf dem Host (fuer den Smoke-Script-Lauf;
+  beides ist auf macOS/Linux meist vorhanden).
 
-## 1 — Env vorbereiten
+`uv` und `node` werden lokal nur noch fuer die regulaeren Tests
+(`uv run pytest -q`, `npm test`) gebraucht, nicht mehr fuer den Smoke.
 
-```bash
-cp .env.example .env
-```
-
-In `.env` ausfuellen:
-
-- `DATABASE_URL` bleibt (Compose-Default).
-- `JWT_SECRET` = **exakt** Supabase-Project-JWT-Secret.
-- `VITE_API_BASE_URL=http://localhost:8000`
-- `VITE_SUPABASE_URL=https://<projekt>.supabase.co`
-- `VITE_SUPABASE_ANON_KEY=<anon-key>`
-
-> Mismatch beim `JWT_SECRET` ⇒ API antwortet jedes Web-Login mit 401.
-
-## 2 — Stack starten
-
-In drei separaten Terminals (Reihenfolge wichtig):
+## 1 — Stack starten
 
 ```bash
-# Terminal A — Postgres-Stub
-docker compose up -d
-
-# Terminal B — Migrations + API
-uv sync
-uv run who2be-migrate
-uv run uvicorn who2be_api.main:app --reload
-
-# Terminal C — Web
-cd apps/web
-npm ci
-npm run dev
+cp .env.example .env       # Defaults passen 1:1 zum Compose-Setup
+docker compose up -d --build --wait --wait-timeout 240
 ```
 
-Smoke-Check fuer die API (eigenes Terminal):
+`--wait` haelt an, bis jeder Service healthy ist (siehe `healthcheck:`-
+Bloecke in `docker-compose.yml`). Reihenfolge: `db` → `migrate` (einmalig,
+bringt alle SQL-Migrationen ein) → `auth` (GoTrue) + `api` → `auth-gateway`
++ `web`.
+
+## 2 — Automatischer Smoke (curl + MCP)
 
 ```bash
-curl -s http://localhost:8000/v1/health
-# erwartet: {"status":"ok","db":"ok"}
+bash scripts/smoke.sh
 ```
 
-## 3 — Web-Happy-Path
+Pruefen wird:
+
+1. `GET /v1/health` → `{"status":"ok","db":"ok"}`
+2. `GET /` (Vite) → HTML mit `<title>`
+3. JWT-authentifizierter `GET /v1/personas` (Token wird mit `scripts/gen_test_jwt.py`
+   gegen `JWT_SECRET` aus `.env` erzeugt) → 200
+4. MCP-Tool-Registrierung im `api`-Container → enthaelt `ping`,
+   `get_persona`, `list_playbooks`, `fetch_playbook`
+
+Wenn das Skript "alle Checks gruen" druckt, ist die Basis steht. Was es
+**nicht** ersetzt: das echte Web-Happy-Path-Klicken (siehe Schritt 3).
+
+## 3 — Web-Happy-Path (manuell)
 
 UI im Browser: <http://localhost:5173>.
 
-- [ ] **Login** — Email/Password aus dem Supabase-Test-User. Nach Erfolg
+Test-User vor dem allerersten Login per GoTrue-Signup anlegen:
+
+```bash
+curl -s -X POST http://localhost:9999/auth/v1/signup \
+  -H "apikey: dev-anon-key-not-used-by-gotrue" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"agent@who2be.dev","password":"streng-geheim"}'
+```
+
+(`GOTRUE_MAILER_AUTOCONFIRM=true` im Compose laesst den User sofort
+einloggen — keine Bestaetigungs-Mail noetig.)
+
+Dann im Browser:
+
+- [ ] **Login** — Email/Password aus dem Signup-Schritt. Nach Erfolg
       Redirect auf `/personas`.
 - [ ] **Persona anlegen** — `Neue Persona` → Name, Beschreibung, System-
       Prompt, Eigenschaften (kommagetrennt) → `Anlegen`. Redirect auf
@@ -112,7 +118,8 @@ MCP-Client (z. B. Claude Desktop mit `who2be` in `mcpServers`) aufrufen:
 
 | Schritt              | Abgehakt am | Beleg (Screenshot / Log) |
 |----------------------|-------------|--------------------------|
-| 2 — API + Web up     |             |                          |
+| 1 — Stack healthy    |             |                          |
+| 2 — `smoke.sh` gruen |             |                          |
 | 3 — Web-Happy-Path   |             |                          |
 | 4 — MCP-Smoke        |             |                          |
 
@@ -120,14 +127,23 @@ MCP-Client (z. B. Claude Desktop mit `who2be` in `mcpServers`) aufrufen:
 > `docs/smoke-evidence/2026-…/` ablegen (Ordner bei Bedarf anlegen,
 > wird nicht eingecheckt) oder in Notion an die Projektseite haengen.
 
+## 6 — Teardown
+
+```bash
+docker compose down -v   # `-v` loescht das Postgres-Volume (frischer Start)
+```
+
 ## Bekannte Stolpersteine
 
-- **401 vom Web** trotz erfolgreichem Supabase-Login → `JWT_SECRET` in
-  `.env` ≠ Supabase-Project-JWT-Secret. API neu starten nach Aenderung.
-- **`who2be-migrate` faellt mit `connection refused`** → Postgres-
-  Container noch nicht bereit; `docker compose ps` pruefen, ggf. 2 s
-  warten.
-- **MCP antwortet "Nicht autorisiert"** → `WHO2BE_API_TOKEN` falsch oder
-  in `/settings/tokens` revoked.
-- **`/v1/health` meldet `db:"down"`** → API hat den Pool nicht gebootet;
-  `DATABASE_URL` und Compose-Status pruefen.
+- **401 vom Web** trotz erfolgreichem Login → `JWT_SECRET` in `.env` ≠
+  `GOTRUE_JWT_SECRET` im Compose. Defaults sind identisch; nach einer
+  Aenderung beide synchron halten und `docker compose up -d` erneut.
+- **`smoke.sh` meldet `MCP-Tool fehlt`** → der `api`-Container war nicht
+  ready; `docker compose ps` und `docker compose logs api` pruefen.
+- **`/v1/health` meldet `db:"unavailable"`** → API hat den Pool nicht
+  gebootet; `docker compose logs db migrate` und `DATABASE_URL`
+  vergleichen.
+- **GoTrue-Signup gibt 422 "validation_failed"** → Passwort < 6 Zeichen
+  oder schon vergebene Email.
+- **MCP "Nicht autorisiert"** → `WHO2BE_API_TOKEN` falsch oder in
+  `/settings/tokens` revoked.
