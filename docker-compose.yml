@@ -1,7 +1,10 @@
 # Lokale Entwicklungs-Infrastruktur fuer Who2Be.
-# Stub — Phase 0 (Task T1) ersetzt dies durch das vollstaendige
-# self-hosted-Supabase-Compose-Setup:
-# https://supabase.com/docs/guides/self-hosting/docker
+# `docker compose up -d --wait` faehrt den ganzen Stack hoch:
+#   db (Postgres) -> migrate (einmalig) -> auth (GoTrue) + api -> web.
+# Gegenstueck: docs/local-smoke.md (1-Befehl-Variante) + scripts/smoke.sh.
+# Vorgriff auf MS-2 C1-C6: self-hosted GoTrue ersetzt die Supabase-Cloud-
+# Abhaengigkeit fuer den lokalen Smoke. Kong/Studio/PostgREST bleiben fuer
+# MS-2 separat (siehe `## Offene Punkte` im Plan).
 services:
   db:
     image: postgres:16
@@ -13,6 +16,109 @@ services:
       - "5432:5432"
     volumes:
       - db-data:/var/lib/postgresql/data
+      - ./supabase/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d who2be"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: ["who2be-migrate"]
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/who2be
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  auth:
+    image: supabase/gotrue:v2.158.1
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: "9999"
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://postgres:postgres@db:5432/who2be?search_path=auth
+      GOTRUE_SITE_URL: http://localhost:5173
+      GOTRUE_URI_ALLOW_LIST: http://localhost:5173,http://localhost:5173/*
+      GOTRUE_DISABLE_SIGNUP: "false"
+      GOTRUE_JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-me-32chars-min}
+      GOTRUE_JWT_EXP: "3600"
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+      API_EXTERNAL_URL: http://localhost:9999
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9999/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  auth-gateway:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./supabase/gateway.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "9999:9999"
+    depends_on:
+      auth:
+        condition: service_healthy
+    healthcheck:
+      # 127.0.0.1 statt localhost — nginx-alpine hoert nur IPv4 (kein
+      # IPv6-Listener), `localhost` aufloest in der Image-Default zu ::1.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9999/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/who2be
+      JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-me-32chars-min}
+      CORS_ORIGINS: http://localhost:5173
+    ports:
+      - "8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/v1/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    environment:
+      VITE_API_BASE_URL: http://localhost:8000
+      VITE_SUPABASE_URL: http://localhost:9999
+      VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:-dev-anon-key-not-used-by-gotrue}
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./apps/web:/app
+      - /app/node_modules
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:5173/"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
 volumes:
   db-data:

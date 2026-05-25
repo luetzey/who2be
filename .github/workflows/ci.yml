@@ -57,3 +57,20 @@ jobs:
         run: npm test
       - name: Build
         run: npm run build
+
+  compose-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compose env
+        run: cp .env.example .env
+      - name: Compose up (build + wait healthy)
+        run: docker compose up -d --build --wait --wait-timeout 240
+      - name: Smoke
+        run: bash scripts/smoke.sh
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+      - name: Compose down
+        if: always()
+        run: docker compose down -v
