@@ -5,16 +5,37 @@ asyncpg-Pool), Auth (`/v1/tokens`), Persona- und Playbook-CRUD inklusive
 Persona-Playbook-Verknuepfung.
 """
 
-from fastapi import FastAPI
+from typing import cast
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from pydantic import BaseModel
+from slowapi.middleware import SlowAPIMiddleware
 
 from who2be_api import __version__
 from who2be_api.core.config import get_settings
 from who2be_api.core.db import database, lifespan
+from who2be_api.core.rate_limit import (
+    RateLimitExceeded,
+    _rate_limit_exceeded_handler,
+    limiter,
+)
 from who2be_api.routers import persona_playbooks, personas, playbooks, tokens
 
+
+def _on_rate_limit(request: Request, exc: Exception) -> Response:
+    # slowapi's Handler ist auf `RateLimitExceeded` typisiert; Starlette erwartet
+    # `Exception`. Duenner Adapter haelt mypy strict, ohne `type: ignore`.
+    return _rate_limit_exceeded_handler(request, cast(RateLimitExceeded, exc))
+
+
 app = FastAPI(title="Who2Be API", version=__version__, lifespan=lifespan)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _on_rate_limit)
+# SlowAPIMiddleware vor CORSMiddleware adden: Starlette stacked LIFO, dann liegt
+# CORS aussen und Preflight-OPTIONS triggert das Limit nicht.
+app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origins,

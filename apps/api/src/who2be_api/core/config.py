@@ -36,9 +36,7 @@ class Settings(BaseSettings):
     rufen `settings.cors_origins` und bekommen die geparste Liste.
     """
 
-    model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", extra="ignore"
-    )
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     database_url: str = "postgresql://postgres:postgres@localhost:5432/who2be"
     jwt_secret: str = ""
@@ -47,6 +45,9 @@ class Settings(BaseSettings):
         default="http://localhost:5173",
         validation_alias=AliasChoices("CORS_ORIGINS", "cors_origins"),
     )
+    # Pro Token-Hash bzw. IP. Slowapi-Limit-Callable liest dieses Feld zur Laufzeit,
+    # damit Tests via Settings-Override auf einen niedrigen Wert druecken koennen.
+    rate_limit_write: str = "30/minute"
 
     @property
     def cors_origins(self) -> list[str]:

@@ -4,9 +4,10 @@ from typing import Annotated
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 
 from who2be_api.core.db import get_pool
+from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import get_current_user
 from who2be_api.repositories.playbook_repository import PgPlaybookRepository
 from who2be_api.services.playbook_service import PlaybookService
@@ -42,22 +43,26 @@ async def list_playbooks(
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
+@limiter.limit(write_limit)
 async def create_playbook(
-    data: PlaybookCreate, owner_id: OwnerId, service: Service
+    request: Request, data: PlaybookCreate, owner_id: OwnerId, service: Service
 ) -> PlaybookRead:
     return await service.create(owner_id, data)
 
 
 @router.get("/{playbook_id}")
-async def get_playbook(
-    playbook_id: UUID, owner_id: OwnerId, service: Service
-) -> PlaybookRead:
+async def get_playbook(playbook_id: UUID, owner_id: OwnerId, service: Service) -> PlaybookRead:
     return await service.get(owner_id, playbook_id)
 
 
 @router.put("/{playbook_id}")
+@limiter.limit(write_limit)
 async def update_playbook(
-    playbook_id: UUID, data: PlaybookUpdate, owner_id: OwnerId, service: Service
+    request: Request,
+    playbook_id: UUID,
+    data: PlaybookUpdate,
+    owner_id: OwnerId,
+    service: Service,
 ) -> PlaybookRead:
     return await service.update(owner_id, playbook_id, data)
 

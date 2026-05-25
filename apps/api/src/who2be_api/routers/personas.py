@@ -4,9 +4,10 @@ from typing import Annotated
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 
 from who2be_api.core.db import get_pool
+from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import get_current_user
 from who2be_api.repositories.persona_repository import PgPersonaRepository
 from who2be_api.services.persona_service import PersonaService
@@ -37,22 +38,26 @@ async def list_personas(owner_id: OwnerId, service: Service) -> list[PersonaRead
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
+@limiter.limit(write_limit)
 async def create_persona(
-    data: PersonaCreate, owner_id: OwnerId, service: Service
+    request: Request, data: PersonaCreate, owner_id: OwnerId, service: Service
 ) -> PersonaRead:
     return await service.create(owner_id, data)
 
 
 @router.get("/{persona_id}")
-async def get_persona(
-    persona_id: UUID, owner_id: OwnerId, service: Service
-) -> PersonaRead:
+async def get_persona(persona_id: UUID, owner_id: OwnerId, service: Service) -> PersonaRead:
     return await service.get(owner_id, persona_id)
 
 
 @router.put("/{persona_id}")
+@limiter.limit(write_limit)
 async def update_persona(
-    persona_id: UUID, data: PersonaUpdate, owner_id: OwnerId, service: Service
+    request: Request,
+    persona_id: UUID,
+    data: PersonaUpdate,
+    owner_id: OwnerId,
+    service: Service,
 ) -> PersonaRead:
     return await service.update(owner_id, persona_id, data)
 
