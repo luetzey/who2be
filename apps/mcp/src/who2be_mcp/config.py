@@ -5,6 +5,7 @@ Die Variablen tragen den Prefix `WHO2BE_` (z. B. `WHO2BE_API_TOKEN`).
 """
 
 from functools import lru_cache
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -19,6 +20,8 @@ class Settings(BaseSettings):
 
     api_base_url: str = "http://localhost:8000"
     api_token: str = ""
+    # `json` fuer Prod-Aggregation, `console` fuer lesbares Dev-Tail (ADR-0007).
+    log_format: Literal["json", "console"] = "json"
 
 
 @lru_cache

@@ -10,6 +10,7 @@ dependencies = [
     "pydantic-settings>=2.0",
     "pyjwt>=2.8",
     "slowapi>=0.1.9",
+    "structlog>=24.1",
     "who2be-models",
 ]
 

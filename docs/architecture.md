@@ -339,6 +339,12 @@ filtert serverseitig nach `owner_id` — Zero-Trust, keine implizite Freigabe.
   einer spaeteren Deploy-Stufe erfordert ein Redis-Backend.
 - Fuer Auth, DB-Zugriff, MCP-Tools und externe Inputs bei der Umsetzung den
   Subagent `security-reviewer` einsetzen (Repo-Vorgabe).
+- Strukturierte JSON-Logs via `structlog` (ADR-0007): API und MCP schreiben
+  auf stdout, jede Zeile traegt mindestens `request_id` (API: pro HTTP-
+  Request, MCP: pro Tool-Aufruf), `owner_id` (sobald `get_current_user`
+  aufloest), `path`, `status` und `duration_ms`. Der Header `X-Request-ID`
+  wird Eingangs uebernommen und Ausgangs propagiert; per `LOG_FORMAT=console`
+  laesst sich lokal auf lesbares Format schalten.
 
 ## 7. Test-Plan (Testpyramide)
 
