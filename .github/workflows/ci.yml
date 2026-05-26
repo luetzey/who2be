@@ -74,3 +74,31 @@ jobs:
       - name: Compose down
         if: always()
         run: docker compose down -v
+
+  audit:
+    # Supply-Chain-Gate (MS-3 H6): pip-audit fuer den Python-Workspace und
+    # npm audit fuer das Web-Frontend. Fail bei high/critical; moderates
+    # werden im RUNBOOK akzeptiert oder direkt gefixt. Triage-Pfad:
+    # deploy/hetzner/RUNBOOK.md §CVE-Response.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+      - name: Export non-workspace deps
+        # Editable Workspace-Members (apps/api, apps/mcp, packages/models)
+        # filtern, weil pip-audit fuer sie keinen Hash aufloesen kann.
+        run: uv export --format requirements-txt --no-emit-workspace --no-hashes > /tmp/who2be-reqs.txt
+      - name: pip-audit (Python)
+        run: uv tool run pip-audit --disable-pip --no-deps -r /tmp/who2be-reqs.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install web deps
+        working-directory: apps/web
+        run: npm ci
+      - name: npm audit (Web, prod-only, high+)
+        working-directory: apps/web
+        run: npm audit --omit=dev --audit-level=high
