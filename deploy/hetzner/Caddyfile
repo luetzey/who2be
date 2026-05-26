@@ -25,6 +25,11 @@ api.{$DOMAIN} {
     import security_headers
     # API liefert JSON — Inline-Scripts, Frames, externe Connects sind alle aus.
     header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+    # H5 / ADR-0010: /v1/internal/* (z.B. /metrics fuer Prometheus) ist ausschliesslich
+    # intern erreichbar. Caddy blockt externen Zugriff direkt — kein Round-Trip in den
+    # Container, damit auch versehentlich offene Endpoints nicht raus-leaken.
+    @internal path /v1/internal/*
+    respond @internal "Forbidden" 403
     reverse_proxy api:8000
 }
 
