@@ -3,8 +3,8 @@ import { render, screen, waitFor } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { AuthTokenProvider } from '../auth/AuthTokenProvider'
-import { SessionContext } from '../auth/session-context'
+import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
+import { SessionContext } from '@/auth/session-context'
 import { PersonasPage } from './PersonasPage'
 
 const fakeSession = { access_token: 'tok' } as unknown as Session

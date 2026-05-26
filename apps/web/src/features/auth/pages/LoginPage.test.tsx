@@ -4,13 +4,13 @@ import { describe, expect, it, vi } from 'vitest'
 
 const { signInWithPassword } = vi.hoisted(() => ({ signInWithPassword: vi.fn() }))
 
-vi.mock('../lib/supabase', () => ({
+vi.mock('@/lib/supabase', () => ({
   supabase: {
     auth: { signInWithPassword, signOut: vi.fn() },
   },
 }))
 
-import { SessionProvider } from '../auth/SessionProvider'
+import { SessionProvider } from '@/auth/SessionProvider'
 import { LoginPage } from './LoginPage'
 
 describe('LoginPage', () => {

@@ -3,14 +3,10 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthTokenProvider } from './auth/AuthTokenProvider'
 import { RequireAuth } from './auth/RequireAuth'
 import { SessionProvider } from './auth/SessionProvider'
-import { LoginPage } from './pages/LoginPage'
-import { PersonaDetailPage } from './pages/PersonaDetailPage'
-import { PersonaNewPage } from './pages/PersonaNewPage'
-import { PersonasPage } from './pages/PersonasPage'
-import { PlaybookDetailPage } from './pages/PlaybookDetailPage'
-import { PlaybookNewPage } from './pages/PlaybookNewPage'
-import { PlaybooksPage } from './pages/PlaybooksPage'
-import { SettingsTokensPage } from './pages/SettingsTokensPage'
+import { LoginPage } from './features/auth'
+import { PersonaDetailPage, PersonaNewPage, PersonasPage } from './features/personas'
+import { PlaybookDetailPage, PlaybookNewPage, PlaybooksPage } from './features/playbooks'
+import { SettingsTokensPage } from './features/tokens'
 
 export function App() {
   return (

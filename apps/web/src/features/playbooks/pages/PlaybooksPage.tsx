@@ -1,0 +1,105 @@
+import { Plus } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+
+import { AppShell } from '@/components/layout/AppShell'
+import { Container } from '@/components/layout/Container'
+import { PageHeader } from '@/components/layout/PageHeader'
+import { DataList } from '@/components/data/DataList'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { useSession } from '@/auth/session-context'
+import { usePlaybooks } from '@/hooks/usePlaybooks'
+
+export function PlaybooksPage() {
+  const { playbooks, loading, error } = usePlaybooks()
+  const { signOut } = useSession()
+  const [tagFilter, setTagFilter] = useState('')
+  const [triggerFilter, setTriggerFilter] = useState('')
+
+  const filtered = useMemo(() => {
+    const tag = tagFilter.trim().toLowerCase()
+    const trigger = triggerFilter.trim().toLowerCase()
+    return playbooks.filter((playbook) => {
+      const tagMatch =
+        tag === '' || playbook.tags.some((entry) => entry.toLowerCase().includes(tag))
+      const triggerMatch =
+        trigger === '' || (playbook.triggers ?? '').toLowerCase().includes(trigger)
+      return tagMatch && triggerMatch
+    })
+  }, [playbooks, tagFilter, triggerFilter])
+
+  return (
+    <AppShell onSignOut={() => void signOut()}>
+      <Container>
+        <PageHeader
+          title="Playbooks"
+          description="Workflows und Playbook-Versionen fuer Agenten."
+          actions={
+            <Button asChild>
+              <Link to="/playbooks/new">
+                <Plus className="h-4 w-4" />
+                Neues Playbook
+              </Link>
+            </Button>
+          }
+        />
+
+        <Card className="mb-6">
+          <CardContent className="grid gap-4 pt-6 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="playbook-tag-filter">Tag-Filter</Label>
+              <Input
+                id="playbook-tag-filter"
+                value={tagFilter}
+                onChange={(event) => setTagFilter(event.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="playbook-trigger-filter">Trigger-Filter</Label>
+              <Input
+                id="playbook-trigger-filter"
+                value={triggerFilter}
+                onChange={(event) => setTriggerFilter(event.target.value)}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        <DataList
+          items={filtered}
+          loading={loading}
+          error={error}
+          getKey={(playbook) => playbook.id}
+          renderItem={(playbook) => (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Link
+                  to={`/playbooks/${playbook.id}`}
+                  className="font-medium text-foreground hover:underline"
+                >
+                  {playbook.name}
+                </Link>
+                <span className="text-xs text-muted-foreground">
+                  {playbook.type} · v{playbook.current_version}
+                </span>
+              </div>
+              {playbook.tags.length > 0 ? (
+                <div className="flex flex-wrap gap-1" aria-label="Tags">
+                  {playbook.tags.map((tag) => (
+                    <Badge key={tag} variant="secondary">
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          )}
+        />
+      </Container>
+    </AppShell>
+  )
+}
