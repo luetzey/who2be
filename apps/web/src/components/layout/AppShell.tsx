@@ -1,0 +1,79 @@
+import { BookOpen, KeyRound, LogOut, Users } from 'lucide-react'
+import type { ComponentType, ReactNode, SVGProps } from 'react'
+import { NavLink } from 'react-router-dom'
+
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
+
+interface AppShellProps {
+  children: ReactNode
+  onSignOut: () => void
+}
+
+interface NavItem {
+  to: string
+  label: string
+  icon: ComponentType<SVGProps<SVGSVGElement>>
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { to: '/', label: 'Personae', icon: Users },
+  { to: '/playbooks', label: 'Playbooks', icon: BookOpen },
+  { to: '/settings/tokens', label: 'API-Tokens', icon: KeyRound },
+]
+
+export function AppShell({ children, onSignOut }: AppShellProps) {
+  return (
+    <div className="flex min-h-screen w-full bg-background text-foreground">
+      <aside className="hidden w-60 shrink-0 flex-col border-r bg-muted/40 px-3 py-4 sm:flex">
+        <div className="px-2 pb-6 text-sm font-semibold tracking-tight">Who2Be</div>
+        <nav className="flex flex-1 flex-col gap-1">
+          {NAV_ITEMS.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.to === '/'}
+              className={({ isActive }) =>
+                cn(
+                  'flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground',
+                  isActive && 'bg-accent text-accent-foreground',
+                )
+              }
+            >
+              <item.icon className="h-4 w-4" />
+              {item.label}
+            </NavLink>
+          ))}
+        </nav>
+      </aside>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex h-14 items-center justify-between border-b px-4 sm:px-6">
+          <nav className="flex items-center gap-3 sm:hidden">
+            {NAV_ITEMS.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === '/'}
+                className={({ isActive }) =>
+                  cn(
+                    'text-sm font-medium text-muted-foreground hover:text-foreground',
+                    isActive && 'text-foreground',
+                  )
+                }
+              >
+                {item.label}
+              </NavLink>
+            ))}
+          </nav>
+          <div className="ml-auto">
+            <Button variant="ghost" size="sm" onClick={onSignOut}>
+              <LogOut className="h-4 w-4" />
+              Abmelden
+            </Button>
+          </div>
+        </header>
+        <main className="min-w-0 flex-1">{children}</main>
+      </div>
+    </div>
+  )
+}
