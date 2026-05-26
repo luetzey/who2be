@@ -11,11 +11,12 @@
 ## Zusammenfassung
 
 13 Findings: **2 High, 5 Medium, 4 Low, 2 Info — keine Critical**.
-Sieben Findings sind in diesem Branch gepatcht (Pydantic-Length-Limits,
+Neun Findings sind in diesem Branch gepatcht (Pydantic-Length-Limits,
 JWT-Audience/Issuer/Role-Check, X-Request-ID-Sanitisierung, MCP-Logging,
-CORS-Header-Whitelist, JWT_SECRET-Fail-loud, Query-Param-Length-Limit). Die
-restlichen sechs sind als bewusst akzeptiert, MS-2-Akzeptanzkriterium oder
-Followup-Task dokumentiert.
+CORS-Header-Whitelist, JWT_SECRET-Fail-loud, Query-Param-Length-Limit,
+Proxy-IP-Rate-Limit-Verifikation, Keyset-Pagination). Die restlichen
+vier sind als bewusst akzeptiert (F-04, F-11, F-13) oder
+MS-2-Akzeptanzkriterium fuer den Reverse-Proxy (F-12) dokumentiert.
 
 Positiv: SQL durchgaengig parametrisiert, `_escape_like` fuer ILIKE-Trigger,
 Composite-FKs in `persona_playbook` als Defense-in-Depth gegen
@@ -28,14 +29,14 @@ strukturierte JSON-Logs ohne Authorization-Header / Bodies / Token.
 | ID   | Severity | Bereich           | Titel                                                                  | Status          |
 | ---- | -------- | ----------------- | ---------------------------------------------------------------------- | --------------- |
 | F-01 | High     | Input-Validierung | Unbeschraenkte String- und Listenfelder in Persona/Playbook/LinkSet    | Fixed           |
-| F-02 | High     | Rate-Limit        | `get_remote_address` ignoriert `X-Forwarded-For` hinter Reverse-Proxy  | Followup → MS-2 |
+| F-02 | High     | Rate-Limit        | `get_remote_address` ignoriert `X-Forwarded-For` hinter Reverse-Proxy  | Fixed           |
 | F-03 | Medium   | Auth/JWT          | `verify_aud=False` und kein `iss`-Check                                | Fixed           |
 | F-04 | Medium   | Auth/Token        | Token-Hash-Lookup ohne Constant-Time-Vergleich                         | Accepted        |
 | F-05 | Medium   | Logging           | `X-Request-ID` unsanitisiert in Log und Response-Header reflektiert    | Fixed           |
 | F-06 | Medium   | MCP               | Volle `httpx`-Exception im Log — kann `Authorization`-Header mitfuehren | Fixed           |
 | F-07 | Medium   | CORS              | `allow_headers=["*"]` zu permissiv                                     | Fixed           |
 | F-08 | Low      | Auth/JWT          | `JWT_SECRET`-Default `""` macht App stillschweigend nicht-funktional   | Fixed           |
-| F-09 | Low      | API/Routing       | Keine Pagination-Limits auf `GET /v1/personas`, `/v1/playbooks`        | Followup        |
+| F-09 | Low      | API/Routing       | Keine Pagination-Limits auf `GET /v1/personas`, `/v1/playbooks`        | Fixed           |
 | F-10 | Low      | API/Query         | `tag`/`trigger` Query-Parameter ohne `max_length`                      | Fixed           |
 | F-11 | Low      | Web/UI            | `VITE_*`-Fallbacks im Production-Build                                 | Accepted        |
 | F-12 | Info     | Security-Header   | Fehlende X-Content-Type-Options, X-Frame-Options, Referrer-Policy, CSP | Followup → MS-2 |
@@ -64,22 +65,27 @@ strukturierte JSON-Logs ohne Authorization-Header / Bodies / Token.
 - **Tests:** `packages/models/tests/test_persona.py`,
   `test_playbook.py`, `test_links.py` (je 3 neue `ValidationError`-Cases).
 
-### F-02 — `get_remote_address` ignoriert `X-Forwarded-For` (High, Followup → MS-2)
+### F-02 — `get_remote_address` ignoriert `X-Forwarded-For` (High, Fixed)
 
-- **Bereich:** `apps/api/src/who2be_api/core/rate_limit.py:34`
+- **Bereich:** `apps/api/src/who2be_api/core/rate_limit.py:34`,
+  `apps/api/Dockerfile:50-54`
 - **Beschreibung:** `slowapi.util.get_remote_address` liest `request.client.host`.
-  Hinter dem in MS-2 geplanten Reverse-Proxy (Caddy auf Hetzner) ist das
-  die Proxy-IP — alle anonymen Calls landen in einem Bucket. Naiver
-  `X-Forwarded-For`-Trust ist Spoofing-Vektor.
-- **Risiko:** Heute (lokal/CI) ohne Reverse-Proxy unkritisch; **wird** zum
-  echten Finding, sobald MS-2 live geht.
-- **Status:** Akzeptiert mit Bindung an MS-2-Task **C3**
-  (App-Compose + Reverse-Proxy). Konkrete MS-2-Akzeptanzkriterien:
-  1. `uvicorn` mit `--forwarded-allow-ips=<proxy_container_ip>` starten.
-  2. `ProxyHeadersMiddleware` aktivieren, sodass `request.client.host` die
-     echte Client-IP wird.
-  3. Pre-Auth-Routen-Limit per IP testen, dass es nach C3 mit echtem Proxy
-     den Limiter wirklich per Client-IP triggert.
+  Hinter dem Reverse-Proxy (Caddy auf Hetzner) ist das ohne
+  Proxy-Header-Handling die Proxy-IP — alle anonymen Calls landen in
+  einem Bucket. Naiver `X-Forwarded-For`-Trust ist Spoofing-Vektor.
+- **Patch:** Die produktive `CMD` in `apps/api/Dockerfile` startet
+  `uvicorn` mit `--proxy-headers --forwarded-allow-ips *`. `*` ist
+  sicher, weil der Container im internen Compose-Netzwerk keinen
+  `ports:`-Eintrag hat und nur Caddy ihn erreicht (siehe
+  `deploy/hetzner/who2be/docker-compose.yml`). `ProxyHeadersMiddleware`
+  rewriten `request.client.host` aus `X-Forwarded-For`, sodass die
+  bestehende `_rate_limit_key`-Logik die echte Client-IP bucketet.
+- **Tests:** `apps/api/tests/test_rate_limit_proxy.py` —
+  `test_anonymous_keys_differ_per_client_host` /
+  `test_bearer_token_overrides_client_host` belegen die
+  Key-Funktion-Semantik, `test_dockerfile_cmd_enables_proxy_headers`
+  schuetzt gegen kuenftiges Image-Refactoring (Anti-Regression auf die
+  CMD-Zeile).
 
 ### F-03 — JWT: `verify_aud=False`, kein `iss`-Check (Medium, Fixed)
 
@@ -164,16 +170,34 @@ strukturierte JSON-Logs ohne Authorization-Header / Bodies / Token.
   `test_lifespan_fails_loud_on_short_jwt_secret` und unveraenderter
   `test_lifespan_warns_on_empty_jwt_secret`.
 
-### F-09 — Keine Pagination-Limits (Low, Followup)
+### F-09 — Keine Pagination-Limits (Low, Fixed)
 
-- **Bereich:** `apps/api/src/who2be_api/routers/{personas,playbooks,tokens,persona_playbooks}.py`
-- **Beschreibung:** `list_*`-Endpunkte liefern ohne Limit alle Zeilen des
-  Owners. Owner-internes Problem (kein Cross-Owner-Leak); kombiniert mit
-  F-01 (jetzt gefixt) waere ein Multiplikator gewesen.
-- **Status:** Followup. Sinnvolle Auspraegung: `?limit` (Default 100, Max
-  200) + `?cursor` (created_at + id). Nicht Blocker fuer MVP-Abnahme, weil
-  per Annahme ein einzelner Owner < 100 Personas/Playbooks hat. Aufnehmen
-  als Notion-Backlog-Item.
+- **Bereich:** `apps/api/src/who2be_api/routers/{personas,playbooks,tokens}.py`
+- **Beschreibung:** `list_*`-Endpunkte lieferten ohne Limit alle Zeilen
+  des Owners. Owner-internes Problem (kein Cross-Owner-Leak); kombiniert
+  mit F-01 (gefixt) waere ein Multiplikator gewesen.
+- **Patch:** Keyset-Pagination ueber `(created_at, id)` auf
+  `/v1/personas`, `/v1/playbooks`, `/v1/tokens`. `?limit` ist
+  `Query(ge=1, le=200)` mit Default 100, `?cursor` ist ein base64url-
+  codierter `(iso_timestamp|uuid)`-String. Der Cursor wird per
+  Response-Header `X-Next-Cursor` transportiert — Response-Shape bleibt
+  `list[T]`, sodass die Web-UI ohne Aenderung weiterlaeuft. SQL nutzt
+  `(created_at, id) < ($cursor)` plus Tie-Breaker `id DESC`, damit
+  Microsekunden-Kollisionen stabil sortieren. `limit + 1`-Peek im
+  Service spart einen zweiten DB-Roundtrip fuer die "hat-mehr?"-Frage.
+  Cursor-Helper liegt in `packages/models/src/who2be_models/pagination.py`
+  (geteilt mit MCP); Router-Dependency in
+  `apps/api/src/who2be_api/core/pagination.py`. CORS expose-Header
+  ergaenzt um `X-Next-Cursor`.
+  Versions-Endpoints und `/personas/{id}/playbooks` sind bewusst nicht
+  paginiert: scoped auf ein Aggregat und bereits durch F-01-Limits
+  (200 Playbook-Links) bounded.
+- **Tests:** `packages/models/tests/test_pagination.py` (Cursor-
+  Roundtrip + malformed → None), `apps/api/tests/test_rate_limit_proxy.py`
+  fuer F-02, sowie die Pagination-Cases in `test_personas.py`,
+  `test_playbooks.py` (mit Tag-Filter kombiniert), `test_tokens.py`
+  (Limit-Validation 0/201 → 422, Cursor `!!!` → 422, Mehrseiten-
+  Konsistenz, Owner-Isolation).
 
 ### F-10 — Query-Parameter ohne Length-Limit (Low, Fixed)
 
@@ -208,8 +232,8 @@ strukturierte JSON-Logs ohne Authorization-Header / Bodies / Token.
 
 | Block            | Status                                                                     |
 | ---------------- | -------------------------------------------------------------------------- |
-| Patches gemerged | Diesen Branch (`claude/plan-action-items-eDq5i`) reviewen und mergen.      |
-| Followups        | F-02, F-09, F-12 als Notion-Backlog-Items anlegen, F-02/F-12 an MS-2 C3.   |
+| Patches gemerged | F-01/03/05/06/07/08/10 in PR aus MS-3 H3; F-02/F-09 in diesem Branch.      |
+| Followups        | Nur noch F-12 (Security-Header / CSP) — gehoert ins Caddyfile (MS-2 C3).   |
 | Akzeptiert       | F-04, F-11, F-13 sind ohne weitere Aktion abgenommen (Rationale s. o.).    |
 | User-Sign-Off    | Pending — bei Merge dieses PRs als implizit abgenommen.                    |
 

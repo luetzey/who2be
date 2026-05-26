@@ -5,6 +5,7 @@ schreiben Identitaets-Zeile und Versions-Snapshot in einer Transaktion.
 Verantwortung: SQL + Row↔Model-Mapping, keine Geschaeftsregeln.
 """
 
+from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
@@ -25,11 +26,14 @@ _SELECT_CURRENT = """
 class PersonaRepository(Protocol):
     """Service-seitige Abstraktion fuer den Persona-Zugriff."""
 
-    async def insert(
-        self, owner_id: UUID, name: str, content: PersonaContent
-    ) -> PersonaRead: ...
+    async def insert(self, owner_id: UUID, name: str, content: PersonaContent) -> PersonaRead: ...
 
-    async def list_by_owner(self, owner_id: UUID) -> list[PersonaRead]: ...
+    async def list_by_owner(
+        self,
+        owner_id: UUID,
+        limit: int,
+        after: tuple[datetime, UUID] | None,
+    ) -> list[PersonaRead]: ...
 
     async def fetch(self, owner_id: UUID, persona_id: UUID) -> PersonaRead | None: ...
 
@@ -56,9 +60,7 @@ class PgPersonaRepository:
     def __init__(self, pool: asyncpg.Pool) -> None:
         self._pool = pool
 
-    async def insert(
-        self, owner_id: UUID, name: str, content: PersonaContent
-    ) -> PersonaRead:
+    async def insert(self, owner_id: UUID, name: str, content: PersonaContent) -> PersonaRead:
         content_json = content.model_dump(mode="json")
         async with self._pool.acquire() as conn, conn.transaction():
             persona = await conn.fetchrow(
@@ -79,11 +81,31 @@ class PgPersonaRepository:
             )
         return PersonaRead.model_validate({**dict(persona), "content": content_json})
 
-    async def list_by_owner(self, owner_id: UUID) -> list[PersonaRead]:
-        rows = await self._pool.fetch(
-            f"{_SELECT_CURRENT} WHERE p.owner_id = $1 ORDER BY p.created_at DESC",
-            owner_id,
-        )
+    async def list_by_owner(
+        self,
+        owner_id: UUID,
+        limit: int,
+        after: tuple[datetime, UUID] | None,
+    ) -> list[PersonaRead]:
+        # Tie-Breaker auf `id` haelt die Sortierung stabil, wenn zwei Rows
+        # auf die Microsekunde gleichzeitig angelegt wurden.
+        if after is None:
+            rows = await self._pool.fetch(
+                f"{_SELECT_CURRENT} WHERE p.owner_id = $1 "
+                "ORDER BY p.created_at DESC, p.id DESC LIMIT $2",
+                owner_id,
+                limit,
+            )
+        else:
+            rows = await self._pool.fetch(
+                f"{_SELECT_CURRENT} WHERE p.owner_id = $1 "
+                "AND (p.created_at, p.id) < ($2, $3) "
+                "ORDER BY p.created_at DESC, p.id DESC LIMIT $4",
+                owner_id,
+                after[0],
+                after[1],
+                limit,
+            )
         return [PersonaRead.model_validate(dict(row)) for row in rows]
 
     async def fetch(self, owner_id: UUID, persona_id: UUID) -> PersonaRead | None:
@@ -104,8 +126,7 @@ class PgPersonaRepository:
         content_json = content.model_dump(mode="json")
         async with self._pool.acquire() as conn, conn.transaction():
             current = await conn.fetchrow(
-                "SELECT current_version FROM persona "
-                "WHERE id = $1 AND owner_id = $2 FOR UPDATE",
+                "SELECT current_version FROM persona WHERE id = $1 AND owner_id = $2 FOR UPDATE",
                 persona_id,
                 owner_id,
             )
@@ -163,6 +184,4 @@ class PgPersonaRepository:
             owner_id,
             version,
         )
-        return (
-            PersonaVersionRead.model_validate(dict(row)) if row is not None else None
-        )
+        return PersonaVersionRead.model_validate(dict(row)) if row is not None else None

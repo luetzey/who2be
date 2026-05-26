@@ -6,6 +6,7 @@ Pydantic-Modelle, kein I/O. Pro Aggregat ein Schema-Satz (`…Create` /
 """
 
 from who2be_models.links import PersonaPlaybookLinkSet
+from who2be_models.pagination import DEFAULT_LIMIT, MAX_LIMIT, decode_cursor, encode_cursor
 from who2be_models.persona import (
     PersonaContent,
     PersonaCreate,
@@ -25,6 +26,8 @@ from who2be_models.token import TokenCreate, TokenCreated, TokenRead
 __version__ = "0.1.0"
 
 __all__ = [
+    "DEFAULT_LIMIT",
+    "MAX_LIMIT",
     "PersonaContent",
     "PersonaCreate",
     "PersonaPlaybookLinkSet",
@@ -40,4 +43,6 @@ __all__ = [
     "TokenCreated",
     "TokenRead",
     "__version__",
+    "decode_cursor",
+    "encode_cursor",
 ]

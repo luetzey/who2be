@@ -4,9 +4,10 @@ from typing import Annotated
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Request, Response, status
 
 from who2be_api.core.db import get_pool
+from who2be_api.core.pagination import DEFAULT_LIMIT, PageCursor, PageLimit
 from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import get_current_user
 from who2be_api.repositories.token_repository import PgTokenRepository
@@ -34,8 +35,17 @@ async def create_token(
 
 
 @router.get("")
-async def list_tokens(owner_id: OwnerId, service: Service) -> list[TokenRead]:
-    return await service.list_all(owner_id)
+async def list_tokens(
+    owner_id: OwnerId,
+    service: Service,
+    response: Response,
+    cursor: PageCursor,
+    limit: PageLimit = DEFAULT_LIMIT,
+) -> list[TokenRead]:
+    items, next_cursor = await service.list_all(owner_id, limit, cursor)
+    if next_cursor is not None:
+        response.headers["X-Next-Cursor"] = next_cursor
+    return items
 
 
 @router.delete("/{token_id}", status_code=status.HTTP_204_NO_CONTENT)

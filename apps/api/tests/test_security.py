@@ -55,7 +55,12 @@ class FakeTokenRepository:
     async def insert(self, owner_id: UUID, name: str, token_hash: str) -> TokenRead:
         raise NotImplementedError
 
-    async def list_by_owner(self, owner_id: UUID) -> list[TokenRead]:
+    async def list_by_owner(
+        self,
+        owner_id: UUID,
+        limit: int,
+        after: tuple[datetime, UUID] | None,
+    ) -> list[TokenRead]:
         raise NotImplementedError
 
     async def fetch_owner_by_hash(self, token_hash: str) -> UUID | None:
