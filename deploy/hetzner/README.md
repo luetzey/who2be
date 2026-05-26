@@ -190,5 +190,7 @@ solange dessen Images noch auf GHCR liegen.
 
 ## Verweis
 
-- Backup/Restore-Pfad und Restore-Drill: kommt mit MS-2 C5 in
-  `RUNBOOK.md` (gleicher Ordner).
+- Operative Schritt-fuer-Schritt-Anleitungen (CVE-Response, Secret-Rotation,
+  akzeptierte Vulnerabilities) in [`RUNBOOK.md`](./RUNBOOK.md).
+- Backup/Restore-Pfad und Restore-Drill: kommt mit MS-2 C5 in `RUNBOOK.md`
+  dazu.
