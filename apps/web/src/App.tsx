@@ -6,8 +6,7 @@ import { SessionProvider } from './auth/SessionProvider'
 import { LoginPage } from './features/auth'
 import { PersonaDetailPage, PersonaNewPage, PersonasPage } from './features/personas'
 import { PlaybookDetailPage } from './pages/PlaybookDetailPage'
-import { PlaybookNewPage } from './pages/PlaybookNewPage'
-import { PlaybooksPage } from './features/playbooks'
+import { PlaybookNewPage, PlaybooksPage } from './features/playbooks'
 import { SettingsTokensPage } from './pages/SettingsTokensPage'
 
 export function App() {
