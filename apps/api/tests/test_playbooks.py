@@ -190,3 +190,56 @@ def test_playbook_crud_filters_and_persona_linking(
             assert client.get(f"/v1/playbooks/{first_id}", headers=_auth(other)).status_code == 404
     finally:
         _cleanup([owner, other])
+
+
+@pytest.mark.integration
+def test_playbook_pagination_combined_with_tag_filter(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = uuid4()
+    auth = _auth(owner)
+
+    try:
+        with TestClient(app) as client:
+            tagged_ids: list[str] = []
+            for i in range(3):
+                resp = client.post(
+                    "/v1/playbooks",
+                    json=_playbook_body(f"Tagged-{i}", "v1", ["alpha"], "match"),
+                    headers=auth,
+                )
+                assert resp.status_code == 201
+                tagged_ids.append(resp.json()["id"])
+            # Ein Playbook mit anderem Tag, das nicht auftauchen darf.
+            other_tag = client.post(
+                "/v1/playbooks",
+                json=_playbook_body("Other", "v1", ["beta"], "other"),
+                headers=auth,
+            )
+            assert other_tag.status_code == 201
+
+            page1 = client.get("/v1/playbooks?tag=alpha&limit=2", headers=auth)
+            assert page1.status_code == 200
+            assert len(page1.json()) == 2
+            cursor = page1.headers.get("X-Next-Cursor")
+            assert cursor is not None
+            assert {p["tags"][0] for p in page1.json()} == {"alpha"}
+
+            page2 = client.get(f"/v1/playbooks?tag=alpha&limit=2&cursor={cursor}", headers=auth)
+            assert page2.status_code == 200
+            assert len(page2.json()) == 1
+            assert "X-Next-Cursor" not in page2.headers
+
+            seen = {p["id"] for p in page1.json()} | {p["id"] for p in page2.json()}
+            assert seen == set(tagged_ids)
+
+            assert client.get("/v1/playbooks?limit=0", headers=auth).status_code == 422
+            assert client.get("/v1/playbooks?limit=201", headers=auth).status_code == 422
+            assert client.get("/v1/playbooks?cursor=!!!", headers=auth).status_code == 422
+    finally:
+        _cleanup([owner])

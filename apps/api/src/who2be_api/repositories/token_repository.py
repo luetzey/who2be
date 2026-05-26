@@ -4,6 +4,7 @@ Verantwortung: SQL + Row↔Model-Mapping, keine Geschaeftsregeln. SQL-Werte
 ausschliesslich ueber asyncpg-Parameter-Binding (§6).
 """
 
+from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
@@ -17,7 +18,12 @@ class TokenRepository(Protocol):
 
     async def insert(self, owner_id: UUID, name: str, token_hash: str) -> TokenRead: ...
 
-    async def list_by_owner(self, owner_id: UUID) -> list[TokenRead]: ...
+    async def list_by_owner(
+        self,
+        owner_id: UUID,
+        limit: int,
+        after: tuple[datetime, UUID] | None,
+    ) -> list[TokenRead]: ...
 
     async def fetch_owner_by_hash(self, token_hash: str) -> UUID | None: ...
 
@@ -43,18 +49,36 @@ class PgTokenRepository:
         )
         return TokenRead.model_validate(dict(row))
 
-    async def list_by_owner(self, owner_id: UUID) -> list[TokenRead]:
-        rows = await self._pool.fetch(
-            "SELECT id, name, created_at, last_used_at, revoked_at "
-            "FROM api_token WHERE owner_id = $1 ORDER BY created_at DESC",
-            owner_id,
-        )
+    async def list_by_owner(
+        self,
+        owner_id: UUID,
+        limit: int,
+        after: tuple[datetime, UUID] | None,
+    ) -> list[TokenRead]:
+        if after is None:
+            rows = await self._pool.fetch(
+                "SELECT id, name, created_at, last_used_at, revoked_at "
+                "FROM api_token WHERE owner_id = $1 "
+                "ORDER BY created_at DESC, id DESC LIMIT $2",
+                owner_id,
+                limit,
+            )
+        else:
+            rows = await self._pool.fetch(
+                "SELECT id, name, created_at, last_used_at, revoked_at "
+                "FROM api_token WHERE owner_id = $1 "
+                "AND (created_at, id) < ($2, $3) "
+                "ORDER BY created_at DESC, id DESC LIMIT $4",
+                owner_id,
+                after[0],
+                after[1],
+                limit,
+            )
         return [TokenRead.model_validate(dict(row)) for row in rows]
 
     async def fetch_owner_by_hash(self, token_hash: str) -> UUID | None:
         row = await self._pool.fetchrow(
-            "SELECT owner_id FROM api_token "
-            "WHERE token_hash = $1 AND revoked_at IS NULL",
+            "SELECT owner_id FROM api_token WHERE token_hash = $1 AND revoked_at IS NULL",
             token_hash,
         )
         owner_id: UUID | None = row["owner_id"] if row is not None else None

@@ -102,3 +102,52 @@ def test_token_lifecycle_and_both_auth_paths(monkeypatch: pytest.MonkeyPatch) ->
             assert client.delete(f"/v1/tokens/{token_id}", headers=jwt_auth).status_code == 404
     finally:
         _cleanup(owner_id)
+
+
+@pytest.mark.integration
+def test_token_listing_pagination_and_validation(monkeypatch: pytest.MonkeyPatch) -> None:
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner_id = uuid4()
+    jwt_token = jwt.encode(
+        {
+            "sub": str(owner_id),
+            "aud": "authenticated",
+            "role": "authenticated",
+            "exp": datetime.now(UTC) + timedelta(hours=1),
+        },
+        _TEST_SECRET,
+        algorithm="HS256",
+    )
+    jwt_auth = {"Authorization": f"Bearer {jwt_token}"}
+
+    try:
+        with TestClient(app) as client:
+            created_ids: list[str] = []
+            for i in range(3):
+                resp = client.post("/v1/tokens", json={"name": f"t{i}"}, headers=jwt_auth)
+                assert resp.status_code == 201
+                created_ids.append(resp.json()["id"])
+
+            page1 = client.get("/v1/tokens?limit=2", headers=jwt_auth)
+            assert page1.status_code == 200
+            assert len(page1.json()) == 2
+            cursor = page1.headers.get("X-Next-Cursor")
+            assert cursor is not None
+
+            page2 = client.get(f"/v1/tokens?limit=2&cursor={cursor}", headers=jwt_auth)
+            assert page2.status_code == 200
+            assert len(page2.json()) == 1
+            assert "X-Next-Cursor" not in page2.headers
+
+            seen = {t["id"] for t in page1.json()} | {t["id"] for t in page2.json()}
+            assert seen == set(created_ids)
+
+            assert client.get("/v1/tokens?limit=0", headers=jwt_auth).status_code == 422
+            assert client.get("/v1/tokens?limit=201", headers=jwt_auth).status_code == 422
+            assert client.get("/v1/tokens?cursor=!!!", headers=jwt_auth).status_code == 422
+    finally:
+        _cleanup(owner_id)

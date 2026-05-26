@@ -4,9 +4,10 @@ from typing import Annotated
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 
 from who2be_api.core.db import get_pool
+from who2be_api.core.pagination import DEFAULT_LIMIT, PageCursor, PageLimit
 from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import get_current_user
 from who2be_api.repositories.playbook_repository import PgPlaybookRepository
@@ -36,10 +37,16 @@ Service = Annotated[PlaybookService, Depends(get_playbook_service)]
 async def list_playbooks(
     owner_id: OwnerId,
     service: Service,
+    response: Response,
+    cursor: PageCursor,
     tag: Annotated[str | None, Query(max_length=100)] = None,
     trigger: Annotated[str | None, Query(max_length=200)] = None,
+    limit: PageLimit = DEFAULT_LIMIT,
 ) -> list[PlaybookRead]:
-    return await service.list_all(owner_id, tag, trigger)
+    items, next_cursor = await service.list_all(owner_id, tag, trigger, limit, cursor)
+    if next_cursor is not None:
+        response.headers["X-Next-Cursor"] = next_cursor
+    return items
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)

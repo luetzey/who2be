@@ -45,6 +45,7 @@ app.add_middleware(
     allow_origins=get_settings().cors_origins,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+    expose_headers=["X-Next-Cursor"],
     allow_credentials=False,
 )
 # Observability-Stack: AccessLog innen, RequestID aussen — Starlette stacked LIFO,

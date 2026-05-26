@@ -130,3 +130,49 @@ def test_persona_crud_versioning_and_isolation(
             assert client.get(f"/v1/personas/{persona_id}", headers=_auth(other)).status_code == 404
     finally:
         _cleanup([owner, other])
+
+
+@pytest.mark.integration
+def test_persona_pagination_via_cursor_and_limit_validation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = uuid4()
+    other = uuid4()
+    auth = _auth(owner)
+
+    try:
+        with TestClient(app) as client:
+            created_ids: list[str] = []
+            for i in range(3):
+                resp = client.post("/v1/personas", json=_persona_body(f"v{i}"), headers=auth)
+                assert resp.status_code == 201
+                created_ids.append(resp.json()["id"])
+
+            page1 = client.get("/v1/personas?limit=2", headers=auth)
+            assert page1.status_code == 200
+            assert len(page1.json()) == 2
+            cursor = page1.headers.get("X-Next-Cursor")
+            assert cursor is not None
+
+            page2 = client.get(f"/v1/personas?limit=2&cursor={cursor}", headers=auth)
+            assert page2.status_code == 200
+            assert len(page2.json()) == 1
+            assert "X-Next-Cursor" not in page2.headers
+
+            seen = {p["id"] for p in page1.json()} | {p["id"] for p in page2.json()}
+            assert seen == set(created_ids)
+
+            # Owner-Isolation bleibt unter Pagination.
+            assert client.get("/v1/personas", headers=_auth(other)).json() == []
+
+            # Validation: Limit-Bereich und Cursor-Form.
+            assert client.get("/v1/personas?limit=0", headers=auth).status_code == 422
+            assert client.get("/v1/personas?limit=201", headers=auth).status_code == 422
+            assert client.get("/v1/personas?cursor=!!!", headers=auth).status_code == 422
+    finally:
+        _cleanup([owner, other])

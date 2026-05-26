@@ -5,6 +5,7 @@ Versionierung ueber eine History-Tabelle (ADR-0004). `type`, `tags` und
 denormalisiert, damit das Listing ohne Join filtern kann (§3).
 """
 
+from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
@@ -30,12 +31,15 @@ def _escape_like(value: str) -> str:
 class PlaybookRepository(Protocol):
     """Service-seitige Abstraktion fuer den Playbook-Zugriff."""
 
-    async def insert(
-        self, owner_id: UUID, name: str, content: PlaybookContent
-    ) -> PlaybookRead: ...
+    async def insert(self, owner_id: UUID, name: str, content: PlaybookContent) -> PlaybookRead: ...
 
     async def list_by_owner(
-        self, owner_id: UUID, tag: str | None, trigger: str | None
+        self,
+        owner_id: UUID,
+        tag: str | None,
+        trigger: str | None,
+        limit: int,
+        after: tuple[datetime, UUID] | None,
     ) -> list[PlaybookRead]: ...
 
     async def fetch(self, owner_id: UUID, playbook_id: UUID) -> PlaybookRead | None: ...
@@ -63,9 +67,7 @@ class PgPlaybookRepository:
     def __init__(self, pool: asyncpg.Pool) -> None:
         self._pool = pool
 
-    async def insert(
-        self, owner_id: UUID, name: str, content: PlaybookContent
-    ) -> PlaybookRead:
+    async def insert(self, owner_id: UUID, name: str, content: PlaybookContent) -> PlaybookRead:
         content_json = content.model_dump(mode="json")
         async with self._pool.acquire() as conn, conn.transaction():
             playbook = await conn.fetchrow(
@@ -91,20 +93,45 @@ class PgPlaybookRepository:
         return PlaybookRead.model_validate({**dict(playbook), "content": content_json})
 
     async def list_by_owner(
-        self, owner_id: UUID, tag: str | None, trigger: str | None
+        self,
+        owner_id: UUID,
+        tag: str | None,
+        trigger: str | None,
+        limit: int,
+        after: tuple[datetime, UUID] | None,
     ) -> list[PlaybookRead]:
         trigger_pattern = _escape_like(trigger) if trigger is not None else None
-        rows = await self._pool.fetch(
-            f"{_SELECT_CURRENT} "
-            "WHERE p.owner_id = $1 "
-            "AND ($2::text IS NULL OR $2 = ANY(p.tags)) "
-            "AND ($3::text IS NULL OR "
-            "     p.triggers ILIKE '%' || $3 || '%' ESCAPE '\\') "
-            "ORDER BY p.created_at DESC",
-            owner_id,
-            tag,
-            trigger_pattern,
-        )
+        # Tag/Trigger-Filter und Keyset-Pagination teilen sich denselben
+        # WHERE-Block; der Cursor-Pfad haengt einen weiteren Term an.
+        if after is None:
+            rows = await self._pool.fetch(
+                f"{_SELECT_CURRENT} "
+                "WHERE p.owner_id = $1 "
+                "AND ($2::text IS NULL OR $2 = ANY(p.tags)) "
+                "AND ($3::text IS NULL OR "
+                "     p.triggers ILIKE '%' || $3 || '%' ESCAPE '\\') "
+                "ORDER BY p.created_at DESC, p.id DESC LIMIT $4",
+                owner_id,
+                tag,
+                trigger_pattern,
+                limit,
+            )
+        else:
+            rows = await self._pool.fetch(
+                f"{_SELECT_CURRENT} "
+                "WHERE p.owner_id = $1 "
+                "AND ($2::text IS NULL OR $2 = ANY(p.tags)) "
+                "AND ($3::text IS NULL OR "
+                "     p.triggers ILIKE '%' || $3 || '%' ESCAPE '\\') "
+                "AND (p.created_at, p.id) < ($4, $5) "
+                "ORDER BY p.created_at DESC, p.id DESC LIMIT $6",
+                owner_id,
+                tag,
+                trigger_pattern,
+                after[0],
+                after[1],
+                limit,
+            )
         return [PlaybookRead.model_validate(dict(row)) for row in rows]
 
     async def fetch(self, owner_id: UUID, playbook_id: UUID) -> PlaybookRead | None:
@@ -125,8 +152,7 @@ class PgPlaybookRepository:
         content_json = content.model_dump(mode="json")
         async with self._pool.acquire() as conn, conn.transaction():
             current = await conn.fetchrow(
-                "SELECT current_version FROM playbook "
-                "WHERE id = $1 AND owner_id = $2 FOR UPDATE",
+                "SELECT current_version FROM playbook WHERE id = $1 AND owner_id = $2 FOR UPDATE",
                 playbook_id,
                 owner_id,
             )
@@ -187,6 +213,4 @@ class PgPlaybookRepository:
             owner_id,
             version,
         )
-        return (
-            PlaybookVersionRead.model_validate(dict(row)) if row is not None else None
-        )
+        return PlaybookVersionRead.model_validate(dict(row)) if row is not None else None
