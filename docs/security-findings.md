@@ -39,7 +39,7 @@ strukturierte JSON-Logs ohne Authorization-Header / Bodies / Token.
 | F-09 | Low      | API/Routing       | Keine Pagination-Limits auf `GET /v1/personas`, `/v1/playbooks`        | Fixed           |
 | F-10 | Low      | API/Query         | `tag`/`trigger` Query-Parameter ohne `max_length`                      | Fixed           |
 | F-11 | Low      | Web/UI            | `VITE_*`-Fallbacks im Production-Build                                 | Accepted        |
-| F-12 | Info     | Security-Header   | Fehlende X-Content-Type-Options, X-Frame-Options, Referrer-Policy, CSP | Followup → MS-2 |
+| F-12 | Info     | Security-Header   | Fehlende X-Content-Type-Options, X-Frame-Options, Referrer-Policy, CSP | In Arbeit (MS-3 H5) |
 | F-13 | Info     | OpenAPI           | `/docs` und `/openapi.json` ohne Auth                                  | Accepted        |
 
 ## Detail je Finding
@@ -114,9 +114,11 @@ strukturierte JSON-Logs ohne Authorization-Header / Bodies / Token.
   Praeimage-Angriff auf SHA-256 ist nicht moeglich; das Timing-Signal
   wuerde maximal die Existenz eines Hash-Werts verraten, dem ohnehin der
   Klartext fehlt.
-- **Status:** Bewusst akzeptiert. Folgemassnahme (`hmac.compare_digest`
-  per Public-Prefix-Index) ist Kosten-/Nutzen-maessig fuer MVP under
-  threshold; bei Bedarf in einer kuenftigen Hardening-Iteration.
+- **Status:** Bewusst akzeptiert — siehe **ADR-0008** mit explizitem
+  Re-Evaluation-Trigger (Multi-User, anhaltend > 1 RPS Token-Auth pro
+  Owner, oder Public-Internet-Exposure ohne Caddy). Trigger 2 wird
+  ueber `who2be_auth_token_attempts_total` (Prometheus, ADR-0010)
+  messbar.
 
 ### F-05 — `X-Request-ID` unsanitisiert reflektiert und geloggt (Medium, Fixed)
 
@@ -213,13 +215,17 @@ strukturierte JSON-Logs ohne Authorization-Header / Bodies / Token.
   Dev-Fallbacks sind unbedenklich (anon-Key ist per Definition public).
 - **Status:** Keine Aktion — die Logik ist defensiv und korrekt.
 
-### F-12 — Fehlende Security-Header (Info, Followup → MS-2)
+### F-12 — Fehlende Security-Header (Info, In Arbeit / MS-3 H5)
 
-- **Bereich:** Reverse-Proxy (Caddy/Nginx, MS-2)
-- **Status:** Akzeptanzkriterium fuer MS-2 **C3**. Konkret im Caddyfile zu
-  setzen: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
-  `Referrer-Policy: no-referrer`, eine restriktive CSP fuer `app.<domain>`,
-  HSTS via Caddy-Auto-HTTPS.
+- **Bereich:** Reverse-Proxy (Caddy, `deploy/hetzner/Caddyfile`)
+- **Status:** Aktive Task **MS-3 H5** (Plan-Review 2026-05-26). Konkret
+  im Caddyfile zu setzen: `Strict-Transport-Security` (HSTS, via Caddy-
+  Auto-HTTPS), `X-Content-Type-Options: nosniff`,
+  `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, restriktive
+  CSP fuer `app.<domain>`. Zusaetzlich Pfad-Block `/v1/internal/*` → 403
+  (ADR-0010). Vertrag: `deploy/hetzner/tests/test_headers.sh` als
+  Smoke. F-13 (`/docs` public) wird im selben Pass per Env-Toggle
+  `WHO2BE_DOCS_PUBLIC=false` adressiert.
 
 ### F-13 — `/docs` und `/openapi.json` oeffentlich (Info, Accepted)
 
@@ -233,7 +239,7 @@ strukturierte JSON-Logs ohne Authorization-Header / Bodies / Token.
 | Block            | Status                                                                     |
 | ---------------- | -------------------------------------------------------------------------- |
 | Patches gemerged | F-01/03/05/06/07/08/10 in PR aus MS-3 H3; F-02/F-09 in diesem Branch.      |
-| Followups        | Nur noch F-12 (Security-Header / CSP) — gehoert ins Caddyfile (MS-2 C3).   |
+| Followups        | F-12 (Security-Header / CSP) ist als MS-3 **H5** im Plan-Review v2 verortet. |
 | Akzeptiert       | F-04, F-11, F-13 sind ohne weitere Aktion abgenommen (Rationale s. o.).    |
 | User-Sign-Off    | Pending — bei Merge dieses PRs als implizit abgenommen.                    |
 
