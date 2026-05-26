@@ -46,14 +46,12 @@ export function LoginPage() {
     <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-10">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>
-            <h1 className="text-2xl font-semibold tracking-tight">Who2Be — Anmeldung</h1>
-          </CardTitle>
+          <CardTitle className="text-2xl">Who2Be — Anmeldung</CardTitle>
           <CardDescription>Melde dich mit deinem Supabase-Account an.</CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
               <FormField
                 control={form.control}
                 name="email"
@@ -85,10 +83,10 @@ export function LoginPage() {
                   </FormItem>
                 )}
               />
+              {error !== null ? <ErrorAlert message={error} /> : null}
               <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
                 Anmelden
               </Button>
-              {error !== null ? <ErrorAlert message={error} /> : null}
             </form>
           </Form>
         </CardContent>

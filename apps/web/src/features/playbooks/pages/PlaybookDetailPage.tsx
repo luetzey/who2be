@@ -8,9 +8,10 @@ import { z } from 'zod'
 import { AppShell } from '@/components/layout/AppShell'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { Stack } from '@/components/layout/Stack'
 import { DataList } from '@/components/data/DataList'
+import { DataView } from '@/components/data/DataView'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
-import { LoadingState } from '@/components/data/LoadingState'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -50,7 +51,8 @@ export function PlaybookDetailPage() {
   const { signOut } = useSession()
   const [playbook, setPlaybook] = useState<Playbook | null>(null)
   const [versions, setVersions] = useState<PlaybookVersion[]>([])
-  const [error, setError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
 
   const form = useForm<EditorValues>({
@@ -69,7 +71,7 @@ export function PlaybookDetailPage() {
     if (id === undefined) {
       return
     }
-    setError(null)
+    setLoadError(null)
     Promise.all([api.getPlaybook(id), api.listPlaybookVersions(id)])
       .then(([loaded, versionList]) => {
         setPlaybook(loaded)
@@ -83,7 +85,7 @@ export function PlaybookDetailPage() {
           triggers: loaded.content.triggers ?? '',
         })
       })
-      .catch((cause: unknown) => setError(describeError(cause)))
+      .catch((cause: unknown) => setLoadError(describeError(cause)))
   }, [api, id, form])
 
   useEffect(load, [load])
@@ -95,7 +97,7 @@ export function PlaybookDetailPage() {
 
   async function onSubmit(values: EditorValues) {
     setStatus(null)
-    setError(null)
+    setSaveError(null)
     try {
       await api.updatePlaybook(playbookId, {
         name: values.name,
@@ -110,163 +112,162 @@ export function PlaybookDetailPage() {
       setStatus('Gespeichert — neue Version erstellt.')
       load()
     } catch (cause) {
-      setError(describeError(cause))
+      setSaveError(describeError(cause))
     }
   }
 
   return (
     <AppShell onSignOut={() => void signOut()}>
       <Container>
-        <Button asChild variant="ghost" size="sm" className="mb-4">
-          <Link to="/playbooks">
-            <ArrowLeft className="h-4 w-4" />
-            Playbooks
-          </Link>
-        </Button>
+        <Stack gap="md">
+          <Button asChild variant="ghost" size="sm" className="self-start">
+            <Link to="/playbooks">
+              <ArrowLeft className="h-4 w-4" />
+              Playbooks
+            </Link>
+          </Button>
 
-        {error !== null ? (
-          <div className="mb-4">
-            <ErrorAlert message={error} />
-          </div>
-        ) : null}
-        {status !== null ? (
-          <Alert role="status" className="mb-4">
-            <AlertDescription>{status}</AlertDescription>
-          </Alert>
-        ) : null}
-
-        {playbook === null ? (
-          <LoadingState />
-        ) : (
-          <>
-            <PageHeader
-              title={playbook.name}
-              description={`Aktuelle Version: ${playbook.current_version}`}
-              actions={
-                playbook.tags.length > 0 ? (
-                  <div className="flex flex-wrap gap-1" aria-label="Tags">
-                    {playbook.tags.map((tag) => (
-                      <Badge key={tag} variant="secondary">
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
-                ) : undefined
-              }
-            />
-
-            <Card className="mb-6">
-              <CardContent className="pt-6">
-                <Form {...form}>
-                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                    <FormField
-                      control={form.control}
-                      name="name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Name</FormLabel>
-                          <FormControl>
-                            <Input required {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="type"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Typ</FormLabel>
-                          <FormControl>
-                            <Input required {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="description"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Beschreibung</FormLabel>
-                          <FormControl>
-                            <Input required {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="body"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Inhalt</FormLabel>
-                          <FormControl>
-                            <Textarea required rows={8} {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="tags"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Tags (kommagetrennt)</FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="triggers"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Trigger</FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <div className="flex justify-end">
-                      <Button type="submit" disabled={form.formState.isSubmitting}>
-                        Speichern (neue Version)
-                      </Button>
-                    </div>
-                  </form>
-                </Form>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>
-                  <h2 className="text-lg font-semibold tracking-tight">Versionen</h2>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <DataList
-                  items={versions}
-                  getKey={(version) => String(version.version)}
-                  renderItem={(version) => (
-                    <span>
-                      v{version.version} — {new Date(version.created_at).toLocaleString()}
-                    </span>
-                  )}
+          <DataView loading={playbook === null && loadError === null} error={loadError}>
+            {playbook !== null ? (
+              <Stack gap="lg">
+                <PageHeader
+                  title={playbook.name}
+                  description={`Aktuelle Version: ${playbook.current_version}`}
+                  actions={
+                    playbook.tags.length > 0 ? (
+                      <div className="flex flex-wrap gap-1" aria-label="Tags">
+                        {playbook.tags.map((tag) => (
+                          <Badge key={tag} variant="secondary">
+                            {tag}
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : undefined
+                  }
                 />
-              </CardContent>
-            </Card>
-          </>
-        )}
+
+                {saveError !== null ? <ErrorAlert message={saveError} /> : null}
+                {status !== null ? (
+                  <Alert role="status">
+                    <AlertDescription>{status}</AlertDescription>
+                  </Alert>
+                ) : null}
+
+                <Card>
+                  <CardContent className="pt-6">
+                    <Form {...form}>
+                      <form
+                        onSubmit={form.handleSubmit(onSubmit)}
+                        className="flex flex-col gap-4"
+                      >
+                        <FormField
+                          control={form.control}
+                          name="name"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Name</FormLabel>
+                              <FormControl>
+                                <Input required {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="type"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Typ</FormLabel>
+                              <FormControl>
+                                <Input required {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="description"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Beschreibung</FormLabel>
+                              <FormControl>
+                                <Input required {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="body"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Inhalt</FormLabel>
+                              <FormControl>
+                                <Textarea required rows={8} {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="tags"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Tags (kommagetrennt)</FormLabel>
+                              <FormControl>
+                                <Input {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="triggers"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Trigger</FormLabel>
+                              <FormControl>
+                                <Input {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <div className="flex justify-end">
+                          <Button type="submit" disabled={form.formState.isSubmitting}>
+                            Speichern (neue Version)
+                          </Button>
+                        </div>
+                      </form>
+                    </Form>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Versionen</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <DataList
+                      items={versions}
+                      getKey={(version) => String(version.version)}
+                      renderItem={(version) => (
+                        <span>
+                          v{version.version} — {new Date(version.created_at).toLocaleString()}
+                        </span>
+                      )}
+                    />
+                  </CardContent>
+                </Card>
+              </Stack>
+            ) : null}
+          </DataView>
+        </Stack>
       </Container>
     </AppShell>
   )

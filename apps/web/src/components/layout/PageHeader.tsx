@@ -13,7 +13,7 @@ export function PageHeader({ title, description, actions, className }: PageHeade
   return (
     <header
       className={cn(
-        'mb-6 flex flex-col gap-3 border-b pb-6 sm:flex-row sm:items-end sm:justify-between',
+        'flex flex-col gap-3 border-b pb-6 sm:flex-row sm:items-end sm:justify-between',
         className,
       )}
     >

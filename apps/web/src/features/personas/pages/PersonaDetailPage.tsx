@@ -8,9 +8,10 @@ import { z } from 'zod'
 import { AppShell } from '@/components/layout/AppShell'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { Stack } from '@/components/layout/Stack'
 import { DataList } from '@/components/data/DataList'
+import { DataView } from '@/components/data/DataView'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
-import { LoadingState } from '@/components/data/LoadingState'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -49,7 +50,8 @@ export function PersonaDetailPage() {
   const { signOut } = useSession()
   const [persona, setPersona] = useState<Persona | null>(null)
   const [versions, setVersions] = useState<PersonaVersion[]>([])
-  const [error, setError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
 
   const form = useForm<EditorValues>({
@@ -63,7 +65,7 @@ export function PersonaDetailPage() {
     if (id === undefined) {
       return
     }
-    setError(null)
+    setLoadError(null)
     Promise.all([api.getPersona(id), api.listPersonaVersions(id)])
       .then(([loaded, versionList]) => {
         setPersona(loaded)
@@ -75,7 +77,7 @@ export function PersonaDetailPage() {
           traits: loaded.content.traits.join(', '),
         })
       })
-      .catch((cause: unknown) => setError(describeError(cause)))
+      .catch((cause: unknown) => setLoadError(describeError(cause)))
   }, [api, id, form])
 
   useEffect(load, [load])
@@ -87,7 +89,7 @@ export function PersonaDetailPage() {
 
   async function onSubmit(values: EditorValues) {
     setStatus(null)
-    setError(null)
+    setSaveError(null)
     try {
       await api.updatePersona(personaId, {
         name: values.name,
@@ -100,170 +102,169 @@ export function PersonaDetailPage() {
       setStatus('Gespeichert — neue Version erstellt.')
       load()
     } catch (cause) {
-      setError(describeError(cause))
+      setSaveError(describeError(cause))
     }
   }
 
   return (
     <AppShell onSignOut={() => void signOut()}>
       <Container>
-        <Button asChild variant="ghost" size="sm" className="mb-4">
-          <Link to="/">
-            <ArrowLeft className="h-4 w-4" />
-            Personae
-          </Link>
-        </Button>
+        <Stack gap="md">
+          <Button asChild variant="ghost" size="sm" className="self-start">
+            <Link to="/">
+              <ArrowLeft className="h-4 w-4" />
+              Personae
+            </Link>
+          </Button>
 
-        {error !== null ? (
-          <div className="mb-4">
-            <ErrorAlert message={error} />
-          </div>
-        ) : null}
-        {status !== null ? (
-          <Alert role="status" className="mb-4">
-            <AlertDescription>{status}</AlertDescription>
-          </Alert>
-        ) : null}
-
-        {persona === null ? (
-          <LoadingState />
-        ) : (
-          <>
-            <PageHeader
-              title={persona.name}
-              description={`Aktuelle Version: ${persona.current_version}`}
-            />
-
-            <Card className="mb-6">
-              <CardContent className="pt-6">
-                <Form {...form}>
-                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                    <FormField
-                      control={form.control}
-                      name="name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Name</FormLabel>
-                          <FormControl>
-                            <Input required {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="description"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Beschreibung</FormLabel>
-                          <FormControl>
-                            <Input required {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="systemPrompt"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>System-Prompt</FormLabel>
-                          <FormControl>
-                            <Textarea required rows={6} {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="traits"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Eigenschaften (kommagetrennt)</FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <div className="flex justify-end">
-                      <Button type="submit" disabled={form.formState.isSubmitting}>
-                        Speichern (neue Version)
-                      </Button>
-                    </div>
-                  </form>
-                </Form>
-              </CardContent>
-            </Card>
-
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle>
-                  <h2 className="text-lg font-semibold tracking-tight">Versionen</h2>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <DataList
-                  items={versions}
-                  getKey={(version) => String(version.version)}
-                  renderItem={(version) => (
-                    <span>
-                      v{version.version} — {new Date(version.created_at).toLocaleString()}
-                    </span>
-                  )}
+          <DataView loading={persona === null && loadError === null} error={loadError}>
+            {persona !== null ? (
+              <Stack gap="lg">
+                <PageHeader
+                  title={persona.name}
+                  description={`Aktuelle Version: ${persona.current_version}`}
                 />
-              </CardContent>
-            </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>
-                  <h2 className="text-lg font-semibold tracking-tight">Verknüpfte Playbooks</h2>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {links.error !== null ? <ErrorAlert message={links.error} /> : null}
-                {links.status !== null ? (
+                {saveError !== null ? <ErrorAlert message={saveError} /> : null}
+                {status !== null ? (
                   <Alert role="status">
-                    <AlertDescription>{links.status}</AlertDescription>
+                    <AlertDescription>{status}</AlertDescription>
                   </Alert>
                 ) : null}
-                {links.loading ? (
-                  <LoadingState />
-                ) : links.playbooks.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Keine Playbooks vorhanden.</p>
-                ) : (
-                  <ul className="space-y-2">
-                    {links.playbooks.map((playbook) => (
-                      <li key={playbook.id}>
-                        <label className="flex items-center gap-2 text-sm">
-                          <Checkbox
-                            checked={links.linkedIds.includes(playbook.id)}
-                            onChange={() => links.toggle(playbook.id)}
-                          />
-                          {playbook.name}
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <div className="flex justify-end">
-                  <Button
-                    type="button"
-                    onClick={() => void links.save()}
-                    disabled={links.saving || links.loading}
-                  >
-                    Verknüpfungen speichern
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </>
-        )}
+
+                <Card>
+                  <CardContent className="pt-6">
+                    <Form {...form}>
+                      <form
+                        onSubmit={form.handleSubmit(onSubmit)}
+                        className="flex flex-col gap-4"
+                      >
+                        <FormField
+                          control={form.control}
+                          name="name"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Name</FormLabel>
+                              <FormControl>
+                                <Input required {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="description"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Beschreibung</FormLabel>
+                              <FormControl>
+                                <Input required {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="systemPrompt"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>System-Prompt</FormLabel>
+                              <FormControl>
+                                <Textarea required rows={6} {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="traits"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Eigenschaften (kommagetrennt)</FormLabel>
+                              <FormControl>
+                                <Input {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <div className="flex justify-end">
+                          <Button type="submit" disabled={form.formState.isSubmitting}>
+                            Speichern (neue Version)
+                          </Button>
+                        </div>
+                      </form>
+                    </Form>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Versionen</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <DataList
+                      items={versions}
+                      getKey={(version) => String(version.version)}
+                      renderItem={(version) => (
+                        <span>
+                          v{version.version} — {new Date(version.created_at).toLocaleString()}
+                        </span>
+                      )}
+                    />
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Verknüpfte Playbooks</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Stack gap="sm">
+                      {links.status !== null ? (
+                        <Alert role="status">
+                          <AlertDescription>{links.status}</AlertDescription>
+                        </Alert>
+                      ) : null}
+                      <DataView
+                        loading={links.loading}
+                        error={links.error}
+                        empty={!links.loading && links.playbooks.length === 0}
+                        emptyTitle="Keine Playbooks vorhanden."
+                      >
+                        <ul className="flex flex-col gap-2">
+                          {links.playbooks.map((playbook) => (
+                            <li key={playbook.id}>
+                              <label className="flex items-center gap-2 text-sm">
+                                <Checkbox
+                                  checked={links.linkedIds.includes(playbook.id)}
+                                  onChange={() => links.toggle(playbook.id)}
+                                />
+                                {playbook.name}
+                              </label>
+                            </li>
+                          ))}
+                        </ul>
+                      </DataView>
+                      <div className="flex justify-end">
+                        <Button
+                          type="button"
+                          onClick={() => void links.save()}
+                          disabled={links.saving || links.loading}
+                        >
+                          Verknüpfungen speichern
+                        </Button>
+                      </div>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              </Stack>
+            ) : null}
+          </DataView>
+        </Stack>
       </Container>
     </AppShell>
   )

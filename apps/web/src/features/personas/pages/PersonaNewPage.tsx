@@ -8,6 +8,7 @@ import { z } from 'zod'
 import { AppShell } from '@/components/layout/AppShell'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { Stack } from '@/components/layout/Stack'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -68,79 +69,81 @@ export function PersonaNewPage() {
   return (
     <AppShell onSignOut={() => void signOut()}>
       <Container>
-        <Button asChild variant="ghost" size="sm" className="mb-4">
-          <Link to="/">
-            <ArrowLeft className="h-4 w-4" />
-            Personae
-          </Link>
-        </Button>
-        <PageHeader title="Neue Persona" description="Lege eine neue Persona-Version an." />
-        <Card>
-          <CardContent className="pt-6">
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Name</FormLabel>
-                      <FormControl>
-                        <Input required {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Beschreibung</FormLabel>
-                      <FormControl>
-                        <Input required {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="systemPrompt"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>System-Prompt</FormLabel>
-                      <FormControl>
-                        <Textarea required rows={6} {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="traits"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Eigenschaften (kommagetrennt)</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <div className="flex justify-end">
-                  <Button type="submit" disabled={form.formState.isSubmitting}>
-                    Anlegen
-                  </Button>
-                </div>
-                {error !== null ? <ErrorAlert message={error} /> : null}
-              </form>
-            </Form>
-          </CardContent>
-        </Card>
+        <Stack gap="md">
+          <Button asChild variant="ghost" size="sm" className="self-start">
+            <Link to="/">
+              <ArrowLeft className="h-4 w-4" />
+              Personae
+            </Link>
+          </Button>
+          <PageHeader title="Neue Persona" description="Lege eine neue Persona-Version an." />
+          <Card>
+            <CardContent className="pt-6">
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Name</FormLabel>
+                        <FormControl>
+                          <Input required {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="description"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Beschreibung</FormLabel>
+                        <FormControl>
+                          <Input required {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="systemPrompt"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>System-Prompt</FormLabel>
+                        <FormControl>
+                          <Textarea required rows={6} {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="traits"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Eigenschaften (kommagetrennt)</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {error !== null ? <ErrorAlert message={error} /> : null}
+                  <div className="flex justify-end">
+                    <Button type="submit" disabled={form.formState.isSubmitting}>
+                      Anlegen
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            </CardContent>
+          </Card>
+        </Stack>
       </Container>
     </AppShell>
   )
