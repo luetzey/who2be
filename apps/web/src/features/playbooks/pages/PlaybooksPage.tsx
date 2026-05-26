@@ -2,7 +2,6 @@ import { Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
-import { AppShell } from '@/components/layout/AppShell'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
@@ -12,12 +11,10 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useSession } from '@/auth/session-context'
 import { usePlaybooks } from '@/hooks/usePlaybooks'
 
 export function PlaybooksPage() {
   const { playbooks, loading, error } = usePlaybooks()
-  const { signOut } = useSession()
   const [tagFilter, setTagFilter] = useState('')
   const [triggerFilter, setTriggerFilter] = useState('')
 
@@ -34,8 +31,7 @@ export function PlaybooksPage() {
   }, [playbooks, tagFilter, triggerFilter])
 
   return (
-    <AppShell onSignOut={() => void signOut()}>
-      <Container>
+    <Container>
         <Stack gap="lg">
           <PageHeader
             title="Playbooks"
@@ -101,7 +97,6 @@ export function PlaybooksPage() {
             )}
           />
         </Stack>
-      </Container>
-    </AppShell>
+    </Container>
   )
 }
