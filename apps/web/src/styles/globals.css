@@ -28,6 +28,33 @@
 
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+
+  /*
+   * Typo-Skala (bewusst auf 6 Stufen begrenzt).
+   * Werte = Tailwind-v4-Defaults, hier explizit deklariert als Single
+   * Source of Truth. Aenderung der Skala = Aenderung hier, nicht inline.
+   */
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.75rem;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.75rem;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 2rem;
+
+  /*
+   * Spacing-Basiseinheit (Tailwind v4: `--spacing` multipliziert).
+   * Bewusste Skala fuer Layout-Rhythmus: nur p-1, p-2, p-3, p-4, p-6,
+   * p-8, p-12, p-16 sowie gap-* gleicher Stufen benutzen.
+   * Abweichungen werden im Code-Review zurueckgewiesen, nicht inline
+   * via `p-[7px]` improvisiert.
+   */
+  --spacing: 0.25rem;
 }
 
 :root {
