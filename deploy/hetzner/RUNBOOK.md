@@ -9,6 +9,7 @@ Aktive Sektionen:
 
 - [CVE-Response](#cve-response) — was tun, wenn der CI-`audit`-Job rot wird
 - [Secret-Rotation](#secret-rotation) — pro Secret: Trigger / Schritte / Verifikation
+- [Backup & Restore](#backup--restore) — verschluesselter pg_dump + restic-Offsite (C5a/C5b)
 - [Akzeptierte Vulnerabilities](#akzeptierte-vulnerabilities) — bewusste Risikoabnahmen
 
 ---
@@ -250,6 +251,107 @@ gpg --decrypt /tmp/latest.sql.gpg | head -5   # erwartet: '-- PostgreSQL databas
 ```
 
 **Side-Effects:** alte `*.sql.gpg`-Dateien bleiben mit dem alten Key entschluesselbar — der Schluessel muss also weiter erreichbar bleiben, bis die letzte alte Backup-Generation aus dem Retention-Fenster faellt.
+
+---
+
+## Backup & Restore
+
+Zwei-Stufen-Backup pro ADR-0011:
+
+- **C5a — lokal:** `pg_dump -Fc | gpg --encrypt -r $BACKUP_GPG_RECIPIENT` ablegen unter
+  `/var/backups/who2be/dump-<ts>.pgc.gpg`. Retention 7 Tage.
+- **C5b — offsite:** `restic` schiebt das ganze Backup-Verzeichnis via SFTP auf eine
+  Hetzner-Storage-Box. Retention `keep-daily 7 / keep-weekly 4 / keep-monthly 6` + Prune.
+
+Beide Schritte fahren im selben Container (`backup`-Service, `--profile backup`).
+Wenn `RESTIC_REPOSITORY` leer ist, laeuft nur Schritt 1 — Lokal-only-Modus fuer
+Probelaeufe ohne Storage Box.
+
+### Initial-Setup (einmalig nach C1-Hetzner-Provisioning)
+
+```bash
+# 1) GPG-Recipient-Key auf dem Host importieren und Trust setzen
+gpg --import /tmp/who2be-backup.pub
+echo -e "5\ny\n" | gpg --command-fd 0 --edit-key who2be-backup@example.org trust quit
+
+# 2) Secrets-Verzeichnis fuer die Volume-Mounts anlegen
+sudo mkdir -p /opt/who2be/secrets/gpg /opt/who2be/secrets/ssh
+sudo cp -a ~/.gnupg/. /opt/who2be/secrets/gpg/
+sudo chmod -R 700 /opt/who2be/secrets/gpg
+
+# 3) SSH-Key fuer die Hetzner-Storage-Box erzeugen + auf dem Robot hinterlegen
+ssh-keygen -t ed25519 -f /opt/who2be/secrets/ssh/storage_box_ed25519 -N "" \
+  -C "who2be-backup"
+# Public-Key (storage_box_ed25519.pub) im Hetzner-Robot bei der Storage Box eintragen.
+
+# 4) .env auf dem Host fuellen (deploy/hetzner/.env):
+#    POSTGRES_PASSWORD, BACKUP_GPG_RECIPIENT, RESTIC_REPOSITORY, RESTIC_PASSWORD
+
+# 5) Erstlauf — restic init passiert idempotent im Script
+cd /opt/who2be && docker compose --profile backup run --rm backup
+```
+
+### Trigger (Routine)
+
+```bash
+# Host-Crontab fuer den Deploy-User (crontab -e):
+15 3 * * * cd /opt/who2be && docker compose --profile backup run --rm backup >> /var/log/who2be-backup.log 2>&1
+```
+
+Bewusst Host-Cron, nicht Compose-Sidecar — spart den Dauerlauf eines Backup-Containers.
+
+### Verifikation
+
+```bash
+# Lokaler Dump vom heutigen Tag muss da sein
+ls -la /var/backups/who2be/dump-*.pgc.gpg | tail -3
+
+# Offsite-Snapshot juenger als 26h
+restic -r "${RESTIC_REPOSITORY}" \
+  -o "sftp.args=-i ${BACKUP_SSH_HOME}/storage_box_ed25519 -o StrictHostKeyChecking=accept-new" \
+  snapshots --last 3
+```
+
+### Restore (Recovery)
+
+Vollwiederherstellung gegen eine leere Test-DB:
+
+```bash
+# 1) Optional offsite holen, sonst direkt /var/backups/who2be nutzen
+restic -r "${RESTIC_REPOSITORY}" restore latest --target /tmp/restore
+
+# 2) GPG-entschluesseln (Recipient-Private-Key muss verfuegbar sein)
+LATEST=$(ls -1t /tmp/restore/var/backups/who2be/dump-*.pgc.gpg | head -1)
+gpg --decrypt "$LATEST" > /tmp/dump.pgc
+
+# 3) Leere Ziel-DB anlegen + pg_restore
+docker compose exec db psql -U supabase_admin postgres \
+  -c "CREATE DATABASE who2be_restore"
+docker compose exec -T db pg_restore -U supabase_admin -d who2be_restore \
+  --clean --if-exists < /tmp/dump.pgc
+
+# 4) Verifizieren: Persona-Count entspricht der prod-DB
+docker compose exec db psql -U supabase_admin who2be_restore \
+  -c "SELECT count(*) FROM persona"
+```
+
+**H4-Restore-Drill** ist ein vollstaendiger Probelauf der obigen Schritte (lokaler
+Dump + Restore in `who2be_restore` + Count-Vergleich), nach jedem prod-Cutover
+einmal durchziehen und Datum hier protokollieren:
+
+| Datum | Backup-Quelle | Restore-Ziel | Persona-Count match | Ausgefuehrt von |
+|---|---|---|---|---|
+| — | — | — | — | — |
+
+### Verifikation der Caddy-Hardening (H5)
+
+Nach jedem Caddy-/Compose-Deploy gegen Prod:
+
+```bash
+bash deploy/hetzner/tests/test_headers.sh https://api.${DOMAIN}
+```
+
+Prueft Security-Header, `/v1/internal/*`-Block (403) und den Docs-Toggle.
 
 ---
 

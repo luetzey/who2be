@@ -100,6 +100,33 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # C5a/C5b — pg_dump | gpg lokal + restic offsite.
+  # Default-up startet diesen Service NICHT (profile=backup). Host-Cron triggert:
+  #   15 3 * * * cd /opt/who2be && docker compose --profile backup run --rm backup
+  # GPG-Keyring und SSH-Keys werden vom Host gemountet — auf Hetzner liegen sie
+  # in /opt/who2be/secrets/{gpg,ssh} (Mode 600/700, Owner deploy).
+  backup:
+    build:
+      context: ..
+      dockerfile: backup/Dockerfile
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      POSTGRES_USER: ${POSTGRES_USER:-supabase_admin}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_GPG_RECIPIENT: ${BACKUP_GPG_RECIPIENT}
+      BACKUP_DIR: /var/backups/who2be
+      RESTIC_REPOSITORY: ${RESTIC_REPOSITORY:-}
+      RESTIC_PASSWORD: ${RESTIC_PASSWORD:-}
+      RESTIC_SSH_KEY: /secrets/storage_box_ed25519
+    volumes:
+      - backups:/var/backups/who2be
+      - ${BACKUP_GPG_HOME:-/opt/who2be/secrets/gpg}:/root/.gnupg:ro
+      - ${BACKUP_SSH_HOME:-/opt/who2be/secrets/ssh}:/secrets:ro
+    networks: [supabase-net]
+    profiles: ["backup"]
+    restart: "no"
+
 networks:
   app-net:
     driver: bridge
@@ -112,3 +139,4 @@ networks:
 volumes:
   caddy-data:
   caddy-config:
+  backups:

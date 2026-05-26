@@ -51,6 +51,12 @@ class Settings(BaseSettings):
     rate_limit_write: str = "30/minute"
     # `json` fuer Prod-Aggregation, `console` fuer lesbares Dev-Tail (ADR-0007).
     log_format: Literal["json", "console"] = "json"
+    # F-13 / H5: /docs, /redoc, /openapi.json sind in Prod default aus. true nur fuer
+    # lokales Debugging — Caddy hat keinen Auth-Layer davor.
+    docs_public: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("WHO2BE_DOCS_PUBLIC", "docs_public"),
+    )
 
     @property
     def cors_origins(self) -> list[str]:
