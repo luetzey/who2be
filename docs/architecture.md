@@ -217,6 +217,18 @@ Reine Pydantic-Modelle, keine I/O. Pro Aggregat ein Schema-Satz: `…Create`,
 typisieren das `jsonb`-Feld. Einzige geteilte Abhaengigkeit zwischen API und
 MCP (Repo-Konvention).
 
+**JSONB-Schema-Evolution (ADR-0009):** Fuer Persona- und Playbook-Content
+gibt es zwei Pydantic-Modelle pro Aggregat. `PersonaContent` /
+`PlaybookContent` sind *strict* (Pydantic-Default `extra="forbid"`,
+Pflichtfelder bleiben Pflicht) und gelten fuer Create/Update.
+`PersonaContentRead` / `PlaybookContentRead` sind *lax*
+(`model_config = ConfigDict(extra="ignore")`, alle Felder mit Default)
+und werden in Versions-Read-Pfaden (`PersonaVersionRead`,
+`PlaybookVersionRead`) verwendet. So entwickelt sich das Schema
+vorwaerts, ohne dass alte `jsonb`-Snapshots eine SQL-Migration zwingen.
+Restore-from-Version (post-MVP) muss explizit strict validieren,
+bevor ein History-Snapshot in die aktuelle Zeile zurueckgesetzt wird.
+
 ### apps/api — core
 - `config.py`: `Settings` (pydantic-settings) — `DATABASE_URL`, `JWT_SECRET`,
   `SUPABASE_URL`, CORS-Origin. Genau eine Quelle fuer Konfiguration.
@@ -345,6 +357,23 @@ filtert serverseitig nach `owner_id` — Zero-Trust, keine implizite Freigabe.
   aufloest), `path`, `status` und `duration_ms`. Der Header `X-Request-ID`
   wird Eingangs uebernommen und Ausgangs propagiert; per `LOG_FORMAT=console`
   laesst sich lokal auf lesbares Format schalten.
+- Prometheus-Metriken via `prometheus-fastapi-instrumentator` (ADR-0010):
+  RED-Metriken (Rate/Errors/Duration) auf `GET /v1/internal/metrics`.
+  Caddy blockt `/v1/internal/*` von extern (403, MS-3 H5). Prometheus
+  + Grafana laufen im selben Compose-Netz; Grafana wird unter
+  `app.<domain>/grafana/` mit Basic-Auth exponiert. Custom-Counter
+  `who2be_auth_token_attempts_total{result="hit|miss"}` liefert das
+  Mess-Signal fuer den F-04-Re-Eval-Trigger aus ADR-0008.
+- Caddy-Security-Header (MS-3 H5): `Strict-Transport-Security`,
+  `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
+  `Referrer-Policy: no-referrer`, restriktive CSP fuer `app.<domain>`.
+  Setzt F-12 um.
+- Supply-Chain-Gate (MS-3 H6): `.github/workflows/ci.yml` faehrt
+  `pip-audit` und `npm audit --omit=dev --audit-level=high`. CI failed
+  bei High/Critical; Moderate werden als PR-Kommentar gemeldet.
+- Backup-Strategie (ADR-0011): `pg_dump -Fc` mit GPG verschluesselt,
+  `restic` synct ins Hetzner-Storage-Box-Repo. Daily Cron, Retention
+  7 daily / 4 weekly / 6 monthly. Restore-Drill (MS-3 H4) ist Vertrag.
 
 ## 7. Test-Plan (Testpyramide)
 
@@ -418,3 +447,10 @@ Real-Use-Test (Phase 4).
 | [0004](adr/0004-versionierung-history-tabellen.md) | Versionierung ueber separate History-Tabellen |
 | [0005](adr/0005-mcp-als-http-client.md) | MCP-Server als HTTP-Client der REST-API |
 | [0006](adr/0006-auth-jwt-und-api-token.md) | Auth: Supabase-JWT + eigene API-Token-Tabelle |
+| [0007](adr/0007-strukturierte-logs.md) | Strukturierte JSON-Logs via structlog |
+| [0008](adr/0008-token-hash-non-constant-time-accepted.md) | Token-Hash-Vergleich bleibt nicht-konstantzeit (F-04 accepted) |
+| [0009](adr/0009-jsonb-schema-evolution.md) | JSONB-Content: strict-on-write, lax-on-history |
+| [0010](adr/0010-observability-prometheus-metrics.md) | Observability: Prometheus-Metriken ueber internal-Pfad |
+| [0011](adr/0011-backup-gpg-restic-offsite.md) | Backup: GPG-verschluesselter Dump + restic auf Hetzner Storage Box |
+| [0012](adr/0012-mcp-write-tools-deferred.md) | MCP-Write-Tools sind post-MVP (deferred) |
+| [0013](adr/0013-api-versionierung.md) | API-Versionierung: pfad-basiert mit SemVer-Semantik |
