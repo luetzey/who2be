@@ -5,7 +5,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
 import { SessionContext } from '@/auth/session-context'
+import { notify } from '@/lib/feedback'
 import { PersonaDetailPage } from './PersonaDetailPage'
+
+vi.mock('@/lib/feedback', () => ({
+  notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
+}))
 
 const session = { access_token: 'jwt' } as unknown as Session
 
@@ -41,6 +46,8 @@ function route(method: string, url: string): string {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.mocked(notify.success).mockClear()
+  vi.mocked(notify.error).mockClear()
 })
 
 describe('PersonaDetailPage', () => {
@@ -95,6 +102,7 @@ describe('PersonaDetailPage', () => {
       expect(screen.getByText('Aktuelle Version: 2')).toBeInTheDocument()
     })
     expect(screen.getByText(/v2 —/)).toBeInTheDocument()
+    expect(notify.success).toHaveBeenCalledWith('Gespeichert — neue Version erstellt.')
   })
 
   it('verknuepft Playbooks via PUT auf /personas/:id/playbooks', async () => {

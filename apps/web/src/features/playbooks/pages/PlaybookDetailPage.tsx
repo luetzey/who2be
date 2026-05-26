@@ -11,7 +11,6 @@ import { Stack } from '@/components/layout/Stack'
 import { DataList } from '@/components/data/DataList'
 import { DataView } from '@/components/data/DataView'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
-import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -20,6 +19,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import type { Playbook, PlaybookVersion } from '@/api/types'
 import { useApi } from '@/api/useApi'
+import { notify } from '@/lib/feedback'
 
 const editorSchema = z.object({
   name: z.string().min(1, 'Name erforderlich.'),
@@ -50,7 +50,6 @@ export function PlaybookDetailPage() {
   const [versions, setVersions] = useState<PlaybookVersion[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [status, setStatus] = useState<string | null>(null)
 
   const form = useForm<EditorValues>({
     resolver: zodResolver(editorSchema),
@@ -93,7 +92,6 @@ export function PlaybookDetailPage() {
   const playbookId = id
 
   async function onSubmit(values: EditorValues) {
-    setStatus(null)
     setSaveError(null)
     try {
       await api.updatePlaybook(playbookId, {
@@ -106,7 +104,7 @@ export function PlaybookDetailPage() {
           triggers: values.triggers.trim() === '' ? null : values.triggers.trim(),
         },
       })
-      setStatus('Gespeichert — neue Version erstellt.')
+      notify.success('Gespeichert — neue Version erstellt.')
       load()
     } catch (cause) {
       setSaveError(describeError(cause))
@@ -143,11 +141,6 @@ export function PlaybookDetailPage() {
                 />
 
                 {saveError !== null ? <ErrorAlert message={saveError} /> : null}
-                {status !== null ? (
-                  <Alert role="status">
-                    <AlertDescription>{status}</AlertDescription>
-                  </Alert>
-                ) : null}
 
                 <Card>
                   <CardContent className="pt-6">
