@@ -29,7 +29,7 @@ export const CardTitle = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElemen
     return (
       <div
         ref={ref}
-        className={cn('text-lg font-semibold leading-none tracking-tight', className)}
+        className={cn('text-lg leading-none font-semibold tracking-tight', className)}
         {...props}
       />
     )
