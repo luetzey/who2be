@@ -5,8 +5,7 @@ import { RequireAuth } from './auth/RequireAuth'
 import { SessionProvider } from './auth/SessionProvider'
 import { LoginPage } from './features/auth'
 import { PersonaDetailPage, PersonaNewPage, PersonasPage } from './features/personas'
-import { PlaybookDetailPage } from './pages/PlaybookDetailPage'
-import { PlaybookNewPage, PlaybooksPage } from './features/playbooks'
+import { PlaybookDetailPage, PlaybookNewPage, PlaybooksPage } from './features/playbooks'
 import { SettingsTokensPage } from './pages/SettingsTokensPage'
 
 export function App() {
