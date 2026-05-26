@@ -3,8 +3,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { AuthTokenProvider } from '../auth/AuthTokenProvider'
-import { SessionContext } from '../auth/session-context'
+import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
+import { SessionContext } from '@/auth/session-context'
 import { PersonaNewPage } from './PersonaNewPage'
 
 const session = { access_token: 'jwt' } as unknown as Session
