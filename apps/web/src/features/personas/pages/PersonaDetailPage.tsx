@@ -21,6 +21,7 @@ import { Textarea } from '@/components/ui/textarea'
 import type { Persona, PersonaVersion } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { usePersonaPlaybooks } from '@/hooks/usePersonaPlaybooks'
+import { notify } from '@/lib/feedback'
 
 const editorSchema = z.object({
   name: z.string().min(1, 'Name erforderlich.'),
@@ -49,7 +50,6 @@ export function PersonaDetailPage() {
   const [versions, setVersions] = useState<PersonaVersion[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [status, setStatus] = useState<string | null>(null)
 
   const form = useForm<EditorValues>({
     resolver: zodResolver(editorSchema),
@@ -85,7 +85,6 @@ export function PersonaDetailPage() {
   const personaId = id
 
   async function onSubmit(values: EditorValues) {
-    setStatus(null)
     setSaveError(null)
     try {
       await api.updatePersona(personaId, {
@@ -96,7 +95,7 @@ export function PersonaDetailPage() {
           traits: splitList(values.traits),
         },
       })
-      setStatus('Gespeichert — neue Version erstellt.')
+      notify.success('Gespeichert — neue Version erstellt.')
       load()
     } catch (cause) {
       setSaveError(describeError(cause))
@@ -122,11 +121,6 @@ export function PersonaDetailPage() {
                 />
 
                 {saveError !== null ? <ErrorAlert message={saveError} /> : null}
-                {status !== null ? (
-                  <Alert role="status">
-                    <AlertDescription>{status}</AlertDescription>
-                  </Alert>
-                ) : null}
 
                 <Card>
                   <CardContent className="pt-6">

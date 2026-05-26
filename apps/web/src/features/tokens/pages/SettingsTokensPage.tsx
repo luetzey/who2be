@@ -20,6 +20,7 @@ import type { TokenCreated } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { useAuthTokenContext } from '@/auth/auth-token-context'
 import { useTokens } from '@/hooks/useTokens'
+import { notify } from '@/lib/feedback'
 
 const tokenSchema = z.object({
   name: z.string().min(1, 'Name erforderlich.'),
@@ -42,7 +43,6 @@ export function SettingsTokensPage() {
 
   const [createError, setCreateError] = useState<string | null>(null)
   const [created, setCreated] = useState<TokenCreated | null>(null)
-  const [revokeError, setRevokeError] = useState<string | null>(null)
 
   const [overrideInput, setOverrideInput] = useState('')
 
@@ -58,18 +58,18 @@ export function SettingsTokensPage() {
       setCreated(result)
       form.reset({ name: '' })
       reload()
+      notify.success(`Token „${values.name}" angelegt. Klartext jetzt einmalig kopieren.`)
     } catch (cause) {
       setCreateError(describeError(cause))
     }
   }
 
   async function handleRevoke(id: string) {
-    setRevokeError(null)
     try {
       await api.revokeToken(id)
       reload()
     } catch (cause) {
-      setRevokeError(describeError(cause))
+      notify.error(describeError(cause))
     }
   }
 
@@ -89,8 +89,6 @@ export function SettingsTokensPage() {
             title="API-Tokens"
             description="Persistente Tokens fuer Headless-Clients und Agents."
           />
-
-          {revokeError !== null ? <ErrorAlert message={revokeError} /> : null}
 
           <Card>
             <CardHeader>

@@ -5,7 +5,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
 import { SessionContext } from '@/auth/session-context'
+import { notify } from '@/lib/feedback'
 import { PlaybookDetailPage } from './PlaybookDetailPage'
+
+vi.mock('@/lib/feedback', () => ({
+  notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
+}))
 
 const session = { access_token: 'jwt' } as unknown as Session
 
@@ -55,6 +60,8 @@ function jsonResponse(body: unknown): Response {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.mocked(notify.success).mockClear()
+  vi.mocked(notify.error).mockClear()
 })
 
 describe('PlaybookDetailPage', () => {
@@ -117,5 +124,6 @@ describe('PlaybookDetailPage', () => {
       expect(screen.getByText('Aktuelle Version: 2')).toBeInTheDocument()
     })
     expect(screen.getByText(/v2 —/)).toBeInTheDocument()
+    expect(notify.success).toHaveBeenCalledWith('Gespeichert — neue Version erstellt.')
   })
 })
