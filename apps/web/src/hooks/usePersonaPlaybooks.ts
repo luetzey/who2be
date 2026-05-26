@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 import type { Playbook } from '../api/types'
 import { useApi } from '../api/useApi'
+import { notify } from '../lib/feedback'
 
 function describeError(cause: unknown): string {
   return cause instanceof Error ? cause.message : 'Unbekannter Fehler.'
@@ -13,7 +14,6 @@ interface PersonaPlaybooksState {
   loading: boolean
   saving: boolean
   error: string | null
-  status: string | null
   toggle: (id: string) => void
   save: () => Promise<void>
   reset: () => void
@@ -26,7 +26,6 @@ export function usePersonaPlaybooks(personaId: string | undefined): PersonaPlayb
   const [loading, setLoading] = useState(personaId !== undefined)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [status, setStatus] = useState<string | null>(null)
 
   const load = useCallback(() => {
     if (personaId === undefined) {
@@ -46,7 +45,6 @@ export function usePersonaPlaybooks(personaId: string | undefined): PersonaPlayb
   useEffect(load, [load])
 
   const toggle = useCallback((id: string) => {
-    setStatus(null)
     setLinkedIds((current) =>
       current.includes(id) ? current.filter((entry) => entry !== id) : [...current, id],
     )
@@ -57,11 +55,10 @@ export function usePersonaPlaybooks(personaId: string | undefined): PersonaPlayb
       return
     }
     setSaving(true)
-    setStatus(null)
     setError(null)
     try {
       await api.setPersonaPlaybooks(personaId, linkedIds)
-      setStatus('Verknüpfungen gespeichert.')
+      notify.success('Verknüpfungen gespeichert.')
     } catch (cause) {
       setError(describeError(cause))
     } finally {
@@ -73,5 +70,5 @@ export function usePersonaPlaybooks(personaId: string | undefined): PersonaPlayb
     load()
   }, [load])
 
-  return { playbooks, linkedIds, loading, saving, error, status, toggle, save, reset }
+  return { playbooks, linkedIds, loading, saving, error, toggle, save, reset }
 }

@@ -161,7 +161,7 @@ describe('PersonaDetailPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Verknüpfungen speichern' }))
 
     await waitFor(() => {
-      expect(screen.getByText('Verknüpfungen gespeichert.')).toBeInTheDocument()
+      expect(notify.success).toHaveBeenCalledWith('Verknüpfungen gespeichert.')
     })
     expect(putCalls).toHaveLength(1)
     expect(putCalls[0].body).toEqual({ playbook_ids: ['pb1', 'pb2'] })
