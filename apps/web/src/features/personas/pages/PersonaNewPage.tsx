@@ -5,7 +5,6 @@ import { useForm } from 'react-hook-form'
 import { Link, useNavigate } from 'react-router-dom'
 import { z } from 'zod'
 
-import { AppShell } from '@/components/layout/AppShell'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
@@ -16,7 +15,6 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { useApi } from '@/api/useApi'
-import { useSession } from '@/auth/session-context'
 
 const personaSchema = z.object({
   name: z.string().min(1, 'Name erforderlich.'),
@@ -41,7 +39,6 @@ function describeError(cause: unknown): string {
 export function PersonaNewPage() {
   const api = useApi()
   const navigate = useNavigate()
-  const { signOut } = useSession()
   const [error, setError] = useState<string | null>(null)
 
   const form = useForm<PersonaValues>({
@@ -67,16 +64,15 @@ export function PersonaNewPage() {
   }
 
   return (
-    <AppShell onSignOut={() => void signOut()}>
-      <Container>
-        <Stack gap="md">
-          <Button asChild variant="ghost" size="sm" className="self-start">
-            <Link to="/">
-              <ArrowLeft className="h-4 w-4" />
-              Personae
-            </Link>
-          </Button>
-          <PageHeader title="Neue Persona" description="Lege eine neue Persona-Version an." />
+    <Container>
+      <Stack gap="md">
+        <Button asChild variant="ghost" size="sm" className="self-start">
+          <Link to="/">
+            <ArrowLeft className="h-4 w-4" />
+            Personae
+          </Link>
+        </Button>
+        <PageHeader title="Neue Persona" description="Lege eine neue Persona-Version an." />
           <Card>
             <CardContent className="pt-6">
               <Form {...form}>
@@ -143,8 +139,7 @@ export function PersonaNewPage() {
               </Form>
             </CardContent>
           </Card>
-        </Stack>
-      </Container>
-    </AppShell>
+      </Stack>
+    </Container>
   )
 }

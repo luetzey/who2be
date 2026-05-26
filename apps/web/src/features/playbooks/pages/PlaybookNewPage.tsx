@@ -5,7 +5,6 @@ import { useForm } from 'react-hook-form'
 import { Link, useNavigate } from 'react-router-dom'
 import { z } from 'zod'
 
-import { AppShell } from '@/components/layout/AppShell'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
@@ -16,7 +15,6 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { useApi } from '@/api/useApi'
-import { useSession } from '@/auth/session-context'
 
 const playbookSchema = z.object({
   name: z.string().min(1, 'Name erforderlich.'),
@@ -43,7 +41,6 @@ function describeError(cause: unknown): string {
 export function PlaybookNewPage() {
   const api = useApi()
   const navigate = useNavigate()
-  const { signOut } = useSession()
   const [error, setError] = useState<string | null>(null)
 
   const form = useForm<PlaybookValues>({
@@ -78,8 +75,7 @@ export function PlaybookNewPage() {
   }
 
   return (
-    <AppShell onSignOut={() => void signOut()}>
-      <Container>
+    <Container>
         <Stack gap="md">
           <Button asChild variant="ghost" size="sm" className="self-start">
             <Link to="/playbooks">
@@ -180,8 +176,7 @@ export function PlaybookNewPage() {
               </Form>
             </CardContent>
           </Card>
-        </Stack>
-      </Container>
-    </AppShell>
+      </Stack>
+    </Container>
   )
 }

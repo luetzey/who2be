@@ -5,7 +5,6 @@ import { useForm } from 'react-hook-form'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { z } from 'zod'
 
-import { AppShell } from '@/components/layout/AppShell'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
@@ -21,7 +20,6 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import type { Persona, PersonaVersion } from '@/api/types'
 import { useApi } from '@/api/useApi'
-import { useSession } from '@/auth/session-context'
 import { usePersonaPlaybooks } from '@/hooks/usePersonaPlaybooks'
 
 const editorSchema = z.object({
@@ -47,7 +45,6 @@ function splitList(raw: string): string[] {
 export function PersonaDetailPage() {
   const { id } = useParams<{ id: string }>()
   const api = useApi()
-  const { signOut } = useSession()
   const [persona, setPersona] = useState<Persona | null>(null)
   const [versions, setVersions] = useState<PersonaVersion[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -107,8 +104,7 @@ export function PersonaDetailPage() {
   }
 
   return (
-    <AppShell onSignOut={() => void signOut()}>
-      <Container>
+    <Container>
         <Stack gap="md">
           <Button asChild variant="ghost" size="sm" className="self-start">
             <Link to="/">
@@ -265,7 +261,6 @@ export function PersonaDetailPage() {
             ) : null}
           </DataView>
         </Stack>
-      </Container>
-    </AppShell>
+    </Container>
   )
 }

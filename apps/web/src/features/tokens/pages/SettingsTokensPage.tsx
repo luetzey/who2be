@@ -4,7 +4,6 @@ import { type FormEvent, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 
-import { AppShell } from '@/components/layout/AppShell'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
@@ -20,7 +19,6 @@ import { Textarea } from '@/components/ui/textarea'
 import type { TokenCreated } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { useAuthTokenContext } from '@/auth/auth-token-context'
-import { useSession } from '@/auth/session-context'
 import { useTokens } from '@/hooks/useTokens'
 
 const tokenSchema = z.object({
@@ -39,7 +37,6 @@ function maskTail(token: string): string {
 
 export function SettingsTokensPage() {
   const api = useApi()
-  const { signOut } = useSession()
   const { tokens, loading, error, reload } = useTokens()
   const { overrideToken, setOverrideToken } = useAuthTokenContext()
 
@@ -86,8 +83,7 @@ export function SettingsTokensPage() {
   }
 
   return (
-    <AppShell onSignOut={() => void signOut()}>
-      <Container>
+    <Container>
         <Stack gap="lg">
           <PageHeader
             title="API-Tokens"
@@ -257,7 +253,6 @@ export function SettingsTokensPage() {
             </CardContent>
           </Card>
         </Stack>
-      </Container>
-    </AppShell>
+    </Container>
   )
 }

@@ -12,6 +12,12 @@ const tailwindEntry = path.join(__dirname, 'src/styles/globals.css')
 
 const FEATURES = ['auth', 'personas', 'playbooks', 'tokens']
 
+const APP_SHELL_RESTRICTED_PATH = {
+  name: '@/components/layout/AppShell',
+  message:
+    'AppShell darf nur aus src/app/** importiert werden. Pages mounten den Shell nicht selbst — das macht <AppLayout> auf Route-Ebene.',
+}
+
 const RAW_HTML_FORBIDDEN = [
   {
     selector: "JSXOpeningElement[name.name='button']",
@@ -41,6 +47,7 @@ const crossFeatureOverrides = FEATURES.map((name) => ({
     'no-restricted-imports': [
       'error',
       {
+        paths: [APP_SHELL_RESTRICTED_PATH],
         patterns: FEATURES.filter((other) => other !== name).flatMap((other) => [
           {
             group: [
@@ -99,6 +106,23 @@ export default tseslint.config(
     files: ['src/components/ui/**/*.{ts,tsx}'],
     rules: {
       'react-refresh/only-export-components': 'off',
+    },
+  },
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: [
+      'src/app/**/*.{ts,tsx}',
+      'src/components/layout/AppShell.tsx',
+      'src/features/**/*.{ts,tsx}',
+      '**/*.test.{ts,tsx}',
+    ],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [APP_SHELL_RESTRICTED_PATH],
+        },
+      ],
     },
   },
   {
