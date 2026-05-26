@@ -27,7 +27,7 @@ export function AppShell({ children, onSignOut }: AppShellProps) {
     <div className="flex min-h-screen w-full bg-background text-foreground">
       <aside className="hidden w-60 shrink-0 flex-col border-r bg-muted/40 px-3 py-4 sm:flex">
         <div className="px-2 pb-6 text-sm font-semibold tracking-tight">Who2Be</div>
-        <nav className="flex flex-1 flex-col gap-1">
+        <nav aria-label="Hauptnavigation" className="flex flex-1 flex-col gap-1">
           {NAV_ITEMS.map((item) => (
             <NavLink
               key={item.to}
@@ -35,7 +35,7 @@ export function AppShell({ children, onSignOut }: AppShellProps) {
               end={item.to === '/'}
               className={({ isActive }) =>
                 cn(
-                  'flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground',
+                  'flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none',
                   isActive && 'bg-accent text-accent-foreground',
                 )
               }
@@ -48,7 +48,7 @@ export function AppShell({ children, onSignOut }: AppShellProps) {
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 items-center justify-between border-b px-4 sm:px-6">
-          <nav className="flex items-center gap-3 sm:hidden">
+          <nav aria-label="Hauptnavigation (mobil)" className="flex items-center gap-3 sm:hidden">
             {NAV_ITEMS.map((item) => (
               <NavLink
                 key={item.to}
@@ -56,7 +56,7 @@ export function AppShell({ children, onSignOut }: AppShellProps) {
                 end={item.to === '/'}
                 className={({ isActive }) =>
                   cn(
-                    'text-sm font-medium text-muted-foreground hover:text-foreground',
+                    'rounded-md px-1 text-sm font-medium text-muted-foreground ring-offset-background hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none',
                     isActive && 'text-foreground',
                   )
                 }
