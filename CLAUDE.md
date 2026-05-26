@@ -30,7 +30,9 @@ folgen in spaeteren Phasen (siehe Hinweise in den jeweiligen Modul-Docstrings).
 
 - `apps/api/` — FastAPI-Backend (REST, `/v1/`)
 - `apps/mcp/` — FastMCP-Server (Ziel-Tools `get_persona`, `list_playbooks`, `fetch_playbook`)
-- `apps/web/` — React/TypeScript-Web-UI (Vite)
+- `apps/web/` — React/TypeScript-Web-UI (Vite); Design-System Tailwind+shadcn
+  geplant, siehe `.claude/plan/2026-05-26-1530_web-ui-design-system-tailwind-shadcn.md`
+  — bis zur Umsetzung kein paralleles UI-System einfuehren
 - `packages/models/` — geteilte Pydantic-Models, von API und MCP importiert
 - Supabase (Postgres) als DB; lokal via Docker-Compose, Ziel-Hosting Hetzner
 
