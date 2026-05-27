@@ -44,9 +44,12 @@ export function LoginPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-10">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-2xl">Who2Be — Anmeldung</CardTitle>
+      <Card className="w-full max-w-md border-transparent shadow-modal">
+        <CardHeader className="gap-2">
+          <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+            Who2Be
+          </span>
+          <CardTitle className="text-3xl tracking-tight">Anmeldung</CardTitle>
           <CardDescription>Melde dich mit deinem Supabase-Account an.</CardDescription>
         </CardHeader>
         <CardContent>
@@ -84,7 +87,12 @@ export function LoginPage() {
                 )}
               />
               {error !== null ? <ErrorAlert message={error} /> : null}
-              <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+              <Button
+                type="submit"
+                variant="brand"
+                className="w-full"
+                disabled={form.formState.isSubmitting}
+              >
                 Anmelden
               </Button>
             </form>

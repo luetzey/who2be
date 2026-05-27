@@ -1,36 +1,39 @@
-import { ArrowLeft } from 'lucide-react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useForm } from 'react-hook-form'
 
-import { Container } from '@/components/layout/Container'
-import { PageHeader } from '@/components/layout/PageHeader'
-import { Stack } from '@/components/layout/Stack'
-import { ErrorAlert } from '@/components/data/ErrorAlert'
+import { FormSection } from '@/components/layout/FormSection'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 
-import { useCreatePersona } from '../hooks/useCreatePersona'
+import { ShowcaseRow, ShowcaseSection } from '../ShowcaseSection'
 
-export function PersonaNewPage() {
-  const navigate = useNavigate()
-  const { form, onSubmit, saveError } = useCreatePersona((id) => navigate(`/personas/${id}`))
+interface DemoValues {
+  name: string
+  description: string
+  systemPrompt: string
+  traits: string
+}
+
+export function FormSectionShowcase() {
+  const form = useForm<DemoValues>({
+    defaultValues: { name: '', description: '', systemPrompt: '', traits: '' },
+  })
 
   return (
-    <Container>
-      <Stack gap="md">
-        <Button asChild variant="ghost" size="sm" className="self-start">
-          <Link to="/">
-            <ArrowLeft className="h-4 w-4" />
-            Personae
-          </Link>
-        </Button>
-        <PageHeader title="Neue Persona" description="Lege eine neue Persona-Version an." />
-        <Card>
-          <CardContent className="pt-6">
-            <Form {...form}>
-              <form onSubmit={onSubmit} className="flex flex-col gap-4">
+    <ShowcaseSection
+      id="form-section"
+      title="FormSection"
+      description="Gruppiert Felder in Editor-Forms. Title + optionale Description + optionaler Footer. Erste Section ohne Border-Top."
+    >
+      <ShowcaseRow label="Zwei Sections nacheinander">
+        <div className="w-full max-w-2xl">
+          <Form {...form}>
+            <form className="flex flex-col gap-6">
+              <FormSection
+                title="Identitaet"
+                description="Wie die Persona heisst und kurz beschrieben wird."
+              >
                 <FormField
                   control={form.control}
                   name="name"
@@ -38,7 +41,7 @@ export function PersonaNewPage() {
                     <FormItem>
                       <FormLabel>Name</FormLabel>
                       <FormControl>
-                        <Input required {...field} />
+                        <Input {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -51,12 +54,19 @@ export function PersonaNewPage() {
                     <FormItem>
                       <FormLabel>Beschreibung</FormLabel>
                       <FormControl>
-                        <Input required {...field} />
+                        <Input {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+              </FormSection>
+
+              <FormSection
+                title="Verhalten"
+                description="System-Prompt und Eigenschaften — bestimmen, wie der Agent antwortet."
+                footer="Aenderungen erzeugen eine neue Version. Alte Versionen bleiben erhalten."
+              >
                 <FormField
                   control={form.control}
                   name="systemPrompt"
@@ -64,7 +74,7 @@ export function PersonaNewPage() {
                     <FormItem>
                       <FormLabel>System-Prompt</FormLabel>
                       <FormControl>
-                        <Textarea required rows={6} {...field} />
+                        <Textarea rows={4} {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -83,21 +93,17 @@ export function PersonaNewPage() {
                     </FormItem>
                   )}
                 />
-                {saveError !== null ? <ErrorAlert message={saveError} /> : null}
-                <div className="flex justify-end">
-                  <Button
-                    type="submit"
-                    variant="brand"
-                    disabled={form.formState.isSubmitting}
-                  >
-                    Anlegen
-                  </Button>
-                </div>
-              </form>
-            </Form>
-          </CardContent>
-        </Card>
-      </Stack>
-    </Container>
+              </FormSection>
+
+              <div className="flex justify-end">
+                <Button type="button" variant="brand">
+                  Neue Version speichern
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </div>
+      </ShowcaseRow>
+    </ShowcaseSection>
   )
 }

@@ -111,7 +111,11 @@ export function PlaybookNewPage() {
                 />
                 {saveError !== null ? <ErrorAlert message={saveError} /> : null}
                 <div className="flex justify-end">
-                  <Button type="submit" disabled={form.formState.isSubmitting}>
+                  <Button
+                    type="submit"
+                    variant="brand"
+                    disabled={form.formState.isSubmitting}
+                  >
                     Anlegen
                   </Button>
                 </div>

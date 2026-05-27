@@ -1,4 +1,4 @@
-import { Plus } from 'lucide-react'
+import { BookOpen, Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
@@ -6,6 +6,7 @@ import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
 import { DataList } from '@/components/data/DataList'
+import { EmptyState } from '@/components/data/EmptyState'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -35,9 +36,9 @@ export function PlaybooksPage() {
         <Stack gap="lg">
           <PageHeader
             title="Playbooks"
-            description="Workflows und Playbook-Versionen fuer Agenten."
+            description="Workflows und Playbook-Versionen für Agenten."
             actions={
-              <Button asChild>
+              <Button asChild variant="brand">
                 <Link to="/playbooks/new">
                   <Plus className="h-4 w-4" />
                   Neues Playbook
@@ -71,6 +72,29 @@ export function PlaybooksPage() {
             loading={loading}
             error={error}
             getKey={(playbook) => playbook.id}
+            empty={
+              <EmptyState
+                icon={BookOpen}
+                title={
+                  playbooks.length === 0
+                    ? 'Noch keine Playbooks'
+                    : 'Keine Playbooks für diesen Filter'
+                }
+                description={
+                  playbooks.length === 0
+                    ? 'Lege dein erstes Playbook an, um Workflows zu definieren.'
+                    : 'Passe Tag- oder Trigger-Filter an oder lege ein neues Playbook an.'
+                }
+                action={
+                  <Button asChild variant="brand">
+                    <Link to="/playbooks/new">
+                      <Plus className="h-4 w-4" />
+                      Neues Playbook
+                    </Link>
+                  </Button>
+                }
+              />
+            }
             renderItem={(playbook) => (
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">

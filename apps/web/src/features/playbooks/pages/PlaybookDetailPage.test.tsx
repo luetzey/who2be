@@ -118,7 +118,7 @@ describe('PlaybookDetailPage', () => {
     })
 
     fireEvent.change(screen.getByLabelText('Inhalt'), { target: { value: 'b2' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Speichern (neue Version)' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Neue Version speichern' }))
 
     await waitFor(() => {
       expect(screen.getByText('Aktuelle Version: 2')).toBeInTheDocument()

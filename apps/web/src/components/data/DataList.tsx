@@ -34,7 +34,12 @@ export function DataList<T>({
     return empty ? <>{empty}</> : <EmptyState title="Keine Einträge." />
   }
   return (
-    <ul className={cn('divide-y rounded-lg border bg-card', className)}>
+    <ul
+      className={cn(
+        'divide-y rounded-lg border border-border/40 bg-card shadow-card',
+        className,
+      )}
+    >
       {items.map((item) => (
         <li key={getKey(item)} className="px-4 py-3 text-sm">
           {renderItem(item)}
