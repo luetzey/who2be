@@ -3,6 +3,7 @@ import type { ComponentType, ReactNode, SVGProps } from 'react'
 import { NavLink } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
+import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { cn } from '@/lib/utils'
 
 interface AppShellProps {
@@ -65,7 +66,8 @@ export function AppShell({ children, onSignOut }: AppShellProps) {
               </NavLink>
             ))}
           </nav>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            <ThemeToggle />
             <Button variant="ghost" size="sm" onClick={onSignOut}>
               <LogOut className="h-4 w-4" />
               Abmelden

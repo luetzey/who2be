@@ -7,11 +7,12 @@ import { useSession } from '@/auth/session-context'
 
 import { RouteErrorBoundary } from './RouteErrorBoundary'
 import { RouteFallback } from './RouteFallback'
+import { ThemeProvider } from './ThemeProvider'
 
 export function AppLayout() {
   const { signOut } = useSession()
   return (
-    <>
+    <ThemeProvider>
       <AppShell onSignOut={() => void signOut()}>
         <RouteErrorBoundary>
           <Suspense fallback={<RouteFallback />}>
@@ -20,6 +21,6 @@ export function AppLayout() {
         </RouteErrorBoundary>
       </AppShell>
       <Toaster richColors closeButton position="bottom-right" />
-    </>
+    </ThemeProvider>
   )
 }
