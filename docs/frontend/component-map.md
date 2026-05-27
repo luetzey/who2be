@@ -64,11 +64,13 @@ in `globals.css`).
 | Hook | Datei | Rolle | Tests |
 |---|---|---|---|
 | `usePersona(id)` | `features/personas/hooks/usePersona.ts` | Laedt `getPersona` + `listPersonaVersions`. | `usePersona.test.tsx` |
-| `usePersonaForm(persona, onSaved)` | `features/personas/hooks/usePersonaForm.ts` | RHF + Zod + `updatePersona` + `notify.success`. | `usePersonaForm.test.tsx` |
+| `usePersonaForm(persona, onSaved)` | `features/personas/hooks/usePersonaForm.ts` | RHF + Zod + `updatePersona` + `notify.success`. | indirekt via `PersonaDetailPage.test.tsx` |
+| `useCreatePersona(onCreated)` | `features/personas/hooks/useCreatePersona.ts` | RHF + Zod + `createPersona` + `notify.success`. | indirekt via `PersonaNewPage.test.tsx` |
 | `usePersonaPlaybooks(id)` | `hooks/usePersonaPlaybooks.ts` | Lade + Toggle-State, Toast statt Inline-Status. | bestehend |
-| `usePlaybook(id)` | `features/playbooks/hooks/usePlaybook.ts` | Analog `usePersona`. | `usePlaybook.test.tsx` |
-| `usePlaybookForm(playbook, onSaved)` | `features/playbooks/hooks/usePlaybookForm.ts` | Analog `usePersonaForm`. | `usePlaybookForm.test.tsx` |
-| `useTokenMutations()` | `features/tokens/hooks/useTokenMutations.ts` | Kapselt `createToken`/`revokeToken`/Override. | `useTokenMutations.test.tsx` |
+| `usePlaybook(id)` | `features/playbooks/hooks/usePlaybook.ts` | Analog `usePersona`. | indirekt via `PlaybookDetailPage.test.tsx` |
+| `usePlaybookForm(playbook, onSaved)` | `features/playbooks/hooks/usePlaybookForm.ts` | Analog `usePersonaForm`. | indirekt via `PlaybookDetailPage.test.tsx` |
+| `useCreatePlaybook(onCreated)` | `features/playbooks/hooks/useCreatePlaybook.ts` | RHF + Zod + `createPlaybook` + `notify.success`. | indirekt via `PlaybookNewPage.test.tsx` |
+| `useTokenMutations()` | `features/tokens/hooks/useTokenMutations.ts` | Kapselt `createToken`/`revokeToken`/Override. | indirekt via `SettingsTokensPage.test.tsx` |
 | `useListData<T>(loader)` | `hooks/useListData.ts` | Generischer Loader. | bestehend |
 | `usePersonas`/`usePlaybooks`/`useTokens` | `hooks/*` | Wrap von `useListData`. | bestehend |
 
@@ -84,10 +86,10 @@ Token-Reveal-Inline-Alert).
 |---|---|---|---|
 | `LoginPage` | `features/auth/pages/LoginPage.tsx` | `/login` (public) | `useSession`, RHF, Zod |
 | `PersonasPage` | `features/personas/pages/PersonasPage.tsx` | `/` | `usePersonas` |
-| `PersonaNewPage` | `features/personas/pages/PersonaNewPage.tsx` | `/personas/new` | RHF + Zod + `useApi.createPersona` (Inline) |
+| `PersonaNewPage` | `features/personas/pages/PersonaNewPage.tsx` | `/personas/new` | `useCreatePersona` |
 | `PersonaDetailPage` | `features/personas/pages/PersonaDetailPage.tsx` | `/personas/:id` | `usePersona`, `usePersonaForm`, `usePersonaPlaybooks`, `PlaybookLinkItem` |
 | `PlaybooksPage` | `features/playbooks/pages/PlaybooksPage.tsx` | `/playbooks` | `usePlaybooks` |
-| `PlaybookNewPage` | `features/playbooks/pages/PlaybookNewPage.tsx` | `/playbooks/new` | RHF + Zod + `useApi.createPlaybook` (Inline) |
+| `PlaybookNewPage` | `features/playbooks/pages/PlaybookNewPage.tsx` | `/playbooks/new` | `useCreatePlaybook` |
 | `PlaybookDetailPage` | `features/playbooks/pages/PlaybookDetailPage.tsx` | `/playbooks/:id` | `usePlaybook`, `usePlaybookForm` |
 | `SettingsTokensPage` | `features/tokens/pages/SettingsTokensPage.tsx` | `/settings/tokens` | `useTokens`, `useTokenMutations`, `useAuthTokenContext` |
 
