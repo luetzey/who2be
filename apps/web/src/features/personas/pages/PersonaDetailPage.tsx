@@ -8,10 +8,10 @@ import { DataList } from '@/components/data/DataList'
 import { DataView } from '@/components/data/DataView'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Checkbox } from '@/components/ui/checkbox'
 import { usePersonaPlaybooks } from '@/hooks/usePersonaPlaybooks'
 
 import { PersonaEditorForm } from '../components/PersonaEditorForm'
+import { PlaybookLinkItem } from '../components/PlaybookLinkItem'
 import { usePersona } from '../hooks/usePersona'
 import { usePersonaForm } from '../hooks/usePersonaForm'
 
@@ -75,15 +75,13 @@ export function PersonaDetailPage() {
                     >
                       <ul className="flex flex-col gap-2">
                         {links.playbooks.map((playbook) => (
-                          <li key={playbook.id}>
-                            <label className="flex items-center gap-2 text-sm">
-                              <Checkbox
-                                checked={links.linkedIds.includes(playbook.id)}
-                                onChange={() => links.toggle(playbook.id)}
-                              />
-                              {playbook.name}
-                            </label>
-                          </li>
+                          <PlaybookLinkItem
+                            key={playbook.id}
+                            id={playbook.id}
+                            name={playbook.name}
+                            checked={links.linkedIds.includes(playbook.id)}
+                            onToggle={() => links.toggle(playbook.id)}
+                          />
                         ))}
                       </ul>
                     </DataView>

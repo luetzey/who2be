@@ -2,6 +2,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import js from '@eslint/js'
+import jsxA11y from 'eslint-plugin-jsx-a11y'
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 import tailwind from 'eslint-plugin-tailwindcss'
@@ -39,6 +40,11 @@ const RAW_HTML_FORBIDDEN = [
     message:
       'Direkter <a>-Tag verboten. Verwende <Link> aus react-router-dom (ggf. <Button asChild><Link/></Button>).',
   },
+  {
+    selector: "JSXOpeningElement[name.name='label']",
+    message:
+      'Direkter <label>-Tag verboten. Verwende <Label> aus @/components/ui/label oder <FormLabel> innerhalb von <FormItem>.',
+  },
 ]
 
 const crossFeatureOverrides = FEATURES.map((name) => ({
@@ -73,6 +79,7 @@ export default tseslint.config(
       ecmaVersion: 2022,
     },
     plugins: {
+      'jsx-a11y': jsxA11y,
       'react-hooks': reactHooks,
       'react-refresh': reactRefresh,
       tailwindcss: tailwind,
@@ -85,6 +92,7 @@ export default tseslint.config(
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      ...jsxA11y.flatConfigs.recommended.rules,
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
       'tailwindcss/classnames-order': 'warn',
       'tailwindcss/no-contradicting-classname': 'error',
@@ -106,6 +114,10 @@ export default tseslint.config(
     files: ['src/components/ui/**/*.{ts,tsx}'],
     rules: {
       'react-refresh/only-export-components': 'off',
+      // shadcn-Primitives nehmen Children via Spread an, jsx-a11y kann das
+      // statisch nicht erkennen. Konsumenten setzen die Children — die
+      // Page-/Catalog-Tests pruefen das Endergebnis.
+      'jsx-a11y/heading-has-content': 'off',
     },
   },
   {

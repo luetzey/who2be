@@ -55,6 +55,11 @@ jobs:
         run: npx tsc -b
       - name: Test
         run: npm test
+      - name: A11y (axe via vitest)
+        # Eigenes Gate: A11y-Tests laufen bereits unter `npm test` mit, hier
+        # gefiltert (`testNamePattern a11y`) als sichtbarer Step. Bricht den
+        # Build sofort, wenn axe Violations meldet — keine Regress-Lecks.
+        run: npm run test:a11y
       - name: Build
         run: npm run build
 
