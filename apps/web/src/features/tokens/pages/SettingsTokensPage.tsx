@@ -70,7 +70,7 @@ export function SettingsTokensPage() {
       <Stack gap="lg">
         <PageHeader
           title="API-Tokens"
-          description="Persistente Tokens fuer Headless-Clients und Agents."
+          description="Persistente Tokens für Headless-Clients und Agenten."
         />
 
         <Card>
@@ -135,7 +135,11 @@ export function SettingsTokensPage() {
                 />
                 {createError !== null ? <ErrorAlert message={createError} /> : null}
                 <div className="flex justify-end">
-                  <Button type="submit" disabled={form.formState.isSubmitting}>
+                  <Button
+                    type="submit"
+                    variant="brand"
+                    disabled={form.formState.isSubmitting}
+                  >
                     Anlegen
                   </Button>
                 </div>
@@ -151,7 +155,7 @@ export function SettingsTokensPage() {
             <AlertDescription>
               <Stack gap="sm">
                 <p>
-                  Der Klartext wird genau einmal angezeigt. Nach dem Schliessen ist er
+                  Der Klartext wird genau einmal angezeigt. Nach dem Schließen ist er
                   nicht mehr abrufbar.
                 </p>
                 <Textarea
@@ -164,6 +168,7 @@ export function SettingsTokensPage() {
                 <div className="flex flex-wrap gap-2">
                   <Button
                     type="button"
+                    variant="brand"
                     size="sm"
                     onClick={() => {
                       if (typeof navigator !== 'undefined' && navigator.clipboard) {
@@ -175,7 +180,7 @@ export function SettingsTokensPage() {
                     In Zwischenablage kopieren
                   </Button>
                   <Button type="button" size="sm" variant="outline" onClick={dismissCreated}>
-                    Schliessen
+                    Schließen
                   </Button>
                 </div>
               </Stack>
@@ -190,7 +195,7 @@ export function SettingsTokensPage() {
           <CardContent>
             <Stack gap="md">
               <p className="text-sm text-muted-foreground">
-                Override fuer kuenftige Headless-Use-Cases: Der eingegebene Token wird ab
+                Override für künftige Headless-Use-Cases: Der eingegebene Token wird ab
                 sofort statt des Supabase-JWT an die API gesendet. Lebt nur in dieser
                 Tab-Sitzung — Reload entfernt ihn.
               </p>

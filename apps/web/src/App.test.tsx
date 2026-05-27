@@ -6,8 +6,7 @@ import { App } from './App'
 describe('App', () => {
   it('zeigt ohne Session die Anmeldeseite', () => {
     render(<App />)
-    expect(
-      screen.getByRole('heading', { name: 'Who2Be — Anmeldung' }),
-    ).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Anmeldung' })).toBeInTheDocument()
+    expect(screen.getByText('Who2Be')).toBeInTheDocument()
   })
 })

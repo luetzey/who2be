@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { ComponentType, ReactNode, SVGProps } from 'react'
 
 import { cn } from '@/lib/utils'
 
@@ -6,10 +6,17 @@ interface EmptyStateProps {
   title: string
   description?: string
   action?: ReactNode
+  icon?: ComponentType<SVGProps<SVGSVGElement>>
   className?: string
 }
 
-export function EmptyState({ title, description, action, className }: EmptyStateProps) {
+export function EmptyState({
+  title,
+  description,
+  action,
+  icon: Icon,
+  className,
+}: EmptyStateProps) {
   return (
     <div
       className={cn(
@@ -17,6 +24,9 @@ export function EmptyState({ title, description, action, className }: EmptyState
         className,
       )}
     >
+      {Icon ? (
+        <Icon className="size-12 text-muted-foreground/60" aria-hidden="true" />
+      ) : null}
       <div className="space-y-1">
         <p className="text-sm font-medium">{title}</p>
         {description ? (

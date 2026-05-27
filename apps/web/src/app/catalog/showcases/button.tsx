@@ -9,9 +9,10 @@ export function ButtonShowcase() {
     <ShowcaseSection
       id="button"
       title="Button"
-      description="cva-Varianten: default, destructive, outline, secondary, ghost, link. Groessen: default, sm, lg, icon."
+      description="cva-Varianten: brand, default, destructive, outline, secondary, ghost, link. Groessen: default, sm, lg, icon."
     >
       <ShowcaseRow label="Varianten">
+        <Button variant="brand">Brand</Button>
         <Button>Default</Button>
         <Button variant="destructive">Destructive</Button>
         <Button variant="outline">Outline</Button>

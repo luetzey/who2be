@@ -2,6 +2,7 @@ import { type BaseSyntheticEvent } from 'react'
 import { type UseFormReturn } from 'react-hook-form'
 
 import { ErrorAlert } from '@/components/data/ErrorAlert'
+import { FormSection } from '@/components/layout/FormSection'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
@@ -23,88 +24,101 @@ export function PlaybookEditorForm({ form, onSubmit, saveError }: PlaybookEditor
       <Card>
         <CardContent className="pt-6">
           <Form {...form}>
-            <form onSubmit={onSubmit} className="flex flex-col gap-4">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Name</FormLabel>
-                    <FormControl>
-                      <Input required {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="type"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Typ</FormLabel>
-                    <FormControl>
-                      <Input required {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Beschreibung</FormLabel>
-                    <FormControl>
-                      <Input required {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="body"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Inhalt</FormLabel>
-                    <FormControl>
-                      <Textarea required rows={8} {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="tags"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Tags (kommagetrennt)</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="triggers"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Trigger</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            <form onSubmit={onSubmit} className="flex flex-col gap-6">
+              <FormSection
+                title="Identität"
+                description="Wie das Playbook heißt, welcher Typ es ist und worum es geht."
+              >
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Name</FormLabel>
+                      <FormControl>
+                        <Input required {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="type"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Typ</FormLabel>
+                      <FormControl>
+                        <Input required {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Beschreibung</FormLabel>
+                      <FormControl>
+                        <Input required {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </FormSection>
+
+              <FormSection
+                title="Inhalt"
+                description="Das ausführliche Playbook und seine Auslöser."
+                footer="Änderungen erzeugen eine neue Version. Alte Versionen bleiben erhalten."
+              >
+                <FormField
+                  control={form.control}
+                  name="body"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Inhalt</FormLabel>
+                      <FormControl>
+                        <Textarea required rows={8} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="tags"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tags (kommagetrennt)</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="triggers"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Trigger</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </FormSection>
+
               <div className="flex justify-end">
-                <Button type="submit" disabled={form.formState.isSubmitting}>
-                  Speichern (neue Version)
+                <Button type="submit" variant="brand" disabled={form.formState.isSubmitting}>
+                  Neue Version speichern
                 </Button>
               </div>
             </form>

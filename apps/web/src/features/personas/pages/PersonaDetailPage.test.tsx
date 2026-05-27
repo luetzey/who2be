@@ -96,7 +96,7 @@ describe('PersonaDetailPage', () => {
     })
 
     fireEvent.change(screen.getByLabelText('System-Prompt'), { target: { value: 's2' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Speichern (neue Version)' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Neue Version speichern' }))
 
     await waitFor(() => {
       expect(screen.getByText('Aktuelle Version: 2')).toBeInTheDocument()

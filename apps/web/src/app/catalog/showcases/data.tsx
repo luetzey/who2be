@@ -1,3 +1,5 @@
+import { Users } from 'lucide-react'
+
 import { DataList } from '@/components/data/DataList'
 import { DataView } from '@/components/data/DataView'
 import { EmptyState } from '@/components/data/EmptyState'
@@ -36,12 +38,17 @@ export function DataShowcase() {
           <ErrorAlert message="Beispiel-Fehlermeldung vom API-Layer (HTTP 500)." />
         </div>
       </ShowcaseRow>
-      <ShowcaseRow label="EmptyState">
+      <ShowcaseRow label="EmptyState (mit Icon)">
         <div className="w-full max-w-md">
           <EmptyState
-            title="Keine Personae"
+            icon={Users}
+            title="Noch keine Personae"
             description="Lege deine erste Persona an, um loszulegen."
-            action={<Button size="sm">Neu</Button>}
+            action={
+              <Button variant="brand" size="sm">
+                Neue Persona
+              </Button>
+            }
           />
         </div>
       </ShowcaseRow>
