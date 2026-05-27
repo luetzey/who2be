@@ -26,8 +26,8 @@ keine zwei Tasks dieselbe Datei anfassen (= parallel mergebar).
 | 2 | Routing-Refactor + AppShell-Outlet | todo | M-FE-2 |
 | 3 | Feedback-Layer (Toaster + `notify`) | todo | M-FE-3 |
 | 4 | Feature-Hooks (Pages frei von Fetch-/Form-State) | todo | M-FE-4 |
-| 5 | A11y-Gate + Primitive-Luecken | todo | M-FE-5 |
-| 6 | Theme-Toggle + OKLCH | todo | M-FE-6 |
+| 5 | A11y-Gate + Primitive-Luecken | done | M-FE-5 |
+| 6 | Theme-Toggle + OKLCH | done | M-FE-6 |
 | 7 | Component-Catalog | todo | M-FE-7 |
 | 8 | Cleanup & Closeout | todo | M-FE-8 |
 
@@ -69,10 +69,10 @@ parallelisierbar zu Phasen 3–5.
 | 5.3 | 5 | todo | 5.1, 4.3 | `…/personas/components/PlaybookLinkItem.tsx`, `…/PersonaDetailPage.tsx` |
 | 5.4 | 5 | todo | 5.3 | `apps/web/eslint.config.js` (label-Forbid + jsx-a11y error) |
 | 5.5 | 5 | todo | 5.2 | `.github/workflows/ci.yml` |
-| 6.1 | 6 | todo | 0.5 | `apps/web/src/styles/globals.css` (OKLCH) |
-| 6.2 | 6 | todo | 2.1 | `apps/web/src/app/ThemeProvider.tsx` (+ Test) |
-| 6.3 | 6 | todo | 6.1, 6.2 | `apps/web/src/components/ui/theme-toggle.tsx`, `…/layout/AppShell.tsx` |
-| 6.4 | 6 | todo | 6.1, 6.2 | `apps/web/src/styles/globals.css` (Dark-Selector) |
+| 6.1 | 6 | done | 0.5 | `apps/web/src/styles/globals.css` (OKLCH) |
+| 6.2 | 6 | done | 2.1 | `apps/web/src/app/{ThemeProvider,theme-context}.tsx` (+ Tests) |
+| 6.3 | 6 | done | 6.1, 6.2 | `apps/web/src/components/ui/theme-toggle.tsx`, `…/layout/AppShell.tsx` |
+| 6.4 | 6 | done | 6.1, 6.2 | `apps/web/src/styles/globals.css` (Dark-Selector) |
 | 7.1 | 7 | todo | 2.1 | `apps/web/src/app/catalog/CatalogPage.tsx`, `apps/web/src/app/routes.tsx` |
 | 7.2 | 7 | todo | 7.1 | `apps/web/src/app/catalog/showcases/*.tsx` (pro Primitive) |
 | 7.3 | 7 | todo | 7.1 | `apps/web/src/app/catalog/showcases/{layout,data}.tsx` |
