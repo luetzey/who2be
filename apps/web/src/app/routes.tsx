@@ -47,6 +47,16 @@ const SettingsTokensPage = lazy(() =>
   })),
 )
 
+// DEV-only Component-Catalog (ADR 0018). In Production-Builds wird die Route
+// nicht registriert — Vite-Tree-Shaking laesst den Chunk dann komplett weg.
+const CatalogPage = import.meta.env.DEV
+  ? lazy(() =>
+      import('./catalog/CatalogPage').then((mod) => ({
+        default: mod.CatalogPage,
+      })),
+    )
+  : null
+
 export function RouterRoot() {
   return (
     <BrowserRouter>
@@ -63,6 +73,9 @@ export function RouterRoot() {
                 <Route path="/playbooks/new" element={<PlaybookNewPage />} />
                 <Route path="/playbooks/:id" element={<PlaybookDetailPage />} />
                 <Route path="/settings/tokens" element={<SettingsTokensPage />} />
+                {CatalogPage ? (
+                  <Route path="/_catalog" element={<CatalogPage />} />
+                ) : null}
               </Route>
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
