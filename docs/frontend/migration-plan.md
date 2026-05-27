@@ -1,6 +1,6 @@
 # Frontend-Migrations-Plan
 
-> Final document. Stand: 2026-05-27 · Alle Phasen abgeschlossen.
+> Final document. Stand: 2026-05-27 · Alle Phasen (0–8) abgeschlossen.
 > Vollstaendiger Blueprint im Approved-Plan unter `.claude/plans/`.
 
 **Constraints (eingehalten):** reine UI-Schicht, Feature-Paritaet war hart
@@ -29,7 +29,7 @@ dass keine zwei Tasks dieselbe Datei angefasst haben (= parallel mergebar).
 | 5 | A11y-Gate + Primitive-Luecken | done | M-FE-5 | `ef09cde` (PR #30) |
 | 6 | Theme-Toggle + OKLCH | done | M-FE-6 | `29ef7cc` (PR #31) |
 | 7 | Component-Catalog | done | M-FE-7 | `44aeb76` (PR #32) |
-| 8 | Cleanup & Closeout | in-progress | M-FE-8 | — |
+| 8 | Cleanup & Closeout | done | M-FE-8 | `0270580` (PR #33) |
 
 ## Task-Tracking
 
@@ -75,7 +75,7 @@ dass keine zwei Tasks dieselbe Datei angefasst haben (= parallel mergebar).
 | 7.3 | 7 | done | 7.1 | `apps/web/src/app/catalog/showcases/{layout,data}.tsx` |
 | 8.1 | 8 | done | 5, 6, 7 | `docs/frontend/{architecture,migration-plan,component-map,test-plan}.md` |
 | 8.2 | 8 | done | 8.1 | `docs/frontend/smoke-checklist.md` |
-| 8.3 | 8 | todo | 8.1 | Notion PROJ-19 Closeout |
+| 8.3 | 8 | done | 8.1 | Notion PROJ-19 Closeout (M-FE-0..8 Done, Lessons-Learned-Note) |
 
 ## Branch- und Merge-Strategie (Rueckblick)
 
