@@ -1,7 +1,7 @@
 # Frontend-Komponenten-Karte
 
-> Living document. Stand: 2026-05-26 · Phase 0. Wird in Phase 1/2
-> aktualisiert, sobald Barrels und `app/`-Layer existieren.
+> Living document. Stand: 2026-05-27 · Phasen 0–7 abgeschlossen.
+> Alle hier gelisteten Bausteine existieren im Repo.
 
 Eine Zeile pro Komponente. Eintraege folgen der Schichtung aus
 [architecture.md](./architecture.md). Spalte **Tokens** nennt die
@@ -25,14 +25,14 @@ in `globals.css`).
 | `Form` (+Field/Item/Label/Control/Message/Description) | `form.tsx` | `--color-{destructive,foreground}` | bestehend (via Page-Tests) | RHF + Radix-Label Integration. |
 | `Skeleton` | `skeleton.tsx` | `--color-muted` | bestehend (via LoadingState) | Pulse-Animation. |
 | `Table` (+Header/Body/Footer/Head/Row/Cell/Caption) | `table.tsx` | `--color-border`, `--color-muted-foreground` | Phase 7 | Semantische Wrappers. |
-| `Toaster` (Sonner) | `sonner.tsx` | `--color-{popover,foreground}` | indirekt (Phase 3) | **Wird in `AppLayout` 1x gemountet (Phase 3.1).** |
-| `ThemeToggle` (NEU Phase 6.3) | `theme-toggle.tsx` | `--color-{popover,accent}` | `…/theme-toggle.test.tsx` (Phase 6.3) | DropdownMenu mit light/dark/system. |
+| `Toaster` (Sonner) | `sonner.tsx` | `--color-{popover,foreground}` | indirekt (Page-Tests) | **In `AppLayout` 1× gemountet.** Aufruf nur via `lib/feedback.ts`. |
+| `ThemeToggle` | `theme-toggle.tsx` | `--color-{popover,accent}` | `…/theme-toggle.test.tsx` | DropdownMenu mit light/dark/system. |
 
 ## Layout-Primitives (`components/layout/*`)
 
 | Komponente | Datei | Rolle | Tokens | Tests |
 |---|---|---|---|---|
-| `AppShell` | `AppShell.tsx` | App-Chrome (Nav-Sidebar, Header, Content-Slot). **Ab Phase 2 nur noch von `AppLayout` importierbar.** Bekommt ab Phase 6 Theme-Toggle-Slot im Header. | `--color-{background,foreground,muted,accent,ring}` | indirekt |
+| `AppShell` | `AppShell.tsx` | App-Chrome (Nav-Sidebar, Header, Content-Slot). **Nur aus `src/app/**` importierbar** (ESLint-Gate). Header-Slot enthaelt `ThemeToggle`. | `--color-{background,foreground,muted,accent,ring}` | indirekt |
 | `Container` | `Container.tsx` | Max-Width-Wrapper (5xl) mit responsivem Padding. | `--space-*` | indirekt |
 | `PageHeader` | `PageHeader.tsx` | Title + Description + Actions-Slot. | `--space-*` | indirekt |
 | `Stack` | `Stack.tsx` | `cva` Flex-Column mit Gap-Skala. | `--space-*` | indirekt |
@@ -48,49 +48,54 @@ in `globals.css`).
 | `EmptyState` | `EmptyState.tsx` | Title + Description + Action-Slot, gestrichelter Rahmen. | indirekt |
 | `ErrorAlert` | `ErrorAlert.tsx` | `Alert` mit `AlertCircle`-Icon und Title/Message. | indirekt |
 
-## App-Layer (`app/*`, ab Phase 2)
+## App-Layer (`app/*`)
 
 | Komponente | Datei | Rolle | Tests |
 |---|---|---|---|
-| `routes.tsx` | `app/routes.tsx` | Routen-Definition mit `<Route element={<AppLayout/>}>` und Lazy + Suspense. | indirekt |
-| `AppLayout` | `app/AppLayout.tsx` | Mountet `<AppShell>`, `<Outlet>`, `<Toaster>`, ErrorBoundary. | `AppLayout.test.tsx` (Phase 2.1) |
-| `RouteErrorBoundary` | `app/RouteErrorBoundary.tsx` | React-Router-V7-ErrorBoundary. | Phase 2.1 |
-| `RouteFallback` | `app/RouteFallback.tsx` | Suspense-Fallback (Skeleton-Page). | Phase 2.1 |
-| `ThemeProvider` (NEU Phase 6.2) | `app/ThemeProvider.tsx` | `data-theme`-Attribut auf `<html>`, localStorage-Persistenz, `system`-Default. | `ThemeProvider.test.tsx` |
+| `routes.tsx` | `app/routes.tsx` | Routen-Definition mit `<Route element={<AppLayout/>}>`, Lazy + Suspense, DEV-gated `/_catalog`. | indirekt |
+| `AppLayout` | `app/AppLayout.tsx` | Mountet `<AppShell>`, `<Outlet>`, `<Toaster>`, ErrorBoundary. | `AppLayout.test.tsx` |
+| `RouteErrorBoundary` | `app/RouteErrorBoundary.tsx` | React-Router-V7-ErrorBoundary. | indirekt |
+| `RouteFallback` | `app/RouteFallback.tsx` | Suspense-Fallback (Skeleton-Page). | indirekt |
+| `ThemeProvider` | `app/ThemeProvider.tsx` (+ `theme-context.ts`) | `data-theme`-Attribut auf `<html>`, localStorage-Persistenz, `system`-Default. | `ThemeProvider.test.tsx` |
+| `CatalogPage` (DEV) | `app/catalog/CatalogPage.tsx` | DEV-only Showcase aller Primitives/Layout/Data. | `CatalogPage.test.tsx` |
 
-## Feature-Hooks (ab Phase 4)
+## Feature-Hooks
 
 | Hook | Datei | Rolle | Tests |
 |---|---|---|---|
 | `usePersona(id)` | `features/personas/hooks/usePersona.ts` | Laedt `getPersona` + `listPersonaVersions`. | `usePersona.test.tsx` |
 | `usePersonaForm(persona, onSaved)` | `features/personas/hooks/usePersonaForm.ts` | RHF + Zod + `updatePersona` + `notify.success`. | `usePersonaForm.test.tsx` |
-| `usePersonaPlaybooks(id)` (existierend) | `hooks/usePersonaPlaybooks.ts` | Lade + Toggle-State. Wird in Phase 4 leichter (Toast statt `status`). | bestehend |
+| `usePersonaPlaybooks(id)` | `hooks/usePersonaPlaybooks.ts` | Lade + Toggle-State, Toast statt Inline-Status. | bestehend |
 | `usePlaybook(id)` | `features/playbooks/hooks/usePlaybook.ts` | Analog `usePersona`. | `usePlaybook.test.tsx` |
 | `usePlaybookForm(playbook, onSaved)` | `features/playbooks/hooks/usePlaybookForm.ts` | Analog `usePersonaForm`. | `usePlaybookForm.test.tsx` |
 | `useTokenMutations()` | `features/tokens/hooks/useTokenMutations.ts` | Kapselt `createToken`/`revokeToken`/Override. | `useTokenMutations.test.tsx` |
-| `useListData<T>(loader)` (existierend) | `hooks/useListData.ts` | Generischer Loader. Bleibt. | bestehend |
-| `usePersonas`/`usePlaybooks`/`useTokens` (existierend) | `hooks/*` | Wrap von `useListData`. Bleiben. | bestehend |
+| `useListData<T>(loader)` | `hooks/useListData.ts` | Generischer Loader. | bestehend |
+| `usePersonas`/`usePlaybooks`/`useTokens` | `hooks/*` | Wrap von `useListData`. | bestehend |
 
 ## Pages (`features/<x>/pages/*`)
 
-Pages komponieren ab Phase 4 nur noch. LOC-Ziel: < 100 Zeilen je Page.
+Pages komponieren nur — Fetch- und Form-State leben in Feature-Hooks.
+Erlaubt in Pages bleiben Routing-Glue (`useParams`/`useNavigate`) und
+reines UI-State (Filter-Eingaben). Detail-Pages liegen knapp ueber 100
+LOC; SettingsTokensPage ist die einzige Ausnahme (Override-Flow +
+Token-Reveal-Inline-Alert).
 
 | Page | Datei | Route | Konsumiert |
 |---|---|---|---|
 | `LoginPage` | `features/auth/pages/LoginPage.tsx` | `/login` (public) | `useSession`, RHF, Zod |
 | `PersonasPage` | `features/personas/pages/PersonasPage.tsx` | `/` | `usePersonas` |
-| `PersonaNewPage` | `features/personas/pages/PersonaNewPage.tsx` | `/personas/new` | Phase 4: `usePersonaForm` (neu, fuer Create-Variante) |
+| `PersonaNewPage` | `features/personas/pages/PersonaNewPage.tsx` | `/personas/new` | RHF + Zod + `useApi.createPersona` (Inline) |
 | `PersonaDetailPage` | `features/personas/pages/PersonaDetailPage.tsx` | `/personas/:id` | `usePersona`, `usePersonaForm`, `usePersonaPlaybooks`, `PlaybookLinkItem` |
 | `PlaybooksPage` | `features/playbooks/pages/PlaybooksPage.tsx` | `/playbooks` | `usePlaybooks` |
-| `PlaybookNewPage` | `features/playbooks/pages/PlaybookNewPage.tsx` | `/playbooks/new` | Phase 4: `usePlaybookForm` (Create) |
+| `PlaybookNewPage` | `features/playbooks/pages/PlaybookNewPage.tsx` | `/playbooks/new` | RHF + Zod + `useApi.createPlaybook` (Inline) |
 | `PlaybookDetailPage` | `features/playbooks/pages/PlaybookDetailPage.tsx` | `/playbooks/:id` | `usePlaybook`, `usePlaybookForm` |
 | `SettingsTokensPage` | `features/tokens/pages/SettingsTokensPage.tsx` | `/settings/tokens` | `useTokens`, `useTokenMutations`, `useAuthTokenContext` |
 
-## Composed Feature-Komponenten (selektiv, ab Phase 5)
+## Composed Feature-Komponenten
 
 | Komponente | Datei | Anlass |
 |---|---|---|
-| `PlaybookLinkItem` | `features/personas/components/PlaybookLinkItem.tsx` | Ersetzt rohes `<label>` in `PersonaDetailPage.tsx:241`. Kapselt `Label` + `Checkbox`. |
+| `PlaybookLinkItem` | `features/personas/components/PlaybookLinkItem.tsx` | Ersetzte rohes `<label>` in `PersonaDetailPage`. Kapselt `Label` + `Checkbox`. |
 
 Weitere Composed-Komponenten werden erst gezogen, wenn `>= 2` Pages
 dasselbe Markup teilen.

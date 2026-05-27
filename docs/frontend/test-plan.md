@@ -1,6 +1,6 @@
 # Frontend-Test-Plan
 
-> Living document. Stand: 2026-05-26 · Phase 0.
+> Living document. Stand: 2026-05-27 · Phasen 0–7 abgeschlossen.
 
 Reine UI-Migration ⇒ Verhalten = API-Calls + Routing + Form-Submit-Reaktionen.
 Strategie: bestehende Pages-Tests dienen als **Feature-Paritaets-Snapshots**;

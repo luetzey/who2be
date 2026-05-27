@@ -1,8 +1,8 @@
 # Frontend-Architektur (Web-UI)
 
-> Living document. Stand: 2026-05-26 · Phase 0 des Frontend-Umbaus
-> ([Migrations-Plan](./migration-plan.md)). Tragende Einzelentscheidungen
-> liegen als ADR unter `docs/adr/0014`–`0018`.
+> Living document. Stand: 2026-05-27 · Frontend-Umbau Phasen 0–7
+> abgeschlossen ([Migrations-Plan](./migration-plan.md)). Tragende
+> Einzelentscheidungen liegen als ADR unter `docs/adr/0014`–`0018`.
 
 Spiegelt die `apps/web/`-Schicht des modularen Monolithen (ADR-0001) und
 konkretisiert das Notion-Playbook **Frontend-Standards**
@@ -48,7 +48,8 @@ fuehren keine API-Calls.
 
 | Pfad | Rolle |
 |---|---|
-| `apps/web/src/app/` | Routing-Wurzel: `routes.tsx`, `AppLayout`, `RouteErrorBoundary`, `RouteFallback`, `ThemeProvider`. Einziger Mount-Punkt fuer `<AppShell>` und `<Toaster>`. |
+| `apps/web/src/app/` | Routing-Wurzel: `routes.tsx`, `AppLayout`, `RouteErrorBoundary`, `RouteFallback`, `ThemeProvider`, `theme-context`. Einziger Mount-Punkt fuer `<AppShell>` und `<Toaster>`. |
+| `apps/web/src/app/catalog/` | DEV-only Component-Catalog (`/_catalog`-Route, ADR-0018). `CatalogPage`, `ShowcaseSection`, `showcases/*.tsx`. In Prod-Build 404. |
 | `apps/web/src/features/<x>/pages/` | Page-Komponenten, vom Router gemountet. Reine Komposition. |
 | `apps/web/src/features/<x>/components/` | Domaenen-spezifische Composed-UI. |
 | `apps/web/src/features/<x>/hooks/` | Feature-Hooks (`useXForm`, `useX`). Kapseln `useApi`-Konsum + Form-Adapter. |
