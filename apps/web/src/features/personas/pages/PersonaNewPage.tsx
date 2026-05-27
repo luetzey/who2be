@@ -1,9 +1,5 @@
-import { zodResolver } from '@hookform/resolvers/zod'
 import { ArrowLeft } from 'lucide-react'
-import { useState } from 'react'
-import { useForm } from 'react-hook-form'
 import { Link, useNavigate } from 'react-router-dom'
-import { z } from 'zod'
 
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -14,54 +10,12 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { useApi } from '@/api/useApi'
 
-const personaSchema = z.object({
-  name: z.string().min(1, 'Name erforderlich.'),
-  description: z.string().min(1, 'Beschreibung erforderlich.'),
-  systemPrompt: z.string().min(1, 'System-Prompt erforderlich.'),
-  traits: z.string(),
-})
-
-type PersonaValues = z.infer<typeof personaSchema>
-
-function splitList(raw: string): string[] {
-  return raw
-    .split(',')
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0)
-}
-
-function describeError(cause: unknown): string {
-  return cause instanceof Error ? cause.message : 'Unbekannter Fehler.'
-}
+import { useCreatePersona } from '../hooks/useCreatePersona'
 
 export function PersonaNewPage() {
-  const api = useApi()
   const navigate = useNavigate()
-  const [error, setError] = useState<string | null>(null)
-
-  const form = useForm<PersonaValues>({
-    resolver: zodResolver(personaSchema),
-    defaultValues: { name: '', description: '', systemPrompt: '', traits: '' },
-  })
-
-  async function onSubmit(values: PersonaValues) {
-    setError(null)
-    try {
-      const created = await api.createPersona({
-        name: values.name,
-        content: {
-          description: values.description,
-          system_prompt: values.systemPrompt,
-          traits: splitList(values.traits),
-        },
-      })
-      navigate(`/personas/${created.id}`)
-    } catch (cause) {
-      setError(describeError(cause))
-    }
-  }
+  const { form, onSubmit, saveError } = useCreatePersona((id) => navigate(`/personas/${id}`))
 
   return (
     <Container>
@@ -73,72 +27,72 @@ export function PersonaNewPage() {
           </Link>
         </Button>
         <PageHeader title="Neue Persona" description="Lege eine neue Persona-Version an." />
-          <Card>
-            <CardContent className="pt-6">
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
-                  <FormField
-                    control={form.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Name</FormLabel>
-                        <FormControl>
-                          <Input required {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="description"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Beschreibung</FormLabel>
-                        <FormControl>
-                          <Input required {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="systemPrompt"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>System-Prompt</FormLabel>
-                        <FormControl>
-                          <Textarea required rows={6} {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="traits"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Eigenschaften (kommagetrennt)</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  {error !== null ? <ErrorAlert message={error} /> : null}
-                  <div className="flex justify-end">
-                    <Button type="submit" disabled={form.formState.isSubmitting}>
-                      Anlegen
-                    </Button>
-                  </div>
-                </form>
-              </Form>
-            </CardContent>
-          </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <Form {...form}>
+              <form onSubmit={onSubmit} className="flex flex-col gap-4">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Name</FormLabel>
+                      <FormControl>
+                        <Input required {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Beschreibung</FormLabel>
+                      <FormControl>
+                        <Input required {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="systemPrompt"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>System-Prompt</FormLabel>
+                      <FormControl>
+                        <Textarea required rows={6} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="traits"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Eigenschaften (kommagetrennt)</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                {saveError !== null ? <ErrorAlert message={saveError} /> : null}
+                <div className="flex justify-end">
+                  <Button type="submit" disabled={form.formState.isSubmitting}>
+                    Anlegen
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          </CardContent>
+        </Card>
       </Stack>
     </Container>
   )
