@@ -88,6 +88,10 @@ keine Utility-Suppe) leben im Notion-Playbook
 Diese Sektion fuellt nur die im Playbook delegierten repo-spezifischen Stellen
 (Stack/Pfade/Header-Ebene); bei Konflikt mit Notion gewinnt dieser Eintrag.
 
+**Designsprache (verbindlich):** [`docs/frontend/design-language.md`](docs/frontend/design-language.md)
+— Token-Werte, Komponenten-Anwendungsmuster, Motion-Tokens und der
+AI-Agenten-Vertrag. **Bei jeder UI-Aenderung zuerst diese Datei lesen.**
+
 ### Stack
 
 - Framework: Vite 7 + React 18, TypeScript `strict` (`apps/web/tsconfig.app.json`).
