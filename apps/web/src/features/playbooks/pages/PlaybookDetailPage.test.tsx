@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import type { Me } from '@/api/types'
 import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
 import { SessionContext } from '@/auth/session-context'
 import { notify } from '@/lib/feedback'
@@ -13,9 +14,16 @@ vi.mock('@/lib/feedback', () => ({
 }))
 
 const session = { access_token: 'jwt' } as unknown as Session
+const me: Me = {
+  user_id: 'u1',
+  default_workspace_id: 'ws-1',
+  organizations: [],
+}
+const WS_PREFIX = '/v1/workspaces/ws-1'
 
 interface PlaybookShape {
   id: string
+  workspace_id: string
   owner_id: string
   name: string
   current_version: number
@@ -36,6 +44,7 @@ interface PlaybookShape {
 function playbook(version: number, body: string): PlaybookShape {
   return {
     id: 'pb1',
+    workspace_id: 'ws-1',
     owner_id: 'o1',
     name: 'Coach',
     current_version: version,
@@ -80,16 +89,16 @@ describe('PlaybookDetailPage', () => {
     }
 
     const handlers: Record<string, () => Response> = {
-      'GET /v1/playbooks/pb1': () => jsonResponse(playbook(1, 'b1')),
-      'GET /v1/playbooks/pb1/versions': () => jsonResponse([v1]),
+      [`GET ${WS_PREFIX}/playbooks/pb1`]: () => jsonResponse(playbook(1, 'b1')),
+      [`GET ${WS_PREFIX}/playbooks/pb1/versions`]: () => jsonResponse([v1]),
     }
 
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const method = init?.method ?? 'GET'
       const url = String(input)
-      if (method === 'PUT' && url.endsWith('/v1/playbooks/pb1')) {
-        handlers['GET /v1/playbooks/pb1'] = () => jsonResponse(playbook(2, 'b2'))
-        handlers['GET /v1/playbooks/pb1/versions'] = () => jsonResponse([v1, v2])
+      if (method === 'PUT' && url.endsWith(`${WS_PREFIX}/playbooks/pb1`)) {
+        handlers[`GET ${WS_PREFIX}/playbooks/pb1`] = () => jsonResponse(playbook(2, 'b2'))
+        handlers[`GET ${WS_PREFIX}/playbooks/pb1/versions`] = () => jsonResponse([v1, v2])
         return jsonResponse(playbook(2, 'b2'))
       }
       const key = `${method} ${new URL(url).pathname}`
@@ -102,11 +111,11 @@ describe('PlaybookDetailPage', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     render(
-      <SessionContext.Provider value={{ session, signIn: vi.fn(), signOut: vi.fn() }}>
+      <SessionContext.Provider value={{ session, me, signIn: vi.fn(), signOut: vi.fn() }}>
         <AuthTokenProvider>
-          <MemoryRouter initialEntries={['/playbooks/pb1']}>
+          <MemoryRouter initialEntries={['/w/ws-1/playbooks/pb1']}>
             <Routes>
-              <Route path="/playbooks/:id" element={<PlaybookDetailPage />} />
+              <Route path="/w/:workspaceId/playbooks/:id" element={<PlaybookDetailPage />} />
             </Routes>
           </MemoryRouter>
         </AuthTokenProvider>

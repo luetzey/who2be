@@ -13,10 +13,15 @@ vi.mock('@/lib/feedback', () => ({
 }))
 
 const session = { access_token: 'jwt' } as unknown as Session
+const me = {
+  user_id: 'u1',
+  default_workspace_id: 'ws-1',
+  organizations: [],
+}
 
 function renderPage() {
   return render(
-    <SessionContext.Provider value={{ session, signIn: vi.fn(), signOut: vi.fn() }}>
+    <SessionContext.Provider value={{ session, me, signIn: vi.fn(), signOut: vi.fn() }}>
       <AuthTokenProvider>
         <BrowserRouter>
           <SettingsTokensPage />
@@ -37,6 +42,7 @@ describe('SettingsTokensPage', () => {
     const existing = [
       {
         id: 't1',
+        workspace_id: 'ws-1',
         name: 'CLI-Agent',
         created_at: '2026-05-24T10:00:00Z',
         last_used_at: null,
@@ -58,6 +64,7 @@ describe('SettingsTokensPage', () => {
   it('legt einen neuen Token an und zeigt den Klartext genau einmal', async () => {
     const created = {
       id: 't2',
+      workspace_id: 'ws-1',
       name: 'Brainstormer',
       created_at: '2026-05-24T10:05:00Z',
       last_used_at: null,
@@ -93,7 +100,7 @@ describe('SettingsTokensPage', () => {
     })
 
     const postCall = fetchMock.mock.calls[1]
-    expect(postCall[0]).toContain('/v1/tokens')
+    expect(postCall[0]).toContain('/v1/workspaces/ws-1/tokens')
     const init = postCall[1] as RequestInit
     expect(init.method).toBe('POST')
     expect(JSON.parse(init.body as string)).toEqual({ name: 'Brainstormer' })
@@ -106,6 +113,7 @@ describe('SettingsTokensPage', () => {
     const existing = [
       {
         id: 't1',
+        workspace_id: 'ws-1',
         name: 'CLI-Agent',
         created_at: '2026-05-24T10:00:00Z',
         last_used_at: null,

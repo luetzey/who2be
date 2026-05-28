@@ -10,18 +10,22 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { useWorkspacePath } from '@/auth/useWorkspacePath'
 
 import { useCreatePlaybook } from '../hooks/useCreatePlaybook'
 
 export function PlaybookNewPage() {
   const navigate = useNavigate()
-  const { form, onSubmit, saveError } = useCreatePlaybook((id) => navigate(`/playbooks/${id}`))
+  const wsPath = useWorkspacePath()
+  const { form, onSubmit, saveError } = useCreatePlaybook((id) =>
+    navigate(wsPath(`/playbooks/${id}`)),
+  )
 
   return (
     <Container>
       <Stack gap="md">
         <Button asChild variant="ghost" size="sm" className="self-start">
-          <Link to="/playbooks">
+          <Link to={wsPath('/playbooks')}>
             <ArrowLeft className="h-4 w-4" />
             Playbooks
           </Link>

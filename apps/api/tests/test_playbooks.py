@@ -1,4 +1,5 @@
-"""Integrationstest fuer `/v1/playbooks` und die Persona-Playbook-Verknuepfung.
+"""Integrationstest fuer Playbooks unter `/v1/workspaces/{ws_id}/playbooks`
+und die Persona-Playbook-Verknuepfung.
 
 Deckt AC2/AC3 ab: Playbook-CRUD + Versionierung, Tag-/Trigger-Filter und das
 Verknuepfen von Playbooks mit einer Persona. Laeuft nur mit erreichbarer
@@ -7,7 +8,7 @@ Datenbank; ohne DB wird der Test uebersprungen.
 
 import asyncio
 from datetime import UTC, datetime, timedelta
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import asyncpg
 import jwt
@@ -18,6 +19,7 @@ from who2be_api.core import security
 from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.migrations import MIGRATIONS_DIR, apply_migrations
 from who2be_api.main import app
+from who2be_api.testing.workspace_setup import cleanup_workspaces, fresh_user_id, setup_workspace
 
 _TEST_SECRET = "integration-test-jwt-secret-padding-0123456789"
 
@@ -39,18 +41,6 @@ def _prepare_db() -> None:
         conn = await asyncpg.connect(get_settings().database_url)
         try:
             await apply_migrations(conn, MIGRATIONS_DIR)
-        finally:
-            await conn.close()
-
-    asyncio.run(_run())
-
-
-def _cleanup(owner_ids: list[UUID]) -> None:
-    async def _run() -> None:
-        conn = await asyncpg.connect(get_settings().database_url)
-        try:
-            await conn.execute("DELETE FROM persona WHERE owner_id = ANY($1::uuid[])", owner_ids)
-            await conn.execute("DELETE FROM playbook WHERE owner_id = ANY($1::uuid[])", owner_ids)
         finally:
             await conn.close()
 
@@ -95,16 +85,20 @@ def test_playbook_crud_filters_and_persona_linking(
     _prepare_db()
 
     monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
-    owner = uuid4()
-    other = uuid4()
+    owner = fresh_user_id()
+    other = fresh_user_id()
+    ws = setup_workspace(owner)
+    other_ws = setup_workspace(other)
     auth = _auth(owner)
+    pb_base = f"/v1/workspaces/{ws}/playbooks"
+    persona_base = f"/v1/workspaces/{ws}/personas"
 
     try:
         with TestClient(app) as client:
-            assert client.get("/v1/playbooks").status_code == 401
+            assert client.get(pb_base).status_code == 401
 
             first = client.post(
-                "/v1/playbooks",
+                pb_base,
                 json=_playbook_body("Onboard", "v1", ["onboarding"], "new user"),
                 headers=auth,
             )
@@ -112,41 +106,42 @@ def test_playbook_crud_filters_and_persona_linking(
             first_id = first.json()["id"]
             assert first.json()["current_version"] == 1
             assert first.json()["tags"] == ["onboarding"]
+            assert first.json()["workspace_id"] == str(ws)
 
             second = client.post(
-                "/v1/playbooks",
+                pb_base,
                 json=_playbook_body("Recover", "v1", ["recovery"], "on error"),
                 headers=auth,
             )
             second_id = second.json()["id"]
 
             # Tag-Filter
-            by_tag = client.get("/v1/playbooks", params={"tag": "onboarding"}, headers=auth).json()
+            by_tag = client.get(pb_base, params={"tag": "onboarding"}, headers=auth).json()
             assert [p["id"] for p in by_tag] == [first_id]
 
             # Trigger-Filter (case-insensitive Teilstring)
             by_trigger = client.get(
-                "/v1/playbooks", params={"trigger": "USER"}, headers=auth
+                pb_base, params={"trigger": "USER"}, headers=auth
             ).json()
             assert [p["id"] for p in by_trigger] == [first_id]
 
             # Update -> neue Version
             updated = client.put(
-                f"/v1/playbooks/{first_id}",
+                f"{pb_base}/{first_id}",
                 json=_playbook_body("Onboard", "v2", ["onboarding"], "new user"),
                 headers=auth,
             )
             assert updated.status_code == 200
             assert updated.json()["current_version"] == 2
 
-            versions = client.get(f"/v1/playbooks/{first_id}/versions", headers=auth).json()
+            versions = client.get(f"{pb_base}/{first_id}/versions", headers=auth).json()
             assert [v["version"] for v in versions] == [2, 1]
-            v1 = client.get(f"/v1/playbooks/{first_id}/versions/1", headers=auth).json()
+            v1 = client.get(f"{pb_base}/{first_id}/versions/1", headers=auth).json()
             assert v1["content"]["description"] == "v1"
 
             # Persona anlegen und Playbooks verknuepfen
             persona = client.post(
-                "/v1/personas",
+                persona_base,
                 json={
                     "name": "QA",
                     "content": {"description": "d", "system_prompt": "s"},
@@ -156,7 +151,7 @@ def test_playbook_crud_filters_and_persona_linking(
             persona_id = persona.json()["id"]
 
             linked = client.put(
-                f"/v1/personas/{persona_id}/playbooks",
+                f"{persona_base}/{persona_id}/playbooks",
                 json={"playbook_ids": [first_id, second_id]},
                 headers=auth,
             )
@@ -165,31 +160,44 @@ def test_playbook_crud_filters_and_persona_linking(
 
             assert {
                 p["id"]
-                for p in client.get(f"/v1/personas/{persona_id}/playbooks", headers=auth).json()
+                for p in client.get(f"{persona_base}/{persona_id}/playbooks", headers=auth).json()
             } == {first_id, second_id}
 
             # Verknuepfung vollstaendig ersetzen (leere Liste loest alle)
             cleared = client.put(
-                f"/v1/personas/{persona_id}/playbooks",
+                f"{persona_base}/{persona_id}/playbooks",
                 json={"playbook_ids": []},
                 headers=auth,
             )
             assert cleared.json() == []
 
-            # Cross-Owner: fremdes Playbook verknuepfen -> 404
+            # Cross-Workspace: fremdes Playbook im eigenen Workspace verknuepfen -> 404
+            # (Persona im fremden WS verlangt Membership des Aufrufers dort).
+            other_persona = client.post(
+                f"/v1/workspaces/{other_ws}/personas",
+                json={
+                    "name": "Other",
+                    "content": {"description": "d", "system_prompt": "s"},
+                },
+                headers=_auth(other),
+            )
+            other_persona_id = other_persona.json()["id"]
             assert (
                 client.put(
-                    f"/v1/personas/{persona_id}/playbooks",
+                    f"/v1/workspaces/{other_ws}/personas/{other_persona_id}/playbooks",
                     json={"playbook_ids": [first_id]},
                     headers=_auth(other),
                 ).status_code
                 == 404
             )
 
-            # Owner-Isolation: fremder Owner sieht das Playbook nicht
-            assert client.get(f"/v1/playbooks/{first_id}", headers=_auth(other)).status_code == 404
+            # Workspace-Isolation: fremder Workspace sieht das Playbook nicht
+            assert (
+                client.get(f"{pb_base}/{first_id}", headers=_auth(other)).status_code
+                == 403
+            )
     finally:
-        _cleanup([owner, other])
+        cleanup_workspaces([owner, other])
 
 
 @pytest.mark.integration
@@ -201,15 +209,17 @@ def test_playbook_pagination_combined_with_tag_filter(
     _prepare_db()
 
     monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
-    owner = uuid4()
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
     auth = _auth(owner)
+    pb_base = f"/v1/workspaces/{ws}/playbooks"
 
     try:
         with TestClient(app) as client:
             tagged_ids: list[str] = []
             for i in range(3):
                 resp = client.post(
-                    "/v1/playbooks",
+                    pb_base,
                     json=_playbook_body(f"Tagged-{i}", "v1", ["alpha"], "match"),
                     headers=auth,
                 )
@@ -217,20 +227,20 @@ def test_playbook_pagination_combined_with_tag_filter(
                 tagged_ids.append(resp.json()["id"])
             # Ein Playbook mit anderem Tag, das nicht auftauchen darf.
             other_tag = client.post(
-                "/v1/playbooks",
+                pb_base,
                 json=_playbook_body("Other", "v1", ["beta"], "other"),
                 headers=auth,
             )
             assert other_tag.status_code == 201
 
-            page1 = client.get("/v1/playbooks?tag=alpha&limit=2", headers=auth)
+            page1 = client.get(f"{pb_base}?tag=alpha&limit=2", headers=auth)
             assert page1.status_code == 200
             assert len(page1.json()) == 2
             cursor = page1.headers.get("X-Next-Cursor")
             assert cursor is not None
             assert {p["tags"][0] for p in page1.json()} == {"alpha"}
 
-            page2 = client.get(f"/v1/playbooks?tag=alpha&limit=2&cursor={cursor}", headers=auth)
+            page2 = client.get(f"{pb_base}?tag=alpha&limit=2&cursor={cursor}", headers=auth)
             assert page2.status_code == 200
             assert len(page2.json()) == 1
             assert "X-Next-Cursor" not in page2.headers
@@ -238,8 +248,8 @@ def test_playbook_pagination_combined_with_tag_filter(
             seen = {p["id"] for p in page1.json()} | {p["id"] for p in page2.json()}
             assert seen == set(tagged_ids)
 
-            assert client.get("/v1/playbooks?limit=0", headers=auth).status_code == 422
-            assert client.get("/v1/playbooks?limit=201", headers=auth).status_code == 422
-            assert client.get("/v1/playbooks?cursor=!!!", headers=auth).status_code == 422
+            assert client.get(f"{pb_base}?limit=0", headers=auth).status_code == 422
+            assert client.get(f"{pb_base}?limit=201", headers=auth).status_code == 422
+            assert client.get(f"{pb_base}?cursor=!!!", headers=auth).status_code == 422
     finally:
-        _cleanup([owner])
+        cleanup_workspaces([owner])

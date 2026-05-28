@@ -45,6 +45,7 @@ def test_update_name_is_optional() -> None:
 def test_read_round_trip_preserves_denormalised_fields() -> None:
     playbook = PlaybookRead(
         id=uuid4(),
+        workspace_id=uuid4(),
         owner_id=uuid4(),
         name="PB",
         current_version=1,

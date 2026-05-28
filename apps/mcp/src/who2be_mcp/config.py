@@ -20,6 +20,8 @@ class Settings(BaseSettings):
 
     api_base_url: str = "http://localhost:8000"
     api_token: str = ""
+    # Optional explizit gepinnter Workspace; sonst Bootstrap via `/v1/me`.
+    workspace_id: str = ""
     # `json` fuer Prod-Aggregation, `console` fuer lesbares Dev-Tail (ADR-0007).
     log_format: Literal["json", "console"] = "json"
 

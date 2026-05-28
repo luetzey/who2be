@@ -9,6 +9,7 @@ import { DataView } from '@/components/data/DataView'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useWorkspacePath } from '@/auth/useWorkspacePath'
 
 import { PlaybookEditorForm } from '../components/PlaybookEditorForm'
 import { usePlaybook } from '../hooks/usePlaybook'
@@ -18,16 +19,17 @@ export function PlaybookDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { playbook, versions, loading, error, reload } = usePlaybook(id)
   const { form, onSubmit, saveError } = usePlaybookForm(playbook, reload)
+  const wsPath = useWorkspacePath()
 
   if (id === undefined) {
-    return <Navigate to="/playbooks" replace />
+    return <Navigate to={wsPath('/playbooks')} replace />
   }
 
   return (
     <Container>
       <Stack gap="md">
         <Button asChild variant="ghost" size="sm" className="self-start">
-          <Link to="/playbooks">
+          <Link to={wsPath('/playbooks')}>
             <ArrowLeft className="h-4 w-4" />
             Playbooks
           </Link>

@@ -8,10 +8,12 @@ import { DataList } from '@/components/data/DataList'
 import { EmptyState } from '@/components/data/EmptyState'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { usePersonas } from '@/hooks/usePersonas'
 
 export function PersonasPage() {
   const { personas, loading, error } = usePersonas()
+  const wsPath = useWorkspacePath()
 
   return (
     <Container>
@@ -21,7 +23,7 @@ export function PersonasPage() {
           description="Versionierte Persona-Definitionen für deine Agenten."
           actions={
             <Button asChild variant="brand">
-              <Link to="/personas/new">
+              <Link to={wsPath("/personas/new")}>
                 <Plus className="h-4 w-4" />
                 Neue Persona
               </Link>
@@ -40,7 +42,7 @@ export function PersonasPage() {
               description="Lege deine erste Persona an, um Agenten zu konfigurieren."
               action={
                 <Button asChild variant="brand">
-                  <Link to="/personas/new">
+                  <Link to={wsPath("/personas/new")}>
                     <Plus className="h-4 w-4" />
                     Neue Persona
                   </Link>
@@ -51,7 +53,7 @@ export function PersonasPage() {
           renderItem={(persona) => (
             <div className="flex items-center justify-between gap-3">
               <Link
-                to={`/personas/${persona.id}`}
+                to={wsPath(`/personas/${persona.id}`)}
                 className="rounded-sm font-medium text-foreground ring-offset-background hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
               >
                 {persona.name}

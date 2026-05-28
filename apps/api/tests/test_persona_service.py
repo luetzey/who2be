@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi import HTTPException
 
+from who2be_api.core.security import WorkspaceContext
 from who2be_api.services.persona_service import PersonaService
 from who2be_models import (
     PersonaContent,
@@ -21,6 +22,12 @@ def _content(description: str = "Tester") -> PersonaContent:
     return PersonaContent(description=description, system_prompt="Be helpful.")
 
 
+def _ctx(workspace_id: UUID, user_id: UUID | None = None) -> WorkspaceContext:
+    return WorkspaceContext(
+        workspace_id=workspace_id, user_id=user_id or uuid4(), role="admin"
+    )
+
+
 class FakePersonaRepository:
     """In-Memory-Stub von `PersonaRepository`."""
 
@@ -28,10 +35,17 @@ class FakePersonaRepository:
         self._personas: dict[UUID, PersonaRead] = {}
         self._versions: dict[UUID, list[PersonaVersionRead]] = {}
 
-    async def insert(self, owner_id: UUID, name: str, content: PersonaContent) -> PersonaRead:
+    async def insert(
+        self,
+        workspace_id: UUID,
+        owner_id: UUID,
+        name: str,
+        content: PersonaContent,
+    ) -> PersonaRead:
         now = datetime.now(UTC)
         persona = PersonaRead(
             id=uuid4(),
+            workspace_id=workspace_id,
             owner_id=owner_id,
             name=name,
             current_version=1,
@@ -45,34 +59,39 @@ class FakePersonaRepository:
         ]
         return persona
 
-    async def list_by_owner(
+    async def list_by_workspace(
         self,
-        owner_id: UUID,
+        workspace_id: UUID,
         limit: int,
         after: tuple[datetime, UUID] | None,
     ) -> list[PersonaRead]:
-        owned = sorted(
-            (p for p in self._personas.values() if p.owner_id == owner_id),
+        own = sorted(
+            (p for p in self._personas.values() if p.workspace_id == workspace_id),
             key=lambda p: (p.created_at, p.id),
             reverse=True,
         )
         if after is not None:
-            owned = [p for p in owned if (p.created_at, p.id) < after]
-        return owned[:limit]
+            own = [p for p in own if (p.created_at, p.id) < after]
+        return own[:limit]
 
-    async def fetch(self, owner_id: UUID, persona_id: UUID) -> PersonaRead | None:
+    async def fetch(self, workspace_id: UUID, persona_id: UUID) -> PersonaRead | None:
         persona = self._personas.get(persona_id)
-        return persona if persona is not None and persona.owner_id == owner_id else None
+        return (
+            persona
+            if persona is not None and persona.workspace_id == workspace_id
+            else None
+        )
 
     async def update(
         self,
+        workspace_id: UUID,
         owner_id: UUID,
         persona_id: UUID,
         name: str | None,
         content: PersonaContent,
     ) -> PersonaRead | None:
         persona = self._personas.get(persona_id)
-        if persona is None or persona.owner_id != owner_id:
+        if persona is None or persona.workspace_id != workspace_id:
             return None
         version = persona.current_version + 1
         updated = persona.model_copy(
@@ -95,111 +114,114 @@ class FakePersonaRepository:
         return updated
 
     async def list_versions(
-        self, owner_id: UUID, persona_id: UUID
+        self, workspace_id: UUID, persona_id: UUID
     ) -> list[PersonaVersionRead] | None:
         persona = self._personas.get(persona_id)
-        if persona is None or persona.owner_id != owner_id:
+        if persona is None or persona.workspace_id != workspace_id:
             return None
         return list(reversed(self._versions[persona_id]))
 
     async def fetch_version(
-        self, owner_id: UUID, persona_id: UUID, version: int
+        self, workspace_id: UUID, persona_id: UUID, version: int
     ) -> PersonaVersionRead | None:
         persona = self._personas.get(persona_id)
-        if persona is None or persona.owner_id != owner_id:
+        if persona is None or persona.workspace_id != workspace_id:
             return None
         return next((v for v in self._versions[persona_id] if v.version == version), None)
 
 
-def _service() -> tuple[PersonaService, UUID]:
-    return PersonaService(FakePersonaRepository()), uuid4()
+def _service() -> tuple[PersonaService, WorkspaceContext]:
+    return PersonaService(FakePersonaRepository()), _ctx(uuid4())
 
 
 def test_create_starts_at_version_one() -> None:
-    service, owner = _service()
-    persona = asyncio.run(service.create(owner, PersonaCreate(name="QA", content=_content())))
+    service, ctx = _service()
+    persona = asyncio.run(service.create(ctx, PersonaCreate(name="QA", content=_content())))
     assert persona.current_version == 1
-    assert persona.owner_id == owner
+    assert persona.workspace_id == ctx.workspace_id
+    assert persona.owner_id == ctx.user_id
 
 
 def test_get_returns_created_persona() -> None:
-    service, owner = _service()
-    created = asyncio.run(service.create(owner, PersonaCreate(name="QA", content=_content())))
-    assert asyncio.run(service.get(owner, created.id)) == created
+    service, ctx = _service()
+    created = asyncio.run(service.create(ctx, PersonaCreate(name="QA", content=_content())))
+    assert asyncio.run(service.get(ctx, created.id)) == created
 
 
 def test_get_unknown_persona_raises_404() -> None:
-    service, owner = _service()
+    service, ctx = _service()
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(service.get(owner, uuid4()))
+        asyncio.run(service.get(ctx, uuid4()))
     assert exc.value.status_code == 404
 
 
 def test_get_foreign_persona_raises_404() -> None:
-    service, owner = _service()
-    created = asyncio.run(service.create(owner, PersonaCreate(name="QA", content=_content())))
+    service, ctx = _service()
+    created = asyncio.run(service.create(ctx, PersonaCreate(name="QA", content=_content())))
+    other = _ctx(uuid4())
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(service.get(uuid4(), created.id))
+        asyncio.run(service.get(other, created.id))
     assert exc.value.status_code == 404
 
 
 def test_list_returns_only_own_personas() -> None:
-    service, owner = _service()
-    asyncio.run(service.create(owner, PersonaCreate(name="A", content=_content())))
-    asyncio.run(service.create(uuid4(), PersonaCreate(name="B", content=_content())))
-    own, next_cursor = asyncio.run(service.list_all(owner, 100, None))
+    service, ctx = _service()
+    asyncio.run(service.create(ctx, PersonaCreate(name="A", content=_content())))
+    other = _ctx(uuid4())
+    asyncio.run(service.create(other, PersonaCreate(name="B", content=_content())))
+    own, next_cursor = asyncio.run(service.list_all(ctx, 100, None))
     assert [p.name for p in own] == ["A"]
     assert next_cursor is None
 
 
 def test_list_returns_next_cursor_when_more_items_available() -> None:
-    service, owner = _service()
+    service, ctx = _service()
     for name in ("A", "B", "C"):
-        asyncio.run(service.create(owner, PersonaCreate(name=name, content=_content())))
-    page1, cursor = asyncio.run(service.list_all(owner, 2, None))
+        asyncio.run(service.create(ctx, PersonaCreate(name=name, content=_content())))
+    page1, cursor = asyncio.run(service.list_all(ctx, 2, None))
     assert len(page1) == 2
     assert cursor is not None
-    page2, cursor2 = asyncio.run(service.list_all(owner, 2, (page1[-1].created_at, page1[-1].id)))
+    page2, cursor2 = asyncio.run(service.list_all(ctx, 2, (page1[-1].created_at, page1[-1].id)))
     assert len(page2) == 1
     assert cursor2 is None
     assert {p.name for p in page1 + page2} == {"A", "B", "C"}
 
 
 def test_update_bumps_version_and_records_snapshot() -> None:
-    service, owner = _service()
-    created = asyncio.run(service.create(owner, PersonaCreate(name="QA", content=_content("v1"))))
-    updated = asyncio.run(service.update(owner, created.id, PersonaUpdate(content=_content("v2"))))
+    service, ctx = _service()
+    created = asyncio.run(service.create(ctx, PersonaCreate(name="QA", content=_content("v1"))))
+    updated = asyncio.run(service.update(ctx, created.id, PersonaUpdate(content=_content("v2"))))
     assert updated.current_version == 2
     assert updated.name == "QA"  # name war None -> bleibt erhalten
-    versions = asyncio.run(service.list_versions(owner, created.id))
+    versions = asyncio.run(service.list_versions(ctx, created.id))
     assert [v.version for v in versions] == [2, 1]
 
 
 def test_update_unknown_persona_raises_404() -> None:
-    service, owner = _service()
+    service, ctx = _service()
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(service.update(owner, uuid4(), PersonaUpdate(content=_content())))
+        asyncio.run(service.update(ctx, uuid4(), PersonaUpdate(content=_content())))
     assert exc.value.status_code == 404
 
 
 def test_get_version_returns_requested_snapshot() -> None:
-    service, owner = _service()
-    created = asyncio.run(service.create(owner, PersonaCreate(name="QA", content=_content("v1"))))
-    asyncio.run(service.update(owner, created.id, PersonaUpdate(content=_content("v2"))))
-    first = asyncio.run(service.get_version(owner, created.id, 1))
+    service, ctx = _service()
+    created = asyncio.run(service.create(ctx, PersonaCreate(name="QA", content=_content("v1"))))
+    asyncio.run(service.update(ctx, created.id, PersonaUpdate(content=_content("v2"))))
+    first = asyncio.run(service.get_version(ctx, created.id, 1))
     assert first.content.description == "v1"
 
 
 def test_get_unknown_version_raises_404() -> None:
-    service, owner = _service()
-    created = asyncio.run(service.create(owner, PersonaCreate(name="QA", content=_content())))
+    service, ctx = _service()
+    created = asyncio.run(service.create(ctx, PersonaCreate(name="QA", content=_content())))
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(service.get_version(owner, created.id, 99))
+        asyncio.run(service.get_version(ctx, created.id, 99))
     assert exc.value.status_code == 404
 
 
 def test_list_versions_unknown_persona_raises_404() -> None:
-    service, owner = _service()
+    service, ctx = _service()
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(service.list_versions(owner, uuid4()))
+        asyncio.run(service.list_versions(ctx, uuid4()))
     assert exc.value.status_code == 404

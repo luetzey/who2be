@@ -22,6 +22,7 @@ describe('PersonaDetailPage (a11y)', () => {
   it('hat keine axe-Violations im AppLayout', async () => {
     const persona = {
       id: 'p1',
+      workspace_id: 'ws-1',
       owner_id: 'o1',
       name: 'Coach',
       current_version: 1,
@@ -31,6 +32,7 @@ describe('PersonaDetailPage (a11y)', () => {
     }
     const playbook = {
       id: 'pb1',
+      workspace_id: 'ws-1',
       owner_id: 'o1',
       name: 'Coaching',
       current_version: 1,
@@ -49,10 +51,10 @@ describe('PersonaDetailPage (a11y)', () => {
     }
 
     const handlers: Record<string, () => Response> = {
-      'GET /v1/personas/p1': () => jsonResponse(persona),
-      'GET /v1/personas/p1/versions': () => jsonResponse([version]),
-      'GET /v1/personas/p1/playbooks': () => jsonResponse([playbook]),
-      'GET /v1/playbooks': () => jsonResponse([playbook]),
+      'GET /v1/workspaces/ws-1/personas/p1': () => jsonResponse(persona),
+      'GET /v1/workspaces/ws-1/personas/p1/versions': () => jsonResponse([version]),
+      'GET /v1/workspaces/ws-1/personas/p1/playbooks': () => jsonResponse([playbook]),
+      'GET /v1/workspaces/ws-1/playbooks': () => jsonResponse([playbook]),
     }
     vi.stubGlobal(
       'fetch',
@@ -67,7 +69,10 @@ describe('PersonaDetailPage (a11y)', () => {
       }),
     )
 
-    const { container } = renderInRoutes(<PersonaDetailPage />, { path: '/personas/:id', initialEntries: ['/personas/p1'] })
+    const { container } = renderInRoutes(<PersonaDetailPage />, {
+      path: '/w/:workspaceId/personas/:id',
+      initialEntries: ['/w/ws-1/personas/p1'],
+    })
 
     await waitFor(() => {
       expect(screen.getByText('Aktuelle Version: 1')).toBeInTheDocument()

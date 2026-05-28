@@ -3,11 +3,17 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import type { Me } from '@/api/types'
 import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
 import { SessionContext } from '@/auth/session-context'
 import { PersonaNewPage } from './PersonaNewPage'
 
 const session = { access_token: 'jwt' } as unknown as Session
+const me: Me = {
+  user_id: 'u1',
+  default_workspace_id: 'ws-1',
+  organizations: [],
+}
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -17,6 +23,7 @@ describe('PersonaNewPage', () => {
   it('legt eine Persona an und leitet auf die Detailseite weiter', async () => {
     const created = {
       id: 'p42',
+      workspace_id: 'ws-1',
       owner_id: 'o1',
       name: 'QA-Bot',
       current_version: 1,
@@ -30,12 +37,15 @@ describe('PersonaNewPage', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     render(
-      <SessionContext.Provider value={{ session, signIn: vi.fn(), signOut: vi.fn() }}>
+      <SessionContext.Provider value={{ session, me, signIn: vi.fn(), signOut: vi.fn() }}>
         <AuthTokenProvider>
-          <MemoryRouter initialEntries={['/personas/new']}>
+          <MemoryRouter initialEntries={['/w/ws-1/personas/new']}>
             <Routes>
-              <Route path="/personas/new" element={<PersonaNewPage />} />
-              <Route path="/personas/:id" element={<div>Detail von {created.id}</div>} />
+              <Route path="/w/:workspaceId/personas/new" element={<PersonaNewPage />} />
+              <Route
+                path="/w/:workspaceId/personas/:id"
+                element={<div>Detail von {created.id}</div>}
+              />
             </Routes>
           </MemoryRouter>
         </AuthTokenProvider>
@@ -55,7 +65,7 @@ describe('PersonaNewPage', () => {
     })
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
-    expect(url).toContain('/v1/personas')
+    expect(url).toContain('/v1/workspaces/ws-1/personas')
     expect(init.method).toBe('POST')
     expect(JSON.parse(init.body as string)).toEqual({
       name: 'QA-Bot',

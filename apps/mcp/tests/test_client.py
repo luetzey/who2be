@@ -14,6 +14,9 @@ from fastmcp.exceptions import ToolError
 from who2be_mcp.client import ApiClient
 from who2be_models import PersonaRead, PlaybookRead
 
+_WORKSPACE = uuid4()
+_WS_PREFIX = f"/v1/workspaces/{_WORKSPACE}"
+
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()
@@ -22,6 +25,7 @@ def _now() -> str:
 def _persona_json(persona_id: str, name: str) -> dict[str, object]:
     return {
         "id": persona_id,
+        "workspace_id": str(_WORKSPACE),
         "owner_id": str(uuid4()),
         "name": name,
         "current_version": 1,
@@ -34,6 +38,7 @@ def _persona_json(persona_id: str, name: str) -> dict[str, object]:
 def _playbook_json(playbook_id: str, name: str) -> dict[str, object]:
     return {
         "id": playbook_id,
+        "workspace_id": str(_WORKSPACE),
         "owner_id": str(uuid4()),
         "name": name,
         "current_version": 1,
@@ -54,7 +59,7 @@ def _playbook_json(playbook_id: str, name: str) -> dict[str, object]:
 
 def _client(handler: object) -> ApiClient:
     transport = httpx.MockTransport(handler)  # type: ignore[arg-type]
-    return ApiClient("http://api.test", "tok", transport=transport)
+    return ApiClient("http://api.test", "tok", _WORKSPACE, transport=transport)
 
 
 def test_get_persona_by_uuid_sends_token_and_returns_model() -> None:
@@ -62,7 +67,7 @@ def test_get_persona_by_uuid_sends_token_and_returns_model() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.headers["Authorization"] == "Bearer tok"
-        assert request.url.path == f"/v1/personas/{pid}"
+        assert request.url.path == f"{_WS_PREFIX}/personas/{pid}"
         return httpx.Response(200, json=_persona_json(pid, "QA"))
 
     persona = asyncio.run(_client(handler).get_persona(pid))
@@ -74,7 +79,7 @@ def test_get_persona_by_name_resolves_via_list() -> None:
     pid = str(uuid4())
 
     def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.path == "/v1/personas"
+        assert request.url.path == f"{_WS_PREFIX}/personas"
         return httpx.Response(
             200,
             json=[_persona_json(str(uuid4()), "Other"), _persona_json(pid, "QA")],
@@ -104,7 +109,7 @@ def test_get_persona_playbooks_returns_list() -> None:
     persona_id = uuid4()
 
     def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.path == f"/v1/personas/{persona_id}/playbooks"
+        assert request.url.path == f"{_WS_PREFIX}/personas/{persona_id}/playbooks"
         return httpx.Response(200, json=[_playbook_json(str(uuid4()), "PB")])
 
     playbooks = asyncio.run(_client(handler).get_persona_playbooks(persona_id))
@@ -116,6 +121,7 @@ def test_list_playbooks_forwards_filters() -> None:
     seen: dict[str, dict[str, str]] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == f"{_WS_PREFIX}/playbooks"
         seen["params"] = dict(request.url.params)
         return httpx.Response(200, json=[_playbook_json(str(uuid4()), "PB")])
 
@@ -139,6 +145,7 @@ def test_get_playbook_returns_model() -> None:
     pid = uuid4()
 
     def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == f"{_WS_PREFIX}/playbooks/{pid}"
         return httpx.Response(200, json=_playbook_json(str(pid), "PB"))
 
     playbook = asyncio.run(_client(handler).get_playbook(pid))

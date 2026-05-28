@@ -21,6 +21,7 @@ def test_read_has_no_secret_fields() -> None:
 def test_read_allows_null_usage_timestamps() -> None:
     token = TokenRead(
         id=uuid4(),
+        workspace_id=uuid4(),
         name="agent",
         created_at=datetime.now(UTC),
         last_used_at=None,
@@ -32,6 +33,7 @@ def test_read_allows_null_usage_timestamps() -> None:
 def test_created_exposes_plaintext_token_once() -> None:
     created = TokenCreated(
         id=uuid4(),
+        workspace_id=uuid4(),
         name="agent",
         created_at=datetime.now(UTC),
         last_used_at=None,

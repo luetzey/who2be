@@ -18,12 +18,15 @@ from who2be_api.core import security
 from who2be_api.core.config import Settings
 from who2be_api.core.security import (
     TOKEN_PREFIX,
+    CurrentPrincipal,
+    get_current_principal,
     get_current_user,
     hash_token,
     new_token,
-    resolve_owner,
+    resolve_principal,
     verify_supabase_jwt,
 )
+from who2be_api.repositories.token_repository import TokenAuthRow
 from who2be_models import TokenRead
 
 _SECRET = "unit-test-jwt-secret-padding-0123456789"
@@ -48,25 +51,27 @@ def jwt_secret(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 class FakeTokenRepository:
     """In-Memory-Stub von `TokenRepository` fuer den Dispatch-Test."""
 
-    def __init__(self, owner_by_hash: dict[str, UUID] | None = None) -> None:
-        self._owner_by_hash = owner_by_hash or {}
+    def __init__(self, auth_by_hash: dict[str, TokenAuthRow] | None = None) -> None:
+        self._auth_by_hash = auth_by_hash or {}
         self.touched: list[str] = []
 
-    async def insert(self, owner_id: UUID, name: str, token_hash: str) -> TokenRead:
+    async def insert(
+        self, workspace_id: UUID, owner_id: UUID, name: str, token_hash: str
+    ) -> TokenRead:
         raise NotImplementedError
 
-    async def list_by_owner(
+    async def list_by_workspace(
         self,
-        owner_id: UUID,
+        workspace_id: UUID,
         limit: int,
         after: tuple[datetime, UUID] | None,
     ) -> list[TokenRead]:
         raise NotImplementedError
 
-    async def fetch_owner_by_hash(self, token_hash: str) -> UUID | None:
-        return self._owner_by_hash.get(token_hash)
+    async def fetch_auth_by_hash(self, token_hash: str) -> TokenAuthRow | None:
+        return self._auth_by_hash.get(token_hash)
 
-    async def revoke(self, owner_id: UUID, token_id: UUID) -> bool:
+    async def revoke(self, workspace_id: UUID, token_id: UUID) -> bool:
         raise NotImplementedError
 
     async def touch_last_used(self, token_hash: str) -> None:
@@ -168,28 +173,41 @@ def test_verify_jwt_rejects_missing_secret(monkeypatch: pytest.MonkeyPatch) -> N
         verify_supabase_jwt(token)
 
 
-def test_resolve_owner_via_api_token_touches_last_used() -> None:
+def test_resolve_principal_via_api_token_touches_last_used() -> None:
     plaintext = new_token()
     owner = uuid4()
-    repo = FakeTokenRepository({hash_token(plaintext): owner})
-    assert asyncio.run(resolve_owner(plaintext, repo)) == owner
+    workspace = uuid4()
+    repo = FakeTokenRepository(
+        {hash_token(plaintext): TokenAuthRow(owner_id=owner, workspace_id=workspace)}
+    )
+    principal = asyncio.run(resolve_principal(plaintext, repo))
+    assert principal.user_id == owner
+    assert principal.token_workspace_id == workspace
     assert repo.touched == [hash_token(plaintext)]
 
 
-def test_resolve_owner_rejects_unknown_api_token() -> None:
+def test_resolve_principal_rejects_unknown_api_token() -> None:
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(resolve_owner(new_token(), FakeTokenRepository()))
+        asyncio.run(resolve_principal(new_token(), FakeTokenRepository()))
     assert exc.value.status_code == 401
 
 
-def test_resolve_owner_via_jwt_leaves_token_table_untouched(jwt_secret: None) -> None:
+def test_resolve_principal_via_jwt_leaves_token_table_untouched(jwt_secret: None) -> None:
     owner = uuid4()
     repo = FakeTokenRepository()
-    assert asyncio.run(resolve_owner(_encode({"sub": str(owner)}), repo)) == owner
+    principal = asyncio.run(resolve_principal(_encode({"sub": str(owner)}), repo))
+    assert principal.user_id == owner
+    assert principal.token_workspace_id is None
     assert repo.touched == []
 
 
-def test_get_current_user_rejects_missing_credentials() -> None:
+def test_get_current_principal_rejects_missing_credentials() -> None:
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(get_current_user(credentials=None))
+        asyncio.run(get_current_principal(credentials=None))
     assert exc.value.status_code == 401
+
+
+def test_get_current_user_unwraps_principal() -> None:
+    user_id = uuid4()
+    principal = CurrentPrincipal(user_id=user_id, token_workspace_id=None)
+    assert asyncio.run(get_current_user(principal=principal)) == user_id
