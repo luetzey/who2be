@@ -6,6 +6,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
 import { DataList } from '@/components/data/DataList'
 import { DataView } from '@/components/data/DataView'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { usePersonaPlaybooks } from '@/hooks/usePersonaPlaybooks'
@@ -13,8 +14,10 @@ import { useWorkspacePath } from '@/auth/useWorkspacePath'
 
 import { PersonaEditorForm } from '../components/PersonaEditorForm'
 import { PlaybookLinkItem } from '../components/PlaybookLinkItem'
+import { StatusActionBar } from '../components/StatusActionBar'
 import { usePersona } from '../hooks/usePersona'
 import { usePersonaForm } from '../hooks/usePersonaForm'
+import { statusBadgeVariant, statusLabel } from '../lib/status'
 
 export function PersonaDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -40,10 +43,37 @@ export function PersonaDetailPage() {
         <DataView loading={loading && persona === null} error={error}>
           {persona !== null ? (
             <Stack gap="lg">
-              <PageHeader
-                title={persona.name}
-                description={`Aktuelle Version: ${persona.current_version}`}
-              />
+              {(() => {
+                const activeVersion = versions.find((v) => v.status === 'active')
+                const draftVersion = versions.find((v) => v.status === 'draft')
+                const reviewVersion = versions.find((v) => v.status === 'review')
+                const pendingVersion = draftVersion ?? reviewVersion
+                const description =
+                  activeVersion !== undefined
+                    ? `Aktive Version: v${activeVersion.version}${
+                        pendingVersion !== undefined
+                          ? ` · Du bearbeitest: v${pendingVersion.version} (${statusLabel(
+                              pendingVersion.status ?? 'draft',
+                            )})`
+                          : ''
+                      }`
+                    : `Aktuelle Version: ${persona.current_version}`
+                const transitionVersion = pendingVersion
+                return (
+                  <Stack gap="md">
+                    <PageHeader title={persona.name} description={description} />
+                    {transitionVersion !== undefined &&
+                    transitionVersion.status !== undefined ? (
+                      <StatusActionBar
+                        personaId={persona.id}
+                        version={transitionVersion.version}
+                        status={transitionVersion.status}
+                        onTransitioned={reload}
+                      />
+                    ) : null}
+                  </Stack>
+                )
+              })()}
               <PersonaEditorForm form={form} onSubmit={onSubmit} saveError={saveError} />
 
               <Card>
@@ -55,8 +85,16 @@ export function PersonaDetailPage() {
                     items={versions}
                     getKey={(version) => String(version.version)}
                     renderItem={(version) => (
-                      <span>
-                        v{version.version} — {new Date(version.created_at).toLocaleString()}
+                      <span className="flex items-center justify-between gap-3">
+                        <span>
+                          v{version.version} —{' '}
+                          {new Date(version.created_at).toLocaleString()}
+                        </span>
+                        {version.status !== undefined ? (
+                          <Badge variant={statusBadgeVariant(version.status)}>
+                            {statusLabel(version.status)}
+                          </Badge>
+                        ) : null}
                       </span>
                     )}
                   />

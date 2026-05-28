@@ -134,6 +134,18 @@
   --brand-hover: oklch(0.66 0.17 55);
 
   /*
+   * Status-Tinten (Phase 2.1b). Eine Tinte je Version-Status fuer
+   * Status-Distribution-Bar + Badges. In JSX via
+   * `style={{ backgroundColor: 'var(--status-X)' }}` konsumieren —
+   * nicht inline `oklch()`. Erweiterungsklausel design-language §2.4:
+   * Use-Case ist da (Dashboard Status-Distribution).
+   */
+  --status-draft: oklch(0.7 0 0);
+  --status-review: oklch(0.72 0.17 55);
+  --status-active: oklch(0.65 0.14 152);
+  --status-inactive: oklch(0.85 0 0);
+
+  /*
    * Motion-Durations. Kein Tailwind-v4-Namespace dafuer; via
    * duration-[var(--duration-fast)] etc. konsumieren.
    */
@@ -167,6 +179,11 @@
     --brand: oklch(0.74 0.17 55);
     --brand-foreground: oklch(0.145 0 0);
     --brand-hover: oklch(0.8 0.16 55);
+
+    --status-draft: oklch(0.65 0 0);
+    --status-review: oklch(0.74 0.17 55);
+    --status-active: oklch(0.68 0.14 152);
+    --status-inactive: oklch(0.4 0 0);
   }
 }
 
@@ -199,6 +216,11 @@
   --brand: oklch(0.72 0.17 55);
   --brand-foreground: oklch(0.985 0 0);
   --brand-hover: oklch(0.66 0.17 55);
+
+  --status-draft: oklch(0.7 0 0);
+  --status-review: oklch(0.72 0.17 55);
+  --status-active: oklch(0.65 0.14 152);
+  --status-inactive: oklch(0.85 0 0);
 }
 
 :root[data-theme='dark'] {
@@ -225,6 +247,11 @@
   --brand: oklch(0.74 0.17 55);
   --brand-foreground: oklch(0.145 0 0);
   --brand-hover: oklch(0.8 0.16 55);
+
+  --status-draft: oklch(0.65 0 0);
+  --status-review: oklch(0.74 0.17 55);
+  --status-active: oklch(0.68 0.14 152);
+  --status-inactive: oklch(0.4 0 0);
 }
 
 @layer base {

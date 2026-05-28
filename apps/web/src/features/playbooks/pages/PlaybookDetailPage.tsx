@@ -12,8 +12,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 
 import { PlaybookEditorForm } from '../components/PlaybookEditorForm'
+import { StatusActionBar } from '../components/StatusActionBar'
 import { usePlaybook } from '../hooks/usePlaybook'
 import { usePlaybookForm } from '../hooks/usePlaybookForm'
+import { statusBadgeVariant, statusLabel } from '../lib/status'
 
 export function PlaybookDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -38,21 +40,51 @@ export function PlaybookDetailPage() {
         <DataView loading={loading && playbook === null} error={error}>
           {playbook !== null ? (
             <Stack gap="lg">
-              <PageHeader
-                title={playbook.name}
-                description={`Aktuelle Version: ${playbook.current_version}`}
-                actions={
-                  playbook.tags.length > 0 ? (
-                    <div className="flex flex-wrap gap-1" aria-label="Tags">
-                      {playbook.tags.map((tag) => (
-                        <Badge key={tag} variant="secondary">
-                          {tag}
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : undefined
-                }
-              />
+              {(() => {
+                const activeVersion = versions.find((v) => v.status === 'active')
+                const draftVersion = versions.find((v) => v.status === 'draft')
+                const reviewVersion = versions.find((v) => v.status === 'review')
+                const pendingVersion = draftVersion ?? reviewVersion
+                const description =
+                  activeVersion !== undefined
+                    ? `Aktive Version: v${activeVersion.version}${
+                        pendingVersion !== undefined
+                          ? ` · Du bearbeitest: v${pendingVersion.version} (${statusLabel(
+                              pendingVersion.status ?? 'draft',
+                            )})`
+                          : ''
+                      }`
+                    : `Aktuelle Version: ${playbook.current_version}`
+                const transitionVersion = pendingVersion
+                return (
+                  <Stack gap="md">
+                    <PageHeader
+                      title={playbook.name}
+                      description={description}
+                      actions={
+                        playbook.tags.length > 0 ? (
+                          <div className="flex flex-wrap gap-1" aria-label="Tags">
+                            {playbook.tags.map((tag) => (
+                              <Badge key={tag} variant="secondary">
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
+                        ) : undefined
+                      }
+                    />
+                    {transitionVersion !== undefined &&
+                    transitionVersion.status !== undefined ? (
+                      <StatusActionBar
+                        playbookId={playbook.id}
+                        version={transitionVersion.version}
+                        status={transitionVersion.status}
+                        onTransitioned={reload}
+                      />
+                    ) : null}
+                  </Stack>
+                )
+              })()}
               <PlaybookEditorForm form={form} onSubmit={onSubmit} saveError={saveError} />
 
               <Card>
@@ -64,8 +96,16 @@ export function PlaybookDetailPage() {
                     items={versions}
                     getKey={(version) => String(version.version)}
                     renderItem={(version) => (
-                      <span>
-                        v{version.version} — {new Date(version.created_at).toLocaleString()}
+                      <span className="flex items-center justify-between gap-3">
+                        <span>
+                          v{version.version} —{' '}
+                          {new Date(version.created_at).toLocaleString()}
+                        </span>
+                        {version.status !== undefined ? (
+                          <Badge variant={statusBadgeVariant(version.status)}>
+                            {statusLabel(version.status)}
+                          </Badge>
+                        ) : null}
                       </span>
                     )}
                   />

@@ -1,5 +1,6 @@
 import { config } from '../config'
 import type {
+  DashboardData,
   Me,
   Persona,
   PersonaInput,
@@ -10,6 +11,7 @@ import type {
   Token,
   TokenCreated,
   TokenInput,
+  VersionStatus,
 } from './types'
 
 export class ApiError extends Error {
@@ -82,6 +84,17 @@ export interface Api {
   listTokens: () => Promise<Token[]>
   createToken: (input: TokenInput) => Promise<TokenCreated>
   revokeToken: (id: string) => Promise<void>
+  getDashboard: () => Promise<DashboardData>
+  transitionPersonaVersion: (
+    id: string,
+    version: number,
+    to: VersionStatus,
+  ) => Promise<PersonaVersion>
+  transitionPlaybookVersion: (
+    id: string,
+    version: number,
+    to: VersionStatus,
+  ) => Promise<PlaybookVersion>
 }
 
 export function createApi(token: string, workspaceId: string): Api {
@@ -136,5 +149,18 @@ export function createApi(token: string, workspaceId: string): Api {
       }),
     revokeToken: (id) =>
       request<void>(token, `${ws}/tokens/${id}`, { method: 'DELETE' }),
+    getDashboard: () => request<DashboardData>(token, `${ws}/dashboard`),
+    transitionPersonaVersion: (id, version, to) =>
+      request<PersonaVersion>(
+        token,
+        `${ws}/personas/${id}/versions/${version}/transition`,
+        { method: 'POST', body: JSON.stringify({ to }) },
+      ),
+    transitionPlaybookVersion: (id, version, to) =>
+      request<PlaybookVersion>(
+        token,
+        `${ws}/playbooks/${id}/versions/${version}/transition`,
+        { method: 'POST', body: JSON.stringify({ to }) },
+      ),
   }
 }
