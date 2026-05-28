@@ -11,7 +11,7 @@ import tseslint from 'typescript-eslint'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const tailwindEntry = path.join(__dirname, 'src/styles/globals.css')
 
-const FEATURES = ['auth', 'personas', 'playbooks', 'tokens']
+const FEATURES = ['auth', 'dashboard', 'personas', 'playbooks', 'tokens']
 
 const APP_SHELL_RESTRICTED_PATH = {
   name: '@/components/layout/AppShell',

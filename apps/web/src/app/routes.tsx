@@ -1,5 +1,5 @@
 import { lazy } from 'react'
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom'
 
 import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
 import { RequireAuth } from '@/auth/RequireAuth'
@@ -47,6 +47,11 @@ const SettingsTokensPage = lazy(() =>
     default: mod.SettingsTokensPage,
   })),
 )
+const DashboardPage = lazy(() =>
+  import('@/features/dashboard/pages/DashboardPage').then((mod) => ({
+    default: mod.DashboardPage,
+  })),
+)
 
 // DEV-only Component-Catalog (ADR 0018). In Production-Builds wird die Route
 // nicht registriert — Vite-Tree-Shaking laesst den Chunk dann komplett weg.
@@ -58,7 +63,7 @@ const CatalogPage = import.meta.env.DEV
     )
   : null
 
-// Default-Redirect nach Login: hebt den User auf `/w/{default_workspace_id}/personas`.
+// Default-Redirect nach Login: hebt den User auf `/w/{default_workspace_id}/dashboard`.
 // `me` kommt aus `/v1/me`, das der SessionProvider nach Sign-In laedt; falls noch
 // nicht resolved, bleibt der User auf Login zurueckgeworfen.
 function DefaultWorkspaceRedirect() {
@@ -67,7 +72,14 @@ function DefaultWorkspaceRedirect() {
   if (!workspaceId) {
     return <Navigate to="/login" replace />
   }
-  return <Navigate to={`/w/${workspaceId}/personas`} replace />
+  return <Navigate to={`/w/${workspaceId}/dashboard`} replace />
+}
+
+// Index-Redirect unter `/w/:workspaceId` — laesst tiefe Bookmarks ohne
+// Tail auf das Dashboard fallen.
+function WorkspaceIndexRedirect() {
+  const params = useParams<{ workspaceId: string }>()
+  return <Navigate to={`/w/${params.workspaceId}/dashboard`} replace />
 }
 
 export function RouterRoot() {
@@ -80,6 +92,8 @@ export function RouterRoot() {
             <Route element={<RequireAuth />}>
               <Route path="/" element={<DefaultWorkspaceRedirect />} />
               <Route element={<AppLayout />}>
+                <Route path="/w/:workspaceId" element={<WorkspaceIndexRedirect />} />
+                <Route path="/w/:workspaceId/dashboard" element={<DashboardPage />} />
                 <Route path="/w/:workspaceId/personas" element={<PersonasPage />} />
                 <Route path="/w/:workspaceId/personas/new" element={<PersonaNewPage />} />
                 <Route path="/w/:workspaceId/personas/:id" element={<PersonaDetailPage />} />
