@@ -6,6 +6,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
+from who2be_models.status import VersionStatus
+
 # Eingabe-Limits — DoS-Schutz gegen riesige Payloads, da Versions-Inhalte unveraenderlich
 # in `persona_version` eingefroren und in jeder `list_personas`-Antwort retourniert werden.
 TraitStr = Annotated[str, StringConstraints(min_length=1, max_length=200)]
@@ -49,6 +51,8 @@ class PersonaRead(BaseModel):
     owner_id: UUID
     name: str
     current_version: int
+    current_status: VersionStatus = VersionStatus.inactive
+    has_pending_draft: bool = False
     content: PersonaContent
     created_at: datetime
     updated_at: datetime
@@ -60,6 +64,7 @@ class PersonaVersionRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     version: int
+    status: VersionStatus = VersionStatus.inactive
     content: PersonaContent
     created_by: UUID
     created_at: datetime

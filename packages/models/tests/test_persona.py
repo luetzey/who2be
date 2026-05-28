@@ -10,6 +10,7 @@ from who2be_models import (
     PersonaRead,
     PersonaUpdate,
     PersonaVersionRead,
+    VersionStatus,
 )
 
 
@@ -76,3 +77,28 @@ def test_version_read_carries_creator_and_version() -> None:
         created_at=datetime.now(UTC),
     )
     assert version.version == 3
+
+
+def test_read_defaults_status_fields_for_back_compat() -> None:
+    persona = PersonaRead(
+        id=uuid4(),
+        workspace_id=uuid4(),
+        owner_id=uuid4(),
+        name="QA",
+        current_version=1,
+        content=_content(),
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+    assert persona.current_status is VersionStatus.inactive
+    assert persona.has_pending_draft is False
+
+
+def test_version_read_defaults_status_to_inactive() -> None:
+    version = PersonaVersionRead(
+        version=1,
+        content=_content(),
+        created_by=uuid4(),
+        created_at=datetime.now(UTC),
+    )
+    assert version.status is VersionStatus.inactive

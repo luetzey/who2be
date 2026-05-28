@@ -11,6 +11,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
+from who2be_models.status import VersionStatus
+
 # Eingabe-Limits — DoS-Schutz fuer in jsonb persistierte und unveraendert
 # wiedergegebene Versions-Inhalte (siehe Persona-Pendant).
 TagStr = Annotated[str, StringConstraints(min_length=1, max_length=100)]
@@ -56,6 +58,8 @@ class PlaybookRead(BaseModel):
     owner_id: UUID
     name: str
     current_version: int
+    current_status: VersionStatus = VersionStatus.inactive
+    has_pending_draft: bool = False
     type: str
     tags: list[str]
     triggers: str | None
@@ -70,6 +74,7 @@ class PlaybookVersionRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     version: int
+    status: VersionStatus = VersionStatus.inactive
     content: PlaybookContent
     created_by: UUID
     created_at: datetime
