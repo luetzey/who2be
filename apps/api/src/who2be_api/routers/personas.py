@@ -1,4 +1,4 @@
-"""REST-Endpunkte fuer Personae (`/v1/personas`)."""
+"""REST-Endpunkte fuer Personae (`/v1/workspaces/{workspace_id}/personas`)."""
 
 from typing import Annotated
 from uuid import UUID
@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Request, Response, status
 from who2be_api.core.db import get_pool
 from who2be_api.core.pagination import DEFAULT_LIMIT, PageCursor, PageLimit
 from who2be_api.core.rate_limit import limiter, write_limit
-from who2be_api.core.security import get_current_user
+from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.repositories.persona_repository import PgPersonaRepository
 from who2be_api.services.persona_service import PersonaService
 from who2be_models import (
@@ -19,7 +19,7 @@ from who2be_models import (
     PersonaVersionRead,
 )
 
-router = APIRouter(prefix="/v1/personas", tags=["personas"])
+router = APIRouter(prefix="/personas", tags=["personas"])
 
 
 def get_persona_service(
@@ -29,19 +29,19 @@ def get_persona_service(
     return PersonaService(PgPersonaRepository(pool))
 
 
-OwnerId = Annotated[UUID, Depends(get_current_user)]
+Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]
 Service = Annotated[PersonaService, Depends(get_persona_service)]
 
 
 @router.get("")
 async def list_personas(
-    owner_id: OwnerId,
+    ctx: Ctx,
     service: Service,
     response: Response,
     cursor: PageCursor,
     limit: PageLimit = DEFAULT_LIMIT,
 ) -> list[PersonaRead]:
-    items, next_cursor = await service.list_all(owner_id, limit, cursor)
+    items, next_cursor = await service.list_all(ctx, limit, cursor)
     if next_cursor is not None:
         response.headers["X-Next-Cursor"] = next_cursor
     return items
@@ -50,14 +50,14 @@ async def list_personas(
 @router.post("", status_code=status.HTTP_201_CREATED)
 @limiter.limit(write_limit)
 async def create_persona(
-    request: Request, data: PersonaCreate, owner_id: OwnerId, service: Service
+    request: Request, data: PersonaCreate, ctx: Ctx, service: Service
 ) -> PersonaRead:
-    return await service.create(owner_id, data)
+    return await service.create(ctx, data)
 
 
 @router.get("/{persona_id}")
-async def get_persona(persona_id: UUID, owner_id: OwnerId, service: Service) -> PersonaRead:
-    return await service.get(owner_id, persona_id)
+async def get_persona(persona_id: UUID, ctx: Ctx, service: Service) -> PersonaRead:
+    return await service.get(ctx, persona_id)
 
 
 @router.put("/{persona_id}")
@@ -66,21 +66,21 @@ async def update_persona(
     request: Request,
     persona_id: UUID,
     data: PersonaUpdate,
-    owner_id: OwnerId,
+    ctx: Ctx,
     service: Service,
 ) -> PersonaRead:
-    return await service.update(owner_id, persona_id, data)
+    return await service.update(ctx, persona_id, data)
 
 
 @router.get("/{persona_id}/versions")
 async def list_persona_versions(
-    persona_id: UUID, owner_id: OwnerId, service: Service
+    persona_id: UUID, ctx: Ctx, service: Service
 ) -> list[PersonaVersionRead]:
-    return await service.list_versions(owner_id, persona_id)
+    return await service.list_versions(ctx, persona_id)
 
 
 @router.get("/{persona_id}/versions/{version}")
 async def get_persona_version(
-    persona_id: UUID, version: int, owner_id: OwnerId, service: Service
+    persona_id: UUID, version: int, ctx: Ctx, service: Service
 ) -> PersonaVersionRead:
-    return await service.get_version(owner_id, persona_id, version)
+    return await service.get_version(ctx, persona_id, version)

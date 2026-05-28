@@ -9,6 +9,7 @@ export interface PersonaContent {
 
 export interface Persona {
   id: string
+  workspace_id: string
   owner_id: string
   name: string
   current_version: number
@@ -39,6 +40,7 @@ export interface PlaybookContent {
 
 export interface Playbook {
   id: string
+  workspace_id: string
   owner_id: string
   name: string
   current_version: number
@@ -64,10 +66,32 @@ export interface PlaybookInput {
 
 export interface Token {
   id: string
+  workspace_id: string
   name: string
   created_at: string
   last_used_at: string | null
   revoked_at: string | null
+}
+
+export interface MeWorkspaceMembership {
+  id: string
+  name: string
+  slug: string
+  role: 'admin' | 'editor' | 'viewer'
+}
+
+export interface MeOrganization {
+  id: string
+  name: string
+  slug: string
+  kind: 'personal' | 'company'
+  workspaces: MeWorkspaceMembership[]
+}
+
+export interface Me {
+  user_id: string
+  default_workspace_id: string | null
+  organizations: MeOrganization[]
 }
 
 export interface TokenCreated extends Token {

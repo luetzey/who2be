@@ -23,7 +23,17 @@ from who2be_api.core.rate_limit import (
     _rate_limit_exceeded_handler,
     limiter,
 )
-from who2be_api.routers import persona_playbooks, personas, playbooks, tokens
+from who2be_api.routers import (
+    me,
+    organizations,
+    persona_playbooks,
+    personas,
+    playbooks,
+    tokens,
+    workspaces,
+)
+
+_WORKSPACE_PREFIX = "/v1/workspaces/{workspace_id}"
 
 
 class Health(BaseModel):
@@ -78,10 +88,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # kann sie ueber `structlog.contextvars` lesen, bevor er die Zeile emittiert.
     app.add_middleware(AccessLogMiddleware)
     app.add_middleware(RequestIDMiddleware)
-    app.include_router(tokens.router)
-    app.include_router(personas.router)
-    app.include_router(playbooks.router)
-    app.include_router(persona_playbooks.router)
+    # Workspace-scoped Router unter `/v1/workspaces/{workspace_id}/...` —
+    # die Path-Variable wird von `get_current_workspace` als Dependency gelesen.
+    app.include_router(tokens.router, prefix=_WORKSPACE_PREFIX)
+    app.include_router(personas.router, prefix=_WORKSPACE_PREFIX)
+    app.include_router(playbooks.router, prefix=_WORKSPACE_PREFIX)
+    app.include_router(persona_playbooks.router, prefix=_WORKSPACE_PREFIX)
+    # Top-Level-Endpunkte: `/v1/me`, `/v1/organizations`, `/v1/workspaces/{id}`.
+    app.include_router(me.router)
+    app.include_router(organizations.router)
+    app.include_router(workspaces.router)
 
     @app.get("/v1/health", response_model=Health)
     async def health() -> Health:

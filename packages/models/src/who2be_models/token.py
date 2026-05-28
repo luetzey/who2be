@@ -24,6 +24,7 @@ class TokenRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
+    workspace_id: UUID
     name: str
     created_at: datetime
     last_used_at: datetime | None

@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
 import { RequireAuth } from '@/auth/RequireAuth'
 import { SessionProvider } from '@/auth/SessionProvider'
+import { useSession } from '@/auth/session-context'
 import { LoginPage } from '@/features/auth'
 
 import { AppLayout } from './AppLayout'
@@ -57,6 +58,18 @@ const CatalogPage = import.meta.env.DEV
     )
   : null
 
+// Default-Redirect nach Login: hebt den User auf `/w/{default_workspace_id}/personas`.
+// `me` kommt aus `/v1/me`, das der SessionProvider nach Sign-In laedt; falls noch
+// nicht resolved, bleibt der User auf Login zurueckgeworfen.
+function DefaultWorkspaceRedirect() {
+  const { me } = useSession()
+  const workspaceId = me?.default_workspace_id
+  if (!workspaceId) {
+    return <Navigate to="/login" replace />
+  }
+  return <Navigate to={`/w/${workspaceId}/personas`} replace />
+}
+
 export function RouterRoot() {
   return (
     <BrowserRouter>
@@ -65,14 +78,18 @@ export function RouterRoot() {
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route element={<RequireAuth />}>
+              <Route path="/" element={<DefaultWorkspaceRedirect />} />
               <Route element={<AppLayout />}>
-                <Route path="/" element={<PersonasPage />} />
-                <Route path="/personas/new" element={<PersonaNewPage />} />
-                <Route path="/personas/:id" element={<PersonaDetailPage />} />
-                <Route path="/playbooks" element={<PlaybooksPage />} />
-                <Route path="/playbooks/new" element={<PlaybookNewPage />} />
-                <Route path="/playbooks/:id" element={<PlaybookDetailPage />} />
-                <Route path="/settings/tokens" element={<SettingsTokensPage />} />
+                <Route path="/w/:workspaceId/personas" element={<PersonasPage />} />
+                <Route path="/w/:workspaceId/personas/new" element={<PersonaNewPage />} />
+                <Route path="/w/:workspaceId/personas/:id" element={<PersonaDetailPage />} />
+                <Route path="/w/:workspaceId/playbooks" element={<PlaybooksPage />} />
+                <Route path="/w/:workspaceId/playbooks/new" element={<PlaybookNewPage />} />
+                <Route path="/w/:workspaceId/playbooks/:id" element={<PlaybookDetailPage />} />
+                <Route
+                  path="/w/:workspaceId/settings/tokens"
+                  element={<SettingsTokensPage />}
+                />
                 {CatalogPage ? (
                   <Route path="/_catalog" element={<CatalogPage />} />
                 ) : null}

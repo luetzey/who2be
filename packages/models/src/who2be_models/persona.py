@@ -45,6 +45,7 @@ class PersonaRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
+    workspace_id: UUID
     owner_id: UUID
     name: str
     current_version: int

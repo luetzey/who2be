@@ -2,18 +2,25 @@
 
 Zwei Wege, ein `owner_id`-Kontext. Die Dependency `get_current_user` erkennt
 den Weg am Token-Praefix `w2b_` und liefert in beiden Faellen die `owner_id`.
+
+Phase 2.1a-2: zusaetzlich `get_current_workspace`, das aus Path-Parameter
+`workspace_id` plus `get_current_user` einen `WorkspaceContext` (User, WS,
+Rolle) baut. Mitgliedschaftspruefung ueber `workspace_member`; API-Token
+tragen einen `workspace_id`-Snapshot, der gegen das Path-Segment matchen
+muss (Defense gegen Cross-Workspace-Token-Reuse).
 """
 
 import hashlib
 import logging
 import secrets
-from typing import Annotated
+from dataclasses import dataclass
+from typing import Annotated, Literal
 from uuid import UUID
 
 import asyncpg
 import jwt
 import structlog
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Path, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from who2be_api.core.config import get_settings
@@ -61,6 +68,36 @@ def _credentials_error() -> HTTPException:
     )
 
 
+@dataclass(frozen=True)
+class TokenAuth:
+    """Resolution-Ergebnis eines API-Tokens: Owner + Workspace-Snapshot."""
+
+    owner_id: UUID
+    workspace_id: UUID
+
+
+@dataclass(frozen=True)
+class CurrentPrincipal:
+    """Authentifizierter Aufrufer.
+
+    `token_workspace_id` ist nur fuer den API-Token-Pfad gesetzt — Tokens sind
+    pro Workspace gepinnt. JWT-Aufrufer haben `None` und werden in
+    `get_current_workspace` allein per Membership autorisiert.
+    """
+
+    user_id: UUID
+    token_workspace_id: UUID | None
+
+
+@dataclass(frozen=True)
+class WorkspaceContext:
+    """Workspace + User + Rolle des Aufrufers — Standard-Service-Argument."""
+
+    workspace_id: UUID
+    user_id: UUID
+    role: Literal["admin", "editor", "viewer"]
+
+
 def verify_supabase_jwt(token: str) -> UUID:
     """Verifiziert ein Supabase-JWT lokal (HS256) und liest `sub` als owner_id."""
     settings = get_settings()
@@ -95,26 +132,32 @@ def verify_supabase_jwt(token: str) -> UUID:
     return owner_id
 
 
-async def resolve_owner(token: str, token_repo: TokenRepository) -> UUID:
-    """Bildet einen Bearer-Token auf eine owner_id ab (ADR-0006-Dispatch)."""
+async def resolve_principal(token: str, token_repo: TokenRepository) -> CurrentPrincipal:
+    """Bildet einen Bearer-Token auf einen `CurrentPrincipal` ab.
+
+    JWT-Pfad: `token_workspace_id=None`, Membership entscheidet spaeter.
+    API-Token-Pfad: Workspace-Snapshot aus `api_token.workspace_id`.
+    """
     if token.startswith(TOKEN_PREFIX):
         token_hash = hash_token(token)
-        owner_id = await token_repo.fetch_owner_by_hash(token_hash)
-        if owner_id is None:
+        auth = await token_repo.fetch_auth_by_hash(token_hash)
+        if auth is None:
             raise _credentials_error()
         try:
             await token_repo.touch_last_used(token_hash)
         except (asyncpg.PostgresError, OSError):
             logger.warning("last_used_at konnte nicht aktualisiert werden.")
-        structlog.contextvars.bind_contextvars(owner_id=str(owner_id))
-        return owner_id
-    return verify_supabase_jwt(token)
+        structlog.contextvars.bind_contextvars(owner_id=str(auth.owner_id))
+        return CurrentPrincipal(
+            user_id=auth.owner_id, token_workspace_id=auth.workspace_id
+        )
+    return CurrentPrincipal(user_id=verify_supabase_jwt(token), token_workspace_id=None)
 
 
-async def get_current_user(
+async def get_current_principal(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)],
-) -> UUID:
-    """FastAPI-Dependency: owner_id des authentifizierten Aufrufers.
+) -> CurrentPrincipal:
+    """FastAPI-Dependency: `CurrentPrincipal` des authentifizierten Aufrufers.
 
     Fehlende Anmeldedaten und der JWT-Pfad kommen ohne Datenbank aus; nur die
     API-Token-Verifikation braucht den Pool. Der Pool wird daher erst hier —
@@ -125,7 +168,9 @@ async def get_current_user(
         raise _credentials_error()
     token = credentials.credentials
     if not token.startswith(TOKEN_PREFIX):
-        return verify_supabase_jwt(token)
+        return CurrentPrincipal(
+            user_id=verify_supabase_jwt(token), token_workspace_id=None
+        )
     try:
         pool = get_pool()
     except RuntimeError as exc:
@@ -133,4 +178,58 @@ async def get_current_user(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Datenbank nicht verfuegbar.",
         ) from exc
-    return await resolve_owner(token, PgTokenRepository(pool))
+    return await resolve_principal(token, PgTokenRepository(pool))
+
+
+async def get_current_user(
+    principal: Annotated[CurrentPrincipal, Depends(get_current_principal)],
+) -> UUID:
+    """FastAPI-Dependency: owner_id des authentifizierten Aufrufers.
+
+    Wird fuer Workspace-uebergreifende Endpunkte (`/v1/me`, `/v1/organizations`)
+    verwendet. Fuer Workspace-scoped Endpunkte stattdessen
+    `get_current_workspace`.
+    """
+    return principal.user_id
+
+
+async def get_current_workspace(
+    workspace_id: Annotated[UUID, Path(...)],
+    principal: Annotated[CurrentPrincipal, Depends(get_current_principal)],
+) -> "WorkspaceContext":
+    """FastAPI-Dependency: `WorkspaceContext` fuer Workspace-scoped Endpunkte.
+
+    Pruefung in zwei Stufen:
+    1. API-Token-Snapshot: Token-`workspace_id` muss exakt zum Path-Segment
+       passen — Defense gegen Cross-Workspace-Token-Reuse.
+    2. Membership: `workspace_member`-Lookup; nicht-Mitglied → 403.
+    """
+    if (
+        principal.token_workspace_id is not None
+        and principal.token_workspace_id != workspace_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Token gehoert nicht zu diesem Workspace.",
+        )
+    try:
+        pool = get_pool()
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Datenbank nicht verfuegbar.",
+        ) from exc
+    role = await pool.fetchval(
+        "SELECT role FROM workspace_member WHERE workspace_id = $1 AND user_id = $2",
+        workspace_id,
+        principal.user_id,
+    )
+    if role is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Kein Zugriff auf diesen Workspace.",
+        )
+    structlog.contextvars.bind_contextvars(workspace_id=str(workspace_id))
+    return WorkspaceContext(
+        workspace_id=workspace_id, user_id=principal.user_id, role=role
+    )

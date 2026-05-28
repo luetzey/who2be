@@ -19,6 +19,7 @@ describe('SettingsTokensPage (a11y)', () => {
     const tokens = [
       {
         id: 't1',
+        workspace_id: 'ws-1',
         name: 'CLI-Agent',
         created_at: '2026-05-24T10:00:00Z',
         last_used_at: null,
@@ -30,7 +31,10 @@ describe('SettingsTokensPage (a11y)', () => {
       vi.fn().mockResolvedValue(new Response(JSON.stringify(tokens), { status: 200 })),
     )
 
-    const { container } = renderInRoutes(<SettingsTokensPage />, { path: '/settings/tokens' })
+    const { container } = renderInRoutes(<SettingsTokensPage />, {
+      path: '/w/:workspaceId/settings/tokens',
+      initialEntries: ['/w/ws-1/settings/tokens'],
+    })
 
     await waitFor(() => {
       expect(screen.getByText('CLI-Agent')).toBeInTheDocument()

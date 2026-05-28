@@ -4,6 +4,7 @@ import { NavLink } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
+import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { cn } from '@/lib/utils'
 
 interface AppShellProps {
@@ -18,12 +19,13 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { to: '/', label: 'Personae', icon: Users },
+  { to: '/personas', label: 'Personae', icon: Users },
   { to: '/playbooks', label: 'Playbooks', icon: BookOpen },
   { to: '/settings/tokens', label: 'API-Tokens', icon: KeyRound },
 ]
 
 export function AppShell({ children, onSignOut }: AppShellProps) {
+  const wsPath = useWorkspacePath()
   return (
     <div className="flex min-h-screen w-full bg-background text-foreground">
       <aside className="hidden w-60 shrink-0 flex-col border-r bg-muted/40 px-3 py-4 sm:flex">
@@ -32,8 +34,7 @@ export function AppShell({ children, onSignOut }: AppShellProps) {
           {NAV_ITEMS.map((item) => (
             <NavLink
               key={item.to}
-              to={item.to}
-              end={item.to === '/'}
+              to={wsPath(item.to)}
               className={({ isActive }) =>
                 cn(
                   'flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none',
@@ -53,8 +54,7 @@ export function AppShell({ children, onSignOut }: AppShellProps) {
             {NAV_ITEMS.map((item) => (
               <NavLink
                 key={item.to}
-                to={item.to}
-                end={item.to === '/'}
+                to={wsPath(item.to)}
                 className={({ isActive }) =>
                   cn(
                     'rounded-md px-1 text-sm font-medium text-muted-foreground ring-offset-background hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none',

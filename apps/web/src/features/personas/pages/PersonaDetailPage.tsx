@@ -9,6 +9,7 @@ import { DataView } from '@/components/data/DataView'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { usePersonaPlaybooks } from '@/hooks/usePersonaPlaybooks'
+import { useWorkspacePath } from '@/auth/useWorkspacePath'
 
 import { PersonaEditorForm } from '../components/PersonaEditorForm'
 import { PlaybookLinkItem } from '../components/PlaybookLinkItem'
@@ -20,16 +21,17 @@ export function PersonaDetailPage() {
   const { persona, versions, loading, error, reload } = usePersona(id)
   const { form, onSubmit, saveError } = usePersonaForm(persona, reload)
   const links = usePersonaPlaybooks(id)
+  const wsPath = useWorkspacePath()
 
   if (id === undefined) {
-    return <Navigate to="/" replace />
+    return <Navigate to={wsPath('/personas')} replace />
   }
 
   return (
     <Container>
       <Stack gap="md">
         <Button asChild variant="ghost" size="sm" className="self-start">
-          <Link to="/">
+          <Link to={wsPath('/personas')}>
             <ArrowLeft className="h-4 w-4" />
             Personae
           </Link>

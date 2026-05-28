@@ -15,6 +15,7 @@ describe('PlaybooksPage (a11y)', () => {
     const playbooks = [
       {
         id: 'pb1',
+        workspace_id: 'ws-1',
         owner_id: 'o1',
         name: 'Coaching',
         current_version: 1,
@@ -37,7 +38,10 @@ describe('PlaybooksPage (a11y)', () => {
       vi.fn().mockResolvedValue(new Response(JSON.stringify(playbooks), { status: 200 })),
     )
 
-    const { container } = renderInRoutes(<PlaybooksPage />, { path: '/playbooks' })
+    const { container } = renderInRoutes(<PlaybooksPage />, {
+      path: '/w/:workspaceId/playbooks',
+      initialEntries: ['/w/ws-1/playbooks'],
+    })
 
     await waitFor(() => {
       expect(screen.getByText('Coaching')).toBeInTheDocument()

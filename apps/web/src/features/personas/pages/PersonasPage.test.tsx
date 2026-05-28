@@ -3,11 +3,17 @@ import { render, screen, waitFor } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import type { Me } from '@/api/types'
 import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
 import { SessionContext } from '@/auth/session-context'
 import { PersonasPage } from './PersonasPage'
 
 const fakeSession = { access_token: 'tok' } as unknown as Session
+const fakeMe: Me = {
+  user_id: 'u1',
+  default_workspace_id: 'ws-1',
+  organizations: [],
+}
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -17,6 +23,7 @@ describe('PersonasPage', () => {
   it('listet die von der API gelieferten Personae', async () => {
     const persona = {
       id: 'p1',
+      workspace_id: 'ws-1',
       owner_id: 'o1',
       name: 'QA-Bot',
       current_version: 1,
@@ -33,7 +40,7 @@ describe('PersonasPage', () => {
 
     render(
       <SessionContext.Provider
-        value={{ session: fakeSession, signIn: vi.fn(), signOut: vi.fn() }}
+        value={{ session: fakeSession, me: fakeMe, signIn: vi.fn(), signOut: vi.fn() }}
       >
         <AuthTokenProvider>
           <BrowserRouter>

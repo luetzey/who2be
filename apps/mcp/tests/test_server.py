@@ -14,10 +14,11 @@ from who2be_mcp.client import ApiClient
 from who2be_mcp.server import mcp
 
 
-def _playbook_json(name: str) -> dict[str, object]:
+def _playbook_json(name: str, workspace_id: str) -> dict[str, object]:
     now = datetime.now(UTC).isoformat()
     return {
         "id": str(uuid4()),
+        "workspace_id": workspace_id,
         "owner_id": str(uuid4()),
         "name": name,
         "current_version": 1,
@@ -54,13 +55,22 @@ def test_fetch_playbook_rejects_invalid_uuid() -> None:
 def test_list_playbooks_tool_returns_playbooks(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    workspace_id = uuid4()
+
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json=[_playbook_json("PB")])
+        return httpx.Response(200, json=[_playbook_json("PB", str(workspace_id))])
 
     api_client = ApiClient(
-        "http://api.test", "tok", transport=httpx.MockTransport(handler)
+        "http://api.test",
+        "tok",
+        workspace_id,
+        transport=httpx.MockTransport(handler),
     )
-    monkeypatch.setattr(server, "build_client", lambda: api_client)
+
+    async def _build() -> ApiClient:
+        return api_client
+
+    monkeypatch.setattr(server, "build_client", _build)
 
     async def _run() -> object:
         async with Client(mcp) as client:

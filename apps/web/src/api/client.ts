@@ -1,5 +1,6 @@
 import { config } from '../config'
 import type {
+  Me,
   Persona,
   PersonaInput,
   PersonaVersion,
@@ -60,6 +61,11 @@ async function readErrorMessage(response: Response): Promise<string> {
   }
 }
 
+// Tenant-weiter Read — Workspace-Resolution beim Bootstrap, vor `createApi`.
+export function fetchMe(token: string): Promise<Me> {
+  return request<Me>(token, '/v1/me')
+}
+
 export interface Api {
   listPersonas: () => Promise<Persona[]>
   getPersona: (id: string) => Promise<Persona>
@@ -78,26 +84,27 @@ export interface Api {
   revokeToken: (id: string) => Promise<void>
 }
 
-export function createApi(token: string): Api {
+export function createApi(token: string, workspaceId: string): Api {
+  const ws = `/v1/workspaces/${workspaceId}`
   return {
-    listPersonas: () => request<Persona[]>(token, '/v1/personas'),
-    getPersona: (id) => request<Persona>(token, `/v1/personas/${id}`),
+    listPersonas: () => request<Persona[]>(token, `${ws}/personas`),
+    getPersona: (id) => request<Persona>(token, `${ws}/personas/${id}`),
     createPersona: (input) =>
-      request<Persona>(token, '/v1/personas', {
+      request<Persona>(token, `${ws}/personas`, {
         method: 'POST',
         body: JSON.stringify(input),
       }),
     updatePersona: (id, input) =>
-      request<Persona>(token, `/v1/personas/${id}`, {
+      request<Persona>(token, `${ws}/personas/${id}`, {
         method: 'PUT',
         body: JSON.stringify(input),
       }),
     listPersonaVersions: (id) =>
-      request<PersonaVersion[]>(token, `/v1/personas/${id}/versions`),
+      request<PersonaVersion[]>(token, `${ws}/personas/${id}/versions`),
     listPersonaPlaybooks: (id) =>
-      request<Playbook[]>(token, `/v1/personas/${id}/playbooks`),
+      request<Playbook[]>(token, `${ws}/personas/${id}/playbooks`),
     setPersonaPlaybooks: (id, playbookIds) =>
-      request<Playbook[]>(token, `/v1/personas/${id}/playbooks`, {
+      request<Playbook[]>(token, `${ws}/personas/${id}/playbooks`, {
         method: 'PUT',
         body: JSON.stringify({ playbook_ids: playbookIds }),
       }),
@@ -106,28 +113,28 @@ export function createApi(token: string): Api {
       if (filters?.tag) params.set('tag', filters.tag)
       if (filters?.trigger) params.set('trigger', filters.trigger)
       const query = params.toString()
-      return request<Playbook[]>(token, `/v1/playbooks${query ? `?${query}` : ''}`)
+      return request<Playbook[]>(token, `${ws}/playbooks${query ? `?${query}` : ''}`)
     },
-    getPlaybook: (id) => request<Playbook>(token, `/v1/playbooks/${id}`),
+    getPlaybook: (id) => request<Playbook>(token, `${ws}/playbooks/${id}`),
     createPlaybook: (input) =>
-      request<Playbook>(token, '/v1/playbooks', {
+      request<Playbook>(token, `${ws}/playbooks`, {
         method: 'POST',
         body: JSON.stringify(input),
       }),
     updatePlaybook: (id, input) =>
-      request<Playbook>(token, `/v1/playbooks/${id}`, {
+      request<Playbook>(token, `${ws}/playbooks/${id}`, {
         method: 'PUT',
         body: JSON.stringify(input),
       }),
     listPlaybookVersions: (id) =>
-      request<PlaybookVersion[]>(token, `/v1/playbooks/${id}/versions`),
-    listTokens: () => request<Token[]>(token, '/v1/tokens'),
+      request<PlaybookVersion[]>(token, `${ws}/playbooks/${id}/versions`),
+    listTokens: () => request<Token[]>(token, `${ws}/tokens`),
     createToken: (input) =>
-      request<TokenCreated>(token, '/v1/tokens', {
+      request<TokenCreated>(token, `${ws}/tokens`, {
         method: 'POST',
         body: JSON.stringify(input),
       }),
     revokeToken: (id) =>
-      request<void>(token, `/v1/tokens/${id}`, { method: 'DELETE' }),
+      request<void>(token, `${ws}/tokens/${id}`, { method: 'DELETE' }),
   }
 }

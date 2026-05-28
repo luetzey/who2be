@@ -30,11 +30,15 @@ class ApiClient:
         self,
         base_url: str,
         token: str,
+        workspace_id: UUID,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._headers = {"Authorization": f"Bearer {token}"}
         self._transport = transport
+        # Vorgefertigter Pfad-Prefix — sparte uns die String-Konkatenation in
+        # jeder Methode und macht Refactors auf weitere Workspace-Endpunkte trivial.
+        self._workspace_prefix = f"/v1/workspaces/{workspace_id}"
 
     async def _get(self, path: str, params: dict[str, str] | None = None) -> Any:
         try:
@@ -66,11 +70,11 @@ class ApiClient:
             persona_id = UUID(identifier)
         except ValueError:
             return await self._resolve_persona_by_name(identifier)
-        data = await self._get(f"/v1/personas/{persona_id}")
+        data = await self._get(f"{self._workspace_prefix}/personas/{persona_id}")
         return PersonaRead.model_validate(data)
 
     async def _resolve_persona_by_name(self, name: str) -> PersonaRead:
-        data = await self._get("/v1/personas")
+        data = await self._get(f"{self._workspace_prefix}/personas")
         for entry in data:
             persona = PersonaRead.model_validate(entry)
             if persona.name == name:
@@ -78,7 +82,9 @@ class ApiClient:
         raise ToolError(f"Keine Persona mit Name '{name}'.")
 
     async def get_persona_playbooks(self, persona_id: UUID) -> list[PlaybookRead]:
-        data = await self._get(f"/v1/personas/{persona_id}/playbooks")
+        data = await self._get(
+            f"{self._workspace_prefix}/personas/{persona_id}/playbooks"
+        )
         return [PlaybookRead.model_validate(item) for item in data]
 
     async def list_playbooks(self, tag: str | None, trigger: str | None) -> list[PlaybookRead]:
@@ -87,9 +93,9 @@ class ApiClient:
             params["tag"] = tag
         if trigger is not None:
             params["trigger"] = trigger
-        data = await self._get("/v1/playbooks", params=params)
+        data = await self._get(f"{self._workspace_prefix}/playbooks", params=params)
         return [PlaybookRead.model_validate(item) for item in data]
 
     async def get_playbook(self, playbook_id: UUID) -> PlaybookRead:
-        data = await self._get(f"/v1/playbooks/{playbook_id}")
+        data = await self._get(f"{self._workspace_prefix}/playbooks/{playbook_id}")
         return PlaybookRead.model_validate(data)

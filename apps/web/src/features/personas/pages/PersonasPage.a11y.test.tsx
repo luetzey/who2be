@@ -15,6 +15,7 @@ describe('PersonasPage (a11y)', () => {
     const personas = [
       {
         id: 'p1',
+        workspace_id: 'ws-1',
         owner_id: 'o1',
         name: 'QA-Bot',
         current_version: 1,
@@ -28,7 +29,10 @@ describe('PersonasPage (a11y)', () => {
       vi.fn().mockResolvedValue(new Response(JSON.stringify(personas), { status: 200 })),
     )
 
-    const { container } = renderInRoutes(<PersonasPage />, { path: '/' })
+    const { container } = renderInRoutes(<PersonasPage />, {
+      path: '/w/:workspaceId/personas',
+      initialEntries: ['/w/ws-1/personas'],
+    })
 
     await waitFor(() => {
       expect(screen.getByText('QA-Bot')).toBeInTheDocument()

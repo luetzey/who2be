@@ -13,9 +13,11 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { usePlaybooks } from '@/hooks/usePlaybooks'
+import { useWorkspacePath } from '@/auth/useWorkspacePath'
 
 export function PlaybooksPage() {
   const { playbooks, loading, error } = usePlaybooks()
+  const wsPath = useWorkspacePath()
   const [tagFilter, setTagFilter] = useState('')
   const [triggerFilter, setTriggerFilter] = useState('')
 
@@ -39,7 +41,7 @@ export function PlaybooksPage() {
             description="Workflows und Playbook-Versionen für Agenten."
             actions={
               <Button asChild variant="brand">
-                <Link to="/playbooks/new">
+                <Link to={wsPath("/playbooks/new")}>
                   <Plus className="h-4 w-4" />
                   Neues Playbook
                 </Link>
@@ -87,7 +89,7 @@ export function PlaybooksPage() {
                 }
                 action={
                   <Button asChild variant="brand">
-                    <Link to="/playbooks/new">
+                    <Link to={wsPath("/playbooks/new")}>
                       <Plus className="h-4 w-4" />
                       Neues Playbook
                     </Link>
@@ -99,7 +101,7 @@ export function PlaybooksPage() {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <Link
-                    to={`/playbooks/${playbook.id}`}
+                    to={wsPath(`/playbooks/${playbook.id}`)}
                     className="rounded-sm font-medium text-foreground ring-offset-background hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
                   >
                     {playbook.name}

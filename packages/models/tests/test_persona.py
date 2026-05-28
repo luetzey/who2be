@@ -39,6 +39,7 @@ def test_update_name_is_optional() -> None:
 def test_read_round_trip_preserves_nested_content() -> None:
     persona = PersonaRead(
         id=uuid4(),
+        workspace_id=uuid4(),
         owner_id=uuid4(),
         name="QA",
         current_version=2,

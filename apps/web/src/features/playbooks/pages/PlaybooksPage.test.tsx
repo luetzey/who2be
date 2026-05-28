@@ -3,15 +3,22 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import type { Me } from '@/api/types'
 import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
 import { SessionContext } from '@/auth/session-context'
 import { PlaybooksPage } from './PlaybooksPage'
 
 const session = { access_token: 'jwt' } as unknown as Session
+const me: Me = {
+  user_id: 'u1',
+  default_workspace_id: 'ws-1',
+  organizations: [],
+}
 
 function playbook(id: string, name: string, tags: string[], triggers: string | null) {
   return {
     id,
+    workspace_id: 'ws-1',
     owner_id: 'o1',
     name,
     current_version: 1,
@@ -40,7 +47,7 @@ describe('PlaybooksPage', () => {
     )
 
     render(
-      <SessionContext.Provider value={{ session, signIn: vi.fn(), signOut: vi.fn() }}>
+      <SessionContext.Provider value={{ session, me, signIn: vi.fn(), signOut: vi.fn() }}>
         <AuthTokenProvider>
           <BrowserRouter>
             <PlaybooksPage />
