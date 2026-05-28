@@ -29,7 +29,12 @@ from who2be_models.playbook import (
     PlaybookUpdate,
     PlaybookVersionRead,
 )
-from who2be_models.status import ALLOWED_TRANSITIONS, VersionStatus, is_allowed_transition
+from who2be_models.status import (
+    ALLOWED_TRANSITIONS,
+    VersionStatus,
+    VersionTransitionRequest,
+    is_allowed_transition,
+)
 from who2be_models.status_history import EntityType, StatusHistoryEntry
 from who2be_models.token import TokenCreate, TokenCreated, TokenRead
 from who2be_models.workspace import WorkspaceCreate, WorkspaceRead, WorkspaceUpdate
@@ -66,6 +71,7 @@ __all__ = [
     "TokenCreated",
     "TokenRead",
     "VersionStatus",
+    "VersionTransitionRequest",
     "WorkspaceCreate",
     "WorkspaceRead",
     "WorkspaceUpdate",

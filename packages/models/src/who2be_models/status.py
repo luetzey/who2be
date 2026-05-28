@@ -12,6 +12,8 @@ Status-Wechsel bumpt KEINE Version; Audit-Eintraege landen in
 from collections.abc import Mapping
 from enum import StrEnum
 
+from pydantic import BaseModel, ConfigDict, Field
+
 
 class VersionStatus(StrEnum):
     """Status einer Persona-/Playbook-/Resource-Version."""
@@ -22,20 +24,29 @@ class VersionStatus(StrEnum):
     inactive = "inactive"
 
 
-# State-Machine. `inactive` ist terminal (passt zum Migration-Backfill, in
-# dem alle Nicht-Current-Versionen auf `inactive` gehen). `review -> draft`
-# ist erlaubt, damit ein Reviewer den Autor zurueck an den Tisch schicken
-# kann ohne den Draft zu verwerfen.
+# State-Machine. `review -> draft` ist erlaubt, damit ein Reviewer den Autor
+# zurueck an den Tisch schicken kann. `inactive -> draft` reaktiviert eine
+# archivierte Version fuer weitere Bearbeitung (Edge-Case fuer das Lifecycle-
+# Modell). Direkte Uebergaenge nach `inactive` sind ausschliesslich aus `active`
+# erlaubt — Drafts/Reviews werden ueber `review -> draft` (Bounce) bzw. ueber
+# `active -> inactive` indirekt verworfen, nicht direkt geloescht.
 ALLOWED_TRANSITIONS: Mapping[VersionStatus, frozenset[VersionStatus]] = {
-    VersionStatus.draft: frozenset({VersionStatus.review, VersionStatus.inactive}),
-    VersionStatus.review: frozenset(
-        {VersionStatus.draft, VersionStatus.active, VersionStatus.inactive}
-    ),
+    VersionStatus.draft: frozenset({VersionStatus.review}),
+    VersionStatus.review: frozenset({VersionStatus.active, VersionStatus.draft}),
     VersionStatus.active: frozenset({VersionStatus.inactive}),
-    VersionStatus.inactive: frozenset(),
+    VersionStatus.inactive: frozenset({VersionStatus.draft}),
 }
 
 
 def is_allowed_transition(from_status: VersionStatus, to_status: VersionStatus) -> bool:
     """True wenn der Uebergang in der State-Machine erlaubt ist."""
     return to_status in ALLOWED_TRANSITIONS[from_status]
+
+
+class VersionTransitionRequest(BaseModel):
+    """Eingabe fuer `POST .../versions/{v}/transition`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    to: VersionStatus
+    note: str | None = Field(default=None, max_length=2_000)

@@ -11,12 +11,16 @@ from who2be_api.core.pagination import DEFAULT_LIMIT, PageCursor, PageLimit
 from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.repositories.persona_repository import PgPersonaRepository
+from who2be_api.repositories.status_history_repository import PgStatusHistoryRepository
 from who2be_api.services.persona_service import PersonaService
+from who2be_api.services.status_history_service import StatusHistoryService
+from who2be_api.services.version_status import VersionStatusService
 from who2be_models import (
     PersonaCreate,
     PersonaRead,
     PersonaUpdate,
     PersonaVersionRead,
+    VersionTransitionRequest,
 )
 
 router = APIRouter(prefix="/personas", tags=["personas"])
@@ -29,8 +33,17 @@ def get_persona_service(
     return PersonaService(PgPersonaRepository(pool))
 
 
+def get_version_status_service(
+    pool: Annotated[asyncpg.Pool, Depends(get_pool)],
+) -> VersionStatusService:
+    return VersionStatusService(
+        pool, StatusHistoryService(PgStatusHistoryRepository())
+    )
+
+
 Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]
 Service = Annotated[PersonaService, Depends(get_persona_service)]
+StatusService = Annotated[VersionStatusService, Depends(get_version_status_service)]
 
 
 @router.get("")
@@ -84,3 +97,18 @@ async def get_persona_version(
     persona_id: UUID, version: int, ctx: Ctx, service: Service
 ) -> PersonaVersionRead:
     return await service.get_version(ctx, persona_id, version)
+
+
+@router.post("/{persona_id}/versions/{version}/transition")
+@limiter.limit(write_limit)
+async def transition_persona_version(
+    request: Request,
+    persona_id: UUID,
+    version: int,
+    data: VersionTransitionRequest,
+    ctx: Ctx,
+    status_service: StatusService,
+) -> PersonaVersionRead:
+    return await status_service.transition_persona_version(
+        ctx, persona_id, version, data.to, data.note
+    )

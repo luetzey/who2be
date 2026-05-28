@@ -48,11 +48,15 @@ class FakePersonaPlaybookRepository:
         self._personas = personas
         self._playbooks = playbooks
         self.links: dict[UUID, list[UUID]] = {}
+        self.last_active_only: bool | None = None
 
     async def persona_belongs_to(self, workspace_id: UUID, persona_id: UUID) -> bool:
         return self._personas.get(persona_id) == workspace_id
 
-    async def list_linked(self, persona_id: UUID) -> list[PlaybookRead]:
+    async def list_linked(
+        self, persona_id: UUID, active_only: bool = False
+    ) -> list[PlaybookRead]:
+        self.last_active_only = active_only
         owner = uuid4()
         return [
             _playbook_read(pid, self._playbooks[pid], owner)

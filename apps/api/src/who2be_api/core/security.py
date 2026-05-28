@@ -91,11 +91,17 @@ class CurrentPrincipal:
 
 @dataclass(frozen=True)
 class WorkspaceContext:
-    """Workspace + User + Rolle des Aufrufers — Standard-Service-Argument."""
+    """Workspace + User + Rolle des Aufrufers — Standard-Service-Argument.
+
+    `is_api_token` ist True, wenn der Aufruf ueber einen `w2b_`-API-Token kam
+    (MCP-Server). Services nutzen das Flag, um nur Active-Versionen
+    zurueckzuliefern (Plan §2.1.D — Active-Filter im Repo).
+    """
 
     workspace_id: UUID
     user_id: UUID
     role: Literal["admin", "editor", "viewer"]
+    is_api_token: bool = False
 
 
 def verify_supabase_jwt(token: str) -> UUID:
@@ -231,5 +237,8 @@ async def get_current_workspace(
         )
     structlog.contextvars.bind_contextvars(workspace_id=str(workspace_id))
     return WorkspaceContext(
-        workspace_id=workspace_id, user_id=principal.user_id, role=role
+        workspace_id=workspace_id,
+        user_id=principal.user_id,
+        role=role,
+        is_api_token=principal.token_workspace_id is not None,
     )

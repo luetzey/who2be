@@ -177,3 +177,168 @@ def test_persona_pagination_via_cursor_and_limit_validation(
             assert client.get(f"{base}?cursor=!!!", headers=auth).status_code == 422
     finally:
         cleanup_workspaces([owner, other])
+
+
+@pytest.mark.integration
+def test_persona_version_transitions_state_machine_and_history(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    base = f"/v1/workspaces/{ws}/personas"
+
+    try:
+        with TestClient(app) as client:
+            created = client.post(base, json=_persona_body("v1"), headers=auth)
+            persona_id = created.json()["id"]
+
+            def transition(v: int, to: str, expected: int = 200) -> dict[str, object]:
+                resp = client.post(
+                    f"{base}/{persona_id}/versions/{v}/transition",
+                    json={"to": to},
+                    headers=auth,
+                )
+                assert resp.status_code == expected, resp.text
+                return resp.json() if resp.status_code < 300 else {}
+
+            # Verbotener Uebergang: inactive -> active (State-Machine erlaubt
+            # nur inactive -> draft).
+            transition(1, "active", expected=409)
+
+            transition(1, "draft", expected=200)
+            review = transition(1, "review", expected=200)
+            assert review["status"] == "review"
+            transition(1, "active", expected=200)
+
+            # PUT auf Active erzeugt v2 als Draft; Active bleibt v1.
+            updated = client.put(
+                f"{base}/{persona_id}",
+                json=_persona_body("v2"),
+                headers=auth,
+            )
+            assert updated.status_code == 200, updated.text
+            assert updated.json()["current_version"] == 2
+            assert updated.json()["current_status"] == "draft"
+            assert updated.json()["has_pending_draft"] is True
+
+            # Promotion von v2: v1 wird auto-inactiviert (Plan §2.1.C),
+            # v2 wird active.
+            transition(2, "review", expected=200)
+            promoted = transition(2, "active", expected=200)
+            assert promoted["status"] == "active"
+            versions = client.get(f"{base}/{persona_id}/versions", headers=auth).json()
+            by_version = {v["version"]: v["status"] for v in versions}
+            assert by_version == {1: "inactive", 2: "active"}
+
+            # status_history-Audit: 5 Eigen-Transitions + 1 Auto-Inactivierung.
+            async def history_count() -> int:
+                conn = await asyncpg.connect(get_settings().database_url)
+                try:
+                    count = await conn.fetchval(
+                        "SELECT count(*) FROM status_history "
+                        "WHERE entity_type='persona' AND entity_id=$1",
+                        UUID(persona_id),
+                    )
+                    return int(count)
+                finally:
+                    await conn.close()
+
+            assert asyncio.run(history_count()) == 6
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+def test_persona_put_on_active_creates_draft_and_blocks_second_edit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    base = f"/v1/workspaces/{ws}/personas"
+
+    try:
+        with TestClient(app) as client:
+            persona_id = client.post(base, json=_persona_body("v1"), headers=auth).json()["id"]
+            # Auf Active hochziehen.
+            for to in ("draft", "review", "active"):
+                client.post(
+                    f"{base}/{persona_id}/versions/1/transition",
+                    json={"to": to},
+                    headers=auth,
+                )
+            first = client.put(
+                f"{base}/{persona_id}", json=_persona_body("v2"), headers=auth
+            )
+            assert first.status_code == 200
+            assert first.json()["current_status"] == "draft"
+
+            # Zweiter PUT: Draft existiert noch → 409.
+            second = client.put(
+                f"{base}/{persona_id}", json=_persona_body("v3"), headers=auth
+            )
+            assert second.status_code == 409
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+def test_persona_active_filter_for_api_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    jwt_auth = _auth(owner)
+    base = f"/v1/workspaces/{ws}/personas"
+
+    try:
+        with TestClient(app) as client:
+            inactive_id = client.post(
+                base, json=_persona_body("inactive"), headers=jwt_auth
+            ).json()["id"]
+            active_id = client.post(
+                base, json=_persona_body("active"), headers=jwt_auth
+            ).json()["id"]
+            # Active-Pfad fuer den zweiten.
+            for to in ("draft", "review", "active"):
+                client.post(
+                    f"{base}/{active_id}/versions/1/transition",
+                    json={"to": to},
+                    headers=jwt_auth,
+                )
+
+            # API-Token anlegen + nutzen.
+            token_resp = client.post(
+                f"/v1/workspaces/{ws}/tokens", json={"name": "mcp"}, headers=jwt_auth
+            )
+            token = token_resp.json()["token"]
+            token_auth = {"Authorization": f"Bearer {token}"}
+
+            # JWT sieht beide.
+            jwt_list = client.get(base, headers=jwt_auth).json()
+            assert {p["id"] for p in jwt_list} == {inactive_id, active_id}
+
+            # Token sieht nur Active.
+            token_list = client.get(base, headers=token_auth).json()
+            assert [p["id"] for p in token_list] == [active_id]
+            assert token_list[0]["current_status"] == "active"
+
+            # Direkter Fetch der inaktiven Persona per Token → 404.
+            assert client.get(f"{base}/{inactive_id}", headers=token_auth).status_code == 404
+            assert client.get(f"{base}/{active_id}", headers=token_auth).status_code == 200
+    finally:
+        cleanup_workspaces([owner])
