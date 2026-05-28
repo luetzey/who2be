@@ -1,7 +1,7 @@
 """Integrationstest fuer Rate-Limiting (MS-3 H1, slowapi).
 
 Belegt drei Eigenschaften:
-1. POST `/v1/personas` antwortet nach dem Limit mit 429.
+1. POST `/v1/workspaces/{ws}/personas` antwortet nach dem Limit mit 429.
 2. GET-Endpoints sind nicht limitiert.
 3. Zwei verschiedene Tokens haben unabhaengige Buckets.
 
@@ -11,7 +11,7 @@ Setup analog `test_personas.py`: nur mit erreichbarer DB; ohne DB Skip.
 import asyncio
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import asyncpg
 import jwt
@@ -22,6 +22,11 @@ from who2be_api.core import rate_limit, security
 from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.migrations import MIGRATIONS_DIR, apply_migrations
 from who2be_api.main import app
+from who2be_api.testing.workspace_setup import (
+    cleanup_workspaces,
+    fresh_user_id,
+    setup_workspace,
+)
 
 _TEST_SECRET = "integration-test-jwt-secret-padding-0123456789"
 _TEST_LIMIT = "2/minute"
@@ -44,17 +49,6 @@ def _prepare_db() -> None:
         conn = await asyncpg.connect(get_settings().database_url)
         try:
             await apply_migrations(conn, MIGRATIONS_DIR)
-        finally:
-            await conn.close()
-
-    asyncio.run(_run())
-
-
-def _cleanup(owner_ids: list[UUID]) -> None:
-    async def _run() -> None:
-        conn = await asyncpg.connect(get_settings().database_url)
-        try:
-            await conn.execute("DELETE FROM persona WHERE owner_id = ANY($1::uuid[])", owner_ids)
         finally:
             await conn.close()
 
@@ -109,19 +103,21 @@ def test_post_personas_returns_429_after_limit(
     _prepare_db()
     _override_settings(monkeypatch, _TEST_LIMIT)
 
-    owner = uuid4()
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
     auth = _auth(owner)
+    base = f"/v1/workspaces/{ws}/personas"
 
     try:
         with TestClient(app) as client:
-            r1 = client.post("/v1/personas", json=_persona_body("p1"), headers=auth)
-            r2 = client.post("/v1/personas", json=_persona_body("p2"), headers=auth)
-            r3 = client.post("/v1/personas", json=_persona_body("p3"), headers=auth)
+            r1 = client.post(base, json=_persona_body("p1"), headers=auth)
+            r2 = client.post(base, json=_persona_body("p2"), headers=auth)
+            r3 = client.post(base, json=_persona_body("p3"), headers=auth)
             assert r1.status_code == 201
             assert r2.status_code == 201
             assert r3.status_code == 429
     finally:
-        _cleanup([owner])
+        cleanup_workspaces([owner])
 
 
 @pytest.mark.integration
@@ -131,17 +127,19 @@ def test_get_personas_not_rate_limited(monkeypatch: pytest.MonkeyPatch) -> None:
     _prepare_db()
     _override_settings(monkeypatch, _TEST_LIMIT)
 
-    owner = uuid4()
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
     auth = _auth(owner)
+    base = f"/v1/workspaces/{ws}/personas"
 
     try:
         with TestClient(app) as client:
             for _ in range(5):
-                response = client.get("/v1/personas", headers=auth)
+                response = client.get(base, headers=auth)
                 assert response.status_code == 200
                 assert response.status_code != 429
     finally:
-        _cleanup([owner])
+        cleanup_workspaces([owner])
 
 
 @pytest.mark.integration
@@ -151,32 +149,36 @@ def test_rate_limit_keyed_per_token(monkeypatch: pytest.MonkeyPatch) -> None:
     _prepare_db()
     _override_settings(monkeypatch, _TEST_LIMIT)
 
-    owner_a = uuid4()
-    owner_b = uuid4()
+    owner_a = fresh_user_id()
+    owner_b = fresh_user_id()
+    ws_a = setup_workspace(owner_a)
+    ws_b = setup_workspace(owner_b)
     auth_a = _auth(owner_a)
     auth_b = _auth(owner_b)
+    base_a = f"/v1/workspaces/{ws_a}/personas"
+    base_b = f"/v1/workspaces/{ws_b}/personas"
 
     try:
         with TestClient(app) as client:
             assert (
-                client.post("/v1/personas", json=_persona_body("a1"), headers=auth_a)
+                client.post(base_a, json=_persona_body("a1"), headers=auth_a)
             ).status_code == 201
             assert (
-                client.post("/v1/personas", json=_persona_body("a2"), headers=auth_a)
+                client.post(base_a, json=_persona_body("a2"), headers=auth_a)
             ).status_code == 201
             # Owner B steckt nicht im Bucket von A — darf weiter schreiben.
             assert (
-                client.post("/v1/personas", json=_persona_body("b1"), headers=auth_b)
+                client.post(base_b, json=_persona_body("b1"), headers=auth_b)
             ).status_code == 201
             assert (
-                client.post("/v1/personas", json=_persona_body("b2"), headers=auth_b)
+                client.post(base_b, json=_persona_body("b2"), headers=auth_b)
             ).status_code == 201
             # Owner A ist im Limit, Owner B noch nicht.
             assert (
-                client.post("/v1/personas", json=_persona_body("a3"), headers=auth_a)
+                client.post(base_a, json=_persona_body("a3"), headers=auth_a)
             ).status_code == 429
             assert (
-                client.post("/v1/personas", json=_persona_body("b3"), headers=auth_b)
+                client.post(base_b, json=_persona_body("b3"), headers=auth_b)
             ).status_code == 429
     finally:
-        _cleanup([owner_a, owner_b])
+        cleanup_workspaces([owner_a, owner_b])
