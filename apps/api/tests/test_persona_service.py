@@ -8,6 +8,7 @@ import pytest
 from fastapi import HTTPException
 
 from who2be_api.core.security import WorkspaceContext
+from who2be_api.repositories.persona_repository import PersonaUpdateOutcome
 from who2be_api.services.persona_service import PersonaService
 from who2be_models import (
     PersonaContent,
@@ -15,6 +16,7 @@ from who2be_models import (
     PersonaRead,
     PersonaUpdate,
     PersonaVersionRead,
+    VersionStatus,
 )
 
 
@@ -22,9 +24,14 @@ def _content(description: str = "Tester") -> PersonaContent:
     return PersonaContent(description=description, system_prompt="Be helpful.")
 
 
-def _ctx(workspace_id: UUID, user_id: UUID | None = None) -> WorkspaceContext:
+def _ctx(
+    workspace_id: UUID, user_id: UUID | None = None, is_api_token: bool = False
+) -> WorkspaceContext:
     return WorkspaceContext(
-        workspace_id=workspace_id, user_id=user_id or uuid4(), role="admin"
+        workspace_id=workspace_id,
+        user_id=user_id or uuid4(),
+        role="admin",
+        is_api_token=is_api_token,
     )
 
 
@@ -34,6 +41,7 @@ class FakePersonaRepository:
     def __init__(self) -> None:
         self._personas: dict[UUID, PersonaRead] = {}
         self._versions: dict[UUID, list[PersonaVersionRead]] = {}
+        self.last_active_only: bool | None = None
 
     async def insert(
         self,
@@ -64,23 +72,30 @@ class FakePersonaRepository:
         workspace_id: UUID,
         limit: int,
         after: tuple[datetime, UUID] | None,
+        active_only: bool = False,
     ) -> list[PersonaRead]:
+        self.last_active_only = active_only
         own = sorted(
             (p for p in self._personas.values() if p.workspace_id == workspace_id),
             key=lambda p: (p.created_at, p.id),
             reverse=True,
         )
+        if active_only:
+            own = [p for p in own if p.current_status == VersionStatus.active]
         if after is not None:
             own = [p for p in own if (p.created_at, p.id) < after]
         return own[:limit]
 
-    async def fetch(self, workspace_id: UUID, persona_id: UUID) -> PersonaRead | None:
+    async def fetch(
+        self, workspace_id: UUID, persona_id: UUID, active_only: bool = False
+    ) -> PersonaRead | None:
+        self.last_active_only = active_only
         persona = self._personas.get(persona_id)
-        return (
-            persona
-            if persona is not None and persona.workspace_id == workspace_id
-            else None
-        )
+        if persona is None or persona.workspace_id != workspace_id:
+            return None
+        if active_only and persona.current_status != VersionStatus.active:
+            return None
+        return persona
 
     async def update(
         self,
@@ -89,15 +104,23 @@ class FakePersonaRepository:
         persona_id: UUID,
         name: str | None,
         content: PersonaContent,
-    ) -> PersonaRead | None:
+    ) -> PersonaUpdateOutcome:
         persona = self._personas.get(persona_id)
         if persona is None or persona.workspace_id != workspace_id:
-            return None
+            return PersonaUpdateOutcome(persona=None)
+        if any(v.status == VersionStatus.draft for v in self._versions[persona_id]):
+            return PersonaUpdateOutcome(persona=None, conflict="draft_exists")
+        if persona.current_status == VersionStatus.active:
+            new_status = VersionStatus.draft
+        else:
+            new_status = VersionStatus.inactive
         version = persona.current_version + 1
         updated = persona.model_copy(
             update={
                 "name": name if name is not None else persona.name,
                 "current_version": version,
+                "current_status": new_status,
+                "has_pending_draft": new_status == VersionStatus.draft,
                 "content": content,
                 "updated_at": datetime.now(UTC),
             }
@@ -106,12 +129,30 @@ class FakePersonaRepository:
         self._versions[persona_id].append(
             PersonaVersionRead(
                 version=version,
+                status=new_status,
                 content=content,
                 created_by=owner_id,
                 created_at=datetime.now(UTC),
             )
         )
-        return updated
+        return PersonaUpdateOutcome(persona=updated)
+
+    def promote_current_to_active(self, persona_id: UUID) -> None:
+        """Testhelfer: hebt die Current-Version auf 'active'."""
+        persona = self._personas[persona_id]
+        self._versions[persona_id] = [
+            v.model_copy(
+                update={
+                    "status": VersionStatus.active
+                    if v.version == persona.current_version
+                    else VersionStatus.inactive
+                }
+            )
+            for v in self._versions[persona_id]
+        ]
+        self._personas[persona_id] = persona.model_copy(
+            update={"current_status": VersionStatus.active, "has_pending_draft": False}
+        )
 
     async def list_versions(
         self, workspace_id: UUID, persona_id: UUID
@@ -224,4 +265,52 @@ def test_list_versions_unknown_persona_raises_404() -> None:
     service, ctx = _service()
     with pytest.raises(HTTPException) as exc:
         asyncio.run(service.list_versions(ctx, uuid4()))
+    assert exc.value.status_code == 404
+
+
+def test_update_on_active_creates_draft_without_overwriting() -> None:
+    repo = FakePersonaRepository()
+    service = PersonaService(repo)
+    ctx = _ctx(uuid4())
+    created = asyncio.run(service.create(ctx, PersonaCreate(name="QA", content=_content("v1"))))
+    repo.promote_current_to_active(created.id)
+    updated = asyncio.run(service.update(ctx, created.id, PersonaUpdate(content=_content("v2"))))
+    assert updated.current_version == 2
+    assert updated.current_status == VersionStatus.draft
+    assert updated.has_pending_draft is True
+
+
+def test_update_on_active_with_existing_draft_raises_409() -> None:
+    repo = FakePersonaRepository()
+    service = PersonaService(repo)
+    ctx = _ctx(uuid4())
+    created = asyncio.run(service.create(ctx, PersonaCreate(name="QA", content=_content("v1"))))
+    repo.promote_current_to_active(created.id)
+    asyncio.run(service.update(ctx, created.id, PersonaUpdate(content=_content("v2"))))
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(service.update(ctx, created.id, PersonaUpdate(content=_content("v3"))))
+    assert exc.value.status_code == 409
+
+
+def test_api_token_context_filters_to_active_only() -> None:
+    repo = FakePersonaRepository()
+    service = PersonaService(repo)
+    ws = uuid4()
+    user = uuid4()
+    web_ctx = _ctx(ws, user_id=user)
+    inactive = asyncio.run(service.create(web_ctx, PersonaCreate(name="I", content=_content())))
+    active = asyncio.run(service.create(web_ctx, PersonaCreate(name="A", content=_content())))
+    repo.promote_current_to_active(active.id)
+
+    # JWT-Pfad (Web) sieht beide.
+    web_items, _ = asyncio.run(service.list_all(web_ctx, 100, None))
+    assert {p.id for p in web_items} == {inactive.id, active.id}
+
+    # API-Token-Pfad (MCP) sieht nur Active.
+    token_ctx = _ctx(ws, user_id=user, is_api_token=True)
+    mcp_items, _ = asyncio.run(service.list_all(token_ctx, 100, None))
+    assert [p.id for p in mcp_items] == [active.id]
+    assert repo.last_active_only is True
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(service.get(token_ctx, inactive.id))
     assert exc.value.status_code == 404

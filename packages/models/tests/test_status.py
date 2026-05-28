@@ -1,4 +1,9 @@
-from who2be_models import ALLOWED_TRANSITIONS, VersionStatus, is_allowed_transition
+from who2be_models import (
+    ALLOWED_TRANSITIONS,
+    VersionStatus,
+    VersionTransitionRequest,
+    is_allowed_transition,
+)
 
 
 def test_version_status_values_match_db_check() -> None:
@@ -12,14 +17,16 @@ def test_str_enum_serializes_as_string() -> None:
 
 
 def test_allowed_transitions_match_state_machine() -> None:
-    assert ALLOWED_TRANSITIONS[VersionStatus.draft] == frozenset(
-        {VersionStatus.review, VersionStatus.inactive}
-    )
+    # Task Phase 2.1b: draft→review, review→active|draft, active→inactive,
+    # inactive→draft. Direkte Wege nach `inactive` ausser von `active` sind
+    # nicht erlaubt (Drafts/Reviews verworfen man via review→draft bzw. nach
+    # Promotion + Inactivierung).
+    assert ALLOWED_TRANSITIONS[VersionStatus.draft] == frozenset({VersionStatus.review})
     assert ALLOWED_TRANSITIONS[VersionStatus.review] == frozenset(
-        {VersionStatus.draft, VersionStatus.active, VersionStatus.inactive}
+        {VersionStatus.draft, VersionStatus.active}
     )
     assert ALLOWED_TRANSITIONS[VersionStatus.active] == frozenset({VersionStatus.inactive})
-    assert ALLOWED_TRANSITIONS[VersionStatus.inactive] == frozenset()
+    assert ALLOWED_TRANSITIONS[VersionStatus.inactive] == frozenset({VersionStatus.draft})
 
 
 def test_draft_can_go_to_review_but_not_active() -> None:
@@ -27,8 +34,9 @@ def test_draft_can_go_to_review_but_not_active() -> None:
     assert not is_allowed_transition(VersionStatus.draft, VersionStatus.active)
 
 
-def test_inactive_is_terminal() -> None:
-    for target in VersionStatus:
+def test_inactive_can_be_reanimated_as_draft() -> None:
+    assert is_allowed_transition(VersionStatus.inactive, VersionStatus.draft)
+    for target in (VersionStatus.review, VersionStatus.active, VersionStatus.inactive):
         assert not is_allowed_transition(VersionStatus.inactive, target)
 
 
@@ -40,3 +48,11 @@ def test_self_transition_is_never_allowed() -> None:
 def test_review_can_bounce_back_to_draft() -> None:
     assert is_allowed_transition(VersionStatus.review, VersionStatus.draft)
     assert is_allowed_transition(VersionStatus.review, VersionStatus.active)
+
+
+def test_transition_request_accepts_to_and_optional_note() -> None:
+    body = VersionTransitionRequest.model_validate({"to": "review"})
+    assert body.to == VersionStatus.review
+    assert body.note is None
+    with_note = VersionTransitionRequest.model_validate({"to": "active", "note": "OK"})
+    assert with_note.note == "OK"

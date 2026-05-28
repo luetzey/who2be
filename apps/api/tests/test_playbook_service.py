@@ -8,6 +8,7 @@ import pytest
 from fastapi import HTTPException
 
 from who2be_api.core.security import WorkspaceContext
+from who2be_api.repositories.playbook_repository import PlaybookUpdateOutcome
 from who2be_api.services.playbook_service import PlaybookService
 from who2be_models import (
     PlaybookContent,
@@ -15,6 +16,7 @@ from who2be_models import (
     PlaybookRead,
     PlaybookUpdate,
     PlaybookVersionRead,
+    VersionStatus,
 )
 
 
@@ -32,9 +34,14 @@ def _content(
     )
 
 
-def _ctx(workspace_id: UUID, user_id: UUID | None = None) -> WorkspaceContext:
+def _ctx(
+    workspace_id: UUID, user_id: UUID | None = None, is_api_token: bool = False
+) -> WorkspaceContext:
     return WorkspaceContext(
-        workspace_id=workspace_id, user_id=user_id or uuid4(), role="admin"
+        workspace_id=workspace_id,
+        user_id=user_id or uuid4(),
+        role="admin",
+        is_api_token=is_api_token,
     )
 
 
@@ -44,6 +51,7 @@ class FakePlaybookRepository:
     def __init__(self) -> None:
         self._playbooks: dict[UUID, PlaybookRead] = {}
         self._versions: dict[UUID, list[PlaybookVersionRead]] = {}
+        self.last_active_only: bool | None = None
 
     async def insert(
         self,
@@ -79,8 +87,12 @@ class FakePlaybookRepository:
         trigger: str | None,
         limit: int,
         after: tuple[datetime, UUID] | None,
+        active_only: bool = False,
     ) -> list[PlaybookRead]:
+        self.last_active_only = active_only
         result = [p for p in self._playbooks.values() if p.workspace_id == workspace_id]
+        if active_only:
+            result = [p for p in result if p.current_status == VersionStatus.active]
         if tag is not None:
             result = [p for p in result if tag in p.tags]
         if trigger is not None:
@@ -94,13 +106,16 @@ class FakePlaybookRepository:
             result = [p for p in result if (p.created_at, p.id) < after]
         return result[:limit]
 
-    async def fetch(self, workspace_id: UUID, playbook_id: UUID) -> PlaybookRead | None:
+    async def fetch(
+        self, workspace_id: UUID, playbook_id: UUID, active_only: bool = False
+    ) -> PlaybookRead | None:
+        self.last_active_only = active_only
         playbook = self._playbooks.get(playbook_id)
-        return (
-            playbook
-            if playbook is not None and playbook.workspace_id == workspace_id
-            else None
-        )
+        if playbook is None or playbook.workspace_id != workspace_id:
+            return None
+        if active_only and playbook.current_status != VersionStatus.active:
+            return None
+        return playbook
 
     async def update(
         self,
@@ -109,15 +124,23 @@ class FakePlaybookRepository:
         playbook_id: UUID,
         name: str | None,
         content: PlaybookContent,
-    ) -> PlaybookRead | None:
+    ) -> PlaybookUpdateOutcome:
         playbook = self._playbooks.get(playbook_id)
         if playbook is None or playbook.workspace_id != workspace_id:
-            return None
+            return PlaybookUpdateOutcome(playbook=None)
+        if any(v.status == VersionStatus.draft for v in self._versions[playbook_id]):
+            return PlaybookUpdateOutcome(playbook=None, conflict="draft_exists")
+        if playbook.current_status == VersionStatus.active:
+            new_status = VersionStatus.draft
+        else:
+            new_status = VersionStatus.inactive
         version = playbook.current_version + 1
         updated = playbook.model_copy(
             update={
                 "name": name if name is not None else playbook.name,
                 "current_version": version,
+                "current_status": new_status,
+                "has_pending_draft": new_status == VersionStatus.draft,
                 "type": content.type,
                 "tags": content.tags,
                 "triggers": content.triggers,
@@ -129,12 +152,29 @@ class FakePlaybookRepository:
         self._versions[playbook_id].append(
             PlaybookVersionRead(
                 version=version,
+                status=new_status,
                 content=content,
                 created_by=owner_id,
                 created_at=datetime.now(UTC),
             )
         )
-        return updated
+        return PlaybookUpdateOutcome(playbook=updated)
+
+    def promote_current_to_active(self, playbook_id: UUID) -> None:
+        playbook = self._playbooks[playbook_id]
+        self._versions[playbook_id] = [
+            v.model_copy(
+                update={
+                    "status": VersionStatus.active
+                    if v.version == playbook.current_version
+                    else VersionStatus.inactive
+                }
+            )
+            for v in self._versions[playbook_id]
+        ]
+        self._playbooks[playbook_id] = playbook.model_copy(
+            update={"current_status": VersionStatus.active, "has_pending_draft": False}
+        )
 
     async def list_versions(
         self, workspace_id: UUID, playbook_id: UUID
@@ -230,3 +270,49 @@ def test_get_version_returns_requested_snapshot() -> None:
     asyncio.run(service.update(ctx, created.id, PlaybookUpdate(content=_content("v2"))))
     first = asyncio.run(service.get_version(ctx, created.id, 1))
     assert first.content.description == "v1"
+
+
+def test_update_on_active_creates_draft_without_overwriting() -> None:
+    repo = FakePlaybookRepository()
+    service = PlaybookService(repo)
+    ctx = _ctx(uuid4())
+    created = asyncio.run(service.create(ctx, PlaybookCreate(name="PB", content=_content("v1"))))
+    repo.promote_current_to_active(created.id)
+    updated = asyncio.run(service.update(ctx, created.id, PlaybookUpdate(content=_content("v2"))))
+    assert updated.current_version == 2
+    assert updated.current_status == VersionStatus.draft
+    assert updated.has_pending_draft is True
+
+
+def test_update_on_active_with_existing_draft_raises_409() -> None:
+    repo = FakePlaybookRepository()
+    service = PlaybookService(repo)
+    ctx = _ctx(uuid4())
+    created = asyncio.run(service.create(ctx, PlaybookCreate(name="PB", content=_content("v1"))))
+    repo.promote_current_to_active(created.id)
+    asyncio.run(service.update(ctx, created.id, PlaybookUpdate(content=_content("v2"))))
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(service.update(ctx, created.id, PlaybookUpdate(content=_content("v3"))))
+    assert exc.value.status_code == 409
+
+
+def test_api_token_context_filters_to_active_only() -> None:
+    repo = FakePlaybookRepository()
+    service = PlaybookService(repo)
+    ws = uuid4()
+    user = uuid4()
+    web_ctx = _ctx(ws, user_id=user)
+    inactive = asyncio.run(service.create(web_ctx, PlaybookCreate(name="I", content=_content())))
+    active = asyncio.run(service.create(web_ctx, PlaybookCreate(name="A", content=_content())))
+    repo.promote_current_to_active(active.id)
+
+    web_items, _ = asyncio.run(service.list_all(web_ctx, None, None, 100, None))
+    assert {p.id for p in web_items} == {inactive.id, active.id}
+
+    token_ctx = _ctx(ws, user_id=user, is_api_token=True)
+    mcp_items, _ = asyncio.run(service.list_all(token_ctx, None, None, 100, None))
+    assert [p.id for p in mcp_items] == [active.id]
+    assert repo.last_active_only is True
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(service.get(token_ctx, inactive.id))
+    assert exc.value.status_code == 404

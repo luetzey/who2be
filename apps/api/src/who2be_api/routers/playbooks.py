@@ -11,12 +11,16 @@ from who2be_api.core.pagination import DEFAULT_LIMIT, PageCursor, PageLimit
 from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.repositories.playbook_repository import PgPlaybookRepository
+from who2be_api.repositories.status_history_repository import PgStatusHistoryRepository
 from who2be_api.services.playbook_service import PlaybookService
+from who2be_api.services.status_history_service import StatusHistoryService
+from who2be_api.services.version_status import VersionStatusService
 from who2be_models import (
     PlaybookCreate,
     PlaybookRead,
     PlaybookUpdate,
     PlaybookVersionRead,
+    VersionTransitionRequest,
 )
 
 router = APIRouter(prefix="/playbooks", tags=["playbooks"])
@@ -29,8 +33,17 @@ def get_playbook_service(
     return PlaybookService(PgPlaybookRepository(pool))
 
 
+def get_version_status_service(
+    pool: Annotated[asyncpg.Pool, Depends(get_pool)],
+) -> VersionStatusService:
+    return VersionStatusService(
+        pool, StatusHistoryService(PgStatusHistoryRepository())
+    )
+
+
 Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]
 Service = Annotated[PlaybookService, Depends(get_playbook_service)]
+StatusService = Annotated[VersionStatusService, Depends(get_version_status_service)]
 
 
 @router.get("")
@@ -86,3 +99,18 @@ async def get_playbook_version(
     playbook_id: UUID, version: int, ctx: Ctx, service: Service
 ) -> PlaybookVersionRead:
     return await service.get_version(ctx, playbook_id, version)
+
+
+@router.post("/{playbook_id}/versions/{version}/transition")
+@limiter.limit(write_limit)
+async def transition_playbook_version(
+    request: Request,
+    playbook_id: UUID,
+    version: int,
+    data: VersionTransitionRequest,
+    ctx: Ctx,
+    status_service: StatusService,
+) -> PlaybookVersionRead:
+    return await status_service.transition_playbook_version(
+        ctx, playbook_id, version, data.to, data.note
+    )

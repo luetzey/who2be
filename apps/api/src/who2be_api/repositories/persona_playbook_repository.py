@@ -36,7 +36,9 @@ class PersonaPlaybookRepository(Protocol):
 
     async def persona_belongs_to(self, workspace_id: UUID, persona_id: UUID) -> bool: ...
 
-    async def list_linked(self, persona_id: UUID) -> list[PlaybookRead]: ...
+    async def list_linked(
+        self, persona_id: UUID, active_only: bool = False
+    ) -> list[PlaybookRead]: ...
 
     async def set_links(
         self,
@@ -61,14 +63,31 @@ class PgPersonaPlaybookRepository:
         )
         return owned is not None
 
-    async def list_linked(self, persona_id: UUID) -> list[PlaybookRead]:
+    async def list_linked(
+        self, persona_id: UUID, active_only: bool = False
+    ) -> list[PlaybookRead]:
+        # `active_only` schwenkt den Join: statt der Current-Version wird die
+        # Active-Version geliefert, eintraege ohne Active-Version fallen raus
+        # (MCP-Pfad, Plan §2.1.D).
+        join_clause = (
+            "JOIN playbook_version pv "
+            "  ON pv.playbook_id = p.id AND pv.status = 'active' "
+            if active_only
+            else "JOIN playbook_version pv "
+            "  ON pv.playbook_id = p.id AND pv.version = p.current_version "
+        )
+        version_col = "pv.version AS current_version" if active_only else "p.current_version"
         rows = await self._pool.fetch(
-            "SELECT p.id, p.workspace_id, p.owner_id, p.name, p.current_version, "
-            "p.type, p.tags, p.triggers, p.created_at, p.updated_at, pv.content "
+            f"SELECT p.id, p.workspace_id, p.owner_id, p.name, {version_col}, "
+            "p.type, p.tags, p.triggers, p.created_at, p.updated_at, pv.content, "
+            "pv.status AS current_status, "
+            "EXISTS ("
+            "  SELECT 1 FROM playbook_version dv "
+            "  WHERE dv.playbook_id = p.id AND dv.status = 'draft'"
+            ") AS has_pending_draft "
             "FROM persona_playbook pp "
             "JOIN playbook p ON p.id = pp.playbook_id "
-            "JOIN playbook_version pv "
-            "  ON pv.playbook_id = p.id AND pv.version = p.current_version "
+            f"{join_clause}"
             "WHERE pp.persona_id = $1 "
             "ORDER BY p.created_at DESC",
             persona_id,

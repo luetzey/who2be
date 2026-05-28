@@ -2,6 +2,10 @@
 
 Workspace-Pruefung liegt im SQL der Repository-Schicht; der Service
 uebersetzt ein fehlendes Ergebnis (`None`) in ein `HTTPException 404`.
+
+Phase 2.1b: Der `active_only`-Schalter (gesetzt fuer API-Token-Aufrufer ueber
+`ctx.is_api_token`, Plan §2.1.D) reicht in den Lese-Pfad durch; die
+Draft-on-Edit-Konfliktlage aus dem Repo wird auf 409 gemappt.
 """
 
 from datetime import datetime
@@ -24,6 +28,16 @@ def _not_found() -> HTTPException:
     return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Persona nicht gefunden.")
 
 
+def _draft_conflict() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=(
+            "Es existiert bereits ein Draft. Promote oder verwirf den "
+            "bestehenden Draft, bevor du erneut editierst."
+        ),
+    )
+
+
 class PersonaService:
     """Legt Personae an, liest, listet, aktualisiert und versioniert sie."""
 
@@ -41,7 +55,9 @@ class PersonaService:
     ) -> tuple[list[PersonaRead], str | None]:
         # `limit + 1`-Peek: gibt es eine Folge-Zeile, codieren wir den
         # Cursor aus der letzten Zeile der Seite — sonst `None` (Ende).
-        rows = await self._repo.list_by_workspace(ctx.workspace_id, limit + 1, cursor)
+        rows = await self._repo.list_by_workspace(
+            ctx.workspace_id, limit + 1, cursor, active_only=ctx.is_api_token
+        )
         if len(rows) > limit:
             items = rows[:limit]
             tail = items[-1]
@@ -49,7 +65,9 @@ class PersonaService:
         return rows, None
 
     async def get(self, ctx: WorkspaceContext, persona_id: UUID) -> PersonaRead:
-        persona = await self._repo.fetch(ctx.workspace_id, persona_id)
+        persona = await self._repo.fetch(
+            ctx.workspace_id, persona_id, active_only=ctx.is_api_token
+        )
         if persona is None:
             raise _not_found()
         return persona
@@ -57,13 +75,19 @@ class PersonaService:
     async def update(
         self, ctx: WorkspaceContext, persona_id: UUID, data: PersonaUpdate
     ) -> PersonaRead:
-        """Erzeugt eine neue Version der Persona."""
-        persona = await self._repo.update(
+        """Erzeugt eine neue Version der Persona.
+
+        Auf einer Active-Persona entsteht eine neue Draft-Version (Plan §2.1.C);
+        existiert bereits ein Draft, antwortet der Service mit 409.
+        """
+        outcome = await self._repo.update(
             ctx.workspace_id, ctx.user_id, persona_id, data.name, data.content
         )
-        if persona is None:
+        if outcome.conflict == "draft_exists":
+            raise _draft_conflict()
+        if outcome.persona is None:
             raise _not_found()
-        return persona
+        return outcome.persona
 
     async def list_versions(
         self, ctx: WorkspaceContext, persona_id: UUID

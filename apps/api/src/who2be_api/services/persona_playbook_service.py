@@ -33,7 +33,7 @@ class PersonaPlaybookService:
     ) -> list[PlaybookRead]:
         if not await self._repo.persona_belongs_to(ctx.workspace_id, persona_id):
             raise _persona_not_found()
-        return await self._repo.list_linked(persona_id)
+        return await self._repo.list_linked(persona_id, active_only=ctx.is_api_token)
 
     async def set_links(
         self, ctx: WorkspaceContext, persona_id: UUID, data: PersonaPlaybookLinkSet
@@ -50,4 +50,4 @@ class PersonaPlaybookService:
                 detail="Mindestens ein Playbook existiert nicht oder "
                 "gehoert einem anderen Workspace.",
             )
-        return await self._repo.list_linked(persona_id)
+        return await self._repo.list_linked(persona_id, active_only=ctx.is_api_token)

@@ -253,3 +253,133 @@ def test_playbook_pagination_combined_with_tag_filter(
             assert client.get(f"{pb_base}?cursor=!!!", headers=auth).status_code == 422
     finally:
         cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+def test_playbook_version_transitions_and_draft_on_edit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    base = f"/v1/workspaces/{ws}/playbooks"
+
+    try:
+        with TestClient(app) as client:
+            playbook_id = client.post(
+                base,
+                json=_playbook_body("Onboard", "v1", ["a"], "x"),
+                headers=auth,
+            ).json()["id"]
+            for to in ("draft", "review", "active"):
+                resp = client.post(
+                    f"{base}/{playbook_id}/versions/1/transition",
+                    json={"to": to},
+                    headers=auth,
+                )
+                assert resp.status_code == 200, resp.text
+
+            # Verbotener Uebergang: active -> draft.
+            assert (
+                client.post(
+                    f"{base}/{playbook_id}/versions/1/transition",
+                    json={"to": "draft"},
+                    headers=auth,
+                ).status_code
+                == 409
+            )
+
+            updated = client.put(
+                f"{base}/{playbook_id}",
+                json=_playbook_body("Onboard", "v2", ["a"], "x"),
+                headers=auth,
+            )
+            assert updated.status_code == 200
+            assert updated.json()["current_version"] == 2
+            assert updated.json()["current_status"] == "draft"
+            assert updated.json()["has_pending_draft"] is True
+
+            # Zweiter PUT → 409 (Draft existiert).
+            second = client.put(
+                f"{base}/{playbook_id}",
+                json=_playbook_body("Onboard", "v3", ["a"], "x"),
+                headers=auth,
+            )
+            assert second.status_code == 409
+
+            # Promotion v2 → active: v1 wird auto-inactiviert.
+            client.post(
+                f"{base}/{playbook_id}/versions/2/transition",
+                json={"to": "review"},
+                headers=auth,
+            )
+            client.post(
+                f"{base}/{playbook_id}/versions/2/transition",
+                json={"to": "active"},
+                headers=auth,
+            )
+            versions = client.get(f"{base}/{playbook_id}/versions", headers=auth).json()
+            assert {v["version"]: v["status"] for v in versions} == {
+                1: "inactive",
+                2: "active",
+            }
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+def test_playbook_active_filter_for_api_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    jwt_auth = _auth(owner)
+    base = f"/v1/workspaces/{ws}/playbooks"
+
+    try:
+        with TestClient(app) as client:
+            inactive_id = client.post(
+                base,
+                json=_playbook_body("Inactive", "v1", ["t"], "x"),
+                headers=jwt_auth,
+            ).json()["id"]
+            active_id = client.post(
+                base,
+                json=_playbook_body("Active", "v1", ["t"], "x"),
+                headers=jwt_auth,
+            ).json()["id"]
+            for to in ("draft", "review", "active"):
+                client.post(
+                    f"{base}/{active_id}/versions/1/transition",
+                    json={"to": to},
+                    headers=jwt_auth,
+                )
+
+            token = client.post(
+                f"/v1/workspaces/{ws}/tokens",
+                json={"name": "mcp"},
+                headers=jwt_auth,
+            ).json()["token"]
+            token_auth = {"Authorization": f"Bearer {token}"}
+
+            jwt_list = client.get(base, headers=jwt_auth).json()
+            assert {p["id"] for p in jwt_list} == {inactive_id, active_id}
+
+            token_list = client.get(base, headers=token_auth).json()
+            assert [p["id"] for p in token_list] == [active_id]
+            assert token_list[0]["current_status"] == "active"
+
+            assert (
+                client.get(f"{base}/{inactive_id}", headers=token_auth).status_code == 404
+            )
+            assert client.get(f"{base}/{active_id}", headers=token_auth).status_code == 200
+    finally:
+        cleanup_workspaces([owner])
