@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import httpx
 import pytest
+from fastmcp.exceptions import ToolError
 
 from who2be_mcp import server
 from who2be_mcp.client import ApiClient
@@ -24,7 +25,7 @@ from who2be_mcp.server import (
 )
 from who2be_models import ResourceRead
 
-_WORKSPACE_ID = str(uuid4())
+_WORKSPACE_ID = uuid4()
 
 
 def _factory(handler: Callable[[httpx.Request], httpx.Response]) -> Callable[[], object]:
@@ -36,7 +37,7 @@ def _factory(handler: Callable[[httpx.Request], httpx.Response]) -> Callable[[],
     return _build
 
 
-def _block(block_id: str, text: str) -> dict:
+def _block(block_id: str, text: str) -> dict[str, object]:
     return {
         "id": block_id,
         "type": "paragraph",
@@ -46,10 +47,12 @@ def _block(block_id: str, text: str) -> dict:
     }
 
 
-def _resource_payload(name: str = "Doc", blocks: list[dict] | None = None) -> dict:
+def _resource_payload(
+    name: str = "Doc", blocks: list[dict[str, object]] | None = None
+) -> dict[str, object]:
     return {
         "id": str(uuid4()),
-        "workspace_id": _WORKSPACE_ID,
+        "workspace_id": str(_WORKSPACE_ID),
         "owner_id": str(uuid4()),
         "name": name,
         "current_version": 1,
@@ -64,10 +67,10 @@ def _resource_payload(name: str = "Doc", blocks: list[dict] | None = None) -> di
     }
 
 
-def _playbook_payload(name: str = "Onboard") -> dict:
+def _playbook_payload(name: str = "Onboard") -> dict[str, object]:
     return {
         "id": str(uuid4()),
-        "workspace_id": _WORKSPACE_ID,
+        "workspace_id": str(_WORKSPACE_ID),
         "owner_id": str(uuid4()),
         "name": name,
         "current_version": 1,
@@ -128,7 +131,7 @@ def test_fetch_resource_validates_uuid(monkeypatch: pytest.MonkeyPatch) -> None:
         "build_client",
         _factory(lambda request: httpx.Response(200, json=_resource_payload())),
     )
-    with pytest.raises(Exception):
+    with pytest.raises(ToolError):
         asyncio.run(fetch_resource("not-a-uuid"))
 
 

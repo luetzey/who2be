@@ -91,7 +91,13 @@ def _playbook_body(name: str) -> dict[str, object]:
 def _activate(
     client: TestClient, base: str, entity_id: str, version: int, auth: dict[str, str]
 ) -> None:
-    for to in ("draft", "review", "active"):
+    """Hebt eine Version auf `active`. Ueberspringt Schritte, deren Status die
+    Version bereits hat (z.B. ist eine Draft-on-Edit-Version schon `draft`)."""
+    versions = client.get(f"{base}/{entity_id}/versions", headers=auth).json()
+    current = next((v["status"] for v in versions if v["version"] == version), None)
+    steps = ["draft", "review", "active"]
+    start = steps.index(current) + 1 if current in steps else 0
+    for to in steps[start:]:
         resp = client.post(
             f"{base}/{entity_id}/versions/{version}/transition", json={"to": to}, headers=auth
         )

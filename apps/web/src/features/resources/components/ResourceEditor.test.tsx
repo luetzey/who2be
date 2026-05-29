@@ -4,10 +4,15 @@ import { describe, expect, it, vi } from 'vitest'
 // BlockNote ist eine gekapselte DOM-/ProseMirror-Insel (ADR-0022), die in
 // jsdom nicht zuverlaessig mountet. Wir mocken die Editor-Module und pruefen
 // nur den Wrapper-Vertrag (rendert + reicht initialContent durch).
-const useCreateBlockNote = vi.fn(() => ({ document: [] }))
+const useCreateBlockNote = vi.fn(
+  (options?: unknown): { document: unknown[] } => {
+    void options
+    return { document: [] }
+  },
+)
 
 vi.mock('@blocknote/react', () => ({
-  useCreateBlockNote: (...args: unknown[]) => useCreateBlockNote(...args),
+  useCreateBlockNote: (options?: unknown) => useCreateBlockNote(options),
 }))
 vi.mock('@blocknote/mantine', () => ({
   BlockNoteView: () => <div data-testid="blocknote-view" />,
