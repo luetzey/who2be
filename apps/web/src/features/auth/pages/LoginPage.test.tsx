@@ -2,11 +2,17 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
-const { signInWithPassword } = vi.hoisted(() => ({ signInWithPassword: vi.fn() }))
+const { signInWithPassword, getSession, onAuthStateChange } = vi.hoisted(() => ({
+  signInWithPassword: vi.fn(),
+  getSession: vi.fn(async () => ({ data: { session: null }, error: null })),
+  onAuthStateChange: vi.fn(() => ({
+    data: { subscription: { unsubscribe: vi.fn() } },
+  })),
+}))
 
 vi.mock('@/lib/supabase', () => ({
   supabase: {
-    auth: { signInWithPassword, signOut: vi.fn() },
+    auth: { signInWithPassword, signOut: vi.fn(), getSession, onAuthStateChange },
   },
 }))
 

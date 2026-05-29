@@ -41,3 +41,7 @@ class MeRead(BaseModel):
     user_id: UUID
     default_workspace_id: UUID | None
     organizations: list[MeOrganization]
+    # `has_password` ist `False`, solange der User nur per Magic-Link
+    # eingeloggt ist (GoTrue-`encrypted_password IS NULL`). Frontend leitet
+    # ihn dann beim Invitation-Accept auf `/onboarding/set-password`.
+    has_password: bool = False

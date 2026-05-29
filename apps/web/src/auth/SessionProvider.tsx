@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useMemo, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 
 import { fetchMe } from '@/api/client'
@@ -7,28 +7,69 @@ import type { Me } from '@/api/types'
 import { supabase } from '../lib/supabase'
 import { SessionContext, type SessionValue } from './session-context'
 
+// Atomare me+session-Reihenfolge — Hintergrund:
+// vertauschte Reihenfolge produziert einen Zwischen-Commit mit
+// session=set+me=null, LoginPage redirected dann sofort zu `/`,
+// DefaultWorkspaceRedirect wirft mangels `default_workspace_id` zurueck auf
+// `/login`, und Chrome bricht die Schleife mit „Throttling navigation to
+// prevent the browser from hanging" ab (weisser Screen). Beide setState-Calls
+// liegen im selben Microtask nach dem await, React 18 batcht das zu einem
+// einzigen Commit.
+async function resolveMe(accessToken: string | undefined): Promise<Me | null> {
+  if (accessToken === undefined || accessToken === '') {
+    return null
+  }
+  try {
+    return await fetchMe(accessToken)
+  } catch {
+    return null
+  }
+}
+
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [me, setMe] = useState<Me | null>(null)
+
+  // Beim Mount: GoTrue parsed den URL-Hash (Magic-Link-Token) intern, wenn
+  // wir `getSession()` aufrufen — unser React-State muss danach synchron
+  // nachziehen, sonst sieht die App weiter `session === null` und der
+  // Invitation-Flow schickt den frisch-eingeloggten User aufs Login zurueck.
+  // `onAuthStateChange` haelt uns danach permanent synchron (refresh,
+  // signOut, signIn aus einem anderen Tab/Reload).
+  useEffect(() => {
+    let cancelled = false
+
+    async function bootstrap() {
+      const { data } = await supabase.auth.getSession()
+      if (cancelled) return
+      const resolved = await resolveMe(data.session?.access_token)
+      if (cancelled) return
+      setMe(resolved)
+      setSession(data.session)
+    }
+    void bootstrap()
+
+    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      void (async () => {
+        const resolved = await resolveMe(nextSession?.access_token)
+        if (cancelled) return
+        setMe(resolved)
+        setSession(nextSession)
+      })()
+    })
+
+    return () => {
+      cancelled = true
+      data.subscription.unsubscribe()
+    }
+  }, [])
 
   const signIn = useCallback(async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
       throw new Error(error.message)
     }
-    // Erst `me` holen, dann beides atomar setzen. Vertauschte Reihenfolge
-    // produziert einen Zwischen-Commit mit session=set+me=null: LoginPage
-    // redirected dann sofort zu `/`, DefaultWorkspaceRedirect wirft mangels
-    // `default_workspace_id` zurueck auf `/login`, und Chrome bricht die
-    // Schleife mit "Throttling navigation to prevent the browser from hanging"
-    // ab — sichtbar als weisser Screen. Beide setState-Calls liegen jetzt im
-    // selben Microtask nach dem await, React 18 batcht das zu einem Commit.
-    let resolved: Me | null = null
-    try {
-      resolved = await fetchMe(data.session?.access_token ?? '')
-    } catch {
-      resolved = null
-    }
+    const resolved = await resolveMe(data.session?.access_token)
     setMe(resolved)
     setSession(data.session)
   }, [])

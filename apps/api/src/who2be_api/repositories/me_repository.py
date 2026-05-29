@@ -65,4 +65,20 @@ class PgMeRepository:
             user_id=user_id,
             default_workspace_id=default_workspace_id,
             organizations=list(orgs.values()),
+            has_password=await self._has_password(user_id),
         )
+
+    async def _has_password(self, user_id: UUID) -> bool:
+        """`auth.users.encrypted_password IS NOT NULL` — frisch eingeladene
+        Magic-Link-User haben `NULL`, bis sie auf `/onboarding/set-password`
+        ein Passwort setzen. Wenn das `auth`-Schema (noch) nicht existiert
+        — z. B. in einer reinen API-Test-DB ohne GoTrue — gilt `False`."""
+        try:
+            value = await self._pool.fetchval(
+                "SELECT encrypted_password IS NOT NULL "
+                "FROM auth.users WHERE id = $1",
+                user_id,
+            )
+        except asyncpg.PostgresError:
+            return False
+        return bool(value)

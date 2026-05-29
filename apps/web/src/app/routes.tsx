@@ -5,7 +5,7 @@ import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
 import { RequireAuth } from '@/auth/RequireAuth'
 import { SessionProvider } from '@/auth/SessionProvider'
 import { useSession } from '@/auth/session-context'
-import { InvitationAcceptPage, LoginPage } from '@/features/auth'
+import { InvitationAcceptPage, LoginPage, SetPasswordPage } from '@/features/auth'
 
 import { AppLayout } from './AppLayout'
 
@@ -115,6 +115,7 @@ export function RouterRoot() {
             />
             <Route element={<RequireAuth />}>
               <Route path="/" element={<DefaultWorkspaceRedirect />} />
+              <Route path="/onboarding/set-password" element={<SetPasswordPage />} />
               <Route element={<AppLayout />}>
                 <Route path="/w/:workspaceId" element={<WorkspaceIndexRedirect />} />
                 <Route path="/w/:workspaceId/dashboard" element={<DashboardPage />} />

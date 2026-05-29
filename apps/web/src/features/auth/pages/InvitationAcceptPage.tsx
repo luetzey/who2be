@@ -29,7 +29,7 @@ function messageForError(cause: unknown): string {
 
 export function InvitationAcceptPage() {
   const { token } = useParams<{ token: string }>()
-  const { session } = useSession()
+  const { session, me } = useSession()
   const authToken = useAuthToken()
   const location = useLocation()
   const [searchParams] = useSearchParams()
@@ -80,6 +80,15 @@ export function InvitationAcceptPage() {
   if (session === null) {
     const next = encodeURIComponent(`${location.pathname}${location.search}`)
     return <Navigate to={`/login?next=${next}`} replace />
+  }
+
+  // Frisch via Magic-Link eingeloggt, aber noch ohne Passwort: erst Passwort
+  // setzen, dann zurueck zur Accept-Page (mit `via=magic`, damit Auto-Accept
+  // wieder greift). Andernfalls bleibt der User in einer Sackgasse, sobald
+  // der Magic-Link-Token einmal verbraucht ist.
+  if (isMagicLink && me !== null && me.has_password === false) {
+    const next = encodeURIComponent(`${location.pathname}${location.search}`)
+    return <Navigate to={`/onboarding/set-password?next=${next}`} replace />
   }
 
   if (acceptedWorkspace !== null) {
