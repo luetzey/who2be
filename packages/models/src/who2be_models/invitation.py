@@ -37,6 +37,16 @@ class InvitationRead(BaseModel):
     created_at: datetime
 
 
+class InvitationCreated(InvitationRead):
+    """Antwort auf `POST /v1/workspaces/{ws}/invitations`.
+
+    Enthaelt den Klartext-Token genau einmal — der Caller versendet den
+    Mail-Link bzw. teilt ihn manuell. Persistiert wird nur der Hash.
+    """
+
+    token: str
+
+
 class InvitationAccept(BaseModel):
     """Eingabe fuer `POST /v1/invitations/{token}/accept`.
 

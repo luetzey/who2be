@@ -1,0 +1,52 @@
+"""Geschaeftslogik fuer Workspace-Mitglieder (Phase 2.3-B).
+
+Listet Mitglieder, aendert Rollen und entfernt Mitglieder. Das Repository
+erzwingt die Last-admin-Invariante transaktional; hier wird sie auf 409
+gemappt, fehlende Mitglieder auf 404.
+"""
+
+from uuid import UUID
+
+from fastapi import HTTPException, status
+
+from who2be_api.repositories.workspace_member_repository import (
+    LastAdminError,
+    WorkspaceMemberRepository,
+)
+from who2be_models import WorkspaceMemberRead, WorkspaceRole
+
+_LAST_ADMIN_DETAIL = "Der letzte Admin kann nicht herabgestuft oder entfernt werden."
+_NOT_FOUND_DETAIL = "Mitglied nicht gefunden."
+
+
+class WorkspaceMemberService:
+    """CRUD-Adapter um das Member-Repository."""
+
+    def __init__(self, member_repo: WorkspaceMemberRepository) -> None:
+        self._repo = member_repo
+
+    async def list_members(self, workspace_id: UUID) -> list[WorkspaceMemberRead]:
+        return await self._repo.list_by_workspace(workspace_id)
+
+    async def update_role(
+        self, workspace_id: UUID, user_id: UUID, new_role: WorkspaceRole
+    ) -> WorkspaceMemberRead:
+        try:
+            member = await self._repo.update_role(workspace_id, user_id, new_role)
+        except LastAdminError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail=_LAST_ADMIN_DETAIL
+            ) from exc
+        if member is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND_DETAIL)
+        return member
+
+    async def remove(self, workspace_id: UUID, user_id: UUID) -> None:
+        try:
+            removed = await self._repo.remove(workspace_id, user_id)
+        except LastAdminError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail=_LAST_ADMIN_DETAIL
+            ) from exc
+        if not removed:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND_DETAIL)
