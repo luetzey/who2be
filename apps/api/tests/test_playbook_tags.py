@@ -1,0 +1,139 @@
+"""Integrationstest fuer `GET /v1/workspaces/{ws}/playbooks/tags` (Phase 3-A).
+
+DISTINCT-sortierte Tag-Liste fuer den Tag-Picker im Frontend. Cross-Workspace-
+Isolation ist explizit Teil des Vertrags — Tags eines anderen Workspaces
+duerfen nicht durchschlagen.
+"""
+
+import asyncio
+from datetime import UTC, datetime, timedelta
+from uuid import UUID
+
+import asyncpg
+import jwt
+import pytest
+from fastapi.testclient import TestClient
+
+from who2be_api.core import security
+from who2be_api.core.config import Settings, get_settings
+from who2be_api.core.migrations import MIGRATIONS_DIR, apply_migrations
+from who2be_api.main import app
+from who2be_api.testing.workspace_setup import cleanup_workspaces, fresh_user_id, setup_workspace
+
+_TEST_SECRET = "integration-test-jwt-secret-padding-0123456789"
+
+
+def _db_reachable() -> bool:
+    async def _check() -> bool:
+        try:
+            conn = await asyncpg.connect(get_settings().database_url)
+        except (asyncpg.PostgresError, OSError):
+            return False
+        await conn.close()
+        return True
+
+    return asyncio.run(_check())
+
+
+def _prepare_db() -> None:
+    async def _run() -> None:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            await apply_migrations(conn, MIGRATIONS_DIR)
+        finally:
+            await conn.close()
+
+    asyncio.run(_run())
+
+
+def _auth(owner_id: UUID) -> dict[str, str]:
+    token = jwt.encode(
+        {
+            "sub": str(owner_id),
+            "aud": "authenticated",
+            "role": "authenticated",
+            "exp": datetime.now(UTC) + timedelta(hours=1),
+        },
+        _TEST_SECRET,
+        algorithm="HS256",
+    )
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _playbook_body(name: str, tags: list[str]) -> dict[str, object]:
+    return {
+        "name": name,
+        "content": {
+            "description": "d",
+            "body": "1.",
+            "type": "workflow",
+            "tags": tags,
+            "triggers": None,
+        },
+    }
+
+
+@pytest.mark.integration
+def test_playbook_tags_distinct_sorted_and_workspace_scoped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    other = fresh_user_id()
+    ws = setup_workspace(owner)
+    other_ws = setup_workspace(other)
+    auth = _auth(owner)
+    other_auth = _auth(other)
+    base = f"/v1/workspaces/{ws}/playbooks"
+    other_base = f"/v1/workspaces/{other_ws}/playbooks"
+
+    try:
+        with TestClient(app) as client:
+            # Owner-Workspace: drei Playbooks mit ueberlappenden Tags + 1 ohne Tags.
+            for tags in [["beta", "alpha"], ["beta", "gamma"], [], ["alpha"]]:
+                resp = client.post(
+                    base,
+                    json=_playbook_body(f"PB-{','.join(tags) or 'none'}", tags),
+                    headers=auth,
+                )
+                assert resp.status_code == 201, resp.text
+
+            # Fremder Workspace: anderer Tag, darf nicht in der Owner-Liste auftauchen.
+            client.post(other_base, json=_playbook_body("Other", ["delta"]), headers=other_auth)
+
+            resp = client.get(f"{base}/tags", headers=auth)
+            assert resp.status_code == 200, resp.text
+            assert resp.json() == ["alpha", "beta", "gamma"]
+
+            # Fremder Workspace bekommt nur seine eigenen Tags.
+            other_resp = client.get(f"{other_base}/tags", headers=other_auth)
+            assert other_resp.json() == ["delta"]
+
+            # Nicht-Mitglied wird vor dem Lookup geblockt (403).
+            assert client.get(f"{base}/tags", headers=other_auth).status_code == 403
+    finally:
+        cleanup_workspaces([owner, other])
+
+
+@pytest.mark.integration
+def test_playbook_tags_empty_for_fresh_workspace(monkeypatch: pytest.MonkeyPatch) -> None:
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+
+    try:
+        with TestClient(app) as client:
+            resp = client.get(f"/v1/workspaces/{ws}/playbooks/tags", headers=auth)
+            assert resp.status_code == 200
+            assert resp.json() == []
+    finally:
+        cleanup_workspaces([owner])

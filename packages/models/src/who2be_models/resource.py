@@ -12,7 +12,7 @@ ein `…Create`/`…Update`/`…Read`/`…VersionRead`-Satz, `…Content` typisi
 
 import json
 from datetime import datetime
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
@@ -130,7 +130,19 @@ class ResourceLinkSet(BaseModel):
 
 
 class ResourceLinkRead(BaseModel):
-    """Ein aufgeloester Block-Ref inkl. Verfuegbarkeit + Vorschau (Ausgabe)."""
+    """Ein aufgeloester Block-Ref inkl. Verfuegbarkeit + Vorschau (Ausgabe).
+
+    Phase 3-A erweitert das Read-Modell um Section-Sicht und Available-
+    Fallback:
+    - `available_in='active'` — Anker in der aktiven Version aufgeloest.
+    - `available_in='draft'` — keine aktive Version, aber die aktuelle
+      (Draft-/Review-/Inactive-)Version traegt den Anker → UI rendert
+      "Nur in Draft".
+    - `available_in=None` — Anker existiert nirgends mehr (Block geloescht).
+    `available` bleibt aus Wire-Backward-Compat (= `available_in is not None`).
+    `section_block_ids` und `section_preview` traegt die Section ab dem
+    Anker-Heading bis (exklusive) zum naechsten Heading desselben Levels.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -139,7 +151,10 @@ class ResourceLinkRead(BaseModel):
     block_id: str
     position: int
     available: bool
+    available_in: Literal["active", "draft"] | None = None
     preview: str | None = None
+    section_block_ids: list[str] = Field(default_factory=list)
+    section_preview: str | None = None
 
 
 class LinkedBlockSection(ResourceLinkRead):

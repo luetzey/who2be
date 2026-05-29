@@ -36,9 +36,7 @@ def get_playbook_service(
 def get_version_status_service(
     pool: Annotated[asyncpg.Pool, Depends(get_pool)],
 ) -> VersionStatusService:
-    return VersionStatusService(
-        pool, StatusHistoryService(PgStatusHistoryRepository())
-    )
+    return VersionStatusService(pool, StatusHistoryService(PgStatusHistoryRepository()))
 
 
 Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]
@@ -68,6 +66,12 @@ async def create_playbook(
     request: Request, data: PlaybookCreate, ctx: Ctx, service: Service
 ) -> PlaybookRead:
     return await service.create(ctx, data)
+
+
+@router.get("/tags")
+async def list_playbook_tags(ctx: Ctx, service: Service) -> list[str]:
+    """DISTINCT-Tags des Workspaces fuer den Tag-Picker im Playbook-Form."""
+    return await service.list_tags(ctx)
 
 
 @router.get("/{playbook_id}")

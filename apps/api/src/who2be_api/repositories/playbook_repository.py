@@ -112,6 +112,8 @@ class PlaybookRepository(Protocol):
         self, workspace_id: UUID, playbook_id: UUID, version: int
     ) -> PlaybookVersionRead | None: ...
 
+    async def list_distinct_tags(self, workspace_id: UUID) -> list[str]: ...
+
 
 class PgPlaybookRepository:
     """asyncpg-Implementierung von `PlaybookRepository`."""
@@ -241,8 +243,7 @@ class PgPlaybookRepository:
             if current is None:
                 return PlaybookUpdateOutcome(playbook=None)
             existing_draft = await conn.fetchval(
-                "SELECT 1 FROM playbook_version "
-                "WHERE playbook_id = $1 AND status = 'draft'",
+                "SELECT 1 FROM playbook_version WHERE playbook_id = $1 AND status = 'draft'",
                 playbook_id,
             )
             if existing_draft is not None:
@@ -318,3 +319,20 @@ class PgPlaybookRepository:
             version,
         )
         return PlaybookVersionRead.model_validate(dict(row)) if row is not None else None
+
+    async def list_distinct_tags(self, workspace_id: UUID) -> list[str]:
+        """DISTINCT alle Tags des Workspaces, lexikografisch sortiert.
+
+        Quelle ist die denormalisierte `playbook.tags`-Spalte; das deckt auch
+        Playbooks ohne aktuelle Version ab. Cross-Workspace-Filter ueber
+        `workspace_id` ist hier essenziell — Tags eines anderen Workspaces
+        wuerden sonst durchschlagen (siehe `test_playbook_tags`).
+        """
+        rows = await self._pool.fetch(
+            "SELECT DISTINCT tag "
+            "FROM playbook, unnest(tags) AS tag "
+            "WHERE workspace_id = $1 "
+            "ORDER BY tag ASC",
+            workspace_id,
+        )
+        return [row["tag"] for row in rows]

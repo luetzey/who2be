@@ -61,11 +61,21 @@ def _auth(owner_id: UUID) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-def _block(block_id: str, text: str) -> dict[str, object]:
+def _block(block_id: str, text: str, block_type: str = "paragraph") -> dict[str, object]:
     return {
         "id": block_id,
-        "type": "paragraph",
+        "type": block_type,
         "props": {},
+        "content": [{"type": "text", "text": text, "styles": {}}],
+        "children": [],
+    }
+
+
+def _heading(block_id: str, text: str, level: int = 1) -> dict[str, object]:
+    return {
+        "id": block_id,
+        "type": "heading",
+        "props": {"level": level},
         "content": [{"type": "text", "text": text, "styles": {}}],
         "children": [],
     }
@@ -124,7 +134,13 @@ def test_resource_links_set_replace_and_availability(
             rid = client.post(
                 rbase,
                 json=_resource_body(
-                    "Doc", [_block("b1", "Erster Block"), _block("b2", "Zweiter")]
+                    "Doc",
+                    [
+                        _heading("h1", "Erster Block"),
+                        _block("p1", "Paragraph zu h1"),
+                        _heading("h2", "Zweiter"),
+                        _block("p2", "Paragraph zu h2"),
+                    ],
                 ),
                 headers=auth,
             ).json()["id"]
@@ -136,43 +152,53 @@ def test_resource_links_set_replace_and_availability(
             # Leerer Stand.
             assert client.get(links_url, headers=auth).json() == []
 
-            # Set: zwei Bloecke verlinken.
+            # Set: zwei Heading-Anker verlinken.
             resp = client.put(
                 links_url,
                 json={
                     "links": [
-                        {"resource_id": rid, "block_id": "b1", "position": 0},
-                        {"resource_id": rid, "block_id": "b2", "position": 1},
+                        {"resource_id": rid, "block_id": "h1", "position": 0},
+                        {"resource_id": rid, "block_id": "h2", "position": 1},
                     ]
                 },
                 headers=auth,
             )
             assert resp.status_code == 200, resp.text
             body = resp.json()
-            assert [link["block_id"] for link in body] == ["b1", "b2"]
+            assert [link["block_id"] for link in body] == ["h1", "h2"]
             assert all(link["available"] for link in body)
+            assert all(link["available_in"] == "active" for link in body)
             assert body[0]["preview"] == "Erster Block"
             assert body[0]["resource_name"] == "Doc"
+            # Section reicht von h1 bis exklusive h2 (gleiches Level).
+            assert body[0]["section_block_ids"] == ["h1", "p1"]
+            assert "Erster Block" in body[0]["section_preview"]
+            assert "Paragraph zu h1" in body[0]["section_preview"]
+            # h2-Section laeuft bis Dokument-Ende.
+            assert body[1]["section_block_ids"] == ["h2", "p2"]
 
-            # Set-Replace: nur noch b1.
+            # Set-Replace: nur noch h1.
             replaced = client.put(
                 links_url,
-                json={"links": [{"resource_id": rid, "block_id": "b1", "position": 0}]},
+                json={"links": [{"resource_id": rid, "block_id": "h1", "position": 0}]},
                 headers=auth,
             ).json()
-            assert [link["block_id"] for link in replaced] == ["b1"]
+            assert [link["block_id"] for link in replaced] == ["h1"]
 
-            # Neue aktive Version OHNE b1 -> Link wird unavailable ("Block geloescht").
+            # Neue aktive Version OHNE h1 -> Link wird unavailable ("Block geloescht").
             client.put(
                 rbase + f"/{rid}",
-                json=_resource_body("Doc", [_block("b2", "Nur b2")]),
+                json=_resource_body("Doc", [_heading("h2", "Nur h2")]),
                 headers=auth,
             )
             _activate(client, rbase, rid, 2, auth)
             after = client.get(links_url, headers=auth).json()
-            assert after[0]["block_id"] == "b1"
+            assert after[0]["block_id"] == "h1"
             assert after[0]["available"] is False
+            assert after[0]["available_in"] is None
             assert after[0]["preview"] is None
+            assert after[0]["section_block_ids"] == []
+            assert after[0]["section_preview"] is None
 
             # Leere Liste loest alle Links.
             assert client.put(links_url, json={"links": []}, headers=auth).json() == []
@@ -198,7 +224,7 @@ def test_resource_links_reject_cross_workspace(monkeypatch: pytest.MonkeyPatch) 
             # Resource im fremden Workspace.
             foreign_rid = client.post(
                 f"/v1/workspaces/{other_ws}/resources",
-                json=_resource_body("Foreign", [_block("b1", "x")]),
+                json=_resource_body("Foreign", [_heading("h1", "x")]),
                 headers=_auth(other),
             ).json()["id"]
             pid = client.post(
@@ -208,9 +234,198 @@ def test_resource_links_reject_cross_workspace(monkeypatch: pytest.MonkeyPatch) 
             # Fremde Resource im eigenen Playbook verlinken -> 404.
             resp = client.put(
                 f"/v1/workspaces/{ws}/playbooks/{pid}/resource_links",
-                json={"links": [{"resource_id": foreign_rid, "block_id": "b1", "position": 0}]},
+                json={"links": [{"resource_id": foreign_rid, "block_id": "h1", "position": 0}]},
                 headers=auth,
             )
             assert resp.status_code == 404
     finally:
         cleanup_workspaces([owner, other])
+
+
+@pytest.mark.integration
+def test_resource_links_reject_non_heading_anchor(monkeypatch: pytest.MonkeyPatch) -> None:
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    rbase = f"/v1/workspaces/{ws}/resources"
+    pbase = f"/v1/workspaces/{ws}/playbooks"
+
+    try:
+        with TestClient(app) as client:
+            rid = client.post(
+                rbase,
+                json=_resource_body(
+                    "Doc",
+                    [_heading("h1", "Heading"), _block("p1", "Paragraph")],
+                ),
+                headers=auth,
+            ).json()["id"]
+            _activate(client, rbase, rid, 1, auth)
+
+            pid = client.post(pbase, json=_playbook_body("PB"), headers=auth).json()["id"]
+            links_url = f"{pbase}/{pid}/resource_links"
+
+            # Paragraph als Anker → 422.
+            resp = client.put(
+                links_url,
+                json={"links": [{"resource_id": rid, "block_id": "p1", "position": 0}]},
+                headers=auth,
+            )
+            assert resp.status_code == 422, resp.text
+            assert "Heading" in resp.json()["detail"]
+
+            # Heading als Anker geht durch.
+            ok = client.put(
+                links_url,
+                json={"links": [{"resource_id": rid, "block_id": "h1", "position": 0}]},
+                headers=auth,
+            )
+            assert ok.status_code == 200, ok.text
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+def test_resource_links_section_nesting_keeps_deeper_headings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    rbase = f"/v1/workspaces/{ws}/resources"
+    pbase = f"/v1/workspaces/{ws}/playbooks"
+
+    try:
+        with TestClient(app) as client:
+            # h1 -> p -> h2 (tieferes Level, bleibt drin) -> p -> h1' (beendet Section).
+            rid = client.post(
+                rbase,
+                json=_resource_body(
+                    "Doc",
+                    [
+                        _heading("h1a", "Erstes Kapitel", level=1),
+                        _block("p1", "Intro"),
+                        _heading("h2a", "Unterkapitel", level=2),
+                        _block("p2", "Detail"),
+                        _heading("h1b", "Zweites Kapitel", level=1),
+                        _block("p3", "Outro"),
+                    ],
+                ),
+                headers=auth,
+            ).json()["id"]
+            _activate(client, rbase, rid, 1, auth)
+
+            pid = client.post(pbase, json=_playbook_body("PB"), headers=auth).json()["id"]
+            links_url = f"{pbase}/{pid}/resource_links"
+            resp = client.put(
+                links_url,
+                json={"links": [{"resource_id": rid, "block_id": "h1a", "position": 0}]},
+                headers=auth,
+            )
+            assert resp.status_code == 200, resp.text
+            link = resp.json()[0]
+            # h2a bleibt in der Section (tieferes Level); h1b beendet sie.
+            assert link["section_block_ids"] == ["h1a", "p1", "h2a", "p2"]
+            assert "Erstes Kapitel" in link["section_preview"]
+            assert "Detail" in link["section_preview"]
+            assert "Zweites Kapitel" not in link["section_preview"]
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+def test_resource_links_available_fallback_to_current_version(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    rbase = f"/v1/workspaces/{ws}/resources"
+    pbase = f"/v1/workspaces/{ws}/playbooks"
+
+    try:
+        with TestClient(app) as client:
+            # Resource hat NUR Draft-v1 (keine Active).
+            rid = client.post(
+                rbase,
+                json=_resource_body("Doc", [_heading("h1", "Nur in Draft")]),
+                headers=auth,
+            ).json()["id"]
+            pid = client.post(pbase, json=_playbook_body("PB"), headers=auth).json()["id"]
+            links_url = f"{pbase}/{pid}/resource_links"
+
+            resp = client.put(
+                links_url,
+                json={"links": [{"resource_id": rid, "block_id": "h1", "position": 0}]},
+                headers=auth,
+            )
+            assert resp.status_code == 200, resp.text
+            link = resp.json()[0]
+            assert link["available"] is True
+            assert link["available_in"] == "draft"
+            assert link["preview"] == "Nur in Draft"
+            assert link["section_block_ids"] == ["h1"]
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+def test_resource_links_active_wins_over_current_draft(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    rbase = f"/v1/workspaces/{ws}/resources"
+    pbase = f"/v1/workspaces/{ws}/playbooks"
+
+    try:
+        with TestClient(app) as client:
+            # v1 wird Active; v2 wird neuer Draft (current_version=2) ohne h1.
+            rid = client.post(
+                rbase,
+                json=_resource_body("Doc", [_heading("h1", "Aktiver Text")]),
+                headers=auth,
+            ).json()["id"]
+            _activate(client, rbase, rid, 1, auth)
+            # Draft-on-Edit erzeugt v2 ohne den h1-Block.
+            client.put(
+                rbase + f"/{rid}",
+                json=_resource_body("Doc", [_heading("h2", "Anderer Heading")]),
+                headers=auth,
+            )
+
+            pid = client.post(pbase, json=_playbook_body("PB"), headers=auth).json()["id"]
+            links_url = f"{pbase}/{pid}/resource_links"
+            resp = client.put(
+                links_url,
+                json={"links": [{"resource_id": rid, "block_id": "h1", "position": 0}]},
+                headers=auth,
+            )
+            assert resp.status_code == 200, resp.text
+            link = resp.json()[0]
+            # h1 ist in Active (v1) und nicht in Current (v2) — Active gewinnt.
+            assert link["available_in"] == "active"
+            assert link["preview"] == "Aktiver Text"
+    finally:
+        cleanup_workspaces([owner])
