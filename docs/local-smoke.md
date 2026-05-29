@@ -95,6 +95,50 @@ Dann im Browser:
       schliessen. Token erscheint in der Liste. Im Test einmal `Revoke`
       auf einen Dummy ausprobieren.
 
+> Hinweis: Seit Phase 2.1a sind alle Inhaltspfade unter `/w/:workspaceId/...`
+> (z. B. `/w/:ws/personas/:id`). Direkt-Aufrufe ohne Workspace-Prefix
+> redirecten in den Default-Workspace.
+
+## 3b — Phase-2-Flows (Status, Resources, RBAC, Dashboard)
+
+Nach dem MVP-Happy-Path: die Phase-2-Funktionen einmal durchklicken. Reihen-
+folge wichtig, weil später Schritte auf früheren Daten aufsetzen.
+
+- [ ] **Org + Workspace** — `/settings/orgs` → `Neue Organisation` →
+      `Workspace anlegen`. AppShell-Switcher zeigt beide Ebenen. Reload:
+      letzte Auswahl persistiert.
+- [ ] **Dashboard** — Default-Landing nach Login: `/w/:ws/dashboard`. KPIs
+      (Active Personas / Playbooks / Pending Reviews) zeigen Zahlen aus dem
+      MVP-Schritt. Activity-Feed bleibt leer, bis Status-Transitions laufen.
+- [ ] **Draft-on-Edit** — Persona-Detail-Page → `Bearbeiten` → Speichern.
+      Header: "Aktive Version: vN · Du bearbeitest: v(N+1) Draft". Zweites
+      `Bearbeiten` → 409 ("Promote oder verwirf bestehenden Draft erst").
+- [ ] **Status-Transitions** — auf der Draft-Version: `Zur Review einreichen`
+      → Badge wird `review`. Dann `Aktivieren` (admin-only) → Badge `active`,
+      die vorherige Active geht automatisch auf `inactive`. Activity-Feed im
+      Dashboard zeigt zwei Einträge.
+- [ ] **Resource + Block-Editor** — Header → `Resources` → `Neue Resource`.
+      BlockNote-Editor öffnen, ein paar Bloecke (Heading, Paragraph,
+      BulletList) einfuegen, speichern, dann promoten auf `active`.
+- [ ] **Playbook-Block-Refs** — Playbook-Detail → `Bloecke verknuepfen` →
+      Resource auswaehlen, einzelne Bloecke per Checkbox picken, speichern.
+      Linked-Blocks-Liste zeigt Vorschau. Im Resource-Editor einen verknuepften
+      Block loeschen → Playbook-Detail zeigt "Block geloescht"-Badge.
+- [ ] **MCP-Read mit Active-Filter** — Token aus dem Workspace im MCP-Client
+      hinterlegen. `get_persona` / `fetch_playbook` liefern nur die
+      `active`-Version. `list_resources` / `fetch_resource(block_ids=…)` liefern
+      die Blöcke aus dem letzten Schritt.
+- [ ] **Members + Invitation** — `/w/:ws/settings/members` → `Einladen` →
+      Email + Rolle `editor`. 201-Body enthaelt einmalig den Klartext-Token,
+      der auch per GoTrue-Mail (falls `SUPABASE_SERVICE_KEY` gesetzt) verschickt
+      wird. Token kopieren.
+- [ ] **Accept-Flow** — zweite Browser-Session, anderer User: Signup, dann
+      `/invitations/{token}/accept` → Redirect ins neue Workspace-Dashboard.
+      Members-Tabelle zeigt beide. Doppel-Klick auf Accept → 410.
+- [ ] **RBAC-Gate** — als Editor: Persona-Edit → Promote-to-Active-Button
+      disabled (Tooltip "Nur Admins koennen aktivieren"). Member-Page →
+      Redirect, Toast "Nur fuer Admins".
+
 ## 4 — MCP-Smoke gegen die lokale API
 
 Token aus Schritt 3 verwenden. In neuem Terminal:

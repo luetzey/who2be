@@ -1,4 +1,7 @@
-# Security-Review — MS-3 H3
+# Security-Review — MS-3 H3 (Phase 1)
+
+> Phase-2-Review (Tenancy/Status/Resources/RBAC) liegt in
+> [`security-findings-phase-2.md`](./security-findings-phase-2.md).
 
 - Datum: 2026-05-25
 - Methodik: `security-reviewer`-Subagent (read-only) ueber Auth, SQL, CORS,

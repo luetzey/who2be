@@ -255,37 +255,50 @@ keine Geschaeftsregeln.
 
 ### apps/api — routers (`/v1`)
 
+**Top-Level** (ohne Workspace-Prefix):
+
 | Methode & Pfad | Zweck |
 |---|---|
-| `GET /v1/health` | Liveness (bereits vorhanden) |
-| `POST /v1/tokens` | API-Token erstellen — Klartext einmalig |
-| `GET /v1/tokens` | Eigene Token listen |
-| `DELETE /v1/tokens/{id}` | Token widerrufen |
-| `GET /v1/personas` | Eigene Personae listen |
-| `POST /v1/personas` | Persona anlegen (Version 1) |
-| `GET /v1/personas/{id}` | Persona (aktuelle Version) |
-| `PUT /v1/personas/{id}` | Update → neue Version |
-| `GET /v1/personas/{id}/versions` | Versionshistorie |
-| `GET /v1/personas/{id}/versions/{n}` | Bestimmte Version |
-| `GET /v1/personas/{id}/playbooks` | Verknuepfte Playbooks |
-| `PUT /v1/personas/{id}/playbooks` | Verknuepfung setzen |
-| `GET /v1/playbooks` | Listen, Filter `?tag=&trigger=` |
-| `POST /v1/playbooks` | Playbook anlegen (Version 1) |
-| `GET /v1/playbooks/{id}` | Playbook (aktuelle Version) |
-| `PUT /v1/playbooks/{id}` | Update → neue Version |
-| `GET /v1/playbooks/{id}/versions` | Versionshistorie |
-| `GET /v1/playbooks/{id}/versions/{n}` | Bestimmte Version |
+| `GET /v1/health` | Liveness |
+| `GET /v1/me` | Identity + Memberships + `default_workspace_id` |
+| `GET /v1/organizations` | Eigene Organisationen listen |
+| `POST /v1/organizations` | Company-Org anlegen (Personal entsteht via Backfill) |
+| `POST /v1/organizations/{id}/workspaces` | Workspace in Org anlegen |
+| `POST /v1/invitations/{token}/accept` | Invitation einlösen (anonym authentifiziert) |
+
+**Workspace-scoped** (Prefix `/v1/workspaces/{workspace_id}`, gated durch
+`get_current_workspace` — Membership + Snapshot-Rolle, siehe ADR-0023):
+
+| Methode & Pfad | Zweck |
+|---|---|
+| `GET / PATCH` | Workspace lesen / umbenennen |
+| `GET /dashboard` | KPIs + Activity + Status-Distribution |
+| `GET/POST /tokens`, `DELETE /tokens/{id}` | API-Token verwalten (snapshot-Rolle) |
+| `GET/POST /personas`, `GET/PUT/DELETE /personas/{id}` | Persona-CRUD (PUT auf Active → Draft) |
+| `GET /personas/{id}/versions`, `GET /personas/{id}/versions/{n}` | Versionshistorie |
+| `POST /personas/{id}/versions/{n}/transition` | Status-Wechsel (Draft → Review → Active …) |
+| `GET/PUT /personas/{id}/playbooks` | Persona-Playbook-Verknüpfung |
+| `GET/POST /playbooks`, `GET/PUT/DELETE /playbooks/{id}` | Playbook-CRUD |
+| `GET /playbooks/{id}/versions`, `GET /playbooks/{id}/versions/{n}` | Versionshistorie |
+| `POST /playbooks/{id}/versions/{n}/transition` | Status-Wechsel |
+| `GET/PUT /playbooks/{id}/resource_links` | Block-Refs auf Resources setzen |
+| `GET/POST /resources`, `GET/PUT/DELETE /resources/{id}` | Resource-CRUD (BlockNote-Doc als JSON) |
+| `POST /resources/{id}/versions/{n}/transition` | Status-Wechsel |
+| `GET/PATCH/DELETE /members`, `.../members/{user_id}` | Mitglieder verwalten (admin-only für Mutationen) |
+| `GET/POST/DELETE /invitations`, `.../invitations/{id}` | Einladungen verwalten (admin-only) |
 
 Register/Login laufen client-seitig direkt gegen Supabase Auth; die API
 verifiziert nur das ausgestellte JWT.
 
 ### apps/mcp
 Duenne FastMCP-Tools, die ueber einen `httpx`-Client gegen die API sprechen
-(API-Token aus `WHO2BE_API_TOKEN`):
+(API-Token aus `WHO2BE_API_TOKEN`, gepinnt auf einen Workspace; alle Reads
+filtern auf `status='active'`):
 
-- `get_persona(name | id)` → `GET /v1/personas/{id}` (inkl. verknuepfter Playbooks)
-- `list_playbooks(tag?, trigger?)` → `GET /v1/playbooks?tag=&trigger=`
-- `fetch_playbook(id)` → `GET /v1/playbooks/{id}`
+- `get_persona(name | id)` → `GET /v1/workspaces/{ws}/personas/{id}` (inkl. verknuepfter Playbooks)
+- `list_playbooks(tag?, trigger?)` → `GET /v1/workspaces/{ws}/playbooks?tag=&trigger=`
+- `fetch_playbook(id)` → `GET /v1/workspaces/{ws}/playbooks/{id}` (inkl. `linked_blocks`)
+- `list_resources()` / `fetch_resource(id, block_ids?)` → Resource-Reads
 
 Keine Geschaeftslogik im MCP-Server — er ist ein reiner Adapter.
 
