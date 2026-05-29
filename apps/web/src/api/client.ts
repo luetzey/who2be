@@ -8,6 +8,11 @@ import type {
   Playbook,
   PlaybookInput,
   PlaybookVersion,
+  Resource,
+  ResourceInput,
+  ResourceLink,
+  ResourceLinkItemInput,
+  ResourceVersion,
   Token,
   TokenCreated,
   TokenInput,
@@ -95,6 +100,21 @@ export interface Api {
     version: number,
     to: VersionStatus,
   ) => Promise<PlaybookVersion>
+  listResources: () => Promise<Resource[]>
+  getResource: (id: string) => Promise<Resource>
+  createResource: (input: ResourceInput) => Promise<Resource>
+  updateResource: (id: string, input: ResourceInput) => Promise<Resource>
+  listResourceVersions: (id: string) => Promise<ResourceVersion[]>
+  transitionResourceVersion: (
+    id: string,
+    version: number,
+    to: VersionStatus,
+  ) => Promise<ResourceVersion>
+  listPlaybookResourceLinks: (playbookId: string) => Promise<ResourceLink[]>
+  setPlaybookResourceLinks: (
+    playbookId: string,
+    links: ResourceLinkItemInput[],
+  ) => Promise<ResourceLink[]>
 }
 
 export function createApi(token: string, workspaceId: string): Api {
@@ -162,5 +182,32 @@ export function createApi(token: string, workspaceId: string): Api {
         `${ws}/playbooks/${id}/versions/${version}/transition`,
         { method: 'POST', body: JSON.stringify({ to }) },
       ),
+    listResources: () => request<Resource[]>(token, `${ws}/resources`),
+    getResource: (id) => request<Resource>(token, `${ws}/resources/${id}`),
+    createResource: (input) =>
+      request<Resource>(token, `${ws}/resources`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    updateResource: (id, input) =>
+      request<Resource>(token, `${ws}/resources/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(input),
+      }),
+    listResourceVersions: (id) =>
+      request<ResourceVersion[]>(token, `${ws}/resources/${id}/versions`),
+    transitionResourceVersion: (id, version, to) =>
+      request<ResourceVersion>(
+        token,
+        `${ws}/resources/${id}/versions/${version}/transition`,
+        { method: 'POST', body: JSON.stringify({ to }) },
+      ),
+    listPlaybookResourceLinks: (playbookId) =>
+      request<ResourceLink[]>(token, `${ws}/playbooks/${playbookId}/resource_links`),
+    setPlaybookResourceLinks: (playbookId, links) =>
+      request<ResourceLink[]>(token, `${ws}/playbooks/${playbookId}/resource_links`, {
+        method: 'PUT',
+        body: JSON.stringify({ links }),
+      }),
   }
 }

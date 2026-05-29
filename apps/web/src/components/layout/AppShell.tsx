@@ -1,4 +1,4 @@
-import { BookOpen, KeyRound, LayoutDashboard, LogOut, Users } from 'lucide-react'
+import { BookOpen, FileText, KeyRound, LayoutDashboard, LogOut, Users } from 'lucide-react'
 import type { ComponentType, ReactNode, SVGProps } from 'react'
 import { NavLink } from 'react-router-dom'
 
@@ -22,6 +22,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/personas', label: 'Personae', icon: Users },
   { to: '/playbooks', label: 'Playbooks', icon: BookOpen },
+  { to: '/resources', label: 'Resources', icon: FileText },
   { to: '/settings/tokens', label: 'API-Tokens', icon: KeyRound },
 ]
 

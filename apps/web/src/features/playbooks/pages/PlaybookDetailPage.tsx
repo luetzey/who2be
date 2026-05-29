@@ -9,9 +9,12 @@ import { DataView } from '@/components/data/DataView'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { usePlaybookResourceLinks } from '@/hooks/usePlaybookResourceLinks'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 
+import { LinkedBlocksList } from '../components/LinkedBlocksList'
 import { PlaybookEditorForm } from '../components/PlaybookEditorForm'
+import { ResourceBlockLinkPicker } from '../components/ResourceBlockLinkPicker'
 import { StatusActionBar } from '../components/StatusActionBar'
 import { usePlaybook } from '../hooks/usePlaybook'
 import { usePlaybookForm } from '../hooks/usePlaybookForm'
@@ -21,7 +24,21 @@ export function PlaybookDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { playbook, versions, loading, error, reload } = usePlaybook(id)
   const { form, onSubmit, saveError } = usePlaybookForm(playbook, reload)
+  const resourceLinks = usePlaybookResourceLinks(id)
   const wsPath = useWorkspacePath()
+
+  const removeLink = (target: { resource_id: string; block_id: string }) => {
+    const remaining = resourceLinks.links.filter(
+      (link) => !(link.resource_id === target.resource_id && link.block_id === target.block_id),
+    )
+    void resourceLinks.save(
+      remaining.map((link, index) => ({
+        resource_id: link.resource_id,
+        block_id: link.block_id,
+        position: index,
+      })),
+    )
+  }
 
   if (id === undefined) {
     return <Navigate to={wsPath('/playbooks')} replace />
@@ -109,6 +126,30 @@ export function PlaybookDetailPage() {
                       </span>
                     )}
                   />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Verknuepfte Resource-Bloecke</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Stack gap="sm">
+                    <DataView loading={resourceLinks.loading} error={resourceLinks.error}>
+                      <LinkedBlocksList
+                        links={resourceLinks.links}
+                        onRemove={removeLink}
+                        disabled={resourceLinks.saving}
+                      />
+                    </DataView>
+                    <div className="flex justify-end">
+                      <ResourceBlockLinkPicker
+                        existing={resourceLinks.links}
+                        saving={resourceLinks.saving}
+                        onSave={resourceLinks.save}
+                      />
+                    </div>
+                  </Stack>
                 </CardContent>
               </Card>
             </Stack>

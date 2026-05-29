@@ -12,6 +12,9 @@
     "test:a11y": "vitest run --testNamePattern a11y"
   },
   "dependencies": {
+    "@blocknote/core": "^0.51.3",
+    "@blocknote/mantine": "^0.51.3",
+    "@blocknote/react": "^0.51.3",
     "@hookform/resolvers": "^5.4.0",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-dropdown-menu": "^2.1.16",

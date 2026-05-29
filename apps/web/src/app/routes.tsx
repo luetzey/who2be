@@ -42,6 +42,21 @@ const PlaybookDetailPage = lazy(() =>
     default: mod.PlaybookDetailPage,
   })),
 )
+const ResourcesPage = lazy(() =>
+  import('@/features/resources/pages/ResourcesPage').then((mod) => ({
+    default: mod.ResourcesPage,
+  })),
+)
+const ResourceNewPage = lazy(() =>
+  import('@/features/resources/pages/ResourceNewPage').then((mod) => ({
+    default: mod.ResourceNewPage,
+  })),
+)
+const ResourceDetailPage = lazy(() =>
+  import('@/features/resources/pages/ResourceDetailPage').then((mod) => ({
+    default: mod.ResourceDetailPage,
+  })),
+)
 const SettingsTokensPage = lazy(() =>
   import('@/features/tokens/pages/SettingsTokensPage').then((mod) => ({
     default: mod.SettingsTokensPage,
@@ -100,6 +115,9 @@ export function RouterRoot() {
                 <Route path="/w/:workspaceId/playbooks" element={<PlaybooksPage />} />
                 <Route path="/w/:workspaceId/playbooks/new" element={<PlaybookNewPage />} />
                 <Route path="/w/:workspaceId/playbooks/:id" element={<PlaybookDetailPage />} />
+                <Route path="/w/:workspaceId/resources" element={<ResourcesPage />} />
+                <Route path="/w/:workspaceId/resources/new" element={<ResourceNewPage />} />
+                <Route path="/w/:workspaceId/resources/:id" element={<ResourceDetailPage />} />
                 <Route
                   path="/w/:workspaceId/settings/tokens"
                   element={<SettingsTokensPage />}
