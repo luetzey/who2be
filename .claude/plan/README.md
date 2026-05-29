@@ -13,10 +13,19 @@ Bei Konflikt zwischen Plan-Header und dieser Übersicht **gewinnt die Übersicht
 
 | Datei | Inhalt |
 |---|---|
-| `2026-05-29-1900_phase-3-ux-polish.md` | Phase-3-Roadmap: WorkspaceSwitcher, BlockNote-Persona/Playbook, Multi-Select-Tags, Section-Block-Refs, Backlinks, Invitation-Magic-Link |
 | `2026-05-27-1935_license-fsl-setup.md` | FSL-1.1-Apache-2.0 als Lizenzmodell + CLA — User-Entscheidungen offen |
 | `2026-05-27-2028_public-switch-github-repo.md` | Repo privat → öffentlich; hängt auf Lizenz + CSP-Pass + Security-TODOs |
 | `2026-05-28-0528_enterprise-license-management.md` | Code-Hooks-only; aktiviert bei erstem qualifizierten Lead |
+
+## Phase 3 — UX-Polish (alle ✅ Done)
+
+Master: `2026-05-29-1900_phase-3-ux-polish.md` — siehe dortige PR-Tabelle.
+
+- `2026-05-29-1817_3-0-models-migrations.md` — PR #57
+- `2026-05-29-1850_3-A-backend.md` — PR #61
+- `2026-05-29-1851_3-B-editor-forms.md` — PR #60
+- `2026-05-29-1850_3-C-navigation-ux.md` — PR #58
+- `2026-05-29-2030_3-D-invitation-magic-link.md` — PR #59
 
 ## Phase 2 — Vollwertige App (alle ✅ Done)
 
