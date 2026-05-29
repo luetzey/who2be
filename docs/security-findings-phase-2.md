@@ -1,5 +1,8 @@
 # Security-Review — Phase 2 (Tenancy + Status + Resources + Multi-User-RBAC)
 
+> Phase-1-Review (MS-3 H3 — Auth/SQL/CORS/Rate-Limit/MCP) liegt in
+> [`security-findings.md`](./security-findings.md).
+
 - Datum: 2026-05-29
 - Methodik: `security-reviewer`-Subagent (read-only). Acht Themen-Bereiche
   laut Plan §Cross-cutting Security

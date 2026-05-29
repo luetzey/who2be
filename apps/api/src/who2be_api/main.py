@@ -1,8 +1,12 @@
 """Application entrypoint for the Who2Be REST API.
 
-Phase 1: Health-Endpoint, Infrastruktur-Fundament (zentrale Settings,
-asyncpg-Pool), Auth (`/v1/tokens`), Persona- und Playbook-CRUD inklusive
-Persona-Playbook-Verknuepfung.
+Routen-Layout nach Phase 2:
+- Top-Level (ohne Workspace-Prefix): `/v1/health`, `/v1/me`, `/v1/organizations`,
+  `/v1/invitations/{token}/accept`.
+- Workspace-scoped (Prefix `/v1/workspaces/{workspace_id}`): Personas, Playbooks,
+  Resources, Tokens, Members, Invitations (Verwaltung), Persona-Playbook-Links,
+  Playbook-Resource-Links, Dashboard. Membership wird über
+  `get_current_workspace` durchgesetzt (siehe `core/security.py`).
 """
 
 from typing import cast

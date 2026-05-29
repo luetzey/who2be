@@ -15,7 +15,7 @@ _WEB_ORIGIN = "http://localhost:5173"
 
 def test_preflight_allows_configured_origin() -> None:
     response = client.options(
-        "/v1/personas",
+        "/v1/me",
         headers={
             "Origin": _WEB_ORIGIN,
             "Access-Control-Request-Method": "POST",
@@ -38,7 +38,7 @@ def test_preflight_rejects_disallowed_custom_header() -> None:
     # erlaubt werden, sonst koennen Skripte beliebige Custom-Header an die API
     # senden ohne Browser-Schutz.
     response = client.options(
-        "/v1/personas",
+        "/v1/me",
         headers={
             "Origin": _WEB_ORIGIN,
             "Access-Control-Request-Method": "POST",

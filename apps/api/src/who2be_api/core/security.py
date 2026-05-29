@@ -70,14 +70,6 @@ def _credentials_error() -> HTTPException:
 
 
 @dataclass(frozen=True)
-class TokenAuth:
-    """Resolution-Ergebnis eines API-Tokens: Owner + Workspace-Snapshot."""
-
-    owner_id: UUID
-    workspace_id: UUID
-
-
-@dataclass(frozen=True)
 class CurrentPrincipal:
     """Authentifizierter Aufrufer.
 
