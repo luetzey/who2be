@@ -194,12 +194,14 @@ def test_dashboard_aggregates_status_and_activity(
 
     try:
         with TestClient(app) as client:
-            # Persona "A": v1 (Backfill -> active), Update auf v2.
-            # Migration 0011 setzt current_version auf 'active', alle anderen
-            # auf 'inactive' — neu erstellte Versionen erben den Default
-            # 'inactive'. Wir lassen das v1 als active stehen und schieben v2
-            # nach 'review', um einen Pending-Review zu erzeugen.
+            # Persona "A": v1 inactive, v2 review.
+            # Phase 3-0: neue v1 startet als Draft (Migration 0019). Damit
+            # `PUT` v2 anlegen kann, seedet der Test v1 erst auf `inactive`
+            # (kein Draft mehr) und re-seedet danach den gewuenschten Endstand.
             persona_a = client.post(persona_base, json=_persona_body("v1"), headers=auth).json()
+            _seed_version_status(
+                "persona_version", "persona_id", UUID(persona_a["id"]), 1, "inactive"
+            )
             client.put(
                 f"{persona_base}/{persona_a['id']}",
                 json=_persona_body("v2"),
@@ -209,13 +211,10 @@ def test_dashboard_aggregates_status_and_activity(
                 "persona_version", "persona_id", UUID(persona_a["id"]), 2, "review"
             )
 
-            # Persona "B": nur v1 (active via Backfill — wir lassen Default).
+            # Persona "B": nur v1 (manuell auf active gehoben).
             persona_b = client.post(
                 persona_base, json=_persona_body("only-v1"), headers=auth
             ).json()
-            # Neu erzeugte Personas haben v1 auf Default 'inactive' (der
-            # Trigger setzt 'active' nur fuer Backfill in 0011). Wir promoten
-            # explizit auf 'active', damit die KPI > 0 ist.
             _seed_version_status(
                 "persona_version", "persona_id", UUID(persona_b["id"]), 1, "active"
             )
@@ -224,6 +223,9 @@ def test_dashboard_aggregates_status_and_activity(
             playbook = client.post(
                 playbook_base, json=_playbook_body("Onboard", "v1"), headers=auth
             ).json()
+            _seed_version_status(
+                "playbook_version", "playbook_id", UUID(playbook["id"]), 1, "inactive"
+            )
             client.put(
                 f"{playbook_base}/{playbook['id']}",
                 json=_playbook_body("Onboard", "v2"),

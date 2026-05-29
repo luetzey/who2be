@@ -142,19 +142,22 @@ class PgPlaybookRepository:
             )
             await conn.execute(
                 "INSERT INTO playbook_version "
-                "(playbook_id, version, content, created_by) "
-                "VALUES ($1, $2, $3, $4)",
+                "(playbook_id, version, content, status, created_by) "
+                "VALUES ($1, $2, $3, $4, $5)",
                 playbook["id"],
                 playbook["current_version"],
                 content_json,
+                VersionStatus.draft.value,
                 owner_id,
             )
+        # Neue v1 startet als Draft (Phase 3-0, siehe Persona-Pendant fuer
+        # Begruendung).
         return PlaybookRead.model_validate(
             {
                 **dict(playbook),
                 "content": content_json,
-                "current_status": VersionStatus.inactive,
-                "has_pending_draft": False,
+                "current_status": VersionStatus.draft,
+                "has_pending_draft": True,
             }
         )
 

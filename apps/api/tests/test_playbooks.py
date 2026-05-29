@@ -125,6 +125,15 @@ def test_playbook_crud_filters_and_persona_linking(
             ).json()
             assert [p["id"] for p in by_trigger] == [first_id]
 
+            # Phase 3-0: neue v1 startet als Draft (Migration 0019). Vor PUT
+            # erst auf Active promoten, sonst 409 (Draft existiert bereits).
+            for to in ("review", "active"):
+                client.post(
+                    f"{pb_base}/{first_id}/versions/1/transition",
+                    json={"to": to},
+                    headers=auth,
+                )
+
             # Update -> neue Version
             updated = client.put(
                 f"{pb_base}/{first_id}",
@@ -276,7 +285,9 @@ def test_playbook_version_transitions_and_draft_on_edit(
                 json=_playbook_body("Onboard", "v1", ["a"], "x"),
                 headers=auth,
             ).json()["id"]
-            for to in ("draft", "review", "active"):
+            # Phase 3-0: v1 startet bereits als Draft (Migration 0019); nur
+            # review + active uebrig auf dem Weg nach Active.
+            for to in ("review", "active"):
                 resp = client.post(
                     f"{base}/{playbook_id}/versions/1/transition",
                     json={"to": to},

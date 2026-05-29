@@ -145,20 +145,24 @@ class PgPersonaRepository:
             )
             await conn.execute(
                 "INSERT INTO persona_version "
-                "(persona_id, version, content, created_by) "
-                "VALUES ($1, $2, $3, $4)",
+                "(persona_id, version, content, status, created_by) "
+                "VALUES ($1, $2, $3, $4, $5)",
                 persona["id"],
                 persona["current_version"],
                 content_json,
+                VersionStatus.draft.value,
                 owner_id,
             )
-        # Neue v1 startet mit DB-Default `status='inactive'`, kein Draft existiert.
+        # Neue v1 startet als Draft (Phase 3-0): die UI rendert sofort die
+        # Status-Action-Bar, MCP-Reads ueberspringen sie bis Promotion. Wir
+        # setzen `status` explizit (statt auf den DB-Default zu vertrauen) —
+        # Defense-in-Depth gegen Drift in Migration 0019.
         return PersonaRead.model_validate(
             {
                 **dict(persona),
                 "content": content_json,
-                "current_status": VersionStatus.inactive,
-                "has_pending_draft": False,
+                "current_status": VersionStatus.draft,
+                "has_pending_draft": True,
             }
         )
 

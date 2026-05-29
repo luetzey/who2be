@@ -103,9 +103,18 @@ def test_resource_crud_versioning_and_isolation(monkeypatch: pytest.MonkeyPatch)
             assert created.status_code == 201, created.text
             rid = created.json()["id"]
             assert created.json()["current_version"] == 1
-            assert created.json()["current_status"] == "inactive"
+            # Phase 3-0: neue v1 startet als Draft (Migration 0019).
+            assert created.json()["current_status"] == "draft"
             assert created.json()["workspace_id"] == str(ws)
             assert created.json()["content"]["blocks"][0]["id"] == "b1"
+
+            # Vor PUT erst v1 auf Active promoten, sonst 409 (Draft existiert).
+            for to in ("review", "active"):
+                client.post(
+                    f"{base}/{rid}/versions/1/transition",
+                    json={"to": to},
+                    headers=auth,
+                )
 
             # Update -> neue Version, Block-Content-Roundtrip.
             updated = client.put(
@@ -149,7 +158,9 @@ def test_resource_transitions_invariant_and_draft_on_edit(
                 headers=auth,
             ).json()["id"]
 
-            for to in ("draft", "review", "active"):
+            # Phase 3-0: v1 startet bereits als Draft; nur review + active
+            # uebrig auf dem Weg nach Active.
+            for to in ("review", "active"):
                 resp = client.post(
                     f"{base}/{rid}/versions/1/transition", json={"to": to}, headers=auth
                 )
