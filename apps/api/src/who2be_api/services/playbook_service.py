@@ -107,3 +107,7 @@ class PlaybookService:
         if found is None:
             raise _not_found()
         return found
+
+    async def list_tags(self, ctx: WorkspaceContext) -> list[str]:
+        """DISTINCT-Tags des Workspaces — Datenquelle fuer den Tag-Picker."""
+        return await self._repo.list_distinct_tags(ctx.workspace_id)

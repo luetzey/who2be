@@ -193,6 +193,13 @@ class FakePlaybookRepository:
             return None
         return next((v for v in self._versions[playbook_id] if v.version == version), None)
 
+    async def list_distinct_tags(self, workspace_id: UUID) -> list[str]:
+        tags: set[str] = set()
+        for playbook in self._playbooks.values():
+            if playbook.workspace_id == workspace_id:
+                tags.update(playbook.tags)
+        return sorted(tags)
+
 
 def _service() -> tuple[PlaybookService, WorkspaceContext]:
     return PlaybookService(FakePlaybookRepository()), _ctx(uuid4())
