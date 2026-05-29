@@ -1,11 +1,12 @@
-"""Integrationstest fuers Workspace-Dashboard (Phase 2.1b-B).
+"""Integrationstest fuers Workspace-Dashboard (Phase 2.1b-B + 3-Fix Track 1).
 
-Drei Cases: leerer Workspace, gemischte Status-Verteilung mit
-Status-History-Eintraegen und Cross-Workspace-Isolation. Der zweite Case
-fuettert `persona_version.status`/`playbook_version.status` und
-`status_history` direkt per SQL — der Transition-Endpoint kommt erst in
-Prompt A. Der dritte Case prueft zusaetzlich die "Activity bleibt leer ohne
-History"-Variante explizit.
+Cases:
+- Leerer Workspace (KPIs/Distribution/Activity sauber leer).
+- Gemischte Status-Verteilung plus Activity-Eintraege mit Mapping in das
+  Frontend-DTO (`actor`, `entity_name`, `event`).
+- Cross-Workspace-Isolation (Activity-leer + 403 fuer fremde Workspaces).
+- `display_name`-Fallback-Kette (`raw_user_meta_data->>'name'`,
+  Email-Local-Part, User-ID-Fallback).
 
 Laeuft nur mit erreichbarer Datenbank; ohne DB wird der Test uebersprungen.
 """
@@ -23,7 +24,12 @@ from who2be_api.core import security
 from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.migrations import MIGRATIONS_DIR, apply_migrations
 from who2be_api.main import app
-from who2be_api.testing.workspace_setup import cleanup_workspaces, fresh_user_id, setup_workspace
+from who2be_api.testing.workspace_setup import (
+    cleanup_workspaces,
+    fresh_user_id,
+    seed_auth_user,
+    setup_workspace,
+)
 
 _TEST_SECRET = "integration-test-jwt-secret-padding-0123456789"
 
@@ -161,18 +167,10 @@ def test_dashboard_empty_workspace_returns_zeroes_and_empty_activity(
                 "pending_reviews": 0,
             }
             assert body["activity"] == []
-            assert body["status_distribution"]["persona"] == {
-                "draft": 0,
-                "review": 0,
-                "active": 0,
-                "inactive": 0,
-            }
-            assert body["status_distribution"]["playbook"] == {
-                "draft": 0,
-                "review": 0,
-                "active": 0,
-                "inactive": 0,
-            }
+            empty_dist = {"draft": 0, "review": 0, "active": 0, "inactive": 0}
+            assert body["status_distribution"]["persona"] == empty_dist
+            assert body["status_distribution"]["playbook"] == empty_dist
+            assert body["status_distribution"]["resource"] == empty_dist
     finally:
         cleanup_workspaces([owner])
 
@@ -191,6 +189,12 @@ def test_dashboard_aggregates_status_and_activity(
     auth = _auth(owner)
     persona_base = f"/v1/workspaces/{ws}/personas"
     playbook_base = f"/v1/workspaces/{ws}/playbooks"
+
+    # display_name-Fallback-Kette: `raw_user_meta_data->>'name'` schlaegt
+    # alles andere. Der Owner taucht hier mit beidem auf, damit die
+    # Aktivitaeten in `body["activity"]` einen sprechenden Anzeigenamen
+    # tragen.
+    seed_auth_user(owner, email="qa-owner@example.com", name="QA Owner")
 
     try:
         with TestClient(app) as client:
@@ -240,7 +244,7 @@ def test_dashboard_aggregates_status_and_activity(
 
             # Activity: zwei Eintraege, neuester zuerst.
             _insert_history("persona", UUID(persona_a["id"]), "draft", "review", owner)
-            _insert_history("playbook", UUID(playbook["id"]), "draft", "active", owner)
+            _insert_history("playbook", UUID(playbook["id"]), "review", "active", owner)
 
             resp = client.get(f"/v1/workspaces/{ws}/dashboard", headers=auth)
             assert resp.status_code == 200
@@ -266,12 +270,21 @@ def test_dashboard_aggregates_status_and_activity(
             activity = body["activity"]
             assert len(activity) == 2
             # ORDER BY changed_at DESC — letzter Insert (playbook) ist erster.
-            assert activity[0]["entity_type"] == "playbook"
-            assert activity[0]["entity_id"] == playbook["id"]
-            assert activity[0]["to_status"] == "active"
-            assert activity[1]["entity_type"] == "persona"
-            assert activity[1]["entity_id"] == persona_a["id"]
-            assert activity[1]["to_status"] == "review"
+            first, second = activity[0], activity[1]
+            assert first["entity_type"] == "playbook"
+            assert first["entity_id"] == playbook["id"]
+            assert first["entity_name"] == "Onboard"
+            assert first["event"] == "promoted_to_active"
+            assert first["actor"] == {
+                "user_id": str(owner),
+                "display_name": "QA Owner",
+            }
+            assert "ts" in first
+            assert second["entity_type"] == "persona"
+            assert second["entity_id"] == persona_a["id"]
+            assert second["entity_name"] == "QA-Bot"
+            assert second["event"] == "submitted_for_review"
+            assert second["actor"]["display_name"] == "QA Owner"
     finally:
         cleanup_workspaces([owner])
 
@@ -330,3 +343,72 @@ def test_dashboard_isolates_other_workspace_data(
             assert forbidden.status_code == 403
     finally:
         cleanup_workspaces([owner_a, owner_b])
+
+
+@pytest.mark.integration
+def test_dashboard_display_name_falls_back_through_meta_email_userid(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Drei Owner, ein Workspace, drei Aktivitaeten — eine pro Fallback-Stufe.
+
+    Damit ein zweiter Owner ohne eigenen Workspace Aktivitaeten in `ws_owner`
+    erzeugen darf, muss er Member sein. Wir tragen die beiden Helfer
+    direkt als Editor in den Workspace ein (umgeht den Invitation-Flow).
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    user_email_only = fresh_user_id()
+    user_none = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+
+    async def _add_members() -> None:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            await conn.executemany(
+                "INSERT INTO workspace_member (workspace_id, user_id, role) "
+                "VALUES ($1, $2, 'editor') "
+                "ON CONFLICT (workspace_id, user_id) DO NOTHING",
+                [(ws, user_email_only), (ws, user_none)],
+            )
+        finally:
+            await conn.close()
+
+    asyncio.run(_add_members())
+
+    # Drei Fallback-Stufen vorbereiten: Meta-Name, Email-Local-Part, gar nichts.
+    seed_auth_user(owner, email="meta@example.com", name="Meta Name")
+    seed_auth_user(user_email_only, email="local-part@example.com", name=None)
+    # `user_none` taucht in auth.users gar nicht auf — LEFT JOIN liefert NULL,
+    # Service-Fallback ist die User-ID-String-Repraesentation.
+
+    try:
+        with TestClient(app) as client:
+            persona = client.post(
+                f"/v1/workspaces/{ws}/personas",
+                json=_persona_body("display-fallback"),
+                headers=auth,
+            ).json()
+            persona_id = UUID(persona["id"])
+            _seed_version_status("persona_version", "persona_id", persona_id, 1, "draft")
+
+            # Drei History-Eintraege in fester Reihenfolge.
+            _insert_history("persona", persona_id, "draft", "review", owner)
+            _insert_history("persona", persona_id, "review", "draft", user_email_only)
+            _insert_history("persona", persona_id, "draft", "review", user_none)
+
+            body = client.get(f"/v1/workspaces/{ws}/dashboard", headers=auth).json()
+            activity = body["activity"]
+            assert len(activity) == 3
+
+            # ORDER BY DESC: zuerst der letzte Insert (`user_none`).
+            assert activity[0]["actor"]["display_name"] == str(user_none)
+            assert activity[1]["actor"]["display_name"] == "local-part"
+            assert activity[2]["actor"]["display_name"] == "Meta Name"
+            assert activity[1]["event"] == "rejected"
+    finally:
+        cleanup_workspaces([owner, user_email_only, user_none])

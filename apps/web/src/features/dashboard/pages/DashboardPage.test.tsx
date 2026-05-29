@@ -75,6 +75,38 @@ describe('DashboardPage', () => {
     })
   })
 
+  it('rendert auch ohne actor (Legacy-Payload) ohne Crash', async () => {
+    // Regression: vor Phase-3 Fix Track 1 lieferte das Backend die
+    // `status_history`-Rohzeilen — kein `actor`. `ActivityRow` darf das
+    // nicht abstuerzen lassen.
+    const legacy = {
+      kpis: { active_personas: 1, active_playbooks: 1, pending_reviews: 0 },
+      activity: [
+        {
+          ts: '2026-05-28T10:00:00Z',
+          entity_type: 'persona' as const,
+          entity_id: 'p1',
+          event: 'submitted_for_review',
+        },
+      ],
+      status_distribution: {
+        persona: { draft: 0, review: 1, active: 1, inactive: 0 },
+        playbook: { draft: 0, review: 0, active: 1, inactive: 0 },
+      },
+    }
+    vi.stubGlobal('fetch', jsonFetch(legacy))
+
+    renderInRoutes(<DashboardPage />, {
+      path: '/w/:workspaceId/dashboard',
+      initialEntries: ['/w/ws-1/dashboard'],
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Unbekannt')).toBeInTheDocument()
+    })
+    expect(screen.getByText(/zur Review eingereicht/)).toBeInTheDocument()
+  })
+
   it('zeigt eine Empty-Hint, wenn keine Aktivitaeten vorliegen', async () => {
     const empty: DashboardData = {
       kpis: { active_personas: 0, active_playbooks: 0, pending_reviews: 0 },

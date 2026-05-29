@@ -1,23 +1,32 @@
 """Read-only Aggregat-Queries fuers Workspace-Dashboard (Phase 2.1b-B).
 
-Zwei Stoerquellen, drei Queries: pro Entity-Typ eine Distribution-Query
-(`GROUP BY status` ueber `*_version`, joined ans Entitaets-Aggregat fuer den
-`workspace_id`-Filter) und eine Activity-Query gegen `status_history` mit
-`entity_id`-Subquery zur Workspace-Isolation. Verantwortung wie ueberall:
-SQL + Row-Mapping, keine Geschaeftsregeln.
+Drei Distribution-Queries (eine pro Entity-Typ, `GROUP BY status` ueber
+`*_version`, joined ans Entitaets-Aggregat fuer den `workspace_id`-Filter)
+und **eine** Activity-Query — eine UNION-ALL ueber persona/playbook/resource,
+die sowohl den Entity-Namen mitliefert als auch (LEFT JOIN auf `auth.users`)
+Email und `raw_user_meta_data` fuer den Anzeigenamen heranholt. Kein
+Per-Row-Lookup, kein N+1.
 
 `status_history` traegt selbst keinen `workspace_id`; die Isolation laeuft
-daher ueber `entity_id IN (SELECT id FROM <entity> WHERE workspace_id = $1)`.
-Sobald Resource-Status in 2.2 dazu kommt, muss die Activity-Query um einen
-dritten `OR`-Zweig (`entity_type = 'resource'`) ergaenzt werden.
+weiterhin per `entity_id IN (SELECT id FROM <entity> WHERE workspace_id = $1)`
+in jedem UNION-Zweig. Aktivitaeten zu zwischenzeitlich geloeschten Entities
+fallen damit aus dem Feed — der Audit-Trail in `status_history` ist
+schemaseitig ohne workspace_id-Snapshot nicht kreuz-isolier-fest und der
+Aufruf in `dashboard_service` faellt fuer fehlende Namen auf den
+`entity_id`-Tail zurueck (Tombstone-Schutz fuer Race-Faelle).
+
+`auth.users` lebt im GoTrue-Schema; LEFT JOIN, damit Test-User ohne
+GoTrue-Row trotzdem mit reinem User-ID-Fallback durchkommen.
 """
 
-from typing import Protocol
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any, Protocol
 from uuid import UUID
 
 import asyncpg
 
-from who2be_models import StatusHistoryEntry, VersionStatus
+from who2be_models import EntityType, VersionStatus
 
 _ACTIVITY_LIMIT = 50
 
@@ -45,21 +54,62 @@ _RESOURCE_DISTRIBUTION = """
     GROUP BY rv.status
 """
 
-# Subquery-Filter ersetzt einen fehlenden `workspace_id` in `status_history`
-# und haelt die Tabelle entity-agnostisch. Resource-Zweig seit Phase 2.2.
+# Single UNION-ALL — persona/playbook/resource in einer Query, plus
+# Anzeige-Felder (`entity_name`, `user_email`, `user_meta`). LIMIT greift
+# nach dem ORDER BY ueber das Gesamtergebnis.
 _ACTIVITY = """
-    SELECT id, entity_type, entity_id, from_status, to_status,
-           changed_by, changed_at, note
-    FROM status_history
-    WHERE (entity_type = 'persona'  AND entity_id IN
-              (SELECT id FROM persona  WHERE workspace_id = $1))
-       OR (entity_type = 'playbook' AND entity_id IN
-              (SELECT id FROM playbook WHERE workspace_id = $1))
-       OR (entity_type = 'resource' AND entity_id IN
-              (SELECT id FROM resource WHERE workspace_id = $1))
-    ORDER BY changed_at DESC
+    WITH activity AS (
+        SELECT 'persona'::text AS entity_type, sh.entity_id,
+               sh.changed_at, sh.changed_by,
+               sh.from_status, sh.to_status,
+               p.name AS entity_name
+        FROM status_history sh
+        LEFT JOIN persona p ON p.id = sh.entity_id AND p.workspace_id = $1
+        WHERE sh.entity_type = 'persona'
+          AND sh.entity_id IN (SELECT id FROM persona WHERE workspace_id = $1)
+        UNION ALL
+        SELECT 'playbook'::text, sh.entity_id,
+               sh.changed_at, sh.changed_by,
+               sh.from_status, sh.to_status,
+               pb.name AS entity_name
+        FROM status_history sh
+        LEFT JOIN playbook pb ON pb.id = sh.entity_id AND pb.workspace_id = $1
+        WHERE sh.entity_type = 'playbook'
+          AND sh.entity_id IN (SELECT id FROM playbook WHERE workspace_id = $1)
+        UNION ALL
+        SELECT 'resource'::text, sh.entity_id,
+               sh.changed_at, sh.changed_by,
+               sh.from_status, sh.to_status,
+               r.name AS entity_name
+        FROM status_history sh
+        LEFT JOIN resource r ON r.id = sh.entity_id AND r.workspace_id = $1
+        WHERE sh.entity_type = 'resource'
+          AND sh.entity_id IN (SELECT id FROM resource WHERE workspace_id = $1)
+    )
+    SELECT a.entity_type, a.entity_id, a.changed_at, a.changed_by,
+           a.from_status, a.to_status, a.entity_name,
+           u.email AS user_email,
+           u.raw_user_meta_data AS user_meta
+    FROM activity a
+    LEFT JOIN auth.users u ON u.id = a.changed_by
+    ORDER BY a.changed_at DESC
     LIMIT $2
 """
+
+
+@dataclass(frozen=True)
+class DashboardActivityRow:
+    """Raw-Row aus `_ACTIVITY` — wird im Service zum DTO gemappt."""
+
+    entity_type: EntityType
+    entity_id: UUID
+    changed_at: datetime
+    changed_by: UUID
+    from_status: VersionStatus | None
+    to_status: VersionStatus
+    entity_name: str | None
+    user_email: str | None
+    user_meta: dict[str, Any] | None
 
 
 class DashboardRepository(Protocol):
@@ -67,11 +117,9 @@ class DashboardRepository(Protocol):
 
     async def status_distribution(
         self, workspace_id: UUID
-    ) -> tuple[
-        dict[VersionStatus, int], dict[VersionStatus, int], dict[VersionStatus, int]
-    ]: ...
+    ) -> tuple[dict[VersionStatus, int], dict[VersionStatus, int], dict[VersionStatus, int]]: ...
 
-    async def recent_activity(self, workspace_id: UUID) -> list[StatusHistoryEntry]: ...
+    async def recent_activity(self, workspace_id: UUID) -> list[DashboardActivityRow]: ...
 
 
 class PgDashboardRepository:
@@ -82,9 +130,7 @@ class PgDashboardRepository:
 
     async def status_distribution(
         self, workspace_id: UUID
-    ) -> tuple[
-        dict[VersionStatus, int], dict[VersionStatus, int], dict[VersionStatus, int]
-    ]:
+    ) -> tuple[dict[VersionStatus, int], dict[VersionStatus, int], dict[VersionStatus, int]]:
         persona_rows = await self._pool.fetch(_PERSONA_DISTRIBUTION, workspace_id)
         playbook_rows = await self._pool.fetch(_PLAYBOOK_DISTRIBUTION, workspace_id)
         resource_rows = await self._pool.fetch(_RESOURCE_DISTRIBUTION, workspace_id)
@@ -94,6 +140,38 @@ class PgDashboardRepository:
             {VersionStatus(row["status"]): row["n"] for row in resource_rows},
         )
 
-    async def recent_activity(self, workspace_id: UUID) -> list[StatusHistoryEntry]:
+    async def recent_activity(self, workspace_id: UUID) -> list[DashboardActivityRow]:
         rows = await self._pool.fetch(_ACTIVITY, workspace_id, _ACTIVITY_LIMIT)
-        return [StatusHistoryEntry.model_validate(dict(row)) for row in rows]
+        return [_row_to_activity(row) for row in rows]
+
+
+def _row_to_activity(row: asyncpg.Record) -> DashboardActivityRow:
+    raw_meta = row["user_meta"]
+    # GoTrue speichert `raw_user_meta_data` als jsonb; asyncpg liefert es
+    # je nach Codec als dict oder als JSON-String — beides absichern.
+    meta: dict[str, Any] | None
+    if isinstance(raw_meta, dict):
+        meta = raw_meta
+    elif isinstance(raw_meta, str) and raw_meta:
+        import json
+
+        try:
+            parsed = json.loads(raw_meta)
+        except json.JSONDecodeError:
+            parsed = None
+        meta = parsed if isinstance(parsed, dict) else None
+    else:
+        meta = None
+
+    from_status_raw = row["from_status"]
+    return DashboardActivityRow(
+        entity_type=row["entity_type"],
+        entity_id=row["entity_id"],
+        changed_at=row["changed_at"],
+        changed_by=row["changed_by"],
+        from_status=VersionStatus(from_status_raw) if from_status_raw is not None else None,
+        to_status=VersionStatus(row["to_status"]),
+        entity_name=row["entity_name"],
+        user_email=row["user_email"],
+        user_meta=meta,
+    )
