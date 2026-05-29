@@ -17,6 +17,7 @@ from who2be_models import (
     PlaybookUpdate,
     PlaybookVersionRead,
     VersionStatus,
+    WorkspaceRole,
 )
 
 
@@ -40,7 +41,7 @@ def _ctx(
     return WorkspaceContext(
         workspace_id=workspace_id,
         user_id=user_id or uuid4(),
-        role="admin",
+        role=WorkspaceRole.admin,
         is_api_token=is_api_token,
     )
 

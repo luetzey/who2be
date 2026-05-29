@@ -10,13 +10,14 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 
-from who2be_api.core.security import WorkspaceContext
+from who2be_api.core.security import WorkspaceContext, require_role
 from who2be_api.repositories.resource_repository import ResourceRepository
 from who2be_models import (
     ResourceCreate,
     ResourceRead,
     ResourceUpdate,
     ResourceVersionRead,
+    WorkspaceRole,
     encode_cursor,
 )
 
@@ -42,6 +43,7 @@ class ResourceService:
         self._repo = resource_repo
 
     async def create(self, ctx: WorkspaceContext, data: ResourceCreate) -> ResourceRead:
+        require_role(ctx, WorkspaceRole.editor)
         return await self._repo.insert(ctx.workspace_id, ctx.user_id, data.name, data.content)
 
     async def list_all(
@@ -71,6 +73,7 @@ class ResourceService:
         self, ctx: WorkspaceContext, resource_id: UUID, data: ResourceUpdate
     ) -> ResourceRead:
         """Erzeugt eine neue Version der Resource (Draft-on-Edit bei Active)."""
+        require_role(ctx, WorkspaceRole.editor)
         outcome = await self._repo.update(
             ctx.workspace_id, ctx.user_id, resource_id, data.name, data.content
         )

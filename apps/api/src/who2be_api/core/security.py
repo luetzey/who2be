@@ -14,7 +14,7 @@ import hashlib
 import logging
 import secrets
 from dataclasses import dataclass
-from typing import Annotated, Literal
+from typing import Annotated
 from uuid import UUID
 
 import asyncpg
@@ -26,6 +26,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from who2be_api.core.config import get_settings
 from who2be_api.core.db import get_pool
 from who2be_api.repositories.token_repository import PgTokenRepository, TokenRepository
+from who2be_models import WorkspaceRole
 
 logger = logging.getLogger(__name__)
 
@@ -83,10 +84,15 @@ class CurrentPrincipal:
     `token_workspace_id` ist nur fuer den API-Token-Pfad gesetzt — Tokens sind
     pro Workspace gepinnt. JWT-Aufrufer haben `None` und werden in
     `get_current_workspace` allein per Membership autorisiert.
+
+    `token_role` traegt im Token-Pfad die gepinnte Snapshot-Rolle aus
+    `api_token.role` (ADR-0023); im JWT-Pfad `None` (Rolle kommt dann aus
+    `workspace_member`).
     """
 
     user_id: UUID
     token_workspace_id: UUID | None
+    token_role: WorkspaceRole | None = None
 
 
 @dataclass(frozen=True)
@@ -96,12 +102,38 @@ class WorkspaceContext:
     `is_api_token` ist True, wenn der Aufruf ueber einen `w2b_`-API-Token kam
     (MCP-Server). Services nutzen das Flag, um nur Active-Versionen
     zurueckzuliefern (Plan §2.1.D — Active-Filter im Repo).
+
+    `role` ist die effektive Rolle (Membership-Rolle im JWT-Pfad,
+    Snapshot-Rolle im Token-Pfad) und Basis fuer `require_role` (ADR-0023).
     """
 
     workspace_id: UUID
     user_id: UUID
-    role: Literal["admin", "editor", "viewer"]
+    role: WorkspaceRole
     is_api_token: bool = False
+
+
+# Rollen-Hierarchie admin > editor > viewer (ADR-0023). Numerischer Rang fuer
+# `require_role`-Vergleiche — Single-Source der Ordnung im Backend.
+_ROLE_ORDER: dict[WorkspaceRole, int] = {
+    WorkspaceRole.viewer: 0,
+    WorkspaceRole.editor: 1,
+    WorkspaceRole.admin: 2,
+}
+
+
+def role_satisfies(actual: WorkspaceRole, minimum: WorkspaceRole) -> bool:
+    """True, wenn `actual` mindestens `minimum` in der Hierarchie erreicht."""
+    return _ROLE_ORDER[actual] >= _ROLE_ORDER[minimum]
+
+
+def require_role(ctx: WorkspaceContext, minimum: WorkspaceRole) -> None:
+    """Wirft 403, wenn die Kontext-Rolle `minimum` nicht erreicht (ADR-0023)."""
+    if not role_satisfies(ctx.role, minimum):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Diese Aktion erfordert mindestens die Rolle '{minimum.value}'.",
+        )
 
 
 def verify_supabase_jwt(token: str) -> UUID:
@@ -155,7 +187,9 @@ async def resolve_principal(token: str, token_repo: TokenRepository) -> CurrentP
             logger.warning("last_used_at konnte nicht aktualisiert werden.")
         structlog.contextvars.bind_contextvars(owner_id=str(auth.owner_id))
         return CurrentPrincipal(
-            user_id=auth.owner_id, token_workspace_id=auth.workspace_id
+            user_id=auth.owner_id,
+            token_workspace_id=auth.workspace_id,
+            token_role=auth.role,
         )
     return CurrentPrincipal(user_id=verify_supabase_jwt(token), token_workspace_id=None)
 
@@ -174,9 +208,7 @@ async def get_current_principal(
         raise _credentials_error()
     token = credentials.credentials
     if not token.startswith(TOKEN_PREFIX):
-        return CurrentPrincipal(
-            user_id=verify_supabase_jwt(token), token_workspace_id=None
-        )
+        return CurrentPrincipal(user_id=verify_supabase_jwt(token), token_workspace_id=None)
     try:
         pool = get_pool()
     except RuntimeError as exc:
@@ -205,19 +237,33 @@ async def get_current_workspace(
 ) -> "WorkspaceContext":
     """FastAPI-Dependency: `WorkspaceContext` fuer Workspace-scoped Endpunkte.
 
-    Pruefung in zwei Stufen:
-    1. API-Token-Snapshot: Token-`workspace_id` muss exakt zum Path-Segment
-       passen — Defense gegen Cross-Workspace-Token-Reuse.
-    2. Membership: `workspace_member`-Lookup; nicht-Mitglied → 403.
+    Zwei getrennte Pfade (ADR-0023):
+    - **API-Token:** Token-`workspace_id` muss exakt zum Path-Segment passen
+      (Defense gegen Cross-Workspace-Token-Reuse); die Rolle ist die gepinnte
+      Snapshot-Rolle aus `api_token.role`. Bewusst **kein**
+      `workspace_member`-Lookup — ein gepinnter Token bleibt gueltig, bis er
+      revoked wird, auch wenn der Ersteller spaeter herabgestuft/entfernt wird.
+    - **JWT:** `workspace_member`-Lookup; nicht-Mitglied → 403. Rolle = die
+      aktuelle Membership-Rolle.
     """
-    if (
-        principal.token_workspace_id is not None
-        and principal.token_workspace_id != workspace_id
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Token gehoert nicht zu diesem Workspace.",
+    if principal.token_workspace_id is not None:
+        if principal.token_workspace_id != workspace_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Token gehoert nicht zu diesem Workspace.",
+            )
+        if principal.token_role is None:
+            # Defensiv: der Token-Pfad setzt `token_role` immer mit. Fehlt sie,
+            # ist der Principal inkonsistent — kein stiller Voll-Zugriff.
+            raise _credentials_error()
+        structlog.contextvars.bind_contextvars(workspace_id=str(workspace_id))
+        return WorkspaceContext(
+            workspace_id=workspace_id,
+            user_id=principal.user_id,
+            role=principal.token_role,
+            is_api_token=True,
         )
+
     try:
         pool = get_pool()
     except RuntimeError as exc:
@@ -239,6 +285,6 @@ async def get_current_workspace(
     return WorkspaceContext(
         workspace_id=workspace_id,
         user_id=principal.user_id,
-        role=role,
-        is_api_token=principal.token_workspace_id is not None,
+        role=WorkspaceRole(role),
+        is_api_token=False,
     )
