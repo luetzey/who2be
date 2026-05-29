@@ -26,7 +26,7 @@ from who2be_api.core.security import (
 )
 from who2be_api.repositories.invitation_repository import PgInvitationRepository
 from who2be_api.services.invitation_service import InvitationService
-from who2be_models import InvitationCreate, InvitationCreated, InvitationRead
+from who2be_models import InvitationCreate, InvitationCreated, InvitationRead, WorkspaceRole
 
 router = APIRouter(prefix="/invitations", tags=["invitations"])
 accept_router = APIRouter(prefix="/v1/invitations", tags=["invitations"])
@@ -54,19 +54,19 @@ class InvitationAcceptResult(BaseModel):
 async def create_invitation(
     request: Request, data: InvitationCreate, ctx: Ctx, service: Service
 ) -> InvitationCreated:
-    require_role(ctx, "admin")
+    require_role(ctx, WorkspaceRole.admin)
     return await service.create(ctx, data)
 
 
 @router.get("")
 async def list_invitations(ctx: Ctx, service: Service) -> list[InvitationRead]:
-    require_role(ctx, "admin")
+    require_role(ctx, WorkspaceRole.admin)
     return await service.list_pending(ctx)
 
 
 @router.delete("/{invitation_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def revoke_invitation(invitation_id: UUID, ctx: Ctx, service: Service) -> None:
-    require_role(ctx, "admin")
+    require_role(ctx, WorkspaceRole.admin)
     await service.revoke(ctx, invitation_id)
 
 

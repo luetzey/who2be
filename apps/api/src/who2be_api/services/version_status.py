@@ -24,7 +24,7 @@ from uuid import UUID
 import asyncpg
 from fastapi import HTTPException, status
 
-from who2be_api.core.security import WorkspaceContext
+from who2be_api.core.security import WorkspaceContext, require_role
 from who2be_api.services.status_history_service import StatusHistoryService
 from who2be_models import (
     ALLOWED_TRANSITIONS,
@@ -33,6 +33,7 @@ from who2be_models import (
     PlaybookVersionRead,
     ResourceVersionRead,
     VersionStatus,
+    WorkspaceRole,
 )
 
 
@@ -44,15 +45,10 @@ def _not_found(entity_type: EntityType) -> HTTPException:
     )
 
 
-def _forbidden_transition(
-    from_status: VersionStatus, to_status: VersionStatus
-) -> HTTPException:
+def _forbidden_transition(from_status: VersionStatus, to_status: VersionStatus) -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_409_CONFLICT,
-        detail=(
-            f"Status-Uebergang {from_status.value} → {to_status.value} "
-            "ist nicht erlaubt."
-        ),
+        detail=(f"Status-Uebergang {from_status.value} → {to_status.value} ist nicht erlaubt."),
     )
 
 
@@ -69,6 +65,21 @@ def validate_transition(from_status: VersionStatus, to_status: VersionStatus) ->
     """Wirft 409, wenn der Uebergang nicht erlaubt ist."""
     if to_status not in ALLOWED_TRANSITIONS[from_status]:
         raise _forbidden_transition(from_status, to_status)
+
+
+def required_role_for_transition(
+    from_status: VersionStatus, to_status: VersionStatus
+) -> WorkspaceRole:
+    """Mindestrolle fuer einen (erlaubten) Status-Uebergang (ADR-0023).
+
+    Promote-to-Active (`review → active`) und Retire (`active → inactive`)
+    sind admin-only; alle uebrigen erlaubten Uebergaenge (`draft → review`,
+    `review → draft`, `inactive → draft`) sind ab `editor` zulaessig.
+    """
+    _ = from_status  # Gate haengt allein am Ziel-Status (active/inactive).
+    if to_status in (VersionStatus.active, VersionStatus.inactive):
+        return WorkspaceRole.admin
+    return WorkspaceRole.editor
 
 
 _PERSONA_TABLES = ("persona", "persona_version", "persona_id")
@@ -150,6 +161,10 @@ class VersionStatusService:
                 raise _not_found(entity_type)
             from_status = VersionStatus(target["status"])
             validate_transition(from_status, to_status)
+            # RBAC-Gate nach der State-Machine: erst pruefen, ob der Uebergang
+            # ueberhaupt erlaubt ist (409), dann ob die Rolle ihn ausfuehren
+            # darf (403). Promote/Retire verlangen admin (ADR-0023).
+            require_role(ctx, required_role_for_transition(from_status, to_status))
 
             # Active-Promotion: die bisherige Active-Version derselben
             # Entity zuerst auf `inactive` setzen — sonst kollidiert der
@@ -170,10 +185,7 @@ class VersionStatusService:
                         VersionStatus.active,
                         VersionStatus.inactive,
                         ctx.user_id,
-                        note=(
-                            "Auto-inactiviert durch Promotion von v"
-                            f"{version} auf 'active'."
-                        ),
+                        note=(f"Auto-inactiviert durch Promotion von v{version} auf 'active'."),
                     )
 
             try:
@@ -206,5 +218,6 @@ class VersionStatusService:
 
 __all__ = [
     "VersionStatusService",
+    "required_role_for_transition",
     "validate_transition",
 ]

@@ -27,7 +27,7 @@ from who2be_api.core.security import (
     verify_supabase_jwt,
 )
 from who2be_api.repositories.token_repository import TokenAuthRow
-from who2be_models import TokenRead
+from who2be_models import TokenRead, WorkspaceRole
 
 _SECRET = "unit-test-jwt-secret-padding-0123456789"
 
@@ -56,7 +56,12 @@ class FakeTokenRepository:
         self.touched: list[str] = []
 
     async def insert(
-        self, workspace_id: UUID, owner_id: UUID, name: str, token_hash: str
+        self,
+        workspace_id: UUID,
+        owner_id: UUID,
+        name: str,
+        token_hash: str,
+        role: WorkspaceRole,
     ) -> TokenRead:
         raise NotImplementedError
 
@@ -178,11 +183,16 @@ def test_resolve_principal_via_api_token_touches_last_used() -> None:
     owner = uuid4()
     workspace = uuid4()
     repo = FakeTokenRepository(
-        {hash_token(plaintext): TokenAuthRow(owner_id=owner, workspace_id=workspace)}
+        {
+            hash_token(plaintext): TokenAuthRow(
+                owner_id=owner, workspace_id=workspace, role=WorkspaceRole.editor
+            )
+        }
     )
     principal = asyncio.run(resolve_principal(plaintext, repo))
     assert principal.user_id == owner
     assert principal.token_workspace_id == workspace
+    assert principal.token_role == WorkspaceRole.editor
     assert repo.touched == [hash_token(plaintext)]
 
 

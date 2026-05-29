@@ -17,7 +17,7 @@ from who2be_api.repositories.workspace_member_repository import (
     PgWorkspaceMemberRepository,
 )
 from who2be_api.services.workspace_member_service import WorkspaceMemberService
-from who2be_models import WorkspaceMemberRead, WorkspaceMemberUpdate
+from who2be_models import WorkspaceMemberRead, WorkspaceMemberUpdate, WorkspaceRole
 
 router = APIRouter(prefix="/members", tags=["members"])
 
@@ -41,11 +41,11 @@ async def list_members(ctx: Ctx, service: Service) -> list[WorkspaceMemberRead]:
 async def update_member_role(
     user_id: UUID, data: WorkspaceMemberUpdate, ctx: Ctx, service: Service
 ) -> WorkspaceMemberRead:
-    require_role(ctx, "admin")
+    require_role(ctx, WorkspaceRole.admin)
     return await service.update_role(ctx.workspace_id, user_id, data.role)
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_member(user_id: UUID, ctx: Ctx, service: Service) -> None:
-    require_role(ctx, "admin")
+    require_role(ctx, WorkspaceRole.admin)
     await service.remove(ctx.workspace_id, user_id)

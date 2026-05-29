@@ -12,13 +12,14 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 
-from who2be_api.core.security import WorkspaceContext
+from who2be_api.core.security import WorkspaceContext, require_role
 from who2be_api.repositories.playbook_repository import PlaybookRepository
 from who2be_models import (
     PlaybookCreate,
     PlaybookRead,
     PlaybookUpdate,
     PlaybookVersionRead,
+    WorkspaceRole,
     encode_cursor,
 )
 
@@ -44,9 +45,8 @@ class PlaybookService:
         self._repo = playbook_repo
 
     async def create(self, ctx: WorkspaceContext, data: PlaybookCreate) -> PlaybookRead:
-        return await self._repo.insert(
-            ctx.workspace_id, ctx.user_id, data.name, data.content
-        )
+        require_role(ctx, WorkspaceRole.editor)
+        return await self._repo.insert(ctx.workspace_id, ctx.user_id, data.name, data.content)
 
     async def list_all(
         self,
@@ -82,6 +82,7 @@ class PlaybookService:
         self, ctx: WorkspaceContext, playbook_id: UUID, data: PlaybookUpdate
     ) -> PlaybookRead:
         """Erzeugt eine neue Version des Playbooks (Draft-on-Edit bei Active)."""
+        require_role(ctx, WorkspaceRole.editor)
         outcome = await self._repo.update(
             ctx.workspace_id, ctx.user_id, playbook_id, data.name, data.content
         )

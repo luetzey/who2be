@@ -83,11 +83,15 @@ export interface Token {
   revoked_at: string | null
 }
 
+// Rollen-Hierarchie laut ADR-0023: admin > editor > viewer. Single-Source
+// fuer das Frontend (spiegelt `WorkspaceRole` aus packages/models).
+export type WorkspaceRole = 'admin' | 'editor' | 'viewer'
+
 export interface MeWorkspaceMembership {
   id: string
   name: string
   slug: string
-  role: 'admin' | 'editor' | 'viewer'
+  role: WorkspaceRole
 }
 
 export interface MeOrganization {
@@ -110,6 +114,45 @@ export interface TokenCreated extends Token {
 
 export interface TokenInput {
   name: string
+  // Phase 2.3 — optionaler Rollen-Snapshot. Bleibt weg, solange die Rolle
+  // unbekannt ist (Service defaultet dann auf die Rolle des Erstellers).
+  role?: WorkspaceRole
+}
+
+// Phase 2.3-C — Multi-User pro Workspace. Spiegelt WorkspaceMemberRead /
+// InvitationRead aus packages/models. Endpoints folgen in Prompt A/B; bis
+// dahin antwortet das Backend 404 — die Pages fangen das als Error/Empty ab.
+export interface Member {
+  user_id: string
+  // `email` ist die menschenlesbare Identitaet in der Member-Tabelle. Backend
+  // liefert sie (Join auf auth.users); fehlt sie, faellt die UI auf user_id.
+  email: string
+  role: WorkspaceRole
+  joined_at: string
+}
+
+export interface MemberUpdateInput {
+  role: WorkspaceRole
+}
+
+export interface Invitation {
+  id: string
+  email: string
+  role: WorkspaceRole
+  expires_at: string
+  created_at: string
+  // Klartext-Token nur unmittelbar nach Erstellung (analog API-Token). Aus der
+  // Liste liefert das Backend ihn bewusst nicht (Hash-only, ADR-0023).
+  token?: string | null
+}
+
+export interface InvitationInput {
+  email: string
+  role: WorkspaceRole
+}
+
+export interface InvitationAcceptResult {
+  workspace_id: string
 }
 
 // Dashboard-Endpoint (Phase 2.1b §2.1.E). Felder folgen dem Plan-Beispiel

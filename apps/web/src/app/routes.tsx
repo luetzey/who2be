@@ -5,7 +5,7 @@ import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
 import { RequireAuth } from '@/auth/RequireAuth'
 import { SessionProvider } from '@/auth/SessionProvider'
 import { useSession } from '@/auth/session-context'
-import { LoginPage } from '@/features/auth'
+import { InvitationAcceptPage, LoginPage } from '@/features/auth'
 
 import { AppLayout } from './AppLayout'
 
@@ -62,6 +62,11 @@ const SettingsTokensPage = lazy(() =>
     default: mod.SettingsTokensPage,
   })),
 )
+const MembersPage = lazy(() =>
+  import('@/features/settings/pages/MembersPage').then((mod) => ({
+    default: mod.MembersPage,
+  })),
+)
 const DashboardPage = lazy(() =>
   import('@/features/dashboard/pages/DashboardPage').then((mod) => ({
     default: mod.DashboardPage,
@@ -104,6 +109,10 @@ export function RouterRoot() {
         <AuthTokenProvider>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
+            <Route
+              path="/invitations/:token/accept"
+              element={<InvitationAcceptPage />}
+            />
             <Route element={<RequireAuth />}>
               <Route path="/" element={<DefaultWorkspaceRedirect />} />
               <Route element={<AppLayout />}>
@@ -121,6 +130,10 @@ export function RouterRoot() {
                 <Route
                   path="/w/:workspaceId/settings/tokens"
                   element={<SettingsTokensPage />}
+                />
+                <Route
+                  path="/w/:workspaceId/settings/members"
+                  element={<MembersPage />}
                 />
                 {CatalogPage ? (
                   <Route path="/_catalog" element={<CatalogPage />} />

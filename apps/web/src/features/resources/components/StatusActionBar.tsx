@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import type { VersionStatus } from '@/api/types'
 import { useApi } from '@/api/useApi'
+import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { Button } from '@/components/ui/button'
 import { notify } from '@/lib/feedback'
 
@@ -24,6 +25,7 @@ export function StatusActionBar({
   onTransitioned,
 }: StatusActionBarProps) {
   const api = useApi()
+  const role = useCurrentWorkspaceRole()
   const [busy, setBusy] = useState<VersionStatus | null>(null)
 
   const transition = async (to: VersionStatus, success: string) => {
@@ -48,6 +50,9 @@ export function StatusActionBar({
     return null
   }
 
+  // Promote (Review → Active) ist Admin-only (ADR-0023, Reviewer-Rolle).
+  const canPromote = role === 'admin'
+
   return (
     <div className="flex flex-wrap items-center gap-2" role="toolbar" aria-label="Status-Aktionen">
       {showPromote ? (
@@ -55,7 +60,8 @@ export function StatusActionBar({
           type="button"
           variant="brand"
           onClick={() => void transition('active', 'Version aktiviert.')}
-          disabled={busy !== null}
+          disabled={busy !== null || !canPromote}
+          title={canPromote ? undefined : 'Nur Admins können aktivieren'}
         >
           Aktivieren
         </Button>

@@ -1,7 +1,16 @@
-import { BookOpen, FileText, KeyRound, LayoutDashboard, LogOut, Users } from 'lucide-react'
+import {
+  BookOpen,
+  FileText,
+  KeyRound,
+  LayoutDashboard,
+  LogOut,
+  UserCog,
+  Users,
+} from 'lucide-react'
 import type { ComponentType, ReactNode, SVGProps } from 'react'
 import { NavLink } from 'react-router-dom'
 
+import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
@@ -26,14 +35,20 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/settings/tokens', label: 'API-Tokens', icon: KeyRound },
 ]
 
+// Mitglieder-Verwaltung ist Admin-only (ADR-0023) — der Link erscheint nur
+// für Admins; Editor/Viewer würden ohnehin aufs Dashboard zurückgeworfen.
+const ADMIN_NAV_ITEM: NavItem = { to: '/settings/members', label: 'Mitglieder', icon: UserCog }
+
 export function AppShell({ children, onSignOut }: AppShellProps) {
   const wsPath = useWorkspacePath()
+  const role = useCurrentWorkspaceRole()
+  const navItems = role === 'admin' ? [...NAV_ITEMS, ADMIN_NAV_ITEM] : NAV_ITEMS
   return (
     <div className="flex min-h-screen w-full bg-background text-foreground">
       <aside className="hidden w-60 shrink-0 flex-col border-r bg-muted/40 px-3 py-4 sm:flex">
         <div className="px-2 pb-6 text-sm font-semibold tracking-tight">Who2Be</div>
         <nav aria-label="Hauptnavigation" className="flex flex-1 flex-col gap-1">
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={wsPath(item.to)}
@@ -53,7 +68,7 @@ export function AppShell({ children, onSignOut }: AppShellProps) {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 items-center justify-between border-b px-4 sm:px-6">
           <nav aria-label="Hauptnavigation (mobil)" className="flex items-center gap-3 sm:hidden">
-            {NAV_ITEMS.map((item) => (
+            {navItems.map((item) => (
               <NavLink
                 key={item.to}
                 to={wsPath(item.to)}

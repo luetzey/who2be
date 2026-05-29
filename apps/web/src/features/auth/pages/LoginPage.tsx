@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { z } from 'zod'
 
 import { ErrorAlert } from '@/components/data/ErrorAlert'
@@ -21,7 +21,14 @@ type LoginValues = z.infer<typeof loginSchema>
 export function LoginPage() {
   const { session, signIn } = useSession()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [error, setError] = useState<string | null>(null)
+
+  // `next` bringt den User nach dem Login dorthin zurück, wo ihn ein
+  // Auth-Gate abgefangen hat (z. B. /invitations/:token/accept). Nur relative
+  // In-App-Pfade zulassen — kein offener Redirect auf externe URLs.
+  const nextParam = searchParams.get('next')
+  const next = nextParam !== null && nextParam.startsWith('/') ? nextParam : '/'
 
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
@@ -29,14 +36,14 @@ export function LoginPage() {
   })
 
   if (session !== null) {
-    return <Navigate to="/" replace />
+    return <Navigate to={next} replace />
   }
 
   async function onSubmit(values: LoginValues) {
     setError(null)
     try {
       await signIn(values.email, values.password)
-      navigate('/')
+      navigate(next)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Login fehlgeschlagen.')
     }

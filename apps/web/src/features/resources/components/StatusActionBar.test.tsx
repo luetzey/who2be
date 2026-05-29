@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { Me, VersionStatus } from '@/api/types'
+import type { Me, VersionStatus, WorkspaceRole } from '@/api/types'
 import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
 import { SessionContext } from '@/auth/session-context'
 import { notify } from '@/lib/feedback'
@@ -15,11 +15,32 @@ vi.mock('@/lib/feedback', () => ({
 }))
 
 const session = { access_token: 'jwt' } as unknown as Session
-const me: Me = { user_id: 'u1', default_workspace_id: 'ws-1', organizations: [] }
 
-function renderBar(status: VersionStatus, onTransitioned = vi.fn()) {
+function buildMe(role: WorkspaceRole): Me {
+  return {
+    user_id: 'u1',
+    default_workspace_id: 'ws-1',
+    organizations: [
+      {
+        id: 'o1',
+        name: 'Org',
+        slug: 'org',
+        kind: 'personal',
+        workspaces: [{ id: 'ws-1', name: 'WS', slug: 'ws', role }],
+      },
+    ],
+  }
+}
+
+function renderBar(
+  status: VersionStatus,
+  onTransitioned = vi.fn(),
+  role: WorkspaceRole = 'admin',
+) {
   return render(
-    <SessionContext.Provider value={{ session, me, signIn: vi.fn(), signOut: vi.fn() }}>
+    <SessionContext.Provider
+      value={{ session, me: buildMe(role), signIn: vi.fn(), signOut: vi.fn() }}
+    >
       <AuthTokenProvider>
         <MemoryRouter initialEntries={['/w/ws-1/resources/r1']}>
           <Routes>
@@ -58,6 +79,17 @@ describe('StatusActionBar (resource)', () => {
     renderBar('review')
     expect(screen.getByRole('button', { name: 'Aktivieren' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Ablehnen' })).toBeInTheDocument()
+  })
+
+  it('aktiviert ist für Admins klickbar, für Viewer gesperrt', () => {
+    const { unmount } = renderBar('review', vi.fn(), 'admin')
+    expect(screen.getByRole('button', { name: 'Aktivieren' })).toBeEnabled()
+    unmount()
+
+    renderBar('review', vi.fn(), 'viewer')
+    const promote = screen.getByRole('button', { name: 'Aktivieren' })
+    expect(promote).toBeDisabled()
+    expect(promote).toHaveAttribute('title', 'Nur Admins können aktivieren')
   })
 
   it('rendert nichts im Status active', () => {
