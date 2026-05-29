@@ -104,6 +104,22 @@ class WorkspaceContext:
     is_api_token: bool = False
 
 
+# Rollen-Hierarchie admin>editor>viewer (ADR-0023). `require_role` ist der
+# Stub fuer das RBAC-Gate aus Plan §2.3.B — er erzwingt bereits ein
+# Mindest-Level (admin-only fuer Member-/Invitation-Verwaltung), und Prompt A
+# baut darauf die volle Permission-Matrix auf.
+_ROLE_RANK: dict[str, int] = {"viewer": 0, "editor": 1, "admin": 2}
+
+
+def require_role(ctx: "WorkspaceContext", minimum: Literal["admin", "editor", "viewer"]) -> None:
+    """Wirft 403, wenn die Rolle im `ctx` unter `minimum` liegt."""
+    if _ROLE_RANK[ctx.role] < _ROLE_RANK[minimum]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Rolle '{minimum}' erforderlich.",
+        )
+
+
 def verify_supabase_jwt(token: str) -> UUID:
     """Verifiziert ein Supabase-JWT lokal (HS256) und liest `sub` als owner_id."""
     settings = get_settings()
@@ -154,9 +170,7 @@ async def resolve_principal(token: str, token_repo: TokenRepository) -> CurrentP
         except (asyncpg.PostgresError, OSError):
             logger.warning("last_used_at konnte nicht aktualisiert werden.")
         structlog.contextvars.bind_contextvars(owner_id=str(auth.owner_id))
-        return CurrentPrincipal(
-            user_id=auth.owner_id, token_workspace_id=auth.workspace_id
-        )
+        return CurrentPrincipal(user_id=auth.owner_id, token_workspace_id=auth.workspace_id)
     return CurrentPrincipal(user_id=verify_supabase_jwt(token), token_workspace_id=None)
 
 
@@ -174,9 +188,7 @@ async def get_current_principal(
         raise _credentials_error()
     token = credentials.credentials
     if not token.startswith(TOKEN_PREFIX):
-        return CurrentPrincipal(
-            user_id=verify_supabase_jwt(token), token_workspace_id=None
-        )
+        return CurrentPrincipal(user_id=verify_supabase_jwt(token), token_workspace_id=None)
     try:
         pool = get_pool()
     except RuntimeError as exc:
@@ -210,10 +222,7 @@ async def get_current_workspace(
        passen — Defense gegen Cross-Workspace-Token-Reuse.
     2. Membership: `workspace_member`-Lookup; nicht-Mitglied → 403.
     """
-    if (
-        principal.token_workspace_id is not None
-        and principal.token_workspace_id != workspace_id
-    ):
+    if principal.token_workspace_id is not None and principal.token_workspace_id != workspace_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Token gehoert nicht zu diesem Workspace.",

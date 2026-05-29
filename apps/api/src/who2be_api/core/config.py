@@ -42,6 +42,13 @@ class Settings(BaseSettings):
     database_url: str = "postgresql://postgres:postgres@localhost:5432/who2be"
     jwt_secret: str = ""
     supabase_url: str = ""
+    # Service-Role-Key fuer GoTrue-Admin-Calls (Invitation-Mail via
+    # `POST /auth/v1/invite`). Leer ⇒ Mail-Versand wird uebersprungen (Token
+    # kommt trotzdem im 201-Body zurueck, manuell teilbar).
+    supabase_service_key: str = ""
+    # Basis-URL der Web-App fuer den Accept-Link in der Einladungs-Mail
+    # (`{web_base_url}/invitations/{token}/accept`).
+    web_base_url: str = "http://localhost:5173"
     cors_origins_raw: str = Field(
         default="http://localhost:5173",
         validation_alias=AliasChoices("CORS_ORIGINS", "cors_origins"),

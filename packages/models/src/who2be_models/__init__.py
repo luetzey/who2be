@@ -11,7 +11,12 @@ from who2be_models.dashboard import (
     DashboardStatusDistribution,
     EntityStatusDistribution,
 )
-from who2be_models.invitation import InvitationAccept, InvitationCreate, InvitationRead
+from who2be_models.invitation import (
+    InvitationAccept,
+    InvitationCreate,
+    InvitationCreated,
+    InvitationRead,
+)
 from who2be_models.links import PersonaPlaybookLinkSet
 from who2be_models.me import MeOrganization, MeRead, MeWorkspace
 from who2be_models.organization import OrganizationCreate, OrganizationRead
@@ -68,6 +73,7 @@ __all__ = [
     "EntityType",
     "InvitationAccept",
     "InvitationCreate",
+    "InvitationCreated",
     "InvitationRead",
     "MAX_LIMIT",
     "MeOrganization",

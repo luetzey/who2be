@@ -25,7 +25,9 @@ from who2be_api.core.rate_limit import (
 )
 from who2be_api.routers import (
     dashboard,
+    invitations,
     me,
+    members,
     organizations,
     persona_playbooks,
     personas,
@@ -100,10 +102,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(resources.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(playbook_resources.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(dashboard.router, prefix=_WORKSPACE_PREFIX)
+    app.include_router(members.router, prefix=_WORKSPACE_PREFIX)
+    app.include_router(invitations.router, prefix=_WORKSPACE_PREFIX)
     # Top-Level-Endpunkte: `/v1/me`, `/v1/organizations`, `/v1/workspaces/{id}`.
+    # Der anonyme Invitation-Accept haengt direkt unter `/v1/invitations`.
     app.include_router(me.router)
     app.include_router(organizations.router)
     app.include_router(workspaces.router)
+    app.include_router(invitations.accept_router)
 
     @app.get("/v1/health", response_model=Health)
     async def health() -> Health:

@@ -1885,6 +1885,7 @@ source = { editable = "apps/api" }
 dependencies = [
     { name = "asyncpg" },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "pydantic-settings" },
     { name = "pyjwt" },
     { name = "slowapi" },
@@ -1897,6 +1898,7 @@ dependencies = [
 requires-dist = [
     { name = "asyncpg", specifier = ">=0.30" },
     { name = "fastapi", specifier = ">=0.115" },
+    { name = "httpx", specifier = ">=0.28" },
     { name = "pydantic-settings", specifier = ">=2.0" },
     { name = "pyjwt", specifier = ">=2.8" },
     { name = "slowapi", specifier = ">=0.1.9" },
