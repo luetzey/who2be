@@ -31,6 +31,7 @@ from who2be_models import (
     EntityType,
     PersonaVersionRead,
     PlaybookVersionRead,
+    ResourceVersionRead,
     VersionStatus,
 )
 
@@ -72,6 +73,7 @@ def validate_transition(from_status: VersionStatus, to_status: VersionStatus) ->
 
 _PERSONA_TABLES = ("persona", "persona_version", "persona_id")
 _PLAYBOOK_TABLES = ("playbook", "playbook_version", "playbook_id")
+_RESOURCE_TABLES = ("resource", "resource_version", "resource_id")
 
 
 class VersionStatusService:
@@ -106,6 +108,19 @@ class VersionStatusService:
             ctx, "playbook", _PLAYBOOK_TABLES, playbook_id, version, to_status, note
         )
         return PlaybookVersionRead.model_validate(dict(row))
+
+    async def transition_resource_version(
+        self,
+        ctx: WorkspaceContext,
+        resource_id: UUID,
+        version: int,
+        to_status: VersionStatus,
+        note: str | None,
+    ) -> ResourceVersionRead:
+        row = await self._transition(
+            ctx, "resource", _RESOURCE_TABLES, resource_id, version, to_status, note
+        )
+        return ResourceVersionRead.model_validate(dict(row))
 
     async def _transition(
         self,

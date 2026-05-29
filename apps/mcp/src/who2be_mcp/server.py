@@ -22,7 +22,12 @@ from pydantic import BaseModel
 from who2be_mcp.client import ApiClient
 from who2be_mcp.config import Settings, get_settings
 from who2be_mcp.core_logging import configure_logging, with_tool_log
-from who2be_models import PersonaRead, PlaybookRead
+from who2be_models import (
+    PersonaRead,
+    PlaybookRead,
+    ResourceLinkRead,
+    ResourceRead,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +42,21 @@ class PersonaWithPlaybooks(BaseModel):
 
     persona: PersonaRead
     playbooks: list[PlaybookRead]
+
+
+class ResourceSummary(BaseModel):
+    """Kompakte Resource-Uebersicht fuer `list_resources`."""
+
+    id: UUID
+    name: str
+    block_count: int
+
+
+class PlaybookWithResources(BaseModel):
+    """Ein Playbook samt seiner Resource-Block-Refs (Pointer, kein Inline)."""
+
+    playbook: PlaybookRead
+    linked_blocks: list[ResourceLinkRead]
 
 
 async def _resolve_workspace_id(settings: Settings) -> UUID:
@@ -117,14 +137,55 @@ async def list_playbooks(
 
 @mcp.tool
 @with_tool_log("fetch_playbook")
-async def fetch_playbook(playbook_id: str) -> PlaybookRead:
-    """Laedt ein einzelnes Playbook per UUID."""
+async def fetch_playbook(playbook_id: str) -> PlaybookWithResources:
+    """Laedt ein Playbook per UUID samt seiner Resource-Block-Refs.
+
+    `linked_blocks` enthaelt Pointer (resource_id + block_id) mit Verfuegbarkeit
+    und einer kurzen Vorschau — kein Auto-Inline (ADR-0021). Blockinhalte
+    werden gezielt ueber `fetch_resource` nachgeladen.
+    """
     try:
         parsed = UUID(playbook_id)
     except ValueError as exc:
         raise ToolError(f"Ungueltige Playbook-UUID: '{playbook_id}'.") from exc
     client = await build_client()
-    return await client.get_playbook(parsed)
+    playbook = await client.get_playbook(parsed)
+    linked = await client.get_playbook_resource_links(parsed)
+    return PlaybookWithResources(playbook=playbook, linked_blocks=linked)
+
+
+@mcp.tool
+@with_tool_log("list_resources")
+async def list_resources() -> list[ResourceSummary]:
+    """Listet die aktiven Resources des Workspaces (id, name, block_count)."""
+    client = await build_client()
+    resources = await client.list_resources()
+    return [
+        ResourceSummary(id=r.id, name=r.name, block_count=len(r.content.blocks))
+        for r in resources
+    ]
+
+
+@mcp.tool
+@with_tool_log("fetch_resource")
+async def fetch_resource(
+    resource_id: str, block_ids: list[str] | None = None
+) -> ResourceRead:
+    """Laedt die aktive Version einer Resource (per UUID).
+
+    Ist `block_ids` gesetzt, werden nur diese Bloecke (in angefragter
+    Reihenfolge) zurueckgegeben; sonst das ganze Dokument.
+    """
+    try:
+        parsed = UUID(resource_id)
+    except ValueError as exc:
+        raise ToolError(f"Ungueltige Resource-UUID: '{resource_id}'.") from exc
+    client = await build_client()
+    resource = await client.get_resource(parsed)
+    if block_ids is not None:
+        by_id = {block.id: block for block in resource.content.blocks}
+        resource.content.blocks = [by_id[bid] for bid in block_ids if bid in by_id]
+    return resource
 
 
 def main() -> None:

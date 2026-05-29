@@ -12,7 +12,7 @@ from uuid import UUID
 import httpx
 from fastmcp.exceptions import ToolError
 
-from who2be_models import PersonaRead, PlaybookRead
+from who2be_models import PersonaRead, PlaybookRead, ResourceLinkRead, ResourceRead
 
 logger = logging.getLogger(__name__)
 
@@ -99,3 +99,19 @@ class ApiClient:
     async def get_playbook(self, playbook_id: UUID) -> PlaybookRead:
         data = await self._get(f"{self._workspace_prefix}/playbooks/{playbook_id}")
         return PlaybookRead.model_validate(data)
+
+    async def list_resources(self) -> list[ResourceRead]:
+        data = await self._get(f"{self._workspace_prefix}/resources")
+        return [ResourceRead.model_validate(item) for item in data]
+
+    async def get_resource(self, resource_id: UUID) -> ResourceRead:
+        data = await self._get(f"{self._workspace_prefix}/resources/{resource_id}")
+        return ResourceRead.model_validate(data)
+
+    async def get_playbook_resource_links(
+        self, playbook_id: UUID
+    ) -> list[ResourceLinkRead]:
+        data = await self._get(
+            f"{self._workspace_prefix}/playbooks/{playbook_id}/resource_links"
+        )
+        return [ResourceLinkRead.model_validate(item) for item in data]

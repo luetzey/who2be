@@ -29,6 +29,17 @@ from who2be_models.playbook import (
     PlaybookUpdate,
     PlaybookVersionRead,
 )
+from who2be_models.resource import (
+    ResourceBlock,
+    ResourceContent,
+    ResourceCreate,
+    ResourceLinkItem,
+    ResourceLinkRead,
+    ResourceLinkSet,
+    ResourceRead,
+    ResourceUpdate,
+    ResourceVersionRead,
+)
 from who2be_models.status import (
     ALLOWED_TRANSITIONS,
     VersionStatus,
@@ -66,6 +77,15 @@ __all__ = [
     "PlaybookRead",
     "PlaybookUpdate",
     "PlaybookVersionRead",
+    "ResourceBlock",
+    "ResourceContent",
+    "ResourceCreate",
+    "ResourceLinkItem",
+    "ResourceLinkRead",
+    "ResourceLinkSet",
+    "ResourceRead",
+    "ResourceUpdate",
+    "ResourceVersionRead",
     "StatusHistoryEntry",
     "TokenCreate",
     "TokenCreated",

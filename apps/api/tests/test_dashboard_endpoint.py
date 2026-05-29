@@ -157,6 +157,7 @@ def test_dashboard_empty_workspace_returns_zeroes_and_empty_activity(
             assert body["kpis"] == {
                 "active_personas": 0,
                 "active_playbooks": 0,
+                "active_resources": 0,
                 "pending_reviews": 0,
             }
             assert body["activity"] == []
@@ -309,6 +310,7 @@ def test_dashboard_isolates_other_workspace_data(
             assert dash_a["kpis"] == {
                 "active_personas": 0,
                 "active_playbooks": 0,
+                "active_resources": 0,
                 "pending_reviews": 0,
             }
             assert dash_a["status_distribution"]["persona"]["active"] == 0
