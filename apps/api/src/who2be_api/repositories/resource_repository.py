@@ -123,19 +123,23 @@ class PgResourceRepository:
                 name,
             )
             await conn.execute(
-                "INSERT INTO resource_version (resource_id, version, content, created_by) "
-                "VALUES ($1, $2, $3, $4)",
+                "INSERT INTO resource_version "
+                "(resource_id, version, content, status, created_by) "
+                "VALUES ($1, $2, $3, $4, $5)",
                 resource["id"],
                 resource["current_version"],
                 content_json,
+                VersionStatus.draft.value,
                 owner_id,
             )
+        # Neue v1 startet als Draft (Phase 3-0, siehe Persona-Pendant fuer
+        # Begruendung).
         return ResourceRead.model_validate(
             {
                 **dict(resource),
                 "content": content_json,
-                "current_status": VersionStatus.inactive,
-                "has_pending_draft": False,
+                "current_status": VersionStatus.draft,
+                "has_pending_draft": True,
             }
         )
 

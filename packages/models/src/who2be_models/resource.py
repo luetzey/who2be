@@ -56,9 +56,7 @@ class ResourceContent(BaseModel):
     def _check_total_size(self) -> Self:
         size = len(json.dumps(self.model_dump(mode="json")))
         if size > _MAX_CONTENT_BYTES:
-            raise ValueError(
-                f"Resource-Inhalt zu gross ({size} > {_MAX_CONTENT_BYTES} Bytes)."
-            )
+            raise ValueError(f"Resource-Inhalt zu gross ({size} > {_MAX_CONTENT_BYTES} Bytes).")
         return self
 
 
@@ -142,3 +140,32 @@ class ResourceLinkRead(BaseModel):
     position: int
     available: bool
     preview: str | None = None
+
+
+class LinkedBlockSection(ResourceLinkRead):
+    """Block-Ref erweitert um alle Bloecke der Section ab dem Anker-Heading
+    (Phase 3-0 Helper-Shape, fuer Section-Aware-Picker/Preview in Track 3-A/B).
+
+    Die Section reicht vom Heading-Block mit `block_id` bis (ausschliesslich)
+    zum naechsten Heading desselben Levels. `section_blocks` enthaelt alle
+    dieser Bloecke in Dokument-Reihenfolge — inklusive des Anker-Headings.
+    Leere Liste = Resource enthielt den Anker nicht (mehr).
+    """
+
+    section_blocks: list[ResourceBlock] = Field(default_factory=list)
+
+
+class ResourceUsage(BaseModel):
+    """Backlink-Record: welche Playbooks referenzieren Bloecke einer Resource?
+
+    Quelle: `playbook_resource_link` GROUP BY playbook_id. `block_count` ist
+    die Anzahl der Block-Refs aus genau diesem Playbook auf die Ziel-Resource.
+    Wird in Track 3-A vom Endpoint
+    `GET /v1/workspaces/{ws}/resources/{id}/usages` serviert.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    playbook_id: UUID
+    playbook_name: str
+    block_count: int = Field(ge=0)

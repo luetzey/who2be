@@ -6,6 +6,7 @@ Join filtern kann (siehe architecture.md §3).
 """
 
 from datetime import datetime
+from enum import StrEnum
 from typing import Annotated
 from uuid import UUID
 
@@ -16,6 +17,22 @@ from who2be_models.status import VersionStatus
 # Eingabe-Limits — DoS-Schutz fuer in jsonb persistierte und unveraendert
 # wiedergegebene Versions-Inhalte (siehe Persona-Pendant).
 TagStr = Annotated[str, StringConstraints(min_length=1, max_length=100)]
+
+
+class PlaybookType(StrEnum):
+    """Kurierte Playbook-Typen (Phase 3-0, Master-Plan §Track 0).
+
+    Migration `0020_playbook_type_check.sql` setzt den passenden CHECK-
+    Constraint in der DB. `PlaybookContent.type` bleibt aus Backward-Compat-
+    Gruenden vorlaeufig `str`; Frontend/Service ziehen mit Track 3-A/B nach.
+    """
+
+    prompt = "prompt"
+    instructions = "instructions"
+    snippet = "snippet"
+    workflow = "workflow"
+    checklist = "checklist"
+    faq = "faq"
 
 
 class PlaybookContent(BaseModel):
@@ -78,3 +95,16 @@ class PlaybookVersionRead(BaseModel):
     content: PlaybookContent
     created_by: UUID
     created_at: datetime
+
+
+class PlaybookUsage(BaseModel):
+    """Backlink-Record: welche Persona referenziert ein Playbook?
+
+    Quelle: `persona_playbook`-Tabelle. Wird in Track 3-A vom Reverse-Lookup-
+    Endpoint `GET /v1/workspaces/{ws}/playbooks/{id}/usages` serviert.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    persona_id: UUID
+    persona_name: str

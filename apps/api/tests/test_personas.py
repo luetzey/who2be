@@ -103,6 +103,16 @@ def test_persona_crud_versioning_and_isolation(
             listed = client.get(base, headers=auth).json()
             assert [p["id"] for p in listed] == [persona_id]
 
+            # Phase 3-0: neue v1 startet als Draft (Migration 0019). PUT
+            # wuerde sonst sofort 409 werfen, weil schon ein Draft existiert
+            # — also v1 erst auf Active promoten.
+            for to in ("review", "active"):
+                client.post(
+                    f"{base}/{persona_id}/versions/1/transition",
+                    json={"to": to},
+                    headers=auth,
+                )
+
             updated = client.put(
                 f"{base}/{persona_id}",
                 json=_persona_body("v2"),
@@ -207,11 +217,11 @@ def test_persona_version_transitions_state_machine_and_history(
                 assert resp.status_code == expected, resp.text
                 return resp.json() if resp.status_code < 300 else {}
 
-            # Verbotener Uebergang: inactive -> active (State-Machine erlaubt
-            # nur inactive -> draft).
+            # Phase 3-0: v1 startet bereits als Draft (Migration 0019).
+            # Verbotener Uebergang: draft -> active (State-Machine erlaubt
+            # nur draft -> review).
             transition(1, "active", expected=409)
 
-            transition(1, "draft", expected=200)
             review = transition(1, "review", expected=200)
             assert review["status"] == "review"
             transition(1, "active", expected=200)
@@ -249,7 +259,9 @@ def test_persona_version_transitions_state_machine_and_history(
                 finally:
                     await conn.close()
 
-            assert asyncio.run(history_count()) == 6
+            # Phase 3-0: 4 Eigen-Transitions auf v1/v2 (draft->review, review->active,
+            # draft->review, review->active) + 1 Auto-Inactivierung von v1 = 5.
+            assert asyncio.run(history_count()) == 5
     finally:
         cleanup_workspaces([owner])
 

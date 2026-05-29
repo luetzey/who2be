@@ -21,7 +21,12 @@ from uuid import UUID
 
 import asyncpg
 
-from who2be_models import PersonaContent, PersonaRead, PersonaVersionRead, VersionStatus
+from who2be_models import (
+    PersonaRead,
+    PersonaVersionContent,
+    PersonaVersionRead,
+    VersionStatus,
+)
 
 # Persona-Zeile verbunden mit dem Inhalt ihrer aktuellen Version, plus
 # Status-Felder (Phase 2.1b). `has_pending_draft` ist ein EXISTS-Subquery,
@@ -78,7 +83,7 @@ class PersonaRepository(Protocol):
         workspace_id: UUID,
         owner_id: UUID,
         name: str,
-        content: PersonaContent,
+        content: PersonaVersionContent,
     ) -> PersonaRead: ...
 
     async def list_by_workspace(
@@ -102,7 +107,7 @@ class PersonaRepository(Protocol):
         owner_id: UUID,
         persona_id: UUID,
         name: str | None,
-        content: PersonaContent,
+        content: PersonaVersionContent,
     ) -> PersonaUpdateOutcome: ...
 
     async def list_versions(
@@ -125,7 +130,7 @@ class PgPersonaRepository:
         workspace_id: UUID,
         owner_id: UUID,
         name: str,
-        content: PersonaContent,
+        content: PersonaVersionContent,
     ) -> PersonaRead:
         content_json = content.model_dump(mode="json")
         async with self._pool.acquire() as conn, conn.transaction():
@@ -140,20 +145,24 @@ class PgPersonaRepository:
             )
             await conn.execute(
                 "INSERT INTO persona_version "
-                "(persona_id, version, content, created_by) "
-                "VALUES ($1, $2, $3, $4)",
+                "(persona_id, version, content, status, created_by) "
+                "VALUES ($1, $2, $3, $4, $5)",
                 persona["id"],
                 persona["current_version"],
                 content_json,
+                VersionStatus.draft.value,
                 owner_id,
             )
-        # Neue v1 startet mit DB-Default `status='inactive'`, kein Draft existiert.
+        # Neue v1 startet als Draft (Phase 3-0): die UI rendert sofort die
+        # Status-Action-Bar, MCP-Reads ueberspringen sie bis Promotion. Wir
+        # setzen `status` explizit (statt auf den DB-Default zu vertrauen) —
+        # Defense-in-Depth gegen Drift in Migration 0019.
         return PersonaRead.model_validate(
             {
                 **dict(persona),
                 "content": content_json,
-                "current_status": VersionStatus.inactive,
-                "has_pending_draft": False,
+                "current_status": VersionStatus.draft,
+                "has_pending_draft": True,
             }
         )
 
@@ -206,7 +215,7 @@ class PgPersonaRepository:
         owner_id: UUID,
         persona_id: UUID,
         name: str | None,
-        content: PersonaContent,
+        content: PersonaVersionContent,
     ) -> PersonaUpdateOutcome:
         content_json = content.model_dump(mode="json")
         async with self._pool.acquire() as conn, conn.transaction():
@@ -227,8 +236,7 @@ class PgPersonaRepository:
             # bei dem schon ein Draft pending ist, und wiederholter Edit auf
             # bereits angelegtem Draft.
             existing_draft = await conn.fetchval(
-                "SELECT 1 FROM persona_version "
-                "WHERE persona_id = $1 AND status = 'draft'",
+                "SELECT 1 FROM persona_version WHERE persona_id = $1 AND status = 'draft'",
                 persona_id,
             )
             if existing_draft is not None:

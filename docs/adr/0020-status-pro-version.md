@@ -64,6 +64,17 @@ Terminal-Zustand passt zum Migration-Backfill aus
 auf `inactive` setzt — daraus soll nichts "wiederbelebt" werden, neue
 Drafts bekommen eine neue Versions-Nummer.
 
+**Default-Status fuer neue Versions (Update Phase 3-0, 2026-05-29).** Neue
+Versions starten mit `status = 'draft'` (Migration
+`0019_status_default_draft.sql`); vor Phase 3-0 war der Default `inactive`,
+was die Status-Action-Bar in der UI fuer frisch angelegte v1 unsichtbar
+liess (Smoke-Findings F-02 / F-13). Bestand: ein einmaliger Backfill hebt
+`current_version`-Rows ohne Active- oder Draft-Schwester von `inactive` auf
+`draft` — der partial-unique-index `*_draft_uniq` aus
+`0011_status_on_versions.sql` bzw. `0015_resource.sql` schuetzt vor
+Doppel-Drafts. Versions, die schon mit Active-Schwester leben (z. B.
+inactive-historisch nach einem Promote), bleiben unangetastet.
+
 **DB-Invariante.** Partial Unique Indices in
 `0011_status_on_versions.sql`:
 
