@@ -144,7 +144,7 @@ export function PersonaEditorForm({ form, onSubmit, saveError }: PersonaEditorFo
                         <TagInput
                           value={field.value}
                           onChange={field.onChange}
-                          loadSuggestions={api.listPlaybookTags}
+                          loadSuggestions={api.listPersonaTags}
                           ariaLabelledby={`${field.name}-label`}
                           placeholder="Tag eingeben und Enter drücken"
                           disabled={isViewer}

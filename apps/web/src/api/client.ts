@@ -100,6 +100,10 @@ export interface Api {
   createPersona: (input: PersonaInput) => Promise<Persona>
   updatePersona: (id: string, input: PersonaInput) => Promise<Persona>
   listPersonaVersions: (id: string) => Promise<PersonaVersion[]>
+  // Phase 3 — DISTINCT-Persona-Tag-Vorschlag fuer den `TagInput` im
+  // Persona-Editor. Eigene Quelle (nicht `listPlaybookTags`), damit der
+  // Picker zur jeweiligen Domaene passt.
+  listPersonaTags: () => Promise<string[]>
   listPersonaPlaybooks: (id: string) => Promise<Playbook[]>
   setPersonaPlaybooks: (id: string, playbookIds: string[]) => Promise<Playbook[]>
   listPlaybooks: (filters?: { tag?: string; trigger?: string }) => Promise<Playbook[]>
@@ -167,6 +171,7 @@ export function createApi(token: string, workspaceId: string): Api {
       }),
     listPersonaVersions: (id) =>
       request<PersonaVersion[]>(token, `${ws}/personas/${id}/versions`),
+    listPersonaTags: () => request<string[]>(token, `${ws}/personas/tags`),
     listPersonaPlaybooks: (id) =>
       request<Playbook[]>(token, `${ws}/personas/${id}/playbooks`),
     setPersonaPlaybooks: (id, playbookIds) =>

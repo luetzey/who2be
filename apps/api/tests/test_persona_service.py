@@ -171,6 +171,13 @@ class FakePersonaRepository:
             return None
         return next((v for v in self._versions[persona_id] if v.version == version), None)
 
+    async def list_distinct_tags(self, workspace_id: UUID) -> list[str]:
+        tags: set[str] = set()
+        for persona in self._personas.values():
+            if persona.workspace_id == workspace_id:
+                tags.update(persona.content.tags)
+        return sorted(tags)
+
 
 def _service() -> tuple[PersonaService, WorkspaceContext]:
     return PersonaService(FakePersonaRepository()), _ctx(uuid4())

@@ -25,11 +25,16 @@ vi.mock('@/auth/useCurrentWorkspaceRole', () => ({
 }))
 
 const updatePersona = vi.fn().mockResolvedValue({})
+const listPersonaTags = vi.fn().mockResolvedValue([])
+// Playbook-Tags duerfen vom Persona-Form nicht mehr geladen werden — die
+// Domaenen sind getrennt. Mock vorhanden, aber Aufrufe = Regression.
+const listPlaybookTags = vi.fn().mockResolvedValue(['playbook-only'])
 
 vi.mock('@/api/useApi', () => ({
   useApi: () => ({
     updatePersona,
-    listPlaybookTags: () => Promise.resolve([]),
+    listPersonaTags,
+    listPlaybookTags,
   }),
 }))
 
@@ -96,5 +101,21 @@ describe('PersonaEditorForm', () => {
     })
     // properties existiert nicht (nur traits, das wir bewusst leer mitsenden).
     expect(payload.content).not.toHaveProperty('properties')
+  })
+
+  it('laedt Tag-Vorschlaege aus `listPersonaTags`, nicht aus `listPlaybookTags`', async () => {
+    listPersonaTags.mockClear()
+    listPlaybookTags.mockClear()
+    listPersonaTags.mockResolvedValueOnce(['empathie', 'leadership'])
+    render(<Harness />)
+
+    // Beim Fokus auf das Tag-Input erscheint der gefilterte Vorschlag.
+    const tagInput = screen.getByRole('combobox')
+    fireEvent.focus(tagInput)
+    fireEvent.change(tagInput, { target: { value: 'lead' } })
+
+    expect(await screen.findByRole('option', { name: 'leadership' })).toBeInTheDocument()
+    expect(listPersonaTags).toHaveBeenCalled()
+    expect(listPlaybookTags).not.toHaveBeenCalled()
   })
 })

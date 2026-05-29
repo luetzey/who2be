@@ -68,6 +68,12 @@ async def create_persona(
     return await service.create(ctx, data)
 
 
+@router.get("/tags")
+async def list_persona_tags(ctx: Ctx, service: Service) -> list[str]:
+    """DISTINCT-Tags des Workspaces fuer den Tag-Picker im Persona-Form."""
+    return await service.list_tags(ctx)
+
+
 @router.get("/{persona_id}")
 async def get_persona(persona_id: UUID, ctx: Ctx, service: Service) -> PersonaRead:
     return await service.get(ctx, persona_id)

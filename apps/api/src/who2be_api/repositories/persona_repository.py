@@ -118,6 +118,8 @@ class PersonaRepository(Protocol):
         self, workspace_id: UUID, persona_id: UUID, version: int
     ) -> PersonaVersionRead | None: ...
 
+    async def list_distinct_tags(self, workspace_id: UUID) -> list[str]: ...
+
 
 class PgPersonaRepository:
     """asyncpg-Implementierung von `PersonaRepository`."""
@@ -316,3 +318,27 @@ class PgPersonaRepository:
             version,
         )
         return PersonaVersionRead.model_validate(dict(row)) if row is not None else None
+
+    async def list_distinct_tags(self, workspace_id: UUID) -> list[str]:
+        """DISTINCT alle Persona-Tags des Workspaces, lexikografisch sortiert.
+
+        Persona-Tags liegen — anders als bei Playbooks — nicht denormalisiert
+        auf der Identitaets-Zeile, sondern im JSON der aktuellen Version
+        (`persona_version.content->'tags'`). Wir lesen daher per Lateral-Join
+        ueber die Current-Version jeder Persona im Workspace. Historische
+        Versions-Snapshots tragen nicht bei — das matcht das Verhalten des
+        Playbook-Pendants, das ebenfalls nur den aktuellen Stand spiegelt.
+        Cross-Workspace-Isolation ueber den `workspace_id`-Filter (siehe
+        `test_persona_tags`).
+        """
+        rows = await self._pool.fetch(
+            "SELECT DISTINCT tag "
+            "FROM persona p "
+            "JOIN persona_version pv "
+            "  ON pv.persona_id = p.id AND pv.version = p.current_version "
+            "CROSS JOIN LATERAL jsonb_array_elements_text(pv.content->'tags') AS tag "
+            "WHERE p.workspace_id = $1 "
+            "ORDER BY tag ASC",
+            workspace_id,
+        )
+        return [row["tag"] for row in rows]
