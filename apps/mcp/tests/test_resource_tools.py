@@ -1,10 +1,12 @@
 """Tool-Tests fuer die Resource-MCP-Tools (Phase 2.2) gegen eine gemockte API.
 
-Spiegelt das Muster aus test_tools.py: ein `httpx.MockTransport` faengt die
-HTTP-Calls ab, `build_client` wird auf eine Factory gepatcht. So decken die
-Tests Tool-Logik UND Client-URL-Aufbau ab, ohne echten Server.
+Spiegelt das Muster aus test_server.py: die async Tools werden ueber
+`asyncio.run` getrieben (kein pytest-asyncio im Stack), der HTTP-Verkehr laeuft
+ueber `httpx.MockTransport`, `build_client` wird je Test auf eine Factory
+gepatcht.
 """
 
+import asyncio
 from collections.abc import Callable
 from uuid import uuid4
 
@@ -22,21 +24,16 @@ from who2be_mcp.server import (
 )
 from who2be_models import ResourceRead
 
-_WORKSPACE_ID = uuid4()
+_WORKSPACE_ID = str(uuid4())
 
 
-def _client_with(handler: Callable[[httpx.Request], httpx.Response]) -> ApiClient:
+def _factory(handler: Callable[[httpx.Request], httpx.Response]) -> Callable[[], object]:
     transport = httpx.MockTransport(handler)
-    return ApiClient("http://test", "token", _WORKSPACE_ID, transport=transport)
 
+    async def _build() -> ApiClient:
+        return ApiClient("http://test", "token", _WORKSPACE_ID, transport=transport)
 
-def _patch_build_client(
-    monkeypatch: pytest.MonkeyPatch, handler: Callable[[httpx.Request], httpx.Response]
-) -> None:
-    async def _factory() -> ApiClient:
-        return _client_with(handler)
-
-    monkeypatch.setattr(server, "build_client", _factory)
+    return _build
 
 
 def _block(block_id: str, text: str) -> dict:
@@ -52,7 +49,7 @@ def _block(block_id: str, text: str) -> dict:
 def _resource_payload(name: str = "Doc", blocks: list[dict] | None = None) -> dict:
     return {
         "id": str(uuid4()),
-        "workspace_id": str(_WORKSPACE_ID),
+        "workspace_id": _WORKSPACE_ID,
         "owner_id": str(uuid4()),
         "name": name,
         "current_version": 1,
@@ -70,7 +67,7 @@ def _resource_payload(name: str = "Doc", blocks: list[dict] | None = None) -> di
 def _playbook_payload(name: str = "Onboard") -> dict:
     return {
         "id": str(uuid4()),
-        "workspace_id": str(_WORKSPACE_ID),
+        "workspace_id": _WORKSPACE_ID,
         "owner_id": str(uuid4()),
         "name": name,
         "current_version": 1,
@@ -91,53 +88,51 @@ def _playbook_payload(name: str = "Onboard") -> dict:
     }
 
 
-@pytest.mark.asyncio
-async def test_list_resources_returns_summaries(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_list_resources_returns_summaries(monkeypatch: pytest.MonkeyPatch) -> None:
     payload = _resource_payload(blocks=[_block("b1", "a"), _block("b2", "b")])
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path.endswith("/resources")
         return httpx.Response(200, json=[payload])
 
-    _patch_build_client(monkeypatch, handler)
-    result = await list_resources()
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    result = asyncio.run(list_resources())
     assert len(result) == 1
     assert isinstance(result[0], ResourceSummary)
     assert result[0].block_count == 2
     assert result[0].name == "Doc"
 
 
-@pytest.mark.asyncio
-async def test_fetch_resource_filters_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_fetch_resource_filters_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
     rid = uuid4()
-    payload = _resource_payload(
-        blocks=[_block("b1", "a"), _block("b2", "b"), _block("b3", "c")]
-    )
+    payload = _resource_payload(blocks=[_block("b1", "a"), _block("b2", "b"), _block("b3", "c")])
     payload["id"] = str(rid)
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path.endswith(f"/resources/{rid}")
         return httpx.Response(200, json=payload)
 
-    _patch_build_client(monkeypatch, handler)
+    monkeypatch.setattr(server, "build_client", _factory(handler))
 
-    full = await fetch_resource(str(rid))
+    full = asyncio.run(fetch_resource(str(rid)))
     assert isinstance(full, ResourceRead)
     assert [b.id for b in full.content.blocks] == ["b1", "b2", "b3"]
 
-    filtered = await fetch_resource(str(rid), block_ids=["b3", "b1"])
+    filtered = asyncio.run(fetch_resource(str(rid), block_ids=["b3", "b1"]))
     assert [b.id for b in filtered.content.blocks] == ["b3", "b1"]
 
 
-@pytest.mark.asyncio
-async def test_fetch_resource_validates_uuid(monkeypatch: pytest.MonkeyPatch) -> None:
-    _patch_build_client(monkeypatch, lambda request: httpx.Response(200, json=_resource_payload()))
+def test_fetch_resource_validates_uuid(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        server,
+        "build_client",
+        _factory(lambda request: httpx.Response(200, json=_resource_payload())),
+    )
     with pytest.raises(Exception):
-        await fetch_resource("not-a-uuid")
+        asyncio.run(fetch_resource("not-a-uuid"))
 
 
-@pytest.mark.asyncio
-async def test_fetch_playbook_includes_linked_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_fetch_playbook_includes_linked_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
     pid = uuid4()
     playbook = _playbook_payload()
     playbook["id"] = str(pid)
@@ -157,8 +152,8 @@ async def test_fetch_playbook_includes_linked_blocks(monkeypatch: pytest.MonkeyP
             return httpx.Response(200, json=playbook)
         return httpx.Response(404)
 
-    _patch_build_client(monkeypatch, handler)
-    result = await fetch_playbook(str(pid))
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    result = asyncio.run(fetch_playbook(str(pid)))
     assert isinstance(result, PlaybookWithResources)
     assert len(result.linked_blocks) == 1
     assert result.linked_blocks[0].block_id == "b1"
