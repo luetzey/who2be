@@ -1,5 +1,7 @@
 # Plan: Phase 3-D — Invitation-Magic-Link + Onboarding-Bridge
 
+**Status:** ✅ Done — Commit `849aa14`, gemerged via PR #59.
+
 - Datum: 2026-05-29
 - Branch: `claude/blissful-allen-8CpKx` (Cloud-Praefix; Sub-Track-D)
 - Vorbedingung: Track 0 gemerged (Status-Default, Models). Hier nicht relevant.

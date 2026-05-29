@@ -279,6 +279,9 @@ keine Geschaeftsregeln.
 | `POST /personas/{id}/versions/{n}/transition` | Status-Wechsel (Draft → Review → Active …) |
 | `GET/PUT /personas/{id}/playbooks` | Persona-Playbook-Verknüpfung |
 | `GET/POST /playbooks`, `GET/PUT/DELETE /playbooks/{id}` | Playbook-CRUD |
+| `GET /playbooks/tags` | DISTINCT-Tag-Liste für Multi-Select-Picker (Phase 3-A) |
+| `GET /playbooks/{id}/usages` | Reverse-Lookup: welche Personas verlinken auf dieses Playbook? (Phase 3-A) |
+| `GET /resources/{id}/usages` | Reverse-Lookup: welche Playbooks referenzieren Blöcke dieser Resource? (Phase 3-A) |
 | `GET /playbooks/{id}/versions`, `GET /playbooks/{id}/versions/{n}` | Versionshistorie |
 | `POST /playbooks/{id}/versions/{n}/transition` | Status-Wechsel |
 | `GET/PUT /playbooks/{id}/resource_links` | Block-Refs auf Resources setzen |

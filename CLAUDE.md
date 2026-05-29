@@ -25,9 +25,31 @@ Skills `python-conventions` und `react-conventions`, Projekt-Profil siehe
 
 ## Aktueller Stand
 
-Phase 2 ist abgeschlossen (Stand 2026-05-29). Master-Plan:
-`.claude/plan/2026-05-27-1921_phase-2-vollwertige-app.md` — alle Sub-Pläne
-geflippt.
+Phase 3 ist abgeschlossen (Stand 2026-05-29). Master-Plan:
+`.claude/plan/2026-05-29-1900_phase-3-ux-polish.md` — alle Sub-Pläne geflippt.
+
+**Phase 3 — UX-Polish nach Live-Smoke:**
+
+- **3-0 Sync:** Migration `0017` (Status-Default `draft` für neue Versions),
+  Migration `0018` (Playbook-Type-CHECK-Enum), Models `PersonaContent` +
+  `PlaybookType` + `PlaybookUsage`/`ResourceUsage`. ADR-0020 um Default-Draft
+  ergänzt.
+- **3-A Backend:** Repo-Inserts setzen `status='draft'` explizit;
+  Section-aware Block-Refs (Heading-Anker + Section-Slice serverseitig);
+  Reverse-Lookups `GET /playbooks/{id}/usages` und `/resources/{id}/usages`;
+  Tags-DISTINCT-Endpoint `GET /playbooks/tags`.
+- **3-B Frontend Editor/Forms:** BlockNote-CSS-Scope-Fix (Slash-Menü mit
+  Hintergrund, Heading-Sizes), Persona-`properties` → BlockNote-Profil +
+  TagInput, Playbook-Type-Select + Multi-Select-TagInput, BlockNote-Body.
+- **3-C Frontend Navigation/UX:** `WorkspaceSwitcher` in der AppShell,
+  Status-Action-Bar auf jeder Detail-Page sichtbar (auch bei `inactive` →
+  „Reaktivieren als Draft"), Backlinks-Anzeige in Playbook- und
+  Resource-Detail.
+- **3-D Invitation Onboarding:** GoTrue-Magic-Link mit `redirect_to=…/accept?via=magic`,
+  Email-Mismatch-Guard auf der Accept-Route, Login-Page `next`-Param gegen
+  Open-Redirects gehärtet.
+
+**Phase 2 — Vollwertige App** (Stand 2026-05-29):
 
 - **2.1a — Tenancy:** `User → org_member → Organization → Workspace → Entity`;
   API hart auf `/v1/workspaces/{ws_id}/...`; API-Tokens pro Workspace gepinnt.
@@ -42,9 +64,11 @@ geflippt.
   `require_role`-Gate auf Mutating-Endpoints; Token-Snapshot-Rolle (ADR-0023);
   Invitations + GoTrue-Mail (single-use, sha256-Hash); Members-Page + Accept-Flow.
 
-Nächste Blöcke offen (kein aktiver Plan): Public-Switch + FSL-Lizenz
-(`…1935_license-fsl-setup`, `…2028_public-switch-github-repo`), MCP-Write-Tools
-(ADR-0012 deferred), Enterprise-License-Hooks (`…0528_enterprise-license-management`).
+Nächste Blöcke offen (kein aktiver Plan): Security-Quick-Wins
+(`docs/security-findings-phase-2.md` §TODO 1–3), CSP/Header-Pass (F-12),
+Public-Switch + FSL-Lizenz (`…1935_license-fsl-setup`,
+`…2028_public-switch-github-repo`), MCP-Write-Tools (ADR-0012 deferred),
+Enterprise-License-Hooks (`…0528_enterprise-license-management`).
 
 ## Struktur
 

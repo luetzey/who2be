@@ -1,5 +1,7 @@
 # Plan 3-0 — Sync-Vorab (Models + Migrations + ADR-Update)
 
+**Status:** ✅ Done — Commits `2aec1c9` + Follow-up `1ac25c6`, gemerged via PR #57.
+
 - Datum: 2026-05-29
 - Master-Plan: `.claude/plan/2026-05-29-1900_phase-3-ux-polish.md` — Track 0.
 - Branch: `claude/confident-hopper-h7KW9` (Cloud-Branch; spiegelt
