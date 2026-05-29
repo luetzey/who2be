@@ -9,13 +9,22 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from who2be_models.workspace_member import WorkspaceRole
+
 
 class TokenCreate(BaseModel):
-    """Eingabe fuer `POST /v1/tokens`."""
+    """Eingabe fuer `POST /v1/tokens`.
+
+    `role` ist optional: `None` ⇒ der Service pinnt die aktuelle Rolle des
+    Erstellers als Snapshot (Token-Role-Snapshot, ADR-0023). Ein explizit
+    gesetzter Wert darf die Ersteller-Rolle nicht uebersteigen — das prueft
+    der Service, nicht dieser Pydantic-Layer.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1, max_length=200)
+    role: WorkspaceRole | None = None
 
 
 class TokenRead(BaseModel):
@@ -26,6 +35,7 @@ class TokenRead(BaseModel):
     id: UUID
     workspace_id: UUID
     name: str
+    role: WorkspaceRole
     created_at: datetime
     last_used_at: datetime | None
     revoked_at: datetime | None

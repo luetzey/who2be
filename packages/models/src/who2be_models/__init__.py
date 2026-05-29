@@ -11,6 +11,7 @@ from who2be_models.dashboard import (
     DashboardStatusDistribution,
     EntityStatusDistribution,
 )
+from who2be_models.invitation import InvitationAccept, InvitationCreate, InvitationRead
 from who2be_models.links import PersonaPlaybookLinkSet
 from who2be_models.me import MeOrganization, MeRead, MeWorkspace
 from who2be_models.organization import OrganizationCreate, OrganizationRead
@@ -49,6 +50,11 @@ from who2be_models.status import (
 from who2be_models.status_history import EntityType, StatusHistoryEntry
 from who2be_models.token import TokenCreate, TokenCreated, TokenRead
 from who2be_models.workspace import WorkspaceCreate, WorkspaceRead, WorkspaceUpdate
+from who2be_models.workspace_member import (
+    WorkspaceMemberRead,
+    WorkspaceMemberUpdate,
+    WorkspaceRole,
+)
 
 __version__ = "0.1.0"
 
@@ -60,6 +66,9 @@ __all__ = [
     "DashboardStatusDistribution",
     "EntityStatusDistribution",
     "EntityType",
+    "InvitationAccept",
+    "InvitationCreate",
+    "InvitationRead",
     "MAX_LIMIT",
     "MeOrganization",
     "MeRead",
@@ -93,7 +102,10 @@ __all__ = [
     "VersionStatus",
     "VersionTransitionRequest",
     "WorkspaceCreate",
+    "WorkspaceMemberRead",
+    "WorkspaceMemberUpdate",
     "WorkspaceRead",
+    "WorkspaceRole",
     "WorkspaceUpdate",
     "__version__",
     "decode_cursor",
