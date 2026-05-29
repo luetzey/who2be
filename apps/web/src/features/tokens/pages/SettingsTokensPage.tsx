@@ -4,6 +4,8 @@ import { type FormEvent, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 
+import type { TokenInput, WorkspaceRole } from '@/api/types'
+import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
@@ -15,7 +17,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { roleLabel, rolesAtMost } from '@/lib/roles'
 import { useTokens } from '@/hooks/useTokens'
 
 import { useTokenMutations } from '../hooks/useTokenMutations'
@@ -44,13 +48,25 @@ export function SettingsTokensPage() {
 
   const [overrideInput, setOverrideInput] = useState('')
 
+  // Token erbt höchstens die eigene Rolle (Snapshot, ADR-0023). Solange die
+  // Rolle unbekannt ist (`null`), bleibt der Select weg und der Service
+  // defaultet serverseitig — der Body trägt dann nur `{ name }`.
+  const currentRole = useCurrentWorkspaceRole()
+  const roleOptions = currentRole !== null ? rolesAtMost(currentRole) : []
+  const [roleOverride, setRoleOverride] = useState<WorkspaceRole | null>(null)
+  const role = roleOverride ?? currentRole
+
   const form = useForm<TokenValues>({
     resolver: zodResolver(tokenSchema),
     defaultValues: { name: '' },
   })
 
   async function onCreate(values: TokenValues) {
-    const result = await createToken({ name: values.name })
+    const input: TokenInput =
+      currentRole !== null && role !== null
+        ? { name: values.name, role }
+        : { name: values.name }
+    const result = await createToken(input)
     if (result !== null) {
       form.reset({ name: '' })
     }
@@ -133,6 +149,28 @@ export function SettingsTokensPage() {
                     </FormItem>
                   )}
                 />
+                {currentRole !== null && role !== null ? (
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="token-role">Rolle</Label>
+                    <Select
+                      id="token-role"
+                      value={role}
+                      onChange={(event) =>
+                        setRoleOverride(event.target.value as WorkspaceRole)
+                      }
+                    >
+                      {roleOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {roleLabel(option)}
+                        </option>
+                      ))}
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Der Token erhält höchstens deine eigene Rolle — höhere Rechte
+                      sind nicht wählbar.
+                    </p>
+                  </div>
+                ) : null}
                 {createError !== null ? <ErrorAlert message={createError} /> : null}
                 <div className="flex justify-end">
                   <Button

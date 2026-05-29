@@ -19,9 +19,25 @@ const me = {
   organizations: [],
 }
 
-function renderPage() {
+const adminMe = {
+  user_id: 'u1',
+  default_workspace_id: 'ws-1',
+  organizations: [
+    {
+      id: 'o1',
+      name: 'Org',
+      slug: 'org',
+      kind: 'personal' as const,
+      workspaces: [{ id: 'ws-1', name: 'WS', slug: 'ws', role: 'admin' as const }],
+    },
+  ],
+}
+
+function renderPage(currentMe: typeof me | typeof adminMe = me) {
   return render(
-    <SessionContext.Provider value={{ session, me, signIn: vi.fn(), signOut: vi.fn() }}>
+    <SessionContext.Provider
+      value={{ session, me: currentMe, signIn: vi.fn(), signOut: vi.fn() }}
+    >
       <AuthTokenProvider>
         <BrowserRouter>
           <SettingsTokensPage />
@@ -107,6 +123,43 @@ describe('SettingsTokensPage', () => {
     expect(notify.success).toHaveBeenCalledWith(
       'Token „Brainstormer" angelegt. Klartext jetzt einmalig kopieren.',
     )
+  })
+
+  it('schickt die gewählte Rolle mit, wenn die eigene Rolle bekannt ist', async () => {
+    const created = {
+      id: 't3',
+      workspace_id: 'ws-1',
+      name: 'Editor-Bot',
+      role: 'editor',
+      created_at: '2026-05-29T10:00:00Z',
+      last_used_at: null,
+      revoked_at: null,
+      token: 'w2b_editor-token',
+    }
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('[]', { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(created), { status: 201 }))
+      .mockResolvedValueOnce(new Response('[]', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderPage(adminMe)
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Neuen Token anlegen' })).toBeInTheDocument()
+    })
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Editor-Bot' } })
+    fireEvent.change(screen.getByLabelText('Rolle'), { target: { value: 'editor' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Anlegen' }))
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Klartext-Token')).toHaveValue('w2b_editor-token')
+    })
+
+    const postCall = fetchMock.mock.calls[1]
+    const init = postCall[1] as RequestInit
+    expect(JSON.parse(init.body as string)).toEqual({ name: 'Editor-Bot', role: 'editor' })
   })
 
   it('meldet Revoke-Fehler ueber Toast statt Inline-Alert', async () => {
