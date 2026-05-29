@@ -19,8 +19,9 @@ from pydantic import BaseModel
 from who2be_api.core.db import get_pool
 from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import (
+    CurrentPrincipal,
     WorkspaceContext,
-    get_current_user,
+    get_current_principal,
     get_current_workspace,
     require_role,
 )
@@ -39,7 +40,7 @@ def get_invitation_service(
 
 
 Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]
-UserId = Annotated[UUID, Depends(get_current_user)]
+Principal = Annotated[CurrentPrincipal, Depends(get_current_principal)]
 Service = Annotated[InvitationService, Depends(get_invitation_service)]
 
 
@@ -73,7 +74,7 @@ async def revoke_invitation(invitation_id: UUID, ctx: Ctx, service: Service) -> 
 @accept_router.post("/{token}/accept")
 @limiter.limit(write_limit)
 async def accept_invitation(
-    request: Request, token: str, user_id: UserId, service: Service
+    request: Request, token: str, principal: Principal, service: Service
 ) -> InvitationAcceptResult:
-    workspace_id = await service.accept(token, user_id)
+    workspace_id = await service.accept(token, principal.user_id, principal.email)
     return InvitationAcceptResult(workspace_id=workspace_id)

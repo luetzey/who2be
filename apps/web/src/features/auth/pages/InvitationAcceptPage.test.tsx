@@ -27,11 +27,11 @@ function LoginMarker() {
   return <div>LOGIN next={params.get('next')}</div>
 }
 
-function renderAccept(session: Session | null) {
+function renderAccept(session: Session | null, initialEntry = '/invitations/abc123/accept') {
   return render(
     <SessionContext.Provider value={{ session, me, signIn: vi.fn(), signOut: vi.fn() }}>
       <AuthTokenProvider>
-        <MemoryRouter initialEntries={['/invitations/abc123/accept']}>
+        <MemoryRouter initialEntries={[initialEntry]}>
           <Routes>
             <Route path="/invitations/:token/accept" element={<InvitationAcceptPage />} />
             <Route path="/w/:workspaceId/dashboard" element={<DashboardMarker />} />
@@ -92,5 +92,41 @@ describe('InvitationAcceptPage', () => {
     expect(
       screen.getByText('LOGIN next=/invitations/abc123/accept'),
     ).toBeInTheDocument()
+  })
+
+  it('akzeptiert magic-link automatisch ohne Klick', async () => {
+    const calls: Array<{ url: string; method: string }> = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({ url: String(input), method: init?.method ?? 'GET' })
+        return new Response(JSON.stringify({ workspace_id: 'ws-7' }), { status: 200 })
+      }),
+    )
+
+    renderAccept(authedSession, '/invitations/magic-tok/accept?via=magic')
+
+    // Microcopy signalisiert den automatischen Flow — kein „Annehmen"-Button.
+    expect(screen.getByText('Du wirst angemeldet…')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Einladung annehmen' })).toBeNull()
+
+    await waitFor(() => {
+      expect(screen.getByText('DASHBOARD ws-7')).toBeInTheDocument()
+    })
+    expect(calls[0].url).toContain('/v1/invitations/magic-tok/accept')
+    expect(calls[0].method).toBe('POST')
+  })
+
+  it('zeigt Email-Mismatch-Microcopy bei 403', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{}', { status: 403 })),
+    )
+
+    renderAccept(authedSession, '/invitations/wrong-acct/accept?via=magic')
+
+    await waitFor(() => {
+      expect(screen.getByText(/andere Email-Adresse/i)).toBeInTheDocument()
+    })
   })
 })

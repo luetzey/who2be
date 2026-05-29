@@ -80,11 +80,17 @@ class CurrentPrincipal:
     `token_role` traegt im Token-Pfad die gepinnte Snapshot-Rolle aus
     `api_token.role` (ADR-0023); im JWT-Pfad `None` (Rolle kommt dann aus
     `workspace_member`).
+
+    `email` ist nur im JWT-Pfad gesetzt — Supabase liefert die User-Email als
+    Claim mit. Wird vom Invitation-Accept genutzt, um Einladungen an die
+    falsche Email-Adresse abzuweisen (Phase 3-D). API-Tokens tragen keinen
+    Email-Claim.
     """
 
     user_id: UUID
     token_workspace_id: UUID | None
     token_role: WorkspaceRole | None = None
+    email: str | None = None
 
 
 @dataclass(frozen=True)
@@ -128,8 +134,14 @@ def require_role(ctx: WorkspaceContext, minimum: WorkspaceRole) -> None:
         )
 
 
-def verify_supabase_jwt(token: str) -> UUID:
-    """Verifiziert ein Supabase-JWT lokal (HS256) und liest `sub` als owner_id."""
+def verify_supabase_jwt(token: str) -> tuple[UUID, str | None]:
+    """Verifiziert ein Supabase-JWT lokal (HS256) und liest `sub` + optional `email`.
+
+    Rueckgabe: `(owner_id, email_or_none)`. Der Email-Claim ist optional —
+    aelteren Test-JWTs fehlt er; produktive Supabase-JWTs tragen ihn aber
+    immer mit. Wir verwenden ihn fuer die Email-Mismatch-Pruefung beim
+    Invitation-Accept (Phase 3-D).
+    """
     settings = get_settings()
     secret = settings.jwt_secret
     if not secret:
@@ -158,8 +170,10 @@ def verify_supabase_jwt(token: str) -> UUID:
         owner_id = UUID(sub)
     except ValueError as exc:
         raise _credentials_error() from exc
+    email_claim = payload.get("email")
+    email = email_claim if isinstance(email_claim, str) and email_claim else None
     structlog.contextvars.bind_contextvars(owner_id=str(owner_id))
-    return owner_id
+    return owner_id, email
 
 
 async def resolve_principal(token: str, token_repo: TokenRepository) -> CurrentPrincipal:
@@ -183,7 +197,8 @@ async def resolve_principal(token: str, token_repo: TokenRepository) -> CurrentP
             token_workspace_id=auth.workspace_id,
             token_role=auth.role,
         )
-    return CurrentPrincipal(user_id=verify_supabase_jwt(token), token_workspace_id=None)
+    user_id, email = verify_supabase_jwt(token)
+    return CurrentPrincipal(user_id=user_id, token_workspace_id=None, email=email)
 
 
 async def get_current_principal(
@@ -200,7 +215,8 @@ async def get_current_principal(
         raise _credentials_error()
     token = credentials.credentials
     if not token.startswith(TOKEN_PREFIX):
-        return CurrentPrincipal(user_id=verify_supabase_jwt(token), token_workspace_id=None)
+        user_id, email = verify_supabase_jwt(token)
+        return CurrentPrincipal(user_id=user_id, token_workspace_id=None, email=email)
     try:
         pool = get_pool()
     except RuntimeError as exc:

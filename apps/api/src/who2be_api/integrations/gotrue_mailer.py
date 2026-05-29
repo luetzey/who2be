@@ -7,8 +7,11 @@ Call fehl, wird das nur geloggt; die Invitation bleibt gueltig und der Caller
 kann den Klartext-Token aus dem 201-Body manuell teilen.
 
 Der Magic-Link von GoTrue zeigt via `redirect_to` auf die Web-Accept-Route
-`{web_base_url}/invitations/{token}/accept`, die den Token an
-`POST /v1/invitations/{token}/accept` weiterreicht.
+`{web_base_url}/invitations/{token}/accept?via=magic`, die den Token an
+`POST /v1/invitations/{token}/accept` weiterreicht. Das `via=magic`-Marker-
+Query signalisiert dem Frontend, dass es sich um einen GoTrue-Magic-Link
+handelt — der User ist nach dem GoTrue-Callback bereits eingeloggt, die Page
+nimmt die Einladung automatisch an (kein „Annehmen"-Klick mehr).
 """
 
 import logging
@@ -23,9 +26,9 @@ _TIMEOUT_SECONDS = 5.0
 
 
 def build_accept_url(token: str) -> str:
-    """Web-Accept-Route fuer einen Klartext-Token."""
+    """Web-Accept-Route fuer einen Klartext-Token (mit Magic-Link-Marker)."""
     base = get_settings().web_base_url.rstrip("/")
-    return f"{base}/invitations/{token}/accept"
+    return f"{base}/invitations/{token}/accept?via=magic"
 
 
 async def send_invitation_email(email: str, token: str) -> bool:

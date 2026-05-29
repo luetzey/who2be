@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { useSession } from '@/auth/session-context'
+import { sanitizeNext } from '@/features/auth/lib/sanitize-next'
 
 const loginSchema = z.object({
   email: z.string().email('Bitte gueltige E-Mail eingeben.'),
@@ -26,9 +27,9 @@ export function LoginPage() {
 
   // `next` bringt den User nach dem Login dorthin zurück, wo ihn ein
   // Auth-Gate abgefangen hat (z. B. /invitations/:token/accept). Nur relative
-  // In-App-Pfade zulassen — kein offener Redirect auf externe URLs.
-  const nextParam = searchParams.get('next')
-  const next = nextParam !== null && nextParam.startsWith('/') ? nextParam : '/'
+  // In-App-Pfade zulassen — Browser interpretieren `//evil.com` und
+  // `https://evil.com` als externe URL → Open-Redirect-Risiko.
+  const next = sanitizeNext(searchParams.get('next'))
 
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),

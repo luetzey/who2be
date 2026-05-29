@@ -59,13 +59,15 @@ class InvitationService:
                 detail="Einladung nicht gefunden.",
             )
 
-    async def accept(self, token: str, user_id: UUID) -> UUID:
+    async def accept(self, token: str, user_id: UUID, jwt_email: str | None = None) -> UUID:
         """Akzeptiert eine Einladung single-use; gibt die `workspace_id` zurueck.
 
         404, wenn der Token unbekannt ist; 410 Gone, wenn die Einladung bereits
-        akzeptiert, widerrufen oder abgelaufen ist.
+        akzeptiert, widerrufen oder abgelaufen ist; 403, wenn `jwt_email`
+        gesetzt ist und nicht zur Invitation-Email passt (Phase 3-D Magic-Link-
+        Schutz — der Klick muss vom eingeladenen Account kommen).
         """
-        result = await self._repo.accept(hash_token(token), user_id)
+        result = await self._repo.accept(hash_token(token), user_id, jwt_email)
         if result.status == "not_found":
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -75,6 +77,11 @@ class InvitationService:
             raise HTTPException(
                 status_code=status.HTTP_410_GONE,
                 detail="Einladung ist nicht mehr gueltig.",
+            )
+        if result.status == "email_mismatch":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Diese Einladung ist fuer eine andere Email-Adresse.",
             )
         assert result.workspace_id is not None
         return result.workspace_id

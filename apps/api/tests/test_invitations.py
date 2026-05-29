@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 from who2be_api.core import security
 from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.migrations import MIGRATIONS_DIR, apply_migrations
+from who2be_api.integrations import gotrue_mailer
 from who2be_api.main import app
 from who2be_api.testing.workspace_setup import (
     cleanup_workspaces,
@@ -66,21 +67,20 @@ def _expire_invitation(invitation_id: str) -> None:
     asyncio.run(_run())
 
 
-def _jwt(user_id: UUID) -> str:
-    return jwt.encode(
-        {
-            "sub": str(user_id),
-            "aud": "authenticated",
-            "role": "authenticated",
-            "exp": datetime.now(UTC) + timedelta(hours=1),
-        },
-        _TEST_SECRET,
-        algorithm="HS256",
-    )
+def _jwt(user_id: UUID, email: str | None = None) -> str:
+    payload: dict[str, object] = {
+        "sub": str(user_id),
+        "aud": "authenticated",
+        "role": "authenticated",
+        "exp": datetime.now(UTC) + timedelta(hours=1),
+    }
+    if email is not None:
+        payload["email"] = email
+    return jwt.encode(payload, _TEST_SECRET, algorithm="HS256")
 
 
-def _auth(user_id: UUID) -> dict[str, str]:
-    return {"Authorization": f"Bearer {_jwt(user_id)}"}
+def _auth(user_id: UUID, email: str | None = None) -> dict[str, str]:
+    return {"Authorization": f"Bearer {_jwt(user_id, email)}"}
 
 
 @pytest.fixture(autouse=True)
@@ -358,3 +358,61 @@ def test_member_role_update_and_last_admin_guard() -> None:
             )
     finally:
         cleanup_workspaces([admin_id, second_id])
+
+
+def test_build_accept_url_carries_magic_marker(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Phase 3-D: der Magic-Link traegt `?via=magic`, damit das Frontend
+    weiss, dass es Auto-Accept ohne Klick fahren darf."""
+    monkeypatch.setattr(
+        gotrue_mailer,
+        "get_settings",
+        lambda: Settings(web_base_url="https://app.who2be.dev"),
+    )
+    url = gotrue_mailer.build_accept_url("tkn-abc")
+    assert url == "https://app.who2be.dev/invitations/tkn-abc/accept?via=magic"
+
+
+@pytest.mark.integration
+def test_invitation_email_mismatch_is_forbidden() -> None:
+    """Phase 3-D: JWT-Email != Invitation-Email → 403, Invitation bleibt offen.
+
+    Schuetzt davor, dass ein anderer User den Magic-Link abfaengt und mit dem
+    eigenen Account einen fremden Workspace betritt.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    admin_id = fresh_user_id()
+    intended_id = fresh_user_id()
+    attacker_id = fresh_user_id()
+    ws = setup_workspace(admin_id)
+
+    try:
+        with TestClient(app) as client:
+            created = client.post(
+                f"/v1/workspaces/{ws}/invitations",
+                json={"email": "intended@example.com", "role": "editor"},
+                headers=_auth(admin_id),
+            )
+            assert created.status_code == 201
+            token = created.json()["token"]
+
+            # Angreifer mit falscher Email-Claim → 403, Microcopy.
+            wrong = client.post(
+                f"/v1/invitations/{token}/accept",
+                headers=_auth(attacker_id, email="attacker@example.com"),
+            )
+            assert wrong.status_code == 403
+            assert "andere Email" in wrong.json()["detail"]
+
+            # Invitation ist nach 403 weiterhin offen — der eingeladene Account
+            # kann sie immer noch akzeptieren (case-insensitive Match).
+            ok = client.post(
+                f"/v1/invitations/{token}/accept",
+                headers=_auth(intended_id, email="Intended@Example.com"),
+            )
+            assert ok.status_code == 200
+            assert ok.json()["workspace_id"] == str(ws)
+    finally:
+        cleanup_workspaces([admin_id, intended_id, attacker_id])

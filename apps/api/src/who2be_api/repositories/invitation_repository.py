@@ -23,11 +23,12 @@ class AcceptResult:
     """Ergebnis eines Accept-Versuchs.
 
     `status` unterscheidet die HTTP-Mappings im Service: `not_found` → 404,
-    `gone` (akzeptiert/widerrufen/abgelaufen) → 410, `accepted` → 200 mit
-    `workspace_id`.
+    `gone` (akzeptiert/widerrufen/abgelaufen) → 410,
+    `email_mismatch` (JWT-Email passt nicht zur Invitation-Email) → 403,
+    `accepted` → 200 mit `workspace_id`.
     """
 
-    status: Literal["not_found", "gone", "accepted"]
+    status: Literal["not_found", "gone", "email_mismatch", "accepted"]
     workspace_id: UUID | None = None
 
 
@@ -46,7 +47,9 @@ class InvitationRepository(Protocol):
 
     async def list_pending_by_workspace(self, workspace_id: UUID) -> list[InvitationRead]: ...
 
-    async def accept(self, token_hash: str, user_id: UUID) -> AcceptResult: ...
+    async def accept(
+        self, token_hash: str, user_id: UUID, expected_email: str | None = None
+    ) -> AcceptResult: ...
 
     async def revoke(self, workspace_id: UUID, invitation_id: UUID) -> bool: ...
 
@@ -90,10 +93,12 @@ class PgInvitationRepository:
         )
         return [InvitationRead.model_validate(dict(row)) for row in rows]
 
-    async def accept(self, token_hash: str, user_id: UUID) -> AcceptResult:
+    async def accept(
+        self, token_hash: str, user_id: UUID, expected_email: str | None = None
+    ) -> AcceptResult:
         async with self._pool.acquire() as conn, conn.transaction():
             row = await conn.fetchrow(
-                "SELECT workspace_id, role, accepted_at, revoked_at, expires_at "
+                "SELECT workspace_id, role, email, accepted_at, revoked_at, expires_at "
                 "FROM workspace_invitation WHERE token_hash = $1 FOR UPDATE",
                 token_hash,
             )
@@ -105,6 +110,12 @@ class PgInvitationRepository:
                 or row["expires_at"] <= datetime.now(row["expires_at"].tzinfo)
             ):
                 return AcceptResult(status="gone")
+            # Phase 3-D: bringt der Aufrufer eine bestaetigte Email mit (JWT-
+            # Claim), muss sie zur Invitation-Email passen — sonst koennte ein
+            # falsches Konto die Mitgliedschaft uebernehmen. Vergleich
+            # case-insensitive; Invitation bleibt offen.
+            if expected_email is not None and expected_email.lower() != row["email"].lower():
+                return AcceptResult(status="email_mismatch")
             # Mitgliedschaft setzen; ein bereits bestehender Member behaelt
             # seine Rolle (DO NOTHING) — der Accept bleibt dennoch single-use.
             await conn.execute(
