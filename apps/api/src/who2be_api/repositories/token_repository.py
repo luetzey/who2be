@@ -59,7 +59,7 @@ class PgTokenRepository:
         row = await self._pool.fetchrow(
             "INSERT INTO api_token (workspace_id, owner_id, name, token_hash) "
             "VALUES ($1, $2, $3, $4) "
-            "RETURNING id, workspace_id, name, created_at, last_used_at, revoked_at",
+            "RETURNING id, workspace_id, name, role, created_at, last_used_at, revoked_at",
             workspace_id,
             owner_id,
             name,
@@ -75,7 +75,7 @@ class PgTokenRepository:
     ) -> list[TokenRead]:
         if after is None:
             rows = await self._pool.fetch(
-                "SELECT id, workspace_id, name, created_at, last_used_at, revoked_at "
+                "SELECT id, workspace_id, name, role, created_at, last_used_at, revoked_at "
                 "FROM api_token WHERE workspace_id = $1 "
                 "ORDER BY created_at DESC, id DESC LIMIT $2",
                 workspace_id,
@@ -83,7 +83,7 @@ class PgTokenRepository:
             )
         else:
             rows = await self._pool.fetch(
-                "SELECT id, workspace_id, name, created_at, last_used_at, revoked_at "
+                "SELECT id, workspace_id, name, role, created_at, last_used_at, revoked_at "
                 "FROM api_token WHERE workspace_id = $1 "
                 "AND (created_at, id) < ($2, $3) "
                 "ORDER BY created_at DESC, id DESC LIMIT $4",
@@ -102,9 +102,7 @@ class PgTokenRepository:
         )
         if row is None:
             return None
-        return TokenAuthRow(
-            owner_id=row["owner_id"], workspace_id=row["workspace_id"]
-        )
+        return TokenAuthRow(owner_id=row["owner_id"], workspace_id=row["workspace_id"])
 
     async def revoke(self, workspace_id: UUID, token_id: UUID) -> bool:
         result = await self._pool.execute(

@@ -4,7 +4,7 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
-from who2be_models import TokenCreate, TokenCreated, TokenRead
+from who2be_models import TokenCreate, TokenCreated, TokenRead, WorkspaceRole
 
 
 def test_create_requires_non_empty_name() -> None:
@@ -23,6 +23,7 @@ def test_read_allows_null_usage_timestamps() -> None:
         id=uuid4(),
         workspace_id=uuid4(),
         name="agent",
+        role=WorkspaceRole.admin,
         created_at=datetime.now(UTC),
         last_used_at=None,
         revoked_at=None,
@@ -30,11 +31,17 @@ def test_read_allows_null_usage_timestamps() -> None:
     assert token.last_used_at is None
 
 
+def test_create_role_defaults_to_none() -> None:
+    # role=None signalisiert dem Service "Snapshot der Ersteller-Rolle".
+    assert TokenCreate(name="agent").role is None
+
+
 def test_created_exposes_plaintext_token_once() -> None:
     created = TokenCreated(
         id=uuid4(),
         workspace_id=uuid4(),
         name="agent",
+        role=WorkspaceRole.admin,
         created_at=datetime.now(UTC),
         last_used_at=None,
         revoked_at=None,
