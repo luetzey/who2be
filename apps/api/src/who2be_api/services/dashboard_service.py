@@ -34,18 +34,22 @@ class DashboardService:
         self._repo = repo
 
     async def fetch(self, ctx: WorkspaceContext) -> DashboardResponse:
-        (persona_counts, playbook_counts), activity = await asyncio.gather(
+        (persona_counts, playbook_counts, resource_counts), activity = await asyncio.gather(
             self._repo.status_distribution(ctx.workspace_id),
             self._repo.recent_activity(ctx.workspace_id),
         )
         persona = _to_distribution(persona_counts)
         playbook = _to_distribution(playbook_counts)
+        resource = _to_distribution(resource_counts)
         return DashboardResponse(
             kpis=DashboardKpis(
                 active_personas=persona.active,
                 active_playbooks=playbook.active,
-                pending_reviews=persona.review + playbook.review,
+                active_resources=resource.active,
+                pending_reviews=persona.review + playbook.review + resource.review,
             ),
             activity=activity,
-            status_distribution=DashboardStatusDistribution(persona=persona, playbook=playbook),
+            status_distribution=DashboardStatusDistribution(
+                persona=persona, playbook=playbook, resource=resource
+            ),
         )

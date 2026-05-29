@@ -152,3 +152,57 @@ export interface DashboardData {
   activity: DashboardActivity[]
   status_distribution: DashboardStatusDistribution
 }
+
+// Phase 2.2 — Resources (Block-Editor) + Playbook→Block-Refs. `blocks` ist das
+// offene BlockNote-Dokument; nur `id`/`type` sind verbindlich.
+export interface ResourceBlock {
+  id: string
+  type: string
+  [key: string]: unknown
+}
+
+export interface ResourceContent {
+  description: string
+  blocks: ResourceBlock[]
+}
+
+export interface Resource {
+  id: string
+  workspace_id: string
+  owner_id: string
+  name: string
+  current_version: number
+  current_status?: VersionStatus
+  has_pending_draft?: boolean
+  content: ResourceContent
+  created_at: string
+  updated_at: string
+}
+
+export interface ResourceVersion {
+  version: number
+  status?: VersionStatus
+  content: ResourceContent
+  created_by: string
+  created_at: string
+}
+
+export interface ResourceInput {
+  name: string
+  content: ResourceContent
+}
+
+export interface ResourceLink {
+  resource_id: string
+  resource_name: string
+  block_id: string
+  position: number
+  available: boolean
+  preview: string | null
+}
+
+export interface ResourceLinkItemInput {
+  resource_id: string
+  block_id: string
+  position: number
+}

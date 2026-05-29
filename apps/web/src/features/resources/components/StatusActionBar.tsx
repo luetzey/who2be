@@ -1,0 +1,85 @@
+import { useState } from 'react'
+
+import type { VersionStatus } from '@/api/types'
+import { useApi } from '@/api/useApi'
+import { Button } from '@/components/ui/button'
+import { notify } from '@/lib/feedback'
+
+import { canTransition } from '../lib/status'
+
+interface StatusActionBarProps {
+  resourceId: string
+  version: number
+  status: VersionStatus
+  onTransitioned: () => void
+}
+
+// Aktionen pro Status laut §2.1.F. Reihenfolge: Promote (primary) vor
+// Submit (secondary) vor Reject (destructive). Buttons werden nur
+// gerendert wenn der Uebergang aus dem aktuellen Status erlaubt ist.
+export function StatusActionBar({
+  resourceId,
+  version,
+  status,
+  onTransitioned,
+}: StatusActionBarProps) {
+  const api = useApi()
+  const [busy, setBusy] = useState<VersionStatus | null>(null)
+
+  const transition = async (to: VersionStatus, success: string) => {
+    setBusy(to)
+    try {
+      await api.transitionResourceVersion(resourceId, version, to)
+      notify.success(success)
+      onTransitioned()
+    } catch (cause: unknown) {
+      const message = cause instanceof Error ? cause.message : 'Aktion fehlgeschlagen.'
+      notify.error(message)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const showSubmit = canTransition(status, 'review')
+  const showPromote = canTransition(status, 'active')
+  const showReject = status === 'review' && canTransition(status, 'draft')
+
+  if (!showSubmit && !showPromote && !showReject) {
+    return null
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2" role="toolbar" aria-label="Status-Aktionen">
+      {showPromote ? (
+        <Button
+          type="button"
+          variant="brand"
+          onClick={() => void transition('active', 'Version aktiviert.')}
+          disabled={busy !== null}
+        >
+          Aktivieren
+        </Button>
+      ) : null}
+      {showSubmit ? (
+        <Button
+          type="button"
+          variant="default"
+          onClick={() => void transition('review', 'Zur Review eingereicht.')}
+          disabled={busy !== null}
+        >
+          Zur Review einreichen
+        </Button>
+      ) : null}
+      {showReject ? (
+        <Button
+          type="button"
+          variant="destructive"
+          onClick={() => void transition('draft', 'Review abgelehnt.')}
+          disabled={busy !== null}
+        >
+          Ablehnen
+        </Button>
+      ) : null}
+    </div>
+  )
+}

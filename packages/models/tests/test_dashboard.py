@@ -18,6 +18,7 @@ def _distribution() -> DashboardStatusDistribution:
     return DashboardStatusDistribution(
         persona=EntityStatusDistribution(draft=2, review=1, active=12, inactive=8),
         playbook=EntityStatusDistribution(draft=0, review=0, active=34, inactive=5),
+        resource=EntityStatusDistribution(draft=1, review=0, active=7, inactive=2),
     )
 
 

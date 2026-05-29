@@ -18,6 +18,7 @@ class DashboardKpis(BaseModel):
 
     active_personas: int = Field(ge=0)
     active_playbooks: int = Field(ge=0)
+    active_resources: int = Field(ge=0, default=0)
     pending_reviews: int = Field(ge=0)
 
 
@@ -39,6 +40,7 @@ class DashboardStatusDistribution(BaseModel):
 
     persona: EntityStatusDistribution
     playbook: EntityStatusDistribution
+    resource: EntityStatusDistribution
 
 
 class DashboardResponse(BaseModel):

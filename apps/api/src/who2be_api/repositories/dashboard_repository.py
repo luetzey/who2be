@@ -37,9 +37,16 @@ _PLAYBOOK_DISTRIBUTION = """
     GROUP BY pv.status
 """
 
-# `entity_type` listet bewusst nur persona/playbook — Resource-Status kommt
-# in Phase 2.2. Subquery-Filter ersetzt einen fehlenden `workspace_id` in
-# `status_history` und haelt die Tabelle entity-agnostisch.
+_RESOURCE_DISTRIBUTION = """
+    SELECT rv.status, COUNT(*)::int AS n
+    FROM resource_version rv
+    JOIN resource r ON r.id = rv.resource_id
+    WHERE r.workspace_id = $1
+    GROUP BY rv.status
+"""
+
+# Subquery-Filter ersetzt einen fehlenden `workspace_id` in `status_history`
+# und haelt die Tabelle entity-agnostisch. Resource-Zweig seit Phase 2.2.
 _ACTIVITY = """
     SELECT id, entity_type, entity_id, from_status, to_status,
            changed_by, changed_at, note
@@ -48,6 +55,8 @@ _ACTIVITY = """
               (SELECT id FROM persona  WHERE workspace_id = $1))
        OR (entity_type = 'playbook' AND entity_id IN
               (SELECT id FROM playbook WHERE workspace_id = $1))
+       OR (entity_type = 'resource' AND entity_id IN
+              (SELECT id FROM resource WHERE workspace_id = $1))
     ORDER BY changed_at DESC
     LIMIT $2
 """
@@ -58,7 +67,9 @@ class DashboardRepository(Protocol):
 
     async def status_distribution(
         self, workspace_id: UUID
-    ) -> tuple[dict[VersionStatus, int], dict[VersionStatus, int]]: ...
+    ) -> tuple[
+        dict[VersionStatus, int], dict[VersionStatus, int], dict[VersionStatus, int]
+    ]: ...
 
     async def recent_activity(self, workspace_id: UUID) -> list[StatusHistoryEntry]: ...
 
@@ -71,12 +82,16 @@ class PgDashboardRepository:
 
     async def status_distribution(
         self, workspace_id: UUID
-    ) -> tuple[dict[VersionStatus, int], dict[VersionStatus, int]]:
+    ) -> tuple[
+        dict[VersionStatus, int], dict[VersionStatus, int], dict[VersionStatus, int]
+    ]:
         persona_rows = await self._pool.fetch(_PERSONA_DISTRIBUTION, workspace_id)
         playbook_rows = await self._pool.fetch(_PLAYBOOK_DISTRIBUTION, workspace_id)
+        resource_rows = await self._pool.fetch(_RESOURCE_DISTRIBUTION, workspace_id)
         return (
             {VersionStatus(row["status"]): row["n"] for row in persona_rows},
             {VersionStatus(row["status"]): row["n"] for row in playbook_rows},
+            {VersionStatus(row["status"]): row["n"] for row in resource_rows},
         )
 
     async def recent_activity(self, workspace_id: UUID) -> list[StatusHistoryEntry]:
