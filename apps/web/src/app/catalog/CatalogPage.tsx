@@ -17,6 +17,7 @@ import { FormSectionShowcase } from './showcases/form-section'
 import { InputShowcase } from './showcases/input'
 import { LabelShowcase } from './showcases/label'
 import { LayoutShowcase } from './showcases/layout'
+import { SelectShowcase } from './showcases/select'
 import { SkeletonShowcase } from './showcases/skeleton'
 import { TableShowcase } from './showcases/table'
 import { TextareaShowcase } from './showcases/textarea'
@@ -31,6 +32,7 @@ const NAV_ENTRIES: readonly NavEntry[] = [
   { id: 'input', label: 'Input' },
   { id: 'textarea', label: 'Textarea' },
   { id: 'label', label: 'Label' },
+  { id: 'select', label: 'Select' },
   { id: 'checkbox', label: 'Checkbox' },
   { id: 'card', label: 'Card' },
   { id: 'badge', label: 'Badge' },
@@ -71,6 +73,7 @@ export function CatalogPage() {
         <InputShowcase />
         <TextareaShowcase />
         <LabelShowcase />
+        <SelectShowcase />
         <CheckboxShowcase />
         <CardShowcase />
         <BadgeShowcase />

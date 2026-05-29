@@ -1,6 +1,7 @@
 import { type BaseSyntheticEvent } from 'react'
 import { type UseFormReturn } from 'react-hook-form'
 
+import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
 import { FormSection } from '@/components/layout/FormSection'
 import { Button } from '@/components/ui/button'
@@ -18,6 +19,8 @@ interface PersonaEditorFormProps {
 }
 
 export function PersonaEditorForm({ form, onSubmit, saveError }: PersonaEditorFormProps) {
+  // Viewer dürfen nur lesen (ADR-0023) — Save bleibt gesperrt.
+  const isViewer = useCurrentWorkspaceRole() === 'viewer'
   return (
     <>
       {saveError !== null ? <ErrorAlert message={saveError} /> : null}
@@ -91,7 +94,12 @@ export function PersonaEditorForm({ form, onSubmit, saveError }: PersonaEditorFo
               </FormSection>
 
               <div className="flex justify-end">
-                <Button type="submit" variant="brand" disabled={form.formState.isSubmitting}>
+                <Button
+                  type="submit"
+                  variant="brand"
+                  disabled={form.formState.isSubmitting || isViewer}
+                  title={isViewer ? 'Viewer können Inhalte nur ansehen' : undefined}
+                >
                   Neue Version speichern
                 </Button>
               </div>

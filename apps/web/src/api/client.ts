@@ -1,7 +1,12 @@
 import { config } from '../config'
 import type {
   DashboardData,
+  Invitation,
+  InvitationAcceptResult,
+  InvitationInput,
   Me,
+  Member,
+  MemberUpdateInput,
   Persona,
   PersonaInput,
   PersonaVersion,
@@ -73,6 +78,20 @@ export function fetchMe(token: string): Promise<Me> {
   return request<Me>(token, '/v1/me')
 }
 
+// Invitation-Annahme ist bewusst NICHT workspace-scoped: der Einladende kennt
+// den Ziel-Workspace, der Eingeladene noch nicht. Der Pfad traegt nur den
+// Klartext-Token; die Response liefert den Workspace, in den man eingetreten ist.
+export function acceptInvitation(
+  token: string,
+  invitationToken: string,
+): Promise<InvitationAcceptResult> {
+  return request<InvitationAcceptResult>(
+    token,
+    `/v1/invitations/${invitationToken}/accept`,
+    { method: 'POST' },
+  )
+}
+
 export interface Api {
   listPersonas: () => Promise<Persona[]>
   getPersona: (id: string) => Promise<Persona>
@@ -115,6 +134,12 @@ export interface Api {
     playbookId: string,
     links: ResourceLinkItemInput[],
   ) => Promise<ResourceLink[]>
+  listMembers: () => Promise<Member[]>
+  updateMemberRole: (userId: string, input: MemberUpdateInput) => Promise<Member>
+  removeMember: (userId: string) => Promise<void>
+  listInvitations: () => Promise<Invitation[]>
+  createInvitation: (input: InvitationInput) => Promise<Invitation>
+  revokeInvitation: (id: string) => Promise<void>
 }
 
 export function createApi(token: string, workspaceId: string): Api {
@@ -209,5 +234,21 @@ export function createApi(token: string, workspaceId: string): Api {
         method: 'PUT',
         body: JSON.stringify({ links }),
       }),
+    listMembers: () => request<Member[]>(token, `${ws}/members`),
+    updateMemberRole: (userId, input) =>
+      request<Member>(token, `${ws}/members/${userId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      }),
+    removeMember: (userId) =>
+      request<void>(token, `${ws}/members/${userId}`, { method: 'DELETE' }),
+    listInvitations: () => request<Invitation[]>(token, `${ws}/invitations`),
+    createInvitation: (input) =>
+      request<Invitation>(token, `${ws}/invitations`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    revokeInvitation: (id) =>
+      request<void>(token, `${ws}/invitations/${id}`, { method: 'DELETE' }),
   }
 }

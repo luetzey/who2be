@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 
 import { ResourceEditor } from '../components/ResourceEditor'
@@ -26,6 +27,8 @@ export function ResourceDetailPage() {
   const { resource, versions, loading, error, reload } = useResource(id)
   const { form, setBlocks, onSubmit, saveError } = useResourceForm(resource, reload)
   const wsPath = useWorkspacePath()
+  // Viewer dürfen nur lesen (ADR-0023) — Save bleibt gesperrt.
+  const isViewer = useCurrentWorkspaceRole() === 'viewer'
 
   if (id === undefined) {
     return <Navigate to={wsPath('/resources')} replace />
@@ -117,7 +120,8 @@ export function ResourceDetailPage() {
                         <Button
                           type="submit"
                           variant="brand"
-                          disabled={form.formState.isSubmitting}
+                          disabled={form.formState.isSubmitting || isViewer}
+                          title={isViewer ? 'Viewer können Inhalte nur ansehen' : undefined}
                         >
                           Neue Version speichern
                         </Button>
