@@ -262,8 +262,10 @@ def test_endpoint_gates_per_role(monkeypatch: pytest.MonkeyPatch) -> None:
             assert client.get(tokens, headers=viewer_auth).status_code == 403
             assert client.post(tokens, json={"name": "t"}, headers=editor_auth).status_code == 201
 
-            # Transition draft->review darf der editor; review->active nur admin.
+            # Frische v1 startet als `inactive` (DB-Default) -> erst nach draft,
+            # dann review. draft/review duerfen editor; review->active nur admin.
             tr = f"{personas}/{pid}/versions/{ver}/transition"
+            assert client.post(tr, json={"to": "draft"}, headers=editor_auth).status_code == 200
             assert client.post(tr, json={"to": "review"}, headers=editor_auth).status_code == 200
             assert client.post(tr, json={"to": "active"}, headers=editor_auth).status_code == 403
             assert client.post(tr, json={"to": "active"}, headers=admin_auth).status_code == 200
@@ -310,7 +312,9 @@ def test_token_role_snapshot(monkeypatch: pytest.MonkeyPatch) -> None:
             assert created_p.status_code == 201
             pid = created_p.json()["id"]
             ver = created_p.json()["current_version"]
+            # Frische v1 = inactive -> erst draft, dann review (beides editor).
             tr = f"{personas}/{pid}/versions/{ver}/transition"
+            assert client.post(tr, json={"to": "draft"}, headers=token_auth).status_code == 200
             assert client.post(tr, json={"to": "review"}, headers=token_auth).status_code == 200
             # ... aber nicht nach active promoten (Snapshot-Rolle = editor).
             assert client.post(tr, json={"to": "active"}, headers=token_auth).status_code == 403
