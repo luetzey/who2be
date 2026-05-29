@@ -22,8 +22,14 @@ export function ResourceEditor({ initialBlocks, editable = true, onChange }: Res
       initialBlocks.length > 0 ? (initialBlocks as unknown as PartialBlock[]) : undefined,
   })
 
+  // `bn-container` aktiviert den scopeden CSS-Theme-Fix (Phase 3-B):
+  // Headings + Popover-Surfaces innerhalb der BlockNote-Insel. Siehe
+  // styles/globals.css §BlockNote-Insel.
   return (
-    <div className="rounded-md border bg-background py-2" data-testid="resource-editor">
+    <div
+      className="bn-container rounded-md border bg-background py-2"
+      data-testid="resource-editor"
+    >
       <BlockNoteView
         editor={editor}
         editable={editable}
