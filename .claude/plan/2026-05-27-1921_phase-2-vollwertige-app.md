@@ -1,5 +1,15 @@
 # Plan: Who2Be — Vollwertige App (Phase 2.1 / 2.2 / 2.3)
 
+**Status:** ✅ Alle drei Phasen abgeschlossen (2026-05-29). Sub-Pläne sind je
+einzeln auf Done geflippt. ADR-Backlog 0019/0020/0021/0022/0023 abgelegt.
+
+| Phase | PRs | Sub-Pläne |
+|---|---|---|
+| 2.1a — Tenancy + Schema-Lock | #38, #41, #42 | `…2.1a-1…`, `…2.1a-2…` |
+| 2.1b — Status + Dashboard | #44, #46, #45, #47 | `…2.1b-0…`, `…2.1b-status-backend`, `…2.1b-dashboard-backend`, `…2.1b-status-dashboard-web` |
+| 2.2 — Resources + BlockNote | #48 | `…2.2-resources-blocknote` |
+| 2.3 — Multi-User RBAC | #49, #50, #51, #52 | `…2.3-0…`, `…2.3-A…`, `…2.3-B…`, `…2.3-C…` |
+
 ## Context
 
 Der MVP ist code-seitig launch-bereit (Personas/Playbooks/Tokens CRUD, MCP-Read-Tools, Web-UI mit Auth). Um Who2Be zu einer **vollwertigen Multi-Tenant-App** zu machen, brauchen wir vier zusammenhaengende Bausteine: **Organization+Workspace-Hierarchie** (Mandantentrennung), **Status-Workflow pro Version** (Draft/Review/Active/Inactive), **Resources mit Block-Editor** (Notion-aehnliche Wissensebene, mit Playbook-Block-Refs) und ein **Dashboard** als Einstieg. Mehrere User pro Workspace ist die letzte Stufe — die Datenstruktur wird aber schon in Phase 2.1 darauf vorbereitet, damit Phase 2.3 ohne Migration auskommt.

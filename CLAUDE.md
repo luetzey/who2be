@@ -25,17 +25,36 @@ Skills `python-conventions` und `react-conventions`, Projekt-Profil siehe
 
 ## Aktueller Stand
 
-Phase 0 — lauffaehiges Geruest. API hat nur `/v1/health`, MCP nur ein `ping`-Tool,
-Web nur eine statische Landing-Page. Persona-/Playbook-CRUD, Datenmodell und Auth
-folgen in spaeteren Phasen (siehe Hinweise in den jeweiligen Modul-Docstrings).
+Phase 2 ist abgeschlossen (Stand 2026-05-29). Master-Plan:
+`.claude/plan/2026-05-27-1921_phase-2-vollwertige-app.md` — alle Sub-Pläne
+geflippt.
+
+- **2.1a — Tenancy:** `User → org_member → Organization → Workspace → Entity`;
+  API hart auf `/v1/workspaces/{ws_id}/...`; API-Tokens pro Workspace gepinnt.
+- **2.1b — Status + Dashboard:** `VersionStatus {draft, review, active, inactive}`
+  pro Version, DB-Invariante via partial-unique-index; `POST .../versions/{v}/transition`;
+  PUT auf Active erzeugt Draft (409 bei vorhandenem Draft); MCP-Reads filtern auf
+  `status='active'`; Dashboard-Endpoint + -Page (KPIs + Activity + Status-Distribution).
+- **2.2 — Resources + BlockNote:** Resource-Aggregat versioniert wie Persona/Playbook;
+  Playbook→Resource-Block-Refs via `block_id`; MCP `list_resources` / `fetch_resource`;
+  Web-Editor isolierte BlockNote-Insel (ADR-0022).
+- **2.3 — Multi-User RBAC:** Rollen `admin > editor > viewer` via `workspace_member`;
+  `require_role`-Gate auf Mutating-Endpoints; Token-Snapshot-Rolle (ADR-0023);
+  Invitations + GoTrue-Mail (single-use, sha256-Hash); Members-Page + Accept-Flow.
+
+Nächste Blöcke offen (kein aktiver Plan): Public-Switch + FSL-Lizenz
+(`…1935_license-fsl-setup`, `…2028_public-switch-github-repo`), MCP-Write-Tools
+(ADR-0012 deferred), Enterprise-License-Hooks (`…0528_enterprise-license-management`).
 
 ## Struktur
 
-- `apps/api/` — FastAPI-Backend (REST, `/v1/`)
-- `apps/mcp/` — FastMCP-Server (Ziel-Tools `get_persona`, `list_playbooks`, `fetch_playbook`)
-- `apps/web/` — React/TypeScript-Web-UI (Vite); Design-System Tailwind+shadcn
-  geplant, siehe `.claude/plan/2026-05-26-1530_web-ui-design-system-tailwind-shadcn.md`
-  — bis zur Umsetzung kein paralleles UI-System einfuehren
+- `apps/api/` — FastAPI-Backend (REST, `/v1/workspaces/{ws_id}/...`)
+- `apps/mcp/` — FastMCP-Server (`get_persona`, `list_playbooks`, `fetch_playbook`,
+  `list_resources`, `fetch_resource` — alle workspace-aware, filtern auf
+  `status='active'`)
+- `apps/web/` — React/TypeScript-Web-UI (Vite, Tailwind v4, shadcn-Primitives,
+  BlockNote-Insel für den Resource-Editor; Designsprache "Warm Citrus" laut
+  `docs/frontend/design-language.md`)
 - `packages/models/` — geteilte Pydantic-Models, von API und MCP importiert
 - Supabase (Postgres) als DB; lokal via Docker-Compose, Ziel-Hosting Hetzner
 
