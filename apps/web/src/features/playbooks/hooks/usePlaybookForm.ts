@@ -3,30 +3,71 @@ import { type BaseSyntheticEvent, useEffect, useState } from 'react'
 import { useForm, type UseFormReturn } from 'react-hook-form'
 import { z } from 'zod'
 
-import type { Playbook } from '@/api/types'
+import type { Playbook, PlaybookType, ResourceBlock } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { notify } from '@/lib/feedback'
 
+import { blockPlainText } from '../lib/blockText'
+
+const PLAYBOOK_TYPES = [
+  'prompt',
+  'instructions',
+  'snippet',
+  'workflow',
+  'checklist',
+  'faq',
+] as const satisfies readonly PlaybookType[]
+
+// `bodyBlocks` und `tags` kommen als Passthrough-Felder ins Schema
+// — Zod ruft sie nur durch, validiert aber Name/Typ/Description.
 const editorSchema = z.object({
   name: z.string().min(1, 'Name erforderlich.'),
-  type: z.string().min(1, 'Typ erforderlich.'),
+  type: z.enum(PLAYBOOK_TYPES),
   description: z.string().min(1, 'Beschreibung erforderlich.'),
-  body: z.string().min(1, 'Inhalt erforderlich.'),
-  tags: z.string(),
   triggers: z.string(),
+  bodyBlocks: z.array(z.custom<ResourceBlock>()),
+  tags: z.array(z.string()),
 })
 
 export type PlaybookEditorValues = z.infer<typeof editorSchema>
 
-function splitList(raw: string): string[] {
-  return raw
-    .split(',')
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0)
+function splitTriggers(raw: string): string | null {
+  const trimmed = raw.trim()
+  return trimmed === '' ? null : trimmed
 }
 
 function describeError(cause: unknown): string {
   return cause instanceof Error ? cause.message : 'Unbekannter Fehler.'
+}
+
+// Backend persistiert `body: str`. Bis das Schema in einem Folge-Plan auf
+// `body_blocks` migriert wurde, serialisieren wir die BlockNote-Bloecke
+// beim Submit als Plain-Text-Snapshot (Blockwise mit `\n\n` getrennt).
+function blocksToPlainText(blocks: ResourceBlock[]): string {
+  return blocks
+    .map((block) => blockPlainText(block).trim())
+    .filter((text) => text.length > 0)
+    .join('\n\n')
+}
+
+// Reverse: vorhandener `body`-String wird in Paragraphen-Bloecke zerlegt,
+// damit der Editor etwas zum Anzeigen hat. Verlustbehaftet (Formatierung
+// geht verloren), aber stabil und deterministisch.
+function plainTextToBlocks(body: string): ResourceBlock[] {
+  if (body.trim() === '') {
+    return []
+  }
+  return body.split(/\n\n+/).map((paragraph, index) => ({
+    id: `playbook-body-${index}`,
+    type: 'paragraph',
+    content: [{ type: 'text', text: paragraph, styles: {} }],
+  }))
+}
+
+function coercePlaybookType(value: string): PlaybookType {
+  return (PLAYBOOK_TYPES as readonly string[]).includes(value)
+    ? (value as PlaybookType)
+    : 'workflow'
 }
 
 export interface UsePlaybookFormResult {
@@ -51,8 +92,8 @@ export function usePlaybookForm(
       name: '',
       type: 'workflow',
       description: '',
-      body: '',
-      tags: '',
+      bodyBlocks: [],
+      tags: [],
       triggers: '',
     },
   })
@@ -61,10 +102,10 @@ export function usePlaybookForm(
     if (playbook !== null) {
       form.reset({
         name: playbook.name,
-        type: playbook.content.type,
+        type: coercePlaybookType(playbook.content.type),
         description: playbook.content.description,
-        body: playbook.content.body,
-        tags: playbook.content.tags.join(', '),
+        bodyBlocks: plainTextToBlocks(playbook.content.body),
+        tags: playbook.content.tags,
         triggers: playbook.content.triggers ?? '',
       })
     }
@@ -80,10 +121,10 @@ export function usePlaybookForm(
         name: values.name,
         content: {
           description: values.description,
-          body: values.body,
+          body: blocksToPlainText(values.bodyBlocks),
           type: values.type,
-          tags: splitList(values.tags),
-          triggers: values.triggers.trim() === '' ? null : values.triggers.trim(),
+          tags: values.tags,
+          triggers: splitTriggers(values.triggers),
         },
       })
       notify.success('Gespeichert — neue Version erstellt.')
@@ -95,3 +136,5 @@ export function usePlaybookForm(
 
   return { form, onSubmit, saveError }
 }
+
+export { PLAYBOOK_TYPES }

@@ -13,6 +13,18 @@ vi.mock('@/lib/feedback', () => ({
   notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }))
 
+// BlockNote-Insel mocken — sie kann nicht in jsdom mounten (ProseMirror).
+// Damit der Persona-Editor (BlockNote-Profil) in diesem Page-Test sauber
+// rendert, stuben wir die Insel-Module + den Theme-Context, der die
+// Insel hochzieht.
+vi.mock('@blocknote/react', () => ({
+  useCreateBlockNote: () => ({ document: [] }),
+}))
+vi.mock('@blocknote/mantine', () => ({
+  BlockNoteView: () => <div data-testid="blocknote-view" />,
+}))
+vi.mock('@/app/theme-context', () => ({ useTheme: () => ({ resolved: 'light' }) }))
+
 const session = { access_token: 'jwt' } as unknown as Session
 const me: Me = {
   user_id: 'u1',

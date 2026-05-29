@@ -13,6 +13,15 @@ vi.mock('@/lib/feedback', () => ({
   notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }))
 
+// BlockNote-Insel mocken — sie ist in jsdom nicht mountfaehig.
+vi.mock('@blocknote/react', () => ({
+  useCreateBlockNote: () => ({ document: [] }),
+}))
+vi.mock('@blocknote/mantine', () => ({
+  BlockNoteView: () => <div data-testid="blocknote-view" />,
+}))
+vi.mock('@/app/theme-context', () => ({ useTheme: () => ({ resolved: 'light' }) }))
+
 const session = { access_token: 'jwt' } as unknown as Session
 const me: Me = {
   user_id: 'u1',
@@ -126,7 +135,9 @@ describe('PlaybookDetailPage', () => {
       expect(screen.getByText('Aktuelle Version: 1')).toBeInTheDocument()
     })
 
-    fireEvent.change(screen.getByLabelText('Inhalt'), { target: { value: 'b2' } })
+    // Inhalt ist jetzt eine BlockNote-Insel (Phase 3-B) — wir aendern den
+    // Namen, um eine neue Version zu erzeugen, statt am Body zu drehen.
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Coach v2' } })
     fireEvent.click(screen.getByRole('button', { name: 'Neue Version speichern' }))
 
     await waitFor(() => {
