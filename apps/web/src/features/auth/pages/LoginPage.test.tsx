@@ -11,6 +11,7 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 import { SessionProvider } from '@/auth/SessionProvider'
+import { sanitizeNext } from '@/features/auth/lib/sanitize-next'
 import { LoginPage } from './LoginPage'
 
 describe('LoginPage', () => {
@@ -38,5 +39,33 @@ describe('LoginPage', () => {
         password: 'streng-geheim',
       })
     })
+  })
+})
+
+describe('sanitizeNext', () => {
+  // Open-Redirect-Schutz: nur In-App-Pfade duerfen den Login-Redirect lenken.
+  it('akzeptiert In-App-Pfade', () => {
+    expect(sanitizeNext('/dashboard')).toBe('/dashboard')
+    expect(sanitizeNext('/invitations/abc/accept?via=magic')).toBe(
+      '/invitations/abc/accept?via=magic',
+    )
+  })
+
+  it('ignoriert Protocol-Relative-URLs wie //evil.com', () => {
+    expect(sanitizeNext('//evil.com')).toBe('/')
+    expect(sanitizeNext('//evil.com/path')).toBe('/')
+  })
+
+  it('ignoriert vollqualifizierte URLs', () => {
+    expect(sanitizeNext('https://evil.com')).toBe('/')
+    expect(sanitizeNext('http://evil.com/path')).toBe('/')
+    // Selbst ein Pfad, der ein `://` enthaelt, wird verworfen.
+    expect(sanitizeNext('/redirect?to=https://evil.com')).toBe('/')
+  })
+
+  it('ignoriert relative Pfade und leere Werte', () => {
+    expect(sanitizeNext('dashboard')).toBe('/')
+    expect(sanitizeNext('')).toBe('/')
+    expect(sanitizeNext(null)).toBe('/')
   })
 })
