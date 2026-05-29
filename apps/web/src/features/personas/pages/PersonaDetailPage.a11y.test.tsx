@@ -10,6 +10,16 @@ vi.mock('@/lib/feedback', () => ({
   notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }))
 
+// Siehe PersonaDetailPage.test.tsx — BlockNote-Insel ist in jsdom nicht
+// mountfaehig. `@/app/theme-context` wird hier NICHT gemockt, weil
+// `renderInRoutes` den echten `ThemeProvider` mountet (AppLayout).
+vi.mock('@blocknote/react', () => ({
+  useCreateBlockNote: () => ({ document: [] }),
+}))
+vi.mock('@blocknote/mantine', () => ({
+  BlockNoteView: () => <div data-testid="blocknote-view" />,
+}))
+
 afterEach(() => {
   vi.unstubAllGlobals()
 })

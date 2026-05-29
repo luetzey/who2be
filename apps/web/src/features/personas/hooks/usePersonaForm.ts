@@ -3,25 +3,23 @@ import { type BaseSyntheticEvent, useEffect, useState } from 'react'
 import { useForm, type UseFormReturn } from 'react-hook-form'
 import { z } from 'zod'
 
-import type { Persona } from '@/api/types'
+import type { Persona, ResourceBlock } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { notify } from '@/lib/feedback'
 
+// Pflichtfelder werden via Zod validiert; `profileBlocks` und `tags`
+// kommen als reine Passthrough-Felder mit ins Schema, damit der Resolver
+// die Werte nicht stripped und die Form-Typen aus `useForm` und
+// `zodResolver` zusammenpassen.
 const editorSchema = z.object({
   name: z.string().min(1, 'Name erforderlich.'),
   description: z.string().min(1, 'Beschreibung erforderlich.'),
   systemPrompt: z.string().min(1, 'System-Prompt erforderlich.'),
-  traits: z.string(),
+  profileBlocks: z.array(z.custom<ResourceBlock>()),
+  tags: z.array(z.string()),
 })
 
 export type PersonaEditorValues = z.infer<typeof editorSchema>
-
-function splitList(raw: string): string[] {
-  return raw
-    .split(',')
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0)
-}
 
 function describeError(cause: unknown): string {
   return cause instanceof Error ? cause.message : 'Unbekannter Fehler.'
@@ -46,7 +44,13 @@ export function usePersonaForm(
   const [saveError, setSaveError] = useState<string | null>(null)
   const form = useForm<PersonaEditorValues>({
     resolver: zodResolver(editorSchema),
-    defaultValues: { name: '', description: '', systemPrompt: '', traits: '' },
+    defaultValues: {
+      name: '',
+      description: '',
+      systemPrompt: '',
+      profileBlocks: [],
+      tags: [],
+    },
   })
 
   useEffect(() => {
@@ -55,7 +59,8 @@ export function usePersonaForm(
         name: persona.name,
         description: persona.content.description,
         systemPrompt: persona.content.system_prompt,
-        traits: persona.content.traits.join(', '),
+        profileBlocks: persona.content.content?.blocks ?? [],
+        tags: persona.content.tags ?? [],
       })
     }
   }, [persona, form])
@@ -71,7 +76,12 @@ export function usePersonaForm(
         content: {
           description: values.description,
           system_prompt: values.systemPrompt,
-          traits: splitList(values.traits),
+          // `traits` ist deprecated (Phase 3-0). Wir senden weiterhin ein
+          // leeres Array, damit der Schema-Default beim Backend greift —
+          // auch wenn Server jetzt selbst einen Default haetten.
+          traits: [],
+          tags: values.tags,
+          content: { description: '', blocks: values.profileBlocks },
         },
       })
       notify.success('Gespeichert — neue Version erstellt.')

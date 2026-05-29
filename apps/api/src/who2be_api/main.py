@@ -39,6 +39,7 @@ from who2be_api.routers import (
     playbooks,
     resources,
     tokens,
+    usages,
     workspaces,
 )
 
@@ -105,6 +106,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(persona_playbooks.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(resources.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(playbook_resources.router, prefix=_WORKSPACE_PREFIX)
+    app.include_router(usages.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(dashboard.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(members.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(invitations.router, prefix=_WORKSPACE_PREFIX)

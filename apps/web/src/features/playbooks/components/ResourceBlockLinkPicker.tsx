@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 
-import { blockPreview } from '../lib/blockText'
+import { blockPlainText, isHeadingBlock, sectionPreview } from '../lib/blockText'
 
 interface ResourceBlockLinkPickerProps {
   existing: ResourceLink[]
@@ -26,6 +26,11 @@ interface ResourceBlockLinkPickerProps {
 
 function keyOf(resourceId: string, blockId: string): string {
   return `${resourceId}::${blockId}`
+}
+
+function headingText(block: ResourceBlock): string {
+  const text = blockPlainText(block).trim()
+  return text.length > 0 ? text : '(unbenanntes Heading)'
 }
 
 export function ResourceBlockLinkPicker({
@@ -85,6 +90,10 @@ export function ResourceBlockLinkPicker({
     setOpen(false)
   }, [selected, onSave])
 
+  // Phase 3-B: nur Heading-Bloecke sind als Anker erlaubt — Backend
+  // (Track A) wird das spaeter auch erzwingen.
+  const headingBlocks = blocks.filter(isHeadingBlock)
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -96,7 +105,8 @@ export function ResourceBlockLinkPicker({
         <DialogHeader>
           <DialogTitle>Resource-Bloecke verknuepfen</DialogTitle>
           <DialogDescription>
-            Waehle links eine Resource und rechts die zu verknuepfenden Bloecke.
+            Waehle links eine Resource und rechts den Heading-Block, dessen Section
+            verlinkt werden soll. Nur Heading-Bloecke sind als Anker erlaubt.
           </DialogDescription>
         </DialogHeader>
 
@@ -126,32 +136,50 @@ export function ResourceBlockLinkPicker({
             ) : null}
           </ul>
 
-          <ul className="flex max-h-80 flex-col gap-2 overflow-auto" aria-label="Bloecke">
+          <ul
+            className="flex max-h-80 flex-col gap-2 overflow-auto"
+            aria-label="Heading-Bloecke"
+          >
             {activeResource === null ? (
               <li className="px-1 text-sm text-muted-foreground">
-                Resource waehlen, um Bloecke zu sehen.
+                Resource waehlen, um Heading-Bloecke zu sehen.
+              </li>
+            ) : headingBlocks.length === 0 ? (
+              <li className="px-1 text-sm text-muted-foreground">
+                Diese Resource hat keine Heading-Bloecke.
               </li>
             ) : (
-              blocks.map((block) => {
+              headingBlocks.map((block) => {
                 const key = keyOf(activeResource.id, block.id)
+                const preview = sectionPreview(blocks, block.id)
                 return (
-                  <li key={block.id} className="flex items-start gap-3 rounded-md border p-2">
+                  <li
+                    key={block.id}
+                    className="flex items-start gap-3 rounded-md border p-2"
+                  >
                     <Checkbox
                       id={`block-${block.id}`}
                       checked={selected.includes(key)}
                       onChange={() => toggle(key)}
-                      aria-label={`Block ${block.id} verknuepfen`}
+                      aria-label={`Section ${headingText(block)} verknuepfen`}
                     />
-                    <Label htmlFor={`block-${block.id}`} className="text-sm font-normal">
-                      {blockPreview(block)}
+                    <Label
+                      htmlFor={`block-${block.id}`}
+                      className="flex flex-col gap-1 text-sm font-normal"
+                    >
+                      <span className="font-medium">{headingText(block)}</span>
+                      {preview.length > 0 ? (
+                        <span className="text-xs text-muted-foreground">{preview}</span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground/70">
+                          (leere Section)
+                        </span>
+                      )}
                     </Label>
                   </li>
                 )
               })
             )}
-            {activeResource !== null && blocks.length === 0 ? (
-              <li className="px-1 text-sm text-muted-foreground">Keine Bloecke.</li>
-            ) : null}
           </ul>
         </div>
 

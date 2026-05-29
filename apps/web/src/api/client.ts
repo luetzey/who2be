@@ -107,6 +107,10 @@ export interface Api {
   createPlaybook: (input: PlaybookInput) => Promise<Playbook>
   updatePlaybook: (id: string, input: PlaybookInput) => Promise<Playbook>
   listPlaybookVersions: (id: string) => Promise<PlaybookVersion[]>
+  // Phase 3-B — DISTINCT-Tag-Vorschlag fuer den `TagInput`. Backend
+  // liefert das Endpoint mit Track A; bis dahin antwortet es 404 — der
+  // TagInput-Konsument faengt das als leeres Vorschlag-Set ab.
+  listPlaybookTags: () => Promise<string[]>
   listTokens: () => Promise<Token[]>
   createToken: (input: TokenInput) => Promise<TokenCreated>
   revokeToken: (id: string) => Promise<void>
@@ -138,7 +142,6 @@ export interface Api {
   ) => Promise<ResourceLink[]>
   getPlaybookUsages: (id: string) => Promise<PlaybookUsage[]>
   getResourceUsages: (id: string) => Promise<ResourceUsage[]>
-  getPlaybookTags: () => Promise<string[]>
   listMembers: () => Promise<Member[]>
   updateMemberRole: (userId: string, input: MemberUpdateInput) => Promise<Member>
   removeMember: (userId: string) => Promise<void>
@@ -191,6 +194,7 @@ export function createApi(token: string, workspaceId: string): Api {
       }),
     listPlaybookVersions: (id) =>
       request<PlaybookVersion[]>(token, `${ws}/playbooks/${id}/versions`),
+    listPlaybookTags: () => request<string[]>(token, `${ws}/playbooks/tags`),
     listTokens: () => request<Token[]>(token, `${ws}/tokens`),
     createToken: (input) =>
       request<TokenCreated>(token, `${ws}/tokens`, {
@@ -243,7 +247,6 @@ export function createApi(token: string, workspaceId: string): Api {
       request<PlaybookUsage[]>(token, `${ws}/playbooks/${id}/usages`),
     getResourceUsages: (id) =>
       request<ResourceUsage[]>(token, `${ws}/resources/${id}/usages`),
-    getPlaybookTags: () => request<string[]>(token, `${ws}/playbooks/tags`),
     listMembers: () => request<Member[]>(token, `${ws}/members`),
     updateMemberRole: (userId, input) =>
       request<Member>(token, `${ws}/members/${userId}`, {

@@ -5,10 +5,23 @@
 // ist, fehlen die Felder in der Response; alle UI-Branches lesen sie optional.
 export type VersionStatus = 'draft' | 'review' | 'active' | 'inactive'
 
+// Strukturierter Profil-Inhalt (Phase 3-B). Spiegelt
+// `PersonaContent` aus packages/models. Optional, weil Backend bis Phase
+// 3-0 das Feld nicht garantiert liefert und alte Versionen es nicht
+// haben.
+export interface PersonaProfile {
+  description: string
+  blocks: ResourceBlock[]
+}
+
 export interface PersonaContent {
   description: string
   system_prompt: string
+  // `traits` ist mit Phase 3-0 deprecated — Backend liefert/akzeptiert
+  // weiterhin ein leeres Array (Default). UI schreibt es nicht mehr.
   traits: string[]
+  tags?: string[]
+  content?: PersonaProfile | null
 }
 
 export interface Persona {
@@ -37,8 +50,11 @@ export interface PersonaInput {
   content: PersonaContent
 }
 
-// Curated Set fuer `playbook.type` (Track 0). UI-Selects beziehen ihre
-// Optionen daraus; Backend setzt CHECK-Constraint.
+// Kuratierte Playbook-Typen (Phase 3-0). Spiegelt `PlaybookType` aus
+// packages/models. Backend bleibt schema-kompatibel zu `string`, daher
+// liegt das Feld in `PlaybookContent.type` als `string` — die Union ist
+// die UI-erwartete Closed-Set-Variante fuer den Select. UI-Selects
+// (Phase 3-B) beziehen ihre Optionen daraus.
 export type PlaybookType =
   | 'prompt'
   | 'instructions'
@@ -245,17 +261,20 @@ export interface ResourceInput {
   content: ResourceContent
 }
 
-// Track A erweitert das Backend um `available_in` (siehe Phase-3-Plan
-// §Track-A.3). Bis das gemerged ist, liefert das Backend nur `available`
-// — das neue Feld bleibt optional, das UI fragt es defensiv ab.
+// Phase 3-B — Heading-only Block-Refs. Backend liefert ab Track A
+// `available_in` und `section_preview`; bis dahin sind beide Felder
+// optional und das Frontend faellt auf `available` + `preview` zurueck.
+export type LinkAvailability = 'active' | 'draft' | null
+
 export interface ResourceLink {
   resource_id: string
   resource_name: string
   block_id: string
   position: number
   available: boolean
-  available_in?: 'active' | 'draft' | null
+  available_in?: LinkAvailability
   preview: string | null
+  section_preview?: string | null
 }
 
 // Backlink-Records (Phase-3-Plan §Track-A.4). Endpoints liefern 404, bis
