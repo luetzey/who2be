@@ -103,9 +103,36 @@ describe('StatusActionBar (persona)', () => {
     expect(container).toBeEmptyDOMElement()
   })
 
-  it('rendert nichts im Status inactive', () => {
-    const { container } = renderBar('inactive')
-    expect(container).toBeEmptyDOMElement()
+  it('zeigt im Status inactive den Reactivate-Button', () => {
+    renderBar('inactive')
+    expect(
+      screen.getByRole('button', { name: 'Reaktivieren als Draft' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Aktivieren' })).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: 'Zur Review einreichen' }),
+    ).toBeNull()
+  })
+
+  it('reaktiviert die Version per inactive→draft-Transition', async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({ url: String(input), init })
+        return new Response('{}', { status: 200 })
+      }),
+    )
+    const onTransitioned = vi.fn()
+
+    renderBar('inactive', onTransitioned)
+    fireEvent.click(screen.getByRole('button', { name: 'Reaktivieren als Draft' }))
+
+    await waitFor(() => {
+      expect(notify.success).toHaveBeenCalledWith('Reaktiviert als Entwurf.')
+    })
+    expect(onTransitioned).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(calls[0].init?.body as string)).toEqual({ to: 'draft' })
   })
 
   it('ruft den Transition-Endpoint und onTransitioned bei Aktivieren auf', async () => {

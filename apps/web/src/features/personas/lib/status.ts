@@ -13,13 +13,14 @@ export const VERSION_STATUSES: readonly VersionStatus[] = [
 ] as const
 
 // Erlaubte Status-Uebergaenge laut §2.1.C. Reject = Review zurueck auf
-// Draft. Active → Inactive ist nicht Teil dieses Prompts; bleibt fuer
-// kuenftige Iteration reserviert.
+// Draft. `inactive → draft` ist die Reaktivierung (Phase 3-C) — damit
+// inaktive Bestaende wieder bearbeitbar werden, ohne eine neue Version
+// anzulegen. Active → Inactive bleibt fuer kuenftige Iteration reserviert.
 export const ALLOWED_TRANSITIONS: Record<VersionStatus, readonly VersionStatus[]> = {
   draft: ['review'],
   review: ['active', 'draft'],
   active: [],
-  inactive: [],
+  inactive: ['draft'],
 }
 
 export type StatusBadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline'

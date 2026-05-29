@@ -12,11 +12,13 @@ import type {
   PersonaVersion,
   Playbook,
   PlaybookInput,
+  PlaybookUsage,
   PlaybookVersion,
   Resource,
   ResourceInput,
   ResourceLink,
   ResourceLinkItemInput,
+  ResourceUsage,
   ResourceVersion,
   Token,
   TokenCreated,
@@ -134,6 +136,9 @@ export interface Api {
     playbookId: string,
     links: ResourceLinkItemInput[],
   ) => Promise<ResourceLink[]>
+  getPlaybookUsages: (id: string) => Promise<PlaybookUsage[]>
+  getResourceUsages: (id: string) => Promise<ResourceUsage[]>
+  getPlaybookTags: () => Promise<string[]>
   listMembers: () => Promise<Member[]>
   updateMemberRole: (userId: string, input: MemberUpdateInput) => Promise<Member>
   removeMember: (userId: string) => Promise<void>
@@ -234,6 +239,11 @@ export function createApi(token: string, workspaceId: string): Api {
         method: 'PUT',
         body: JSON.stringify({ links }),
       }),
+    getPlaybookUsages: (id) =>
+      request<PlaybookUsage[]>(token, `${ws}/playbooks/${id}/usages`),
+    getResourceUsages: (id) =>
+      request<ResourceUsage[]>(token, `${ws}/resources/${id}/usages`),
+    getPlaybookTags: () => request<string[]>(token, `${ws}/playbooks/tags`),
     listMembers: () => request<Member[]>(token, `${ws}/members`),
     updateMemberRole: (userId, input) =>
       request<Member>(token, `${ws}/members/${userId}`, {

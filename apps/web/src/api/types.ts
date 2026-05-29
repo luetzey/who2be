@@ -37,6 +37,16 @@ export interface PersonaInput {
   content: PersonaContent
 }
 
+// Curated Set fuer `playbook.type` (Track 0). UI-Selects beziehen ihre
+// Optionen daraus; Backend setzt CHECK-Constraint.
+export type PlaybookType =
+  | 'prompt'
+  | 'instructions'
+  | 'snippet'
+  | 'workflow'
+  | 'checklist'
+  | 'faq'
+
 export interface PlaybookContent {
   description: string
   body: string
@@ -235,13 +245,30 @@ export interface ResourceInput {
   content: ResourceContent
 }
 
+// Track A erweitert das Backend um `available_in` (siehe Phase-3-Plan
+// §Track-A.3). Bis das gemerged ist, liefert das Backend nur `available`
+// — das neue Feld bleibt optional, das UI fragt es defensiv ab.
 export interface ResourceLink {
   resource_id: string
   resource_name: string
   block_id: string
   position: number
   available: boolean
+  available_in?: 'active' | 'draft' | null
   preview: string | null
+}
+
+// Backlink-Records (Phase-3-Plan §Track-A.4). Endpoints liefern 404, bis
+// Track A merged — die Hooks behandeln das als leere Liste + EmptyState.
+export interface PlaybookUsage {
+  persona_id: string
+  persona_name: string
+}
+
+export interface ResourceUsage {
+  playbook_id: string
+  playbook_name: string
+  block_count: number
 }
 
 export interface ResourceLinkItemInput {

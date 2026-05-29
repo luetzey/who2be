@@ -12,11 +12,13 @@ export const VERSION_STATUSES: readonly VersionStatus[] = [
   'inactive',
 ] as const
 
+// `inactive → draft` aktiviert inaktive Resource-Versionen wieder als
+// Entwurf (Phase 3-C). Andere Transitionen wie in Persona/Playbook.
 export const ALLOWED_TRANSITIONS: Record<VersionStatus, readonly VersionStatus[]> = {
   draft: ['review'],
   review: ['active', 'draft'],
   active: [],
-  inactive: [],
+  inactive: ['draft'],
 }
 
 export type StatusBadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline'
