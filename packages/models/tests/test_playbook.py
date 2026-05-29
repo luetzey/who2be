@@ -8,7 +8,9 @@ from who2be_models import (
     PlaybookContent,
     PlaybookCreate,
     PlaybookRead,
+    PlaybookType,
     PlaybookUpdate,
+    PlaybookUsage,
     PlaybookVersionRead,
     VersionStatus,
 )
@@ -121,3 +123,27 @@ def test_version_read_defaults_status_to_inactive() -> None:
         created_at=datetime.now(UTC),
     )
     assert version.status is VersionStatus.inactive
+
+
+def test_playbook_type_enum_covers_curated_set() -> None:
+    assert {member.value for member in PlaybookType} == {
+        "prompt",
+        "instructions",
+        "snippet",
+        "workflow",
+        "checklist",
+        "faq",
+    }
+
+
+def test_playbook_type_is_str_compatible() -> None:
+    # StrEnum-Werte muessen sich direkt mit PlaybookContent.type vergleichen
+    # lassen — das nutzt die UI fuer "selected"-Vergleiche und der MCP-Filter.
+    content = PlaybookContent(description="d", body="b", type=PlaybookType.workflow.value)
+    assert content.type == "workflow"
+    assert PlaybookType("workflow") is PlaybookType.workflow
+
+
+def test_playbook_usage_round_trip() -> None:
+    usage = PlaybookUsage(persona_id=uuid4(), persona_name="QA Persona")
+    assert PlaybookUsage.model_validate(usage.model_dump()) == usage

@@ -11,18 +11,18 @@ from who2be_api.core.security import WorkspaceContext
 from who2be_api.repositories.persona_repository import PersonaUpdateOutcome
 from who2be_api.services.persona_service import PersonaService
 from who2be_models import (
-    PersonaContent,
     PersonaCreate,
     PersonaRead,
     PersonaUpdate,
+    PersonaVersionContent,
     PersonaVersionRead,
     VersionStatus,
     WorkspaceRole,
 )
 
 
-def _content(description: str = "Tester") -> PersonaContent:
-    return PersonaContent(description=description, system_prompt="Be helpful.")
+def _content(description: str = "Tester") -> PersonaVersionContent:
+    return PersonaVersionContent(description=description, system_prompt="Be helpful.")
 
 
 def _ctx(
@@ -49,7 +49,7 @@ class FakePersonaRepository:
         workspace_id: UUID,
         owner_id: UUID,
         name: str,
-        content: PersonaContent,
+        content: PersonaVersionContent,
     ) -> PersonaRead:
         now = datetime.now(UTC)
         persona = PersonaRead(
@@ -104,7 +104,7 @@ class FakePersonaRepository:
         owner_id: UUID,
         persona_id: UUID,
         name: str | None,
-        content: PersonaContent,
+        content: PersonaVersionContent,
     ) -> PersonaUpdateOutcome:
         persona = self._personas.get(persona_id)
         if persona is None or persona.workspace_id != workspace_id:
