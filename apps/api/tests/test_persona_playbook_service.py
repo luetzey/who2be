@@ -11,12 +11,17 @@ from fastapi import HTTPException
 from who2be_api.core.security import WorkspaceContext
 from who2be_api.repositories.persona_playbook_repository import SetLinksResult
 from who2be_api.services.persona_playbook_service import PersonaPlaybookService
-from who2be_models import PersonaPlaybookLinkSet, PlaybookContent, PlaybookRead
+from who2be_models import (
+    PersonaPlaybookLinkSet,
+    PlaybookContent,
+    PlaybookRead,
+    WorkspaceRole,
+)
 
 
 def _ctx(workspace_id: UUID, user_id: UUID | None = None) -> WorkspaceContext:
     return WorkspaceContext(
-        workspace_id=workspace_id, user_id=user_id or uuid4(), role="admin"
+        workspace_id=workspace_id, user_id=user_id or uuid4(), role=WorkspaceRole.admin
     )
 
 
@@ -41,9 +46,7 @@ def _playbook_read(playbook_id: UUID, workspace_id: UUID, owner_id: UUID) -> Pla
 class FakePersonaPlaybookRepository:
     """In-Memory-Stub von `PersonaPlaybookRepository`."""
 
-    def __init__(
-        self, personas: dict[UUID, UUID], playbooks: dict[UUID, UUID]
-    ) -> None:
+    def __init__(self, personas: dict[UUID, UUID], playbooks: dict[UUID, UUID]) -> None:
         # persona_id -> workspace_id bzw. playbook_id -> workspace_id
         self._personas = personas
         self._playbooks = playbooks
@@ -53,9 +56,7 @@ class FakePersonaPlaybookRepository:
     async def persona_belongs_to(self, workspace_id: UUID, persona_id: UUID) -> bool:
         return self._personas.get(persona_id) == workspace_id
 
-    async def list_linked(
-        self, persona_id: UUID, active_only: bool = False
-    ) -> list[PlaybookRead]:
+    async def list_linked(self, persona_id: UUID, active_only: bool = False) -> list[PlaybookRead]:
         self.last_active_only = active_only
         owner = uuid4()
         return [
@@ -92,17 +93,13 @@ def test_set_links_unknown_persona_raises_404() -> None:
     repo = FakePersonaPlaybookRepository({}, {})
     service = PersonaPlaybookService(repo)
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(
-            service.set_links(_ctx(uuid4()), uuid4(), PersonaPlaybookLinkSet())
-        )
+        asyncio.run(service.set_links(_ctx(uuid4()), uuid4(), PersonaPlaybookLinkSet()))
     assert exc.value.status_code == 404
 
 
 def test_set_links_with_foreign_playbook_raises_404() -> None:
     workspace, persona_id, foreign_playbook = uuid4(), uuid4(), uuid4()
-    repo = FakePersonaPlaybookRepository(
-        {persona_id: workspace}, {foreign_playbook: uuid4()}
-    )
+    repo = FakePersonaPlaybookRepository({persona_id: workspace}, {foreign_playbook: uuid4()})
     service = PersonaPlaybookService(repo)
     with pytest.raises(HTTPException) as exc:
         asyncio.run(
@@ -137,9 +134,7 @@ def test_set_links_empty_clears_links() -> None:
     repo = FakePersonaPlaybookRepository({persona_id: workspace}, {pb: workspace})
     repo.links[persona_id] = [pb]
     service = PersonaPlaybookService(repo)
-    linked = asyncio.run(
-        service.set_links(_ctx(workspace), persona_id, PersonaPlaybookLinkSet())
-    )
+    linked = asyncio.run(service.set_links(_ctx(workspace), persona_id, PersonaPlaybookLinkSet()))
     assert linked == []
 
 

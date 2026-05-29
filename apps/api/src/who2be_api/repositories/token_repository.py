@@ -15,22 +15,28 @@ from uuid import UUID
 
 import asyncpg
 
-from who2be_models import TokenRead
+from who2be_models import TokenRead, WorkspaceRole
 
 
 @dataclass(frozen=True)
 class TokenAuthRow:
-    """Snapshot eines gehashten Tokens: Owner + Workspace."""
+    """Snapshot eines gehashten Tokens: Owner + Workspace + Rolle (ADR-0023)."""
 
     owner_id: UUID
     workspace_id: UUID
+    role: WorkspaceRole
 
 
 class TokenRepository(Protocol):
     """Service-seitige Abstraktion fuer den Token-Zugriff."""
 
     async def insert(
-        self, workspace_id: UUID, owner_id: UUID, name: str, token_hash: str
+        self,
+        workspace_id: UUID,
+        owner_id: UUID,
+        name: str,
+        token_hash: str,
+        role: WorkspaceRole,
     ) -> TokenRead: ...
 
     async def list_by_workspace(
@@ -54,16 +60,22 @@ class PgTokenRepository:
         self._pool = pool
 
     async def insert(
-        self, workspace_id: UUID, owner_id: UUID, name: str, token_hash: str
+        self,
+        workspace_id: UUID,
+        owner_id: UUID,
+        name: str,
+        token_hash: str,
+        role: WorkspaceRole,
     ) -> TokenRead:
         row = await self._pool.fetchrow(
-            "INSERT INTO api_token (workspace_id, owner_id, name, token_hash) "
-            "VALUES ($1, $2, $3, $4) "
+            "INSERT INTO api_token (workspace_id, owner_id, name, token_hash, role) "
+            "VALUES ($1, $2, $3, $4, $5) "
             "RETURNING id, workspace_id, name, role, created_at, last_used_at, revoked_at",
             workspace_id,
             owner_id,
             name,
             token_hash,
+            role.value,
         )
         return TokenRead.model_validate(dict(row))
 
@@ -96,13 +108,17 @@ class PgTokenRepository:
 
     async def fetch_auth_by_hash(self, token_hash: str) -> TokenAuthRow | None:
         row = await self._pool.fetchrow(
-            "SELECT owner_id, workspace_id FROM api_token "
+            "SELECT owner_id, workspace_id, role FROM api_token "
             "WHERE token_hash = $1 AND revoked_at IS NULL",
             token_hash,
         )
         if row is None:
             return None
-        return TokenAuthRow(owner_id=row["owner_id"], workspace_id=row["workspace_id"])
+        return TokenAuthRow(
+            owner_id=row["owner_id"],
+            workspace_id=row["workspace_id"],
+            role=WorkspaceRole(row["role"]),
+        )
 
     async def revoke(self, workspace_id: UUID, token_id: UUID) -> bool:
         result = await self._pool.execute(

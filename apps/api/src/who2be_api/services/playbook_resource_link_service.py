@@ -10,17 +10,15 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 
-from who2be_api.core.security import WorkspaceContext
+from who2be_api.core.security import WorkspaceContext, require_role
 from who2be_api.repositories.playbook_resource_link_repository import (
     PlaybookResourceLinkRepository,
 )
-from who2be_models import ResourceLinkItem, ResourceLinkRead, ResourceLinkSet
+from who2be_models import ResourceLinkItem, ResourceLinkRead, ResourceLinkSet, WorkspaceRole
 
 
 def _playbook_not_found() -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND, detail="Playbook nicht gefunden."
-    )
+    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Playbook nicht gefunden.")
 
 
 class PlaybookResourceLinkService:
@@ -29,9 +27,7 @@ class PlaybookResourceLinkService:
     def __init__(self, link_repo: PlaybookResourceLinkRepository) -> None:
         self._repo = link_repo
 
-    async def list_links(
-        self, ctx: WorkspaceContext, playbook_id: UUID
-    ) -> list[ResourceLinkRead]:
+    async def list_links(self, ctx: WorkspaceContext, playbook_id: UUID) -> list[ResourceLinkRead]:
         links = await self._repo.list_links(ctx.workspace_id, playbook_id)
         if links is None:
             raise _playbook_not_found()
@@ -41,6 +37,7 @@ class PlaybookResourceLinkService:
         self, ctx: WorkspaceContext, playbook_id: UUID, data: ResourceLinkSet
     ) -> list[ResourceLinkRead]:
         """Ersetzt die Block-Refs; leere Liste loest alle."""
+        require_role(ctx, WorkspaceRole.editor)
         deduped: dict[tuple[UUID, str], ResourceLinkItem] = {}
         for item in data.links:
             deduped.setdefault((item.resource_id, item.block_id), item)

@@ -13,13 +13,14 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 
-from who2be_api.core.security import WorkspaceContext
+from who2be_api.core.security import WorkspaceContext, require_role
 from who2be_api.repositories.persona_repository import PersonaRepository
 from who2be_models import (
     PersonaCreate,
     PersonaRead,
     PersonaUpdate,
     PersonaVersionRead,
+    WorkspaceRole,
     encode_cursor,
 )
 
@@ -45,6 +46,7 @@ class PersonaService:
         self._repo = persona_repo
 
     async def create(self, ctx: WorkspaceContext, data: PersonaCreate) -> PersonaRead:
+        require_role(ctx, WorkspaceRole.editor)
         return await self._repo.insert(ctx.workspace_id, ctx.user_id, data.name, data.content)
 
     async def list_all(
@@ -65,9 +67,7 @@ class PersonaService:
         return rows, None
 
     async def get(self, ctx: WorkspaceContext, persona_id: UUID) -> PersonaRead:
-        persona = await self._repo.fetch(
-            ctx.workspace_id, persona_id, active_only=ctx.is_api_token
-        )
+        persona = await self._repo.fetch(ctx.workspace_id, persona_id, active_only=ctx.is_api_token)
         if persona is None:
             raise _not_found()
         return persona
@@ -80,6 +80,7 @@ class PersonaService:
         Auf einer Active-Persona entsteht eine neue Draft-Version (Plan §2.1.C);
         existiert bereits ein Draft, antwortet der Service mit 409.
         """
+        require_role(ctx, WorkspaceRole.editor)
         outcome = await self._repo.update(
             ctx.workspace_id, ctx.user_id, persona_id, data.name, data.content
         )
