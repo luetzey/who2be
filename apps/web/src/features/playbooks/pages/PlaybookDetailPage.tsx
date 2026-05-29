@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { usePlaybookResourceLinks } from '@/hooks/usePlaybookResourceLinks'
+import { usePlaybookUsages } from '@/hooks/usePlaybookUsages'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 
 import { LinkedBlocksList } from '../components/LinkedBlocksList'
@@ -25,6 +26,7 @@ export function PlaybookDetailPage() {
   const { playbook, versions, loading, error, reload } = usePlaybook(id)
   const { form, onSubmit, saveError } = usePlaybookForm(playbook, reload)
   const resourceLinks = usePlaybookResourceLinks(id)
+  const usages = usePlaybookUsages(id)
   const wsPath = useWorkspacePath()
 
   const removeLink = (target: { resource_id: string; block_id: string }) => {
@@ -61,18 +63,26 @@ export function PlaybookDetailPage() {
                 const activeVersion = versions.find((v) => v.status === 'active')
                 const draftVersion = versions.find((v) => v.status === 'draft')
                 const reviewVersion = versions.find((v) => v.status === 'review')
-                const pendingVersion = draftVersion ?? reviewVersion
+                const inactiveCurrent =
+                  activeVersion === undefined
+                    ? versions.find(
+                        (v) =>
+                          v.version === playbook.current_version &&
+                          v.status === 'inactive',
+                      )
+                    : undefined
+                const actionableVersion =
+                  draftVersion ?? reviewVersion ?? inactiveCurrent
                 const description =
                   activeVersion !== undefined
                     ? `Aktive Version: v${activeVersion.version}${
-                        pendingVersion !== undefined
-                          ? ` · Du bearbeitest: v${pendingVersion.version} (${statusLabel(
-                              pendingVersion.status ?? 'draft',
+                        actionableVersion !== undefined
+                          ? ` · Du bearbeitest: v${actionableVersion.version} (${statusLabel(
+                              actionableVersion.status ?? 'draft',
                             )})`
                           : ''
                       }`
                     : `Aktuelle Version: ${playbook.current_version}`
-                const transitionVersion = pendingVersion
                 return (
                   <Stack gap="md">
                     <PageHeader
@@ -90,12 +100,12 @@ export function PlaybookDetailPage() {
                         ) : undefined
                       }
                     />
-                    {transitionVersion !== undefined &&
-                    transitionVersion.status !== undefined ? (
+                    {actionableVersion !== undefined &&
+                    actionableVersion.status !== undefined ? (
                       <StatusActionBar
                         playbookId={playbook.id}
-                        version={transitionVersion.version}
-                        status={transitionVersion.status}
+                        version={actionableVersion.version}
+                        status={actionableVersion.status}
                         onTransitioned={reload}
                       />
                     ) : null}
@@ -126,6 +136,34 @@ export function PlaybookDetailPage() {
                       </span>
                     )}
                   />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Verwendet in</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <DataView
+                    loading={usages.loading}
+                    error={usages.error}
+                    empty={!usages.loading && usages.usages.length === 0}
+                    emptyTitle="Noch in keiner Persona verwendet"
+                    emptyDescription="Verknuepfe dieses Playbook im Persona-Editor, um es einer Persona zuzuweisen."
+                  >
+                    <DataList
+                      items={usages.usages}
+                      getKey={(usage) => usage.persona_id}
+                      renderItem={(usage) => (
+                        <Link
+                          to={wsPath(`/personas/${usage.persona_id}`)}
+                          className="block truncate"
+                        >
+                          {usage.persona_name}
+                        </Link>
+                      )}
+                    />
+                  </DataView>
                 </CardContent>
               </Card>
 

@@ -47,27 +47,38 @@ export function PersonaDetailPage() {
                 const activeVersion = versions.find((v) => v.status === 'active')
                 const draftVersion = versions.find((v) => v.status === 'draft')
                 const reviewVersion = versions.find((v) => v.status === 'review')
-                const pendingVersion = draftVersion ?? reviewVersion
+                // Inaktive current_version → Bar zeigt "Reaktivieren als Draft"
+                // (Phase 3-C, F-02). Wenn es einen Active gibt, ist die
+                // inaktive Version nicht aktuell — kein Reactivate-Anker.
+                const inactiveCurrent =
+                  activeVersion === undefined
+                    ? versions.find(
+                        (v) =>
+                          v.version === persona.current_version &&
+                          v.status === 'inactive',
+                      )
+                    : undefined
+                const actionableVersion =
+                  draftVersion ?? reviewVersion ?? inactiveCurrent
                 const description =
                   activeVersion !== undefined
                     ? `Aktive Version: v${activeVersion.version}${
-                        pendingVersion !== undefined
-                          ? ` · Du bearbeitest: v${pendingVersion.version} (${statusLabel(
-                              pendingVersion.status ?? 'draft',
+                        actionableVersion !== undefined
+                          ? ` · Du bearbeitest: v${actionableVersion.version} (${statusLabel(
+                              actionableVersion.status ?? 'draft',
                             )})`
                           : ''
                       }`
                     : `Aktuelle Version: ${persona.current_version}`
-                const transitionVersion = pendingVersion
                 return (
                   <Stack gap="md">
                     <PageHeader title={persona.name} description={description} />
-                    {transitionVersion !== undefined &&
-                    transitionVersion.status !== undefined ? (
+                    {actionableVersion !== undefined &&
+                    actionableVersion.status !== undefined ? (
                       <StatusActionBar
                         personaId={persona.id}
-                        version={transitionVersion.version}
-                        status={transitionVersion.status}
+                        version={actionableVersion.version}
+                        status={actionableVersion.status}
                         onTransitioned={reload}
                       />
                     ) : null}

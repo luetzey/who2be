@@ -16,6 +16,8 @@ import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { cn } from '@/lib/utils'
 
+import { WorkspaceSwitcher } from './WorkspaceSwitcher'
+
 interface AppShellProps {
   children: ReactNode
   onSignOut: () => void
@@ -46,7 +48,12 @@ export function AppShell({ children, onSignOut }: AppShellProps) {
   return (
     <div className="flex min-h-screen w-full bg-background text-foreground">
       <aside className="hidden w-60 shrink-0 flex-col border-r bg-muted/40 px-3 py-4 sm:flex">
-        <div className="px-2 pb-6 text-sm font-semibold tracking-tight">Who2Be</div>
+        <div className="px-2 pb-3 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+          Who2Be
+        </div>
+        <div className="pb-3">
+          <WorkspaceSwitcher />
+        </div>
         <nav aria-label="Hauptnavigation" className="flex flex-1 flex-col gap-1">
           {navItems.map((item) => (
             <NavLink

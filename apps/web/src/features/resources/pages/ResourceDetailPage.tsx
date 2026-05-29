@@ -22,10 +22,13 @@ import { useResource } from '../hooks/useResource'
 import { useResourceForm } from '../hooks/useResourceForm'
 import { statusBadgeVariant, statusLabel } from '../lib/status'
 
+import { useResourceUsages } from '@/hooks/useResourceUsages'
+
 export function ResourceDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { resource, versions, loading, error, reload } = useResource(id)
   const { form, setBlocks, onSubmit, saveError } = useResourceForm(resource, reload)
+  const usages = useResourceUsages(id)
   const wsPath = useWorkspacePath()
   // Viewer dürfen nur lesen (ADR-0023) — Save bleibt gesperrt.
   const isViewer = useCurrentWorkspaceRole() === 'viewer'
@@ -51,13 +54,22 @@ export function ResourceDetailPage() {
                 const activeVersion = versions.find((v) => v.status === 'active')
                 const draftVersion = versions.find((v) => v.status === 'draft')
                 const reviewVersion = versions.find((v) => v.status === 'review')
-                const pendingVersion = draftVersion ?? reviewVersion
+                const inactiveCurrent =
+                  activeVersion === undefined
+                    ? versions.find(
+                        (v) =>
+                          v.version === resource.current_version &&
+                          v.status === 'inactive',
+                      )
+                    : undefined
+                const actionableVersion =
+                  draftVersion ?? reviewVersion ?? inactiveCurrent
                 const description =
                   activeVersion !== undefined
                     ? `Aktive Version: v${activeVersion.version}${
-                        pendingVersion !== undefined
-                          ? ` · Du bearbeitest: v${pendingVersion.version} (${statusLabel(
-                              pendingVersion.status ?? 'draft',
+                        actionableVersion !== undefined
+                          ? ` · Du bearbeitest: v${actionableVersion.version} (${statusLabel(
+                              actionableVersion.status ?? 'draft',
                             )})`
                           : ''
                       }`
@@ -65,11 +77,12 @@ export function ResourceDetailPage() {
                 return (
                   <Stack gap="md">
                     <PageHeader title={resource.name} description={description} />
-                    {pendingVersion !== undefined && pendingVersion.status !== undefined ? (
+                    {actionableVersion !== undefined &&
+                    actionableVersion.status !== undefined ? (
                       <StatusActionBar
                         resourceId={resource.id}
-                        version={pendingVersion.version}
-                        status={pendingVersion.status}
+                        version={actionableVersion.version}
+                        status={actionableVersion.status}
                         onTransitioned={reload}
                       />
                     ) : null}
@@ -128,6 +141,40 @@ export function ResourceDetailPage() {
                       </div>
                     </form>
                   </Form>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Verlinkt in</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <DataView
+                    loading={usages.loading}
+                    error={usages.error}
+                    empty={!usages.loading && usages.usages.length === 0}
+                    emptyTitle="Noch in keinem Playbook verwendet"
+                    emptyDescription="Verlinke einen Heading-Block in einem Playbook, um diese Resource sichtbar zu machen."
+                  >
+                    <DataList
+                      items={usages.usages}
+                      getKey={(usage) => usage.playbook_id}
+                      renderItem={(usage) => (
+                        <span className="flex items-center justify-between gap-3">
+                          <Link
+                            to={wsPath(`/playbooks/${usage.playbook_id}`)}
+                            className="truncate"
+                          >
+                            {usage.playbook_name}
+                          </Link>
+                          <Badge variant="secondary">
+                            {usage.block_count}{' '}
+                            {usage.block_count === 1 ? 'Block' : 'Bloecke'}
+                          </Badge>
+                        </span>
+                      )}
+                    />
+                  </DataView>
                 </CardContent>
               </Card>
 

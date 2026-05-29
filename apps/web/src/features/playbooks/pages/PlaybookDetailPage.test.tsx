@@ -100,6 +100,8 @@ describe('PlaybookDetailPage', () => {
     const handlers: Record<string, () => Response> = {
       [`GET ${WS_PREFIX}/playbooks/pb1`]: () => jsonResponse(playbook(1, 'b1')),
       [`GET ${WS_PREFIX}/playbooks/pb1/versions`]: () => jsonResponse([v1]),
+      [`GET ${WS_PREFIX}/playbooks/pb1/resource_links`]: () => jsonResponse([]),
+      [`GET ${WS_PREFIX}/playbooks/pb1/usages`]: () => jsonResponse([]),
     }
 
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -145,5 +147,91 @@ describe('PlaybookDetailPage', () => {
     })
     expect(screen.getByText(/v2 —/)).toBeInTheDocument()
     expect(notify.success).toHaveBeenCalledWith('Gespeichert — neue Version erstellt.')
+  })
+
+  it('zeigt im "Verwendet in"-Block die Personas aus /usages und faellt auf EmptyState zurueck, wenn keine vorhanden sind', async () => {
+    const handlers: Record<string, () => Response> = {
+      [`GET ${WS_PREFIX}/playbooks/pb1`]: () => jsonResponse(playbook(1, 'b1')),
+      [`GET ${WS_PREFIX}/playbooks/pb1/versions`]: () =>
+        jsonResponse([
+          { version: 1, content: playbook(1, 'b1').content, created_by: 'o1', created_at: 't1' },
+        ]),
+      [`GET ${WS_PREFIX}/playbooks/pb1/resource_links`]: () => jsonResponse([]),
+      [`GET ${WS_PREFIX}/playbooks/pb1/usages`]: () =>
+        jsonResponse([
+          { persona_id: 'per1', persona_name: 'Coach Persona' },
+          { persona_id: 'per2', persona_name: 'Onboarding Persona' },
+        ]),
+    }
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const method = init?.method ?? 'GET'
+      const key = `${method} ${new URL(String(input)).pathname}`
+      const handler = handlers[key]
+      if (!handler) {
+        throw new Error(`Unmocked ${key}`)
+      }
+      return handler()
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(
+      <SessionContext.Provider value={{ session, me, signIn: vi.fn(), signOut: vi.fn() }}>
+        <AuthTokenProvider>
+          <MemoryRouter initialEntries={['/w/ws-1/playbooks/pb1']}>
+            <Routes>
+              <Route path="/w/:workspaceId/playbooks/:id" element={<PlaybookDetailPage />} />
+            </Routes>
+          </MemoryRouter>
+        </AuthTokenProvider>
+      </SessionContext.Provider>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('Verwendet in')).toBeInTheDocument()
+    })
+    expect(screen.getByText('Coach Persona')).toBeInTheDocument()
+    expect(screen.getByText('Onboarding Persona')).toBeInTheDocument()
+  })
+
+  it('zeigt einen EmptyState wenn /usages ein 404 zurueckgibt', async () => {
+    const handlers: Record<string, () => Response> = {
+      [`GET ${WS_PREFIX}/playbooks/pb1`]: () => jsonResponse(playbook(1, 'b1')),
+      [`GET ${WS_PREFIX}/playbooks/pb1/versions`]: () =>
+        jsonResponse([
+          { version: 1, content: playbook(1, 'b1').content, created_by: 'o1', created_at: 't1' },
+        ]),
+      [`GET ${WS_PREFIX}/playbooks/pb1/resource_links`]: () => jsonResponse([]),
+    }
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const method = init?.method ?? 'GET'
+      const url = String(input)
+      const pathname = new URL(url).pathname
+      if (pathname.endsWith('/usages')) {
+        return new Response('', { status: 404 })
+      }
+      const key = `${method} ${pathname}`
+      const handler = handlers[key]
+      if (!handler) {
+        throw new Error(`Unmocked ${key}`)
+      }
+      return handler()
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(
+      <SessionContext.Provider value={{ session, me, signIn: vi.fn(), signOut: vi.fn() }}>
+        <AuthTokenProvider>
+          <MemoryRouter initialEntries={['/w/ws-1/playbooks/pb1']}>
+            <Routes>
+              <Route path="/w/:workspaceId/playbooks/:id" element={<PlaybookDetailPage />} />
+            </Routes>
+          </MemoryRouter>
+        </AuthTokenProvider>
+      </SessionContext.Provider>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('Noch in keiner Persona verwendet')).toBeInTheDocument()
+    })
   })
 })

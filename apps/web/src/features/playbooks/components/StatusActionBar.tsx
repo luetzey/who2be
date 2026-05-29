@@ -46,8 +46,9 @@ export function StatusActionBar({
   const showSubmit = canTransition(status, 'review')
   const showPromote = canTransition(status, 'active')
   const showReject = status === 'review' && canTransition(status, 'draft')
+  const showReactivate = status === 'inactive' && canTransition(status, 'draft')
 
-  if (!showSubmit && !showPromote && !showReject) {
+  if (!showSubmit && !showPromote && !showReject && !showReactivate) {
     return null
   }
 
@@ -89,6 +90,16 @@ export function StatusActionBar({
           disabled={busy !== null}
         >
           Ablehnen
+        </Button>
+      ) : null}
+      {showReactivate ? (
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => void transition('draft', 'Reaktiviert als Entwurf.')}
+          disabled={busy !== null}
+        >
+          Reaktivieren als Draft
         </Button>
       ) : null}
     </div>

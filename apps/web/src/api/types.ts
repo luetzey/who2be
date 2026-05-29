@@ -53,7 +53,8 @@ export interface PersonaInput {
 // Kuratierte Playbook-Typen (Phase 3-0). Spiegelt `PlaybookType` aus
 // packages/models. Backend bleibt schema-kompatibel zu `string`, daher
 // liegt das Feld in `PlaybookContent.type` als `string` — die Union ist
-// die UI-erwartete Closed-Set-Variante fuer den Select.
+// die UI-erwartete Closed-Set-Variante fuer den Select. UI-Selects
+// (Phase 3-B) beziehen ihre Optionen daraus.
 export type PlaybookType =
   | 'prompt'
   | 'instructions'
@@ -271,9 +272,22 @@ export interface ResourceLink {
   block_id: string
   position: number
   available: boolean
-  preview: string | null
   available_in?: LinkAvailability
+  preview: string | null
   section_preview?: string | null
+}
+
+// Backlink-Records (Phase-3-Plan §Track-A.4). Endpoints liefern 404, bis
+// Track A merged — die Hooks behandeln das als leere Liste + EmptyState.
+export interface PlaybookUsage {
+  persona_id: string
+  persona_name: string
+}
+
+export interface ResourceUsage {
+  playbook_id: string
+  playbook_name: string
+  block_count: number
 }
 
 export interface ResourceLinkItemInput {
