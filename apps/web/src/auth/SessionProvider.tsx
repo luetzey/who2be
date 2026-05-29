@@ -16,15 +16,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (error) {
       throw new Error(error.message)
     }
-    setSession(data.session)
-    // Identity + Memberships zusammen mit der Session laden — die UI redirected
-    // nach `/w/{default_workspace_id}/...`, sobald `me` gesetzt ist.
+    // Erst `me` holen, dann beides atomar setzen. Vertauschte Reihenfolge
+    // produziert einen Zwischen-Commit mit session=set+me=null: LoginPage
+    // redirected dann sofort zu `/`, DefaultWorkspaceRedirect wirft mangels
+    // `default_workspace_id` zurueck auf `/login`, und Chrome bricht die
+    // Schleife mit "Throttling navigation to prevent the browser from hanging"
+    // ab — sichtbar als weisser Screen. Beide setState-Calls liegen jetzt im
+    // selben Microtask nach dem await, React 18 batcht das zu einem Commit.
+    let resolved: Me | null = null
     try {
-      const resolved = await fetchMe(data.session?.access_token ?? '')
-      setMe(resolved)
+      resolved = await fetchMe(data.session?.access_token ?? '')
     } catch {
-      setMe(null)
+      resolved = null
     }
+    setMe(resolved)
+    setSession(data.session)
   }, [])
 
   const signOut = useCallback(async () => {
