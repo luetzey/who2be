@@ -3,8 +3,9 @@ import { createContext, useContext } from 'react'
 // In-Memory-Override fuer einen `w2b_`-API-Token. Wird in W1 nur deklariert
 // und vom AuthTokenProvider gehalten — die UI dahinter (Settings-Seite,
 // Token-Login) kommt erst mit W2. Keine Persistenz: react-conventions
-// verbieten Auth-Tokens im localStorage, und `persistSession: false` in
-// `lib/supabase.ts` haelt dieselbe Linie fuer Supabase-Sessions.
+// verbieten Auth-Tokens im localStorage. Supabase-Sessions laufen aus
+// demselben Grund ueber `sessionStorage` (siehe `lib/supabase.ts`) —
+// Tab-Lifetime statt Disk.
 export interface AuthTokenValue {
   overrideToken: string | null
   setOverrideToken: (token: string | null) => void

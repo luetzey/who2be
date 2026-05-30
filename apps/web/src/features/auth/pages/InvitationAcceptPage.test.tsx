@@ -112,6 +112,17 @@ describe('InvitationAcceptPage', () => {
     ).toBeInTheDocument()
   })
 
+  it('zeigt Loading-State, solange Session da, me aber noch null ist', () => {
+    // Hash-Session ist etabliert, `/v1/me` antwortet noch nicht. Ohne diesen
+    // Branch wuerde der `has_password`-Check `me === null` als „kein Passwort"
+    // missverstehen oder der Auto-Accept ohne `me`-Daten feuern.
+    renderAccept(authedSession, '/invitations/magic-tok/accept?via=magic', null)
+
+    expect(screen.getByText('Login wird abgeschlossen…')).toBeInTheDocument()
+    expect(screen.queryByText(/LOGIN next=/)).toBeNull()
+    expect(screen.queryByText(/SETPW next=/)).toBeNull()
+  })
+
   it('akzeptiert magic-link automatisch ohne Klick', async () => {
     const calls: Array<{ url: string; method: string }> = []
     vi.stubGlobal(
@@ -125,7 +136,7 @@ describe('InvitationAcceptPage', () => {
     renderAccept(authedSession, '/invitations/magic-tok/accept?via=magic')
 
     // Microcopy signalisiert den automatischen Flow — kein „Annehmen"-Button.
-    expect(screen.getByText('Du wirst angemeldet…')).toBeInTheDocument()
+    expect(screen.getByText('Login wird abgeschlossen…')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Einladung annehmen' })).toBeNull()
 
     await waitFor(() => {
