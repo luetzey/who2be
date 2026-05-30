@@ -309,6 +309,12 @@
 /*
  * Popover-Surfaces fuer Slash-Menu, Side-Menu und Drag-Handle-Menue —
  * Layer 2 (siehe design-language.md §2.3 / §6).
+ *
+ * Die Selektoren stehen bewusst OHNE `.bn-container`-Prefix: BlockNote
+ * portalt diese Floating-UI-Elemente per `portalElements.default = null`
+ * direkt unter `document.body`, damit kein `overflow:hidden`-Ancestor
+ * (Card, FormSection) das Popover beschneidet (Phase 3-fixes Track 2).
+ * Ein scopender Selektor wuerde die Styles deswegen verfehlen.
  */
 .bn-suggestion-menu,
 .bn-side-menu,
@@ -318,6 +324,22 @@
   box-shadow: var(--shadow-popover);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  /*
+   * Floating-UI ueber Modals/Headers halten — Mantine setzt selbst keinen
+   * z-index, der zuverlaessig hoch genug waere, sobald wir an `body` portalen.
+   */
+  z-index: 50;
+}
+
+/*
+ * Kindelemente der Floating-Layer (Suggestion-Items, Side-Menu-Buttons)
+ * erben jetzt eine kontraststarke Surface — der Dark-Theme-Fix aus F-14
+ * gilt damit auch nach dem Portal-Schwenk.
+ */
+.bn-suggestion-menu-item[aria-selected='true'],
+.bn-suggestion-menu-item:hover {
+  background-color: var(--accent);
+  color: var(--accent-foreground);
 }
 
 /*

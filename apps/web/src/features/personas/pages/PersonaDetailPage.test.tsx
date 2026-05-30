@@ -116,7 +116,8 @@ describe('PersonaDetailPage', () => {
       expect(screen.getByText('Aktuelle Version: 1')).toBeInTheDocument()
     })
 
-    fireEvent.change(screen.getByLabelText('System-Prompt'), { target: { value: 's2' } })
+    // System-Prompt wird seit Phase 3-fixes Track 2 ueber BlockNote erfasst —
+    // der Wert kommt im Test aus dem GET-Response, kein DOM-Event noetig.
     fireEvent.click(screen.getByRole('button', { name: 'Neue Version speichern' }))
 
     await waitFor(() => {

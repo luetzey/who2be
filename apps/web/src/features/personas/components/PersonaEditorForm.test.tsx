@@ -73,16 +73,17 @@ describe('PersonaEditorForm', () => {
 
   it('rendert die BlockNote-Insel im Profil-Slot', () => {
     render(<Harness />)
-    expect(screen.getByTestId('blocknote-view')).toBeInTheDocument()
+    // Profil-Editor + System-Prompt-Editor — beide BlockNote.
+    expect(screen.getAllByTestId('blocknote-view').length).toBeGreaterThan(0)
   })
 
   it('submitt eine Payload mit `content.blocks` + `tags` und ohne `properties`', async () => {
     updatePersona.mockClear()
     render(<Harness />)
 
-    fireEvent.change(screen.getByLabelText('System-Prompt'), {
-      target: { value: 'Antworten in Deutsch.' },
-    })
+    // System-Prompt laeuft seit Track 2 ueber den BlockNote-Editor (Slash-Menu
+    // verfuegbar). Der Editor ist im Test gemockt — also kein DOM-Event noetig;
+    // der Wert kommt aus `persona.content.system_prompt` via `form.reset`.
     fireEvent.click(screen.getByRole('button', { name: 'Neue Version speichern' }))
 
     await waitFor(() => {
@@ -93,7 +94,7 @@ describe('PersonaEditorForm', () => {
       name: 'Coach',
       content: {
         description: 'd',
-        system_prompt: 'Antworten in Deutsch.',
+        system_prompt: 'Sei hilfsbereit.',
         traits: [],
         tags: ['coaching'],
         content: { description: '', blocks: [] },
@@ -101,6 +102,13 @@ describe('PersonaEditorForm', () => {
     })
     // properties existiert nicht (nur traits, das wir bewusst leer mitsenden).
     expect(payload.content).not.toHaveProperty('properties')
+  })
+
+  it('rendert zwei BlockNote-Inseln — Profil + System-Prompt (gleicher Wrapper)', () => {
+    render(<Harness />)
+    // Profil-Editor + System-Prompt-Editor teilen sich denselben Wrapper —
+    // entsprechend zweimal `blocknote-view` im DOM.
+    expect(screen.getAllByTestId('blocknote-view').length).toBe(2)
   })
 
   it('laedt Tag-Vorschlaege aus `listPersonaTags`, nicht aus `listPlaybookTags`', async () => {
