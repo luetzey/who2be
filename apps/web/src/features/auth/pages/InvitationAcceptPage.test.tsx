@@ -14,7 +14,13 @@ vi.mock('@/lib/feedback', () => ({
   notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }))
 
-const me: Me = { user_id: 'u1', default_workspace_id: 'ws-1', organizations: [] }
+const me: Me = {
+  user_id: 'u1',
+  default_workspace_id: 'ws-1',
+  organizations: [],
+  has_password: true,
+}
+const meNoPassword: Me = { ...me, has_password: false }
 const authedSession = { access_token: 'jwt' } as unknown as Session
 
 function DashboardMarker() {
@@ -27,15 +33,27 @@ function LoginMarker() {
   return <div>LOGIN next={params.get('next')}</div>
 }
 
-function renderAccept(session: Session | null, initialEntry = '/invitations/abc123/accept') {
+function SetPasswordMarker() {
+  const [params] = useSearchParams()
+  return <div>SETPW next={params.get('next')}</div>
+}
+
+function renderAccept(
+  session: Session | null,
+  initialEntry = '/invitations/abc123/accept',
+  meValue: Me | null = me,
+) {
   return render(
-    <SessionContext.Provider value={{ session, me, signIn: vi.fn(), signOut: vi.fn() }}>
+    <SessionContext.Provider
+      value={{ session, me: meValue, signIn: vi.fn(), signOut: vi.fn() }}
+    >
       <AuthTokenProvider>
         <MemoryRouter initialEntries={[initialEntry]}>
           <Routes>
             <Route path="/invitations/:token/accept" element={<InvitationAcceptPage />} />
             <Route path="/w/:workspaceId/dashboard" element={<DashboardMarker />} />
             <Route path="/login" element={<LoginMarker />} />
+            <Route path="/onboarding/set-password" element={<SetPasswordMarker />} />
           </Routes>
         </MemoryRouter>
       </AuthTokenProvider>
@@ -115,6 +133,27 @@ describe('InvitationAcceptPage', () => {
     })
     expect(calls[0].url).toContain('/v1/invitations/magic-tok/accept')
     expect(calls[0].method).toBe('POST')
+  })
+
+  it('leitet Magic-Link-User ohne Passwort auf Set-Password um', () => {
+    renderAccept(authedSession, '/invitations/magic-tok/accept?via=magic', meNoPassword)
+
+    expect(
+      screen.getByText('SETPW next=/invitations/magic-tok/accept?via=magic'),
+    ).toBeInTheDocument()
+  })
+
+  it('akzeptiert Magic-Link automatisch, wenn Passwort bereits gesetzt ist', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ workspace_id: 'ws-3' }), { status: 200 })),
+    )
+
+    renderAccept(authedSession, '/invitations/magic-tok/accept?via=magic', me)
+
+    await waitFor(() => {
+      expect(screen.getByText('DASHBOARD ws-3')).toBeInTheDocument()
+    })
   })
 
   it('zeigt Email-Mismatch-Microcopy bei 403', async () => {

@@ -132,6 +132,12 @@ export interface Me {
   user_id: string
   default_workspace_id: string | null
   organizations: MeOrganization[]
+  // `has_password=false` markiert Magic-Link-User ohne gesetztes Passwort.
+  // Invitation-Accept leitet die dann auf `/onboarding/set-password` um —
+  // sonst landen sie in einer Login-Sackgasse (kein Credential vorhanden).
+  // Optional, weil aeltere Backend-Versionen das Feld nicht liefern; Frontend
+  // behandelt `undefined` als „Status unbekannt, nicht umleiten".
+  has_password?: boolean
 }
 
 export interface TokenCreated extends Token {
