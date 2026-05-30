@@ -6,6 +6,8 @@ Pydantic-Modelle, kein I/O. Pro Aggregat ein Schema-Satz (`…Create` /
 """
 
 from who2be_models.dashboard import (
+    DashboardActivity,
+    DashboardActor,
     DashboardKpis,
     DashboardResponse,
     DashboardStatusDistribution,
@@ -71,6 +73,8 @@ __version__ = "0.1.0"
 __all__ = [
     "ALLOWED_TRANSITIONS",
     "DEFAULT_LIMIT",
+    "DashboardActivity",
+    "DashboardActor",
     "DashboardKpis",
     "DashboardResponse",
     "DashboardStatusDistribution",

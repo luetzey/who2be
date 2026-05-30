@@ -181,15 +181,17 @@ export interface InvitationAcceptResult {
   workspace_id: string
 }
 
-// Dashboard-Endpoint (Phase 2.1b §2.1.E). Felder folgen dem Plan-Beispiel
-// in `.claude/plan/2026-05-27-1921_phase-2-vollwertige-app.md`. Backend
-// implementiert das in Phase 2.1b-A/B — bis dahin darf der Endpoint 404
-// oder ein leeres Objekt zurueckgeben.
-export type DashboardEntityType = 'persona' | 'playbook'
+// Dashboard-Endpoint (Phase 2.1b §2.1.E + Phase-3-Fix Track 1). Felder
+// spiegeln das Backend-DTO aus `packages/models/.../dashboard.py`. `actor`
+// und `entity_name` werden absichtlich als optional getragen: alte
+// Response-Versionen (vor Track 1) lieferten sie nicht, und auch nach Fix
+// soll der Frontend-Code defensiv lesen.
+export type DashboardEntityType = 'persona' | 'playbook' | 'resource'
 
 export interface DashboardKpis {
   active_personas: number
   active_playbooks: number
+  active_resources?: number
   pending_reviews: number
 }
 
@@ -200,7 +202,7 @@ export interface DashboardActor {
 
 export interface DashboardActivity {
   ts: string
-  actor: DashboardActor
+  actor?: DashboardActor | null
   entity_type: DashboardEntityType
   entity_id: string
   entity_name?: string | null
@@ -214,6 +216,7 @@ export type StatusDistribution = Record<VersionStatus, number>
 export interface DashboardStatusDistribution {
   persona: StatusDistribution
   playbook: StatusDistribution
+  resource?: StatusDistribution
 }
 
 export interface DashboardData {

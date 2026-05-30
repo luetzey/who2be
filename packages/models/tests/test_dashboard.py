@@ -5,12 +5,12 @@ import pytest
 from pydantic import ValidationError
 
 from who2be_models import (
+    DashboardActivity,
+    DashboardActor,
     DashboardKpis,
     DashboardResponse,
     DashboardStatusDistribution,
     EntityStatusDistribution,
-    StatusHistoryEntry,
-    VersionStatus,
 )
 
 
@@ -32,15 +32,15 @@ def test_activity_defaults_to_empty_list() -> None:
 
 
 def test_round_trip_preserves_activity() -> None:
-    entry = StatusHistoryEntry(
-        id=uuid4(),
+    entry = DashboardActivity(
+        ts=datetime.now(UTC),
+        actor=DashboardActor(user_id=uuid4(), display_name="Alice"),
         entity_type="playbook",
         entity_id=uuid4(),
-        from_status=VersionStatus.review,
-        to_status=VersionStatus.active,
-        changed_by=uuid4(),
-        changed_at=datetime.now(UTC),
-        note=None,
+        entity_name="Onboard",
+        event="promoted_to_active",
+        from_version=3,
+        to_version=4,
     )
     response = DashboardResponse(
         kpis=_kpis(),
