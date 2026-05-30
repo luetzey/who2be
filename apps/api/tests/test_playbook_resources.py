@@ -385,6 +385,187 @@ def test_resource_links_available_fallback_to_current_version(
 
 
 @pytest.mark.integration
+def test_resource_links_resource_scope_roundtrip(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Phase-3-Fixes Track 4: 'resource'-Scope verlinkt das Volldokument.
+
+    block_id ist None, preview/section bleiben leer; available_in ergibt
+    sich aus der Existenz einer Active-Version.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    rbase = f"/v1/workspaces/{ws}/resources"
+    pbase = f"/v1/workspaces/{ws}/playbooks"
+
+    try:
+        with TestClient(app) as client:
+            rid = client.post(
+                rbase,
+                json=_resource_body("Doc", [_heading("h1", "Heading"), _block("p1", "Body")]),
+                headers=auth,
+            ).json()["id"]
+            _activate(client, rbase, rid, 1, auth)
+
+            pid = client.post(pbase, json=_playbook_body("PB"), headers=auth).json()["id"]
+            links_url = f"{pbase}/{pid}/resource_links"
+
+            resp = client.put(
+                links_url,
+                json={
+                    "links": [
+                        {
+                            "resource_id": rid,
+                            "block_id": None,
+                            "position": 0,
+                            "link_scope": "resource",
+                        }
+                    ]
+                },
+                headers=auth,
+            )
+            assert resp.status_code == 200, resp.text
+            body = resp.json()
+            assert len(body) == 1
+            assert body[0]["link_scope"] == "resource"
+            assert body[0]["block_id"] is None
+            assert body[0]["available"] is True
+            assert body[0]["available_in"] == "active"
+            assert body[0]["preview"] is None
+            assert body[0]["section_block_ids"] == []
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+def test_resource_links_resource_and_block_scopes_coexist(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Playbook darf neben dem 'resource'-Link beliebig viele 'block'-Refs
+    auf dieselbe Resource haben — die partiellen Unique-Indexe aus 0021
+    kollidieren nicht.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    rbase = f"/v1/workspaces/{ws}/resources"
+    pbase = f"/v1/workspaces/{ws}/playbooks"
+
+    try:
+        with TestClient(app) as client:
+            rid = client.post(
+                rbase,
+                json=_resource_body(
+                    "Doc",
+                    [_heading("h1", "A"), _block("p1", "x"), _heading("h2", "B")],
+                ),
+                headers=auth,
+            ).json()["id"]
+            _activate(client, rbase, rid, 1, auth)
+
+            pid = client.post(pbase, json=_playbook_body("PB"), headers=auth).json()["id"]
+            links_url = f"{pbase}/{pid}/resource_links"
+
+            resp = client.put(
+                links_url,
+                json={
+                    "links": [
+                        {
+                            "resource_id": rid,
+                            "block_id": None,
+                            "position": 0,
+                            "link_scope": "resource",
+                        },
+                        {
+                            "resource_id": rid,
+                            "block_id": "h1",
+                            "position": 1,
+                            "link_scope": "block",
+                        },
+                        {
+                            "resource_id": rid,
+                            "block_id": "h2",
+                            "position": 2,
+                            "link_scope": "block",
+                        },
+                    ]
+                },
+                headers=auth,
+            )
+            assert resp.status_code == 200, resp.text
+            body = resp.json()
+            assert len(body) == 3
+            scopes = sorted(link["link_scope"] for link in body)
+            assert scopes == ["block", "block", "resource"]
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+def test_resource_links_resource_scope_dedup(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Zweimal denselben 'resource'-Link schicken — Service-Dedup laesst nur
+    einen durch, sodass der partielle Unique-Index aus 0021 nicht feuert.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    rbase = f"/v1/workspaces/{ws}/resources"
+    pbase = f"/v1/workspaces/{ws}/playbooks"
+
+    try:
+        with TestClient(app) as client:
+            rid = client.post(
+                rbase,
+                json=_resource_body("Doc", [_heading("h1", "Heading")]),
+                headers=auth,
+            ).json()["id"]
+            _activate(client, rbase, rid, 1, auth)
+            pid = client.post(pbase, json=_playbook_body("PB"), headers=auth).json()["id"]
+            links_url = f"{pbase}/{pid}/resource_links"
+
+            resp = client.put(
+                links_url,
+                json={
+                    "links": [
+                        {
+                            "resource_id": rid,
+                            "block_id": None,
+                            "position": 0,
+                            "link_scope": "resource",
+                        },
+                        {
+                            "resource_id": rid,
+                            "block_id": None,
+                            "position": 1,
+                            "link_scope": "resource",
+                        },
+                    ]
+                },
+                headers=auth,
+            )
+            assert resp.status_code == 200, resp.text
+            body = resp.json()
+            assert len(body) == 1
+            assert body[0]["link_scope"] == "resource"
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
 def test_resource_links_active_wins_over_current_draft(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

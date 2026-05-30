@@ -42,11 +42,18 @@ class PlaybookResourceLinkService:
     async def set_links(
         self, ctx: WorkspaceContext, playbook_id: UUID, data: ResourceLinkSet
     ) -> list[ResourceLinkRead]:
-        """Ersetzt die Block-Refs; leere Liste loest alle."""
+        """Ersetzt die Block-/Resource-Refs; leere Liste loest alle.
+
+        Dedup-Key beruecksichtigt `link_scope`: ein `'resource'`-Eintrag pro
+        Resource (block_id ist None), beliebig viele `'block'`-Eintraege je
+        Resource (Key = (resource_id, 'block', block_id)). Damit deckt der
+        Service-Dedup den DB-Constraint aus 0021 auch dann ab, wenn ein
+        Client die Liste mit Duplikaten schickt.
+        """
         require_role(ctx, WorkspaceRole.editor)
-        deduped: dict[tuple[UUID, str], ResourceLinkItem] = {}
+        deduped: dict[tuple[UUID, str, str | None], ResourceLinkItem] = {}
         for item in data.links:
-            deduped.setdefault((item.resource_id, item.block_id), item)
+            deduped.setdefault((item.resource_id, item.link_scope, item.block_id), item)
         items = list(deduped.values())
         await self._validate_heading_anchors(ctx.workspace_id, items)
         result = await self._repo.set_links(ctx.workspace_id, ctx.user_id, playbook_id, items)
@@ -70,12 +77,16 @@ class PlaybookResourceLinkService:
         als "noch nicht resolved"; der Set bleibt zulaessig, weil ein
         Heading nach Edit-Discard rueckverfuegbar werden kann. Der Read
         meldet solche Refs spaeter als `available_in=None`.
+
+        `'resource'`-Scope-Items werden uebersprungen — sie zeigen aufs
+        Volldokument und brauchen keinen Heading-Anker.
         """
-        if not items:
+        block_items = [item for item in items if item.link_scope == "block"]
+        if not block_items:
             return
-        resource_ids = list({item.resource_id for item in items})
+        resource_ids = list({item.resource_id for item in block_items})
         blocks_per_resource = await self._repo.load_resource_blocks(workspace_id, resource_ids)
-        for item in items:
+        for item in block_items:
             blocks = blocks_per_resource.get(item.resource_id, [])
             anchor = next(
                 (b for b in blocks if b.get("id") == item.block_id),

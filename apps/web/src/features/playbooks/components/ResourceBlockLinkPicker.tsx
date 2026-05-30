@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import type { Resource, ResourceBlock, ResourceLink, ResourceLinkItemInput } from '@/api/types'
 import { useApi } from '@/api/useApi'
@@ -24,8 +24,18 @@ interface ResourceBlockLinkPickerProps {
   onSave: (items: ResourceLinkItemInput[]) => void | Promise<void>
 }
 
-function keyOf(resourceId: string, blockId: string): string {
+// Selektions-Keys: Block-Anker ueber `<resourceId>::<blockId>`, ein
+// 'resource'-Scope-Eintrag ueber `<resourceId>::__resource__`. So
+// laufen beide Modi durch dasselbe Toggle-Array, und die exklusive
+// Disable-Logik im Picker bleibt auf eine Lookup-Map reduziert.
+const RESOURCE_SCOPE_TOKEN = '__resource__'
+
+function blockKeyOf(resourceId: string, blockId: string): string {
   return `${resourceId}::${blockId}`
+}
+
+function resourceScopeKeyOf(resourceId: string): string {
+  return `${resourceId}::${RESOURCE_SCOPE_TOKEN}`
 }
 
 function headingText(block: ResourceBlock): string {
@@ -47,12 +57,19 @@ export function ResourceBlockLinkPicker({
   const [loadError, setLoadError] = useState<string | null>(null)
 
   // Beim Oeffnen: aktuelle Auswahl aus den bestehenden Links uebernehmen und
-  // die Resource-Liste laden.
+  // die Resource-Liste laden. 'resource'-Scope-Links werden auf den
+  // Resource-Token gemapped, Block-Scope-Links auf den Block-Anker.
   useEffect(() => {
     if (!open) {
       return
     }
-    setSelected(existing.map((link) => keyOf(link.resource_id, link.block_id)))
+    setSelected(
+      existing.map((link) =>
+        link.link_scope === 'resource' || link.block_id === null
+          ? resourceScopeKeyOf(link.resource_id)
+          : blockKeyOf(link.resource_id, link.block_id),
+      ),
+    )
     setLoadError(null)
     api
       .listResources()
@@ -81,18 +98,53 @@ export function ResourceBlockLinkPicker({
     )
   }, [])
 
+  // 'Gesamtes Dokument' fuer die aktive Resource togglen — exklusive
+  // Logik (Block-Auswahl derselben Resource wird beim Aktivieren entfernt,
+  // damit der Backend-Constraint nicht doppelt feuert).
+  const toggleResourceScope = useCallback((resourceId: string) => {
+    const key = resourceScopeKeyOf(resourceId)
+    const prefix = `${resourceId}::`
+    setSelected((current) => {
+      if (current.includes(key)) {
+        return current.filter((entry) => entry !== key)
+      }
+      return [
+        ...current.filter((entry) => !entry.startsWith(prefix)),
+        key,
+      ]
+    })
+  }, [])
+
   const handleSave = useCallback(async () => {
     const items: ResourceLinkItemInput[] = selected.map((key, index) => {
-      const [resourceId, blockId] = key.split('::')
-      return { resource_id: resourceId, block_id: blockId, position: index }
+      const [resourceId, anchor] = key.split('::')
+      if (anchor === RESOURCE_SCOPE_TOKEN) {
+        return {
+          resource_id: resourceId,
+          block_id: null,
+          position: index,
+          link_scope: 'resource',
+        }
+      }
+      return {
+        resource_id: resourceId,
+        block_id: anchor,
+        position: index,
+        link_scope: 'block',
+      }
     })
     await onSave(items)
     setOpen(false)
   }, [selected, onSave])
 
   // Phase 3-B: nur Heading-Bloecke sind als Anker erlaubt — Backend
-  // (Track A) wird das spaeter auch erzwingen.
+  // (Track A) erzwingt das ebenfalls.
   const headingBlocks = blocks.filter(isHeadingBlock)
+
+  const resourceScopeSelected = useMemo(() => {
+    if (activeResource === null) return false
+    return selected.includes(resourceScopeKeyOf(activeResource.id))
+  }, [activeResource, selected])
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -136,51 +188,79 @@ export function ResourceBlockLinkPicker({
             ) : null}
           </ul>
 
-          <ul
-            className="flex max-h-80 flex-col gap-2 overflow-auto"
-            aria-label="Heading-Bloecke"
-          >
+          <div className="flex max-h-80 flex-col gap-3 overflow-auto">
             {activeResource === null ? (
-              <li className="px-1 text-sm text-muted-foreground">
+              <p className="px-1 text-sm text-muted-foreground">
                 Resource waehlen, um Heading-Bloecke zu sehen.
-              </li>
-            ) : headingBlocks.length === 0 ? (
-              <li className="px-1 text-sm text-muted-foreground">
-                Diese Resource hat keine Heading-Bloecke.
-              </li>
+              </p>
             ) : (
-              headingBlocks.map((block) => {
-                const key = keyOf(activeResource.id, block.id)
-                const preview = sectionPreview(blocks, block.id)
-                return (
-                  <li
-                    key={block.id}
-                    className="flex items-start gap-3 rounded-md border p-2"
+              <>
+                <div className="flex items-start gap-3 rounded-md border border-dashed p-2">
+                  <Checkbox
+                    id={`resource-${activeResource.id}`}
+                    checked={resourceScopeSelected}
+                    onChange={() => toggleResourceScope(activeResource.id)}
+                    aria-label="Gesamtes Dokument verknuepfen"
+                  />
+                  <Label
+                    htmlFor={`resource-${activeResource.id}`}
+                    className="flex flex-col gap-1 text-sm font-normal"
                   >
-                    <Checkbox
-                      id={`block-${block.id}`}
-                      checked={selected.includes(key)}
-                      onChange={() => toggle(key)}
-                      aria-label={`Section ${headingText(block)} verknuepfen`}
-                    />
-                    <Label
-                      htmlFor={`block-${block.id}`}
-                      className="flex flex-col gap-1 text-sm font-normal"
-                    >
-                      <span className="font-medium">{headingText(block)}</span>
-                      {preview.length > 0 ? (
-                        <span className="text-xs text-muted-foreground">{preview}</span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground/70">
-                          (leere Section)
-                        </span>
-                      )}
-                    </Label>
-                  </li>
-                )
-              })
+                    <span className="font-medium">Gesamtes Dokument</span>
+                    <span className="text-xs text-muted-foreground">
+                      Verlinkt die komplette Resource — exklusive zu
+                      einzelnen Block-Ankern.
+                    </span>
+                  </Label>
+                </div>
+                <ul
+                  className={cn(
+                    'flex flex-col gap-2',
+                    resourceScopeSelected && 'pointer-events-none opacity-60',
+                  )}
+                  aria-label="Heading-Bloecke"
+                >
+                  {headingBlocks.length === 0 ? (
+                    <li className="px-1 text-sm text-muted-foreground">
+                      Diese Resource hat keine Heading-Bloecke.
+                    </li>
+                  ) : (
+                    headingBlocks.map((block) => {
+                      const key = blockKeyOf(activeResource.id, block.id)
+                      const preview = sectionPreview(blocks, block.id)
+                      return (
+                        <li
+                          key={block.id}
+                          className="flex items-start gap-3 rounded-md border p-2"
+                        >
+                          <Checkbox
+                            id={`block-${block.id}`}
+                            checked={selected.includes(key)}
+                            onChange={() => toggle(key)}
+                            disabled={resourceScopeSelected}
+                            aria-label={`Section ${headingText(block)} verknuepfen`}
+                          />
+                          <Label
+                            htmlFor={`block-${block.id}`}
+                            className="flex flex-col gap-1 text-sm font-normal"
+                          >
+                            <span className="font-medium">{headingText(block)}</span>
+                            {preview.length > 0 ? (
+                              <span className="text-xs text-muted-foreground">{preview}</span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground/70">
+                                (leere Section)
+                              </span>
+                            )}
+                          </Label>
+                        </li>
+                      )
+                    })
+                  )}
+                </ul>
+              </>
             )}
-          </ul>
+          </div>
         </div>
 
         <DialogFooter>

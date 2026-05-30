@@ -108,13 +108,29 @@ class ResourceVersionRead(BaseModel):
 
 
 class ResourceLinkItem(BaseModel):
-    """Ein einzelner Playbook→Resource-Block-Verweis (Eingabe)."""
+    """Ein einzelner Playbook→Resource-Verweis (Eingabe).
+
+    Phase-3-Fixes Track 4: `link_scope` unterscheidet zwischen Volldokument-
+    Referenz (`'resource'`, kein `block_id`) und Block-Anker (`'block'`, mit
+    `block_id`). Default `'block'` ist Backward-Compat fuer alte Clients;
+    Default `block_id=None` erzwingt im Validator die explizite Block-ID
+    fuer 'block'-Items.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     resource_id: UUID
-    block_id: BlockId
+    block_id: BlockId | None = None
     position: int = Field(ge=0)
+    link_scope: Literal["resource", "block"] = "block"
+
+    @model_validator(mode="after")
+    def _check_scope_block_pairing(self) -> Self:
+        if self.link_scope == "resource" and self.block_id is not None:
+            raise ValueError("link_scope='resource' darf kein block_id setzen.")
+        if self.link_scope == "block" and self.block_id is None:
+            raise ValueError("link_scope='block' verlangt eine block_id.")
+        return self
 
 
 class ResourceLinkSet(BaseModel):
@@ -148,13 +164,14 @@ class ResourceLinkRead(BaseModel):
 
     resource_id: UUID
     resource_name: str
-    block_id: str
+    block_id: str | None = None
     position: int
     available: bool
     available_in: Literal["active", "draft"] | None = None
     preview: str | None = None
     section_block_ids: list[str] = Field(default_factory=list)
     section_preview: str | None = None
+    link_scope: Literal["resource", "block"] = "block"
 
 
 class LinkedBlockSection(ResourceLinkRead):

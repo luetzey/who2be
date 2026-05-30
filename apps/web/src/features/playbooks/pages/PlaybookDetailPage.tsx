@@ -9,6 +9,7 @@ import { DataView } from '@/components/data/DataView'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import type { ResourceLink } from '@/api/types'
 import { usePlaybookResourceLinks } from '@/hooks/usePlaybookResourceLinks'
 import { usePlaybookUsages } from '@/hooks/usePlaybookUsages'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
@@ -29,15 +30,21 @@ export function PlaybookDetailPage() {
   const usages = usePlaybookUsages(id)
   const wsPath = useWorkspacePath()
 
-  const removeLink = (target: { resource_id: string; block_id: string }) => {
+  const removeLink = (target: ResourceLink) => {
     const remaining = resourceLinks.links.filter(
-      (link) => !(link.resource_id === target.resource_id && link.block_id === target.block_id),
+      (link) =>
+        !(
+          link.resource_id === target.resource_id &&
+          link.block_id === target.block_id &&
+          (link.link_scope ?? 'block') === (target.link_scope ?? 'block')
+        ),
     )
     void resourceLinks.save(
       remaining.map((link, index) => ({
         resource_id: link.resource_id,
         block_id: link.block_id,
         position: index,
+        link_scope: link.link_scope ?? 'block',
       })),
     )
   }

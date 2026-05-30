@@ -53,10 +53,18 @@ class ResourceSummary(BaseModel):
 
 
 class PlaybookWithResources(BaseModel):
-    """Ein Playbook samt seiner Resource-Block-Refs (Pointer, kein Inline)."""
+    """Ein Playbook samt seiner Resource-Verweise.
+
+    `linked_blocks` traegt alle Links als Pointer (Backward-Compat zum
+    ADR-0021-Vertrag) — sowohl Block-Anker als auch Resource-Volldokument-
+    Refs (`link_scope='resource'`, `block_id` None). `linked_resources`
+    haelt fuer letztere zusaetzlich das vollstaendige Dokument inline,
+    damit Agenten den Snippet-Fetch sparen koennen.
+    """
 
     playbook: PlaybookRead
     linked_blocks: list[ResourceLinkRead]
+    linked_resources: list[ResourceRead]
 
 
 async def _resolve_workspace_id(settings: Settings) -> UUID:
@@ -138,11 +146,14 @@ async def list_playbooks(
 @mcp.tool
 @with_tool_log("fetch_playbook")
 async def fetch_playbook(playbook_id: str) -> PlaybookWithResources:
-    """Laedt ein Playbook per UUID samt seiner Resource-Block-Refs.
+    """Laedt ein Playbook per UUID samt seiner Resource-Verweise.
 
-    `linked_blocks` enthaelt Pointer (resource_id + block_id) mit Verfuegbarkeit
-    und einer kurzen Vorschau — kein Auto-Inline (ADR-0021). Blockinhalte
-    werden gezielt ueber `fetch_resource` nachgeladen.
+    `linked_blocks` enthaelt alle Verweise als Pointer (resource_id +
+    block_id, Verfuegbarkeit, Section-Preview) — kein Auto-Inline fuer
+    Block-Refs (ADR-0021). Fuer `link_scope='resource'`-Eintraege wird die
+    Ziel-Resource zusaetzlich als Volldokument in `linked_resources`
+    ausgeliefert; Block-Refs bleiben Pointer und werden bei Bedarf ueber
+    `fetch_resource` nachgeladen.
     """
     try:
         parsed = UUID(playbook_id)
@@ -151,7 +162,18 @@ async def fetch_playbook(playbook_id: str) -> PlaybookWithResources:
     client = await build_client()
     playbook = await client.get_playbook(parsed)
     linked = await client.get_playbook_resource_links(parsed)
-    return PlaybookWithResources(playbook=playbook, linked_blocks=linked)
+    resource_scope_ids: list[UUID] = []
+    seen: set[UUID] = set()
+    for link in linked:
+        if link.link_scope == "resource" and link.resource_id not in seen:
+            seen.add(link.resource_id)
+            resource_scope_ids.append(link.resource_id)
+    resources = [await client.get_resource(rid) for rid in resource_scope_ids]
+    return PlaybookWithResources(
+        playbook=playbook,
+        linked_blocks=linked,
+        linked_resources=resources,
+    )
 
 
 @mcp.tool

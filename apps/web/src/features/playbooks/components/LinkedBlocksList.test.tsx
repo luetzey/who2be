@@ -74,4 +74,18 @@ describe('LinkedBlocksList', () => {
     render(<LinkedBlocksList links={[]} onRemove={() => {}} />)
     expect(screen.getByText('Noch keine Bloecke verknuepft.')).toBeInTheDocument()
   })
+
+  it('rendert einen Resource-Scope-Link als Ganzes Dokument', () => {
+    const resourceLink = link('', {
+      block_id: null,
+      link_scope: 'resource',
+      available_in: 'active',
+      available: true,
+      preview: null,
+      section_preview: null,
+    })
+    render(<LinkedBlocksList links={[resourceLink]} onRemove={() => {}} />)
+    expect(screen.getByText('Ganzes Dokument')).toBeInTheDocument()
+    expect(screen.getByText('Vollstaendige Resource referenziert')).toBeInTheDocument()
+  })
 })
