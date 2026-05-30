@@ -1,23 +1,27 @@
 import { ArrowLeft } from 'lucide-react'
+import { useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 
+import type { ResourceLink, VersionStatus } from '@/api/types'
+import { useApi } from '@/api/useApi'
+import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
+import { useWorkspacePath } from '@/auth/useWorkspacePath'
+import { BranchStatus, type BranchAction } from '@/components/data/BranchStatus'
+import { DataList } from '@/components/data/DataList'
+import { DataView } from '@/components/data/DataView'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
-import { DataList } from '@/components/data/DataList'
-import { DataView } from '@/components/data/DataView'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import type { ResourceLink } from '@/api/types'
 import { usePlaybookResourceLinks } from '@/hooks/usePlaybookResourceLinks'
 import { usePlaybookUsages } from '@/hooks/usePlaybookUsages'
-import { useWorkspacePath } from '@/auth/useWorkspacePath'
+import { notify } from '@/lib/feedback'
 
 import { LinkedBlocksList } from '../components/LinkedBlocksList'
 import { PlaybookEditorForm } from '../components/PlaybookEditorForm'
 import { ResourceBlockLinkPicker } from '../components/ResourceBlockLinkPicker'
-import { StatusActionBar } from '../components/StatusActionBar'
 import { usePlaybook } from '../hooks/usePlaybook'
 import { usePlaybookForm } from '../hooks/usePlaybookForm'
 import { statusBadgeVariant, statusLabel } from '../lib/status'
@@ -26,10 +30,13 @@ import { splitTriggers } from '../lib/triggers'
 export function PlaybookDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { playbook, versions, loading, error, reload } = usePlaybook(id)
-  const { form, onSubmit, saveError, initialBodyBlocks } = usePlaybookForm(playbook, reload)
+  const { form, autoSave, initialBodyBlocks } = usePlaybookForm(playbook)
   const resourceLinks = usePlaybookResourceLinks(id)
   const usages = usePlaybookUsages(id)
   const wsPath = useWorkspacePath()
+  const api = useApi()
+  const role = useCurrentWorkspaceRole()
+  const [actionBusy, setActionBusy] = useState(false)
 
   const removeLink = (target: ResourceLink) => {
     const remaining = resourceLinks.links.filter(
@@ -52,6 +59,27 @@ export function PlaybookDetailPage() {
 
   if (id === undefined) {
     return <Navigate to={wsPath('/playbooks')} replace />
+  }
+
+  const runTransition = async (
+    version: number,
+    to: VersionStatus,
+    successMessage: string,
+  ) => {
+    if (playbook === null) {
+      return
+    }
+    setActionBusy(true)
+    try {
+      await autoSave.flush()
+      await api.transitionPlaybookVersion(playbook.id, version, to)
+      notify.success(successMessage)
+      reload()
+    } catch (cause) {
+      notify.error(cause instanceof Error ? cause.message : 'Aktion fehlgeschlagen.')
+    } finally {
+      setActionBusy(false)
+    }
   }
 
   return (
@@ -79,19 +107,78 @@ export function PlaybookDetailPage() {
                           v.status === 'inactive',
                       )
                     : undefined
-                const actionableVersion =
-                  draftVersion ?? reviewVersion ?? inactiveCurrent
                 const description =
                   activeVersion !== undefined
-                    ? `Aktive Version: v${activeVersion.version}${
-                        actionableVersion !== undefined
-                          ? ` · Du bearbeitest: v${actionableVersion.version} (${statusLabel(
-                              actionableVersion.status ?? 'draft',
-                            )})`
-                          : ''
+                    ? `Active: v${activeVersion.version}${
+                        draftVersion !== undefined
+                          ? ` · Du arbeitest auf Draft v${draftVersion.version}`
+                          : reviewVersion !== undefined
+                            ? ` · In Review: v${reviewVersion.version}`
+                            : ''
                       }`
-                    : `Aktuelle Version: ${playbook.current_version}`
+                    : `Aktuelle Version: v${playbook.current_version} (${statusLabel(
+                        playbook.current_status ?? 'draft',
+                      )})`
                 const triggers = splitTriggers(playbook.triggers ?? null)
+
+                const canPromote = role === 'admin'
+                const actions: BranchAction[] = []
+                if (draftVersion !== undefined) {
+                  actions.push({
+                    key: 'submit',
+                    label: 'Draft abschliessen',
+                    variant: 'brand',
+                    disabled: actionBusy,
+                    onClick: () =>
+                      void runTransition(
+                        draftVersion.version,
+                        'review',
+                        'Zur Review eingereicht.',
+                      ),
+                  })
+                }
+                if (reviewVersion !== undefined) {
+                  actions.push({
+                    key: 'publish',
+                    label: 'Veroeffentlichen',
+                    variant: 'brand',
+                    disabled: actionBusy || !canPromote,
+                    title: canPromote ? undefined : 'Nur Admins koennen aktivieren',
+                    onClick: () =>
+                      void runTransition(
+                        reviewVersion.version,
+                        'active',
+                        'Version aktiviert.',
+                      ),
+                  })
+                  actions.push({
+                    key: 'reject',
+                    label: 'Zurueck zu Draft',
+                    variant: 'destructive',
+                    disabled: actionBusy,
+                    onClick: () =>
+                      void runTransition(
+                        reviewVersion.version,
+                        'draft',
+                        'Review abgelehnt.',
+                      ),
+                  })
+                }
+                if (inactiveCurrent !== undefined) {
+                  actions.push({
+                    key: 'reactivate',
+                    label: 'Reaktivieren als Draft',
+                    variant: 'outline',
+                    disabled: actionBusy,
+                    onClick: () =>
+                      void runTransition(
+                        inactiveCurrent.version,
+                        'draft',
+                        'Reaktiviert als Entwurf.',
+                      ),
+                  })
+                }
+
                 return (
                   <Stack gap="md">
                     <PageHeader
@@ -125,22 +212,20 @@ export function PlaybookDetailPage() {
                         ))}
                       </div>
                     ) : null}
-                    {actionableVersion !== undefined &&
-                    actionableVersion.status !== undefined ? (
-                      <StatusActionBar
-                        playbookId={playbook.id}
-                        version={actionableVersion.version}
-                        status={actionableVersion.status}
-                        onTransitioned={reload}
-                      />
-                    ) : null}
+                    <BranchStatus
+                      activeVersion={activeVersion?.version}
+                      draftVersion={draftVersion?.version}
+                      reviewVersion={reviewVersion?.version}
+                      inactiveVersion={inactiveCurrent?.version}
+                      currentVersion={playbook.current_version}
+                      saveState={autoSave}
+                      actions={actions}
+                    />
                   </Stack>
                 )
               })()}
               <PlaybookEditorForm
                 form={form}
-                onSubmit={onSubmit}
-                saveError={saveError}
                 formKey={`${playbook.id}-${playbook.current_version}`}
                 initialBodyBlocks={initialBodyBlocks}
               />

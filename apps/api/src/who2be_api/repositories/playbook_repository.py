@@ -61,10 +61,10 @@ def _escape_like(value: str) -> str:
 
 @dataclass(frozen=True)
 class PlaybookUpdateOutcome:
-    """Ergebnis eines `update`-Aufrufs (analog `PersonaUpdateOutcome`)."""
+    """Ergebnis eines `update`- oder `upsert_draft`-Aufrufs (analog Persona)."""
 
     playbook: PlaybookRead | None
-    conflict: Literal["draft_exists"] | None = None
+    conflict: Literal["draft_exists", "review_pending"] | None = None
 
 
 class PlaybookRepository(Protocol):
@@ -96,6 +96,15 @@ class PlaybookRepository(Protocol):
     ) -> PlaybookRead | None: ...
 
     async def update(
+        self,
+        workspace_id: UUID,
+        owner_id: UUID,
+        playbook_id: UUID,
+        name: str | None,
+        content: PlaybookContent,
+    ) -> PlaybookUpdateOutcome: ...
+
+    async def upsert_draft(
         self,
         workspace_id: UUID,
         owner_id: UUID,
@@ -285,6 +294,111 @@ class PgPlaybookRepository:
                     "content": content_json,
                     "current_status": new_status,
                     "has_pending_draft": new_status == VersionStatus.draft,
+                }
+            )
+        )
+
+    async def upsert_draft(
+        self,
+        workspace_id: UUID,
+        owner_id: UUID,
+        playbook_id: UUID,
+        name: str | None,
+        content: PlaybookContent,
+    ) -> PlaybookUpdateOutcome:
+        """Auto-Save-Pfad fuer Playbook (PATCH `.../draft`).
+
+        Semantik analog zu `PgPersonaRepository.upsert_draft`:
+        - bestehender Draft → in-place Update (kein Versions-Increment).
+        - kein Draft, current=active|inactive → neuer Draft v(n+1).
+        - kein Draft, current=review → 409 (review_pending), Frontend
+          verhindert das eigentlich.
+        Denormalisierte Filterspalten (`type`, `tags`, `triggers`) wandern
+        bei jedem Patch mit, sonst spiegelt die Liste den Draft-Inhalt nicht.
+        """
+        content_json = content.model_dump(mode="json")
+        async with self._pool.acquire() as conn, conn.transaction():
+            current = await conn.fetchrow(
+                "SELECT p.current_version, pv.status "
+                "FROM playbook p "
+                "JOIN playbook_version pv "
+                "  ON pv.playbook_id = p.id AND pv.version = p.current_version "
+                "WHERE p.id = $1 AND p.workspace_id = $2 FOR UPDATE OF p",
+                playbook_id,
+                workspace_id,
+            )
+            if current is None:
+                return PlaybookUpdateOutcome(playbook=None)
+            draft_version = await conn.fetchval(
+                "SELECT version FROM playbook_version WHERE playbook_id = $1 AND status = 'draft'",
+                playbook_id,
+            )
+            if draft_version is not None:
+                playbook = await conn.fetchrow(
+                    "UPDATE playbook "
+                    "SET name = COALESCE($1, name), type = $2, tags = $3, "
+                    "triggers = $4, updated_at = now() "
+                    "WHERE id = $5 "
+                    "RETURNING id, workspace_id, owner_id, name, current_version, "
+                    "type, tags, triggers, created_at, updated_at",
+                    name,
+                    content.type,
+                    content.tags,
+                    content.triggers,
+                    playbook_id,
+                )
+                await conn.execute(
+                    "UPDATE playbook_version SET content = $1, created_by = $2 "
+                    "WHERE playbook_id = $3 AND version = $4",
+                    content_json,
+                    owner_id,
+                    playbook_id,
+                    draft_version,
+                )
+                return PlaybookUpdateOutcome(
+                    playbook=PlaybookRead.model_validate(
+                        {
+                            **dict(playbook),
+                            "content": content_json,
+                            "current_status": VersionStatus.draft,
+                            "has_pending_draft": True,
+                        }
+                    )
+                )
+            if current["status"] == VersionStatus.review.value:
+                return PlaybookUpdateOutcome(playbook=None, conflict="review_pending")
+            next_version = current["current_version"] + 1
+            playbook = await conn.fetchrow(
+                "UPDATE playbook "
+                "SET current_version = $1, name = COALESCE($2, name), "
+                "type = $3, tags = $4, triggers = $5, updated_at = now() "
+                "WHERE id = $6 "
+                "RETURNING id, workspace_id, owner_id, name, current_version, "
+                "type, tags, triggers, created_at, updated_at",
+                next_version,
+                name,
+                content.type,
+                content.tags,
+                content.triggers,
+                playbook_id,
+            )
+            await conn.execute(
+                "INSERT INTO playbook_version "
+                "(playbook_id, version, content, status, created_by) "
+                "VALUES ($1, $2, $3, $4, $5)",
+                playbook_id,
+                next_version,
+                content_json,
+                VersionStatus.draft.value,
+                owner_id,
+            )
+        return PlaybookUpdateOutcome(
+            playbook=PlaybookRead.model_validate(
+                {
+                    **dict(playbook),
+                    "content": content_json,
+                    "current_status": VersionStatus.draft,
+                    "has_pending_draft": True,
                 }
             )
         )

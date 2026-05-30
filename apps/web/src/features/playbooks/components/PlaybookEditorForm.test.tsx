@@ -25,11 +25,11 @@ vi.mock('@/auth/useCurrentWorkspaceRole', () => ({
   useCurrentWorkspaceRole: () => 'admin',
 }))
 
-const updatePlaybook = vi.fn().mockResolvedValue({})
+const patchPlaybookDraft = vi.fn().mockResolvedValue({})
 
 vi.mock('@/api/useApi', () => ({
   useApi: () => ({
-    updatePlaybook,
+    patchPlaybookDraft,
     listPlaybookTags: () => Promise.resolve(['support']),
   }),
 }))
@@ -55,15 +55,10 @@ const playbook: Playbook = {
 }
 
 function Harness({ source = playbook }: { source?: Playbook } = {}) {
-  const { form, onSubmit, saveError, initialBodyBlocks } = usePlaybookForm(
-    source,
-    () => {},
-  )
+  const { form, initialBodyBlocks } = usePlaybookForm(source)
   return (
     <PlaybookEditorForm
       form={form}
-      onSubmit={onSubmit}
-      saveError={saveError}
       formKey={`${source.id}-${source.current_version}`}
       initialBodyBlocks={initialBodyBlocks}
     />
@@ -104,17 +99,18 @@ describe('PlaybookEditorForm', () => {
     expect(screen.getByTestId('blocknote-view')).toBeInTheDocument()
   })
 
-  it('submitt eine Payload mit `tags: string[]` und neuem Typ aus dem Select', async () => {
-    updatePlaybook.mockClear()
+  it('auto-saved eine Payload mit `tags: string[]` und neuem Typ aus dem Select', async () => {
+    patchPlaybookDraft.mockClear()
     render(<Harness />)
 
     fireEvent.change(screen.getByLabelText('Typ'), { target: { value: 'checklist' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Neue Version speichern' }))
-
-    await waitFor(() => {
-      expect(updatePlaybook).toHaveBeenCalledTimes(1)
-    })
-    const payload = updatePlaybook.mock.calls[0][1]
+    await waitFor(
+      () => {
+        expect(patchPlaybookDraft).toHaveBeenCalledTimes(1)
+      },
+      { timeout: 3000 },
+    )
+    const payload = patchPlaybookDraft.mock.calls[0][1]
     expect(payload).toMatchObject({
       name: 'Reset-Mail',
       content: {
@@ -125,7 +121,7 @@ describe('PlaybookEditorForm', () => {
       },
     })
     expect(Array.isArray(payload.content.tags)).toBe(true)
-  })
+  }, 10_000)
 
   it('zeigt Hilfe-Tooltips fuer jede Section', () => {
     render(<Harness />)
@@ -146,11 +142,10 @@ describe('PlaybookEditorForm', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('legt einen neuen Trigger als Pill an und schickt ihn beim Submit als Komma-String', async () => {
-    updatePlaybook.mockClear()
+  it('legt einen neuen Trigger als Pill an und sendet ihn via Auto-Save als Komma-String', async () => {
+    patchPlaybookDraft.mockClear()
     render(<Harness />)
 
-    // Trigger-Input ueber sein Label finden (aria-labelledby haelt das Combobox-Element).
     const triggerLabel = screen.getByText('Trigger', { selector: 'label' })
     const triggerLabelId = triggerLabel.getAttribute('id') ?? triggerLabel.id
     const triggerInput = screen
@@ -166,14 +161,16 @@ describe('PlaybookEditorForm', () => {
       await screen.findByRole('button', { name: 'Tag reset link entfernen' }),
     ).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Neue Version speichern' }))
-
-    await waitFor(() => {
-      expect(updatePlaybook).toHaveBeenCalledTimes(1)
-    })
-    const payload = updatePlaybook.mock.calls[0][1]
-    expect(payload.content.triggers).toBe('passwort vergessen, reset link')
-  })
+    await waitFor(
+      () => {
+        expect(patchPlaybookDraft).toHaveBeenCalled()
+      },
+      { timeout: 3000 },
+    )
+    const lastCall =
+      patchPlaybookDraft.mock.calls[patchPlaybookDraft.mock.calls.length - 1]
+    expect(lastCall[1].content.triggers).toBe('passwort vergessen, reset link')
+  }, 10_000)
 
   it('rehydratisiert die BlockNote-Insel, wenn `formKey` wechselt', async () => {
     const v1: Playbook = {
@@ -200,8 +197,8 @@ describe('PlaybookEditorForm', () => {
     })
   })
 
-  it('entfernt einen Trigger per Klick auf das X', async () => {
-    updatePlaybook.mockClear()
+  it('entfernt einen Trigger per Klick auf das X und propagiert ihn via Auto-Save', async () => {
+    patchPlaybookDraft.mockClear()
     render(<Harness />)
 
     fireEvent.click(
@@ -212,11 +209,14 @@ describe('PlaybookEditorForm', () => {
       screen.queryByRole('button', { name: 'Tag passwort vergessen entfernen' }),
     ).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Neue Version speichern' }))
-
-    await waitFor(() => {
-      expect(updatePlaybook).toHaveBeenCalledTimes(1)
-    })
-    expect(updatePlaybook.mock.calls[0][1].content.triggers).toBeNull()
-  })
+    await waitFor(
+      () => {
+        expect(patchPlaybookDraft).toHaveBeenCalled()
+      },
+      { timeout: 3000 },
+    )
+    const lastCall =
+      patchPlaybookDraft.mock.calls[patchPlaybookDraft.mock.calls.length - 1]
+    expect(lastCall[1].content.triggers).toBeNull()
+  }, 10_000)
 })

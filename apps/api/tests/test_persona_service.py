@@ -138,6 +138,65 @@ class FakePersonaRepository:
         )
         return PersonaUpdateOutcome(persona=updated)
 
+    async def upsert_draft(
+        self,
+        workspace_id: UUID,
+        owner_id: UUID,
+        persona_id: UUID,
+        name: str | None,
+        content: PersonaVersionContent,
+    ) -> PersonaUpdateOutcome:
+        persona = self._personas.get(persona_id)
+        if persona is None or persona.workspace_id != workspace_id:
+            return PersonaUpdateOutcome(persona=None)
+        existing_draft = next(
+            (v for v in self._versions[persona_id] if v.status == VersionStatus.draft),
+            None,
+        )
+        if existing_draft is not None:
+            updated_version = existing_draft.model_copy(
+                update={"content": content, "created_by": owner_id, "created_at": datetime.now(UTC)}
+            )
+            self._versions[persona_id] = [
+                updated_version if v.version == existing_draft.version else v
+                for v in self._versions[persona_id]
+            ]
+            updated = persona.model_copy(
+                update={
+                    "name": name if name is not None else persona.name,
+                    "content": content,
+                    "current_status": VersionStatus.draft,
+                    "has_pending_draft": True,
+                    "updated_at": datetime.now(UTC),
+                }
+            )
+            self._personas[persona_id] = updated
+            return PersonaUpdateOutcome(persona=updated)
+        if persona.current_status == VersionStatus.review:
+            return PersonaUpdateOutcome(persona=None, conflict="review_pending")
+        version = persona.current_version + 1
+        updated = persona.model_copy(
+            update={
+                "name": name if name is not None else persona.name,
+                "current_version": version,
+                "current_status": VersionStatus.draft,
+                "has_pending_draft": True,
+                "content": content,
+                "updated_at": datetime.now(UTC),
+            }
+        )
+        self._personas[persona_id] = updated
+        self._versions[persona_id].append(
+            PersonaVersionRead(
+                version=version,
+                status=VersionStatus.draft,
+                content=content,
+                created_by=owner_id,
+                created_at=datetime.now(UTC),
+            )
+        )
+        return PersonaUpdateOutcome(persona=updated)
+
     def promote_current_to_active(self, persona_id: UUID) -> None:
         """Testhelfer: hebt die Current-Version auf 'active'."""
         persona = self._personas[persona_id]

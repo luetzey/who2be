@@ -1,10 +1,14 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect, useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, type UseFormReturn } from 'react-hook-form'
 import { z } from 'zod'
 
-import type { Resource, ResourceBlock } from '@/api/types'
+import type { Resource, ResourceBlock, ResourceInput } from '@/api/types'
 import { useApi } from '@/api/useApi'
+import {
+  useAutoSaveDraft,
+  type UseAutoSaveDraftResult,
+} from '@/hooks/useAutoSaveDraft'
 
 const schema = z.object({
   name: z.string().min(1, 'Name ist erforderlich.'),
@@ -13,9 +17,15 @@ const schema = z.object({
 
 export type ResourceEditorValues = z.infer<typeof schema>
 
-export function useResourceForm(resource: Resource | null, onSaved: () => void) {
+export interface UseResourceFormResult {
+  form: UseFormReturn<ResourceEditorValues>
+  blocks: ResourceBlock[]
+  setBlocks: (blocks: ResourceBlock[]) => void
+  autoSave: UseAutoSaveDraftResult
+}
+
+export function useResourceForm(resource: Resource | null): UseResourceFormResult {
   const api = useApi()
-  const [saveError, setSaveError] = useState<string | null>(null)
   const [blocks, setBlocks] = useState<ResourceBlock[]>([])
   const form = useForm<ResourceEditorValues>({
     resolver: zodResolver(schema),
@@ -30,18 +40,23 @@ export function useResourceForm(resource: Resource | null, onSaved: () => void) 
     setBlocks(resource.content.blocks ?? [])
   }, [resource, form])
 
-  const onSubmit = form.handleSubmit(async (values) => {
-    setSaveError(null)
-    try {
-      await api.updateResource(resource?.id ?? '', {
-        name: values.name,
-        content: { description: values.description, blocks },
-      })
-      onSaved()
-    } catch (cause: unknown) {
-      setSaveError(cause instanceof Error ? cause.message : 'Speichern fehlgeschlagen.')
-    }
+  const values = form.watch()
+  // Auto-Save bekommt name + description + blocks als kombinierten Snapshot.
+  // Blocks sind ein eigener State (BlockNote-Onsave reicht sie via Setter).
+  const combined: ResourceInput = {
+    name: values.name,
+    content: { description: values.description, blocks },
+  }
+  const autoSave = useAutoSaveDraft<ResourceInput>({
+    values: combined,
+    isReady: resource !== null,
+    patchFn: async (next) => {
+      if (resource === null) {
+        return
+      }
+      await api.patchResourceDraft(resource.id, next)
+    },
   })
 
-  return { form, blocks, setBlocks, onSubmit, saveError }
+  return { form, blocks, setBlocks, autoSave }
 }

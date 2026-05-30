@@ -1,14 +1,12 @@
-import { type BaseSyntheticEvent, useMemo } from 'react'
+import { useMemo } from 'react'
 import { type UseFormReturn } from 'react-hook-form'
 
 import type { ResourceBlock } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
-import { ErrorAlert } from '@/components/data/ErrorAlert'
 import { BlockNoteEditor } from '@/components/editor/BlockNoteEditor'
 import { blocksToPlainText, plainTextToBlocks } from '@/components/editor/plaintext'
 import { FormSection } from '@/components/layout/FormSection'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
@@ -19,8 +17,6 @@ import type { PersonaEditorValues } from '../hooks/usePersonaForm'
 
 interface PersonaEditorFormProps {
   form: UseFormReturn<PersonaEditorValues>
-  onSubmit: (event?: BaseSyntheticEvent) => Promise<void>
-  saveError: string | null
   // Render-Identitaet fuer die BlockNote-Inseln. Wechselt der Key, wird der
   // ProseMirror-State remountet — sonst bleibt der Editor auf dem alten
   // `initialContent` haengen (useCreateBlockNote initialisiert nur einmal).
@@ -40,22 +36,23 @@ Ausnahmen: kein Rabattversprechen ohne Freigabe.`
 
 export function PersonaEditorForm({
   form,
-  onSubmit,
-  saveError,
   formKey,
   initialProfileBlocks,
   initialSystemPrompt,
 }: PersonaEditorFormProps) {
-  // Viewer dürfen nur lesen (ADR-0023) — Save bleibt gesperrt.
+  // Viewer dürfen nur lesen (ADR-0023) — Auto-Save bleibt gesperrt (Detail-
+  // Page reicht `isReady=false` durch, falls die Rolle das Editieren
+  // unterbindet).
   const isViewer = useCurrentWorkspaceRole() === 'viewer'
   const api = useApi()
   return (
-    <>
-      {saveError !== null ? <ErrorAlert message={saveError} /> : null}
-      <Card>
-        <CardContent className="pt-6">
-          <Form {...form}>
-            <form onSubmit={onSubmit} className="flex flex-col gap-6">
+    <Card>
+      <CardContent className="pt-6">
+        <Form {...form}>
+          <form
+            className="flex flex-col gap-6"
+            onSubmit={(event) => event.preventDefault()}
+          >
               <FormSection
                 title="Identität"
                 description="Wie die Persona heißt und wofür sie zuständig ist."
@@ -198,21 +195,10 @@ export function PersonaEditorForm({
                 />
               </FormSection>
 
-              <div className="flex justify-end">
-                <Button
-                  type="submit"
-                  variant="brand"
-                  disabled={form.formState.isSubmitting || isViewer}
-                  title={isViewer ? 'Viewer können Inhalte nur ansehen' : undefined}
-                >
-                  Neue Version speichern
-                </Button>
-              </div>
             </form>
-          </Form>
-        </CardContent>
-      </Card>
-    </>
+        </Form>
+      </CardContent>
+    </Card>
   )
 }
 

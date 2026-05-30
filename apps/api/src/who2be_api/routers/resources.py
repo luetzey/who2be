@@ -83,6 +83,19 @@ async def update_resource(
     return await service.update(ctx, resource_id, data)
 
 
+@router.patch("/{resource_id}/draft")
+@limiter.limit(write_limit)
+async def update_resource_draft(
+    request: Request,
+    resource_id: UUID,
+    data: ResourceUpdate,
+    ctx: Ctx,
+    service: Service,
+) -> ResourceRead:
+    """Auto-Save-Pfad — upsertet die Draft-Version ohne Versions-Increment."""
+    return await service.update_draft(ctx, resource_id, data)
+
+
 @router.get("/{resource_id}/versions")
 async def list_resource_versions(
     resource_id: UUID, ctx: Ctx, service: Service

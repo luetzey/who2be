@@ -1,11 +1,14 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { type BaseSyntheticEvent, useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useForm, type UseFormReturn } from 'react-hook-form'
 import { z } from 'zod'
 
-import type { Persona, ResourceBlock } from '@/api/types'
+import type { Persona, PersonaInput, ResourceBlock } from '@/api/types'
 import { useApi } from '@/api/useApi'
-import { notify } from '@/lib/feedback'
+import {
+  useAutoSaveDraft,
+  type UseAutoSaveDraftResult,
+} from '@/hooks/useAutoSaveDraft'
 
 // Pflichtfelder werden via Zod validiert; `profileBlocks` und `tags`
 // kommen als reine Passthrough-Felder mit ins Schema, damit der Resolver
@@ -21,27 +24,33 @@ const editorSchema = z.object({
 
 export type PersonaEditorValues = z.infer<typeof editorSchema>
 
-function describeError(cause: unknown): string {
-  return cause instanceof Error ? cause.message : 'Unbekannter Fehler.'
-}
-
 export interface UsePersonaFormResult {
   form: UseFormReturn<PersonaEditorValues>
-  onSubmit: (event?: BaseSyntheticEvent) => Promise<void>
-  saveError: string | null
+  autoSave: UseAutoSaveDraftResult
+}
+
+function toInput(values: PersonaEditorValues): PersonaInput {
+  return {
+    name: values.name,
+    content: {
+      description: values.description,
+      system_prompt: values.systemPrompt,
+      // `traits` ist deprecated (Phase 3-0). Wir senden weiterhin ein
+      // leeres Array, damit der Schema-Default beim Backend greift.
+      traits: [],
+      tags: values.tags,
+      content: { description: '', blocks: values.profileBlocks },
+    },
+  }
 }
 
 /**
- * Editor-Form fuer Persona-Update. Wartet bis `persona` geladen ist,
- * resettet dann die Defaults. Submit ruft updatePersona, zeigt Toast
- * und triggert das uebergebene `onSaved` (typisch: reload).
+ * Editor-Form fuer Persona-Auto-Save. Wartet bis `persona` geladen ist,
+ * resettet dann die Defaults und uebergibt die Werte an `useAutoSaveDraft`,
+ * der mit 1500 ms Debounce in den Draft schreibt.
  */
-export function usePersonaForm(
-  persona: Persona | null,
-  onSaved: () => void,
-): UsePersonaFormResult {
+export function usePersonaForm(persona: Persona | null): UsePersonaFormResult {
   const api = useApi()
-  const [saveError, setSaveError] = useState<string | null>(null)
   const form = useForm<PersonaEditorValues>({
     resolver: zodResolver(editorSchema),
     defaultValues: {
@@ -65,31 +74,17 @@ export function usePersonaForm(
     }
   }, [persona, form])
 
-  const onSubmit = form.handleSubmit(async (values) => {
-    if (persona === null) {
-      return
-    }
-    setSaveError(null)
-    try {
-      await api.updatePersona(persona.id, {
-        name: values.name,
-        content: {
-          description: values.description,
-          system_prompt: values.systemPrompt,
-          // `traits` ist deprecated (Phase 3-0). Wir senden weiterhin ein
-          // leeres Array, damit der Schema-Default beim Backend greift —
-          // auch wenn Server jetzt selbst einen Default haetten.
-          traits: [],
-          tags: values.tags,
-          content: { description: '', blocks: values.profileBlocks },
-        },
-      })
-      notify.success('Gespeichert — neue Version erstellt.')
-      onSaved()
-    } catch (cause) {
-      setSaveError(describeError(cause))
-    }
+  const values = form.watch()
+  const autoSave = useAutoSaveDraft<PersonaEditorValues>({
+    values,
+    isReady: persona !== null,
+    patchFn: async (next) => {
+      if (persona === null) {
+        return
+      }
+      await api.patchPersonaDraft(persona.id, toInput(next))
+    },
   })
 
-  return { form, onSubmit, saveError }
+  return { form, autoSave }
 }

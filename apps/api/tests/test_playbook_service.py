@@ -161,6 +161,71 @@ class FakePlaybookRepository:
         )
         return PlaybookUpdateOutcome(playbook=updated)
 
+    async def upsert_draft(
+        self,
+        workspace_id: UUID,
+        owner_id: UUID,
+        playbook_id: UUID,
+        name: str | None,
+        content: PlaybookContent,
+    ) -> PlaybookUpdateOutcome:
+        playbook = self._playbooks.get(playbook_id)
+        if playbook is None or playbook.workspace_id != workspace_id:
+            return PlaybookUpdateOutcome(playbook=None)
+        existing_draft = next(
+            (v for v in self._versions[playbook_id] if v.status == VersionStatus.draft),
+            None,
+        )
+        if existing_draft is not None:
+            updated_version = existing_draft.model_copy(
+                update={"content": content, "created_by": owner_id, "created_at": datetime.now(UTC)}
+            )
+            self._versions[playbook_id] = [
+                updated_version if v.version == existing_draft.version else v
+                for v in self._versions[playbook_id]
+            ]
+            updated = playbook.model_copy(
+                update={
+                    "name": name if name is not None else playbook.name,
+                    "type": content.type,
+                    "tags": content.tags,
+                    "triggers": content.triggers,
+                    "content": content,
+                    "current_status": VersionStatus.draft,
+                    "has_pending_draft": True,
+                    "updated_at": datetime.now(UTC),
+                }
+            )
+            self._playbooks[playbook_id] = updated
+            return PlaybookUpdateOutcome(playbook=updated)
+        if playbook.current_status == VersionStatus.review:
+            return PlaybookUpdateOutcome(playbook=None, conflict="review_pending")
+        version = playbook.current_version + 1
+        updated = playbook.model_copy(
+            update={
+                "name": name if name is not None else playbook.name,
+                "current_version": version,
+                "current_status": VersionStatus.draft,
+                "has_pending_draft": True,
+                "type": content.type,
+                "tags": content.tags,
+                "triggers": content.triggers,
+                "content": content,
+                "updated_at": datetime.now(UTC),
+            }
+        )
+        self._playbooks[playbook_id] = updated
+        self._versions[playbook_id].append(
+            PlaybookVersionRead(
+                version=version,
+                status=VersionStatus.draft,
+                content=content,
+                created_by=owner_id,
+                created_at=datetime.now(UTC),
+            )
+        )
+        return PlaybookUpdateOutcome(playbook=updated)
+
     def promote_current_to_active(self, playbook_id: UUID) -> None:
         playbook = self._playbooks[playbook_id]
         self._versions[playbook_id] = [

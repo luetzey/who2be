@@ -1,40 +1,65 @@
 import { ArrowLeft } from 'lucide-react'
+import { useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 
+import type { VersionStatus } from '@/api/types'
+import { useApi } from '@/api/useApi'
+import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
+import { useWorkspacePath } from '@/auth/useWorkspacePath'
+import { BranchStatus, type BranchAction } from '@/components/data/BranchStatus'
+import { DataList } from '@/components/data/DataList'
+import { DataView } from '@/components/data/DataView'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
-import { ErrorAlert } from '@/components/data/ErrorAlert'
-import { DataList } from '@/components/data/DataList'
-import { DataView } from '@/components/data/DataView'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
-import { useWorkspacePath } from '@/auth/useWorkspacePath'
+import { useResourceUsages } from '@/hooks/useResourceUsages'
+import { notify } from '@/lib/feedback'
 
 import { ResourceEditor } from '../components/ResourceEditor'
-import { StatusActionBar } from '../components/StatusActionBar'
 import { useResource } from '../hooks/useResource'
 import { useResourceForm } from '../hooks/useResourceForm'
 import { statusBadgeVariant, statusLabel } from '../lib/status'
 
-import { useResourceUsages } from '@/hooks/useResourceUsages'
-
 export function ResourceDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { resource, versions, loading, error, reload } = useResource(id)
-  const { form, setBlocks, onSubmit, saveError } = useResourceForm(resource, reload)
+  const { form, setBlocks, autoSave } = useResourceForm(resource)
   const usages = useResourceUsages(id)
   const wsPath = useWorkspacePath()
-  // Viewer dürfen nur lesen (ADR-0023) — Save bleibt gesperrt.
-  const isViewer = useCurrentWorkspaceRole() === 'viewer'
+  const api = useApi()
+  const role = useCurrentWorkspaceRole()
+  const isViewer = role === 'viewer'
+  const [actionBusy, setActionBusy] = useState(false)
 
   if (id === undefined) {
     return <Navigate to={wsPath('/resources')} replace />
+  }
+
+  const runTransition = async (
+    version: number,
+    to: VersionStatus,
+    successMessage: string,
+  ) => {
+    if (resource === null) {
+      return
+    }
+    setActionBusy(true)
+    try {
+      await autoSave.flush()
+      await api.transitionResourceVersion(resource.id, version, to)
+      notify.success(successMessage)
+      reload()
+    } catch (cause) {
+      notify.error(cause instanceof Error ? cause.message : 'Aktion fehlgeschlagen.')
+    } finally {
+      setActionBusy(false)
+    }
   }
 
   return (
@@ -62,39 +87,99 @@ export function ResourceDetailPage() {
                           v.status === 'inactive',
                       )
                     : undefined
-                const actionableVersion =
-                  draftVersion ?? reviewVersion ?? inactiveCurrent
                 const description =
                   activeVersion !== undefined
-                    ? `Aktive Version: v${activeVersion.version}${
-                        actionableVersion !== undefined
-                          ? ` · Du bearbeitest: v${actionableVersion.version} (${statusLabel(
-                              actionableVersion.status ?? 'draft',
-                            )})`
-                          : ''
+                    ? `Active: v${activeVersion.version}${
+                        draftVersion !== undefined
+                          ? ` · Du arbeitest auf Draft v${draftVersion.version}`
+                          : reviewVersion !== undefined
+                            ? ` · In Review: v${reviewVersion.version}`
+                            : ''
                       }`
-                    : `Aktuelle Version: ${resource.current_version}`
+                    : `Aktuelle Version: v${resource.current_version} (${statusLabel(
+                        resource.current_status ?? 'draft',
+                      )})`
+
+                const canPromote = role === 'admin'
+                const actions: BranchAction[] = []
+                if (draftVersion !== undefined) {
+                  actions.push({
+                    key: 'submit',
+                    label: 'Draft abschliessen',
+                    variant: 'brand',
+                    disabled: actionBusy,
+                    onClick: () =>
+                      void runTransition(
+                        draftVersion.version,
+                        'review',
+                        'Zur Review eingereicht.',
+                      ),
+                  })
+                }
+                if (reviewVersion !== undefined) {
+                  actions.push({
+                    key: 'publish',
+                    label: 'Veroeffentlichen',
+                    variant: 'brand',
+                    disabled: actionBusy || !canPromote,
+                    title: canPromote ? undefined : 'Nur Admins koennen aktivieren',
+                    onClick: () =>
+                      void runTransition(
+                        reviewVersion.version,
+                        'active',
+                        'Version aktiviert.',
+                      ),
+                  })
+                  actions.push({
+                    key: 'reject',
+                    label: 'Zurueck zu Draft',
+                    variant: 'destructive',
+                    disabled: actionBusy,
+                    onClick: () =>
+                      void runTransition(
+                        reviewVersion.version,
+                        'draft',
+                        'Review abgelehnt.',
+                      ),
+                  })
+                }
+                if (inactiveCurrent !== undefined) {
+                  actions.push({
+                    key: 'reactivate',
+                    label: 'Reaktivieren als Draft',
+                    variant: 'outline',
+                    disabled: actionBusy,
+                    onClick: () =>
+                      void runTransition(
+                        inactiveCurrent.version,
+                        'draft',
+                        'Reaktiviert als Entwurf.',
+                      ),
+                  })
+                }
                 return (
                   <Stack gap="md">
                     <PageHeader title={resource.name} description={description} />
-                    {actionableVersion !== undefined &&
-                    actionableVersion.status !== undefined ? (
-                      <StatusActionBar
-                        resourceId={resource.id}
-                        version={actionableVersion.version}
-                        status={actionableVersion.status}
-                        onTransitioned={reload}
-                      />
-                    ) : null}
+                    <BranchStatus
+                      activeVersion={activeVersion?.version}
+                      draftVersion={draftVersion?.version}
+                      reviewVersion={reviewVersion?.version}
+                      inactiveVersion={inactiveCurrent?.version}
+                      currentVersion={resource.current_version}
+                      saveState={autoSave}
+                      actions={actions}
+                    />
                   </Stack>
                 )
               })()}
 
-              {saveError !== null ? <ErrorAlert message={saveError} /> : null}
               <Card>
                 <CardContent className="pt-6">
                   <Form {...form}>
-                    <form onSubmit={onSubmit} className="flex flex-col gap-4">
+                    <form
+                      className="flex flex-col gap-4"
+                      onSubmit={(event) => event.preventDefault()}
+                    >
                       <FormField
                         control={form.control}
                         name="name"
@@ -126,18 +211,9 @@ export function ResourceDetailPage() {
                         <ResourceEditor
                           key={`${resource.id}-${resource.current_version}`}
                           initialBlocks={resource.content.blocks ?? []}
+                          editable={!isViewer}
                           onChange={setBlocks}
                         />
-                      </div>
-                      <div className="flex justify-end">
-                        <Button
-                          type="submit"
-                          variant="brand"
-                          disabled={form.formState.isSubmitting || isViewer}
-                          title={isViewer ? 'Viewer können Inhalte nur ansehen' : undefined}
-                        >
-                          Neue Version speichern
-                        </Button>
                       </div>
                     </form>
                   </Form>

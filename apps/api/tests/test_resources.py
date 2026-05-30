@@ -203,6 +203,101 @@ def test_resource_transitions_invariant_and_draft_on_edit(
 
 
 @pytest.mark.integration
+def test_resource_patch_draft_upserts_in_place_without_active_touch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    other = fresh_user_id()
+    ws = setup_workspace(owner)
+    setup_workspace(other)
+    auth = _auth(owner)
+    base = f"/v1/workspaces/{ws}/resources"
+
+    try:
+        with TestClient(app) as client:
+            rid = client.post(
+                base,
+                json=_resource_body("Doc", "v1", [_block("b1", "active")]),
+                headers=auth,
+            ).json()["id"]
+            for to in ("review", "active"):
+                client.post(f"{base}/{rid}/versions/1/transition", json={"to": to}, headers=auth)
+
+            first = client.patch(
+                f"{base}/{rid}/draft",
+                json=_resource_body("Doc", "d1", [_block("b1", "draft-1")]),
+                headers=auth,
+            )
+            assert first.status_code == 200, first.text
+            assert first.json()["current_version"] == 2
+            assert first.json()["current_status"] == "draft"
+            v1 = client.get(f"{base}/{rid}/versions/1", headers=auth).json()
+            assert v1["status"] == "active"
+            assert v1["content"]["description"] == "v1"
+
+            second = client.patch(
+                f"{base}/{rid}/draft",
+                json=_resource_body("Doc", "d2", [_block("b1", "draft-2")]),
+                headers=auth,
+            )
+            assert second.status_code == 200
+            assert second.json()["current_version"] == 2
+            assert second.json()["content"]["description"] == "d2"
+            versions = client.get(f"{base}/{rid}/versions", headers=auth).json()
+            assert [v["version"] for v in versions] == [2, 1]
+
+            assert (
+                client.patch(
+                    f"{base}/{rid}/draft",
+                    json=_resource_body("Doc", "f", [_block("b1", "foreign")]),
+                    headers=_auth(other),
+                ).status_code
+                == 403
+            )
+    finally:
+        cleanup_workspaces([owner, other])
+
+
+@pytest.mark.integration
+def test_resource_patch_draft_on_review_returns_409(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    base = f"/v1/workspaces/{ws}/resources"
+
+    try:
+        with TestClient(app) as client:
+            rid = client.post(
+                base,
+                json=_resource_body("Doc", "v1", [_block("b1", "x")]),
+                headers=auth,
+            ).json()["id"]
+            client.post(f"{base}/{rid}/versions/1/transition", json={"to": "review"}, headers=auth)
+            assert (
+                client.patch(
+                    f"{base}/{rid}/draft",
+                    json=_resource_body("Doc", "nope", [_block("b1", "y")]),
+                    headers=auth,
+                ).status_code
+                == 409
+            )
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
 def test_resource_active_filter_for_api_token(monkeypatch: pytest.MonkeyPatch) -> None:
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
