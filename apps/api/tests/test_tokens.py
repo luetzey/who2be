@@ -125,10 +125,7 @@ def test_api_token_rejected_for_other_workspace(monkeypatch: pytest.MonkeyPatch)
             api_auth = {"Authorization": f"Bearer {plaintext}"}
 
             # Token gepinnt auf ws_a: Aufruf auf ws_b -> 403 (Snapshot-Mismatch).
-            assert (
-                client.get(f"/v1/workspaces/{ws_b}/tokens", headers=api_auth).status_code
-                == 403
-            )
+            assert client.get(f"/v1/workspaces/{ws_b}/tokens", headers=api_auth).status_code == 403
     finally:
         cleanup_workspaces([owner_id, other_id])
 

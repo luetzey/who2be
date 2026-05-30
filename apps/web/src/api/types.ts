@@ -312,3 +312,77 @@ export interface ResourceLinkItemInput {
   position: number
   link_scope: ResourceLinkScope
 }
+
+// Phase 3 Runde 3 Track 3 — SystemPromptTemplate-Aggregat.
+export interface SystemPromptTemplateContent {
+  description: string
+  body: string
+}
+
+export interface SystemPromptTemplate {
+  id: string
+  workspace_id: string
+  owner_id: string
+  name: string
+  slug: string
+  current_version: number
+  current_status?: VersionStatus
+  has_pending_draft?: boolean
+  content: SystemPromptTemplateContent
+  created_at: string
+  updated_at: string
+}
+
+export interface SystemPromptTemplateVersion {
+  version: number
+  status?: VersionStatus
+  content: SystemPromptTemplateContent
+  created_by: string
+  created_at: string
+}
+
+export interface SystemPromptTemplateInput {
+  name: string
+  slug?: string
+  content: SystemPromptTemplateContent
+}
+
+// Phase 3 Runde 3 Track 3 — Agent-Aggregat (Top-Level-Konfig, keine Versions).
+export type AgentStatus = 'enabled' | 'disabled'
+
+export interface Agent {
+  id: string
+  workspace_id: string
+  owner_id: string
+  name: string
+  description: string
+  persona_id: string
+  system_prompt_template_id: string
+  status: AgentStatus
+  created_at: string
+  updated_at: string
+}
+
+export interface AgentInput {
+  name: string
+  description?: string
+  persona_id: string
+  system_prompt_template_id: string
+  status?: AgentStatus
+}
+
+export interface AgentUpdateInput {
+  name?: string
+  description?: string
+  persona_id?: string
+  system_prompt_template_id?: string
+  status?: AgentStatus
+}
+
+export type AgentRenderFormat = 'plain' | 'markdown' | 'html'
+
+export interface AgentRenderResult {
+  content: string
+  unresolved_placeholders: string[]
+  format: AgentRenderFormat
+}

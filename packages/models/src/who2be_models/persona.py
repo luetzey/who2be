@@ -47,7 +47,11 @@ class PersonaVersionContent(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     description: str = Field(max_length=2_000)
-    system_prompt: str = Field(max_length=20_000)
+    # `system_prompt` ist seit Phase 3 Runde 3 (Track 3 — Agents+Templates)
+    # deprecated: der System-Prompt des Agenten lebt im verknuepften Template.
+    # Default ist daher der leere String — neue UIs senden das Feld nicht mehr,
+    # alte Clients (z. B. Bestand-Editoren) bleiben kompatibel.
+    system_prompt: str = Field(default="", max_length=20_000)
     traits: list[TraitStr] = Field(default_factory=list, max_length=50)
     tags: list[TagStr] = Field(default_factory=list, max_length=50)
     content: PersonaContent | None = None

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { useMemo } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { Persona } from '@/api/types'
@@ -38,61 +39,94 @@ vi.mock('@/api/useApi', () => ({
   }),
 }))
 
-const persona: Persona = {
-  id: 'p-1',
-  workspace_id: 'ws-1',
-  owner_id: 'o-1',
-  name: 'Coach',
-  current_version: 1,
-  content: {
-    description: 'd',
-    system_prompt: 'Sei hilfsbereit.',
-    traits: [],
-    tags: ['coaching'],
-    content: { description: '', blocks: [] },
-  },
-  created_at: 't',
-  updated_at: 't',
+function makePersona(systemPrompt = ''): Persona {
+  return {
+    id: 'p-1',
+    workspace_id: 'ws-1',
+    owner_id: 'o-1',
+    name: 'Coach',
+    current_version: 1,
+    content: {
+      description: 'd',
+      system_prompt: systemPrompt,
+      traits: [],
+      tags: ['coaching'],
+      content: { description: '', blocks: [] },
+    },
+    created_at: 't',
+    updated_at: 't',
+  }
 }
 
-function Harness() {
-  const { form, onSubmit, saveError } = usePersonaForm(persona, () => {})
-  return <PersonaEditorForm form={form} onSubmit={onSubmit} saveError={saveError} />
+function Harness({
+  legacySystemPrompt,
+  persona,
+}: {
+  legacySystemPrompt?: string
+  persona?: Persona
+}) {
+  // Persona-Referenz muss stabil sein — sonst feuert `usePersonaForm`s
+  // form.reset-useEffect bei jedem Render und das Test rendert sich in eine
+  // Endlosschleife. `useMemo` mit leerem Dependency-Array haelt die Referenz
+  // genau einmal pro Mount fest.
+  const usedPersona = useMemo(() => persona ?? makePersona(), [persona])
+  const { form, onSubmit, saveError } = usePersonaForm(usedPersona, () => {})
+  return (
+    <PersonaEditorForm
+      form={form}
+      onSubmit={onSubmit}
+      saveError={saveError}
+      legacySystemPrompt={legacySystemPrompt}
+    />
+  )
 }
 
 describe('PersonaEditorForm', () => {
-  it('rendert die vier Sektionen — Identitaet, Profil, System-Prompt, Tags', async () => {
+  it('rendert drei Sektionen — Identitaet, Profil, Tags (System-Prompt entfaellt)', async () => {
     render(<Harness />)
     expect(await screen.findByText('Identität')).toBeInTheDocument()
     expect(screen.getByText('Profil')).toBeInTheDocument()
-    expect(screen.getAllByText('System-Prompt').length).toBeGreaterThan(0)
     expect(screen.getByText('Tags', { selector: 'h2' })).toBeInTheDocument()
     // properties/traits-Feld entfaellt — kein „Eigenschaften"-Label mehr.
     expect(screen.queryByLabelText(/Eigenschaften/)).not.toBeInTheDocument()
+    // System-Prompt-Section ist mit Track 3 weg.
+    expect(screen.queryByText(/System-Prompt/)).not.toBeInTheDocument()
+  })
+
+  it('zeigt Read-Only-Hinweis fuer Bestandsdaten mit System-Prompt', () => {
+    render(
+      <Harness legacySystemPrompt="Sei hilfsbereit." persona={makePersona('Sei hilfsbereit.')} />,
+    )
+    const hint = screen.getByTestId('persona-legacy-system-prompt-hint')
+    expect(hint).toBeInTheDocument()
+    expect(hint).toHaveTextContent('Sei hilfsbereit.')
+  })
+
+  it('zeigt KEINEN Hinweis, wenn das Bestands-Feld leer ist', () => {
+    render(<Harness legacySystemPrompt="" />)
+    expect(
+      screen.queryByTestId('persona-legacy-system-prompt-hint'),
+    ).not.toBeInTheDocument()
   })
 
   it('rendert Hilfe-Tooltips statt Inline-<details>', () => {
     const { container } = render(<Harness />)
-    // Keine <details>/<summary>-Knoten mehr — Hilfe wandert in den Tooltip.
     expect(container.querySelector('details')).toBeNull()
     expect(container.querySelector('summary')).toBeNull()
-    // Jede Section hat ein Info-Icon mit deutschem aria-label.
-    expect(screen.getAllByRole('button', { name: 'Hilfe einblenden' }).length).toBe(4)
+    // Drei Section-Hilfen — System-Prompt-Section ist entfallen.
+    expect(screen.getAllByRole('button', { name: 'Hilfe einblenden' }).length).toBe(3)
   })
 
   it('rendert die BlockNote-Insel im Profil-Slot', () => {
     render(<Harness />)
-    // Profil-Editor + System-Prompt-Editor — beide BlockNote.
-    expect(screen.getAllByTestId('blocknote-view').length).toBeGreaterThan(0)
+    // Nur noch eine BlockNote-Insel (Profil-Editor).
+    expect(screen.getAllByTestId('blocknote-view').length).toBe(1)
   })
 
-  it('submitt eine Payload mit `content.blocks` + `tags` und ohne `properties`', async () => {
+  it('submitt eine Payload mit `content.blocks` + `tags` und leerem `system_prompt`', async () => {
     updatePersona.mockClear()
-    render(<Harness />)
+    render(<Harness persona={makePersona('Sei hilfsbereit.')} />)
 
-    // System-Prompt laeuft seit Track 2 ueber den BlockNote-Editor (Slash-Menu
-    // verfuegbar). Der Editor ist im Test gemockt — also kein DOM-Event noetig;
-    // der Wert kommt aus `persona.content.system_prompt` via `form.reset`.
     fireEvent.click(screen.getByRole('button', { name: 'Neue Version speichern' }))
 
     await waitFor(() => {
@@ -103,21 +137,13 @@ describe('PersonaEditorForm', () => {
       name: 'Coach',
       content: {
         description: 'd',
-        system_prompt: 'Sei hilfsbereit.',
+        system_prompt: '',
         traits: [],
         tags: ['coaching'],
         content: { description: '', blocks: [] },
       },
     })
-    // properties existiert nicht (nur traits, das wir bewusst leer mitsenden).
     expect(payload.content).not.toHaveProperty('properties')
-  })
-
-  it('rendert zwei BlockNote-Inseln — Profil + System-Prompt (gleicher Wrapper)', () => {
-    render(<Harness />)
-    // Profil-Editor + System-Prompt-Editor teilen sich denselben Wrapper —
-    // entsprechend zweimal `blocknote-view` im DOM.
-    expect(screen.getAllByTestId('blocknote-view').length).toBe(2)
   })
 
   it('laedt Tag-Vorschlaege aus `listPersonaTags`, nicht aus `listPlaybookTags`', async () => {

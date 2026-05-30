@@ -7,14 +7,12 @@ import type { Persona, ResourceBlock } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { notify } from '@/lib/feedback'
 
-// Pflichtfelder werden via Zod validiert; `profileBlocks` und `tags`
-// kommen als reine Passthrough-Felder mit ins Schema, damit der Resolver
-// die Werte nicht stripped und die Form-Typen aus `useForm` und
-// `zodResolver` zusammenpassen.
+// Phase 3 Runde 3 Track 3: `systemPrompt` ist deprecated. Das Form-Schema
+// haelt das Feld nicht mehr; der Submit schickt einen leeren String ans
+// Backend, damit Pydantic-Defaults greifen.
 const editorSchema = z.object({
   name: z.string().min(1, 'Name erforderlich.'),
   description: z.string().min(1, 'Beschreibung erforderlich.'),
-  systemPrompt: z.string().min(1, 'System-Prompt erforderlich.'),
   profileBlocks: z.array(z.custom<ResourceBlock>()),
   tags: z.array(z.string()),
 })
@@ -47,7 +45,6 @@ export function usePersonaForm(
     defaultValues: {
       name: '',
       description: '',
-      systemPrompt: '',
       profileBlocks: [],
       tags: [],
     },
@@ -58,7 +55,6 @@ export function usePersonaForm(
       form.reset({
         name: persona.name,
         description: persona.content.description,
-        systemPrompt: persona.content.system_prompt,
         profileBlocks: persona.content.content?.blocks ?? [],
         tags: persona.content.tags ?? [],
       })
@@ -75,7 +71,12 @@ export function usePersonaForm(
         name: values.name,
         content: {
           description: values.description,
-          system_prompt: values.systemPrompt,
+          // Track 3: System-Prompt wandert ins Agent-Template. Wir senden
+          // einen leeren String, damit der Pydantic-Default greift und
+          // bestehende Daten nicht weggewischt werden — wer einen Wert
+          // erhalten will, faellt jetzt durch die Read-Only-Hinweis-Box
+          // auf das Template-Konzept.
+          system_prompt: '',
           // `traits` ist deprecated (Phase 3-0). Wir senden weiterhin ein
           // leeres Array, damit der Schema-Default beim Backend greift —
           // auch wenn Server jetzt selbst einen Default haetten.

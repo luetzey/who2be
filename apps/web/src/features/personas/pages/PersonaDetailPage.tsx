@@ -85,7 +85,12 @@ export function PersonaDetailPage() {
                   </Stack>
                 )
               })()}
-              <PersonaEditorForm form={form} onSubmit={onSubmit} saveError={saveError} />
+              <PersonaEditorForm
+                form={form}
+                onSubmit={onSubmit}
+                saveError={saveError}
+                legacySystemPrompt={persona.content.system_prompt}
+              />
 
               <Card>
                 <CardHeader>

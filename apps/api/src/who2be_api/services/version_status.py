@@ -32,13 +32,19 @@ from who2be_models import (
     PersonaVersionRead,
     PlaybookVersionRead,
     ResourceVersionRead,
+    SystemPromptTemplateVersionRead,
     VersionStatus,
     WorkspaceRole,
 )
 
 
 def _not_found(entity_type: EntityType) -> HTTPException:
-    label = {"persona": "Persona", "playbook": "Playbook", "resource": "Resource"}[entity_type]
+    label = {
+        "persona": "Persona",
+        "playbook": "Playbook",
+        "resource": "Resource",
+        "system_prompt_template": "System-Prompt-Template",
+    }[entity_type]
     return HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
         detail=f"{label}-Version nicht gefunden.",
@@ -85,6 +91,11 @@ def required_role_for_transition(
 _PERSONA_TABLES = ("persona", "persona_version", "persona_id")
 _PLAYBOOK_TABLES = ("playbook", "playbook_version", "playbook_id")
 _RESOURCE_TABLES = ("resource", "resource_version", "resource_id")
+_TEMPLATE_TABLES = (
+    "system_prompt_template",
+    "system_prompt_template_version",
+    "template_id",
+)
 
 
 class VersionStatusService:
@@ -132,6 +143,25 @@ class VersionStatusService:
             ctx, "resource", _RESOURCE_TABLES, resource_id, version, to_status, note
         )
         return ResourceVersionRead.model_validate(dict(row))
+
+    async def transition_system_prompt_template_version(
+        self,
+        ctx: WorkspaceContext,
+        template_id: UUID,
+        version: int,
+        to_status: VersionStatus,
+        note: str | None,
+    ) -> SystemPromptTemplateVersionRead:
+        row = await self._transition(
+            ctx,
+            "system_prompt_template",
+            _TEMPLATE_TABLES,
+            template_id,
+            version,
+            to_status,
+            note,
+        )
+        return SystemPromptTemplateVersionRead.model_validate(dict(row))
 
     async def _transition(
         self,

@@ -22,9 +22,7 @@ class OrganizationRepository(Protocol):
         self, user_id: UUID, name: str, slug: str, default_workspace_name: str
     ) -> tuple[OrganizationRead, UUID]: ...
 
-    async def fetch(
-        self, user_id: UUID, organization_id: UUID
-    ) -> OrganizationRead | None: ...
+    async def fetch(self, user_id: UUID, organization_id: UUID) -> OrganizationRead | None: ...
 
 
 class PgOrganizationRepository:
@@ -44,9 +42,7 @@ class PgOrganizationRepository:
         )
         return [OrganizationRead.model_validate(dict(row)) for row in rows]
 
-    async def fetch(
-        self, user_id: UUID, organization_id: UUID
-    ) -> OrganizationRead | None:
+    async def fetch(self, user_id: UUID, organization_id: UUID) -> OrganizationRead | None:
         row = await self._pool.fetchrow(
             "SELECT o.id, o.name, o.slug, o.kind, o.created_at "
             "FROM organization o "
@@ -76,8 +72,7 @@ class PgOrganizationRepository:
             )
             org_id = org_row["id"]
             await conn.execute(
-                "INSERT INTO org_member (org_id, user_id, role) "
-                "VALUES ($1, $2, 'owner')",
+                "INSERT INTO org_member (org_id, user_id, role) VALUES ($1, $2, 'owner')",
                 org_id,
                 user_id,
             )

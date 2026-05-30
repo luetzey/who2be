@@ -6,21 +6,15 @@ import { z } from 'zod'
 import { useApi } from '@/api/useApi'
 import { notify } from '@/lib/feedback'
 
+// Phase 3 Runde 3 Track 3: `systemPrompt` ist deprecated, der System-Prompt
+// lebt am Agent-Template. Neue Personas werden ohne System-Prompt-Feld
+// angelegt; Pydantic-Default '' greift.
 const createSchema = z.object({
   name: z.string().min(1, 'Name erforderlich.'),
   description: z.string().min(1, 'Beschreibung erforderlich.'),
-  systemPrompt: z.string().min(1, 'System-Prompt erforderlich.'),
-  traits: z.string(),
 })
 
 export type PersonaCreateValues = z.infer<typeof createSchema>
-
-function splitList(raw: string): string[] {
-  return raw
-    .split(',')
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0)
-}
 
 function describeError(cause: unknown): string {
   return cause instanceof Error ? cause.message : 'Unbekannter Fehler.'
@@ -37,7 +31,7 @@ export function useCreatePersona(onCreated: (id: string) => void): UseCreatePers
   const [saveError, setSaveError] = useState<string | null>(null)
   const form = useForm<PersonaCreateValues>({
     resolver: zodResolver(createSchema),
-    defaultValues: { name: '', description: '', systemPrompt: '', traits: '' },
+    defaultValues: { name: '', description: '' },
   })
 
   const onSubmit = form.handleSubmit(async (values) => {
@@ -47,8 +41,8 @@ export function useCreatePersona(onCreated: (id: string) => void): UseCreatePers
         name: values.name,
         content: {
           description: values.description,
-          system_prompt: values.systemPrompt,
-          traits: splitList(values.traits),
+          system_prompt: '',
+          traits: [],
         },
       })
       notify.success('Persona angelegt.')

@@ -72,6 +72,36 @@ const DashboardPage = lazy(() =>
     default: mod.DashboardPage,
   })),
 )
+const AgentsPage = lazy(() =>
+  import('@/features/agents/pages/AgentsPage').then((mod) => ({
+    default: mod.AgentsPage,
+  })),
+)
+const AgentNewPage = lazy(() =>
+  import('@/features/agents/pages/AgentNewPage').then((mod) => ({
+    default: mod.AgentNewPage,
+  })),
+)
+const AgentDetailPage = lazy(() =>
+  import('@/features/agents/pages/AgentDetailPage').then((mod) => ({
+    default: mod.AgentDetailPage,
+  })),
+)
+const SystemPromptsPage = lazy(() =>
+  import('@/features/system-prompts/pages/SystemPromptsPage').then((mod) => ({
+    default: mod.SystemPromptsPage,
+  })),
+)
+const SystemPromptNewPage = lazy(() =>
+  import('@/features/system-prompts/pages/SystemPromptNewPage').then((mod) => ({
+    default: mod.SystemPromptNewPage,
+  })),
+)
+const SystemPromptDetailPage = lazy(() =>
+  import('@/features/system-prompts/pages/SystemPromptDetailPage').then((mod) => ({
+    default: mod.SystemPromptDetailPage,
+  })),
+)
 
 // DEV-only Component-Catalog (ADR 0018). In Production-Builds wird die Route
 // nicht registriert — Vite-Tree-Shaking laesst den Chunk dann komplett weg.
@@ -128,6 +158,21 @@ export function RouterRoot() {
                 <Route path="/w/:workspaceId/resources" element={<ResourcesPage />} />
                 <Route path="/w/:workspaceId/resources/new" element={<ResourceNewPage />} />
                 <Route path="/w/:workspaceId/resources/:id" element={<ResourceDetailPage />} />
+                <Route path="/w/:workspaceId/agents" element={<AgentsPage />} />
+                <Route path="/w/:workspaceId/agents/new" element={<AgentNewPage />} />
+                <Route path="/w/:workspaceId/agents/:id" element={<AgentDetailPage />} />
+                <Route
+                  path="/w/:workspaceId/system-prompts"
+                  element={<SystemPromptsPage />}
+                />
+                <Route
+                  path="/w/:workspaceId/system-prompts/new"
+                  element={<SystemPromptNewPage />}
+                />
+                <Route
+                  path="/w/:workspaceId/system-prompts/:id"
+                  element={<SystemPromptDetailPage />}
+                />
                 <Route
                   path="/w/:workspaceId/settings/tokens"
                   element={<SettingsTokensPage />}

@@ -28,6 +28,7 @@ from who2be_api.core.rate_limit import (
     limiter,
 )
 from who2be_api.routers import (
+    agents,
     dashboard,
     invitations,
     me,
@@ -38,6 +39,7 @@ from who2be_api.routers import (
     playbook_resources,
     playbooks,
     resources,
+    system_prompts,
     tokens,
     usages,
     workspaces,
@@ -107,6 +109,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(resources.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(playbook_resources.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(usages.router, prefix=_WORKSPACE_PREFIX)
+    app.include_router(system_prompts.router, prefix=_WORKSPACE_PREFIX)
+    app.include_router(agents.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(dashboard.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(members.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(invitations.router, prefix=_WORKSPACE_PREFIX)

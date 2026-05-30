@@ -1,0 +1,120 @@
+"""REST-Endpunkte fuer Agents inkl. Render.
+
+Pfad: ``/v1/workspaces/{workspace_id}/agents``.
+
+Render-Endpoint ``GET .../{id}/render?format=plain|markdown|html`` ist die
+Single Source of Truth fuer die Placeholder-Aufloesung. Default-Format
+``plain`` deckt den UI-Copy-Button ohne Query-Param ab.
+"""
+
+from typing import Annotated
+from uuid import UUID
+
+import asyncpg
+from fastapi import APIRouter, Depends, Query, Request, Response, status
+
+from who2be_api.core.db import get_pool
+from who2be_api.core.pagination import DEFAULT_LIMIT, PageCursor, PageLimit
+from who2be_api.core.rate_limit import limiter, write_limit
+from who2be_api.core.security import WorkspaceContext, get_current_workspace
+from who2be_api.repositories.agent_repository import PgAgentRepository
+from who2be_api.repositories.persona_playbook_repository import (
+    PgPersonaPlaybookRepository,
+)
+from who2be_api.repositories.persona_repository import PgPersonaRepository
+from who2be_api.repositories.playbook_resource_link_repository import (
+    PgPlaybookResourceLinkRepository,
+)
+from who2be_api.repositories.system_prompt_template_repository import (
+    PgSystemPromptTemplateRepository,
+)
+from who2be_api.services.agent_render_service import AgentRenderService
+from who2be_api.services.agent_service import AgentService
+from who2be_models import (
+    AgentCreate,
+    AgentRead,
+    AgentRenderResponse,
+    AgentUpdate,
+    RenderFormat,
+)
+
+router = APIRouter(prefix="/agents", tags=["agents"])
+
+
+def get_agent_service(
+    pool: Annotated[asyncpg.Pool, Depends(get_pool)],
+) -> AgentService:
+    return AgentService(PgAgentRepository(pool))
+
+
+def get_agent_render_service(
+    pool: Annotated[asyncpg.Pool, Depends(get_pool)],
+) -> AgentRenderService:
+    return AgentRenderService(
+        PgAgentRepository(pool),
+        PgPersonaRepository(pool),
+        PgSystemPromptTemplateRepository(pool),
+        PgPersonaPlaybookRepository(pool),
+        PgPlaybookResourceLinkRepository(pool),
+    )
+
+
+Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]
+Service = Annotated[AgentService, Depends(get_agent_service)]
+RenderService = Annotated[AgentRenderService, Depends(get_agent_render_service)]
+
+
+@router.get("")
+async def list_agents(
+    ctx: Ctx,
+    service: Service,
+    response: Response,
+    cursor: PageCursor,
+    limit: PageLimit = DEFAULT_LIMIT,
+) -> list[AgentRead]:
+    items, next_cursor = await service.list_all(ctx, limit, cursor)
+    if next_cursor is not None:
+        response.headers["X-Next-Cursor"] = next_cursor
+    return items
+
+
+@router.post("", status_code=status.HTTP_201_CREATED)
+@limiter.limit(write_limit)
+async def create_agent(
+    request: Request, data: AgentCreate, ctx: Ctx, service: Service
+) -> AgentRead:
+    return await service.create(ctx, data)
+
+
+@router.get("/{agent_id}")
+async def get_agent(agent_id: UUID, ctx: Ctx, service: Service) -> AgentRead:
+    return await service.get(ctx, agent_id)
+
+
+@router.put("/{agent_id}")
+@limiter.limit(write_limit)
+async def update_agent(
+    request: Request,
+    agent_id: UUID,
+    data: AgentUpdate,
+    ctx: Ctx,
+    service: Service,
+) -> AgentRead:
+    return await service.update(ctx, agent_id, data)
+
+
+@router.delete("/{agent_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(write_limit)
+async def delete_agent(request: Request, agent_id: UUID, ctx: Ctx, service: Service) -> Response:
+    await service.delete(ctx, agent_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/{agent_id}/render")
+async def render_agent(
+    agent_id: UUID,
+    ctx: Ctx,
+    render_service: RenderService,
+    output_format: Annotated[RenderFormat, Query(alias="format")] = "plain",
+) -> AgentRenderResponse:
+    return await render_service.render(ctx.workspace_id, agent_id, output_format)

@@ -206,8 +206,7 @@ class PgResourceRepository:
             if current is None:
                 return ResourceUpdateOutcome(resource=None)
             existing_draft = await conn.fetchval(
-                "SELECT 1 FROM resource_version "
-                "WHERE resource_id = $1 AND status = 'draft'",
+                "SELECT 1 FROM resource_version WHERE resource_id = $1 AND status = 'draft'",
                 resource_id,
             )
             if existing_draft is not None:

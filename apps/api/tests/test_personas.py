@@ -290,16 +290,12 @@ def test_persona_put_on_active_creates_draft_and_blocks_second_edit(
                     json={"to": to},
                     headers=auth,
                 )
-            first = client.put(
-                f"{base}/{persona_id}", json=_persona_body("v2"), headers=auth
-            )
+            first = client.put(f"{base}/{persona_id}", json=_persona_body("v2"), headers=auth)
             assert first.status_code == 200
             assert first.json()["current_status"] == "draft"
 
             # Zweiter PUT: Draft existiert noch → 409.
-            second = client.put(
-                f"{base}/{persona_id}", json=_persona_body("v3"), headers=auth
-            )
+            second = client.put(f"{base}/{persona_id}", json=_persona_body("v3"), headers=auth)
             assert second.status_code == 409
     finally:
         cleanup_workspaces([owner])
@@ -322,9 +318,9 @@ def test_persona_active_filter_for_api_token(monkeypatch: pytest.MonkeyPatch) ->
             inactive_id = client.post(
                 base, json=_persona_body("inactive"), headers=jwt_auth
             ).json()["id"]
-            active_id = client.post(
-                base, json=_persona_body("active"), headers=jwt_auth
-            ).json()["id"]
+            active_id = client.post(base, json=_persona_body("active"), headers=jwt_auth).json()[
+                "id"
+            ]
             # Active-Pfad fuer den zweiten.
             for to in ("draft", "review", "active"):
                 client.post(

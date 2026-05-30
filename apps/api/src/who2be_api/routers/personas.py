@@ -36,9 +36,7 @@ def get_persona_service(
 def get_version_status_service(
     pool: Annotated[asyncpg.Pool, Depends(get_pool)],
 ) -> VersionStatusService:
-    return VersionStatusService(
-        pool, StatusHistoryService(PgStatusHistoryRepository())
-    )
+    return VersionStatusService(pool, StatusHistoryService(PgStatusHistoryRepository()))
 
 
 Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]

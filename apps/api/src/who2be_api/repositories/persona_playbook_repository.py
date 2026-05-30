@@ -63,15 +63,12 @@ class PgPersonaPlaybookRepository:
         )
         return owned is not None
 
-    async def list_linked(
-        self, persona_id: UUID, active_only: bool = False
-    ) -> list[PlaybookRead]:
+    async def list_linked(self, persona_id: UUID, active_only: bool = False) -> list[PlaybookRead]:
         # `active_only` schwenkt den Join: statt der Current-Version wird die
         # Active-Version geliefert, eintraege ohne Active-Version fallen raus
         # (MCP-Pfad, Plan §2.1.D).
         join_clause = (
-            "JOIN playbook_version pv "
-            "  ON pv.playbook_id = p.id AND pv.status = 'active' "
+            "JOIN playbook_version pv   ON pv.playbook_id = p.id AND pv.status = 'active' "
             if active_only
             else "JOIN playbook_version pv "
             "  ON pv.playbook_id = p.id AND pv.version = p.current_version "
@@ -104,8 +101,7 @@ class PgPersonaPlaybookRepository:
         ids = list(playbook_ids)
         async with self._pool.acquire() as conn, conn.transaction():
             persona = await conn.fetchval(
-                "SELECT 1 FROM persona "
-                "WHERE id = $1 AND workspace_id = $2 FOR UPDATE",
+                "SELECT 1 FROM persona WHERE id = $1 AND workspace_id = $2 FOR UPDATE",
                 persona_id,
                 workspace_id,
             )
@@ -113,20 +109,15 @@ class PgPersonaPlaybookRepository:
                 return SetLinksResult(persona_found=False)
             if ids:
                 owned_rows = await conn.fetch(
-                    "SELECT id FROM playbook "
-                    "WHERE workspace_id = $1 AND id = ANY($2::uuid[])",
+                    "SELECT id FROM playbook WHERE workspace_id = $1 AND id = ANY($2::uuid[])",
                     workspace_id,
                     ids,
                 )
                 owned = {row["id"] for row in owned_rows}
                 missing = [pid for pid in ids if pid not in owned]
                 if missing:
-                    return SetLinksResult(
-                        persona_found=True, missing_playbook_ids=missing
-                    )
-            await conn.execute(
-                "DELETE FROM persona_playbook WHERE persona_id = $1", persona_id
-            )
+                    return SetLinksResult(persona_found=True, missing_playbook_ids=missing)
+            await conn.execute("DELETE FROM persona_playbook WHERE persona_id = $1", persona_id)
             await conn.execute(
                 "INSERT INTO persona_playbook (persona_id, playbook_id, workspace_id, owner_id) "
                 "SELECT $1, unnest($2::uuid[]), $3, $4",

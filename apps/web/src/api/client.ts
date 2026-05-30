@@ -1,5 +1,10 @@
 import { config } from '../config'
 import type {
+  Agent,
+  AgentInput,
+  AgentRenderFormat,
+  AgentRenderResult,
+  AgentUpdateInput,
   DashboardData,
   Invitation,
   InvitationAcceptResult,
@@ -20,6 +25,9 @@ import type {
   ResourceLinkItemInput,
   ResourceUsage,
   ResourceVersion,
+  SystemPromptTemplate,
+  SystemPromptTemplateInput,
+  SystemPromptTemplateVersion,
   Token,
   TokenCreated,
   TokenInput,
@@ -152,6 +160,33 @@ export interface Api {
   listInvitations: () => Promise<Invitation[]>
   createInvitation: (input: InvitationInput) => Promise<Invitation>
   revokeInvitation: (id: string) => Promise<void>
+  // Phase 3 Runde 3 Track 3 — SystemPromptTemplate + Agent.
+  listSystemPromptTemplates: () => Promise<SystemPromptTemplate[]>
+  getSystemPromptTemplate: (id: string) => Promise<SystemPromptTemplate>
+  createSystemPromptTemplate: (
+    input: SystemPromptTemplateInput,
+  ) => Promise<SystemPromptTemplate>
+  updateSystemPromptTemplate: (
+    id: string,
+    input: SystemPromptTemplateInput,
+  ) => Promise<SystemPromptTemplate>
+  listSystemPromptTemplateVersions: (
+    id: string,
+  ) => Promise<SystemPromptTemplateVersion[]>
+  transitionSystemPromptTemplateVersion: (
+    id: string,
+    version: number,
+    to: VersionStatus,
+  ) => Promise<SystemPromptTemplateVersion>
+  listAgents: () => Promise<Agent[]>
+  getAgent: (id: string) => Promise<Agent>
+  createAgent: (input: AgentInput) => Promise<Agent>
+  updateAgent: (id: string, input: AgentUpdateInput) => Promise<Agent>
+  deleteAgent: (id: string) => Promise<void>
+  renderAgentPrompt: (
+    id: string,
+    format?: AgentRenderFormat,
+  ) => Promise<AgentRenderResult>
 }
 
 export function createApi(token: string, workspaceId: string): Api {
@@ -268,5 +303,51 @@ export function createApi(token: string, workspaceId: string): Api {
       }),
     revokeInvitation: (id) =>
       request<void>(token, `${ws}/invitations/${id}`, { method: 'DELETE' }),
+    listSystemPromptTemplates: () =>
+      request<SystemPromptTemplate[]>(token, `${ws}/system-prompts`),
+    getSystemPromptTemplate: (id) =>
+      request<SystemPromptTemplate>(token, `${ws}/system-prompts/${id}`),
+    createSystemPromptTemplate: (input) =>
+      request<SystemPromptTemplate>(token, `${ws}/system-prompts`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    updateSystemPromptTemplate: (id, input) =>
+      request<SystemPromptTemplate>(token, `${ws}/system-prompts/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(input),
+      }),
+    listSystemPromptTemplateVersions: (id) =>
+      request<SystemPromptTemplateVersion[]>(
+        token,
+        `${ws}/system-prompts/${id}/versions`,
+      ),
+    transitionSystemPromptTemplateVersion: (id, version, to) =>
+      request<SystemPromptTemplateVersion>(
+        token,
+        `${ws}/system-prompts/${id}/versions/${version}/transition`,
+        { method: 'POST', body: JSON.stringify({ to }) },
+      ),
+    listAgents: () => request<Agent[]>(token, `${ws}/agents`),
+    getAgent: (id) => request<Agent>(token, `${ws}/agents/${id}`),
+    createAgent: (input) =>
+      request<Agent>(token, `${ws}/agents`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    updateAgent: (id, input) =>
+      request<Agent>(token, `${ws}/agents/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(input),
+      }),
+    deleteAgent: (id) =>
+      request<void>(token, `${ws}/agents/${id}`, { method: 'DELETE' }),
+    renderAgentPrompt: (id, format) => {
+      const query = format !== undefined ? `?format=${format}` : ''
+      return request<AgentRenderResult>(
+        token,
+        `${ws}/agents/${id}/render${query}`,
+      )
+    },
   }
 }

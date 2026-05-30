@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 
 import { useCreatePersona } from '../hooks/useCreatePersona'
@@ -56,32 +55,6 @@ export function PersonaNewPage() {
                       <FormLabel>Beschreibung</FormLabel>
                       <FormControl>
                         <Input required {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="systemPrompt"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>System-Prompt</FormLabel>
-                      <FormControl>
-                        <Textarea required rows={6} {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="traits"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Eigenschaften (kommagetrennt)</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

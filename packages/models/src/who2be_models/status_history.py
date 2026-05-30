@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from who2be_models.status import VersionStatus
 
-EntityType = Literal["persona", "playbook", "resource"]
+EntityType = Literal["persona", "playbook", "resource", "system_prompt_template"]
 
 
 class StatusHistoryEntry(BaseModel):
