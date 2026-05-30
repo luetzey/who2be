@@ -1,17 +1,18 @@
-import { type BaseSyntheticEvent } from 'react'
+import { type BaseSyntheticEvent, useMemo } from 'react'
 import { type UseFormReturn } from 'react-hook-form'
 
 import type { ResourceBlock } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
+import { BlockNoteEditor } from '@/components/editor/BlockNoteEditor'
+import { blocksToPlainText, plainTextToBlocks } from '@/components/editor/plaintext'
 import { FormSection } from '@/components/layout/FormSection'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { TagInput } from '@/components/ui/tag-input'
-import { Textarea } from '@/components/ui/textarea'
 import { ResourceEditor } from '@/features/resources/components/ResourceEditor'
 
 import type { PersonaEditorValues } from '../hooks/usePersonaForm'
@@ -117,11 +118,10 @@ export function PersonaEditorForm({ form, onSubmit, saveError }: PersonaEditorFo
                     <FormItem>
                       <FormLabel>System-Prompt</FormLabel>
                       <FormControl>
-                        <Textarea
-                          required
-                          rows={6}
-                          placeholder="z. B. Du bist ein 1:1-Coach. Stelle erst Klärungsfragen, bevor du Empfehlungen gibst."
-                          {...field}
+                        <SystemPromptEditor
+                          value={field.value}
+                          editable={!isViewer}
+                          onChange={field.onChange}
                         />
                       </FormControl>
                       <FormMessage />
@@ -171,5 +171,31 @@ export function PersonaEditorForm({ form, onSubmit, saveError }: PersonaEditorFo
         </CardContent>
       </Card>
     </>
+  )
+}
+
+interface SystemPromptEditorProps {
+  value: string
+  editable: boolean
+  onChange: (value: string) => void
+}
+
+// Plaintext-Bruecke: das Form-Feld bleibt `string` (Backend-Vertrag), aber die
+// Eingabe laeuft durch den geteilten BlockNote-Editor — damit auch der
+// System-Prompt das gleiche Slash-/Side-Menue bekommt wie Profil und Body.
+// `initialBlocks` wird nur einmal je Editor-Instanz beruecksichtigt (das ist
+// OK, weil PersonaEditorForm erst mountet, sobald die Persona geladen und das
+// Form via `form.reset` befuellt ist — siehe PersonaDetailPage).
+function SystemPromptEditor({ value, editable, onChange }: SystemPromptEditorProps) {
+  // `initialBlocks` darf nur einmal pro Editor-Instanz berechnet werden — die
+  // BlockNote-Insel hydratisiert ihren ProseMirror-State sonst nicht neu.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const initialBlocks = useMemo(() => plainTextToBlocks(value), [])
+  return (
+    <BlockNoteEditor
+      initialBlocks={initialBlocks}
+      editable={editable}
+      onChange={(blocks: ResourceBlock[]) => onChange(blocksToPlainText(blocks))}
+    />
   )
 }
