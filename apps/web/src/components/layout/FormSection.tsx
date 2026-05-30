@@ -1,10 +1,14 @@
 import { forwardRef, type HTMLAttributes, type ReactNode } from 'react'
 
+import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { cn } from '@/lib/utils'
 
 export interface FormSectionProps extends HTMLAttributes<HTMLElement> {
   title: string
+  /** Ein-Satz-Beschreibung unter dem Titel. Mehrzeilige Tipps gehen ueber `help`. */
   description?: string
+  /** Erweiterte Hilfe — wird im Tooltip neben dem Titel gerendert. */
+  help?: ReactNode
   footer?: ReactNode
 }
 
@@ -16,7 +20,7 @@ export interface FormSectionProps extends HTMLAttributes<HTMLElement> {
  * erste Section in einem Container braucht `first:border-t-0 first:pt-0`.
  */
 export const FormSection = forwardRef<HTMLElement, FormSectionProps>(function FormSection(
-  { title, description, footer, className, children, ...props },
+  { title, description, help, footer, className, children, ...props },
   ref,
 ) {
   return (
@@ -29,7 +33,10 @@ export const FormSection = forwardRef<HTMLElement, FormSectionProps>(function Fo
       {...props}
     >
       <div className="space-y-1">
-        <h2 className="text-base font-semibold tracking-tight">{title}</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-base font-semibold tracking-tight">{title}</h2>
+          {help !== undefined ? <InfoTooltip>{help}</InfoTooltip> : null}
+        </div>
         {description !== undefined ? (
           <p className="text-sm text-muted-foreground">{description}</p>
         ) : null}
