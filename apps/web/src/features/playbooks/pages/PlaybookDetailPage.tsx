@@ -21,6 +21,7 @@ import { StatusActionBar } from '../components/StatusActionBar'
 import { usePlaybook } from '../hooks/usePlaybook'
 import { usePlaybookForm } from '../hooks/usePlaybookForm'
 import { statusBadgeVariant, statusLabel } from '../lib/status'
+import { splitTriggers } from '../lib/triggers'
 
 export function PlaybookDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -90,6 +91,7 @@ export function PlaybookDetailPage() {
                           : ''
                       }`
                     : `Aktuelle Version: ${playbook.current_version}`
+                const triggers = splitTriggers(playbook.triggers ?? null)
                 return (
                   <Stack gap="md">
                     <PageHeader
@@ -107,6 +109,22 @@ export function PlaybookDetailPage() {
                         ) : undefined
                       }
                     />
+                    {triggers.length > 0 ? (
+                      <div
+                        className="flex flex-wrap items-center gap-2"
+                        role="list"
+                        aria-label="Trigger-Liste"
+                      >
+                        <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                          Trigger
+                        </span>
+                        {triggers.map((trigger) => (
+                          <Badge key={trigger} variant="outline" role="listitem">
+                            {trigger}
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : null}
                     {actionableVersion !== undefined &&
                     actionableVersion.status !== undefined ? (
                       <StatusActionBar

@@ -8,6 +8,7 @@ import { useApi } from '@/api/useApi'
 import { notify } from '@/lib/feedback'
 
 import { blockPlainText } from '../lib/blockText'
+import { joinTriggers, splitTriggers } from '../lib/triggers'
 
 const PLAYBOOK_TYPES = [
   'prompt',
@@ -24,17 +25,12 @@ const editorSchema = z.object({
   name: z.string().min(1, 'Name erforderlich.'),
   type: z.enum(PLAYBOOK_TYPES),
   description: z.string().min(1, 'Beschreibung erforderlich.'),
-  triggers: z.string(),
+  triggers: z.array(z.string()),
   bodyBlocks: z.array(z.custom<ResourceBlock>()),
   tags: z.array(z.string()),
 })
 
 export type PlaybookEditorValues = z.infer<typeof editorSchema>
-
-function splitTriggers(raw: string): string | null {
-  const trimmed = raw.trim()
-  return trimmed === '' ? null : trimmed
-}
 
 function describeError(cause: unknown): string {
   return cause instanceof Error ? cause.message : 'Unbekannter Fehler.'
@@ -94,7 +90,7 @@ export function usePlaybookForm(
       description: '',
       bodyBlocks: [],
       tags: [],
-      triggers: '',
+      triggers: [],
     },
   })
 
@@ -106,7 +102,7 @@ export function usePlaybookForm(
         description: playbook.content.description,
         bodyBlocks: plainTextToBlocks(playbook.content.body),
         tags: playbook.content.tags,
-        triggers: playbook.content.triggers ?? '',
+        triggers: splitTriggers(playbook.content.triggers ?? null),
       })
     }
   }, [playbook, form])
@@ -124,7 +120,7 @@ export function usePlaybookForm(
           body: blocksToPlainText(values.bodyBlocks),
           type: values.type,
           tags: values.tags,
-          triggers: splitTriggers(values.triggers),
+          triggers: joinTriggers(values.triggers),
         },
       })
       notify.success('Gespeichert — neue Version erstellt.')
