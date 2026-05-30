@@ -1,19 +1,23 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
-import type { Persona } from '@/api/types'
+import type { Persona, ResourceBlock } from '@/api/types'
 
 import { PersonaEditorForm } from './PersonaEditorForm'
 import { usePersonaForm } from '../hooks/usePersonaForm'
 
-// BlockNote-Insel + Theme-Context muessen gemockt sein — siehe ADR-0022.
-vi.mock('@blocknote/react', () => ({
-  useCreateBlockNote: () => ({ document: [] }),
+// BlockNote-Insel wird auf der Wrapper-Ebene gemockt — so koennen wir
+// `initialBlocks` per Data-Attribut beobachten, ohne ProseMirror zu starten.
+// Existierende Tests pruefen `data-testid="blocknote-view"`; der Mock erfuellt
+// beide Rollen.
+vi.mock('@/components/editor/BlockNoteEditor', () => ({
+  BlockNoteEditor: ({ initialBlocks }: { initialBlocks: ResourceBlock[] }) => (
+    <div
+      data-testid="blocknote-view"
+      data-initial-blocks={JSON.stringify(initialBlocks)}
+    />
+  ),
 }))
-vi.mock('@blocknote/mantine', () => ({
-  BlockNoteView: () => <div data-testid="blocknote-view" />,
-}))
-vi.mock('@/app/theme-context', () => ({ useTheme: () => ({ resolved: 'light' }) }))
 
 vi.mock('@/lib/feedback', () => ({
   notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
@@ -55,9 +59,18 @@ const persona: Persona = {
   updated_at: 't',
 }
 
-function Harness() {
-  const { form, onSubmit, saveError } = usePersonaForm(persona, () => {})
-  return <PersonaEditorForm form={form} onSubmit={onSubmit} saveError={saveError} />
+function Harness({ source = persona }: { source?: Persona } = {}) {
+  const { form, onSubmit, saveError } = usePersonaForm(source, () => {})
+  return (
+    <PersonaEditorForm
+      form={form}
+      onSubmit={onSubmit}
+      saveError={saveError}
+      formKey={`${source.id}-${source.current_version}`}
+      initialProfileBlocks={source.content.content?.blocks ?? []}
+      initialSystemPrompt={source.content.system_prompt}
+    />
+  )
 }
 
 describe('PersonaEditorForm', () => {
@@ -118,6 +131,46 @@ describe('PersonaEditorForm', () => {
     // Profil-Editor + System-Prompt-Editor teilen sich denselben Wrapper —
     // entsprechend zweimal `blocknote-view` im DOM.
     expect(screen.getAllByTestId('blocknote-view').length).toBe(2)
+  })
+
+  it('rehydratisiert die BlockNote-Inseln, wenn `formKey` wechselt', async () => {
+    const paragraph = (text: string, id: string): ResourceBlock => ({
+      id,
+      type: 'paragraph',
+      content: [{ type: 'text', text, styles: {} }],
+    })
+    const v1: Persona = {
+      ...persona,
+      current_version: 1,
+      content: {
+        ...persona.content,
+        system_prompt: 'erster-prompt',
+        content: { description: '', blocks: [paragraph('alpha-block', 'b-1')] },
+      },
+    }
+    const v2: Persona = {
+      ...persona,
+      current_version: 2,
+      content: {
+        ...persona.content,
+        system_prompt: 'zweiter-prompt',
+        content: { description: '', blocks: [paragraph('beta-block', 'b-2')] },
+      },
+    }
+
+    const { rerender } = render(<Harness source={v1} />)
+    await waitFor(() => {
+      const [profile, systemPrompt] = screen.getAllByTestId('blocknote-view')
+      expect(profile.getAttribute('data-initial-blocks')).toContain('alpha-block')
+      expect(systemPrompt.getAttribute('data-initial-blocks')).toContain('erster-prompt')
+    })
+
+    rerender(<Harness source={v2} />)
+    await waitFor(() => {
+      const [profile, systemPrompt] = screen.getAllByTestId('blocknote-view')
+      expect(profile.getAttribute('data-initial-blocks')).toContain('beta-block')
+      expect(systemPrompt.getAttribute('data-initial-blocks')).toContain('zweiter-prompt')
+    })
   })
 
   it('laedt Tag-Vorschlaege aus `listPersonaTags`, nicht aus `listPlaybookTags`', async () => {

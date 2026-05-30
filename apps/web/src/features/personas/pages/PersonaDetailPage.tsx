@@ -85,7 +85,14 @@ export function PersonaDetailPage() {
                   </Stack>
                 )
               })()}
-              <PersonaEditorForm form={form} onSubmit={onSubmit} saveError={saveError} />
+              <PersonaEditorForm
+                form={form}
+                onSubmit={onSubmit}
+                saveError={saveError}
+                formKey={`${persona.id}-${persona.current_version}`}
+                initialProfileBlocks={persona.content.content?.blocks ?? []}
+                initialSystemPrompt={persona.content.system_prompt}
+              />
 
               <Card>
                 <CardHeader>

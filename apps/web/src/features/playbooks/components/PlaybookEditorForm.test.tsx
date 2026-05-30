@@ -1,18 +1,21 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
-import type { Playbook } from '@/api/types'
+import type { Playbook, ResourceBlock } from '@/api/types'
 
 import { PlaybookEditorForm } from './PlaybookEditorForm'
 import { usePlaybookForm } from '../hooks/usePlaybookForm'
 
-vi.mock('@blocknote/react', () => ({
-  useCreateBlockNote: () => ({ document: [] }),
+// BlockNote-Insel wird auf der Wrapper-Ebene gemockt — so koennen wir
+// `initialBlocks` per Data-Attribut beobachten, ohne ProseMirror zu starten.
+vi.mock('@/components/editor/BlockNoteEditor', () => ({
+  BlockNoteEditor: ({ initialBlocks }: { initialBlocks: ResourceBlock[] }) => (
+    <div
+      data-testid="blocknote-view"
+      data-initial-blocks={JSON.stringify(initialBlocks)}
+    />
+  ),
 }))
-vi.mock('@blocknote/mantine', () => ({
-  BlockNoteView: () => <div data-testid="blocknote-view" />,
-}))
-vi.mock('@/app/theme-context', () => ({ useTheme: () => ({ resolved: 'light' }) }))
 
 vi.mock('@/lib/feedback', () => ({
   notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
@@ -51,9 +54,20 @@ const playbook: Playbook = {
   updated_at: 't',
 }
 
-function Harness() {
-  const { form, onSubmit, saveError } = usePlaybookForm(playbook, () => {})
-  return <PlaybookEditorForm form={form} onSubmit={onSubmit} saveError={saveError} />
+function Harness({ source = playbook }: { source?: Playbook } = {}) {
+  const { form, onSubmit, saveError, initialBodyBlocks } = usePlaybookForm(
+    source,
+    () => {},
+  )
+  return (
+    <PlaybookEditorForm
+      form={form}
+      onSubmit={onSubmit}
+      saveError={saveError}
+      formKey={`${source.id}-${source.current_version}`}
+      initialBodyBlocks={initialBodyBlocks}
+    />
+  )
 }
 
 describe('PlaybookEditorForm', () => {
@@ -159,6 +173,31 @@ describe('PlaybookEditorForm', () => {
     })
     const payload = updatePlaybook.mock.calls[0][1]
     expect(payload.content.triggers).toBe('passwort vergessen, reset link')
+  })
+
+  it('rehydratisiert die BlockNote-Insel, wenn `formKey` wechselt', async () => {
+    const v1: Playbook = {
+      ...playbook,
+      current_version: 1,
+      content: { ...playbook.content, body: 'alpha-body' },
+    }
+    const v2: Playbook = {
+      ...playbook,
+      current_version: 2,
+      content: { ...playbook.content, body: 'beta-body' },
+    }
+
+    const { rerender } = render(<Harness source={v1} />)
+    await waitFor(() => {
+      const editor = screen.getByTestId('blocknote-view')
+      expect(editor.getAttribute('data-initial-blocks')).toContain('alpha-body')
+    })
+
+    rerender(<Harness source={v2} />)
+    await waitFor(() => {
+      const editor = screen.getByTestId('blocknote-view')
+      expect(editor.getAttribute('data-initial-blocks')).toContain('beta-body')
+    })
   })
 
   it('entfernt einen Trigger per Klick auf das X', async () => {
