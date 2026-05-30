@@ -315,8 +315,15 @@
  * direkt unter `document.body`, damit kein `overflow:hidden`-Ancestor
  * (Card, FormSection) das Popover beschneidet (Phase 3-fixes Track 2).
  * Ein scopender Selektor wuerde die Styles deswegen verfehlen.
+ *
+ * Spezifitaet: Mantine setzt seine eigenen Surface-Regeln via
+ * `.bn-mantine .bn-suggestion-menu` (0,2,0). Damit unsere Tokens das
+ * Mantine-Default schlagen, ziehen wir die Selektoren entweder ueber den
+ * `.bn-mantine`-Wrapper hoch (gleicher Selektor-Aufbau, spaetere Source-
+ * Order gewinnt) oder verdoppeln den Klassennamen (`.bn-side-menu` und
+ * `.bn-drag-handle-menu` haengen direkt am Editor, nicht im Portal).
  */
-.bn-suggestion-menu,
+.bn-mantine .bn-suggestion-menu,
 .bn-side-menu,
 .bn-drag-handle-menu {
   background-color: var(--popover);
@@ -332,14 +339,168 @@
 }
 
 /*
+ * Slash-Menu als ordentliches Popover (Phase 3-fixes Runde 2, Track 2):
+ * - klare Max-Breite, kein horizontales Scrollen.
+ * - vertikales Scrollen sobald >`max-height`, damit auch lange Listen
+ *   (alle Block-Typen) in den Viewport passen.
+ * - `width: 22rem` als Mindest-Breite, sonst kollabiert das Popover bei
+ *   wenigen Items unangenehm schmal.
+ */
+.bn-mantine .bn-suggestion-menu {
+  width: 22rem;
+  max-width: min(28rem, calc(100vw - 2rem));
+  max-height: min(60vh, 480px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: calc(var(--spacing) * 1);
+}
+
+/*
+ * Slash-Menu-Item: Grid `icon | body | badge` mit echtem Gap, damit Title
+ * und Subtitle nicht mehr an der Icon-Box kleben. Mantine setzt das Item
+ * default auf `display: flex` ohne Gap — wir ersetzen das.
+ */
+.bn-mantine .bn-suggestion-menu-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: calc(var(--spacing) * 3);
+  padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3);
+  height: auto;
+  min-height: calc(var(--spacing) * 12);
+  border-radius: calc(var(--radius) - 2px);
+}
+
+/*
+ * Item-Body: Titel + Subtext in einer Spalte, Subtext gedimmt. Mantine
+ * gibt beiden den gleichen Farb-Token; wir typen die Skala hier sauber:
+ * Title `text-sm` + medium, Subtext `text-xs` + muted.
+ */
+.bn-mt-suggestion-menu-item-body {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--spacing) * 0.5);
+  padding-right: 0;
+  min-width: 0;
+}
+
+.bn-mt-suggestion-menu-item-title {
+  font-size: var(--text-sm);
+  line-height: var(--text-sm--line-height);
+  font-weight: 500;
+  color: var(--popover-foreground);
+}
+
+.bn-mt-suggestion-menu-item-subtitle {
+  font-size: var(--text-xs);
+  line-height: var(--text-xs--line-height);
+  color: var(--muted-foreground);
+}
+
+/*
+ * Icon-Section (links) und Badge-Section (rechts). Mantine setzt am
+ * Icon-Section einen Tooltip-Background — wir neutralisieren das auf die
+ * Surface-Tinte des Popovers, damit Icons nicht in einer harten Kachel
+ * sitzen. Rechte Section (Shortcut/Badge) bekommt monospace + muted.
+ */
+.bn-mt-suggestion-menu-item-section[data-position='left'] {
+  background-color: transparent;
+  color: var(--muted-foreground);
+  padding: 0;
+}
+
+.bn-mt-suggestion-menu-item-section[data-position='right'] {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--text-xs--line-height);
+  color: var(--muted-foreground);
+}
+
+/*
+ * Group-Label des Slash-Menus (Mantine `Menu.Label`, von BlockNote als
+ * Section-Header genutzt: "Headings", "Basic blocks" usw.). Klein,
+ * uppercase, mit unterem Border zur visuellen Trennung.
+ */
+.bn-mantine .bn-suggestion-menu-label {
+  font-size: 10px;
+  line-height: 1rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  color: var(--muted-foreground);
+  padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: calc(var(--spacing) * 1);
+}
+
+/*
  * Kindelemente der Floating-Layer (Suggestion-Items, Side-Menu-Buttons)
  * erben jetzt eine kontraststarke Surface — der Dark-Theme-Fix aus F-14
  * gilt damit auch nach dem Portal-Schwenk.
  */
-.bn-suggestion-menu-item[aria-selected='true'],
-.bn-suggestion-menu-item:hover {
+.bn-mantine .bn-suggestion-menu-item[aria-selected='true'],
+.bn-mantine .bn-suggestion-menu-item:hover {
   background-color: var(--accent);
   color: var(--accent-foreground);
+}
+
+/*
+ * Im Hover/Selected-State soll auch der Subtext lesbar bleiben (Mantine
+ * laesst ihn auf dem Default-Token = dunkel auf Accent dunkel).
+ */
+.bn-mantine .bn-suggestion-menu-item[aria-selected='true'] .bn-mt-suggestion-menu-item-title,
+.bn-mantine .bn-suggestion-menu-item:hover .bn-mt-suggestion-menu-item-title {
+  color: var(--accent-foreground);
+}
+
+.bn-mantine .bn-suggestion-menu-item[aria-selected='true'] .bn-mt-suggestion-menu-item-subtitle,
+.bn-mantine .bn-suggestion-menu-item:hover .bn-mt-suggestion-menu-item-subtitle {
+  color: var(--accent-foreground);
+  opacity: 0.8;
+}
+
+/*
+ * Block-Render (Track 4): Tailwinds Preflight nullt `ul/ol`-Marker und
+ * `hr`-Border. BlockNote rendert beides nativ, aber ohne Marker bzw.
+ * sichtbare Linie. Wir schalten Marker und Linie scoped wieder ein —
+ * sowohl im Edit-Mode (`.bn-container`) als auch im Read-Only-Render
+ * (`.bn-block-content`), damit Edit und Read identisch aussehen.
+ *
+ * Inline `<code>` bekommt eine leichte Surface-Tinte, damit Code-Spans
+ * im Fliesstext sofort als Code erkennbar sind.
+ */
+.bn-container ul,
+.bn-block-content ul {
+  list-style: disc;
+  padding-left: 1.5rem;
+}
+
+.bn-container ol,
+.bn-block-content ol {
+  list-style: decimal;
+  padding-left: 1.5rem;
+}
+
+.bn-container li > p,
+.bn-block-content li > p {
+  margin: 0;
+}
+
+.bn-container hr,
+.bn-block-content hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: calc(var(--spacing) * 4) 0;
+}
+
+.bn-container code,
+.bn-block-content code {
+  background-color: color-mix(in oklch, var(--muted) 50%, transparent);
+  color: var(--foreground);
+  padding: 0.1em 0.3em;
+  border-radius: 0.25rem;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
 }
 
 /*
