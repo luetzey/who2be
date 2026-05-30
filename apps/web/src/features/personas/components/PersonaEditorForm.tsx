@@ -21,6 +21,16 @@ interface PersonaEditorFormProps {
   form: UseFormReturn<PersonaEditorValues>
   onSubmit: (event?: BaseSyntheticEvent) => Promise<void>
   saveError: string | null
+  // Render-Identitaet fuer die BlockNote-Inseln. Wechselt der Key, wird der
+  // ProseMirror-State remountet — sonst bleibt der Editor auf dem alten
+  // `initialContent` haengen (useCreateBlockNote initialisiert nur einmal).
+  formKey: string
+  // Initial-Snapshot direkt aus dem persona-Prop. Wir koennen NICHT
+  // `field.value` als initialBlocks nutzen, weil form.reset erst im Effect
+  // nach dem Mount laeuft — der frische Editor wuerde sonst den alten
+  // Form-State sehen. Pattern parallel zu ResourceDetailPage.
+  initialProfileBlocks: ResourceBlock[]
+  initialSystemPrompt: string
 }
 
 const PROFILE_EXAMPLE_SNIPPET = `Rolle: Senior-Customer-Support-Coach.
@@ -28,7 +38,14 @@ Tonfall: ruhig, empathisch, direkt — kein Marketing-Geschwurbel.
 Beispiele: "Reset-Mail beantworten" → freundlich begruessen, Schritte als Liste.
 Ausnahmen: kein Rabattversprechen ohne Freigabe.`
 
-export function PersonaEditorForm({ form, onSubmit, saveError }: PersonaEditorFormProps) {
+export function PersonaEditorForm({
+  form,
+  onSubmit,
+  saveError,
+  formKey,
+  initialProfileBlocks,
+  initialSystemPrompt,
+}: PersonaEditorFormProps) {
   // Viewer dürfen nur lesen (ADR-0023) — Save bleibt gesperrt.
   const isViewer = useCurrentWorkspaceRole() === 'viewer'
   const api = useApi()
@@ -105,7 +122,8 @@ export function PersonaEditorForm({ form, onSubmit, saveError }: PersonaEditorFo
                       <FormLabel>Profil-Inhalt</FormLabel>
                       <FormControl>
                         <ResourceEditor
-                          initialBlocks={field.value}
+                          key={formKey}
+                          initialBlocks={initialProfileBlocks}
                           editable={!isViewer}
                           onChange={(blocks: ResourceBlock[]) => field.onChange(blocks)}
                         />
@@ -135,7 +153,8 @@ export function PersonaEditorForm({ form, onSubmit, saveError }: PersonaEditorFo
                       <FormLabel>System-Prompt</FormLabel>
                       <FormControl>
                         <SystemPromptEditor
-                          value={field.value}
+                          key={formKey}
+                          initialValue={initialSystemPrompt}
                           editable={!isViewer}
                           onChange={field.onChange}
                         />
@@ -198,7 +217,7 @@ export function PersonaEditorForm({ form, onSubmit, saveError }: PersonaEditorFo
 }
 
 interface SystemPromptEditorProps {
-  value: string
+  initialValue: string
   editable: boolean
   onChange: (value: string) => void
 }
@@ -206,14 +225,10 @@ interface SystemPromptEditorProps {
 // Plaintext-Bruecke: das Form-Feld bleibt `string` (Backend-Vertrag), aber die
 // Eingabe laeuft durch den geteilten BlockNote-Editor — damit auch der
 // System-Prompt das gleiche Slash-/Side-Menue bekommt wie Profil und Body.
-// `initialBlocks` wird nur einmal je Editor-Instanz beruecksichtigt (das ist
-// OK, weil PersonaEditorForm erst mountet, sobald die Persona geladen und das
-// Form via `form.reset` befuellt ist — siehe PersonaDetailPage).
-function SystemPromptEditor({ value, editable, onChange }: SystemPromptEditorProps) {
-  // `initialBlocks` darf nur einmal pro Editor-Instanz berechnet werden — die
-  // BlockNote-Insel hydratisiert ihren ProseMirror-State sonst nicht neu.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const initialBlocks = useMemo(() => plainTextToBlocks(value), [])
+// `initialValue` wird einmal pro Mount in Bloecke uebersetzt; Rehydration
+// nach Save laeuft ueber den `formKey`-Wechsel im Parent.
+function SystemPromptEditor({ initialValue, editable, onChange }: SystemPromptEditorProps) {
+  const initialBlocks = useMemo(() => plainTextToBlocks(initialValue), [initialValue])
   return (
     <BlockNoteEditor
       initialBlocks={initialBlocks}

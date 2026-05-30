@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { type BaseSyntheticEvent, useEffect, useState } from 'react'
+import { type BaseSyntheticEvent, useEffect, useMemo, useState } from 'react'
 import { useForm, type UseFormReturn } from 'react-hook-form'
 import { z } from 'zod'
 
@@ -70,6 +70,10 @@ export interface UsePlaybookFormResult {
   form: UseFormReturn<PlaybookEditorValues>
   onSubmit: (event?: BaseSyntheticEvent) => Promise<void>
   saveError: string | null
+  // Initial-Snapshot der Body-Bloecke, direkt vom playbook-Prop abgeleitet.
+  // Wird als `initialBlocks` an die BlockNote-Insel gereicht — `field.value`
+  // taugt dafuer nicht, weil form.reset erst nach dem Mount im Effect laeuft.
+  initialBodyBlocks: ResourceBlock[]
 }
 
 /**
@@ -130,7 +134,12 @@ export function usePlaybookForm(
     }
   })
 
-  return { form, onSubmit, saveError }
+  const initialBodyBlocks = useMemo(
+    () => (playbook !== null ? plainTextToBlocks(playbook.content.body) : []),
+    [playbook],
+  )
+
+  return { form, onSubmit, saveError, initialBodyBlocks }
 }
 
 export { PLAYBOOK_TYPES }

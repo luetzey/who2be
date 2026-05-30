@@ -26,7 +26,7 @@ import { splitTriggers } from '../lib/triggers'
 export function PlaybookDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { playbook, versions, loading, error, reload } = usePlaybook(id)
-  const { form, onSubmit, saveError } = usePlaybookForm(playbook, reload)
+  const { form, onSubmit, saveError, initialBodyBlocks } = usePlaybookForm(playbook, reload)
   const resourceLinks = usePlaybookResourceLinks(id)
   const usages = usePlaybookUsages(id)
   const wsPath = useWorkspacePath()
@@ -137,7 +137,13 @@ export function PlaybookDetailPage() {
                   </Stack>
                 )
               })()}
-              <PlaybookEditorForm form={form} onSubmit={onSubmit} saveError={saveError} />
+              <PlaybookEditorForm
+                form={form}
+                onSubmit={onSubmit}
+                saveError={saveError}
+                formKey={`${playbook.id}-${playbook.current_version}`}
+                initialBodyBlocks={initialBodyBlocks}
+              />
 
               <Card>
                 <CardHeader>

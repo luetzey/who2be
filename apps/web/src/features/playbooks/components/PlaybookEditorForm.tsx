@@ -20,6 +20,14 @@ interface PlaybookEditorFormProps {
   form: UseFormReturn<PlaybookEditorValues>
   onSubmit: (event?: BaseSyntheticEvent) => Promise<void>
   saveError: string | null
+  // Render-Identitaet fuer die BlockNote-Insel. Wechselt der Key, wird der
+  // ProseMirror-State remountet — sonst bleibt der Editor auf dem alten
+  // `initialContent` haengen (useCreateBlockNote initialisiert nur einmal).
+  formKey: string
+  // Initial-Snapshot der Body-Bloecke aus dem playbook-Prop (siehe
+  // usePlaybookForm) — `field.value` wuerde den alten Form-State zeigen,
+  // weil form.reset erst im Effect nach dem Mount laeuft.
+  initialBodyBlocks: ResourceBlock[]
 }
 
 interface TypeOption {
@@ -61,7 +69,13 @@ const TYPE_OPTIONS: readonly TypeOption[] = [
   },
 ]
 
-export function PlaybookEditorForm({ form, onSubmit, saveError }: PlaybookEditorFormProps) {
+export function PlaybookEditorForm({
+  form,
+  onSubmit,
+  saveError,
+  formKey,
+  initialBodyBlocks,
+}: PlaybookEditorFormProps) {
   // Viewer dürfen nur lesen (ADR-0023) — Save bleibt gesperrt.
   const isViewer = useCurrentWorkspaceRole() === 'viewer'
   const api = useApi()
@@ -175,7 +189,8 @@ export function PlaybookEditorForm({ form, onSubmit, saveError }: PlaybookEditor
                       <FormLabel>Inhalt</FormLabel>
                       <FormControl>
                         <ResourceEditor
-                          initialBlocks={field.value}
+                          key={formKey}
+                          initialBlocks={initialBodyBlocks}
                           editable={!isViewer}
                           onChange={(blocks: ResourceBlock[]) => field.onChange(blocks)}
                         />
