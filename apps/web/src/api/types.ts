@@ -269,13 +269,20 @@ export type LinkAvailability = 'active' | 'draft' | null
 export interface ResourceLink {
   resource_id: string
   resource_name: string
-  block_id: string
+  block_id: string | null
   position: number
   available: boolean
   available_in?: LinkAvailability
   preview: string | null
   section_preview?: string | null
+  link_scope?: ResourceLinkScope
 }
+
+// Phase-3-Fixes Track 4: ein Playbook→Resource-Link kann entweder das
+// ganze Dokument referenzieren ('resource') oder einen Heading-Anker
+// ('block'). Default im Backend ist 'block' — der optionale Feldwert
+// bleibt zur Wire-Backward-Compat optional.
+export type ResourceLinkScope = 'resource' | 'block'
 
 // Backlink-Records (Phase-3-Plan §Track-A.4). Endpoints liefern 404, bis
 // Track A merged — die Hooks behandeln das als leere Liste + EmptyState.
@@ -292,6 +299,7 @@ export interface ResourceUsage {
 
 export interface ResourceLinkItemInput {
   resource_id: string
-  block_id: string
+  block_id: string | null
   position: number
+  link_scope: ResourceLinkScope
 }

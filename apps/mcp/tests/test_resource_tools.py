@@ -146,6 +146,7 @@ def test_fetch_playbook_includes_linked_blocks(monkeypatch: pytest.MonkeyPatch) 
         "position": 0,
         "available": True,
         "preview": "Hallo",
+        "link_scope": "block",
     }
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -161,3 +162,92 @@ def test_fetch_playbook_includes_linked_blocks(monkeypatch: pytest.MonkeyPatch) 
     assert len(result.linked_blocks) == 1
     assert result.linked_blocks[0].block_id == "b1"
     assert result.linked_blocks[0].available is True
+    assert result.linked_blocks[0].link_scope == "block"
+    # Block-Refs ziehen das Volldokument NICHT mit — Snippet via fetch_resource.
+    assert result.linked_resources == []
+
+
+def test_fetch_playbook_inlines_resource_for_resource_scope_links(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pid = uuid4()
+    rid = uuid4()
+    playbook = _playbook_payload()
+    playbook["id"] = str(pid)
+    resource = _resource_payload(blocks=[_block("b1", "Inline-Inhalt")])
+    resource["id"] = str(rid)
+    link = {
+        "resource_id": str(rid),
+        "resource_name": resource["name"],
+        "block_id": None,
+        "position": 0,
+        "available": True,
+        "available_in": "active",
+        "preview": None,
+        "link_scope": "resource",
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith(f"/playbooks/{pid}/resource_links"):
+            return httpx.Response(200, json=[link])
+        if path.endswith(f"/playbooks/{pid}"):
+            return httpx.Response(200, json=playbook)
+        if path.endswith(f"/resources/{rid}"):
+            return httpx.Response(200, json=resource)
+        return httpx.Response(404)
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    result = asyncio.run(fetch_playbook(str(pid)))
+    assert isinstance(result, PlaybookWithResources)
+    assert len(result.linked_blocks) == 1
+    assert result.linked_blocks[0].link_scope == "resource"
+    assert result.linked_blocks[0].block_id is None
+    # Volldokument ist mit ausgeliefert.
+    assert len(result.linked_resources) == 1
+    assert result.linked_resources[0].id == rid
+    assert [b.id for b in result.linked_resources[0].content.blocks] == ["b1"]
+
+
+def test_fetch_playbook_deduplicates_resource_scope_inline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pid = uuid4()
+    rid = uuid4()
+    playbook = _playbook_payload()
+    playbook["id"] = str(pid)
+    resource = _resource_payload(blocks=[_block("b1", "x")])
+    resource["id"] = str(rid)
+    # Zweimal derselbe 'resource'-Link (Service-Dedup haette das eigentlich
+    # weggeraeumt; der MCP-Server muss aber idempotent bleiben).
+    links = [
+        {
+            "resource_id": str(rid),
+            "resource_name": resource["name"],
+            "block_id": None,
+            "position": idx,
+            "available": True,
+            "available_in": "active",
+            "preview": None,
+            "link_scope": "resource",
+        }
+        for idx in range(2)
+    ]
+    resource_fetches = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal resource_fetches
+        path = request.url.path
+        if path.endswith(f"/playbooks/{pid}/resource_links"):
+            return httpx.Response(200, json=links)
+        if path.endswith(f"/playbooks/{pid}"):
+            return httpx.Response(200, json=playbook)
+        if path.endswith(f"/resources/{rid}"):
+            resource_fetches += 1
+            return httpx.Response(200, json=resource)
+        return httpx.Response(404)
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    result = asyncio.run(fetch_playbook(str(pid)))
+    assert len(result.linked_resources) == 1
+    assert resource_fetches == 1

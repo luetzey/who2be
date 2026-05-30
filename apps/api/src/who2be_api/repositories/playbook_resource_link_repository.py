@@ -166,9 +166,11 @@ class PgPlaybookResourceLinkRepository:
             return None
         # Zwei LEFT JOINs: bevorzugt die Active-Version, fallback auf die
         # Current-Version (egal welcher Status). Der Block-Match entscheidet
-        # pro Link, ob `available_in` 'active' oder 'draft' wird.
+        # pro Link, ob `available_in` 'active' oder 'draft' wird. Fuer
+        # 'resource'-Scope-Links existiert kein Block-Anker; die Verfuegbarkeit
+        # ergibt sich aus dem schieren Vorhandensein der Active/Current-Version.
         rows = await self._pool.fetch(
-            "SELECT prl.resource_id, prl.block_id, prl.position, "
+            "SELECT prl.resource_id, prl.block_id, prl.position, prl.link_scope, "
             "       r.name AS resource_name, "
             "       rva.content AS active_content, "
             "       rvc.content AS current_content "
@@ -179,7 +181,8 @@ class PgPlaybookResourceLinkRepository:
             "LEFT JOIN resource_version rvc "
             "  ON rvc.resource_id = r.id AND rvc.version = r.current_version "
             "WHERE prl.playbook_id = $1 AND prl.workspace_id = $2 "
-            "ORDER BY prl.position, prl.resource_id, prl.block_id",
+            "ORDER BY prl.position, prl.resource_id, "
+            "         COALESCE(prl.block_id, '')",
             playbook_id,
             workspace_id,
         )
@@ -219,16 +222,42 @@ class PgPlaybookResourceLinkRepository:
 
     @staticmethod
     def _to_link_read(row: asyncpg.Record) -> ResourceLinkRead:
+        link_scope: Literal["resource", "block"] = row["link_scope"]
         anchor_id = row["block_id"]
-        active_blocks = _blocks_of(row["active_content"])
-        current_blocks = _blocks_of(row["current_content"])
+        active_content = row["active_content"]
+        current_content = row["current_content"]
+        active_blocks = _blocks_of(active_content)
+        current_blocks = _blocks_of(current_content)
+
+        if link_scope == "resource":
+            # Ganzes Dokument referenziert: Verfuegbarkeit haengt nur an der
+            # Existenz einer Active- bzw. Current-Version, kein Section-Match.
+            available_in: Literal["active", "draft"] | None
+            if active_content is not None:
+                available_in = "active"
+            elif current_content is not None:
+                available_in = "draft"
+            else:
+                available_in = None
+            return ResourceLinkRead(
+                resource_id=row["resource_id"],
+                resource_name=row["resource_name"],
+                block_id=None,
+                position=row["position"],
+                available=available_in is not None,
+                available_in=available_in,
+                preview=None,
+                section_block_ids=[],
+                section_preview=None,
+                link_scope="resource",
+            )
 
         # Bevorzugt Active; nur fallback auf Current, wenn der Anker dort
         # nicht (mehr) gefunden wird. So sieht das UI fuer eine Resource mit
         # Active+Draft den Active-Stand und kippt nur dann auf "Nur in Draft",
         # wenn der Block in Active nicht mehr existiert.
         match_blocks: list[dict[str, Any]] | None = None
-        available_in: Literal["active", "draft"] | None = None
+        available_in = None
         if any(b.get("id") == anchor_id for b in active_blocks):
             match_blocks = active_blocks
             available_in = "active"
@@ -239,7 +268,7 @@ class PgPlaybookResourceLinkRepository:
         preview: str | None = None
         section_block_ids: list[str] = []
         section_preview: str | None = None
-        if match_blocks is not None:
+        if match_blocks is not None and anchor_id is not None:
             anchor = next(b for b in match_blocks if b.get("id") == anchor_id)
             text = block_plain_text(anchor)
             preview = text[:_PREVIEW_LEN] if text else None
@@ -256,6 +285,7 @@ class PgPlaybookResourceLinkRepository:
             preview=preview,
             section_block_ids=section_block_ids,
             section_preview=section_preview,
+            link_scope="block",
         )
 
     async def set_links(
@@ -291,8 +321,9 @@ class PgPlaybookResourceLinkRepository:
             if items:
                 await conn.executemany(
                     "INSERT INTO playbook_resource_link "
-                    "(playbook_id, resource_id, block_id, workspace_id, owner_id, position) "
-                    "VALUES ($1, $2, $3, $4, $5, $6)",
+                    "(playbook_id, resource_id, block_id, workspace_id, "
+                    " owner_id, position, link_scope) "
+                    "VALUES ($1, $2, $3, $4, $5, $6, $7)",
                     [
                         (
                             playbook_id,
@@ -301,6 +332,7 @@ class PgPlaybookResourceLinkRepository:
                             workspace_id,
                             owner_id,
                             item.position,
+                            item.link_scope,
                         )
                         for item in items
                     ],
