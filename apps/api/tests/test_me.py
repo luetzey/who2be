@@ -56,6 +56,14 @@ def _ensure_auth_users_shim() -> None:
                 "encrypted_password text"
                 ")"
             )
+            # Defensive: ein vorheriger Test (workspace_setup-Stub) kann die
+            # Tabelle ohne encrypted_password angelegt haben; CREATE IF NOT
+            # EXISTS oben waere dann no-op. ALTER … ADD COLUMN IF NOT EXISTS
+            # schliesst die Luecke.
+            await conn.execute(
+                "ALTER TABLE auth.users "
+                "ADD COLUMN IF NOT EXISTS encrypted_password text"
+            )
         finally:
             await conn.close()
 
