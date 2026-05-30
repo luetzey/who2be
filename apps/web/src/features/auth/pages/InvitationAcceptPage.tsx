@@ -6,6 +6,7 @@ import { acceptInvitation, ApiError } from '@/api/client'
 import { useAuthToken } from '@/auth/useAuthToken'
 import { useSession } from '@/auth/session-context'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
+import { LoadingState } from '@/components/data/LoadingState'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { notify } from '@/lib/feedback'
@@ -82,11 +83,35 @@ export function InvitationAcceptPage() {
     return <Navigate to={`/login?next=${next}`} replace />
   }
 
+  // Session ist da, aber `/v1/me` ist noch unterwegs — das passiert beim
+  // Magic-Link-Hash, der eine Session synchron etabliert, waehrend
+  // `fetchMe` parallel laeuft. Ohne diesen Branch wuerde der Auto-Accept
+  // ohne `has_password`-Wissen feuern und die Set-Password-Weiche bliebe
+  // unklar; Login-Redirect ist hier falsch, weil die Session existiert.
+  if (me === null) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-10">
+        <Card className="w-full max-w-md border-transparent shadow-modal">
+          <CardHeader className="gap-2">
+            <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              Who2Be
+            </span>
+            <CardTitle className="text-3xl tracking-tight">Einladung annehmen</CardTitle>
+            <CardDescription>Login wird abgeschlossen…</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <LoadingState rows={2} />
+          </CardContent>
+        </Card>
+      </main>
+    )
+  }
+
   // Frisch via Magic-Link eingeloggt, aber noch ohne Passwort: erst Passwort
   // setzen, dann zurueck zur Accept-Page (mit `via=magic`, damit Auto-Accept
   // wieder greift). Andernfalls bleibt der User in einer Sackgasse, sobald
   // der Magic-Link-Token einmal verbraucht ist.
-  if (isMagicLink && me !== null && me.has_password === false) {
+  if (isMagicLink && me.has_password === false) {
     const next = encodeURIComponent(`${location.pathname}${location.search}`)
     return <Navigate to={`/onboarding/set-password?next=${next}`} replace />
   }
@@ -109,7 +134,7 @@ export function InvitationAcceptPage() {
           <CardTitle className="text-3xl tracking-tight">Einladung annehmen</CardTitle>
           <CardDescription>
             {isMagicLink
-              ? 'Du wirst angemeldet…'
+              ? 'Login wird abgeschlossen…'
               : 'Tritt dem Workspace bei, zu dem du eingeladen wurdest.'}
           </CardDescription>
         </CardHeader>

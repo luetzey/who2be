@@ -8,12 +8,19 @@ const {
   signOut,
   onAuthStateChange,
   unsubscribe,
+  fetchMe,
 } = vi.hoisted(() => ({
   getSession: vi.fn(),
   signInWithPassword: vi.fn(),
   signOut: vi.fn(),
   onAuthStateChange: vi.fn(),
   unsubscribe: vi.fn(),
+  fetchMe: vi.fn(async () => ({
+    user_id: 'u1',
+    default_workspace_id: 'ws-1',
+    organizations: [],
+    has_password: true,
+  })),
 }))
 
 vi.mock('@/lib/supabase', () => ({
@@ -23,12 +30,7 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 vi.mock('@/api/client', () => ({
-  fetchMe: vi.fn(async () => ({
-    user_id: 'u1',
-    default_workspace_id: 'ws-1',
-    organizations: [],
-    has_password: true,
-  })),
+  fetchMe,
 }))
 
 import { SessionProvider } from './SessionProvider'
@@ -77,6 +79,35 @@ describe('SessionProvider', () => {
       expect(getSession).toHaveBeenCalled()
     })
     expect(onAuthStateChange).toHaveBeenCalledTimes(1)
+  })
+
+  it('uebernimmt Hash-Session aus dem Bootstrap und fetcht me genau einmal', async () => {
+    // Magic-Link-Hash: GoTrue parsed den Token und liefert die Session
+    // schon beim ersten `getSession()`. `onAuthStateChange` feuert direkt
+    // danach mit `INITIAL_SESSION` und identischem Token — der zweite
+    // `fetchMe`-Call wuerde Daten doppelt holen und (bei race) den ersten
+    // ueberholen.
+    const magicSession = { access_token: 'magic-jwt' } as unknown as Session
+    getSession.mockResolvedValueOnce({ data: { session: magicSession }, error: null })
+
+    render(
+      <SessionProvider>
+        <Probe />
+      </SessionProvider>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('session').textContent).toBe('magic-jwt')
+      expect(screen.getByTestId('me').textContent).toBe('u1')
+    })
+
+    // Listener feuert mit identischem Token — dedupe verhindert Doppel-Fetch.
+    await act(async () => {
+      listener?.('INITIAL_SESSION', magicSession)
+      await Promise.resolve()
+    })
+
+    expect(fetchMe).toHaveBeenCalledTimes(1)
   })
 
   it('synct Session+Me, sobald onAuthStateChange feuert (Magic-Link-Hash)', async () => {

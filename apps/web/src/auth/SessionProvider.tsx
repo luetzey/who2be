@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 
 import { fetchMe } from '@/api/client'
@@ -29,6 +29,11 @@ async function resolveMe(accessToken: string | undefined): Promise<Me | null> {
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [me, setMe] = useState<Me | null>(null)
+  // Dedupe-Marker: speichert das zuletzt verarbeitete Access-Token (oder
+  // `null` fuer "keine Session"). `onAuthStateChange` feuert direkt nach
+  // `getSession()` mit `INITIAL_SESSION` und liefert das identische Token —
+  // ohne diesen Vergleich wuerde `fetchMe` doppelt laufen.
+  const lastTokenRef = useRef<string | null | undefined>(undefined)
 
   // Beim Mount: GoTrue parsed den URL-Hash (Magic-Link-Token) intern, wenn
   // wir `getSession()` aufrufen — unser React-State muss danach synchron
@@ -39,23 +44,27 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false
 
+    async function apply(nextSession: Session | null) {
+      const nextToken = nextSession?.access_token ?? null
+      if (lastTokenRef.current === nextToken) {
+        return
+      }
+      lastTokenRef.current = nextToken
+      const resolved = await resolveMe(nextSession?.access_token)
+      if (cancelled) return
+      setMe(resolved)
+      setSession(nextSession)
+    }
+
     async function bootstrap() {
       const { data } = await supabase.auth.getSession()
       if (cancelled) return
-      const resolved = await resolveMe(data.session?.access_token)
-      if (cancelled) return
-      setMe(resolved)
-      setSession(data.session)
+      await apply(data.session)
     }
     void bootstrap()
 
     const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      void (async () => {
-        const resolved = await resolveMe(nextSession?.access_token)
-        if (cancelled) return
-        setMe(resolved)
-        setSession(nextSession)
-      })()
+      void apply(nextSession)
     })
 
     return () => {
@@ -70,12 +79,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       throw new Error(error.message)
     }
     const resolved = await resolveMe(data.session?.access_token)
+    lastTokenRef.current = data.session?.access_token ?? null
     setMe(resolved)
     setSession(data.session)
   }, [])
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut()
+    lastTokenRef.current = null
     setSession(null)
     setMe(null)
   }, [])
