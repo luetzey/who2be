@@ -19,8 +19,12 @@ _AUTH_USERS_STUB = """
     CREATE TABLE IF NOT EXISTS auth.users (
         id                  uuid PRIMARY KEY,
         email               text,
-        raw_user_meta_data  jsonb
+        raw_user_meta_data  jsonb,
+        encrypted_password  text
     );
+    -- Defensive: aeltere Test-Runs haben die Tabelle ohne
+    -- encrypted_password angelegt; bei geteilter Test-DB sonst Fehler.
+    ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS encrypted_password text;
 """
 
 
