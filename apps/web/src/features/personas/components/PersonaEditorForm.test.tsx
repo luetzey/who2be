@@ -71,6 +71,15 @@ describe('PersonaEditorForm', () => {
     expect(screen.queryByLabelText(/Eigenschaften/)).not.toBeInTheDocument()
   })
 
+  it('rendert Hilfe-Tooltips statt Inline-<details>', () => {
+    const { container } = render(<Harness />)
+    // Keine <details>/<summary>-Knoten mehr — Hilfe wandert in den Tooltip.
+    expect(container.querySelector('details')).toBeNull()
+    expect(container.querySelector('summary')).toBeNull()
+    // Jede Section hat ein Info-Icon mit deutschem aria-label.
+    expect(screen.getAllByRole('button', { name: 'Hilfe einblenden' }).length).toBe(4)
+  })
+
   it('rendert die BlockNote-Insel im Profil-Slot', () => {
     render(<Harness />)
     // Profil-Editor + System-Prompt-Editor — beide BlockNote.

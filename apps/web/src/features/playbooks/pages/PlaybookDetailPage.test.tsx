@@ -193,6 +193,64 @@ describe('PlaybookDetailPage', () => {
     expect(screen.getByText('Onboarding Persona')).toBeInTheDocument()
   })
 
+  it('rendert vorhandene Komma-Trigger als Pills statt als Komma-Text', async () => {
+    const playbookWithTriggers = {
+      ...playbook(1, 'b1'),
+      triggers: '"passwort vergessen", "reset link"',
+      content: {
+        ...playbook(1, 'b1').content,
+        triggers: '"passwort vergessen", "reset link"',
+      },
+    }
+    const handlers: Record<string, () => Response> = {
+      [`GET ${WS_PREFIX}/playbooks/pb1`]: () => jsonResponse(playbookWithTriggers),
+      [`GET ${WS_PREFIX}/playbooks/pb1/versions`]: () =>
+        jsonResponse([
+          {
+            version: 1,
+            content: playbookWithTriggers.content,
+            created_by: 'o1',
+            created_at: 't1',
+          },
+        ]),
+      [`GET ${WS_PREFIX}/playbooks/pb1/resource_links`]: () => jsonResponse([]),
+      [`GET ${WS_PREFIX}/playbooks/pb1/usages`]: () => jsonResponse([]),
+    }
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const method = init?.method ?? 'GET'
+      const key = `${method} ${new URL(String(input)).pathname}`
+      const handler = handlers[key]
+      if (!handler) {
+        throw new Error(`Unmocked ${key}`)
+      }
+      return handler()
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(
+      <SessionContext.Provider value={{ session, me, signIn: vi.fn(), signOut: vi.fn() }}>
+        <AuthTokenProvider>
+          <MemoryRouter initialEntries={['/w/ws-1/playbooks/pb1']}>
+            <Routes>
+              <Route path="/w/:workspaceId/playbooks/:id" element={<PlaybookDetailPage />} />
+            </Routes>
+          </MemoryRouter>
+        </AuthTokenProvider>
+      </SessionContext.Provider>,
+    )
+
+    const cluster = await screen.findByRole('list', { name: 'Trigger-Liste' })
+    expect(cluster).toBeInTheDocument()
+    // Anfuehrungszeichen sind in der UI komplett geschluckt.
+    expect(cluster.textContent ?? '').not.toContain('"')
+    // Beide Pills sind als eigene Listitem-Pills da.
+    const items = screen.getAllByRole('listitem')
+    const itemTexts = items.map((node) => node.textContent ?? '')
+    expect(itemTexts).toEqual(
+      expect.arrayContaining(['passwort vergessen', 'reset link']),
+    )
+  })
+
   it('zeigt einen EmptyState wenn /usages ein 404 zurueckgibt', async () => {
     const handlers: Record<string, () => Response> = {
       [`GET ${WS_PREFIX}/playbooks/pb1`]: () => jsonResponse(playbook(1, 'b1')),

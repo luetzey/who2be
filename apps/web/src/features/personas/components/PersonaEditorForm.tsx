@@ -41,7 +41,13 @@ export function PersonaEditorForm({ form, onSubmit, saveError }: PersonaEditorFo
             <form onSubmit={onSubmit} className="flex flex-col gap-6">
               <FormSection
                 title="Identität"
-                description={'Wie die Persona heißt und wofür sie zuständig ist. Beispiel: „Coach Carla — moderiert 1:1-Feedback-Gespräche".'}
+                description="Wie die Persona heißt und wofür sie zuständig ist."
+                help={
+                  <p>
+                    Beispiel: <em>„Coach Carla — moderiert 1:1-Feedback-Gespräche"</em>.
+                    Name und Beschreibung tauchen in Listen, Picker und Agent-Tools auf.
+                  </p>
+                }
               >
                 <FormField
                   control={form.control}
@@ -77,7 +83,19 @@ export function PersonaEditorForm({ form, onSubmit, saveError }: PersonaEditorFo
 
               <FormSection
                 title="Profil"
-                description="Rolle, Tonfall, Beispiele und Ausnahmen. Der Agent leitet daraus ab, wie er antworten soll — strukturierte Beispiele schlagen Bullet-Listen."
+                description="Rolle, Tonfall, Beispiele und Ausnahmen."
+                help={
+                  <div className="space-y-2">
+                    <p>
+                      Der Agent leitet daraus ab, wie er antworten soll —
+                      strukturierte Beispiele schlagen Bullet-Listen.
+                    </p>
+                    <p className="text-xs font-medium text-foreground">Beispiel</p>
+                    <pre className="rounded bg-muted/50 p-2 font-mono text-xs whitespace-pre-wrap">
+                      {PROFILE_EXAMPLE_SNIPPET}
+                    </pre>
+                  </div>
+                }
               >
                 <FormField
                   control={form.control}
@@ -96,20 +114,18 @@ export function PersonaEditorForm({ form, onSubmit, saveError }: PersonaEditorFo
                     </FormItem>
                   )}
                 />
-                <details className="rounded-md border bg-muted/30 p-3 text-sm">
-                  <summary className="cursor-pointer font-medium text-foreground">
-                    Beispiel anzeigen
-                  </summary>
-                  <pre className="mt-2 font-mono text-xs whitespace-pre-wrap text-muted-foreground">
-                    {PROFILE_EXAMPLE_SNIPPET}
-                  </pre>
-                </details>
               </FormSection>
 
               <FormSection
                 title="System-Prompt"
-                description="Technischer Prompt — wird wörtlich an das LLM geschickt. Hier landet die operative Anweisung, nicht die Erklärung."
-                footer="Tipp: Halte den Prompt kurz und imperativ. Beispiele und Personality gehören ins Profil oben."
+                description="Technischer Prompt — wird wörtlich an das LLM geschickt."
+                help={
+                  <p>
+                    Hier landet die operative Anweisung, nicht die Erklärung.
+                    Halte den Prompt kurz und imperativ — Beispiele und Personality
+                    gehören ins Profil oben.
+                  </p>
+                }
               >
                 <FormField
                   control={form.control}
@@ -132,7 +148,14 @@ export function PersonaEditorForm({ form, onSubmit, saveError }: PersonaEditorFo
 
               <FormSection
                 title="Tags"
-                description={'Stichwörter zur Suche und Gruppierung. Beispiel: „coaching, feedback, leadership".'}
+                description="Stichwörter zur Suche und Gruppierung."
+                help={
+                  <p>
+                    Beispiel: <em>„coaching, feedback, leadership"</em>.
+                    Enter zum Anlegen, Klick auf das X zum Entfernen.
+                    Vorschläge kommen aus bereits verwendeten Tags.
+                  </p>
+                }
               >
                 <FormField
                   control={form.control}

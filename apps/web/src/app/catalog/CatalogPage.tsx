@@ -14,6 +14,7 @@ import { DialogShowcase } from './showcases/dialog'
 import { DropdownShowcase } from './showcases/dropdown'
 import { FormShowcase } from './showcases/form'
 import { FormSectionShowcase } from './showcases/form-section'
+import { InfoTooltipShowcase } from './showcases/info-tooltip'
 import { InputShowcase } from './showcases/input'
 import { LabelShowcase } from './showcases/label'
 import { LayoutShowcase } from './showcases/layout'
@@ -41,6 +42,7 @@ const NAV_ENTRIES: readonly NavEntry[] = [
   { id: 'dropdown', label: 'Dropdown' },
   { id: 'form', label: 'Form' },
   { id: 'form-section', label: 'FormSection' },
+  { id: 'info-tooltip', label: 'InfoTooltip' },
   { id: 'skeleton', label: 'Skeleton' },
   { id: 'table', label: 'Table' },
   { id: 'layout', label: 'Layout' },
@@ -82,6 +84,7 @@ export function CatalogPage() {
         <DropdownShowcase />
         <FormShowcase />
         <FormSectionShowcase />
+        <InfoTooltipShowcase />
         <SkeletonShowcase />
         <TableShowcase />
         <LayoutShowcase />

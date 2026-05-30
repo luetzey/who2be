@@ -112,4 +112,72 @@ describe('PlaybookEditorForm', () => {
     })
     expect(Array.isArray(payload.content.tags)).toBe(true)
   })
+
+  it('zeigt Hilfe-Tooltips fuer jede Section', () => {
+    render(<Harness />)
+    // Zwei Sections (Identität, Inhalt) → zwei Info-Buttons.
+    expect(screen.getAllByRole('button', { name: 'Hilfe einblenden' }).length).toBe(2)
+  })
+
+  it('rendert bestehende Trigger als Pills (kein Komma-Input mehr)', () => {
+    render(<Harness />)
+    // Bestehender Trigger aus dem Mock-Playbook taucht als Badge-Pill auf
+    // (mit Entfernen-Button via TagInput).
+    expect(
+      screen.getByRole('button', { name: 'Tag passwort vergessen entfernen' }),
+    ).toBeInTheDocument()
+    // Es gibt KEIN klassisches <input type="text"> mit dem alten Placeholder.
+    expect(
+      screen.queryByPlaceholderText(/passwort vergessen.*reset link/),
+    ).not.toBeInTheDocument()
+  })
+
+  it('legt einen neuen Trigger als Pill an und schickt ihn beim Submit als Komma-String', async () => {
+    updatePlaybook.mockClear()
+    render(<Harness />)
+
+    // Trigger-Input ueber sein Label finden (aria-labelledby haelt das Combobox-Element).
+    const triggerLabel = screen.getByText('Trigger', { selector: 'label' })
+    const triggerLabelId = triggerLabel.getAttribute('id') ?? triggerLabel.id
+    const triggerInput = screen
+      .getAllByRole('combobox')
+      .find((element) => element.getAttribute('aria-labelledby') === triggerLabelId)
+    if (triggerInput === undefined) {
+      throw new Error('Trigger-Combobox nicht gefunden')
+    }
+    fireEvent.change(triggerInput, { target: { value: 'reset link' } })
+    fireEvent.keyDown(triggerInput, { key: 'Enter' })
+
+    expect(
+      await screen.findByRole('button', { name: 'Tag reset link entfernen' }),
+    ).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Neue Version speichern' }))
+
+    await waitFor(() => {
+      expect(updatePlaybook).toHaveBeenCalledTimes(1)
+    })
+    const payload = updatePlaybook.mock.calls[0][1]
+    expect(payload.content.triggers).toBe('passwort vergessen, reset link')
+  })
+
+  it('entfernt einen Trigger per Klick auf das X', async () => {
+    updatePlaybook.mockClear()
+    render(<Harness />)
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Tag passwort vergessen entfernen' }),
+    )
+
+    expect(
+      screen.queryByRole('button', { name: 'Tag passwort vergessen entfernen' }),
+    ).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Neue Version speichern' }))
+
+    await waitFor(() => {
+      expect(updatePlaybook).toHaveBeenCalledTimes(1)
+    })
+    expect(updatePlaybook.mock.calls[0][1].content.triggers).toBeNull()
+  })
 })

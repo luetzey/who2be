@@ -78,7 +78,22 @@ export function PlaybookEditorForm({ form, onSubmit, saveError }: PlaybookEditor
             <form onSubmit={onSubmit} className="flex flex-col gap-6">
               <FormSection
                 title="Identität"
-                description={'Wie das Playbook heißt, welcher Typ es ist und worum es geht. Beispiel: „Reset-Mail beantworten" als Workflow.'}
+                description="Wie das Playbook heißt, welcher Typ es ist und worum es geht."
+                help={
+                  <div className="space-y-2">
+                    <p>
+                      Beispiel: <em>„Reset-Mail beantworten"</em> als Workflow.
+                    </p>
+                    <p className="text-xs font-medium text-foreground">Typen</p>
+                    <ul className="list-disc space-y-1 pl-4 text-xs">
+                      {TYPE_OPTIONS.map((option) => (
+                        <li key={option.value}>
+                          <strong>{option.label}:</strong> {option.hint}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                }
               >
                 <FormField
                   control={form.control}
@@ -143,8 +158,14 @@ export function PlaybookEditorForm({ form, onSubmit, saveError }: PlaybookEditor
 
               <FormSection
                 title="Inhalt"
-                description="Das eigentliche Playbook und seine Auslöser. Beispiel: Schritt 1 — Kunde begrüßen; Schritt 2 — Identität verifizieren; Schritt 3 — Reset-Link versenden."
-                footer="Änderungen erzeugen eine neue Version. Alte Versionen bleiben erhalten."
+                description="Das eigentliche Playbook und seine Auslöser."
+                help={
+                  <p>
+                    Beispiel: Schritt 1 — Kunde begrüßen; Schritt 2 — Identität
+                    verifizieren; Schritt 3 — Reset-Link versenden. Änderungen
+                    erzeugen eine neue Version; alte Versionen bleiben erhalten.
+                  </p>
+                }
               >
                 <FormField
                   control={form.control}
@@ -179,10 +200,6 @@ export function PlaybookEditorForm({ form, onSubmit, saveError }: PlaybookEditor
                           disabled={isViewer}
                         />
                       </FormControl>
-                      <p className="text-xs text-muted-foreground">
-                        Beispiel: „support, reset, mail". Vorschläge kommen aus bereits
-                        verwendeten Tags.
-                      </p>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -192,16 +209,18 @@ export function PlaybookEditorForm({ form, onSubmit, saveError }: PlaybookEditor
                   name="triggers"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Trigger</FormLabel>
+                      <FormLabel id={`${field.name}-label`}>Trigger</FormLabel>
                       <FormControl>
-                        <Input
-                          placeholder='z. B. "passwort vergessen", "reset link"'
-                          {...field}
+                        <TagInput
+                          value={field.value}
+                          onChange={field.onChange}
+                          ariaLabelledby={`${field.name}-label`}
+                          placeholder="Trigger eingeben und Enter drücken"
+                          disabled={isViewer}
                         />
                       </FormControl>
                       <p className="text-xs text-muted-foreground">
-                        Komma-Liste von Schlüsselwörtern, mit denen Agenten dieses
-                        Playbook finden.
+                        Enter zum Anlegen, Klick zum Entfernen.
                       </p>
                       <FormMessage />
                     </FormItem>
