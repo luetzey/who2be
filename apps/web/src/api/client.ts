@@ -107,6 +107,12 @@ export interface Api {
   getPersona: (id: string) => Promise<Persona>
   createPersona: (input: PersonaInput) => Promise<Persona>
   updatePersona: (id: string, input: PersonaInput) => Promise<Persona>
+  // Auto-Save (Phase 3-Runde-3 Track 2): schreibt in den Draft, ohne neue
+  // Version anzulegen. Active bleibt unangetastet — der explizite Submit
+  // (Status-Transition draft→review) erfolgt separat.
+  patchPersonaDraft: (id: string, input: PersonaInput) => Promise<Persona>
+  patchPlaybookDraft: (id: string, input: PlaybookInput) => Promise<Playbook>
+  patchResourceDraft: (id: string, input: ResourceInput) => Promise<Resource>
   listPersonaVersions: (id: string) => Promise<PersonaVersion[]>
   // Phase 3 — DISTINCT-Persona-Tag-Vorschlag fuer den `TagInput` im
   // Persona-Editor. Eigene Quelle (nicht `listPlaybookTags`), damit der
@@ -202,6 +208,21 @@ export function createApi(token: string, workspaceId: string): Api {
     updatePersona: (id, input) =>
       request<Persona>(token, `${ws}/personas/${id}`, {
         method: 'PUT',
+        body: JSON.stringify(input),
+      }),
+    patchPersonaDraft: (id, input) =>
+      request<Persona>(token, `${ws}/personas/${id}/draft`, {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      }),
+    patchPlaybookDraft: (id, input) =>
+      request<Playbook>(token, `${ws}/playbooks/${id}/draft`, {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      }),
+    patchResourceDraft: (id, input) =>
+      request<Resource>(token, `${ws}/resources/${id}/draft`, {
+        method: 'PATCH',
         body: JSON.stringify(input),
       }),
     listPersonaVersions: (id) =>

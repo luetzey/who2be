@@ -84,8 +84,9 @@ describe('PersonaDetailPage (a11y)', () => {
       initialEntries: ['/w/ws-1/personas/p1'],
     })
 
+    // Phase-3-Round-3: Header zeigt jetzt das Versions-Status-Format.
     await waitFor(() => {
-      expect(screen.getByText('Aktuelle Version: 1')).toBeInTheDocument()
+      expect(screen.getByText(/Aktuelle Version: v1/)).toBeInTheDocument()
     })
     await waitFor(() => {
       expect(screen.getByLabelText('Coaching')).toBeInTheDocument()

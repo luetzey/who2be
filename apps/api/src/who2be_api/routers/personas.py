@@ -89,6 +89,19 @@ async def update_persona(
     return await service.update(ctx, persona_id, data)
 
 
+@router.patch("/{persona_id}/draft")
+@limiter.limit(write_limit)
+async def update_persona_draft(
+    request: Request,
+    persona_id: UUID,
+    data: PersonaUpdate,
+    ctx: Ctx,
+    service: Service,
+) -> PersonaRead:
+    """Auto-Save-Pfad — upsertet die Draft-Version ohne Versions-Increment."""
+    return await service.update_draft(ctx, persona_id, data)
+
+
 @router.get("/{persona_id}/versions")
 async def list_persona_versions(
     persona_id: UUID, ctx: Ctx, service: Service

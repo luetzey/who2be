@@ -1,11 +1,14 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { type BaseSyntheticEvent, useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useForm, type UseFormReturn } from 'react-hook-form'
 import { z } from 'zod'
 
-import type { Playbook, PlaybookType, ResourceBlock } from '@/api/types'
+import type { Playbook, PlaybookInput, PlaybookType, ResourceBlock } from '@/api/types'
 import { useApi } from '@/api/useApi'
-import { notify } from '@/lib/feedback'
+import {
+  useAutoSaveDraft,
+  type UseAutoSaveDraftResult,
+} from '@/hooks/useAutoSaveDraft'
 
 import { blockPlainText } from '../lib/blockText'
 import { joinTriggers, splitTriggers } from '../lib/triggers'
@@ -32,13 +35,9 @@ const editorSchema = z.object({
 
 export type PlaybookEditorValues = z.infer<typeof editorSchema>
 
-function describeError(cause: unknown): string {
-  return cause instanceof Error ? cause.message : 'Unbekannter Fehler.'
-}
-
 // Backend persistiert `body: str`. Bis das Schema in einem Folge-Plan auf
 // `body_blocks` migriert wurde, serialisieren wir die BlockNote-Bloecke
-// beim Submit als Plain-Text-Snapshot (Blockwise mit `\n\n` getrennt).
+// beim Save als Plain-Text-Snapshot (Blockwise mit `\n\n` getrennt).
 function blocksToPlainText(blocks: ResourceBlock[]): string {
   return blocks
     .map((block) => blockPlainText(block).trim())
@@ -66,22 +65,34 @@ function coercePlaybookType(value: string): PlaybookType {
     : 'workflow'
 }
 
+function toInput(values: PlaybookEditorValues): PlaybookInput {
+  return {
+    name: values.name,
+    content: {
+      description: values.description,
+      body: blocksToPlainText(values.bodyBlocks),
+      type: values.type,
+      tags: values.tags,
+      triggers: joinTriggers(values.triggers),
+    },
+  }
+}
+
 export interface UsePlaybookFormResult {
   form: UseFormReturn<PlaybookEditorValues>
-  onSubmit: (event?: BaseSyntheticEvent) => Promise<void>
-  saveError: string | null
+  autoSave: UseAutoSaveDraftResult
+  // Initial-Snapshot der Body-Bloecke, direkt vom playbook-Prop abgeleitet.
+  // `field.value` taugt dafuer nicht, weil form.reset erst nach dem Mount
+  // im Effect laeuft.
+  initialBodyBlocks: ResourceBlock[]
 }
 
 /**
- * Editor-Form fuer Playbook-Update. Resettet auf Persona-Aenderung,
- * Submit ruft updatePlaybook + Toast + uebergebenes `onSaved`.
+ * Editor-Form fuer Playbook-Auto-Save. Resettet auf Playbook-Aenderung,
+ * leitet `form.watch`-Werte in `useAutoSaveDraft` (PATCH `.../draft`).
  */
-export function usePlaybookForm(
-  playbook: Playbook | null,
-  onSaved: () => void,
-): UsePlaybookFormResult {
+export function usePlaybookForm(playbook: Playbook | null): UsePlaybookFormResult {
   const api = useApi()
-  const [saveError, setSaveError] = useState<string | null>(null)
   const form = useForm<PlaybookEditorValues>({
     resolver: zodResolver(editorSchema),
     defaultValues: {
@@ -94,6 +105,8 @@ export function usePlaybookForm(
     },
   })
 
+  // Siehe `usePersonaForm` — `formReady` verhindert das Default-Snapshot-Race.
+  const [formReady, setFormReady] = useState(false)
   useEffect(() => {
     if (playbook !== null) {
       form.reset({
@@ -104,33 +117,28 @@ export function usePlaybookForm(
         tags: playbook.content.tags,
         triggers: splitTriggers(playbook.content.triggers ?? null),
       })
+      setFormReady(true)
     }
   }, [playbook, form])
 
-  const onSubmit = form.handleSubmit(async (values) => {
-    if (playbook === null) {
-      return
-    }
-    setSaveError(null)
-    try {
-      await api.updatePlaybook(playbook.id, {
-        name: values.name,
-        content: {
-          description: values.description,
-          body: blocksToPlainText(values.bodyBlocks),
-          type: values.type,
-          tags: values.tags,
-          triggers: joinTriggers(values.triggers),
-        },
-      })
-      notify.success('Gespeichert — neue Version erstellt.')
-      onSaved()
-    } catch (cause) {
-      setSaveError(describeError(cause))
-    }
+  const values = form.watch()
+  const autoSave = useAutoSaveDraft<PlaybookEditorValues>({
+    values,
+    isReady: playbook !== null && formReady,
+    patchFn: async (next) => {
+      if (playbook === null) {
+        return
+      }
+      await api.patchPlaybookDraft(playbook.id, toInput(next))
+    },
   })
 
-  return { form, onSubmit, saveError }
+  const initialBodyBlocks = useMemo(
+    () => (playbook !== null ? plainTextToBlocks(playbook.content.body) : []),
+    [playbook],
+  )
+
+  return { form, autoSave, initialBodyBlocks }
 }
 
 export { PLAYBOOK_TYPES }

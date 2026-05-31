@@ -72,10 +72,14 @@ afterEach(() => {
 })
 
 describe('PersonaDetailPage', () => {
-  it('zeigt eine neue Version, nachdem der Editor gespeichert wurde', async () => {
-    const v1 = { version: 1, content: persona(1, 's1').content, created_by: 'o1', created_at: 't1' }
-    const v2 = { version: 2, content: persona(2, 's2').content, created_by: 'o1', created_at: 't2' }
-
+  it('Auto-Save: Aenderungen feuern einen PATCH-Draft, kein PUT mehr', async () => {
+    const v1 = {
+      version: 1,
+      status: 'draft',
+      content: persona(1, 's1').content,
+      created_by: 'o1',
+      created_at: 't1',
+    }
     const handlers: Record<string, () => Response> = {
       [route('GET', `${WS_PREFIX}/personas/p1`)]: () => jsonResponse(persona(1, 's1')),
       [route('GET', `${WS_PREFIX}/personas/p1/versions`)]: () => jsonResponse([v1]),
@@ -83,15 +87,16 @@ describe('PersonaDetailPage', () => {
       [route('GET', `${WS_PREFIX}/playbooks`)]: () => jsonResponse([]),
     }
 
+    const patchCalls: Array<{ url: string; body: unknown }> = []
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const method = init?.method ?? 'GET'
       const url = String(input)
-      if (method === 'PUT' && url.endsWith(`${WS_PREFIX}/personas/p1`)) {
-        handlers[route('GET', `${WS_PREFIX}/personas/p1`)] = () => jsonResponse(persona(2, 's2'))
-        handlers[route('GET', `${WS_PREFIX}/personas/p1/versions`)] = () => jsonResponse([v1, v2])
-        return jsonResponse(persona(2, 's2'))
+      const pathname = new URL(url).pathname
+      if (method === 'PATCH' && pathname.endsWith('/personas/p1/draft')) {
+        patchCalls.push({ url, body: JSON.parse(init?.body as string) })
+        return jsonResponse(persona(1, 's1'))
       }
-      const key = route(method, new URL(url).pathname)
+      const key = route(method, pathname)
       const handler = handlers[key]
       if (!handler) {
         throw new Error(`Unmocked ${key}`)
@@ -113,19 +118,29 @@ describe('PersonaDetailPage', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText('Aktuelle Version: 1')).toBeInTheDocument()
+      expect(screen.getByLabelText('Name')).toBeInTheDocument()
     })
+    expect(
+      screen.queryByRole('button', { name: 'Neue Version speichern' }),
+    ).not.toBeInTheDocument()
 
-    // System-Prompt wird seit Phase 3-fixes Track 2 ueber BlockNote erfasst —
-    // der Wert kommt im Test aus dem GET-Response, kein DOM-Event noetig.
-    fireEvent.click(screen.getByRole('button', { name: 'Neue Version speichern' }))
-
-    await waitFor(() => {
-      expect(screen.getByText('Aktuelle Version: 2')).toBeInTheDocument()
-    })
-    expect(screen.getByText(/v2 —/)).toBeInTheDocument()
-    expect(notify.success).toHaveBeenCalledWith('Gespeichert — neue Version erstellt.')
-  })
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Coach v2' } })
+    await waitFor(
+      () => {
+        expect(patchCalls.length).toBeGreaterThanOrEqual(1)
+      },
+      { timeout: 3000 },
+    )
+    expect((patchCalls[patchCalls.length - 1].body as { name: string }).name).toBe(
+      'Coach v2',
+    )
+    const putCalls = fetchMock.mock.calls.filter(
+      (call) =>
+        (call[1] as RequestInit | undefined)?.method === 'PUT' &&
+        String(call[0]).endsWith('/personas/p1'),
+    )
+    expect(putCalls).toHaveLength(0)
+  }, 10_000)
 
   it('verknuepft Playbooks via PUT auf /personas/:id/playbooks', async () => {
     const pb1 = {

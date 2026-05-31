@@ -91,6 +91,19 @@ async def update_playbook(
     return await service.update(ctx, playbook_id, data)
 
 
+@router.patch("/{playbook_id}/draft")
+@limiter.limit(write_limit)
+async def update_playbook_draft(
+    request: Request,
+    playbook_id: UUID,
+    data: PlaybookUpdate,
+    ctx: Ctx,
+    service: Service,
+) -> PlaybookRead:
+    """Auto-Save-Pfad — upsertet die Draft-Version ohne Versions-Increment."""
+    return await service.update_draft(ctx, playbook_id, data)
+
+
 @router.get("/{playbook_id}/versions")
 async def list_playbook_versions(
     playbook_id: UUID, ctx: Ctx, service: Service

@@ -302,6 +302,112 @@ def test_persona_put_on_active_creates_draft_and_blocks_second_edit(
 
 
 @pytest.mark.integration
+def test_persona_patch_draft_upserts_in_place_without_active_touch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """PATCH erzeugt einen Draft (wenn nicht da) und ueberschreibt ihn in-place.
+
+    - PATCH 1 auf Active-only-Stand: neuer Draft v2, Active bleibt v1.
+    - PATCH 2 auf den Draft: Inhalt wird ueberschrieben, kein Versions-Increment.
+    - Tenant-Isolation: Fremd-Workspace darf nicht editieren (403/404).
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    other = fresh_user_id()
+    ws = setup_workspace(owner)
+    setup_workspace(other)
+    auth = _auth(owner)
+    base = f"/v1/workspaces/{ws}/personas"
+
+    try:
+        with TestClient(app) as client:
+            persona_id = client.post(base, json=_persona_body("v1"), headers=auth).json()["id"]
+            # Auf Active hochziehen.
+            for to in ("review", "active"):
+                client.post(
+                    f"{base}/{persona_id}/versions/1/transition",
+                    json={"to": to},
+                    headers=auth,
+                )
+
+            # PATCH 1: Draft v2 entsteht, Active bleibt v1.
+            first = client.patch(
+                f"{base}/{persona_id}/draft",
+                json=_persona_body("draft-1"),
+                headers=auth,
+            )
+            assert first.status_code == 200, first.text
+            assert first.json()["current_version"] == 2
+            assert first.json()["current_status"] == "draft"
+            v1 = client.get(f"{base}/{persona_id}/versions/1", headers=auth).json()
+            assert v1["status"] == "active"
+            assert v1["content"]["description"] == "v1"
+
+            # PATCH 2: gleicher Draft, in-place ueberschrieben.
+            second = client.patch(
+                f"{base}/{persona_id}/draft",
+                json=_persona_body("draft-2"),
+                headers=auth,
+            )
+            assert second.status_code == 200
+            assert second.json()["current_version"] == 2
+            assert second.json()["content"]["description"] == "draft-2"
+            versions = client.get(f"{base}/{persona_id}/versions", headers=auth).json()
+            # Genau zwei Versionen: v1 (active) + v2 (draft, ueberschrieben).
+            assert [v["version"] for v in versions] == [2, 1]
+
+            # Tenant-Isolation: fremder User hat keinen Zugriff (403, kein 200).
+            assert (
+                client.patch(
+                    f"{base}/{persona_id}/draft",
+                    json=_persona_body("foreign"),
+                    headers=_auth(other),
+                ).status_code
+                == 403
+            )
+    finally:
+        cleanup_workspaces([owner, other])
+
+
+@pytest.mark.integration
+def test_persona_patch_draft_on_review_returns_409(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Review-Version darf nicht ueberschrieben werden — 409 statt stiller Write."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    base = f"/v1/workspaces/{ws}/personas"
+
+    try:
+        with TestClient(app) as client:
+            persona_id = client.post(base, json=_persona_body("v1"), headers=auth).json()["id"]
+            # v1: draft → review (kein Draft mehr, current_status=review).
+            client.post(
+                f"{base}/{persona_id}/versions/1/transition",
+                json={"to": "review"},
+                headers=auth,
+            )
+            resp = client.patch(
+                f"{base}/{persona_id}/draft",
+                json=_persona_body("nope"),
+                headers=auth,
+            )
+            assert resp.status_code == 409
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
 def test_persona_active_filter_for_api_token(monkeypatch: pytest.MonkeyPatch) -> None:
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
