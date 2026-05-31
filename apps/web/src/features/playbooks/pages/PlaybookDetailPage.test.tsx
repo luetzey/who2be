@@ -128,8 +128,13 @@ describe('PlaybookDetailPage', () => {
       </SessionContext.Provider>,
     )
 
+    // WICHTIG: warten bis form.reset(playbook) durchgelaufen ist und das
+    // Name-Feld den geladenen Wert "Coach" enthaelt. Sonst feuert
+    // fireEvent.change gegen ein noch leeres Default-Input und der spaeter
+    // eintreffende reset ueberschreibt die Aenderung — PATCH wird nie
+    // ausgeloest (CI-Flake beobachtet in PR #79, analog Persona-Test).
     await waitFor(() => {
-      expect(screen.getByLabelText('Name')).toBeInTheDocument()
+      expect(screen.getByLabelText('Name')).toHaveValue('Coach')
     })
     // Save-Button gibt es nicht mehr.
     expect(
