@@ -34,6 +34,13 @@ async def render_template_body(
     Bei `body_format != 'blocknote'` wird der Body unveraendert zurueckgegeben
     (rueckwaertskompatibel mit bestehenden `plain`-Templates).
 
+    Akzeptiert zwei BlockNote-JSON-Shapes:
+    - Top-Level-Array `[{...block...}, ...]` (was `editor.document` liefert
+      und was Frontend in `body` schreibt) — der Default.
+    - Wrapper-Objekt `{"content": [{...block...}, ...]}` (was BlockNote bei
+      anderen Export-Pfaden produziert und was die Unit-Tests bisher
+      benutzten).
+
     Args:
         body_text:   Der rohe Template-Body-String aus der Datenbank.
         body_format: `'plain'` oder `'blocknote'`.
@@ -47,20 +54,32 @@ async def render_template_body(
         return body_text
 
     try:
-        doc: dict[str, Any] = json.loads(body_text)
+        parsed: Any = json.loads(body_text)
     except json.JSONDecodeError:
         logger.error("render_template_body: Body ist kein gueltiges JSON — unveraendert zurueck")
         return body_text
 
-    return await _walk_blocks(doc, ctx, db)
+    if isinstance(parsed, list):
+        top_level_blocks: list[dict[str, Any]] = parsed
+    elif isinstance(parsed, dict):
+        nested = parsed.get("content", [])
+        top_level_blocks = nested if isinstance(nested, list) else []
+    else:
+        logger.error(
+            "render_template_body: Unbekannte JSON-Top-Level-Form %r — leerer Output",
+            type(parsed).__name__,
+        )
+        return ""
+
+    return await _walk_blocks(top_level_blocks, ctx, db)
 
 
 async def _walk_blocks(
-    doc: dict[str, Any],
+    top_level_blocks: list[dict[str, Any]],
     ctx: RenderContext,
     db: asyncpg.Connection,
 ) -> str:
-    """Traversiert ein BlockNote-Dokument und rendert es zu Plain-Text.
+    """Traversiert die Top-Level-Block-Liste und rendert sie zu Plain-Text.
 
     Jeder Block wird zu einem Absatz; Inline-Content innerhalb des Blocks wird
     konkateniert. Placeholder-Inline-Elemente werden ueber den REGISTRY-Dict
@@ -68,7 +87,6 @@ async def _walk_blocks(
     String eingefuegt; eine Exception wird nie geworfen.
     """
     parts: list[str] = []
-    top_level_blocks: list[dict[str, Any]] = doc.get("content", [])
     for block in top_level_blocks:
         block_text = await _render_block(block, ctx, db)
         if block_text:

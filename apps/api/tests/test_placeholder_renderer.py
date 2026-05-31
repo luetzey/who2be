@@ -325,6 +325,20 @@ class TestToolsOverviewResolver:
 class TestRenderTemplateBody:
     """Tests fuer den Renderer selbst (ohne echte DB)."""
 
+    def _blocknote_doc_array(self, *inline_items: dict[str, Any]) -> str:
+        """Top-Level-Array-Variante — wie `editor.document` sie liefert."""
+        return json.dumps(
+            [
+                {
+                    "id": "p1",
+                    "type": "paragraph",
+                    "props": {},
+                    "content": list(inline_items),
+                    "children": [],
+                }
+            ]
+        )
+
     def _blocknote_doc(self, *inline_items: dict[str, Any]) -> str:
         """Erzeugt ein minimales BlockNote-JSON-Dokument mit einem Paragraph."""
         return json.dumps(
@@ -358,6 +372,30 @@ class TestRenderTemplateBody:
         result = _async_run(render_template_body(doc, "blocknote", ctx, db))
 
         assert "Hallo Welt" in result
+
+    def test_blocknote_top_level_array_shape(self) -> None:
+        """Frontend serialisiert `editor.document` als reines Array — siehe
+        SystemPromptEditorForm.handleBlockNoteChange. Renderer muss das
+        ebenso akzeptieren wie das `{content: [...]}`-Wrapper-Format."""
+        db = _make_db()
+        ctx = _ctx()
+        doc = self._blocknote_doc_array({"type": "text", "text": "Top-Array", "styles": {}})
+
+        result = _async_run(render_template_body(doc, "blocknote", ctx, db))
+
+        assert "Top-Array" in result
+
+    def test_blocknote_top_level_array_with_placeholder(self) -> None:
+        db = _make_db()
+        ctx = _ctx(now=datetime(2026, 5, 31, tzinfo=UTC))
+        doc = self._blocknote_doc_array(
+            {"type": "text", "text": "Heute: ", "styles": {}},
+            {"type": "placeholder", "props": {"kind": "date", "target_id": "", "label": "Datum"}},
+        )
+
+        result = _async_run(render_template_body(doc, "blocknote", ctx, db))
+
+        assert result.strip() == "Heute: 2026-05-31"
 
     def test_blocknote_date_placeholder_iso(self) -> None:
         db = _make_db()
