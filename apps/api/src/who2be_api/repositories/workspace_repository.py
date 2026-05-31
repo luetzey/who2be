@@ -144,10 +144,114 @@ class PgWorkspaceRepository:
         return WorkspaceRead.model_validate(dict(row)) if row is not None else None
 
 
+# Welle 6: BlockNote-Starter-Body als Top-Level-JSON-Array (siehe
+# Migration 0027). 1:1-Synchron mit der SQL-Variante — Tests pruefen die
+# Slugs, das Body-Layout selbst ist hier nur Stringliteral.
+_WORKFLOW_STARTER_BLOCKNOTE_BODY = """[
+  {
+    "id": "ws-h1",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Rolle", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "ws-p1",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Du bist ", "styles": {}},
+      {"type": "placeholder", "props": {"kind": "persona-field", "target_id": "name", "label": "Persona: Name"}},
+      {"type": "text", "text": " \\u2014 ", "styles": {}},
+      {"type": "placeholder", "props": {"kind": "persona-field", "target_id": "description", "label": "Persona: Beschreibung"}},
+      {"type": "text", "text": ".", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "ws-h2",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Verfuegbare Werkzeuge", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "ws-p2",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "placeholder", "props": {"kind": "tools-overview", "target_id": "", "label": "Werkzeuge"}}
+    ],
+    "children": []
+  },
+  {
+    "id": "ws-h3",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "So gehst du vor", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "ws-li1",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Hoere der Anfrage zu und identifiziere das Thema.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "ws-li2",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Rufe list_triggers() auf, um zu sehen, ob ein Playbook reagiert.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "ws-li3",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Wenn ja: fetch_playbook(id) und folge dessen Schritten.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "ws-li4",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Wenn das Playbook auf eine Resource verweist: fetch_resource(id).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "ws-li5",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Erst wenn keines passt, antworte aus deinem allgemeinen Wissen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "ws-h4",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Letzter Stand", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "ws-p3",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Heute ist der ", "styles": {}},
+      {"type": "placeholder", "props": {"kind": "date", "target_id": "human", "label": "Datum"}},
+      {"type": "text", "text": ".", "styles": {}}
+    ],
+    "children": []
+  }
+]"""
+
+
 # Seed-Bodies fuer die Default-Templates eines neuen Workspaces — Quelle der
-# Migration 0023b und gleichzeitig Quelle dieser Laufzeit-Variante. Wir halten
-# beide bewusst synchron (Test prueft die Slug-Liste).
-_DEFAULT_TEMPLATES: tuple[tuple[str, str, str], ...] = (
+# Migrationen 0023b/0027 und gleichzeitig Quelle dieser Laufzeit-Variante. Wir
+# halten beide bewusst synchron (Test prueft die Slug-Liste).
+# Format: (slug, name, body, body_format).
+_DEFAULT_TEMPLATES: tuple[tuple[str, str, str, str], ...] = (
     (
         "customer-support-agent",
         "Customer-Support-Agent",
@@ -159,6 +263,7 @@ _DEFAULT_TEMPLATES: tuple[tuple[str, str, str], ...] = (
         "## Trigger-Stichworte\nReagiere besonders auf: {{ triggers }}\n\n"
         "## Wissensquellen\n{{ resources }}\n\n"
         "Antworte ruhig, präzise und in der gleichen Sprache wie der Nutzer.",
+        "plain",
     ),
     (
         "knowledge-worker",
@@ -170,6 +275,7 @@ _DEFAULT_TEMPLATES: tuple[tuple[str, str, str], ...] = (
         "## Arbeitsabläufe\n{{ playbooks }}\n\n"
         "Nutze die Wissensquellen, bevor du externe Annahmen triffst. "
         "Wenn die Quelle widersprüchlich ist, weise höflich darauf hin.",
+        "plain",
     ),
     (
         "conversational-coach",
@@ -181,6 +287,13 @@ _DEFAULT_TEMPLATES: tuple[tuple[str, str, str], ...] = (
         "## Cues, die einen Methodenwechsel auslösen\n{{ triggers }}\n\n"
         "Bleibe stets gesprächig, stelle Fragen statt Antworten zu predigen, "
         "und beziehe die Methoden nur ein, wenn sie zum Gespräch passen.",
+        "plain",
+    ),
+    (
+        "workflow-starter",
+        "Workflow-Starter",
+        _WORKFLOW_STARTER_BLOCKNOTE_BODY,
+        "blocknote",
     ),
 )
 
@@ -196,16 +309,18 @@ async def _seed_default_templates(
     Initial-Status ist `active`, sodass der Render-Endpoint sofort ohne
     Promote-Schritt feuert.
     """
-    for slug, name, body in _DEFAULT_TEMPLATES:
+    for slug, name, body, body_format in _DEFAULT_TEMPLATES:
         template_id = await conn.fetchval(
-            "INSERT INTO system_prompt_template (workspace_id, owner_id, name, slug) "
-            "VALUES ($1, $2, $3, $4) "
+            "INSERT INTO system_prompt_template "
+            "(workspace_id, owner_id, name, slug, body_format) "
+            "VALUES ($1, $2, $3, $4, $5) "
             "ON CONFLICT (workspace_id, slug) DO NOTHING "
             "RETURNING id",
             workspace_id,
             owner_id,
             name,
             slug,
+            body_format,
         )
         if template_id is None:
             # Template gab es schon — der Versions-Insert unten wuerde
