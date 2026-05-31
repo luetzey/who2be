@@ -41,7 +41,7 @@ function nodeFor(label: string, version: number, accent: boolean) {
       className={cn(
         'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs',
         accent
-          ? 'border-brand/40 bg-brand/10 text-brand-foreground'
+          ? 'border-brand/40 bg-brand/10 text-brand'
           : 'border-border bg-muted text-muted-foreground',
       )}
       data-testid={`branch-node-${label}`}
