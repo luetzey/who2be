@@ -53,6 +53,7 @@ def get_agent_render_service(
     pool: Annotated[asyncpg.Pool, Depends(get_pool)],
 ) -> AgentRenderService:
     return AgentRenderService(
+        pool,
         PgAgentRepository(pool),
         PgPersonaRepository(pool),
         PgSystemPromptTemplateRepository(pool),
