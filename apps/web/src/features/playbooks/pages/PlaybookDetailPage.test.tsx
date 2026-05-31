@@ -139,12 +139,13 @@ describe('PlaybookDetailPage', () => {
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Coach v2' } })
     // Auto-Save-Debounce ist 1500 ms — Real-Timer warten ist robuster als
     // FakeTimers (die unter Vitest in Kombination mit dem React-Concurrent-
-    // Renderer manchmal pending Promises blockieren).
+    // Renderer manchmal pending Promises blockieren). 5 s reicht komfortabel
+    // fuer CI-Runner; das alte 3-s-Limit war flaky (siehe PR #79).
     await waitFor(
       () => {
         expect(patchCalls.length).toBeGreaterThanOrEqual(1)
       },
-      { timeout: 3000 },
+      { timeout: 5000 },
     )
     expect(
       (patchCalls[patchCalls.length - 1].body as { name: string }).name,
