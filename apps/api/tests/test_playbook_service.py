@@ -14,8 +14,10 @@ from who2be_models import (
     PlaybookContent,
     PlaybookCreate,
     PlaybookRead,
+    PlaybookRef,
     PlaybookUpdate,
     PlaybookVersionRead,
+    TriggerOverview,
     VersionStatus,
     WorkspaceRole,
 )
@@ -264,6 +266,24 @@ class FakePlaybookRepository:
             if playbook.workspace_id == workspace_id:
                 tags.update(playbook.tags)
         return sorted(tags)
+
+    async def list_triggers_with_playbooks(
+        self, workspace_id: UUID
+    ) -> list[TriggerOverview]:
+        bucket: dict[str, list[PlaybookRef]] = {}
+        for playbook in self._playbooks.values():
+            if playbook.workspace_id != workspace_id:
+                continue
+            if not playbook.triggers:
+                continue
+            for raw in playbook.triggers.split(","):
+                trigger = raw.strip()
+                if not trigger:
+                    continue
+                bucket.setdefault(trigger, []).append(
+                    PlaybookRef(id=playbook.id, name=playbook.name)
+                )
+        return [TriggerOverview(trigger=t, playbooks=p) for t, p in sorted(bucket.items())]
 
 
 def _service() -> tuple[PlaybookService, WorkspaceContext]:

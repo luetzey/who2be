@@ -88,9 +88,7 @@ def with_tool_log(tool_name: str) -> Callable[[Callable[P, R]], Callable[P, R]]:
             @functools.wraps(func)
             async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
                 request_id = uuid.uuid4().hex
-                structlog.contextvars.bind_contextvars(
-                    request_id=request_id, tool=tool_name
-                )
+                structlog.contextvars.bind_contextvars(request_id=request_id, tool=tool_name)
                 start = time.perf_counter()
                 try:
                     result = await cast(Callable[P, Awaitable[R]], func)(*args, **kwargs)
@@ -105,9 +103,7 @@ def with_tool_log(tool_name: str) -> Callable[[Callable[P, R]], Callable[P, R]]:
         @functools.wraps(func)
         def sync_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             request_id = uuid.uuid4().hex
-            structlog.contextvars.bind_contextvars(
-                request_id=request_id, tool=tool_name
-            )
+            structlog.contextvars.bind_contextvars(request_id=request_id, tool=tool_name)
             start = time.perf_counter()
             try:
                 result = func(*args, **kwargs)

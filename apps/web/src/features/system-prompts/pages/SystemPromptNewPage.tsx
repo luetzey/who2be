@@ -1,12 +1,14 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { ArrowLeft } from 'lucide-react'
-import { useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, useNavigate } from 'react-router-dom'
 import { z } from 'zod'
 
 import { useApi } from '@/api/useApi'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
+import { SystemPromptEditor } from '@/components/editor/system-prompt/SystemPromptEditor'
+import type { SystemPromptBlock } from '@/components/editor/system-prompt/SystemPromptEditor'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -15,15 +17,16 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import { notify } from '@/lib/feedback'
 
 import { PlaceholderHelp } from '../components/PlaceholderHelp'
 
+// Neue Templates nutzen immer body_format='blocknote'.
+// body-Validierung: kein min(1) — ein leeres BlockNote-Dok ist valid.
 const createSchema = z.object({
   name: z.string().min(1, 'Name erforderlich.'),
   description: z.string(),
-  body: z.string().min(1, 'Body erforderlich.'),
+  body: z.string(),
 })
 
 type CreateValues = z.infer<typeof createSchema>
@@ -33,17 +36,41 @@ export function SystemPromptNewPage() {
   const navigate = useNavigate()
   const wsPath = useWorkspacePath()
   const [saveError, setSaveError] = useState<string | null>(null)
+
+  // BlockNote-Bloecke werden ausserhalb des RHF-State gepuffert, damit kein
+  // Re-Render des Editors bei jedem Keystroke ausgeloest wird.
+  const blocksRef = useRef<SystemPromptBlock[]>([])
+
   const form = useForm<CreateValues>({
     resolver: zodResolver(createSchema),
     defaultValues: { name: '', description: '', body: '' },
   })
 
+  const handleBlockNoteChange = useCallback(
+    (blocks: SystemPromptBlock[]) => {
+      blocksRef.current = blocks
+      // RHF-body-Feld mitfuehren, damit isDirty korrekt ist.
+      form.setValue('body', JSON.stringify(blocks), { shouldDirty: true })
+    },
+    [form],
+  )
+
   const onSubmit = form.handleSubmit(async (values) => {
     setSaveError(null)
     try {
+      // body ist JSON-String; falls noch nie onChange gefeuert hat → leeres Array.
+      const bodyJson =
+        values.body !== '' ? values.body : JSON.stringify(blocksRef.current)
       const created = await api.createSystemPromptTemplate({
         name: values.name,
-        content: { description: values.description, body: values.body },
+        body_format: 'blocknote',
+        content: {
+          description: values.description,
+          // body_format lebt auf Template-Top-Level; content traegt nur
+          // description+body. body darf nicht leer sein (Pydantic min_length=1) —
+          // ein leeres BlockNote-Dok serialisiert zu "[]", was OK ist.
+          body: bodyJson !== '' ? bodyJson : '[]',
+        },
       })
       notify.success('Template angelegt.')
       navigate(wsPath(`/system-prompts/${created.id}`))
@@ -77,7 +104,7 @@ export function SystemPromptNewPage() {
                       <FormItem>
                         <FormLabel>Name</FormLabel>
                         <FormControl>
-                          <Input required {...field} />
+                          <Input required placeholder="z. B. Customer-Support-Agent" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -90,7 +117,10 @@ export function SystemPromptNewPage() {
                       <FormItem>
                         <FormLabel>Beschreibung</FormLabel>
                         <FormControl>
-                          <Input {...field} />
+                          <Input
+                            placeholder="z. B. Standard-Template für Support-Agenten"
+                            {...field}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -99,18 +129,10 @@ export function SystemPromptNewPage() {
                   <FormField
                     control={form.control}
                     name="body"
-                    render={({ field }) => (
+                    render={() => (
                       <FormItem>
                         <FormLabel>Body</FormLabel>
-                        <FormControl>
-                          <Textarea
-                            required
-                            rows={16}
-                            className="font-mono text-sm"
-                            placeholder="Du bist {{ persona.name }} — …"
-                            {...field}
-                          />
-                        </FormControl>
+                        <SystemPromptEditor onChange={handleBlockNoteChange} />
                         <FormMessage />
                       </FormItem>
                     )}

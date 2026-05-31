@@ -119,3 +119,28 @@ class PlaybookUsage(BaseModel):
 
     persona_id: UUID
     persona_name: str
+
+
+class PlaybookRef(BaseModel):
+    """Schlankes Playbook-Pointer-Tupel (id + name) fuer Aggregate."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
+
+
+class TriggerOverview(BaseModel):
+    """Welle 5: ein deduplizierter Trigger mit den Playbooks, die ihn fuehren.
+
+    Quelle: denormalisierte `playbook.triggers`-Spalte, kommagetrennt. Wird vom
+    Discovery-Endpoint `GET /v1/workspaces/{ws}/playbooks/triggers` und vom
+    MCP-Tool `list_triggers` zurueckgegeben — der LLM nutzt die Tabelle, um
+    fuer eine User-Anfrage das passende Playbook zu finden, ohne dass alle
+    Playbook-Bodies in den Systemprompt geladen werden muessen.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    trigger: str
+    playbooks: list[PlaybookRef]

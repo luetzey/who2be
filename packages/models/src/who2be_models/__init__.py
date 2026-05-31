@@ -11,6 +11,7 @@ from who2be_models.agent import (
     AgentRenderResponse,
     AgentStatus,
     AgentUpdate,
+    AgentWithRenderedPrompt,
     RenderFormat,
 )
 from who2be_models.dashboard import (
@@ -43,10 +44,12 @@ from who2be_models.playbook import (
     PlaybookContent,
     PlaybookCreate,
     PlaybookRead,
+    PlaybookRef,
     PlaybookType,
     PlaybookUpdate,
     PlaybookUsage,
     PlaybookVersionRead,
+    TriggerOverview,
 )
 from who2be_models.resource import (
     LinkedBlockSection,
@@ -92,6 +95,7 @@ __all__ = [
     "AgentRenderResponse",
     "AgentStatus",
     "AgentUpdate",
+    "AgentWithRenderedPrompt",
     "DEFAULT_LIMIT",
     "DashboardActivity",
     "DashboardActor",
@@ -121,6 +125,7 @@ __all__ = [
     "PlaybookContent",
     "PlaybookCreate",
     "PlaybookRead",
+    "PlaybookRef",
     "PlaybookType",
     "PlaybookUpdate",
     "PlaybookUsage",
@@ -145,6 +150,7 @@ __all__ = [
     "TokenCreate",
     "TokenCreated",
     "TokenRead",
+    "TriggerOverview",
     "VersionStatus",
     "VersionTransitionRequest",
     "WorkspaceCreate",

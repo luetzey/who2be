@@ -314,6 +314,15 @@ export interface ResourceLinkItemInput {
 }
 
 // Phase 3 Runde 3 Track 3 — SystemPromptTemplate-Aggregat.
+
+// body_format: 'plain' = Plain-Text-Textarea (Legacy),
+//              'blocknote' = BlockNote-JSON-String (Welle 5).
+// Migration 0026 ergaenzt die Spalte; Default ist 'plain'.
+export type SystemPromptBodyFormat = 'plain' | 'blocknote'
+
+// `body_format` ist im Backend ein Top-Level-Feld (sibling von `name`/
+// `content`), NICHT Teil des inner `SystemPromptTemplateContent`-Models —
+// Pydantic verwirft es sonst mit 422 (`extra="forbid"` auf Content).
 export interface SystemPromptTemplateContent {
   description: string
   body: string
@@ -325,6 +334,8 @@ export interface SystemPromptTemplate {
   owner_id: string
   name: string
   slug: string
+  // Optional bei alten Responses (Pre-Welle-5); Frontend faellt auf 'plain' zurueck.
+  body_format?: SystemPromptBodyFormat
   current_version: number
   current_status?: VersionStatus
   has_pending_draft?: boolean
@@ -344,6 +355,7 @@ export interface SystemPromptTemplateVersion {
 export interface SystemPromptTemplateInput {
   name: string
   slug?: string
+  body_format?: SystemPromptBodyFormat
   content: SystemPromptTemplateContent
 }
 

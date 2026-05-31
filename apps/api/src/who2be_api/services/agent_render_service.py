@@ -31,9 +31,11 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
+import asyncpg
 from fastapi import HTTPException, status
 from markdown_it import MarkdownIt
 
@@ -51,6 +53,10 @@ from who2be_api.repositories.system_prompt_template_repository import (
     SystemPromptTemplateRepository,
 )
 from who2be_api.services.agent_service import AgentService
+from who2be_api.services.placeholders import (
+    RenderContext as PlaceholderRenderContext,
+)
+from who2be_api.services.placeholders import render_template_body
 from who2be_models import (
     AgentRenderResponse,
     PersonaContent,
@@ -184,12 +190,14 @@ class AgentRenderService:
 
     def __init__(
         self,
+        pool: asyncpg.Pool,
         agent_repo: AgentRepository,
         persona_repo: PersonaRepository,
         template_repo: SystemPromptTemplateRepository,
         persona_playbook_repo: PersonaPlaybookRepository,
         playbook_resource_link_repo: PlaybookResourceLinkRepository,
     ) -> None:
+        self._pool = pool
         self._agent_repo = agent_repo
         self._persona_repo = persona_repo
         self._template_repo = template_repo
@@ -209,11 +217,38 @@ class AgentRenderService:
             )
         if AgentService.is_disabled(agent):
             raise _agent_render_inactive()
-        template_content = await self._template_repo.fetch_active_content(
+        active = await self._template_repo.fetch_active_content_with_format(
             workspace_id, agent.system_prompt_template_id
         )
-        if template_content is None:
+        if active is None:
             raise _template_inactive()
+        template_content, body_format = active
+
+        # Welle 5: BlockNote-Templates laufen ueber den Placeholder-Renderer
+        # (services/placeholders/), der Custom-Inline-Blocks (playbook,
+        # resource, persona-field, date, tools-overview) zu echtem Text
+        # expandiert. Liquid-Tokens wuerden in der JSON-Repraesentation
+        # sowieso nicht greifen — daher zaehlen sie hier nicht als
+        # `unresolved_placeholders`.
+        if body_format == "blocknote":
+            render_ctx = PlaceholderRenderContext(
+                workspace_id=workspace_id,
+                persona_id=agent.persona_id,
+                now=datetime.now(UTC),
+            )
+            async with self._pool.acquire() as conn:
+                substituted = await render_template_body(
+                    template_content.body, body_format, render_ctx, conn
+                )
+            if output_format == "html":
+                renderer = MarkdownIt("commonmark", {"html": False, "breaks": True})
+                substituted = renderer.render(substituted)
+            return AgentRenderResponse(
+                content=substituted,
+                unresolved_placeholders=[],
+                format=output_format,
+            )
+
         ctx = await self._collect_context(workspace_id, agent.persona_id)
         substituted, unresolved = _substitute(template_content.body, ctx, output_format)
         return AgentRenderResponse(

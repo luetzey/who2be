@@ -12,7 +12,14 @@ from uuid import UUID
 import httpx
 from fastmcp.exceptions import ToolError
 
-from who2be_models import PersonaRead, PlaybookRead, ResourceLinkRead, ResourceRead
+from who2be_models import (
+    AgentWithRenderedPrompt,
+    PersonaRead,
+    PlaybookRead,
+    ResourceLinkRead,
+    ResourceRead,
+    TriggerOverview,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -82,9 +89,7 @@ class ApiClient:
         raise ToolError(f"Keine Persona mit Name '{name}'.")
 
     async def get_persona_playbooks(self, persona_id: UUID) -> list[PlaybookRead]:
-        data = await self._get(
-            f"{self._workspace_prefix}/personas/{persona_id}/playbooks"
-        )
+        data = await self._get(f"{self._workspace_prefix}/personas/{persona_id}/playbooks")
         return [PlaybookRead.model_validate(item) for item in data]
 
     async def list_playbooks(self, tag: str | None, trigger: str | None) -> list[PlaybookRead]:
@@ -95,6 +100,10 @@ class ApiClient:
             params["trigger"] = trigger
         data = await self._get(f"{self._workspace_prefix}/playbooks", params=params)
         return [PlaybookRead.model_validate(item) for item in data]
+
+    async def list_triggers(self) -> list[TriggerOverview]:
+        data = await self._get(f"{self._workspace_prefix}/playbooks/triggers")
+        return [TriggerOverview.model_validate(item) for item in data]
 
     async def get_playbook(self, playbook_id: UUID) -> PlaybookRead:
         data = await self._get(f"{self._workspace_prefix}/playbooks/{playbook_id}")
@@ -108,10 +117,11 @@ class ApiClient:
         data = await self._get(f"{self._workspace_prefix}/resources/{resource_id}")
         return ResourceRead.model_validate(data)
 
-    async def get_playbook_resource_links(
-        self, playbook_id: UUID
-    ) -> list[ResourceLinkRead]:
-        data = await self._get(
-            f"{self._workspace_prefix}/playbooks/{playbook_id}/resource_links"
-        )
+    async def get_playbook_resource_links(self, playbook_id: UUID) -> list[ResourceLinkRead]:
+        data = await self._get(f"{self._workspace_prefix}/playbooks/{playbook_id}/resource_links")
         return [ResourceLinkRead.model_validate(item) for item in data]
+
+    async def get_agent_rendered(self, agent_id: UUID) -> AgentWithRenderedPrompt:
+        """Laedt Agent + Persona + expandierten System-Prompt vom API-Endpoint."""
+        data = await self._get(f"{self._workspace_prefix}/agents/{agent_id}/rendered")
+        return AgentWithRenderedPrompt.model_validate(data)
