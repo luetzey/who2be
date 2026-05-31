@@ -27,7 +27,7 @@ import { statusBadgeVariant, statusLabel } from '../lib/status'
 export function PersonaDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { persona, versions, loading, error, reload } = usePersona(id)
-  const { form, autoSave } = usePersonaForm(persona)
+  const { form, autoSave } = usePersonaForm(persona, reload)
   const links = usePersonaPlaybooks(id)
   const wsPath = useWorkspacePath()
   const api = useApi()

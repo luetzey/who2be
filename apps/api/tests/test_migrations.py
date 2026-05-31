@@ -44,7 +44,18 @@ _PHASE3_MIGRATIONS = [
     "0019_status_default_draft.sql",
     "0020_playbook_type_check.sql",
 ]
-_PRE_PHASE3_MIGRATIONS = [m for m in _ALL_MIGRATIONS if m not in _PHASE3_MIGRATIONS]
+# Welle 4: 0025 lockert den `playbook_type_check`-Constraint um den
+# Leerstring — gehoert zwingend zur „neuen Welt", sonst legt der Test
+# vor dem Phase-3-Step bereits den engen Constraint an und der Test-
+# INSERT mit `type='core'` schlaegt mit CheckViolation fehl.
+_POST_PHASE3_MIGRATIONS = [
+    "0025_playbook_type_allow_empty.sql",
+]
+_PRE_PHASE3_MIGRATIONS = [
+    m
+    for m in _ALL_MIGRATIONS
+    if m not in _PHASE3_MIGRATIONS and m not in _POST_PHASE3_MIGRATIONS
+]
 
 
 def _db_reachable() -> bool:
@@ -143,7 +154,7 @@ def test_phase30_idempotent(tmp_path: Path) -> None:
         first = await apply_migrations(conn, tmp_path)
         second = await apply_migrations(conn, tmp_path)
         # Manuelles Statement-Replay der neuen Files muss ebenfalls No-op sein.
-        for name in _PHASE3_MIGRATIONS:
+        for name in _PHASE3_MIGRATIONS + _POST_PHASE3_MIGRATIONS:
             sql = (MIGRATIONS_DIR / name).read_text(encoding="utf-8")
             await conn.execute(sql)
         return first, second
@@ -218,7 +229,7 @@ def test_phase30_status_default_and_backfill(tmp_path: Path) -> None:
         )
 
         # 2) Phase-3-Migration anwenden.
-        _copy_migrations(tmp_path, _PHASE3_MIGRATIONS)
+        _copy_migrations(tmp_path, _PHASE3_MIGRATIONS + _POST_PHASE3_MIGRATIONS)
         await apply_migrations(conn, tmp_path)
 
         # Status nach Backfill.
@@ -289,7 +300,7 @@ def test_phase30_playbook_type_check(tmp_path: Path) -> None:
             owner,
         )
 
-        _copy_migrations(tmp_path, _PHASE3_MIGRATIONS)
+        _copy_migrations(tmp_path, _PHASE3_MIGRATIONS + _POST_PHASE3_MIGRATIONS)
         await apply_migrations(conn, tmp_path)
 
         legacy_type = await conn.fetchval("SELECT type FROM playbook WHERE id = $1", legacy_id)

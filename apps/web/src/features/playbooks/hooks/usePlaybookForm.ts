@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm, type UseFormReturn } from 'react-hook-form'
 import { z } from 'zod'
 
@@ -90,8 +90,15 @@ export interface UsePlaybookFormResult {
 /**
  * Editor-Form fuer Playbook-Auto-Save. Resettet auf Playbook-Aenderung,
  * leitet `form.watch`-Werte in `useAutoSaveDraft` (PATCH `.../draft`).
+ *
+ * `onSaved` triggert die Page nach erfolgreichem PATCH zum Refetch (Status/
+ * Version live aktualisieren). Subsequent-Reloads derselben Playbook-ID
+ * resetten den Form-State nicht, damit User-Edits nicht ueberschrieben werden.
  */
-export function usePlaybookForm(playbook: Playbook | null): UsePlaybookFormResult {
+export function usePlaybookForm(
+  playbook: Playbook | null,
+  onSaved?: () => void,
+): UsePlaybookFormResult {
   const api = useApi()
   const form = useForm<PlaybookEditorValues>({
     resolver: zodResolver(editorSchema),
@@ -107,8 +114,9 @@ export function usePlaybookForm(playbook: Playbook | null): UsePlaybookFormResul
 
   // Siehe `usePersonaForm` — `formReady` verhindert das Default-Snapshot-Race.
   const [formReady, setFormReady] = useState(false)
+  const resetIdRef = useRef<string | null>(null)
   useEffect(() => {
-    if (playbook !== null) {
+    if (playbook !== null && resetIdRef.current !== playbook.id) {
       form.reset({
         name: playbook.name,
         type: coercePlaybookType(playbook.content.type),
@@ -117,6 +125,7 @@ export function usePlaybookForm(playbook: Playbook | null): UsePlaybookFormResul
         tags: playbook.content.tags,
         triggers: splitTriggers(playbook.content.triggers ?? null),
       })
+      resetIdRef.current = playbook.id
       setFormReady(true)
     }
   }, [playbook, form])
@@ -131,6 +140,7 @@ export function usePlaybookForm(playbook: Playbook | null): UsePlaybookFormResul
       }
       await api.patchPlaybookDraft(playbook.id, toInput(next))
     },
+    onSaved,
   })
 
   const initialBodyBlocks = useMemo(

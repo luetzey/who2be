@@ -60,12 +60,26 @@ def _auth(owner_id: UUID) -> dict[str, str]:
 
 
 def _persona_body(description: str) -> dict[str, object]:
+    # Welle 4: Promote-Validator verlangt fuer draft -> review/active eine
+    # nicht-leere Beschreibung UND einen nicht-leeren Profil-Body
+    # (content.content.blocks). Die meisten Integrationstests transitionen
+    # die v1 spaeter auf active — Body daher von Anfang an mitschicken.
     return {
         "name": "QA-Bot",
         "content": {
             "description": description,
             "system_prompt": "Be precise.",
             "traits": ["thorough"],
+            "content": {
+                "description": description,
+                "blocks": [
+                    {
+                        "id": "b1",
+                        "type": "paragraph",
+                        "content": [{"type": "text", "text": description, "styles": {}}],
+                    }
+                ],
+            },
         },
     }
 

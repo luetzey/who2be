@@ -19,12 +19,19 @@ unnoetig aufblaehen wuerden. Wir bleiben hier bei rohem SQL und halten die
 Transition-Logik an einer Stelle.
 """
 
+from collections.abc import Callable
+from typing import Any
 from uuid import UUID
 
 import asyncpg
 from fastapi import HTTPException, status
 
 from who2be_api.core.security import WorkspaceContext, require_role
+from who2be_api.services.promote_validation import (
+    validate_promote_persona,
+    validate_promote_playbook,
+    validate_promote_resource,
+)
 from who2be_api.services.status_history_service import StatusHistoryService
 from who2be_models import (
     ALLOWED_TRANSITIONS,
@@ -65,6 +72,17 @@ def _invariant_violation() -> HTTPException:
         status_code=status.HTTP_409_CONFLICT,
         detail="Konfliktierende Status-Aenderung (parallele Transition).",
     )
+
+
+# Promote-Validator-Map: EntityType -> Validator-Funktion.
+# `system_prompt_template` hat keine Pflichtfeld-Tabelle in Welle 4;
+# der Slot bleibt None (kein Promote-Gate fuer Templates).
+_ValidatorFn = Callable[[str, dict[str, Any], VersionStatus], None]
+_PROMOTE_VALIDATORS: dict[str, _ValidatorFn] = {
+    "persona": validate_promote_persona,
+    "playbook": validate_promote_playbook,
+    "resource": validate_promote_resource,
+}
 
 
 def validate_transition(from_status: VersionStatus, to_status: VersionStatus) -> None:
@@ -177,8 +195,10 @@ class VersionStatusService:
         async with self._pool.acquire() as conn, conn.transaction():
             # Ziel-Version laden + sperren. JOIN ueber das Entity sichert,
             # dass die Version im richtigen Workspace lebt.
+            # `e.name` und `pv.content` werden fuer die Promote-Validation
+            # mitgeladen (Welle 4).
             target = await conn.fetchrow(
-                f"SELECT pv.status FROM {version_tbl} pv "
+                f"SELECT pv.status, pv.content, e.name FROM {version_tbl} pv "
                 f"JOIN {entity_tbl} e ON e.id = pv.{fk_col} "
                 f"WHERE pv.{fk_col} = $1 AND pv.version = $2 "
                 "AND e.workspace_id = $3 "
@@ -195,6 +215,16 @@ class VersionStatusService:
             # ueberhaupt erlaubt ist (409), dann ob die Rolle ihn ausfuehren
             # darf (403). Promote/Retire verlangen admin (ADR-0023).
             require_role(ctx, required_role_for_transition(from_status, to_status))
+
+            # Promote-Validation (Welle 4): Pflichtfelder vor draft->review/active.
+            # Nur fuer Entities mit Pflichtfeld-Tabelle (persona, playbook, resource).
+            # system_prompt_template hat kein Gate. PromoteValidationError propagiert
+            # zum Exception-Handler in main.py (application/problem+json, 409).
+            # asyncpg gibt jsonb-Felder dank registered codec als dict zurueck.
+            validator = _PROMOTE_VALIDATORS.get(entity_type)
+            if validator is not None and from_status == VersionStatus.draft:
+                content_dict: dict[str, Any] = target["content"]
+                validator(target["name"], content_dict, to_status)
 
             # Active-Promotion: die bisherige Active-Version derselben
             # Entity zuerst auf `inactive` setzen — sonst kollidiert der

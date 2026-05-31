@@ -36,24 +36,35 @@ class PlaybookType(StrEnum):
 
 
 class PlaybookContent(BaseModel):
-    """Typisierter Inhalt einer Playbook-Version (`playbook_version.content`)."""
+    """Typisierter Inhalt einer Playbook-Version (`playbook_version.content`).
+
+    Welle 4: description, body und type haben Default "" — Create erlaubt
+    unvollstaendige Drafts. Promote-Validation (draft → review/active) prueft
+    im Transition-Endpunkt auf vollstaendige Pflichtfelder.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    description: str = Field(max_length=2_000)
-    body: str = Field(max_length=50_000)
-    type: str = Field(min_length=1, max_length=100)
+    description: str = Field(default="", max_length=2_000)
+    body: str = Field(default="", max_length=50_000)
+    # Welle 4: min_length entfernt; Default "" erlaubt Draft-Create ohne Typ.
+    # Der denormalisierte DB-Wert wird im Repo auf "prompt" gemappt wenn leer.
+    type: str = Field(default="", max_length=100)
     tags: list[TagStr] = Field(default_factory=list, max_length=50)
     triggers: str | None = Field(default=None, max_length=2_000)
 
 
 class PlaybookCreate(BaseModel):
-    """Eingabe fuer `POST /v1/playbooks` — legt Version 1 an."""
+    """Eingabe fuer `POST /v1/playbooks` — legt Version 1 an.
+
+    Welle 4: nur `name` ist Pflicht. `content` ist optional; fehlt es, wird
+    eine leere `PlaybookContent` eingesetzt.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1, max_length=200)
-    content: PlaybookContent
+    content: PlaybookContent = Field(default_factory=PlaybookContent)
 
 
 class PlaybookUpdate(BaseModel):

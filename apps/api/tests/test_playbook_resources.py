@@ -82,7 +82,10 @@ def _heading(block_id: str, text: str, level: int = 1) -> dict[str, object]:
 
 
 def _resource_body(name: str, blocks: list[dict[str, object]]) -> dict[str, object]:
-    return {"name": name, "content": {"description": "", "blocks": blocks}}
+    # Welle 4: Promote-Validator verlangt nicht-leere description fuer
+    # draft -> review/active. blocks kommt schon vom Caller; description
+    # bekommt eine harmlose, eindeutige Vorgabe.
+    return {"name": name, "content": {"description": f"resource {name}", "blocks": blocks}}
 
 
 def _playbook_body(name: str) -> dict[str, object]:

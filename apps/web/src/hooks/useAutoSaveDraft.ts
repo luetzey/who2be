@@ -23,6 +23,12 @@ export interface UseAutoSaveDraftOptions<T> {
   isReady: boolean
   patchFn: (values: T) => Promise<unknown>
   debounceMs?: number
+  // Welle 4 (Folge-Fix): Detail-Pages wollen nach jedem erfolgreichen
+  // Auto-Save den Versions-/Status-Snapshot vom Server nachholen, damit
+  // der gerade angelegte Draft direkt in der BranchStatus + Versionsliste
+  // auftaucht. `onSaved` wird genau einmal pro erfolgreicher Save-Runde
+  // gefeuert, nach `lastSavedSnapshotRef`-Update.
+  onSaved?: () => void
 }
 
 export interface UseAutoSaveDraftResult extends AutoSaveState {
@@ -40,6 +46,7 @@ export function useAutoSaveDraft<T>({
   isReady,
   patchFn,
   debounceMs = DEFAULT_DEBOUNCE_MS,
+  onSaved,
 }: UseAutoSaveDraftOptions<T>): UseAutoSaveDraftResult {
   const [state, setState] = useState<AutoSaveState>({
     status: 'idle',
@@ -54,6 +61,7 @@ export function useAutoSaveDraft<T>({
   const valuesRef = useRef(values)
   const isReadyRef = useRef(isReady)
   const patchFnRef = useRef(patchFn)
+  const onSavedRef = useRef(onSaved)
   const lastSavedSnapshotRef = useRef<string | null>(null)
   const pendingSnapshotRef = useRef<string | null>(null)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -62,6 +70,7 @@ export function useAutoSaveDraft<T>({
   valuesRef.current = values
   isReadyRef.current = isReady
   patchFnRef.current = patchFn
+  onSavedRef.current = onSaved
 
   const runSave = useCallback(async (): Promise<void> => {
     if (!isReadyRef.current) {
@@ -83,6 +92,10 @@ export function useAutoSaveDraft<T>({
         lastSavedAt: new Date(),
         errorMessage: null,
       })
+      // Nach erfolgreichem Save: Detail-Page-Refetch triggern (Status/Version
+      // im UI aktualisieren). Out-of-band, damit ein onSaved-Fehler den
+      // Save-Status nicht ueberschreibt.
+      onSavedRef.current?.()
     } catch (cause) {
       setState((prev) => ({
         status: 'error',

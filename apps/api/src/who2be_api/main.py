@@ -13,7 +13,7 @@ from typing import cast
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 from slowapi.middleware import SlowAPIMiddleware
 
@@ -44,6 +44,7 @@ from who2be_api.routers import (
     usages,
     workspaces,
 )
+from who2be_api.services.promote_validation import PromoteValidationError
 
 _WORKSPACE_PREFIX = "/v1/workspaces/{workspace_id}"
 
@@ -58,6 +59,27 @@ def _on_rate_limit(request: Request, exc: Exception) -> Response:
     # slowapi's Handler ist auf `RateLimitExceeded` typisiert; Starlette erwartet
     # `Exception`. Duenner Adapter haelt mypy strict, ohne `type: ignore`.
     return _rate_limit_exceeded_handler(request, cast(RateLimitExceeded, exc))
+
+
+def _on_promote_validation_error(request: Request, exc: Exception) -> Response:
+    """application/problem+json-Handler fuer `PromoteValidationError` (Welle 4).
+
+    HTTP 409 (Status-Konflikt, nicht 422 syntaktischer Fehler). Der Frontend-
+    Agent erwartet exakt dieses Shape um die fehlenden Feldnamen anzuzeigen.
+    """
+    err = cast(PromoteValidationError, exc)
+    body = {
+        "type": "https://who2be.dev/errors/promote-validation-failed",
+        "title": "Promote nicht moeglich: Pflichtfelder fehlen",
+        "status": 409,
+        "detail": "Pflichtfelder muessen vor Promote ausgefuellt sein.",
+        "missing": err.missing,
+    }
+    return JSONResponse(
+        status_code=409,
+        content=body,
+        media_type="application/problem+json",
+    )
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -84,6 +106,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _on_rate_limit)
+    app.add_exception_handler(PromoteValidationError, _on_promote_validation_error)
     # SlowAPIMiddleware vor CORSMiddleware adden: Starlette stacked LIFO, dann liegt
     # CORS aussen und Preflight-OPTIONS triggert das Limit nicht.
     app.add_middleware(SlowAPIMiddleware)

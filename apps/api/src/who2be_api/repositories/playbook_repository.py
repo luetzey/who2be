@@ -139,6 +139,8 @@ class PgPlaybookRepository:
     ) -> PlaybookRead:
         content_json = content.model_dump(mode="json")
         async with self._pool.acquire() as conn, conn.transaction():
+            # Welle 4: type="" ist erlaubter Draft-Zustand (Migration 0025 hat
+            # den CHECK um '' erweitert). Direkt content.type uebergeben.
             playbook = await conn.fetchrow(
                 "INSERT INTO playbook (workspace_id, owner_id, name, type, tags, triggers) "
                 "VALUES ($1, $2, $3, $4, $5, $6) "
