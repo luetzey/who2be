@@ -25,9 +25,11 @@ def _content() -> PlaybookContent:
     )
 
 
-def test_content_requires_non_empty_type() -> None:
-    with pytest.raises(ValidationError):
-        PlaybookContent(description="d", body="b", type="")
+def test_content_allows_empty_type_for_draft() -> None:
+    # Welle 4: type="" ist erlaubt fuer Draft-Create.
+    # Promote-Validation prueft spaeter, ob type befuellt ist.
+    content = PlaybookContent(description="d", body="b", type="")
+    assert content.type == ""
 
 
 def test_content_defaults_tags_and_triggers() -> None:

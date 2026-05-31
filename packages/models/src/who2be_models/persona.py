@@ -46,7 +46,8 @@ class PersonaVersionContent(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    description: str = Field(max_length=2_000)
+    # Welle 4: description hat Default "" — Create erlaubt leere Description.
+    description: str = Field(default="", max_length=2_000)
     # `system_prompt` ist seit Phase 3 Runde 3 (Track 3 — Agents+Templates)
     # deprecated: der System-Prompt des Agenten lebt im verknuepften Template.
     # Default ist daher der leere String — neue UIs senden das Feld nicht mehr,
@@ -58,12 +59,18 @@ class PersonaVersionContent(BaseModel):
 
 
 class PersonaCreate(BaseModel):
-    """Eingabe fuer `POST /v1/personas` — legt Version 1 an."""
+    """Eingabe fuer `POST /v1/personas` — legt Version 1 an.
+
+    Welle 4: nur `name` ist Pflicht. `content` ist optional; fehlt es, wird
+    eine leere `PersonaVersionContent` eingesetzt. Promote-Validation (draft →
+    review/active) prueft im Transition-Endpunkt auf vollstaendige Pflichtfelder
+    (description, body in `content.content.blocks`).
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1, max_length=200)
-    content: PersonaVersionContent
+    content: PersonaVersionContent = Field(default_factory=PersonaVersionContent)
 
 
 class PersonaUpdate(BaseModel):
