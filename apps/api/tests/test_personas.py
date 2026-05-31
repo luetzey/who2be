@@ -530,7 +530,9 @@ def test_persona_modes_round_trip_create_read_update(
                     headers=auth,
                 )
 
-            modes_v2: list[dict[str, object]] = [{"name": "Solo", "trigger": None, "is_default": True}]
+            modes_v2: list[dict[str, object]] = [
+                {"name": "Solo", "trigger": None, "is_default": True}
+            ]
             updated = client.put(
                 f"{base}/{persona_id}",
                 json=_body_with_modes("v2 ohne Erklaerer", modes_v2),
