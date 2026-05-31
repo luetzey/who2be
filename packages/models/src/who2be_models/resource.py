@@ -61,12 +61,16 @@ class ResourceContent(BaseModel):
 
 
 class ResourceCreate(BaseModel):
-    """Eingabe fuer `POST /v1/workspaces/{ws}/resources` — legt Version 1 an."""
+    """Eingabe fuer `POST /v1/workspaces/{ws}/resources` — legt Version 1 an.
+
+    Welle 4: nur `name` ist Pflicht. `content` ist optional; fehlt es, wird
+    eine leere `ResourceContent` eingesetzt (description="" + blocks=[]).
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1, max_length=200)
-    content: ResourceContent
+    content: ResourceContent = Field(default_factory=ResourceContent)
 
 
 class ResourceUpdate(BaseModel):
