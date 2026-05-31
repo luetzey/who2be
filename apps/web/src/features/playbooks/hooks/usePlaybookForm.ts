@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useForm, type UseFormReturn } from 'react-hook-form'
 import { z } from 'zod'
 
@@ -105,6 +105,8 @@ export function usePlaybookForm(playbook: Playbook | null): UsePlaybookFormResul
     },
   })
 
+  // Siehe `usePersonaForm` — `formReady` verhindert das Default-Snapshot-Race.
+  const [formReady, setFormReady] = useState(false)
   useEffect(() => {
     if (playbook !== null) {
       form.reset({
@@ -115,13 +117,14 @@ export function usePlaybookForm(playbook: Playbook | null): UsePlaybookFormResul
         tags: playbook.content.tags,
         triggers: splitTriggers(playbook.content.triggers ?? null),
       })
+      setFormReady(true)
     }
   }, [playbook, form])
 
   const values = form.watch()
   const autoSave = useAutoSaveDraft<PlaybookEditorValues>({
     values,
-    isReady: playbook !== null,
+    isReady: playbook !== null && formReady,
     patchFn: async (next) => {
       if (playbook === null) {
         return

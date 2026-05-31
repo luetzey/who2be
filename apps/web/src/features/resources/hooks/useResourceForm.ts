@@ -31,6 +31,8 @@ export function useResourceForm(resource: Resource | null): UseResourceFormResul
     resolver: zodResolver(schema),
     defaultValues: { name: '', description: '' },
   })
+  // Siehe `usePersonaForm` — `formReady` verhindert das Default-Snapshot-Race.
+  const [formReady, setFormReady] = useState(false)
 
   useEffect(() => {
     if (resource === null) {
@@ -38,6 +40,7 @@ export function useResourceForm(resource: Resource | null): UseResourceFormResul
     }
     form.reset({ name: resource.name, description: resource.content.description ?? '' })
     setBlocks(resource.content.blocks ?? [])
+    setFormReady(true)
   }, [resource, form])
 
   const values = form.watch()
@@ -49,7 +52,7 @@ export function useResourceForm(resource: Resource | null): UseResourceFormResul
   }
   const autoSave = useAutoSaveDraft<ResourceInput>({
     values: combined,
-    isReady: resource !== null,
+    isReady: resource !== null && formReady,
     patchFn: async (next) => {
       if (resource === null) {
         return

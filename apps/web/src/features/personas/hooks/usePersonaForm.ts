@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm, type UseFormReturn } from 'react-hook-form'
 import { z } from 'zod'
 
@@ -62,6 +62,11 @@ export function usePersonaForm(persona: Persona | null): UsePersonaFormResult {
     },
   })
 
+  // `formReady` flippt erst, NACHDEM `form.reset(persona)` durchgelaufen ist.
+  // Sonst sieht der Auto-Save-Hook den Default-Snapshot (leerer Name etc.) als
+  // "Anker" und schiesst beim ersten Re-Render mit den persona-Werten einen
+  // ungewollten PATCH ab — siehe Test-Flake in PR #74.
+  const [formReady, setFormReady] = useState(false)
   useEffect(() => {
     if (persona !== null) {
       form.reset({
@@ -71,13 +76,14 @@ export function usePersonaForm(persona: Persona | null): UsePersonaFormResult {
         profileBlocks: persona.content.content?.blocks ?? [],
         tags: persona.content.tags ?? [],
       })
+      setFormReady(true)
     }
   }, [persona, form])
 
   const values = form.watch()
   const autoSave = useAutoSaveDraft<PersonaEditorValues>({
     values,
-    isReady: persona !== null,
+    isReady: persona !== null && formReady,
     patchFn: async (next) => {
       if (persona === null) {
         return
