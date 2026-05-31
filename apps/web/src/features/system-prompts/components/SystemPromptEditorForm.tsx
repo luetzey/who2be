@@ -142,16 +142,22 @@ export function SystemPromptEditorForm({
                   }
                 >
                   {bodyFormat === 'blocknote' ? (
-                    <FormItem>
-                      <FormLabel>Body</FormLabel>
-                      <SystemPromptEditor
-                        key={initialBlocks !== undefined ? 'loaded' : 'empty'}
-                        initialBlocks={initialBlocks}
-                        editable={!isViewer}
-                        onChange={handleBlockNoteChange}
-                      />
-                      <FormMessage />
-                    </FormItem>
+                    <FormField
+                      control={form.control}
+                      name="body"
+                      render={() => (
+                        <FormItem>
+                          <FormLabel>Body</FormLabel>
+                          <SystemPromptEditor
+                            key={initialBlocks !== undefined ? 'loaded' : 'empty'}
+                            initialBlocks={initialBlocks}
+                            editable={!isViewer}
+                            onChange={handleBlockNoteChange}
+                          />
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   ) : (
                     <FormField
                       control={form.control}

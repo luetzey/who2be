@@ -123,10 +123,17 @@ export function SystemPromptNewPage() {
                       </FormItem>
                     )}
                   />
-                  <FormItem>
-                    <FormLabel>Body</FormLabel>
-                    <SystemPromptEditor onChange={handleBlockNoteChange} />
-                  </FormItem>
+                  <FormField
+                    control={form.control}
+                    name="body"
+                    render={() => (
+                      <FormItem>
+                        <FormLabel>Body</FormLabel>
+                        <SystemPromptEditor onChange={handleBlockNoteChange} />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                   {saveError !== null ? <ErrorAlert message={saveError} /> : null}
                   <div className="flex justify-end">
                     <Button
