@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm, type UseFormReturn } from 'react-hook-form'
 import { z } from 'zod'
 
@@ -26,7 +26,10 @@ export interface UseResourceFormResult {
   autoSave: UseAutoSaveDraftResult
 }
 
-export function useResourceForm(resource: Resource | null): UseResourceFormResult {
+export function useResourceForm(
+  resource: Resource | null,
+  onSaved?: () => void,
+): UseResourceFormResult {
   const api = useApi()
   const form = useForm<ResourceEditorValues>({
     resolver: zodResolver(schema),
@@ -34,9 +37,10 @@ export function useResourceForm(resource: Resource | null): UseResourceFormResul
   })
   // Siehe `usePersonaForm` — `formReady` verhindert das Default-Snapshot-Race.
   const [formReady, setFormReady] = useState(false)
+  const resetIdRef = useRef<string | null>(null)
 
   useEffect(() => {
-    if (resource === null) {
+    if (resource === null || resetIdRef.current === resource.id) {
       return
     }
     form.reset({
@@ -44,6 +48,7 @@ export function useResourceForm(resource: Resource | null): UseResourceFormResul
       description: resource.content.description ?? '',
       bodyBlocks: resource.content.blocks ?? [],
     })
+    resetIdRef.current = resource.id
     setFormReady(true)
   }, [resource, form])
 
@@ -62,6 +67,7 @@ export function useResourceForm(resource: Resource | null): UseResourceFormResul
       }
       await api.patchResourceDraft(resource.id, next)
     },
+    onSaved,
   })
 
   return { form, autoSave }

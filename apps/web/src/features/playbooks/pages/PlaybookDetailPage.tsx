@@ -30,7 +30,7 @@ import { splitTriggers } from '../lib/triggers'
 export function PlaybookDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { playbook, versions, loading, error, reload } = usePlaybook(id)
-  const { form, autoSave, initialBodyBlocks } = usePlaybookForm(playbook)
+  const { form, autoSave, initialBodyBlocks } = usePlaybookForm(playbook, reload)
   const resourceLinks = usePlaybookResourceLinks(id)
   const usages = usePlaybookUsages(id)
   const wsPath = useWorkspacePath()

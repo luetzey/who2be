@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useForm, type UseFormReturn } from 'react-hook-form'
 import { z } from 'zod'
 
@@ -49,8 +49,16 @@ function toInput(values: PersonaEditorValues): PersonaInput {
  * Editor-Form fuer Persona-Auto-Save. Wartet bis `persona` geladen ist,
  * resettet dann die Defaults und uebergibt die Werte an `useAutoSaveDraft`,
  * der mit 1500 ms Debounce in den Draft schreibt.
+ *
+ * `onSaved` triggert die Page nach erfolgreichem PATCH zum Refetch, damit
+ * Version/Status live aktualisieren. Form wird auf Subsequent-Reloads
+ * derselben Persona-ID NICHT resettet — sonst wuerde der Refetch laufende
+ * User-Edits ueberschreiben.
  */
-export function usePersonaForm(persona: Persona | null): UsePersonaFormResult {
+export function usePersonaForm(
+  persona: Persona | null,
+  onSaved?: () => void,
+): UsePersonaFormResult {
   const api = useApi()
   const form = useForm<PersonaEditorValues>({
     resolver: zodResolver(editorSchema),
@@ -67,14 +75,18 @@ export function usePersonaForm(persona: Persona | null): UsePersonaFormResult {
   // "Anker" und schiesst beim ersten Re-Render mit den persona-Werten einen
   // ungewollten PATCH ab — siehe Test-Flake in PR #74.
   const [formReady, setFormReady] = useState(false)
+  // Nur beim ersten Laden einer Persona-ID resetten — Refetches mit derselben
+  // ID (Save-Triggered Reload) lassen die User-Edits unberuehrt.
+  const resetIdRef = useRef<string | null>(null)
   useEffect(() => {
-    if (persona !== null) {
+    if (persona !== null && resetIdRef.current !== persona.id) {
       form.reset({
         name: persona.name,
         description: persona.content.description,
         profileBlocks: persona.content.content?.blocks ?? [],
         tags: persona.content.tags ?? [],
       })
+      resetIdRef.current = persona.id
       setFormReady(true)
     }
   }, [persona, form])
@@ -89,6 +101,7 @@ export function usePersonaForm(persona: Persona | null): UsePersonaFormResult {
       }
       await api.patchPersonaDraft(persona.id, toInput(next))
     },
+    onSaved,
   })
 
   return { form, autoSave }

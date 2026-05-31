@@ -22,7 +22,7 @@ import { statusBadgeVariant, statusLabel } from '../lib/status'
 export function ResourceDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { resource, versions, loading, error, reload } = useResource(id)
-  const { form, autoSave } = useResourceForm(resource)
+  const { form, autoSave } = useResourceForm(resource, reload)
   const usages = useResourceUsages(id)
   const wsPath = useWorkspacePath()
 
