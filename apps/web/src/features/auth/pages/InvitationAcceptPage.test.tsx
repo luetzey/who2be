@@ -45,7 +45,7 @@ function renderAccept(
 ) {
   return render(
     <SessionContext.Provider
-      value={{ session, me: meValue, signIn: vi.fn(), signOut: vi.fn() }}
+      value={{ session, me: meValue, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
     >
       <AuthTokenProvider>
         <MemoryRouter initialEntries={[initialEntry]}>

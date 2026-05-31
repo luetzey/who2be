@@ -91,9 +91,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setMe(null)
   }, [])
 
+  // Expliziter Re-Fetch ohne Token-Wechsel — z. B. nach Lazy-Seed eines
+  // Personal-Workspace. Nur sinnvoll, wenn eine aktive Session vorliegt.
+  const refreshMe = useCallback(async () => {
+    const { data } = await supabase.auth.getSession()
+    const token = data.session?.access_token
+    if (!token) return
+    const resolved = await resolveMe(token)
+    setMe(resolved)
+  }, [])
+
   const value = useMemo<SessionValue>(
-    () => ({ session, me, signIn, signOut }),
-    [session, me, signIn, signOut],
+    () => ({ session, me, signIn, signOut, refreshMe }),
+    [session, me, signIn, signOut, refreshMe],
   )
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>

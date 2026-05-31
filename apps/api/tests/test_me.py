@@ -187,6 +187,48 @@ def test_me_has_password_false_when_only_magic_link(
 
 
 @pytest.mark.integration
+def test_me_lazy_seeds_personal_workspace_for_fresh_user(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Frischer User ohne Workspace bekommt beim ersten /v1/me-Aufruf automatisch
+    eine Personal-Org + Admin-Workspace. Zweiter Aufruf ist idempotent."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+    _ensure_auth_users_shim()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    # Kein setup_workspace — User existiert nur in auth.users, nicht in org_member.
+    _set_auth_user(owner, has_password=False)
+
+    try:
+        with TestClient(app) as client:
+            # Erster Aufruf: lazy-seed muss greifen.
+            resp = client.get("/v1/me", headers=_auth(owner))
+            assert resp.status_code == 200
+            body = resp.json()
+            assert body["user_id"] == str(owner)
+            assert body["default_workspace_id"] is not None
+            assert len(body["organizations"]) == 1
+            org = body["organizations"][0]
+            assert org["kind"] == "personal"
+            assert len(org["workspaces"]) == 1
+            assert org["workspaces"][0]["role"] == "admin"
+            ws_id = body["default_workspace_id"]
+
+            # Zweiter Aufruf: idempotent — gleiche workspace_id, immer noch 1 Org.
+            resp2 = client.get("/v1/me", headers=_auth(owner))
+            assert resp2.status_code == 200
+            body2 = resp2.json()
+            assert body2["default_workspace_id"] == ws_id
+            assert len(body2["organizations"]) == 1
+    finally:
+        _delete_auth_user(owner)
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
 def test_me_rejects_unauthenticated() -> None:
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")

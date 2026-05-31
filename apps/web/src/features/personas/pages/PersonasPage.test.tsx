@@ -40,7 +40,7 @@ describe('PersonasPage', () => {
 
     render(
       <SessionContext.Provider
-        value={{ session: fakeSession, me: fakeMe, signIn: vi.fn(), signOut: vi.fn() }}
+        value={{ session: fakeSession, me: fakeMe, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
       >
         <AuthTokenProvider>
           <BrowserRouter>
