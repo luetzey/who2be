@@ -448,3 +448,117 @@ def test_fetch_agent_rendered_not_found_returns_404(
 
     finally:
         cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+def test_agent_render_blocknote_fills_unresolved_placeholders(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Welle 6: BlockNote-Branch von AgentRenderService befuellt unresolved_placeholders.
+
+    Template enthaelt einen validen persona-field:name-Pill (sollte aufloesen)
+    und einen invaliden Playbook-UUID-Pill (sollte Miss ergeben). Der
+    GET .../agents/{id}/render Endpoint muss das Feld korrekt befuellen.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+
+    invalid_playbook_uuid = "00000000-dead-beef-0000-000000000000"
+
+    try:
+        with TestClient(app) as client:
+            # Persona anlegen (kein Aktivieren noetig — persona-field liest
+            # current_version, nicht active).
+            persona = client.post(
+                f"/v1/workspaces/{ws}/personas",
+                json=_persona_body(),
+                headers=auth,
+            ).json()
+
+            # Template: persona-field:name (sollte aufloesen) + invalider Playbook.
+            doc = {
+                "content": [
+                    {
+                        "id": "p1",
+                        "type": "paragraph",
+                        "props": {},
+                        "content": [
+                            {
+                                "type": "placeholder",
+                                "props": {
+                                    "kind": "persona-field",
+                                    "target_id": "name",
+                                    "label": "Persona: Name",
+                                },
+                            },
+                        ],
+                        "children": [],
+                    },
+                    {
+                        "id": "p2",
+                        "type": "paragraph",
+                        "props": {},
+                        "content": [
+                            {
+                                "type": "placeholder",
+                                "props": {
+                                    "kind": "playbook",
+                                    "target_id": invalid_playbook_uuid,
+                                    "label": "Playbook: nicht existent",
+                                },
+                            },
+                        ],
+                        "children": [],
+                    },
+                ]
+            }
+            tpl = client.post(
+                f"/v1/workspaces/{ws}/system-prompts",
+                json={
+                    "name": "Welle6-Test-Template",
+                    "body_format": "blocknote",
+                    "content": {"description": "", "body": json.dumps(doc)},
+                },
+                headers=auth,
+            )
+            assert tpl.status_code == 201, tpl.text
+            tpl_id = tpl.json()["id"]
+            _promote_to_active(client, f"/v1/workspaces/{ws}/system-prompts", tpl_id, auth)
+
+            agent = client.post(
+                f"/v1/workspaces/{ws}/agents",
+                json={
+                    "name": "Welle6-Test-Agent",
+                    "description": "",
+                    "persona_id": persona["id"],
+                    "system_prompt_template_id": tpl_id,
+                },
+                headers=auth,
+            )
+            assert agent.status_code == 201, agent.text
+            agent_id = agent.json()["id"]
+
+            # GET .../render — prueft AgentRenderService BlockNote-Branch.
+            render_resp = client.get(
+                f"/v1/workspaces/{ws}/agents/{agent_id}/render",
+                headers=auth,
+            )
+            assert render_resp.status_code == 200, render_resp.text
+            data = render_resp.json()
+
+            # Persona-Field sollte aufgeloest worden sein (Name in content).
+            assert "Coach Carla" in data["content"]
+
+            # Invalider Playbook -> Miss im unresolved.
+            assert f"playbook:{invalid_playbook_uuid}" in data["unresolved_placeholders"]
+
+            # persona-field:name aufgeloest -> NICHT in unresolved.
+            assert "persona-field:name" not in data["unresolved_placeholders"]
+
+    finally:
+        cleanup_workspaces([owner])

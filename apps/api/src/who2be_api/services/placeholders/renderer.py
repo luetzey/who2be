@@ -2,12 +2,18 @@
 
 Traversiert BlockNote-JSON, sammelt alle Inline-Elemente vom Typ
 `placeholder`, ruft den passenden Resolver aus dem REGISTRY-Dict auf und
-gibt den expandierten Plain-Text-String zurueck.
+gibt den expandierten Plain-Text-String plus eine Liste der nicht aufgeloesten
+Placeholder-Keys zurueck.
 
 Saubere Trennung: _walk_blocks kummert sich ums Walking, REGISTRY ums Resolving.
 
 Nicht-gefundene Resolver -> lokalisierter Fehler-String, kein Exception.
 Der Renderer laeuft robust durch.
+
+Welle 6: `render_template_body` gibt `tuple[str, list[str]]` zurueck.
+  - Index 0: gerenderter Plain-Text
+  - Index 1: deduplizierte, lexikografisch sortierte Liste der Miss-Keys
+    (z.B. ``["persona-field:name", "playbook:abc-uuid"]``).
 """
 
 from __future__ import annotations
@@ -28,11 +34,12 @@ async def render_template_body(
     body_format: str,
     ctx: RenderContext,
     db: asyncpg.Connection,
-) -> str:
+) -> tuple[str, list[str]]:
     """Expandiert Placeholders im Template-Body.
 
     Bei `body_format != 'blocknote'` wird der Body unveraendert zurueckgegeben
-    (rueckwaertskompatibel mit bestehenden `plain`-Templates).
+    (rueckwaertskompatibel mit bestehenden `plain`-Templates). Die
+    unresolved-Liste ist in diesem Fall leer.
 
     Akzeptiert zwei BlockNote-JSON-Shapes:
     - Top-Level-Array `[{...block...}, ...]` (was `editor.document` liefert
@@ -48,16 +55,17 @@ async def render_template_body(
         db:          asyncpg-Connection fuer DB-Lookups der Resolver.
 
     Returns:
-        Expandierter Plain-Text-String.
+        Tuple (expanded_text, unresolved_keys) — unresolved_keys ist
+        dedupliziert und lexikografisch sortiert.
     """
     if body_format != "blocknote":
-        return body_text
+        return body_text, []
 
     try:
         parsed: Any = json.loads(body_text)
     except json.JSONDecodeError:
         logger.error("render_template_body: Body ist kein gueltiges JSON — unveraendert zurueck")
-        return body_text
+        return body_text, []
 
     if isinstance(parsed, list):
         top_level_blocks: list[dict[str, Any]] = parsed
@@ -69,15 +77,25 @@ async def render_template_body(
             "render_template_body: Unbekannte JSON-Top-Level-Form %r — leerer Output",
             type(parsed).__name__,
         )
-        return ""
+        return "", []
 
-    return await _walk_blocks(top_level_blocks, ctx, db)
+    unresolved: list[str] = []
+    text = await _walk_blocks(top_level_blocks, ctx, db, unresolved)
+    # Deduplizieren + lexikografisch sortieren fuer deterministischen Output.
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for key in sorted(unresolved):
+        if key not in seen:
+            seen.add(key)
+            deduped.append(key)
+    return text, deduped
 
 
 async def _walk_blocks(
     top_level_blocks: list[dict[str, Any]],
     ctx: RenderContext,
     db: asyncpg.Connection,
+    unresolved: list[str],
 ) -> str:
     """Traversiert die Top-Level-Block-Liste und rendert sie zu Plain-Text.
 
@@ -85,10 +103,12 @@ async def _walk_blocks(
     konkateniert. Placeholder-Inline-Elemente werden ueber den REGISTRY-Dict
     expandiert. Unbekannte Placeholder-Kinds werden als lokalisierter Fehler-
     String eingefuegt; eine Exception wird nie geworfen.
+
+    Miss-Keys werden in `unresolved` (Akkumulator) gesammelt.
     """
     parts: list[str] = []
     for block in top_level_blocks:
-        block_text = await _render_block(block, ctx, db)
+        block_text = await _render_block(block, ctx, db, unresolved)
         if block_text:
             parts.append(block_text)
     return "\n\n".join(parts)
@@ -98,12 +118,13 @@ async def _render_block(
     block: dict[str, Any],
     ctx: RenderContext,
     db: asyncpg.Connection,
+    unresolved: list[str],
 ) -> str:
     """Rendert einen einzelnen Block (inkl. seiner Inline-Content-Liste) zu Text."""
     inline_parts: list[str] = []
     inline_content: list[dict[str, Any]] = block.get("content", [])
     for inline in inline_content:
-        inline_text = await _render_inline(inline, ctx, db)
+        inline_text = await _render_inline(inline, ctx, db, unresolved)
         inline_parts.append(inline_text)
 
     block_text = "".join(inline_parts).strip()
@@ -111,7 +132,7 @@ async def _render_block(
     # Kinder rekursiv prozessieren (z.B. verschachtelte Listeneintraege).
     child_parts: list[str] = []
     for child in block.get("children", []):
-        child_text = await _render_block(child, ctx, db)
+        child_text = await _render_block(child, ctx, db, unresolved)
         if child_text:
             child_parts.append(child_text)
 
@@ -126,12 +147,16 @@ async def _render_inline(
     inline: dict[str, Any],
     ctx: RenderContext,
     db: asyncpg.Connection,
+    unresolved: list[str],
 ) -> str:
     """Rendert ein einzelnes Inline-Element zu Text.
 
     - `type='text'`: roher Text-String.
     - `type='placeholder'`: Resolver-Aufruf ueber REGISTRY.
     - Sonst: leerer String + Debug-Log.
+
+    Miss-Keys (aus `ResolveResult.unresolved_key`) werden in `unresolved`
+    akkumuliert.
     """
     inline_type: str = inline.get("type", "")
 
@@ -152,7 +177,7 @@ async def _render_inline(
             return f"<Unbekannter Placeholder: {kind}>"
 
         try:
-            return await resolver.resolve(target_id, ctx, db)
+            result = await resolver.resolve(target_id, ctx, db)
         except Exception:
             logger.exception(
                 "_render_inline: Resolver '%s' fuer target_id '%s' hat eine Exception geworfen",
@@ -160,6 +185,10 @@ async def _render_inline(
                 target_id,
             )
             return f"<Fehler bei Placeholder: {kind}>"
+
+        if result.unresolved_key is not None:
+            unresolved.append(result.unresolved_key)
+        return result.text
 
     logger.debug("_render_inline: unbekannter Inline-Typ '%s' ignoriert", inline_type)
     return ""

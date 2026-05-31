@@ -131,8 +131,13 @@ describe('PlaybookDetailPage', () => {
       </SessionContext.Provider>,
     )
 
+    // WICHTIG: warten bis form.reset(playbook) durchgelaufen ist und das
+    // Name-Feld den geladenen Wert "Coach" enthaelt. Sonst feuert
+    // fireEvent.change gegen ein noch leeres Default-Input und der spaeter
+    // eintreffende reset ueberschreibt die Aenderung — PATCH wird nie
+    // ausgeloest (CI-Flake beobachtet in PR #79, analog Persona-Test).
     await waitFor(() => {
-      expect(screen.getByLabelText('Name')).toBeInTheDocument()
+      expect(screen.getByLabelText('Name')).toHaveValue('Coach')
     })
     // Save-Button gibt es nicht mehr.
     expect(
@@ -142,12 +147,14 @@ describe('PlaybookDetailPage', () => {
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Coach v2' } })
     // Auto-Save-Debounce ist 1500 ms — Real-Timer warten ist robuster als
     // FakeTimers (die unter Vitest in Kombination mit dem React-Concurrent-
-    // Renderer manchmal pending Promises blockieren).
+    // Renderer manchmal pending Promises blockieren). CI-Runner haben
+    // mehrfach 3s und 5s gerissen (PR #79); 8s ist grosszuegig, das
+    // it()-Timeout unten ist auf 15s gehoben.
     await waitFor(
       () => {
         expect(patchCalls.length).toBeGreaterThanOrEqual(1)
       },
-      { timeout: 3000 },
+      { timeout: 8000 },
     )
     expect(
       (patchCalls[patchCalls.length - 1].body as { name: string }).name,
@@ -156,7 +163,7 @@ describe('PlaybookDetailPage', () => {
       (call) => (call[1] as RequestInit | undefined)?.method === 'PUT',
     )
     expect(putCalls).toHaveLength(0)
-  }, 10_000)
+  }, 15_000)
 
   it('zeigt im "Verwendet in"-Block die Personas aus /usages und faellt auf EmptyState zurueck, wenn keine vorhanden sind', async () => {
     const handlers: Record<string, () => Response> = {

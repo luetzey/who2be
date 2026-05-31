@@ -45,7 +45,7 @@ DB-`CHECK`-Constraint zusaetzlich ab.
 
 **Option C.**
 
-### Schema (`0027_playbook_composition.sql`)
+### Schema (`0028_playbook_composition.sql`)
 
 ```sql
 CREATE TABLE playbook_composition (

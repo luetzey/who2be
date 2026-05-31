@@ -5,6 +5,7 @@ Liest und schreibt `workspace`. Die Membership-Pruefung ist Aufgabe der
 und bekommt die User-Identitaet vom Service-Layer durchgereicht.
 """
 
+from pathlib import Path
 from typing import Protocol
 from uuid import UUID
 
@@ -161,9 +162,20 @@ _BASE_CLAUSES = (
     "Trigger-Match laden — erst `list_triggers()`, dann `fetch_playbook(id)`."
 )
 
+# Welle 6: BlockNote-Starter-Body lebt als Sidecar-JSON-Datei neben dem
+# Modul. Triple-Quoted-Stringliteral wurde von ruff (line-length=100)
+# wegen der inneren JSON-Keys mit "textAlignment" usw. flach abgelehnt;
+# die Sidecar-Datei sortiert ausserdem das Dual-Maintenance mit der
+# SQL-Migration 0027 (gleicher Body-Inhalt jetzt nur noch an zwei Stellen).
+_WORKFLOW_STARTER_BLOCKNOTE_BODY = (Path(__file__).parent / "workflow_starter_body.json").read_text(
+    encoding="utf-8"
+)
+
+
 # Seed-Bodies fuer die Default-Templates eines neuen Workspaces — Quelle der
-# Migration 0023b und gleichzeitig Quelle dieser Laufzeit-Variante. Wir halten
-# beide bewusst synchron (Test prueft die Slug-Liste).
+# Migrationen 0023b/0027 und gleichzeitig Quelle dieser Laufzeit-Variante. Wir
+# halten beide bewusst synchron (Test prueft die Slug-Liste).
+# Format: (slug, name, body, body_format).
 #
 # E4-Checkliste (jedes Template enthaelt):
 #   1. {{ persona profile }} — Persoenlichkeit + Modi
@@ -171,7 +183,7 @@ _BASE_CLAUSES = (
 #   3. {{ tools-overview }} — Lookup-Wegweiser
 #   4. {{ date }} — aktuelles Datum
 #   5. BASE-Klauseln (_BASE_CLAUSES) — Modi / Composite / Applied-vs-Triggered
-_DEFAULT_TEMPLATES: tuple[tuple[str, str, str], ...] = (
+_DEFAULT_TEMPLATES: tuple[tuple[str, str, str, str], ...] = (
     (
         "customer-support-agent",
         "Customer-Support-Agent",
@@ -186,6 +198,7 @@ _DEFAULT_TEMPLATES: tuple[tuple[str, str, str], ...] = (
         "## Werkzeuge\n{{ tools-overview }}\n\n"
         f"{_BASE_CLAUSES}\n\n"
         "Antworte ruhig, präzise und in der gleichen Sprache wie der Nutzer.",
+        "plain",
     ),
     (
         "knowledge-worker",
@@ -200,6 +213,7 @@ _DEFAULT_TEMPLATES: tuple[tuple[str, str, str], ...] = (
         f"{_BASE_CLAUSES}\n\n"
         "Nutze die Wissensquellen, bevor du externe Annahmen triffst. "
         "Wenn die Quelle widersprüchlich ist, weise höflich darauf hin.",
+        "plain",
     ),
     (
         "conversational-coach",
@@ -214,6 +228,13 @@ _DEFAULT_TEMPLATES: tuple[tuple[str, str, str], ...] = (
         f"{_BASE_CLAUSES}\n\n"
         "Bleibe stets gesprächig, stelle Fragen statt Antworten zu predigen, "
         "und beziehe die Methoden nur ein, wenn sie zum Gespräch passen.",
+        "plain",
+    ),
+    (
+        "workflow-starter",
+        "Workflow-Starter",
+        _WORKFLOW_STARTER_BLOCKNOTE_BODY,
+        "blocknote",
     ),
 )
 
@@ -229,16 +250,18 @@ async def _seed_default_templates(
     Initial-Status ist `active`, sodass der Render-Endpoint sofort ohne
     Promote-Schritt feuert.
     """
-    for slug, name, body in _DEFAULT_TEMPLATES:
+    for slug, name, body, body_format in _DEFAULT_TEMPLATES:
         template_id = await conn.fetchval(
-            "INSERT INTO system_prompt_template (workspace_id, owner_id, name, slug) "
-            "VALUES ($1, $2, $3, $4) "
+            "INSERT INTO system_prompt_template "
+            "(workspace_id, owner_id, name, slug, body_format) "
+            "VALUES ($1, $2, $3, $4, $5) "
             "ON CONFLICT (workspace_id, slug) DO NOTHING "
             "RETURNING id",
             workspace_id,
             owner_id,
             name,
             slug,
+            body_format,
         )
         if template_id is None:
             # Template gab es schon — der Versions-Insert unten wuerde

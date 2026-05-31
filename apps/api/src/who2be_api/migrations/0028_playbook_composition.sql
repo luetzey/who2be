@@ -1,4 +1,4 @@
--- Migration 0027 — playbook_composition (Gap 2.1, ADR-0024)
+-- Migration 0028 — playbook_composition (Gap 2.1, ADR-0024)
 -- Self-m:n: parent (Composite) -> child (Sub-Playbook), geordnet via position.
 -- Composite-FKs auf (workspace_id, id) erzwingen Same-Workspace (wie 0016).
 -- CHECK verhindert direkte Selbst-Referenz; transitive Zyklen prueft der
