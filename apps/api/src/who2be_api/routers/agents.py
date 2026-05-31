@@ -28,6 +28,7 @@ from who2be_api.repositories.playbook_resource_link_repository import (
 from who2be_api.repositories.system_prompt_template_repository import (
     PgSystemPromptTemplateRepository,
 )
+from who2be_api.services.agent_fetch_rendered_service import AgentFetchRenderedService
 from who2be_api.services.agent_render_service import AgentRenderService
 from who2be_api.services.agent_service import AgentService
 from who2be_models import (
@@ -35,6 +36,7 @@ from who2be_models import (
     AgentRead,
     AgentRenderResponse,
     AgentUpdate,
+    AgentWithRenderedPrompt,
     RenderFormat,
 )
 
@@ -59,9 +61,23 @@ def get_agent_render_service(
     )
 
 
+def get_agent_fetch_rendered_service(
+    pool: Annotated[asyncpg.Pool, Depends(get_pool)],
+) -> AgentFetchRenderedService:
+    return AgentFetchRenderedService(
+        pool,
+        PgAgentRepository(pool),
+        PgPersonaRepository(pool),
+        PgSystemPromptTemplateRepository(pool),
+    )
+
+
 Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]
 Service = Annotated[AgentService, Depends(get_agent_service)]
 RenderService = Annotated[AgentRenderService, Depends(get_agent_render_service)]
+FetchRenderedService = Annotated[
+    AgentFetchRenderedService, Depends(get_agent_fetch_rendered_service)
+]
 
 
 @router.get("")
@@ -118,3 +134,21 @@ async def render_agent(
     output_format: Annotated[RenderFormat, Query(alias="format")] = "plain",
 ) -> AgentRenderResponse:
     return await render_service.render(ctx.workspace_id, agent_id, output_format)
+
+
+@router.get("/{agent_id}/rendered")
+async def fetch_agent_rendered(
+    agent_id: UUID,
+    ctx: Ctx,
+    fetch_rendered_service: FetchRenderedService,
+) -> AgentWithRenderedPrompt:
+    """Laedt Agent + Persona + expandierten System-Prompt (Placeholder bereits aufgeloest).
+
+    Fuer `body_format='blocknote'`-Templates: Placeholder-Inline-Bloecke werden
+    serverseitig expandiert und als Plain-Text geliefert. Fuer `'plain'`-Templates
+    wird der Body unveraendert zurueckgegeben.
+
+    Wird vom MCP-Tool `fetch_agent` genutzt; kann auch direkt von der UI
+    fuer einen Copy-Button eingesetzt werden.
+    """
+    return await fetch_rendered_service.fetch_rendered(ctx.workspace_id, agent_id)

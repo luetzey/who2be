@@ -82,9 +82,7 @@ def main(argv: list[str] | None = None) -> int:
     header_b64 = _b64url(json.dumps(header, separators=(",", ":")).encode())
     payload_b64 = _b64url(json.dumps(payload, separators=(",", ":")).encode())
     signing_input = f"{header_b64}.{payload_b64}".encode("ascii")
-    signature = hmac.new(
-        args.secret.encode("utf-8"), signing_input, hashlib.sha256
-    ).digest()
+    signature = hmac.new(args.secret.encode("utf-8"), signing_input, hashlib.sha256).digest()
     sig_b64 = _b64url(signature)
 
     print(f"{header_b64}.{payload_b64}.{sig_b64}")

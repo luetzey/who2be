@@ -5,10 +5,14 @@ Style-Placeholders (`{{ persona.name }}`, `{{ playbooks }}` etc.), die der
 Render-Service serverseitig befuellt. Versionierung analog persona/playbook
 (ADR-0004, ADR-0020): Identitaets-Zeile `system_prompt_template` + Snapshots
 in `system_prompt_template_version`.
+
+`body_format` (Migration 0025): `'plain'` = Liquid-Style-Plaintext (Default,
+rueckwaertskompatibel); `'blocknote'` = Stringified-BlockNote-JSON mit
+Custom-Inline-Blocks vom Typ `placeholder`, die der Renderer expandiert.
 """
 
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
@@ -46,6 +50,7 @@ class SystemPromptTemplateCreate(BaseModel):
     # gesetzt. Wir lassen Clients aber auch explizit einen Slug uebergeben
     # (Default-Templates aus dem Seed nutzen feste Slugs).
     slug: SlugStr | None = None
+    body_format: Literal["plain", "blocknote"] = "plain"
     content: SystemPromptTemplateContent
 
 
@@ -55,6 +60,7 @@ class SystemPromptTemplateUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str | None = Field(default=None, min_length=1, max_length=200)
+    body_format: Literal["plain", "blocknote"] = "plain"
     content: SystemPromptTemplateContent
 
 
@@ -68,6 +74,7 @@ class SystemPromptTemplateRead(BaseModel):
     owner_id: UUID
     name: str
     slug: str
+    body_format: Literal["plain", "blocknote"] = "plain"
     current_version: int
     current_status: VersionStatus = VersionStatus.inactive
     has_pending_draft: bool = False

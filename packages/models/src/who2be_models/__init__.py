@@ -11,6 +11,7 @@ from who2be_models.agent import (
     AgentRenderResponse,
     AgentStatus,
     AgentUpdate,
+    AgentWithRenderedPrompt,
     RenderFormat,
 )
 from who2be_models.dashboard import (
@@ -92,6 +93,7 @@ __all__ = [
     "AgentRenderResponse",
     "AgentStatus",
     "AgentUpdate",
+    "AgentWithRenderedPrompt",
     "DEFAULT_LIMIT",
     "DashboardActivity",
     "DashboardActor",

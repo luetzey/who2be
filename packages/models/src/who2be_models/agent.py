@@ -6,12 +6,17 @@ Agent. Keine eigene Versionshistorie — Aenderungen am Agent sind reine
 Konfig-Updates. Inhaltliche Versionierung lebt auf Persona/Template/Playbook.
 """
 
+from __future__ import annotations
+
 from datetime import datetime
 from enum import StrEnum
 from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
+
+# PersonaRead importiert keine agent-Modelle — kein zirkulaerer Import.
+from who2be_models.persona import PersonaRead
 
 
 class AgentStatus(StrEnum):
@@ -87,3 +92,23 @@ class AgentRenderResponse(BaseModel):
     content: str
     unresolved_placeholders: list[str] = Field(default_factory=list)
     format: RenderFormat = "plain"
+
+
+class AgentWithRenderedPrompt(BaseModel):
+    """Antwort des MCP-Tools `fetch_agent` (und des API-Endpoints `GET .../rendered`).
+
+    Liefert den Agent zusammen mit seiner Persona und dem bereits expandierten
+    System-Prompt als Plain-Text — alle Placeholder wurden bereits aufgeloest,
+    sodass MCP-Konsumenten den fertigen Prompt direkt einsetzen koennen.
+
+    Hinweis: `persona` ist direkt inline (kein Wrapper-Objekt), damit der
+    Frontend-Agent und der MCP-Konsument ohne zusaetzlichen Fetch auskommen.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID
+    name: str
+    persona: PersonaRead
+    system_prompt_rendered: str
+    system_prompt_template_id: UUID
