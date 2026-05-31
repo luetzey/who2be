@@ -3,25 +3,34 @@ import { type BaseSyntheticEvent, useState } from 'react'
 import { useForm, type UseFormReturn } from 'react-hook-form'
 import { z } from 'zod'
 
+import type { ResourceBlock } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { notify } from '@/lib/feedback'
 
+import { blockPlainText } from '../lib/blockText'
+import { joinTriggers } from '../lib/triggers'
+import { PLAYBOOK_TYPES, type PlaybookEditorValues } from './usePlaybookForm'
+
+// Schema deckt sich bewusst mit `usePlaybookForm` — so kann
+// `PlaybookEditorForm` ohne Sonderbehandlung in der Neu-Page genutzt werden.
+// `bodyBlocks`/`tags`/`triggers` sind Passthrough; das Backend persistiert
+// einen Plain-Text-Body (siehe `blocksToPlainText`).
 const createSchema = z.object({
   name: z.string().min(1, 'Name erforderlich.'),
-  type: z.string().min(1, 'Typ erforderlich.'),
+  type: z.enum(PLAYBOOK_TYPES),
   description: z.string().min(1, 'Beschreibung erforderlich.'),
-  body: z.string().min(1, 'Inhalt erforderlich.'),
-  tags: z.string(),
-  triggers: z.string(),
+  bodyBlocks: z.array(z.custom<ResourceBlock>()),
+  tags: z.array(z.string()),
+  triggers: z.array(z.string()),
 })
 
-export type PlaybookCreateValues = z.infer<typeof createSchema>
+export type PlaybookCreateValues = PlaybookEditorValues
 
-function splitList(raw: string): string[] {
-  return raw
-    .split(',')
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0)
+function blocksToPlainText(blocks: ResourceBlock[]): string {
+  return blocks
+    .map((block) => blockPlainText(block).trim())
+    .filter((text) => text.length > 0)
+    .join('\n\n')
 }
 
 function describeError(cause: unknown): string {
@@ -29,7 +38,7 @@ function describeError(cause: unknown): string {
 }
 
 export interface UseCreatePlaybookResult {
-  form: UseFormReturn<PlaybookCreateValues>
+  form: UseFormReturn<PlaybookEditorValues>
   onSubmit: (event?: BaseSyntheticEvent) => Promise<void>
   saveError: string | null
 }
@@ -37,15 +46,15 @@ export interface UseCreatePlaybookResult {
 export function useCreatePlaybook(onCreated: (id: string) => void): UseCreatePlaybookResult {
   const api = useApi()
   const [saveError, setSaveError] = useState<string | null>(null)
-  const form = useForm<PlaybookCreateValues>({
+  const form = useForm<PlaybookEditorValues>({
     resolver: zodResolver(createSchema),
     defaultValues: {
       name: '',
       type: 'workflow',
       description: '',
-      body: '',
-      tags: '',
-      triggers: '',
+      bodyBlocks: [],
+      tags: [],
+      triggers: [],
     },
   })
 
@@ -56,10 +65,10 @@ export function useCreatePlaybook(onCreated: (id: string) => void): UseCreatePla
         name: values.name,
         content: {
           description: values.description,
-          body: values.body,
+          body: blocksToPlainText(values.bodyBlocks),
           type: values.type,
-          tags: splitList(values.tags),
-          triggers: values.triggers.trim() === '' ? null : values.triggers.trim(),
+          tags: values.tags,
+          triggers: joinTriggers(values.triggers),
         },
       })
       notify.success('Playbook angelegt.')

@@ -1,3 +1,4 @@
+import type { FormEvent, ReactNode } from 'react'
 import { type UseFormReturn } from 'react-hook-form'
 
 import type { PlaybookType, ResourceBlock } from '@/api/types'
@@ -23,6 +24,11 @@ interface PlaybookEditorFormProps {
   // usePlaybookForm) — `field.value` wuerde den alten Form-State zeigen,
   // weil form.reset erst im Effect nach dem Mount laeuft.
   initialBodyBlocks: ResourceBlock[]
+  // Detail-Page nutzt Auto-Save, dort bleibt der Default (preventDefault).
+  // Neu-Page reicht einen handleSubmit-Callback durch.
+  onSubmit?: (event: FormEvent<HTMLFormElement>) => void
+  // Optionaler Slot fuer Submit-/Cancel-Buttons (nur Neu-Page).
+  actions?: ReactNode
 }
 
 interface TypeOption {
@@ -68,6 +74,8 @@ export function PlaybookEditorForm({
   form,
   formKey,
   initialBodyBlocks,
+  onSubmit,
+  actions,
 }: PlaybookEditorFormProps) {
   // Viewer dürfen nur lesen (ADR-0023) — Auto-Save deaktiviert sich auf
   // Detail-Page-Ebene.
@@ -83,7 +91,7 @@ export function PlaybookEditorForm({
         <Form {...form}>
           <form
             className="flex flex-col gap-6"
-            onSubmit={(event) => event.preventDefault()}
+            onSubmit={onSubmit ?? ((event) => event.preventDefault())}
           >
               <FormSection
                 title="Identität"
@@ -238,6 +246,7 @@ export function PlaybookEditorForm({
                 />
               </FormSection>
 
+              {actions !== undefined ? actions : null}
           </form>
         </Form>
       </CardContent>
