@@ -103,6 +103,10 @@ class AgentWithRenderedPrompt(BaseModel):
 
     Hinweis: `persona` ist direkt inline (kein Wrapper-Objekt), damit der
     Frontend-Agent und der MCP-Konsument ohne zusaetzlichen Fetch auskommen.
+
+    `unresolved_placeholders` enthaelt jeden Placeholder-Key, der beim Render
+    nicht aufgeloest werden konnte (z. B. `"playbook:abc-uuid"` bei fehlender
+    aktiver Version). Default leere Liste fuer Backward-Compat.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -112,3 +116,4 @@ class AgentWithRenderedPrompt(BaseModel):
     persona: PersonaRead
     system_prompt_rendered: str
     system_prompt_template_id: UUID
+    unresolved_placeholders: list[str] = Field(default_factory=list)

@@ -117,19 +117,28 @@ describe('PersonaDetailPage', () => {
       </SessionContext.Provider>,
     )
 
+    // WICHTIG: warten bis form.reset(persona) durchgelaufen ist und das Name-
+    // Feld den geladenen Wert "Coach" enthaelt. Sonst feuert fireEvent.change
+    // gegen ein noch leeres Default-Input und der spaeter eintreffende reset
+    // ueberschreibt die Aenderung — PATCH wird nie ausgeloest (CI-Flake
+    // beobachtet in PR #79).
     await waitFor(() => {
-      expect(screen.getByLabelText('Name')).toBeInTheDocument()
+      expect(screen.getByLabelText('Name')).toHaveValue('Coach')
     })
     expect(
       screen.queryByRole('button', { name: 'Neue Version speichern' }),
     ).not.toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Coach v2' } })
+    // Auto-Save-Debounce ist 1500 ms; lokal ~1.6s, aber CI-Runner mit
+    // jsdom-Overhead haben sowohl das 3s- als auch das 5s-Limit gerissen
+    // (siehe PR #79). 8s ist grosszuegig, der it()-Timeout unten ist auf
+    // 15s gehoben.
     await waitFor(
       () => {
         expect(patchCalls.length).toBeGreaterThanOrEqual(1)
       },
-      { timeout: 3000 },
+      { timeout: 8000 },
     )
     expect((patchCalls[patchCalls.length - 1].body as { name: string }).name).toBe(
       'Coach v2',
@@ -140,7 +149,7 @@ describe('PersonaDetailPage', () => {
         String(call[0]).endsWith('/personas/p1'),
     )
     expect(putCalls).toHaveLength(0)
-  }, 10_000)
+  }, 15_000)
 
   it('verknuepft Playbooks via PUT auf /personas/:id/playbooks', async () => {
     const pb1 = {

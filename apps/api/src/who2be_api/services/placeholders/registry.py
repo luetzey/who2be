@@ -5,12 +5,14 @@ Dict. Kein weiterer Umbau am Renderer noetig.
 
 Resolver-Regeln (aus der Spec):
 - playbook:      target_id ist UUID; sucht Active-Version im Workspace.
-                 Nicht gefunden -> lokalisierter Fehler-String.
+                 Nicht gefunden -> Miss (unresolved_key gesetzt).
 - resource:      analog zu playbook.
-- persona-field: target_id in {"name", "description"}; bei persona_id=None
-                 -> leerer String + Warning-Log.
+- persona-field: target_id in {"name", "description"}; bei persona_id=None,
+                 unbekanntem Feld oder Persona nicht gefunden -> Miss.
 - date:          target_id ist Format-Slug ("" -> ISO-8601, "human" ->
                  "31. Mai 2026"). Standardisiert auf ctx.locale = 'de-DE'.
+                 Nie Miss.
+- tools-overview: statische Markdown-Liste. Nie Miss.
 """
 
 from __future__ import annotations
@@ -47,13 +49,25 @@ class RenderContext(BaseModel):
 
     `persona_id` ist None, wenn der Agent keine Persona hat (unwahrscheinlich
     durch FK-Constraint, aber defensiv abgesichert). Der PersonaFieldResolver
-    liefert in dem Fall einen leeren String statt einer Exception.
+    liefert in dem Fall einen Miss statt einer Exception.
     """
 
     workspace_id: UUID
     persona_id: UUID | None
     now: datetime
     locale: str = "de-DE"
+
+
+class ResolveResult(BaseModel):
+    """Ergebnis eines Resolver-Aufrufs.
+
+    `text` enthaelt den expandierten String (bei Miss: lokalisierten Fallback).
+    `unresolved_key` ist gesetzt, wenn der Resolver keinen gueltigen Wert
+    finden konnte, z. B. `"playbook:abc-uuid"` oder `"persona-field:name"`.
+    """
+
+    text: str
+    unresolved_key: str | None = None
 
 
 class PlaceholderResolver(Protocol):
@@ -64,7 +78,7 @@ class PlaceholderResolver(Protocol):
         target_id: str,
         ctx: RenderContext,
         db: asyncpg.Connection,
-    ) -> str: ...
+    ) -> ResolveResult: ...
 
 
 # ---------------------------------------------------------------------------
@@ -76,7 +90,7 @@ class PlaybookResolver:
     """Expandiert `target_id` (UUID) zum Body der Active-Version des Playbooks.
 
     Filtert auf `status='active'` — analog zu MCP-Reads im Repo. Bei nicht
-    gefunden: lokalisierter Fehler-String (kein 500).
+    gefunden: lokalisierter Fehler-String + Miss-Key.
     """
 
     async def resolve(
@@ -84,12 +98,13 @@ class PlaybookResolver:
         target_id: str,
         ctx: RenderContext,
         db: asyncpg.Connection,
-    ) -> str:
+    ) -> ResolveResult:
+        miss_key = f"playbook:{target_id}"
         try:
             playbook_id = UUID(target_id)
         except ValueError:
             logger.warning("PlaybookResolver: ungueltige UUID '%s'", target_id)
-            return "<Playbook nicht verfuegbar>"
+            return ResolveResult(text="<Playbook nicht verfuegbar>", unresolved_key=miss_key)
 
         row = await db.fetchrow(
             """
@@ -109,7 +124,7 @@ class PlaybookResolver:
                 playbook_id,
                 ctx.workspace_id,
             )
-            return "<Playbook nicht verfuegbar>"
+            return ResolveResult(text="<Playbook nicht verfuegbar>", unresolved_key=miss_key)
 
         content: dict[str, object] = dict(row["content"])
         name: str = row["name"]
@@ -120,14 +135,14 @@ class PlaybookResolver:
             lines.append(description)
         if body:
             lines.append(body)
-        return "\n".join(lines)
+        return ResolveResult(text="\n".join(lines))
 
 
 class ResourceResolver:
     """Expandiert `target_id` (UUID) zum Body der Active-Version der Resource.
 
     Filtert auf `status='active'` — analog zu MCP-Reads im Repo. Bei nicht
-    gefunden: lokalisierter Fehler-String (kein 500).
+    gefunden: lokalisierter Fehler-String + Miss-Key.
     """
 
     async def resolve(
@@ -135,12 +150,13 @@ class ResourceResolver:
         target_id: str,
         ctx: RenderContext,
         db: asyncpg.Connection,
-    ) -> str:
+    ) -> ResolveResult:
+        miss_key = f"resource:{target_id}"
         try:
             resource_id = UUID(target_id)
         except ValueError:
             logger.warning("ResourceResolver: ungueltige UUID '%s'", target_id)
-            return "<Resource nicht verfuegbar>"
+            return ResolveResult(text="<Resource nicht verfuegbar>", unresolved_key=miss_key)
 
         row = await db.fetchrow(
             """
@@ -160,7 +176,7 @@ class ResourceResolver:
                 resource_id,
                 ctx.workspace_id,
             )
-            return "<Resource nicht verfuegbar>"
+            return ResolveResult(text="<Resource nicht verfuegbar>", unresolved_key=miss_key)
 
         content: dict[str, object] = dict(row["content"])
         name: str = row["name"]
@@ -176,7 +192,7 @@ class ResourceResolver:
         lines: list[str] = [f"#### {name}"]
         if body_text:
             lines.append(body_text)
-        return "\n".join(lines)
+        return ResolveResult(text="\n".join(lines))
 
 
 def _block_plain_text(block: dict[str, object]) -> str:
@@ -210,10 +226,10 @@ def _block_plain_text(block: dict[str, object]) -> str:
 class PersonaFieldResolver:
     """Expandiert `target_id` zu einem Persona-Feld (`name` oder `description`).
 
-    Wenn `ctx.persona_id` nicht gesetzt ist (Agent ohne Persona — durch den
-    NOT NULL FK in Migration 0023 eigentlich nicht moeglich), wird ein leerer
-    String zurueckgegeben und ein Warning geloggt, damit der Render stabil
-    durchlaeuft.
+    Miss-Faelle (alle liefern unresolved_key):
+    - `ctx.persona_id` ist None
+    - `target_id` ist kein bekanntes Feld
+    - Persona nicht in der DB gefunden
     """
 
     async def resolve(
@@ -221,20 +237,22 @@ class PersonaFieldResolver:
         target_id: str,
         ctx: RenderContext,
         db: asyncpg.Connection,
-    ) -> str:
+    ) -> ResolveResult:
+        miss_key = f"persona-field:{target_id}"
+
         if ctx.persona_id is None:
             logger.warning(
-                "PersonaFieldResolver: ctx.persona_id ist None — leerer String fuer '%s'",
+                "PersonaFieldResolver: ctx.persona_id ist None — Miss fuer '%s'",
                 target_id,
             )
-            return ""
+            return ResolveResult(text="", unresolved_key=miss_key)
 
         if target_id not in ("name", "description"):
             logger.warning(
-                "PersonaFieldResolver: unbekanntes Feld '%s' — leerer String",
+                "PersonaFieldResolver: unbekanntes Feld '%s' — Miss",
                 target_id,
             )
-            return ""
+            return ResolveResult(text="", unresolved_key=miss_key)
 
         if target_id == "name":
             row = await db.fetchrow(
@@ -247,8 +265,8 @@ class PersonaFieldResolver:
                     "PersonaFieldResolver: Persona %s nicht gefunden",
                     ctx.persona_id,
                 )
-                return ""
-            return str(row["name"])
+                return ResolveResult(text="", unresolved_key=miss_key)
+            return ResolveResult(text=str(row["name"]))
 
         # target_id == "description": aus dem aktuellen Versions-Snapshot lesen.
         # Wir nehmen den current_version-Snapshot (analog zum Render-Endpoint),
@@ -270,9 +288,9 @@ class PersonaFieldResolver:
                 "PersonaFieldResolver: Persona %s nicht gefunden",
                 ctx.persona_id,
             )
-            return ""
+            return ResolveResult(text="", unresolved_key=miss_key)
         content: dict[str, object] = dict(row["content"])
-        return str(content.get("description", "")).strip()
+        return ResolveResult(text=str(content.get("description", "")).strip())
 
 
 class ToolsOverviewResolver:
@@ -286,6 +304,8 @@ class ToolsOverviewResolver:
 
     `target_id` ist heute ungenutzt — Future-Use fuer Filter (z. B. nur
     Read-Tools vs. alle), aktuell wird er ignoriert.
+
+    Nie Miss.
     """
 
     async def resolve(
@@ -293,11 +313,11 @@ class ToolsOverviewResolver:
         target_id: str,  # noqa: ARG002
         ctx: RenderContext,  # noqa: ARG002
         db: asyncpg.Connection,  # noqa: ARG002
-    ) -> str:
+    ) -> ResolveResult:
         lines = ["## Verfuegbare Werkzeuge", ""]
         for tool in _TOOLS:
             lines.append(f"- **{tool.signature}** — {tool.description}")
-        return "\n".join(lines)
+        return ResolveResult(text="\n".join(lines))
 
 
 class _ToolDoc(BaseModel):
@@ -361,7 +381,7 @@ class DateResolver:
     - ``"human"``   -> "31. Mai 2026" (Deutsch, via _DE_MONTHS-Map)
 
     Unbekannte Slugs werden wie ``""`` behandelt; ein Warning wird geloggt.
-    Kein babel im Repo — einfache Map.
+    Kein babel im Repo — einfache Map. Nie Miss.
     """
 
     async def resolve(
@@ -369,19 +389,19 @@ class DateResolver:
         target_id: str,
         ctx: RenderContext,
         db: asyncpg.Connection,  # noqa: ARG002  (nicht benoetigt, aber Teil des Protokolls)
-    ) -> str:
+    ) -> ResolveResult:
         now = ctx.now
         if target_id == "human":
             day = now.day
             month_name = _DE_MONTHS[now.month - 1]
             year = now.year
-            return f"{day}. {month_name} {year}"
+            return ResolveResult(text=f"{day}. {month_name} {year}")
         if target_id != "":
             logger.warning(
                 "DateResolver: unbekannter Format-Slug '%s' — verwende ISO-8601",
                 target_id,
             )
-        return now.strftime("%Y-%m-%d")
+        return ResolveResult(text=now.strftime("%Y-%m-%d"))
 
 
 # ---------------------------------------------------------------------------

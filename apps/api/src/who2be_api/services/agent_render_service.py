@@ -237,7 +237,7 @@ class AgentRenderService:
                 now=datetime.now(UTC),
             )
             async with self._pool.acquire() as conn:
-                substituted = await render_template_body(
+                substituted, unresolved_blocknote = await render_template_body(
                     template_content.body, body_format, render_ctx, conn
                 )
             if output_format == "html":
@@ -245,7 +245,7 @@ class AgentRenderService:
                 substituted = renderer.render(substituted)
             return AgentRenderResponse(
                 content=substituted,
-                unresolved_placeholders=[],
+                unresolved_placeholders=unresolved_blocknote,
                 format=output_format,
             )
 
