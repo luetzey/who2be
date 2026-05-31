@@ -554,6 +554,31 @@ class TestToolsOverviewResolver:
         result = _async_run(REGISTRY["tools-overview"].resolve("", ctx, db))
         assert "Verfuegbare Werkzeuge" in result
 
+    def test_fetch_playbook_mentions_composite(self) -> None:
+        """fetch_playbook-Eintrag erklaert Composite-Sequenz (E2)."""
+        resolver = ToolsOverviewResolver()
+        ctx = _ctx()
+        db = _make_db()
+        result = _async_run(resolver.resolve("", ctx, db))
+        assert "Composite" in result or "composed_playbooks" in result
+
+    def test_get_persona_mentions_modi(self) -> None:
+        """get_persona-Eintrag erklaert content.modes / Modi-Auswahl (E2)."""
+        resolver = ToolsOverviewResolver()
+        ctx = _ctx()
+        db = _make_db()
+        result = _async_run(resolver.resolve("", ctx, db))
+        assert "content.modes" in result or "Modi" in result
+
+    def test_overview_includes_applied_vs_triggered_hint(self) -> None:
+        """Overview enthaelt Hinweis: applied (immer geladen) vs. triggered (E2)."""
+        resolver = ToolsOverviewResolver()
+        ctx = _ctx()
+        db = _make_db()
+        result = _async_run(resolver.resolve("", ctx, db))
+        assert "applied" in result or "eingebettet" in result
+        assert "list_triggers" in result
+
 
 # ---------------------------------------------------------------------------
 # render_template_body (Renderer-Integration)

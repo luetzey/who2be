@@ -144,41 +144,74 @@ class PgWorkspaceRepository:
         return WorkspaceRead.model_validate(dict(row)) if row is not None else None
 
 
+# BASE-Klauseln (D1/E4): erklaeren dem Agenten die drei Achsen.
+# Einheitlich in alle Default-Templates eingebettet; nach den inhaltlichen
+# Abschnitten, vor dem abschliessenden Verhaltenssatz.
+_BASE_CLAUSES = (
+    "## Agenten-Hinweise\n"
+    "**Modi:** Wenn die Persona Modi fuehrt (siehe Profil-Abschnitt oben), "
+    "waehle anhand des Modus-Triggers den passenden Modus und wende dessen "
+    "Identity-Ergaenzung sowie Output-Stil an. Ohne Trigger-Match gilt der "
+    "Default-Modus.\n\n"
+    "**Composite-Playbooks:** Wenn ein Playbook ein Composite ist (Feld "
+    "`composed_playbooks` nicht leer), folge der nummerierten Sub-Playbook-"
+    "Sequenz der Reihe nach.\n\n"
+    "**Applied vs. Triggered:** Fest eingebettete Playbooks (Pill) sind "
+    "bereits expandiert und gelten immer. Weitere Playbooks nur bei "
+    "Trigger-Match laden — erst `list_triggers()`, dann `fetch_playbook(id)`."
+)
+
 # Seed-Bodies fuer die Default-Templates eines neuen Workspaces — Quelle der
 # Migration 0023b und gleichzeitig Quelle dieser Laufzeit-Variante. Wir halten
 # beide bewusst synchron (Test prueft die Slug-Liste).
+#
+# E4-Checkliste (jedes Template enthaelt):
+#   1. {{ persona profile }} — Persoenlichkeit + Modi
+#   2. Platz fuer applied-Playbook-Pills (vom Autor gesetzt; hier: {{ playbooks }})
+#   3. {{ tools-overview }} — Lookup-Wegweiser
+#   4. {{ date }} — aktuelles Datum
+#   5. BASE-Klauseln (_BASE_CLAUSES) — Modi / Composite / Applied-vs-Triggered
 _DEFAULT_TEMPLATES: tuple[tuple[str, str, str], ...] = (
     (
         "customer-support-agent",
         "Customer-Support-Agent",
-        "Du bist {{ persona.name }} — {{ persona.description }}.\n\n"
+        "Du bist {{ persona.name }} — {{ persona.description }}.\n"
+        "Datum: {{ date }}\n\n"
         "## Hintergrund zur Rolle\n{{ persona.profile }}\n\n"
         "## Themen-Tags\n{{ persona.tags }}\n\n"
         "## Spielbuecher\nFolge konsequent diesen Playbooks, wenn der Nutzer "
         "einen passenden Auslöser anspricht:\n{{ playbooks }}\n\n"
         "## Trigger-Stichworte\nReagiere besonders auf: {{ triggers }}\n\n"
         "## Wissensquellen\n{{ resources }}\n\n"
+        "## Werkzeuge\n{{ tools-overview }}\n\n"
+        f"{_BASE_CLAUSES}\n\n"
         "Antworte ruhig, präzise und in der gleichen Sprache wie der Nutzer.",
     ),
     (
         "knowledge-worker",
         "Knowledge-Worker",
         "Du bist {{ persona.name }}, ein Wissensarbeiter mit folgendem "
-        "Profil:\n{{ persona.description }}\n\n"
+        "Profil:\n{{ persona.description }}\n"
+        "Datum: {{ date }}\n\n"
         "## Persönliche Notizen\n{{ persona.profile }}\n\n"
         "## Verfügbares Wissen\n{{ resources }}\n\n"
         "## Arbeitsabläufe\n{{ playbooks }}\n\n"
+        "## Werkzeuge\n{{ tools-overview }}\n\n"
+        f"{_BASE_CLAUSES}\n\n"
         "Nutze die Wissensquellen, bevor du externe Annahmen triffst. "
         "Wenn die Quelle widersprüchlich ist, weise höflich darauf hin.",
     ),
     (
         "conversational-coach",
         "Conversational-Coach",
-        "Du bist {{ persona.name }} — {{ persona.description }}.\n\n"
+        "Du bist {{ persona.name }} — {{ persona.description }}.\n"
+        "Datum: {{ date }}\n\n"
         "## Coach-Stimme\n{{ persona.profile }}\n\n"
         "## Schwerpunkte\nTags: {{ persona.tags }}\n\n"
         "## Methodenkasten\n{{ playbooks }}\n\n"
         "## Cues, die einen Methodenwechsel auslösen\n{{ triggers }}\n\n"
+        "## Werkzeuge\n{{ tools-overview }}\n\n"
+        f"{_BASE_CLAUSES}\n\n"
         "Bleibe stets gesprächig, stelle Fragen statt Antworten zu predigen, "
         "und beziehe die Methoden nur ein, wenn sie zum Gespräch passen.",
     ),

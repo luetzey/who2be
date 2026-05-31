@@ -418,6 +418,8 @@ class ToolsOverviewResolver:
         lines = ["## Verfuegbare Werkzeuge", ""]
         for tool in _TOOLS:
             lines.append(f"- **{tool.signature}** — {tool.description}")
+        lines.append("")
+        lines.append(_TOOLS_APPLIED_NOTE)
         return "\n".join(lines)
 
 
@@ -431,7 +433,11 @@ _TOOLS: list[_ToolDoc] = [
         signature="get_persona(identifier)",
         description=(
             "Laedt deine eigene Persona inkl. Profil und verknuepfter Playbooks. "
-            "Ruf das einmal zu Beginn auf, wenn du deinen Kontext brauchst."
+            "Ruf das einmal zu Beginn auf, wenn du deinen Kontext brauchst. "
+            "Pruefe `content.modes`: Wenn die Persona Modi enthaelt, waehle anhand "
+            "des Modus-Triggers den passenden Modus und wende dessen "
+            "`identity_add` + `output_style_override` an; ohne Trigger-Match "
+            "gilt der Default-Modus."
         ),
     ),
     _ToolDoc(
@@ -439,7 +445,9 @@ _TOOLS: list[_ToolDoc] = [
         description=(
             "Tabelle aller Trigger-Keywords mit dem zugehoerigen Playbook. "
             "Nutze das, um zu erkennen, ob fuer die User-Frage ein Playbook "
-            "vorgesehen ist — bevor du list_playbooks oder fetch_playbook rufst."
+            "vorgesehen ist — bevor du list_playbooks oder fetch_playbook rufst. "
+            "Hinweis: fest eingebettete (applied) Playbooks sind bereits im "
+            "System-Prompt enthalten und erscheinen hier typischerweise nicht."
         ),
     ),
     _ToolDoc(
@@ -453,7 +461,11 @@ _TOOLS: list[_ToolDoc] = [
         signature="fetch_playbook(playbook_id)",
         description=(
             "Vollstaendiger Body eines Playbooks (Schritte, Anweisungen). "
-            "Folge den dort beschriebenen Schritten."
+            "Folge den dort beschriebenen Schritten. "
+            "Ist das Playbook ein Composite (Feld `composed_playbooks` nicht leer), "
+            "enthaelt die Antwort eine nummerierte Sub-Playbook-Sequenz — "
+            "arbeite diese der Reihe nach ab; einzelne Kinder koennen via "
+            "erneutem fetch_playbook(child_id) vertieft werden."
         ),
     ),
     _ToolDoc(
@@ -472,6 +484,16 @@ _TOOLS: list[_ToolDoc] = [
         ),
     ),
 ]
+
+# Applied-vs-Triggered-Hinweis: Fest im System-Prompt eingebettete Playbooks
+# (Pill / applied) gelten immer und sind bereits expandiert — kein MCP-Call noetig.
+# Triggered Playbooks werden via list_triggers() entdeckt und nur bei
+# Trigger-Match via fetch_playbook() geladen.
+_TOOLS_APPLIED_NOTE = (
+    "**Invocation-Wege:** Fest eingebettete Playbooks (applied, bereits im "
+    "System-Prompt) gelten immer. Weitere Playbooks nur bei Trigger-Match laden "
+    "— erst list_triggers(), dann fetch_playbook(id)."
+)
 
 
 class DateResolver:
