@@ -6,12 +6,15 @@ import type { Playbook } from '@/api/types'
 import { PlaybookComposesPicker } from './PlaybookComposesPicker'
 
 // Delay-freier Mock — sofortige Aufloesung wie in bestehenden Tests.
+// WICHTIG: `useApi` muss eine STABILE Objekt-Referenz liefern. Die Komponente
+// hat `api` in den useEffect-Deps; ein frisches Objekt pro Render wuerde den
+// Effect bei jedem Render neu feuern -> setState -> Render-Endlosschleife
+// (Worker haengt, CI-Timeout). Muster wie ResourceBlockLinkPicker.test.tsx.
 const listPlaybooksMock = vi.fn()
+const stableApi = { listPlaybooks: listPlaybooksMock }
 
 vi.mock('@/api/useApi', () => ({
-  useApi: () => ({
-    listPlaybooks: listPlaybooksMock,
-  }),
+  useApi: () => stableApi,
 }))
 
 const makePlaybook = (id: string, name: string): Playbook => ({
