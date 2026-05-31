@@ -35,12 +35,21 @@ import type {
 } from './types'
 
 export class ApiError extends Error {
+  /**
+   * Rohes JSON-Body-Objekt, wenn die Antwort als `application/problem+json`
+   * oder `application/json` geparst werden konnte. Damit koennen Aufrufer
+   * (z. B. StatusActionBar) das `missing`-Array bei 409 auslesen.
+   */
+  readonly body: unknown
+
   constructor(
     readonly status: number,
     message: string,
+    body?: unknown,
   ) {
     super(message)
     this.name = 'ApiError'
+    this.body = body ?? null
   }
 }
 
@@ -60,7 +69,8 @@ async function request<T>(token: string, path: string, init?: RequestInit): Prom
     throw new ApiError(0, 'Who2Be-API nicht erreichbar.')
   }
   if (!response.ok) {
-    throw new ApiError(response.status, await readErrorMessage(response))
+    const { message, body } = await readErrorBody(response)
+    throw new ApiError(response.status, message, body)
   }
   if (response.status === 204) {
     return undefined as T
@@ -68,18 +78,24 @@ async function request<T>(token: string, path: string, init?: RequestInit): Prom
   return (await response.json()) as T
 }
 
-async function readErrorMessage(response: Response): Promise<string> {
+async function readErrorBody(
+  response: Response,
+): Promise<{ message: string; body: unknown }> {
   const fallback = `Who2Be-API-Fehler (${response.status}).`
-  if (!response.headers.get('content-type')?.includes('application/json')) {
-    return fallback
+  const contentType = response.headers.get('content-type') ?? ''
+  if (
+    !contentType.includes('application/json') &&
+    !contentType.includes('application/problem+json')
+  ) {
+    return { message: fallback, body: null }
   }
   try {
     const body = (await response.json()) as { detail?: unknown }
-    return typeof body.detail === 'string' && body.detail.length > 0
-      ? body.detail
-      : fallback
+    const message =
+      typeof body.detail === 'string' && body.detail.length > 0 ? body.detail : fallback
+    return { message, body }
   } catch {
-    return fallback
+    return { message: fallback, body: null }
   }
 }
 

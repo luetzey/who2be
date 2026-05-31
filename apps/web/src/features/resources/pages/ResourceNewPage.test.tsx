@@ -6,9 +6,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Me, ResourceBlock } from '@/api/types'
 import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
 import { SessionContext } from '@/auth/session-context'
-import { PersonaNewPage } from './PersonaNewPage'
+import { ResourceNewPage } from './ResourceNewPage'
 
-// BlockNote-Insel mocken — PersonaEditorForm beinhaltet ResourceEditor, der
+// BlockNote-Insel mocken — ResourceEditorForm beinhaltet ResourceEditor, der
 // BlockNoteEditor (ThemeProvider-Abhaengigkeit) benoetigt.
 vi.mock('@/components/editor/BlockNoteEditor', () => ({
   BlockNoteEditor: ({ initialBlocks }: { initialBlocks: ResourceBlock[] }) => (
@@ -27,13 +27,11 @@ vi.mock('@/auth/useCurrentWorkspaceRole', () => ({
   useCurrentWorkspaceRole: () => 'admin',
 }))
 
-// Alle useApi-Aufrufe auf der New-Page mocken. `listPersonaTags` liefert []
-// (kein echtes Netz). `createPersona` delegiert an den globalen fetch-Stub.
-const createPersonaMock = vi.fn()
+// `createResource` delegiert via gemocktem useApi — kein echtes Netz.
+const createResourceMock = vi.fn()
 vi.mock('@/api/useApi', () => ({
   useApi: () => ({
-    listPersonaTags: vi.fn().mockResolvedValue([]),
-    createPersona: createPersonaMock,
+    createResource: createResourceMock,
   }),
 }))
 
@@ -46,37 +44,31 @@ const me: Me = {
 
 afterEach(() => {
   vi.unstubAllGlobals()
-  createPersonaMock.mockReset()
+  createResourceMock.mockReset()
 })
 
-describe('PersonaNewPage', () => {
-  it('legt eine Persona an und leitet auf die Detailseite weiter', async () => {
+describe('ResourceNewPage', () => {
+  it('legt eine Resource an und leitet auf die Detailseite weiter', async () => {
     const created = {
-      id: 'p42',
+      id: 'res7',
       workspace_id: 'ws-1',
       owner_id: 'o1',
-      name: 'QA-Bot',
+      name: 'FAQ',
       current_version: 1,
-      content: {
-        description: '',
-        system_prompt: '',
-        traits: [],
-        tags: [],
-        content: { description: '', blocks: [] },
-      },
-      created_at: '2026-05-24T11:00:00Z',
-      updated_at: '2026-05-24T11:00:00Z',
+      content: { description: '', blocks: [] },
+      created_at: '2026-05-31T10:00:00Z',
+      updated_at: '2026-05-31T10:00:00Z',
     }
-    createPersonaMock.mockResolvedValueOnce(created)
+    createResourceMock.mockResolvedValueOnce(created)
 
     render(
       <SessionContext.Provider value={{ session, me, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}>
         <AuthTokenProvider>
-          <MemoryRouter initialEntries={['/w/ws-1/personas/new']}>
+          <MemoryRouter initialEntries={['/w/ws-1/resources/new']}>
             <Routes>
-              <Route path="/w/:workspaceId/personas/new" element={<PersonaNewPage />} />
+              <Route path="/w/:workspaceId/resources/new" element={<ResourceNewPage />} />
               <Route
-                path="/w/:workspaceId/personas/:id"
+                path="/w/:workspaceId/resources/:id"
                 element={<div>Detail von {created.id}</div>}
               />
             </Routes>
@@ -86,35 +78,23 @@ describe('PersonaNewPage', () => {
     )
 
     // `name` ist das einzige Pflichtfeld fuer Create (Welle 4).
-    const nameInput = screen.getByLabelText('Name')
-    fireEvent.change(nameInput, { target: { value: 'QA-Bot' } })
-    // Submit via button-click; falls jsdom die Bubble-Chain nicht
-    // durchreicht, feuern wir zusaetzlich das submit-Event direkt.
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'FAQ' } })
     const submitButton = screen.getByRole('button', { name: 'Anlegen' })
     fireEvent.click(submitButton)
-    // Fallback: form direkt submitten
+    // Fallback: form direkt submitten (jsdom bubbled-submit-Fix).
     const form = submitButton.closest('form')
     if (form !== null) {
       fireEvent.submit(form)
     }
 
-    await waitFor(
-      () => {
-        expect(screen.getByText('Detail von p42')).toBeInTheDocument()
-      },
-      { timeout: 3000 },
-    )
+    await waitFor(() => {
+      expect(screen.getByText('Detail von res7')).toBeInTheDocument()
+    })
 
-    // POST-Call: createPersona mit korrektem Body aufgerufen.
-    expect(createPersonaMock).toHaveBeenCalledWith({
-      name: 'QA-Bot',
-      content: {
-        description: '',
-        system_prompt: '',
-        traits: [],
-        tags: [],
-        content: { description: '', blocks: [] },
-      },
+    // `createResource` mit korrektem Body aufgerufen (Method-Filter Analog).
+    expect(createResourceMock).toHaveBeenCalledWith({
+      name: 'FAQ',
+      content: { description: '', blocks: [] },
     })
   })
 })
