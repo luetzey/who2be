@@ -6,13 +6,18 @@
 
 import { BlockNoteSchema, defaultInlineContentSpecs } from '@blocknote/core'
 import { createReactInlineContentSpec } from '@blocknote/react'
-import { BookOpen, Calendar, FileText, User } from 'lucide-react'
+import { BookOpen, Calendar, FileText, User, Wrench } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 
 // ---------------------- Typen ------------------------------------------------
 
-export type PlaceholderKind = 'playbook' | 'resource' | 'persona-field' | 'date'
+export type PlaceholderKind =
+  | 'playbook'
+  | 'resource'
+  | 'persona-field'
+  | 'date'
+  | 'tools-overview'
 
 export interface PlaceholderProps {
   kind: PlaceholderKind
@@ -51,6 +56,11 @@ const KIND_META: Record<PlaceholderKind, KindMeta> = {
     pillClass: 'bg-amber-100 text-amber-800 border-amber-200',
     labelPrefix: 'Datum',
   },
+  'tools-overview': {
+    icon: Wrench,
+    pillClass: 'bg-slate-100 text-slate-800 border-slate-200',
+    labelPrefix: 'MCP-Tools',
+  },
 }
 
 // ---------------------- BlockNote Custom-Inline-Spec -------------------------
@@ -69,7 +79,13 @@ export const PlaceholderInlineSpec = createReactInlineContentSpec(
     propSchema: {
       kind: {
         default: 'playbook' as PlaceholderKind,
-        values: ['playbook', 'resource', 'persona-field', 'date'] as const,
+        values: [
+          'playbook',
+          'resource',
+          'persona-field',
+          'date',
+          'tools-overview',
+        ] as const,
       },
       target_id: { default: '' as string },
       label: { default: '' as string },

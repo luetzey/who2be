@@ -18,6 +18,7 @@ from who2be_models import (
     PlaybookRead,
     ResourceLinkRead,
     ResourceRead,
+    TriggerOverview,
 )
 
 logger = logging.getLogger(__name__)
@@ -99,6 +100,10 @@ class ApiClient:
             params["trigger"] = trigger
         data = await self._get(f"{self._workspace_prefix}/playbooks", params=params)
         return [PlaybookRead.model_validate(item) for item in data]
+
+    async def list_triggers(self) -> list[TriggerOverview]:
+        data = await self._get(f"{self._workspace_prefix}/playbooks/triggers")
+        return [TriggerOverview.model_validate(item) for item in data]
 
     async def get_playbook(self, playbook_id: UUID) -> PlaybookRead:
         data = await self._get(f"{self._workspace_prefix}/playbooks/{playbook_id}")

@@ -22,7 +22,9 @@ import asyncpg
 from who2be_models import (
     PlaybookContent,
     PlaybookRead,
+    PlaybookRef,
     PlaybookVersionRead,
+    TriggerOverview,
     VersionStatus,
 )
 
@@ -122,6 +124,10 @@ class PlaybookRepository(Protocol):
     ) -> PlaybookVersionRead | None: ...
 
     async def list_distinct_tags(self, workspace_id: UUID) -> list[str]: ...
+
+    async def list_triggers_with_playbooks(
+        self, workspace_id: UUID
+    ) -> list[TriggerOverview]: ...
 
 
 class PgPlaybookRepository:
@@ -452,3 +458,32 @@ class PgPlaybookRepository:
             workspace_id,
         )
         return [row["tag"] for row in rows]
+
+    async def list_triggers_with_playbooks(
+        self, workspace_id: UUID
+    ) -> list[TriggerOverview]:
+        """Welle 5: Discovery-Aggregat fuer den `list_triggers`-MCP-Tool.
+
+        Trigger sind heute kommagetrennt in `playbook.triggers` denormalisiert.
+        Wir splitten in SQL via `string_to_array`+`unnest`, trimmen leere
+        Eintraege und gruppieren in Python — `asyncpg` hat keinen praktischen
+        Weg, JSON-Aggregate ohne weitere Decode-Logik zurueckzugeben.
+        """
+        rows = await self._pool.fetch(
+            "SELECT p.id, p.name, trim(t.trigger) AS trigger "
+            "  FROM playbook p, "
+            "       unnest(string_to_array(coalesce(p.triggers, ''), ',')) AS t(trigger) "
+            " WHERE p.workspace_id = $1 "
+            "   AND trim(t.trigger) <> '' "
+            " ORDER BY trim(t.trigger) ASC, p.name ASC",
+            workspace_id,
+        )
+        bucket: dict[str, list[PlaybookRef]] = {}
+        for row in rows:
+            bucket.setdefault(row["trigger"], []).append(
+                PlaybookRef(id=row["id"], name=row["name"])
+            )
+        return [
+            TriggerOverview(trigger=trigger, playbooks=playbooks)
+            for trigger, playbooks in bucket.items()
+        ]

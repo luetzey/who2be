@@ -275,6 +275,84 @@ class PersonaFieldResolver:
         return str(content.get("description", "")).strip()
 
 
+class ToolsOverviewResolver:
+    """Expandiert zu einer Markdown-Liste aller verfuegbaren MCP-Tools.
+
+    Inhalt ist statisch — der MCP-Server kann seine Tool-Liste introspectieren
+    (`mcp.list_tools()`), aber die docstrings sind Englisch + nicht
+    domaen-freundlich. Hier pflegen wir eine kuratierte DE-Variante, die genau
+    die Hinweise enthaelt, die der LLM braucht, um die Werkzeuge zur
+    richtigen Zeit zu nutzen. Erweitern: neuer Eintrag in `_TOOLS`.
+
+    `target_id` ist heute ungenutzt — Future-Use fuer Filter (z. B. nur
+    Read-Tools vs. alle), aktuell wird er ignoriert.
+    """
+
+    async def resolve(
+        self,
+        target_id: str,  # noqa: ARG002
+        ctx: RenderContext,  # noqa: ARG002
+        db: asyncpg.Connection,  # noqa: ARG002
+    ) -> str:
+        lines = ["## Verfuegbare Werkzeuge", ""]
+        for tool in _TOOLS:
+            lines.append(f"- **{tool.signature}** — {tool.description}")
+        return "\n".join(lines)
+
+
+class _ToolDoc(BaseModel):
+    signature: str
+    description: str
+
+
+_TOOLS: list[_ToolDoc] = [
+    _ToolDoc(
+        signature="get_persona(identifier)",
+        description=(
+            "Laedt deine eigene Persona inkl. Profil und verknuepfter Playbooks. "
+            "Ruf das einmal zu Beginn auf, wenn du deinen Kontext brauchst."
+        ),
+    ),
+    _ToolDoc(
+        signature="list_triggers()",
+        description=(
+            "Tabelle aller Trigger-Keywords mit dem zugehoerigen Playbook. "
+            "Nutze das, um zu erkennen, ob fuer die User-Frage ein Playbook "
+            "vorgesehen ist — bevor du list_playbooks oder fetch_playbook rufst."
+        ),
+    ),
+    _ToolDoc(
+        signature="list_playbooks(tag?, trigger?)",
+        description=(
+            "Katalog der Playbooks im Workspace, optional gefiltert nach Tag "
+            "oder Trigger. Antwortet mit Name, Beschreibung, Tags, Triggern."
+        ),
+    ),
+    _ToolDoc(
+        signature="fetch_playbook(playbook_id)",
+        description=(
+            "Vollstaendiger Body eines Playbooks (Schritte, Anweisungen). "
+            "Folge den dort beschriebenen Schritten."
+        ),
+    ),
+    _ToolDoc(
+        signature="list_resources()",
+        description=(
+            "Katalog der Resources im Workspace (Knowledge-Base-Dokumente). "
+            "Rufe das, wenn ein Playbook auf Resources verweist oder der User "
+            "nach Hintergrundwissen fragt."
+        ),
+    ),
+    _ToolDoc(
+        signature="fetch_resource(resource_id, block_ids?)",
+        description=(
+            "Body einer Resource — optional gezielt einzelne Bloecke "
+            "(z. B. ein einzelner Abschnitt)."
+        ),
+    ),
+]
+
+
 class DateResolver:
     """Expandiert das aktuelle Datum gemaess `target_id`-Format-Slug.
 
@@ -315,4 +393,5 @@ REGISTRY: dict[str, PlaceholderResolver] = {
     "resource": ResourceResolver(),
     "persona-field": PersonaFieldResolver(),
     "date": DateResolver(),
+    "tools-overview": ToolsOverviewResolver(),
 }

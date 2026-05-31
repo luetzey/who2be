@@ -28,6 +28,7 @@ from who2be_models import (
     PlaybookRead,
     ResourceLinkRead,
     ResourceRead,
+    TriggerOverview,
 )
 
 logger = logging.getLogger(__name__)
@@ -138,6 +139,20 @@ async def list_playbooks(tag: str | None = None, trigger: str | None = None) -> 
     """Listet Playbooks, optional gefiltert nach Tag und/oder Trigger."""
     client = await build_client()
     return await client.list_playbooks(tag, trigger)
+
+
+@mcp.tool
+@with_tool_log("list_triggers")
+async def list_triggers() -> list[TriggerOverview]:
+    """Welle 5: Discovery-Liste aller Trigger im Workspace mit Playbook-Verweis.
+
+    Liefert pro Trigger-Keyword die zugehoerigen Playbooks (id + name).
+    Ideal als ersten Schritt im Agent-Flow: erkenne aus einer User-Frage, ob
+    ein Trigger zutrifft, bevor du `list_playbooks` oder `fetch_playbook`
+    aufrufst.
+    """
+    client = await build_client()
+    return await client.list_triggers()
 
 
 @mcp.tool

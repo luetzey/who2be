@@ -44,10 +44,12 @@ from who2be_models.playbook import (
     PlaybookContent,
     PlaybookCreate,
     PlaybookRead,
+    PlaybookRef,
     PlaybookType,
     PlaybookUpdate,
     PlaybookUsage,
     PlaybookVersionRead,
+    TriggerOverview,
 )
 from who2be_models.resource import (
     LinkedBlockSection,
@@ -123,6 +125,7 @@ __all__ = [
     "PlaybookContent",
     "PlaybookCreate",
     "PlaybookRead",
+    "PlaybookRef",
     "PlaybookType",
     "PlaybookUpdate",
     "PlaybookUsage",
@@ -147,6 +150,7 @@ __all__ = [
     "TokenCreate",
     "TokenCreated",
     "TokenRead",
+    "TriggerOverview",
     "VersionStatus",
     "VersionTransitionRequest",
     "WorkspaceCreate",

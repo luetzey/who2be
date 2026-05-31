@@ -80,6 +80,21 @@ export function SystemPromptEditor({
     setOpenPicker(null)
   }
 
+  // `tools-overview` ist parameterlos — kein Picker noetig. Statt einen
+  // weiteren Dialog zu mounten, insertieren wir direkt, wenn das Slash-
+  // Menue den Kind anfordert.
+  function handleOpenPicker(kind: PlaceholderKind) {
+    if (kind === 'tools-overview') {
+      handlePickerConfirm({
+        kind: 'tools-overview',
+        target_id: '',
+        label: 'MCP-Tools-Übersicht',
+      })
+      return
+    }
+    setOpenPicker(kind)
+  }
+
   return (
     <>
       <div
@@ -106,11 +121,7 @@ export function SystemPromptEditor({
           <SuggestionMenuController
             triggerCharacter="/"
             getItems={async (query) =>
-              buildSlashMenuItems(
-                editor,
-                (kind) => setOpenPicker(kind),
-                query,
-              )
+              buildSlashMenuItems(editor, handleOpenPicker, query)
             }
           />
         </BlockNoteView>

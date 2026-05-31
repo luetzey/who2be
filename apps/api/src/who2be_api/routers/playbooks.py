@@ -20,6 +20,7 @@ from who2be_models import (
     PlaybookRead,
     PlaybookUpdate,
     PlaybookVersionRead,
+    TriggerOverview,
     VersionTransitionRequest,
 )
 
@@ -72,6 +73,19 @@ async def create_playbook(
 async def list_playbook_tags(ctx: Ctx, service: Service) -> list[str]:
     """DISTINCT-Tags des Workspaces fuer den Tag-Picker im Playbook-Form."""
     return await service.list_tags(ctx)
+
+
+@router.get("/triggers")
+async def list_playbook_triggers(
+    ctx: Ctx, service: Service
+) -> list[TriggerOverview]:
+    """Welle 5: Discovery-Aggregat — deduplizierte Trigger mit Playbook-Verweis.
+
+    Datenquelle fuer den MCP-Tool `list_triggers`, den der LLM in Templates
+    nutzt (Slash-Pill `/MCP-Tools`), um vor `list_playbooks`/`fetch_playbook`
+    die passende Anfrage einzugrenzen.
+    """
+    return await service.list_triggers(ctx)
 
 
 @router.get("/{playbook_id}")

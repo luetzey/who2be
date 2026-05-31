@@ -1,4 +1,4 @@
-import { BookText, Calendar, FileText, User, X } from 'lucide-react'
+import { BookText, Calendar, FileText, User, Wrench, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -31,6 +31,12 @@ const SLASH_PLACEHOLDERS: readonly SlashRow[] = [
     icon: Calendar,
     description: 'Aktuelles Datum (ISO oder lesbar).',
   },
+  {
+    command: '/MCP-Tools',
+    icon: Wrench,
+    description:
+      'Liste der MCP-Werkzeuge mit Signatur und Kurzbeschreibung. Schreib drumherum die Reihenfolge ("zuerst list_triggers, dann fetch_playbook"), damit der LLM die Tools richtig nutzt.',
+  },
 ]
 
 interface LiquidRow {
@@ -43,8 +49,16 @@ const LIQUID_PLACEHOLDERS: readonly LiquidRow[] = [
   { token: '{{ persona.description }}', description: 'Kurzbeschreibung der Persona.' },
   { token: '{{ persona.profile }}', description: 'Profil-Blocks der Persona als Klartext.' },
   { token: '{{ persona.tags }}', description: 'Komma-getrennte Persona-Tags.' },
-  { token: '{{ playbooks }}', description: 'Alle verlinkten Playbooks („### Name\\nBody"-Block).' },
-  { token: '{{ triggers }}', description: 'Komma-getrennte Trigger-Keywords aller Playbooks (dedup).' },
+  {
+    token: '{{ playbooks }}',
+    description:
+      'Alle verlinkten Playbooks („### Name\\nBody"-Block). Für neue Templates besser MCP-Tool list_playbooks/fetch_playbook nutzen — kleinerer Prompt, frischere Daten.',
+  },
+  {
+    token: '{{ triggers }}',
+    description:
+      'Komma-getrennte Trigger-Keywords aller Playbooks (dedup). Empfehlung: stattdessen MCP-Tool list_triggers nutzen — liefert Trigger→Playbook-Tabelle.',
+  },
   {
     token: '{{ resources }}',
     description: 'Deduplizierte Resource-Section-Snippets aus den Playbook-Block-Refs.',

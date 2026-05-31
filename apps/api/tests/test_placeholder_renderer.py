@@ -15,11 +15,13 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID, uuid4
 
 from who2be_api.services.placeholders.registry import (
+    REGISTRY,
     DateResolver,
     PersonaFieldResolver,
     PlaybookResolver,
     RenderContext,
     ResourceResolver,
+    ToolsOverviewResolver,
 )
 from who2be_api.services.placeholders.renderer import render_template_body
 
@@ -279,6 +281,40 @@ class TestDateResolver:
 
         # Fallback auf ISO.
         assert result == "2026-03-15"
+
+
+class TestToolsOverviewResolver:
+    """Welle 5: statische MCP-Tool-Liste."""
+
+    def test_returns_markdown_with_header(self) -> None:
+        resolver = ToolsOverviewResolver()
+        ctx = _ctx()
+        db = _make_db()
+        result = _async_run(resolver.resolve("", ctx, db))
+        assert result.startswith("## Verfuegbare Werkzeuge")
+
+    def test_lists_all_known_tool_signatures(self) -> None:
+        resolver = ToolsOverviewResolver()
+        ctx = _ctx()
+        db = _make_db()
+        result = _async_run(resolver.resolve("", ctx, db))
+        for expected in (
+            "get_persona(identifier)",
+            "list_triggers()",
+            "list_playbooks(tag?, trigger?)",
+            "fetch_playbook(playbook_id)",
+            "list_resources()",
+            "fetch_resource(resource_id, block_ids?)",
+        ):
+            assert expected in result
+
+    def test_registered_in_registry_under_tools_overview_key(self) -> None:
+        assert "tools-overview" in REGISTRY
+        # Sicherstellen, dass der Renderer das Kind ueber dieselbe Map findet.
+        ctx = _ctx()
+        db = _make_db()
+        result = _async_run(REGISTRY["tools-overview"].resolve("", ctx, db))
+        assert "Verfuegbare Werkzeuge" in result
 
 
 # ---------------------------------------------------------------------------

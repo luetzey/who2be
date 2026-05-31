@@ -11,7 +11,7 @@
 // Default-Items, die i18n-Lookup machen). Wir nutzen `title` + `group` als
 // visuelle Identitaet.
 
-import { BookOpen, Calendar, FileText, User } from 'lucide-react'
+import { BookOpen, Calendar, FileText, User, Wrench } from 'lucide-react'
 import { createElement } from 'react'
 
 import type { DefaultReactSuggestionItem } from '@blocknote/react'
@@ -91,6 +91,16 @@ export function buildSlashMenuItems(
         openPicker('date')
       },
       aliases: ['datum', 'date', 'heute'],
+    },
+    {
+      title: 'MCP-Tools',
+      subtext: 'Fuegt eine Uebersicht der MCP-Werkzeuge ein, die der Agent nutzen kann',
+      group: 'Placeholder',
+      icon: createElement(Wrench, { size: 18 }),
+      onItemClick: () => {
+        openPicker('tools-overview')
+      },
+      aliases: ['mcp', 'tools', 'werkzeuge', 'tools-overview'],
     },
   ]
 

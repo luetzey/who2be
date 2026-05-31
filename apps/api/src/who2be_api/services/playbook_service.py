@@ -19,6 +19,7 @@ from who2be_models import (
     PlaybookRead,
     PlaybookUpdate,
     PlaybookVersionRead,
+    TriggerOverview,
     WorkspaceRole,
     encode_cursor,
 )
@@ -135,3 +136,10 @@ class PlaybookService:
     async def list_tags(self, ctx: WorkspaceContext) -> list[str]:
         """DISTINCT-Tags des Workspaces — Datenquelle fuer den Tag-Picker."""
         return await self._repo.list_distinct_tags(ctx.workspace_id)
+
+    async def list_triggers(self, ctx: WorkspaceContext) -> list[TriggerOverview]:
+        """Welle 5: Discovery-Liste aller Trigger im Workspace mit Playbook-Verweis.
+
+        Quelle fuer MCP-Tool `list_triggers` und Frontend-Hinweise.
+        """
+        return await self._repo.list_triggers_with_playbooks(ctx.workspace_id)
