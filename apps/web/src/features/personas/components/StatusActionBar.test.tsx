@@ -39,7 +39,7 @@ function renderBar(
 ) {
   return render(
     <SessionContext.Provider
-      value={{ session, me: buildMe(role), signIn: vi.fn(), signOut: vi.fn() }}
+      value={{ session, me: buildMe(role), signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
     >
       <AuthTokenProvider>
         <MemoryRouter initialEntries={['/w/ws-1/personas/p1']}>

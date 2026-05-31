@@ -10,6 +10,9 @@ export interface SessionValue {
   me: Me | null
   signIn: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
+  // Expliziter Re-Fetch von `/v1/me` — wird von `DefaultWorkspaceRedirect`
+  // genutzt, wenn der Lazy-Seed noch nicht abgeschlossen war (Fallback).
+  refreshMe: () => Promise<void>
 }
 
 export const SessionContext = createContext<SessionValue | null>(null)

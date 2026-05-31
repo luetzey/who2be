@@ -36,7 +36,7 @@ const adminMe = {
 function renderPage(currentMe: typeof me | typeof adminMe = me) {
   return render(
     <SessionContext.Provider
-      value={{ session, me: currentMe, signIn: vi.fn(), signOut: vi.fn() }}
+      value={{ session, me: currentMe, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
     >
       <AuthTokenProvider>
         <BrowserRouter>

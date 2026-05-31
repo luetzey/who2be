@@ -47,7 +47,7 @@ describe('PlaybooksPage', () => {
     )
 
     render(
-      <SessionContext.Provider value={{ session, me, signIn: vi.fn(), signOut: vi.fn() }}>
+      <SessionContext.Provider value={{ session, me, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}>
         <AuthTokenProvider>
           <BrowserRouter>
             <PlaybooksPage />

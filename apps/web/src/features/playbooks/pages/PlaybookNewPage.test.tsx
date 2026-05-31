@@ -46,7 +46,7 @@ describe('PlaybookNewPage', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     render(
-      <SessionContext.Provider value={{ session, me, signIn: vi.fn(), signOut: vi.fn() }}>
+      <SessionContext.Provider value={{ session, me, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}>
         <AuthTokenProvider>
           <MemoryRouter initialEntries={['/w/ws-1/playbooks/new']}>
             <Routes>
