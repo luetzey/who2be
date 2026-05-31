@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 
 import type { SystemPromptEditorValues } from '../hooks/useSystemPromptForm'
+import { liquidBodyToInline } from '../lib/liquidMigration'
 
 import { PlaceholderHelp } from './PlaceholderHelp'
 
@@ -41,8 +42,14 @@ export function SystemPromptEditorForm({
 
   // Migration: plain → blocknote. Wickelt den Plain-Text in einen
   // Single-Paragraph-Block und setzt body_format auf 'blocknote'.
+  // Bekannte Liquid-Tokens werden dabei direkt zu Placeholder-Pills
+  // umgesetzt (persona.name / persona.description); andere Tokens (z. B.
+  // playbooks/triggers/resources, denen keine BlockNote-Placeholder-Form
+  // entspricht) bleiben als Text stehen — der Server-Renderer im plain-
+  // Pfad expandiert sie weiter, und der User kann sie im Editor durch
+  // Slash-Befehl manuell ersetzen.
   function handleMigrateToBlockNote() {
-    const currentBody = bodyValue
+    const content = liquidBodyToInline(bodyValue)
     const singleParagraph = [
       {
         id: crypto.randomUUID(),
@@ -52,7 +59,7 @@ export function SystemPromptEditorForm({
           backgroundColor: 'default',
           textAlignment: 'left',
         },
-        content: [{ type: 'text', text: currentBody, styles: {} }],
+        content,
         children: [],
       },
     ]
