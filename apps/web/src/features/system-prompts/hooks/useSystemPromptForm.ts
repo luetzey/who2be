@@ -50,8 +50,9 @@ export function useSystemPromptForm(
         name: template.name,
         description: template.content.description,
         body: template.content.body,
-        // Fehlende body_format (Legacy-Templates vor Welle 5) → 'plain'
-        body_format: template.content.body_format ?? 'plain',
+        // Fehlende body_format (Legacy-Templates vor Welle 5) → 'plain'.
+        // body_format lebt seit Welle 5 auf Template-Top-Level (siehe types.ts).
+        body_format: template.body_format ?? 'plain',
       })
     }
   }, [template, form])
@@ -64,10 +65,10 @@ export function useSystemPromptForm(
     try {
       await api.updateSystemPromptTemplate(template.id, {
         name: values.name,
+        body_format: values.body_format,
         content: {
           description: values.description,
           body: values.body,
-          body_format: values.body_format,
         },
       })
       notify.success('Gespeichert — neue Version erstellt.')

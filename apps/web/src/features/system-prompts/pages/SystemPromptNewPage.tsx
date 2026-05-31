@@ -63,10 +63,13 @@ export function SystemPromptNewPage() {
         values.body !== '' ? values.body : JSON.stringify(blocksRef.current)
       const created = await api.createSystemPromptTemplate({
         name: values.name,
+        body_format: 'blocknote',
         content: {
           description: values.description,
-          body: bodyJson,
-          body_format: 'blocknote',
+          // body_format lebt auf Template-Top-Level; content traegt nur
+          // description+body. body darf nicht leer sein (Pydantic min_length=1) —
+          // ein leeres BlockNote-Dok serialisiert zu "[]", was OK ist.
+          body: bodyJson !== '' ? bodyJson : '[]',
         },
       })
       notify.success('Template angelegt.')
