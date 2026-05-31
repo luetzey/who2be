@@ -5,6 +5,7 @@ Liest und schreibt `workspace`. Die Membership-Pruefung ist Aufgabe der
 und bekommt die User-Identitaet vom Service-Layer durchgereicht.
 """
 
+from pathlib import Path
 from typing import Protocol
 from uuid import UUID
 
@@ -144,107 +145,14 @@ class PgWorkspaceRepository:
         return WorkspaceRead.model_validate(dict(row)) if row is not None else None
 
 
-# Welle 6: BlockNote-Starter-Body als Top-Level-JSON-Array (siehe
-# Migration 0027). 1:1-Synchron mit der SQL-Variante — Tests pruefen die
-# Slugs, das Body-Layout selbst ist hier nur Stringliteral.
-_WORKFLOW_STARTER_BLOCKNOTE_BODY = """[
-  {
-    "id": "ws-h1",
-    "type": "heading",
-    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Rolle", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "ws-p1",
-    "type": "paragraph",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [
-      {"type": "text", "text": "Du bist ", "styles": {}},
-      {"type": "placeholder", "props": {"kind": "persona-field", "target_id": "name", "label": "Persona: Name"}},
-      {"type": "text", "text": " \\u2014 ", "styles": {}},
-      {"type": "placeholder", "props": {"kind": "persona-field", "target_id": "description", "label": "Persona: Beschreibung"}},
-      {"type": "text", "text": ".", "styles": {}}
-    ],
-    "children": []
-  },
-  {
-    "id": "ws-h2",
-    "type": "heading",
-    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Verfuegbare Werkzeuge", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "ws-p2",
-    "type": "paragraph",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [
-      {"type": "placeholder", "props": {"kind": "tools-overview", "target_id": "", "label": "Werkzeuge"}}
-    ],
-    "children": []
-  },
-  {
-    "id": "ws-h3",
-    "type": "heading",
-    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "So gehst du vor", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "ws-li1",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Hoere der Anfrage zu und identifiziere das Thema.", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "ws-li2",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Rufe list_triggers() auf, um zu sehen, ob ein Playbook reagiert.", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "ws-li3",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Wenn ja: fetch_playbook(id) und folge dessen Schritten.", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "ws-li4",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Wenn das Playbook auf eine Resource verweist: fetch_resource(id).", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "ws-li5",
-    "type": "bulletListItem",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Erst wenn keines passt, antworte aus deinem allgemeinen Wissen.", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "ws-h4",
-    "type": "heading",
-    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Letzter Stand", "styles": {}}],
-    "children": []
-  },
-  {
-    "id": "ws-p3",
-    "type": "paragraph",
-    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [
-      {"type": "text", "text": "Heute ist der ", "styles": {}},
-      {"type": "placeholder", "props": {"kind": "date", "target_id": "human", "label": "Datum"}},
-      {"type": "text", "text": ".", "styles": {}}
-    ],
-    "children": []
-  }
-]"""
+# Welle 6: BlockNote-Starter-Body lebt als Sidecar-JSON-Datei neben dem
+# Modul. Triple-Quoted-Stringliteral wurde von ruff (line-length=100)
+# wegen der inneren JSON-Keys mit "textAlignment" usw. flach abgelehnt;
+# die Sidecar-Datei sortiert ausserdem das Dual-Maintenance mit der
+# SQL-Migration 0027 (gleicher Body-Inhalt jetzt nur noch an zwei Stellen).
+_WORKFLOW_STARTER_BLOCKNOTE_BODY = (Path(__file__).parent / "workflow_starter_body.json").read_text(
+    encoding="utf-8"
+)
 
 
 # Seed-Bodies fuer die Default-Templates eines neuen Workspaces — Quelle der

@@ -125,11 +125,15 @@ describe('PersonaDetailPage', () => {
     ).not.toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Coach v2' } })
+    // Auto-Save-Debounce ist 1500 ms; lokal landet der Test bei ~1.6s,
+    // CI-Runner mit jsdom-Overhead haben das alte 3s-Limit gelegentlich
+    // gerissen (siehe PR #79). 5s reicht komfortabel, bleibt aber klar
+    // unter dem outer it()-Timeout von 10s.
     await waitFor(
       () => {
         expect(patchCalls.length).toBeGreaterThanOrEqual(1)
       },
-      { timeout: 3000 },
+      { timeout: 5000 },
     )
     expect((patchCalls[patchCalls.length - 1].body as { name: string }).name).toBe(
       'Coach v2',
