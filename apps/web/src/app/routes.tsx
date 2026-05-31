@@ -1,4 +1,4 @@
-import { lazy } from 'react'
+import { lazy, useEffect, useRef } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom'
 
 import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
@@ -114,14 +114,51 @@ const CatalogPage = import.meta.env.DEV
   : null
 
 // Default-Redirect nach Login: hebt den User auf `/w/{default_workspace_id}/dashboard`.
-// `me` kommt aus `/v1/me`, das der SessionProvider nach Sign-In laedt; falls noch
-// nicht resolved, bleibt der User auf Login zurueckgeworfen.
+// `me` kommt aus `/v1/me`, das der SessionProvider nach Sign-In laedt.
+//
+// Sonderfaelle:
+//  - me === null: Session + me-Fetch noch nicht abgeschlossen → Ladeanzeige,
+//    kein Redirect (verhindert Login-Schleife).
+//  - me.default_workspace_id === null: Backend hat noch keinen Workspace
+//    geseedett (sollte mit Lazy-Seed nicht mehr auftreten, aber als
+//    Defense-in-Depth): einmaliger refreshMe nach 1.5 s, statischer
+//    Fallback-Screen ohne Navigate-Schleife.
 function DefaultWorkspaceRedirect() {
-  const { me } = useSession()
-  const workspaceId = me?.default_workspace_id
-  if (!workspaceId) {
-    return <Navigate to="/login" replace />
+  const { me, refreshMe } = useSession()
+  const refreshedRef = useRef(false)
+
+  const workspaceId = me?.default_workspace_id ?? null
+
+  useEffect(() => {
+    // Nur feuern, wenn me geladen (nicht null), workspace aber fehlt und
+    // noch kein Retry lief.
+    if (me !== null && workspaceId === null && !refreshedRef.current) {
+      refreshedRef.current = true
+      const timer = setTimeout(() => {
+        void refreshMe()
+      }, 1500)
+      return () => clearTimeout(timer)
+    }
+  }, [me, workspaceId, refreshMe])
+
+  // me noch nicht resolved (Session-Bootstrap laeuft noch).
+  if (me === null) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
+        Wird geladen…
+      </div>
+    )
   }
+
+  // me geladen, aber workspace fehlt → Retry laeuft (useEffect oben).
+  if (workspaceId === null) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
+        Workspace wird vorbereitet…
+      </div>
+    )
+  }
+
   return <Navigate to={`/w/${workspaceId}/dashboard`} replace />
 }
 

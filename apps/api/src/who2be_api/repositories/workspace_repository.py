@@ -13,6 +13,65 @@ import asyncpg
 from who2be_models import WorkspaceRead
 
 
+async def ensure_personal_workspace(
+    conn: asyncpg.Connection,
+    user_id: UUID,
+    *,
+    user_email: str | None,
+) -> UUID:
+    """Lazy-Seed einer Personal-Org + Workspace + Admin-Membership.
+
+    Idempotent: laeuft ein zweites Mal durch, ohne Duplikate anzulegen.
+    Naming-Strategie fuer die Org:
+      1. Local-Part der ``user_email``, falls gesetzt und valide.
+      2. Fallback: ``"Personal"``.
+
+    Gibt die ``workspace_id`` zurueck.
+    """
+    org_name = _org_name_from_email(user_email)
+    org_id = await conn.fetchval(
+        "INSERT INTO organization (name, slug, kind) "
+        "VALUES ($1, $2, 'personal') "
+        "ON CONFLICT (kind, slug) DO UPDATE SET name = excluded.name "
+        "RETURNING id",
+        org_name,
+        str(user_id),
+    )
+    await conn.execute(
+        "INSERT INTO org_member (org_id, user_id, role) VALUES ($1, $2, 'owner') "
+        "ON CONFLICT (org_id, user_id) DO NOTHING",
+        org_id,
+        user_id,
+    )
+    workspace_id: UUID = await conn.fetchval(
+        "INSERT INTO workspace (org_id, name, slug) VALUES ($1, 'Personal', 'personal') "
+        "ON CONFLICT (org_id, slug) DO UPDATE SET name = excluded.name "
+        "RETURNING id",
+        org_id,
+    )
+    await conn.execute(
+        "INSERT INTO workspace_member (workspace_id, user_id, role) "
+        "VALUES ($1, $2, 'admin') ON CONFLICT (workspace_id, user_id) DO NOTHING",
+        workspace_id,
+        user_id,
+    )
+    await _seed_default_templates(conn, workspace_id, user_id)
+    return workspace_id
+
+
+def _org_name_from_email(email: str | None) -> str:
+    """Leitet den Org-Namen aus dem Local-Part der E-Mail ab.
+
+    Nur der Teil vor ``@`` wird genutzt; leere Strings und ``None`` fallen
+    auf ``"Personal"`` zurueck.
+    """
+    if email:
+        local = email.split("@")[0].strip()
+        if local:
+            return local
+    return "Personal"
+
+
 class WorkspaceRepository(Protocol):
     """Service-seitige Abstraktion fuer den Workspace-Zugriff."""
 

@@ -8,6 +8,15 @@ import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
 import { SessionContext } from '@/auth/session-context'
 import { PlaybookNewPage } from './PlaybookNewPage'
 
+// BlockNote-Insel in jsdom nicht mountfaehig — siehe PlaybookDetailPage.test.tsx.
+vi.mock('@blocknote/react', () => ({
+  useCreateBlockNote: () => ({ document: [] }),
+}))
+vi.mock('@blocknote/mantine', () => ({
+  BlockNoteView: () => <div data-testid="blocknote-view" />,
+}))
+vi.mock('@/app/theme-context', () => ({ useTheme: () => ({ resolved: 'light' }) }))
+
 const session = { access_token: 'jwt' } as unknown as Session
 const me: Me = {
   user_id: 'u1',
@@ -28,25 +37,33 @@ describe('PlaybookNewPage', () => {
       name: 'Brainstorming',
       current_version: 1,
       type: 'workflow',
-      tags: ['ideation'],
-      triggers: 'ich brauche Ideen',
+      tags: [],
+      triggers: null,
       content: {
         description: 'd',
-        body: 'b',
+        body: '',
         type: 'workflow',
-        tags: ['ideation'],
-        triggers: 'ich brauche Ideen',
+        tags: [],
+        triggers: null,
       },
       created_at: '2026-05-24T12:00:00Z',
       updated_at: '2026-05-24T12:00:00Z',
     }
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(new Response(JSON.stringify(created), { status: 201 }))
+    // TagInput laedt Tag-Vorschlaege via GET .../playbooks/tags — der
+    // gleiche fetch-Mock muss URL-bewusst antworten, sonst kracht TagInput
+    // beim Filtern auf der nicht-Array-Response.
+    const fetchMock = vi.fn((url: string) => {
+      if (url.includes('/playbooks/tags')) {
+        return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }))
+      }
+      return Promise.resolve(new Response(JSON.stringify(created), { status: 201 }))
+    })
     vi.stubGlobal('fetch', fetchMock)
 
     render(
-      <SessionContext.Provider value={{ session, me, signIn: vi.fn(), signOut: vi.fn() }}>
+      <SessionContext.Provider
+        value={{ session, me, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
+      >
         <AuthTokenProvider>
           <MemoryRouter initialEntries={['/w/ws-1/playbooks/new']}>
             <Routes>
@@ -62,32 +79,30 @@ describe('PlaybookNewPage', () => {
     )
 
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Brainstorming' } })
+    // Type ist jetzt ein Select-Dropdown mit Enum statt freiem Input.
     fireEvent.change(screen.getByLabelText('Typ'), { target: { value: 'workflow' } })
     fireEvent.change(screen.getByLabelText('Beschreibung'), { target: { value: 'd' } })
-    fireEvent.change(screen.getByLabelText('Inhalt'), { target: { value: 'b' } })
-    fireEvent.change(screen.getByLabelText('Tags (kommagetrennt)'), {
-      target: { value: 'ideation' },
-    })
-    fireEvent.change(screen.getByLabelText('Trigger'), {
-      target: { value: 'ich brauche Ideen' },
-    })
+
     fireEvent.click(screen.getByRole('button', { name: 'Anlegen' }))
 
     await waitFor(() => {
       expect(screen.getByText('Detail von pb7')).toBeInTheDocument()
     })
 
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit?]>
+    const postCall = calls.find((call) => call[1]?.method === 'POST')
+    expect(postCall).toBeDefined()
+    const [url, init] = postCall!
     expect(url).toContain('/v1/workspaces/ws-1/playbooks')
-    expect(init.method).toBe('POST')
-    expect(JSON.parse(init.body as string)).toEqual({
+    expect(init?.method).toBe('POST')
+    expect(JSON.parse(init!.body as string)).toEqual({
       name: 'Brainstorming',
       content: {
         description: 'd',
-        body: 'b',
+        body: '',
         type: 'workflow',
-        tags: ['ideation'],
-        triggers: 'ich brauche Ideen',
+        tags: [],
+        triggers: null,
       },
     })
   })

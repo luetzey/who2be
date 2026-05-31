@@ -41,45 +41,15 @@ async def _ensure_auth_users_stub(conn: asyncpg.Connection) -> None:
 
 
 async def _ensure_workspace(conn: asyncpg.Connection, user_id: UUID) -> UUID:
-    """Legt — falls noch nicht da — eine Personal-Org + Workspace fuer den
-    User an und gibt die `workspace_id` zurueck. Slug-Konvention identisch zur
-    Migration 0013, damit Re-Runs keine Duplikate erzeugen.
+    """Duenner Test-Helper-Wrapper um ``ensure_personal_workspace`` (DRY).
+
+    Stellt den `auth.users`-Stub bereit (nur in Test-DBs noetig) und
+    delegiert die eigentliche Seed-Logik an das Prod-Modul.
     """
     await _ensure_auth_users_stub(conn)
-    org_id = await conn.fetchval(
-        "INSERT INTO organization (name, slug, kind) "
-        "VALUES ('Personal', $1, 'personal') "
-        "ON CONFLICT (kind, slug) DO UPDATE SET name = excluded.name "
-        "RETURNING id",
-        str(user_id),
-    )
-    await conn.execute(
-        "INSERT INTO org_member (org_id, user_id, role) VALUES ($1, $2, 'owner') "
-        "ON CONFLICT (org_id, user_id) DO NOTHING",
-        org_id,
-        user_id,
-    )
-    workspace_id: UUID = await conn.fetchval(
-        "INSERT INTO workspace (org_id, name, slug) VALUES ($1, 'Personal', 'personal') "
-        "ON CONFLICT (org_id, slug) DO UPDATE SET name = excluded.name "
-        "RETURNING id",
-        org_id,
-    )
-    await conn.execute(
-        "INSERT INTO workspace_member (workspace_id, user_id, role) "
-        "VALUES ($1, $2, 'admin') ON CONFLICT (workspace_id, user_id) DO NOTHING",
-        workspace_id,
-        user_id,
-    )
-    # Phase 3 Runde 3 Track 3: jeder neue Workspace bekommt die drei
-    # Default-System-Prompt-Templates. In Prod uebernimmt das
-    # `workspace_repository.create`; hier spiegeln wir das Setup, damit
-    # Tests, die ueber `setup_workspace` direkt INSERTen, die Seed-Daten
-    # ebenfalls bekommen. Idempotent ueber (workspace_id, slug) UNIQUE.
-    from who2be_api.repositories.workspace_repository import _seed_default_templates
+    from who2be_api.repositories.workspace_repository import ensure_personal_workspace
 
-    await _seed_default_templates(conn, workspace_id, user_id)
-    return workspace_id
+    return await ensure_personal_workspace(conn, user_id, user_email=None)
 
 
 def setup_workspace(user_id: UUID) -> UUID:

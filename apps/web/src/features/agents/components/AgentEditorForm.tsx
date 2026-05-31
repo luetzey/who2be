@@ -78,11 +78,11 @@ export function AgentEditorForm({
 
               <FormSection
                 title="Konfiguration"
-                description="Welche Persona und welches Template der Agent verwendet."
+                description="Welche Persona und welcher Systemprompt der Agent verwendet."
                 help={
                   <p>
                     Die ausgewählte Persona liefert Name, Profil, Tags und ihre
-                    Playbooks. Das Template definiert den eigentlichen
+                    Playbooks. Der Systemprompt definiert den eigentlichen
                     System-Prompt mit Platzhaltern.
                   </p>
                 }
@@ -114,7 +114,7 @@ export function AgentEditorForm({
                   name="system_prompt_template_id"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Template</FormLabel>
+                      <FormLabel>Systemprompt</FormLabel>
                       <FormControl>
                         <Select required disabled={isViewer} {...field}>
                           <option value="" disabled>

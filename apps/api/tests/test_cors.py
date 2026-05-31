@@ -27,6 +27,22 @@ def test_preflight_allows_configured_origin() -> None:
     assert "POST" in response.headers["access-control-allow-methods"]
 
 
+def test_preflight_allows_patch_method() -> None:
+    # PATCH wird vom Auto-Save (Persona/Playbook/Resource-Draft) und vom
+    # Members-Role-Update gebraucht; fehlt es in `allow_methods`, blockt der
+    # Browser den Preflight und der Client sieht "Who2Be-API nicht erreichbar".
+    response = client.options(
+        "/v1/me",
+        headers={
+            "Origin": _WEB_ORIGIN,
+            "Access-Control-Request-Method": "PATCH",
+            "Access-Control-Request-Headers": "authorization,content-type",
+        },
+    )
+    assert response.status_code == 200
+    assert "PATCH" in response.headers["access-control-allow-methods"]
+
+
 def test_simple_request_carries_acao_header() -> None:
     response = client.get("/v1/health", headers={"Origin": _WEB_ORIGIN})
     assert response.status_code == 200
