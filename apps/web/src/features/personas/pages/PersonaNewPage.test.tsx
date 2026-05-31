@@ -54,10 +54,6 @@ describe('PersonaNewPage', () => {
 
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'QA-Bot' } })
     fireEvent.change(screen.getByLabelText('Beschreibung'), { target: { value: 'd' } })
-    fireEvent.change(screen.getByLabelText('System-Prompt'), { target: { value: 's' } })
-    fireEvent.change(screen.getByLabelText('Eigenschaften (kommagetrennt)'), {
-      target: { value: 'careful' },
-    })
     fireEvent.click(screen.getByRole('button', { name: 'Anlegen' }))
 
     await waitFor(() => {
@@ -69,7 +65,7 @@ describe('PersonaNewPage', () => {
     expect(init.method).toBe('POST')
     expect(JSON.parse(init.body as string)).toEqual({
       name: 'QA-Bot',
-      content: { description: 'd', system_prompt: 's', traits: ['careful'] },
+      content: { description: 'd', system_prompt: '', traits: [] },
     })
   })
 })

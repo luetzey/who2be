@@ -115,8 +115,7 @@ def test_phase21_tables_created(tmp_path: Path) -> None:
     async def _run(conn: asyncpg.Connection) -> set[str]:
         await apply_migrations(conn, tmp_path)
         rows = await conn.fetch(
-            "SELECT table_name FROM information_schema.tables "
-            "WHERE table_schema = current_schema()"
+            "SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema()"
         )
         return {row["table_name"] for row in rows}
 
@@ -145,8 +144,7 @@ def test_phase21_status_invariant(tmp_path: Path) -> None:
         owner = uuid4()
         persona_id = uuid4()
         await conn.execute(
-            "INSERT INTO persona (id, owner_id, name, current_version) "
-            "VALUES ($1, $2, $3, 1)",
+            "INSERT INTO persona (id, owner_id, name, current_version) VALUES ($1, $2, $3, 1)",
             persona_id,
             owner,
             "p",
@@ -203,8 +201,7 @@ def test_phase21_status_backfill(tmp_path: Path) -> None:
         owner = uuid4()
         persona_id = uuid4()
         await conn.execute(
-            "INSERT INTO persona (id, owner_id, name, current_version) "
-            "VALUES ($1, $2, 'p', 3)",
+            "INSERT INTO persona (id, owner_id, name, current_version) VALUES ($1, $2, 'p', 3)",
             persona_id,
             owner,
         )
@@ -222,8 +219,7 @@ def test_phase21_status_backfill(tmp_path: Path) -> None:
         await apply_migrations(conn, tmp_path)
 
         rows = await conn.fetch(
-            "SELECT version, status FROM persona_version "
-            "WHERE persona_id = $1 ORDER BY version",
+            "SELECT version, status FROM persona_version WHERE persona_id = $1 ORDER BY version",
             persona_id,
         )
         return {row["version"]: row["status"] for row in rows}
@@ -274,20 +270,17 @@ def test_phase21_backfill_cardinality(tmp_path: Path) -> None:
             owners[1],
         )
         await conn.execute(
-            "INSERT INTO playbook (id, owner_id, name, type) "
-            "VALUES ($1, $2, 'pb0', 'core')",
+            "INSERT INTO playbook (id, owner_id, name, type) VALUES ($1, $2, 'pb0', 'core')",
             uuid4(),
             owners[0],
         )
         await conn.execute(
-            "INSERT INTO api_token (owner_id, name, token_hash) "
-            "VALUES ($1, 't0', $2)",
+            "INSERT INTO api_token (owner_id, name, token_hash) VALUES ($1, 't0', $2)",
             owners[0],
             secrets.token_hex(16),
         )
         await conn.execute(
-            "INSERT INTO api_token (owner_id, name, token_hash) "
-            "VALUES ($1, 't2', $2)",
+            "INSERT INTO api_token (owner_id, name, token_hash) VALUES ($1, 't2', $2)",
             owners[2],
             secrets.token_hex(16),
         )
@@ -295,17 +288,13 @@ def test_phase21_backfill_cardinality(tmp_path: Path) -> None:
         _copy_migrations(tmp_path, _TENANT_MIGRATIONS)
         await apply_migrations(conn, tmp_path)
 
-        org_count = await conn.fetchval(
-            "SELECT count(*) FROM organization WHERE kind = 'personal'"
-        )
+        org_count = await conn.fetchval("SELECT count(*) FROM organization WHERE kind = 'personal'")
         workspace_count = await conn.fetchval("SELECT count(*) FROM workspace")
         admin_count = await conn.fetchval(
             "SELECT count(*) FROM workspace_member WHERE role = 'admin'"
         )
 
-        persona_workspace_ids = await conn.fetch(
-            "SELECT workspace_id FROM persona ORDER BY name"
-        )
+        persona_workspace_ids = await conn.fetch("SELECT workspace_id FROM persona ORDER BY name")
         return (
             org_count,
             workspace_count,
@@ -313,9 +302,7 @@ def test_phase21_backfill_cardinality(tmp_path: Path) -> None:
             [row["workspace_id"] for row in persona_workspace_ids],
         )
 
-    org_count, ws_count, admin_count, persona_workspaces = asyncio.run(
-        _with_isolated_schema(_run)
-    )
+    org_count, ws_count, admin_count, persona_workspaces = asyncio.run(_with_isolated_schema(_run))
     assert org_count == 3
     assert ws_count == 3
     assert admin_count == 3
@@ -342,14 +329,10 @@ def test_phase21_backfill_idempotent(tmp_path: Path) -> None:
         )
         # 0013-Body manuell zweimal ausfuehren — schema_migrations ueberspringt
         # den File-Lauf, daher Re-Apply per Statement-Replay.
-        sql = (MIGRATIONS_DIR / "0013_backfill_tenants.sql").read_text(
-            encoding="utf-8"
-        )
+        sql = (MIGRATIONS_DIR / "0013_backfill_tenants.sql").read_text(encoding="utf-8")
         await conn.execute(sql)
         await conn.execute(sql)
-        org_count = await conn.fetchval(
-            "SELECT count(*) FROM organization WHERE kind = 'personal'"
-        )
+        org_count = await conn.fetchval("SELECT count(*) FROM organization WHERE kind = 'personal'")
         ws_count = await conn.fetchval("SELECT count(*) FROM workspace")
         member_count = await conn.fetchval(
             "SELECT count(*) FROM workspace_member WHERE user_id = $1",

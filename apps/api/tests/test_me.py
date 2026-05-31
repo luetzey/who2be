@@ -61,8 +61,7 @@ def _ensure_auth_users_shim() -> None:
             # EXISTS oben waere dann no-op. ALTER … ADD COLUMN IF NOT EXISTS
             # schliesst die Luecke.
             await conn.execute(
-                "ALTER TABLE auth.users "
-                "ADD COLUMN IF NOT EXISTS encrypted_password text"
+                "ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS encrypted_password text"
             )
         finally:
             await conn.close()

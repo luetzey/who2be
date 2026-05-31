@@ -23,9 +23,7 @@ class OrganizationService:
     async def list_for_user(self, user_id: UUID) -> list[OrganizationRead]:
         return await self._repo.list_by_user(user_id)
 
-    async def create(
-        self, user_id: UUID, data: OrganizationCreate
-    ) -> OrganizationRead:
+    async def create(self, user_id: UUID, data: OrganizationCreate) -> OrganizationRead:
         try:
             org, _workspace_id = await self._repo.create_company(
                 user_id, data.name, data.slug, default_workspace_name="Default"

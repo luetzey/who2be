@@ -178,7 +178,7 @@ export function PersonaDetailPage() {
                 form={form}
                 formKey={`${persona.id}-${persona.current_version}`}
                 initialProfileBlocks={persona.content.content?.blocks ?? []}
-                initialSystemPrompt={persona.content.system_prompt}
+                legacySystemPrompt={persona.content.system_prompt}
               />
 
               <Card>

@@ -75,8 +75,7 @@ class PgMeRepository:
         — z. B. in einer reinen API-Test-DB ohne GoTrue — gilt `False`."""
         try:
             value = await self._pool.fetchval(
-                "SELECT encrypted_password IS NOT NULL "
-                "FROM auth.users WHERE id = $1",
+                "SELECT encrypted_password IS NOT NULL FROM auth.users WHERE id = $1",
                 user_id,
             )
         except asyncpg.PostgresError:

@@ -71,6 +71,14 @@ async def _ensure_workspace(conn: asyncpg.Connection, user_id: UUID) -> UUID:
         workspace_id,
         user_id,
     )
+    # Phase 3 Runde 3 Track 3: jeder neue Workspace bekommt die drei
+    # Default-System-Prompt-Templates. In Prod uebernimmt das
+    # `workspace_repository.create`; hier spiegeln wir das Setup, damit
+    # Tests, die ueber `setup_workspace` direkt INSERTen, die Seed-Daten
+    # ebenfalls bekommen. Idempotent ueber (workspace_id, slug) UNIQUE.
+    from who2be_api.repositories.workspace_repository import _seed_default_templates
+
+    await _seed_default_templates(conn, workspace_id, user_id)
     return workspace_id
 
 

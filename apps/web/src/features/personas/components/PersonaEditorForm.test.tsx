@@ -50,6 +50,9 @@ const persona: Persona = {
   current_version: 1,
   content: {
     description: 'd',
+    // Bestandsdaten mit gefuelltem System-Prompt — Track 3 zeigt dafuer
+    // die Read-Only-Hinweis-Box. Wir setzen den Wert hier, weil viele
+    // Tests beide Zustaende (mit + ohne Wert) brauchen.
     system_prompt: 'Sei hilfsbereit.',
     traits: [],
     tags: ['coaching'],
@@ -59,42 +62,66 @@ const persona: Persona = {
   updated_at: 't',
 }
 
-function Harness({ source = persona }: { source?: Persona } = {}) {
+function Harness({
+  source = persona,
+  legacySystemPrompt = source.content.system_prompt,
+}: {
+  source?: Persona
+  legacySystemPrompt?: string
+} = {}) {
   const { form } = usePersonaForm(source)
   return (
     <PersonaEditorForm
       form={form}
       formKey={`${source.id}-${source.current_version}`}
       initialProfileBlocks={source.content.content?.blocks ?? []}
-      initialSystemPrompt={source.content.system_prompt}
+      legacySystemPrompt={legacySystemPrompt}
     />
   )
 }
 
 describe('PersonaEditorForm', () => {
-  it('rendert die vier Sektionen — Identitaet, Profil, System-Prompt, Tags', async () => {
+  it('rendert drei Sektionen — Identitaet, Profil, Tags (System-Prompt entfaellt)', async () => {
     render(<Harness />)
     expect(await screen.findByText('Identität')).toBeInTheDocument()
     expect(screen.getByText('Profil')).toBeInTheDocument()
-    expect(screen.getAllByText('System-Prompt').length).toBeGreaterThan(0)
     expect(screen.getByText('Tags', { selector: 'h2' })).toBeInTheDocument()
     // properties/traits-Feld entfaellt — kein „Eigenschaften"-Label mehr.
     expect(screen.queryByLabelText(/Eigenschaften/)).not.toBeInTheDocument()
+    // Mit Track 3 ist die System-Prompt-Section weg — der Form-Section-Titel
+    // existiert nicht mehr (die Read-Only-Hinweis-Box verwendet andere Texte).
+    expect(
+      screen.queryByText('System-Prompt', { selector: 'h2' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('zeigt Read-Only-Hinweis fuer Bestandsdaten mit System-Prompt', () => {
+    render(<Harness />)
+    const hint = screen.getByTestId('persona-legacy-system-prompt-hint')
+    expect(hint).toBeInTheDocument()
+    expect(hint).toHaveTextContent('Sei hilfsbereit.')
+  })
+
+  it('zeigt KEINEN Hinweis, wenn das Bestands-Feld leer ist', () => {
+    render(<Harness legacySystemPrompt="" />)
+    expect(
+      screen.queryByTestId('persona-legacy-system-prompt-hint'),
+    ).not.toBeInTheDocument()
   })
 
   it('rendert Hilfe-Tooltips statt Inline-<details>', () => {
     const { container } = render(<Harness />)
-    // Keine <details>/<summary>-Knoten mehr — Hilfe wandert in den Tooltip.
     expect(container.querySelector('details')).toBeNull()
     expect(container.querySelector('summary')).toBeNull()
-    // Jede Section hat ein Info-Icon mit deutschem aria-label.
-    expect(screen.getAllByRole('button', { name: 'Hilfe einblenden' }).length).toBe(4)
+    // Drei Section-Hilfen — System-Prompt-Section ist entfallen.
+    expect(screen.getAllByRole('button', { name: 'Hilfe einblenden' }).length).toBe(3)
   })
 
-  it('rendert die BlockNote-Insel im Profil-Slot', () => {
+  it('rendert die BlockNote-Insel im Profil-Slot (eine Insel)', () => {
     render(<Harness />)
-    // Profil-Editor + System-Prompt-Editor — beide BlockNote.
-    expect(screen.getAllByTestId('blocknote-view').length).toBeGreaterThan(0)
+    // Nur noch eine BlockNote-Insel (Profil-Editor) — System-Prompt-Editor
+    // ist mit Track 3 entfallen.
+    expect(screen.getAllByTestId('blocknote-view').length).toBe(1)
   })
 
   it('rendert keinen Save-Button mehr — Auto-Save uebernimmt', () => {
@@ -104,39 +131,38 @@ describe('PersonaEditorForm', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('triggert per Auto-Save einen PATCH-Draft mit der vollstaendigen Payload', async () => {
-    patchPersonaDraft.mockClear()
-    render(<Harness />)
-    const nameInput = screen.getByLabelText('Name')
-    fireEvent.change(nameInput, { target: { value: 'Coach v2' } })
-    await waitFor(
-      () => {
-        expect(patchPersonaDraft).toHaveBeenCalledTimes(1)
-      },
-      { timeout: 3000 },
-    )
-    const payload = patchPersonaDraft.mock.calls[0][1]
-    expect(payload).toMatchObject({
-      name: 'Coach v2',
-      content: {
-        description: 'd',
-        system_prompt: 'Sei hilfsbereit.',
-        traits: [],
-        tags: ['coaching'],
-        content: { description: '', blocks: [] },
-      },
-    })
-    expect(payload.content).not.toHaveProperty('properties')
-  }, 10_000)
+  it(
+    'triggert per Auto-Save einen PATCH-Draft mit `system_prompt: ""`',
+    async () => {
+      patchPersonaDraft.mockClear()
+      render(<Harness />)
+      const nameInput = screen.getByLabelText('Name')
+      fireEvent.change(nameInput, { target: { value: 'Coach v2' } })
+      await waitFor(
+        () => {
+          expect(patchPersonaDraft).toHaveBeenCalledTimes(1)
+        },
+        { timeout: 3000 },
+      )
+      const payload = patchPersonaDraft.mock.calls[0][1]
+      expect(payload).toMatchObject({
+        name: 'Coach v2',
+        content: {
+          description: 'd',
+          // Track 3: System-Prompt wandert ins Template. Wir schicken den
+          // Default '' mit, damit Backend-Pydantic ihn nicht ablehnt.
+          system_prompt: '',
+          traits: [],
+          tags: ['coaching'],
+          content: { description: '', blocks: [] },
+        },
+      })
+      expect(payload.content).not.toHaveProperty('properties')
+    },
+    10_000,
+  )
 
-  it('rendert zwei BlockNote-Inseln — Profil + System-Prompt (gleicher Wrapper)', () => {
-    render(<Harness />)
-    // Profil-Editor + System-Prompt-Editor teilen sich denselben Wrapper —
-    // entsprechend zweimal `blocknote-view` im DOM.
-    expect(screen.getAllByTestId('blocknote-view').length).toBe(2)
-  })
-
-  it('rehydratisiert die BlockNote-Inseln, wenn `formKey` wechselt', async () => {
+  it('rehydratisiert die Profil-Insel, wenn `formKey` wechselt', async () => {
     const paragraph = (text: string, id: string): ResourceBlock => ({
       id,
       type: 'paragraph',
@@ -147,7 +173,6 @@ describe('PersonaEditorForm', () => {
       current_version: 1,
       content: {
         ...persona.content,
-        system_prompt: 'erster-prompt',
         content: { description: '', blocks: [paragraph('alpha-block', 'b-1')] },
       },
     }
@@ -156,23 +181,20 @@ describe('PersonaEditorForm', () => {
       current_version: 2,
       content: {
         ...persona.content,
-        system_prompt: 'zweiter-prompt',
         content: { description: '', blocks: [paragraph('beta-block', 'b-2')] },
       },
     }
 
     const { rerender } = render(<Harness source={v1} />)
     await waitFor(() => {
-      const [profile, systemPrompt] = screen.getAllByTestId('blocknote-view')
+      const [profile] = screen.getAllByTestId('blocknote-view')
       expect(profile.getAttribute('data-initial-blocks')).toContain('alpha-block')
-      expect(systemPrompt.getAttribute('data-initial-blocks')).toContain('erster-prompt')
     })
 
     rerender(<Harness source={v2} />)
     await waitFor(() => {
-      const [profile, systemPrompt] = screen.getAllByTestId('blocknote-view')
+      const [profile] = screen.getAllByTestId('blocknote-view')
       expect(profile.getAttribute('data-initial-blocks')).toContain('beta-block')
-      expect(systemPrompt.getAttribute('data-initial-blocks')).toContain('zweiter-prompt')
     })
   })
 

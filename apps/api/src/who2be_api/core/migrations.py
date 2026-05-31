@@ -45,9 +45,7 @@ async def apply_migrations(
         sql = path.read_text(encoding="utf-8")
         async with conn.transaction():
             await conn.execute(sql)
-            await conn.execute(
-                "INSERT INTO schema_migrations (version) VALUES ($1)", path.name
-            )
+            await conn.execute("INSERT INTO schema_migrations (version) VALUES ($1)", path.name)
         newly_applied.append(path.name)
     return newly_applied
 

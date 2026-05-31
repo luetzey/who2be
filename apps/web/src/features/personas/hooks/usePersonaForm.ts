@@ -10,14 +10,13 @@ import {
   type UseAutoSaveDraftResult,
 } from '@/hooks/useAutoSaveDraft'
 
-// Pflichtfelder werden via Zod validiert; `profileBlocks` und `tags`
-// kommen als reine Passthrough-Felder mit ins Schema, damit der Resolver
-// die Werte nicht stripped und die Form-Typen aus `useForm` und
-// `zodResolver` zusammenpassen.
+// Phase 3 Runde 3 Track 3: `systemPrompt` ist deprecated — der Agent-Template
+// uebernimmt den System-Prompt. Schema haelt das Feld nicht mehr; beim Auto-
+// Save schicken wir `system_prompt: ''` ans Backend, damit der Pydantic-
+// Default greift.
 const editorSchema = z.object({
   name: z.string().min(1, 'Name erforderlich.'),
   description: z.string().min(1, 'Beschreibung erforderlich.'),
-  systemPrompt: z.string().min(1, 'System-Prompt erforderlich.'),
   profileBlocks: z.array(z.custom<ResourceBlock>()),
   tags: z.array(z.string()),
 })
@@ -34,7 +33,9 @@ function toInput(values: PersonaEditorValues): PersonaInput {
     name: values.name,
     content: {
       description: values.description,
-      system_prompt: values.systemPrompt,
+      // Track 3: System-Prompt lebt jetzt im Agent-Template; wir loeschen
+      // bestehende Werte nicht aktiv, sondern senden den Default ''.
+      system_prompt: '',
       // `traits` ist deprecated (Phase 3-0). Wir senden weiterhin ein
       // leeres Array, damit der Schema-Default beim Backend greift.
       traits: [],
@@ -56,7 +57,6 @@ export function usePersonaForm(persona: Persona | null): UsePersonaFormResult {
     defaultValues: {
       name: '',
       description: '',
-      systemPrompt: '',
       profileBlocks: [],
       tags: [],
     },
@@ -72,7 +72,6 @@ export function usePersonaForm(persona: Persona | null): UsePersonaFormResult {
       form.reset({
         name: persona.name,
         description: persona.content.description,
-        systemPrompt: persona.content.system_prompt,
         profileBlocks: persona.content.content?.blocks ?? [],
         tags: persona.content.tags ?? [],
       })

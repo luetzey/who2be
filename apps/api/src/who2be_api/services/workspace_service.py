@@ -16,9 +16,7 @@ from who2be_models import WorkspaceCreate, WorkspaceRead, WorkspaceUpdate
 
 
 def _not_found() -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND, detail="Workspace nicht gefunden."
-    )
+    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace nicht gefunden.")
 
 
 class WorkspaceService:
@@ -40,27 +38,21 @@ class WorkspaceService:
             )
         return await self._workspaces.list_by_org_for_user(org_id, user_id)
 
-    async def create(
-        self, org_id: UUID, user_id: UUID, data: WorkspaceCreate
-    ) -> WorkspaceRead:
+    async def create(self, org_id: UUID, user_id: UUID, data: WorkspaceCreate) -> WorkspaceRead:
         if await self._orgs.fetch(user_id, org_id) is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Organization nicht gefunden.",
             )
         try:
-            return await self._workspaces.create(
-                org_id, user_id, data.name, data.slug
-            )
+            return await self._workspaces.create(org_id, user_id, data.name, data.slug)
         except asyncpg.UniqueViolationError as exc:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Workspace-Slug ist in dieser Organization vergeben.",
             ) from exc
 
-    async def update(
-        self, workspace_id: UUID, data: WorkspaceUpdate
-    ) -> WorkspaceRead:
+    async def update(self, workspace_id: UUID, data: WorkspaceUpdate) -> WorkspaceRead:
         if data.name is None:
             current = await self._workspaces.fetch(workspace_id)
             if current is None:

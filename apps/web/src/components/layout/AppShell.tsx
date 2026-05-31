@@ -1,9 +1,11 @@
 import {
   BookOpen,
+  Bot,
   FileText,
   KeyRound,
   LayoutDashboard,
   LogOut,
+  ScrollText,
   UserCog,
   Users,
 } from 'lucide-react'
@@ -31,6 +33,8 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/agents', label: 'Agents', icon: Bot },
+  { to: '/system-prompts', label: 'System-Prompts', icon: ScrollText },
   { to: '/personas', label: 'Personae', icon: Users },
   { to: '/playbooks', label: 'Playbooks', icon: BookOpen },
   { to: '/resources', label: 'Resources', icon: FileText },

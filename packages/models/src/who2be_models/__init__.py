@@ -5,6 +5,14 @@ Pydantic-Modelle, kein I/O. Pro Aggregat ein Schema-Satz (`…Create` /
 `…Update` / `…Read` / `…VersionRead`); `…Content` typisiert das `jsonb`-Feld.
 """
 
+from who2be_models.agent import (
+    AgentCreate,
+    AgentRead,
+    AgentRenderResponse,
+    AgentStatus,
+    AgentUpdate,
+    RenderFormat,
+)
 from who2be_models.dashboard import (
     DashboardActivity,
     DashboardActor,
@@ -60,6 +68,13 @@ from who2be_models.status import (
     is_allowed_transition,
 )
 from who2be_models.status_history import EntityType, StatusHistoryEntry
+from who2be_models.system_prompt_template import (
+    SystemPromptTemplateContent,
+    SystemPromptTemplateCreate,
+    SystemPromptTemplateRead,
+    SystemPromptTemplateUpdate,
+    SystemPromptTemplateVersionRead,
+)
 from who2be_models.token import TokenCreate, TokenCreated, TokenRead
 from who2be_models.workspace import WorkspaceCreate, WorkspaceRead, WorkspaceUpdate
 from who2be_models.workspace_member import (
@@ -72,6 +87,11 @@ __version__ = "0.1.0"
 
 __all__ = [
     "ALLOWED_TRANSITIONS",
+    "AgentCreate",
+    "AgentRead",
+    "AgentRenderResponse",
+    "AgentStatus",
+    "AgentUpdate",
     "DEFAULT_LIMIT",
     "DashboardActivity",
     "DashboardActor",
@@ -115,7 +135,13 @@ __all__ = [
     "ResourceUpdate",
     "ResourceUsage",
     "ResourceVersionRead",
+    "RenderFormat",
     "StatusHistoryEntry",
+    "SystemPromptTemplateContent",
+    "SystemPromptTemplateCreate",
+    "SystemPromptTemplateRead",
+    "SystemPromptTemplateUpdate",
+    "SystemPromptTemplateVersionRead",
     "TokenCreate",
     "TokenCreated",
     "TokenRead",
