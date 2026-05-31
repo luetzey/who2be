@@ -208,12 +208,20 @@ def _block_plain_text(block: dict[str, object]) -> str:
 
 
 class PersonaFieldResolver:
-    """Expandiert `target_id` zu einem Persona-Feld (`name` oder `description`).
+    """Expandiert `target_id` zu einem Persona-Feld (`name`, `description` oder `profile`).
 
     Wenn `ctx.persona_id` nicht gesetzt ist (Agent ohne Persona — durch den
     NOT NULL FK in Migration 0023 eigentlich nicht moeglich), wird ein leerer
     String zurueckgegeben und ein Warning geloggt, damit der Render stabil
     durchlaeuft.
+
+    Targets:
+    - ``name``        — Name der Persona (aus der Identity-Zeile).
+    - ``description`` — Kurzbeschreibung aus dem Versions-Content (Backward-Compat).
+    - ``profile``     — Volles Profil: description + BlockNote-Body (`content.blocks`)
+                        + optionale Traits-Liste + Modi-Sektion (C4).
+                        Liest den `current_version`-Snapshot, wie der Operator ihn sieht.
+    - Unbekannt       — leerer String + Warning (Bestandsverhalten).
     """
 
     async def resolve(
@@ -229,7 +237,7 @@ class PersonaFieldResolver:
             )
             return ""
 
-        if target_id not in ("name", "description"):
+        if target_id not in ("name", "description", "profile"):
             logger.warning(
                 "PersonaFieldResolver: unbekanntes Feld '%s' — leerer String",
                 target_id,
@@ -250,7 +258,7 @@ class PersonaFieldResolver:
                 return ""
             return str(row["name"])
 
-        # target_id == "description": aus dem aktuellen Versions-Snapshot lesen.
+        # target_id in ("description", "profile"): aus dem aktuellen Versions-Snapshot.
         # Wir nehmen den current_version-Snapshot (analog zum Render-Endpoint),
         # nicht die active-only-Variante — der Operator kann Drafts einsehen.
         row = await db.fetchrow(
@@ -272,7 +280,82 @@ class PersonaFieldResolver:
             )
             return ""
         content: dict[str, object] = dict(row["content"])
-        return str(content.get("description", "")).strip()
+
+        if target_id == "description":
+            return str(content.get("description", "")).strip()
+
+        # target_id == "profile": volles Profil rendern (E1 + C4).
+        return _render_persona_profile(content)
+
+
+def _render_persona_profile(content: dict[str, object]) -> str:
+    """Rendert das vollstaendige Persona-Profil als Markdown-String.
+
+    Aufbau:
+    1. description (falls vorhanden)
+    2. BlockNote-Body aus `content.blocks` (via `_block_plain_text`)
+    3. Traits-Liste (deprecated, aber noch lesbar — nur wenn nicht leer)
+    4. `## Modi`-Sektion (C4) — nur wenn `modes` vorhanden
+
+    Gibt leeren String zurueck, wenn kein Inhalt vorhanden.
+    """
+    parts: list[str] = []
+
+    # 1. description
+    description = str(content.get("description", "")).strip()
+    if description:
+        parts.append(description)
+
+    # 2. BlockNote-Body aus `content.content.blocks` (PersonaContent-Ebene)
+    inner_content = content.get("content")
+    if isinstance(inner_content, dict):
+        raw_blocks = inner_content.get("blocks", [])
+        blocks: list[dict[str, object]] = list(raw_blocks) if isinstance(raw_blocks, list) else []
+        block_parts: list[str] = []
+        for block in blocks:
+            text = _block_plain_text(block)
+            if text:
+                block_parts.append(text)
+        body_text = "\n\n".join(block_parts).strip()
+        if body_text:
+            parts.append(body_text)
+
+    # 3. Traits (deprecated, aber lesbar) — nur wenn vorhanden
+    raw_traits = content.get("traits", [])
+    traits: list[str] = list(raw_traits) if isinstance(raw_traits, list) else []
+    if traits:
+        trait_lines = ["**Traits:**"]
+        for trait in traits:
+            trait_lines.append(f"- {trait}")
+        parts.append("\n".join(trait_lines))
+
+    # 4. Modi-Sektion (C4) — nur wenn modes vorhanden
+    raw_modes = content.get("modes", [])
+    modes: list[dict[str, object]] = list(raw_modes) if isinstance(raw_modes, list) else []
+    if modes:
+        mode_lines = ["## Modi"]
+        for mode in modes:
+            name = str(mode.get("name", "")).strip()
+            is_default = bool(mode.get("is_default", False))
+            trigger = mode.get("trigger")
+            identity_add = str(mode.get("identity_add", "")).strip()
+            output_style_override = str(mode.get("output_style_override", "")).strip()
+
+            header = f"### {name}"
+            if is_default:
+                header += " (Default)"
+            mode_lines.append(header)
+
+            if trigger:
+                mode_lines.append(f"**Trigger:** {trigger}")
+            if identity_add:
+                mode_lines.append(f"**Identity-Ergaenzung:** {identity_add}")
+            if output_style_override:
+                mode_lines.append(f"**Output-Stil:** {output_style_override}")
+
+        parts.append("\n".join(mode_lines))
+
+    return "\n\n".join(parts)
 
 
 class ToolsOverviewResolver:

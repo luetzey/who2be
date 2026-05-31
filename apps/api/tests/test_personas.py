@@ -470,3 +470,74 @@ def test_persona_active_filter_for_api_token(monkeypatch: pytest.MonkeyPatch) ->
             assert client.get(f"{base}/{active_id}", headers=token_auth).status_code == 200
     finally:
         cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+def test_persona_modes_round_trip_create_read_update(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """C6: Modi-Round-Trip — Create mit modes -> Read bewahrt modes -> Update aendert modes."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    base = f"/v1/workspaces/{ws}/personas"
+
+    def _body_with_modes(description: str, modes: list[dict[str, object]]) -> dict[str, object]:
+        body = _persona_body(description)
+        body["content"]["modes"] = modes  # type: ignore[index]
+        return body
+
+    modes_v1: list[dict[str, object]] = [
+        {
+            "name": "Erklaerer",
+            "trigger": "erklaer,wie",
+            "is_default": False,
+            "identity_add": "Du bist ein Lehrer.",
+            "output_style_override": "Schreibe einfach.",
+        },
+        {
+            "name": "Standard",
+            "trigger": None,
+            "is_default": True,
+            "identity_add": "",
+            "output_style_override": "",
+        },
+    ]
+
+    try:
+        with TestClient(app) as client:
+            # Create mit modi.
+            created = client.post(base, json=_body_with_modes("mit Modi", modes_v1), headers=auth)
+            assert created.status_code == 201, created.text
+            persona_id = created.json()["id"]
+
+            # Read bewahrt modes.
+            fetched = client.get(f"{base}/{persona_id}", headers=auth).json()
+            assert len(fetched["content"]["modes"]) == 2
+            names = {m["name"] for m in fetched["content"]["modes"]}
+            assert names == {"Erklaerer", "Standard"}
+
+            # Auf active promoten, dann Update mit geaenderten modes.
+            for to in ("review", "active"):
+                client.post(
+                    f"{base}/{persona_id}/versions/1/transition",
+                    json={"to": to},
+                    headers=auth,
+                )
+
+            modes_v2: list[dict[str, object]] = [{"name": "Solo", "trigger": None, "is_default": True}]
+            updated = client.put(
+                f"{base}/{persona_id}",
+                json=_body_with_modes("v2 ohne Erklaerer", modes_v2),
+                headers=auth,
+            )
+            assert updated.status_code == 200, updated.text
+            assert len(updated.json()["content"]["modes"]) == 1
+            assert updated.json()["content"]["modes"][0]["name"] == "Solo"
+    finally:
+        cleanup_workspaces([owner])

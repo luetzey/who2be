@@ -133,7 +133,14 @@ def ping() -> str:
 @mcp.tool
 @with_tool_log("get_persona")
 async def get_persona(identifier: str) -> PersonaWithPlaybooks:
-    """Laedt eine Persona (per UUID oder Name) samt verknuepfter Playbooks."""
+    """Laedt eine Persona (per UUID oder Name) samt verknuepfter Playbooks.
+
+    `persona.content.modes` enthaelt ggf. die Modi einer Multi-Modus-Persona
+    (Gap 3.4). Jeder Modus traegt `name`, `trigger` (Erkennungs-Keywords),
+    `is_default` (Fallback ohne Trigger-Match), `identity_add` (Ergaenzung zur
+    Basis-Identitaet) und `output_style_override` (Output-Stil-Anpassung).
+    Fehlt das Feld oder ist es leer, ist die Persona single-mode.
+    """
     client = await build_client()
     persona = await client.get_persona(identifier)
     playbooks = await client.get_persona_playbooks(persona.id)

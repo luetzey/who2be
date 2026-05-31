@@ -229,6 +229,150 @@ class TestPersonaFieldResolver:
 
         assert result == ""
 
+    # --- profile-Target (E1 + C4) ---
+
+    def test_resolves_profile_with_description_and_blocks(self) -> None:
+        """profile rendert description + BlockNote-Body."""
+        resolver = PersonaFieldResolver()
+        ctx = _ctx(persona_id=uuid4())
+        blocks = [
+            {
+                "id": "b1",
+                "type": "paragraph",
+                "props": {},
+                "content": [{"type": "text", "text": "Empathisch und praezise.", "styles": {}}],
+                "children": [],
+            }
+        ]
+        _content: dict[str, Any] = {
+            "description": "Senior Coach",
+            "content": {"description": "", "blocks": blocks},
+            "traits": [],
+            "modes": [],
+        }
+        row = MagicMock()
+        row.__getitem__ = MagicMock(side_effect=lambda k: {"content": _content}[k])
+        db = _make_db(row)
+
+        result = _async_run(resolver.resolve("profile", ctx, db))
+
+        assert "Senior Coach" in result
+        assert "Empathisch und praezise." in result
+
+    def test_resolves_profile_with_modi_sektion(self) -> None:
+        """profile enthaelt ## Modi-Sektion wenn modes vorhanden (C4)."""
+        resolver = PersonaFieldResolver()
+        ctx = _ctx(persona_id=uuid4())
+        _content: dict[str, Any] = {
+            "description": "Persona mit Modi",
+            "content": None,
+            "traits": [],
+            "modes": [
+                {
+                    "name": "Erklaerer",
+                    "trigger": "erklaer,wie",
+                    "is_default": False,
+                    "identity_add": "Du bist ein Lehrer.",
+                    "output_style_override": "Schreibe einfach.",
+                },
+                {
+                    "name": "Standard",
+                    "trigger": None,
+                    "is_default": True,
+                    "identity_add": "",
+                    "output_style_override": "",
+                },
+            ],
+        }
+        row = MagicMock()
+        row.__getitem__ = MagicMock(side_effect=lambda k: {"content": _content}[k])
+        db = _make_db(row)
+
+        result = _async_run(resolver.resolve("profile", ctx, db))
+
+        assert "## Modi" in result
+        assert "### Erklaerer" in result
+        assert "Trigger" in result
+        assert "erklaer,wie" in result
+        assert "Du bist ein Lehrer." in result
+        assert "Schreibe einfach." in result
+        assert "### Standard (Default)" in result
+
+    def test_resolves_profile_without_modi_sektion_when_modes_empty(self) -> None:
+        """profile enthaelt keine ## Modi-Sektion wenn modes leer."""
+        resolver = PersonaFieldResolver()
+        ctx = _ctx(persona_id=uuid4())
+        _content: dict[str, Any] = {
+            "description": "Einfache Persona",
+            "content": None,
+            "traits": [],
+            "modes": [],
+        }
+        row = MagicMock()
+        row.__getitem__ = MagicMock(side_effect=lambda k: {"content": _content}[k])
+        db = _make_db(row)
+
+        result = _async_run(resolver.resolve("profile", ctx, db))
+
+        assert "Einfache Persona" in result
+        assert "## Modi" not in result
+
+    def test_resolves_profile_with_empty_body_returns_description_only(self) -> None:
+        """profile mit leerem Body gibt nur description zurueck."""
+        resolver = PersonaFieldResolver()
+        ctx = _ctx(persona_id=uuid4())
+        _content: dict[str, Any] = {
+            "description": "Nur Beschreibung",
+            "content": {"description": "", "blocks": []},
+            "traits": [],
+            "modes": [],
+        }
+        row = MagicMock()
+        row.__getitem__ = MagicMock(side_effect=lambda k: {"content": _content}[k])
+        db = _make_db(row)
+
+        result = _async_run(resolver.resolve("profile", ctx, db))
+
+        assert result.strip() == "Nur Beschreibung"
+
+    def test_resolves_profile_empty_description_and_body_returns_empty_string(self) -> None:
+        """profile mit leerer description und leerem Body gibt leeren String zurueck."""
+        resolver = PersonaFieldResolver()
+        ctx = _ctx(persona_id=uuid4())
+        _content: dict[str, Any] = {
+            "description": "",
+            "content": {"description": "", "blocks": []},
+            "traits": [],
+            "modes": [],
+        }
+        row = MagicMock()
+        row.__getitem__ = MagicMock(side_effect=lambda k: {"content": _content}[k])
+        db = _make_db(row)
+
+        result = _async_run(resolver.resolve("profile", ctx, db))
+
+        assert result == ""
+
+    def test_resolves_profile_with_traits(self) -> None:
+        """profile rendert Traits-Liste (deprecated aber lesbar)."""
+        resolver = PersonaFieldResolver()
+        ctx = _ctx(persona_id=uuid4())
+        _content: dict[str, Any] = {
+            "description": "Persona mit Traits",
+            "content": None,
+            "traits": ["praezise", "empathisch"],
+            "modes": [],
+        }
+        row = MagicMock()
+        row.__getitem__ = MagicMock(side_effect=lambda k: {"content": _content}[k])
+        db = _make_db(row)
+
+        result = _async_run(resolver.resolve("profile", ctx, db))
+
+        assert "praezise" in result
+        assert "empathisch" in result
+        assert "Traits" in result
+
 
 # ---------------------------------------------------------------------------
 # DateResolver

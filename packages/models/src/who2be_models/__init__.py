@@ -35,6 +35,7 @@ from who2be_models.pagination import DEFAULT_LIMIT, MAX_LIMIT, decode_cursor, en
 from who2be_models.persona import (
     PersonaContent,
     PersonaCreate,
+    PersonaMode,
     PersonaRead,
     PersonaUpdate,
     PersonaVersionContent,
@@ -117,6 +118,7 @@ __all__ = [
     "OrganizationRead",
     "PersonaContent",
     "PersonaCreate",
+    "PersonaMode",
     "PersonaPlaybookLinkSet",
     "PlaybookCompositionLinkSet",
     "PersonaRead",

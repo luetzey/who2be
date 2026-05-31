@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from who2be_models import (
     PersonaContent,
     PersonaCreate,
+    PersonaMode,
     PersonaRead,
     PersonaUpdate,
     PersonaVersionContent,
@@ -146,3 +147,100 @@ def test_persona_content_rejects_too_many_blocks() -> None:
 def test_persona_content_rejects_oversized_description() -> None:
     with pytest.raises(ValidationError):
         PersonaContent(description="x" * 2_001)
+
+
+# ---------------------------------------------------------------------------
+# PersonaMode + modes-Validator (C1 / C6)
+# ---------------------------------------------------------------------------
+
+
+def test_persona_mode_defaults() -> None:
+    """PersonaMode legt sinnvolle Defaults fest."""
+    mode = PersonaMode(name="Standard")
+    assert mode.trigger is None
+    assert mode.is_default is False
+    assert mode.identity_add == ""
+    assert mode.output_style_override == ""
+
+
+def test_persona_mode_rejects_unknown_fields() -> None:
+    with pytest.raises(ValidationError):
+        PersonaMode(name="X", foo="bar")  # type: ignore[call-arg]
+
+
+def test_persona_mode_name_min_length() -> None:
+    with pytest.raises(ValidationError):
+        PersonaMode(name="")
+
+
+def test_modes_default_empty_list() -> None:
+    """modes fehlt -> leere Liste (Backward-Compat)."""
+    content = PersonaVersionContent(description="d")
+    assert content.modes == []
+
+
+def test_modes_single_default_ok() -> None:
+    modes = [
+        PersonaMode(name="Default-Modus", is_default=True),
+        PersonaMode(name="Debug-Modus", is_default=False),
+    ]
+    content = PersonaVersionContent(description="d", modes=modes)
+    assert len(content.modes) == 2
+
+
+def test_modes_two_defaults_raises() -> None:
+    """Hoechstens ein is_default=True erlaubt."""
+    with pytest.raises(ValidationError, match="is_default"):
+        PersonaVersionContent(
+            description="d",
+            modes=[
+                PersonaMode(name="A", is_default=True),
+                PersonaMode(name="B", is_default=True),
+            ],
+        )
+
+
+def test_modes_duplicate_name_raises() -> None:
+    """Modus-Namen case-insensitiv eindeutig."""
+    with pytest.raises(ValidationError, match="case-insensitiv"):
+        PersonaVersionContent(
+            description="d",
+            modes=[
+                PersonaMode(name="Fokus"),
+                PersonaMode(name="fokus"),  # Duplikat case-insensitiv
+            ],
+        )
+
+
+def test_modes_empty_list_ok() -> None:
+    """Leere modes-Liste ist gueltig."""
+    content = PersonaVersionContent(description="d", modes=[])
+    assert content.modes == []
+
+
+def test_modes_round_trip_via_model_dump() -> None:
+    """modes werden durch model_dump/model_validate korrekt erhalten."""
+    original = PersonaVersionContent(
+        description="d",
+        modes=[
+            PersonaMode(
+                name="Erklaerer",
+                trigger="erklaer,wie,warum",
+                is_default=False,
+                identity_add="Du bist ein Lehrer.",
+                output_style_override="Schreibe einfach und verstaendlich.",
+            ),
+            PersonaMode(name="Standard", is_default=True),
+        ],
+    )
+    restored = PersonaVersionContent.model_validate(original.model_dump())
+    assert restored.modes == original.modes
+
+
+def test_modes_max_length_enforced() -> None:
+    """Mehr als 20 Modi werden abgelehnt."""
+    with pytest.raises(ValidationError):
+        PersonaVersionContent(
+            description="d",
+            modes=[PersonaMode(name=f"Modus-{i}") for i in range(21)],
+        )
