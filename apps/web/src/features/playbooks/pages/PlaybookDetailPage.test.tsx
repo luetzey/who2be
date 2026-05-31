@@ -139,13 +139,14 @@ describe('PlaybookDetailPage', () => {
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Coach v2' } })
     // Auto-Save-Debounce ist 1500 ms — Real-Timer warten ist robuster als
     // FakeTimers (die unter Vitest in Kombination mit dem React-Concurrent-
-    // Renderer manchmal pending Promises blockieren). 5 s reicht komfortabel
-    // fuer CI-Runner; das alte 3-s-Limit war flaky (siehe PR #79).
+    // Renderer manchmal pending Promises blockieren). CI-Runner haben
+    // mehrfach 3s und 5s gerissen (PR #79); 8s ist grosszuegig, das
+    // it()-Timeout unten ist auf 15s gehoben.
     await waitFor(
       () => {
         expect(patchCalls.length).toBeGreaterThanOrEqual(1)
       },
-      { timeout: 5000 },
+      { timeout: 8000 },
     )
     expect(
       (patchCalls[patchCalls.length - 1].body as { name: string }).name,
@@ -154,7 +155,7 @@ describe('PlaybookDetailPage', () => {
       (call) => (call[1] as RequestInit | undefined)?.method === 'PUT',
     )
     expect(putCalls).toHaveLength(0)
-  }, 10_000)
+  }, 15_000)
 
   it('zeigt im "Verwendet in"-Block die Personas aus /usages und faellt auf EmptyState zurueck, wenn keine vorhanden sind', async () => {
     const handlers: Record<string, () => Response> = {

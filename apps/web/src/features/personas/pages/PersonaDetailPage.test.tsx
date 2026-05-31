@@ -125,15 +125,15 @@ describe('PersonaDetailPage', () => {
     ).not.toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Coach v2' } })
-    // Auto-Save-Debounce ist 1500 ms; lokal landet der Test bei ~1.6s,
-    // CI-Runner mit jsdom-Overhead haben das alte 3s-Limit gelegentlich
-    // gerissen (siehe PR #79). 5s reicht komfortabel, bleibt aber klar
-    // unter dem outer it()-Timeout von 10s.
+    // Auto-Save-Debounce ist 1500 ms; lokal ~1.6s, aber CI-Runner mit
+    // jsdom-Overhead haben sowohl das 3s- als auch das 5s-Limit gerissen
+    // (siehe PR #79). 8s ist grosszuegig, der it()-Timeout unten ist auf
+    // 15s gehoben.
     await waitFor(
       () => {
         expect(patchCalls.length).toBeGreaterThanOrEqual(1)
       },
-      { timeout: 5000 },
+      { timeout: 8000 },
     )
     expect((patchCalls[patchCalls.length - 1].body as { name: string }).name).toBe(
       'Coach v2',
@@ -144,7 +144,7 @@ describe('PersonaDetailPage', () => {
         String(call[0]).endsWith('/personas/p1'),
     )
     expect(putCalls).toHaveLength(0)
-  }, 10_000)
+  }, 15_000)
 
   it('verknuepft Playbooks via PUT auf /personas/:id/playbooks', async () => {
     const pb1 = {
