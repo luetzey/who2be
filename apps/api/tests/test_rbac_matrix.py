@@ -213,9 +213,23 @@ def _jwt(owner_id: UUID) -> str:
 
 
 def _persona_body(name: str = "tester") -> dict[str, object]:
+    # Welle 4: Promote-Validator verlangt content.content.blocks nicht leer.
     return {
         "name": name,
-        "content": {"description": "d", "system_prompt": "Be helpful."},
+        "content": {
+            "description": "d",
+            "system_prompt": "Be helpful.",
+            "content": {
+                "description": "d",
+                "blocks": [
+                    {
+                        "id": "b1",
+                        "type": "paragraph",
+                        "content": [{"type": "text", "text": "body", "styles": {}}],
+                    }
+                ],
+            },
+        },
     }
 
 
