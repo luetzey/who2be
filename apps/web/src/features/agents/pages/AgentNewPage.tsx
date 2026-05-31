@@ -8,6 +8,9 @@ import { z } from 'zod'
 import type { Persona, SystemPromptTemplate } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
+import { EmptyState } from '@/components/data/EmptyState'
+import { ErrorAlert } from '@/components/data/ErrorAlert'
+import { LoadingState } from '@/components/data/LoadingState'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
@@ -21,7 +24,7 @@ const createSchema = z.object({
   name: z.string().min(1, 'Name erforderlich.'),
   description: z.string(),
   persona_id: z.string().min(1, 'Persona erforderlich.'),
-  system_prompt_template_id: z.string().min(1, 'Template erforderlich.'),
+  system_prompt_template_id: z.string().min(1, 'Systemprompt erforderlich.'),
   status: z.enum(['enabled', 'disabled']),
 })
 
@@ -31,6 +34,8 @@ export function AgentNewPage() {
   const wsPath = useWorkspacePath()
   const [personas, setPersonas] = useState<Persona[]>([])
   const [templates, setTemplates] = useState<SystemPromptTemplate[]>([])
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
   const [saveError, setSaveError] = useState<string | null>(null)
   const form = useForm<AgentEditorValues>({
     resolver: zodResolver(createSchema),
@@ -44,12 +49,19 @@ export function AgentNewPage() {
   })
 
   useEffect(() => {
-    void Promise.all([api.listPersonas(), api.listSystemPromptTemplates()]).then(
-      ([loadedPersonas, loadedTemplates]) => {
+    setLoading(true)
+    setLoadError(null)
+    void Promise.all([api.listPersonas(), api.listSystemPromptTemplates()])
+      .then(([loadedPersonas, loadedTemplates]) => {
         setPersonas(loadedPersonas)
         setTemplates(loadedTemplates)
-      },
-    )
+      })
+      .catch((cause: unknown) => {
+        setLoadError(cause instanceof Error ? cause.message : 'Daten konnten nicht geladen werden.')
+      })
+      .finally(() => {
+        setLoading(false)
+      })
   }, [api])
 
   const onSubmit = form.handleSubmit(async (values) => {
@@ -78,15 +90,32 @@ export function AgentNewPage() {
             Agents
           </Link>
         </Button>
-        <PageHeader title="Neuer Agent" description="Verknüpfe Persona und Template." />
-        <AgentEditorForm
-          form={form}
-          onSubmit={onSubmit}
-          saveError={saveError}
-          personas={personas}
-          templates={templates}
-          submitLabel="Anlegen"
-        />
+        <PageHeader title="Neuer Agent" description="Verknüpfe Persona und Systemprompt." />
+
+        {loading ? (
+          <LoadingState />
+        ) : loadError !== null ? (
+          <ErrorAlert message={loadError} />
+        ) : personas.length === 0 ? (
+          <EmptyState
+            title="Keine Persona vorhanden."
+            description="Du brauchst zuerst eine Persona, um einen Agent anzulegen."
+            action={
+              <Button asChild variant="brand">
+                <Link to={wsPath('/personas/new')}>Persona anlegen</Link>
+              </Button>
+            }
+          />
+        ) : (
+          <AgentEditorForm
+            form={form}
+            onSubmit={onSubmit}
+            saveError={saveError}
+            personas={personas}
+            templates={templates}
+            submitLabel="Anlegen"
+          />
+        )}
       </Stack>
     </Container>
   )
