@@ -156,4 +156,36 @@ describe('StatusActionBar (playbook)', () => {
     )
     expect(JSON.parse(call.init?.body as string)).toEqual({ to: 'draft' })
   })
+
+  it('zeigt Inline-Fehler mit Feldnamen bei 409 Promote-Validation-Fail', async () => {
+    const problemBody = {
+      type: 'https://who2be.dev/errors/promote-validation-failed',
+      title: 'Promote nicht moeglich: Pflichtfelder fehlen',
+      status: 409,
+      detail: 'Pflichtfelder muessen vor Promote ausgefuellt sein.',
+      missing: ['description', 'body'],
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        new Response(JSON.stringify(problemBody), {
+          status: 409,
+          headers: { 'Content-Type': 'application/problem+json' },
+        }),
+      ),
+    )
+
+    renderBar('review')
+    fireEvent.click(screen.getByRole('button', { name: 'Aktivieren' }))
+
+    // Button bleibt klickbar (Welle 4: kein disabled-State).
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Aktivieren' })).toBeEnabled()
+    })
+    // Feldnamen sichtbar im Inline-Fehler.
+    expect(await screen.findByText(/Beschreibung/)).toBeInTheDocument()
+    expect(await screen.findByText(/Inhalt/)).toBeInTheDocument()
+    // Kein globaler notify.error bei Promote-Validation-Fail.
+    expect(notify.error).not.toHaveBeenCalled()
+  })
 })

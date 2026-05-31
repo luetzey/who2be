@@ -1,3 +1,4 @@
+import { type FormEvent, type ReactNode } from 'react'
 import { type UseFormReturn } from 'react-hook-form'
 
 import type { ResourceBlock } from '@/api/types'
@@ -29,6 +30,17 @@ interface PersonaEditorFormProps {
    * und zeigt fuer Bestandsdaten lediglich eine Read-Only-Hinweis-Box.
    */
   legacySystemPrompt?: string
+  /**
+   * Optionaler onSubmit-Handler. Fehlt er, wird das Standard-preventDefault
+   * genutzt (Auto-Save-Modus). Wird er angegeben, uebernimmt die Parent-Page
+   * die Submit-Logik (New-Page-Modus).
+   */
+  onSubmit?: (e: FormEvent<HTMLFormElement>) => void
+  /**
+   * Optionaler Actions-Slot. Wird am Ende des <form>-Elements gerendert.
+   * Typisch: Submit-Button + ErrorAlert auf der New-Page.
+   */
+  actions?: ReactNode
 }
 
 const PROFILE_EXAMPLE_SNIPPET = `Rolle: Senior-Customer-Support-Coach.
@@ -41,6 +53,8 @@ export function PersonaEditorForm({
   formKey,
   initialProfileBlocks,
   legacySystemPrompt,
+  onSubmit,
+  actions,
 }: PersonaEditorFormProps) {
   // Viewer dürfen nur lesen (ADR-0023) — Auto-Save bleibt gesperrt (Detail-
   // Page reicht `isReady=false` durch, falls die Rolle das Editieren
@@ -55,7 +69,7 @@ export function PersonaEditorForm({
         <Form {...form}>
           <form
             className="flex flex-col gap-6"
-            onSubmit={(event) => event.preventDefault()}
+            onSubmit={onSubmit ?? ((event) => event.preventDefault())}
           >
             <FormSection
               title="Identität"
@@ -186,6 +200,7 @@ export function PersonaEditorForm({
                 )}
               />
             </FormSection>
+            {actions !== undefined ? actions : null}
           </form>
         </Form>
       </CardContent>

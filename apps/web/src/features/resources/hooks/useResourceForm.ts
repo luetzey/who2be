@@ -10,26 +10,27 @@ import {
   type UseAutoSaveDraftResult,
 } from '@/hooks/useAutoSaveDraft'
 
+// Welle 4: `bodyBlocks` in das Editor-Schema aufgenommen, damit
+// `ResourceEditorForm` nahtlos sowohl mit dem Auto-Save-Hook (Detail-Page)
+// als auch mit dem Create-Hook (New-Page) funktioniert.
 const schema = z.object({
   name: z.string().min(1, 'Name ist erforderlich.'),
   description: z.string(),
+  bodyBlocks: z.array(z.custom<ResourceBlock>()),
 })
 
 export type ResourceEditorValues = z.infer<typeof schema>
 
 export interface UseResourceFormResult {
   form: UseFormReturn<ResourceEditorValues>
-  blocks: ResourceBlock[]
-  setBlocks: (blocks: ResourceBlock[]) => void
   autoSave: UseAutoSaveDraftResult
 }
 
 export function useResourceForm(resource: Resource | null): UseResourceFormResult {
   const api = useApi()
-  const [blocks, setBlocks] = useState<ResourceBlock[]>([])
   const form = useForm<ResourceEditorValues>({
     resolver: zodResolver(schema),
-    defaultValues: { name: '', description: '' },
+    defaultValues: { name: '', description: '', bodyBlocks: [] },
   })
   // Siehe `usePersonaForm` — `formReady` verhindert das Default-Snapshot-Race.
   const [formReady, setFormReady] = useState(false)
@@ -38,17 +39,19 @@ export function useResourceForm(resource: Resource | null): UseResourceFormResul
     if (resource === null) {
       return
     }
-    form.reset({ name: resource.name, description: resource.content.description ?? '' })
-    setBlocks(resource.content.blocks ?? [])
+    form.reset({
+      name: resource.name,
+      description: resource.content.description ?? '',
+      bodyBlocks: resource.content.blocks ?? [],
+    })
     setFormReady(true)
   }, [resource, form])
 
   const values = form.watch()
-  // Auto-Save bekommt name + description + blocks als kombinierten Snapshot.
-  // Blocks sind ein eigener State (BlockNote-Onsave reicht sie via Setter).
+  // Auto-Save baut ResourceInput aus den Form-Werten inkl. bodyBlocks.
   const combined: ResourceInput = {
     name: values.name,
-    content: { description: values.description, blocks },
+    content: { description: values.description, blocks: values.bodyBlocks },
   }
   const autoSave = useAutoSaveDraft<ResourceInput>({
     values: combined,
@@ -61,5 +64,5 @@ export function useResourceForm(resource: Resource | null): UseResourceFormResul
     },
   })
 
-  return { form, blocks, setBlocks, autoSave }
+  return { form, autoSave }
 }

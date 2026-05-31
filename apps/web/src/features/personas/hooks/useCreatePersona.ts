@@ -3,15 +3,19 @@ import { type BaseSyntheticEvent, useState } from 'react'
 import { useForm, type UseFormReturn } from 'react-hook-form'
 import { z } from 'zod'
 
+import type { ResourceBlock } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { notify } from '@/lib/feedback'
 
-// Phase 3 Runde 3 Track 3: `systemPrompt` ist deprecated, der System-Prompt
-// lebt am Agent-Template. Neue Personas werden ohne System-Prompt-Feld
-// angelegt; Pydantic-Default '' greift.
+// Welle 4: Create ist immer erlaubt. `name` ist die einzige clientseitige
+// Pflicht (Spec: "Anlegen geht immer"). Body, Description duerfen leer sein.
+// Schema spiegelt `usePersonaForm.editorSchema`, damit `PersonaEditorForm`
+// mit beiden Hooks funktioniert.
 const createSchema = z.object({
   name: z.string().min(1, 'Name erforderlich.'),
-  description: z.string().min(1, 'Beschreibung erforderlich.'),
+  description: z.string(),
+  profileBlocks: z.array(z.custom<ResourceBlock>()),
+  tags: z.array(z.string()),
 })
 
 export type PersonaCreateValues = z.infer<typeof createSchema>
@@ -31,7 +35,12 @@ export function useCreatePersona(onCreated: (id: string) => void): UseCreatePers
   const [saveError, setSaveError] = useState<string | null>(null)
   const form = useForm<PersonaCreateValues>({
     resolver: zodResolver(createSchema),
-    defaultValues: { name: '', description: '' },
+    defaultValues: {
+      name: '',
+      description: '',
+      profileBlocks: [],
+      tags: [],
+    },
   })
 
   const onSubmit = form.handleSubmit(async (values) => {
@@ -43,6 +52,8 @@ export function useCreatePersona(onCreated: (id: string) => void): UseCreatePers
           description: values.description,
           system_prompt: '',
           traits: [],
+          tags: values.tags,
+          content: { description: '', blocks: values.profileBlocks },
         },
       })
       notify.success('Persona angelegt.')
