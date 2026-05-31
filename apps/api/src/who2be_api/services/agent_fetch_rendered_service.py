@@ -107,7 +107,7 @@ class AgentFetchRenderedService:
 
         # Renderer braucht eine einzelne Connection fuer DB-Lookups.
         async with self._pool.acquire() as conn:
-            rendered = await render_template_body(
+            rendered, unresolved = await render_template_body(
                 template_content.body,
                 body_format,
                 ctx,
@@ -120,4 +120,5 @@ class AgentFetchRenderedService:
             persona=persona,
             system_prompt_rendered=rendered,
             system_prompt_template_id=agent.system_prompt_template_id,
+            unresolved_placeholders=unresolved,
         )

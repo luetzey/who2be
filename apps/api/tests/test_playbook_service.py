@@ -267,9 +267,7 @@ class FakePlaybookRepository:
                 tags.update(playbook.tags)
         return sorted(tags)
 
-    async def list_triggers_with_playbooks(
-        self, workspace_id: UUID
-    ) -> list[TriggerOverview]:
+    async def list_triggers_with_playbooks(self, workspace_id: UUID) -> list[TriggerOverview]:
         bucket: dict[str, list[PlaybookRef]] = {}
         for playbook in self._playbooks.values():
             if playbook.workspace_id != workspace_id:

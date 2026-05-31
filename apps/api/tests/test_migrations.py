@@ -52,9 +52,7 @@ _POST_PHASE3_MIGRATIONS = [
     "0025_playbook_type_allow_empty.sql",
 ]
 _PRE_PHASE3_MIGRATIONS = [
-    m
-    for m in _ALL_MIGRATIONS
-    if m not in _PHASE3_MIGRATIONS and m not in _POST_PHASE3_MIGRATIONS
+    m for m in _ALL_MIGRATIONS if m not in _PHASE3_MIGRATIONS and m not in _POST_PHASE3_MIGRATIONS
 ]
 
 

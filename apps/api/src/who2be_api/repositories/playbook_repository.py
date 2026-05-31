@@ -125,9 +125,7 @@ class PlaybookRepository(Protocol):
 
     async def list_distinct_tags(self, workspace_id: UUID) -> list[str]: ...
 
-    async def list_triggers_with_playbooks(
-        self, workspace_id: UUID
-    ) -> list[TriggerOverview]: ...
+    async def list_triggers_with_playbooks(self, workspace_id: UUID) -> list[TriggerOverview]: ...
 
 
 class PgPlaybookRepository:
@@ -459,9 +457,7 @@ class PgPlaybookRepository:
         )
         return [row["tag"] for row in rows]
 
-    async def list_triggers_with_playbooks(
-        self, workspace_id: UUID
-    ) -> list[TriggerOverview]:
+    async def list_triggers_with_playbooks(self, workspace_id: UUID) -> list[TriggerOverview]:
         """Welle 5: Discovery-Aggregat fuer den `list_triggers`-MCP-Tool.
 
         Trigger sind heute kommagetrennt in `playbook.triggers` denormalisiert.

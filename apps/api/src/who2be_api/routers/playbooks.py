@@ -76,9 +76,7 @@ async def list_playbook_tags(ctx: Ctx, service: Service) -> list[str]:
 
 
 @router.get("/triggers")
-async def list_playbook_triggers(
-    ctx: Ctx, service: Service
-) -> list[TriggerOverview]:
+async def list_playbook_triggers(ctx: Ctx, service: Service) -> list[TriggerOverview]:
     """Welle 5: Discovery-Aggregat — deduplizierte Trigger mit Playbook-Verweis.
 
     Datenquelle fuer den MCP-Tool `list_triggers`, den der LLM in Templates
