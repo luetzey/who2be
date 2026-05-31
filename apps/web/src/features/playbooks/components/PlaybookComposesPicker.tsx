@@ -114,7 +114,7 @@ export function PlaybookComposesPicker({
         {/* Ausgewaehlte Kinder in Reihenfolge */}
         {selected.length > 0 ? (
           <div className="flex flex-col gap-1">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
               Ausgewählt ({selected.length})
             </p>
             <ul className="flex flex-col gap-1" aria-label="Ausgewaehlte Sub-Playbooks">
@@ -170,7 +170,7 @@ export function PlaybookComposesPicker({
 
         {/* Verbleibende auswaehlbare Playbooks */}
         <div className="flex flex-col gap-1">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
             {selected.length > 0 ? 'Weitere hinzufügen' : 'Playbooks'}
           </p>
           <ul
