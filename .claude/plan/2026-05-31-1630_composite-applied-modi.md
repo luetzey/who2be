@@ -316,12 +316,12 @@ Folge-Schritt (Out of Scope, s.u.): `persona-modes`-Placeholder-Kind.
 
 ### C4 — Renderer: Modi in den Prompt
 
-`PersonaFieldResolver` bzw. die `persona.profile`-Rendering-Stelle: existieren
-`modes`, eine `## Modi`-Sektion in den gerenderten Prompt einfügen (pro Modus:
-Name, Trigger, Identity-Add, Output-Override). So sieht der Agent die Modi im
-fertigen System-Prompt. Variante: dediziertes `persona-field`-Target `modes`.
-Entscheidung: in die bestehende Profil-Expansion integrieren (kein neuer Kind),
-damit Bestands-Templates ohne Editor-Änderung profitieren.
+Die `## Modi`-Sektion wird Teil der **neuen Persona-Profil-Expansion** (Track
+E1, `persona-field`-Target `profile`): existieren `modes`, hängt die
+Profil-Expansion eine `## Modi`-Sektion an (pro Modus: Name, Trigger,
+Identity-Add, Output-Override). Kein neuer Placeholder-Kind. **Abhängigkeit:**
+C4 setzt E1 voraus — ohne Profil-Pill gibt es kein Render-Ziel für die Modi
+(die bisherige `persona-field`-Pill kann nur `name`/`description`).
 
 ### C5 — Web
 
@@ -380,21 +380,126 @@ das Notion→who2be-Mapping zentral dokumentieren; Verweis aus CLAUDE.md
 
 ---
 
+# Track E — Agenten-Laufzeitsicht: Lücken schließen (Perspektivwechsel)
+
+**Leitfrage:** Der Agent bekommt nur den gerenderten System-Prompt
+(`fetch_agent`). Ab da muss er sauber von **Persona → Playbook → Resource**
+durchschalten können — Persönlichkeit & Handlungsweise aus der Persona,
+konkrete Abläufe aus Playbooks, Wissen aus Resources. Der Durchstich deckt
+vier Lücken auf, die die Tracks A–D **nicht** automatisch schließen.
+
+## Soll-Reise des Agenten
+
+1. **Boot:** `fetch_agent(agent_id)` → System-Prompt mit expandierten Pills.
+   Muss enthalten: Persona-Persönlichkeit, fest eingebettete (applied)
+   Playbooks, Werkzeug-Übersicht, Datum.
+2. **Persona verinnerlichen:** ggf. `get_persona()` für volles Profil + Modi.
+3. **Prozess erkennen:** `list_triggers()` → Trigger-Match → `fetch_playbook()`
+   (inkl. Composite-Sequenz) den Schritten folgen.
+4. **Wissen nachschlagen:** über Playbook-Resource-Refs **oder** gezielt
+   `list_resources()` → `fetch_resource()`.
+
+## E1 — Persona-Profil-Pill (die fehlende Schlüssel-Pill) · *blockierend für C4*
+
+**Ist:** `PersonaFieldResolver` rendert nur `name`/`description`. Die
+eigentliche Persönlichkeit (Rolle, Tonfall, Beispiele) lebt in
+`PersonaContent.blocks` (BlockNote) und ist **durch keine Pill** in den
+System-Prompt holbar. Damit lässt sich „mit der Persona die Persönlichkeit
+festlegen" heute nur erreichen, indem der Autor den Text direkt ins Template
+kopiert (Drift!) oder der Agent zur Laufzeit `get_persona` ruft.
+
+**Soll:** `PersonaFieldResolver` um Target **`profile`** erweitern:
+- Rendert `description` + den Persona-Body (`content.blocks`) via vorhandenem
+  `_block_plain_text`-Helper (gleiche Mechanik wie Playbook-/Resource-Body).
+- Hängt — falls vorhanden — die `## Modi`-Sektion an (Track C4).
+- Optional `traits` als kompakte Liste (deprecated, aber noch lesbar).
+- `name`/`description` bleiben als eigene Targets erhalten (Backward-Compat).
+
+**Web:** `PersonaFieldPicker.tsx` um die Option „Profil (vollständig)" ergänzen
+(neben Name/Beschreibung). `slashMenu.ts`-Subtext schärfen.
+
+**Tests:** Resolver `profile` rendert Body+Description+Modi; leeres Profil →
+nur Description; unbekanntes Target → leerer String (Bestandsverhalten).
+
+## E2 — `tools-overview` lehrt die neuen Achsen
+
+**Ist:** Die kuratierte `_TOOLS`-Liste erklärt die Read-Tools, aber **nicht**,
+dass (a) ein Playbook ein **Composite** sein kann (Sub-Playbooks der Reihe nach
+abarbeiten), (b) die Persona **Modi** haben kann (per Trigger umschalten),
+(c) fest eingebettete (Pill-)Playbooks immer gelten vs. getriggerte on-demand.
+
+**Soll:** `_TOOLS`/Overview-Text erweitern:
+- `fetch_playbook`-Eintrag: Hinweis auf `composed_playbooks` (Sequenz folgen).
+- `get_persona`-Eintrag: Hinweis auf `content.modes` (Modus-Wahl per Trigger).
+- Kurzer Rahmen-Absatz „applied (immer geladen) vs. triggered (bei Match)".
+Deckt sich inhaltlich mit den BASE-Klauseln (Track D1) — **eine** Quelle pflegen
+(Overview-Text referenziert die Achsen, Default-Template nur knapp).
+
+**Tests:** Renderer-Snapshot der Overview enthält Composite-/Modi-/Applied-Hinweise.
+
+## E3 — Resource-Discoverability (Tags + Filter) · *kleiner Track, keine Migration*
+
+**Ist:** `list_resources()` liefert **alle** aktiven Resources ungefiltert;
+Resources haben **keine Tags**. Playbooks haben `list_playbooks(tag, trigger)`,
+Resources nichts Vergleichbares. „Wissen nachschlagen" über viele Resources
+skaliert nur über Namensraten.
+
+**Soll (analog Persona/Playbook-Tags, jsonb — keine Migration):**
+- `ResourceContent` um `tags: list[TagStr] = Field(default_factory=list,
+  max_length=50)` erweitern. Denormalisierte Filterspalte optional (für jetzt
+  In-Query-jsonb-Filter ausreichend; Index erst bei Bedarf).
+- API: `GET /resources?tag=` Filter; `ResourceSummary.tags` ergänzen.
+- MCP: `list_resources(tag: str | None = None)`; `ResourceSummary` um `tags`.
+- Web: TagInput im Resource-Editor (Muster Playbook-Multi-Select-TagInput);
+  Tag-Anzeige/-Filter in der Resource-Liste.
+- `tools-overview`: `list_resources(tag?)`-Signatur aktualisieren.
+
+**Bewusst Out of Scope:** semantische/Volltext-Suche über Resources
+(Embeddings) — das ist die „große" Knowledge-Lookup-Lösung, eigener Block.
+
+**Tests:** Tag-Round-Trip; `list_resources?tag=` filtert; MCP-Filter; Web-TagInput.
+
+## E4 — Bootstrap: Default-Template muss kohärent booten
+
+**Ist:** Ob ein frischer Agent Persönlichkeit + Werkzeug-Übersicht im
+System-Prompt hat, hängt allein am Seed-Template-Body (0023b) — **unverifiziert.**
+
+**Soll:** Seed-Default-Templates so fassen (Track D1), dass der gerenderte
+Boot-Prompt mindestens enthält:
+1. `{{ persona profile }}`-Pill (E1) — Persönlichkeit + Modi,
+2. die applied-Playbook-Pills (vom Autor gesetzt),
+3. `{{ tools-overview }}`-Pill (E2) — Lookup-Wegweiser,
+4. `{{ date }}`.
+Verifikations-Task: aktuellen 0023b-Seed-Body lesen und gegen diese Checkliste
+prüfen; fehlende Pills ergänzen.
+
+## E5 — Doku: die drei Achsen + die Boot-Reise
+
+In der Track-D3-Doku eine „Agenten-Reise"-Sektion ergänzen (Boot →
+Persona/Modi → Playbook/Composite → Resource), inkl. der applied-vs-triggered-
+Tabelle aus Track B. Dient zugleich als Akzeptanz-Checkliste.
+
 # Reihenfolge / Agenten-Plan
 
-Tracks sind weitgehend unabhängig; **B hängt an A** (Composite-aware Resolver
-braucht die Composition-Tabelle). Empfohlene Sequenz:
+Abhängigkeiten: **B hängt an A** (Composite-aware Resolver braucht die
+Composition-Tabelle); **C4 hängt an E1** (Modi brauchen die Profil-Expansion als
+Render-Ziel); **E4/E2 hängen an D** (Seed-Template + Overview-Text). Empfohlene
+Sequenz:
 
 1. **A (Backend):** Migration 0027, Models, Repo, Service, Router, MCP + Tests.
    Eigener Sub-Branch / Worktree (`backend-developer` Sonnet).
-2. **C (Backend-Anteil):** Models + Validator + Renderer-Integration + Tests.
-   Parallel zu A möglich (keine Überschneidung außer evtl. Renderer-Datei →
-   sequenziell mergen).
-3. **B:** Resolver Composite-aware + Slash-Politur + Tests (nach A gemerged).
-4. **A/C (Web):** PlaybookComposesPicker/ComposedByList + PersonaModesEditor
-   (`frontend-developer` Sonnet), startet, sobald Backend-JSON-Shapes fixiert.
-5. **D:** Seed-/Bootstrap-Klauseln + Doku. Zuletzt.
-6. **ADR-0024** mit Track A; Doku-Notizen mit B/D.
+2. **E1 + C (Backend):** Persona-Profil-Pill (E1) zuerst, dann Modi-Model +
+   Validator + Modi-in-Profil (C). Parallel zu A möglich; Renderer-Datei
+   (`registry.py`) berührt A(B)/E1/C → sequenziell mergen.
+3. **E3 (Backend):** Resource-Tags + `list_resources(tag?)` + Tests.
+   Unabhängig, jederzeit parallel.
+4. **B:** Resolver Composite-aware + Slash-Politur + Tests (nach A gemerged).
+5. **Web:** PlaybookComposesPicker/ComposedByList (A), PersonaModesEditor (C),
+   PersonaFieldPicker-Profil-Option (E1), Resource-TagInput (E3)
+   (`frontend-developer` Sonnet), sobald Backend-JSON-Shapes fixiert.
+6. **D + E2 + E4 + E5:** `tools-overview`-Text (E2), Seed-/Bootstrap-Klauseln &
+   Default-Template-Verifikation (E4), Doku inkl. Agenten-Reise (E5). Zuletzt.
+7. **ADR-0024** mit Track A; Doku-Notizen mit B/D/E.
 
 Integration (Merges, Sammel-Test, Stack-Rebuild, Smoke) durch den Coder selbst.
 
@@ -417,6 +522,10 @@ Integration (Merges, Sammel-Test, Stack-Rebuild, Smoke) durch den Coder selbst.
 - Modus-abhängiges Playbook-Routing (Modi sind persona-intern).
 - Caching der Composite-Auflösung im Renderer (erst bei Bedarf, vgl. Welle 5).
 - Batch-Backfill aller bestehenden Default-Templates ohne Unverändert-Guard.
+- **Semantische/Volltext-Suche über Resources** (Embeddings) — E3 liefert nur
+  Tag-Filter; echte KB-Suche ist ein eigener Block.
+- Denormalisierte Resource-Tag-Filterspalte + GIN-Index (erst bei
+  Performance-Bedarf; E3 nutzt zunächst jsonb-In-Query-Filter).
 
 # Offene Punkte (im Bericht klären)
 
@@ -424,3 +533,7 @@ Integration (Merges, Sammel-Test, Stack-Rebuild, Smoke) durch den Coder selbst.
 - A7: Soll `composed_playbooks` im MCP rekursiv (alle Ebenen) oder nur eine
   Ebene inline sein? Default: **eine Ebene** (Payload-Schutz); tiefere via
   erneutem `fetch_playbook`.
+- E1: Soll die Profil-Pill den vollen `content.blocks`-Body inline ziehen
+  (Drift-Risiko vs. immer aktuell) oder nur eine Kurzfassung? Default:
+  **voller Body** — die Pill rendert beim Boot stets die aktive Version,
+  also kein Drift, im Gegensatz zum manuellen Kopieren ins Template.
