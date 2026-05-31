@@ -23,6 +23,7 @@ from who2be_mcp.client import ApiClient
 from who2be_mcp.config import Settings, get_settings
 from who2be_mcp.core_logging import configure_logging, with_tool_log
 from who2be_models import (
+    AgentWithRenderedPrompt,
     PersonaRead,
     PlaybookRead,
     ResourceLinkRead,
@@ -83,9 +84,7 @@ async def _resolve_workspace_id(settings: Settings) -> UUID:
             try:
                 _cached_workspace_id = UUID(settings.workspace_id)
             except ValueError as exc:
-                raise ToolError(
-                    "WHO2BE_WORKSPACE_ID ist keine gueltige UUID."
-                ) from exc
+                raise ToolError("WHO2BE_WORKSPACE_ID ist keine gueltige UUID.") from exc
             return _cached_workspace_id
         try:
             async with httpx.AsyncClient(
@@ -135,9 +134,7 @@ async def get_persona(identifier: str) -> PersonaWithPlaybooks:
 
 @mcp.tool
 @with_tool_log("list_playbooks")
-async def list_playbooks(
-    tag: str | None = None, trigger: str | None = None
-) -> list[PlaybookRead]:
+async def list_playbooks(tag: str | None = None, trigger: str | None = None) -> list[PlaybookRead]:
     """Listet Playbooks, optional gefiltert nach Tag und/oder Trigger."""
     client = await build_client()
     return await client.list_playbooks(tag, trigger)
@@ -183,16 +180,30 @@ async def list_resources() -> list[ResourceSummary]:
     client = await build_client()
     resources = await client.list_resources()
     return [
-        ResourceSummary(id=r.id, name=r.name, block_count=len(r.content.blocks))
-        for r in resources
+        ResourceSummary(id=r.id, name=r.name, block_count=len(r.content.blocks)) for r in resources
     ]
 
 
 @mcp.tool
+@with_tool_log("fetch_agent")
+async def fetch_agent(agent_id: str) -> AgentWithRenderedPrompt:
+    """Laedt einen Agent samt Persona + gerendertem Systemprompt (Placeholder bereits expandiert).
+
+    Der System-Prompt wird serverseitig expandiert: alle Placeholder-Bloecke
+    (Playbook, Resource, Persona-Feld, Datum) sind bereits aufgeloest und als
+    Plain-Text eingebettet. MCP-Konsumenten sehen den fertigen Prompt.
+    """
+    try:
+        parsed = UUID(agent_id)
+    except ValueError as exc:
+        raise ToolError(f"Ungueltige Agent-UUID: '{agent_id}'.") from exc
+    client = await build_client()
+    return await client.get_agent_rendered(parsed)
+
+
+@mcp.tool
 @with_tool_log("fetch_resource")
-async def fetch_resource(
-    resource_id: str, block_ids: list[str] | None = None
-) -> ResourceRead:
+async def fetch_resource(resource_id: str, block_ids: list[str] | None = None) -> ResourceRead:
     """Laedt die aktive Version einer Resource (per UUID).
 
     Ist `block_ids` gesetzt, werden nur diese Bloecke (in angefragter

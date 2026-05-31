@@ -17,9 +17,7 @@ def capture_with_context() -> Iterator[list[dict[str, Any]]]:
     `structlog.testing.capture_logs`)."""
     entries: list[dict[str, Any]] = []
 
-    def append(
-        _: Any, __: str, event_dict: MutableMapping[str, Any]
-    ) -> Mapping[str, Any]:
+    def append(_: Any, __: str, event_dict: MutableMapping[str, Any]) -> Mapping[str, Any]:
         entries.append(dict(event_dict))
         raise structlog.DropEvent
 
