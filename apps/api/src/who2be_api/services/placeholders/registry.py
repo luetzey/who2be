@@ -419,11 +419,11 @@ _TOOLS: list[_ToolDoc] = [
         ),
     ),
     _ToolDoc(
-        signature="list_resources()",
+        signature="list_resources(tag?)",
         description=(
-            "Katalog der Resources im Workspace (Knowledge-Base-Dokumente). "
-            "Rufe das, wenn ein Playbook auf Resources verweist oder der User "
-            "nach Hintergrundwissen fragt."
+            "Katalog der Resources im Workspace (Knowledge-Base-Dokumente), "
+            "optional nach Tag gefiltert. Rufe das, wenn ein Playbook auf "
+            "Resources verweist oder der User nach Hintergrundwissen fragt."
         ),
     ),
     _ToolDoc(

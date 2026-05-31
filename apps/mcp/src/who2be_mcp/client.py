@@ -109,8 +109,11 @@ class ApiClient:
         data = await self._get(f"{self._workspace_prefix}/playbooks/{playbook_id}")
         return PlaybookRead.model_validate(data)
 
-    async def list_resources(self) -> list[ResourceRead]:
-        data = await self._get(f"{self._workspace_prefix}/resources")
+    async def list_resources(self, tag: str | None = None) -> list[ResourceRead]:
+        params: dict[str, str] = {}
+        if tag is not None:
+            params["tag"] = tag
+        data = await self._get(f"{self._workspace_prefix}/resources", params=params)
         return [ResourceRead.model_validate(item) for item in data]
 
     async def get_resource(self, resource_id: UUID) -> ResourceRead:

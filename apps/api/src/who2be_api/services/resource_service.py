@@ -59,11 +59,12 @@ class ResourceService:
     async def list_all(
         self,
         ctx: WorkspaceContext,
+        tag: str | None,
         limit: int,
         cursor: tuple[datetime, UUID] | None,
     ) -> tuple[list[ResourceRead], str | None]:
         rows = await self._repo.list_by_workspace(
-            ctx.workspace_id, limit + 1, cursor, active_only=ctx.is_api_token
+            ctx.workspace_id, tag, limit + 1, cursor, active_only=ctx.is_api_token
         )
         if len(rows) > limit:
             items = rows[:limit]

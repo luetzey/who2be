@@ -106,6 +106,62 @@ def test_list_resources_returns_summaries(monkeypatch: pytest.MonkeyPatch) -> No
     assert result[0].name == "Doc"
 
 
+def test_list_resources_summary_includes_tags(monkeypatch: pytest.MonkeyPatch) -> None:
+    """E3: ResourceSummary.tags spiegelt content.tags der Resource."""
+    payload = _resource_payload(blocks=[_block("b1", "x")])
+    payload["content"]["tags"] = ["wissen", "onboarding"]  # type: ignore[index]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=[payload])
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    result = asyncio.run(list_resources())
+    assert len(result) == 1
+    assert result[0].tags == ["wissen", "onboarding"]
+
+
+def test_list_resources_summary_empty_tags_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """E3: Resource ohne Tags liefert leere Tags-Liste (Backward-Compat)."""
+    payload = _resource_payload()  # kein 'tags' im content
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=[payload])
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    result = asyncio.run(list_resources())
+    assert result[0].tags == []
+
+
+def test_list_resources_passes_tag_filter_to_api(monkeypatch: pytest.MonkeyPatch) -> None:
+    """E3: list_resources(tag='x') reicht den tag-Parameter an den API-Client durch."""
+    received_params: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        # Anfrage-Query-String auf tag pruefen
+        for key, value in request.url.params.items():
+            received_params[key] = value
+        return httpx.Response(200, json=[])
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    result = asyncio.run(list_resources(tag="wissen"))
+    assert result == []
+    assert received_params.get("tag") == "wissen"
+
+
+def test_list_resources_without_tag_sends_no_tag_param(monkeypatch: pytest.MonkeyPatch) -> None:
+    """E3: list_resources() ohne tag sendet keinen tag-Parameter (kein ?tag=None)."""
+    received_params: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        for key, value in request.url.params.items():
+            received_params[key] = value
+        return httpx.Response(200, json=[])
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    asyncio.run(list_resources())
+    assert "tag" not in received_params
+
+
 def test_fetch_resource_filters_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
     rid = uuid4()
     payload = _resource_payload(blocks=[_block("b1", "a"), _block("b2", "b"), _block("b3", "c")])

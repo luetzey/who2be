@@ -2,8 +2,12 @@
 
 Versionierung ueber eine History-Tabelle (ADR-0004), Status pro Version
 (ADR-0020), Workspace-Isolation ueber `workspace_id` (ADR-0019). Aufbau
-identisch zum Playbook-Repository, nur ohne denormalisierte Filterspalten
-(Resources haben im MVP keine Tags).
+identisch zum Playbook-Repository.
+
+Tag-Filter (E3): Resources haben keine denormalisierte Tag-Spalte; der Filter
+laueft ueber `resource_version.content` (jsonb-In-Query) mit dem Ausdruck
+`$tag = ANY(SELECT jsonb_array_elements_text(rv.content->'tags'))`.
+Kein GIN-Index — ausreichend fuer initiale Last (laut Plan Out-of-Scope).
 
 `active_only=True` liefert die Active-Version statt der Current-Version
 (MCP-Pfad). `update` erzwingt Draft-on-Edit bei `active`-Current.
@@ -68,6 +72,7 @@ class ResourceRepository(Protocol):
     async def list_by_workspace(
         self,
         workspace_id: UUID,
+        tag: str | None,
         limit: int,
         after: tuple[datetime, UUID] | None,
         active_only: bool = False,
@@ -155,24 +160,35 @@ class PgResourceRepository:
     async def list_by_workspace(
         self,
         workspace_id: UUID,
+        tag: str | None,
         limit: int,
         after: tuple[datetime, UUID] | None,
         active_only: bool = False,
     ) -> list[ResourceRead]:
+        # Tag-Filter via jsonb-In-Query: kein denormalisierter Tag-Array auf
+        # der resource-Zeile (laut Plan E3 Out-of-Scope); stattdessen direkt
+        # aus content->tags im resource_version-Row. Bedingung:
+        # `$tag = ANY(SELECT jsonb_array_elements_text(rv.content->'tags'))`.
         select = _SELECT_ACTIVE if active_only else _SELECT_CURRENT
         if after is None:
             rows = await self._pool.fetch(
                 f"{select} WHERE r.workspace_id = $1 "
-                "ORDER BY r.created_at DESC, r.id DESC LIMIT $2",
+                "AND ($2::text IS NULL OR $2 = ANY("
+                "    SELECT jsonb_array_elements_text(rv.content->'tags'))) "
+                "ORDER BY r.created_at DESC, r.id DESC LIMIT $3",
                 workspace_id,
+                tag,
                 limit,
             )
         else:
             rows = await self._pool.fetch(
                 f"{select} WHERE r.workspace_id = $1 "
-                "AND (r.created_at, r.id) < ($2, $3) "
-                "ORDER BY r.created_at DESC, r.id DESC LIMIT $4",
+                "AND ($2::text IS NULL OR $2 = ANY("
+                "    SELECT jsonb_array_elements_text(rv.content->'tags'))) "
+                "AND (r.created_at, r.id) < ($3, $4) "
+                "ORDER BY r.created_at DESC, r.id DESC LIMIT $5",
                 workspace_id,
+                tag,
                 after[0],
                 after[1],
                 limit,

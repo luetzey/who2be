@@ -47,11 +47,16 @@ class PersonaWithPlaybooks(BaseModel):
 
 
 class ResourceSummary(BaseModel):
-    """Kompakte Resource-Uebersicht fuer `list_resources`."""
+    """Kompakte Resource-Uebersicht fuer `list_resources`.
+
+    `tags` spiegelt `content.tags` der aktuellen Version (E3). Leere Liste =
+    keine Tags — Backward-Compat mit Resources, die vor E3 angelegt wurden.
+    """
 
     id: UUID
     name: str
     block_count: int
+    tags: list[str] = []
 
 
 class PlaybookWithResources(BaseModel):
@@ -211,12 +216,23 @@ async def fetch_playbook(playbook_id: str) -> PlaybookWithResources:
 
 @mcp.tool
 @with_tool_log("list_resources")
-async def list_resources() -> list[ResourceSummary]:
-    """Listet die aktiven Resources des Workspaces (id, name, block_count)."""
+async def list_resources(tag: str | None = None) -> list[ResourceSummary]:
+    """Listet die aktiven Resources des Workspaces, optional nach Tag gefiltert.
+
+    `tag` filtert auf Resources, deren `content.tags` diesen Wert enthalten
+    (exakter Treffer, case-sensitiv). Ohne `tag` werden alle aktiven Resources
+    zurueckgegeben.
+    """
     client = await build_client()
-    resources = await client.list_resources()
+    resources = await client.list_resources(tag)
     return [
-        ResourceSummary(id=r.id, name=r.name, block_count=len(r.content.blocks)) for r in resources
+        ResourceSummary(
+            id=r.id,
+            name=r.name,
+            block_count=len(r.content.blocks),
+            tags=r.content.tags,
+        )
+        for r in resources
     ]
 
 

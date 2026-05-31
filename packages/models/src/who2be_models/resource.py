@@ -24,6 +24,10 @@ from who2be_models.status import VersionStatus
 BlockId = Annotated[str, StringConstraints(min_length=1, max_length=100)]
 BlockType = Annotated[str, StringConstraints(min_length=1, max_length=50)]
 
+# Eingabe-Limit fuer Tags — analog zu PlaybookContent.TagStr (DoS-Schutz fuer
+# in jsonb persistierte Strings, ADR-0009).
+TagStr = Annotated[str, StringConstraints(min_length=1, max_length=100)]
+
 # DoS-Obergrenze fuer den serialisierten Block-Inhalt. Bloecke sind
 # `extra="allow"` (BlockNote-Schema ist offen), darum greift hier ein
 # Gesamt-Byte-Limit statt feldweiser `max_length` (F-01-Linie).
@@ -45,12 +49,18 @@ class ResourceBlock(BaseModel):
 
 
 class ResourceContent(BaseModel):
-    """Typisierter Inhalt einer Resource-Version (`resource_version.content`)."""
+    """Typisierter Inhalt einer Resource-Version (`resource_version.content`).
+
+    E3 (Track E3, ADR-0009 additive jsonb-Evolution): `tags` ermoeglicht das
+    Filtern ueber `GET /resources?tag=` ohne denormalisierte DB-Spalte.
+    Default `[]` — Backward-Compat: alte Versionen ohne Tags bleiben gueltig.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     description: str = Field(default="", max_length=2_000)
     blocks: list[ResourceBlock] = Field(default_factory=list, max_length=2_000)
+    tags: list[TagStr] = Field(default_factory=list, max_length=50)
 
     @model_validator(mode="after")
     def _check_total_size(self) -> Self:

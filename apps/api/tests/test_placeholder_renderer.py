@@ -447,7 +447,7 @@ class TestToolsOverviewResolver:
             "list_triggers()",
             "list_playbooks(tag?, trigger?)",
             "fetch_playbook(playbook_id)",
-            "list_resources()",
+            "list_resources(tag?)",
             "fetch_resource(resource_id, block_ids?)",
         ):
             assert expected in result
