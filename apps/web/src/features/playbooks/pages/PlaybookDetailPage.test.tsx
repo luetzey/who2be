@@ -96,6 +96,9 @@ describe('PlaybookDetailPage', () => {
       [`GET ${WS_PREFIX}/playbooks/pb1/versions`]: () => jsonResponse([v1]),
       [`GET ${WS_PREFIX}/playbooks/pb1/resource_links`]: () => jsonResponse([]),
       [`GET ${WS_PREFIX}/playbooks/pb1/usages`]: () => jsonResponse([]),
+      // Track A8 — Composite-Endpoints (leere Listen).
+      [`GET ${WS_PREFIX}/playbooks/pb1/composes`]: () => jsonResponse([]),
+      [`GET ${WS_PREFIX}/playbooks/pb1/composed_by`]: () => jsonResponse([]),
     }
 
     const patchCalls: Array<{ url: string; body: unknown }> = []
@@ -168,6 +171,8 @@ describe('PlaybookDetailPage', () => {
           { persona_id: 'per1', persona_name: 'Coach Persona' },
           { persona_id: 'per2', persona_name: 'Onboarding Persona' },
         ]),
+      [`GET ${WS_PREFIX}/playbooks/pb1/composes`]: () => jsonResponse([]),
+      [`GET ${WS_PREFIX}/playbooks/pb1/composed_by`]: () => jsonResponse([]),
     }
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const method = init?.method ?? 'GET'
@@ -221,6 +226,8 @@ describe('PlaybookDetailPage', () => {
         ]),
       [`GET ${WS_PREFIX}/playbooks/pb1/resource_links`]: () => jsonResponse([]),
       [`GET ${WS_PREFIX}/playbooks/pb1/usages`]: () => jsonResponse([]),
+      [`GET ${WS_PREFIX}/playbooks/pb1/composes`]: () => jsonResponse([]),
+      [`GET ${WS_PREFIX}/playbooks/pb1/composed_by`]: () => jsonResponse([]),
     }
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const method = init?.method ?? 'GET'
@@ -265,6 +272,8 @@ describe('PlaybookDetailPage', () => {
           { version: 1, content: playbook(1, 'b1').content, created_by: 'o1', created_at: 't1' },
         ]),
       [`GET ${WS_PREFIX}/playbooks/pb1/resource_links`]: () => jsonResponse([]),
+      [`GET ${WS_PREFIX}/playbooks/pb1/composes`]: () => jsonResponse([]),
+      [`GET ${WS_PREFIX}/playbooks/pb1/composed_by`]: () => jsonResponse([]),
     }
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const method = init?.method ?? 'GET'

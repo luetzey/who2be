@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useForm, type UseFormReturn } from 'react-hook-form'
 import { z } from 'zod'
 
-import type { Persona, PersonaInput, ResourceBlock } from '@/api/types'
+import type { Persona, PersonaInput, PersonaMode, ResourceBlock } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import {
   useAutoSaveDraft,
@@ -14,11 +14,20 @@ import {
 // uebernimmt den System-Prompt. Schema haelt das Feld nicht mehr; beim Auto-
 // Save schicken wir `system_prompt: ''` ans Backend, damit der Pydantic-
 // Default greift.
+const modeSchema = z.object({
+  name: z.string(),
+  trigger: z.string().nullable().optional(),
+  is_default: z.boolean(),
+  identity_add: z.string(),
+  output_style_override: z.string(),
+})
+
 const editorSchema = z.object({
   name: z.string().min(1, 'Name erforderlich.'),
   description: z.string().min(1, 'Beschreibung erforderlich.'),
   profileBlocks: z.array(z.custom<ResourceBlock>()),
   tags: z.array(z.string()),
+  modes: z.array(modeSchema),
 })
 
 export type PersonaEditorValues = z.infer<typeof editorSchema>
@@ -41,6 +50,8 @@ function toInput(values: PersonaEditorValues): PersonaInput {
       traits: [],
       tags: values.tags,
       content: { description: '', blocks: values.profileBlocks },
+      // Track C5 — Modi.
+      modes: values.modes as PersonaMode[],
     },
   }
 }
@@ -67,6 +78,7 @@ export function usePersonaForm(
       description: '',
       profileBlocks: [],
       tags: [],
+      modes: [],
     },
   })
 
@@ -85,6 +97,7 @@ export function usePersonaForm(
         description: persona.content.description,
         profileBlocks: persona.content.content?.blocks ?? [],
         tags: persona.content.tags ?? [],
+        modes: persona.content.modes ?? [],
       })
       resetIdRef.current = persona.id
       setFormReady(true)

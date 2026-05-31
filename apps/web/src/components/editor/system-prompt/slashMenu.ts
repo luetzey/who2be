@@ -54,13 +54,15 @@ export function buildSlashMenuItems(
   const customItems: DefaultReactSuggestionItem[] = [
     {
       title: 'Playbook',
-      subtext: 'Verlinkt ein spezifisches Playbook',
+      subtext:
+        'Bettet ein Playbook fest ein — immer geladen, nicht getriggert. ' +
+        'Bei einem Composite-Playbook wird die vollständige Sub-Playbook-Sequenz gerendert.',
       group: 'Placeholder',
       icon: createElement(BookOpen, { size: 18 }),
       onItemClick: () => {
         openPicker('playbook')
       },
-      aliases: ['playbook', 'pb'],
+      aliases: ['playbook', 'pb', 'standard'],
     },
     {
       title: 'Resource',
@@ -74,13 +76,15 @@ export function buildSlashMenuItems(
     },
     {
       title: 'Persona-Feld',
-      subtext: 'Fuegt Name oder Beschreibung der Persona ein',
+      subtext:
+        'Fügt ein Persona-Feld ein: Name, Beschreibung oder das vollständige Profil ' +
+        '(inkl. Body und Modi) — empfohlen für den System-Prompt-Bootstrap.',
       group: 'Placeholder',
       icon: createElement(User, { size: 18 }),
       onItemClick: () => {
         openPicker('persona-field')
       },
-      aliases: ['persona', 'name', 'beschreibung'],
+      aliases: ['persona', 'name', 'beschreibung', 'profil', 'profile'],
     },
     {
       title: 'Datum',

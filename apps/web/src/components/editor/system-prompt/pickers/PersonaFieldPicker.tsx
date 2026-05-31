@@ -1,5 +1,6 @@
-// PersonaFieldPicker — Radio-Dialog: "Name" oder "Beschreibung".
-// Kein API-Call. target_id ist der englische Slug "name" / "description".
+// PersonaFieldPicker — Radio-Dialog: "Name", "Beschreibung" oder "Profil (vollstaendig)".
+// Kein API-Call. target_id ist der englische Slug "name" / "description" / "profile".
+// Track E1: "profile" rendert die volle Persona-Persoenlichkeit inkl. BlockNote-Body und Modi.
 import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -13,7 +14,7 @@ import {
 
 import type { PlaceholderProps } from '../PlaceholderBlock'
 
-type PersonaFieldTarget = 'name' | 'description'
+type PersonaFieldTarget = 'name' | 'description' | 'profile'
 
 interface PersonaFieldPickerProps {
   open: boolean
@@ -27,6 +28,13 @@ const OPTIONS: { target_id: PersonaFieldTarget; label: string; description: stri
     target_id: 'description',
     label: 'Persona: Beschreibung',
     description: 'Die Beschreibung der Persona',
+  },
+  {
+    target_id: 'profile',
+    label: 'Persona: Profil (vollständig)',
+    description:
+      'Rendert die vollständige Persönlichkeit — Beschreibung, Profil-Body und Modi. ' +
+      'Empfohlen für den System-Prompt-Bootstrap.',
   },
 ]
 

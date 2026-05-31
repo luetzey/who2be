@@ -17,6 +17,7 @@ import type {
   PersonaVersion,
   Playbook,
   PlaybookInput,
+  PlaybookRef,
   PlaybookUsage,
   PlaybookVersion,
   Resource,
@@ -176,6 +177,13 @@ export interface Api {
   ) => Promise<ResourceLink[]>
   getPlaybookUsages: (id: string) => Promise<PlaybookUsage[]>
   getResourceUsages: (id: string) => Promise<ResourceUsage[]>
+  // Track A8 — Composite-Playbook-Endpoints.
+  listPlaybookComposes: (id: string) => Promise<Playbook[]>
+  setPlaybookComposes: (id: string, childIds: string[]) => Promise<Playbook[]>
+  listPlaybookComposedBy: (id: string) => Promise<PlaybookRef[]>
+  // Track E3 — Resource-Tags.
+  listResourceTags: () => Promise<string[]>
+  listResourcesByTag: (tag: string) => Promise<Resource[]>
   listMembers: () => Promise<Member[]>
   updateMemberRole: (userId: string, input: MemberUpdateInput) => Promise<Member>
   removeMember: (userId: string) => Promise<void>
@@ -324,6 +332,20 @@ export function createApi(token: string, workspaceId: string): Api {
       request<PlaybookUsage[]>(token, `${ws}/playbooks/${id}/usages`),
     getResourceUsages: (id) =>
       request<ResourceUsage[]>(token, `${ws}/resources/${id}/usages`),
+    listPlaybookComposes: (id) =>
+      request<Playbook[]>(token, `${ws}/playbooks/${id}/composes`),
+    setPlaybookComposes: (id, childIds) =>
+      request<Playbook[]>(token, `${ws}/playbooks/${id}/composes`, {
+        method: 'PUT',
+        body: JSON.stringify({ child_ids: childIds }),
+      }),
+    listPlaybookComposedBy: (id) =>
+      request<PlaybookRef[]>(token, `${ws}/playbooks/${id}/composed_by`),
+    listResourceTags: () => request<string[]>(token, `${ws}/resources/tags`),
+    listResourcesByTag: (tag) => {
+      const params = new URLSearchParams({ tag })
+      return request<Resource[]>(token, `${ws}/resources?${params.toString()}`)
+    },
     listMembers: () => request<Member[]>(token, `${ws}/members`),
     updateMemberRole: (userId, input) =>
       request<Member>(token, `${ws}/members/${userId}`, {

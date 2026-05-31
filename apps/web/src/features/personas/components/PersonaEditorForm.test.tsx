@@ -113,8 +113,8 @@ describe('PersonaEditorForm', () => {
     const { container } = render(<Harness />)
     expect(container.querySelector('details')).toBeNull()
     expect(container.querySelector('summary')).toBeNull()
-    // Drei Section-Hilfen — System-Prompt-Section ist entfallen.
-    expect(screen.getAllByRole('button', { name: 'Hilfe einblenden' }).length).toBe(3)
+    // Vier Section-Hilfen: Identitaet, Profil, Tags, Modi.
+    expect(screen.getAllByRole('button', { name: 'Hilfe einblenden' }).length).toBe(4)
   })
 
   it('rendert die BlockNote-Insel im Profil-Slot (eine Insel)', () => {

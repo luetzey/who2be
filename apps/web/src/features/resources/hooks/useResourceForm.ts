@@ -4,6 +4,7 @@ import { useForm, type UseFormReturn } from 'react-hook-form'
 import { z } from 'zod'
 
 import type { Resource, ResourceBlock, ResourceInput } from '@/api/types'
+// Track E3: Tags werden jetzt Teil des Form-States.
 import { useApi } from '@/api/useApi'
 import {
   useAutoSaveDraft,
@@ -17,6 +18,8 @@ const schema = z.object({
   name: z.string().min(1, 'Name ist erforderlich.'),
   description: z.string(),
   bodyBlocks: z.array(z.custom<ResourceBlock>()),
+  // Track E3 — Tags (jsonb, keine Migration noetig).
+  tags: z.array(z.string()),
 })
 
 export type ResourceEditorValues = z.infer<typeof schema>
@@ -33,7 +36,7 @@ export function useResourceForm(
   const api = useApi()
   const form = useForm<ResourceEditorValues>({
     resolver: zodResolver(schema),
-    defaultValues: { name: '', description: '', bodyBlocks: [] },
+    defaultValues: { name: '', description: '', bodyBlocks: [], tags: [] },
   })
   // Siehe `usePersonaForm` — `formReady` verhindert das Default-Snapshot-Race.
   const [formReady, setFormReady] = useState(false)
@@ -47,16 +50,17 @@ export function useResourceForm(
       name: resource.name,
       description: resource.content.description ?? '',
       bodyBlocks: resource.content.blocks ?? [],
+      tags: resource.content.tags ?? [],
     })
     resetIdRef.current = resource.id
     setFormReady(true)
   }, [resource, form])
 
   const values = form.watch()
-  // Auto-Save baut ResourceInput aus den Form-Werten inkl. bodyBlocks.
+  // Auto-Save baut ResourceInput aus den Form-Werten inkl. bodyBlocks + tags.
   const combined: ResourceInput = {
     name: values.name,
-    content: { description: values.description, blocks: values.bodyBlocks },
+    content: { description: values.description, blocks: values.bodyBlocks, tags: values.tags },
   }
   const autoSave = useAutoSaveDraft<ResourceInput>({
     values: combined,

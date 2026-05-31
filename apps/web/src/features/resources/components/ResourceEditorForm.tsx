@@ -2,11 +2,13 @@ import { type FormEvent, type ReactNode } from 'react'
 import { type UseFormReturn } from 'react-hook-form'
 
 import type { ResourceBlock } from '@/api/types'
+import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { FormSection } from '@/components/layout/FormSection'
 import { Card, CardContent } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { TagInput } from '@/components/ui/tag-input'
 
 import { ResourceEditor } from './ResourceEditor'
 import type { ResourceEditorValues } from '../hooks/useResourceForm'
@@ -39,6 +41,7 @@ export function ResourceEditorForm({
   actions,
 }: ResourceEditorFormProps) {
   const isViewer = useCurrentWorkspaceRole() === 'viewer'
+  const api = useApi()
 
   return (
     <Card>
@@ -115,6 +118,39 @@ export function ResourceEditorForm({
                         initialBlocks={initialBodyBlocks}
                         editable={!isViewer}
                         onChange={(blocks: ResourceBlock[]) => field.onChange(blocks)}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </FormSection>
+
+            <FormSection
+              title="Tags"
+              description="Stichwörter zur Suche und Filterung."
+              help={
+                <p>
+                  Beispiel: <em>„datenschutz, faq, recht"</em>. Enter zum Anlegen,
+                  Klick auf das X zum Entfernen. Tags ermöglichen das Filtern in der
+                  Resource-Liste und im MCP-Tool <code>list_resources</code>.
+                </p>
+              }
+            >
+              <FormField
+                control={form.control}
+                name="tags"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel id={`${field.name}-label`}>Tags</FormLabel>
+                    <FormControl>
+                      <TagInput
+                        value={field.value}
+                        onChange={field.onChange}
+                        loadSuggestions={api.listResourceTags}
+                        ariaLabelledby={`${field.name}-label`}
+                        placeholder="Tag eingeben und Enter drücken"
+                        disabled={isViewer}
                       />
                     </FormControl>
                     <FormMessage />

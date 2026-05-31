@@ -11,11 +11,21 @@ import { notify } from '@/lib/feedback'
 // Pflicht (Spec: "Anlegen geht immer"). Body, Description duerfen leer sein.
 // Schema spiegelt `usePersonaForm.editorSchema`, damit `PersonaEditorForm`
 // mit beiden Hooks funktioniert.
+// Track C5: modes hinzugefuegt.
+const modeSchema = z.object({
+  name: z.string(),
+  trigger: z.string().nullable().optional(),
+  is_default: z.boolean(),
+  identity_add: z.string(),
+  output_style_override: z.string(),
+})
+
 const createSchema = z.object({
   name: z.string().min(1, 'Name erforderlich.'),
   description: z.string(),
   profileBlocks: z.array(z.custom<ResourceBlock>()),
   tags: z.array(z.string()),
+  modes: z.array(modeSchema),
 })
 
 export type PersonaCreateValues = z.infer<typeof createSchema>
@@ -40,6 +50,7 @@ export function useCreatePersona(onCreated: (id: string) => void): UseCreatePers
       description: '',
       profileBlocks: [],
       tags: [],
+      modes: [],
     },
   })
 
@@ -54,6 +65,7 @@ export function useCreatePersona(onCreated: (id: string) => void): UseCreatePers
           traits: [],
           tags: values.tags,
           content: { description: '', blocks: values.profileBlocks },
+          modes: values.modes,
         },
       })
       notify.success('Persona angelegt.')
