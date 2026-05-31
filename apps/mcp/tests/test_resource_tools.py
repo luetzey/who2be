@@ -152,6 +152,8 @@ def test_fetch_playbook_includes_linked_blocks(monkeypatch: pytest.MonkeyPatch) 
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith(f"/playbooks/{pid}/resource_links"):
             return httpx.Response(200, json=[link])
+        if request.url.path.endswith(f"/playbooks/{pid}/composes"):
+            return httpx.Response(200, json=[])
         if request.url.path.endswith(f"/playbooks/{pid}"):
             return httpx.Response(200, json=playbook)
         return httpx.Response(404)
@@ -165,6 +167,8 @@ def test_fetch_playbook_includes_linked_blocks(monkeypatch: pytest.MonkeyPatch) 
     assert result.linked_blocks[0].link_scope == "block"
     # Block-Refs ziehen das Volldokument NICHT mit — Snippet via fetch_resource.
     assert result.linked_resources == []
+    # Kein Composite → leere composed_playbooks.
+    assert result.composed_playbooks == []
 
 
 def test_fetch_playbook_inlines_resource_for_resource_scope_links(
@@ -191,6 +195,8 @@ def test_fetch_playbook_inlines_resource_for_resource_scope_links(
         path = request.url.path
         if path.endswith(f"/playbooks/{pid}/resource_links"):
             return httpx.Response(200, json=[link])
+        if path.endswith(f"/playbooks/{pid}/composes"):
+            return httpx.Response(200, json=[])
         if path.endswith(f"/playbooks/{pid}"):
             return httpx.Response(200, json=playbook)
         if path.endswith(f"/resources/{rid}"):
@@ -240,6 +246,8 @@ def test_fetch_playbook_deduplicates_resource_scope_inline(
         path = request.url.path
         if path.endswith(f"/playbooks/{pid}/resource_links"):
             return httpx.Response(200, json=links)
+        if path.endswith(f"/playbooks/{pid}/composes"):
+            return httpx.Response(200, json=[])
         if path.endswith(f"/playbooks/{pid}"):
             return httpx.Response(200, json=playbook)
         if path.endswith(f"/resources/{rid}"):
@@ -251,3 +259,39 @@ def test_fetch_playbook_deduplicates_resource_scope_inline(
     result = asyncio.run(fetch_playbook(str(pid)))
     assert len(result.linked_resources) == 1
     assert resource_fetches == 1
+
+
+def test_fetch_playbook_includes_composed_playbooks_ordered(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Composite-Playbook: composed_playbooks enthaelt geordnete aktive Kinder."""
+    pid = uuid4()
+    child_a_id = uuid4()
+    child_b_id = uuid4()
+    playbook = _playbook_payload()
+    playbook["id"] = str(pid)
+    playbook["is_composite"] = True
+    child_a = _playbook_payload("Child-A")
+    child_a["id"] = str(child_a_id)
+    child_b = _playbook_payload("Child-B")
+    child_b["id"] = str(child_b_id)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith(f"/playbooks/{pid}/resource_links"):
+            return httpx.Response(200, json=[])
+        if path.endswith(f"/playbooks/{pid}/composes"):
+            # Geordnet: child_a an Position 0, child_b an Position 1
+            return httpx.Response(200, json=[child_a, child_b])
+        if path.endswith(f"/playbooks/{pid}"):
+            return httpx.Response(200, json=playbook)
+        return httpx.Response(404)
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    result = asyncio.run(fetch_playbook(str(pid)))
+    assert isinstance(result, PlaybookWithResources)
+    assert len(result.composed_playbooks) == 2
+    assert result.composed_playbooks[0].id == child_a_id
+    assert result.composed_playbooks[1].id == child_b_id
+    assert result.composed_playbooks[0].name == "Child-A"
+    assert result.composed_playbooks[1].name == "Child-B"

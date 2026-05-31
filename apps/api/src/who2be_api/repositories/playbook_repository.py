@@ -35,7 +35,10 @@ _SELECT_CURRENT = """
            EXISTS (
                SELECT 1 FROM playbook_version dv
                WHERE dv.playbook_id = p.id AND dv.status = 'draft'
-           ) AS has_pending_draft
+           ) AS has_pending_draft,
+           EXISTS (
+               SELECT 1 FROM playbook_composition c WHERE c.parent_id = p.id
+           ) AS is_composite
     FROM playbook p
     JOIN playbook_version pv
       ON pv.playbook_id = p.id AND pv.version = p.current_version
@@ -49,7 +52,10 @@ _SELECT_ACTIVE = """
            EXISTS (
                SELECT 1 FROM playbook_version dv
                WHERE dv.playbook_id = p.id AND dv.status = 'draft'
-           ) AS has_pending_draft
+           ) AS has_pending_draft,
+           EXISTS (
+               SELECT 1 FROM playbook_composition c WHERE c.parent_id = p.id
+           ) AS is_composite
     FROM playbook p
     JOIN playbook_version pv
       ON pv.playbook_id = p.id AND pv.status = 'active'
@@ -125,9 +131,7 @@ class PlaybookRepository(Protocol):
 
     async def list_distinct_tags(self, workspace_id: UUID) -> list[str]: ...
 
-    async def list_triggers_with_playbooks(
-        self, workspace_id: UUID
-    ) -> list[TriggerOverview]: ...
+    async def list_triggers_with_playbooks(self, workspace_id: UUID) -> list[TriggerOverview]: ...
 
 
 class PgPlaybookRepository:
@@ -459,9 +463,7 @@ class PgPlaybookRepository:
         )
         return [row["tag"] for row in rows]
 
-    async def list_triggers_with_playbooks(
-        self, workspace_id: UUID
-    ) -> list[TriggerOverview]:
+    async def list_triggers_with_playbooks(self, workspace_id: UUID) -> list[TriggerOverview]:
         """Welle 5: Discovery-Aggregat fuer den `list_triggers`-MCP-Tool.
 
         Trigger sind heute kommagetrennt in `playbook.triggers` denormalisiert.

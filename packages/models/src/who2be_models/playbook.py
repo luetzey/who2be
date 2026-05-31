@@ -94,6 +94,9 @@ class PlaybookRead(BaseModel):
     content: PlaybookContent
     created_at: datetime
     updated_at: datetime
+    # Abgeleitet: EXISTS(child in playbook_composition). Default False fuer
+    # Backward-Compat mit Konsumenten, die das Feld nicht liefern.
+    is_composite: bool = False
 
 
 class PlaybookVersionRead(BaseModel):
