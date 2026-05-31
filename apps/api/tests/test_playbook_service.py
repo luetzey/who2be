@@ -387,6 +387,41 @@ def test_update_on_active_with_existing_draft_raises_409() -> None:
     assert exc.value.status_code == 409
 
 
+def test_list_triggers_excludes_triggerless_playbook() -> None:
+    """B3: Ein Playbook ohne Trigger erscheint NICHT in list_triggers (Discovery-Liste).
+
+    Applied-Playbooks (via Pill im System-Prompt-Template eingebettet) fuehren
+    typischerweise keine `triggers`-Felder, da sie immer geladen sind und nicht
+    on-demand getriggert werden. Diese Eigenschaft garantiert, dass applied-
+    Playbooks sauber von triggered-Playbooks getrennt bleiben.
+    """
+    service, ctx = _service()
+    asyncio.run(
+        service.create(
+            ctx,
+            PlaybookCreate(name="Applied-Playbook", content=_content(triggers=None)),
+        )
+    )
+    asyncio.run(
+        service.create(
+            ctx,
+            PlaybookCreate(name="Triggered-Playbook", content=_content(triggers="reset, logout")),
+        )
+    )
+
+    triggers = asyncio.run(service.list_triggers(ctx))
+
+    trigger_names = {t.trigger for t in triggers}
+    playbook_names_in_triggers = {pb.name for t in triggers for pb in t.playbooks}
+
+    # Trigger-los → erscheint nicht in der Discovery-Liste.
+    assert "Applied-Playbook" not in playbook_names_in_triggers
+    # Triggered-Playbook erscheint mit beiden Keywords.
+    assert "reset" in trigger_names
+    assert "logout" in trigger_names
+    assert "Triggered-Playbook" in playbook_names_in_triggers
+
+
 def test_api_token_context_filters_to_active_only() -> None:
     repo = FakePlaybookRepository()
     service = PlaybookService(repo)

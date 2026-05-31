@@ -77,6 +77,13 @@ class PlaybookResolver:
 
     Filtert auf `status='active'` — analog zu MCP-Reads im Repo. Bei nicht
     gefunden: lokalisierter Fehler-String (kein 500).
+
+    **Composite-aware (B1):** Hat das Playbook Kinder in `playbook_composition`,
+    wird die Orchestrierungs-Sequenz angehaengt:
+    - Composite-Body zuerst (wie bisher).
+    - Dann eine `## Ablauf (Sub-Playbooks)`-Sektion mit nummerierten Kindern
+      (nur aktive Versionen, geordnet nach `position`); inaktive/fehlende Kinder
+      werden uebersprungen (kein Hard-Fail). Atomic-Pills bleiben unveraendert.
     """
 
     async def resolve(
@@ -120,6 +127,37 @@ class PlaybookResolver:
             lines.append(description)
         if body:
             lines.append(body)
+
+        # --- Composite-Erweiterung (B1) ---
+        # Kinder aus playbook_composition laden (nur aktive Versionen, geordnet).
+        child_rows = await db.fetch(
+            """
+            SELECT p.name AS child_name, pv.content AS child_content
+              FROM playbook_composition pc
+              JOIN playbook p ON p.id = pc.child_id
+              JOIN playbook_version pv
+                ON pv.playbook_id = p.id AND pv.status = 'active'
+             WHERE pc.parent_id = $1
+               AND pc.workspace_id = $2
+             ORDER BY pc.position ASC
+            """,
+            playbook_id,
+            ctx.workspace_id,
+        )
+        if child_rows:
+            lines.append("\n## Ablauf (Sub-Playbooks)")
+            for idx, child_row in enumerate(child_rows, start=1):
+                child_content: dict[str, object] = dict(child_row["child_content"])
+                child_name: str = child_row["child_name"]
+                child_description = str(child_content.get("description", "")).strip()
+                child_body = str(child_content.get("body", "")).strip()
+                child_parts: list[str] = [f"**{child_name}**"]
+                if child_description:
+                    child_parts.append(child_description)
+                if child_body:
+                    child_parts.append(child_body)
+                lines.append(f"{idx}. " + " — ".join(child_parts))
+
         return "\n".join(lines)
 
 

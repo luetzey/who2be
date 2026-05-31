@@ -41,10 +41,17 @@ def _ctx(
     )
 
 
-def _make_db(fetchrow_return: Any = None) -> MagicMock:
-    """Erstellt einen Fake asyncpg.Connection-Mock."""
+def _make_db(fetchrow_return: Any = None, fetch_return: Any = None) -> MagicMock:
+    """Erstellt einen Fake asyncpg.Connection-Mock.
+
+    `fetchrow_return` — Rueckgabewert fuer `db.fetchrow(...)`.
+    `fetch_return`    — Rueckgabewert fuer `db.fetch(...)` (Default: leere Liste,
+                        damit der Composite-Zweig des PlaybookResolvers korrekt
+                        „kein Kind → Atomic" meldet).
+    """
     db = MagicMock()
     db.fetchrow = AsyncMock(return_value=fetchrow_return)
+    db.fetch = AsyncMock(return_value=fetch_return if fetch_return is not None else [])
     return db
 
 
@@ -111,6 +118,93 @@ class TestPlaybookResolver:
         result = _async_run(resolver.resolve(str(uuid4()), ctx, db))
 
         assert result == "### Leer"
+
+    # --- Composite-aware (B1) ---
+
+    def _make_child_row(self, name: str, description: str, body: str) -> MagicMock:
+        """Erstellt einen Fake-Child-Row-Mock fuer `db.fetch`."""
+        row = MagicMock()
+        row.__getitem__ = MagicMock(
+            side_effect=lambda k: {
+                "child_name": name,
+                "child_content": {"description": description, "body": body},
+            }[k]
+        )
+        return row
+
+    def test_composite_pill_includes_composite_body_and_children_in_order(self) -> None:
+        """Pill auf Composite → Output enthaelt Composite-Body + Kinder in position-Reihenfolge."""
+        resolver = PlaybookResolver()
+        ctx = _ctx()
+        parent_row = MagicMock()
+        parent_row.__getitem__ = MagicMock(
+            side_effect=lambda k: {
+                "name": "Onboarding",
+                "content": {"description": "Gesamt-Onboarding", "body": "Bitte folgen."},
+            }[k]
+        )
+        child_rows = [
+            self._make_child_row("Schritt-1: Konto", "Konto anlegen", "Gehe zu Settings."),
+            self._make_child_row("Schritt-2: Profil", "Profil ausfuellen", "Name eingeben."),
+        ]
+        db = _make_db(fetchrow_return=parent_row, fetch_return=child_rows)
+
+        result = _async_run(resolver.resolve(str(uuid4()), ctx, db))
+
+        assert "### Onboarding" in result
+        assert "Gesamt-Onboarding" in result
+        assert "Bitte folgen." in result
+        assert "## Ablauf (Sub-Playbooks)" in result
+        # Kinder erscheinen nummeriert in Reihenfolge.
+        assert "1." in result
+        assert "2." in result
+        assert result.index("Schritt-1: Konto") < result.index("Schritt-2: Profil")
+        assert "Gehe zu Settings." in result
+        assert "Name eingeben." in result
+
+    def test_atomic_pill_returns_only_own_body(self) -> None:
+        """Pill auf Atomic (keine Kinder) → nur eigener Body, keine Ablauf-Sektion."""
+        resolver = PlaybookResolver()
+        ctx = _ctx()
+        row = MagicMock()
+        row.__getitem__ = MagicMock(
+            side_effect=lambda k: {
+                "name": "Reset-Mail",
+                "content": {"description": "Passwort zuruecksetzen", "body": "Mail senden."},
+            }[k]
+        )
+        db = _make_db(fetchrow_return=row, fetch_return=[])
+
+        result = _async_run(resolver.resolve(str(uuid4()), ctx, db))
+
+        assert "### Reset-Mail" in result
+        assert "Passwort zuruecksetzen" in result
+        assert "Mail senden." in result
+        assert "## Ablauf (Sub-Playbooks)" not in result
+
+    def test_composite_pill_skips_inactive_children(self) -> None:
+        """Inaktive Kinder (kein active-Join-Match) werden uebersprungen — kein Hard-Fail."""
+        resolver = PlaybookResolver()
+        ctx = _ctx()
+        parent_row = MagicMock()
+        parent_row.__getitem__ = MagicMock(
+            side_effect=lambda k: {
+                "name": "Composite",
+                "content": {"description": "", "body": "Sequenz."},
+            }[k]
+        )
+        # Nur ein aktives Kind geliefert (inaktives Kind fehlt im JOIN-Ergebnis).
+        active_child = self._make_child_row("Aktiv-Schritt", "Nur aktiv", "Fertig.")
+        db = _make_db(fetchrow_return=parent_row, fetch_return=[active_child])
+
+        result = _async_run(resolver.resolve(str(uuid4()), ctx, db))
+
+        assert "Aktiv-Schritt" in result
+        assert "## Ablauf (Sub-Playbooks)" in result
+        # Nur ein Kind → nur "1." vorhanden, kein "2."
+        assert "1." in result
+        lines_with_2 = [ln for ln in result.splitlines() if ln.strip().startswith("2.")]
+        assert lines_with_2 == []
 
 
 # ---------------------------------------------------------------------------
