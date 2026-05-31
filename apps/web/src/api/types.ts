@@ -314,9 +314,18 @@ export interface ResourceLinkItemInput {
 }
 
 // Phase 3 Runde 3 Track 3 — SystemPromptTemplate-Aggregat.
+
+// body_format: 'plain' = Plain-Text-Textarea (Legacy),
+//              'blocknote' = BlockNote-JSON-String (Welle 5).
+// Migration 0026 ergaenzt die Spalte; Default ist 'plain'.
+export type SystemPromptBodyFormat = 'plain' | 'blocknote'
+
 export interface SystemPromptTemplateContent {
   description: string
   body: string
+  // Optionales Feld: Fehlt bei Responses vor Welle 5, Frontend faellt
+  // dann auf 'plain' zurueck.
+  body_format?: SystemPromptBodyFormat
 }
 
 export interface SystemPromptTemplate {
