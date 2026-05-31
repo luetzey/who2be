@@ -28,7 +28,7 @@ vi.mock('@/auth/useCurrentWorkspaceRole', () => ({
   useCurrentWorkspaceRole: () => 'admin',
 }))
 
-const updatePersona = vi.fn().mockResolvedValue({})
+const patchPersonaDraft = vi.fn().mockResolvedValue({})
 const listPersonaTags = vi.fn().mockResolvedValue([])
 // Playbook-Tags duerfen vom Persona-Form nicht mehr geladen werden — die
 // Domaenen sind getrennt. Mock vorhanden, aber Aufrufe = Regression.
@@ -36,7 +36,7 @@ const listPlaybookTags = vi.fn().mockResolvedValue(['playbook-only'])
 
 vi.mock('@/api/useApi', () => ({
   useApi: () => ({
-    updatePersona,
+    patchPersonaDraft,
     listPersonaTags,
     listPlaybookTags,
   }),
@@ -60,12 +60,10 @@ const persona: Persona = {
 }
 
 function Harness({ source = persona }: { source?: Persona } = {}) {
-  const { form, onSubmit, saveError } = usePersonaForm(source, () => {})
+  const { form } = usePersonaForm(source)
   return (
     <PersonaEditorForm
       form={form}
-      onSubmit={onSubmit}
-      saveError={saveError}
       formKey={`${source.id}-${source.current_version}`}
       initialProfileBlocks={source.content.content?.blocks ?? []}
       initialSystemPrompt={source.content.system_prompt}
@@ -99,21 +97,27 @@ describe('PersonaEditorForm', () => {
     expect(screen.getAllByTestId('blocknote-view').length).toBeGreaterThan(0)
   })
 
-  it('submitt eine Payload mit `content.blocks` + `tags` und ohne `properties`', async () => {
-    updatePersona.mockClear()
+  it('rendert keinen Save-Button mehr — Auto-Save uebernimmt', () => {
     render(<Harness />)
+    expect(
+      screen.queryByRole('button', { name: 'Neue Version speichern' }),
+    ).not.toBeInTheDocument()
+  })
 
-    // System-Prompt laeuft seit Track 2 ueber den BlockNote-Editor (Slash-Menu
-    // verfuegbar). Der Editor ist im Test gemockt — also kein DOM-Event noetig;
-    // der Wert kommt aus `persona.content.system_prompt` via `form.reset`.
-    fireEvent.click(screen.getByRole('button', { name: 'Neue Version speichern' }))
-
-    await waitFor(() => {
-      expect(updatePersona).toHaveBeenCalledTimes(1)
-    })
-    const payload = updatePersona.mock.calls[0][1]
+  it('triggert per Auto-Save einen PATCH-Draft mit der vollstaendigen Payload', async () => {
+    patchPersonaDraft.mockClear()
+    render(<Harness />)
+    const nameInput = screen.getByLabelText('Name')
+    fireEvent.change(nameInput, { target: { value: 'Coach v2' } })
+    await waitFor(
+      () => {
+        expect(patchPersonaDraft).toHaveBeenCalledTimes(1)
+      },
+      { timeout: 3000 },
+    )
+    const payload = patchPersonaDraft.mock.calls[0][1]
     expect(payload).toMatchObject({
-      name: 'Coach',
+      name: 'Coach v2',
       content: {
         description: 'd',
         system_prompt: 'Sei hilfsbereit.',
@@ -122,9 +126,8 @@ describe('PersonaEditorForm', () => {
         content: { description: '', blocks: [] },
       },
     })
-    // properties existiert nicht (nur traits, das wir bewusst leer mitsenden).
     expect(payload.content).not.toHaveProperty('properties')
-  })
+  }, 10_000)
 
   it('rendert zwei BlockNote-Inseln — Profil + System-Prompt (gleicher Wrapper)', () => {
     render(<Harness />)

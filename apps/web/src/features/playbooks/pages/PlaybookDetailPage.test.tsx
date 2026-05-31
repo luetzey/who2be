@@ -83,20 +83,14 @@ afterEach(() => {
 })
 
 describe('PlaybookDetailPage', () => {
-  it('zeigt eine neue Version, nachdem der Editor gespeichert wurde', async () => {
+  it('Auto-Save: aendert man Felder, geht ein PATCH-Draft raus und kein PUT', async () => {
     const v1 = {
       version: 1,
+      status: 'draft',
       content: playbook(1, 'b1').content,
       created_by: 'o1',
       created_at: 't1',
     }
-    const v2 = {
-      version: 2,
-      content: playbook(2, 'b2').content,
-      created_by: 'o1',
-      created_at: 't2',
-    }
-
     const handlers: Record<string, () => Response> = {
       [`GET ${WS_PREFIX}/playbooks/pb1`]: () => jsonResponse(playbook(1, 'b1')),
       [`GET ${WS_PREFIX}/playbooks/pb1/versions`]: () => jsonResponse([v1]),
@@ -104,15 +98,16 @@ describe('PlaybookDetailPage', () => {
       [`GET ${WS_PREFIX}/playbooks/pb1/usages`]: () => jsonResponse([]),
     }
 
+    const patchCalls: Array<{ url: string; body: unknown }> = []
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const method = init?.method ?? 'GET'
       const url = String(input)
-      if (method === 'PUT' && url.endsWith(`${WS_PREFIX}/playbooks/pb1`)) {
-        handlers[`GET ${WS_PREFIX}/playbooks/pb1`] = () => jsonResponse(playbook(2, 'b2'))
-        handlers[`GET ${WS_PREFIX}/playbooks/pb1/versions`] = () => jsonResponse([v1, v2])
-        return jsonResponse(playbook(2, 'b2'))
+      const pathname = new URL(url).pathname
+      if (method === 'PATCH' && pathname.endsWith('/playbooks/pb1/draft')) {
+        patchCalls.push({ url, body: JSON.parse(init?.body as string) })
+        return jsonResponse(playbook(1, 'b1'))
       }
-      const key = `${method} ${new URL(url).pathname}`
+      const key = `${method} ${pathname}`
       const handler = handlers[key]
       if (!handler) {
         throw new Error(`Unmocked ${key}`)
@@ -134,20 +129,31 @@ describe('PlaybookDetailPage', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText('Aktuelle Version: 1')).toBeInTheDocument()
+      expect(screen.getByLabelText('Name')).toBeInTheDocument()
     })
+    // Save-Button gibt es nicht mehr.
+    expect(
+      screen.queryByRole('button', { name: 'Neue Version speichern' }),
+    ).not.toBeInTheDocument()
 
-    // Inhalt ist jetzt eine BlockNote-Insel (Phase 3-B) — wir aendern den
-    // Namen, um eine neue Version zu erzeugen, statt am Body zu drehen.
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Coach v2' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Neue Version speichern' }))
-
-    await waitFor(() => {
-      expect(screen.getByText('Aktuelle Version: 2')).toBeInTheDocument()
-    })
-    expect(screen.getByText(/v2 —/)).toBeInTheDocument()
-    expect(notify.success).toHaveBeenCalledWith('Gespeichert — neue Version erstellt.')
-  })
+    // Auto-Save-Debounce ist 1500 ms — Real-Timer warten ist robuster als
+    // FakeTimers (die unter Vitest in Kombination mit dem React-Concurrent-
+    // Renderer manchmal pending Promises blockieren).
+    await waitFor(
+      () => {
+        expect(patchCalls.length).toBeGreaterThanOrEqual(1)
+      },
+      { timeout: 3000 },
+    )
+    expect(
+      (patchCalls[patchCalls.length - 1].body as { name: string }).name,
+    ).toBe('Coach v2')
+    const putCalls = fetchMock.mock.calls.filter(
+      (call) => (call[1] as RequestInit | undefined)?.method === 'PUT',
+    )
+    expect(putCalls).toHaveLength(0)
+  }, 10_000)
 
   it('zeigt im "Verwendet in"-Block die Personas aus /usages und faellt auf EmptyState zurueck, wenn keine vorhanden sind', async () => {
     const handlers: Record<string, () => Response> = {

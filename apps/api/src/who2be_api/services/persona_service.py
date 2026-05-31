@@ -39,6 +39,16 @@ def _draft_conflict() -> HTTPException:
     )
 
 
+def _review_conflict() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=(
+            "Diese Version steht in der Review — Auto-Save ist deaktiviert. "
+            "Lehne die Review erst ab, bevor du weiter editierst."
+        ),
+    )
+
+
 class PersonaService:
     """Legt Personae an, liest, listet, aktualisiert und versioniert sie."""
 
@@ -86,6 +96,26 @@ class PersonaService:
         )
         if outcome.conflict == "draft_exists":
             raise _draft_conflict()
+        if outcome.persona is None:
+            raise _not_found()
+        return outcome.persona
+
+    async def update_draft(
+        self, ctx: WorkspaceContext, persona_id: UUID, data: PersonaUpdate
+    ) -> PersonaRead:
+        """Auto-Save-Pfad (PATCH `.../draft`) — upsertet die Draft-Version.
+
+        Im Gegensatz zu `update` schreibt dieser Pfad in einen bestehenden
+        Draft in-place, ohne neue Version anzulegen. Active bleibt
+        unangetastet. 409 nur fuer den Edge-Case "Review-Pending"
+        (siehe Repository-Doku).
+        """
+        require_role(ctx, WorkspaceRole.editor)
+        outcome = await self._repo.upsert_draft(
+            ctx.workspace_id, ctx.user_id, persona_id, data.name, data.content
+        )
+        if outcome.conflict == "review_pending":
+            raise _review_conflict()
         if outcome.persona is None:
             raise _not_found()
         return outcome.persona

@@ -65,14 +65,17 @@ _SELECT_ACTIVE = """
 
 @dataclass(frozen=True)
 class PersonaUpdateOutcome:
-    """Ergebnis eines `update`-Aufrufs.
+    """Ergebnis eines `update`- oder `upsert_draft`-Aufrufs.
 
-    Bei `conflict='draft_exists'` ist `persona=None`; der Service mappt das auf
-    409. `conflict=None` und `persona=None` heisst "nicht gefunden" (→ 404).
+    `conflict='draft_exists'` markiert den PUT-Pfad bei bereits offenem Draft;
+    `conflict='review_pending'` markiert den PATCH-Pfad gegen eine Review-
+    Version (auto-save darf einen Review-Snapshot nicht ueberschreiben). In
+    beiden Faellen ist `persona=None`. `conflict=None` und `persona=None`
+    heisst "nicht gefunden" (→ 404).
     """
 
     persona: PersonaRead | None
-    conflict: Literal["draft_exists"] | None = None
+    conflict: Literal["draft_exists", "review_pending"] | None = None
 
 
 class PersonaRepository(Protocol):
@@ -102,6 +105,15 @@ class PersonaRepository(Protocol):
     ) -> PersonaRead | None: ...
 
     async def update(
+        self,
+        workspace_id: UUID,
+        owner_id: UUID,
+        persona_id: UUID,
+        name: str | None,
+        content: PersonaVersionContent,
+    ) -> PersonaUpdateOutcome: ...
+
+    async def upsert_draft(
         self,
         workspace_id: UUID,
         owner_id: UUID,
@@ -284,6 +296,108 @@ class PgPersonaRepository:
                     "content": content_json,
                     "current_status": new_status,
                     "has_pending_draft": new_status == VersionStatus.draft,
+                }
+            )
+        )
+
+    async def upsert_draft(
+        self,
+        workspace_id: UUID,
+        owner_id: UUID,
+        persona_id: UUID,
+        name: str | None,
+        content: PersonaVersionContent,
+    ) -> PersonaUpdateOutcome:
+        """Auto-Save-Pfad (PATCH `.../draft`).
+
+        Verhalten:
+        - Existiert ein Draft, wird die Draft-Row in-place ueberschrieben —
+          kein Versions-Increment. Active bleibt unangetastet.
+        - Existiert kein Draft, wird ein neuer Draft v(n+1) angelegt; die
+          `persona.current_version` wandert mit. Active wird *nicht*
+          inaktiviert (das macht erst die Publish-Transition).
+        - Edge-Case `current_status='review'` ohne offenen Draft: 409. Auf
+          einer Review-Version wird kein Auto-Save zugelassen — sonst wuerde
+          der Reviewer-Snapshot beim Tippen verschwinden. Frontend
+          verhindert das eigentlich (Editor disabled), aber der Server haelt
+          den Vertrag.
+        """
+        content_json = content.model_dump(mode="json")
+        async with self._pool.acquire() as conn, conn.transaction():
+            current = await conn.fetchrow(
+                "SELECT p.current_version, pv.status "
+                "FROM persona p "
+                "JOIN persona_version pv "
+                "  ON pv.persona_id = p.id AND pv.version = p.current_version "
+                "WHERE p.id = $1 AND p.workspace_id = $2 FOR UPDATE OF p",
+                persona_id,
+                workspace_id,
+            )
+            if current is None:
+                return PersonaUpdateOutcome(persona=None)
+            draft_version = await conn.fetchval(
+                "SELECT version FROM persona_version WHERE persona_id = $1 AND status = 'draft'",
+                persona_id,
+            )
+            if draft_version is not None:
+                persona = await conn.fetchrow(
+                    "UPDATE persona "
+                    "SET name = COALESCE($1, name), updated_at = now() "
+                    "WHERE id = $2 "
+                    "RETURNING id, workspace_id, owner_id, name, current_version, "
+                    "created_at, updated_at",
+                    name,
+                    persona_id,
+                )
+                await conn.execute(
+                    "UPDATE persona_version SET content = $1, created_by = $2 "
+                    "WHERE persona_id = $3 AND version = $4",
+                    content_json,
+                    owner_id,
+                    persona_id,
+                    draft_version,
+                )
+                return PersonaUpdateOutcome(
+                    persona=PersonaRead.model_validate(
+                        {
+                            **dict(persona),
+                            "content": content_json,
+                            "current_status": VersionStatus.draft,
+                            "has_pending_draft": True,
+                        }
+                    )
+                )
+            if current["status"] == VersionStatus.review.value:
+                return PersonaUpdateOutcome(persona=None, conflict="review_pending")
+            next_version = current["current_version"] + 1
+            persona = await conn.fetchrow(
+                "UPDATE persona "
+                "SET current_version = $1, name = COALESCE($2, name), "
+                "updated_at = now() "
+                "WHERE id = $3 "
+                "RETURNING id, workspace_id, owner_id, name, current_version, "
+                "created_at, updated_at",
+                next_version,
+                name,
+                persona_id,
+            )
+            await conn.execute(
+                "INSERT INTO persona_version "
+                "(persona_id, version, content, status, created_by) "
+                "VALUES ($1, $2, $3, $4, $5)",
+                persona_id,
+                next_version,
+                content_json,
+                VersionStatus.draft.value,
+                owner_id,
+            )
+        return PersonaUpdateOutcome(
+            persona=PersonaRead.model_validate(
+                {
+                    **dict(persona),
+                    "content": content_json,
+                    "current_status": VersionStatus.draft,
+                    "has_pending_draft": True,
                 }
             )
         )

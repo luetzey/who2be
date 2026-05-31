@@ -1,12 +1,9 @@
-import { type BaseSyntheticEvent } from 'react'
 import { type UseFormReturn } from 'react-hook-form'
 
 import type { PlaybookType, ResourceBlock } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
-import { ErrorAlert } from '@/components/data/ErrorAlert'
 import { FormSection } from '@/components/layout/FormSection'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
@@ -18,8 +15,6 @@ import { PLAYBOOK_TYPES, type PlaybookEditorValues } from '../hooks/usePlaybookF
 
 interface PlaybookEditorFormProps {
   form: UseFormReturn<PlaybookEditorValues>
-  onSubmit: (event?: BaseSyntheticEvent) => Promise<void>
-  saveError: string | null
   // Render-Identitaet fuer die BlockNote-Insel. Wechselt der Key, wird der
   // ProseMirror-State remountet — sonst bleibt der Editor auf dem alten
   // `initialContent` haengen (useCreateBlockNote initialisiert nur einmal).
@@ -71,12 +66,11 @@ const TYPE_OPTIONS: readonly TypeOption[] = [
 
 export function PlaybookEditorForm({
   form,
-  onSubmit,
-  saveError,
   formKey,
   initialBodyBlocks,
 }: PlaybookEditorFormProps) {
-  // Viewer dürfen nur lesen (ADR-0023) — Save bleibt gesperrt.
+  // Viewer dürfen nur lesen (ADR-0023) — Auto-Save deaktiviert sich auf
+  // Detail-Page-Ebene.
   const isViewer = useCurrentWorkspaceRole() === 'viewer'
   const api = useApi()
   const currentType = form.watch('type')
@@ -84,12 +78,13 @@ export function PlaybookEditorForm({
     TYPE_OPTIONS.find((option) => option.value === currentType)?.hint ?? null
 
   return (
-    <>
-      {saveError !== null ? <ErrorAlert message={saveError} /> : null}
-      <Card>
-        <CardContent className="pt-6">
-          <Form {...form}>
-            <form onSubmit={onSubmit} className="flex flex-col gap-6">
+    <Card>
+      <CardContent className="pt-6">
+        <Form {...form}>
+          <form
+            className="flex flex-col gap-6"
+            onSubmit={(event) => event.preventDefault()}
+          >
               <FormSection
                 title="Identität"
                 description="Wie das Playbook heißt, welcher Typ es ist und worum es geht."
@@ -243,20 +238,9 @@ export function PlaybookEditorForm({
                 />
               </FormSection>
 
-              <div className="flex justify-end">
-                <Button
-                  type="submit"
-                  variant="brand"
-                  disabled={form.formState.isSubmitting || isViewer}
-                  title={isViewer ? 'Viewer können Inhalte nur ansehen' : undefined}
-                >
-                  Neue Version speichern
-                </Button>
-              </div>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
-    </>
+          </form>
+        </Form>
+      </CardContent>
+    </Card>
   )
 }

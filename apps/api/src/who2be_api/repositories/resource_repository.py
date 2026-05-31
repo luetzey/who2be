@@ -48,10 +48,10 @@ _SELECT_ACTIVE = """
 
 @dataclass(frozen=True)
 class ResourceUpdateOutcome:
-    """Ergebnis eines `update`-Aufrufs (analog `PlaybookUpdateOutcome`)."""
+    """Ergebnis eines `update`- oder `upsert_draft`-Aufrufs (analog Persona)."""
 
     resource: ResourceRead | None
-    conflict: Literal["draft_exists"] | None = None
+    conflict: Literal["draft_exists", "review_pending"] | None = None
 
 
 class ResourceRepository(Protocol):
@@ -81,6 +81,15 @@ class ResourceRepository(Protocol):
     ) -> ResourceRead | None: ...
 
     async def update(
+        self,
+        workspace_id: UUID,
+        owner_id: UUID,
+        resource_id: UUID,
+        name: str | None,
+        content: ResourceContent,
+    ) -> ResourceUpdateOutcome: ...
+
+    async def upsert_draft(
         self,
         workspace_id: UUID,
         owner_id: UUID,
@@ -206,8 +215,7 @@ class PgResourceRepository:
             if current is None:
                 return ResourceUpdateOutcome(resource=None)
             existing_draft = await conn.fetchval(
-                "SELECT 1 FROM resource_version "
-                "WHERE resource_id = $1 AND status = 'draft'",
+                "SELECT 1 FROM resource_version WHERE resource_id = $1 AND status = 'draft'",
                 resource_id,
             )
             if existing_draft is not None:
@@ -245,6 +253,99 @@ class PgResourceRepository:
                     "content": content_json,
                     "current_status": new_status,
                     "has_pending_draft": new_status == VersionStatus.draft,
+                }
+            )
+        )
+
+    async def upsert_draft(
+        self,
+        workspace_id: UUID,
+        owner_id: UUID,
+        resource_id: UUID,
+        name: str | None,
+        content: ResourceContent,
+    ) -> ResourceUpdateOutcome:
+        """Auto-Save-Pfad fuer Resource (PATCH `.../draft`).
+
+        Semantik wie `PgPersonaRepository.upsert_draft` — bestehender Draft
+        wird in-place ueberschrieben, sonst entsteht eine neue Draft-Version.
+        """
+        content_json = content.model_dump(mode="json")
+        async with self._pool.acquire() as conn, conn.transaction():
+            current = await conn.fetchrow(
+                "SELECT r.current_version, rv.status "
+                "FROM resource r "
+                "JOIN resource_version rv "
+                "  ON rv.resource_id = r.id AND rv.version = r.current_version "
+                "WHERE r.id = $1 AND r.workspace_id = $2 FOR UPDATE OF r",
+                resource_id,
+                workspace_id,
+            )
+            if current is None:
+                return ResourceUpdateOutcome(resource=None)
+            draft_version = await conn.fetchval(
+                "SELECT version FROM resource_version WHERE resource_id = $1 AND status = 'draft'",
+                resource_id,
+            )
+            if draft_version is not None:
+                resource = await conn.fetchrow(
+                    "UPDATE resource "
+                    "SET name = COALESCE($1, name), updated_at = now() "
+                    "WHERE id = $2 "
+                    "RETURNING id, workspace_id, owner_id, name, current_version, "
+                    "created_at, updated_at",
+                    name,
+                    resource_id,
+                )
+                await conn.execute(
+                    "UPDATE resource_version SET content = $1, created_by = $2 "
+                    "WHERE resource_id = $3 AND version = $4",
+                    content_json,
+                    owner_id,
+                    resource_id,
+                    draft_version,
+                )
+                return ResourceUpdateOutcome(
+                    resource=ResourceRead.model_validate(
+                        {
+                            **dict(resource),
+                            "content": content_json,
+                            "current_status": VersionStatus.draft,
+                            "has_pending_draft": True,
+                        }
+                    )
+                )
+            if current["status"] == VersionStatus.review.value:
+                return ResourceUpdateOutcome(resource=None, conflict="review_pending")
+            next_version = current["current_version"] + 1
+            resource = await conn.fetchrow(
+                "UPDATE resource "
+                "SET current_version = $1, name = COALESCE($2, name), "
+                "updated_at = now() "
+                "WHERE id = $3 "
+                "RETURNING id, workspace_id, owner_id, name, current_version, "
+                "created_at, updated_at",
+                next_version,
+                name,
+                resource_id,
+            )
+            await conn.execute(
+                "INSERT INTO resource_version "
+                "(resource_id, version, content, status, created_by) "
+                "VALUES ($1, $2, $3, $4, $5)",
+                resource_id,
+                next_version,
+                content_json,
+                VersionStatus.draft.value,
+                owner_id,
+            )
+        return ResourceUpdateOutcome(
+            resource=ResourceRead.model_validate(
+                {
+                    **dict(resource),
+                    "content": content_json,
+                    "current_status": VersionStatus.draft,
+                    "has_pending_draft": True,
                 }
             )
         )

@@ -36,9 +36,7 @@ def get_persona_service(
 def get_version_status_service(
     pool: Annotated[asyncpg.Pool, Depends(get_pool)],
 ) -> VersionStatusService:
-    return VersionStatusService(
-        pool, StatusHistoryService(PgStatusHistoryRepository())
-    )
+    return VersionStatusService(pool, StatusHistoryService(PgStatusHistoryRepository()))
 
 
 Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]
@@ -89,6 +87,19 @@ async def update_persona(
     service: Service,
 ) -> PersonaRead:
     return await service.update(ctx, persona_id, data)
+
+
+@router.patch("/{persona_id}/draft")
+@limiter.limit(write_limit)
+async def update_persona_draft(
+    request: Request,
+    persona_id: UUID,
+    data: PersonaUpdate,
+    ctx: Ctx,
+    service: Service,
+) -> PersonaRead:
+    """Auto-Save-Pfad — upsertet die Draft-Version ohne Versions-Increment."""
+    return await service.update_draft(ctx, persona_id, data)
 
 
 @router.get("/{persona_id}/versions")

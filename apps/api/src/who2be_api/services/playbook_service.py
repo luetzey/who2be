@@ -38,6 +38,16 @@ def _draft_conflict() -> HTTPException:
     )
 
 
+def _review_conflict() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=(
+            "Diese Version steht in der Review — Auto-Save ist deaktiviert. "
+            "Lehne die Review erst ab, bevor du weiter editierst."
+        ),
+    )
+
+
 class PlaybookService:
     """Legt Playbooks an, liest, listet (mit Filtern), aktualisiert sie."""
 
@@ -88,6 +98,20 @@ class PlaybookService:
         )
         if outcome.conflict == "draft_exists":
             raise _draft_conflict()
+        if outcome.playbook is None:
+            raise _not_found()
+        return outcome.playbook
+
+    async def update_draft(
+        self, ctx: WorkspaceContext, playbook_id: UUID, data: PlaybookUpdate
+    ) -> PlaybookRead:
+        """Auto-Save-Pfad (PATCH `.../draft`) — upsertet die Draft-Version."""
+        require_role(ctx, WorkspaceRole.editor)
+        outcome = await self._repo.upsert_draft(
+            ctx.workspace_id, ctx.user_id, playbook_id, data.name, data.content
+        )
+        if outcome.conflict == "review_pending":
+            raise _review_conflict()
         if outcome.playbook is None:
             raise _not_found()
         return outcome.playbook
