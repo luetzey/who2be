@@ -33,6 +33,35 @@ Fragen 1–3 sind Analyse (siehe unten „Kontext"), 4–7 sind die hier geplant
   per-mode Anti-Patterns, Skills, Rich-Text-Modi. Genau diese werden hier
   geschlossen.
 
+## ⚠️ Kritische Revision (2026-06-01, nach Code-Verifikation)
+
+Eine tragende Annahme der Erstfassung war falsch. Korrekturen:
+
+1. **Playbook-Body ist heute Plain-`str`** (`playbook.py:49`); der Editor
+   serialisiert via `blocksToPlainText` (`usePlaybookForm.ts:38-46,73`).
+   Inline-Pills überleben einen Save **nicht**. → **Body-Format-Migration
+   (`blocknote`-JSON + `body_format`-Spalte, Muster wie `system_prompt_template`
+   / Migration 0026) ist Pflicht-Fundament**, nicht Fußnote.
+2. **Block-Anker ist Requirement** (Frage 6 = „Resourcen *Blöcke* verlinken").
+   `ResourceResolver` kann heute nur ganze Resourcen (kein `#block_id`,
+   `registry.py:179-233`). → Resolver + Pill-Props + Picker müssen Block-Level
+   können, sonst Regression ggü. `ResourceBlockLinkPicker`.
+3. **„Body treibt" + Set-Replace = Datenverlust** für Bestands-Playbooks
+   (Plain-Body, aber Relationen in Tabellen). → Backfill: Relationen beim
+   Konvertieren als Pills in den Body injizieren, oder Sync additiv/gegated.
+4. **`_render_persona_profile` ist pure/sync, kein DB** (`registry.py:348`).
+   `mode.playbook_id`→Name: **denormalisierter `playbook_name`-Snapshot** im
+   Modus (statt DB-Plumbing).
+5. **`fetch_playbook` rendert den Body heute NICHT** (`server.py:179-214`, roh).
+   Für Pill-Expansion muss der Playbook-Body durch `render_template_body`.
+6. **Zwei Composite-Mechaniken**: `playbook_composition` + `## Ablauf`-Render vs.
+   neue Body-Pill. Rendering-Vertrag nötig (Pill = inline Erwähnung, `## Ablauf`
+   = maßgebliche Sequenz).
+
+**Scope-Schnitt:** Persona-Seite und Playbook-Seite sind unabhängig; die
+Playbook-Seite ist deutlich schwerer. → **Zwei getrennte PRs/Inkremente**
+(siehe revidierte Wellen unten).
+
 ## Architektur-Notizen
 
 ### Persona-Modi (Backend-Vertrag)
@@ -102,47 +131,55 @@ Dialoge auf **read-only Backlink-/Übersicht** zurückstufen (nicht löschen),
 Editier-Pfad konvergiert auf den Body. → Bestätigung einholen, bevor ein
 user-sichtbarer Dialog entfernt/entwertet wird (kein eigenmächtiges Löschen).
 
-## Wellen (datei-disjunkt, nach Plan-Freigabe an Sub-Agents verteilt)
+## Wellen — zwei getrennte Inkremente (PR-A Persona, PR-B Playbook)
 
-### Welle 0 — Fundament (zuerst, blockierend, sequenziell)
-- **0.1 Models** `packages/models/.../persona.py`: `PersonaMode`-Felder
-  (Blocks + `anti_patterns` + `playbook_id`), `PersonaVersionContent.skills`,
-  `SkillRef`, Read-Koerzion-Validator (str→Block). `playbook.py`: ggf.
-  `body_format`-Marker prüfen/ergänzen.
-- **0.2 Migration** `migrations/0029_persona_modes_skills.sql`: nur falls
-  DB-Constraints/Kommentare nötig (jsonb additiv → vermutlich nur
-  Doku-Kommentar + evtl. CHECK). ADR-0009/0024-Notiz ergänzen.
-- **0.3 ADR**: kurzer ADR-Eintrag „Rich-Modi + Mode→Playbook + Body-driven
-  Links" (Notion + `docs/`).
+### PR-A — Persona: Rich-Modi + Mode→Playbook + Anti-Patterns + Skills
+Self-contained, kleineres Risiko, kein Body-Format-Umbau.
 
-### Welle 1 — Backend (nach Welle 0; intern paketiert, da Dateien überlappen)
-- **1.1** `registry.py::_render_persona_profile` — Block-Render für Modi-Felder,
-  Anti-Patterns, Mode-Playbook-Name, Skills-Sektion.
-- **1.2** Playbook-Save-Sync — `playbook_service` + beide Repos
-  (`set_composition`/`set_links` aus Body-Pills ableiten).
-- **1.3** Playbook-Body-Pill-Expansion im Render-/`fetch_playbook`-Pfad
-  (`renderer.py` / MCP `server.py`) — nur falls heute nicht abgedeckt.
-- **1.4** Backend-Tests: `test_persona_service`, `test_placeholder_renderer`,
-  `test_playbook_composition`, `test_playbook_resources` (Alt-String-Koerzion,
-  Mode-Playbook-Render, Body→Tabellen-Sync, Pill-Expansion).
+- **A0 Fundament** `packages/models/.../persona.py`: `identity_add`/
+  `output_style_override` → `list[ResourceBlock]`; neu `anti_patterns:
+  list[ResourceBlock]`, `playbook_id: UUID|None`, `playbook_name: str` (Snapshot,
+  bei Save gesetzt). `PersonaVersionContent.skills: list[SkillRef]` (+ `SkillRef`).
+  **Read-Koerzion** `field_validator(mode="before")`: Alt-`str` → ein
+  Paragraph-Block, verlustfrei lesbar; kein DB-Backfill. Migration `0029` nur
+  Doku-Kommentar (jsonb additiv).
+- **A1 Resolver** `registry.py::_render_persona_profile` (348-415): Modi-Felder
+  via `_block_plain_text` (statt `str(...)`, Zeilen 398-411); `### Anti-Patterns`
+  je Modus; `**Zugehöriges Playbook:** {playbook_name}` je Modus; `## Skills`.
+- **A2 Frontend** `features/personas/`: `PersonaModesEditor` — BlockNote-Insel je
+  `identity_add`/`output_style_override`/`anti_patterns`, Per-Mode Playbook-Picker
+  (setzt id+name), Skills-Input. `usePersonaForm` + `api/types.ts`.
+- **A3 Tests + Doku**: Resolver/Service (Alt-str-Koerzion, Block-Render,
+  Mode-Playbook, Skills), Vitest Modi-Editor. `docs/agent-axes.md`.
 
-### Welle 2 — Frontend (nach Welle 0/1-Contract; 2.1 ∥ 2.2 disjunkt)
-- **2.1 Personas** (`features/personas/`): `PersonaModesEditor` — BlockNote-Insel
-  je `identity_add`/`output_style_override`, Anti-Patterns-Insel, Per-Mode
-  Playbook-Picker, Skills-Input (TagInput-artig + Note). `usePersonaForm`/Types
-  (`api/types.ts`) anpassen (Blocks statt str, neue Felder).
-- **2.2 Playbooks** (`features/playbooks/`): `PlaybookBodyEditor` mit
-  Custom-Schema (resource + playbook Pills), Slash-Items (Resource/Playbook) +
-  Picker, Save-Wiring (Body → bestehende Mutations-/Sync-Calls). Dialoge
-  `PlaybookComposesPicker`/`ResourceBlockLinkPicker` auf read-only zurückstufen
-  (nach Bestätigung Mikro-Punkt).
-- **2.3 Frontend-Tests**: Vitest für Modi-Editor + Playbook-Slash/Pill-Insert.
+### PR-B — Playbook: Slash-Links + Body-Format + Block-Anker + Sync
+Schwerer; setzt das Body-Format-Fundament voraus.
 
-### Welle 3 — Verifikation & Doku
-- Beide Stacks grün: `uv run pytest -q`, `uv run ruff check .`, `uv run mypy .`;
-  `npm run lint`, `npx tsc --noEmit`, `npm test`, `npm run build`.
-- `docs/agent-axes.md` + `docs/CLAUDE-PROFILE.md` updaten.
-- Notion-Change-Log in Projekt-`## Notes` + Pointer auf diese Datei.
+- **B0 Body-Format-Fundament** (blockierend): `PlaybookContent` +
+  `body_format ∈ {plain,blocknote}` (Modell + Migration analog
+  `0026_system_prompt_template_body_format.sql`); `usePlaybookForm` speichert
+  BlockNote-JSON statt `blocksToPlainText`.
+- **B1 Block-Anker im Resolver** `ResourceResolver` (registry.py:179-233):
+  optionalen `block_id`/Block-Slice-Support (Pill-Prop trägt block_id).
+- **B2 Body-Render-Verdrahtung**: `fetch_playbook` (MCP `server.py:179-214`)
+  leitet `body_format='blocknote'`-Bodies durch `render_template_body`;
+  Composite-Pill-Rendering-Vertrag (Pill inline, `## Ablauf` maßgeblich).
+- **B3 Save-Sync (Body treibt)** `playbook_service` + Repos: aus Body-Pills
+  `set_composition` (playbook-Pills, Dok-Reihenfolge) + `set_links`
+  (resource-Pills inkl. block_id/scope) ableiten. **Backfill**: bestehende
+  Tabellen-Relationen bei Konvertierung als Body-Pills injizieren — sonst
+  Datenverlust.
+- **B4 Frontend** `features/playbooks/`: `PlaybookBodyEditor` (Custom-Schema
+  resource+playbook Pills, Slash-Items + Picker mit Block-Auswahl). Dialoge
+  `PlaybookComposesPicker`/`ResourceBlockLinkPicker` → read-only Übersicht
+  (nach Bestätigung Mikro-Punkt; nicht löschen).
+- **B5 Tests**: `test_placeholder_renderer` (Block-Anker), `test_playbook_*`
+  (Body→Tabellen-Sync, Backfill-Roundtrip), `compose-smoke` grün; Vitest Pills.
+
+### Abschluss je PR
+Beide Stacks grün (`uv run pytest -q`, `ruff`, `mypy`; `npm run lint`,
+`tsc --noEmit`, `npm test`, `npm run build`), `docs/` + Notion-Change-Log +
+Pointer, Conventional-Commit + Push + Draft-PR.
 - Commit (Conventional Commits) + Push + Draft-PR.
 
 ## Completion-Condition (`/goal`-Stil, messbar)
