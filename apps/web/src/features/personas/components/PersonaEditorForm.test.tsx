@@ -109,12 +109,18 @@ describe('PersonaEditorForm', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('rendert Hilfe-Tooltips statt Inline-<details>', () => {
+  it('rendert Hilfe-Tooltips statt Inline-<details> (Modi-Disclosure ausgenommen)', () => {
     const { container } = render(<Harness />)
-    expect(container.querySelector('details')).toBeNull()
-    expect(container.querySelector('summary')).toBeNull()
-    // Vier Section-Hilfen: Identitaet, Profil, Tags, Modi.
-    expect(screen.getAllByRole('button', { name: 'Hilfe einblenden' }).length).toBe(4)
+    // Genau ein <details> — die Modi-Disclosure (PersonaModesDisclosure).
+    // Hilfen laufen weiter ueber InfoTooltip-Buttons, nicht ueber natives
+    // <details>. Drei verbleibende Sektionen (Identitaet, Profil, Tags) plus
+    // die Section-Hilfe innerhalb der Modi-Disclosure ergeben vier Tooltips.
+    const details = container.querySelectorAll('details')
+    expect(details.length).toBe(1)
+    expect(details[0].id).toBe('persona-modes-section')
+    // Hilfe-Buttons: Identitaet, Profil, Tags (Modi-Section hat keinen Help-
+    // Slot mehr — die Erklaerung steht im Summary-Subtext).
+    expect(screen.getAllByRole('button', { name: 'Hilfe einblenden' }).length).toBe(3)
   })
 
   it('rendert die BlockNote-Insel im Profil-Slot (eine Insel)', () => {
