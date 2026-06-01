@@ -153,7 +153,16 @@ Gates: pytest 338 passed / ruff / mypy 150; web tsc / lint(0 err) / 268 tests / 
 - **A3 Tests + Doku**: Resolver/Service (Alt-str-Koerzion, Block-Render,
   Mode-Playbook, Skills), Vitest Modi-Editor. `docs/agent-axes.md`.
 
-### PR-B — Playbook: Slash-Links + Body-Format + Block-Anker + Sync
+### PR-B — Playbook: Slash-Links + Body-Format + Block-Anker + Sync ✅ ERLEDIGT (2026-06-01)
+Commits: B0/B2 `…`, B3/B5 `137a6da`, B1/B4 `2f5ce83` (auf gemergtem main).
+Entscheidungen umgesetzt: body_format im Content-jsonb (kein DDL); Block-Anker
+via composite target_id `<uuid>#<block_id>` + block_section_text; Sync nur bei
+blocknote über Composition-/ResourceLink-Services (Zyklus→409, Heading→422);
+MCP-Render über neuen API-Endpoint `…/playbooks/{id}/rendered` (MCP hat kein DB);
+Migrate-UX hebt Alt-Relationen als Pills (set-replace-Schutz).
+Regressionsfix: ResourcePicker-Effect-Loop (fehlender `!open`-Guard) behoben.
+Gates: pytest 338 / ruff / mypy; web tsc / lint(0 err) / 279 tests / build.
+
 Schwerer; setzt das Body-Format-Fundament voraus.
 
 - **B0 Body-Format-Fundament** (blockierend): `PlaybookContent` +
