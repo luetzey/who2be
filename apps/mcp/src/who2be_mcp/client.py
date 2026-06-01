@@ -137,3 +137,18 @@ class ApiClient:
         """Laedt Agent + Persona + expandierten System-Prompt vom API-Endpoint."""
         data = await self._get(f"{self._workspace_prefix}/agents/{agent_id}/rendered")
         return AgentWithRenderedPrompt.model_validate(data)
+
+    async def get_playbook_rendered(self, playbook_id: UUID) -> str:
+        """Laedt den serverseitig expandierten Playbook-Body (B5).
+
+        Der API-Endpoint `GET .../playbooks/{id}/rendered` jagt den Body durch den
+        Placeholder-Renderer (Inline-Pills → Plain-Text). Bei `body_format='plain'`
+        kommt der rohe Body zurueck. Der MCP-Prozess hat keinen DB-Zugriff — das
+        Rendering MUSS daher ueber diesen Endpoint laufen.
+
+        Gibt nur den `body_rendered`-String zurueck; die `unresolved`-Liste ist fuer
+        den Agent-Konsum nicht relevant (best-effort Expansion).
+        """
+        data = await self._get(f"{self._workspace_prefix}/playbooks/{playbook_id}/rendered")
+        body = data.get("body_rendered") if isinstance(data, dict) else None
+        return body if isinstance(body, str) else ""

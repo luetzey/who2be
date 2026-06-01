@@ -79,6 +79,12 @@ class PlaybookWithResources(BaseModel):
     linked_blocks: list[ResourceLinkRead]
     linked_resources: list[ResourceRead]
     composed_playbooks: list[PlaybookRead] = []  # geordnete, aktive Kinder
+    # B5: serverseitig expandierter Body. Bei `body_format='blocknote'` werden die
+    # Inline-Pills (playbook/resource/…) zu Plain-Text aufgeloest; bei `'plain'`
+    # ist es der rohe `playbook.content.body`. Der Agent nutzt diesen Text statt
+    # `playbook.content.body`, da letzterer fuer Blocknote nur stringifiziertes JSON
+    # ist. Additives Feld → bricht den bestehenden ADR-0021-Vertrag nicht.
+    body_rendered: str = ""
 
 
 async def _resolve_workspace_id(settings: Settings) -> UUID:
@@ -190,6 +196,11 @@ async def fetch_playbook(playbook_id: str) -> PlaybookWithResources:
     `composed_playbooks` die geordneten aktiven Sub-Playbooks (nur eine Ebene,
     ADR-0024). Tiefere Ebenen per `fetch_playbook(child_id)` nachladen. Ein
     Composite-Agent folgt der Sequenz in `composed_playbooks` der Reihe nach.
+
+    `body_rendered` traegt den serverseitig expandierten Playbook-Body (B5): bei
+    `body_format='blocknote'` werden Inline-Pills zu Plain-Text aufgeloest, bei
+    `'plain'` ist es der rohe Body. Nutze `body_rendered` statt
+    `playbook.content.body` — letzterer ist fuer Blocknote nur stringifiziertes JSON.
     """
     try:
         parsed = UUID(playbook_id)
@@ -206,11 +217,13 @@ async def fetch_playbook(playbook_id: str) -> PlaybookWithResources:
             resource_scope_ids.append(link.resource_id)
     resources = [await client.get_resource(rid) for rid in resource_scope_ids]
     composed = await client.get_playbook_composes(parsed)
+    body_rendered = await client.get_playbook_rendered(parsed)
     return PlaybookWithResources(
         playbook=playbook,
         linked_blocks=linked,
         linked_resources=resources,
         composed_playbooks=composed,
+        body_rendered=body_rendered,
     )
 
 
