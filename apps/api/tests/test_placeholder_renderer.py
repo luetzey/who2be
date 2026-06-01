@@ -285,6 +285,98 @@ class TestResourceResolver:
         assert result.unresolved_key == "resource:keine-uuid"
         db.fetchrow.assert_not_called()
 
+    # --- Block-Anker (B2) ---
+
+    def _heading(self, block_id: str, text: str, level: int = 1) -> dict[str, Any]:
+        """Baut einen BlockNote-Heading-Block mit `props.level`."""
+        return {
+            "id": block_id,
+            "type": "heading",
+            "props": {"level": level},
+            "content": [{"type": "text", "text": text, "styles": {}}],
+            "children": [],
+        }
+
+    def _section_blocks(self) -> list[dict[str, Any]]:
+        """Zwei Sections auf demselben Heading-Level (h1) mit je einem Absatz."""
+        return [
+            self._heading("h1", "Einleitung", level=1),
+            _blk("p1", "Intro-Absatz."),
+            self._heading("h2", "Details", level=1),
+            _blk("p2", "Detail-Absatz."),
+        ]
+
+    def test_resource_pill_without_block_renders_whole_resource(self) -> None:
+        """Pure UUID (kein '#') → ganze Resource, beide Sections im Output."""
+        resolver = ResourceResolver()
+        ctx = _ctx()
+        blocks = self._section_blocks()
+        row = MagicMock()
+        row.__getitem__ = MagicMock(
+            side_effect=lambda k: {
+                "name": "Handbuch",
+                "content": {"blocks": blocks},
+            }[k]
+        )
+        db = _make_db(row)
+
+        result = _async_run(resolver.resolve(str(uuid4()), ctx, db))
+
+        assert "#### Handbuch" in result.text
+        assert "Einleitung" in result.text
+        assert "Intro-Absatz." in result.text
+        assert "Details" in result.text
+        assert "Detail-Absatz." in result.text
+        assert result.unresolved_key is None
+
+    def test_resource_pill_with_block_anchor_renders_only_section(self) -> None:
+        """`<uuid>#<heading_block_id>` → nur die Section ab dem Anker-Heading."""
+        resolver = ResourceResolver()
+        ctx = _ctx()
+        blocks = self._section_blocks()
+        rid = uuid4()
+        target = f"{rid}#h1"
+        row = MagicMock()
+        row.__getitem__ = MagicMock(
+            side_effect=lambda k: {
+                "name": "Handbuch",
+                "content": {"blocks": blocks},
+            }[k]
+        )
+        db = _make_db(row)
+
+        result = _async_run(resolver.resolve(target, ctx, db))
+
+        assert "#### Handbuch" in result.text
+        # Erste Section (Anker h1) ist drin.
+        assert "Einleitung" in result.text
+        assert "Intro-Absatz." in result.text
+        # Zweite Section (h2, gleiches Level) ist abgeschnitten.
+        assert "Details" not in result.text
+        assert "Detail-Absatz." not in result.text
+        assert result.unresolved_key is None
+
+    def test_resource_pill_with_unknown_block_anchor_is_miss(self) -> None:
+        """Nicht existierender block_id → leerer Body + Miss-Key (mit Anker-Suffix)."""
+        resolver = ResourceResolver()
+        ctx = _ctx()
+        blocks = self._section_blocks()
+        rid = uuid4()
+        target = f"{rid}#does-not-exist"
+        row = MagicMock()
+        row.__getitem__ = MagicMock(
+            side_effect=lambda k: {
+                "name": "Handbuch",
+                "content": {"blocks": blocks},
+            }[k]
+        )
+        db = _make_db(row)
+
+        result = _async_run(resolver.resolve(target, ctx, db))
+
+        assert result.text == ""
+        assert result.unresolved_key == f"resource:{target}"
+
 
 # ---------------------------------------------------------------------------
 # PersonaFieldResolver

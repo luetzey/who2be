@@ -25,6 +25,8 @@ from uuid import UUID
 import asyncpg
 from pydantic import BaseModel
 
+from who2be_api.repositories.playbook_resource_link_repository import block_section_text
+
 logger = logging.getLogger(__name__)
 
 # Deutsche Monatsnamen (kein babel im Repo — simple Map, einfach zu warten).
@@ -177,10 +179,20 @@ class PlaybookResolver:
 
 
 class ResourceResolver:
-    """Expandiert `target_id` (UUID) zum Body der Active-Version der Resource.
+    """Expandiert `target_id` zur Active-Version einer Resource.
 
     Filtert auf `status='active'` — analog zu MCP-Reads im Repo. Bei nicht
     gefunden: lokalisierter Fehler-String + Miss-Key.
+
+    **Block-Anker (B2):** `target_id` kann eine reine Resource-UUID sein oder
+    ein Section-Anker der Form `"<resource_uuid>#<block_id>"`:
+    - ohne `#` (oder leerer Block-Teil) → ganze Resource (Bestandsverhalten).
+    - mit `#<block_id>` → nur die Section ab dem Anker-Heading (via
+      `block_section_text`). Existiert der Anker-Block in der Active-Version
+      nicht → sauberer Miss (leerer Body + Miss-Key).
+
+    Der Miss-Key bleibt in allen Faellen `f"resource:{target_id}"` (inkl.
+    Anker-Suffix), damit der unresolved-Tracker das Pill eindeutig wiederfindet.
     """
 
     async def resolve(
@@ -190,10 +202,11 @@ class ResourceResolver:
         db: asyncpg.Connection,
     ) -> ResolveResult:
         miss_key = f"resource:{target_id}"
+        resource_part, _, block_id = target_id.partition("#")
         try:
-            resource_id = UUID(target_id)
+            resource_id = UUID(resource_part)
         except ValueError:
-            logger.warning("ResourceResolver: ungueltige UUID '%s'", target_id)
+            logger.warning("ResourceResolver: ungueltige UUID '%s'", resource_part)
             return ResolveResult(text="<Resource nicht verfuegbar>", unresolved_key=miss_key)
 
         row = await db.fetchrow(
@@ -221,13 +234,29 @@ class ResourceResolver:
         # BlockNote-JSON: content.blocks Liste von Block-Dicts -> Plaintext
         raw_blocks = content.get("blocks", [])
         blocks: list[dict[str, object]] = list(raw_blocks) if isinstance(raw_blocks, list) else []
+
+        if block_id:
+            # Section-Anker: nur die Section ab dem Anker-Heading rendern.
+            section_block_ids, body_text = block_section_text(blocks, block_id)
+            if not section_block_ids:
+                logger.info(
+                    "ResourceResolver: Anker-Block '%s' in Resource %s nicht gefunden",
+                    block_id,
+                    resource_id,
+                )
+                return ResolveResult(text="", unresolved_key=miss_key)
+            lines: list[str] = [f"#### {name}"]
+            if body_text:
+                lines.append(body_text)
+            return ResolveResult(text="\n".join(lines))
+
         parts: list[str] = []
         for block in blocks:
             text = _block_plain_text(block)
             if text:
                 parts.append(text)
         body_text = "\n\n".join(parts).strip()
-        lines: list[str] = [f"#### {name}"]
+        lines = [f"#### {name}"]
         if body_text:
             lines.append(body_text)
         return ResolveResult(text="\n".join(lines))
