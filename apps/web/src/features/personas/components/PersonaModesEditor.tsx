@@ -86,7 +86,7 @@ export function PersonaModesEditor({ control, disabled = false }: PersonaModesEd
           key={field.id}
           className={cn(
             'flex flex-col gap-3 rounded-lg border p-4',
-            field.is_default && 'border-brand/40 bg-brand/5',
+            field.is_default && 'border-border bg-muted/40',
           )}
         >
           <div className="flex items-center justify-between gap-2">

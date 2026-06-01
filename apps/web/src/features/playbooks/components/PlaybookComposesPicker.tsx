@@ -194,7 +194,7 @@ export function PlaybookComposesPicker({
                   />
                   <Label
                     htmlFor={checkId}
-                    className="flex cursor-pointer flex-col gap-0.5 font-normal"
+                    className="flex cursor-pointer flex-col gap-1 font-normal"
                   >
                     <span className="text-sm font-medium">{pb.name}</span>
                     {pb.content.description ? (
