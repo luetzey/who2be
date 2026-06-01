@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { useApi } from '@/api/useApi'
 import type { PlaceholderPreview } from '@/api/types'
+import { ErrorAlert, LoadingState } from '@/components/data'
 import {
   Dialog,
   DialogContent,
@@ -86,17 +87,13 @@ export function PlaceholderPreviewDialog({ containerRef }: PlaceholderPreviewDia
             So wird dieser Platzhalter im fertigen Prompt aufgeloest.
           </DialogDescription>
         </DialogHeader>
-        <div className="max-h-96 overflow-y-auto rounded-md border bg-muted/40 p-3">
-          {state.status === 'loading' && (
-            <p className="text-sm text-muted-foreground">Lade Vorschau…</p>
-          )}
-          {state.status === 'error' && (
-            <p className="text-sm text-destructive" data-testid="placeholder-preview-error">
-              {state.message}
-            </p>
-          )}
-          {state.status === 'ready' &&
-            (state.preview.unresolved ? (
+        {state.status === 'loading' && <LoadingState rows={2} />}
+        {state.status === 'error' && (
+          <ErrorAlert message={state.message} title="Vorschau fehlgeschlagen" />
+        )}
+        {state.status === 'ready' && (
+          <div className="max-h-96 overflow-y-auto rounded-md border bg-muted/40 p-3">
+            {state.preview.unresolved ? (
               <p
                 className="text-sm text-muted-foreground"
                 data-testid="placeholder-preview-miss"
@@ -110,8 +107,9 @@ export function PlaceholderPreviewDialog({ containerRef }: PlaceholderPreviewDia
               >
                 {state.preview.text}
               </pre>
-            ))}
-        </div>
+            )}
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   )

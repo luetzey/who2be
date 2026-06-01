@@ -101,7 +101,10 @@ describe('PlaceholderPreviewDialog', () => {
     fireEvent.click(screen.getByTestId('fire'))
 
     await waitFor(() => {
-      expect(screen.getByTestId('placeholder-preview-error')).toBeInTheDocument()
+      // ErrorAlert rendert role="alert" mit der Fehlermeldung.
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Vorschau konnte nicht geladen werden.',
+      )
     })
   })
 })
