@@ -1,18 +1,122 @@
+import { ChevronRight } from 'lucide-react'
 import { type FormEvent, type ReactNode } from 'react'
-import { type UseFormReturn } from 'react-hook-form'
+import { useFormContext, useWatch, type Control, type UseFormReturn } from 'react-hook-form'
 
 import type { ResourceBlock } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { FormSection } from '@/components/layout/FormSection'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { TagInput } from '@/components/ui/tag-input'
+import { cn } from '@/lib/utils'
 import { ResourceEditor } from '@/features/resources/components/ResourceEditor'
 
 import type { PersonaEditorValues } from '../hooks/usePersonaForm'
 import { PersonaModesEditor } from './PersonaModesEditor'
+
+const MODES_SECTION_ID = 'persona-modes-section'
+
+/**
+ * Read-Only-Info-Pill am Kopf des Profil-Editors. Zeigt Anzahl + Default-Modus
+ * und scrollt beim Klick zum Modi-Bereich (Disclosure unten). So sieht der
+ * Editor beim Schreiben des Profil-Body, dass Modi existieren, ohne sie inline
+ * editieren zu muessen (Slash-Pill wuerde Datenmodell-Bruch erzeugen — Modi
+ * sind strukturierte Felder, keine Body-Blocks).
+ */
+function PersonaModesInfoPill() {
+  const { control } = useFormContext<PersonaEditorValues>()
+  const modes = useWatch({ control, name: 'modes' })
+  if (modes === undefined || modes.length === 0) {
+    return null
+  }
+  const defaultMode = modes.find((m) => m.is_default)
+  const defaultLabel = defaultMode?.name?.trim() !== '' ? defaultMode?.name : 'kein Default'
+  const handleJump = () => {
+    const el = document.getElementById(MODES_SECTION_ID)
+    if (el === null) return
+    if (el instanceof HTMLDetailsElement) {
+      el.open = true
+    }
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      onClick={handleJump}
+      className={cn(
+        'h-auto self-start rounded-full border-brand/30 bg-brand/5 px-3 py-1',
+        'text-xs font-normal text-foreground hover:bg-brand/10',
+      )}
+      data-testid="persona-modes-info-pill"
+      aria-label={`${modes.length} Modi definiert, Default ${defaultLabel}. Zu Modi springen.`}
+    >
+      <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
+        {modes.length}
+      </Badge>
+      <span>
+        Modi · Default: <strong className="font-semibold">{defaultLabel}</strong>
+      </span>
+    </Button>
+  )
+}
+
+interface PersonaModesDisclosureProps {
+  control: Control<PersonaEditorValues>
+  disabled: boolean
+}
+
+/**
+ * Disclosure-Wrapper um den `PersonaModesEditor`. Steht unmittelbar unter dem
+ * Profil-Editor (statt am Form-Ende), damit der Schreib-Ort des Profils und
+ * der situative Verhaltens-Layer (Modi) raeumlich zusammenliegen. Default-
+ * offen, sobald mindestens ein Modus existiert — sonst eingeklappt, um den
+ * Editor-Body nicht visuell zu verlaengern, wenn das Feature ungenutzt ist.
+ *
+ * Native `<details>`/`<summary>` ist a11y-konform und braucht keine eigene
+ * Open/Close-State-Maschine (das macht der Browser).
+ */
+function PersonaModesDisclosure({ control, disabled }: PersonaModesDisclosureProps) {
+  const modes = useWatch({ control, name: 'modes' })
+  const hasModes = modes !== undefined && modes.length > 0
+  return (
+    <details
+      id={MODES_SECTION_ID}
+      className="group rounded-lg border bg-card"
+      open={hasModes}
+    >
+      <summary
+        className={cn(
+          'flex cursor-pointer list-none items-center justify-between gap-2 rounded-lg px-4 py-3',
+          'text-sm font-medium hover:bg-muted/40',
+          'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+          '[&::-webkit-details-marker]:hidden',
+        )}
+      >
+        <span className="flex items-center gap-2">
+          <ChevronRight className="size-4 transition-transform group-open:rotate-90" />
+          <span>Modi (optional)</span>
+          {hasModes ? (
+            <Badge variant="secondary" className="ml-1">
+              {modes.length}
+            </Badge>
+          ) : null}
+        </span>
+        <span className="text-xs font-normal text-muted-foreground">
+          Verhalten je Kontext — z. B. Coaching vs. Analyse
+        </span>
+      </summary>
+      <div className="border-t px-4 py-4">
+        <PersonaModesEditor control={control} disabled={disabled} />
+      </div>
+    </details>
+  )
+}
 
 interface PersonaEditorFormProps {
   form: UseFormReturn<PersonaEditorValues>
@@ -149,6 +253,7 @@ export function PersonaEditorForm({
                 </div>
               }
             >
+              <PersonaModesInfoPill />
               <FormField
                 control={form.control}
                 name="profileBlocks"
@@ -168,6 +273,8 @@ export function PersonaEditorForm({
                 )}
               />
             </FormSection>
+
+            <PersonaModesDisclosure control={form.control} disabled={isViewer} />
 
             <FormSection
               title="Tags"
@@ -200,26 +307,6 @@ export function PersonaEditorForm({
                   </FormItem>
                 )}
               />
-            </FormSection>
-            <FormSection
-              title="Modi (optional)"
-              description="Multi-Modus-Personas können je nach Kontext unterschiedlich agieren."
-              help={
-                <div className="space-y-2">
-                  <p>
-                    Modi ermöglichen es einer Persona, den Stil je nach Trigger-Schlüsselwort
-                    zu wechseln. Nur ein Modus kann der Default sein — er greift, wenn kein
-                    anderer Trigger passt.
-                  </p>
-                  <p className="text-xs font-medium text-foreground">Beispiel</p>
-                  <p className="text-xs">
-                    Modus „Coaching": Trigger „coaching, feedback" → ruhig, empathisch.
-                    Modus „Analyse" (Default): sachlich, datenorientiert.
-                  </p>
-                </div>
-              }
-            >
-              <PersonaModesEditor control={form.control} disabled={isViewer} />
             </FormSection>
 
             {actions !== undefined ? actions : null}
