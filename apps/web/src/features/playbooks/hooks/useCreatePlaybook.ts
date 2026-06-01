@@ -22,6 +22,7 @@ const createSchema = z.object({
   bodyBlocks: z.array(z.custom<ResourceBlock>()),
   tags: z.array(z.string()),
   triggers: z.array(z.string()),
+  body_format: z.enum(['plain', 'blocknote']),
 })
 
 export type PlaybookCreateValues = PlaybookEditorValues
@@ -55,20 +56,26 @@ export function useCreatePlaybook(onCreated: (id: string) => void): UseCreatePla
       bodyBlocks: [],
       tags: [],
       triggers: [],
+      body_format: 'plain',
     },
   })
 
   const onSubmit = form.handleSubmit(async (values) => {
     setSaveError(null)
     try {
+      const body =
+        values.body_format === 'blocknote'
+          ? JSON.stringify(values.bodyBlocks)
+          : blocksToPlainText(values.bodyBlocks)
       const created = await api.createPlaybook({
         name: values.name,
         content: {
           description: values.description,
-          body: blocksToPlainText(values.bodyBlocks),
+          body,
           type: values.type,
           tags: values.tags,
           triggers: joinTriggers(values.triggers),
+          body_format: values.body_format,
         },
       })
       notify.success('Playbook angelegt.')

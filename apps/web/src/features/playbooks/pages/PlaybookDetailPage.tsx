@@ -42,6 +42,11 @@ export function PlaybookDetailPage() {
   const role = useCurrentWorkspaceRole()
   const [actionBusy, setActionBusy] = useState(false)
 
+  // Ist der Body im BlockNote-Format, sind die Pills im Body die Quelle der
+  // Relationen — die separaten Picker werden read-only (Editier-Aktion
+  // ausgeblendet), damit es keine zwei konkurrierenden Quellen gibt.
+  const bodyIsBlockNote = playbook?.content.body_format === 'blocknote'
+
   const removeLink = (target: ResourceLink) => {
     const remaining = resourceLinks.links.filter(
       (link) =>
@@ -237,6 +242,8 @@ export function PlaybookDetailPage() {
                 form={form}
                 formKey={`${playbook.id}-${playbook.current_version}`}
                 initialBodyBlocks={initialBodyBlocks}
+                composesChildren={composition.children}
+                resourceLinks={resourceLinks.links}
               />
 
               <Card>
@@ -301,17 +308,24 @@ export function PlaybookDetailPage() {
                     <DataView loading={resourceLinks.loading} error={resourceLinks.error}>
                       <LinkedBlocksList
                         links={resourceLinks.links}
-                        onRemove={removeLink}
-                        disabled={resourceLinks.saving}
+                        onRemove={bodyIsBlockNote ? undefined : removeLink}
+                        disabled={resourceLinks.saving || bodyIsBlockNote}
                       />
                     </DataView>
-                    <div className="flex justify-end">
-                      <ResourceBlockLinkPicker
-                        existing={resourceLinks.links}
-                        saving={resourceLinks.saving}
-                        onSave={resourceLinks.save}
-                      />
-                    </div>
+                    {bodyIsBlockNote ? (
+                      <p className="text-xs text-muted-foreground">
+                        Resource-Verknüpfungen werden im BlockNote-Body als Pills
+                        gepflegt — bearbeite sie dort.
+                      </p>
+                    ) : (
+                      <div className="flex justify-end">
+                        <ResourceBlockLinkPicker
+                          existing={resourceLinks.links}
+                          saving={resourceLinks.saving}
+                          onSave={resourceLinks.save}
+                        />
+                      </div>
+                    )}
                   </Stack>
                 </CardContent>
               </Card>
@@ -353,14 +367,21 @@ export function PlaybookDetailPage() {
                         </ol>
                       )}
                     </DataView>
-                    <div className="flex justify-end">
-                      <PlaybookComposesPicker
-                        currentPlaybookId={playbook.id}
-                        existing={composition.children}
-                        saving={composition.saving}
-                        onSave={composition.save}
-                      />
-                    </div>
+                    {bodyIsBlockNote ? (
+                      <p className="text-xs text-muted-foreground">
+                        Sub-Playbooks werden im BlockNote-Body als Pills
+                        gepflegt — bearbeite sie dort.
+                      </p>
+                    ) : (
+                      <div className="flex justify-end">
+                        <PlaybookComposesPicker
+                          currentPlaybookId={playbook.id}
+                          existing={composition.children}
+                          saving={composition.saving}
+                          onSave={composition.save}
+                        />
+                      </div>
+                    )}
                   </Stack>
                 </CardContent>
               </Card>

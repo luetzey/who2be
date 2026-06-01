@@ -95,6 +95,12 @@ export interface PlaybookContent {
   type: string
   tags: string[]
   triggers: string | null
+  // Welle 5 (Playbook-Body-BlockNote). 'plain' = Legacy-Plain-Text-Snapshot,
+  // 'blocknote' = JSON.stringify(editor.document) mit Inline-Pills im `body`.
+  // Optional + Default 'plain', weil aeltere Versions/Backend-Responses das
+  // Feld nicht garantieren. Wiederverwendung von `SystemPromptBodyFormat`
+  // (siehe weiter unten — identische Semantik).
+  body_format?: SystemPromptBodyFormat
 }
 
 export interface Playbook {
