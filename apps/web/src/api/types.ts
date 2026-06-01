@@ -440,3 +440,19 @@ export interface AgentRenderResult {
   unresolved_placeholders: string[]
   format: AgentRenderFormat
 }
+
+// Pill-Preview (Editor-Overlay): aufgeloester Output einer einzelnen
+// Placeholder-Pill. `unresolved=true`, wenn der Resolver keinen Wert fand
+// (z. B. persona-field ohne Persona-Kontext) — die UI zeigt dann einen Hinweis.
+export interface PlaceholderPreviewInput {
+  kind: string
+  target_id: string
+  persona_id?: string
+}
+
+export interface PlaceholderPreview {
+  kind: string
+  target_id: string
+  text: string
+  unresolved: boolean
+}

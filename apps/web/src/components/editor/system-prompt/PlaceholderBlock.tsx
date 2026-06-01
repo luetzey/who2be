@@ -27,6 +27,21 @@ export interface PlaceholderProps {
   label: string
 }
 
+/**
+ * Name des CustomEvents, das eine Pill beim Klick auf ihrem DOM-Knoten
+ * dispatcht (bubbelt zum `bn-container`). Der Editor-Wrapper haengt dort einen
+ * nativen Listener auf und oeffnet das Preview-Overlay. Entkoppelt die
+ * statische BlockNote-Render-Funktion vom React-State des Wrappers.
+ */
+export const PLACEHOLDER_CLICK_EVENT = 'placeholder-click'
+
+/** Detail-Payload des `placeholder-click`-CustomEvents. */
+export interface PlaceholderClickDetail {
+  kind: PlaceholderKind
+  target_id: string
+  label: string
+}
+
 // ---------------------- Icon + Farbe je Kind ---------------------------------
 
 interface KindMeta {
@@ -94,13 +109,42 @@ export const PlaceholderInlineSpec = createReactInlineContentSpec(
   {
     render: ({ inlineContent }) => {
       const kind = inlineContent.props.kind as PlaceholderKind
+      const target_id = inlineContent.props.target_id as string
       const label = inlineContent.props.label as string
       const meta = KIND_META[kind]
       const Icon = meta.icon
 
+      // Klick/Tastatur dispatcht ein bubbelndes CustomEvent, das der Editor-
+      // Wrapper abfaengt, um das Preview-Overlay zu oeffnen. stopPropagation
+      // verhindert, dass BlockNote den Klick als Cursor-Platzierung interpretiert.
+      const dispatchPreview = (node: HTMLSpanElement) => {
+        const detail: PlaceholderClickDetail = { kind, target_id, label }
+        node.dispatchEvent(
+          new CustomEvent<PlaceholderClickDetail>(PLACEHOLDER_CLICK_EVENT, {
+            detail,
+            bubbles: true,
+          }),
+        )
+      }
+      const handleClick = (event: React.MouseEvent<HTMLSpanElement>) => {
+        event.preventDefault()
+        event.stopPropagation()
+        dispatchPreview(event.currentTarget)
+      }
+      const handleKeyDown = (event: React.KeyboardEvent<HTMLSpanElement>) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return
+        event.preventDefault()
+        event.stopPropagation()
+        dispatchPreview(event.currentTarget)
+      }
+
       return (
         <span
           data-testid={`placeholder-pill-${kind}`}
+          role="button"
+          tabIndex={0}
+          onClick={handleClick}
+          onKeyDown={handleKeyDown}
           className={cn(
             'inline-flex cursor-pointer items-center gap-1 rounded-full border px-2 py-0.5 align-middle text-xs leading-none font-medium transition-opacity select-none hover:opacity-80',
             meta.pillClass,

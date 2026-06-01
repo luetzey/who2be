@@ -21,6 +21,7 @@ import {
   type PlaceholderProps,
 } from '@/components/editor/system-prompt/PlaceholderBlock'
 import type { SystemPromptBlock } from '@/components/editor/system-prompt/SystemPromptEditor'
+import { PlaceholderPreviewDialog } from '@/components/editor/system-prompt/PlaceholderPreviewDialog'
 import { buildSlashMenuItems } from '@/components/editor/system-prompt/slashMenu'
 import { PlaybookPicker } from '@/components/editor/system-prompt/pickers/PlaybookPicker'
 import { ResourcePicker } from '@/components/editor/system-prompt/pickers/ResourcePicker'
@@ -50,6 +51,8 @@ export function PlaybookBodyEditor({
 }: PlaybookBodyEditorProps) {
   const { resolved } = useTheme()
   const userInteractedRef = useRef(false)
+  // Ref auf den bn-container — Anker fuer das bubbelnde `placeholder-click`-Event.
+  const containerRef = useRef<HTMLDivElement>(null)
 
   const [openPicker, setOpenPicker] = useState<PlaceholderKind | null>(null)
 
@@ -86,6 +89,7 @@ export function PlaybookBodyEditor({
   return (
     <>
       <div
+        ref={containerRef}
         className="bn-container rounded-md border bg-background py-2"
         data-testid="playbook-body-editor"
         onFocusCapture={() => {
@@ -111,6 +115,9 @@ export function PlaybookBodyEditor({
           />
         </BlockNoteView>
       </div>
+
+      {/* Pill-Preview-Overlay: lauscht auf Klicks im bn-container. */}
+      <PlaceholderPreviewDialog containerRef={containerRef} />
 
       <PlaybookPicker
         open={openPicker === 'playbook'}

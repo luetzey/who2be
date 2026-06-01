@@ -19,6 +19,7 @@ import { useTheme } from '@/app/theme-context'
 import { buildSystemPromptSchema, type SystemPromptSchema } from './PlaceholderBlock'
 import type { PlaceholderKind, PlaceholderProps } from './PlaceholderBlock'
 import { buildSlashMenuItems } from './slashMenu'
+import { PlaceholderPreviewDialog } from './PlaceholderPreviewDialog'
 import { PlaybookPicker } from './pickers/PlaybookPicker'
 import { ResourcePicker } from './pickers/ResourcePicker'
 import { PersonaFieldPicker } from './pickers/PersonaFieldPicker'
@@ -49,6 +50,8 @@ export function SystemPromptEditor({
 }: SystemPromptEditorProps) {
   const { resolved } = useTheme()
   const userInteractedRef = useRef(false)
+  // Ref auf den bn-container — Anker fuer das bubbelnde `placeholder-click`-Event.
+  const containerRef = useRef<HTMLDivElement>(null)
 
   // Picker-State: welcher Picker ist offen?
   const [openPicker, setOpenPicker] = useState<PlaceholderKind | null>(null)
@@ -98,6 +101,7 @@ export function SystemPromptEditor({
   return (
     <>
       <div
+        ref={containerRef}
         className="bn-container rounded-md border bg-background py-2"
         data-testid="system-prompt-editor"
         onFocusCapture={() => {
@@ -126,6 +130,9 @@ export function SystemPromptEditor({
           />
         </BlockNoteView>
       </div>
+
+      {/* Pill-Preview-Overlay: lauscht auf Klicks im bn-container. */}
+      <PlaceholderPreviewDialog containerRef={containerRef} />
 
       {/* Picker-Dialoge (ausserhalb des bn-container) */}
       <PlaybookPicker

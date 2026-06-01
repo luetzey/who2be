@@ -15,6 +15,8 @@ import type {
   Persona,
   PersonaInput,
   PersonaVersion,
+  PlaceholderPreview,
+  PlaceholderPreviewInput,
   Playbook,
   PlaybookInput,
   PlaybookRef,
@@ -217,6 +219,8 @@ export interface Api {
     id: string,
     format?: AgentRenderFormat,
   ) => Promise<AgentRenderResult>
+  // Pill-Preview-Overlay: loest eine einzelne Editor-Pill zu ihrem Output auf.
+  previewPlaceholder: (input: PlaceholderPreviewInput) => Promise<PlaceholderPreview>
 }
 
 export function createApi(token: string, workspaceId: string): Api {
@@ -407,6 +411,11 @@ export function createApi(token: string, workspaceId: string): Api {
         token,
         `${ws}/agents/${id}/render${query}`,
       )
+    },
+    previewPlaceholder: (input) => {
+      const params = new URLSearchParams({ kind: input.kind, target_id: input.target_id })
+      if (input.persona_id !== undefined) params.set('persona_id', input.persona_id)
+      return request<PlaceholderPreview>(token, `${ws}/placeholders/preview?${params.toString()}`)
     },
   }
 }
