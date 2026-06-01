@@ -14,13 +14,26 @@ export interface PersonaProfile {
   blocks: ResourceBlock[]
 }
 
-// Track C5 — Persona-Modi. Spiegelt `PersonaMode` aus packages/models.
+// Track D/E (PR-A) — eine Persona kann auf Skills referenzieren. `SkillRef`
+// ist ein schlanker {name, note}-Eintrag (kein Aggregat).
+export interface SkillRef {
+  name: string
+  note: string
+}
+
+// Track C5 + PR-A — Persona-Modi. Spiegelt `PersonaMode` aus packages/models.
+// `identity_add`/`output_style_override`/`anti_patterns` sind BlockNote-Dokumente
+// (ResourceBlock[]), nicht mehr Plain-Strings. `playbook_id`/`playbook_name`
+// verknuepfen einen Modus optional mit einem Playbook (denormalisierter Snapshot).
 export interface PersonaMode {
   name: string
   trigger?: string | null
   is_default: boolean
-  identity_add: string
-  output_style_override: string
+  identity_add: ResourceBlock[]
+  output_style_override: ResourceBlock[]
+  anti_patterns: ResourceBlock[]
+  playbook_id?: string | null
+  playbook_name?: string
 }
 
 export interface PersonaContent {
@@ -33,6 +46,8 @@ export interface PersonaContent {
   content?: PersonaProfile | null
   // Track C5 — Modi (optional, Default []).
   modes?: PersonaMode[]
+  // Track D/E (PR-A) — Skill-Referenzen (optional, Default []).
+  skills?: SkillRef[]
 }
 
 export interface Persona {

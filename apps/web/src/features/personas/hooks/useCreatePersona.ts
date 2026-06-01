@@ -16,8 +16,17 @@ const modeSchema = z.object({
   name: z.string(),
   trigger: z.string().nullable().optional(),
   is_default: z.boolean(),
-  identity_add: z.string(),
-  output_style_override: z.string(),
+  // PR-A: Block-Dokumente statt Plain-Strings.
+  identity_add: z.array(z.custom<ResourceBlock>()),
+  output_style_override: z.array(z.custom<ResourceBlock>()),
+  anti_patterns: z.array(z.custom<ResourceBlock>()),
+  playbook_id: z.string().nullable().optional(),
+  playbook_name: z.string().optional(),
+})
+
+const skillSchema = z.object({
+  name: z.string(),
+  note: z.string(),
 })
 
 const createSchema = z.object({
@@ -26,6 +35,7 @@ const createSchema = z.object({
   profileBlocks: z.array(z.custom<ResourceBlock>()),
   tags: z.array(z.string()),
   modes: z.array(modeSchema),
+  skills: z.array(skillSchema),
 })
 
 export type PersonaCreateValues = z.infer<typeof createSchema>
@@ -51,6 +61,7 @@ export function useCreatePersona(onCreated: (id: string) => void): UseCreatePers
       profileBlocks: [],
       tags: [],
       modes: [],
+      skills: [],
     },
   })
 
@@ -66,6 +77,7 @@ export function useCreatePersona(onCreated: (id: string) => void): UseCreatePers
           tags: values.tags,
           content: { description: '', blocks: values.profileBlocks },
           modes: values.modes,
+          skills: values.skills,
         },
       })
       notify.success('Persona angelegt.')

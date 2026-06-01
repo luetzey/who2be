@@ -17,6 +17,7 @@ import { ResourceEditor } from '@/features/resources/components/ResourceEditor'
 
 import type { PersonaEditorValues } from '../hooks/usePersonaForm'
 import { PersonaModesEditor } from './PersonaModesEditor'
+import { PersonaSkillsEditor } from './PersonaSkillsEditor'
 
 const MODES_SECTION_ID = 'persona-modes-section'
 
@@ -275,6 +276,19 @@ export function PersonaEditorForm({
             </FormSection>
 
             <PersonaModesDisclosure control={form.control} disabled={isViewer} />
+
+            <FormSection
+              title="Skills"
+              description="Faehigkeiten, auf die sich die Persona stützt — mit kurzer Notiz."
+              help={
+                <p>
+                  Beispiel: <em>„Aktives Zuhören — paraphrasiert vor jeder Antwort"</em>.
+                  Skills sind schlanke Referenzen, kein eigenes Aggregat.
+                </p>
+              }
+            >
+              <PersonaSkillsEditor control={form.control} disabled={isViewer} />
+            </FormSection>
 
             <FormSection
               title="Tags"

@@ -4,7 +4,14 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 
 from who2be_models.resource import ResourceBlock
 from who2be_models.status import VersionStatus
@@ -14,6 +21,42 @@ from who2be_models.status import VersionStatus
 # `list_personas`-Antwort retourniert werden.
 TraitStr = Annotated[str, StringConstraints(min_length=1, max_length=200)]
 TagStr = Annotated[str, StringConstraints(min_length=1, max_length=100)]
+SkillNameStr = Annotated[str, StringConstraints(min_length=1, max_length=100)]
+
+
+def _coerce_str_to_blocks(value: object) -> object:
+    """Read-Koerzion fuer PR-A: alter `str`-Inhalt → BlockNote-Block-Liste.
+
+    Vor PR-A waren `identity_add`/`output_style_override` Plain-`str`. Damit
+    bestehende `persona_version`-jsonb-Snapshots ohne DB-Backfill weiter valide
+    deserialisieren, wird ein vorhandener String verlustfrei in einen einzelnen
+    Paragraph-Block gewrappt. Leerer/Whitespace-String → leere Liste.
+    """
+    if isinstance(value, str):
+        if value.strip() == "":
+            return []
+        return [
+            {
+                "id": "legacy-text",
+                "type": "paragraph",
+                "content": [{"type": "text", "text": value, "styles": {}}],
+            }
+        ]
+    return value
+
+
+class SkillRef(BaseModel):
+    """Referenz auf einen relevanten Skill der Persona (Gap 3.5).
+
+    Rein deskriptiv: `name` benennt den Skill, `note` haelt den Relevanz-Hinweis
+    (z. B. „nuetzlich im Story-Crafter-Modus"). Keine Ausfuehrungs-Bindung —
+    der gerenderte Profil-Text teilt dem Agenten die relevanten Skills mit.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: SkillNameStr
+    note: str = Field(default="", max_length=1_000)
 
 
 class PersonaMode(BaseModel):
@@ -24,7 +67,14 @@ class PersonaMode(BaseModel):
     Trigger-Match greift der Default-Modus (`is_default=True`).
 
     `identity_add` ergaenzt die Basis-Identitaet der Persona; `output_style_override`
-    beschreibt, wie sich der Output-Stil in diesem Modus aendert.
+    beschreibt, wie sich der Output-Stil in diesem Modus aendert; `anti_patterns`
+    listet Dinge, die der Modus vermeidet. Alle drei sind BlockNote-Dokumente
+    (PR-A — vorher `str`; Alt-Daten werden per `_coerce_str_to_blocks` gelesen).
+
+    `playbook_id` bindet einen Modus an ein zugehoeriges Playbook (Brainstormer:
+    „Zugehoeriges Playbook"); `playbook_name` ist ein denormalisierter Snapshot
+    fuer das Rendering (der reine Profil-Resolver hat keinen DB-Zugriff). Der
+    `playbook_id` bleibt die Wahrheit — der Name kann bei Umbenennung veralten.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -32,8 +82,16 @@ class PersonaMode(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     trigger: str | None = Field(default=None, max_length=2_000)
     is_default: bool = False
-    identity_add: str = Field(default="", max_length=5_000)
-    output_style_override: str = Field(default="", max_length=5_000)
+    identity_add: list[ResourceBlock] = Field(default_factory=list, max_length=500)
+    output_style_override: list[ResourceBlock] = Field(default_factory=list, max_length=500)
+    anti_patterns: list[ResourceBlock] = Field(default_factory=list, max_length=500)
+    playbook_id: UUID | None = None
+    playbook_name: str = Field(default="", max_length=200)
+
+    @field_validator("identity_add", "output_style_override", "anti_patterns", mode="before")
+    @classmethod
+    def _coerce_legacy_str(cls, value: object) -> object:
+        return _coerce_str_to_blocks(value)
 
 
 class PersonaContent(BaseModel):
@@ -79,6 +137,9 @@ class PersonaVersionContent(BaseModel):
     # Gap 3.4: Multi-Modus-Personas. Default [] = Backward-Compat (alte Clients
     # senden das Feld nicht; additive jsonb-Evolution nach ADR-0009).
     modes: list[PersonaMode] = Field(default_factory=list, max_length=20)
+    # Gap 3.5: relevante Skills der Persona (deskriptiv). Default [] = Backward-
+    # Compat (additive jsonb-Evolution nach ADR-0009).
+    skills: list[SkillRef] = Field(default_factory=list, max_length=50)
 
     @model_validator(mode="after")
     def _validate_modes(self) -> "PersonaVersionContent":

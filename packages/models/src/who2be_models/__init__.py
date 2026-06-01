@@ -40,6 +40,7 @@ from who2be_models.persona import (
     PersonaUpdate,
     PersonaVersionContent,
     PersonaVersionRead,
+    SkillRef,
 )
 from who2be_models.playbook import (
     PlaybookContent,
@@ -125,6 +126,7 @@ __all__ = [
     "PersonaUpdate",
     "PersonaVersionContent",
     "PersonaVersionRead",
+    "SkillRef",
     "PlaybookContent",
     "PlaybookCreate",
     "PlaybookRead",

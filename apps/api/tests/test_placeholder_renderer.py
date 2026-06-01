@@ -35,6 +35,17 @@ from who2be_api.services.placeholders.renderer import render_template_body
 # ---------------------------------------------------------------------------
 
 
+def _blk(block_id: str, text: str) -> dict[str, Any]:
+    """Baut einen minimalen BlockNote-Paragraph-Block (ResourceBlock-Form)."""
+    return {
+        "id": block_id,
+        "type": "paragraph",
+        "props": {},
+        "content": [{"type": "text", "text": text, "styles": {}}],
+        "children": [],
+    }
+
+
 def _ctx(
     persona_id: UUID | None = None,
     now: datetime | None = None,
@@ -388,15 +399,15 @@ class TestPersonaFieldResolver:
                     "name": "Erklaerer",
                     "trigger": "erklaer,wie",
                     "is_default": False,
-                    "identity_add": "Du bist ein Lehrer.",
-                    "output_style_override": "Schreibe einfach.",
+                    "identity_add": [_blk("ia1", "Du bist ein Lehrer.")],
+                    "output_style_override": [_blk("os1", "Schreibe einfach.")],
                 },
                 {
                     "name": "Standard",
                     "trigger": None,
                     "is_default": True,
-                    "identity_add": "",
-                    "output_style_override": "",
+                    "identity_add": [],
+                    "output_style_override": [],
                 },
             ],
         }
@@ -413,6 +424,167 @@ class TestPersonaFieldResolver:
         assert "Du bist ein Lehrer." in result
         assert "Schreibe einfach." in result
         assert "### Standard (Default)" in result
+
+    def test_resolves_profile_mode_blocks_rendered_multiline(self) -> None:
+        """Block-Listen in identity_add/output_style_override werden per Block gerendert."""
+        resolver = PersonaFieldResolver()
+        ctx = _ctx(persona_id=uuid4())
+        _content: dict[str, Any] = {
+            "description": "Persona",
+            "content": None,
+            "traits": [],
+            "modes": [
+                {
+                    "name": "Multi",
+                    "trigger": None,
+                    "is_default": True,
+                    "identity_add": [_blk("a", "Zeile eins."), _blk("b", "Zeile zwei.")],
+                    "output_style_override": [_blk("c", "Kurz.")],
+                },
+            ],
+        }
+        row = MagicMock()
+        row.__getitem__ = MagicMock(side_effect=lambda k: {"content": _content}[k])
+        db = _make_db(row)
+
+        result = _async_run(resolver.resolve("profile", ctx, db)).text
+
+        assert "**Identity-Ergaenzung:** Zeile eins.\n\nZeile zwei." in result
+        assert "**Output-Stil:** Kurz." in result
+
+    def test_resolves_profile_mode_empty_block_lists_no_lines(self) -> None:
+        """Leere Block-Listen erzeugen keine Identity-/Output-/Anti-Pattern-Zeilen."""
+        resolver = PersonaFieldResolver()
+        ctx = _ctx(persona_id=uuid4())
+        _content: dict[str, Any] = {
+            "description": "Persona",
+            "content": None,
+            "traits": [],
+            "modes": [
+                {
+                    "name": "Leer",
+                    "trigger": None,
+                    "is_default": True,
+                    "identity_add": [],
+                    "output_style_override": [],
+                    "anti_patterns": [],
+                    "playbook_name": "",
+                },
+            ],
+        }
+        row = MagicMock()
+        row.__getitem__ = MagicMock(side_effect=lambda k: {"content": _content}[k])
+        db = _make_db(row)
+
+        result = _async_run(resolver.resolve("profile", ctx, db)).text
+
+        assert "### Leer (Default)" in result
+        assert "Identity-Ergaenzung" not in result
+        assert "Output-Stil" not in result
+        assert "Anti-Patterns" not in result
+        assert "Zugehoeriges Playbook" not in result
+
+    def test_resolves_profile_mode_anti_patterns_and_playbook_name(self) -> None:
+        """Anti-Patterns (Block-Liste) und playbook_name (str) werden gerendert."""
+        resolver = PersonaFieldResolver()
+        ctx = _ctx(persona_id=uuid4())
+        _content: dict[str, Any] = {
+            "description": "Persona",
+            "content": None,
+            "traits": [],
+            "modes": [
+                {
+                    "name": "Mit-Extras",
+                    "trigger": None,
+                    "is_default": True,
+                    "identity_add": [],
+                    "output_style_override": [],
+                    "anti_patterns": [_blk("ap1", "Niemals raten.")],
+                    "playbook_name": "Coding-Playbook",
+                },
+            ],
+        }
+        row = MagicMock()
+        row.__getitem__ = MagicMock(side_effect=lambda k: {"content": _content}[k])
+        db = _make_db(row)
+
+        result = _async_run(resolver.resolve("profile", ctx, db)).text
+
+        assert "**Anti-Patterns:** Niemals raten." in result
+        assert "**Zugehoeriges Playbook:** Coding-Playbook" in result
+
+    def test_resolves_profile_skills_section(self) -> None:
+        """## Skills-Sektion wird gerendert, note nur wenn vorhanden."""
+        resolver = PersonaFieldResolver()
+        ctx = _ctx(persona_id=uuid4())
+        _content: dict[str, Any] = {
+            "description": "Persona",
+            "content": None,
+            "traits": [],
+            "modes": [],
+            "skills": [
+                {"name": "Python", "note": "fortgeschritten"},
+                {"name": "Refactoring", "note": ""},
+            ],
+        }
+        row = MagicMock()
+        row.__getitem__ = MagicMock(side_effect=lambda k: {"content": _content}[k])
+        db = _make_db(row)
+
+        result = _async_run(resolver.resolve("profile", ctx, db)).text
+
+        assert "## Skills" in result
+        assert "- Python: fortgeschritten" in result
+        assert "- Refactoring" in result
+        assert "- Refactoring:" not in result
+
+    def test_resolves_profile_no_skills_section_when_empty(self) -> None:
+        """Keine ## Skills-Sektion wenn skills leer/fehlt."""
+        resolver = PersonaFieldResolver()
+        ctx = _ctx(persona_id=uuid4())
+        _content: dict[str, Any] = {
+            "description": "Persona",
+            "content": None,
+            "traits": [],
+            "modes": [],
+            "skills": [],
+        }
+        row = MagicMock()
+        row.__getitem__ = MagicMock(side_effect=lambda k: {"content": _content}[k])
+        db = _make_db(row)
+
+        result = _async_run(resolver.resolve("profile", ctx, db)).text
+
+        assert "## Skills" not in result
+
+    def test_resolves_profile_mode_str_coercion_via_model_validate(self) -> None:
+        """Alt-str in identity_add wird via PersonaMode.model_validate zu Block-Liste."""
+        from who2be_models.persona import PersonaMode
+
+        mode = PersonaMode.model_validate(
+            {
+                "name": "Legacy",
+                "is_default": True,
+                "identity_add": "Alt-Text identity.",
+                "output_style_override": "Alt-Text style.",
+            }
+        )
+        resolver = PersonaFieldResolver()
+        ctx = _ctx(persona_id=uuid4())
+        _content: dict[str, Any] = {
+            "description": "Persona",
+            "content": None,
+            "traits": [],
+            "modes": [mode.model_dump(mode="json")],
+        }
+        row = MagicMock()
+        row.__getitem__ = MagicMock(side_effect=lambda k: {"content": _content}[k])
+        db = _make_db(row)
+
+        result = _async_run(resolver.resolve("profile", ctx, db)).text
+
+        assert "**Identity-Ergaenzung:** Alt-Text identity." in result
+        assert "**Output-Stil:** Alt-Text style." in result
 
     def test_resolves_profile_without_modi_sektion_when_modes_empty(self) -> None:
         """profile enthaelt keine ## Modi-Sektion wenn modes leer."""
