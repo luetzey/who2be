@@ -133,8 +133,9 @@ user-sichtbarer Dialog entfernt/entwertet wird (kein eigenmächtiges Löschen).
 
 ## Wellen — zwei getrennte Inkremente (PR-A Persona, PR-B Playbook)
 
-### PR-A — Persona: Rich-Modi + Mode→Playbook + Anti-Patterns + Skills
-Self-contained, kleineres Risiko, kein Body-Format-Umbau.
+### PR-A — Persona: Rich-Modi + Mode→Playbook + Anti-Patterns + Skills ✅ ERLEDIGT (2026-06-01)
+Self-contained, kleineres Risiko, kein Body-Format-Umbau. Commit `9ccc799`.
+Gates: pytest 338 passed / ruff / mypy 150; web tsc / lint(0 err) / 268 tests / build.
 
 - **A0 Fundament** `packages/models/.../persona.py`: `identity_add`/
   `output_style_override` → `list[ResourceBlock]`; neu `anti_patterns:
