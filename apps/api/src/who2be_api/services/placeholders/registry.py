@@ -395,8 +395,12 @@ def _render_persona_profile(content: dict[str, object]) -> str:
             name = str(mode.get("name", "")).strip()
             is_default = bool(mode.get("is_default", False))
             trigger = mode.get("trigger")
-            identity_add = str(mode.get("identity_add", "")).strip()
-            output_style_override = str(mode.get("output_style_override", "")).strip()
+            # identity_add / output_style_override / anti_patterns sind Block-Listen
+            # (list[ResourceBlock]); via _block_plain_text rendern (analog Body oben).
+            identity_add = _render_block_list(mode.get("identity_add"))
+            output_style_override = _render_block_list(mode.get("output_style_override"))
+            anti_patterns = _render_block_list(mode.get("anti_patterns"))
+            playbook_name = str(mode.get("playbook_name", "")).strip()
 
             header = f"### {name}"
             if is_default:
@@ -409,10 +413,52 @@ def _render_persona_profile(content: dict[str, object]) -> str:
                 mode_lines.append(f"**Identity-Ergaenzung:** {identity_add}")
             if output_style_override:
                 mode_lines.append(f"**Output-Stil:** {output_style_override}")
+            if anti_patterns:
+                mode_lines.append(f"**Anti-Patterns:** {anti_patterns}")
+            if playbook_name:
+                mode_lines.append(f"**Zugehoeriges Playbook:** {playbook_name}")
 
         parts.append("\n".join(mode_lines))
 
+    # 5. Skills-Sektion — nur wenn skills vorhanden
+    raw_skills = content.get("skills", [])
+    skills: list[dict[str, object]] = list(raw_skills) if isinstance(raw_skills, list) else []
+    if skills:
+        skill_lines = ["## Skills"]
+        for skill in skills:
+            skill_name = str(skill.get("name", "")).strip()
+            if not skill_name:
+                continue
+            note = str(skill.get("note", "")).strip()
+            if note:
+                skill_lines.append(f"- {skill_name}: {note}")
+            else:
+                skill_lines.append(f"- {skill_name}")
+        # Nur anhaengen, wenn mindestens ein Skill-Eintrag (nicht nur Header) da ist.
+        if len(skill_lines) > 1:
+            parts.append("\n".join(skill_lines))
+
     return "\n\n".join(parts)
+
+
+def _render_block_list(raw: object) -> str:
+    """Rendert eine BlockNote-Block-Liste (list[ResourceBlock]) als Plain-Text.
+
+    Pro Block wird `_block_plain_text` angewandt, leere Blocks werden
+    uebersprungen, Ergebnisse mit Doppel-Newline verbunden. Nicht-Listen
+    (z. B. None oder ein Alt-String, der die Koerzion nicht durchlief) liefern
+    einen leeren String — so erzeugt der haeufigste Leerfall keine Zeilen.
+    """
+    if not isinstance(raw, list):
+        return ""
+    block_parts: list[str] = []
+    for block in raw:
+        if not isinstance(block, dict):
+            continue
+        text = _block_plain_text(block)
+        if text:
+            block_parts.append(text)
+    return "\n\n".join(block_parts).strip()
 
 
 class ToolsOverviewResolver:

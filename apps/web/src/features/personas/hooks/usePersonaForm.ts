@@ -18,8 +18,18 @@ const modeSchema = z.object({
   name: z.string(),
   trigger: z.string().nullable().optional(),
   is_default: z.boolean(),
-  identity_add: z.string(),
-  output_style_override: z.string(),
+  // PR-A: Block-Dokumente statt Plain-Strings.
+  identity_add: z.array(z.custom<ResourceBlock>()),
+  output_style_override: z.array(z.custom<ResourceBlock>()),
+  anti_patterns: z.array(z.custom<ResourceBlock>()),
+  // PR-A: optionaler Playbook-Bezug (denormalisierter Snapshot).
+  playbook_id: z.string().nullable().optional(),
+  playbook_name: z.string().optional(),
+})
+
+const skillSchema = z.object({
+  name: z.string(),
+  note: z.string(),
 })
 
 const editorSchema = z.object({
@@ -28,6 +38,7 @@ const editorSchema = z.object({
   profileBlocks: z.array(z.custom<ResourceBlock>()),
   tags: z.array(z.string()),
   modes: z.array(modeSchema),
+  skills: z.array(skillSchema),
 })
 
 export type PersonaEditorValues = z.infer<typeof editorSchema>
@@ -52,6 +63,8 @@ function toInput(values: PersonaEditorValues): PersonaInput {
       content: { description: '', blocks: values.profileBlocks },
       // Track C5 — Modi.
       modes: values.modes as PersonaMode[],
+      // Track D/E (PR-A) — Skill-Referenzen.
+      skills: values.skills,
     },
   }
 }
@@ -79,6 +92,7 @@ export function usePersonaForm(
       profileBlocks: [],
       tags: [],
       modes: [],
+      skills: [],
     },
   })
 
@@ -98,6 +112,7 @@ export function usePersonaForm(
         profileBlocks: persona.content.content?.blocks ?? [],
         tags: persona.content.tags ?? [],
         modes: persona.content.modes ?? [],
+        skills: persona.content.skills ?? [],
       })
       resetIdRef.current = persona.id
       setFormReady(true)

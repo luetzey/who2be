@@ -118,9 +118,9 @@ describe('PersonaEditorForm', () => {
     const details = container.querySelectorAll('details')
     expect(details.length).toBe(1)
     expect(details[0].id).toBe('persona-modes-section')
-    // Hilfe-Buttons: Identitaet, Profil, Tags (Modi-Section hat keinen Help-
-    // Slot mehr — die Erklaerung steht im Summary-Subtext).
-    expect(screen.getAllByRole('button', { name: 'Hilfe einblenden' }).length).toBe(3)
+    // Hilfe-Buttons: Identitaet, Profil, Skills, Tags (Modi-Section hat keinen
+    // Help-Slot mehr — die Erklaerung steht im Summary-Subtext).
+    expect(screen.getAllByRole('button', { name: 'Hilfe einblenden' }).length).toBe(4)
   })
 
   it('rendert die BlockNote-Insel im Profil-Slot (eine Insel)', () => {

@@ -13,6 +13,7 @@ from who2be_models import (
     PersonaVersionContent,
     PersonaVersionRead,
     ResourceBlock,
+    SkillRef,
     VersionStatus,
 )
 
@@ -159,8 +160,57 @@ def test_persona_mode_defaults() -> None:
     mode = PersonaMode(name="Standard")
     assert mode.trigger is None
     assert mode.is_default is False
-    assert mode.identity_add == ""
-    assert mode.output_style_override == ""
+    assert mode.identity_add == []
+    assert mode.output_style_override == []
+    assert mode.anti_patterns == []
+    assert mode.playbook_id is None
+    assert mode.playbook_name == ""
+
+
+def test_persona_mode_coerces_legacy_str_to_blocks() -> None:
+    """PR-A Read-Koerzion: alter str-Inhalt wird zu einem Paragraph-Block."""
+    mode = PersonaMode.model_validate(
+        {
+            "name": "Wirbler",
+            "identity_add": "Divergent, wild assoziierend.",
+            "output_style_override": "",
+        }
+    )
+    assert len(mode.identity_add) == 1
+    assert mode.identity_add[0].type == "paragraph"
+    assert mode.output_style_override == []
+
+
+def test_persona_mode_accepts_block_fields_and_playbook() -> None:
+    pid = uuid4()
+    mode = PersonaMode(
+        name="Story-Crafter",
+        identity_add=[ResourceBlock(id="b1", type="paragraph")],
+        anti_patterns=[ResourceBlock(id="b2", type="paragraph")],
+        playbook_id=pid,
+        playbook_name="Content-Crafting-Flow",
+    )
+    assert mode.playbook_id == pid
+    assert mode.playbook_name == "Content-Crafting-Flow"
+    restored = PersonaMode.model_validate(mode.model_dump(mode="json"))
+    assert restored == mode
+
+
+def test_skills_default_empty_and_round_trip() -> None:
+    assert _content().skills == []
+    content = PersonaVersionContent(
+        description="d",
+        skills=[SkillRef(name="content-writer", note="nuetzlich im Crafting")],
+    )
+    restored = PersonaVersionContent.model_validate(content.model_dump())
+    assert restored.skills == content.skills
+
+
+def test_skills_reject_too_many_or_oversized() -> None:
+    with pytest.raises(ValidationError):
+        PersonaVersionContent(description="d", skills=[SkillRef(name="s")] * 51)
+    with pytest.raises(ValidationError):
+        PersonaVersionContent(description="d", skills=[SkillRef(name="x" * 101)])
 
 
 def test_persona_mode_rejects_unknown_fields() -> None:
@@ -227,8 +277,8 @@ def test_modes_round_trip_via_model_dump() -> None:
                 name="Erklaerer",
                 trigger="erklaer,wie,warum",
                 is_default=False,
-                identity_add="Du bist ein Lehrer.",
-                output_style_override="Schreibe einfach und verstaendlich.",
+                identity_add=[ResourceBlock(id="ia1", type="paragraph")],
+                output_style_override=[ResourceBlock(id="os1", type="paragraph")],
             ),
             PersonaMode(name="Standard", is_default=True),
         ],
