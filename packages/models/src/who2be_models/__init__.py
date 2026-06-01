@@ -28,13 +28,14 @@ from who2be_models.invitation import (
     InvitationCreated,
     InvitationRead,
 )
-from who2be_models.links import PersonaPlaybookLinkSet
+from who2be_models.links import PersonaPlaybookLinkSet, PlaybookCompositionLinkSet
 from who2be_models.me import MeOrganization, MeRead, MeWorkspace
 from who2be_models.organization import OrganizationCreate, OrganizationRead
 from who2be_models.pagination import DEFAULT_LIMIT, MAX_LIMIT, decode_cursor, encode_cursor
 from who2be_models.persona import (
     PersonaContent,
     PersonaCreate,
+    PersonaMode,
     PersonaRead,
     PersonaUpdate,
     PersonaVersionContent,
@@ -117,7 +118,9 @@ __all__ = [
     "OrganizationRead",
     "PersonaContent",
     "PersonaCreate",
+    "PersonaMode",
     "PersonaPlaybookLinkSet",
+    "PlaybookCompositionLinkSet",
     "PersonaRead",
     "PersonaUpdate",
     "PersonaVersionContent",

@@ -47,26 +47,38 @@ class PersonaWithPlaybooks(BaseModel):
 
 
 class ResourceSummary(BaseModel):
-    """Kompakte Resource-Uebersicht fuer `list_resources`."""
+    """Kompakte Resource-Uebersicht fuer `list_resources`.
+
+    `tags` spiegelt `content.tags` der aktuellen Version (E3). Leere Liste =
+    keine Tags — Backward-Compat mit Resources, die vor E3 angelegt wurden.
+    """
 
     id: UUID
     name: str
     block_count: int
+    tags: list[str] = []
 
 
 class PlaybookWithResources(BaseModel):
-    """Ein Playbook samt seiner Resource-Verweise.
+    """Ein Playbook samt seiner Resource-Verweise und geordneter Sub-Playbooks.
 
     `linked_blocks` traegt alle Links als Pointer (Backward-Compat zum
     ADR-0021-Vertrag) — sowohl Block-Anker als auch Resource-Volldokument-
     Refs (`link_scope='resource'`, `block_id` None). `linked_resources`
     haelt fuer letztere zusaetzlich das vollstaendige Dokument inline,
     damit Agenten den Snippet-Fetch sparen koennen.
+
+    `composed_playbooks` enthaelt die geordneten, aktiven Sub-Playbooks falls
+    dieses Playbook ein Composite ist (ADR-0024, Gap 2.1). Nur eine Ebene wird
+    inline mitgeliefert; tiefere Ebenen via erneutem `fetch_playbook(child_id)`
+    nachladen. Ein Composite-Agent folgt der Reihenfolge in `composed_playbooks`
+    Schritt fuer Schritt.
     """
 
     playbook: PlaybookRead
     linked_blocks: list[ResourceLinkRead]
     linked_resources: list[ResourceRead]
+    composed_playbooks: list[PlaybookRead] = []  # geordnete, aktive Kinder
 
 
 async def _resolve_workspace_id(settings: Settings) -> UUID:
@@ -126,7 +138,14 @@ def ping() -> str:
 @mcp.tool
 @with_tool_log("get_persona")
 async def get_persona(identifier: str) -> PersonaWithPlaybooks:
-    """Laedt eine Persona (per UUID oder Name) samt verknuepfter Playbooks."""
+    """Laedt eine Persona (per UUID oder Name) samt verknuepfter Playbooks.
+
+    `persona.content.modes` enthaelt ggf. die Modi einer Multi-Modus-Persona
+    (Gap 3.4). Jeder Modus traegt `name`, `trigger` (Erkennungs-Keywords),
+    `is_default` (Fallback ohne Trigger-Match), `identity_add` (Ergaenzung zur
+    Basis-Identitaet) und `output_style_override` (Output-Stil-Anpassung).
+    Fehlt das Feld oder ist es leer, ist die Persona single-mode.
+    """
     client = await build_client()
     persona = await client.get_persona(identifier)
     playbooks = await client.get_persona_playbooks(persona.id)
@@ -158,7 +177,7 @@ async def list_triggers() -> list[TriggerOverview]:
 @mcp.tool
 @with_tool_log("fetch_playbook")
 async def fetch_playbook(playbook_id: str) -> PlaybookWithResources:
-    """Laedt ein Playbook per UUID samt seiner Resource-Verweise.
+    """Laedt ein Playbook per UUID samt seiner Resource-Verweise und Sub-Playbooks.
 
     `linked_blocks` enthaelt alle Verweise als Pointer (resource_id +
     block_id, Verfuegbarkeit, Section-Preview) — kein Auto-Inline fuer
@@ -166,6 +185,11 @@ async def fetch_playbook(playbook_id: str) -> PlaybookWithResources:
     Ziel-Resource zusaetzlich als Volldokument in `linked_resources`
     ausgeliefert; Block-Refs bleiben Pointer und werden bei Bedarf ueber
     `fetch_resource` nachgeladen.
+
+    Ist das Playbook ein Composite (`is_composite=True`), enthaelt
+    `composed_playbooks` die geordneten aktiven Sub-Playbooks (nur eine Ebene,
+    ADR-0024). Tiefere Ebenen per `fetch_playbook(child_id)` nachladen. Ein
+    Composite-Agent folgt der Sequenz in `composed_playbooks` der Reihe nach.
     """
     try:
         parsed = UUID(playbook_id)
@@ -181,21 +205,34 @@ async def fetch_playbook(playbook_id: str) -> PlaybookWithResources:
             seen.add(link.resource_id)
             resource_scope_ids.append(link.resource_id)
     resources = [await client.get_resource(rid) for rid in resource_scope_ids]
+    composed = await client.get_playbook_composes(parsed)
     return PlaybookWithResources(
         playbook=playbook,
         linked_blocks=linked,
         linked_resources=resources,
+        composed_playbooks=composed,
     )
 
 
 @mcp.tool
 @with_tool_log("list_resources")
-async def list_resources() -> list[ResourceSummary]:
-    """Listet die aktiven Resources des Workspaces (id, name, block_count)."""
+async def list_resources(tag: str | None = None) -> list[ResourceSummary]:
+    """Listet die aktiven Resources des Workspaces, optional nach Tag gefiltert.
+
+    `tag` filtert auf Resources, deren `content.tags` diesen Wert enthalten
+    (exakter Treffer, case-sensitiv). Ohne `tag` werden alle aktiven Resources
+    zurueckgegeben.
+    """
     client = await build_client()
-    resources = await client.list_resources()
+    resources = await client.list_resources(tag)
     return [
-        ResourceSummary(id=r.id, name=r.name, block_count=len(r.content.blocks)) for r in resources
+        ResourceSummary(
+            id=r.id,
+            name=r.name,
+            block_count=len(r.content.blocks),
+            tags=r.content.tags,
+        )
+        for r in resources
     ]
 
 

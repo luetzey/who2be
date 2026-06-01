@@ -4,7 +4,7 @@ from typing import Annotated
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 
 from who2be_api.core.db import get_pool
 from who2be_api.core.pagination import DEFAULT_LIMIT, PageCursor, PageLimit
@@ -50,9 +50,10 @@ async def list_resources(
     service: Service,
     response: Response,
     cursor: PageCursor,
+    tag: Annotated[str | None, Query(max_length=100)] = None,
     limit: PageLimit = DEFAULT_LIMIT,
 ) -> list[ResourceRead]:
-    items, next_cursor = await service.list_all(ctx, limit, cursor)
+    items, next_cursor = await service.list_all(ctx, tag, limit, cursor)
     if next_cursor is not None:
         response.headers["X-Next-Cursor"] = next_cursor
     return items

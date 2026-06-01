@@ -109,8 +109,11 @@ class ApiClient:
         data = await self._get(f"{self._workspace_prefix}/playbooks/{playbook_id}")
         return PlaybookRead.model_validate(data)
 
-    async def list_resources(self) -> list[ResourceRead]:
-        data = await self._get(f"{self._workspace_prefix}/resources")
+    async def list_resources(self, tag: str | None = None) -> list[ResourceRead]:
+        params: dict[str, str] = {}
+        if tag is not None:
+            params["tag"] = tag
+        data = await self._get(f"{self._workspace_prefix}/resources", params=params)
         return [ResourceRead.model_validate(item) for item in data]
 
     async def get_resource(self, resource_id: UUID) -> ResourceRead:
@@ -120,6 +123,15 @@ class ApiClient:
     async def get_playbook_resource_links(self, playbook_id: UUID) -> list[ResourceLinkRead]:
         data = await self._get(f"{self._workspace_prefix}/playbooks/{playbook_id}/resource_links")
         return [ResourceLinkRead.model_validate(item) for item in data]
+
+    async def get_playbook_composes(self, playbook_id: UUID) -> list[PlaybookRead]:
+        """Laedt die geordneten aktiven Sub-Playbooks eines Composite (eine Ebene).
+
+        Leere Liste wenn das Playbook kein Composite ist oder keine aktiven
+        Kinder hat (API-Token-Pfad liefert nur aktive Versionen).
+        """
+        data = await self._get(f"{self._workspace_prefix}/playbooks/{playbook_id}/composes")
+        return [PlaybookRead.model_validate(item) for item in data]
 
     async def get_agent_rendered(self, agent_id: UUID) -> AgentWithRenderedPrompt:
         """Laedt Agent + Persona + expandierten System-Prompt vom API-Endpoint."""

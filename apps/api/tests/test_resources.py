@@ -72,9 +72,15 @@ def _block(block_id: str, text: str, block_type: str = "paragraph") -> dict[str,
 
 
 def _resource_body(
-    name: str, description: str, blocks: list[dict[str, object]]
+    name: str,
+    description: str,
+    blocks: list[dict[str, object]],
+    tags: list[str] | None = None,
 ) -> dict[str, object]:
-    return {"name": name, "content": {"description": description, "blocks": blocks}}
+    content: dict[str, object] = {"description": description, "blocks": blocks}
+    if tags is not None:
+        content["tags"] = tags
+    return {"name": name, "content": content}
 
 
 @pytest.mark.integration
@@ -336,5 +342,66 @@ def test_resource_active_filter_for_api_token(monkeypatch: pytest.MonkeyPatch) -
 
             assert client.get(f"{base}/{inactive_id}", headers=token_auth).status_code == 404
             assert client.get(f"{base}/{active_id}", headers=token_auth).status_code == 200
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+def test_resource_tag_filter(monkeypatch: pytest.MonkeyPatch) -> None:
+    """E3: GET /resources?tag= filtert korrekt via jsonb-In-Query; ResourceSummary.tags befuellt.
+
+    Prueft:
+    - Ohne tag=: alle Resources im Workspace.
+    - Mit tag=wissen: nur die Resource mit dem passenden Tag.
+    - Mit tag=nicht_da: leere Liste.
+    - content.tags erscheint in der GET-Antwort (Backward-Compat: Resource ohne Tags liefert []).
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    base = f"/v1/workspaces/{ws}/resources"
+
+    try:
+        with TestClient(app) as client:
+            # Resource mit Tag "wissen"
+            tagged = client.post(
+                base,
+                json=_resource_body("KB-Artikel", "v1", [_block("b1", "x")], tags=["wissen"]),
+                headers=auth,
+            )
+            assert tagged.status_code == 201, tagged.text
+            tagged_id = tagged.json()["id"]
+            # content.tags erscheint in der Antwort
+            assert tagged.json()["content"]["tags"] == ["wissen"]
+
+            # Resource ohne Tags
+            untagged = client.post(
+                base,
+                json=_resource_body("FAQ", "v1", [_block("b2", "y")]),
+                headers=auth,
+            )
+            assert untagged.status_code == 201
+            untagged_id = untagged.json()["id"]
+            assert untagged.json()["content"]["tags"] == []
+
+            # Ohne Filter: beide sichtbar
+            all_resp = client.get(base, headers=auth).json()
+            all_ids = {r["id"] for r in all_resp}
+            assert tagged_id in all_ids
+            assert untagged_id in all_ids
+
+            # Mit tag=wissen: nur der getaggte Eintrag
+            filtered = client.get(f"{base}?tag=wissen", headers=auth).json()
+            assert [r["id"] for r in filtered] == [tagged_id]
+            assert filtered[0]["content"]["tags"] == ["wissen"]
+
+            # Mit unbekanntem Tag: leere Liste
+            empty = client.get(f"{base}?tag=nicht_da", headers=auth).json()
+            assert empty == []
     finally:
         cleanup_workspaces([owner])

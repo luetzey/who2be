@@ -2,7 +2,7 @@ import { ArrowLeft } from 'lucide-react'
 import { useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 
-import type { VersionStatus } from '@/api/types'
+import type { PersonaMode, VersionStatus } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
@@ -205,6 +205,50 @@ export function PersonaDetailPage() {
                   />
                 </CardContent>
               </Card>
+
+              {(() => {
+                const modes: PersonaMode[] = persona.content.modes ?? []
+                if (modes.length === 0) return null
+                return (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Modi</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ul className="flex flex-col gap-3" aria-label="Persona-Modi">
+                        {modes.map((mode, index) => (
+                          <li
+                            key={index}
+                            className="flex flex-col gap-1 rounded-md border p-3"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium">{mode.name}</span>
+                              {mode.is_default ? (
+                                <Badge variant="secondary">Default</Badge>
+                              ) : null}
+                            </div>
+                            {mode.trigger ? (
+                              <p className="text-xs text-muted-foreground">
+                                Trigger: {mode.trigger}
+                              </p>
+                            ) : null}
+                            {mode.identity_add ? (
+                              <p className="text-xs text-muted-foreground">
+                                Identity: {mode.identity_add}
+                              </p>
+                            ) : null}
+                            {mode.output_style_override ? (
+                              <p className="text-xs text-muted-foreground">
+                                Output-Stil: {mode.output_style_override}
+                              </p>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  </Card>
+                )
+              })()}
 
               <Card>
                 <CardHeader>

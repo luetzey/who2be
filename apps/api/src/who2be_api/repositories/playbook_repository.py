@@ -35,7 +35,10 @@ _SELECT_CURRENT = """
            EXISTS (
                SELECT 1 FROM playbook_version dv
                WHERE dv.playbook_id = p.id AND dv.status = 'draft'
-           ) AS has_pending_draft
+           ) AS has_pending_draft,
+           EXISTS (
+               SELECT 1 FROM playbook_composition c WHERE c.parent_id = p.id
+           ) AS is_composite
     FROM playbook p
     JOIN playbook_version pv
       ON pv.playbook_id = p.id AND pv.version = p.current_version
@@ -49,7 +52,10 @@ _SELECT_ACTIVE = """
            EXISTS (
                SELECT 1 FROM playbook_version dv
                WHERE dv.playbook_id = p.id AND dv.status = 'draft'
-           ) AS has_pending_draft
+           ) AS has_pending_draft,
+           EXISTS (
+               SELECT 1 FROM playbook_composition c WHERE c.parent_id = p.id
+           ) AS is_composite
     FROM playbook p
     JOIN playbook_version pv
       ON pv.playbook_id = p.id AND pv.status = 'active'

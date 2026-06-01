@@ -46,10 +46,17 @@ def _ctx(
     )
 
 
-def _make_db(fetchrow_return: Any = None) -> MagicMock:
-    """Erstellt einen Fake asyncpg.Connection-Mock."""
+def _make_db(fetchrow_return: Any = None, fetch_return: Any = None) -> MagicMock:
+    """Erstellt einen Fake asyncpg.Connection-Mock.
+
+    `fetchrow_return` — Rueckgabewert fuer `db.fetchrow(...)`.
+    `fetch_return`    — Rueckgabewert fuer `db.fetch(...)` (Default: leere Liste,
+                        damit der Composite-Zweig des PlaybookResolvers korrekt
+                        „kein Kind → Atomic" meldet).
+    """
     db = MagicMock()
     db.fetchrow = AsyncMock(return_value=fetchrow_return)
+    db.fetch = AsyncMock(return_value=fetch_return if fetch_return is not None else [])
     return db
 
 
@@ -122,6 +129,93 @@ class TestPlaybookResolver:
 
         assert result.text == "### Leer"
         assert result.unresolved_key is None
+
+    # --- Composite-aware (B1) ---
+
+    def _make_child_row(self, name: str, description: str, body: str) -> MagicMock:
+        """Erstellt einen Fake-Child-Row-Mock fuer `db.fetch`."""
+        row = MagicMock()
+        row.__getitem__ = MagicMock(
+            side_effect=lambda k: {
+                "child_name": name,
+                "child_content": {"description": description, "body": body},
+            }[k]
+        )
+        return row
+
+    def test_composite_pill_includes_composite_body_and_children_in_order(self) -> None:
+        """Pill auf Composite → Output enthaelt Composite-Body + Kinder in position-Reihenfolge."""
+        resolver = PlaybookResolver()
+        ctx = _ctx()
+        parent_row = MagicMock()
+        parent_row.__getitem__ = MagicMock(
+            side_effect=lambda k: {
+                "name": "Onboarding",
+                "content": {"description": "Gesamt-Onboarding", "body": "Bitte folgen."},
+            }[k]
+        )
+        child_rows = [
+            self._make_child_row("Schritt-1: Konto", "Konto anlegen", "Gehe zu Settings."),
+            self._make_child_row("Schritt-2: Profil", "Profil ausfuellen", "Name eingeben."),
+        ]
+        db = _make_db(fetchrow_return=parent_row, fetch_return=child_rows)
+
+        result = _async_run(resolver.resolve(str(uuid4()), ctx, db)).text
+
+        assert "### Onboarding" in result
+        assert "Gesamt-Onboarding" in result
+        assert "Bitte folgen." in result
+        assert "## Ablauf (Sub-Playbooks)" in result
+        # Kinder erscheinen nummeriert in Reihenfolge.
+        assert "1." in result
+        assert "2." in result
+        assert result.index("Schritt-1: Konto") < result.index("Schritt-2: Profil")
+        assert "Gehe zu Settings." in result
+        assert "Name eingeben." in result
+
+    def test_atomic_pill_returns_only_own_body(self) -> None:
+        """Pill auf Atomic (keine Kinder) → nur eigener Body, keine Ablauf-Sektion."""
+        resolver = PlaybookResolver()
+        ctx = _ctx()
+        row = MagicMock()
+        row.__getitem__ = MagicMock(
+            side_effect=lambda k: {
+                "name": "Reset-Mail",
+                "content": {"description": "Passwort zuruecksetzen", "body": "Mail senden."},
+            }[k]
+        )
+        db = _make_db(fetchrow_return=row, fetch_return=[])
+
+        result = _async_run(resolver.resolve(str(uuid4()), ctx, db)).text
+
+        assert "### Reset-Mail" in result
+        assert "Passwort zuruecksetzen" in result
+        assert "Mail senden." in result
+        assert "## Ablauf (Sub-Playbooks)" not in result
+
+    def test_composite_pill_skips_inactive_children(self) -> None:
+        """Inaktive Kinder (kein active-Join-Match) werden uebersprungen — kein Hard-Fail."""
+        resolver = PlaybookResolver()
+        ctx = _ctx()
+        parent_row = MagicMock()
+        parent_row.__getitem__ = MagicMock(
+            side_effect=lambda k: {
+                "name": "Composite",
+                "content": {"description": "", "body": "Sequenz."},
+            }[k]
+        )
+        # Nur ein aktives Kind geliefert (inaktives Kind fehlt im JOIN-Ergebnis).
+        active_child = self._make_child_row("Aktiv-Schritt", "Nur aktiv", "Fertig.")
+        db = _make_db(fetchrow_return=parent_row, fetch_return=[active_child])
+
+        result = _async_run(resolver.resolve(str(uuid4()), ctx, db)).text
+
+        assert "Aktiv-Schritt" in result
+        assert "## Ablauf (Sub-Playbooks)" in result
+        # Nur ein Kind → nur "1." vorhanden, kein "2."
+        assert "1." in result
+        lines_with_2 = [ln for ln in result.splitlines() if ln.strip().startswith("2.")]
+        assert lines_with_2 == []
 
 
 # ---------------------------------------------------------------------------
@@ -251,6 +345,150 @@ class TestPersonaFieldResolver:
         assert result.text == ""
         assert result.unresolved_key == "persona-field:name"
 
+    # --- profile-Target (E1 + C4) ---
+
+    def test_resolves_profile_with_description_and_blocks(self) -> None:
+        """profile rendert description + BlockNote-Body."""
+        resolver = PersonaFieldResolver()
+        ctx = _ctx(persona_id=uuid4())
+        blocks = [
+            {
+                "id": "b1",
+                "type": "paragraph",
+                "props": {},
+                "content": [{"type": "text", "text": "Empathisch und praezise.", "styles": {}}],
+                "children": [],
+            }
+        ]
+        _content: dict[str, Any] = {
+            "description": "Senior Coach",
+            "content": {"description": "", "blocks": blocks},
+            "traits": [],
+            "modes": [],
+        }
+        row = MagicMock()
+        row.__getitem__ = MagicMock(side_effect=lambda k: {"content": _content}[k])
+        db = _make_db(row)
+
+        result = _async_run(resolver.resolve("profile", ctx, db)).text
+
+        assert "Senior Coach" in result
+        assert "Empathisch und praezise." in result
+
+    def test_resolves_profile_with_modi_sektion(self) -> None:
+        """profile enthaelt ## Modi-Sektion wenn modes vorhanden (C4)."""
+        resolver = PersonaFieldResolver()
+        ctx = _ctx(persona_id=uuid4())
+        _content: dict[str, Any] = {
+            "description": "Persona mit Modi",
+            "content": None,
+            "traits": [],
+            "modes": [
+                {
+                    "name": "Erklaerer",
+                    "trigger": "erklaer,wie",
+                    "is_default": False,
+                    "identity_add": "Du bist ein Lehrer.",
+                    "output_style_override": "Schreibe einfach.",
+                },
+                {
+                    "name": "Standard",
+                    "trigger": None,
+                    "is_default": True,
+                    "identity_add": "",
+                    "output_style_override": "",
+                },
+            ],
+        }
+        row = MagicMock()
+        row.__getitem__ = MagicMock(side_effect=lambda k: {"content": _content}[k])
+        db = _make_db(row)
+
+        result = _async_run(resolver.resolve("profile", ctx, db)).text
+
+        assert "## Modi" in result
+        assert "### Erklaerer" in result
+        assert "Trigger" in result
+        assert "erklaer,wie" in result
+        assert "Du bist ein Lehrer." in result
+        assert "Schreibe einfach." in result
+        assert "### Standard (Default)" in result
+
+    def test_resolves_profile_without_modi_sektion_when_modes_empty(self) -> None:
+        """profile enthaelt keine ## Modi-Sektion wenn modes leer."""
+        resolver = PersonaFieldResolver()
+        ctx = _ctx(persona_id=uuid4())
+        _content: dict[str, Any] = {
+            "description": "Einfache Persona",
+            "content": None,
+            "traits": [],
+            "modes": [],
+        }
+        row = MagicMock()
+        row.__getitem__ = MagicMock(side_effect=lambda k: {"content": _content}[k])
+        db = _make_db(row)
+
+        result = _async_run(resolver.resolve("profile", ctx, db)).text
+
+        assert "Einfache Persona" in result
+        assert "## Modi" not in result
+
+    def test_resolves_profile_with_empty_body_returns_description_only(self) -> None:
+        """profile mit leerem Body gibt nur description zurueck."""
+        resolver = PersonaFieldResolver()
+        ctx = _ctx(persona_id=uuid4())
+        _content: dict[str, Any] = {
+            "description": "Nur Beschreibung",
+            "content": {"description": "", "blocks": []},
+            "traits": [],
+            "modes": [],
+        }
+        row = MagicMock()
+        row.__getitem__ = MagicMock(side_effect=lambda k: {"content": _content}[k])
+        db = _make_db(row)
+
+        result = _async_run(resolver.resolve("profile", ctx, db)).text
+
+        assert result.strip() == "Nur Beschreibung"
+
+    def test_resolves_profile_empty_description_and_body_returns_empty_string(self) -> None:
+        """profile mit leerer description und leerem Body gibt leeren String zurueck."""
+        resolver = PersonaFieldResolver()
+        ctx = _ctx(persona_id=uuid4())
+        _content: dict[str, Any] = {
+            "description": "",
+            "content": {"description": "", "blocks": []},
+            "traits": [],
+            "modes": [],
+        }
+        row = MagicMock()
+        row.__getitem__ = MagicMock(side_effect=lambda k: {"content": _content}[k])
+        db = _make_db(row)
+
+        result = _async_run(resolver.resolve("profile", ctx, db)).text
+
+        assert result == ""
+
+    def test_resolves_profile_with_traits(self) -> None:
+        """profile rendert Traits-Liste (deprecated aber lesbar)."""
+        resolver = PersonaFieldResolver()
+        ctx = _ctx(persona_id=uuid4())
+        _content: dict[str, Any] = {
+            "description": "Persona mit Traits",
+            "content": None,
+            "traits": ["praezise", "empathisch"],
+            "modes": [],
+        }
+        row = MagicMock()
+        row.__getitem__ = MagicMock(side_effect=lambda k: {"content": _content}[k])
+        db = _make_db(row)
+
+        result = _async_run(resolver.resolve("profile", ctx, db)).text
+
+        assert "praezise" in result
+        assert "empathisch" in result
+        assert "Traits" in result
+
 
 # ---------------------------------------------------------------------------
 # DateResolver
@@ -331,7 +569,7 @@ class TestToolsOverviewResolver:
             "list_triggers()",
             "list_playbooks(tag?, trigger?)",
             "fetch_playbook(playbook_id)",
-            "list_resources()",
+            "list_resources(tag?)",
             "fetch_resource(resource_id, block_ids?)",
         ):
             assert expected in result.text
@@ -342,6 +580,31 @@ class TestToolsOverviewResolver:
         db = _make_db()
         result = _async_run(REGISTRY["tools-overview"].resolve("", ctx, db))
         assert "Verfuegbare Werkzeuge" in result.text
+
+    def test_fetch_playbook_mentions_composite(self) -> None:
+        """fetch_playbook-Eintrag erklaert Composite-Sequenz (E2)."""
+        resolver = ToolsOverviewResolver()
+        ctx = _ctx()
+        db = _make_db()
+        result = _async_run(resolver.resolve("", ctx, db)).text
+        assert "Composite" in result or "composed_playbooks" in result
+
+    def test_get_persona_mentions_modi(self) -> None:
+        """get_persona-Eintrag erklaert content.modes / Modi-Auswahl (E2)."""
+        resolver = ToolsOverviewResolver()
+        ctx = _ctx()
+        db = _make_db()
+        result = _async_run(resolver.resolve("", ctx, db)).text
+        assert "content.modes" in result or "Modi" in result
+
+    def test_overview_includes_applied_vs_triggered_hint(self) -> None:
+        """Overview enthaelt Hinweis: applied (immer geladen) vs. triggered (E2)."""
+        resolver = ToolsOverviewResolver()
+        ctx = _ctx()
+        db = _make_db()
+        result = _async_run(resolver.resolve("", ctx, db)).text
+        assert "applied" in result or "eingebettet" in result
+        assert "list_triggers" in result
 
 
 # ---------------------------------------------------------------------------
@@ -589,6 +852,8 @@ class TestRenderTemplateBody:
         )
         db = MagicMock()
         db.fetchrow = AsyncMock(side_effect=[row_mock, None])
+        # Valider Playbook ist kein Composite -> db.fetch liefert keine Kinder.
+        db.fetch = AsyncMock(return_value=[])
 
         ctx = RenderContext(
             workspace_id=UUID("00000000-0000-0000-0000-000000000099"),

@@ -10,10 +10,12 @@ import { notify } from '@/lib/feedback'
 // Welle 4: Create ist immer erlaubt. `name` ist die einzige clientseitige
 // Pflicht. Schema spiegelt `useResourceForm`, damit `ResourceEditorForm`
 // mit beiden Hooks funktioniert.
+// Track E3: Tags hinzugefuegt.
 const createSchema = z.object({
   name: z.string().min(1, 'Name ist erforderlich.'),
   description: z.string(),
   bodyBlocks: z.array(z.custom<ResourceBlock>()),
+  tags: z.array(z.string()),
 })
 
 export type ResourceCreateValues = z.infer<typeof createSchema>
@@ -29,7 +31,7 @@ export function useCreateResource(onCreated: (id: string) => void): UseCreateRes
   const [saveError, setSaveError] = useState<string | null>(null)
   const form = useForm<ResourceCreateValues>({
     resolver: zodResolver(createSchema),
-    defaultValues: { name: '', description: '', bodyBlocks: [] },
+    defaultValues: { name: '', description: '', bodyBlocks: [], tags: [] },
   })
 
   const onSubmit = form.handleSubmit(async (values) => {
@@ -37,7 +39,7 @@ export function useCreateResource(onCreated: (id: string) => void): UseCreateRes
     try {
       const created = await api.createResource({
         name: values.name,
-        content: { description: values.description, blocks: values.bodyBlocks },
+        content: { description: values.description, blocks: values.bodyBlocks, tags: values.tags },
       })
       notify.success('Resource angelegt.')
       onCreated(created.id)

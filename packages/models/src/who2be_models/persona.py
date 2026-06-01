@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from who2be_models.resource import ResourceBlock
 from who2be_models.status import VersionStatus
@@ -14,6 +14,26 @@ from who2be_models.status import VersionStatus
 # `list_personas`-Antwort retourniert werden.
 TraitStr = Annotated[str, StringConstraints(min_length=1, max_length=200)]
 TagStr = Annotated[str, StringConstraints(min_length=1, max_length=100)]
+
+
+class PersonaMode(BaseModel):
+    """Ein einzelner Modus einer Multi-Modus-Persona (Gap 3.4).
+
+    Ein Modus beschreibt, wie sich die Persona in einem bestimmten Kontext
+    verhaelt. Er wird durch `trigger` erkannt (kommagetrennte Keywords); ohne
+    Trigger-Match greift der Default-Modus (`is_default=True`).
+
+    `identity_add` ergaenzt die Basis-Identitaet der Persona; `output_style_override`
+    beschreibt, wie sich der Output-Stil in diesem Modus aendert.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=100)
+    trigger: str | None = Field(default=None, max_length=2_000)
+    is_default: bool = False
+    identity_add: str = Field(default="", max_length=5_000)
+    output_style_override: str = Field(default="", max_length=5_000)
 
 
 class PersonaContent(BaseModel):
@@ -56,6 +76,34 @@ class PersonaVersionContent(BaseModel):
     traits: list[TraitStr] = Field(default_factory=list, max_length=50)
     tags: list[TagStr] = Field(default_factory=list, max_length=50)
     content: PersonaContent | None = None
+    # Gap 3.4: Multi-Modus-Personas. Default [] = Backward-Compat (alte Clients
+    # senden das Feld nicht; additive jsonb-Evolution nach ADR-0009).
+    modes: list[PersonaMode] = Field(default_factory=list, max_length=20)
+
+    @model_validator(mode="after")
+    def _validate_modes(self) -> "PersonaVersionContent":
+        """Validiert Invarianten ueber alle Modi:
+
+        1. Hoechstens ein Modus darf `is_default=True` sein.
+        2. Modus-Namen sind case-insensitive eindeutig.
+        """
+        default_count = sum(1 for m in self.modes if m.is_default)
+        if default_count > 1:
+            raise ValueError(
+                f"Hoechstens ein Modus darf is_default=True sein, gefunden: {default_count}"
+            )
+
+        names_lower = [m.name.lower() for m in self.modes]
+        if len(names_lower) != len(set(names_lower)):
+            seen: set[str] = set()
+            for n in names_lower:
+                if n in seen:
+                    raise ValueError(
+                        f"Modus-Namen muessen case-insensitiv eindeutig sein, Duplikat: '{n}'"
+                    )
+                seen.add(n)
+
+        return self
 
 
 class PersonaCreate(BaseModel):

@@ -15,11 +15,14 @@ import { Stack } from '@/components/layout/Stack'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { usePlaybookComposes } from '@/hooks/usePlaybookComposes'
 import { usePlaybookResourceLinks } from '@/hooks/usePlaybookResourceLinks'
 import { usePlaybookUsages } from '@/hooks/usePlaybookUsages'
 import { notify } from '@/lib/feedback'
 
+import { ComposedByList } from '../components/ComposedByList'
 import { LinkedBlocksList } from '../components/LinkedBlocksList'
+import { PlaybookComposesPicker } from '../components/PlaybookComposesPicker'
 import { PlaybookEditorForm } from '../components/PlaybookEditorForm'
 import { ResourceBlockLinkPicker } from '../components/ResourceBlockLinkPicker'
 import { usePlaybook } from '../hooks/usePlaybook'
@@ -33,6 +36,7 @@ export function PlaybookDetailPage() {
   const { form, autoSave, initialBodyBlocks } = usePlaybookForm(playbook, reload)
   const resourceLinks = usePlaybookResourceLinks(id)
   const usages = usePlaybookUsages(id)
+  const composition = usePlaybookComposes(id)
   const wsPath = useWorkspacePath()
   const api = useApi()
   const role = useCurrentWorkspaceRole()
@@ -185,15 +189,20 @@ export function PlaybookDetailPage() {
                       title={playbook.name}
                       description={description}
                       actions={
-                        playbook.tags.length > 0 ? (
-                          <div className="flex flex-wrap gap-1" aria-label="Tags">
-                            {playbook.tags.map((tag) => (
-                              <Badge key={tag} variant="secondary">
-                                {tag}
-                              </Badge>
-                            ))}
-                          </div>
-                        ) : undefined
+                        <div className="flex flex-wrap items-center gap-2">
+                          {playbook.is_composite === true ? (
+                            <Badge variant="secondary">Composite</Badge>
+                          ) : null}
+                          {playbook.tags.length > 0 ? (
+                            <div className="flex flex-wrap gap-1" aria-label="Tags">
+                              {playbook.tags.map((tag) => (
+                                <Badge key={tag} variant="secondary">
+                                  {tag}
+                                </Badge>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
                       }
                     />
                     {triggers.length > 0 ? (
@@ -304,6 +313,64 @@ export function PlaybookDetailPage() {
                       />
                     </div>
                   </Stack>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Sub-Playbooks (Composes)</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Stack gap="sm">
+                    <DataView loading={composition.loading} error={composition.error}>
+                      {composition.children.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          Keine Sub-Playbooks verknüpft. Dieses Playbook ist atomar.
+                        </p>
+                      ) : (
+                        <ol className="flex flex-col gap-1" aria-label="Sub-Playbooks">
+                          {composition.children.map((child, index) => (
+                            <li
+                              key={child.id}
+                              className="flex items-center gap-2 text-sm"
+                            >
+                              <span className="w-5 text-right text-xs text-muted-foreground">
+                                {index + 1}.
+                              </span>
+                              <Link
+                                to={wsPath(`/playbooks/${child.id}`)}
+                                className="rounded-sm font-medium text-foreground ring-offset-background hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
+                              >
+                                {child.name}
+                              </Link>
+                              {child.is_composite === true ? (
+                                <Badge variant="outline" className="text-xs">
+                                  Composite
+                                </Badge>
+                              ) : null}
+                            </li>
+                          ))}
+                        </ol>
+                      )}
+                    </DataView>
+                    <div className="flex justify-end">
+                      <PlaybookComposesPicker
+                        currentPlaybookId={playbook.id}
+                        existing={composition.children}
+                        saving={composition.saving}
+                        onSave={composition.save}
+                      />
+                    </div>
+                  </Stack>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Verwendet als Sub-Playbook in</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ComposedByList parents={composition.parents} />
                 </CardContent>
               </Card>
             </Stack>

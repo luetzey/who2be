@@ -105,7 +105,7 @@ describe('PersonaNewPage', () => {
       { timeout: 3000 },
     )
 
-    // POST-Call: createPersona mit korrektem Body aufgerufen.
+    // POST-Call: createPersona mit korrektem Body aufgerufen (Track C5: modes immer mitgeschickt).
     expect(createPersonaMock).toHaveBeenCalledWith({
       name: 'QA-Bot',
       content: {
@@ -114,6 +114,7 @@ describe('PersonaNewPage', () => {
         traits: [],
         tags: [],
         content: { description: '', blocks: [] },
+        modes: [],
       },
     })
   })

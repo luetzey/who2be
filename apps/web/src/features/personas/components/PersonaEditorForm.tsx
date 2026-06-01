@@ -12,6 +12,7 @@ import { TagInput } from '@/components/ui/tag-input'
 import { ResourceEditor } from '@/features/resources/components/ResourceEditor'
 
 import type { PersonaEditorValues } from '../hooks/usePersonaForm'
+import { PersonaModesEditor } from './PersonaModesEditor'
 
 interface PersonaEditorFormProps {
   form: UseFormReturn<PersonaEditorValues>
@@ -200,6 +201,27 @@ export function PersonaEditorForm({
                 )}
               />
             </FormSection>
+            <FormSection
+              title="Modi (optional)"
+              description="Multi-Modus-Personas können je nach Kontext unterschiedlich agieren."
+              help={
+                <div className="space-y-2">
+                  <p>
+                    Modi ermöglichen es einer Persona, den Stil je nach Trigger-Schlüsselwort
+                    zu wechseln. Nur ein Modus kann der Default sein — er greift, wenn kein
+                    anderer Trigger passt.
+                  </p>
+                  <p className="text-xs font-medium text-foreground">Beispiel</p>
+                  <p className="text-xs">
+                    Modus „Coaching": Trigger „coaching, feedback" → ruhig, empathisch.
+                    Modus „Analyse" (Default): sachlich, datenorientiert.
+                  </p>
+                </div>
+              }
+            >
+              <PersonaModesEditor control={form.control} disabled={isViewer} />
+            </FormSection>
+
             {actions !== undefined ? actions : null}
           </form>
         </Form>

@@ -106,6 +106,62 @@ def test_list_resources_returns_summaries(monkeypatch: pytest.MonkeyPatch) -> No
     assert result[0].name == "Doc"
 
 
+def test_list_resources_summary_includes_tags(monkeypatch: pytest.MonkeyPatch) -> None:
+    """E3: ResourceSummary.tags spiegelt content.tags der Resource."""
+    payload = _resource_payload(blocks=[_block("b1", "x")])
+    payload["content"]["tags"] = ["wissen", "onboarding"]  # type: ignore[index]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=[payload])
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    result = asyncio.run(list_resources())
+    assert len(result) == 1
+    assert result[0].tags == ["wissen", "onboarding"]
+
+
+def test_list_resources_summary_empty_tags_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """E3: Resource ohne Tags liefert leere Tags-Liste (Backward-Compat)."""
+    payload = _resource_payload()  # kein 'tags' im content
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=[payload])
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    result = asyncio.run(list_resources())
+    assert result[0].tags == []
+
+
+def test_list_resources_passes_tag_filter_to_api(monkeypatch: pytest.MonkeyPatch) -> None:
+    """E3: list_resources(tag='x') reicht den tag-Parameter an den API-Client durch."""
+    received_params: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        # Anfrage-Query-String auf tag pruefen
+        for key, value in request.url.params.items():
+            received_params[key] = value
+        return httpx.Response(200, json=[])
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    result = asyncio.run(list_resources(tag="wissen"))
+    assert result == []
+    assert received_params.get("tag") == "wissen"
+
+
+def test_list_resources_without_tag_sends_no_tag_param(monkeypatch: pytest.MonkeyPatch) -> None:
+    """E3: list_resources() ohne tag sendet keinen tag-Parameter (kein ?tag=None)."""
+    received_params: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        for key, value in request.url.params.items():
+            received_params[key] = value
+        return httpx.Response(200, json=[])
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    asyncio.run(list_resources())
+    assert "tag" not in received_params
+
+
 def test_fetch_resource_filters_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
     rid = uuid4()
     payload = _resource_payload(blocks=[_block("b1", "a"), _block("b2", "b"), _block("b3", "c")])
@@ -152,6 +208,8 @@ def test_fetch_playbook_includes_linked_blocks(monkeypatch: pytest.MonkeyPatch) 
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith(f"/playbooks/{pid}/resource_links"):
             return httpx.Response(200, json=[link])
+        if request.url.path.endswith(f"/playbooks/{pid}/composes"):
+            return httpx.Response(200, json=[])
         if request.url.path.endswith(f"/playbooks/{pid}"):
             return httpx.Response(200, json=playbook)
         return httpx.Response(404)
@@ -165,6 +223,8 @@ def test_fetch_playbook_includes_linked_blocks(monkeypatch: pytest.MonkeyPatch) 
     assert result.linked_blocks[0].link_scope == "block"
     # Block-Refs ziehen das Volldokument NICHT mit — Snippet via fetch_resource.
     assert result.linked_resources == []
+    # Kein Composite → leere composed_playbooks.
+    assert result.composed_playbooks == []
 
 
 def test_fetch_playbook_inlines_resource_for_resource_scope_links(
@@ -191,6 +251,8 @@ def test_fetch_playbook_inlines_resource_for_resource_scope_links(
         path = request.url.path
         if path.endswith(f"/playbooks/{pid}/resource_links"):
             return httpx.Response(200, json=[link])
+        if path.endswith(f"/playbooks/{pid}/composes"):
+            return httpx.Response(200, json=[])
         if path.endswith(f"/playbooks/{pid}"):
             return httpx.Response(200, json=playbook)
         if path.endswith(f"/resources/{rid}"):
@@ -240,6 +302,8 @@ def test_fetch_playbook_deduplicates_resource_scope_inline(
         path = request.url.path
         if path.endswith(f"/playbooks/{pid}/resource_links"):
             return httpx.Response(200, json=links)
+        if path.endswith(f"/playbooks/{pid}/composes"):
+            return httpx.Response(200, json=[])
         if path.endswith(f"/playbooks/{pid}"):
             return httpx.Response(200, json=playbook)
         if path.endswith(f"/resources/{rid}"):
@@ -251,3 +315,39 @@ def test_fetch_playbook_deduplicates_resource_scope_inline(
     result = asyncio.run(fetch_playbook(str(pid)))
     assert len(result.linked_resources) == 1
     assert resource_fetches == 1
+
+
+def test_fetch_playbook_includes_composed_playbooks_ordered(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Composite-Playbook: composed_playbooks enthaelt geordnete aktive Kinder."""
+    pid = uuid4()
+    child_a_id = uuid4()
+    child_b_id = uuid4()
+    playbook = _playbook_payload()
+    playbook["id"] = str(pid)
+    playbook["is_composite"] = True
+    child_a = _playbook_payload("Child-A")
+    child_a["id"] = str(child_a_id)
+    child_b = _playbook_payload("Child-B")
+    child_b["id"] = str(child_b_id)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith(f"/playbooks/{pid}/resource_links"):
+            return httpx.Response(200, json=[])
+        if path.endswith(f"/playbooks/{pid}/composes"):
+            # Geordnet: child_a an Position 0, child_b an Position 1
+            return httpx.Response(200, json=[child_a, child_b])
+        if path.endswith(f"/playbooks/{pid}"):
+            return httpx.Response(200, json=playbook)
+        return httpx.Response(404)
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    result = asyncio.run(fetch_playbook(str(pid)))
+    assert isinstance(result, PlaybookWithResources)
+    assert len(result.composed_playbooks) == 2
+    assert result.composed_playbooks[0].id == child_a_id
+    assert result.composed_playbooks[1].id == child_b_id
+    assert result.composed_playbooks[0].name == "Child-A"
+    assert result.composed_playbooks[1].name == "Child-B"

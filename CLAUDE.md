@@ -64,6 +64,11 @@ Phase 3 ist abgeschlossen (Stand 2026-05-29). Master-Plan:
   `require_role`-Gate auf Mutating-Endpoints; Token-Snapshot-Rolle (ADR-0023);
   Invitations + GoTrue-Mail (single-use, sha256-Hash); Members-Page + Accept-Flow.
 
+**Agenten-Achsen (Track D/E, 2026-05-31):** Composite-Playbooks (ADR-0024),
+  Applied-via-Pill, Persona-Modi + `profile`-Target, Resource-Tags —
+  vollstaendige Agenten-Reise-Doku in `docs/agent-axes.md`. Plan:
+  `.claude/plan/2026-05-31-1630_composite-applied-modi.md`.
+
 Nächste Blöcke offen (kein aktiver Plan): Security-Quick-Wins
 (`docs/security-findings-phase-2.md` §TODO 1–3), CSP/Header-Pass (F-12),
 Public-Switch + FSL-Lizenz (`…1935_license-fsl-setup`,

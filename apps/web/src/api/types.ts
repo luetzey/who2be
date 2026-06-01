@@ -14,6 +14,15 @@ export interface PersonaProfile {
   blocks: ResourceBlock[]
 }
 
+// Track C5 — Persona-Modi. Spiegelt `PersonaMode` aus packages/models.
+export interface PersonaMode {
+  name: string
+  trigger?: string | null
+  is_default: boolean
+  identity_add: string
+  output_style_override: string
+}
+
 export interface PersonaContent {
   description: string
   system_prompt: string
@@ -22,6 +31,8 @@ export interface PersonaContent {
   traits: string[]
   tags?: string[]
   content?: PersonaProfile | null
+  // Track C5 — Modi (optional, Default []).
+  modes?: PersonaMode[]
 }
 
 export interface Persona {
@@ -85,6 +96,14 @@ export interface Playbook {
   content: PlaybookContent
   created_at: string
   updated_at: string
+  // Track A8 — abgeleitet: hat Kinder in playbook_composition.
+  is_composite?: boolean
+}
+
+// Track A8 — Schlanke Referenz fuer Backlinks (Composed-by-Liste).
+export interface PlaybookRef {
+  id: string
+  name: string
 }
 
 export interface PlaybookVersion {
@@ -242,6 +261,8 @@ export interface ResourceBlock {
 export interface ResourceContent {
   description: string
   blocks: ResourceBlock[]
+  // Track E3 — Tags (optional, Default []).
+  tags?: string[]
 }
 
 export interface Resource {

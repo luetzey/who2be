@@ -29,9 +29,12 @@ vi.mock('@/auth/useCurrentWorkspaceRole', () => ({
 
 // `createResource` delegiert via gemocktem useApi — kein echtes Netz.
 const createResourceMock = vi.fn()
+// Track E3: `listResourceTags` wird vom TagInput-Feld beim Mount aufgerufen.
+const listResourceTagsMock = vi.fn().mockResolvedValue([])
 vi.mock('@/api/useApi', () => ({
   useApi: () => ({
     createResource: createResourceMock,
+    listResourceTags: listResourceTagsMock,
   }),
 }))
 
@@ -91,10 +94,10 @@ describe('ResourceNewPage', () => {
       expect(screen.getByText('Detail von res7')).toBeInTheDocument()
     })
 
-    // `createResource` mit korrektem Body aufgerufen (Method-Filter Analog).
+    // `createResource` mit korrektem Body aufgerufen (Track E3: tags immer mitgeschickt).
     expect(createResourceMock).toHaveBeenCalledWith({
       name: 'FAQ',
-      content: { description: '', blocks: [] },
+      content: { description: '', blocks: [], tags: [] },
     })
   })
 })
