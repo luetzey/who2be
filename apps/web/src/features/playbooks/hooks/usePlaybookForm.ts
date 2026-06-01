@@ -3,7 +3,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm, type UseFormReturn } from 'react-hook-form'
 import { z } from 'zod'
 
-import type { Playbook, PlaybookInput, PlaybookType, ResourceBlock } from '@/api/types'
+import type {
+  Playbook,
+  PlaybookInput,
+  PlaybookType,
+  ResourceBlock,
+  SystemPromptBodyFormat,
+} from '@/api/types'
 import { useApi } from '@/api/useApi'
 import {
   useAutoSaveDraft,
@@ -29,8 +35,12 @@ const editorSchema = z.object({
   type: z.enum(PLAYBOOK_TYPES),
   description: z.string().min(1, 'Beschreibung erforderlich.'),
   triggers: z.array(z.string()),
+  // `bodyBlocks` traegt entweder Legacy-Plain-Paragraphen ('plain') oder das
+  // BlockNote-Dokument mit Inline-Pills ('blocknote'). Die Serialisierung im
+  // `toInput` haengt am `body_format`.
   bodyBlocks: z.array(z.custom<ResourceBlock>()),
   tags: z.array(z.string()),
+  body_format: z.enum(['plain', 'blocknote']),
 })
 
 export type PlaybookEditorValues = z.infer<typeof editorSchema>
@@ -65,15 +75,42 @@ function coercePlaybookType(value: string): PlaybookType {
     : 'workflow'
 }
 
+// `body_format` aus playbook.content lesen (Default 'plain' fuer alte
+// Versions/Responses, die das Feld nicht garantieren).
+function readBodyFormat(content: Playbook['content']): SystemPromptBodyFormat {
+  return content.body_format === 'blocknote' ? 'blocknote' : 'plain'
+}
+
+// Initial-Bloecke fuer den Editor: blocknote → JSON.parse(body); plain →
+// plainTextToBlocks (Legacy). JSON-Parse-Fehler fallen auf leer zurueck.
+function deriveInitialBlocks(content: Playbook['content']): ResourceBlock[] {
+  if (readBodyFormat(content) === 'blocknote') {
+    if (content.body.trim() === '') return []
+    try {
+      return JSON.parse(content.body) as ResourceBlock[]
+    } catch {
+      return []
+    }
+  }
+  return plainTextToBlocks(content.body)
+}
+
 function toInput(values: PlaybookEditorValues): PlaybookInput {
+  // blocknote → JSON.stringify(blocks) (Pills bleiben erhalten); plain →
+  // Legacy-Plain-Text-Snapshot.
+  const body =
+    values.body_format === 'blocknote'
+      ? JSON.stringify(values.bodyBlocks)
+      : blocksToPlainText(values.bodyBlocks)
   return {
     name: values.name,
     content: {
       description: values.description,
-      body: blocksToPlainText(values.bodyBlocks),
+      body,
       type: values.type,
       tags: values.tags,
       triggers: joinTriggers(values.triggers),
+      body_format: values.body_format,
     },
   }
 }
@@ -109,6 +146,7 @@ export function usePlaybookForm(
       bodyBlocks: [],
       tags: [],
       triggers: [],
+      body_format: 'plain',
     },
   })
 
@@ -121,9 +159,10 @@ export function usePlaybookForm(
         name: playbook.name,
         type: coercePlaybookType(playbook.content.type),
         description: playbook.content.description,
-        bodyBlocks: plainTextToBlocks(playbook.content.body),
+        bodyBlocks: deriveInitialBlocks(playbook.content),
         tags: playbook.content.tags,
         triggers: splitTriggers(playbook.content.triggers ?? null),
+        body_format: readBodyFormat(playbook.content),
       })
       resetIdRef.current = playbook.id
       setFormReady(true)
@@ -144,7 +183,7 @@ export function usePlaybookForm(
   })
 
   const initialBodyBlocks = useMemo(
-    () => (playbook !== null ? plainTextToBlocks(playbook.content.body) : []),
+    () => (playbook !== null ? deriveInitialBlocks(playbook.content) : []),
     [playbook],
   )
 

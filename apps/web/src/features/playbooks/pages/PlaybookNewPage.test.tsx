@@ -9,12 +9,38 @@ import { SessionContext } from '@/auth/session-context'
 import { PlaybookNewPage } from './PlaybookNewPage'
 
 // BlockNote-Insel in jsdom nicht mountfaehig — siehe PlaybookDetailPage.test.tsx.
+// PlaybookEditorForm importiert PlaybookBodyEditor statisch → Schema-Build beim
+// Modul-Load braucht createReactInlineContentSpec/BlockNoteSchema.create.
 vi.mock('@blocknote/react', () => ({
   useCreateBlockNote: () => ({ document: [] }),
+  SuggestionMenuController: () => null,
+  getDefaultReactSlashMenuItems: () => [],
+  createReactInlineContentSpec: (_config: unknown, _impl: unknown) => ({
+    config: _config,
+    implementation: _impl,
+  }),
 }))
 vi.mock('@blocknote/mantine', () => ({
   BlockNoteView: () => <div data-testid="blocknote-view" />,
 }))
+vi.mock('@blocknote/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@blocknote/core')>()
+  return {
+    ...actual,
+    BlockNoteSchema: {
+      create: vi.fn().mockReturnValue({
+        blockSchema: {},
+        inlineContentSchema: {
+          placeholder: { type: 'placeholder', propSchema: {}, content: 'none' },
+          text: { config: 'text' },
+          link: { config: 'link' },
+        },
+        styleSchema: {},
+      }),
+    },
+    defaultInlineContentSpecs: { text: {}, link: {} },
+  }
+})
 vi.mock('@/app/theme-context', () => ({ useTheme: () => ({ resolved: 'light' }) }))
 
 const session = { access_token: 'jwt' } as unknown as Session
@@ -103,6 +129,7 @@ describe('PlaybookNewPage', () => {
         type: 'workflow',
         tags: [],
         triggers: null,
+        body_format: 'plain',
       },
     })
   })

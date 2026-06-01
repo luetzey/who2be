@@ -38,6 +38,13 @@ export function buildSlashMenuItems(
   editor: unknown,
   openPicker: PickerOpenFn,
   query: string,
+  // Optionaler Filter: nur Placeholder-Items dieser Kinds anbieten. Ohne
+  // Param bleibt das Verhalten wie bisher (alle Items). Der Playbook-Body-
+  // Editor uebergibt z. B. `new Set(['playbook', 'resource'])`, damit dort
+  // keine Persona-Feld-/Datum-/MCP-Tools-Pills angeboten werden. Das
+  // gemeinsame PlaceholderBlock-Schema (alle Kinds) bleibt unveraendert —
+  // wir filtern nur die Slash-Items.
+  allowedKinds?: Set<PlaceholderKind>,
 ): DefaultReactSuggestionItem[] {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const defaults = getDefaultReactSlashMenuItems(editor as any)
@@ -50,9 +57,14 @@ export function buildSlashMenuItems(
     return asAny.key !== undefined && ALLOWED_KEYS.has(asAny.key)
   })
 
-  // Vier Custom-Placeholder-Items
-  const customItems: DefaultReactSuggestionItem[] = [
+  // Custom-Placeholder-Items. `kind` traegt das Filter-Kriterium fuer
+  // `allowedKinds`; es wird unten wieder abgestreift (BlockNote kennt kein
+  // `kind`-Feld auf SuggestionItems).
+  const customItemsWithKind: (DefaultReactSuggestionItem & {
+    kind: PlaceholderKind
+  })[] = [
     {
+      kind: 'playbook',
       title: 'Playbook',
       subtext:
         'Bettet ein Playbook fest ein — immer geladen, nicht getriggert. ' +
@@ -65,6 +77,7 @@ export function buildSlashMenuItems(
       aliases: ['playbook', 'pb', 'standard'],
     },
     {
+      kind: 'resource',
       title: 'Resource',
       subtext: 'Verlinkt eine spezifische Resource',
       group: 'Placeholder',
@@ -75,6 +88,7 @@ export function buildSlashMenuItems(
       aliases: ['resource', 'res', 'datei'],
     },
     {
+      kind: 'persona-field',
       title: 'Persona-Feld',
       subtext:
         'Fügt ein Persona-Feld ein: Name, Beschreibung oder das vollständige Profil ' +
@@ -87,6 +101,7 @@ export function buildSlashMenuItems(
       aliases: ['persona', 'name', 'beschreibung', 'profil', 'profile'],
     },
     {
+      kind: 'date',
       title: 'Datum',
       subtext: 'Aktuelles Datum beim Rendern',
       group: 'Placeholder',
@@ -97,6 +112,7 @@ export function buildSlashMenuItems(
       aliases: ['datum', 'date', 'heute'],
     },
     {
+      kind: 'tools-overview',
       title: 'MCP-Tools',
       subtext: 'Fuegt eine Uebersicht der MCP-Werkzeuge ein, die der Agent nutzen kann',
       group: 'Placeholder',
@@ -107,6 +123,16 @@ export function buildSlashMenuItems(
       aliases: ['mcp', 'tools', 'werkzeuge', 'tools-overview'],
     },
   ]
+
+  // `allowedKinds` filtert die Custom-Items; `kind` wird danach abgestreift
+  // (BlockNote kennt kein `kind`-Feld auf SuggestionItems).
+  const customItems: DefaultReactSuggestionItem[] = customItemsWithKind
+    .filter((item) => allowedKinds === undefined || allowedKinds.has(item.kind))
+    .map((item) => {
+      const rest = { ...item } as Partial<typeof item>
+      delete rest.kind
+      return rest as DefaultReactSuggestionItem
+    })
 
   const allItems = [...filtered, ...customItems]
 

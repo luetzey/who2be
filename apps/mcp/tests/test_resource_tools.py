@@ -210,6 +210,8 @@ def test_fetch_playbook_includes_linked_blocks(monkeypatch: pytest.MonkeyPatch) 
             return httpx.Response(200, json=[link])
         if request.url.path.endswith(f"/playbooks/{pid}/composes"):
             return httpx.Response(200, json=[])
+        if request.url.path.endswith(f"/playbooks/{pid}/rendered"):
+            return httpx.Response(200, json={"body_rendered": "b", "unresolved": []})
         if request.url.path.endswith(f"/playbooks/{pid}"):
             return httpx.Response(200, json=playbook)
         return httpx.Response(404)
@@ -253,6 +255,8 @@ def test_fetch_playbook_inlines_resource_for_resource_scope_links(
             return httpx.Response(200, json=[link])
         if path.endswith(f"/playbooks/{pid}/composes"):
             return httpx.Response(200, json=[])
+        if path.endswith(f"/playbooks/{pid}/rendered"):
+            return httpx.Response(200, json={"body_rendered": "b", "unresolved": []})
         if path.endswith(f"/playbooks/{pid}"):
             return httpx.Response(200, json=playbook)
         if path.endswith(f"/resources/{rid}"):
@@ -304,6 +308,8 @@ def test_fetch_playbook_deduplicates_resource_scope_inline(
             return httpx.Response(200, json=links)
         if path.endswith(f"/playbooks/{pid}/composes"):
             return httpx.Response(200, json=[])
+        if path.endswith(f"/playbooks/{pid}/rendered"):
+            return httpx.Response(200, json={"body_rendered": "b", "unresolved": []})
         if path.endswith(f"/playbooks/{pid}"):
             return httpx.Response(200, json=playbook)
         if path.endswith(f"/resources/{rid}"):
@@ -339,6 +345,8 @@ def test_fetch_playbook_includes_composed_playbooks_ordered(
         if path.endswith(f"/playbooks/{pid}/composes"):
             # Geordnet: child_a an Position 0, child_b an Position 1
             return httpx.Response(200, json=[child_a, child_b])
+        if path.endswith(f"/playbooks/{pid}/rendered"):
+            return httpx.Response(200, json={"body_rendered": "b", "unresolved": []})
         if path.endswith(f"/playbooks/{pid}"):
             return httpx.Response(200, json=playbook)
         return httpx.Response(404)
@@ -351,3 +359,35 @@ def test_fetch_playbook_includes_composed_playbooks_ordered(
     assert result.composed_playbooks[1].id == child_b_id
     assert result.composed_playbooks[0].name == "Child-A"
     assert result.composed_playbooks[1].name == "Child-B"
+
+
+def test_fetch_playbook_returns_rendered_body(monkeypatch: pytest.MonkeyPatch) -> None:
+    """B5: fetch_playbook liefert den serverseitig expandierten Body.
+
+    Der MCP-Server holt den Body ueber `GET .../playbooks/{id}/rendered`; bei
+    `body_format='blocknote'` sind die Inline-Pills bereits zu Plain-Text
+    aufgeloest. Hier mocken wir die API-Antwort mit dem expandierten Text.
+    """
+    pid = uuid4()
+    playbook = _playbook_payload()
+    playbook["id"] = str(pid)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith(f"/playbooks/{pid}/resource_links"):
+            return httpx.Response(200, json=[])
+        if path.endswith(f"/playbooks/{pid}/composes"):
+            return httpx.Response(200, json=[])
+        if path.endswith(f"/playbooks/{pid}/rendered"):
+            return httpx.Response(
+                200,
+                json={"body_rendered": "Schritt 1\n\nSub-Playbook-Inhalt", "unresolved": []},
+            )
+        if path.endswith(f"/playbooks/{pid}"):
+            return httpx.Response(200, json=playbook)
+        return httpx.Response(404)
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    result = asyncio.run(fetch_playbook(str(pid)))
+    assert isinstance(result, PlaybookWithResources)
+    assert result.body_rendered == "Schritt 1\n\nSub-Playbook-Inhalt"

@@ -17,6 +17,36 @@ vi.mock('@/components/editor/BlockNoteEditor', () => ({
   ),
 }))
 
+// PlaybookBodyEditor (BlockNote-Insel fuer den blocknote-Body) ebenfalls
+// mocken — er importiert BlockNote direkt. Wir exponieren `initialBlocks`
+// per Data-Attribut und einen Button, der onChange mit Test-Bloecken feuert.
+vi.mock('./PlaybookBodyEditor', () => ({
+  PlaybookBodyEditor: ({
+    initialBlocks,
+    onChange,
+  }: {
+    initialBlocks: unknown[]
+    onChange?: (blocks: unknown[]) => void
+  }) => (
+    <div
+      data-testid="playbook-body-editor"
+      data-initial-blocks={JSON.stringify(initialBlocks)}
+    >
+      <button
+        type="button"
+        data-testid="emit-blocknote-change"
+        onClick={() =>
+          onChange?.([
+            { id: 'b1', type: 'paragraph', content: [{ type: 'text', text: 'X', styles: {} }] },
+          ])
+        }
+      >
+        emit
+      </button>
+    </div>
+  ),
+}))
+
 vi.mock('@/lib/feedback', () => ({
   notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }))
@@ -54,13 +84,23 @@ const playbook: Playbook = {
   updated_at: 't',
 }
 
-function Harness({ source = playbook }: { source?: Playbook } = {}) {
+function Harness({
+  source = playbook,
+  composesChildren,
+  resourceLinks,
+}: {
+  source?: Playbook
+  composesChildren?: import('@/api/types').Playbook[]
+  resourceLinks?: import('@/api/types').ResourceLink[]
+} = {}) {
   const { form, initialBodyBlocks } = usePlaybookForm(source)
   return (
     <PlaybookEditorForm
       form={form}
       formKey={`${source.id}-${source.current_version}`}
       initialBodyBlocks={initialBodyBlocks}
+      composesChildren={composesChildren}
+      resourceLinks={resourceLinks}
     />
   )
 }
@@ -218,5 +258,89 @@ describe('PlaybookEditorForm', () => {
     const lastCall =
       patchPlaybookDraft.mock.calls[patchPlaybookDraft.mock.calls.length - 1]
     expect(lastCall[1].content.triggers).toBeNull()
+  }, 10_000)
+
+  it('rendert bei body_format=plain den ResourceEditor + Migrate-Button, nicht den BlockNote-Body', () => {
+    render(<Harness />)
+    expect(screen.getByTestId('blocknote-view')).toBeInTheDocument()
+    expect(screen.queryByTestId('playbook-body-editor')).not.toBeInTheDocument()
+    expect(screen.getByTestId('migrate-to-blocknote-btn')).toBeInTheDocument()
+  })
+
+  it('serialisiert bei body_format=blocknote den Body als JSON.stringify(blocks)', async () => {
+    patchPlaybookDraft.mockClear()
+    const bnPlaybook: Playbook = {
+      ...playbook,
+      content: {
+        ...playbook.content,
+        body: JSON.stringify([
+          { id: 'b0', type: 'paragraph', content: [{ type: 'text', text: 'Y', styles: {} }] },
+        ]),
+        body_format: 'blocknote',
+      },
+    }
+    render(<Harness source={bnPlaybook} />)
+
+    // BlockNote-Body wird gerendert, ResourceEditor nicht.
+    expect(await screen.findByTestId('playbook-body-editor')).toBeInTheDocument()
+    expect(screen.queryByTestId('blocknote-view')).not.toBeInTheDocument()
+
+    // onChange feuern → Auto-Save mit JSON-serialisiertem Body + body_format.
+    fireEvent.click(screen.getByTestId('emit-blocknote-change'))
+    await waitFor(
+      () => {
+        expect(patchPlaybookDraft).toHaveBeenCalled()
+      },
+      { timeout: 3000 },
+    )
+    const payload = patchPlaybookDraft.mock.calls.at(-1)?.[1]
+    expect(payload.content.body_format).toBe('blocknote')
+    const parsed = JSON.parse(payload.content.body)
+    expect(Array.isArray(parsed)).toBe(true)
+    expect(parsed[0]).toMatchObject({ id: 'b1', type: 'paragraph' })
+  }, 10_000)
+
+  it('Migrate-Button schaltet auf blocknote um und hebt Relationen als Pills in den Body', async () => {
+    patchPlaybookDraft.mockClear()
+    const child: import('@/api/types').Playbook = {
+      ...playbook,
+      id: 'pb-child',
+      name: 'Sub-Playbook',
+    }
+    const links: import('@/api/types').ResourceLink[] = [
+      {
+        resource_id: 'res-1',
+        resource_name: 'FAQ',
+        block_id: 'blk-1',
+        position: 0,
+        available: true,
+        section_preview: 'Reset',
+        preview: null,
+        link_scope: 'block',
+      },
+    ]
+    render(<Harness composesChildren={[child]} resourceLinks={links} />)
+
+    fireEvent.click(screen.getByTestId('migrate-to-blocknote-btn'))
+
+    // Nach Migration: BlockNote-Body sichtbar, initialBlocks enthalten Pills.
+    const editor = await screen.findByTestId('playbook-body-editor')
+    const initial = editor.getAttribute('data-initial-blocks') ?? ''
+    expect(initial).toContain('"kind":"playbook"')
+    expect(initial).toContain('pb-child')
+    expect(initial).toContain('"kind":"resource"')
+    expect(initial).toContain('res-1#blk-1')
+
+    // Auto-Save serialisiert den migrierten Body als blocknote.
+    await waitFor(
+      () => {
+        expect(patchPlaybookDraft).toHaveBeenCalled()
+      },
+      { timeout: 3000 },
+    )
+    const payload = patchPlaybookDraft.mock.calls.at(-1)?.[1]
+    expect(payload.content.body_format).toBe('blocknote')
+    expect(payload.content.body).toContain('pb-child')
+    expect(payload.content.body).toContain('res-1#blk-1')
   }, 10_000)
 })

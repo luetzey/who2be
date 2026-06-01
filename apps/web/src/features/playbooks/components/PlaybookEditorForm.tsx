@@ -1,10 +1,11 @@
-import type { FormEvent, ReactNode } from 'react'
+import { useState, type FormEvent, type ReactNode } from 'react'
 import { type UseFormReturn } from 'react-hook-form'
 
-import type { PlaybookType, ResourceBlock } from '@/api/types'
+import type { Playbook, PlaybookType, ResourceBlock, ResourceLink } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { FormSection } from '@/components/layout/FormSection'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
@@ -13,6 +14,19 @@ import { TagInput } from '@/components/ui/tag-input'
 import { ResourceEditor } from '@/features/resources/components/ResourceEditor'
 
 import { PLAYBOOK_TYPES, type PlaybookEditorValues } from '../hooks/usePlaybookForm'
+import { blockPlainText } from '../lib/blockText'
+import { buildMigratedBody } from '../lib/bodyMigration'
+
+import { PlaybookBodyEditor, type PlaybookBodyBlock } from './PlaybookBodyEditor'
+
+// Plain-Text-Snapshot der aktuellen Bloecke — fuer den Migrate-Pfad, damit
+// der bestehende Plain-Body in BlockNote-Paragraphen ueberfuehrt werden kann.
+function blocksToPlainText(blocks: ResourceBlock[]): string {
+  return blocks
+    .map((block) => blockPlainText(block).trim())
+    .filter((text) => text.length > 0)
+    .join('\n\n')
+}
 
 interface PlaybookEditorFormProps {
   form: UseFormReturn<PlaybookEditorValues>
@@ -29,6 +43,12 @@ interface PlaybookEditorFormProps {
   onSubmit?: (event: FormEvent<HTMLFormElement>) => void
   // Optionaler Slot fuer Submit-/Cancel-Buttons (nur Neu-Page).
   actions?: ReactNode
+  // Bestehende Relationen (nur Detail-Page) — werden vom Migrate-Button als
+  // Pills in den Body gehoben, damit der set-replace-Sync sie nicht loescht.
+  // Sind sie undefined (Neu-Page), wird der Migrate-Button ohne Backfill
+  // gerendert (es gibt dort noch keine Relationen).
+  composesChildren?: Playbook[]
+  resourceLinks?: ResourceLink[]
 }
 
 interface TypeOption {
@@ -76,14 +96,56 @@ export function PlaybookEditorForm({
   initialBodyBlocks,
   onSubmit,
   actions,
+  composesChildren,
+  resourceLinks,
 }: PlaybookEditorFormProps) {
   // Viewer dürfen nur lesen (ADR-0023) — Auto-Save deaktiviert sich auf
   // Detail-Page-Ebene.
   const isViewer = useCurrentWorkspaceRole() === 'viewer'
   const api = useApi()
   const currentType = form.watch('type')
+  const bodyFormat = form.watch('body_format')
   const currentHint =
     TYPE_OPTIONS.find((option) => option.value === currentType)?.hint ?? null
+
+  // Seed-Bloecke + Remount-Key fuer die BlockNote-Insel. Beim ersten Mount
+  // sind das die `initialBodyBlocks` (aus dem playbook-Prop). Nach einer
+  // Migration setzen wir den Seed auf die migrierten Bloecke und bumpen den
+  // Key, damit `useCreateBlockNote` mit dem neuen `initialContent` remountet.
+  const [bodySeed, setBodySeed] = useState<{
+    blocks: PlaybookBodyBlock[]
+    key: number
+  }>({ blocks: initialBodyBlocks as PlaybookBodyBlock[], key: 0 })
+
+  // BlockNote-onChange: das aktuelle Dokument (inkl. Pills) in `bodyBlocks`
+  // schreiben. `toInput` serialisiert es bei `body_format='blocknote'` via
+  // JSON.stringify.
+  const handleBlockNoteChange = (blocks: PlaybookBodyBlock[]) => {
+    form.setValue('bodyBlocks', blocks as unknown as ResourceBlock[], {
+      shouldDirty: true,
+    })
+  }
+
+  // Migrate-Pfad (KRITISCH gegen Datenverlust): Plain-Body → BlockNote +
+  // bestehende Relationen als Pills voranstellen. Ohne dieses Backfill wuerde
+  // der erste blocknote-Save (set-replace) die Composes/Resource-Links
+  // loeschen. Die bestehenden Bloecke (aus dem Editor-State) werden in
+  // Plain-Text zurueckgewandelt und neu als BlockNote-Paragraphen aufgebaut.
+  const handleMigrateToBlockNote = () => {
+    const plainBody = blocksToPlainText(form.getValues('bodyBlocks'))
+    const migrated = buildMigratedBody(
+      plainBody,
+      composesChildren ?? [],
+      resourceLinks ?? [],
+    )
+    // Seed setzen, damit die BlockNote-Insel mit den migrierten Pills mountet.
+    setBodySeed((prev) => ({
+      blocks: migrated as PlaybookBodyBlock[],
+      key: prev.key + 1,
+    }))
+    form.setValue('bodyBlocks', migrated, { shouldDirty: true })
+    form.setValue('body_format', 'blocknote', { shouldDirty: true })
+  }
 
   return (
     <Card>
@@ -184,24 +246,62 @@ export function PlaybookEditorForm({
                   </p>
                 }
               >
-                <FormField
-                  control={form.control}
-                  name="bodyBlocks"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Inhalt</FormLabel>
-                      <FormControl>
-                        <ResourceEditor
-                          key={formKey}
-                          initialBlocks={initialBodyBlocks}
-                          editable={!isViewer}
-                          onChange={(blocks: ResourceBlock[]) => field.onChange(blocks)}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                {bodyFormat === 'blocknote' ? (
+                  <FormField
+                    control={form.control}
+                    name="bodyBlocks"
+                    render={() => (
+                      <FormItem>
+                        <FormLabel>Inhalt</FormLabel>
+                        <FormControl>
+                          <PlaybookBodyEditor
+                            key={`${formKey}-blocknote-${bodySeed.key}`}
+                            initialBlocks={bodySeed.blocks}
+                            editable={!isViewer}
+                            onChange={handleBlockNoteChange}
+                          />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground">
+                          Tippe <code>/</code> im Editor, um Playbook- oder
+                          Resource-Pills einzufügen. Verlinkte Relationen leben
+                          ab jetzt im Body.
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ) : (
+                  <FormField
+                    control={form.control}
+                    name="bodyBlocks"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Inhalt</FormLabel>
+                        <FormControl>
+                          <ResourceEditor
+                            key={formKey}
+                            initialBlocks={initialBodyBlocks}
+                            editable={!isViewer}
+                            onChange={(blocks: ResourceBlock[]) => field.onChange(blocks)}
+                          />
+                        </FormControl>
+                        {!isViewer ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="mt-2"
+                            onClick={handleMigrateToBlockNote}
+                            data-testid="migrate-to-blocknote-btn"
+                          >
+                            In BlockNote-Editor migrieren
+                          </Button>
+                        ) : null}
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
                 <FormField
                   control={form.control}
                   name="tags"

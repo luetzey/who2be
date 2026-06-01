@@ -13,13 +13,40 @@ vi.mock('@/lib/feedback', () => ({
   notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }))
 
-// BlockNote-Insel mocken — sie ist in jsdom nicht mountfaehig.
+// BlockNote-Insel mocken — sie ist in jsdom nicht mountfaehig. PlaybookEditorForm
+// importiert PlaybookBodyEditor statisch → beim Modul-Load baut PlaceholderBlock
+// das Schema via createReactInlineContentSpec/BlockNoteSchema.create, daher diese
+// Exports mit-mocken (Muster aus PlaybookBodyEditor.test.tsx).
 vi.mock('@blocknote/react', () => ({
   useCreateBlockNote: () => ({ document: [] }),
+  SuggestionMenuController: () => null,
+  getDefaultReactSlashMenuItems: () => [],
+  createReactInlineContentSpec: (_config: unknown, _impl: unknown) => ({
+    config: _config,
+    implementation: _impl,
+  }),
 }))
 vi.mock('@blocknote/mantine', () => ({
   BlockNoteView: () => <div data-testid="blocknote-view" />,
 }))
+vi.mock('@blocknote/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@blocknote/core')>()
+  return {
+    ...actual,
+    BlockNoteSchema: {
+      create: vi.fn().mockReturnValue({
+        blockSchema: {},
+        inlineContentSchema: {
+          placeholder: { type: 'placeholder', propSchema: {}, content: 'none' },
+          text: { config: 'text' },
+          link: { config: 'link' },
+        },
+        styleSchema: {},
+      }),
+    },
+    defaultInlineContentSpecs: { text: {}, link: {} },
+  }
+})
 vi.mock('@/app/theme-context', () => ({ useTheme: () => ({ resolved: 'light' }) }))
 
 const session = { access_token: 'jwt' } as unknown as Session

@@ -10,9 +10,17 @@ from who2be_api.core.db import get_pool
 from who2be_api.core.pagination import DEFAULT_LIMIT, PageCursor, PageLimit
 from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
+from who2be_api.repositories.playbook_composition_repository import (
+    PgPlaybookCompositionRepository,
+)
 from who2be_api.repositories.playbook_repository import PgPlaybookRepository
+from who2be_api.repositories.playbook_resource_link_repository import (
+    PgPlaybookResourceLinkRepository,
+)
 from who2be_api.repositories.status_history_repository import PgStatusHistoryRepository
-from who2be_api.services.playbook_service import PlaybookService
+from who2be_api.services.playbook_composition_service import PlaybookCompositionService
+from who2be_api.services.playbook_resource_link_service import PlaybookResourceLinkService
+from who2be_api.services.playbook_service import PlaybookRenderResponse, PlaybookService
 from who2be_api.services.status_history_service import StatusHistoryService
 from who2be_api.services.version_status import VersionStatusService
 from who2be_models import (
@@ -30,8 +38,17 @@ router = APIRouter(prefix="/playbooks", tags=["playbooks"])
 def get_playbook_service(
     pool: Annotated[asyncpg.Pool, Depends(get_pool)],
 ) -> PlaybookService:
-    """FastAPI-Dependency: verdrahtet den Service mit der Pg-Implementierung."""
-    return PlaybookService(PgPlaybookRepository(pool))
+    """FastAPI-Dependency: verdrahtet den Service mit der Pg-Implementierung.
+
+    Der Pool wird fuer den Render-Pfad (B5) injiziert; die Composition-/
+    Resource-Link-Services treiben den Save-Sync „Body treibt" (B3).
+    """
+    return PlaybookService(
+        PgPlaybookRepository(pool),
+        pool,
+        PlaybookCompositionService(PgPlaybookCompositionRepository(pool)),
+        PlaybookResourceLinkService(PgPlaybookResourceLinkRepository(pool)),
+    )
 
 
 def get_version_status_service(
@@ -114,6 +131,19 @@ async def update_playbook_draft(
 ) -> PlaybookRead:
     """Auto-Save-Pfad — upsertet die Draft-Version ohne Versions-Increment."""
     return await service.update_draft(ctx, playbook_id, data)
+
+
+@router.get("/{playbook_id}/rendered")
+async def render_playbook(
+    playbook_id: UUID, ctx: Ctx, service: Service
+) -> PlaybookRenderResponse:
+    """Liefert den durch den Placeholder-Renderer expandierten Playbook-Body (B5).
+
+    Bei `body_format='blocknote'` werden Inline-Pills (playbook/resource/…)
+    serverseitig zu Plain-Text expandiert; bei `'plain'` wird der Body roh
+    zurueckgegeben. Wird vom MCP-Tool `fetch_playbook` genutzt.
+    """
+    return await service.render(ctx, playbook_id)
 
 
 @router.get("/{playbook_id}/versions")

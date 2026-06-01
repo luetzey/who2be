@@ -4,7 +4,9 @@ import { Button } from '@/components/ui/button'
 
 interface LinkedBlocksListProps {
   links: ResourceLink[]
-  onRemove: (link: ResourceLink) => void
+  // Optional: ohne Handler wird die Entfernen-Aktion ausgeblendet (read-only,
+  // z. B. wenn die Relationen im BlockNote-Body als Pills gepflegt werden).
+  onRemove?: (link: ResourceLink) => void
   disabled?: boolean
 }
 
@@ -75,15 +77,17 @@ export function LinkedBlocksList({ links, onRemove, disabled = false }: LinkedBl
             </span>
             <span className="flex shrink-0 items-center gap-2">
               <Badge variant={meta.variant}>{meta.label}</Badge>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => onRemove(link)}
-                disabled={disabled}
-              >
-                Entfernen
-              </Button>
+              {onRemove !== undefined ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onRemove(link)}
+                  disabled={disabled}
+                >
+                  Entfernen
+                </Button>
+              ) : null}
             </span>
           </li>
         )

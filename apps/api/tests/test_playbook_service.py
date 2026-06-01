@@ -1,14 +1,21 @@
 """Unit-Tests fuer `PlaybookService` mit einem In-Memory-Fake-Repository."""
 
 import asyncio
+from collections.abc import Sequence
 from datetime import UTC, datetime
+from typing import Any, cast
 from uuid import UUID, uuid4
 
+import asyncpg
 import pytest
 from fastapi import HTTPException
 
 from who2be_api.core.security import WorkspaceContext
+from who2be_api.repositories.playbook_composition_repository import SetCompositionResult
 from who2be_api.repositories.playbook_repository import PlaybookUpdateOutcome
+from who2be_api.repositories.playbook_resource_link_repository import SetLinksResult
+from who2be_api.services.playbook_composition_service import PlaybookCompositionService
+from who2be_api.services.playbook_resource_link_service import PlaybookResourceLinkService
 from who2be_api.services.playbook_service import PlaybookService
 from who2be_models import (
     PlaybookContent,
@@ -17,6 +24,8 @@ from who2be_models import (
     PlaybookRef,
     PlaybookUpdate,
     PlaybookVersionRead,
+    ResourceLinkItem,
+    ResourceLinkRead,
     TriggerOverview,
     VersionStatus,
     WorkspaceRole,
@@ -284,8 +293,80 @@ class FakePlaybookRepository:
         return [TriggerOverview(trigger=t, playbooks=p) for t, p in sorted(bucket.items())]
 
 
+class FakeCompositionRepo:
+    """In-Memory-Stub: erfasst die zuletzt gesetzte Composition-Kinderliste.
+
+    `parent_belongs_to` ist immer True; `set_composition` simuliert den Zyklus-
+    Guard ueber `cycle_for`-IDs, damit der Save-Sync-Pfad einen 409 ausloesen kann.
+    """
+
+    def __init__(self) -> None:
+        self.last_child_ids: list[UUID] | None = None
+        self.cycle_for: set[UUID] = set()
+
+    async def parent_belongs_to(self, workspace_id: UUID, parent_id: UUID) -> bool:
+        return True
+
+    async def list_children(
+        self, parent_id: UUID, active_only: bool = False
+    ) -> list[PlaybookRead]:
+        return []
+
+    async def list_parents(self, child_id: UUID) -> list[PlaybookRef]:
+        return []
+
+    async def set_composition(
+        self,
+        workspace_id: UUID,
+        owner_id: UUID,
+        parent_id: UUID,
+        child_ids: list[UUID],
+    ) -> SetCompositionResult:
+        if any(cid in self.cycle_for for cid in child_ids):
+            return SetCompositionResult(parent_found=True, cycle=True)
+        self.last_child_ids = list(child_ids)
+        return SetCompositionResult(parent_found=True)
+
+
+class FakeResourceLinkRepo:
+    """In-Memory-Stub: erfasst die zuletzt gesetzten Resource-Links."""
+
+    def __init__(self) -> None:
+        self.last_links: list[ResourceLinkItem] | None = None
+
+    async def list_links(
+        self, workspace_id: UUID, playbook_id: UUID
+    ) -> list[ResourceLinkRead] | None:
+        return []
+
+    async def load_resource_blocks(
+        self, workspace_id: UUID, resource_ids: Sequence[UUID]
+    ) -> dict[UUID, list[dict[str, Any]]]:
+        return {}
+
+    async def set_links(
+        self,
+        workspace_id: UUID,
+        owner_id: UUID,
+        playbook_id: UUID,
+        links: Sequence[ResourceLinkItem],
+    ) -> SetLinksResult:
+        self.last_links = list(links)
+        return SetLinksResult(playbook_found=True)
+
+
+def _make_service(
+    repo: FakePlaybookRepository,
+    composition_repo: FakeCompositionRepo | None = None,
+    link_repo: FakeResourceLinkRepo | None = None,
+) -> PlaybookService:
+    comp = PlaybookCompositionService(composition_repo or FakeCompositionRepo())
+    links = PlaybookResourceLinkService(link_repo or FakeResourceLinkRepo())
+    return PlaybookService(repo, cast("asyncpg.Pool", None), comp, links)
+
+
 def _service() -> tuple[PlaybookService, WorkspaceContext]:
-    return PlaybookService(FakePlaybookRepository()), _ctx(uuid4())
+    return _make_service(FakePlaybookRepository()), _ctx(uuid4())
 
 
 def test_create_denormalises_content_fields() -> None:
@@ -365,7 +446,7 @@ def test_get_version_returns_requested_snapshot() -> None:
 
 def test_update_on_active_creates_draft_without_overwriting() -> None:
     repo = FakePlaybookRepository()
-    service = PlaybookService(repo)
+    service = _make_service(repo)
     ctx = _ctx(uuid4())
     created = asyncio.run(service.create(ctx, PlaybookCreate(name="PB", content=_content("v1"))))
     repo.promote_current_to_active(created.id)
@@ -377,7 +458,7 @@ def test_update_on_active_creates_draft_without_overwriting() -> None:
 
 def test_update_on_active_with_existing_draft_raises_409() -> None:
     repo = FakePlaybookRepository()
-    service = PlaybookService(repo)
+    service = _make_service(repo)
     ctx = _ctx(uuid4())
     created = asyncio.run(service.create(ctx, PlaybookCreate(name="PB", content=_content("v1"))))
     repo.promote_current_to_active(created.id)
@@ -424,7 +505,7 @@ def test_list_triggers_excludes_triggerless_playbook() -> None:
 
 def test_api_token_context_filters_to_active_only() -> None:
     repo = FakePlaybookRepository()
-    service = PlaybookService(repo)
+    service = _make_service(repo)
     ws = uuid4()
     user = uuid4()
     web_ctx = _ctx(ws, user_id=user)
@@ -442,3 +523,176 @@ def test_api_token_context_filters_to_active_only() -> None:
     with pytest.raises(HTTPException) as exc:
         asyncio.run(service.get(token_ctx, inactive.id))
     assert exc.value.status_code == 404
+
+
+# --- B3: Save-Sync „Body treibt" ------------------------------------------
+
+
+def _blocknote_content(body: str, description: str = "Flow") -> PlaybookContent:
+    return PlaybookContent(
+        description=description,
+        body=body,
+        type="workflow",
+        tags=[],
+        triggers=None,
+        body_format="blocknote",
+    )
+
+
+def _pill_body(child_id: UUID, resource_id: UUID, block_id: str = "h1") -> str:
+    """BlockNote-Body mit einer Playbook-Pill und einer Block-Resource-Pill."""
+    import json
+
+    return json.dumps(
+        [
+            {
+                "type": "paragraph",
+                "content": [
+                    {
+                        "type": "placeholder",
+                        "props": {
+                            "kind": "playbook",
+                            "target_id": str(child_id),
+                            "label": "Sub",
+                        },
+                    },
+                    {
+                        "type": "placeholder",
+                        "props": {
+                            "kind": "resource",
+                            "target_id": f"{resource_id}#{block_id}",
+                            "label": "Res",
+                        },
+                    },
+                ],
+            }
+        ]
+    )
+
+
+def test_blocknote_create_syncs_composition_and_resource_links() -> None:
+    repo = FakePlaybookRepository()
+    comp = FakeCompositionRepo()
+    links = FakeResourceLinkRepo()
+    service = _make_service(repo, comp, links)
+    ctx = _ctx(uuid4())
+    child = uuid4()
+    resource = uuid4()
+    body = _pill_body(child, resource)
+    asyncio.run(
+        service.create(ctx, PlaybookCreate(name="Composite", content=_blocknote_content(body)))
+    )
+    assert comp.last_child_ids == [child]
+    assert links.last_links is not None
+    assert len(links.last_links) == 1
+    assert links.last_links[0].resource_id == resource
+    assert links.last_links[0].link_scope == "block"
+    assert links.last_links[0].block_id == "h1"
+
+
+def test_plain_create_leaves_link_tables_untouched() -> None:
+    repo = FakePlaybookRepository()
+    comp = FakeCompositionRepo()
+    links = FakeResourceLinkRepo()
+    service = _make_service(repo, comp, links)
+    ctx = _ctx(uuid4())
+    asyncio.run(service.create(ctx, PlaybookCreate(name="Plain", content=_content())))
+    # 'plain'-Body → kein Sync-Aufruf, Tabellen unberuehrt.
+    assert comp.last_child_ids is None
+    assert links.last_links is None
+
+
+def test_blocknote_update_syncs_links() -> None:
+    repo = FakePlaybookRepository()
+    comp = FakeCompositionRepo()
+    links = FakeResourceLinkRepo()
+    service = _make_service(repo, comp, links)
+    ctx = _ctx(uuid4())
+    created = asyncio.run(service.create(ctx, PlaybookCreate(name="PB", content=_content())))
+    child = uuid4()
+    resource = uuid4()
+    body = _pill_body(child, resource)
+    asyncio.run(service.update(ctx, created.id, PlaybookUpdate(content=_blocknote_content(body))))
+    assert comp.last_child_ids == [child]
+    assert links.last_links is not None and len(links.last_links) == 1
+
+
+# --- B5: Render-Endpoint ----------------------------------------------------
+
+
+class _FakeAcquire:
+    """Async-Contextmanager-Stub fuer `pool.acquire()` — liefert eine None-Conn.
+
+    Der Renderer beruehrt die Conn nur fuer Placeholder-Resolver; bei Bodies ohne
+    Pills (Text-only) bleibt sie ungenutzt, daher reicht ein No-Op-Handle.
+    """
+
+    async def __aenter__(self) -> object:
+        return None
+
+    async def __aexit__(self, *args: object) -> None:
+        return None
+
+
+class _FakePool:
+    def acquire(self) -> _FakeAcquire:
+        return _FakeAcquire()
+
+
+def _service_with_pool(pool: object) -> tuple[PlaybookService, WorkspaceContext]:
+    repo = FakePlaybookRepository()
+    comp = PlaybookCompositionService(FakeCompositionRepo())
+    links = PlaybookResourceLinkService(FakeResourceLinkRepo())
+    return PlaybookService(repo, cast("asyncpg.Pool", pool), comp, links), _ctx(uuid4())
+
+
+def test_render_plain_body_returns_raw() -> None:
+    service, ctx = _service_with_pool(_FakePool())
+    created = asyncio.run(
+        service.create(ctx, PlaybookCreate(name="Plain", content=_content("Desc")))
+    )
+    result = asyncio.run(service.render(ctx, created.id))
+    assert result.body_rendered == "1. Do it."
+    assert result.unresolved == []
+
+
+def test_render_blocknote_text_expands_to_plain() -> None:
+    service, ctx = _service_with_pool(_FakePool())
+    import json
+
+    body = json.dumps(
+        [
+            {"type": "paragraph", "content": [{"type": "text", "text": "Hallo", "styles": {}}]},
+            {"type": "paragraph", "content": [{"type": "text", "text": "Welt", "styles": {}}]},
+        ]
+    )
+    created = asyncio.run(
+        service.create(ctx, PlaybookCreate(name="BN", content=_blocknote_content(body)))
+    )
+    result = asyncio.run(service.render(ctx, created.id))
+    assert result.body_rendered == "Hallo\n\nWelt"
+    assert result.unresolved == []
+
+
+def test_render_unknown_playbook_raises_404() -> None:
+    service, ctx = _service_with_pool(_FakePool())
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(service.render(ctx, uuid4()))
+    assert exc.value.status_code == 404
+
+
+def test_blocknote_create_with_cycle_pill_raises_409() -> None:
+    repo = FakePlaybookRepository()
+    comp = FakeCompositionRepo()
+    links = FakeResourceLinkRepo()
+    service = _make_service(repo, comp, links)
+    ctx = _ctx(uuid4())
+    cyclic_child = uuid4()
+    comp.cycle_for = {cyclic_child}
+    resource = uuid4()
+    body = _pill_body(cyclic_child, resource)
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(
+            service.create(ctx, PlaybookCreate(name="Cyclic", content=_blocknote_content(body)))
+        )
+    assert exc.value.status_code == 409
