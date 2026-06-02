@@ -1109,6 +1109,29 @@ class TestResourcesCatalogResolver:
     def test_registered_in_registry(self) -> None:
         assert isinstance(REGISTRY["resources-catalog"], ResourcesCatalogResolver)
 
+    def test_overflow_truncates_and_appends_hint(self) -> None:
+        from who2be_api.services.placeholders.registry import _CATALOG_LIMIT
+
+        resolver = ResourcesCatalogResolver()
+        ctx = _ctx()
+        # Eine Zeile mehr als das Limit (+1-Peek) → Overflow-Pfad.
+        rows = [
+            _resource_catalog_row(f"R{i}", [], "desc") for i in range(_CATALOG_LIMIT + 1)
+        ]
+        db = _make_db(fetch_return=rows)
+
+        result = _async_run(resolver.resolve("all", ctx, db))
+
+        # Nur _CATALOG_LIMIT Daten-Zeilen (R0..R{limit-1}); die letzte Zeile fehlt.
+        data_lines = [
+            line
+            for line in result.text.splitlines()
+            if line.startswith("|") and "fetch_resource(" in line
+        ]
+        assert len(data_lines) == _CATALOG_LIMIT
+        assert "und weitere" in result.text
+        assert "list_resources" in result.text
+
 
 # ---------------------------------------------------------------------------
 # render_skills_table

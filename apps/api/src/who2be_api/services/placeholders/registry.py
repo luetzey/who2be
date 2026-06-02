@@ -850,6 +850,9 @@ class ResourcesCatalogResolver:
         tag = target_id.strip()
         tag_filter = None if tag in ("", "all") else tag
 
+        # Deckel gegen aufgeblaehte Agenten-Prompts (Self-DoS): bei mehr aktiven
+        # Resources als `_CATALOG_LIMIT` werden nur die juengsten gelistet und ein
+        # „… und N weitere"-Hinweis angehaengt. `+ 1`-Peek erkennt den Overflow.
         rows = await db.fetch(
             """
             SELECT r.id, r.name, rv.content
@@ -860,10 +863,14 @@ class ResourcesCatalogResolver:
                AND ($2::text IS NULL OR $2 = ANY(
                    SELECT jsonb_array_elements_text(rv.content->'tags')))
              ORDER BY r.created_at DESC
+             LIMIT $3
             """,
             ctx.workspace_id,
             tag_filter,
+            _CATALOG_LIMIT + 1,
         )
+        overflow = len(rows) > _CATALOG_LIMIT
+        rows = rows[:_CATALOG_LIMIT]
 
         entries: list[tuple[str, str, str, str]] = []
         for row in rows:
@@ -907,7 +914,17 @@ class ResourcesCatalogResolver:
                 f"| {_table_cell(name)} | {_table_cell(tags_str)} "
                 f"| `{call}` | {_table_cell(description)} |"
             )
+        if overflow:
+            lines.append("")
+            lines.append(
+                f"_… und weitere — gefiltert auf die {_CATALOG_LIMIT} juengsten Resources. "
+                "Nutze `list_resources(tag?)` fuer den vollstaendigen Katalog._"
+            )
         return ResolveResult(text="\n".join(lines))
+
+
+# Obergrenze fuer Katalog-Tabellen (DoS-Schutz gegen riesige Agenten-Prompts).
+_CATALOG_LIMIT = 100
 
 
 def render_skills_table(raw_skills: object) -> str:
