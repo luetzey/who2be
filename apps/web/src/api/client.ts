@@ -153,7 +153,7 @@ export interface Api {
   listTokens: () => Promise<Token[]>
   createToken: (input: TokenInput) => Promise<TokenCreated>
   revokeToken: (id: string) => Promise<void>
-  getDashboard: () => Promise<DashboardData>
+  getDashboard: (page?: number) => Promise<DashboardData>
   transitionPersonaVersion: (
     id: string,
     version: number,
@@ -319,7 +319,11 @@ export function createApi(token: string, workspaceId: string): Api {
       }),
     revokeToken: (id) =>
       request<void>(token, `${ws}/tokens/${id}`, { method: 'DELETE' }),
-    getDashboard: () => request<DashboardData>(token, `${ws}/dashboard`),
+    getDashboard: (page) =>
+      request<DashboardData>(
+        token,
+        `${ws}/dashboard${page && page > 1 ? `?page=${page}` : ''}`,
+      ),
     transitionPersonaVersion: (id, version, to) =>
       request<PersonaVersion>(
         token,
