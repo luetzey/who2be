@@ -13,6 +13,7 @@ from uuid import UUID
 import asyncpg
 
 from who2be_api.core.config import get_settings
+from who2be_api.core.db import _init_connection
 
 _AUTH_USERS_STUB = """
     CREATE SCHEMA IF NOT EXISTS auth;
@@ -52,11 +53,24 @@ async def _ensure_workspace(conn: asyncpg.Connection, user_id: UUID) -> UUID:
     return await ensure_personal_workspace(conn, user_id, user_email=None)
 
 
+async def _connect_with_codec() -> asyncpg.Connection:
+    """Test-Connection mit dem gleichen jsonb-Codec wie der Prod-Pool.
+
+    Ohne den Codec akzeptiert asyncpg nur pre-serialisierte JSON-Strings fuer
+    jsonb-Spalten — Tests laufen, Prod-Code mit dict-Inputs ueber den Pool
+    crasht. Das hat den Double-Encoded-Seed-Bug in `seed_default_templates`
+    verdeckt. Test-Setup muss die Prod-Realitaet spiegeln.
+    """
+    conn = await asyncpg.connect(get_settings().database_url)
+    await _init_connection(conn)
+    return conn
+
+
 def setup_workspace(user_id: UUID) -> UUID:
     """Synchrone Convenience-Wrapper fuer Test-Setup."""
 
     async def _run() -> UUID:
-        conn = await asyncpg.connect(get_settings().database_url)
+        conn = await _connect_with_codec()
         try:
             return await _ensure_workspace(conn, user_id)
         finally:

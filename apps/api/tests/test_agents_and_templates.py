@@ -162,6 +162,49 @@ def test_default_templates_seeded_for_workspace(
 
 
 @pytest.mark.integration
+def test_seeded_template_content_is_jsonb_object_not_string(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: seed_default_templates darf KEINEN pre-serialisierten
+    JSON-String an die `$content`-Bindung uebergeben.
+
+    Der jsonb-Codec (core/db.py) ruft json.dumps auf jeden Bind-Wert. Bekam
+    er einen String, verpackte er ihn ein zweites Mal in Quotes → die Spalte
+    enthielt einen JSON-string-scalar statt eines Objekts. Migration 0033
+    (Track B / BlockNote-only) krachte dadurch mit `cannot set path in scalar`.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    try:
+
+        async def _types() -> list[str]:
+            conn = await asyncpg.connect(get_settings().database_url)
+            try:
+                rows = await conn.fetch(
+                    "SELECT jsonb_typeof(v.content) AS t "
+                    "  FROM system_prompt_template_version v "
+                    "  JOIN system_prompt_template t ON t.id = v.template_id "
+                    " WHERE t.workspace_id = $1",
+                    ws,
+                )
+                return [row["t"] for row in rows]
+            finally:
+                await conn.close()
+
+        types = asyncio.run(_types())
+        assert types, "Keine Seed-Templates fuer den Workspace gefunden."
+        assert all(t == "object" for t in types), (
+            f"Seed-Template-Content muss ein JSON-Object sein, fand: {types}"
+        )
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
 def test_seed_migration_idempotent() -> None:
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
