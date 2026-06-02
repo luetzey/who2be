@@ -9,6 +9,9 @@ Routen-Layout nach Phase 2:
   `get_current_workspace` durchgesetzt (siehe `core/security.py`).
 """
 
+import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import cast
 
 from fastapi import FastAPI, Request
@@ -19,7 +22,8 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from who2be_api import __version__
 from who2be_api.core.config import Settings, get_settings
-from who2be_api.core.db import database, lifespan
+from who2be_api.core.db import database
+from who2be_api.core.db import lifespan as db_lifespan
 from who2be_api.core.logging import configure_logging
 from who2be_api.core.middleware import AccessLogMiddleware, RequestIDMiddleware
 from who2be_api.core.rate_limit import (
@@ -27,8 +31,10 @@ from who2be_api.core.rate_limit import (
     _rate_limit_exceeded_handler,
     limiter,
 )
+from who2be_api.licensing.edition import is_onprem
 from who2be_api.routers import (
     agents,
+    billing,
     dashboard,
     invitations,
     me,
@@ -46,7 +52,31 @@ from who2be_api.routers import (
     usages,
     workspaces,
 )
+from who2be_api.services.bootstrap_service import bootstrap_admin_if_needed
 from who2be_api.services.promote_validation import PromoteValidationError
+
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """App-Lifespan: DB-Lifecycle + On-Prem-Admin-Bootstrap (Track D).
+
+    Wrappt den DB-Lifespan und seedet danach — nur On-Prem, nur wenn ein Pool
+    verfuegbar ist und `WHO2BE_BOOTSTRAP_ADMIN_EMAIL` gesetzt ist — den Admin.
+    Ein Bootstrap-Fehler darf den Start nie verhindern (fail open beim Boot).
+    """
+    async with db_lifespan(app):
+        settings = get_settings()
+        if is_onprem(settings) and settings.bootstrap_admin_email.strip():
+            try:
+                await bootstrap_admin_if_needed(database.pool, settings)
+            except (RuntimeError, OSError) as exc:
+                logger.warning("On-Prem-Bootstrap uebersprungen: %s", type(exc).__name__)
+            except Exception:  # noqa: BLE001 — Boot darf nie an Bootstrap scheitern
+                logger.exception("On-Prem-Bootstrap fehlgeschlagen.")
+        yield
+
 
 _WORKSPACE_PREFIX = "/v1/workspaces/{workspace_id}"
 
@@ -141,12 +171,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(dashboard.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(members.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(invitations.router, prefix=_WORKSPACE_PREFIX)
+    app.include_router(billing.router, prefix=_WORKSPACE_PREFIX)
     # Top-Level-Endpunkte: `/v1/me`, `/v1/organizations`, `/v1/workspaces/{id}`.
     # Der anonyme Invitation-Accept haengt direkt unter `/v1/invitations`.
     app.include_router(me.router)
     app.include_router(organizations.router)
     app.include_router(workspaces.router)
     app.include_router(invitations.accept_router)
+    # Cloud-Billing-Webhook (anonym, signaturgeprueft) — top-level, kein Workspace-Prefix.
+    app.include_router(billing.webhook_router)
 
     @app.get("/v1/health", response_model=Health)
     async def health() -> Health:
