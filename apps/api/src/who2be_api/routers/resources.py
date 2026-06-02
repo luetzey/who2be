@@ -12,6 +12,7 @@ from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.repositories.resource_repository import PgResourceRepository
 from who2be_api.repositories.status_history_repository import PgStatusHistoryRepository
+from who2be_api.services.mcp_limit_service import enforce_mcp_read_limit
 from who2be_api.services.resource_service import ResourceService
 from who2be_api.services.status_history_service import StatusHistoryService
 from who2be_api.services.version_status import VersionStatusService
@@ -48,7 +49,7 @@ StatusService = Annotated[VersionStatusService, Depends(get_version_status_servi
 DiffAgainst = Annotated[str, Query(max_length=20)]
 
 
-@router.get("")
+@router.get("", dependencies=[Depends(enforce_mcp_read_limit)])
 async def list_resources(
     ctx: Ctx,
     service: Service,
@@ -71,7 +72,7 @@ async def create_resource(
     return await service.create(ctx, data)
 
 
-@router.get("/{resource_id}")
+@router.get("/{resource_id}", dependencies=[Depends(enforce_mcp_read_limit)])
 async def get_resource(resource_id: UUID, ctx: Ctx, service: Service) -> ResourceRead:
     return await service.get(ctx, resource_id)
 

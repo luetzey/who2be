@@ -6,6 +6,7 @@ import type {
   AgentRenderResult,
   AgentUpdateInput,
   DashboardData,
+  EntitlementInfo,
   Invitation,
   InvitationAcceptResult,
   InvitationInput,
@@ -261,6 +262,8 @@ export interface Api {
   ) => Promise<AgentRenderResult>
   // Pill-Preview-Overlay: loest eine einzelne Editor-Pill zu ihrem Output auf.
   previewPlaceholder: (input: PlaceholderPreviewInput) => Promise<PlaceholderPreview>
+  // Track D: aufgeloestes Org-Entitlement + MCP-Verbrauch (Billing-Slot).
+  getEntitlement: () => Promise<EntitlementInfo>
 }
 
 export function createApi(token: string, workspaceId: string): Api {
@@ -535,5 +538,6 @@ export function createApi(token: string, workspaceId: string): Api {
       if (input.persona_id !== undefined) params.set('persona_id', input.persona_id)
       return request<PlaceholderPreview>(token, `${ws}/placeholders/preview?${params.toString()}`)
     },
+    getEntitlement: () => request<EntitlementInfo>(token, `${ws}/billing/entitlement`),
   }
 }

@@ -31,6 +31,7 @@ from who2be_api.repositories.system_prompt_template_repository import (
 from who2be_api.services.agent_fetch_rendered_service import AgentFetchRenderedService
 from who2be_api.services.agent_render_service import AgentRenderService
 from who2be_api.services.agent_service import AgentService
+from who2be_api.services.mcp_limit_service import enforce_mcp_read_limit
 from who2be_models import (
     AgentCreate,
     AgentRead,
@@ -137,7 +138,7 @@ async def render_agent(
     return await render_service.render(ctx.workspace_id, agent_id, output_format)
 
 
-@router.get("/{agent_id}/rendered")
+@router.get("/{agent_id}/rendered", dependencies=[Depends(enforce_mcp_read_limit)])
 async def fetch_agent_rendered(
     agent_id: UUID,
     ctx: Ctx,
