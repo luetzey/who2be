@@ -2,17 +2,15 @@ import {
   BookOpen,
   Bot,
   FileText,
-  KeyRound,
   LayoutDashboard,
   LogOut,
   ScrollText,
-  UserCog,
+  Settings,
   Users,
 } from 'lucide-react'
 import type { ComponentType, ReactNode, SVGProps } from 'react'
 import { NavLink } from 'react-router-dom'
 
-import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { Button } from '@/components/ui/button'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
@@ -31,6 +29,9 @@ interface NavItem {
   icon: ComponentType<SVGProps<SVGSVGElement>>
 }
 
+// „Einstellungen" bündelt die drei Spaces (Konto / Organisation / Workspace)
+// plus Mitglieder + API-Tokens; die Aufteilung übernimmt die `SettingsNav` in
+// der Settings-Sektion. Einstiegspunkt ist der User-Space (Konto).
 const NAV_ITEMS: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/agents', label: 'Agents', icon: Bot },
@@ -38,17 +39,12 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/personas', label: 'Personae', icon: Users },
   { to: '/playbooks', label: 'Playbooks', icon: BookOpen },
   { to: '/resources', label: 'Resources', icon: FileText },
-  { to: '/settings/tokens', label: 'API-Tokens', icon: KeyRound },
+  { to: '/settings/account', label: 'Einstellungen', icon: Settings },
 ]
-
-// Mitglieder-Verwaltung ist Admin-only (ADR-0023) — der Link erscheint nur
-// für Admins; Editor/Viewer würden ohnehin aufs Dashboard zurückgeworfen.
-const ADMIN_NAV_ITEM: NavItem = { to: '/settings/members', label: 'Mitglieder', icon: UserCog }
 
 export function AppShell({ children, onSignOut }: AppShellProps) {
   const wsPath = useWorkspacePath()
-  const role = useCurrentWorkspaceRole()
-  const navItems = role === 'admin' ? [...NAV_ITEMS, ADMIN_NAV_ITEM] : NAV_ITEMS
+  const navItems = NAV_ITEMS
   return (
     <div className="flex min-h-screen w-full bg-background text-foreground">
       <aside className="hidden w-60 shrink-0 flex-col border-r bg-muted/40 px-3 py-4 sm:flex">

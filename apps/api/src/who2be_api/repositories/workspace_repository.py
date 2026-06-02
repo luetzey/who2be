@@ -14,6 +14,14 @@ import asyncpg
 from who2be_models import WorkspaceRead
 
 
+class LastWorkspaceError(Exception):
+    """Der letzte Workspace einer Organization sollte geloescht werden.
+
+    Wuerde die Org fuehrungslos zuruecklassen (und den Owner aussperren) —
+    deshalb verboten. Konsistent mit der Last-admin-Invariante auf Member-Ebene.
+    """
+
+
 async def ensure_personal_workspace(
     conn: asyncpg.Connection,
     user_id: UUID,
@@ -84,6 +92,8 @@ class WorkspaceRepository(Protocol):
 
     async def update_name(self, workspace_id: UUID, name: str) -> WorkspaceRead | None: ...
 
+    async def delete(self, workspace_id: UUID) -> bool: ...
+
 
 class PgWorkspaceRepository:
     """asyncpg-Implementierung."""
@@ -143,6 +153,37 @@ class PgWorkspaceRepository:
             workspace_id,
         )
         return WorkspaceRead.model_validate(dict(row)) if row is not None else None
+
+    async def delete(self, workspace_id: UUID) -> bool:
+        """Loescht einen Workspace samt aller Inhalte (FK-Cascade).
+
+        Schutz-Invariante: der **letzte** Workspace einer Org darf nicht
+        geloescht werden (`LastWorkspaceError`). Die Pruefung laeuft
+        transaktional mit `FOR UPDATE` auf der Workspace-Zeile, damit zwei
+        parallele Loeschungen nicht beide durchrutschen.
+
+        `agent`-Zeilen werden zuerst explizit entfernt: Ihre Composite-FKs auf
+        `persona`/`system_prompt_template` sind `ON DELETE RESTRICT`. Beim
+        Workspace-Cascade wuerden Persona/Template ebenfalls geloescht — die
+        RESTRICT-Pruefung koennte dann je nach Cascade-Reihenfolge feuern.
+        Erst Agents weg, dann Workspace → der Cascade laeuft konfliktfrei.
+        """
+        async with self._pool.acquire() as conn, conn.transaction():
+            org_id = await conn.fetchval(
+                "SELECT org_id FROM workspace WHERE id = $1 FOR UPDATE",
+                workspace_id,
+            )
+            if org_id is None:
+                return False
+            remaining = await conn.fetchval(
+                "SELECT count(*) FROM workspace WHERE org_id = $1",
+                org_id,
+            )
+            if remaining <= 1:
+                raise LastWorkspaceError
+            await conn.execute("DELETE FROM agent WHERE workspace_id = $1", workspace_id)
+            await conn.execute("DELETE FROM workspace WHERE id = $1", workspace_id)
+        return True
 
 
 # BASE-Klauseln (D1/E4): erklaeren dem Agenten die drei Achsen.

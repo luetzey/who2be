@@ -36,7 +36,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { notify } from '@/lib/feedback'
-import { ROLE_ORDER, roleLabel } from '@/lib/roles'
+import { isDowngrade, ROLE_ORDER, roleLabel } from '@/lib/roles'
 
 import { useInvitations } from '../hooks/useInvitations'
 import { useMembers } from '../hooks/useMembers'
@@ -98,10 +98,26 @@ export function MembersPage() {
     }
   }
 
-  async function onChangeRole(userId: string, nextRole: WorkspaceRole) {
+  async function onChangeRole(
+    userId: string,
+    currentRole: WorkspaceRole,
+    nextRole: WorkspaceRole,
+  ) {
+    if (nextRole === currentRole) {
+      return
+    }
     try {
       await api.updateMemberRole(userId, { role: nextRole })
       notify.success('Rolle aktualisiert.')
+      // ADR-0023: Token tragen einen Rollen-Snapshot. Ein Downgrade des
+      // Mitglieds entzieht dessen bestehenden Tokens NICHT automatisch die
+      // höheren Rechte — die müssen explizit widerrufen werden.
+      if (isDowngrade(currentRole, nextRole)) {
+        notify.info(
+          'Bestehende API-Tokens dieses Mitglieds behalten ihre alte Rolle, ' +
+            'bis sie widerrufen werden.',
+        )
+      }
       members.reload()
     } catch (cause) {
       notify.error(describeError(cause))
@@ -172,7 +188,7 @@ export function MembersPage() {
                   {members.members.map((member) => (
                     <TableRow key={member.user_id}>
                       <TableCell className="font-medium">
-                        {member.email !== '' ? member.email : member.user_id}
+                        {member.email ? member.email : member.user_id}
                       </TableCell>
                       <TableCell>
                         <Select
@@ -181,6 +197,7 @@ export function MembersPage() {
                           onChange={(event) =>
                             void onChangeRole(
                               member.user_id,
+                              member.role,
                               event.target.value as WorkspaceRole,
                             )
                           }
