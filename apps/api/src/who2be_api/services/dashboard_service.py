@@ -16,6 +16,7 @@ from who2be_api.repositories.dashboard_repository import (
     DashboardRepository,
 )
 from who2be_models import (
+    ActivityPagination,
     DashboardActivity,
     DashboardActor,
     DashboardKpis,
@@ -24,6 +25,9 @@ from who2be_models import (
     EntityStatusDistribution,
     VersionStatus,
 )
+
+# Default-Seitengroesse fuer den Activity-Feed (Plan §4 Track G: 20/Seite).
+DEFAULT_ACTIVITY_PAGE_SIZE = 20
 
 # Mapping (from_status, to_status) → stabiler Event-String fuers Frontend.
 # Default-Fall siehe `_event_for` — unbekannte Uebergaenge bleiben
@@ -95,14 +99,22 @@ class DashboardService:
     def __init__(self, repo: DashboardRepository) -> None:
         self._repo = repo
 
-    async def fetch(self, ctx: WorkspaceContext) -> DashboardResponse:
-        (persona_counts, playbook_counts, resource_counts), rows = await asyncio.gather(
+    async def fetch(
+        self,
+        ctx: WorkspaceContext,
+        page: int = 1,
+        page_size: int = DEFAULT_ACTIVITY_PAGE_SIZE,
+    ) -> DashboardResponse:
+        offset = (page - 1) * page_size
+        (persona_counts, playbook_counts, resource_counts), (rows, total) = await asyncio.gather(
             self._repo.status_distribution(ctx.workspace_id),
-            self._repo.recent_activity(ctx.workspace_id),
+            self._repo.recent_activity(ctx.workspace_id, page_size, offset),
         )
         persona = _to_distribution(persona_counts)
         playbook = _to_distribution(playbook_counts)
         resource = _to_distribution(resource_counts)
+        # Ceil-Division ohne Float-Rundungsfehler; bei total=0 sind es 0 Seiten.
+        total_pages = (total + page_size - 1) // page_size
         return DashboardResponse(
             kpis=DashboardKpis(
                 active_personas=persona.active,
@@ -111,6 +123,9 @@ class DashboardService:
                 pending_reviews=persona.review + playbook.review + resource.review,
             ),
             activity=[_to_activity(row) for row in rows],
+            activity_pagination=ActivityPagination(
+                page=page, page_size=page_size, total=total, total_pages=total_pages
+            ),
             status_distribution=DashboardStatusDistribution(
                 persona=persona, playbook=playbook, resource=resource
             ),

@@ -28,8 +28,6 @@ import asyncpg
 
 from who2be_models import EntityType, VersionStatus
 
-_ACTIVITY_LIMIT = 50
-
 _PERSONA_DISTRIBUTION = """
     SELECT pv.status, COUNT(*)::int AS n
     FROM persona_version pv
@@ -55,8 +53,10 @@ _RESOURCE_DISTRIBUTION = """
 """
 
 # Single UNION-ALL — persona/playbook/resource in einer Query, plus
-# Anzeige-Felder (`entity_name`, `user_email`, `user_meta`). LIMIT greift
-# nach dem ORDER BY ueber das Gesamtergebnis.
+# Anzeige-Felder (`entity_name`, `user_email`, `user_meta`). LIMIT/OFFSET
+# greifen nach dem ORDER BY ueber das Gesamtergebnis (seitenbasierte
+# Pagination, Track G). `COUNT(*) OVER ()` liefert die Gesamtzahl ueber
+# alle Seiten in derselben Query mit — kein separater Count-Roundtrip.
 _ACTIVITY = """
     WITH activity AS (
         SELECT 'persona'::text AS entity_type, sh.entity_id,
@@ -89,11 +89,12 @@ _ACTIVITY = """
     SELECT a.entity_type, a.entity_id, a.changed_at, a.changed_by,
            a.from_status, a.to_status, a.entity_name,
            u.email AS user_email,
-           u.raw_user_meta_data AS user_meta
+           u.raw_user_meta_data AS user_meta,
+           COUNT(*) OVER () AS total_count
     FROM activity a
     LEFT JOIN auth.users u ON u.id = a.changed_by
     ORDER BY a.changed_at DESC
-    LIMIT $2
+    LIMIT $2 OFFSET $3
 """
 
 
@@ -119,7 +120,11 @@ class DashboardRepository(Protocol):
         self, workspace_id: UUID
     ) -> tuple[dict[VersionStatus, int], dict[VersionStatus, int], dict[VersionStatus, int]]: ...
 
-    async def recent_activity(self, workspace_id: UUID) -> list[DashboardActivityRow]: ...
+    async def recent_activity(
+        self, workspace_id: UUID, limit: int, offset: int
+    ) -> tuple[list[DashboardActivityRow], int]:
+        """Eine Activity-Seite plus die Gesamtzahl ueber alle Seiten."""
+        ...
 
 
 class PgDashboardRepository:
@@ -140,9 +145,14 @@ class PgDashboardRepository:
             {VersionStatus(row["status"]): row["n"] for row in resource_rows},
         )
 
-    async def recent_activity(self, workspace_id: UUID) -> list[DashboardActivityRow]:
-        rows = await self._pool.fetch(_ACTIVITY, workspace_id, _ACTIVITY_LIMIT)
-        return [_row_to_activity(row) for row in rows]
+    async def recent_activity(
+        self, workspace_id: UUID, limit: int, offset: int
+    ) -> tuple[list[DashboardActivityRow], int]:
+        rows = await self._pool.fetch(_ACTIVITY, workspace_id, limit, offset)
+        # `COUNT(*) OVER ()` ist auf jeder Zeile identisch; bei leerer Seite
+        # (Offset hinter dem Ende oder gar keine Activity) ist die Gesamtzahl 0.
+        total = int(rows[0]["total_count"]) if rows else 0
+        return [_row_to_activity(row) for row in rows], total
 
 
 def _row_to_activity(row: asyncpg.Record) -> DashboardActivityRow:
