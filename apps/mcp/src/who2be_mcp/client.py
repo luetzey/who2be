@@ -18,6 +18,7 @@ from who2be_models import (
     PlaybookRead,
     ResourceLinkRead,
     ResourceRead,
+    SubResourceRead,
     TriggerOverview,
 )
 
@@ -119,6 +120,17 @@ class ApiClient:
     async def get_resource(self, resource_id: UUID) -> ResourceRead:
         data = await self._get(f"{self._workspace_prefix}/resources/{resource_id}")
         return ResourceRead.model_validate(data)
+
+    async def get_resource_sub_resources(self, resource_id: UUID) -> list[SubResourceRead]:
+        """Laedt die direkten Sub-Resources einer Resource (Track E §3.3).
+
+        Eine Ebene, keine Expansion: jeder Eintrag traegt `fetch_call`, damit der
+        Agent das Kind bei Bedarf separat nachladen kann.
+        """
+        data = await self._get(
+            f"{self._workspace_prefix}/resources/{resource_id}/sub_resources"
+        )
+        return [SubResourceRead.model_validate(item) for item in data]
 
     async def get_playbook_resource_links(self, playbook_id: UUID) -> list[ResourceLinkRead]:
         data = await self._get(f"{self._workspace_prefix}/playbooks/{playbook_id}/resource_links")

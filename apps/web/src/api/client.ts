@@ -31,8 +31,11 @@ import type {
   ResourceInput,
   ResourceLink,
   ResourceLinkItemInput,
+  ResourceRef,
   ResourceUsage,
   ResourceVersion,
+  SubResource,
+  SubResourceLinkInput,
   SystemPromptTemplate,
   SystemPromptTemplateInput,
   SystemPromptTemplateVersion,
@@ -188,6 +191,13 @@ export interface Api {
   ) => Promise<ResourceLink[]>
   getPlaybookUsages: (id: string) => Promise<PlaybookUsage[]>
   getResourceUsages: (id: string) => Promise<ResourceUsage[]>
+  // Track E — Sub-Resource-Composition.
+  listResourceSubResources: (id: string) => Promise<SubResource[]>
+  setResourceSubResources: (
+    id: string,
+    links: SubResourceLinkInput[],
+  ) => Promise<SubResource[]>
+  listResourceUsedBy: (id: string) => Promise<ResourceRef[]>
   // Track A8 — Composite-Playbook-Endpoints.
   listPlaybookComposes: (id: string) => Promise<Playbook[]>
   setPlaybookComposes: (id: string, childIds: string[]) => Promise<Playbook[]>
@@ -385,6 +395,15 @@ export function createApi(token: string, workspaceId: string): Api {
       request<PlaybookUsage[]>(token, `${ws}/playbooks/${id}/usages`),
     getResourceUsages: (id) =>
       request<ResourceUsage[]>(token, `${ws}/resources/${id}/usages`),
+    listResourceSubResources: (id) =>
+      request<SubResource[]>(token, `${ws}/resources/${id}/sub_resources`),
+    setResourceSubResources: (id, links) =>
+      request<SubResource[]>(token, `${ws}/resources/${id}/sub_resources`, {
+        method: 'PUT',
+        body: JSON.stringify({ links }),
+      }),
+    listResourceUsedBy: (id) =>
+      request<ResourceRef[]>(token, `${ws}/resources/${id}/used_by`),
     listPlaybookComposes: (id) =>
       request<Playbook[]>(token, `${ws}/playbooks/${id}/composes`),
     setPlaybookComposes: (id, childIds) =>
