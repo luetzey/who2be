@@ -25,3 +25,10 @@ cd apps/web && npm ci  # Web-Dependencies
 
 Repo-Setup fuer Claude Code on the web: siehe `CLAUDE.md`, `.claude/` und
 `docs/CLAUDE-PROFILE.md`.
+
+## License
+
+Lizenziert unter der [Functional Source License 1.1 (Apache 2.0 Future)](LICENSE.md)
+— frei fuer interne Nutzung, kein konkurrierendes Hosting; jedes Release wird
+zwei Jahre nach Veroeffentlichung automatisch Apache-2.0. Fuer eine kommerzielle
+Enterprise-Lizenz: <luetzey@gmail.com>.
