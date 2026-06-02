@@ -11,7 +11,16 @@
 // Default-Items, die i18n-Lookup machen). Wir nutzen `title` + `group` als
 // visuelle Identitaet.
 
-import { BookOpen, Calendar, FileText, Table, User, UserCog, Wrench } from 'lucide-react'
+import {
+  BookOpen,
+  Calendar,
+  FileText,
+  Library,
+  Table,
+  User,
+  UserCog,
+  Wrench,
+} from 'lucide-react'
 import { createElement } from 'react'
 
 import type { DefaultReactSuggestionItem } from '@blocknote/react'
@@ -117,6 +126,17 @@ export function buildSlashMenuItems(
         openPicker('playbooks-catalog')
       },
       aliases: ['katalog', 'playbooks', 'tabelle', 'uebersicht', 'catalog'],
+    },
+    {
+      kind: 'resources-catalog',
+      title: 'Resource-Katalog',
+      subtext: 'Tabelle der Workspace-Resources (optional nach Tag)',
+      group: 'Placeholder',
+      icon: createElement(Library, { size: 18 }),
+      onItemClick: () => {
+        openPicker('resources-catalog')
+      },
+      aliases: ['resource-katalog', 'resources', 'wissen', 'tabelle', 'catalog', 'tag'],
     },
     {
       kind: 'date',

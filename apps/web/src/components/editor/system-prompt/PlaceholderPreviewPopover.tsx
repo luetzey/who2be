@@ -37,6 +37,14 @@ interface PlaceholderPreviewPopoverProps {
   editable?: boolean
   /** Klick auf „Bearbeiten" — der Wrapper oeffnet den vorbefuellten Picker. */
   onEdit?: (detail: PlaceholderClickDetail) => void
+  /**
+   * Optionaler Persona-Kontext fuer die Vorschau. Im Persona-Editor wird die
+   * ID der bearbeiteten Persona durchgereicht, damit Katalog-Pills
+   * (`playbooks-catalog`) und `persona-field`-Pills auch in der Editor-Vorschau
+   * aufloesen statt einen Miss zu zeigen. Fehlt der Kontext (z. B. neue, noch
+   * nicht gespeicherte Persona), bleibt das Miss-Verhalten unveraendert.
+   */
+  personaId?: string
 }
 
 type LoadState =
@@ -74,6 +82,7 @@ export function PlaceholderPreviewPopover({
   anchorRef,
   editable = false,
   onEdit,
+  personaId,
 }: PlaceholderPreviewPopoverProps) {
   const api = useApi()
   const [active, setActive] = useState<PlaceholderClickDetail | null>(null)
@@ -83,13 +92,17 @@ export function PlaceholderPreviewPopover({
     (detail: PlaceholderClickDetail) => {
       setState({ status: 'loading' })
       api
-        .previewPlaceholder({ kind: detail.kind, target_id: detail.target_id })
+        .previewPlaceholder({
+          kind: detail.kind,
+          target_id: detail.target_id,
+          persona_id: personaId,
+        })
         .then((preview) => setState({ status: 'ready', preview }))
         .catch(() =>
           setState({ status: 'error', message: 'Vorschau konnte nicht geladen werden.' }),
         )
     },
-    [api],
+    [api, personaId],
   )
 
   useEffect(() => {

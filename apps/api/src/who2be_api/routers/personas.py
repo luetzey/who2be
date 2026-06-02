@@ -13,7 +13,7 @@ from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.repositories.persona_repository import PgPersonaRepository
 from who2be_api.repositories.status_history_repository import PgStatusHistoryRepository
 from who2be_api.services.mcp_limit_service import enforce_mcp_read_limit
-from who2be_api.services.persona_service import PersonaService
+from who2be_api.services.persona_service import PersonaRenderResponse, PersonaService
 from who2be_api.services.status_history_service import StatusHistoryService
 from who2be_api.services.version_status import VersionStatusService
 from who2be_models import (
@@ -32,8 +32,12 @@ router = APIRouter(prefix="/personas", tags=["personas"])
 def get_persona_service(
     pool: Annotated[asyncpg.Pool, Depends(get_pool)],
 ) -> PersonaService:
-    """FastAPI-Dependency: verdrahtet den Service mit der Pg-Implementierung."""
-    return PersonaService(PgPersonaRepository(pool))
+    """FastAPI-Dependency: verdrahtet den Service mit der Pg-Implementierung.
+
+    Der Pool wird zusaetzlich durchgereicht (Track F: Render-Pfad braucht eine
+    Connection fuer die fetch-time-Expansion der Katalog-Pills).
+    """
+    return PersonaService(PgPersonaRepository(pool), pool)
 
 
 def get_version_status_service(
@@ -80,6 +84,18 @@ async def list_persona_tags(ctx: Ctx, service: Service) -> list[str]:
 @router.get("/{persona_id}", dependencies=[Depends(enforce_mcp_read_limit)])
 async def get_persona(persona_id: UUID, ctx: Ctx, service: Service) -> PersonaRead:
     return await service.get(ctx, persona_id)
+
+
+@router.get("/{persona_id}/rendered", dependencies=[Depends(enforce_mcp_read_limit)])
+async def render_persona(persona_id: UUID, ctx: Ctx, service: Service) -> PersonaRenderResponse:
+    """Liefert den durch den Placeholder-Renderer expandierten Profil-Body (Track F).
+
+    Die Katalog-Pills (`playbooks-catalog`/`resources-catalog`) und Slash-Refs
+    werden fetch-time gegen die aktiven Playbooks/Resources des Workspace
+    aufgeloest; eine Skills-Tabelle wird angehaengt. Wird vom MCP-Tool
+    `get_persona` genutzt.
+    """
+    return await service.render(ctx, persona_id)
 
 
 @router.put("/{persona_id}")

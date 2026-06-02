@@ -31,6 +31,7 @@ import { ResourcePicker } from './pickers/ResourcePicker'
 import { PersonaFieldPicker } from './pickers/PersonaFieldPicker'
 import { DateFormatPicker } from './pickers/DateFormatPicker'
 import { CatalogScopePicker } from './pickers/CatalogScopePicker'
+import { ResourcesCatalogScopePicker } from './pickers/ResourcesCatalogScopePicker'
 
 // Das Schema wird einmal pro Modul-Import gebaut; keine Hot-Reload-Probleme
 // weil BlockNote-Schemata statisch sind.
@@ -208,6 +209,13 @@ export function SystemPromptEditor({
         open={openPicker === 'playbooks-catalog'}
         anchorRef={anchorRef}
         initial={pendingEdit?.kind === 'playbooks-catalog' ? pendingEdit : undefined}
+        onConfirm={handlePickerConfirm}
+        onCancel={handlePickerCancel}
+      />
+      <ResourcesCatalogScopePicker
+        open={openPicker === 'resources-catalog'}
+        anchorRef={anchorRef}
+        initial={pendingEdit?.kind === 'resources-catalog' ? pendingEdit : undefined}
         onConfirm={handlePickerConfirm}
         onCancel={handlePickerCancel}
       />

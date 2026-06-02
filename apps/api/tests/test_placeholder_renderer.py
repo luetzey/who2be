@@ -28,7 +28,9 @@ from who2be_api.services.placeholders.registry import (
     RenderContext,
     ResolveResult,
     ResourceResolver,
+    ResourcesCatalogResolver,
     ToolsOverviewResolver,
+    render_skills_table,
 )
 from who2be_api.services.placeholders.renderer import render_template_body
 
@@ -999,6 +1001,178 @@ class TestPlaybooksCatalogResolver:
 
         assert result.text == ""
         assert result.unresolved_key == "playbooks-catalog:all"
+
+
+# ---------------------------------------------------------------------------
+# ResourcesCatalogResolver
+# ---------------------------------------------------------------------------
+
+
+def _resource_catalog_row(name: str, tags: list[str], description: str) -> MagicMock:
+    row = MagicMock()
+    data = {
+        "id": uuid4(),
+        "name": name,
+        "content": {"description": description, "tags": tags},
+    }
+    row.__getitem__ = MagicMock(side_effect=lambda k: data[k])
+    return row
+
+
+class TestResourcesCatalogResolver:
+    def test_renders_table_for_all_active(self) -> None:
+        resolver = ResourcesCatalogResolver()
+        ctx = _ctx()
+        db = _make_db(
+            fetch_return=[
+                _resource_catalog_row("Tarifwerk", ["billing", "preise"], "Aktuelle Tarife."),
+                _resource_catalog_row("Tonalitaet", [], "Wie wir schreiben."),
+            ]
+        )
+
+        result = _async_run(resolver.resolve("all", ctx, db))
+
+        assert result.unresolved_key is None
+        assert "## Verfuegbare Resources" in result.text
+        assert "| Resource | Tags | Aufruf | Beschreibung |" in result.text
+        assert "Tarifwerk" in result.text
+        assert "billing, preise" in result.text
+        assert "fetch_resource(" in result.text
+        assert "Tonalitaet" in result.text
+
+    def test_empty_target_id_behaves_like_all(self) -> None:
+        resolver = ResourcesCatalogResolver()
+        ctx = _ctx()
+        db = _make_db(fetch_return=[_resource_catalog_row("R", ["t"], "desc")])
+
+        _async_run(resolver.resolve("", ctx, db))
+
+        # Bei "all"/"" wird der Tag-Filter als NULL ($2) durchgereicht.
+        # Positional-Args: (sql, workspace_id, tag_filter)
+        positional = db.fetch.call_args[0]
+        assert positional[2] is None
+
+    def test_tag_filter_is_passed_through(self) -> None:
+        resolver = ResourcesCatalogResolver()
+        ctx = _ctx()
+        db = _make_db(fetch_return=[_resource_catalog_row("R", ["billing"], "desc")])
+
+        _async_run(resolver.resolve("billing", ctx, db))
+
+        positional = db.fetch.call_args[0]
+        assert positional[2] == "billing"
+
+    def test_empty_catalog_returns_hint_no_miss(self) -> None:
+        resolver = ResourcesCatalogResolver()
+        ctx = _ctx()
+        db = _make_db(fetch_return=[])
+
+        result = _async_run(resolver.resolve("all", ctx, db))
+
+        assert result.unresolved_key is None
+        assert "keine aktiven Resources" in result.text
+
+    def test_empty_tag_filtered_catalog_mentions_tag(self) -> None:
+        resolver = ResourcesCatalogResolver()
+        ctx = _ctx()
+        db = _make_db(fetch_return=[])
+
+        result = _async_run(resolver.resolve("billing", ctx, db))
+
+        assert result.unresolved_key is None
+        assert "billing" in result.text
+
+    def test_pipe_in_name_is_escaped(self) -> None:
+        resolver = ResourcesCatalogResolver()
+        ctx = _ctx()
+        db = _make_db(fetch_return=[_resource_catalog_row("A|B", ["t"], "desc")])
+
+        result = _async_run(resolver.resolve("all", ctx, db))
+
+        assert "A\\|B" in result.text
+
+    def test_no_persona_context_needed(self) -> None:
+        """Resources-Katalog braucht — anders als playbooks-catalog — keine Persona."""
+        resolver = ResourcesCatalogResolver()
+        ctx = RenderContext(
+            workspace_id=uuid4(),
+            persona_id=None,
+            now=datetime(2026, 5, 31, tzinfo=UTC),
+        )
+        db = _make_db(fetch_return=[_resource_catalog_row("R", [], "desc")])
+
+        result = _async_run(resolver.resolve("all", ctx, db))
+
+        assert result.unresolved_key is None
+        assert "R" in result.text
+
+    def test_registered_in_registry(self) -> None:
+        assert isinstance(REGISTRY["resources-catalog"], ResourcesCatalogResolver)
+
+    def test_overflow_truncates_and_appends_hint(self) -> None:
+        from who2be_api.services.placeholders.registry import _CATALOG_LIMIT
+
+        resolver = ResourcesCatalogResolver()
+        ctx = _ctx()
+        # Eine Zeile mehr als das Limit (+1-Peek) → Overflow-Pfad.
+        rows = [
+            _resource_catalog_row(f"R{i}", [], "desc") for i in range(_CATALOG_LIMIT + 1)
+        ]
+        db = _make_db(fetch_return=rows)
+
+        result = _async_run(resolver.resolve("all", ctx, db))
+
+        # Nur _CATALOG_LIMIT Daten-Zeilen (R0..R{limit-1}); die letzte Zeile fehlt.
+        data_lines = [
+            line
+            for line in result.text.splitlines()
+            if line.startswith("|") and "fetch_resource(" in line
+        ]
+        assert len(data_lines) == _CATALOG_LIMIT
+        assert "und weitere" in result.text
+        assert "list_resources" in result.text
+
+
+# ---------------------------------------------------------------------------
+# render_skills_table
+# ---------------------------------------------------------------------------
+
+
+class TestRenderSkillsTable:
+    def test_renders_table_with_note(self) -> None:
+        table = render_skills_table(
+            [
+                {"name": "Python", "note": "fortgeschritten"},
+                {"name": "Refactoring", "note": ""},
+            ]
+        )
+        assert "## Skills" in table
+        assert "| Skill | Hinweis |" in table
+        assert "| Python | fortgeschritten |" in table
+        assert "| Refactoring |  |" in table
+
+    def test_empty_skills_returns_empty_string(self) -> None:
+        assert render_skills_table([]) == ""
+
+    def test_non_list_returns_empty_string(self) -> None:
+        assert render_skills_table(None) == ""
+
+    def test_skips_nameless_entries(self) -> None:
+        table = render_skills_table([{"name": "  ", "note": "x"}, {"name": "Echt"}])
+        assert "Echt" in table
+        # Genau eine Daten-Zeile: Header `| Skill | Hinweis |`, Trenner `|---|---|`
+        # und die eine Echt-Zeile — der namenlose Eintrag erscheint nicht.
+        data_rows = [
+            line
+            for line in table.splitlines()
+            if line.startswith("|") and "Skill | Hinweis" not in line and not line.startswith("|--")
+        ]
+        assert data_rows == ["| Echt |  |"]
+
+    def test_pipe_escaped_in_table(self) -> None:
+        table = render_skills_table([{"name": "A|B", "note": "c|d"}])
+        assert "A\\|B" in table
+        assert "c\\|d" in table
 
 
 # ---------------------------------------------------------------------------

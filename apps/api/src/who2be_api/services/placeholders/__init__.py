@@ -14,7 +14,18 @@ Oeffentliche API:
     ResolveResult
 """
 
-from who2be_api.services.placeholders.registry import REGISTRY, RenderContext, ResolveResult
+from who2be_api.services.placeholders.registry import (
+    REGISTRY,
+    RenderContext,
+    ResolveResult,
+    render_skills_table,
+)
 from who2be_api.services.placeholders.renderer import render_template_body
 
-__all__ = ["REGISTRY", "RenderContext", "ResolveResult", "render_template_body"]
+__all__ = [
+    "REGISTRY",
+    "RenderContext",
+    "ResolveResult",
+    "render_skills_table",
+    "render_template_body",
+]

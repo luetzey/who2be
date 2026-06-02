@@ -820,6 +820,142 @@ class PlaybooksCatalogResolver:
         return ResolveResult(text="\n".join(lines))
 
 
+class ResourcesCatalogResolver:
+    """Expandiert zu einer Briefing-**Tabelle** der aktiven Resources des Workspace.
+
+    Quelle: alle Resources des Workspace in ihrer Active-Version
+    (`status='active'`) — konsistent mit `list_resources` und den MCP-Reads.
+    Im Gegensatz zur `playbooks-catalog`-Pill ist **kein** Persona-Kontext noetig
+    (Resources haengen nicht an der Persona), daher gibt es hier nie einen
+    Persona-Miss.
+
+    `target_id` steuert den Filter (Pill-Setting):
+    - ``""`` / ``"all"`` → alle aktiven Resources.
+    - sonst → nur Resources, deren `content.tags` den Wert (exakt) enthalten.
+
+    Spalten: **Resource | Tags | Aufruf | Beschreibung**. Die `Aufruf`-Spalte
+    enthaelt den konkreten MCP-Call (`fetch_resource("<id>")`), damit der Agent
+    unmittelbar handlungsfaehig ist.
+
+    Verhalten:
+    - Keine (passenden) Resources → kurzer Hinweistext (kein Miss).
+    """
+
+    async def resolve(
+        self,
+        target_id: str,
+        ctx: RenderContext,
+        db: asyncpg.Connection,
+    ) -> ResolveResult:
+        tag = target_id.strip()
+        tag_filter = None if tag in ("", "all") else tag
+
+        # Deckel gegen aufgeblaehte Agenten-Prompts (Self-DoS): bei mehr aktiven
+        # Resources als `_CATALOG_LIMIT` werden nur die juengsten gelistet und ein
+        # „… und N weitere"-Hinweis angehaengt. `+ 1`-Peek erkennt den Overflow.
+        rows = await db.fetch(
+            """
+            SELECT r.id, r.name, rv.content
+              FROM resource r
+              JOIN resource_version rv
+                ON rv.resource_id = r.id AND rv.status = 'active'
+             WHERE r.workspace_id = $1
+               AND ($2::text IS NULL OR $2 = ANY(
+                   SELECT jsonb_array_elements_text(rv.content->'tags')))
+             ORDER BY r.created_at DESC
+             LIMIT $3
+            """,
+            ctx.workspace_id,
+            tag_filter,
+            _CATALOG_LIMIT + 1,
+        )
+        overflow = len(rows) > _CATALOG_LIMIT
+        rows = rows[:_CATALOG_LIMIT]
+
+        entries: list[tuple[str, str, str, str]] = []
+        for row in rows:
+            content: dict[str, object] = dict(row["content"]) if row["content"] else {}
+            description = str(content.get("description", "")).strip()
+            raw_tags = content.get("tags", [])
+            tags_list = [str(t) for t in raw_tags] if isinstance(raw_tags, list) else []
+            entries.append(
+                (
+                    str(row["name"]),
+                    ", ".join(tags_list),
+                    f'fetch_resource("{row["id"]}")',
+                    description,
+                )
+            )
+
+        if not entries:
+            if tag_filter is not None:
+                return ResolveResult(
+                    text=f"_Keine aktiven Resources mit dem Tag „{tag_filter}“._"
+                )
+            return ResolveResult(text="_Im Workspace gibt es aktuell keine aktiven Resources._")
+
+        scope_note = (
+            f"Wissens-Resources mit dem Tag „{tag_filter}“."
+            if tag_filter is not None
+            else "Diese Wissens-Resources stehen dir im Workspace zur Verfuegung."
+        )
+        lines = [
+            "## Verfuegbare Resources",
+            (
+                f"{scope_note} Lade eine Resource ueber die Aufruf-Spalte "
+                "(`fetch_resource(...)`), wenn du ihren Inhalt brauchst."
+            ),
+            "",
+            "| Resource | Tags | Aufruf | Beschreibung |",
+            "|---|---|---|---|",
+        ]
+        for name, tags_str, call, description in entries:
+            lines.append(
+                f"| {_table_cell(name)} | {_table_cell(tags_str)} "
+                f"| `{call}` | {_table_cell(description)} |"
+            )
+        if overflow:
+            lines.append("")
+            lines.append(
+                f"_… und weitere — gefiltert auf die {_CATALOG_LIMIT} juengsten Resources. "
+                "Nutze `list_resources(tag?)` fuer den vollstaendigen Katalog._"
+            )
+        return ResolveResult(text="\n".join(lines))
+
+
+# Obergrenze fuer Katalog-Tabellen (DoS-Schutz gegen riesige Agenten-Prompts).
+_CATALOG_LIMIT = 100
+
+
+def render_skills_table(raw_skills: object) -> str:
+    """Rendert die Skills einer Persona als Markdown-Tabelle **Skill | Hinweis**.
+
+    Quelle: `PersonaVersionContent.skills` (`list[SkillRef{name, note}]`), als
+    rohe Liste von Dicts oder Pydantic-Dumps uebergeben. Leere/namens-lose
+    Eintraege werden uebersprungen. Gibt einen leeren String zurueck, wenn keine
+    Skills vorhanden sind — der Aufrufer haengt die Sektion dann nicht an.
+
+    Single-Source fuer den Agenten-Render (`get_persona`) und — gespiegelt — die
+    Web-Detail-Page. Zellen escapen `|` und kollabieren Newlines via `_table_cell`.
+    """
+    skills: list[dict[str, object]] = list(raw_skills) if isinstance(raw_skills, list) else []
+    rows: list[tuple[str, str]] = []
+    for skill in skills:
+        if not isinstance(skill, dict):
+            continue
+        name = str(skill.get("name", "")).strip()
+        if not name:
+            continue
+        note = str(skill.get("note", "")).strip()
+        rows.append((name, note))
+    if not rows:
+        return ""
+    lines = ["## Skills", "", "| Skill | Hinweis |", "|---|---|"]
+    for name, note in rows:
+        lines.append(f"| {_table_cell(name)} | {_table_cell(note)} |")
+    return "\n".join(lines)
+
+
 # ---------------------------------------------------------------------------
 # Registry-Dict — Neuen Placeholder: Resolver-Klasse + Eintrag hier.
 # ---------------------------------------------------------------------------
@@ -830,6 +966,7 @@ REGISTRY: dict[str, PlaceholderResolver] = {
     "persona-field": PersonaFieldResolver(),
     "persona-ref": PersonaRefResolver(),
     "playbooks-catalog": PlaybooksCatalogResolver(),
+    "resources-catalog": ResourcesCatalogResolver(),
     "date": DateResolver(),
     "tools-overview": ToolsOverviewResolver(),
 }

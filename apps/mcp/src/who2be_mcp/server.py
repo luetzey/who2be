@@ -40,10 +40,19 @@ _cached_workspace_id: UUID | None = None
 
 
 class PersonaWithPlaybooks(BaseModel):
-    """Eine Persona samt der mit ihr verknuepften Playbooks."""
+    """Eine Persona samt der mit ihr verknuepften Playbooks.
+
+    `body_rendered` traegt den serverseitig expandierten Persona-Profil-Body
+    (Track F): die Katalog-Pills (`playbooks-catalog`/`resources-catalog`) und
+    Slash-Refs sind fetch-time gegen die aktiven Playbooks/Resources des
+    Workspace aufgeloest, gefolgt von einer Skills-Tabelle. Nutze
+    `body_rendered` als gebrauchsfertigen Profil-Text — `persona.content` traegt
+    weiterhin die strukturierten Felder (Modi, Skills, Tags) fuer die Logik.
+    """
 
     persona: PersonaRead
     playbooks: list[PlaybookRead]
+    body_rendered: str = ""
 
 
 class ResourceSummary(BaseModel):
@@ -151,11 +160,17 @@ async def get_persona(identifier: str) -> PersonaWithPlaybooks:
     `is_default` (Fallback ohne Trigger-Match), `identity_add` (Ergaenzung zur
     Basis-Identitaet) und `output_style_override` (Output-Stil-Anpassung).
     Fehlt das Feld oder ist es leer, ist die Persona single-mode.
+
+    `body_rendered` traegt den fetch-time expandierten Profil-Body (Track F):
+    Katalog-Pills (`playbooks-catalog`/`resources-catalog`) und Slash-Refs sind
+    bereits zu Plain-Text aufgeloest, gefolgt von einer Skills-Tabelle. Nutze
+    diesen Text als gebrauchsfertiges Persona-Briefing.
     """
     client = await build_client()
     persona = await client.get_persona(identifier)
     playbooks = await client.get_persona_playbooks(persona.id)
-    return PersonaWithPlaybooks(persona=persona, playbooks=playbooks)
+    body_rendered = await client.get_persona_rendered(persona.id)
+    return PersonaWithPlaybooks(persona=persona, playbooks=playbooks, body_rendered=body_rendered)
 
 
 @mcp.tool
