@@ -156,8 +156,7 @@ class SystemPromptTemplateService:
     ) -> SystemPromptTemplateRead:
         """Stellt den Snapshot `source_version` als neue Draft wieder her (§3.1).
 
-        `body_format` ist nicht versioniert — die Template-Zeile behaelt ihr
-        aktuelles Format. 409 bei bereits offenem Draft.
+        409 bei bereits offenem Draft.
         """
         require_role(ctx, WorkspaceRole.editor)
         snapshot = await self._repo.fetch_version(ctx.workspace_id, template_id, source_version)
