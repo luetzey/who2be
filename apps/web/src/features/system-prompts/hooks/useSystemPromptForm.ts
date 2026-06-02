@@ -3,17 +3,16 @@ import { type BaseSyntheticEvent, useEffect, useState } from 'react'
 import { useForm, type UseFormReturn } from 'react-hook-form'
 import { z } from 'zod'
 
-import type { SystemPromptBodyFormat, SystemPromptTemplate } from '@/api/types'
+import type { SystemPromptTemplate } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { notify } from '@/lib/feedback'
 
 const editorSchema = z.object({
   name: z.string().min(1, 'Name erforderlich.'),
   description: z.string(),
+  // Track B (Nur-BlockNote): `body` ist immer ein stringifiziertes
+  // BlockNote-JSON-Dokument.
   body: z.string().min(1, 'Body erforderlich.'),
-  // body_format wird nicht via RHF-Validierung erzwungen — der Default 'blocknote'
-  // ist immer gueltig. BlockNote-Save setzt diesen Wert direkt vor dem Submit.
-  body_format: z.enum(['plain', 'blocknote']),
 })
 
 export type SystemPromptEditorValues = z.infer<typeof editorSchema>
@@ -40,7 +39,6 @@ export function useSystemPromptForm(
       name: '',
       description: '',
       body: '',
-      body_format: 'blocknote' as SystemPromptBodyFormat,
     },
   })
 
@@ -50,9 +48,6 @@ export function useSystemPromptForm(
         name: template.name,
         description: template.content.description,
         body: template.content.body,
-        // Fehlende body_format (Legacy-Templates vor Welle 5) → 'plain'.
-        // body_format lebt seit Welle 5 auf Template-Top-Level (siehe types.ts).
-        body_format: template.body_format ?? 'plain',
       })
     }
   }, [template, form])
@@ -65,7 +60,6 @@ export function useSystemPromptForm(
     try {
       await api.updateSystemPromptTemplate(template.id, {
         name: values.name,
-        body_format: values.body_format,
         content: {
           description: values.description,
           body: values.body,

@@ -7,14 +7,13 @@ import type { ResourceBlock } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { notify } from '@/lib/feedback'
 
-import { blockPlainText } from '../lib/blockText'
 import { joinTriggers } from '../lib/triggers'
 import { PLAYBOOK_TYPES, type PlaybookEditorValues } from './usePlaybookForm'
 
 // Schema deckt sich bewusst mit `usePlaybookForm` — so kann
 // `PlaybookEditorForm` ohne Sonderbehandlung in der Neu-Page genutzt werden.
-// `bodyBlocks`/`tags`/`triggers` sind Passthrough; das Backend persistiert
-// einen Plain-Text-Body (siehe `blocksToPlainText`).
+// `bodyBlocks`/`tags`/`triggers` sind Passthrough; Track B (Nur-BlockNote):
+// der Body wird als stringifiziertes BlockNote-Dokument persistiert.
 const createSchema = z.object({
   name: z.string().min(1, 'Name erforderlich.'),
   type: z.enum(PLAYBOOK_TYPES),
@@ -22,17 +21,9 @@ const createSchema = z.object({
   bodyBlocks: z.array(z.custom<ResourceBlock>()),
   tags: z.array(z.string()),
   triggers: z.array(z.string()),
-  body_format: z.enum(['plain', 'blocknote']),
 })
 
 export type PlaybookCreateValues = PlaybookEditorValues
-
-function blocksToPlainText(blocks: ResourceBlock[]): string {
-  return blocks
-    .map((block) => blockPlainText(block).trim())
-    .filter((text) => text.length > 0)
-    .join('\n\n')
-}
 
 function describeError(cause: unknown): string {
   return cause instanceof Error ? cause.message : 'Unbekannter Fehler.'
@@ -56,26 +47,20 @@ export function useCreatePlaybook(onCreated: (id: string) => void): UseCreatePla
       bodyBlocks: [],
       tags: [],
       triggers: [],
-      body_format: 'plain',
     },
   })
 
   const onSubmit = form.handleSubmit(async (values) => {
     setSaveError(null)
     try {
-      const body =
-        values.body_format === 'blocknote'
-          ? JSON.stringify(values.bodyBlocks)
-          : blocksToPlainText(values.bodyBlocks)
       const created = await api.createPlaybook({
         name: values.name,
         content: {
           description: values.description,
-          body,
+          body: JSON.stringify(values.bodyBlocks),
           type: values.type,
           tags: values.tags,
           triggers: joinTriggers(values.triggers),
-          body_format: values.body_format,
         },
       })
       notify.success('Playbook angelegt.')
