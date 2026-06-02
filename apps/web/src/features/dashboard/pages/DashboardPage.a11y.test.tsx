@@ -46,7 +46,7 @@ describe('DashboardPage (a11y)', () => {
     })
 
     await waitFor(() => {
-      expect(screen.getByText('Letzte Aktivitaeten')).toBeInTheDocument()
+      expect(screen.getByText('Letzte Aktivitäten')).toBeInTheDocument()
     })
 
     const results = await axe(container)

@@ -5,6 +5,7 @@ import pytest
 from pydantic import ValidationError
 
 from who2be_models import (
+    ActivityPagination,
     DashboardActivity,
     DashboardActor,
     DashboardKpis,
@@ -49,6 +50,32 @@ def test_round_trip_preserves_activity() -> None:
     )
     restored = DashboardResponse.model_validate(response.model_dump())
     assert restored == response
+
+
+def test_activity_pagination_defaults_to_empty_first_page() -> None:
+    response = DashboardResponse(kpis=_kpis(), status_distribution=_distribution())
+    assert response.activity_pagination == ActivityPagination(
+        page=1, page_size=20, total=0, total_pages=0
+    )
+
+
+def test_round_trip_preserves_pagination() -> None:
+    response = DashboardResponse(
+        kpis=_kpis(),
+        status_distribution=_distribution(),
+        activity_pagination=ActivityPagination(page=2, page_size=20, total=45, total_pages=3),
+    )
+    restored = DashboardResponse.model_validate(response.model_dump())
+    assert restored.activity_pagination.page == 2
+    assert restored.activity_pagination.total == 45
+    assert restored.activity_pagination.total_pages == 3
+
+
+def test_rejects_invalid_pagination_values() -> None:
+    with pytest.raises(ValidationError):
+        ActivityPagination(page=0, page_size=20, total=0, total_pages=0)
+    with pytest.raises(ValidationError):
+        ActivityPagination(page=1, page_size=0, total=0, total_pages=0)
 
 
 def test_rejects_negative_kpi() -> None:

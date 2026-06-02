@@ -299,9 +299,21 @@ export interface DashboardStatusDistribution {
   resource?: StatusDistribution
 }
 
+// Seiten-Metadaten fuer den Activity-Feed (Track G). `activity` traegt nur
+// die Eintraege der aktuellen Seite; `total_pages` steuert die Vor-/Zurueck-
+// Buttons. Optional getragen, weil aeltere Backend-Versionen das Feld nicht
+// liefern — der Konsument faellt dann auf "eine Seite" zurueck.
+export interface ActivityPagination {
+  page: number
+  page_size: number
+  total: number
+  total_pages: number
+}
+
 export interface DashboardData {
   kpis: DashboardKpis
   activity: DashboardActivity[]
+  activity_pagination?: ActivityPagination
   status_distribution: DashboardStatusDistribution
 }
 

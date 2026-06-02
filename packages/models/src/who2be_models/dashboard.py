@@ -77,6 +77,23 @@ class DashboardActivity(BaseModel):
     to_version: int | None = None
 
 
+class ActivityPagination(BaseModel):
+    """Seiten-Metadaten fuer den paginierten Activity-Feed (Track G).
+
+    `activity` traegt nur die Eintraege der aktuellen Seite; diese Struktur
+    beschreibt die Position im Gesamtdatensatz (`status_history`), damit das
+    Frontend Vor-/Zurueck-Steuerung rendern kann. Defaults erlauben eine
+    Konstruktion ohne explizite Werte (1-basierte erste Seite, leer).
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    page: int = Field(ge=1, default=1)
+    page_size: int = Field(ge=1, default=20)
+    total: int = Field(ge=0, default=0)
+    total_pages: int = Field(ge=0, default=0)
+
+
 class DashboardResponse(BaseModel):
     """Antwort von `GET /v1/workspaces/{ws_id}/dashboard`."""
 
@@ -84,4 +101,5 @@ class DashboardResponse(BaseModel):
 
     kpis: DashboardKpis
     activity: list[DashboardActivity] = Field(default_factory=list)
+    activity_pagination: ActivityPagination = Field(default_factory=ActivityPagination)
     status_distribution: DashboardStatusDistribution

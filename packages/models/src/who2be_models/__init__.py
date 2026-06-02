@@ -15,6 +15,7 @@ from who2be_models.agent import (
     RenderFormat,
 )
 from who2be_models.dashboard import (
+    ActivityPagination,
     DashboardActivity,
     DashboardActor,
     DashboardKpis,
@@ -93,6 +94,7 @@ __version__ = "0.1.0"
 
 __all__ = [
     "ALLOWED_TRANSITIONS",
+    "ActivityPagination",
     "AgentCreate",
     "AgentRead",
     "AgentRenderResponse",
