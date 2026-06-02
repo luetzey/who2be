@@ -17,15 +17,17 @@ def test_str_enum_serializes_as_string() -> None:
 
 
 def test_allowed_transitions_match_state_machine() -> None:
-    # Task Phase 2.1b: draft→review, review→active|draft, active→inactive,
-    # inactive→draft. Direkte Wege nach `inactive` ausser von `active` sind
-    # nicht erlaubt (Drafts/Reviews verworfen man via review→draft bzw. nach
-    # Promotion + Inactivierung).
+    # Task Phase 2.1b + Track A: draft→review, review→active|draft,
+    # active→inactive|draft (Reset-auf-Draft), inactive→draft. Direkte Wege nach
+    # `inactive` ausser von `active` sind nicht erlaubt (Drafts/Reviews verwirft
+    # man via review→draft bzw. nach Promotion + Inactivierung).
     assert ALLOWED_TRANSITIONS[VersionStatus.draft] == frozenset({VersionStatus.review})
     assert ALLOWED_TRANSITIONS[VersionStatus.review] == frozenset(
         {VersionStatus.draft, VersionStatus.active}
     )
-    assert ALLOWED_TRANSITIONS[VersionStatus.active] == frozenset({VersionStatus.inactive})
+    assert ALLOWED_TRANSITIONS[VersionStatus.active] == frozenset(
+        {VersionStatus.inactive, VersionStatus.draft}
+    )
     assert ALLOWED_TRANSITIONS[VersionStatus.inactive] == frozenset({VersionStatus.draft})
 
 

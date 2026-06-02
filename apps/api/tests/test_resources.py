@@ -172,10 +172,11 @@ def test_resource_transitions_invariant_and_draft_on_edit(
                 )
                 assert resp.status_code == 200, resp.text
 
-            # Verbotener Uebergang active -> draft.
+            # Verbotener Uebergang active -> review (active darf nur nach
+            # inactive oder — als Reset-auf-Draft, Track A — nach draft).
             assert (
                 client.post(
-                    f"{base}/{rid}/versions/1/transition", json={"to": "draft"}, headers=auth
+                    f"{base}/{rid}/versions/1/transition", json={"to": "review"}, headers=auth
                 ).status_code
                 == 409
             )

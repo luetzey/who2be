@@ -18,11 +18,15 @@ from who2be_api.core.security import WorkspaceContext, require_role
 from who2be_api.repositories.system_prompt_template_repository import (
     SystemPromptTemplateRepository,
 )
+from who2be_api.services.version_diff import compute_version_diff
 from who2be_models import (
+    SystemPromptTemplateContent,
     SystemPromptTemplateCreate,
     SystemPromptTemplateRead,
     SystemPromptTemplateUpdate,
     SystemPromptTemplateVersionRead,
+    VersionDiff,
+    VersionStatus,
     WorkspaceRole,
     encode_cursor,
 )
@@ -51,6 +55,13 @@ def _slug_conflict() -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_409_CONFLICT,
         detail="Ein Template mit diesem Slug existiert bereits.",
+    )
+
+
+def _invalid_against() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail="Ungueltiger 'against'-Parameter; erwartet 'active' oder eine Versions-Nummer.",
     )
 
 
@@ -140,3 +151,61 @@ class SystemPromptTemplateService:
         if found is None:
             raise _not_found()
         return found
+
+    async def restore(
+        self, ctx: WorkspaceContext, template_id: UUID, source_version: int
+    ) -> SystemPromptTemplateRead:
+        """Stellt den Snapshot `source_version` als neue Draft wieder her (§3.1).
+
+        `body_format` ist nicht versioniert — die Template-Zeile behaelt ihr
+        aktuelles Format. 409 bei bereits offenem Draft.
+        """
+        require_role(ctx, WorkspaceRole.editor)
+        snapshot = await self._repo.fetch_version(ctx.workspace_id, template_id, source_version)
+        if snapshot is None:
+            raise _not_found()
+        outcome = await self._repo.restore_version(
+            ctx.workspace_id, ctx.user_id, template_id, snapshot.content
+        )
+        if outcome.conflict == "draft_exists":
+            raise _draft_conflict()
+        if outcome.template is None:
+            raise _not_found()
+        return outcome.template
+
+    async def diff(
+        self, ctx: WorkspaceContext, template_id: UUID, version: int, against: str
+    ) -> VersionDiff:
+        """Strukturierter Feld-Diff der Version `version` gegen `against`."""
+        target = await self._repo.fetch_version(ctx.workspace_id, template_id, version)
+        if target is None:
+            raise _not_found()
+        versions = await self._repo.list_versions(ctx.workspace_id, template_id)
+        if versions is None:
+            raise _not_found()
+        base_version, base_content = self._resolve_against(against, versions)
+        before = base_content.model_dump(mode="json") if base_content is not None else {}
+        return compute_version_diff(
+            version=version,
+            against=against,
+            against_version=base_version,
+            before=before,
+            after=target.content.model_dump(mode="json"),
+        )
+
+    def _resolve_against(
+        self, against: str, versions: list[SystemPromptTemplateVersionRead]
+    ) -> tuple[int | None, SystemPromptTemplateContent | None]:
+        if against == "active":
+            for candidate in versions:
+                if candidate.status == VersionStatus.active:
+                    return candidate.version, candidate.content
+            return None, None
+        try:
+            wanted = int(against)
+        except ValueError:
+            raise _invalid_against() from None
+        for candidate in versions:
+            if candidate.version == wanted:
+                return candidate.version, candidate.content
+        raise _not_found()

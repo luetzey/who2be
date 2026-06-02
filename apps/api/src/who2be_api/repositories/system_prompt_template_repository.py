@@ -96,6 +96,14 @@ class SystemPromptTemplateRepository(Protocol):
         body_format: str = "plain",
     ) -> SystemPromptTemplateUpdateOutcome: ...
 
+    async def restore_version(
+        self,
+        workspace_id: UUID,
+        owner_id: UUID,
+        template_id: UUID,
+        content: SystemPromptTemplateContent,
+    ) -> SystemPromptTemplateUpdateOutcome: ...
+
     async def list_versions(
         self, workspace_id: UUID, template_id: UUID
     ) -> list[SystemPromptTemplateVersionRead] | None: ...
@@ -296,6 +304,68 @@ class PgSystemPromptTemplateRepository:
                     "content": content_json,
                     "current_status": new_status,
                     "has_pending_draft": new_status == VersionStatus.draft,
+                }
+            )
+        )
+
+    async def restore_version(
+        self,
+        workspace_id: UUID,
+        owner_id: UUID,
+        template_id: UUID,
+        content: SystemPromptTemplateContent,
+    ) -> SystemPromptTemplateUpdateOutcome:
+        """Schreibt `content` (Snapshot) als neue Draft-Version (Track A §3.1).
+
+        Non-destruktiv: frische Draft v(n+1), kein Pointer-Reset. 409
+        (`draft_exists`) bei bereits offenem Draft. `body_format` ist nicht Teil
+        des versionierten Contents — die aktuelle Template-Zeile behaelt ihr
+        Format; Name und Slug bleiben ebenfalls unveraendert.
+        """
+        content_json = content.model_dump(mode="json")
+        async with self._pool.acquire() as conn, conn.transaction():
+            current = await conn.fetchrow(
+                "SELECT current_version FROM system_prompt_template "
+                "WHERE id = $1 AND workspace_id = $2 FOR UPDATE",
+                template_id,
+                workspace_id,
+            )
+            if current is None:
+                return SystemPromptTemplateUpdateOutcome(template=None)
+            existing_draft = await conn.fetchval(
+                "SELECT 1 FROM system_prompt_template_version "
+                "WHERE template_id = $1 AND status = 'draft'",
+                template_id,
+            )
+            if existing_draft is not None:
+                return SystemPromptTemplateUpdateOutcome(template=None, conflict="draft_exists")
+            next_version = current["current_version"] + 1
+            template = await conn.fetchrow(
+                "UPDATE system_prompt_template "
+                "SET current_version = $1, updated_at = now() "
+                "WHERE id = $2 "
+                "RETURNING id, workspace_id, owner_id, name, slug, body_format, "
+                "current_version, created_at, updated_at",
+                next_version,
+                template_id,
+            )
+            await conn.execute(
+                "INSERT INTO system_prompt_template_version "
+                "(template_id, version, content, status, created_by) "
+                "VALUES ($1, $2, $3, $4, $5)",
+                template_id,
+                next_version,
+                content_json,
+                VersionStatus.draft.value,
+                owner_id,
+            )
+        return SystemPromptTemplateUpdateOutcome(
+            template=SystemPromptTemplateRead.model_validate(
+                {
+                    **dict(template),
+                    "content": content_json,
+                    "current_status": VersionStatus.draft,
+                    "has_pending_draft": True,
                 }
             )
         )

@@ -121,6 +121,14 @@ class PlaybookRepository(Protocol):
         content: PlaybookContent,
     ) -> PlaybookUpdateOutcome: ...
 
+    async def restore_version(
+        self,
+        workspace_id: UUID,
+        owner_id: UUID,
+        playbook_id: UUID,
+        content: PlaybookContent,
+    ) -> PlaybookUpdateOutcome: ...
+
     async def list_versions(
         self, workspace_id: UUID, playbook_id: UUID
     ) -> list[PlaybookVersionRead] | None: ...
@@ -389,6 +397,72 @@ class PgPlaybookRepository:
                 "type, tags, triggers, created_at, updated_at",
                 next_version,
                 name,
+                content.type,
+                content.tags,
+                content.triggers,
+                playbook_id,
+            )
+            await conn.execute(
+                "INSERT INTO playbook_version "
+                "(playbook_id, version, content, status, created_by) "
+                "VALUES ($1, $2, $3, $4, $5)",
+                playbook_id,
+                next_version,
+                content_json,
+                VersionStatus.draft.value,
+                owner_id,
+            )
+        return PlaybookUpdateOutcome(
+            playbook=PlaybookRead.model_validate(
+                {
+                    **dict(playbook),
+                    "content": content_json,
+                    "current_status": VersionStatus.draft,
+                    "has_pending_draft": True,
+                }
+            )
+        )
+
+    async def restore_version(
+        self,
+        workspace_id: UUID,
+        owner_id: UUID,
+        playbook_id: UUID,
+        content: PlaybookContent,
+    ) -> PlaybookUpdateOutcome:
+        """Schreibt `content` (Snapshot einer fruehen Version) als neue Draft.
+
+        Non-destruktiv (Track A §3.1): kein Pointer-Reset, sondern eine frische
+        Draft-Version v(n+1). 409 (`draft_exists`), wenn bereits ein Draft offen
+        ist — konsistent mit `update`/PUT-auf-Active. Der Name bleibt
+        unveraendert (Name ist nicht Teil des versionierten Contents); die
+        denormalisierten Filterspalten wandern aus dem Snapshot-Content mit.
+        """
+        content_json = content.model_dump(mode="json")
+        async with self._pool.acquire() as conn, conn.transaction():
+            current = await conn.fetchrow(
+                "SELECT current_version FROM playbook "
+                "WHERE id = $1 AND workspace_id = $2 FOR UPDATE",
+                playbook_id,
+                workspace_id,
+            )
+            if current is None:
+                return PlaybookUpdateOutcome(playbook=None)
+            existing_draft = await conn.fetchval(
+                "SELECT 1 FROM playbook_version WHERE playbook_id = $1 AND status = 'draft'",
+                playbook_id,
+            )
+            if existing_draft is not None:
+                return PlaybookUpdateOutcome(playbook=None, conflict="draft_exists")
+            next_version = current["current_version"] + 1
+            playbook = await conn.fetchrow(
+                "UPDATE playbook "
+                "SET current_version = $1, type = $2, tags = $3, triggers = $4, "
+                "updated_at = now() "
+                "WHERE id = $5 "
+                "RETURNING id, workspace_id, owner_id, name, current_version, type, tags, "
+                "triggers, created_at, updated_at",
+                next_version,
                 content.type,
                 content.tags,
                 content.triggers,

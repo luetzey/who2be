@@ -4,7 +4,7 @@ from typing import Annotated
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 
 from who2be_api.core.db import get_pool
 from who2be_api.core.pagination import DEFAULT_LIMIT, PageCursor, PageLimit
@@ -20,6 +20,8 @@ from who2be_models import (
     PersonaRead,
     PersonaUpdate,
     PersonaVersionRead,
+    StatusHistoryEntry,
+    VersionDiff,
     VersionTransitionRequest,
 )
 
@@ -42,6 +44,8 @@ def get_version_status_service(
 Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]
 Service = Annotated[PersonaService, Depends(get_persona_service)]
 StatusService = Annotated[VersionStatusService, Depends(get_version_status_service)]
+# `against` waehlt den Diff-Vergleichsstand: 'active' oder eine Versions-Nummer.
+DiffAgainst = Annotated[str, Query(max_length=20)]
 
 
 @router.get("")
@@ -129,3 +133,39 @@ async def transition_persona_version(
     return await status_service.transition_persona_version(
         ctx, persona_id, version, data.to, data.note
     )
+
+
+@router.post("/{persona_id}/versions/{version}/restore", status_code=status.HTTP_201_CREATED)
+@limiter.limit(write_limit)
+async def restore_persona_version(
+    request: Request,
+    persona_id: UUID,
+    version: int,
+    ctx: Ctx,
+    service: Service,
+) -> PersonaRead:
+    """Stellt Version `version` als neue Draft wieder her (non-destruktiv)."""
+    return await service.restore(ctx, persona_id, version)
+
+
+@router.get("/{persona_id}/versions/{version}/diff")
+async def diff_persona_version(
+    persona_id: UUID,
+    version: int,
+    ctx: Ctx,
+    service: Service,
+    against: DiffAgainst = "active",
+) -> VersionDiff:
+    """Strukturierter Feld-/Block-Diff der Version gegen `against` (read-only)."""
+    return await service.diff(ctx, persona_id, version, against)
+
+
+@router.get("/{persona_id}/versions/{version}/provenance")
+async def provenance_persona_version(
+    persona_id: UUID,
+    version: int,
+    ctx: Ctx,
+    status_service: StatusService,
+) -> list[StatusHistoryEntry]:
+    """Status-Historie dieser Version ("warum aktiv")."""
+    return await status_service.provenance_persona(ctx, persona_id, version)

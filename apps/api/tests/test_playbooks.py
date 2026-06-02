@@ -290,11 +290,12 @@ def test_playbook_version_transitions_and_draft_on_edit(
                 )
                 assert resp.status_code == 200, resp.text
 
-            # Verbotener Uebergang: active -> draft.
+            # Verbotener Uebergang: active -> review (active darf nur nach
+            # inactive oder — als Reset-auf-Draft, Track A — nach draft).
             assert (
                 client.post(
                     f"{base}/{playbook_id}/versions/1/transition",
-                    json={"to": "draft"},
+                    json={"to": "review"},
                     headers=auth,
                 ).status_code
                 == 409

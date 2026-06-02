@@ -11,7 +11,7 @@ from typing import Annotated
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 
 from who2be_api.core.db import get_pool
 from who2be_api.core.pagination import DEFAULT_LIMIT, PageCursor, PageLimit
@@ -27,10 +27,12 @@ from who2be_api.services.system_prompt_template_service import (
 )
 from who2be_api.services.version_status import VersionStatusService
 from who2be_models import (
+    StatusHistoryEntry,
     SystemPromptTemplateCreate,
     SystemPromptTemplateRead,
     SystemPromptTemplateUpdate,
     SystemPromptTemplateVersionRead,
+    VersionDiff,
     VersionTransitionRequest,
 )
 
@@ -52,6 +54,8 @@ def get_version_status_service(
 Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]
 Service = Annotated[SystemPromptTemplateService, Depends(get_template_service)]
 StatusService = Annotated[VersionStatusService, Depends(get_version_status_service)]
+# `against` waehlt den Diff-Vergleichsstand: 'active' oder eine Versions-Nummer.
+DiffAgainst = Annotated[str, Query(max_length=20)]
 
 
 @router.get("")
@@ -123,3 +127,39 @@ async def transition_template_version(
     return await status_service.transition_system_prompt_template_version(
         ctx, template_id, version, data.to, data.note
     )
+
+
+@router.post("/{template_id}/versions/{version}/restore", status_code=status.HTTP_201_CREATED)
+@limiter.limit(write_limit)
+async def restore_template_version(
+    request: Request,
+    template_id: UUID,
+    version: int,
+    ctx: Ctx,
+    service: Service,
+) -> SystemPromptTemplateRead:
+    """Stellt Version `version` als neue Draft wieder her (non-destruktiv)."""
+    return await service.restore(ctx, template_id, version)
+
+
+@router.get("/{template_id}/versions/{version}/diff")
+async def diff_template_version(
+    template_id: UUID,
+    version: int,
+    ctx: Ctx,
+    service: Service,
+    against: DiffAgainst = "active",
+) -> VersionDiff:
+    """Strukturierter Feld-Diff der Version gegen `against` (read-only)."""
+    return await service.diff(ctx, template_id, version, against)
+
+
+@router.get("/{template_id}/versions/{version}/provenance")
+async def provenance_template_version(
+    template_id: UUID,
+    version: int,
+    ctx: Ctx,
+    status_service: StatusService,
+) -> list[StatusHistoryEntry]:
+    """Status-Historie dieser Version ("warum aktiv")."""
+    return await status_service.provenance_system_prompt_template(ctx, template_id, version)

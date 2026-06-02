@@ -138,6 +138,40 @@ class FakePersonaRepository:
         )
         return PersonaUpdateOutcome(persona=updated)
 
+    async def restore_version(
+        self,
+        workspace_id: UUID,
+        owner_id: UUID,
+        persona_id: UUID,
+        content: PersonaVersionContent,
+    ) -> PersonaUpdateOutcome:
+        persona = self._personas.get(persona_id)
+        if persona is None or persona.workspace_id != workspace_id:
+            return PersonaUpdateOutcome(persona=None)
+        if any(v.status == VersionStatus.draft for v in self._versions[persona_id]):
+            return PersonaUpdateOutcome(persona=None, conflict="draft_exists")
+        version = persona.current_version + 1
+        updated = persona.model_copy(
+            update={
+                "current_version": version,
+                "current_status": VersionStatus.draft,
+                "has_pending_draft": True,
+                "content": content,
+                "updated_at": datetime.now(UTC),
+            }
+        )
+        self._personas[persona_id] = updated
+        self._versions[persona_id].append(
+            PersonaVersionRead(
+                version=version,
+                status=VersionStatus.draft,
+                content=content,
+                created_by=owner_id,
+                created_at=datetime.now(UTC),
+            )
+        )
+        return PersonaUpdateOutcome(persona=updated)
+
     async def upsert_draft(
         self,
         workspace_id: UUID,

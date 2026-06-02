@@ -39,6 +39,7 @@ from who2be_models import (
     PersonaVersionRead,
     PlaybookVersionRead,
     ResourceVersionRead,
+    StatusHistoryEntry,
     SystemPromptTemplateVersionRead,
     VersionStatus,
     WorkspaceRole,
@@ -96,12 +97,17 @@ def required_role_for_transition(
 ) -> WorkspaceRole:
     """Mindestrolle fuer einen (erlaubten) Status-Uebergang (ADR-0023).
 
-    Promote-to-Active (`review → active`) und Retire (`active → inactive`)
-    sind admin-only; alle uebrigen erlaubten Uebergaenge (`draft → review`,
-    `review → draft`, `inactive → draft`) sind ab `editor` zulaessig.
+    Admin-only sind die Uebergaenge, die den publizierten (aktiven) Stand
+    veraendern: Promote-to-Active (`review → active`), Retire
+    (`active → inactive`) und Reset-auf-Draft (`active → draft`, Track A —
+    holt die aktive Version zur Bearbeitung zurueck). Alle uebrigen erlaubten
+    Uebergaenge (`draft → review`, `review → draft`, `inactive → draft`) sind
+    ab `editor` zulaessig.
     """
-    _ = from_status  # Gate haengt allein am Ziel-Status (active/inactive).
-    if to_status in (VersionStatus.active, VersionStatus.inactive):
+    if (
+        to_status in (VersionStatus.active, VersionStatus.inactive)
+        or from_status == VersionStatus.active
+    ):
         return WorkspaceRole.admin
     return WorkspaceRole.editor
 
@@ -181,6 +187,63 @@ class VersionStatusService:
         )
         return SystemPromptTemplateVersionRead.model_validate(dict(row))
 
+    async def provenance_persona(
+        self, ctx: WorkspaceContext, persona_id: UUID, version: int
+    ) -> list[StatusHistoryEntry]:
+        return await self._provenance(ctx, "persona", _PERSONA_TABLES, persona_id, version)
+
+    async def provenance_playbook(
+        self, ctx: WorkspaceContext, playbook_id: UUID, version: int
+    ) -> list[StatusHistoryEntry]:
+        return await self._provenance(ctx, "playbook", _PLAYBOOK_TABLES, playbook_id, version)
+
+    async def provenance_resource(
+        self, ctx: WorkspaceContext, resource_id: UUID, version: int
+    ) -> list[StatusHistoryEntry]:
+        return await self._provenance(ctx, "resource", _RESOURCE_TABLES, resource_id, version)
+
+    async def provenance_system_prompt_template(
+        self, ctx: WorkspaceContext, template_id: UUID, version: int
+    ) -> list[StatusHistoryEntry]:
+        return await self._provenance(
+            ctx, "system_prompt_template", _TEMPLATE_TABLES, template_id, version
+        )
+
+    async def _provenance(
+        self,
+        ctx: WorkspaceContext,
+        entity_type: EntityType,
+        tables: tuple[str, str, str],
+        entity_id: UUID,
+        version: int,
+    ) -> list[StatusHistoryEntry]:
+        """Liefert die `status_history`-Kette einer Version (chronologisch).
+
+        Beantwortet „warum aktiv" — die Episoden, die diese Version durch die
+        State-Machine bewegt haben. Workspace-Isolation ueber das Entity; eine
+        Version ohne Historie (Alt-Daten vor Migration 0029) liefert `[]`.
+        """
+        entity_tbl, _version_tbl, _fk_col = tables
+        async with self._pool.acquire() as conn:
+            owned = await conn.fetchval(
+                f"SELECT 1 FROM {entity_tbl} WHERE id = $1 AND workspace_id = $2",
+                entity_id,
+                ctx.workspace_id,
+            )
+            if owned is None:
+                raise _not_found(entity_type)
+            rows = await conn.fetch(
+                "SELECT id, entity_type, entity_id, version, from_status, to_status, "
+                "changed_by, changed_at, note "
+                "FROM status_history "
+                "WHERE entity_type = $1 AND entity_id = $2 AND version = $3 "
+                "ORDER BY changed_at ASC",
+                entity_type,
+                entity_id,
+                version,
+            )
+        return [StatusHistoryEntry.model_validate(dict(row)) for row in rows]
+
     async def _transition(
         self,
         ctx: WorkspaceContext,
@@ -246,6 +309,7 @@ class VersionStatusService:
                         VersionStatus.inactive,
                         ctx.user_id,
                         note=(f"Auto-inactiviert durch Promotion von v{version} auf 'active'."),
+                        version=prev_active_version,
                     )
 
             try:
@@ -272,8 +336,68 @@ class VersionStatusService:
                 to_status,
                 ctx.user_id,
                 note,
+                version=version,
             )
+
+            # Reset-auf-Draft (Track A): wird die aktive Version zur Bearbeitung
+            # zurueckgeholt, reaktivieren wir die zuletzt aktive Version, damit
+            # die Invariante „genau eine aktiv" haelt. `version → draft` hat oben
+            # die Active-Slot freigeraeumt, also kollidiert der Partial-Unique-
+            # Index nicht. Gibt es keine fruehere aktive Version, bleibt die
+            # Entity ohne aktive Version (erlaubt, §3.1).
+            if from_status == VersionStatus.active and to_status == VersionStatus.draft:
+                await self._reactivate_previous(
+                    conn, entity_type, version_tbl, fk_col, entity_id, version, ctx.user_id
+                )
             return updated
+
+    async def _reactivate_previous(
+        self,
+        conn: asyncpg.Connection,
+        entity_type: EntityType,
+        version_tbl: str,
+        fk_col: str,
+        entity_id: UUID,
+        reset_version: int,
+        user_id: UUID,
+    ) -> None:
+        """Reaktiviert die zuletzt aktive Version nach einem Reset-auf-Draft.
+
+        „Zuletzt aktiv" = juengste `status_history`-Episode mit
+        `to_status='active'` fuer eine ANDERE Version als die gerade
+        zurueckgesetzte. Nur reaktiviert, wenn diese Version noch existiert und
+        aktuell `inactive` ist (Defense gegen Races / zwischenzeitlich
+        weiterbearbeitete Versionen).
+        """
+        prev_version = await conn.fetchval(
+            "SELECT version FROM status_history "
+            "WHERE entity_type = $1 AND entity_id = $2 AND to_status = 'active' "
+            "AND version IS NOT NULL AND version <> $3 "
+            "ORDER BY changed_at DESC LIMIT 1",
+            entity_type,
+            entity_id,
+            reset_version,
+        )
+        if prev_version is None:
+            return
+        reactivated = await conn.fetchval(
+            f"UPDATE {version_tbl} SET status = 'active' "
+            f"WHERE {fk_col} = $1 AND version = $2 AND status = 'inactive' "
+            "RETURNING version",
+            entity_id,
+            prev_version,
+        )
+        if reactivated is not None:
+            await self._history.record(
+                conn,
+                entity_type,
+                entity_id,
+                VersionStatus.inactive,
+                VersionStatus.active,
+                user_id,
+                note=f"Reaktiviert nach Reset von v{reset_version} auf Draft.",
+                version=prev_version,
+            )
 
 
 __all__ = [
