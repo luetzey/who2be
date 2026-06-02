@@ -6,7 +6,6 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { Me, WorkspaceRole } from '@/api/types'
 import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
 import { SessionContext } from '@/auth/session-context'
-import { notify } from '@/lib/feedback'
 
 import { WorkspaceSettingsPage } from './WorkspaceSettingsPage'
 
