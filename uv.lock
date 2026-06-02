@@ -1884,6 +1884,7 @@ version = "0.1.0"
 source = { editable = "apps/api" }
 dependencies = [
     { name = "asyncpg" },
+    { name = "cryptography" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "markdown-it-py" },
@@ -1898,6 +1899,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "asyncpg", specifier = ">=0.30" },
+    { name = "cryptography", specifier = ">=44" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "markdown-it-py", specifier = ">=3.0" },

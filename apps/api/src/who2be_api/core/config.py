@@ -64,6 +64,32 @@ class Settings(BaseSettings):
         default=False,
         validation_alias=AliasChoices("WHO2BE_DOCS_PUBLIC", "docs_public"),
     )
+    # Track D — Editionen/Entitlements (Notion-Vault: Deployment-/Licensing-Standards).
+    # Ein Build, ein Image; der Unterschied Cloud vs. On-Prem liegt allein in dieser
+    # Runtime-Config (12-Factor III). Default `onprem` ⇒ OSS-sicher (unbegrenztes
+    # `OSS_ENTITLEMENT`, kein Billing). Nur `cloud` aktiviert Limits + Webhook-Adapter.
+    edition: Literal["cloud", "onprem"] = Field(
+        default="onprem",
+        validation_alias=AliasChoices("WHO2BE_EDITION", "edition"),
+    )
+    # On-Prem-Adapter: signierte Lizenzdatei (Ed25519), offline mit `K_pub` verifiziert.
+    # Leer ⇒ reines OSS (unbegrenzt). NIE der Private-Key — nur der Lizenz-Token.
+    license_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("WHO2BE_LICENSE_KEY", "license_key"),
+    )
+    # Cloud-Adapter: Shared Secret des Zahlungsanbieters (Stripe/Mollie) fuer die
+    # Webhook-Signaturpruefung. Leer ⇒ Webhook lehnt jede Lieferung ab (fail closed).
+    billing_webhook_secret: str = Field(
+        default="",
+        validation_alias=AliasChoices("WHO2BE_BILLING_WEBHOOK_SECRET", "billing_webhook_secret"),
+    )
+    # On-Prem-Bootstrap: beim ersten Boot ohne Tenant wird fuer diese Email ein
+    # Admin + Personal-Org + Workspace deterministisch geseedet.
+    bootstrap_admin_email: str = Field(
+        default="",
+        validation_alias=AliasChoices("WHO2BE_BOOTSTRAP_ADMIN_EMAIL", "bootstrap_admin_email"),
+    )
 
     @property
     def cors_origins(self) -> list[str]:
