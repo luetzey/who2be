@@ -23,7 +23,12 @@ class WorkspaceRole(StrEnum):
 
 
 class WorkspaceMemberRead(BaseModel):
-    """Mitgliedschafts-Metadaten (read-only, Spiegel von `workspace_member`)."""
+    """Mitgliedschafts-Metadaten (read-only, Spiegel von `workspace_member`).
+
+    `email` ist die menschenlesbare Identitaet aus `auth.users` (LEFT JOIN).
+    Optional, weil reine API-Test-DBs ohne GoTrue-Schema sie nicht liefern —
+    die UI faellt dann auf die `user_id` zurueck (analog `/v1/me`).
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -31,6 +36,7 @@ class WorkspaceMemberRead(BaseModel):
     user_id: UUID
     role: WorkspaceRole
     joined_at: datetime
+    email: str | None = None
 
 
 class WorkspaceMemberUpdate(BaseModel):

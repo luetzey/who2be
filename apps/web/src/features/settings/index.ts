@@ -1,1 +1,5 @@
+export { SettingsLayout } from './components/SettingsLayout'
+export { AccountPage } from './pages/AccountPage'
 export { MembersPage } from './pages/MembersPage'
+export { OrgSettingsPage } from './pages/OrgSettingsPage'
+export { WorkspaceSettingsPage } from './pages/WorkspaceSettingsPage'

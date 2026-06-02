@@ -12,6 +12,8 @@ import type {
   Me,
   Member,
   MemberUpdateInput,
+  Organization,
+  OrganizationInput,
   Persona,
   PersonaInput,
   PersonaVersion,
@@ -37,6 +39,9 @@ import type {
   TokenInput,
   VersionDiff,
   VersionStatus,
+  Workspace,
+  WorkspaceInput,
+  WorkspaceRenameInput,
 } from './types'
 
 export class ApiError extends Error {
@@ -194,6 +199,14 @@ export interface Api {
   listInvitations: () => Promise<Invitation[]>
   createInvitation: (input: InvitationInput) => Promise<Invitation>
   revokeInvitation: (id: string) => Promise<void>
+  // Track C — Tenancy-Management. NICHT workspace-scoped: Org-Routen tragen die
+  // org_id im Pfad, Workspace-Mutationen die jeweilige workspace_id (kann vom
+  // aktuell aktiven Workspace abweichen, z. B. beim Löschen eines anderen).
+  createOrganization: (input: OrganizationInput) => Promise<Organization>
+  listOrgWorkspaces: (orgId: string) => Promise<Workspace[]>
+  createWorkspace: (orgId: string, input: WorkspaceInput) => Promise<Workspace>
+  renameWorkspace: (workspaceId: string, input: WorkspaceRenameInput) => Promise<Workspace>
+  deleteWorkspace: (workspaceId: string) => Promise<void>
   // Phase 3 Runde 3 Track 3 — SystemPromptTemplate + Agent.
   listSystemPromptTemplates: () => Promise<SystemPromptTemplate[]>
   getSystemPromptTemplate: (id: string) => Promise<SystemPromptTemplate>
@@ -393,6 +406,25 @@ export function createApi(token: string, workspaceId: string): Api {
       }),
     revokeInvitation: (id) =>
       request<void>(token, `${ws}/invitations/${id}`, { method: 'DELETE' }),
+    createOrganization: (input) =>
+      request<Organization>(token, `/v1/organizations`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    listOrgWorkspaces: (orgId) =>
+      request<Workspace[]>(token, `/v1/organizations/${orgId}/workspaces`),
+    createWorkspace: (orgId, input) =>
+      request<Workspace>(token, `/v1/organizations/${orgId}/workspaces`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    renameWorkspace: (workspaceId, input) =>
+      request<Workspace>(token, `/v1/workspaces/${workspaceId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      }),
+    deleteWorkspace: (workspaceId) =>
+      request<void>(token, `/v1/workspaces/${workspaceId}`, { method: 'DELETE' }),
     listSystemPromptTemplates: () =>
       request<SystemPromptTemplate[]>(token, `${ws}/system-prompts`),
     getSystemPromptTemplate: (id) =>
