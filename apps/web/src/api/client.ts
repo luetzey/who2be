@@ -6,6 +6,8 @@ import type {
   AgentRenderFormat,
   AgentRenderResult,
   AgentUpdateInput,
+  CheckoutInput,
+  CheckoutResult,
   DashboardData,
   EntitlementInfo,
   Invitation,
@@ -276,6 +278,8 @@ export interface Api {
   previewPlaceholder: (input: PlaceholderPreviewInput) => Promise<PlaceholderPreview>
   // Track D: aufgeloestes Org-Entitlement + MCP-Verbrauch (Billing-Slot).
   getEntitlement: () => Promise<EntitlementInfo>
+  // Track J: startet einen Mollie-Checkout und liefert die Hosted-Checkout-URL.
+  createCheckout: (input: CheckoutInput) => Promise<CheckoutResult>
 }
 
 export function createApi(token: string, workspaceId: string): Api {
@@ -569,5 +573,10 @@ export function createApi(token: string, workspaceId: string): Api {
       return request<PlaceholderPreview>(token, `${ws}/placeholders/preview?${params.toString()}`)
     },
     getEntitlement: () => request<EntitlementInfo>(token, `${ws}/billing/entitlement`),
+    createCheckout: (input) =>
+      request<CheckoutResult>(token, `${ws}/billing/checkout`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
   }
 }
