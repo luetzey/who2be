@@ -50,30 +50,33 @@ interface KindMeta {
   labelPrefix: string
 }
 
+// Token-basierte Pill-Tinten (siehe styles/globals.css §Pill-Kategorie-Tinten).
+// bg + fg je Kind als semantische Tokens; Border via fg-Opacity — keine rohen
+// Palette-Stufen (Frontend-Standards: Token statt Rohwert).
 const KIND_META: Record<PlaceholderKind, KindMeta> = {
   playbook: {
     icon: BookOpen,
-    pillClass: 'bg-blue-100 text-blue-800 border-blue-200',
+    pillClass: 'bg-pill-playbook text-pill-playbook-fg border-pill-playbook-fg/25',
     labelPrefix: 'Playbook',
   },
   resource: {
     icon: FileText,
-    pillClass: 'bg-green-100 text-green-800 border-green-200',
+    pillClass: 'bg-pill-resource text-pill-resource-fg border-pill-resource-fg/25',
     labelPrefix: 'Resource',
   },
   'persona-field': {
     icon: User,
-    pillClass: 'bg-purple-100 text-purple-800 border-purple-200',
+    pillClass: 'bg-pill-persona text-pill-persona-fg border-pill-persona-fg/25',
     labelPrefix: 'Persona',
   },
   date: {
     icon: Calendar,
-    pillClass: 'bg-amber-100 text-amber-800 border-amber-200',
+    pillClass: 'bg-pill-date text-pill-date-fg border-pill-date-fg/25',
     labelPrefix: 'Datum',
   },
   'tools-overview': {
     icon: Wrench,
-    pillClass: 'bg-slate-100 text-slate-800 border-slate-200',
+    pillClass: 'bg-pill-tools text-pill-tools-fg border-pill-tools-fg/25',
     labelPrefix: 'MCP-Tools',
   },
 }
@@ -147,6 +150,9 @@ export const PlaceholderInlineSpec = createReactInlineContentSpec(
           onKeyDown={handleKeyDown}
           className={cn(
             'inline-flex cursor-pointer items-center gap-1 rounded-full border px-2 py-0.5 align-middle text-xs leading-none font-medium transition-opacity select-none hover:opacity-80',
+            // A11y: sichtbarer, token-basierter Fokus-Ring (Design-Sprache §13 —
+            // "Focus-Ring nie wegklassen"), da die Pill fokussierbar ist.
+            'ring-offset-background focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none',
             meta.pillClass,
           )}
         >
