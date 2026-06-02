@@ -266,18 +266,12 @@ async def _seed_default_templates(
             "  WHERE template_id = $1 AND version = 1"
             ")",
             template_id,
-            f'{{"description": "", "body": {_json_escape(body)}}}',
+            # WICHTIG: dict uebergeben, KEINEN bereits serialisierten JSON-String.
+            # Der jsonb-Codec in core/db.py ruft json.dumps auf jeden Bind-Wert —
+            # eine pre-serialisierte Zeichenkette wuerde dadurch ein zweites Mal
+            # in Quotes verpackt (doppelt-encodierter JSON-String statt Objekt).
+            # Der ::jsonb-Cast oben aktiviert den Codec; ohne ihn fuehrt asyncpg
+            # keine Typ-Inferenz fuer $2 durch und erwartet einen str.
+            {"description": "", "body": body},
             owner_id,
         )
-
-
-def _json_escape(text: str) -> str:
-    """Minimaler JSON-String-Escape (Quotes + Backslashes + Newlines).
-
-    Wir bauen das jsonb-Literal bewusst ohne externe ``json``-Import-Aufrufe,
-    damit der Helper nah am SQL bleibt. Reicht fuer Fixed-Strings aus unserer
-    eigenen Konstanten-Tabelle.
-    """
-    import json
-
-    return json.dumps(text, ensure_ascii=False)
