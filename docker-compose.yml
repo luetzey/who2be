@@ -51,7 +51,21 @@ services:
       GOTRUE_JWT_ADMIN_ROLES: service_role
       GOTRUE_JWT_AUD: authenticated
       GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      # Dev bleibt autoconfirm: kein SMTP noetig, Signups sind sofort nutzbar.
+      # Prod (deploy/hetzner) schaltet das auf false + echten Mailer um.
       GOTRUE_MAILER_AUTOCONFIRM: "true"
+      # Social-Login (Track K) — lokal default AUS. Zum Testen die Werte in
+      # .env setzen (GOTRUE_EXTERNAL_GOOGLE_ENABLED=true + CLIENT_ID/SECRET).
+      # Die Provider rufen nach dem Login die GoTrue-Callback-Route ueber den
+      # auth-gateway auf (/auth/v1/callback → intern /callback).
+      GOTRUE_EXTERNAL_GOOGLE_ENABLED: ${GOTRUE_EXTERNAL_GOOGLE_ENABLED:-false}
+      GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID: ${GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID:-}
+      GOTRUE_EXTERNAL_GOOGLE_SECRET: ${GOTRUE_EXTERNAL_GOOGLE_SECRET:-}
+      GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI: ${GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI:-http://localhost:9999/auth/v1/callback}
+      GOTRUE_EXTERNAL_GITHUB_ENABLED: ${GOTRUE_EXTERNAL_GITHUB_ENABLED:-false}
+      GOTRUE_EXTERNAL_GITHUB_CLIENT_ID: ${GOTRUE_EXTERNAL_GITHUB_CLIENT_ID:-}
+      GOTRUE_EXTERNAL_GITHUB_SECRET: ${GOTRUE_EXTERNAL_GITHUB_SECRET:-}
+      GOTRUE_EXTERNAL_GITHUB_REDIRECT_URI: ${GOTRUE_EXTERNAL_GITHUB_REDIRECT_URI:-http://localhost:9999/auth/v1/callback}
       API_EXTERNAL_URL: http://localhost:9999
     depends_on:
       migrate:

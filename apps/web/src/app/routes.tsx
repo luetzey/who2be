@@ -5,7 +5,14 @@ import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
 import { RequireAuth } from '@/auth/RequireAuth'
 import { SessionProvider } from '@/auth/SessionProvider'
 import { useSession } from '@/auth/session-context'
-import { InvitationAcceptPage, LoginPage, SetPasswordPage } from '@/features/auth'
+import {
+  AuthCallbackPage,
+  InvitationAcceptPage,
+  LoginPage,
+  ResetPasswordPage,
+  SetPasswordPage,
+  SignupPage,
+} from '@/features/auth'
 
 import { AppLayout } from './AppLayout'
 
@@ -201,6 +208,11 @@ export function RouterRoot() {
         <AuthTokenProvider>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/signup" element={<SignupPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
+            {/* OAuth-/E-Mail-Confirm-Landing: public, etabliert die Session
+                aus dem URL-Hash und leitet dann weiter. */}
+            <Route path="/auth/callback" element={<AuthCallbackPage />} />
             <Route
               path="/invitations/:token/accept"
               element={<InvitationAcceptPage />}
