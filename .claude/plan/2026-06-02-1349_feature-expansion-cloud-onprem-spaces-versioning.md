@@ -23,7 +23,7 @@
 | 6 | `fetch_resource`-Vertrag | Eigener Body **inline** + Tabelle der **direkten** Sub-Resources (je Zeile: child-id, name, fertige `fetch_resource('<id>')`-Anweisung). Kinder-Inhalt wird **nicht** expandiert. |
 | 7 | Persona-Pills | Voller Pill-Satz wie System-Prompt: Slash-Refs auf einzelne Playbooks/Resources + Katalog-Pills `playbooks-catalog` (all\|triggered) + `resources-catalog` (all\|tag) + Skills-Tabelle. Alles fetch-time-dynamisch via MCP. |
 | 8 | Skills | Leichte Refs `{name, note}` an der Persona, gerendert als Tabelle (Skill \| Beschreibung \| Hinweis). Keine neue Entität. |
-| 9 | Cloud-Limit | MCP-**Monatskontingent pro Org** (Usage-Tabelle, Monats-Reset) + per-Token-**Rate-Ceiling** (req/min, slowapi). On-Prem unbegrenzt. Gilt nur für agent-facing Reads. |
+| 9 | Cloud-Limit | MCP-**Monatskontingent pro Org** (Usage-Tabelle, Monats-Reset) + per-Token-**Rate-Ceiling** (req/min, slowapi), **aus dem Org-Entitlement (SSoT)** gelesen. On-Prem unbegrenzt. Gilt nur für agent-facing Reads. Architektur: §3.5/§3.6. |
 | 10 | On-Prem-Admin | Env-seeded: `WHO2BE_BOOTSTRAP_ADMIN_EMAIL` (+ Magic-Link/Initialpasswort beim ersten Boot) → Org-Owner + Workspace-Admin deterministisch. |
 | 11 | BlockNote | `body_format='plain'`-Pfad **raus**; alles BlockNote. **Markdown-aware** Migration der Altbestände (Headings/Listen/Code), Fallback Paragraph. |
 | 12 | Placeholder-Hinweis | Dauer-Hinweis „verfügbare Placeholder" → kompaktes Info-Button/Popover (+ Doku-Link). |
@@ -79,11 +79,60 @@
 - Skills-Tabelle aus `PersonaVersionContent.skills` (Track F rendert sie; Datenmodell bleibt `SkillRef{name,note}`).
 - `get_persona` rendert Katalog-Pills fetch-time gegen die aktiven Playbooks/Resources des Workspace.
 
-### 3.5 Edition + MCP-Limit (Track D)
-- `WHO2BE_EDITION` in `config.py`; `licensing/edition.py` exponiert `is_cloud()`.
-- `licensing/entitlement.py`: `Entitlement{plan, mcp_monthly_quota, mcp_rate_per_min, ...}`, Default `OSS_ENTITLEMENT` (unbegrenzt).
-- MCP-Monatskontingent: Usage-Zähler-Tabelle (`mcp_usage(org_id, period, count)`), Inkrement pro agent-facing Read, 429 bei Überschreitung; per-Token-Rate via slowapi. **Nur** wenn `is_cloud()`.
-- On-Prem-Bootstrap: beim Lifespan-Start, falls kein User existiert und `WHO2BE_BOOTSTRAP_ADMIN_EMAIL` gesetzt → Admin + Personal-Org + Workspace seeden.
+### 3.5 Edition + Entitlements + MCP-Limit (Track D) — nach Notion-Vault-Standards
+**Leitprinzip (Licensing-Standards):** *Das Nutzungsrecht entscheidet die App über
+Entitlements — der Zahlungsanbieter meldet nur Ereignisse, er steuert den Zugriff nicht.*
+
+- **Entitlement = Single Source of Truth pro Org:** persistierte Struktur je Org
+  `{status: active|inactive, features: set[str], expires_at, mcp_monthly_quota,
+  mcp_rate_per_min}`. Jede gated Feature-/Read-Abfrage prüft erst das Entitlement.
+  Default `OSS_ENTITLEMENT` (unbegrenzt, alle Features) für On-Prem/OSS.
+- **Hexagonal (Deployment-Standards): `EntitlementPort` + zwei Adapter.** Der Kern
+  liest nur das aufgelöste Entitlement; die Herkunft ist ein austauschbarer Adapter:
+  - **Cloud-Adapter (webhook-getrieben):** Stripe/Mollie ist führend für den
+    Zahlungsstatus und sendet Webhooks → Signatur **immer** gegen Provider-Secret
+    verifizieren → Produkt→Feature-Mapping über Provider-Metadaten
+    (`license_policy`/`short_code`, kein hartkodiertes Mapping) → Org-Entitlement
+    setzen (`active`/Features/Laufzeit). Kündigung/Fehlzahlung → sofort entzogen.
+  - **On-Prem-Adapter (offline):** signierte Lizenzdatei, verifiziert mit `K_pub`
+    (Ed25519, nur Public-Key im Repo) — **kein** Phone-Home. `WHO2BE_LICENSE_KEY`.
+    Deckt sich mit `…0528_enterprise-license-management`.
+- **Billing-Integration ist ein Cloud-Adapter, nicht im Kern.** Das gesamte
+  Stripe/Webhook-Modul wird nur unter `is_cloud()` aktiviert; OSS/On-Prem nie.
+- **MCP-Limit liest aus dem Entitlement:** Monatskontingent
+  (`mcp_usage(org_id, period_yyyymm, count)`, 429 bei Überschreitung) + per-Token-
+  Rate (slowapi). Quota/Rate kommen aus dem Org-Entitlement. Nur agent-facing Reads.
+- **Config strikt vom Code (12-Factor III):** Edition, Lizenz-Key, Provider-Secrets
+  via Env; `.env` gitignored; nur `K_pub` im Repo, **nie** der Private-Key.
+- **On-Prem-Bootstrap:** Lifespan-Start, kein User + `WHO2BE_BOOTSTRAP_ADMIN_EMAIL`
+  → Admin + Personal-Org + Workspace seeden.
+
+### 3.6 Deployment- & Licensing-Standards (Notion-Vault — verbindlich)
+Quelle: Playbooks *Deployment-Standards (Single Codebase)* (`373be537-2ab8-8133-9a6a-c6d2babde6cb`)
++ *Licensing-Standards (Entitlements)* (`373be537-2ab8-81fc-944e-ed1d41b8e82b`).
+Gelten als Constraints für **alle** Tracks mit Edition-/Tenancy-/Cloud-Bezug (v. a. C, D):
+
+- **Single Codebase, kein Fork** — Umgebungsunterschiede in Config + Adaptern,
+  nicht in parallelen Codebasen. (= Entscheidung #1.)
+- **Hexagonal (Ports & Adapters):** Geschäftslogik von Infra isolieren; cloud-
+  spezifische Dinge (Billing, Mailer, Storage) als Adapter hinter Ports, Kern unverändert.
+- **Ein unveränderliches Docker-Artefakt** für beide Targets (build-once-deploy-
+  anywhere); Edition nur per Laufzeit-Config.
+- **DB-Symmetrie:** ein Schema für Cloud + On-Prem mit `organization_id`/
+  `workspace_id`. **Cloud-Defense-in-Depth (additiv): Postgres RLS** mit Mandanten-
+  Kontext pro Request; On-Prem identisches Schema, RLS deaktiviert/per System-ID
+  umgangen — **ohne** den App-SQL zu ändern. Heute: app-seitiges `WHERE workspace_id`
+  (ADR-0019). RLS ist eine empfohlene Cloud-Härtung → eigener Hardening-Schritt
+  (siehe §5), nicht verstreut im Kern-SQL.
+- **Logs als Event-Stream** (stdout/stderr) — bereits via structlog erfüllt.
+
+**Anti-Patterns (verbindliche Guardrails):**
+- Zugriff am Zahlungsstatus statt am Entitlement festmachen.
+- Webhooks ohne Signaturprüfung verarbeiten.
+- On-Prem-Lizenzprüfung mit Online-Call.
+- Privaten Signing-Key im Repo (nur `K_pub`).
+- Billing-Logik im Anwendungskern.
+- Getrennte Repos / pro Umgebung ein eigenes Image / getrenntes DB-Schema.
 
 ---
 
@@ -186,31 +235,53 @@ org/user-Settings-Pages + AppShell-Nav-Einträge.
 NICHT anfassen: licensing/, Billing-Logik (Track D), Entity-Editoren.
 ```
 
-### Track D — Editionen/Entitlement/MCP-Limits/On-Prem-Bootstrap (Welle 2)
+### Track D — Editionen/Entitlements/MCP-Limits/On-Prem-Bootstrap (Welle 2)
 ```
-Branch: feat/editions-entitlement-mcp-limits
-Ziel: Cloud-vs-On-Prem über ein Runtime-Flag; Entitlement-Layer; MCP-
-Request-Limitierung (Org-Monatskontingent + per-Token-Rate); On-Prem-Admin-Seed.
+Branch: feat/editions-entitlements-mcp-limits
+Ziel: Cloud-vs-On-Prem über ein Runtime-Flag; Entitlement-Schicht als Single
+Source of Truth pro Org (hexagonal, zwei Adapter); MCP-Request-Limitierung aus
+dem Entitlement; On-Prem-Admin-Seed.
+ZWINGEND nach §3.5 + §3.6 (Notion-Vault-Standards: Deployment + Licensing).
 
 Implementiere:
-1. WHO2BE_EDITION in core/config.py; licensing/edition.py mit is_cloud().
-2. licensing/entitlement.py: Entitlement{plan, mcp_monthly_quota,
-   mcp_rate_per_min}, Default OSS_ENTITLEMENT (unbegrenzt). licensing/keys/.gitkeep.
-3. Migration: mcp_usage(org_id, period_yyyymm, count) für Monats-Accounting.
+1. WHO2BE_EDITION in core/config.py (12-Factor: nur Env); licensing/edition.py
+   mit is_cloud().
+2. Entitlement als Org-SSoT: licensing/entitlement.py
+   Entitlement{status, features, expires_at, mcp_monthly_quota, mcp_rate_per_min};
+   Default OSS_ENTITLEMENT (unbegrenzt). Persistenz pro Org (Migration:
+   org_entitlement). Jede gated Abfrage prüft das Entitlement.
+3. Hexagonal EntitlementPort + zwei Adapter (Kern liest nur das aufgelöste
+   Entitlement, nie den Adapter):
+   - Cloud (webhook): POST /v1/billing/webhook — Provider-Signatur IMMER gegen
+     Provider-Secret (Env) verifizieren; Produkt→Feature-Mapping über Provider-
+     Metadaten (license_policy/short_code), KEIN hartkodiertes Mapping; Org-
+     Entitlement setzen (active/Features/Laufzeit), Kündigung→entzogen.
+   - On-Prem (offline): WHO2BE_LICENSE_KEY = signierte Lizenzdatei, verifiziert
+     mit licensing/keys/ K_pub (Ed25519, NUR Public-Key; heute .gitkeep). Kein
+     Phone-Home.
 4. MCP-Limit-Gate NUR für agent-facing Reads (get_persona, list/fetch_playbook,
-   list/fetch_resource, fetch_agent/render): Monatszähler inkrementieren + 429
-   bei Quota-Überschreitung; per-Token-Rate via core/rate_limit.py (slowapi).
-   Nur aktiv wenn is_cloud().
-5. Billing-Web-Feature (Scaffold): füllt den Org-Settings-Billing-Slot aus
-   Track C (Plan/Quota-Anzeige, Upgrade-CTA). On-Prem: ausgeblendet.
-6. On-Prem-Bootstrap im Lifespan: kein User vorhanden + WHO2BE_BOOTSTRAP_ADMIN_EMAIL
-   gesetzt → Admin + Personal-Org + Workspace seeden.
+   list/fetch_resource, fetch_agent/render): mcp_usage(org_id, period_yyyymm,
+   count) inkrementieren + 429 bei Quota; per-Token-Rate via core/rate_limit.py.
+   Quota/Rate stammen aus dem Org-Entitlement. Nur aktiv wenn is_cloud().
+5. Billing als Cloud-ADAPTER, nicht im Kern: Stripe/Webhook-Modul nur unter
+   is_cloud() aktiv. Billing-Web-Feature (Scaffold) füllt den Org-Settings-
+   Billing-Slot aus Track C (Entitlement-/Quota-Anzeige, Upgrade-CTA); On-Prem
+   ausgeblendet.
+6. On-Prem-Bootstrap im Lifespan: kein User + WHO2BE_BOOTSTRAP_ADMIN_EMAIL →
+   Admin + Personal-Org + Workspace seeden.
 
-DATEIEN: neues licensing/-Modul; core/config.py; core/rate_limit.py (nur
-ergänzen); neue Migration; agent-facing Read-Router (nur Gate-Dependency
-anhängen); apps/web/src/features/billing/** (neu); main.py-Lifespan.
-NICHT anfassen: Entity-Create-Limits (es gibt KEINE Zähl-Limits), Tenancy-Mgmt-
-Routen (Track C besitzt sie).
+GUARDRAILS (§3.6): Zugriff an Entitlement, NIE am Zahlungsstatus; Webhooks IMMER
+signatur-verifizieren; KEIN Online-Call für On-Prem-Lizenz; NIE Private-Key im
+Repo (nur K_pub); KEINE Billing-Logik im Kern; .env gitignored, keine Secrets im
+Code. Security-sensible Stellen (Webhook, Krypto, Token) mit security-reviewer prüfen.
+
+DATEIEN: neues licensing/-Modul (+ adapters/ + keys/ mit K_pub-Slot); core/config.py;
+core/rate_limit.py (nur ergänzen); neue Migrationen (org_entitlement, mcp_usage);
+neuer billing-Webhook-Router; agent-facing Read-Router (nur Gate-Dependency anhängen);
+apps/web/src/features/billing/** (neu); main.py-Lifespan.
+NICHT anfassen: Entity-Create-Pfade (KEINE Zähl-Limits); Tenancy-Mgmt-Routen
+(Track C). RLS-Härtung (§3.6/§5) ist ein separater späterer Schritt — hier den
+App-SQL NICHT umbauen.
 ```
 
 ### Track G — Dashboard-Viz + Pagination (Welle 2)
@@ -299,6 +370,19 @@ WICHTIG: auf gemergten Stand von B (+D) rebasen.
 
 ## 5. Out of Scope / offen
 - Konkretes Cloud-Pricing & Plan-Tiers (separater Plan, sobald MCP-Quota-Zahlen feststehen).
+- **Postgres-RLS-Härtung (Cloud-Defense-in-Depth, §3.6):** eigener Hardening-Track —
+  RLS-Policies + `SET app.current_tenant`-Kontext pro Request; On-Prem deaktiviert,
+  ohne App-SQL zu ändern. Heute genügt app-seitiges `WHERE workspace_id` (ADR-0019).
+- Konkrete Stripe/Mollie-Produktdefinition (`license_policy`/`short_code`) + Live-Secrets.
 - FSL-LICENSE.md / CLA / Public-Switch (eigene bestehende Pläne `…1935_license-fsl-setup`, `…2028_public-switch-github-repo`).
 - Enterprise-Hard-Hooks (SSO/SCIM/Audit-Export) — `…0528_enterprise-license-management` Phase B–D, trigger-basiert.
 - Vektorisierung der Playbook-/Resource-Auswahl (bleibt tag/trigger-basiert).
+
+## 6. Notes / Änderungen
+**2026-06-02** — V1.1: Track D + §3.5 an die Notion-Vault-Standards *Deployment-
+Standards (Single Codebase)* + *Licensing-Standards (Entitlements)* angeglichen.
+Neu: Entitlement als Org-SSoT (App entscheidet, Provider meldet nur), hexagonaler
+`EntitlementPort` mit Cloud-Webhook- + On-Prem-`K_pub`-Adapter, Billing als Cloud-
+Adapter (nicht im Kern), Webhook-Signaturpflicht, Anti-Pattern-Guardrails (§3.6),
+RLS-Härtung als eigener späterer Schritt (§5).
+**2026-06-02** — V1.0: Initial-Anlage nach Brainstorming (12 Forks, 8 Tracks/3 Wellen).
