@@ -145,96 +145,45 @@ class PgWorkspaceRepository:
         return WorkspaceRead.model_validate(dict(row)) if row is not None else None
 
 
-# BASE-Klauseln (D1/E4): erklaeren dem Agenten die drei Achsen.
-# Einheitlich in alle Default-Templates eingebettet; nach den inhaltlichen
-# Abschnitten, vor dem abschliessenden Verhaltenssatz.
-_BASE_CLAUSES = (
-    "## Agenten-Hinweise\n"
-    "**Modi:** Wenn die Persona Modi fuehrt (siehe Profil-Abschnitt oben), "
-    "waehle anhand des Modus-Triggers den passenden Modus und wende dessen "
-    "Identity-Ergaenzung sowie Output-Stil an. Ohne Trigger-Match gilt der "
-    "Default-Modus.\n\n"
-    "**Composite-Playbooks:** Wenn ein Playbook ein Composite ist (Feld "
-    "`composed_playbooks` nicht leer), folge der nummerierten Sub-Playbook-"
-    "Sequenz der Reihe nach.\n\n"
-    "**Applied vs. Triggered:** Fest eingebettete Playbooks (Pill) sind "
-    "bereits expandiert und gelten immer. Weitere Playbooks nur bei "
-    "Trigger-Match laden — erst `list_triggers()`, dann `fetch_playbook(id)`."
-)
-
-# Welle 6: BlockNote-Starter-Body lebt als Sidecar-JSON-Datei neben dem
-# Modul. Triple-Quoted-Stringliteral wurde von ruff (line-length=100)
-# wegen der inneren JSON-Keys mit "textAlignment" usw. flach abgelehnt;
-# die Sidecar-Datei sortiert ausserdem das Dual-Maintenance mit der
-# SQL-Migration 0027 (gleicher Body-Inhalt jetzt nur noch an zwei Stellen).
-_WORKFLOW_STARTER_BLOCKNOTE_BODY = (Path(__file__).parent / "workflow_starter_body.json").read_text(
-    encoding="utf-8"
-)
+# BlockNote-Bodies der Default-Templates leben als Sidecar-JSON-Dateien neben
+# dem Modul (Track B: Nur-BlockNote). Triple-Quoted-Stringliterale wurden von
+# ruff (line-length=100) wegen der inneren JSON-Keys flach abgelehnt; die
+# Sidecar-Dateien sind ausserdem die einzige Pflege-Quelle der Pill-Bodies.
+def _sidecar(name: str) -> str:
+    return (Path(__file__).parent / name).read_text(encoding="utf-8")
 
 
-# Seed-Bodies fuer die Default-Templates eines neuen Workspaces — Quelle der
-# Migrationen 0023b/0027 und gleichzeitig Quelle dieser Laufzeit-Variante. Wir
-# halten beide bewusst synchron (Test prueft die Slug-Liste).
-# Format: (slug, name, body, body_format).
+_WORKFLOW_STARTER_BLOCKNOTE_BODY = _sidecar("workflow_starter_body.json")
+
+
+# Seed-Bodies fuer die Default-Templates eines neuen Workspaces. Track B
+# (Nur-BlockNote): alle vier Bodies sind BlockNote-JSON mit Placeholder-Pills
+# (persona-field, playbooks-catalog, tools-overview, date). Format:
+# (slug, name, blocknote_body).
 #
-# E4-Checkliste (jedes Template enthaelt):
-#   1. {{ persona profile }} — Persoenlichkeit + Modi
-#   2. Platz fuer applied-Playbook-Pills (vom Autor gesetzt; hier: {{ playbooks }})
-#   3. {{ tools-overview }} — Lookup-Wegweiser
-#   4. {{ date }} — aktuelles Datum
-#   5. BASE-Klauseln (_BASE_CLAUSES) — Modi / Composite / Applied-vs-Triggered
-_DEFAULT_TEMPLATES: tuple[tuple[str, str, str, str], ...] = (
+# E4-Checkliste (jedes Template enthaelt): Persona-Profil-Pill, Playbooks-
+# Katalog-Pill, tools-overview-Pill, date-Pill + Agenten-Hinweise (Modi /
+# Composite / Applied-vs-Triggered).
+_DEFAULT_TEMPLATES: tuple[tuple[str, str, str], ...] = (
     (
         "customer-support-agent",
         "Customer-Support-Agent",
-        "Du bist {{ persona.name }} — {{ persona.description }}.\n"
-        "Datum: {{ date }}\n\n"
-        "## Hintergrund zur Rolle\n{{ persona.profile }}\n\n"
-        "## Themen-Tags\n{{ persona.tags }}\n\n"
-        "## Spielbuecher\nFolge konsequent diesen Playbooks, wenn der Nutzer "
-        "einen passenden Auslöser anspricht:\n{{ playbooks }}\n\n"
-        "## Trigger-Stichworte\nReagiere besonders auf: {{ triggers }}\n\n"
-        "## Wissensquellen\n{{ resources }}\n\n"
-        "## Werkzeuge\n{{ tools-overview }}\n\n"
-        f"{_BASE_CLAUSES}\n\n"
-        "Antworte ruhig, präzise und in der gleichen Sprache wie der Nutzer.",
-        "plain",
+        _sidecar("customer_support_body.json"),
     ),
     (
         "knowledge-worker",
         "Knowledge-Worker",
-        "Du bist {{ persona.name }}, ein Wissensarbeiter mit folgendem "
-        "Profil:\n{{ persona.description }}\n"
-        "Datum: {{ date }}\n\n"
-        "## Persönliche Notizen\n{{ persona.profile }}\n\n"
-        "## Verfügbares Wissen\n{{ resources }}\n\n"
-        "## Arbeitsabläufe\n{{ playbooks }}\n\n"
-        "## Werkzeuge\n{{ tools-overview }}\n\n"
-        f"{_BASE_CLAUSES}\n\n"
-        "Nutze die Wissensquellen, bevor du externe Annahmen triffst. "
-        "Wenn die Quelle widersprüchlich ist, weise höflich darauf hin.",
-        "plain",
+        _sidecar("knowledge_worker_body.json"),
     ),
     (
         "conversational-coach",
         "Conversational-Coach",
-        "Du bist {{ persona.name }} — {{ persona.description }}.\n"
-        "Datum: {{ date }}\n\n"
-        "## Coach-Stimme\n{{ persona.profile }}\n\n"
-        "## Schwerpunkte\nTags: {{ persona.tags }}\n\n"
-        "## Methodenkasten\n{{ playbooks }}\n\n"
-        "## Cues, die einen Methodenwechsel auslösen\n{{ triggers }}\n\n"
-        "## Werkzeuge\n{{ tools-overview }}\n\n"
-        f"{_BASE_CLAUSES}\n\n"
-        "Bleibe stets gesprächig, stelle Fragen statt Antworten zu predigen, "
-        "und beziehe die Methoden nur ein, wenn sie zum Gespräch passen.",
-        "plain",
+        _sidecar("conversational_coach_body.json"),
     ),
     (
         "workflow-starter",
         "Workflow-Starter",
         _WORKFLOW_STARTER_BLOCKNOTE_BODY,
-        "blocknote",
     ),
 )
 
@@ -242,7 +191,7 @@ _DEFAULT_TEMPLATES: tuple[tuple[str, str, str, str], ...] = (
 async def _seed_default_templates(
     conn: asyncpg.Connection, workspace_id: UUID, owner_id: UUID
 ) -> None:
-    """Legt die drei Default-Templates eines neuen Workspaces an.
+    """Legt die vier Default-Templates eines neuen Workspaces an.
 
     Idempotent ueber ``ON CONFLICT (workspace_id, slug) DO NOTHING`` auf
     `system_prompt_template`. Versions-Insert per ``NOT EXISTS`` — wenn ein
@@ -250,18 +199,17 @@ async def _seed_default_templates(
     Initial-Status ist `active`, sodass der Render-Endpoint sofort ohne
     Promote-Schritt feuert.
     """
-    for slug, name, body, body_format in _DEFAULT_TEMPLATES:
+    for slug, name, body in _DEFAULT_TEMPLATES:
         template_id = await conn.fetchval(
             "INSERT INTO system_prompt_template "
-            "(workspace_id, owner_id, name, slug, body_format) "
-            "VALUES ($1, $2, $3, $4, $5) "
+            "(workspace_id, owner_id, name, slug) "
+            "VALUES ($1, $2, $3, $4) "
             "ON CONFLICT (workspace_id, slug) DO NOTHING "
             "RETURNING id",
             workspace_id,
             owner_id,
             name,
             slug,
-            body_format,
         )
         if template_id is None:
             # Template gab es schon — der Versions-Insert unten wuerde

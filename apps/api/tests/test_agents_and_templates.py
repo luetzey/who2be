@@ -14,6 +14,7 @@ Laeuft nur mit erreichbarer Datenbank; ohne DB wird der Test uebersprungen.
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -341,18 +342,44 @@ def test_render_endpoint_returns_substituted_prompt(
             )
             assert link.status_code == 200
 
-            # Eigenes Template anlegen + aktivieren.
+            # Eigenes BlockNote-Template anlegen + aktivieren (Track B: Nur-
+            # BlockNote — Pills statt Liquid-Tokens).
+            tpl_doc = [
+                {
+                    "id": "t1",
+                    "type": "paragraph",
+                    "props": {},
+                    "content": [
+                        {"type": "text", "text": "Du bist ", "styles": {}},
+                        {
+                            "type": "placeholder",
+                            "props": {
+                                "kind": "persona-field",
+                                "target_id": "name",
+                                "label": "Name",
+                            },
+                        },
+                        {"type": "text", "text": ". Profil: ", "styles": {}},
+                        {
+                            "type": "placeholder",
+                            "props": {
+                                "kind": "persona-field",
+                                "target_id": "profile",
+                                "label": "Profil",
+                            },
+                        },
+                        {"type": "text", "text": " Unbekannt: ", "styles": {}},
+                        {
+                            "type": "placeholder",
+                            "props": {"kind": "xyz", "target_id": "", "label": "X"},
+                        },
+                    ],
+                    "children": [],
+                }
+            ]
             tpl = client.post(
                 f"/v1/workspaces/{ws}/system-prompts",
-                json=_template_body(
-                    "Test-Tpl",
-                    (
-                        "Du bist {{ persona.name }}. "
-                        "Profil: {{ persona.profile }} "
-                        "Trigger: {{ triggers }} "
-                        "Unbekannt: {{ xyz }}"
-                    ),
-                ),
+                json=_template_body("Test-Tpl", json.dumps(tpl_doc)),
                 headers=auth,
             ).json()
             client.post(
@@ -387,9 +414,8 @@ def test_render_endpoint_returns_substituted_prompt(
             data = plain.json()
             assert "Coach Carla" in data["content"]
             assert "Empathisch" in data["content"]
-            assert "passwort" in data["content"]
-            assert "⚠ {{ xyz }}" in data["content"]
-            assert data["unresolved_placeholders"] == ["xyz"]
+            # Unbekanntes Pill-Kind → Fehler-Marker im Text, keine Exception.
+            assert "<Unbekannter Placeholder: xyz>" in data["content"]
             assert data["format"] == "plain"
 
             # Render (markdown).

@@ -18,13 +18,7 @@ from who2be_api.core.pagination import DEFAULT_LIMIT, PageCursor, PageLimit
 from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.repositories.agent_repository import PgAgentRepository
-from who2be_api.repositories.persona_playbook_repository import (
-    PgPersonaPlaybookRepository,
-)
 from who2be_api.repositories.persona_repository import PgPersonaRepository
-from who2be_api.repositories.playbook_resource_link_repository import (
-    PgPlaybookResourceLinkRepository,
-)
 from who2be_api.repositories.system_prompt_template_repository import (
     PgSystemPromptTemplateRepository,
 )
@@ -55,10 +49,7 @@ def get_agent_render_service(
     return AgentRenderService(
         pool,
         PgAgentRepository(pool),
-        PgPersonaRepository(pool),
         PgSystemPromptTemplateRepository(pool),
-        PgPersonaPlaybookRepository(pool),
-        PgPlaybookResourceLinkRepository(pool),
     )
 
 
@@ -145,9 +136,8 @@ async def fetch_agent_rendered(
 ) -> AgentWithRenderedPrompt:
     """Laedt Agent + Persona + expandierten System-Prompt (Placeholder bereits aufgeloest).
 
-    Fuer `body_format='blocknote'`-Templates: Placeholder-Inline-Bloecke werden
-    serverseitig expandiert und als Plain-Text geliefert. Fuer `'plain'`-Templates
-    wird der Body unveraendert zurueckgegeben.
+    Track B (Nur-BlockNote): Placeholder-Inline-Bloecke des BlockNote-Bodys
+    werden serverseitig expandiert und als Plain-Text geliefert.
 
     Wird vom MCP-Tool `fetch_agent` genutzt; kann auch direkt von der UI
     fuer einen Copy-Button eingesetzt werden.

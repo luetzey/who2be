@@ -143,9 +143,9 @@ async def render_playbook(
 ) -> PlaybookRenderResponse:
     """Liefert den durch den Placeholder-Renderer expandierten Playbook-Body (B5).
 
-    Bei `body_format='blocknote'` werden Inline-Pills (playbook/resource/…)
-    serverseitig zu Plain-Text expandiert; bei `'plain'` wird der Body roh
-    zurueckgegeben. Wird vom MCP-Tool `fetch_playbook` genutzt.
+    Track B (Nur-BlockNote): Inline-Pills (playbook/resource/…) werden
+    serverseitig zu Plain-Text expandiert. Wird vom MCP-Tool `fetch_playbook`
+    genutzt.
     """
     return await service.render(ctx, playbook_id)
 

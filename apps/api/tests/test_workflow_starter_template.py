@@ -2,7 +2,7 @@
 
 Prueft:
 1. Migration-Test: nach `apply_migrations` existiert `workflow-starter` pro
-   Workspace, `body_format='blocknote'`, `current_version=1`, `status='active'`.
+   Workspace als BlockNote-Template, `current_version=1`, `status='active'`.
 2. Renderer-Smoke: der Seed-Body ohne Persona-Kontext (persona_id=None) durch
    `render_template_body` rendern -> unresolved enthaelt die zwei
    persona-field-Keys; Text enthaelt Sektionsueberschriften und
@@ -57,7 +57,7 @@ def _prepare_db() -> None:
 
 @pytest.mark.integration
 def test_workflow_starter_template_exists_after_migration() -> None:
-    """Nach apply_migrations existiert 'workflow-starter' mit body_format='blocknote'."""
+    """Nach apply_migrations existiert 'workflow-starter' als aktive v1 (Nur-BlockNote)."""
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
     _prepare_db()
@@ -70,8 +70,9 @@ def test_workflow_starter_template_exists_after_migration() -> None:
         try:
             row = await conn.fetchrow(
                 """
-                SELECT t.slug, t.body_format, t.current_version,
-                       tv.status AS current_status
+                SELECT t.slug, t.current_version,
+                       tv.status AS current_status,
+                       (tv.content ->> 'body') AS body
                   FROM system_prompt_template t
                   JOIN system_prompt_template_version tv
                     ON tv.template_id = t.id AND tv.version = t.current_version
@@ -84,9 +85,9 @@ def test_workflow_starter_template_exists_after_migration() -> None:
                 return {}
             return {
                 "slug": row["slug"],
-                "body_format": row["body_format"],
                 "current_version": row["current_version"],
                 "current_status": row["current_status"],
+                "body": row["body"],
             }
         finally:
             await conn.close()
@@ -95,9 +96,8 @@ def test_workflow_starter_template_exists_after_migration() -> None:
         data = asyncio.run(_check(ws))
         assert data, "Template 'workflow-starter' wurde nicht gefunden."
         assert data["slug"] == "workflow-starter"
-        assert data["body_format"] == "blocknote", (
-            f"Erwartet body_format='blocknote', erhalten: {data['body_format']!r}"
-        )
+        # Track B: body_format-Spalte entfaellt; Body ist immer BlockNote-JSON.
+        assert isinstance(json.loads(str(data["body"])), list), "Body ist kein BlockNote-Array."
         assert data["current_version"] == 1
         assert data["current_status"] == "active"
     finally:
@@ -149,7 +149,7 @@ def test_workflow_starter_template_renderer_smoke() -> None:
         )
         conn = await asyncpg.connect(get_settings().database_url)
         try:
-            return await render_template_body(body_text, "blocknote", ctx, conn)
+            return await render_template_body(body_text, ctx, conn)
         finally:
             await conn.close()
 

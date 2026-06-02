@@ -141,10 +141,9 @@ class ApiClient:
     async def get_playbook_rendered(self, playbook_id: UUID) -> str:
         """Laedt den serverseitig expandierten Playbook-Body (B5).
 
-        Der API-Endpoint `GET .../playbooks/{id}/rendered` jagt den Body durch den
-        Placeholder-Renderer (Inline-Pills → Plain-Text). Bei `body_format='plain'`
-        kommt der rohe Body zurueck. Der MCP-Prozess hat keinen DB-Zugriff — das
-        Rendering MUSS daher ueber diesen Endpoint laufen.
+        Der API-Endpoint `GET .../playbooks/{id}/rendered` jagt den BlockNote-Body
+        durch den Placeholder-Renderer (Inline-Pills → Plain-Text). Der MCP-Prozess
+        hat keinen DB-Zugriff — das Rendering MUSS daher ueber diesen Endpoint laufen.
 
         Gibt nur den `body_rendered`-String zurueck; die `unresolved`-Liste ist fuer
         den Agent-Konsum nicht relevant (best-effort Expansion).
