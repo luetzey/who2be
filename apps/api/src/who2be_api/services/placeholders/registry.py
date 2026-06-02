@@ -18,6 +18,7 @@ Resolver-Regeln (aus der Spec):
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime
 from typing import Protocol
 from uuid import UUID
@@ -291,7 +292,7 @@ def _block_plain_text(block: dict[str, object]) -> str:
 
 
 class PersonaFieldResolver:
-    """Expandiert `target_id` zu einem Persona-Feld (`name`, `description` oder `profile`).
+    """Expandiert `target_id` zu einem Persona-Feld (`name`, `description`, `profile`, `modes`).
 
     Targets:
     - ``name``        — Name der Persona (aus der Identity-Zeile).
@@ -299,6 +300,9 @@ class PersonaFieldResolver:
     - ``profile``     — Volles Profil: description + BlockNote-Body (`content.blocks`)
                         + optionale Traits-Liste + Modi-Sektion (C4).
                         Liest den `current_version`-Snapshot, wie der Operator ihn sieht.
+    - ``modes``       — Nur die `## Modi`-Sektion (Teilmenge von `profile`). Hat die
+                        Persona keine Modi, ist das Ergebnis ein leerer String (KEIN
+                        Miss — Modi sind optional).
 
     Miss-Faelle (alle liefern unresolved_key + leeren String, damit der Render
     stabil durchlaeuft):
@@ -323,7 +327,7 @@ class PersonaFieldResolver:
             )
             return ResolveResult(text="", unresolved_key=miss_key)
 
-        if target_id not in ("name", "description", "profile"):
+        if target_id not in ("name", "description", "profile", "modes"):
             logger.warning(
                 "PersonaFieldResolver: unbekanntes Feld '%s' — Miss",
                 target_id,
@@ -369,6 +373,10 @@ class PersonaFieldResolver:
 
         if target_id == "description":
             return ResolveResult(text=str(content.get("description", "")).strip())
+
+        if target_id == "modes":
+            # Nur die Modi-Sektion. Keine Modi -> leerer String (kein Miss).
+            return ResolveResult(text=_render_modes_section(content))
 
         # target_id == "profile": volles Profil rendern (E1 + C4).
         return ResolveResult(text=_render_persona_profile(content))
@@ -416,38 +424,9 @@ def _render_persona_profile(content: dict[str, object]) -> str:
         parts.append("\n".join(trait_lines))
 
     # 4. Modi-Sektion (C4) — nur wenn modes vorhanden
-    raw_modes = content.get("modes", [])
-    modes: list[dict[str, object]] = list(raw_modes) if isinstance(raw_modes, list) else []
-    if modes:
-        mode_lines = ["## Modi"]
-        for mode in modes:
-            name = str(mode.get("name", "")).strip()
-            is_default = bool(mode.get("is_default", False))
-            trigger = mode.get("trigger")
-            # identity_add / output_style_override / anti_patterns sind Block-Listen
-            # (list[ResourceBlock]); via _block_plain_text rendern (analog Body oben).
-            identity_add = _render_block_list(mode.get("identity_add"))
-            output_style_override = _render_block_list(mode.get("output_style_override"))
-            anti_patterns = _render_block_list(mode.get("anti_patterns"))
-            playbook_name = str(mode.get("playbook_name", "")).strip()
-
-            header = f"### {name}"
-            if is_default:
-                header += " (Default)"
-            mode_lines.append(header)
-
-            if trigger:
-                mode_lines.append(f"**Trigger:** {trigger}")
-            if identity_add:
-                mode_lines.append(f"**Identity-Ergaenzung:** {identity_add}")
-            if output_style_override:
-                mode_lines.append(f"**Output-Stil:** {output_style_override}")
-            if anti_patterns:
-                mode_lines.append(f"**Anti-Patterns:** {anti_patterns}")
-            if playbook_name:
-                mode_lines.append(f"**Zugehoeriges Playbook:** {playbook_name}")
-
-        parts.append("\n".join(mode_lines))
+    modes_section = _render_modes_section(content)
+    if modes_section:
+        parts.append(modes_section)
 
     # 5. Skills-Sektion — nur wenn skills vorhanden
     raw_skills = content.get("skills", [])
@@ -468,6 +447,52 @@ def _render_persona_profile(content: dict[str, object]) -> str:
             parts.append("\n".join(skill_lines))
 
     return "\n\n".join(parts)
+
+
+def _render_modes_section(content: dict[str, object]) -> str:
+    """Rendert die `## Modi`-Sektion einer Persona als Markdown-String.
+
+    Pro Modus: Header (mit `(Default)`-Markierung), Trigger, Identity-Ergaenzung,
+    Output-Stil, Anti-Patterns und zugehoeriges Playbook — soweit vorhanden.
+    `identity_add` / `output_style_override` / `anti_patterns` sind Block-Listen
+    (list[ResourceBlock]) und werden via `_render_block_list` zu Plain-Text.
+
+    Gibt einen leeren String zurueck, wenn die Persona keine Modi fuehrt — Modi
+    sind optional und erzeugen in dem Fall keinen Render-Fehler.
+    """
+    raw_modes = content.get("modes", [])
+    modes: list[dict[str, object]] = list(raw_modes) if isinstance(raw_modes, list) else []
+    if not modes:
+        return ""
+    mode_lines = ["## Modi"]
+    for mode in modes:
+        if not isinstance(mode, dict):
+            continue
+        name = str(mode.get("name", "")).strip()
+        is_default = bool(mode.get("is_default", False))
+        trigger = mode.get("trigger")
+        identity_add = _render_block_list(mode.get("identity_add"))
+        output_style_override = _render_block_list(mode.get("output_style_override"))
+        anti_patterns = _render_block_list(mode.get("anti_patterns"))
+        playbook_name = str(mode.get("playbook_name", "")).strip()
+
+        header = f"### {name}"
+        if is_default:
+            header += " (Default)"
+        mode_lines.append(header)
+
+        if trigger:
+            mode_lines.append(f"**Trigger:** {trigger}")
+        if identity_add:
+            mode_lines.append(f"**Identity-Ergaenzung:** {identity_add}")
+        if output_style_override:
+            mode_lines.append(f"**Output-Stil:** {output_style_override}")
+        if anti_patterns:
+            mode_lines.append(f"**Anti-Patterns:** {anti_patterns}")
+        if playbook_name:
+            mode_lines.append(f"**Zugehoeriges Playbook:** {playbook_name}")
+
+    return "\n".join(mode_lines)
 
 
 def _render_block_list(raw: object) -> str:
@@ -623,6 +648,161 @@ class DateResolver:
         return ResolveResult(text=now.strftime("%Y-%m-%d"))
 
 
+class PersonaRefResolver:
+    """Expandiert zu einer **Anweisung**, die Persona per MCP selbst zu laden.
+
+    Im Gegensatz zum `persona-field`-Resolver (der Inhalt einbettet) rendert
+    dieser Resolver eine handlungsorientierte Briefing-Zeile: Der Agent erfaehrt
+    Name + ID seiner Persona und die Aufforderung, sie zu Beginn der Sitzung via
+    `get_persona(...)` zu laden und ihre Modi anzuwenden. So holt sich der Agent
+    den Inhalt dynamisch zur Laufzeit, statt einen Snapshot fest im Prompt zu
+    tragen.
+
+    `target_id` ist heute ungenutzt (parameterlos) — reserviert fuer kuenftige
+    Varianten (z. B. Laden per Name statt ID).
+
+    Miss-Faelle (leerer String + Miss-Key, damit der Render stabil durchlaeuft):
+    - `ctx.persona_id` ist None.
+    - Persona nicht in der DB gefunden.
+    """
+
+    async def resolve(
+        self,
+        target_id: str,
+        ctx: RenderContext,
+        db: asyncpg.Connection,
+    ) -> ResolveResult:
+        miss_key = f"persona-ref:{target_id}"
+        if ctx.persona_id is None:
+            logger.warning("PersonaRefResolver: ctx.persona_id ist None — Miss")
+            return ResolveResult(text="", unresolved_key=miss_key)
+
+        row = await db.fetchrow(
+            "SELECT name FROM persona WHERE id = $1 AND workspace_id = $2",
+            ctx.persona_id,
+            ctx.workspace_id,
+        )
+        if row is None:
+            logger.warning("PersonaRefResolver: Persona %s nicht gefunden", ctx.persona_id)
+            return ResolveResult(text="", unresolved_key=miss_key)
+
+        name = str(row["name"])
+        text = (
+            f"Deine Persona ist **{name}** (id: `{ctx.persona_id}`). "
+            f'Lade dein vollstaendiges Profil und deine Modi zu Beginn der Sitzung via '
+            f'MCP-Tool `get_persona("{ctx.persona_id}")`. '
+            "Pruefe danach `content.modes`: Waehle anhand des Modus-`trigger` den "
+            "passenden Modus und wende dessen `identity_add` + `output_style_override` "
+            "an; ohne Trigger-Match gilt der Default-Modus."
+        )
+        return ResolveResult(text=text)
+
+
+def _table_cell(value: str) -> str:
+    """Macht einen String tabellen-tauglich: Newlines zu Leerzeichen, Pipe escapen."""
+    return value.replace("\n", " ").replace("\r", " ").replace("|", "\\|").strip()
+
+
+def _normalize_triggers(raw: str | None) -> str:
+    """Zerlegt die freitext-Trigger-Spalte (Komma/Newline) zu ``"t1, t2"``."""
+    if not raw:
+        return ""
+    tokens = [t.strip() for t in re.split(r"[,\n]", raw) if t.strip()]
+    return ", ".join(tokens)
+
+
+class PlaybooksCatalogResolver:
+    """Expandiert zu einer Briefing-**Tabelle** der dem Agenten zugeordneten Playbooks.
+
+    Quelle: die der Persona des Agenten verknuepften Playbooks (`persona_playbook`),
+    jeweils Active-Version (`status='active'`) — konsistent mit den MCP-Reads und
+    der Applied-Pill.
+
+    `target_id` steuert den Filter (Pill-Setting):
+    - ``"triggered"`` → nur Playbooks mit nicht-leerem Trigger-Feld.
+    - ``""`` / ``"all"`` / sonstiges → alle verknuepften aktiven Playbooks.
+
+    Spalten: **Playbook | Trigger | Aufruf | Beschreibung**. Die `Aufruf`-Spalte
+    enthaelt den konkreten MCP-Call (`fetch_playbook("<id>")`), damit der Agent
+    unmittelbar handlungsfaehig ist.
+
+    Verhalten:
+    - `ctx.persona_id` ist None → Miss (im Editor-Preview ohne Persona-Kontext
+      zeigt das den Laufzeit-Hinweis; nie eine irrefuehrend leere Tabelle).
+    - Persona vorhanden, aber keine (passenden) Playbooks → kurzer Hinweistext
+      (kein Miss).
+    """
+
+    async def resolve(
+        self,
+        target_id: str,
+        ctx: RenderContext,
+        db: asyncpg.Connection,
+    ) -> ResolveResult:
+        miss_key = f"playbooks-catalog:{target_id}"
+        if ctx.persona_id is None:
+            logger.info("PlaybooksCatalogResolver: ctx.persona_id ist None — Miss")
+            return ResolveResult(text="", unresolved_key=miss_key)
+
+        only_triggered = target_id == "triggered"
+
+        rows = await db.fetch(
+            """
+            SELECT p.id, p.name, p.triggers, pv.content
+              FROM persona_playbook pp
+              JOIN playbook p ON p.id = pp.playbook_id
+              JOIN playbook_version pv
+                ON pv.playbook_id = p.id AND pv.status = 'active'
+             WHERE pp.persona_id = $1
+               AND p.workspace_id = $2
+             ORDER BY p.created_at DESC
+            """,
+            ctx.persona_id,
+            ctx.workspace_id,
+        )
+
+        entries: list[tuple[str, str, str, str]] = []
+        for row in rows:
+            triggers = _normalize_triggers(row["triggers"])
+            if only_triggered and not triggers:
+                continue
+            content: dict[str, object] = dict(row["content"]) if row["content"] else {}
+            description = str(content.get("description", "")).strip()
+            entries.append(
+                (
+                    str(row["name"]),
+                    triggers,
+                    f'fetch_playbook("{row["id"]}")',
+                    description,
+                )
+            )
+
+        if not entries:
+            if only_triggered:
+                return ResolveResult(
+                    text="_Dir sind aktuell keine Playbooks mit Triggern zugeordnet._"
+                )
+            return ResolveResult(text="_Dir sind aktuell keine Playbooks zugeordnet._")
+
+        lines = [
+            "## Deine Playbooks",
+            (
+                "Diese Playbooks stehen dir zur Verfuegung. Wenn der Nutzer eines der "
+                "Trigger-Stichworte anspricht, lade das Playbook ueber die Aufruf-Spalte "
+                "(`fetch_playbook(...)`) und folge seinen Schritten."
+            ),
+            "",
+            "| Playbook | Trigger | Aufruf | Beschreibung |",
+            "|---|---|---|---|",
+        ]
+        for name, triggers, call, description in entries:
+            lines.append(
+                f"| {_table_cell(name)} | {_table_cell(triggers)} "
+                f"| `{call}` | {_table_cell(description)} |"
+            )
+        return ResolveResult(text="\n".join(lines))
+
+
 # ---------------------------------------------------------------------------
 # Registry-Dict — Neuen Placeholder: Resolver-Klasse + Eintrag hier.
 # ---------------------------------------------------------------------------
@@ -631,6 +811,8 @@ REGISTRY: dict[str, PlaceholderResolver] = {
     "playbook": PlaybookResolver(),
     "resource": ResourceResolver(),
     "persona-field": PersonaFieldResolver(),
+    "persona-ref": PersonaRefResolver(),
+    "playbooks-catalog": PlaybooksCatalogResolver(),
     "date": DateResolver(),
     "tools-overview": ToolsOverviewResolver(),
 }

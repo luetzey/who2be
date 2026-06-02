@@ -3,7 +3,7 @@
 // Kontext), damit Tests sie direkt rendern koennen.
 // NICHT im Produktions-Bundle verwendet — nur von *.test.tsx importiert.
 
-import { BookOpen, Calendar, FileText, User, Wrench } from 'lucide-react'
+import { BookOpen, Calendar, FileText, Table, User, UserCog, Wrench } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { PlaceholderKind } from './PlaceholderBlock'
 
@@ -30,6 +30,16 @@ export const KIND_META_TEST_EXPORT: Record<PlaceholderKind, KindMeta> = {
     icon: User,
     pillClass: 'bg-pill-persona text-pill-persona-fg border-pill-persona-fg/25',
     labelPrefix: 'Persona',
+  },
+  'persona-ref': {
+    icon: UserCog,
+    pillClass: 'bg-pill-persona text-pill-persona-fg border-pill-persona-fg/25',
+    labelPrefix: 'Persona laden',
+  },
+  'playbooks-catalog': {
+    icon: Table,
+    pillClass: 'bg-pill-catalog text-pill-catalog-fg border-pill-catalog-fg/25',
+    labelPrefix: 'Playbook-Katalog',
   },
   date: {
     icon: Calendar,

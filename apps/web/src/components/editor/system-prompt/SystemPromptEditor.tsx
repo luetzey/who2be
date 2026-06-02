@@ -30,6 +30,7 @@ import { PlaybookPicker } from './pickers/PlaybookPicker'
 import { ResourcePicker } from './pickers/ResourcePicker'
 import { PersonaFieldPicker } from './pickers/PersonaFieldPicker'
 import { DateFormatPicker } from './pickers/DateFormatPicker'
+import { CatalogScopePicker } from './pickers/CatalogScopePicker'
 
 // Das Schema wird einmal pro Modul-Import gebaut; keine Hot-Reload-Probleme
 // weil BlockNote-Schemata statisch sind.
@@ -108,15 +109,23 @@ export function SystemPromptEditor({
     setOpenPicker(detail.kind)
   }
 
-  // `tools-overview` ist parameterlos — kein Picker noetig. Statt einen
-  // weiteren Dialog zu mounten, insertieren wir direkt, wenn das Slash-
-  // Menue den Kind anfordert.
+  // `tools-overview` und `persona-ref` sind parameterlos — kein Picker noetig.
+  // Statt einen weiteren Dialog zu mounten, insertieren wir direkt, wenn das
+  // Slash-Menue den Kind anfordert.
   function handleOpenPicker(kind: PlaceholderKind) {
     if (kind === 'tools-overview') {
       handlePickerConfirm({
         kind: 'tools-overview',
         target_id: '',
         label: 'MCP-Tools-Übersicht',
+      })
+      return
+    }
+    if (kind === 'persona-ref') {
+      handlePickerConfirm({
+        kind: 'persona-ref',
+        target_id: '',
+        label: 'Persona laden (MCP)',
       })
       return
     }
@@ -192,6 +201,13 @@ export function SystemPromptEditor({
         open={openPicker === 'date'}
         anchorRef={anchorRef}
         initial={pendingEdit?.kind === 'date' ? pendingEdit : undefined}
+        onConfirm={handlePickerConfirm}
+        onCancel={handlePickerCancel}
+      />
+      <CatalogScopePicker
+        open={openPicker === 'playbooks-catalog'}
+        anchorRef={anchorRef}
+        initial={pendingEdit?.kind === 'playbooks-catalog' ? pendingEdit : undefined}
         onConfirm={handlePickerConfirm}
         onCancel={handlePickerCancel}
       />

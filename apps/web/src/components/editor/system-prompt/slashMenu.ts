@@ -11,7 +11,7 @@
 // Default-Items, die i18n-Lookup machen). Wir nutzen `title` + `group` als
 // visuelle Identitaet.
 
-import { BookOpen, Calendar, FileText, User, Wrench } from 'lucide-react'
+import { BookOpen, Calendar, FileText, Table, User, UserCog, Wrench } from 'lucide-react'
 import { createElement } from 'react'
 
 import type { DefaultReactSuggestionItem } from '@blocknote/react'
@@ -91,14 +91,40 @@ export function buildSlashMenuItems(
       kind: 'persona-field',
       title: 'Persona-Feld',
       subtext:
-        'Fügt ein Persona-Feld ein: Name, Beschreibung oder das vollständige Profil ' +
-        '(inkl. Body und Modi) — empfohlen für den System-Prompt-Bootstrap.',
+        'Bettet ein Persona-Feld ein: Name, Beschreibung, das vollständige Profil ' +
+        '(inkl. Body und Modi) oder nur die Modi — empfohlen für den System-Prompt-Bootstrap.',
       group: 'Placeholder',
       icon: createElement(User, { size: 18 }),
       onItemClick: () => {
         openPicker('persona-field')
       },
-      aliases: ['persona', 'name', 'beschreibung', 'profil', 'profile'],
+      aliases: ['persona', 'name', 'beschreibung', 'profil', 'profile', 'modi', 'modes'],
+    },
+    {
+      kind: 'persona-ref',
+      title: 'Persona laden (MCP)',
+      subtext:
+        'Bettet keinen Inhalt ein, sondern weist den Agenten an, seine Persona zur ' +
+        'Laufzeit selbst via get_persona(...) zu laden und ihre Modi anzuwenden.',
+      group: 'Placeholder',
+      icon: createElement(UserCog, { size: 18 }),
+      onItemClick: () => {
+        openPicker('persona-ref')
+      },
+      aliases: ['persona laden', 'get_persona', 'mcp persona', 'persona-ref', 'referenz'],
+    },
+    {
+      kind: 'playbooks-catalog',
+      title: 'Playbook-Katalog',
+      subtext:
+        'Fügt eine Tabelle der zugeordneten Playbooks ein (Name, Trigger, Aufruf, ' +
+        'Beschreibung) — briefs den Agenten, was er wann via fetch_playbook(...) laden kann.',
+      group: 'Placeholder',
+      icon: createElement(Table, { size: 18 }),
+      onItemClick: () => {
+        openPicker('playbooks-catalog')
+      },
+      aliases: ['katalog', 'playbooks', 'tabelle', 'uebersicht', 'catalog'],
     },
     {
       kind: 'date',

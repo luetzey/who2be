@@ -22,7 +22,9 @@ from who2be_api.services.placeholders.registry import (
     REGISTRY,
     DateResolver,
     PersonaFieldResolver,
+    PersonaRefResolver,
     PlaybookResolver,
+    PlaybooksCatalogResolver,
     RenderContext,
     ResolveResult,
     ResourceResolver,
@@ -752,6 +754,203 @@ class TestPersonaFieldResolver:
         assert "praezise" in result
         assert "empathisch" in result
         assert "Traits" in result
+
+    def test_resolves_modes_only_section(self) -> None:
+        """target_id='modes' rendert nur die ## Modi-Sektion."""
+        resolver = PersonaFieldResolver()
+        ctx = _ctx(persona_id=uuid4())
+        _content: dict[str, Any] = {
+            "description": "Soll NICHT im Modes-Output erscheinen",
+            "content": {"description": "", "blocks": [_blk("b1", "Profil-Body")]},
+            "traits": [],
+            "modes": [
+                {
+                    "name": "Erklaerer",
+                    "trigger": "erklaer",
+                    "is_default": False,
+                    "identity_add": [_blk("ia1", "Du bist ein Lehrer.")],
+                    "output_style_override": [],
+                },
+            ],
+        }
+        row = MagicMock()
+        row.__getitem__ = MagicMock(side_effect=lambda k: {"content": _content}[k])
+        db = _make_db(row)
+
+        result = _async_run(resolver.resolve("modes", ctx, db))
+
+        assert result.unresolved_key is None
+        assert "## Modi" in result.text
+        assert "### Erklaerer" in result.text
+        assert "Du bist ein Lehrer." in result.text
+        # Profil-Body / Beschreibung gehoeren NICHT in den Modes-only-Output.
+        assert "Profil-Body" not in result.text
+        assert "Soll NICHT" not in result.text
+
+    def test_resolves_modes_empty_returns_empty_string_no_miss(self) -> None:
+        """Ohne Modi liefert 'modes' einen leeren String — kein Miss."""
+        resolver = PersonaFieldResolver()
+        ctx = _ctx(persona_id=uuid4())
+        _content: dict[str, Any] = {
+            "description": "Persona ohne Modi",
+            "content": {"description": "", "blocks": []},
+            "traits": [],
+            "modes": [],
+        }
+        row = MagicMock()
+        row.__getitem__ = MagicMock(side_effect=lambda k: {"content": _content}[k])
+        db = _make_db(row)
+
+        result = _async_run(resolver.resolve("modes", ctx, db))
+
+        assert result.text == ""
+        assert result.unresolved_key is None
+
+    def test_modes_none_persona_id_returns_miss(self) -> None:
+        resolver = PersonaFieldResolver()
+        ctx = _ctx(persona_id=None)
+        ctx = RenderContext(workspace_id=ctx.workspace_id, persona_id=None, now=ctx.now)
+        db = _make_db()
+
+        result = _async_run(resolver.resolve("modes", ctx, db))
+
+        assert result.text == ""
+        assert result.unresolved_key == "persona-field:modes"
+
+
+# ---------------------------------------------------------------------------
+# PersonaRefResolver
+# ---------------------------------------------------------------------------
+
+
+class TestPersonaRefResolver:
+    def test_renders_load_instruction_with_id_and_name(self) -> None:
+        resolver = PersonaRefResolver()
+        persona_id = uuid4()
+        ctx = _ctx(persona_id=persona_id)
+        row = MagicMock()
+        row.__getitem__ = MagicMock(side_effect=lambda k: {"name": "Lena Support"}[k])
+        db = _make_db(row)
+
+        result = _async_run(resolver.resolve("", ctx, db))
+
+        assert result.unresolved_key is None
+        assert "Lena Support" in result.text
+        assert str(persona_id) in result.text
+        assert "get_persona" in result.text
+        assert "content.modes" in result.text
+
+    def test_none_persona_id_returns_miss(self) -> None:
+        resolver = PersonaRefResolver()
+        ctx = RenderContext(
+            workspace_id=uuid4(),
+            persona_id=None,
+            now=datetime(2026, 5, 31, tzinfo=UTC),
+        )
+        db = _make_db()
+
+        result = _async_run(resolver.resolve("", ctx, db))
+
+        assert result.text == ""
+        assert result.unresolved_key == "persona-ref:"
+
+    def test_persona_not_found_returns_miss(self) -> None:
+        resolver = PersonaRefResolver()
+        ctx = _ctx(persona_id=uuid4())
+        db = _make_db(None)
+
+        result = _async_run(resolver.resolve("", ctx, db))
+
+        assert result.text == ""
+        assert result.unresolved_key == "persona-ref:"
+
+
+# ---------------------------------------------------------------------------
+# PlaybooksCatalogResolver
+# ---------------------------------------------------------------------------
+
+
+def _catalog_row(name: str, triggers: str | None, description: str) -> MagicMock:
+    row = MagicMock()
+    data = {
+        "id": uuid4(),
+        "name": name,
+        "triggers": triggers,
+        "content": {"description": description, "body": "egal"},
+    }
+    row.__getitem__ = MagicMock(side_effect=lambda k: data[k])
+    return row
+
+
+class TestPlaybooksCatalogResolver:
+    def test_renders_table_for_all_linked(self) -> None:
+        resolver = PlaybooksCatalogResolver()
+        ctx = _ctx(persona_id=uuid4())
+        db = _make_db(
+            fetch_return=[
+                _catalog_row("Reset-Mail", "passwort, reset", "Setzt das Passwort zurueck."),
+                _catalog_row("Smalltalk", None, "Lockerer Einstieg."),
+            ]
+        )
+
+        result = _async_run(resolver.resolve("all", ctx, db))
+
+        assert result.unresolved_key is None
+        assert "## Deine Playbooks" in result.text
+        assert "| Playbook | Trigger | Aufruf | Beschreibung |" in result.text
+        assert "Reset-Mail" in result.text
+        assert "passwort, reset" in result.text
+        assert "fetch_playbook(" in result.text
+        # Ohne Filter erscheint auch das trigger-lose Playbook.
+        assert "Smalltalk" in result.text
+
+    def test_triggered_filter_excludes_triggerless(self) -> None:
+        resolver = PlaybooksCatalogResolver()
+        ctx = _ctx(persona_id=uuid4())
+        db = _make_db(
+            fetch_return=[
+                _catalog_row("Reset-Mail", "passwort", "Setzt zurueck."),
+                _catalog_row("Smalltalk", "  ", "Lockerer Einstieg."),
+            ]
+        )
+
+        result = _async_run(resolver.resolve("triggered", ctx, db))
+
+        assert "Reset-Mail" in result.text
+        assert "Smalltalk" not in result.text
+
+    def test_empty_catalog_returns_hint_no_miss(self) -> None:
+        resolver = PlaybooksCatalogResolver()
+        ctx = _ctx(persona_id=uuid4())
+        db = _make_db(fetch_return=[])
+
+        result = _async_run(resolver.resolve("all", ctx, db))
+
+        assert result.unresolved_key is None
+        assert "keine Playbooks" in result.text
+
+    def test_pipe_in_name_is_escaped(self) -> None:
+        resolver = PlaybooksCatalogResolver()
+        ctx = _ctx(persona_id=uuid4())
+        db = _make_db(fetch_return=[_catalog_row("A|B", "t", "desc")])
+
+        result = _async_run(resolver.resolve("all", ctx, db))
+
+        assert "A\\|B" in result.text
+
+    def test_none_persona_id_returns_miss(self) -> None:
+        resolver = PlaybooksCatalogResolver()
+        ctx = RenderContext(
+            workspace_id=uuid4(),
+            persona_id=None,
+            now=datetime(2026, 5, 31, tzinfo=UTC),
+        )
+        db = _make_db()
+
+        result = _async_run(resolver.resolve("all", ctx, db))
+
+        assert result.text == ""
+        assert result.unresolved_key == "playbooks-catalog:all"
 
 
 # ---------------------------------------------------------------------------

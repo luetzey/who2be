@@ -51,15 +51,22 @@ const PERSONA_FIELD_HINT =
   'Dieses Persona-Feld wird erst im Agenten-Kontext mit der zugewiesenen ' +
   'Persona aufgeloest. In der Vorlage gibt es noch keinen Persona-Bezug.'
 
+// `persona-ref` und `playbooks-catalog` brauchen — wie `persona-field` — den
+// Agenten-Kontext (zugewiesene Persona), den die Template-Editoren nicht haben.
+const PERSONA_CONTEXT_HINT =
+  'Dies wird erst im Agenten-Kontext mit der zugewiesenen Persona aufgeloest. ' +
+  'In der Vorlage gibt es noch keinen Persona-Bezug.'
+
 function missHint(kind: PlaceholderKind): string {
   if (kind === 'persona-field') return PERSONA_FIELD_HINT
+  if (kind === 'persona-ref' || kind === 'playbooks-catalog') return PERSONA_CONTEXT_HINT
   return 'Der Platzhalter konnte nicht aufgeloest werden — Ziel nicht gefunden ' +
     'oder (noch) nicht aktiv.'
 }
 
-// `tools-overview` ist parameterlos — nichts zu bearbeiten.
+// `tools-overview` und `persona-ref` sind parameterlos — nichts zu bearbeiten.
 function isEditableKind(kind: PlaceholderKind): boolean {
-  return kind !== 'tools-overview'
+  return kind !== 'tools-overview' && kind !== 'persona-ref'
 }
 
 export function PlaceholderPreviewPopover({
