@@ -7,12 +7,15 @@ import type {
   AgentRenderResult,
   AgentUpdateInput,
   DashboardData,
+  EntitlementInfo,
   Invitation,
   InvitationAcceptResult,
   InvitationInput,
   Me,
   Member,
   MemberUpdateInput,
+  Organization,
+  OrganizationInput,
   Persona,
   PersonaInput,
   PersonaVersion,
@@ -38,6 +41,9 @@ import type {
   TokenInput,
   VersionDiff,
   VersionStatus,
+  Workspace,
+  WorkspaceInput,
+  WorkspaceRenameInput,
 } from './types'
 
 export class ApiError extends Error {
@@ -154,7 +160,7 @@ export interface Api {
   listTokens: () => Promise<Token[]>
   createToken: (input: TokenInput) => Promise<TokenCreated>
   revokeToken: (id: string) => Promise<void>
-  getDashboard: () => Promise<DashboardData>
+  getDashboard: (page?: number) => Promise<DashboardData>
   transitionPersonaVersion: (
     id: string,
     version: number,
@@ -195,6 +201,14 @@ export interface Api {
   listInvitations: () => Promise<Invitation[]>
   createInvitation: (input: InvitationInput) => Promise<Invitation>
   revokeInvitation: (id: string) => Promise<void>
+  // Track C — Tenancy-Management. NICHT workspace-scoped: Org-Routen tragen die
+  // org_id im Pfad, Workspace-Mutationen die jeweilige workspace_id (kann vom
+  // aktuell aktiven Workspace abweichen, z. B. beim Löschen eines anderen).
+  createOrganization: (input: OrganizationInput) => Promise<Organization>
+  listOrgWorkspaces: (orgId: string) => Promise<Workspace[]>
+  createWorkspace: (orgId: string, input: WorkspaceInput) => Promise<Workspace>
+  renameWorkspace: (workspaceId: string, input: WorkspaceRenameInput) => Promise<Workspace>
+  deleteWorkspace: (workspaceId: string) => Promise<void>
   // Phase 3 Runde 3 Track 3 — SystemPromptTemplate + Agent.
   listSystemPromptTemplates: () => Promise<SystemPromptTemplate[]>
   getSystemPromptTemplate: (id: string) => Promise<SystemPromptTemplate>
@@ -250,6 +264,8 @@ export interface Api {
   ) => Promise<AgentRenderResult>
   // Pill-Preview-Overlay: loest eine einzelne Editor-Pill zu ihrem Output auf.
   previewPlaceholder: (input: PlaceholderPreviewInput) => Promise<PlaceholderPreview>
+  // Track D: aufgeloestes Org-Entitlement + MCP-Verbrauch (Billing-Slot).
+  getEntitlement: () => Promise<EntitlementInfo>
 }
 
 export function createApi(token: string, workspaceId: string): Api {
@@ -321,7 +337,11 @@ export function createApi(token: string, workspaceId: string): Api {
       }),
     revokeToken: (id) =>
       request<void>(token, `${ws}/tokens/${id}`, { method: 'DELETE' }),
-    getDashboard: () => request<DashboardData>(token, `${ws}/dashboard`),
+    getDashboard: (page) =>
+      request<DashboardData>(
+        token,
+        `${ws}/dashboard${page && page > 1 ? `?page=${page}` : ''}`,
+      ),
     transitionPersonaVersion: (id, version, to) =>
       request<PersonaVersion>(
         token,
@@ -395,6 +415,25 @@ export function createApi(token: string, workspaceId: string): Api {
       }),
     revokeInvitation: (id) =>
       request<void>(token, `${ws}/invitations/${id}`, { method: 'DELETE' }),
+    createOrganization: (input) =>
+      request<Organization>(token, `/v1/organizations`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    listOrgWorkspaces: (orgId) =>
+      request<Workspace[]>(token, `/v1/organizations/${orgId}/workspaces`),
+    createWorkspace: (orgId, input) =>
+      request<Workspace>(token, `/v1/organizations/${orgId}/workspaces`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    renameWorkspace: (workspaceId, input) =>
+      request<Workspace>(token, `/v1/workspaces/${workspaceId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      }),
+    deleteWorkspace: (workspaceId) =>
+      request<void>(token, `/v1/workspaces/${workspaceId}`, { method: 'DELETE' }),
     listSystemPromptTemplates: () =>
       request<SystemPromptTemplate[]>(token, `${ws}/system-prompts`),
     getSystemPromptTemplate: (id) =>
@@ -510,5 +549,6 @@ export function createApi(token: string, workspaceId: string): Api {
       if (input.persona_id !== undefined) params.set('persona_id', input.persona_id)
       return request<PlaceholderPreview>(token, `${ws}/placeholders/preview?${params.toString()}`)
     },
+    getEntitlement: () => request<EntitlementInfo>(token, `${ws}/billing/entitlement`),
   }
 }

@@ -33,6 +33,21 @@ class WorkspaceMemberRepository(Protocol):
 
 _COLUMNS = "workspace_id, user_id, role, joined_at"
 
+# Mit Email-Join (auth.users). Wird bevorzugt; faellt auf `_COLUMNS` zurueck,
+# wenn das `auth`-Schema fehlt (reine API-Test-DB ohne GoTrue) — analog
+# `PgMeRepository._lookup_email`.
+_LIST_WITH_EMAIL = (
+    "SELECT m.workspace_id, m.user_id, m.role, m.joined_at, u.email "
+    "FROM workspace_member m "
+    "LEFT JOIN auth.users u ON u.id = m.user_id "
+    "WHERE m.workspace_id = $1 "
+    "ORDER BY m.joined_at ASC, m.user_id ASC"
+)
+_LIST_NO_EMAIL = (
+    f"SELECT {_COLUMNS} FROM workspace_member WHERE workspace_id = $1 "
+    "ORDER BY joined_at ASC, user_id ASC"
+)
+
 
 class PgWorkspaceMemberRepository:
     """asyncpg-Implementierung von `WorkspaceMemberRepository`."""
@@ -41,11 +56,11 @@ class PgWorkspaceMemberRepository:
         self._pool = pool
 
     async def list_by_workspace(self, workspace_id: UUID) -> list[WorkspaceMemberRead]:
-        rows = await self._pool.fetch(
-            f"SELECT {_COLUMNS} FROM workspace_member WHERE workspace_id = $1 "
-            "ORDER BY joined_at ASC, user_id ASC",
-            workspace_id,
-        )
+        try:
+            rows = await self._pool.fetch(_LIST_WITH_EMAIL, workspace_id)
+        except asyncpg.PostgresError:
+            # `auth.users` existiert nicht (Test-DB) → ohne Email-Join lesen.
+            rows = await self._pool.fetch(_LIST_NO_EMAIL, workspace_id)
         return [WorkspaceMemberRead.model_validate(dict(row)) for row in rows]
 
     async def update_role(

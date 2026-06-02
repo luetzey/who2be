@@ -180,6 +180,39 @@ export interface Me {
   has_password?: boolean
 }
 
+// Track C — Tenancy-Aggregate (Org/Workspace). Spiegeln `OrganizationRead`
+// und `WorkspaceRead` aus packages/models. Genutzt von den Space-Settings-
+// Pages (Workspace anlegen/umbenennen/löschen).
+export interface Organization {
+  id: string
+  name: string
+  slug: string
+  kind: 'personal' | 'company'
+  created_at: string
+}
+
+export interface Workspace {
+  id: string
+  org_id: string
+  name: string
+  slug: string
+  created_at: string
+}
+
+export interface WorkspaceInput {
+  name: string
+  slug: string
+}
+
+export interface OrganizationInput {
+  name: string
+  slug: string
+}
+
+export interface WorkspaceRenameInput {
+  name: string
+}
+
 export interface TokenCreated extends Token {
   token: string
 }
@@ -197,8 +230,9 @@ export interface TokenInput {
 export interface Member {
   user_id: string
   // `email` ist die menschenlesbare Identitaet in der Member-Tabelle. Backend
-  // liefert sie (Join auf auth.users); fehlt sie, faellt die UI auf user_id.
-  email: string
+  // liefert sie via LEFT JOIN auf `auth.users`; fehlt das Schema (Test-DB) oder
+  // der User keine Email, ist sie null/leer und die UI faellt auf user_id.
+  email: string | null
   role: WorkspaceRole
   joined_at: string
 }
@@ -265,9 +299,21 @@ export interface DashboardStatusDistribution {
   resource?: StatusDistribution
 }
 
+// Seiten-Metadaten fuer den Activity-Feed (Track G). `activity` traegt nur
+// die Eintraege der aktuellen Seite; `total_pages` steuert die Vor-/Zurueck-
+// Buttons. Optional getragen, weil aeltere Backend-Versionen das Feld nicht
+// liefern — der Konsument faellt dann auf "eine Seite" zurueck.
+export interface ActivityPagination {
+  page: number
+  page_size: number
+  total: number
+  total_pages: number
+}
+
 export interface DashboardData {
   kpis: DashboardKpis
   activity: DashboardActivity[]
+  activity_pagination?: ActivityPagination
   status_distribution: DashboardStatusDistribution
 }
 
@@ -497,4 +543,22 @@ export interface ProvenanceEntry {
   changed_by: string
   changed_at: string
   note: string | null
+}
+
+// Track D — aufgeloestes Org-Entitlement + MCP-Verbrauch fuer den Billing-Slot.
+// Spiegelt `EntitlementInfo` aus `routers/billing.py`. `edition` steuert die
+// Sichtbarkeit: das Billing-Panel rendert nur unter `'cloud'`.
+export interface EntitlementUsage {
+  period: string
+  count: number
+}
+
+export interface EntitlementInfo {
+  edition: 'cloud' | 'onprem'
+  status: 'active' | 'inactive'
+  features: string[]
+  expires_at: string | null
+  mcp_monthly_quota: number | null
+  mcp_rate_per_min: number | null
+  usage: EntitlementUsage
 }

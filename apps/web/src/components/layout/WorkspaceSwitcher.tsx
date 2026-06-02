@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import type { MeOrganization } from '@/api/types'
 import { useSession } from '@/auth/session-context'
 import { useWorkspaceId } from '@/auth/useWorkspaceId'
+import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -43,6 +44,7 @@ export function WorkspaceSwitcher() {
   const { me } = useSession()
   const navigate = useNavigate()
   const currentWorkspaceId = useWorkspaceId()
+  const wsPath = useWorkspacePath()
 
   if (me === null || me.organizations.length === 0) {
     return null
@@ -121,7 +123,7 @@ export function WorkspaceSwitcher() {
         ))}
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <Link to="/settings/orgs" className="flex items-center gap-2">
+          <Link to={wsPath('/settings/org')} className="flex items-center gap-2">
             <Plus className="size-4" aria-hidden="true" />
             Workspace anlegen
           </Link>

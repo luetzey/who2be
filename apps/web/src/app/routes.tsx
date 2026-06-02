@@ -67,6 +67,26 @@ const MembersPage = lazy(() =>
     default: mod.MembersPage,
   })),
 )
+const SettingsLayout = lazy(() =>
+  import('@/features/settings/components/SettingsLayout').then((mod) => ({
+    default: mod.SettingsLayout,
+  })),
+)
+const AccountPage = lazy(() =>
+  import('@/features/settings/pages/AccountPage').then((mod) => ({
+    default: mod.AccountPage,
+  })),
+)
+const OrgSettingsPage = lazy(() =>
+  import('@/features/settings/pages/OrgSettingsPage').then((mod) => ({
+    default: mod.OrgSettingsPage,
+  })),
+)
+const WorkspaceSettingsPage = lazy(() =>
+  import('@/features/settings/pages/WorkspaceSettingsPage').then((mod) => ({
+    default: mod.WorkspaceSettingsPage,
+  })),
+)
 const DashboardPage = lazy(() =>
   import('@/features/dashboard/pages/DashboardPage').then((mod) => ({
     default: mod.DashboardPage,
@@ -210,14 +230,28 @@ export function RouterRoot() {
                   path="/w/:workspaceId/system-prompts/:id"
                   element={<SystemPromptDetailPage />}
                 />
-                <Route
-                  path="/w/:workspaceId/settings/tokens"
-                  element={<SettingsTokensPage />}
-                />
-                <Route
-                  path="/w/:workspaceId/settings/members"
-                  element={<MembersPage />}
-                />
+                <Route element={<SettingsLayout />}>
+                  <Route
+                    path="/w/:workspaceId/settings/account"
+                    element={<AccountPage />}
+                  />
+                  <Route
+                    path="/w/:workspaceId/settings/org"
+                    element={<OrgSettingsPage />}
+                  />
+                  <Route
+                    path="/w/:workspaceId/settings/workspace"
+                    element={<WorkspaceSettingsPage />}
+                  />
+                  <Route
+                    path="/w/:workspaceId/settings/members"
+                    element={<MembersPage />}
+                  />
+                  <Route
+                    path="/w/:workspaceId/settings/tokens"
+                    element={<SettingsTokensPage />}
+                  />
+                </Route>
                 {CatalogPage ? (
                   <Route path="/_catalog" element={<CatalogPage />} />
                 ) : null}

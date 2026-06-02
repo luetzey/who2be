@@ -1,4 +1,4 @@
-import { LayoutDashboard } from 'lucide-react'
+import { BookOpen, ClipboardCheck, LayoutDashboard, Users } from 'lucide-react'
 
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -10,25 +10,29 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 import { ActivityRow } from '../components/ActivityRow'
 import { KpiCard } from '../components/KpiCard'
-import { StatusBar } from '../components/StatusBar'
+import { PaginationControls } from '../components/PaginationControls'
+import { StatusDonut } from '../components/StatusDonut'
 import { useDashboard } from '../hooks/useDashboard'
 
 export function DashboardPage() {
-  const { data, loading, error, notFound } = useDashboard()
+  const { data, loading, error, notFound, page, setPage } = useDashboard()
+
+  const pagination = data?.activity_pagination
+  const totalPages = pagination?.total_pages ?? 1
 
   return (
     <Container>
       <Stack gap="lg">
         <PageHeader
           title="Dashboard"
-          description="Aktueller Zustand des Workspaces — KPIs, Aktivitaeten und Status-Verteilung."
+          description="Aktueller Zustand des Workspaces — KPIs, Status-Verteilung und Aktivitäten."
         />
 
         {notFound ? (
           <EmptyState
             icon={LayoutDashboard}
-            title="Dashboard noch nicht verfuegbar."
-            description="Der Dashboard-Endpoint wird mit Phase 2.1b-A/B ausgerollt. Sobald das Backend gemergt ist, erscheinen hier KPIs, Aktivitaeten und die Status-Verteilung."
+            title="Dashboard noch nicht verfügbar."
+            description="Der Dashboard-Endpoint wird mit Phase 2.1b-A/B ausgerollt. Sobald das Backend gemergt ist, erscheinen hier KPIs, Aktivitäten und die Status-Verteilung."
           />
         ) : (
           <DataView loading={loading && data === null} error={error}>
@@ -41,50 +45,67 @@ export function DashboardPage() {
                   <KpiCard
                     label="Aktive Personae"
                     value={data.kpis.active_personas}
+                    icon={Users}
                   />
                   <KpiCard
                     label="Aktive Playbooks"
                     value={data.kpis.active_playbooks}
+                    icon={BookOpen}
                   />
                   <KpiCard
                     label="In Review"
                     value={data.kpis.pending_reviews}
+                    icon={ClipboardCheck}
                     description="Versionen, die auf Promote warten."
                   />
                 </section>
 
                 <Card>
                   <CardHeader>
-                    <CardTitle>Letzte Aktivitaeten</CardTitle>
+                    <CardTitle>Status-Verteilung</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <DataList
-                      items={data.activity}
-                      getKey={(activity) => `${activity.ts}-${activity.entity_id}`}
-                      renderItem={(activity) => <ActivityRow activity={activity} />}
-                      empty={
-                        <EmptyState
-                          title="Noch keine Aktivitaeten."
-                          description="Sobald jemand Versionen anlegt oder Status aendert, erscheinen sie hier."
+                    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                      <StatusDonut
+                        label="Personae"
+                        distribution={data.status_distribution.persona}
+                      />
+                      <StatusDonut
+                        label="Playbooks"
+                        distribution={data.status_distribution.playbook}
+                      />
+                      {data.status_distribution.resource ? (
+                        <StatusDonut
+                          label="Resources"
+                          distribution={data.status_distribution.resource}
                         />
-                      }
-                    />
+                      ) : null}
+                    </div>
                   </CardContent>
                 </Card>
 
                 <Card>
                   <CardHeader>
-                    <CardTitle>Status-Verteilung</CardTitle>
+                    <CardTitle>Letzte Aktivitäten</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <Stack gap="md">
-                      <StatusBar
-                        label="Personae"
-                        distribution={data.status_distribution.persona}
+                      <DataList
+                        items={data.activity}
+                        getKey={(activity) => `${activity.ts}-${activity.entity_id}`}
+                        renderItem={(activity) => <ActivityRow activity={activity} />}
+                        empty={
+                          <EmptyState
+                            title="Noch keine Aktivitäten."
+                            description="Sobald jemand Versionen anlegt oder Status ändert, erscheinen sie hier."
+                          />
+                        }
                       />
-                      <StatusBar
-                        label="Playbooks"
-                        distribution={data.status_distribution.playbook}
+                      <PaginationControls
+                        page={page}
+                        totalPages={totalPages}
+                        onPageChange={setPage}
+                        busy={loading}
                       />
                     </Stack>
                   </CardContent>

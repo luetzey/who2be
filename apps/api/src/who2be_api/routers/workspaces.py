@@ -10,14 +10,18 @@ from typing import Annotated
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
 
 from who2be_api.core.db import get_pool
-from who2be_api.core.security import WorkspaceContext, get_current_workspace
+from who2be_api.core.security import (
+    WorkspaceContext,
+    get_current_workspace,
+    require_role,
+)
 from who2be_api.repositories.organization_repository import PgOrganizationRepository
 from who2be_api.repositories.workspace_repository import PgWorkspaceRepository
 from who2be_api.services.workspace_service import WorkspaceService
-from who2be_models import WorkspaceRead, WorkspaceUpdate
+from who2be_models import WorkspaceRead, WorkspaceRole, WorkspaceUpdate
 
 router = APIRouter(prefix="/v1/workspaces", tags=["workspaces"])
 
@@ -43,5 +47,13 @@ async def get_workspace(workspace_id: UUID, ctx: Ctx, service: Service) -> Works
 async def update_workspace(
     workspace_id: UUID, data: WorkspaceUpdate, ctx: Ctx, service: Service
 ) -> WorkspaceRead:
-    _ = ctx
+    require_role(ctx, WorkspaceRole.admin)
     return await service.update(workspace_id, data)
+
+
+@router.delete("/{workspace_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_workspace(workspace_id: UUID, ctx: Ctx, service: Service) -> None:
+    # Danger-Zone (Track C): nur Admins; der letzte Workspace einer Org ist
+    # geschuetzt (Service → 409). `ctx` erzwingt Membership im Ziel-Workspace.
+    require_role(ctx, WorkspaceRole.admin)
+    await service.delete(workspace_id)

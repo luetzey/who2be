@@ -12,6 +12,7 @@ from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.repositories.persona_repository import PgPersonaRepository
 from who2be_api.repositories.status_history_repository import PgStatusHistoryRepository
+from who2be_api.services.mcp_limit_service import enforce_mcp_read_limit
 from who2be_api.services.persona_service import PersonaService
 from who2be_api.services.status_history_service import StatusHistoryService
 from who2be_api.services.version_status import VersionStatusService
@@ -76,7 +77,7 @@ async def list_persona_tags(ctx: Ctx, service: Service) -> list[str]:
     return await service.list_tags(ctx)
 
 
-@router.get("/{persona_id}")
+@router.get("/{persona_id}", dependencies=[Depends(enforce_mcp_read_limit)])
 async def get_persona(persona_id: UUID, ctx: Ctx, service: Service) -> PersonaRead:
     return await service.get(ctx, persona_id)
 

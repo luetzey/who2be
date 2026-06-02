@@ -8,12 +8,15 @@ Pfad: `GET /v1/workspaces/{workspace_id}/dashboard` (Prefix kommt aus
 from typing import Annotated
 
 import asyncpg
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from who2be_api.core.db import get_pool
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.repositories.dashboard_repository import PgDashboardRepository
-from who2be_api.services.dashboard_service import DashboardService
+from who2be_api.services.dashboard_service import (
+    DEFAULT_ACTIVITY_PAGE_SIZE,
+    DashboardService,
+)
 from who2be_models import DashboardResponse
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -30,5 +33,12 @@ Service = Annotated[DashboardService, Depends(get_dashboard_service)]
 
 
 @router.get("")
-async def get_dashboard(ctx: Ctx, service: Service) -> DashboardResponse:
-    return await service.fetch(ctx)
+async def get_dashboard(
+    ctx: Ctx,
+    service: Service,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = DEFAULT_ACTIVITY_PAGE_SIZE,
+) -> DashboardResponse:
+    # KPIs + Status-Verteilung sind seiten-unabhaengig; `page`/`page_size`
+    # blaettern nur durch den `status_history`-Activity-Feed (Track G).
+    return await service.fetch(ctx, page=page, page_size=page_size)

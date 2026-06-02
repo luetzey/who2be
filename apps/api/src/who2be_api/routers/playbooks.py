@@ -18,6 +18,7 @@ from who2be_api.repositories.playbook_resource_link_repository import (
     PgPlaybookResourceLinkRepository,
 )
 from who2be_api.repositories.status_history_repository import PgStatusHistoryRepository
+from who2be_api.services.mcp_limit_service import enforce_mcp_read_limit
 from who2be_api.services.playbook_composition_service import PlaybookCompositionService
 from who2be_api.services.playbook_resource_link_service import PlaybookResourceLinkService
 from who2be_api.services.playbook_service import PlaybookRenderResponse, PlaybookService
@@ -66,7 +67,7 @@ StatusService = Annotated[VersionStatusService, Depends(get_version_status_servi
 DiffAgainst = Annotated[str, Query(max_length=20)]
 
 
-@router.get("")
+@router.get("", dependencies=[Depends(enforce_mcp_read_limit)])
 async def list_playbooks(
     ctx: Ctx,
     service: Service,
@@ -107,7 +108,7 @@ async def list_playbook_triggers(ctx: Ctx, service: Service) -> list[TriggerOver
     return await service.list_triggers(ctx)
 
 
-@router.get("/{playbook_id}")
+@router.get("/{playbook_id}", dependencies=[Depends(enforce_mcp_read_limit)])
 async def get_playbook(playbook_id: UUID, ctx: Ctx, service: Service) -> PlaybookRead:
     return await service.get(ctx, playbook_id)
 
@@ -138,9 +139,7 @@ async def update_playbook_draft(
 
 
 @router.get("/{playbook_id}/rendered")
-async def render_playbook(
-    playbook_id: UUID, ctx: Ctx, service: Service
-) -> PlaybookRenderResponse:
+async def render_playbook(playbook_id: UUID, ctx: Ctx, service: Service) -> PlaybookRenderResponse:
     """Liefert den durch den Placeholder-Renderer expandierten Playbook-Body (B5).
 
     Bei `body_format='blocknote'` werden Inline-Pills (playbook/resource/…)

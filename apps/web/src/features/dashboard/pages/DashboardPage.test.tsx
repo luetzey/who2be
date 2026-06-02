@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { DashboardData } from '@/api/types'
@@ -70,7 +70,7 @@ describe('DashboardPage', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText('Dashboard noch nicht verfuegbar.'),
+        screen.getByText('Dashboard noch nicht verfügbar.'),
       ).toBeInTheDocument()
     })
   })
@@ -107,6 +107,49 @@ describe('DashboardPage', () => {
     expect(screen.getByText(/zur Review eingereicht/)).toBeInTheDocument()
   })
 
+  it('blaettert die Activity seitenbasiert und fragt page=2 an', async () => {
+    const paged: DashboardData = {
+      kpis: { active_personas: 1, active_playbooks: 1, pending_reviews: 0 },
+      activity: [
+        {
+          ts: '2026-05-28T10:00:00Z',
+          actor: { user_id: 'u1', display_name: 'Alice' },
+          entity_type: 'playbook',
+          entity_id: 'pb1',
+          entity_name: 'Coaching',
+          event: 'promoted_to_active',
+        },
+      ],
+      activity_pagination: { page: 1, page_size: 20, total: 25, total_pages: 2 },
+      status_distribution: {
+        persona: { draft: 0, review: 0, active: 1, inactive: 0 },
+        playbook: { draft: 0, review: 0, active: 1, inactive: 0 },
+      },
+    }
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify(paged), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderInRoutes(<DashboardPage />, {
+      path: '/w/:workspaceId/dashboard',
+      initialEntries: ['/w/ws-1/dashboard'],
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Seite 1 von 2')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /Weiter/ }))
+
+    await waitFor(() => {
+      const calledWithPage2 = fetchMock.mock.calls.some(([url]) =>
+        String(url).includes('page=2'),
+      )
+      expect(calledWithPage2).toBe(true)
+    })
+  })
+
   it('zeigt eine Empty-Hint, wenn keine Aktivitaeten vorliegen', async () => {
     const empty: DashboardData = {
       kpis: { active_personas: 0, active_playbooks: 0, pending_reviews: 0 },
@@ -124,7 +167,7 @@ describe('DashboardPage', () => {
     })
 
     await waitFor(() => {
-      expect(screen.getByText('Noch keine Aktivitaeten.')).toBeInTheDocument()
+      expect(screen.getByText('Noch keine Aktivitäten.')).toBeInTheDocument()
     })
   })
 })
