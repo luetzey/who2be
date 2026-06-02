@@ -14,6 +14,7 @@ import asyncpg
 from fastapi import FastAPI
 
 from who2be_api.core.config import get_settings
+from who2be_api.core.tenancy import apply_tenant_settings
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,17 @@ class Database:
 
     async def connect(self) -> None:
         settings = get_settings()
-        self._pool = await asyncpg.create_pool(settings.database_url, init=_init_connection)
+        # `init` (einmalig je physischer Connection): jsonb-Codec.
+        # `setup` (bei jedem Checkout): Tenant-GUCs aus dem Request-ContextVar
+        # (RLS-Choke-Point, core/tenancy.py). Die App verbindet ueber
+        # `effective_app_database_url` — Cloud: Rolle `who2be_app` (RLS aktiv),
+        # On-Prem/Dev: Owner (RLS-Bypass). Migrationen laufen separat ueber
+        # `DATABASE_URL` (who2be-migrate).
+        self._pool = await asyncpg.create_pool(
+            settings.effective_app_database_url,
+            init=_init_connection,
+            setup=apply_tenant_settings,
+        )
 
     async def disconnect(self) -> None:
         if self._pool is not None:
