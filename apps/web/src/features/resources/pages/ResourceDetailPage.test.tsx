@@ -96,6 +96,8 @@ describe('ResourceDetailPage', () => {
           { playbook_id: 'pb1', playbook_name: 'Coach', block_count: 1 },
           { playbook_id: 'pb2', playbook_name: 'Onboarding-Flow', block_count: 3 },
         ])
+      if (path === `${WS_PREFIX}/resources/r1/sub_resources`) return jsonResponse([])
+      if (path === `${WS_PREFIX}/resources/r1/used_by`) return jsonResponse([])
       throw new Error(`Unmocked ${path}`)
     })
 
@@ -117,11 +119,48 @@ describe('ResourceDetailPage', () => {
         ])
       if (path === `${WS_PREFIX}/resources/r1/usages`)
         return new Response('', { status: 404 })
+      if (path === `${WS_PREFIX}/resources/r1/sub_resources`)
+        return new Response('', { status: 404 })
+      if (path === `${WS_PREFIX}/resources/r1/used_by`)
+        return new Response('', { status: 404 })
       throw new Error(`Unmocked ${path}`)
     })
 
     await waitFor(() => {
       expect(screen.getByText('Noch in keinem Playbook verwendet')).toBeInTheDocument()
     })
+  })
+
+  it('zeigt die direkten Sub-Resources mit Scope-Badge', async () => {
+    renderPage((path) => {
+      if (path === `${WS_PREFIX}/resources/r1`) return jsonResponse(resource())
+      if (path === `${WS_PREFIX}/resources/r1/versions`)
+        return jsonResponse([
+          { version: 1, content: { description: 'd', blocks: [] }, created_by: 'o1', created_at: 't' },
+        ])
+      if (path === `${WS_PREFIX}/resources/r1/usages`) return jsonResponse([])
+      if (path === `${WS_PREFIX}/resources/r1/sub_resources`)
+        return jsonResponse([
+          {
+            id: 'r2',
+            name: 'Glossar',
+            link_scope: 'resource',
+            block_id: null,
+            position: 0,
+            fetch_call: "fetch_resource('r2')",
+          },
+        ])
+      if (path === `${WS_PREFIX}/resources/r1/used_by`)
+        return jsonResponse([{ id: 'r3', name: 'Handbuch' }])
+      throw new Error(`Unmocked ${path}`)
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Sub-Resources')).toBeInTheDocument()
+    })
+    expect(screen.getByText('Glossar')).toBeInTheDocument()
+    expect(screen.getByText('Dokument')).toBeInTheDocument()
+    // Used-By-Backlink.
+    expect(screen.getByText('Handbuch')).toBeInTheDocument()
   })
 })

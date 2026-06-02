@@ -168,7 +168,10 @@ def test_fetch_resource_filters_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
     payload["id"] = str(rid)
 
     def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.path.endswith(f"/resources/{rid}")
+        path = request.url.path
+        if path.endswith(f"/resources/{rid}/sub_resources"):
+            return httpx.Response(200, json=[])
+        assert path.endswith(f"/resources/{rid}")
         return httpx.Response(200, json=payload)
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
@@ -176,9 +179,48 @@ def test_fetch_resource_filters_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
     full = asyncio.run(fetch_resource(str(rid)))
     assert isinstance(full, ResourceRead)
     assert [b.id for b in full.content.blocks] == ["b1", "b2", "b3"]
+    assert full.sub_resources == []
 
     filtered = asyncio.run(fetch_resource(str(rid), block_ids=["b3", "b1"]))
     assert [b.id for b in filtered.content.blocks] == ["b3", "b1"]
+
+
+def test_fetch_resource_attaches_direct_sub_resources(monkeypatch: pytest.MonkeyPatch) -> None:
+    """§3.3: fetch_resource liefert eigenen Body + direkte Sub-Resource-Tabelle.
+
+    Die Kinder werden NICHT expandiert — jeder Eintrag traegt nur Pointer-Daten
+    plus die fertige `fetch_call`-Anweisung.
+    """
+    rid = uuid4()
+    child_id = uuid4()
+    payload = _resource_payload(blocks=[_block("b1", "Eigener Body")])
+    payload["id"] = str(rid)
+    sub = {
+        "id": str(child_id),
+        "name": "Kind-Doc",
+        "link_scope": "resource",
+        "block_id": None,
+        "position": 0,
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith(f"/resources/{rid}/sub_resources"):
+            return httpx.Response(200, json=[sub])
+        if path.endswith(f"/resources/{rid}"):
+            return httpx.Response(200, json=payload)
+        return httpx.Response(404)
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    result = asyncio.run(fetch_resource(str(rid)))
+    assert isinstance(result, ResourceRead)
+    # Eigener Body bleibt inline.
+    assert [b.id for b in result.content.blocks] == ["b1"]
+    # Direkte Sub-Resources als Pointer mit fetch_call, nicht expandiert.
+    assert len(result.sub_resources) == 1
+    assert result.sub_resources[0].id == child_id
+    assert result.sub_resources[0].name == "Kind-Doc"
+    assert result.sub_resources[0].fetch_call == f"fetch_resource('{child_id}')"
 
 
 def test_fetch_resource_validates_uuid(monkeypatch: pytest.MonkeyPatch) -> None:

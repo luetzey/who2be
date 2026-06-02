@@ -14,11 +14,14 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { VersionHistory } from '@/components/version'
+import { useResourceSubResources } from '@/hooks/useResourceSubResources'
 import { useResourceUsages } from '@/hooks/useResourceUsages'
 import { notify } from '@/lib/feedback'
 
 import { ResourceEditorForm } from '../components/ResourceEditorForm'
+import { ResourceUsedByList } from '../components/ResourceUsedByList'
 import { StatusActionBar } from '../components/StatusActionBar'
+import { SubResourcePicker } from '../components/SubResourcePicker'
 import { useResource } from '../hooks/useResource'
 import { useResourceForm } from '../hooks/useResourceForm'
 import { statusLabel } from '../lib/status'
@@ -28,9 +31,11 @@ export function ResourceDetailPage() {
   const { resource, versions, loading, error, reload } = useResource(id)
   const { form, autoSave } = useResourceForm(resource, reload)
   const usages = useResourceUsages(id)
+  const subResources = useResourceSubResources(id)
   const wsPath = useWorkspacePath()
   const api = useApi()
   const role = useCurrentWorkspaceRole()
+  const canEdit = role === 'admin' || role === 'editor'
 
   if (id === undefined) {
     return <Navigate to={wsPath('/resources')} replace />
@@ -147,9 +152,67 @@ export function ResourceDetailPage() {
                 </CardContent>
               </Card>
 
+              <Card>
+                <CardHeader>
+                  <CardTitle>Sub-Resources</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Stack gap="sm">
+                    <DataView
+                      loading={subResources.loading}
+                      error={subResources.error}
+                      empty={
+                        !subResources.loading && subResources.children.length === 0
+                      }
+                      emptyTitle="Keine Sub-Resources"
+                      emptyDescription="Verknüpfe weitere Resources, die ein Agent über fetch_resource nachladen kann."
+                    >
+                      <DataList
+                        items={subResources.children}
+                        getKey={(sub) => `${sub.id}-${sub.block_id ?? 'doc'}`}
+                        renderItem={(sub) => (
+                          <span className="flex items-center justify-between gap-3">
+                            <Link
+                              to={wsPath(`/resources/${sub.id}`)}
+                              className="truncate"
+                            >
+                              {sub.name}
+                            </Link>
+                            <Badge variant="secondary">
+                              {sub.link_scope === 'block'
+                                ? `Block ${sub.block_id ?? ''}`.trim()
+                                : 'Dokument'}
+                            </Badge>
+                          </span>
+                        )}
+                      />
+                    </DataView>
+                    {canEdit ? (
+                      <SubResourcePicker
+                        currentResourceId={resource.id}
+                        existing={subResources.children}
+                        saving={subResources.saving}
+                        onSave={subResources.save}
+                      />
+                    ) : null}
+                  </Stack>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Verwendet in Resources</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <DataView loading={subResources.loading} error={subResources.error}>
+                    <ResourceUsedByList parents={subResources.parents} />
+                  </DataView>
+                </CardContent>
+              </Card>
+
               <VersionHistory
                 versions={versions}
-                canEdit={role === 'admin' || role === 'editor'}
+                canEdit={canEdit}
                 onRestore={async (version) => {
                   await api.restoreResourceVersion(resource.id, version)
                   notify.success(`v${version} als Entwurf wiederhergestellt.`)

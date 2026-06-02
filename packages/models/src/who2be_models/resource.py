@@ -15,7 +15,14 @@ from datetime import datetime
 from typing import Annotated, Literal, Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    computed_field,
+    model_validator,
+)
 
 from who2be_models.status import VersionStatus
 
@@ -105,6 +112,12 @@ class ResourceRead(BaseModel):
     current_status: VersionStatus = VersionStatus.inactive
     has_pending_draft: bool = False
     content: ResourceContent
+    # Track E: direkte Sub-Resource-Verweise (Resource->Resource). Default `[]`
+    # — REST-Reads befuellen das Feld nicht (dafuer gibt es den dedizierten
+    # `GET .../sub_resources`-Endpoint); der MCP-`fetch_resource`-Pfad haengt
+    # die direkten Kinder hier an, damit der Agent Body + Sub-Ref-Tabelle in
+    # einem Modell sieht (Kinder werden NICHT expandiert, §3.3).
+    sub_resources: list["SubResourceRead"] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
@@ -215,3 +228,82 @@ class ResourceUsage(BaseModel):
     playbook_id: UUID
     playbook_name: str
     block_count: int = Field(ge=0)
+
+
+class ResourceRef(BaseModel):
+    """Schlanker Resource-Pointer (id + name) fuer Backlinks/Aggregate.
+
+    Pendant zu `PlaybookRef` — getragen z. B. von `GET .../{id}/used_by`
+    (welche Resources referenzieren diese Resource als Sub-Resource?).
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
+
+
+class SubResourceLinkItem(BaseModel):
+    """Eingabe-Item fuer einen Sub-Resource-Link (Resource->Resource, Track E).
+
+    Spiegelt `ResourceLinkItem`: `link_scope='resource'` referenziert das ganze
+    Kind-Dokument (kein `block_id`), `link_scope='block'` einen Heading-Anker
+    im Kind (mit `block_id`). Default ist `'resource'` — bei Sub-Resources ist
+    die Volldokument-Referenz der Normalfall.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    child_id: UUID
+    block_id: BlockId | None = None
+    position: int = Field(default=0, ge=0)
+    link_scope: Literal["resource", "block"] = "resource"
+
+    @model_validator(mode="after")
+    def _check_scope_block_pairing(self) -> Self:
+        if self.link_scope == "resource" and self.block_id is not None:
+            raise ValueError("link_scope='resource' darf kein block_id setzen.")
+        if self.link_scope == "block" and self.block_id is None:
+            raise ValueError("link_scope='block' verlangt eine block_id.")
+        return self
+
+
+class SubResourceLinkSet(BaseModel):
+    """Eingabe fuer `PUT .../resources/{id}/sub_resources`.
+
+    Set-Replace-Semantik wie `ResourceLinkSet`/`PlaybookCompositionLinkSet`:
+    die Liste ersetzt den bisherigen Stand vollstaendig (leere Liste loest
+    alle Sub-Resource-Links). Obergrenze schuetzt vor Riesen-Arrays.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    links: list[SubResourceLinkItem] = Field(default_factory=list, max_length=200)
+
+
+class SubResourceRead(BaseModel):
+    """Ein direkter Sub-Resource-Verweis (Ausgabe).
+
+    `fetch_call` ist die fertige MCP-Anweisung, das Kind separat zu laden —
+    der `fetch_resource`-Vertrag (§3.3) expandiert Kinder NICHT, sondern
+    reicht diese Tabelle durch. Das Feld ist `computed`, damit es immer aus
+    der `id` abgeleitet wird (kein Duplikat-State, keine Drift).
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
+    link_scope: Literal["resource", "block"] = "resource"
+    block_id: str | None = None
+    position: int = 0
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def fetch_call(self) -> str:
+        return f"fetch_resource('{self.id}')"
+
+
+# `ResourceRead.sub_resources` referenziert `SubResourceRead` als Forward-Ref —
+# jetzt aufloesen, da der Typ oben definiert ist.
+ResourceRead.model_rebuild()

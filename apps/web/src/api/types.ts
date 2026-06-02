@@ -401,6 +401,34 @@ export interface ResourceLinkItemInput {
   link_scope: ResourceLinkScope
 }
 
+// Track E — Sub-Resource-Composition (Resource->Resource, §3.3).
+// Schlanker Resource-Pointer fuer Used-By-Backlinks.
+export interface ResourceRef {
+  id: string
+  name: string
+}
+
+// Ein direkter Sub-Resource-Verweis (Ausgabe). `fetch_call` ist die fertige
+// MCP-Anweisung; im Web nur informativ. Backend liefert 404, bis Track E
+// merged — die Hooks behandeln das als leere Liste.
+export interface SubResource {
+  id: string
+  name: string
+  link_scope: ResourceLinkScope
+  block_id: string | null
+  position: number
+  fetch_call: string
+}
+
+// Eingabe-Item fuer PUT .../sub_resources. Default-Scope ist 'resource'
+// (Volldokument-Referenz); Block-Anker analog ResourceLinkItemInput.
+export interface SubResourceLinkInput {
+  child_id: string
+  block_id: string | null
+  position: number
+  link_scope: ResourceLinkScope
+}
+
 // Phase 3 Runde 3 Track 3 — SystemPromptTemplate-Aggregat.
 
 // body_format: 'plain' = Plain-Text-Textarea (Legacy),
