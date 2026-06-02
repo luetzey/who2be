@@ -13,10 +13,10 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input'
 import { TagInput } from '@/components/ui/tag-input'
 import { cn } from '@/lib/utils'
-import { ResourceEditor } from '@/features/resources/components/ResourceEditor'
 
 import type { PersonaEditorValues } from '../hooks/usePersonaForm'
 import { PersonaModesEditor } from './PersonaModesEditor'
+import { PersonaProfileEditor } from './PersonaProfileEditor'
 import { PersonaSkillsEditor } from './PersonaSkillsEditor'
 
 const MODES_SECTION_ID = 'persona-modes-section'
@@ -131,6 +131,12 @@ interface PersonaEditorFormProps {
   // Form-State sehen. Pattern parallel zu ResourceDetailPage.
   initialProfileBlocks: ResourceBlock[]
   /**
+   * ID der bearbeiteten Persona — fuer die Pill-Vorschau im Profil-Editor
+   * (Katalog-/Persona-Pills loesen sonst ohne Persona-Kontext nicht auf).
+   * Fehlt auf der New-Page (Persona noch nicht gespeichert).
+   */
+  personaId?: string
+  /**
    * Bestehender Persona-eigener System-Prompt. Mit Phase 3 Runde 3 Track 3
    * wandert der System-Prompt ins Agent-Template; die UI versteckt das Feld
    * und zeigt fuer Bestandsdaten lediglich eine Read-Only-Hinweis-Box.
@@ -158,6 +164,7 @@ export function PersonaEditorForm({
   form,
   formKey,
   initialProfileBlocks,
+  personaId,
   legacySystemPrompt,
   onSubmit,
   actions,
@@ -247,6 +254,13 @@ export function PersonaEditorForm({
                     Der Agent leitet daraus ab, wie er antworten soll —
                     strukturierte Beispiele schlagen Bullet-Listen.
                   </p>
+                  <p>
+                    Mit <code>/</code> fügst du Pills ein: einzelne Playbooks/Resources
+                    oder die Kataloge <em>Playbook-Katalog</em> (alle/getriggert) und
+                    <em> Resource-Katalog</em> (alle/Tag). Sie lösen beim
+                    <code> get_persona</code>-Abruf gegen die aktiven Playbooks/Resources
+                    des Workspace auf.
+                  </p>
                   <p className="text-xs font-medium text-foreground">Beispiel</p>
                   <pre className="rounded bg-muted/50 p-2 font-mono text-xs whitespace-pre-wrap">
                     {PROFILE_EXAMPLE_SNIPPET}
@@ -262,10 +276,11 @@ export function PersonaEditorForm({
                   <FormItem>
                     <FormLabel>Profil-Inhalt</FormLabel>
                     <FormControl>
-                      <ResourceEditor
+                      <PersonaProfileEditor
                         key={formKey}
                         initialBlocks={initialProfileBlocks}
                         editable={!isViewer}
+                        personaId={personaId}
                         onChange={(blocks: ResourceBlock[]) => field.onChange(blocks)}
                       />
                     </FormControl>

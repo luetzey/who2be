@@ -18,6 +18,7 @@ import { usePersonaPlaybooks } from '@/hooks/usePersonaPlaybooks'
 import { notify } from '@/lib/feedback'
 
 import { PersonaEditorForm } from '../components/PersonaEditorForm'
+import { PersonaSkillsTable } from '../components/PersonaSkillsTable'
 import { PlaybookLinkItem } from '../components/PlaybookLinkItem'
 import { usePersona } from '../hooks/usePersona'
 import { usePersonaForm } from '../hooks/usePersonaForm'
@@ -177,8 +178,11 @@ export function PersonaDetailPage() {
                 form={form}
                 formKey={`${persona.id}-${persona.current_version}`}
                 initialProfileBlocks={persona.content.content?.blocks ?? []}
+                personaId={persona.id}
                 legacySystemPrompt={persona.content.system_prompt}
               />
+
+              <PersonaSkillsTable skills={persona.content.skills ?? []} />
 
               <VersionHistory
                 versions={versions}

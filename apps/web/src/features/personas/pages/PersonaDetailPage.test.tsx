@@ -24,6 +24,12 @@ vi.mock('@blocknote/mantine', () => ({
   BlockNoteView: () => <div data-testid="blocknote-view" />,
 }))
 vi.mock('@/app/theme-context', () => ({ useTheme: () => ({ resolved: 'light' }) }))
+// Track F: der pill-faehige Profil-Editor zieht das volle BlockNote-Custom-
+// Schema hoch (createReactInlineContentSpec). Im Page-Test stuben wir ihn,
+// damit nur das Page-Verhalten geprueft wird, nicht die BlockNote-Insel.
+vi.mock('@/features/personas/components/PersonaProfileEditor', () => ({
+  PersonaProfileEditor: () => <div data-testid="blocknote-view" />,
+}))
 
 const session = { access_token: 'jwt' } as unknown as Session
 const me: Me = {

@@ -124,6 +124,28 @@ describe('buildSlashMenuItems', () => {
     const catalogItem = items.find((i) => i.title === 'Playbook-Katalog')
     catalogItem?.onItemClick()
     expect(openPicker).toHaveBeenCalledWith('playbooks-catalog')
+
+    const resourceCatalogItem = items.find((i) => i.title === 'Resource-Katalog')
+    resourceCatalogItem?.onItemClick()
+    expect(openPicker).toHaveBeenCalledWith('resources-catalog')
+  })
+
+  it('allowedKinds filtert die Custom-Items (Persona-Pill-Satz)', () => {
+    const allowed = new Set([
+      'playbook',
+      'resource',
+      'playbooks-catalog',
+      'resources-catalog',
+    ] as const)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const items = buildSlashMenuItems({} as any, vi.fn(), '', allowed)
+    const titles = items.map((i) => i.title)
+    expect(titles).toContain('Resource-Katalog')
+    expect(titles).toContain('Playbook-Katalog')
+    // Nicht erlaubte Kinds fehlen.
+    expect(titles).not.toContain('Persona-Feld')
+    expect(titles).not.toContain('Datum')
+    expect(titles).not.toContain('MCP-Tools')
   })
 })
 

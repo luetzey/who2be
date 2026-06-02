@@ -8,10 +8,10 @@ import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
 import { SessionContext } from '@/auth/session-context'
 import { PersonaNewPage } from './PersonaNewPage'
 
-// BlockNote-Insel mocken — PersonaEditorForm beinhaltet ResourceEditor, der
-// BlockNoteEditor (ThemeProvider-Abhaengigkeit) benoetigt.
-vi.mock('@/components/editor/BlockNoteEditor', () => ({
-  BlockNoteEditor: ({ initialBlocks }: { initialBlocks: ResourceBlock[] }) => (
+// Profil-Insel mocken — PersonaEditorForm beinhaltet den PersonaProfileEditor,
+// der BlockNote (ThemeProvider-Abhaengigkeit) benoetigt (Track F).
+vi.mock('@/features/personas/components/PersonaProfileEditor', () => ({
+  PersonaProfileEditor: ({ initialBlocks }: { initialBlocks: ResourceBlock[] }) => (
     <div
       data-testid="blocknote-view"
       data-initial-blocks={JSON.stringify(initialBlocks)}

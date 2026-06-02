@@ -6,12 +6,13 @@ import type { Persona, ResourceBlock } from '@/api/types'
 import { PersonaEditorForm } from './PersonaEditorForm'
 import { usePersonaForm } from '../hooks/usePersonaForm'
 
-// BlockNote-Insel wird auf der Wrapper-Ebene gemockt — so koennen wir
-// `initialBlocks` per Data-Attribut beobachten, ohne ProseMirror zu starten.
-// Existierende Tests pruefen `data-testid="blocknote-view"`; der Mock erfuellt
-// beide Rollen.
-vi.mock('@/components/editor/BlockNoteEditor', () => ({
-  BlockNoteEditor: ({ initialBlocks }: { initialBlocks: ResourceBlock[] }) => (
+// Profil-Insel wird auf der Wrapper-Ebene gemockt — so koennen wir
+// `initialBlocks` per Data-Attribut beobachten, ohne ProseMirror/BlockNote zu
+// starten (Track F: der Profil-Editor ist jetzt der pill-faehige
+// PersonaProfileEditor). Existierende Tests pruefen `data-testid="blocknote-view"`;
+// der Mock erfuellt beide Rollen.
+vi.mock('./PersonaProfileEditor', () => ({
+  PersonaProfileEditor: ({ initialBlocks }: { initialBlocks: ResourceBlock[] }) => (
     <div
       data-testid="blocknote-view"
       data-initial-blocks={JSON.stringify(initialBlocks)}

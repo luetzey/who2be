@@ -19,6 +19,11 @@ vi.mock('@blocknote/react', () => ({
 vi.mock('@blocknote/mantine', () => ({
   BlockNoteView: () => <div data-testid="blocknote-view" />,
 }))
+// Track F: pill-faehiger Profil-Editor — im a11y-Page-Test gestubt (das volle
+// BlockNote-Custom-Schema mountet nicht in jsdom).
+vi.mock('@/features/personas/components/PersonaProfileEditor', () => ({
+  PersonaProfileEditor: () => <div data-testid="blocknote-view" />,
+}))
 
 afterEach(() => {
   vi.unstubAllGlobals()
