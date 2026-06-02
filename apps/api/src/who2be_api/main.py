@@ -182,6 +182,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(invitations.accept_router)
     # Cloud-Billing-Webhook (anonym, signaturgeprueft) — top-level, kein Workspace-Prefix.
     app.include_router(billing.webhook_router)
+    # Mollie-Pull-Webhook (form id=, aktiver API-Fetch statt Body-Signatur) — top-level.
+    app.include_router(billing.mollie_webhook_router)
 
     @app.get("/v1/health", response_model=Health)
     async def health() -> Health:

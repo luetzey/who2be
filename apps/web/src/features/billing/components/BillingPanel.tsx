@@ -1,7 +1,11 @@
 import { ErrorAlert, LoadingState } from '@/components/data'
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
 
+import { useCheckout } from '../hooks/useCheckout'
 import { useEntitlement } from '../hooks/useEntitlement'
+
+// Feature-Codes, die den Pro-Tier ausmachen (siehe docs/licensing/plans.md).
+const PRO_FEATURES = ['composite_playbooks', 'agents', 'audit_export']
 
 function formatExpiry(iso: string | null): string {
   if (!iso) return 'unbegrenzt'
@@ -47,6 +51,7 @@ function QuotaBar({ count, quota }: { count: number; quota: number | null }) {
  */
 export function BillingPanel() {
   const { data, loading, error, notFound } = useEntitlement()
+  const checkout = useCheckout()
 
   if (loading) return <LoadingState />
   if (notFound) return null
@@ -56,6 +61,8 @@ export function BillingPanel() {
   if (data.edition !== 'cloud') return null
 
   const active = data.status === 'active'
+  // Pro-Tier liegt vor, wenn alle Pro-Feature-Codes aktiv freigeschaltet sind.
+  const isPro = active && PRO_FEATURES.every((feature) => data.features.includes(feature))
 
   return (
     <Card>
@@ -94,9 +101,20 @@ export function BillingPanel() {
           </div>
         </div>
 
-        <Button className="w-full" disabled={!active && data.features.length === 0}>
-          {active ? 'Plan verwalten' : 'Jetzt upgraden'}
-        </Button>
+        {isPro ? (
+          <Button className="w-full" disabled>
+            Pro aktiv
+          </Button>
+        ) : (
+          <Button
+            className="w-full"
+            disabled={checkout.pending}
+            onClick={() => checkout.start('pro')}
+          >
+            {checkout.pending ? 'Weiterleitung…' : 'Jetzt upgraden'}
+          </Button>
+        )}
+        {checkout.error ? <ErrorAlert message={checkout.error} /> : null}
       </CardContent>
     </Card>
   )

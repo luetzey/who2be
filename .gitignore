@@ -27,3 +27,6 @@ build/
 .claude/settings.local.json
 .claude/worktrees/
 .claude/scheduled_tasks.lock
+
+# Claude Code project link (Notion-IDs lokal halten; Template: project.example.json)
+.claude/project.json

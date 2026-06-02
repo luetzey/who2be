@@ -93,6 +93,27 @@ class Settings(BaseSettings):
         default="",
         validation_alias=AliasChoices("WHO2BE_BILLING_WEBHOOK_SECRET", "billing_webhook_secret"),
     )
+    # Mollie-Pull-Adapter (Plan §3.2): API-Key fuer den serverseitigen Fetch nach
+    # dem Webhook-Ping (Mollie liefert nur die `id`, kein signierter Body). Leer ⇒
+    # Mollie-Checkout/-Webhook sind nicht verfuegbar (503). NIE ein Test-Key in Prod.
+    mollie_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("MOLLIE_API_KEY", "mollie_api_key"),
+    )
+    # Optionales Zusatz-Secret fuer den Mollie-Webhook-Pfad (`?token=…`,
+    # konstant-zeitlich verglichen) — Mollie selbst signiert nicht. Leer ⇒ kein
+    # Token-Gate (die Pull-Verifikation bleibt die Hauptsicherung).
+    mollie_webhook_secret: str = Field(
+        default="",
+        validation_alias=AliasChoices("MOLLIE_WEBHOOK_SECRET", "mollie_webhook_secret"),
+    )
+    # Absolute, oeffentlich erreichbare URL des Mollie-Webhooks (Mollie verlangt
+    # https und akzeptiert kein localhost). Leer ⇒ Zahlungen/Subscriptions werden
+    # ohne `webhookUrl` angelegt (lokales Dev / Tests).
+    mollie_webhook_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("MOLLIE_WEBHOOK_URL", "mollie_webhook_url"),
+    )
     # On-Prem-Bootstrap: beim ersten Boot ohne Tenant wird fuer diese Email ein
     # Admin + Personal-Org + Workspace deterministisch geseedet.
     bootstrap_admin_email: str = Field(

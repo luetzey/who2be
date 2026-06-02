@@ -577,3 +577,12 @@ export interface EntitlementInfo {
   mcp_rate_per_min: number | null
   usage: EntitlementUsage
 }
+
+// Mollie-Checkout (Track J). `plan` ist der buchbare Tier-Code (z. B. `'pro'`).
+export interface CheckoutInput {
+  plan: string
+}
+
+export interface CheckoutResult {
+  checkout_url: string
+}
