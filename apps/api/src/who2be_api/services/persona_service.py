@@ -8,13 +8,18 @@ Phase 2.1b: Der `active_only`-Schalter (gesetzt fuer API-Token-Aufrufer ueber
 Draft-on-Edit-Konfliktlage aus dem Repo wird auf 409 gemappt.
 """
 
-from datetime import datetime
+import json
+from datetime import UTC, datetime
 from uuid import UUID
 
+import asyncpg
 from fastapi import HTTPException, status
+from pydantic import BaseModel
 
 from who2be_api.core.security import WorkspaceContext, require_role
 from who2be_api.repositories.persona_repository import PersonaRepository
+from who2be_api.services.placeholders import RenderContext, render_template_body
+from who2be_api.services.placeholders.registry import render_skills_table
 from who2be_api.services.version_diff import compute_version_diff
 from who2be_models import (
     PersonaCreate,
@@ -27,6 +32,19 @@ from who2be_models import (
     WorkspaceRole,
     encode_cursor,
 )
+
+
+class PersonaRenderResponse(BaseModel):
+    """Antwort des Persona-Render-Endpoints: expandierter Profil-Body + Misses.
+
+    Spiegelt den Playbook-Render-Vertrag (`PlaybookRenderResponse`): `body_rendered`
+    ist der durch den Placeholder-Renderer expandierte Profil-Body (Katalog-Pills
+    fetch-time gegen die aktiven Playbooks/Resources des Workspace) plus eine
+    angehaengte Skills-Tabelle. `unresolved` listet deduplizierte Miss-Keys.
+    """
+
+    body_rendered: str
+    unresolved: list[str]
 
 
 def _not_found() -> HTTPException:
@@ -61,10 +79,18 @@ def _review_conflict() -> HTTPException:
 
 
 class PersonaService:
-    """Legt Personae an, liest, listet, aktualisiert und versioniert sie."""
+    """Legt Personae an, liest, listet, aktualisiert und versioniert sie.
 
-    def __init__(self, persona_repo: PersonaRepository) -> None:
+    Track F: haelt zusaetzlich den Pool fuer den Render-Pfad (`render`), der den
+    Persona-Profil-Body durch den Placeholder-Renderer jagt (Katalog-Pills
+    fetch-time). Der Pool ist optional, damit Unit-Tests, die nur die
+    Versions-/CRUD-Methoden treffen, den Service weiterhin nur mit dem Repo
+    konstruieren koennen.
+    """
+
+    def __init__(self, persona_repo: PersonaRepository, pool: asyncpg.Pool | None = None) -> None:
         self._repo = persona_repo
+        self._pool = pool
 
     async def create(self, ctx: WorkspaceContext, data: PersonaCreate) -> PersonaRead:
         require_role(ctx, WorkspaceRole.editor)
@@ -92,6 +118,42 @@ class PersonaService:
         if persona is None:
             raise _not_found()
         return persona
+
+    async def render(self, ctx: WorkspaceContext, persona_id: UUID) -> PersonaRenderResponse:
+        """Expandiert den Persona-Profil-Body durch den Placeholder-Renderer (Track F).
+
+        Der BlockNote-Profil-Body (`content.content.blocks`) wird mit
+        `persona_id=persona.id` gerendert — so loesen die Katalog-Pills
+        (`playbooks-catalog`/`resources-catalog`) sowie die Slash-Refs
+        fetch-time gegen die aktiven Playbooks/Resources des Workspace auf.
+        Anschliessend wird die Skills-Tabelle aus `content.skills` angehaengt.
+
+        Wird vom MCP-Tool `get_persona` genutzt (der MCP-Prozess hat keinen
+        DB-Zugriff). Leerer Body + keine Skills → leerer `body_rendered`.
+        """
+        persona = await self.get(ctx, persona_id)
+        body_blocks = persona.content.content.blocks if persona.content.content is not None else []
+        body_json = json.dumps([block.model_dump(mode="json") for block in body_blocks])
+
+        render_ctx = RenderContext(
+            workspace_id=ctx.workspace_id,
+            persona_id=persona.id,
+            now=datetime.now(UTC),
+        )
+        if self._pool is None:  # pragma: no cover - im Prod immer gesetzt
+            raise RuntimeError("PersonaService.render benoetigt einen DB-Pool.")
+        async with self._pool.acquire() as conn:
+            body_rendered, unresolved = await render_template_body(
+                body_json, "blocknote", render_ctx, conn
+            )
+
+        skills_table = render_skills_table(
+            [skill.model_dump(mode="json") for skill in persona.content.skills]
+        )
+        if skills_table:
+            body_rendered = f"{body_rendered}\n\n{skills_table}" if body_rendered else skills_table
+
+        return PersonaRenderResponse(body_rendered=body_rendered, unresolved=unresolved)
 
     async def update(
         self, ctx: WorkspaceContext, persona_id: UUID, data: PersonaUpdate

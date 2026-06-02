@@ -2,8 +2,10 @@
 
 import asyncio
 from datetime import UTC, datetime
+from typing import cast
 from uuid import UUID, uuid4
 
+import asyncpg
 import pytest
 from fastapi import HTTPException
 
@@ -11,11 +13,14 @@ from who2be_api.core.security import WorkspaceContext
 from who2be_api.repositories.persona_repository import PersonaUpdateOutcome
 from who2be_api.services.persona_service import PersonaService
 from who2be_models import (
+    PersonaContent,
     PersonaCreate,
     PersonaRead,
     PersonaUpdate,
     PersonaVersionContent,
     PersonaVersionRead,
+    ResourceBlock,
+    SkillRef,
     VersionStatus,
     WorkspaceRole,
 )
@@ -414,4 +419,109 @@ def test_api_token_context_filters_to_active_only() -> None:
     assert repo.last_active_only is True
     with pytest.raises(HTTPException) as exc:
         asyncio.run(service.get(token_ctx, inactive.id))
+    assert exc.value.status_code == 404
+
+
+# --- Track F: Render-Pfad (Persona-Pills + Skills-Tabelle) -------------------
+
+
+class _FakeAcquire:
+    """Async-Contextmanager-Stub fuer `pool.acquire()` — liefert eine None-Conn.
+
+    Fuer text-only Profil-Bloecke (ohne Katalog-Pills) beruehrt der Renderer die
+    Conn nicht; ein No-Op-Handle reicht.
+    """
+
+    async def __aenter__(self) -> object:
+        return None
+
+    async def __aexit__(self, *args: object) -> None:
+        return None
+
+
+class _FakePool:
+    def acquire(self) -> _FakeAcquire:
+        return _FakeAcquire()
+
+
+def _service_with_pool() -> tuple[PersonaService, WorkspaceContext]:
+    repo = FakePersonaRepository()
+    pool = cast("asyncpg.Pool", _FakePool())
+    return PersonaService(repo, pool), _ctx(uuid4())
+
+
+def _profile_block(text: str) -> ResourceBlock:
+    return ResourceBlock.model_validate(
+        {
+            "id": "b1",
+            "type": "paragraph",
+            "content": [{"type": "text", "text": text, "styles": {}}],
+        }
+    )
+
+
+def test_render_profile_body_text_expands_to_plain() -> None:
+    service, ctx = _service_with_pool()
+    content = PersonaVersionContent(
+        description="Coach",
+        content=PersonaContent(blocks=[_profile_block("Hallo"), _profile_block("Welt")]),
+    )
+    created = asyncio.run(service.create(ctx, PersonaCreate(name="Coach", content=content)))
+
+    result = asyncio.run(service.render(ctx, created.id))
+
+    assert result.body_rendered == "Hallo\n\nWelt"
+    assert result.unresolved == []
+
+
+def test_render_appends_skills_table() -> None:
+    service, ctx = _service_with_pool()
+    content = PersonaVersionContent(
+        description="Coach",
+        content=PersonaContent(blocks=[_profile_block("Profil-Text")]),
+        skills=[
+            SkillRef(name="Aktives Zuhören", note="paraphrasiert vor jeder Antwort"),
+            SkillRef(name="Refactoring"),
+        ],
+    )
+    created = asyncio.run(service.create(ctx, PersonaCreate(name="Coach", content=content)))
+
+    result = asyncio.run(service.render(ctx, created.id))
+
+    assert "Profil-Text" in result.body_rendered
+    assert "## Skills" in result.body_rendered
+    assert "| Skill | Hinweis |" in result.body_rendered
+    assert "| Aktives Zuhören | paraphrasiert vor jeder Antwort |" in result.body_rendered
+    assert "| Refactoring |  |" in result.body_rendered
+
+
+def test_render_empty_profile_and_no_skills_is_empty() -> None:
+    service, ctx = _service_with_pool()
+    created = asyncio.run(
+        service.create(ctx, PersonaCreate(name="Leer", content=PersonaVersionContent()))
+    )
+
+    result = asyncio.run(service.render(ctx, created.id))
+
+    assert result.body_rendered == ""
+    assert result.unresolved == []
+
+
+def test_render_skills_only_when_body_empty() -> None:
+    service, ctx = _service_with_pool()
+    content = PersonaVersionContent(skills=[SkillRef(name="Python", note="fortgeschritten")])
+    created = asyncio.run(service.create(ctx, PersonaCreate(name="Skill", content=content)))
+
+    result = asyncio.run(service.render(ctx, created.id))
+
+    # Ohne Profil-Body beginnt der Output direkt mit der Skills-Sektion (kein
+    # fuehrender Doppel-Newline).
+    assert result.body_rendered.startswith("## Skills")
+    assert "| Python | fortgeschritten |" in result.body_rendered
+
+
+def test_render_unknown_persona_raises_404() -> None:
+    service, ctx = _service_with_pool()
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(service.render(ctx, uuid4()))
     assert exc.value.status_code == 404

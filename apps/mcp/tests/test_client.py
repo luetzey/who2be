@@ -117,6 +117,31 @@ def test_get_persona_playbooks_returns_list() -> None:
     assert isinstance(playbooks[0], PlaybookRead)
 
 
+def test_get_persona_rendered_returns_body_string() -> None:
+    persona_id = uuid4()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == f"{_WS_PREFIX}/personas/{persona_id}/rendered"
+        return httpx.Response(
+            200,
+            json={"body_rendered": "Profil\n\n## Skills\n...", "unresolved": []},
+        )
+
+    body = asyncio.run(_client(handler).get_persona_rendered(persona_id))
+    assert body.startswith("Profil")
+    assert "## Skills" in body
+
+
+def test_get_persona_rendered_tolerates_missing_field() -> None:
+    persona_id = uuid4()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"unresolved": []})
+
+    body = asyncio.run(_client(handler).get_persona_rendered(persona_id))
+    assert body == ""
+
+
 def test_list_playbooks_forwards_filters() -> None:
     seen: dict[str, dict[str, str]] = {}
 

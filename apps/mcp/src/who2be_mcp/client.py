@@ -92,6 +92,23 @@ class ApiClient:
         data = await self._get(f"{self._workspace_prefix}/personas/{persona_id}/playbooks")
         return [PlaybookRead.model_validate(item) for item in data]
 
+    async def get_persona_rendered(self, persona_id: UUID) -> str:
+        """Laedt den serverseitig expandierten Persona-Profil-Body (Track F).
+
+        Der API-Endpoint `GET .../personas/{id}/rendered` jagt den Profil-Body
+        durch den Placeholder-Renderer: Katalog-Pills (`playbooks-catalog`/
+        `resources-catalog`) und Slash-Refs werden fetch-time gegen die aktiven
+        Playbooks/Resources des Workspace aufgeloest, plus eine Skills-Tabelle.
+        Der MCP-Prozess hat keinen DB-Zugriff — das Rendering MUSS daher ueber
+        diesen Endpoint laufen.
+
+        Gibt nur den `body_rendered`-String zurueck; die `unresolved`-Liste ist
+        fuer den Agent-Konsum nicht relevant (best-effort Expansion).
+        """
+        data = await self._get(f"{self._workspace_prefix}/personas/{persona_id}/rendered")
+        body = data.get("body_rendered") if isinstance(data, dict) else None
+        return body if isinstance(body, str) else ""
+
     async def list_playbooks(self, tag: str | None, trigger: str | None) -> list[PlaybookRead]:
         params: dict[str, str] = {}
         if tag is not None:
