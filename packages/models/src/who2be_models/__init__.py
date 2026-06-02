@@ -6,6 +6,7 @@ Pydantic-Modelle, kein I/O. Pro Aggregat ein Schema-Satz (`…Create` /
 """
 
 from who2be_models.agent import (
+    AgentCopy,
     AgentCreate,
     AgentRead,
     AgentRenderResponse,
@@ -93,6 +94,7 @@ __version__ = "0.1.0"
 
 __all__ = [
     "ALLOWED_TRANSITIONS",
+    "AgentCopy",
     "AgentCreate",
     "AgentRead",
     "AgentRenderResponse",

@@ -16,6 +16,7 @@ from fastapi import HTTPException, status
 from who2be_api.core.security import WorkspaceContext, require_role
 from who2be_api.repositories.agent_repository import AgentRepository
 from who2be_models import (
+    AgentCopy,
     AgentCreate,
     AgentRead,
     AgentStatus,
@@ -27,6 +28,16 @@ from who2be_models import (
 
 def _not_found() -> HTTPException:
     return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent nicht gefunden.")
+
+
+def _incomplete_shell() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=(
+            "Agent ist eine unvollstaendige Huelle (Persona oder Template fehlt) "
+            "und kann nicht kopiert werden."
+        ),
+    )
 
 
 def _invalid_reference() -> HTTPException:
@@ -93,6 +104,35 @@ class AgentService:
             existing = await self._repo.fetch(ctx.workspace_id, agent_id)
             if existing is None:
                 raise _not_found()
+            raise _invalid_reference()
+        return agent
+
+    async def copy(self, ctx: WorkspaceContext, agent_id: UUID, data: AgentCopy) -> AgentRead:
+        """Dupliziert einen Agent unter neuem Namen.
+
+        Gesperrt (409), solange die Quelle eine unvollstaendige Huelle ist —
+        eine Kopie ohne Persona/Template waere selbst nicht einsetzbar. Die
+        Kopie uebernimmt Persona, Template, Beschreibung und Status und gehoert
+        dem kopierenden User.
+        """
+        require_role(ctx, WorkspaceRole.editor)
+        source = await self._repo.fetch(ctx.workspace_id, agent_id)
+        if source is None:
+            raise _not_found()
+        if source.is_shell:
+            raise _incomplete_shell()
+        name = data.name if data.name is not None else f"{source.name} (Kopie)"
+        agent = await self._repo.insert(
+            ctx.workspace_id,
+            ctx.user_id,
+            name,
+            source.description,
+            source.persona_id,
+            source.system_prompt_template_id,
+            source.status,
+        )
+        if agent is None:
+            # Persona/Template wurde zwischen fetch und insert geloescht.
             raise _invalid_reference()
         return agent
 

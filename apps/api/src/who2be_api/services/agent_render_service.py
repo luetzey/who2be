@@ -86,6 +86,13 @@ def _template_inactive() -> HTTPException:
     )
 
 
+def _agent_incomplete() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=("Agent ist eine unvollstaendige Huelle ohne Template — nichts zu rendern."),
+    )
+
+
 @dataclass(frozen=True)
 class _AgentRenderContext:
     persona_name: str
@@ -217,6 +224,9 @@ class AgentRenderService:
             )
         if AgentService.is_disabled(agent):
             raise _agent_render_inactive()
+        if agent.system_prompt_template_id is None:
+            # Unvollstaendige Huelle: ohne Template gibt es keinen Body.
+            raise _agent_incomplete()
         active = await self._template_repo.fetch_active_content_with_format(
             workspace_id, agent.system_prompt_template_id
         )
@@ -257,12 +267,18 @@ class AgentRenderService:
             format=output_format,
         )
 
-    async def _collect_context(self, workspace_id: UUID, persona_id: UUID) -> _AgentRenderContext:
-        persona = await self._persona_repo.fetch(workspace_id, persona_id)
+    async def _collect_context(
+        self, workspace_id: UUID, persona_id: UUID | None
+    ) -> _AgentRenderContext:
+        persona = (
+            await self._persona_repo.fetch(workspace_id, persona_id)
+            if persona_id is not None
+            else None
+        )
         if persona is None:
-            # Fester FK in Migration 0023 — kann technisch nur bei einer
-            # geloeschten Persona greifen (CASCADE-Setup). Wir geben einen
-            # leeren Kontext zurueck, damit der Render trotzdem laeuft.
+            # Persona-Huelle (persona_id is None) oder zwischenzeitlich
+            # geloeschte Persona: leerer Kontext, der Render laeuft weiter und
+            # die Persona-Placeholder bleiben unaufgeloest.
             return _AgentRenderContext(
                 persona_name="",
                 persona_description="",

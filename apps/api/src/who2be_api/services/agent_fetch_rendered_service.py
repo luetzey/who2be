@@ -51,6 +51,16 @@ def _template_not_active() -> HTTPException:
     )
 
 
+def _agent_incomplete() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=(
+            "Agent ist eine unvollstaendige Huelle (Persona oder Template fehlt) — "
+            "der System-Prompt kann nicht gerendert werden."
+        ),
+    )
+
+
 class AgentFetchRenderedService:
     """Laedt einen Agent + Persona und rendert den System-Prompt via Placeholder-Renderer."""
 
@@ -80,8 +90,12 @@ class AgentFetchRenderedService:
             )
         if AgentService.is_disabled(agent):
             raise _agent_disabled()
+        if agent.persona_id is None or agent.system_prompt_template_id is None:
+            # Eine Huelle hat keine vollstaendige Persona/Template-Kette; die
+            # Antwort verlangt aber eine Persona — daher 409 statt 500.
+            raise _agent_incomplete()
 
-        # Persona laden — NOT NULL FK, aber defensiv abgesichert.
+        # Persona laden — durch den Huellen-Guard hier garantiert gesetzt.
         persona = await self._persona_repo.fetch(workspace_id, agent.persona_id)
         if persona is None:
             # Defensive: sollte durch FK nicht eintreten, aber kein 500.
