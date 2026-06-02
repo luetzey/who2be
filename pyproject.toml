@@ -3,6 +3,8 @@ name = "who2be"
 version = "0"
 description = "Who2Be — self-hosted AgentDB for versioned persona and playbook management"
 requires-python = ">=3.11"
+license = { text = "FSL-1.1-Apache-2.0" }
+authors = [{ name = "Yannick Lützenburg", email = "luetzey@gmail.com" }]
 
 [tool.uv]
 package = false

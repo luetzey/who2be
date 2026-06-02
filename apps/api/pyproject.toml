@@ -3,6 +3,8 @@ name = "who2be-api"
 version = "0.1.0"
 description = "Who2Be FastAPI backend"
 requires-python = ">=3.11"
+license = { text = "FSL-1.1-Apache-2.0" }
+authors = [{ name = "Yannick Lützenburg", email = "luetzey@gmail.com" }]
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.34",

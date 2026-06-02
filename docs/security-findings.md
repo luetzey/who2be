@@ -248,3 +248,25 @@ strukturierte JSON-Logs ohne Authorization-Header / Bodies / Token.
 
 MS-3 H3 ist damit umgesetzt; offen bleibt H4 (Backup-Restore-Drill, blockiert
 durch MS-2).
+
+## Public-Tauglichkeits-Review (2026-06-02, FSL-/Public-Prep)
+
+Im Rahmen der Public-Switch-Vorbereitung (Track L,
+`.claude/plan/2026-06-02-1819_followups-rls-mollie-auth-fsl.md` §3.4) wurden die
+deferred/akzeptierten Findings dieser Datei (**F-04**, **F-11**, **F-12**,
+**F-13**) auf Public-Tauglichkeit geprueft.
+
+**Befund:** Public-tauglich, keine Redaktion noetig.
+
+- Die Beschreibungen sind Risiko-Klassifikation + Mitigation/Status — **kein
+  PoC, kein Reproduce-Schritt, keine Secrets oder Pfade, die einem Angreifer
+  ueber das hinaus, was im OSS-Code ohnehin sichtbar ist, einen Hebel geben.**
+- **F-04** (Token-Hash-Timing) beschreibt ausdruecklich nur einen theoretischen
+  Side-Channel auf einen SHA-256-Hash ohne Klartext-Leak — kein verwertbarer
+  Angriffspfad.
+- **F-11** (VITE-Fallbacks) betrifft den per Definition oeffentlichen Anon-Key.
+- **F-12** (Security-Header) und **F-13** (`/docs` public) sind bewusste
+  Haertungs-/OSS-Entscheidungen; F-12 ist als aktive Caddy-Task verortet.
+
+Hinweis: Der tatsaechliche Public-Flip ist **nicht** Teil dieses Schritts (Repo
+bleibt privat). F-12 sollte vor dem Flip geschlossen sein (CSP/Header in Caddy).
