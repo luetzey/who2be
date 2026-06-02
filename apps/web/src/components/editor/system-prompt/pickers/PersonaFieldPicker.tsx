@@ -9,7 +9,7 @@ import { type AnchorRef } from '@/components/ui/popover'
 import type { PlaceholderProps } from '../PlaceholderBlock'
 import { PickerPopover } from './PickerPopover'
 
-type PersonaFieldTarget = 'name' | 'description' | 'profile' | 'modes'
+type PersonaFieldTarget = 'name' | 'description' | 'profile' | 'profile-body' | 'modes'
 
 interface PersonaFieldPickerProps {
   open: boolean
@@ -23,7 +23,11 @@ interface PersonaFieldPickerProps {
 
 function isPersonaFieldTarget(value: string | undefined): value is PersonaFieldTarget {
   return (
-    value === 'name' || value === 'description' || value === 'profile' || value === 'modes'
+    value === 'name' ||
+    value === 'description' ||
+    value === 'profile' ||
+    value === 'profile-body' ||
+    value === 'modes'
   )
 }
 
@@ -40,6 +44,12 @@ const OPTIONS: { target_id: PersonaFieldTarget; label: string; description: stri
     description:
       'Rendert die vollständige Persönlichkeit — Beschreibung, Profil-Body und Modi. ' +
       'Empfohlen für den System-Prompt-Bootstrap.',
+  },
+  {
+    target_id: 'profile-body',
+    label: 'Persona: Profil-Inhalt',
+    description:
+      'Rendert nur den Profil-Body (BlockNote-Inhalt) — ohne Beschreibung, Traits oder Modi.',
   },
   {
     target_id: 'modes',

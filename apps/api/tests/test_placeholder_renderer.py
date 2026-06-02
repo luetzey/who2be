@@ -817,6 +817,54 @@ class TestPersonaFieldResolver:
         assert result.text == ""
         assert result.unresolved_key == "persona-field:modes"
 
+    def test_resolves_profile_body_only(self) -> None:
+        """target_id='profile-body' rendert nur den BlockNote-Body."""
+        resolver = PersonaFieldResolver()
+        ctx = _ctx(persona_id=uuid4())
+        _content: dict[str, Any] = {
+            "description": "Beschreibung NICHT im Body",
+            "content": {
+                "description": "",
+                "blocks": [_blk("b1", "Profil-Body Zeile 1"), _blk("b2", "Profil-Body Zeile 2")],
+            },
+            "traits": ["trait-x"],
+            "modes": [
+                {"name": "M", "trigger": None, "is_default": True},
+            ],
+        }
+        row = MagicMock()
+        row.__getitem__ = MagicMock(side_effect=lambda k: {"content": _content}[k])
+        db = _make_db(row)
+
+        result = _async_run(resolver.resolve("profile-body", ctx, db))
+
+        assert result.unresolved_key is None
+        assert "Profil-Body Zeile 1" in result.text
+        assert "Profil-Body Zeile 2" in result.text
+        # Beschreibung, Traits, Modi gehoeren NICHT in den Body-only-Output.
+        assert "Beschreibung NICHT" not in result.text
+        assert "trait-x" not in result.text
+        assert "## Modi" not in result.text
+
+    def test_resolves_profile_body_empty_returns_empty_string(self) -> None:
+        """Ohne Profil-Body liefert 'profile-body' einen leeren String (kein Miss)."""
+        resolver = PersonaFieldResolver()
+        ctx = _ctx(persona_id=uuid4())
+        _content: dict[str, Any] = {
+            "description": "Nur Beschreibung",
+            "content": {"description": "", "blocks": []},
+            "traits": [],
+            "modes": [],
+        }
+        row = MagicMock()
+        row.__getitem__ = MagicMock(side_effect=lambda k: {"content": _content}[k])
+        db = _make_db(row)
+
+        result = _async_run(resolver.resolve("profile-body", ctx, db))
+
+        assert result.text == ""
+        assert result.unresolved_key is None
+
 
 # ---------------------------------------------------------------------------
 # PersonaRefResolver

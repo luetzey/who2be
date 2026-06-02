@@ -424,10 +424,14 @@
 .bn-mantine .bn-suggestion-menu-item {
   display: grid;
   grid-template-columns: auto 1fr auto;
-  align-items: center;
+  /* Oben ausrichten statt zentriert: bei zweizeiligem Subtext bleibt das Item
+     sauber statt vertikal auseinanderzulaufen. */
+  align-items: start;
   gap: calc(var(--spacing) * 3);
   padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3);
-  height: auto;
+  /* Hoehe waechst mit dem Inhalt — verhindert, dass ein laengerer Subtext in
+     den naechsten Eintrag ueberlaeuft (`!important` schlaegt Mantines Default). */
+  height: auto !important;
   min-height: calc(var(--spacing) * 12);
   border-radius: calc(var(--radius) - 2px);
 }
@@ -456,6 +460,13 @@
   font-size: var(--text-xs);
   line-height: var(--text-xs--line-height);
   color: var(--muted-foreground);
+  /* Defensive Klammer: maximal zwei Zeilen, Rest mit Ellipse — verhindert
+     Ueberlauf in den naechsten Eintrag, falls ein Subtext doch laenger wird. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 /*

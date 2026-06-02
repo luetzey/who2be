@@ -66,9 +66,7 @@ export function buildSlashMenuItems(
     {
       kind: 'playbook',
       title: 'Playbook',
-      subtext:
-        'Bettet ein Playbook fest ein — immer geladen, nicht getriggert. ' +
-        'Bei einem Composite-Playbook wird die vollständige Sub-Playbook-Sequenz gerendert.',
+      subtext: 'Playbook fest einbetten (immer geladen)',
       group: 'Placeholder',
       icon: createElement(BookOpen, { size: 18 }),
       onItemClick: () => {
@@ -90,9 +88,7 @@ export function buildSlashMenuItems(
     {
       kind: 'persona-field',
       title: 'Persona-Feld',
-      subtext:
-        'Bettet ein Persona-Feld ein: Name, Beschreibung, das vollständige Profil ' +
-        '(inkl. Body und Modi) oder nur die Modi — empfohlen für den System-Prompt-Bootstrap.',
+      subtext: 'Persona: Name, Beschreibung, Profil, Modi',
       group: 'Placeholder',
       icon: createElement(User, { size: 18 }),
       onItemClick: () => {
@@ -103,9 +99,7 @@ export function buildSlashMenuItems(
     {
       kind: 'persona-ref',
       title: 'Persona laden (MCP)',
-      subtext:
-        'Bettet keinen Inhalt ein, sondern weist den Agenten an, seine Persona zur ' +
-        'Laufzeit selbst via get_persona(...) zu laden und ihre Modi anzuwenden.',
+      subtext: 'Persona zur Laufzeit per get_persona laden',
       group: 'Placeholder',
       icon: createElement(UserCog, { size: 18 }),
       onItemClick: () => {
@@ -116,9 +110,7 @@ export function buildSlashMenuItems(
     {
       kind: 'playbooks-catalog',
       title: 'Playbook-Katalog',
-      subtext:
-        'Fügt eine Tabelle der zugeordneten Playbooks ein (Name, Trigger, Aufruf, ' +
-        'Beschreibung) — briefs den Agenten, was er wann via fetch_playbook(...) laden kann.',
+      subtext: 'Tabelle der zugeordneten Playbooks',
       group: 'Placeholder',
       icon: createElement(Table, { size: 18 }),
       onItemClick: () => {
@@ -140,7 +132,7 @@ export function buildSlashMenuItems(
     {
       kind: 'tools-overview',
       title: 'MCP-Tools',
-      subtext: 'Fuegt eine Uebersicht der MCP-Werkzeuge ein, die der Agent nutzen kann',
+      subtext: 'Übersicht der MCP-Werkzeuge für den Agenten',
       group: 'Placeholder',
       icon: createElement(Wrench, { size: 18 }),
       onItemClick: () => {

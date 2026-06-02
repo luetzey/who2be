@@ -47,6 +47,8 @@ Drei Erweiterungen, jeweils 1 Resolver + Registry-Eintrag + Frontend-Spiegelung:
   `get_persona("<id>")` zu laden und die Modi anzuwenden.
 - **`persona-field:modes`** (Erweiterung): rendert nur die `## Modi`-Sektion;
   ohne Modi ein leerer String (kein Miss — Modi sind optional).
+- **`persona-field:profile-body`** (Erweiterung): rendert nur den BlockNote-
+  Profil-Body (ohne Beschreibung/Traits/Modi); leerer Body → leerer String.
 - **`playbooks-catalog`** (neu, mit Pill-Setting): Markdown-Tabelle der
   persona-verknuepften aktiven Playbooks mit Spalten **Playbook | Trigger |
   Aufruf | Beschreibung**. Die `Aufruf`-Spalte enthaelt den konkreten

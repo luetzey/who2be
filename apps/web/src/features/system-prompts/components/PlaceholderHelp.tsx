@@ -24,7 +24,8 @@ const SLASH_PLACEHOLDERS: readonly SlashRow[] = [
   {
     command: '/Persona-Feld',
     icon: User,
-    description: 'Bettet Name, Beschreibung, das volle Profil oder nur die Modi der Persona ein.',
+    description:
+      'Bettet Name, Beschreibung, das volle Profil, nur den Profil-Inhalt oder nur die Modi ein.',
   },
   {
     command: '/Persona laden (MCP)',
