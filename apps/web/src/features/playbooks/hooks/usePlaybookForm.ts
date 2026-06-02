@@ -3,20 +3,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm, type UseFormReturn } from 'react-hook-form'
 import { z } from 'zod'
 
-import type {
-  Playbook,
-  PlaybookInput,
-  PlaybookType,
-  ResourceBlock,
-  SystemPromptBodyFormat,
-} from '@/api/types'
+import type { Playbook, PlaybookInput, PlaybookType, ResourceBlock } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import {
   useAutoSaveDraft,
   type UseAutoSaveDraftResult,
 } from '@/hooks/useAutoSaveDraft'
 
-import { blockPlainText } from '../lib/blockText'
 import { joinTriggers, splitTriggers } from '../lib/triggers'
 
 const PLAYBOOK_TYPES = [
@@ -35,39 +28,13 @@ const editorSchema = z.object({
   type: z.enum(PLAYBOOK_TYPES),
   description: z.string().min(1, 'Beschreibung erforderlich.'),
   triggers: z.array(z.string()),
-  // `bodyBlocks` traegt entweder Legacy-Plain-Paragraphen ('plain') oder das
-  // BlockNote-Dokument mit Inline-Pills ('blocknote'). Die Serialisierung im
-  // `toInput` haengt am `body_format`.
+  // `bodyBlocks` traegt das BlockNote-Dokument mit Inline-Pills (Track B:
+  // immer BlockNote). `toInput` serialisiert es via JSON.stringify.
   bodyBlocks: z.array(z.custom<ResourceBlock>()),
   tags: z.array(z.string()),
-  body_format: z.enum(['plain', 'blocknote']),
 })
 
 export type PlaybookEditorValues = z.infer<typeof editorSchema>
-
-// Backend persistiert `body: str`. Bis das Schema in einem Folge-Plan auf
-// `body_blocks` migriert wurde, serialisieren wir die BlockNote-Bloecke
-// beim Save als Plain-Text-Snapshot (Blockwise mit `\n\n` getrennt).
-function blocksToPlainText(blocks: ResourceBlock[]): string {
-  return blocks
-    .map((block) => blockPlainText(block).trim())
-    .filter((text) => text.length > 0)
-    .join('\n\n')
-}
-
-// Reverse: vorhandener `body`-String wird in Paragraphen-Bloecke zerlegt,
-// damit der Editor etwas zum Anzeigen hat. Verlustbehaftet (Formatierung
-// geht verloren), aber stabil und deterministisch.
-function plainTextToBlocks(body: string): ResourceBlock[] {
-  if (body.trim() === '') {
-    return []
-  }
-  return body.split(/\n\n+/).map((paragraph, index) => ({
-    id: `playbook-body-${index}`,
-    type: 'paragraph',
-    content: [{ type: 'text', text: paragraph, styles: {} }],
-  }))
-}
 
 function coercePlaybookType(value: string): PlaybookType {
   return (PLAYBOOK_TYPES as readonly string[]).includes(value)
@@ -75,42 +42,28 @@ function coercePlaybookType(value: string): PlaybookType {
     : 'workflow'
 }
 
-// `body_format` aus playbook.content lesen (Default 'plain' fuer alte
-// Versions/Responses, die das Feld nicht garantieren).
-function readBodyFormat(content: Playbook['content']): SystemPromptBodyFormat {
-  return content.body_format === 'blocknote' ? 'blocknote' : 'plain'
-}
-
-// Initial-Bloecke fuer den Editor: blocknote → JSON.parse(body); plain →
-// plainTextToBlocks (Legacy). JSON-Parse-Fehler fallen auf leer zurueck.
+// Initial-Bloecke fuer den Editor: Track B — `body` ist immer ein
+// stringifiziertes BlockNote-JSON-Dokument; JSON-Parse-Fehler/leerer Body
+// fallen auf eine leere Block-Liste zurueck.
 function deriveInitialBlocks(content: Playbook['content']): ResourceBlock[] {
-  if (readBodyFormat(content) === 'blocknote') {
-    if (content.body.trim() === '') return []
-    try {
-      return JSON.parse(content.body) as ResourceBlock[]
-    } catch {
-      return []
-    }
+  if (content.body.trim() === '') return []
+  try {
+    const parsed = JSON.parse(content.body)
+    return Array.isArray(parsed) ? (parsed as ResourceBlock[]) : []
+  } catch {
+    return []
   }
-  return plainTextToBlocks(content.body)
 }
 
 function toInput(values: PlaybookEditorValues): PlaybookInput {
-  // blocknote → JSON.stringify(blocks) (Pills bleiben erhalten); plain →
-  // Legacy-Plain-Text-Snapshot.
-  const body =
-    values.body_format === 'blocknote'
-      ? JSON.stringify(values.bodyBlocks)
-      : blocksToPlainText(values.bodyBlocks)
   return {
     name: values.name,
     content: {
       description: values.description,
-      body,
+      body: JSON.stringify(values.bodyBlocks),
       type: values.type,
       tags: values.tags,
       triggers: joinTriggers(values.triggers),
-      body_format: values.body_format,
     },
   }
 }
@@ -122,13 +75,6 @@ export interface UsePlaybookFormResult {
   // `field.value` taugt dafuer nicht, weil form.reset erst nach dem Mount
   // im Effect laeuft.
   initialBodyBlocks: ResourceBlock[]
-  // Initial-Body-Format aus dem playbook-Prop. Form-State traegt diesen Wert
-  // erst NACH dem ersten Mount (form.reset im Effect) — die Editor-Branch-
-  // Auswahl im PlaybookEditorForm muss aber schon im ersten Render stimmen,
-  // sonst landet ein blocknote-Body mit Placeholder-Pills im default-
-  // schema-ResourceEditor und stuerzt mit "node type placeholder not found"
-  // ab.
-  initialBodyFormat: SystemPromptBodyFormat
 }
 
 /**
@@ -153,7 +99,6 @@ export function usePlaybookForm(
       bodyBlocks: [],
       tags: [],
       triggers: [],
-      body_format: 'plain',
     },
   })
 
@@ -169,7 +114,6 @@ export function usePlaybookForm(
         bodyBlocks: deriveInitialBlocks(playbook.content),
         tags: playbook.content.tags,
         triggers: splitTriggers(playbook.content.triggers ?? null),
-        body_format: readBodyFormat(playbook.content),
       })
       resetIdRef.current = playbook.id
       setFormReady(true)
@@ -193,10 +137,8 @@ export function usePlaybookForm(
     () => (playbook !== null ? deriveInitialBlocks(playbook.content) : []),
     [playbook],
   )
-  const initialBodyFormat: SystemPromptBodyFormat =
-    playbook !== null ? readBodyFormat(playbook.content) : 'plain'
 
-  return { form, autoSave, initialBodyBlocks, initialBodyFormat }
+  return { form, autoSave, initialBodyBlocks }
 }
 
 export { PLAYBOOK_TYPES }

@@ -125,11 +125,11 @@ describe('PlaybookNewPage', () => {
       name: 'Brainstorming',
       content: {
         description: 'd',
-        body: '',
+        // Track B: leeres BlockNote-Dokument → "[]".
+        body: '[]',
         type: 'workflow',
         tags: [],
         triggers: null,
-        body_format: 'plain',
       },
     })
   })
