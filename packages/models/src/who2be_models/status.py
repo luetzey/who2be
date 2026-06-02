@@ -27,13 +27,16 @@ class VersionStatus(StrEnum):
 # State-Machine. `review -> draft` ist erlaubt, damit ein Reviewer den Autor
 # zurueck an den Tisch schicken kann. `inactive -> draft` reaktiviert eine
 # archivierte Version fuer weitere Bearbeitung (Edge-Case fuer das Lifecycle-
-# Modell). Direkte Uebergaenge nach `inactive` sind ausschliesslich aus `active`
-# erlaubt — Drafts/Reviews werden ueber `review -> draft` (Bounce) bzw. ueber
-# `active -> inactive` indirekt verworfen, nicht direkt geloescht.
+# Modell). `active -> draft` ist der „Reset-auf-Draft" (Track A): die aktive
+# Version wird zur Bearbeitung zurueckgeholt; der Transition-Service reaktiviert
+# dabei die zuletzt aktive Version, damit die Invariante „genau eine aktiv"
+# haelt (siehe version_status.py). Direkte Uebergaenge nach `inactive` sind
+# ausschliesslich aus `active` erlaubt — Drafts/Reviews werden ueber
+# `review -> draft` (Bounce) bzw. ueber `active -> inactive` indirekt verworfen.
 ALLOWED_TRANSITIONS: Mapping[VersionStatus, frozenset[VersionStatus]] = {
     VersionStatus.draft: frozenset({VersionStatus.review}),
     VersionStatus.review: frozenset({VersionStatus.active, VersionStatus.draft}),
-    VersionStatus.active: frozenset({VersionStatus.inactive}),
+    VersionStatus.active: frozenset({VersionStatus.inactive, VersionStatus.draft}),
     VersionStatus.inactive: frozenset({VersionStatus.draft}),
 }
 

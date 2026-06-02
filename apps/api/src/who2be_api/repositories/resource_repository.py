@@ -103,6 +103,14 @@ class ResourceRepository(Protocol):
         content: ResourceContent,
     ) -> ResourceUpdateOutcome: ...
 
+    async def restore_version(
+        self,
+        workspace_id: UUID,
+        owner_id: UUID,
+        resource_id: UUID,
+        content: ResourceContent,
+    ) -> ResourceUpdateOutcome: ...
+
     async def list_versions(
         self, workspace_id: UUID, resource_id: UUID
     ) -> list[ResourceVersionRead] | None: ...
@@ -343,6 +351,64 @@ class PgResourceRepository:
                 "created_at, updated_at",
                 next_version,
                 name,
+                resource_id,
+            )
+            await conn.execute(
+                "INSERT INTO resource_version "
+                "(resource_id, version, content, status, created_by) "
+                "VALUES ($1, $2, $3, $4, $5)",
+                resource_id,
+                next_version,
+                content_json,
+                VersionStatus.draft.value,
+                owner_id,
+            )
+        return ResourceUpdateOutcome(
+            resource=ResourceRead.model_validate(
+                {
+                    **dict(resource),
+                    "content": content_json,
+                    "current_status": VersionStatus.draft,
+                    "has_pending_draft": True,
+                }
+            )
+        )
+
+    async def restore_version(
+        self,
+        workspace_id: UUID,
+        owner_id: UUID,
+        resource_id: UUID,
+        content: ResourceContent,
+    ) -> ResourceUpdateOutcome:
+        """Schreibt `content` (Snapshot) als neue Draft-Version (Track A §3.1).
+
+        Non-destruktiv: frische Draft v(n+1), kein Pointer-Reset. 409
+        (`draft_exists`) bei bereits offenem Draft. Name bleibt unveraendert.
+        """
+        content_json = content.model_dump(mode="json")
+        async with self._pool.acquire() as conn, conn.transaction():
+            current = await conn.fetchrow(
+                "SELECT current_version FROM resource "
+                "WHERE id = $1 AND workspace_id = $2 FOR UPDATE",
+                resource_id,
+                workspace_id,
+            )
+            if current is None:
+                return ResourceUpdateOutcome(resource=None)
+            existing_draft = await conn.fetchval(
+                "SELECT 1 FROM resource_version WHERE resource_id = $1 AND status = 'draft'",
+                resource_id,
+            )
+            if existing_draft is not None:
+                return ResourceUpdateOutcome(resource=None, conflict="draft_exists")
+            next_version = current["current_version"] + 1
+            resource = await conn.fetchrow(
+                "UPDATE resource SET current_version = $1, updated_at = now() "
+                "WHERE id = $2 "
+                "RETURNING id, workspace_id, owner_id, name, current_version, "
+                "created_at, updated_at",
+                next_version,
                 resource_id,
             )
             await conn.execute(

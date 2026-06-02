@@ -456,3 +456,38 @@ export interface PlaceholderPreview {
   text: string
   unresolved: boolean
 }
+
+// Track A — Versionierung-Core. Spiegelt `VersionDiff`/`VersionDiffChange`
+// aus packages/models. Serverseitig berechneter, read-only Feld-/Block-Diff
+// einer Version gegen einen Vergleichsstand (`against`).
+export type VersionDiffOp = 'added' | 'removed' | 'changed'
+
+export interface VersionDiffChange {
+  path: string
+  op: VersionDiffOp
+  before?: unknown
+  after?: unknown
+}
+
+export interface VersionDiff {
+  version: number
+  against: string
+  against_version: number | null
+  changes: VersionDiffChange[]
+  identical: boolean
+}
+
+// Track A — Status-Historie einer Version ("warum aktiv"). Spiegelt
+// `StatusHistoryEntry` aus packages/models. `version` ist seit Migration 0029
+// gefuehrt; Alt-Eintraege tragen null.
+export interface ProvenanceEntry {
+  id: string
+  entity_type: string
+  entity_id: string
+  version: number | null
+  from_status: VersionStatus | null
+  to_status: VersionStatus
+  changed_by: string
+  changed_at: string
+  note: string | null
+}

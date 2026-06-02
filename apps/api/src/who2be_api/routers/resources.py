@@ -20,6 +20,8 @@ from who2be_models import (
     ResourceRead,
     ResourceUpdate,
     ResourceVersionRead,
+    StatusHistoryEntry,
+    VersionDiff,
     VersionTransitionRequest,
 )
 
@@ -42,6 +44,8 @@ def get_version_status_service(
 Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]
 Service = Annotated[ResourceService, Depends(get_resource_service)]
 StatusService = Annotated[VersionStatusService, Depends(get_version_status_service)]
+# `against` waehlt den Diff-Vergleichsstand: 'active' oder eine Versions-Nummer.
+DiffAgainst = Annotated[str, Query(max_length=20)]
 
 
 @router.get("")
@@ -124,3 +128,39 @@ async def transition_resource_version(
     return await status_service.transition_resource_version(
         ctx, resource_id, version, data.to, data.note
     )
+
+
+@router.post("/{resource_id}/versions/{version}/restore", status_code=status.HTTP_201_CREATED)
+@limiter.limit(write_limit)
+async def restore_resource_version(
+    request: Request,
+    resource_id: UUID,
+    version: int,
+    ctx: Ctx,
+    service: Service,
+) -> ResourceRead:
+    """Stellt Version `version` als neue Draft wieder her (non-destruktiv)."""
+    return await service.restore(ctx, resource_id, version)
+
+
+@router.get("/{resource_id}/versions/{version}/diff")
+async def diff_resource_version(
+    resource_id: UUID,
+    version: int,
+    ctx: Ctx,
+    service: Service,
+    against: DiffAgainst = "active",
+) -> VersionDiff:
+    """Strukturierter Feld-/Block-Diff der Version gegen `against` (read-only)."""
+    return await service.diff(ctx, resource_id, version, against)
+
+
+@router.get("/{resource_id}/versions/{version}/provenance")
+async def provenance_resource_version(
+    resource_id: UUID,
+    version: int,
+    ctx: Ctx,
+    status_service: StatusService,
+) -> list[StatusHistoryEntry]:
+    """Status-Historie dieser Version ("warum aktiv")."""
+    return await status_service.provenance_resource(ctx, resource_id, version)

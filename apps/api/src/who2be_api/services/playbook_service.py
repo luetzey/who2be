@@ -20,6 +20,7 @@ from who2be_api.services.placeholders import RenderContext, render_template_body
 from who2be_api.services.playbook_body_pills import extract_pills
 from who2be_api.services.playbook_composition_service import PlaybookCompositionService
 from who2be_api.services.playbook_resource_link_service import PlaybookResourceLinkService
+from who2be_api.services.version_diff import compute_version_diff
 from who2be_models import (
     PlaybookCompositionLinkSet,
     PlaybookContent,
@@ -29,6 +30,8 @@ from who2be_models import (
     PlaybookVersionRead,
     ResourceLinkSet,
     TriggerOverview,
+    VersionDiff,
+    VersionStatus,
     WorkspaceRole,
     encode_cursor,
 )
@@ -67,6 +70,13 @@ def _review_conflict() -> HTTPException:
             "Diese Version steht in der Review — Auto-Save ist deaktiviert. "
             "Lehne die Review erst ab, bevor du weiter editierst."
         ),
+    )
+
+
+def _invalid_against() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail="Ungueltiger 'against'-Parameter; erwartet 'active' oder eine Versions-Nummer.",
     )
 
 
@@ -220,6 +230,65 @@ class PlaybookService:
         if found is None:
             raise _not_found()
         return found
+
+    async def restore(
+        self, ctx: WorkspaceContext, playbook_id: UUID, source_version: int
+    ) -> PlaybookRead:
+        """Stellt den Snapshot `source_version` als neue Draft wieder her (§3.1).
+
+        Body-Pills werden hier bewusst NICHT gesynct (Track-A-Grenze: Pill-Logik
+        bleibt unberuehrt) — der naechste Save/Auto-Save zieht Composition-/
+        Resource-Links wieder aus dem Body nach.
+        """
+        require_role(ctx, WorkspaceRole.editor)
+        snapshot = await self._repo.fetch_version(ctx.workspace_id, playbook_id, source_version)
+        if snapshot is None:
+            raise _not_found()
+        outcome = await self._repo.restore_version(
+            ctx.workspace_id, ctx.user_id, playbook_id, snapshot.content
+        )
+        if outcome.conflict == "draft_exists":
+            raise _draft_conflict()
+        if outcome.playbook is None:
+            raise _not_found()
+        return outcome.playbook
+
+    async def diff(
+        self, ctx: WorkspaceContext, playbook_id: UUID, version: int, against: str
+    ) -> VersionDiff:
+        """Strukturierter Feld-/Block-Diff der Version `version` gegen `against`."""
+        target = await self._repo.fetch_version(ctx.workspace_id, playbook_id, version)
+        if target is None:
+            raise _not_found()
+        versions = await self._repo.list_versions(ctx.workspace_id, playbook_id)
+        if versions is None:
+            raise _not_found()
+        base_version, base_content = self._resolve_against(against, versions)
+        before = base_content.model_dump(mode="json") if base_content is not None else {}
+        return compute_version_diff(
+            version=version,
+            against=against,
+            against_version=base_version,
+            before=before,
+            after=target.content.model_dump(mode="json"),
+        )
+
+    def _resolve_against(
+        self, against: str, versions: list[PlaybookVersionRead]
+    ) -> tuple[int | None, PlaybookContent | None]:
+        if against == "active":
+            for candidate in versions:
+                if candidate.status == VersionStatus.active:
+                    return candidate.version, candidate.content
+            return None, None
+        try:
+            wanted = int(against)
+        except ValueError:
+            raise _invalid_against() from None
+        for candidate in versions:
+            if candidate.version == wanted:
+                return candidate.version, candidate.content
+        raise _not_found()
 
     async def list_tags(self, ctx: WorkspaceContext) -> list[str]:
         """DISTINCT-Tags des Workspaces — Datenquelle fuer den Tag-Picker."""

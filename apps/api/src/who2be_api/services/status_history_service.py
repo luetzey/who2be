@@ -29,6 +29,7 @@ class StatusHistoryService:
         to_status: VersionStatus,
         changed_by: UUID,
         note: str | None,
+        version: int | None = None,
     ) -> None:
         await self._repo.insert(
             conn,
@@ -38,4 +39,5 @@ class StatusHistoryService:
             to_status,
             changed_by,
             note,
+            version,
         )

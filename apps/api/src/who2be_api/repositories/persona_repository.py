@@ -122,6 +122,14 @@ class PersonaRepository(Protocol):
         content: PersonaVersionContent,
     ) -> PersonaUpdateOutcome: ...
 
+    async def restore_version(
+        self,
+        workspace_id: UUID,
+        owner_id: UUID,
+        persona_id: UUID,
+        content: PersonaVersionContent,
+    ) -> PersonaUpdateOutcome: ...
+
     async def list_versions(
         self, workspace_id: UUID, persona_id: UUID
     ) -> list[PersonaVersionRead] | None: ...
@@ -379,6 +387,64 @@ class PgPersonaRepository:
                 "created_at, updated_at",
                 next_version,
                 name,
+                persona_id,
+            )
+            await conn.execute(
+                "INSERT INTO persona_version "
+                "(persona_id, version, content, status, created_by) "
+                "VALUES ($1, $2, $3, $4, $5)",
+                persona_id,
+                next_version,
+                content_json,
+                VersionStatus.draft.value,
+                owner_id,
+            )
+        return PersonaUpdateOutcome(
+            persona=PersonaRead.model_validate(
+                {
+                    **dict(persona),
+                    "content": content_json,
+                    "current_status": VersionStatus.draft,
+                    "has_pending_draft": True,
+                }
+            )
+        )
+
+    async def restore_version(
+        self,
+        workspace_id: UUID,
+        owner_id: UUID,
+        persona_id: UUID,
+        content: PersonaVersionContent,
+    ) -> PersonaUpdateOutcome:
+        """Schreibt `content` (Snapshot) als neue Draft-Version (Track A §3.1).
+
+        Non-destruktiv: frische Draft v(n+1), kein Pointer-Reset. 409
+        (`draft_exists`) bei bereits offenem Draft. Name bleibt unveraendert.
+        """
+        content_json = content.model_dump(mode="json")
+        async with self._pool.acquire() as conn, conn.transaction():
+            current = await conn.fetchrow(
+                "SELECT current_version FROM persona "
+                "WHERE id = $1 AND workspace_id = $2 FOR UPDATE",
+                persona_id,
+                workspace_id,
+            )
+            if current is None:
+                return PersonaUpdateOutcome(persona=None)
+            existing_draft = await conn.fetchval(
+                "SELECT 1 FROM persona_version WHERE persona_id = $1 AND status = 'draft'",
+                persona_id,
+            )
+            if existing_draft is not None:
+                return PersonaUpdateOutcome(persona=None, conflict="draft_exists")
+            next_version = current["current_version"] + 1
+            persona = await conn.fetchrow(
+                "UPDATE persona SET current_version = $1, updated_at = now() "
+                "WHERE id = $2 "
+                "RETURNING id, workspace_id, owner_id, name, current_version, "
+                "created_at, updated_at",
+                next_version,
                 persona_id,
             )
             await conn.execute(

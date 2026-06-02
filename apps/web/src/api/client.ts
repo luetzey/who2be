@@ -18,6 +18,7 @@ import type {
   PlaceholderPreview,
   PlaceholderPreviewInput,
   Playbook,
+  ProvenanceEntry,
   PlaybookInput,
   PlaybookRef,
   PlaybookUsage,
@@ -34,6 +35,7 @@ import type {
   Token,
   TokenCreated,
   TokenInput,
+  VersionDiff,
   VersionStatus,
 } from './types'
 
@@ -210,6 +212,31 @@ export interface Api {
     version: number,
     to: VersionStatus,
   ) => Promise<SystemPromptTemplateVersion>
+  // Track A — Versionierung-Core: Restore (non-destruktiv → neue Draft),
+  // Diff (gegen 'active' oder eine Versions-Nummer) und Provenance
+  // (status_history-Kette einer Version, "warum aktiv").
+  restorePersonaVersion: (id: string, version: number) => Promise<Persona>
+  diffPersonaVersion: (id: string, version: number, against?: string) => Promise<VersionDiff>
+  provenancePersonaVersion: (id: string, version: number) => Promise<ProvenanceEntry[]>
+  restorePlaybookVersion: (id: string, version: number) => Promise<Playbook>
+  diffPlaybookVersion: (id: string, version: number, against?: string) => Promise<VersionDiff>
+  provenancePlaybookVersion: (id: string, version: number) => Promise<ProvenanceEntry[]>
+  restoreResourceVersion: (id: string, version: number) => Promise<Resource>
+  diffResourceVersion: (id: string, version: number, against?: string) => Promise<VersionDiff>
+  provenanceResourceVersion: (id: string, version: number) => Promise<ProvenanceEntry[]>
+  restoreSystemPromptTemplateVersion: (
+    id: string,
+    version: number,
+  ) => Promise<SystemPromptTemplate>
+  diffSystemPromptTemplateVersion: (
+    id: string,
+    version: number,
+    against?: string,
+  ) => Promise<VersionDiff>
+  provenanceSystemPromptTemplateVersion: (
+    id: string,
+    version: number,
+  ) => Promise<ProvenanceEntry[]>
   listAgents: () => Promise<Agent[]>
   getAgent: (id: string) => Promise<Agent>
   createAgent: (input: AgentInput) => Promise<Agent>
@@ -390,6 +417,65 @@ export function createApi(token: string, workspaceId: string): Api {
         token,
         `${ws}/system-prompts/${id}/versions/${version}/transition`,
         { method: 'POST', body: JSON.stringify({ to }) },
+      ),
+    restorePersonaVersion: (id, version) =>
+      request<Persona>(token, `${ws}/personas/${id}/versions/${version}/restore`, {
+        method: 'POST',
+      }),
+    diffPersonaVersion: (id, version, against = 'active') =>
+      request<VersionDiff>(
+        token,
+        `${ws}/personas/${id}/versions/${version}/diff?against=${encodeURIComponent(against)}`,
+      ),
+    provenancePersonaVersion: (id, version) =>
+      request<ProvenanceEntry[]>(
+        token,
+        `${ws}/personas/${id}/versions/${version}/provenance`,
+      ),
+    restorePlaybookVersion: (id, version) =>
+      request<Playbook>(token, `${ws}/playbooks/${id}/versions/${version}/restore`, {
+        method: 'POST',
+      }),
+    diffPlaybookVersion: (id, version, against = 'active') =>
+      request<VersionDiff>(
+        token,
+        `${ws}/playbooks/${id}/versions/${version}/diff?against=${encodeURIComponent(against)}`,
+      ),
+    provenancePlaybookVersion: (id, version) =>
+      request<ProvenanceEntry[]>(
+        token,
+        `${ws}/playbooks/${id}/versions/${version}/provenance`,
+      ),
+    restoreResourceVersion: (id, version) =>
+      request<Resource>(token, `${ws}/resources/${id}/versions/${version}/restore`, {
+        method: 'POST',
+      }),
+    diffResourceVersion: (id, version, against = 'active') =>
+      request<VersionDiff>(
+        token,
+        `${ws}/resources/${id}/versions/${version}/diff?against=${encodeURIComponent(against)}`,
+      ),
+    provenanceResourceVersion: (id, version) =>
+      request<ProvenanceEntry[]>(
+        token,
+        `${ws}/resources/${id}/versions/${version}/provenance`,
+      ),
+    restoreSystemPromptTemplateVersion: (id, version) =>
+      request<SystemPromptTemplate>(
+        token,
+        `${ws}/system-prompts/${id}/versions/${version}/restore`,
+        { method: 'POST' },
+      ),
+    diffSystemPromptTemplateVersion: (id, version, against = 'active') =>
+      request<VersionDiff>(
+        token,
+        `${ws}/system-prompts/${id}/versions/${version}/diff` +
+          `?against=${encodeURIComponent(against)}`,
+      ),
+    provenanceSystemPromptTemplateVersion: (id, version) =>
+      request<ProvenanceEntry[]>(
+        token,
+        `${ws}/system-prompts/${id}/versions/${version}/provenance`,
       ),
     listAgents: () => request<Agent[]>(token, `${ws}/agents`),
     getAgent: (id) => request<Agent>(token, `${ws}/agents/${id}`),

@@ -81,6 +81,7 @@ from who2be_models.system_prompt_template import (
     SystemPromptTemplateVersionRead,
 )
 from who2be_models.token import TokenCreate, TokenCreated, TokenRead
+from who2be_models.version_diff import DiffOp, VersionDiff, VersionDiffChange
 from who2be_models.workspace import WorkspaceCreate, WorkspaceRead, WorkspaceUpdate
 from who2be_models.workspace_member import (
     WorkspaceMemberRead,
@@ -104,6 +105,7 @@ __all__ = [
     "DashboardKpis",
     "DashboardResponse",
     "DashboardStatusDistribution",
+    "DiffOp",
     "EntityStatusDistribution",
     "EntityType",
     "InvitationAccept",
@@ -156,6 +158,8 @@ __all__ = [
     "TokenCreated",
     "TokenRead",
     "TriggerOverview",
+    "VersionDiff",
+    "VersionDiffChange",
     "VersionStatus",
     "VersionTransitionRequest",
     "WorkspaceCreate",

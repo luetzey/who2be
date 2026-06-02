@@ -25,6 +25,7 @@ class StatusHistoryRepository(Protocol):
         to_status: VersionStatus,
         changed_by: UUID,
         note: str | None,
+        version: int | None = None,
     ) -> None: ...
 
 
@@ -40,13 +41,15 @@ class PgStatusHistoryRepository:
         to_status: VersionStatus,
         changed_by: UUID,
         note: str | None,
+        version: int | None = None,
     ) -> None:
         await conn.execute(
             "INSERT INTO status_history "
-            "(entity_type, entity_id, from_status, to_status, changed_by, note) "
-            "VALUES ($1, $2, $3, $4, $5, $6)",
+            "(entity_type, entity_id, version, from_status, to_status, changed_by, note) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7)",
             entity_type,
             entity_id,
+            version,
             from_status.value if from_status is not None else None,
             to_status.value,
             changed_by,

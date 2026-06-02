@@ -28,7 +28,9 @@ from who2be_models import (
     PlaybookRead,
     PlaybookUpdate,
     PlaybookVersionRead,
+    StatusHistoryEntry,
     TriggerOverview,
+    VersionDiff,
     VersionTransitionRequest,
 )
 
@@ -60,6 +62,8 @@ def get_version_status_service(
 Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]
 Service = Annotated[PlaybookService, Depends(get_playbook_service)]
 StatusService = Annotated[VersionStatusService, Depends(get_version_status_service)]
+# `against` waehlt den Diff-Vergleichsstand: 'active' oder eine Versions-Nummer.
+DiffAgainst = Annotated[str, Query(max_length=20)]
 
 
 @router.get("")
@@ -173,3 +177,39 @@ async def transition_playbook_version(
     return await status_service.transition_playbook_version(
         ctx, playbook_id, version, data.to, data.note
     )
+
+
+@router.post("/{playbook_id}/versions/{version}/restore", status_code=status.HTTP_201_CREATED)
+@limiter.limit(write_limit)
+async def restore_playbook_version(
+    request: Request,
+    playbook_id: UUID,
+    version: int,
+    ctx: Ctx,
+    service: Service,
+) -> PlaybookRead:
+    """Stellt Version `version` als neue Draft wieder her (non-destruktiv)."""
+    return await service.restore(ctx, playbook_id, version)
+
+
+@router.get("/{playbook_id}/versions/{version}/diff")
+async def diff_playbook_version(
+    playbook_id: UUID,
+    version: int,
+    ctx: Ctx,
+    service: Service,
+    against: DiffAgainst = "active",
+) -> VersionDiff:
+    """Strukturierter Feld-/Block-Diff der Version gegen `against` (read-only)."""
+    return await service.diff(ctx, playbook_id, version, against)
+
+
+@router.get("/{playbook_id}/versions/{version}/provenance")
+async def provenance_playbook_version(
+    playbook_id: UUID,
+    version: int,
+    ctx: Ctx,
+    status_service: StatusService,
+) -> list[StatusHistoryEntry]:
+    """Status-Historie dieser Version ("warum aktiv")."""
+    return await status_service.provenance_playbook(ctx, playbook_id, version)

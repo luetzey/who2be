@@ -1,32 +1,27 @@
 import { ArrowLeft } from 'lucide-react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 
-import type { VersionStatus } from '@/api/types'
+import { useApi } from '@/api/useApi'
+import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
-import { DataList } from '@/components/data/DataList'
 import { DataView } from '@/components/data/DataView'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { VersionHistory } from '@/components/version'
+import { notify } from '@/lib/feedback'
 
 import { SystemPromptEditorForm } from '../components/SystemPromptEditorForm'
 import { SystemPromptStatusActionBar } from '../components/SystemPromptStatusActionBar'
 import { useSystemPrompt } from '../hooks/useSystemPrompt'
 import { useSystemPromptForm } from '../hooks/useSystemPromptForm'
 
-function statusBadge(status: VersionStatus | undefined) {
-  if (status === 'active') return <Badge variant="default">Aktiv</Badge>
-  if (status === 'review') return <Badge variant="secondary">In Review</Badge>
-  if (status === 'draft') return <Badge variant="outline">Entwurf</Badge>
-  return <Badge variant="outline">Inaktiv</Badge>
-}
-
 export function SystemPromptDetailPage() {
   const { id } = useParams<{ id: string }>()
   const wsPath = useWorkspacePath()
+  const api = useApi()
+  const role = useCurrentWorkspaceRole()
   const { template, versions, loading, error, reload } = useSystemPrompt(id)
   const { form, onSubmit, saveError } = useSystemPromptForm(template, reload)
 
@@ -67,26 +62,21 @@ export function SystemPromptDetailPage() {
                 saveError={saveError}
               />
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Versionen</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <DataList
-                    items={versions}
-                    getKey={(version) => String(version.version)}
-                    renderItem={(version) => (
-                      <span className="flex items-center justify-between gap-3">
-                        <span>
-                          v{version.version} —{' '}
-                          {new Date(version.created_at).toLocaleString()}
-                        </span>
-                        {statusBadge(version.status)}
-                      </span>
-                    )}
-                  />
-                </CardContent>
-              </Card>
+              <VersionHistory
+                versions={versions}
+                canEdit={role === 'admin' || role === 'editor'}
+                onRestore={async (version) => {
+                  await api.restoreSystemPromptTemplateVersion(template.id, version)
+                  notify.success(`v${version} als Entwurf wiederhergestellt.`)
+                  reload()
+                }}
+                loadDiff={(version) =>
+                  api.diffSystemPromptTemplateVersion(template.id, version)
+                }
+                loadProvenance={(version) =>
+                  api.provenanceSystemPromptTemplateVersion(template.id, version)
+                }
+              />
             </Stack>
           ) : null}
         </DataView>

@@ -24,6 +24,10 @@ class StatusHistoryEntry(BaseModel):
     id: UUID
     entity_type: EntityType
     entity_id: UUID
+    # `version` ist seit Migration 0029 gefuehrt; Alt-Eintraege tragen None.
+    # Provenance filtert auf eine konkrete Version, sodass die Kette einer
+    # Version isoliert beantwortet werden kann ("warum aktiv").
+    version: int | None = None
     from_status: VersionStatus | None
     to_status: VersionStatus
     changed_by: UUID
