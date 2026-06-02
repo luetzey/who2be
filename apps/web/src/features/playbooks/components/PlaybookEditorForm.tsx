@@ -1,7 +1,13 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { type UseFormReturn } from 'react-hook-form'
 
-import type { Playbook, PlaybookType, ResourceBlock, ResourceLink } from '@/api/types'
+import type {
+  Playbook,
+  PlaybookType,
+  ResourceBlock,
+  ResourceLink,
+  SystemPromptBodyFormat,
+} from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { FormSection } from '@/components/layout/FormSection'
@@ -38,6 +44,10 @@ interface PlaybookEditorFormProps {
   // usePlaybookForm) — `field.value` wuerde den alten Form-State zeigen,
   // weil form.reset erst im Effect nach dem Mount laeuft.
   initialBodyBlocks: ResourceBlock[]
+  // Initial-Body-Format aus dem playbook-Prop (analog zu initialBodyBlocks).
+  // Defaults auf 'plain' fuer die Neu-Page, weil form-default ebenfalls 'plain'
+  // ist und es dort noch kein gespeichertes Playbook gibt.
+  initialBodyFormat?: SystemPromptBodyFormat
   // Detail-Page nutzt Auto-Save, dort bleibt der Default (preventDefault).
   // Neu-Page reicht einen handleSubmit-Callback durch.
   onSubmit?: (event: FormEvent<HTMLFormElement>) => void
@@ -94,6 +104,7 @@ export function PlaybookEditorForm({
   form,
   formKey,
   initialBodyBlocks,
+  initialBodyFormat = 'plain',
   onSubmit,
   actions,
   composesChildren,
@@ -104,7 +115,18 @@ export function PlaybookEditorForm({
   const isViewer = useCurrentWorkspaceRole() === 'viewer'
   const api = useApi()
   const currentType = form.watch('type')
-  const bodyFormat = form.watch('body_format')
+  // form.watch('body_format') ist auf dem ersten Render noch der Form-
+  // Default ('plain') — form.reset im usePlaybookForm-Effect laeuft erst NACH
+  // dem Mount. Solange der User das Format nicht aktiv geaendert hat (Migrate-
+  // Button → setValue(..., {shouldDirty: true})), trauen wir dem aus dem
+  // playbook-Prop abgeleiteten initialBodyFormat. Andernfalls landet ein
+  // blocknote-Body mit Placeholder-Pills im default-schema-ResourceEditor
+  // und stuerzt mit "node type placeholder not found" ab.
+  const watchedBodyFormat = form.watch('body_format')
+  const formatDirty = form.formState.dirtyFields.body_format === true
+  const bodyFormat: SystemPromptBodyFormat = formatDirty
+    ? watchedBodyFormat
+    : initialBodyFormat
   const currentHint =
     TYPE_OPTIONS.find((option) => option.value === currentType)?.hint ?? null
 

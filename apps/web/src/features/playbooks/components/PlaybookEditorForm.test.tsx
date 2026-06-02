@@ -93,12 +93,13 @@ function Harness({
   composesChildren?: import('@/api/types').Playbook[]
   resourceLinks?: import('@/api/types').ResourceLink[]
 } = {}) {
-  const { form, initialBodyBlocks } = usePlaybookForm(source)
+  const { form, initialBodyBlocks, initialBodyFormat } = usePlaybookForm(source)
   return (
     <PlaybookEditorForm
       form={form}
       formKey={`${source.id}-${source.current_version}`}
       initialBodyBlocks={initialBodyBlocks}
+      initialBodyFormat={initialBodyFormat}
       composesChildren={composesChildren}
       resourceLinks={resourceLinks}
     />
@@ -265,6 +266,32 @@ describe('PlaybookEditorForm', () => {
     expect(screen.getByTestId('blocknote-view')).toBeInTheDocument()
     expect(screen.queryByTestId('playbook-body-editor')).not.toBeInTheDocument()
     expect(screen.getByTestId('migrate-to-blocknote-btn')).toBeInTheDocument()
+  })
+
+  it('Regression: rendert beim allerersten Render schon den PlaybookBodyEditor, wenn das Playbook body_format=blocknote ist (sonst landen Placeholder-Pills im default-schema-ResourceEditor)', () => {
+    // form.reset im usePlaybookForm-Effect laeuft erst NACH dem ersten Render,
+    // d. h. form.watch('body_format') ist initial der Form-Default 'plain'.
+    // Wuerde die Branch-Entscheidung daran haengen, mountete der ResourceEditor
+    // (Default-BlockNote-Schema) mit Placeholder-Pills im initialContent und
+    // wirft live "node type placeholder not found in schema".
+    const bnPlaybook: Playbook = {
+      ...playbook,
+      content: {
+        ...playbook.content,
+        body: JSON.stringify([
+          {
+            id: 'b0',
+            type: 'paragraph',
+            content: [{ type: 'placeholder', props: { kind: 'resource', target_id: 'r-1', label: 'R' } }],
+          },
+        ]),
+        body_format: 'blocknote',
+      },
+    }
+    render(<Harness source={bnPlaybook} />)
+    // Erster Render bereits korrekt — kein doppeltes Mount mit ResourceEditor.
+    expect(screen.queryByTestId('blocknote-view')).not.toBeInTheDocument()
+    expect(screen.getByTestId('playbook-body-editor')).toBeInTheDocument()
   })
 
   it('serialisiert bei body_format=blocknote den Body als JSON.stringify(blocks)', async () => {
