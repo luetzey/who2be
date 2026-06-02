@@ -8,10 +8,12 @@ import { useCallback, useEffect, useState } from 'react'
 import { useApi } from '@/api/useApi'
 import type { PlaceholderPreview } from '@/api/types'
 import { ErrorAlert, LoadingState } from '@/components/data'
+import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
@@ -25,6 +27,15 @@ import {
 interface PlaceholderPreviewDialogProps {
   /** Ref auf den `bn-container`, an dem das `placeholder-click`-Event bubbelt. */
   containerRef: React.RefObject<HTMLElement | null>
+  /** Im editierbaren Editor: zeigt einen „Bearbeiten"-Button im Overlay. */
+  editable?: boolean
+  /** Klick auf „Bearbeiten" — der Wrapper oeffnet den vorbefuellten Picker. */
+  onEdit?: (detail: PlaceholderClickDetail) => void
+}
+
+// `tools-overview` ist parameterlos — nichts zu bearbeiten.
+function isEditableKind(kind: PlaceholderKind): boolean {
+  return kind !== 'tools-overview'
 }
 
 type LoadState =
@@ -45,7 +56,11 @@ function missHint(kind: PlaceholderKind): string {
     'oder (noch) nicht aktiv.'
 }
 
-export function PlaceholderPreviewDialog({ containerRef }: PlaceholderPreviewDialogProps) {
+export function PlaceholderPreviewDialog({
+  containerRef,
+  editable = false,
+  onEdit,
+}: PlaceholderPreviewDialogProps) {
   const api = useApi()
   const [active, setActive] = useState<PlaceholderClickDetail | null>(null)
   const [state, setState] = useState<LoadState>({ status: 'loading' })
@@ -109,6 +124,21 @@ export function PlaceholderPreviewDialog({ containerRef }: PlaceholderPreviewDia
               </pre>
             )}
           </div>
+        )}
+        {editable && active !== null && isEditableKind(active.kind) && (
+          <DialogFooter>
+            <Button
+              variant="outline"
+              data-testid="placeholder-preview-edit"
+              onClick={() => {
+                const detail = active
+                setActive(null)
+                onEdit?.(detail)
+              }}
+            >
+              Bearbeiten
+            </Button>
+          </DialogFooter>
         )}
       </DialogContent>
     </Dialog>

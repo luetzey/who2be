@@ -1,4 +1,4 @@
-// PlaceholderPreviewDialog.test.tsx — Event-getriebenes Preview-Overlay.
+// PlaceholderPreviewDialog.test.tsx — Event-getriebenes Preview-Overlay + Edit-Einstieg.
 // Wir mocken useApi.previewPlaceholder und feuern das `placeholder-click`-
 // CustomEvent auf dem Container; der Dialog soll oeffnen und den Output zeigen.
 import { useRef } from 'react'
@@ -17,9 +17,24 @@ vi.mock('@/api/useApi', () => ({
   useApi: () => ({ previewPlaceholder }),
 }))
 
+// Baut ein vollstaendiges Detail inkl. `updateInlineContent`-Stub.
+function makeDetail(
+  partial: Omit<PlaceholderClickDetail, 'updateInlineContent'>,
+): PlaceholderClickDetail {
+  return { ...partial, updateInlineContent: vi.fn() }
+}
+
 // Host-Komponente: stellt den Container-Ref bereit und gibt einen Button zum
 // Dispatchen des Events frei (simuliert den Pill-Klick im bn-container).
-function Host({ detail }: { detail: PlaceholderClickDetail }) {
+function Host({
+  detail,
+  editable = false,
+  onEdit,
+}: {
+  detail: PlaceholderClickDetail
+  editable?: boolean
+  onEdit?: (detail: PlaceholderClickDetail) => void
+}) {
   const ref = useRef<HTMLDivElement>(null)
   return (
     <div>
@@ -39,7 +54,7 @@ function Host({ detail }: { detail: PlaceholderClickDetail }) {
           fire
         </button>
       </div>
-      <PlaceholderPreviewDialog containerRef={ref} />
+      <PlaceholderPreviewDialog containerRef={ref} editable={editable} onEdit={onEdit} />
     </div>
   )
 }
@@ -62,7 +77,7 @@ describe('PlaceholderPreviewDialog', () => {
     })
 
     render(
-      <Host detail={{ kind: 'date', target_id: 'human', label: 'Datum (lesbar)' }} />,
+      <Host detail={makeDetail({ kind: 'date', target_id: 'human', label: 'Datum (lesbar)' })} />,
     )
     fireEvent.click(screen.getByTestId('fire'))
 
@@ -82,7 +97,7 @@ describe('PlaceholderPreviewDialog', () => {
     })
 
     render(
-      <Host detail={{ kind: 'persona-field', target_id: 'name', label: 'Persona: Name' }} />,
+      <Host detail={makeDetail({ kind: 'persona-field', target_id: 'name', label: 'Persona: Name' })} />,
     )
     fireEvent.click(screen.getByTestId('fire'))
 
@@ -96,7 +111,7 @@ describe('PlaceholderPreviewDialog', () => {
     previewPlaceholder.mockRejectedValue(new Error('boom'))
 
     render(
-      <Host detail={{ kind: 'playbook', target_id: 'x', label: 'Playbook: X' }} />,
+      <Host detail={makeDetail({ kind: 'playbook', target_id: 'x', label: 'Playbook: X' })} />,
     )
     fireEvent.click(screen.getByTestId('fire'))
 
@@ -105,6 +120,72 @@ describe('PlaceholderPreviewDialog', () => {
       expect(screen.getByRole('alert')).toHaveTextContent(
         'Vorschau konnte nicht geladen werden.',
       )
+    })
+  })
+
+  it('kein "Bearbeiten" wenn nicht editierbar', async () => {
+    previewPlaceholder.mockResolvedValue({
+      kind: 'playbook',
+      target_id: 'pb1',
+      text: 'Body',
+      unresolved: false,
+    })
+
+    render(
+      <Host detail={makeDetail({ kind: 'playbook', target_id: 'pb1', label: 'Playbook: X' })} />,
+    )
+    fireEvent.click(screen.getByTestId('fire'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('placeholder-preview-text')).toBeInTheDocument()
+    })
+    expect(screen.queryByTestId('placeholder-preview-edit')).not.toBeInTheDocument()
+  })
+
+  it('kein "Bearbeiten" fuer tools-overview (parameterlos)', async () => {
+    previewPlaceholder.mockResolvedValue({
+      kind: 'tools-overview',
+      target_id: '',
+      text: '## Werkzeuge',
+      unresolved: false,
+    })
+
+    render(
+      <Host
+        editable
+        detail={makeDetail({ kind: 'tools-overview', target_id: '', label: 'MCP-Tools' })}
+      />,
+    )
+    fireEvent.click(screen.getByTestId('fire'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('placeholder-preview-text')).toBeInTheDocument()
+    })
+    expect(screen.queryByTestId('placeholder-preview-edit')).not.toBeInTheDocument()
+  })
+
+  it('editierbar: "Bearbeiten" ruft onEdit mit dem Detail (inkl. updateInlineContent)', async () => {
+    previewPlaceholder.mockResolvedValue({
+      kind: 'playbook',
+      target_id: 'pb1',
+      text: 'Body',
+      unresolved: false,
+    })
+    const onEdit = vi.fn()
+    const detail = makeDetail({ kind: 'playbook', target_id: 'pb1', label: 'Playbook: X' })
+
+    render(<Host editable detail={detail} onEdit={onEdit} />)
+    fireEvent.click(screen.getByTestId('fire'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('placeholder-preview-edit')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByTestId('placeholder-preview-edit'))
+
+    expect(onEdit).toHaveBeenCalledWith(detail)
+    // Overlay schliesst nach dem Edit-Start.
+    await waitFor(() => {
+      expect(screen.queryByTestId('placeholder-preview-dialog')).not.toBeInTheDocument()
     })
   })
 })

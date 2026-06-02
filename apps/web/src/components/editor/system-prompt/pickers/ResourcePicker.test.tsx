@@ -134,4 +134,61 @@ describe('ResourcePicker', () => {
     // Exakte Token-JSON-Form (drei Felder, keine Extra-Felder).
     expect(Object.keys(props ?? {})).toEqual(['kind', 'target_id', 'label'])
   })
+
+  it('Edit-Modus: vorbefuellt Resource + Section-Anker und Confirm-Label "Aktualisieren"', async () => {
+    // URL-bewusster Mock: listResources → Array, getResource/res1 → mit Headings.
+    const res1WithBlocks = {
+      ...resources[0],
+      content: {
+        description: '',
+        blocks: [
+          {
+            id: 'h1',
+            type: 'heading',
+            props: { level: 2 },
+            content: [{ type: 'text', text: 'Einleitung', styles: {} }],
+            children: [],
+          },
+        ],
+      },
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) =>
+        Promise.resolve(
+          /\/resources\/res1$/.test(url)
+            ? new Response(JSON.stringify(res1WithBlocks), { status: 200 })
+            : new Response(JSON.stringify(resources), { status: 200 }),
+        ),
+      ),
+    )
+
+    const onConfirm = vi.fn<(props: PlaceholderProps) => void>()
+
+    render(
+      <Wrapper>
+        <ResourcePicker
+          open
+          allowBlockAnchor
+          initial={{ kind: 'resource', target_id: 'res1#h1', label: 'Resource: FAQ-Dokument › Einleitung' }}
+          onConfirm={onConfirm}
+          onCancel={vi.fn()}
+        />
+      </Wrapper>,
+    )
+
+    // Button-Label im Edit-Modus + vorbefuellter Section-Anker.
+    await waitFor(() => {
+      expect(screen.getByTestId('resource-picker-confirm')).toHaveTextContent('Aktualisieren')
+      expect(screen.getByTestId('resource-block-option-h1')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByTestId('resource-picker-confirm'))
+
+    expect(onConfirm).toHaveBeenCalledWith({
+      kind: 'resource',
+      target_id: 'res1#h1',
+      label: 'Resource: FAQ-Dokument › Einleitung',
+    })
+  })
 })

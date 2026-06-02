@@ -40,6 +40,12 @@ export interface PlaceholderClickDetail {
   kind: PlaceholderKind
   target_id: string
   label: string
+  /**
+   * Aktualisiert genau diese Pill-Instanz in-place (Wrapper um BlockNotes
+   * Render-Prop `updateInlineContent`). Der Edit-Flow ruft ihn nach
+   * Picker-Bestaetigung, statt die Pill zu loeschen und neu einzufuegen.
+   */
+  updateInlineContent: (props: PlaceholderProps) => void
 }
 
 // ---------------------- Icon + Farbe je Kind ---------------------------------
@@ -110,7 +116,7 @@ export const PlaceholderInlineSpec = createReactInlineContentSpec(
     },
   },
   {
-    render: ({ inlineContent }) => {
+    render: ({ inlineContent, updateInlineContent }) => {
       const kind = inlineContent.props.kind as PlaceholderKind
       const target_id = inlineContent.props.target_id as string
       const label = inlineContent.props.label as string
@@ -121,7 +127,14 @@ export const PlaceholderInlineSpec = createReactInlineContentSpec(
       // Wrapper abfaengt, um das Preview-Overlay zu oeffnen. stopPropagation
       // verhindert, dass BlockNote den Klick als Cursor-Platzierung interpretiert.
       const dispatchPreview = (node: HTMLSpanElement) => {
-        const detail: PlaceholderClickDetail = { kind, target_id, label }
+        const detail: PlaceholderClickDetail = {
+          kind,
+          target_id,
+          label,
+          // In-place-Update dieser Pill — vom Edit-Flow im Wrapper genutzt.
+          updateInlineContent: (props) =>
+            updateInlineContent({ type: 'placeholder', props }),
+        }
         node.dispatchEvent(
           new CustomEvent<PlaceholderClickDetail>(PLACEHOLDER_CLICK_EVENT, {
             detail,

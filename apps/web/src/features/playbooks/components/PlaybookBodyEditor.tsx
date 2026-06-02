@@ -17,6 +17,7 @@ import { SuggestionMenuController, useCreateBlockNote } from '@blocknote/react'
 import { useTheme } from '@/app/theme-context'
 import {
   buildSystemPromptSchema,
+  type PlaceholderClickDetail,
   type PlaceholderKind,
   type PlaceholderProps,
 } from '@/components/editor/system-prompt/PlaceholderBlock'
@@ -55,6 +56,8 @@ export function PlaybookBodyEditor({
   const containerRef = useRef<HTMLDivElement>(null)
 
   const [openPicker, setOpenPicker] = useState<PlaceholderKind | null>(null)
+  // Edit-Flow: Detail (inkl. `updateInlineContent`) der bearbeiteten Pill.
+  const [pendingEdit, setPendingEdit] = useState<PlaceholderClickDetail | null>(null)
 
   const editor = useCreateBlockNote(
     {
@@ -69,6 +72,11 @@ export function PlaybookBodyEditor({
 
   function handlePickerConfirm(props: PlaceholderProps) {
     setOpenPicker(null)
+    if (pendingEdit !== null) {
+      pendingEdit.updateInlineContent(props)
+      setPendingEdit(null)
+      return
+    }
     editor.insertInlineContent([
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       { type: 'placeholder', props } as any,
@@ -78,12 +86,20 @@ export function PlaybookBodyEditor({
 
   function handlePickerCancel() {
     setOpenPicker(null)
+    setPendingEdit(null)
   }
 
   function handleOpenPicker(kind: PlaceholderKind) {
     // Nur playbook/resource sind erlaubt; alles andere ignorieren (defensiv).
     if (!ALLOWED_KINDS.has(kind)) return
     setOpenPicker(kind)
+  }
+
+  // „Bearbeiten" im Preview-Overlay: nur erlaubte Kinds koennen hier existieren.
+  function handleStartEdit(detail: PlaceholderClickDetail) {
+    if (!ALLOWED_KINDS.has(detail.kind)) return
+    setPendingEdit(detail)
+    setOpenPicker(detail.kind)
   }
 
   return (
@@ -117,16 +133,22 @@ export function PlaybookBodyEditor({
       </div>
 
       {/* Pill-Preview-Overlay: lauscht auf Klicks im bn-container. */}
-      <PlaceholderPreviewDialog containerRef={containerRef} />
+      <PlaceholderPreviewDialog
+        containerRef={containerRef}
+        editable={editable}
+        onEdit={handleStartEdit}
+      />
 
       <PlaybookPicker
         open={openPicker === 'playbook'}
+        initial={pendingEdit?.kind === 'playbook' ? pendingEdit : undefined}
         onConfirm={handlePickerConfirm}
         onCancel={handlePickerCancel}
       />
       <ResourcePicker
         open={openPicker === 'resource'}
         allowBlockAnchor
+        initial={pendingEdit?.kind === 'resource' ? pendingEdit : undefined}
         onConfirm={handlePickerConfirm}
         onCancel={handlePickerCancel}
       />

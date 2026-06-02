@@ -17,7 +17,11 @@ import type { PartialBlock } from '@blocknote/core'
 import { useTheme } from '@/app/theme-context'
 
 import { buildSystemPromptSchema, type SystemPromptSchema } from './PlaceholderBlock'
-import type { PlaceholderKind, PlaceholderProps } from './PlaceholderBlock'
+import type {
+  PlaceholderClickDetail,
+  PlaceholderKind,
+  PlaceholderProps,
+} from './PlaceholderBlock'
 import { buildSlashMenuItems } from './slashMenu'
 import { PlaceholderPreviewDialog } from './PlaceholderPreviewDialog'
 import { PlaybookPicker } from './pickers/PlaybookPicker'
@@ -55,6 +59,9 @@ export function SystemPromptEditor({
 
   // Picker-State: welcher Picker ist offen?
   const [openPicker, setOpenPicker] = useState<PlaceholderKind | null>(null)
+  // Edit-Flow: wird eine Pill bearbeitet, haelt dies das Detail (inkl.
+  // `updateInlineContent`) der betroffenen Pill. `null` = Neu-Einfuegen.
+  const [pendingEdit, setPendingEdit] = useState<PlaceholderClickDetail | null>(null)
 
   const editor = useCreateBlockNote(
     {
@@ -69,9 +76,15 @@ export function SystemPromptEditor({
 
   const portalElements = useMemo(() => ({ default: null }), [])
 
-  // Picker-Callback: insertet den Placeholder-Inline-Block nach Bestaetigung.
+  // Picker-Callback: im Edit-Modus die bestehende Pill in-place aktualisieren,
+  // sonst eine neue Placeholder-Inline einfuegen.
   function handlePickerConfirm(props: PlaceholderProps) {
     setOpenPicker(null)
+    if (pendingEdit !== null) {
+      pendingEdit.updateInlineContent(props)
+      setPendingEdit(null)
+      return
+    }
     editor.insertInlineContent([
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       { type: 'placeholder', props } as any,
@@ -81,6 +94,13 @@ export function SystemPromptEditor({
 
   function handlePickerCancel() {
     setOpenPicker(null)
+    setPendingEdit(null)
+  }
+
+  // „Bearbeiten" im Preview-Overlay: passenden Picker vorbefuellt oeffnen.
+  function handleStartEdit(detail: PlaceholderClickDetail) {
+    setPendingEdit(detail)
+    setOpenPicker(detail.kind)
   }
 
   // `tools-overview` ist parameterlos — kein Picker noetig. Statt einen
@@ -132,26 +152,34 @@ export function SystemPromptEditor({
       </div>
 
       {/* Pill-Preview-Overlay: lauscht auf Klicks im bn-container. */}
-      <PlaceholderPreviewDialog containerRef={containerRef} />
+      <PlaceholderPreviewDialog
+        containerRef={containerRef}
+        editable={editable}
+        onEdit={handleStartEdit}
+      />
 
       {/* Picker-Dialoge (ausserhalb des bn-container) */}
       <PlaybookPicker
         open={openPicker === 'playbook'}
+        initial={pendingEdit?.kind === 'playbook' ? pendingEdit : undefined}
         onConfirm={handlePickerConfirm}
         onCancel={handlePickerCancel}
       />
       <ResourcePicker
         open={openPicker === 'resource'}
+        initial={pendingEdit?.kind === 'resource' ? pendingEdit : undefined}
         onConfirm={handlePickerConfirm}
         onCancel={handlePickerCancel}
       />
       <PersonaFieldPicker
         open={openPicker === 'persona-field'}
+        initial={pendingEdit?.kind === 'persona-field' ? pendingEdit : undefined}
         onConfirm={handlePickerConfirm}
         onCancel={handlePickerCancel}
       />
       <DateFormatPicker
         open={openPicker === 'date'}
+        initial={pendingEdit?.kind === 'date' ? pendingEdit : undefined}
         onConfirm={handlePickerConfirm}
         onCancel={handlePickerCancel}
       />

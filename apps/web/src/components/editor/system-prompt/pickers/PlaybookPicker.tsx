@@ -20,26 +20,43 @@ interface PlaybookPickerProps {
   open: boolean
   onConfirm: (props: PlaceholderProps) => void
   onCancel: () => void
+  /**
+   * Edit-Modus: vorhandene Pill-Werte. Ist gesetzt, wird das referenzierte
+   * Playbook vorselektiert und der Confirm-Button heisst „Aktualisieren".
+   */
+  initial?: PlaceholderProps
 }
 
-export function PlaybookPicker({ open, onConfirm, onCancel }: PlaybookPickerProps) {
+export function PlaybookPicker({ open, onConfirm, onCancel, initial }: PlaybookPickerProps) {
   const api = useApi()
   const [playbooks, setPlaybooks] = useState<Playbook[]>([])
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<Playbook | null>(null)
   const [loading, setLoading] = useState(false)
 
+  const isEdit = initial !== undefined
+  const initialTargetId = initial?.target_id
+
   useEffect(() => {
     if (!open) return
     setLoading(true)
     setQuery('')
-    setSelected(null)
     api
       .listPlaybooks()
-      .then(setPlaybooks)
-      .catch(() => setPlaybooks([]))
+      .then((list) => {
+        setPlaybooks(list)
+        setSelected(
+          initialTargetId !== undefined
+            ? (list.find((p) => p.id === initialTargetId) ?? null)
+            : null,
+        )
+      })
+      .catch(() => {
+        setPlaybooks([])
+        setSelected(null)
+      })
       .finally(() => setLoading(false))
-  }, [open, api])
+  }, [open, api, initialTargetId])
 
   const filtered = query.trim() === ''
     ? playbooks
@@ -58,7 +75,7 @@ export function PlaybookPicker({ open, onConfirm, onCancel }: PlaybookPickerProp
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onCancel() }}>
       <DialogContent data-testid="playbook-picker-dialog">
         <DialogHeader>
-          <DialogTitle>Playbook verlinken</DialogTitle>
+          <DialogTitle>{isEdit ? 'Playbook ändern' : 'Playbook verlinken'}</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col gap-3">
           <Input
@@ -100,7 +117,7 @@ export function PlaybookPicker({ open, onConfirm, onCancel }: PlaybookPickerProp
             onClick={handleConfirm}
             data-testid="playbook-picker-confirm"
           >
-            Einfuegen
+            {isEdit ? 'Aktualisieren' : 'Einfuegen'}
           </Button>
         </DialogFooter>
       </DialogContent>
