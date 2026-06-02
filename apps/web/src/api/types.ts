@@ -491,3 +491,21 @@ export interface ProvenanceEntry {
   changed_at: string
   note: string | null
 }
+
+// Track D — aufgeloestes Org-Entitlement + MCP-Verbrauch fuer den Billing-Slot.
+// Spiegelt `EntitlementInfo` aus `routers/billing.py`. `edition` steuert die
+// Sichtbarkeit: das Billing-Panel rendert nur unter `'cloud'`.
+export interface EntitlementUsage {
+  period: string
+  count: number
+}
+
+export interface EntitlementInfo {
+  edition: 'cloud' | 'onprem'
+  status: 'active' | 'inactive'
+  features: string[]
+  expires_at: string | null
+  mcp_monthly_quota: number | null
+  mcp_rate_per_min: number | null
+  usage: EntitlementUsage
+}
