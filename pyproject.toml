@@ -42,10 +42,10 @@ strict = true
 explicit_package_bases = true
 mypy_path = ["apps/api/src", "apps/mcp/src", "packages/models/src"]
 
-# asyncpg liefert keine vollstaendigen Typ-Stubs — bewusste, eng begrenzte
-# Ausnahme; unser eigener Code bleibt strict.
+# asyncpg + die Mollie-SDK liefern keine vollstaendigen Typ-Stubs — bewusste, eng
+# begrenzte Ausnahme; unser eigener Code bleibt strict.
 [[tool.mypy.overrides]]
-module = ["asyncpg.*"]
+module = ["asyncpg.*", "mollie.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
