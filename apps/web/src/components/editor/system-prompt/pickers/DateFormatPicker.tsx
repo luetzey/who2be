@@ -1,6 +1,6 @@
 // DateFormatPicker — Radio-Dialog: ISO-8601 oder lesbar.
 // Kein API-Call. target_id ist "" (ISO) oder "human" (lesbar).
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -19,6 +19,8 @@ interface DateFormatPickerProps {
   open: boolean
   onConfirm: (props: PlaceholderProps) => void
   onCancel: () => void
+  /** Edit-Modus: vorhandene Pill-Werte; das Format wird vorbelegt. */
+  initial?: PlaceholderProps
 }
 
 const OPTIONS: {
@@ -44,8 +46,18 @@ const OPTIONS: {
   },
 ]
 
-export function DateFormatPicker({ open, onConfirm, onCancel }: DateFormatPickerProps) {
+export function DateFormatPicker({ open, onConfirm, onCancel, initial }: DateFormatPickerProps) {
   const [selected, setSelected] = useState<DateFormatTarget>('human')
+
+  const isEdit = initial !== undefined
+  const initialTargetId = initial?.target_id
+
+  // Beim Oeffnen das Format auf den aktuellen Pill-Wert (Edit) oder den
+  // Default 'human' (Neu) setzen. '' (ISO) ist ein gueltiger Wert.
+  useEffect(() => {
+    if (!open) return
+    setSelected(initialTargetId === '' ? '' : initialTargetId === 'human' ? 'human' : 'human')
+  }, [open, initialTargetId])
 
   function handleConfirm() {
     const option = OPTIONS.find((o) => o.target_id === selected)
@@ -61,7 +73,7 @@ export function DateFormatPicker({ open, onConfirm, onCancel }: DateFormatPicker
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onCancel() }}>
       <DialogContent data-testid="date-format-picker-dialog">
         <DialogHeader>
-          <DialogTitle>Datum einfuegen</DialogTitle>
+          <DialogTitle>{isEdit ? 'Datum ändern' : 'Datum einfuegen'}</DialogTitle>
         </DialogHeader>
         <fieldset className="flex flex-col gap-2">
           <legend className="sr-only">Datumsformat auswaehlen</legend>
@@ -95,7 +107,7 @@ export function DateFormatPicker({ open, onConfirm, onCancel }: DateFormatPicker
             Abbrechen
           </Button>
           <Button variant="brand" onClick={handleConfirm} data-testid="date-format-picker-confirm">
-            Einfuegen
+            {isEdit ? 'Aktualisieren' : 'Einfuegen'}
           </Button>
         </DialogFooter>
       </DialogContent>

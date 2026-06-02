@@ -170,4 +170,39 @@ describe('PlaybookPicker', () => {
     // Keine zusaetzlichen Felder ausser den drei vorgesehenen.
     expect(Object.keys(props ?? {})).toEqual(['kind', 'target_id', 'label'])
   })
+
+  it('Edit-Modus: vorbefuellt das referenzierte Playbook + Confirm-Label "Aktualisieren"', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(new Response(JSON.stringify(playbooks), { status: 200 })),
+      ),
+    )
+
+    const onConfirm = vi.fn<(props: PlaceholderProps) => void>()
+
+    render(
+      <Wrapper>
+        <PlaybookPicker
+          open
+          initial={{ kind: 'playbook', target_id: 'pb2', label: 'Playbook: Onboarding Flow' }}
+          onConfirm={onConfirm}
+          onCancel={vi.fn()}
+        />
+      </Wrapper>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('playbook-picker-confirm')).toHaveTextContent('Aktualisieren')
+    })
+
+    // Vorauswahl ohne erneute Auswahl bestaetigen → das initial referenzierte pb2.
+    fireEvent.click(screen.getByTestId('playbook-picker-confirm'))
+
+    expect(onConfirm).toHaveBeenCalledWith({
+      kind: 'playbook',
+      target_id: 'pb2',
+      label: 'Playbook: Onboarding Flow',
+    })
+  })
 })

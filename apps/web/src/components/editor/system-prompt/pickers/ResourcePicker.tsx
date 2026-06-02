@@ -33,6 +33,12 @@ interface ResourcePickerProps {
    * die ganze Resource).
    */
   allowBlockAnchor?: boolean
+  /**
+   * Edit-Modus: vorhandene Pill-Werte. `target_id` kann `<uuid>` oder
+   * `<uuid>#<block_id>` sein; Resource (und ggf. Section-Anker) werden
+   * vorselektiert, der Confirm-Button heisst „Aktualisieren".
+   */
+  initial?: PlaceholderProps
 }
 
 // Lokaler Heading-Detektor + Plain-Text-Extraktor (kein Feature-Import, damit
@@ -67,6 +73,7 @@ export function ResourcePicker({
   onConfirm,
   onCancel,
   allowBlockAnchor = false,
+  initial,
 }: ResourcePickerProps) {
   const api = useApi()
   const [resources, setResources] = useState<Resource[]>([])
@@ -79,19 +86,43 @@ export function ResourcePicker({
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
   const [blocksLoading, setBlocksLoading] = useState(false)
 
+  // Edit-Modus: target_id in Resource-UUID + optionalen Block-Anker zerlegen.
+  const isEdit = initial !== undefined
+  const initialTargetId = initial?.target_id
+  const hashIndex = initialTargetId !== undefined ? initialTargetId.indexOf('#') : -1
+  const initialResourceId =
+    initialTargetId === undefined
+      ? undefined
+      : hashIndex >= 0
+        ? initialTargetId.slice(0, hashIndex)
+        : initialTargetId
+  const initialBlockId =
+    initialTargetId !== undefined && hashIndex >= 0
+      ? initialTargetId.slice(hashIndex + 1)
+      : undefined
+
   useEffect(() => {
     if (!open) return
     setLoading(true)
     setQuery('')
-    setSelected(null)
     setBlocks([])
     setSelectedBlockId(null)
     api
       .listResources()
-      .then(setResources)
-      .catch(() => setResources([]))
+      .then((list) => {
+        setResources(list)
+        setSelected(
+          initialResourceId !== undefined
+            ? (list.find((r) => r.id === initialResourceId) ?? null)
+            : null,
+        )
+      })
+      .catch(() => {
+        setResources([])
+        setSelected(null)
+      })
       .finally(() => setLoading(false))
-  }, [open, api])
+  }, [open, api, initialResourceId])
 
   // Bei Resource-Wahl (und aktivem Block-Anker) die Heading-Bloecke laden.
   // `if (!open) return` analog zum Resource-Lade-Effect oben: ohne diesen
@@ -109,10 +140,17 @@ export function ResourcePicker({
     setSelectedBlockId(null)
     api
       .getResource(selected.id)
-      .then((full) => setBlocks(full.content.blocks ?? []))
+      .then((full) => {
+        setBlocks(full.content.blocks ?? [])
+        // Edit-Modus: Anker nur fuer die urspruenglich referenzierte Resource
+        // vorbelegen (bei Wechsel auf eine andere Resource bleibt er leer).
+        if (initialBlockId !== undefined && selected.id === initialResourceId) {
+          setSelectedBlockId(initialBlockId)
+        }
+      })
       .catch(() => setBlocks([]))
       .finally(() => setBlocksLoading(false))
-  }, [open, allowBlockAnchor, selected, api])
+  }, [open, allowBlockAnchor, selected, api, initialBlockId, initialResourceId])
 
   const filtered =
     query.trim() === ''
@@ -149,7 +187,7 @@ export function ResourcePicker({
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onCancel() }}>
       <DialogContent data-testid="resource-picker-dialog">
         <DialogHeader>
-          <DialogTitle>Resource verlinken</DialogTitle>
+          <DialogTitle>{isEdit ? 'Resource ändern' : 'Resource verlinken'}</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col gap-3">
           <Input
@@ -238,7 +276,7 @@ export function ResourcePicker({
             onClick={handleConfirm}
             data-testid="resource-picker-confirm"
           >
-            Einfuegen
+            {isEdit ? 'Aktualisieren' : 'Einfuegen'}
           </Button>
         </DialogFooter>
       </DialogContent>

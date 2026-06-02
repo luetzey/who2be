@@ -1,7 +1,7 @@
 // PersonaFieldPicker — Radio-Dialog: "Name", "Beschreibung" oder "Profil (vollstaendig)".
 // Kein API-Call. target_id ist der englische Slug "name" / "description" / "profile".
 // Track E1: "profile" rendert die volle Persona-Persoenlichkeit inkl. BlockNote-Body und Modi.
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -20,6 +20,12 @@ interface PersonaFieldPickerProps {
   open: boolean
   onConfirm: (props: PlaceholderProps) => void
   onCancel: () => void
+  /** Edit-Modus: vorhandene Pill-Werte; das referenzierte Feld wird vorbelegt. */
+  initial?: PlaceholderProps
+}
+
+function isPersonaFieldTarget(value: string | undefined): value is PersonaFieldTarget {
+  return value === 'name' || value === 'description' || value === 'profile'
 }
 
 const OPTIONS: { target_id: PersonaFieldTarget; label: string; description: string }[] = [
@@ -38,8 +44,23 @@ const OPTIONS: { target_id: PersonaFieldTarget; label: string; description: stri
   },
 ]
 
-export function PersonaFieldPicker({ open, onConfirm, onCancel }: PersonaFieldPickerProps) {
+export function PersonaFieldPicker({
+  open,
+  onConfirm,
+  onCancel,
+  initial,
+}: PersonaFieldPickerProps) {
   const [selected, setSelected] = useState<PersonaFieldTarget>('name')
+
+  const isEdit = initial !== undefined
+  const initialTargetId = initial?.target_id
+
+  // Beim Oeffnen die Radio-Auswahl auf den aktuellen Pill-Wert (Edit) oder
+  // den Default 'name' (Neu) setzen.
+  useEffect(() => {
+    if (!open) return
+    setSelected(isPersonaFieldTarget(initialTargetId) ? initialTargetId : 'name')
+  }, [open, initialTargetId])
 
   function handleConfirm() {
     const option = OPTIONS.find((o) => o.target_id === selected)
@@ -55,7 +76,7 @@ export function PersonaFieldPicker({ open, onConfirm, onCancel }: PersonaFieldPi
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onCancel() }}>
       <DialogContent data-testid="persona-field-picker-dialog">
         <DialogHeader>
-          <DialogTitle>Persona-Feld einfuegen</DialogTitle>
+          <DialogTitle>{isEdit ? 'Persona-Feld ändern' : 'Persona-Feld einfuegen'}</DialogTitle>
         </DialogHeader>
         <fieldset className="flex flex-col gap-2">
           <legend className="sr-only">Persona-Feld auswaehlen</legend>
@@ -89,7 +110,7 @@ export function PersonaFieldPicker({ open, onConfirm, onCancel }: PersonaFieldPi
             Abbrechen
           </Button>
           <Button variant="brand" onClick={handleConfirm} data-testid="persona-field-picker-confirm">
-            Einfuegen
+            {isEdit ? 'Aktualisieren' : 'Einfuegen'}
           </Button>
         </DialogFooter>
       </DialogContent>
