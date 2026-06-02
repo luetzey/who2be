@@ -22,10 +22,12 @@ import {
   type PlaceholderProps,
 } from '@/components/editor/system-prompt/PlaceholderBlock'
 import type { SystemPromptBlock } from '@/components/editor/system-prompt/SystemPromptEditor'
-import { PlaceholderPreviewDialog } from '@/components/editor/system-prompt/PlaceholderPreviewDialog'
+import { PlaceholderPreviewPopover } from '@/components/editor/system-prompt/PlaceholderPreviewPopover'
+import { caretMeasurable } from '@/components/editor/system-prompt/caretAnchor'
 import { buildSlashMenuItems } from '@/components/editor/system-prompt/slashMenu'
 import { PlaybookPicker } from '@/components/editor/system-prompt/pickers/PlaybookPicker'
 import { ResourcePicker } from '@/components/editor/system-prompt/pickers/ResourcePicker'
+import { type Measurable } from '@/components/ui/popover'
 
 // Das Schema wird einmal pro Modul-Import gebaut (statisch, siehe
 // SystemPromptEditor). Wir teilen bewusst dasselbe Schema — alle Pill-Kinds
@@ -54,6 +56,8 @@ export function PlaybookBodyEditor({
   const userInteractedRef = useRef(false)
   // Ref auf den bn-container — Anker fuer das bubbelnde `placeholder-click`-Event.
   const containerRef = useRef<HTMLDivElement>(null)
+  // Gemeinsamer Anker fuer die schwebenden Panels (Pill bzw. Caret).
+  const anchorRef = useRef<Measurable | null>(null)
 
   const [openPicker, setOpenPicker] = useState<PlaceholderKind | null>(null)
   // Edit-Flow: Detail (inkl. `updateInlineContent`) der bearbeiteten Pill.
@@ -92,6 +96,8 @@ export function PlaybookBodyEditor({
   function handleOpenPicker(kind: PlaceholderKind) {
     // Nur playbook/resource sind erlaubt; alles andere ignorieren (defensiv).
     if (!ALLOWED_KINDS.has(kind)) return
+    // Slash-Einfuegen: Panel am Caret verankern (kein pending Edit).
+    anchorRef.current = caretMeasurable(containerRef.current)
     setOpenPicker(kind)
   }
 
@@ -132,21 +138,24 @@ export function PlaybookBodyEditor({
         </BlockNoteView>
       </div>
 
-      {/* Pill-Preview-Overlay: lauscht auf Klicks im bn-container. */}
-      <PlaceholderPreviewDialog
+      {/* Pill-Preview-Popover: lauscht auf Klicks im bn-container. */}
+      <PlaceholderPreviewPopover
         containerRef={containerRef}
+        anchorRef={anchorRef}
         editable={editable}
         onEdit={handleStartEdit}
       />
 
       <PlaybookPicker
         open={openPicker === 'playbook'}
+        anchorRef={anchorRef}
         initial={pendingEdit?.kind === 'playbook' ? pendingEdit : undefined}
         onConfirm={handlePickerConfirm}
         onCancel={handlePickerCancel}
       />
       <ResourcePicker
         open={openPicker === 'resource'}
+        anchorRef={anchorRef}
         allowBlockAnchor
         initial={pendingEdit?.kind === 'resource' ? pendingEdit : undefined}
         onConfirm={handlePickerConfirm}

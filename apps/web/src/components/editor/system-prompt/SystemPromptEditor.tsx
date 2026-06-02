@@ -15,6 +15,7 @@ import { SuggestionMenuController, useCreateBlockNote } from '@blocknote/react'
 import type { PartialBlock } from '@blocknote/core'
 
 import { useTheme } from '@/app/theme-context'
+import { type Measurable } from '@/components/ui/popover'
 
 import { buildSystemPromptSchema, type SystemPromptSchema } from './PlaceholderBlock'
 import type {
@@ -22,8 +23,9 @@ import type {
   PlaceholderKind,
   PlaceholderProps,
 } from './PlaceholderBlock'
+import { caretMeasurable } from './caretAnchor'
 import { buildSlashMenuItems } from './slashMenu'
-import { PlaceholderPreviewDialog } from './PlaceholderPreviewDialog'
+import { PlaceholderPreviewPopover } from './PlaceholderPreviewPopover'
 import { PlaybookPicker } from './pickers/PlaybookPicker'
 import { ResourcePicker } from './pickers/ResourcePicker'
 import { PersonaFieldPicker } from './pickers/PersonaFieldPicker'
@@ -56,6 +58,9 @@ export function SystemPromptEditor({
   const userInteractedRef = useRef(false)
   // Ref auf den bn-container — Anker fuer das bubbelnde `placeholder-click`-Event.
   const containerRef = useRef<HTMLDivElement>(null)
+  // Gemeinsamer Anker fuer die schwebenden Panels: Pill (Klick/Edit) oder
+  // Caret (Slash-Einfuegen). Von Preview + allen Pickern geteilt.
+  const anchorRef = useRef<Measurable | null>(null)
 
   // Picker-State: welcher Picker ist offen?
   const [openPicker, setOpenPicker] = useState<PlaceholderKind | null>(null)
@@ -115,6 +120,8 @@ export function SystemPromptEditor({
       })
       return
     }
+    // Slash-Einfuegen: Panel am Caret verankern (kein pending Edit).
+    anchorRef.current = caretMeasurable(containerRef.current)
     setOpenPicker(kind)
   }
 
@@ -151,34 +158,39 @@ export function SystemPromptEditor({
         </BlockNoteView>
       </div>
 
-      {/* Pill-Preview-Overlay: lauscht auf Klicks im bn-container. */}
-      <PlaceholderPreviewDialog
+      {/* Pill-Preview-Popover: lauscht auf Klicks im bn-container. */}
+      <PlaceholderPreviewPopover
         containerRef={containerRef}
+        anchorRef={anchorRef}
         editable={editable}
         onEdit={handleStartEdit}
       />
 
-      {/* Picker-Dialoge (ausserhalb des bn-container) */}
+      {/* Picker-Popover (Portal, am Anker verankert) */}
       <PlaybookPicker
         open={openPicker === 'playbook'}
+        anchorRef={anchorRef}
         initial={pendingEdit?.kind === 'playbook' ? pendingEdit : undefined}
         onConfirm={handlePickerConfirm}
         onCancel={handlePickerCancel}
       />
       <ResourcePicker
         open={openPicker === 'resource'}
+        anchorRef={anchorRef}
         initial={pendingEdit?.kind === 'resource' ? pendingEdit : undefined}
         onConfirm={handlePickerConfirm}
         onCancel={handlePickerCancel}
       />
       <PersonaFieldPicker
         open={openPicker === 'persona-field'}
+        anchorRef={anchorRef}
         initial={pendingEdit?.kind === 'persona-field' ? pendingEdit : undefined}
         onConfirm={handlePickerConfirm}
         onCancel={handlePickerCancel}
       />
       <DateFormatPicker
         open={openPicker === 'date'}
+        anchorRef={anchorRef}
         initial={pendingEdit?.kind === 'date' ? pendingEdit : undefined}
         onConfirm={handlePickerConfirm}
         onCancel={handlePickerCancel}
