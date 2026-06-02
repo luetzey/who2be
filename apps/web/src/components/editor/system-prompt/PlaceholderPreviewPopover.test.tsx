@@ -1,11 +1,14 @@
-// PlaceholderPreviewDialog.test.tsx — Event-getriebenes Preview-Overlay + Edit-Einstieg.
-// Wir mocken useApi.previewPlaceholder und feuern das `placeholder-click`-
-// CustomEvent auf dem Container; der Dialog soll oeffnen und den Output zeigen.
+// PlaceholderPreviewPopover.test.tsx — Event-getriebenes, schwebendes Preview-
+// Popover + Edit-Einstieg. Wir mocken useApi.previewPlaceholder und feuern das
+// `placeholder-click`-CustomEvent auf dem Container; das Popover oeffnet sich
+// und zeigt den Output.
 import { useRef } from 'react'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { PlaceholderPreviewDialog } from './PlaceholderPreviewDialog'
+import { type Measurable } from '@/components/ui/popover'
+
+import { PlaceholderPreviewPopover } from './PlaceholderPreviewPopover'
 import {
   PLACEHOLDER_CLICK_EVENT,
   type PlaceholderClickDetail,
@@ -36,6 +39,7 @@ function Host({
   onEdit?: (detail: PlaceholderClickDetail) => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
+  const anchorRef = useRef<Measurable | null>(null)
   return (
     <div>
       <div ref={ref} data-testid="container">
@@ -54,7 +58,12 @@ function Host({
           fire
         </button>
       </div>
-      <PlaceholderPreviewDialog containerRef={ref} editable={editable} onEdit={onEdit} />
+      <PlaceholderPreviewPopover
+        containerRef={ref}
+        anchorRef={anchorRef}
+        editable={editable}
+        onEdit={onEdit}
+      />
     </div>
   )
 }
@@ -67,7 +76,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('PlaceholderPreviewDialog', () => {
+describe('PlaceholderPreviewPopover', () => {
   it('oeffnet bei placeholder-click und zeigt den aufgeloesten Output', async () => {
     previewPlaceholder.mockResolvedValue({
       kind: 'date',
@@ -185,7 +194,7 @@ describe('PlaceholderPreviewDialog', () => {
     expect(onEdit).toHaveBeenCalledWith(detail)
     // Overlay schliesst nach dem Edit-Start.
     await waitFor(() => {
-      expect(screen.queryByTestId('placeholder-preview-dialog')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('placeholder-preview-popover')).not.toBeInTheDocument()
     })
   })
 })

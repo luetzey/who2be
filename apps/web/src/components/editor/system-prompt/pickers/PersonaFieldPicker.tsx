@@ -4,15 +4,10 @@
 import { useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { type AnchorRef } from '@/components/ui/popover'
 
 import type { PlaceholderProps } from '../PlaceholderBlock'
+import { PickerPopover } from './PickerPopover'
 
 type PersonaFieldTarget = 'name' | 'description' | 'profile'
 
@@ -20,6 +15,8 @@ interface PersonaFieldPickerProps {
   open: boolean
   onConfirm: (props: PlaceholderProps) => void
   onCancel: () => void
+  /** Anker fuer das schwebende Panel (Pill beim Bearbeiten, Caret beim Einfuegen). */
+  anchorRef?: AnchorRef
   /** Edit-Modus: vorhandene Pill-Werte; das referenzierte Feld wird vorbelegt. */
   initial?: PlaceholderProps
 }
@@ -48,6 +45,7 @@ export function PersonaFieldPicker({
   open,
   onConfirm,
   onCancel,
+  anchorRef,
   initial,
 }: PersonaFieldPickerProps) {
   const [selected, setSelected] = useState<PersonaFieldTarget>('name')
@@ -73,47 +71,49 @@ export function PersonaFieldPicker({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onCancel() }}>
-      <DialogContent data-testid="persona-field-picker-dialog">
-        <DialogHeader>
-          <DialogTitle>{isEdit ? 'Persona-Feld ändern' : 'Persona-Feld einfuegen'}</DialogTitle>
-        </DialogHeader>
-        <fieldset className="flex flex-col gap-2">
-          <legend className="sr-only">Persona-Feld auswaehlen</legend>
-          {OPTIONS.map((opt) => {
-            const inputId = `persona-field-${opt.target_id}`
-            return (
-              <div
-                key={opt.target_id}
-                className="flex cursor-pointer items-start gap-3 rounded-md border p-3 hover:bg-muted/50"
-              >
-                <input
-                  id={inputId}
-                  type="radio"
-                  name="persona-field"
-                  value={opt.target_id}
-                  checked={selected === opt.target_id}
-                  onChange={() => setSelected(opt.target_id)}
-                  data-testid={`persona-field-option-${opt.target_id}`}
-                  className="mt-0.5"
-                />
-                <label htmlFor={inputId} className="flex cursor-pointer flex-col gap-0.5">
-                  <span className="text-sm font-medium">{opt.label}</span>
-                  <span className="text-xs text-muted-foreground">{opt.description}</span>
-                </label>
-              </div>
-            )
-          })}
-        </fieldset>
-        <DialogFooter>
-          <Button variant="outline" onClick={onCancel}>
-            Abbrechen
-          </Button>
-          <Button variant="brand" onClick={handleConfirm} data-testid="persona-field-picker-confirm">
-            {isEdit ? 'Aktualisieren' : 'Einfuegen'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <PickerPopover
+      open={open}
+      onCancel={onCancel}
+      anchorRef={anchorRef}
+      title={isEdit ? 'Persona-Feld ändern' : 'Persona-Feld einfuegen'}
+      ariaLabel="Persona-Feld einfuegen"
+      testId="persona-field-picker-dialog"
+    >
+      <fieldset className="flex flex-col gap-2">
+        <legend className="sr-only">Persona-Feld auswaehlen</legend>
+        {OPTIONS.map((opt) => {
+          const inputId = `persona-field-${opt.target_id}`
+          return (
+            <div
+              key={opt.target_id}
+              className="flex cursor-pointer items-start gap-3 rounded-md border p-3 hover:bg-muted/50"
+            >
+              <input
+                id={inputId}
+                type="radio"
+                name="persona-field"
+                value={opt.target_id}
+                checked={selected === opt.target_id}
+                onChange={() => setSelected(opt.target_id)}
+                data-testid={`persona-field-option-${opt.target_id}`}
+                className="mt-0.5"
+              />
+              <label htmlFor={inputId} className="flex cursor-pointer flex-col gap-0.5">
+                <span className="text-sm font-medium">{opt.label}</span>
+                <span className="text-xs text-muted-foreground">{opt.description}</span>
+              </label>
+            </div>
+          )
+        })}
+      </fieldset>
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" onClick={onCancel}>
+          Abbrechen
+        </Button>
+        <Button variant="brand" onClick={handleConfirm} data-testid="persona-field-picker-confirm">
+          {isEdit ? 'Aktualisieren' : 'Einfuegen'}
+        </Button>
+      </div>
+    </PickerPopover>
   )
 }
