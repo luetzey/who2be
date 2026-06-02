@@ -300,6 +300,8 @@ class PersonaFieldResolver:
     - ``profile``     — Volles Profil: description + BlockNote-Body (`content.blocks`)
                         + optionale Traits-Liste + Modi-Sektion (C4).
                         Liest den `current_version`-Snapshot, wie der Operator ihn sieht.
+    - ``profile-body``— Nur der BlockNote-Profil-Body (ohne Beschreibung/Traits/Modi).
+                        Leerer Body -> leerer String (kein Miss).
     - ``modes``       — Nur die `## Modi`-Sektion (Teilmenge von `profile`). Hat die
                         Persona keine Modi, ist das Ergebnis ein leerer String (KEIN
                         Miss — Modi sind optional).
@@ -327,7 +329,7 @@ class PersonaFieldResolver:
             )
             return ResolveResult(text="", unresolved_key=miss_key)
 
-        if target_id not in ("name", "description", "profile", "modes"):
+        if target_id not in ("name", "description", "profile", "profile-body", "modes"):
             logger.warning(
                 "PersonaFieldResolver: unbekanntes Feld '%s' — Miss",
                 target_id,
@@ -374,12 +376,36 @@ class PersonaFieldResolver:
         if target_id == "description":
             return ResolveResult(text=str(content.get("description", "")).strip())
 
+        if target_id == "profile-body":
+            # Nur der BlockNote-Profil-Body (ohne Beschreibung/Traits/Modi).
+            return ResolveResult(text=_render_profile_body(content))
+
         if target_id == "modes":
             # Nur die Modi-Sektion. Keine Modi -> leerer String (kein Miss).
             return ResolveResult(text=_render_modes_section(content))
 
         # target_id == "profile": volles Profil rendern (E1 + C4).
         return ResolveResult(text=_render_persona_profile(content))
+
+
+def _render_profile_body(content: dict[str, object]) -> str:
+    """Rendert nur den BlockNote-Profil-Body einer Persona als Plain-Text.
+
+    Quelle: `content.content.blocks` (die PersonaContent-Ebene). Beschreibung,
+    Traits und Modi bleiben aussen vor — das ist die „nur Profil-Inhalt"-Sicht.
+    Leerer Body -> leerer String.
+    """
+    inner_content = content.get("content")
+    if not isinstance(inner_content, dict):
+        return ""
+    raw_blocks = inner_content.get("blocks", [])
+    blocks: list[dict[str, object]] = list(raw_blocks) if isinstance(raw_blocks, list) else []
+    block_parts: list[str] = []
+    for block in blocks:
+        text = _block_plain_text(block)
+        if text:
+            block_parts.append(text)
+    return "\n\n".join(block_parts).strip()
 
 
 def _render_persona_profile(content: dict[str, object]) -> str:
@@ -401,18 +427,9 @@ def _render_persona_profile(content: dict[str, object]) -> str:
         parts.append(description)
 
     # 2. BlockNote-Body aus `content.content.blocks` (PersonaContent-Ebene)
-    inner_content = content.get("content")
-    if isinstance(inner_content, dict):
-        raw_blocks = inner_content.get("blocks", [])
-        blocks: list[dict[str, object]] = list(raw_blocks) if isinstance(raw_blocks, list) else []
-        block_parts: list[str] = []
-        for block in blocks:
-            text = _block_plain_text(block)
-            if text:
-                block_parts.append(text)
-        body_text = "\n\n".join(block_parts).strip()
-        if body_text:
-            parts.append(body_text)
+    body_text = _render_profile_body(content)
+    if body_text:
+        parts.append(body_text)
 
     # 3. Traits (deprecated, aber lesbar) — nur wenn vorhanden
     raw_traits = content.get("traits", [])
