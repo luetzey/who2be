@@ -9,6 +9,7 @@ import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { BranchStatus, type BranchAction } from '@/components/data/BranchStatus'
 import { DataList } from '@/components/data/DataList'
 import { DataView } from '@/components/data/DataView'
+import { VersionHistory } from '@/components/version'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
@@ -27,7 +28,7 @@ import { PlaybookEditorForm } from '../components/PlaybookEditorForm'
 import { ResourceBlockLinkPicker } from '../components/ResourceBlockLinkPicker'
 import { usePlaybook } from '../hooks/usePlaybook'
 import { usePlaybookForm } from '../hooks/usePlaybookForm'
-import { statusBadgeVariant, statusLabel } from '../lib/status'
+import { statusLabel } from '../lib/status'
 import { splitTriggers } from '../lib/triggers'
 
 export function PlaybookDetailPage() {
@@ -250,30 +251,19 @@ export function PlaybookDetailPage() {
                 resourceLinks={resourceLinks.links}
               />
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Versionen</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <DataList
-                    items={versions}
-                    getKey={(version) => String(version.version)}
-                    renderItem={(version) => (
-                      <span className="flex items-center justify-between gap-3">
-                        <span>
-                          v{version.version} —{' '}
-                          {new Date(version.created_at).toLocaleString()}
-                        </span>
-                        {version.status !== undefined ? (
-                          <Badge variant={statusBadgeVariant(version.status)}>
-                            {statusLabel(version.status)}
-                          </Badge>
-                        ) : null}
-                      </span>
-                    )}
-                  />
-                </CardContent>
-              </Card>
+              <VersionHistory
+                versions={versions}
+                canEdit={role === 'admin' || role === 'editor'}
+                onRestore={async (version) => {
+                  await api.restorePlaybookVersion(playbook.id, version)
+                  notify.success(`v${version} als Entwurf wiederhergestellt.`)
+                  reload()
+                }}
+                loadDiff={(version) => api.diffPlaybookVersion(playbook.id, version)}
+                loadProvenance={(version) =>
+                  api.provenancePlaybookVersion(playbook.id, version)
+                }
+              />
 
               <Card>
                 <CardHeader>

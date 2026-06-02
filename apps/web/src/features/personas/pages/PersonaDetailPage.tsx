@@ -7,14 +7,13 @@ import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { BranchStatus, type BranchAction } from '@/components/data/BranchStatus'
-import { DataList } from '@/components/data/DataList'
 import { DataView } from '@/components/data/DataView'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { VersionHistory } from '@/components/version'
 import { usePersonaPlaybooks } from '@/hooks/usePersonaPlaybooks'
 import { notify } from '@/lib/feedback'
 
@@ -22,7 +21,7 @@ import { PersonaEditorForm } from '../components/PersonaEditorForm'
 import { PlaybookLinkItem } from '../components/PlaybookLinkItem'
 import { usePersona } from '../hooks/usePersona'
 import { usePersonaForm } from '../hooks/usePersonaForm'
-import { statusBadgeVariant, statusLabel } from '../lib/status'
+import { statusLabel } from '../lib/status'
 
 export function PersonaDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -181,30 +180,20 @@ export function PersonaDetailPage() {
                 legacySystemPrompt={persona.content.system_prompt}
               />
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Versionen</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <DataList
-                    items={versions}
-                    getKey={(version) => String(version.version)}
-                    renderItem={(version) => (
-                      <span className="flex items-center justify-between gap-3">
-                        <span>
-                          v{version.version} —{' '}
-                          {new Date(version.created_at).toLocaleString()}
-                        </span>
-                        {version.status !== undefined ? (
-                          <Badge variant={statusBadgeVariant(version.status)}>
-                            {statusLabel(version.status)}
-                          </Badge>
-                        ) : null}
-                      </span>
-                    )}
-                  />
-                </CardContent>
-              </Card>
+              <VersionHistory
+                versions={versions}
+                canEdit={role === 'admin' || role === 'editor'}
+                onRestore={async (version) => {
+                  await autoSave.flush()
+                  await api.restorePersonaVersion(persona.id, version)
+                  notify.success(`v${version} als Entwurf wiederhergestellt.`)
+                  reload()
+                }}
+                loadDiff={(version) => api.diffPersonaVersion(persona.id, version)}
+                loadProvenance={(version) =>
+                  api.provenancePersonaVersion(persona.id, version)
+                }
+              />
 
               <Card>
                 <CardHeader>

@@ -1,6 +1,8 @@
 import { ArrowLeft } from 'lucide-react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 
+import { useApi } from '@/api/useApi'
+import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { BranchStatus } from '@/components/data/BranchStatus'
 import { DataList } from '@/components/data/DataList'
@@ -11,13 +13,15 @@ import { Stack } from '@/components/layout/Stack'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { VersionHistory } from '@/components/version'
 import { useResourceUsages } from '@/hooks/useResourceUsages'
+import { notify } from '@/lib/feedback'
 
 import { ResourceEditorForm } from '../components/ResourceEditorForm'
 import { StatusActionBar } from '../components/StatusActionBar'
 import { useResource } from '../hooks/useResource'
 import { useResourceForm } from '../hooks/useResourceForm'
-import { statusBadgeVariant, statusLabel } from '../lib/status'
+import { statusLabel } from '../lib/status'
 
 export function ResourceDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -25,6 +29,8 @@ export function ResourceDetailPage() {
   const { form, autoSave } = useResourceForm(resource, reload)
   const usages = useResourceUsages(id)
   const wsPath = useWorkspacePath()
+  const api = useApi()
+  const role = useCurrentWorkspaceRole()
 
   if (id === undefined) {
     return <Navigate to={wsPath('/resources')} replace />
@@ -141,30 +147,19 @@ export function ResourceDetailPage() {
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Versionen</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <DataList
-                    items={versions}
-                    getKey={(version) => String(version.version)}
-                    renderItem={(version) => (
-                      <span className="flex items-center justify-between gap-3">
-                        <span>
-                          v{version.version} —{' '}
-                          {new Date(version.created_at).toLocaleString()}
-                        </span>
-                        {version.status !== undefined ? (
-                          <Badge variant={statusBadgeVariant(version.status)}>
-                            {statusLabel(version.status)}
-                          </Badge>
-                        ) : null}
-                      </span>
-                    )}
-                  />
-                </CardContent>
-              </Card>
+              <VersionHistory
+                versions={versions}
+                canEdit={role === 'admin' || role === 'editor'}
+                onRestore={async (version) => {
+                  await api.restoreResourceVersion(resource.id, version)
+                  notify.success(`v${version} als Entwurf wiederhergestellt.`)
+                  reload()
+                }}
+                loadDiff={(version) => api.diffResourceVersion(resource.id, version)}
+                loadProvenance={(version) =>
+                  api.provenanceResourceVersion(resource.id, version)
+                }
+              />
             </Stack>
           ) : null}
         </DataView>
