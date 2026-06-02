@@ -23,10 +23,10 @@
 | L1 | Lizenz | FSL-1.1-Apache-2.0 (bereits entschieden, `…1935_license-fsl-setup`). Nur **Ausführung Phase A** + Public-**Vorbereitung**. |
 | L2 | Public-Flip | **Noch nicht flippen.** GitHub-Settings/CLA/Branch-Protection/Advisories = separates explizites Go. Repo bleibt privat. |
 
-### Offene Eingaben (vor/zur Track-L-Umsetzung)
-- **`<OWNER-NAME>`** — voller Klarname für die Copyright-Zeile in `LICENSE.md` (BLOCKING für Track L).
-- **Commercial-Kontakt** — Default `luetzey@gmail.com` (bis `who2be`-Domain steht).
-- **SSO-Provider** — Default **Google + GitHub**.
+### Geklärte Eingaben (2026-06-02)
+- **Owner / Copyright:** `Yannick Lützenburg` → Copyright-Zeile `Copyright (c) 2026 Yannick Lützenburg`.
+- **Commercial-Kontakt:** `luetzey@gmail.com` (bis `who2be`-Domain steht).
+- **SSO-Provider:** Google + GitHub.
 
 ---
 
@@ -72,7 +72,7 @@ Keine harte Wellen-Reihenfolge nötig; jeder Track = eigener `feat/`-Branch + Dr
 - `security-reviewer` für OAuth-Redirects, Recovery-Token, E-Mail-Wechsel.
 
 ### 3.4 FSL/Public-Prep (Track L)
-- `LICENSE.md` = unveränderter FSL-1.1-Apache-2.0-Standardtext (fsl.software) + Copyright `Copyright (c) 2026 <OWNER-NAME>`.
+- `LICENSE.md` = unveränderter FSL-1.1-Apache-2.0-Standardtext (fsl.software) + Copyright `Copyright (c) 2026 Yannick Lützenburg`.
 - `README.md` License-Sektion (1 Satz + Link + Commercial-Kontakt). `CONTRIBUTING.md` (CLA-Hinweis-Platzhalter, Branch-/Commit-Konventionen aus CLAUDE.md). `SECURITY.md` (private Advisory, 90-Tage-Disclosure).
 - `license = "FSL-1.1-Apache-2.0"` + `authors` in Root-`pyproject.toml`, `apps/api`, `apps/mcp`, `packages/models`; `"license"` in `apps/web/package.json`.
 - `docs/security-findings*.md` deferred Findings auf Public-Tauglichkeit reviewen (keine Exploit-Details offenlegen) — Befund dokumentieren.
@@ -177,8 +177,8 @@ Repo who2be. Branch feat/fsl-license-public-prep von main. LIES ZUERST den Plan
 
 Setze NUR Vorbereitung um (Repo bleibt PRIVAT, kein GitHub-Flip):
 1. LICENSE.md = unveränderter FSL-1.1-Apache-2.0-Standardtext (fsl.software),
-   Copyright "Copyright (c) 2026 <OWNER-NAME>".  ← OWNER-NAME vom User einsetzen.
-2. README.md License-Sektion (1 Satz + Link + Commercial-Kontakt <CONTACT>).
+   Copyright "Copyright (c) 2026 Yannick Lützenburg".
+2. README.md License-Sektion (1 Satz + Link + Commercial-Kontakt luetzey@gmail.com).
 3. CONTRIBUTING.md (CLA-Hinweis-Platzhalter + Branch-/Commit-Konventionen aus CLAUDE.md).
 4. SECURITY.md (private Advisory, 90-Tage-Disclosure).
 5. license="FSL-1.1-Apache-2.0" + authors in Root-pyproject + apps/api + apps/mcp +
