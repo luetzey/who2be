@@ -249,3 +249,27 @@ Anmerkung sollen vor dem Public-Switch adressiert werden.
    muss vor Public-Switch greifen; bei Multi-User-Frontend mit BlockNote ist
    `default-src 'self'` Pflicht (Insel laesst keinen Inline-Style/Script
    stehen, ADR-0022).
+
+## Public-Tauglichkeits-Review (2026-06-02, FSL-/Public-Prep)
+
+Im Rahmen der Public-Switch-Vorbereitung (Track L,
+`.claude/plan/2026-06-02-1819_followups-rls-mollie-auth-fsl.md` §3.4) wurden die
+offenen Findings dieser Datei (**F-Phase2-01**, **F-Phase2-02**,
+**F-Phase2-03**) auf Public-Tauglichkeit geprueft.
+
+**Befund:** Im Kern public-tauglich, keine Redaktion vorgenommen; **eine
+Empfehlung fuer den spaeteren Flip.**
+
+- Alle drei Findings sind Risiko-Klassifikation + Mitigation-Empfehlung — **kein
+  PoC, kein Reproduce-Code, keine Secrets.** F-Phase2-02/03 sind reine
+  Defense-in-Depth-Hinweise ohne realen Leak.
+- **F-Phase2-01** benennt konkret die Endpunkte ohne `write_limit` und einen
+  403-Timing-Probe-Gedanken. Das ist der einzige fuer einen Angreifer leicht
+  verwertbare Detailgrad. Bewertung: **nicht redigieren, sondern schliessen** —
+  der Finding ist als „TODO vor Public-Switch" (oben, Punkt 1) ohnehin
+  blockierend; eine Kuerzung der Beschreibung wuerde nur Tracking-Wert kosten,
+  solange das Repo privat ist.
+
+Hinweis: Der tatsaechliche Public-Flip ist **nicht** Teil dieses Schritts (Repo
+bleibt privat). Die obigen „TODO vor Public-Switch"-Punkte (insb. F-Phase2-01
+Rate-Limits und der CSP/Header-Pass) bleiben Voraussetzung fuer den Flip.

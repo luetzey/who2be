@@ -101,6 +101,12 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/who2be
       JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-me-32chars-min}
       CORS_ORIGINS: http://localhost:5173
+      # Edition + Mollie-Pull-Billing (Plan §3.2) — alle leer/onprem im lokalen
+      # Stack; nur die Cloud-Edition mit gesetztem MOLLIE_API_KEY schaltet Billing scharf.
+      WHO2BE_EDITION: ${WHO2BE_EDITION:-onprem}
+      MOLLIE_API_KEY: ${MOLLIE_API_KEY:-}
+      MOLLIE_WEBHOOK_SECRET: ${MOLLIE_WEBHOOK_SECRET:-}
+      MOLLIE_WEBHOOK_URL: ${MOLLIE_WEBHOOK_URL:-}
     ports:
       - "8000:8000"
     depends_on:

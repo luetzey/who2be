@@ -3,6 +3,8 @@ name = "who2be-models"
 version = "0.1.0"
 description = "Shared Pydantic models for Who2Be (API + MCP)"
 requires-python = ">=3.11"
+license = { text = "FSL-1.1-Apache-2.0" }
+authors = [{ name = "Yannick Lützenburg", email = "luetzey@gmail.com" }]
 dependencies = ["pydantic>=2.7"]
 
 [build-system]
