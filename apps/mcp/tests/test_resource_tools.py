@@ -407,7 +407,7 @@ def test_fetch_playbook_returns_rendered_body(monkeypatch: pytest.MonkeyPatch) -
     """B5: fetch_playbook liefert den serverseitig expandierten Body.
 
     Der MCP-Server holt den Body ueber `GET .../playbooks/{id}/rendered`; bei
-    `body_format='blocknote'` sind die Inline-Pills bereits zu Plain-Text
+    BlockNote-Bodies haben ihre Inline-Pills bereits zu Plain-Text
     aufgeloest. Hier mocken wir die API-Antwort mit dem expandierten Text.
     """
     pid = uuid4()

@@ -6,13 +6,14 @@ Render-Service serverseitig befuellt. Versionierung analog persona/playbook
 (ADR-0004, ADR-0020): Identitaets-Zeile `system_prompt_template` + Snapshots
 in `system_prompt_template_version`.
 
-`body_format` (Migration 0025): `'plain'` = Liquid-Style-Plaintext (Default,
-rueckwaertskompatibel); `'blocknote'` = Stringified-BlockNote-JSON mit
-Custom-Inline-Blocks vom Typ `placeholder`, die der Renderer expandiert.
+Track B (Nur-BlockNote): `body` ist immer ein stringifiziertes BlockNote-JSON-
+Dokument mit Custom-Inline-Blocks vom Typ `placeholder`, die der Renderer
+expandiert. Der frueher gefuehrte `body_format`-Schalter (Migration 0025/0026)
+ist mit Migration `0030_blocknote_only.sql` entfallen.
 """
 
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
@@ -50,7 +51,6 @@ class SystemPromptTemplateCreate(BaseModel):
     # gesetzt. Wir lassen Clients aber auch explizit einen Slug uebergeben
     # (Default-Templates aus dem Seed nutzen feste Slugs).
     slug: SlugStr | None = None
-    body_format: Literal["plain", "blocknote"] = "plain"
     content: SystemPromptTemplateContent
 
 
@@ -60,7 +60,6 @@ class SystemPromptTemplateUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str | None = Field(default=None, min_length=1, max_length=200)
-    body_format: Literal["plain", "blocknote"] = "plain"
     content: SystemPromptTemplateContent
 
 
@@ -74,7 +73,6 @@ class SystemPromptTemplateRead(BaseModel):
     owner_id: UUID
     name: str
     slug: str
-    body_format: Literal["plain", "blocknote"] = "plain"
     current_version: int
     current_status: VersionStatus = VersionStatus.inactive
     has_pending_draft: bool = False

@@ -144,7 +144,7 @@ class PersonaService:
             raise RuntimeError("PersonaService.render benoetigt einen DB-Pool.")
         async with self._pool.acquire() as conn:
             body_rendered, unresolved = await render_template_body(
-                body_json, "blocknote", render_ctx, conn
+                body_json, render_ctx, conn
             )
 
         skills_table = render_skills_table(

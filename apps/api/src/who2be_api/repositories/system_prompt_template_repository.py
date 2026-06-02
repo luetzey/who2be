@@ -27,11 +27,11 @@ from who2be_models import (
 )
 
 # Identitaets-Zeile + Inhalt der aktuellen Version (analog Persona).
-# `body_format` liegt auf der Template-Zeile (nicht auf der Version) — es
-# beschreibt das Format des Body-Felds fuer alle Versionen des Templates.
+# Track B (Nur-BlockNote): `body_format` ist entfallen — der Body ist immer
+# BlockNote-JSON.
 _SELECT_CURRENT = """
     SELECT t.id, t.workspace_id, t.owner_id, t.name, t.slug,
-           t.body_format, t.current_version,
+           t.current_version,
            t.created_at, t.updated_at, tv.content,
            tv.status AS current_status,
            EXISTS (
@@ -62,7 +62,6 @@ class SystemPromptTemplateRepository(Protocol):
         name: str,
         slug: str,
         content: SystemPromptTemplateContent,
-        body_format: str = "plain",
     ) -> SystemPromptTemplateRead: ...
 
     async def list_by_workspace(
@@ -80,12 +79,6 @@ class SystemPromptTemplateRepository(Protocol):
         self, workspace_id: UUID, template_id: UUID
     ) -> SystemPromptTemplateContent | None: ...
 
-    async def fetch_active_content_with_format(
-        self, workspace_id: UUID, template_id: UUID
-    ) -> tuple[SystemPromptTemplateContent, str] | None:
-        """Liefert (content, body_format) der Active-Version oder None."""
-        ...
-
     async def update(
         self,
         workspace_id: UUID,
@@ -93,7 +86,6 @@ class SystemPromptTemplateRepository(Protocol):
         template_id: UUID,
         name: str | None,
         content: SystemPromptTemplateContent,
-        body_format: str = "plain",
     ) -> SystemPromptTemplateUpdateOutcome: ...
 
     async def restore_version(
@@ -131,21 +123,19 @@ class PgSystemPromptTemplateRepository:
         name: str,
         slug: str,
         content: SystemPromptTemplateContent,
-        body_format: str = "plain",
     ) -> SystemPromptTemplateRead:
         content_json = content.model_dump(mode="json")
         async with self._pool.acquire() as conn, conn.transaction():
             template = await conn.fetchrow(
                 "INSERT INTO system_prompt_template "
-                "(workspace_id, owner_id, name, slug, body_format) "
-                "VALUES ($1, $2, $3, $4, $5) "
-                "RETURNING id, workspace_id, owner_id, name, slug, body_format, "
+                "(workspace_id, owner_id, name, slug) "
+                "VALUES ($1, $2, $3, $4) "
+                "RETURNING id, workspace_id, owner_id, name, slug, "
                 "current_version, created_at, updated_at",
                 workspace_id,
                 owner_id,
                 name,
                 slug,
-                body_format,
             )
             await conn.execute(
                 "INSERT INTO system_prompt_template_version "
@@ -219,27 +209,6 @@ class PgSystemPromptTemplateRepository:
             return None
         return SystemPromptTemplateContent.model_validate(row["content"])
 
-    async def fetch_active_content_with_format(
-        self, workspace_id: UUID, template_id: UUID
-    ) -> tuple[SystemPromptTemplateContent, str] | None:
-        """Liefert (content, body_format) der Active-Version oder None.
-
-        Erweiterung um `body_format` fuer den Placeholder-Renderer (Welle 5).
-        """
-        row = await self._pool.fetchrow(
-            "SELECT tv.content, t.body_format "
-            "FROM system_prompt_template_version tv "
-            "JOIN system_prompt_template t ON t.id = tv.template_id "
-            "WHERE t.id = $1 AND t.workspace_id = $2 AND tv.status = 'active'",
-            template_id,
-            workspace_id,
-        )
-        if row is None:
-            return None
-        content = SystemPromptTemplateContent.model_validate(row["content"])
-        body_format: str = row["body_format"]
-        return content, body_format
-
     async def update(
         self,
         workspace_id: UUID,
@@ -247,7 +216,6 @@ class PgSystemPromptTemplateRepository:
         template_id: UUID,
         name: str | None,
         content: SystemPromptTemplateContent,
-        body_format: str = "plain",
     ) -> SystemPromptTemplateUpdateOutcome:
         content_json = content.model_dump(mode="json")
         async with self._pool.acquire() as conn, conn.transaction():
@@ -278,13 +246,12 @@ class PgSystemPromptTemplateRepository:
             template = await conn.fetchrow(
                 "UPDATE system_prompt_template "
                 "SET current_version = $1, name = COALESCE($2, name), "
-                "    body_format = $3, updated_at = now() "
-                "WHERE id = $4 "
-                "RETURNING id, workspace_id, owner_id, name, slug, body_format, "
+                "    updated_at = now() "
+                "WHERE id = $3 "
+                "RETURNING id, workspace_id, owner_id, name, slug, "
                 "current_version, created_at, updated_at",
                 next_version,
                 name,
-                body_format,
                 template_id,
             )
             await conn.execute(
@@ -318,9 +285,8 @@ class PgSystemPromptTemplateRepository:
         """Schreibt `content` (Snapshot) als neue Draft-Version (Track A §3.1).
 
         Non-destruktiv: frische Draft v(n+1), kein Pointer-Reset. 409
-        (`draft_exists`) bei bereits offenem Draft. `body_format` ist nicht Teil
-        des versionierten Contents — die aktuelle Template-Zeile behaelt ihr
-        Format; Name und Slug bleiben ebenfalls unveraendert.
+        (`draft_exists`) bei bereits offenem Draft. Name und Slug bleiben
+        unveraendert.
         """
         content_json = content.model_dump(mode="json")
         async with self._pool.acquire() as conn, conn.transaction():
@@ -344,7 +310,7 @@ class PgSystemPromptTemplateRepository:
                 "UPDATE system_prompt_template "
                 "SET current_version = $1, updated_at = now() "
                 "WHERE id = $2 "
-                "RETURNING id, workspace_id, owner_id, name, slug, body_format, "
+                "RETURNING id, workspace_id, owner_id, name, slug, "
                 "current_version, created_at, updated_at",
                 next_version,
                 template_id,

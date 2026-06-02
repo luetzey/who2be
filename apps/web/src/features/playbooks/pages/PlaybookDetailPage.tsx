@@ -34,10 +34,7 @@ import { splitTriggers } from '../lib/triggers'
 export function PlaybookDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { playbook, versions, loading, error, reload } = usePlaybook(id)
-  const { form, autoSave, initialBodyBlocks, initialBodyFormat } = usePlaybookForm(
-    playbook,
-    reload,
-  )
+  const { form, autoSave, initialBodyBlocks } = usePlaybookForm(playbook, reload)
   const resourceLinks = usePlaybookResourceLinks(id)
   const usages = usePlaybookUsages(id)
   const composition = usePlaybookComposes(id)
@@ -46,10 +43,10 @@ export function PlaybookDetailPage() {
   const role = useCurrentWorkspaceRole()
   const [actionBusy, setActionBusy] = useState(false)
 
-  // Ist der Body im BlockNote-Format, sind die Pills im Body die Quelle der
-  // Relationen — die separaten Picker werden read-only (Editier-Aktion
+  // Track B (Nur-BlockNote): die Pills im Body sind immer die Quelle der
+  // Relationen — die separaten Picker sind daher read-only (Editier-Aktion
   // ausgeblendet), damit es keine zwei konkurrierenden Quellen gibt.
-  const bodyIsBlockNote = playbook?.content.body_format === 'blocknote'
+  const bodyIsBlockNote = true
 
   const removeLink = (target: ResourceLink) => {
     const remaining = resourceLinks.links.filter(
@@ -246,9 +243,6 @@ export function PlaybookDetailPage() {
                 form={form}
                 formKey={`${playbook.id}-${playbook.current_version}`}
                 initialBodyBlocks={initialBodyBlocks}
-                initialBodyFormat={initialBodyFormat}
-                composesChildren={composition.children}
-                resourceLinks={resourceLinks.links}
               />
 
               <VersionHistory

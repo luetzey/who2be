@@ -21,7 +21,7 @@ import { notify } from '@/lib/feedback'
 
 import { PlaceholderHelp } from '../components/PlaceholderHelp'
 
-// Neue Templates nutzen immer body_format='blocknote'.
+// Track B (Nur-BlockNote): Templates sind immer BlockNote.
 // body-Validierung: kein min(1) — ein leeres BlockNote-Dok ist valid.
 const createSchema = z.object({
   name: z.string().min(1, 'Name erforderlich.'),
@@ -63,12 +63,11 @@ export function SystemPromptNewPage() {
         values.body !== '' ? values.body : JSON.stringify(blocksRef.current)
       const created = await api.createSystemPromptTemplate({
         name: values.name,
-        body_format: 'blocknote',
         content: {
           description: values.description,
-          // body_format lebt auf Template-Top-Level; content traegt nur
-          // description+body. body darf nicht leer sein (Pydantic min_length=1) —
-          // ein leeres BlockNote-Dok serialisiert zu "[]", was OK ist.
+          // Track B: content traegt nur description+body. body darf nicht leer
+          // sein (Pydantic min_length=1) — ein leeres BlockNote-Dok
+          // serialisiert zu "[]", was OK ist.
           body: bodyJson !== '' ? bodyJson : '[]',
         },
       })
@@ -92,7 +91,7 @@ export function SystemPromptNewPage() {
           title="Neues Template"
           description="Lege ein wiederverwendbares System-Prompt-Template an."
         />
-        <div className="grid gap-6 lg:grid-cols-[1fr_18rem]">
+        <div className="flex flex-col gap-6">
           <Card>
             <CardContent className="pt-6">
               <Form {...form}>
@@ -131,7 +130,10 @@ export function SystemPromptNewPage() {
                     name="body"
                     render={() => (
                       <FormItem>
-                        <FormLabel>Body</FormLabel>
+                        <div className="flex items-center justify-between">
+                          <FormLabel>Body</FormLabel>
+                          <PlaceholderHelp />
+                        </div>
                         <SystemPromptEditor onChange={handleBlockNoteChange} />
                         <FormMessage />
                       </FormItem>
@@ -151,12 +153,6 @@ export function SystemPromptNewPage() {
               </Form>
             </CardContent>
           </Card>
-          <aside
-            aria-label="Placeholder-Hilfe"
-            className="lg:sticky lg:top-4 lg:self-start"
-          >
-            <PlaceholderHelp compact />
-          </aside>
         </div>
       </Stack>
     </Container>

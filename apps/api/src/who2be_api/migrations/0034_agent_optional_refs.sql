@@ -1,5 +1,9 @@
--- Migration 0030 — agent: persona_id + system_prompt_template_id optional
+-- Migration 0034 — agent: persona_id + system_prompt_template_id optional
 -- (Feature-Expansion Track H — leere Huelle erlaubt)
+--
+-- Renumber 0030 -> 0034: Track H und Track D hatten beide parallel die Nummer
+-- 0030 vergeben. Da diese Migration idempotent ist (siehe unten), ist die
+-- Umbenennung gefahrlos — ein erneuter Lauf unter neuem Dateinamen ist ein No-Op.
 --
 -- Ein Agent darf als leere Huelle (ohne Persona und/oder Template) angelegt
 -- werden, die spaeter per PUT vervollstaendigt wird. Dafuer fallen die

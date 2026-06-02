@@ -122,6 +122,11 @@ const SystemPromptDetailPage = lazy(() =>
     default: mod.SystemPromptDetailPage,
   })),
 )
+const HelpPlaceholdersPage = lazy(() =>
+  import('@/features/system-prompts/pages/HelpPlaceholdersPage').then((mod) => ({
+    default: mod.HelpPlaceholdersPage,
+  })),
+)
 
 // DEV-only Component-Catalog (ADR 0018). In Production-Builds wird die Route
 // nicht registriert — Vite-Tree-Shaking laesst den Chunk dann komplett weg.
@@ -252,6 +257,10 @@ export function RouterRoot() {
                     element={<SettingsTokensPage />}
                   />
                 </Route>
+                <Route
+                  path="/w/:workspaceId/help/placeholders"
+                  element={<HelpPlaceholdersPage />}
+                />
                 {CatalogPage ? (
                   <Route path="/_catalog" element={<CatalogPage />} />
                 ) : null}

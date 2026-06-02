@@ -31,15 +31,14 @@ logger = logging.getLogger(__name__)
 
 async def render_template_body(
     body_text: str,
-    body_format: str,
     ctx: RenderContext,
     db: asyncpg.Connection,
 ) -> tuple[str, list[str]]:
-    """Expandiert Placeholders im Template-Body.
+    """Expandiert Placeholders im BlockNote-Template-Body (Track B: Nur-BlockNote).
 
-    Bei `body_format != 'blocknote'` wird der Body unveraendert zurueckgegeben
-    (rueckwaertskompatibel mit bestehenden `plain`-Templates). Die
-    unresolved-Liste ist in diesem Fall leer.
+    `body_text` ist immer ein stringifiziertes BlockNote-JSON-Dokument. Leere
+    oder ungueltige Bodies (z. B. frische Drafts) liefern den Rohwert + leere
+    unresolved-Liste — kein Fehler.
 
     Akzeptiert zwei BlockNote-JSON-Shapes:
     - Top-Level-Array `[{...block...}, ...]` (was `editor.document` liefert
@@ -49,18 +48,14 @@ async def render_template_body(
       benutzten).
 
     Args:
-        body_text:   Der rohe Template-Body-String aus der Datenbank.
-        body_format: `'plain'` oder `'blocknote'`.
-        ctx:         Render-Kontext (workspace_id, persona_id, jetzt).
-        db:          asyncpg-Connection fuer DB-Lookups der Resolver.
+        body_text: Der rohe BlockNote-Body-String aus der Datenbank.
+        ctx:       Render-Kontext (workspace_id, persona_id, jetzt).
+        db:        asyncpg-Connection fuer DB-Lookups der Resolver.
 
     Returns:
         Tuple (expanded_text, unresolved_keys) — unresolved_keys ist
         dedupliziert und lexikografisch sortiert.
     """
-    if body_format != "blocknote":
-        return body_text, []
-
     try:
         parsed: Any = json.loads(body_text)
     except json.JSONDecodeError:
