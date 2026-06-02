@@ -46,6 +46,8 @@
   --color-pill-date-fg: var(--pill-date-fg);
   --color-pill-tools: var(--pill-tools-bg);
   --color-pill-tools-fg: var(--pill-tools-fg);
+  --color-pill-catalog: var(--pill-catalog-bg);
+  --color-pill-catalog-fg: var(--pill-catalog-fg);
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -173,6 +175,8 @@
   --pill-date-fg: oklch(0.47 0.11 75);
   --pill-tools-bg: oklch(0.95 0 0);
   --pill-tools-fg: oklch(0.45 0 0);
+  --pill-catalog-bg: oklch(0.93 0.05 195);
+  --pill-catalog-fg: oklch(0.45 0.12 195);
 
   /*
    * Motion-Durations. Kein Tailwind-v4-Namespace dafuer; via
@@ -262,6 +266,8 @@
   --pill-date-fg: oklch(0.47 0.11 75);
   --pill-tools-bg: oklch(0.95 0 0);
   --pill-tools-fg: oklch(0.45 0 0);
+  --pill-catalog-bg: oklch(0.93 0.05 195);
+  --pill-catalog-fg: oklch(0.45 0.12 195);
 }
 
 :root[data-theme='dark'] {
@@ -305,6 +311,8 @@
   --pill-date-fg: oklch(0.87 0.1 75);
   --pill-tools-bg: oklch(0.32 0 0);
   --pill-tools-fg: oklch(0.85 0 0);
+  --pill-catalog-bg: oklch(0.32 0.05 195);
+  --pill-catalog-fg: oklch(0.85 0.1 195);
 }
 
 @layer base {

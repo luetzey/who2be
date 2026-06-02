@@ -42,6 +42,27 @@ Der gerenderte Prompt enthaelt (E4-Checkliste):
   Composite-/Modi-/Applied-Hinweisen.
 - **Datum:** `{{ date }}` → aktuelles Datum (ISO oder „human").
 
+#### Briefing-Pills (ADR-0025)
+
+Drei zusaetzliche Pills briefen den Agenten **handlungsorientiert** — der Fokus
+liegt darauf, dass der Agent nach dem Lesen weiss, *welches* Tool er *wann*
+ruft:
+
+- **`persona-ref` (Persona als MCP-Handle):** Rendert keine Inhalte, sondern
+  die Anweisung „Deine Persona ist **NAME** (id: …). Lade sie via
+  `get_persona("<id>")` …". So holt sich der Agent Profil + Modi dynamisch
+  zur Laufzeit, statt einen Snapshot fest im Prompt zu tragen. Alternative zum
+  einbettenden `persona-field:profile`.
+- **`persona-field:modes`:** Bettet nur die `## Modi`-Sektion ein (Teilmenge
+  von `profile`); ohne Modi bleibt die Stelle leer.
+- **`playbooks-catalog` (Playbook-Briefing-Tabelle):** Markdown-Tabelle der
+  persona-verknuepften aktiven Playbooks — **Playbook | Trigger | Aufruf |
+  Beschreibung**. Die `Aufruf`-Spalte enthaelt den konkreten
+  `fetch_playbook("<id>")`-Call. Pill-Setting `target_id ∈ {all, triggered}`
+  steuert, ob nur Playbooks mit Trigger gelistet werden. So ist der Agent
+  vorab gebrieft, was er wann laden kann — ohne erst `list_triggers()` zu
+  rufen.
+
 ### 2. Persona / Modi
 
 `get_persona(identifier)` gibt `PersonaRead.content.modes` zurueck.

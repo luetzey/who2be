@@ -78,13 +78,15 @@ describe('SystemPromptEditor', () => {
 })
 
 describe('buildSlashMenuItems', () => {
-  it('enthaelt alle vier Custom-Placeholder-Items', () => {
+  it('enthaelt alle Custom-Placeholder-Items', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const items = buildSlashMenuItems({} as any, vi.fn(), '')
     const titles = items.map((i) => i.title)
     expect(titles).toContain('Playbook')
     expect(titles).toContain('Resource')
     expect(titles).toContain('Persona-Feld')
+    expect(titles).toContain('Persona laden (MCP)')
+    expect(titles).toContain('Playbook-Katalog')
     expect(titles).toContain('Datum')
   })
 
@@ -114,6 +116,14 @@ describe('buildSlashMenuItems', () => {
     const dateItem = items.find((i) => i.title === 'Datum')
     dateItem?.onItemClick()
     expect(openPicker).toHaveBeenCalledWith('date')
+
+    const personaRefItem = items.find((i) => i.title === 'Persona laden (MCP)')
+    personaRefItem?.onItemClick()
+    expect(openPicker).toHaveBeenCalledWith('persona-ref')
+
+    const catalogItem = items.find((i) => i.title === 'Playbook-Katalog')
+    catalogItem?.onItemClick()
+    expect(openPicker).toHaveBeenCalledWith('playbooks-catalog')
   })
 })
 

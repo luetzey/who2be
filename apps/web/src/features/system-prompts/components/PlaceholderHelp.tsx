@@ -1,4 +1,4 @@
-import { BookText, Calendar, FileText, User, Wrench, X } from 'lucide-react'
+import { BookText, Calendar, FileText, Table, User, UserCog, Wrench, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -24,7 +24,19 @@ const SLASH_PLACEHOLDERS: readonly SlashRow[] = [
   {
     command: '/Persona-Feld',
     icon: User,
-    description: 'Name oder Beschreibung der Persona des Agents.',
+    description: 'Bettet Name, Beschreibung, das volle Profil oder nur die Modi der Persona ein.',
+  },
+  {
+    command: '/Persona laden (MCP)',
+    icon: UserCog,
+    description:
+      'Bettet keinen Inhalt ein, sondern weist den Agenten an, seine Persona zur Laufzeit via get_persona(...) selbst zu laden und ihre Modi anzuwenden.',
+  },
+  {
+    command: '/Playbook-Katalog',
+    icon: Table,
+    description:
+      'Tabelle der zugeordneten Playbooks (Name, Trigger, Aufruf, Beschreibung) — briefs den Agenten, was er wann via fetch_playbook(...) laden kann. Wahlweise alle oder nur getriggerte.',
   },
   {
     command: '/Datum',

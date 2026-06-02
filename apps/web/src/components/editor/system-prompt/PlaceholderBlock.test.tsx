@@ -39,6 +39,26 @@ describe('PlaceholderPill', () => {
     expect(pill).toHaveTextContent('Datum (lesbar)')
   })
 
+  it('rendert Persona-laden-Pill (MCP-Referenz)', () => {
+    render(<PlaceholderPill kind="persona-ref" label="Persona laden (MCP)" target_id="" />)
+    const pill = screen.getByTestId('placeholder-pill-persona-ref')
+    expect(pill).toBeInTheDocument()
+    expect(pill).toHaveTextContent('Persona laden (MCP)')
+  })
+
+  it('rendert Playbook-Katalog-Pill', () => {
+    render(
+      <PlaceholderPill
+        kind="playbooks-catalog"
+        label="Playbook-Katalog (alle)"
+        target_id="all"
+      />,
+    )
+    const pill = screen.getByTestId('placeholder-pill-playbooks-catalog')
+    expect(pill).toBeInTheDocument()
+    expect(pill).toHaveTextContent('Playbook-Katalog (alle)')
+  })
+
   it('faellt auf labelPrefix zurueck wenn label leer ist', () => {
     render(<PlaceholderPill kind="date" label="" target_id="" />)
     const pill = screen.getByTestId('placeholder-pill-date')
