@@ -14,8 +14,11 @@ import { Button } from '@/components/ui/button'
 import { AgentEditorForm } from '../components/AgentEditorForm'
 import { AgentHierarchyView } from '../components/AgentHierarchyView'
 import { CopyPromptButton } from '../components/CopyPromptButton'
+import { DeleteAgentButton } from '../components/DeleteAgentButton'
+import { DuplicateAgentButton } from '../components/DuplicateAgentButton'
 import { useAgent } from '../hooks/useAgent'
 import { useAgentForm } from '../hooks/useAgentForm'
+import { isAgentShell } from '../lib/shell'
 
 export function AgentDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -56,10 +59,14 @@ export function AgentDetailPage() {
                   title={agent.name}
                   description={agent.description || undefined}
                   actions={
-                    <CopyPromptButton
-                      agentId={agent.id}
-                      disabled={agent.status !== 'enabled'}
-                    />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <CopyPromptButton
+                        agentId={agent.id}
+                        disabled={agent.status !== 'enabled' || isAgentShell(agent)}
+                      />
+                      <DuplicateAgentButton agent={agent} />
+                      <DeleteAgentButton agent={agent} />
+                    </div>
                   }
                 />
               </Stack>

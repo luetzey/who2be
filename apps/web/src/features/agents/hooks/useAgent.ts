@@ -47,10 +47,18 @@ export function useAgent(id: string | undefined): UseAgentResult {
       .getAgent(id)
       .then(async (loadedAgent) => {
         setAgent(loadedAgent)
+        // Leere Huelle: Persona/Template (und damit Playbooks) koennen fehlen.
+        // Wir laden nur, was verknuepft ist — sonst trifft die UI `/null`.
         const [loadedPersona, loadedTemplate, loadedPlaybooks] = await Promise.all([
-          api.getPersona(loadedAgent.persona_id),
-          api.getSystemPromptTemplate(loadedAgent.system_prompt_template_id),
-          api.listPersonaPlaybooks(loadedAgent.persona_id),
+          loadedAgent.persona_id !== null
+            ? api.getPersona(loadedAgent.persona_id)
+            : Promise.resolve(null),
+          loadedAgent.system_prompt_template_id !== null
+            ? api.getSystemPromptTemplate(loadedAgent.system_prompt_template_id)
+            : Promise.resolve(null),
+          loadedAgent.persona_id !== null
+            ? api.listPersonaPlaybooks(loadedAgent.persona_id)
+            : Promise.resolve([]),
         ])
         setPersona(loadedPersona)
         setTemplate(loadedTemplate)

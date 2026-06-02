@@ -32,14 +32,20 @@ class AgentStatus(StrEnum):
 
 
 class AgentCreate(BaseModel):
-    """Eingabe fuer `POST .../agents` — legt einen Agent an."""
+    """Eingabe fuer `POST .../agents` — legt einen Agent an.
+
+    `persona_id` und `system_prompt_template_id` sind optional: ein Agent darf
+    als leere Huelle (ohne Persona und/oder Template) angelegt werden, die
+    spaeter per `PUT` vervollstaendigt wird. Eine unvollstaendige Huelle ist
+    nicht render- und nicht kopierbar (siehe `POST .../agents/{id}/copy`).
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1, max_length=200)
     description: str = Field(default="", max_length=2_000)
-    persona_id: UUID
-    system_prompt_template_id: UUID
+    persona_id: UUID | None = None
+    system_prompt_template_id: UUID | None = None
     status: AgentStatus = AgentStatus.enabled
 
 
@@ -55,6 +61,19 @@ class AgentUpdate(BaseModel):
     status: AgentStatus | None = None
 
 
+class AgentCopy(BaseModel):
+    """Eingabe fuer `POST .../agents/{id}/copy` — dupliziert einen Agent.
+
+    `name` ist optional; ohne Angabe leitet der Service einen Default aus dem
+    Quell-Namen ab (``"<Name> (Kopie)"``). Die Kopie uebernimmt Persona,
+    Template, Beschreibung und Status der Quelle.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+
+
 class AgentRead(BaseModel):
     """Agent im aktuellen Stand."""
 
@@ -65,11 +84,19 @@ class AgentRead(BaseModel):
     owner_id: UUID
     name: str
     description: str
-    persona_id: UUID
-    system_prompt_template_id: UUID
+    persona_id: UUID | None
+    system_prompt_template_id: UUID | None
     status: AgentStatus
     created_at: datetime
     updated_at: datetime
+
+    @property
+    def is_shell(self) -> bool:
+        """True, solange Persona ODER Template fehlt (unvollstaendige Huelle).
+
+        Eine unvollstaendige Huelle ist nicht render- und nicht kopierbar.
+        """
+        return self.persona_id is None or self.system_prompt_template_id is None
 
 
 # Output-Formate des Render-Endpoints. `plain` ist der Default (rohe

@@ -1,6 +1,7 @@
 import { config } from '../config'
 import type {
   Agent,
+  AgentCopyInput,
   AgentInput,
   AgentRenderFormat,
   AgentRenderResult,
@@ -256,6 +257,7 @@ export interface Api {
   createAgent: (input: AgentInput) => Promise<Agent>
   updateAgent: (id: string, input: AgentUpdateInput) => Promise<Agent>
   deleteAgent: (id: string) => Promise<void>
+  copyAgent: (id: string, input?: AgentCopyInput) => Promise<Agent>
   renderAgentPrompt: (
     id: string,
     format?: AgentRenderFormat,
@@ -530,6 +532,11 @@ export function createApi(token: string, workspaceId: string): Api {
       }),
     deleteAgent: (id) =>
       request<void>(token, `${ws}/agents/${id}`, { method: 'DELETE' }),
+    copyAgent: (id, input) =>
+      request<Agent>(token, `${ws}/agents/${id}/copy`, {
+        method: 'POST',
+        body: JSON.stringify(input ?? {}),
+      }),
     renderAgentPrompt: (id, format) => {
       const query = format !== undefined ? `?format=${format}` : ''
       return request<AgentRenderResult>(

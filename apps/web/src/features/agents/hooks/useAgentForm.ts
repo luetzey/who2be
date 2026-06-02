@@ -49,8 +49,9 @@ export function useAgentForm(
       form.reset({
         name: agent.name,
         description: agent.description,
-        persona_id: agent.persona_id,
-        system_prompt_template_id: agent.system_prompt_template_id,
+        // Huelle: null-Refs werden zu leerer Auswahl ("— bitte wählen —").
+        persona_id: agent.persona_id ?? '',
+        system_prompt_template_id: agent.system_prompt_template_id ?? '',
         status: agent.status,
       })
     }

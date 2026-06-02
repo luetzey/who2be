@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime, timedelta
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import asyncpg
 import jwt
@@ -308,6 +308,71 @@ def test_agent_crud_and_isolation(monkeypatch: pytest.MonkeyPatch) -> None:
             assert deleted.status_code == 204
     finally:
         cleanup_workspaces([owner, other])
+
+
+@pytest.mark.integration
+def test_agent_shell_create_and_copy_guard(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Leere Huelle anlegbar; Copy bei Huelle gesperrt, bei Vollagent erlaubt."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    base = f"/v1/workspaces/{ws}/agents"
+    try:
+        with TestClient(app) as client:
+            # Leere Huelle ohne Persona/Template anlegen.
+            shell = client.post(base, json={"name": "Leere Huelle"}, headers=auth)
+            assert shell.status_code == 201, shell.text
+            shell_body = shell.json()
+            assert shell_body["persona_id"] is None
+            assert shell_body["system_prompt_template_id"] is None
+            shell_id = shell_body["id"]
+
+            # Copy einer Huelle ist gesperrt (409).
+            blocked = client.post(f"{base}/{shell_id}/copy", json={}, headers=auth)
+            assert blocked.status_code == 409, blocked.text
+
+            # Render einer Huelle ist gesperrt (409) — kein Template.
+            render = client.get(f"{base}/{shell_id}/render", headers=auth)
+            assert render.status_code == 409
+
+            # Huelle vervollstaendigen.
+            persona = client.post(
+                f"/v1/workspaces/{ws}/personas",
+                json=_persona_body(),
+                headers=auth,
+            ).json()
+            tpl = client.get(f"/v1/workspaces/{ws}/system-prompts", headers=auth).json()
+            tpl_id = next(t["id"] for t in tpl if t["slug"] == "customer-support-agent")
+            put = client.put(
+                f"{base}/{shell_id}",
+                json={"persona_id": persona["id"], "system_prompt_template_id": tpl_id},
+                headers=auth,
+            )
+            assert put.status_code == 200, put.text
+
+            # Jetzt ist Copy erlaubt; Default-Name wird abgeleitet.
+            copied = client.post(f"{base}/{shell_id}/copy", json={}, headers=auth)
+            assert copied.status_code == 201, copied.text
+            copy_body = copied.json()
+            assert copy_body["id"] != shell_id
+            assert copy_body["name"] == "Leere Huelle (Kopie)"
+            assert copy_body["persona_id"] == persona["id"]
+            assert copy_body["system_prompt_template_id"] == tpl_id
+
+            # Copy mit explizitem Namen.
+            named = client.post(f"{base}/{shell_id}/copy", json={"name": "Klon"}, headers=auth)
+            assert named.status_code == 201
+            assert named.json()["name"] == "Klon"
+
+            # Copy eines unbekannten Agenten → 404.
+            missing = client.post(f"{base}/{uuid4()}/copy", json={}, headers=auth)
+            assert missing.status_code == 404
+    finally:
+        cleanup_workspaces([owner])
 
 
 @pytest.mark.integration

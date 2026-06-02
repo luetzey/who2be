@@ -35,8 +35,8 @@ class AgentRepository(Protocol):
         owner_id: UUID,
         name: str,
         description: str,
-        persona_id: UUID,
-        template_id: UUID,
+        persona_id: UUID | None,
+        template_id: UUID | None,
         status: AgentStatus,
     ) -> AgentRead | None: ...
 
@@ -75,8 +75,8 @@ class PgAgentRepository:
         owner_id: UUID,
         name: str,
         description: str,
-        persona_id: UUID,
-        template_id: UUID,
+        persona_id: UUID | None,
+        template_id: UUID | None,
         status: AgentStatus,
     ) -> AgentRead | None:
         try:

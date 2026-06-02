@@ -456,8 +456,9 @@ export interface Agent {
   owner_id: string
   name: string
   description: string
-  persona_id: string
-  system_prompt_template_id: string
+  // null = leere Huelle: Persona bzw. Template noch nicht zugewiesen.
+  persona_id: string | null
+  system_prompt_template_id: string | null
   status: AgentStatus
   created_at: string
   updated_at: string
@@ -466,9 +467,15 @@ export interface Agent {
 export interface AgentInput {
   name: string
   description?: string
-  persona_id: string
-  system_prompt_template_id: string
+  // Optional: ohne Refs entsteht eine leere Huelle.
+  persona_id?: string | null
+  system_prompt_template_id?: string | null
   status?: AgentStatus
+}
+
+export interface AgentCopyInput {
+  // Ohne Namen leitet der Server "<Name> (Kopie)" ab.
+  name?: string
 }
 
 export interface AgentUpdateInput {

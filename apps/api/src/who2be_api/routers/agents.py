@@ -33,6 +33,7 @@ from who2be_api.services.agent_render_service import AgentRenderService
 from who2be_api.services.agent_service import AgentService
 from who2be_api.services.mcp_limit_service import enforce_mcp_read_limit
 from who2be_models import (
+    AgentCopy,
     AgentCreate,
     AgentRead,
     AgentRenderResponse,
@@ -126,6 +127,23 @@ async def update_agent(
 async def delete_agent(request: Request, agent_id: UUID, ctx: Ctx, service: Service) -> Response:
     await service.delete(ctx, agent_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{agent_id}/copy", status_code=status.HTTP_201_CREATED)
+@limiter.limit(write_limit)
+async def copy_agent(
+    request: Request,
+    agent_id: UUID,
+    data: AgentCopy,
+    ctx: Ctx,
+    service: Service,
+) -> AgentRead:
+    """Dupliziert einen Agent unter neuem Namen.
+
+    409, wenn der Quell-Agent eine unvollstaendige Huelle ist (Persona oder
+    Template fehlt) — eine solche Kopie waere selbst nicht einsetzbar.
+    """
+    return await service.copy(ctx, agent_id, data)
 
 
 @router.get("/{agent_id}/render")
