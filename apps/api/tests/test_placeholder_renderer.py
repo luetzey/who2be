@@ -1334,12 +1334,15 @@ class TestRenderTemplateBody:
             }
         )
 
-    def test_plain_format_returned_as_is_with_empty_unresolved(self) -> None:
+    def test_non_json_body_returned_as_is_with_empty_unresolved(self) -> None:
+        # Track B: kein body_format mehr — ein nicht-JSON-Body (z. B. ein
+        # frischer Plain-Entwurf) wird unveraendert + leere unresolved-Liste
+        # zurueckgegeben (kein Fehler).
         db = _make_db()
         ctx = _ctx()
         body = "Hallo {{ persona.name }}"
 
-        text, unresolved = _async_run(render_template_body(body, "plain", ctx, db))
+        text, unresolved = _async_run(render_template_body(body, ctx, db))
 
         assert text == body
         assert unresolved == []
@@ -1349,7 +1352,7 @@ class TestRenderTemplateBody:
         ctx = _ctx()
         doc = self._blocknote_doc({"type": "text", "text": "Hallo Welt", "styles": {}})
 
-        text, unresolved = _async_run(render_template_body(doc, "blocknote", ctx, db))
+        text, unresolved = _async_run(render_template_body(doc, ctx, db))
 
         assert "Hallo Welt" in text
         assert unresolved == []
@@ -1361,7 +1364,7 @@ class TestRenderTemplateBody:
         ctx = _ctx()
         doc = self._blocknote_doc_array({"type": "text", "text": "Top-Array", "styles": {}})
 
-        text, unresolved = _async_run(render_template_body(doc, "blocknote", ctx, db))
+        text, unresolved = _async_run(render_template_body(doc, ctx, db))
 
         assert "Top-Array" in text
         assert unresolved == []
@@ -1374,7 +1377,7 @@ class TestRenderTemplateBody:
             {"type": "placeholder", "props": {"kind": "date", "target_id": "", "label": "Datum"}},
         )
 
-        text, unresolved = _async_run(render_template_body(doc, "blocknote", ctx, db))
+        text, unresolved = _async_run(render_template_body(doc, ctx, db))
 
         assert text.strip() == "Heute: 2026-05-31"
         assert unresolved == []
@@ -1386,7 +1389,7 @@ class TestRenderTemplateBody:
             {"type": "placeholder", "props": {"kind": "date", "target_id": "", "label": "Datum"}}
         )
 
-        text, unresolved = _async_run(render_template_body(doc, "blocknote", ctx, db))
+        text, unresolved = _async_run(render_template_body(doc, ctx, db))
 
         assert "2026-05-31" in text
         assert unresolved == []
@@ -1401,7 +1404,7 @@ class TestRenderTemplateBody:
             }
         )
 
-        text, unresolved = _async_run(render_template_body(doc, "blocknote", ctx, db))
+        text, unresolved = _async_run(render_template_body(doc, ctx, db))
 
         assert "31. Mai 2026" in text
         assert unresolved == []
@@ -1416,7 +1419,7 @@ class TestRenderTemplateBody:
             }
         )
 
-        text, unresolved = _async_run(render_template_body(doc, "blocknote", ctx, db))
+        text, unresolved = _async_run(render_template_body(doc, ctx, db))
 
         assert "unknown-kind" in text
         # Unbekanntes Kind landet NICHT in unresolved (kein Resolver vorhanden).
@@ -1427,7 +1430,7 @@ class TestRenderTemplateBody:
         ctx = _ctx()
         bad_body = "{not valid json"
 
-        text, unresolved = _async_run(render_template_body(bad_body, "blocknote", ctx, db))
+        text, unresolved = _async_run(render_template_body(bad_body, ctx, db))
 
         assert text == bad_body
         assert unresolved == []
@@ -1445,7 +1448,7 @@ class TestRenderTemplateBody:
             {"type": "text", "text": ".", "styles": {}},
         )
 
-        text, unresolved = _async_run(render_template_body(doc, "blocknote", ctx, db))
+        text, unresolved = _async_run(render_template_body(doc, ctx, db))
 
         assert "Heute ist der 31. Mai 2026." in text
         assert unresolved == []
@@ -1469,7 +1472,7 @@ class TestRenderTemplateBody:
             }
         )
 
-        text, unresolved = _async_run(render_template_body(doc, "blocknote", ctx, db))
+        text, unresolved = _async_run(render_template_body(doc, ctx, db))
 
         assert text == "<Playbook nicht verfuegbar>"
         assert unresolved == ["playbook:keine-uuid"]
@@ -1486,7 +1489,7 @@ class TestRenderTemplateBody:
             }
         )
 
-        text, unresolved = _async_run(render_template_body(doc, "blocknote", ctx, db))
+        text, unresolved = _async_run(render_template_body(doc, ctx, db))
 
         assert text == "<Playbook nicht verfuegbar>"
         assert unresolved == [f"playbook:{target}"]
@@ -1510,7 +1513,7 @@ class TestRenderTemplateBody:
             }
         )
 
-        text, unresolved = _async_run(render_template_body(doc, "blocknote", ctx, db))
+        text, unresolved = _async_run(render_template_body(doc, ctx, db))
 
         assert text == ""
         assert unresolved == ["persona-field:name"]
@@ -1599,7 +1602,7 @@ class TestRenderTemplateBody:
             ]
         )
 
-        text, unresolved = _async_run(render_template_body(doc, "blocknote", ctx, db))
+        text, unresolved = _async_run(render_template_body(doc, ctx, db))
 
         # Valider Playbook muss im Text erscheinen.
         assert "Begruessung" in text
@@ -1652,7 +1655,7 @@ class TestRenderTemplateBody:
             ]
         )
 
-        _text, unresolved = _async_run(render_template_body(doc, "blocknote", ctx, db))
+        _text, unresolved = _async_run(render_template_body(doc, ctx, db))
 
         # Nur einmal in der Liste.
         assert unresolved == [f"playbook:{target}"]
@@ -1668,6 +1671,6 @@ class TestRenderTemplateBody:
             },
         )
 
-        _text, unresolved = _async_run(render_template_body(doc, "blocknote", ctx, db))
+        _text, unresolved = _async_run(render_template_body(doc, ctx, db))
 
         assert unresolved == []

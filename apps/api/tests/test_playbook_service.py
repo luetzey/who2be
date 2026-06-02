@@ -572,7 +572,6 @@ def _blocknote_content(body: str, description: str = "Flow") -> PlaybookContent:
         type="workflow",
         tags=[],
         triggers=None,
-        body_format="blocknote",
     )
 
 
@@ -627,16 +626,17 @@ def test_blocknote_create_syncs_composition_and_resource_links() -> None:
     assert links.last_links[0].block_id == "h1"
 
 
-def test_plain_create_leaves_link_tables_untouched() -> None:
+def test_create_with_pill_free_body_syncs_empty_links() -> None:
     repo = FakePlaybookRepository()
     comp = FakeCompositionRepo()
     links = FakeResourceLinkRepo()
     service = _make_service(repo, comp, links)
     ctx = _ctx(uuid4())
     asyncio.run(service.create(ctx, PlaybookCreate(name="Plain", content=_content())))
-    # 'plain'-Body → kein Sync-Aufruf, Tabellen unberuehrt.
-    assert comp.last_child_ids is None
-    assert links.last_links is None
+    # Track B: der Body treibt immer — ein pill-freier (hier leerer/nicht-JSON)
+    # Body synct leere Link-Sets (idempotenter No-Op fuer ein frisches Playbook).
+    assert comp.last_child_ids == []
+    assert links.last_links == []
 
 
 def test_blocknote_update_syncs_links() -> None:

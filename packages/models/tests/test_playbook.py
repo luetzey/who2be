@@ -38,21 +38,20 @@ def test_content_defaults_tags_and_triggers() -> None:
     assert content.triggers is None
 
 
-def test_content_defaults_body_format_to_plain() -> None:
-    # PR-B: fehlender Key (Alt-Snapshots) -> "plain" (Backward-Compat).
-    assert PlaybookContent(description="d", body="b", type="workflow").body_format == "plain"
-    legacy = PlaybookContent.model_validate({"description": "d", "body": "b", "type": "workflow"})
-    assert legacy.body_format == "plain"
+def test_content_body_is_plain_string_field() -> None:
+    # Track B (Nur-BlockNote): `body` ist immer ein (stringifizierter BlockNote-)
+    # String; es gibt keinen `body_format`-Schalter mehr.
+    content = PlaybookContent(description="d", body="[]", type="workflow")
+    assert content.body == "[]"
 
 
-def test_content_accepts_blocknote_body_format() -> None:
-    content = PlaybookContent(description="d", body="[]", type="workflow", body_format="blocknote")
-    assert content.body_format == "blocknote"
-
-
-def test_content_rejects_unknown_body_format() -> None:
+def test_content_rejects_body_format_key() -> None:
+    # `extra="forbid"`: ein verbliebener body_format-Key (Alt-Client) wird
+    # abgelehnt — Migration 0030 entfernt ihn aus allen Snapshots.
     with pytest.raises(ValidationError):
-        PlaybookContent(description="d", body="b", type="workflow", body_format="markdown")  # type: ignore[arg-type]
+        PlaybookContent.model_validate(
+            {"description": "d", "body": "b", "type": "workflow", "body_format": "blocknote"}
+        )
 
 
 def test_create_rejects_unknown_fields() -> None:

@@ -7,7 +7,7 @@ Join filtern kann (siehe architecture.md §3).
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Annotated, Literal
+from typing import Annotated
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
@@ -41,6 +41,12 @@ class PlaybookContent(BaseModel):
     Welle 4: description, body und type haben Default "" — Create erlaubt
     unvollstaendige Drafts. Promote-Validation (draft → review/active) prueft
     im Transition-Endpunkt auf vollstaendige Pflichtfelder.
+
+    Track B (Nur-BlockNote): `body` ist immer ein stringifiziertes BlockNote-
+    JSON-Dokument (`JSON.stringify(editor.document)`) mit Inline-Placeholder-
+    Pills. Der frueher gefuehrte `body_format`-Schalter ist entfallen; Migration
+    `0030_blocknote_only.sql` hat Altbestaende markdown-aware konvertiert und den
+    `body_format`-Key aus allen Versions-Snapshots entfernt.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -52,13 +58,6 @@ class PlaybookContent(BaseModel):
     type: str = Field(default="", max_length=100)
     tags: list[TagStr] = Field(default_factory=list, max_length=50)
     triggers: str | None = Field(default=None, max_length=2_000)
-    # PR-B: Format des `body`-Felds. "plain" = \n\n-getrennter Plaintext (Alt-
-    # bestand, Default fuer fehlende Keys → Backward-Compat). "blocknote" =
-    # stringifiziertes BlockNote-JSON mit Inline-Placeholder-Pills (resource/
-    # playbook). Liegt bewusst im versionierten Content-jsonb (nicht als Spalte),
-    # damit alte Versions-Snapshots automatisch "plain" bleiben (additive
-    # jsonb-Evolution nach ADR-0009; wird nicht gequert/gefiltert).
-    body_format: Literal["plain", "blocknote"] = "plain"
 
 
 class PlaybookCreate(BaseModel):

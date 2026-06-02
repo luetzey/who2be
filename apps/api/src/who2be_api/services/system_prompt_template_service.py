@@ -95,7 +95,6 @@ class SystemPromptTemplateService:
                 data.name,
                 slug,
                 data.content,
-                data.body_format,
             )
         except asyncpg.UniqueViolationError as exc:
             raise _slug_conflict() from exc
@@ -128,7 +127,7 @@ class SystemPromptTemplateService:
         """Erzeugt eine neue Version des Templates (Draft-on-Edit bei Active)."""
         require_role(ctx, WorkspaceRole.editor)
         outcome = await self._repo.update(
-            ctx.workspace_id, ctx.user_id, template_id, data.name, data.content, data.body_format
+            ctx.workspace_id, ctx.user_id, template_id, data.name, data.content
         )
         if outcome.conflict == "draft_exists":
             raise _draft_conflict()

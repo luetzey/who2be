@@ -199,7 +199,6 @@ def _blocknote_template_body(
     }
     return {
         "name": name,
-        "body_format": "blocknote",
         "content": {"description": "", "body": json.dumps(doc)},
     }
 
@@ -243,7 +242,7 @@ def test_fetch_agent_rendered_expands_all_placeholder_kinds(
             ).json()
             _promote_to_active(client, f"/v1/workspaces/{ws}/resources", res["id"], auth)
 
-            # 4. Template mit body_format='blocknote' anlegen.
+            # 4. BlockNote-Template anlegen.
             tpl_body = _blocknote_template_body(
                 "Test-Template-Welle5",
                 pb["id"],
@@ -257,7 +256,6 @@ def test_fetch_agent_rendered_expands_all_placeholder_kinds(
             )
             assert tpl.status_code == 201, tpl.text
             tpl_data = tpl.json()
-            assert tpl_data["body_format"] == "blocknote"
             tpl_id = tpl_data["id"]
             _promote_to_active(client, f"/v1/workspaces/{ws}/system-prompts", tpl_id, auth)
 
@@ -521,7 +519,6 @@ def test_agent_render_blocknote_fills_unresolved_placeholders(
                 f"/v1/workspaces/{ws}/system-prompts",
                 json={
                     "name": "Welle6-Test-Template",
-                    "body_format": "blocknote",
                     "content": {"description": "", "body": json.dumps(doc)},
                 },
                 headers=auth,

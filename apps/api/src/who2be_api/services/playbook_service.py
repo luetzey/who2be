@@ -41,7 +41,7 @@ class PlaybookRenderResponse(BaseModel):
     """Antwort des Render-Endpoints: expandierter Body + offene Placeholder-Keys.
 
     Spiegelt den Agent-Render-Vertrag: `body_rendered` ist der Plain-Text-Output
-    von `render_template_body`; bei `body_format='plain'` der rohe Body. `unresolved`
+    von `render_template_body` (Track B: Body ist immer BlockNote). `unresolved`
     listet deduplizierte, lexikografisch sortierte Miss-Keys.
     """
 
@@ -114,9 +114,9 @@ class PlaybookService:
     ) -> PlaybookRenderResponse:
         """Expandiert den Playbook-Body durch den Placeholder-Renderer (B5).
 
-        Bei `body_format != 'blocknote'` liefert `render_template_body` den rohen
-        Body unveraendert zurueck (Z.61-62 im Renderer). MCP nutzt diesen Endpoint,
-        da der MCP-Prozess keinen DB-Zugriff hat.
+        Track B: Der Body ist immer BlockNote-JSON; Inline-Pills werden
+        serverseitig expandiert. MCP nutzt diesen Endpoint, da der MCP-Prozess
+        keinen DB-Zugriff hat.
         """
         playbook = await self.get(ctx, playbook_id)
         render_ctx = RenderContext(
@@ -127,7 +127,6 @@ class PlaybookService:
         async with self._pool.acquire() as conn:
             body_rendered, unresolved = await render_template_body(
                 playbook.content.body,
-                playbook.content.body_format,
                 render_ctx,
                 conn,
             )
@@ -138,15 +137,13 @@ class PlaybookService:
     ) -> None:
         """Save-Sync „Body treibt" (B3): extrahiert Inline-Pills und synct sie.
 
-        Laeuft NUR bei `body_format=='blocknote'`. 'plain'-Bodies bleiben komplett
-        unangetastet (Composition-/Resource-Link-Tabellen werden nicht beruehrt).
+        Track B: Der Body ist immer BlockNote; `extract_pills` toleriert leere/
+        ungueltige Bodies (liefert dann leere Listen).
 
         Delegiert an die Services (nicht die Repos), damit Dedup, Self-Ref-Filter,
         Zyklus-Guard und Heading-Anker-Validierung greifen. Ein Zyklus (→ 409) oder
         ungueltiger Block-Anker (→ 422) propagiert als HTTPException nach oben.
         """
-        if content.body_format != "blocknote":
-            return
         child_ids, resource_links = extract_pills(content.body)
         await self._composition_service.set_composition(
             ctx, playbook_id, PlaybookCompositionLinkSet(child_ids=child_ids)

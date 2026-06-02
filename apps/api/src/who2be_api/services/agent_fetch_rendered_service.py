@@ -104,13 +104,12 @@ class AgentFetchRenderedService:
                 detail="Agent-Persona nicht gefunden (FK-Konsistenzproblem).",
             )
 
-        # Template-Active-Content + body_format laden.
-        result = await self._template_repo.fetch_active_content_with_format(
+        # Template-Active-Content laden (Track B: Body ist immer BlockNote).
+        template_content = await self._template_repo.fetch_active_content(
             workspace_id, agent.system_prompt_template_id
         )
-        if result is None:
+        if template_content is None:
             raise _template_not_active()
-        template_content, body_format = result
 
         # Render-Kontext aufbauen.
         ctx = RenderContext(
@@ -123,7 +122,6 @@ class AgentFetchRenderedService:
         async with self._pool.acquire() as conn:
             rendered, unresolved = await render_template_body(
                 template_content.body,
-                body_format,
                 ctx,
                 conn,
             )

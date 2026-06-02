@@ -88,11 +88,11 @@ class PlaybookWithResources(BaseModel):
     linked_blocks: list[ResourceLinkRead]
     linked_resources: list[ResourceRead]
     composed_playbooks: list[PlaybookRead] = []  # geordnete, aktive Kinder
-    # B5: serverseitig expandierter Body. Bei `body_format='blocknote'` werden die
-    # Inline-Pills (playbook/resource/…) zu Plain-Text aufgeloest; bei `'plain'`
-    # ist es der rohe `playbook.content.body`. Der Agent nutzt diesen Text statt
-    # `playbook.content.body`, da letzterer fuer Blocknote nur stringifiziertes JSON
-    # ist. Additives Feld → bricht den bestehenden ADR-0021-Vertrag nicht.
+    # B5: serverseitig expandierter Body. Track B (Nur-BlockNote): die Inline-
+    # Pills (playbook/resource/…) werden zu Plain-Text aufgeloest. Der Agent
+    # nutzt diesen Text statt `playbook.content.body`, da letzterer nur
+    # stringifiziertes BlockNote-JSON ist. Additives Feld → bricht den
+    # bestehenden ADR-0021-Vertrag nicht.
     body_rendered: str = ""
 
 
@@ -212,10 +212,9 @@ async def fetch_playbook(playbook_id: str) -> PlaybookWithResources:
     ADR-0024). Tiefere Ebenen per `fetch_playbook(child_id)` nachladen. Ein
     Composite-Agent folgt der Sequenz in `composed_playbooks` der Reihe nach.
 
-    `body_rendered` traegt den serverseitig expandierten Playbook-Body (B5): bei
-    `body_format='blocknote'` werden Inline-Pills zu Plain-Text aufgeloest, bei
-    `'plain'` ist es der rohe Body. Nutze `body_rendered` statt
-    `playbook.content.body` — letzterer ist fuer Blocknote nur stringifiziertes JSON.
+    `body_rendered` traegt den serverseitig expandierten Playbook-Body (B5):
+    Inline-Pills werden zu Plain-Text aufgeloest. Nutze `body_rendered` statt
+    `playbook.content.body` — letzterer ist nur stringifiziertes BlockNote-JSON.
     """
     try:
         parsed = UUID(playbook_id)
