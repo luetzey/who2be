@@ -122,6 +122,13 @@ export interface UsePlaybookFormResult {
   // `field.value` taugt dafuer nicht, weil form.reset erst nach dem Mount
   // im Effect laeuft.
   initialBodyBlocks: ResourceBlock[]
+  // Initial-Body-Format aus dem playbook-Prop. Form-State traegt diesen Wert
+  // erst NACH dem ersten Mount (form.reset im Effect) — die Editor-Branch-
+  // Auswahl im PlaybookEditorForm muss aber schon im ersten Render stimmen,
+  // sonst landet ein blocknote-Body mit Placeholder-Pills im default-
+  // schema-ResourceEditor und stuerzt mit "node type placeholder not found"
+  // ab.
+  initialBodyFormat: SystemPromptBodyFormat
 }
 
 /**
@@ -186,8 +193,10 @@ export function usePlaybookForm(
     () => (playbook !== null ? deriveInitialBlocks(playbook.content) : []),
     [playbook],
   )
+  const initialBodyFormat: SystemPromptBodyFormat =
+    playbook !== null ? readBodyFormat(playbook.content) : 'plain'
 
-  return { form, autoSave, initialBodyBlocks }
+  return { form, autoSave, initialBodyBlocks, initialBodyFormat }
 }
 
 export { PLAYBOOK_TYPES }

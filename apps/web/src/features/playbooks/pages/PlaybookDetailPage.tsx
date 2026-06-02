@@ -33,7 +33,10 @@ import { splitTriggers } from '../lib/triggers'
 export function PlaybookDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { playbook, versions, loading, error, reload } = usePlaybook(id)
-  const { form, autoSave, initialBodyBlocks } = usePlaybookForm(playbook, reload)
+  const { form, autoSave, initialBodyBlocks, initialBodyFormat } = usePlaybookForm(
+    playbook,
+    reload,
+  )
   const resourceLinks = usePlaybookResourceLinks(id)
   const usages = usePlaybookUsages(id)
   const composition = usePlaybookComposes(id)
@@ -242,6 +245,7 @@ export function PlaybookDetailPage() {
                 form={form}
                 formKey={`${playbook.id}-${playbook.current_version}`}
                 initialBodyBlocks={initialBodyBlocks}
+                initialBodyFormat={initialBodyFormat}
                 composesChildren={composition.children}
                 resourceLinks={resourceLinks.links}
               />
