@@ -9,6 +9,13 @@ export function sanitizeNext(raw: string | null): string {
   if (!raw.startsWith('/') || raw.startsWith('//')) {
     return '/'
   }
+  // Backslashes verbieten: manche Browser normalisieren `\` zu `/`, sodass
+  // `/\evil.com` als protocol-relative `//evil.com` interpretiert wird — der
+  // `startsWith('//')`-Check oben greift dann nicht. In-App-Pfade brauchen nie
+  // einen Backslash, daher folgenlos.
+  if (raw.includes('\\')) {
+    return '/'
+  }
   if (raw.includes('://')) {
     return '/'
   }

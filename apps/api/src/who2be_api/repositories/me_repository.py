@@ -54,7 +54,12 @@ class PgMeRepository:
         # default_workspace_id traegt.
         if not rows:
             user_email = await self._lookup_email(user_id)
-            async with self._pool.acquire() as conn:
+            # Transaktion: der Seed besteht aus mehreren Inserts (Org, Member,
+            # Workspace, Default-Templates). Atomar, damit zwei parallele
+            # Erstaufrufe desselben Users keinen Teilzustand hinterlassen — die
+            # ON-CONFLICT-Klauseln in ensure_personal_workspace machen den
+            # Re-Lauf idempotent (analog WorkspaceRepository.create).
+            async with self._pool.acquire() as conn, conn.transaction():
                 await ensure_personal_workspace(conn, user_id, user_email=user_email)
             rows = await self._pool.fetch(_MEMBER_QUERY, user_id)
 

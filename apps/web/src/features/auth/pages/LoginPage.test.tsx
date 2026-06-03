@@ -62,6 +62,13 @@ describe('sanitizeNext', () => {
     expect(sanitizeNext('//evil.com/path')).toBe('/')
   })
 
+  it('ignoriert Backslash-Tricks wie /\\evil.com', () => {
+    // Browser normalisieren `\` teils zu `/` → protocol-relative Umgehung.
+    expect(sanitizeNext('/\\evil.com')).toBe('/')
+    expect(sanitizeNext('/\\/evil.com')).toBe('/')
+    expect(sanitizeNext('/path\\with\\backslash')).toBe('/')
+  })
+
   it('ignoriert vollqualifizierte URLs', () => {
     expect(sanitizeNext('https://evil.com')).toBe('/')
     expect(sanitizeNext('http://evil.com/path')).toBe('/')
