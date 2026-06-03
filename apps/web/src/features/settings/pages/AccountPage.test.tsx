@@ -2,9 +2,11 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { updateUser, signOut } = vi.hoisted(() => ({
+const { updateUser, signOut, exportMyData, deleteAccount } = vi.hoisted(() => ({
   updateUser: vi.fn(),
   signOut: vi.fn(),
+  exportMyData: vi.fn(),
+  deleteAccount: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase', () => ({
@@ -13,6 +15,12 @@ vi.mock('@/lib/supabase', () => ({
 
 vi.mock('@/lib/feedback', () => ({
   notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
+}))
+
+// Track O: Export-/Konto-Löschen-Sektionen nutzen useApi — hier gestubbt, damit
+// der Test ohne AuthTokenProvider auskommt.
+vi.mock('@/api/useApi', () => ({
+  useApi: () => ({ exportMyData, deleteAccount }),
 }))
 
 // ThemeToggle braucht den ThemeProvider-Context; fuer den AccountPage-Test
@@ -47,6 +55,8 @@ function renderPage() {
 afterEach(() => {
   updateUser.mockReset()
   signOut.mockReset()
+  exportMyData.mockReset()
+  deleteAccount.mockReset()
 })
 
 describe('AccountPage', () => {
@@ -92,6 +102,46 @@ describe('AccountPage', () => {
     })
     await waitFor(() => {
       expect(screen.getByText('LOGIN')).toBeInTheDocument()
+    })
+  })
+
+  it('exportiert die Daten ueber die API', async () => {
+    exportMyData.mockResolvedValue({ user_id: 'user-1', organizations: [] })
+    // jsdom kennt createObjectURL nicht — stubben.
+    URL.createObjectURL = vi.fn(() => 'blob:x')
+    URL.revokeObjectURL = vi.fn()
+    renderPage()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Daten exportieren' }))
+
+    await waitFor(() => {
+      expect(exportMyData).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('loescht das Konto erst nach E-Mail-Bestaetigung und meldet ab', async () => {
+    deleteAccount.mockResolvedValue({ purge_after: '2026-07-03T00:00:00Z' })
+    signOut.mockResolvedValue({ error: null })
+    renderPage()
+
+    // Dialog oeffnen.
+    fireEvent.click(screen.getByRole('button', { name: 'Konto löschen' }))
+
+    // Ohne passende E-Mail bleibt der Bestaetigen-Button deaktiviert.
+    const confirmButton = screen.getByRole('button', { name: 'Konto endgültig löschen' })
+    expect(confirmButton).toBeDisabled()
+
+    fireEvent.change(screen.getByLabelText('E-Mail'), {
+      target: { value: 'agent@who2be.dev' },
+    })
+    expect(confirmButton).toBeEnabled()
+    fireEvent.click(confirmButton)
+
+    await waitFor(() => {
+      expect(deleteAccount).toHaveBeenCalledTimes(1)
+    })
+    await waitFor(() => {
+      expect(signOut).toHaveBeenCalledWith({ scope: 'global' })
     })
   })
 })

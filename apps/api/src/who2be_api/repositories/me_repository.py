@@ -35,7 +35,7 @@ _MEMBER_QUERY = (
     "FROM workspace_member m "
     "JOIN workspace w ON w.id = m.workspace_id "
     "JOIN organization o ON o.id = w.org_id "
-    "WHERE m.user_id = $1 "
+    "WHERE m.user_id = $1 AND o.deleted_at IS NULL "
     "ORDER BY o.created_at ASC, o.id ASC, m.joined_at ASC, w.id ASC"
 )
 

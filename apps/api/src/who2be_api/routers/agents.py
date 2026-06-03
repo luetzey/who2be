@@ -25,6 +25,7 @@ from who2be_api.repositories.system_prompt_template_repository import (
 from who2be_api.services.agent_fetch_rendered_service import AgentFetchRenderedService
 from who2be_api.services.agent_render_service import AgentRenderService
 from who2be_api.services.agent_service import AgentService
+from who2be_api.services.entity_quota_service import enforce_entity_quota
 from who2be_api.services.mcp_limit_service import enforce_mcp_read_limit
 from who2be_models import (
     AgentCopy,
@@ -88,7 +89,11 @@ async def list_agents(
     return items
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(enforce_entity_quota)],
+)
 @limiter.limit(write_limit)
 async def create_agent(
     request: Request, data: AgentCreate, ctx: Ctx, service: Service

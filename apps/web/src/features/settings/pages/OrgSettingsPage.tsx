@@ -1,9 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Check } from 'lucide-react'
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { z } from 'zod'
 
+import type { MeOrganization } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { useSession } from '@/auth/session-context'
 import { useWorkspaceId } from '@/auth/useWorkspaceId'
@@ -16,6 +18,16 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+import {
   Form,
   FormControl,
   FormDescription,
@@ -25,6 +37,7 @@ import {
   FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { notify } from '@/lib/feedback'
 import { roleLabel } from '@/lib/roles'
 
@@ -227,7 +240,92 @@ export function OrgSettingsPage() {
             </p>
           </CardContent>
         </Card>
+
+        {org.kind === 'company' && isAdmin ? <DeleteOrgSection org={org} /> : null}
       </Stack>
     </Container>
+  )
+}
+
+// Danger-Zone (Track O): Org-Löschung mit 30-Tage-Grace. Nur der Org-Owner darf
+// das wirklich — das Backend enforced es (403 → Toast); hier zeigen wir den
+// Eintrag für Company-Org-Admins, Personal-Orgs laufen über die Konto-Löschung.
+function DeleteOrgSection({ org }: { org: MeOrganization }) {
+  const api = useApi()
+  const { refreshMe } = useSession()
+  const navigate = useNavigate()
+  const [confirm, setConfirm] = useState('')
+  const [pending, setPending] = useState(false)
+  const confirmMatches = confirm === org.name
+
+  async function onDelete() {
+    setPending(true)
+    try {
+      await api.deleteOrganization(org.id)
+      notify.success(`Organisation „${org.name}“ zur Löschung vorgemerkt.`)
+      await refreshMe()
+      navigate('/', { replace: true })
+    } catch (cause) {
+      setPending(false)
+      notify.error(cause instanceof Error ? cause.message : 'Löschen fehlgeschlagen.')
+    }
+  }
+
+  return (
+    <Card className="border-destructive/40">
+      <CardHeader>
+        <CardTitle className="text-destructive">Danger-Zone</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Stack gap="sm">
+          <p className="text-sm text-muted-foreground">
+            Das Löschen merkt die Organisation samt aller Workspaces, Personae, Playbooks,
+            Resources, Agenten und Tokens zur endgültigen Entfernung vor (30-Tage-Frist). Nur der
+            Owner kann das ausführen.
+          </p>
+          <Dialog
+            onOpenChange={(open) => {
+              if (!open) {
+                setConfirm('')
+              }
+            }}
+          >
+            <DialogTrigger asChild>
+              <Button variant="destructive">Organisation löschen</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Organisation löschen</DialogTitle>
+                <DialogDescription>
+                  Gib zur Bestätigung den Namen „{org.name}“ ein. Alle Inhalte aller Workspaces
+                  gehen nach Ablauf der Frist verloren.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="confirm-org-name">Organisations-Name</Label>
+                <Input
+                  id="confirm-org-name"
+                  value={confirm}
+                  autoComplete="off"
+                  onChange={(event) => setConfirm(event.target.value)}
+                />
+              </div>
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button variant="outline">Abbrechen</Button>
+                </DialogClose>
+                <Button
+                  variant="destructive"
+                  disabled={!confirmMatches || pending}
+                  onClick={() => void onDelete()}
+                >
+                  Endgültig löschen
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </Stack>
+      </CardContent>
+    </Card>
   )
 }

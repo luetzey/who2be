@@ -36,6 +36,7 @@ from who2be_api.routers import (
     agents,
     billing,
     dashboard,
+    gdpr,
     invitations,
     me,
     members,
@@ -179,6 +180,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(me.router)
     app.include_router(organizations.router)
     app.include_router(workspaces.router)
+    app.include_router(gdpr.router)
     app.include_router(invitations.accept_router)
     # Cloud-Billing-Webhook (anonym, signaturgeprueft) — top-level, kein Workspace-Prefix.
     app.include_router(billing.webhook_router)

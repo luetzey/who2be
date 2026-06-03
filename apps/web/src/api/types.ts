@@ -195,6 +195,22 @@ export interface Workspace {
   created_at: string
 }
 
+// Track O — Account-/Org-Lifecycle. `purge_after` ist der frueheste
+// Hard-Purge-Zeitpunkt (now + 30-Tage-Grace).
+export interface AccountDeletion {
+  purge_after: string
+}
+
+export interface OrganizationDeletion {
+  organization_id: string
+  purge_after: string
+}
+
+// Track O — GDPR-Datenexport. Bewusst lose typisiert: das Buendel ist ein
+// 1:1-Abzug der DB-Zeilen (Versionen + jsonb-Inhalte) und wird im Frontend nur
+// als Datei heruntergeladen, nicht strukturiert gelesen.
+export type GdprExport = Record<string, unknown>
+
 export interface WorkspaceInput {
   name: string
   slug: string

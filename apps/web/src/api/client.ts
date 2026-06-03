@@ -1,5 +1,6 @@
 import { config } from '../config'
 import type {
+  AccountDeletion,
   Agent,
   AgentCopyInput,
   AgentInput,
@@ -10,6 +11,7 @@ import type {
   CheckoutResult,
   DashboardData,
   EntitlementInfo,
+  GdprExport,
   Invitation,
   InvitationAcceptResult,
   InvitationInput,
@@ -17,6 +19,7 @@ import type {
   Member,
   MemberUpdateInput,
   Organization,
+  OrganizationDeletion,
   OrganizationInput,
   Persona,
   PersonaInput,
@@ -221,6 +224,12 @@ export interface Api {
   createWorkspace: (orgId: string, input: WorkspaceInput) => Promise<Workspace>
   renameWorkspace: (workspaceId: string, input: WorkspaceRenameInput) => Promise<Workspace>
   deleteWorkspace: (workspaceId: string) => Promise<void>
+  // Track O — Account-/Org-Lifecycle (Soft-Delete, 30-Tage-Grace) + GDPR-Export.
+  // Bewusst NICHT workspace-scoped: Konto-/Export-Routen haengen an `/v1/me`
+  // bzw. `/v1/gdpr`, die Org-Loeschung traegt die org_id im Pfad.
+  deleteAccount: () => Promise<AccountDeletion>
+  deleteOrganization: (orgId: string) => Promise<OrganizationDeletion>
+  exportMyData: () => Promise<GdprExport>
   // Phase 3 Runde 3 Track 3 — SystemPromptTemplate + Agent.
   listSystemPromptTemplates: () => Promise<SystemPromptTemplate[]>
   getSystemPromptTemplate: (id: string) => Promise<SystemPromptTemplate>
@@ -457,6 +466,10 @@ export function createApi(token: string, workspaceId: string): Api {
       }),
     deleteWorkspace: (workspaceId) =>
       request<void>(token, `/v1/workspaces/${workspaceId}`, { method: 'DELETE' }),
+    deleteAccount: () => request<AccountDeletion>(token, `/v1/me`, { method: 'DELETE' }),
+    deleteOrganization: (orgId) =>
+      request<OrganizationDeletion>(token, `/v1/organizations/${orgId}`, { method: 'DELETE' }),
+    exportMyData: () => request<GdprExport>(token, `/v1/gdpr/export`),
     listSystemPromptTemplates: () =>
       request<SystemPromptTemplate[]>(token, `${ws}/system-prompts`),
     getSystemPromptTemplate: (id) =>

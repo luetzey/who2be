@@ -36,7 +36,7 @@ class PgOrganizationRepository:
             "SELECT o.id, o.name, o.slug, o.kind, o.created_at "
             "FROM organization o "
             "JOIN org_member m ON m.org_id = o.id "
-            "WHERE m.user_id = $1 "
+            "WHERE m.user_id = $1 AND o.deleted_at IS NULL "
             "ORDER BY o.created_at ASC, o.id ASC",
             user_id,
         )
@@ -47,7 +47,7 @@ class PgOrganizationRepository:
             "SELECT o.id, o.name, o.slug, o.kind, o.created_at "
             "FROM organization o "
             "JOIN org_member m ON m.org_id = o.id "
-            "WHERE o.id = $1 AND m.user_id = $2",
+            "WHERE o.id = $1 AND m.user_id = $2 AND o.deleted_at IS NULL",
             organization_id,
             user_id,
         )

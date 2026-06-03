@@ -307,12 +307,22 @@ async def get_current_workspace(
         )
 
     # Org des Workspace fuer `app.current_org` (org-scoped RLS auf
-    # org_entitlement/mcp_usage). `workspace` traegt keine RLS, ist also auch
-    # ausserhalb des Scopes lesbar; None ⇒ org-GUC bleibt ungesetzt.
-    org_id: UUID | None = await pool.fetchval(
-        "SELECT org_id FROM workspace WHERE id = $1",
+    # org_entitlement/mcp_usage). `workspace`/`organization` tragen keine RLS,
+    # sind also auch ausserhalb des Scopes lesbar; None ⇒ org-GUC bleibt ungesetzt.
+    # Zugleich der Soft-Delete-Gate (Track O): eine zur Loeschung vorgemerkte
+    # Org (deleted_at gesetzt) sperrt den Zugriff auf alle ihre Workspaces.
+    org_row = await pool.fetchrow(
+        "SELECT o.id AS org_id, o.deleted_at "
+        "FROM workspace w JOIN organization o ON o.id = w.org_id "
+        "WHERE w.id = $1",
         workspace_id,
     )
+    if org_row is not None and org_row["deleted_at"] is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Diese Organisation wurde zur Loeschung vorgemerkt.",
+        )
+    org_id: UUID | None = org_row["org_id"] if org_row is not None else None
     structlog.contextvars.bind_contextvars(workspace_id=str(workspace_id))
     async with tenant_scope(workspace_id, org_id):
         yield ctx

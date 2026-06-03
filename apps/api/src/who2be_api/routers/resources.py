@@ -12,6 +12,7 @@ from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.repositories.resource_repository import PgResourceRepository
 from who2be_api.repositories.status_history_repository import PgStatusHistoryRepository
+from who2be_api.services.entity_quota_service import enforce_entity_quota
 from who2be_api.services.mcp_limit_service import enforce_mcp_read_limit
 from who2be_api.services.resource_service import ResourceService
 from who2be_api.services.status_history_service import StatusHistoryService
@@ -64,7 +65,11 @@ async def list_resources(
     return items
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(enforce_entity_quota)],
+)
 @limiter.limit(write_limit)
 async def create_resource(
     request: Request, data: ResourceCreate, ctx: Ctx, service: Service
