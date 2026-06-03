@@ -13,6 +13,7 @@ muss (Defense gegen Cross-Workspace-Token-Reuse).
 import hashlib
 import logging
 import secrets
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Annotated
 from uuid import UUID
@@ -25,6 +26,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from who2be_api.core.config import get_settings
 from who2be_api.core.db import get_pool
+from who2be_api.core.tenancy import tenant_scope
 from who2be_api.repositories.token_repository import PgTokenRepository, TokenRepository
 from who2be_models import WorkspaceRole
 
@@ -242,7 +244,7 @@ async def get_current_user(
 async def get_current_workspace(
     workspace_id: Annotated[UUID, Path(...)],
     principal: Annotated[CurrentPrincipal, Depends(get_current_principal)],
-) -> "WorkspaceContext":
+) -> AsyncIterator["WorkspaceContext"]:
     """FastAPI-Dependency: `WorkspaceContext` fuer Workspace-scoped Endpunkte.
 
     Zwei getrennte Pfade (ADR-0023):
@@ -253,7 +255,23 @@ async def get_current_workspace(
       revoked wird, auch wenn der Ersteller spaeter herabgestuft/entfernt wird.
     - **JWT:** `workspace_member`-Lookup; nicht-Mitglied → 403. Rolle = die
       aktuelle Membership-Rolle.
+
+    RLS-Choke-Point (Plan R1): nach der Autorisierung betritt diese Dependency
+    `tenant_scope(workspace_id, org_id)` und reicht den `WorkspaceContext` per
+    `yield` weiter. Solange der Endpunkt laeuft, traegt jede vom App-Pool
+    gezogene Connection `app.current_tenant`/`app.current_org` — RLS isoliert
+    den Mandanten als zweite Verteidigungslinie hinter den App-`WHERE`-Filtern.
+    Der `org_id`-Lookup laeuft VOR dem Scope (workspace ist control-plane, ohne
+    RLS lesbar).
     """
+    try:
+        pool = get_pool()
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Datenbank nicht verfuegbar.",
+        ) from exc
+
     if principal.token_workspace_id is not None:
         if principal.token_workspace_id != workspace_id:
             raise HTTPException(
@@ -264,35 +282,37 @@ async def get_current_workspace(
             # Defensiv: der Token-Pfad setzt `token_role` immer mit. Fehlt sie,
             # ist der Principal inkonsistent — kein stiller Voll-Zugriff.
             raise _credentials_error()
-        structlog.contextvars.bind_contextvars(workspace_id=str(workspace_id))
-        return WorkspaceContext(
+        ctx = WorkspaceContext(
             workspace_id=workspace_id,
             user_id=principal.user_id,
             role=principal.token_role,
             is_api_token=True,
         )
-
-    try:
-        pool = get_pool()
-    except RuntimeError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Datenbank nicht verfuegbar.",
-        ) from exc
-    role = await pool.fetchval(
-        "SELECT role FROM workspace_member WHERE workspace_id = $1 AND user_id = $2",
-        workspace_id,
-        principal.user_id,
-    )
-    if role is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Kein Zugriff auf diesen Workspace.",
+    else:
+        role = await pool.fetchval(
+            "SELECT role FROM workspace_member WHERE workspace_id = $1 AND user_id = $2",
+            workspace_id,
+            principal.user_id,
         )
-    structlog.contextvars.bind_contextvars(workspace_id=str(workspace_id))
-    return WorkspaceContext(
-        workspace_id=workspace_id,
-        user_id=principal.user_id,
-        role=WorkspaceRole(role),
-        is_api_token=False,
+        if role is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Kein Zugriff auf diesen Workspace.",
+            )
+        ctx = WorkspaceContext(
+            workspace_id=workspace_id,
+            user_id=principal.user_id,
+            role=WorkspaceRole(role),
+            is_api_token=False,
+        )
+
+    # Org des Workspace fuer `app.current_org` (org-scoped RLS auf
+    # org_entitlement/mcp_usage). `workspace` traegt keine RLS, ist also auch
+    # ausserhalb des Scopes lesbar; None ⇒ org-GUC bleibt ungesetzt.
+    org_id: UUID | None = await pool.fetchval(
+        "SELECT org_id FROM workspace WHERE id = $1",
+        workspace_id,
     )
+    structlog.contextvars.bind_contextvars(workspace_id=str(workspace_id))
+    async with tenant_scope(workspace_id, org_id):
+        yield ctx

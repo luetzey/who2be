@@ -40,6 +40,15 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     database_url: str = "postgresql://postgres:postgres@localhost:5432/who2be"
+    # RLS-Cloud-Haertung (Plan R1/R2): die App verbindet im Cloud-Betrieb als
+    # nicht-privilegierte Rolle `who2be_app` (NOSUPERUSER, NOBYPASSRLS) ueber
+    # diese URL; `DATABASE_URL` bleibt der Owner und faehrt nur die Migrationen
+    # (`who2be-migrate`). Leer ⇒ Fallback auf `DATABASE_URL` (On-Prem/Dev: die
+    # App laeuft als Owner, der RLS ohnehin umgeht — kein App-SQL-Unterschied).
+    app_database_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("APP_DATABASE_URL", "app_database_url"),
+    )
     jwt_secret: str = ""
     supabase_url: str = ""
     # Service-Role-Key fuer GoTrue-Admin-Calls (Invitation-Mail via
@@ -115,6 +124,15 @@ class Settings(BaseSettings):
     @property
     def cors_origins(self) -> list[str]:
         return _split_origins(self.cors_origins_raw)
+
+    @property
+    def effective_app_database_url(self) -> str:
+        """App-Role-Connection fuer den Laufzeit-Pool.
+
+        Cloud: `APP_DATABASE_URL` (Rolle `who2be_app`). On-Prem/Dev: faellt auf
+        `DATABASE_URL` zurueck (App laeuft als Owner, RLS-Bypass — Plan R2).
+        """
+        return self.app_database_url or self.database_url
 
 
 @lru_cache
