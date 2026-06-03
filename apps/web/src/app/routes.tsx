@@ -13,6 +13,8 @@ import {
   SetPasswordPage,
   SignupPage,
 } from '@/features/auth'
+import { CookieConsentBanner } from '@/features/legal/components/CookieConsentBanner'
+import { LegalLayout } from '@/features/legal/components/LegalLayout'
 
 import { AppLayout } from './AppLayout'
 
@@ -135,6 +137,19 @@ const HelpPlaceholdersPage = lazy(() =>
   })),
 )
 
+// Oeffentliche Rechtsseiten (`/legal/*`) — kein Auth-Gate, lazy mit eigenen
+// Chunks. Die Suspense-Boundary liefert `LegalLayout`.
+const ImpressumPage = lazy(() =>
+  import('@/features/legal').then((mod) => ({ default: mod.ImpressumPage })),
+)
+const TermsPage = lazy(() =>
+  import('@/features/legal').then((mod) => ({ default: mod.TermsPage })),
+)
+const PrivacyPage = lazy(() =>
+  import('@/features/legal').then((mod) => ({ default: mod.PrivacyPage })),
+)
+const DpaPage = lazy(() => import('@/features/legal').then((mod) => ({ default: mod.DpaPage })))
+
 // DEV-only Component-Catalog (ADR 0018). In Production-Builds wird die Route
 // nicht registriert — Vite-Tree-Shaking laesst den Chunk dann komplett weg.
 const CatalogPage = import.meta.env.DEV
@@ -217,6 +232,14 @@ export function RouterRoot() {
               path="/invitations/:token/accept"
               element={<InvitationAcceptPage />}
             />
+            {/* Oeffentliche Pflichtseiten: auch ausgeloggt erreichbar. */}
+            <Route path="/legal" element={<LegalLayout />}>
+              <Route index element={<Navigate to="/legal/impressum" replace />} />
+              <Route path="impressum" element={<ImpressumPage />} />
+              <Route path="agb" element={<TermsPage />} />
+              <Route path="datenschutz" element={<PrivacyPage />} />
+              <Route path="dpa" element={<DpaPage />} />
+            </Route>
             <Route element={<RequireAuth />}>
               <Route path="/" element={<DefaultWorkspaceRedirect />} />
               <Route path="/onboarding/set-password" element={<SetPasswordPage />} />
@@ -280,6 +303,8 @@ export function RouterRoot() {
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          {/* Global, auf jeder Route sichtbar bis eine Einwilligung vorliegt. */}
+          <CookieConsentBanner />
         </AuthTokenProvider>
       </SessionProvider>
     </BrowserRouter>
