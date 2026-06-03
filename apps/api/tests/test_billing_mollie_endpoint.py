@@ -17,11 +17,17 @@ from fastapi.testclient import TestClient
 from test_licensing_mollie_adapter import (  # type: ignore[import-not-found]
     FakeEntitlementRepository,
     FakeMollieGateway,
+    FakeProcessedEventRepository,
 )
 
 from who2be_api.core.config import get_settings
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
-from who2be_api.licensing.adapters.mollie import MollieBillingService
+from who2be_api.licensing.adapters.mollie import (
+    MollieBillingService,
+    MolliePayment,
+    MollieSubscription,
+)
+from who2be_api.licensing.plans import PRO_PLAN
 from who2be_api.main import create_app
 from who2be_api.routers.billing import get_mollie_service
 from who2be_models import WorkspaceRole
@@ -108,6 +114,36 @@ def test_mollie_webhook_token_gate(monkeypatch: pytest.MonkeyPatch) -> None:
         get_settings.cache_clear()
     assert bad.status_code == 403
     assert good.status_code == 200
+
+
+def test_mollie_webhook_replay_is_idempotent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Zwei identische Pings ueber den Endpoint ⇒ nur ein Entitlement-Upsert.
+
+    Der Service (inkl. Dedupe-Ledger) wird als **eine** Instanz ueber alle
+    Requests injiziert, damit der Claim ueber Pings hinweg greift.
+    """
+    monkeypatch.setenv("WHO2BE_EDITION", "cloud")
+    monkeypatch.setenv("MOLLIE_API_KEY", "test_dummy")
+    get_settings.cache_clear()
+    app = create_app()
+    org_id = uuid4()
+    repo = FakeEntitlementRepository()
+    gateway = FakeMollieGateway(
+        payment=MolliePayment("tr_1", True, "cst_1", "sub_1", "mdt_1", {}),
+        subscription=MollieSubscription("sub_1", "active", dict(PRO_PLAN.metadata(org_id))),
+    )
+    service = MollieBillingService(gateway, repo, FakeProcessedEventRepository())
+    app.dependency_overrides[get_mollie_service] = lambda: service
+    try:
+        with TestClient(app) as client:
+            first = client.post("/v1/billing/mollie/webhook", data={"id": "tr_1"})
+            second = client.post("/v1/billing/mollie/webhook", data={"id": "tr_1"})
+    finally:
+        app.dependency_overrides.clear()
+        get_settings.cache_clear()
+    assert first.json() == {"received": True}
+    assert second.json() == {"received": False}
+    assert len(repo.calls) == 1
 
 
 def test_checkout_rejects_non_admin(cloud_app: tuple[FastAPI, FakeMollieGateway]) -> None:

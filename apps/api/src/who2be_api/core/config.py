@@ -123,6 +123,14 @@ class Settings(BaseSettings):
         default="",
         validation_alias=AliasChoices("MOLLIE_WEBHOOK_URL", "mollie_webhook_url"),
     )
+    # Dunning-Grace bei fehlgeschlagener Folgezahlung (Plan §3.2): so viele Tage
+    # bleibt der gebuchte Tier nach einem fehlgeschlagenen Recurring-Payment aktiv
+    # (Banner via `grace_until`), bevor das Entitlement abgelaufen ist.
+    mollie_grace_days: int = Field(
+        default=7,
+        ge=0,
+        validation_alias=AliasChoices("MOLLIE_GRACE_DAYS", "mollie_grace_days"),
+    )
     # On-Prem-Bootstrap: beim ersten Boot ohne Tenant wird fuer diese Email ein
     # Admin + Personal-Org + Workspace deterministisch geseedet.
     bootstrap_admin_email: str = Field(

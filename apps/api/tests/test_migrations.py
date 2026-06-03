@@ -324,3 +324,53 @@ def test_phase30_playbook_type_check(tmp_path: Path) -> None:
 
     types = asyncio.run(_with_isolated_schema(_run))
     assert types["legacy"] == "prompt"
+
+
+# --- Track P: Mollie-Dunning + Webhook-Dedupe (0038) ------------------------
+
+
+@pytest.mark.integration
+def test_mollie_dunning_dedupe_migration(tmp_path: Path) -> None:
+    """0038: `grace_until`-Spalte + `processed_webhook_event`-Dedupe-Ledger.
+
+    Belegt: die Grace-Spalte existiert (NULL-Default), der Dedupe-Claim per
+    `ON CONFLICT DO NOTHING RETURNING` liefert beim Replay keine Zeile, und ein
+    erneutes Statement-Replay der 0038-Datei ist No-op.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+
+    _copy_migrations(tmp_path, _ALL_MIGRATIONS)
+
+    async def _run(conn: asyncpg.Connection) -> None:
+        await apply_migrations(conn, tmp_path)
+
+        # grace_until existiert und ist standardmaessig NULL.
+        org_id = await conn.fetchval(
+            "INSERT INTO organization (name, slug, kind) VALUES ('o', 's', 'company') RETURNING id"
+        )
+        await conn.execute(
+            "INSERT INTO org_entitlement (org_id, status) VALUES ($1, 'active')", org_id
+        )
+        grace = await conn.fetchval(
+            "SELECT grace_until FROM org_entitlement WHERE org_id = $1", org_id
+        )
+        assert grace is None
+
+        # Dedupe: der erste Claim liefert eine id, der zweite (Replay) None.
+        first = await conn.fetchval(
+            "INSERT INTO processed_webhook_event (provider, event_id) VALUES ('mollie', 'tr_1') "
+            "ON CONFLICT (provider, event_id) DO NOTHING RETURNING id"
+        )
+        second = await conn.fetchval(
+            "INSERT INTO processed_webhook_event (provider, event_id) VALUES ('mollie', 'tr_1') "
+            "ON CONFLICT (provider, event_id) DO NOTHING RETURNING id"
+        )
+        assert first is not None
+        assert second is None
+
+        # Statement-Replay der 0038-Datei muss No-op sein (IF NOT EXISTS / idempotent).
+        sql = (MIGRATIONS_DIR / "0038_mollie_dunning_dedupe.sql").read_text(encoding="utf-8")
+        await conn.execute(sql)
+
+    asyncio.run(_with_isolated_schema(_run))

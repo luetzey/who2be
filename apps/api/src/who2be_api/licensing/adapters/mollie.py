@@ -35,7 +35,10 @@ Schnittstelle isoliert die SDK vom Kern und macht den Service ohne Netz testbar.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 from uuid import UUID
 
@@ -53,8 +56,16 @@ from who2be_api.licensing.plans import (
     plan_by_code,
 )
 from who2be_api.repositories.entitlement_repository import EntitlementRepository
+from who2be_api.repositories.processed_event_repository import ProcessedEventRepository
 
 _STATUS_ACTIVE = "active"
+_STATUS_SUSPENDED = "suspended"
+_STATUS_CANCELED = "canceled"
+# Provider-Key fuer den Dedupe-Ledger (`processed_webhook_event`).
+_PROVIDER = "mollie"
+# Default-Grace bei fehlgeschlagener Folgezahlung (Tage), falls der Service ohne
+# expliziten Wert gebaut wird. Der Router reicht `Settings.mollie_grace_days` durch.
+_DEFAULT_GRACE_DAYS = 7
 
 
 class MollieError(Exception):
@@ -78,11 +89,16 @@ class MolliePayment:
 
 @dataclass(frozen=True)
 class MollieSubscription:
-    """Reduzierte Sicht auf eine Mollie-Subscription."""
+    """Reduzierte Sicht auf eine Mollie-Subscription.
+
+    `next_payment_date` = Beginn der naechsten (noch nicht bezahlten) Periode;
+    bei Kuendigung markiert es das bezahlte Periodenende (Cancel-am-Periodenende).
+    """
 
     subscription_id: str
     status: str
     metadata: dict[str, Any]
+    next_payment_date: datetime | None = None
 
 
 # --- Port ------------------------------------------------------------------------
@@ -131,6 +147,21 @@ def _metadata(raw: Any) -> dict[str, Any]:
     return raw if isinstance(raw, dict) else {}
 
 
+def _parse_optional_date(raw: Any) -> datetime | None:
+    """Parst Mollies `nextPaymentDate` (ISO-Datum/-Zeit) defensiv zu `datetime`.
+
+    Unbrauchbares/leeres ⇒ `None` (Cancel faellt dann sofort auf Free zurueck) —
+    ein optionales Periodenende darf den Webhook nie sprengen.
+    """
+    if not isinstance(raw, str) or not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+
+
 def metadata_org_id(metadata: dict[str, Any]) -> UUID:
     """Liest `org_id` aus der Metadata — Pflichtfeld, sonst `MollieError`."""
     raw = metadata.get(META_ORG_ID)
@@ -171,17 +202,61 @@ def metadata_to_entitlement(metadata: dict[str, Any]) -> Entitlement:
     )
 
 
-def subscription_to_update(subscription: MollieSubscription) -> EntitlementUpdate:
-    """Bildet eine Subscription auf ein Org-Entitlement ab.
+def _grace_entitlement(
+    metadata: dict[str, Any], now: datetime, grace_days: int
+) -> Entitlement:
+    """Gebuchter Tier bleibt aktiv, aber mit Dunning-Frist (Plan §3.2).
 
-    `active` ⇒ gebuchter Tier aus der Metadata; jeder andere Status
-    (`canceled`/`suspended`/`completed`/`pending`) ⇒ zurueck auf **Free**
-    (Guardrail §3.6: Zugriff am Entitlement, nicht am rohen Zahlungsstatus —
-    Free bleibt nutzbar, statt die Org hart zu sperren).
+    `expires_at` wird auf dieselbe Frist gesetzt wie `grace_until`: so flippt
+    `is_active()` nach Ablauf von selbst (kein Job), waehrend `grace_until` der
+    Web-UI das Banner-Signal liefert.
+    """
+    deadline = now + timedelta(days=grace_days)
+    return metadata_to_entitlement(metadata).model_copy(
+        update={"expires_at": deadline, "grace_until": deadline}
+    )
+
+
+def _canceled_entitlement(subscription: MollieSubscription, now: datetime) -> Entitlement:
+    """Kuendigung am Periodenende: gebuchter Tier laeuft bis `next_payment_date`.
+
+    Ohne bekanntes (zukuenftiges) Periodenende faellt die Org sofort auf **Free**
+    zurueck. Kein `grace_until` — eine Kuendigung ist kein Dunning-Fall.
+    """
+    period_end = subscription.next_payment_date
+    if period_end is None or period_end <= now:
+        return CLOUD_FREE_ENTITLEMENT
+    return metadata_to_entitlement(subscription.metadata).model_copy(
+        update={"expires_at": period_end}
+    )
+
+
+def subscription_to_update(
+    subscription: MollieSubscription,
+    *,
+    payment_paid: bool = True,
+    now: datetime | None = None,
+    grace_days: int = _DEFAULT_GRACE_DAYS,
+) -> EntitlementUpdate:
+    """Bildet eine Subscription (+ den Status der ausloesenden Zahlung) auf ein
+    Org-Entitlement ab (Guardrail §3.6: Zugriff am Entitlement, nicht am rohen
+    Zahlungsstatus).
+
+    - `active` + bezahlt ⇒ gebuchter Tier aus der Metadata (Grace geraeumt).
+    - `active` + Zahlung fehlgeschlagen **oder** `suspended` (Mollie nach
+      erschoepften Retries) ⇒ **Dunning-Grace**: Tier bleibt aktiv bis `grace_until`.
+    - `canceled` ⇒ Cancel am Periodenende (Tier bis `next_payment_date`, sonst Free).
+    - `completed`/`pending`/unbekannt ⇒ Free.
     """
     org_id = metadata_org_id(subscription.metadata)
-    if subscription.status == _STATUS_ACTIVE:
+    reference = now or datetime.now(UTC)
+    status = subscription.status
+    if status == _STATUS_ACTIVE and payment_paid:
         entitlement = metadata_to_entitlement(subscription.metadata)
+    elif status in (_STATUS_ACTIVE, _STATUS_SUSPENDED):
+        entitlement = _grace_entitlement(subscription.metadata, reference, grace_days)
+    elif status == _STATUS_CANCELED:
+        entitlement = _canceled_entitlement(subscription, reference)
     else:
         entitlement = CLOUD_FREE_ENTITLEMENT
     return EntitlementUpdate(
@@ -297,6 +372,9 @@ class SdkMollieGateway:
                 subscription_id=str(subscription.id),
                 status=str(subscription.status),
                 metadata=_metadata(subscription.metadata),
+                next_payment_date=_parse_optional_date(
+                    getattr(subscription, "next_payment_date", None)
+                ),
             )
 
         return await asyncio.to_thread(_call)
@@ -305,17 +383,47 @@ class SdkMollieGateway:
 # --- Service (Orchestrierung Gateway + Entitlement-Persistenz) -------------------
 
 
+class _InMemoryProcessedEvents:
+    """Prozess-lokaler Dedupe-Fallback (Dev/Tests ohne DB-gestuetzten Ledger)."""
+
+    def __init__(self) -> None:
+        self._claimed: set[tuple[str, str]] = set()
+
+    async def claim(self, provider: str, event_id: str) -> bool:
+        key = (provider, event_id)
+        if key in self._claimed:
+            return False
+        self._claimed.add(key)
+        return True
+
+    async def release(self, provider: str, event_id: str) -> None:
+        self._claimed.discard((provider, event_id))
+
+
 class MollieBillingService:
     """Verbindet das Mollie-Gateway mit der `org_entitlement`-Persistenz.
 
     Bewusst **nicht** im Kern (Guardrail §3.6): der Router aktiviert den Service
     nur unter `is_cloud()`. Der Kern liest spaeter ausschliesslich das
     persistierte Entitlement (`CloudEntitlementAdapter`), nie Mollie direkt.
+
+    `processed` ist der Idempotenz-/Dedupe-Ledger: jeder Webhook-Ping wird genau
+    einmal verarbeitet (Replay ⇒ No-Op). `grace_days` steuert die Dunning-Frist
+    bei fehlgeschlagener Folgezahlung.
     """
 
-    def __init__(self, gateway: MollieGateway, repo: EntitlementRepository) -> None:
+    def __init__(
+        self,
+        gateway: MollieGateway,
+        repo: EntitlementRepository,
+        processed: ProcessedEventRepository | None = None,
+        *,
+        grace_days: int = _DEFAULT_GRACE_DAYS,
+    ) -> None:
         self._gateway = gateway
         self._repo = repo
+        self._processed: ProcessedEventRepository = processed or _InMemoryProcessedEvents()
+        self._grace_days = grace_days
 
     async def start_checkout(
         self,
@@ -343,19 +451,29 @@ class MollieBillingService:
             metadata=metadata,
         )
 
-    async def handle_webhook(self, payment_id: str, *, webhook_url: str | None) -> bool:
+    async def handle_webhook(
+        self, payment_id: str, *, webhook_url: str | None, now: datetime | None = None
+    ) -> bool:
         """Verarbeitet einen Mollie-Ping. True, wenn ein Entitlement geschrieben wurde.
 
         Drei Faelle:
         - **Folgezahlung** (Payment traegt `subscriptionId`) ⇒ Subscription-Status
-          fetchen und Tier setzen/zurueckfallen.
+          fetchen und Tier setzen / in Dunning-Grace gehen / zurueckfallen.
         - **Erstzahlung bezahlt** (Mandat vorhanden, Plan-Metadata) ⇒ Subscription
           anlegen und Tier aktiv setzen.
         - sonst ⇒ No-Op (noch nicht bezahlt / irrelevant), quittiert mit `False`.
+
+        Idempotenz: sobald ein Ping zu einer Aktion fuehrt, wird die Payment-`id`
+        im Dedupe-Ledger beansprucht; ein Replay derselben `id` ist No-Op (`False`).
+        Der Claim sitzt **vor** der nicht-idempotenten Subscription-Anlage, damit
+        ein wiederholter Erstzahlungs-Ping keine zweite Subscription erzeugt.
+        Schlaegt die Aktion nach dem Claim fehl, wird der Claim wieder freigegeben,
+        damit ein Mollie-Retry das (bezahlte) Event nicht verliert.
         """
         payment = await self._gateway.get_payment(payment_id)
         if payment is None:
             return False
+        reference = now or datetime.now(UTC)
 
         if payment.subscription_id and payment.customer_id:
             subscription = await self._gateway.get_subscription(
@@ -363,19 +481,39 @@ class MollieBillingService:
             )
             if subscription is None:
                 return False
-            update = subscription_to_update(subscription)
-            await self._repo.upsert(
-                update.org_id,
-                update.entitlement,
-                source="mollie",
-                external_ref=update.external_ref,
-            )
+            if not await self._processed.claim(_PROVIDER, payment.id):
+                return False
+            async with self._released_on_error(payment.id):
+                update = subscription_to_update(
+                    subscription,
+                    payment_paid=payment.is_paid,
+                    now=reference,
+                    grace_days=self._grace_days,
+                )
+                await self._repo.upsert(
+                    update.org_id,
+                    update.entitlement,
+                    source="mollie",
+                    external_ref=update.external_ref,
+                )
             return True
 
         if payment.is_paid and payment.customer_id and payment.mandate_id:
-            return await self._activate_from_first_payment(payment, webhook_url=webhook_url)
+            if not await self._processed.claim(_PROVIDER, payment.id):
+                return False
+            async with self._released_on_error(payment.id):
+                return await self._activate_from_first_payment(payment, webhook_url=webhook_url)
 
         return False
+
+    @asynccontextmanager
+    async def _released_on_error(self, payment_id: str) -> AsyncIterator[None]:
+        """Gibt den Dedupe-Claim frei, falls der umschlossene Schritt scheitert."""
+        try:
+            yield
+        except Exception:
+            await self._processed.release(_PROVIDER, payment_id)
+            raise
 
     async def _activate_from_first_payment(
         self, payment: MolliePayment, *, webhook_url: str | None

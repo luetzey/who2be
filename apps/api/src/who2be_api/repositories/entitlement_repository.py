@@ -23,6 +23,7 @@ def _row_to_entitlement(row: asyncpg.Record) -> Entitlement:
         expires_at=row["expires_at"],
         mcp_monthly_quota=row["mcp_monthly_quota"],
         mcp_rate_per_min=row["mcp_rate_per_min"],
+        grace_until=row["grace_until"],
     )
 
 
@@ -44,7 +45,8 @@ class PgEntitlementRepository:
 
     async def fetch(self, org_id: UUID) -> Entitlement | None:
         row = await self._pool.fetchrow(
-            "SELECT status, features, expires_at, mcp_monthly_quota, mcp_rate_per_min "
+            "SELECT status, features, expires_at, mcp_monthly_quota, mcp_rate_per_min, "
+            "       grace_until "
             "FROM org_entitlement WHERE org_id = $1",
             org_id,
         )
@@ -62,14 +64,15 @@ class PgEntitlementRepository:
         await self._pool.execute(
             "INSERT INTO org_entitlement "
             "(org_id, status, features, expires_at, mcp_monthly_quota, "
-            " mcp_rate_per_min, source, external_ref, updated_at) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now()) "
+            " mcp_rate_per_min, grace_until, source, external_ref, updated_at) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now()) "
             "ON CONFLICT (org_id) DO UPDATE SET "
             "  status = EXCLUDED.status, "
             "  features = EXCLUDED.features, "
             "  expires_at = EXCLUDED.expires_at, "
             "  mcp_monthly_quota = EXCLUDED.mcp_monthly_quota, "
             "  mcp_rate_per_min = EXCLUDED.mcp_rate_per_min, "
+            "  grace_until = EXCLUDED.grace_until, "
             "  source = EXCLUDED.source, "
             "  external_ref = EXCLUDED.external_ref, "
             "  updated_at = now()",
@@ -79,6 +82,7 @@ class PgEntitlementRepository:
             entitlement.expires_at,
             entitlement.mcp_monthly_quota,
             entitlement.mcp_rate_per_min,
+            entitlement.grace_until,
             source,
             external_ref,
         )
