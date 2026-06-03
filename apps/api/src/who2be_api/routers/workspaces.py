@@ -10,9 +10,10 @@ from typing import Annotated
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 
 from who2be_api.core.db import get_pool
+from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import (
     WorkspaceContext,
     get_current_workspace,
@@ -44,15 +45,19 @@ async def get_workspace(workspace_id: UUID, ctx: Ctx, service: Service) -> Works
 
 
 @router.patch("/{workspace_id}")
+@limiter.limit(write_limit)
 async def update_workspace(
-    workspace_id: UUID, data: WorkspaceUpdate, ctx: Ctx, service: Service
+    request: Request, workspace_id: UUID, data: WorkspaceUpdate, ctx: Ctx, service: Service
 ) -> WorkspaceRead:
     require_role(ctx, WorkspaceRole.admin)
     return await service.update(workspace_id, data)
 
 
 @router.delete("/{workspace_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_workspace(workspace_id: UUID, ctx: Ctx, service: Service) -> None:
+@limiter.limit(write_limit)
+async def delete_workspace(
+    request: Request, workspace_id: UUID, ctx: Ctx, service: Service
+) -> None:
     # Danger-Zone (Track C): nur Admins; der letzte Workspace einer Org ist
     # geschuetzt (Service → 409). `ctx` erzwingt Membership im Ziel-Workspace.
     require_role(ctx, WorkspaceRole.admin)

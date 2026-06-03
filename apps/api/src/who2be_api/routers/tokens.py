@@ -49,5 +49,6 @@ async def list_tokens(
 
 
 @router.delete("/{token_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def revoke_token(token_id: UUID, ctx: Ctx, service: Service) -> None:
+@limiter.limit(write_limit)
+async def revoke_token(request: Request, token_id: UUID, ctx: Ctx, service: Service) -> None:
     await service.revoke(ctx, token_id)

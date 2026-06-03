@@ -66,7 +66,10 @@ async def list_invitations(ctx: Ctx, service: Service) -> list[InvitationRead]:
 
 
 @router.delete("/{invitation_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def revoke_invitation(invitation_id: UUID, ctx: Ctx, service: Service) -> None:
+@limiter.limit(write_limit)
+async def revoke_invitation(
+    request: Request, invitation_id: UUID, ctx: Ctx, service: Service
+) -> None:
     require_role(ctx, WorkspaceRole.admin)
     await service.revoke(ctx, invitation_id)
 

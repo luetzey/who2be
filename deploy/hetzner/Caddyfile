@@ -10,6 +10,8 @@
 
 # Reusable Security-Header — HSTS schon via Caddys Auto-HTTPS gegeben, hier
 # explizit fuer Klarheit; `-Server` versteckt das Caddy-Banner.
+# Cross-Origin-Opener-Policy isoliert den Browsing-Context (kein window-Handle
+# fuer cross-origin Opener) — schliesst die letzte Header-Luecke aus F-12.
 (security_headers) {
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains"
@@ -17,14 +19,17 @@
         X-Frame-Options "DENY"
         Referrer-Policy "no-referrer"
         Permissions-Policy "accelerometer=(), camera=(), geolocation=(), microphone=()"
+        Cross-Origin-Opener-Policy "same-origin"
         -Server
     }
 }
 
 api.{$DOMAIN} {
     import security_headers
-    # API liefert JSON — Inline-Scripts, Frames, externe Connects sind alle aus.
-    header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+    # API liefert JSON — Inline-Scripts, Frames, Plugins, Form-Posts und externe
+    # Connects sind alle aus. `object-src`/`form-action` explizit, weil Letzteres
+    # NICHT auf `default-src` zurueckfaellt (sonst Form-Hijack-Luecke).
+    header Content-Security-Policy "default-src 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'"
     # H5 / ADR-0010: /v1/internal/* (z.B. /metrics fuer Prometheus) ist ausschliesslich
     # intern erreichbar. Caddy blockt externen Zugriff direkt — kein Round-Trip in den
     # Container, damit auch versehentlich offene Endpoints nicht raus-leaken.
@@ -35,9 +40,11 @@ api.{$DOMAIN} {
 
 app.{$DOMAIN} {
     import security_headers
-    # SPA-CSP: Vite-Build hat keine Inline-Scripts, aber Inline-Styles (CSSinJS).
-    # connect-src haelt die eigene API + die Supabase-Instanz erlaubt.
-    header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://api.{$DOMAIN} {$VITE_SUPABASE_URL}; frame-ancestors 'none'; base-uri 'self'"
+    # SPA-CSP: Vite-Build hat keine Inline-Scripts, aber Inline-Styles (CSSinJS,
+    # BlockNote-Insel ADR-0022). connect-src haelt die eigene API + die
+    # Supabase-Instanz erlaubt. `object-src 'none'` killt Plugin-XSS,
+    # `form-action 'self'` verhindert Form-Hijack (kein default-src-Fallback).
+    header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://api.{$DOMAIN} {$VITE_SUPABASE_URL}; object-src 'none'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'"
     reverse_proxy web:80
 }
 
@@ -45,6 +52,6 @@ supabase.{$DOMAIN} {
     import security_headers
     # GoTrue-Endpunkt (Auth). CORS macht der auth-gateway-Container selbst,
     # CSP hier bewusst sehr restriktiv, weil es keine HTML-Antworten gibt.
-    header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+    header Content-Security-Policy "default-src 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'"
     reverse_proxy auth-gateway:9999
 }
