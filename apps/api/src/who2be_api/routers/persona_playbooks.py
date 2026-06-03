@@ -9,9 +9,10 @@ from typing import Annotated
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
 from who2be_api.core.db import get_pool
+from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.repositories.persona_playbook_repository import (
     PgPersonaPlaybookRepository,
@@ -41,7 +42,9 @@ async def list_persona_playbooks(
 
 
 @router.put("/{persona_id}/playbooks")
+@limiter.limit(write_limit)
 async def set_persona_playbooks(
+    request: Request,
     persona_id: UUID,
     data: PersonaPlaybookLinkSet,
     ctx: Ctx,

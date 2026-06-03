@@ -28,7 +28,7 @@ realer Leak — Composite-FK + vorheriger Membership-Check decken ab).
 
 | ID            | Severity | Bereich            | Titel                                                          | Status |
 | ------------- | -------- | ------------------ | -------------------------------------------------------------- | ------ |
-| F-Phase2-01   | Medium   | Rate-Limit         | Fehlende `@limiter.limit(write_limit)` auf Member/Link-Mutating | Open   |
+| F-Phase2-01   | Medium   | Rate-Limit         | Fehlende `@limiter.limit(write_limit)` auf Member/Link-Mutating | Closed |
 | F-Phase2-02   | Low      | Cross-Workspace    | `list_linked` ohne expliziten `workspace_id`-Filter (Defense)  | Review |
 | F-Phase2-03   | Low      | Cross-Workspace    | `workspace_repository.fetch/update_name` ohne `workspace_id`-Re-Bind | Review |
 
@@ -194,7 +194,7 @@ Geprueft: `apps/api/src/who2be_api/core/security.py:139-170`.
 Direkt verglichen mit F-03 aus `docs/security-findings.md` — alle
 dortigen Patches bestehen weiter.
 
-## 8. Rate-Limit auf Mutating-Endpoints — FAIL/REVIEW
+## 8. Rate-Limit auf Mutating-Endpoints — CLOSED (war FAIL/REVIEW)
 
 Geprueft: alle `routers/*.py`. Erfasst (PASS):
 - `routers/personas.py:64, 77, 103` (POST/PUT/Transition)
@@ -205,7 +205,7 @@ Geprueft: alle `routers/*.py`. Erfasst (PASS):
 - `routers/organizations.py:49, 64`
 - `routers/playbook_resources.py:47` (PUT)
 
-### F-Phase2-01 — Mutationen ohne `write_limit` (Medium, Open)
+### F-Phase2-01 — Mutationen ohne `write_limit` (Medium, Closed)
 
 - **Bereiche:**
   - `apps/api/src/who2be_api/routers/members.py:40-45` — `PATCH /members/{user_id}` (Rolle-Aenderung)
@@ -226,29 +226,46 @@ Geprueft: alle `routers/*.py`. Erfasst (PASS):
 - **Empfehlung:** `@limiter.limit(write_limit)` + `request: Request`-Parameter
   auf den oben aufgelisteten Handlern ergaenzen (analog Muster in
   `routers/tokens.py:29-34`).
+- **Fix (2026-06-03, Branch `feat/security-findings-prelaunch`):** `@limiter.limit(write_limit)`
+  + `request: Request` auf allen gelisteten Handlern ergaenzt — `members.py`
+  (`update_member_role`, `remove_member`), `persona_playbooks.py`
+  (`set_persona_playbooks`), `playbook_composition.py` (`set_playbook_composes`),
+  `workspaces.py` (`update_workspace`, `delete_workspace`), `invitations.py`
+  (`revoke_invitation`) und `tokens.py` (`revoke_token`). `playbook_resources.py`
+  (`set_resource_links`) und `resource_composition.py` (`set_sub_resources`)
+  trugen das Limit bereits. Regressionstest:
+  `apps/api/tests/test_rate_limit_mutations.py` belegt pro Endpunkt den 429
+  nach Limit-Ueberschreitung (parametriert, skippt ohne DB wie die uebrigen
+  Integrationstests). **Status: Closed.**
 
 ## Akzeptanz / Ampel
 
-**Gesamt-Ampel:** Gelb. Keine Critical/High, aber drei offene Findings
-(1× Medium Rate-Limit, 2× Low Defense-in-Depth) plus die Last-Admin-Race-
-Anmerkung sollen vor dem Public-Switch adressiert werden.
+**Gesamt-Ampel:** Gelb. Keine Critical/High. **F-Phase2-01 (Rate-Limit) ist
+seit 2026-06-03 geschlossen**; offen bleiben nur noch 2× Low Defense-in-Depth
+(F-Phase2-02, F-Phase2-03) plus die Last-Admin-Race-Anmerkung, die vor dem
+Public-Switch adressiert werden sollen.
 
 ### TODO vor Public-Switch
 
-1. **F-Phase2-01** — `@limiter.limit(write_limit)` auf alle in §8 gelisteten
-   Mutationen ziehen (`routers/members.py`, `routers/persona_playbooks.py`,
+1. **F-Phase2-01** — ✅ **erledigt (2026-06-03)**: `@limiter.limit(write_limit)`
+   auf alle in §8 gelisteten Mutationen gezogen (`routers/members.py`,
+   `routers/persona_playbooks.py`, `routers/playbook_composition.py`,
    `routers/workspaces.py`, `routers/invitations.py`-Revoke,
-   `routers/tokens.py`-Revoke).
+   `routers/tokens.py`-Revoke); Regressionstest
+   `apps/api/tests/test_rate_limit_mutations.py`.
 2. **F-Phase2-02** — `list_linked` um `workspace_id`-Filter ergaenzen
    (Defense-in-Depth gegen kuenftige Service-Refactors).
 3. **F-Phase2-03** — `workspace_repository.update_name` mit `require_role(ctx,
    admin)` im Router gaten und im SQL den `workspace_id` re-binden.
 4. **Last-Admin (Anmerkung §6)** — Advisory-Lock auf `workspace_id` vor dem
    `_last_admin`-Count erwaegen, falls Parallel-Downgrades realistisch werden.
-5. **CSP/Header-Pass (offen aus Phase 1, F-12)** — Caddyfile-Header-Snippet
-   muss vor Public-Switch greifen; bei Multi-User-Frontend mit BlockNote ist
-   `default-src 'self'` Pflicht (Insel laesst keinen Inline-Style/Script
-   stehen, ADR-0022).
+5. **CSP/Header-Pass (offen aus Phase 1, F-12)** — ✅ **erledigt (2026-06-03)**:
+   `deploy/hetzner/Caddyfile` finalisiert (HSTS, X-Content-Type-Options,
+   X-Frame-Options, Referrer-Policy, Permissions-Policy, Cross-Origin-Opener-
+   Policy + per-Subdomain CSP mit `object-src 'none'`/`form-action`).
+   `default-src 'self'` auf `app.<domain>` mit `style-src 'unsafe-inline'` fuer
+   die BlockNote-Insel (ADR-0022). Smoke: `deploy/hetzner/tests/test_headers.sh`.
+   Siehe `docs/security-findings.md` §F-12.
 
 ## Public-Tauglichkeits-Review (2026-06-02, FSL-/Public-Prep)
 

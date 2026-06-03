@@ -9,9 +9,10 @@ from typing import Annotated
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
 from who2be_api.core.db import get_pool
+from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.repositories.playbook_composition_repository import (
     PgPlaybookCompositionRepository,
@@ -42,7 +43,9 @@ async def list_playbook_composes(
 
 
 @router.put("/{playbook_id}/composes")
+@limiter.limit(write_limit)
 async def set_playbook_composes(
+    request: Request,
     playbook_id: UUID,
     data: PlaybookCompositionLinkSet,
     ctx: Ctx,
