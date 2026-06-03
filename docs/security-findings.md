@@ -42,7 +42,7 @@ strukturierte JSON-Logs ohne Authorization-Header / Bodies / Token.
 | F-09 | Low      | API/Routing       | Keine Pagination-Limits auf `GET /v1/personas`, `/v1/playbooks`        | Fixed           |
 | F-10 | Low      | API/Query         | `tag`/`trigger` Query-Parameter ohne `max_length`                      | Fixed           |
 | F-11 | Low      | Web/UI            | `VITE_*`-Fallbacks im Production-Build                                 | Accepted        |
-| F-12 | Info     | Security-Header   | Fehlende X-Content-Type-Options, X-Frame-Options, Referrer-Policy, CSP | In Arbeit (MS-3 H5) |
+| F-12 | Info     | Security-Header   | Fehlende X-Content-Type-Options, X-Frame-Options, Referrer-Policy, CSP | Closed          |
 | F-13 | Info     | OpenAPI           | `/docs` und `/openapi.json` ohne Auth                                  | Accepted        |
 
 ## Detail je Finding
@@ -218,17 +218,31 @@ strukturierte JSON-Logs ohne Authorization-Header / Bodies / Token.
   Dev-Fallbacks sind unbedenklich (anon-Key ist per Definition public).
 - **Status:** Keine Aktion — die Logik ist defensiv und korrekt.
 
-### F-12 — Fehlende Security-Header (Info, In Arbeit / MS-3 H5)
+### F-12 — Fehlende Security-Header (Info, Closed)
 
 - **Bereich:** Reverse-Proxy (Caddy, `deploy/hetzner/Caddyfile`)
-- **Status:** Aktive Task **MS-3 H5** (Plan-Review 2026-05-26). Konkret
-  im Caddyfile zu setzen: `Strict-Transport-Security` (HSTS, via Caddy-
-  Auto-HTTPS), `X-Content-Type-Options: nosniff`,
-  `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, restriktive
-  CSP fuer `app.<domain>`. Zusaetzlich Pfad-Block `/v1/internal/*` → 403
-  (ADR-0010). Vertrag: `deploy/hetzner/tests/test_headers.sh` als
-  Smoke. F-13 (`/docs` public) wird im selben Pass per Env-Toggle
-  `WHO2BE_DOCS_PUBLIC=false` adressiert.
+- **Status:** **Closed (2026-06-03, Branch `feat/security-findings-prelaunch`).**
+  Im Caddyfile zentral gesetzt (Snippet `(security_headers)` + per-Subdomain
+  CSP): `Strict-Transport-Security` (HSTS, `max-age=31536000; includeSubDomains`,
+  via Caddy-Auto-HTTPS), `X-Content-Type-Options: nosniff`,
+  `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Permissions-Policy`
+  und `Cross-Origin-Opener-Policy: same-origin`. CSP pro Vhost:
+  - `api.<domain>` / `supabase.<domain>` (JSON, kein HTML):
+    `default-src 'none'; object-src 'none'; frame-ancestors 'none';
+    form-action 'none'; base-uri 'none'`.
+  - `app.<domain>` (SPA + BlockNote-Insel ADR-0022):
+    `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';
+    img-src 'self' data:; font-src 'self' data:; connect-src 'self'
+    https://api.<domain> <VITE_SUPABASE_URL>; object-src 'none';
+    frame-ancestors 'none'; form-action 'self'; base-uri 'self'`.
+
+  `object-src 'none'` killt Plugin-XSS, `form-action` ist explizit, weil die
+  Direktive **nicht** auf `default-src` zurueckfaellt. Zusaetzlich Pfad-Block
+  `/v1/internal/*` → 403 (ADR-0010). Vertrag/Smoke:
+  `deploy/hetzner/tests/test_headers.sh` (assertiert HSTS, XCTO, XFO, Referrer,
+  Permissions, COOP, CSP inkl. `object-src`/`form-action` sowie den
+  `/v1/internal/`-Block und den `/docs`-Toggle). F-13 (`/docs` public) bleibt
+  per Env-Toggle `WHO2BE_DOCS_PUBLIC=false` (Default) abgedeckt.
 
 ### F-13 — `/docs` und `/openapi.json` oeffentlich (Info, Accepted)
 
@@ -242,7 +256,7 @@ strukturierte JSON-Logs ohne Authorization-Header / Bodies / Token.
 | Block            | Status                                                                     |
 | ---------------- | -------------------------------------------------------------------------- |
 | Patches gemerged | F-01/03/05/06/07/08/10 in PR aus MS-3 H3; F-02/F-09 in diesem Branch.      |
-| Followups        | F-12 (Security-Header / CSP) ist als MS-3 **H5** im Plan-Review v2 verortet. |
+| Followups        | F-12 (Security-Header / CSP) **Closed (2026-06-03)** — Caddyfile finalisiert, Smoke `deploy/hetzner/tests/test_headers.sh`. |
 | Akzeptiert       | F-04, F-11, F-13 sind ohne weitere Aktion abgenommen (Rationale s. o.).    |
 | User-Sign-Off    | Pending — bei Merge dieses PRs als implizit abgenommen.                    |
 
@@ -269,4 +283,5 @@ deferred/akzeptierten Findings dieser Datei (**F-04**, **F-11**, **F-12**,
   Haertungs-/OSS-Entscheidungen; F-12 ist als aktive Caddy-Task verortet.
 
 Hinweis: Der tatsaechliche Public-Flip ist **nicht** Teil dieses Schritts (Repo
-bleibt privat). F-12 sollte vor dem Flip geschlossen sein (CSP/Header in Caddy).
+bleibt privat). F-12 ist seit 2026-06-03 geschlossen (CSP/Header in Caddy
+finalisiert, s. o.).

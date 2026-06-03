@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Smoke fuer H5 Caddy-Hardening:
-#   1) Security-Header auf /v1/health (HSTS, XCTO, XFO, Referrer, Permissions, CSP)
+# Smoke fuer H5 Caddy-Hardening (F-12):
+#   1) Security-Header auf /v1/health (HSTS, XCTO, XFO, Referrer, Permissions,
+#      COOP, CSP inkl. object-src/form-action)
 #   2) /v1/internal/* → 403 (extern blockt Caddy direkt)
 #   3) /docs → 404 wenn WHO2BE_DOCS_PUBLIC=false (Default), sonst 200
 #
@@ -38,7 +39,10 @@ assert_header "X-Content-Type-Options"    "nosniff"
 assert_header "X-Frame-Options"           "DENY"
 assert_header "Referrer-Policy"           "no-referrer"
 assert_header "Permissions-Policy"        "accelerometer"
+assert_header "Cross-Origin-Opener-Policy" "same-origin"
 assert_header "Content-Security-Policy"   "default-src"
+assert_header "Content-Security-Policy"   "object-src 'none'"
+assert_header "Content-Security-Policy"   "form-action"
 
 # --- 2) /v1/internal/* Block ---------------------------------------------
 log "GET ${BASE}/v1/internal/foo (erwartet 403)"
