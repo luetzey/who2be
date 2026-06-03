@@ -47,6 +47,7 @@ from who2be_api.licensing.plans import plan_by_code
 from who2be_api.licensing.service import build_entitlement_port
 from who2be_api.repositories.entitlement_repository import PgEntitlementRepository
 from who2be_api.repositories.mcp_usage_repository import PgMcpUsageRepository
+from who2be_api.repositories.processed_event_repository import PgProcessedEventRepository
 from who2be_api.services.mcp_limit_service import current_period
 from who2be_models import WorkspaceRole
 
@@ -79,6 +80,9 @@ class EntitlementInfo(BaseModel):
     expires_at: str | None
     mcp_monthly_quota: int | None
     mcp_rate_per_min: int | None
+    # Dunning-Signal: gesetzt, solange eine fehlgeschlagene Zahlung in der
+    # Grace-Period nachgeholt werden kann (Banner in der Web-UI).
+    grace_until: str | None
     usage: EntitlementUsage
 
 
@@ -117,7 +121,12 @@ def get_mollie_service() -> MollieBillingService:
             detail="Datenbank nicht verfuegbar.",
         ) from exc
     gateway = SdkMollieGateway(settings.mollie_api_key)
-    return MollieBillingService(gateway, PgEntitlementRepository(pool))
+    return MollieBillingService(
+        gateway,
+        PgEntitlementRepository(pool),
+        PgProcessedEventRepository(pool),
+        grace_days=settings.mollie_grace_days,
+    )
 
 
 MollieService = Annotated[MollieBillingService, Depends(get_mollie_service)]
@@ -217,6 +226,7 @@ async def get_entitlement(ctx: Ctx, pool: Pool) -> EntitlementInfo:
         expires_at=entitlement.expires_at.isoformat() if entitlement.expires_at else None,
         mcp_monthly_quota=entitlement.mcp_monthly_quota,
         mcp_rate_per_min=entitlement.mcp_rate_per_min,
+        grace_until=entitlement.grace_until.isoformat() if entitlement.grace_until else None,
         usage=EntitlementUsage(period=period, count=count),
     )
 

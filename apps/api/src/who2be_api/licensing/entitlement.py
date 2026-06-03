@@ -52,6 +52,12 @@ class Entitlement(BaseModel):
     `mcp_monthly_quota` / `mcp_rate_per_min` sind `None` = unbegrenzt. `status`
     plus `expires_at` bestimmen `is_active()`; nur ein aktives Entitlement laesst
     gated Reads durch.
+
+    `grace_until` ist ein reines **Dunning-Signal** (Banner): es liegt vor, solange
+    eine fehlgeschlagene Zahlung in der Grace-Period nachgeholt werden kann. Es
+    steuert den Zugriff nicht selbst — die Sperre nach Ablauf laeuft ueber
+    `expires_at` (das der Webhook auf dieselbe Frist setzt), sodass `is_active()`
+    unveraendert die einzige Zugriffs-Wahrheit bleibt.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -61,6 +67,7 @@ class Entitlement(BaseModel):
     expires_at: datetime | None = None
     mcp_monthly_quota: int | None = None
     mcp_rate_per_min: int | None = None
+    grace_until: datetime | None = None
 
     def is_active(self, now: datetime | None = None) -> bool:
         """True, wenn `status='active'` und (falls gesetzt) `expires_at` in der Zukunft liegt."""
