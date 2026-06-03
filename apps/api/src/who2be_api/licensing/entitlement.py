@@ -45,6 +45,12 @@ ALL_FEATURES: frozenset[str] = frozenset(
     }
 )
 
+# Free-Tier-Obergrenze fuer Inhalts-Entities (Persona/Playbook/Resource/Agent)
+# je Workspace (Plan §3.2 — Downgrade-Enforcement). Bestand bleibt lesbar; nur
+# NEUE Creates ueber diese Grenze werden geblockt. Paid-Plaene + On-Prem sind
+# unbegrenzt (siehe `Entitlement.entity_limit`).
+FREE_ENTITY_QUOTA = 50
+
 
 class Entitlement(BaseModel):
     """Aufgeloeste Nutzungsrechte einer Org.
@@ -82,6 +88,23 @@ class Entitlement(BaseModel):
     def has_feature(self, feature: str) -> bool:
         """True, wenn das Feature freigeschaltet ist (und das Entitlement aktiv ist)."""
         return self.is_active() and feature in self.features
+
+    def entity_limit(self, now: datetime | None = None) -> int | None:
+        """Max. Anzahl Inhalts-Entities je Workspace (None = unbegrenzt, Plan §3.2).
+
+        Aus den Feature-Codes abgeleitet, bewusst **ohne** zusaetzliche
+        DB-Spalte — so wirkt die Grenze auch dann, wenn der Billing-Webhook
+        (Track P) ein heruntergestuftes Entitlement schreibt, ohne dieses Feld
+        zu kennen:
+          * **Free** (nur `core`) oder **inaktiv** (Kuendigung/Fehlzahlung nach
+            Ablauf der Grace) ⇒ `FREE_ENTITY_QUOTA`.
+          * Jeder Plan mit Paid-Features (Pro/Enterprise) und On-Prem/OSS
+            (`ALL_FEATURES`) ⇒ unbegrenzt.
+        """
+        if not self.is_active(now):
+            return FREE_ENTITY_QUOTA
+        paid_features = self.features - {Feature.CORE}
+        return None if paid_features else FREE_ENTITY_QUOTA
 
 
 # On-Prem/OSS-Default: alle Features, unbegrenzt, kein Ablauf (Plan §3.5).

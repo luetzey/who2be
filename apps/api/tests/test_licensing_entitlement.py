@@ -9,10 +9,29 @@ from who2be_api.licensing.edition import current_edition, is_cloud, is_onprem
 from who2be_api.licensing.entitlement import (
     ALL_FEATURES,
     CLOUD_FREE_ENTITLEMENT,
+    FREE_ENTITY_QUOTA,
     OSS_ENTITLEMENT,
     Entitlement,
     Feature,
 )
+
+
+def test_oss_entitlement_has_unlimited_entity_limit() -> None:
+    assert OSS_ENTITLEMENT.entity_limit() is None
+
+
+def test_cloud_free_entitlement_has_free_entity_limit() -> None:
+    assert CLOUD_FREE_ENTITLEMENT.entity_limit() == FREE_ENTITY_QUOTA
+
+
+def test_paid_features_lift_entity_limit() -> None:
+    pro = Entitlement(status="active", features=frozenset({Feature.CORE, Feature.AGENTS}))
+    assert pro.entity_limit() is None
+
+
+def test_inactive_entitlement_falls_back_to_free_entity_limit() -> None:
+    ent = Entitlement(status="inactive", features=frozenset({Feature.CORE, Feature.AGENTS}))
+    assert ent.entity_limit() == FREE_ENTITY_QUOTA
 
 
 def test_oss_entitlement_is_unlimited_and_all_features() -> None:

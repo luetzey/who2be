@@ -5,6 +5,7 @@ Pydantic-Modelle, kein I/O. Pro Aggregat ein Schema-Satz (`…Create` /
 `…Update` / `…Read` / `…VersionRead`); `…Content` typisiert das `jsonb`-Feld.
 """
 
+from who2be_models.account import AccountDeletionRead, OrganizationDeletionRead
 from who2be_models.agent import (
     AgentCopy,
     AgentCreate,
@@ -99,6 +100,7 @@ __version__ = "0.1.0"
 
 __all__ = [
     "ALLOWED_TRANSITIONS",
+    "AccountDeletionRead",
     "ActivityPagination",
     "AgentCopy",
     "AgentCreate",
@@ -174,6 +176,7 @@ __all__ = [
     "VersionDiffChange",
     "VersionStatus",
     "VersionTransitionRequest",
+    "OrganizationDeletionRead",
     "WorkspaceCreate",
     "WorkspaceMemberRead",
     "WorkspaceMemberUpdate",

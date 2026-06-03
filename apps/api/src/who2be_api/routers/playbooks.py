@@ -18,6 +18,7 @@ from who2be_api.repositories.playbook_resource_link_repository import (
     PgPlaybookResourceLinkRepository,
 )
 from who2be_api.repositories.status_history_repository import PgStatusHistoryRepository
+from who2be_api.services.entity_quota_service import enforce_entity_quota
 from who2be_api.services.mcp_limit_service import enforce_mcp_read_limit
 from who2be_api.services.playbook_composition_service import PlaybookCompositionService
 from who2be_api.services.playbook_resource_link_service import PlaybookResourceLinkService
@@ -83,7 +84,11 @@ async def list_playbooks(
     return items
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(enforce_entity_quota)],
+)
 @limiter.limit(write_limit)
 async def create_playbook(
     request: Request, data: PlaybookCreate, ctx: Ctx, service: Service

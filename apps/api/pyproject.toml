@@ -29,6 +29,7 @@ dependencies = [
 
 [project.scripts]
 who2be-migrate = "who2be_api.core.migrations:cli"
+who2be-purge = "who2be_api.core.purge:cli"
 
 [tool.uv.sources]
 who2be-models = { workspace = true }

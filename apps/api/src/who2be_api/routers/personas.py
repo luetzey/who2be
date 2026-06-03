@@ -12,6 +12,7 @@ from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.repositories.persona_repository import PgPersonaRepository
 from who2be_api.repositories.status_history_repository import PgStatusHistoryRepository
+from who2be_api.services.entity_quota_service import enforce_entity_quota
 from who2be_api.services.mcp_limit_service import enforce_mcp_read_limit
 from who2be_api.services.persona_service import PersonaRenderResponse, PersonaService
 from who2be_api.services.status_history_service import StatusHistoryService
@@ -67,7 +68,11 @@ async def list_personas(
     return items
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(enforce_entity_quota)],
+)
 @limiter.limit(write_limit)
 async def create_persona(
     request: Request, data: PersonaCreate, ctx: Ctx, service: Service
