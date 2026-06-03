@@ -16,6 +16,7 @@ import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { cn } from '@/lib/utils'
 
+import { Footer } from './Footer'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 
 interface AppShellProps {
@@ -99,6 +100,7 @@ export function AppShell({ children, onSignOut }: AppShellProps) {
           </div>
         </header>
         <main className="min-w-0 flex-1">{children}</main>
+        <Footer />
       </div>
     </div>
   )
