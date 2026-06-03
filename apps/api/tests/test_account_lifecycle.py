@@ -126,6 +126,35 @@ def test_delete_me_soft_deletes_account_and_personal_org(monkeypatch: pytest.Mon
 
 
 @pytest.mark.integration
+def test_delete_me_blocked_when_sole_owner_of_company_org(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+
+    owner = fresh_user_id()
+    setup_workspace(owner)
+    slug = f"acme-{secrets.token_hex(4)}"
+    try:
+        with TestClient(app) as client:
+            client.post(
+                "/v1/organizations",
+                json={"name": "Acme", "slug": slug},
+                headers=_auth(owner),
+            )
+            # Alleiniger Owner einer Company-Org → Konto-Loeschung 409.
+            blocked = client.delete("/v1/me", headers=_auth(owner))
+            assert blocked.status_code == 409
+            assert "Acme" in blocked.json()["detail"]
+    finally:
+        _drop_company_org(slug)
+        cleanup_workspaces([owner])
+        asyncio.run(_execute("DELETE FROM account_deletion WHERE user_id = $1", owner))
+
+
+@pytest.mark.integration
 def test_delete_organization_owner_only(monkeypatch: pytest.MonkeyPatch) -> None:
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")

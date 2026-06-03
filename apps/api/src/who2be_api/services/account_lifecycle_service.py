@@ -28,7 +28,23 @@ class AccountLifecycleService:
         self._repo = repo
 
     async def request_account_deletion(self, user_id: UUID) -> AccountDeletionRead:
-        """Merkt den eigenen Account zur Loeschung vor (Personal-Org wird eingemottet)."""
+        """Merkt den eigenen Account zur Loeschung vor (Personal-Org wird eingemottet).
+
+        409, wenn der User alleiniger Owner einer Company-Org ist — die wuerde
+        sonst fuehrungslos verwaisen. Er muss sie zuerst uebertragen oder
+        separat loeschen.
+        """
+        orphaned = await self._repo.sole_owner_company_orgs(user_id)
+        if orphaned:
+            joined = ", ".join(orphaned)
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Du bist alleiniger Owner folgender Organisationen: "
+                    f"{joined}. Uebertrage sie an ein anderes Mitglied oder loesche "
+                    "sie zuerst, bevor du dein Konto loeschst."
+                ),
+            )
         purge_after = datetime.now(UTC) + GRACE_PERIOD
         await self._repo.request_account_deletion(user_id, purge_after)
         return AccountDeletionRead(purge_after=purge_after)
@@ -56,6 +72,6 @@ class AccountLifecycleService:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Nur der Owner kann diese Organisation loeschen.",
             )
-        purge_after = datetime.now(UTC) + GRACE_PERIOD
-        await self._repo.soft_delete_organization(org_id, purge_after)
-        return OrganizationDeletionRead(organization_id=str(org_id), purge_after=purge_after)
+        requested = datetime.now(UTC) + GRACE_PERIOD
+        effective = await self._repo.soft_delete_organization(org_id, requested)
+        return OrganizationDeletionRead(organization_id=str(org_id), purge_after=effective)

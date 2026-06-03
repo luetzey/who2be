@@ -20,17 +20,22 @@ _TIMEOUT_SECONDS = 5.0
 
 
 async def delete_auth_user(user_id: UUID) -> bool:
-    """Loescht den GoTrue-User per Admin-API. True bei Erfolg (oder 404 ⇒ schon weg).
+    """Loescht den GoTrue-User per Admin-API.
 
-    Fehler werden geschluckt (best-effort); der Aufrufer (Purge-Job) darf den
-    Rueckgabewert zur Protokollierung nutzen, ist aber nicht davon abhaengig.
+    Rueckgabe ist bewusst „ist die Identitaet erfolgreich entfernt (oder gibt es
+    nichts zu entfernen)?" — der Purge-Job finalisiert die Account-Loeschung nur
+    bei True (sonst wird sie beim naechsten Lauf erneut versucht, DSGVO-Erasure):
+      * **True**: erfolgreich geloescht, 404 (schon weg) ODER GoTrue gar nicht
+        konfiguriert (On-Prem/Dev — es gibt keine zu loeschende Identitaet).
+      * **False**: GoTrue ist konfiguriert, aber der Call ist fehlgeschlagen
+        (Netzwerk/HTTP) — die Identitaet besteht moeglicherweise noch.
     """
     settings = get_settings()
     base = settings.supabase_url.rstrip("/")
     service_key = settings.supabase_service_key
     if not base or not service_key:
-        logger.info("GoTrue nicht konfiguriert — Auth-User-Loeschung uebersprungen.")
-        return False
+        logger.info("GoTrue nicht konfiguriert — keine Auth-Identitaet zu loeschen.")
+        return True
 
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT_SECONDS) as client:

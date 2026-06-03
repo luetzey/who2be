@@ -26,7 +26,9 @@ class AccountLifecycleRepository(Protocol):
 
     async def org_kind(self, org_id: UUID) -> str | None: ...
 
-    async def soft_delete_organization(self, org_id: UUID, purge_after: datetime) -> bool: ...
+    async def soft_delete_organization(self, org_id: UUID, purge_after: datetime) -> datetime: ...
+
+    async def sole_owner_company_orgs(self, user_id: UUID) -> list[str]: ...
 
     async def request_account_deletion(self, user_id: UUID, purge_after: datetime) -> None: ...
 
@@ -52,16 +54,43 @@ class PgAccountLifecycleRepository:
         )
         return kind
 
-    async def soft_delete_organization(self, org_id: UUID, purge_after: datetime) -> bool:
-        """Markiert die Org als zur Loeschung vorgemerkt. False, wenn sie nicht
-        existiert oder bereits vorgemerkt ist (idempotent)."""
-        result = await self._pool.fetchval(
+    async def soft_delete_organization(self, org_id: UUID, purge_after: datetime) -> datetime:
+        """Markiert die Org als zur Loeschung vorgemerkt; liefert den effektiven
+        Purge-Termin. Idempotent: ist die Org bereits vorgemerkt, bleibt der
+        urspruengliche `purge_after` bestehen und wird zurueckgegeben (kein
+        verlaengertes Grace-Fenster bei erneutem Loeschen)."""
+        stored: datetime | None = await self._pool.fetchval(
             "UPDATE organization SET deleted_at = now(), purge_after = $2 "
-            "WHERE id = $1 AND deleted_at IS NULL RETURNING id",
+            "WHERE id = $1 AND deleted_at IS NULL RETURNING purge_after",
             org_id,
             purge_after,
         )
-        return result is not None
+        if stored is not None:
+            return stored
+        existing: datetime | None = await self._pool.fetchval(
+            "SELECT purge_after FROM organization WHERE id = $1",
+            org_id,
+        )
+        return existing if existing is not None else purge_after
+
+    async def sole_owner_company_orgs(self, user_id: UUID) -> list[str]:
+        """Namen aktiver Company-Orgs, in denen `user_id` der EINZIGE Owner ist.
+
+        Solche Orgs duerfen nicht ueber die Konto-Loeschung verwaist werden —
+        der Service blockt die Account-Loeschung, bis sie uebertragen oder
+        separat geloescht sind."""
+        rows = await self._pool.fetch(
+            "SELECT o.name FROM organization o "
+            "JOIN org_member m ON m.org_id = o.id AND m.user_id = $1 AND m.role = 'owner' "
+            "WHERE o.kind = 'company' AND o.deleted_at IS NULL "
+            "  AND NOT EXISTS ("
+            "    SELECT 1 FROM org_member m2 "
+            "    WHERE m2.org_id = o.id AND m2.role = 'owner' AND m2.user_id <> $1"
+            "  ) "
+            "ORDER BY o.name ASC",
+            user_id,
+        )
+        return [row["name"] for row in rows]
 
     async def request_account_deletion(self, user_id: UUID, purge_after: datetime) -> None:
         """Merkt den Account vor und mottet die Personal-Org des Users ein.

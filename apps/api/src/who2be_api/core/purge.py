@@ -58,13 +58,26 @@ async def purge_expired(
         logger.info("Org %s endgueltig geloescht (Grace abgelaufen).", org_id)
 
     user_ids = await repo.expired_accounts(reference)
+    purged_accounts = 0
     for user_id in user_ids:
+        # Daten zuerst (idempotent), dann die GoTrue-Identitaet. `purged_at` wird
+        # NUR gesetzt, wenn die Identitaet erfolgreich entfernt ist — sonst bleibt
+        # der Account pending und der naechste Lauf versucht die Erasure erneut
+        # (DSGVO: die Loeschung gilt erst als abgeschlossen, wenn auch die
+        # Auth-Identitaet weg ist).
         await repo.purge_account_data(user_id)
-        await delete_auth_user(user_id)
-        await repo.mark_account_purged(user_id)
-        logger.info("Account %s endgueltig geloescht (Grace abgelaufen).", user_id)
+        if await delete_auth_user(user_id):
+            await repo.mark_account_purged(user_id)
+            purged_accounts += 1
+            logger.info("Account %s endgueltig geloescht (Grace abgelaufen).", user_id)
+        else:
+            logger.warning(
+                "Account %s: Auth-Identitaet konnte nicht geloescht werden — "
+                "Purge wird beim naechsten Lauf erneut versucht.",
+                user_id,
+            )
 
-    return PurgeResult(organizations=len(org_ids), accounts=len(user_ids))
+    return PurgeResult(organizations=len(org_ids), accounts=purged_accounts)
 
 
 async def _run() -> PurgeResult:
