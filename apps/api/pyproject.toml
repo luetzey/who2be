@@ -11,11 +11,17 @@ dependencies = [
     "asyncpg>=0.30",
     "cryptography>=44",
     "httpx>=0.28",
+    # Pluggable Rate-Limit-Storage (Plan CL2): `limits` liefert die Moving-Window-
+    # Strategie + Storage-Backends, `redis` den Client fuer `redis://`-URIs. `limits`
+    # ist transitiv via slowapi vorhanden, hier explizit gepinnt, weil der Code es
+    # direkt importiert; `redis` wird erst beim redis://-Pfad geladen.
+    "limits>=3.0",
     "markdown-it-py>=3.0",
     "mollie-api-python>=3.7",
     "pydantic-settings>=2.0",
     "pyjwt>=2.8",
     "python-multipart>=0.0.9",
+    "redis>=5.0",
     "slowapi>=0.1.9",
     "structlog>=24.1",
     "who2be-models",

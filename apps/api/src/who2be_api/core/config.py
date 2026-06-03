@@ -65,6 +65,15 @@ class Settings(BaseSettings):
     # Pro Token-Hash bzw. IP. Slowapi-Limit-Callable liest dieses Feld zur Laufzeit,
     # damit Tests via Settings-Override auf einen niedrigen Wert druecken koennen.
     rate_limit_write: str = "30/minute"
+    # Plan CL2 / §3.1 — pluggable Rate-Limit-Storage. Default `memory://` ⇒
+    # Single-Process, Verhalten unveraendert. `redis://host:port` aktiviert ein
+    # geteiltes Backend (slowapi + Per-Token-Ceiling), damit mehrere API-Replicas
+    # dasselbe Fenster sehen. Der Wert wird 1:1 an `storage_from_string` (limits)
+    # bzw. an den slowapi-`Limiter` durchgereicht.
+    rate_limit_storage_uri: str = Field(
+        default="memory://",
+        validation_alias=AliasChoices("RATE_LIMIT_STORAGE_URI", "rate_limit_storage_uri"),
+    )
     # `json` fuer Prod-Aggregation, `console` fuer lesbares Dev-Tail (ADR-0007).
     log_format: Literal["json", "console"] = "json"
     # F-13 / H5: /docs, /redoc, /openapi.json sind in Prod default aus. true nur fuer

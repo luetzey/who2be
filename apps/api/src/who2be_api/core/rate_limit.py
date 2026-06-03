@@ -1,7 +1,10 @@
 """Rate-Limiting fuer schreibende Endpoints (slowapi).
 
-Single-Process / In-Memory: ausreichend fuer den aktuellen Single-Container-Lauf.
-Mehrere API-Replicas in MS-2+ erfordern ein Redis-Storage (`storage_uri="redis://..."`).
+Storage ist pluggable (Plan CL2 / §3.1): `RATE_LIMIT_STORAGE_URI` steuert sowohl
+den slowapi-`Limiter` als auch das Per-Token-Ceiling. Default `memory://` ⇒
+Single-Process / In-Memory, ausreichend fuer den Single-Container-Lauf. Ein
+`redis://...`-URI aktiviert ein geteiltes Backend, sodass mehrere API-Replicas
+dasselbe Fenster sehen — ohne Verhaltensaenderung im Default.
 
 Key-Funktion: SHA-256-Praefix des Bearer-Tokens (deckt JWT- und `w2b_`-Pfad ohne
 DB-Roundtrip ab) und faellt auf Client-IP zurueck, wenn kein Auth-Header anliegt.
@@ -11,18 +14,22 @@ import hashlib
 import threading
 import time
 from collections import defaultdict, deque
+from typing import Protocol
 
 from fastapi import Request
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from who2be_api.core.config import get_settings
+from who2be_api.core.config import Settings, get_settings
 
 __all__ = [
     "RateLimitExceeded",
+    "RedisTokenRateLimiter",
     "TokenRateLimiter",
+    "TokenRateLimiterPort",
     "_rate_limit_exceeded_handler",
+    "build_token_rate_limiter",
     "limiter",
     "rate_limit_key",
     "token_rate_limiter",
@@ -49,7 +56,15 @@ def write_limit() -> str:
     return get_settings().rate_limit_write
 
 
-limiter = Limiter(key_func=rate_limit_key)
+limiter = Limiter(key_func=rate_limit_key, storage_uri=get_settings().rate_limit_storage_uri)
+
+
+class TokenRateLimiterPort(Protocol):
+    """Vertrag des Per-Token-Ceilings — In-Memory und Redis erfuellen ihn gleich."""
+
+    def allow(self, key: str, limit_per_min: int | None, now: float | None = None) -> bool: ...
+
+    def reset(self) -> None: ...
 
 
 class TokenRateLimiter:
@@ -89,4 +104,57 @@ class TokenRateLimiter:
             self._events.clear()
 
 
-token_rate_limiter = TokenRateLimiter()
+class RedisTokenRateLimiter:
+    """Redis-backed Per-Token-Ceiling via `limits` (Moving-Window-Strategie).
+
+    Semantik-gleich zum In-Memory `TokenRateLimiter` (60s-Sliding-Window pro Key),
+    aber prozessuebergreifend: mehrere API-Replicas teilen sich denselben Bucket
+    (Plan CL2). Aktiv, sobald `RATE_LIMIT_STORAGE_URI` auf `redis://...` zeigt.
+
+    Storage/Strategie werden **lazy** beim ersten `allow` gebaut, damit Import und
+    Config-Aufloesung ohne erreichbares Redis funktionieren (Tests, Boot-Reihenfolge).
+    Der `now`-Parameter existiert nur fuer API-Kompatibilitaet; das Zeitfenster
+    verwaltet `limits` selbst.
+    """
+
+    _WINDOW_SECONDS = 60
+
+    def __init__(self, storage_uri: str) -> None:
+        self.storage_uri = storage_uri
+        self._limiter: object | None = None
+
+    def _strategy(self) -> object:
+        if self._limiter is None:
+            from limits.storage import storage_from_string
+            from limits.strategies import MovingWindowRateLimiter
+
+            self._limiter = MovingWindowRateLimiter(storage_from_string(self.storage_uri))
+        return self._limiter
+
+    def allow(self, key: str, limit_per_min: int | None, now: float | None = None) -> bool:
+        """True, solange der Read im aktuellen 60s-Fenster unter dem Limit liegt."""
+        if limit_per_min is None or limit_per_min <= 0:
+            return True
+        from limits import RateLimitItemPerMinute
+        from limits.strategies import MovingWindowRateLimiter
+
+        item = RateLimitItemPerMinute(limit_per_min)
+        strategy = self._strategy()
+        assert isinstance(strategy, MovingWindowRateLimiter)  # noqa: S101 — Typ-Narrowing
+        return strategy.hit(item, key)
+
+    def reset(self) -> None:
+        """Verwirft die Strategie — frische Verbindung/Buckets beim naechsten Lauf."""
+        self._limiter = None
+
+
+def build_token_rate_limiter(settings: Settings | None = None) -> TokenRateLimiterPort:
+    """Waehlt das Per-Token-Backend anhand der Storage-URI (Default: In-Memory)."""
+    resolved = settings or get_settings()
+    uri = resolved.rate_limit_storage_uri
+    if uri.startswith("redis"):
+        return RedisTokenRateLimiter(uri)
+    return TokenRateLimiter()
+
+
+token_rate_limiter: TokenRateLimiterPort = build_token_rate_limiter()
