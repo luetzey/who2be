@@ -1,0 +1,109 @@
+# Cloud-Edition LOKAL — volle Prod-Paritaet auf dem PC (Plan §3.1, CL1).
+#
+# Overlay ueber docker-compose.yml. Immer ZUSAMMEN starten:
+#   docker compose -f docker-compose.yml -f docker-compose.cloud.yml up -d --build --wait
+#
+# Was dieses Overlay gegenueber dem dev-Stack umstellt:
+#   + mailpit  — faengt alle GoTrue-Mails (SMTP :1025, UI :8025)
+#   + redis    — Rate-Limit-Storage-Backend (:6379)
+#   + set-app-role-password — One-Shot, der das `who2be_app`-Passwort setzt
+#                 (Rolle kommt aus Migration 0036) — danach verbindet die API
+#                 als nicht-privilegierte Rolle mit AKTIVER RLS.
+#   ~ auth     — GOTRUE_MAILER_AUTOCONFIRM=false + SMTP→mailpit + Mailer-Pfade
+#   ~ api      — WHO2BE_EDITION=cloud, APP_DATABASE_URL (who2be_app),
+#                RATE_LIMIT_STORAGE_URI=redis://…, Mollie-Test-Key + Webhook-URL
+#
+# Schritt-fuer-Schritt der bezahlten Cloud-Reise: docs/cloud-local-smoke.md.
+# dev-Defaults bleiben in docker-compose.yml unveraendert (kein Overlay ⇒ onprem).
+services:
+  mailpit:
+    image: axllent/mailpit:v1.20
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "true"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "true"
+    ports:
+      - "1025:1025"  # SMTP (GoTrue spricht hierher)
+      - "8025:8025"  # Web-UI — Verify-Mails im Browser oeffnen
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8025/livez"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-Shot: setzt das Passwort der Rolle `who2be_app` (Migration 0036 legt die
+  # Rolle an, das Secret liegt ausserhalb des Repos). Laeuft nach `migrate` und
+  # vor `api`, damit die App-Connection (APP_DATABASE_URL) sofort verbindet.
+  set-app-role-password:
+    image: postgres:16
+    entrypoint: ["/bin/sh", "/scripts/set-app-role-password.sh"]
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: who2be
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-who2be_app_local_pw}
+    volumes:
+      - ./scripts/set-app-role-password.sh:/scripts/set-app-role-password.sh:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
+  auth:
+    environment:
+      # Cloud-Paritaet: E-Mail-Verifikation PFLICHT (dev nutzt autoconfirm=true).
+      GOTRUE_MAILER_AUTOCONFIRM: "false"
+      # SMTP → mailpit. Auth/Insecure egal, mailpit nimmt im Dev-Modus alles an.
+      GOTRUE_SMTP_HOST: mailpit
+      GOTRUE_SMTP_PORT: "1025"
+      GOTRUE_SMTP_USER: ${GOTRUE_SMTP_USER:-dev}
+      GOTRUE_SMTP_PASS: ${GOTRUE_SMTP_PASS:-dev}
+      GOTRUE_SMTP_ADMIN_EMAIL: ${GOTRUE_SMTP_ADMIN_EMAIL:-no-reply@who2be.local}
+      GOTRUE_SMTP_SENDER_NAME: ${GOTRUE_SMTP_SENDER_NAME:-Who2Be}
+      # Mail-Link-Ziele relativ zu GOTRUE_SITE_URL — identisch zur Prod-Config
+      # (deploy/hetzner/supabase/docker-compose.yml), damit der lokale Smoke die
+      # echten Web-Routen trifft (/auth/callback, /onboarding/set-password, …).
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: /auth/callback
+      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: /auth/callback
+      GOTRUE_MAILER_URLPATHS_RECOVERY: /onboarding/set-password
+      GOTRUE_MAILER_URLPATHS_INVITE: /invitations
+    depends_on:
+      mailpit:
+        condition: service_healthy
+
+  api:
+    environment:
+      # Cloud-Edition scharf: Limits + Billing-Adapter aktiv (config.py:edition).
+      WHO2BE_EDITION: cloud
+      # Laufzeit-Connection als nicht-privilegierte Rolle `who2be_app` ⇒ RLS
+      # aktiv (Plan R1/R2). DATABASE_URL (Owner) bleibt nur fuer `migrate`.
+      APP_DATABASE_URL: postgresql://who2be_app:${APP_DB_PASSWORD:-who2be_app_local_pw}@db:5432/who2be
+      # Rate-Limit-Storage auf Redis (Track N liest die Var; bis dahin no-op via
+      # config extra="ignore"). Sliding-Window teilt sich so ueber Prozesse.
+      RATE_LIMIT_STORAGE_URI: redis://redis:6379
+      # Mollie-Test-Modus: Key aus .env (test_…). Leer ⇒ Checkout/Webhook 503.
+      MOLLIE_API_KEY: ${MOLLIE_API_KEY:-}
+      MOLLIE_WEBHOOK_SECRET: ${MOLLIE_WEBHOOK_SECRET:-}
+      # Oeffentliche https-Webhook-URL (Mollie akzeptiert kein localhost). Lokal
+      # via Tunnel (ngrok/cloudflared) setzen — sonst ohne webhookUrl angelegt.
+      MOLLIE_WEBHOOK_URL: ${MOLLIE_WEBHOOK_URL:-}
+      # Invitation-/Service-Mails via GoTrue-Admin (optional auch ohne nutzbar).
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
+      WEB_BASE_URL: ${WEB_BASE_URL:-http://localhost:5173}
+    depends_on:
+      set-app-role-password:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
