@@ -326,16 +326,16 @@ def test_phase30_playbook_type_check(tmp_path: Path) -> None:
     assert types["legacy"] == "prompt"
 
 
-# --- Track P: Mollie-Dunning + Webhook-Dedupe (0038) ------------------------
+# --- Track P: Mollie-Dunning + Webhook-Dedupe (0039) ------------------------
 
 
 @pytest.mark.integration
 def test_mollie_dunning_dedupe_migration(tmp_path: Path) -> None:
-    """0038: `grace_until`-Spalte + `processed_webhook_event`-Dedupe-Ledger.
+    """0039: `grace_until`-Spalte + `processed_webhook_event`-Dedupe-Ledger.
 
     Belegt: die Grace-Spalte existiert (NULL-Default), der Dedupe-Claim per
     `ON CONFLICT DO NOTHING RETURNING` liefert beim Replay keine Zeile, und ein
-    erneutes Statement-Replay der 0038-Datei ist No-op.
+    erneutes Statement-Replay der 0039-Datei ist No-op.
     """
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
@@ -369,8 +369,8 @@ def test_mollie_dunning_dedupe_migration(tmp_path: Path) -> None:
         assert first is not None
         assert second is None
 
-        # Statement-Replay der 0038-Datei muss No-op sein (IF NOT EXISTS / idempotent).
-        sql = (MIGRATIONS_DIR / "0038_mollie_dunning_dedupe.sql").read_text(encoding="utf-8")
+        # Statement-Replay der 0039-Datei muss No-op sein (IF NOT EXISTS / idempotent).
+        sql = (MIGRATIONS_DIR / "0039_mollie_dunning_dedupe.sql").read_text(encoding="utf-8")
         await conn.execute(sql)
 
     asyncio.run(_with_isolated_schema(_run))
