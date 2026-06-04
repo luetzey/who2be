@@ -18,7 +18,6 @@ import { DeleteAgentButton } from '../components/DeleteAgentButton'
 import { DuplicateAgentButton } from '../components/DuplicateAgentButton'
 import { useAgent } from '../hooks/useAgent'
 import { useAgentForm } from '../hooks/useAgentForm'
-import { isAgentShell } from '../lib/shell'
 
 export function AgentDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -62,7 +61,7 @@ export function AgentDetailPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <CopyPromptButton
                         agentId={agent.id}
-                        disabled={agent.status !== 'enabled' || isAgentShell(agent)}
+                        disabled={agent.status !== 'enabled'}
                       />
                       <DuplicateAgentButton agent={agent} />
                       <DeleteAgentButton agent={agent} />
@@ -84,6 +83,7 @@ export function AgentDetailPage() {
                 saveError={saveError}
                 personas={personas}
                 templates={templates}
+                agent={agent}
                 submitLabel="Speichern"
               />
             </Stack>

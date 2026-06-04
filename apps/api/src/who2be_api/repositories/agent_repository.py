@@ -18,11 +18,33 @@ import asyncpg
 
 from who2be_models import AgentRead, AgentStatus
 
-_SELECT = """
+# `persona_active` wird per EXISTS-Subquery auf `persona_version.status='active'`
+# mitgelesen — so kennt jedes AgentRead die Aktivierbarkeit ohne Extra-Roundtrip.
+# Ein Agent ohne Persona (`persona_id IS NULL`) ergibt korrekt False.
+_PERSONA_ACTIVE_EXPR = """
+    EXISTS (
+        SELECT 1 FROM persona_version pv
+        WHERE pv.persona_id = {col} AND pv.status = 'active'
+    )
+"""
+
+_SELECT = f"""
     SELECT a.id, a.workspace_id, a.owner_id, a.name, a.description,
            a.persona_id, a.system_prompt_template_id, a.status,
-           a.created_at, a.updated_at
+           a.created_at, a.updated_at,
+           {_PERSONA_ACTIVE_EXPR.format(col="a.persona_id")} AS persona_active
     FROM agent a
+"""
+
+# RETURNING fuer INSERT/UPDATE — identische Spalten wie `_SELECT` (ohne `a.`-Alias,
+# da `RETURNING` auf der Ziel-Tabelle operiert), inkl. `persona_active`. Die
+# Korrelation muss `agent.persona_id` qualifizieren: unqualifiziert wuerde
+# `persona_id` in der Subquery auf `persona_version.persona_id` aufloesen.
+_RETURNING = f"""
+    RETURNING id, workspace_id, owner_id, name, description,
+              persona_id, system_prompt_template_id, status,
+              created_at, updated_at,
+              {_PERSONA_ACTIVE_EXPR.format(col="agent.persona_id")} AS persona_active
 """
 
 
@@ -62,6 +84,10 @@ class AgentRepository(Protocol):
 
     async def delete(self, workspace_id: UUID, agent_id: UUID) -> bool: ...
 
+    async def persona_has_active_version(
+        self, workspace_id: UUID, persona_id: UUID
+    ) -> bool: ...
+
 
 class PgAgentRepository:
     """asyncpg-Implementierung."""
@@ -84,9 +110,7 @@ class PgAgentRepository:
                 "INSERT INTO agent (workspace_id, owner_id, name, description, "
                 "  persona_id, system_prompt_template_id, status) "
                 "VALUES ($1, $2, $3, $4, $5, $6, $7) "
-                "RETURNING id, workspace_id, owner_id, name, description, "
-                "persona_id, system_prompt_template_id, status, created_at, "
-                "updated_at",
+                f"{_RETURNING}",
                 workspace_id,
                 owner_id,
                 name,
@@ -154,9 +178,7 @@ class PgAgentRepository:
                 "  status = COALESCE($7, status), "
                 "  updated_at = now() "
                 "WHERE id = $1 AND workspace_id = $2 "
-                "RETURNING id, workspace_id, owner_id, name, description, "
-                "persona_id, system_prompt_template_id, status, created_at, "
-                "updated_at",
+                f"{_RETURNING}",
                 agent_id,
                 workspace_id,
                 name,
@@ -177,3 +199,21 @@ class PgAgentRepository:
         )
         # asyncpg gibt "DELETE <n>" zurueck; n=0 wenn nichts geloescht wurde.
         return bool(result.split()[-1] != "0")
+
+    async def persona_has_active_version(self, workspace_id: UUID, persona_id: UUID) -> bool:
+        """True, wenn die Persona im Workspace eine aktive Version hat.
+
+        Workspace-gepinnt: ein Cross-Workspace-`persona_id` (theoretisch durch
+        den Composite-FK ausgeschlossen) liefert False statt eines Lecks.
+        """
+        active: bool = await self._pool.fetchval(
+            "SELECT EXISTS ("
+            "  SELECT 1 FROM persona_version pv "
+            "  JOIN persona p ON p.id = pv.persona_id "
+            "  WHERE pv.persona_id = $1 AND p.workspace_id = $2 "
+            "    AND pv.status = 'active'"
+            ")",
+            persona_id,
+            workspace_id,
+        )
+        return active

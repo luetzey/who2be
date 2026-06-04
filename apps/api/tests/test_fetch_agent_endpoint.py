@@ -259,7 +259,7 @@ def test_fetch_agent_rendered_expands_all_placeholder_kinds(
             tpl_id = tpl_data["id"]
             _promote_to_active(client, f"/v1/workspaces/{ws}/system-prompts", tpl_id, auth)
 
-            # 5. Agent anlegen.
+            # 5. Agent anlegen (enabled — Persona + Template sind aktiv).
             agent = client.post(
                 f"/v1/workspaces/{ws}/agents",
                 json={
@@ -267,6 +267,7 @@ def test_fetch_agent_rendered_expands_all_placeholder_kinds(
                     "description": "",
                     "persona_id": persona["id"],
                     "system_prompt_template_id": tpl_id,
+                    "status": "enabled",
                 },
                 headers=auth,
             )
@@ -345,6 +346,8 @@ def test_fetch_agent_rendered_plain_format_unchanged(
                 json=_persona_body(),
                 headers=auth,
             ).json()
+            # Persona aktiv schalten — Voraussetzung fuer einen enabled Agent.
+            _promote_to_active(client, f"/v1/workspaces/{ws}/personas", persona["id"], auth)
 
             # plain-Template: Body wird unveraendert geliefert.
             plain_body = "Du bist ein hilfreicher Assistent."
@@ -362,6 +365,7 @@ def test_fetch_agent_rendered_plain_format_unchanged(
                     "description": "",
                     "persona_id": persona["id"],
                     "system_prompt_template_id": tpl["id"],
+                    "status": "enabled",
                 },
                 headers=auth,
             ).json()
@@ -470,13 +474,14 @@ def test_agent_render_blocknote_fills_unresolved_placeholders(
 
     try:
         with TestClient(app) as client:
-            # Persona anlegen (kein Aktivieren noetig — persona-field liest
-            # current_version, nicht active).
+            # Persona anlegen und aktiv schalten — ein Agent ist nur mit aktiver
+            # Persona aktivierbar (enabled) und damit renderbar.
             persona = client.post(
                 f"/v1/workspaces/{ws}/personas",
                 json=_persona_body(),
                 headers=auth,
             ).json()
+            _promote_to_active(client, f"/v1/workspaces/{ws}/personas", persona["id"], auth)
 
             # Template: persona-field:name (sollte aufloesen) + invalider Playbook.
             doc = {
@@ -534,6 +539,7 @@ def test_agent_render_blocknote_fills_unresolved_placeholders(
                     "description": "",
                     "persona_id": persona["id"],
                     "system_prompt_template_id": tpl_id,
+                    "status": "enabled",
                 },
                 headers=auth,
             )

@@ -7,11 +7,13 @@ import type { Agent } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { notify } from '@/lib/feedback'
 
+// Nur der Name ist Pflicht: ein Agent ist jederzeit speicherbar, auch ohne
+// Persona/Template. Aktivierbarkeit wird separat (im Editor + Backend) geprueft.
 const editorSchema = z.object({
   name: z.string().min(1, 'Name erforderlich.'),
   description: z.string(),
-  persona_id: z.string().min(1, 'Persona erforderlich.'),
-  system_prompt_template_id: z.string().min(1, 'Template erforderlich.'),
+  persona_id: z.string(),
+  system_prompt_template_id: z.string(),
   status: z.enum(['enabled', 'disabled']),
 })
 
@@ -63,11 +65,12 @@ export function useAgentForm(
     }
     setSaveError(null)
     try {
+      // Leere Auswahl ⇒ Feld weglassen (Backend nutzt COALESCE: unveraendert).
       await api.updateAgent(agent.id, {
         name: values.name,
         description: values.description,
-        persona_id: values.persona_id,
-        system_prompt_template_id: values.system_prompt_template_id,
+        persona_id: values.persona_id || undefined,
+        system_prompt_template_id: values.system_prompt_template_id || undefined,
         status: values.status,
       })
       notify.success('Agent gespeichert.')

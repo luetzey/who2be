@@ -481,6 +481,9 @@ export interface SystemPromptTemplateInput {
 // Phase 3 Runde 3 Track 3 — Agent-Aggregat (Top-Level-Konfig, keine Versions).
 export type AgentStatus = 'enabled' | 'disabled'
 
+// Was dem Agenten zur Aktivierbarkeit fehlt — Codes aus `AgentRead.missing`.
+export type AgentMissing = 'persona' | 'template' | 'persona_active'
+
 export interface Agent {
   id: string
   workspace_id: string
@@ -491,6 +494,12 @@ export interface Agent {
   persona_id: string | null
   system_prompt_template_id: string | null
   status: AgentStatus
+  // Ob die verknuepfte Persona eine aktive Version hat (serverseitig gelesen).
+  persona_active: boolean
+  // Aktivierbar (enabled/kopierbar) = Persona + Template gesetzt UND Persona aktiv.
+  activatable: boolean
+  // Offene Luecken zur Aktivierbarkeit; leer ⇒ activatable.
+  missing: AgentMissing[]
   created_at: string
   updated_at: string
 }

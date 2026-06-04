@@ -9,7 +9,7 @@ import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { Button } from '@/components/ui/button'
 import { notify } from '@/lib/feedback'
 
-import { isAgentShell } from '../lib/shell'
+import { describeAgentMissing } from '../lib/activation'
 
 interface DuplicateAgentButtonProps {
   agent: Agent
@@ -17,20 +17,20 @@ interface DuplicateAgentButtonProps {
 
 /**
  * Dupliziert einen Agent ueber `POST /agents/{id}/copy` und navigiert zur
- * Kopie. Ausgegraut, solange der Agent eine unvollstaendige Huelle ist
- * (Backend antwortet sonst 409) oder der User nur Viewer ist.
+ * Kopie. Ausgegraut, solange der Agent nicht aktivierbar ist (Persona/Template
+ * fehlt ODER Persona nicht aktiv — Backend antwortet sonst 409) oder der User
+ * nur Viewer ist. Der Tooltip nennt die konkreten Luecken.
  */
 export function DuplicateAgentButton({ agent }: DuplicateAgentButtonProps) {
   const api = useApi()
   const navigate = useNavigate()
   const wsPath = useWorkspacePath()
   const isViewer = useCurrentWorkspaceRole() === 'viewer'
-  const shell = isAgentShell(agent)
   const [busy, setBusy] = useState(false)
 
-  const disabled = isViewer || shell || busy
-  const title = shell
-    ? 'Unvollständige Hülle kann nicht dupliziert werden — erst Persona und Systemprompt zuweisen.'
+  const disabled = isViewer || !agent.activatable || busy
+  const title = !agent.activatable
+    ? `Noch nicht kopierbar — fehlt: ${describeAgentMissing(agent.missing).join(', ')}.`
     : isViewer
       ? 'Viewer können Agents nur ansehen'
       : undefined

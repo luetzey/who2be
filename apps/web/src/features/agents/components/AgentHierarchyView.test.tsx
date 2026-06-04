@@ -20,6 +20,9 @@ function mockAgent(): Agent {
     persona_id: 'p',
     system_prompt_template_id: 't',
     status: 'enabled',
+    persona_active: true,
+    activatable: true,
+    missing: [],
     created_at: '2026-05-30T10:00:00Z',
     updated_at: '2026-05-30T10:00:00Z',
   }

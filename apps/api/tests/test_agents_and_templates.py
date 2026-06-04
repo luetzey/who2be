@@ -91,6 +91,15 @@ def _set_role(workspace_id: UUID, user_id: UUID, role: str) -> None:
     asyncio.run(_run())
 
 
+def _activate_persona(client: TestClient, ws: UUID, persona_id: str, auth: dict[str, str]) -> None:
+    """Promotet Persona-Version 1 von draft ueber review nach active."""
+    base = f"/v1/workspaces/{ws}/personas/{persona_id}/versions/1/transition"
+    r1 = client.post(base, json={"to": "review"}, headers=auth)
+    assert r1.status_code == 200, r1.text
+    r2 = client.post(base, json={"to": "active"}, headers=auth)
+    assert r2.status_code == 200, r2.text
+
+
 def _persona_body() -> dict[str, object]:
     return {
         "name": "Coach Carla",
@@ -356,7 +365,11 @@ def test_agent_crud_and_isolation(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.integration
 def test_agent_shell_create_and_copy_guard(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Leere Huelle anlegbar; Copy bei Huelle gesperrt, bei Vollagent erlaubt."""
+    """Leere Huelle in 1 Klick anlegbar; Copy erst bei aktivierbarem Agent erlaubt.
+
+    Aktivierbar = Persona + Template gesetzt UND Persona hat eine aktive
+    Version. Solange die Persona nur Draft ist, bleibt Copy gesperrt (409).
+    """
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
     _prepare_db()
@@ -367,12 +380,16 @@ def test_agent_shell_create_and_copy_guard(monkeypatch: pytest.MonkeyPatch) -> N
     base = f"/v1/workspaces/{ws}/agents"
     try:
         with TestClient(app) as client:
-            # Leere Huelle ohne Persona/Template anlegen.
+            # Leere Huelle ohne Persona/Template anlegen (nur Name) — 1-Klick-Flow.
             shell = client.post(base, json={"name": "Leere Huelle"}, headers=auth)
             assert shell.status_code == 201, shell.text
             shell_body = shell.json()
             assert shell_body["persona_id"] is None
             assert shell_body["system_prompt_template_id"] is None
+            # Frisch angelegt → disabled + nicht aktivierbar, alle Luecken gemeldet.
+            assert shell_body["status"] == "disabled"
+            assert shell_body["activatable"] is False
+            assert shell_body["missing"] == ["persona", "template", "persona_active"]
             shell_id = shell_body["id"]
 
             # Copy einer Huelle ist gesperrt (409).
@@ -383,7 +400,7 @@ def test_agent_shell_create_and_copy_guard(monkeypatch: pytest.MonkeyPatch) -> N
             render = client.get(f"{base}/{shell_id}/render", headers=auth)
             assert render.status_code == 409
 
-            # Huelle vervollstaendigen.
+            # Huelle mit (noch Draft-)Persona + Template vervollstaendigen.
             persona = client.post(
                 f"/v1/workspaces/{ws}/personas",
                 json=_persona_body(),
@@ -397,6 +414,19 @@ def test_agent_shell_create_and_copy_guard(monkeypatch: pytest.MonkeyPatch) -> N
                 headers=auth,
             )
             assert put.status_code == 200, put.text
+            # Refs gesetzt, aber Persona ist Draft → nur `persona_active` fehlt noch.
+            assert put.json()["activatable"] is False
+            assert put.json()["missing"] == ["persona_active"]
+
+            # Copy bleibt gesperrt, solange die Persona nicht aktiv ist (409).
+            still_blocked = client.post(f"{base}/{shell_id}/copy", json={}, headers=auth)
+            assert still_blocked.status_code == 409, still_blocked.text
+
+            # Persona aktiv schalten → Agent wird aktivierbar.
+            _activate_persona(client, ws, persona["id"], auth)
+            fetched = client.get(f"{base}/{shell_id}", headers=auth).json()
+            assert fetched["activatable"] is True
+            assert fetched["missing"] == []
 
             # Jetzt ist Copy erlaubt; Default-Name wird abgeleitet.
             copied = client.post(f"{base}/{shell_id}/copy", json={}, headers=auth)
@@ -415,6 +445,83 @@ def test_agent_shell_create_and_copy_guard(monkeypatch: pytest.MonkeyPatch) -> N
             # Copy eines unbekannten Agenten → 404.
             missing = client.post(f"{base}/{uuid4()}/copy", json={}, headers=auth)
             assert missing.status_code == 404
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+def test_agent_enable_gate(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Aktivieren (enabled) ist nur fuer einen vollstaendigen Agenten moeglich.
+
+    Deckt die Enable-Transition auf Create- und Update-Pfad ab: solange Persona
+    oder Template fehlt bzw. die Persona keine aktive Version hat, liefert ein
+    `status=enabled` 409; sonst 200/201.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    base = f"/v1/workspaces/{ws}/agents"
+    try:
+        with TestClient(app) as client:
+            # Direktes Create mit status=enabled ohne Refs → 409.
+            bad_create = client.post(
+                base, json={"name": "Voreilig", "status": "enabled"}, headers=auth
+            )
+            assert bad_create.status_code == 409, bad_create.text
+
+            persona = client.post(
+                f"/v1/workspaces/{ws}/personas",
+                json=_persona_body(),
+                headers=auth,
+            ).json()
+            tpl = client.get(f"/v1/workspaces/{ws}/system-prompts", headers=auth).json()
+            tpl_id = next(t["id"] for t in tpl if t["slug"] == "customer-support-agent")
+
+            # Create mit Refs aber Draft-Persona + status=enabled → 409.
+            draft_enable = client.post(
+                base,
+                json={
+                    "name": "Mit Draft",
+                    "persona_id": persona["id"],
+                    "system_prompt_template_id": tpl_id,
+                    "status": "enabled",
+                },
+                headers=auth,
+            )
+            assert draft_enable.status_code == 409, draft_enable.text
+
+            # Create ohne status (Default disabled) klappt — speicherbare Huelle.
+            created = client.post(
+                base,
+                json={
+                    "name": "Speicherbar",
+                    "persona_id": persona["id"],
+                    "system_prompt_template_id": tpl_id,
+                },
+                headers=auth,
+            )
+            assert created.status_code == 201, created.text
+            agent_id = created.json()["id"]
+            assert created.json()["status"] == "disabled"
+
+            # Update auf enabled scheitert, solange Persona Draft ist → 409.
+            enable_blocked = client.put(
+                f"{base}/{agent_id}", json={"status": "enabled"}, headers=auth
+            )
+            assert enable_blocked.status_code == 409, enable_blocked.text
+
+            # Persona aktiv schalten → Update auf enabled klappt.
+            _activate_persona(client, ws, persona["id"], auth)
+            enabled = client.put(
+                f"{base}/{agent_id}", json={"status": "enabled"}, headers=auth
+            )
+            assert enabled.status_code == 200, enabled.text
+            assert enabled.json()["status"] == "enabled"
+            assert enabled.json()["activatable"] is True
     finally:
         cleanup_workspaces([owner])
 
@@ -449,6 +556,9 @@ def test_render_endpoint_returns_substituted_prompt(
                 headers=auth,
             )
             assert link.status_code == 200
+            # Persona aktiv schalten — Voraussetzung, damit der Agent enabled
+            # sein und gerendert werden darf.
+            _activate_persona(client, ws, persona["id"], auth)
 
             # Eigenes BlockNote-Template anlegen + aktivieren (Track B: Nur-
             # BlockNote — Pills statt Liquid-Tokens).
@@ -501,7 +611,7 @@ def test_render_endpoint_returns_substituted_prompt(
                 headers=auth,
             )
 
-            # Agent anlegen.
+            # Agent anlegen (enabled — Persona aktiv, Template aktiv).
             agent = client.post(
                 f"/v1/workspaces/{ws}/agents",
                 json={
@@ -509,6 +619,7 @@ def test_render_endpoint_returns_substituted_prompt(
                     "description": "",
                     "persona_id": persona["id"],
                     "system_prompt_template_id": tpl["id"],
+                    "status": "enabled",
                 },
                 headers=auth,
             ).json()
@@ -567,6 +678,7 @@ def test_viewer_can_read_and_render_but_not_write(
                 json=_persona_body(),
                 headers=admin_auth,
             ).json()
+            _activate_persona(client, ws, persona["id"], admin_auth)
             tpl = client.get(f"/v1/workspaces/{ws}/system-prompts", headers=admin_auth).json()
             tpl_id = next(t["id"] for t in tpl if t["slug"] == "customer-support-agent")
             agent = client.post(
@@ -576,6 +688,7 @@ def test_viewer_can_read_and_render_but_not_write(
                     "description": "",
                     "persona_id": persona["id"],
                     "system_prompt_template_id": tpl_id,
+                    "status": "enabled",
                 },
                 headers=admin_auth,
             ).json()
