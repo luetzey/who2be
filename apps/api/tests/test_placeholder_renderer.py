@@ -18,6 +18,8 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID, uuid4
 
+import pytest
+
 from who2be_api.services.placeholders.registry import (
     REGISTRY,
     DateResolver,
@@ -609,8 +611,10 @@ class TestPersonaFieldResolver:
         assert "**Anti-Patterns:** Niemals raten." in result
         assert "**Zugehoeriges Playbook:** Coding-Playbook" in result
 
-    def test_resolves_profile_skills_section(self) -> None:
-        """## Skills-Sektion wird gerendert, note nur wenn vorhanden."""
+    def test_resolves_profile_skills_section(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """## Skills-Sektion wird gerendert, note nur wenn vorhanden (Flag aktiv)."""
+        # Skills sind Coming Soon (ADR-0026) — fuer den Render-Test lokal aktiv.
+        monkeypatch.setattr("who2be_api.services.placeholders.registry.SKILLS_ENABLED", True)
         resolver = PersonaFieldResolver()
         ctx = _ctx(persona_id=uuid4())
         _content: dict[str, Any] = {
@@ -633,6 +637,25 @@ class TestPersonaFieldResolver:
         assert "- Python: fortgeschritten" in result
         assert "- Refactoring" in result
         assert "- Refactoring:" not in result
+
+    def test_resolves_profile_no_skills_section_when_disabled(self) -> None:
+        """Coming Soon (ADR-0026): keine ## Skills-Sektion, auch wenn skills da sind."""
+        resolver = PersonaFieldResolver()
+        ctx = _ctx(persona_id=uuid4())
+        _content: dict[str, Any] = {
+            "description": "Persona",
+            "content": None,
+            "traits": [],
+            "modes": [],
+            "skills": [{"name": "Python", "note": "fortgeschritten"}],
+        }
+        row = MagicMock()
+        row.__getitem__ = MagicMock(side_effect=lambda k: {"content": _content}[k])
+        db = _make_db(row)
+
+        result = _async_run(resolver.resolve("profile", ctx, db)).text
+
+        assert "## Skills" not in result
 
     def test_resolves_profile_no_skills_section_when_empty(self) -> None:
         """Keine ## Skills-Sektion wenn skills leer/fehlt."""
@@ -1115,9 +1138,7 @@ class TestResourcesCatalogResolver:
         resolver = ResourcesCatalogResolver()
         ctx = _ctx()
         # Eine Zeile mehr als das Limit (+1-Peek) → Overflow-Pfad.
-        rows = [
-            _resource_catalog_row(f"R{i}", [], "desc") for i in range(_CATALOG_LIMIT + 1)
-        ]
+        rows = [_resource_catalog_row(f"R{i}", [], "desc") for i in range(_CATALOG_LIMIT + 1)]
         db = _make_db(fetch_return=rows)
 
         result = _async_run(resolver.resolve("all", ctx, db))
@@ -1138,8 +1159,23 @@ class TestResourcesCatalogResolver:
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture
+def _skills_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Aktiviert das (per Default deaktivierte) Skills-Feature fuer den Test.
+
+    Skills sind derzeit Coming Soon (ADR-0026, `SKILLS_ENABLED = False`). Die
+    folgende Klasse testet das zugrunde liegende Rendering — also die Logik, die
+    bei Reaktivierung greift — und flippt das Flag dafuer lokal auf True.
+    """
+    monkeypatch.setattr("who2be_api.services.placeholders.registry.SKILLS_ENABLED", True)
+
+
 class TestRenderSkillsTable:
-    def test_renders_table_with_note(self) -> None:
+    def test_disabled_by_default_returns_empty(self) -> None:
+        # Coming Soon (ADR-0026): ohne aktiviertes Flag rendert nichts.
+        assert render_skills_table([{"name": "Python", "note": "fortgeschritten"}]) == ""
+
+    def test_renders_table_with_note(self, _skills_enabled: None) -> None:
         table = render_skills_table(
             [
                 {"name": "Python", "note": "fortgeschritten"},
@@ -1151,13 +1187,13 @@ class TestRenderSkillsTable:
         assert "| Python | fortgeschritten |" in table
         assert "| Refactoring |  |" in table
 
-    def test_empty_skills_returns_empty_string(self) -> None:
+    def test_empty_skills_returns_empty_string(self, _skills_enabled: None) -> None:
         assert render_skills_table([]) == ""
 
-    def test_non_list_returns_empty_string(self) -> None:
+    def test_non_list_returns_empty_string(self, _skills_enabled: None) -> None:
         assert render_skills_table(None) == ""
 
-    def test_skips_nameless_entries(self) -> None:
+    def test_skips_nameless_entries(self, _skills_enabled: None) -> None:
         table = render_skills_table([{"name": "  ", "note": "x"}, {"name": "Echt"}])
         assert "Echt" in table
         # Genau eine Daten-Zeile: Header `| Skill | Hinweis |`, Trenner `|---|---|`
@@ -1169,7 +1205,7 @@ class TestRenderSkillsTable:
         ]
         assert data_rows == ["| Echt |  |"]
 
-    def test_pipe_escaped_in_table(self) -> None:
+    def test_pipe_escaped_in_table(self, _skills_enabled: None) -> None:
         table = render_skills_table([{"name": "A|B", "note": "c|d"}])
         assert "A\\|B" in table
         assert "c\\|d" in table

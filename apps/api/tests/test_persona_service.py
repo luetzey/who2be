@@ -474,7 +474,29 @@ def test_render_profile_body_text_expands_to_plain() -> None:
     assert result.unresolved == []
 
 
-def test_render_appends_skills_table() -> None:
+def test_render_skills_disabled_by_default_not_appended() -> None:
+    # Coming Soon (ADR-0026): Skills-Tabelle wird ohne aktiviertes Flag nicht
+    # an den Briefing-Body angehaengt.
+    service, ctx = _service_with_pool()
+    content = PersonaVersionContent(
+        description="Coach",
+        content=PersonaContent(blocks=[_profile_block("Profil-Text")]),
+        skills=[
+            SkillRef(name="Aktives Zuhören", note="paraphrasiert vor jeder Antwort"),
+            SkillRef(name="Refactoring"),
+        ],
+    )
+    created = asyncio.run(service.create(ctx, PersonaCreate(name="Coach", content=content)))
+
+    result = asyncio.run(service.render(ctx, created.id))
+
+    assert result.body_rendered == "Profil-Text"
+    assert "## Skills" not in result.body_rendered
+
+
+def test_render_appends_skills_table_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Flag lokal aktivieren — testet die Render-Logik, die bei Reaktivierung greift.
+    monkeypatch.setattr("who2be_api.services.placeholders.registry.SKILLS_ENABLED", True)
     service, ctx = _service_with_pool()
     content = PersonaVersionContent(
         description="Coach",
@@ -507,7 +529,10 @@ def test_render_empty_profile_and_no_skills_is_empty() -> None:
     assert result.unresolved == []
 
 
-def test_render_skills_only_when_body_empty() -> None:
+def test_render_skills_only_when_body_empty_and_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("who2be_api.services.placeholders.registry.SKILLS_ENABLED", True)
     service, ctx = _service_with_pool()
     content = PersonaVersionContent(skills=[SkillRef(name="Python", note="fortgeschritten")])
     created = asyncio.run(service.create(ctx, PersonaCreate(name="Skill", content=content)))
