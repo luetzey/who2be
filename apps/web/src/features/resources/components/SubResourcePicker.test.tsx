@@ -110,7 +110,53 @@ describe('SubResourcePicker', () => {
     })
     const links = onSave.mock.calls[0][0] as SubResourceLinkInput[]
     expect(links).toEqual([
-      { child_id: 'r-a', block_id: null, position: 0, link_scope: 'resource' },
+      {
+        child_id: 'r-a',
+        block_id: null,
+        position: 0,
+        link_scope: 'resource',
+        embedding_mode: 'lazy',
+      },
+    ])
+  })
+
+  it('schaltet eine Sub-Resource auf "Fest einbetten" (inline) um', async () => {
+    listResourcesMock.mockResolvedValue([rA, rB])
+    const onSave = vi.fn()
+
+    render(
+      <SubResourcePicker
+        currentResourceId={currentId}
+        existing={[makeSub('r-a', 'Glossar A')]}
+        saving={false}
+        onSave={onSave}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sub-Resources bearbeiten' }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('list', { name: 'Ausgewaehlte Sub-Resources' }),
+      ).toBeInTheDocument()
+    })
+
+    // Standard ist 'lazy' — auf 'Fest einbetten' umstellen.
+    fireEvent.click(screen.getByRole('button', { name: 'Fest einbetten' }))
+    fireEvent.click(screen.getByRole('button', { name: /Speichern/ }))
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledTimes(1)
+    })
+    const links = onSave.mock.calls[0][0] as SubResourceLinkInput[]
+    expect(links).toEqual([
+      {
+        child_id: 'r-a',
+        block_id: null,
+        position: 0,
+        link_scope: 'resource',
+        embedding_mode: 'inline',
+      },
     ])
   })
 
@@ -151,7 +197,13 @@ describe('SubResourcePicker', () => {
     const links = onSave.mock.calls[0][0] as SubResourceLinkInput[]
     // Volldokument-Ref (r-a) + erhaltener Block-Anker (r-b/heading-1).
     expect(links).toEqual([
-      { child_id: 'r-a', block_id: null, position: 0, link_scope: 'resource' },
+      {
+        child_id: 'r-a',
+        block_id: null,
+        position: 0,
+        link_scope: 'resource',
+        embedding_mode: 'lazy',
+      },
       { child_id: 'r-b', block_id: 'heading-1', position: 1, link_scope: 'block' },
     ])
   })

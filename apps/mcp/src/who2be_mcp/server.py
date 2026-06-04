@@ -223,13 +223,20 @@ async def fetch_playbook(playbook_id: str) -> PlaybookWithResources:
     client = await build_client()
     playbook = await client.get_playbook(parsed)
     linked = await client.get_playbook_resource_links(parsed)
-    resource_scope_ids: list[UUID] = []
+    # Nur 'resource'-scope-Links mit embedding_mode='inline' ziehen das
+    # Volldokument mit; 'lazy'-Links bleiben reine Pointer in `linked_blocks`
+    # (Default lazy → kleinerer Kontext, der Agent laedt via fetch_resource nach).
+    inline_resource_ids: list[UUID] = []
     seen: set[UUID] = set()
     for link in linked:
-        if link.link_scope == "resource" and link.resource_id not in seen:
+        if (
+            link.link_scope == "resource"
+            and link.embedding_mode == "inline"
+            and link.resource_id not in seen
+        ):
             seen.add(link.resource_id)
-            resource_scope_ids.append(link.resource_id)
-    resources = [await client.get_resource(rid) for rid in resource_scope_ids]
+            inline_resource_ids.append(link.resource_id)
+    resources = [await client.get_resource(rid) for rid in inline_resource_ids]
     composed = await client.get_playbook_composes(parsed)
     body_rendered = await client.get_playbook_rendered(parsed)
     return PlaybookWithResources(
@@ -287,13 +294,19 @@ async def fetch_resource(resource_id: str, block_ids: list[str] | None = None) -
 
     Liefert den **eigenen** Body inline plus `sub_resources`: eine Tabelle der
     **direkten** Sub-Resources (je Eintrag: `id`, `name`, `link_scope`,
-    optional `block_id` und die fertige `fetch_call`-Anweisung
-    `fetch_resource('<id>')`). Die Kinder werden **nicht** expandiert — folge
-    `fetch_call`, um eine Sub-Resource bei Bedarf nachzuladen (Track E §3.3).
+    `embedding_mode`, optional `block_id` und die fertige `fetch_call`-Anweisung
+    `fetch_resource('<id>')`). Standardmaessig (`embedding_mode='lazy'`) werden
+    die Kinder **nicht** expandiert — folge `fetch_call`, um eine Sub-Resource
+    bei Bedarf nachzuladen (Track E §3.3).
+
+    Sub-Resources mit `embedding_mode='inline'` (link_scope='resource') liefert
+    der Server zusaetzlich als Volldokument in `inline_sub_resources` (eine
+    Ebene, keine Rekursion) — der Agent spart den Nachlade-Fetch. Sie bleiben
+    parallel als Pointer in `sub_resources` gelistet.
 
     Ist `block_ids` gesetzt, werden nur diese Bloecke (in angefragter
-    Reihenfolge) des eigenen Bodys zurueckgegeben; `sub_resources` bleibt davon
-    unberuehrt.
+    Reihenfolge) des eigenen Bodys zurueckgegeben; `sub_resources` und
+    `inline_sub_resources` bleiben davon unberuehrt.
     """
     try:
         parsed = UUID(resource_id)
@@ -305,7 +318,21 @@ async def fetch_resource(resource_id: str, block_ids: list[str] | None = None) -
         by_id = {block.id: block for block in resource.content.blocks}
         resource.content.blocks = [by_id[bid] for bid in block_ids if bid in by_id]
     # Direkte Sub-Resources als Pointer-Tabelle anhaengen (keine Expansion).
-    resource.sub_resources = await client.get_resource_sub_resources(parsed)
+    subs = await client.get_resource_sub_resources(parsed)
+    resource.sub_resources = subs
+    # 'inline'-Kinder zusaetzlich als Volldokument mitgeben (eine Ebene). Nur
+    # 'resource'-scope kann inline sein; 'lazy' bleibt reiner Pointer.
+    inline_ids: list[UUID] = []
+    seen: set[UUID] = set()
+    for sub in subs:
+        if (
+            sub.embedding_mode == "inline"
+            and sub.link_scope == "resource"
+            and sub.id not in seen
+        ):
+            seen.add(sub.id)
+            inline_ids.append(sub.id)
+    resource.inline_sub_resources = [await client.get_resource(cid) for cid in inline_ids]
     return resource
 
 

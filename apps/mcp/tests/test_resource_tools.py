@@ -221,6 +221,69 @@ def test_fetch_resource_attaches_direct_sub_resources(monkeypatch: pytest.Monkey
     assert result.sub_resources[0].id == child_id
     assert result.sub_resources[0].name == "Kind-Doc"
     assert result.sub_resources[0].fetch_call == f"fetch_resource('{child_id}')"
+    # Default 'lazy' → kein Inline-Dokument.
+    assert result.sub_resources[0].embedding_mode == "lazy"
+    assert result.inline_sub_resources == []
+
+
+def test_fetch_resource_inlines_inline_mode_sub_resource(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """embedding_mode='inline': das Kind-Volldokument haengt zusaetzlich an.
+
+    Lazy-Kinder bleiben reine Pointer; nur 'inline' (link_scope='resource')
+    zieht das Volldokument in `inline_sub_resources` (eine Ebene).
+    """
+    rid = uuid4()
+    inline_child = uuid4()
+    lazy_child = uuid4()
+    parent = _resource_payload(blocks=[_block("b1", "Eigener Body")])
+    parent["id"] = str(rid)
+    child_payload = _resource_payload(name="Inline-Kind", blocks=[_block("c1", "Kind-Body")])
+    child_payload["id"] = str(inline_child)
+    subs = [
+        {
+            "id": str(inline_child),
+            "name": "Inline-Kind",
+            "link_scope": "resource",
+            "block_id": None,
+            "position": 0,
+            "embedding_mode": "inline",
+        },
+        {
+            "id": str(lazy_child),
+            "name": "Lazy-Kind",
+            "link_scope": "resource",
+            "block_id": None,
+            "position": 1,
+            "embedding_mode": "lazy",
+        },
+    ]
+    child_fetches = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal child_fetches
+        path = request.url.path
+        if path.endswith(f"/resources/{rid}/sub_resources"):
+            return httpx.Response(200, json=subs)
+        if path.endswith(f"/resources/{rid}"):
+            return httpx.Response(200, json=parent)
+        if path.endswith(f"/resources/{inline_child}"):
+            child_fetches += 1
+            return httpx.Response(200, json=child_payload)
+        return httpx.Response(404)
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    result = asyncio.run(fetch_resource(str(rid)))
+    assert isinstance(result, ResourceRead)
+    # Beide Kinder bleiben in der Pointer-Tabelle.
+    assert len(result.sub_resources) == 2
+    # Nur das 'inline'-Kind wird als Volldokument expandiert.
+    assert len(result.inline_sub_resources) == 1
+    assert result.inline_sub_resources[0].id == inline_child
+    assert [b.id for b in result.inline_sub_resources[0].content.blocks] == ["c1"]
+    # Das Lazy-Kind wird NICHT nachgeladen.
+    assert child_fetches == 1
 
 
 def test_fetch_resource_validates_uuid(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -289,6 +352,7 @@ def test_fetch_playbook_inlines_resource_for_resource_scope_links(
         "available_in": "active",
         "preview": None,
         "link_scope": "resource",
+        "embedding_mode": "inline",
     }
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -311,10 +375,64 @@ def test_fetch_playbook_inlines_resource_for_resource_scope_links(
     assert len(result.linked_blocks) == 1
     assert result.linked_blocks[0].link_scope == "resource"
     assert result.linked_blocks[0].block_id is None
-    # Volldokument ist mit ausgeliefert.
+    # Volldokument ist mit ausgeliefert (embedding_mode='inline').
     assert len(result.linked_resources) == 1
     assert result.linked_resources[0].id == rid
     assert [b.id for b in result.linked_resources[0].content.blocks] == ["b1"]
+
+
+def test_fetch_playbook_lazy_resource_scope_link_not_inlined(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Default 'lazy': ein 'resource'-scope-Link bleibt reiner Pointer.
+
+    Bewusst breaking gegenueber dem Alt-Verhalten (immer inline) — der Agent
+    laedt das Dokument bei Bedarf via fetch_resource nach.
+    """
+    pid = uuid4()
+    rid = uuid4()
+    playbook = _playbook_payload()
+    playbook["id"] = str(pid)
+    resource = _resource_payload(blocks=[_block("b1", "Lazy-Inhalt")])
+    resource["id"] = str(rid)
+    # Kein embedding_mode im Payload → Wire-Default 'lazy'.
+    link = {
+        "resource_id": str(rid),
+        "resource_name": resource["name"],
+        "block_id": None,
+        "position": 0,
+        "available": True,
+        "available_in": "active",
+        "preview": None,
+        "link_scope": "resource",
+    }
+    resource_fetches = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal resource_fetches
+        path = request.url.path
+        if path.endswith(f"/playbooks/{pid}/resource_links"):
+            return httpx.Response(200, json=[link])
+        if path.endswith(f"/playbooks/{pid}/composes"):
+            return httpx.Response(200, json=[])
+        if path.endswith(f"/playbooks/{pid}/rendered"):
+            return httpx.Response(200, json={"body_rendered": "b", "unresolved": []})
+        if path.endswith(f"/playbooks/{pid}"):
+            return httpx.Response(200, json=playbook)
+        if path.endswith(f"/resources/{rid}"):
+            resource_fetches += 1
+            return httpx.Response(200, json=resource)
+        return httpx.Response(404)
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    result = asyncio.run(fetch_playbook(str(pid)))
+    assert isinstance(result, PlaybookWithResources)
+    # Link bleibt als Pointer sichtbar, aber NICHT inline.
+    assert len(result.linked_blocks) == 1
+    assert result.linked_blocks[0].embedding_mode == "lazy"
+    assert result.linked_resources == []
+    # Lazy-Link wird gar nicht erst nachgeladen.
+    assert resource_fetches == 0
 
 
 def test_fetch_playbook_deduplicates_resource_scope_inline(
@@ -338,6 +456,7 @@ def test_fetch_playbook_deduplicates_resource_scope_inline(
             "available_in": "active",
             "preview": None,
             "link_scope": "resource",
+            "embedding_mode": "inline",
         }
         for idx in range(2)
     ]

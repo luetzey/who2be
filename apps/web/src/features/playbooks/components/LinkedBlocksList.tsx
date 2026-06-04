@@ -60,9 +60,12 @@ export function LinkedBlocksList({ links, onRemove, disabled = false }: LinkedBl
             ? META.deleted
             : RESOURCE_SCOPE_META
           : META[state]
+        const isInline = isResourceScope && link.embedding_mode === 'inline'
         const preview = link.section_preview ?? link.preview
         const subline = isResourceScope
-          ? 'Vollstaendige Resource referenziert'
+          ? isInline
+            ? 'Vollstaendige Resource — fest eingebettet (inline)'
+            : 'Vollstaendige Resource — Link (lazy), via fetch nachgeladen'
           : state === 'deleted'
             ? meta.empty
             : (preview ?? meta.empty)

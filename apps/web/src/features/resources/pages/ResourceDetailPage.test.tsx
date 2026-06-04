@@ -159,7 +159,7 @@ describe('ResourceDetailPage', () => {
       expect(screen.getByText('Sub-Resources')).toBeInTheDocument()
     })
     expect(screen.getByText('Glossar')).toBeInTheDocument()
-    expect(screen.getByText('Dokument')).toBeInTheDocument()
+    expect(screen.getByText('Dokument · lazy')).toBeInTheDocument()
     // Used-By-Backlink.
     expect(screen.getByText('Handbuch')).toBeInTheDocument()
   })

@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
-import type { Resource, ResourceBlock, ResourceLink, ResourceLinkItemInput } from '@/api/types'
+import type {
+  EmbeddingMode,
+  Resource,
+  ResourceBlock,
+  ResourceLink,
+  ResourceLinkItemInput,
+} from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -54,6 +60,10 @@ export function ResourceBlockLinkPicker({
   const [activeResource, setActiveResource] = useState<Resource | null>(null)
   const [blocks, setBlocks] = useState<ResourceBlock[]>([])
   const [selected, setSelected] = useState<string[]>([])
+  // Embed-Modus je Volldokument-Ref (key = resourceId). Default 'lazy':
+  // der MCP sendet das Dokument NICHT inline mit. Nur fuer 'resource'-scope
+  // relevant — Block-Anker bleiben immer Pointer.
+  const [modes, setModes] = useState<Record<string, EmbeddingMode>>({})
   const [loadError, setLoadError] = useState<string | null>(null)
 
   // Beim Oeffnen: aktuelle Auswahl aus den bestehenden Links uebernehmen und
@@ -68,6 +78,13 @@ export function ResourceBlockLinkPicker({
         link.link_scope === 'resource' || link.block_id === null
           ? resourceScopeKeyOf(link.resource_id)
           : blockKeyOf(link.resource_id, link.block_id),
+      ),
+    )
+    setModes(
+      Object.fromEntries(
+        existing
+          .filter((link) => link.link_scope === 'resource' || link.block_id === null)
+          .map((link) => [link.resource_id, link.embedding_mode ?? 'lazy']),
       ),
     )
     setLoadError(null)
@@ -115,6 +132,10 @@ export function ResourceBlockLinkPicker({
     })
   }, [])
 
+  const setMode = useCallback((resourceId: string, mode: EmbeddingMode) => {
+    setModes((current) => ({ ...current, [resourceId]: mode }))
+  }, [])
+
   const handleSave = useCallback(async () => {
     const items: ResourceLinkItemInput[] = selected.map((key, index) => {
       const [resourceId, anchor] = key.split('::')
@@ -124,6 +145,7 @@ export function ResourceBlockLinkPicker({
           block_id: null,
           position: index,
           link_scope: 'resource',
+          embedding_mode: modes[resourceId] ?? 'lazy',
         }
       }
       return {
@@ -135,7 +157,7 @@ export function ResourceBlockLinkPicker({
     })
     await onSave(items)
     setOpen(false)
-  }, [selected, onSave])
+  }, [selected, modes, onSave])
 
   // Phase 3-B: nur Heading-Bloecke sind als Anker erlaubt — Backend
   // (Track A) erzwingt das ebenfalls.
@@ -202,16 +224,50 @@ export function ResourceBlockLinkPicker({
                     onChange={() => toggleResourceScope(activeResource.id)}
                     aria-label="Gesamtes Dokument verknuepfen"
                   />
-                  <Label
-                    htmlFor={`resource-${activeResource.id}`}
-                    className="flex flex-col gap-1 text-sm font-normal"
-                  >
-                    <span className="font-medium">Gesamtes Dokument</span>
-                    <span className="text-xs text-muted-foreground">
-                      Verlinkt die komplette Resource — exklusive zu
-                      einzelnen Block-Ankern.
-                    </span>
-                  </Label>
+                  <div className="flex flex-1 flex-col gap-1">
+                    <Label
+                      htmlFor={`resource-${activeResource.id}`}
+                      className="flex flex-col gap-1 text-sm font-normal"
+                    >
+                      <span className="font-medium">Gesamtes Dokument</span>
+                      <span className="text-xs text-muted-foreground">
+                        Verlinkt die komplette Resource — exklusive zu
+                        einzelnen Block-Ankern.
+                      </span>
+                    </Label>
+                    {resourceScopeSelected ? (
+                      <span
+                        className="mt-1 inline-flex w-fit overflow-hidden rounded-md border"
+                        role="group"
+                        aria-label="Embed-Modus fuer das gesamte Dokument"
+                      >
+                        <Button
+                          type="button"
+                          variant={
+                            (modes[activeResource.id] ?? 'lazy') === 'lazy' ? 'brand' : 'ghost'
+                          }
+                          size="sm"
+                          className="h-6 rounded-none px-2 text-xs"
+                          onClick={() => setMode(activeResource.id, 'lazy')}
+                          aria-pressed={(modes[activeResource.id] ?? 'lazy') === 'lazy'}
+                        >
+                          Link (lazy)
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={
+                            (modes[activeResource.id] ?? 'lazy') === 'inline' ? 'brand' : 'ghost'
+                          }
+                          size="sm"
+                          className="h-6 rounded-none px-2 text-xs"
+                          onClick={() => setMode(activeResource.id, 'inline')}
+                          aria-pressed={(modes[activeResource.id] ?? 'lazy') === 'inline'}
+                        >
+                          Fest einbetten
+                        </Button>
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
                 <ul
                   className={cn(

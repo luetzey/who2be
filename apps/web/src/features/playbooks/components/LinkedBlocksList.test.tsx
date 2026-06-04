@@ -86,6 +86,25 @@ describe('LinkedBlocksList', () => {
     })
     render(<LinkedBlocksList links={[resourceLink]} onRemove={() => {}} />)
     expect(screen.getByText('Ganzes Dokument')).toBeInTheDocument()
-    expect(screen.getByText('Vollstaendige Resource referenziert')).toBeInTheDocument()
+    // Default ohne embedding_mode → lazy-Hinweis.
+    expect(
+      screen.getByText('Vollstaendige Resource — Link (lazy), via fetch nachgeladen'),
+    ).toBeInTheDocument()
+  })
+
+  it('markiert einen inline-eingebetteten Resource-Scope-Link', () => {
+    const inlineLink = link('', {
+      block_id: null,
+      link_scope: 'resource',
+      embedding_mode: 'inline',
+      available_in: 'active',
+      available: true,
+      preview: null,
+      section_preview: null,
+    })
+    render(<LinkedBlocksList links={[inlineLink]} onRemove={() => {}} />)
+    expect(
+      screen.getByText('Vollstaendige Resource — fest eingebettet (inline)'),
+    ).toBeInTheDocument()
   })
 })

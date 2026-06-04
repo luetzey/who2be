@@ -171,6 +171,7 @@ class PgPlaybookResourceLinkRepository:
         # ergibt sich aus dem schieren Vorhandensein der Active/Current-Version.
         rows = await self._pool.fetch(
             "SELECT prl.resource_id, prl.block_id, prl.position, prl.link_scope, "
+            "       prl.embedding_mode, "
             "       r.name AS resource_name, "
             "       rva.content AS active_content, "
             "       rvc.content AS current_content "
@@ -223,6 +224,7 @@ class PgPlaybookResourceLinkRepository:
     @staticmethod
     def _to_link_read(row: asyncpg.Record) -> ResourceLinkRead:
         link_scope: Literal["resource", "block"] = row["link_scope"]
+        embedding_mode: Literal["lazy", "inline"] = row["embedding_mode"]
         anchor_id = row["block_id"]
         active_content = row["active_content"]
         current_content = row["current_content"]
@@ -250,6 +252,7 @@ class PgPlaybookResourceLinkRepository:
                 section_block_ids=[],
                 section_preview=None,
                 link_scope="resource",
+                embedding_mode=embedding_mode,
             )
 
         # Bevorzugt Active; nur fallback auf Current, wenn der Anker dort
@@ -286,6 +289,7 @@ class PgPlaybookResourceLinkRepository:
             section_block_ids=section_block_ids,
             section_preview=section_preview,
             link_scope="block",
+            embedding_mode=embedding_mode,
         )
 
     async def set_links(
@@ -322,8 +326,8 @@ class PgPlaybookResourceLinkRepository:
                 await conn.executemany(
                     "INSERT INTO playbook_resource_link "
                     "(playbook_id, resource_id, block_id, workspace_id, "
-                    " owner_id, position, link_scope) "
-                    "VALUES ($1, $2, $3, $4, $5, $6, $7)",
+                    " owner_id, position, link_scope, embedding_mode) "
+                    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
                     [
                         (
                             playbook_id,
@@ -333,6 +337,7 @@ class PgPlaybookResourceLinkRepository:
                             owner_id,
                             item.position,
                             item.link_scope,
+                            item.embedding_mode,
                         )
                         for item in items
                     ],

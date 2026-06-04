@@ -341,3 +341,48 @@ def test_sub_resource_self_reference_filtered(monkeypatch: pytest.MonkeyPatch) -
             assert resp.json() == []
     finally:
         cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+def test_sub_resource_embedding_mode_roundtrip(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Embed-Modus: Default 'lazy', explizit auf 'inline' setzbar (Set-Replace).
+
+    'inline'-Kinder zieht der MCP-`fetch_resource`-Pfad als Volldokument mit;
+    hier nur der REST-Roundtrip.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    base = f"/v1/workspaces/{ws}/resources"
+
+    try:
+        with TestClient(app) as client:
+            parent = client.post(base, json=_resource_body("Parent"), headers=auth).json()["id"]
+            child = client.post(base, json=_resource_body("Child"), headers=auth).json()["id"]
+            subs_url = f"{base}/{parent}/sub_resources"
+
+            # Default ohne embedding_mode → 'lazy'.
+            resp = client.put(
+                subs_url,
+                json={"links": [{"child_id": child, "link_scope": "resource", "position": 0}]},
+                headers=auth,
+            )
+            assert resp.status_code == 200, resp.text
+            assert resp.json()[0]["embedding_mode"] == "lazy"
+
+            # Explizit auf 'inline' umschalten.
+            resp = client.put(
+                subs_url,
+                json={"links": [{"child_id": child, "link_scope": "resource",
+                                 "position": 0, "embedding_mode": "inline"}]},
+                headers=auth,
+            )
+            assert resp.status_code == 200, resp.text
+            assert resp.json()[0]["embedding_mode"] == "inline"
+    finally:
+        cleanup_workspaces([owner])

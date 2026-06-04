@@ -613,3 +613,55 @@ def test_resource_links_active_wins_over_current_draft(
             assert link["preview"] == "Aktiver Text"
     finally:
         cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+def test_resource_links_embedding_mode_roundtrip(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Embed-Modus: Default 'lazy', explizit auf 'inline' setzbar (Set-Replace).
+
+    Steuert, ob `fetch_playbook` das Volldokument inline mitsendet (MCP-Seite).
+    Hier nur der REST-Roundtrip: schreiben + zuruecklesen.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    rbase = f"/v1/workspaces/{ws}/resources"
+    pbase = f"/v1/workspaces/{ws}/playbooks"
+
+    try:
+        with TestClient(app) as client:
+            rid = client.post(
+                rbase,
+                json=_resource_body("Doc", [_heading("h1", "Heading")]),
+                headers=auth,
+            ).json()["id"]
+            _activate(client, rbase, rid, 1, auth)
+            pid = client.post(pbase, json=_playbook_body("PB"), headers=auth).json()["id"]
+            links_url = f"{pbase}/{pid}/resource_links"
+
+            # Default ohne embedding_mode → 'lazy'.
+            resp = client.put(
+                links_url,
+                json={"links": [{"resource_id": rid, "block_id": None,
+                                 "position": 0, "link_scope": "resource"}]},
+                headers=auth,
+            )
+            assert resp.status_code == 200, resp.text
+            assert resp.json()[0]["embedding_mode"] == "lazy"
+
+            # Explizit auf 'inline' umschalten.
+            resp = client.put(
+                links_url,
+                json={"links": [{"resource_id": rid, "block_id": None, "position": 0,
+                                 "link_scope": "resource", "embedding_mode": "inline"}]},
+                headers=auth,
+            )
+            assert resp.status_code == 200, resp.text
+            assert resp.json()[0]["embedding_mode"] == "inline"
+    finally:
+        cleanup_workspaces([owner])

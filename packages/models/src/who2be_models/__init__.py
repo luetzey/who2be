@@ -57,6 +57,7 @@ from who2be_models.playbook import (
     TriggerOverview,
 )
 from who2be_models.resource import (
+    EmbeddingMode,
     LinkedBlockSection,
     ResourceBlock,
     ResourceContent,
@@ -116,6 +117,7 @@ __all__ = [
     "DashboardResponse",
     "DashboardStatusDistribution",
     "DiffOp",
+    "EmbeddingMode",
     "EntityStatusDistribution",
     "EntityType",
     "InvitationAccept",

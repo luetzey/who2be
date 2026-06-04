@@ -91,7 +91,7 @@ class PgResourceCompositionRepository:
         """
         rows = await self._pool.fetch(
             "SELECT rc.child_id AS id, child.name AS name, rc.link_scope, "
-            "       rc.block_id, rc.position "
+            "       rc.block_id, rc.position, rc.embedding_mode "
             "FROM resource_composition rc "
             "JOIN resource child ON child.id = rc.child_id "
             "WHERE rc.parent_id = $1 AND rc.workspace_id = $2 "
@@ -171,8 +171,8 @@ class PgResourceCompositionRepository:
                 await conn.executemany(
                     "INSERT INTO resource_composition "
                     "(parent_id, child_id, block_id, workspace_id, "
-                    " owner_id, position, link_scope) "
-                    "VALUES ($1, $2, $3, $4, $5, $6, $7)",
+                    " owner_id, position, link_scope, embedding_mode) "
+                    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
                     [
                         (
                             parent_id,
@@ -182,6 +182,7 @@ class PgResourceCompositionRepository:
                             owner_id,
                             item.position,
                             item.link_scope,
+                            item.embedding_mode,
                         )
                         for item in items
                     ],

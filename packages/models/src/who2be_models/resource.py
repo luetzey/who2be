@@ -35,6 +35,13 @@ BlockType = Annotated[str, StringConstraints(min_length=1, max_length=50)]
 # in jsonb persistierte Strings, ADR-0009).
 TagStr = Annotated[str, StringConstraints(min_length=1, max_length=100)]
 
+# Embed-Modus einer Einbettung (playbook->resource, resource->resource).
+# 'lazy' (DEFAULT): reine Referenz — der MCP-Server sendet das Ziel NICHT inline
+# mit; der Agent laedt es bei Bedarf via `fetch_resource` nach. 'inline': das
+# Ziel-Dokument wird fest vom MCP mitgeliefert. Default 'lazy' reduziert den
+# gesendeten Kontext (bewusst breaking fuer bestehende 'resource'-scope-Links).
+EmbeddingMode = Literal["lazy", "inline"]
+
 # DoS-Obergrenze fuer den serialisierten Block-Inhalt. Bloecke sind
 # `extra="allow"` (BlockNote-Schema ist offen), darum greift hier ein
 # Gesamt-Byte-Limit statt feldweiser `max_length` (F-01-Linie).
@@ -118,6 +125,12 @@ class ResourceRead(BaseModel):
     # die direkten Kinder hier an, damit der Agent Body + Sub-Ref-Tabelle in
     # einem Modell sieht (Kinder werden NICHT expandiert, §3.3).
     sub_resources: list["SubResourceRead"] = Field(default_factory=list)
+    # Track Embed-Modus: Volldokumente der direkten Sub-Resources, die auf
+    # `embedding_mode='inline'` (link_scope='resource') stehen. Der
+    # `fetch_resource`-Pfad fuellt das Feld (eine Ebene, keine Rekursion);
+    # 'lazy'-Kinder bleiben reine Pointer in `sub_resources`. Spiegelt
+    # `PlaybookWithResources.linked_resources`.
+    inline_sub_resources: list["ResourceRead"] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
@@ -150,6 +163,8 @@ class ResourceLinkItem(BaseModel):
     block_id: BlockId | None = None
     position: int = Field(ge=0)
     link_scope: Literal["resource", "block"] = "block"
+    # Embed-Modus (Default 'lazy'): nur 'inline' wird vom MCP mitgesendet.
+    embedding_mode: EmbeddingMode = "lazy"
 
     @model_validator(mode="after")
     def _check_scope_block_pairing(self) -> Self:
@@ -199,6 +214,9 @@ class ResourceLinkRead(BaseModel):
     section_block_ids: list[str] = Field(default_factory=list)
     section_preview: str | None = None
     link_scope: Literal["resource", "block"] = "block"
+    # Embed-Modus (Default 'lazy'): steuert, ob `fetch_playbook` das Volldokument
+    # inline mitsendet. Nur fuer 'resource'-scope-Links wirksam.
+    embedding_mode: EmbeddingMode = "lazy"
 
 
 class LinkedBlockSection(ResourceLinkRead):
@@ -258,6 +276,8 @@ class SubResourceLinkItem(BaseModel):
     block_id: BlockId | None = None
     position: int = Field(default=0, ge=0)
     link_scope: Literal["resource", "block"] = "resource"
+    # Embed-Modus (Default 'lazy'): nur 'inline' wird vom MCP mitgesendet.
+    embedding_mode: EmbeddingMode = "lazy"
 
     @model_validator(mode="after")
     def _check_scope_block_pairing(self) -> Self:
@@ -297,6 +317,9 @@ class SubResourceRead(BaseModel):
     link_scope: Literal["resource", "block"] = "resource"
     block_id: str | None = None
     position: int = 0
+    # Embed-Modus (Default 'lazy'): bei 'inline' haengt `fetch_resource` das
+    # Volldokument zusaetzlich an `ResourceRead.inline_sub_resources`.
+    embedding_mode: EmbeddingMode = "lazy"
 
     @computed_field  # type: ignore[prop-decorator]
     @property
