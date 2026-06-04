@@ -100,6 +100,38 @@ E-Mail **bestaetigen** (echte Cloud-Reise). Die Mail landet in Mailpit.
 > Ohne Confirm bleibt der User **un-bestaetigt** und der Login schlaegt fehl —
 > genau das verifiziert, dass die Mail-Pflicht lokal greift.
 
+## 3b — Optional: Google/GitHub-Login aktivieren
+
+Social-Login ist nur eine **Login-Methode** — fuer den Produkt-Test reicht
+E-Mail/Passwort (Schritt 3). Wer Google/GitHub lokal testen will: Wir nutzen
+**selbst-gehostetes GoTrue** (kein Supabase-Cloud-Projekt), also gibt es **keine
+Dashboard-UI** — Provider werden ueber **Env-Variablen** aktiviert.
+
+1. **OAuth-Client anlegen** (Google Cloud Console → Credentials → OAuth client ID,
+   Typ *Web application*; Consent-Screen *External* + eigene Mail als Test-User).
+   **Authorized redirect URI** zeichengenau:
+   ```
+   http://localhost:9999/auth/v1/callback
+   ```
+   (= Default von `GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI`; GoTrue laeuft auf :9999,
+   der Callback geht ueber den auth-gateway.)
+2. **`.env`** setzen (Platzhalter stehen auskommentiert bereit):
+   ```bash
+   GOTRUE_EXTERNAL_GOOGLE_ENABLED=true
+   GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID=<client-id>
+   GOTRUE_EXTERNAL_GOOGLE_SECRET=<secret>
+   ```
+3. **Auth neu starten:** `dcc up -d auth`.
+
+GitHub analog ueber `GOTRUE_EXTERNAL_GITHUB_*` (gleiche Redirect-URI).
+
+> **Stolperstein** „400 Request Header Or Cookie Too Large" beim Google-Accept:
+> Der OAuth-Callback + angesammelte localhost-Cookies sprengen den nginx-
+> Header-Puffer. Der auth-gateway (`supabase/gateway.conf`) setzt dafuer jetzt
+> groessere Puffer (`large_client_header_buffers`); bei einem alten Stand
+> entweder den Gateway aktualisieren (`dcc up -d auth-gateway`) oder kurzfristig
+> die `localhost`-Cookies im Browser loeschen.
+
 ## 4 — Upgrade: Mollie-Test-Checkout → Pro-Entitlement
 
 Frisch registrierte Cloud-Orgs starten auf **Free** (`mcp_monthly_quota=1000`,
@@ -262,6 +294,15 @@ wird beim naechsten Hochfahren erneut gesetzt).
 - **Keine `429` im 429-Check** → Edition pruefen (`dcc exec api printenv
   WHO2BE_EDITION` muss `cloud` sein) und dass ein **API-Token** (`w2b_…`),
   nicht ein Web-JWT, genutzt wird — nur Token-Reads unterliegen dem Gate.
+
+- **`400 Request Header Or Cookie Too Large` (nginx) beim Google/GitHub-Accept**
+  → auth-gateway-Header-Puffer. Mit aktuellem `supabase/gateway.conf` behoben;
+  sonst `dcc up -d auth-gateway` nach dem Pull, oder die `localhost`-Cookies im
+  Browser loeschen.
+
+- **`Unsupported provider: provider is not enabled` beim Social-Login** → der
+  Provider ist in GoTrue aus. `GOTRUE_EXTERNAL_GOOGLE_ENABLED=true` (+ CLIENT_ID/
+  SECRET) in `.env` setzen und `dcc up -d auth` (Schritt 3b).
 
 - **Browser-Schritte:** Mailpit-UI, Web-Login und der Mollie-Test-Checkout
   laufen auf deiner **Workstation** (nicht im Sandbox-Container). Ports 5173 /
