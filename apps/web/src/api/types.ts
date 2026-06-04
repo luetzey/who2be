@@ -385,6 +385,7 @@ export interface ResourceLink {
   preview: string | null
   section_preview?: string | null
   link_scope?: ResourceLinkScope
+  embedding_mode?: EmbeddingMode
 }
 
 // Phase-3-Fixes Track 4: ein Playbook→Resource-Link kann entweder das
@@ -392,6 +393,12 @@ export interface ResourceLink {
 // ('block'). Default im Backend ist 'block' — der optionale Feldwert
 // bleibt zur Wire-Backward-Compat optional.
 export type ResourceLinkScope = 'resource' | 'block'
+
+// Embed-Modus einer Einbettung. 'lazy' (Default): reine Referenz — der MCP
+// sendet das Ziel NICHT inline mit, der Agent laedt es bei Bedarf nach.
+// 'inline': das Ziel-Dokument wird fest mitgesendet. Optional zur Wire-
+// Backward-Compat (fehlt → 'lazy').
+export type EmbeddingMode = 'lazy' | 'inline'
 
 // Backlink-Records (Phase-3-Plan §Track-A.4). Endpoints liefern 404, bis
 // Track A merged — die Hooks behandeln das als leere Liste + EmptyState.
@@ -411,6 +418,7 @@ export interface ResourceLinkItemInput {
   block_id: string | null
   position: number
   link_scope: ResourceLinkScope
+  embedding_mode?: EmbeddingMode
 }
 
 // Track E — Sub-Resource-Composition (Resource->Resource, §3.3).
@@ -430,6 +438,7 @@ export interface SubResource {
   block_id: string | null
   position: number
   fetch_call: string
+  embedding_mode?: EmbeddingMode
 }
 
 // Eingabe-Item fuer PUT .../sub_resources. Default-Scope ist 'resource'
@@ -439,6 +448,7 @@ export interface SubResourceLinkInput {
   block_id: string | null
   position: number
   link_scope: ResourceLinkScope
+  embedding_mode?: EmbeddingMode
 }
 
 // Phase 3 Runde 3 Track 3 — SystemPromptTemplate-Aggregat.

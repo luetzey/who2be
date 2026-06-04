@@ -181,7 +181,9 @@ export function ResourceDetailPage() {
                             <Badge variant="secondary">
                               {sub.link_scope === 'block'
                                 ? `Block ${sub.block_id ?? ''}`.trim()
-                                : 'Dokument'}
+                                : sub.embedding_mode === 'inline'
+                                  ? 'Dokument · inline'
+                                  : 'Dokument · lazy'}
                             </Badge>
                           </span>
                         )}

@@ -105,7 +105,13 @@ describe('ResourceBlockLinkPicker', () => {
       expect(onSave).toHaveBeenCalledTimes(1)
     })
     expect(onSave).toHaveBeenCalledWith([
-      { resource_id: 'r-1', block_id: null, position: 0, link_scope: 'resource' },
+      {
+        resource_id: 'r-1',
+        block_id: null,
+        position: 0,
+        link_scope: 'resource',
+        embedding_mode: 'lazy',
+      },
     ])
   })
 

@@ -63,6 +63,7 @@ export function PlaybookDetailPage() {
         block_id: link.block_id,
         position: index,
         link_scope: link.link_scope ?? 'block',
+        embedding_mode: link.embedding_mode ?? 'lazy',
       })),
     )
   }

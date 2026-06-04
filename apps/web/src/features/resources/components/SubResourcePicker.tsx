@@ -6,7 +6,7 @@
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 
-import type { Resource, SubResource, SubResourceLinkInput } from '@/api/types'
+import type { EmbeddingMode, Resource, SubResource, SubResourceLinkInput } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -41,6 +41,9 @@ export function SubResourcePicker({
   const [open, setOpen] = useState(false)
   const [allResources, setAllResources] = useState<Resource[]>([])
   const [selected, setSelected] = useState<string[]>([])
+  // Embed-Modus je ausgewaehltem Kind (Default 'lazy'). 'inline' liefert das
+  // Volldokument vom MCP mit; 'lazy' bleibt reine Referenz.
+  const [modes, setModes] = useState<Record<string, EmbeddingMode>>({})
   const [loadError, setLoadError] = useState<string | null>(null)
 
   // Beim Oeffnen: aktuelle Auswahl aus den bestehenden Kindern uebernehmen.
@@ -50,8 +53,12 @@ export function SubResourcePicker({
     if (!open) {
       return
     }
-    setSelected(
-      existing.filter((sub) => sub.link_scope === 'resource').map((sub) => sub.id),
+    const resourceSubs = existing.filter((sub) => sub.link_scope === 'resource')
+    setSelected(resourceSubs.map((sub) => sub.id))
+    setModes(
+      Object.fromEntries(
+        resourceSubs.map((sub) => [sub.id, sub.embedding_mode ?? 'lazy']),
+      ),
     )
     setLoadError(null)
     api
@@ -68,6 +75,10 @@ export function SubResourcePicker({
     setSelected((current) =>
       current.includes(id) ? current.filter((entry) => entry !== id) : [...current, id],
     )
+  }, [])
+
+  const setMode = useCallback((id: string, mode: EmbeddingMode) => {
+    setModes((current) => ({ ...current, [id]: mode }))
   }, [])
 
   const move = useCallback((id: string, direction: 'up' | 'down') => {
@@ -91,6 +102,7 @@ export function SubResourcePicker({
       block_id: null,
       position: 0,
       link_scope: 'resource',
+      embedding_mode: modes[id] ?? 'lazy',
     }))
     const anchorLinks: SubResourceLinkInput[] = blockAnchors.map((sub) => ({
       child_id: sub.id,
@@ -104,7 +116,7 @@ export function SubResourcePicker({
     }))
     await onSave(links)
     setOpen(false)
-  }, [selected, existing, onSave])
+  }, [selected, existing, modes, onSave])
 
   const selectedSet = new Set(selected)
   const unselected = allResources.filter((r) => !selectedSet.has(r.id))
@@ -151,6 +163,32 @@ export function SubResourcePicker({
                     <span className="font-medium">{nameOf(id)}</span>
                   </span>
                   <span className="flex items-center gap-1">
+                    <span
+                      className="mr-1 inline-flex overflow-hidden rounded-md border"
+                      role="group"
+                      aria-label={`Embed-Modus fuer ${nameOf(id)}`}
+                    >
+                      <Button
+                        type="button"
+                        variant={(modes[id] ?? 'lazy') === 'lazy' ? 'brand' : 'ghost'}
+                        size="sm"
+                        className="h-6 rounded-none px-2 text-xs"
+                        onClick={() => setMode(id, 'lazy')}
+                        aria-pressed={(modes[id] ?? 'lazy') === 'lazy'}
+                      >
+                        Link (lazy)
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={(modes[id] ?? 'lazy') === 'inline' ? 'brand' : 'ghost'}
+                        size="sm"
+                        className="h-6 rounded-none px-2 text-xs"
+                        onClick={() => setMode(id, 'inline')}
+                        aria-pressed={(modes[id] ?? 'lazy') === 'inline'}
+                      >
+                        Fest einbetten
+                      </Button>
+                    </span>
                     <Button
                       type="button"
                       variant="ghost"
