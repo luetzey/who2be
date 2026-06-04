@@ -30,6 +30,13 @@ from who2be_api.repositories.playbook_resource_link_repository import block_sect
 
 logger = logging.getLogger(__name__)
 
+# Skills sind vorlaeufig deaktiviert ("Coming Soon", ADR-0026). Das deskriptive
+# `SkillRef`-Feld wird weder in den Agenten-Briefing-Body (`get_persona` →
+# `render_skills_table`) noch in die Persona-Referenz-Aufloesung
+# (`_render_persona_profile`) gerendert. Der gespeicherte `skills`-Inhalt bleibt
+# im Datenmodell unangetastet (Backward-Compat). Reaktivierung: Flag auf True.
+SKILLS_ENABLED = False
+
 # Deutsche Monatsnamen (kein babel im Repo — simple Map, einfach zu warten).
 _DE_MONTHS = [
     "Januar",
@@ -445,10 +452,11 @@ def _render_persona_profile(content: dict[str, object]) -> str:
     if modes_section:
         parts.append(modes_section)
 
-    # 5. Skills-Sektion — nur wenn skills vorhanden
+    # 5. Skills-Sektion — nur wenn skills vorhanden UND Feature aktiv
+    # (Coming Soon, ADR-0026 — derzeit deaktiviert).
     raw_skills = content.get("skills", [])
     skills: list[dict[str, object]] = list(raw_skills) if isinstance(raw_skills, list) else []
-    if skills:
+    if SKILLS_ENABLED and skills:
         skill_lines = ["## Skills"]
         for skill in skills:
             skill_name = str(skill.get("name", "")).strip()
@@ -706,7 +714,7 @@ class PersonaRefResolver:
         name = str(row["name"])
         text = (
             f"Deine Persona ist **{name}** (id: `{ctx.persona_id}`). "
-            f'Lade dein vollstaendiges Profil und deine Modi zu Beginn der Sitzung via '
+            f"Lade dein vollstaendiges Profil und deine Modi zu Beginn der Sitzung via "
             f'MCP-Tool `get_persona("{ctx.persona_id}")`. '
             "Pruefe danach `content.modes`: Waehle anhand des Modus-`trigger` den "
             "passenden Modus und wende dessen `identity_add` + `output_style_override` "
@@ -889,9 +897,7 @@ class ResourcesCatalogResolver:
 
         if not entries:
             if tag_filter is not None:
-                return ResolveResult(
-                    text=f"_Keine aktiven Resources mit dem Tag „{tag_filter}“._"
-                )
+                return ResolveResult(text=f"_Keine aktiven Resources mit dem Tag „{tag_filter}“._")
             return ResolveResult(text="_Im Workspace gibt es aktuell keine aktiven Resources._")
 
         scope_note = (
@@ -937,7 +943,13 @@ def render_skills_table(raw_skills: object) -> str:
 
     Single-Source fuer den Agenten-Render (`get_persona`) und — gespiegelt — die
     Web-Detail-Page. Zellen escapen `|` und kollabieren Newlines via `_table_cell`.
+
+    Skills sind derzeit deaktiviert (Coming Soon, ADR-0026): bei `SKILLS_ENABLED
+    is False` liefert die Funktion immer `""`, sodass nichts an den
+    Briefing-Body angehaengt wird.
     """
+    if not SKILLS_ENABLED:
+        return ""
     skills: list[dict[str, object]] = list(raw_skills) if isinstance(raw_skills, list) else []
     rows: list[tuple[str, str]] = []
     for skill in skills:

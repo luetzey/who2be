@@ -1,6 +1,6 @@
-# ADR-0026 — Persona-„Skills": deskriptives Feld vs. echte Agent-Skills
+# ADR-0026 — Persona-„Skills": deskriptives Feld deaktiviert (Coming Soon)
 
-- Status: Offen / Deferred (Grundsatz-Entscheidung vertagt)
+- Status: Akzeptiert — deskriptives Feld deaktiviert (Coming Soon)
 - Datum: 2026-06-04
 - Kontext: Who2Be — Persona-Aggregat, Brainstorm „Machen Skills Sinn?"
 - Bezug: ADR-0009 (jsonb-Schema-Evolution), ADR-0024 (Composite-Playbooks),
@@ -66,14 +66,33 @@ nur den Namen gemein.
 
 ## Entscheidung
 
-**Offen.** Bewusst vertagt. Kein Code wird mit dieser ADR geändert; das
-deskriptive `SkillRef`-Feld bleibt vorerst aktiv (faktisch Option A als
-Übergangszustand). Diese ADR hält Problem, Optionen und Re-Evaluation-
-Trigger fest, damit die Entscheidung nicht implizit „weiterwächst".
+**B (deaktivieren) als Brücke zu C (echte Agent-Skills).** Das deskriptive
+`SkillRef`-Feld wird vorläufig **deaktiviert und als „Coming Soon"
+dargestellt** — sichtbar, aber nicht nutzbar. Begründung: Das heutige
+`name+note`-Feld trägt seinen Platz nicht (siehe 1–3), aber „Skill" soll als
+Konzept erhalten bleiben und später als echtes, versioniertes Agent-Skill-
+Aggregat (Option C) zurückkommen. Statt es ersatzlos zu entfernen,
+kommunizieren wir es als geplantes Feature.
 
-Leitplanke bis zur Entscheidung: **kein Ausbau** des deskriptiven Felds
-(keine neuen Render-Pfade, keine Skill→X-Verknüpfungen) — solange offen ist,
-ob es durch Option C ersetzt oder per Option B entfernt wird.
+Umsetzung (reversibel, kein Datenverlust):
+
+- **Backend-Flag** `SKILLS_ENABLED = False`
+  (`apps/api/.../placeholders/registry.py`) gated beide Render-Pfade:
+  `render_skills_table` liefert `""`, die Skills-Sektion in
+  `_render_persona_profile` wird übersprungen. Reaktivierung = Flag auf
+  `True`.
+- **MCP** (`get_persona`/`PersonaWithPlaybooks`): Skills sind im
+  dokumentierten Tool-Vertrag als „Coming Soon, derzeit deaktiviert"
+  ausgewiesen und erscheinen nicht im `body_rendered`.
+- **Frontend**: `PersonaSkillsEditor`/`PersonaSkillsTable` sind durch den
+  `SkillsComingSoon`-Platzhalter ersetzt (Editor-Formular + Detail-Page).
+  Die Komponenten bleiben im Repo für die Reaktivierung.
+- **Datenmodell** unverändert: `skills` bleibt mit Default `[]` (ADR-0009),
+  der Form-Passthrough erhält bestehende Inhalte verlustfrei.
+
+Leitplanke: **kein Ausbau** des deskriptiven Felds (keine neuen
+Render-Pfade, keine Skill→X-Verknüpfungen) — der nächste Schritt ist
+Option C, nicht das Reaktivieren des Freitext-Felds.
 
 ## Re-Evaluation-Trigger
 
@@ -94,11 +113,15 @@ PR.
 
 ## Konsequenzen
 
-- `packages/models/.../persona.py` (`SkillRef`, `skills`-Feld) und
-  `render_skills_table` bleiben unverändert — die offene Frage ist
-  dokumentiert, nicht gelöst.
+- `packages/models/.../persona.py` (`SkillRef`, `skills`-Feld) bleibt
+  unverändert — nur das *Rendering* ist hinter `SKILLS_ENABLED` deaktiviert.
+- Reaktivierung ist ein Einzeiler (`SKILLS_ENABLED = True`) plus das
+  Wiedereinhängen von `PersonaSkillsEditor`/`PersonaSkillsTable` — die
+  Komponenten und ihre Tests bleiben erhalten. Das Render-Verhalten ist
+  weiterhin getestet (Flag-gegated in `test_placeholder_renderer.py` /
+  `test_persona_service.py`).
 - Pull-Requests, die das deskriptive Skills-Feld *ausbauen*, sind gegen
   diese ADR prüfbar (Leitplanke „kein Ausbau").
-- Das `skills`-jsonb-Feld bleibt durch ADR-0009 additiv evolvierbar — eine
-  spätere Deaktivierung (B) oder Migration zu C bricht keine Bestands-
+- Das `skills`-jsonb-Feld bleibt durch ADR-0009 additiv evolvierbar — die
+  Deaktivierung wie eine spätere Migration zu C bricht keine Bestands-
   Snapshots.

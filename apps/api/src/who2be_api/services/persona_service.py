@@ -39,8 +39,11 @@ class PersonaRenderResponse(BaseModel):
 
     Spiegelt den Playbook-Render-Vertrag (`PlaybookRenderResponse`): `body_rendered`
     ist der durch den Placeholder-Renderer expandierte Profil-Body (Katalog-Pills
-    fetch-time gegen die aktiven Playbooks/Resources des Workspace) plus eine
-    angehaengte Skills-Tabelle. `unresolved` listet deduplizierte Miss-Keys.
+    fetch-time gegen die aktiven Playbooks/Resources des Workspace). `unresolved`
+    listet deduplizierte Miss-Keys.
+
+    Hinweis: Die Skills-Tabelle ist derzeit deaktiviert (Coming Soon, ADR-0026) —
+    `render_skills_table` liefert `""`, es wird nichts angehaengt.
     """
 
     body_rendered: str
@@ -126,7 +129,8 @@ class PersonaService:
         `persona_id=persona.id` gerendert — so loesen die Katalog-Pills
         (`playbooks-catalog`/`resources-catalog`) sowie die Slash-Refs
         fetch-time gegen die aktiven Playbooks/Resources des Workspace auf.
-        Anschliessend wird die Skills-Tabelle aus `content.skills` angehaengt.
+        Die Skills-Tabelle ist derzeit deaktiviert (Coming Soon, ADR-0026) und
+        wird nicht angehaengt — `render_skills_table` liefert `""`.
 
         Wird vom MCP-Tool `get_persona` genutzt (der MCP-Prozess hat keinen
         DB-Zugriff). Leerer Body + keine Skills → leerer `body_rendered`.
@@ -143,9 +147,7 @@ class PersonaService:
         if self._pool is None:  # pragma: no cover - im Prod immer gesetzt
             raise RuntimeError("PersonaService.render benoetigt einen DB-Pool.")
         async with self._pool.acquire() as conn:
-            body_rendered, unresolved = await render_template_body(
-                body_json, render_ctx, conn
-            )
+            body_rendered, unresolved = await render_template_body(body_json, render_ctx, conn)
 
         skills_table = render_skills_table(
             [skill.model_dump(mode="json") for skill in persona.content.skills]

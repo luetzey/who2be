@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils'
 import type { PersonaEditorValues } from '../hooks/usePersonaForm'
 import { PersonaModesEditor } from './PersonaModesEditor'
 import { PersonaProfileEditor } from './PersonaProfileEditor'
-import { PersonaSkillsEditor } from './PersonaSkillsEditor'
+import { SkillsComingSoon } from './SkillsComingSoon'
 
 const MODES_SECTION_ID = 'persona-modes-section'
 
@@ -294,15 +294,15 @@ export function PersonaEditorForm({
 
             <FormSection
               title="Skills"
-              description="Faehigkeiten, auf die sich die Persona stützt — mit kurzer Notiz."
+              description="Bald: paketierte, wiederverwendbare Fähigkeiten für deine Agenten."
               help={
                 <p>
-                  Beispiel: <em>„Aktives Zuhören — paraphrasiert vor jeder Antwort"</em>.
-                  Skills sind schlanke Referenzen, kein eigenes Aggregat.
+                  Skills bekommen ein eigenes, versioniertes Format. Die Funktion
+                  ist aktuell noch nicht aktiv — der Editor folgt mit dem Release.
                 </p>
               }
             >
-              <PersonaSkillsEditor control={form.control} disabled={isViewer} />
+              <SkillsComingSoon />
             </FormSection>
 
             <FormSection

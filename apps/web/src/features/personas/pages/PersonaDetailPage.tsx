@@ -18,7 +18,7 @@ import { usePersonaPlaybooks } from '@/hooks/usePersonaPlaybooks'
 import { notify } from '@/lib/feedback'
 
 import { PersonaEditorForm } from '../components/PersonaEditorForm'
-import { PersonaSkillsTable } from '../components/PersonaSkillsTable'
+import { SkillsComingSoon } from '../components/SkillsComingSoon'
 import { PlaybookLinkItem } from '../components/PlaybookLinkItem'
 import { usePersona } from '../hooks/usePersona'
 import { usePersonaForm } from '../hooks/usePersonaForm'
@@ -182,7 +182,14 @@ export function PersonaDetailPage() {
                 legacySystemPrompt={persona.content.system_prompt}
               />
 
-              <PersonaSkillsTable skills={persona.content.skills ?? []} />
+              <Card>
+                <CardHeader>
+                  <CardTitle>Skills</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <SkillsComingSoon />
+                </CardContent>
+              </Card>
 
               <VersionHistory
                 versions={versions}

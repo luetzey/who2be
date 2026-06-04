@@ -45,9 +45,13 @@ class PersonaWithPlaybooks(BaseModel):
     `body_rendered` traegt den serverseitig expandierten Persona-Profil-Body
     (Track F): die Katalog-Pills (`playbooks-catalog`/`resources-catalog`) und
     Slash-Refs sind fetch-time gegen die aktiven Playbooks/Resources des
-    Workspace aufgeloest, gefolgt von einer Skills-Tabelle. Nutze
-    `body_rendered` als gebrauchsfertigen Profil-Text — `persona.content` traegt
-    weiterhin die strukturierten Felder (Modi, Skills, Tags) fuer die Logik.
+    Workspace aufgeloest. Nutze `body_rendered` als gebrauchsfertigen
+    Profil-Text — `persona.content` traegt weiterhin die strukturierten Felder
+    (Modi, Tags) fuer die Logik.
+
+    Skills sind derzeit deaktiviert ("Coming Soon", ADR-0026): das deskriptive
+    `persona.content.skills`-Feld erscheint nicht im `body_rendered` und ist noch
+    nicht nutzbar. Ein versioniertes Agent-Skill-Format folgt.
     """
 
     persona: PersonaRead
@@ -163,8 +167,11 @@ async def get_persona(identifier: str) -> PersonaWithPlaybooks:
 
     `body_rendered` traegt den fetch-time expandierten Profil-Body (Track F):
     Katalog-Pills (`playbooks-catalog`/`resources-catalog`) und Slash-Refs sind
-    bereits zu Plain-Text aufgeloest, gefolgt von einer Skills-Tabelle. Nutze
-    diesen Text als gebrauchsfertiges Persona-Briefing.
+    bereits zu Plain-Text aufgeloest. Nutze diesen Text als gebrauchsfertiges
+    Persona-Briefing.
+
+    Skills sind derzeit deaktiviert ("Coming Soon", ADR-0026) und erscheinen
+    nicht im `body_rendered`.
     """
     client = await build_client()
     persona = await client.get_persona(identifier)
