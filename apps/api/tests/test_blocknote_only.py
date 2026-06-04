@@ -155,6 +155,7 @@ def test_default_template_renders_persona_name(monkeypatch: pytest.MonkeyPatch) 
                     "description": "",
                     "persona_id": persona["id"],
                     "system_prompt_template_id": tpl_id,
+                    "status": "enabled",
                 },
                 headers=auth,
             ).json()
