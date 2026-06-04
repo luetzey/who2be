@@ -83,9 +83,16 @@ async function request<T>(token: string, path: string, init?: RequestInit): Prom
     headers.Authorization = `Bearer ${token}`
   }
   let response: Response
+  const url = `${config.apiBaseUrl}${path}`
   try {
-    response = await fetch(`${config.apiBaseUrl}${path}`, { ...init, headers })
-  } catch {
+    response = await fetch(url, { ...init, headers })
+  } catch (cause) {
+    // `fetch` rejectet nur bei Netzwerk-/CORS-/DNS-Fehlern (nicht bei
+    // HTTP-Fehlerstatus). Die User-Message bleibt generisch, aber die echte
+    // Ursache (API laeuft nicht, falsche `VITE_API_BASE_URL`, CORS) wird
+    // geloggt — sonst ist „nicht erreichbar" im DevTools-Log nicht
+    // diagnostizierbar.
+    console.error(`Who2Be-API nicht erreichbar: ${init?.method ?? 'GET'} ${url}`, cause)
     throw new ApiError(0, 'Who2Be-API nicht erreichbar.')
   }
   if (!response.ok) {

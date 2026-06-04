@@ -150,6 +150,28 @@ describe('DashboardPage', () => {
     })
   })
 
+  it('feuert keinen Request und zeigt Preparing-State ohne Workspace-ID', async () => {
+    // Kein `:workspaceId`-Param in der Route UND `me.default_workspace_id`
+    // leer ⇒ `useWorkspaceId()` liefert ''. Der Hook darf dann NICHT
+    // `/v1/workspaces//dashboard` feuern (sonst 404 oder „nicht erreichbar"),
+    // sondern einen Preparing-State zeigen.
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify(sampleData), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderInRoutes(<DashboardPage />, {
+      path: '/dashboard',
+      initialEntries: ['/dashboard'],
+      me: { user_id: 'u1', default_workspace_id: null, organizations: [] },
+    })
+
+    await waitFor(() => {
+      expect(screen.getByText('Workspace wird vorbereitet …')).toBeInTheDocument()
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('zeigt eine Empty-Hint, wenn keine Aktivitaeten vorliegen', async () => {
     const empty: DashboardData = {
       kpis: { active_personas: 0, active_playbooks: 0, pending_reviews: 0 },

@@ -15,7 +15,7 @@ import { StatusDonut } from '../components/StatusDonut'
 import { useDashboard } from '../hooks/useDashboard'
 
 export function DashboardPage() {
-  const { data, loading, error, notFound, page, setPage } = useDashboard()
+  const { data, loading, error, notFound, preparing, page, setPage } = useDashboard()
 
   const pagination = data?.activity_pagination
   const totalPages = pagination?.total_pages ?? 1
@@ -28,7 +28,13 @@ export function DashboardPage() {
           description="Aktueller Zustand des Workspaces — KPIs, Status-Verteilung und Aktivitäten."
         />
 
-        {notFound ? (
+        {preparing ? (
+          <EmptyState
+            icon={LayoutDashboard}
+            title="Workspace wird vorbereitet …"
+            description="Sobald dein Workspace bereitsteht, erscheinen hier KPIs, Aktivitäten und die Status-Verteilung."
+          />
+        ) : notFound ? (
           <EmptyState
             icon={LayoutDashboard}
             title="Dashboard noch nicht verfügbar."
