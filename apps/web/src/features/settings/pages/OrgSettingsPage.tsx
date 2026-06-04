@@ -38,6 +38,7 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { BillingPanel } from '@/features/billing'
 import { notify } from '@/lib/feedback'
 import { roleLabel } from '@/lib/roles'
 
@@ -227,19 +228,11 @@ export function OrgSettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Billing-Slot (Track D füllt ihn: Entitlement-/Quota-Anzeige + Upgrade-CTA;
-            On-Prem blendet ihn aus). Hier bewusst nur ein leerer Platzhalter. */}
-        <Card data-testid="billing-slot">
-          <CardHeader>
-            <CardTitle>Abrechnung</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Plan- und Nutzungsdetails erscheinen hier, sobald die Abrechnung
-              aktiviert ist.
-            </p>
-          </CardContent>
-        </Card>
+        {/* Billing-Slot: BillingPanel zeigt Plan/Quota/Verbrauch + Upgrade-CTA
+            (Cloud); On-Prem rendert es null. Wrapper haelt die testid stabil. */}
+        <div data-testid="billing-slot">
+          <BillingPanel />
+        </div>
 
         {org.kind === 'company' && isAdmin ? <DeleteOrgSection org={org} /> : null}
       </Stack>
