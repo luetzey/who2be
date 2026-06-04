@@ -1,5 +1,11 @@
--- Migration 0038 — Mollie-Haertung: Webhook-Dedupe + Dunning-Grace (Track P, Plan §3.2)
+-- Migration 0039 — Mollie-Haertung: Webhook-Dedupe + Dunning-Grace (Track P, Plan §3.2)
 -- Plan: .claude/plan/2026-06-03-2030_cloud-launch-readiness.md (Track P)
+--
+-- Renumber-Hinweis: lief vorab als 0038, kollidierte mit `0038_account_org_lifecycle.sql`
+-- aus dem parallelen Track O. Beide Files sind idempotent (CREATE TABLE/ADD COLUMN
+-- IF NOT EXISTS, Grants pg_roles-geguarded) und voellig unabhaengig — die
+-- Umbenennung ist gefahrlos und reine Reihenfolge. Migrationen werden per Glob
+-- entdeckt und alphabetisch angewendet; kein Code referenziert den Dateinamen.
 --
 -- Zwei unabhaengige Bausteine der Mollie-Haertung:
 --
