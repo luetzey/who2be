@@ -182,14 +182,7 @@ export function PersonaDetailPage() {
                 legacySystemPrompt={persona.content.system_prompt}
               />
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Skills</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <SkillsComingSoon />
-                </CardContent>
-              </Card>
+              <SkillsComingSoon compact />
 
               <VersionHistory
                 versions={versions}

@@ -9,7 +9,26 @@ import { Sparkles } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 
-export function SkillsComingSoon() {
+interface SkillsComingSoonProps {
+  /**
+   * Kompakte, dezente Variante (eine gedaempfte Zeile statt Box mit Erklaer-
+   * text). Fuer die Detail-Page gedacht, wo der Hinweis nicht dominieren soll;
+   * der Editor nutzt die Default-Box.
+   */
+  compact?: boolean
+}
+
+export function SkillsComingSoon({ compact = false }: SkillsComingSoonProps) {
+  if (compact) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Sparkles className="size-4" />
+        <span>Skills</span>
+        <Badge variant="secondary">Coming Soon</Badge>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed p-6">
       <div className="flex items-center gap-2">
