@@ -1,7 +1,8 @@
+import { AlertCircle } from 'lucide-react'
 import { type BaseSyntheticEvent } from 'react'
 import { type UseFormReturn } from 'react-hook-form'
 
-import type { Persona, SystemPromptTemplate } from '@/api/types'
+import type { Agent, Persona, SystemPromptTemplate } from '@/api/types'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
 import { FormSection } from '@/components/layout/FormSection'
@@ -13,6 +14,7 @@ import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 
 import type { AgentEditorValues } from '../hooks/useAgentForm'
+import { describeAgentMissing } from '../lib/activation'
 
 interface AgentEditorFormProps {
   form: UseFormReturn<AgentEditorValues>
@@ -20,6 +22,8 @@ interface AgentEditorFormProps {
   saveError: string | null
   personas: Persona[]
   templates: SystemPromptTemplate[]
+  /** Gespeicherter Agent — liefert die serverseitige Aktivierbarkeit. */
+  agent: Agent
   submitLabel?: string
 }
 
@@ -29,9 +33,19 @@ export function AgentEditorForm({
   saveError,
   personas,
   templates,
+  agent,
   submitLabel = 'Speichern',
 }: AgentEditorFormProps) {
   const isViewer = useCurrentWorkspaceRole() === 'viewer'
+
+  // Aktivierbarkeit kommt vom Backend (Persona + Template gesetzt UND Persona
+  // hat eine aktive Version). Bewusst nicht aus dem Live-Formular abgeleitet:
+  // „Persona aktiv" haengt an der Versionshistorie (eine aktive Version kann
+  // neben einem Draft existieren), die die Persona-Liste nicht verlaesslich
+  // zeigt. Geaenderte Refs werden erst nach dem Speichern (Reload) bewertet.
+  const activatable = agent.activatable
+  const missing = agent.missing
+
   return (
     <>
       {saveError !== null ? <ErrorAlert message={saveError} /> : null}
@@ -94,13 +108,12 @@ export function AgentEditorForm({
                     <FormItem>
                       <FormLabel>Persona</FormLabel>
                       <FormControl>
-                        <Select required disabled={isViewer} {...field}>
-                          <option value="" disabled>
-                            — bitte wählen —
-                          </option>
+                        <Select disabled={isViewer} {...field}>
+                          <option value="">— keine —</option>
                           {personas.map((persona) => (
                             <option key={persona.id} value={persona.id}>
                               {persona.name}
+                              {persona.current_status === 'active' ? '' : ' (nicht aktiv)'}
                             </option>
                           ))}
                         </Select>
@@ -116,10 +129,8 @@ export function AgentEditorForm({
                     <FormItem>
                       <FormLabel>Systemprompt</FormLabel>
                       <FormControl>
-                        <Select required disabled={isViewer} {...field}>
-                          <option value="" disabled>
-                            — bitte wählen —
-                          </option>
+                        <Select disabled={isViewer} {...field}>
+                          <option value="">— keiner —</option>
                           {templates.map((template) => (
                             <option key={template.id} value={template.id}>
                               {template.name} ({template.slug})
@@ -139,10 +150,24 @@ export function AgentEditorForm({
                       <FormLabel>Status</FormLabel>
                       <FormControl>
                         <Select disabled={isViewer} {...field}>
-                          <option value="enabled">Aktiv</option>
+                          <option value="enabled" disabled={!activatable}>
+                            Aktiv
+                          </option>
                           <option value="disabled">Deaktiviert</option>
                         </Select>
                       </FormControl>
+                      {activatable ? null : (
+                        <p
+                          className="flex items-start gap-2 text-sm text-muted-foreground"
+                          data-testid="agent-missing-notice"
+                        >
+                          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                          <span>
+                            Noch nicht aktivierbar — fehlt:{' '}
+                            {describeAgentMissing(missing).join(', ')}.
+                          </span>
+                        </p>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )}

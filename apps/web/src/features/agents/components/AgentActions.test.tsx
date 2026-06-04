@@ -47,6 +47,9 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
     persona_id: 'p-1',
     system_prompt_template_id: 't-1',
     status: 'enabled',
+    persona_active: true,
+    activatable: true,
+    missing: [],
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
     ...overrides,
@@ -91,10 +94,15 @@ describe('DuplicateAgentButton', () => {
     })
   })
 
-  it('ist ausgegraut für eine unvollständige Hülle', () => {
-    render(<DuplicateAgentButton agent={makeAgent({ persona_id: null })} />)
+  it('ist ausgegraut für einen nicht aktivierbaren Agent', () => {
+    render(
+      <DuplicateAgentButton
+        agent={makeAgent({ persona_id: null, activatable: false, missing: ['persona'] })}
+      />,
+    )
     const button = screen.getByTestId('duplicate-agent')
     expect(button).toBeDisabled()
+    expect(button).toHaveAttribute('title', expect.stringContaining('Persona verknüpfen'))
     fireEvent.click(button)
     expect(copyAgent).not.toHaveBeenCalled()
   })

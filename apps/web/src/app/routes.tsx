@@ -106,11 +106,6 @@ const AgentsPage = lazy(() =>
     default: mod.AgentsPage,
   })),
 )
-const AgentNewPage = lazy(() =>
-  import('@/features/agents/pages/AgentNewPage').then((mod) => ({
-    default: mod.AgentNewPage,
-  })),
-)
 const AgentDetailPage = lazy(() =>
   import('@/features/agents/pages/AgentDetailPage').then((mod) => ({
     default: mod.AgentDetailPage,
@@ -256,7 +251,6 @@ export function RouterRoot() {
                 <Route path="/w/:workspaceId/resources/new" element={<ResourceNewPage />} />
                 <Route path="/w/:workspaceId/resources/:id" element={<ResourceDetailPage />} />
                 <Route path="/w/:workspaceId/agents" element={<AgentsPage />} />
-                <Route path="/w/:workspaceId/agents/new" element={<AgentNewPage />} />
                 <Route path="/w/:workspaceId/agents/:id" element={<AgentDetailPage />} />
                 <Route
                   path="/w/:workspaceId/system-prompts"

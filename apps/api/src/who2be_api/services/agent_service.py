@@ -30,12 +30,22 @@ def _not_found() -> HTTPException:
     return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent nicht gefunden.")
 
 
-def _incomplete_shell() -> HTTPException:
+_MISSING_LABELS = {
+    "persona": "Persona verknuepfen",
+    "template": "System-Prompt-Template verknuepfen",
+    "persona_active": "verknuepfte Persona aktiv schalten",
+}
+
+
+def _not_activatable(missing: list[str]) -> HTTPException:
+    """409 mit Klartext, was dem Agenten zur Aktivierbarkeit fehlt."""
+    todo = ", ".join(_MISSING_LABELS.get(item, item) for item in missing)
     return HTTPException(
         status_code=status.HTTP_409_CONFLICT,
         detail=(
-            "Agent ist eine unvollstaendige Huelle (Persona oder Template fehlt) "
-            "und kann nicht kopiert werden."
+            f"Agent ist noch nicht vollstaendig — fehlt: {todo}. "
+            "Aktivieren und Kopieren sind erst moeglich, wenn Persona und Template "
+            "gesetzt sind und die Persona eine aktive Version hat."
         ),
     )
 
@@ -53,8 +63,38 @@ class AgentService:
     def __init__(self, repo: AgentRepository) -> None:
         self._repo = repo
 
+    async def _missing_for_enable(
+        self,
+        workspace_id: UUID,
+        persona_id: UUID | None,
+        template_id: UUID | None,
+    ) -> list[str]:
+        """Was dem (effektiven) Agenten zur Aktivierbarkeit fehlt.
+
+        Spiegelt `AgentRead.missing`, aber fuer die *geplanten* Refs eines
+        Create/Update — die Persona-Aktivitaet wird live aus der DB gelesen,
+        damit wir vor dem Schreiben gaten koennen (kein Enable-then-Rollback).
+        """
+        gaps: list[str] = []
+        if persona_id is None:
+            gaps.append("persona")
+        if template_id is None:
+            gaps.append("template")
+        persona_active = persona_id is not None and await self._repo.persona_has_active_version(
+            workspace_id, persona_id
+        )
+        if not persona_active:
+            gaps.append("persona_active")
+        return gaps
+
     async def create(self, ctx: WorkspaceContext, data: AgentCreate) -> AgentRead:
         require_role(ctx, WorkspaceRole.editor)
+        if data.status == AgentStatus.enabled:
+            missing = await self._missing_for_enable(
+                ctx.workspace_id, data.persona_id, data.system_prompt_template_id
+            )
+            if missing:
+                raise _not_activatable(missing)
         agent = await self._repo.insert(
             ctx.workspace_id,
             ctx.user_id,
@@ -89,6 +129,23 @@ class AgentService:
 
     async def update(self, ctx: WorkspaceContext, agent_id: UUID, data: AgentUpdate) -> AgentRead:
         require_role(ctx, WorkspaceRole.editor)
+        existing = await self._repo.fetch(ctx.workspace_id, agent_id)
+        if existing is None:
+            raise _not_found()
+        # Enable-Gate auf den *effektiven* Stand nach dem Update (None = unveraendert).
+        # Greift auch, wenn ein bereits aktiver Agent durch Ref-Wechsel
+        # unvollstaendig wuerde — so bleibt die Invariante „enabled ⇒ aktivierbar".
+        effective_status = data.status if data.status is not None else existing.status
+        if effective_status == AgentStatus.enabled:
+            persona_id = data.persona_id if data.persona_id is not None else existing.persona_id
+            template_id = (
+                data.system_prompt_template_id
+                if data.system_prompt_template_id is not None
+                else existing.system_prompt_template_id
+            )
+            missing = await self._missing_for_enable(ctx.workspace_id, persona_id, template_id)
+            if missing:
+                raise _not_activatable(missing)
         agent = await self._repo.update(
             ctx.workspace_id,
             agent_id,
@@ -99,28 +156,25 @@ class AgentService:
             data.status,
         )
         if agent is None:
-            # Disambiguieren: existiert der Agent ueberhaupt? Wenn ja, dann
-            # war der Composite-FK auf persona/template das Problem.
-            existing = await self._repo.fetch(ctx.workspace_id, agent_id)
-            if existing is None:
-                raise _not_found()
+            # Existenz oben bereits bestaetigt → der Composite-FK auf
+            # persona/template war das Problem.
             raise _invalid_reference()
         return agent
 
     async def copy(self, ctx: WorkspaceContext, agent_id: UUID, data: AgentCopy) -> AgentRead:
         """Dupliziert einen Agent unter neuem Namen.
 
-        Gesperrt (409), solange die Quelle eine unvollstaendige Huelle ist —
-        eine Kopie ohne Persona/Template waere selbst nicht einsetzbar. Die
-        Kopie uebernimmt Persona, Template, Beschreibung und Status und gehoert
-        dem kopierenden User.
+        Gesperrt (409), solange die Quelle nicht aktivierbar ist (Persona oder
+        Template fehlt ODER die Persona hat keine aktive Version) — eine solche
+        Kopie waere selbst nicht einsetzbar. Die Kopie uebernimmt Persona,
+        Template, Beschreibung und Status und gehoert dem kopierenden User.
         """
         require_role(ctx, WorkspaceRole.editor)
         source = await self._repo.fetch(ctx.workspace_id, agent_id)
         if source is None:
             raise _not_found()
-        if source.is_shell:
-            raise _incomplete_shell()
+        if not source.activatable:
+            raise _not_activatable(source.missing)
         name = data.name if data.name is not None else f"{source.name} (Kopie)"
         agent = await self._repo.insert(
             ctx.workspace_id,

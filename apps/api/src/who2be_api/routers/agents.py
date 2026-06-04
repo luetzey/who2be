@@ -136,8 +136,9 @@ async def copy_agent(
 ) -> AgentRead:
     """Dupliziert einen Agent unter neuem Namen.
 
-    409, wenn der Quell-Agent eine unvollstaendige Huelle ist (Persona oder
-    Template fehlt) — eine solche Kopie waere selbst nicht einsetzbar.
+    409, wenn der Quell-Agent nicht aktivierbar ist (Persona oder Template
+    fehlt ODER die Persona hat keine aktive Version) — eine solche Kopie waere
+    selbst nicht einsetzbar.
     """
     return await service.copy(ctx, agent_id, data)
 

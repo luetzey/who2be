@@ -13,7 +13,7 @@ from enum import StrEnum
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 # PersonaRead importiert keine agent-Modelle — kein zirkulaerer Import.
 from who2be_models.persona import PersonaRead
@@ -36,8 +36,14 @@ class AgentCreate(BaseModel):
 
     `persona_id` und `system_prompt_template_id` sind optional: ein Agent darf
     als leere Huelle (ohne Persona und/oder Template) angelegt werden, die
-    spaeter per `PUT` vervollstaendigt wird. Eine unvollstaendige Huelle ist
-    nicht render- und nicht kopierbar (siehe `POST .../agents/{id}/copy`).
+    spaeter per `PUT` vervollstaendigt wird. Eine unvollstaendige (oder noch
+    nicht aktivierbare) Huelle ist nicht render- und nicht kopierbar (siehe
+    `POST .../agents/{id}/copy`).
+
+    Default-Status ist `disabled`: ein frisch angelegter Agent ist erst dann
+    aktivierbar (`enabled`), wenn er vollstaendig ist (Persona + Template gesetzt
+    UND die Persona hat eine aktive Version). Wer beim Anlegen explizit
+    `status=enabled` sendet, ohne diese Bedingung zu erfuellen, bekommt 409.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -46,7 +52,7 @@ class AgentCreate(BaseModel):
     description: str = Field(default="", max_length=2_000)
     persona_id: UUID | None = None
     system_prompt_template_id: UUID | None = None
-    status: AgentStatus = AgentStatus.enabled
+    status: AgentStatus = AgentStatus.disabled
 
 
 class AgentUpdate(BaseModel):
@@ -75,7 +81,13 @@ class AgentCopy(BaseModel):
 
 
 class AgentRead(BaseModel):
-    """Agent im aktuellen Stand."""
+    """Agent im aktuellen Stand.
+
+    `persona_active` spiegelt, ob die verknuepfte Persona eine aktive Version
+    hat (serverseitig aus `persona_version.status='active'` gelesen). Das Feld
+    ist die Grundlage fuer `activatable`/`missing` — ohne aktive Persona darf
+    der Agent nicht aktiviert oder kopiert werden.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -87,6 +99,10 @@ class AgentRead(BaseModel):
     persona_id: UUID | None
     system_prompt_template_id: UUID | None
     status: AgentStatus
+    # Ob die verknuepfte Persona eine aktive Version hat. Default False, damit
+    # direkt konstruierte Reads (ohne DB-Join) konservativ als "nicht aktivierbar"
+    # gelten; die Repository-SELECTs befuellen es per EXISTS-Subquery.
+    persona_active: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -94,9 +110,41 @@ class AgentRead(BaseModel):
     def is_shell(self) -> bool:
         """True, solange Persona ODER Template fehlt (unvollstaendige Huelle).
 
-        Eine unvollstaendige Huelle ist nicht render- und nicht kopierbar.
+        Eine Huelle ist nicht render- und nicht kopierbar. Schaerfer als das
+        reine Vorhandensein ist `activatable` (verlangt zusaetzlich eine aktive
+        Persona) — `is_shell` bleibt der Render-Guard (kein Template = nichts
+        zu rendern), `activatable` der Enable-/Copy-Guard.
         """
         return self.persona_id is None or self.system_prompt_template_id is None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def missing(self) -> list[str]:
+        """Was dem Agenten zur Aktivierbarkeit fehlt — in stabiler Reihenfolge.
+
+        Moegliche Eintraege: ``"persona"`` (keine Persona verknuepft),
+        ``"template"`` (kein Template verknuepft), ``"persona_active"`` (Persona
+        verknuepft/fehlend, aber ohne aktive Version). Eine leere Liste heisst
+        aktivierbar.
+        """
+        gaps: list[str] = []
+        if self.persona_id is None:
+            gaps.append("persona")
+        if self.system_prompt_template_id is None:
+            gaps.append("template")
+        if not self.persona_active:
+            gaps.append("persona_active")
+        return gaps
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def activatable(self) -> bool:
+        """True, wenn der Agent aktiviert (enabled) und kopiert werden darf.
+
+        Bedingung: Persona UND Template gesetzt UND die Persona hat eine aktive
+        Version. Spiegelt `not self.missing`.
+        """
+        return not self.missing
 
 
 # Output-Formate des Render-Endpoints. `plain` ist der Default (rohe
