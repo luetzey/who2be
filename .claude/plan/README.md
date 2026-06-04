@@ -13,6 +13,7 @@ Bei Konflikt zwischen Plan-Header und dieser Übersicht **gewinnt die Übersicht
 
 | Datei | Inhalt |
 |---|---|
+| `2026-06-04-1000_ux-fixes-i18n-embedding.md` | Dashboard-Fix + Agent-Create-Flow + Embed-Modi/Resource-Compose (Welle 1, parallel) + i18n UI/Content (Welle 2). Agenten-Prompts enthalten; User startet manuell |
 | `2026-05-27-1935_license-fsl-setup.md` | FSL-1.1-Apache-2.0 als Lizenzmodell + CLA — User-Entscheidungen offen |
 | `2026-05-27-2028_public-switch-github-repo.md` | Repo privat → öffentlich; hängt auf Lizenz + CSP-Pass + Security-TODOs |
 | `2026-05-28-0528_enterprise-license-management.md` | Code-Hooks-only; aktiviert bei erstem qualifizierten Lead |
