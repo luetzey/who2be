@@ -3,30 +3,57 @@
 End-to-End-Smoke der **Cloud-Edition** auf dem privaten PC, mit voller
 Prod-Paritaet (Plan §3.1 / CL1): Mailpit faengt die Verify-Mail, Redis ist
 Rate-Limit-Backend, die API verbindet als nicht-privilegierte Rolle
-`who2be_app` (**RLS aktiv**), `WHO2BE_EDITION=cloud`, Mollie im **Test-Modus**.
+`who2be_app` (**RLS aktiv**), `WHO2BE_EDITION=cloud`.
 
-Reise: **Signup → Verify-Mail (Mailpit) → Login → Upgrade (Mollie-Test) →
-Pro-Entitlement → MCP-Quota bis 429 → RLS-Nachweis**.
+Reise: **Signup → Verify-Mail (Mailpit) → Login → Pro-Entitlement
+(CLI **oder** Mollie-Test) → MCP-Quota bis 429 → Downgrade → RLS-Nachweis**.
 
 > **Wer haakt ab?** Du (User). Alle Browser-Schritte (Mailpit-UI, Web-Login,
-> Mollie-Test-Checkout) laufen auf **deiner Workstation** — der Sandbox-
-> Container kann den Browser-Happy-Path nicht selbst fahren. Plan-Pointer:
+> optionaler Mollie-Test-Checkout) laufen auf **deiner Workstation** — der
+> Sandbox-Container kann den Browser-Happy-Path nicht selbst fahren. Plan-Pointer:
 > `.claude/plan/2026-06-03-2030_cloud-launch-readiness.md` (Track M).
 >
 > Abgrenzung zu `docs/local-smoke.md`: das ist der **dev**-Stack (onprem,
 > autoconfirm, kein Billing). Diese Datei fuegt die Cloud-Schalter dazu.
+
+## Beide Editionen lokal testbar — Run-Modi
+
+Genau ein Image, zwei Run-Modi (12-Factor III). Die Edition wird zur Laufzeit
+ueber das Overlay umgeschaltet, nicht ueber den Build.
+
+| Modus              | Befehl                                                                                                  |
+|--------------------|---------------------------------------------------------------------------------------------------------|
+| **On-Prem** (Default) | `docker compose up -d --build --wait`                                                                |
+| **Cloud** (Overlay)   | `docker compose -f docker-compose.yml -f docker-compose.cloud.yml up -d --build --wait`              |
+
+| Aspekt                  | On-Prem (Default)                | Cloud (Overlay)                              |
+|-------------------------|----------------------------------|----------------------------------------------|
+| `WHO2BE_EDITION`        | `onprem`                         | `cloud`                                      |
+| DB-Rolle der API        | Owner (`postgres`) — RLS-Bypass  | `who2be_app` — **RLS aktiv**                 |
+| MCP-Quota / Rate        | unbegrenzt (`OSS_ENTITLEMENT`)   | **erzwungen** (429 bei Ueberschreiten)       |
+| Billing-UI / Endpoints  | versteckt (404 / Feature-Flag)   | sichtbar (`/v1/billing/...`)                 |
+| Mail (Verify/Invite)    | `GOTRUE_MAILER_AUTOCONFIRM=true` | Mailpit, **Confirm-Pflicht**                 |
+| Downgrade-Enforcement   | n/a                              | greift (Free-Limits, gated Features blockt)  |
+| Rate-Limit-Storage      | in-memory                        | Redis (`redis://redis:6379`)                 |
+| Mollie-Test             | n/a                              | optional (`MOLLIE_API_KEY`), s. §4 Variante B |
+
+Diese Datei beschreibt den **Cloud**-Modus. Fuer einen klassischen Dev-Lauf
+(On-Prem) reicht `docker compose up -d --build --wait` — siehe
+`docs/local-smoke.md`.
 
 ---
 
 ## 0 — Voraussetzungen
 
 - `docker` + `docker compose` (Docker Desktop oder Engine).
-- Browser fuer Web-UI, Mailpit-UI und den Mollie-Test-Checkout.
-- **Mollie-Test-Key** (`test_…`) aus dem Mollie-Dashboard
-  (Developers → API keys) — fuer den Upgrade-Schritt.
-- Optional fuer einen echten Webhook-Pull: ein Tunnel auf die API
-  (`ngrok http 8000` oder `cloudflared tunnel --url http://localhost:8000`).
-- `curl` + `uv` auf dem Host (fuer die MCP-/429-Checks).
+- Browser fuer Web-UI und Mailpit-UI.
+- `curl` + `uv` auf dem Host (fuer die MCP-/429-Checks und das CLI-Tool
+  `who2be-set-entitlement`).
+- **Optional (nur Variante B, §4):** ein **Mollie-Test-Key** (`test_…`) aus dem
+  Mollie-Dashboard (Developers → API keys) **und** ggf. ein Tunnel auf die API
+  (`ngrok http 8000` oder `cloudflared tunnel --url http://localhost:8000`)
+  fuer den echten Webhook-Pull. Ohne Mollie-Key faehrt der Cloud-Stack genauso
+  hoch — Variante A (CLI) deckt die Reise vollstaendig ab.
 
 ## 1 — `.env` vorbereiten
 
@@ -39,12 +66,19 @@ Im `.env` die cloud-local-Sektion entkommentieren/setzen (siehe
 
 ```dotenv
 APP_DB_PASSWORD=who2be_app_local_pw          # frei waehlbar (lokal)
-MOLLIE_API_KEY=test_xxxxxxxxxxxxxxxxxxxxxxxx  # dein Mollie-Test-Key
-# Nur wenn du den Webhook-Pull live testen willst (sonst leer lassen):
+
+# Optional (nur Variante B, §4): Test-Key freigeben, sonst leer lassen.
+# MOLLIE_API_KEY=test_xxxxxxxxxxxxxxxxxxxxxxxx
+# Nur wenn du den Webhook-Pull live testen willst:
 # MOLLIE_WEBHOOK_URL=https://<tunnel-host>/v1/billing/mollie/webhook
 ```
 
 `JWT_SECRET` / `VITE_*` bleiben auf den Defaults (passen zum Compose-Stack).
+
+> `MOLLIE_API_KEY` ist **optional**. Der Cloud-Stack bootet ohne Key; nur die
+> Mollie-Checkout/-Webhook-Pfade sind dann 503 (Variante B). Variante A nutzt
+> stattdessen das Betreiber-CLI `who2be-set-entitlement` und braucht den Key
+> nicht.
 
 ## 2 — Cloud-Stack starten (Overlay)
 
@@ -132,17 +166,72 @@ GitHub analog ueber `GOTRUE_EXTERNAL_GITHUB_*` (gleiche Redirect-URI).
 > entweder den Gateway aktualisieren (`dcc up -d auth-gateway`) oder kurzfristig
 > die `localhost`-Cookies im Browser loeschen.
 
-## 4 — Upgrade: Mollie-Test-Checkout → Pro-Entitlement
+## 4 — Pro-Entitlement setzen
 
 Frisch registrierte Cloud-Orgs starten auf **Free** (`mcp_monthly_quota=1000`,
-`mcp_rate_per_min=30`). Upgrade auf **Pro** (`100_000` / `240`,
-Features Composite/Agents/Audit-Export).
+`mcp_rate_per_min=30`). Auf **Pro** heben (Features
+Composite/Agents/Audit-Export, `100_000` / `240`) geht auf zwei Wegen — die
+beiden Varianten sind aequivalent fuer alle nachgelagerten Schritte (§5–6).
 
-1. **Entitlement vorher** lesen (Free-Defaults bestaetigen). Token aus
-   `/settings/tokens` in der Web-UI erstellen (`w2b_…`), dann:
+### 4.0 — Org-Id ermitteln
+
+Beide Varianten brauchen die `org_id`. Aus der Web-UI per `/v1/me` lesen
+(Token aus `/settings/tokens` oder JWT-Cookie aus dem Browser):
+
+```bash
+export TOK=w2b_<dein-token>
+curl -s http://localhost:8000/v1/me -H "Authorization: Bearer $TOK" \
+  | python3 -m json.tool
+# → "organizations":[{"id":"<ORG_ID>", ...}]
+```
+
+Alternativ direkt in der DB:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.cloud.yml \
+  exec db psql -U postgres -d who2be -c "SELECT id, name FROM organization;"
+```
+
+`<ws-id>` ist die Workspace-Id derselben Org (`organizations[].workspaces[].id`
+aus `/v1/me`).
+
+### 4 — Variante A (Default, OHNE Mollie): CLI
+
+Das Betreiber-CLI `who2be-set-entitlement` schreibt den Pro-Tier direkt in
+`org_entitlement` (`source='manual'`, ohne Webhook). Tier-Defaults
+(Features + Quota/Rate) kommen aus `licensing/plans.py` — Single Source of
+Truth, kein hartkodiertes Mapping im CLI.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.cloud.yml \
+  exec api who2be-set-entitlement <ORG_ID> pro
+# → Org <ORG_ID> → pro (manual)
+#     status:            active
+#     features:          agents, audit_export, composite_playbooks, core
+#     mcp_monthly_quota: 100000
+#     mcp_rate_per_min:  240
+```
+
+> **Nur lokal / Dev / Betreiber.** Das CLI laeuft als Owner (`DATABASE_URL`,
+> RLS-Bypass) und ist bewusst kein HTTP-Endpoint. In Prod fuehrt der
+> Mollie-Webhook das Upsert — manuelle Overrides bleiben Ausnahmen.
+
+Mit Override-Flags fuer §5 (kleine Quota zwingt den 429-Fall in Sekunden,
+statt 1.000 Reads):
+
+```bash
+dcc exec api who2be-set-entitlement <ORG_ID> pro --quota 2 --rate 5
+# Pro-Featureset bleibt; Limits sind auf 2/Monat und 5/min runter.
+```
+
+### 4 — Variante B (OPTIONAL, mit Mollie-Test-Key): Test-Checkout
+
+Nur wenn ein **Mollie-Test-Key** in `.env` gesetzt ist (sonst 503). Belegt
+zusaetzlich den Pull-Adapter inkl. Webhook-Pfad.
+
+1. **Entitlement vorher** lesen (Free-Defaults bestaetigen):
 
    ```bash
-   export TOK=w2b_<dein-token>
    curl -s http://localhost:8000/v1/workspaces/<ws-id>/billing/entitlement \
      -H "Authorization: Bearer $TOK" | python3 -m json.tool
    # → "status":"active", mcp_monthly_quota:1000, mcp_rate_per_min:30
@@ -175,16 +264,16 @@ Features Composite/Agents/Audit-Export).
        -d "id=<payment-id-aus-checkout-url>"
      ```
 
-5. **Entitlement nachher** erneut lesen:
+### Entitlement-Check (beide Varianten)
 
-   ```bash
-   curl -s http://localhost:8000/v1/workspaces/<ws-id>/billing/entitlement \
-     -H "Authorization: Bearer $TOK" | python3 -m json.tool
-   # → mcp_monthly_quota:100000, mcp_rate_per_min:240,
-   #   features enthaelt composite_playbooks/agents/audit_export
-   ```
+```bash
+curl -s http://localhost:8000/v1/workspaces/<ws-id>/billing/entitlement \
+  -H "Authorization: Bearer $TOK" | python3 -m json.tool
+# → mcp_monthly_quota:100000, mcp_rate_per_min:240,
+#   features enthaelt composite_playbooks/agents/audit_export
+```
 
-   - [ ] Quota + Features sind auf Pro angehoben.
+- [ ] Quota + Features sind auf Pro angehoben.
 
 ## 5 — MCP-Quota bis 429
 
@@ -193,30 +282,66 @@ API-Token-Aufrufer (der MCP-Server) — Web-/JWT-Reads passieren ungehindert.
 Zwei Schranken: **Per-Token-Rate/min** (schnell zu treffen) und das
 **Monats-Kontingent** (beide → **429**); ein `inactive` Entitlement → 402.
 
-Am schnellsten ueber die **Per-Minute-Rate** sichtbar. Auf **Free** (30/min)
-ein MCP-Read im Loop hammern:
+Am schnellsten in Sekunden via CLI-Override aus §4 Variante A: kurz vor
+diesem Schritt die Quota auf 2 druecken (`--quota 2 --rate 5`), dann ein
+paar MCP-Reads im Loop:
 
 ```bash
 export WHO2BE_API_BASE_URL=http://localhost:8000
 export WHO2BE_API_TOKEN=w2b_<dein-token>
-for i in $(seq 1 40); do
+for i in $(seq 1 10); do
   curl -s -o /dev/null -w "%{http_code}\n" \
     http://localhost:8000/v1/workspaces/<ws-id>/personas \
     -H "Authorization: Bearer $WHO2BE_API_TOKEN"
 done | sort | uniq -c
-# → erst 200er, ab Ueberschreiten des Token-Rate-Ceilings 429er
+# → erst 200er, ab Quota-/Rate-Ceiling 429er
 ```
 
-- [ ] Es erscheinen `429`-Antworten (`detail":"Token-Ratenlimit ueberschritten."`).
-- [ ] Optional Monats-Kontingent: auf Free 1000 Reads/Monat — danach
-      `detail":"Monatliches MCP-Kontingent erschoepft."` (ebenfalls 429).
+- [ ] Es erscheinen `429`-Antworten (`detail":"Monatliches MCP-Kontingent
+      erschoepft."` bzw. `…Token-Ratenlimit ueberschritten."`).
+- [ ] Ohne Override gilt der Pro-Default (100k/240) — der 429-Fall ist dann
+      via Per-Minute-Rate schneller zu treffen als ueber das Monats-Kontingent.
 
 > Der echte MCP-Pfad laeuft identisch — `uv run python -m who2be_mcp.server`
 > mit denselben Env-Vars, Tools `get_persona` / `list_playbooks` /
 > `fetch_playbook` (siehe `docs/local-smoke.md` §4). Das Gate sitzt
 > server-seitig in der API, nicht im MCP-Prozess.
 
-## 6 — RLS-Nachweis (App laeuft als `who2be_app`)
+## 6 — Downgrade-Enforcement
+
+Belegt: der Fall „Kuendigung / Fehlzahlung" senkt das Entitlement zurueck auf
+Free (gated Features sind weg, Free-Limits gelten). Zwei Wege, beide
+aequivalent zur Wirkung des Mollie-Webhooks:
+
+```bash
+# Variante 1 — explizit auf Free zurueck (Featureset = core).
+dcc exec api who2be-set-entitlement <ORG_ID> free
+
+# Variante 2 — Entitlement-Zeile loeschen ⇒ Cloud-Adapter faellt
+# auf `CLOUD_FREE_ENTITLEMENT` zurueck (gleicher Default wie eine
+# frische Org).
+dcc exec db psql -U postgres -d who2be \
+  -c "DELETE FROM org_entitlement WHERE org_id = '<ORG_ID>';"
+```
+
+Pruefen:
+
+```bash
+curl -s http://localhost:8000/v1/workspaces/<ws-id>/billing/entitlement \
+  -H "Authorization: Bearer $TOK" | python3 -m json.tool
+# → mcp_monthly_quota:1000, mcp_rate_per_min:30, features:["core"]
+
+# Gated Endpoint (Pro-Feature) ist jetzt blockiert (402):
+curl -s -o /dev/null -w "%{http_code}\n" \
+  http://localhost:8000/v1/workspaces/<ws-id>/agents \
+  -H "Authorization: Bearer $TOK"
+# → 402
+```
+
+- [ ] `features` ist auf `["core"]` reduziert.
+- [ ] Pro-gated Endpoint liefert `402 Payment Required`.
+
+## 7 — RLS-Nachweis (App laeuft als `who2be_app`)
 
 Beleg, dass die API zur Laufzeit als nicht-privilegierte Rolle mit aktiver
 Row-Level-Security verbindet (nicht als Owner `postgres`):
@@ -243,17 +368,18 @@ umgehen). Ein zweiter User/Org sieht die Personas aus Schritt 4 **nicht**.
 - [ ] `who2be_app`: `rolsuper=f`, `rolbypassrls=f`.
 - [ ] RLS auf den App-Tabellen aktiv; Reads bleiben workspace-isoliert.
 
-## 7 — Abnahme
+## 8 — Abnahme
 
 | Schritt                          | Abgehakt am | Beleg |
 |----------------------------------|-------------|-------|
 | 2 — Cloud-Stack healthy          |             |       |
 | 3 — Signup + Verify (Mailpit)    |             |       |
-| 4 — Upgrade → Pro-Entitlement    |             |       |
+| 4 — Pro-Entitlement (Variante A oder B) |      |       |
 | 5 — MCP-Quota 429                 |             |       |
-| 6 — RLS aktiv (`who2be_app`)     |             |       |
+| 6 — Downgrade-Enforcement (402)  |             |       |
+| 7 — RLS aktiv (`who2be_app`)     |             |       |
 
-## 8 — Teardown
+## 9 — Teardown
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.cloud.yml down -v
@@ -284,16 +410,27 @@ wird beim naechsten Hochfahren erneut gesetzt).
   Mailpit den Confirm-Link klicken. (Im dev-Stack waere autoconfirm an — hier
   bewusst nicht.)
 
-- **Checkout liefert 503** → `MOLLIE_API_KEY` fehlt/leer. Test-Key in `.env`
-  setzen und `dcc up -d api` neu ausrollen.
+- **`who2be-set-entitlement: command not found`** → das Console-Script wird
+  beim Image-Build registriert (`apps/api/pyproject.toml`). Nach Code-Aenderungen
+  `dcc up -d --build api` neu bauen; das CLI ist nur im `api`-Container.
 
-- **Mollie ruft den Webhook nicht** → localhost ist fuer Mollie nicht
-  erreichbar. Entweder Tunnel + `MOLLIE_WEBHOOK_URL` setzen, oder den Webhook-
-  Ping nach „paid" manuell nachstellen (Schritt 4.4).
+- **`Unbekannter Plan-Code …`** → erlaubt sind ausschliesslich `free` und `pro`
+  (Tier-Defs aus `licensing/plans.py`). Weitere Tiers werden bewusst hier nicht
+  gespiegelt — die docs/licensing/plans.md bleibt Single Source of Truth.
+
+- **Checkout liefert 503** (nur Variante B) → `MOLLIE_API_KEY` fehlt/leer.
+  Test-Key in `.env` setzen und `dcc up -d api` neu ausrollen. Oder einfach
+  Variante A (CLI) nutzen — sie kommt ohne Mollie aus.
+
+- **Mollie ruft den Webhook nicht** (nur Variante B) → localhost ist fuer
+  Mollie nicht erreichbar. Entweder Tunnel + `MOLLIE_WEBHOOK_URL` setzen, oder
+  den Webhook-Ping nach „paid" manuell nachstellen (Schritt 4 Variante B.4).
 
 - **Keine `429` im 429-Check** → Edition pruefen (`dcc exec api printenv
   WHO2BE_EDITION` muss `cloud` sein) und dass ein **API-Token** (`w2b_…`),
   nicht ein Web-JWT, genutzt wird — nur Token-Reads unterliegen dem Gate.
+  Mit `dcc exec api who2be-set-entitlement <ORG_ID> pro --quota 2 --rate 5`
+  laesst sich der Fall in wenigen Reads erzwingen.
 
 - **`400 Request Header Or Cookie Too Large` (nginx) beim Google/GitHub-Accept**
   → auth-gateway-Header-Puffer. Mit aktuellem `supabase/gateway.conf` behoben;
@@ -304,6 +441,7 @@ wird beim naechsten Hochfahren erneut gesetzt).
   Provider ist in GoTrue aus. `GOTRUE_EXTERNAL_GOOGLE_ENABLED=true` (+ CLIENT_ID/
   SECRET) in `.env` setzen und `dcc up -d auth` (Schritt 3b).
 
-- **Browser-Schritte:** Mailpit-UI, Web-Login und der Mollie-Test-Checkout
-  laufen auf deiner **Workstation** (nicht im Sandbox-Container). Ports 5173 /
-  8025 / 8000 / 9999 muessen vom Host erreichbar sein (Compose mappt sie).
+- **Browser-Schritte:** Mailpit-UI, Web-Login und der optionale
+  Mollie-Test-Checkout laufen auf deiner **Workstation** (nicht im Sandbox-
+  Container). Ports 5173 / 8025 / 8000 / 9999 muessen vom Host erreichbar sein
+  (Compose mappt sie).
