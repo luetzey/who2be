@@ -70,6 +70,10 @@ class ResourceService:
             ctx.workspace_id, ctx.user_id, data.name, data.content, data.locales
         )
 
+    async def list_tags(self, ctx: WorkspaceContext, locale: str = DEFAULT_LOCALE) -> list[str]:
+        """DISTINCT-Tags des Workspaces — Datenquelle fuer den Resource-Tag-Picker."""
+        return await self._repo.list_distinct_tags(ctx.workspace_id, locale)
+
     async def list_all(
         self,
         ctx: WorkspaceContext,

@@ -79,6 +79,16 @@ async def create_resource(
     return await service.create(ctx, data)
 
 
+@router.get("/tags")
+async def list_resource_tags(ctx: Ctx, service: Service, locale: LocaleQuery) -> list[str]:
+    """Track E3: DISTINCT-Tags des Workspaces fuer den Tag-Picker im Resource-Form.
+
+    Bewusst VOR `/{resource_id}` deklariert, sonst faengt der Pfad-Parameter
+    `tags` als resource_id ab (Route-Shadowing).
+    """
+    return await service.list_tags(ctx, locale)
+
+
 @router.get("/{resource_id}", dependencies=[Depends(enforce_mcp_read_limit)])
 async def get_resource(
     resource_id: UUID, ctx: Ctx, service: Service, locale: LocaleQuery
