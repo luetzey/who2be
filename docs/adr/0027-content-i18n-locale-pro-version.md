@@ -1,6 +1,6 @@
 # ADR-0027 — Content-i18n: locale pro Version
 
-- Status: **Vorschlag (Review-Stop)** — wartet auf User-Freigabe vor der Migration
+- Status: **Akzeptiert** (User-Freigabe 2026-06-04)
 - Datum: 2026-06-04
 - Kontext: Who2Be Welle 2, Stream D2 (i18n Content). Plan
   `.claude/plan/2026-06-04-1000_ux-fixes-i18n-embedding.md` (§D2) +
@@ -76,9 +76,13 @@ und `system_prompt_template_version`:
 
 ```sql
 ALTER TABLE persona_version
-    ADD COLUMN locale text NOT NULL DEFAULT 'de'
-        CHECK (locale IN ('de', 'en'));
+    ADD COLUMN locale text NOT NULL DEFAULT 'de';
 ```
+
+**Kein** CHECK-Constraint (User-Entscheidung 2026-06-04): das Sprach-Set bleibt
+DB-seitig offen, damit weitere Sprachen ohne Migration moeglich sind. Die
+Anwendungs-Schicht (Pydantic) normalisiert/validiert das Kuerzel
+(lowercase, kurze Laenge) — heute bietet die UI nur `de`/`en` an.
 
 `NOT NULL DEFAULT 'de'` fuellt **bestehende Rows automatisch** mit `'de'` —
 kein separater Backfill noetig ("Bestandsdaten = implizit de").
@@ -197,12 +201,11 @@ an die API durchgereicht; die Tools filtern weiterhin server-seitig auf
 - **status_history ohne locale:** Status-Audit ist entity-weit; pro-locale-
   Audit kann spaeter additiv nachgezogen werden.
 
-## Review-Stop
+## Freigabe (User-Entscheidungen 2026-06-04)
 
-Diese ADR ist bewusst ein **Vorschlag**. Vor der DB-Migration (0042+) und der
-Code-Umsetzung wird die User-Freigabe eingeholt — insbesondere zu:
-1. Option B (locale pro Version) vs. A (Identitaets-Zeile pro Sprache).
-2. Versions-Track **pro Sprache** (Variante B) vs. globaler Zaehler (C).
-3. Init-Verhalten: zusaetzliche Sprache startet als **Copy** der Vorlage
-   (Uebersetzungs-Startpunkt) vs. leerer Draft.
-4. Sprach-Set fix `{de, en}` (CHECK) — spaetere Sprachen = neue Migration.
+Der Review-Stop aus SCHRITT 0 ist abgeschlossen. Entschieden:
+1. **Option B** — locale pro Version (nicht A).
+2. **Versions-Track pro Sprache** (Variante B, nicht globaler Zaehler C).
+3. **Init = Copy** der Vorlage als Uebersetzungs-Startpunkt (nicht leerer Draft).
+4. **Offenes Sprach-Set, KEIN CHECK** — DB-seitig frei; Validierung in der
+   Anwendungs-Schicht. Weitere Sprachen brauchen keine Migration.

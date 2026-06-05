@@ -18,6 +18,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
+from who2be_models.locale import DEFAULT_LOCALE, ContentLocale
 from who2be_models.status import VersionStatus
 
 # Slug-Form fuer Default-Templates und idempotenten Seed (Migration 0023b).
@@ -76,6 +77,10 @@ class SystemPromptTemplateRead(BaseModel):
     current_version: int
     current_status: VersionStatus = VersionStatus.inactive
     has_pending_draft: bool = False
+    # Content-i18n (ADR-0027): Sprachvariante dieser Antwort. Templates sind
+    # heute einsprachig ('de'); das Feld haelt das Read-Modell konsistent mit
+    # den uebrigen Aggregaten und deckt den Migration-Default.
+    locale: ContentLocale = DEFAULT_LOCALE
     content: SystemPromptTemplateContent
     created_at: datetime
     updated_at: datetime
@@ -88,6 +93,7 @@ class SystemPromptTemplateVersionRead(BaseModel):
 
     version: int
     status: VersionStatus = VersionStatus.inactive
+    locale: ContentLocale = DEFAULT_LOCALE
     content: SystemPromptTemplateContent
     created_by: UUID
     created_at: datetime

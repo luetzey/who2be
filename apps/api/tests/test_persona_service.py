@@ -55,6 +55,7 @@ class FakePersonaRepository:
         owner_id: UUID,
         name: str,
         content: PersonaVersionContent,
+        locales: list[str] | None = None,
     ) -> PersonaRead:
         now = datetime.now(UTC)
         persona = PersonaRead(
@@ -79,6 +80,7 @@ class FakePersonaRepository:
         limit: int,
         after: tuple[datetime, UUID] | None,
         active_only: bool = False,
+        locale: str = "de",
     ) -> list[PersonaRead]:
         self.last_active_only = active_only
         own = sorted(
@@ -93,7 +95,7 @@ class FakePersonaRepository:
         return own[:limit]
 
     async def fetch(
-        self, workspace_id: UUID, persona_id: UUID, active_only: bool = False
+        self, workspace_id: UUID, persona_id: UUID, active_only: bool = False, locale: str = "de"
     ) -> PersonaRead | None:
         self.last_active_only = active_only
         persona = self._personas.get(persona_id)
@@ -110,6 +112,7 @@ class FakePersonaRepository:
         persona_id: UUID,
         name: str | None,
         content: PersonaVersionContent,
+        locale: str = "de",
     ) -> PersonaUpdateOutcome:
         persona = self._personas.get(persona_id)
         if persona is None or persona.workspace_id != workspace_id:
@@ -149,6 +152,7 @@ class FakePersonaRepository:
         owner_id: UUID,
         persona_id: UUID,
         content: PersonaVersionContent,
+        locale: str = "de",
     ) -> PersonaUpdateOutcome:
         persona = self._personas.get(persona_id)
         if persona is None or persona.workspace_id != workspace_id:
@@ -184,6 +188,7 @@ class FakePersonaRepository:
         persona_id: UUID,
         name: str | None,
         content: PersonaVersionContent,
+        locale: str = "de",
     ) -> PersonaUpdateOutcome:
         persona = self._personas.get(persona_id)
         if persona is None or persona.workspace_id != workspace_id:
@@ -254,7 +259,7 @@ class FakePersonaRepository:
         )
 
     async def list_versions(
-        self, workspace_id: UUID, persona_id: UUID
+        self, workspace_id: UUID, persona_id: UUID, locale: str = "de"
     ) -> list[PersonaVersionRead] | None:
         persona = self._personas.get(persona_id)
         if persona is None or persona.workspace_id != workspace_id:
@@ -262,14 +267,14 @@ class FakePersonaRepository:
         return list(reversed(self._versions[persona_id]))
 
     async def fetch_version(
-        self, workspace_id: UUID, persona_id: UUID, version: int
+        self, workspace_id: UUID, persona_id: UUID, version: int, locale: str = "de"
     ) -> PersonaVersionRead | None:
         persona = self._personas.get(persona_id)
         if persona is None or persona.workspace_id != workspace_id:
             return None
         return next((v for v in self._versions[persona_id] if v.version == version), None)
 
-    async def list_distinct_tags(self, workspace_id: UUID) -> list[str]:
+    async def list_distinct_tags(self, workspace_id: UUID, locale: str = "de") -> list[str]:
         tags: set[str] = set()
         for persona in self._personas.values():
             if persona.workspace_id == workspace_id:

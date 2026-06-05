@@ -10,8 +10,9 @@ from enum import StrEnum
 from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
+from who2be_models.locale import DEFAULT_LOCALE, ContentLocale, normalize_locale
 from who2be_models.status import VersionStatus
 
 # Eingabe-Limits — DoS-Schutz fuer in jsonb persistierte und unveraendert
@@ -71,6 +72,23 @@ class PlaybookCreate(BaseModel):
 
     name: str = Field(min_length=1, max_length=200)
     content: PlaybookContent = Field(default_factory=PlaybookContent)
+    # Content-i18n (ADR-0027): Sprachvarianten beim Anlegen. Default `['de']`
+    # = Backward-Compat; jede Sprache startet als eigene Draft-v1 (Copy).
+    locales: list[ContentLocale] = Field(default_factory=lambda: [DEFAULT_LOCALE])
+
+    @field_validator("locales")
+    @classmethod
+    def _dedup_non_empty(cls, value: list[str]) -> list[str]:
+        if not value:
+            raise ValueError("Mindestens eine Sprache ist erforderlich.")
+        seen: set[str] = set()
+        ordered: list[str] = []
+        for loc in value:
+            norm = normalize_locale(loc)
+            if norm not in seen:
+                seen.add(norm)
+                ordered.append(norm)
+        return ordered
 
 
 class PlaybookUpdate(BaseModel):
@@ -94,6 +112,7 @@ class PlaybookRead(BaseModel):
     current_version: int
     current_status: VersionStatus = VersionStatus.inactive
     has_pending_draft: bool = False
+    locale: ContentLocale = DEFAULT_LOCALE
     type: str
     tags: list[str]
     triggers: str | None
@@ -112,6 +131,7 @@ class PlaybookVersionRead(BaseModel):
 
     version: int
     status: VersionStatus = VersionStatus.inactive
+    locale: ContentLocale = DEFAULT_LOCALE
     content: PlaybookContent
     created_by: UUID
     created_at: datetime

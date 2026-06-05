@@ -7,6 +7,7 @@ import asyncpg
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 
 from who2be_api.core.db import get_pool
+from who2be_api.core.locale import LocaleQuery
 from who2be_api.core.pagination import DEFAULT_LIMIT, PageCursor, PageLimit
 from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
@@ -56,10 +57,11 @@ async def list_resources(
     service: Service,
     response: Response,
     cursor: PageCursor,
+    locale: LocaleQuery,
     tag: Annotated[str | None, Query(max_length=100)] = None,
     limit: PageLimit = DEFAULT_LIMIT,
 ) -> list[ResourceRead]:
-    items, next_cursor = await service.list_all(ctx, tag, limit, cursor)
+    items, next_cursor = await service.list_all(ctx, tag, limit, cursor, locale=locale)
     if next_cursor is not None:
         response.headers["X-Next-Cursor"] = next_cursor
     return items
@@ -78,8 +80,10 @@ async def create_resource(
 
 
 @router.get("/{resource_id}", dependencies=[Depends(enforce_mcp_read_limit)])
-async def get_resource(resource_id: UUID, ctx: Ctx, service: Service) -> ResourceRead:
-    return await service.get(ctx, resource_id)
+async def get_resource(
+    resource_id: UUID, ctx: Ctx, service: Service, locale: LocaleQuery
+) -> ResourceRead:
+    return await service.get(ctx, resource_id, locale=locale)
 
 
 @router.put("/{resource_id}")
@@ -90,8 +94,9 @@ async def update_resource(
     data: ResourceUpdate,
     ctx: Ctx,
     service: Service,
+    locale: LocaleQuery,
 ) -> ResourceRead:
-    return await service.update(ctx, resource_id, data)
+    return await service.update(ctx, resource_id, data, locale=locale)
 
 
 @router.patch("/{resource_id}/draft")
@@ -102,23 +107,24 @@ async def update_resource_draft(
     data: ResourceUpdate,
     ctx: Ctx,
     service: Service,
+    locale: LocaleQuery,
 ) -> ResourceRead:
     """Auto-Save-Pfad — upsertet die Draft-Version ohne Versions-Increment."""
-    return await service.update_draft(ctx, resource_id, data)
+    return await service.update_draft(ctx, resource_id, data, locale=locale)
 
 
 @router.get("/{resource_id}/versions")
 async def list_resource_versions(
-    resource_id: UUID, ctx: Ctx, service: Service
+    resource_id: UUID, ctx: Ctx, service: Service, locale: LocaleQuery
 ) -> list[ResourceVersionRead]:
-    return await service.list_versions(ctx, resource_id)
+    return await service.list_versions(ctx, resource_id, locale)
 
 
 @router.get("/{resource_id}/versions/{version}")
 async def get_resource_version(
-    resource_id: UUID, version: int, ctx: Ctx, service: Service
+    resource_id: UUID, version: int, ctx: Ctx, service: Service, locale: LocaleQuery
 ) -> ResourceVersionRead:
-    return await service.get_version(ctx, resource_id, version)
+    return await service.get_version(ctx, resource_id, version, locale)
 
 
 @router.post("/{resource_id}/versions/{version}/transition")
@@ -130,9 +136,10 @@ async def transition_resource_version(
     data: VersionTransitionRequest,
     ctx: Ctx,
     status_service: StatusService,
+    locale: LocaleQuery,
 ) -> ResourceVersionRead:
     return await status_service.transition_resource_version(
-        ctx, resource_id, version, data.to, data.note
+        ctx, resource_id, version, data.to, data.note, locale=locale
     )
 
 
@@ -144,9 +151,10 @@ async def restore_resource_version(
     version: int,
     ctx: Ctx,
     service: Service,
+    locale: LocaleQuery,
 ) -> ResourceRead:
     """Stellt Version `version` als neue Draft wieder her (non-destruktiv)."""
-    return await service.restore(ctx, resource_id, version)
+    return await service.restore(ctx, resource_id, version, locale=locale)
 
 
 @router.get("/{resource_id}/versions/{version}/diff")
@@ -155,10 +163,11 @@ async def diff_resource_version(
     version: int,
     ctx: Ctx,
     service: Service,
+    locale: LocaleQuery,
     against: DiffAgainst = "active",
 ) -> VersionDiff:
     """Strukturierter Feld-/Block-Diff der Version gegen `against` (read-only)."""
-    return await service.diff(ctx, resource_id, version, against)
+    return await service.diff(ctx, resource_id, version, against, locale=locale)
 
 
 @router.get("/{resource_id}/versions/{version}/provenance")

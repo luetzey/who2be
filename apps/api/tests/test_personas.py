@@ -155,6 +155,81 @@ def test_persona_crud_versioning_and_isolation(
 
 
 @pytest.mark.integration
+def test_persona_locale_de_en_variants(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Content-i18n (ADR-0027): Anlegen in DE+EN, Lesen per ?locale=.
+
+    Belegt: ein POST mit `locales=['de','en']` legt pro Sprache eine eigene
+    Draft-v1 an; `?locale=` liefert die richtige Variante; pro Sprache laeuft
+    ein eigener Versions-Track (DE-Edit beruehrt EN nicht); Default ohne
+    `?locale=` ist `de` (Backward-Compat).
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    base = f"/v1/workspaces/{ws}/personas"
+
+    try:
+        with TestClient(app) as client:
+            body = _persona_body("hallo")
+            body["locales"] = ["de", "en"]
+            created = client.post(base, json=body, headers=auth)
+            assert created.status_code == 201, created.text
+            persona_id = created.json()["id"]
+            # Die Antwort spiegelt die erste gewaehlte Sprache.
+            assert created.json()["locale"] == "de"
+
+            # Default (kein ?locale=) liefert die DE-Variante.
+            default = client.get(f"{base}/{persona_id}", headers=auth).json()
+            assert default["locale"] == "de"
+
+            # Beide Sprachvarianten existieren als eigene v1.
+            de = client.get(f"{base}/{persona_id}?locale=de", headers=auth).json()
+            en = client.get(f"{base}/{persona_id}?locale=en", headers=auth).json()
+            assert de["locale"] == "de"
+            assert en["locale"] == "en"
+            assert de["current_version"] == 1
+            assert en["current_version"] == 1
+
+            # Versions-Listen sind pro Sprache getrennt — je genau eine v1.
+            de_versions = client.get(
+                f"{base}/{persona_id}/versions?locale=de", headers=auth
+            ).json()
+            en_versions = client.get(
+                f"{base}/{persona_id}/versions?locale=en", headers=auth
+            ).json()
+            assert [v["version"] for v in de_versions] == [1]
+            assert [v["version"] for v in en_versions] == [1]
+
+            # DE auf active promoten, dann editieren → DE bekommt v2 (Draft).
+            for to in ("review", "active"):
+                client.post(
+                    f"{base}/{persona_id}/versions/1/transition?locale=de",
+                    json={"to": to},
+                    headers=auth,
+                )
+            de_v2 = client.put(
+                f"{base}/{persona_id}?locale=de",
+                json=_persona_body("hallo v2"),
+                headers=auth,
+            )
+            assert de_v2.status_code == 200, de_v2.text
+            assert de_v2.json()["current_version"] == 2
+
+            # EN-Track ist unberuehrt: weiterhin v1.
+            en_after = client.get(f"{base}/{persona_id}?locale=en", headers=auth).json()
+            assert en_after["current_version"] == 1
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
 def test_persona_pagination_via_cursor_and_limit_validation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

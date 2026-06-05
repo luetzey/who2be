@@ -156,8 +156,12 @@ def ping() -> str:
 
 @mcp.tool
 @with_tool_log("get_persona")
-async def get_persona(identifier: str) -> PersonaWithPlaybooks:
+async def get_persona(identifier: str, locale: str = "de") -> PersonaWithPlaybooks:
     """Laedt eine Persona (per UUID oder Name) samt verknuepfter Playbooks.
+
+    `locale` waehlt die Sprachvariante des Inhalts (Default `'de'`); es werden
+    weiterhin nur aktive Versionen geliefert. Liegt fuer die Persona keine
+    Variante in `locale` vor, antwortet die API mit 404.
 
     `persona.content.modes` enthaelt ggf. die Modi einer Multi-Modus-Persona
     (Gap 3.4). Jeder Modus traegt `name`, `trigger` (Erkennungs-Keywords),
@@ -174,18 +178,24 @@ async def get_persona(identifier: str) -> PersonaWithPlaybooks:
     nicht im `body_rendered`.
     """
     client = await build_client()
-    persona = await client.get_persona(identifier)
-    playbooks = await client.get_persona_playbooks(persona.id)
-    body_rendered = await client.get_persona_rendered(persona.id)
+    persona = await client.get_persona(identifier, locale)
+    playbooks = await client.get_persona_playbooks(persona.id, locale)
+    body_rendered = await client.get_persona_rendered(persona.id, locale)
     return PersonaWithPlaybooks(persona=persona, playbooks=playbooks, body_rendered=body_rendered)
 
 
 @mcp.tool
 @with_tool_log("list_playbooks")
-async def list_playbooks(tag: str | None = None, trigger: str | None = None) -> list[PlaybookRead]:
-    """Listet Playbooks, optional gefiltert nach Tag und/oder Trigger."""
+async def list_playbooks(
+    tag: str | None = None, trigger: str | None = None, locale: str = "de"
+) -> list[PlaybookRead]:
+    """Listet Playbooks, optional gefiltert nach Tag und/oder Trigger.
+
+    `locale` waehlt die Sprachvariante des Inhalts (Default `'de'`); es werden
+    weiterhin nur aktive Versionen geliefert.
+    """
     client = await build_client()
-    return await client.list_playbooks(tag, trigger)
+    return await client.list_playbooks(tag, trigger, locale)
 
 
 @mcp.tool
@@ -204,8 +214,12 @@ async def list_triggers() -> list[TriggerOverview]:
 
 @mcp.tool
 @with_tool_log("fetch_playbook")
-async def fetch_playbook(playbook_id: str) -> PlaybookWithResources:
+async def fetch_playbook(playbook_id: str, locale: str = "de") -> PlaybookWithResources:
     """Laedt ein Playbook per UUID samt seiner Resource-Verweise und Sub-Playbooks.
+
+    `locale` waehlt die Sprachvariante von Playbook, Sub-Playbooks und inline
+    mitgelieferten Resources (Default `'de'`); es werden weiterhin nur aktive
+    Versionen geliefert.
 
     `linked_blocks` enthaelt alle Verweise als Pointer (resource_id +
     block_id, Verfuegbarkeit, Section-Preview) — kein Auto-Inline fuer
@@ -228,7 +242,7 @@ async def fetch_playbook(playbook_id: str) -> PlaybookWithResources:
     except ValueError as exc:
         raise ToolError(f"Ungueltige Playbook-UUID: '{playbook_id}'.") from exc
     client = await build_client()
-    playbook = await client.get_playbook(parsed)
+    playbook = await client.get_playbook(parsed, locale)
     linked = await client.get_playbook_resource_links(parsed)
     # Nur 'resource'-scope-Links mit embedding_mode='inline' ziehen das
     # Volldokument mit; 'lazy'-Links bleiben reine Pointer in `linked_blocks`
@@ -243,9 +257,9 @@ async def fetch_playbook(playbook_id: str) -> PlaybookWithResources:
         ):
             seen.add(link.resource_id)
             inline_resource_ids.append(link.resource_id)
-    resources = [await client.get_resource(rid) for rid in inline_resource_ids]
-    composed = await client.get_playbook_composes(parsed)
-    body_rendered = await client.get_playbook_rendered(parsed)
+    resources = [await client.get_resource(rid, locale) for rid in inline_resource_ids]
+    composed = await client.get_playbook_composes(parsed, locale)
+    body_rendered = await client.get_playbook_rendered(parsed, locale)
     return PlaybookWithResources(
         playbook=playbook,
         linked_blocks=linked,
@@ -257,15 +271,15 @@ async def fetch_playbook(playbook_id: str) -> PlaybookWithResources:
 
 @mcp.tool
 @with_tool_log("list_resources")
-async def list_resources(tag: str | None = None) -> list[ResourceSummary]:
+async def list_resources(tag: str | None = None, locale: str = "de") -> list[ResourceSummary]:
     """Listet die aktiven Resources des Workspaces, optional nach Tag gefiltert.
 
     `tag` filtert auf Resources, deren `content.tags` diesen Wert enthalten
     (exakter Treffer, case-sensitiv). Ohne `tag` werden alle aktiven Resources
-    zurueckgegeben.
+    zurueckgegeben. `locale` waehlt die Sprachvariante (Default `'de'`).
     """
     client = await build_client()
-    resources = await client.list_resources(tag)
+    resources = await client.list_resources(tag, locale)
     return [
         ResourceSummary(
             id=r.id,
@@ -296,8 +310,13 @@ async def fetch_agent(agent_id: str) -> AgentWithRenderedPrompt:
 
 @mcp.tool
 @with_tool_log("fetch_resource")
-async def fetch_resource(resource_id: str, block_ids: list[str] | None = None) -> ResourceRead:
+async def fetch_resource(
+    resource_id: str, block_ids: list[str] | None = None, locale: str = "de"
+) -> ResourceRead:
     """Laedt die aktive Version einer Resource (per UUID).
+
+    `locale` waehlt die Sprachvariante der Resource und ihrer inline
+    mitgelieferten Sub-Resources (Default `'de'`).
 
     Liefert den **eigenen** Body inline plus `sub_resources`: eine Tabelle der
     **direkten** Sub-Resources (je Eintrag: `id`, `name`, `link_scope`,
@@ -320,7 +339,7 @@ async def fetch_resource(resource_id: str, block_ids: list[str] | None = None) -
     except ValueError as exc:
         raise ToolError(f"Ungueltige Resource-UUID: '{resource_id}'.") from exc
     client = await build_client()
-    resource = await client.get_resource(parsed)
+    resource = await client.get_resource(parsed, locale)
     if block_ids is not None:
         by_id = {block.id: block for block in resource.content.blocks}
         resource.content.blocks = [by_id[bid] for bid in block_ids if bid in by_id]
@@ -339,7 +358,9 @@ async def fetch_resource(resource_id: str, block_ids: list[str] | None = None) -
         ):
             seen.add(sub.id)
             inline_ids.append(sub.id)
-    resource.inline_sub_resources = [await client.get_resource(cid) for cid in inline_ids]
+    resource.inline_sub_resources = [
+        await client.get_resource(cid, locale) for cid in inline_ids
+    ]
     return resource
 
 
