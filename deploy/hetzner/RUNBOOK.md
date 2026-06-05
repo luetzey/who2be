@@ -9,6 +9,8 @@ Aktive Sektionen:
 
 - [CVE-Response](#cve-response) — was tun, wenn der CI-`audit`-Job rot wird
 - [Secret-Rotation](#secret-rotation) — pro Secret: Trigger / Schritte / Verifikation
+- [Verschluesselung at-Rest](#verschluesselung-at-rest-postgres-volume) — LUKS/verschl. Hetzner-Volume + Verifikation (Befund P4/S2)
+- [Standort & Auftragsverarbeiter](#standort--auftragsverarbeiter) — RZ-Standort + Sub-Processor-Liste (DSGVO/AVV)
 - [Backup & Restore](#backup--restore) — verschluesselter pg_dump + restic-Offsite (C5a/C5b)
 - [Akzeptierte Vulnerabilities](#akzeptierte-vulnerabilities) — bewusste Risikoabnahmen
 
@@ -251,6 +253,132 @@ gpg --decrypt /tmp/latest.sql.gpg | head -5   # erwartet: '-- PostgreSQL databas
 ```
 
 **Side-Effects:** alte `*.sql.gpg`-Dateien bleiben mit dem alten Key entschluesselbar — der Schluessel muss also weiter erreichbar bleiben, bis die letzte alte Backup-Generation aus dem Retention-Fenster faellt.
+
+---
+
+## Verschluesselung at-Rest (Postgres-Volume)
+
+> ⚠️ **Disclaimer:** Engineering-/Betriebs-Checkliste, **keine** Rechts- oder
+> Zertifizierungsberatung. Adressiert die Audit-Befunde **P4** (Encryption-at-Rest
+> nicht belegt) und **S2** (At-Rest-Verschluesselung Live-DB nicht nachweisbar)
+> aus `.claude/plan/2026-06-05-1311_compliance-de-saas-remediation.md`. Die
+> tatsaechlich umgesetzte Variante ist vom Betreiber je nach Hetzner-Produkt zu
+> waehlen und unten zu protokollieren.
+
+Die Live-Datenbank liegt im Docker-Volume `db-data` (siehe `docker-compose.yml`
+bzw. den self-hosted-Supabase-Stack). „At-Rest" heisst: die Bytes auf dem
+Block-Device, auf dem dieses Volume liegt, sind im Ruhezustand verschluesselt —
+ein gestohlenes/aussortiertes Laufwerk gibt ohne Schluessel keine Klartextdaten
+preis. Anwendungs-/Transport-Verschluesselung (TLS via Caddy) und Backup-
+Verschluesselung (GPG + restic, siehe unten) sind **separat** und ersetzen das
+nicht.
+
+Es gibt zwei betrieblich uebliche Wege auf Hetzner — **genau einen** waehlen und
+die Wahl in der Protokoll-Tabelle unten festhalten:
+
+### Variante A — verschluesseltes Hetzner Cloud Volume / Storage
+
+Hetzner Cloud Volumes werden serverseitig at-Rest verschluesselt (LUKS auf der
+Plattform-Ebene). Wenn das `db-data`-Volume auf einem Cloud-Volume liegt:
+
+1. Bestaetigen, dass das Datenverzeichnis auf dem Cloud-Volume-Mount liegt
+   (nicht auf der lokalen Boot-Disk):
+
+   ```bash
+   # Wo liegt der Docker-Volume-Mountpoint physisch?
+   docker volume inspect who2be_db-data --format '{{ .Mountpoint }}'
+   # Den Pfad gegen die Mounts halten — muss auf dem Cloud-Volume-Device sitzen:
+   findmnt -no SOURCE,TARGET --target "$(docker volume inspect who2be_db-data --format '{{ .Mountpoint }}')"
+   lsblk -o NAME,FSTYPE,MOUNTPOINT,SIZE
+   ```
+
+2. **Nachweis** ist die Hetzner-Console/-API-Eigenschaft des Volumes
+   (Encryption „aktiv") plus ein Screenshot/Export in der Betreiber-Doku.
+   `<PLATZHALTER: Volume-ID + Hetzner-Console-Beleg>`.
+
+> Hinweis: Bei reiner Plattform-Verschluesselung ist auf OS-Ebene **kein**
+> `crypt`-Device sichtbar (`lsblk` zeigt das Volume als normales `ext4`/`xfs`),
+> weil die Verschluesselung unterhalb der VM passiert. Der Beleg kommt dann aus
+> der Hetzner-Console, nicht aus `cryptsetup`.
+
+### Variante B — LUKS-Full-Disk-Encryption auf dem Host (selbst verwaltet)
+
+Wenn das Volume auf einem dedizierten/Root-Server liegt, wird LUKS selbst
+eingerichtet (einmalig bei Provisioning, **vor** dem ersten `docker compose up`):
+
+1. Block-Device als LUKS-Container initialisieren (Beispiel-Device — am realen
+   Setup anpassen, **keine** Passphrase ins Repo):
+
+   ```bash
+   sudo cryptsetup luksFormat /dev/sdb           # einmalig, zerstoert Daten
+   sudo cryptsetup open /dev/sdb cryptdata        # mappt nach /dev/mapper/cryptdata
+   sudo mkfs.ext4 /dev/mapper/cryptdata
+   sudo mkdir -p /opt/who2be/data
+   sudo mount /dev/mapper/cryptdata /opt/who2be/data
+   ```
+
+2. Auto-Unlock beim Boot ueber ein Keyfile (Mode 600, **nicht** im Repo, nicht im
+   Backup-Klartext) in `/etc/crypttab` + `/etc/fstab` verdrahten. Schluessel-
+   verwahrung: `<PLATZHALTER: Keyfile-/Passphrase-Verwahrung (z. B. versiegelter
+   Umschlag / HSM / Passwort-Manager)>`.
+3. Den Docker-Volume-Pfad bzw. `data_directory` auf den entschluesselten
+   Mountpoint legen, sodass `db-data` physisch im LUKS-Container landet.
+
+### Reproduzierbarer Verifikationsschritt
+
+Nach jedem (Re-)Provisioning bzw. Host-Wechsel ausfuehren und das Ergebnis in der
+Tabelle unten protokollieren:
+
+```bash
+# Variante B (LUKS sichtbar auf OS-Ebene): Datentyp muss "crypto_LUKS" sein,
+# das Mapper-Device aktiv.
+lsblk -o NAME,FSTYPE,MOUNTPOINT,SIZE
+sudo cryptsetup status cryptdata     # erwartet: "is active", cipher/keysize sichtbar
+
+# Variante A (Plattform-Volume): Mount auf dem Cloud-Volume-Device nachweisen
+findmnt --target /opt/who2be/data    # bzw. der reale Daten-Mount
+# Encryption-Beleg = Hetzner-Console-Eigenschaft des Volumes (siehe oben).
+```
+
+**Akzeptanzkriterium:** Bei Variante B zeigt `cryptsetup status cryptdata`
+`is active` und `lsblk` `crypto_LUKS` fuer das Daten-Device; bei Variante A liegt
+der Daten-Mount nachweislich auf dem verschluesselten Hetzner-Volume + Console-
+Beleg. **Keine** Passphrase/kein Keyfile-Inhalt wird je ins Repo, in Logs oder in
+Klartext-Backups geschrieben.
+
+| Datum | Variante (A/B) | Host/Volume | Verifikations-Output abgelegt | Ausgefuehrt von |
+|---|---|---|---|---|
+| — | — | — | — | — |
+
+---
+
+## Standort & Auftragsverarbeiter
+
+> ⚠️ **Disclaimer:** Betriebs-/Nachweis-Dokumentation, **keine** Rechtsberatung.
+> Die vollstaendige, rechtsverbindliche Auftragsverarbeiter-Liste fuehrt der
+> Betreiber im AVV/VVT (siehe `docs/compliance/vvt.md`). Diese Tabelle ist der
+> technische Stand aus den Deploy-Artefakten.
+
+**Rechenzentrums-Standort (Hetzner):** Who2Be wird auf Hetzner betrieben.
+Verfuegbare Hetzner-Regionen sind Deutschland (Nuernberg `nbg1`, Falkenstein
+`fsn1`) und Finnland (Helsinki `hel1`) — alle innerhalb der EU/des EWR. Der
+konkret gewaehlte Standort: `<PLATZHALTER: gewaehlte Hetzner-Region, z. B. fsn1 (DE)>`.
+Empfehlung fuer DE-SaaS mit Datenresidenz-Erwartung: eine **DE-Region** waehlen
+und das hier sowie im VVT festhalten.
+
+**Auftragsverarbeiter / Sub-Processors (technischer Stand):**
+
+| Empfaenger | Rolle | Datenkategorien | Standort | Beleg |
+|---|---|---|---|---|
+| Hetzner Online GmbH | Hosting/IaaS (Server, Volume, Storage-Box) | gesamte DB at-Rest, Backups | DE/FI (EU/EWR) | `docker-compose.yml`, `deploy/hetzner/**` |
+| Mollie B.V. | Zahlungsdienstleister (PSP) | Zahlungs-/Abodaten (Mollie-seitig); App speichert nur Entitlement-Status + `external_ref` | NL (EU/EWR) | `packages/billing/**` |
+| GoTrue (self-hosted, Supabase) | Authentifizierung | E-Mail, Auth-Metadaten (`auth.users`) | selbst gehostet (= Hetzner-Standort) | `docker-compose.yml` (`supabase/gotrue`) |
+| Mail-/SMTP-Provider | Transaktionsmails (Verify/Invite/Reset) | E-Mail-Adresse, Mail-Inhalt | `<PLATZHALTER: Mail-Provider + Standort>` | GoTrue-SMTP-Env |
+
+Drittland-Transfer: nach aktuellem technischem Stand **keiner** (alle benannten
+Verarbeiter EU/EWR) — Ausnahme: ein etwaiger Mail-/SMTP- oder OAuth-Provider
+(Google/GitHub-Login, falls aktiviert) ist vom Betreiber zu pruefen und im VVT zu
+ergaenzen. Querverweis: `docs/compliance/vvt.md`, `docs/compliance/c5-mapping.md`.
 
 ---
 

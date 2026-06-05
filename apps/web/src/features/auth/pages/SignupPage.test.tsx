@@ -32,12 +32,20 @@ function renderPage(entry = '/signup') {
   )
 }
 
-function fillForm() {
+function acceptConsent() {
+  // Checkbox ist via <Label htmlFor> assoziiert → ueber den Label-Text greifbar.
+  fireEvent.click(screen.getByLabelText(/Ich akzeptiere die/))
+}
+
+function fillForm({ consent = true }: { consent?: boolean } = {}) {
   fireEvent.change(screen.getByLabelText('E-Mail'), { target: { value: 'neu@who2be.dev' } })
   fireEvent.change(screen.getByLabelText('Passwort'), { target: { value: 'streng-geheim-1' } })
   fireEvent.change(screen.getByLabelText('Passwort wiederholen'), {
     target: { value: 'streng-geheim-1' },
   })
+  if (consent) {
+    acceptConsent()
+  }
 }
 
 afterEach(() => {
@@ -71,10 +79,24 @@ describe('SignupPage', () => {
     })
   })
 
-  it('startet den OAuth-Flow ueber den Google-Button', async () => {
+  it('blockt Signup ohne Consent (Submit + OAuth deaktiviert)', () => {
+    renderPage()
+    fillForm({ consent: false })
+
+    const submit = screen.getByRole('button', { name: 'Konto erstellen' })
+    const google = screen.getByRole('button', { name: 'Mit Google anmelden' })
+    expect(submit).toBeDisabled()
+    expect(google).toBeDisabled()
+
+    fireEvent.click(submit)
+    expect(signUp).not.toHaveBeenCalled()
+  })
+
+  it('startet den OAuth-Flow ueber den Google-Button (nach Consent)', async () => {
     signInWithOAuth.mockResolvedValue({ data: {}, error: null })
 
     renderPage()
+    acceptConsent()
     fireEvent.click(screen.getByRole('button', { name: 'Mit Google anmelden' }))
 
     await waitFor(() => {

@@ -271,7 +271,15 @@
       "submit": "Create account",
       "confirmPending": "Check your inbox and follow the confirmation link to complete sign-up.",
       "alreadyAccount": "Already have an account?",
-      "signIn": "Sign in"
+      "signIn": "Sign in",
+      "consent": {
+        "before": "I accept the",
+        "termsLink": "Terms",
+        "middle": "and the",
+        "privacyLink": "Privacy Policy",
+        "after": "."
+      },
+      "consentRequiredHint": "Please accept the Terms and the Privacy Policy to continue."
     },
     "resetPassword": {
       "title": "Reset password",
@@ -316,7 +324,8 @@
       "passwordRequired": "Password required.",
       "passwordMinLength": "At least 8 characters.",
       "confirmRequired": "Please repeat.",
-      "passwordMismatch": "Passwords do not match."
+      "passwordMismatch": "Passwords do not match.",
+      "consentRequired": "Please accept the Terms and Privacy Policy."
     }
   },
   "dashboard": {
@@ -452,9 +461,22 @@
     },
     "terms": {
       "title": "General Terms and Conditions (GTC)",
-      "intro": "These GTC govern the use of Who2Be by",
+      "intro": "These GTC govern the use of Who2Be (a SaaS contract combining rental and service elements) by",
       "introUserGroup": "description of user group (consumers/businesses)",
-      "introPeriod": ".",
+      "introPeriod": ". Section A applies to all users, Section B only to consumers (B2C), Section C only to businesses (B2B).",
+      "groups": {
+        "general": {
+          "heading": "A. General provisions (all users)"
+        },
+        "consumer": {
+          "heading": "B. Additional provisions for consumers (B2C)",
+          "note": "A consumer is any natural person who enters into the contract for purposes that are predominantly outside their trade, business or profession."
+        },
+        "business": {
+          "heading": "C. Additional provisions for businesses (B2B)",
+          "note": "A business is any party who enters into the contract in the exercise of its trade, business or profession."
+        }
+      },
       "sections": {
         "scope": {
           "heading": "§ 1 Scope of application",
@@ -462,7 +484,7 @@
         },
         "subject": {
           "heading": "§ 2 Subject matter & service description",
-          "body": "Description of the SaaS offering, scope of services per plan (Free/Pro), availability/SLA"
+          "body": "Description of the SaaS offering, scope of services per plan (Free/Pro), classification as a combined rental + service contract"
         },
         "registration": {
           "heading": "§ 3 Registration & account",
@@ -476,29 +498,58 @@
           "heading": "§ 5 Term & termination",
           "body": "Contract term, renewal, ordinary/extraordinary termination, termination at end of period"
         },
-        "withdrawal": {
-          "heading": "§ 6 Right of withdrawal",
-          "body": "Withdrawal instructions for consumers including sample withdrawal form, or note if not applicable"
-        },
         "obligations": {
-          "heading": "§ 7 User obligations & acceptable use",
+          "heading": "§ 6 User obligations & acceptable use",
           "body": "Acceptable use policy, prohibited content, responsibility for submitted data"
         },
         "availability": {
-          "heading": "§ 8 Availability, changes & maintenance",
-          "body": "Availability commitment, maintenance windows, reservation of changes"
+          "heading": "§ 7 Availability, service levels (SLA), maintenance & changes",
+          "body": "Availability commitment, maintenance windows, reservation of changes",
+          "slaIntro": "Service levels (binding values to be supplied by the operator):",
+          "slaUptimeLabel": "Availability (monthly average):",
+          "slaUptime": "target availability, e.g. 99.x %",
+          "slaResponseLabel": "Support response times:",
+          "slaResponse": "response times per priority/plan",
+          "slaMaintenanceLabel": "Scheduled maintenance windows:",
+          "slaMaintenance": "announced maintenance windows (period/lead time)",
+          "slaCreditsLabel": "Service credits:",
+          "slaCredits": "rules on credits for SLA breaches, if committed"
         },
         "liability": {
-          "heading": "§ 9 Liability",
+          "heading": "§ 8 Liability",
           "body": "Liability provisions (intent/gross negligence, cardinal obligations, limitation)"
         },
         "privacy": {
-          "heading": "§ 10 Data protection",
+          "heading": "§ 9 Data protection",
           "body": "Reference to the privacy policy and, where applicable, the data processing agreement (DPA)"
         },
         "final": {
-          "heading": "§ 11 Final provisions",
-          "body": "Applicable law, place of jurisdiction, severability clause, amendments to the GTC"
+          "heading": "§ 10 Final provisions",
+          "body": "Severability clause, amendments to the GTC, text form"
+        }
+      },
+      "consumerSections": {
+        "withdrawal": {
+          "heading": "§ 11 Right of withdrawal & withdrawal instructions",
+          "body": "Withdrawal instructions for consumers (period, form, legal consequences, start of the period)",
+          "formLabel": "Sample withdrawal form:",
+          "form": "Sample withdrawal form, or note if not applicable (e.g. early start of performance at the consumer's express request)"
+        },
+        "einvoice": {
+          "heading": "§ 12 Electronic invoice — recipient's consent",
+          "body": "Note: invoices/receipts are provided electronically; for consumers this requires the recipient's consent",
+          "consentLabel": "Consent:",
+          "consent": "wording of the recipient's consent to electronic invoicing (B2C)"
+        }
+      },
+      "businessSections": {
+        "deviations": {
+          "heading": "§ 13 Deviating provisions for businesses",
+          "body": "e.g. exclusion of the right of withdrawal, deviating liability/warranty, set-off/retention, text form"
+        },
+        "jurisdiction": {
+          "heading": "§ 14 Place of jurisdiction, place of performance & applicable law (B2B)",
+          "body": "Place of jurisdiction, place of performance and applicable law for businesses"
         }
       }
     },

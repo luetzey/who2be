@@ -640,6 +640,33 @@ Pushen, Draft-PR, Change-Log Abschnitt 7. Bei Design-Weichen drei Optionen rück
 - 2026-06-05 — WP-C — `feat/compliance-backend` — `entitlement_repository.upsert` schreibt SSoT + `entitlement_history`-Journal atomar in einer Transaktion; `test_entitlement_history.py` belegt 3 Journalzeilen (free→pro→manual_override) und Survival nach Org-Delete; DoD grün.
 - 2026-06-05 — WP-D — `feat/compliance-backend` — `purge_account_data` anonymisiert `status_history.changed_by`/`audit_log.actor_id` auf Sentinel `00000000-…`; `cleanup_expired_invitations` redacted Klartext-`email` accepted/expired Invitations; `PurgeResult` zählt anonymisierte Zeilen + Invitations; `test_purge_erasure.py` deckt Anonymisierung + Cleanup + Retention von `entitlement_history` ab; DoD grün.
 - 2026-06-05 — WP-E — `feat/compliance-backend` — `gdpr_export_service.export` ergänzt `account`-Block (id/email/created_at/last_sign_in_at aus `auth.users`, robust gegen fehlendes Schema); `test_gdpr_export_account.py` (Unit) + `test_gdpr_export.py` (Integration) decken Block ab; DoD grün.
+- 2026-06-05 — WP-G — `feat/compliance-docs-legal` — Supply-Chain/Infra:
+  `.github/dependabot.yml` (uv/npm/github-actions/docker, woechentlich, gruppiert,
+  Labels) angelegt; `deploy/hetzner/RUNBOOK.md` um §Verschluesselung at-Rest
+  (LUKS/verschl. Hetzner-Volume + `lsblk`/`cryptsetup status`-Verifikation +
+  Protokoll-Tabelle) und §Standort & Auftragsverarbeiter (DE/FI + Sub-Processor-
+  Liste) ergaenzt; `deploy/hetzner/README.md` mit Compliance-Verweisen;
+  `docs/compliance/c5-mapping.md` (Orientierung, kein Testat). DoD: dependabot.yml
+  valide (YAML-Parse), keine Secrets im Repo. ✅
+- 2026-06-05 — WP-H — `feat/compliance-docs-legal` — Compliance-Dokumente unter
+  `docs/compliance/`: `README.md`, `vvt.md` (Art. 30, Datenkategorien aus Schema,
+  Auftragsverarbeiter, Drittland, Loeschfristen), `gobd-verfahrensdokumentation.md`
+  (Mollie-PSP, `org_entitlement` + `entitlement_history`, §14b UStG/§147 AO,
+  E-Rechnung nicht einschlaegig, USt-IdNr/Reverse-Charge als offene Frage),
+  `data-retention-and-erasure.md` (30-Tage-Grace + Hard-Purge, Anonymisierung,
+  restic-Retention + Restore-only-Re-Deletion, Ausnahme `entitlement_history`).
+  Jedes Dokument mit Disclaimer + markierten `<PLATZHALTER>`, Querverweis ADR-0031.
+  DoD: Dokumente vollstaendig. ✅
+- 2026-06-05 — WP-I — `feat/compliance-docs-legal` — Legal-Struktur:
+  `TermsPage.tsx` in A. Allgemein / B. Verbraucher (B2C) / C. Unternehmer (B2B)
+  getrennt, SLA-Geruest (§7, Werte als Platzhalter — als Abschnitt in der AGB,
+  Betreiber-Weiche), Widerrufsbelehrung (§11) + E-Rechnungs-Empfaengerzustimmung
+  (§12); Signup-Consent (Pflicht-Checkbox „AGB & Datenschutz", react-hook-form +
+  zod) blockt Submit UND OAuth (Betreiber-Weiche); i18n de/en ergaenzt;
+  `docs/compliance/legal-texts-checklist.md` (Impressum §5 DDG + Datenschutz,
+  §5 DDG/TDDDG bewusst erhalten). Neue Tests: SignupPage „blockt ohne Consent",
+  `TermsPage.a11y.test.tsx`. DoD: `npm run lint` (0 Errors), `npx tsc -b`,
+  `npm test` (354 gruen), `npm run build` — alle gruen, axe gruen. ✅
 
 ---
 

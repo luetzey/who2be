@@ -33,7 +33,15 @@ function GithubGlyph() {
 // (implicit flow). `redirect_to` ist immer ein In-App-Pfad auf unserem Origin.
 type Provider = 'google' | 'github'
 
-export function OAuthButtons({ next }: { next?: string | null }) {
+// `disabled` gated den Social-Login z. B. solange die Signup-Consent-Checkbox
+// nicht gesetzt ist (WP-I). Default false → Login bleibt unveraendert.
+export function OAuthButtons({
+  next,
+  disabled = false,
+}: {
+  next?: string | null
+  disabled?: boolean
+}) {
   const { t } = useTranslation('auth')
   const [pending, setPending] = useState<Provider | null>(null)
 
@@ -57,7 +65,7 @@ export function OAuthButtons({ next }: { next?: string | null }) {
         variant="outline"
         className="w-full"
         onClick={() => void signInWith('google')}
-        disabled={pending !== null}
+        disabled={disabled || pending !== null}
       >
         <GoogleGlyph />
         {t('oauth.google')}
@@ -67,7 +75,7 @@ export function OAuthButtons({ next }: { next?: string | null }) {
         variant="outline"
         className="w-full"
         onClick={() => void signInWith('github')}
-        disabled={pending !== null}
+        disabled={disabled || pending !== null}
       >
         <GithubGlyph />
         {t('oauth.github')}

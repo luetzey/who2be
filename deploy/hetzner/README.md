@@ -188,9 +188,27 @@ Auf dem Host:
 Das Skript ist idempotent und kann auf einen frueheren SHA zurueckrollen,
 solange dessen Images noch auf GHCR liegen.
 
+## Datenschutz / Compliance (At-Rest + Standort)
+
+- **Verschluesselung at-Rest:** Das Postgres-Volume (`db-data`) muss at-Rest
+  verschluesselt liegen — entweder ueber ein verschluesseltes Hetzner-Volume
+  (Plattform-LUKS) oder selbst verwaltetes LUKS auf dem Host. Einrichtung +
+  reproduzierbarer Verifikationsschritt (`lsblk` / `cryptsetup status`) und die
+  Protokoll-Tabelle stehen im RUNBOOK unter
+  [Verschluesselung at-Rest](./RUNBOOK.md#verschluesselung-at-rest-postgres-volume).
+  Adressiert die Audit-Befunde P4/S2. **Keine** Schluessel/Passphrasen ins Repo.
+- **RZ-Standort & Auftragsverarbeiter:** Hetzner-Region (DE: `nbg1`/`fsn1`,
+  FI: `hel1` — alle EU/EWR) und die Sub-Processor-Liste (Hetzner, Mollie,
+  self-hosted GoTrue, Mail) sind im RUNBOOK unter
+  [Standort & Auftragsverarbeiter](./RUNBOOK.md#standort--auftragsverarbeiter)
+  dokumentiert; die rechtsverbindliche Fassung fuehrt der Betreiber im VVT
+  ([`docs/compliance/vvt.md`](../../docs/compliance/vvt.md)).
+
 ## Verweis
 
 - Operative Schritt-fuer-Schritt-Anleitungen (CVE-Response, Secret-Rotation,
-  akzeptierte Vulnerabilities) in [`RUNBOOK.md`](./RUNBOOK.md).
-- Backup/Restore-Pfad und Restore-Drill: kommt mit MS-2 C5 in `RUNBOOK.md`
-  dazu.
+  At-Rest-Verschluesselung, Standort/Auftragsverarbeiter, akzeptierte
+  Vulnerabilities) in [`RUNBOOK.md`](./RUNBOOK.md).
+- Backup/Restore-Pfad und Restore-Drill: [`RUNBOOK.md` §Backup & Restore](./RUNBOOK.md#backup--restore).
+- Compliance-Dokumente (VVT, GoBD, Retention, C5-Mapping):
+  [`docs/compliance/`](../../docs/compliance/).

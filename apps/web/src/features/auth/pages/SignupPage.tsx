@@ -10,23 +10,29 @@ import { useSession } from '@/auth/session-context'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { supabase } from '@/lib/supabase'
 
 import { OAuthButtons } from '../components/OAuthButtons'
 import { buildRedirectTo } from '../lib/redirect'
 import { sanitizeNext } from '../lib/sanitize-next'
 
-type SignupValues = { email: string; password: string; confirm: string }
+type SignupValues = { email: string; password: string; confirm: string; consent: boolean }
 
 // Min-Laenge 8 = GoTrue-Default; Confirm-Feld verhindert Tippfehler im Passwort.
+// `consent` (AGB & Datenschutz) ist Pflicht — muss true sein, sonst kein Submit.
 function makeSignupSchema(t: (key: string) => string) {
   return z
     .object({
       email: z.string().email(t('validation.emailInvalid')),
       password: z.string().min(8, t('validation.passwordMinLength')),
       confirm: z.string().min(1, t('validation.confirmRequired')),
+      consent: z.boolean().refine((value) => value === true, {
+        message: t('validation.consentRequired'),
+      }),
     })
     .refine((values) => values.password === values.confirm, {
       message: t('validation.passwordMismatch'),
@@ -54,8 +60,11 @@ export function SignupPage() {
 
   const form = useForm<SignupValues>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { email: '', password: '', confirm: '' },
+    defaultValues: { email: '', password: '', confirm: '', consent: false },
   })
+
+  // Gate fuer Submit UND OAuth: erst nach Zustimmung freigeschaltet (WP-I).
+  const consentGiven = form.watch('consent')
 
   // Bereits eingeloggt (z. B. zurueck-navigiert) → nicht erneut registrieren.
   if (session !== null && !confirmationPending) {
@@ -160,12 +169,57 @@ export function SignupPage() {
                       </FormItem>
                     )}
                   />
+                  <FormField
+                    control={form.control}
+                    name="consent"
+                    render={({ field, fieldState }) => (
+                      <FormItem>
+                        <div className="flex items-start gap-2">
+                          <Checkbox
+                            id="signup-consent"
+                            name={field.name}
+                            ref={field.ref}
+                            checked={field.value}
+                            onBlur={field.onBlur}
+                            onChange={(event) => field.onChange(event.target.checked)}
+                            aria-invalid={fieldState.error ? true : undefined}
+                            className="mt-0.5"
+                          />
+                          <Label
+                            htmlFor="signup-consent"
+                            className="text-sm leading-snug font-normal text-muted-foreground"
+                          >
+                            {t('signup.consent.before')}{' '}
+                            <Link
+                              to="/legal/agb"
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-medium text-foreground underline-offset-4 hover:underline"
+                            >
+                              {t('signup.consent.termsLink')}
+                            </Link>{' '}
+                            {t('signup.consent.middle')}{' '}
+                            <Link
+                              to="/legal/datenschutz"
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-medium text-foreground underline-offset-4 hover:underline"
+                            >
+                              {t('signup.consent.privacyLink')}
+                            </Link>
+                            {t('signup.consent.after')}
+                          </Label>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                   {error !== null ? <ErrorAlert message={error} /> : null}
                   <Button
                     type="submit"
                     variant="brand"
                     className="w-full"
-                    disabled={form.formState.isSubmitting}
+                    disabled={form.formState.isSubmitting || !consentGiven}
                   >
                     {t('signup.submit')}
                   </Button>
@@ -176,7 +230,12 @@ export function SignupPage() {
                 {t('or')}
                 <span className="h-px flex-1 bg-border" />
               </div>
-              <OAuthButtons next={next} />
+              {!consentGiven ? (
+                <p className="text-center text-xs text-muted-foreground">
+                  {t('signup.consentRequiredHint')}
+                </p>
+              ) : null}
+              <OAuthButtons next={next} disabled={!consentGiven} />
               <p className="text-center text-sm text-muted-foreground">
                 {t('signup.alreadyAccount')}{' '}
                 <Link to="/login" className="font-medium text-foreground underline-offset-4 hover:underline">
