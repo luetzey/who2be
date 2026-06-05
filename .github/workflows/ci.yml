@@ -23,7 +23,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install uv
         uses: astral-sh/setup-uv@v7
       - name: Sync dependencies
@@ -35,8 +35,23 @@ jobs:
         run: uv run ruff check .
       - name: Typecheck
         run: uv run mypy .
-      - name: Test
-        run: uv run pytest -q
+      - name: Test (coverage ratchet + DB-Skip-Guard)
+        # WHO2BE_REQUIRE_DB=1: ohne erreichbare DB bricht die Suite hart ab
+        # (conftest.py, ADR-0032) — kein stilles "gruen durch Skip" mehr.
+        # --cov-fail-under: Ratchet-Floor. CI-gemessen (722 Tests inkl. DB):
+        # 86.92 % -> Floor 85 (2 Pkt Headroom). Anhebung nur in Coverage-PRs.
+        env:
+          WHO2BE_REQUIRE_DB: "1"
+        run: >-
+          uv run pytest -q --cov --cov-report=term-missing
+          --cov-report=xml --cov-fail-under=85
+      - name: Upload Python coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-python
+          path: coverage.xml
+          if-no-files-found: ignore
 
   web:
     runs-on: ubuntu-latest
@@ -44,8 +59,8 @@ jobs:
       run:
         working-directory: apps/web
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
@@ -56,8 +71,17 @@ jobs:
         run: npm run lint
       - name: Typecheck
         run: npx tsc -b
-      - name: Test
-        run: npm test
+      - name: Test (coverage ratchet)
+        # `test:coverage` faehrt die volle Vitest-Suite mit v8-Coverage und
+        # erzwingt die Thresholds aus vite.config.ts (Floor, ADR-0032).
+        run: npm run test:coverage
+      - name: Upload web coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-web
+          path: apps/web/coverage
+          if-no-files-found: ignore
       - name: A11y (axe via vitest)
         # Eigenes Gate: A11y-Tests laufen bereits unter `npm test` mit, hier
         # gefiltert (`testNamePattern a11y`) als sichtbarer Step. Bricht den
@@ -77,7 +101,7 @@ jobs:
   compose-smoke:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Compose env
         run: cp .env.example .env
       - name: Compose up (build + wait healthy)
@@ -91,6 +115,49 @@ jobs:
         if: always()
         run: docker compose down -v
 
+  e2e:
+    # Duenne E2E-Spitze (ADR-0032, Phase 4): Playwright gegen den echten
+    # Compose-Stack (Web :5173, API :8000). Soft-Gate (`continue-on-error`)
+    # waehrend der Stabilisierung — bricht den Build noch nicht; nach 1–2
+    # gruenen Laeufen wird `continue-on-error` entfernt (hartes Gate).
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+      - name: Compose env
+        run: cp .env.example .env
+      - name: Compose up (build + wait healthy)
+        run: docker compose up -d --build --wait --wait-timeout 240
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install web deps
+        working-directory: apps/web
+        run: npm ci
+      - name: Install Playwright browser
+        working-directory: apps/web
+        run: npm run e2e:install
+      - name: Run E2E
+        working-directory: apps/web
+        env:
+          E2E_BASE_URL: http://localhost:5173
+        run: npm run e2e
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          if-no-files-found: ignore
+      - name: Compose logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+      - name: Compose down
+        if: always()
+        run: docker compose down -v
+
   audit:
     # Supply-Chain-Gate (MS-3 H6): pip-audit fuer den Python-Workspace und
     # npm audit fuer das Web-Frontend. Fail bei high/critical; moderates
@@ -98,7 +165,7 @@ jobs:
     # deploy/hetzner/RUNBOOK.md §CVE-Response.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install uv
         uses: astral-sh/setup-uv@v7
       - name: Export non-workspace deps
@@ -107,7 +174,7 @@ jobs:
         run: uv export --format requirements-txt --no-emit-workspace --no-hashes --group billing > /tmp/who2be-reqs.txt
       - name: pip-audit (Python)
         run: uv tool run pip-audit --disable-pip --no-deps -r /tmp/who2be-reqs.txt
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm

@@ -156,6 +156,10 @@ class ResourceRepository(Protocol):
 
     async def delete(self, workspace_id: UUID, resource_id: UUID) -> bool: ...
 
+    async def list_distinct_tags(
+        self, workspace_id: UUID, locale: str = DEFAULT_LOCALE
+    ) -> list[str]: ...
+
 
 class PgResourceRepository:
     """asyncpg-Implementierung von `ResourceRepository`."""
@@ -251,6 +255,24 @@ class PgResourceRepository:
                 locale,
             )
         return [ResourceRead.model_validate(dict(row)) for row in rows]
+
+    async def list_distinct_tags(
+        self, workspace_id: UUID, locale: str = DEFAULT_LOCALE
+    ) -> list[str]:
+        # Track E3: Tags liegen denormalisiert in `resource_version.content->'tags'`
+        # (kein Array-Spalte auf `resource`, anders als bei Playbooks). Wir
+        # extrahieren DISTINCT-Tags aus der jeweils aktuellen Version pro Sprache
+        # ueber denselben `_select_current`-Build wie der Tag-Filter — `tags` ist
+        # im Modell `default_factory=list`, also stets ein (ggf. leeres) jsonb-Array.
+        select = _select_current("$2")
+        rows = await self._pool.fetch(
+            f"SELECT DISTINCT tag FROM ( {select} WHERE r.workspace_id = $1 ) AS cur, "
+            "jsonb_array_elements_text(cur.content->'tags') AS tag "
+            "ORDER BY tag ASC",
+            workspace_id,
+            locale,
+        )
+        return [row["tag"] for row in rows]
 
     async def fetch(
         self,

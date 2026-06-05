@@ -10,7 +10,10 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:a11y": "vitest run --testNamePattern a11y"
+    "test:a11y": "vitest run --testNamePattern a11y",
+    "test:coverage": "vitest run --coverage",
+    "e2e": "playwright test",
+    "e2e:install": "playwright install --with-deps chromium"
   },
   "dependencies": {
     "@blocknote/core": "^0.51.4",
@@ -45,25 +48,27 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
+    "@playwright/test": "^1.60.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@types/node": "^25.9.1",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
-    "@vitejs/plugin-react": "^4.3.4",
-    "@vitest/mocker": "^3.2.4",
+    "@vitejs/plugin-react": "^6.0.2",
+    "@vitest/coverage-v8": "^4.1.8",
+    "@vitest/mocker": "^4.1.8",
     "eslint": "^9.17.0",
     "eslint-plugin-jsx-a11y": "^6.10.2",
-    "eslint-plugin-react-hooks": "^5.1.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "eslint-plugin-tailwindcss": "^3.18.3",
     "jsdom": "^25.0.1",
-    "typescript": "^5.7.2",
+    "typescript": "^6.0.3",
     "typescript-eslint": "^8.60.1",
-    "vite": "^7.3.3",
+    "vite": "^8.0.16",
     "vite-node": "^3.2.4",
-    "vitest": "^3.2.4",
+    "vitest": "^4.1.8",
     "vitest-axe": "^0.1.0"
   }
 }

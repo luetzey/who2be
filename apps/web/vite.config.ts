@@ -24,5 +24,34 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    // Nur Unit/Component-Tests unter src — die Playwright-E2E-Specs in `e2e/`
+    // laufen im eigenen Runner und duerfen NICHT von Vitest gesammelt werden
+    // (sie importieren @playwright/test). ADR-0032, Phase 4.
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    // Coverage-Ratchet (ADR-0032): v8-Provider, Thresholds als Floor in CI
+    // (`npm run test:coverage`). Bewusst ohne `all: true` — gemessen wird die
+    // von Tests beruehrte Surface; Schwellen liegen knapp unter der Baseline
+    // und werden in dedizierten Coverage-PRs angehoben, nie gesenkt.
+    coverage: {
+      provider: 'v8',
+      reporter: ['text-summary', 'json', 'html'],
+      exclude: [
+        'src/**/*.test.{ts,tsx}',
+        'src/**/*.a11y.test.{ts,tsx}',
+        'src/**/*.d.ts',
+        'src/test/**',
+        'src/main.tsx',
+        'src/vite-env.d.ts',
+        'src/i18n/**',
+      ],
+      // Gemessen (deterministisch, gleiche Suite): ~81.6 / 80.9 / 76.8.
+      // Floors knapp darunter; Anhebung nur in dedizierten Coverage-PRs.
+      thresholds: {
+        statements: 80,
+        branches: 79,
+        functions: 75,
+        lines: 80,
+      },
+    },
   },
 })
