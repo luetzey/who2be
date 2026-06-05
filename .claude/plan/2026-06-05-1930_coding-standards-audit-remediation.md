@@ -1,8 +1,9 @@
 # Plan — Coding-Standards-Audit & Remediation (komplette Codebase)
 
 **Datum:** 2026-06-05
-**Status:** Welle 0 (PR #… `cbd106d`) + Welle 1 (PR #166 `d256173`) gemergt;
-Welle 2 umgesetzt auf `claude/serene-lamport-ueQxe` (Draft-PR offen); Welle 3 optional/offen.
+**Status:** Welle 0 (`cbd106d`) + Welle 1 (#166) + Welle 2 (#167) gemergt;
+Welle 3/WP-3.1 umgesetzt auf `claude/serene-lamport-ueQxe` (Draft-PR offen).
+WP-3.2 (DEFERRED/YAGNI) + WP-3.3 (optional, vor Public-Switch) bleiben offen.
 **Branch:** `claude/serene-lamport-ueQxe`
 **Anlass:** Vollständige Prüfung der Codebase gegen das Notion-Composite
 [`Coding-Standards`](https://www.notion.so/367be5372ab881938a8accf264e66209)
@@ -218,7 +219,7 @@ DoD lokal grün: lint 0 Errors, `tsc` 0, 376 Tests, Build, License-Gate.
 
 ### Welle 3 — Housekeeping (optional, YAGNI-bewusst)
 
-#### WP-3.1 — Deprecation-Warnings beseitigen · **Severity: Low**
+#### WP-3.1 — Deprecation-Warnings beseitigen · **Severity: Low** ✅ UMGESETZT
 
 - **Befund:** pytest-Warnings: FastAPI `HTTP_422_UNPROCESSABLE_ENTITY`
   deprecated (→ `HTTP_422_UNPROCESSABLE_CONTENT`); OpenTelemetry
@@ -226,6 +227,14 @@ DoD lokal grün: lint 0 Errors, `tsc` 0, 376 Tests, Build, License-Gate.
 - **Aktion:** Eigene `HTTP_422_*`-Verwendungen umstellen; OTel-Warning nur
   dokumentieren (Upstream).
 - **DoD:** keine selbstverursachten Deprecation-Warnings mehr in `pytest`.
+- **Umsetzung:** 9 `HTTP_422_UNPROCESSABLE_ENTITY` → `…_CONTENT` (alias-gleich,
+  Wert 422; 8 Dateien in `apps/api` + `packages/billing`). OTel-Warning eng per
+  `filterwarnings` (nur diese Meldung) in `pyproject.toml` gefiltert + kommentiert
+  — Suite jetzt warning-frei (585 passed, 174 skipped). **Zusätzlich** (Boy-Scout):
+  4 vorbestehende Format-Drift-Dateien (`agent_scope`, `security`,
+  `test_placeholder_renderer`, `tool_policy`) reformatiert — der Welle-0-
+  Format-Gate war latent rot, weil CI seit den Startup-Failures nie lief.
+  DoD grün: `ruff check`/`format --check`/`mypy` sauber, pytest warning-frei.
 
 #### WP-3.2 — Versionierungs-Repo-Basis (DEFERRED · YAGNI)
 

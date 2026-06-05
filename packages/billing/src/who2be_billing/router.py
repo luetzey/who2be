@@ -232,7 +232,7 @@ async def create_checkout(
     plan = plan_by_code(body.plan)
     if plan is None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Unbekannter oder nicht buchbarer Plan '{body.plan}'.",
         )
     pool = get_pool()
@@ -290,7 +290,7 @@ async def create_override(
     plan = plan_by_code(body.plan)
     if plan is None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Unbekannter oder nicht buchbarer Plan '{body.plan}'.",
         )
     expires_at = datetime.now(tz=UTC) + timedelta(days=body.days)

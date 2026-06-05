@@ -413,9 +413,7 @@ async def get_current_workspace(
         # An einen Agenten gebundener Token: dessen Tool-Policy laden, damit
         # `require_capability` (Writes) und die Read-Services (Scoping) sie
         # durchsetzen. Der Agent ist workspace-gepinnt — kein Cross-WS-Leck.
-        tool_policy = await _load_agent_tool_policy(
-            pool, workspace_id, principal.token_agent_id
-        )
+        tool_policy = await _load_agent_tool_policy(pool, workspace_id, principal.token_agent_id)
         ctx = WorkspaceContext(
             workspace_id=workspace_id,
             user_id=principal.user_id,

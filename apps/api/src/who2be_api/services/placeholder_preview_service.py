@@ -57,7 +57,7 @@ class PlaceholderPreviewService:
         resolver = REGISTRY.get(kind)
         if resolver is None:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"Unbekannter Placeholder-Typ: {kind}",
             )
 

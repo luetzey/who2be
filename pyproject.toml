@@ -69,6 +69,14 @@ addopts = ["--strict-markers"]
 markers = [
     "integration: Test benoetigt eine erreichbare Datenbank (DB). Zentral in conftest.py uebersprungen, wenn keine DB erreichbar ist; mit WHO2BE_REQUIRE_DB=1 (CI) schlaegt der fehlende DB-Zugriff stattdessen hart fehl.",
 ]
+# Upstream-Deprecation (nicht selbstverursacht, WP-3.1): OpenTelemetry nutzt die
+# als deprecated markierte `SelectableGroups`-dict-API von importlib.metadata —
+# behoben erst in neueren OTel-Releases (transitiv). Bewusst eng gefiltert
+# (nur diese Meldung), damit die Suite warning-frei bleibt und kuenftige
+# *eigene* DeprecationWarnings sichtbar auffallen.
+filterwarnings = [
+    "ignore:SelectableGroups dict interface is deprecated:DeprecationWarning",
+]
 
 # --- Coverage (ADR-0032) -----------------------------------------------------
 # Gemessen ueber die importierbaren Paketnamen (editable installs zeigen auf die

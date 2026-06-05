@@ -26,7 +26,7 @@ def locale_param(
         return normalize_locale(locale)
     except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Ungueltiger locale-Parameter: {locale!r}.",
         ) from exc
 

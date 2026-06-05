@@ -110,7 +110,7 @@ def _review_conflict() -> HTTPException:
 
 def _invalid_against() -> HTTPException:
     return HTTPException(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         detail="Ungueltiger 'against'-Parameter; erwartet 'active' oder eine Versions-Nummer.",
     )
 
