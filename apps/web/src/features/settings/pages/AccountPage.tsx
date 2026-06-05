@@ -2,6 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 
 import { useApi } from '@/api/useApi'
@@ -25,15 +26,21 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select } from '@/components/ui/select'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
+import { LOCALE_LABELS } from '@/i18n'
+import type { Locale } from '@/i18n'
+import { useLocale } from '@/i18n/useLocale'
 import { supabase } from '@/lib/supabase'
 import { notify } from '@/lib/feedback'
+
 
 // Konto-Self-Service (Track K). Mutationen laufen ueber GoTrue
 // (`supabase.auth.updateUser`/`signOut`); die Anzeige speist sich aus der
 // Supabase-Session. E-Mail-Wechsel loest eine erneute Bestaetigung aus —
 // die alte Adresse bleibt bis zur Bestaetigung aktiv.
 export function AccountPage() {
+  const { t } = useTranslation('settings')
   const { session, me } = useSession()
   const email = session?.user?.email ?? '—'
   const userId = me?.user_id ?? session?.user?.id ?? '—'
@@ -45,21 +52,21 @@ export function AccountPage() {
     <Container>
       <Stack gap="lg">
         <PageHeader
-          title="Konto"
-          description="Dein persönliches Profil, Sicherheit und Anzeige-Präferenzen."
+          title={t('account.title')}
+          description={t('account.description')}
         />
 
         <Card>
           <CardHeader>
-            <CardTitle>Profil</CardTitle>
-            <CardDescription>Anzeigename und Anmelde-E-Mail.</CardDescription>
+            <CardTitle>{t('account.profile.title')}</CardTitle>
+            <CardDescription>{t('account.profile.description')}</CardDescription>
           </CardHeader>
           <CardContent>
             <Stack gap="lg">
               <ProfileForm initialName={initialName} />
               <ChangeEmailForm currentEmail={email} />
               <dl className="grid gap-3 text-sm sm:grid-cols-[8rem_1fr]">
-                <dt className="text-muted-foreground">User-ID</dt>
+                <dt className="text-muted-foreground">{t('account.profile.userId')}</dt>
                 <dd className="font-mono text-xs break-all text-muted-foreground">{userId}</dd>
               </dl>
             </Stack>
@@ -68,8 +75,8 @@ export function AccountPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Sicherheit</CardTitle>
-            <CardDescription>Passwort und aktive Sitzungen.</CardDescription>
+            <CardTitle>{t('account.security.title')}</CardTitle>
+            <CardDescription>{t('account.security.description')}</CardDescription>
           </CardHeader>
           <CardContent>
             <Stack gap="lg">
@@ -81,23 +88,26 @@ export function AccountPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Präferenzen</CardTitle>
+            <CardTitle>{t('account.preferences.title')}</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-between gap-4">
-              <div className="text-sm">
-                <div className="font-medium">Darstellung</div>
-                <p className="text-muted-foreground">Hell, Dunkel oder Systemvorgabe.</p>
+            <Stack gap="md">
+              <div className="flex items-center justify-between gap-4">
+                <div className="text-sm">
+                  <div className="font-medium">{t('account.preferences.theme.title')}</div>
+                  <p className="text-muted-foreground">{t('account.preferences.theme.description')}</p>
+                </div>
+                <ThemeToggle />
               </div>
-              <ThemeToggle />
-            </div>
+              <LanguageRow />
+            </Stack>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Daten & Datenschutz</CardTitle>
-            <CardDescription>Exportiere eine Kopie all deiner Daten (DSGVO).</CardDescription>
+            <CardTitle>{t('account.dataPrivacy.title')}</CardTitle>
+            <CardDescription>{t('account.dataPrivacy.description')}</CardDescription>
           </CardHeader>
           <CardContent>
             <DataExportSection />
@@ -106,7 +116,7 @@ export function AccountPage() {
 
         <Card className="border-destructive/40">
           <CardHeader>
-            <CardTitle className="text-destructive">Konto löschen</CardTitle>
+            <CardTitle className="text-destructive">{t('account.deleteAccount.title')}</CardTitle>
           </CardHeader>
           <CardContent>
             <DeleteAccountSection email={email} />
@@ -117,7 +127,37 @@ export function AccountPage() {
   )
 }
 
+function LanguageRow() {
+  const { t } = useTranslation('settings')
+  const { locale, locales, setLocale } = useLocale()
+
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div className="text-sm">
+        <Label htmlFor="language-select" className="font-medium">
+          {t('language.label')}
+        </Label>
+        <p className="text-muted-foreground">{t('language.description')}</p>
+      </div>
+      <Select
+        id="language-select"
+        value={locale}
+        onChange={(event) => setLocale(event.target.value as Locale)}
+        className="w-auto"
+        aria-label={t('language.label')}
+      >
+        {locales.map((loc) => (
+          <option key={loc} value={loc}>
+            {LOCALE_LABELS[loc]}
+          </option>
+        ))}
+      </Select>
+    </div>
+  )
+}
+
 function DataExportSection() {
+  const { t } = useTranslation('settings')
   const api = useApi()
   const [pending, setPending] = useState(false)
 
@@ -133,9 +173,9 @@ function DataExportSection() {
       anchor.download = 'who2be-export.json'
       anchor.click()
       URL.revokeObjectURL(url)
-      notify.success('Datenexport heruntergeladen.')
+      notify.success(t('account.dataPrivacy.exportSuccess'))
     } catch (cause) {
-      notify.error(cause instanceof Error ? cause.message : 'Export fehlgeschlagen.')
+      notify.error(cause instanceof Error ? cause.message : t('account.dataPrivacy.exportError'))
     } finally {
       setPending(false)
     }
@@ -144,12 +184,11 @@ function DataExportSection() {
   return (
     <div className="flex flex-col gap-2">
       <p className="text-sm text-muted-foreground">
-        Lädt alle Organisationen, Workspaces, Personae, Playbooks, Resources, Agenten und deren
-        Versionen als JSON-Datei herunter.
+        {t('account.dataPrivacy.exportHint')}
       </p>
       <div>
         <Button type="button" variant="outline" size="sm" onClick={() => void onExport()} disabled={pending}>
-          Daten exportieren
+          {t('account.dataPrivacy.exportButton')}
         </Button>
       </div>
     </div>
@@ -157,6 +196,7 @@ function DataExportSection() {
 }
 
 function DeleteAccountSection({ email }: { email: string }) {
+  const { t } = useTranslation('settings')
   const api = useApi()
   const navigate = useNavigate()
   const [confirm, setConfirm] = useState('')
@@ -170,19 +210,18 @@ function DeleteAccountSection({ email }: { email: string }) {
       // Sofort clientseitig abmelden; der GoTrue-User wird im Hard-Purge nach
       // Ablauf der 30-Tage-Grace endgültig entfernt.
       await supabase.auth.signOut({ scope: 'global' })
-      notify.success('Konto zur Löschung vorgemerkt. Du wurdest abgemeldet.')
+      notify.success(t('account.deleteAccount.successToast'))
       navigate('/login', { replace: true })
     } catch (cause) {
       setPending(false)
-      notify.error(cause instanceof Error ? cause.message : 'Löschen fehlgeschlagen.')
+      notify.error(cause instanceof Error ? cause.message : t('account.deleteAccount.errorFallback'))
     }
   }
 
   return (
     <Stack gap="sm">
       <p className="text-sm text-muted-foreground">
-        Dein Konto und deine persönliche Organisation werden zur Löschung vorgemerkt und nach einer
-        30-tägigen Frist endgültig entfernt. Diese Aktion ist nicht widerrufbar.
+        {t('account.deleteAccount.description')}
       </p>
       <Dialog
         onOpenChange={(open) => {
@@ -192,18 +231,17 @@ function DeleteAccountSection({ email }: { email: string }) {
         }}
       >
         <DialogTrigger asChild>
-          <Button variant="destructive">Konto löschen</Button>
+          <Button variant="destructive">{t('account.deleteAccount.triggerButton')}</Button>
         </DialogTrigger>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Konto löschen</DialogTitle>
+            <DialogTitle>{t('account.deleteAccount.dialogTitle')}</DialogTitle>
             <DialogDescription>
-              Gib zur Bestätigung deine E-Mail „{email}“ ein. Nach 30 Tagen werden alle deine Daten
-              endgültig gelöscht.
+              {t('account.deleteAccount.dialogDescription', { email })}
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="confirm-account-email">E-Mail</Label>
+            <Label htmlFor="confirm-account-email">{t('account.deleteAccount.emailLabel')}</Label>
             <Input
               id="confirm-account-email"
               value={confirm}
@@ -213,14 +251,14 @@ function DeleteAccountSection({ email }: { email: string }) {
           </div>
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant="outline">Abbrechen</Button>
+              <Button variant="outline">{t('common:actions.cancel')}</Button>
             </DialogClose>
             <Button
               variant="destructive"
               disabled={!confirmMatches || pending}
               onClick={() => void onDelete()}
             >
-              Konto endgültig löschen
+              {t('account.deleteAccount.confirmButton')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -234,6 +272,7 @@ const nameSchema = z.object({
 })
 
 function ProfileForm({ initialName }: { initialName: string }) {
+  const { t } = useTranslation('settings')
   const [error, setError] = useState<string | null>(null)
   const form = useForm<z.infer<typeof nameSchema>>({
     resolver: zodResolver(nameSchema),
@@ -249,7 +288,7 @@ function ProfileForm({ initialName }: { initialName: string }) {
       setError(updateError.message)
       return
     }
-    notify.success('Anzeigename gespeichert.')
+    notify.success(t('account.profile.savedToast'))
     form.reset({ display_name: values.display_name })
   }
 
@@ -261,7 +300,7 @@ function ProfileForm({ initialName }: { initialName: string }) {
           name="display_name"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Anzeigename</FormLabel>
+              <FormLabel>{t('account.profile.displayName')}</FormLabel>
               <FormControl>
                 <Input autoComplete="name" {...field} />
               </FormControl>
@@ -277,7 +316,7 @@ function ProfileForm({ initialName }: { initialName: string }) {
             size="sm"
             disabled={form.formState.isSubmitting || !form.formState.isDirty}
           >
-            Speichern
+            {t('common:actions.save')}
           </Button>
         </div>
       </form>
@@ -290,6 +329,7 @@ const emailSchema = z.object({
 })
 
 function ChangeEmailForm({ currentEmail }: { currentEmail: string }) {
+  const { t } = useTranslation('settings')
   const [error, setError] = useState<string | null>(null)
   const form = useForm<z.infer<typeof emailSchema>>({
     resolver: zodResolver(emailSchema),
@@ -299,7 +339,7 @@ function ChangeEmailForm({ currentEmail }: { currentEmail: string }) {
   async function onSubmit(values: z.infer<typeof emailSchema>) {
     setError(null)
     if (values.email === currentEmail) {
-      setError('Das ist bereits deine aktuelle E-Mail-Adresse.')
+      setError(t('account.email.sameError'))
       return
     }
     // GoTrue schickt eine Bestaetigungs-Mail an die NEUE Adresse; die alte
@@ -309,7 +349,7 @@ function ChangeEmailForm({ currentEmail }: { currentEmail: string }) {
       setError(updateError.message)
       return
     }
-    notify.success('Bestaetigungs-Mail an die neue Adresse gesendet.')
+    notify.success(t('account.email.sentToast'))
     form.reset({ email: '' })
   }
 
@@ -321,7 +361,7 @@ function ChangeEmailForm({ currentEmail }: { currentEmail: string }) {
           name="email"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>E-Mail aendern</FormLabel>
+              <FormLabel>{t('account.email.changeLabel')}</FormLabel>
               <FormControl>
                 <Input type="email" autoComplete="email" placeholder={currentEmail} {...field} />
               </FormControl>
@@ -330,8 +370,7 @@ function ChangeEmailForm({ currentEmail }: { currentEmail: string }) {
           )}
         />
         <p className="text-xs text-muted-foreground">
-          Aktuell: <span className="font-medium text-foreground">{currentEmail}</span>. Eine neue
-          Adresse muss ueber einen Bestaetigungs-Link aktiviert werden.
+          {t('account.email.currentNote', { email: currentEmail })}
         </p>
         {error !== null ? <ErrorAlert message={error} /> : null}
         <div>
@@ -341,7 +380,7 @@ function ChangeEmailForm({ currentEmail }: { currentEmail: string }) {
             size="sm"
             disabled={form.formState.isSubmitting}
           >
-            E-Mail aendern
+            {t('account.email.changeButton')}
           </Button>
         </div>
       </form>
@@ -360,6 +399,7 @@ const passwordSchema = z
   })
 
 function ChangePasswordForm({ hasPassword }: { hasPassword: boolean }) {
+  const { t } = useTranslation('settings')
   const [error, setError] = useState<string | null>(null)
   const form = useForm<z.infer<typeof passwordSchema>>({
     resolver: zodResolver(passwordSchema),
@@ -373,7 +413,7 @@ function ChangePasswordForm({ hasPassword }: { hasPassword: boolean }) {
       setError(updateError.message)
       return
     }
-    notify.success(hasPassword ? 'Passwort geaendert.' : 'Passwort gesetzt.')
+    notify.success(hasPassword ? t('account.password.changedToast') : t('account.password.setToast'))
     form.reset({ password: '', confirm: '' })
   }
 
@@ -385,7 +425,7 @@ function ChangePasswordForm({ hasPassword }: { hasPassword: boolean }) {
           name="password"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{hasPassword ? 'Neues Passwort' : 'Passwort setzen'}</FormLabel>
+              <FormLabel>{hasPassword ? t('account.password.newLabel') : t('account.password.setLabel')}</FormLabel>
               <FormControl>
                 <Input type="password" autoComplete="new-password" {...field} />
               </FormControl>
@@ -398,7 +438,7 @@ function ChangePasswordForm({ hasPassword }: { hasPassword: boolean }) {
           name="confirm"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Passwort wiederholen</FormLabel>
+              <FormLabel>{t('account.password.confirmLabel')}</FormLabel>
               <FormControl>
                 <Input type="password" autoComplete="new-password" {...field} />
               </FormControl>
@@ -408,8 +448,7 @@ function ChangePasswordForm({ hasPassword }: { hasPassword: boolean }) {
         />
         {!hasPassword ? (
           <p className="text-xs text-muted-foreground">
-            Du bist per Magic-Link oder Social-Login angemeldet. Mit einem Passwort kannst du dich
-            auch direkt anmelden.
+            {t('account.password.magicLinkHint')}
           </p>
         ) : null}
         {error !== null ? <ErrorAlert message={error} /> : null}
@@ -420,7 +459,7 @@ function ChangePasswordForm({ hasPassword }: { hasPassword: boolean }) {
             size="sm"
             disabled={form.formState.isSubmitting}
           >
-            {hasPassword ? 'Passwort aendern' : 'Passwort setzen'}
+            {hasPassword ? t('account.password.changeButton') : t('account.password.setButton')}
           </Button>
         </div>
       </form>
@@ -429,6 +468,7 @@ function ChangePasswordForm({ hasPassword }: { hasPassword: boolean }) {
 }
 
 function SignOutEverywhere() {
+  const { t } = useTranslation('settings')
   const navigate = useNavigate()
   const [pending, setPending] = useState(false)
 
@@ -442,16 +482,16 @@ function SignOutEverywhere() {
       notify.error(error.message)
       return
     }
-    notify.success('Auf allen Geraeten abgemeldet.')
+    notify.success(t('account.signOutEverywhere.successToast'))
     navigate('/login', { replace: true })
   }
 
   return (
     <div className="flex flex-col gap-2">
       <div className="text-sm">
-        <div className="font-medium">Überall abmelden</div>
+        <div className="font-medium">{t('account.signOutEverywhere.title')}</div>
         <p className="text-muted-foreground">
-          Beendet alle aktiven Sitzungen auf allen Geräten.
+          {t('account.signOutEverywhere.description')}
         </p>
       </div>
       <div>
@@ -462,7 +502,7 @@ function SignOutEverywhere() {
           onClick={() => void signOutEverywhere()}
           disabled={pending}
         >
-          Überall abmelden
+          {t('account.signOutEverywhere.button')}
         </Button>
       </div>
     </div>

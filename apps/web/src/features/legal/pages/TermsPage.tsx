@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+
 import { LegalArticle, LegalSection } from '../components/LegalArticle'
 import { Placeholder } from '../components/Placeholder'
 
@@ -6,103 +8,82 @@ import { Placeholder } from '../components/Placeholder'
  * Platzhaltern — verbindlicher Text folgt vom Betreiber/Anwalt (CL4).
  */
 export function TermsPage() {
+  const { t } = useTranslation('legal')
+
   return (
     <LegalArticle
-      title="Allgemeine Geschaeftsbedingungen (AGB)"
+      title={t('terms.title')}
       intro={
         <p>
-          Diese AGB regeln die Nutzung von Who2Be durch{' '}
-          <Placeholder>Beschreibung der Nutzergruppe (Verbraucher/Unternehmer)</Placeholder>.
+          {t('terms.intro')}{' '}
+          <Placeholder>{t('terms.introUserGroup')}</Placeholder>
+          {t('terms.introPeriod')}
         </p>
       }
     >
-      <LegalSection heading="§ 1 Geltungsbereich">
+      <LegalSection heading={t('terms.sections.scope.heading')}>
         <p>
-          <Placeholder>
-            Geltungsbereich, Vertragspartner, Vorrang individueller Abreden, Einbeziehung
-          </Placeholder>
+          <Placeholder>{t('terms.sections.scope.body')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="§ 2 Vertragsgegenstand & Leistungsbeschreibung">
+      <LegalSection heading={t('terms.sections.subject.heading')}>
         <p>
-          <Placeholder>
-            Beschreibung des SaaS-Angebots, Leistungsumfang je Plan (Free/Pro), Verfuegbarkeit/SLA
-          </Placeholder>
+          <Placeholder>{t('terms.sections.subject.body')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="§ 3 Registrierung & Konto">
+      <LegalSection heading={t('terms.sections.registration.heading')}>
         <p>
-          <Placeholder>
-            Registrierungspflicht, Wahrheit der Angaben, Geheimhaltung der Zugangsdaten,
-            Mindestalter
-          </Placeholder>
+          <Placeholder>{t('terms.sections.registration.body')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="§ 4 Preise & Zahlungsbedingungen">
+      <LegalSection heading={t('terms.sections.pricing.heading')}>
         <p>
-          <Placeholder>
-            Preise, Abrechnungszeitraum, Zahlungsdienstleister (Mollie), Faelligkeit, Verzug,
-            Steuern
-          </Placeholder>
+          <Placeholder>{t('terms.sections.pricing.body')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="§ 5 Laufzeit & Kuendigung">
+      <LegalSection heading={t('terms.sections.termination.heading')}>
         <p>
-          <Placeholder>
-            Vertragslaufzeit, Verlaengerung, ordentliche/ausserordentliche Kuendigung,
-            Kuendigung zum Periodenende
-          </Placeholder>
+          <Placeholder>{t('terms.sections.termination.body')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="§ 6 Widerrufsrecht">
+      <LegalSection heading={t('terms.sections.withdrawal.heading')}>
         <p>
-          <Placeholder>
-            Widerrufsbelehrung fuer Verbraucher inkl. Muster-Widerrufsformular bzw. Hinweis,
-            falls nicht einschlaegig
-          </Placeholder>
+          <Placeholder>{t('terms.sections.withdrawal.body')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="§ 7 Pflichten der Nutzer & zulaessige Nutzung">
+      <LegalSection heading={t('terms.sections.obligations.heading')}>
         <p>
-          <Placeholder>
-            Acceptable-Use-Policy, verbotene Inhalte, Verantwortung fuer eingestellte Daten
-          </Placeholder>
+          <Placeholder>{t('terms.sections.obligations.body')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="§ 8 Verfuegbarkeit, Aenderungen & Wartung">
+      <LegalSection heading={t('terms.sections.availability.heading')}>
         <p>
-          <Placeholder>Verfuegbarkeitszusage, Wartungsfenster, Aenderungsvorbehalt</Placeholder>
+          <Placeholder>{t('terms.sections.availability.body')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="§ 9 Haftung">
+      <LegalSection heading={t('terms.sections.liability.heading')}>
         <p>
-          <Placeholder>
-            Haftungsregelung (Vorsatz/grobe Fahrlaessigkeit, Kardinalpflichten, Begrenzung)
-          </Placeholder>
+          <Placeholder>{t('terms.sections.liability.body')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="§ 10 Datenschutz">
+      <LegalSection heading={t('terms.sections.privacy.heading')}>
         <p>
-          <Placeholder>
-            Verweis auf Datenschutzerklaerung und ggf. Auftragsverarbeitungsvertrag (DPA)
-          </Placeholder>
+          <Placeholder>{t('terms.sections.privacy.body')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="§ 11 Schlussbestimmungen">
+      <LegalSection heading={t('terms.sections.final.heading')}>
         <p>
-          <Placeholder>
-            Anwendbares Recht, Gerichtsstand, salvatorische Klausel, Aenderungen der AGB
-          </Placeholder>
+          <Placeholder>{t('terms.sections.final.body')}</Placeholder>
         </p>
       </LegalSection>
     </LegalArticle>

@@ -2,6 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 
 import { ErrorAlert } from '@/components/data/ErrorAlert'
@@ -17,12 +18,7 @@ import { OAuthButtons } from '../components/OAuthButtons'
 import { buildRedirectTo } from '../lib/redirect'
 import { sanitizeNext } from '../lib/sanitize-next'
 
-const loginSchema = z.object({
-  email: z.string().email('Bitte gueltige E-Mail eingeben.'),
-  password: z.string().min(1, 'Passwort erforderlich.'),
-})
-
-type LoginValues = z.infer<typeof loginSchema>
+type LoginValues = { email: string; password: string }
 
 // GoTrue meldet einen noch nicht bestaetigten Account mit diesem Code; wir
 // fuehren den User dann gezielt zum erneuten Versand der Confirm-Mail.
@@ -34,6 +30,7 @@ function isUnconfirmedEmail(cause: unknown): boolean {
 }
 
 export function LoginPage() {
+  const { t } = useTranslation('auth')
   const { session, signIn } = useSession()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -46,6 +43,11 @@ export function LoginPage() {
   // In-App-Pfade zulassen — Browser interpretieren `//evil.com` und
   // `https://evil.com` als externe URL → Open-Redirect-Risiko.
   const next = sanitizeNext(searchParams.get('next'))
+
+  const loginSchema = z.object({
+    email: z.string().email(t('validation.emailInvalid')),
+    password: z.string().min(1, t('validation.passwordRequired')),
+  })
 
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
@@ -65,10 +67,10 @@ export function LoginPage() {
     } catch (cause) {
       if (isUnconfirmedEmail(cause)) {
         setUnconfirmed(true)
-        setError('Deine E-Mail-Adresse ist noch nicht bestaetigt.')
+        setError(t('login.unconfirmedEmail'))
         return
       }
-      setError(cause instanceof Error ? cause.message : 'Login fehlgeschlagen.')
+      setError(cause instanceof Error ? cause.message : t('login.loginFailed'))
     }
   }
 
@@ -83,7 +85,7 @@ export function LoginPage() {
       notify.error(resendError.message)
       return
     }
-    notify.success('Bestaetigungs-Mail erneut gesendet.')
+    notify.success(t('login.confirmationResent'))
   }
 
   return (
@@ -91,10 +93,10 @@ export function LoginPage() {
       <Card className="w-full max-w-md border-transparent shadow-modal">
         <CardHeader className="gap-2">
           <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            Who2Be
+            {t('brand')}
           </span>
-          <CardTitle className="text-3xl tracking-tight">Anmeldung</CardTitle>
-          <CardDescription>Melde dich mit deinem Who2Be-Konto an.</CardDescription>
+          <CardTitle className="text-3xl tracking-tight">{t('login.title')}</CardTitle>
+          <CardDescription>{t('login.description')}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col gap-4">
@@ -105,7 +107,7 @@ export function LoginPage() {
                   name="email"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>E-Mail</FormLabel>
+                      <FormLabel>{t('fields.email')}</FormLabel>
                       <FormControl>
                         <Input type="email" autoComplete="email" required {...field} />
                       </FormControl>
@@ -119,7 +121,7 @@ export function LoginPage() {
                   render={({ field }) => (
                     <FormItem>
                       <div className="flex items-center justify-between">
-                        <FormLabel>Passwort</FormLabel>
+                        <FormLabel>{t('fields.password')}</FormLabel>
                         <Link
                           to={
                             next === '/'
@@ -128,7 +130,7 @@ export function LoginPage() {
                           }
                           className="text-xs text-muted-foreground underline-offset-4 hover:underline"
                         >
-                          Passwort vergessen?
+                          {t('login.forgotPassword')}
                         </Link>
                       </div>
                       <FormControl>
@@ -146,7 +148,7 @@ export function LoginPage() {
                 {error !== null ? <ErrorAlert message={error} /> : null}
                 {unconfirmed ? (
                   <Button type="button" variant="outline" size="sm" onClick={() => void resendConfirmation()}>
-                    Bestaetigungs-Mail erneut senden
+                    {t('login.resendConfirmation')}
                   </Button>
                 ) : null}
                 <Button
@@ -155,23 +157,23 @@ export function LoginPage() {
                   className="w-full"
                   disabled={form.formState.isSubmitting}
                 >
-                  Anmelden
+                  {t('login.submit')}
                 </Button>
               </form>
             </Form>
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span className="h-px flex-1 bg-border" />
-              oder
+              {t('or')}
               <span className="h-px flex-1 bg-border" />
             </div>
             <OAuthButtons next={next} />
             <p className="text-center text-sm text-muted-foreground">
-              Noch kein Konto?{' '}
+              {t('login.noAccount')}{' '}
               <Link
                 to={next === '/' ? '/signup' : `/signup?next=${encodeURIComponent(next)}`}
                 className="font-medium text-foreground underline-offset-4 hover:underline"
               >
-                Registrieren
+                {t('login.register')}
               </Link>
             </p>
           </div>

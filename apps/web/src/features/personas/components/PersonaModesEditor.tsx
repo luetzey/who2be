@@ -9,6 +9,7 @@
 import { Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useFieldArray, useFormContext, useWatch, type Control } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
 
 import type { Playbook, ResourceBlock } from '@/api/types'
 import { useApi } from '@/api/useApi'
@@ -90,6 +91,7 @@ interface ModePlaybookSelectProps {
 }
 
 function ModePlaybookSelect({ control, index, disabled }: ModePlaybookSelectProps) {
+  const { t } = useTranslation('personas')
   const api = useApi()
   const { setValue } = useFormContext<PersonaEditorValues>()
   const [playbooks, setPlaybooks] = useState<Playbook[]>([])
@@ -115,7 +117,7 @@ function ModePlaybookSelect({ control, index, disabled }: ModePlaybookSelectProp
       name={`modes.${index}.playbook_id`}
       render={({ field: f }) => (
         <FormItem>
-          <FormLabel>Playbook</FormLabel>
+          <FormLabel>{t('modes.field.playbook.label')}</FormLabel>
           <FormControl>
             <Select
               value={f.value ?? ''}
@@ -132,7 +134,7 @@ function ModePlaybookSelect({ control, index, disabled }: ModePlaybookSelectProp
                 setValue(`modes.${index}.playbook_name`, picked?.name ?? '')
               }}
             >
-              <option value="">Kein Playbook</option>
+              <option value="">{t('modes.field.playbook.none')}</option>
               {playbooks.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -141,7 +143,7 @@ function ModePlaybookSelect({ control, index, disabled }: ModePlaybookSelectProp
             </Select>
           </FormControl>
           <p className="text-xs text-muted-foreground">
-            Optional — verknüpft diesen Modus mit einem Playbook.
+            {t('modes.field.playbook.hint')}
           </p>
           <FormMessage />
         </FormItem>
@@ -151,6 +153,7 @@ function ModePlaybookSelect({ control, index, disabled }: ModePlaybookSelectProp
 }
 
 export function PersonaModesEditor({ control, disabled = false }: PersonaModesEditorProps) {
+  const { t } = useTranslation('personas')
   const { fields, append, remove, update } = useFieldArray({
     control,
     name: 'modes',
@@ -187,8 +190,7 @@ export function PersonaModesEditor({ control, disabled = false }: PersonaModesEd
     return (
       <div className="flex flex-col gap-3">
         <p className="text-sm text-muted-foreground">
-          Noch keine Modi definiert. Modi ermöglichen es der Persona, je nach Kontext
-          unterschiedlich zu agieren (z. B. „Coaching-Modus" vs. „Analyse-Modus").
+          {t('modes.empty.text')}
         </p>
         <div className="flex justify-start">
           <Button
@@ -199,7 +201,7 @@ export function PersonaModesEditor({ control, disabled = false }: PersonaModesEd
             disabled={disabled}
           >
             <Plus className="size-4" />
-            Ersten Modus anlegen
+            {t('modes.addFirst')}
           </Button>
         </div>
       </div>
@@ -230,7 +232,7 @@ export function PersonaModesEditor({ control, disabled = false }: PersonaModesEd
           disabled={disabled}
         >
           <Plus className="size-4" />
-          Modus hinzufügen
+          {t('modes.add')}
         </Button>
       </div>
     </div>
@@ -256,6 +258,7 @@ function PersonaModeCard({
   onSetDefault,
   onRemove,
 }: PersonaModeCardProps) {
+  const { t } = useTranslation('personas')
   // Live-Default aus dem Form-State (useFieldArray-`field.is_default` aktualisiert
   // sich nicht ohne Re-Sync; useWatch ist die verlaessliche Quelle fuer das Badge).
   const watchedDefault = useWatch({ control, name: `modes.${index}.is_default` })
@@ -271,9 +274,9 @@ function PersonaModeCard({
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-muted-foreground">
-            Modus {index + 1}
+            {t('modes.card.header', { number: index + 1 })}
           </span>
-          {showDefault ? <Badge variant="secondary">Default</Badge> : null}
+          {showDefault ? <Badge variant="secondary">{t('modes.card.defaultBadge')}</Badge> : null}
         </div>
         <div className="flex items-center gap-2">
           {!showDefault ? (
@@ -285,7 +288,7 @@ function PersonaModeCard({
               disabled={disabled}
               className="text-xs"
             >
-              Als Default setzen
+              {t('modes.card.setDefault')}
             </Button>
           ) : null}
           <Button
@@ -294,7 +297,7 @@ function PersonaModeCard({
             size="sm"
             onClick={onRemove}
             disabled={disabled}
-            aria-label={`Modus ${index + 1} entfernen`}
+            aria-label={t('modes.card.remove', { number: index + 1 })}
             className="text-destructive hover:text-destructive"
           >
             <Trash2 className="size-4" />
@@ -307,9 +310,9 @@ function PersonaModeCard({
         name={`modes.${index}.name`}
         render={({ field: f }) => (
           <FormItem>
-            <FormLabel>Name</FormLabel>
+            <FormLabel>{t('common:fields.name')}</FormLabel>
             <FormControl>
-              <Input {...f} placeholder="z. B. Coaching-Modus" disabled={disabled} />
+              <Input {...f} placeholder={t('modes.field.namePlaceholder')} disabled={disabled} />
             </FormControl>
             <FormMessage />
           </FormItem>
@@ -321,18 +324,17 @@ function PersonaModeCard({
         name={`modes.${index}.trigger`}
         render={({ field: f }) => (
           <FormItem>
-            <FormLabel>Trigger</FormLabel>
+            <FormLabel>{t('modes.field.trigger.label')}</FormLabel>
             <FormControl>
               <Input
                 {...f}
                 value={f.value ?? ''}
-                placeholder="z. B. coaching, feedback (kommagetrennt)"
+                placeholder={t('modes.field.trigger.placeholder')}
                 disabled={disabled}
               />
             </FormControl>
             <p className="text-xs text-muted-foreground">
-              Kommagetrennte Schlüsselwörter. Leer = Default-Modus
-              (nur einer erlaubt).
+              {t('modes.field.trigger.hint')}
             </p>
             <FormMessage />
           </FormItem>
@@ -345,7 +347,7 @@ function PersonaModeCard({
         control={control}
         index={index}
         field="identity_add"
-        label="Identity-Ergänzung"
+        label={t('modes.field.identity.label')}
         instanceKey={instanceKey}
         disabled={disabled}
       />
@@ -353,7 +355,7 @@ function PersonaModeCard({
         control={control}
         index={index}
         field="output_style_override"
-        label="Output-Stil"
+        label={t('modes.field.outputStyle.label')}
         instanceKey={instanceKey}
         disabled={disabled}
       />
@@ -361,7 +363,7 @@ function PersonaModeCard({
         control={control}
         index={index}
         field="anti_patterns"
-        label="Anti-Patterns"
+        label={t('modes.field.antiPatterns.label')}
         instanceKey={instanceKey}
         disabled={disabled}
       />

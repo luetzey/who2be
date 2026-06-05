@@ -1,5 +1,6 @@
 import { ArrowLeft } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { Container } from '@/components/layout/Container'
@@ -15,6 +16,7 @@ import { PlaceholderHelpContent } from '../components/PlaceholderHelp'
  * Placeholder-Popovers, Track B Punkt 12).
  */
 export function HelpPlaceholdersPage() {
+  const { t } = useTranslation('systemPrompts')
   const wsPath = useWorkspacePath()
   return (
     <Container>
@@ -22,12 +24,12 @@ export function HelpPlaceholdersPage() {
         <Button asChild variant="ghost" size="sm" className="self-start">
           <Link to={wsPath('/system-prompts')}>
             <ArrowLeft className="h-4 w-4" />
-            System-Prompts
+            {t('nav.backToList')}
           </Link>
         </Button>
         <PageHeader
-          title="Placeholder-Referenz"
-          description="Welche Placeholder dir im System-Prompt-Editor zur Verfügung stehen und was sie beim MCP-Read einfügen."
+          title={t('page.help.title')}
+          description={t('page.help.description')}
         />
         <Card>
           <CardContent className="pt-6">

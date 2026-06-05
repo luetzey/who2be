@@ -1,7 +1,18 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
-import { afterEach, expect } from 'vitest'
+import { afterEach, beforeEach, expect } from 'vitest'
 import * as axeMatchers from 'vitest-axe/matchers'
+
+// i18n-Singleton initialisieren und auf Deutsch fixieren. Der Sprachdetektor
+// wuerde in JSDOM sonst `navigator.language` (en-US) ziehen und die UI auf
+// Englisch schalten — die bestehenden Tests assertieren deutsche Strings.
+import i18n from '@/i18n'
+
+beforeEach(() => {
+  if (i18n.language !== 'de') {
+    void i18n.changeLanguage('de')
+  }
+})
 
 // vitest-axe@0.1.0 liefert ein leeres `extend-expect.js` — daher die Matcher
 // (u.a. `toHaveNoViolations`) hier explizit registrieren.

@@ -1,4 +1,5 @@
 import { Check, ChevronsUpDown, Plus } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router-dom'
 
 import type { MeOrganization } from '@/api/types'
@@ -41,6 +42,7 @@ function findCurrentLabel(
 // die letzte Workspace-Id in `localStorage` (Bookmarks-Fallback) und
 // navigiert auf das Dashboard des neuen Workspace.
 export function WorkspaceSwitcher() {
+  const { t } = useTranslation('layout')
   const { me } = useSession()
   const navigate = useNavigate()
   const currentWorkspaceId = useWorkspaceId()
@@ -52,8 +54,9 @@ export function WorkspaceSwitcher() {
 
   const current = findCurrentLabel(me.organizations, currentWorkspaceId)
   const triggerLabel =
-    current !== null ? current.wsName : 'Workspace wählen'
-  const triggerSubLabel = current !== null ? current.orgName : 'Kein Workspace aktiv'
+    current !== null ? current.wsName : t('workspaceSwitcher.select')
+  const triggerSubLabel =
+    current !== null ? current.orgName : t('workspaceSwitcher.noneActive')
 
   const handleSelect = (workspaceId: string) => {
     if (workspaceId === currentWorkspaceId) {
@@ -73,7 +76,7 @@ export function WorkspaceSwitcher() {
         <Button
           variant="ghost"
           className="flex h-auto w-full items-center justify-between gap-2 px-2 py-2 text-left"
-          aria-label="Workspace wechseln"
+          aria-label={t('workspaceSwitcher.switch')}
         >
           <span className="flex min-w-0 flex-col">
             <span className="truncate text-sm font-medium">{triggerLabel}</span>
@@ -91,12 +94,14 @@ export function WorkspaceSwitcher() {
             <DropdownMenuLabel className="flex items-center justify-between gap-2">
               <span className="truncate">{org.name}</span>
               <span className="text-xs font-normal text-muted-foreground">
-                {org.kind === 'personal' ? 'Persönlich' : 'Organisation'}
+                {org.kind === 'personal'
+                  ? t('workspaceSwitcher.personal')
+                  : t('workspaceSwitcher.organization')}
               </span>
             </DropdownMenuLabel>
             {org.workspaces.length === 0 ? (
               <DropdownMenuItem disabled>
-                Keine Workspaces in dieser Organisation
+                {t('workspaceSwitcher.noWorkspacesInOrg')}
               </DropdownMenuItem>
             ) : (
               org.workspaces.map((ws) => {
@@ -125,7 +130,7 @@ export function WorkspaceSwitcher() {
         <DropdownMenuItem asChild>
           <Link to={wsPath('/settings/org')} className="flex items-center gap-2">
             <Plus className="size-4" aria-hidden="true" />
-            Workspace anlegen
+            {t('workspaceSwitcher.create')}
           </Link>
         </DropdownMenuItem>
       </DropdownMenuContent>

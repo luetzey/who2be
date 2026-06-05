@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+
 import { LegalArticle, LegalSection } from '../components/LegalArticle'
 import { Placeholder } from '../components/Placeholder'
 
@@ -7,102 +9,76 @@ import { Placeholder } from '../components/Placeholder'
  * Geruest mit Platzhaltern — verbindliche Fassung folgt vom Betreiber/Anwalt.
  */
 export function DpaPage() {
+  const { t } = useTranslation('legal')
+
   return (
     <LegalArticle
-      title="Vertrag zur Auftragsverarbeitung (DPA)"
-      intro={
-        <p>
-          Dieser Vertrag konkretisiert die Pflichten nach Art. 28 DSGVO, wenn der Kunde
-          (Verantwortlicher) Who2Be (Auftragsverarbeiter) mit der Verarbeitung personenbezogener
-          Daten beauftragt. Er wird Bestandteil des Hauptvertrags.
-        </p>
-      }
+      title={t('dpa.title')}
+      intro={<p>{t('dpa.intro')}</p>}
     >
-      <LegalSection heading="1. Gegenstand & Dauer">
+      <LegalSection heading={t('dpa.sections.subject.heading')}>
         <p>
-          <Placeholder>
-            Gegenstand der Verarbeitung, Laufzeit (gekoppelt an Hauptvertrag), Kuendigung
-          </Placeholder>
+          <Placeholder>{t('dpa.sections.subject.body')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="2. Art & Zweck der Verarbeitung">
+      <LegalSection heading={t('dpa.sections.purpose.heading')}>
         <p>
-          <Placeholder>
-            beschriebene Verarbeitungstaetigkeiten und Zweck der Auftragsverarbeitung
-          </Placeholder>
+          <Placeholder>{t('dpa.sections.purpose.body')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="3. Art der personenbezogenen Daten">
+      <LegalSection heading={t('dpa.sections.dataTypes.heading')}>
         <p>
-          <Placeholder>
-            Datenkategorien (z. B. Konto-/Profildaten, Inhalte der Personas/Playbooks/Resources)
-          </Placeholder>
+          <Placeholder>{t('dpa.sections.dataTypes.body')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="4. Kategorien betroffener Personen">
+      <LegalSection heading={t('dpa.sections.dataSubjects.heading')}>
         <p>
-          <Placeholder>
-            betroffene Personen (z. B. Mitarbeitende, Kunden des Verantwortlichen)
-          </Placeholder>
+          <Placeholder>{t('dpa.sections.dataSubjects.body')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="5. Pflichten des Auftragsverarbeiters">
+      <LegalSection heading={t('dpa.sections.processorObligations.heading')}>
         <p>
-          <Placeholder>
-            Weisungsbindung, Vertraulichkeit, Unterstuetzung bei Betroffenenrechten, Meldepflichten
-          </Placeholder>
+          <Placeholder>{t('dpa.sections.processorObligations.body')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="6. Technische & organisatorische Massnahmen (TOM)">
+      <LegalSection heading={t('dpa.sections.tom.heading')}>
         <p>
-          <Placeholder>
-            Verweis auf TOM-Anlage (Verschluesselung, Zugriffskontrolle, RLS, Backups, Logging)
-          </Placeholder>
+          <Placeholder>{t('dpa.sections.tom.body')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="7. Unterauftragsverarbeiter">
+      <LegalSection heading={t('dpa.sections.subprocessors.heading')}>
         <p>
-          <Placeholder>
-            Liste zugelassener Subunternehmer (Hosting/Auth/Mail/Payment), Genehmigungsverfahren
-          </Placeholder>
+          <Placeholder>{t('dpa.sections.subprocessors.body')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="8. Drittlandtransfers">
+      <LegalSection heading={t('dpa.sections.transfers.heading')}>
         <p>
-          <Placeholder>
-            Angaben zu Uebermittlungen in Drittlaender und Garantien (SCC) sofern einschlaegig
-          </Placeholder>
+          <Placeholder>{t('dpa.sections.transfers.body')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="9. Betroffenenrechte & Unterstuetzung">
+      <LegalSection heading={t('dpa.sections.dataSubjectRights.heading')}>
         <p>
-          <Placeholder>
-            Unterstuetzung des Verantwortlichen bei Auskunft/Loeschung/Datenexport
-          </Placeholder>
+          <Placeholder>{t('dpa.sections.dataSubjectRights.body')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="10. Loeschung & Rueckgabe nach Vertragsende">
+      <LegalSection heading={t('dpa.sections.deletion.heading')}>
         <p>
-          <Placeholder>
-            Loesch-/Rueckgabekonzept nach Vertragsende inkl. Fristen
-          </Placeholder>
+          <Placeholder>{t('dpa.sections.deletion.body')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="11. Nachweise & Audits">
+      <LegalSection heading={t('dpa.sections.audits.heading')}>
         <p>
-          <Placeholder>
-            Nachweispflichten, Audit-Rechte des Verantwortlichen, Zertifizierungen
-          </Placeholder>
+          <Placeholder>{t('dpa.sections.audits.body')}</Placeholder>
         </p>
       </LegalSection>
     </LegalArticle>

@@ -1,5 +1,6 @@
 import { ArrowLeft } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -12,6 +13,7 @@ import { PersonaEditorForm } from '../components/PersonaEditorForm'
 import { useCreatePersona } from '../hooks/useCreatePersona'
 
 export function PersonaNewPage() {
+  const { t } = useTranslation('personas')
   const navigate = useNavigate()
   const wsPath = useWorkspacePath()
   const { form, onSubmit, saveError } = useCreatePersona((id) =>
@@ -24,10 +26,10 @@ export function PersonaNewPage() {
         <Button asChild variant="ghost" size="sm" className="self-start">
           <Link to={wsPath('/personas')}>
             <ArrowLeft className="h-4 w-4" />
-            Personae
+            {t('list.title')}
           </Link>
         </Button>
-        <PageHeader title="Neue Persona" description="Lege eine neue Persona-Version an." />
+        <PageHeader title={t('new.title')} description={t('new.description')} />
         <PersonaEditorForm
           form={form}
           formKey="new"
@@ -42,7 +44,7 @@ export function PersonaNewPage() {
                   variant="brand"
                   disabled={form.formState.isSubmitting}
                 >
-                  Anlegen
+                  {t('new.submit')}
                 </Button>
               </div>
             </div>

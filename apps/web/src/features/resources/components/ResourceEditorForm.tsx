@@ -1,5 +1,6 @@
 import { type FormEvent, type ReactNode } from 'react'
 import { type UseFormReturn } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
 
 import type { ResourceBlock } from '@/api/types'
 import { useApi } from '@/api/useApi'
@@ -40,6 +41,7 @@ export function ResourceEditorForm({
   onSubmit,
   actions,
 }: ResourceEditorFormProps) {
+  const { t } = useTranslation('resources')
   const isViewer = useCurrentWorkspaceRole() === 'viewer'
   const api = useApi()
 
@@ -52,12 +54,11 @@ export function ResourceEditorForm({
             onSubmit={onSubmit ?? ((event) => event.preventDefault())}
           >
             <FormSection
-              title="Identität"
-              description="Wie die Resource heißt und worum es geht."
+              title={t('form.identityTitle')}
+              description={t('form.identityDescription')}
               help={
                 <p>
-                  Beispiel: <em>„Datenschutz-FAQ"</em> — strukturierter
-                  Wissensblock, der von Playbooks per Block-Ref eingebunden wird.
+                  {t('form.identityHelp')}
                 </p>
               }
             >
@@ -66,11 +67,11 @@ export function ResourceEditorForm({
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Name</FormLabel>
+                    <FormLabel>{t('common:fields.name')}</FormLabel>
                     <FormControl>
                       <Input
                         required
-                        placeholder="z. B. Datenschutz-FAQ"
+                        placeholder={t('form.namePlaceholder')}
                         {...field}
                       />
                     </FormControl>
@@ -83,10 +84,10 @@ export function ResourceEditorForm({
                 name="description"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Beschreibung</FormLabel>
+                    <FormLabel>{t('common:fields.description')}</FormLabel>
                     <FormControl>
                       <Input
-                        placeholder="z. B. Antworten auf die häufigsten Datenschutzfragen"
+                        placeholder={t('form.descriptionPlaceholder')}
                         {...field}
                       />
                     </FormControl>
@@ -97,12 +98,11 @@ export function ResourceEditorForm({
             </FormSection>
 
             <FormSection
-              title="Inhalt"
-              description="Der eigentliche Inhalt der Resource."
+              title={t('form.contentTitle')}
+              description={t('form.contentDescription')}
               help={
                 <p>
-                  Einzelne Heading-Bloecke koennen per Block-Ref in Playbooks
-                  eingebunden werden. Aenderungen erzeugen eine neue Version.
+                  {t('form.contentHelp')}
                 </p>
               }
             >
@@ -111,7 +111,7 @@ export function ResourceEditorForm({
                 name="bodyBlocks"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Inhalt</FormLabel>
+                    <FormLabel>{t('form.contentLabel')}</FormLabel>
                     <FormControl>
                       <ResourceEditor
                         key={formKey}
@@ -127,13 +127,11 @@ export function ResourceEditorForm({
             </FormSection>
 
             <FormSection
-              title="Tags"
-              description="Stichwörter zur Suche und Filterung."
+              title={t('common:fields.tags')}
+              description={t('form.tagsDescription')}
               help={
                 <p>
-                  Beispiel: <em>„datenschutz, faq, recht"</em>. Enter zum Anlegen,
-                  Klick auf das X zum Entfernen. Tags ermöglichen das Filtern in der
-                  Resource-Liste und im MCP-Tool <code>list_resources</code>.
+                  {t('form.tagsHelp')}
                 </p>
               }
             >
@@ -142,14 +140,14 @@ export function ResourceEditorForm({
                 name="tags"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel id={`${field.name}-label`}>Tags</FormLabel>
+                    <FormLabel id={`${field.name}-label`}>{t('common:fields.tags')}</FormLabel>
                     <FormControl>
                       <TagInput
                         value={field.value}
                         onChange={field.onChange}
                         loadSuggestions={api.listResourceTags}
                         ariaLabelledby={`${field.name}-label`}
-                        placeholder="Tag eingeben und Enter drücken"
+                        placeholder={t('form.tagsPlaceholder')}
                         disabled={isViewer}
                       />
                     </FormControl>

@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 
 import { ErrorAlert } from '@/components/data/ErrorAlert'
 import { Container } from '@/components/layout/Container'
+import i18n from '@/i18n'
 
 interface BoundaryProps {
   children: ReactNode
@@ -27,7 +28,7 @@ class ErrorBoundaryImpl extends Component<BoundaryProps, BoundaryState> {
     if (this.state.error !== null) {
       return (
         <Container>
-          <ErrorAlert title="Unerwarteter Fehler" message={this.state.error.message} />
+          <ErrorAlert title={i18n.t('common:unexpectedError')} message={this.state.error.message} />
         </Container>
       )
     }

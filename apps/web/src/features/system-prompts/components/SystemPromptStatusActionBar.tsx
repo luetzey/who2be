@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import type { VersionStatus } from '@/api/types'
 import { useApi } from '@/api/useApi'
@@ -24,6 +25,7 @@ export function SystemPromptStatusActionBar({
   status,
   onTransitioned,
 }: SystemPromptStatusActionBarProps) {
+  const { t } = useTranslation('systemPrompts')
   const api = useApi()
   const role = useCurrentWorkspaceRole()
   const [busy, setBusy] = useState<VersionStatus | null>(null)
@@ -36,7 +38,7 @@ export function SystemPromptStatusActionBar({
       onTransitioned()
     } catch (cause: unknown) {
       const message =
-        cause instanceof Error ? cause.message : 'Aktion fehlgeschlagen.'
+        cause instanceof Error ? cause.message : t('statusBar.toast.actionFailed')
       notify.error(message)
     } finally {
       setBusy(null)
@@ -47,51 +49,51 @@ export function SystemPromptStatusActionBar({
   // State-Machine: draft → review; review → active|draft; inactive → draft.
   if (status === 'draft') {
     return (
-      <div role="toolbar" aria-label="Status-Aktionen" className="flex gap-2">
+      <div role="toolbar" aria-label={t('statusBar.ariaLabel')} className="flex gap-2">
         <Button
           type="button"
           variant="default"
           disabled={busy !== null}
-          onClick={() => void transition('review', 'Zur Review eingereicht.')}
+          onClick={() => void transition('review', t('statusBar.toast.submittedForReview'))}
         >
-          Zur Review einreichen
+          {t('statusBar.submitForReview')}
         </Button>
       </div>
     )
   }
   if (status === 'review') {
     return (
-      <div role="toolbar" aria-label="Status-Aktionen" className="flex gap-2">
+      <div role="toolbar" aria-label={t('statusBar.ariaLabel')} className="flex gap-2">
         <Button
           type="button"
           variant="brand"
           disabled={busy !== null || !canPromote}
-          title={canPromote ? undefined : 'Nur Admins können aktivieren'}
-          onClick={() => void transition('active', 'Version aktiviert.')}
+          title={canPromote ? undefined : t('statusBar.adminOnlyTooltip')}
+          onClick={() => void transition('active', t('statusBar.toast.activated'))}
         >
-          Aktivieren
+          {t('statusBar.activate')}
         </Button>
         <Button
           type="button"
           variant="destructive"
           disabled={busy !== null}
-          onClick={() => void transition('draft', 'Zurück in den Entwurf.')}
+          onClick={() => void transition('draft', t('statusBar.toast.backToDraft'))}
         >
-          Zurück zu Draft
+          {t('statusBar.backToDraft')}
         </Button>
       </div>
     )
   }
   if (status === 'inactive') {
     return (
-      <div role="toolbar" aria-label="Status-Aktionen" className="flex gap-2">
+      <div role="toolbar" aria-label={t('statusBar.ariaLabel')} className="flex gap-2">
         <Button
           type="button"
           variant="default"
           disabled={busy !== null}
-          onClick={() => void transition('draft', 'Als Draft reaktiviert.')}
+          onClick={() => void transition('draft', t('statusBar.toast.reactivatedAsDraft'))}
         >
-          Als Draft reaktivieren
+          {t('statusBar.reactivateAsDraft')}
         </Button>
       </div>
     )

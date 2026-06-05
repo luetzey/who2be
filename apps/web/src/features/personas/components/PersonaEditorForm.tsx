@@ -1,6 +1,7 @@
 import { ChevronRight } from 'lucide-react'
 import { type FormEvent, type ReactNode } from 'react'
 import { useFormContext, useWatch, type Control, type UseFormReturn } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
 
 import type { ResourceBlock } from '@/api/types'
 import { useApi } from '@/api/useApi'
@@ -29,13 +30,14 @@ const MODES_SECTION_ID = 'persona-modes-section'
  * sind strukturierte Felder, keine Body-Blocks).
  */
 function PersonaModesInfoPill() {
+  const { t } = useTranslation('personas')
   const { control } = useFormContext<PersonaEditorValues>()
   const modes = useWatch({ control, name: 'modes' })
   if (modes === undefined || modes.length === 0) {
     return null
   }
   const defaultMode = modes.find((m) => m.is_default)
-  const defaultLabel = defaultMode?.name?.trim() !== '' ? defaultMode?.name : 'kein Default'
+  const defaultLabel = defaultMode?.name?.trim() !== '' ? defaultMode?.name : t('modes.noDefaultLabel')
   const handleJump = () => {
     const el = document.getElementById(MODES_SECTION_ID)
     if (el === null) return
@@ -55,13 +57,13 @@ function PersonaModesInfoPill() {
         'text-xs font-normal text-foreground hover:bg-brand/10',
       )}
       data-testid="persona-modes-info-pill"
-      aria-label={`${modes.length} Modi definiert, Default ${defaultLabel}. Zu Modi springen.`}
+      aria-label={t('editor.modes.infoAriaLabel', { count: modes.length, defaultLabel })}
     >
       <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
         {modes.length}
       </Badge>
       <span>
-        Modi · Default: <strong className="font-semibold">{defaultLabel}</strong>
+        {t('editor.modes.infoPillText')} <strong className="font-semibold">{defaultLabel}</strong>
       </span>
     </Button>
   )
@@ -83,6 +85,7 @@ interface PersonaModesDisclosureProps {
  * Open/Close-State-Maschine (das macht der Browser).
  */
 function PersonaModesDisclosure({ control, disabled }: PersonaModesDisclosureProps) {
+  const { t } = useTranslation('personas')
   const modes = useWatch({ control, name: 'modes' })
   const hasModes = modes !== undefined && modes.length > 0
   return (
@@ -101,7 +104,7 @@ function PersonaModesDisclosure({ control, disabled }: PersonaModesDisclosurePro
       >
         <span className="flex items-center gap-2">
           <ChevronRight className="size-4 transition-transform group-open:rotate-90" />
-          <span>Modi (optional)</span>
+          <span>{t('editor.modes.disclosure.title')}</span>
           {hasModes ? (
             <Badge variant="secondary" className="ml-1">
               {modes.length}
@@ -109,7 +112,7 @@ function PersonaModesDisclosure({ control, disabled }: PersonaModesDisclosurePro
           ) : null}
         </span>
         <span className="text-xs font-normal text-muted-foreground">
-          Verhalten je Kontext — z. B. Coaching vs. Analyse
+          {t('editor.modes.disclosure.subtitle')}
         </span>
       </summary>
       <div className="border-t px-4 py-4">
@@ -172,6 +175,7 @@ export function PersonaEditorForm({
   // Viewer dürfen nur lesen (ADR-0023) — Auto-Save bleibt gesperrt (Detail-
   // Page reicht `isReady=false` durch, falls die Rolle das Editieren
   // unterbindet).
+  const { t } = useTranslation('personas')
   const isViewer = useCurrentWorkspaceRole() === 'viewer'
   const api = useApi()
   const showLegacyHint =
@@ -185,12 +189,11 @@ export function PersonaEditorForm({
             onSubmit={onSubmit ?? ((event) => event.preventDefault())}
           >
             <FormSection
-              title="Identität"
-              description="Wie die Persona heißt und wofür sie zuständig ist."
+              title={t('editor.identity.title')}
+              description={t('editor.identity.description')}
               help={
                 <p>
-                  Beispiel: <em>„Coach Carla — moderiert 1:1-Feedback-Gespräche"</em>.
-                  Name und Beschreibung tauchen in Listen, Picker und Agent-Tools auf.
+                  {t('editor.identity.helpExample')}
                 </p>
               }
             >
@@ -199,9 +202,9 @@ export function PersonaEditorForm({
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Name</FormLabel>
+                    <FormLabel>{t('common:fields.name')}</FormLabel>
                     <FormControl>
-                      <Input required placeholder="z. B. Coach Carla" {...field} />
+                      <Input required placeholder={t('editor.identity.namePlaceholder')} {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -212,11 +215,11 @@ export function PersonaEditorForm({
                 name="description"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Beschreibung</FormLabel>
+                    <FormLabel>{t('common:fields.description')}</FormLabel>
                     <FormControl>
                       <Input
                         required
-                        placeholder="z. B. 1:1-Coach für Führungskräfte-Sparring"
+                        placeholder={t('editor.identity.descriptionPlaceholder')}
                         {...field}
                       />
                     </FormControl>
@@ -229,15 +232,13 @@ export function PersonaEditorForm({
             {showLegacyHint ? (
               <div
                 role="note"
-                aria-label="Veralteter System-Prompt"
+                aria-label={t('editor.legacy.ariaLabel')}
                 data-testid="persona-legacy-system-prompt-hint"
                 className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200"
               >
-                <p className="font-medium">Veraltet — Inhalt in Template übernehmen</p>
+                <p className="font-medium">{t('editor.legacy.title')}</p>
                 <p className="mt-1 text-xs">
-                  Persona-eigene System-Prompts laufen jetzt über das verknüpfte
-                  Agent-Template. Übernimm den Text manuell in dein Template,
-                  danach kannst du das Feld leer lassen.
+                  {t('editor.legacy.body')}
                 </p>
                 <pre className="mt-2 max-h-40 overflow-auto rounded bg-amber-100/60 p-2 font-mono text-xs whitespace-pre-wrap dark:bg-amber-900/40">
                   {legacySystemPrompt}
@@ -246,22 +247,17 @@ export function PersonaEditorForm({
             ) : null}
 
             <FormSection
-              title="Profil"
-              description="Rolle, Tonfall, Beispiele und Ausnahmen."
+              title={t('editor.profile.title')}
+              description={t('editor.profile.description')}
               help={
                 <div className="space-y-2">
                   <p>
-                    Der Agent leitet daraus ab, wie er antworten soll —
-                    strukturierte Beispiele schlagen Bullet-Listen.
+                    {t('editor.profile.helpLine1')}
                   </p>
                   <p>
-                    Mit <code>/</code> fügst du Pills ein: einzelne Playbooks/Resources
-                    oder die Kataloge <em>Playbook-Katalog</em> (alle/getriggert) und
-                    <em> Resource-Katalog</em> (alle/Tag). Sie lösen beim
-                    <code> get_persona</code>-Abruf gegen die aktiven Playbooks/Resources
-                    des Workspace auf.
+                    {t('editor.profile.helpLine2')}
                   </p>
-                  <p className="text-xs font-medium text-foreground">Beispiel</p>
+                  <p className="text-xs font-medium text-foreground">{t('editor.profile.helpExampleLabel')}</p>
                   <pre className="rounded bg-muted/50 p-2 font-mono text-xs whitespace-pre-wrap">
                     {PROFILE_EXAMPLE_SNIPPET}
                   </pre>
@@ -274,7 +270,7 @@ export function PersonaEditorForm({
                 name="profileBlocks"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Profil-Inhalt</FormLabel>
+                    <FormLabel>{t('editor.profile.contentLabel')}</FormLabel>
                     <FormControl>
                       <PersonaProfileEditor
                         key={formKey}
@@ -293,12 +289,11 @@ export function PersonaEditorForm({
             <PersonaModesDisclosure control={form.control} disabled={isViewer} />
 
             <FormSection
-              title="Skills"
-              description="Bald: paketierte, wiederverwendbare Fähigkeiten für deine Agenten."
+              title={t('editor.skills.title')}
+              description={t('editor.skills.description')}
               help={
                 <p>
-                  Skills bekommen ein eigenes, versioniertes Format. Die Funktion
-                  ist aktuell noch nicht aktiv — der Editor folgt mit dem Release.
+                  {t('editor.skills.helpText')}
                 </p>
               }
             >
@@ -306,13 +301,11 @@ export function PersonaEditorForm({
             </FormSection>
 
             <FormSection
-              title="Tags"
-              description="Stichwörter zur Suche und Gruppierung."
+              title={t('editor.tags.title')}
+              description={t('editor.tags.description')}
               help={
                 <p>
-                  Beispiel: <em>„coaching, feedback, leadership"</em>.
-                  Enter zum Anlegen, Klick auf das X zum Entfernen.
-                  Vorschläge kommen aus bereits verwendeten Tags.
+                  {t('editor.tags.helpText')}
                 </p>
               }
             >
@@ -321,14 +314,14 @@ export function PersonaEditorForm({
                 name="tags"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel id={`${field.name}-label`}>Tags</FormLabel>
+                    <FormLabel id={`${field.name}-label`}>{t('common:fields.tags')}</FormLabel>
                     <FormControl>
                       <TagInput
                         value={field.value}
                         onChange={field.onChange}
                         loadSuggestions={api.listPersonaTags}
                         ariaLabelledby={`${field.name}-label`}
-                        placeholder="Tag eingeben und Enter drücken"
+                        placeholder={t('editor.tags.placeholder')}
                         disabled={isViewer}
                       />
                     </FormControl>

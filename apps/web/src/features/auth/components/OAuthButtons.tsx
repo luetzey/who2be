@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabase'
@@ -33,6 +34,7 @@ function GithubGlyph() {
 type Provider = 'google' | 'github'
 
 export function OAuthButtons({ next }: { next?: string | null }) {
+  const { t } = useTranslation('auth')
   const [pending, setPending] = useState<Provider | null>(null)
 
   async function signInWith(provider: Provider) {
@@ -58,7 +60,7 @@ export function OAuthButtons({ next }: { next?: string | null }) {
         disabled={pending !== null}
       >
         <GoogleGlyph />
-        Mit Google anmelden
+        {t('oauth.google')}
       </Button>
       <Button
         type="button"
@@ -68,7 +70,7 @@ export function OAuthButtons({ next }: { next?: string | null }) {
         disabled={pending !== null}
       >
         <GithubGlyph />
-        Mit GitHub anmelden
+        {t('oauth.github')}
       </Button>
     </div>
   )

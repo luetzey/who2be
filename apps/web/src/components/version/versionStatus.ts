@@ -5,20 +5,12 @@
 // Versions-UI-Insel.
 
 import type { VersionStatus } from '@/api/types'
+import i18n from '@/i18n'
 
 export type StatusBadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline'
 
 export function statusLabel(status: VersionStatus): string {
-  switch (status) {
-    case 'draft':
-      return 'Entwurf'
-    case 'review':
-      return 'In Review'
-    case 'active':
-      return 'Aktiv'
-    case 'inactive':
-      return 'Inaktiv'
-  }
+  return i18n.t(`common:status.${status}`)
 }
 
 export function statusBadgeVariant(status: VersionStatus): StatusBadgeVariant {

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { EmptyState } from '@/components/data/EmptyState'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
@@ -19,12 +20,13 @@ export function DataView({
   loading,
   error,
   empty,
-  emptyTitle = 'Keine Eintraege.',
+  emptyTitle,
   emptyDescription,
   emptyAction,
   loadingRows,
   children,
 }: DataViewProps) {
+  const { t } = useTranslation('data')
   if (loading) {
     return <LoadingState rows={loadingRows} />
   }
@@ -33,7 +35,11 @@ export function DataView({
   }
   if (empty) {
     return (
-      <EmptyState title={emptyTitle} description={emptyDescription} action={emptyAction} />
+      <EmptyState
+        title={emptyTitle ?? t('empty')}
+        description={emptyDescription}
+        action={emptyAction}
+      />
     )
   }
   return <>{children}</>

@@ -1,0 +1,1421 @@
+{
+  "common": {
+    "actions": {
+      "save": "Save",
+      "saving": "Saving…",
+      "cancel": "Cancel",
+      "delete": "Delete",
+      "edit": "Edit",
+      "create": "Create",
+      "add": "Add",
+      "remove": "Remove",
+      "copy": "Copy",
+      "back": "Back",
+      "close": "Close",
+      "retry": "Try again",
+      "search": "Search",
+      "filter": "Filter",
+      "confirm": "Confirm",
+      "submit": "Submit",
+      "reset": "Reset",
+      "restore": "Restore",
+      "activate": "Activate",
+      "deactivate": "Deactivate",
+      "more": "More"
+    },
+    "fields": {
+      "name": "Name",
+      "description": "Description",
+      "title": "Title",
+      "status": "Status",
+      "tags": "Tags",
+      "actions": "Actions",
+      "slug": "Slug",
+      "type": "Type",
+      "createdAt": "Created",
+      "updatedAt": "Updated"
+    },
+    "status": {
+      "draft": "Draft",
+      "review": "In review",
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "loading": "Loading…",
+    "loadingLong": "Loading…",
+    "workspacePreparing": "Preparing workspace…",
+    "unexpectedError": "Unexpected error",
+    "error": {
+      "title": "Error",
+      "generic": "An error occurred."
+    },
+    "validation": {
+      "nameRequired": "Name is required.",
+      "slugRequired": "Slug is required.",
+      "slugInvalid": "Only lowercase letters, digits and hyphens.",
+      "emailInvalid": "Please enter a valid email."
+    }
+  },
+  "layout": {
+    "brand": "Who2Be",
+    "nav": {
+      "primary": "Main navigation",
+      "primaryMobile": "Main navigation (mobile)",
+      "dashboard": "Dashboard",
+      "agents": "Agents",
+      "systemPrompts": "System prompts",
+      "personas": "Personae",
+      "playbooks": "Playbooks",
+      "resources": "Resources",
+      "settings": "Settings"
+    },
+    "signOut": "Sign out",
+    "language": {
+      "label": "Language",
+      "switch": "Change language"
+    },
+    "footer": {
+      "legal": "Legal",
+      "impressum": "Imprint",
+      "terms": "Terms",
+      "privacy": "Privacy",
+      "dpa": "Data processing"
+    },
+    "workspaceSwitcher": {
+      "switch": "Switch workspace",
+      "select": "Select workspace",
+      "noneActive": "No workspace active",
+      "personal": "Personal",
+      "organization": "Organization",
+      "noWorkspacesInOrg": "No workspaces in this organization",
+      "create": "Create workspace"
+    }
+  },
+  "data": {
+    "empty": "No entries.",
+    "error": {
+      "title": "Error"
+    },
+    "loading": "Loading…",
+    "branch": {
+      "label": "Version branch",
+      "actions": "Branch actions",
+      "editing": "(you are editing)",
+      "ready": "Ready.",
+      "saving": "Saving …",
+      "saved": "Saved.",
+      "savedAgoSeconds": "Saved ({{seconds}}s ago).",
+      "savedAgoMinutes": "Saved ({{minutes}}min ago).",
+      "error": "Error while saving.",
+      "errorWithMessage": "Error while saving: {{message}}"
+    }
+  },
+  "version": {
+    "history": {
+      "title": "Versions",
+      "empty": "No versions yet.",
+      "version": "Version {{number}}",
+      "current": "Current",
+      "listLabel": "Version history",
+      "diff": "Diff",
+      "whyActive": "Why active?",
+      "history": "History",
+      "restoreHint": "Restore this version as a new draft",
+      "restoreBlockedHint": "A draft already exists — finish or discard it first.",
+      "loadFailed": "Loading failed.",
+      "restoreFailed": "Restore failed."
+    },
+    "diff": {
+      "title": "Changes",
+      "noChanges": "No changes.",
+      "added": "Added",
+      "removed": "Removed",
+      "changed": "Changed",
+      "changesLabel": "Changes",
+      "noBaseline": "no baseline",
+      "identical": "No differences between v{{version}} and {{against}}.",
+      "comparing": "Comparing v{{version}} against {{against}}",
+      "before": "Before:",
+      "after": "After:",
+      "empty": "(empty)"
+    },
+    "provenance": {
+      "title": "Provenance",
+      "empty": "No status history yet.",
+      "listLabel": "Status history",
+      "emptyForVersion": "No status history for this version yet."
+    }
+  },
+  "agents": {
+    "page": {
+      "title": "Agents",
+      "description": "Configured agents — persona × template, one click to copy.",
+      "newAgent": "Create new agent",
+      "viewerNoCreate": "Viewers cannot create agents",
+      "empty": {
+        "title": "No agents yet",
+        "description": "Create your first agent to copy prompts with one click."
+      }
+    },
+    "status": {
+      "enabled": "Active",
+      "disabled": "Disabled",
+      "incomplete": "Incomplete"
+    },
+    "detail": {
+      "back": "Agents",
+      "submitLabel": "Save"
+    },
+    "form": {
+      "identity": {
+        "title": "Identity",
+        "description": "What the agent is called and what it is intended for.",
+        "help": "Example: \"Carla Bot — Customer Support Agent\"."
+      },
+      "config": {
+        "title": "Configuration",
+        "description": "Which persona and system prompt the agent uses.",
+        "help": "The selected persona provides name, profile, tags and its playbooks. The system prompt defines the actual system prompt with placeholders."
+      },
+      "persona": {
+        "label": "Persona",
+        "none": "— none —",
+        "notActive": " (not active)"
+      },
+      "template": {
+        "label": "System prompt",
+        "none": "— none —"
+      },
+      "statusField": {
+        "label": "Status",
+        "enabled": "Active",
+        "disabled": "Disabled"
+      },
+      "missing": {
+        "notice": "Not yet activatable — missing: {{items}}.",
+        "persona": "link persona",
+        "template": "link system prompt",
+        "persona_active": "activate linked persona"
+      },
+      "viewerReadOnly": "Viewers can only view agents",
+      "nameRequired": "Name required."
+    },
+    "hierarchy": {
+      "templateLabel": "Template:",
+      "personaLabel": "Persona:",
+      "notLoaded": "— not loaded —",
+      "noPlaybooks": "No playbooks linked."
+    },
+    "copy": {
+      "plain": "Copy",
+      "markdown": "Copy as Markdown",
+      "html": "Copy as HTML",
+      "formatSelect": "Choose format",
+      "success": {
+        "plain": "Prompt copied to clipboard.",
+        "markdown": "Prompt copied as Markdown to clipboard.",
+        "html": "Prompt copied as HTML to clipboard."
+      },
+      "unresolvedHint": "Note: {{count}} unknown placeholder(s) — {{list}}",
+      "error": "Copy failed."
+    },
+    "duplicate": {
+      "label": "Duplicate",
+      "success": "Agent duplicated.",
+      "error": "Duplicate failed.",
+      "notCopyable": "Not yet copyable — missing: {{items}}.",
+      "viewerReadOnly": "Viewers can only view agents"
+    },
+    "delete": {
+      "label": "Delete",
+      "confirmLabel": "Delete permanently",
+      "dialogTitle": "Delete agent?",
+      "dialogDescription": "\"{{name}}\" will be permanently removed. This action cannot be undone.",
+      "success": "Agent deleted.",
+      "error": "Delete failed.",
+      "viewerReadOnly": "Viewers can only view agents"
+    },
+    "toast": {
+      "created": "Agent created — now assign persona and system prompt.",
+      "createError": "Creation failed.",
+      "saved": "Agent saved.",
+      "unknownError": "Unknown error."
+    }
+  },
+  "auth": {
+    "brand": "Who2Be",
+    "fields": {
+      "email": "Email",
+      "password": "Password",
+      "passwordRepeat": "Repeat password",
+      "newPassword": "New password"
+    },
+    "or": "or",
+    "backToLogin": "Back to sign in",
+    "login": {
+      "title": "Sign in",
+      "description": "Sign in to your Who2Be account.",
+      "forgotPassword": "Forgot password?",
+      "submit": "Sign in",
+      "noAccount": "No account yet?",
+      "register": "Sign up",
+      "unconfirmedEmail": "Your email address has not been confirmed yet.",
+      "loginFailed": "Login failed.",
+      "resendConfirmation": "Resend confirmation email",
+      "confirmationResent": "Confirmation email resent."
+    },
+    "signup": {
+      "title": "Sign up",
+      "description": "Create an account to set up your workspace.",
+      "descriptionPending": "Confirm your email address via the link we sent you.",
+      "submit": "Create account",
+      "confirmPending": "Check your inbox and follow the confirmation link to complete sign-up.",
+      "alreadyAccount": "Already have an account?",
+      "signIn": "Sign in"
+    },
+    "resetPassword": {
+      "title": "Reset password",
+      "description": "We will send you a link to set a new password.",
+      "descriptionSent": "If an account with this email exists, a reset link is on its way.",
+      "submit": "Send reset link",
+      "checkInbox": "Check your inbox and follow the link in the email."
+    },
+    "setPassword": {
+      "title": "Set password",
+      "description": "Set a password so you can sign in directly next time.",
+      "submit": "Set password",
+      "success": "Password set."
+    },
+    "invitation": {
+      "title": "Accept invitation",
+      "descriptionManual": "Join the workspace you were invited to.",
+      "descriptionMagic": "Completing sign-in…",
+      "submit": "Accept invitation",
+      "success": "Invitation accepted.",
+      "loginPending": "Completing sign-in…",
+      "error": {
+        "expired": "This invitation has expired. Please request a new one.",
+        "notFound": "This invitation does not exist or has already been redeemed.",
+        "emailMismatch": "This invitation is for a different email address.",
+        "generic": "Could not accept invitation."
+      }
+    },
+    "callback": {
+      "loadingTitle": "Completing sign-in…",
+      "loadingDescription": "Just a moment while we set up your session.",
+      "errorTitle": "Sign-in failed",
+      "errorDescription": "The login via the external provider did not work.",
+      "noSession": "No valid session returned. Please try again."
+    },
+    "oauth": {
+      "google": "Sign in with Google",
+      "github": "Sign in with GitHub"
+    },
+    "validation": {
+      "emailInvalid": "Please enter a valid email address.",
+      "passwordRequired": "Password required.",
+      "passwordMinLength": "At least 8 characters.",
+      "confirmRequired": "Please repeat.",
+      "passwordMismatch": "Passwords do not match."
+    }
+  },
+  "billing": {
+    "panel": {
+      "title": "Plan & Usage",
+      "statusActive": "Active",
+      "statusInactive": "Inactive",
+      "quota": {
+        "unlimited": "MCP quota: unlimited",
+        "monthlyLabel": "MCP reads this month",
+        "ariaLabel": "MCP quota usage"
+      },
+      "rateLimit": "Rate limit",
+      "validUntil": "Valid until",
+      "unlimited": "unlimited",
+      "features": {
+        "label": "Features",
+        "none": "none"
+      },
+      "proActive": "Pro active",
+      "upgrading": "Redirecting…",
+      "upgrade": "Upgrade now"
+    },
+    "expiry": {
+      "unlimited": "unlimited"
+    },
+    "error": {
+      "checkoutFailed": "Checkout failed.",
+      "unknown": "Unknown error."
+    }
+  },
+  "dashboard": {
+    "page": {
+      "title": "Dashboard",
+      "description": "Overview of the current state of your workspace."
+    },
+    "preparing": {
+      "title": "Preparing workspace …",
+      "description": "Please wait a moment while your workspace is being set up."
+    },
+    "notFound": {
+      "title": "Dashboard not available yet.",
+      "description": "The dashboard for this workspace is not yet available."
+    },
+    "kpis": {
+      "ariaLabel": "Key metrics",
+      "activePersonas": "Active Personae",
+      "activePlaybooks": "Active Playbooks",
+      "pendingReviewsDescription": "Versions awaiting review"
+    },
+    "statusDistribution": {
+      "title": "Status Distribution",
+      "personas": "Personae",
+      "playbooks": "Playbooks",
+      "resources": "Resources"
+    },
+    "activity": {
+      "title": "Recent Activity",
+      "unknownActor": "Unknown",
+      "empty": {
+        "title": "No activity yet.",
+        "description": "Once something happens in the workspace, the latest events will appear here."
+      },
+      "entityTypes": {
+        "persona": "Persona",
+        "playbook": "Playbook",
+        "resource": "Resource"
+      },
+      "events": {
+        "promoted_to_active": "activated",
+        "submitted_for_review": "submitted for review",
+        "rejected": "rejected",
+        "returned_to_draft": "returned to draft",
+        "deactivated": "deactivated",
+        "created": "created",
+        "updated": "updated",
+        "deleted": "deleted",
+        "changed": "changed"
+      }
+    },
+    "pagination": {
+      "ariaLabel": "Activity pages",
+      "pageOf": "Page {{page}} of {{totalPages}}",
+      "next": "Next"
+    }
+  },
+  "legal": {
+    "layout": {
+      "brand": "Who2Be",
+      "legalLabel": "Legal",
+      "loading": "Loading…",
+      "nav": {
+        "ariaLabel": "Legal pages",
+        "impressum": "Imprint",
+        "agb": "Terms",
+        "datenschutz": "Privacy",
+        "dpa": "Data Processing Agreement (DPA)"
+      }
+    },
+    "article": {
+      "lastUpdated": "As of:",
+      "lastUpdatedPlaceholder": "Date of last update"
+    },
+    "cookie": {
+      "regionLabel": "Cookie consent",
+      "title": "Cookies & Privacy",
+      "body": "We only use technically necessary cookies. Optional cookies (e.g.",
+      "bodyServices": "name analytics/tracking services",
+      "bodyEnd": "will only be set with your consent. Details in our",
+      "privacyLink": "Privacy Policy",
+      "rejectButton": "Necessary only",
+      "acceptButton": "Accept all"
+    },
+    "impressum": {
+      "title": "Imprint",
+      "sections": {
+        "legalNotice": {
+          "heading": "Information pursuant to § 5 DDG",
+          "companyName": "Company name / legal form",
+          "street": "Street and house number",
+          "city": "Postal code and city",
+          "country": "Country"
+        },
+        "representative": {
+          "heading": "Represented by",
+          "name": "Name of authorised representative(s)"
+        },
+        "contact": {
+          "heading": "Contact",
+          "phoneLabel": "Phone:",
+          "phone": "Phone number",
+          "emailLabel": "E-mail:",
+          "email": "Contact e-mail"
+        },
+        "register": {
+          "heading": "Commercial register",
+          "registryLabel": "Registered in the",
+          "registry": "commercial/association register",
+          "courtLabel": "Registration court:",
+          "court": "competent registration court",
+          "numberLabel": "Registration number:",
+          "number": "Registration number"
+        },
+        "vatId": {
+          "heading": "VAT identification number",
+          "label": "VAT identification number pursuant to § 27a UStG:",
+          "value": "VAT ID no."
+        },
+        "responsible": {
+          "heading": "Responsible pursuant to § 18 para. 2 MStV",
+          "name": "Name and address of the responsible person"
+        },
+        "dispute": {
+          "heading": "EU dispute resolution",
+          "text1": "The European Commission provides a platform for online dispute resolution (ODR):",
+          "platformLink": "Link to the ODR platform",
+          "text2": "We are",
+          "participation": "willing / not willing / not obliged",
+          "text3": "to participate in dispute settlement proceedings before a consumer arbitration board."
+        }
+      }
+    },
+    "terms": {
+      "title": "General Terms and Conditions (GTC)",
+      "intro": "These GTC govern the use of Who2Be by",
+      "introUserGroup": "description of user group (consumers/businesses)",
+      "introPeriod": ".",
+      "sections": {
+        "scope": {
+          "heading": "§ 1 Scope of application",
+          "body": "Scope of application, contracting parties, precedence of individual agreements, incorporation"
+        },
+        "subject": {
+          "heading": "§ 2 Subject matter & service description",
+          "body": "Description of the SaaS offering, scope of services per plan (Free/Pro), availability/SLA"
+        },
+        "registration": {
+          "heading": "§ 3 Registration & account",
+          "body": "Registration requirement, accuracy of information, confidentiality of credentials, minimum age"
+        },
+        "pricing": {
+          "heading": "§ 4 Prices & payment terms",
+          "body": "Prices, billing period, payment service provider (Mollie), due date, default, taxes"
+        },
+        "termination": {
+          "heading": "§ 5 Term & termination",
+          "body": "Contract term, renewal, ordinary/extraordinary termination, termination at end of period"
+        },
+        "withdrawal": {
+          "heading": "§ 6 Right of withdrawal",
+          "body": "Withdrawal instructions for consumers including sample withdrawal form, or note if not applicable"
+        },
+        "obligations": {
+          "heading": "§ 7 User obligations & acceptable use",
+          "body": "Acceptable use policy, prohibited content, responsibility for submitted data"
+        },
+        "availability": {
+          "heading": "§ 8 Availability, changes & maintenance",
+          "body": "Availability commitment, maintenance windows, reservation of changes"
+        },
+        "liability": {
+          "heading": "§ 9 Liability",
+          "body": "Liability provisions (intent/gross negligence, cardinal obligations, limitation)"
+        },
+        "privacy": {
+          "heading": "§ 10 Data protection",
+          "body": "Reference to the privacy policy and, where applicable, the data processing agreement (DPA)"
+        },
+        "final": {
+          "heading": "§ 11 Final provisions",
+          "body": "Applicable law, place of jurisdiction, severability clause, amendments to the GTC"
+        }
+      }
+    },
+    "privacy": {
+      "title": "Privacy Policy",
+      "intro": "This policy informs you about the processing of personal data when using Who2Be.",
+      "sections": {
+        "controller": {
+          "heading": "1. Controller",
+          "text1": "The controller within the meaning of the GDPR is:",
+          "contactPlaceholder": "Name / address / contact of the controller",
+          "dpoLabel": "Data protection officer:",
+          "dpoPlaceholder": "DPO contact or \"not appointed\""
+        },
+        "hosting": {
+          "heading": "2. Hosting & infrastructure",
+          "body": "Hosting provider (e.g. Hetzner), server location, data processing agreement, legal basis"
+        },
+        "serverLogs": {
+          "heading": "3. Access data / server logs",
+          "body": "Collected log data, purpose, retention period, legal basis Art. 6 para. 1 lit. f GDPR"
+        },
+        "cookies": {
+          "heading": "4. Cookies & consent",
+          "text1": "We use technically necessary cookies (session/authentication) on the basis of § 25 para. 2 TDDDG. Optional cookies are only set with your consent (§ 25 para. 1 TDDDG, Art. 6 para. 1 lit. a GDPR); consent may be withdrawn at any time with effect for the future.",
+          "listPlaceholder": "List of specific cookies / retention period / withdrawal method"
+        },
+        "account": {
+          "heading": "5. Registration & account",
+          "body": "Processed account/master data, purpose (contract performance Art. 6 para. 1 lit. b), retention period"
+        },
+        "auth": {
+          "heading": "6. Authentication (Supabase/GoTrue)",
+          "body": "Auth service, processed data, OAuth providers (Google/GitHub) if applicable, legal basis"
+        },
+        "payment": {
+          "heading": "7. Payment processing",
+          "body": "Payment service provider (Mollie), transmitted data, provider's own privacy policy, legal basis"
+        },
+        "email": {
+          "heading": "8. E-mail delivery (transactional mails)",
+          "body": "SMTP/mail provider, occasions (Verify/Invite/Reset), legal basis"
+        },
+        "processors": {
+          "heading": "9. Recipients & processors",
+          "body": "List of processors, third-country transfers and safeguards (SCCs) where applicable"
+        },
+        "retention": {
+          "heading": "10. Retention periods",
+          "body": "General deletion concepts, statutory retention obligations"
+        },
+        "rights": {
+          "heading": "11. Your rights",
+          "text1": "You have the right to access (Art. 15), rectification (Art. 16), erasure (Art. 17), restriction (Art. 18), data portability (Art. 20), and objection (Art. 21), as well as the right to lodge a complaint with a supervisory authority (Art. 77).",
+          "authorityLabel": "Competent supervisory authority:",
+          "authorityPlaceholder": "competent data protection authority"
+        }
+      }
+    },
+    "dpa": {
+      "title": "Data Processing Agreement (DPA)",
+      "intro": "This agreement specifies the obligations under Art. 28 GDPR when the customer (controller) engages Who2Be (processor) to process personal data. It forms part of the main contract.",
+      "sections": {
+        "subject": {
+          "heading": "1. Subject matter & duration",
+          "body": "Subject matter of processing, term (tied to main contract), termination"
+        },
+        "purpose": {
+          "heading": "2. Nature & purpose of processing",
+          "body": "Described processing activities and purpose of the data processing arrangement"
+        },
+        "dataTypes": {
+          "heading": "3. Type of personal data",
+          "body": "Data categories (e.g. account/profile data, content of Personas/Playbooks/Resources)"
+        },
+        "dataSubjects": {
+          "heading": "4. Categories of data subjects",
+          "body": "Data subjects (e.g. employees, customers of the controller)"
+        },
+        "processorObligations": {
+          "heading": "5. Obligations of the processor",
+          "body": "Instruction binding, confidentiality, support for data subject rights, notification obligations"
+        },
+        "tom": {
+          "heading": "6. Technical & organisational measures (TOM)",
+          "body": "Reference to TOM annex (encryption, access control, RLS, backups, logging)"
+        },
+        "subprocessors": {
+          "heading": "7. Sub-processors",
+          "body": "List of approved sub-contractors (hosting/auth/mail/payment), approval procedure"
+        },
+        "transfers": {
+          "heading": "8. Third-country transfers",
+          "body": "Information on transfers to third countries and safeguards (SCCs) where applicable"
+        },
+        "dataSubjectRights": {
+          "heading": "9. Data subject rights & support",
+          "body": "Support for the controller in handling access requests/erasure/data exports"
+        },
+        "deletion": {
+          "heading": "10. Deletion & return after contract end",
+          "body": "Deletion/return concept after contract end including deadlines"
+        },
+        "audits": {
+          "heading": "11. Evidence & audits",
+          "body": "Evidence obligations, controller's audit rights, certifications"
+        }
+      }
+    }
+  },
+  "personas": {
+    "list": {
+      "title": "Personae",
+      "description": "Versioned persona definitions for your agents.",
+      "newPersona": "New persona",
+      "empty": {
+        "title": "No personae yet",
+        "description": "Create your first persona to configure agents."
+      }
+    },
+    "detail": {
+      "back": "Personae",
+      "description": {
+        "activeDraft": " · You are editing draft v{{version}}",
+        "activeReview": " · In review: v{{version}}",
+        "active": "Active: v{{version}}",
+        "currentVersion": "Current version: v{{version}} ({{status}})"
+      },
+      "branch": {
+        "submit": "Finish draft",
+        "publish": "Publish",
+        "reject": "Back to draft",
+        "reactivate": "Reactivate as draft"
+      },
+      "toast": {
+        "submitted": "Submitted for review.",
+        "activated": "Version activated.",
+        "rejected": "Review rejected.",
+        "reactivated": "Reactivated as draft.",
+        "restored": "v{{version}} restored as draft.",
+        "actionFailed": "Action failed."
+      },
+      "playbooks": {
+        "title": "Linked playbooks",
+        "empty": "No playbooks available.",
+        "save": "Save links"
+      }
+    },
+    "new": {
+      "title": "New persona",
+      "description": "Create a new persona version.",
+      "submit": "Create",
+      "toast": {
+        "created": "Persona created."
+      }
+    },
+    "editor": {
+      "identity": {
+        "title": "Identity",
+        "description": "The persona's name and what it is responsible for.",
+        "helpExample": "Example: \"Coach Carla — facilitates 1:1 feedback conversations\". Name and description appear in lists, pickers and agent tools.",
+        "namePlaceholder": "e.g. Coach Carla",
+        "descriptionPlaceholder": "e.g. 1:1 coach for leadership sparring"
+      },
+      "legacy": {
+        "ariaLabel": "Deprecated system prompt",
+        "title": "Deprecated — move content to template",
+        "body": "Persona-owned system prompts are now handled by the linked agent template. Copy the text manually into your template, then you can leave this field empty."
+      },
+      "profile": {
+        "title": "Profile",
+        "description": "Role, tone, examples and exceptions.",
+        "helpLine1": "The agent uses this to determine how to respond — structured examples beat bullet lists.",
+        "helpLine2": "Use / to insert pills: individual playbooks/resources or the catalogs Playbook catalog (all/triggered) and Resource catalog (all/tag). They resolve at get_persona fetch time against the active playbooks/resources of the workspace.",
+        "helpExampleLabel": "Example",
+        "contentLabel": "Profile content"
+      },
+      "modes": {
+        "infoAriaLabel": "{{count}} modes defined, default {{defaultLabel}}. Jump to modes.",
+        "infoPillText": "Modes · Default:",
+        "disclosure": {
+          "title": "Modes (optional)",
+          "subtitle": "Behaviour per context — e.g. coaching vs. analysis"
+        }
+      },
+      "skills": {
+        "title": "Skills",
+        "description": "Coming soon: packaged, reusable capabilities for your agents.",
+        "helpText": "Skills will get their own versioned format. The feature is not yet active — the editor will follow with the release."
+      },
+      "tags": {
+        "title": "Tags",
+        "description": "Keywords for search and grouping.",
+        "helpText": "Example: \"coaching, feedback, leadership\". Press Enter to add, click X to remove. Suggestions come from already-used tags.",
+        "placeholder": "Enter a tag and press Enter"
+      }
+    },
+    "modes": {
+      "empty": {
+        "text": "No modes defined yet. Modes allow the persona to act differently depending on context (e.g. \"Coaching mode\" vs. \"Analysis mode\")."
+      },
+      "addFirst": "Add first mode",
+      "add": "Add mode",
+      "noDefaultLabel": "no default",
+      "card": {
+        "header": "Mode {{number}}",
+        "setDefault": "Set as default",
+        "remove": "Remove mode {{number}}",
+        "defaultBadge": "Default"
+      },
+      "field": {
+        "trigger": {
+          "label": "Trigger",
+          "placeholder": "e.g. coaching, feedback (comma-separated)",
+          "hint": "Comma-separated keywords. Empty = default mode (only one allowed)."
+        },
+        "playbook": {
+          "label": "Playbook",
+          "none": "No playbook",
+          "hint": "Optional — links this mode to a playbook."
+        },
+        "namePlaceholder": "e.g. Coaching mode",
+        "identity": {
+          "label": "Identity addition"
+        },
+        "outputStyle": {
+          "label": "Output style"
+        },
+        "antiPatterns": {
+          "label": "Anti-patterns"
+        }
+      }
+    },
+    "skills": {
+      "empty": {
+        "text": "No skills referenced yet. Skills name capabilities the persona relies on — with a short note about what they count for."
+      },
+      "addFirst": "Add first skill",
+      "add": "Add skill",
+      "card": {
+        "header": "Skill {{number}}",
+        "remove": "Remove skill {{number}}"
+      },
+      "field": {
+        "note": {
+          "label": "Note",
+          "placeholder": "What this skill counts for in the persona..."
+        },
+        "namePlaceholder": "e.g. Active listening"
+      },
+      "table": {
+        "title": "Skills (agent view)",
+        "skillColumn": "Skill",
+        "hintColumn": "Note"
+      }
+    },
+    "statusBar": {
+      "ariaLabel": "Status actions",
+      "submit": "Submit for review",
+      "promote": "Activate",
+      "reject": "Reject",
+      "reactivate": "Reactivate as draft",
+      "adminOnly": "Only admins can activate",
+      "toast": {
+        "activated": "Version activated.",
+        "submitted": "Submitted for review.",
+        "rejected": "Review rejected.",
+        "reactivated": "Reactivated as draft."
+      },
+      "error": {
+        "promoteTitle": "Promote not possible",
+        "promoteFill": "Fill in before activating: {{fields}}."
+      },
+      "fallback": "Action failed."
+    },
+    "skillsComingSoon": {
+      "label": "Skills",
+      "badge": "Coming Soon",
+      "description": "Skills will soon get their own versioned format — as packaged, reusable capabilities for your agents. The feature is not yet active."
+    }
+  },
+  "playbooks": {
+    "list": {
+      "title": "Playbooks",
+      "description": "Workflows and playbook versions for agents.",
+      "newButton": "New playbook",
+      "tagFilter": "Tag filter",
+      "triggerFilter": "Trigger filter",
+      "empty": {
+        "title": "No playbooks yet",
+        "description": "Create your first playbook to define workflows.",
+        "filteredTitle": "No playbooks match this filter",
+        "filteredDescription": "Adjust the tag or trigger filter, or create a new playbook."
+      }
+    },
+    "new": {
+      "title": "New playbook",
+      "description": "Create a new playbook."
+    },
+    "detail": {
+      "back": "Playbooks",
+      "activeBadge": "Active: v{{version}}",
+      "draftNote": " · You are editing Draft v{{version}}",
+      "reviewNote": " · In review: v{{version}}",
+      "currentVersion": "Current version: v{{version}} ({{status}})",
+      "triggerList": "Trigger list",
+      "triggerLabel": "Triggers",
+      "usedInTitle": "Used in",
+      "usedInEmpty": "Not used in any persona yet",
+      "usedInEmptyDescription": "Link this playbook in the persona editor to assign it to a persona.",
+      "resourceLinksTitle": "Linked resource blocks",
+      "resourceLinksBodyNote": "Resource links are managed as pills in the BlockNote body — edit them there.",
+      "subPlaybooksTitle": "Sub-playbooks (Composes)",
+      "subPlaybooksEmpty": "No sub-playbooks linked. This playbook is atomic.",
+      "subPlaybooksBodyNote": "Sub-playbooks are managed as pills in the BlockNote body — edit them there.",
+      "composedByTitle": "Used as sub-playbook in",
+      "restoreSuccess": "v{{version}} restored as draft.",
+      "actionFailed": "Action failed."
+    },
+    "form": {
+      "identityTitle": "Identity",
+      "identityDescription": "The playbook name, its type, and what it is about.",
+      "identityHelpExample": "Example: ",
+      "identityHelpExampleText": "\"Handle password-reset email\"",
+      "identityHelpExampleSuffix": " as a workflow.",
+      "identityHelpTypesHeading": "Types",
+      "nameLabel": "Name",
+      "namePlaceholder": "e.g. Handle password-reset email",
+      "typeLabel": "Typ",
+      "descriptionPlaceholder": "e.g. Responds to password-reset requests with a clear next step",
+      "contentTitle": "Content",
+      "contentDescription": "The actual playbook content and its triggers.",
+      "contentHelp": "Example: Step 1 — greet the customer; Step 2 — verify identity; Step 3 — send reset link. Changes create a new version; old versions are retained.",
+      "bodyLabel": "Content",
+      "bodyHint": "Type / in the editor to insert playbook or resource pills. Linked relations live in the body.",
+      "tagsPlaceholder": "Type a tag and press Enter",
+      "triggersLabel": "Trigger",
+      "triggersPlaceholder": "Type a trigger and press Enter",
+      "triggersHint": "Press Enter to add, click to remove.",
+      "createButton": "Create",
+      "nameRequired": "Name required.",
+      "descriptionRequired": "Description required.",
+      "unknownError": "Unknown error."
+    },
+    "typeHints": {
+      "prompt": "A single prompt with a clear outcome — e.g. \"Summarize the call in 3 bullets\".",
+      "instructions": "Multi-part instructions with a step sequence — e.g. the onboarding flow of an agent.",
+      "snippet": "Short, reusable text snippets — e.g. a standard greeting or a legal footnote.",
+      "workflow": "Multi-step process with branches — e.g. escalation when the customer remains dissatisfied.",
+      "checklist": "Checklist — e.g. \"Pre-flight before sending a campaign\".",
+      "faq": "Question-and-answer collection — e.g. the top 10 support questions for a product line."
+    },
+    "actions": {
+      "toolbarAriaLabel": "Status actions",
+      "submitReview": "Submit for review",
+      "reject": "Reject",
+      "reactivate": "Reactivate as draft",
+      "activateAdminOnly": "Only admins can activate",
+      "promoteError": "Fill in before activating: {{fields}}.",
+      "promoteErrorTitle": "Cannot promote",
+      "draftSubmit": "Finalise draft",
+      "publish": "Publish",
+      "rejectDraft": "Back to draft",
+      "reactivateDraft": "Reactivate as draft"
+    },
+    "toast": {
+      "created": "Playbook created.",
+      "submitted": "Submitted for review.",
+      "activated": "Version activated.",
+      "reviewRejected": "Review rejected.",
+      "reactivated": "Reactivated as draft.",
+      "actionFailed": "Action failed."
+    },
+    "composedBy": {
+      "empty": "No composite playbook references this playbook.",
+      "ariaLabel": "Referenced in composites"
+    },
+    "composesPicker": {
+      "triggerButton": "Edit sub-playbooks",
+      "dialogTitle": "Sub-playbooks (Composition)",
+      "dialogDescription": "Select playbooks as sub-playbooks and reorder them with the arrow buttons. The order determines the execution sequence during rendering.",
+      "selectedHeading": "Selected ({{count}})",
+      "selectedList": "Selected sub-playbooks",
+      "moveUp": "Move {{name}} up",
+      "moveDown": "Move {{name}} down",
+      "addMore": "Add more",
+      "availableHeading": "Playbooks",
+      "availableList": "Available playbooks",
+      "addAriaLabel": "Add {{name}} as sub-playbook",
+      "noMore": "All available playbooks are already selected.",
+      "noPlaybooks": "No other playbooks in the workspace.",
+      "loadFailed": "Loading failed.",
+      "saveButton": "Save ({{count}})"
+    },
+    "linkedBlocks": {
+      "empty": "No blocks linked yet.",
+      "ariaLabel": "Linked blocks",
+      "statusActive": "Active",
+      "statusDraft": "Draft only",
+      "statusDeleted": "Block deleted",
+      "emptyActive": "(empty)",
+      "emptyDraft": "(empty — draft)",
+      "emptyDeleted": "Block no longer available",
+      "resourceScopeLabel": "Whole document",
+      "resourceScopeEmpty": "Resource no longer available",
+      "sublinesLazy": "Complete resource — link (lazy), fetched on demand",
+      "sublinesInline": "Complete resource — embedded inline"
+    },
+    "resourcePicker": {
+      "triggerButton": "Link blocks",
+      "dialogTitle": "Link resource blocks",
+      "dialogDescription": "Select a resource on the left and the heading block whose section should be linked on the right. Only heading blocks are allowed as anchors.",
+      "noResources": "No resources.",
+      "selectResourceHint": "Select a resource to see heading blocks.",
+      "wholeDocLabel": "Whole document",
+      "wholeDocDescription": "Links the complete resource — exclusive to individual block anchors.",
+      "wholeDocAriaLabel": "Link whole document",
+      "embedModeGroup": "Embed mode for the whole document",
+      "embedLazy": "Link (lazy)",
+      "embedInline": "Embed inline",
+      "headingBlocksLabel": "Heading blocks",
+      "noHeadings": "This resource has no heading blocks.",
+      "sectionAriaLabel": "Link section {{heading}}",
+      "emptySection": "(empty section)",
+      "loadFailed": "Loading failed.",
+      "saveButton": "Save ({{count}})"
+    }
+  },
+  "resources": {
+    "list": {
+      "title": "Resources",
+      "description": "Versioned knowledge blocks with block editor.",
+      "newResource": "New resource",
+      "tagFilter": "Tag filter",
+      "resetFilter": "Reset filter",
+      "emptyTagTitle": "No resources with tag \"{{tag}}\"",
+      "emptyTagDescription": "Remove the filter or create a new resource with this tag.",
+      "emptyTitle": "No resources yet",
+      "emptyDescription": "Create your first resource to capture knowledge in blocks."
+    },
+    "new": {
+      "title": "New resource",
+      "description": "Create a new resource.",
+      "submit": "Create"
+    },
+    "form": {
+      "identityTitle": "Identity",
+      "identityDescription": "What the resource is called and what it covers.",
+      "identityHelp": "Example: \"Privacy FAQ\" — a structured knowledge block embedded in playbooks via block refs.",
+      "namePlaceholder": "e.g. Privacy FAQ",
+      "descriptionPlaceholder": "e.g. Answers to the most common privacy questions",
+      "contentTitle": "Content",
+      "contentDescription": "The actual content of the resource.",
+      "contentHelp": "Individual heading blocks can be embedded in playbooks via block refs. Changes create a new version.",
+      "contentLabel": "Content",
+      "tagsDescription": "Keywords for searching and filtering.",
+      "tagsHelp": "Example: \"privacy, faq, legal\". Press Enter to add, click X to remove. Tags enable filtering in the resource list and in the MCP tool list_resources.",
+      "tagsPlaceholder": "Enter tag and press Enter",
+      "nameRequired": "Name is required."
+    },
+    "detail": {
+      "activeVersion": "Active: v{{version}}",
+      "workingOnDraft": "You are editing draft v{{version}}",
+      "inReview": "In review: v{{version}}",
+      "currentVersion": "Current version: v{{version}} ({{status}})",
+      "linkedIn": "Linked in",
+      "block_one": "{{count}} block",
+      "block_other": "{{count}} blocks",
+      "usagesEmptyTitle": "Not used in any playbook yet",
+      "usagesEmptyDescription": "Link a heading block in a playbook to make this resource visible.",
+      "subResourcesTitle": "Sub-resources",
+      "subResourcesEmptyTitle": "No sub-resources",
+      "subResourcesEmptyDescription": "Link additional resources that an agent can load via fetch_resource.",
+      "scopeBlock": "Block {{blockId}}",
+      "scopeDocumentInline": "Document · inline",
+      "scopeDocumentLazy": "Document · lazy",
+      "usedByTitle": "Used in resources",
+      "restoredAsDraft": "v{{version}} restored as draft."
+    },
+    "statusBar": {
+      "ariaLabel": "Status actions",
+      "activate": "Activate",
+      "activateAdminOnly": "Only admins can activate",
+      "submitForReview": "Submit for review",
+      "reject": "Reject",
+      "reactivate": "Reactivate as draft",
+      "promoteError": "Fill in before activating: {{fields}}.",
+      "actionFailed": "Action failed.",
+      "promoteErrorTitle": "Cannot promote",
+      "toast": {
+        "activated": "Version activated.",
+        "submitted": "Submitted for review.",
+        "rejected": "Review rejected.",
+        "reactivated": "Reactivated as draft."
+      }
+    },
+    "usedBy": {
+      "empty": "No resource references this resource as a sub-resource.",
+      "ariaLabel": "Referenced as sub-resource in"
+    },
+    "picker": {
+      "trigger": "Edit sub-resources",
+      "title": "Sub-resources (Composition)",
+      "description": "Select resources as sub-resources and reorder them with the arrow buttons. Agents load them via fetch_resource — content is not expanded.",
+      "selectedCount": "Selected ({{count}})",
+      "selectedAriaLabel": "Selected sub-resources",
+      "embedModeFor": "Embed mode for {{name}}",
+      "modeLazy": "Link (lazy)",
+      "modeInline": "Embed inline",
+      "moveUp": "Move {{name}} up",
+      "moveDown": "Move {{name}} down",
+      "addMore": "Add more",
+      "resources": "Resources",
+      "availableAriaLabel": "Available resources",
+      "addAriaLabel": "Add {{name}} as sub-resource",
+      "noMore": "No more resources in workspace.",
+      "allSelected": "All available resources are already selected.",
+      "save": "Save ({{count}})",
+      "loadError": "Loading failed."
+    },
+    "toast": {
+      "created": "Resource created.",
+      "createFailed": "Creation failed."
+    }
+  },
+  "settings": {
+    "nav": {
+      "ariaLabel": "Settings navigation",
+      "account": "Account",
+      "org": "Organization",
+      "workspace": "Workspace",
+      "members": "Members",
+      "tokens": "API Tokens"
+    },
+    "account": {
+      "title": "Account",
+      "description": "Your personal profile, security and display preferences.",
+      "profile": {
+        "title": "Profile",
+        "description": "Display name and login email.",
+        "displayName": "Display name",
+        "userId": "User ID",
+        "displayNameRequired": "Please enter a name.",
+        "displayNameMaxLength": "Maximum 120 characters.",
+        "savedToast": "Display name saved."
+      },
+      "email": {
+        "changeLabel": "Change email",
+        "changeButton": "Change email",
+        "currentNote": "Current: {{email}}. A new address must be activated via a confirmation link.",
+        "sameError": "That is already your current email address.",
+        "invalidError": "Please enter a valid email address.",
+        "sentToast": "Confirmation email sent to the new address."
+      },
+      "security": {
+        "title": "Security",
+        "description": "Password and active sessions."
+      },
+      "password": {
+        "newLabel": "New password",
+        "setLabel": "Set password",
+        "confirmLabel": "Repeat password",
+        "changeButton": "Change password",
+        "setButton": "Set password",
+        "minLength": "At least 8 characters.",
+        "confirmRequired": "Please repeat.",
+        "mismatch": "Passwords do not match.",
+        "magicLinkHint": "You are signed in via magic link or social login. With a password you can also sign in directly.",
+        "changedToast": "Password changed.",
+        "setToast": "Password set."
+      },
+      "signOutEverywhere": {
+        "title": "Sign out everywhere",
+        "description": "Ends all active sessions on all devices.",
+        "button": "Sign out everywhere",
+        "successToast": "Signed out on all devices."
+      },
+      "preferences": {
+        "title": "Preferences",
+        "theme": {
+          "title": "Appearance",
+          "description": "Light, dark or system default."
+        }
+      },
+      "language": {
+        "label": "Language",
+        "description": "Interface language."
+      },
+      "dataPrivacy": {
+        "title": "Data & Privacy",
+        "description": "Export a copy of all your data (GDPR).",
+        "exportHint": "Downloads all organizations, workspaces, personae, playbooks, resources, agents and their versions as a JSON file.",
+        "exportButton": "Export data",
+        "exportSuccess": "Data export downloaded.",
+        "exportError": "Export failed."
+      },
+      "deleteAccount": {
+        "title": "Delete account",
+        "description": "Your account and personal organization will be scheduled for deletion and permanently removed after a 30-day grace period. This action is irreversible.",
+        "triggerButton": "Delete account",
+        "dialogTitle": "Delete account",
+        "dialogDescription": "Enter your email \"{{email}}\" to confirm. After 30 days all your data will be permanently deleted.",
+        "emailLabel": "Email",
+        "confirmButton": "Permanently delete account",
+        "successToast": "Account scheduled for deletion. You have been signed out.",
+        "errorFallback": "Deletion failed."
+      }
+    },
+    "org": {
+      "title": "Organization",
+      "description": "Workspaces, master data and billing for this organization.",
+      "loading": "Loading…",
+      "masterData": {
+        "title": "Master data",
+        "name": "Name",
+        "slug": "Slug",
+        "type": "Type",
+        "personal": "Personal",
+        "company": "Organization"
+      },
+      "workspaces": {
+        "title": "Workspaces",
+        "openButton": "Open",
+        "addTitle": "Add workspace",
+        "addDescription": "A new workspace groups its own personae, playbooks and tokens.",
+        "nameLabel": "Name",
+        "slugLabel": "Slug",
+        "slugDescription": "Unique within the organization, used in the URL.",
+        "slugPlaceholder": "e.g. marketing",
+        "nameRequired": "Name required.",
+        "slugRequired": "Slug required.",
+        "slugInvalid": "Only lowercase letters, digits and hyphens.",
+        "createButton": "Create workspace",
+        "createdToast": "Workspace \"{{name}}\" created.",
+        "adminOnly": "Only admins can create workspaces in this organization."
+      },
+      "members": {
+        "title": "Members",
+        "descriptionPrefix": "Members are managed per workspace — roles, invitations and removal can be found under",
+        "descriptionSuffix": ".",
+        "linkLabel": "Members"
+      },
+      "dangerZone": {
+        "title": "Danger zone",
+        "description": "Deleting schedules the organization along with all workspaces, personae, playbooks, resources, agents and tokens for permanent removal (30-day grace period). Only the owner can do this.",
+        "triggerButton": "Delete organization",
+        "dialogTitle": "Delete organization",
+        "dialogDescription": "Enter the name \"{{name}}\" to confirm. All content of all workspaces will be lost after the grace period.",
+        "orgNameLabel": "Organization name",
+        "confirmButton": "Permanently delete",
+        "deletedToast": "Organization \"{{name}}\" scheduled for deletion.",
+        "errorFallback": "Deletion failed."
+      },
+      "actionFailed": "Action failed."
+    },
+    "workspace": {
+      "title": "Workspace",
+      "description": "Settings, members and danger zone for this workspace.",
+      "loading": "Loading…",
+      "general": {
+        "title": "General",
+        "renameTitle": "Rename workspace",
+        "renameDescription": "The displayed name. The slug remains unchanged.",
+        "nameLabel": "Name",
+        "nameRequired": "Name required.",
+        "saveButton": "Save",
+        "renamedToast": "Workspace renamed.",
+        "adminOnly": "Only admins can rename this workspace."
+      },
+      "members": {
+        "title": "Members",
+        "descriptionPrefix": "Roles, invitations and removal can be found under",
+        "descriptionSuffix": ".",
+        "linkLabel": "Members"
+      },
+      "dangerZone": {
+        "title": "Danger zone",
+        "description": "Deleting removes the workspace along with all personae, playbooks, resources, templates, agents and tokens. This action is irreversible.",
+        "lastWorkspace": "This is the last workspace of the organization and cannot be deleted.",
+        "triggerButton": "Delete workspace",
+        "dialogTitle": "Delete workspace",
+        "dialogDescription": "Enter the workspace name \"{{name}}\" to confirm. All content will be lost.",
+        "workspaceNameLabel": "Workspace name",
+        "confirmButton": "Permanently delete",
+        "deletedToast": "Workspace deleted.",
+        "errorFallback": "Action failed."
+      },
+      "actionFailed": "Action failed."
+    },
+    "members": {
+      "title": "Members",
+      "description": "Who has access to this workspace and with which role.",
+      "adminOnly": "This page is for admins only.",
+      "list": {
+        "title": "Members",
+        "emptyTitle": "No members yet.",
+        "emptyDescription": "Invite someone to share the workspace.",
+        "colEmail": "Email",
+        "colRole": "Role",
+        "colJoined": "Joined",
+        "colActions": "Actions",
+        "roleAriaLabel": "Role of {{email}}",
+        "removeButton": "Remove",
+        "removedToast": "Member removed.",
+        "roleUpdatedToast": "Role updated.",
+        "tokenDowngradeInfo": "Existing API tokens of this member retain their old role until they are revoked."
+      },
+      "invite": {
+        "cardTitle": "Invite",
+        "sectionTitle": "Invite new member",
+        "sectionDescription": "The person will receive a one-time link to join.",
+        "sectionFooter": "Open invitations expire automatically and can be revoked.",
+        "emailLabel": "Email",
+        "roleLabel": "Role",
+        "inviteButton": "Invite",
+        "sentToast": "Invitation sent to {{email}}.",
+        "emailInvalid": "Please enter a valid email address.",
+        "actionFailed": "Action failed."
+      },
+      "invitations": {
+        "cardTitle": "Open invitations",
+        "empty": "No open invitations.",
+        "expiresLabel": "expires",
+        "copyButton": "Copy link",
+        "copyDisabledTitle": "Link can only be copied right after inviting",
+        "copiedToast": "Invitation link copied.",
+        "revokeButton": "Revoke",
+        "revokedToast": "Invitation revoked."
+      }
+    },
+    "language": {
+      "label": "Language",
+      "description": "Interface language."
+    }
+  },
+  "systemPrompts": {
+    "page": {
+      "list": {
+        "title": "System prompts",
+        "description": "Reusable template library for your agents — with placeholders.",
+        "newTemplate": "New template",
+        "empty": {
+          "title": "No templates yet",
+          "description": "Create your first system-prompt template."
+        }
+      },
+      "new": {
+        "title": "New template",
+        "description": "Create a reusable system-prompt template.",
+        "submit": "Create",
+        "toast": {
+          "created": "Template created."
+        },
+        "error": {
+          "unknown": "Unknown error."
+        }
+      },
+      "detail": {
+        "slugVersion": "Slug: {{slug}} · Current version: v{{version}}",
+        "toast": {
+          "restored": "v{{version}} restored as draft."
+        }
+      },
+      "help": {
+        "title": "Placeholder reference",
+        "description": "Which placeholders are available in the system-prompt editor and what they insert on MCP read."
+      }
+    },
+    "nav": {
+      "backToList": "System prompts"
+    },
+    "form": {
+      "identity": {
+        "title": "Identity",
+        "description": {
+          "placeholder": "e.g. Default template for support agents"
+        },
+        "help": "Example: \"Customer support agent v1\". The description appears in the template list and agent picker.",
+        "name": {
+          "placeholder": "e.g. Customer-support-agent"
+        }
+      },
+      "promptBody": {
+        "title": "Prompt body",
+        "description": "Write your prompt in the editor. Type / to insert placeholders.",
+        "help": "Type / in the editor to insert playbook, resource, persona-field, or date placeholders. The backend renderer expands them to real text on MCP read.",
+        "label": "Body"
+      },
+      "saveVersion": "Save new version",
+      "viewerTooltip": "Viewers can only read content",
+      "validation": {
+        "nameRequired": "Name required."
+      },
+      "toast": {
+        "saved": "Saved — new version created."
+      },
+      "error": {
+        "unknown": "Unknown error."
+      }
+    },
+    "statusBar": {
+      "ariaLabel": "Status actions",
+      "submitForReview": "Submit for review",
+      "activate": "Activate",
+      "backToDraft": "Back to draft",
+      "reactivateAsDraft": "Reactivate as draft",
+      "adminOnlyTooltip": "Only admins can activate",
+      "toast": {
+        "submittedForReview": "Submitted for review.",
+        "activated": "Version activated.",
+        "backToDraft": "Moved back to draft.",
+        "reactivatedAsDraft": "Reactivated as draft.",
+        "actionFailed": "Action failed."
+      }
+    },
+    "placeholderHelp": {
+      "triggerLabel": "Available placeholders",
+      "docsLink": "More in the docs →",
+      "intro": {
+        "heading": "What is a placeholder?",
+        "body": "Placeholders are markers in the template that the server replaces with real content on MCP read — e.g. the persona's name or the body of a linked playbook. This keeps the prompt small and up to date.",
+        "usage": "Open the slash menu in the editor with / and pick a placeholder as a pill."
+      },
+      "slashSection": {
+        "heading": "BlockNote editor (slash menu)"
+      },
+      "slash": {
+        "playbook": {
+          "description": "Insert the body of a linked playbook."
+        },
+        "resource": {
+          "description": "Insert the body of a resource."
+        },
+        "personaField": {
+          "description": "Embeds the name, description, full profile, only the profile content, or only the modes."
+        },
+        "personaLoad": {
+          "description": "Does not embed content but instructs the agent to load its persona at runtime via get_persona(...) and apply its modes."
+        },
+        "playbookCatalog": {
+          "description": "Table of assigned playbooks (name, trigger, call, description) — briefs the agent on what it can load when via fetch_playbook(...). Optionally all or only triggered ones."
+        },
+        "date": {
+          "description": "Current date (ISO or human-readable)."
+        },
+        "mcpTools": {
+          "description": "List of MCP tools with signature and short description. Write the order around it (\"first list_triggers, then fetch_playbook\") so the LLM uses the tools correctly."
+        }
+      }
+    }
+  },
+  "tokens": {
+    "page": {
+      "title": "API Tokens",
+      "description": "Persistent tokens for headless clients and agents."
+    },
+    "list": {
+      "title": "Existing tokens",
+      "createdAt": "created {{date}}",
+      "lastUsed": "· last used {{date}}",
+      "revoked": "· revoked {{date}}",
+      "revoke": "Revoke"
+    },
+    "create": {
+      "title": "Create new token",
+      "submit": "Create",
+      "nameRequired": "Name required.",
+      "roleLabel": "Role",
+      "roleHint": "The token inherits at most your own role — higher permissions cannot be selected."
+    },
+    "reveal": {
+      "title": "New token — copy now",
+      "body": "The plaintext is shown exactly once. After closing it cannot be retrieved again.",
+      "ariaLabel": "Plaintext token",
+      "copyButton": "Copy to clipboard"
+    },
+    "override": {
+      "title": "Activate headless token",
+      "description": "Override for future headless use-cases: the entered token will be sent to the API instead of the Supabase JWT from now on. Lives only in this tab session — a reload removes it.",
+      "statusLabel": "Status:",
+      "statusNone": "no override (Supabase JWT active)",
+      "statusActive": "Override active ({{tail}})",
+      "inputLabel": "w2b_ token",
+      "remove": "Remove override"
+    },
+    "toast": {
+      "created": "Token \"{{name}}\" created. Copy the plaintext now — it won't be shown again.",
+      "unknownError": "Unknown error."
+    }
+  }
+}

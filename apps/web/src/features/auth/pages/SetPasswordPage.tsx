@@ -2,6 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 
 import { supabase } from '@/lib/supabase'
@@ -13,21 +14,11 @@ import { Input } from '@/components/ui/input'
 import { sanitizeNext } from '@/features/auth/lib/sanitize-next'
 import { notify } from '@/lib/feedback'
 
-// Min-Laenge 8 — GoTrue-Default. Match-Check verhindert Tippfehler im
-// One-Shot-Magic-Link-Flow, wo der User noch keinen Reset-Pfad hat.
-const schema = z
-  .object({
-    password: z.string().min(8, 'Mindestens 8 Zeichen.'),
-    confirm: z.string().min(1, 'Bitte wiederholen.'),
-  })
-  .refine((values) => values.password === values.confirm, {
-    message: 'Passwoerter stimmen nicht ueberein.',
-    path: ['confirm'],
-  })
 
-type SetPasswordValues = z.infer<typeof schema>
+type SetPasswordValues = { password: string; confirm: string }
 
 export function SetPasswordPage() {
+  const { t } = useTranslation('auth')
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [error, setError] = useState<string | null>(null)
@@ -37,8 +28,20 @@ export function SetPasswordPage() {
   // `sanitizeNext` schuetzt vor Open-Redirect — gleiche Pruefung wie LoginPage.
   const next = sanitizeNext(searchParams.get('next'))
 
+  // Min-Laenge 8 — GoTrue-Default. Match-Check verhindert Tippfehler im
+  // One-Shot-Magic-Link-Flow, wo der User noch keinen Reset-Pfad hat.
+  const setPasswordSchema = z
+    .object({
+      password: z.string().min(8, t('validation.passwordMinLength')),
+      confirm: z.string().min(1, t('validation.confirmRequired')),
+    })
+    .refine((values) => values.password === values.confirm, {
+      message: t('validation.passwordMismatch'),
+      path: ['confirm'],
+    })
+
   const form = useForm<SetPasswordValues>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(setPasswordSchema),
     defaultValues: { password: '', confirm: '' },
   })
 
@@ -51,7 +54,7 @@ export function SetPasswordPage() {
       setError(updateError.message)
       return
     }
-    notify.success('Passwort gesetzt.')
+    notify.success(t('setPassword.success'))
     navigate(next)
   }
 
@@ -60,11 +63,11 @@ export function SetPasswordPage() {
       <Card className="w-full max-w-md border-transparent shadow-modal">
         <CardHeader className="gap-2">
           <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            Who2Be
+            {t('brand')}
           </span>
-          <CardTitle className="text-3xl tracking-tight">Passwort setzen</CardTitle>
+          <CardTitle className="text-3xl tracking-tight">{t('setPassword.title')}</CardTitle>
           <CardDescription>
-            Lege ein Passwort fest, damit du dich beim naechsten Mal direkt anmelden kannst.
+            {t('setPassword.description')}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -75,7 +78,7 @@ export function SetPasswordPage() {
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Neues Passwort</FormLabel>
+                    <FormLabel>{t('fields.newPassword')}</FormLabel>
                     <FormControl>
                       <Input
                         type="password"
@@ -93,7 +96,7 @@ export function SetPasswordPage() {
                 name="confirm"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Passwort wiederholen</FormLabel>
+                    <FormLabel>{t('fields.passwordRepeat')}</FormLabel>
                     <FormControl>
                       <Input
                         type="password"
@@ -113,7 +116,7 @@ export function SetPasswordPage() {
                 className="w-full"
                 disabled={form.formState.isSubmitting}
               >
-                Passwort setzen
+                {t('setPassword.submit')}
               </Button>
             </form>
           </Form>

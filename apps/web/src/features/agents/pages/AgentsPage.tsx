@@ -1,5 +1,6 @@
 import { Bot, Plus } from 'lucide-react'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { useApi } from '@/api/useApi'
@@ -17,6 +18,7 @@ import { notify } from '@/lib/feedback'
 import { useAgents } from '../hooks/useAgents'
 
 export function AgentsPage() {
+  const { t } = useTranslation('agents')
   const { agents, loading, error } = useAgents()
   const api = useApi()
   const navigate = useNavigate()
@@ -30,10 +32,10 @@ export function AgentsPage() {
     setCreating(true)
     try {
       const created = await api.createAgent({ name: 'Neuer Agent' })
-      notify.success('Agent angelegt — jetzt Persona und Systemprompt zuweisen.')
+      notify.success(t('toast.created'))
       navigate(wsPath(`/agents/${created.id}`))
     } catch (cause: unknown) {
-      notify.error(cause instanceof Error ? cause.message : 'Anlegen fehlgeschlagen.')
+      notify.error(cause instanceof Error ? cause.message : t('toast.createError'))
       setCreating(false)
     }
   }
@@ -42,19 +44,19 @@ export function AgentsPage() {
     <Container>
       <Stack gap="lg">
         <PageHeader
-          title="Agents"
-          description="Konfigurierte Agents — Persona × Template, einmal klicken zum Kopieren."
+          title={t('page.title')}
+          description={t('page.description')}
           actions={
             <Button
               type="button"
               variant="brand"
               disabled={isViewer || creating}
               onClick={() => void createAgent()}
-              title={isViewer ? 'Viewer können keine Agents anlegen' : undefined}
+              title={isViewer ? t('page.viewerNoCreate') : undefined}
               data-testid="new-agent"
             >
               <Plus className="h-4 w-4" />
-              Neuen Agent erstellen
+              {t('page.newAgent')}
             </Button>
           }
         />
@@ -66,19 +68,19 @@ export function AgentsPage() {
           empty={
             <EmptyState
               icon={Bot}
-              title="Noch keine Agents"
-              description="Lege deinen ersten Agent an, um Prompts mit einem Klick zu kopieren."
+              title={t('page.empty.title')}
+              description={t('page.empty.description')}
               action={
                 <Button
                   type="button"
                   variant="brand"
                   disabled={isViewer || creating}
                   onClick={() => void createAgent()}
-                  title={isViewer ? 'Viewer können keine Agents anlegen' : undefined}
+                  title={isViewer ? t('page.viewerNoCreate') : undefined}
                   data-testid="new-agent-empty"
                 >
                   <Plus className="h-4 w-4" />
-                  Neuen Agent erstellen
+                  {t('page.newAgent')}
                 </Button>
               }
             />
@@ -92,9 +94,11 @@ export function AgentsPage() {
                 {agent.name}
               </Link>
               <div className="flex items-center gap-2">
-                {agent.activatable ? null : <Badge variant="outline">Unvollständig</Badge>}
+                {agent.activatable ? null : (
+                  <Badge variant="outline">{t('status.incomplete')}</Badge>
+                )}
                 <Badge variant={agent.status === 'enabled' ? 'default' : 'outline'}>
-                  {agent.status === 'enabled' ? 'Aktiv' : 'Deaktiviert'}
+                  {agent.status === 'enabled' ? t('status.enabled') : t('status.disabled')}
                 </Badge>
               </div>
             </div>

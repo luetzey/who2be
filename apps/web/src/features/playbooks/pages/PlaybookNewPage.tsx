@@ -1,5 +1,6 @@
 import { ArrowLeft } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -12,6 +13,7 @@ import { PlaybookEditorForm } from '../components/PlaybookEditorForm'
 import { useCreatePlaybook } from '../hooks/useCreatePlaybook'
 
 export function PlaybookNewPage() {
+  const { t } = useTranslation('playbooks')
   const navigate = useNavigate()
   const wsPath = useWorkspacePath()
   const { form, onSubmit, saveError } = useCreatePlaybook((id) =>
@@ -24,10 +26,10 @@ export function PlaybookNewPage() {
         <Button asChild variant="ghost" size="sm" className="self-start">
           <Link to={wsPath('/playbooks')}>
             <ArrowLeft className="h-4 w-4" />
-            Playbooks
+            {t('detail.back')}
           </Link>
         </Button>
-        <PageHeader title="Neues Playbook" description="Lege ein neues Playbook an." />
+        <PageHeader title={t('new.title')} description={t('new.description')} />
         <PlaybookEditorForm
           form={form}
           formKey="new-playbook"
@@ -42,7 +44,7 @@ export function PlaybookNewPage() {
                   variant="brand"
                   disabled={form.formState.isSubmitting}
                 >
-                  Anlegen
+                  {t('form.createButton')}
                 </Button>
               </div>
             </Stack>

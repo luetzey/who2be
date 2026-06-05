@@ -3,7 +3,10 @@ import { Check } from 'lucide-react'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
+
+import i18n from '@/i18n'
 
 import type { MeOrganization } from '@/api/types'
 import { useApi } from '@/api/useApi'
@@ -45,24 +48,25 @@ import { roleLabel } from '@/lib/roles'
 import { useCurrentOrg } from '../hooks/useCurrentOrg'
 
 const workspaceSchema = z.object({
-  name: z.string().min(1, 'Name erforderlich.').max(200),
+  name: z.string().min(1, i18n.t('common:validation.nameRequired')).max(200),
   slug: z
     .string()
-    .min(1, 'Slug erforderlich.')
+    .min(1, i18n.t('common:validation.slugRequired'))
     .max(64)
-    .regex(/^[a-z0-9-]+$/, 'Nur Kleinbuchstaben, Ziffern und Bindestriche.'),
+    .regex(/^[a-z0-9-]+$/, i18n.t('common:validation.slugInvalid')),
 })
 
 type WorkspaceValues = z.infer<typeof workspaceSchema>
 
-function describeError(cause: unknown): string {
-  return cause instanceof Error ? cause.message : 'Aktion fehlgeschlagen.'
+function describeError(cause: unknown, fallback: string): string {
+  return cause instanceof Error ? cause.message : fallback
 }
 
 // Org-Space (Track C): Organisation-Einstellungen — Workspaces (inkl. Anlage,
 // Fix für den toten "Workspace hinzufügen"-Button), Org-Metadaten und der
 // Billing-Slot, den Track D füllt.
 export function OrgSettingsPage() {
+  const { t } = useTranslation('settings')
   const api = useApi()
   const { refreshMe } = useSession()
   const current = useCurrentOrg()
@@ -78,7 +82,7 @@ export function OrgSettingsPage() {
     return (
       <Container>
         <Stack gap="lg">
-          <PageHeader title="Organisation" description="Wird geladen…" />
+          <PageHeader title={t('org.title')} description={t('org.loading')} />
         </Stack>
       </Container>
     )
@@ -90,11 +94,11 @@ export function OrgSettingsPage() {
   async function onCreateWorkspace(values: WorkspaceValues) {
     try {
       const created = await api.createWorkspace(org.id, values)
-      notify.success(`Workspace „${created.name}“ angelegt.`)
+      notify.success(t('org.workspaces.createdToast', { name: created.name }))
       form.reset({ name: '', slug: '' })
       await refreshMe()
     } catch (cause) {
-      notify.error(describeError(cause))
+      notify.error(describeError(cause, t('org.actionFailed')))
     }
   }
 
@@ -102,24 +106,24 @@ export function OrgSettingsPage() {
     <Container>
       <Stack gap="lg">
         <PageHeader
-          title="Organisation"
-          description="Workspaces, Stammdaten und Abrechnung dieser Organisation."
+          title={t('org.title')}
+          description={t('org.description')}
         />
 
         <Card>
           <CardHeader>
-            <CardTitle>Stammdaten</CardTitle>
+            <CardTitle>{t('org.masterData.title')}</CardTitle>
           </CardHeader>
           <CardContent>
             <dl className="grid gap-3 text-sm sm:grid-cols-[8rem_1fr]">
-              <dt className="text-muted-foreground">Name</dt>
+              <dt className="text-muted-foreground">{t('org.masterData.name')}</dt>
               <dd className="font-medium">{org.name}</dd>
-              <dt className="text-muted-foreground">Slug</dt>
+              <dt className="text-muted-foreground">{t('org.masterData.slug')}</dt>
               <dd className="font-mono text-xs text-muted-foreground">{org.slug}</dd>
-              <dt className="text-muted-foreground">Typ</dt>
+              <dt className="text-muted-foreground">{t('org.masterData.type')}</dt>
               <dd>
                 <Badge variant="secondary">
-                  {org.kind === 'personal' ? 'Persönlich' : 'Organisation'}
+                  {org.kind === 'personal' ? t('org.masterData.personal') : t('org.masterData.company')}
                 </Badge>
               </dd>
             </dl>
@@ -128,7 +132,7 @@ export function OrgSettingsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Workspaces</CardTitle>
+            <CardTitle>{t('org.workspaces.title')}</CardTitle>
           </CardHeader>
           <CardContent>
             <Stack gap="md">
@@ -148,7 +152,7 @@ export function OrgSettingsPage() {
                         <Badge variant="outline">{roleLabel(ws.role)}</Badge>
                       </div>
                       <Button asChild variant="ghost" size="sm">
-                        <Link to={`/w/${ws.id}/dashboard`}>Öffnen</Link>
+                        <Link to={`/w/${ws.id}/dashboard`}>{t('org.workspaces.openButton')}</Link>
                       </Button>
                     </li>
                   )
@@ -159,15 +163,15 @@ export function OrgSettingsPage() {
                 <Form {...form}>
                   <form onSubmit={form.handleSubmit(onCreateWorkspace)}>
                     <FormSection
-                      title="Workspace hinzufügen"
-                      description="Ein neuer Workspace gruppiert eigene Personae, Playbooks und Tokens."
+                      title={t('org.workspaces.addTitle')}
+                      description={t('org.workspaces.addDescription')}
                     >
                       <FormField
                         control={form.control}
                         name="name"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Name</FormLabel>
+                            <FormLabel>{t('org.workspaces.nameLabel')}</FormLabel>
                             <FormControl>
                               <Input required {...field} />
                             </FormControl>
@@ -180,12 +184,12 @@ export function OrgSettingsPage() {
                         name="slug"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Slug</FormLabel>
+                            <FormLabel>{t('org.workspaces.slugLabel')}</FormLabel>
                             <FormControl>
-                              <Input required placeholder="z.B. marketing" {...field} />
+                              <Input required placeholder={t('org.workspaces.slugPlaceholder')} {...field} />
                             </FormControl>
                             <FormDescription>
-                              Eindeutig innerhalb der Organisation, in der URL verwendet.
+                              {t('org.workspaces.slugDescription')}
                             </FormDescription>
                             <FormMessage />
                           </FormItem>
@@ -197,7 +201,7 @@ export function OrgSettingsPage() {
                           variant="brand"
                           disabled={form.formState.isSubmitting}
                         >
-                          Workspace anlegen
+                          {t('org.workspaces.createButton')}
                         </Button>
                       </div>
                     </FormSection>
@@ -205,7 +209,7 @@ export function OrgSettingsPage() {
                 </Form>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  Nur Admins können in dieser Organisation Workspaces anlegen.
+                  {t('org.workspaces.adminOnly')}
                 </p>
               )}
             </Stack>
@@ -214,16 +218,15 @@ export function OrgSettingsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Mitglieder</CardTitle>
+            <CardTitle>{t('org.members.title')}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Mitglieder werden pro Workspace verwaltet — Rollen, Einladungen und
-              Entfernen findest du unter{' '}
+              {t('org.members.descriptionPrefix')}{' '}
               <Link to={wsPath('/settings/members')} className="underline underline-offset-4">
-                Mitglieder
+                {t('org.members.linkLabel')}
               </Link>
-              .
+              {t('org.members.descriptionSuffix')}
             </p>
           </CardContent>
         </Card>
@@ -244,6 +247,7 @@ export function OrgSettingsPage() {
 // das wirklich — das Backend enforced es (403 → Toast); hier zeigen wir den
 // Eintrag für Company-Org-Admins, Personal-Orgs laufen über die Konto-Löschung.
 function DeleteOrgSection({ org }: { org: MeOrganization }) {
+  const { t } = useTranslation('settings')
   const api = useApi()
   const { refreshMe } = useSession()
   const navigate = useNavigate()
@@ -255,26 +259,24 @@ function DeleteOrgSection({ org }: { org: MeOrganization }) {
     setPending(true)
     try {
       await api.deleteOrganization(org.id)
-      notify.success(`Organisation „${org.name}“ zur Löschung vorgemerkt.`)
+      notify.success(t('org.dangerZone.deletedToast', { name: org.name }))
       await refreshMe()
       navigate('/', { replace: true })
     } catch (cause) {
       setPending(false)
-      notify.error(cause instanceof Error ? cause.message : 'Löschen fehlgeschlagen.')
+      notify.error(cause instanceof Error ? cause.message : t('org.dangerZone.errorFallback'))
     }
   }
 
   return (
     <Card className="border-destructive/40">
       <CardHeader>
-        <CardTitle className="text-destructive">Danger-Zone</CardTitle>
+        <CardTitle className="text-destructive">{t('org.dangerZone.title')}</CardTitle>
       </CardHeader>
       <CardContent>
         <Stack gap="sm">
           <p className="text-sm text-muted-foreground">
-            Das Löschen merkt die Organisation samt aller Workspaces, Personae, Playbooks,
-            Resources, Agenten und Tokens zur endgültigen Entfernung vor (30-Tage-Frist). Nur der
-            Owner kann das ausführen.
+            {t('org.dangerZone.description')}
           </p>
           <Dialog
             onOpenChange={(open) => {
@@ -284,18 +286,17 @@ function DeleteOrgSection({ org }: { org: MeOrganization }) {
             }}
           >
             <DialogTrigger asChild>
-              <Button variant="destructive">Organisation löschen</Button>
+              <Button variant="destructive">{t('org.dangerZone.triggerButton')}</Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Organisation löschen</DialogTitle>
+                <DialogTitle>{t('org.dangerZone.dialogTitle')}</DialogTitle>
                 <DialogDescription>
-                  Gib zur Bestätigung den Namen „{org.name}“ ein. Alle Inhalte aller Workspaces
-                  gehen nach Ablauf der Frist verloren.
+                  {t('org.dangerZone.dialogDescription', { name: org.name })}
                 </DialogDescription>
               </DialogHeader>
               <div className="flex flex-col gap-2">
-                <Label htmlFor="confirm-org-name">Organisations-Name</Label>
+                <Label htmlFor="confirm-org-name">{t('org.dangerZone.orgNameLabel')}</Label>
                 <Input
                   id="confirm-org-name"
                   value={confirm}
@@ -305,14 +306,14 @@ function DeleteOrgSection({ org }: { org: MeOrganization }) {
               </div>
               <DialogFooter>
                 <DialogClose asChild>
-                  <Button variant="outline">Abbrechen</Button>
+                  <Button variant="outline">{t('common:actions.cancel')}</Button>
                 </DialogClose>
                 <Button
                   variant="destructive"
                   disabled={!confirmMatches || pending}
                   onClick={() => void onDelete()}
                 >
-                  Endgültig löschen
+                  {t('org.dangerZone.confirmButton')}
                 </Button>
               </DialogFooter>
             </DialogContent>

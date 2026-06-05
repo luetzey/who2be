@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import type { ProvenanceEntry, VersionDiff, VersionStatus } from '@/api/types'
 import { Badge } from '@/components/ui/badge'
@@ -42,6 +43,7 @@ export function VersionHistory({
   loadDiff,
   loadProvenance,
 }: VersionHistoryProps) {
+  const { t } = useTranslation('version')
   const [openPanel, setOpenPanel] = useState<{ version: number; kind: PanelKind } | null>(null)
   const [diff, setDiff] = useState<VersionDiff | null>(null)
   const [provenance, setProvenance] = useState<ProvenanceEntry[] | null>(null)
@@ -68,7 +70,7 @@ export function VersionHistory({
         setProvenance(await loadProvenance(version))
       }
     } catch (cause) {
-      setPanelError(cause instanceof Error ? cause.message : 'Laden fehlgeschlagen.')
+      setPanelError(cause instanceof Error ? cause.message : t('history.loadFailed'))
     } finally {
       setPanelLoading(false)
     }
@@ -80,7 +82,7 @@ export function VersionHistory({
       await onRestore(version)
       setOpenPanel(null)
     } catch (cause) {
-      notify.error(cause instanceof Error ? cause.message : 'Wiederherstellen fehlgeschlagen.')
+      notify.error(cause instanceof Error ? cause.message : t('history.restoreFailed'))
     } finally {
       setRestoringVersion(null)
     }
@@ -89,10 +91,10 @@ export function VersionHistory({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Versionen</CardTitle>
+        <CardTitle>{t('history.title')}</CardTitle>
       </CardHeader>
       <CardContent>
-        <ul className="flex flex-col gap-2" aria-label="Versionsverlauf">
+        <ul className="flex flex-col gap-2" aria-label={t('history.listLabel')}>
           {versions.map((version) => {
             const isOpen = openPanel?.version === version.version
             return (
@@ -119,7 +121,7 @@ export function VersionHistory({
                       aria-pressed={isOpen && openPanel?.kind === 'diff'}
                       onClick={() => void togglePanel(version.version, 'diff')}
                     >
-                      Diff
+                      {t('history.diff')}
                     </Button>
                     <Button
                       variant="ghost"
@@ -127,7 +129,7 @@ export function VersionHistory({
                       aria-pressed={isOpen && openPanel?.kind === 'provenance'}
                       onClick={() => void togglePanel(version.version, 'provenance')}
                     >
-                      {version.status === 'active' ? 'Warum aktiv?' : 'Verlauf'}
+                      {version.status === 'active' ? t('history.whyActive') : t('history.history')}
                     </Button>
                     {canEdit ? (
                       <Button
@@ -135,13 +137,11 @@ export function VersionHistory({
                         size="sm"
                         disabled={hasDraft || restoringVersion !== null}
                         title={
-                          hasDraft
-                            ? 'Es existiert bereits ein Draft — erst abschliessen oder verwerfen.'
-                            : 'Diese Version als neuen Draft wiederherstellen'
+                          hasDraft ? t('history.restoreBlockedHint') : t('history.restoreHint')
                         }
                         onClick={() => void restore(version.version)}
                       >
-                        Wiederherstellen
+                        {t('common:actions.restore')}
                       </Button>
                     ) : null}
                   </span>
@@ -149,7 +149,7 @@ export function VersionHistory({
                 {isOpen ? (
                   <div className="mt-3 border-t border-border pt-3">
                     {panelLoading ? (
-                      <p className="text-sm text-muted-foreground">Lädt…</p>
+                      <p className="text-sm text-muted-foreground">{t('common:loading')}</p>
                     ) : panelError !== null ? (
                       <p className="text-sm text-destructive">{panelError}</p>
                     ) : openPanel?.kind === 'diff' && diff !== null ? (

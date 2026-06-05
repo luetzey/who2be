@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import type { VersionStatus } from '@/api/types'
 import { useApi } from '@/api/useApi'
@@ -27,6 +28,7 @@ export function StatusActionBar({
   status,
   onTransitioned,
 }: StatusActionBarProps) {
+  const { t } = useTranslation('playbooks')
   const api = useApi()
   const role = useCurrentWorkspaceRole()
   const [busy, setBusy] = useState<VersionStatus | null>(null)
@@ -44,10 +46,10 @@ export function StatusActionBar({
       const missing = extractMissingFields(cause)
       if (missing !== null) {
         setPromoteError(
-          `Vor dem Aktivieren ausfuellen: ${formatMissingFields(missing)}.`,
+          t('actions.promoteError', { fields: formatMissingFields(missing) }),
         )
       } else {
-        const message = cause instanceof Error ? cause.message : 'Aktion fehlgeschlagen.'
+        const message = cause instanceof Error ? cause.message : t('toast.actionFailed')
         notify.error(message)
       }
     } finally {
@@ -72,52 +74,52 @@ export function StatusActionBar({
       <div
         className="flex flex-wrap items-center gap-2"
         role="toolbar"
-        aria-label="Status-Aktionen"
+        aria-label={t('actions.toolbarAriaLabel')}
       >
         {showPromote ? (
           <Button
             type="button"
             variant="brand"
-            onClick={() => void transition('active', 'Version aktiviert.')}
+            onClick={() => void transition('active', t('toast.activated'))}
             disabled={busy !== null || !canPromote}
-            title={canPromote ? undefined : 'Nur Admins können aktivieren'}
+            title={canPromote ? undefined : t('actions.activateAdminOnly')}
           >
-            Aktivieren
+            {t('common:actions.activate')}
           </Button>
         ) : null}
         {showSubmit ? (
           <Button
             type="button"
             variant="default"
-            onClick={() => void transition('review', 'Zur Review eingereicht.')}
+            onClick={() => void transition('review', t('toast.submitted'))}
             disabled={busy !== null}
           >
-            Zur Review einreichen
+            {t('actions.submitReview')}
           </Button>
         ) : null}
         {showReject ? (
           <Button
             type="button"
             variant="destructive"
-            onClick={() => void transition('draft', 'Review abgelehnt.')}
+            onClick={() => void transition('draft', t('toast.reviewRejected'))}
             disabled={busy !== null}
           >
-            Ablehnen
+            {t('actions.reject')}
           </Button>
         ) : null}
         {showReactivate ? (
           <Button
             type="button"
             variant="outline"
-            onClick={() => void transition('draft', 'Reaktiviert als Entwurf.')}
+            onClick={() => void transition('draft', t('toast.reactivated'))}
             disabled={busy !== null}
           >
-            Reaktivieren als Draft
+            {t('actions.reactivate')}
           </Button>
         ) : null}
       </div>
       {promoteError !== null ? (
-        <ErrorAlert message={promoteError} title="Promote nicht möglich" />
+        <ErrorAlert message={promoteError} title={t('actions.promoteErrorTitle')} />
       ) : null}
     </div>
   )

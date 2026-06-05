@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -14,6 +15,7 @@ import { Placeholder } from './Placeholder'
  */
 export function CookieConsentBanner() {
   const { isDecided, accept, reject } = useCookieConsent()
+  const { t } = useTranslation('legal')
 
   if (isDecided) {
     return null
@@ -23,30 +25,31 @@ export function CookieConsentBanner() {
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center p-4">
       <Card
         role="region"
-        aria-label="Cookie-Einwilligung"
+        aria-label={t('cookie.regionLabel')}
         className="pointer-events-auto flex w-full max-w-2xl flex-col gap-4 p-5 shadow-modal sm:flex-row sm:items-center"
       >
         <div className="flex-1 space-y-1">
-          <p className="text-sm font-medium">Cookies & Datenschutz</p>
+          <p className="text-sm font-medium">{t('cookie.title')}</p>
           <p className="text-sm text-muted-foreground">
-            Wir nutzen nur technisch notwendige Cookies. Optionale Cookies (z. B.{' '}
-            <Placeholder>Analyse-/Tracking-Dienste benennen</Placeholder>) setzen wir erst nach
-            deiner Zustimmung. Details in der{' '}
+            {t('cookie.body')}{' '}
+            <Placeholder>{t('cookie.bodyServices')}</Placeholder>
+            {') '}
+            {t('cookie.bodyEnd')}{' '}
             <Link
               to="/legal/datenschutz"
               className="font-medium text-foreground underline-offset-4 hover:underline"
             >
-              Datenschutzerklaerung
+              {t('cookie.privacyLink')}
             </Link>
             .
           </p>
         </div>
         <div className="flex shrink-0 gap-2">
           <Button variant="outline" size="sm" onClick={reject}>
-            Nur notwendige
+            {t('cookie.rejectButton')}
           </Button>
           <Button variant="brand" size="sm" onClick={accept}>
-            Alle akzeptieren
+            {t('cookie.acceptButton')}
           </Button>
         </div>
       </Card>

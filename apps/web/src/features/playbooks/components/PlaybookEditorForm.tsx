@@ -1,5 +1,6 @@
 import { type FormEvent, type ReactNode } from 'react'
 import { type UseFormReturn } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
 
 import type { PlaybookType, ResourceBlock } from '@/api/types'
 import { useApi } from '@/api/useApi'
@@ -38,38 +39,15 @@ interface TypeOption {
   hint: string
 }
 
-const TYPE_OPTIONS: readonly TypeOption[] = [
-  {
-    value: 'prompt',
-    label: 'Prompt',
-    hint: 'Ein Einzel-Prompt mit klarem Outcome — z. B. „Fasse den Anruf in 3 Bullets zusammen".',
-  },
-  {
-    value: 'instructions',
-    label: 'Instructions',
-    hint: 'Mehrteilige Handlungsanweisung mit Schritt-Reihenfolge — z. B. Onboarding-Flow eines Agenten.',
-  },
-  {
-    value: 'snippet',
-    label: 'Snippet',
-    hint: 'Kurze, wiederverwendbare Textbausteine — z. B. Standard-Begruessung oder rechtliche Fussnote.',
-  },
-  {
-    value: 'workflow',
-    label: 'Workflow',
-    hint: 'Mehrstufiger Prozess mit Verzweigungen — z. B. Eskalation, wenn der Kunde unzufrieden bleibt.',
-  },
-  {
-    value: 'checklist',
-    label: 'Checklist',
-    hint: 'Pruefliste — z. B. „Pre-Flight vor dem Versand einer Kampagne".',
-  },
-  {
-    value: 'faq',
-    label: 'FAQ',
-    hint: 'Frage-Antwort-Sammlung — z. B. die Top-10-Support-Fragen einer Produkt-Linie.',
-  },
-]
+// Labels for playbook types — same across all languages (they are technical terms).
+const TYPE_LABELS: Record<PlaybookType, string> = {
+  prompt: 'Prompt',
+  instructions: 'Instructions',
+  snippet: 'Snippet',
+  workflow: 'Workflow',
+  checklist: 'Checklist',
+  faq: 'FAQ',
+}
 
 export function PlaybookEditorForm({
   form,
@@ -78,13 +56,22 @@ export function PlaybookEditorForm({
   onSubmit,
   actions,
 }: PlaybookEditorFormProps) {
+  const { t } = useTranslation('playbooks')
   // Viewer dürfen nur lesen (ADR-0023) — Auto-Save deaktiviert sich auf
   // Detail-Page-Ebene.
   const isViewer = useCurrentWorkspaceRole() === 'viewer'
   const api = useApi()
   const currentType = form.watch('type')
+
+  // TYPE_OPTIONS must be inside the component so `t()` runs within render context.
+  const typeOptions: readonly TypeOption[] = PLAYBOOK_TYPES.map((value) => ({
+    value,
+    label: TYPE_LABELS[value],
+    hint: t(`typeHints.${value}`),
+  }))
+
   const currentHint =
-    TYPE_OPTIONS.find((option) => option.value === currentType)?.hint ?? null
+    typeOptions.find((option) => option.value === currentType)?.hint ?? null
 
   // BlockNote-onChange: das aktuelle Dokument (inkl. Pills) in `bodyBlocks`
   // schreiben. `toInput` serialisiert es via JSON.stringify.
@@ -103,16 +90,16 @@ export function PlaybookEditorForm({
             onSubmit={onSubmit ?? ((event) => event.preventDefault())}
           >
               <FormSection
-                title="Identität"
-                description="Wie das Playbook heißt, welcher Typ es ist und worum es geht."
+                title={t('form.identityTitle')}
+                description={t('form.identityDescription')}
                 help={
                   <div className="space-y-2">
                     <p>
-                      Beispiel: <em>„Reset-Mail beantworten"</em> als Workflow.
+                      {t('form.identityHelpExample')}<em>{t('form.identityHelpExampleText')}</em>{t('form.identityHelpExampleSuffix')}
                     </p>
-                    <p className="text-xs font-medium text-foreground">Typen</p>
+                    <p className="text-xs font-medium text-foreground">{t('form.identityHelpTypesHeading')}</p>
                     <ul className="list-disc space-y-1 pl-4 text-xs">
-                      {TYPE_OPTIONS.map((option) => (
+                      {typeOptions.map((option) => (
                         <li key={option.value}>
                           <strong>{option.label}:</strong> {option.hint}
                         </li>
@@ -126,11 +113,11 @@ export function PlaybookEditorForm({
                   name="name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Name</FormLabel>
+                      <FormLabel>{t('common:fields.name')}</FormLabel>
                       <FormControl>
                         <Input
                           required
-                          placeholder="z. B. Reset-Mail beantworten"
+                          placeholder={t('form.namePlaceholder')}
                           {...field}
                         />
                       </FormControl>
@@ -143,11 +130,11 @@ export function PlaybookEditorForm({
                   name="type"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Typ</FormLabel>
+                      <FormLabel>{t('form.typeLabel')}</FormLabel>
                       <FormControl>
                         <Select required {...field}>
                           {PLAYBOOK_TYPES.map((option) => {
-                            const meta = TYPE_OPTIONS.find((entry) => entry.value === option)
+                            const meta = typeOptions.find((entry) => entry.value === option)
                             return (
                               <option key={option} value={option}>
                                 {meta?.label ?? option}
@@ -168,11 +155,11 @@ export function PlaybookEditorForm({
                   name="description"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Beschreibung</FormLabel>
+                      <FormLabel>{t('common:fields.description')}</FormLabel>
                       <FormControl>
                         <Input
                           required
-                          placeholder="z. B. Antwortet auf Passwort-Reset-Anfragen mit klarem nächsten Schritt"
+                          placeholder={t('form.descriptionPlaceholder')}
                           {...field}
                         />
                       </FormControl>
@@ -183,14 +170,10 @@ export function PlaybookEditorForm({
               </FormSection>
 
               <FormSection
-                title="Inhalt"
-                description="Das eigentliche Playbook und seine Auslöser."
+                title={t('form.contentTitle')}
+                description={t('form.contentDescription')}
                 help={
-                  <p>
-                    Beispiel: Schritt 1 — Kunde begrüßen; Schritt 2 — Identität
-                    verifizieren; Schritt 3 — Reset-Link versenden. Änderungen
-                    erzeugen eine neue Version; alte Versionen bleiben erhalten.
-                  </p>
+                  <p>{t('form.contentHelp')}</p>
                 }
               >
                 <FormField
@@ -198,7 +181,7 @@ export function PlaybookEditorForm({
                   name="bodyBlocks"
                   render={() => (
                     <FormItem>
-                      <FormLabel>Inhalt</FormLabel>
+                      <FormLabel>{t('form.bodyLabel')}</FormLabel>
                       <FormControl>
                         <PlaybookBodyEditor
                           key={`${formKey}-blocknote`}
@@ -208,9 +191,7 @@ export function PlaybookEditorForm({
                         />
                       </FormControl>
                       <p className="text-xs text-muted-foreground">
-                        Tippe <code>/</code> im Editor, um Playbook- oder
-                        Resource-Pills einzufügen. Verlinkte Relationen leben
-                        im Body.
+                        {t('form.bodyHint')}
                       </p>
                       <FormMessage />
                     </FormItem>
@@ -221,14 +202,14 @@ export function PlaybookEditorForm({
                   name="tags"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel id={`${field.name}-label`}>Tags</FormLabel>
+                      <FormLabel id={`${field.name}-label`}>{t('common:fields.tags')}</FormLabel>
                       <FormControl>
                         <TagInput
                           value={field.value}
                           onChange={field.onChange}
                           loadSuggestions={api.listPlaybookTags}
                           ariaLabelledby={`${field.name}-label`}
-                          placeholder="Tag eingeben und Enter drücken"
+                          placeholder={t('form.tagsPlaceholder')}
                           disabled={isViewer}
                         />
                       </FormControl>
@@ -241,18 +222,18 @@ export function PlaybookEditorForm({
                   name="triggers"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel id={`${field.name}-label`}>Trigger</FormLabel>
+                      <FormLabel id={`${field.name}-label`}>{t('form.triggersLabel')}</FormLabel>
                       <FormControl>
                         <TagInput
                           value={field.value}
                           onChange={field.onChange}
                           ariaLabelledby={`${field.name}-label`}
-                          placeholder="Trigger eingeben und Enter drücken"
+                          placeholder={t('form.triggersPlaceholder')}
                           disabled={isViewer}
                         />
                       </FormControl>
                       <p className="text-xs text-muted-foreground">
-                        Enter zum Anlegen, Klick zum Entfernen.
+                        {t('form.triggersHint')}
                       </p>
                       <FormMessage />
                     </FormItem>

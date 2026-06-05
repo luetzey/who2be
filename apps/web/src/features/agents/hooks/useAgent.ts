@@ -7,9 +7,10 @@ import type {
   SystemPromptTemplate,
 } from '@/api/types'
 import { useApi } from '@/api/useApi'
+import i18n from '@/i18n'
 
 function describeError(cause: unknown): string {
-  return cause instanceof Error ? cause.message : 'Unbekannter Fehler.'
+  return cause instanceof Error ? cause.message : i18n.t('agents:toast.unknownError')
 }
 
 export interface UseAgentResult {
@@ -25,7 +26,7 @@ export interface UseAgentResult {
 /**
  * Laedt einen Agent + die referenzierte Persona/Template und alle
  * verlinkten Playbooks. Wir bauen den Tree client-seitig (statt ein
- * neues /agents/{id}/expanded-Endpoint einzufuehren) — das hier ist die
+ * neues /agents/{id}/expanded-Endpoint einzufuehren) -- das hier ist die
  * einzige Stelle, die diese Verbund-Sicht braucht.
  */
 export function useAgent(id: string | undefined): UseAgentResult {
@@ -48,7 +49,7 @@ export function useAgent(id: string | undefined): UseAgentResult {
       .then(async (loadedAgent) => {
         setAgent(loadedAgent)
         // Leere Huelle: Persona/Template (und damit Playbooks) koennen fehlen.
-        // Wir laden nur, was verknuepft ist — sonst trifft die UI `/null`.
+        // Wir laden nur, was verknuepft ist -- sonst trifft die UI /null.
         const [loadedPersona, loadedTemplate, loadedPlaybooks] = await Promise.all([
           loadedAgent.persona_id !== null
             ? api.getPersona(loadedAgent.persona_id)

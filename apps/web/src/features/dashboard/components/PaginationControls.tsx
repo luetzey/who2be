@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 
@@ -18,10 +19,11 @@ export function PaginationControls({
   onPageChange,
   busy = false,
 }: PaginationControlsProps) {
+  const { t } = useTranslation('dashboard')
   if (totalPages <= 1) return null
 
   return (
-    <nav className="flex items-center justify-between gap-3" aria-label="Aktivitaeten-Seiten">
+    <nav className="flex items-center justify-between gap-3" aria-label={t('pagination.ariaLabel')}>
       <Button
         variant="outline"
         size="sm"
@@ -29,10 +31,10 @@ export function PaginationControls({
         disabled={busy || page <= 1}
       >
         <ChevronLeft />
-        Zurück
+        {t('common:actions.back')}
       </Button>
       <span className="text-xs text-muted-foreground" aria-live="polite">
-        Seite {page} von {totalPages}
+        {t('pagination.pageOf', { page, totalPages })}
       </span>
       <Button
         variant="outline"
@@ -40,7 +42,7 @@ export function PaginationControls({
         onClick={() => onPageChange(page + 1)}
         disabled={busy || page >= totalPages}
       >
-        Weiter
+        {t('pagination.next')}
         <ChevronRight />
       </Button>
     </nav>

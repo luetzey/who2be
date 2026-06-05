@@ -2,7 +2,10 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Copy, KeyRound } from 'lucide-react'
 import { type FormEvent, useState } from 'react'
 import { useForm } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
+
+import i18n from '@/i18n'
 
 import type { TokenInput, WorkspaceRole } from '@/api/types'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
@@ -25,7 +28,7 @@ import { useTokens } from '@/hooks/useTokens'
 import { useTokenMutations } from '../hooks/useTokenMutations'
 
 const tokenSchema = z.object({
-  name: z.string().min(1, 'Name erforderlich.'),
+  name: z.string().min(1, i18n.t('common:validation.nameRequired')),
 })
 
 type TokenValues = z.infer<typeof tokenSchema>
@@ -35,6 +38,7 @@ function maskTail(token: string): string {
 }
 
 export function SettingsTokensPage() {
+  const { t } = useTranslation('tokens')
   const { tokens, loading, error, reload } = useTokens()
   const {
     createError,
@@ -85,13 +89,13 @@ export function SettingsTokensPage() {
     <Container>
       <Stack gap="lg">
         <PageHeader
-          title="API-Tokens"
-          description="Persistente Tokens für Headless-Clients und Agenten."
+          title={t('page.title')}
+          description={t('page.description')}
         />
 
         <Card>
           <CardHeader>
-            <CardTitle>Vorhandene Tokens</CardTitle>
+            <CardTitle>{t('list.title')}</CardTitle>
           </CardHeader>
           <CardContent>
             <DataList
@@ -106,11 +110,11 @@ export function SettingsTokensPage() {
                     <Stack gap="xs">
                       <div className="font-medium">{token.name}</div>
                       <div className="text-xs text-muted-foreground">
-                        erstellt {token.created_at}
+                        {t('list.createdAt', { date: token.created_at })}
                         {token.last_used_at !== null
-                          ? ` · zuletzt benutzt ${token.last_used_at}`
+                          ? t('list.lastUsed', { date: token.last_used_at })
                           : ''}
-                        {isRevoked ? ` · widerrufen ${token.revoked_at ?? ''}` : ''}
+                        {isRevoked ? t('list.revoked', { date: token.revoked_at ?? '' }) : ''}
                       </div>
                     </Stack>
                     <Button
@@ -120,7 +124,7 @@ export function SettingsTokensPage() {
                       onClick={() => void revokeToken(token.id)}
                       disabled={isRevoked}
                     >
-                      Widerrufen
+                      {t('list.revoke')}
                     </Button>
                   </div>
                 )
@@ -131,7 +135,7 @@ export function SettingsTokensPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Neuen Token anlegen</CardTitle>
+            <CardTitle>{t('create.title')}</CardTitle>
           </CardHeader>
           <CardContent>
             <Form {...form}>
@@ -141,7 +145,7 @@ export function SettingsTokensPage() {
                   name="name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Name</FormLabel>
+                      <FormLabel>{t('common:fields.name')}</FormLabel>
                       <FormControl>
                         <Input required {...field} />
                       </FormControl>
@@ -151,7 +155,7 @@ export function SettingsTokensPage() {
                 />
                 {currentRole !== null && role !== null ? (
                   <div className="flex flex-col gap-2">
-                    <Label htmlFor="token-role">Rolle</Label>
+                    <Label htmlFor="token-role">{t('create.roleLabel')}</Label>
                     <Select
                       id="token-role"
                       value={role}
@@ -166,8 +170,7 @@ export function SettingsTokensPage() {
                       ))}
                     </Select>
                     <p className="text-xs text-muted-foreground">
-                      Der Token erhält höchstens deine eigene Rolle — höhere Rechte
-                      sind nicht wählbar.
+                      {t('create.roleHint')}
                     </p>
                   </div>
                 ) : null}
@@ -178,7 +181,7 @@ export function SettingsTokensPage() {
                     variant="brand"
                     disabled={form.formState.isSubmitting}
                   >
-                    Anlegen
+                    {t('create.submit')}
                   </Button>
                 </div>
               </form>
@@ -189,16 +192,15 @@ export function SettingsTokensPage() {
         {created !== null ? (
           <Alert role="status">
             <KeyRound />
-            <AlertTitle>Neuer Token — jetzt kopieren</AlertTitle>
+            <AlertTitle>{t('reveal.title')}</AlertTitle>
             <AlertDescription>
               <Stack gap="sm">
                 <p>
-                  Der Klartext wird genau einmal angezeigt. Nach dem Schließen ist er
-                  nicht mehr abrufbar.
+                  {t('reveal.body')}
                 </p>
                 <Textarea
                   readOnly
-                  aria-label="Klartext-Token"
+                  aria-label={t('reveal.ariaLabel')}
                   value={created.token}
                   rows={2}
                   onFocus={(event) => event.currentTarget.select()}
@@ -215,10 +217,10 @@ export function SettingsTokensPage() {
                     }}
                   >
                     <Copy className="h-4 w-4" />
-                    In Zwischenablage kopieren
+                    {t('reveal.copyButton')}
                   </Button>
                   <Button type="button" size="sm" variant="outline" onClick={dismissCreated}>
-                    Schließen
+                    {t('common:actions.close')}
                   </Button>
                 </div>
               </Stack>
@@ -228,24 +230,22 @@ export function SettingsTokensPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Headless-Token aktivieren</CardTitle>
+            <CardTitle>{t('override.title')}</CardTitle>
           </CardHeader>
           <CardContent>
             <Stack gap="md">
               <p className="text-sm text-muted-foreground">
-                Override für künftige Headless-Use-Cases: Der eingegebene Token wird ab
-                sofort statt des Supabase-JWT an die API gesendet. Lebt nur in dieser
-                Tab-Sitzung — Reload entfernt ihn.
+                {t('override.description')}
               </p>
               <p className="text-sm">
-                Status:{' '}
+                {t('override.statusLabel')}{' '}
                 {overrideToken === null
-                  ? 'kein Override (Supabase-JWT aktiv)'
-                  : `Override aktiv (${maskTail(overrideToken)})`}
+                  ? t('override.statusNone')
+                  : t('override.statusActive', { tail: maskTail(overrideToken) })}
               </p>
               <form onSubmit={handleOverrideActivate} className="flex flex-col gap-3">
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="override-token">w2b_-Token</Label>
+                  <Label htmlFor="override-token">{t('override.inputLabel')}</Label>
                   <Input
                     id="override-token"
                     type="password"
@@ -256,7 +256,7 @@ export function SettingsTokensPage() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button type="submit" disabled={overrideInput === ''}>
-                    Aktivieren
+                    {t('common:actions.activate')}
                   </Button>
                   <Button
                     type="button"
@@ -264,7 +264,7 @@ export function SettingsTokensPage() {
                     onClick={() => setOverrideToken(null)}
                     disabled={overrideToken === null}
                   >
-                    Override entfernen
+                    {t('override.remove')}
                   </Button>
                 </div>
               </form>

@@ -3,6 +3,7 @@ import { MailCheck } from 'lucide-react'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 
 import { ErrorAlert } from '@/components/data/ErrorAlert'
@@ -14,11 +15,7 @@ import { supabase } from '@/lib/supabase'
 
 import { buildRedirectTo } from '../lib/redirect'
 
-const schema = z.object({
-  email: z.string().email('Bitte gueltige E-Mail eingeben.'),
-})
-
-type ResetValues = z.infer<typeof schema>
+type ResetValues = { email: string }
 
 // Passwort-Reset (Track K) — Schritt 1 von 2: Request. Der User gibt seine
 // E-Mail ein, GoTrue verschickt eine Recovery-Mail. Der Link darin fuehrt auf
@@ -29,12 +26,17 @@ type ResetValues = z.infer<typeof schema>
 // und nur als In-App-Pfad in die `redirectTo`-URL eingebettet — kein externer
 // Origin landet je in der Recovery-Mail.
 export function ResetPasswordPage() {
+  const { t } = useTranslation('auth')
   const [searchParams] = useSearchParams()
   const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const resetSchema = z.object({
+    email: z.string().email(t('validation.emailInvalid')),
+  })
+
   const form = useForm<ResetValues>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(resetSchema),
     defaultValues: { email: '' },
   })
 
@@ -55,13 +57,13 @@ export function ResetPasswordPage() {
       <Card className="w-full max-w-md border-transparent shadow-modal">
         <CardHeader className="gap-2">
           <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            Who2Be
+            {t('brand')}
           </span>
-          <CardTitle className="text-3xl tracking-tight">Passwort zuruecksetzen</CardTitle>
+          <CardTitle className="text-3xl tracking-tight">{t('resetPassword.title')}</CardTitle>
           <CardDescription>
             {sent
-              ? 'Wenn ein Konto zu dieser E-Mail existiert, ist eine Mail mit Reset-Link unterwegs.'
-              : 'Wir senden dir einen Link, mit dem du ein neues Passwort setzen kannst.'}
+              ? t('resetPassword.descriptionSent')
+              : t('resetPassword.description')}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -69,10 +71,10 @@ export function ResetPasswordPage() {
             <div className="flex flex-col items-center gap-4 py-4 text-center">
               <MailCheck className="h-10 w-10 text-muted-foreground" aria-hidden="true" />
               <p className="text-sm text-muted-foreground">
-                Pruefe dein Postfach und folge dem Link in der E-Mail.
+                {t('resetPassword.checkInbox')}
               </p>
               <Button asChild variant="outline" className="w-full">
-                <Link to="/login">Zurueck zur Anmeldung</Link>
+                <Link to="/login">{t('backToLogin')}</Link>
               </Button>
             </div>
           ) : (
@@ -83,7 +85,7 @@ export function ResetPasswordPage() {
                   name="email"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>E-Mail</FormLabel>
+                      <FormLabel>{t('fields.email')}</FormLabel>
                       <FormControl>
                         <Input type="email" autoComplete="email" required {...field} />
                       </FormControl>
@@ -98,10 +100,10 @@ export function ResetPasswordPage() {
                   className="w-full"
                   disabled={form.formState.isSubmitting}
                 >
-                  Reset-Link senden
+                  {t('resetPassword.submit')}
                 </Button>
                 <Button asChild variant="ghost" size="sm" className="w-full">
-                  <Link to="/login">Zurueck zur Anmeldung</Link>
+                  <Link to="/login">{t('backToLogin')}</Link>
                 </Button>
               </form>
             </Form>

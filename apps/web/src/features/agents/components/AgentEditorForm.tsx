@@ -1,5 +1,6 @@
 import { AlertCircle } from 'lucide-react'
 import { type BaseSyntheticEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import { type UseFormReturn } from 'react-hook-form'
 
 import type { Agent, Persona, SystemPromptTemplate } from '@/api/types'
@@ -34,9 +35,12 @@ export function AgentEditorForm({
   personas,
   templates,
   agent,
-  submitLabel = 'Speichern',
+  submitLabel,
 }: AgentEditorFormProps) {
+  const { t } = useTranslation('agents')
   const isViewer = useCurrentWorkspaceRole() === 'viewer'
+
+  const resolvedSubmitLabel = submitLabel ?? t('detail.submitLabel')
 
   // Aktivierbarkeit kommt vom Backend (Persona + Template gesetzt UND Persona
   // hat eine aktive Version). Bewusst nicht aus dem Live-Formular abgeleitet:
@@ -54,11 +58,11 @@ export function AgentEditorForm({
           <Form {...form}>
             <form onSubmit={onSubmit} className="flex flex-col gap-6">
               <FormSection
-                title="Identität"
-                description="Wie der Agent heißt und wofür er gedacht ist."
+                title={t('form.identity.title')}
+                description={t('form.identity.description')}
                 help={
                   <p>
-                    Beispiel: <em>„Carla Bot — Customer-Support-Agent"</em>.
+                    {t('form.identity.help')}
                   </p>
                 }
               >
@@ -67,7 +71,7 @@ export function AgentEditorForm({
                   name="name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Name</FormLabel>
+                      <FormLabel>{t('common:fields.name')}</FormLabel>
                       <FormControl>
                         <Input required {...field} />
                       </FormControl>
@@ -80,7 +84,7 @@ export function AgentEditorForm({
                   name="description"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Beschreibung</FormLabel>
+                      <FormLabel>{t('common:fields.description')}</FormLabel>
                       <FormControl>
                         <Textarea rows={3} {...field} />
                       </FormControl>
@@ -91,13 +95,11 @@ export function AgentEditorForm({
               </FormSection>
 
               <FormSection
-                title="Konfiguration"
-                description="Welche Persona und welcher Systemprompt der Agent verwendet."
+                title={t('form.config.title')}
+                description={t('form.config.description')}
                 help={
                   <p>
-                    Die ausgewählte Persona liefert Name, Profil, Tags und ihre
-                    Playbooks. Der Systemprompt definiert den eigentlichen
-                    System-Prompt mit Platzhaltern.
+                    {t('form.config.help')}
                   </p>
                 }
               >
@@ -106,14 +108,14 @@ export function AgentEditorForm({
                   name="persona_id"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Persona</FormLabel>
+                      <FormLabel>{t('form.persona.label')}</FormLabel>
                       <FormControl>
                         <Select disabled={isViewer} {...field}>
-                          <option value="">— keine —</option>
+                          <option value="">{t('form.persona.none')}</option>
                           {personas.map((persona) => (
                             <option key={persona.id} value={persona.id}>
                               {persona.name}
-                              {persona.current_status === 'active' ? '' : ' (nicht aktiv)'}
+                              {persona.current_status === 'active' ? '' : t('form.persona.notActive')}
                             </option>
                           ))}
                         </Select>
@@ -127,10 +129,10 @@ export function AgentEditorForm({
                   name="system_prompt_template_id"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Systemprompt</FormLabel>
+                      <FormLabel>{t('form.template.label')}</FormLabel>
                       <FormControl>
                         <Select disabled={isViewer} {...field}>
-                          <option value="">— keiner —</option>
+                          <option value="">{t('form.template.none')}</option>
                           {templates.map((template) => (
                             <option key={template.id} value={template.id}>
                               {template.name} ({template.slug})
@@ -147,13 +149,13 @@ export function AgentEditorForm({
                   name="status"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Status</FormLabel>
+                      <FormLabel>{t('form.statusField.label')}</FormLabel>
                       <FormControl>
                         <Select disabled={isViewer} {...field}>
                           <option value="enabled" disabled={!activatable}>
-                            Aktiv
+                            {t('form.statusField.enabled')}
                           </option>
-                          <option value="disabled">Deaktiviert</option>
+                          <option value="disabled">{t('form.statusField.disabled')}</option>
                         </Select>
                       </FormControl>
                       {activatable ? null : (
@@ -163,8 +165,9 @@ export function AgentEditorForm({
                         >
                           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                           <span>
-                            Noch nicht aktivierbar — fehlt:{' '}
-                            {describeAgentMissing(missing).join(', ')}.
+                            {t('form.missing.notice', {
+                              items: describeAgentMissing(missing).join(', '),
+                            })}
                           </span>
                         </p>
                       )}
@@ -179,9 +182,9 @@ export function AgentEditorForm({
                   type="submit"
                   variant="brand"
                   disabled={form.formState.isSubmitting || isViewer}
-                  title={isViewer ? 'Viewer können Agents nur ansehen' : undefined}
+                  title={isViewer ? t('form.viewerReadOnly') : undefined}
                 >
-                  {submitLabel}
+                  {resolvedSubmitLabel}
                 </Button>
               </div>
             </form>

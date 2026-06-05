@@ -1,6 +1,7 @@
 import { ArrowLeft } from 'lucide-react'
 import { useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 
 import type { ResourceLink, VersionStatus } from '@/api/types'
 import { useApi } from '@/api/useApi'
@@ -32,6 +33,7 @@ import { statusLabel } from '../lib/status'
 import { splitTriggers } from '../lib/triggers'
 
 export function PlaybookDetailPage() {
+  const { t } = useTranslation('playbooks')
   const { id } = useParams<{ id: string }>()
   const { playbook, versions, loading, error, reload } = usePlaybook(id)
   const { form, autoSave, initialBodyBlocks } = usePlaybookForm(playbook, reload)
@@ -87,7 +89,7 @@ export function PlaybookDetailPage() {
       notify.success(successMessage)
       reload()
     } catch (cause) {
-      notify.error(cause instanceof Error ? cause.message : 'Aktion fehlgeschlagen.')
+      notify.error(cause instanceof Error ? cause.message : t('toast.actionFailed'))
     } finally {
       setActionBusy(false)
     }
@@ -99,7 +101,7 @@ export function PlaybookDetailPage() {
         <Button asChild variant="ghost" size="sm" className="self-start">
           <Link to={wsPath('/playbooks')}>
             <ArrowLeft className="h-4 w-4" />
-            Playbooks
+            {t('detail.back')}
           </Link>
         </Button>
 
@@ -122,14 +124,15 @@ export function PlaybookDetailPage() {
                   activeVersion !== undefined
                     ? `Active: v${activeVersion.version}${
                         draftVersion !== undefined
-                          ? ` · Du arbeitest auf Draft v${draftVersion.version}`
+                          ? t('detail.draftNote', { version: draftVersion.version })
                           : reviewVersion !== undefined
-                            ? ` · In Review: v${reviewVersion.version}`
+                            ? t('detail.reviewNote', { version: reviewVersion.version })
                             : ''
                       }`
-                    : `Aktuelle Version: v${playbook.current_version} (${statusLabel(
-                        playbook.current_status ?? 'draft',
-                      )})`
+                    : t('detail.currentVersion', {
+                        version: playbook.current_version,
+                        status: statusLabel(playbook.current_status ?? 'draft'),
+                      })
                 const triggers = splitTriggers(playbook.triggers ?? null)
 
                 const canPromote = role === 'admin'
@@ -137,55 +140,55 @@ export function PlaybookDetailPage() {
                 if (draftVersion !== undefined) {
                   actions.push({
                     key: 'submit',
-                    label: 'Draft abschliessen',
+                    label: t('actions.draftSubmit'),
                     variant: 'brand',
                     disabled: actionBusy,
                     onClick: () =>
                       void runTransition(
                         draftVersion.version,
                         'review',
-                        'Zur Review eingereicht.',
+                        t('toast.submitted'),
                       ),
                   })
                 }
                 if (reviewVersion !== undefined) {
                   actions.push({
                     key: 'publish',
-                    label: 'Veroeffentlichen',
+                    label: t('actions.publish'),
                     variant: 'brand',
                     disabled: actionBusy || !canPromote,
-                    title: canPromote ? undefined : 'Nur Admins koennen aktivieren',
+                    title: canPromote ? undefined : t('actions.activateAdminOnly'),
                     onClick: () =>
                       void runTransition(
                         reviewVersion.version,
                         'active',
-                        'Version aktiviert.',
+                        t('toast.activated'),
                       ),
                   })
                   actions.push({
                     key: 'reject',
-                    label: 'Zurueck zu Draft',
+                    label: t('actions.rejectDraft'),
                     variant: 'destructive',
                     disabled: actionBusy,
                     onClick: () =>
                       void runTransition(
                         reviewVersion.version,
                         'draft',
-                        'Review abgelehnt.',
+                        t('toast.reviewRejected'),
                       ),
                   })
                 }
                 if (inactiveCurrent !== undefined) {
                   actions.push({
                     key: 'reactivate',
-                    label: 'Reaktivieren als Draft',
+                    label: t('actions.reactivateDraft'),
                     variant: 'outline',
                     disabled: actionBusy,
                     onClick: () =>
                       void runTransition(
                         inactiveCurrent.version,
                         'draft',
-                        'Reaktiviert als Entwurf.',
+                        t('toast.reactivated'),
                       ),
                   })
                 }
@@ -201,7 +204,7 @@ export function PlaybookDetailPage() {
                             <Badge variant="secondary">Composite</Badge>
                           ) : null}
                           {playbook.tags.length > 0 ? (
-                            <div className="flex flex-wrap gap-1" aria-label="Tags">
+                            <div className="flex flex-wrap gap-1" aria-label={t('common:fields.tags')}>
                               {playbook.tags.map((tag) => (
                                 <Badge key={tag} variant="secondary">
                                   {tag}
@@ -216,10 +219,10 @@ export function PlaybookDetailPage() {
                       <div
                         className="flex flex-wrap items-center gap-2"
                         role="list"
-                        aria-label="Trigger-Liste"
+                        aria-label={t('detail.triggerList')}
                       >
                         <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                          Trigger
+                          {t('detail.triggerLabel')}
                         </span>
                         {triggers.map((trigger) => (
                           <Badge key={trigger} variant="outline" role="listitem">
@@ -251,7 +254,7 @@ export function PlaybookDetailPage() {
                 canEdit={role === 'admin' || role === 'editor'}
                 onRestore={async (version) => {
                   await api.restorePlaybookVersion(playbook.id, version)
-                  notify.success(`v${version} als Entwurf wiederhergestellt.`)
+                  notify.success(t('detail.restoreSuccess', { version }))
                   reload()
                 }}
                 loadDiff={(version) => api.diffPlaybookVersion(playbook.id, version)}
@@ -262,15 +265,15 @@ export function PlaybookDetailPage() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Verwendet in</CardTitle>
+                  <CardTitle>{t('detail.usedInTitle')}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <DataView
                     loading={usages.loading}
                     error={usages.error}
                     empty={!usages.loading && usages.usages.length === 0}
-                    emptyTitle="Noch in keiner Persona verwendet"
-                    emptyDescription="Verknuepfe dieses Playbook im Persona-Editor, um es einer Persona zuzuweisen."
+                    emptyTitle={t('detail.usedInEmpty')}
+                    emptyDescription={t('detail.usedInEmptyDescription')}
                   >
                     <DataList
                       items={usages.usages}
@@ -290,7 +293,7 @@ export function PlaybookDetailPage() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Verknuepfte Resource-Bloecke</CardTitle>
+                  <CardTitle>{t('detail.resourceLinksTitle')}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <Stack gap="sm">
@@ -303,8 +306,7 @@ export function PlaybookDetailPage() {
                     </DataView>
                     {bodyIsBlockNote ? (
                       <p className="text-xs text-muted-foreground">
-                        Resource-Verknüpfungen werden im BlockNote-Body als Pills
-                        gepflegt — bearbeite sie dort.
+                        {t('detail.resourceLinksBodyNote')}
                       </p>
                     ) : (
                       <div className="flex justify-end">
@@ -321,14 +323,14 @@ export function PlaybookDetailPage() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Sub-Playbooks (Composes)</CardTitle>
+                  <CardTitle>{t('detail.subPlaybooksTitle')}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <Stack gap="sm">
                     <DataView loading={composition.loading} error={composition.error}>
                       {composition.children.length === 0 ? (
                         <p className="text-sm text-muted-foreground">
-                          Keine Sub-Playbooks verknüpft. Dieses Playbook ist atomar.
+                          {t('detail.subPlaybooksEmpty')}
                         </p>
                       ) : (
                         <ol className="flex flex-col gap-1" aria-label="Sub-Playbooks">
@@ -358,8 +360,7 @@ export function PlaybookDetailPage() {
                     </DataView>
                     {bodyIsBlockNote ? (
                       <p className="text-xs text-muted-foreground">
-                        Sub-Playbooks werden im BlockNote-Body als Pills
-                        gepflegt — bearbeite sie dort.
+                        {t('detail.subPlaybooksBodyNote')}
                       </p>
                     ) : (
                       <div className="flex justify-end">
@@ -377,7 +378,7 @@ export function PlaybookDetailPage() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Verwendet als Sub-Playbook in</CardTitle>
+                  <CardTitle>{t('detail.composedByTitle')}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <ComposedByList parents={composition.parents} />

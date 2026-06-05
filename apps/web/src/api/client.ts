@@ -1,3 +1,5 @@
+import i18n, { DEFAULT_LOCALE } from '@/i18n'
+
 import { config } from '../config'
 import type {
   AccountDeletion,
@@ -76,6 +78,11 @@ export class ApiError extends Error {
 async function request<T>(token: string, path: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    // Locale-Plumbing (D2-Koordination): die aktive UI-Sprache geht als
+    // `Accept-Language` mit, damit das Backend sprachabhaengigen Content in
+    // der passenden Sprache liefern kann. Aufrufer koennen den Header via
+    // `init.headers` ueberschreiben.
+    'Accept-Language': i18n.resolvedLanguage ?? i18n.language ?? DEFAULT_LOCALE,
     ...(init?.headers as Record<string, string> | undefined),
   }
   // Kein leerer Bearer-Header, wenn (noch) kein Token vorliegt.

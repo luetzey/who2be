@@ -1,5 +1,6 @@
 import { Trash2 } from 'lucide-react'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 
 import type { Agent } from '@/api/types'
@@ -28,6 +29,7 @@ interface DeleteAgentButtonProps {
  * Liste. Fuer Viewer deaktiviert (nur editor+ duerfen schreiben, ADR-0023).
  */
 export function DeleteAgentButton({ agent }: DeleteAgentButtonProps) {
+  const { t } = useTranslation('agents')
   const api = useApi()
   const navigate = useNavigate()
   const wsPath = useWorkspacePath()
@@ -39,10 +41,10 @@ export function DeleteAgentButton({ agent }: DeleteAgentButtonProps) {
     setBusy(true)
     try {
       await api.deleteAgent(agent.id)
-      notify.success('Agent gelöscht.')
+      notify.success(t('delete.success'))
       navigate(wsPath('/agents'))
     } catch (cause: unknown) {
-      notify.error(cause instanceof Error ? cause.message : 'Löschen fehlgeschlagen.')
+      notify.error(cause instanceof Error ? cause.message : t('delete.error'))
       setBusy(false)
     }
   }
@@ -54,25 +56,24 @@ export function DeleteAgentButton({ agent }: DeleteAgentButtonProps) {
           type="button"
           variant="destructive"
           disabled={isViewer}
-          title={isViewer ? 'Viewer können Agents nur ansehen' : undefined}
+          title={isViewer ? t('delete.viewerReadOnly') : undefined}
           data-testid="delete-agent-trigger"
         >
           <Trash2 className="h-4 w-4" />
-          Löschen
+          {t('delete.label')}
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Agent löschen?</DialogTitle>
+          <DialogTitle>{t('delete.dialogTitle')}</DialogTitle>
           <DialogDescription>
-            „{agent.name}" wird dauerhaft entfernt. Diese Aktion kann nicht rückgängig gemacht
-            werden.
+            {t('delete.dialogDescription', { name: agent.name })}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <DialogClose asChild>
             <Button type="button" variant="outline" disabled={busy}>
-              Abbrechen
+              {t('common:actions.cancel')}
             </Button>
           </DialogClose>
           <Button
@@ -82,7 +83,7 @@ export function DeleteAgentButton({ agent }: DeleteAgentButtonProps) {
             onClick={() => void onDelete()}
             data-testid="delete-agent-confirm"
           >
-            Endgültig löschen
+            {t('delete.confirmLabel')}
           </Button>
         </DialogFooter>
       </DialogContent>

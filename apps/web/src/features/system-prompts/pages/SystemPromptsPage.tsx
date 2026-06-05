@@ -1,5 +1,6 @@
 import { FileText, Plus } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { DataList } from '@/components/data/DataList'
@@ -13,19 +14,20 @@ import { Button } from '@/components/ui/button'
 import { useSystemPrompts } from '../hooks/useSystemPrompts'
 
 export function SystemPromptsPage() {
+  const { t } = useTranslation('systemPrompts')
   const { templates, loading, error } = useSystemPrompts()
   const wsPath = useWorkspacePath()
   return (
     <Container>
       <Stack gap="lg">
         <PageHeader
-          title="System-Prompts"
-          description="Wiederverwendbare Template-Bibliothek für deine Agents — mit Liquid-Placeholders."
+          title={t('page.list.title')}
+          description={t('page.list.description')}
           actions={
             <Button asChild variant="brand">
               <Link to={wsPath('/system-prompts/new')}>
                 <Plus className="h-4 w-4" />
-                Neues Template
+                {t('page.list.newTemplate')}
               </Link>
             </Button>
           }
@@ -38,13 +40,13 @@ export function SystemPromptsPage() {
           empty={
             <EmptyState
               icon={FileText}
-              title="Noch keine Templates"
-              description="Lege dein erstes System-Prompt-Template an."
+              title={t('page.list.empty.title')}
+              description={t('page.list.empty.description')}
               action={
                 <Button asChild variant="brand">
                   <Link to={wsPath('/system-prompts/new')}>
                     <Plus className="h-4 w-4" />
-                    Neues Template
+                    {t('page.list.newTemplate')}
                   </Link>
                 </Button>
               }
