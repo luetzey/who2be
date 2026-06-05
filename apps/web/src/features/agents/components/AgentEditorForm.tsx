@@ -12,6 +12,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 
@@ -30,6 +31,46 @@ const WRITE_CAP_FIELDS = [
   'promote_retire',
 ] as const
 const READ_SCOPES = ['all', 'assigned', 'none'] as const
+
+// Boolean-Policy-Felder (An/Aus-Reads + Write-Capabilities) — die Checkbox-Zeilen.
+type PolicyBoolField = (typeof READ_FLAG_FIELDS)[number] | (typeof WRITE_CAP_FIELDS)[number]
+
+/** Eine Policy-Checkbox-Zeile im etablierten Form-Checkbox-Muster (vgl. SignupPage). */
+function PolicyCheckbox({
+  form,
+  name,
+  label,
+  disabled,
+}: {
+  form: UseFormReturn<AgentEditorValues>
+  name: PolicyBoolField
+  label: string
+  disabled: boolean
+}) {
+  const id = `agent-policy-${name}`
+  return (
+    <FormField
+      control={form.control}
+      name={name}
+      render={({ field }) => (
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id={id}
+            name={field.name}
+            ref={field.ref}
+            checked={Boolean(field.value)}
+            onBlur={field.onBlur}
+            onChange={(event) => field.onChange(event.target.checked)}
+            disabled={disabled}
+          />
+          <Label htmlFor={id} className="text-sm font-normal">
+            {label}
+          </Label>
+        </div>
+      )}
+    />
+  )
+}
 
 interface AgentEditorFormProps {
   form: UseFormReturn<AgentEditorValues>
@@ -221,24 +262,12 @@ export function AgentEditorForm({
                     />
                   ))}
                   {READ_FLAG_FIELDS.map((name) => (
-                    <FormField
+                    <PolicyCheckbox
                       key={name}
-                      control={form.control}
+                      form={form}
                       name={name}
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-center gap-2">
-                          <FormControl>
-                            <Checkbox
-                              disabled={isViewer}
-                              checked={Boolean(field.value)}
-                              onChange={(event) => field.onChange(event.target.checked)}
-                            />
-                          </FormControl>
-                          <FormLabel className="!mt-0">
-                            {t(`form.policy.flagField.${name}`)}
-                          </FormLabel>
-                        </FormItem>
-                      )}
+                      label={t(`form.policy.flagField.${name}`)}
+                      disabled={isViewer}
                     />
                   ))}
                 </fieldset>
@@ -247,24 +276,12 @@ export function AgentEditorForm({
                   <legend className="text-sm font-medium">{t('form.policy.writes')}</legend>
                   <p className="text-sm text-muted-foreground">{t('form.policy.writesHint')}</p>
                   {WRITE_CAP_FIELDS.map((name) => (
-                    <FormField
+                    <PolicyCheckbox
                       key={name}
-                      control={form.control}
+                      form={form}
                       name={name}
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-center gap-2">
-                          <FormControl>
-                            <Checkbox
-                              disabled={isViewer}
-                              checked={Boolean(field.value)}
-                              onChange={(event) => field.onChange(event.target.checked)}
-                            />
-                          </FormControl>
-                          <FormLabel className="!mt-0">
-                            {t(`form.policy.capField.${name}`)}
-                          </FormLabel>
-                        </FormItem>
-                      )}
+                      label={t(`form.policy.capField.${name}`)}
+                      disabled={isViewer}
                     />
                   ))}
                 </fieldset>
