@@ -115,6 +115,49 @@ jobs:
         if: always()
         run: docker compose down -v
 
+  e2e:
+    # Duenne E2E-Spitze (ADR-0032, Phase 4): Playwright gegen den echten
+    # Compose-Stack (Web :5173, API :8000). Soft-Gate (`continue-on-error`)
+    # waehrend der Stabilisierung — bricht den Build noch nicht; nach 1–2
+    # gruenen Laeufen wird `continue-on-error` entfernt (hartes Gate).
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compose env
+        run: cp .env.example .env
+      - name: Compose up (build + wait healthy)
+        run: docker compose up -d --build --wait --wait-timeout 240
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install web deps
+        working-directory: apps/web
+        run: npm ci
+      - name: Install Playwright browser
+        working-directory: apps/web
+        run: npm run e2e:install
+      - name: Run E2E
+        working-directory: apps/web
+        env:
+          E2E_BASE_URL: http://localhost:5173
+        run: npm run e2e
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          if-no-files-found: ignore
+      - name: Compose logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+      - name: Compose down
+        if: always()
+        run: docker compose down -v
+
   audit:
     # Supply-Chain-Gate (MS-3 H6): pip-audit fuer den Python-Workspace und
     # npm audit fuer das Web-Frontend. Fail bei high/critical; moderates
