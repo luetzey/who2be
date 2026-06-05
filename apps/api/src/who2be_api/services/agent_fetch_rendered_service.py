@@ -100,7 +100,7 @@ class AgentFetchRenderedService:
         if persona is None:
             # Defensive: sollte durch FK nicht eintreten, aber kein 500.
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Agent-Persona nicht gefunden (FK-Konsistenzproblem).",
             )
 

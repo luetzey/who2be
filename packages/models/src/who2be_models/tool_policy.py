@@ -101,9 +101,7 @@ class AgentToolPolicy(BaseModel):
             "agent_write",
             "promote_retire",
         )
-        return all(
-            not getattr(self, name) or getattr(other, name) for name in bool_fields
-        )
+        return all(not getattr(self, name) or getattr(other, name) for name in bool_fields)
 
 
 # Scope-Rang fuer den Teilmengen-Vergleich (`is_within`): mehr Sicht = hoeher.

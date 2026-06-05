@@ -1358,9 +1358,7 @@ class TestToolsOverviewResolver:
 
     def test_playbook_write_capability_reveals_write_tools(self) -> None:
         result = _async_run(
-            ToolsOverviewResolver().resolve(
-                "", self._policy_ctx(playbook_write=True), _make_db()
-            )
+            ToolsOverviewResolver().resolve("", self._policy_ctx(playbook_write=True), _make_db())
         ).text
         assert "create_playbook" in result
         assert "Schreibzugriff" in result

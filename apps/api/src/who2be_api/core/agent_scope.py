@@ -113,9 +113,7 @@ def _tool_unavailable(domain: str) -> HTTPException:
     )
 
 
-async def playbook_read_restrict(
-    pool: asyncpg.Pool, ctx: WorkspaceContext
-) -> list[UUID] | None:
+async def playbook_read_restrict(pool: asyncpg.Pool, ctx: WorkspaceContext) -> list[UUID] | None:
     """`restrict_ids` fuer Playbook-Reads gemaess Policy.
 
     `None` = keine Einschraenkung (ungebundener Token oder Scope `all`). Bei
@@ -132,9 +130,7 @@ async def playbook_read_restrict(
     return sorted(await assigned_playbook_ids(pool, ctx.workspace_id, ctx.agent_id))
 
 
-async def resource_read_restrict(
-    pool: asyncpg.Pool, ctx: WorkspaceContext
-) -> list[UUID] | None:
+async def resource_read_restrict(pool: asyncpg.Pool, ctx: WorkspaceContext) -> list[UUID] | None:
     """`restrict_ids` fuer Resource-Reads gemaess Policy (siehe playbook-Variante)."""
     policy = ctx.tool_policy
     if policy is None or ctx.agent_id is None:
