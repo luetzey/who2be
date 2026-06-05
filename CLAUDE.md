@@ -94,17 +94,33 @@ Enterprise-License-Hooks (`…0528_enterprise-license-management`).
   BlockNote-Insel für den Resource-Editor; Designsprache "Warm Citrus" laut
   `docs/frontend/design-language.md`)
 - `packages/models/` — geteilte Pydantic-Models, von API und MCP importiert
+- `packages/billing/` — **optionales Cloud-Billing-Paket** (`who2be-billing`:
+  Mollie-Checkout/-Webhooks, Tarif-Logik, `manual_override`). Build-Zeit-isoliert
+  (ADR-0029): nur die Cloud-Edition zieht es (`uv sync --group billing`,
+  Docker-Target `runtime-cloud`); das On-Prem-Artefakt enthaelt es physisch nicht.
+  Der Kern (`apps/api`) haengt nicht davon ab und importiert es nie statisch.
 - Supabase (Postgres) als DB; lokal via Docker-Compose, Ziel-Hosting Hetzner
 
-Python ist ein uv-Workspace im Repo-Root (`pyproject.toml` → `members`). Die drei
-Python-Pakete (`who2be-api`, `who2be-mcp`, `who2be-models`) sind editierbar
-verlinkt; `models` ist die einzige geteilte Abhaengigkeit zwischen API und MCP.
+Python ist ein uv-Workspace im Repo-Root (`pyproject.toml` → `members`). Die
+Python-Pakete (`who2be-api`, `who2be-mcp`, `who2be-models` + optional
+`who2be-billing`) sind editierbar verlinkt; `models` ist die geteilte
+Abhaengigkeit zwischen API und MCP, `who2be-billing` haengt einseitig am Kern.
+
+**Editionen / Entitlements (ADR-0028/0029):** Ein Codebase, zwei Build-Profile.
+`org_entitlement` ist die einzige gelesene SSoT; geschrieben wird sie nur von
+benannten Quellen (`mollie`/`cloud`/`manual_override`/`signed_license`), nie von
+der Read-App. On-Prem entsteht ein Entitlement ausschliesslich aus dem
+K_pub-verifizierten `WHO2BE_LICENSE_KEY` (env-validiert, kein Tabellen-Write);
+Cloud-Entitlements nur ueber den Billing-Dienst, Ausnahme ist der befristete,
+auditierte Admin-Override. Build-Isolation auch im Web (`features/billing` per
+`VITE_WHO2BE_EDITION` aus dem On-Prem-Bundle tree-geshaked).
 
 ## Befehle
 
 Python (uv-Workspace im Repo-Root):
 
-- Dependencies: `uv sync`
+- Dependencies: `uv sync --group billing` (inkl. Cloud-Billing-Paket; ohne
+  `--group billing` laeuft der On-Prem-Kern, dann fehlen die Billing-Tests)
 - Tests: `uv run pytest -q`
 - Einzeltest: `uv run pytest apps/api/tests/test_health.py::test_health`
 - Lint: `uv run ruff check .`

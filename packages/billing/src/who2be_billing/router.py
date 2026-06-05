@@ -1,54 +1,48 @@
-"""Billing — Cloud-Adapter-Router (Track D, Plan §3.5/§3.6).
+"""Billing — Cloud-Schreibseite (optionales `who2be-billing`-Paket, ADR-0029).
 
-Zwei Endpunkte, beide **nur in der Cloud-Edition** aktiv (On-Prem ⇒ 404):
-- ``POST /v1/billing/webhook`` (top-level, anonym): nimmt Provider-Ereignisse
-  entgegen, **verifiziert die Signatur immer** und leitet daraus das
-  Org-Entitlement ab. Das ist der Schreibpfad des Cloud-Entitlement-Adapters.
-- ``GET /v1/workspaces/{ws}/billing/entitlement`` (Operator/JWT): liefert das
-  aufgeloeste Entitlement + den aktuellen MCP-Verbrauch fuer den Org-Settings-
-  Billing-Slot der Web-UI.
+Drei Schreib-Endpunkte, alle **nur in der Cloud-Edition** aktiv (das Paket ist im
+On-Prem-Artefakt gar nicht installiert; zusaetzlich Runtime-`_require_cloud` als
+Defense-in-Depth):
+- ``POST /v1/billing/webhook`` (top-level, anonym): generischer HMAC-Webhook,
+  **verifiziert die Signatur immer**, leitet daraus das Org-Entitlement ab.
+- ``POST /v1/billing/mollie/webhook`` (top-level, form ``id=``): Mollie-Pull-Ping
+  → aktiver API-Fetch → Entitlement-Upsert.
+- ``POST /v1/workspaces/{ws}/billing/checkout`` (admin): startet einen Mollie-
+  Checkout fuer den gebuchten Tier.
 
-Guardrails (§3.6): kein Webhook ohne Signaturpruefung; keine Billing-Logik im
-Kern (das Mapping lebt in `licensing/billing.py`); Zugriff am Entitlement, nicht
-am rohen Zahlungsstatus.
+Guardrails (ADR-0028): kein Webhook ohne Signaturpruefung; Schreiben ausschliesslich
+in `org_entitlement` ueber `EntitlementRepository`; Zugriff am Entitlement, nicht am
+rohen Zahlungsstatus.
 """
 
 from __future__ import annotations
 
 import hmac
 import logging
-from typing import Annotated, cast
+from datetime import UTC, datetime, timedelta
+from typing import Annotated
 from uuid import UUID
 
 import asyncpg
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.db import get_pool
-from who2be_api.core.security import (
-    WorkspaceContext,
-    get_current_workspace,
-    require_role,
-)
-from who2be_api.licensing.adapters.mollie import (
-    MollieBillingService,
-    MollieError,
-    SdkMollieGateway,
-)
-from who2be_api.licensing.billing import (
+from who2be_api.core.security import WorkspaceContext, get_current_workspace, require_role
+from who2be_api.licensing.edition import is_cloud
+from who2be_api.licensing.entitlement import Entitlement
+from who2be_api.repositories.entitlement_repository import PgEntitlementRepository
+from who2be_api.routers.entitlement import resolve_org_id
+from who2be_billing.mollie import MollieBillingService, MollieError, SdkMollieGateway
+from who2be_billing.plans import plan_by_code
+from who2be_billing.processed_event_repository import PgProcessedEventRepository
+from who2be_billing.webhook import (
     WebhookError,
     map_event_to_entitlement,
     parse_event,
     verify_webhook_signature,
 )
-from who2be_api.licensing.edition import current_edition, is_cloud
-from who2be_api.licensing.plans import plan_by_code
-from who2be_api.licensing.service import build_entitlement_port
-from who2be_api.repositories.entitlement_repository import PgEntitlementRepository
-from who2be_api.repositories.mcp_usage_repository import PgMcpUsageRepository
-from who2be_api.repositories.processed_event_repository import PgProcessedEventRepository
-from who2be_api.services.mcp_limit_service import current_period
 from who2be_models import WorkspaceRole
 
 logger = logging.getLogger(__name__)
@@ -58,32 +52,9 @@ mollie_webhook_router = APIRouter(prefix="/v1/billing/mollie", tags=["billing"])
 router = APIRouter(prefix="/billing", tags=["billing"])
 
 Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]
-Pool = Annotated[asyncpg.Pool, Depends(get_pool)]
 
 # Provider-Signatur-Header (Stripe: `Stripe-Signature`; generisch: `X-Webhook-Signature`).
 _SIGNATURE_HEADERS = ("stripe-signature", "x-webhook-signature")
-
-
-class EntitlementUsage(BaseModel):
-    """Aktueller MCP-Verbrauch der laufenden Periode."""
-
-    period: str
-    count: int
-
-
-class EntitlementInfo(BaseModel):
-    """Entitlement-Snapshot fuer die Web-Anzeige (Billing-Slot)."""
-
-    edition: str
-    status: str
-    features: list[str]
-    expires_at: str | None
-    mcp_monthly_quota: int | None
-    mcp_rate_per_min: int | None
-    # Dunning-Signal: gesetzt, solange eine fehlgeschlagene Zahlung in der
-    # Grace-Period nachgeholt werden kann (Banner in der Web-UI).
-    grace_until: str | None
-    usage: EntitlementUsage
 
 
 def _require_cloud() -> None:
@@ -211,36 +182,6 @@ async def billing_webhook(request: Request) -> dict[str, bool]:
     return {"received": True}
 
 
-@router.get("/entitlement")
-async def get_entitlement(ctx: Ctx, pool: Pool) -> EntitlementInfo:
-    """Aufgeloestes Entitlement + MCP-Verbrauch der Org dieses Workspaces."""
-    org_id = await _resolve_org_id(pool, ctx.workspace_id)
-    port = build_entitlement_port(pool, get_settings())
-    entitlement = await port.resolve(org_id)
-    period = current_period()
-    count = await PgMcpUsageRepository(pool).current(org_id, period)
-    return EntitlementInfo(
-        edition=current_edition(),
-        status=entitlement.status,
-        features=sorted(entitlement.features),
-        expires_at=entitlement.expires_at.isoformat() if entitlement.expires_at else None,
-        mcp_monthly_quota=entitlement.mcp_monthly_quota,
-        mcp_rate_per_min=entitlement.mcp_rate_per_min,
-        grace_until=entitlement.grace_until.isoformat() if entitlement.grace_until else None,
-        usage=EntitlementUsage(period=period, count=count),
-    )
-
-
-async def _resolve_org_id(pool: asyncpg.Pool, workspace_id: UUID) -> UUID:
-    org_id = await pool.fetchval("SELECT org_id FROM workspace WHERE id = $1", workspace_id)
-    if org_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Workspace ohne Organisation.",
-        )
-    return cast(UUID, org_id)
-
-
 # --- Mollie: Pull-Webhook + Checkout (Plan §3.2) ---------------------------------
 
 
@@ -295,7 +236,7 @@ async def create_checkout(
             detail=f"Unbekannter oder nicht buchbarer Plan '{body.plan}'.",
         )
     pool = get_pool()
-    org_id = await _resolve_org_id(pool, ctx.workspace_id)
+    org_id = await resolve_org_id(pool, ctx.workspace_id)
     customer_name, customer_email = await _fetch_billing_identity(pool, org_id, ctx.user_id)
     settings = get_settings()
     redirect_url = f"{settings.web_base_url.rstrip('/')}/settings/billing"
@@ -308,3 +249,71 @@ async def create_checkout(
         webhook_url=settings.mollie_webhook_url or None,
     )
     return CheckoutResponse(checkout_url=checkout_url)
+
+
+# --- Manual-Override (kontrollierter Cloud-Ausnahmepfad, ADR-0028) ----------------
+
+
+class OverrideRequest(BaseModel):
+    """Befristeter manueller Override fuer Support-/Kulanz-/Webhook-Haenger-Faelle.
+
+    Pflicht-befristet (`days`) + auditiert (`reason`): es gibt kein permanentes
+    Override. Der gewaehlte Tier kommt aus `plan` (Single Source: `plans.py`).
+    """
+
+    plan: str = "pro"
+    days: int = Field(gt=0, le=365, description="Laufzeit in Tagen (1–365).")
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class OverrideResponse(BaseModel):
+    """Bestaetigter Override-Stand fuer die UI-Rueckmeldung."""
+
+    plan: str
+    expires_at: str
+    features: list[str]
+
+
+@router.post("/override", status_code=status.HTTP_201_CREATED)
+async def create_override(
+    body: OverrideRequest,
+    ctx: Ctx,
+) -> OverrideResponse:
+    """Setzt ein befristetes `manual_override` (admin-only, nur Cloud).
+
+    Schreibt ausschliesslich in `org_entitlement` ueber den Repository-Vertrag —
+    keine anderen App-Interna. Urheber (`created_by`) + `reason` werden auditiert,
+    der Ablauf greift ohne Sonderlogik ueber `is_active()`/`expires_at`.
+    """
+    _require_cloud()
+    require_role(ctx, WorkspaceRole.admin)
+    plan = plan_by_code(body.plan)
+    if plan is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Unbekannter oder nicht buchbarer Plan '{body.plan}'.",
+        )
+    expires_at = datetime.now(tz=UTC) + timedelta(days=body.days)
+    entitlement = Entitlement(
+        status="active",
+        features=plan.features,
+        expires_at=expires_at,
+        mcp_monthly_quota=plan.mcp_monthly_quota,
+        mcp_rate_per_min=plan.mcp_rate_per_min,
+        grace_until=None,
+    )
+    pool = get_pool()
+    org_id = await resolve_org_id(pool, ctx.workspace_id)
+    await PgEntitlementRepository(pool).upsert(
+        org_id,
+        entitlement,
+        source="manual_override",
+        external_ref=None,
+        created_by=ctx.user_id,
+        reason=body.reason,
+    )
+    return OverrideResponse(
+        plan=plan.code,
+        expires_at=expires_at.isoformat(),
+        features=sorted(entitlement.features),
+    )

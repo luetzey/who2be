@@ -9,6 +9,7 @@ Routen-Layout nach Phase 2:
   `get_current_workspace` durchgesetzt (siehe `core/security.py`).
 """
 
+import importlib
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -31,11 +32,11 @@ from who2be_api.core.rate_limit import (
     _rate_limit_exceeded_handler,
     limiter,
 )
-from who2be_api.licensing.edition import is_onprem
+from who2be_api.licensing.edition import is_cloud, is_onprem
 from who2be_api.routers import (
     agents,
-    billing,
     dashboard,
+    entitlement,
     gdpr,
     invitations,
     me,
@@ -116,6 +117,23 @@ def _on_promote_validation_error(request: Request, exc: Exception) -> Response:
     )
 
 
+def _register_billing_if_present(app: FastAPI, settings: Settings) -> None:
+    """Bindet das optionale Cloud-Billing-Paket ein — nur Cloud UND installiert.
+
+    Dynamischer Import (kein statisches ``import who2be_billing``): der Kern haengt
+    nicht von der Schreibseite ab (ADR-0029). Im On-Prem-Artefakt ist das Paket
+    physisch nicht installiert → ``ImportError`` → still uebersprungen.
+    """
+    if not is_cloud(settings):
+        return
+    try:
+        billing = importlib.import_module("who2be_billing")
+    except ImportError:
+        logger.info("who2be-billing nicht installiert — Billing-Schreibrouten ausgelassen.")
+        return
+    billing.include_routers(app, workspace_prefix=_WORKSPACE_PREFIX)
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     """Konstruiert die FastAPI-App. Default-Settings via `get_settings()`.
 
@@ -174,7 +192,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(dashboard.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(members.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(invitations.router, prefix=_WORKSPACE_PREFIX)
-    app.include_router(billing.router, prefix=_WORKSPACE_PREFIX)
+    # Entitlement-READ (editionsunabhaengig, reiner Read auf die Org-SSoT).
+    app.include_router(entitlement.router, prefix=_WORKSPACE_PREFIX)
     # Top-Level-Endpunkte: `/v1/me`, `/v1/organizations`, `/v1/workspaces/{id}`.
     # Der anonyme Invitation-Accept haengt direkt unter `/v1/invitations`.
     app.include_router(me.router)
@@ -182,10 +201,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(workspaces.router)
     app.include_router(gdpr.router)
     app.include_router(invitations.accept_router)
-    # Cloud-Billing-Webhook (anonym, signaturgeprueft) — top-level, kein Workspace-Prefix.
-    app.include_router(billing.webhook_router)
-    # Mollie-Pull-Webhook (form id=, aktiver API-Fetch statt Body-Signatur) — top-level.
-    app.include_router(billing.mollie_webhook_router)
+    # Billing-SCHREIBSEITE (Webhooks/Checkout) lebt im optionalen `who2be-billing`-
+    # Paket (ADR-0029). Build-Zeit-isoliert: On-Prem hat es nicht installiert →
+    # der Import schlaegt fehl und es wird nichts registriert. Der Kern kennt das
+    # Paket NIE statisch.
+    _register_billing_if_present(app, settings)
 
     @app.get("/v1/health", response_model=Health)
     async def health() -> Health:

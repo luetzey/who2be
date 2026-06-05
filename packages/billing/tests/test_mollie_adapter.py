@@ -18,7 +18,8 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from who2be_api.licensing.adapters.mollie import (
+from who2be_api.licensing.entitlement import CLOUD_FREE_ENTITLEMENT, Entitlement, Feature
+from who2be_billing.mollie import (
     MollieBillingService,
     MollieError,
     MolliePayment,
@@ -27,8 +28,7 @@ from who2be_api.licensing.adapters.mollie import (
     metadata_to_entitlement,
     subscription_to_update,
 )
-from who2be_api.licensing.entitlement import CLOUD_FREE_ENTITLEMENT, Entitlement, Feature
-from who2be_api.licensing.plans import PRO_PLAN
+from who2be_billing.plans import PRO_PLAN
 
 
 @dataclass
@@ -49,7 +49,13 @@ class FakeEntitlementRepository:
         return None
 
     async def upsert(
-        self, org_id: UUID, entitlement: Entitlement, source: str, external_ref: str | None
+        self,
+        org_id: UUID,
+        entitlement: Entitlement,
+        source: str,
+        external_ref: str | None,
+        created_by: UUID | None = None,
+        reason: str | None = None,
     ) -> None:
         self.calls.append(_UpsertCall(org_id, entitlement, source, external_ref))
 
@@ -415,7 +421,13 @@ def test_handle_webhook_releases_claim_on_failure() -> None:
             self._failed = False
 
         async def upsert(
-            self, org_id: UUID, entitlement: Entitlement, source: str, external_ref: str | None
+            self,
+            org_id: UUID,
+            entitlement: Entitlement,
+            source: str,
+            external_ref: str | None,
+            created_by: UUID | None = None,
+            reason: str | None = None,
         ) -> None:
             if not self._failed:
                 self._failed = True
