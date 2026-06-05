@@ -87,12 +87,18 @@ class CurrentPrincipal:
     Claim mit. Wird vom Invitation-Accept genutzt, um Einladungen an die
     falsche Email-Adresse abzuweisen (Phase 3-D). API-Tokens tragen keinen
     Email-Claim.
+
+    `aal` ist nur im JWT-Pfad gesetzt — GoTrue liefert den Authenticator-
+    Assurance-Level ("aal1" nach Ein-Faktor-Login, "aal2" nach verifizierter
+    MFA-Challenge) als Claim. Das Admin-MFA-Gate (`require_aal2`) liest ihn.
+    API-Tokens tragen keinen aal-Claim (`None`).
     """
 
     user_id: UUID
     token_workspace_id: UUID | None
     token_role: WorkspaceRole | None = None
     email: str | None = None
+    aal: str | None = None
 
 
 @dataclass(frozen=True)
@@ -105,12 +111,18 @@ class WorkspaceContext:
 
     `role` ist die effektive Rolle (Membership-Rolle im JWT-Pfad,
     Snapshot-Rolle im Token-Pfad) und Basis fuer `require_role` (ADR-0023).
+
+    `aal` traegt im JWT-Pfad den Authenticator-Assurance-Level-Claim
+    ("aal1"/"aal2") aus dem GoTrue-Token; das Admin-MFA-Gate (`require_aal2`,
+    WP-F/S1) wertet ihn aus. Im API-Token-Pfad `None` — Tokens sind ein
+    Maschinen-Pfad ohne MFA-Konzept und vom Gate ausgenommen.
     """
 
     workspace_id: UUID
     user_id: UUID
     role: WorkspaceRole
     is_api_token: bool = False
+    aal: str | None = None
 
 
 # Rollen-Hierarchie admin > editor > viewer (ADR-0023). Numerischer Rang fuer
@@ -127,22 +139,65 @@ def role_satisfies(actual: WorkspaceRole, minimum: WorkspaceRole) -> bool:
     return _ROLE_ORDER[actual] >= _ROLE_ORDER[minimum]
 
 
+# Authenticator Assurance Level (GoTrue/Supabase): "aal1" = ein Faktor
+# (Passwort/Magic-Link), "aal2" = zusaetzlich eine verifizierte MFA-Challenge
+# (TOTP). Administrative Aktionen verlangen aal2 (WP-F, Befund S1).
+_AAL2 = "aal2"
+
+
+def require_aal2(ctx: WorkspaceContext) -> None:
+    """Wirft 403, wenn ein interaktiver Aufrufer keine MFA-(AAL2-)Session hat.
+
+    Zentrales Gate fuer administrative Aktionen (WP-F, S1) — wird von
+    `require_role` automatisch fuer `minimum == admin` aufgerufen, kann aber
+    auch direkt verwendet werden. Zwei bewusste Ausnahmen, damit das Gate
+    keine legitimen Bestands-/Maschinenpfade bricht:
+
+    - **API-Token** (`is_api_token`): Maschinen-Pfad ohne MFA-Konzept (analog
+      GitHub-PATs) — separat ausstellbar/revozierbar, daher exempt.
+    - **Fehlender `aal`-Claim** (`aal is None`): aeltere/handsignierte
+      Test-JWTs tragen ihn nicht. Produktive GoTrue-JWTs setzen `aal` immer,
+      daher greift das Gate in Produktion zuverlaessig; nur ein *expliziter*
+      Nicht-aal2-Wert (typisch "aal1") wird geblockt (fail-open bei Absenz).
+    """
+    if ctx.is_api_token:
+        return
+    if ctx.aal is None or ctx.aal == _AAL2:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=(
+            "Diese Admin-Aktion erfordert Zwei-Faktor-Authentifizierung (MFA). "
+            "Richte in den Kontoeinstellungen einen TOTP-Faktor ein und melde "
+            "dich anschliessend erneut an."
+        ),
+    )
+
+
 def require_role(ctx: WorkspaceContext, minimum: WorkspaceRole) -> None:
-    """Wirft 403, wenn die Kontext-Rolle `minimum` nicht erreicht (ADR-0023)."""
+    """Wirft 403, wenn die Kontext-Rolle `minimum` nicht erreicht (ADR-0023).
+
+    Administrative Aktionen (`minimum == admin`) verlangen zusaetzlich eine
+    MFA-(AAL2-)Session (WP-F, S1) — das Gate haengt zentral hier, sodass jeder
+    bestehende `require_role(ctx, WorkspaceRole.admin)`-Aufruf es erbt, ohne
+    dass die einzelnen Call-Sites es duplizieren.
+    """
     if not role_satisfies(ctx.role, minimum):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Diese Aktion erfordert mindestens die Rolle '{minimum.value}'.",
         )
+    if minimum == WorkspaceRole.admin:
+        require_aal2(ctx)
 
 
-def verify_supabase_jwt(token: str) -> tuple[UUID, str | None]:
-    """Verifiziert ein Supabase-JWT lokal (HS256) und liest `sub` + optional `email`.
+def verify_supabase_jwt(token: str) -> tuple[UUID, str | None, str | None]:
+    """Verifiziert ein Supabase-JWT lokal (HS256) und liest `sub` + optional `email`/`aal`.
 
-    Rueckgabe: `(owner_id, email_or_none)`. Der Email-Claim ist optional —
-    aelteren Test-JWTs fehlt er; produktive Supabase-JWTs tragen ihn aber
-    immer mit. Wir verwenden ihn fuer die Email-Mismatch-Pruefung beim
-    Invitation-Accept (Phase 3-D).
+    Rueckgabe: `(owner_id, email_or_none, aal_or_none)`. Email- und aal-Claim
+    sind optional — aelteren/handsignierten Test-JWTs fehlen sie; produktive
+    Supabase-JWTs tragen beide mit. Email nutzt die Email-Mismatch-Pruefung
+    beim Invitation-Accept (Phase 3-D); `aal` das Admin-MFA-Gate (WP-F/S1).
     """
     settings = get_settings()
     secret = settings.jwt_secret
@@ -174,8 +229,12 @@ def verify_supabase_jwt(token: str) -> tuple[UUID, str | None]:
         raise _credentials_error() from exc
     email_claim = payload.get("email")
     email = email_claim if isinstance(email_claim, str) and email_claim else None
+    # `aal` (Authenticator Assurance Level): "aal1" nach Ein-Faktor-Login,
+    # "aal2" nach verifizierter MFA-Challenge. Fehlt bei Test-JWTs (→ None).
+    aal_claim = payload.get("aal")
+    aal = aal_claim if isinstance(aal_claim, str) and aal_claim else None
     structlog.contextvars.bind_contextvars(owner_id=str(owner_id))
-    return owner_id, email
+    return owner_id, email, aal
 
 
 async def resolve_principal(token: str, token_repo: TokenRepository) -> CurrentPrincipal:
@@ -199,8 +258,8 @@ async def resolve_principal(token: str, token_repo: TokenRepository) -> CurrentP
             token_workspace_id=auth.workspace_id,
             token_role=auth.role,
         )
-    user_id, email = verify_supabase_jwt(token)
-    return CurrentPrincipal(user_id=user_id, token_workspace_id=None, email=email)
+    user_id, email, aal = verify_supabase_jwt(token)
+    return CurrentPrincipal(user_id=user_id, token_workspace_id=None, email=email, aal=aal)
 
 
 async def get_current_principal(
@@ -217,8 +276,8 @@ async def get_current_principal(
         raise _credentials_error()
     token = credentials.credentials
     if not token.startswith(TOKEN_PREFIX):
-        user_id, email = verify_supabase_jwt(token)
-        return CurrentPrincipal(user_id=user_id, token_workspace_id=None, email=email)
+        user_id, email, aal = verify_supabase_jwt(token)
+        return CurrentPrincipal(user_id=user_id, token_workspace_id=None, email=email, aal=aal)
     try:
         pool = get_pool()
     except RuntimeError as exc:
@@ -304,6 +363,7 @@ async def get_current_workspace(
             user_id=principal.user_id,
             role=WorkspaceRole(role),
             is_api_token=False,
+            aal=principal.aal,
         )
 
     # Org des Workspace fuer `app.current_org` (org-scoped RLS auf

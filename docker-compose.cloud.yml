@@ -63,6 +63,11 @@ services:
 
   auth:
     environment:
+      # MFA/TOTP (WP-F, S1) wird aus dem Basis-`auth`-Service vererbt
+      # (docker-compose.yml: GOTRUE_MFA_TOTP_*). Compose merged die
+      # `environment`-Maps, daher gilt das Admin-MFA-Gate auch im Cloud-Stack —
+      # hier bewusst nicht dupliziert, um Drift zu vermeiden.
+      #
       # Cloud-Paritaet: E-Mail-Verifikation PFLICHT (dev nutzt autoconfirm=true).
       GOTRUE_MAILER_AUTOCONFIRM: "false"
       # SMTP → mailpit. Auth/Insecure egal, mailpit nimmt im Dev-Modus alles an.

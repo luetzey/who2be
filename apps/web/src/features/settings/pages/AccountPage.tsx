@@ -34,6 +34,8 @@ import { useLocale } from '@/i18n/useLocale'
 import { supabase } from '@/lib/supabase'
 import { notify } from '@/lib/feedback'
 
+import { MfaSection } from '../components/MfaSection'
+
 
 // Konto-Self-Service (Track K). Mutationen laufen ueber GoTrue
 // (`supabase.auth.updateUser`/`signOut`); die Anzeige speist sich aus der
@@ -81,6 +83,7 @@ export function AccountPage() {
           <CardContent>
             <Stack gap="lg">
               <ChangePasswordForm hasPassword={hasPassword} />
+              <MfaSection />
               <SignOutEverywhere />
             </Stack>
           </CardContent>
