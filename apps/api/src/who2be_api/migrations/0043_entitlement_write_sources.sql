@@ -29,8 +29,15 @@ UPDATE org_entitlement
 -- Geschlossene Herkunfts-Taxonomie (ADR-0028).
 DO $$
 BEGIN
+    -- conrelid-Scope (statt nur conname): pg_constraint.conname ist nur je
+    -- Namespace eindeutig — ohne Tabellenbezug wuerde der Guard in isolierten
+    -- Test-Schemata einen fremden, gleichnamigen Constraint faelschlich als
+    -- „vorhanden" werten. `'org_entitlement'::regclass` loest die Tabelle im
+    -- aktuellen search_path auf.
     IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'org_entitlement_source_check'
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'org_entitlement_source_check'
+          AND conrelid = 'org_entitlement'::regclass
     ) THEN
         ALTER TABLE org_entitlement
             ADD CONSTRAINT org_entitlement_source_check
@@ -43,7 +50,9 @@ END $$;
 DO $$
 BEGIN
     IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'org_entitlement_manual_override_check'
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'org_entitlement_manual_override_check'
+          AND conrelid = 'org_entitlement'::regclass
     ) THEN
         ALTER TABLE org_entitlement
             ADD CONSTRAINT org_entitlement_manual_override_check
