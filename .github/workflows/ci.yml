@@ -65,6 +65,14 @@ jobs:
         run: npm run test:a11y
       - name: Build
         run: npm run build
+      - name: Assert on-prem bundle excludes Billing-UI (ADR-0029)
+        # Default-Build = On-Prem (kein VITE_WHO2BE_EDITION) → features/billing
+        # muss aus dem Bundle tree-geshaked sein. Marker: BillingPanel-CTA.
+        run: |
+          if grep -rlE "Jetzt upgraden|Monatsverbrauch" dist; then
+            echo "::error::Billing-UI ist ins On-Prem-Bundle gelangt"; exit 1
+          fi
+          echo "OK: Billing-UI nicht im On-Prem-Bundle."
 
   compose-smoke:
     runs-on: ubuntu-latest
