@@ -4,7 +4,9 @@
 import { useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
 import { type AnchorRef } from '@/components/ui/popover'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 
 import type { PlaceholderProps } from '../PlaceholderBlock'
 import { PickerPopover } from './PickerPopover'
@@ -76,33 +78,33 @@ export function CatalogScopePicker({
       ariaLabel="Playbook-Katalog einfuegen"
       testId="catalog-scope-picker-dialog"
     >
-      <fieldset className="flex flex-col gap-2">
-        <legend className="sr-only">Playbook-Auswahl für den Katalog</legend>
+      <RadioGroup
+        value={selected}
+        onValueChange={(value) => setSelected(value as CatalogScope)}
+        aria-label="Playbook-Auswahl für den Katalog"
+      >
         {OPTIONS.map((opt) => {
           const inputId = `catalog-scope-${opt.target_id}`
           return (
-            <div
+            <Label
               key={opt.target_id}
-              className="flex cursor-pointer items-start gap-3 rounded-md border p-3 hover:bg-muted/50"
+              htmlFor={inputId}
+              className="flex cursor-pointer items-start gap-3 rounded-md border p-3 font-normal hover:bg-muted/50"
             >
-              <input
+              <RadioGroupItem
                 id={inputId}
-                type="radio"
-                name="catalog-scope"
                 value={opt.target_id}
-                checked={selected === opt.target_id}
-                onChange={() => setSelected(opt.target_id)}
                 data-testid={`catalog-scope-option-${opt.target_id}`}
                 className="mt-0.5"
               />
-              <label htmlFor={inputId} className="flex cursor-pointer flex-col gap-0.5">
+              <span className="flex flex-col gap-0.5">
                 <span className="text-sm font-medium">{opt.label}</span>
                 <span className="text-xs text-muted-foreground">{opt.description}</span>
-              </label>
-            </div>
+              </span>
+            </Label>
           )
         })}
-      </fieldset>
+      </RadioGroup>
       <div className="flex justify-end gap-2">
         <Button variant="outline" onClick={onCancel}>
           Abbrechen

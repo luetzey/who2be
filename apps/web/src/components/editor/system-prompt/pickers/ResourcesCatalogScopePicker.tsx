@@ -6,7 +6,9 @@ import { useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { type AnchorRef } from '@/components/ui/popover'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 
 import type { PlaceholderProps } from '../PlaceholderBlock'
 import { PickerPopover } from './PickerPopover'
@@ -75,38 +77,39 @@ export function ResourcesCatalogScopePicker({
       ariaLabel="Resource-Katalog einfuegen"
       testId="resources-catalog-scope-picker-dialog"
     >
-      <fieldset className="flex flex-col gap-2">
-        <legend className="sr-only">Resource-Auswahl für den Katalog</legend>
-        <div className="flex cursor-pointer items-start gap-3 rounded-md border p-3 hover:bg-muted/50">
-          <input
+      <RadioGroup
+        value={mode}
+        onValueChange={(value) => setMode(value as CatalogMode)}
+        aria-label="Resource-Auswahl für den Katalog"
+      >
+        <Label
+          htmlFor="resources-catalog-mode-all"
+          className="flex cursor-pointer items-start gap-3 rounded-md border p-3 font-normal hover:bg-muted/50"
+        >
+          <RadioGroupItem
             id="resources-catalog-mode-all"
-            type="radio"
-            name="resources-catalog-mode"
             value="all"
-            checked={mode === 'all'}
-            onChange={() => setMode('all')}
             data-testid="resources-catalog-option-all"
             className="mt-0.5"
           />
-          <label htmlFor="resources-catalog-mode-all" className="flex cursor-pointer flex-col gap-0.5">
+          <span className="flex flex-col gap-0.5">
             <span className="text-sm font-medium">Alle Resources</span>
             <span className="text-xs text-muted-foreground">
               Listet alle aktiven Resources des Workspace.
             </span>
-          </label>
-        </div>
-        <div className="flex cursor-pointer items-start gap-3 rounded-md border p-3 hover:bg-muted/50">
-          <input
+          </span>
+        </Label>
+        <Label
+          htmlFor="resources-catalog-mode-tag"
+          className="flex flex-1 cursor-pointer items-start gap-3 rounded-md border p-3 font-normal hover:bg-muted/50"
+        >
+          <RadioGroupItem
             id="resources-catalog-mode-tag"
-            type="radio"
-            name="resources-catalog-mode"
             value="tag"
-            checked={mode === 'tag'}
-            onChange={() => setMode('tag')}
             data-testid="resources-catalog-option-tag"
             className="mt-0.5"
           />
-          <label htmlFor="resources-catalog-mode-tag" className="flex flex-1 cursor-pointer flex-col gap-1">
+          <span className="flex flex-1 flex-col gap-1">
             <span className="text-sm font-medium">Nach Tag</span>
             <span className="text-xs text-muted-foreground">
               Listet nur Resources mit dem angegebenen Tag.
@@ -122,9 +125,9 @@ export function ResourcesCatalogScopePicker({
               data-testid="resources-catalog-tag-input"
               className="mt-1 h-8"
             />
-          </label>
-        </div>
-      </fieldset>
+          </span>
+        </Label>
+      </RadioGroup>
       <div className="flex justify-end gap-2">
         <Button variant="outline" onClick={onCancel}>
           Abbrechen

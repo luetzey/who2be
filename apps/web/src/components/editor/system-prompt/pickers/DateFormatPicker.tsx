@@ -3,7 +3,9 @@
 import { useEffect, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
 import { type AnchorRef } from '@/components/ui/popover'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 
 import type { PlaceholderProps } from '../PlaceholderBlock'
 import { PickerPopover } from './PickerPopover'
@@ -81,33 +83,39 @@ export function DateFormatPicker({
       ariaLabel="Datum einfuegen"
       testId="date-format-picker-dialog"
     >
-      <fieldset className="flex flex-col gap-2">
-        <legend className="sr-only">Datumsformat auswaehlen</legend>
-        {OPTIONS.map((opt) => (
-          <div
-            key={opt.inputId}
-            className="flex cursor-pointer items-start gap-3 rounded-md border p-3 hover:bg-muted/50"
-          >
-            <input
-              id={opt.inputId}
-              type="radio"
-              name="date-format"
-              value={opt.target_id}
-              checked={selected === opt.target_id}
-              onChange={() => setSelected(opt.target_id)}
-              data-testid={`date-format-option-${opt.target_id === '' ? 'iso' : opt.target_id}`}
-              className="mt-0.5"
-            />
-            <label htmlFor={opt.inputId} className="flex cursor-pointer flex-col gap-0.5">
-              <span className="text-sm font-medium">{opt.label}</span>
-              <span className="text-xs text-muted-foreground">
-                {opt.description} — Beispiel:{' '}
-                <code className="font-mono">{opt.example}</code>
+      {/* Radix behandelt den leeren String als „keine Auswahl"; ISO ('') wird
+          daher auf den Radio-Wert 'iso' gemappt und beim Wechsel zurueck-
+          uebersetzt. Der target_id-Vertrag (`''` = ISO) bleibt unveraendert. */}
+      <RadioGroup
+        value={selected === '' ? 'iso' : 'human'}
+        onValueChange={(value) => setSelected(value === 'iso' ? '' : 'human')}
+        aria-label="Datumsformat auswaehlen"
+      >
+        {OPTIONS.map((opt) => {
+          const radioValue = opt.target_id === '' ? 'iso' : opt.target_id
+          return (
+            <Label
+              key={opt.inputId}
+              htmlFor={opt.inputId}
+              className="flex cursor-pointer items-start gap-3 rounded-md border p-3 font-normal hover:bg-muted/50"
+            >
+              <RadioGroupItem
+                id={opt.inputId}
+                value={radioValue}
+                data-testid={`date-format-option-${radioValue}`}
+                className="mt-0.5"
+              />
+              <span className="flex flex-col gap-0.5">
+                <span className="text-sm font-medium">{opt.label}</span>
+                <span className="text-xs text-muted-foreground">
+                  {opt.description} — Beispiel:{' '}
+                  <code className="font-mono">{opt.example}</code>
+                </span>
               </span>
-            </label>
-          </div>
-        ))}
-      </fieldset>
+            </Label>
+          )
+        })}
+      </RadioGroup>
       <div className="flex justify-end gap-2">
         <Button variant="outline" onClick={onCancel}>
           Abbrechen
