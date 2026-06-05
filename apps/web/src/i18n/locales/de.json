@@ -271,7 +271,15 @@
       "submit": "Konto erstellen",
       "confirmPending": "Pruefe dein Postfach und folge dem Bestaetigungs-Link, um die Anmeldung abzuschliessen.",
       "alreadyAccount": "Schon ein Konto?",
-      "signIn": "Anmelden"
+      "signIn": "Anmelden",
+      "consent": {
+        "before": "Ich akzeptiere die",
+        "termsLink": "AGB",
+        "middle": "und die",
+        "privacyLink": "Datenschutzerklaerung",
+        "after": "."
+      },
+      "consentRequiredHint": "Bitte stimme den AGB und der Datenschutzerklaerung zu, um fortzufahren."
     },
     "resetPassword": {
       "title": "Passwort zuruecksetzen",
@@ -316,7 +324,8 @@
       "passwordRequired": "Passwort erforderlich.",
       "passwordMinLength": "Mindestens 8 Zeichen.",
       "confirmRequired": "Bitte wiederholen.",
-      "passwordMismatch": "Passwoerter stimmen nicht ueberein."
+      "passwordMismatch": "Passwoerter stimmen nicht ueberein.",
+      "consentRequired": "Bitte AGB und Datenschutz akzeptieren."
     }
   },
   "dashboard": {
@@ -452,9 +461,22 @@
     },
     "terms": {
       "title": "Allgemeine Geschaeftsbedingungen (AGB)",
-      "intro": "Diese AGB regeln die Nutzung von Who2Be durch",
+      "intro": "Diese AGB regeln die Nutzung von Who2Be (SaaS-Mischvertrag aus Miet- und Dienstleistungselementen) durch",
       "introUserGroup": "Beschreibung der Nutzergruppe (Verbraucher/Unternehmer)",
-      "introPeriod": ".",
+      "introPeriod": ". Abschnitt A gilt fuer alle Nutzer, Abschnitt B nur fuer Verbraucher (B2C), Abschnitt C nur fuer Unternehmer (B2B).",
+      "groups": {
+        "general": {
+          "heading": "A. Allgemeine Bestimmungen (alle Nutzer)"
+        },
+        "consumer": {
+          "heading": "B. Zusaetzliche Bestimmungen fuer Verbraucher (B2C)",
+          "note": "Verbraucher ist, wer den Vertrag zu Zwecken abschliesst, die ueberwiegend weder seiner gewerblichen noch seiner selbstaendigen beruflichen Taetigkeit zugerechnet werden koennen."
+        },
+        "business": {
+          "heading": "C. Zusaetzliche Bestimmungen fuer Unternehmer (B2B)",
+          "note": "Unternehmer ist, wer den Vertrag in Ausuebung gewerblicher oder selbstaendiger beruflicher Taetigkeit abschliesst."
+        }
+      },
       "sections": {
         "scope": {
           "heading": "§ 1 Geltungsbereich",
@@ -462,7 +484,7 @@
         },
         "subject": {
           "heading": "§ 2 Vertragsgegenstand & Leistungsbeschreibung",
-          "body": "Beschreibung des SaaS-Angebots, Leistungsumfang je Plan (Free/Pro), Verfuegbarkeit/SLA"
+          "body": "Beschreibung des SaaS-Angebots, Leistungsumfang je Plan (Free/Pro), Einordnung als Mischvertrag (Miete + Dienstleistung)"
         },
         "registration": {
           "heading": "§ 3 Registrierung & Konto",
@@ -476,29 +498,58 @@
           "heading": "§ 5 Laufzeit & Kuendigung",
           "body": "Vertragslaufzeit, Verlaengerung, ordentliche/ausserordentliche Kuendigung, Kuendigung zum Periodenende"
         },
-        "withdrawal": {
-          "heading": "§ 6 Widerrufsrecht",
-          "body": "Widerrufsbelehrung fuer Verbraucher inkl. Muster-Widerrufsformular bzw. Hinweis, falls nicht einschlaegig"
-        },
         "obligations": {
-          "heading": "§ 7 Pflichten der Nutzer & zulaessige Nutzung",
+          "heading": "§ 6 Pflichten der Nutzer & zulaessige Nutzung",
           "body": "Acceptable-Use-Policy, verbotene Inhalte, Verantwortung fuer eingestellte Daten"
         },
         "availability": {
-          "heading": "§ 8 Verfuegbarkeit, Aenderungen & Wartung",
-          "body": "Verfuegbarkeitszusage, Wartungsfenster, Aenderungsvorbehalt"
+          "heading": "§ 7 Verfuegbarkeit, Service-Level (SLA), Wartung & Aenderungen",
+          "body": "Verfuegbarkeitszusage, Wartungsfenster, Aenderungsvorbehalt",
+          "slaIntro": "Service-Level (verbindliche Werte folgen vom Betreiber):",
+          "slaUptimeLabel": "Verfuegbarkeit (Monatsmittel):",
+          "slaUptime": "Zielwert Verfuegbarkeit, z. B. 99,x %",
+          "slaResponseLabel": "Reaktionszeiten Support:",
+          "slaResponse": "Reaktionszeiten je Prioritaet/Plan",
+          "slaMaintenanceLabel": "Geplante Wartungsfenster:",
+          "slaMaintenance": "angekuendigte Wartungsfenster (Zeitraum/Vorlauf)",
+          "slaCreditsLabel": "Service-Gutschriften:",
+          "slaCredits": "Regelung zu Gutschriften bei SLA-Unterschreitung, falls zugesagt"
         },
         "liability": {
-          "heading": "§ 9 Haftung",
+          "heading": "§ 8 Haftung",
           "body": "Haftungsregelung (Vorsatz/grobe Fahrlaessigkeit, Kardinalpflichten, Begrenzung)"
         },
         "privacy": {
-          "heading": "§ 10 Datenschutz",
+          "heading": "§ 9 Datenschutz",
           "body": "Verweis auf Datenschutzerklaerung und ggf. Auftragsverarbeitungsvertrag (DPA)"
         },
         "final": {
-          "heading": "§ 11 Schlussbestimmungen",
-          "body": "Anwendbares Recht, Gerichtsstand, salvatorische Klausel, Aenderungen der AGB"
+          "heading": "§ 10 Schlussbestimmungen",
+          "body": "Salvatorische Klausel, Aenderungen der AGB, Textform"
+        }
+      },
+      "consumerSections": {
+        "withdrawal": {
+          "heading": "§ 11 Widerrufsrecht & Widerrufsbelehrung",
+          "body": "Widerrufsbelehrung fuer Verbraucher (Frist, Form, Rechtsfolgen, Beginn der Frist)",
+          "formLabel": "Muster-Widerrufsformular:",
+          "form": "Muster-Widerrufsformular bzw. Hinweis, falls nicht einschlaegig (z. B. vorzeitiger Leistungsbeginn auf ausdruecklichen Wunsch)"
+        },
+        "einvoice": {
+          "heading": "§ 12 Elektronische Rechnung — Zustimmung des Empfaengers",
+          "body": "Hinweis: Rechnungen/Belege werden elektronisch bereitgestellt; gegenueber Verbrauchern ist hierfuer die Zustimmung des Empfaengers erforderlich",
+          "consentLabel": "Zustimmung:",
+          "consent": "Formulierung der Empfaengerzustimmung zur elektronischen Rechnung (B2C)"
+        }
+      },
+      "businessSections": {
+        "deviations": {
+          "heading": "§ 13 Abweichende Regelungen fuer Unternehmer",
+          "body": "z. B. Ausschluss des Widerrufsrechts, abweichende Haftung/Gewaehrleistung, Aufrechnung/Zurueckbehaltung, Textform"
+        },
+        "jurisdiction": {
+          "heading": "§ 14 Gerichtsstand, Erfuellungsort & anwendbares Recht (B2B)",
+          "body": "Gerichtsstand, Erfuellungsort und anwendbares Recht fuer Unternehmer"
         }
       }
     },
