@@ -10,7 +10,7 @@ FROM node:26-slim AS builder
 
 WORKDIR /app
 
-COPY apps/web/package.json apps/web/package-lock.json ./
+COPY apps/web/package.json apps/web/package-lock.json apps/web/.npmrc ./
 RUN npm ci
 
 COPY apps/web/ ./
