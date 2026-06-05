@@ -60,7 +60,7 @@ jobs:
         working-directory: apps/web
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
@@ -128,7 +128,7 @@ jobs:
         run: cp .env.example .env
       - name: Compose up (build + wait healthy)
         run: docker compose up -d --build --wait --wait-timeout 240
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
@@ -174,7 +174,7 @@ jobs:
         run: uv export --format requirements-txt --no-emit-workspace --no-hashes --group billing > /tmp/who2be-reqs.txt
       - name: pip-audit (Python)
         run: uv tool run pip-audit --disable-pip --no-deps -r /tmp/who2be-reqs.txt
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
