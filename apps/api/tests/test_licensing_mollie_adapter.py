@@ -49,7 +49,13 @@ class FakeEntitlementRepository:
         return None
 
     async def upsert(
-        self, org_id: UUID, entitlement: Entitlement, source: str, external_ref: str | None
+        self,
+        org_id: UUID,
+        entitlement: Entitlement,
+        source: str,
+        external_ref: str | None,
+        created_by: UUID | None = None,
+        reason: str | None = None,
     ) -> None:
         self.calls.append(_UpsertCall(org_id, entitlement, source, external_ref))
 
@@ -415,7 +421,13 @@ def test_handle_webhook_releases_claim_on_failure() -> None:
             self._failed = False
 
         async def upsert(
-            self, org_id: UUID, entitlement: Entitlement, source: str, external_ref: str | None
+            self,
+            org_id: UUID,
+            entitlement: Entitlement,
+            source: str,
+            external_ref: str | None,
+            created_by: UUID | None = None,
+            reason: str | None = None,
         ) -> None:
             if not self._failed:
                 self._failed = True
