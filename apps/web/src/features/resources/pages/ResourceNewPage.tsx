@@ -1,10 +1,12 @@
 import { ArrowLeft } from 'lucide-react'
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
+import { LanguageSelect } from '@/components/forms/LanguageSelect'
 import { Button } from '@/components/ui/button'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 
@@ -14,8 +16,10 @@ import { useCreateResource } from '../hooks/useCreateResource'
 export function ResourceNewPage() {
   const navigate = useNavigate()
   const wsPath = useWorkspacePath()
-  const { form, onSubmit, saveError } = useCreateResource((id) =>
-    navigate(wsPath(`/resources/${id}`)),
+  const [locales, setLocales] = useState<string[]>(['de'])
+  const { form, onSubmit, saveError } = useCreateResource(
+    (id) => navigate(wsPath(`/resources/${id}`)),
+    locales,
   )
 
   return (
@@ -28,6 +32,7 @@ export function ResourceNewPage() {
           </Link>
         </Button>
         <PageHeader title="Neue Resource" description="Lege eine neue Resource an." />
+        <LanguageSelect value={locales} onChange={setLocales} idBase="resource-lang" />
         <ResourceEditorForm
           form={form}
           formKey="new"

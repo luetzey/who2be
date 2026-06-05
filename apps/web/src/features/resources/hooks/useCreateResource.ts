@@ -26,7 +26,11 @@ export interface UseCreateResourceResult {
   saveError: string | null
 }
 
-export function useCreateResource(onCreated: (id: string) => void): UseCreateResourceResult {
+export function useCreateResource(
+  onCreated: (id: string) => void,
+  // Content-i18n (ADR-0027): gewaehlte Sprachvarianten (mind. eine), Default ['de'].
+  locales: string[] = ['de'],
+): UseCreateResourceResult {
   const api = useApi()
   const [saveError, setSaveError] = useState<string | null>(null)
   const form = useForm<ResourceCreateValues>({
@@ -40,6 +44,7 @@ export function useCreateResource(onCreated: (id: string) => void): UseCreateRes
       const created = await api.createResource({
         name: values.name,
         content: { description: values.description, blocks: values.bodyBlocks, tags: values.tags },
+        locales,
       })
       notify.success('Resource angelegt.')
       onCreated(created.id)

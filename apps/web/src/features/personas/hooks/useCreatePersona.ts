@@ -50,7 +50,13 @@ export interface UseCreatePersonaResult {
   saveError: string | null
 }
 
-export function useCreatePersona(onCreated: (id: string) => void): UseCreatePersonaResult {
+export function useCreatePersona(
+  onCreated: (id: string) => void,
+  // Content-i18n (ADR-0027): gewaehlte Sprachvarianten (mind. eine). Default
+  // ['de'] = Backward-Compat. Wird als Page-State gehalten, damit das
+  // geteilte `PersonaEditorForm`-Schema unveraendert bleibt.
+  locales: string[] = ['de'],
+): UseCreatePersonaResult {
   const api = useApi()
   const [saveError, setSaveError] = useState<string | null>(null)
   const form = useForm<PersonaCreateValues>({
@@ -79,6 +85,7 @@ export function useCreatePersona(onCreated: (id: string) => void): UseCreatePers
           modes: values.modes,
           skills: values.skills,
         },
+        locales,
       })
       notify.success('Persona angelegt.')
       onCreated(created.id)

@@ -67,8 +67,13 @@ class PgPersonaPlaybookRepository:
         # `active_only` schwenkt den Join: statt der Current-Version wird die
         # Active-Version geliefert, eintraege ohne Active-Version fallen raus
         # (MCP-Pfad, Plan §2.1.D).
+        # Content-i18n (ADR-0027): der Active-Join wird auf die Default-Sprache
+        # ('de') gepinnt. Sonst lieferte ein Playbook mit aktiver de- UND
+        # en-Version doppelte Zeilen. Dieser Reverse-Lookup ist (noch) nicht
+        # locale-plumbed — 'de' haelt das Verhalten exakt wie vor i18n.
         join_clause = (
-            "JOIN playbook_version pv   ON pv.playbook_id = p.id AND pv.status = 'active' "
+            "JOIN playbook_version pv   ON pv.playbook_id = p.id "
+            "AND pv.status = 'active' AND pv.locale = 'de' "
             if active_only
             else "JOIN playbook_version pv "
             "  ON pv.playbook_id = p.id AND pv.version = p.current_version "

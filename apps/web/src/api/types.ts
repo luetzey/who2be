@@ -74,6 +74,9 @@ export interface PersonaVersion {
 export interface PersonaInput {
   name: string
   content: PersonaContent
+  // Content-i18n (ADR-0027): Sprachvarianten, die beim Anlegen erzeugt werden.
+  // Fehlt das Feld, faellt das Backend auf ['de'] zurueck (Backward-Compat).
+  locales?: string[]
 }
 
 // Kuratierte Playbook-Typen (Phase 3-0). Spiegelt `PlaybookType` aus
@@ -134,6 +137,8 @@ export interface PlaybookVersion {
 export interface PlaybookInput {
   name: string
   content: PlaybookContent
+  // Content-i18n (ADR-0027): Sprachvarianten beim Anlegen (Default ['de']).
+  locales?: string[]
 }
 
 export interface Token {
@@ -368,6 +373,8 @@ export interface ResourceVersion {
 export interface ResourceInput {
   name: string
   content: ResourceContent
+  // Content-i18n (ADR-0027): Sprachvarianten beim Anlegen (Default ['de']).
+  locales?: string[]
 }
 
 // Phase 3-B — Heading-only Block-Refs. Backend liefert ab Track A
