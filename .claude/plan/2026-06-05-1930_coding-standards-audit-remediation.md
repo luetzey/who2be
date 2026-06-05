@@ -1,7 +1,8 @@
 # Plan — Coding-Standards-Audit & Remediation (komplette Codebase)
 
 **Datum:** 2026-06-05
-**Status:** Aktiv (Plan erstellt, Umsetzung offen)
+**Status:** Welle 0 (PR #… `cbd106d`) + Welle 1 (PR #166 `d256173`) gemergt;
+Welle 2 umgesetzt auf `claude/serene-lamport-ueQxe` (Draft-PR offen); Welle 3 optional/offen.
 **Branch:** `claude/serene-lamport-ueQxe`
 **Anlass:** Vollständige Prüfung der Codebase gegen das Notion-Composite
 [`Coding-Standards`](https://www.notion.so/367be5372ab881938a8accf264e66209)
@@ -156,9 +157,18 @@ Der einzige Standard mit einer inhaltlichen Lücke statt nur einer Gate-Lücke.
 
 ---
 
-### Welle 2 — Frontend-Standards: Primitive-Reinheit + Gate-Lücke
+### Welle 2 — Frontend-Standards: Primitive-Reinheit + Gate-Lücke ✅ UMGESETZT
 
 Eine nicht-gegatete Editor-Ecke verletzt zwei Frontend-Standards.
+
+**Umsetzung (Draft-PR):** Radix-`RadioGroup`-Primitive unter `@/components/ui/`
+ergänzt; die 4 Radio-Picker (`Catalog`/`DateFormat`/`PersonaField`/
+`ResourcesCatalogScope`) darauf umgestellt (rohe `<input>`/`<label>` weg).
+Daten-Logik aus `PlaybookPicker`/`ResourcePicker`/`PlaceholderPreviewPopover`
+in Hooks `usePlaybookSearch`/`useResourceSearch`/`usePlaceholderPreview`
+(`system-prompt/hooks/`) extrahiert (kein `useApi()` mehr in der UI). ESLint-
+Roh-HTML-Gate auf alle `src/components/**` ausgeweitet (außer `components/ui/**`).
+DoD lokal grün: lint 0 Errors, `tsc` 0, 376 Tests, Build, License-Gate.
 
 #### WP-2.1 — Rohe Radio-Inputs durch UI-Primitive ersetzen · **Severity: Medium**
 

@@ -114,10 +114,13 @@ export default tseslint.config(
     },
   },
   {
+    // Roh-HTML-Verbot ueberall ausser den Primitiven selbst: features, app und
+    // alle components/** (inkl. editor/, forms/, version/) — nur components/ui/**
+    // (die Primitive-Quelle) ist ausgenommen (Override unten). So bricht eine
+    // rohe Form-Control kuenftig auch in der Editor-Ecke den Build.
     files: [
       'src/features/**/*.{ts,tsx}',
-      'src/components/layout/**/*.{ts,tsx}',
-      'src/components/data/**/*.{ts,tsx}',
+      'src/components/**/*.{ts,tsx}',
       'src/app/**/*.{ts,tsx}',
     ],
     rules: {
@@ -127,6 +130,9 @@ export default tseslint.config(
   {
     files: ['src/components/ui/**/*.{ts,tsx}'],
     rules: {
+      // Die Primitive sind die einzige erlaubte Quelle roher HTML-Controls
+      // (<Button>/<Input>/<Checkbox>/<RadioGroupItem> kapseln sie hier).
+      'no-restricted-syntax': 'off',
       'react-refresh/only-export-components': 'off',
       // shadcn-Primitives nehmen Children via Spread an, jsx-a11y kann das
       // statisch nicht erkennen. Konsumenten setzen die Children — die

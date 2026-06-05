@@ -4,10 +4,6 @@
 // `placeholder-click`-CustomEvent an den `bn-container`; beim Klick wird der
 // Anker (die Pill) gesetzt, der Preview-Endpoint befragt und das Ergebnis im
 // Popover gezeigt. Kein Backdrop, kein Focus-Trap — Editor bleibt bedienbar.
-import { useCallback, useEffect, useState } from 'react'
-
-import { useApi } from '@/api/useApi'
-import type { PlaceholderPreview } from '@/api/types'
 import { ErrorAlert, LoadingState } from '@/components/data'
 import { Button } from '@/components/ui/button'
 import {
@@ -18,11 +14,8 @@ import {
   PopoverContent,
 } from '@/components/ui/popover'
 
-import {
-  PLACEHOLDER_CLICK_EVENT,
-  type PlaceholderClickDetail,
-  type PlaceholderKind,
-} from './PlaceholderBlock'
+import { usePlaceholderPreview } from './hooks/usePlaceholderPreview'
+import { type PlaceholderClickDetail, type PlaceholderKind } from './PlaceholderBlock'
 
 interface PlaceholderPreviewPopoverProps {
   /** Ref auf den `bn-container`, an dem das `placeholder-click`-Event bubbelt. */
@@ -46,11 +39,6 @@ interface PlaceholderPreviewPopoverProps {
    */
   personaId?: string
 }
-
-type LoadState =
-  | { status: 'loading' }
-  | { status: 'error'; message: string }
-  | { status: 'ready'; preview: PlaceholderPreview }
 
 // `persona-field`-Pills brauchen einen Persona-Kontext, den die Template-Editoren
 // nicht haben — der Resolver liefert dann einen Miss. Statt einer leeren Vorschau
@@ -84,42 +72,7 @@ export function PlaceholderPreviewPopover({
   onEdit,
   personaId,
 }: PlaceholderPreviewPopoverProps) {
-  const api = useApi()
-  const [active, setActive] = useState<PlaceholderClickDetail | null>(null)
-  const [state, setState] = useState<LoadState>({ status: 'loading' })
-
-  const load = useCallback(
-    (detail: PlaceholderClickDetail) => {
-      setState({ status: 'loading' })
-      api
-        .previewPlaceholder({
-          kind: detail.kind,
-          target_id: detail.target_id,
-          persona_id: personaId,
-        })
-        .then((preview) => setState({ status: 'ready', preview }))
-        .catch(() =>
-          setState({ status: 'error', message: 'Vorschau konnte nicht geladen werden.' }),
-        )
-    },
-    [api, personaId],
-  )
-
-  useEffect(() => {
-    const container = containerRef.current
-    if (container === null) return
-    const handler = (event: Event) => {
-      // Die geklickte Pill ist der Anker fuer das schwebende Panel.
-      if (event.target instanceof HTMLElement) {
-        anchorRef.current = event.target
-      }
-      const detail = (event as CustomEvent<PlaceholderClickDetail>).detail
-      setActive(detail)
-      load(detail)
-    }
-    container.addEventListener(PLACEHOLDER_CLICK_EVENT, handler)
-    return () => container.removeEventListener(PLACEHOLDER_CLICK_EVENT, handler)
-  }, [containerRef, anchorRef, load])
+  const { active, setActive, state } = usePlaceholderPreview(containerRef, anchorRef, personaId)
 
   const open = active !== null
 

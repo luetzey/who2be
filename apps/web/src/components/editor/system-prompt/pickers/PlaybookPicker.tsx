@@ -1,14 +1,11 @@
 // PlaybookPicker — schwebendes Popover mit Combobox-Suche ueber
 // api.listPlaybooks(). Liefert bei Bestaetigung ein PlaceholderProps-Objekt
 // via onConfirm-Callback.
-import { useEffect, useState } from 'react'
-
-import { useApi } from '@/api/useApi'
-import type { Playbook } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { type AnchorRef } from '@/components/ui/popover'
 
+import { usePlaybookSearch } from '../hooks/usePlaybookSearch'
 import type { PlaceholderProps } from '../PlaceholderBlock'
 import { PickerPopover } from './PickerPopover'
 
@@ -32,39 +29,11 @@ export function PlaybookPicker({
   anchorRef,
   initial,
 }: PlaybookPickerProps) {
-  const api = useApi()
-  const [playbooks, setPlaybooks] = useState<Playbook[]>([])
-  const [query, setQuery] = useState('')
-  const [selected, setSelected] = useState<Playbook | null>(null)
-  const [loading, setLoading] = useState(false)
-
   const isEdit = initial !== undefined
-  const initialTargetId = initial?.target_id
-
-  useEffect(() => {
-    if (!open) return
-    setLoading(true)
-    setQuery('')
-    api
-      .listPlaybooks()
-      .then((list) => {
-        setPlaybooks(list)
-        setSelected(
-          initialTargetId !== undefined
-            ? (list.find((p) => p.id === initialTargetId) ?? null)
-            : null,
-        )
-      })
-      .catch(() => {
-        setPlaybooks([])
-        setSelected(null)
-      })
-      .finally(() => setLoading(false))
-  }, [open, api, initialTargetId])
-
-  const filtered = query.trim() === ''
-    ? playbooks
-    : playbooks.filter((p) => p.name.toLowerCase().includes(query.toLowerCase()))
+  const { query, setQuery, selected, setSelected, loading, filtered } = usePlaybookSearch(
+    open,
+    initial?.target_id,
+  )
 
   function handleConfirm() {
     if (selected === null) return
