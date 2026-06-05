@@ -1,4 +1,5 @@
 import { ArrowLeft } from 'lucide-react'
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
@@ -6,6 +7,7 @@ import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
+import { LanguageSelect } from '@/components/forms/LanguageSelect'
 import { Button } from '@/components/ui/button'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 
@@ -16,8 +18,10 @@ export function PlaybookNewPage() {
   const { t } = useTranslation('playbooks')
   const navigate = useNavigate()
   const wsPath = useWorkspacePath()
-  const { form, onSubmit, saveError } = useCreatePlaybook((id) =>
-    navigate(wsPath(`/playbooks/${id}`)),
+  const [locales, setLocales] = useState<string[]>(['de'])
+  const { form, onSubmit, saveError } = useCreatePlaybook(
+    (id) => navigate(wsPath(`/playbooks/${id}`)),
+    locales,
   )
 
   return (
@@ -30,6 +34,7 @@ export function PlaybookNewPage() {
           </Link>
         </Button>
         <PageHeader title={t('new.title')} description={t('new.description')} />
+        <LanguageSelect value={locales} onChange={setLocales} idBase="playbook-lang" />
         <PlaybookEditorForm
           form={form}
           formKey="new-playbook"

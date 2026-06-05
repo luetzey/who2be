@@ -14,6 +14,7 @@ from who2be_api.core.security import WorkspaceContext, require_role
 from who2be_api.repositories.resource_repository import ResourceRepository
 from who2be_api.services.version_diff import compute_version_diff
 from who2be_models import (
+    DEFAULT_LOCALE,
     ResourceContent,
     ResourceCreate,
     ResourceRead,
@@ -65,7 +66,9 @@ class ResourceService:
 
     async def create(self, ctx: WorkspaceContext, data: ResourceCreate) -> ResourceRead:
         require_role(ctx, WorkspaceRole.editor)
-        return await self._repo.insert(ctx.workspace_id, ctx.user_id, data.name, data.content)
+        return await self._repo.insert(
+            ctx.workspace_id, ctx.user_id, data.name, data.content, data.locales
+        )
 
     async def list_all(
         self,
@@ -73,9 +76,10 @@ class ResourceService:
         tag: str | None,
         limit: int,
         cursor: tuple[datetime, UUID] | None,
+        locale: str = DEFAULT_LOCALE,
     ) -> tuple[list[ResourceRead], str | None]:
         rows = await self._repo.list_by_workspace(
-            ctx.workspace_id, tag, limit + 1, cursor, active_only=ctx.is_api_token
+            ctx.workspace_id, tag, limit + 1, cursor, active_only=ctx.is_api_token, locale=locale
         )
         if len(rows) > limit:
             items = rows[:limit]
@@ -83,21 +87,27 @@ class ResourceService:
             return items, encode_cursor(tail.created_at, tail.id)
         return rows, None
 
-    async def get(self, ctx: WorkspaceContext, resource_id: UUID) -> ResourceRead:
+    async def get(
+        self, ctx: WorkspaceContext, resource_id: UUID, locale: str = DEFAULT_LOCALE
+    ) -> ResourceRead:
         resource = await self._repo.fetch(
-            ctx.workspace_id, resource_id, active_only=ctx.is_api_token
+            ctx.workspace_id, resource_id, active_only=ctx.is_api_token, locale=locale
         )
         if resource is None:
             raise _not_found()
         return resource
 
     async def update(
-        self, ctx: WorkspaceContext, resource_id: UUID, data: ResourceUpdate
+        self,
+        ctx: WorkspaceContext,
+        resource_id: UUID,
+        data: ResourceUpdate,
+        locale: str = DEFAULT_LOCALE,
     ) -> ResourceRead:
         """Erzeugt eine neue Version der Resource (Draft-on-Edit bei Active)."""
         require_role(ctx, WorkspaceRole.editor)
         outcome = await self._repo.update(
-            ctx.workspace_id, ctx.user_id, resource_id, data.name, data.content
+            ctx.workspace_id, ctx.user_id, resource_id, data.name, data.content, locale
         )
         if outcome.conflict == "draft_exists":
             raise _draft_conflict()
@@ -106,12 +116,16 @@ class ResourceService:
         return outcome.resource
 
     async def update_draft(
-        self, ctx: WorkspaceContext, resource_id: UUID, data: ResourceUpdate
+        self,
+        ctx: WorkspaceContext,
+        resource_id: UUID,
+        data: ResourceUpdate,
+        locale: str = DEFAULT_LOCALE,
     ) -> ResourceRead:
         """Auto-Save-Pfad (PATCH `.../draft`) — upsertet die Draft-Version."""
         require_role(ctx, WorkspaceRole.editor)
         outcome = await self._repo.upsert_draft(
-            ctx.workspace_id, ctx.user_id, resource_id, data.name, data.content
+            ctx.workspace_id, ctx.user_id, resource_id, data.name, data.content, locale
         )
         if outcome.conflict == "review_pending":
             raise _review_conflict()
@@ -120,31 +134,37 @@ class ResourceService:
         return outcome.resource
 
     async def list_versions(
-        self, ctx: WorkspaceContext, resource_id: UUID
+        self, ctx: WorkspaceContext, resource_id: UUID, locale: str = DEFAULT_LOCALE
     ) -> list[ResourceVersionRead]:
-        versions = await self._repo.list_versions(ctx.workspace_id, resource_id)
+        versions = await self._repo.list_versions(ctx.workspace_id, resource_id, locale)
         if versions is None:
             raise _not_found()
         return versions
 
     async def get_version(
-        self, ctx: WorkspaceContext, resource_id: UUID, version: int
+        self, ctx: WorkspaceContext, resource_id: UUID, version: int, locale: str = DEFAULT_LOCALE
     ) -> ResourceVersionRead:
-        found = await self._repo.fetch_version(ctx.workspace_id, resource_id, version)
+        found = await self._repo.fetch_version(ctx.workspace_id, resource_id, version, locale)
         if found is None:
             raise _not_found()
         return found
 
     async def restore(
-        self, ctx: WorkspaceContext, resource_id: UUID, source_version: int
+        self,
+        ctx: WorkspaceContext,
+        resource_id: UUID,
+        source_version: int,
+        locale: str = DEFAULT_LOCALE,
     ) -> ResourceRead:
         """Stellt den Snapshot `source_version` als neue Draft wieder her (§3.1)."""
         require_role(ctx, WorkspaceRole.editor)
-        snapshot = await self._repo.fetch_version(ctx.workspace_id, resource_id, source_version)
+        snapshot = await self._repo.fetch_version(
+            ctx.workspace_id, resource_id, source_version, locale
+        )
         if snapshot is None:
             raise _not_found()
         outcome = await self._repo.restore_version(
-            ctx.workspace_id, ctx.user_id, resource_id, snapshot.content
+            ctx.workspace_id, ctx.user_id, resource_id, snapshot.content, locale
         )
         if outcome.conflict == "draft_exists":
             raise _draft_conflict()
@@ -153,13 +173,18 @@ class ResourceService:
         return outcome.resource
 
     async def diff(
-        self, ctx: WorkspaceContext, resource_id: UUID, version: int, against: str
+        self,
+        ctx: WorkspaceContext,
+        resource_id: UUID,
+        version: int,
+        against: str,
+        locale: str = DEFAULT_LOCALE,
     ) -> VersionDiff:
         """Strukturierter Feld-/Block-Diff der Version `version` gegen `against`."""
-        target = await self._repo.fetch_version(ctx.workspace_id, resource_id, version)
+        target = await self._repo.fetch_version(ctx.workspace_id, resource_id, version, locale)
         if target is None:
             raise _not_found()
-        versions = await self._repo.list_versions(ctx.workspace_id, resource_id)
+        versions = await self._repo.list_versions(ctx.workspace_id, resource_id, locale)
         if versions is None:
             raise _not_found()
         base_version, base_content = self._resolve_against(against, versions)

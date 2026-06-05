@@ -33,7 +33,13 @@ class EntitlementRepository(Protocol):
     async def fetch(self, org_id: UUID) -> Entitlement | None: ...
 
     async def upsert(
-        self, org_id: UUID, entitlement: Entitlement, source: str, external_ref: str | None
+        self,
+        org_id: UUID,
+        entitlement: Entitlement,
+        source: str,
+        external_ref: str | None,
+        created_by: UUID | None = None,
+        reason: str | None = None,
     ) -> None: ...
 
 
@@ -58,14 +64,20 @@ class PgEntitlementRepository:
         entitlement: Entitlement,
         source: str,
         external_ref: str | None,
+        created_by: UUID | None = None,
+        reason: str | None = None,
     ) -> None:
         # `features` als sortierte Liste persistieren (jsonb) — stabile Reihenfolge
         # erleichtert Diffs/Debugging; die Domaene nutzt ohnehin ein frozenset.
+        # `created_by`/`reason` sind das Audit des befristeten `manual_override`
+        # (ADR-0028); andere Quellen schreiben hier NULL — ein neuer regulaerer
+        # Stand (Mollie/Webhook) hebt damit einen vorherigen Override korrekt auf.
         await self._pool.execute(
             "INSERT INTO org_entitlement "
             "(org_id, status, features, expires_at, mcp_monthly_quota, "
-            " mcp_rate_per_min, grace_until, source, external_ref, updated_at) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now()) "
+            " mcp_rate_per_min, grace_until, source, external_ref, "
+            " created_by, reason, updated_at) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now()) "
             "ON CONFLICT (org_id) DO UPDATE SET "
             "  status = EXCLUDED.status, "
             "  features = EXCLUDED.features, "
@@ -75,6 +87,8 @@ class PgEntitlementRepository:
             "  grace_until = EXCLUDED.grace_until, "
             "  source = EXCLUDED.source, "
             "  external_ref = EXCLUDED.external_ref, "
+            "  created_by = EXCLUDED.created_by, "
+            "  reason = EXCLUDED.reason, "
             "  updated_at = now()",
             org_id,
             entitlement.status,
@@ -85,4 +99,6 @@ class PgEntitlementRepository:
             entitlement.grace_until,
             source,
             external_ref,
+            created_by,
+            reason,
         )

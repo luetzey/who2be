@@ -16,7 +16,7 @@ from uuid import uuid4
 
 import pytest
 
-from who2be_api.licensing.billing import (
+from who2be_billing.webhook import (
     WebhookError,
     map_event_to_entitlement,
     parse_event,

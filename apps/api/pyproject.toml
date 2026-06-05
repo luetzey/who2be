@@ -17,7 +17,6 @@ dependencies = [
     # direkt importiert; `redis` wird erst beim redis://-Pfad geladen.
     "limits>=3.0",
     "markdown-it-py>=3.0",
-    "mollie-api-python>=3.7",
     "pydantic-settings>=2.0",
     "pyjwt>=2.8",
     "python-multipart>=0.0.9",
@@ -30,7 +29,7 @@ dependencies = [
 [project.scripts]
 who2be-migrate = "who2be_api.core.migrations:cli"
 who2be-purge = "who2be_api.core.purge:cli"
-who2be-set-entitlement = "who2be_api.core.set_entitlement:cli"
+who2be-license = "who2be_api.core.license_cli:cli"
 
 [tool.uv.sources]
 who2be-models = { workspace = true }

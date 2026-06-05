@@ -4,7 +4,14 @@
 #   build:
 #     context: .
 #     dockerfile: apps/api/Dockerfile
-FROM python:3.11-slim AS builder
+#     target: runtime          # On-Prem (Default) — KEIN Billing/Mollie im Image
+#     # target: runtime-cloud  # Cloud — installiert das who2be-billing-Paket
+#
+# Build-Zeit-Isolation (ADR-0029): Der On-Prem-Build kopiert `packages/billing`
+# bewusst NICHT in den Context und synct die `billing`-Gruppe nicht — das
+# Mollie-SDK + die Billing-Schreibseite sind im On-Prem-Artefakt physisch nicht
+# vorhanden. Nur der Cloud-Build zieht sie ueber `--group billing`.
+FROM python:3.11-slim AS base
 
 COPY --from=ghcr.io/astral-sh/uv:0.4.27 /uv /usr/local/bin/uv
 
@@ -13,17 +20,30 @@ ENV UV_LINK_MODE=copy \
     UV_COMPILE_BYTECODE=1
 
 COPY pyproject.toml uv.lock ./
-COPY packages packages
+# Nur der Kern-Workspace — packages/billing wird hier absichtlich NICHT kopiert.
+COPY packages/models packages/models
 COPY apps/api apps/api
 COPY apps/mcp apps/mcp
 
+# --- On-Prem-Build: Kern ohne Billing -------------------------------------------
+FROM base AS builder
+
 # Workspace-Members (who2be-api/mcp/models) sind in der `dev`-Group gelistet
 # (Root ist `package = false`). Daher kein `--no-dev` — sonst landet kein
-# uvicorn/who2be-migrate im venv. pytest/mypy/ruff sind dadurch mit drin;
-# fuer Smoke OK, fuer Prod-Image spaeter eigene `runtime`-Group anlegen.
+# uvicorn/who2be-migrate im venv. Die `billing`-Group ist NICHT default → das
+# Mollie-SDK + who2be-billing werden nicht installiert.
 RUN uv sync --frozen
 
-FROM python:3.11-slim AS runtime
+# --- Cloud-Build: Kern + Billing-Paket ------------------------------------------
+FROM base AS builder-cloud
+
+# Cloud zieht zusaetzlich das Billing-Paket (inkl. Mollie-SDK) in den Context
+# und synct die `billing`-Gruppe.
+COPY packages/billing packages/billing
+RUN uv sync --frozen --group billing
+
+# --- Gemeinsame Runtime-Basis ---------------------------------------------------
+FROM python:3.11-slim AS runtime-base
 
 WORKDIR /app
 ENV PATH="/app/.venv/bin:$PATH" \
@@ -32,14 +52,8 @@ ENV PATH="/app/.venv/bin:$PATH" \
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY --from=builder /app /app
-
-# Non-root-User fuer Prod-Container — minimiert Container-Escape-Schaden.
-RUN useradd --system --no-create-home --uid 1000 who2be \
-    && chown -R who2be:who2be /app
-USER who2be
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --no-create-home --uid 1000 who2be
 
 EXPOSE 8000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
@@ -52,3 +66,16 @@ CMD ["uvicorn", "who2be_api.main:app", \
      "--port", "8000", \
      "--proxy-headers", \
      "--forwarded-allow-ips", "*"]
+
+# --- Cloud-Runtime (mit Billing) ------------------------------------------------
+FROM runtime-base AS runtime-cloud
+COPY --from=builder-cloud /app /app
+RUN chown -R who2be:who2be /app
+USER who2be
+
+# --- On-Prem-Runtime (Default, OHNE Billing) ------------------------------------
+# Bewusst die LETZTE Stage: `docker compose build` ohne `target:` baut On-Prem.
+FROM runtime-base AS runtime
+COPY --from=builder /app /app
+RUN chown -R who2be:who2be /app
+USER who2be

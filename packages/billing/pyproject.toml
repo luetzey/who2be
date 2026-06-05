@@ -1,0 +1,28 @@
+[project]
+name = "who2be-billing"
+version = "0.1.0"
+description = "Cloud-only billing for Who2Be (Mollie checkout + webhooks). Not shipped on-prem."
+requires-python = ">=3.11"
+license = { text = "FSL-1.1-Apache-2.0" }
+authors = [{ name = "Yannick Lützenburg", email = "luetzey@gmail.com" }]
+# Richtung: who2be-billing → who2be-api (hexagonal); der Kern haengt NIE umgekehrt.
+# Das Mollie-SDK lebt ausschliesslich hier → nicht im On-Prem-Artefakt.
+dependencies = [
+    "fastapi>=0.115",
+    "asyncpg>=0.30",
+    "mollie-api-python>=3.7",
+    "python-multipart>=0.0.9",
+    "who2be-api",
+    "who2be-models",
+]
+
+[tool.uv.sources]
+who2be-api = { workspace = true }
+who2be-models = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/who2be_billing"]

@@ -44,6 +44,77 @@ def test_server_exposes_all_tools() -> None:
     assert {"ping", "get_persona", "list_playbooks", "fetch_playbook"} <= names
 
 
+def test_server_exposes_write_tools() -> None:
+    """ADR-0012: die Mutations-Tools fuer alle vier Kernelemente sind registriert."""
+    tools = asyncio.run(mcp.list_tools())
+    names = {tool.name for tool in tools}
+    assert {
+        "create_persona",
+        "update_persona",
+        "transition_persona",
+        "restore_persona",
+        "set_persona_playbooks",
+        "create_playbook",
+        "update_playbook",
+        "transition_playbook",
+        "restore_playbook",
+        "set_playbook_resource_links",
+        "set_playbook_composes",
+        "create_resource",
+        "update_resource",
+        "transition_resource",
+        "restore_resource",
+        "set_resource_sub_resources",
+        "create_agent",
+        "update_agent",
+        "copy_agent",
+    } <= names
+
+
+def test_create_persona_tool_posts_and_returns_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace_id = uuid4()
+    persona_id = uuid4()
+    seen: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["method"] = request.method
+        seen["path"] = request.url.path
+        return httpx.Response(201, json=_persona_json(str(persona_id), "Neu", str(workspace_id)))
+
+    api_client = ApiClient(
+        "http://api.test", "tok", workspace_id, transport=httpx.MockTransport(handler)
+    )
+
+    async def _build() -> ApiClient:
+        return api_client
+
+    monkeypatch.setattr(server, "build_client", _build)
+
+    async def _run() -> object:
+        async with Client(mcp) as client:
+            result = await client.call_tool("create_persona", {"data": {"name": "Neu"}})
+            return result.data
+
+    data = asyncio.run(_run())
+    assert seen["method"] == "POST"
+    assert str(seen["path"]).endswith("/personas")
+    assert data.name == "Neu"  # type: ignore[attr-defined]
+
+
+def test_transition_persona_tool_rejects_invalid_uuid() -> None:
+    async def _run() -> None:
+        async with Client(mcp) as client:
+            await client.call_tool(
+                "transition_persona",
+                {"persona_id": "not-a-uuid", "version": 1, "to": "review"},
+            )
+
+    with pytest.raises(ToolError):
+        asyncio.run(_run())
+
+
 def test_fetch_playbook_rejects_invalid_uuid() -> None:
     async def _run() -> None:
         async with Client(mcp) as client:

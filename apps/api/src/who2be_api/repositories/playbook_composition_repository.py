@@ -46,8 +46,11 @@ _SELECT_ACTIVE = """
            ) AS is_composite
     FROM playbook p
     JOIN playbook_version pv
-      ON pv.playbook_id = p.id AND pv.status = 'active'
+      ON pv.playbook_id = p.id AND pv.status = 'active' AND pv.locale = 'de'
 """
+# Content-i18n (ADR-0027): Active-Join oben auf Default-Sprache 'de' gepinnt,
+# sonst duplizierte ein Composite-Kind mit aktiver de- UND en-Version die Zeile.
+# Composite-Reads sind (noch) nicht locale-plumbed — 'de' = Verhalten wie vor i18n.
 
 # WITH RECURSIVE-Zyklus-Guard: prueft ob parent_id Nachfahre eines der neuen
 # Kinder ist. Trifft zu → Zyklus. Kommentar im Service erklaert die Logik.

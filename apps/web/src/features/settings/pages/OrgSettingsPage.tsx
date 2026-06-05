@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Check } from 'lucide-react'
-import { useState } from 'react'
+import { Suspense, lazy, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -41,11 +41,18 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { BillingPanel } from '@/features/billing'
 import { notify } from '@/lib/feedback'
 import { roleLabel } from '@/lib/roles'
 
 import { useCurrentOrg } from '../hooks/useCurrentOrg'
+
+// Build-Zeit-Isolation (ADR-0029): Im On-Prem-Build ist `__CLOUD_BUILD__` das
+// Literal `false`, sodass der dynamische Import im toten Ternary-Zweig vom
+// Bundler eliminiert wird — `features/billing` (inkl. Mollie-/Tarif-Interna)
+// landet dann nicht im ausgelieferten JS. Nur der Cloud-Build laedt das Panel.
+const BillingPanel = __CLOUD_BUILD__
+  ? lazy(() => import('@/features/billing').then((m) => ({ default: m.BillingPanel })))
+  : null
 
 const workspaceSchema = z.object({
   name: z.string().min(1, i18n.t('common:validation.nameRequired')).max(200),
@@ -231,10 +238,15 @@ export function OrgSettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Billing-Slot: BillingPanel zeigt Plan/Quota/Verbrauch + Upgrade-CTA
-            (Cloud); On-Prem rendert es null. Wrapper haelt die testid stabil. */}
+        {/* Billing-Slot: nur im Cloud-Build vorhanden (Build-Zeit-Isolation,
+            ADR-0029). Im On-Prem-Bundle ist BillingPanel `null` und der Code
+            wird wegge-tree-shaked. Wrapper haelt die testid stabil. */}
         <div data-testid="billing-slot">
-          <BillingPanel />
+          {BillingPanel ? (
+            <Suspense fallback={null}>
+              <BillingPanel />
+            </Suspense>
+          ) : null}
         </div>
 
         {org.kind === 'company' && isAdmin ? <DeleteOrgSection org={org} /> : null}

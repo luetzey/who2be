@@ -119,6 +119,8 @@ describe('PersonaNewPage', () => {
         modes: [],
         skills: [],
       },
+      // Content-i18n (ADR-0027): Default-Sprachauswahl wird mitgeschickt.
+      locales: ['de'],
     })
   })
 })

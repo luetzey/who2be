@@ -9,15 +9,22 @@ authors = [{ name = "Yannick Lützenburg", email = "luetzey@gmail.com" }]
 [tool.uv]
 package = false
 
+# Glob fuer `packages/*`: der On-Prem-Build kopiert `packages/billing` bewusst NICHT
+# in den Build-Context (Build-Zeit-Isolation, ADR-0029) — die Glob-Discovery
+# toleriert das fehlende Member, statt zu scheitern.
 [tool.uv.workspace]
-members = ["apps/api", "apps/mcp", "packages/models"]
+members = ["apps/api", "apps/mcp", "packages/*"]
 
 [tool.uv.sources]
 who2be-api = { workspace = true }
 who2be-mcp = { workspace = true }
 who2be-models = { workspace = true }
+who2be-billing = { workspace = true }
 
 [dependency-groups]
+# `dev` = Kern (On-Prem-Surface). `billing` ist eine SEPARATE, optionale Gruppe —
+# nur die Cloud-Edition synct sie (`uv sync --group billing`). So landet das
+# Mollie-SDK nie im On-Prem-Artefakt.
 dev = [
     "who2be-api",
     "who2be-mcp",
@@ -27,11 +34,14 @@ dev = [
     "mypy>=1.10",
     "ruff>=0.6",
 ]
+billing = [
+    "who2be-billing",
+]
 
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-src = ["apps/api/src", "apps/mcp/src", "packages/models/src"]
+src = ["apps/api/src", "apps/mcp/src", "packages/models/src", "packages/billing/src"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
@@ -40,7 +50,7 @@ select = ["E", "F", "I", "UP", "B"]
 python_version = "3.11"
 strict = true
 explicit_package_bases = true
-mypy_path = ["apps/api/src", "apps/mcp/src", "packages/models/src"]
+mypy_path = ["apps/api/src", "apps/mcp/src", "packages/models/src", "packages/billing/src"]
 
 # asyncpg + die Mollie-SDK liefern keine vollstaendigen Typ-Stubs — bewusste, eng
 # begrenzte Ausnahme; unser eigener Code bleibt strict.
@@ -49,7 +59,7 @@ module = ["asyncpg.*", "mollie.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-testpaths = ["apps/api/tests", "apps/mcp/tests", "packages/models/tests"]
+testpaths = ["apps/api/tests", "apps/mcp/tests", "packages/models/tests", "packages/billing/tests"]
 markers = [
     "integration: Test benoetigt eine erreichbare Datenbank",
 ]

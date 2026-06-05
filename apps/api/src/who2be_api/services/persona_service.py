@@ -22,6 +22,7 @@ from who2be_api.services.placeholders import RenderContext, render_template_body
 from who2be_api.services.placeholders.registry import render_skills_table
 from who2be_api.services.version_diff import compute_version_diff
 from who2be_models import (
+    DEFAULT_LOCALE,
     PersonaCreate,
     PersonaRead,
     PersonaUpdate,
@@ -97,18 +98,21 @@ class PersonaService:
 
     async def create(self, ctx: WorkspaceContext, data: PersonaCreate) -> PersonaRead:
         require_role(ctx, WorkspaceRole.editor)
-        return await self._repo.insert(ctx.workspace_id, ctx.user_id, data.name, data.content)
+        return await self._repo.insert(
+            ctx.workspace_id, ctx.user_id, data.name, data.content, data.locales
+        )
 
     async def list_all(
         self,
         ctx: WorkspaceContext,
         limit: int,
         cursor: tuple[datetime, UUID] | None,
+        locale: str = DEFAULT_LOCALE,
     ) -> tuple[list[PersonaRead], str | None]:
         # `limit + 1`-Peek: gibt es eine Folge-Zeile, codieren wir den
         # Cursor aus der letzten Zeile der Seite — sonst `None` (Ende).
         rows = await self._repo.list_by_workspace(
-            ctx.workspace_id, limit + 1, cursor, active_only=ctx.is_api_token
+            ctx.workspace_id, limit + 1, cursor, active_only=ctx.is_api_token, locale=locale
         )
         if len(rows) > limit:
             items = rows[:limit]
@@ -116,13 +120,19 @@ class PersonaService:
             return items, encode_cursor(tail.created_at, tail.id)
         return rows, None
 
-    async def get(self, ctx: WorkspaceContext, persona_id: UUID) -> PersonaRead:
-        persona = await self._repo.fetch(ctx.workspace_id, persona_id, active_only=ctx.is_api_token)
+    async def get(
+        self, ctx: WorkspaceContext, persona_id: UUID, locale: str = DEFAULT_LOCALE
+    ) -> PersonaRead:
+        persona = await self._repo.fetch(
+            ctx.workspace_id, persona_id, active_only=ctx.is_api_token, locale=locale
+        )
         if persona is None:
             raise _not_found()
         return persona
 
-    async def render(self, ctx: WorkspaceContext, persona_id: UUID) -> PersonaRenderResponse:
+    async def render(
+        self, ctx: WorkspaceContext, persona_id: UUID, locale: str = DEFAULT_LOCALE
+    ) -> PersonaRenderResponse:
         """Expandiert den Persona-Profil-Body durch den Placeholder-Renderer (Track F).
 
         Der BlockNote-Profil-Body (`content.content.blocks`) wird mit
@@ -135,7 +145,7 @@ class PersonaService:
         Wird vom MCP-Tool `get_persona` genutzt (der MCP-Prozess hat keinen
         DB-Zugriff). Leerer Body + keine Skills → leerer `body_rendered`.
         """
-        persona = await self.get(ctx, persona_id)
+        persona = await self.get(ctx, persona_id, locale=locale)
         body_blocks = persona.content.content.blocks if persona.content.content is not None else []
         body_json = json.dumps([block.model_dump(mode="json") for block in body_blocks])
 
@@ -158,16 +168,20 @@ class PersonaService:
         return PersonaRenderResponse(body_rendered=body_rendered, unresolved=unresolved)
 
     async def update(
-        self, ctx: WorkspaceContext, persona_id: UUID, data: PersonaUpdate
+        self,
+        ctx: WorkspaceContext,
+        persona_id: UUID,
+        data: PersonaUpdate,
+        locale: str = DEFAULT_LOCALE,
     ) -> PersonaRead:
-        """Erzeugt eine neue Version der Persona.
+        """Erzeugt eine neue Version der Persona (im `locale`-Track).
 
         Auf einer Active-Persona entsteht eine neue Draft-Version (Plan §2.1.C);
         existiert bereits ein Draft, antwortet der Service mit 409.
         """
         require_role(ctx, WorkspaceRole.editor)
         outcome = await self._repo.update(
-            ctx.workspace_id, ctx.user_id, persona_id, data.name, data.content
+            ctx.workspace_id, ctx.user_id, persona_id, data.name, data.content, locale
         )
         if outcome.conflict == "draft_exists":
             raise _draft_conflict()
@@ -176,7 +190,11 @@ class PersonaService:
         return outcome.persona
 
     async def update_draft(
-        self, ctx: WorkspaceContext, persona_id: UUID, data: PersonaUpdate
+        self,
+        ctx: WorkspaceContext,
+        persona_id: UUID,
+        data: PersonaUpdate,
+        locale: str = DEFAULT_LOCALE,
     ) -> PersonaRead:
         """Auto-Save-Pfad (PATCH `.../draft`) — upsertet die Draft-Version.
 
@@ -187,7 +205,7 @@ class PersonaService:
         """
         require_role(ctx, WorkspaceRole.editor)
         outcome = await self._repo.upsert_draft(
-            ctx.workspace_id, ctx.user_id, persona_id, data.name, data.content
+            ctx.workspace_id, ctx.user_id, persona_id, data.name, data.content, locale
         )
         if outcome.conflict == "review_pending":
             raise _review_conflict()
@@ -196,23 +214,27 @@ class PersonaService:
         return outcome.persona
 
     async def list_versions(
-        self, ctx: WorkspaceContext, persona_id: UUID
+        self, ctx: WorkspaceContext, persona_id: UUID, locale: str = DEFAULT_LOCALE
     ) -> list[PersonaVersionRead]:
-        versions = await self._repo.list_versions(ctx.workspace_id, persona_id)
+        versions = await self._repo.list_versions(ctx.workspace_id, persona_id, locale)
         if versions is None:
             raise _not_found()
         return versions
 
     async def get_version(
-        self, ctx: WorkspaceContext, persona_id: UUID, version: int
+        self, ctx: WorkspaceContext, persona_id: UUID, version: int, locale: str = DEFAULT_LOCALE
     ) -> PersonaVersionRead:
-        found = await self._repo.fetch_version(ctx.workspace_id, persona_id, version)
+        found = await self._repo.fetch_version(ctx.workspace_id, persona_id, version, locale)
         if found is None:
             raise _not_found()
         return found
 
     async def restore(
-        self, ctx: WorkspaceContext, persona_id: UUID, source_version: int
+        self,
+        ctx: WorkspaceContext,
+        persona_id: UUID,
+        source_version: int,
+        locale: str = DEFAULT_LOCALE,
     ) -> PersonaRead:
         """Stellt den Snapshot `source_version` als neue Draft wieder her (§3.1).
 
@@ -221,11 +243,13 @@ class PersonaService:
         Content-Schema validiert (ADR-0009). 409 bei bereits offenem Draft.
         """
         require_role(ctx, WorkspaceRole.editor)
-        snapshot = await self._repo.fetch_version(ctx.workspace_id, persona_id, source_version)
+        snapshot = await self._repo.fetch_version(
+            ctx.workspace_id, persona_id, source_version, locale
+        )
         if snapshot is None:
             raise _not_found()
         outcome = await self._repo.restore_version(
-            ctx.workspace_id, ctx.user_id, persona_id, snapshot.content
+            ctx.workspace_id, ctx.user_id, persona_id, snapshot.content, locale
         )
         if outcome.conflict == "draft_exists":
             raise _draft_conflict()
@@ -234,13 +258,18 @@ class PersonaService:
         return outcome.persona
 
     async def diff(
-        self, ctx: WorkspaceContext, persona_id: UUID, version: int, against: str
+        self,
+        ctx: WorkspaceContext,
+        persona_id: UUID,
+        version: int,
+        against: str,
+        locale: str = DEFAULT_LOCALE,
     ) -> VersionDiff:
         """Strukturierter Feld-/Block-Diff der Version `version` gegen `against`."""
-        target = await self._repo.fetch_version(ctx.workspace_id, persona_id, version)
+        target = await self._repo.fetch_version(ctx.workspace_id, persona_id, version, locale)
         if target is None:
             raise _not_found()
-        versions = await self._repo.list_versions(ctx.workspace_id, persona_id)
+        versions = await self._repo.list_versions(ctx.workspace_id, persona_id, locale)
         if versions is None:
             raise _not_found()
         base_version, base_content = self._resolve_against(against, versions)
@@ -270,6 +299,6 @@ class PersonaService:
                 return candidate.version, candidate.content
         raise _not_found()
 
-    async def list_tags(self, ctx: WorkspaceContext) -> list[str]:
+    async def list_tags(self, ctx: WorkspaceContext, locale: str = DEFAULT_LOCALE) -> list[str]:
         """DISTINCT-Tags des Workspaces — Datenquelle fuer den Tag-Picker."""
-        return await self._repo.list_distinct_tags(ctx.workspace_id)
+        return await self._repo.list_distinct_tags(ctx.workspace_id, locale)

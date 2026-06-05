@@ -7,6 +7,7 @@ import asyncpg
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 
 from who2be_api.core.db import get_pool
+from who2be_api.core.locale import LocaleQuery
 from who2be_api.core.pagination import DEFAULT_LIMIT, PageCursor, PageLimit
 from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
@@ -60,9 +61,10 @@ async def list_personas(
     service: Service,
     response: Response,
     cursor: PageCursor,
+    locale: LocaleQuery,
     limit: PageLimit = DEFAULT_LIMIT,
 ) -> list[PersonaRead]:
-    items, next_cursor = await service.list_all(ctx, limit, cursor)
+    items, next_cursor = await service.list_all(ctx, limit, cursor, locale=locale)
     if next_cursor is not None:
         response.headers["X-Next-Cursor"] = next_cursor
     return items
@@ -81,18 +83,22 @@ async def create_persona(
 
 
 @router.get("/tags")
-async def list_persona_tags(ctx: Ctx, service: Service) -> list[str]:
+async def list_persona_tags(ctx: Ctx, service: Service, locale: LocaleQuery) -> list[str]:
     """DISTINCT-Tags des Workspaces fuer den Tag-Picker im Persona-Form."""
-    return await service.list_tags(ctx)
+    return await service.list_tags(ctx, locale)
 
 
 @router.get("/{persona_id}", dependencies=[Depends(enforce_mcp_read_limit)])
-async def get_persona(persona_id: UUID, ctx: Ctx, service: Service) -> PersonaRead:
-    return await service.get(ctx, persona_id)
+async def get_persona(
+    persona_id: UUID, ctx: Ctx, service: Service, locale: LocaleQuery
+) -> PersonaRead:
+    return await service.get(ctx, persona_id, locale=locale)
 
 
 @router.get("/{persona_id}/rendered", dependencies=[Depends(enforce_mcp_read_limit)])
-async def render_persona(persona_id: UUID, ctx: Ctx, service: Service) -> PersonaRenderResponse:
+async def render_persona(
+    persona_id: UUID, ctx: Ctx, service: Service, locale: LocaleQuery
+) -> PersonaRenderResponse:
     """Liefert den durch den Placeholder-Renderer expandierten Profil-Body (Track F).
 
     Die Katalog-Pills (`playbooks-catalog`/`resources-catalog`) und Slash-Refs
@@ -100,7 +106,7 @@ async def render_persona(persona_id: UUID, ctx: Ctx, service: Service) -> Person
     aufgeloest; eine Skills-Tabelle wird angehaengt. Wird vom MCP-Tool
     `get_persona` genutzt.
     """
-    return await service.render(ctx, persona_id)
+    return await service.render(ctx, persona_id, locale=locale)
 
 
 @router.put("/{persona_id}")
@@ -111,8 +117,9 @@ async def update_persona(
     data: PersonaUpdate,
     ctx: Ctx,
     service: Service,
+    locale: LocaleQuery,
 ) -> PersonaRead:
-    return await service.update(ctx, persona_id, data)
+    return await service.update(ctx, persona_id, data, locale=locale)
 
 
 @router.patch("/{persona_id}/draft")
@@ -123,23 +130,24 @@ async def update_persona_draft(
     data: PersonaUpdate,
     ctx: Ctx,
     service: Service,
+    locale: LocaleQuery,
 ) -> PersonaRead:
     """Auto-Save-Pfad — upsertet die Draft-Version ohne Versions-Increment."""
-    return await service.update_draft(ctx, persona_id, data)
+    return await service.update_draft(ctx, persona_id, data, locale=locale)
 
 
 @router.get("/{persona_id}/versions")
 async def list_persona_versions(
-    persona_id: UUID, ctx: Ctx, service: Service
+    persona_id: UUID, ctx: Ctx, service: Service, locale: LocaleQuery
 ) -> list[PersonaVersionRead]:
-    return await service.list_versions(ctx, persona_id)
+    return await service.list_versions(ctx, persona_id, locale)
 
 
 @router.get("/{persona_id}/versions/{version}")
 async def get_persona_version(
-    persona_id: UUID, version: int, ctx: Ctx, service: Service
+    persona_id: UUID, version: int, ctx: Ctx, service: Service, locale: LocaleQuery
 ) -> PersonaVersionRead:
-    return await service.get_version(ctx, persona_id, version)
+    return await service.get_version(ctx, persona_id, version, locale)
 
 
 @router.post("/{persona_id}/versions/{version}/transition")
@@ -151,9 +159,10 @@ async def transition_persona_version(
     data: VersionTransitionRequest,
     ctx: Ctx,
     status_service: StatusService,
+    locale: LocaleQuery,
 ) -> PersonaVersionRead:
     return await status_service.transition_persona_version(
-        ctx, persona_id, version, data.to, data.note
+        ctx, persona_id, version, data.to, data.note, locale=locale
     )
 
 
@@ -165,9 +174,10 @@ async def restore_persona_version(
     version: int,
     ctx: Ctx,
     service: Service,
+    locale: LocaleQuery,
 ) -> PersonaRead:
     """Stellt Version `version` als neue Draft wieder her (non-destruktiv)."""
-    return await service.restore(ctx, persona_id, version)
+    return await service.restore(ctx, persona_id, version, locale=locale)
 
 
 @router.get("/{persona_id}/versions/{version}/diff")
@@ -176,10 +186,11 @@ async def diff_persona_version(
     version: int,
     ctx: Ctx,
     service: Service,
+    locale: LocaleQuery,
     against: DiffAgainst = "active",
 ) -> VersionDiff:
     """Strukturierter Feld-/Block-Diff der Version gegen `against` (read-only)."""
-    return await service.diff(ctx, persona_id, version, against)
+    return await service.diff(ctx, persona_id, version, against, locale=locale)
 
 
 @router.get("/{persona_id}/versions/{version}/provenance")

@@ -10,7 +10,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 from who2be_api.licensing.entitlement import Feature
-from who2be_api.licensing.plans import (
+from who2be_billing.plans import (
     FREE_PLAN,
     PRO_PLAN,
     Plan,

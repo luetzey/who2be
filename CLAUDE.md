@@ -69,33 +69,58 @@ Phase 3 ist abgeschlossen (Stand 2026-05-29). Master-Plan:
   vollstaendige Agenten-Reise-Doku in `docs/agent-axes.md`. Plan:
   `.claude/plan/2026-05-31-1630_composite-applied-modi.md`.
 
+**MCP-Write-Tools (ADR-0030, 2026-06-05):** Der MCP-Server exponiert
+  Mutations-Tools fuer alle vier Kernelemente (Persona, Playbook, Resource,
+  Agent): create/update/transition/restore + Verknuepfungs-Setter. Duenner
+  Adapter — Autorisierung (editor; Promote/Retire admin), Owner-Scoping und
+  der Draft→active-Workflow bleiben serverseitig. Kein delete ueber MCP.
+  Loest ADR-0012 (deferred) ab.
+
 Nächste Blöcke offen (kein aktiver Plan): Security-Quick-Wins
 (`docs/security-findings-phase-2.md` §TODO 1–3), CSP/Header-Pass (F-12),
 Public-Switch + FSL-Lizenz (`…1935_license-fsl-setup`,
-`…2028_public-switch-github-repo`), MCP-Write-Tools (ADR-0012 deferred),
+`…2028_public-switch-github-repo`),
 Enterprise-License-Hooks (`…0528_enterprise-license-management`).
 
 ## Struktur
 
 - `apps/api/` — FastAPI-Backend (REST, `/v1/workspaces/{ws_id}/...`)
-- `apps/mcp/` — FastMCP-Server (`get_persona`, `list_playbooks`, `fetch_playbook`,
-  `list_resources`, `fetch_resource` — alle workspace-aware, filtern auf
-  `status='active'`)
+- `apps/mcp/` — FastMCP-Server. Read-Tools (`get_persona`, `list_playbooks`,
+  `fetch_playbook`, `list_resources`, `fetch_resource`, `fetch_agent`,
+  `list_triggers` — workspace-aware, filtern auf `status='active'`) plus
+  Write-Tools (ADR-0030: create/update/transition/restore + Link-Setter fuer
+  Persona/Playbook/Resource/Agent; Autorisierung serverseitig)
 - `apps/web/` — React/TypeScript-Web-UI (Vite, Tailwind v4, shadcn-Primitives,
   BlockNote-Insel für den Resource-Editor; Designsprache "Warm Citrus" laut
   `docs/frontend/design-language.md`)
 - `packages/models/` — geteilte Pydantic-Models, von API und MCP importiert
+- `packages/billing/` — **optionales Cloud-Billing-Paket** (`who2be-billing`:
+  Mollie-Checkout/-Webhooks, Tarif-Logik, `manual_override`). Build-Zeit-isoliert
+  (ADR-0029): nur die Cloud-Edition zieht es (`uv sync --group billing`,
+  Docker-Target `runtime-cloud`); das On-Prem-Artefakt enthaelt es physisch nicht.
+  Der Kern (`apps/api`) haengt nicht davon ab und importiert es nie statisch.
 - Supabase (Postgres) als DB; lokal via Docker-Compose, Ziel-Hosting Hetzner
 
-Python ist ein uv-Workspace im Repo-Root (`pyproject.toml` → `members`). Die drei
-Python-Pakete (`who2be-api`, `who2be-mcp`, `who2be-models`) sind editierbar
-verlinkt; `models` ist die einzige geteilte Abhaengigkeit zwischen API und MCP.
+Python ist ein uv-Workspace im Repo-Root (`pyproject.toml` → `members`). Die
+Python-Pakete (`who2be-api`, `who2be-mcp`, `who2be-models` + optional
+`who2be-billing`) sind editierbar verlinkt; `models` ist die geteilte
+Abhaengigkeit zwischen API und MCP, `who2be-billing` haengt einseitig am Kern.
+
+**Editionen / Entitlements (ADR-0028/0029):** Ein Codebase, zwei Build-Profile.
+`org_entitlement` ist die einzige gelesene SSoT; geschrieben wird sie nur von
+benannten Quellen (`mollie`/`cloud`/`manual_override`/`signed_license`), nie von
+der Read-App. On-Prem entsteht ein Entitlement ausschliesslich aus dem
+K_pub-verifizierten `WHO2BE_LICENSE_KEY` (env-validiert, kein Tabellen-Write);
+Cloud-Entitlements nur ueber den Billing-Dienst, Ausnahme ist der befristete,
+auditierte Admin-Override. Build-Isolation auch im Web (`features/billing` per
+`VITE_WHO2BE_EDITION` aus dem On-Prem-Bundle tree-geshaked).
 
 ## Befehle
 
 Python (uv-Workspace im Repo-Root):
 
-- Dependencies: `uv sync`
+- Dependencies: `uv sync --group billing` (inkl. Cloud-Billing-Paket; ohne
+  `--group billing` laeuft der On-Prem-Kern, dann fehlen die Billing-Tests)
 - Tests: `uv run pytest -q`
 - Einzeltest: `uv run pytest apps/api/tests/test_health.py::test_health`
 - Lint: `uv run ruff check .`
