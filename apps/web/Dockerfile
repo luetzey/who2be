@@ -6,7 +6,7 @@
 # Multi-stage: Vite-Build mit npm, dann statisch via nginx:alpine.
 # Die VITE_*-Args sind Compile-Time-Substitution (apps/web/src/config.ts:14-23
 # wirft im PROD-Mode bei leer) und MUESSEN per --build-arg gesetzt sein.
-FROM node:22-slim AS builder
+FROM node:26-slim AS builder
 
 WORKDIR /app
 
