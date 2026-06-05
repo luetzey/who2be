@@ -64,7 +64,7 @@ beforeEach(() => {
   vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
     const el = realCreate(tag)
     if (tag === 'a') {
-      el.click = anchorClick
+      el.click = anchorClick as () => void
       createdAnchors.push(el as HTMLAnchorElement)
     }
     return el

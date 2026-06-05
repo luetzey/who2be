@@ -95,6 +95,18 @@ export default tseslint.config(
     rules: {
       ...reactHooks.configs.recommended.rules,
       ...jsxA11y.flatConfigs.recommended.rules,
+      // eslint-plugin-react-hooks v7 aktiviert die neuen React-Compiler-Regeln
+      // als `error`. Das Projekt nutzt den React Compiler (noch) nicht; diese
+      // Regeln feuern auf bestehende, legitime Muster (fetch->setState im
+      // Effect, BlockNote-/Mantine-Interop u. a.). Bis zu einer bewussten
+      // Compiler-Migration advisory (`warn`) — sichtbar, ohne den Build zu
+      // brechen. Die klassischen Regeln (rules-of-hooks, exhaustive-deps)
+      // bleiben unveraendert `error`.
+      'react-hooks/set-state-in-effect': 'warn',
+      'react-hooks/incompatible-library': 'warn',
+      'react-hooks/preserve-manual-memoization': 'warn',
+      'react-hooks/refs': 'warn',
+      'react-hooks/use-memo': 'warn',
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
       'tailwindcss/classnames-order': 'warn',
       'tailwindcss/no-contradicting-classname': 'error',
