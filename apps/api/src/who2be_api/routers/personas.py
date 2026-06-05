@@ -1,10 +1,10 @@
 """REST-Endpunkte fuer Personae (`/v1/workspaces/{workspace_id}/personas`)."""
 
-from typing import Annotated
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends, Query, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
 from who2be_api.core.db import get_pool
 from who2be_api.core.locale import LocaleQuery
@@ -13,6 +13,8 @@ from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.repositories.persona_repository import PgPersonaRepository
 from who2be_api.repositories.status_history_repository import PgStatusHistoryRepository
+from who2be_api.repositories.usage_repository import PgUsageRepository
+from who2be_api.services.entity_export_service import EntityExportService
 from who2be_api.services.entity_quota_service import enforce_entity_quota
 from who2be_api.services.mcp_limit_service import enforce_mcp_read_limit
 from who2be_api.services.persona_service import PersonaRenderResponse, PersonaService
@@ -39,7 +41,7 @@ def get_persona_service(
     Der Pool wird zusaetzlich durchgereicht (Track F: Render-Pfad braucht eine
     Connection fuer die fetch-time-Expansion der Katalog-Pills).
     """
-    return PersonaService(PgPersonaRepository(pool), pool)
+    return PersonaService(PgPersonaRepository(pool), pool, PgUsageRepository(pool))
 
 
 def get_version_status_service(
@@ -48,9 +50,17 @@ def get_version_status_service(
     return VersionStatusService(pool, StatusHistoryService(PgStatusHistoryRepository()))
 
 
+def get_export_service(
+    pool: Annotated[asyncpg.Pool, Depends(get_pool)],
+) -> EntityExportService:
+    return EntityExportService(pool)
+
+
 Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]
 Service = Annotated[PersonaService, Depends(get_persona_service)]
 StatusService = Annotated[VersionStatusService, Depends(get_version_status_service)]
+ExportService = Annotated[EntityExportService, Depends(get_export_service)]
+ExportFormat = Annotated[Literal["json", "markdown"], Query()]
 # `against` waehlt den Diff-Vergleichsstand: 'active' oder eine Versions-Nummer.
 DiffAgainst = Annotated[str, Query(max_length=20)]
 
@@ -120,6 +130,50 @@ async def update_persona(
     locale: LocaleQuery,
 ) -> PersonaRead:
     return await service.update(ctx, persona_id, data, locale=locale)
+
+
+@router.delete("/{persona_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(write_limit)
+async def delete_persona(
+    request: Request, persona_id: UUID, ctx: Ctx, service: Service
+) -> Response:
+    """Hard-Delete der Persona (editor+). 409, wenn Agenten sie noch nutzen."""
+    await service.delete(ctx, persona_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/{persona_id}/export")
+@limiter.limit(write_limit)
+async def export_persona(
+    request: Request,
+    persona_id: UUID,
+    ctx: Ctx,
+    export_service: ExportService,
+    response: Response,
+    format: ExportFormat = "json",
+) -> Any:
+    """Einzel-Export der Persona als JSON (alle Versionen) oder Markdown (aktive
+    Version gerendert). Lesen ist fuer Viewer offen (kein require_role)."""
+    if format == "markdown":
+        rendered = await export_service.export_markdown(ctx.workspace_id, "persona", persona_id)
+        if rendered is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Persona nicht gefunden."
+            )
+        return Response(
+            content=rendered,
+            media_type="text/markdown",
+            headers={
+                "Content-Disposition": (f'attachment; filename="who2be-persona-{persona_id}.md"')
+            },
+        )
+    bundle = await export_service.export_json(ctx.workspace_id, "persona", persona_id)
+    if bundle is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Persona nicht gefunden.")
+    response.headers["Content-Disposition"] = (
+        f'attachment; filename="who2be-persona-{persona_id}.json"'
+    )
+    return bundle
 
 
 @router.patch("/{persona_id}/draft")

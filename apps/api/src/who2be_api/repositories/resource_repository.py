@@ -154,6 +154,8 @@ class ResourceRepository(Protocol):
         self, workspace_id: UUID, resource_id: UUID, version: int, locale: str = DEFAULT_LOCALE
     ) -> ResourceVersionRead | None: ...
 
+    async def delete(self, workspace_id: UUID, resource_id: UUID) -> bool: ...
+
 
 class PgResourceRepository:
     """asyncpg-Implementierung von `ResourceRepository`."""
@@ -565,3 +567,23 @@ class PgResourceRepository:
             locale,
         )
         return ResourceVersionRead.model_validate(dict(row)) if row is not None else None
+
+    async def delete(self, workspace_id: UUID, resource_id: UUID) -> bool:
+        """Hard-Delete der Identitaets-Zeile (ADR-0032).
+
+        Workspace-scoped wie alle Schreib-Pfade dieser Klasse. Die FK-Kaskaden
+        (Migration 0015: `resource_version` ON DELETE CASCADE; 0016:
+        `playbook_resource_link` ON DELETE CASCADE; 0032:
+        `resource_composition` ON DELETE CASCADE auf parent UND child) raeumen
+        alle Versionen und ausgehenden Links/Composition-Kanten ab — kein
+        Waisen-Rest. Eingehende Referenzen (verlinkende Playbooks, Eltern-
+        Composites) werden im Service vorab als 409 abgefangen.
+        """
+        async with self._pool.acquire() as conn, conn.transaction():
+            result = await conn.execute(
+                "DELETE FROM resource WHERE id = $1 AND workspace_id = $2",
+                resource_id,
+                workspace_id,
+            )
+        # asyncpg gibt "DELETE <n>" zurueck; n=0 wenn nichts geloescht wurde.
+        return bool(result.split()[-1] != "0")

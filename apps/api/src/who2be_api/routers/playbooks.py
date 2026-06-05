@@ -1,10 +1,10 @@
 """REST-Endpunkte fuer Playbooks (`/v1/workspaces/{workspace_id}/playbooks`)."""
 
-from typing import Annotated
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends, Query, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
 from who2be_api.core.db import get_pool
 from who2be_api.core.locale import LocaleQuery
@@ -19,6 +19,8 @@ from who2be_api.repositories.playbook_resource_link_repository import (
     PgPlaybookResourceLinkRepository,
 )
 from who2be_api.repositories.status_history_repository import PgStatusHistoryRepository
+from who2be_api.repositories.usage_repository import PgUsageRepository
+from who2be_api.services.entity_export_service import EntityExportService
 from who2be_api.services.entity_quota_service import enforce_entity_quota
 from who2be_api.services.mcp_limit_service import enforce_mcp_read_limit
 from who2be_api.services.playbook_composition_service import PlaybookCompositionService
@@ -53,6 +55,7 @@ def get_playbook_service(
         pool,
         PlaybookCompositionService(PgPlaybookCompositionRepository(pool)),
         PlaybookResourceLinkService(PgPlaybookResourceLinkRepository(pool)),
+        PgUsageRepository(pool),
     )
 
 
@@ -62,9 +65,17 @@ def get_version_status_service(
     return VersionStatusService(pool, StatusHistoryService(PgStatusHistoryRepository()))
 
 
+def get_export_service(
+    pool: Annotated[asyncpg.Pool, Depends(get_pool)],
+) -> EntityExportService:
+    return EntityExportService(pool)
+
+
 Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]
 Service = Annotated[PlaybookService, Depends(get_playbook_service)]
 StatusService = Annotated[VersionStatusService, Depends(get_version_status_service)]
+ExportService = Annotated[EntityExportService, Depends(get_export_service)]
+ExportFormat = Annotated[Literal["json", "markdown"], Query()]
 # `against` waehlt den Diff-Vergleichsstand: 'active' oder eine Versions-Nummer.
 DiffAgainst = Annotated[str, Query(max_length=20)]
 
@@ -133,6 +144,55 @@ async def update_playbook(
     locale: LocaleQuery,
 ) -> PlaybookRead:
     return await service.update(ctx, playbook_id, data, locale=locale)
+
+
+@router.delete("/{playbook_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(write_limit)
+async def delete_playbook(
+    request: Request, playbook_id: UUID, ctx: Ctx, service: Service
+) -> Response:
+    """Hard-Delete des Playbooks (editor+).
+
+    409, wenn Personas es verlinken oder Eltern-Composites es einbetten.
+    """
+    await service.delete(ctx, playbook_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/{playbook_id}/export")
+@limiter.limit(write_limit)
+async def export_playbook(
+    request: Request,
+    playbook_id: UUID,
+    ctx: Ctx,
+    export_service: ExportService,
+    response: Response,
+    format: ExportFormat = "json",
+) -> Any:
+    """Einzel-Export des Playbooks als JSON (alle Versionen) oder Markdown (aktive
+    Version gerendert). Lesen ist fuer Viewer offen (kein require_role)."""
+    if format == "markdown":
+        rendered = await export_service.export_markdown(ctx.workspace_id, "playbook", playbook_id)
+        if rendered is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Playbook nicht gefunden."
+            )
+        return Response(
+            content=rendered,
+            media_type="text/markdown",
+            headers={
+                "Content-Disposition": (f'attachment; filename="who2be-playbook-{playbook_id}.md"')
+            },
+        )
+    bundle = await export_service.export_json(ctx.workspace_id, "playbook", playbook_id)
+    if bundle is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Playbook nicht gefunden."
+        )
+    response.headers["Content-Disposition"] = (
+        f'attachment; filename="who2be-playbook-{playbook_id}.json"'
+    )
+    return bundle
 
 
 @router.patch("/{playbook_id}/draft")

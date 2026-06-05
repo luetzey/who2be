@@ -829,6 +829,26 @@
       "label": "Skills",
       "badge": "Coming Soon",
       "description": "Skills will soon get their own versioned format — as packaged, reusable capabilities for your agents. The feature is not yet active."
+    },
+    "delete": {
+      "label": "Delete",
+      "confirmLabel": "Delete permanently",
+      "dialogTitle": "Delete persona?",
+      "dialogDescription": "{{name}} and all its versions are removed permanently. This action cannot be undone.",
+      "success": "Persona deleted.",
+      "error": "Deletion failed.",
+      "viewerReadOnly": "Viewers can only view personas",
+      "blockedTitle": "Deletion blocked",
+      "blockedMessage": "This persona is still used by:",
+      "dangerZoneTitle": "Delete persona",
+      "dangerZoneDescription": "Permanently removes this persona and all its versions. No undo."
+    },
+    "export": {
+      "label": "Export",
+      "json": "As JSON",
+      "markdown": "As Markdown",
+      "success": "Export downloaded.",
+      "error": "Export failed."
     }
   },
   "playbooks": {
@@ -976,6 +996,26 @@
       "emptySection": "(empty section)",
       "loadFailed": "Loading failed.",
       "saveButton": "Save ({{count}})"
+    },
+    "delete": {
+      "label": "Delete",
+      "confirmLabel": "Delete permanently",
+      "dialogTitle": "Delete playbook?",
+      "dialogDescription": "{{name}} and all its versions are removed permanently. This action cannot be undone.",
+      "success": "Playbook deleted.",
+      "error": "Deletion failed.",
+      "viewerReadOnly": "Viewers can only view playbooks",
+      "blockedTitle": "Deletion blocked",
+      "blockedMessage": "This playbook is still used by:",
+      "dangerZoneTitle": "Delete playbook",
+      "dangerZoneDescription": "Permanently removes this playbook and all its versions. No undo."
+    },
+    "export": {
+      "label": "Export",
+      "json": "As JSON",
+      "markdown": "As Markdown",
+      "success": "Export downloaded.",
+      "error": "Export failed."
     }
   },
   "resources": {
@@ -1073,6 +1113,26 @@
     "toast": {
       "created": "Resource created.",
       "createFailed": "Creation failed."
+    },
+    "delete": {
+      "label": "Delete",
+      "confirmLabel": "Delete permanently",
+      "dialogTitle": "Delete resource?",
+      "dialogDescription": "{{name}} and all its versions are removed permanently. This action cannot be undone.",
+      "success": "Resource deleted.",
+      "error": "Deletion failed.",
+      "viewerReadOnly": "Viewers can only view resources",
+      "blockedTitle": "Deletion blocked",
+      "blockedMessage": "This resource is still used by:",
+      "dangerZoneTitle": "Delete resource",
+      "dangerZoneDescription": "Permanently removes this resource and all its versions. No undo."
+    },
+    "export": {
+      "label": "Export",
+      "json": "As JSON",
+      "markdown": "As Markdown",
+      "success": "Export downloaded.",
+      "error": "Export failed."
     }
   },
   "settings": {

@@ -18,14 +18,17 @@ from pydantic import BaseModel
 
 from who2be_api.core.security import WorkspaceContext, require_role
 from who2be_api.repositories.persona_repository import PersonaRepository
+from who2be_api.repositories.usage_repository import UsageRepository
 from who2be_api.services.placeholders import RenderContext, render_template_body
 from who2be_api.services.placeholders.registry import render_skills_table
 from who2be_api.services.version_diff import compute_version_diff
 from who2be_models import (
     DEFAULT_LOCALE,
+    DeleteBlocked,
     PersonaCreate,
     PersonaRead,
     PersonaUpdate,
+    PersonaUsage,
     PersonaVersionContent,
     PersonaVersionRead,
     VersionDiff,
@@ -53,6 +56,26 @@ class PersonaRenderResponse(BaseModel):
 
 def _not_found() -> HTTPException:
     return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Persona nicht gefunden.")
+
+
+def _delete_blocked(usages: list[PersonaUsage]) -> HTTPException:
+    """409: eingehende Agenten-Referenzen blockieren das Persona-Delete.
+
+    `detail` ist der strukturierte `DeleteBlocked`-Body (Klartext + maschinen-
+    lesbare Verwender-Liste), den das Frontend fuer die Blockier-Anzeige nutzt.
+    """
+    names = ", ".join(u.agent_name for u in usages)
+    detail = DeleteBlocked(
+        message=(
+            f"Persona kann nicht geloescht werden — sie wird von {len(usages)} "
+            f"Agent(en) genutzt: {names}. Loese die Verknuepfungen zuerst."
+        ),
+        blocked_by={"agents": list(usages)},
+    )
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=detail.model_dump(mode="json"),
+    )
 
 
 def _invalid_against() -> HTTPException:
@@ -92,9 +115,15 @@ class PersonaService:
     konstruieren koennen.
     """
 
-    def __init__(self, persona_repo: PersonaRepository, pool: asyncpg.Pool | None = None) -> None:
+    def __init__(
+        self,
+        persona_repo: PersonaRepository,
+        pool: asyncpg.Pool | None = None,
+        usage_repo: UsageRepository | None = None,
+    ) -> None:
         self._repo = persona_repo
         self._pool = pool
+        self._usage_repo = usage_repo
 
     async def create(self, ctx: WorkspaceContext, data: PersonaCreate) -> PersonaRead:
         require_role(ctx, WorkspaceRole.editor)
@@ -302,3 +331,25 @@ class PersonaService:
     async def list_tags(self, ctx: WorkspaceContext, locale: str = DEFAULT_LOCALE) -> list[str]:
         """DISTINCT-Tags des Workspaces — Datenquelle fuer den Tag-Picker."""
         return await self._repo.list_distinct_tags(ctx.workspace_id, locale)
+
+    async def delete(self, ctx: WorkspaceContext, persona_id: UUID) -> None:
+        """Hard-Delete der Persona (ADR-0032).
+
+        Editor-Gate (analog `agent_service.delete`). Blockiert mit 409, solange
+        ein Agent die Persona nutzt (`agent.persona_id` ON DELETE RESTRICT) —
+        der 409-Body listet die blockierenden Agenten. Existiert die Persona
+        nicht (mehr), antwortet 404. Die FK-Kaskaden raeumen Versionen und
+        ausgehende Playbook-Links beim DELETE selbst ab.
+        """
+        require_role(ctx, WorkspaceRole.editor)
+        persona = await self._repo.fetch(ctx.workspace_id, persona_id)
+        if persona is None:
+            raise _not_found()
+        if self._usage_repo is None:  # pragma: no cover - im Prod immer gesetzt
+            raise RuntimeError("PersonaService.delete benoetigt ein UsageRepository.")
+        usages = await self._usage_repo.list_persona_usages(ctx.workspace_id, persona_id)
+        if usages:
+            raise _delete_blocked(usages)
+        deleted = await self._repo.delete(ctx.workspace_id, persona_id)
+        if not deleted:
+            raise _not_found()

@@ -281,6 +281,13 @@ class FakePersonaRepository:
                 tags.update(persona.content.tags)
         return sorted(tags)
 
+    async def delete(self, workspace_id: UUID, persona_id: UUID) -> bool:
+        persona = self._personas.get(persona_id)
+        if persona is None or persona.workspace_id != workspace_id:
+            return False
+        del self._personas[persona_id]
+        return True
+
 
 def _service() -> tuple[PersonaService, WorkspaceContext]:
     return PersonaService(FakePersonaRepository()), _ctx(uuid4())
