@@ -47,6 +47,9 @@ uv run ruff check .
 uv run ruff format --check .
 uv run mypy .
 uv run pytest -q
+# OSS-Lizenz-Gate (ADR-0033) — fail-closed gegen Copyleft/AGPL:
+uv run --with pip-licenses python -m piplicenses --partial-match \
+  --fail-on "GPL;AGPL;LGPL;SSPL;CDDL;EPL;EUPL;OSL;CPL;NPL;Sleepycat;UNKNOWN"
 ```
 
 **Web (in `apps/web/`):**
@@ -56,7 +59,13 @@ npm run lint
 npx tsc --noEmit
 npm test
 npm run build
+npm run license:check   # OSS-Lizenz-Gate (ADR-0033)
 ```
+
+Neue Dependency? Vorher die Lizenz pruefen (Scan-Pflicht, ADR-0033). Erlaubt
+sind permissive Lizenzen (MIT, BSD, Apache-2.0, ISC, 0BSD) sowie MPL-2.0;
+GPL/AGPL/LGPL und sonstiges Copyleft brechen das Gate. Bewusste Ausnahmen
+brauchen einen ADR-Nachtrag.
 
 Bei Bugfixes zuerst einen reproduzierenden, fehlschlagenden Test schreiben,
 dann fixen. Ursache statt Symptom beheben; groessere Aenderungen zuerst als
