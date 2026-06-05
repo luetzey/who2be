@@ -53,6 +53,39 @@ updates:
         update-types:
           - "minor"
           - "patch"
+      # Gekoppelte Tooling-Majors buendeln, statt sie einzeln rot auflaufen zu
+      # lassen: einzeln gebumpt scheitern sie an `npm ci` (ERESOLVE) bzw. an
+      # Peer-Bruechen. Als Gruppe kommen die zusammengehoerigen Pakete in EINEM
+      # PR und sind als Set installier-/review-bar (vgl. CI-Triage 2026-06-05).
+      web-lint-tooling-major:
+        patterns:
+          - "eslint"
+          - "@eslint/*"
+          - "typescript-eslint"
+          - "@typescript-eslint/*"
+        update-types:
+          - "major"
+      web-vite-major:
+        patterns:
+          - "vite"
+          - "@vitejs/*"
+          - "vitest"
+          - "@vitest/*"
+        update-types:
+          - "major"
+    ignore:
+      # Framework-Majors sind bewusste, koordinierte Migrationen — kein
+      # Bot-Auto-Bump. React 18->19 ist ein eigenes Projekt (Test-Pyramide
+      # ADR-0032 als Sicherheitsnetz); Mantine 9 setzt React 19 voraus
+      # (`useEffectEvent`), darf also nicht vor dem React-Sprung kommen.
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@mantine/core"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@mantine/hooks"
+        update-types: ["version-update:semver-major"]
 
   # --- GitHub-Actions (Workflows in .github/workflows) ---------------------
   - package-ecosystem: "github-actions"
