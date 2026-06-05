@@ -32,7 +32,7 @@ from who2be_models import (
 _SELECT_CURRENT = """
     SELECT t.id, t.workspace_id, t.owner_id, t.name, t.slug,
            t.current_version,
-           t.created_at, t.updated_at, tv.content,
+           t.created_at, t.updated_at, tv.content, tv.locale,
            tv.status AS current_status,
            EXISTS (
                SELECT 1 FROM system_prompt_template_version dv
@@ -347,7 +347,7 @@ class PgSystemPromptTemplateRepository:
         if owned is None:
             return None
         rows = await self._pool.fetch(
-            "SELECT version, status, content, created_by, created_at "
+            "SELECT version, status, locale, content, created_by, created_at "
             "FROM system_prompt_template_version WHERE template_id = $1 "
             "ORDER BY version DESC",
             template_id,
@@ -358,7 +358,7 @@ class PgSystemPromptTemplateRepository:
         self, workspace_id: UUID, template_id: UUID, version: int
     ) -> SystemPromptTemplateVersionRead | None:
         row = await self._pool.fetchrow(
-            "SELECT tv.version, tv.status, tv.content, tv.created_by, tv.created_at "
+            "SELECT tv.version, tv.status, tv.locale, tv.content, tv.created_by, tv.created_at "
             "FROM system_prompt_template_version tv "
             "JOIN system_prompt_template t ON t.id = tv.template_id "
             "WHERE t.id = $1 AND t.workspace_id = $2 AND tv.version = $3",

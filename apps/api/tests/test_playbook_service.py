@@ -71,6 +71,7 @@ class FakePlaybookRepository:
         owner_id: UUID,
         name: str,
         content: PlaybookContent,
+        locales: list[str] | None = None,
     ) -> PlaybookRead:
         now = datetime.now(UTC)
         playbook = PlaybookRead(
@@ -100,6 +101,7 @@ class FakePlaybookRepository:
         limit: int,
         after: tuple[datetime, UUID] | None,
         active_only: bool = False,
+        locale: str = "de",
     ) -> list[PlaybookRead]:
         self.last_active_only = active_only
         result = [p for p in self._playbooks.values() if p.workspace_id == workspace_id]
@@ -119,7 +121,7 @@ class FakePlaybookRepository:
         return result[:limit]
 
     async def fetch(
-        self, workspace_id: UUID, playbook_id: UUID, active_only: bool = False
+        self, workspace_id: UUID, playbook_id: UUID, active_only: bool = False, locale: str = "de"
     ) -> PlaybookRead | None:
         self.last_active_only = active_only
         playbook = self._playbooks.get(playbook_id)
@@ -136,6 +138,7 @@ class FakePlaybookRepository:
         playbook_id: UUID,
         name: str | None,
         content: PlaybookContent,
+        locale: str = "de",
     ) -> PlaybookUpdateOutcome:
         playbook = self._playbooks.get(playbook_id)
         if playbook is None or playbook.workspace_id != workspace_id:
@@ -178,6 +181,7 @@ class FakePlaybookRepository:
         owner_id: UUID,
         playbook_id: UUID,
         content: PlaybookContent,
+        locale: str = "de",
     ) -> PlaybookUpdateOutcome:
         playbook = self._playbooks.get(playbook_id)
         if playbook is None or playbook.workspace_id != workspace_id:
@@ -216,6 +220,7 @@ class FakePlaybookRepository:
         playbook_id: UUID,
         name: str | None,
         content: PlaybookContent,
+        locale: str = "de",
     ) -> PlaybookUpdateOutcome:
         playbook = self._playbooks.get(playbook_id)
         if playbook is None or playbook.workspace_id != workspace_id:
@@ -291,7 +296,7 @@ class FakePlaybookRepository:
         )
 
     async def list_versions(
-        self, workspace_id: UUID, playbook_id: UUID
+        self, workspace_id: UUID, playbook_id: UUID, locale: str = "de"
     ) -> list[PlaybookVersionRead] | None:
         playbook = self._playbooks.get(playbook_id)
         if playbook is None or playbook.workspace_id != workspace_id:
@@ -299,14 +304,14 @@ class FakePlaybookRepository:
         return list(reversed(self._versions[playbook_id]))
 
     async def fetch_version(
-        self, workspace_id: UUID, playbook_id: UUID, version: int
+        self, workspace_id: UUID, playbook_id: UUID, version: int, locale: str = "de"
     ) -> PlaybookVersionRead | None:
         playbook = self._playbooks.get(playbook_id)
         if playbook is None or playbook.workspace_id != workspace_id:
             return None
         return next((v for v in self._versions[playbook_id] if v.version == version), None)
 
-    async def list_distinct_tags(self, workspace_id: UUID) -> list[str]:
+    async def list_distinct_tags(self, workspace_id: UUID, locale: str = "de") -> list[str]:
         tags: set[str] = set()
         for playbook in self._playbooks.values():
             if playbook.workspace_id == workspace_id:

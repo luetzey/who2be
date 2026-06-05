@@ -131,6 +131,8 @@ describe('PlaybookNewPage', () => {
         tags: [],
         triggers: null,
       },
+      // Content-i18n (ADR-0027): Default-Sprachauswahl wird mitgeschickt.
+      locales: ['de'],
     })
   })
 })

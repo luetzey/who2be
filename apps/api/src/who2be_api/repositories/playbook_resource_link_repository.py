@@ -178,7 +178,9 @@ class PgPlaybookResourceLinkRepository:
             "FROM playbook_resource_link prl "
             "JOIN resource r ON r.id = prl.resource_id "
             "LEFT JOIN resource_version rva "
-            "  ON rva.resource_id = r.id AND rva.status = 'active' "
+            # Content-i18n (ADR-0027): Active-Variante auf Default-Sprache 'de'
+            # gepinnt — sonst dupliziert eine aktive de+en-Resource die Zeile.
+            "  ON rva.resource_id = r.id AND rva.status = 'active' AND rva.locale = 'de' "
             "LEFT JOIN resource_version rvc "
             "  ON rvc.resource_id = r.id AND rvc.version = r.current_version "
             "WHERE prl.playbook_id = $1 AND prl.workspace_id = $2 "
@@ -204,7 +206,9 @@ class PgPlaybookResourceLinkRepository:
             "       COALESCE(rva.content, rvc.content) AS content "
             "FROM resource r "
             "LEFT JOIN resource_version rva "
-            "  ON rva.resource_id = r.id AND rva.status = 'active' "
+            # Content-i18n (ADR-0027): Active-Variante auf Default-Sprache 'de'
+            # gepinnt — sonst dupliziert eine aktive de+en-Resource die Zeile.
+            "  ON rva.resource_id = r.id AND rva.status = 'active' AND rva.locale = 'de' "
             "LEFT JOIN resource_version rvc "
             "  ON rvc.resource_id = r.id AND rvc.version = r.current_version "
             "WHERE r.workspace_id = $1 AND r.id = ANY($2::uuid[])",

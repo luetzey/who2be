@@ -35,6 +35,7 @@ from who2be_api.services.promote_validation import (
 from who2be_api.services.status_history_service import StatusHistoryService
 from who2be_models import (
     ALLOWED_TRANSITIONS,
+    DEFAULT_LOCALE,
     EntityType,
     PersonaVersionRead,
     PlaybookVersionRead,
@@ -136,9 +137,10 @@ class VersionStatusService:
         version: int,
         to_status: VersionStatus,
         note: str | None,
+        locale: str = DEFAULT_LOCALE,
     ) -> PersonaVersionRead:
         row = await self._transition(
-            ctx, "persona", _PERSONA_TABLES, persona_id, version, to_status, note
+            ctx, "persona", _PERSONA_TABLES, persona_id, version, to_status, note, locale
         )
         return PersonaVersionRead.model_validate(dict(row))
 
@@ -149,9 +151,10 @@ class VersionStatusService:
         version: int,
         to_status: VersionStatus,
         note: str | None,
+        locale: str = DEFAULT_LOCALE,
     ) -> PlaybookVersionRead:
         row = await self._transition(
-            ctx, "playbook", _PLAYBOOK_TABLES, playbook_id, version, to_status, note
+            ctx, "playbook", _PLAYBOOK_TABLES, playbook_id, version, to_status, note, locale
         )
         return PlaybookVersionRead.model_validate(dict(row))
 
@@ -162,9 +165,10 @@ class VersionStatusService:
         version: int,
         to_status: VersionStatus,
         note: str | None,
+        locale: str = DEFAULT_LOCALE,
     ) -> ResourceVersionRead:
         row = await self._transition(
-            ctx, "resource", _RESOURCE_TABLES, resource_id, version, to_status, note
+            ctx, "resource", _RESOURCE_TABLES, resource_id, version, to_status, note, locale
         )
         return ResourceVersionRead.model_validate(dict(row))
 
@@ -175,6 +179,7 @@ class VersionStatusService:
         version: int,
         to_status: VersionStatus,
         note: str | None,
+        locale: str = DEFAULT_LOCALE,
     ) -> SystemPromptTemplateVersionRead:
         row = await self._transition(
             ctx,
@@ -184,6 +189,7 @@ class VersionStatusService:
             version,
             to_status,
             note,
+            locale,
         )
         return SystemPromptTemplateVersionRead.model_validate(dict(row))
 
@@ -253,22 +259,26 @@ class VersionStatusService:
         version: int,
         to_status: VersionStatus,
         note: str | None,
+        locale: str = DEFAULT_LOCALE,
     ) -> asyncpg.Record:
         entity_tbl, version_tbl, fk_col = tables
         async with self._pool.acquire() as conn, conn.transaction():
             # Ziel-Version laden + sperren. JOIN ueber das Entity sichert,
-            # dass die Version im richtigen Workspace lebt.
+            # dass die Version im richtigen Workspace lebt. `version` ist seit
+            # Content-i18n nur noch je (entity, locale) eindeutig — daher der
+            # zusaetzliche `locale`-Filter (ADR-0027).
             # `e.name` und `pv.content` werden fuer die Promote-Validation
             # mitgeladen (Welle 4).
             target = await conn.fetchrow(
                 f"SELECT pv.status, pv.content, e.name FROM {version_tbl} pv "
                 f"JOIN {entity_tbl} e ON e.id = pv.{fk_col} "
                 f"WHERE pv.{fk_col} = $1 AND pv.version = $2 "
-                "AND e.workspace_id = $3 "
+                "AND e.workspace_id = $3 AND pv.locale = $4 "
                 "FOR UPDATE OF pv",
                 entity_id,
                 version,
                 ctx.workspace_id,
+                locale,
             )
             if target is None:
                 raise _not_found(entity_type)
@@ -294,11 +304,15 @@ class VersionStatusService:
             # Partial-Unique-Index. Audit-Eintrag fuer das implizite
             # Inactive-Setzen schreiben.
             if to_status == VersionStatus.active:
+                # Nur die Active-Version DERSELBEN Sprache inaktivieren — andere
+                # Sprachvarianten haben ihren eigenen Active-Slot (per-locale
+                # Partial-Unique-Index).
                 prev_active_version = await conn.fetchval(
                     f"UPDATE {version_tbl} SET status = 'inactive' "
-                    f"WHERE {fk_col} = $1 AND status = 'active' "
+                    f"WHERE {fk_col} = $1 AND locale = $2 AND status = 'active' "
                     "RETURNING version",
                     entity_id,
+                    locale,
                 )
                 if prev_active_version is not None:
                     await self._history.record(
@@ -315,11 +329,12 @@ class VersionStatusService:
             try:
                 updated = await conn.fetchrow(
                     f"UPDATE {version_tbl} SET status = $1 "
-                    f"WHERE {fk_col} = $2 AND version = $3 "
-                    "RETURNING version, status, content, created_by, created_at",
+                    f"WHERE {fk_col} = $2 AND version = $3 AND locale = $4 "
+                    "RETURNING version, status, locale, content, created_by, created_at",
                     to_status.value,
                     entity_id,
                     version,
+                    locale,
                 )
             except asyncpg.UniqueViolationError as exc:
                 raise _invariant_violation() from exc
@@ -347,7 +362,7 @@ class VersionStatusService:
             # Entity ohne aktive Version (erlaubt, §3.1).
             if from_status == VersionStatus.active and to_status == VersionStatus.draft:
                 await self._reactivate_previous(
-                    conn, entity_type, version_tbl, fk_col, entity_id, version, ctx.user_id
+                    conn, entity_type, version_tbl, fk_col, entity_id, version, ctx.user_id, locale
                 )
             return updated
 
@@ -360,6 +375,7 @@ class VersionStatusService:
         entity_id: UUID,
         reset_version: int,
         user_id: UUID,
+        locale: str = DEFAULT_LOCALE,
     ) -> None:
         """Reaktiviert die zuletzt aktive Version nach einem Reset-auf-Draft.
 
@@ -382,10 +398,11 @@ class VersionStatusService:
             return
         reactivated = await conn.fetchval(
             f"UPDATE {version_tbl} SET status = 'active' "
-            f"WHERE {fk_col} = $1 AND version = $2 AND status = 'inactive' "
+            f"WHERE {fk_col} = $1 AND version = $2 AND locale = $3 AND status = 'inactive' "
             "RETURNING version",
             entity_id,
             prev_version,
+            locale,
         )
         if reactivated is not None:
             await self._history.record(

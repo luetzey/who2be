@@ -13,6 +13,7 @@ from pydantic import (
     model_validator,
 )
 
+from who2be_models.locale import DEFAULT_LOCALE, ContentLocale, normalize_locale
 from who2be_models.resource import ResourceBlock
 from who2be_models.status import VersionStatus
 
@@ -180,6 +181,24 @@ class PersonaCreate(BaseModel):
 
     name: str = Field(min_length=1, max_length=200)
     content: PersonaVersionContent = Field(default_factory=PersonaVersionContent)
+    # Content-i18n (ADR-0027): Sprachvarianten, die beim Anlegen erzeugt werden.
+    # Default `['de']` haelt Bestands-Clients backward-compatible. Jede gewaehlte
+    # Sprache startet als eigene Draft-v1 (Copy von `content`).
+    locales: list[ContentLocale] = Field(default_factory=lambda: [DEFAULT_LOCALE])
+
+    @field_validator("locales")
+    @classmethod
+    def _dedup_non_empty(cls, value: list[str]) -> list[str]:
+        if not value:
+            raise ValueError("Mindestens eine Sprache ist erforderlich.")
+        seen: set[str] = set()
+        ordered: list[str] = []
+        for loc in value:
+            norm = normalize_locale(loc)
+            if norm not in seen:
+                seen.add(norm)
+                ordered.append(norm)
+        return ordered
 
 
 class PersonaUpdate(BaseModel):
@@ -203,6 +222,9 @@ class PersonaRead(BaseModel):
     current_version: int
     current_status: VersionStatus = VersionStatus.inactive
     has_pending_draft: bool = False
+    # Sprachvariante, die diese Antwort traegt (ADR-0027). Default `'de'` deckt
+    # Bestand + Lese-Pfade ohne locale-Angabe.
+    locale: ContentLocale = DEFAULT_LOCALE
     content: PersonaVersionContent
     created_at: datetime
     updated_at: datetime
@@ -215,6 +237,7 @@ class PersonaVersionRead(BaseModel):
 
     version: int
     status: VersionStatus = VersionStatus.inactive
+    locale: ContentLocale = DEFAULT_LOCALE
     content: PersonaVersionContent
     created_by: UUID
     created_at: datetime

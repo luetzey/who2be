@@ -35,7 +35,11 @@ export interface UseCreatePlaybookResult {
   saveError: string | null
 }
 
-export function useCreatePlaybook(onCreated: (id: string) => void): UseCreatePlaybookResult {
+export function useCreatePlaybook(
+  onCreated: (id: string) => void,
+  // Content-i18n (ADR-0027): gewaehlte Sprachvarianten (mind. eine), Default ['de'].
+  locales: string[] = ['de'],
+): UseCreatePlaybookResult {
   const api = useApi()
   const [saveError, setSaveError] = useState<string | null>(null)
   const form = useForm<PlaybookEditorValues>({
@@ -62,6 +66,7 @@ export function useCreatePlaybook(onCreated: (id: string) => void): UseCreatePla
           tags: values.tags,
           triggers: joinTriggers(values.triggers),
         },
+        locales,
       })
       notify.success('Playbook angelegt.')
       onCreated(created.id)

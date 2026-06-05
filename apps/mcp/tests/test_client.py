@@ -75,6 +75,31 @@ def test_get_persona_by_uuid_sends_token_and_returns_model() -> None:
     assert persona.name == "QA"
 
 
+def test_get_persona_forwards_locale() -> None:
+    """Content-i18n (ADR-0027): `locale` wird als Query-Param durchgereicht."""
+    pid = str(uuid4())
+    seen: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(dict(request.url.params))
+        return httpx.Response(200, json=_persona_json(pid, "QA"))
+
+    asyncio.run(_client(handler).get_persona(pid, "en"))
+    assert seen["locale"] == "en"
+
+
+def test_get_persona_defaults_locale_to_de() -> None:
+    pid = str(uuid4())
+    seen: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(dict(request.url.params))
+        return httpx.Response(200, json=_persona_json(pid, "QA"))
+
+    asyncio.run(_client(handler).get_persona(pid))
+    assert seen["locale"] == "de"
+
+
 def test_get_persona_by_name_resolves_via_list() -> None:
     pid = str(uuid4())
 
@@ -151,7 +176,8 @@ def test_list_playbooks_forwards_filters() -> None:
         return httpx.Response(200, json=[_playbook_json(str(uuid4()), "PB")])
 
     result = asyncio.run(_client(handler).list_playbooks("onboarding", "new user"))
-    assert seen["params"] == {"tag": "onboarding", "trigger": "new user"}
+    # `locale` wird seit Content-i18n (ADR-0027) immer mitgesendet (Default 'de').
+    assert seen["params"] == {"tag": "onboarding", "trigger": "new user", "locale": "de"}
     assert len(result) == 1
 
 
@@ -163,7 +189,8 @@ def test_list_playbooks_omits_unset_filters() -> None:
         return httpx.Response(200, json=[])
 
     asyncio.run(_client(handler).list_playbooks(None, None))
-    assert seen["params"] == {}
+    # Ohne Filter bleibt nur der Default-`locale` (ADR-0027).
+    assert seen["params"] == {"locale": "de"}
 
 
 def test_get_playbook_returns_model() -> None:

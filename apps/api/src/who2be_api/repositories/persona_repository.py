@@ -12,6 +12,13 @@ SELECT-Pfad mitgelesen. `update` erzwingt Draft-on-Edit, wenn die aktuelle
 Version `active` ist (Plan §2.1.C). `active_only=True` filtert in den
 Lese-Pfaden auf `status='active'` und liefert die Active-Version als
 Current — Pfad fuer den MCP-Server (Plan §2.1.D).
+
+Content-i18n (ADR-0027, Stream D2): jede Version traegt ein `locale`-Kuerzel;
+pro Sprache laeuft ein eigener Versions-Track. Die "aktuelle" Version einer
+Sprache ist die hoechste `version` mit diesem `locale` (statt der einzelnen
+`persona.current_version`-Spalte, die nur noch den Default-Locale-Track
+`'de'` spiegelt). Alle Lese-/Schreib-Pfade nehmen `locale` (Default `'de'` =
+Backward-Compat).
 """
 
 from dataclasses import dataclass
@@ -22,45 +29,55 @@ from uuid import UUID
 import asyncpg
 
 from who2be_models import (
+    DEFAULT_LOCALE,
     PersonaRead,
     PersonaVersionContent,
     PersonaVersionRead,
     VersionStatus,
 )
 
-# Persona-Zeile verbunden mit dem Inhalt ihrer aktuellen Version, plus
-# Status-Felder (Phase 2.1b). `has_pending_draft` ist ein EXISTS-Subquery,
-# damit die Standard-Liste in einem Roundtrip bleibt.
-_SELECT_CURRENT = """
-    SELECT p.id, p.workspace_id, p.owner_id, p.name, p.current_version,
-           p.created_at, p.updated_at, pv.content,
-           pv.status AS current_status,
-           EXISTS (
-               SELECT 1 FROM persona_version dv
-               WHERE dv.persona_id = p.id AND dv.status = 'draft'
-           ) AS has_pending_draft
-    FROM persona p
-    JOIN persona_version pv
-      ON pv.persona_id = p.id AND pv.version = p.current_version
-"""
 
-# Active-Variante: gibt die Active-Version aus (falls vorhanden) statt der
-# Current-Version. `current_version` wird dabei auf die Version-Nummer der
-# Active-Version umgeschrieben, damit Konsument (MCP) ein konsistentes Bild
-# bekommt — current_version und content matchen.
-_SELECT_ACTIVE = """
-    SELECT p.id, p.workspace_id, p.owner_id, p.name,
-           pv.version AS current_version,
-           p.created_at, p.updated_at, pv.content,
-           pv.status AS current_status,
-           EXISTS (
-               SELECT 1 FROM persona_version dv
-               WHERE dv.persona_id = p.id AND dv.status = 'draft'
-           ) AS has_pending_draft
-    FROM persona p
-    JOIN persona_version pv
-      ON pv.persona_id = p.id AND pv.status = 'active'
-"""
+def _select_current(locale_param: str) -> str:
+    """Current-Read pro Sprache: hoechste Version des `locale`-Tracks.
+
+    `locale_param` ist der asyncpg-Platzhalter (z. B. `"$3"`), der die Ziel-
+    Sprache traegt — er erscheint mehrfach (JOIN + Max-Subquery + Draft-EXISTS).
+    `current_version` wird auf die Versionsnummer dieser Sprache aliased, damit
+    `current_version` und `content` in der Antwort matchen.
+    """
+    return (
+        "SELECT p.id, p.workspace_id, p.owner_id, p.name, "
+        "pv.version AS current_version, "
+        "p.created_at, p.updated_at, pv.content, pv.locale, "
+        "pv.status AS current_status, "
+        "EXISTS ( "
+        "    SELECT 1 FROM persona_version dv "
+        f"    WHERE dv.persona_id = p.id AND dv.locale = {locale_param} AND dv.status = 'draft' "
+        ") AS has_pending_draft "
+        "FROM persona p "
+        f"JOIN persona_version pv ON pv.persona_id = p.id AND pv.locale = {locale_param} "
+        "  AND pv.version = ( "
+        "      SELECT max(v.version) FROM persona_version v "
+        f"      WHERE v.persona_id = p.id AND v.locale = {locale_param} "
+        "  ) "
+    )
+
+
+def _select_active(locale_param: str) -> str:
+    """Active-Read pro Sprache: die `status='active'`-Version des Tracks."""
+    return (
+        "SELECT p.id, p.workspace_id, p.owner_id, p.name, "
+        "pv.version AS current_version, "
+        "p.created_at, p.updated_at, pv.content, pv.locale, "
+        "pv.status AS current_status, "
+        "EXISTS ( "
+        "    SELECT 1 FROM persona_version dv "
+        f"    WHERE dv.persona_id = p.id AND dv.locale = {locale_param} AND dv.status = 'draft' "
+        ") AS has_pending_draft "
+        "FROM persona p "
+        f"JOIN persona_version pv ON pv.persona_id = p.id AND pv.locale = {locale_param} "
+        "  AND pv.status = 'active' "
+    )
 
 
 @dataclass(frozen=True)
@@ -87,6 +104,7 @@ class PersonaRepository(Protocol):
         owner_id: UUID,
         name: str,
         content: PersonaVersionContent,
+        locales: list[str] | None = None,
     ) -> PersonaRead: ...
 
     async def list_by_workspace(
@@ -95,6 +113,7 @@ class PersonaRepository(Protocol):
         limit: int,
         after: tuple[datetime, UUID] | None,
         active_only: bool = False,
+        locale: str = DEFAULT_LOCALE,
     ) -> list[PersonaRead]: ...
 
     async def fetch(
@@ -102,6 +121,7 @@ class PersonaRepository(Protocol):
         workspace_id: UUID,
         persona_id: UUID,
         active_only: bool = False,
+        locale: str = DEFAULT_LOCALE,
     ) -> PersonaRead | None: ...
 
     async def update(
@@ -111,6 +131,7 @@ class PersonaRepository(Protocol):
         persona_id: UUID,
         name: str | None,
         content: PersonaVersionContent,
+        locale: str = DEFAULT_LOCALE,
     ) -> PersonaUpdateOutcome: ...
 
     async def upsert_draft(
@@ -120,6 +141,7 @@ class PersonaRepository(Protocol):
         persona_id: UUID,
         name: str | None,
         content: PersonaVersionContent,
+        locale: str = DEFAULT_LOCALE,
     ) -> PersonaUpdateOutcome: ...
 
     async def restore_version(
@@ -128,17 +150,20 @@ class PersonaRepository(Protocol):
         owner_id: UUID,
         persona_id: UUID,
         content: PersonaVersionContent,
+        locale: str = DEFAULT_LOCALE,
     ) -> PersonaUpdateOutcome: ...
 
     async def list_versions(
-        self, workspace_id: UUID, persona_id: UUID
+        self, workspace_id: UUID, persona_id: UUID, locale: str = DEFAULT_LOCALE
     ) -> list[PersonaVersionRead] | None: ...
 
     async def fetch_version(
-        self, workspace_id: UUID, persona_id: UUID, version: int
+        self, workspace_id: UUID, persona_id: UUID, version: int, locale: str = DEFAULT_LOCALE
     ) -> PersonaVersionRead | None: ...
 
-    async def list_distinct_tags(self, workspace_id: UUID) -> list[str]: ...
+    async def list_distinct_tags(
+        self, workspace_id: UUID, locale: str = DEFAULT_LOCALE
+    ) -> list[str]: ...
 
 
 class PgPersonaRepository:
@@ -153,7 +178,11 @@ class PgPersonaRepository:
         owner_id: UUID,
         name: str,
         content: PersonaVersionContent,
+        locales: list[str] | None = None,
     ) -> PersonaRead:
+        # Content-i18n: pro gewaehlter Sprache eine eigene Draft-v1 (Copy der
+        # Vorlage). Default `['de']` haelt Bestands-Aufrufer kompatibel.
+        target_locales = locales or [DEFAULT_LOCALE]
         content_json = content.model_dump(mode="json")
         async with self._pool.acquire() as conn, conn.transaction():
             persona = await conn.fetchrow(
@@ -165,24 +194,26 @@ class PgPersonaRepository:
                 owner_id,
                 name,
             )
-            await conn.execute(
-                "INSERT INTO persona_version "
-                "(persona_id, version, content, status, created_by) "
-                "VALUES ($1, $2, $3, $4, $5)",
-                persona["id"],
-                persona["current_version"],
-                content_json,
-                VersionStatus.draft.value,
-                owner_id,
-            )
+            for loc in target_locales:
+                await conn.execute(
+                    "INSERT INTO persona_version "
+                    "(persona_id, version, content, status, created_by, locale) "
+                    "VALUES ($1, $2, $3, $4, $5, $6)",
+                    persona["id"],
+                    persona["current_version"],
+                    content_json,
+                    VersionStatus.draft.value,
+                    owner_id,
+                    loc,
+                )
         # Neue v1 startet als Draft (Phase 3-0): die UI rendert sofort die
-        # Status-Action-Bar, MCP-Reads ueberspringen sie bis Promotion. Wir
-        # setzen `status` explizit (statt auf den DB-Default zu vertrauen) —
-        # Defense-in-Depth gegen Drift in Migration 0019.
+        # Status-Action-Bar, MCP-Reads ueberspringen sie bis Promotion. Die
+        # Antwort spiegelt die erste gewaehlte Sprache.
         return PersonaRead.model_validate(
             {
                 **dict(persona),
                 "content": content_json,
+                "locale": target_locales[0],
                 "current_status": VersionStatus.draft,
                 "has_pending_draft": True,
             }
@@ -194,18 +225,22 @@ class PgPersonaRepository:
         limit: int,
         after: tuple[datetime, UUID] | None,
         active_only: bool = False,
+        locale: str = DEFAULT_LOCALE,
     ) -> list[PersonaRead]:
-        select = _SELECT_ACTIVE if active_only else _SELECT_CURRENT
+        builder = _select_active if active_only else _select_current
         # Tie-Breaker auf `id` haelt die Sortierung stabil, wenn zwei Rows
         # auf die Microsekunde gleichzeitig angelegt wurden.
         if after is None:
+            select = builder("$3")
             rows = await self._pool.fetch(
                 f"{select} WHERE p.workspace_id = $1 "
                 "ORDER BY p.created_at DESC, p.id DESC LIMIT $2",
                 workspace_id,
                 limit,
+                locale,
             )
         else:
+            select = builder("$5")
             rows = await self._pool.fetch(
                 f"{select} WHERE p.workspace_id = $1 "
                 "AND (p.created_at, p.id) < ($2, $3) "
@@ -214,6 +249,7 @@ class PgPersonaRepository:
                 after[0],
                 after[1],
                 limit,
+                locale,
             )
         return [PersonaRead.model_validate(dict(row)) for row in rows]
 
@@ -222,12 +258,15 @@ class PgPersonaRepository:
         workspace_id: UUID,
         persona_id: UUID,
         active_only: bool = False,
+        locale: str = DEFAULT_LOCALE,
     ) -> PersonaRead | None:
-        select = _SELECT_ACTIVE if active_only else _SELECT_CURRENT
+        builder = _select_active if active_only else _select_current
+        select = builder("$3")
         row = await self._pool.fetchrow(
             f"{select} WHERE p.id = $1 AND p.workspace_id = $2",
             persona_id,
             workspace_id,
+            locale,
         )
         return PersonaRead.model_validate(dict(row)) if row is not None else None
 
@@ -238,28 +277,34 @@ class PgPersonaRepository:
         persona_id: UUID,
         name: str | None,
         content: PersonaVersionContent,
+        locale: str = DEFAULT_LOCALE,
     ) -> PersonaUpdateOutcome:
         content_json = content.model_dump(mode="json")
+        is_default = locale == DEFAULT_LOCALE
         async with self._pool.acquire() as conn, conn.transaction():
             current = await conn.fetchrow(
-                "SELECT p.current_version, pv.status "
+                "SELECT pv.version AS current_version, pv.status "
                 "FROM persona p "
                 "JOIN persona_version pv "
-                "  ON pv.persona_id = p.id AND pv.version = p.current_version "
+                "  ON pv.persona_id = p.id AND pv.locale = $3 "
+                "  AND pv.version = ( "
+                "      SELECT max(v.version) FROM persona_version v "
+                "      WHERE v.persona_id = p.id AND v.locale = $3 "
+                "  ) "
                 "WHERE p.id = $1 AND p.workspace_id = $2 FOR UPDATE OF p",
                 persona_id,
                 workspace_id,
+                locale,
             )
             if current is None:
                 return PersonaUpdateOutcome(persona=None)
-            # Solange irgendein Draft existiert, blockiert PUT: der Caller
-            # soll erst Promote/Discard durchspielen. Damit fasst der Konflikt-
-            # zweig zwei Faelle zusammen — frischer Edit auf einem aktiven Stand,
-            # bei dem schon ein Draft pending ist, und wiederholter Edit auf
-            # bereits angelegtem Draft.
+            # Solange irgendein Draft (in dieser Sprache) existiert, blockiert
+            # PUT: der Caller soll erst Promote/Discard durchspielen.
             existing_draft = await conn.fetchval(
-                "SELECT 1 FROM persona_version WHERE persona_id = $1 AND status = 'draft'",
+                "SELECT 1 FROM persona_version "
+                "WHERE persona_id = $1 AND locale = $2 AND status = 'draft'",
                 persona_id,
+                locale,
             )
             if existing_draft is not None:
                 return PersonaUpdateOutcome(persona=None, conflict="draft_exists")
@@ -276,31 +321,33 @@ class PgPersonaRepository:
                 new_status = VersionStatus.inactive
             persona = await conn.fetchrow(
                 "UPDATE persona "
-                "SET current_version = $1, name = COALESCE($2, name), "
-                "updated_at = now() "
+                "SET current_version = CASE WHEN $4 THEN $1 ELSE current_version END, "
+                "name = COALESCE($2, name), updated_at = now() "
                 "WHERE id = $3 "
                 "RETURNING id, workspace_id, owner_id, name, current_version, "
                 "created_at, updated_at",
                 next_version,
                 name,
                 persona_id,
+                is_default,
             )
             await conn.execute(
                 "INSERT INTO persona_version "
-                "(persona_id, version, content, status, created_by) "
-                "VALUES ($1, $2, $3, $4, $5)",
+                "(persona_id, version, content, status, created_by, locale) "
+                "VALUES ($1, $2, $3, $4, $5, $6)",
                 persona_id,
                 next_version,
                 content_json,
                 new_status.value,
                 owner_id,
+                locale,
             )
-        # `has_pending_draft` ist genau dann True, wenn wir hier soeben einen
-        # Draft erzeugt haben — vorhandene Drafts haetten 409 ausgeloest.
         return PersonaUpdateOutcome(
             persona=PersonaRead.model_validate(
                 {
                     **dict(persona),
+                    "current_version": next_version,
+                    "locale": locale,
                     "content": content_json,
                     "current_status": new_status,
                     "has_pending_draft": new_status == VersionStatus.draft,
@@ -315,37 +362,40 @@ class PgPersonaRepository:
         persona_id: UUID,
         name: str | None,
         content: PersonaVersionContent,
+        locale: str = DEFAULT_LOCALE,
     ) -> PersonaUpdateOutcome:
         """Auto-Save-Pfad (PATCH `.../draft`).
 
-        Verhalten:
+        Verhalten (jeweils pro Sprache):
         - Existiert ein Draft, wird die Draft-Row in-place ueberschrieben —
           kein Versions-Increment. Active bleibt unangetastet.
-        - Existiert kein Draft, wird ein neuer Draft v(n+1) angelegt; die
-          `persona.current_version` wandert mit. Active wird *nicht*
-          inaktiviert (das macht erst die Publish-Transition).
-        - Edge-Case `current_status='review'` ohne offenen Draft: 409. Auf
-          einer Review-Version wird kein Auto-Save zugelassen — sonst wuerde
-          der Reviewer-Snapshot beim Tippen verschwinden. Frontend
-          verhindert das eigentlich (Editor disabled), aber der Server haelt
-          den Vertrag.
+        - Existiert kein Draft, wird ein neuer Draft v(n+1) angelegt.
+        - Edge-Case `current_status='review'` ohne offenen Draft: 409.
         """
         content_json = content.model_dump(mode="json")
+        is_default = locale == DEFAULT_LOCALE
         async with self._pool.acquire() as conn, conn.transaction():
             current = await conn.fetchrow(
-                "SELECT p.current_version, pv.status "
+                "SELECT pv.version AS current_version, pv.status "
                 "FROM persona p "
                 "JOIN persona_version pv "
-                "  ON pv.persona_id = p.id AND pv.version = p.current_version "
+                "  ON pv.persona_id = p.id AND pv.locale = $3 "
+                "  AND pv.version = ( "
+                "      SELECT max(v.version) FROM persona_version v "
+                "      WHERE v.persona_id = p.id AND v.locale = $3 "
+                "  ) "
                 "WHERE p.id = $1 AND p.workspace_id = $2 FOR UPDATE OF p",
                 persona_id,
                 workspace_id,
+                locale,
             )
             if current is None:
                 return PersonaUpdateOutcome(persona=None)
             draft_version = await conn.fetchval(
-                "SELECT version FROM persona_version WHERE persona_id = $1 AND status = 'draft'",
+                "SELECT version FROM persona_version "
+                "WHERE persona_id = $1 AND locale = $2 AND status = 'draft'",
                 persona_id,
+                locale,
             )
             if draft_version is not None:
                 persona = await conn.fetchrow(
@@ -359,16 +409,19 @@ class PgPersonaRepository:
                 )
                 await conn.execute(
                     "UPDATE persona_version SET content = $1, created_by = $2 "
-                    "WHERE persona_id = $3 AND version = $4",
+                    "WHERE persona_id = $3 AND locale = $4 AND version = $5",
                     content_json,
                     owner_id,
                     persona_id,
+                    locale,
                     draft_version,
                 )
                 return PersonaUpdateOutcome(
                     persona=PersonaRead.model_validate(
                         {
                             **dict(persona),
+                            "current_version": draft_version,
+                            "locale": locale,
                             "content": content_json,
                             "current_status": VersionStatus.draft,
                             "has_pending_draft": True,
@@ -380,29 +433,33 @@ class PgPersonaRepository:
             next_version = current["current_version"] + 1
             persona = await conn.fetchrow(
                 "UPDATE persona "
-                "SET current_version = $1, name = COALESCE($2, name), "
-                "updated_at = now() "
+                "SET current_version = CASE WHEN $4 THEN $1 ELSE current_version END, "
+                "name = COALESCE($2, name), updated_at = now() "
                 "WHERE id = $3 "
                 "RETURNING id, workspace_id, owner_id, name, current_version, "
                 "created_at, updated_at",
                 next_version,
                 name,
                 persona_id,
+                is_default,
             )
             await conn.execute(
                 "INSERT INTO persona_version "
-                "(persona_id, version, content, status, created_by) "
-                "VALUES ($1, $2, $3, $4, $5)",
+                "(persona_id, version, content, status, created_by, locale) "
+                "VALUES ($1, $2, $3, $4, $5, $6)",
                 persona_id,
                 next_version,
                 content_json,
                 VersionStatus.draft.value,
                 owner_id,
+                locale,
             )
         return PersonaUpdateOutcome(
             persona=PersonaRead.model_validate(
                 {
                     **dict(persona),
+                    "current_version": next_version,
+                    "locale": locale,
                     "content": content_json,
                     "current_status": VersionStatus.draft,
                     "has_pending_draft": True,
@@ -416,51 +473,70 @@ class PgPersonaRepository:
         owner_id: UUID,
         persona_id: UUID,
         content: PersonaVersionContent,
+        locale: str = DEFAULT_LOCALE,
     ) -> PersonaUpdateOutcome:
         """Schreibt `content` (Snapshot) als neue Draft-Version (Track A §3.1).
 
-        Non-destruktiv: frische Draft v(n+1), kein Pointer-Reset. 409
-        (`draft_exists`) bei bereits offenem Draft. Name bleibt unveraendert.
+        Non-destruktiv: frische Draft v(n+1) im `locale`-Track, kein Pointer-
+        Reset. 409 (`draft_exists`) bei bereits offenem Draft. Name bleibt
+        unveraendert.
         """
         content_json = content.model_dump(mode="json")
+        is_default = locale == DEFAULT_LOCALE
         async with self._pool.acquire() as conn, conn.transaction():
             current = await conn.fetchrow(
-                "SELECT current_version FROM persona "
-                "WHERE id = $1 AND workspace_id = $2 FOR UPDATE",
+                # Per-locale Max-Version als Scalar-Subquery — Postgres erlaubt
+                # `FOR UPDATE` nicht zusammen mit `GROUP BY`. Die Sperre liegt
+                # auf der Identitaets-Zeile `persona`; current_version ist NULL,
+                # wenn fuer die Sprache (noch) keine Version existiert.
+                "SELECT (SELECT max(v.version) FROM persona_version v "
+                "        WHERE v.persona_id = p.id AND v.locale = $3) AS current_version "
+                "FROM persona p "
+                "WHERE p.id = $1 AND p.workspace_id = $2 "
+                "FOR UPDATE",
                 persona_id,
                 workspace_id,
+                locale,
             )
-            if current is None:
+            if current is None or current["current_version"] is None:
                 return PersonaUpdateOutcome(persona=None)
             existing_draft = await conn.fetchval(
-                "SELECT 1 FROM persona_version WHERE persona_id = $1 AND status = 'draft'",
+                "SELECT 1 FROM persona_version "
+                "WHERE persona_id = $1 AND locale = $2 AND status = 'draft'",
                 persona_id,
+                locale,
             )
             if existing_draft is not None:
                 return PersonaUpdateOutcome(persona=None, conflict="draft_exists")
             next_version = current["current_version"] + 1
             persona = await conn.fetchrow(
-                "UPDATE persona SET current_version = $1, updated_at = now() "
+                "UPDATE persona SET "
+                "current_version = CASE WHEN $3 THEN $1 ELSE current_version END, "
+                "updated_at = now() "
                 "WHERE id = $2 "
                 "RETURNING id, workspace_id, owner_id, name, current_version, "
                 "created_at, updated_at",
                 next_version,
                 persona_id,
+                is_default,
             )
             await conn.execute(
                 "INSERT INTO persona_version "
-                "(persona_id, version, content, status, created_by) "
-                "VALUES ($1, $2, $3, $4, $5)",
+                "(persona_id, version, content, status, created_by, locale) "
+                "VALUES ($1, $2, $3, $4, $5, $6)",
                 persona_id,
                 next_version,
                 content_json,
                 VersionStatus.draft.value,
                 owner_id,
+                locale,
             )
         return PersonaUpdateOutcome(
             persona=PersonaRead.model_validate(
                 {
                     **dict(persona),
+                    "current_version": next_version,
+                    "locale": locale,
                     "content": content_json,
                     "current_status": VersionStatus.draft,
                     "has_pending_draft": True,
@@ -469,7 +545,7 @@ class PgPersonaRepository:
         )
 
     async def list_versions(
-        self, workspace_id: UUID, persona_id: UUID
+        self, workspace_id: UUID, persona_id: UUID, locale: str = DEFAULT_LOCALE
     ) -> list[PersonaVersionRead] | None:
         owned = await self._pool.fetchval(
             "SELECT 1 FROM persona WHERE id = $1 AND workspace_id = $2",
@@ -479,46 +555,54 @@ class PgPersonaRepository:
         if owned is None:
             return None
         rows = await self._pool.fetch(
-            "SELECT version, status, content, created_by, created_at "
-            "FROM persona_version WHERE persona_id = $1 ORDER BY version DESC",
+            "SELECT version, status, locale, content, created_by, created_at "
+            "FROM persona_version WHERE persona_id = $1 AND locale = $2 "
+            "ORDER BY version DESC",
             persona_id,
+            locale,
         )
         return [PersonaVersionRead.model_validate(dict(row)) for row in rows]
 
     async def fetch_version(
-        self, workspace_id: UUID, persona_id: UUID, version: int
+        self, workspace_id: UUID, persona_id: UUID, version: int, locale: str = DEFAULT_LOCALE
     ) -> PersonaVersionRead | None:
         row = await self._pool.fetchrow(
-            "SELECT pv.version, pv.status, pv.content, pv.created_by, pv.created_at "
+            "SELECT pv.version, pv.status, pv.locale, pv.content, pv.created_by, pv.created_at "
             "FROM persona_version pv "
             "JOIN persona p ON p.id = pv.persona_id "
-            "WHERE p.id = $1 AND p.workspace_id = $2 AND pv.version = $3",
+            "WHERE p.id = $1 AND p.workspace_id = $2 AND pv.version = $3 AND pv.locale = $4",
             persona_id,
             workspace_id,
             version,
+            locale,
         )
         return PersonaVersionRead.model_validate(dict(row)) if row is not None else None
 
-    async def list_distinct_tags(self, workspace_id: UUID) -> list[str]:
+    async def list_distinct_tags(
+        self, workspace_id: UUID, locale: str = DEFAULT_LOCALE
+    ) -> list[str]:
         """DISTINCT alle Persona-Tags des Workspaces, lexikografisch sortiert.
 
         Persona-Tags liegen — anders als bei Playbooks — nicht denormalisiert
         auf der Identitaets-Zeile, sondern im JSON der aktuellen Version
         (`persona_version.content->'tags'`). Wir lesen daher per Lateral-Join
-        ueber die Current-Version jeder Persona im Workspace. Historische
-        Versions-Snapshots tragen nicht bei — das matcht das Verhalten des
-        Playbook-Pendants, das ebenfalls nur den aktuellen Stand spiegelt.
-        Cross-Workspace-Isolation ueber den `workspace_id`-Filter (siehe
-        `test_persona_tags`).
+        ueber die Current-Version (= hoechste Version des `locale`-Tracks) jeder
+        Persona im Workspace. Historische Versions-Snapshots tragen nicht bei.
+        Cross-Workspace-Isolation ueber den `workspace_id`-Filter.
         """
         rows = await self._pool.fetch(
             "SELECT DISTINCT tag "
             "FROM persona p "
             "JOIN persona_version pv "
-            "  ON pv.persona_id = p.id AND pv.version = p.current_version "
+            "  ON pv.persona_id = p.id AND pv.locale = $2 "
+            "  AND pv.version = ( "
+            "      SELECT max(v.version) FROM persona_version v "
+            "      WHERE v.persona_id = p.id AND v.locale = $2 "
+            "  ) "
             "CROSS JOIN LATERAL jsonb_array_elements_text(pv.content->'tags') AS tag "
             "WHERE p.workspace_id = $1 "
             "ORDER BY tag ASC",
             workspace_id,
+            locale,
         )
         return [row["tag"] for row in rows]

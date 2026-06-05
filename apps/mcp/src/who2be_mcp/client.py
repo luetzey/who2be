@@ -13,6 +13,7 @@ import httpx
 from fastmcp.exceptions import ToolError
 
 from who2be_models import (
+    DEFAULT_LOCALE,
     AgentWithRenderedPrompt,
     PersonaRead,
     PlaybookRead,
@@ -72,28 +73,43 @@ class ApiClient:
             raise ToolError(f"Who2Be-API-Fehler ({response.status_code}).")
         return response.json()
 
-    async def get_persona(self, identifier: str) -> PersonaRead:
-        """Laedt eine Persona per UUID oder — sonst — per Name."""
+    async def get_persona(
+        self, identifier: str, locale: str = DEFAULT_LOCALE
+    ) -> PersonaRead:
+        """Laedt eine Persona per UUID oder — sonst — per Name (in `locale`)."""
         try:
             persona_id = UUID(identifier)
         except ValueError:
-            return await self._resolve_persona_by_name(identifier)
-        data = await self._get(f"{self._workspace_prefix}/personas/{persona_id}")
+            return await self._resolve_persona_by_name(identifier, locale)
+        data = await self._get(
+            f"{self._workspace_prefix}/personas/{persona_id}", params={"locale": locale}
+        )
         return PersonaRead.model_validate(data)
 
-    async def _resolve_persona_by_name(self, name: str) -> PersonaRead:
-        data = await self._get(f"{self._workspace_prefix}/personas")
+    async def _resolve_persona_by_name(
+        self, name: str, locale: str = DEFAULT_LOCALE
+    ) -> PersonaRead:
+        data = await self._get(
+            f"{self._workspace_prefix}/personas", params={"locale": locale}
+        )
         for entry in data:
             persona = PersonaRead.model_validate(entry)
             if persona.name == name:
                 return persona
         raise ToolError(f"Keine Persona mit Name '{name}'.")
 
-    async def get_persona_playbooks(self, persona_id: UUID) -> list[PlaybookRead]:
-        data = await self._get(f"{self._workspace_prefix}/personas/{persona_id}/playbooks")
+    async def get_persona_playbooks(
+        self, persona_id: UUID, locale: str = DEFAULT_LOCALE
+    ) -> list[PlaybookRead]:
+        data = await self._get(
+            f"{self._workspace_prefix}/personas/{persona_id}/playbooks",
+            params={"locale": locale},
+        )
         return [PlaybookRead.model_validate(item) for item in data]
 
-    async def get_persona_rendered(self, persona_id: UUID) -> str:
+    async def get_persona_rendered(
+        self, persona_id: UUID, locale: str = DEFAULT_LOCALE
+    ) -> str:
         """Laedt den serverseitig expandierten Persona-Profil-Body (Track F).
 
         Der API-Endpoint `GET .../personas/{id}/rendered` jagt den Profil-Body
@@ -106,12 +122,17 @@ class ApiClient:
         Gibt nur den `body_rendered`-String zurueck; die `unresolved`-Liste ist
         fuer den Agent-Konsum nicht relevant (best-effort Expansion).
         """
-        data = await self._get(f"{self._workspace_prefix}/personas/{persona_id}/rendered")
+        data = await self._get(
+            f"{self._workspace_prefix}/personas/{persona_id}/rendered",
+            params={"locale": locale},
+        )
         body = data.get("body_rendered") if isinstance(data, dict) else None
         return body if isinstance(body, str) else ""
 
-    async def list_playbooks(self, tag: str | None, trigger: str | None) -> list[PlaybookRead]:
-        params: dict[str, str] = {}
+    async def list_playbooks(
+        self, tag: str | None, trigger: str | None, locale: str = DEFAULT_LOCALE
+    ) -> list[PlaybookRead]:
+        params: dict[str, str] = {"locale": locale}
         if tag is not None:
             params["tag"] = tag
         if trigger is not None:
@@ -123,19 +144,29 @@ class ApiClient:
         data = await self._get(f"{self._workspace_prefix}/playbooks/triggers")
         return [TriggerOverview.model_validate(item) for item in data]
 
-    async def get_playbook(self, playbook_id: UUID) -> PlaybookRead:
-        data = await self._get(f"{self._workspace_prefix}/playbooks/{playbook_id}")
+    async def get_playbook(
+        self, playbook_id: UUID, locale: str = DEFAULT_LOCALE
+    ) -> PlaybookRead:
+        data = await self._get(
+            f"{self._workspace_prefix}/playbooks/{playbook_id}", params={"locale": locale}
+        )
         return PlaybookRead.model_validate(data)
 
-    async def list_resources(self, tag: str | None = None) -> list[ResourceRead]:
-        params: dict[str, str] = {}
+    async def list_resources(
+        self, tag: str | None = None, locale: str = DEFAULT_LOCALE
+    ) -> list[ResourceRead]:
+        params: dict[str, str] = {"locale": locale}
         if tag is not None:
             params["tag"] = tag
         data = await self._get(f"{self._workspace_prefix}/resources", params=params)
         return [ResourceRead.model_validate(item) for item in data]
 
-    async def get_resource(self, resource_id: UUID) -> ResourceRead:
-        data = await self._get(f"{self._workspace_prefix}/resources/{resource_id}")
+    async def get_resource(
+        self, resource_id: UUID, locale: str = DEFAULT_LOCALE
+    ) -> ResourceRead:
+        data = await self._get(
+            f"{self._workspace_prefix}/resources/{resource_id}", params={"locale": locale}
+        )
         return ResourceRead.model_validate(data)
 
     async def get_resource_sub_resources(self, resource_id: UUID) -> list[SubResourceRead]:
@@ -153,13 +184,18 @@ class ApiClient:
         data = await self._get(f"{self._workspace_prefix}/playbooks/{playbook_id}/resource_links")
         return [ResourceLinkRead.model_validate(item) for item in data]
 
-    async def get_playbook_composes(self, playbook_id: UUID) -> list[PlaybookRead]:
+    async def get_playbook_composes(
+        self, playbook_id: UUID, locale: str = DEFAULT_LOCALE
+    ) -> list[PlaybookRead]:
         """Laedt die geordneten aktiven Sub-Playbooks eines Composite (eine Ebene).
 
         Leere Liste wenn das Playbook kein Composite ist oder keine aktiven
         Kinder hat (API-Token-Pfad liefert nur aktive Versionen).
         """
-        data = await self._get(f"{self._workspace_prefix}/playbooks/{playbook_id}/composes")
+        data = await self._get(
+            f"{self._workspace_prefix}/playbooks/{playbook_id}/composes",
+            params={"locale": locale},
+        )
         return [PlaybookRead.model_validate(item) for item in data]
 
     async def get_agent_rendered(self, agent_id: UUID) -> AgentWithRenderedPrompt:
@@ -167,7 +203,9 @@ class ApiClient:
         data = await self._get(f"{self._workspace_prefix}/agents/{agent_id}/rendered")
         return AgentWithRenderedPrompt.model_validate(data)
 
-    async def get_playbook_rendered(self, playbook_id: UUID) -> str:
+    async def get_playbook_rendered(
+        self, playbook_id: UUID, locale: str = DEFAULT_LOCALE
+    ) -> str:
         """Laedt den serverseitig expandierten Playbook-Body (B5).
 
         Der API-Endpoint `GET .../playbooks/{id}/rendered` jagt den BlockNote-Body
@@ -177,6 +215,9 @@ class ApiClient:
         Gibt nur den `body_rendered`-String zurueck; die `unresolved`-Liste ist fuer
         den Agent-Konsum nicht relevant (best-effort Expansion).
         """
-        data = await self._get(f"{self._workspace_prefix}/playbooks/{playbook_id}/rendered")
+        data = await self._get(
+            f"{self._workspace_prefix}/playbooks/{playbook_id}/rendered",
+            params={"locale": locale},
+        )
         body = data.get("body_rendered") if isinstance(data, dict) else None
         return body if isinstance(body, str) else ""

@@ -21,9 +21,11 @@ from pydantic import (
     Field,
     StringConstraints,
     computed_field,
+    field_validator,
     model_validator,
 )
 
+from who2be_models.locale import DEFAULT_LOCALE, ContentLocale, normalize_locale
 from who2be_models.status import VersionStatus
 
 # Stabile BlockNote-Block-ID bzw. Block-Typ — die ID ist der Anker fuer
@@ -95,6 +97,23 @@ class ResourceCreate(BaseModel):
 
     name: str = Field(min_length=1, max_length=200)
     content: ResourceContent = Field(default_factory=ResourceContent)
+    # Content-i18n (ADR-0027): Sprachvarianten beim Anlegen. Default `['de']`
+    # = Backward-Compat; jede Sprache startet als eigene Draft-v1 (Copy).
+    locales: list[ContentLocale] = Field(default_factory=lambda: [DEFAULT_LOCALE])
+
+    @field_validator("locales")
+    @classmethod
+    def _dedup_non_empty(cls, value: list[str]) -> list[str]:
+        if not value:
+            raise ValueError("Mindestens eine Sprache ist erforderlich.")
+        seen: set[str] = set()
+        ordered: list[str] = []
+        for loc in value:
+            norm = normalize_locale(loc)
+            if norm not in seen:
+                seen.add(norm)
+                ordered.append(norm)
+        return ordered
 
 
 class ResourceUpdate(BaseModel):
@@ -118,6 +137,7 @@ class ResourceRead(BaseModel):
     current_version: int
     current_status: VersionStatus = VersionStatus.inactive
     has_pending_draft: bool = False
+    locale: ContentLocale = DEFAULT_LOCALE
     content: ResourceContent
     # Track E: direkte Sub-Resource-Verweise (Resource->Resource). Default `[]`
     # — REST-Reads befuellen das Feld nicht (dafuer gibt es den dedizierten
@@ -142,6 +162,7 @@ class ResourceVersionRead(BaseModel):
 
     version: int
     status: VersionStatus = VersionStatus.inactive
+    locale: ContentLocale = DEFAULT_LOCALE
     content: ResourceContent
     created_by: UUID
     created_at: datetime
