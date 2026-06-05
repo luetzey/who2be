@@ -29,6 +29,13 @@ vi.mock('@/components/ui/theme-toggle', () => ({
   ThemeToggle: () => <div>theme</div>,
 }))
 
+// MfaSection spricht die GoTrue-`/factors`-API (supabase.auth.mfa) beim Mount
+// an — hier irrelevant und durch einen Platzhalter ersetzt. Eigene Tests in
+// MfaSection.test.tsx / MfaSection.a11y.test.tsx.
+vi.mock('../components/MfaSection', () => ({
+  MfaSection: () => <div>mfa</div>,
+}))
+
 vi.mock('@/auth/session-context', () => ({
   useSession: () => ({
     session: {

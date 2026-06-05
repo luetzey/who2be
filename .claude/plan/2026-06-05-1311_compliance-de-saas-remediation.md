@@ -618,7 +618,23 @@ Pushen, Draft-PR, Change-Log Abschnitt 7. Bei Design-Weichen drei Optionen rück
 > Jeder WP-Agent trägt hier nach Abschluss eine Zeile ein: `YYYY-MM-DD — WP-x — <PR-Link/Branch> —
 > Kurzbeschreibung + DoD-Status`. Spiegelbild kurz nach Notion-Projekt-`## Notes` (Coder-Doku-Konvention).
 
-- _(noch leer — wird befüllt, sobald die Pakete laufen)_
+- 2026-06-05 — **WP-F** — Branch `claude/lucid-allen-lFw4Z` (Draft-PR) — MFA für
+  administrative Zugänge. GoTrue-TOTP per Env aktiviert
+  (`GOTRUE_MFA_TOTP_ENROLL_ENABLED`/`VERIFY_ENABLED`/`MAX_ENROLLED_FACTORS`,
+  verifiziert gegen GoTrue v2.158.1 — kein Top-Level `GOTRUE_MFA_ENABLED`) in
+  `docker-compose.yml`, `docker-compose.cloud.yml` (vererbt), `deploy/hetzner/supabase/docker-compose.yml`
+  + beide `.env.example`. Backend: `aal`-Claim ausgewertet
+  (`verify_supabase_jwt`), zentrale Hilfsfunktion `require_aal2` an
+  `require_role(ctx, admin)` gehängt → 403 ohne AAL2. **Design-Entscheidungen
+  (mit Betreiber abgestimmt):** API-Token exempt (Maschinen-Pfad), fehlender
+  `aal`-Claim fail-open (nur expliziter Nicht-aal2-Wert blockt — produktive
+  GoTrue-JWTs tragen `aal` immer). Frontend: MFA-Sektion in der Konto-Security-
+  Card (`features/settings/components/MfaSection.tsx`, TOTP enroll/verify/list/
+  unenroll via `supabase.auth.mfa`), keine neue Route. Doku: `docs/mfa-admin.md`.
+  Tests: `test_mfa_aal2.py`, `test_security.py` (aal-Claim), `MfaSection.test.tsx`
+  + `MfaSection.a11y.test.tsx`. **DoD grün:** ruff/mypy/pytest (553 passed) +
+  Web lint/tsc/test (357 passed)/build. Grenzen eingehalten (von `apps/api` nur
+  `core/security.py`; RUNBOOK/routes.tsx/auth/legal nicht angefasst).
 
 ---
 

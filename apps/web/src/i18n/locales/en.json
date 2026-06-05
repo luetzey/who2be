@@ -1055,7 +1055,31 @@
       },
       "security": {
         "title": "Security",
-        "description": "Password and active sessions."
+        "description": "Password, two-factor (MFA) and active sessions."
+      },
+      "mfa": {
+        "title": "Two-factor (MFA)",
+        "description": "Protects administrative actions with a second factor (TOTP). Mandatory for admins — without MFA, admin actions are blocked.",
+        "listLabel": "Configured authenticators",
+        "statusActive": "Active",
+        "factorFallbackName": "Authenticator",
+        "empty": "No authenticator configured yet.",
+        "addButton": "Add authenticator",
+        "enrollTitle": "Set up authenticator",
+        "enrollDescription": "Scan the QR code with your authenticator app (e.g. 1Password, Google Authenticator) and enter the 6-digit code shown.",
+        "preparing": "Preparing setup…",
+        "qrAlt": "QR code to set up the authenticator",
+        "secretLabel": "Secret for manual entry",
+        "codeLabel": "6-digit code",
+        "codePlaceholder": "123456",
+        "verifyButton": "Confirm",
+        "enrolledToast": "Two-factor enabled.",
+        "enrollError": "Could not start setup.",
+        "removeButton": "Remove",
+        "removeTitle": "Remove factor",
+        "removeDescription": "Without a second factor, administrative actions are blocked. Really remove this authenticator?",
+        "removeConfirm": "Remove",
+        "removedToast": "Factor removed."
       },
       "password": {
         "newLabel": "New password",

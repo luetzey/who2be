@@ -51,6 +51,14 @@ services:
       GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
       GOTRUE_JWT_ADMIN_ROLES: service_role
       GOTRUE_JWT_AUD: authenticated
+      # MFA / TOTP (WP-F, Befund S1): Zwei-Faktor per TOTP. Nach einer
+      # verifizierten Challenge setzt GoTrue den JWT-Claim `aal=aal2`; die API
+      # erzwingt aal2 fuer Admin-Aktionen (core/security.require_aal2). GoTrue
+      # v2.158.1 kennt KEIN Top-Level GOTRUE_MFA_ENABLED — Faktoren werden pro
+      # Typ geschaltet (TOTP default an; hier explizit + via .env overridebar).
+      GOTRUE_MFA_TOTP_ENROLL_ENABLED: ${GOTRUE_MFA_TOTP_ENROLL_ENABLED:-true}
+      GOTRUE_MFA_TOTP_VERIFY_ENABLED: ${GOTRUE_MFA_TOTP_VERIFY_ENABLED:-true}
+      GOTRUE_MFA_MAX_ENROLLED_FACTORS: ${GOTRUE_MFA_MAX_ENROLLED_FACTORS:-10}
       GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
       # Dev bleibt autoconfirm: kein SMTP noetig, Signups sind sofort nutzbar.
       # Prod (deploy/hetzner) schaltet das auf false + echten Mailer um.

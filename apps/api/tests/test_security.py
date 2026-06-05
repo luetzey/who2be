@@ -96,13 +96,19 @@ def test_new_token_has_prefix_and_is_unique() -> None:
 
 def test_verify_jwt_accepts_valid_token(jwt_secret: None) -> None:
     owner = uuid4()
-    assert verify_supabase_jwt(_encode({"sub": str(owner)})) == (owner, None)
+    assert verify_supabase_jwt(_encode({"sub": str(owner)})) == (owner, None, None)
 
 
 def test_verify_jwt_reads_email_claim(jwt_secret: None) -> None:
     owner = uuid4()
     token = _encode({"sub": str(owner), "email": "user@example.com"})
-    assert verify_supabase_jwt(token) == (owner, "user@example.com")
+    assert verify_supabase_jwt(token) == (owner, "user@example.com", None)
+
+
+def test_verify_jwt_reads_aal_claim(jwt_secret: None) -> None:
+    owner = uuid4()
+    token = _encode({"sub": str(owner), "aal": "aal2"})
+    assert verify_supabase_jwt(token) == (owner, None, "aal2")
 
 
 def test_verify_jwt_rejects_expired_token(jwt_secret: None) -> None:
@@ -145,7 +151,7 @@ def test_verify_jwt_rejects_service_role(jwt_secret: None) -> None:
 def test_verify_jwt_accepts_authenticated_role(jwt_secret: None) -> None:
     owner = uuid4()
     token = _encode({"sub": str(owner), "role": "authenticated"})
-    assert verify_supabase_jwt(token) == (owner, None)
+    assert verify_supabase_jwt(token) == (owner, None, None)
 
 
 def test_verify_jwt_checks_issuer_when_supabase_url_configured(
@@ -159,7 +165,7 @@ def test_verify_jwt_checks_issuer_when_supabase_url_configured(
     owner = uuid4()
     # Korrekter Issuer akzeptiert.
     ok = _encode({"sub": str(owner), "iss": "https://supa.test/auth/v1"})
-    assert verify_supabase_jwt(ok) == (owner, None)
+    assert verify_supabase_jwt(ok) == (owner, None, None)
     # Falscher Issuer abgelehnt.
     bad = _encode({"sub": str(owner), "iss": "https://evil.example.com/auth/v1"})
     with pytest.raises(HTTPException):

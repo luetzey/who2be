@@ -47,6 +47,14 @@ services:
       GOTRUE_JWT_ADMIN_ROLES: service_role
       GOTRUE_JWT_AUD: authenticated
       GOTRUE_JWT_ISSUER: https://supabase.${DOMAIN}/auth/v1
+      # MFA / TOTP (WP-F, Befund S1): Zwei-Faktor per TOTP. Nach verifizierter
+      # Challenge setzt GoTrue `aal=aal2` im JWT; die Who2Be-API erzwingt aal2
+      # fuer Admin-Aktionen (core/security.require_aal2). Admins MUESSEN einen
+      # TOTP-Faktor einrichten (docs/mfa-admin.md). v2.158.1 hat KEIN
+      # Top-Level GOTRUE_MFA_ENABLED — TOTP wird pro Faktor geschaltet.
+      GOTRUE_MFA_TOTP_ENROLL_ENABLED: ${GOTRUE_MFA_TOTP_ENROLL_ENABLED:-true}
+      GOTRUE_MFA_TOTP_VERIFY_ENABLED: ${GOTRUE_MFA_TOTP_VERIFY_ENABLED:-true}
+      GOTRUE_MFA_MAX_ENROLLED_FACTORS: ${GOTRUE_MFA_MAX_ENROLLED_FACTORS:-10}
       GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
       # Prod: E-Mail-Verifikation AN (default false = Confirm Pflicht). Mit
       # GOTRUE_MAILER_AUTOCONFIRM=true im .env laesst sich das fuer einen

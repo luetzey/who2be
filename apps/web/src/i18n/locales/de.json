@@ -1055,7 +1055,31 @@
       },
       "security": {
         "title": "Sicherheit",
-        "description": "Passwort und aktive Sitzungen."
+        "description": "Passwort, Zwei-Faktor (MFA) und aktive Sitzungen."
+      },
+      "mfa": {
+        "title": "Zwei-Faktor (MFA)",
+        "description": "Schützt administrative Aktionen mit einem zweiten Faktor (TOTP). Für Admins verpflichtend — ohne MFA sind Admin-Aktionen blockiert.",
+        "listLabel": "Eingerichtete Authenticator",
+        "statusActive": "Aktiv",
+        "factorFallbackName": "Authenticator",
+        "empty": "Noch kein Authenticator eingerichtet.",
+        "addButton": "Authenticator hinzufügen",
+        "enrollTitle": "Authenticator einrichten",
+        "enrollDescription": "Scanne den QR-Code mit deiner Authenticator-App (z. B. 1Password, Google Authenticator) und gib den angezeigten 6-stelligen Code ein.",
+        "preparing": "Einrichtung wird vorbereitet…",
+        "qrAlt": "QR-Code zum Einrichten des Authenticators",
+        "secretLabel": "Schlüssel zum manuellen Eingeben",
+        "codeLabel": "6-stelliger Code",
+        "codePlaceholder": "123456",
+        "verifyButton": "Bestätigen",
+        "enrolledToast": "Zwei-Faktor aktiviert.",
+        "enrollError": "Einrichtung konnte nicht gestartet werden.",
+        "removeButton": "Entfernen",
+        "removeTitle": "Faktor entfernen",
+        "removeDescription": "Ohne zweiten Faktor sind administrative Aktionen blockiert. Authenticator wirklich entfernen?",
+        "removeConfirm": "Entfernen",
+        "removedToast": "Faktor entfernt."
       },
       "password": {
         "newLabel": "Neues Passwort",
