@@ -25,6 +25,7 @@ import asyncio
 import os
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import UUID
 
 import pytest
@@ -34,6 +35,41 @@ import pytest
 TEST_JWT_SECRET = "integration-test-jwt-secret-padding-0123456789"
 
 _DB_REACHABLE_CACHE: bool | None = None
+_PG_CONTAINER: Any = None
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Opt-in: ephemere Postgres via Testcontainers (ADR-0032, Phase 2).
+
+    Mit ``WHO2BE_TEST_TESTCONTAINERS=1`` (und laufendem Docker) wird vor der
+    Collection ein Postgres-Container gestartet, ``DATABASE_URL`` darauf gesetzt
+    und der ``get_settings``-Cache geleert — so laufen die Integrationstests
+    auch *lokal* wirklich, ohne manuelles ``docker compose``. Default ist aus:
+    CI nutzt bewusst den vorhandenen Postgres-Service (eine DB-Quelle, ADR-0032),
+    normale lokale Laeufe bleiben unveraendert.
+    """
+    global _PG_CONTAINER
+    if not _truthy(os.environ.get("WHO2BE_TEST_TESTCONTAINERS")):
+        return
+    from testcontainers.postgres import PostgresContainer
+
+    container = PostgresContainer("postgres:16")
+    container.start()
+    # Testcontainers liefert eine SQLAlchemy-URL (…+psycopg2://); asyncpg will
+    # das nackte ``postgresql://``-Schema.
+    url = container.get_connection_url().replace("+psycopg2", "")
+    os.environ["DATABASE_URL"] = url
+    from who2be_api.core.config import get_settings
+
+    get_settings.cache_clear()
+    _PG_CONTAINER = container
+
+
+def pytest_unconfigure(config: pytest.Config) -> None:
+    global _PG_CONTAINER
+    if _PG_CONTAINER is not None:
+        _PG_CONTAINER.stop()
+        _PG_CONTAINER = None
 
 
 def _truthy(value: str | None) -> bool:
