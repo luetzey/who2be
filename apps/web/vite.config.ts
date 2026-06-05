@@ -44,10 +44,12 @@ export default defineConfig({
         'src/vite-env.d.ts',
         'src/i18n/**',
       ],
+      // Gemessen (deterministisch, gleiche Suite): ~81.6 / 80.9 / 76.8.
+      // Floors knapp darunter; Anhebung nur in dedizierten Coverage-PRs.
       thresholds: {
         statements: 80,
-        branches: 78,
-        functions: 70,
+        branches: 79,
+        functions: 75,
         lines: 80,
       },
     },

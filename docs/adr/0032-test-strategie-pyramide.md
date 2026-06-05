@@ -30,9 +30,10 @@ Eine ehrliche, gemessene Pyramide mit durchgaengigen Gates. Bewusst **keine**
 fette E2E-Schicht (Anti-Ice-Cream-Cone).
 
 - **Coverage als Ratchet-Floor.** Python via `pytest-cov`
-  (`--cov-fail-under`), Web via `@vitest/coverage-v8` (`thresholds`). Baselines
-  DB-los gemessen (Python 66 %, Web ~81 %); CI-Floor konservativ (Python 65,
-  Web 80/78/70/80). Floors werden nur in dedizierten Coverage-PRs angehoben,
+  (`--cov-fail-under`), Web via `@vitest/coverage-v8` (`thresholds`). In CI
+  gemessen (Python: 722 Tests inkl. DB → **86.92 %**; Web: ~81.6 %); Floors
+  knapp darunter (Python **85**, Web 80/79/75/80) mit Headroom gegen
+  Mess-Rauschen. Floors werden nur in dedizierten Coverage-PRs angehoben,
   nie gesenkt.
 - **Zentrales `conftest.py` + Skip-Guard.** DB-Erreichbarkeit wird einmal
   gecacht; `@pytest.mark.integration`-Tests werden an *einer* Stelle
@@ -54,9 +55,9 @@ fette E2E-Schicht (Anti-Ice-Cream-Cone).
 
 - CI bricht bei Coverage-Regression (Floor) und bei fehlender DB im
   Integration-Tier (Skip-Guard) — beide Lecks sind geschlossen.
-- Der Floor ist zunaechst **locker** (CI-Coverage liegt mit DB ueber dem
-  DB-los gemessenen Floor). Anhebung auf den CI-gemessenen Wert erfolgt in einem
-  Folge-PR, sobald die erste gruene CI-Messung vorliegt.
+- Der Floor wurde nach dem ersten gruenen CI-Lauf auf die real gemessene
+  Coverage nachgezogen (Python 65→85). Damit faengt der Ratchet echte
+  Regressionen, nicht nur Totalausfaelle.
 - Neue Integrationstests nutzen die `conftest.py`-Fixtures statt eigenem
   Boilerplate; die 40 Alt-Dateien bleiben funktional (zentraler Skip macht ihre
   Inline-Skips redundant) und werden inkrementell migriert.

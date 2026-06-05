@@ -38,13 +38,13 @@ jobs:
       - name: Test (coverage ratchet + DB-Skip-Guard)
         # WHO2BE_REQUIRE_DB=1: ohne erreichbare DB bricht die Suite hart ab
         # (conftest.py, ADR-0032) — kein stilles "gruen durch Skip" mehr.
-        # --cov-fail-under: Ratchet-Floor (Baseline DB-los gemessen = 66 %;
-        # mit DB in CI hoeher, also sicher; Anhebung nur in Coverage-PRs).
+        # --cov-fail-under: Ratchet-Floor. CI-gemessen (722 Tests inkl. DB):
+        # 86.92 % -> Floor 85 (2 Pkt Headroom). Anhebung nur in Coverage-PRs.
         env:
           WHO2BE_REQUIRE_DB: "1"
         run: >-
           uv run pytest -q --cov --cov-report=term-missing
-          --cov-report=xml --cov-fail-under=65
+          --cov-report=xml --cov-fail-under=85
       - name: Upload Python coverage
         if: always()
         uses: actions/upload-artifact@v4
