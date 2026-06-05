@@ -37,6 +37,15 @@ jobs:
         run: uv run ruff format --check .
       - name: Typecheck
         run: uv run mypy .
+      - name: License check (Python · Deny-Liste)
+        # OSS-License-Compliance (ADR-0033): fail-closed gegen Copyleft/AGPL.
+        # Deny-Liste statt Allow-Liste — geringe False-Positive-Rate, wartungsarm
+        # (neue permissive Deps brauchen keine Pflege). MPL-2.0 (file-level,
+        # z. B. certifi) bleibt bewusst erlaubt. Laeuft hier, weil die Deps im
+        # python-Job bereits via `uv sync --group billing` installiert sind.
+        run: >-
+          uv run --with pip-licenses python -m piplicenses --partial-match
+          --fail-on "GPL;AGPL;LGPL;SSPL;CDDL;EPL;EUPL;OSL;CPL;NPL;Sleepycat;UNKNOWN"
       - name: Test (coverage ratchet + DB-Skip-Guard)
         # WHO2BE_REQUIRE_DB=1: ohne erreichbare DB bricht die Suite hart ab
         # (conftest.py, ADR-0032) — kein stilles "gruen durch Skip" mehr.
@@ -187,3 +196,9 @@ jobs:
       - name: npm audit (Web, prod-only, high+)
         working-directory: apps/web
         run: npm audit --omit=dev --audit-level=high
+      - name: License check (Web · Deny-Liste)
+        # OSS-License-Compliance (ADR-0033): fail-closed gegen Copyleft/AGPL in
+        # den Produktions-Deps. Eigenes (privates) Paket ausgeschlossen; MPL-2.0
+        # (BlockNote, lightningcss) bleibt erlaubt. Deny-Liste in package.json.
+        working-directory: apps/web
+        run: npm run license:check

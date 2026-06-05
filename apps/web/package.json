@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:a11y": "vitest run --testNamePattern a11y",
     "test:coverage": "vitest run --coverage",
+    "license:check": "license-checker-rseidelsohn --production --excludePrivatePackages --failOn \"GPL;LGPL;AGPL;SSPL;CDDL;EPL;EUPL;OSL;CPAL;NPL;Sleepycat\"",
     "e2e": "playwright test",
     "e2e:install": "playwright install --with-deps chromium"
   },
@@ -64,6 +65,7 @@
     "eslint-plugin-react-refresh": "^0.5.2",
     "eslint-plugin-tailwindcss": "^3.18.3",
     "jsdom": "^25.0.1",
+    "license-checker-rseidelsohn": "^4.4.2",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.60.1",
     "vite": "^8.0.16",
