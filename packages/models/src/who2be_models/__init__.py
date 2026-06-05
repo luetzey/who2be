@@ -90,6 +90,7 @@ from who2be_models.system_prompt_template import (
     SystemPromptTemplateVersionRead,
 )
 from who2be_models.token import TokenCreate, TokenCreated, TokenRead
+from who2be_models.tool_policy import AgentCapability, AgentToolPolicy, ReadScope
 from who2be_models.version_diff import DiffOp, VersionDiff, VersionDiffChange
 from who2be_models.workspace import WorkspaceCreate, WorkspaceRead, WorkspaceUpdate
 from who2be_models.workspace_member import (
@@ -107,11 +108,13 @@ __all__ = [
     "ContentLocale",
     "DEFAULT_LOCALE",
     "SUPPORTED_LOCALES",
+    "AgentCapability",
     "AgentCopy",
     "AgentCreate",
     "AgentRead",
     "AgentRenderResponse",
     "AgentStatus",
+    "AgentToolPolicy",
     "AgentUpdate",
     "AgentWithRenderedPrompt",
     "DEFAULT_LIMIT",
@@ -153,6 +156,7 @@ __all__ = [
     "PlaybookUpdate",
     "PlaybookUsage",
     "PlaybookVersionRead",
+    "ReadScope",
     "ResourceBlock",
     "ResourceContent",
     "ResourceCreate",

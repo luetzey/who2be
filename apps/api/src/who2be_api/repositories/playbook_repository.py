@@ -121,6 +121,7 @@ class PlaybookRepository(Protocol):
         after: tuple[datetime, UUID] | None,
         active_only: bool = False,
         locale: str = DEFAULT_LOCALE,
+        restrict_ids: list[UUID] | None = None,
     ) -> list[PlaybookRead]: ...
 
     async def fetch(
@@ -129,6 +130,7 @@ class PlaybookRepository(Protocol):
         playbook_id: UUID,
         active_only: bool = False,
         locale: str = DEFAULT_LOCALE,
+        restrict_ids: list[UUID] | None = None,
     ) -> PlaybookRead | None: ...
 
     async def update(
@@ -243,12 +245,15 @@ class PgPlaybookRepository:
         after: tuple[datetime, UUID] | None,
         active_only: bool = False,
         locale: str = DEFAULT_LOCALE,
+        restrict_ids: list[UUID] | None = None,
     ) -> list[PlaybookRead]:
         builder = _select_active if active_only else _select_current
         trigger_pattern = _escape_like(trigger) if trigger is not None else None
         # Tag/Trigger-Filter und Keyset-Pagination teilen sich denselben
         # WHERE-Block; der Cursor-Pfad haengt einen weiteren Term an. Der
-        # `locale`-Platzhalter haengt hinten an die Parameterliste.
+        # `locale`-Platzhalter haengt hinten an die Parameterliste. `restrict_ids`
+        # (Read-Scoping `assigned`) ist der letzte Parameter: NULL ⇒ keine
+        # Einschraenkung, leere Liste ⇒ keine Treffer.
         if after is None:
             select = builder("$5")
             rows = await self._pool.fetch(
@@ -257,12 +262,14 @@ class PgPlaybookRepository:
                 "AND ($2::text IS NULL OR $2 = ANY(p.tags)) "
                 "AND ($3::text IS NULL OR "
                 "     p.triggers ILIKE '%' || $3 || '%' ESCAPE '\\') "
+                "AND ($6::uuid[] IS NULL OR p.id = ANY($6)) "
                 "ORDER BY p.created_at DESC, p.id DESC LIMIT $4",
                 workspace_id,
                 tag,
                 trigger_pattern,
                 limit,
                 locale,
+                restrict_ids,
             )
         else:
             select = builder("$7")
@@ -273,6 +280,7 @@ class PgPlaybookRepository:
                 "AND ($3::text IS NULL OR "
                 "     p.triggers ILIKE '%' || $3 || '%' ESCAPE '\\') "
                 "AND (p.created_at, p.id) < ($4, $5) "
+                "AND ($8::uuid[] IS NULL OR p.id = ANY($8)) "
                 "ORDER BY p.created_at DESC, p.id DESC LIMIT $6",
                 workspace_id,
                 tag,
@@ -281,6 +289,7 @@ class PgPlaybookRepository:
                 after[1],
                 limit,
                 locale,
+                restrict_ids,
             )
         return [PlaybookRead.model_validate(dict(row)) for row in rows]
 
@@ -290,14 +299,17 @@ class PgPlaybookRepository:
         playbook_id: UUID,
         active_only: bool = False,
         locale: str = DEFAULT_LOCALE,
+        restrict_ids: list[UUID] | None = None,
     ) -> PlaybookRead | None:
         builder = _select_active if active_only else _select_current
         select = builder("$3")
         row = await self._pool.fetchrow(
-            f"{select} WHERE p.id = $1 AND p.workspace_id = $2",
+            f"{select} WHERE p.id = $1 AND p.workspace_id = $2 "
+            "AND ($4::uuid[] IS NULL OR p.id = ANY($4))",
             playbook_id,
             workspace_id,
             locale,
+            restrict_ids,
         )
         return PlaybookRead.model_validate(dict(row)) if row is not None else None
 

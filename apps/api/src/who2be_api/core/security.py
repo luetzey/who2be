@@ -28,7 +28,7 @@ from who2be_api.core.config import get_settings
 from who2be_api.core.db import get_pool
 from who2be_api.core.tenancy import tenant_scope
 from who2be_api.repositories.token_repository import PgTokenRepository, TokenRepository
-from who2be_models import WorkspaceRole
+from who2be_models import AgentCapability, AgentToolPolicy, WorkspaceRole
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +99,10 @@ class CurrentPrincipal:
     token_role: WorkspaceRole | None = None
     email: str | None = None
     aal: str | None = None
+    # Nur im API-Token-Pfad und nur, wenn der Token an einen Agenten gebunden
+    # ist: dann erbt jeder Aufruf die MCP-Tool-Policy dieses Agenten. `None` =
+    # ungebundener Token (oder JWT) → keine Pro-Agent-Restriktion.
+    token_agent_id: UUID | None = None
 
 
 @dataclass(frozen=True)
@@ -123,6 +127,14 @@ class WorkspaceContext:
     role: WorkspaceRole
     is_api_token: bool = False
     aal: str | None = None
+    # An welchen Agenten der aufrufende Token gebunden ist (None = ungebunden
+    # oder JWT). Gesetzt im Token-Pfad von `get_current_workspace`.
+    agent_id: UUID | None = None
+    # Die MCP-Tool-Policy des gebundenen Agenten. `None` heisst „keine
+    # Pro-Agent-Restriktion" (Mensch/JWT oder ungebundener Token) — dann greift
+    # allein das Rollen-Gate. Ist sie gesetzt, prueft `require_capability` die
+    # Writes und die Read-Services scopen ueber `tool_policy`.
+    tool_policy: AgentToolPolicy | None = None
 
 
 # Rollen-Hierarchie admin > editor > viewer (ADR-0023). Numerischer Rang fuer
@@ -191,6 +203,40 @@ def require_role(ctx: WorkspaceContext, minimum: WorkspaceRole) -> None:
         require_aal2(ctx)
 
 
+# Klartext-Erklaerung pro Capability fuer die 403-Antwort an den Agenten.
+_CAPABILITY_LABELS: dict[AgentCapability, str] = {
+    AgentCapability.persona_write: "Personas zu erstellen oder zu aendern",
+    AgentCapability.playbook_write: "Playbooks zu erstellen, zu aendern oder zu verknuepfen",
+    AgentCapability.resource_write: "Resources zu erstellen, zu aendern oder zu verknuepfen",
+    AgentCapability.agent_write: "Agenten zu erstellen oder zu aendern",
+    AgentCapability.promote_retire: "Versionen zu aktivieren oder zu deaktivieren",
+}
+
+
+def require_capability(ctx: WorkspaceContext, capability: AgentCapability) -> None:
+    """Wirft 403, wenn ein agent-gebundener Token die Capability nicht hat.
+
+    Ist `ctx.tool_policy is None` (Mensch/JWT oder ungebundener API-Token), ist
+    dies ein No-Op — dann gilt allein das Rollen-Gate (`require_role`). Nur wenn
+    der Token an einen Agenten gebunden ist, schraenkt die Pro-Agent-Policy die
+    Mutation zusaetzlich ein. So bleibt der bestehende Pfad (Web-UI,
+    Admin-Tokens) unveraendert, waehrend ein Agent nur das darf, was sein
+    Besitzer ihm zugestanden hat.
+    """
+    policy = ctx.tool_policy
+    if policy is None:
+        return
+    if not policy.allows(capability):
+        what = _CAPABILITY_LABELS.get(capability, capability.value)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"Dieser Agent ist nicht berechtigt, {what}. "
+                "Der Workspace-Besitzer kann das in der Agent-Konfiguration freischalten."
+            ),
+        )
+
+
 def verify_supabase_jwt(token: str) -> tuple[UUID, str | None, str | None]:
     """Verifiziert ein Supabase-JWT lokal (HS256) und liest `sub` + optional `email`/`aal`.
 
@@ -257,6 +303,7 @@ async def resolve_principal(token: str, token_repo: TokenRepository) -> CurrentP
             user_id=auth.owner_id,
             token_workspace_id=auth.workspace_id,
             token_role=auth.role,
+            token_agent_id=auth.agent_id,
         )
     user_id, email, aal = verify_supabase_jwt(token)
     return CurrentPrincipal(user_id=user_id, token_workspace_id=None, email=email, aal=aal)
@@ -300,6 +347,28 @@ async def get_current_user(
     return principal.user_id
 
 
+async def _load_agent_tool_policy(
+    pool: asyncpg.Pool, workspace_id: UUID, agent_id: UUID | None
+) -> AgentToolPolicy | None:
+    """Laedt die Tool-Policy des an den Token gebundenen Agenten.
+
+    `None`, wenn der Token ungebunden ist (`agent_id is None`) — dann gilt keine
+    Pro-Agent-Restriktion. Der Agent ist ueber `(id, workspace_id)`
+    workspace-gepinnt; verschwindet er (Race mit Delete), faellt der Token
+    defensiv auf „keine Policy" zurueck statt zu brechen.
+    """
+    if agent_id is None:
+        return None
+    policy_json = await pool.fetchval(
+        "SELECT tool_policy FROM agent WHERE id = $1 AND workspace_id = $2",
+        agent_id,
+        workspace_id,
+    )
+    if policy_json is None:
+        return None
+    return AgentToolPolicy.model_validate(policy_json)
+
+
 async def get_current_workspace(
     workspace_id: Annotated[UUID, Path(...)],
     principal: Annotated[CurrentPrincipal, Depends(get_current_principal)],
@@ -341,11 +410,19 @@ async def get_current_workspace(
             # Defensiv: der Token-Pfad setzt `token_role` immer mit. Fehlt sie,
             # ist der Principal inkonsistent — kein stiller Voll-Zugriff.
             raise _credentials_error()
+        # An einen Agenten gebundener Token: dessen Tool-Policy laden, damit
+        # `require_capability` (Writes) und die Read-Services (Scoping) sie
+        # durchsetzen. Der Agent ist workspace-gepinnt — kein Cross-WS-Leck.
+        tool_policy = await _load_agent_tool_policy(
+            pool, workspace_id, principal.token_agent_id
+        )
         ctx = WorkspaceContext(
             workspace_id=workspace_id,
             user_id=principal.user_id,
             role=principal.token_role,
             is_api_token=True,
+            agent_id=principal.token_agent_id,
+            tool_policy=tool_policy,
         )
     else:
         role = await pool.fetchval(

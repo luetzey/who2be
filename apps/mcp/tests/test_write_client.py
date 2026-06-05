@@ -336,10 +336,26 @@ def test_copy_agent_posts_to_copy() -> None:
 
 
 def test_forbidden_write_raises_toolerror_with_role_hint() -> None:
+    # Rollen-Gate: das API-`detail` traegt den Hinweis und wird durchgereicht.
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(403, json={"detail": "Forbidden"})
+        return httpx.Response(
+            403,
+            json={"detail": "Diese Aktion erfordert mindestens die Rolle 'editor'."},
+        )
 
     with pytest.raises(ToolError, match="editor"):
+        asyncio.run(_client(handler).create_persona(PersonaCreate(name="X")))
+
+
+def test_forbidden_write_surfaces_agent_policy_reason() -> None:
+    # Pro-Agent-Policy-Gate: der spezifische Grund erreicht den Agenten.
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            403,
+            json={"detail": "Dieser Agent ist nicht berechtigt, Playbooks zu erstellen."},
+        )
+
+    with pytest.raises(ToolError, match="nicht berechtigt"):
         asyncio.run(_client(handler).create_persona(PersonaCreate(name="X")))
 
 

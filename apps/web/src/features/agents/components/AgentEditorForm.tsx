@@ -9,6 +9,7 @@ import { ErrorAlert } from '@/components/data/ErrorAlert'
 import { FormSection } from '@/components/layout/FormSection'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -16,6 +17,19 @@ import { Textarea } from '@/components/ui/textarea'
 
 import type { AgentEditorValues } from '../hooks/useAgentForm'
 import { describeAgentMissing } from '../lib/activation'
+
+// Read-Scope-Domains (Select all|assigned|none), An/Aus-Reads und Write-
+// Capability-Gruppen. Reihenfolge = Anzeigereihenfolge im Formular.
+const READ_SCOPE_FIELDS = ['playbook_read', 'resource_read'] as const
+const READ_FLAG_FIELDS = ['persona_read', 'agent_read'] as const
+const WRITE_CAP_FIELDS = [
+  'persona_write',
+  'playbook_write',
+  'resource_write',
+  'agent_write',
+  'promote_retire',
+] as const
+const READ_SCOPES = ['all', 'assigned', 'none'] as const
 
 interface AgentEditorFormProps {
   form: UseFormReturn<AgentEditorValues>
@@ -175,6 +189,85 @@ export function AgentEditorForm({
                     </FormItem>
                   )}
                 />
+              </FormSection>
+
+              <FormSection
+                title={t('form.policy.title')}
+                description={t('form.policy.description')}
+                help={<p>{t('form.policy.help')}</p>}
+              >
+                <fieldset className="flex flex-col gap-3" disabled={isViewer}>
+                  <legend className="text-sm font-medium">{t('form.policy.reads')}</legend>
+                  {READ_SCOPE_FIELDS.map((name) => (
+                    <FormField
+                      key={name}
+                      control={form.control}
+                      name={name}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t(`form.policy.scopeField.${name}`)}</FormLabel>
+                          <FormControl>
+                            <Select disabled={isViewer} {...field}>
+                              {READ_SCOPES.map((scope) => (
+                                <option key={scope} value={scope}>
+                                  {t(`form.policy.scope.${scope}`)}
+                                </option>
+                              ))}
+                            </Select>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  ))}
+                  {READ_FLAG_FIELDS.map((name) => (
+                    <FormField
+                      key={name}
+                      control={form.control}
+                      name={name}
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center gap-2">
+                          <FormControl>
+                            <Checkbox
+                              disabled={isViewer}
+                              checked={Boolean(field.value)}
+                              onChange={(event) => field.onChange(event.target.checked)}
+                            />
+                          </FormControl>
+                          <FormLabel className="!mt-0">
+                            {t(`form.policy.flagField.${name}`)}
+                          </FormLabel>
+                        </FormItem>
+                      )}
+                    />
+                  ))}
+                </fieldset>
+
+                <fieldset className="flex flex-col gap-3" disabled={isViewer}>
+                  <legend className="text-sm font-medium">{t('form.policy.writes')}</legend>
+                  <p className="text-sm text-muted-foreground">{t('form.policy.writesHint')}</p>
+                  {WRITE_CAP_FIELDS.map((name) => (
+                    <FormField
+                      key={name}
+                      control={form.control}
+                      name={name}
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center gap-2">
+                          <FormControl>
+                            <Checkbox
+                              disabled={isViewer}
+                              checked={Boolean(field.value)}
+                              onChange={(event) => field.onChange(event.target.checked)}
+                            />
+                          </FormControl>
+                          <FormLabel className="!mt-0">
+                            {t(`form.policy.capField.${name}`)}
+                          </FormLabel>
+                        </FormItem>
+                      )}
+                    />
+                  ))}
+                </fieldset>
               </FormSection>
 
               <div className="flex justify-end">

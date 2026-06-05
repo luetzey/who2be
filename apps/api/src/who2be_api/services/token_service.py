@@ -39,6 +39,38 @@ class TokenService:
         self._audit = audit_service
         self._pool = pool
 
+    @staticmethod
+    def _deny_agent_bound(ctx: WorkspaceContext) -> None:
+        """Agent-gebundene Tokens duerfen keine Tokens verwalten.
+
+        Sonst koennte ein eingeschraenkter Agent einen ungebundenen Token mit
+        voller Rolle minten und so seine Pro-Agent-Policy komplett umgehen
+        (Privilege-Escalation). Token-Verwaltung bleibt menschlichen Sessions
+        und nicht-gebundenen Tokens vorbehalten.
+        """
+        if ctx.tool_policy is not None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Agent-gebundene Tokens duerfen keine API-Tokens verwalten.",
+            )
+
+    async def _assert_agent_in_workspace(self, workspace_id: UUID, agent_id: UUID) -> None:
+        """404, wenn der zu bindende Agent nicht in diesem Workspace existiert."""
+        if self._pool is None:
+            # Ohne Pool (aeltere Test-Fakes) keine DB-Pruefung moeglich; der FK
+            # auf `agent.id` faengt zumindest nicht-existente Agenten beim INSERT.
+            return
+        exists = await self._pool.fetchval(
+            "SELECT 1 FROM agent WHERE id = $1 AND workspace_id = $2",
+            agent_id,
+            workspace_id,
+        )
+        if exists is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Der zu bindende Agent existiert nicht in diesem Workspace.",
+            )
+
     async def create(self, ctx: WorkspaceContext, data: TokenCreate) -> TokenCreated:
         """Legt einen Token an; der Klartext wird genau einmal zurueckgegeben.
 
@@ -48,15 +80,26 @@ class TokenService:
         verboten (ein editor kann kein admin-Token erzeugen).
         """
         require_role(ctx, WorkspaceRole.editor)
+        self._deny_agent_bound(ctx)
         role = data.role if data.role is not None else ctx.role
         if not role_satisfies(ctx.role, role):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Ein Token darf keine hoehere Rolle als sein Ersteller haben.",
             )
+        # Optionale Agent-Bindung: der Agent muss im selben Workspace leben. Der
+        # Single-Column-FK auf `agent.id` garantiert nur Existenz, nicht die
+        # Workspace-Zugehoerigkeit — die pruefen wir hier vor dem INSERT.
+        if data.agent_id is not None:
+            await self._assert_agent_in_workspace(ctx.workspace_id, data.agent_id)
         plaintext = new_token()
         stored = await self._repo.insert(
-            ctx.workspace_id, ctx.user_id, data.name, hash_token(plaintext), role
+            ctx.workspace_id,
+            ctx.user_id,
+            data.name,
+            hash_token(plaintext),
+            role,
+            agent_id=data.agent_id,
         )
         if self._audit is not None and self._pool is not None:
             await self._audit.record(
@@ -65,7 +108,11 @@ class TokenService:
                 actor_id=ctx.user_id,
                 workspace_id=ctx.workspace_id,
                 target=stored.id,
-                detail={"name": data.name, "role": role.value},
+                detail={
+                    "name": data.name,
+                    "role": role.value,
+                    "agent_id": str(data.agent_id) if data.agent_id is not None else None,
+                },
             )
         return TokenCreated(**stored.model_dump(), token=plaintext)
 
@@ -76,6 +123,7 @@ class TokenService:
         cursor: tuple[datetime, UUID] | None,
     ) -> tuple[list[TokenRead], str | None]:
         require_role(ctx, WorkspaceRole.editor)
+        self._deny_agent_bound(ctx)
         rows = await self._repo.list_by_workspace(ctx.workspace_id, limit + 1, cursor)
         if len(rows) > limit:
             items = rows[:limit]
@@ -86,6 +134,7 @@ class TokenService:
     async def revoke(self, ctx: WorkspaceContext, token_id: UUID) -> None:
         """Widerruft einen eigenen Token; 404, wenn er nicht (mehr) existiert."""
         require_role(ctx, WorkspaceRole.editor)
+        self._deny_agent_bound(ctx)
         revoked = await self._repo.revoke(ctx.workspace_id, token_id)
         if not revoked:
             raise HTTPException(

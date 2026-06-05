@@ -10,11 +10,12 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 
-from who2be_api.core.security import WorkspaceContext, require_role
+from who2be_api.core.security import WorkspaceContext, require_capability, require_role
 from who2be_api.repositories.resource_composition_repository import (
     ResourceCompositionRepository,
 )
 from who2be_models import (
+    AgentCapability,
     ResourceRef,
     SubResourceLinkItem,
     SubResourceLinkSet,
@@ -70,6 +71,7 @@ class ResourceCompositionService:
         - 409: Verknuepfung wuerde einen Zyklus erzeugen.
         """
         require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.resource_write)
 
         seen: set[tuple[UUID, str, str | None]] = set()
         items: list[SubResourceLinkItem] = []

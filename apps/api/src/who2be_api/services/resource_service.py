@@ -8,13 +8,16 @@ Draft-on-Edit-Konflikt in `409`. Aufbau analog `playbook_service.py`.
 from datetime import datetime
 from uuid import UUID
 
+import asyncpg
 from fastapi import HTTPException, status
 
-from who2be_api.core.security import WorkspaceContext, require_role
+from who2be_api.core.agent_scope import resource_read_restrict
+from who2be_api.core.security import WorkspaceContext, require_capability, require_role
 from who2be_api.repositories.resource_repository import ResourceRepository
 from who2be_api.services.version_diff import compute_version_diff
 from who2be_models import (
     DEFAULT_LOCALE,
+    AgentCapability,
     ResourceContent,
     ResourceCreate,
     ResourceRead,
@@ -59,13 +62,22 @@ def _review_conflict() -> HTTPException:
 
 
 class ResourceService:
-    """Legt Resources an, liest, listet (Keyset-Pagination), aktualisiert sie."""
+    """Legt Resources an, liest, listet (Keyset-Pagination), aktualisiert sie.
 
-    def __init__(self, resource_repo: ResourceRepository) -> None:
+    `pool` wird fuer das Read-Scoping (`assigned`) gebraucht — die Berechnung
+    der dem Agenten zugewiesenen Resource-IDs laeuft als eigene Query. Optional,
+    damit aeltere Test-Fakes ohne Pool weiterlaufen (dann kein Scoping).
+    """
+
+    def __init__(
+        self, resource_repo: ResourceRepository, pool: asyncpg.Pool | None = None
+    ) -> None:
         self._repo = resource_repo
+        self._pool = pool
 
     async def create(self, ctx: WorkspaceContext, data: ResourceCreate) -> ResourceRead:
         require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.resource_write)
         return await self._repo.insert(
             ctx.workspace_id, ctx.user_id, data.name, data.content, data.locales
         )
@@ -82,8 +94,15 @@ class ResourceService:
         cursor: tuple[datetime, UUID] | None,
         locale: str = DEFAULT_LOCALE,
     ) -> tuple[list[ResourceRead], str | None]:
+        restrict_ids = await self._read_restrict(ctx)
         rows = await self._repo.list_by_workspace(
-            ctx.workspace_id, tag, limit + 1, cursor, active_only=ctx.is_api_token, locale=locale
+            ctx.workspace_id,
+            tag,
+            limit + 1,
+            cursor,
+            active_only=ctx.is_api_token,
+            locale=locale,
+            restrict_ids=restrict_ids,
         )
         if len(rows) > limit:
             items = rows[:limit]
@@ -91,11 +110,22 @@ class ResourceService:
             return items, encode_cursor(tail.created_at, tail.id)
         return rows, None
 
+    async def _read_restrict(self, ctx: WorkspaceContext) -> list[UUID] | None:
+        """Read-Scope-Filter; ohne Pool (Test-Fakes) kein Scoping."""
+        if self._pool is None:
+            return None
+        return await resource_read_restrict(self._pool, ctx)
+
     async def get(
         self, ctx: WorkspaceContext, resource_id: UUID, locale: str = DEFAULT_LOCALE
     ) -> ResourceRead:
+        restrict_ids = await self._read_restrict(ctx)
         resource = await self._repo.fetch(
-            ctx.workspace_id, resource_id, active_only=ctx.is_api_token, locale=locale
+            ctx.workspace_id,
+            resource_id,
+            active_only=ctx.is_api_token,
+            locale=locale,
+            restrict_ids=restrict_ids,
         )
         if resource is None:
             raise _not_found()
@@ -110,6 +140,7 @@ class ResourceService:
     ) -> ResourceRead:
         """Erzeugt eine neue Version der Resource (Draft-on-Edit bei Active)."""
         require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.resource_write)
         outcome = await self._repo.update(
             ctx.workspace_id, ctx.user_id, resource_id, data.name, data.content, locale
         )
@@ -128,6 +159,7 @@ class ResourceService:
     ) -> ResourceRead:
         """Auto-Save-Pfad (PATCH `.../draft`) — upsertet die Draft-Version."""
         require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.resource_write)
         outcome = await self._repo.upsert_draft(
             ctx.workspace_id, ctx.user_id, resource_id, data.name, data.content, locale
         )
@@ -162,6 +194,7 @@ class ResourceService:
     ) -> ResourceRead:
         """Stellt den Snapshot `source_version` als neue Draft wieder her (§3.1)."""
         require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.resource_write)
         snapshot = await self._repo.fetch_version(
             ctx.workspace_id, resource_id, source_version, locale
         )

@@ -100,9 +100,16 @@ class ApiClient:
         if response.status_code == 401:
             raise ToolError("Nicht autorisiert — WHO2BE_API_TOKEN pruefen.")
         if response.status_code == 403:
+            # Das `detail` der API traegt die genaue Ursache — Rollen-Gate ODER
+            # die Pro-Agent-Tool-Policy ("Dieser Agent ist nicht berechtigt …").
+            # Durchreichen, damit der Agent versteht, warum das Tool gesperrt ist.
             raise ToolError(
-                "Keine Berechtigung — der API-Token braucht mindestens die editor-Rolle "
-                "(Status-Promote/Retire erfordert admin) fuer diesen Schreibzugriff."
+                self._detail(
+                    response,
+                    "Keine Berechtigung — der API-Token braucht mindestens die editor-Rolle "
+                    "(Status-Promote/Retire erfordert admin), bzw. dieser Agent darf das "
+                    "Tool laut seiner Tool-Policy nicht nutzen.",
+                )
             )
         if response.status_code == 409:
             raise ToolError(self._detail(response, "Konflikt mit dem aktuellen Stand."))
