@@ -73,9 +73,13 @@ einen Journaleintrag — atomar in derselben Transaktion. Das Journal traegt:
 - die Herkunft (`source`, `external_ref`, `created_by`, `reason`),
 - den Zeitpunkt (`recorded_at`).
 
-`org_id` referenziert `organization` **ohne** `ON DELETE CASCADE`: das Journal
-ueberlebt eine Org-Loeschung. Das ist der bewusste Retention-Konflikt zugunsten
-der gesetzlichen Aufbewahrung (§ 14b UStG, § 147 AO) — die DSGVO erlaubt diese
+`org_id` ist bewusst **keine** Foreign-Key-Referenz auf `organization`. Ein FK
+mit `ON DELETE CASCADE/SET NULL` wuerde die Aufbewahrung brechen; ein FK mit
+`ON DELETE NO ACTION` wuerde umgekehrt den Org-Hard-Purge (`DELETE FROM
+organization`, CASCADE-Schnitt der Hierarchie) blockieren. Die freie UUID-
+Spalte behaelt die Org-Zugehoerigkeit nachvollziehbar, ohne den Loeschpfad zu
+durchbrechen — Retention-Konflikt bewusst zugunsten der gesetzlichen
+Aufbewahrung (§ 14b UStG, § 147 AO) aufgeloest, die DSGVO erlaubt diese
 Ausnahme. Operativ heisst das: bei einem Hard-Purge der Org bleiben die
 Journalzeilen als verwaiste Org-ID stehen (siehe Punkt 3).
 

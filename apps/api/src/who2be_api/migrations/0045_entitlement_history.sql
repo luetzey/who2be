@@ -6,19 +6,23 @@
 -- signed_license). Begleitet `org_entitlement` (Migration 0030/0043): die SSoT
 -- bleibt der UPSERT-Stand, dieses Journal ist das lueckenlose Protokoll.
 --
--- Aufbewahrung: `org_id` referenziert `organization` **ohne** ON DELETE CASCADE.
--- Damit ueberlebt der Journal-Eintrag eine Org-Loeschung — gesetzliche
--- Aufbewahrungspflichten (§14b UStG / §147 AO) gehen der DSGVO-Erasure vor
--- (Retention-Konflikt bewusst zugunsten der Aufbewahrung aufgeloest, siehe
--- ADR-0031 + Doku in WP-H/data-retention-and-erasure.md).
+-- Aufbewahrung: `org_id` ist bewusst KEINE Foreign-Key-Referenz auf
+-- `organization`. Der Org-Hard-Purge (`core/purge.py`, WP-D) loescht die Org-
+-- Zeile via CASCADE der ganzen Hierarchie ab — das Journal soll diesen Schnitt
+-- ueberleben (gesetzliche Aufbewahrungspflicht §14b UStG / §147 AO, geht der
+-- DSGVO-Erasure vor; siehe ADR-0031 + WP-H/data-retention-and-erasure.md).
+-- Ein FK mit ON DELETE NO ACTION wuerde den Purge blockieren; ein FK mit
+-- ON DELETE CASCADE/SET NULL wuerde die Aufbewahrung brechen. Loesung: org_id
+-- als reine UUID-Spalte fuehren — die Org-Zugehoerigkeit bleibt nachvollziehbar,
+-- der Loeschpfad wird nicht durchbrochen.
 --
 -- Idempotenz: CREATE TABLE/INDEX via IF NOT EXISTS; RLS-Policy via
 -- DROP IF EXISTS + CREATE; Grants idempotent.
 
 CREATE TABLE IF NOT EXISTS entitlement_history (
     id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    -- Bewusst KEIN ON DELETE CASCADE — GoBD-Aufbewahrung (ADR-0031).
-    org_id            uuid NOT NULL REFERENCES organization (id) ON DELETE NO ACTION,
+    -- KEIN FK auf organization (Begruendung siehe Kommentar oben).
+    org_id            uuid NOT NULL,
     status            text NOT NULL,
     features          jsonb NOT NULL DEFAULT '[]'::jsonb,
     expires_at        timestamptz,
