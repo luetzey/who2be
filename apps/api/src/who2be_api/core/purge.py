@@ -38,6 +38,8 @@ class PurgeResult:
 
     organizations: int
     accounts: int
+    anonymized_audit_rows: int = 0
+    cleaned_invitations: int = 0
 
 
 async def purge_expired(
@@ -59,13 +61,14 @@ async def purge_expired(
 
     user_ids = await repo.expired_accounts(reference)
     purged_accounts = 0
+    anonymized_rows = 0
     for user_id in user_ids:
         # Daten zuerst (idempotent), dann die GoTrue-Identitaet. `purged_at` wird
         # NUR gesetzt, wenn die Identitaet erfolgreich entfernt ist — sonst bleibt
         # der Account pending und der naechste Lauf versucht die Erasure erneut
         # (DSGVO: die Loeschung gilt erst als abgeschlossen, wenn auch die
         # Auth-Identitaet weg ist).
-        await repo.purge_account_data(user_id)
+        anonymized_rows += await repo.purge_account_data(user_id)
         if await delete_auth_user(user_id):
             await repo.mark_account_purged(user_id)
             purged_accounts += 1
@@ -77,7 +80,16 @@ async def purge_expired(
                 user_id,
             )
 
-    return PurgeResult(organizations=len(org_ids), accounts=purged_accounts)
+    # Generischer Cleanup-Schritt: PII abgelaufener/akzeptierter Invitations
+    # (WP-D, P7). Laeuft unabhaengig von Account-/Org-Purges; idempotent.
+    cleaned_invitations = await repo.cleanup_expired_invitations(reference)
+
+    return PurgeResult(
+        organizations=len(org_ids),
+        accounts=purged_accounts,
+        anonymized_audit_rows=anonymized_rows,
+        cleaned_invitations=cleaned_invitations,
+    )
 
 
 async def _run() -> PurgeResult:
@@ -94,7 +106,11 @@ async def _run() -> PurgeResult:
 def cli() -> None:
     """Console-Entrypoint fuer `who2be-purge` (Cron)."""
     result = asyncio.run(_run())
-    print(f"Purge: {result.organizations} Org(s), {result.accounts} Account(s) geloescht.")
+    print(
+        f"Purge: {result.organizations} Org(s), {result.accounts} Account(s) "
+        f"geloescht; {result.anonymized_audit_rows} Audit-Zeile(n) anonymisiert, "
+        f"{result.cleaned_invitations} Invitation(s) bereinigt."
+    )
 
 
 if __name__ == "__main__":

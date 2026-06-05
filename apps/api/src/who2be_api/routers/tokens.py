@@ -10,7 +10,9 @@ from who2be_api.core.db import get_pool
 from who2be_api.core.pagination import DEFAULT_LIMIT, PageCursor, PageLimit
 from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
+from who2be_api.repositories.audit_log_repository import PgAuditLogRepository
 from who2be_api.repositories.token_repository import PgTokenRepository
+from who2be_api.services.audit_service import AuditService
 from who2be_api.services.token_service import TokenService
 from who2be_models import TokenCreate, TokenCreated, TokenRead
 
@@ -19,7 +21,11 @@ router = APIRouter(prefix="/tokens", tags=["tokens"])
 
 def get_token_service(pool: Annotated[asyncpg.Pool, Depends(get_pool)]) -> TokenService:
     """FastAPI-Dependency: verdrahtet den Service mit der Pg-Implementierung."""
-    return TokenService(PgTokenRepository(pool))
+    return TokenService(
+        PgTokenRepository(pool),
+        audit_service=AuditService(PgAuditLogRepository()),
+        pool=pool,
+    )
 
 
 Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]
