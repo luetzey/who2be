@@ -485,15 +485,20 @@ class PgPersonaRepository:
         is_default = locale == DEFAULT_LOCALE
         async with self._pool.acquire() as conn, conn.transaction():
             current = await conn.fetchrow(
-                "SELECT max(v.version) AS current_version FROM persona p "
-                "JOIN persona_version v ON v.persona_id = p.id AND v.locale = $3 "
+                # Per-locale Max-Version als Scalar-Subquery — Postgres erlaubt
+                # `FOR UPDATE` nicht zusammen mit `GROUP BY`. Die Sperre liegt
+                # auf der Identitaets-Zeile `persona`; current_version ist NULL,
+                # wenn fuer die Sprache (noch) keine Version existiert.
+                "SELECT (SELECT max(v.version) FROM persona_version v "
+                "        WHERE v.persona_id = p.id AND v.locale = $3) AS current_version "
+                "FROM persona p "
                 "WHERE p.id = $1 AND p.workspace_id = $2 "
-                "GROUP BY p.id FOR UPDATE OF p",
+                "FOR UPDATE",
                 persona_id,
                 workspace_id,
                 locale,
             )
-            if current is None:
+            if current is None or current["current_version"] is None:
                 return PersonaUpdateOutcome(persona=None)
             existing_draft = await conn.fetchval(
                 "SELECT 1 FROM persona_version "

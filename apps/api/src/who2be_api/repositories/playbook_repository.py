@@ -532,15 +532,19 @@ class PgPlaybookRepository:
         is_default = locale == DEFAULT_LOCALE
         async with self._pool.acquire() as conn, conn.transaction():
             current = await conn.fetchrow(
-                "SELECT max(v.version) AS current_version FROM playbook p "
-                "JOIN playbook_version v ON v.playbook_id = p.id AND v.locale = $3 "
+                # Per-locale Max-Version als Scalar-Subquery — Postgres erlaubt
+                # `FOR UPDATE` nicht zusammen mit `GROUP BY`. Sperre auf der
+                # `playbook`-Identitaets-Zeile.
+                "SELECT (SELECT max(v.version) FROM playbook_version v "
+                "        WHERE v.playbook_id = p.id AND v.locale = $3) AS current_version "
+                "FROM playbook p "
                 "WHERE p.id = $1 AND p.workspace_id = $2 "
-                "GROUP BY p.id FOR UPDATE OF p",
+                "FOR UPDATE",
                 playbook_id,
                 workspace_id,
                 locale,
             )
-            if current is None:
+            if current is None or current["current_version"] is None:
                 return PlaybookUpdateOutcome(playbook=None)
             existing_draft = await conn.fetchval(
                 "SELECT 1 FROM playbook_version "

@@ -474,15 +474,19 @@ class PgResourceRepository:
         is_default = locale == DEFAULT_LOCALE
         async with self._pool.acquire() as conn, conn.transaction():
             current = await conn.fetchrow(
-                "SELECT max(v.version) AS current_version FROM resource r "
-                "JOIN resource_version v ON v.resource_id = r.id AND v.locale = $3 "
+                # Per-locale Max-Version als Scalar-Subquery — Postgres erlaubt
+                # `FOR UPDATE` nicht zusammen mit `GROUP BY`. Sperre auf der
+                # `resource`-Identitaets-Zeile.
+                "SELECT (SELECT max(v.version) FROM resource_version v "
+                "        WHERE v.resource_id = r.id AND v.locale = $3) AS current_version "
+                "FROM resource r "
                 "WHERE r.id = $1 AND r.workspace_id = $2 "
-                "GROUP BY r.id FOR UPDATE OF r",
+                "FOR UPDATE",
                 resource_id,
                 workspace_id,
                 locale,
             )
-            if current is None:
+            if current is None or current["current_version"] is None:
                 return ResourceUpdateOutcome(resource=None)
             existing_draft = await conn.fetchval(
                 "SELECT 1 FROM resource_version "
