@@ -319,35 +319,6 @@
       "passwordMismatch": "Passwoerter stimmen nicht ueberein."
     }
   },
-  "billing": {
-    "panel": {
-      "title": "Plan & Nutzung",
-      "statusActive": "Aktiv",
-      "statusInactive": "Inaktiv",
-      "quota": {
-        "unlimited": "MCP-Kontingent: unbegrenzt",
-        "monthlyLabel": "MCP-Reads diesen Monat",
-        "ariaLabel": "MCP-Kontingent-Verbrauch"
-      },
-      "rateLimit": "Rate-Limit",
-      "validUntil": "Gueltig bis",
-      "unlimited": "unbegrenzt",
-      "features": {
-        "label": "Features",
-        "none": "keine"
-      },
-      "proActive": "Pro aktiv",
-      "upgrading": "Weiterleitung…",
-      "upgrade": "Jetzt upgraden"
-    },
-    "expiry": {
-      "unlimited": "unbegrenzt"
-    },
-    "error": {
-      "checkoutFailed": "Checkout fehlgeschlagen.",
-      "unknown": "Unbekannter Fehler."
-    }
-  },
   "dashboard": {
     "page": {
       "title": "Dashboard",

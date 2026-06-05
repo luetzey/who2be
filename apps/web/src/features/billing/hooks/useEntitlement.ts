@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import '../i18n'
 
 import { ApiError } from '@/api/client'
 import type { EntitlementInfo } from '@/api/types'

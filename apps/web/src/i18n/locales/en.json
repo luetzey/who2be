@@ -319,35 +319,6 @@
       "passwordMismatch": "Passwords do not match."
     }
   },
-  "billing": {
-    "panel": {
-      "title": "Plan & Usage",
-      "statusActive": "Active",
-      "statusInactive": "Inactive",
-      "quota": {
-        "unlimited": "MCP quota: unlimited",
-        "monthlyLabel": "MCP reads this month",
-        "ariaLabel": "MCP quota usage"
-      },
-      "rateLimit": "Rate limit",
-      "validUntil": "Valid until",
-      "unlimited": "unlimited",
-      "features": {
-        "label": "Features",
-        "none": "none"
-      },
-      "proActive": "Pro active",
-      "upgrading": "Redirecting…",
-      "upgrade": "Upgrade now"
-    },
-    "expiry": {
-      "unlimited": "unlimited"
-    },
-    "error": {
-      "checkoutFailed": "Checkout failed.",
-      "unknown": "Unknown error."
-    }
-  },
   "dashboard": {
     "page": {
       "title": "Dashboard",

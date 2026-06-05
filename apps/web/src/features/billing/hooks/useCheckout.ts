@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import '../i18n'
 
 import { useApi } from '@/api/useApi'
 import i18n from '@/i18n'

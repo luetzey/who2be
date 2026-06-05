@@ -1,5 +1,7 @@
 import { useTranslation } from 'react-i18next'
 
+import '../i18n'
+
 import { ErrorAlert, LoadingState } from '@/components/data'
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
 
