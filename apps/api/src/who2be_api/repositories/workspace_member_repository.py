@@ -3,15 +3,27 @@
 Listet Mitglieder eines Workspaces, aendert Rollen und entfernt Mitglieder.
 Schutz-Invariante: der **letzte** admin eines Workspaces darf sich nicht
 selbst herabstufen oder entfernen — sonst bliebe der Workspace fuehrungslos.
-Die Pruefung laeuft transaktional gegen `count(*) WHERE role='admin'`, damit
-zwei parallele Downgrades nicht beide durchrutschen.
+
+Race-Schutz (WP-B): ein PG-Advisory-Lock auf `('ws_admins:'||workspace_id)`
+serialisiert konkurrierende Rollen-Downgrades/Removals desselben Workspaces
+auch unter READ COMMITTED. Ohne diesen Lock konnten zwei parallele Drops
+verschiedener Admins beide `count = 2` lesen und durchschluepfen
+(`docs/security-findings-phase-2.md:171-179`).
+
+Audit (WP-B): bei einem erfolgreichen Rollenwechsel/Removal wird in derselben
+Transaktion ein Eintrag in `audit_log` geschrieben (`member.role_changed`/
+`member.removed`), wenn ein `AuditLogRepository` und `actor_id` mitgegeben
+werden — atomar mit der Mutation.
 """
+
+from __future__ import annotations
 
 from typing import Protocol
 from uuid import UUID
 
 import asyncpg
 
+from who2be_api.repositories.audit_log_repository import AuditLogRepository
 from who2be_models import WorkspaceMemberRead, WorkspaceRole
 
 
@@ -25,10 +37,21 @@ class WorkspaceMemberRepository(Protocol):
     async def list_by_workspace(self, workspace_id: UUID) -> list[WorkspaceMemberRead]: ...
 
     async def update_role(
-        self, workspace_id: UUID, user_id: UUID, new_role: WorkspaceRole
+        self,
+        workspace_id: UUID,
+        user_id: UUID,
+        new_role: WorkspaceRole,
+        *,
+        actor_id: UUID | None = None,
     ) -> WorkspaceMemberRead | None: ...
 
-    async def remove(self, workspace_id: UUID, user_id: UUID) -> bool: ...
+    async def remove(
+        self,
+        workspace_id: UUID,
+        user_id: UUID,
+        *,
+        actor_id: UUID | None = None,
+    ) -> bool: ...
 
 
 _COLUMNS = "workspace_id, user_id, role, joined_at"
@@ -52,8 +75,13 @@ _LIST_NO_EMAIL = (
 class PgWorkspaceMemberRepository:
     """asyncpg-Implementierung von `WorkspaceMemberRepository`."""
 
-    def __init__(self, pool: asyncpg.Pool) -> None:
+    def __init__(
+        self,
+        pool: asyncpg.Pool,
+        audit_repo: AuditLogRepository | None = None,
+    ) -> None:
         self._pool = pool
+        self._audit_repo = audit_repo
 
     async def list_by_workspace(self, workspace_id: UUID) -> list[WorkspaceMemberRead]:
         try:
@@ -64,9 +92,15 @@ class PgWorkspaceMemberRepository:
         return [WorkspaceMemberRead.model_validate(dict(row)) for row in rows]
 
     async def update_role(
-        self, workspace_id: UUID, user_id: UUID, new_role: WorkspaceRole
+        self,
+        workspace_id: UUID,
+        user_id: UUID,
+        new_role: WorkspaceRole,
+        *,
+        actor_id: UUID | None = None,
     ) -> WorkspaceMemberRead | None:
         async with self._pool.acquire() as conn, conn.transaction():
+            await self._lock_workspace_admins(conn, workspace_id)
             current = await conn.fetchval(
                 "SELECT role FROM workspace_member "
                 "WHERE workspace_id = $1 AND user_id = $2 FOR UPDATE",
@@ -85,10 +119,26 @@ class PgWorkspaceMemberRepository:
                 user_id,
                 new_role.value,
             )
+            if self._audit_repo is not None and actor_id is not None:
+                await self._audit_repo.insert(
+                    conn,
+                    action="member.role_changed",
+                    workspace_id=workspace_id,
+                    actor_id=actor_id,
+                    target=str(user_id),
+                    detail={"from": current, "to": new_role.value},
+                )
         return WorkspaceMemberRead.model_validate(dict(row))
 
-    async def remove(self, workspace_id: UUID, user_id: UUID) -> bool:
+    async def remove(
+        self,
+        workspace_id: UUID,
+        user_id: UUID,
+        *,
+        actor_id: UUID | None = None,
+    ) -> bool:
         async with self._pool.acquire() as conn, conn.transaction():
+            await self._lock_workspace_admins(conn, workspace_id)
             current = await conn.fetchval(
                 "SELECT role FROM workspace_member "
                 "WHERE workspace_id = $1 AND user_id = $2 FOR UPDATE",
@@ -104,6 +154,15 @@ class PgWorkspaceMemberRepository:
                 workspace_id,
                 user_id,
             )
+            if self._audit_repo is not None and actor_id is not None:
+                await self._audit_repo.insert(
+                    conn,
+                    action="member.removed",
+                    workspace_id=workspace_id,
+                    actor_id=actor_id,
+                    target=str(user_id),
+                    detail={"role": current},
+                )
         return True
 
     @staticmethod
@@ -113,3 +172,16 @@ class PgWorkspaceMemberRepository:
             workspace_id,
         )
         return bool(admin_count <= 1)
+
+    @staticmethod
+    async def _lock_workspace_admins(
+        conn: asyncpg.Connection, workspace_id: UUID
+    ) -> None:
+        """Serialisiert konkurrierende Admin-Downgrades/Removals desselben
+        Workspaces. `hashtext` mappt den Schluessel auf den `bigint`-Lock-Raum;
+        `xact_lock` gibt die Sperre am Tx-Ende automatisch frei.
+        """
+        await conn.execute(
+            "SELECT pg_advisory_xact_lock(hashtext($1))",
+            f"ws_admins:{workspace_id}",
+        )

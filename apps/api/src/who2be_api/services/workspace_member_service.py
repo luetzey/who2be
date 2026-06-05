@@ -29,10 +29,17 @@ class WorkspaceMemberService:
         return await self._repo.list_by_workspace(workspace_id)
 
     async def update_role(
-        self, workspace_id: UUID, user_id: UUID, new_role: WorkspaceRole
+        self,
+        workspace_id: UUID,
+        user_id: UUID,
+        new_role: WorkspaceRole,
+        *,
+        actor_id: UUID | None = None,
     ) -> WorkspaceMemberRead:
         try:
-            member = await self._repo.update_role(workspace_id, user_id, new_role)
+            member = await self._repo.update_role(
+                workspace_id, user_id, new_role, actor_id=actor_id
+            )
         except LastAdminError as exc:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT, detail=_LAST_ADMIN_DETAIL
@@ -41,9 +48,15 @@ class WorkspaceMemberService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND_DETAIL)
         return member
 
-    async def remove(self, workspace_id: UUID, user_id: UUID) -> None:
+    async def remove(
+        self,
+        workspace_id: UUID,
+        user_id: UUID,
+        *,
+        actor_id: UUID | None = None,
+    ) -> None:
         try:
-            removed = await self._repo.remove(workspace_id, user_id)
+            removed = await self._repo.remove(workspace_id, user_id, actor_id=actor_id)
         except LastAdminError as exc:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT, detail=_LAST_ADMIN_DETAIL

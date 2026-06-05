@@ -618,6 +618,11 @@ Pushen, Draft-PR, Change-Log Abschnitt 7. Bei Design-Weichen drei Optionen rück
 > Jeder WP-Agent trägt hier nach Abschluss eine Zeile ein: `YYYY-MM-DD — WP-x — <PR-Link/Branch> —
 > Kurzbeschreibung + DoD-Status`. Spiegelbild kurz nach Notion-Projekt-`## Notes` (Coder-Doku-Konvention).
 
+- 2026-06-05 — WP-A — `feat/compliance-backend` — Migrationen 0044 (Append-only/audit_log) + 0045 (entitlement_history, ohne FK auf organization → GoBD-Aufbewahrung); ADR-0031; `test_audit_append_only.py` belegt Privileg-Split; DoD grün.
+- 2026-06-05 — WP-B — `feat/compliance-backend` — `audit_log_repository` + `audit_service` neu; Wiring für member.role_changed/removed (in-Tx), token.issued/revoked, invitation.issued/revoked, account.deletion_requested, org.soft_deleted; PG-Advisory-Lock `ws_admins:<ws_id>` serialisiert parallele Admin-Drops; `test_audit_service.py` mit Fake-Repo + Race-Integrationstest; DoD grün.
+- 2026-06-05 — WP-C — `feat/compliance-backend` — `entitlement_repository.upsert` schreibt SSoT + `entitlement_history`-Journal atomar in einer Transaktion; `test_entitlement_history.py` belegt 3 Journalzeilen (free→pro→manual_override) und Survival nach Org-Delete; DoD grün.
+- 2026-06-05 — WP-D — `feat/compliance-backend` — `purge_account_data` anonymisiert `status_history.changed_by`/`audit_log.actor_id` auf Sentinel `00000000-…`; `cleanup_expired_invitations` redacted Klartext-`email` accepted/expired Invitations; `PurgeResult` zählt anonymisierte Zeilen + Invitations; `test_purge_erasure.py` deckt Anonymisierung + Cleanup + Retention von `entitlement_history` ab; DoD grün.
+- 2026-06-05 — WP-E — `feat/compliance-backend` — `gdpr_export_service.export` ergänzt `account`-Block (id/email/created_at/last_sign_in_at aus `auth.users`, robust gegen fehlendes Schema); `test_gdpr_export_account.py` (Unit) + `test_gdpr_export.py` (Integration) decken Block ab; DoD grün.
 - 2026-06-05 — WP-G — `feat/compliance-docs-legal` — Supply-Chain/Infra:
   `.github/dependabot.yml` (uv/npm/github-actions/docker, woechentlich, gruppiert,
   Labels) angelegt; `deploy/hetzner/RUNBOOK.md` um §Verschluesselung at-Rest

@@ -81,8 +81,41 @@ class GdprExportService:
         return {
             "exported_at": datetime.now(UTC),
             "user_id": str(user_id),
+            "account": await self._export_account(user_id),
             "organizations": list(orgs.values()),
         }
+
+    async def _export_account(self, user_id: UUID) -> dict[str, Any]:
+        """GoTrue-Profildaten des Users (Art.-15-Vollstaendigkeit, WP-E).
+
+        Liest aus `auth.users` (Schema gehoert GoTrue). Robust gegen fehlende
+        `auth.users` in Test-DBs oder eingeschraenkten Berechtigungen — Muster
+        analog `repositories/me_repository._lookup_email`: bei PostgresError
+        wird ein leerer Account-Block zurueckgegeben, statt den ganzen Export
+        scheitern zu lassen.
+        """
+        block: dict[str, Any] = {
+            "id": str(user_id),
+            "email": None,
+            "created_at": None,
+            "last_sign_in_at": None,
+        }
+        try:
+            row = await self._pool.fetchrow(
+                "SELECT email, created_at, last_sign_in_at "
+                "FROM auth.users WHERE id = $1",
+                user_id,
+            )
+        except asyncpg.PostgresError:
+            return block
+        if row is None:
+            return block
+        # Spalten koennen in alten Test-Stubs fehlen — defensiv per .get().
+        record = dict(row)
+        block["email"] = record.get("email")
+        block["created_at"] = record.get("created_at")
+        block["last_sign_in_at"] = record.get("last_sign_in_at")
+        return block
 
     async def _export_workspace(
         self,
