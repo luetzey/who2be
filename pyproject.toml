@@ -30,6 +30,8 @@ dev = [
     "who2be-mcp",
     "who2be-models",
     "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "testcontainers[postgres]>=4.0",
     "httpx>=0.27",
     "mypy>=1.10",
     "ruff>=0.15.16",
@@ -55,11 +57,33 @@ mypy_path = ["apps/api/src", "apps/mcp/src", "packages/models/src", "packages/bi
 # asyncpg + die Mollie-SDK liefern keine vollstaendigen Typ-Stubs — bewusste, eng
 # begrenzte Ausnahme; unser eigener Code bleibt strict.
 [[tool.mypy.overrides]]
-module = ["asyncpg.*", "mollie.*"]
+module = ["asyncpg.*", "mollie.*", "testcontainers.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["apps/api/tests", "apps/mcp/tests", "packages/models/tests", "packages/billing/tests"]
+# `--strict-markers`: ein vertippter/unbekannter Marker (z. B. `@pytest.mark.integraton`)
+# bricht statt still zu rutschen — Voraussetzung fuer den zentralen Integration-Skip
+# in `conftest.py` und den CI-Skip-Guard (`WHO2BE_REQUIRE_DB`).
+addopts = ["--strict-markers"]
 markers = [
-    "integration: Test benoetigt eine erreichbare Datenbank",
+    "integration: Test benoetigt eine erreichbare Datenbank (DB). Zentral in conftest.py uebersprungen, wenn keine DB erreichbar ist; mit WHO2BE_REQUIRE_DB=1 (CI) schlaegt der fehlende DB-Zugriff stattdessen hart fehl.",
+]
+
+# --- Coverage (ADR-0032) -----------------------------------------------------
+# Gemessen ueber die importierbaren Paketnamen (editable installs zeigen auf die
+# jeweiligen src/-Baeume). `--cov` zieht diese Config; der Ratchet-Floor laeuft in
+# CI via `--cov-fail-under`. branch=true, damit der Floor auch Zweige abdeckt.
+[tool.coverage.run]
+branch = true
+source = ["who2be_api", "who2be_mcp", "who2be_models", "who2be_billing"]
+omit = ["*/tests/*"]
+
+[tool.coverage.report]
+show_missing = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@(abc\\.)?abstractmethod",
+    "if __name__ == .__main__.:",
 ]

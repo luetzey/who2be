@@ -6,12 +6,24 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
+# Coverage (ADR-0032)
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+coverage/
+
 # Node / React
 node_modules/
 dist/
 build/
 *.local
 *.tsbuildinfo
+
+# Playwright (ADR-0032, Phase 4)
+playwright-report/
+test-results/
+/apps/web/playwright/.cache/
 
 # Environment / Secrets
 .env
