@@ -35,6 +35,7 @@ def billing_migrations_dir() -> Path | None:
     path = Path(next(iter(spec.submodule_search_locations))) / "migrations"
     return path if path.is_dir() else None
 
+
 _SCHEMA_MIGRATIONS_DDL = """
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version    text PRIMARY KEY,

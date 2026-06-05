@@ -35,7 +35,5 @@ async def export_my_data(
     request: Request, response: Response, user_id: UserId, service: Service
 ) -> dict[str, Any]:
     """Exportiert alle Daten des Users als JSON-Buendel (Download-Header gesetzt)."""
-    response.headers["Content-Disposition"] = (
-        f'attachment; filename="who2be-export-{user_id}.json"'
-    )
+    response.headers["Content-Disposition"] = f'attachment; filename="who2be-export-{user_id}.json"'
     return await service.export(user_id)

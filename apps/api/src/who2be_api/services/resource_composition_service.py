@@ -37,9 +37,7 @@ class ResourceCompositionService:
     def __init__(self, repo: ResourceCompositionRepository) -> None:
         self._repo = repo
 
-    async def list_children(
-        self, ctx: WorkspaceContext, parent_id: UUID
-    ) -> list[SubResourceRead]:
+    async def list_children(self, ctx: WorkspaceContext, parent_id: UUID) -> list[SubResourceRead]:
         """Gibt die geordneten direkten Sub-Resources zurueck."""
         if not await self._repo.parent_belongs_to(ctx.workspace_id, parent_id):
             raise _resource_not_found()

@@ -86,9 +86,7 @@ def test_placeholder_preview_resolves_and_misses(
             assert iso.json()["unresolved"] is False
 
             # date (human) -> deutscher Monatsname enthalten
-            human = client.get(
-                base, params={"kind": "date", "target_id": "human"}, headers=auth
-            )
+            human = client.get(base, params={"kind": "date", "target_id": "human"}, headers=auth)
             assert human.status_code == 200
             assert str(date.today().year) in human.json()["text"]
             assert human.json()["unresolved"] is False

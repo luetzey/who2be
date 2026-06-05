@@ -60,9 +60,7 @@ def _diff_block_list(
             )
 
 
-def _diff_value(
-    path: str, before: Any, after: Any, changes: list[VersionDiffChange]
-) -> None:
+def _diff_value(path: str, before: Any, after: Any, changes: list[VersionDiffChange]) -> None:
     if before is _MISSING and after is _MISSING:
         return
     if before is not _MISSING and after is not _MISSING and before == after:
@@ -76,8 +74,10 @@ def _diff_value(
         return
 
     # Block-Listen (Listen aus Dicts mit `id`) → ID-gematchter Block-Diff.
-    if (_is_block_list(before) or _is_block_list(after)) and _list_like(before) and _list_like(
-        after
+    if (
+        (_is_block_list(before) or _is_block_list(after))
+        and _list_like(before)
+        and _list_like(after)
     ):
         before_list = before if isinstance(before, list) else []
         after_list = after if isinstance(after, list) else []

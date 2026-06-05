@@ -1,15 +1,7 @@
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 
-// Content-i18n (ADR-0027): beim Anlegen waehlt der User eine oder mehrere
-// Sprachen — pro Sprache legt das Backend eine eigene Draft-Version an. Das
-// Set ist hier bewusst klein gehalten (Backend-Sprach-Set ist offen, die UI
-// bietet vorerst DE/EN an). UI-Strings bleiben deutsch (String-Extraktion =
-// Stream D1, nicht hier).
-export const CONTENT_LANGUAGES = [
-  { value: 'de', label: 'Deutsch' },
-  { value: 'en', label: 'English' },
-] as const
+import { CONTENT_LANGUAGES } from './content-languages'
 
 export interface LanguageSelectProps {
   /** Aktuell gewaehlte Sprach-Kuerzel (z. B. `['de']`). */

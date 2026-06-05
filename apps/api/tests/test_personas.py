@@ -198,12 +198,8 @@ def test_persona_locale_de_en_variants(
             assert en["current_version"] == 1
 
             # Versions-Listen sind pro Sprache getrennt — je genau eine v1.
-            de_versions = client.get(
-                f"{base}/{persona_id}/versions?locale=de", headers=auth
-            ).json()
-            en_versions = client.get(
-                f"{base}/{persona_id}/versions?locale=en", headers=auth
-            ).json()
+            de_versions = client.get(f"{base}/{persona_id}/versions?locale=de", headers=auth).json()
+            en_versions = client.get(f"{base}/{persona_id}/versions?locale=en", headers=auth).json()
             assert [v["version"] for v in de_versions] == [1]
             assert [v["version"] for v in en_versions] == [1]
 

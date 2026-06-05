@@ -85,9 +85,7 @@ class FakeResourceCompositionRepository:
         if self._resources.get(parent_id) != workspace_id:
             return SetSubResourcesResult(parent_found=False)
         items = list(links)
-        missing = [
-            i.child_id for i in items if self._resources.get(i.child_id) != workspace_id
-        ]
+        missing = [i.child_id for i in items if self._resources.get(i.child_id) != workspace_id]
         if missing:
             return SetSubResourcesResult(parent_found=True, missing_child_ids=missing)
         if self.simulate_cycle:
@@ -127,9 +125,7 @@ def test_set_links_foreign_child_raises_404() -> None:
     repo = FakeResourceCompositionRepository({parent: ws, foreign: uuid4()})
     service = ResourceCompositionService(repo)
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(
-            service.set_links(_ctx(ws), parent, SubResourceLinkSet(links=[_link(foreign)]))
-        )
+        asyncio.run(service.set_links(_ctx(ws), parent, SubResourceLinkSet(links=[_link(foreign)])))
     assert exc.value.status_code == 404
 
 
@@ -139,9 +135,7 @@ def test_set_links_cycle_raises_409() -> None:
     repo.simulate_cycle = True
     service = ResourceCompositionService(repo)
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(
-            service.set_links(_ctx(ws), parent, SubResourceLinkSet(links=[_link(child)]))
-        )
+        asyncio.run(service.set_links(_ctx(ws), parent, SubResourceLinkSet(links=[_link(child)])))
     assert exc.value.status_code == 409
 
 

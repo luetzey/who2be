@@ -102,8 +102,7 @@ class GdprExportService:
         }
         try:
             row = await self._pool.fetchrow(
-                "SELECT email, created_at, last_sign_in_at "
-                "FROM auth.users WHERE id = $1",
+                "SELECT email, created_at, last_sign_in_at FROM auth.users WHERE id = $1",
                 user_id,
             )
         except asyncpg.PostgresError:

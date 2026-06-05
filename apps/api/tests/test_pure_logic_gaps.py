@@ -64,9 +64,7 @@ def test_promote_validators_skip_non_promote_directions(to_status: VersionStatus
 def test_promote_resource_missing_name_and_body() -> None:
     """Leerer Name + leere Bloecke → beide Felder in `missing`."""
     with pytest.raises(PromoteValidationError) as exc:
-        validate_promote_resource(
-            "  ", {"description": "da", "blocks": []}, VersionStatus.review
-        )
+        validate_promote_resource("  ", {"description": "da", "blocks": []}, VersionStatus.review)
     assert "name" in exc.value.missing
     assert "body" in exc.value.missing
 

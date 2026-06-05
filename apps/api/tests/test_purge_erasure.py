@@ -150,8 +150,7 @@ def test_purge_anonymises_audit_and_keeps_entitlement_history() -> None:
 
             # status_history: die User-Zeile ist anonymisiert, die fremde unveraendert.
             actors = await owner.fetch(
-                "SELECT changed_by FROM status_history WHERE entity_id = $1 "
-                "ORDER BY changed_at",
+                "SELECT changed_by FROM status_history WHERE entity_id = $1 ORDER BY changed_at",
                 persona_id,
             )
             assert [row["changed_by"] for row in actors] == [ANONYMIZED_USER_ID, other_user]

@@ -134,9 +134,7 @@ def test_default_template_renders_persona_name(monkeypatch: pytest.MonkeyPatch) 
 
     def _promote(base: str, eid: str) -> None:
         for to in ("review", "active"):
-            client.post(
-                f"{base}/{eid}/versions/1/transition", json={"to": to}, headers=auth
-            )
+            client.post(f"{base}/{eid}/versions/1/transition", json={"to": to}, headers=auth)
 
     try:
         with TestClient(app) as client:

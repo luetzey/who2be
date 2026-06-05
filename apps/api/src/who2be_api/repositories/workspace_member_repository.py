@@ -174,9 +174,7 @@ class PgWorkspaceMemberRepository:
         return bool(admin_count <= 1)
 
     @staticmethod
-    async def _lock_workspace_admins(
-        conn: asyncpg.Connection, workspace_id: UUID
-    ) -> None:
+    async def _lock_workspace_admins(conn: asyncpg.Connection, workspace_id: UUID) -> None:
         """Serialisiert konkurrierende Admin-Downgrades/Removals desselben
         Workspaces. `hashtext` mappt den Schluessel auf den `bigint`-Lock-Raum;
         `xact_lock` gibt die Sperre am Tx-Ende automatisch frei.

@@ -59,8 +59,7 @@ async def _with_isolated_schema(
 
 async def _seed_org(conn: asyncpg.Connection) -> object:
     return await conn.fetchval(
-        "INSERT INTO organization (name, slug, kind) "
-        "VALUES ('o', $1, 'company') RETURNING id",
+        "INSERT INTO organization (name, slug, kind) VALUES ('o', $1, 'company') RETURNING id",
         f"o-{secrets.token_hex(4)}",
     )
 
@@ -112,8 +111,7 @@ def test_manual_override_requires_expiry_and_author() -> None:
         org_a = await _seed_org(conn)
         with pytest.raises(asyncpg.IntegrityConstraintViolationError):
             await conn.execute(
-                "INSERT INTO org_entitlement (org_id, source) "
-                "VALUES ($1, 'manual_override')",
+                "INSERT INTO org_entitlement (org_id, source) VALUES ($1, 'manual_override')",
                 org_a,
             )
 

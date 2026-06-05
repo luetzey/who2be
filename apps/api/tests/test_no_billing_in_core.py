@@ -35,8 +35,7 @@ def test_core_has_no_static_billing_or_mollie_import() -> None:
         if _FORBIDDEN_IMPORT.search(text):
             offenders.append(str(path.relative_to(_API_SRC.parent)))
     assert not offenders, (
-        "Kern (who2be_api) importiert die Billing-Schreibseite statisch: "
-        f"{sorted(offenders)}"
+        f"Kern (who2be_api) importiert die Billing-Schreibseite statisch: {sorted(offenders)}"
     )
 
 
