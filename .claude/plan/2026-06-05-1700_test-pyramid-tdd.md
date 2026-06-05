@@ -1,7 +1,10 @@
 # Plan — Vollständige Test-Pyramide (TDD)
 
-**Status:** 🟡 **ENTWURF — wartet auf Freigabe.** **Erstellt:** 2026-06-05.
-**Branch:** `claude/laughing-lovelace-0OWCg`.
+**Status:** ✅ **UMGESETZT** (2026-06-05) — alle 6 Phasen auf
+`claude/laughing-lovelace-0OWCg` / PR #149. CI grün (Python 86.92 % Coverage,
+722 Tests; Web ~81 %); E2E-Spitze als Soft-Gate (Public-Smokes live,
+Journeys als `test.fixme`-Scaffolds bis Auth-Seed-Helper steht).
+**Erstellt:** 2026-06-05. **Branch:** `claude/laughing-lovelace-0OWCg`.
 **Entscheidungen (User 2026-06-05):** E2E **dünn** (3–5 Journeys) · Integration via
 **Testcontainers** (lokal+CI) · Coverage als **Ratchet-Floor** in CI.
 **Geplanter ADR:** `docs/adr/0032-test-strategie-pyramide.md`.
