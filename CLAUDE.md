@@ -69,18 +69,27 @@ Phase 3 ist abgeschlossen (Stand 2026-05-29). Master-Plan:
   vollstaendige Agenten-Reise-Doku in `docs/agent-axes.md`. Plan:
   `.claude/plan/2026-05-31-1630_composite-applied-modi.md`.
 
+**MCP-Write-Tools (ADR-0030, 2026-06-05):** Der MCP-Server exponiert
+  Mutations-Tools fuer alle vier Kernelemente (Persona, Playbook, Resource,
+  Agent): create/update/transition/restore + Verknuepfungs-Setter. Duenner
+  Adapter — Autorisierung (editor; Promote/Retire admin), Owner-Scoping und
+  der Draft→active-Workflow bleiben serverseitig. Kein delete ueber MCP.
+  Loest ADR-0012 (deferred) ab.
+
 Nächste Blöcke offen (kein aktiver Plan): Security-Quick-Wins
 (`docs/security-findings-phase-2.md` §TODO 1–3), CSP/Header-Pass (F-12),
 Public-Switch + FSL-Lizenz (`…1935_license-fsl-setup`,
-`…2028_public-switch-github-repo`), MCP-Write-Tools (ADR-0012 deferred),
+`…2028_public-switch-github-repo`),
 Enterprise-License-Hooks (`…0528_enterprise-license-management`).
 
 ## Struktur
 
 - `apps/api/` — FastAPI-Backend (REST, `/v1/workspaces/{ws_id}/...`)
-- `apps/mcp/` — FastMCP-Server (`get_persona`, `list_playbooks`, `fetch_playbook`,
-  `list_resources`, `fetch_resource` — alle workspace-aware, filtern auf
-  `status='active'`)
+- `apps/mcp/` — FastMCP-Server. Read-Tools (`get_persona`, `list_playbooks`,
+  `fetch_playbook`, `list_resources`, `fetch_resource`, `fetch_agent`,
+  `list_triggers` — workspace-aware, filtern auf `status='active'`) plus
+  Write-Tools (ADR-0030: create/update/transition/restore + Link-Setter fuer
+  Persona/Playbook/Resource/Agent; Autorisierung serverseitig)
 - `apps/web/` — React/TypeScript-Web-UI (Vite, Tailwind v4, shadcn-Primitives,
   BlockNote-Insel für den Resource-Editor; Designsprache "Warm Citrus" laut
   `docs/frontend/design-language.md`)

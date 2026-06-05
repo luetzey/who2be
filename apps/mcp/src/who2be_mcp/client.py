@@ -11,16 +11,35 @@ from uuid import UUID
 
 import httpx
 from fastmcp.exceptions import ToolError
+from pydantic import BaseModel
 
 from who2be_models import (
     DEFAULT_LOCALE,
+    AgentCopy,
+    AgentCreate,
+    AgentRead,
+    AgentUpdate,
     AgentWithRenderedPrompt,
+    PersonaCreate,
+    PersonaPlaybookLinkSet,
     PersonaRead,
+    PersonaUpdate,
+    PersonaVersionRead,
+    PlaybookCompositionLinkSet,
+    PlaybookCreate,
     PlaybookRead,
+    PlaybookUpdate,
+    PlaybookVersionRead,
+    ResourceCreate,
     ResourceLinkRead,
+    ResourceLinkSet,
     ResourceRead,
+    ResourceUpdate,
+    ResourceVersionRead,
+    SubResourceLinkSet,
     SubResourceRead,
     TriggerOverview,
+    VersionTransitionRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -49,7 +68,14 @@ class ApiClient:
         # jeder Methode und macht Refactors auf weitere Workspace-Endpunkte trivial.
         self._workspace_prefix = f"/v1/workspaces/{workspace_id}"
 
-    async def _get(self, path: str, params: dict[str, str] | None = None) -> Any:
+    async def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: dict[str, str] | None = None,
+        json: Any = None,
+    ) -> httpx.Response:
         try:
             async with httpx.AsyncClient(
                 base_url=self._base_url,
@@ -57,25 +83,71 @@ class ApiClient:
                 transport=self._transport,
                 timeout=_TIMEOUT,
             ) as client:
-                response = await client.get(path, params=params)
+                response = await client.request(method, path, params=params, json=json)
         except httpx.HTTPError as exc:
             # Nur den Exception-Typ loggen — die `str(exc)`-Repraesentation kann
             # je nach httpx-Pfad das Request-Objekt mit `Authorization`-Header
             # mitfuehren; den Token-Klartext wollen wir nirgends im Log sehen.
             logger.warning("Who2Be-API nicht erreichbar: %s", type(exc).__name__)
             raise ToolError("Who2Be-API nicht erreichbar.") from exc
+        self._raise_for_status(response, path)
+        return response
+
+    def _raise_for_status(self, response: httpx.Response, path: str) -> None:
+        """Uebersetzt API-Fehlerstatuses in fuer Agenten lesbare `ToolError`s."""
         if response.status_code == 404:
             raise ToolError("Angefragte Ressource nicht gefunden.")
         if response.status_code == 401:
             raise ToolError("Nicht autorisiert — WHO2BE_API_TOKEN pruefen.")
+        if response.status_code == 403:
+            raise ToolError(
+                "Keine Berechtigung — der API-Token braucht mindestens die editor-Rolle "
+                "(Status-Promote/Retire erfordert admin) fuer diesen Schreibzugriff."
+            )
+        if response.status_code == 409:
+            raise ToolError(self._detail(response, "Konflikt mit dem aktuellen Stand."))
+        if response.status_code == 422:
+            raise ToolError(self._detail(response, "Ungueltige Eingabe."))
         if response.is_error:
             logger.warning("Who2Be-API-Fehler %s fuer %s", response.status_code, path)
             raise ToolError(f"Who2Be-API-Fehler ({response.status_code}).")
+
+    @staticmethod
+    def _detail(response: httpx.Response, fallback: str) -> str:
+        """Extrahiert das `detail`-Feld der API-Fehlerantwort (best-effort).
+
+        409/422 tragen oft eine sprechende `detail`-Meldung (z.B. "Es existiert
+        bereits ein Draft") — die reichen wir an den Agenten durch. Listen-Details
+        (422-Validation) bleiben generisch.
+        """
+        try:
+            payload = response.json()
+        except ValueError:
+            return fallback
+        detail = payload.get("detail") if isinstance(payload, dict) else None
+        return detail if isinstance(detail, str) and detail else fallback
+
+    async def _get(self, path: str, params: dict[str, str] | None = None) -> Any:
+        response = await self._request("GET", path, params=params)
         return response.json()
 
-    async def get_persona(
-        self, identifier: str, locale: str = DEFAULT_LOCALE
-    ) -> PersonaRead:
+    async def _write(
+        self,
+        method: str,
+        path: str,
+        body: BaseModel | None,
+        params: dict[str, str] | None = None,
+    ) -> Any:
+        """Sendet einen mutierenden Request und gibt die JSON-Antwort zurueck.
+
+        `body` wird via `model_dump(mode="json")` serialisiert (UUID/datetime →
+        JSON-tauglich); `None` sendet einen leeren Body (z.B. Restore-Endpunkte).
+        """
+        payload = body.model_dump(mode="json") if body is not None else None
+        response = await self._request(method, path, params=params, json=payload)
+        return response.json()
+
+    async def get_persona(self, identifier: str, locale: str = DEFAULT_LOCALE) -> PersonaRead:
         """Laedt eine Persona per UUID oder — sonst — per Name (in `locale`)."""
         try:
             persona_id = UUID(identifier)
@@ -89,9 +161,7 @@ class ApiClient:
     async def _resolve_persona_by_name(
         self, name: str, locale: str = DEFAULT_LOCALE
     ) -> PersonaRead:
-        data = await self._get(
-            f"{self._workspace_prefix}/personas", params={"locale": locale}
-        )
+        data = await self._get(f"{self._workspace_prefix}/personas", params={"locale": locale})
         for entry in data:
             persona = PersonaRead.model_validate(entry)
             if persona.name == name:
@@ -107,9 +177,7 @@ class ApiClient:
         )
         return [PlaybookRead.model_validate(item) for item in data]
 
-    async def get_persona_rendered(
-        self, persona_id: UUID, locale: str = DEFAULT_LOCALE
-    ) -> str:
+    async def get_persona_rendered(self, persona_id: UUID, locale: str = DEFAULT_LOCALE) -> str:
         """Laedt den serverseitig expandierten Persona-Profil-Body (Track F).
 
         Der API-Endpoint `GET .../personas/{id}/rendered` jagt den Profil-Body
@@ -144,9 +212,7 @@ class ApiClient:
         data = await self._get(f"{self._workspace_prefix}/playbooks/triggers")
         return [TriggerOverview.model_validate(item) for item in data]
 
-    async def get_playbook(
-        self, playbook_id: UUID, locale: str = DEFAULT_LOCALE
-    ) -> PlaybookRead:
+    async def get_playbook(self, playbook_id: UUID, locale: str = DEFAULT_LOCALE) -> PlaybookRead:
         data = await self._get(
             f"{self._workspace_prefix}/playbooks/{playbook_id}", params={"locale": locale}
         )
@@ -161,9 +227,7 @@ class ApiClient:
         data = await self._get(f"{self._workspace_prefix}/resources", params=params)
         return [ResourceRead.model_validate(item) for item in data]
 
-    async def get_resource(
-        self, resource_id: UUID, locale: str = DEFAULT_LOCALE
-    ) -> ResourceRead:
+    async def get_resource(self, resource_id: UUID, locale: str = DEFAULT_LOCALE) -> ResourceRead:
         data = await self._get(
             f"{self._workspace_prefix}/resources/{resource_id}", params={"locale": locale}
         )
@@ -175,9 +239,7 @@ class ApiClient:
         Eine Ebene, keine Expansion: jeder Eintrag traegt `fetch_call`, damit der
         Agent das Kind bei Bedarf separat nachladen kann.
         """
-        data = await self._get(
-            f"{self._workspace_prefix}/resources/{resource_id}/sub_resources"
-        )
+        data = await self._get(f"{self._workspace_prefix}/resources/{resource_id}/sub_resources")
         return [SubResourceRead.model_validate(item) for item in data]
 
     async def get_playbook_resource_links(self, playbook_id: UUID) -> list[ResourceLinkRead]:
@@ -203,9 +265,7 @@ class ApiClient:
         data = await self._get(f"{self._workspace_prefix}/agents/{agent_id}/rendered")
         return AgentWithRenderedPrompt.model_validate(data)
 
-    async def get_playbook_rendered(
-        self, playbook_id: UUID, locale: str = DEFAULT_LOCALE
-    ) -> str:
+    async def get_playbook_rendered(self, playbook_id: UUID, locale: str = DEFAULT_LOCALE) -> str:
         """Laedt den serverseitig expandierten Playbook-Body (B5).
 
         Der API-Endpoint `GET .../playbooks/{id}/rendered` jagt den BlockNote-Body
@@ -221,3 +281,175 @@ class ApiClient:
         )
         body = data.get("body_rendered") if isinstance(data, dict) else None
         return body if isinstance(body, str) else ""
+
+    # ------------------------------------------------------------------
+    # Write-Pfad (ADR-0012). Alle Mutationen brauchen einen Token mit
+    # editor-Rolle (Status-Promote/Retire: admin) — die API erzwingt das.
+    # ------------------------------------------------------------------
+
+    async def create_persona(self, data: PersonaCreate) -> PersonaRead:
+        body = await self._write("POST", f"{self._workspace_prefix}/personas", data)
+        return PersonaRead.model_validate(body)
+
+    async def update_persona(
+        self, persona_id: UUID, data: PersonaUpdate, locale: str = DEFAULT_LOCALE
+    ) -> PersonaRead:
+        body = await self._write(
+            "PUT",
+            f"{self._workspace_prefix}/personas/{persona_id}",
+            data,
+            params={"locale": locale},
+        )
+        return PersonaRead.model_validate(body)
+
+    async def transition_persona_version(
+        self,
+        persona_id: UUID,
+        version: int,
+        data: VersionTransitionRequest,
+        locale: str = DEFAULT_LOCALE,
+    ) -> PersonaVersionRead:
+        body = await self._write(
+            "POST",
+            f"{self._workspace_prefix}/personas/{persona_id}/versions/{version}/transition",
+            data,
+            params={"locale": locale},
+        )
+        return PersonaVersionRead.model_validate(body)
+
+    async def restore_persona_version(
+        self, persona_id: UUID, version: int, locale: str = DEFAULT_LOCALE
+    ) -> PersonaRead:
+        body = await self._write(
+            "POST",
+            f"{self._workspace_prefix}/personas/{persona_id}/versions/{version}/restore",
+            None,
+            params={"locale": locale},
+        )
+        return PersonaRead.model_validate(body)
+
+    async def set_persona_playbooks(
+        self, persona_id: UUID, data: PersonaPlaybookLinkSet
+    ) -> list[PlaybookRead]:
+        body = await self._write(
+            "PUT", f"{self._workspace_prefix}/personas/{persona_id}/playbooks", data
+        )
+        return [PlaybookRead.model_validate(item) for item in body]
+
+    async def create_playbook(self, data: PlaybookCreate) -> PlaybookRead:
+        body = await self._write("POST", f"{self._workspace_prefix}/playbooks", data)
+        return PlaybookRead.model_validate(body)
+
+    async def update_playbook(
+        self, playbook_id: UUID, data: PlaybookUpdate, locale: str = DEFAULT_LOCALE
+    ) -> PlaybookRead:
+        body = await self._write(
+            "PUT",
+            f"{self._workspace_prefix}/playbooks/{playbook_id}",
+            data,
+            params={"locale": locale},
+        )
+        return PlaybookRead.model_validate(body)
+
+    async def transition_playbook_version(
+        self,
+        playbook_id: UUID,
+        version: int,
+        data: VersionTransitionRequest,
+        locale: str = DEFAULT_LOCALE,
+    ) -> PlaybookVersionRead:
+        body = await self._write(
+            "POST",
+            f"{self._workspace_prefix}/playbooks/{playbook_id}/versions/{version}/transition",
+            data,
+            params={"locale": locale},
+        )
+        return PlaybookVersionRead.model_validate(body)
+
+    async def restore_playbook_version(
+        self, playbook_id: UUID, version: int, locale: str = DEFAULT_LOCALE
+    ) -> PlaybookRead:
+        body = await self._write(
+            "POST",
+            f"{self._workspace_prefix}/playbooks/{playbook_id}/versions/{version}/restore",
+            None,
+            params={"locale": locale},
+        )
+        return PlaybookRead.model_validate(body)
+
+    async def set_playbook_resource_links(
+        self, playbook_id: UUID, data: ResourceLinkSet
+    ) -> list[ResourceLinkRead]:
+        body = await self._write(
+            "PUT", f"{self._workspace_prefix}/playbooks/{playbook_id}/resource_links", data
+        )
+        return [ResourceLinkRead.model_validate(item) for item in body]
+
+    async def set_playbook_composes(
+        self, playbook_id: UUID, data: PlaybookCompositionLinkSet
+    ) -> list[PlaybookRead]:
+        body = await self._write(
+            "PUT", f"{self._workspace_prefix}/playbooks/{playbook_id}/composes", data
+        )
+        return [PlaybookRead.model_validate(item) for item in body]
+
+    async def create_resource(self, data: ResourceCreate) -> ResourceRead:
+        body = await self._write("POST", f"{self._workspace_prefix}/resources", data)
+        return ResourceRead.model_validate(body)
+
+    async def update_resource(
+        self, resource_id: UUID, data: ResourceUpdate, locale: str = DEFAULT_LOCALE
+    ) -> ResourceRead:
+        body = await self._write(
+            "PUT",
+            f"{self._workspace_prefix}/resources/{resource_id}",
+            data,
+            params={"locale": locale},
+        )
+        return ResourceRead.model_validate(body)
+
+    async def transition_resource_version(
+        self,
+        resource_id: UUID,
+        version: int,
+        data: VersionTransitionRequest,
+        locale: str = DEFAULT_LOCALE,
+    ) -> ResourceVersionRead:
+        body = await self._write(
+            "POST",
+            f"{self._workspace_prefix}/resources/{resource_id}/versions/{version}/transition",
+            data,
+            params={"locale": locale},
+        )
+        return ResourceVersionRead.model_validate(body)
+
+    async def restore_resource_version(
+        self, resource_id: UUID, version: int, locale: str = DEFAULT_LOCALE
+    ) -> ResourceRead:
+        body = await self._write(
+            "POST",
+            f"{self._workspace_prefix}/resources/{resource_id}/versions/{version}/restore",
+            None,
+            params={"locale": locale},
+        )
+        return ResourceRead.model_validate(body)
+
+    async def set_resource_sub_resources(
+        self, resource_id: UUID, data: SubResourceLinkSet
+    ) -> list[SubResourceRead]:
+        body = await self._write(
+            "PUT", f"{self._workspace_prefix}/resources/{resource_id}/sub_resources", data
+        )
+        return [SubResourceRead.model_validate(item) for item in body]
+
+    async def create_agent(self, data: AgentCreate) -> AgentRead:
+        body = await self._write("POST", f"{self._workspace_prefix}/agents", data)
+        return AgentRead.model_validate(body)
+
+    async def update_agent(self, agent_id: UUID, data: AgentUpdate) -> AgentRead:
+        body = await self._write("PUT", f"{self._workspace_prefix}/agents/{agent_id}", data)
+        return AgentRead.model_validate(body)
+
+    async def copy_agent(self, agent_id: UUID, data: AgentCopy) -> AgentRead:
+        body = await self._write("POST", f"{self._workspace_prefix}/agents/{agent_id}/copy", data)
+        return AgentRead.model_validate(body)

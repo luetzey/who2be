@@ -23,12 +23,32 @@ from who2be_mcp.client import ApiClient
 from who2be_mcp.config import Settings, get_settings
 from who2be_mcp.core_logging import configure_logging, with_tool_log
 from who2be_models import (
+    AgentCopy,
+    AgentCreate,
+    AgentRead,
+    AgentUpdate,
     AgentWithRenderedPrompt,
+    PersonaCreate,
+    PersonaPlaybookLinkSet,
     PersonaRead,
+    PersonaUpdate,
+    PersonaVersionRead,
+    PlaybookCompositionLinkSet,
+    PlaybookCreate,
     PlaybookRead,
+    PlaybookUpdate,
+    PlaybookVersionRead,
+    ResourceCreate,
     ResourceLinkRead,
+    ResourceLinkSet,
     ResourceRead,
+    ResourceUpdate,
+    ResourceVersionRead,
+    SubResourceLinkSet,
+    SubResourceRead,
     TriggerOverview,
+    VersionStatus,
+    VersionTransitionRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -145,6 +165,14 @@ async def build_client() -> ApiClient:
     settings = get_settings()
     workspace_id = await _resolve_workspace_id(settings)
     return ApiClient(settings.api_base_url, settings.api_token, workspace_id)
+
+
+def _parse_uuid(value: str, label: str) -> UUID:
+    """Parst eine UUID oder wirft einen fuer Agenten lesbaren `ToolError`."""
+    try:
+        return UUID(value)
+    except ValueError as exc:
+        raise ToolError(f"Ungueltige {label}-UUID: '{value}'.") from exc
 
 
 @mcp.tool
@@ -351,17 +379,270 @@ async def fetch_resource(
     inline_ids: list[UUID] = []
     seen: set[UUID] = set()
     for sub in subs:
-        if (
-            sub.embedding_mode == "inline"
-            and sub.link_scope == "resource"
-            and sub.id not in seen
-        ):
+        if sub.embedding_mode == "inline" and sub.link_scope == "resource" and sub.id not in seen:
             seen.add(sub.id)
             inline_ids.append(sub.id)
-    resource.inline_sub_resources = [
-        await client.get_resource(cid, locale) for cid in inline_ids
-    ]
+    resource.inline_sub_resources = [await client.get_resource(cid, locale) for cid in inline_ids]
     return resource
+
+
+# ---------------------------------------------------------------------------
+# Write-Tools (ADR-0012). Verlangen einen API-Token mit editor-Rolle;
+# Status-Promote (draft→active) und Retire (active→inactive) brauchen admin.
+# Versionsmodell: PUT auf eine aktive Version legt eine neue Draft an (409,
+# falls bereits ein Draft existiert). Reads (MCP get_*/fetch_*) sehen nur
+# aktive Versionen — eine neu erstellte/bearbeitete Entitaet wird erst nach
+# `transition(..., to='active')` fuer Agenten sichtbar.
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool
+@with_tool_log("create_persona")
+async def create_persona(data: PersonaCreate) -> PersonaRead:
+    """Legt eine neue Persona an (initiale Draft-Version 1).
+
+    `data.content` traegt die strukturierten Felder (Beschreibung, Traits,
+    Tags, Modi, Profil-Bloecke). Die Persona ist nach dem Anlegen `draft` und
+    fuer MCP-Reads noch unsichtbar — erst `transition_persona(..., to='active')`
+    schaltet sie scharf.
+    """
+    client = await build_client()
+    return await client.create_persona(data)
+
+
+@mcp.tool
+@with_tool_log("update_persona")
+async def update_persona(persona_id: str, data: PersonaUpdate, locale: str = "de") -> PersonaRead:
+    """Aktualisiert eine Persona (versioniert). PUT auf eine aktive Version legt
+    eine neue Draft an; 409, falls bereits ein Draft existiert (dann den Draft
+    weiterbearbeiten und neu transitionieren). `locale` waehlt die Variante.
+    """
+    client = await build_client()
+    return await client.update_persona(_parse_uuid(persona_id, "Persona"), data, locale)
+
+
+@mcp.tool
+@with_tool_log("transition_persona")
+async def transition_persona(
+    persona_id: str, version: int, to: VersionStatus, note: str | None = None, locale: str = "de"
+) -> PersonaVersionRead:
+    """Schaltet eine Persona-Version in einen neuen Status.
+
+    Erlaubte Uebergaenge (State-Machine): draft→review, review→{active,draft},
+    active→{inactive,draft}, inactive→draft. Promote (→active) und Retire
+    (active→inactive) erfordern die admin-Rolle, sonst genuegt editor. `note`
+    landet in der Status-Historie.
+    """
+    client = await build_client()
+    return await client.transition_persona_version(
+        _parse_uuid(persona_id, "Persona"),
+        version,
+        VersionTransitionRequest(to=to, note=note),
+        locale,
+    )
+
+
+@mcp.tool
+@with_tool_log("restore_persona")
+async def restore_persona(persona_id: str, version: int, locale: str = "de") -> PersonaRead:
+    """Stellt eine aeltere Persona-Version als neue Draft wieder her (non-destruktiv)."""
+    client = await build_client()
+    return await client.restore_persona_version(_parse_uuid(persona_id, "Persona"), version, locale)
+
+
+@mcp.tool
+@with_tool_log("set_persona_playbooks")
+async def set_persona_playbooks(persona_id: str, playbook_ids: list[str]) -> list[PlaybookRead]:
+    """Setzt die mit einer Persona verknuepften Playbooks (Set-Replace-Semantik).
+
+    `playbook_ids` ersetzt die bestehende Verknuepfungs-Liste vollstaendig —
+    eine leere Liste loest alle Verknuepfungen.
+    """
+    parsed = [_parse_uuid(pid, "Playbook") for pid in playbook_ids]
+    client = await build_client()
+    return await client.set_persona_playbooks(
+        _parse_uuid(persona_id, "Persona"), PersonaPlaybookLinkSet(playbook_ids=parsed)
+    )
+
+
+@mcp.tool
+@with_tool_log("create_playbook")
+async def create_playbook(data: PlaybookCreate) -> PlaybookRead:
+    """Legt ein neues Playbook an (initiale Draft-Version 1).
+
+    `data.content.body` ist BlockNote-Markup (oder Plain-Text); `type`, `tags`
+    und `triggers` steuern Auffindbarkeit. Erst nach `transition_playbook(...,
+    to='active')` fuer MCP-Reads sichtbar.
+    """
+    client = await build_client()
+    return await client.create_playbook(data)
+
+
+@mcp.tool
+@with_tool_log("update_playbook")
+async def update_playbook(
+    playbook_id: str, data: PlaybookUpdate, locale: str = "de"
+) -> PlaybookRead:
+    """Aktualisiert ein Playbook (versioniert; PUT auf aktiv → neue Draft, 409 bei
+    bestehendem Draft)."""
+    client = await build_client()
+    return await client.update_playbook(_parse_uuid(playbook_id, "Playbook"), data, locale)
+
+
+@mcp.tool
+@with_tool_log("transition_playbook")
+async def transition_playbook(
+    playbook_id: str, version: int, to: VersionStatus, note: str | None = None, locale: str = "de"
+) -> PlaybookVersionRead:
+    """Schaltet eine Playbook-Version in einen neuen Status (State-Machine wie bei
+    Persona; Promote/Retire = admin)."""
+    client = await build_client()
+    return await client.transition_playbook_version(
+        _parse_uuid(playbook_id, "Playbook"),
+        version,
+        VersionTransitionRequest(to=to, note=note),
+        locale,
+    )
+
+
+@mcp.tool
+@with_tool_log("restore_playbook")
+async def restore_playbook(playbook_id: str, version: int, locale: str = "de") -> PlaybookRead:
+    """Stellt eine aeltere Playbook-Version als neue Draft wieder her (non-destruktiv)."""
+    client = await build_client()
+    return await client.restore_playbook_version(
+        _parse_uuid(playbook_id, "Playbook"), version, locale
+    )
+
+
+@mcp.tool
+@with_tool_log("set_playbook_resource_links")
+async def set_playbook_resource_links(
+    playbook_id: str, links: ResourceLinkSet
+) -> list[ResourceLinkRead]:
+    """Setzt die Resource-Verweise eines Playbooks (Set-Replace-Semantik).
+
+    Jeder Link traegt `resource_id`, optional `block_id` (Block-Anker),
+    `position`, `link_scope` ('resource'|'block') und `embedding_mode`
+    ('lazy'|'inline'). Die Liste ersetzt die bestehenden Links vollstaendig.
+    """
+    client = await build_client()
+    return await client.set_playbook_resource_links(_parse_uuid(playbook_id, "Playbook"), links)
+
+
+@mcp.tool
+@with_tool_log("set_playbook_composes")
+async def set_playbook_composes(playbook_id: str, child_ids: list[str]) -> list[PlaybookRead]:
+    """Setzt die geordneten Sub-Playbooks eines Composite (Set-Replace-Semantik).
+
+    `child_ids` ist die geordnete Sequenz der Kind-Playbooks (ADR-0024). Eine
+    leere Liste macht das Playbook wieder zu einem Nicht-Composite.
+    """
+    parsed = [_parse_uuid(cid, "Playbook") for cid in child_ids]
+    client = await build_client()
+    return await client.set_playbook_composes(
+        _parse_uuid(playbook_id, "Playbook"), PlaybookCompositionLinkSet(child_ids=parsed)
+    )
+
+
+@mcp.tool
+@with_tool_log("create_resource")
+async def create_resource(data: ResourceCreate) -> ResourceRead:
+    """Legt eine neue Resource an (BlockNote-Dokument, initiale Draft-Version 1).
+
+    `data.content.blocks` ist die BlockNote-Block-Liste; `tags` steuert die
+    Auffindbarkeit. Erst nach `transition_resource(..., to='active')` sichtbar.
+    """
+    client = await build_client()
+    return await client.create_resource(data)
+
+
+@mcp.tool
+@with_tool_log("update_resource")
+async def update_resource(
+    resource_id: str, data: ResourceUpdate, locale: str = "de"
+) -> ResourceRead:
+    """Aktualisiert eine Resource (versioniert; PUT auf aktiv → neue Draft, 409 bei
+    bestehendem Draft)."""
+    client = await build_client()
+    return await client.update_resource(_parse_uuid(resource_id, "Resource"), data, locale)
+
+
+@mcp.tool
+@with_tool_log("transition_resource")
+async def transition_resource(
+    resource_id: str, version: int, to: VersionStatus, note: str | None = None, locale: str = "de"
+) -> ResourceVersionRead:
+    """Schaltet eine Resource-Version in einen neuen Status (State-Machine wie bei
+    Persona; Promote/Retire = admin)."""
+    client = await build_client()
+    return await client.transition_resource_version(
+        _parse_uuid(resource_id, "Resource"),
+        version,
+        VersionTransitionRequest(to=to, note=note),
+        locale,
+    )
+
+
+@mcp.tool
+@with_tool_log("restore_resource")
+async def restore_resource(resource_id: str, version: int, locale: str = "de") -> ResourceRead:
+    """Stellt eine aeltere Resource-Version als neue Draft wieder her (non-destruktiv)."""
+    client = await build_client()
+    return await client.restore_resource_version(
+        _parse_uuid(resource_id, "Resource"), version, locale
+    )
+
+
+@mcp.tool
+@with_tool_log("set_resource_sub_resources")
+async def set_resource_sub_resources(
+    resource_id: str, links: SubResourceLinkSet
+) -> list[SubResourceRead]:
+    """Setzt die geordneten Sub-Resources einer Resource (Set-Replace-Semantik).
+
+    Jeder Link traegt `child_id`, optional `block_id`, `position`, `link_scope`
+    ('resource'|'block') und `embedding_mode` ('lazy'|'inline'). Ersetzt die
+    bestehenden Sub-Resource-Links vollstaendig.
+    """
+    client = await build_client()
+    return await client.set_resource_sub_resources(_parse_uuid(resource_id, "Resource"), links)
+
+
+@mcp.tool
+@with_tool_log("create_agent")
+async def create_agent(data: AgentCreate) -> AgentRead:
+    """Legt einen neuen Agent an (Persona + System-Prompt-Template).
+
+    Ein Agent ist erst aktivierbar (`activatable`), wenn Persona und Template
+    gesetzt sind UND die Persona eine aktive Version hat. `status` startet auf
+    `disabled`, falls nicht gesetzt.
+    """
+    client = await build_client()
+    return await client.create_agent(data)
+
+
+@mcp.tool
+@with_tool_log("update_agent")
+async def update_agent(agent_id: str, data: AgentUpdate) -> AgentRead:
+    """Aktualisiert einen Agent (Name, Beschreibung, Persona, Template, Status).
+
+    Nur gesetzte Felder werden geaendert; `None`-Felder bleiben unveraendert.
+    """
+    client = await build_client()
+    return await client.update_agent(_parse_uuid(agent_id, "Agent"), data)
+
+
+@mcp.tool
+@with_tool_log("copy_agent")
+async def copy_agent(agent_id: str, name: str | None = None) -> AgentRead:
+    """Dupliziert einen Agent unter neuem Namen (Default: '<Name> (Kopie)').
+
+    409, falls der Quell-Agent nicht aktivierbar ist (Persona/Template fehlt
+    oder Persona ohne aktive Version) — eine solche Kopie waere nicht einsetzbar.
+    """
+    client = await build_client()
+    return await client.copy_agent(_parse_uuid(agent_id, "Agent"), AgentCopy(name=name))
 
 
 def main() -> None:
