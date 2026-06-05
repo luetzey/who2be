@@ -18,7 +18,8 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from who2be_api.licensing.adapters.mollie import (
+from who2be_api.licensing.entitlement import CLOUD_FREE_ENTITLEMENT, Entitlement, Feature
+from who2be_billing.mollie import (
     MollieBillingService,
     MollieError,
     MolliePayment,
@@ -27,8 +28,7 @@ from who2be_api.licensing.adapters.mollie import (
     metadata_to_entitlement,
     subscription_to_update,
 )
-from who2be_api.licensing.entitlement import CLOUD_FREE_ENTITLEMENT, Entitlement, Feature
-from who2be_api.licensing.plans import PRO_PLAN
+from who2be_billing.plans import PRO_PLAN
 
 
 @dataclass

@@ -44,9 +44,9 @@ from uuid import UUID
 
 from mollie.api.client import Client
 
-from who2be_api.licensing.billing import EntitlementUpdate
 from who2be_api.licensing.entitlement import CLOUD_FREE_ENTITLEMENT, Entitlement
-from who2be_api.licensing.plans import (
+from who2be_api.repositories.entitlement_repository import EntitlementRepository
+from who2be_billing.plans import (
     META_LICENSE_POLICY,
     META_MCP_MONTHLY_QUOTA,
     META_MCP_RATE_PER_MIN,
@@ -55,8 +55,8 @@ from who2be_api.licensing.plans import (
     Plan,
     plan_by_code,
 )
-from who2be_api.repositories.entitlement_repository import EntitlementRepository
-from who2be_api.repositories.processed_event_repository import ProcessedEventRepository
+from who2be_billing.processed_event_repository import ProcessedEventRepository
+from who2be_billing.webhook import EntitlementUpdate
 
 _STATUS_ACTIVE = "active"
 _STATUS_SUSPENDED = "suspended"
@@ -202,9 +202,7 @@ def metadata_to_entitlement(metadata: dict[str, Any]) -> Entitlement:
     )
 
 
-def _grace_entitlement(
-    metadata: dict[str, Any], now: datetime, grace_days: int
-) -> Entitlement:
+def _grace_entitlement(metadata: dict[str, Any], now: datetime, grace_days: int) -> Entitlement:
     """Gebuchter Tier bleibt aktiv, aber mit Dunning-Frist (Plan §3.2).
 
     `expires_at` wird auf dieselbe Frist gesetzt wie `grace_until`: so flippt

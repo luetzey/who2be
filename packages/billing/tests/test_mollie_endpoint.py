@@ -14,7 +14,7 @@ from uuid import uuid4
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from test_licensing_mollie_adapter import (  # type: ignore[import-not-found]
+from test_mollie_adapter import (  # type: ignore[import-not-found]
     FakeEntitlementRepository,
     FakeMollieGateway,
     FakeProcessedEventRepository,
@@ -22,14 +22,14 @@ from test_licensing_mollie_adapter import (  # type: ignore[import-not-found]
 
 from who2be_api.core.config import get_settings
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
-from who2be_api.licensing.adapters.mollie import (
+from who2be_api.main import create_app
+from who2be_billing.mollie import (
     MollieBillingService,
     MolliePayment,
     MollieSubscription,
 )
-from who2be_api.licensing.plans import PRO_PLAN
-from who2be_api.main import create_app
-from who2be_api.routers.billing import get_mollie_service
+from who2be_billing.plans import PRO_PLAN
+from who2be_billing.router import get_mollie_service
 from who2be_models import WorkspaceRole
 
 

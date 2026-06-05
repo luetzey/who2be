@@ -27,6 +27,7 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
+      target: ${API_BUILD_TARGET:-runtime}
     command: ["who2be-migrate"]
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/who2be
@@ -97,6 +98,8 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
+      # On-Prem (Default, ohne Billing). Cloud-Dev: API_BUILD_TARGET=runtime-cloud.
+      target: ${API_BUILD_TARGET:-runtime}
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/who2be
       JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-me-32chars-min}
