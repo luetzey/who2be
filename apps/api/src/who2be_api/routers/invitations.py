@@ -25,7 +25,9 @@ from who2be_api.core.security import (
     get_current_workspace,
     require_role,
 )
+from who2be_api.repositories.audit_log_repository import PgAuditLogRepository
 from who2be_api.repositories.invitation_repository import PgInvitationRepository
+from who2be_api.services.audit_service import AuditService
 from who2be_api.services.invitation_service import InvitationService
 from who2be_models import InvitationCreate, InvitationCreated, InvitationRead, WorkspaceRole
 
@@ -36,7 +38,11 @@ accept_router = APIRouter(prefix="/v1/invitations", tags=["invitations"])
 def get_invitation_service(
     pool: Annotated[asyncpg.Pool, Depends(get_pool)],
 ) -> InvitationService:
-    return InvitationService(PgInvitationRepository(pool))
+    return InvitationService(
+        PgInvitationRepository(pool),
+        audit_service=AuditService(PgAuditLogRepository()),
+        pool=pool,
+    )
 
 
 Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]

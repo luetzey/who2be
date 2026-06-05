@@ -10,11 +10,13 @@ import secrets
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
+import asyncpg
 from fastapi import HTTPException, status
 
 from who2be_api.core.security import WorkspaceContext, hash_token
 from who2be_api.integrations.gotrue_mailer import send_invitation_email
 from who2be_api.repositories.invitation_repository import InvitationRepository
+from who2be_api.services.audit_service import AuditService
 from who2be_models import InvitationCreate, InvitationCreated, InvitationRead
 
 _EXPIRY = timedelta(days=7)
@@ -29,8 +31,15 @@ def _new_invitation_token() -> str:
 class InvitationService:
     """Adapter um das Invitation-Repository plus Mail-Versand."""
 
-    def __init__(self, invitation_repo: InvitationRepository) -> None:
+    def __init__(
+        self,
+        invitation_repo: InvitationRepository,
+        audit_service: AuditService | None = None,
+        pool: asyncpg.Pool | None = None,
+    ) -> None:
         self._repo = invitation_repo
+        self._audit = audit_service
+        self._pool = pool
 
     async def create(self, ctx: WorkspaceContext, data: InvitationCreate) -> InvitationCreated:
         plaintext = _new_invitation_token()
@@ -43,6 +52,15 @@ class InvitationService:
             expires_at,
             ctx.user_id,
         )
+        if self._audit is not None and self._pool is not None:
+            await self._audit.record(
+                self._pool,
+                action="invitation.issued",
+                actor_id=ctx.user_id,
+                workspace_id=ctx.workspace_id,
+                target=invitation.id,
+                detail={"role": data.role.value},
+            )
         # Best-effort: ein Mail-Fehler darf die (persistierte) Invitation nicht
         # kippen — der Klartext-Token kommt ohnehin im Result zurueck.
         await send_invitation_email(data.email, plaintext)
@@ -57,6 +75,14 @@ class InvitationService:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Einladung nicht gefunden.",
+            )
+        if self._audit is not None and self._pool is not None:
+            await self._audit.record(
+                self._pool,
+                action="invitation.revoked",
+                actor_id=ctx.user_id,
+                workspace_id=ctx.workspace_id,
+                target=invitation_id,
             )
 
     async def accept(self, token: str, user_id: UUID, jwt_email: str | None = None) -> UUID:
