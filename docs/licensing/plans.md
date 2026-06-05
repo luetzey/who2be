@@ -2,9 +2,9 @@
 
 **Single Source of Truth** für die Cloud-Plan-Tiers (Plan
 `2026-06-02-1819_followups-rls-mollie-auth-fsl.md` §3.2, Entscheidung M1/M2).
-Die Code-Konstanten in `apps/api/src/who2be_api/licensing/plans.py` spiegeln
-exakt diese Tabelle; bei Abweichung gewinnt dieses Dokument und der Code wird
-nachgezogen.
+Die Code-Konstanten in `packages/billing/src/who2be_billing/plans.py` (optionales
+Cloud-Paket, ADR-0029) spiegeln exakt diese Tabelle; bei Abweichung gewinnt dieses
+Dokument und der Code wird nachgezogen.
 
 > **Leitprinzip (Licensing-Standards §3.6):** Das Nutzungsrecht entscheidet die
 > App über das **Entitlement** — der Zahlungsanbieter (Mollie) meldet nur
@@ -84,6 +84,29 @@ Ablauf:
 3. **Folgezahlungen / Statuswechsel** (Webhook-Ping): App fetcht die zugehörige
    Subscription → `active` ⇒ Tier bleibt; `canceled`/`suspended`/`completed` ⇒
    Org fällt auf **Free** zurück.
+
+## Entitlement-Schreibquellen (ADR-0028)
+
+`org_entitlement` ist die einzige **gelesene** SSoT; sie wird nur von klar
+benannten Quellen **geschrieben** (per CHECK auf diese vier begrenzt), nie von der
+ausgelieferten Read-App:
+
+| `source` | Edition | Wer schreibt | Pflichtfelder |
+|---|---|---|---|
+| `mollie` | Cloud | Billing-Paket (Mollie-Pull) | `external_ref` |
+| `cloud` | Cloud | Billing-Paket (generischer HMAC-Webhook) | `external_ref` |
+| `manual_override` | Cloud | Admin-Endpoint `POST …/billing/override` | `expires_at`, `created_by`, `reason` |
+| `signed_license` | On-Prem | **kein Tabellen-Write** — Adapter resolved live aus dem K_pub-verifizierten Token | — |
+
+- **On-Prem:** Entitlement nur über den K_pub-Verifikationspfad
+  (`WHO2BE_LICENSE_KEY`, env-validiert via `who2be-license verify`). Kein
+  Tabellen-Writer im On-Prem-Build (das rohe `who2be-set-entitlement` wurde
+  entfernt).
+- **`manual_override`:** kontrollierter, **befristeter** + auditierter
+  Ausnahmepfad (Support/Kulanz/Webhook-Hänger) — gleiche Tabelle, gleiches Lesen,
+  Ablauf über `is_active()`/`expires_at`. Nur in der Cloud-Edition (Billing-Paket).
+- **Build-Isolation:** Das Mollie-/Billing-Modul (`who2be-billing`) ist im
+  On-Prem-Artefakt physisch nicht vorhanden (ADR-0029).
 
 ## Out of Scope (späterer Iterationsschritt)
 
