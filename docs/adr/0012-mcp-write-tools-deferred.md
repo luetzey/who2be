@@ -1,9 +1,10 @@
 # ADR-0012 — MCP-Write-Tools sind post-MVP
 
-- Status: Deferred (bewusst nicht im MVP)
+- Status: Superseded durch ADR-0030 (2026-06-05)
 - Datum: 2026-05-26
 - Kontext: Who2Be MVP (PROJ-19), Plan-Review 2026-05-26
-- Bezug: ADR-0005 (MCP als HTTP-Client)
+- Bezug: ADR-0005 (MCP als HTTP-Client); abgeloest durch ADR-0030
+  (MCP-Write-Tools), nachdem beide Re-Evaluation-Trigger erfuellt waren
 
 ## Kontext
 
