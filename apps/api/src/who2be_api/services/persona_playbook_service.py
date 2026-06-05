@@ -9,11 +9,16 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 
-from who2be_api.core.security import WorkspaceContext, require_role
+from who2be_api.core.security import WorkspaceContext, require_capability, require_role
 from who2be_api.repositories.persona_playbook_repository import (
     PersonaPlaybookRepository,
 )
-from who2be_models import PersonaPlaybookLinkSet, PlaybookRead, WorkspaceRole
+from who2be_models import (
+    AgentCapability,
+    PersonaPlaybookLinkSet,
+    PlaybookRead,
+    WorkspaceRole,
+)
 
 
 def _persona_not_found() -> HTTPException:
@@ -36,6 +41,7 @@ class PersonaPlaybookService:
     ) -> list[PlaybookRead]:
         """Ersetzt die Verknuepfungen; leere Liste loest alle."""
         require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.persona_write)
         # Reihenfolge erhaltend deduplizieren — doppelte Links sind keine.
         ids = list(dict.fromkeys(data.playbook_ids))
         result = await self._repo.set_links(ctx.workspace_id, ctx.user_id, persona_id, ids)

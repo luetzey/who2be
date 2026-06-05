@@ -1327,6 +1327,73 @@ class TestToolsOverviewResolver:
         assert "applied" in result or "eingebettet" in result
         assert "list_triggers" in result
 
+    # --- Pro-Agent-Filter (Tool-Policy) -----------------------------------
+
+    @staticmethod
+    def _policy_ctx(**policy_kwargs: Any) -> RenderContext:
+        from who2be_models import AgentToolPolicy
+
+        return RenderContext(
+            workspace_id=UUID("00000000-0000-0000-0000-000000000099"),
+            persona_id=UUID("00000000-0000-0000-0000-000000000001"),
+            now=datetime(2026, 5, 31, 12, 0, 0, tzinfo=UTC),
+            tool_policy=AgentToolPolicy(**policy_kwargs),
+        )
+
+    def test_no_policy_hides_write_tools(self) -> None:
+        """Ohne Policy (None): nur Read-Tools, keine Write-Tools."""
+        result = _async_run(ToolsOverviewResolver().resolve("", _ctx(), _make_db())).text
+        assert "list_playbooks" in result
+        assert "create_playbook" not in result
+        assert "create_agent" not in result
+
+    def test_default_policy_shows_reads_no_writes(self) -> None:
+        """Default-Policy = Read-All ohne Writes."""
+        result = _async_run(
+            ToolsOverviewResolver().resolve("", self._policy_ctx(), _make_db())
+        ).text
+        assert "list_playbooks" in result
+        assert "create_playbook" not in result
+        assert "nur die dir zugewiesenen" not in result
+
+    def test_playbook_write_capability_reveals_write_tools(self) -> None:
+        result = _async_run(
+            ToolsOverviewResolver().resolve(
+                "", self._policy_ctx(playbook_write=True), _make_db()
+            )
+        ).text
+        assert "create_playbook" in result
+        assert "Schreibzugriff" in result
+        # Andere Domains bleiben gesperrt.
+        assert "create_resource" not in result
+        assert "create_agent" not in result
+
+    def test_assigned_scope_adds_hint(self) -> None:
+        from who2be_models import ReadScope
+
+        result = _async_run(
+            ToolsOverviewResolver().resolve(
+                "", self._policy_ctx(playbook_read=ReadScope.assigned), _make_db()
+            )
+        ).text
+        assert "nur die dir zugewiesenen Playbooks" in result
+
+    def test_read_scope_none_hides_tool(self) -> None:
+        from who2be_models import ReadScope
+
+        result = _async_run(
+            ToolsOverviewResolver().resolve(
+                "", self._policy_ctx(playbook_read=ReadScope.none), _make_db()
+            )
+        ).text
+        # Die Tool-Eintraege (Signaturen) sind weg — der Applied-Hinweis-Text
+        # darf "fetch_playbook(id)" weiterhin erwaehnen, daher auf die exakte
+        # Tool-Signatur pruefen.
+        assert "list_playbooks(tag?, trigger?)" not in result
+        assert "fetch_playbook(playbook_id)" not in result
+        # Resources bleiben (Default all) sichtbar.
+        assert "list_resources(tag?)" in result
+
 
 # ---------------------------------------------------------------------------
 # render_template_body (Renderer-Integration) — Welle 6: tuple return

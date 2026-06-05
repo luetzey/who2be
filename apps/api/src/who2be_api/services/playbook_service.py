@@ -14,7 +14,8 @@ import asyncpg
 from fastapi import HTTPException, status
 from pydantic import BaseModel
 
-from who2be_api.core.security import WorkspaceContext, require_role
+from who2be_api.core.agent_scope import playbook_read_restrict
+from who2be_api.core.security import WorkspaceContext, require_capability, require_role
 from who2be_api.repositories.playbook_repository import PlaybookRepository
 from who2be_api.repositories.usage_repository import UsageRepository
 from who2be_api.services.placeholders import RenderContext, render_template_body
@@ -24,6 +25,7 @@ from who2be_api.services.playbook_resource_link_service import PlaybookResourceL
 from who2be_api.services.version_diff import compute_version_diff
 from who2be_models import (
     DEFAULT_LOCALE,
+    AgentCapability,
     DeleteBlocked,
     PlaybookCompositionLinkSet,
     PlaybookContent,
@@ -138,6 +140,7 @@ class PlaybookService:
 
     async def create(self, ctx: WorkspaceContext, data: PlaybookCreate) -> PlaybookRead:
         require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.playbook_write)
         playbook = await self._repo.insert(
             ctx.workspace_id, ctx.user_id, data.name, data.content, data.locales
         )
@@ -196,6 +199,7 @@ class PlaybookService:
         cursor: tuple[datetime, UUID] | None,
         locale: str = DEFAULT_LOCALE,
     ) -> tuple[list[PlaybookRead], str | None]:
+        restrict_ids = await playbook_read_restrict(self._pool, ctx)
         rows = await self._repo.list_by_workspace(
             ctx.workspace_id,
             tag,
@@ -204,6 +208,7 @@ class PlaybookService:
             cursor,
             active_only=ctx.is_api_token,
             locale=locale,
+            restrict_ids=restrict_ids,
         )
         if len(rows) > limit:
             items = rows[:limit]
@@ -214,8 +219,13 @@ class PlaybookService:
     async def get(
         self, ctx: WorkspaceContext, playbook_id: UUID, locale: str = DEFAULT_LOCALE
     ) -> PlaybookRead:
+        restrict_ids = await playbook_read_restrict(self._pool, ctx)
         playbook = await self._repo.fetch(
-            ctx.workspace_id, playbook_id, active_only=ctx.is_api_token, locale=locale
+            ctx.workspace_id,
+            playbook_id,
+            active_only=ctx.is_api_token,
+            locale=locale,
+            restrict_ids=restrict_ids,
         )
         if playbook is None:
             raise _not_found()
@@ -230,6 +240,7 @@ class PlaybookService:
     ) -> PlaybookRead:
         """Erzeugt eine neue Version des Playbooks (Draft-on-Edit bei Active)."""
         require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.playbook_write)
         outcome = await self._repo.update(
             ctx.workspace_id, ctx.user_id, playbook_id, data.name, data.content, locale
         )
@@ -249,6 +260,7 @@ class PlaybookService:
     ) -> PlaybookRead:
         """Auto-Save-Pfad (PATCH `.../draft`) — upsertet die Draft-Version."""
         require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.playbook_write)
         outcome = await self._repo.upsert_draft(
             ctx.workspace_id, ctx.user_id, playbook_id, data.name, data.content, locale
         )
@@ -289,6 +301,7 @@ class PlaybookService:
         Resource-Links wieder aus dem Body nach.
         """
         require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.playbook_write)
         snapshot = await self._repo.fetch_version(
             ctx.workspace_id, playbook_id, source_version, locale
         )
@@ -352,9 +365,21 @@ class PlaybookService:
     async def list_triggers(self, ctx: WorkspaceContext) -> list[TriggerOverview]:
         """Welle 5: Discovery-Liste aller Trigger im Workspace mit Playbook-Verweis.
 
-        Quelle fuer MCP-Tool `list_triggers` und Frontend-Hinweise.
+        Quelle fuer MCP-Tool `list_triggers` und Frontend-Hinweise. Read-Scoping
+        (`assigned`): Trigger werden auf die zugewiesenen Playbooks gefiltert,
+        Eintraege ohne verbleibendes Playbook fallen weg. Scope `none` → 403.
         """
-        return await self._repo.list_triggers_with_playbooks(ctx.workspace_id)
+        overviews = await self._repo.list_triggers_with_playbooks(ctx.workspace_id)
+        restrict_ids = await playbook_read_restrict(self._pool, ctx)
+        if restrict_ids is None:
+            return overviews
+        allowed = set(restrict_ids)
+        scoped: list[TriggerOverview] = []
+        for overview in overviews:
+            kept = [ref for ref in overview.playbooks if ref.id in allowed]
+            if kept:
+                scoped.append(TriggerOverview(trigger=overview.trigger, playbooks=kept))
+        return scoped
 
     async def delete(self, ctx: WorkspaceContext, playbook_id: UUID) -> None:
         """Hard-Delete des Playbooks (ADR-0032).
@@ -366,6 +391,7 @@ class PlaybookService:
         selbst ab.
         """
         require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.playbook_write)
         playbook = await self._repo.fetch(ctx.workspace_id, playbook_id)
         if playbook is None:
             raise _not_found()

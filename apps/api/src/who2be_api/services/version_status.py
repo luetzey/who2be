@@ -26,7 +26,7 @@ from uuid import UUID
 import asyncpg
 from fastapi import HTTPException, status
 
-from who2be_api.core.security import WorkspaceContext, require_role
+from who2be_api.core.security import WorkspaceContext, require_capability, require_role
 from who2be_api.services.promote_validation import (
     validate_promote_persona,
     validate_promote_playbook,
@@ -36,6 +36,7 @@ from who2be_api.services.status_history_service import StatusHistoryService
 from who2be_models import (
     ALLOWED_TRANSITIONS,
     DEFAULT_LOCALE,
+    AgentCapability,
     EntityType,
     PersonaVersionRead,
     PlaybookVersionRead,
@@ -111,6 +112,39 @@ def required_role_for_transition(
     ):
         return WorkspaceRole.admin
     return WorkspaceRole.editor
+
+
+# Schreib-Capability je EntityType fuer draft/review-Uebergaenge. Promote/Retire
+# (active/inactive) mappt unabhaengig vom Typ auf `promote_retire`. Templates
+# haben keine MCP-Tool-Capability — agent-gebundene Tokens duerfen sie nicht
+# transitionieren (siehe `_require_transition_capability`).
+_WRITE_CAPABILITY: dict[str, AgentCapability] = {
+    "persona": AgentCapability.persona_write,
+    "playbook": AgentCapability.playbook_write,
+    "resource": AgentCapability.resource_write,
+}
+
+
+def _require_transition_capability(
+    ctx: WorkspaceContext, entity_type: EntityType, to_status: VersionStatus
+) -> None:
+    """Pro-Agent-Gate fuer Status-Uebergaenge (No-Op fuer ungebundene Tokens).
+
+    Promote/Retire (→active/→inactive) verlangen `promote_retire`; draft/review
+    die Schreib-Capability der Domain. System-Prompt-Templates sind ueber MCP
+    nicht verwaltbar, daher fuer agent-gebundene Tokens komplett gesperrt.
+    """
+    if ctx.tool_policy is None:
+        return
+    if entity_type not in _WRITE_CAPABILITY:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Agent-gebundene Tokens duerfen System-Prompt-Templates nicht aendern.",
+        )
+    if to_status in (VersionStatus.active, VersionStatus.inactive):
+        require_capability(ctx, AgentCapability.promote_retire)
+    else:
+        require_capability(ctx, _WRITE_CAPABILITY[entity_type])
 
 
 _PERSONA_TABLES = ("persona", "persona_version", "persona_id")
@@ -288,6 +322,8 @@ class VersionStatusService:
             # ueberhaupt erlaubt ist (409), dann ob die Rolle ihn ausfuehren
             # darf (403). Promote/Retire verlangen admin (ADR-0023).
             require_role(ctx, required_role_for_transition(from_status, to_status))
+            # Pro-Agent-Gate zusaetzlich zum Rollen-Gate (No-Op fuer ungebundene Tokens).
+            _require_transition_capability(ctx, entity_type, to_status)
 
             # Promote-Validation (Welle 4): Pflichtfelder vor draft->review/active.
             # Nur fuer Entities mit Pflichtfeld-Tabelle (persona, playbook, resource).

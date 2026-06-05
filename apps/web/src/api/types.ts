@@ -145,6 +145,9 @@ export interface Token {
   id: string
   workspace_id: string
   name: string
+  // An welchen Agenten der Token gebunden ist (null = ungebunden). Ein
+  // gebundener Token erbt die MCP-Tool-Policy dieses Agenten.
+  agent_id: string | null
   created_at: string
   last_used_at: string | null
   revoked_at: string | null
@@ -239,6 +242,8 @@ export interface TokenInput {
   // Phase 2.3 — optionaler Rollen-Snapshot. Bleibt weg, solange die Rolle
   // unbekannt ist (Service defaultet dann auf die Rolle des Erstellers).
   role?: WorkspaceRole
+  // Optionale Bindung an einen Agenten: der Token erbt dann dessen MCP-Tool-Policy.
+  agent_id?: string | null
 }
 
 // Phase 2.3-C — Multi-User pro Workspace. Spiegelt WorkspaceMemberRead /
@@ -537,6 +542,35 @@ export type AgentStatus = 'enabled' | 'disabled'
 // Was dem Agenten zur Aktivierbarkeit fehlt — Codes aus `AgentRead.missing`.
 export type AgentMissing = 'persona' | 'template' | 'persona_active'
 
+// Pro-Agent-MCP-Tool-Policy (spiegelt AgentToolPolicy aus packages/models).
+// Read-Scope: 'all' = ganzer Workspace, 'assigned' = nur zugewiesene, 'none' = aus.
+export type ReadScope = 'all' | 'assigned' | 'none'
+
+export interface AgentToolPolicy {
+  playbook_read: ReadScope
+  resource_read: ReadScope
+  persona_read: boolean
+  agent_read: boolean
+  persona_write: boolean
+  playbook_write: boolean
+  resource_write: boolean
+  agent_write: boolean
+  promote_retire: boolean
+}
+
+// Default-Policy fuer neue Agenten: alles lesen, nichts schreiben.
+export const DEFAULT_TOOL_POLICY: AgentToolPolicy = {
+  playbook_read: 'all',
+  resource_read: 'all',
+  persona_read: true,
+  agent_read: true,
+  persona_write: false,
+  playbook_write: false,
+  resource_write: false,
+  agent_write: false,
+  promote_retire: false,
+}
+
 export interface Agent {
   id: string
   workspace_id: string
@@ -547,6 +581,8 @@ export interface Agent {
   persona_id: string | null
   system_prompt_template_id: string | null
   status: AgentStatus
+  // Welche MCP-Tools der Agent nutzen darf (Default: alles lesen, nichts schreiben).
+  tool_policy: AgentToolPolicy
   // Ob die verknuepfte Persona eine aktive Version hat (serverseitig gelesen).
   persona_active: boolean
   // Aktivierbar (enabled/kopierbar) = Persona + Template gesetzt UND Persona aktiv.
@@ -564,6 +600,7 @@ export interface AgentInput {
   persona_id?: string | null
   system_prompt_template_id?: string | null
   status?: AgentStatus
+  tool_policy?: AgentToolPolicy
 }
 
 export interface AgentCopyInput {
@@ -577,6 +614,8 @@ export interface AgentUpdateInput {
   persona_id?: string
   system_prompt_template_id?: string
   status?: AgentStatus
+  // Gesetzt ⇒ ersetzt die Policy ganz; weggelassen ⇒ unveraendert.
+  tool_policy?: AgentToolPolicy
 }
 
 export type AgentRenderFormat = 'plain' | 'markdown' | 'html'

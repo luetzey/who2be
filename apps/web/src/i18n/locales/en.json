@@ -198,7 +198,35 @@
         "persona_active": "activate linked persona"
       },
       "viewerReadOnly": "Viewers can only view agents",
-      "nameRequired": "Name required."
+      "nameRequired": "Name required.",
+      "policy": {
+        "title": "Tools & permissions",
+        "description": "Which MCP tools this agent may use. Applies when an API token is bound to the agent.",
+        "help": "By default the agent may read everything but change nothing. Enable write permissions selectively. The system prompt automatically lists only the allowed tools; blocked tools are rejected server-side.",
+        "reads": "Reading",
+        "writes": "Writing",
+        "writesHint": "Off by default. Only enable what the agent should actually be able to change.",
+        "scopeField": {
+          "playbook_read": "Read playbooks",
+          "resource_read": "Read resources"
+        },
+        "scope": {
+          "all": "All (entire workspace)",
+          "assigned": "Assigned only",
+          "none": "Off"
+        },
+        "flagField": {
+          "persona_read": "Read own persona",
+          "agent_read": "Read agents"
+        },
+        "capField": {
+          "persona_write": "Create/edit personas",
+          "playbook_write": "Create/edit/link playbooks",
+          "resource_write": "Create/edit/link resources",
+          "agent_write": "Create/edit agents",
+          "promote_retire": "Activate/deactivate versions"
+        }
+      }
     },
     "hierarchy": {
       "templateLabel": "Template:",
@@ -1502,7 +1530,10 @@
       "submit": "Create",
       "nameRequired": "Name required.",
       "roleLabel": "Role",
-      "roleHint": "The token inherits at most your own role — higher permissions cannot be selected."
+      "roleHint": "The token inherits at most your own role — higher permissions cannot be selected.",
+      "agentLabel": "Bind to agent (optional)",
+      "agentNone": "— no binding —",
+      "agentHint": "A bound token inherits the agent's MCP tool policy: writes are gated, reads scoped per policy."
     },
     "reveal": {
       "title": "New token — copy now",

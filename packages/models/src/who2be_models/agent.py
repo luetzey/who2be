@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 # PersonaRead importiert keine agent-Modelle — kein zirkulaerer Import.
 from who2be_models.persona import PersonaRead
+from who2be_models.tool_policy import AgentToolPolicy
 
 
 class AgentStatus(StrEnum):
@@ -53,10 +54,16 @@ class AgentCreate(BaseModel):
     persona_id: UUID | None = None
     system_prompt_template_id: UUID | None = None
     status: AgentStatus = AgentStatus.disabled
+    # Welche MCP-Tools der Agent nutzen darf. Default = Read-All / keine Writes.
+    tool_policy: AgentToolPolicy = Field(default_factory=AgentToolPolicy)
 
 
 class AgentUpdate(BaseModel):
-    """Eingabe fuer `PUT .../agents/{id}` — aendert Konfig in-place."""
+    """Eingabe fuer `PUT .../agents/{id}` — aendert Konfig in-place.
+
+    `tool_policy` ist optional: `None` laesst die bestehende Policy unangetastet
+    (analog zu name/description). Ein gesetztes Objekt ersetzt die Policy ganz.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -65,6 +72,7 @@ class AgentUpdate(BaseModel):
     persona_id: UUID | None = None
     system_prompt_template_id: UUID | None = None
     status: AgentStatus | None = None
+    tool_policy: AgentToolPolicy | None = None
 
 
 class AgentCopy(BaseModel):
@@ -103,6 +111,9 @@ class AgentRead(BaseModel):
     # direkt konstruierte Reads (ohne DB-Join) konservativ als "nicht aktivierbar"
     # gelten; die Repository-SELECTs befuellen es per EXISTS-Subquery.
     persona_active: bool = False
+    # MCP-Tool-Policy des Agenten. Default-Instanz (Read-All/keine Writes) deckt
+    # direkt konstruierte Reads und Bestands-Agenten mit leerem `{}`-JSON ab.
+    tool_policy: AgentToolPolicy = Field(default_factory=AgentToolPolicy)
     created_at: datetime
     updated_at: datetime
 

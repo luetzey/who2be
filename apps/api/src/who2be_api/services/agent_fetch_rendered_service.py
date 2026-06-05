@@ -111,11 +111,14 @@ class AgentFetchRenderedService:
         if template_content is None:
             raise _template_not_active()
 
-        # Render-Kontext aufbauen.
+        # Render-Kontext aufbauen. `tool_policy` des gerenderten Agenten filtert
+        # den `tools-overview`-Block: der System-Prompt listet nur die Tools, die
+        # genau dieser Agent nutzen darf.
         ctx = RenderContext(
             workspace_id=workspace_id,
             persona_id=agent.persona_id,
             now=datetime.now(UTC),
+            tool_policy=agent.tool_policy,
         )
 
         # Renderer braucht eine einzelne Connection fuer DB-Lookups.

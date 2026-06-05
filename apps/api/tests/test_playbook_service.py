@@ -102,6 +102,7 @@ class FakePlaybookRepository:
         after: tuple[datetime, UUID] | None,
         active_only: bool = False,
         locale: str = "de",
+        restrict_ids: list[UUID] | None = None,
     ) -> list[PlaybookRead]:
         self.last_active_only = active_only
         result = [p for p in self._playbooks.values() if p.workspace_id == workspace_id]
@@ -115,19 +116,29 @@ class FakePlaybookRepository:
                 for p in result
                 if p.triggers is not None and trigger.lower() in p.triggers.lower()
             ]
+        if restrict_ids is not None:
+            allowed = set(restrict_ids)
+            result = [p for p in result if p.id in allowed]
         result.sort(key=lambda p: (p.created_at, p.id), reverse=True)
         if after is not None:
             result = [p for p in result if (p.created_at, p.id) < after]
         return result[:limit]
 
     async def fetch(
-        self, workspace_id: UUID, playbook_id: UUID, active_only: bool = False, locale: str = "de"
+        self,
+        workspace_id: UUID,
+        playbook_id: UUID,
+        active_only: bool = False,
+        locale: str = "de",
+        restrict_ids: list[UUID] | None = None,
     ) -> PlaybookRead | None:
         self.last_active_only = active_only
         playbook = self._playbooks.get(playbook_id)
         if playbook is None or playbook.workspace_id != workspace_id:
             return None
         if active_only and playbook.current_status != VersionStatus.active:
+            return None
+        if restrict_ids is not None and playbook_id not in set(restrict_ids):
             return None
         return playbook
 

@@ -13,13 +13,15 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 
-from who2be_api.core.security import WorkspaceContext, require_role
+from who2be_api.core.security import WorkspaceContext, require_capability, require_role
 from who2be_api.repositories.agent_repository import AgentRepository
 from who2be_models import (
+    AgentCapability,
     AgentCopy,
     AgentCreate,
     AgentRead,
     AgentStatus,
+    AgentToolPolicy,
     AgentUpdate,
     WorkspaceRole,
     encode_cursor,
@@ -57,6 +59,28 @@ def _invalid_reference() -> HTTPException:
     )
 
 
+def _guard_policy_escalation(ctx: WorkspaceContext, target: AgentToolPolicy) -> None:
+    """Verhindert, dass ein agent-gebundener Aufrufer Rechte „nach oben" vererbt.
+
+    Ein menschlicher/ungebundener Aufrufer (`ctx.tool_policy is None`) darf jede
+    Policy setzen. Ein agent-gebundener Aufrufer (z. B. ein Agent mit
+    `agent_write`) darf hingegen keinen Agenten anlegen/aendern/kopieren, dessen
+    Tool-Policy die eigene uebersteigt — sonst koennte er sich selbst (per
+    Update der eigenen Zeile) oder einen neuen Agenten mit mehr Rechten
+    ausstatten und so die Einschraenkung umgehen.
+    """
+    if ctx.tool_policy is None:
+        return
+    if not target.is_within(ctx.tool_policy):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Ein Agent darf keinen Agenten mit mehr Rechten als seinen eigenen "
+                "anlegen oder aendern."
+            ),
+        )
+
+
 class AgentService:
     """Agent-CRUD ohne Versionierung."""
 
@@ -89,6 +113,8 @@ class AgentService:
 
     async def create(self, ctx: WorkspaceContext, data: AgentCreate) -> AgentRead:
         require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.agent_write)
+        _guard_policy_escalation(ctx, data.tool_policy)
         if data.status == AgentStatus.enabled:
             missing = await self._missing_for_enable(
                 ctx.workspace_id, data.persona_id, data.system_prompt_template_id
@@ -103,6 +129,7 @@ class AgentService:
             data.persona_id,
             data.system_prompt_template_id,
             data.status,
+            data.tool_policy,
         )
         if agent is None:
             raise _invalid_reference()
@@ -129,6 +156,9 @@ class AgentService:
 
     async def update(self, ctx: WorkspaceContext, agent_id: UUID, data: AgentUpdate) -> AgentRead:
         require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.agent_write)
+        if data.tool_policy is not None:
+            _guard_policy_escalation(ctx, data.tool_policy)
         existing = await self._repo.fetch(ctx.workspace_id, agent_id)
         if existing is None:
             raise _not_found()
@@ -154,6 +184,7 @@ class AgentService:
             data.persona_id,
             data.system_prompt_template_id,
             data.status,
+            data.tool_policy,
         )
         if agent is None:
             # Existenz oben bereits bestaetigt → der Composite-FK auf
@@ -170,11 +201,15 @@ class AgentService:
         Template, Beschreibung und Status und gehoert dem kopierenden User.
         """
         require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.agent_write)
         source = await self._repo.fetch(ctx.workspace_id, agent_id)
         if source is None:
             raise _not_found()
         if not source.activatable:
             raise _not_activatable(source.missing)
+        # Die Kopie uebernimmt die Quell-Policy — fuer agent-gebundene Aufrufer
+        # nur, soweit sie ihre eigene nicht uebersteigt.
+        _guard_policy_escalation(ctx, source.tool_policy)
         name = data.name if data.name is not None else f"{source.name} (Kopie)"
         agent = await self._repo.insert(
             ctx.workspace_id,
@@ -184,6 +219,7 @@ class AgentService:
             source.persona_id,
             source.system_prompt_template_id,
             source.status,
+            source.tool_policy,
         )
         if agent is None:
             # Persona/Template wurde zwischen fetch und insert geloescht.
@@ -192,6 +228,7 @@ class AgentService:
 
     async def delete(self, ctx: WorkspaceContext, agent_id: UUID) -> None:
         require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.agent_write)
         deleted = await self._repo.delete(ctx.workspace_id, agent_id)
         if not deleted:
             raise _not_found()

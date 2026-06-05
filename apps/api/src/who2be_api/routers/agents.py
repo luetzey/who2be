@@ -13,6 +13,7 @@ from uuid import UUID
 import asyncpg
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 
+from who2be_api.core.agent_scope import require_read_flag
 from who2be_api.core.db import get_pool
 from who2be_api.core.pagination import DEFAULT_LIMIT, PageCursor, PageLimit
 from who2be_api.core.rate_limit import limiter, write_limit
@@ -167,4 +168,5 @@ async def fetch_agent_rendered(
     Wird vom MCP-Tool `fetch_agent` genutzt; kann auch direkt von der UI
     fuer einen Copy-Button eingesetzt werden.
     """
+    require_read_flag(ctx, "agent_read", "Agenten")
     return await fetch_rendered_service.fetch_rendered(ctx.workspace_id, agent_id)

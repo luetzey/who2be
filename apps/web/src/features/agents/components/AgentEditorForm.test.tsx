@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { useForm } from 'react-hook-form'
 import { describe, expect, it, vi } from 'vitest'
 
-import type { Agent, Persona, SystemPromptTemplate } from '@/api/types'
+import { DEFAULT_TOOL_POLICY, type Agent, type Persona, type SystemPromptTemplate } from '@/api/types'
 
 import { AgentEditorForm } from './AgentEditorForm'
 import type { AgentEditorValues } from '../hooks/useAgentForm'
@@ -21,6 +21,7 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
     persona_id: null,
     system_prompt_template_id: null,
     status: 'disabled',
+    tool_policy: DEFAULT_TOOL_POLICY,
     persona_active: false,
     activatable: false,
     missing: ['persona', 'template', 'persona_active'],
@@ -41,6 +42,7 @@ function Harness({ agent }: { agent: Agent }) {
       persona_id: agent.persona_id ?? '',
       system_prompt_template_id: agent.system_prompt_template_id ?? '',
       status: agent.status,
+      ...agent.tool_policy,
     },
   })
   return (
@@ -82,5 +84,15 @@ describe('AgentEditorForm', () => {
 
     expect(screen.queryByTestId('agent-missing-notice')).not.toBeInTheDocument()
     expect(screen.getByRole('option', { name: 'Aktiv' })).toBeEnabled()
+  })
+
+  it('rendert die Werkzeuge-&-Rechte-Sektion mit Read-Scopes und Write-Switches', () => {
+    render(<Harness agent={makeAgent()} />)
+
+    // Read-Scope-Select fuer Playbooks (Default-Policy: alle).
+    expect(screen.getByLabelText('Playbooks lesen')).toBeInTheDocument()
+    // Eine Write-Capability-Checkbox ist vorhanden und per Default aus.
+    const playbookWrite = screen.getByLabelText('Playbooks erstellen/ändern/verknüpfen')
+    expect(playbookWrite).not.toBeChecked()
   })
 })

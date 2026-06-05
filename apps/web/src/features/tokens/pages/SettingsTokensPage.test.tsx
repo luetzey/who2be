@@ -89,7 +89,9 @@ describe('SettingsTokensPage', () => {
     }
     const fetchMock = vi
       .fn()
-      // initial list
+      // initial token list
+      .mockResolvedValueOnce(new Response('[]', { status: 200 }))
+      // agents list (Mount, fuer den optionalen Agent-Bindungs-Select)
       .mockResolvedValueOnce(new Response('[]', { status: 200 }))
       // POST /v1/tokens
       .mockResolvedValueOnce(new Response(JSON.stringify(created), { status: 201 }))
@@ -115,7 +117,12 @@ describe('SettingsTokensPage', () => {
       expect(screen.getByLabelText('Klartext-Token')).toHaveValue('w2b_secret-plaintext')
     })
 
-    const postCall = fetchMock.mock.calls[1]
+    const postCall = fetchMock.mock.calls.find(
+      (call) => (call[1] as RequestInit | undefined)?.method === 'POST',
+    )
+    if (postCall === undefined) {
+      throw new Error('Kein POST /tokens-Aufruf gefunden.')
+    }
     expect(postCall[0]).toContain('/v1/workspaces/ws-1/tokens')
     const init = postCall[1] as RequestInit
     expect(init.method).toBe('POST')
@@ -139,6 +146,8 @@ describe('SettingsTokensPage', () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(new Response('[]', { status: 200 }))
+      // agents list (Mount)
+      .mockResolvedValueOnce(new Response('[]', { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(created), { status: 201 }))
       .mockResolvedValueOnce(new Response('[]', { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
@@ -157,7 +166,12 @@ describe('SettingsTokensPage', () => {
       expect(screen.getByLabelText('Klartext-Token')).toHaveValue('w2b_editor-token')
     })
 
-    const postCall = fetchMock.mock.calls[1]
+    const postCall = fetchMock.mock.calls.find(
+      (call) => (call[1] as RequestInit | undefined)?.method === 'POST',
+    )
+    if (postCall === undefined) {
+      throw new Error('Kein POST /tokens-Aufruf gefunden.')
+    }
     const init = postCall[1] as RequestInit
     expect(JSON.parse(init.body as string)).toEqual({ name: 'Editor-Bot', role: 'editor' })
   })
@@ -176,6 +190,8 @@ describe('SettingsTokensPage', () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(new Response(JSON.stringify(existing), { status: 200 }))
+      // agents list (Mount)
+      .mockResolvedValueOnce(new Response('[]', { status: 200 }))
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ detail: 'Server explodiert.' }), {
           status: 500,

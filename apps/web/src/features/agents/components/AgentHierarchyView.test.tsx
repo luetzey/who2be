@@ -1,11 +1,12 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
-import type {
-  Agent,
-  Persona,
-  Playbook,
-  SystemPromptTemplate,
+import {
+  DEFAULT_TOOL_POLICY,
+  type Agent,
+  type Persona,
+  type Playbook,
+  type SystemPromptTemplate,
 } from '@/api/types'
 
 import { AgentHierarchyView } from './AgentHierarchyView'
@@ -20,6 +21,7 @@ function mockAgent(): Agent {
     persona_id: 'p',
     system_prompt_template_id: 't',
     status: 'enabled',
+    tool_policy: DEFAULT_TOOL_POLICY,
     persona_active: true,
     activatable: true,
     missing: [],

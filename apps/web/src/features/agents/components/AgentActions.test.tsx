@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { Agent } from '@/api/types'
+import { DEFAULT_TOOL_POLICY, type Agent } from '@/api/types'
 
 import { DeleteAgentButton } from './DeleteAgentButton'
 import { DuplicateAgentButton } from './DuplicateAgentButton'
@@ -47,6 +47,7 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
     persona_id: 'p-1',
     system_prompt_template_id: 't-1',
     status: 'enabled',
+    tool_policy: DEFAULT_TOOL_POLICY,
     persona_active: true,
     activatable: true,
     missing: [],

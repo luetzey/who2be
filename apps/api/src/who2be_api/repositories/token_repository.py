@@ -20,11 +20,16 @@ from who2be_models import TokenRead, WorkspaceRole
 
 @dataclass(frozen=True)
 class TokenAuthRow:
-    """Snapshot eines gehashten Tokens: Owner + Workspace + Rolle (ADR-0023)."""
+    """Snapshot eines gehashten Tokens: Owner + Workspace + Rolle (ADR-0023).
+
+    `agent_id` ist gesetzt, wenn der Token an einen Agenten gebunden ist — dann
+    erbt der Aufruf dessen MCP-Tool-Policy (`get_current_workspace`).
+    """
 
     owner_id: UUID
     workspace_id: UUID
     role: WorkspaceRole
+    agent_id: UUID | None = None
 
 
 class TokenRepository(Protocol):
@@ -37,6 +42,7 @@ class TokenRepository(Protocol):
         name: str,
         token_hash: str,
         role: WorkspaceRole,
+        agent_id: UUID | None = None,
     ) -> TokenRead: ...
 
     async def list_by_workspace(
@@ -66,16 +72,19 @@ class PgTokenRepository:
         name: str,
         token_hash: str,
         role: WorkspaceRole,
+        agent_id: UUID | None = None,
     ) -> TokenRead:
         row = await self._pool.fetchrow(
-            "INSERT INTO api_token (workspace_id, owner_id, name, token_hash, role) "
-            "VALUES ($1, $2, $3, $4, $5) "
-            "RETURNING id, workspace_id, name, role, created_at, last_used_at, revoked_at",
+            "INSERT INTO api_token (workspace_id, owner_id, name, token_hash, role, agent_id) "
+            "VALUES ($1, $2, $3, $4, $5, $6) "
+            "RETURNING id, workspace_id, name, role, agent_id, "
+            "created_at, last_used_at, revoked_at",
             workspace_id,
             owner_id,
             name,
             token_hash,
             role.value,
+            agent_id,
         )
         return TokenRead.model_validate(dict(row))
 
@@ -87,7 +96,8 @@ class PgTokenRepository:
     ) -> list[TokenRead]:
         if after is None:
             rows = await self._pool.fetch(
-                "SELECT id, workspace_id, name, role, created_at, last_used_at, revoked_at "
+                "SELECT id, workspace_id, name, role, agent_id, "
+                "created_at, last_used_at, revoked_at "
                 "FROM api_token WHERE workspace_id = $1 "
                 "ORDER BY created_at DESC, id DESC LIMIT $2",
                 workspace_id,
@@ -95,7 +105,8 @@ class PgTokenRepository:
             )
         else:
             rows = await self._pool.fetch(
-                "SELECT id, workspace_id, name, role, created_at, last_used_at, revoked_at "
+                "SELECT id, workspace_id, name, role, agent_id, "
+                "created_at, last_used_at, revoked_at "
                 "FROM api_token WHERE workspace_id = $1 "
                 "AND (created_at, id) < ($2, $3) "
                 "ORDER BY created_at DESC, id DESC LIMIT $4",
@@ -108,7 +119,7 @@ class PgTokenRepository:
 
     async def fetch_auth_by_hash(self, token_hash: str) -> TokenAuthRow | None:
         row = await self._pool.fetchrow(
-            "SELECT owner_id, workspace_id, role FROM api_token "
+            "SELECT owner_id, workspace_id, role, agent_id FROM api_token "
             "WHERE token_hash = $1 AND revoked_at IS NULL",
             token_hash,
         )
@@ -118,6 +129,7 @@ class PgTokenRepository:
             owner_id=row["owner_id"],
             workspace_id=row["workspace_id"],
             role=WorkspaceRole(row["role"]),
+            agent_id=row["agent_id"],
         )
 
     async def revoke(self, workspace_id: UUID, token_id: UUID) -> bool:

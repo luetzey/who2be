@@ -16,7 +16,7 @@ from uuid import UUID
 
 import asyncpg
 
-from who2be_models import AgentRead, AgentStatus
+from who2be_models import AgentRead, AgentStatus, AgentToolPolicy
 
 # `persona_active` wird per EXISTS-Subquery auf `persona_version.status='active'`
 # mitgelesen — so kennt jedes AgentRead die Aktivierbarkeit ohne Extra-Roundtrip.
@@ -30,7 +30,7 @@ _PERSONA_ACTIVE_EXPR = """
 
 _SELECT = f"""
     SELECT a.id, a.workspace_id, a.owner_id, a.name, a.description,
-           a.persona_id, a.system_prompt_template_id, a.status,
+           a.persona_id, a.system_prompt_template_id, a.status, a.tool_policy,
            a.created_at, a.updated_at,
            {_PERSONA_ACTIVE_EXPR.format(col="a.persona_id")} AS persona_active
     FROM agent a
@@ -42,7 +42,7 @@ _SELECT = f"""
 # `persona_id` in der Subquery auf `persona_version.persona_id` aufloesen.
 _RETURNING = f"""
     RETURNING id, workspace_id, owner_id, name, description,
-              persona_id, system_prompt_template_id, status,
+              persona_id, system_prompt_template_id, status, tool_policy,
               created_at, updated_at,
               {_PERSONA_ACTIVE_EXPR.format(col="agent.persona_id")} AS persona_active
 """
@@ -60,6 +60,7 @@ class AgentRepository(Protocol):
         persona_id: UUID | None,
         template_id: UUID | None,
         status: AgentStatus,
+        tool_policy: AgentToolPolicy,
     ) -> AgentRead | None: ...
 
     async def list_by_workspace(
@@ -80,6 +81,7 @@ class AgentRepository(Protocol):
         persona_id: UUID | None,
         template_id: UUID | None,
         status: AgentStatus | None,
+        tool_policy: AgentToolPolicy | None,
     ) -> AgentRead | None: ...
 
     async def delete(self, workspace_id: UUID, agent_id: UUID) -> bool: ...
@@ -104,12 +106,13 @@ class PgAgentRepository:
         persona_id: UUID | None,
         template_id: UUID | None,
         status: AgentStatus,
+        tool_policy: AgentToolPolicy,
     ) -> AgentRead | None:
         try:
             row = await self._pool.fetchrow(
                 "INSERT INTO agent (workspace_id, owner_id, name, description, "
-                "  persona_id, system_prompt_template_id, status) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7) "
+                "  persona_id, system_prompt_template_id, status, tool_policy) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8) "
                 f"{_RETURNING}",
                 workspace_id,
                 owner_id,
@@ -118,6 +121,7 @@ class PgAgentRepository:
                 persona_id,
                 template_id,
                 status.value,
+                tool_policy.model_dump(mode="json"),
             )
         except asyncpg.ForeignKeyViolationError:
             # Composite-FK auf persona/template ausgeloest — Referenz lebt
@@ -167,6 +171,7 @@ class PgAgentRepository:
         persona_id: UUID | None,
         template_id: UUID | None,
         status: AgentStatus | None,
+        tool_policy: AgentToolPolicy | None,
     ) -> AgentRead | None:
         try:
             row = await self._pool.fetchrow(
@@ -176,6 +181,7 @@ class PgAgentRepository:
                 "  persona_id = COALESCE($5, persona_id), "
                 "  system_prompt_template_id = COALESCE($6, system_prompt_template_id), "
                 "  status = COALESCE($7, status), "
+                "  tool_policy = COALESCE($8::jsonb, tool_policy), "
                 "  updated_at = now() "
                 "WHERE id = $1 AND workspace_id = $2 "
                 f"{_RETURNING}",
@@ -186,6 +192,7 @@ class PgAgentRepository:
                 persona_id,
                 template_id,
                 status.value if status is not None else None,
+                tool_policy.model_dump(mode="json") if tool_policy is not None else None,
             )
         except asyncpg.ForeignKeyViolationError:
             return None

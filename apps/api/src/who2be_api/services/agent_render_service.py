@@ -91,6 +91,7 @@ class AgentRenderService:
             workspace_id=workspace_id,
             persona_id=agent.persona_id,
             now=datetime.now(UTC),
+            tool_policy=agent.tool_policy,
         )
         async with self._pool.acquire() as conn:
             substituted, unresolved = await render_template_body(

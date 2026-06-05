@@ -15,12 +15,18 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 
-from who2be_api.core.security import WorkspaceContext, require_role
+from who2be_api.core.security import WorkspaceContext, require_capability, require_role
 from who2be_api.repositories.playbook_resource_link_repository import (
     PlaybookResourceLinkRepository,
     is_heading_block,
 )
-from who2be_models import ResourceLinkItem, ResourceLinkRead, ResourceLinkSet, WorkspaceRole
+from who2be_models import (
+    AgentCapability,
+    ResourceLinkItem,
+    ResourceLinkRead,
+    ResourceLinkSet,
+    WorkspaceRole,
+)
 
 
 def _playbook_not_found() -> HTTPException:
@@ -51,6 +57,7 @@ class PlaybookResourceLinkService:
         Client die Liste mit Duplikaten schickt.
         """
         require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.playbook_write)
         deduped: dict[tuple[UUID, str, str | None], ResourceLinkItem] = {}
         for item in data.links:
             deduped.setdefault((item.resource_id, item.link_scope, item.block_id), item)

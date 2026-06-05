@@ -16,7 +16,8 @@ import asyncpg
 from fastapi import HTTPException, status
 from pydantic import BaseModel
 
-from who2be_api.core.security import WorkspaceContext, require_role
+from who2be_api.core.agent_scope import require_read_flag
+from who2be_api.core.security import WorkspaceContext, require_capability, require_role
 from who2be_api.repositories.persona_repository import PersonaRepository
 from who2be_api.repositories.usage_repository import UsageRepository
 from who2be_api.services.placeholders import RenderContext, render_template_body
@@ -24,6 +25,7 @@ from who2be_api.services.placeholders.registry import render_skills_table
 from who2be_api.services.version_diff import compute_version_diff
 from who2be_models import (
     DEFAULT_LOCALE,
+    AgentCapability,
     DeleteBlocked,
     PersonaCreate,
     PersonaRead,
@@ -127,6 +129,7 @@ class PersonaService:
 
     async def create(self, ctx: WorkspaceContext, data: PersonaCreate) -> PersonaRead:
         require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.persona_write)
         return await self._repo.insert(
             ctx.workspace_id, ctx.user_id, data.name, data.content, data.locales
         )
@@ -138,6 +141,7 @@ class PersonaService:
         cursor: tuple[datetime, UUID] | None,
         locale: str = DEFAULT_LOCALE,
     ) -> tuple[list[PersonaRead], str | None]:
+        require_read_flag(ctx, "persona_read", "Personas")
         # `limit + 1`-Peek: gibt es eine Folge-Zeile, codieren wir den
         # Cursor aus der letzten Zeile der Seite — sonst `None` (Ende).
         rows = await self._repo.list_by_workspace(
@@ -152,6 +156,7 @@ class PersonaService:
     async def get(
         self, ctx: WorkspaceContext, persona_id: UUID, locale: str = DEFAULT_LOCALE
     ) -> PersonaRead:
+        require_read_flag(ctx, "persona_read", "Personas")
         persona = await self._repo.fetch(
             ctx.workspace_id, persona_id, active_only=ctx.is_api_token, locale=locale
         )
@@ -209,6 +214,7 @@ class PersonaService:
         existiert bereits ein Draft, antwortet der Service mit 409.
         """
         require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.persona_write)
         outcome = await self._repo.update(
             ctx.workspace_id, ctx.user_id, persona_id, data.name, data.content, locale
         )
@@ -233,6 +239,7 @@ class PersonaService:
         (siehe Repository-Doku).
         """
         require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.persona_write)
         outcome = await self._repo.upsert_draft(
             ctx.workspace_id, ctx.user_id, persona_id, data.name, data.content, locale
         )
@@ -272,6 +279,7 @@ class PersonaService:
         Content-Schema validiert (ADR-0009). 409 bei bereits offenem Draft.
         """
         require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.persona_write)
         snapshot = await self._repo.fetch_version(
             ctx.workspace_id, persona_id, source_version, locale
         )
@@ -342,6 +350,7 @@ class PersonaService:
         ausgehende Playbook-Links beim DELETE selbst ab.
         """
         require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.persona_write)
         persona = await self._repo.fetch(ctx.workspace_id, persona_id)
         if persona is None:
             raise _not_found()
