@@ -107,6 +107,7 @@ class ResourceRepository(Protocol):
         after: tuple[datetime, UUID] | None,
         active_only: bool = False,
         locale: str = DEFAULT_LOCALE,
+        restrict_ids: list[UUID] | None = None,
     ) -> list[ResourceRead]: ...
 
     async def fetch(
@@ -115,6 +116,7 @@ class ResourceRepository(Protocol):
         resource_id: UUID,
         active_only: bool = False,
         locale: str = DEFAULT_LOCALE,
+        restrict_ids: list[UUID] | None = None,
     ) -> ResourceRead | None: ...
 
     async def update(
@@ -215,11 +217,14 @@ class PgResourceRepository:
         after: tuple[datetime, UUID] | None,
         active_only: bool = False,
         locale: str = DEFAULT_LOCALE,
+        restrict_ids: list[UUID] | None = None,
     ) -> list[ResourceRead]:
         # Tag-Filter via jsonb-In-Query: kein denormalisierter Tag-Array auf
         # der resource-Zeile (laut Plan E3 Out-of-Scope); stattdessen direkt
         # aus content->tags im resource_version-Row. Bedingung:
         # `$tag = ANY(SELECT jsonb_array_elements_text(rv.content->'tags'))`.
+        # `restrict_ids` (Read-Scoping `assigned`) ist der letzte Parameter:
+        # NULL ⇒ keine Einschraenkung, leere Liste ⇒ keine Treffer.
         builder = _select_active if active_only else _select_current
         if after is None:
             select = builder("$4")
@@ -227,11 +232,13 @@ class PgResourceRepository:
                 f"{select} WHERE r.workspace_id = $1 "
                 "AND ($2::text IS NULL OR $2 = ANY("
                 "    SELECT jsonb_array_elements_text(rv.content->'tags'))) "
+                "AND ($5::uuid[] IS NULL OR r.id = ANY($5)) "
                 "ORDER BY r.created_at DESC, r.id DESC LIMIT $3",
                 workspace_id,
                 tag,
                 limit,
                 locale,
+                restrict_ids,
             )
         else:
             select = builder("$6")
@@ -240,6 +247,7 @@ class PgResourceRepository:
                 "AND ($2::text IS NULL OR $2 = ANY("
                 "    SELECT jsonb_array_elements_text(rv.content->'tags'))) "
                 "AND (r.created_at, r.id) < ($3, $4) "
+                "AND ($7::uuid[] IS NULL OR r.id = ANY($7)) "
                 "ORDER BY r.created_at DESC, r.id DESC LIMIT $5",
                 workspace_id,
                 tag,
@@ -247,6 +255,7 @@ class PgResourceRepository:
                 after[1],
                 limit,
                 locale,
+                restrict_ids,
             )
         return [ResourceRead.model_validate(dict(row)) for row in rows]
 
@@ -256,14 +265,17 @@ class PgResourceRepository:
         resource_id: UUID,
         active_only: bool = False,
         locale: str = DEFAULT_LOCALE,
+        restrict_ids: list[UUID] | None = None,
     ) -> ResourceRead | None:
         builder = _select_active if active_only else _select_current
         select = builder("$3")
         row = await self._pool.fetchrow(
-            f"{select} WHERE r.id = $1 AND r.workspace_id = $2",
+            f"{select} WHERE r.id = $1 AND r.workspace_id = $2 "
+            "AND ($4::uuid[] IS NULL OR r.id = ANY($4))",
             resource_id,
             workspace_id,
             locale,
+            restrict_ids,
         )
         return ResourceRead.model_validate(dict(row)) if row is not None else None
 

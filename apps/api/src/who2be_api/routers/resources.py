@@ -35,7 +35,7 @@ def get_resource_service(
     pool: Annotated[asyncpg.Pool, Depends(get_pool)],
 ) -> ResourceService:
     """FastAPI-Dependency: verdrahtet den Service mit der Pg-Implementierung."""
-    return ResourceService(PgResourceRepository(pool))
+    return ResourceService(PgResourceRepository(pool), pool=pool)
 
 
 def get_version_status_service(

@@ -9,11 +9,17 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 
-from who2be_api.core.security import WorkspaceContext, require_role
+from who2be_api.core.security import WorkspaceContext, require_capability, require_role
 from who2be_api.repositories.playbook_composition_repository import (
     PlaybookCompositionRepository,
 )
-from who2be_models import PlaybookCompositionLinkSet, PlaybookRead, PlaybookRef, WorkspaceRole
+from who2be_models import (
+    AgentCapability,
+    PlaybookCompositionLinkSet,
+    PlaybookRead,
+    PlaybookRef,
+    WorkspaceRole,
+)
 
 
 def _parent_not_found() -> HTTPException:
@@ -61,6 +67,7 @@ class PlaybookCompositionService:
         - 409: Verknuepfung wuerde einen Zyklus erzeugen.
         """
         require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.playbook_write)
 
         # Reihenfolge-erhaltend dedupen + defensiv self-ref entfernen
         ids: list[UUID] = [cid for cid in dict.fromkeys(data.child_ids) if cid != parent_id]

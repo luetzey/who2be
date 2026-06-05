@@ -25,6 +25,10 @@ class TokenCreate(BaseModel):
 
     name: str = Field(min_length=1, max_length=200)
     role: WorkspaceRole | None = None
+    # Optionale Bindung an einen Agenten: ist sie gesetzt, setzt das Backend die
+    # MCP-Tool-Policy dieses Agenten bei jedem Aufruf des Tokens durch (Writes
+    # gated, Reads gescoped). `None` = ungebundener Token (nur Rollen-Gate).
+    agent_id: UUID | None = None
 
 
 class TokenRead(BaseModel):
@@ -36,6 +40,8 @@ class TokenRead(BaseModel):
     workspace_id: UUID
     name: str
     role: WorkspaceRole
+    # An welchen Agenten der Token gebunden ist (None = ungebunden).
+    agent_id: UUID | None = None
     created_at: datetime
     last_used_at: datetime | None
     revoked_at: datetime | None

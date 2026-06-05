@@ -62,6 +62,7 @@ class FakeTokenRepository:
         name: str,
         token_hash: str,
         role: WorkspaceRole,
+        agent_id: UUID | None = None,
     ) -> TokenRead:
         raise NotImplementedError
 
