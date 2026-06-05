@@ -34,7 +34,7 @@ dev = [
     "testcontainers[postgres]>=4.0",
     "httpx>=0.27",
     "mypy>=1.10",
-    "ruff>=0.6",
+    "ruff>=0.15.16",
 ]
 billing = [
     "who2be-billing",

@@ -4,7 +4,7 @@
 # - restic + openssh-client sind der Offsite-Pfad (SFTP zur Hetzner-Storage-Box)
 # Build-Context ist `deploy/hetzner/` (siehe who2be/docker-compose.yml).
 
-FROM alpine:3.20
+FROM alpine:3.23
 
 RUN apk add --no-cache \
       bash \

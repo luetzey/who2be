@@ -8,7 +8,7 @@
 # consumer / smoke harness" — im Hetzner-Compose unter `profiles: ["mcp"]`,
 # aufrufbar via `docker compose run --rm mcp ...`. Bei Bedarf kann spaeter
 # auf HTTP-Transport umgestellt werden, dann kippt das Profil auf default.
-FROM python:3.11-slim AS builder
+FROM python:3.14-slim AS builder
 
 COPY --from=ghcr.io/astral-sh/uv:0.4.27 /uv /usr/local/bin/uv
 
@@ -26,7 +26,7 @@ COPY apps/mcp apps/mcp
 # apps/api/Dockerfile Kommentar).
 RUN uv sync --frozen
 
-FROM python:3.11-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 WORKDIR /app
 ENV PATH="/app/.venv/bin:$PATH" \
