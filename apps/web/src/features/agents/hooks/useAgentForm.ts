@@ -3,22 +3,49 @@ import { type BaseSyntheticEvent, useEffect, useState } from 'react'
 import { useForm, type UseFormReturn } from 'react-hook-form'
 import { z } from 'zod'
 
-import type { Agent } from '@/api/types'
+import { DEFAULT_TOOL_POLICY, type Agent, type AgentToolPolicy } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import i18n from '@/i18n'
 import { notify } from '@/lib/feedback'
 
+const readScope = z.enum(['all', 'assigned', 'none'])
+
 // Nur der Name ist Pflicht: ein Agent ist jederzeit speicherbar, auch ohne
 // Persona/Template. Aktivierbarkeit wird separat (im Editor + Backend) geprueft.
+// Die Tool-Policy liegt flach im Formular (RHF-freundlich) und wird beim Submit
+// wieder zu einem AgentToolPolicy-Objekt zusammengesetzt.
 const editorSchema = z.object({
   name: z.string().min(1, i18n.t('agents:form.nameRequired')),
   description: z.string(),
   persona_id: z.string(),
   system_prompt_template_id: z.string(),
   status: z.enum(['enabled', 'disabled']),
+  playbook_read: readScope,
+  resource_read: readScope,
+  persona_read: z.boolean(),
+  agent_read: z.boolean(),
+  persona_write: z.boolean(),
+  playbook_write: z.boolean(),
+  resource_write: z.boolean(),
+  agent_write: z.boolean(),
+  promote_retire: z.boolean(),
 })
 
 export type AgentEditorValues = z.infer<typeof editorSchema>
+
+function valuesToPolicy(values: AgentEditorValues): AgentToolPolicy {
+  return {
+    playbook_read: values.playbook_read,
+    resource_read: values.resource_read,
+    persona_read: values.persona_read,
+    agent_read: values.agent_read,
+    persona_write: values.persona_write,
+    playbook_write: values.playbook_write,
+    resource_write: values.resource_write,
+    agent_write: values.agent_write,
+    promote_retire: values.promote_retire,
+  }
+}
 
 function describeError(cause: unknown): string {
   return cause instanceof Error ? cause.message : i18n.t('agents:toast.unknownError')
@@ -44,6 +71,7 @@ export function useAgentForm(
       persona_id: '',
       system_prompt_template_id: '',
       status: 'enabled',
+      ...DEFAULT_TOOL_POLICY,
     },
   })
 
@@ -56,6 +84,7 @@ export function useAgentForm(
         persona_id: agent.persona_id ?? '',
         system_prompt_template_id: agent.system_prompt_template_id ?? '',
         status: agent.status,
+        ...agent.tool_policy,
       })
     }
   }, [agent, form])
@@ -73,6 +102,7 @@ export function useAgentForm(
         persona_id: values.persona_id || undefined,
         system_prompt_template_id: values.system_prompt_template_id || undefined,
         status: values.status,
+        tool_policy: valuesToPolicy(values),
       })
       notify.success(i18n.t('agents:toast.saved'))
       onSaved()

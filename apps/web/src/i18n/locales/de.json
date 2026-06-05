@@ -198,7 +198,35 @@
         "persona_active": "verknüpfte Persona aktiv schalten"
       },
       "viewerReadOnly": "Viewer können Agents nur ansehen",
-      "nameRequired": "Name erforderlich."
+      "nameRequired": "Name erforderlich.",
+      "policy": {
+        "title": "Werkzeuge & Rechte",
+        "description": "Welche MCP-Tools dieser Agent nutzen darf. Gilt, wenn ein API-Token an den Agenten gebunden ist.",
+        "help": "Standardmäßig darf der Agent alles lesen, aber nichts verändern. Schalte Schreibrechte gezielt frei. Der System-Prompt listet automatisch nur die freigegebenen Tools; gesperrte Tools werden serverseitig abgelehnt.",
+        "reads": "Lesen",
+        "writes": "Schreiben",
+        "writesHint": "Standardmäßig aus. Nur aktivieren, was der Agent wirklich verändern können soll.",
+        "scopeField": {
+          "playbook_read": "Playbooks lesen",
+          "resource_read": "Resources lesen"
+        },
+        "scope": {
+          "all": "Alle (ganzer Workspace)",
+          "assigned": "Nur zugewiesene",
+          "none": "Aus"
+        },
+        "flagField": {
+          "persona_read": "Eigene Persona lesen",
+          "agent_read": "Agenten lesen"
+        },
+        "capField": {
+          "persona_write": "Personas erstellen/ändern",
+          "playbook_write": "Playbooks erstellen/ändern/verknüpfen",
+          "resource_write": "Resources erstellen/ändern/verknüpfen",
+          "agent_write": "Agenten erstellen/ändern",
+          "promote_retire": "Versionen aktivieren/deaktivieren"
+        }
+      }
     },
     "hierarchy": {
       "templateLabel": "Template:",
@@ -1442,7 +1470,10 @@
       "submit": "Anlegen",
       "nameRequired": "Name erforderlich.",
       "roleLabel": "Rolle",
-      "roleHint": "Der Token erhält höchstens deine eigene Rolle — höhere Rechte sind nicht wählbar."
+      "roleHint": "Der Token erhält höchstens deine eigene Rolle — höhere Rechte sind nicht wählbar.",
+      "agentLabel": "An Agenten binden (optional)",
+      "agentNone": "— keine Bindung —",
+      "agentHint": "Ein gebundener Token erbt die MCP-Tool-Policy des Agenten: Schreibrechte werden gegated, Lesezugriffe gemäß Policy gescoped."
     },
     "reveal": {
       "title": "Neuer Token — jetzt kopieren",

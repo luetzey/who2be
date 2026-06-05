@@ -1,13 +1,14 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Copy, KeyRound } from 'lucide-react'
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 
 import i18n from '@/i18n'
 
-import type { TokenInput, WorkspaceRole } from '@/api/types'
+import type { Agent, TokenInput, WorkspaceRole } from '@/api/types'
+import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -60,6 +61,29 @@ export function SettingsTokensPage() {
   const [roleOverride, setRoleOverride] = useState<WorkspaceRole | null>(null)
   const role = roleOverride ?? currentRole
 
+  // Optionale Agent-Bindung: ein gebundener Token erbt die MCP-Tool-Policy des
+  // Agenten. Agenten werden direkt geladen (kein Cross-Feature-Import).
+  const api = useApi()
+  const [agents, setAgents] = useState<Agent[]>([])
+  const [agentId, setAgentId] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    void api
+      .listAgents()
+      .then((list) => {
+        if (!cancelled) {
+          setAgents(list)
+        }
+      })
+      .catch(() => {
+        // Agenten-Liste ist optional fuer die Token-Anlage — Fehler still ignorieren.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [api])
+
   const form = useForm<TokenValues>({
     resolver: zodResolver(tokenSchema),
     defaultValues: { name: '' },
@@ -70,9 +94,13 @@ export function SettingsTokensPage() {
       currentRole !== null && role !== null
         ? { name: values.name, role }
         : { name: values.name }
+    if (agentId !== '') {
+      input.agent_id = agentId
+    }
     const result = await createToken(input)
     if (result !== null) {
       form.reset({ name: '' })
+      setAgentId('')
     }
   }
 
@@ -172,6 +200,24 @@ export function SettingsTokensPage() {
                     <p className="text-xs text-muted-foreground">
                       {t('create.roleHint')}
                     </p>
+                  </div>
+                ) : null}
+                {agents.length > 0 ? (
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="token-agent">{t('create.agentLabel')}</Label>
+                    <Select
+                      id="token-agent"
+                      value={agentId}
+                      onChange={(event) => setAgentId(event.target.value)}
+                    >
+                      <option value="">{t('create.agentNone')}</option>
+                      {agents.map((agent) => (
+                        <option key={agent.id} value={agent.id}>
+                          {agent.name}
+                        </option>
+                      ))}
+                    </Select>
+                    <p className="text-xs text-muted-foreground">{t('create.agentHint')}</p>
                   </div>
                 ) : null}
                 {createError !== null ? <ErrorAlert message={createError} /> : null}
