@@ -76,6 +76,16 @@ Phase 3 ist abgeschlossen (Stand 2026-05-29). Master-Plan:
   der Draft→active-Workflow bleiben serverseitig. Kein delete ueber MCP.
   Loest ADR-0012 (deferred) ab.
 
+**Einzel-Element Delete + Export (ADR-0032, 2026-06-05):** Hard-Delete fuer
+  Persona/Playbook/Resource (`DELETE …/{entity}/{id}`, `editor`-Gate, FK-Cascade
+  raeumt Versionen + ausgehende Links). Eingehende Referenzen blockieren mit
+  **409** + `DeleteBlocked`-Body (`message` + `blocked_by`-Map: Persona←Agenten,
+  Playbook←Personas/Composites, Resource←Playbooks/Composites) — kein Cascade auf
+  fremde Aggregate. Einzel-Export `GET …/{entity}/{id}/export?format=json|markdown`
+  (Viewer-offen; JSON = Identitaet + alle Versionen, Markdown = gerenderter Body
+  der aktiven Version + YAML-Frontmatter). Bewusst **kein** MCP-Delete/-Export
+  (ADR-0030 bleibt). Plan: `.claude/plan/2026-06-05-1500_single-element-delete-export.md`.
+
 Nächste Blöcke offen (kein aktiver Plan): Security-Quick-Wins
 (`docs/security-findings-phase-2.md` §TODO 1–3), CSP/Header-Pass (F-12),
 Public-Switch + FSL-Lizenz (`…1935_license-fsl-setup`,

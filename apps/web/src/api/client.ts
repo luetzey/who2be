@@ -13,6 +13,8 @@ import type {
   CheckoutResult,
   DashboardData,
   EntitlementInfo,
+  EntityExport,
+  EntityExportFormat,
   GdprExport,
   Invitation,
   InvitationAcceptResult,
@@ -110,6 +112,51 @@ async function request<T>(token: string, path: string, init?: RequestInit): Prom
     return undefined as T
   }
   return (await response.json()) as T
+}
+
+// Wie `request`, gibt aber den Roh-Body als Text zurueck (z. B. Markdown-Export
+// mit `media_type=text/markdown` — kein JSON). Fehler-Handling identisch.
+async function requestText(
+  token: string,
+  path: string,
+  init?: RequestInit,
+): Promise<string> {
+  const headers: Record<string, string> = {
+    'Accept-Language': i18n.resolvedLanguage ?? i18n.language ?? DEFAULT_LOCALE,
+    ...(init?.headers as Record<string, string> | undefined),
+  }
+  if (token !== '') {
+    headers.Authorization = `Bearer ${token}`
+  }
+  let response: Response
+  const url = `${config.apiBaseUrl}${path}`
+  try {
+    response = await fetch(url, { ...init, headers })
+  } catch (cause) {
+    console.error(`Who2Be-API nicht erreichbar: ${init?.method ?? 'GET'} ${url}`, cause)
+    throw new ApiError(0, 'Who2Be-API nicht erreichbar.')
+  }
+  if (!response.ok) {
+    const { message, body } = await readErrorBody(response)
+    throw new ApiError(response.status, message, body)
+  }
+  return response.text()
+}
+
+// Einzel-Element-Export (Plan 2026-06-05). `json` liefert ein geparstes Objekt,
+// `markdown` den Roh-Text. Der Aufrufer laedt beides als Datei herunter.
+async function exportEntity(
+  token: string,
+  ws: string,
+  entity: 'personas' | 'playbooks' | 'resources',
+  id: string,
+  format: EntityExportFormat,
+): Promise<EntityExport | string> {
+  const path = `${ws}/${entity}/${id}/export?format=${format}`
+  if (format === 'markdown') {
+    return requestText(token, path)
+  }
+  return request<EntityExport>(token, path)
 }
 
 async function readErrorBody(
@@ -210,6 +257,17 @@ export interface Api {
   ) => Promise<ResourceLink[]>
   getPlaybookUsages: (id: string) => Promise<PlaybookUsage[]>
   getResourceUsages: (id: string) => Promise<ResourceUsage[]>
+  // Einzel-Element-Hard-Delete (Plan 2026-06-05, Muster `deleteAgent`).
+  // 204 bei Erfolg; 409 (referenziert) traegt die Verwender im ApiError.body;
+  // 404 bei unbekannter ID.
+  deletePersona: (id: string) => Promise<void>
+  deletePlaybook: (id: string) => Promise<void>
+  deleteResource: (id: string) => Promise<void>
+  // Einzel-Element-Export (Plan 2026-06-05). `json` liefert ein Objekt,
+  // `markdown` den Roh-Text — Aufrufer laedt beides als Datei herunter.
+  exportPersona: (id: string, format: EntityExportFormat) => Promise<EntityExport | string>
+  exportPlaybook: (id: string, format: EntityExportFormat) => Promise<EntityExport | string>
+  exportResource: (id: string, format: EntityExportFormat) => Promise<EntityExport | string>
   // Track E — Sub-Resource-Composition.
   listResourceSubResources: (id: string) => Promise<SubResource[]>
   setResourceSubResources: (
@@ -422,6 +480,15 @@ export function createApi(token: string, workspaceId: string): Api {
       request<PlaybookUsage[]>(token, `${ws}/playbooks/${id}/usages`),
     getResourceUsages: (id) =>
       request<ResourceUsage[]>(token, `${ws}/resources/${id}/usages`),
+    deletePersona: (id) =>
+      request<void>(token, `${ws}/personas/${id}`, { method: 'DELETE' }),
+    deletePlaybook: (id) =>
+      request<void>(token, `${ws}/playbooks/${id}`, { method: 'DELETE' }),
+    deleteResource: (id) =>
+      request<void>(token, `${ws}/resources/${id}`, { method: 'DELETE' }),
+    exportPersona: (id, format) => exportEntity(token, ws, 'personas', id, format),
+    exportPlaybook: (id, format) => exportEntity(token, ws, 'playbooks', id, format),
+    exportResource: (id, format) => exportEntity(token, ws, 'resources', id, format),
     listResourceSubResources: (id) =>
       request<SubResource[]>(token, `${ws}/resources/${id}/sub_resources`),
     setResourceSubResources: (id, links) =>

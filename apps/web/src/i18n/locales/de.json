@@ -857,6 +857,26 @@
       "label": "Skills",
       "badge": "Coming Soon",
       "description": "Skills bekommen bald ein eigenes, versioniertes Format — als paketierte, wiederverwendbare Fähigkeit für deine Agenten. Die Funktion ist aktuell noch nicht aktiv."
+    },
+    "delete": {
+      "label": "Löschen",
+      "confirmLabel": "Endgültig löschen",
+      "dialogTitle": "Persona löschen?",
+      "dialogDescription": "{{name}} wird mit allen Versionen dauerhaft entfernt. Diese Aktion kann nicht rückgängig gemacht werden.",
+      "success": "Persona gelöscht.",
+      "error": "Löschen fehlgeschlagen.",
+      "viewerReadOnly": "Viewer können Personae nur ansehen",
+      "blockedTitle": "Löschen blockiert",
+      "blockedMessage": "Diese Persona wird noch verwendet von:",
+      "dangerZoneTitle": "Persona löschen",
+      "dangerZoneDescription": "Entfernt diese Persona samt allen Versionen dauerhaft. Kein Undo."
+    },
+    "export": {
+      "label": "Exportieren",
+      "json": "Als JSON",
+      "markdown": "Als Markdown",
+      "success": "Export heruntergeladen.",
+      "error": "Export fehlgeschlagen."
     }
   },
   "playbooks": {
@@ -1004,6 +1024,26 @@
       "emptySection": "(leere Section)",
       "loadFailed": "Laden fehlgeschlagen.",
       "saveButton": "Speichern ({{count}})"
+    },
+    "delete": {
+      "label": "Löschen",
+      "confirmLabel": "Endgültig löschen",
+      "dialogTitle": "Playbook löschen?",
+      "dialogDescription": "{{name}} wird mit allen Versionen dauerhaft entfernt. Diese Aktion kann nicht rückgängig gemacht werden.",
+      "success": "Playbook gelöscht.",
+      "error": "Löschen fehlgeschlagen.",
+      "viewerReadOnly": "Viewer können Playbooks nur ansehen",
+      "blockedTitle": "Löschen blockiert",
+      "blockedMessage": "Dieses Playbook wird noch verwendet von:",
+      "dangerZoneTitle": "Playbook löschen",
+      "dangerZoneDescription": "Entfernt dieses Playbook samt allen Versionen dauerhaft. Kein Undo."
+    },
+    "export": {
+      "label": "Exportieren",
+      "json": "Als JSON",
+      "markdown": "Als Markdown",
+      "success": "Export heruntergeladen.",
+      "error": "Export fehlgeschlagen."
     }
   },
   "resources": {
@@ -1101,6 +1141,26 @@
     "toast": {
       "created": "Resource angelegt.",
       "createFailed": "Anlegen fehlgeschlagen."
+    },
+    "delete": {
+      "label": "Löschen",
+      "confirmLabel": "Endgültig löschen",
+      "dialogTitle": "Resource löschen?",
+      "dialogDescription": "{{name}} wird mit allen Versionen dauerhaft entfernt. Diese Aktion kann nicht rückgängig gemacht werden.",
+      "success": "Resource gelöscht.",
+      "error": "Löschen fehlgeschlagen.",
+      "viewerReadOnly": "Viewer können Resources nur ansehen",
+      "blockedTitle": "Löschen blockiert",
+      "blockedMessage": "Diese Resource wird noch verwendet von:",
+      "dangerZoneTitle": "Resource löschen",
+      "dangerZoneDescription": "Entfernt diese Resource samt allen Versionen dauerhaft. Kein Undo."
+    },
+    "export": {
+      "label": "Exportieren",
+      "json": "Als JSON",
+      "markdown": "Als Markdown",
+      "success": "Export heruntergeladen.",
+      "error": "Export fehlgeschlagen."
     }
   },
   "settings": {

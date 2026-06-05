@@ -425,6 +425,42 @@ export interface ResourceUsage {
   block_count: number
 }
 
+// Einzel-Element-Delete (Plan 2026-06-05): wird ein Element noch von anderen
+// Aggregaten referenziert, blockiert das Backend mit 409 und liefert die
+// Verwender. Normalisierte Sicht eines Verwender-Eintrags — die UI liest den
+// rohen Body defensiv aus, Felder sind daher allesamt optional.
+export interface DeleteBlocker {
+  id?: string
+  name?: string
+  // Quelle der Referenz: Map-Schluessel aus `blocked_by`
+  // (agents/personas/playbooks/resources/composites).
+  type?: string
+}
+
+// `HTTPException.detail` des Backends (`DeleteBlocked`): Klartext-`message` plus
+// `blocked_by` als Map Quelle->Records. Die Records tragen quellspezifische
+// Feldnamen (agent_name/persona_name/playbook_name/name; agent_id/persona_id/
+// …/id), daher hier bewusst `unknown[]` — die Normalisierung macht
+// `extractDeleteBlockers`.
+export interface DeleteBlockedDetail {
+  message?: string
+  blocked_by?: Record<string, unknown[]>
+}
+
+export interface DeleteBlockedBody {
+  // FastAPI verschachtelt `detail`: bei Delete-Konflikten ein DeleteBlockedDetail,
+  // bei anderen Fehlern ein String. `blocked_by` auf Top-Level bleibt als
+  // defensiver Fallback erlaubt.
+  detail?: DeleteBlockedDetail | string
+  blocked_by?: Record<string, unknown[]>
+}
+
+// Einzel-Element-Export (Plan 2026-06-05). JSON ist ein lose typisierter
+// Abzug (Identitaet + alle Versionen), wird nur als Datei heruntergeladen.
+export type EntityExport = Record<string, unknown>
+
+export type EntityExportFormat = 'json' | 'markdown'
+
 export interface ResourceLinkItemInput {
   resource_id: string
   block_id: string | null

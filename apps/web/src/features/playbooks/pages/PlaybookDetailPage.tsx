@@ -23,6 +23,8 @@ import { usePlaybookUsages } from '@/hooks/usePlaybookUsages'
 import { notify } from '@/lib/feedback'
 
 import { ComposedByList } from '../components/ComposedByList'
+import { DeletePlaybookButton } from '../components/DeletePlaybookButton'
+import { ExportPlaybookButton } from '../components/ExportPlaybookButton'
 import { LinkedBlocksList } from '../components/LinkedBlocksList'
 import { PlaybookComposesPicker } from '../components/PlaybookComposesPicker'
 import { PlaybookEditorForm } from '../components/PlaybookEditorForm'
@@ -212,6 +214,7 @@ export function PlaybookDetailPage() {
                               ))}
                             </div>
                           ) : null}
+                          <ExportPlaybookButton playbook={playbook} />
                         </div>
                       }
                     />
@@ -384,6 +387,26 @@ export function PlaybookDetailPage() {
                   <ComposedByList parents={composition.parents} />
                 </CardContent>
               </Card>
+
+              {role !== 'viewer' ? (
+                <Card className="border-destructive/40">
+                  <CardHeader>
+                    <CardTitle className="text-destructive">
+                      {t('delete.dangerZoneTitle')}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Stack gap="sm">
+                      <p className="text-sm text-muted-foreground">
+                        {t('delete.dangerZoneDescription')}
+                      </p>
+                      <div>
+                        <DeletePlaybookButton playbook={playbook} />
+                      </div>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              ) : null}
             </Stack>
           ) : null}
         </DataView>

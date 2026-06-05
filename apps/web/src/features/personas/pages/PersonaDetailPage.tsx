@@ -18,6 +18,8 @@ import { VersionHistory } from '@/components/version'
 import { usePersonaPlaybooks } from '@/hooks/usePersonaPlaybooks'
 import { notify } from '@/lib/feedback'
 
+import { DeletePersonaButton } from '../components/DeletePersonaButton'
+import { ExportPersonaButton } from '../components/ExportPersonaButton'
 import { PersonaEditorForm } from '../components/PersonaEditorForm'
 import { SkillsComingSoon } from '../components/SkillsComingSoon'
 import { PlaybookLinkItem } from '../components/PlaybookLinkItem'
@@ -164,7 +166,11 @@ export function PersonaDetailPage() {
 
                 return (
                   <Stack gap="md">
-                    <PageHeader title={persona.name} description={description} />
+                    <PageHeader
+                      title={persona.name}
+                      description={description}
+                      actions={<ExportPersonaButton persona={persona} />}
+                    />
                     <BranchStatus
                       activeVersion={activeVersion?.version}
                       draftVersion={draftVersion?.version}
@@ -238,6 +244,26 @@ export function PersonaDetailPage() {
                   </Stack>
                 </CardContent>
               </Card>
+
+              {role !== 'viewer' ? (
+                <Card className="border-destructive/40">
+                  <CardHeader>
+                    <CardTitle className="text-destructive">
+                      {t('delete.dangerZoneTitle')}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Stack gap="sm">
+                      <p className="text-sm text-muted-foreground">
+                        {t('delete.dangerZoneDescription')}
+                      </p>
+                      <div>
+                        <DeletePersonaButton persona={persona} />
+                      </div>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              ) : null}
             </Stack>
           ) : null}
         </DataView>

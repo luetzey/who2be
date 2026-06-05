@@ -19,6 +19,8 @@ import { useResourceSubResources } from '@/hooks/useResourceSubResources'
 import { useResourceUsages } from '@/hooks/useResourceUsages'
 import { notify } from '@/lib/feedback'
 
+import { DeleteResourceButton } from '../components/DeleteResourceButton'
+import { ExportResourceButton } from '../components/ExportResourceButton'
 import { ResourceEditorForm } from '../components/ResourceEditorForm'
 import { ResourceUsedByList } from '../components/ResourceUsedByList'
 import { StatusActionBar } from '../components/StatusActionBar'
@@ -85,7 +87,11 @@ export function ResourceDetailPage() {
                       })
                 return (
                   <Stack gap="sm">
-                    <PageHeader title={resource.name} description={description} />
+                    <PageHeader
+                      title={resource.name}
+                      description={description}
+                      actions={<ExportResourceButton resource={resource} />}
+                    />
                     <BranchStatus
                       activeVersion={activeVersion?.version}
                       draftVersion={draftVersion?.version}
@@ -227,6 +233,26 @@ export function ResourceDetailPage() {
                   api.provenanceResourceVersion(resource.id, version)
                 }
               />
+
+              {canEdit ? (
+                <Card className="border-destructive/40">
+                  <CardHeader>
+                    <CardTitle className="text-destructive">
+                      {t('delete.dangerZoneTitle')}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Stack gap="sm">
+                      <p className="text-sm text-muted-foreground">
+                        {t('delete.dangerZoneDescription')}
+                      </p>
+                      <div>
+                        <DeleteResourceButton resource={resource} />
+                      </div>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              ) : null}
             </Stack>
           ) : null}
         </DataView>

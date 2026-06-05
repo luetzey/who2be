@@ -31,7 +31,11 @@ from who2be_models.invitation import (
     InvitationCreated,
     InvitationRead,
 )
-from who2be_models.links import PersonaPlaybookLinkSet, PlaybookCompositionLinkSet
+from who2be_models.links import (
+    DeleteBlocked,
+    PersonaPlaybookLinkSet,
+    PlaybookCompositionLinkSet,
+)
 from who2be_models.locale import DEFAULT_LOCALE, SUPPORTED_LOCALES, ContentLocale
 from who2be_models.me import MeOrganization, MeRead, MeWorkspace
 from who2be_models.organization import OrganizationCreate, OrganizationRead
@@ -42,6 +46,7 @@ from who2be_models.persona import (
     PersonaMode,
     PersonaRead,
     PersonaUpdate,
+    PersonaUsage,
     PersonaVersionContent,
     PersonaVersionRead,
     SkillRef,
@@ -123,6 +128,7 @@ __all__ = [
     "DashboardKpis",
     "DashboardResponse",
     "DashboardStatusDistribution",
+    "DeleteBlocked",
     "DiffOp",
     "EmbeddingMode",
     "EntityStatusDistribution",
@@ -145,6 +151,7 @@ __all__ = [
     "PlaybookCompositionLinkSet",
     "PersonaRead",
     "PersonaUpdate",
+    "PersonaUsage",
     "PersonaVersionContent",
     "PersonaVersionRead",
     "SkillRef",

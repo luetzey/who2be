@@ -176,6 +176,8 @@ class PlaybookRepository(Protocol):
 
     async def list_triggers_with_playbooks(self, workspace_id: UUID) -> list[TriggerOverview]: ...
 
+    async def delete(self, workspace_id: UUID, playbook_id: UUID) -> bool: ...
+
 
 class PgPlaybookRepository:
     """asyncpg-Implementierung von `PlaybookRepository`."""
@@ -688,3 +690,23 @@ class PgPlaybookRepository:
             TriggerOverview(trigger=trigger, playbooks=playbooks)
             for trigger, playbooks in bucket.items()
         ]
+
+    async def delete(self, workspace_id: UUID, playbook_id: UUID) -> bool:
+        """Hard-Delete der Identitaets-Zeile (ADR-0032).
+
+        Workspace-scoped wie alle Schreib-Pfade dieser Klasse. Die FK-Kaskaden
+        (Migration 0003: `playbook_version` ON DELETE CASCADE; 0016:
+        `playbook_resource_link` ON DELETE CASCADE; 0028:
+        `playbook_composition` ON DELETE CASCADE auf parent UND child) raeumen
+        alle Versionen und ausgehenden Links/Composition-Kanten ab — kein
+        Waisen-Rest. Eingehende Referenzen (verlinkende Personas, Eltern-
+        Composites) werden im Service vorab als 409 abgefangen.
+        """
+        async with self._pool.acquire() as conn, conn.transaction():
+            result = await conn.execute(
+                "DELETE FROM playbook WHERE id = $1 AND workspace_id = $2",
+                playbook_id,
+                workspace_id,
+            )
+        # asyncpg gibt "DELETE <n>" zurueck; n=0 wenn nichts geloescht wurde.
+        return bool(result.split()[-1] != "0")

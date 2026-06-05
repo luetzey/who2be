@@ -160,6 +160,11 @@
     "operationId": "list_persona_tags_v1_workspaces__workspace_id__personas_tags_get"
   },
   {
+    "method": "DELETE",
+    "path": "/v1/workspaces/{workspace_id}/personas/{persona_id}",
+    "operationId": "delete_persona_v1_workspaces__workspace_id__personas__persona_id__delete"
+  },
+  {
     "method": "GET",
     "path": "/v1/workspaces/{workspace_id}/personas/{persona_id}",
     "operationId": "get_persona_v1_workspaces__workspace_id__personas__persona_id__get"
@@ -173,6 +178,11 @@
     "method": "PATCH",
     "path": "/v1/workspaces/{workspace_id}/personas/{persona_id}/draft",
     "operationId": "update_persona_draft_v1_workspaces__workspace_id__personas__persona_id__draft_patch"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/personas/{persona_id}/export",
+    "operationId": "export_persona_v1_workspaces__workspace_id__personas__persona_id__export_get"
   },
   {
     "method": "GET",
@@ -245,6 +255,11 @@
     "operationId": "list_playbook_triggers_v1_workspaces__workspace_id__playbooks_triggers_get"
   },
   {
+    "method": "DELETE",
+    "path": "/v1/workspaces/{workspace_id}/playbooks/{playbook_id}",
+    "operationId": "delete_playbook_v1_workspaces__workspace_id__playbooks__playbook_id__delete"
+  },
+  {
     "method": "GET",
     "path": "/v1/workspaces/{workspace_id}/playbooks/{playbook_id}",
     "operationId": "get_playbook_v1_workspaces__workspace_id__playbooks__playbook_id__get"
@@ -273,6 +288,11 @@
     "method": "PATCH",
     "path": "/v1/workspaces/{workspace_id}/playbooks/{playbook_id}/draft",
     "operationId": "update_playbook_draft_v1_workspaces__workspace_id__playbooks__playbook_id__draft_patch"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/playbooks/{playbook_id}/export",
+    "operationId": "export_playbook_v1_workspaces__workspace_id__playbooks__playbook_id__export_get"
   },
   {
     "method": "GET",
@@ -340,6 +360,11 @@
     "operationId": "list_resource_tags_v1_workspaces__workspace_id__resources_tags_get"
   },
   {
+    "method": "DELETE",
+    "path": "/v1/workspaces/{workspace_id}/resources/{resource_id}",
+    "operationId": "delete_resource_v1_workspaces__workspace_id__resources__resource_id__delete"
+  },
+  {
     "method": "GET",
     "path": "/v1/workspaces/{workspace_id}/resources/{resource_id}",
     "operationId": "get_resource_v1_workspaces__workspace_id__resources__resource_id__get"
@@ -353,6 +378,11 @@
     "method": "PATCH",
     "path": "/v1/workspaces/{workspace_id}/resources/{resource_id}/draft",
     "operationId": "update_resource_draft_v1_workspaces__workspace_id__resources__resource_id__draft_patch"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/resources/{resource_id}/export",
+    "operationId": "export_resource_v1_workspaces__workspace_id__resources__resource_id__export_get"
   },
   {
     "method": "GET",

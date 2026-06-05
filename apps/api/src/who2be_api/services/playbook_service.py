@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from who2be_api.core.agent_scope import playbook_read_restrict
 from who2be_api.core.security import WorkspaceContext, require_capability, require_role
 from who2be_api.repositories.playbook_repository import PlaybookRepository
+from who2be_api.repositories.usage_repository import UsageRepository
 from who2be_api.services.placeholders import RenderContext, render_template_body
 from who2be_api.services.playbook_body_pills import extract_pills
 from who2be_api.services.playbook_composition_service import PlaybookCompositionService
@@ -25,11 +26,14 @@ from who2be_api.services.version_diff import compute_version_diff
 from who2be_models import (
     DEFAULT_LOCALE,
     AgentCapability,
+    DeleteBlocked,
     PlaybookCompositionLinkSet,
     PlaybookContent,
     PlaybookCreate,
     PlaybookRead,
+    PlaybookRef,
     PlaybookUpdate,
+    PlaybookUsage,
     PlaybookVersionRead,
     ResourceLinkSet,
     TriggerOverview,
@@ -54,6 +58,34 @@ class PlaybookRenderResponse(BaseModel):
 
 def _not_found() -> HTTPException:
     return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Playbook nicht gefunden.")
+
+
+def _delete_blocked(personas: list[PlaybookUsage], composites: list[PlaybookRef]) -> HTTPException:
+    """409: eingehende Referenzen blockieren das Playbook-Delete.
+
+    Blockierend sind verlinkende Personas (`persona_playbook`) UND Eltern-
+    Composites (`playbook_composition`). `detail` ist der strukturierte
+    `DeleteBlocked`-Body (Klartext + maschinenlesbare Verwender-Listen).
+    """
+    parts: list[str] = []
+    if personas:
+        parts.append(f"{len(personas)} Persona(s): " + ", ".join(u.persona_name for u in personas))
+    if composites:
+        parts.append(
+            f"{len(composites)} Composite-Playbook(s): " + ", ".join(c.name for c in composites)
+        )
+    detail = DeleteBlocked(
+        message=(
+            "Playbook kann nicht geloescht werden — es wird referenziert von "
+            + "; ".join(parts)
+            + ". Loese die Verknuepfungen zuerst."
+        ),
+        blocked_by={"personas": list(personas), "composites": list(composites)},
+    )
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=detail.model_dump(mode="json"),
+    )
 
 
 def _draft_conflict() -> HTTPException:
@@ -98,11 +130,13 @@ class PlaybookService:
         pool: asyncpg.Pool,
         composition_service: PlaybookCompositionService,
         resource_link_service: PlaybookResourceLinkService,
+        usage_repo: UsageRepository | None = None,
     ) -> None:
         self._repo = playbook_repo
         self._pool = pool
         self._composition_service = composition_service
         self._resource_link_service = resource_link_service
+        self._usage_repo = usage_repo
 
     async def create(self, ctx: WorkspaceContext, data: PlaybookCreate) -> PlaybookRead:
         require_role(ctx, WorkspaceRole.editor)
@@ -346,3 +380,29 @@ class PlaybookService:
             if kept:
                 scoped.append(TriggerOverview(trigger=overview.trigger, playbooks=kept))
         return scoped
+
+    async def delete(self, ctx: WorkspaceContext, playbook_id: UUID) -> None:
+        """Hard-Delete des Playbooks (ADR-0032).
+
+        Editor-Gate. Blockiert mit 409, solange Personas das Playbook verlinken
+        oder Eltern-Composites es einbetten (der 409-Body listet beide Quellen).
+        404, wenn das Playbook nicht (mehr) existiert. Die FK-Kaskaden raeumen
+        Versionen sowie ausgehende Resource-Links/Composition-Kanten beim DELETE
+        selbst ab.
+        """
+        require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.playbook_write)
+        playbook = await self._repo.fetch(ctx.workspace_id, playbook_id)
+        if playbook is None:
+            raise _not_found()
+        if self._usage_repo is None:  # pragma: no cover - im Prod immer gesetzt
+            raise RuntimeError("PlaybookService.delete benoetigt ein UsageRepository.")
+        personas = await self._usage_repo.list_playbook_usages(ctx.workspace_id, playbook_id)
+        composites = await self._usage_repo.list_playbook_parent_composites(
+            ctx.workspace_id, playbook_id
+        )
+        if personas or composites:
+            raise _delete_blocked(personas, composites)
+        deleted = await self._repo.delete(ctx.workspace_id, playbook_id)
+        if not deleted:
+            raise _not_found()

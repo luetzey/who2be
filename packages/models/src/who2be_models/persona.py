@@ -241,3 +241,17 @@ class PersonaVersionRead(BaseModel):
     content: PersonaVersionContent
     created_by: UUID
     created_at: datetime
+
+
+class PersonaUsage(BaseModel):
+    """Backlink-Record: welcher Agent nutzt diese Persona?
+
+    Quelle: `agent.persona_id`. Blockiert das Hard-Delete einer Persona (409),
+    weil der Composite-FK `agent.persona_id` auf `ON DELETE RESTRICT` steht —
+    der Agent muss erst umgehaengt/geloescht werden.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    agent_id: UUID
+    agent_name: str

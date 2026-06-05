@@ -1,10 +1,10 @@
 """REST-Endpunkte fuer Resources (`/v1/workspaces/{workspace_id}/resources`)."""
 
-from typing import Annotated
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends, Query, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
 from who2be_api.core.db import get_pool
 from who2be_api.core.locale import LocaleQuery
@@ -13,6 +13,8 @@ from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.repositories.resource_repository import PgResourceRepository
 from who2be_api.repositories.status_history_repository import PgStatusHistoryRepository
+from who2be_api.repositories.usage_repository import PgUsageRepository
+from who2be_api.services.entity_export_service import EntityExportService
 from who2be_api.services.entity_quota_service import enforce_entity_quota
 from who2be_api.services.mcp_limit_service import enforce_mcp_read_limit
 from who2be_api.services.resource_service import ResourceService
@@ -35,7 +37,9 @@ def get_resource_service(
     pool: Annotated[asyncpg.Pool, Depends(get_pool)],
 ) -> ResourceService:
     """FastAPI-Dependency: verdrahtet den Service mit der Pg-Implementierung."""
-    return ResourceService(PgResourceRepository(pool), pool=pool)
+    return ResourceService(
+        PgResourceRepository(pool), pool=pool, usage_repo=PgUsageRepository(pool)
+    )
 
 
 def get_version_status_service(
@@ -44,9 +48,17 @@ def get_version_status_service(
     return VersionStatusService(pool, StatusHistoryService(PgStatusHistoryRepository()))
 
 
+def get_export_service(
+    pool: Annotated[asyncpg.Pool, Depends(get_pool)],
+) -> EntityExportService:
+    return EntityExportService(pool)
+
+
 Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]
 Service = Annotated[ResourceService, Depends(get_resource_service)]
 StatusService = Annotated[VersionStatusService, Depends(get_version_status_service)]
+ExportService = Annotated[EntityExportService, Depends(get_export_service)]
+ExportFormat = Annotated[Literal["json", "markdown"], Query()]
 # `against` waehlt den Diff-Vergleichsstand: 'active' oder eine Versions-Nummer.
 DiffAgainst = Annotated[str, Query(max_length=20)]
 
@@ -107,6 +119,55 @@ async def update_resource(
     locale: LocaleQuery,
 ) -> ResourceRead:
     return await service.update(ctx, resource_id, data, locale=locale)
+
+
+@router.delete("/{resource_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(write_limit)
+async def delete_resource(
+    request: Request, resource_id: UUID, ctx: Ctx, service: Service
+) -> Response:
+    """Hard-Delete der Resource (editor+).
+
+    409, wenn Playbooks Bloecke referenzieren oder Eltern-Composites sie einbetten.
+    """
+    await service.delete(ctx, resource_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/{resource_id}/export")
+@limiter.limit(write_limit)
+async def export_resource(
+    request: Request,
+    resource_id: UUID,
+    ctx: Ctx,
+    export_service: ExportService,
+    response: Response,
+    format: ExportFormat = "json",
+) -> Any:
+    """Einzel-Export der Resource als JSON (alle Versionen) oder Markdown (aktive
+    Version gerendert). Lesen ist fuer Viewer offen (kein require_role)."""
+    if format == "markdown":
+        rendered = await export_service.export_markdown(ctx.workspace_id, "resource", resource_id)
+        if rendered is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Resource nicht gefunden."
+            )
+        return Response(
+            content=rendered,
+            media_type="text/markdown",
+            headers={
+                "Content-Disposition": (f'attachment; filename="who2be-resource-{resource_id}.md"')
+            },
+        )
+    bundle = await export_service.export_json(ctx.workspace_id, "resource", resource_id)
+    if bundle is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Resource nicht gefunden."
+        )
+    response.headers["Content-Disposition"] = (
+        f'attachment; filename="who2be-resource-{resource_id}.json"'
+    )
+    return bundle
 
 
 @router.patch("/{resource_id}/draft")

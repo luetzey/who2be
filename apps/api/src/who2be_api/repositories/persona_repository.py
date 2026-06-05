@@ -165,6 +165,8 @@ class PersonaRepository(Protocol):
         self, workspace_id: UUID, locale: str = DEFAULT_LOCALE
     ) -> list[str]: ...
 
+    async def delete(self, workspace_id: UUID, persona_id: UUID) -> bool: ...
+
 
 class PgPersonaRepository:
     """asyncpg-Implementierung von `PersonaRepository`."""
@@ -606,3 +608,22 @@ class PgPersonaRepository:
             locale,
         )
         return [row["tag"] for row in rows]
+
+    async def delete(self, workspace_id: UUID, persona_id: UUID) -> bool:
+        """Hard-Delete der Identitaets-Zeile (ADR-0032).
+
+        Workspace-scoped wie alle Schreib-Pfade dieser Klasse. Die FK-Kaskaden
+        (Migration 0002: `persona_version` ON DELETE CASCADE; 0004/0014:
+        `persona_playbook` ON DELETE CASCADE) raeumen alle Versionen und
+        ausgehenden Persona->Playbook-Links automatisch ab — kein Waisen-Rest.
+        Eingehende `agent.persona_id`-Referenzen sind ON DELETE RESTRICT und
+        werden im Service vorab als 409 abgefangen, bevor dieser DELETE laeuft.
+        """
+        async with self._pool.acquire() as conn, conn.transaction():
+            result = await conn.execute(
+                "DELETE FROM persona WHERE id = $1 AND workspace_id = $2",
+                persona_id,
+                workspace_id,
+            )
+        # asyncpg gibt "DELETE <n>" zurueck; n=0 wenn nichts geloescht wurde.
+        return bool(result.split()[-1] != "0")

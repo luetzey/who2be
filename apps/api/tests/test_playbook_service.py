@@ -345,6 +345,13 @@ class FakePlaybookRepository:
                 )
         return [TriggerOverview(trigger=t, playbooks=p) for t, p in sorted(bucket.items())]
 
+    async def delete(self, workspace_id: UUID, playbook_id: UUID) -> bool:
+        playbook = self._playbooks.get(playbook_id)
+        if playbook is None or playbook.workspace_id != workspace_id:
+            return False
+        del self._playbooks[playbook_id]
+        return True
+
 
 class FakeCompositionRepo:
     """In-Memory-Stub: erfasst die zuletzt gesetzte Composition-Kinderliste.
@@ -360,9 +367,7 @@ class FakeCompositionRepo:
     async def parent_belongs_to(self, workspace_id: UUID, parent_id: UUID) -> bool:
         return True
 
-    async def list_children(
-        self, parent_id: UUID, active_only: bool = False
-    ) -> list[PlaybookRead]:
+    async def list_children(self, parent_id: UUID, active_only: bool = False) -> list[PlaybookRead]:
         return []
 
     async def list_parents(self, child_id: UUID) -> list[PlaybookRef]:
