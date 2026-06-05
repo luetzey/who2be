@@ -35,8 +35,23 @@ jobs:
         run: uv run ruff check .
       - name: Typecheck
         run: uv run mypy .
-      - name: Test
-        run: uv run pytest -q
+      - name: Test (coverage ratchet + DB-Skip-Guard)
+        # WHO2BE_REQUIRE_DB=1: ohne erreichbare DB bricht die Suite hart ab
+        # (conftest.py, ADR-0032) — kein stilles "gruen durch Skip" mehr.
+        # --cov-fail-under: Ratchet-Floor (Baseline DB-los gemessen = 66 %;
+        # mit DB in CI hoeher, also sicher; Anhebung nur in Coverage-PRs).
+        env:
+          WHO2BE_REQUIRE_DB: "1"
+        run: >-
+          uv run pytest -q --cov --cov-report=term-missing
+          --cov-report=xml --cov-fail-under=65
+      - name: Upload Python coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-python
+          path: coverage.xml
+          if-no-files-found: ignore
 
   web:
     runs-on: ubuntu-latest
@@ -56,8 +71,17 @@ jobs:
         run: npm run lint
       - name: Typecheck
         run: npx tsc -b
-      - name: Test
-        run: npm test
+      - name: Test (coverage ratchet)
+        # `test:coverage` faehrt die volle Vitest-Suite mit v8-Coverage und
+        # erzwingt die Thresholds aus vite.config.ts (Floor, ADR-0032).
+        run: npm run test:coverage
+      - name: Upload web coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-web
+          path: apps/web/coverage
+          if-no-files-found: ignore
       - name: A11y (axe via vitest)
         # Eigenes Gate: A11y-Tests laufen bereits unter `npm test` mit, hier
         # gefiltert (`testNamePattern a11y`) als sichtbarer Step. Bricht den
