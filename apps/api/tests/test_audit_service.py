@@ -233,9 +233,7 @@ class _FakeLifecycleRepo:
     async def org_kind(self, org_id: UUID) -> str | None:
         return "company"
 
-    async def soft_delete_organization(
-        self, org_id: UUID, purge_after: datetime
-    ) -> datetime:
+    async def soft_delete_organization(self, org_id: UUID, purge_after: datetime) -> datetime:
         return purge_after
 
     async def sole_owner_company_orgs(self, user_id: UUID) -> list[str]:
@@ -288,8 +286,7 @@ async def _seed_workspace_with_two_admins(
 ) -> tuple[UUID, UUID, UUID]:
     """Workspace mit zwei Admins; gibt (workspace_id, admin_a, admin_b) zurueck."""
     org_id = await conn.fetchval(
-        "INSERT INTO organization (name, slug, kind) "
-        "VALUES ('o', $1, 'company') RETURNING id",
+        "INSERT INTO organization (name, slug, kind) VALUES ('o', $1, 'company') RETURNING id",
         f"o-{secrets.token_hex(4)}",
     )
     ws_id = await conn.fetchval(
@@ -299,8 +296,7 @@ async def _seed_workspace_with_two_admins(
     a, b = uuid4(), uuid4()
     for user_id in (a, b):
         await conn.execute(
-            "INSERT INTO workspace_member (workspace_id, user_id, role) "
-            "VALUES ($1, $2, 'admin')",
+            "INSERT INTO workspace_member (workspace_id, user_id, role) VALUES ($1, $2, 'admin')",
             ws_id,
             user_id,
         )
@@ -416,8 +412,7 @@ def test_last_admin_race_is_serialised_by_advisory_lock() -> None:
             # Genau eine der beiden Operationen darf gelungen sein.
             assert sum(results) == 1
             remaining = await owner.fetchval(
-                "SELECT count(*) FROM workspace_member "
-                "WHERE workspace_id = $1 AND role = 'admin'",
+                "SELECT count(*) FROM workspace_member WHERE workspace_id = $1 AND role = 'admin'",
                 ws_id,
             )
             assert remaining >= 1

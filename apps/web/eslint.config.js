@@ -140,10 +140,14 @@ export default tseslint.config(
     },
   },
   {
-    files: ['**/*.test.{ts,tsx}'],
+    // Test-Dateien und Test-Helfer (`*.test-utils.tsx`) sind nicht Teil des
+    // Fast-Refresh-Graphen — der only-export-components-Check (gemischte
+    // Komponenten-/Konstanten-Exports) gilt fuer sie nicht.
+    files: ['**/*.test.{ts,tsx}', '**/*.test-utils.{ts,tsx}'],
     rules: {
       'no-restricted-syntax': 'off',
       'no-restricted-imports': 'off',
+      'react-refresh/only-export-components': 'off',
     },
   },
   ...crossFeatureOverrides,

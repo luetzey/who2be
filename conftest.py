@@ -98,9 +98,7 @@ def _db_reachable() -> bool:
     return _DB_REACHABLE_CACHE
 
 
-def pytest_collection_modifyitems(
-    config: pytest.Config, items: list[pytest.Item]
-) -> None:
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     """Zentraler Integration-Skip + CI-Skip-Guard.
 
     Ohne erreichbare DB werden ``integration``-Tests einmalig markiert

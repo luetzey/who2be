@@ -60,8 +60,6 @@ async def set_resource_sub_resources(
 
 
 @router.get("/{resource_id}/used_by")
-async def list_resource_used_by(
-    resource_id: UUID, ctx: Ctx, service: Service
-) -> list[ResourceRef]:
+async def list_resource_used_by(resource_id: UUID, ctx: Ctx, service: Service) -> list[ResourceRef]:
     """Gibt die Parent-Resources zurueck, die diese Resource als Sub-Resource fuehren."""
     return await service.list_parents(ctx, resource_id)

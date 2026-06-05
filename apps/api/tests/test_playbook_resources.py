@@ -647,8 +647,16 @@ def test_resource_links_embedding_mode_roundtrip(monkeypatch: pytest.MonkeyPatch
             # Default ohne embedding_mode → 'lazy'.
             resp = client.put(
                 links_url,
-                json={"links": [{"resource_id": rid, "block_id": None,
-                                 "position": 0, "link_scope": "resource"}]},
+                json={
+                    "links": [
+                        {
+                            "resource_id": rid,
+                            "block_id": None,
+                            "position": 0,
+                            "link_scope": "resource",
+                        }
+                    ]
+                },
                 headers=auth,
             )
             assert resp.status_code == 200, resp.text
@@ -657,8 +665,17 @@ def test_resource_links_embedding_mode_roundtrip(monkeypatch: pytest.MonkeyPatch
             # Explizit auf 'inline' umschalten.
             resp = client.put(
                 links_url,
-                json={"links": [{"resource_id": rid, "block_id": None, "position": 0,
-                                 "link_scope": "resource", "embedding_mode": "inline"}]},
+                json={
+                    "links": [
+                        {
+                            "resource_id": rid,
+                            "block_id": None,
+                            "position": 0,
+                            "link_scope": "resource",
+                            "embedding_mode": "inline",
+                        }
+                    ]
+                },
                 headers=auth,
             )
             assert resp.status_code == 200, resp.text

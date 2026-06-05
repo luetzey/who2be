@@ -378,8 +378,16 @@ def test_sub_resource_embedding_mode_roundtrip(monkeypatch: pytest.MonkeyPatch) 
             # Explizit auf 'inline' umschalten.
             resp = client.put(
                 subs_url,
-                json={"links": [{"child_id": child, "link_scope": "resource",
-                                 "position": 0, "embedding_mode": "inline"}]},
+                json={
+                    "links": [
+                        {
+                            "child_id": child,
+                            "link_scope": "resource",
+                            "position": 0,
+                            "embedding_mode": "inline",
+                        }
+                    ]
+                },
                 headers=auth,
             )
             assert resp.status_code == 200, resp.text

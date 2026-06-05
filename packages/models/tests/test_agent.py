@@ -14,9 +14,7 @@ from who2be_models import (
 )
 
 
-def _read(
-    *, persona_id: object, template_id: object, persona_active: bool = False
-) -> AgentRead:
+def _read(*, persona_id: object, template_id: object, persona_active: bool = False) -> AgentRead:
     now = datetime.now(UTC)
     return AgentRead(
         id=uuid4(),

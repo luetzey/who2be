@@ -54,7 +54,5 @@ def entitlement_from_license(payload: dict[str, Any]) -> Entitlement:
         mcp_monthly_quota=_parse_optional_int(
             payload.get("mcp_monthly_quota"), "mcp_monthly_quota"
         ),
-        mcp_rate_per_min=_parse_optional_int(
-            payload.get("mcp_rate_per_min"), "mcp_rate_per_min"
-        ),
+        mcp_rate_per_min=_parse_optional_int(payload.get("mcp_rate_per_min"), "mcp_rate_per_min"),
     )

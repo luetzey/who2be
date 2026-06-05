@@ -516,9 +516,7 @@ def test_agent_enable_gate(monkeypatch: pytest.MonkeyPatch) -> None:
 
             # Persona aktiv schalten → Update auf enabled klappt.
             _activate_persona(client, ws, persona["id"], auth)
-            enabled = client.put(
-                f"{base}/{agent_id}", json={"status": "enabled"}, headers=auth
-            )
+            enabled = client.put(f"{base}/{agent_id}", json={"status": "enabled"}, headers=auth)
             assert enabled.status_code == 200, enabled.text
             assert enabled.json()["status"] == "enabled"
             assert enabled.json()["activatable"] is True

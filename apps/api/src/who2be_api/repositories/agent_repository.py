@@ -84,9 +84,7 @@ class AgentRepository(Protocol):
 
     async def delete(self, workspace_id: UUID, agent_id: UUID) -> bool: ...
 
-    async def persona_has_active_version(
-        self, workspace_id: UUID, persona_id: UUID
-    ) -> bool: ...
+    async def persona_has_active_version(self, workspace_id: UUID, persona_id: UUID) -> bool: ...
 
 
 class PgAgentRepository:

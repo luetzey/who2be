@@ -1,5 +1,5 @@
 import { MailCheck } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Navigate, useLocation, useParams, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
@@ -34,34 +34,40 @@ export function InvitationAcceptPage() {
 
   // Microcopy beantwortet das WIESO (design-language §1): warum der Link nicht
   // (mehr) funktioniert. 403 ist neu (Phase 3-D Magic-Link-Email-Check).
-  function messageForError(cause: unknown): string {
-    if (cause instanceof ApiError) {
-      if (cause.status === 410) {
-        return t('invitation.error.expired')
+  const messageForError = useCallback(
+    (cause: unknown): string => {
+      if (cause instanceof ApiError) {
+        if (cause.status === 410) {
+          return t('invitation.error.expired')
+        }
+        if (cause.status === 404) {
+          return t('invitation.error.notFound')
+        }
+        if (cause.status === 403) {
+          return t('invitation.error.emailMismatch')
+        }
       }
-      if (cause.status === 404) {
-        return t('invitation.error.notFound')
-      }
-      if (cause.status === 403) {
-        return t('invitation.error.emailMismatch')
-      }
-    }
-    return cause instanceof Error ? cause.message : t('invitation.error.generic')
-  }
+      return cause instanceof Error ? cause.message : t('invitation.error.generic')
+    },
+    [t],
+  )
 
-  async function runAccept(currentToken: string, currentAuthToken: string) {
-    setAccepting(true)
-    setError(null)
-    try {
-      const result = await acceptInvitation(currentAuthToken, currentToken)
-      notify.success(t('invitation.success'))
-      setAcceptedWorkspace(result.workspace_id)
-    } catch (cause) {
-      setError(messageForError(cause))
-    } finally {
-      setAccepting(false)
-    }
-  }
+  const runAccept = useCallback(
+    async (currentToken: string, currentAuthToken: string) => {
+      setAccepting(true)
+      setError(null)
+      try {
+        const result = await acceptInvitation(currentAuthToken, currentToken)
+        notify.success(t('invitation.success'))
+        setAcceptedWorkspace(result.workspace_id)
+      } catch (cause) {
+        setError(messageForError(cause))
+      } finally {
+        setAccepting(false)
+      }
+    },
+    [t, messageForError],
+  )
 
   useEffect(() => {
     if (
@@ -75,7 +81,7 @@ export function InvitationAcceptPage() {
     }
     autoAcceptedRef.current = true
     void runAccept(token, authToken)
-  }, [isMagicLink, session, token, authToken])
+  }, [isMagicLink, session, token, authToken, runAccept])
 
   // Ohne Session geht die Annahme nicht — zurück zum Login, der via `next`
   // wieder hierher zurückspringt. Magic-Link-User sind nach dem GoTrue-Callback

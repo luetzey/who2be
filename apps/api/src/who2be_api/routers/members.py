@@ -47,9 +47,7 @@ async def update_member_role(
     request: Request, user_id: UUID, data: WorkspaceMemberUpdate, ctx: Ctx, service: Service
 ) -> WorkspaceMemberRead:
     require_role(ctx, WorkspaceRole.admin)
-    return await service.update_role(
-        ctx.workspace_id, user_id, data.role, actor_id=ctx.user_id
-    )
+    return await service.update_role(ctx.workspace_id, user_id, data.role, actor_id=ctx.user_id)
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)

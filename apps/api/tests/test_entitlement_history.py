@@ -80,8 +80,7 @@ def test_upsert_writes_exactly_one_history_row_per_call() -> None:
 
     async def _run(pool: asyncpg.Pool, owner: asyncpg.Connection) -> None:
         org_id = await owner.fetchval(
-            "INSERT INTO organization (name, slug, kind) "
-            "VALUES ('o', $1, 'company') RETURNING id",
+            "INSERT INTO organization (name, slug, kind) VALUES ('o', $1, 'company') RETURNING id",
             f"o-{secrets.token_hex(4)}",
         )
         repo = PgEntitlementRepository(pool)
@@ -143,8 +142,7 @@ def test_history_survives_org_delete() -> None:
 
     async def _run(pool: asyncpg.Pool, owner: asyncpg.Connection) -> None:
         org_id = await owner.fetchval(
-            "INSERT INTO organization (name, slug, kind) "
-            "VALUES ('o', $1, 'company') RETURNING id",
+            "INSERT INTO organization (name, slug, kind) VALUES ('o', $1, 'company') RETURNING id",
             f"o-{secrets.token_hex(4)}",
         )
         repo = PgEntitlementRepository(pool)

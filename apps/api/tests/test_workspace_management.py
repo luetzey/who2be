@@ -239,9 +239,7 @@ def test_members_list_includes_email(monkeypatch: pytest.MonkeyPatch) -> None:
         with TestClient(app) as client:
             me = client.get("/v1/me", headers=_auth(owner)).json()
             ws_id = me["default_workspace_id"]
-            members = client.get(
-                f"/v1/workspaces/{ws_id}/members", headers=_auth(owner)
-            ).json()
+            members = client.get(f"/v1/workspaces/{ws_id}/members", headers=_auth(owner)).json()
             assert len(members) == 1
             assert members[0]["email"] == "owner@example.com"
     finally:

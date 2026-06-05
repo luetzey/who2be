@@ -45,8 +45,7 @@ async def _seed(conn: asyncpg.Connection) -> dict[str, UUID]:
     ids: dict[str, UUID] = {}
     for key in ("a", "b"):
         org_id = await conn.fetchval(
-            "INSERT INTO organization (name, slug, kind) "
-            "VALUES ($1, $1, 'company') RETURNING id",
+            "INSERT INTO organization (name, slug, kind) VALUES ($1, $1, 'company') RETURNING id",
             f"org-{key}-{secrets.token_hex(4)}",
         )
         ws_id = await conn.fetchval(
@@ -55,8 +54,7 @@ async def _seed(conn: asyncpg.Connection) -> dict[str, UUID]:
             f"ws-{key}",
         )
         persona_id = await conn.fetchval(
-            "INSERT INTO persona (workspace_id, owner_id, name) "
-            "VALUES ($1, $2, $3) RETURNING id",
+            "INSERT INTO persona (workspace_id, owner_id, name) VALUES ($1, $2, $3) RETURNING id",
             ws_id,
             owner,
             f"persona-{key}",
@@ -125,9 +123,7 @@ def test_rls_blocks_cross_workspace_reads_for_app_role() -> None:
             assert {row["workspace_id"] for row in persona_ws_b} == {ids["ws_b"]}
 
             # --- Fremder Mandant: kein Treffer, auch ohne WHERE. ---
-            await app.execute(
-                "SELECT set_config('app.current_tenant', $1, false)", str(uuid4())
-            )
+            await app.execute("SELECT set_config('app.current_tenant', $1, false)", str(uuid4()))
             stranger = await app.fetch("SELECT workspace_id FROM persona")
             assert stranger == []
 

@@ -153,8 +153,7 @@ class PgAccountPurgeRepository:
 
     async def expired_organizations(self, now: datetime) -> list[UUID]:
         rows = await self._conn.fetch(
-            "SELECT id FROM organization "
-            "WHERE deleted_at IS NOT NULL AND purge_after <= $1",
+            "SELECT id FROM organization WHERE deleted_at IS NOT NULL AND purge_after <= $1",
             now,
         )
         return [row["id"] for row in rows]
@@ -165,8 +164,7 @@ class PgAccountPurgeRepository:
 
     async def expired_accounts(self, now: datetime) -> list[UUID]:
         rows = await self._conn.fetch(
-            "SELECT user_id FROM account_deletion "
-            "WHERE purged_at IS NULL AND purge_after <= $1",
+            "SELECT user_id FROM account_deletion WHERE purged_at IS NULL AND purge_after <= $1",
             now,
         )
         return [row["user_id"] for row in rows]
