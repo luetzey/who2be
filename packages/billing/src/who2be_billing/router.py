@@ -19,17 +19,19 @@ from __future__ import annotations
 
 import hmac
 import logging
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 from uuid import UUID
 
 import asyncpg
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.db import get_pool
 from who2be_api.core.security import WorkspaceContext, get_current_workspace, require_role
 from who2be_api.licensing.edition import is_cloud
+from who2be_api.licensing.entitlement import Entitlement
 from who2be_api.repositories.entitlement_repository import PgEntitlementRepository
 from who2be_api.routers.entitlement import resolve_org_id
 from who2be_billing.mollie import MollieBillingService, MollieError, SdkMollieGateway
@@ -247,3 +249,71 @@ async def create_checkout(
         webhook_url=settings.mollie_webhook_url or None,
     )
     return CheckoutResponse(checkout_url=checkout_url)
+
+
+# --- Manual-Override (kontrollierter Cloud-Ausnahmepfad, ADR-0028) ----------------
+
+
+class OverrideRequest(BaseModel):
+    """Befristeter manueller Override fuer Support-/Kulanz-/Webhook-Haenger-Faelle.
+
+    Pflicht-befristet (`days`) + auditiert (`reason`): es gibt kein permanentes
+    Override. Der gewaehlte Tier kommt aus `plan` (Single Source: `plans.py`).
+    """
+
+    plan: str = "pro"
+    days: int = Field(gt=0, le=365, description="Laufzeit in Tagen (1–365).")
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class OverrideResponse(BaseModel):
+    """Bestaetigter Override-Stand fuer die UI-Rueckmeldung."""
+
+    plan: str
+    expires_at: str
+    features: list[str]
+
+
+@router.post("/override", status_code=status.HTTP_201_CREATED)
+async def create_override(
+    body: OverrideRequest,
+    ctx: Ctx,
+) -> OverrideResponse:
+    """Setzt ein befristetes `manual_override` (admin-only, nur Cloud).
+
+    Schreibt ausschliesslich in `org_entitlement` ueber den Repository-Vertrag —
+    keine anderen App-Interna. Urheber (`created_by`) + `reason` werden auditiert,
+    der Ablauf greift ohne Sonderlogik ueber `is_active()`/`expires_at`.
+    """
+    _require_cloud()
+    require_role(ctx, WorkspaceRole.admin)
+    plan = plan_by_code(body.plan)
+    if plan is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Unbekannter oder nicht buchbarer Plan '{body.plan}'.",
+        )
+    expires_at = datetime.now(tz=UTC) + timedelta(days=body.days)
+    entitlement = Entitlement(
+        status="active",
+        features=plan.features,
+        expires_at=expires_at,
+        mcp_monthly_quota=plan.mcp_monthly_quota,
+        mcp_rate_per_min=plan.mcp_rate_per_min,
+        grace_until=None,
+    )
+    pool = get_pool()
+    org_id = await resolve_org_id(pool, ctx.workspace_id)
+    await PgEntitlementRepository(pool).upsert(
+        org_id,
+        entitlement,
+        source="manual_override",
+        external_ref=None,
+        created_by=ctx.user_id,
+        reason=body.reason,
+    )
+    return OverrideResponse(
+        plan=plan.code,
+        expires_at=expires_at.isoformat(),
+        features=sorted(entitlement.features),
+    )
