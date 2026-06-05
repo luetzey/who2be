@@ -1,5 +1,6 @@
 import { Plus, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -12,6 +13,7 @@ import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { usePersonas } from '@/hooks/usePersonas'
 
 export function PersonasPage() {
+  const { t } = useTranslation('personas')
   const { personas, loading, error } = usePersonas()
   const wsPath = useWorkspacePath()
 
@@ -19,13 +21,13 @@ export function PersonasPage() {
     <Container>
       <Stack gap="lg">
         <PageHeader
-          title="Personae"
-          description="Versionierte Persona-Definitionen für deine Agenten."
+          title={t('list.title')}
+          description={t('list.description')}
           actions={
             <Button asChild variant="brand">
               <Link to={wsPath("/personas/new")}>
                 <Plus className="h-4 w-4" />
-                Neue Persona
+                {t('list.newPersona')}
               </Link>
             </Button>
           }
@@ -38,13 +40,13 @@ export function PersonasPage() {
           empty={
             <EmptyState
               icon={Users}
-              title="Noch keine Personae"
-              description="Lege deine erste Persona an, um Agenten zu konfigurieren."
+              title={t('list.empty.title')}
+              description={t('list.empty.description')}
               action={
                 <Button asChild variant="brand">
                   <Link to={wsPath("/personas/new")}>
                     <Plus className="h-4 w-4" />
-                    Neue Persona
+                    {t('list.newPersona')}
                   </Link>
                 </Button>
               }

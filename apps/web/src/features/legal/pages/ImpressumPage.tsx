@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+
 import { LegalArticle, LegalSection } from '../components/LegalArticle'
 import { Placeholder } from '../components/Placeholder'
 
@@ -6,64 +8,71 @@ import { Placeholder } from '../components/Placeholder'
  * Platzhaltern — finaler Text kommt vom Betreiber/Anwalt (CL4).
  */
 export function ImpressumPage() {
+  const { t } = useTranslation('legal')
+
   return (
-    <LegalArticle title="Impressum">
-      <LegalSection heading="Angaben gemaess § 5 DDG">
+    <LegalArticle title={t('impressum.title')}>
+      <LegalSection heading={t('impressum.sections.legalNotice.heading')}>
         <p>
-          <Placeholder>Firmenname / Rechtsform</Placeholder>
+          <Placeholder>{t('impressum.sections.legalNotice.companyName')}</Placeholder>
           <br />
-          <Placeholder>Strasse und Hausnummer</Placeholder>
+          <Placeholder>{t('impressum.sections.legalNotice.street')}</Placeholder>
           <br />
-          <Placeholder>PLZ und Ort</Placeholder>
+          <Placeholder>{t('impressum.sections.legalNotice.city')}</Placeholder>
           <br />
-          <Placeholder>Land</Placeholder>
+          <Placeholder>{t('impressum.sections.legalNotice.country')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="Vertreten durch">
+      <LegalSection heading={t('impressum.sections.representative.heading')}>
         <p>
-          <Placeholder>Name der vertretungsberechtigten Person(en)</Placeholder>
+          <Placeholder>{t('impressum.sections.representative.name')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="Kontakt">
+      <LegalSection heading={t('impressum.sections.contact.heading')}>
         <p>
-          Telefon: <Placeholder>Telefonnummer</Placeholder>
+          {t('impressum.sections.contact.phoneLabel')}{' '}
+          <Placeholder>{t('impressum.sections.contact.phone')}</Placeholder>
           <br />
-          E-Mail: <Placeholder>Kontakt-E-Mail</Placeholder>
+          {t('impressum.sections.contact.emailLabel')}{' '}
+          <Placeholder>{t('impressum.sections.contact.email')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="Registereintrag">
+      <LegalSection heading={t('impressum.sections.register.heading')}>
         <p>
-          Eintragung im <Placeholder>Handels-/Vereinsregister</Placeholder>
+          {t('impressum.sections.register.registryLabel')}{' '}
+          <Placeholder>{t('impressum.sections.register.registry')}</Placeholder>
           <br />
-          Registergericht: <Placeholder>zustaendiges Registergericht</Placeholder>
+          {t('impressum.sections.register.courtLabel')}{' '}
+          <Placeholder>{t('impressum.sections.register.court')}</Placeholder>
           <br />
-          Registernummer: <Placeholder>Registernummer</Placeholder>
+          {t('impressum.sections.register.numberLabel')}{' '}
+          <Placeholder>{t('impressum.sections.register.number')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="Umsatzsteuer-ID">
+      <LegalSection heading={t('impressum.sections.vatId.heading')}>
         <p>
-          Umsatzsteuer-Identifikationsnummer gemaess § 27a UStG:{' '}
-          <Placeholder>USt-IdNr.</Placeholder>
+          {t('impressum.sections.vatId.label')}{' '}
+          <Placeholder>{t('impressum.sections.vatId.value')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="Verantwortlich i.S.d. § 18 Abs. 2 MStV">
+      <LegalSection heading={t('impressum.sections.responsible.heading')}>
         <p>
-          <Placeholder>Name und Anschrift der verantwortlichen Person</Placeholder>
+          <Placeholder>{t('impressum.sections.responsible.name')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="EU-Streitschlichtung">
+      <LegalSection heading={t('impressum.sections.dispute.heading')}>
         <p>
-          Die Europaeische Kommission stellt eine Plattform zur
-          Online-Streitbeilegung (OS) bereit:{' '}
-          <Placeholder>Link zur OS-Plattform</Placeholder>. Wir sind{' '}
-          <Placeholder>bereit / nicht bereit / nicht verpflichtet</Placeholder>, an einem
-          Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle teilzunehmen.
+          {t('impressum.sections.dispute.text1')}{' '}
+          <Placeholder>{t('impressum.sections.dispute.platformLink')}</Placeholder>.{' '}
+          {t('impressum.sections.dispute.text2')}{' '}
+          <Placeholder>{t('impressum.sections.dispute.participation')}</Placeholder>
+          {t('impressum.sections.dispute.text3')}
         </p>
       </LegalSection>
     </LegalArticle>

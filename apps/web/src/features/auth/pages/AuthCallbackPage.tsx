@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, Navigate, useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 
 import { useSession } from '@/auth/session-context'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
@@ -34,6 +35,7 @@ function readHashError(): string | null {
 // sie steht, leiten wir auf den (gehaerteten) `next`-Pfad weiter; bleibt sie
 // aus oder kommt ein Fehler im Hash, fuehren wir zurueck zum Login.
 export function AuthCallbackPage() {
+  const { t } = useTranslation('auth')
   const { session } = useSession()
   const [searchParams] = useSearchParams()
   const [hashError] = useState<string | null>(() => readHashError())
@@ -62,18 +64,18 @@ export function AuthCallbackPage() {
         <Card className="w-full max-w-md border-transparent shadow-modal">
           <CardHeader className="gap-2">
             <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              Who2Be
+              {t('brand')}
             </span>
-            <CardTitle className="text-3xl tracking-tight">Anmeldung fehlgeschlagen</CardTitle>
-            <CardDescription>Der Login ueber den externen Anbieter klappte nicht.</CardDescription>
+            <CardTitle className="text-3xl tracking-tight">{t('callback.errorTitle')}</CardTitle>
+            <CardDescription>{t('callback.errorDescription')}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col gap-4">
               <ErrorAlert
-                message={hashError ?? 'Es kam keine gueltige Sitzung zurueck. Bitte erneut versuchen.'}
+                message={hashError ?? t('callback.noSession')}
               />
               <Button asChild variant="brand" className="w-full">
-                <Link to="/login">Zurueck zur Anmeldung</Link>
+                <Link to="/login">{t('backToLogin')}</Link>
               </Button>
             </div>
           </CardContent>
@@ -87,10 +89,10 @@ export function AuthCallbackPage() {
       <Card className="w-full max-w-md border-transparent shadow-modal">
         <CardHeader className="gap-2">
           <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            Who2Be
+            {t('brand')}
           </span>
-          <CardTitle className="text-3xl tracking-tight">Anmeldung wird abgeschlossen…</CardTitle>
-          <CardDescription>Einen Moment, wir richten deine Sitzung ein.</CardDescription>
+          <CardTitle className="text-3xl tracking-tight">{t('callback.loadingTitle')}</CardTitle>
+          <CardDescription>{t('callback.loadingDescription')}</CardDescription>
         </CardHeader>
         <CardContent>
           <LoadingState rows={2} />

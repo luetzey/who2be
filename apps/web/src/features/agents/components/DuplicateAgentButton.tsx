@@ -1,5 +1,6 @@
 import { Copy } from 'lucide-react'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 
 import type { Agent } from '@/api/types'
@@ -22,6 +23,7 @@ interface DuplicateAgentButtonProps {
  * nur Viewer ist. Der Tooltip nennt die konkreten Luecken.
  */
 export function DuplicateAgentButton({ agent }: DuplicateAgentButtonProps) {
+  const { t } = useTranslation('agents')
   const api = useApi()
   const navigate = useNavigate()
   const wsPath = useWorkspacePath()
@@ -30,19 +32,19 @@ export function DuplicateAgentButton({ agent }: DuplicateAgentButtonProps) {
 
   const disabled = isViewer || !agent.activatable || busy
   const title = !agent.activatable
-    ? `Noch nicht kopierbar — fehlt: ${describeAgentMissing(agent.missing).join(', ')}.`
+    ? t('duplicate.notCopyable', { items: describeAgentMissing(agent.missing).join(', ') })
     : isViewer
-      ? 'Viewer können Agents nur ansehen'
+      ? t('duplicate.viewerReadOnly')
       : undefined
 
   const onCopy = async () => {
     setBusy(true)
     try {
       const created = await api.copyAgent(agent.id)
-      notify.success('Agent dupliziert.')
+      notify.success(t('duplicate.success'))
       navigate(wsPath(`/agents/${created.id}`))
     } catch (cause: unknown) {
-      notify.error(cause instanceof Error ? cause.message : 'Duplizieren fehlgeschlagen.')
+      notify.error(cause instanceof Error ? cause.message : t('duplicate.error'))
       setBusy(false)
     }
   }
@@ -57,7 +59,7 @@ export function DuplicateAgentButton({ agent }: DuplicateAgentButtonProps) {
       data-testid="duplicate-agent"
     >
       <Copy className="h-4 w-4" />
-      Duplizieren
+      {t('duplicate.label')}
     </Button>
   )
 }

@@ -6,6 +6,7 @@
 import { Plus, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
 import { useFieldArray, type Control } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
 
 import type { PersonaEditorValues } from '@/features/personas/hooks/usePersonaForm'
 import { Button } from '@/components/ui/button'
@@ -25,6 +26,7 @@ interface PersonaSkillsEditorProps {
 }
 
 export function PersonaSkillsEditor({ control, disabled = false }: PersonaSkillsEditorProps) {
+  const { t } = useTranslation('personas')
   const { fields, append, remove } = useFieldArray({
     control,
     name: 'skills',
@@ -38,8 +40,7 @@ export function PersonaSkillsEditor({ control, disabled = false }: PersonaSkills
     return (
       <div className="flex flex-col gap-3">
         <p className="text-sm text-muted-foreground">
-          Noch keine Skills referenziert. Skills benennen Faehigkeiten, auf die
-          sich die Persona stuetzt — mit einer kurzen Notiz, wofür sie zählen.
+          {t('skills.empty.text')}
         </p>
         <div className="flex justify-start">
           <Button
@@ -50,7 +51,7 @@ export function PersonaSkillsEditor({ control, disabled = false }: PersonaSkills
             disabled={disabled}
           >
             <Plus className="size-4" />
-            Ersten Skill hinzufügen
+            {t('skills.addFirst')}
           </Button>
         </div>
       </div>
@@ -67,7 +68,7 @@ export function PersonaSkillsEditor({ control, disabled = false }: PersonaSkills
         >
           <div className="flex items-center justify-between gap-2">
             <span className="text-sm font-medium text-muted-foreground">
-              Skill {index + 1}
+              {t('skills.card.header', { number: index + 1 })}
             </span>
             <Button
               type="button"
@@ -75,7 +76,7 @@ export function PersonaSkillsEditor({ control, disabled = false }: PersonaSkills
               size="sm"
               onClick={() => remove(index)}
               disabled={disabled}
-              aria-label={`Skill ${index + 1} entfernen`}
+              aria-label={t('skills.card.remove', { number: index + 1 })}
               className="text-destructive hover:text-destructive"
             >
               <Trash2 className="size-4" />
@@ -87,9 +88,9 @@ export function PersonaSkillsEditor({ control, disabled = false }: PersonaSkills
             name={`skills.${index}.name`}
             render={({ field: f }) => (
               <FormItem>
-                <FormLabel>Name</FormLabel>
+                <FormLabel>{t('common:fields.name')}</FormLabel>
                 <FormControl>
-                  <Input {...f} placeholder="z. B. Aktives Zuhören" disabled={disabled} />
+                  <Input {...f} placeholder={t('skills.field.namePlaceholder')} disabled={disabled} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -101,11 +102,11 @@ export function PersonaSkillsEditor({ control, disabled = false }: PersonaSkills
             name={`skills.${index}.note`}
             render={({ field: f }) => (
               <FormItem>
-                <FormLabel>Notiz</FormLabel>
+                <FormLabel>{t('skills.field.note.label')}</FormLabel>
                 <FormControl>
                   <Textarea
                     {...f}
-                    placeholder="Wofür dieser Skill in der Persona zählt…"
+                    placeholder={t('skills.field.note.placeholder')}
                     disabled={disabled}
                     className="min-h-20 resize-none"
                   />
@@ -126,7 +127,7 @@ export function PersonaSkillsEditor({ control, disabled = false }: PersonaSkills
           disabled={disabled}
         >
           <Plus className="size-4" />
-          Skill hinzufügen
+          {t('skills.add')}
         </Button>
       </div>
     </div>

@@ -3,6 +3,7 @@
 // Muster: ComposedByList.
 
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 
 import type { ResourceRef } from '@/api/types'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
@@ -12,18 +13,19 @@ interface ResourceUsedByListProps {
 }
 
 export function ResourceUsedByList({ parents }: ResourceUsedByListProps) {
+  const { t } = useTranslation('resources')
   const wsPath = useWorkspacePath()
 
   if (parents.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        Keine Resource referenziert diese Resource als Sub-Resource.
+        {t('usedBy.empty')}
       </p>
     )
   }
 
   return (
-    <ul className="flex flex-col gap-1" aria-label="Referenziert als Sub-Resource in">
+    <ul className="flex flex-col gap-1" aria-label={t('usedBy.ariaLabel')}>
       {parents.map((parent) => (
         <li key={parent.id} className="text-sm">
           <Link

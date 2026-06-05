@@ -5,12 +5,13 @@ import { z } from 'zod'
 
 import type { Agent } from '@/api/types'
 import { useApi } from '@/api/useApi'
+import i18n from '@/i18n'
 import { notify } from '@/lib/feedback'
 
 // Nur der Name ist Pflicht: ein Agent ist jederzeit speicherbar, auch ohne
 // Persona/Template. Aktivierbarkeit wird separat (im Editor + Backend) geprueft.
 const editorSchema = z.object({
-  name: z.string().min(1, 'Name erforderlich.'),
+  name: z.string().min(1, i18n.t('agents:form.nameRequired')),
   description: z.string(),
   persona_id: z.string(),
   system_prompt_template_id: z.string(),
@@ -20,7 +21,7 @@ const editorSchema = z.object({
 export type AgentEditorValues = z.infer<typeof editorSchema>
 
 function describeError(cause: unknown): string {
-  return cause instanceof Error ? cause.message : 'Unbekannter Fehler.'
+  return cause instanceof Error ? cause.message : i18n.t('agents:toast.unknownError')
 }
 
 export interface UseAgentFormResult {
@@ -73,7 +74,7 @@ export function useAgentForm(
         system_prompt_template_id: values.system_prompt_template_id || undefined,
         status: values.status,
       })
-      notify.success('Agent gespeichert.')
+      notify.success(i18n.t('agents:toast.saved'))
       onSaved()
     } catch (cause) {
       setSaveError(describeError(cause))

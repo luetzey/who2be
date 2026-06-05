@@ -1,4 +1,5 @@
 import { BookOpen, ClipboardCheck, LayoutDashboard, Users } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -15,6 +16,7 @@ import { StatusDonut } from '../components/StatusDonut'
 import { useDashboard } from '../hooks/useDashboard'
 
 export function DashboardPage() {
+  const { t } = useTranslation('dashboard')
   const { data, loading, error, notFound, preparing, page, setPage } = useDashboard()
 
   const pagination = data?.activity_pagination
@@ -24,21 +26,21 @@ export function DashboardPage() {
     <Container>
       <Stack gap="lg">
         <PageHeader
-          title="Dashboard"
-          description="Aktueller Zustand des Workspaces — KPIs, Status-Verteilung und Aktivitäten."
+          title={t('page.title')}
+          description={t('page.description')}
         />
 
         {preparing ? (
           <EmptyState
             icon={LayoutDashboard}
-            title="Workspace wird vorbereitet …"
-            description="Sobald dein Workspace bereitsteht, erscheinen hier KPIs, Aktivitäten und die Status-Verteilung."
+            title={t('preparing.title')}
+            description={t('preparing.description')}
           />
         ) : notFound ? (
           <EmptyState
             icon={LayoutDashboard}
-            title="Dashboard noch nicht verfügbar."
-            description="Der Dashboard-Endpoint wird mit Phase 2.1b-A/B ausgerollt. Sobald das Backend gemergt ist, erscheinen hier KPIs, Aktivitäten und die Status-Verteilung."
+            title={t('notFound.title')}
+            description={t('notFound.description')}
           />
         ) : (
           <DataView loading={loading && data === null} error={error}>
@@ -46,43 +48,43 @@ export function DashboardPage() {
               <Stack gap="lg">
                 <section
                   className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
-                  aria-label="Kennzahlen"
+                  aria-label={t('kpis.ariaLabel')}
                 >
                   <KpiCard
-                    label="Aktive Personae"
+                    label={t('kpis.activePersonas')}
                     value={data.kpis.active_personas}
                     icon={Users}
                   />
                   <KpiCard
-                    label="Aktive Playbooks"
+                    label={t('kpis.activePlaybooks')}
                     value={data.kpis.active_playbooks}
                     icon={BookOpen}
                   />
                   <KpiCard
-                    label="In Review"
+                    label={t('common:status.review')}
                     value={data.kpis.pending_reviews}
                     icon={ClipboardCheck}
-                    description="Versionen, die auf Promote warten."
+                    description={t('kpis.pendingReviewsDescription')}
                   />
                 </section>
 
                 <Card>
                   <CardHeader>
-                    <CardTitle>Status-Verteilung</CardTitle>
+                    <CardTitle>{t('statusDistribution.title')}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                       <StatusDonut
-                        label="Personae"
+                        label={t('statusDistribution.personas')}
                         distribution={data.status_distribution.persona}
                       />
                       <StatusDonut
-                        label="Playbooks"
+                        label={t('statusDistribution.playbooks')}
                         distribution={data.status_distribution.playbook}
                       />
                       {data.status_distribution.resource ? (
                         <StatusDonut
-                          label="Resources"
+                          label={t('statusDistribution.resources')}
                           distribution={data.status_distribution.resource}
                         />
                       ) : null}
@@ -92,7 +94,7 @@ export function DashboardPage() {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle>Letzte Aktivitäten</CardTitle>
+                    <CardTitle>{t('activity.title')}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <Stack gap="md">
@@ -102,8 +104,8 @@ export function DashboardPage() {
                         renderItem={(activity) => <ActivityRow activity={activity} />}
                         empty={
                           <EmptyState
-                            title="Noch keine Aktivitäten."
-                            description="Sobald jemand Versionen anlegt oder Status ändert, erscheinen sie hier."
+                            title={t('activity.empty.title')}
+                            description={t('activity.empty.description')}
                           />
                         }
                       />

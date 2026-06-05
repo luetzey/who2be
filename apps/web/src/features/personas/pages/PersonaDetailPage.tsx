@@ -1,6 +1,7 @@
 import { ArrowLeft } from 'lucide-react'
 import { useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 
 import type { VersionStatus } from '@/api/types'
 import { useApi } from '@/api/useApi'
@@ -25,6 +26,7 @@ import { usePersonaForm } from '../hooks/usePersonaForm'
 import { statusLabel } from '../lib/status'
 
 export function PersonaDetailPage() {
+  const { t } = useTranslation('personas')
   const { id } = useParams<{ id: string }>()
   const { persona, versions, loading, error, reload } = usePersona(id)
   const { form, autoSave } = usePersonaForm(persona, reload)
@@ -56,7 +58,7 @@ export function PersonaDetailPage() {
       notify.success(successMessage)
       reload()
     } catch (cause) {
-      notify.error(cause instanceof Error ? cause.message : 'Aktion fehlgeschlagen.')
+      notify.error(cause instanceof Error ? cause.message : t('detail.toast.actionFailed'))
     } finally {
       setActionBusy(false)
     }
@@ -68,7 +70,7 @@ export function PersonaDetailPage() {
         <Button asChild variant="ghost" size="sm" className="self-start">
           <Link to={wsPath('/personas')}>
             <ArrowLeft className="h-4 w-4" />
-            Personae
+            {t('detail.back')}
           </Link>
         </Button>
 
@@ -90,71 +92,72 @@ export function PersonaDetailPage() {
 
                 const description =
                   activeVersion !== undefined
-                    ? `Active: v${activeVersion.version}${
+                    ? `${t('detail.description.active', { version: activeVersion.version })}${
                         draftVersion !== undefined
-                          ? ` · Du arbeitest auf Draft v${draftVersion.version}`
+                          ? t('detail.description.activeDraft', { version: draftVersion.version })
                           : reviewVersion !== undefined
-                            ? ` · In Review: v${reviewVersion.version}`
+                            ? t('detail.description.activeReview', { version: reviewVersion.version })
                             : ''
                       }`
-                    : `Aktuelle Version: v${persona.current_version} (${statusLabel(
-                        persona.current_status ?? 'draft',
-                      )})`
+                    : t('detail.description.currentVersion', {
+                        version: persona.current_version,
+                        status: statusLabel(persona.current_status ?? 'draft'),
+                      })
 
                 const canPromote = role === 'admin'
                 const actions: BranchAction[] = []
                 if (draftVersion !== undefined) {
                   actions.push({
                     key: 'submit',
-                    label: 'Draft abschliessen',
+                    label: t('detail.branch.submit'),
                     variant: 'brand',
                     disabled: actionBusy,
                     onClick: () =>
                       void runTransition(
                         draftVersion.version,
                         'review',
-                        'Zur Review eingereicht.',
+                        t('detail.toast.submitted'),
                       ),
                   })
                 }
                 if (reviewVersion !== undefined) {
                   actions.push({
                     key: 'publish',
-                    label: 'Veroeffentlichen',
+                    label: t('detail.branch.publish'),
                     variant: 'brand',
                     disabled: actionBusy || !canPromote,
-                    title: canPromote ? undefined : 'Nur Admins koennen aktivieren',
+                    title: canPromote ? undefined : t('statusBar.adminOnly'),
                     onClick: () =>
                       void runTransition(
                         reviewVersion.version,
                         'active',
-                        'Version aktiviert.',
+                        t('detail.toast.activated'),
                       ),
                   })
                   actions.push({
                     key: 'reject',
-                    label: 'Zurueck zu Draft',
+                    label: t('detail.branch.reject'),
                     variant: 'destructive',
                     disabled: actionBusy,
                     onClick: () =>
                       void runTransition(
                         reviewVersion.version,
                         'draft',
-                        'Review abgelehnt.',
+                        t('detail.toast.rejected'),
                       ),
                   })
                 }
                 if (inactiveCurrent !== undefined) {
                   actions.push({
                     key: 'reactivate',
-                    label: 'Reaktivieren als Draft',
+                    label: t('detail.branch.reactivate'),
                     variant: 'outline',
                     disabled: actionBusy,
                     onClick: () =>
                       void runTransition(
                         inactiveCurrent.version,
                         'draft',
-                        'Reaktiviert als Entwurf.',
+                        t('detail.toast.reactivated'),
                       ),
                   })
                 }
@@ -190,7 +193,7 @@ export function PersonaDetailPage() {
                 onRestore={async (version) => {
                   await autoSave.flush()
                   await api.restorePersonaVersion(persona.id, version)
-                  notify.success(`v${version} als Entwurf wiederhergestellt.`)
+                  notify.success(t('detail.toast.restored', { version }))
                   reload()
                 }}
                 loadDiff={(version) => api.diffPersonaVersion(persona.id, version)}
@@ -201,7 +204,7 @@ export function PersonaDetailPage() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Verknüpfte Playbooks</CardTitle>
+                  <CardTitle>{t('detail.playbooks.title')}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <Stack gap="sm">
@@ -209,7 +212,7 @@ export function PersonaDetailPage() {
                       loading={links.loading}
                       error={links.error}
                       empty={!links.loading && links.playbooks.length === 0}
-                      emptyTitle="Keine Playbooks vorhanden."
+                      emptyTitle={t('detail.playbooks.empty')}
                     >
                       <ul className="flex flex-col gap-2">
                         {links.playbooks.map((playbook) => (
@@ -229,7 +232,7 @@ export function PersonaDetailPage() {
                         onClick={() => void links.save()}
                         disabled={links.saving || links.loading}
                       >
-                        Verknüpfungen speichern
+                        {t('detail.playbooks.save')}
                       </Button>
                     </div>
                   </Stack>

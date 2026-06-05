@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+
 import { LegalArticle, LegalSection } from '../components/LegalArticle'
 import { Placeholder } from '../components/Placeholder'
 
@@ -6,110 +8,86 @@ import { Placeholder } from '../components/Placeholder'
  * konkreten Verarbeitungen/Empfaenger traegt der Betreiber/Anwalt nach (CL4).
  */
 export function PrivacyPage() {
+  const { t } = useTranslation('legal')
+
   return (
     <LegalArticle
-      title="Datenschutzerklaerung"
-      intro={
-        <p>
-          Diese Erklaerung informiert ueber die Verarbeitung personenbezogener Daten bei der
-          Nutzung von Who2Be.
-        </p>
-      }
+      title={t('privacy.title')}
+      intro={<p>{t('privacy.intro')}</p>}
     >
-      <LegalSection heading="1. Verantwortlicher">
+      <LegalSection heading={t('privacy.sections.controller.heading')}>
         <p>
-          Verantwortlich im Sinne der DSGVO ist:
+          {t('privacy.sections.controller.text1')}
           <br />
-          <Placeholder>Name / Anschrift / Kontakt des Verantwortlichen</Placeholder>
+          <Placeholder>{t('privacy.sections.controller.contactPlaceholder')}</Placeholder>
           <br />
-          Datenschutzbeauftragter: <Placeholder>Kontakt DSB oder „nicht benannt"</Placeholder>
+          {t('privacy.sections.controller.dpoLabel')}{' '}
+          <Placeholder>{t('privacy.sections.controller.dpoPlaceholder')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="2. Hosting & Infrastruktur">
+      <LegalSection heading={t('privacy.sections.hosting.heading')}>
         <p>
-          <Placeholder>
-            Hosting-Anbieter (z. B. Hetzner), Serverstandort, Auftragsverarbeitung, Rechtsgrundlage
-          </Placeholder>
+          <Placeholder>{t('privacy.sections.hosting.body')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="3. Zugriffsdaten / Server-Logs">
+      <LegalSection heading={t('privacy.sections.serverLogs.heading')}>
         <p>
-          <Placeholder>
-            erhobene Log-Daten, Zweck, Speicherdauer, Rechtsgrundlage Art. 6 Abs. 1 lit. f DSGVO
-          </Placeholder>
+          <Placeholder>{t('privacy.sections.serverLogs.body')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="4. Cookies & Einwilligung">
+      <LegalSection heading={t('privacy.sections.cookies.heading')}>
         <p>
-          Wir setzen technisch notwendige Cookies (Session/Authentifizierung) auf Grundlage von §
-          25 Abs. 2 TDDDG. Optionale Cookies werden nur nach Einwilligung gesetzt (§ 25 Abs. 1
-          TDDDG, Art. 6 Abs. 1 lit. a DSGVO); die Einwilligung kann jederzeit mit Wirkung fuer die
-          Zukunft widerrufen werden.
+          {t('privacy.sections.cookies.text1')}
           <br />
-          <Placeholder>Auflistung konkreter Cookies / Speicherdauer / Widerrufsweg</Placeholder>
+          <Placeholder>{t('privacy.sections.cookies.listPlaceholder')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="5. Registrierung & Konto">
+      <LegalSection heading={t('privacy.sections.account.heading')}>
         <p>
-          <Placeholder>
-            verarbeitete Konto-/Stammdaten, Zweck (Vertragserfuellung Art. 6 Abs. 1 lit. b),
-            Speicherdauer
-          </Placeholder>
+          <Placeholder>{t('privacy.sections.account.body')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="6. Authentifizierung (Supabase/GoTrue)">
+      <LegalSection heading={t('privacy.sections.auth.heading')}>
         <p>
-          <Placeholder>
-            Auth-Dienst, verarbeitete Daten, ggf. OAuth-Provider (Google/GitHub), Rechtsgrundlage
-          </Placeholder>
+          <Placeholder>{t('privacy.sections.auth.body')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="7. Zahlungsabwicklung">
+      <LegalSection heading={t('privacy.sections.payment.heading')}>
         <p>
-          <Placeholder>
-            Zahlungsdienstleister (Mollie), uebermittelte Daten, eigene Datenschutzerklaerung des
-            Anbieters, Rechtsgrundlage
-          </Placeholder>
+          <Placeholder>{t('privacy.sections.payment.body')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="8. E-Mail-Versand (Transaktionsmails)">
+      <LegalSection heading={t('privacy.sections.email.heading')}>
         <p>
-          <Placeholder>
-            SMTP-/Mail-Provider, Anlaesse (Verify/Invite/Reset), Rechtsgrundlage
-          </Placeholder>
+          <Placeholder>{t('privacy.sections.email.body')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="9. Empfaenger & Auftragsverarbeiter">
+      <LegalSection heading={t('privacy.sections.processors.heading')}>
         <p>
-          <Placeholder>
-            Liste der Auftragsverarbeiter, Drittlandtransfers + Garantien (SCC) sofern einschlaegig
-          </Placeholder>
+          <Placeholder>{t('privacy.sections.processors.body')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="10. Speicherdauer">
+      <LegalSection heading={t('privacy.sections.retention.heading')}>
         <p>
-          <Placeholder>
-            allgemeine Loeschkonzepte, gesetzliche Aufbewahrungsfristen
-          </Placeholder>
+          <Placeholder>{t('privacy.sections.retention.body')}</Placeholder>
         </p>
       </LegalSection>
 
-      <LegalSection heading="11. Deine Rechte">
+      <LegalSection heading={t('privacy.sections.rights.heading')}>
         <p>
-          Du hast das Recht auf Auskunft (Art. 15), Berichtigung (Art. 16), Loeschung (Art. 17),
-          Einschraenkung (Art. 18), Datenuebertragbarkeit (Art. 20) und Widerspruch (Art. 21)
-          sowie das Recht auf Beschwerde bei einer Aufsichtsbehoerde (Art. 77).
+          {t('privacy.sections.rights.text1')}
           <br />
-          Zustaendige Aufsichtsbehoerde: <Placeholder>zustaendige Datenschutzbehoerde</Placeholder>
+          {t('privacy.sections.rights.authorityLabel')}{' '}
+          <Placeholder>{t('privacy.sections.rights.authorityPlaceholder')}</Placeholder>
         </p>
       </LegalSection>
     </LegalArticle>

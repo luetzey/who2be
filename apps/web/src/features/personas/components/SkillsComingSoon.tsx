@@ -6,6 +6,7 @@
 // (Detail-Page) ersetzen und das Backend-Flag `SKILLS_ENABLED` flippen.
 
 import { Sparkles } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import { Badge } from '@/components/ui/badge'
 
@@ -19,12 +20,13 @@ interface SkillsComingSoonProps {
 }
 
 export function SkillsComingSoon({ compact = false }: SkillsComingSoonProps) {
+  const { t } = useTranslation('personas')
   if (compact) {
     return (
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <Sparkles className="size-4" />
-        <span>Skills</span>
-        <Badge variant="secondary">Coming Soon</Badge>
+        <span>{t('skillsComingSoon.label')}</span>
+        <Badge variant="secondary">{t('skillsComingSoon.badge')}</Badge>
       </div>
     )
   }
@@ -33,12 +35,10 @@ export function SkillsComingSoon({ compact = false }: SkillsComingSoonProps) {
     <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed p-6">
       <div className="flex items-center gap-2">
         <Sparkles className="size-4 text-muted-foreground" />
-        <Badge variant="secondary">Coming Soon</Badge>
+        <Badge variant="secondary">{t('skillsComingSoon.badge')}</Badge>
       </div>
       <p className="text-sm text-muted-foreground">
-        Skills bekommen bald ein eigenes, versioniertes Format — als paketierte,
-        wiederverwendbare Fähigkeit für deine Agenten. Die Funktion ist aktuell
-        noch nicht aktiv.
+        {t('skillsComingSoon.description')}
       </p>
     </div>
   )

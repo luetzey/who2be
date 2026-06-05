@@ -1,5 +1,6 @@
 import { ArrowLeft } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link, Navigate, useParams } from 'react-router-dom'
 
 import type { Persona, SystemPromptTemplate } from '@/api/types'
@@ -20,6 +21,7 @@ import { useAgent } from '../hooks/useAgent'
 import { useAgentForm } from '../hooks/useAgentForm'
 
 export function AgentDetailPage() {
+  const { t } = useTranslation('agents')
   const { id } = useParams<{ id: string }>()
   const wsPath = useWorkspacePath()
   const api = useApi()
@@ -47,7 +49,7 @@ export function AgentDetailPage() {
         <Button asChild variant="ghost" size="sm" className="self-start">
           <Link to={wsPath('/agents')}>
             <ArrowLeft className="h-4 w-4" />
-            Agents
+            {t('detail.back')}
           </Link>
         </Button>
         <DataView loading={loading && agent === null} error={error}>
@@ -84,7 +86,6 @@ export function AgentDetailPage() {
                 personas={personas}
                 templates={templates}
                 agent={agent}
-                submitLabel="Speichern"
               />
             </Stack>
           ) : null}

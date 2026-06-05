@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -35,7 +37,7 @@ export interface BranchStatusProps {
   className?: string
 }
 
-function nodeFor(label: string, version: number, accent: boolean) {
+function nodeFor(label: string, displayLabel: string, version: number, accent: boolean) {
   return (
     <span
       className={cn(
@@ -48,40 +50,41 @@ function nodeFor(label: string, version: number, accent: boolean) {
     >
       <span aria-hidden="true">{accent ? '●' : '○'}</span>
       <span>
-        v{version} {label}
+        v{version} {displayLabel}
       </span>
     </span>
   )
 }
 
-function describeSaveState(state: AutoSaveState, now: Date): string {
+function describeSaveState(state: AutoSaveState, now: Date, t: TFunction): string {
   switch (state.status) {
     case 'idle':
-      return 'Bereit.'
+      return t('branch.ready')
     case 'saving':
-      return 'Speichert …'
+      return t('branch.saving')
     case 'saved': {
       if (state.lastSavedAt === null) {
-        return 'Gespeichert.'
+        return t('branch.saved')
       }
       const seconds = Math.max(0, Math.floor((now.getTime() - state.lastSavedAt.getTime()) / 1000))
       if (seconds < 5) {
-        return 'Gespeichert.'
+        return t('branch.saved')
       }
       if (seconds < 60) {
-        return `Gespeichert (vor ${seconds} s).`
+        return t('branch.savedAgoSeconds', { seconds })
       }
       const minutes = Math.floor(seconds / 60)
-      return `Gespeichert (vor ${minutes} min).`
+      return t('branch.savedAgoMinutes', { minutes })
     }
     case 'error':
       return state.errorMessage !== null
-        ? `Fehler beim Speichern: ${state.errorMessage}`
-        : 'Fehler beim Speichern.'
+        ? t('branch.errorWithMessage', { message: state.errorMessage })
+        : t('branch.error')
   }
 }
 
 function SaveIndicator({ state }: { state: AutoSaveState }) {
+  const { t } = useTranslation('data')
   // 1-Sekunden-Tick fuer den "vor X s"-Text — laeuft nur in "saved", damit
   // wir nicht im Idle/Error sinnlos re-rendern.
   const [now, setNow] = useState(() => new Date())
@@ -106,7 +109,7 @@ function SaveIndicator({ state }: { state: AutoSaveState }) {
       aria-live="polite"
       data-testid="branch-save-indicator"
     >
-      {describeSaveState(state, now)}
+      {describeSaveState(state, now, t)}
     </p>
   )
 }
@@ -121,6 +124,7 @@ export function BranchStatus({
   actions,
   className,
 }: BranchStatusProps) {
+  const { t } = useTranslation('data')
   const nodes: { label: string; version: number; accent: boolean }[] = []
   if (activeVersion !== undefined) {
     nodes.push({ label: 'active', version: activeVersion, accent: currentVersion === activeVersion })
@@ -141,7 +145,7 @@ export function BranchStatus({
   return (
     <section
       className={cn('flex flex-col gap-3', className)}
-      aria-label="Versions-Branch"
+      aria-label={t('branch.label')}
     >
       <div className="flex flex-wrap items-center gap-2" data-testid="branch-graph">
         {nodes.map((node, index) => (
@@ -151,11 +155,11 @@ export function BranchStatus({
                 ──
               </span>
             ) : null}
-            {nodeFor(node.label, node.version, node.accent)}
+            {nodeFor(node.label, node.label, node.version, node.accent)}
           </span>
         ))}
         {nodes.find((n) => n.label === 'draft' && n.accent) !== undefined ? (
-          <span className="text-xs text-muted-foreground">(du bearbeitest)</span>
+          <span className="text-xs text-muted-foreground">{t('branch.editing')}</span>
         ) : null}
       </div>
 
@@ -163,7 +167,7 @@ export function BranchStatus({
         <div
           className="flex flex-wrap items-center gap-2"
           role="toolbar"
-          aria-label="Branch-Aktionen"
+          aria-label={t('branch.actions')}
         >
           {actions.map((action) => (
             <Button

@@ -4,6 +4,7 @@
 // wird ueber StatusActionBar-Tests in allen Features ausgeglichen.
 
 import type { VersionStatus } from '@/api/types'
+import i18n from '@/i18n'
 
 export const VERSION_STATUSES: readonly VersionStatus[] = [
   'draft',
@@ -26,13 +27,13 @@ export type StatusBadgeVariant = 'default' | 'secondary' | 'destructive' | 'outl
 export function statusLabel(status: VersionStatus): string {
   switch (status) {
     case 'draft':
-      return 'Entwurf'
+      return i18n.t('common:status.draft')
     case 'review':
-      return 'In Review'
+      return i18n.t('common:status.review')
     case 'active':
-      return 'Aktiv'
+      return i18n.t('common:status.active')
     case 'inactive':
-      return 'Inaktiv'
+      return i18n.t('common:status.inactive')
   }
 }
 

@@ -1,0 +1,1392 @@
+{
+  "common": {
+    "actions": {
+      "save": "Speichern",
+      "saving": "Speichern…",
+      "cancel": "Abbrechen",
+      "delete": "Löschen",
+      "edit": "Bearbeiten",
+      "create": "Erstellen",
+      "add": "Hinzufügen",
+      "remove": "Entfernen",
+      "copy": "Kopieren",
+      "back": "Zurück",
+      "close": "Schließen",
+      "retry": "Erneut versuchen",
+      "search": "Suchen",
+      "filter": "Filtern",
+      "confirm": "Bestätigen",
+      "submit": "Absenden",
+      "reset": "Zurücksetzen",
+      "restore": "Wiederherstellen",
+      "activate": "Aktivieren",
+      "deactivate": "Deaktivieren",
+      "more": "Mehr"
+    },
+    "fields": {
+      "name": "Name",
+      "description": "Beschreibung",
+      "title": "Titel",
+      "status": "Status",
+      "tags": "Tags",
+      "actions": "Aktionen",
+      "slug": "Slug",
+      "type": "Typ",
+      "createdAt": "Erstellt",
+      "updatedAt": "Aktualisiert"
+    },
+    "status": {
+      "draft": "Entwurf",
+      "review": "In Review",
+      "active": "Aktiv",
+      "inactive": "Inaktiv"
+    },
+    "loading": "Lädt…",
+    "loadingLong": "Wird geladen…",
+    "workspacePreparing": "Workspace wird vorbereitet…",
+    "unexpectedError": "Unerwarteter Fehler",
+    "error": {
+      "title": "Fehler",
+      "generic": "Ein Fehler ist aufgetreten."
+    },
+    "validation": {
+      "nameRequired": "Name erforderlich.",
+      "slugRequired": "Slug erforderlich.",
+      "slugInvalid": "Nur Kleinbuchstaben, Ziffern und Bindestriche.",
+      "emailInvalid": "Bitte gültige E-Mail eingeben."
+    }
+  },
+  "layout": {
+    "brand": "Who2Be",
+    "nav": {
+      "primary": "Hauptnavigation",
+      "primaryMobile": "Hauptnavigation (mobil)",
+      "dashboard": "Dashboard",
+      "agents": "Agents",
+      "systemPrompts": "System-Prompts",
+      "personas": "Personae",
+      "playbooks": "Playbooks",
+      "resources": "Resources",
+      "settings": "Einstellungen"
+    },
+    "signOut": "Abmelden",
+    "language": {
+      "label": "Sprache",
+      "switch": "Sprache umstellen"
+    },
+    "footer": {
+      "legal": "Rechtliches",
+      "impressum": "Impressum",
+      "terms": "AGB",
+      "privacy": "Datenschutz",
+      "dpa": "Auftragsverarbeitung"
+    },
+    "workspaceSwitcher": {
+      "switch": "Workspace wechseln",
+      "select": "Workspace wählen",
+      "noneActive": "Kein Workspace aktiv",
+      "personal": "Persönlich",
+      "organization": "Organisation",
+      "noWorkspacesInOrg": "Keine Workspaces in dieser Organisation",
+      "create": "Workspace anlegen"
+    }
+  },
+  "data": {
+    "empty": "Keine Einträge.",
+    "error": {
+      "title": "Fehler"
+    },
+    "loading": "Lädt…",
+    "branch": {
+      "label": "Versions-Branch",
+      "actions": "Branch-Aktionen",
+      "editing": "(du bearbeitest)",
+      "ready": "Bereit.",
+      "saving": "Speichert …",
+      "saved": "Gespeichert.",
+      "savedAgoSeconds": "Gespeichert (vor {{seconds}} s).",
+      "savedAgoMinutes": "Gespeichert (vor {{minutes}} min).",
+      "error": "Fehler beim Speichern.",
+      "errorWithMessage": "Fehler beim Speichern: {{message}}"
+    }
+  },
+  "version": {
+    "history": {
+      "title": "Versionen",
+      "empty": "Noch keine Versionen vorhanden.",
+      "version": "Version {{number}}",
+      "current": "Aktuell",
+      "listLabel": "Versionsverlauf",
+      "diff": "Diff",
+      "whyActive": "Warum aktiv?",
+      "history": "Verlauf",
+      "restoreHint": "Diese Version als neuen Draft wiederherstellen",
+      "restoreBlockedHint": "Es existiert bereits ein Draft — erst abschliessen oder verwerfen.",
+      "loadFailed": "Laden fehlgeschlagen.",
+      "restoreFailed": "Wiederherstellen fehlgeschlagen."
+    },
+    "diff": {
+      "title": "Änderungen",
+      "noChanges": "Keine Änderungen.",
+      "added": "Hinzugefügt",
+      "removed": "Entfernt",
+      "changed": "Geändert",
+      "changesLabel": "Änderungen",
+      "noBaseline": "kein Vergleichsstand",
+      "identical": "Keine Unterschiede zwischen v{{version}} und {{against}}.",
+      "comparing": "Vergleich v{{version}} gegen {{against}}",
+      "before": "Vorher:",
+      "after": "Nachher:",
+      "empty": "(leer)"
+    },
+    "provenance": {
+      "title": "Herkunft",
+      "empty": "Keine Statushistorie vorhanden.",
+      "listLabel": "Status-Historie",
+      "emptyForVersion": "Noch keine Status-Historie für diese Version."
+    }
+  },
+  "agents": {
+    "page": {
+      "title": "Agents",
+      "description": "Konfigurierte Agents — Persona × Template, einmal klicken zum Kopieren.",
+      "newAgent": "Neuen Agent erstellen",
+      "viewerNoCreate": "Viewer können keine Agents anlegen",
+      "empty": {
+        "title": "Noch keine Agents",
+        "description": "Lege deinen ersten Agent an, um Prompts mit einem Klick zu kopieren."
+      }
+    },
+    "status": {
+      "enabled": "Aktiv",
+      "disabled": "Deaktiviert",
+      "incomplete": "Unvollständig"
+    },
+    "detail": {
+      "back": "Agents",
+      "submitLabel": "Speichern"
+    },
+    "form": {
+      "identity": {
+        "title": "Identität",
+        "description": "Wie der Agent heißt und wofür er gedacht ist.",
+        "help": "Beispiel: „Carla Bot — Customer-Support-Agent\"."
+      },
+      "config": {
+        "title": "Konfiguration",
+        "description": "Welche Persona und welcher Systemprompt der Agent verwendet.",
+        "help": "Die ausgewählte Persona liefert Name, Profil, Tags und ihre Playbooks. Der Systemprompt definiert den eigentlichen System-Prompt mit Platzhaltern."
+      },
+      "persona": {
+        "label": "Persona",
+        "none": "— keine —",
+        "notActive": " (nicht aktiv)"
+      },
+      "template": {
+        "label": "Systemprompt",
+        "none": "— keiner —"
+      },
+      "statusField": {
+        "label": "Status",
+        "enabled": "Aktiv",
+        "disabled": "Deaktiviert"
+      },
+      "missing": {
+        "notice": "Noch nicht aktivierbar — fehlt: {{items}}.",
+        "persona": "Persona verknüpfen",
+        "template": "Systemprompt verknüpfen",
+        "persona_active": "verknüpfte Persona aktiv schalten"
+      },
+      "viewerReadOnly": "Viewer können Agents nur ansehen",
+      "nameRequired": "Name erforderlich."
+    },
+    "hierarchy": {
+      "templateLabel": "Template:",
+      "personaLabel": "Persona:",
+      "notLoaded": "— nicht geladen —",
+      "noPlaybooks": "Keine Playbooks verknüpft."
+    },
+    "copy": {
+      "plain": "Kopieren",
+      "markdown": "Als Markdown kopieren",
+      "html": "Als HTML kopieren",
+      "formatSelect": "Format wählen",
+      "success": {
+        "plain": "Prompt in Zwischenablage.",
+        "markdown": "Prompt als Markdown in Zwischenablage.",
+        "html": "Prompt als HTML in Zwischenablage."
+      },
+      "unresolvedHint": "Hinweis: {{count}} unbekannte Placeholder(s) — {{list}}",
+      "error": "Kopieren fehlgeschlagen."
+    },
+    "duplicate": {
+      "label": "Duplizieren",
+      "success": "Agent dupliziert.",
+      "error": "Duplizieren fehlgeschlagen.",
+      "notCopyable": "Noch nicht kopierbar — fehlt: {{items}}.",
+      "viewerReadOnly": "Viewer können Agents nur ansehen"
+    },
+    "delete": {
+      "label": "Löschen",
+      "confirmLabel": "Endgültig löschen",
+      "dialogTitle": "Agent löschen?",
+      "dialogDescription": "{{name}} wird dauerhaft entfernt. Diese Aktion kann nicht rückgängig gemacht werden.",
+      "success": "Agent gelöscht.",
+      "error": "Löschen fehlgeschlagen.",
+      "viewerReadOnly": "Viewer können Agents nur ansehen"
+    },
+    "toast": {
+      "created": "Agent angelegt — jetzt Persona und Systemprompt zuweisen.",
+      "createError": "Anlegen fehlgeschlagen.",
+      "saved": "Agent gespeichert.",
+      "unknownError": "Unbekannter Fehler."
+    }
+  },
+  "auth": {
+    "brand": "Who2Be",
+    "fields": {
+      "email": "E-Mail",
+      "password": "Passwort",
+      "passwordRepeat": "Passwort wiederholen",
+      "newPassword": "Neues Passwort"
+    },
+    "or": "oder",
+    "backToLogin": "Zurueck zur Anmeldung",
+    "login": {
+      "title": "Anmeldung",
+      "description": "Melde dich mit deinem Who2Be-Konto an.",
+      "forgotPassword": "Passwort vergessen?",
+      "submit": "Anmelden",
+      "noAccount": "Noch kein Konto?",
+      "register": "Registrieren",
+      "unconfirmedEmail": "Deine E-Mail-Adresse ist noch nicht bestaetigt.",
+      "loginFailed": "Login fehlgeschlagen.",
+      "resendConfirmation": "Bestaetigungs-Mail erneut senden",
+      "confirmationResent": "Bestaetigungs-Mail erneut gesendet."
+    },
+    "signup": {
+      "title": "Registrieren",
+      "description": "Erstelle ein Konto, um deinen Workspace einzurichten.",
+      "descriptionPending": "Bestaetige deine E-Mail-Adresse ueber den Link, den wir dir geschickt haben.",
+      "submit": "Konto erstellen",
+      "confirmPending": "Pruefe dein Postfach und folge dem Bestaetigungs-Link, um die Anmeldung abzuschliessen.",
+      "alreadyAccount": "Schon ein Konto?",
+      "signIn": "Anmelden"
+    },
+    "resetPassword": {
+      "title": "Passwort zuruecksetzen",
+      "description": "Wir senden dir einen Link, mit dem du ein neues Passwort setzen kannst.",
+      "descriptionSent": "Wenn ein Konto zu dieser E-Mail existiert, ist eine Mail mit Reset-Link unterwegs.",
+      "submit": "Reset-Link senden",
+      "checkInbox": "Pruefe dein Postfach und folge dem Link in der E-Mail."
+    },
+    "setPassword": {
+      "title": "Passwort setzen",
+      "description": "Lege ein Passwort fest, damit du dich beim naechsten Mal direkt anmelden kannst.",
+      "submit": "Passwort setzen",
+      "success": "Passwort gesetzt."
+    },
+    "invitation": {
+      "title": "Einladung annehmen",
+      "descriptionManual": "Tritt dem Workspace bei, zu dem du eingeladen wurdest.",
+      "descriptionMagic": "Login wird abgeschlossen…",
+      "submit": "Einladung annehmen",
+      "success": "Einladung angenommen.",
+      "loginPending": "Login wird abgeschlossen…",
+      "error": {
+        "expired": "Diese Einladung ist abgelaufen. Bitte fordere eine neue an.",
+        "notFound": "Diese Einladung existiert nicht oder wurde bereits eingelöst.",
+        "emailMismatch": "Diese Einladung ist für eine andere Email-Adresse.",
+        "generic": "Einladung konnte nicht angenommen werden."
+      }
+    },
+    "callback": {
+      "loadingTitle": "Anmeldung wird abgeschlossen…",
+      "loadingDescription": "Einen Moment, wir richten deine Sitzung ein.",
+      "errorTitle": "Anmeldung fehlgeschlagen",
+      "errorDescription": "Der Login ueber den externen Anbieter klappte nicht.",
+      "noSession": "Es kam keine gueltige Sitzung zurueck. Bitte erneut versuchen."
+    },
+    "oauth": {
+      "google": "Mit Google anmelden",
+      "github": "Mit GitHub anmelden"
+    },
+    "validation": {
+      "emailInvalid": "Bitte gueltige E-Mail eingeben.",
+      "passwordRequired": "Passwort erforderlich.",
+      "passwordMinLength": "Mindestens 8 Zeichen.",
+      "confirmRequired": "Bitte wiederholen.",
+      "passwordMismatch": "Passwoerter stimmen nicht ueberein."
+    }
+  },
+  "dashboard": {
+    "page": {
+      "title": "Dashboard",
+      "description": "Überblick über den aktuellen Stand deines Workspaces."
+    },
+    "preparing": {
+      "title": "Workspace wird vorbereitet …",
+      "description": "Bitte warte einen Moment, bis dein Workspace bereit ist."
+    },
+    "notFound": {
+      "title": "Dashboard noch nicht verfügbar.",
+      "description": "Das Dashboard für diesen Workspace steht noch nicht zur Verfügung."
+    },
+    "kpis": {
+      "ariaLabel": "Kennzahlen",
+      "activePersonas": "Aktive Personae",
+      "activePlaybooks": "Aktive Playbooks",
+      "pendingReviewsDescription": "Versionen warten auf Review"
+    },
+    "statusDistribution": {
+      "title": "Status-Verteilung",
+      "personas": "Personae",
+      "playbooks": "Playbooks",
+      "resources": "Resources"
+    },
+    "activity": {
+      "title": "Letzte Aktivitäten",
+      "unknownActor": "Unbekannt",
+      "empty": {
+        "title": "Noch keine Aktivitäten.",
+        "description": "Sobald im Workspace etwas passiert, erscheinen hier die letzten Ereignisse."
+      },
+      "entityTypes": {
+        "persona": "Persona",
+        "playbook": "Playbook",
+        "resource": "Resource"
+      },
+      "events": {
+        "promoted_to_active": "aktiviert",
+        "submitted_for_review": "zur Review eingereicht",
+        "rejected": "abgelehnt",
+        "returned_to_draft": "zurück zu Entwurf gesetzt",
+        "deactivated": "deaktiviert",
+        "created": "erstellt",
+        "updated": "aktualisiert",
+        "deleted": "gelöscht",
+        "changed": "geändert"
+      }
+    },
+    "pagination": {
+      "ariaLabel": "Aktivitäten-Seiten",
+      "pageOf": "Seite {{page}} von {{totalPages}}",
+      "next": "Weiter"
+    }
+  },
+  "legal": {
+    "layout": {
+      "brand": "Who2Be",
+      "legalLabel": "Rechtliches",
+      "loading": "Wird geladen…",
+      "nav": {
+        "ariaLabel": "Rechtliche Seiten",
+        "impressum": "Impressum",
+        "agb": "AGB",
+        "datenschutz": "Datenschutz",
+        "dpa": "Auftragsverarbeitung (DPA)"
+      }
+    },
+    "article": {
+      "lastUpdated": "Stand:",
+      "lastUpdatedPlaceholder": "Datum der letzten Aktualisierung"
+    },
+    "cookie": {
+      "regionLabel": "Cookie-Einwilligung",
+      "title": "Cookies & Datenschutz",
+      "body": "Wir nutzen nur technisch notwendige Cookies. Optionale Cookies (z. B.",
+      "bodyServices": "Analyse-/Tracking-Dienste benennen",
+      "bodyEnd": "setzen wir erst nach deiner Zustimmung. Details in der",
+      "privacyLink": "Datenschutzerklaerung",
+      "rejectButton": "Nur notwendige",
+      "acceptButton": "Alle akzeptieren"
+    },
+    "impressum": {
+      "title": "Impressum",
+      "sections": {
+        "legalNotice": {
+          "heading": "Angaben gemaess § 5 DDG",
+          "companyName": "Firmenname / Rechtsform",
+          "street": "Strasse und Hausnummer",
+          "city": "PLZ und Ort",
+          "country": "Land"
+        },
+        "representative": {
+          "heading": "Vertreten durch",
+          "name": "Name der vertretungsberechtigten Person(en)"
+        },
+        "contact": {
+          "heading": "Kontakt",
+          "phoneLabel": "Telefon:",
+          "phone": "Telefonnummer",
+          "emailLabel": "E-Mail:",
+          "email": "Kontakt-E-Mail"
+        },
+        "register": {
+          "heading": "Registereintrag",
+          "registryLabel": "Eintragung im",
+          "registry": "Handels-/Vereinsregister",
+          "courtLabel": "Registergericht:",
+          "court": "zustaendiges Registergericht",
+          "numberLabel": "Registernummer:",
+          "number": "Registernummer"
+        },
+        "vatId": {
+          "heading": "Umsatzsteuer-ID",
+          "label": "Umsatzsteuer-Identifikationsnummer gemaess § 27a UStG:",
+          "value": "USt-IdNr."
+        },
+        "responsible": {
+          "heading": "Verantwortlich i.S.d. § 18 Abs. 2 MStV",
+          "name": "Name und Anschrift der verantwortlichen Person"
+        },
+        "dispute": {
+          "heading": "EU-Streitschlichtung",
+          "text1": "Die Europaeische Kommission stellt eine Plattform zur Online-Streitbeilegung (OS) bereit:",
+          "platformLink": "Link zur OS-Plattform",
+          "text2": "Wir sind",
+          "participation": "bereit / nicht bereit / nicht verpflichtet",
+          "text3": ", an einem Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle teilzunehmen."
+        }
+      }
+    },
+    "terms": {
+      "title": "Allgemeine Geschaeftsbedingungen (AGB)",
+      "intro": "Diese AGB regeln die Nutzung von Who2Be durch",
+      "introUserGroup": "Beschreibung der Nutzergruppe (Verbraucher/Unternehmer)",
+      "introPeriod": ".",
+      "sections": {
+        "scope": {
+          "heading": "§ 1 Geltungsbereich",
+          "body": "Geltungsbereich, Vertragspartner, Vorrang individueller Abreden, Einbeziehung"
+        },
+        "subject": {
+          "heading": "§ 2 Vertragsgegenstand & Leistungsbeschreibung",
+          "body": "Beschreibung des SaaS-Angebots, Leistungsumfang je Plan (Free/Pro), Verfuegbarkeit/SLA"
+        },
+        "registration": {
+          "heading": "§ 3 Registrierung & Konto",
+          "body": "Registrierungspflicht, Wahrheit der Angaben, Geheimhaltung der Zugangsdaten, Mindestalter"
+        },
+        "pricing": {
+          "heading": "§ 4 Preise & Zahlungsbedingungen",
+          "body": "Preise, Abrechnungszeitraum, Zahlungsdienstleister (Mollie), Faelligkeit, Verzug, Steuern"
+        },
+        "termination": {
+          "heading": "§ 5 Laufzeit & Kuendigung",
+          "body": "Vertragslaufzeit, Verlaengerung, ordentliche/ausserordentliche Kuendigung, Kuendigung zum Periodenende"
+        },
+        "withdrawal": {
+          "heading": "§ 6 Widerrufsrecht",
+          "body": "Widerrufsbelehrung fuer Verbraucher inkl. Muster-Widerrufsformular bzw. Hinweis, falls nicht einschlaegig"
+        },
+        "obligations": {
+          "heading": "§ 7 Pflichten der Nutzer & zulaessige Nutzung",
+          "body": "Acceptable-Use-Policy, verbotene Inhalte, Verantwortung fuer eingestellte Daten"
+        },
+        "availability": {
+          "heading": "§ 8 Verfuegbarkeit, Aenderungen & Wartung",
+          "body": "Verfuegbarkeitszusage, Wartungsfenster, Aenderungsvorbehalt"
+        },
+        "liability": {
+          "heading": "§ 9 Haftung",
+          "body": "Haftungsregelung (Vorsatz/grobe Fahrlaessigkeit, Kardinalpflichten, Begrenzung)"
+        },
+        "privacy": {
+          "heading": "§ 10 Datenschutz",
+          "body": "Verweis auf Datenschutzerklaerung und ggf. Auftragsverarbeitungsvertrag (DPA)"
+        },
+        "final": {
+          "heading": "§ 11 Schlussbestimmungen",
+          "body": "Anwendbares Recht, Gerichtsstand, salvatorische Klausel, Aenderungen der AGB"
+        }
+      }
+    },
+    "privacy": {
+      "title": "Datenschutzerklaerung",
+      "intro": "Diese Erklaerung informiert ueber die Verarbeitung personenbezogener Daten bei der Nutzung von Who2Be.",
+      "sections": {
+        "controller": {
+          "heading": "1. Verantwortlicher",
+          "text1": "Verantwortlich im Sinne der DSGVO ist:",
+          "contactPlaceholder": "Name / Anschrift / Kontakt des Verantwortlichen",
+          "dpoLabel": "Datenschutzbeauftragter:",
+          "dpoPlaceholder": "Kontakt DSB oder „nicht benannt\""
+        },
+        "hosting": {
+          "heading": "2. Hosting & Infrastruktur",
+          "body": "Hosting-Anbieter (z. B. Hetzner), Serverstandort, Auftragsverarbeitung, Rechtsgrundlage"
+        },
+        "serverLogs": {
+          "heading": "3. Zugriffsdaten / Server-Logs",
+          "body": "erhobene Log-Daten, Zweck, Speicherdauer, Rechtsgrundlage Art. 6 Abs. 1 lit. f DSGVO"
+        },
+        "cookies": {
+          "heading": "4. Cookies & Einwilligung",
+          "text1": "Wir setzen technisch notwendige Cookies (Session/Authentifizierung) auf Grundlage von § 25 Abs. 2 TDDDG. Optionale Cookies werden nur nach Einwilligung gesetzt (§ 25 Abs. 1 TDDDG, Art. 6 Abs. 1 lit. a DSGVO); die Einwilligung kann jederzeit mit Wirkung fuer die Zukunft widerrufen werden.",
+          "listPlaceholder": "Auflistung konkreter Cookies / Speicherdauer / Widerrufsweg"
+        },
+        "account": {
+          "heading": "5. Registrierung & Konto",
+          "body": "verarbeitete Konto-/Stammdaten, Zweck (Vertragserfuellung Art. 6 Abs. 1 lit. b), Speicherdauer"
+        },
+        "auth": {
+          "heading": "6. Authentifizierung (Supabase/GoTrue)",
+          "body": "Auth-Dienst, verarbeitete Daten, ggf. OAuth-Provider (Google/GitHub), Rechtsgrundlage"
+        },
+        "payment": {
+          "heading": "7. Zahlungsabwicklung",
+          "body": "Zahlungsdienstleister (Mollie), uebermittelte Daten, eigene Datenschutzerklaerung des Anbieters, Rechtsgrundlage"
+        },
+        "email": {
+          "heading": "8. E-Mail-Versand (Transaktionsmails)",
+          "body": "SMTP-/Mail-Provider, Anlaesse (Verify/Invite/Reset), Rechtsgrundlage"
+        },
+        "processors": {
+          "heading": "9. Empfaenger & Auftragsverarbeiter",
+          "body": "Liste der Auftragsverarbeiter, Drittlandtransfers + Garantien (SCC) sofern einschlaegig"
+        },
+        "retention": {
+          "heading": "10. Speicherdauer",
+          "body": "allgemeine Loeschkonzepte, gesetzliche Aufbewahrungsfristen"
+        },
+        "rights": {
+          "heading": "11. Deine Rechte",
+          "text1": "Du hast das Recht auf Auskunft (Art. 15), Berichtigung (Art. 16), Loeschung (Art. 17), Einschraenkung (Art. 18), Datenuebertragbarkeit (Art. 20) und Widerspruch (Art. 21) sowie das Recht auf Beschwerde bei einer Aufsichtsbehoerde (Art. 77).",
+          "authorityLabel": "Zustaendige Aufsichtsbehoerde:",
+          "authorityPlaceholder": "zustaendige Datenschutzbehoerde"
+        }
+      }
+    },
+    "dpa": {
+      "title": "Vertrag zur Auftragsverarbeitung (DPA)",
+      "intro": "Dieser Vertrag konkretisiert die Pflichten nach Art. 28 DSGVO, wenn der Kunde (Verantwortlicher) Who2Be (Auftragsverarbeiter) mit der Verarbeitung personenbezogener Daten beauftragt. Er wird Bestandteil des Hauptvertrags.",
+      "sections": {
+        "subject": {
+          "heading": "1. Gegenstand & Dauer",
+          "body": "Gegenstand der Verarbeitung, Laufzeit (gekoppelt an Hauptvertrag), Kuendigung"
+        },
+        "purpose": {
+          "heading": "2. Art & Zweck der Verarbeitung",
+          "body": "beschriebene Verarbeitungstaetigkeiten und Zweck der Auftragsverarbeitung"
+        },
+        "dataTypes": {
+          "heading": "3. Art der personenbezogenen Daten",
+          "body": "Datenkategorien (z. B. Konto-/Profildaten, Inhalte der Personas/Playbooks/Resources)"
+        },
+        "dataSubjects": {
+          "heading": "4. Kategorien betroffener Personen",
+          "body": "betroffene Personen (z. B. Mitarbeitende, Kunden des Verantwortlichen)"
+        },
+        "processorObligations": {
+          "heading": "5. Pflichten des Auftragsverarbeiters",
+          "body": "Weisungsbindung, Vertraulichkeit, Unterstuetzung bei Betroffenenrechten, Meldepflichten"
+        },
+        "tom": {
+          "heading": "6. Technische & organisatorische Massnahmen (TOM)",
+          "body": "Verweis auf TOM-Anlage (Verschluesselung, Zugriffskontrolle, RLS, Backups, Logging)"
+        },
+        "subprocessors": {
+          "heading": "7. Unterauftragsverarbeiter",
+          "body": "Liste zugelassener Subunternehmer (Hosting/Auth/Mail/Payment), Genehmigungsverfahren"
+        },
+        "transfers": {
+          "heading": "8. Drittlandtransfers",
+          "body": "Angaben zu Uebermittlungen in Drittlaender und Garantien (SCC) sofern einschlaegig"
+        },
+        "dataSubjectRights": {
+          "heading": "9. Betroffenenrechte & Unterstuetzung",
+          "body": "Unterstuetzung des Verantwortlichen bei Auskunft/Loeschung/Datenexport"
+        },
+        "deletion": {
+          "heading": "10. Loeschung & Rueckgabe nach Vertragsende",
+          "body": "Loesch-/Rueckgabekonzept nach Vertragsende inkl. Fristen"
+        },
+        "audits": {
+          "heading": "11. Nachweise & Audits",
+          "body": "Nachweispflichten, Audit-Rechte des Verantwortlichen, Zertifizierungen"
+        }
+      }
+    }
+  },
+  "personas": {
+    "list": {
+      "title": "Personae",
+      "description": "Versionierte Persona-Definitionen für deine Agenten.",
+      "newPersona": "Neue Persona",
+      "empty": {
+        "title": "Noch keine Personae",
+        "description": "Lege deine erste Persona an, um Agenten zu konfigurieren."
+      }
+    },
+    "detail": {
+      "back": "Personae",
+      "description": {
+        "activeDraft": " · Du arbeitest auf Draft v{{version}}",
+        "activeReview": " · In Review: v{{version}}",
+        "active": "Active: v{{version}}",
+        "currentVersion": "Aktuelle Version: v{{version}} ({{status}})"
+      },
+      "branch": {
+        "submit": "Draft abschliessen",
+        "publish": "Veroeffentlichen",
+        "reject": "Zurueck zu Draft",
+        "reactivate": "Reaktivieren als Draft"
+      },
+      "toast": {
+        "submitted": "Zur Review eingereicht.",
+        "activated": "Version aktiviert.",
+        "rejected": "Review abgelehnt.",
+        "reactivated": "Reaktiviert als Entwurf.",
+        "restored": "v{{version}} als Entwurf wiederhergestellt.",
+        "actionFailed": "Aktion fehlgeschlagen."
+      },
+      "playbooks": {
+        "title": "Verknüpfte Playbooks",
+        "empty": "Keine Playbooks vorhanden.",
+        "save": "Verknüpfungen speichern"
+      }
+    },
+    "new": {
+      "title": "Neue Persona",
+      "description": "Lege eine neue Persona-Version an.",
+      "submit": "Anlegen",
+      "toast": {
+        "created": "Persona angelegt."
+      }
+    },
+    "editor": {
+      "identity": {
+        "title": "Identität",
+        "description": "Wie die Persona heißt und wofür sie zuständig ist.",
+        "helpExample": "Beispiel: „Coach Carla — moderiert 1:1-Feedback-Gespräche“. Name und Beschreibung tauchen in Listen, Picker und Agent-Tools auf.",
+        "namePlaceholder": "z. B. Coach Carla",
+        "descriptionPlaceholder": "z. B. 1:1-Coach für Führungskräfte-Sparring"
+      },
+      "legacy": {
+        "ariaLabel": "Veralteter System-Prompt",
+        "title": "Veraltet — Inhalt in Template übernehmen",
+        "body": "Persona-eigene System-Prompts laufen jetzt über das verknüpfte Agent-Template. Übernimm den Text manuell in dein Template, danach kannst du das Feld leer lassen."
+      },
+      "profile": {
+        "title": "Profil",
+        "description": "Rolle, Tonfall, Beispiele und Ausnahmen.",
+        "helpLine1": "Der Agent leitet daraus ab, wie er antworten soll — strukturierte Beispiele schlagen Bullet-Listen.",
+        "helpLine2": "Mit / fügst du Pills ein: einzelne Playbooks/Resources oder die Kataloge Playbook-Katalog (alle/getriggert) und Resource-Katalog (alle/Tag). Sie lösen beim get_persona-Abruf gegen die aktiven Playbooks/Resources des Workspace auf.",
+        "helpExampleLabel": "Beispiel",
+        "contentLabel": "Profil-Inhalt"
+      },
+      "modes": {
+        "infoAriaLabel": "{{count}} Modi definiert, Default {{defaultLabel}}. Zu Modi springen.",
+        "infoPillText": "Modi · Default:",
+        "disclosure": {
+          "title": "Modi (optional)",
+          "subtitle": "Verhalten je Kontext — z. B. Coaching vs. Analyse"
+        }
+      },
+      "skills": {
+        "title": "Skills",
+        "description": "Bald: paketierte, wiederverwendbare Fähigkeiten für deine Agenten.",
+        "helpText": "Skills bekommen ein eigenes, versioniertes Format. Die Funktion ist aktuell noch nicht aktiv — der Editor folgt mit dem Release."
+      },
+      "tags": {
+        "title": "Tags",
+        "description": "Stichwörter zur Suche und Gruppierung.",
+        "helpText": "Beispiel: „coaching, feedback, leadership“. Enter zum Anlegen, Klick auf das X zum Entfernen. Vorschläge kommen aus bereits verwendeten Tags.",
+        "placeholder": "Tag eingeben und Enter drücken"
+      }
+    },
+    "modes": {
+      "empty": {
+        "text": "Noch keine Modi definiert. Modi ermöglichen es der Persona, je nach Kontext unterschiedlich zu agieren (z. B. „Coaching-Modus“ vs. „Analyse-Modus“)."
+      },
+      "addFirst": "Ersten Modus anlegen",
+      "add": "Modus hinzufügen",
+      "noDefaultLabel": "kein Default",
+      "card": {
+        "header": "Modus {{number}}",
+        "setDefault": "Als Default setzen",
+        "remove": "Modus {{number}} entfernen",
+        "defaultBadge": "Default"
+      },
+      "field": {
+        "trigger": {
+          "label": "Trigger",
+          "placeholder": "z. B. coaching, feedback (kommagetrennt)",
+          "hint": "Kommagetrennte Schlüsselwörter. Leer = Default-Modus (nur einer erlaubt)."
+        },
+        "playbook": {
+          "label": "Playbook",
+          "none": "Kein Playbook",
+          "hint": "Optional — verknüpft diesen Modus mit einem Playbook."
+        },
+        "namePlaceholder": "z. B. Coaching-Modus",
+        "identity": {
+          "label": "Identity-Ergänzung"
+        },
+        "outputStyle": {
+          "label": "Output-Stil"
+        },
+        "antiPatterns": {
+          "label": "Anti-Patterns"
+        }
+      }
+    },
+    "skills": {
+      "empty": {
+        "text": "Noch keine Skills referenziert. Skills benennen Faehigkeiten, auf die sich die Persona stuetzt — mit einer kurzen Notiz, wofür sie zählen."
+      },
+      "addFirst": "Ersten Skill hinzufügen",
+      "add": "Skill hinzufügen",
+      "card": {
+        "header": "Skill {{number}}",
+        "remove": "Skill {{number}} entfernen"
+      },
+      "field": {
+        "note": {
+          "label": "Notiz",
+          "placeholder": "Wofür dieser Skill in der Persona zählt…"
+        },
+        "namePlaceholder": "z. B. Aktives Zuhören"
+      },
+      "table": {
+        "title": "Skills (Agenten-Sicht)",
+        "skillColumn": "Skill",
+        "hintColumn": "Hinweis"
+      }
+    },
+    "statusBar": {
+      "ariaLabel": "Status-Aktionen",
+      "submit": "Zur Review einreichen",
+      "promote": "Aktivieren",
+      "reject": "Ablehnen",
+      "reactivate": "Reaktivieren als Draft",
+      "adminOnly": "Nur Admins können aktivieren",
+      "toast": {
+        "activated": "Version aktiviert.",
+        "submitted": "Zur Review eingereicht.",
+        "rejected": "Review abgelehnt.",
+        "reactivated": "Reaktiviert als Entwurf."
+      },
+      "error": {
+        "promoteTitle": "Promote nicht möglich",
+        "promoteFill": "Vor dem Aktivieren ausfuellen: {{fields}}."
+      },
+      "fallback": "Aktion fehlgeschlagen."
+    },
+    "skillsComingSoon": {
+      "label": "Skills",
+      "badge": "Coming Soon",
+      "description": "Skills bekommen bald ein eigenes, versioniertes Format — als paketierte, wiederverwendbare Fähigkeit für deine Agenten. Die Funktion ist aktuell noch nicht aktiv."
+    }
+  },
+  "playbooks": {
+    "list": {
+      "title": "Playbooks",
+      "description": "Workflows und Playbook-Versionen für Agenten.",
+      "newButton": "Neues Playbook",
+      "tagFilter": "Tag-Filter",
+      "triggerFilter": "Trigger-Filter",
+      "empty": {
+        "title": "Noch keine Playbooks",
+        "description": "Lege dein erstes Playbook an, um Workflows zu definieren.",
+        "filteredTitle": "Keine Playbooks für diesen Filter",
+        "filteredDescription": "Passe Tag- oder Trigger-Filter an oder lege ein neues Playbook an."
+      }
+    },
+    "new": {
+      "title": "Neues Playbook",
+      "description": "Lege ein neues Playbook an."
+    },
+    "detail": {
+      "back": "Playbooks",
+      "activeBadge": "Active: v{{version}}",
+      "draftNote": " · Du arbeitest auf Draft v{{version}}",
+      "reviewNote": " · In Review: v{{version}}",
+      "currentVersion": "Aktuelle Version: v{{version}} ({{status}})",
+      "triggerList": "Trigger-Liste",
+      "triggerLabel": "Trigger",
+      "usedInTitle": "Verwendet in",
+      "usedInEmpty": "Noch in keiner Persona verwendet",
+      "usedInEmptyDescription": "Verknuepfe dieses Playbook im Persona-Editor, um es einer Persona zuzuweisen.",
+      "resourceLinksTitle": "Verknuepfte Resource-Bloecke",
+      "resourceLinksBodyNote": "Resource-Verknüpfungen werden im BlockNote-Body als Pills gepflegt — bearbeite sie dort.",
+      "subPlaybooksTitle": "Sub-Playbooks (Composes)",
+      "subPlaybooksEmpty": "Keine Sub-Playbooks verknüpft. Dieses Playbook ist atomar.",
+      "subPlaybooksBodyNote": "Sub-Playbooks werden im BlockNote-Body als Pills gepflegt — bearbeite sie dort.",
+      "composedByTitle": "Verwendet als Sub-Playbook in",
+      "restoreSuccess": "v{{version}} als Entwurf wiederhergestellt.",
+      "actionFailed": "Aktion fehlgeschlagen."
+    },
+    "form": {
+      "identityTitle": "Identität",
+      "identityDescription": "Wie das Playbook heißt, welcher Typ es ist und worum es geht.",
+      "identityHelpExample": "Beispiel: ",
+      "identityHelpExampleText": "„Reset-Mail beantworten\"",
+      "identityHelpExampleSuffix": " als Workflow.",
+      "identityHelpTypesHeading": "Typen",
+      "nameLabel": "Name",
+      "namePlaceholder": "z. B. Reset-Mail beantworten",
+      "typeLabel": "Typ",
+      "descriptionPlaceholder": "z. B. Antwortet auf Passwort-Reset-Anfragen mit klarem nächsten Schritt",
+      "contentTitle": "Inhalt",
+      "contentDescription": "Das eigentliche Playbook und seine Auslöser.",
+      "contentHelp": "Beispiel: Schritt 1 — Kunde begrüßen; Schritt 2 — Identität verifizieren; Schritt 3 — Reset-Link versenden. Änderungen erzeugen eine neue Version; alte Versionen bleiben erhalten.",
+      "bodyLabel": "Inhalt",
+      "bodyHint": "Tippe / im Editor, um Playbook- oder Resource-Pills einzufügen. Verlinkte Relationen leben im Body.",
+      "tagsPlaceholder": "Tag eingeben und Enter drücken",
+      "triggersLabel": "Trigger",
+      "triggersPlaceholder": "Trigger eingeben und Enter drücken",
+      "triggersHint": "Enter zum Anlegen, Klick zum Entfernen.",
+      "createButton": "Anlegen",
+      "nameRequired": "Name erforderlich.",
+      "descriptionRequired": "Beschreibung erforderlich.",
+      "unknownError": "Unbekannter Fehler."
+    },
+    "typeHints": {
+      "prompt": "Ein Einzel-Prompt mit klarem Outcome — z. B. „Fasse den Anruf in 3 Bullets zusammen\".",
+      "instructions": "Mehrteilige Handlungsanweisung mit Schritt-Reihenfolge — z. B. Onboarding-Flow eines Agenten.",
+      "snippet": "Kurze, wiederverwendbare Textbausteine — z. B. Standard-Begruessung oder rechtliche Fussnote.",
+      "workflow": "Mehrstufiger Prozess mit Verzweigungen — z. B. Eskalation, wenn der Kunde unzufrieden bleibt.",
+      "checklist": "Pruefliste — z. B. „Pre-Flight vor dem Versand einer Kampagne\".",
+      "faq": "Frage-Antwort-Sammlung — z. B. die Top-10-Support-Fragen einer Produkt-Linie."
+    },
+    "actions": {
+      "toolbarAriaLabel": "Status-Aktionen",
+      "submitReview": "Zur Review einreichen",
+      "reject": "Ablehnen",
+      "reactivate": "Reaktivieren als Draft",
+      "activateAdminOnly": "Nur Admins können aktivieren",
+      "promoteError": "Vor dem Aktivieren ausfuellen: {{fields}}.",
+      "promoteErrorTitle": "Promote nicht möglich",
+      "draftSubmit": "Draft abschliessen",
+      "publish": "Veroeffentlichen",
+      "rejectDraft": "Zurueck zu Draft",
+      "reactivateDraft": "Reaktivieren als Draft"
+    },
+    "toast": {
+      "created": "Playbook angelegt.",
+      "submitted": "Zur Review eingereicht.",
+      "activated": "Version aktiviert.",
+      "reviewRejected": "Review abgelehnt.",
+      "reactivated": "Reaktiviert als Entwurf.",
+      "actionFailed": "Aktion fehlgeschlagen."
+    },
+    "composedBy": {
+      "empty": "Kein Composite-Playbook referenziert dieses Playbook.",
+      "ariaLabel": "Referenziert in Composites"
+    },
+    "composesPicker": {
+      "triggerButton": "Sub-Playbooks bearbeiten",
+      "dialogTitle": "Sub-Playbooks (Composition)",
+      "dialogDescription": "Wähle Playbooks als Sub-Playbooks aus und ordne sie per Pfeil-Buttons. Die Reihenfolge bestimmt die Ausführungssequenz beim Rendern.",
+      "selectedHeading": "Ausgewählt ({{count}})",
+      "selectedList": "Ausgewaehlte Sub-Playbooks",
+      "moveUp": "{{name}} nach oben verschieben",
+      "moveDown": "{{name}} nach unten verschieben",
+      "addMore": "Weitere hinzufügen",
+      "availableHeading": "Playbooks",
+      "availableList": "Verfuegbare Playbooks",
+      "addAriaLabel": "{{name}} als Sub-Playbook hinzufügen",
+      "noMore": "Alle verfügbaren Playbooks sind bereits ausgewählt.",
+      "noPlaybooks": "Keine weiteren Playbooks im Workspace.",
+      "loadFailed": "Laden fehlgeschlagen.",
+      "saveButton": "Speichern ({{count}})"
+    },
+    "linkedBlocks": {
+      "empty": "Noch keine Bloecke verknuepft.",
+      "ariaLabel": "Verknuepfte Bloecke",
+      "statusActive": "Aktiv",
+      "statusDraft": "Nur in Draft",
+      "statusDeleted": "Block geloescht",
+      "emptyActive": "(leer)",
+      "emptyDraft": "(leer — Draft)",
+      "emptyDeleted": "Block nicht mehr verfuegbar",
+      "resourceScopeLabel": "Ganzes Dokument",
+      "resourceScopeEmpty": "Resource nicht mehr verfuegbar",
+      "sublinesLazy": "Vollstaendige Resource — Link (lazy), via fetch nachgeladen",
+      "sublinesInline": "Vollstaendige Resource — fest eingebettet (inline)"
+    },
+    "resourcePicker": {
+      "triggerButton": "Bloecke verknuepfen",
+      "dialogTitle": "Resource-Bloecke verknuepfen",
+      "dialogDescription": "Waehle links eine Resource und rechts den Heading-Block, dessen Section verlinkt werden soll. Nur Heading-Bloecke sind als Anker erlaubt.",
+      "noResources": "Keine Resources.",
+      "selectResourceHint": "Resource waehlen, um Heading-Bloecke zu sehen.",
+      "wholeDocLabel": "Gesamtes Dokument",
+      "wholeDocDescription": "Verlinkt die komplette Resource — exklusive zu einzelnen Block-Ankern.",
+      "wholeDocAriaLabel": "Gesamtes Dokument verknuepfen",
+      "embedModeGroup": "Embed-Modus fuer das gesamte Dokument",
+      "embedLazy": "Link (lazy)",
+      "embedInline": "Fest einbetten",
+      "headingBlocksLabel": "Heading-Bloecke",
+      "noHeadings": "Diese Resource hat keine Heading-Bloecke.",
+      "sectionAriaLabel": "Section {{heading}} verknuepfen",
+      "emptySection": "(leere Section)",
+      "loadFailed": "Laden fehlgeschlagen.",
+      "saveButton": "Speichern ({{count}})"
+    }
+  },
+  "resources": {
+    "list": {
+      "title": "Resources",
+      "description": "Versionierte Wissensbausteine mit Block-Editor.",
+      "newResource": "Neue Resource",
+      "tagFilter": "Tag-Filter",
+      "resetFilter": "Filter zurücksetzen",
+      "emptyTagTitle": "Keine Resources mit Tag „{{tag}}\"",
+      "emptyTagDescription": "Entferne den Filter oder lege eine neue Resource mit diesem Tag an.",
+      "emptyTitle": "Noch keine Resources",
+      "emptyDescription": "Lege deine erste Resource an, um Wissen in Blöcken zu erfassen."
+    },
+    "new": {
+      "title": "Neue Resource",
+      "description": "Lege eine neue Resource an.",
+      "submit": "Anlegen"
+    },
+    "form": {
+      "identityTitle": "Identität",
+      "identityDescription": "Wie die Resource heißt und worum es geht.",
+      "identityHelp": "Beispiel: „Datenschutz-FAQ\" — strukturierter Wissensblock, der von Playbooks per Block-Ref eingebunden wird.",
+      "namePlaceholder": "z. B. Datenschutz-FAQ",
+      "descriptionPlaceholder": "z. B. Antworten auf die häufigsten Datenschutzfragen",
+      "contentTitle": "Inhalt",
+      "contentDescription": "Der eigentliche Inhalt der Resource.",
+      "contentHelp": "Einzelne Heading-Bloecke koennen per Block-Ref in Playbooks eingebunden werden. Aenderungen erzeugen eine neue Version.",
+      "contentLabel": "Inhalt",
+      "tagsDescription": "Stichwörter zur Suche und Filterung.",
+      "tagsHelp": "Beispiel: „datenschutz, faq, recht\". Enter zum Anlegen, Klick auf das X zum Entfernen. Tags ermöglichen das Filtern in der Resource-Liste und im MCP-Tool list_resources.",
+      "tagsPlaceholder": "Tag eingeben und Enter drücken",
+      "nameRequired": "Name ist erforderlich."
+    },
+    "detail": {
+      "activeVersion": "Active: v{{version}}",
+      "workingOnDraft": "Du arbeitest auf Draft v{{version}}",
+      "inReview": "In Review: v{{version}}",
+      "currentVersion": "Aktuelle Version: v{{version}} ({{status}})",
+      "linkedIn": "Verlinkt in",
+      "block_one": "{{count}} Block",
+      "block_other": "{{count}} Bloecke",
+      "usagesEmptyTitle": "Noch in keinem Playbook verwendet",
+      "usagesEmptyDescription": "Verlinke einen Heading-Block in einem Playbook, um diese Resource sichtbar zu machen.",
+      "subResourcesTitle": "Sub-Resources",
+      "subResourcesEmptyTitle": "Keine Sub-Resources",
+      "subResourcesEmptyDescription": "Verknüpfe weitere Resources, die ein Agent über fetch_resource nachladen kann.",
+      "scopeBlock": "Block {{blockId}}",
+      "scopeDocumentInline": "Dokument · inline",
+      "scopeDocumentLazy": "Dokument · lazy",
+      "usedByTitle": "Verwendet in Resources",
+      "restoredAsDraft": "v{{version}} als Entwurf wiederhergestellt."
+    },
+    "statusBar": {
+      "ariaLabel": "Status-Aktionen",
+      "activate": "Aktivieren",
+      "activateAdminOnly": "Nur Admins können aktivieren",
+      "submitForReview": "Zur Review einreichen",
+      "reject": "Ablehnen",
+      "reactivate": "Reaktivieren als Draft",
+      "promoteError": "Vor dem Aktivieren ausfuellen: {{fields}}.",
+      "actionFailed": "Aktion fehlgeschlagen.",
+      "promoteErrorTitle": "Promote nicht möglich",
+      "toast": {
+        "activated": "Version aktiviert.",
+        "submitted": "Zur Review eingereicht.",
+        "rejected": "Review abgelehnt.",
+        "reactivated": "Reaktiviert als Entwurf."
+      }
+    },
+    "usedBy": {
+      "empty": "Keine Resource referenziert diese Resource als Sub-Resource.",
+      "ariaLabel": "Referenziert als Sub-Resource in"
+    },
+    "picker": {
+      "trigger": "Sub-Resources bearbeiten",
+      "title": "Sub-Resources (Composition)",
+      "description": "Wähle Resources als Sub-Resources aus und ordne sie per Pfeil-Buttons. Agenten laden sie über fetch_resource nach — die Inhalte werden nicht expandiert.",
+      "selectedCount": "Ausgewählt ({{count}})",
+      "selectedAriaLabel": "Ausgewaehlte Sub-Resources",
+      "embedModeFor": "Embed-Modus fuer {{name}}",
+      "modeLazy": "Link (lazy)",
+      "modeInline": "Fest einbetten",
+      "moveUp": "{{name}} nach oben verschieben",
+      "moveDown": "{{name}} nach unten verschieben",
+      "addMore": "Weitere hinzufügen",
+      "resources": "Resources",
+      "availableAriaLabel": "Verfuegbare Resources",
+      "addAriaLabel": "{{name}} als Sub-Resource hinzufügen",
+      "noMore": "Keine weiteren Resources im Workspace.",
+      "allSelected": "Alle verfügbaren Resources sind bereits ausgewählt.",
+      "save": "Speichern ({{count}})",
+      "loadError": "Laden fehlgeschlagen."
+    },
+    "toast": {
+      "created": "Resource angelegt.",
+      "createFailed": "Anlegen fehlgeschlagen."
+    }
+  },
+  "settings": {
+    "nav": {
+      "ariaLabel": "Einstellungen-Navigation",
+      "account": "Konto",
+      "org": "Organisation",
+      "workspace": "Workspace",
+      "members": "Mitglieder",
+      "tokens": "API-Tokens"
+    },
+    "account": {
+      "title": "Konto",
+      "description": "Dein persönliches Profil, Sicherheit und Anzeige-Präferenzen.",
+      "profile": {
+        "title": "Profil",
+        "description": "Anzeigename und Anmelde-E-Mail.",
+        "displayName": "Anzeigename",
+        "userId": "User-ID",
+        "displayNameRequired": "Bitte einen Namen eingeben.",
+        "displayNameMaxLength": "Maximal 120 Zeichen.",
+        "savedToast": "Anzeigename gespeichert."
+      },
+      "email": {
+        "changeLabel": "E-Mail aendern",
+        "changeButton": "E-Mail aendern",
+        "currentNote": "Aktuell: {{email}}. Eine neue Adresse muss ueber einen Bestaetigungs-Link aktiviert werden.",
+        "sameError": "Das ist bereits deine aktuelle E-Mail-Adresse.",
+        "invalidError": "Bitte gueltige E-Mail eingeben.",
+        "sentToast": "Bestaetigungs-Mail an die neue Adresse gesendet."
+      },
+      "security": {
+        "title": "Sicherheit",
+        "description": "Passwort und aktive Sitzungen."
+      },
+      "password": {
+        "newLabel": "Neues Passwort",
+        "setLabel": "Passwort setzen",
+        "confirmLabel": "Passwort wiederholen",
+        "changeButton": "Passwort aendern",
+        "setButton": "Passwort setzen",
+        "minLength": "Mindestens 8 Zeichen.",
+        "confirmRequired": "Bitte wiederholen.",
+        "mismatch": "Passwoerter stimmen nicht ueberein.",
+        "magicLinkHint": "Du bist per Magic-Link oder Social-Login angemeldet. Mit einem Passwort kannst du dich auch direkt anmelden.",
+        "changedToast": "Passwort geaendert.",
+        "setToast": "Passwort gesetzt."
+      },
+      "signOutEverywhere": {
+        "title": "Überall abmelden",
+        "description": "Beendet alle aktiven Sitzungen auf allen Geräten.",
+        "button": "Überall abmelden",
+        "successToast": "Auf allen Geraeten abgemeldet."
+      },
+      "preferences": {
+        "title": "Präferenzen",
+        "theme": {
+          "title": "Darstellung",
+          "description": "Hell, Dunkel oder Systemvorgabe."
+        }
+      },
+      "language": {
+        "label": "Sprache",
+        "description": "Sprache der Benutzeroberfläche."
+      },
+      "dataPrivacy": {
+        "title": "Daten & Datenschutz",
+        "description": "Exportiere eine Kopie all deiner Daten (DSGVO).",
+        "exportHint": "Lädt alle Organisationen, Workspaces, Personae, Playbooks, Resources, Agenten und deren Versionen als JSON-Datei herunter.",
+        "exportButton": "Daten exportieren",
+        "exportSuccess": "Datenexport heruntergeladen.",
+        "exportError": "Export fehlgeschlagen."
+      },
+      "deleteAccount": {
+        "title": "Konto löschen",
+        "description": "Dein Konto und deine persönliche Organisation werden zur Löschung vorgemerkt und nach einer 30-tägigen Frist endgültig entfernt. Diese Aktion ist nicht widerrufbar.",
+        "triggerButton": "Konto löschen",
+        "dialogTitle": "Konto löschen",
+        "dialogDescription": "Gib zur Bestätigung deine E-Mail „{{email}}\" ein. Nach 30 Tagen werden alle deine Daten endgültig gelöscht.",
+        "emailLabel": "E-Mail",
+        "confirmButton": "Konto endgültig löschen",
+        "successToast": "Konto zur Löschung vorgemerkt. Du wurdest abgemeldet.",
+        "errorFallback": "Löschen fehlgeschlagen."
+      }
+    },
+    "org": {
+      "title": "Organisation",
+      "description": "Workspaces, Stammdaten und Abrechnung dieser Organisation.",
+      "loading": "Wird geladen…",
+      "masterData": {
+        "title": "Stammdaten",
+        "name": "Name",
+        "slug": "Slug",
+        "type": "Typ",
+        "personal": "Persönlich",
+        "company": "Organisation"
+      },
+      "workspaces": {
+        "title": "Workspaces",
+        "openButton": "Öffnen",
+        "addTitle": "Workspace hinzufügen",
+        "addDescription": "Ein neuer Workspace gruppiert eigene Personae, Playbooks und Tokens.",
+        "nameLabel": "Name",
+        "slugLabel": "Slug",
+        "slugDescription": "Eindeutig innerhalb der Organisation, in der URL verwendet.",
+        "slugPlaceholder": "z.B. marketing",
+        "nameRequired": "Name erforderlich.",
+        "slugRequired": "Slug erforderlich.",
+        "slugInvalid": "Nur Kleinbuchstaben, Ziffern und Bindestriche.",
+        "createButton": "Workspace anlegen",
+        "createdToast": "Workspace „{{name}}\" angelegt.",
+        "adminOnly": "Nur Admins können in dieser Organisation Workspaces anlegen."
+      },
+      "members": {
+        "title": "Mitglieder",
+        "descriptionPrefix": "Mitglieder werden pro Workspace verwaltet — Rollen, Einladungen und Entfernen findest du unter",
+        "descriptionSuffix": ".",
+        "linkLabel": "Mitglieder"
+      },
+      "dangerZone": {
+        "title": "Danger-Zone",
+        "description": "Das Löschen merkt die Organisation samt aller Workspaces, Personae, Playbooks, Resources, Agenten und Tokens zur endgültigen Entfernung vor (30-Tage-Frist). Nur der Owner kann das ausführen.",
+        "triggerButton": "Organisation löschen",
+        "dialogTitle": "Organisation löschen",
+        "dialogDescription": "Gib zur Bestätigung den Namen „{{name}}\" ein. Alle Inhalte aller Workspaces gehen nach Ablauf der Frist verloren.",
+        "orgNameLabel": "Organisations-Name",
+        "confirmButton": "Endgültig löschen",
+        "deletedToast": "Organisation „{{name}}\" zur Löschung vorgemerkt.",
+        "errorFallback": "Löschen fehlgeschlagen."
+      },
+      "actionFailed": "Aktion fehlgeschlagen."
+    },
+    "workspace": {
+      "title": "Workspace",
+      "description": "Einstellungen, Mitglieder und Danger-Zone dieses Workspaces.",
+      "loading": "Wird geladen…",
+      "general": {
+        "title": "Allgemein",
+        "renameTitle": "Workspace umbenennen",
+        "renameDescription": "Der angezeigte Name. Der Slug bleibt unverändert.",
+        "nameLabel": "Name",
+        "nameRequired": "Name erforderlich.",
+        "saveButton": "Speichern",
+        "renamedToast": "Workspace umbenannt.",
+        "adminOnly": "Nur Admins können diesen Workspace umbenennen."
+      },
+      "members": {
+        "title": "Mitglieder",
+        "descriptionPrefix": "Rollen, Einladungen und Entfernen findest du unter",
+        "descriptionSuffix": ".",
+        "linkLabel": "Mitglieder"
+      },
+      "dangerZone": {
+        "title": "Danger-Zone",
+        "description": "Das Löschen entfernt den Workspace samt aller Personae, Playbooks, Resources, Templates, Agenten und Tokens. Diese Aktion ist unwiderruflich.",
+        "lastWorkspace": "Dies ist der letzte Workspace der Organisation und kann nicht gelöscht werden.",
+        "triggerButton": "Workspace löschen",
+        "dialogTitle": "Workspace löschen",
+        "dialogDescription": "Gib zur Bestätigung den Workspace-Namen „{{name}}\" ein. Alle Inhalte gehen verloren.",
+        "workspaceNameLabel": "Workspace-Name",
+        "confirmButton": "Endgültig löschen",
+        "deletedToast": "Workspace gelöscht.",
+        "errorFallback": "Aktion fehlgeschlagen."
+      },
+      "actionFailed": "Aktion fehlgeschlagen."
+    },
+    "members": {
+      "title": "Mitglieder",
+      "description": "Wer Zugriff auf diesen Workspace hat und mit welcher Rolle.",
+      "adminOnly": "Diese Seite ist nur für Admins.",
+      "list": {
+        "title": "Mitglieder",
+        "emptyTitle": "Noch keine Mitglieder.",
+        "emptyDescription": "Lade jemanden ein, um den Workspace zu teilen.",
+        "colEmail": "E-Mail",
+        "colRole": "Rolle",
+        "colJoined": "Beigetreten",
+        "colActions": "Aktionen",
+        "roleAriaLabel": "Rolle von {{email}}",
+        "removeButton": "Entfernen",
+        "removedToast": "Mitglied entfernt.",
+        "roleUpdatedToast": "Rolle aktualisiert.",
+        "tokenDowngradeInfo": "Bestehende API-Tokens dieses Mitglieds behalten ihre alte Rolle, bis sie widerrufen werden."
+      },
+      "invite": {
+        "cardTitle": "Einladen",
+        "sectionTitle": "Neues Mitglied einladen",
+        "sectionDescription": "Die Person erhält einen einmaligen Link, um beizutreten.",
+        "sectionFooter": "Offene Einladungen laufen automatisch ab und können widerrufen werden.",
+        "emailLabel": "E-Mail",
+        "roleLabel": "Rolle",
+        "inviteButton": "Einladen",
+        "sentToast": "Einladung an {{email}} verschickt.",
+        "emailInvalid": "Bitte gültige E-Mail eingeben.",
+        "actionFailed": "Aktion fehlgeschlagen."
+      },
+      "invitations": {
+        "cardTitle": "Offene Einladungen",
+        "empty": "Keine offenen Einladungen.",
+        "expiresLabel": "läuft ab",
+        "copyButton": "Link kopieren",
+        "copyDisabledTitle": "Link nur direkt nach dem Einladen kopierbar",
+        "copiedToast": "Einladungs-Link kopiert.",
+        "revokeButton": "Widerrufen",
+        "revokedToast": "Einladung widerrufen."
+      }
+    },
+    "language": {
+      "label": "Sprache",
+      "description": "Sprache der Benutzeroberfläche."
+    }
+  },
+  "systemPrompts": {
+    "page": {
+      "list": {
+        "title": "System-Prompts",
+        "description": "Wiederverwendbare Template-Bibliothek für deine Agents — mit Liquid-Placeholders.",
+        "newTemplate": "Neues Template",
+        "empty": {
+          "title": "Noch keine Templates",
+          "description": "Lege dein erstes System-Prompt-Template an."
+        }
+      },
+      "new": {
+        "title": "Neues Template",
+        "description": "Lege ein wiederverwendbares System-Prompt-Template an.",
+        "submit": "Anlegen",
+        "toast": {
+          "created": "Template angelegt."
+        },
+        "error": {
+          "unknown": "Unbekannter Fehler."
+        }
+      },
+      "detail": {
+        "slugVersion": "Slug: {{slug}} · Aktuelle Version: v{{version}}",
+        "toast": {
+          "restored": "v{{version}} als Entwurf wiederhergestellt."
+        }
+      },
+      "help": {
+        "title": "Placeholder-Referenz",
+        "description": "Welche Placeholder dir im System-Prompt-Editor zur Verfügung stehen und was sie beim MCP-Read einfügen."
+      }
+    },
+    "nav": {
+      "backToList": "System-Prompts"
+    },
+    "form": {
+      "identity": {
+        "title": "Identität",
+        "description": {
+          "placeholder": "z. B. Standard-Template für Support-Agenten"
+        },
+        "help": "Beispiel: „Customer-Support-Agent v1\". Beschreibung taucht in der Template-Liste und im Agent-Picker auf.",
+        "name": {
+          "placeholder": "z. B. Customer-Support-Agent"
+        }
+      },
+      "promptBody": {
+        "title": "Prompt-Body",
+        "description": "Schreibe deinen Prompt im Editor. Mit / fügst du Placeholder ein.",
+        "help": "Tippe / im Editor um Playbook-, Resource-, Persona-Feld- oder Datum-Placeholder einzufuegen. Der Backend-Renderer expandiert diese beim MCP-Read zu echtem Text.",
+        "label": "Body"
+      },
+      "saveVersion": "Neue Version speichern",
+      "viewerTooltip": "Viewer können Inhalte nur ansehen",
+      "validation": {
+        "nameRequired": "Name erforderlich."
+      },
+      "toast": {
+        "saved": "Gespeichert — neue Version erstellt."
+      },
+      "error": {
+        "unknown": "Unbekannter Fehler."
+      }
+    },
+    "statusBar": {
+      "ariaLabel": "Status-Aktionen",
+      "submitForReview": "Zur Review einreichen",
+      "activate": "Aktivieren",
+      "backToDraft": "Zurück zu Draft",
+      "reactivateAsDraft": "Als Draft reaktivieren",
+      "adminOnlyTooltip": "Nur Admins können aktivieren",
+      "toast": {
+        "submittedForReview": "Zur Review eingereicht.",
+        "activated": "Version aktiviert.",
+        "backToDraft": "Zurück in den Entwurf.",
+        "reactivatedAsDraft": "Als Draft reaktiviert.",
+        "actionFailed": "Aktion fehlgeschlagen."
+      }
+    },
+    "placeholderHelp": {
+      "triggerLabel": "Verfügbare Placeholder",
+      "docsLink": "Mehr in der Doku →",
+      "intro": {
+        "heading": "Was ist ein Placeholder?",
+        "body": "Placeholders sind Platzhalter im Template, die der Server beim MCP-Read durch echten Inhalt ersetzt — z. B. den Namen der Persona oder den Body eines verknüpften Playbooks. So bleibt der Prompt klein und aktuell.",
+        "usage": "Öffne im Editor das Slash-Menü mit / und wähle einen Placeholder als Pill aus."
+      },
+      "slashSection": {
+        "heading": "BlockNote-Editor (Slash-Menü)"
+      },
+      "slash": {
+        "playbook": {
+          "description": "Body eines verknüpften Playbooks einfügen."
+        },
+        "resource": {
+          "description": "Body einer Resource einfügen."
+        },
+        "personaField": {
+          "description": "Bettet Name, Beschreibung, das volle Profil, nur den Profil-Inhalt oder nur die Modi ein."
+        },
+        "personaLoad": {
+          "description": "Bettet keinen Inhalt ein, sondern weist den Agenten an, seine Persona zur Laufzeit via get_persona(...) selbst zu laden und ihre Modi anzuwenden."
+        },
+        "playbookCatalog": {
+          "description": "Tabelle der zugeordneten Playbooks (Name, Trigger, Aufruf, Beschreibung) — briefs den Agenten, was er wann via fetch_playbook(...) laden kann. Wahlweise alle oder nur getriggerte."
+        },
+        "date": {
+          "description": "Aktuelles Datum (ISO oder lesbar)."
+        },
+        "mcpTools": {
+          "description": "Liste der MCP-Werkzeuge mit Signatur und Kurzbeschreibung. Schreib drumherum die Reihenfolge (\"zuerst list_triggers, dann fetch_playbook\"), damit der LLM die Tools richtig nutzt."
+        }
+      }
+    }
+  },
+  "tokens": {
+    "page": {
+      "title": "API-Tokens",
+      "description": "Persistente Tokens für Headless-Clients und Agenten."
+    },
+    "list": {
+      "title": "Vorhandene Tokens",
+      "createdAt": "erstellt {{date}}",
+      "lastUsed": "· zuletzt benutzt {{date}}",
+      "revoked": "· widerrufen {{date}}",
+      "revoke": "Widerrufen"
+    },
+    "create": {
+      "title": "Neuen Token anlegen",
+      "submit": "Anlegen",
+      "nameRequired": "Name erforderlich.",
+      "roleLabel": "Rolle",
+      "roleHint": "Der Token erhält höchstens deine eigene Rolle — höhere Rechte sind nicht wählbar."
+    },
+    "reveal": {
+      "title": "Neuer Token — jetzt kopieren",
+      "body": "Der Klartext wird genau einmal angezeigt. Nach dem Schließen ist er nicht mehr abrufbar.",
+      "ariaLabel": "Klartext-Token",
+      "copyButton": "In Zwischenablage kopieren"
+    },
+    "override": {
+      "title": "Headless-Token aktivieren",
+      "description": "Override für künftige Headless-Use-Cases: Der eingegebene Token wird ab sofort statt des Supabase-JWT an die API gesendet. Lebt nur in dieser Tab-Sitzung — Reload entfernt ihn.",
+      "statusLabel": "Status:",
+      "statusNone": "kein Override (Supabase-JWT aktiv)",
+      "statusActive": "Override aktiv ({{tail}})",
+      "inputLabel": "w2b_-Token",
+      "remove": "Override entfernen"
+    },
+    "toast": {
+      "created": "Token „{{name}}\" angelegt. Klartext jetzt einmalig kopieren.",
+      "unknownError": "Unbekannter Fehler."
+    }
+  }
+}

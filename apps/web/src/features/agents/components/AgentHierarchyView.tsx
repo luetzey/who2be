@@ -1,4 +1,5 @@
 import { Bot, FileText, GitBranch, Users } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import type { Agent, Persona, Playbook, SystemPromptTemplate } from '@/api/types'
 import { Badge } from '@/components/ui/badge'
@@ -22,6 +23,8 @@ export function AgentHierarchyView({
   template,
   playbooks,
 }: AgentHierarchyViewProps) {
+  const { t } = useTranslation('agents')
+
   return (
     <Card data-testid="agent-hierarchy">
       <CardHeader className="flex flex-row items-center gap-2">
@@ -33,7 +36,7 @@ export function AgentHierarchyView({
           ) : null}
         </div>
         <Badge variant={agent.status === 'enabled' ? 'default' : 'outline'}>
-          {agent.status === 'enabled' ? 'Aktiv' : 'Deaktiviert'}
+          {agent.status === 'enabled' ? t('status.enabled') : t('status.disabled')}
         </Badge>
       </CardHeader>
       <CardContent>
@@ -41,33 +44,33 @@ export function AgentHierarchyView({
           <li>
             <div className="flex items-center gap-2 text-sm">
               <FileText className="h-4 w-4 text-muted-foreground" />
-              <span className="font-medium">Template:</span>
+              <span className="font-medium">{t('hierarchy.templateLabel')}</span>
               {template !== null ? (
                 <>
                   <span>{template.name}</span>
                   <Badge variant="outline">v{template.current_version}</Badge>
                 </>
               ) : (
-                <span className="text-muted-foreground">— nicht geladen —</span>
+                <span className="text-muted-foreground">{t('hierarchy.notLoaded')}</span>
               )}
             </div>
           </li>
           <li>
             <div className="flex items-center gap-2 text-sm">
               <Users className="h-4 w-4 text-muted-foreground" />
-              <span className="font-medium">Persona:</span>
+              <span className="font-medium">{t('hierarchy.personaLabel')}</span>
               {persona !== null ? (
                 <>
                   <span>{persona.name}</span>
                   <Badge variant="outline">v{persona.current_version}</Badge>
                 </>
               ) : (
-                <span className="text-muted-foreground">— nicht geladen —</span>
+                <span className="text-muted-foreground">{t('hierarchy.notLoaded')}</span>
               )}
             </div>
             <ul className="mt-2 flex flex-col gap-1 border-l border-muted pl-4 text-sm">
               {playbooks.length === 0 ? (
-                <li className="text-muted-foreground">Keine Playbooks verknüpft.</li>
+                <li className="text-muted-foreground">{t('hierarchy.noPlaybooks')}</li>
               ) : (
                 playbooks.map((playbook) => (
                   <li

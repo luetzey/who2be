@@ -1,4 +1,5 @@
 import { lazy, useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom'
 
 import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
@@ -166,6 +167,7 @@ const CatalogPage = import.meta.env.DEV
 //    Defense-in-Depth): einmaliger refreshMe nach 1.5 s, statischer
 //    Fallback-Screen ohne Navigate-Schleife.
 function DefaultWorkspaceRedirect() {
+  const { t } = useTranslation('common')
   const { me, refreshMe } = useSession()
   const refreshedRef = useRef(false)
 
@@ -187,7 +189,7 @@ function DefaultWorkspaceRedirect() {
   if (me === null) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
-        Wird geladen…
+        {t('loadingLong')}
       </div>
     )
   }
@@ -196,7 +198,7 @@ function DefaultWorkspaceRedirect() {
   if (workspaceId === null) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
-        Workspace wird vorbereitet…
+        {t('workspacePreparing')}
       </div>
     )
   }

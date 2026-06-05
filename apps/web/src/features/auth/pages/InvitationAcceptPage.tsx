@@ -1,6 +1,7 @@
 import { MailCheck } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Navigate, useLocation, useParams, useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 
 import { acceptInvitation, ApiError } from '@/api/client'
 import { useAuthToken } from '@/auth/useAuthToken'
@@ -11,24 +12,9 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { notify } from '@/lib/feedback'
 
-// Microcopy beantwortet das WIESO (design-language §1): warum der Link nicht
-// (mehr) funktioniert. 403 ist neu (Phase 3-D Magic-Link-Email-Check).
-function messageForError(cause: unknown): string {
-  if (cause instanceof ApiError) {
-    if (cause.status === 410) {
-      return 'Diese Einladung ist abgelaufen. Bitte fordere eine neue an.'
-    }
-    if (cause.status === 404) {
-      return 'Diese Einladung existiert nicht oder wurde bereits eingelöst.'
-    }
-    if (cause.status === 403) {
-      return 'Diese Einladung ist für eine andere Email-Adresse.'
-    }
-  }
-  return cause instanceof Error ? cause.message : 'Einladung konnte nicht angenommen werden.'
-}
 
 export function InvitationAcceptPage() {
+  const { t } = useTranslation('auth')
   const { token } = useParams<{ token: string }>()
   const { session, me } = useSession()
   const authToken = useAuthToken()
@@ -46,12 +32,29 @@ export function InvitationAcceptPage() {
   // Auto-Accept darf nur einmal feuern, auch bei React-StrictMode-Doppel-Mount.
   const autoAcceptedRef = useRef(false)
 
+  // Microcopy beantwortet das WIESO (design-language §1): warum der Link nicht
+  // (mehr) funktioniert. 403 ist neu (Phase 3-D Magic-Link-Email-Check).
+  function messageForError(cause: unknown): string {
+    if (cause instanceof ApiError) {
+      if (cause.status === 410) {
+        return t('invitation.error.expired')
+      }
+      if (cause.status === 404) {
+        return t('invitation.error.notFound')
+      }
+      if (cause.status === 403) {
+        return t('invitation.error.emailMismatch')
+      }
+    }
+    return cause instanceof Error ? cause.message : t('invitation.error.generic')
+  }
+
   async function runAccept(currentToken: string, currentAuthToken: string) {
     setAccepting(true)
     setError(null)
     try {
       const result = await acceptInvitation(currentAuthToken, currentToken)
-      notify.success('Einladung angenommen.')
+      notify.success(t('invitation.success'))
       setAcceptedWorkspace(result.workspace_id)
     } catch (cause) {
       setError(messageForError(cause))
@@ -94,10 +97,10 @@ export function InvitationAcceptPage() {
         <Card className="w-full max-w-md border-transparent shadow-modal">
           <CardHeader className="gap-2">
             <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              Who2Be
+              {t('brand')}
             </span>
-            <CardTitle className="text-3xl tracking-tight">Einladung annehmen</CardTitle>
-            <CardDescription>Login wird abgeschlossen…</CardDescription>
+            <CardTitle className="text-3xl tracking-tight">{t('invitation.title')}</CardTitle>
+            <CardDescription>{t('invitation.loginPending')}</CardDescription>
           </CardHeader>
           <CardContent>
             <LoadingState rows={2} />
@@ -129,13 +132,13 @@ export function InvitationAcceptPage() {
       <Card className="w-full max-w-md border-transparent shadow-modal">
         <CardHeader className="gap-2">
           <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            Who2Be
+            {t('brand')}
           </span>
-          <CardTitle className="text-3xl tracking-tight">Einladung annehmen</CardTitle>
+          <CardTitle className="text-3xl tracking-tight">{t('invitation.title')}</CardTitle>
           <CardDescription>
             {isMagicLink
-              ? 'Login wird abgeschlossen…'
-              : 'Tritt dem Workspace bei, zu dem du eingeladen wurdest.'}
+              ? t('invitation.descriptionMagic')
+              : t('invitation.descriptionManual')}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -150,7 +153,7 @@ export function InvitationAcceptPage() {
                 disabled={accepting}
               >
                 <MailCheck className="h-4 w-4" />
-                Einladung annehmen
+                {t('invitation.submit')}
               </Button>
             )}
           </div>

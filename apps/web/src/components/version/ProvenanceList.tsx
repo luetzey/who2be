@@ -1,4 +1,5 @@
 import { ArrowRight } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import type { ProvenanceEntry } from '@/api/types'
 import { Badge } from '@/components/ui/badge'
@@ -14,16 +15,15 @@ interface ProvenanceListProps {
  * `status_history`-Kette chronologisch: Übergang, Zeitpunkt und optionale Notiz.
  */
 export function ProvenanceList({ entries }: ProvenanceListProps) {
+  const { t } = useTranslation('version')
   if (entries.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">
-        Noch keine Status-Historie für diese Version.
-      </p>
+      <p className="text-sm text-muted-foreground">{t('provenance.emptyForVersion')}</p>
     )
   }
 
   return (
-    <ol className="flex flex-col gap-2" aria-label="Status-Historie">
+    <ol className="flex flex-col gap-2" aria-label={t('provenance.listLabel')}>
       {entries.map((entry) => (
         <li key={entry.id} className="rounded-md border border-border bg-muted/30 p-2">
           <div className="flex flex-wrap items-center gap-2">

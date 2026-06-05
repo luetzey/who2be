@@ -2,7 +2,10 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
+
+import i18n from '@/i18n'
 
 import { useApi } from '@/api/useApi'
 import { useSession } from '@/auth/session-context'
@@ -39,19 +42,20 @@ import { notify } from '@/lib/feedback'
 import { useCurrentOrg } from '../hooks/useCurrentOrg'
 
 const renameSchema = z.object({
-  name: z.string().min(1, 'Name erforderlich.').max(200),
+  name: z.string().min(1, i18n.t('common:validation.nameRequired')).max(200),
 })
 
 type RenameValues = z.infer<typeof renameSchema>
 
-function describeError(cause: unknown): string {
-  return cause instanceof Error ? cause.message : 'Aktion fehlgeschlagen.'
+function describeError(cause: unknown, fallback: string): string {
+  return cause instanceof Error ? cause.message : fallback
 }
 
 // Workspace-Space (Track C): Settings (Umbenennen), Verweis auf Mitglieder und
 // die Danger-Zone (Löschen). Mutationen sind admin-only; das Backend enforced
 // zusätzlich und schützt den letzten Workspace einer Organisation.
 export function WorkspaceSettingsPage() {
+  const { t } = useTranslation('settings')
   const api = useApi()
   const { me, refreshMe } = useSession()
   const navigate = useNavigate()
@@ -71,7 +75,7 @@ export function WorkspaceSettingsPage() {
     return (
       <Container>
         <Stack gap="lg">
-          <PageHeader title="Workspace" description="Wird geladen…" />
+          <PageHeader title={t('workspace.title')} description={t('workspace.loading')} />
         </Stack>
       </Container>
     )
@@ -85,10 +89,10 @@ export function WorkspaceSettingsPage() {
   async function onRename(values: RenameValues) {
     try {
       await api.renameWorkspace(workspaceId, { name: values.name })
-      notify.success('Workspace umbenannt.')
+      notify.success(t('workspace.general.renamedToast'))
       await refreshMe()
     } catch (cause) {
-      notify.error(describeError(cause))
+      notify.error(describeError(cause, t('workspace.actionFailed')))
     }
   }
 
@@ -107,12 +111,12 @@ export function WorkspaceSettingsPage() {
     setDeleting(true)
     try {
       await api.deleteWorkspace(workspaceId)
-      notify.success('Workspace gelöscht.')
+      notify.success(t('workspace.dangerZone.deletedToast'))
       const fallback = pickFallbackWorkspace()
       await refreshMe()
       navigate(fallback !== null ? `/w/${fallback}/dashboard` : '/', { replace: true })
     } catch (cause) {
-      notify.error(describeError(cause))
+      notify.error(describeError(cause, t('workspace.dangerZone.errorFallback')))
     } finally {
       setDeleting(false)
     }
@@ -122,28 +126,28 @@ export function WorkspaceSettingsPage() {
     <Container>
       <Stack gap="lg">
         <PageHeader
-          title="Workspace"
-          description="Einstellungen, Mitglieder und Danger-Zone dieses Workspaces."
+          title={t('workspace.title')}
+          description={t('workspace.description')}
         />
 
         <Card>
           <CardHeader>
-            <CardTitle>Allgemein</CardTitle>
+            <CardTitle>{t('workspace.general.title')}</CardTitle>
           </CardHeader>
           <CardContent>
             {isAdmin ? (
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onRename)}>
                   <FormSection
-                    title="Workspace umbenennen"
-                    description="Der angezeigte Name. Der Slug bleibt unverändert."
+                    title={t('workspace.general.renameTitle')}
+                    description={t('workspace.general.renameDescription')}
                   >
                     <FormField
                       control={form.control}
                       name="name"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Name</FormLabel>
+                          <FormLabel>{t('workspace.general.nameLabel')}</FormLabel>
                           <FormControl>
                             <Input required {...field} />
                           </FormControl>
@@ -157,7 +161,7 @@ export function WorkspaceSettingsPage() {
                         variant="brand"
                         disabled={form.formState.isSubmitting}
                       >
-                        Speichern
+                        {t('workspace.general.saveButton')}
                       </Button>
                     </div>
                   </FormSection>
@@ -165,7 +169,7 @@ export function WorkspaceSettingsPage() {
               </Form>
             ) : (
               <p className="text-sm text-muted-foreground">
-                Nur Admins können diesen Workspace umbenennen.
+                {t('workspace.general.adminOnly')}
               </p>
             )}
           </CardContent>
@@ -173,15 +177,15 @@ export function WorkspaceSettingsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Mitglieder</CardTitle>
+            <CardTitle>{t('workspace.members.title')}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Rollen, Einladungen und Entfernen findest du unter{' '}
+              {t('workspace.members.descriptionPrefix')}{' '}
               <Link to={wsPath('/settings/members')} className="underline underline-offset-4">
-                Mitglieder
+                {t('workspace.members.linkLabel')}
               </Link>
-              .
+              {t('workspace.members.descriptionSuffix')}
             </p>
           </CardContent>
         </Card>
@@ -189,19 +193,16 @@ export function WorkspaceSettingsPage() {
         {isAdmin ? (
           <Card className="border-destructive/40">
             <CardHeader>
-              <CardTitle className="text-destructive">Danger-Zone</CardTitle>
+              <CardTitle className="text-destructive">{t('workspace.dangerZone.title')}</CardTitle>
             </CardHeader>
             <CardContent>
               <Stack gap="sm">
                 <p className="text-sm text-muted-foreground">
-                  Das Löschen entfernt den Workspace samt aller Personae, Playbooks,
-                  Resources, Templates, Agenten und Tokens. Diese Aktion ist
-                  unwiderruflich.
+                  {t('workspace.dangerZone.description')}
                 </p>
                 {isLastWorkspace ? (
                   <p className="text-sm text-muted-foreground">
-                    Dies ist der letzte Workspace der Organisation und kann nicht
-                    gelöscht werden.
+                    {t('workspace.dangerZone.lastWorkspace')}
                   </p>
                 ) : null}
                 <Dialog
@@ -213,19 +214,18 @@ export function WorkspaceSettingsPage() {
                 >
                   <DialogTrigger asChild>
                     <Button variant="destructive" disabled={isLastWorkspace}>
-                      Workspace löschen
+                      {t('workspace.dangerZone.triggerButton')}
                     </Button>
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
-                      <DialogTitle>Workspace löschen</DialogTitle>
+                      <DialogTitle>{t('workspace.dangerZone.dialogTitle')}</DialogTitle>
                       <DialogDescription>
-                        Gib zur Bestätigung den Workspace-Namen „{workspace.name}“ ein.
-                        Alle Inhalte gehen verloren.
+                        {t('workspace.dangerZone.dialogDescription', { name: workspace.name })}
                       </DialogDescription>
                     </DialogHeader>
                     <div className="flex flex-col gap-2">
-                      <Label htmlFor="confirm-workspace-name">Workspace-Name</Label>
+                      <Label htmlFor="confirm-workspace-name">{t('workspace.dangerZone.workspaceNameLabel')}</Label>
                       <Input
                         id="confirm-workspace-name"
                         value={confirmName}
@@ -235,14 +235,14 @@ export function WorkspaceSettingsPage() {
                     </div>
                     <DialogFooter>
                       <DialogClose asChild>
-                        <Button variant="outline">Abbrechen</Button>
+                        <Button variant="outline">{t('common:actions.cancel')}</Button>
                       </DialogClose>
                       <Button
                         variant="destructive"
                         disabled={!confirmMatches || deleting}
                         onClick={() => void onDelete()}
                       >
-                        Endgültig löschen
+                        {t('workspace.dangerZone.confirmButton')}
                       </Button>
                     </DialogFooter>
                   </DialogContent>

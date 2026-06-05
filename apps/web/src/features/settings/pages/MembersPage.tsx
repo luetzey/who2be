@@ -3,7 +3,10 @@ import { Copy } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Navigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
+
+import i18n from '@/i18n'
 
 import type { Invitation, WorkspaceRole } from '@/api/types'
 import { useApi } from '@/api/useApi'
@@ -42,14 +45,14 @@ import { useInvitations } from '../hooks/useInvitations'
 import { useMembers } from '../hooks/useMembers'
 
 const inviteSchema = z.object({
-  email: z.string().email('Bitte gültige E-Mail eingeben.'),
+  email: z.string().email(i18n.t('common:validation.emailInvalid')),
   role: z.enum(['admin', 'editor', 'viewer']),
 })
 
 type InviteValues = z.infer<typeof inviteSchema>
 
-function describeError(cause: unknown): string {
-  return cause instanceof Error ? cause.message : 'Aktion fehlgeschlagen.'
+function describeError(cause: unknown, fallback: string): string {
+  return cause instanceof Error ? cause.message : fallback
 }
 
 function acceptUrl(token: string): string {
@@ -58,6 +61,7 @@ function acceptUrl(token: string): string {
 }
 
 export function MembersPage() {
+  const { t } = useTranslation('settings')
   const api = useApi()
   const role = useCurrentWorkspaceRole()
   const wsPath = useWorkspacePath()
@@ -71,9 +75,9 @@ export function MembersPage() {
 
   useEffect(() => {
     if (isBlocked) {
-      notify.error('Diese Seite ist nur für Admins.')
+      notify.error(t('members.adminOnly'))
     }
-  }, [isBlocked])
+  }, [isBlocked, t])
 
   const form = useForm<InviteValues>({
     resolver: zodResolver(inviteSchema),
@@ -90,11 +94,11 @@ export function MembersPage() {
       if (created.token !== undefined && created.token !== null) {
         setIssuedTokens((prev) => ({ ...prev, [created.id]: created.token as string }))
       }
-      notify.success(`Einladung an ${values.email} verschickt.`)
+      notify.success(t('members.invite.sentToast', { email: values.email }))
       form.reset({ email: '', role: 'editor' })
       invitations.reload()
     } catch (cause) {
-      notify.error(describeError(cause))
+      notify.error(describeError(cause, t('members.invite.actionFailed')))
     }
   }
 
@@ -108,39 +112,36 @@ export function MembersPage() {
     }
     try {
       await api.updateMemberRole(userId, { role: nextRole })
-      notify.success('Rolle aktualisiert.')
+      notify.success(t('members.list.roleUpdatedToast'))
       // ADR-0023: Token tragen einen Rollen-Snapshot. Ein Downgrade des
       // Mitglieds entzieht dessen bestehenden Tokens NICHT automatisch die
       // höheren Rechte — die müssen explizit widerrufen werden.
       if (isDowngrade(currentRole, nextRole)) {
-        notify.info(
-          'Bestehende API-Tokens dieses Mitglieds behalten ihre alte Rolle, ' +
-            'bis sie widerrufen werden.',
-        )
+        notify.info(t('members.list.tokenDowngradeInfo'))
       }
       members.reload()
     } catch (cause) {
-      notify.error(describeError(cause))
+      notify.error(describeError(cause, t('members.invite.actionFailed')))
     }
   }
 
   async function onRemove(userId: string) {
     try {
       await api.removeMember(userId)
-      notify.success('Mitglied entfernt.')
+      notify.success(t('members.list.removedToast'))
       members.reload()
     } catch (cause) {
-      notify.error(describeError(cause))
+      notify.error(describeError(cause, t('members.invite.actionFailed')))
     }
   }
 
   async function onRevoke(id: string) {
     try {
       await api.revokeInvitation(id)
-      notify.success('Einladung widerrufen.')
+      notify.success(t('members.invitations.revokedToast'))
       invitations.reload()
     } catch (cause) {
-      notify.error(describeError(cause))
+      notify.error(describeError(cause, t('members.invite.actionFailed')))
     }
   }
 
@@ -151,7 +152,7 @@ export function MembersPage() {
   function copyLink(token: string) {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       void navigator.clipboard.writeText(acceptUrl(token))
-      notify.success('Einladungs-Link kopiert.')
+      notify.success(t('members.invitations.copiedToast'))
     }
   }
 
@@ -159,29 +160,29 @@ export function MembersPage() {
     <Container>
       <Stack gap="lg">
         <PageHeader
-          title="Mitglieder"
-          description="Wer Zugriff auf diesen Workspace hat und mit welcher Rolle."
+          title={t('members.title')}
+          description={t('members.description')}
         />
 
         <Card>
           <CardHeader>
-            <CardTitle>Mitglieder</CardTitle>
+            <CardTitle>{t('members.list.title')}</CardTitle>
           </CardHeader>
           <CardContent>
             <DataView
               loading={members.loading}
               error={members.error}
               empty={!members.loading && members.members.length === 0}
-              emptyTitle="Noch keine Mitglieder."
-              emptyDescription="Lade jemanden ein, um den Workspace zu teilen."
+              emptyTitle={t('members.list.emptyTitle')}
+              emptyDescription={t('members.list.emptyDescription')}
             >
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>E-Mail</TableHead>
-                    <TableHead>Rolle</TableHead>
-                    <TableHead>Beigetreten</TableHead>
-                    <TableHead className="text-right">Aktionen</TableHead>
+                    <TableHead>{t('members.list.colEmail')}</TableHead>
+                    <TableHead>{t('members.list.colRole')}</TableHead>
+                    <TableHead>{t('members.list.colJoined')}</TableHead>
+                    <TableHead className="text-right">{t('members.list.colActions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -192,7 +193,7 @@ export function MembersPage() {
                       </TableCell>
                       <TableCell>
                         <Select
-                          aria-label={`Rolle von ${member.email}`}
+                          aria-label={t('members.list.roleAriaLabel', { email: member.email })}
                           value={member.role}
                           onChange={(event) =>
                             void onChangeRole(
@@ -219,7 +220,7 @@ export function MembersPage() {
                           size="sm"
                           onClick={() => void onRemove(member.user_id)}
                         >
-                          Entfernen
+                          {t('members.list.removeButton')}
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -232,22 +233,22 @@ export function MembersPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Einladen</CardTitle>
+            <CardTitle>{t('members.invite.cardTitle')}</CardTitle>
           </CardHeader>
           <CardContent>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onInvite)}>
                 <FormSection
-                  title="Neues Mitglied einladen"
-                  description="Die Person erhält einen einmaligen Link, um beizutreten."
-                  footer="Offene Einladungen laufen automatisch ab und können widerrufen werden."
+                  title={t('members.invite.sectionTitle')}
+                  description={t('members.invite.sectionDescription')}
+                  footer={t('members.invite.sectionFooter')}
                 >
                   <FormField
                     control={form.control}
                     name="email"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>E-Mail</FormLabel>
+                        <FormLabel>{t('members.invite.emailLabel')}</FormLabel>
                         <FormControl>
                           <Input type="email" autoComplete="off" required {...field} />
                         </FormControl>
@@ -260,7 +261,7 @@ export function MembersPage() {
                     name="role"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Rolle</FormLabel>
+                        <FormLabel>{t('members.invite.roleLabel')}</FormLabel>
                         <FormControl>
                           <Select {...field}>
                             {ROLE_ORDER.map((option) => (
@@ -280,7 +281,7 @@ export function MembersPage() {
                       variant="brand"
                       disabled={form.formState.isSubmitting}
                     >
-                      Einladen
+                      {t('members.invite.inviteButton')}
                     </Button>
                   </div>
                 </FormSection>
@@ -291,7 +292,7 @@ export function MembersPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Offene Einladungen</CardTitle>
+            <CardTitle>{t('members.invitations.cardTitle')}</CardTitle>
           </CardHeader>
           <CardContent>
             <DataList
@@ -306,7 +307,7 @@ export function MembersPage() {
                     <Stack gap="xs">
                       <div className="font-medium">{invitation.email}</div>
                       <div className="text-xs text-muted-foreground">
-                        {roleLabel(invitation.role)} · läuft ab{' '}
+                        {roleLabel(invitation.role)} · {t('members.invitations.expiresLabel')}{' '}
                         {new Date(invitation.expires_at).toLocaleDateString()}
                       </div>
                     </Stack>
@@ -318,7 +319,7 @@ export function MembersPage() {
                         disabled={token === null}
                         title={
                           token === null
-                            ? 'Link nur direkt nach dem Einladen kopierbar'
+                            ? t('members.invitations.copyDisabledTitle')
                             : undefined
                         }
                         onClick={() => {
@@ -328,7 +329,7 @@ export function MembersPage() {
                         }}
                       >
                         <Copy className="h-4 w-4" />
-                        Link kopieren
+                        {t('members.invitations.copyButton')}
                       </Button>
                       <Button
                         type="button"
@@ -336,7 +337,7 @@ export function MembersPage() {
                         size="sm"
                         onClick={() => void onRevoke(invitation.id)}
                       >
-                        Widerrufen
+                        {t('members.invitations.revokeButton')}
                       </Button>
                     </div>
                   </div>
@@ -344,7 +345,7 @@ export function MembersPage() {
               }}
               empty={
                 <p className="text-sm text-muted-foreground">
-                  Keine offenen Einladungen.
+                  {t('members.invitations.empty')}
                 </p>
               }
             />

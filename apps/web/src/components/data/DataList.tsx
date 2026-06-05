@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { EmptyState } from '@/components/data/EmptyState'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
@@ -24,6 +25,7 @@ export function DataList<T>({
   empty,
   className,
 }: DataListProps<T>) {
+  const { t } = useTranslation('data')
   if (loading) {
     return <LoadingState />
   }
@@ -31,7 +33,7 @@ export function DataList<T>({
     return <ErrorAlert message={error} />
   }
   if (items.length === 0) {
-    return empty ? <>{empty}</> : <EmptyState title="Keine Einträge." />
+    return empty ? <>{empty}</> : <EmptyState title={t('empty')} />
   }
   return (
     <ul

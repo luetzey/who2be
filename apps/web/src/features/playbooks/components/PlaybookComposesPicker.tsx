@@ -4,6 +4,7 @@
 
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import type { Playbook } from '@/api/types'
 import { useApi } from '@/api/useApi'
@@ -36,6 +37,7 @@ export function PlaybookComposesPicker({
   saving,
   onSave,
 }: PlaybookComposesPickerProps) {
+  const { t } = useTranslation('playbooks')
   const api = useApi()
   const [open, setOpen] = useState(false)
   const [allPlaybooks, setAllPlaybooks] = useState<Playbook[]>([])
@@ -55,9 +57,9 @@ export function PlaybookComposesPicker({
         setAllPlaybooks(playbooks.filter((pb) => pb.id !== currentPlaybookId)),
       )
       .catch((cause: unknown) =>
-        setLoadError(cause instanceof Error ? cause.message : 'Laden fehlgeschlagen.'),
+        setLoadError(cause instanceof Error ? cause.message : t('composesPicker.loadFailed')),
       )
-  }, [open, existing, api, currentPlaybookId])
+  }, [open, existing, api, currentPlaybookId, t])
 
   const toggle = useCallback((id: string) => {
     setSelected((current) =>
@@ -95,15 +97,14 @@ export function PlaybookComposesPicker({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button type="button" variant="outline">
-          Sub-Playbooks bearbeiten
+          {t('composesPicker.triggerButton')}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Sub-Playbooks (Composition)</DialogTitle>
+          <DialogTitle>{t('composesPicker.dialogTitle')}</DialogTitle>
           <DialogDescription>
-            Wähle Playbooks als Sub-Playbooks aus und ordne sie per Pfeil-Buttons. Die
-            Reihenfolge bestimmt die Ausführungssequenz beim Rendern.
+            {t('composesPicker.dialogDescription')}
           </DialogDescription>
         </DialogHeader>
 
@@ -115,9 +116,9 @@ export function PlaybookComposesPicker({
         {selected.length > 0 ? (
           <div className="flex flex-col gap-1">
             <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              Ausgewählt ({selected.length})
+              {t('composesPicker.selectedHeading', { count: selected.length })}
             </p>
-            <ul className="flex flex-col gap-1" aria-label="Ausgewaehlte Sub-Playbooks">
+            <ul className="flex flex-col gap-1" aria-label={t('composesPicker.selectedList')}>
               {selected.map((id, index) => (
                 <li
                   key={id}
@@ -137,7 +138,7 @@ export function PlaybookComposesPicker({
                       className="h-6 w-6 p-0"
                       onClick={() => move(id, 'up')}
                       disabled={index === 0}
-                      aria-label={`${nameOf(id)} nach oben verschieben`}
+                      aria-label={t('composesPicker.moveUp', { name: nameOf(id) })}
                     >
                       <ChevronUp className="size-3" />
                     </Button>
@@ -148,7 +149,7 @@ export function PlaybookComposesPicker({
                       className="h-6 w-6 p-0"
                       onClick={() => move(id, 'down')}
                       disabled={index === selected.length - 1}
-                      aria-label={`${nameOf(id)} nach unten verschieben`}
+                      aria-label={t('composesPicker.moveDown', { name: nameOf(id) })}
                     >
                       <ChevronDown className="size-3" />
                     </Button>
@@ -159,7 +160,7 @@ export function PlaybookComposesPicker({
                       className="h-6 px-2 text-xs text-muted-foreground"
                       onClick={() => toggle(id)}
                     >
-                      Entfernen
+                      {t('common:actions.remove')}
                     </Button>
                   </span>
                 </li>
@@ -171,11 +172,11 @@ export function PlaybookComposesPicker({
         {/* Verbleibende auswaehlbare Playbooks */}
         <div className="flex flex-col gap-1">
           <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            {selected.length > 0 ? 'Weitere hinzufügen' : 'Playbooks'}
+            {selected.length > 0 ? t('composesPicker.addMore') : t('composesPicker.availableHeading')}
           </p>
           <ul
             className="flex max-h-60 flex-col gap-1 overflow-auto"
-            aria-label="Verfuegbare Playbooks"
+            aria-label={t('composesPicker.availableList')}
           >
             {unselected.map((pb) => {
               const checkId = `compose-pick-${pb.id}`
@@ -190,7 +191,7 @@ export function PlaybookComposesPicker({
                     id={checkId}
                     checked={false}
                     onChange={() => toggle(pb.id)}
-                    aria-label={`${pb.name} als Sub-Playbook hinzufügen`}
+                    aria-label={t('composesPicker.addAriaLabel', { name: pb.name })}
                   />
                   <Label
                     htmlFor={checkId}
@@ -208,11 +209,11 @@ export function PlaybookComposesPicker({
             })}
             {unselected.length === 0 && allPlaybooks.length === 0 ? (
               <li className="px-3 py-2 text-sm text-muted-foreground">
-                Keine weiteren Playbooks im Workspace.
+                {t('composesPicker.noPlaybooks')}
               </li>
             ) : unselected.length === 0 ? (
               <li className="px-3 py-2 text-sm text-muted-foreground">
-                Alle verfügbaren Playbooks sind bereits ausgewählt.
+                {t('composesPicker.noMore')}
               </li>
             ) : null}
           </ul>
@@ -220,7 +221,7 @@ export function PlaybookComposesPicker({
 
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-            Abbrechen
+            {t('common:actions.cancel')}
           </Button>
           <Button
             type="button"
@@ -228,7 +229,7 @@ export function PlaybookComposesPicker({
             onClick={() => void handleSave()}
             disabled={saving}
           >
-            Speichern ({selected.length})
+            {t('composesPicker.saveButton', { count: selected.length })}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,5 +1,6 @@
 import { ArrowLeft } from 'lucide-react'
 import { Link, Navigate, useParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 
 import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
@@ -27,6 +28,7 @@ import { useResourceForm } from '../hooks/useResourceForm'
 import { statusLabel } from '../lib/status'
 
 export function ResourceDetailPage() {
+  const { t } = useTranslation('resources')
   const { id } = useParams<{ id: string }>()
   const { resource, versions, loading, error, reload } = useResource(id)
   const { form, autoSave } = useResourceForm(resource, reload)
@@ -60,7 +62,7 @@ export function ResourceDetailPage() {
         <Button asChild variant="ghost" size="sm" className="self-start">
           <Link to={wsPath('/resources')}>
             <ArrowLeft className="h-4 w-4" />
-            Resources
+            {t('list.title')}
           </Link>
         </Button>
 
@@ -70,16 +72,17 @@ export function ResourceDetailPage() {
               {(() => {
                 const description =
                   activeVersion !== undefined
-                    ? `Active: v${activeVersion.version}${
+                    ? `${t('detail.activeVersion', { version: activeVersion.version })}${
                         draftVersion !== undefined
-                          ? ` · Du arbeitest auf Draft v${draftVersion.version}`
+                          ? ` · ${t('detail.workingOnDraft', { version: draftVersion.version })}`
                           : reviewVersion !== undefined
-                            ? ` · In Review: v${reviewVersion.version}`
+                            ? ` · ${t('detail.inReview', { version: reviewVersion.version })}`
                             : ''
                       }`
-                    : `Aktuelle Version: v${resource.current_version} (${statusLabel(
-                        resource.current_status ?? 'draft',
-                      )})`
+                    : t('detail.currentVersion', {
+                        version: resource.current_version,
+                        status: statusLabel(resource.current_status ?? 'draft'),
+                      })
                 return (
                   <Stack gap="sm">
                     <PageHeader title={resource.name} description={description} />
@@ -120,15 +123,15 @@ export function ResourceDetailPage() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Verlinkt in</CardTitle>
+                  <CardTitle>{t('detail.linkedIn')}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <DataView
                     loading={usages.loading}
                     error={usages.error}
                     empty={!usages.loading && usages.usages.length === 0}
-                    emptyTitle="Noch in keinem Playbook verwendet"
-                    emptyDescription="Verlinke einen Heading-Block in einem Playbook, um diese Resource sichtbar zu machen."
+                    emptyTitle={t('detail.usagesEmptyTitle')}
+                    emptyDescription={t('detail.usagesEmptyDescription')}
                   >
                     <DataList
                       items={usages.usages}
@@ -142,8 +145,7 @@ export function ResourceDetailPage() {
                             {usage.playbook_name}
                           </Link>
                           <Badge variant="secondary">
-                            {usage.block_count}{' '}
-                            {usage.block_count === 1 ? 'Block' : 'Bloecke'}
+                            {t('detail.block', { count: usage.block_count })}
                           </Badge>
                         </span>
                       )}
@@ -154,7 +156,7 @@ export function ResourceDetailPage() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Sub-Resources</CardTitle>
+                  <CardTitle>{t('detail.subResourcesTitle')}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <Stack gap="sm">
@@ -164,8 +166,8 @@ export function ResourceDetailPage() {
                       empty={
                         !subResources.loading && subResources.children.length === 0
                       }
-                      emptyTitle="Keine Sub-Resources"
-                      emptyDescription="Verknüpfe weitere Resources, die ein Agent über fetch_resource nachladen kann."
+                      emptyTitle={t('detail.subResourcesEmptyTitle')}
+                      emptyDescription={t('detail.subResourcesEmptyDescription')}
                     >
                       <DataList
                         items={subResources.children}
@@ -180,10 +182,10 @@ export function ResourceDetailPage() {
                             </Link>
                             <Badge variant="secondary">
                               {sub.link_scope === 'block'
-                                ? `Block ${sub.block_id ?? ''}`.trim()
+                                ? t('detail.scopeBlock', { blockId: sub.block_id ?? '' })
                                 : sub.embedding_mode === 'inline'
-                                  ? 'Dokument · inline'
-                                  : 'Dokument · lazy'}
+                                  ? t('detail.scopeDocumentInline')
+                                  : t('detail.scopeDocumentLazy')}
                             </Badge>
                           </span>
                         )}
@@ -203,7 +205,7 @@ export function ResourceDetailPage() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Verwendet in Resources</CardTitle>
+                  <CardTitle>{t('detail.usedByTitle')}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <DataView loading={subResources.loading} error={subResources.error}>
@@ -217,7 +219,7 @@ export function ResourceDetailPage() {
                 canEdit={canEdit}
                 onRestore={async (version) => {
                   await api.restoreResourceVersion(resource.id, version)
-                  notify.success(`v${version} als Entwurf wiederhergestellt.`)
+                  notify.success(t('detail.restoredAsDraft', { version }))
                   reload()
                 }}
                 loadDiff={(version) => api.diffResourceVersion(resource.id, version)}

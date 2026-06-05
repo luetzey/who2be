@@ -7,6 +7,9 @@ import { createRoot } from 'react-dom/client'
 // nichts zu ueberschreiben (Phase 3-fixes Runde 2, Track 2 + 4).
 import '@blocknote/mantine/style.css'
 
+// i18n-Singleton initialisieren (Sprachdetektor + react-i18next), bevor die
+// App mountet — `useTranslation` greift auf die Default-Instanz zu.
+import './i18n'
 import { App } from './App'
 import './styles/globals.css'
 

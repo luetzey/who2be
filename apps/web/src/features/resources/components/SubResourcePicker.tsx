@@ -5,6 +5,7 @@
 
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import type { EmbeddingMode, Resource, SubResource, SubResourceLinkInput } from '@/api/types'
 import { useApi } from '@/api/useApi'
@@ -37,6 +38,7 @@ export function SubResourcePicker({
   saving,
   onSave,
 }: SubResourcePickerProps) {
+  const { t } = useTranslation('resources')
   const api = useApi()
   const [open, setOpen] = useState(false)
   const [allResources, setAllResources] = useState<Resource[]>([])
@@ -67,9 +69,9 @@ export function SubResourcePicker({
         setAllResources(resources.filter((r) => r.id !== currentResourceId)),
       )
       .catch((cause: unknown) =>
-        setLoadError(cause instanceof Error ? cause.message : 'Laden fehlgeschlagen.'),
+        setLoadError(cause instanceof Error ? cause.message : t('picker.loadError')),
       )
-  }, [open, existing, api, currentResourceId])
+  }, [open, existing, api, currentResourceId, t])
 
   const toggle = useCallback((id: string) => {
     setSelected((current) =>
@@ -128,16 +130,14 @@ export function SubResourcePicker({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button type="button" variant="outline">
-          Sub-Resources bearbeiten
+          {t('picker.trigger')}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Sub-Resources (Composition)</DialogTitle>
+          <DialogTitle>{t('picker.title')}</DialogTitle>
           <DialogDescription>
-            Wähle Resources als Sub-Resources aus und ordne sie per Pfeil-Buttons. Agenten
-            laden sie über <code>fetch_resource</code> nach — die Inhalte werden nicht
-            expandiert.
+            {t('picker.description')}
           </DialogDescription>
         </DialogHeader>
 
@@ -148,9 +148,9 @@ export function SubResourcePicker({
         {selected.length > 0 ? (
           <div className="flex flex-col gap-1">
             <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              Ausgewählt ({selected.length})
+              {t('picker.selectedCount', { count: selected.length })}
             </p>
-            <ul className="flex flex-col gap-1" aria-label="Ausgewaehlte Sub-Resources">
+            <ul className="flex flex-col gap-1" aria-label={t('picker.selectedAriaLabel')}>
               {selected.map((id, index) => (
                 <li
                   key={id}
@@ -166,7 +166,7 @@ export function SubResourcePicker({
                     <span
                       className="mr-1 inline-flex overflow-hidden rounded-md border"
                       role="group"
-                      aria-label={`Embed-Modus fuer ${nameOf(id)}`}
+                      aria-label={t('picker.embedModeFor', { name: nameOf(id) })}
                     >
                       <Button
                         type="button"
@@ -176,7 +176,7 @@ export function SubResourcePicker({
                         onClick={() => setMode(id, 'lazy')}
                         aria-pressed={(modes[id] ?? 'lazy') === 'lazy'}
                       >
-                        Link (lazy)
+                        {t('picker.modeLazy')}
                       </Button>
                       <Button
                         type="button"
@@ -186,7 +186,7 @@ export function SubResourcePicker({
                         onClick={() => setMode(id, 'inline')}
                         aria-pressed={(modes[id] ?? 'lazy') === 'inline'}
                       >
-                        Fest einbetten
+                        {t('picker.modeInline')}
                       </Button>
                     </span>
                     <Button
@@ -196,7 +196,7 @@ export function SubResourcePicker({
                       className="h-6 w-6 p-0"
                       onClick={() => move(id, 'up')}
                       disabled={index === 0}
-                      aria-label={`${nameOf(id)} nach oben verschieben`}
+                      aria-label={t('picker.moveUp', { name: nameOf(id) })}
                     >
                       <ChevronUp className="size-3" />
                     </Button>
@@ -207,7 +207,7 @@ export function SubResourcePicker({
                       className="h-6 w-6 p-0"
                       onClick={() => move(id, 'down')}
                       disabled={index === selected.length - 1}
-                      aria-label={`${nameOf(id)} nach unten verschieben`}
+                      aria-label={t('picker.moveDown', { name: nameOf(id) })}
                     >
                       <ChevronDown className="size-3" />
                     </Button>
@@ -218,7 +218,7 @@ export function SubResourcePicker({
                       className="h-6 px-2 text-xs text-muted-foreground"
                       onClick={() => toggle(id)}
                     >
-                      Entfernen
+                      {t('common:actions.remove')}
                     </Button>
                   </span>
                 </li>
@@ -229,11 +229,11 @@ export function SubResourcePicker({
 
         <div className="flex flex-col gap-1">
           <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            {selected.length > 0 ? 'Weitere hinzufügen' : 'Resources'}
+            {selected.length > 0 ? t('picker.addMore') : t('picker.resources')}
           </p>
           <ul
             className="flex max-h-60 flex-col gap-1 overflow-auto"
-            aria-label="Verfuegbare Resources"
+            aria-label={t('picker.availableAriaLabel')}
           >
             {unselected.map((resource) => {
               const checkId = `sub-resource-pick-${resource.id}`
@@ -248,7 +248,7 @@ export function SubResourcePicker({
                     id={checkId}
                     checked={false}
                     onChange={() => toggle(resource.id)}
-                    aria-label={`${resource.name} als Sub-Resource hinzufügen`}
+                    aria-label={t('picker.addAriaLabel', { name: resource.name })}
                   />
                   <Label
                     htmlFor={checkId}
@@ -266,11 +266,11 @@ export function SubResourcePicker({
             })}
             {unselected.length === 0 && allResources.length === 0 ? (
               <li className="px-3 py-2 text-sm text-muted-foreground">
-                Keine weiteren Resources im Workspace.
+                {t('picker.noMore')}
               </li>
             ) : unselected.length === 0 ? (
               <li className="px-3 py-2 text-sm text-muted-foreground">
-                Alle verfügbaren Resources sind bereits ausgewählt.
+                {t('picker.allSelected')}
               </li>
             ) : null}
           </ul>
@@ -278,7 +278,7 @@ export function SubResourcePicker({
 
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-            Abbrechen
+            {t('common:actions.cancel')}
           </Button>
           <Button
             type="button"
@@ -286,7 +286,7 @@ export function SubResourcePicker({
             onClick={() => void handleSave()}
             disabled={saving}
           >
-            Speichern ({selected.length})
+            {t('picker.save', { count: selected.length })}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -5,6 +5,8 @@
 // gebrieft bekommt — ohne sie hier editieren zu muessen (das macht der
 // PersonaSkillsEditor im Formular).
 
+import { useTranslation } from 'react-i18next'
+
 import type { SkillRef } from '@/api/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -21,6 +23,7 @@ interface PersonaSkillsTableProps {
 }
 
 export function PersonaSkillsTable({ skills }: PersonaSkillsTableProps) {
+  const { t } = useTranslation('personas')
   const named = skills.filter((skill) => skill.name.trim() !== '')
   if (named.length === 0) {
     return null
@@ -28,14 +31,14 @@ export function PersonaSkillsTable({ skills }: PersonaSkillsTableProps) {
   return (
     <Card data-testid="persona-skills-table">
       <CardHeader>
-        <CardTitle>Skills (Agenten-Sicht)</CardTitle>
+        <CardTitle>{t('skills.table.title')}</CardTitle>
       </CardHeader>
       <CardContent>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-1/3">Skill</TableHead>
-              <TableHead>Hinweis</TableHead>
+              <TableHead className="w-1/3">{t('skills.table.skillColumn')}</TableHead>
+              <TableHead>{t('skills.table.hintColumn')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

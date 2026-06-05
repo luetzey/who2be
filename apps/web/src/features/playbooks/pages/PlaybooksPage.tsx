@@ -1,6 +1,7 @@
 import { BookOpen, Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -16,6 +17,7 @@ import { usePlaybooks } from '@/hooks/usePlaybooks'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 
 export function PlaybooksPage() {
+  const { t } = useTranslation('playbooks')
   const { playbooks, loading, error } = usePlaybooks()
   const wsPath = useWorkspacePath()
   const [tagFilter, setTagFilter] = useState('')
@@ -37,13 +39,13 @@ export function PlaybooksPage() {
     <Container>
         <Stack gap="lg">
           <PageHeader
-            title="Playbooks"
-            description="Workflows und Playbook-Versionen für Agenten."
+            title={t('list.title')}
+            description={t('list.description')}
             actions={
               <Button asChild variant="brand">
                 <Link to={wsPath("/playbooks/new")}>
                   <Plus className="h-4 w-4" />
-                  Neues Playbook
+                  {t('list.newButton')}
                 </Link>
               </Button>
             }
@@ -51,7 +53,7 @@ export function PlaybooksPage() {
           <Card>
             <CardContent className="grid gap-4 pt-6 sm:grid-cols-2">
               <div className="flex flex-col gap-2">
-                <Label htmlFor="playbook-tag-filter">Tag-Filter</Label>
+                <Label htmlFor="playbook-tag-filter">{t('list.tagFilter')}</Label>
                 <Input
                   id="playbook-tag-filter"
                   value={tagFilter}
@@ -59,7 +61,7 @@ export function PlaybooksPage() {
                 />
               </div>
               <div className="flex flex-col gap-2">
-                <Label htmlFor="playbook-trigger-filter">Trigger-Filter</Label>
+                <Label htmlFor="playbook-trigger-filter">{t('list.triggerFilter')}</Label>
                 <Input
                   id="playbook-trigger-filter"
                   value={triggerFilter}
@@ -79,19 +81,19 @@ export function PlaybooksPage() {
                 icon={BookOpen}
                 title={
                   playbooks.length === 0
-                    ? 'Noch keine Playbooks'
-                    : 'Keine Playbooks für diesen Filter'
+                    ? t('list.empty.title')
+                    : t('list.empty.filteredTitle')
                 }
                 description={
                   playbooks.length === 0
-                    ? 'Lege dein erstes Playbook an, um Workflows zu definieren.'
-                    : 'Passe Tag- oder Trigger-Filter an oder lege ein neues Playbook an.'
+                    ? t('list.empty.description')
+                    : t('list.empty.filteredDescription')
                 }
                 action={
                   <Button asChild variant="brand">
                     <Link to={wsPath("/playbooks/new")}>
                       <Plus className="h-4 w-4" />
-                      Neues Playbook
+                      {t('list.newButton')}
                     </Link>
                   </Button>
                 }
@@ -111,7 +113,7 @@ export function PlaybooksPage() {
                   </span>
                 </div>
                 {playbook.tags.length > 0 ? (
-                  <div className="flex flex-wrap gap-1" aria-label="Tags">
+                  <div className="flex flex-wrap gap-1" aria-label={t('common:fields.tags')}>
                     {playbook.tags.map((tag) => (
                       <Badge key={tag} variant="secondary">
                         {tag}

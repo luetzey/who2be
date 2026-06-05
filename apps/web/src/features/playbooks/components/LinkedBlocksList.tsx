@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+
 import type { LinkAvailability, ResourceLink } from '@/api/types'
 import { Badge, type BadgeProps } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -11,25 +13,25 @@ interface LinkedBlocksListProps {
 }
 
 interface AvailabilityMeta {
-  label: string
+  labelKey: string
   variant: BadgeProps['variant']
-  empty: string
+  emptyKey: string
 }
 
 const META: Record<'active' | 'draft' | 'deleted', AvailabilityMeta> = {
-  active: { label: 'Aktiv', variant: 'secondary', empty: '(leer)' },
-  draft: { label: 'Nur in Draft', variant: 'outline', empty: '(leer — Draft)' },
+  active: { labelKey: 'linkedBlocks.statusActive', variant: 'secondary', emptyKey: 'linkedBlocks.emptyActive' },
+  draft: { labelKey: 'linkedBlocks.statusDraft', variant: 'outline', emptyKey: 'linkedBlocks.emptyDraft' },
   deleted: {
-    label: 'Block geloescht',
+    labelKey: 'linkedBlocks.statusDeleted',
     variant: 'destructive',
-    empty: 'Block nicht mehr verfuegbar',
+    emptyKey: 'linkedBlocks.emptyDeleted',
   },
 }
 
 const RESOURCE_SCOPE_META: AvailabilityMeta = {
-  label: 'Ganzes Dokument',
+  labelKey: 'linkedBlocks.resourceScopeLabel',
   variant: 'secondary',
-  empty: 'Resource nicht mehr verfuegbar',
+  emptyKey: 'linkedBlocks.resourceScopeEmpty',
 }
 
 // Backend liefert ab Track A `available_in: 'active' | 'draft' | null`. Bis
@@ -47,11 +49,12 @@ function resolveAvailability(link: ResourceLink): 'active' | 'draft' | 'deleted'
 }
 
 export function LinkedBlocksList({ links, onRemove, disabled = false }: LinkedBlocksListProps) {
+  const { t } = useTranslation('playbooks')
   if (links.length === 0) {
-    return <p className="text-sm text-muted-foreground">Noch keine Bloecke verknuepft.</p>
+    return <p className="text-sm text-muted-foreground">{t('linkedBlocks.empty')}</p>
   }
   return (
-    <ul className="flex flex-col gap-2" aria-label="Verknuepfte Bloecke">
+    <ul className="flex flex-col gap-2" aria-label={t('linkedBlocks.ariaLabel')}>
       {links.map((link) => {
         const isResourceScope = link.link_scope === 'resource'
         const state = resolveAvailability(link)
@@ -64,11 +67,11 @@ export function LinkedBlocksList({ links, onRemove, disabled = false }: LinkedBl
         const preview = link.section_preview ?? link.preview
         const subline = isResourceScope
           ? isInline
-            ? 'Vollstaendige Resource — fest eingebettet (inline)'
-            : 'Vollstaendige Resource — Link (lazy), via fetch nachgeladen'
+            ? t('linkedBlocks.sublinesInline')
+            : t('linkedBlocks.sublinesLazy')
           : state === 'deleted'
-            ? meta.empty
-            : (preview ?? meta.empty)
+            ? t(meta.emptyKey)
+            : (preview ?? t(meta.emptyKey))
         return (
           <li
             key={`${link.resource_id}-${link.link_scope ?? 'block'}-${link.block_id ?? 'resource'}`}
@@ -79,7 +82,7 @@ export function LinkedBlocksList({ links, onRemove, disabled = false }: LinkedBl
               <span className="truncate text-xs text-muted-foreground">{subline}</span>
             </span>
             <span className="flex shrink-0 items-center gap-2">
-              <Badge variant={meta.variant}>{meta.label}</Badge>
+              <Badge variant={meta.variant}>{t(meta.labelKey)}</Badge>
               {onRemove !== undefined ? (
                 <Button
                   type="button"
@@ -88,7 +91,7 @@ export function LinkedBlocksList({ links, onRemove, disabled = false }: LinkedBl
                   onClick={() => onRemove(link)}
                   disabled={disabled}
                 >
-                  Entfernen
+                  {t('common:actions.remove')}
                 </Button>
               ) : null}
             </span>

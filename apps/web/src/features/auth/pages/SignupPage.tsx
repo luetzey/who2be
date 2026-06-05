@@ -3,6 +3,7 @@ import { MailCheck } from 'lucide-react'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 
 import { useSession } from '@/auth/session-context'
@@ -17,19 +18,21 @@ import { OAuthButtons } from '../components/OAuthButtons'
 import { buildRedirectTo } from '../lib/redirect'
 import { sanitizeNext } from '../lib/sanitize-next'
 
-// Min-Laenge 8 = GoTrue-Default; Confirm-Feld verhindert Tippfehler im Passwort.
-const schema = z
-  .object({
-    email: z.string().email('Bitte gueltige E-Mail eingeben.'),
-    password: z.string().min(8, 'Mindestens 8 Zeichen.'),
-    confirm: z.string().min(1, 'Bitte wiederholen.'),
-  })
-  .refine((values) => values.password === values.confirm, {
-    message: 'Passwoerter stimmen nicht ueberein.',
-    path: ['confirm'],
-  })
+type SignupValues = { email: string; password: string; confirm: string }
 
-type SignupValues = z.infer<typeof schema>
+// Min-Laenge 8 = GoTrue-Default; Confirm-Feld verhindert Tippfehler im Passwort.
+function makeSignupSchema(t: (key: string) => string) {
+  return z
+    .object({
+      email: z.string().email(t('validation.emailInvalid')),
+      password: z.string().min(8, t('validation.passwordMinLength')),
+      confirm: z.string().min(1, t('validation.confirmRequired')),
+    })
+    .refine((values) => values.password === values.confirm, {
+      message: t('validation.passwordMismatch'),
+      path: ['confirm'],
+    })
+}
 
 // Registrierung (Track K). Zwei GoTrue-Ausgaenge:
 //   - Dev (`GOTRUE_MAILER_AUTOCONFIRM=true`): `signUp` liefert sofort eine
@@ -38,6 +41,7 @@ type SignupValues = z.infer<typeof schema>
 //     verschickt eine Bestaetigungs-Mail. Wir zeigen den „Pruefe dein
 //     Postfach"-Zustand; der Confirm-Link landet auf `/auth/callback`.
 export function SignupPage() {
+  const { t } = useTranslation('auth')
   const { session } = useSession()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -46,8 +50,10 @@ export function SignupPage() {
 
   const next = sanitizeNext(searchParams.get('next'))
 
+  const signupSchema = makeSignupSchema(t)
+
   const form = useForm<SignupValues>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(signupSchema),
     defaultValues: { email: '', password: '', confirm: '' },
   })
 
@@ -81,13 +87,13 @@ export function SignupPage() {
       <Card className="w-full max-w-md border-transparent shadow-modal">
         <CardHeader className="gap-2">
           <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            Who2Be
+            {t('brand')}
           </span>
-          <CardTitle className="text-3xl tracking-tight">Registrieren</CardTitle>
+          <CardTitle className="text-3xl tracking-tight">{t('signup.title')}</CardTitle>
           <CardDescription>
             {confirmationPending
-              ? 'Bestaetige deine E-Mail-Adresse ueber den Link, den wir dir geschickt haben.'
-              : 'Erstelle ein Konto, um deinen Workspace einzurichten.'}
+              ? t('signup.descriptionPending')
+              : t('signup.description')}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -95,11 +101,10 @@ export function SignupPage() {
             <div className="flex flex-col items-center gap-4 py-4 text-center">
               <MailCheck className="h-10 w-10 text-muted-foreground" aria-hidden="true" />
               <p className="text-sm text-muted-foreground">
-                Pruefe dein Postfach und folge dem Bestaetigungs-Link, um die Anmeldung
-                abzuschliessen.
+                {t('signup.confirmPending')}
               </p>
               <Button asChild variant="outline" className="w-full">
-                <Link to="/login">Zurueck zur Anmeldung</Link>
+                <Link to="/login">{t('backToLogin')}</Link>
               </Button>
             </div>
           ) : (
@@ -111,7 +116,7 @@ export function SignupPage() {
                     name="email"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>E-Mail</FormLabel>
+                        <FormLabel>{t('fields.email')}</FormLabel>
                         <FormControl>
                           <Input type="email" autoComplete="email" required {...field} />
                         </FormControl>
@@ -124,7 +129,7 @@ export function SignupPage() {
                     name="password"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Passwort</FormLabel>
+                        <FormLabel>{t('fields.password')}</FormLabel>
                         <FormControl>
                           <Input
                             type="password"
@@ -142,7 +147,7 @@ export function SignupPage() {
                     name="confirm"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Passwort wiederholen</FormLabel>
+                        <FormLabel>{t('fields.passwordRepeat')}</FormLabel>
                         <FormControl>
                           <Input
                             type="password"
@@ -162,20 +167,20 @@ export function SignupPage() {
                     className="w-full"
                     disabled={form.formState.isSubmitting}
                   >
-                    Konto erstellen
+                    {t('signup.submit')}
                   </Button>
                 </form>
               </Form>
               <div className="flex items-center gap-3 text-xs text-muted-foreground">
                 <span className="h-px flex-1 bg-border" />
-                oder
+                {t('or')}
                 <span className="h-px flex-1 bg-border" />
               </div>
               <OAuthButtons next={next} />
               <p className="text-center text-sm text-muted-foreground">
-                Schon ein Konto?{' '}
+                {t('signup.alreadyAccount')}{' '}
                 <Link to="/login" className="font-medium text-foreground underline-offset-4 hover:underline">
-                  Anmelden
+                  {t('signup.signIn')}
                 </Link>
               </p>
             </div>

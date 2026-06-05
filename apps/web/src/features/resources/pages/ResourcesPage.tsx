@@ -1,6 +1,7 @@
 import { FileText, Plus, X } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 
 import type { Resource } from '@/api/types'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
@@ -14,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { useResources } from '@/hooks/useResources'
 
 export function ResourcesPage() {
+  const { t } = useTranslation('resources')
   const { resources, loading, error } = useResources()
   const wsPath = useWorkspacePath()
   const [activeTag, setActiveTag] = useState<string | null>(null)
@@ -34,20 +36,20 @@ export function ResourcesPage() {
     <Container>
       <Stack gap="lg">
         <PageHeader
-          title="Resources"
-          description="Versionierte Wissensbausteine mit Block-Editor."
+          title={t('list.title')}
+          description={t('list.description')}
           actions={
             <Button asChild variant="brand">
               <Link to={wsPath('/resources/new')}>
                 <Plus className="h-4 w-4" />
-                Neue Resource
+                {t('list.newResource')}
               </Link>
             </Button>
           }
         />
 
         {allTags.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Tag-Filter">
+          <div className="flex flex-wrap items-center gap-2" role="group" aria-label={t('list.tagFilter')}>
             <span className="text-xs font-medium text-muted-foreground">Tags:</span>
             {allTags.map((tag) => (
               <Badge
@@ -70,7 +72,7 @@ export function ResourcesPage() {
                 onClick={() => setActiveTag(null)}
               >
                 <X className="size-3" />
-                Filter zurücksetzen
+                {t('list.resetFilter')}
               </Button>
             ) : null}
           </div>
@@ -85,24 +87,24 @@ export function ResourcesPage() {
             activeTag !== null ? (
               <EmptyState
                 icon={FileText}
-                title={`Keine Resources mit Tag „${activeTag}"`}
-                description="Entferne den Filter oder lege eine neue Resource mit diesem Tag an."
+                title={t('list.emptyTagTitle', { tag: activeTag })}
+                description={t('list.emptyTagDescription')}
                 action={
                   <Button type="button" variant="outline" onClick={() => setActiveTag(null)}>
-                    Filter zurücksetzen
+                    {t('list.resetFilter')}
                   </Button>
                 }
               />
             ) : (
               <EmptyState
                 icon={FileText}
-                title="Noch keine Resources"
-                description="Lege deine erste Resource an, um Wissen in Blöcken zu erfassen."
+                title={t('list.emptyTitle')}
+                description={t('list.emptyDescription')}
                 action={
                   <Button asChild variant="brand">
                     <Link to={wsPath('/resources/new')}>
                       <Plus className="h-4 w-4" />
-                      Neue Resource
+                      {t('list.newResource')}
                     </Link>
                   </Button>
                 }

@@ -1,6 +1,8 @@
 import { useCallback, useState } from 'react'
+import '../i18n'
 
 import { useApi } from '@/api/useApi'
+import i18n from '@/i18n'
 
 interface UseCheckoutResult {
   start: (plan: string) => void
@@ -9,7 +11,7 @@ interface UseCheckoutResult {
 }
 
 function describeError(cause: unknown): string {
-  return cause instanceof Error ? cause.message : 'Checkout fehlgeschlagen.'
+  return cause instanceof Error ? cause.message : i18n.t('billing:error.checkoutFailed')
 }
 
 /**

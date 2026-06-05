@@ -2,6 +2,7 @@
 // Zeigt welche Composite-Playbooks dieses Playbook als Sub-Playbook enthalten.
 
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 
 import type { PlaybookRef } from '@/api/types'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
@@ -11,18 +12,19 @@ interface ComposedByListProps {
 }
 
 export function ComposedByList({ parents }: ComposedByListProps) {
+  const { t } = useTranslation('playbooks')
   const wsPath = useWorkspacePath()
 
   if (parents.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        Kein Composite-Playbook referenziert dieses Playbook.
+        {t('composedBy.empty')}
       </p>
     )
   }
 
   return (
-    <ul className="flex flex-col gap-1" aria-label="Referenziert in Composites">
+    <ul className="flex flex-col gap-1" aria-label={t('composedBy.ariaLabel')}>
       {parents.map((parent) => (
         <li key={parent.id} className="text-sm">
           <Link

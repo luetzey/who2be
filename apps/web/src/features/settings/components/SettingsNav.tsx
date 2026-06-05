@@ -1,6 +1,7 @@
 import { Building2, KeyRound, Settings2, User, Users } from 'lucide-react'
 import type { ComponentType, SVGProps } from 'react'
 import { NavLink } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
@@ -8,7 +9,7 @@ import { cn } from '@/lib/utils'
 
 interface SettingsNavItem {
   to: string
-  label: string
+  labelKey: string
   icon: ComponentType<SVGProps<SVGSVGElement>>
   adminOnly?: boolean
 }
@@ -17,20 +18,21 @@ interface SettingsNavItem {
 // Workspace-internen Bereiche Mitglieder + API-Tokens. Mitglieder ist
 // admin-only (ADR-0023) — Editor/Viewer würden ohnehin zurückgeworfen.
 const ITEMS: SettingsNavItem[] = [
-  { to: '/settings/account', label: 'Konto', icon: User },
-  { to: '/settings/org', label: 'Organisation', icon: Building2 },
-  { to: '/settings/workspace', label: 'Workspace', icon: Settings2 },
-  { to: '/settings/members', label: 'Mitglieder', icon: Users, adminOnly: true },
-  { to: '/settings/tokens', label: 'API-Tokens', icon: KeyRound },
+  { to: '/settings/account', labelKey: 'nav.account', icon: User },
+  { to: '/settings/org', labelKey: 'nav.org', icon: Building2 },
+  { to: '/settings/workspace', labelKey: 'nav.workspace', icon: Settings2 },
+  { to: '/settings/members', labelKey: 'nav.members', icon: Users, adminOnly: true },
+  { to: '/settings/tokens', labelKey: 'nav.tokens', icon: KeyRound },
 ]
 
 export function SettingsNav() {
+  const { t } = useTranslation('settings')
   const wsPath = useWorkspacePath()
   const role = useCurrentWorkspaceRole()
   const items = ITEMS.filter((item) => !item.adminOnly || role === 'admin')
   return (
     <nav
-      aria-label="Einstellungen-Navigation"
+      aria-label={t('nav.ariaLabel')}
       className="flex flex-wrap gap-1 border-b pb-px"
     >
       {items.map((item) => (
@@ -45,7 +47,7 @@ export function SettingsNav() {
           }
         >
           <item.icon className="h-4 w-4" />
-          {item.label}
+          {t(item.labelKey)}
         </NavLink>
       ))}
     </nav>

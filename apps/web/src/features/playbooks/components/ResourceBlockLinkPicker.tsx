@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import type {
   EmbeddingMode,
@@ -54,6 +55,7 @@ export function ResourceBlockLinkPicker({
   saving,
   onSave,
 }: ResourceBlockLinkPickerProps) {
+  const { t } = useTranslation('playbooks')
   const api = useApi()
   const [open, setOpen] = useState(false)
   const [resources, setResources] = useState<Resource[]>([])
@@ -92,9 +94,9 @@ export function ResourceBlockLinkPicker({
       .listResources()
       .then(setResources)
       .catch((cause: unknown) =>
-        setLoadError(cause instanceof Error ? cause.message : 'Laden fehlgeschlagen.'),
+        setLoadError(cause instanceof Error ? cause.message : t('resourcePicker.loadFailed')),
       )
-  }, [open, existing, api])
+  }, [open, existing, api, t])
 
   const openResource = useCallback(
     (resource: Resource) => {
@@ -103,10 +105,10 @@ export function ResourceBlockLinkPicker({
         .getResource(resource.id)
         .then((full) => setBlocks(full.content.blocks ?? []))
         .catch((cause: unknown) =>
-          setLoadError(cause instanceof Error ? cause.message : 'Laden fehlgeschlagen.'),
+          setLoadError(cause instanceof Error ? cause.message : t('resourcePicker.loadFailed')),
         )
     },
-    [api],
+    [api, t],
   )
 
   const toggle = useCallback((key: string) => {
@@ -172,15 +174,14 @@ export function ResourceBlockLinkPicker({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button type="button" variant="outline">
-          Bloecke verknuepfen
+          {t('resourcePicker.triggerButton')}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Resource-Bloecke verknuepfen</DialogTitle>
+          <DialogTitle>{t('resourcePicker.dialogTitle')}</DialogTitle>
           <DialogDescription>
-            Waehle links eine Resource und rechts den Heading-Block, dessen Section
-            verlinkt werden soll. Nur Heading-Bloecke sind als Anker erlaubt.
+            {t('resourcePicker.dialogDescription')}
           </DialogDescription>
         </DialogHeader>
 
@@ -206,7 +207,7 @@ export function ResourceBlockLinkPicker({
               </li>
             ))}
             {resources.length === 0 ? (
-              <li className="px-3 py-2 text-sm text-muted-foreground">Keine Resources.</li>
+              <li className="px-3 py-2 text-sm text-muted-foreground">{t('resourcePicker.noResources')}</li>
             ) : null}
           </ul>
 

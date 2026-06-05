@@ -1,6 +1,7 @@
 import { ArrowLeft } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -14,6 +15,7 @@ import { ResourceEditorForm } from '../components/ResourceEditorForm'
 import { useCreateResource } from '../hooks/useCreateResource'
 
 export function ResourceNewPage() {
+  const { t } = useTranslation('resources')
   const navigate = useNavigate()
   const wsPath = useWorkspacePath()
   const [locales, setLocales] = useState<string[]>(['de'])
@@ -28,10 +30,10 @@ export function ResourceNewPage() {
         <Button asChild variant="ghost" size="sm" className="self-start">
           <Link to={wsPath('/resources')}>
             <ArrowLeft className="h-4 w-4" />
-            Resources
+            {t('list.title')}
           </Link>
         </Button>
-        <PageHeader title="Neue Resource" description="Lege eine neue Resource an." />
+        <PageHeader title={t('new.title')} description={t('new.description')} />
         <LanguageSelect value={locales} onChange={setLocales} idBase="resource-lang" />
         <ResourceEditorForm
           form={form}
@@ -47,7 +49,7 @@ export function ResourceNewPage() {
                   variant="brand"
                   disabled={form.formState.isSubmitting}
                 >
-                  Anlegen
+                  {t('new.submit')}
                 </Button>
               </div>
             </div>

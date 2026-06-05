@@ -3,7 +3,10 @@ import { ArrowLeft } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
+
+import i18n from '@/i18n'
 
 import { useApi } from '@/api/useApi'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
@@ -24,7 +27,7 @@ import { PlaceholderHelp } from '../components/PlaceholderHelp'
 // Track B (Nur-BlockNote): Templates sind immer BlockNote.
 // body-Validierung: kein min(1) — ein leeres BlockNote-Dok ist valid.
 const createSchema = z.object({
-  name: z.string().min(1, 'Name erforderlich.'),
+  name: z.string().min(1, i18n.t('common:validation.nameRequired')),
   description: z.string(),
   body: z.string(),
 })
@@ -32,6 +35,7 @@ const createSchema = z.object({
 type CreateValues = z.infer<typeof createSchema>
 
 export function SystemPromptNewPage() {
+  const { t } = useTranslation('systemPrompts')
   const api = useApi()
   const navigate = useNavigate()
   const wsPath = useWorkspacePath()
@@ -71,10 +75,10 @@ export function SystemPromptNewPage() {
           body: bodyJson !== '' ? bodyJson : '[]',
         },
       })
-      notify.success('Template angelegt.')
+      notify.success(t('page.new.toast.created'))
       navigate(wsPath(`/system-prompts/${created.id}`))
     } catch (cause) {
-      setSaveError(cause instanceof Error ? cause.message : 'Unbekannter Fehler.')
+      setSaveError(cause instanceof Error ? cause.message : t('page.new.error.unknown'))
     }
   })
 
@@ -84,12 +88,12 @@ export function SystemPromptNewPage() {
         <Button asChild variant="ghost" size="sm" className="self-start">
           <Link to={wsPath('/system-prompts')}>
             <ArrowLeft className="h-4 w-4" />
-            System-Prompts
+            {t('nav.backToList')}
           </Link>
         </Button>
         <PageHeader
-          title="Neues Template"
-          description="Lege ein wiederverwendbares System-Prompt-Template an."
+          title={t('page.new.title')}
+          description={t('page.new.description')}
         />
         <div className="flex flex-col gap-6">
           <Card>
@@ -101,9 +105,9 @@ export function SystemPromptNewPage() {
                     name="name"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Name</FormLabel>
+                        <FormLabel>{t('common:fields.name')}</FormLabel>
                         <FormControl>
-                          <Input required placeholder="z. B. Customer-Support-Agent" {...field} />
+                          <Input required placeholder={t('form.identity.name.placeholder')} {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -114,10 +118,10 @@ export function SystemPromptNewPage() {
                     name="description"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Beschreibung</FormLabel>
+                        <FormLabel>{t('common:fields.description')}</FormLabel>
                         <FormControl>
                           <Input
-                            placeholder="z. B. Standard-Template für Support-Agenten"
+                            placeholder={t('form.identity.description.placeholder')}
                             {...field}
                           />
                         </FormControl>
@@ -131,7 +135,7 @@ export function SystemPromptNewPage() {
                     render={() => (
                       <FormItem>
                         <div className="flex items-center justify-between">
-                          <FormLabel>Body</FormLabel>
+                          <FormLabel>{t('form.promptBody.label')}</FormLabel>
                           <PlaceholderHelp />
                         </div>
                         <SystemPromptEditor onChange={handleBlockNoteChange} />
@@ -146,7 +150,7 @@ export function SystemPromptNewPage() {
                       variant="brand"
                       disabled={form.formState.isSubmitting}
                     >
-                      Anlegen
+                      {t('page.new.submit')}
                     </Button>
                   </div>
                 </form>

@@ -1,5 +1,6 @@
 import { type BaseSyntheticEvent, useCallback } from 'react'
 import { type UseFormReturn } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
 
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
@@ -26,6 +27,7 @@ export function SystemPromptEditorForm({
   onSubmit,
   saveError,
 }: SystemPromptEditorFormProps) {
+  const { t } = useTranslation('systemPrompts')
   const isViewer = useCurrentWorkspaceRole() === 'viewer'
   const bodyValue = form.watch('body')
 
@@ -56,12 +58,11 @@ export function SystemPromptEditorForm({
             <Form {...form}>
               <form onSubmit={onSubmit} className="flex flex-col gap-6">
                 <FormSection
-                  title="Identität"
-                  description="Wie das Template heißt und wofür es genutzt wird."
+                  title={t('form.identity.title')}
+                  description={t('form.identity.description.placeholder')}
                   help={
                     <p>
-                      Beispiel: <em>„Customer-Support-Agent v1"</em>. Beschreibung
-                      taucht in der Template-Liste und im Agent-Picker auf.
+                      {t('form.identity.help')}
                     </p>
                   }
                 >
@@ -70,9 +71,9 @@ export function SystemPromptEditorForm({
                     name="name"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Name</FormLabel>
+                        <FormLabel>{t('common:fields.name')}</FormLabel>
                         <FormControl>
-                          <Input required placeholder="z. B. Customer-Support-Agent" {...field} />
+                          <Input required placeholder={t('form.identity.name.placeholder')} {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -83,10 +84,10 @@ export function SystemPromptEditorForm({
                     name="description"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Beschreibung</FormLabel>
+                        <FormLabel>{t('common:fields.description')}</FormLabel>
                         <FormControl>
                           <Input
-                            placeholder="z. B. Standard-Template für Support-Agenten"
+                            placeholder={t('form.identity.description.placeholder')}
                             {...field}
                           />
                         </FormControl>
@@ -97,13 +98,11 @@ export function SystemPromptEditorForm({
                 </FormSection>
 
                 <FormSection
-                  title="Prompt-Body"
-                  description="Schreibe deinen Prompt im Editor. Mit / fügst du Placeholder ein."
+                  title={t('form.promptBody.title')}
+                  description={t('form.promptBody.description')}
                   help={
                     <p>
-                      Tippe <code>/</code> im Editor um Playbook-, Resource-, Persona-Feld-
-                      oder Datum-Placeholder einzufuegen. Der Backend-Renderer expandiert
-                      diese beim MCP-Read zu echtem Text.
+                      {t('form.promptBody.help')}
                     </p>
                   }
                 >
@@ -113,7 +112,7 @@ export function SystemPromptEditorForm({
                     render={() => (
                       <FormItem>
                         <div className="flex items-center justify-between">
-                          <FormLabel>Body</FormLabel>
+                          <FormLabel>{t('form.promptBody.label')}</FormLabel>
                           <PlaceholderHelp />
                         </div>
                         <SystemPromptEditor
@@ -133,9 +132,9 @@ export function SystemPromptEditorForm({
                     type="submit"
                     variant="brand"
                     disabled={form.formState.isSubmitting || isViewer}
-                    title={isViewer ? 'Viewer können Inhalte nur ansehen' : undefined}
+                    title={isViewer ? t('form.viewerTooltip') : undefined}
                   >
-                    Neue Version speichern
+                    {t('form.saveVersion')}
                   </Button>
                 </div>
               </form>

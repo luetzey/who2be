@@ -1,5 +1,6 @@
 import { ChevronDown, Clipboard } from 'lucide-react'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import type { AgentRenderFormat } from '@/api/types'
 import { useApi } from '@/api/useApi'
@@ -18,18 +19,6 @@ interface CopyPromptButtonProps {
   disabled?: boolean
 }
 
-const FORMAT_LABELS: Record<AgentRenderFormat, string> = {
-  plain: 'Kopieren',
-  markdown: 'Als Markdown kopieren',
-  html: 'Als HTML kopieren',
-}
-
-const SUCCESS_LABELS: Record<AgentRenderFormat, string> = {
-  plain: 'Prompt in Zwischenablage.',
-  markdown: 'Prompt als Markdown in Zwischenablage.',
-  html: 'Prompt als HTML in Zwischenablage.',
-}
-
 /**
  * Split-Button: Primary kopiert den Plain-Prompt, das Dropdown bietet
  * Markdown- und HTML-Varianten. Das Render-Ergebnis landet via
@@ -37,6 +26,7 @@ const SUCCESS_LABELS: Record<AgentRenderFormat, string> = {
  * Placeholders triggern einen sekundaeren Hinweis-Toast.
  */
 export function CopyPromptButton({ agentId, disabled = false }: CopyPromptButtonProps) {
+  const { t } = useTranslation('agents')
   const api = useApi()
   const [busy, setBusy] = useState<AgentRenderFormat | null>(null)
 
@@ -45,15 +35,17 @@ export function CopyPromptButton({ agentId, disabled = false }: CopyPromptButton
     try {
       const result = await api.renderAgentPrompt(agentId, format)
       await navigator.clipboard.writeText(result.content)
-      notify.success(SUCCESS_LABELS[format])
+      notify.success(t(`copy.success.${format}`))
       if (result.unresolved_placeholders.length > 0) {
         notify.info(
-          `Hinweis: ${result.unresolved_placeholders.length} unbekannte Placeholder(s) — ${result.unresolved_placeholders.join(', ')}`,
+          t('copy.unresolvedHint', {
+            count: result.unresolved_placeholders.length,
+            list: result.unresolved_placeholders.join(', '),
+          }),
         )
       }
     } catch (cause: unknown) {
-      const message =
-        cause instanceof Error ? cause.message : 'Kopieren fehlgeschlagen.'
+      const message = cause instanceof Error ? cause.message : t('copy.error')
       notify.error(message)
     } finally {
       setBusy(null)
@@ -71,7 +63,7 @@ export function CopyPromptButton({ agentId, disabled = false }: CopyPromptButton
         data-testid="copy-prompt-primary"
       >
         <Clipboard className="h-4 w-4" />
-        {FORMAT_LABELS.plain}
+        {t('copy.plain')}
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -79,7 +71,7 @@ export function CopyPromptButton({ agentId, disabled = false }: CopyPromptButton
             type="button"
             variant="brand"
             disabled={disabled || busy !== null}
-            aria-label="Format wählen"
+            aria-label={t('copy.formatSelect')}
             className="rounded-l-none border-l border-l-primary-foreground/30 px-2"
             data-testid="copy-prompt-dropdown-trigger"
           >
@@ -91,13 +83,13 @@ export function CopyPromptButton({ agentId, disabled = false }: CopyPromptButton
             onSelect={() => void copy('markdown')}
             data-testid="copy-prompt-option-markdown"
           >
-            {FORMAT_LABELS.markdown}
+            {t('copy.markdown')}
           </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={() => void copy('html')}
             data-testid="copy-prompt-option-html"
           >
-            {FORMAT_LABELS.html}
+            {t('copy.html')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
