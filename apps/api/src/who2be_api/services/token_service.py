@@ -8,6 +8,7 @@ in den Token-Row geschrieben.
 from datetime import datetime
 from uuid import UUID
 
+import asyncpg
 from fastapi import HTTPException, status
 
 from who2be_api.core.security import (
@@ -18,14 +19,25 @@ from who2be_api.core.security import (
     role_satisfies,
 )
 from who2be_api.repositories.token_repository import TokenRepository
+from who2be_api.services.audit_service import AuditService
 from who2be_models import TokenCreate, TokenCreated, TokenRead, WorkspaceRole, encode_cursor
 
 
 class TokenService:
     """Erzeugt, listet und widerruft API-Token eines Workspaces."""
 
-    def __init__(self, token_repo: TokenRepository) -> None:
+    def __init__(
+        self,
+        token_repo: TokenRepository,
+        audit_service: AuditService | None = None,
+        pool: asyncpg.Pool | None = None,
+    ) -> None:
+        # `pool` ist der Audit-Executor (best-effort, separater Tx-Pfad — die
+        # Token-Mutationen selbst sind einzelne Pool-Statements). `audit_service`
+        # ist optional, damit aeltere Tests/Fakes ohne Audit-Wiring weiterlaufen.
         self._repo = token_repo
+        self._audit = audit_service
+        self._pool = pool
 
     async def create(self, ctx: WorkspaceContext, data: TokenCreate) -> TokenCreated:
         """Legt einen Token an; der Klartext wird genau einmal zurueckgegeben.
@@ -46,6 +58,15 @@ class TokenService:
         stored = await self._repo.insert(
             ctx.workspace_id, ctx.user_id, data.name, hash_token(plaintext), role
         )
+        if self._audit is not None and self._pool is not None:
+            await self._audit.record(
+                self._pool,
+                action="token.issued",
+                actor_id=ctx.user_id,
+                workspace_id=ctx.workspace_id,
+                target=stored.id,
+                detail={"name": data.name, "role": role.value},
+            )
         return TokenCreated(**stored.model_dump(), token=plaintext)
 
     async def list_all(
@@ -70,4 +91,12 @@ class TokenService:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Token nicht gefunden.",
+            )
+        if self._audit is not None and self._pool is not None:
+            await self._audit.record(
+                self._pool,
+                action="token.revoked",
+                actor_id=ctx.user_id,
+                workspace_id=ctx.workspace_id,
+                target=token_id,
             )

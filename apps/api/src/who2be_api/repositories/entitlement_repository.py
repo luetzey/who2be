@@ -72,33 +72,61 @@ class PgEntitlementRepository:
         # `created_by`/`reason` sind das Audit des befristeten `manual_override`
         # (ADR-0028); andere Quellen schreiben hier NULL — ein neuer regulaerer
         # Stand (Mollie/Webhook) hebt damit einen vorherigen Override korrekt auf.
-        await self._pool.execute(
-            "INSERT INTO org_entitlement "
-            "(org_id, status, features, expires_at, mcp_monthly_quota, "
-            " mcp_rate_per_min, grace_until, source, external_ref, "
-            " created_by, reason, updated_at) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now()) "
-            "ON CONFLICT (org_id) DO UPDATE SET "
-            "  status = EXCLUDED.status, "
-            "  features = EXCLUDED.features, "
-            "  expires_at = EXCLUDED.expires_at, "
-            "  mcp_monthly_quota = EXCLUDED.mcp_monthly_quota, "
-            "  mcp_rate_per_min = EXCLUDED.mcp_rate_per_min, "
-            "  grace_until = EXCLUDED.grace_until, "
-            "  source = EXCLUDED.source, "
-            "  external_ref = EXCLUDED.external_ref, "
-            "  created_by = EXCLUDED.created_by, "
-            "  reason = EXCLUDED.reason, "
-            "  updated_at = now()",
-            org_id,
-            entitlement.status,
-            sorted(entitlement.features),
-            entitlement.expires_at,
-            entitlement.mcp_monthly_quota,
-            entitlement.mcp_rate_per_min,
-            entitlement.grace_until,
-            source,
-            external_ref,
-            created_by,
-            reason,
-        )
+        #
+        # WP-C (ADR-0031): zusaetzlich zum UPSERT der SSoT `org_entitlement` wird
+        # **in derselben Transaktion** ein unveraenderbarer Journaleintrag in
+        # `entitlement_history` geschrieben — atomar. So existiert pro Mutation
+        # genau eine Journalzeile (lueckenlos, GoBD), waehrend `org_entitlement`
+        # weiterhin den aktuellen Stand traegt. Schreibpfade laufen entweder als
+        # Owner (Webhook, RLS-Bypass) oder workspace-/org-scoped als App
+        # (`app.current_org` ist dann gesetzt — siehe 0037 RLS).
+        features = sorted(entitlement.features)
+        async with self._pool.acquire() as conn, conn.transaction():
+            await conn.execute(
+                "INSERT INTO org_entitlement "
+                "(org_id, status, features, expires_at, mcp_monthly_quota, "
+                " mcp_rate_per_min, grace_until, source, external_ref, "
+                " created_by, reason, updated_at) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now()) "
+                "ON CONFLICT (org_id) DO UPDATE SET "
+                "  status = EXCLUDED.status, "
+                "  features = EXCLUDED.features, "
+                "  expires_at = EXCLUDED.expires_at, "
+                "  mcp_monthly_quota = EXCLUDED.mcp_monthly_quota, "
+                "  mcp_rate_per_min = EXCLUDED.mcp_rate_per_min, "
+                "  grace_until = EXCLUDED.grace_until, "
+                "  source = EXCLUDED.source, "
+                "  external_ref = EXCLUDED.external_ref, "
+                "  created_by = EXCLUDED.created_by, "
+                "  reason = EXCLUDED.reason, "
+                "  updated_at = now()",
+                org_id,
+                entitlement.status,
+                features,
+                entitlement.expires_at,
+                entitlement.mcp_monthly_quota,
+                entitlement.mcp_rate_per_min,
+                entitlement.grace_until,
+                source,
+                external_ref,
+                created_by,
+                reason,
+            )
+            await conn.execute(
+                "INSERT INTO entitlement_history "
+                "(org_id, status, features, expires_at, mcp_monthly_quota, "
+                " mcp_rate_per_min, grace_until, source, external_ref, "
+                " created_by, reason) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
+                org_id,
+                entitlement.status,
+                features,
+                entitlement.expires_at,
+                entitlement.mcp_monthly_quota,
+                entitlement.mcp_rate_per_min,
+                entitlement.grace_until,
+                source,
+                external_ref,
+                created_by,
+                reason,
+            )

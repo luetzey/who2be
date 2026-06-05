@@ -10,9 +10,11 @@ from who2be_api.core.db import get_pool
 from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import get_current_user
 from who2be_api.repositories.account_repository import PgAccountLifecycleRepository
+from who2be_api.repositories.audit_log_repository import PgAuditLogRepository
 from who2be_api.repositories.organization_repository import PgOrganizationRepository
 from who2be_api.repositories.workspace_repository import PgWorkspaceRepository
 from who2be_api.services.account_lifecycle_service import AccountLifecycleService
+from who2be_api.services.audit_service import AuditService
 from who2be_api.services.organization_service import OrganizationService
 from who2be_api.services.workspace_service import WorkspaceService
 from who2be_models import (
@@ -41,7 +43,11 @@ def get_workspace_service(
 def get_account_lifecycle_service(
     pool: Annotated[asyncpg.Pool, Depends(get_pool)],
 ) -> AccountLifecycleService:
-    return AccountLifecycleService(PgAccountLifecycleRepository(pool))
+    return AccountLifecycleService(
+        PgAccountLifecycleRepository(pool),
+        audit_service=AuditService(PgAuditLogRepository()),
+        pool=pool,
+    )
 
 
 UserId = Annotated[UUID, Depends(get_current_user)]

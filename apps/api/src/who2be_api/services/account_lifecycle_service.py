@@ -13,9 +13,11 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
+import asyncpg
 from fastapi import HTTPException, status
 
 from who2be_api.repositories.account_repository import AccountLifecycleRepository
+from who2be_api.services.audit_service import AuditService
 from who2be_models import AccountDeletionRead, OrganizationDeletionRead
 
 GRACE_PERIOD = timedelta(days=30)
@@ -24,8 +26,15 @@ GRACE_PERIOD = timedelta(days=30)
 class AccountLifecycleService:
     """Vormerkung von Account- und Org-Loeschungen (kein Hard-Delete hier)."""
 
-    def __init__(self, repo: AccountLifecycleRepository) -> None:
+    def __init__(
+        self,
+        repo: AccountLifecycleRepository,
+        audit_service: AuditService | None = None,
+        pool: asyncpg.Pool | None = None,
+    ) -> None:
         self._repo = repo
+        self._audit = audit_service
+        self._pool = pool
 
     async def request_account_deletion(self, user_id: UUID) -> AccountDeletionRead:
         """Merkt den eigenen Account zur Loeschung vor (Personal-Org wird eingemottet).
@@ -47,6 +56,14 @@ class AccountLifecycleService:
             )
         purge_after = datetime.now(UTC) + GRACE_PERIOD
         await self._repo.request_account_deletion(user_id, purge_after)
+        if self._audit is not None and self._pool is not None:
+            await self._audit.record(
+                self._pool,
+                action="account.deletion_requested",
+                actor_id=user_id,
+                target=user_id,
+                detail={"purge_after": purge_after.isoformat()},
+            )
         return AccountDeletionRead(purge_after=purge_after)
 
     async def delete_organization(self, user_id: UUID, org_id: UUID) -> OrganizationDeletionRead:
@@ -74,4 +91,13 @@ class AccountLifecycleService:
             )
         requested = datetime.now(UTC) + GRACE_PERIOD
         effective = await self._repo.soft_delete_organization(org_id, requested)
+        if self._audit is not None and self._pool is not None:
+            await self._audit.record(
+                self._pool,
+                action="org.soft_deleted",
+                actor_id=user_id,
+                org_id=org_id,
+                target=org_id,
+                detail={"purge_after": effective.isoformat()},
+            )
         return OrganizationDeletionRead(organization_id=str(org_id), purge_after=effective)

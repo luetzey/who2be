@@ -18,6 +18,12 @@ from uuid import UUID
 
 import asyncpg
 
+# Sentinel-UUID fuer anonymisierte Akteurs-/Subjekt-Verweise in Audit-Journalen
+# (WP-D, ADR-0031). Nach DSGVO-Erasure wird `status_history.changed_by` und
+# `audit_log.actor_id` des geloeschten Users hierauf gesetzt — Audit-Integritaet
+# bleibt, PII-Bezug ist weg.
+ANONYMIZED_USER_ID = UUID("00000000-0000-0000-0000-000000000000")
+
 
 class AccountLifecycleRepository(Protocol):
     """Service-seitige Abstraktion fuer Lifecycle-Schreibzugriffe."""
@@ -127,7 +133,9 @@ class AccountPurgeRepository(Protocol):
 
     async def expired_accounts(self, now: datetime) -> list[UUID]: ...
 
-    async def purge_account_data(self, user_id: UUID) -> None: ...
+    async def purge_account_data(self, user_id: UUID) -> int: ...
+
+    async def cleanup_expired_invitations(self, now: datetime) -> int: ...
 
     async def mark_account_purged(self, user_id: UUID) -> None: ...
 
@@ -163,9 +171,19 @@ class PgAccountPurgeRepository:
         )
         return [row["user_id"] for row in rows]
 
-    async def purge_account_data(self, user_id: UUID) -> None:
-        """Loescht die User-eigenen Daten: Personal-Org (CASCADE), API-Tokens
-        und alle Memberships. Atomar."""
+    async def purge_account_data(self, user_id: UUID) -> int:
+        """Loescht die User-eigenen Daten und anonymisiert ueberlebende
+        Audit-Referenzen. Liefert die Zahl der anonymisierten Audit-Zeilen.
+
+        Atomar in einer Owner-Transaktion (RLS-Bypass + UPDATE-Recht trotz
+        Append-only-REVOKE aus 0044 — WP-D):
+          * Personal-Org loeschen (CASCADE der ganzen Hierarchie).
+          * API-Tokens und Memberships loeschen.
+          * `status_history.changed_by` und `audit_log.actor_id` des Users auf
+            den Sentinel anonymisieren (Audit-Integritaet bleibt, PII weg).
+          * `entitlement_history` bleibt **bewusst unberuehrt** (gesetzliche
+            Aufbewahrung §14b UStG / §147 AO, ADR-0031).
+        """
         async with self._conn.transaction():
             await self._conn.execute(
                 "DELETE FROM organization WHERE kind = 'personal' AND slug = $1",
@@ -174,9 +192,45 @@ class PgAccountPurgeRepository:
             await self._conn.execute("DELETE FROM api_token WHERE owner_id = $1", user_id)
             await self._conn.execute("DELETE FROM org_member WHERE user_id = $1", user_id)
             await self._conn.execute("DELETE FROM workspace_member WHERE user_id = $1", user_id)
+            sh_result = await self._conn.execute(
+                "UPDATE status_history SET changed_by = $2 WHERE changed_by = $1",
+                user_id,
+                ANONYMIZED_USER_ID,
+            )
+            al_result = await self._conn.execute(
+                "UPDATE audit_log SET actor_id = $2 WHERE actor_id = $1",
+                user_id,
+                ANONYMIZED_USER_ID,
+            )
+        return _count(sh_result) + _count(al_result)
+
+    async def cleanup_expired_invitations(self, now: datetime) -> int:
+        """Bereinigt die Klartext-`email` akzeptierter/abgelaufener Einladungen.
+
+        Setzt `email` auf einen Marker, statt die Zeile zu loeschen — der
+        Audit-Trail (`workspace_invitation`-Verlauf) bleibt formal erhalten,
+        die PII (E-Mail) wird entfernt. Idempotent: schon bereinigte Zeilen
+        traegt der WHERE-Filter beim naechsten Lauf nicht mehr.
+        """
+        result = await self._conn.execute(
+            "UPDATE workspace_invitation SET email = '<redacted>' "
+            "WHERE email <> '<redacted>' "
+            "  AND (accepted_at IS NOT NULL OR expires_at < $1)",
+            now,
+        )
+        return _count(result)
 
     async def mark_account_purged(self, user_id: UUID) -> None:
         await self._conn.execute(
             "UPDATE account_deletion SET purged_at = now() WHERE user_id = $1",
             user_id,
         )
+
+
+def _count(result: str) -> int:
+    """Parst die Affected-Row-Zahl aus dem asyncpg-Statement-Result (z. B.
+    'UPDATE 5'). Bei unerwartetem Format → 0."""
+    parts = result.split()
+    if len(parts) >= 2 and parts[-1].isdigit():
+        return int(parts[-1])
+    return 0
