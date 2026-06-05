@@ -60,7 +60,7 @@
     "@vitest/mocker": "^4.1.8",
     "eslint": "^9.17.0",
     "eslint-plugin-jsx-a11y": "^6.10.2",
-    "eslint-plugin-react-hooks": "^5.1.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "eslint-plugin-tailwindcss": "^3.18.3",
     "jsdom": "^25.0.1",
