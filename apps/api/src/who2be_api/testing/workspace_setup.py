@@ -21,11 +21,15 @@ _AUTH_USERS_STUB = """
         id                  uuid PRIMARY KEY,
         email               text,
         raw_user_meta_data  jsonb,
-        encrypted_password  text
+        encrypted_password  text,
+        created_at          timestamptz,
+        last_sign_in_at     timestamptz
     );
-    -- Defensive: aeltere Test-Runs haben die Tabelle ohne
-    -- encrypted_password angelegt; bei geteilter Test-DB sonst Fehler.
+    -- Defensive: aeltere Test-Runs haben die Tabelle ohne diese Spalten
+    -- angelegt; bei geteilter Test-DB sonst Fehler.
     ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS encrypted_password text;
+    ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS created_at timestamptz;
+    ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS last_sign_in_at timestamptz;
 """
 
 

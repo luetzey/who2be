@@ -13,7 +13,12 @@ from who2be_api.core import security
 from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.migrations import MIGRATIONS_DIR, apply_migrations
 from who2be_api.main import app
-from who2be_api.testing.workspace_setup import cleanup_workspaces, fresh_user_id, setup_workspace
+from who2be_api.testing.workspace_setup import (
+    cleanup_workspaces,
+    fresh_user_id,
+    seed_auth_user,
+    setup_workspace,
+)
 
 _TEST_SECRET = "integration-test-jwt-secret-padding-0123456789"
 
@@ -85,6 +90,7 @@ def test_gdpr_export_bundles_user_data(monkeypatch: pytest.MonkeyPatch) -> None:
 
     owner = fresh_user_id()
     ws = setup_workspace(owner)
+    seed_auth_user(owner, "export-user@example.com", name=None)
     try:
         with TestClient(app) as client:
             created = client.post(
@@ -102,6 +108,10 @@ def test_gdpr_export_bundles_user_data(monkeypatch: pytest.MonkeyPatch) -> None:
             bundle = export.json()
             assert bundle["user_id"] == str(owner)
             assert "exported_at" in bundle
+
+            # WP-E: account/identity-Block enthaelt die GoTrue-Email.
+            assert bundle["account"]["id"] == str(owner)
+            assert bundle["account"]["email"] == "export-user@example.com"
 
             # Personal-Org → Workspace → Persona inkl. Versionen ist enthalten.
             workspaces = [w for o in bundle["organizations"] for w in o["workspaces"]]
