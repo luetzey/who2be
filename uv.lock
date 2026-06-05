@@ -2263,7 +2263,7 @@ dev = [
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-cov", specifier = ">=5.0" },
     { name = "ruff", specifier = ">=0.15.16" },
-    { name = "testcontainers", extras = ["postgres"], specifier = ">=4.0" },
+    { name = "testcontainers", extras = ["postgres"], specifier = ">=4.14.2" },
     { name = "who2be-api", editable = "apps/api" },
     { name = "who2be-mcp", editable = "apps/mcp" },
     { name = "who2be-models", editable = "packages/models" },
