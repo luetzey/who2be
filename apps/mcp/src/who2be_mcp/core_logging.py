@@ -57,7 +57,10 @@ def configure_logging(fmt: LogFormat = "json") -> None:
         ],
     )
 
-    handler = logging.StreamHandler(sys.stdout)
+    # MCP-Stdio-Transport reserviert stdout fuer JSON-RPC-Frames — Logs MUESSEN
+    # auf stderr, sonst kollidieren strukturierte Log-Zeilen mit MCP-Antworten
+    # und kein Client (Claude Desktop, Cursor) kann den Server lesen.
+    handler = logging.StreamHandler(sys.stderr)
     handler.setFormatter(formatter)
 
     root = logging.getLogger()

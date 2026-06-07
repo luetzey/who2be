@@ -55,3 +55,21 @@ supabase.{$DOMAIN} {
     header Content-Security-Policy "default-src 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'"
     reverse_proxy auth-gateway:9999
 }
+
+# MCP-Streamable-HTTP-Endpunkt (ADR-0034). Aktiv nur bei `--profile mcp-http`
+# im App-Compose; ohne aktiven Backend-Container antwortet Caddy mit 502.
+# Auth: Bearer-Token aus dem Who2Be-Settings-/v1/tokens-Endpunkt — Caddy reicht
+# `Authorization` unveraendert weiter, der MCP-Server konsumiert ihn als
+# `WHO2BE_API_TOKEN` aus der ASGI-Lifespan-Settings (eigenstaendig pro Request
+# als Followup, siehe ADR-0034 §"Multi-Tenant").
+mcp.{$DOMAIN} {
+    import security_headers
+    # Streamable-HTTP liefert SSE-Frames (`text/event-stream`); HTML-Inline-Code
+    # gibt es nicht, deshalb harte CSP — Browser sollten den Endpoint sowieso
+    # nicht direkt anfassen (MCP-Clients sind native bzw. Server-to-Server).
+    header Content-Security-Policy "default-src 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'"
+    reverse_proxy mcp-http:8765 {
+        # SSE braucht Read-Streaming; Default-Buffer wuerde Frames verschlucken.
+        flush_interval -1
+    }
+}

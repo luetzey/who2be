@@ -3,11 +3,9 @@
 #   build:
 #     context: .
 #     dockerfile: apps/mcp/Dockerfile
-# Hinweis: Der MCP-Server nutzt per Default stdio-Transport. Der Container ist
-# daher kein Long-Running-Service hinter Caddy, sondern ein "internal API
-# consumer / smoke harness" — im Hetzner-Compose unter `profiles: ["mcp"]`,
-# aufrufbar via `docker compose run --rm mcp ...`. Bei Bedarf kann spaeter
-# auf HTTP-Transport umgestellt werden, dann kippt das Profil auf default.
+# Transport: Default stdio (Claude Desktop / Cursor local). Mit
+# `WHO2BE_TRANSPORT=http` exponiert der Server Streamable-HTTP auf 0.0.0.0:8765
+# — geeignet als Long-Running-Service hinter Caddy (`mcp.${DOMAIN}`). ADR-0034.
 FROM python:3.14-slim AS builder
 
 COPY --from=ghcr.io/astral-sh/uv:0.4.27 /uv /usr/local/bin/uv
@@ -38,5 +36,18 @@ COPY --from=builder /app /app
 RUN useradd --system --no-create-home --uid 1000 who2be \
     && chown -R who2be:who2be /app
 USER who2be
+
+# HTTP-Transport (WHO2BE_TRANSPORT=http) bindet auf 0.0.0.0:8765/mcp; stdio
+# ignoriert das. EXPOSE ist deklarativ — Compose darf den Port veroeffentlichen.
+EXPOSE 8765
+
+# Python-basierter Healthcheck (kein curl-Apt-Layer noetig). Reiner TCP-Connect
+# — Streamable-HTTP-Endpunkt antwortet ohne Mcp-Session-Id mit 400 (das ist die
+# spezifikationskonforme Antwort), und ein vollstaendiger `initialize`-Handshake
+# im Healthcheck ist Overkill. Socket-Connect prueft, dass uvicorn bindet.
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import socket,sys; \
+s=socket.socket(); s.settimeout(3); s.connect(('127.0.0.1',8765)); s.close()" \
+    2>/dev/null || exit 1
 
 CMD ["python", "-m", "who2be_mcp.server"]

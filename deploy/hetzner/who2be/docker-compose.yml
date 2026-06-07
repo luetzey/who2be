@@ -64,18 +64,49 @@ services:
       timeout: 5s
       retries: 3
 
+  # Stdio-Variante (Default). One-Shot per `docker compose run --rm mcp ...`,
+  # nicht beim normalen `up` aktiv (profile=mcp).
   mcp:
     image: ghcr.io/luetzey/who2be-mcp:${MCP_IMAGE_TAG:-latest}
     build:
       context: ../../..
       dockerfile: apps/mcp/Dockerfile
     environment:
-      WHO2BE_API_BASE_URL: ${VITE_API_BASE_URL}
+      WHO2BE_API_BASE_URL: http://api:8000
       WHO2BE_API_TOKEN: ${WHO2BE_API_TOKEN:-}
       WHO2BE_LOG_FORMAT: ${LOG_FORMAT:-json}
+      WHO2BE_TRANSPORT: stdio
     networks: [app-net]
     profiles: ["mcp"]
     restart: "no"
+    # Stdio-Container hat keinen offenen Port — Healthcheck aus.
+    healthcheck:
+      disable: true
+
+  # HTTP-Variante: Long-Running Streamable-HTTP-Server auf 0.0.0.0:8765/mcp.
+  # Aktiv mit `--profile mcp-http`. Caddy proxy'iert `mcp.${DOMAIN}` darauf
+  # (siehe deploy/hetzner/Caddyfile). ADR-0034.
+  mcp-http:
+    image: ghcr.io/luetzey/who2be-mcp:${MCP_IMAGE_TAG:-latest}
+    build:
+      context: ../../..
+      dockerfile: apps/mcp/Dockerfile
+    environment:
+      WHO2BE_API_BASE_URL: http://api:8000
+      WHO2BE_API_TOKEN: ${WHO2BE_API_TOKEN:-}
+      WHO2BE_LOG_FORMAT: ${LOG_FORMAT:-json}
+      WHO2BE_TRANSPORT: http
+      WHO2BE_HTTP_HOST: 0.0.0.0
+      WHO2BE_HTTP_PORT: "8765"
+      WHO2BE_HTTP_PATH: /mcp
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [app-net]
+    profiles: ["mcp-http"]
+    restart: unless-stopped
+    # Healthcheck aus dem Dockerfile bleibt aktiv — Streamable-HTTP-Endpunkt
+    # antwortet auf GET mit `Accept: text/event-stream`.
 
   caddy:
     image: caddy:2.8-alpine

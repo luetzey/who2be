@@ -103,12 +103,14 @@ setzen + Caddy auf `auto_https off` umstellen oder direkt die Container
 mit `docker compose exec api curl -fsS http://localhost:8000/v1/health`
 ansprechen.
 
-## MCP-Container (Profile `mcp`)
+## MCP-Container — stdio (Profile `mcp`) + HTTP (Profile `mcp-http`)
 
-Der MCP-Server nutzt per Default stdio-Transport — er laeuft nicht als
-Long-Running-Service hinter Caddy. Das Image ist im Compose unter
-`profiles: ["mcp"]` versteckt und wird **nicht** beim normalen `up`
-gestartet. Aufruf als interner Smoke-Harness:
+Der MCP-Server unterstuetzt zwei Transports (ADR-0034). Beide nutzen dasselbe
+Image; der Unterschied liegt in der `WHO2BE_TRANSPORT`-Env.
+
+### Stdio (Default — Claude Desktop / Cursor lokal)
+
+Profile `mcp`. Wird **nicht** beim normalen `up` gestartet. One-Shot:
 
 ```bash
 docker compose \
@@ -117,9 +119,30 @@ docker compose \
   run --rm mcp python -c "import who2be_mcp.server as s; print('ok')"
 ```
 
-Falls spaeter Remote-MCP via HTTP-Transport gewuenscht ist: Profil von
-`mcp` auf `default` kippen, Caddy-Route `mcp.${DOMAIN}` ergaenzen — eigene
-Folge-Task.
+### Streamable-HTTP (Remote-Clients hinter Caddy)
+
+Profile `mcp-http`. Long-Running, lauscht auf `0.0.0.0:8765/mcp`, Caddy
+proxy'iert `mcp.${DOMAIN}` darauf. Aktivieren beim Bringup:
+
+```bash
+docker compose \
+  -f deploy/hetzner/who2be/docker-compose.yml \
+  --env-file deploy/hetzner/.env \
+  --profile mcp-http up -d --wait
+```
+
+Verifizieren (Streamable-HTTP-Endpunkt antwortet auf GET mit Accept-Header):
+
+```bash
+curl -fsS -H 'Accept: text/event-stream' \
+  https://mcp.${DOMAIN}/mcp/ -m 5 | head
+```
+
+Auth: derselbe Bearer-Token wie die REST-API (`WHO2BE_API_TOKEN`, beziehbar
+ueber `/v1/tokens` in den Workspace-Settings). Caddy reicht `Authorization`
+unveraendert weiter; der MCP-Server verwendet ihn aktuell als globalen
+Server-Token. Per-Request-Auth-Forwarding ist ADR-0034 §"Multi-Tenant"
+Followup.
 
 ## Security-Header / Proxy-Headers
 
