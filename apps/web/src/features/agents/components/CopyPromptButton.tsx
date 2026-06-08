@@ -11,6 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { copyToClipboard } from '@/lib/clipboard'
 import { notify } from '@/lib/feedback'
 
 interface CopyPromptButtonProps {
@@ -22,8 +23,11 @@ interface CopyPromptButtonProps {
 /**
  * Split-Button: Primary kopiert den Plain-Prompt, das Dropdown bietet
  * Markdown- und HTML-Varianten. Das Render-Ergebnis landet via
- * `navigator.clipboard.writeText` in der Zwischenablage; unresolved
- * Placeholders triggern einen sekundaeren Hinweis-Toast.
+ * `copyToClipboard` in der Zwischenablage — der Wrapper deckt
+ * Non-Secure-Contexts (selbst-gehostete HTTP-Origins ohne TLS) mit einem
+ * Textarea-/execCommand-Fallback ab, sonst crasht `navigator.clipboard`
+ * mit `undefined`. Unresolved Placeholders triggern einen sekundaeren
+ * Hinweis-Toast.
  */
 export function CopyPromptButton({ agentId, disabled = false }: CopyPromptButtonProps) {
   const { t } = useTranslation('agents')
@@ -34,7 +38,7 @@ export function CopyPromptButton({ agentId, disabled = false }: CopyPromptButton
     setBusy(format)
     try {
       const result = await api.renderAgentPrompt(agentId, format)
-      await navigator.clipboard.writeText(result.content)
+      await copyToClipboard(result.content)
       notify.success(t(`copy.success.${format}`))
       if (result.unresolved_placeholders.length > 0) {
         notify.info(
