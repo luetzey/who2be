@@ -38,6 +38,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { copyToClipboard } from '@/lib/clipboard'
 import { notify } from '@/lib/feedback'
 import { isDowngrade, ROLE_ORDER, roleLabel } from '@/lib/roles'
 
@@ -150,10 +151,12 @@ export function MembersPage() {
   }
 
   function copyLink(token: string) {
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      void navigator.clipboard.writeText(acceptUrl(token))
-      notify.success(t('members.invitations.copiedToast'))
-    }
+    void copyToClipboard(acceptUrl(token))
+      .then(() => notify.success(t('members.invitations.copiedToast')))
+      .catch((cause: unknown) => {
+        const message = cause instanceof Error ? cause.message : t('common:error.generic')
+        notify.error(message)
+      })
   }
 
   return (

@@ -23,6 +23,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { copyToClipboard } from '@/lib/clipboard'
+import { notify } from '@/lib/feedback'
 import { roleLabel, rolesAtMost } from '@/lib/roles'
 import { useTokens } from '@/hooks/useTokens'
 
@@ -257,9 +259,10 @@ export function SettingsTokensPage() {
                     variant="brand"
                     size="sm"
                     onClick={() => {
-                      if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                        void navigator.clipboard.writeText(created.token)
-                      }
+                      void copyToClipboard(created.token).catch((cause: unknown) => {
+                        const message = cause instanceof Error ? cause.message : t('common:error.generic')
+                        notify.error(message)
+                      })
                     }}
                   >
                     <Copy className="h-4 w-4" />
