@@ -646,7 +646,19 @@ async def copy_agent(agent_id: str, name: str | None = None) -> AgentRead:
 
 
 def main() -> None:
-    configure_logging(get_settings().log_format)
+    settings = get_settings()
+    configure_logging(settings.log_format)
+    if settings.transport == "http":
+        # Streamable-HTTP (MCP-Spec 2025-03-26). Auth via vorgelagertem
+        # Reverse-Proxy (z.B. Caddy `mcp.{$DOMAIN}` → forwarded Bearer landet
+        # als `WHO2BE_API_TOKEN` im API-Client). ADR-0034.
+        mcp.run(
+            transport="http",
+            host=settings.http_host,
+            port=settings.http_port,
+            path=settings.http_path,
+        )
+        return
     mcp.run()
 
 

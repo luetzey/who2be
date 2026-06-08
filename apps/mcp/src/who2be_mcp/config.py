@@ -24,6 +24,14 @@ class Settings(BaseSettings):
     workspace_id: str = ""
     # `json` fuer Prod-Aggregation, `console` fuer lesbares Dev-Tail (ADR-0007).
     log_format: Literal["json", "console"] = "json"
+    # Transport-Switch — Default `stdio` (Claude Desktop / Cursor local).
+    # `http` exponiert den FastMCP-Server als ASGI-App (Streamable-HTTP) auf
+    # {http_host}:{http_port}{http_path} — fuer Cloud-Connectoren, Remote-Clients
+    # und Hetzner-Deployment hinter Caddy. ADR-0034.
+    transport: Literal["stdio", "http"] = "stdio"
+    http_host: str = "0.0.0.0"
+    http_port: int = 8765
+    http_path: str = "/mcp"
 
 
 @lru_cache
