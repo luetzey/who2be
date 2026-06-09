@@ -1,0 +1,111 @@
+# === Hetzner Cloud-Edition Overlay ============================================
+# Overlay ueber deploy/hetzner/who2be/docker-compose.yml. Schaltet den
+# On-Prem-App-Stack auf die CLOUD-Edition (Plan §3.1 / Track S+T,
+# .claude/plan/2026-06-03-2030_cloud-launch-readiness.md). Das lokale Pendant
+# ist docker-compose.cloud.yml im Repo-Root — dieses File traegt dieselben
+# Schalter in den Hetzner-Split-Stack (DB liegt hier im Supabase-Compose,
+# DB-Name `postgres`, Owner `supabase_admin`, NICHT `who2be`/`postgres` wie lokal).
+#
+# IMMER beide Files zusammen (Reihenfolge wichtig):
+#   docker compose \
+#     -f deploy/hetzner/who2be/docker-compose.yml \
+#     -f deploy/hetzner/who2be/docker-compose.cloud.yml \
+#     --env-file deploy/hetzner/.env \
+#     build api migrate web        # Cloud-Image (runtime-cloud) lokal bauen
+#   docker compose \
+#     -f deploy/hetzner/who2be/docker-compose.yml \
+#     -f deploy/hetzner/who2be/docker-compose.cloud.yml \
+#     --env-file deploy/hetzner/.env \
+#     up -d --wait
+#
+# Ohne Overlay laeuft der On-Prem-Kern unveraendert (kein Billing, RLS-Bypass,
+# In-Memory-Rate-Limit) — das Default-Verhalten bleibt also erhalten.
+#
+# Was dieses Overlay gegenueber dem On-Prem-Stack umstellt:
+#   + redis    — Rate-Limit-Storage-Backend (app-net intern, kein ports:)
+#   + set-app-role-password — One-Shot, setzt das `who2be_app`-Passwort
+#                 (Rolle kommt aus Migration 0036) — danach verbindet die API
+#                 als nicht-privilegierte Rolle mit AKTIVER RLS.
+#   ~ migrate  — baut/zieht das runtime-cloud-Image (Billing-Paket im Artefakt).
+#   ~ api      — WHO2BE_EDITION=cloud, APP_DATABASE_URL (who2be_app, RLS aktiv),
+#                RATE_LIMIT_STORAGE_URI=redis://…, Mollie-Env, SUPABASE_SERVICE_KEY,
+#                WEB_BASE_URL; baut das runtime-cloud-Image.
+#
+# Supabase-seitig (separater Stack) fuer echte Cloud-Paritaet zusaetzlich setzen:
+#   GOTRUE_MAILER_AUTOCONFIRM=false + echter SMTP-Provider (siehe
+#   deploy/hetzner/supabase/.env.example). Fuer einen ersten Solo-Smoke darf
+#   autoconfirm voruebergehend `true` bleiben.
+services:
+  # runtime-cloud-Image: zieht das who2be-billing-Paket (Mollie-SDK) in den
+  # Build (ADR-0029). Ohne `target` baut der Dockerfile die On-Prem-Stage ohne
+  # Billing — dann liefern die /v1/billing-Pfade Fehler. pull_policy=build
+  # erzwingt den lokalen Cloud-Build statt eines (on-prem) GHCR-Pulls.
+  migrate:
+    build:
+      target: runtime-cloud
+    pull_policy: build
+
+  api:
+    build:
+      target: runtime-cloud
+    pull_policy: build
+    environment:
+      # Cloud-Edition scharf: Limits + Billing-Adapter aktiv (config.py:edition).
+      WHO2BE_EDITION: cloud
+      # Laufzeit-Connection als nicht-privilegierte Rolle `who2be_app` ⇒ RLS
+      # aktiv (Plan R1/R2). DATABASE_URL (Owner) bleibt nur fuer `migrate`.
+      # DB-Name ist im Supabase-Stack `postgres` (NICHT `who2be`).
+      APP_DATABASE_URL: postgresql://who2be_app:${APP_DB_PASSWORD}@db:5432/postgres
+      # Rate-Limit-Storage auf Redis (Sliding-Window teilt sich ueber Prozesse).
+      RATE_LIMIT_STORAGE_URI: redis://redis:6379
+      # Billing (Mollie). Leer ⇒ Checkout/Webhook 503 — fuer einen Solo-Test
+      # optional: das Pro-Entitlement laesst sich auch per CLI setzen
+      # (who2be-set-entitlement, siehe RUNBOOK). Live-Key erst bei echten Kunden.
+      MOLLIE_API_KEY: ${MOLLIE_API_KEY:-}
+      MOLLIE_WEBHOOK_SECRET: ${MOLLIE_WEBHOOK_SECRET:-}
+      # Oeffentliche https-Webhook-URL. Mollie ruft sie nach Zahlung — zeigt auf
+      # die API hinter Caddy: https://api.<DOMAIN>/v1/billing/mollie/webhook.
+      MOLLIE_WEBHOOK_URL: ${MOLLIE_WEBHOOK_URL:-}
+      # Invitation-/Account-Delete-Mails via GoTrue-Admin (service_role-JWT).
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
+      # Basis-URL der Web-App fuer Mail-/Redirect-Links.
+      WEB_BASE_URL: ${WEB_BASE_URL:-https://app.${DOMAIN}}
+    depends_on:
+      set-app-role-password:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    networks: [app-net]
+    restart: unless-stopped
+    # Bewusst KEIN ports: — nur die API erreicht Redis im internen app-net.
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-Shot: setzt das Passwort der Rolle `who2be_app` (Migration 0036 legt die
+  # Rolle an, das Secret liegt ausserhalb des Repos — Plan §3.3). Laeuft nach
+  # `migrate` und vor `api`, damit die App-Connection (APP_DATABASE_URL) sofort
+  # verbindet. Verbindet sich gegen die Supabase-DB im supabase-net.
+  set-app-role-password:
+    image: postgres:16
+    entrypoint: ["/bin/sh", "/scripts/set-app-role-password.sh"]
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      PGUSER: ${POSTGRES_USER:-supabase_admin}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:-postgres}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+    volumes:
+      - ../../../scripts/set-app-role-password.sh:/scripts/set-app-role-password.sh:ro
+    networks: [supabase-net]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"

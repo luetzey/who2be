@@ -82,6 +82,68 @@ docker compose \
      --env-file deploy/hetzner/.env logs -f caddy api
    ```
 
+## Cloud-Edition (Billing + RLS + Redis)
+
+Der Default-Bring-up oben faehrt die **On-Prem-Edition** (kein Billing,
+RLS-Bypass, In-Memory-Rate-Limit). Fuer die **Cloud-Edition** das Overlay
+`who2be/docker-compose.cloud.yml` zusaetzlich laden (Plan Track S/T,
+`.claude/plan/2026-06-03-2030_cloud-launch-readiness.md`). Es spiegelt das
+lokale `docker-compose.cloud.yml` auf den Hetzner-Split-Stack.
+
+Was das Overlay umstellt: `WHO2BE_EDITION=cloud`, API verbindet als Rolle
+`who2be_app` (**RLS aktiv**) statt als Owner, Redis als Rate-Limit-Storage,
+Mollie-Billing-Env, und es baut das `runtime-cloud`-Image (mit
+`who2be-billing`-Paket). Details siehe Kopf des Overlay-Files.
+
+```bash
+# 0) .env um die Cloud-Vars ergaenzen (siehe .env.example, Sektion
+#    "Cloud-Edition"): APP_DB_PASSWORD, SUPABASE_SERVICE_KEY, optional MOLLIE_*.
+
+# 1) Supabase-Stack — fuer echte Cloud-Paritaet mit Mail-Pflicht + echtem SMTP
+#    (supabase/.env: GOTRUE_MAILER_AUTOCONFIRM=false + GOTRUE_SMTP_*). Fuer einen
+#    ersten Solo-Smoke darf autoconfirm voruebergehend true bleiben.
+docker compose \
+  -f deploy/hetzner/supabase/docker-compose.yml \
+  --env-file deploy/hetzner/supabase/.env up -d --wait
+
+# 2) Cloud-Image bauen (runtime-cloud) und Stack hochfahren — IMMER beide -f:
+docker compose \
+  -f deploy/hetzner/who2be/docker-compose.yml \
+  -f deploy/hetzner/who2be/docker-compose.cloud.yml \
+  --env-file deploy/hetzner/.env build api migrate web
+docker compose \
+  -f deploy/hetzner/who2be/docker-compose.yml \
+  -f deploy/hetzner/who2be/docker-compose.cloud.yml \
+  --env-file deploy/hetzner/.env up -d --wait
+```
+
+Reihenfolge intern: `migrate` (alle SQL inkl. `0036` Rolle `who2be_app` +
+`0037` RLS) → `set-app-role-password` (One-Shot: setzt das Rollen-Passwort) →
+`redis` → `api` (verbindet als `who2be_app`). Sanity-Check, dass die Schalter
+greifen:
+
+```bash
+docker compose \
+  -f deploy/hetzner/who2be/docker-compose.yml \
+  -f deploy/hetzner/who2be/docker-compose.cloud.yml \
+  --env-file deploy/hetzner/.env \
+  exec api printenv WHO2BE_EDITION APP_DATABASE_URL RATE_LIMIT_STORAGE_URI
+# → cloud / postgresql://who2be_app:***@db:5432/postgres / redis://redis:6379
+```
+
+Abnahme-Reise (Signup → Verify → Pro-Entitlement → MCP-Quota 429 → Downgrade →
+RLS-Nachweis): `docs/cloud-local-smoke.md` 1:1 gegen `https://api.${DOMAIN}`
+statt `localhost` fahren. Pro-Entitlement ohne Mollie per CLI:
+
+```bash
+docker compose ... exec api who2be-set-entitlement <ORG_ID> pro
+```
+
+> **Wichtig:** Ein Wechsel zwischen On-Prem und Cloud auf demselben Volume ist
+> ein Edition-Wechsel der Laufzeit, kein Daten-Reset. Bleib pro Box bei **einer**
+> Edition; das Cloud-Overlay baut ein eigenes `runtime-cloud`-Image und erzwingt
+> es via `pull_policy: build`.
+
 ## Lokaler Smoke ohne Hetzner
 
 Override-File spinnt einen lokalen Postgres an und mappt Caddy auf
