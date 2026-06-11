@@ -9,6 +9,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import asyncpg
+import httpx
 import jwt
 import pytest
 from fastapi.testclient import TestClient
@@ -26,19 +27,31 @@ from who2be_api.testing.workspace_setup import (
 _SECRET = "integration-test-jwt-secret-padding-0123456789"
 
 # ── BLOCKNOTE-kompatibler Body (Pflichtfelder laut Promote-Validator) ────────
-_PER_BLOCKS = [{"id": "b1", "type": "paragraph",
-                "content": [{"type": "text", "text": "QA persona body.", "styles": {}}]}]
+_PER_BLOCKS = [
+    {
+        "id": "b1",
+        "type": "paragraph",
+        "content": [{"type": "text", "text": "QA persona body.", "styles": {}}],
+    }
+]
 
 # Resource blocks: heading (block links require heading as anchor)
 _RES_BLOCKS = [
-    {"id": "h1", "type": "heading", "props": {"level": 1},
-     "content": [{"type": "text", "text": "Section One", "styles": {}}]},
-    {"id": "p1", "type": "paragraph",
-     "content": [{"type": "text", "text": "Resource content.", "styles": {}}]},
+    {
+        "id": "h1",
+        "type": "heading",
+        "props": {"level": 1},
+        "content": [{"type": "text", "text": "Section One", "styles": {}}],
+    },
+    {
+        "id": "p1",
+        "type": "paragraph",
+        "content": [{"type": "text", "text": "Resource content.", "styles": {}}],
+    },
 ]
 
 
-def _persona_body(description: str = "QA persona") -> dict:
+def _persona_body(description: str = "QA persona") -> dict[str, object]:
     return {
         "name": "[QA] Persona",
         "content": {
@@ -50,7 +63,9 @@ def _persona_body(description: str = "QA persona") -> dict:
     }
 
 
-def _playbook_body(description: str = "QA playbook", pb_type: str = "workflow") -> dict:
+def _playbook_body(
+    description: str = "QA playbook", pb_type: str = "workflow"
+) -> dict[str, object]:
     return {
         "name": "[QA] Playbook",
         "content": {
@@ -63,7 +78,7 @@ def _playbook_body(description: str = "QA playbook", pb_type: str = "workflow") 
     }
 
 
-def _resource_body(description: str = "QA resource") -> dict:
+def _resource_body(description: str = "QA resource") -> dict[str, object]:
     return {
         "name": "[QA] Resource",
         "content": {
@@ -75,6 +90,7 @@ def _resource_body(description: str = "QA resource") -> dict:
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
+
 def _db_reachable() -> bool:
     async def _check() -> bool:
         try:
@@ -83,6 +99,7 @@ def _db_reachable() -> bool:
             return True
         except Exception:
             return False
+
     return asyncio.run(_check())
 
 
@@ -93,14 +110,20 @@ def _prepare_db() -> None:
             await apply_migrations(conn, MIGRATIONS_DIR)
         finally:
             await conn.close()
+
     asyncio.run(_run())
 
 
 def _auth(owner_id: UUID) -> dict[str, str]:
     token = jwt.encode(
-        {"sub": str(owner_id), "aud": "authenticated", "role": "authenticated",
-         "exp": datetime.now(UTC) + timedelta(hours=1)},
-        _SECRET, algorithm="HS256",
+        {
+            "sub": str(owner_id),
+            "aud": "authenticated",
+            "role": "authenticated",
+            "exp": datetime.now(UTC) + timedelta(hours=1),
+        },
+        _SECRET,
+        algorithm="HS256",
     )
     return {"Authorization": f"Bearer {token}"}
 
@@ -112,15 +135,19 @@ def _add_member(ws_id: UUID, user_id: UUID, role: str) -> None:
             await conn.execute(
                 "INSERT INTO workspace_member (workspace_id, user_id, role) "
                 "VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
-                ws_id, user_id, role,
+                ws_id,
+                user_id,
+                role,
             )
         finally:
             await conn.close()
+
     asyncio.run(_run())
 
 
-def _activate(c: TestClient, base: str, eid: str, v: int,
-              editor_h: dict, admin_h: dict) -> None:
+def _activate(
+    c: TestClient, base: str, eid: str, v: int, editor_h: dict[str, str], admin_h: dict[str, str]
+) -> None:
     """Transitions entity version through draft→review→active."""
     versions = c.get(f"{base}/{eid}/versions", headers=editor_h).json()
     current_status = next((ver["status"] for ver in versions if ver["version"] == v), "draft")
@@ -132,6 +159,7 @@ def _activate(c: TestClient, base: str, eid: str, v: int,
 
 
 # ── FT-PER-01..16 ────────────────────────────────────────────────────────────
+
 
 @pytest.mark.integration
 def test_FT_PER_01_to_16(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -184,23 +212,36 @@ def test_FT_PER_01_to_16(monkeypatch: pytest.MonkeyPatch) -> None:
         assert r.status_code == 200, f"PER-03 detail: {r.text}"
 
         # PER-04: Auto-Save-Draft (PATCH)
-        r = c.patch(f"{base}/{per_id}/draft",
-                    json={"content": {"description": "PER-04 patched",
-                                      "system_prompt": "Be precise.", "traits": ["thorough"],
-                                      "content": {"description": "patched", "blocks": _PER_BLOCKS}}},
-                    headers=editor_h)
+        r = c.patch(
+            f"{base}/{per_id}/draft",
+            json={
+                "content": {
+                    "description": "PER-04 patched",
+                    "system_prompt": "Be precise.",
+                    "traits": ["thorough"],
+                    "content": {"description": "patched", "blocks": _PER_BLOCKS},
+                }
+            },
+            headers=editor_h,
+        )
         assert r.status_code == 200, f"PER-04 patch draft: {r.text}"
         # version must stay at 1 (no increment on patch)
         assert r.json()["current_version"] == 1, "PER-04: version incremented unexpectedly"
 
         # PER-05: Persona-Modi (PATCH to not conflict with draft)
-        r = c.patch(f"{base}/{per_id}/draft",
-                    json={"content": {"description": "PER-05 modes",
-                                      "system_prompt": "Be precise.", "traits": ["thorough"],
-                                      "content": {"description": "modes", "blocks": _PER_BLOCKS},
-                                      "modes": [{"name": "focusMode", "trigger": "focus",
-                                                  "is_default": True}]}},
-                    headers=editor_h)
+        r = c.patch(
+            f"{base}/{per_id}/draft",
+            json={
+                "content": {
+                    "description": "PER-05 modes",
+                    "system_prompt": "Be precise.",
+                    "traits": ["thorough"],
+                    "content": {"description": "modes", "blocks": _PER_BLOCKS},
+                    "modes": [{"name": "focusMode", "trigger": "focus", "is_default": True}],
+                }
+            },
+            headers=editor_h,
+        )
         assert r.status_code == 200, f"PER-05 modes via patch: {r.text}"
 
         # PER-06: tags endpoint
@@ -215,8 +256,7 @@ def test_FT_PER_01_to_16(monkeypatch: pytest.MonkeyPatch) -> None:
         _activate(c, pb_base, pb_id, 1, editor_h, admin_h)
 
         # PER-07: verlinkte Playbooks set
-        r = c.put(f"{base}/{per_id}/playbooks",
-                  json={"playbook_ids": [pb_id]}, headers=editor_h)
+        r = c.put(f"{base}/{per_id}/playbooks", json={"playbook_ids": [pb_id]}, headers=editor_h)
         assert r.status_code == 200, f"PER-07 link: {r.text}"
 
         # verify link via GET /personas/{id}/playbooks
@@ -242,8 +282,7 @@ def test_FT_PER_01_to_16(monkeypatch: pytest.MonkeyPatch) -> None:
         assert r.status_code == 200, f"PER-12 rendered: {r.text}"
 
         # PER-07 set-replace semantics: clear
-        r = c.put(f"{base}/{per_id}/playbooks",
-                  json={"playbook_ids": []}, headers=editor_h)
+        r = c.put(f"{base}/{per_id}/playbooks", json={"playbook_ids": []}, headers=editor_h)
         assert r.status_code == 200, "PER-07 set-replace clear"
 
         # PUT on active → new draft (for diff)
@@ -281,9 +320,11 @@ def test_FT_PER_01_to_16(monkeypatch: pytest.MonkeyPatch) -> None:
         # PER-16: Delete blockiert by Agent
         # per_id has active v1 → create an agent referencing it
         ag_base = f"/v1/workspaces/{ws}/agents"
-        r = c.post(ag_base, json={"name": "[QA] Blocker-Agent",
-                                   "persona_id": per_id, "status": "disabled"},
-                   headers=editor_h)
+        r = c.post(
+            ag_base,
+            json={"name": "[QA] Blocker-Agent", "persona_id": per_id, "status": "disabled"},
+            headers=editor_h,
+        )
         assert r.status_code == 201, f"PER-16 agent create: {r.text}"
 
         r = c.delete(f"{base}/{per_id}", headers=editor_h)
@@ -295,6 +336,7 @@ def test_FT_PER_01_to_16(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 # ── FT-PB-01..14 ─────────────────────────────────────────────────────────────
+
 
 @pytest.mark.integration
 def test_FT_PB_01_to_14(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -328,10 +370,16 @@ def test_FT_PB_01_to_14(monkeypatch: pytest.MonkeyPatch) -> None:
             assert r.status_code == 201, f"PB-02 type={pb_type}: {r.text}"
 
         # Main playbook
-        main_body = _playbook_body("PB main", "workflow")
-        main_body["name"] = "[QA] Main-PB"
-        main_body["content"]["tags"] = ["qa", "main"]
-        main_body["content"]["triggers"] = "qa-main,qa-trigger"
+        main_body: dict[str, object] = {
+            "name": "[QA] Main-PB",
+            "content": {
+                "description": "PB main",
+                "body": "1. Step one. 2. Step two.",
+                "type": "workflow",
+                "tags": ["qa", "main"],
+                "triggers": "qa-main,qa-trigger",
+            },
+        }
         r = c.post(base, json=main_body, headers=editor_h)
         assert r.status_code == 201, f"PB-02 main: {r.text}"
         pb = r.json()
@@ -349,12 +397,19 @@ def test_FT_PB_01_to_14(monkeypatch: pytest.MonkeyPatch) -> None:
         assert r.status_code == 200, "PB-01 trigger filter"
 
         # PB-03: Edit body via PATCH (no active yet, use patch)
-        r = c.patch(f"{base}/{pb_id}/draft",
-                    json={"content": {"description": "PB-03 with body",
-                                      "body": "# Title\nStep 1.\nStep 2.",
-                                      "type": "workflow", "tags": ["qa", "main"],
-                                      "triggers": "qa-main"}},
-                    headers=editor_h)
+        r = c.patch(
+            f"{base}/{pb_id}/draft",
+            json={
+                "content": {
+                    "description": "PB-03 with body",
+                    "body": "# Title\nStep 1.\nStep 2.",
+                    "type": "workflow",
+                    "tags": ["qa", "main"],
+                    "triggers": "qa-main",
+                }
+            },
+            headers=editor_h,
+        )
         assert r.status_code == 200, f"PB-03: {r.text}"
 
         # PB-04: Triggers & Tags detail
@@ -378,18 +433,38 @@ def test_FT_PB_01_to_14(monkeypatch: pytest.MonkeyPatch) -> None:
         _activate(c, res_base, res_id, 1, editor_h, admin_h)
 
         # link_scope='resource': no block_id (whole resource, inline)
-        r = c.put(f"{base}/{pb_id}/resource_links",
-                  json={"links": [{"resource_id": res_id, "position": 0,
-                                   "link_scope": "resource", "embedding_mode": "inline"}]},
-                  headers=editor_h)
+        r = c.put(
+            f"{base}/{pb_id}/resource_links",
+            json={
+                "links": [
+                    {
+                        "resource_id": res_id,
+                        "position": 0,
+                        "link_scope": "resource",
+                        "embedding_mode": "inline",
+                    }
+                ]
+            },
+            headers=editor_h,
+        )
         assert r.status_code == 200, f"PB-07 inline link: {r.text}"
 
         # link_scope='block': block_id must be a heading block ("h1")
-        r = c.put(f"{base}/{pb_id}/resource_links",
-                  json={"links": [{"resource_id": res_id, "block_id": "h1",
-                                   "position": 1, "link_scope": "block",
-                                   "embedding_mode": "lazy"}]},
-                  headers=editor_h)
+        r = c.put(
+            f"{base}/{pb_id}/resource_links",
+            json={
+                "links": [
+                    {
+                        "resource_id": res_id,
+                        "block_id": "h1",
+                        "position": 1,
+                        "link_scope": "block",
+                        "embedding_mode": "lazy",
+                    }
+                ]
+            },
+            headers=editor_h,
+        )
         assert r.status_code == 200, f"PB-07 lazy link: {r.text}"
 
         # PB-08: Composite — create + activate child
@@ -400,8 +475,7 @@ def test_FT_PB_01_to_14(monkeypatch: pytest.MonkeyPatch) -> None:
         child_id = r.json()["id"]
         _activate(c, base, child_id, 1, editor_h, admin_h)
 
-        r = c.put(f"{base}/{pb_id}/composes",
-                  json={"child_ids": [child_id]}, headers=editor_h)
+        r = c.put(f"{base}/{pb_id}/composes", json={"child_ids": [child_id]}, headers=editor_h)
         assert r.status_code == 200, f"PB-08 composes: {r.text}"
 
         # PB-09: composed_by
@@ -417,8 +491,11 @@ def test_FT_PB_01_to_14(monkeypatch: pytest.MonkeyPatch) -> None:
         r = c.post(per_base, json=_persona_body("PB-10 persona"), headers=editor_h)
         assert r.status_code == 201
         linked_per_id = r.json()["id"]
-        r = c.put(f"{per_base}/{linked_per_id}/playbooks",
-                  json={"playbook_ids": [pb_id]}, headers=editor_h)
+        r = c.put(
+            f"{per_base}/{linked_per_id}/playbooks",
+            json={"playbook_ids": [pb_id]},
+            headers=editor_h,
+        )
         assert r.status_code == 200
 
         r = c.get(f"{base}/{pb_id}/usages", headers=editor_h)
@@ -475,6 +552,7 @@ def test_FT_PB_01_to_14(monkeypatch: pytest.MonkeyPatch) -> None:
 
 # ── FT-VER-01..10 (Persona) ──────────────────────────────────────────────────
 
+
 @pytest.mark.integration
 def test_FT_VER_01_to_10_persona(monkeypatch: pytest.MonkeyPatch) -> None:
     """I · VER-01..10 für Persona."""
@@ -492,9 +570,10 @@ def test_FT_VER_01_to_10_persona(monkeypatch: pytest.MonkeyPatch) -> None:
     editor_h = _auth(editor_id)
     base = f"/v1/workspaces/{ws}/personas"
 
-    def _t(c: TestClient, pid: str, v: int, to: str, auth: dict,
-           note: str | None = None) -> object:
-        body: dict = {"to": to}
+    def _t(
+        c: TestClient, pid: str, v: int, to: str, auth: dict[str, str], note: str | None = None
+    ) -> httpx.Response:
+        body: dict[str, str] = {"to": to}
         if note:
             body["note"] = note
         return c.post(f"{base}/{pid}/versions/{v}/transition", json=body, headers=auth)
@@ -580,15 +659,13 @@ def test_FT_VER_01_to_10_persona(monkeypatch: pytest.MonkeyPatch) -> None:
         r = c.get(f"{base}/{pid}/versions/1/provenance", headers=editor_h)
         assert r.status_code == 200, f"VER-10 provenance: {r.text}"
         prov = r.json()
-        # Check that at least one entry has a note (we submitted with note above)
-        has_note = any(e.get("note") for e in prov) if isinstance(prov, list) else False
-        # Note: structure may vary; just assert endpoint returns 200 with content
         assert isinstance(prov, list), "VER-10: provenance not a list"
 
     cleanup_workspaces([admin_id, editor_id])
 
 
 # ── FT-VER-01..10 (Playbook) ─────────────────────────────────────────────────
+
 
 @pytest.mark.integration
 def test_FT_VER_01_to_10_playbook(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -607,9 +684,10 @@ def test_FT_VER_01_to_10_playbook(monkeypatch: pytest.MonkeyPatch) -> None:
     editor_h = _auth(editor_id)
     base = f"/v1/workspaces/{ws}/playbooks"
 
-    def _t(c: TestClient, eid: str, v: int, to: str, auth: dict,
-           note: str | None = None) -> object:
-        body: dict = {"to": to}
+    def _t(
+        c: TestClient, eid: str, v: int, to: str, auth: dict[str, str], note: str | None = None
+    ) -> httpx.Response:
+        body: dict[str, str] = {"to": to}
         if note:
             body["note"] = note
         return c.post(f"{base}/{eid}/versions/{v}/transition", json=body, headers=auth)
@@ -680,6 +758,7 @@ def test_FT_VER_01_to_10_playbook(monkeypatch: pytest.MonkeyPatch) -> None:
 
 # ── J-Links: LINK-01..03 ─────────────────────────────────────────────────────
 
+
 @pytest.mark.integration
 def test_FT_LINK_01_to_03(monkeypatch: pytest.MonkeyPatch) -> None:
     """J · LINK-01 (Persona↔Playbook), LINK-02 (Playbook↔Resource), LINK-03 (Composite)."""
@@ -728,8 +807,11 @@ def test_FT_LINK_01_to_03(monkeypatch: pytest.MonkeyPatch) -> None:
 
         # ── LINK-01: Persona↔Playbook Set-Replace ────────────────────────────
         # Set link
-        r = c.put(f"{per_base}/{per_id}/playbooks",
-                  json={"playbook_ids": [pb_parent_id]}, headers=editor_h)
+        r = c.put(
+            f"{per_base}/{per_id}/playbooks",
+            json={"playbook_ids": [pb_parent_id]},
+            headers=editor_h,
+        )
         assert r.status_code == 200, f"LINK-01 set: {r.text}"
 
         # Verify link via GET /personas/{id}/playbooks
@@ -743,37 +825,59 @@ def test_FT_LINK_01_to_03(monkeypatch: pytest.MonkeyPatch) -> None:
         assert r.status_code == 200, f"LINK-01 backlink usages: {r.text}"
 
         # Replace (set-replace: now only child)
-        r = c.put(f"{per_base}/{per_id}/playbooks",
-                  json={"playbook_ids": [pb_child_id]}, headers=editor_h)
+        r = c.put(
+            f"{per_base}/{per_id}/playbooks", json={"playbook_ids": [pb_child_id]}, headers=editor_h
+        )
         assert r.status_code == 200, f"LINK-01 replace: {r.text}"
 
         # Parent no longer linked — verify via dedicated endpoint
         r = c.get(f"{per_base}/{per_id}/playbooks", headers=editor_h)
         linked_after = r.json()
-        assert not any(p["id"] == pb_parent_id for p in linked_after), \
+        assert not any(p["id"] == pb_parent_id for p in linked_after), (
             "LINK-01: old link persists after replace"
-        assert any(p["id"] == pb_child_id for p in linked_after), \
+        )
+        assert any(p["id"] == pb_child_id for p in linked_after), (
             "LINK-01: new link missing after replace"
+        )
 
         # Clear all links
-        r = c.put(f"{per_base}/{per_id}/playbooks",
-                  json={"playbook_ids": []}, headers=editor_h)
+        r = c.put(f"{per_base}/{per_id}/playbooks", json={"playbook_ids": []}, headers=editor_h)
         assert r.status_code == 200, f"LINK-01 clear: {r.text}"
 
         # ── LINK-02: Playbook↔Resource Block-Ref ─────────────────────────────
         # inline embedding: link_scope='resource', no block_id
-        r = c.put(f"{pb_base}/{pb_parent_id}/resource_links",
-                  json={"links": [{"resource_id": res_id, "position": 0,
-                                   "link_scope": "resource", "embedding_mode": "inline"}]},
-                  headers=editor_h)
+        r = c.put(
+            f"{pb_base}/{pb_parent_id}/resource_links",
+            json={
+                "links": [
+                    {
+                        "resource_id": res_id,
+                        "position": 0,
+                        "link_scope": "resource",
+                        "embedding_mode": "inline",
+                    }
+                ]
+            },
+            headers=editor_h,
+        )
         assert r.status_code == 200, f"LINK-02 inline: {r.text}"
 
         # lazy embedding: block_id must reference a heading block ("h1")
-        r = c.put(f"{pb_base}/{pb_parent_id}/resource_links",
-                  json={"links": [{"resource_id": res_id, "block_id": "h1",
-                                   "position": 0, "link_scope": "block",
-                                   "embedding_mode": "lazy"}]},
-                  headers=editor_h)
+        r = c.put(
+            f"{pb_base}/{pb_parent_id}/resource_links",
+            json={
+                "links": [
+                    {
+                        "resource_id": res_id,
+                        "block_id": "h1",
+                        "position": 0,
+                        "link_scope": "block",
+                        "embedding_mode": "lazy",
+                    }
+                ]
+            },
+            headers=editor_h,
+        )
         assert r.status_code == 200, f"LINK-02 lazy: {r.text}"
 
         # resource usages endpoint
@@ -781,8 +885,11 @@ def test_FT_LINK_01_to_03(monkeypatch: pytest.MonkeyPatch) -> None:
         assert r.status_code == 200, f"LINK-02 resource usages: {r.text}"
 
         # ── LINK-03: Playbook↔Playbook Composite ─────────────────────────────
-        r = c.put(f"{pb_base}/{pb_parent_id}/composes",
-                  json={"child_ids": [pb_child_id]}, headers=editor_h)
+        r = c.put(
+            f"{pb_base}/{pb_parent_id}/composes",
+            json={"child_ids": [pb_child_id]},
+            headers=editor_h,
+        )
         assert r.status_code == 200, f"LINK-03 composes: {r.text}"
 
         # composed_by backlink
@@ -792,14 +899,14 @@ def test_FT_LINK_01_to_03(monkeypatch: pytest.MonkeyPatch) -> None:
         assert any(p["id"] == pb_parent_id for p in parents), "LINK-03: parent missing"
 
         # Clear composite (empty list = not composite)
-        r = c.put(f"{pb_base}/{pb_parent_id}/composes",
-                  json={"child_ids": []}, headers=editor_h)
+        r = c.put(f"{pb_base}/{pb_parent_id}/composes", json={"child_ids": []}, headers=editor_h)
         assert r.status_code == 200, f"LINK-03 clear: {r.text}"
 
         # Verify cleared
         r = c.get(f"{pb_base}/{pb_child_id}/composed_by", headers=editor_h)
         parents_after = r.json()
-        assert not any(p["id"] == pb_parent_id for p in parents_after), \
+        assert not any(p["id"] == pb_parent_id for p in parents_after), (
             "LINK-03: parent still in composed_by after clear"
+        )
 
     cleanup_workspaces([admin_id, editor_id])
