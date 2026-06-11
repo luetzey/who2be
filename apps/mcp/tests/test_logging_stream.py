@@ -17,13 +17,11 @@ def test_configure_logging_attaches_stderr_handler() -> None:
     configure_logging("json")
 
     root_handlers = logging.getLogger().handlers
-    stream_handlers = [
-        h for h in root_handlers if isinstance(h, logging.StreamHandler)
-    ]
+    stream_handlers = [h for h in root_handlers if isinstance(h, logging.StreamHandler)]
     assert stream_handlers, "configure_logging muss einen StreamHandler setzen"
-    assert all(
-        h.stream is sys.stderr for h in stream_handlers
-    ), "Stdio-Transport: Logs MUESSEN auf stderr — stdout ist fuer JSON-RPC reserviert."
+    assert all(h.stream is sys.stderr for h in stream_handlers), (
+        "Stdio-Transport: Logs MUESSEN auf stderr — stdout ist fuer JSON-RPC reserviert."
+    )
 
 
 def test_configure_logging_does_not_leak_stdout_handler() -> None:
@@ -32,9 +30,7 @@ def test_configure_logging_does_not_leak_stdout_handler() -> None:
     configure_logging("console")
 
     root_handlers = logging.getLogger().handlers
-    stream_handlers = [
-        h for h in root_handlers if isinstance(h, logging.StreamHandler)
-    ]
-    assert not any(
-        getattr(h, "stream", None) is sys.stdout for h in stream_handlers
-    ), "Kein Handler darf auf sys.stdout zeigen (Stdio-MCP-Frame-Korruption)."
+    stream_handlers = [h for h in root_handlers if isinstance(h, logging.StreamHandler)]
+    assert not any(getattr(h, "stream", None) is sys.stdout for h in stream_handlers), (
+        "Kein Handler darf auf sys.stdout zeigen (Stdio-MCP-Frame-Korruption)."
+    )
