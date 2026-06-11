@@ -140,6 +140,43 @@ curl -sw '%{http_code}\n' -o /dev/null "https://api.${DOMAIN}/v1/personas" \
 
 **Side-Effects:** der spezifische Agent bricht ab, bis der neue Token in seiner Config steht. Andere Tokens bleiben unberuehrt.
 
+### APP_DB_PASSWORD (Cloud-Edition, Rolle `who2be_app`)
+
+- **Was:** Passwort der nicht-privilegierten Laufzeit-Rolle `who2be_app`, mit der die API in der **Cloud-Edition** verbindet (RLS aktiv, Migration 0036/0037). Nur relevant mit dem Cloud-Overlay (`who2be/docker-compose.cloud.yml`). On-Prem verbindet die API als Owner und liest diese Var nicht.
+- **Trigger:** Kompromittierungs-Verdacht, Personalwechsel mit Host-Zugriff, Routine 6 Monate.
+
+**Schritte:**
+
+```bash
+# 1) Neues Passwort generieren
+openssl rand -base64 32
+
+# 2) In deploy/hetzner/.env ersetzen (APP_DB_PASSWORD=...)
+$EDITOR deploy/hetzner/.env
+
+# 3) Rollen-Passwort in der DB neu setzen (One-Shot liest die .env)
+docker compose \
+  -f deploy/hetzner/who2be/docker-compose.yml \
+  -f deploy/hetzner/who2be/docker-compose.cloud.yml \
+  --env-file deploy/hetzner/.env \
+  run --rm set-app-role-password
+
+# 4) API neu starten, damit APP_DATABASE_URL das neue Passwort traegt
+docker compose \
+  -f deploy/hetzner/who2be/docker-compose.yml \
+  -f deploy/hetzner/who2be/docker-compose.cloud.yml \
+  --env-file deploy/hetzner/.env up -d --force-recreate api
+```
+
+**Verifikation:**
+
+```bash
+# API verbindet als who2be_app und ist healthy
+curl -fsS https://api.${DOMAIN}/v1/health   # erwartet: db:"ok"
+```
+
+**Side-Effects:** kurze API-Downtime beim Recreate. Reihenfolge wichtig — erst Rollen-Passwort setzen (Schritt 3), dann API recreaten (Schritt 4); sonst verbindet die API mit dem alten Passwort gegen die geaenderte Rolle und failt der Healthcheck.
+
 ### STORAGE_BOX_USER / STORAGE_BOX_HOST / STORAGE_BOX_SSH_KEY
 
 - **Was:** Hetzner-Storage-Box-Zugangsdaten fuer den restic-Offsite-Backup-Pfad (ADR-0011, MS-2 C5b).
