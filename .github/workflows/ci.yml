@@ -5,6 +5,14 @@ on:
     branches: [main]
   pull_request:
 
+# Superseded Runs desselben Refs abbrechen, statt sie parallel zu Ende laufen
+# zu lassen. Spart GitHub-Actions-Minuten (relevant fuer das Minuten-Kontingent
+# privater Repos) und haelt die Run-Historie pro Branch sauber. main wird nicht
+# abgebrochen (push-Events auf main behalten ihren Lauf via run_id-Gruppe).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   python:
     runs-on: ubuntu-latest
