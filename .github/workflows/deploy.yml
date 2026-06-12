@@ -56,7 +56,9 @@ jobs:
           images: ghcr.io/luetzey/who2be-${{ matrix.image }}
           tags: |
             type=raw,value=latest
-            type=sha,format=long
+            # prefix= ueberschreibt den Default `sha-`, damit das Tag dem
+            # bare Commit-SHA entspricht, das deploy.sh in *_IMAGE_TAG setzt.
+            type=sha,format=long,prefix=
 
       - uses: docker/build-push-action@v7
         with:
