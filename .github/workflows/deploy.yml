@@ -16,17 +16,28 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # On-Prem-API (Default-Target `runtime`, OHNE Billing) — bleibt
+          # unangetastet unter `who2be-api`.
           - image: api
             dockerfile: apps/api/Dockerfile
+            target: ""
             build_args: ""
           - image: web
             dockerfile: apps/web/Dockerfile
+            target: ""
             build_args: |
               VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL }}
               VITE_SUPABASE_URL=${{ vars.VITE_SUPABASE_URL }}
               VITE_SUPABASE_ANON_KEY=${{ vars.VITE_SUPABASE_ANON_KEY }}
           - image: mcp
             dockerfile: apps/mcp/Dockerfile
+            target: ""
+            build_args: ""
+          # Cloud-API (Target `runtime-cloud`, MIT who2be-billing) — eigenes
+          # Tag `who2be-api-cloud`, damit das On-Prem-Image unberuehrt bleibt.
+          - image: api-cloud
+            dockerfile: apps/api/Dockerfile
+            target: runtime-cloud
             build_args: ""
     steps:
       - uses: actions/checkout@v6
@@ -52,6 +63,7 @@ jobs:
           context: .
           file: ${{ matrix.dockerfile }}
           push: true
+          target: ${{ matrix.target }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.image }}
@@ -85,6 +97,9 @@ jobs:
           DEPLOY_USER: ${{ vars.DEPLOY_USER }}
           DEPLOY_PROJECT_DIR: ${{ vars.DEPLOY_PROJECT_DIR || '/opt/who2be' }}
           DEPLOY_SHA: ${{ github.sha }}
+          # Edition-Schalter: `cloud` faehrt das Cloud-Overlay (zwei -f-Files,
+          # runtime-cloud-API). Leer/unset ⇒ On-Prem-Default.
+          WHO2BE_EDITION: ${{ vars.WHO2BE_EDITION || 'onprem' }}
         run: |
           ssh "${DEPLOY_USER}@${DEPLOY_HOST}" \
-            "PROJECT_DIR='${DEPLOY_PROJECT_DIR}' ${DEPLOY_PROJECT_DIR}/deploy/hetzner/scripts/deploy.sh '${DEPLOY_SHA}'"
+            "PROJECT_DIR='${DEPLOY_PROJECT_DIR}' WHO2BE_EDITION='${WHO2BE_EDITION}' ${DEPLOY_PROJECT_DIR}/deploy/hetzner/scripts/deploy.sh '${DEPLOY_SHA}'"
