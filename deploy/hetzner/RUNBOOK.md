@@ -7,12 +7,209 @@ CVE-Triage und Secret-Rotation. Setup-Anleitungen liegen in
 
 Aktive Sektionen:
 
+- [Provisioning (Track S/C1)](#provisioning-track-sc1) — leere Hetzner-Box → laufender Stack (Box/Docker/Firewall/deploy-User/DNS/TLS)
+- [Erste Inbetriebnahme der Cloud-Edition](#erste-inbetriebnahme-der-cloud-edition) — Bring-up-Checkliste (Service-Key, Mailer, Deploy-Pipeline)
 - [CVE-Response](#cve-response) — was tun, wenn der CI-`audit`-Job rot wird
 - [Secret-Rotation](#secret-rotation) — pro Secret: Trigger / Schritte / Verifikation
 - [Verschluesselung at-Rest](#verschluesselung-at-rest-postgres-volume) — LUKS/verschl. Hetzner-Volume + Verifikation (Befund P4/S2)
 - [Standort & Auftragsverarbeiter](#standort--auftragsverarbeiter) — RZ-Standort + Sub-Processor-Liste (DSGVO/AVV)
 - [Backup & Restore](#backup--restore) — verschluesselter pg_dump + restic-Offsite (C5a/C5b)
 - [Akzeptierte Vulnerabilities](#akzeptierte-vulnerabilities) — bewusste Risikoabnahmen
+
+---
+
+## Provisioning (Track S/C1)
+
+Von der **leeren Hetzner-Box** bis zum laufenden Stack. Diese Sektion deckt
+**C1** (Server-Provisioning) ab — die Compose-Bring-up-Reihenfolge selbst steht
+in [`README.md`](./README.md) (§Bring-up-Reihenfolge / §Cloud-Edition), die
+Cloud-Abnahme in [`docs/cloud-prod-smoke.md`](../../docs/cloud-prod-smoke.md).
+
+> ⚠️ **Nicht automatisierbar (manuell, einmalig):** Das Bestellen der Box
+> (Schritt 1) und das Setzen der DNS-A-Records (Schritt 5) laufen ueber die
+> Hetzner-Console bzw. den DNS-Anbieter — kein Skript im Repo macht das. Alle
+> uebrigen Schritte sind reproduzierbare Shell-Kommandos auf dem Host.
+
+### 1 — Box anlegen (manuell, Hetzner-Console)
+
+- Server-Typ: Hetzner Cloud (z. B. CPX31/CPX41) **oder** dedizierter Root-Server.
+- **Region:** eine **EU/EWR-Region** waehlen — fuer DE-SaaS mit Datenresidenz-
+  Erwartung eine **DE-Region** (`nbg1`/`fsn1`). Die Wahl gehoert in die
+  Protokoll-Tabelle unter [Standort & Auftragsverarbeiter](#standort--auftragsverarbeiter).
+- **OS:** Ubuntu 24.04 LTS. Beim Anlegen den eigenen **SSH-Public-Key**
+  hinterlegen (kein Passwort-Login).
+- **At-Rest-Verschluesselung** des Daten-Volumes ist Pflicht und wird beim
+  Provisioning entschieden — Variante + Verifikation siehe
+  [Verschluesselung at-Rest](#verschluesselung-at-rest-postgres-volume). Bei
+  Variante B (LUKS) **vor** dem ersten `docker compose up` einrichten.
+
+### 2 — deploy-User + Grund-Hardening
+
+Als `root` (oder via initialem Cloud-User) den unprivilegierten `deploy`-User
+anlegen, der spaeter den Stack faehrt und das CI/CD-Deploy-Ziel ist
+(`DEPLOY_USER`, siehe [README §CI/CD](./README.md#cicd-ms-2-c4)):
+
+```bash
+adduser --disabled-password --gecos "" deploy
+install -d -m 700 -o deploy -g deploy /home/deploy/.ssh
+# Den Deploy-SSH-Public-Key (CI: Gegenstueck zu DEPLOY_SSH_KEY) eintragen:
+$EDITOR /home/deploy/.ssh/authorized_keys
+chown deploy:deploy /home/deploy/.ssh/authorized_keys
+chmod 600 /home/deploy/.ssh/authorized_keys
+```
+
+### 3 — Docker + Compose-v2
+
+```bash
+# Offizielles Convenience-Skript (Docker Engine inkl. Compose-v2-Plugin)
+curl -fsSL https://get.docker.com | sh
+# deploy-User darf Docker ohne sudo fahren
+usermod -aG docker deploy
+# Verifikation (frische Login-Shell des deploy-Users)
+sudo -iu deploy docker compose version   # → Docker Compose version v2.x
+```
+
+### 4 — Firewall (Ports 80/443, SSH 22)
+
+Caddy braucht **80** (ACME-HTTP-Challenge + Redirect) und **443** (HTTPS)
+eingehend; **22** fuer SSH/Deploy. Alles andere bleibt zu — die API-, Web-,
+Redis- und DB-Container haben bewusst **kein** `ports:` und sind nur im internen
+Docker-Netz erreichbar.
+
+```bash
+# Variante a) UFW auf dem Host
+ufw default deny incoming && ufw default allow outgoing
+ufw allow 22/tcp && ufw allow 80/tcp && ufw allow 443/tcp
+ufw enable && ufw status verbose
+```
+
+> Bei Hetzner Cloud zusaetzlich/alternativ eine **Cloud-Firewall** in der
+> Console anlegen (Inbound nur 22/80/443) und der Box zuweisen — sie wirkt vor
+> der VM und ist die robustere Schranke.
+
+### 5 — DNS-A-Records (manuell, DNS-Anbieter)
+
+Beim DNS-Provider drei (optional vier) **A-Records** auf die oeffentliche
+Box-IP zeigen lassen — die Subdomains, die der Caddyfile bedient:
+
+| Record               | Ziel       | Pflicht | Backend (Caddyfile)        |
+| -------------------- | ---------- | ------- | -------------------------- |
+| `api.<DOMAIN>`       | `<BOX_IP>` | ja      | `api:8000`                 |
+| `app.<DOMAIN>`       | `<BOX_IP>` | ja      | `web:80`                   |
+| `supabase.<DOMAIN>`  | `<BOX_IP>` | ja      | `auth-gateway:9999`        |
+| `mcp.<DOMAIN>`       | `<BOX_IP>` | optional| `mcp-http:8765` (`--profile mcp-http`) |
+
+`mcp.<DOMAIN>` nur anlegen, wenn der MCP-Streamable-HTTP-Endpunkt remote
+erreichbar sein soll (siehe [README §MCP-Container](./README.md#mcp-container--stdio-profile-mcp--http-profile-mcp-http)).
+Auflösung pruefen, **bevor** Caddy startet (sonst schlaegt die ACME-Challenge fehl):
+
+```bash
+for sub in api app supabase; do dig +short ${sub}.${DOMAIN}; done
+# Jede Zeile muss die Box-IP zeigen.
+```
+
+### 6 — Repo + .env auf den Host
+
+```bash
+sudo -iu deploy
+sudo install -d -o deploy -g deploy /opt/who2be   # DEPLOY_PROJECT_DIR-Default
+git clone https://github.com/luetzey/who2be.git /opt/who2be
+cd /opt/who2be
+
+# App-Stack-.env
+cp deploy/hetzner/.env.example deploy/hetzner/.env
+$EDITOR deploy/hetzner/.env            # DOMAIN, ACME_EMAIL, JWT_SECRET, …
+chmod 600 deploy/hetzner/.env
+
+# Supabase-Stack-.env (identisches JWT_SECRET!)
+cp deploy/hetzner/supabase/.env.example deploy/hetzner/supabase/.env
+$EDITOR deploy/hetzner/supabase/.env   # POSTGRES_PASSWORD, JWT_SECRET, SMTP, …
+chmod 600 deploy/hetzner/supabase/.env
+```
+
+Welche Vars Pflicht sind (inkl. der Cloud-Edition-Secrets `APP_DB_PASSWORD`,
+`SUPABASE_SERVICE_KEY`), steht in der
+[Erste-Inbetriebnahme-Checkliste](#erste-inbetriebnahme-der-cloud-edition) unten.
+Stack hochfahren: [README §Bring-up-Reihenfolge](./README.md#bring-up-reihenfolge)
+(On-Prem) bzw. [README §Cloud-Edition](./README.md#cloud-edition-billing--rls--redis).
+
+### 7 — TLS via Caddy (Auto-HTTPS) + Verifikation
+
+Caddy holt sich beim ersten Start **automatisch** Let's-Encrypt-Zertifikate fuer
+`api`/`app`/`supabase` (+ `mcp`, falls aktiv) — Voraussetzung: DNS aufgeloest
+(Schritt 5) und Ports 80/443 offen (Schritt 4). `ACME_EMAIL` aus der `.env` ist
+der LE-Kontakt. Kein manueller Cert-Schritt noetig. Nach dem Bring-up
+verifizieren:
+
+```bash
+# 1) HTTPS terminiert + API gesund (gueltiges LE-Cert ⇒ kein -k noetig)
+curl -fsSI https://api.${DOMAIN}/v1/health | head -1   # → HTTP/2 200
+
+# 2) Zertifikats-Aussteller + Laufzeit pruefen
+echo | openssl s_client -connect api.${DOMAIN}:443 -servername api.${DOMAIN} 2>/dev/null \
+  | openssl x509 -noout -issuer -dates
+#   issuer= …Let's Encrypt… / notAfter ~90 Tage in der Zukunft
+
+# 3) HTTP→HTTPS-Redirect (Caddy macht das automatisch)
+curl -sI http://api.${DOMAIN}/v1/health | grep -i '^location:'   # → https://…
+
+# 4) Security-Header / Hardening (H5) gegen alle drei Subdomains
+export DOMAIN=<deine-domain>   # noetig: der Test setzt den Host-Header daraus
+bash deploy/hetzner/tests/test_headers.sh https://api.${DOMAIN}
+```
+
+Schlaegt die Cert-Ausstellung fehl, sind fast immer DNS (Schritt 5) oder die
+Firewall (Schritt 4, Port 80 fuer die ACME-Challenge) die Ursache —
+`docker compose … logs caddy` zeigt die ACME-Fehler im Klartext.
+
+---
+
+## Erste Inbetriebnahme der Cloud-Edition
+
+Kompakte Bring-up-Checkliste fuer die **erste** Cloud-Inbetriebnahme nach dem
+[Provisioning](#provisioning-track-sc1). Sie verzahnt die drei Vorarbeiten —
+**Service-Key**, **Mailer** und **Deploy-Pipeline** — mit dem Compose-Bring-up
+und der Abnahme. Reihenfolge einhalten:
+
+- [ ] **0 — Provisioning steht:** Box, Docker, Firewall (80/443/22), deploy-User,
+      DNS-A-Records aufgeloest, At-Rest-Verschluesselung verifiziert
+      ([Provisioning](#provisioning-track-sc1)).
+- [ ] **1 — Secrets in `deploy/hetzner/.env` (Mode 600):** `DOMAIN`, `ACME_EMAIL`,
+      `JWT_SECRET` (≥ 32 Zeichen, **identisch** zu `supabase/.env`), `DATABASE_URL`,
+      `SUPABASE_URL`, `CORS_ORIGINS`, `VITE_*`. Cloud-Sektion zusaetzlich:
+      `APP_DB_PASSWORD` (Passwort der RLS-Rolle `who2be_app`) und —
+- [ ] **2 — Service-Key (GoTrue-Admin):** `SUPABASE_SERVICE_KEY` setzen. Erzeugen
+      mit demselben `JWT_SECRET` wie der ANON_KEY:
+      ```bash
+      uv run python scripts/gen_test_jwt.py --secret "$JWT_SECRET" --role service_role
+      ```
+      Ohne ihn schlagen Invitation-/Account-Loesch-Mails fehl (GoTrue-Admin-Calls).
+- [ ] **3 — Mailer scharf (echter Posteingang, kein Mailpit):** in
+      `deploy/hetzner/supabase/.env` `GOTRUE_MAILER_AUTOCONFIRM=false` **und**
+      `GOTRUE_SMTP_HOST/PORT/USER/PASS/ADMIN_EMAIL` setzen. Pflicht, sobald
+      Autoconfirm aus ist — sonst kommt keine Verify-Mail an. (Fuer einen ersten
+      Solo-Smoke darf `autoconfirm` voruebergehend `true` bleiben, dann ohne SMTP.)
+- [ ] **4 — Stacks hochfahren** (Supabase zuerst, dann Cloud-Overlay) gemaess
+      [README §Cloud-Edition](./README.md#cloud-edition-billing--rls--redis).
+      Interne Reihenfolge: `migrate` → `set-app-role-password` → `redis` → `api`.
+- [ ] **5 — Cloud-Schalter greifen:**
+      ```bash
+      docker compose \
+        -f deploy/hetzner/who2be/docker-compose.yml \
+        -f deploy/hetzner/who2be/docker-compose.cloud.yml \
+        --env-file deploy/hetzner/.env \
+        exec api printenv WHO2BE_EDITION APP_DATABASE_URL RATE_LIMIT_STORAGE_URI
+      # → cloud / postgresql://who2be_app:***@db:5432/postgres / redis://redis:6379
+      ```
+- [ ] **6 — TLS + Header gruen:** [Provisioning §7](#provisioning-track-sc1) inkl.
+      `bash deploy/hetzner/tests/test_headers.sh https://api.${DOMAIN}`.
+- [ ] **7 — Deploy-Pipeline (optional, fuer kuenftige Rollouts):** Repository-
+      Variables/Secrets (`DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, …) gemaess
+      [README §CI/CD](./README.md#cicd-ms-2-c4) hinterlegen. Danach deployt jeder
+      `push: main` via `deploy/hetzner/scripts/deploy.sh <sha>`; Rollback identisch
+      mit altem SHA.
+- [ ] **8 — Abnahme-Reise fahren:** [`docs/cloud-prod-smoke.md`](../../docs/cloud-prod-smoke.md)
+      (Signup → Verify → Pro → MCP-Quota 429 → Downgrade 402 → RLS-Nachweis).
 
 ---
 
