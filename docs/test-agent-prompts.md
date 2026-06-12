@@ -253,8 +253,56 @@ DURCHZUFÜHREN:
 
 ---
 
-## Nach allen Läufen (optional, durch dich oder einen 7. Sammel-Agenten)
+## AGENT A7 — Konsolidierung (Welle 2, nach A1–A6)
 
-- Reports unter `docs/test-runs/` zu einem Gesamt-Status konsolidieren (PASS/FAIL je Strang).
-- Alle FAIL/BLOCKED als Issues/Findings sammeln, nach Schwere sortiert.
-- NEEDS-VISUAL-Punkte als manuelle Restliste für einen menschlichen Sichtdurchlauf führen.
+```
+[GEMEINSAMER KOPF hier einfügen, AGENT-ID = A7 — ABER: du legst KEINEN eigenen Workspace
+an und führst KEINE Tests aus. Du bist reiner Auswerte-/Schreib-Agent.]
+
+DEIN AUFTRAG: Die Einzelreports der Agenten A1–A6 aus docs/test-runs/ zu EINEM
+Gesamt-Abnahmebericht konsolidieren. Nur lesen + aggregieren + schreiben. Keine Tests
+nachholen, keine Entitäten anlegen.
+
+EINGABE:
+- Alle Dateien docs/test-runs/<RUN-TS>_A1.md … _A6.md (eine je Agent).
+- Die Soll-Liste aller Test-IDs aus docs/test-plan-functional.md (Stränge A–T,
+  inkl. PREP, FT-VER, FT-LINK, FT-POL, FT-NEG sowie die Rollen-Matrix-Zeilen aus Strang T).
+
+VORGEHEN:
+1. PARSEN: Lies jeden Einzelreport und extrahiere pro Zeile: Test-ID, Status
+   (PASS/FAIL/BLOCKED/NEEDS-VISUAL/SKIPPED), Beweis, Notiz, ausführender Agent.
+   Wenn ein Report fehlt oder unparsebar ist → als "REPORT-MISSING" für den ganzen
+   Strang vermerken, nicht raten.
+2. COVERAGE-ABGLEICH: Vergleiche die Menge der gefundenen Test-IDs gegen die Soll-Liste.
+   - Fehlende IDs (im Plan, in keinem Report) → "NICHT AUSGEFÜHRT (Lücke)".
+   - Doppelte IDs (in mehreren Reports, außer der gewollten A6-Redundanz bei Strang T)
+     → markieren und bei Widerspruch im Status auf FAIL eskalieren.
+3. STRANG-VERDIKT (A bis T): je Strang ein Gesamturteil:
+   - GRÜN  = alle Test-IDs PASS (NEEDS-VISUAL erlaubt, wenn als Restpunkt gelistet).
+   - GELB  = nur NEEDS-VISUAL/BLOCKED offen, kein FAIL.
+   - ROT   = mindestens ein FAIL ODER eine nicht ausgeführte Pflicht-ID.
+4. FINDINGS: Sammle alle FAIL + BLOCKED als priorisierte Liste. Schwere ableiten:
+   - KRITISCH = Sicherheits-/Autorisierungs-Bruch (Strang R/S/T: 403/401/Tenant-Isolation/
+     Open-Redirect/Email-Mismatch falsch), Datenverlust, Crash 500.
+   - HOCH     = Kernfunktion (CRUD/Versionierung/MCP-Read/Write) funktioniert nicht.
+   - MITTEL   = Nebenfunktion/Edge-Case fehlerhaft, mit Workaround.
+   - NIEDRIG  = kosmetisch/Doku/NEEDS-VISUAL-Restpunkt.
+   Dedupliziere gleiche Symptome aus mehreren Reports zu einem Finding (mit Quellenliste).
+5. RESTLISTE: Alle NEEDS-VISUAL als separate manuelle Sicht-Checkliste für einen Menschen
+   (Test-ID + was visuell zu prüfen ist).
+
+AUSGABE → docs/test-runs/<RUN-TS>_SUMMARY.md mit diesen Abschnitten:
+  a) Kopf: Run-Zeitstempel, Umgebung, welche Agenten gelaufen sind, welche Reports fehlen.
+  b) Gesamtbilanz: Tabelle Status × Anzahl (PASS/FAIL/BLOCKED/NEEDS-VISUAL/SKIPPED/
+     NICHT-AUSGEFÜHRT) + Gesamt-Ampel (ROT, wenn irgendein KRITISCH/HOCH offen).
+  c) Strang-Ampel-Tabelle: | Strang | Verdikt | #PASS | #FAIL | #offen | Agent |.
+  d) Findings, nach Schwere sortiert: | # | Schwere | Test-ID(s) | Symptom | Beweis | Quelle |.
+  e) Coverage-Lücken: Liste nicht ausgeführter Pflicht-Test-IDs.
+  f) Manuelle Restliste (NEEDS-VISUAL).
+  g) Empfehlung: Freigabe ja/nein + die Top-3 Blocker.
+
+REGELN: Erfinde nichts. Status, die du nicht aus einem Report belegen kannst, sind
+"NICHT AUSGEFÜHRT", nicht PASS. Bei widersprüchlichen Status zur selben Test-ID gilt das
+schlechtere (FAIL > BLOCKED > NEEDS-VISUAL > PASS) und der Widerspruch wird als Notiz
+ausgewiesen.
+```
