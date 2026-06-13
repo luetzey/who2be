@@ -26,31 +26,13 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any
 from uuid import UUID
 
 import asyncpg
 
+from who2be_api.services.entity_sql import EntityKind, safe_entity
 from who2be_api.services.placeholders import RenderContext, render_template_body
-
-EntityKind = Literal["persona", "playbook", "resource"]
-
-# Defense-in-Depth (Security-Review L-2): `entity` fliesst in f-String-
-# Tabellennamen. Heute immer ein Literal aus dem Router, aber ein kuenftiger
-# dynamischer Aufrufer waere sonst injizierbar — daher hier eine harte
-# Whitelist, gegen die jeder SQL-bauende Pfad zuerst prueft.
-_ALLOWED_ENTITIES: frozenset[str] = frozenset({"persona", "playbook", "resource"})
-
-
-def _safe_entity(entity: EntityKind) -> EntityKind:
-    """Erlaubt nur die drei bekannten Inhalts-Tabellen als SQL-Identifier.
-
-    Greift, falls ueber einen `Any`-Pfad doch ein Nicht-Literal hereinkommt.
-    """
-    if entity not in _ALLOWED_ENTITIES:
-        raise ValueError(f"Unbekannte Export-Entity: {entity!r}")
-    return entity
-
 
 # Tabellen-/FK-/Inhalts-Konfiguration je Entity. `body_blocks` extrahiert aus
 # dem Versions-`content`-jsonb das BlockNote-Dokument als Block-Liste, die der
@@ -87,7 +69,7 @@ class EntityExportService:
         self, workspace_id: UUID, entity: EntityKind, entity_id: UUID
     ) -> dict[str, Any] | None:
         """Identitaets-Zeile + alle Versionen eines Aggregats (oder None ⇒ 404)."""
-        entity = _safe_entity(entity)
+        entity = safe_entity(entity)
         fk_column = f"{entity}_id"
         identity = await self._pool.fetchrow(
             f"SELECT * FROM {entity} WHERE id = $1 AND workspace_id = $2",
@@ -116,7 +98,7 @@ class EntityExportService:
 
         Liefert None, wenn das Aggregat im Workspace nicht existiert (⇒ 404).
         """
-        entity = _safe_entity(entity)
+        entity = safe_entity(entity)
         identity = await self._pool.fetchrow(
             f"SELECT name FROM {entity} WHERE id = $1 AND workspace_id = $2",
             entity_id,

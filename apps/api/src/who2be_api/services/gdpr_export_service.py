@@ -21,6 +21,7 @@ from uuid import UUID
 import asyncpg
 
 from who2be_api.core.tenancy import tenant_scope
+from who2be_api.services.entity_sql import safe_entity
 
 # Tabellen, deren interne Mandanten-Spalte aus dem Export entfernt wird.
 _INTERNAL_COLUMNS = frozenset({"workspace_id"})
@@ -151,9 +152,12 @@ class GdprExportService:
     ) -> list[dict[str, Any]]:
         """Identitaets-Zeilen eines Inhalts-Aggregats inkl. aller Versionen.
 
-        `entity` ist ein festes Identifier-Set (persona/playbook/resource) —
-        nie Nutzereingabe; die f-String-Interpolation ist daher unkritisch.
+        `entity` fliesst als f-String-Tabellenname ins SQL. Heute immer ein
+        Literal aus dem Aufrufer — die harte `safe_entity`-Whitelist (geteilt mit
+        dem Einzel-Export) erzwingt das aber als Runtime-Guard statt nur per
+        Kommentar (Defense-in-Depth, Zero-Trust).
         """
+        entity = safe_entity(entity)
         identity_rows = await self._pool.fetch(
             f"SELECT * FROM {entity} WHERE workspace_id = $1 ORDER BY created_at ASC, id ASC",
             workspace_id,

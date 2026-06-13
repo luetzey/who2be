@@ -27,6 +27,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from who2be_api.core.config import get_settings
 from who2be_api.core.db import get_pool
 from who2be_api.core.tenancy import tenant_scope
+from who2be_api.licensing.edition import is_onprem
 from who2be_api.repositories.token_repository import PgTokenRepository, TokenRepository
 from who2be_models import AgentCapability, AgentToolPolicy, WorkspaceRole
 
@@ -168,13 +169,20 @@ def require_aal2(ctx: WorkspaceContext) -> None:
     - **API-Token** (`is_api_token`): Maschinen-Pfad ohne MFA-Konzept (analog
       GitHub-PATs) — separat ausstellbar/revozierbar, daher exempt.
     - **Fehlender `aal`-Claim** (`aal is None`): aeltere/handsignierte
-      Test-JWTs tragen ihn nicht. Produktive GoTrue-JWTs setzen `aal` immer,
-      daher greift das Gate in Produktion zuverlaessig; nur ein *expliziter*
-      Nicht-aal2-Wert (typisch "aal1") wird geblockt (fail-open bei Absenz).
+      (Magic-Link-/Test-)JWTs tragen ihn nicht — aber nur **On-Prem/Dev** wird
+      das fail-open durchgelassen. In der **Cloud** setzt GoTrue `aal` immer mit;
+      ein dort fehlender Claim ist verdaechtig und wird fail-**closed** behandelt
+      (Zero-Trust). Ein *expliziter* Nicht-aal2-Wert (typisch "aal1") wird in
+      beiden Editionen geblockt.
     """
     if ctx.is_api_token:
         return
-    if ctx.aal is None or ctx.aal == _AAL2:
+    if ctx.aal == _AAL2:
+        return
+    # Fehlender Claim: fail-open nur On-Prem/Dev (Bestands-/Test-JWTs ohne aal).
+    # In der Cloud faellt der Pfad durch zum Raise (fail-closed) — folgt dem
+    # `is_cloud()`-Editions-Muster, ohne den On-Prem-Default zu brechen.
+    if ctx.aal is None and is_onprem():
         return
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
