@@ -52,6 +52,10 @@ GRUNDREGELN:
    | Test-ID | Status (PASS/FAIL/BLOCKED/NEEDS-VISUAL/SKIPPED) | Beweis | Notiz |
    Darunter eine Kurz-Zusammenfassung (Anzahl je Status) + jede FAIL/BLOCKED-Ursache.
    Erfinde keine Ergebnisse; wenn etwas nicht prüfbar war, sag das ehrlich (BLOCKED + Grund).
+   PFLICHT: Schreibe IMMER einen Report — auch wenn Stack/DB/MCP/Browser komplett fehlen.
+   Dann jede zugewiesene Test-ID als BLOCKED mit Grund eintragen. Produziere NIEMALS gar
+   keinen Report: ein fehlender Report wird in der Konsolidierung zur unsichtbaren
+   Coverage-Lücke (NICHT AUSGEFÜHRT) statt zu einem nachvollziehbaren BLOCKED.
 6. SCOPE-DISZIPLIN: Bearbeite nur die unten gelisteten Test-IDs. Stößt du auf einen Bug
    außerhalb deines Scopes, notiere ihn unter "Beobachtungen", aber verfolge ihn nicht.
 7. STATUS-MASCHINE (für Versionierung relevant): draft→review (Submit, editor) →active
@@ -164,6 +168,15 @@ Pflichtfelder zu Promote schicken → erwarte 409 mit Liste der fehlenden Felder
 
 DEIN AUFTRAG: Die komplette Agenten-Reise — Agent-Konfiguration in der UI/API PLUS die
 gesamte MCP-Schnittstelle (Read- und Write-Tools) inkl. Autorisierung/Tool-Policy.
+
+UMGEBUNGS-PFLICHT: Dieser Strang braucht einen LAUFENDEN MCP-Server (MCP_ENDPOINT) plus
+laufende API + DB. Ist das nicht gegeben, brich NICHT ab und liefere keinen leeren Lauf —
+trage stattdessen jede der 38 IDs (FT-AG-01..10, FT-MCPR-01..08, FT-MCPW-01..14,
+FT-POL-01..06) als BLOCKED mit Grund "MCP/Stack nicht verfügbar" in deinen Report ein.
+Ein fehlender A4-Report ist im Vorlauf 2026-06-11 als unsichtbare Coverage-Lücke (38 IDs
+NICHT AUSGEFÜHRT) aufgefallen — genau das muss verhindert werden. Strang R (Autorisierungs-
+Gates) hat dabei Vorrang: er ist sicherheitsrelevant und muss am Ende einen belegten Status
+tragen (PASS oder BLOCKED-mit-Grund), niemals "fehlt".
 
 SELBST-PROVISIONIERUNG (Pflicht, da MCP-Reads nur ACTIVE sehen): Lege in deinem Workspace
 je mindestens eine Persona, ein Playbook, eine Resource und ein System-Prompt-Template an

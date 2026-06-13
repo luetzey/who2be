@@ -72,7 +72,8 @@ Phase 3 ist abgeschlossen (Stand 2026-05-29). Master-Plan:
 **MCP-Write-Tools (ADR-0030, 2026-06-05):** Der MCP-Server exponiert
   Mutations-Tools fuer alle vier Kernelemente (Persona, Playbook, Resource,
   Agent): create/update/transition/restore + Verknuepfungs-Setter. Duenner
-  Adapter — Autorisierung (editor; Promote/Retire admin), Owner-Scoping und
+  Adapter — Autorisierung (editor; jeder Uebergang ab/zu `active` —
+  Promote/Retire/Reset — admin), Owner-Scoping und
   der Draft→active-Workflow bleiben serverseitig. Kein delete ueber MCP.
   Loest ADR-0012 (deferred) ab.
 
