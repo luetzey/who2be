@@ -23,13 +23,13 @@ Gilt für **Persona, Playbook, Resource, System-Prompt-Template**:
 draft ──(Submit, editor)──▶ review ──(Publish, admin)──▶ active ──(Retire, admin)──▶ inactive
   ▲                            │                            │                          │
   └──(Reject, editor)──────────┘                            │                          │
-  ◀──(Reset, editor)────────────────────────────────────────┘                          │
+  ◀──(Reset, admin)─────────────────────────────────────────┘                          │
   ◀──(Reaktivieren als Draft, editor)──────────────────────────────────────────────────┘
 ```
 
 - **Agenten (MCP-Reads) sehen ausschließlich `status='active'`.** Drafts/Review/Inactive sind unsichtbar.
 - PUT auf eine aktive Version erzeugt einen neuen **Draft** (→ **409**, wenn bereits ein Draft existiert).
-- Promote (→active) und Retire (active→inactive) erfordern **admin**; alle übrigen Transitionen **editor**.
+- Jeder Übergang **ab `active`** erfordert **admin** — Promote (→active), Retire (active→inactive) **und Reset (active→draft)** (ADR-0023, durchgesetzt in `version_status.py::required_role_for_transition`). Übrige Transitionen (Submit, Reject, Reaktivieren) erfordern **editor**.
 
 ---
 
@@ -37,7 +37,7 @@ draft ──(Submit, editor)──▶ review ──(Publish, admin)──▶ act
 
 | ID | Ziel | Oberfläche | Rolle | Schritte / Erwartung | ✅ |
 |----|------|-----------|-------|----------------------|----|
-| FT-PREP-01 | Stacks starten | — | — | `docker compose up -d`; API: `uv run uvicorn who2be_api.main:app --reload`; MCP: `uv run python -m who2be_mcp.server`; Web: `npm run dev`. Alle drei laufen ohne Fehler. | |
+| FT-PREP-01 | Stacks starten | — | — | `docker compose up -d`; API: `uv run uvicorn who2be_api.main:app --reload`; MCP: `uv run python -m who2be_mcp.server`; Web: `npm run dev`. Alle drei laufen ohne Fehler. **Für einen vollwertigen Lauf zwingend DB/GoTrue/Mailcatcher (Setup: `docs/local-smoke.md`).** Tipp: `WHO2BE_REQUIRE_DB=1` setzen, damit DB-abhängige Pfade hart **fehlschlagen** statt zu skippen — verhindert „grün durch Skip" bei den 31 BLOCKED-IDs. | |
 | FT-PREP-02 | Health-Check | API | anon | `GET /v1/health` → **200**, Body mit `status`, `version`, DB-Konnektivität. | |
 | FT-PREP-03 | MCP-Liveness | MCP | anon | Tool `ping` → `"pong"`. | |
 | FT-PREP-04 | Testkonten anlegen | UI | — | Mind. **3 User**: einer wird `admin`, einer `editor`, einer `viewer` (im selben Workspace). Für Tenancy-Tests ein 4. User ohne Mitgliedschaft. | |
@@ -200,7 +200,7 @@ draft ──(Submit, editor)──▶ review ──(Publish, admin)──▶ act
 | FT-VER-02 | Publish | UI/API | admin | review→active. Als editor → **403**. | |
 | FT-VER-03 | Reject | UI/API | editor | review→draft. | |
 | FT-VER-04 | Retire | UI/API | admin | active→inactive. Als editor → **403**. | |
-| FT-VER-05 | Reset | UI/API | editor | active→draft. | |
+| FT-VER-05 | Reset | UI/API | admin | active→draft. Jeder Übergang **ab `active`** ist admin-only (ADR-0023); als editor → **403**. | |
 | FT-VER-06 | Reaktivieren | UI/API | editor | inactive→draft („Reaktivieren als Draft"). | |
 | FT-VER-07 | PUT-auf-Active = Draft | API | editor | PUT auf aktive Version erzeugt neuen Draft. | |
 | FT-VER-08 | Draft-Konflikt | API | editor | PUT/Update bei bereits existierendem Draft → **409**. | |
@@ -236,9 +236,9 @@ draft ──(Submit, editor)──▶ review ──(Publish, admin)──▶ act
 
 | ID | Ziel | Oberfläche | Rolle | Schritte / Erwartung | ✅ |
 |----|------|-----------|-------|----------------------|----|
-| FT-TOK-01 | Token anlegen | UI/API | member | `POST …/tokens`: Name; optional Rollen-Override (≤ eigene Rolle); optional Agent-Binding. Klartext-Token **einmalig** sichtbar. | |
+| FT-TOK-01 | Token anlegen | UI/API | editor | `POST …/tokens`: Name; optional Rollen-Override (≤ eigene Rolle); optional Agent-Binding. Klartext-Token **einmalig** sichtbar. viewer → **403** (`token_service.py` `require_role(editor)`, konsistent mit ADR-0023). | |
 | FT-TOK-02 | Liste | UI/API | member | Name, Created, Last-used, Revoked; Tail maskiert („…xyz"). | |
-| FT-TOK-03 | Revoke | UI/API | member | `DELETE …/tokens/{id}` → **204**, sofort ungültig. | |
+| FT-TOK-03 | Revoke | UI/API | editor | `DELETE …/tokens/{id}` → **204**, sofort ungültig. viewer → **403**. | |
 | FT-TOK-04 | Workspace-Pinning | API | — | Token gilt nur für seinen Workspace; Cross-Workspace-Aufruf scheitert. | |
 | FT-TOK-05 | Rollen-Snapshot | API | — | Token trägt Rolle als Snapshot (ADR-0023); spätere Downgrades wirken. | |
 | FT-TOK-06 | Override-Laden | UI | member | Token aus Datei einfügen → „Activate" → Konfiguration geladen. | |
@@ -357,13 +357,13 @@ draft ──(Submit, editor)──▶ review ──(Publish, admin)──▶ act
 |--------|:------:|:------:|:-----:|----|
 | Lesen (Listen/Detail/Versionen/Diff/Provenance/Export) | ✓ | ✓ | ✓ | |
 | Create/Update (Persona/Playbook/Resource/SP/Agent) | ✗ (403/UI gesperrt) | ✓ | ✓ | |
-| Submit/Reject/Reset/Reaktivieren (editor-Transitionen) | ✗ | ✓ | ✓ | |
-| Publish (→active) / Retire (→inactive) | ✗ | ✗ (403) | ✓ | |
+| Submit/Reject/Reaktivieren (editor-Transitionen) | ✗ | ✓ | ✓ | |
+| Publish (→active) / Retire (→inactive) / Reset (active→draft) | ✗ | ✗ (403) | ✓ | |
 | Delete (Persona/Playbook/Resource/Agent) | ✗ | ✓ | ✓ | |
 | Links/Composes/Sub-Resources setzen | ✗ | ✓ | ✓ | |
 | Mitglieder/Einladungen/Rollen verwalten | ✗ | ✗ | ✓ | |
 | Workspace/Org umbenennen & löschen | ✗ | ✗ | ✓ (Org-Delete: owner) | |
-| Tokens anlegen/widerrufen | ✓ (≤ eigene Rolle) | ✓ | ✓ | |
+| Tokens anlegen/widerrufen | ✗ (403) | ✓ (≤ eigene Rolle) | ✓ | |
 
 ---
 
