@@ -614,7 +614,7 @@ class TestPersonaFieldResolver:
     def test_resolves_profile_skills_section(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """## Skills-Sektion wird gerendert, note nur wenn vorhanden (Flag aktiv)."""
         # Skills sind Coming Soon (ADR-0026) — fuer den Render-Test lokal aktiv.
-        monkeypatch.setattr("who2be_api.services.placeholders.registry.SKILLS_ENABLED", True)
+        monkeypatch.setattr("who2be_api.services.placeholders._core.SKILLS_ENABLED", True)
         resolver = PersonaFieldResolver()
         ctx = _ctx(persona_id=uuid4())
         _content: dict[str, Any] = {
@@ -1133,7 +1133,7 @@ class TestResourcesCatalogResolver:
         assert isinstance(REGISTRY["resources-catalog"], ResourcesCatalogResolver)
 
     def test_overflow_truncates_and_appends_hint(self) -> None:
-        from who2be_api.services.placeholders.registry import _CATALOG_LIMIT
+        from who2be_api.services.placeholders.resolvers.catalog import _CATALOG_LIMIT
 
         resolver = ResourcesCatalogResolver()
         ctx = _ctx()
@@ -1167,7 +1167,7 @@ def _skills_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
     folgende Klasse testet das zugrunde liegende Rendering — also die Logik, die
     bei Reaktivierung greift — und flippt das Flag dafuer lokal auf True.
     """
-    monkeypatch.setattr("who2be_api.services.placeholders.registry.SKILLS_ENABLED", True)
+    monkeypatch.setattr("who2be_api.services.placeholders._core.SKILLS_ENABLED", True)
 
 
 class TestRenderSkillsTable:

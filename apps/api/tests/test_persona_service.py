@@ -508,7 +508,7 @@ def test_render_skills_disabled_by_default_not_appended() -> None:
 
 def test_render_appends_skills_table_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
     # Flag lokal aktivieren — testet die Render-Logik, die bei Reaktivierung greift.
-    monkeypatch.setattr("who2be_api.services.placeholders.registry.SKILLS_ENABLED", True)
+    monkeypatch.setattr("who2be_api.services.placeholders._core.SKILLS_ENABLED", True)
     service, ctx = _service_with_pool()
     content = PersonaVersionContent(
         description="Coach",
@@ -544,7 +544,7 @@ def test_render_empty_profile_and_no_skills_is_empty() -> None:
 def test_render_skills_only_when_body_empty_and_enabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("who2be_api.services.placeholders.registry.SKILLS_ENABLED", True)
+    monkeypatch.setattr("who2be_api.services.placeholders._core.SKILLS_ENABLED", True)
     service, ctx = _service_with_pool()
     content = PersonaVersionContent(skills=[SkillRef(name="Python", note="fortgeschritten")])
     created = asyncio.run(service.create(ctx, PersonaCreate(name="Skill", content=content)))
