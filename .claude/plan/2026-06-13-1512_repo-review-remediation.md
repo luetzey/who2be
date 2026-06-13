@@ -48,11 +48,25 @@ Rest-Risiken = Härtung (fail-open MFA, Defense-in-Depth-Konsistenz).
   ein Hard-Gate-Flip wäre untestbar und würde die ohnehin rote CI nur verschärfen.
   Erst flippen, wenn die Infra steht und 1–2 E2E-Läufe grün sind.
 
-## Welle 3 — Strategisch (eigener Plan + Drei-Optionen-Weiche)
+## Welle 3 — Strategisch (Drei-Optionen-Weiche: **Option A — generische Basisklasse** gewählt)
 
-- [ ] **STR-1** Generisches `VersionedAggregateRepository` extrahieren (~1.960 Z. Triplikation
-  über persona/playbook/resource-Repos). Vorlage: `version_status.py`-`tables`-Muster.
-  Drei-Optionen-Rückfrage vor Start: Voll-Unifikation vs. Mixin vs. Code-Gen.
+- [x] **STR-1a — Fundament + Persona.** `repositories/versioned_repository.py`:
+  `VersionedAggregateRepository[TRead,TVersionRead]` + `AggregateTables`-Config hält
+  den identischen Versionierungs-Kern (insert/update/upsert_draft/restore/list_versions/
+  fetch_version/delete) als protected `_`-Methoden; Tabellennamen aus `entity` abgeleitet
+  und über `entity_sql.safe_entity` whitelisted (Zero-Trust). `PgPersonaRepository` ist
+  jetzt dünne Subklasse: Wrapper in die typisierten Signaturen (`PersonaUpdateOutcome`)
+  + entity-spezifische Lesepfade (fetch/list_by_workspace/list_distinct_tags).
+  Verifiziert: ruff, mypy strict (Protocol-Conformance grün), 72 Persona-Unit-Tests,
+  generiertes SQL self-consistent. **Einschränkung:** DB-Integrationstests (28) konnten
+  lokal nicht laufen (kein Docker, CI-Runner-Infra down) — SQL ist per
+  Transkriptions-Äquivalenz + generierter-SQL-Inspektion + Typen verifiziert, **nicht**
+  gegen echtes Postgres ausgeführt. CI/Reviewer bestätigt die Integration-Suite.
+- [ ] **STR-1b — Resource migrieren.** Shared-Kern byte-identisch zu Persona (verifiziert);
+  resource-spezifisch: fetch/list_by_workspace mit `tag`-jsonb-Filter + `restrict_ids`.
+- [ ] **STR-1c — Playbook migrieren.** Divergenter: `triggers`-Spalte auf der Identitäts-
+  Zeile + `list_triggers_with_playbooks` → Basis muss insert/update um optionale
+  Identitäts-Extra-Spalten erweitert werden.
 
 ## Verifikation (DoD)
 
