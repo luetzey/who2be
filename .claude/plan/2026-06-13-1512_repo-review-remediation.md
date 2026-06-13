@@ -34,10 +34,19 @@ Rest-Risiken = Härtung (fail-open MFA, Defense-in-Depth-Konsistenz).
   `sessionStorage` (Tab-Lifetime, Supabase-SPA-Norm), abgemildert durch Caddy-CSP
   (F-12). → Als akzeptiertes Rest-Risiko per ADR festgehalten.
 
-## Welle 2 — Strukturell (nächste Iteration, separat)
+## Welle 2 — Strukturell
 
-- [ ] **ST-1** `services/placeholders/registry.py` (1115 Z.) in `placeholders/resolvers/`-Paket splitten.
-- [ ] **ST-2** E2E von Soft-Gate (`continue-on-error`) auf Hard-Gate flippen (nach stabilen Läufen).
+- [x] **ST-1** `services/placeholders/registry.py` (1115 Z.) in `placeholders/resolvers/`-Paket
+  gesplittet. Azyklische Schichtung `registry (Fassade, 72 Z.) → resolvers/{content,
+  persona,tools,catalog,date}.py → _core.py` (Typen, Protocol, `SKILLS_ENABLED`,
+  geteilte Helfer). Größtes Modul jetzt 349 Z. Öffentliche Import-Oberfläche
+  (`placeholders/__init__`, `registry.*`) unverändert re-exportiert; `SKILLS_ENABLED`
+  lebt jetzt in `_core` (4 Test-Monkeypatches + 1 `_CATALOG_LIMIT`-Import umverdrahtet).
+  Verhalten unverändert: 357 API-Tests grün, mypy strict/ruff grün.
+- [ ] **ST-2** E2E Soft→Hard-Gate: **bewusst zurückgestellt.** Die CI-Runner-Infra ist
+  derzeit umgebungsweit defekt (kein Runner-Provisioning, siehe Welle-1-PR-Diagnose);
+  ein Hard-Gate-Flip wäre untestbar und würde die ohnehin rote CI nur verschärfen.
+  Erst flippen, wenn die Infra steht und 1–2 E2E-Läufe grün sind.
 
 ## Welle 3 — Strategisch (eigener Plan + Drei-Optionen-Weiche)
 
