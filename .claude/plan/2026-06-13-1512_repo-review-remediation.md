@@ -68,9 +68,19 @@ Rest-Risiken = Härtung (fail-open MFA, Defense-in-Depth-Konsistenz).
   Protocol + `ResourceUpdateOutcome` unverändert (null Service-Ripple). Verifiziert:
   ruff, mypy strict (120 Dateien), 357 Tests, generiertes Resource-SQL self-consistent.
   Gleiche DB-Ausführungs-Grenze wie STR-1a (kein Docker/CI-Runner).
-- [ ] **STR-1c — Playbook migrieren.** Divergenter: `triggers`-Spalte auf der Identitäts-
-  Zeile + `list_triggers_with_playbooks` → Basis muss insert/update um optionale
-  Identitäts-Extra-Spalten erweitert werden.
+- [x] **STR-1c — Playbook partiell migriert (Option B, vom User gewählt).** Recherche
+  ergab: Playbook divergiert real (denormalisierte `type`/`tags`/`triggers` auf der
+  Identitäts-Zeile, geschrieben in insert/update/upsert/restore; `is_composite`;
+  eigene Array-/ILIKE-Filter; `list_triggers_with_playbooks`). Option A (Basis-Bloat
+  für einen Ausreißer) verworfen. `PgPlaybookRepository` subclasst die Basis und erbt
+  nur `list_versions`/`fetch_version`/`delete` via Wrapper; der Write-Core + Lese-Filter
+  bleiben playbook-eigen. 712 → 694 Z. Verifiziert: ruff, mypy strict (120), 357 Tests.
+  Gleiche DB-Ausführungs-Grenze.
+
+**STR-1 abgeschlossen:** generische Basis über alle drei Aggregate angewandt (persona/
+resource voll, playbook partiell). Verbleibende DB-Verifikation: einmal
+`WHO2BE_TEST_TESTCONTAINERS=1 uv run pytest apps/api/tests -k "persona or resource or
+playbook"` grün laufen lassen, sobald Docker/CI-Runner verfügbar.
 
 ## Verifikation (DoD)
 
