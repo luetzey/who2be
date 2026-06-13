@@ -1,0 +1,184 @@
+[
+  {
+    "id": "pb-persona-h-zweck",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Zweck", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-p-zweck",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "CRUD-Workflow fuer Personas in Who2Be: eine Persona anlegen, pflegen oder zurueckziehen — mit Schema-Disziplin und Phasen-Trennung (Verstehen → Vorschlag → Schreiben → Hand-Off). Drei Modi: Create (neue Persona), Update (bestehende aendern), Retire (deaktivieren). Geschrieben wird ausschliesslich ueber die Who2Be-MCP-Write-Tools; der Draft→active-Workflow bleibt serverseitig.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-h-trigger",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Trigger-Stichworte", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-p-trigger",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "neue Persona; neuer Agent; Persona anlegen; Persona bearbeiten; Persona editieren; Persona aendern; Persona zurueckziehen; Persona deaktivieren; Persona retiren.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-h-prozedur",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Prozedur", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-p-modus",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Erkenne zuerst den Modus: Create, wenn der Nutzer einen Agenten/Persona-Namen nennt, der noch nicht existiert; Update, wenn er eine bestehende Persona plus Aenderungswunsch nennt; Retire, wenn er eine Persona deaktivieren will. Bei Mehrdeutigkeit zuerst get_persona(identifier) lesen und klar nachfragen, welche Persona gemeint ist.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-1",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Create — Verstehen: Klaerungsfragen phasenweise, 1-2 pro Turn, nie alle auf einmal. Identity (eine knappe Zeile), Tone & Style (mit Beispiel-Phrasen), Allowed (4-6 konkrete Capabilities), Forbidden (Domaen-Grenzen + Anti-Patterns), Output Style (Form, Laenge), Modi-Entscheidung (Single-Mode ist Standard; Multi-Mode nur bei fundamental anderer Stimme/Output).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-2",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Create — Vorschlag: Persona-Body konsolidieren (description + BlockNote-Profil mit Identity, Tone & Style, Allowed, Forbidden, Output Style; optional modes). Dem Nutzer zeigen, Trade-offs erklaeren, Bestaetigung einholen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-3",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Create — Schreiben: create_persona(name, content, locale='de') aufrufen. Die neue Version 1 entsteht serverseitig als status='draft' — nie direkt aktiv. traits und tags fuer Stimme bzw. Domaene setzen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-4",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Update — Verstehen & Vorschlag: get_persona(identifier) lesen, betroffene Sektion (Identity / Tone & Style / Allowed / Forbidden / Output Style / Modi) zeigen, Aenderungswunsch klaeren, Edit-Vorschlag konsolidieren und bestaetigen lassen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-5",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Update — Schreiben: update_persona(persona_id, content) legt automatisch einen neuen Draft an (PUT auf eine aktive Version erzeugt einen Draft; existiert bereits ein Draft, kommt 409). Aenderungen sammeln, nicht pro Mikro-Edit eine neue Version erzwingen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-6",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Verknuepfungen: Welche Playbooks die Persona fuehren soll, via set_persona_playbooks(persona_id, playbook_ids) setzen (Replace-Semantik — die Liste ersetzt den Stand vollstaendig). Vorher mit list_playbooks() die passenden IDs ermitteln.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-7",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Aktivieren: Sobald der Nutzer freigibt, transition_persona(persona_id, version, to='active') aufrufen — promoten ist admin-gated und liegt beim Nutzer. Niemals beim Anlegen automatisch aktivieren.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-8",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Retire: get_persona(identifier) lesen; pruefen, ob Agenten diese Persona nutzen, und den Nutzer warnen. Dann transition_persona(persona_id, version, to='inactive') aufrufen. restore_persona(persona_id, version) stellt eine fruehere Version als neuen Draft wieder her, falls ein Rollback noetig ist.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-h-tools",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Tools & Operations", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-t1",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "create_persona — neue Persona als Draft-Version 1 anlegen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-t2",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "update_persona — Inhalt einer Persona als neuen Draft aendern.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-t3",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "transition_persona — eine Version schalten (draft/review benoetigt persona_write; active/inactive benoetigt promote_retire).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-t4",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "restore_persona — eine fruehere Version als neuen Draft wiederherstellen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-t5",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "set_persona_playbooks — die einer Persona zugeordneten Playbooks setzen (Replace-Semantik).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-t6",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Reads: get_persona, list_playbooks zur Vorbereitung. Verboten: Status beim Anlegen direkt auf active setzen, sowie Schreiben in fremde Aggregate ueber dieses Playbook hinaus.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-h-handoff",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Hand-Off", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-ho1",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Persona-Inhalt vom Nutzer reviewen lassen und auf 'active' schalten, sobald freigegeben.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-ho2",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Passende Playbooks anlegen (Playbook-anlegen-Playbook) und via set_persona_playbooks verknuepfen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-ho3",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Einen Agenten anlegen, der diese Persona plus ein Systemprompt-Template fuehrt (Agent-anlegen-Playbook).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-ho4",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Bei verhaltensrelevanten Updates: laufende Sitzungen halten den alten Stand gecached — fuer die neue Stimme einen neuen Chat starten. Bei Themen ausserhalb der Persona-Pflege hoeflich an die zustaendige Stelle rueckverweisen.", "styles": {}}],
+    "children": []
+  }
+]
