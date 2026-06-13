@@ -4,7 +4,8 @@ Reine Unit-Tests ueber `require_role`/`require_aal2` mit konstruierten
 `WorkspaceContext`-Objekten — kein I/O, keine DB. Deckt ab:
 - Admin-Aktion mit `aal1` → 403 (MFA-Pflicht greift),
 - Admin-Aktion mit `aal2` → ok,
-- fehlender aal-Claim (`None`) → ok (fail-open bei Absenz, Bestands-/Test-JWTs),
+- fehlender aal-Claim (`None`) On-Prem → ok (fail-open, Bestands-/Test-JWTs),
+- fehlender aal-Claim (`None`) Cloud → 403 (fail-closed, Zero-Trust),
 - API-Token (Maschinen-Pfad) → ok (vom Gate ausgenommen),
 - nicht-administrative Aktionen (editor/viewer) → kein AAL2-Gate.
 """
@@ -49,10 +50,24 @@ def test_admin_action_with_aal2_is_allowed() -> None:
     require_role(_ctx(WorkspaceRole.admin, aal="aal2"), WorkspaceRole.admin)
 
 
-def test_admin_action_without_aal_claim_is_allowed_fail_open() -> None:
-    # Fehlender Claim (Legacy-/Test-JWT) → erlaubt; nur ein expliziter
-    # Nicht-aal2-Wert blockt.
+def test_admin_action_without_aal_claim_is_allowed_fail_open_onprem(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # On-Prem/Dev: fehlender Claim (Legacy-/Magic-Link-/Test-JWT) → erlaubt.
+    monkeypatch.setattr("who2be_api.core.security.is_onprem", lambda: True)
     require_role(_ctx(WorkspaceRole.admin, aal=None), WorkspaceRole.admin)
+
+
+def test_admin_action_without_aal_claim_blocked_in_cloud(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Cloud: GoTrue setzt aal immer; ein fehlender Claim ist verdaechtig und
+    # wird fail-closed behandelt (Zero-Trust, QW-2).
+    monkeypatch.setattr("who2be_api.core.security.is_onprem", lambda: False)
+    with pytest.raises(HTTPException) as exc:
+        require_role(_ctx(WorkspaceRole.admin, aal=None), WorkspaceRole.admin)
+    assert exc.value.status_code == 403
+    assert "MFA" in exc.value.detail
 
 
 def test_admin_action_via_api_token_is_exempt() -> None:
