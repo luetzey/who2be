@@ -27,6 +27,10 @@ from uuid import UUID
 
 import asyncpg
 
+from who2be_api.repositories.versioned_repository import (
+    AggregateTables,
+    VersionedAggregateRepository,
+)
 from who2be_models import (
     DEFAULT_LOCALE,
     PlaybookContent,
@@ -179,11 +183,22 @@ class PlaybookRepository(Protocol):
     async def delete(self, workspace_id: UUID, playbook_id: UUID) -> bool: ...
 
 
-class PgPlaybookRepository:
-    """asyncpg-Implementierung von `PlaybookRepository`."""
+class PgPlaybookRepository(VersionedAggregateRepository[PlaybookRead, PlaybookVersionRead]):
+    """asyncpg-Implementierung von `PlaybookRepository`.
+
+    Teil-Migration auf den generischen Kern (Repo-Review STR-1c, Option B):
+    `list_versions`/`fetch_version`/`delete` kommen aus
+    `VersionedAggregateRepository`. `insert`/`update`/`upsert_draft`/
+    `restore_version` sowie die Lese-Filter bleiben playbook-eigen — die
+    denormalisierten Identitaets-Spalten (`type`/`tags`/`triggers`) und
+    `is_composite` weichen vom generischen Schema ab.
+    """
 
     def __init__(self, pool: asyncpg.Pool) -> None:
-        self._pool = pool
+        super().__init__(
+            pool,
+            AggregateTables("playbook", PlaybookRead, PlaybookVersionRead),
+        )
 
     async def insert(
         self,
@@ -610,36 +625,12 @@ class PgPlaybookRepository:
     async def list_versions(
         self, workspace_id: UUID, playbook_id: UUID, locale: str = DEFAULT_LOCALE
     ) -> list[PlaybookVersionRead] | None:
-        owned = await self._pool.fetchval(
-            "SELECT 1 FROM playbook WHERE id = $1 AND workspace_id = $2",
-            playbook_id,
-            workspace_id,
-        )
-        if owned is None:
-            return None
-        rows = await self._pool.fetch(
-            "SELECT version, status, locale, content, created_by, created_at "
-            "FROM playbook_version WHERE playbook_id = $1 AND locale = $2 "
-            "ORDER BY version DESC",
-            playbook_id,
-            locale,
-        )
-        return [PlaybookVersionRead.model_validate(dict(row)) for row in rows]
+        return await self._list_versions(workspace_id, playbook_id, locale)
 
     async def fetch_version(
         self, workspace_id: UUID, playbook_id: UUID, version: int, locale: str = DEFAULT_LOCALE
     ) -> PlaybookVersionRead | None:
-        row = await self._pool.fetchrow(
-            "SELECT pv.version, pv.status, pv.locale, pv.content, pv.created_by, pv.created_at "
-            "FROM playbook_version pv "
-            "JOIN playbook p ON p.id = pv.playbook_id "
-            "WHERE p.id = $1 AND p.workspace_id = $2 AND pv.version = $3 AND pv.locale = $4",
-            playbook_id,
-            workspace_id,
-            version,
-            locale,
-        )
-        return PlaybookVersionRead.model_validate(dict(row)) if row is not None else None
+        return await self._fetch_version(workspace_id, playbook_id, version, locale)
 
     async def list_distinct_tags(
         self, workspace_id: UUID, locale: str = DEFAULT_LOCALE
@@ -692,21 +683,12 @@ class PgPlaybookRepository:
         ]
 
     async def delete(self, workspace_id: UUID, playbook_id: UUID) -> bool:
-        """Hard-Delete der Identitaets-Zeile (ADR-0032).
+        """Hard-Delete der Identitaets-Zeile (ADR-0032), workspace-scoped.
 
-        Workspace-scoped wie alle Schreib-Pfade dieser Klasse. Die FK-Kaskaden
-        (Migration 0003: `playbook_version` ON DELETE CASCADE; 0016:
-        `playbook_resource_link` ON DELETE CASCADE; 0028:
-        `playbook_composition` ON DELETE CASCADE auf parent UND child) raeumen
-        alle Versionen und ausgehenden Links/Composition-Kanten ab — kein
-        Waisen-Rest. Eingehende Referenzen (verlinkende Personas, Eltern-
-        Composites) werden im Service vorab als 409 abgefangen.
+        FK-Kaskaden (0003 `playbook_version`, 0016 `playbook_resource_link`,
+        0028 `playbook_composition` parent+child — alle ON DELETE CASCADE) raeumen
+        Versionen und ausgehende Links/Composition-Kanten; eingehende Referenzen
+        (verlinkende Personas, Eltern-Composites) faengt der Service vorab als
+        409 ab.
         """
-        async with self._pool.acquire() as conn, conn.transaction():
-            result = await conn.execute(
-                "DELETE FROM playbook WHERE id = $1 AND workspace_id = $2",
-                playbook_id,
-                workspace_id,
-            )
-        # asyncpg gibt "DELETE <n>" zurueck; n=0 wenn nichts geloescht wurde.
-        return bool(result.split()[-1] != "0")
+        return await self._delete(workspace_id, playbook_id)
