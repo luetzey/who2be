@@ -62,8 +62,12 @@ Rest-Risiken = Härtung (fail-open MFA, Defense-in-Depth-Konsistenz).
   lokal nicht laufen (kein Docker, CI-Runner-Infra down) — SQL ist per
   Transkriptions-Äquivalenz + generierter-SQL-Inspektion + Typen verifiziert, **nicht**
   gegen echtes Postgres ausgeführt. CI/Reviewer bestätigt die Integration-Suite.
-- [ ] **STR-1b — Resource migrieren.** Shared-Kern byte-identisch zu Persona (verifiziert);
-  resource-spezifisch: fetch/list_by_workspace mit `tag`-jsonb-Filter + `restrict_ids`.
+- [x] **STR-1b — Resource migriert.** `PgResourceRepository` ist jetzt Subklasse von
+  `VersionedAggregateRepository` (623 → 283 Z.). Resource-spezifisch behalten:
+  fetch/list_by_workspace mit `tag`-jsonb-Filter + `restrict_ids`, list_distinct_tags.
+  Protocol + `ResourceUpdateOutcome` unverändert (null Service-Ripple). Verifiziert:
+  ruff, mypy strict (120 Dateien), 357 Tests, generiertes Resource-SQL self-consistent.
+  Gleiche DB-Ausführungs-Grenze wie STR-1a (kein Docker/CI-Runner).
 - [ ] **STR-1c — Playbook migrieren.** Divergenter: `triggers`-Spalte auf der Identitäts-
   Zeile + `list_triggers_with_playbooks` → Basis muss insert/update um optionale
   Identitäts-Extra-Spalten erweitert werden.
