@@ -232,15 +232,36 @@ docker run --rm \
 Workflow `.github/workflows/deploy.yml` triggert auf `push: main` (oder
 manuell per `workflow_dispatch`):
 
-1. **`build-and-push`** baut die drei Images parallel und pushed sie als
-   `ghcr.io/luetzey/who2be-{api,web,mcp}:<sha>` und `:latest` ans
-   GitHub Container Registry. Login per `GITHUB_TOKEN` (`packages: write`).
+1. **`build-and-push`** baut die Images parallel (Matrix) und pushed sie ans
+   GitHub Container Registry (Login per `GITHUB_TOKEN`, `packages: write`):
+   - On-Prem (Default-Target `runtime`, OHNE Billing):
+     `ghcr.io/luetzey/who2be-{api,web,mcp}:<sha>` und `:latest`.
+   - **Cloud-API** (Target `runtime-cloud`, MIT `who2be-billing`):
+     `ghcr.io/luetzey/who2be-api-cloud:<sha>` und `:latest`. Eigenes Tag,
+     damit das On-Prem-`who2be-api`-Image **unangetastet** bleibt; `web`/`mcp`
+     haben keine Cloud-Variante.
 2. **`deploy`** ist conditional (`if: vars.DEPLOY_HOST != ''`): solange
    die Host-Konfig im Repo fehlt (C1 nicht fertig), ueberspringt der
    Job sich sauber. Sobald `DEPLOY_HOST` gesetzt ist, ruft er via SSH
-   `deploy/hetzner/scripts/deploy.sh <commit-sha>` auf dem Host auf —
-   dieses Skript checkt den SHA aus, setzt die `*_IMAGE_TAG`-Variablen
-   in `.env` und macht `docker compose pull` + `up -d --wait`.
+   `WHO2BE_EDITION=<edition> deploy/hetzner/scripts/deploy.sh <commit-sha>`
+   auf dem Host auf — dieses Skript checkt den SHA aus, setzt die
+   `*_IMAGE_TAG`-Variablen in `.env` und faehrt den Stack hoch. Die Edition
+   steuert die Repo-Variable `WHO2BE_EDITION` (Default On-Prem):
+   - **On-Prem** (`WHO2BE_EDITION` leer/`onprem`): ein Compose-File
+     (`docker-compose.yml`), `docker compose pull api web migrate` + `up -d --wait`.
+   - **Cloud** (`WHO2BE_EDITION=cloud`): **beide** `-f`-Files
+     (`docker-compose.yml` + `docker-compose.cloud.yml`). Das Overlay (PR #181)
+     pinnt `pull_policy: build` + `target: runtime-cloud` fuer `api`+`migrate`,
+     also entsteht der Cloud-API-Build auf dem Host aus dem ausgecheckten SHA;
+     `web` wird aus GHCR gezogen. Das in CI gepushte `who2be-api-cloud:<sha>`
+     dient Paritaet/Verifikation und ist die SSoT, falls das Overlay spaeter auf
+     Pull umgestellt wird. Reihenfolge intern (Overlay): `migrate` →
+     `set-app-role-password` → `redis` → `api`.
+
+   Idempotenz/Rollback bleiben in beiden Editionen erhalten: erneuter Aufruf mit
+   demselben (oder einem frueheren) SHA setzt die Tags neu und faehrt den Stack
+   ueber `up -d --wait --remove-orphans` zustandslos nach. Pro Box **eine**
+   Edition behalten (Edition-Wechsel ist ein Laufzeit-, kein Daten-Reset).
 
 ### Repository Variables
 
@@ -255,6 +276,7 @@ In **Settings → Secrets and variables → Actions → Variables** anlegen:
 | `DEPLOY_USER`              | `deploy`                            | SSH-User auf dem Host                |
 | `DEPLOY_PROJECT_DIR`       | `/opt/who2be`                       | Repo-Klon auf dem Host (Default)     |
 | `DEPLOY_SSH_KNOWN_HOSTS`   | Output von `ssh-keyscan -H <host>`  | Optional; sonst Auto-keyscan         |
+| `WHO2BE_EDITION`           | `cloud`                             | Optional; `cloud` → Cloud-Overlay. Leer/`onprem` = Default |
 
 ### Repository Secrets
 
@@ -268,10 +290,14 @@ In **Secrets**:
 
 Auf dem Host:
 ```bash
+# On-Prem
 /opt/who2be/deploy/hetzner/scripts/deploy.sh <alter-commit-sha>
+# Cloud (gleiche Edition wie der Box-Zustand!)
+WHO2BE_EDITION=cloud /opt/who2be/deploy/hetzner/scripts/deploy.sh <alter-commit-sha>
 ```
 Das Skript ist idempotent und kann auf einen frueheren SHA zurueckrollen,
-solange dessen Images noch auf GHCR liegen.
+solange dessen Images noch auf GHCR liegen (Cloud-API baut den `runtime-cloud`-
+Build lokal aus dem ausgecheckten SHA).
 
 ## Datenschutz / Compliance (At-Rest + Standort)
 
