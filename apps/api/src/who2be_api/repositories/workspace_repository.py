@@ -322,8 +322,7 @@ _BUILDER_PERSONA_TRAITS: tuple[str, ...] = (
 _BUILDER_PERSONA_TAGS: tuple[str, ...] = ("meta-agent", "agent-building", "crud")
 
 _BUILDER_AGENT_DESCRIPTION = (
-    "Standard-Meta-Agent zum Anlegen und Pflegen von Personas, Playbooks, "
-    "Resources und Agenten."
+    "Standard-Meta-Agent zum Anlegen und Pflegen von Personas, Playbooks, Resources und Agenten."
 )
 
 # (name, type, triggers, tags, description, sidecar) — Reihenfolge fix, damit
