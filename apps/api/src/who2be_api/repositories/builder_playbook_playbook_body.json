@@ -1,0 +1,419 @@
+[
+  {
+    "id": "pb-playbook-h-zweck",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Zweck", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-p-zweck",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "CRUD-Workflow fuer Playbooks ueber die Who2Be-MCP-Write-Tools. Behandelt atomare und Composite-Playbooks. Ein Playbook wird als Draft angelegt und erst nach Review aktiviert — der Draft-zu-active-Workflow bleibt serverseitig. Die Sub-Playbook-Sequenz eines Composite wird ueber ", "styles": {}},
+      {"type": "text", "text": "set_playbook_composes", "styles": {"code": true}},
+      {"type": "text", "text": " gesetzt; Verweise auf Wissens-Resources ueber ", "styles": {}},
+      {"type": "text", "text": "set_playbook_resource_links", "styles": {"code": true}},
+      {"type": "text", "text": ".", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-h-modus",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Modus erkennen", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-modus-create",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Create: Der User will einen neuen Workflow anlegen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-modus-update",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Update: Der User nennt ein bestehendes Playbook plus eine Aenderung.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-modus-transition",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Transition: Ein Draft soll veroeffentlicht (active) oder ein aktives Playbook zurueckgezogen (inactive) werden.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-modus-restore",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Restore: Eine fruehere Version soll als neuer Draft wiederhergestellt werden.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-h-create",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Create — neues Playbook anlegen", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-h-create-p1",
+    "type": "heading",
+    "props": {"level": 3, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Phase 1 — Verstehen", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-create-p1-persona",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Persona-Bindung: Welche Persona nutzt das Playbook? Existiert sie schon (get_persona)? Falls nein, zuerst dem Persona-Playbook folgen und die Persona anlegen, dann hierhin zurueckkehren.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-create-p1-type",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Type: Ist das Playbook atomar (eigenstaendiger Workflow, Leaf-Knoten) oder ein Composite (orchestriert mehrere atomare Playbooks in einer Sequenz)?", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-create-p1-triggers",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Triggers: Welche User-Phrasen aktivieren das Playbook? Semikolon-getrennt, mit [Platzhaltern] wo flexibel. Mit list_triggers() pruefen, ob ein Trigger schon belegt ist (Kollision vermeiden).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-create-p1-tags",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Tags: Eine bestehende Kategorie nutzen oder ist es wirklich eine neue? Tags ueber list_playbooks() gegenpruefen, nicht wild erweitern.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-create-p1-desc",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Description: Eine praegnante 1-Zeilen-Zusammenfassung.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-create-p1-resources",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Resource-Verweise: Stuetzt sich das Playbook auf Wissens-Resources? Wenn ja, die Resource-IDs notieren (spaeter set_playbook_resource_links).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-create-p1-composite",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Bei Composite: keine eigenen Schritte erfinden — der Body beschreibt nur die Orchestrierung; die fachlichen Schritte liegen in den Sub-Playbooks. Composite hat erst ab zwei Sub-Playbooks Wert.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-h-create-p2",
+    "type": "heading",
+    "props": {"level": 3, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Phase 2 — Vorschlag", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-create-p2-atomic",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Atomic: Body als BlockNote-Dokument entwerfen — klare Phasen oder nummerierte Schritte, dazu die Sektionen Tools & Operations, Anti-Patterns und Notes.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-create-p2-composite",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Composite: Body als nummerierte Sequenz der Sub-Playbooks plus einen Sequenz-Disziplin-Abschnitt (wann passt das Composite nicht, was passiert wenn ein Sub-Playbook fehlt). Die Reihenfolge im Body ist die verbindliche Wahrheit.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-h-create-p3",
+    "type": "heading",
+    "props": {"level": 3, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Phase 3 — Schreiben", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-create-p3-create",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "create_playbook", "styles": {"code": true}},
+      {"type": "text", "text": " mit name und content (description, body als BlockNote-JSON, type, tags, triggers) aufrufen. Das legt eine Draft-Version 1 an — Status ist serverseitig draft, nicht active.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-create-p3-composes",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Bei Composite: ", "styles": {}},
+      {"type": "text", "text": "set_playbook_composes", "styles": {"code": true}},
+      {"type": "text", "text": " mit der parent-ID und den child-IDs in der gewuenschten Reihenfolge (Replace-Semantik). Nur aktive Sub-Playbooks verlinken.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-create-p3-resources",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Bei Resource-Verweisen: ", "styles": {}},
+      {"type": "text", "text": "set_playbook_resource_links", "styles": {"code": true}},
+      {"type": "text", "text": " mit den Resource-Verknuepfungen setzen (Replace-Semantik).", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-create-p3-persona",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Persona-Bindung: Die M:M-Zuordnung Persona zu Playbook wird auf der Persona-Seite gesetzt (", "styles": {}},
+      {"type": "text", "text": "set_persona_playbooks", "styles": {"code": true}},
+      {"type": "text", "text": ") — siehe Persona-Playbook. Ein Playbook ohne Persona haengt im Vakuum.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-h-create-p4",
+    "type": "heading",
+    "props": {"level": 3, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Phase 4 — Hand-Off", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-create-p4-review",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Den Playbook-Inhalt mit dem User reviewen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-create-p4-activate",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Nach Freigabe ", "styles": {}},
+      {"type": "text", "text": "transition_playbook", "styles": {"code": true}},
+      {"type": "text", "text": " mit version=1 und to=\"active\" aufrufen. Das Promoten nach active braucht die Capability promote_retire.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-create-p4-composite-check",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Bei Composite: pruefen, dass alle verlinkten Sub-Playbooks existieren und auf active stehen — sonst werden inaktive Kinder beim Render uebersprungen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-h-update",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Update — bestehendes Playbook aendern", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-update-1",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Verstehen: Das Playbook mit ", "styles": {}},
+      {"type": "text", "text": "fetch_playbook", "styles": {"code": true}},
+      {"type": "text", "text": " laden, den Aenderungs-Bereich klaeren — Body-Sektion (Procedure / Tools & Operations / Anti-Patterns / Notes) oder ein Feld (triggers, tags, description, type).", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-update-2",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Vorschlag: Den Edit konsolidieren und mit dem User abstimmen, bevor geschrieben wird.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-update-3",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Schreiben: ", "styles": {}},
+      {"type": "text", "text": "update_playbook", "styles": {"code": true}},
+      {"type": "text", "text": " mit dem vollstaendigen content aufrufen. Auf einer aktiven Version erzeugt das eine neue Draft-Version (kein In-Place-Edit; existiert schon ein Draft, kommt 409). Composes oder Resource-Links bei Bedarf mit set_playbook_composes / set_playbook_resource_links nachziehen.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-update-4",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Hand-Off: Den neuen Draft via transition_playbook auf active schalten. Bei Trigger-Aenderungen pruefen, ob ein Persona-Modus-Trigger auf den alten Wert verweist. Bei Type-Wechsel atomar zu Composite die Composes-Sequenz setzen, bei Composite zu atomar leeren.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-h-transition",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Transition — veroeffentlichen & zurueckziehen", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-transition-flow",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "transition_playbook", "styles": {"code": true}},
+      {"type": "text", "text": " mit id, version und to schaltet den Status: draft zu review, review zu active oder active zu inactive (zurueckgezogen). Nach draft/review genuegt die Schreib-Capability; Promote nach active und Retire nach inactive brauchen promote_retire.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-transition-backlinks",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Vor dem Zurueckziehen die eingehenden Referenzen pruefen: Welche Composites oder Personas nutzen das Playbook? Betroffene Stellen brauchen eine Anpassung — den User warnen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-transition-invariant",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Status-Invariante: je Playbook ist hoechstens eine Version active. Eine neue Version zu aktivieren setzt die alte automatisch auf inactive.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-h-restore",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Restore — fruehere Version wiederherstellen", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-restore-1",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "restore_playbook", "styles": {"code": true}},
+      {"type": "text", "text": " mit id und der Quell-Version kopiert deren Inhalt als neuen Draft. Danach reviewen und ueber transition_playbook nach active schalten — kein direktes Ueberschreiben der aktiven Version.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-h-tools",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Tools & Operations", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-tools-read",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Read: fetch_playbook (Body + Felder), list_playbooks (Katalog, Tags), list_triggers (Trigger-Kollisionen pruefen).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-tools-write",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Write: create_playbook (Draft-v1), update_playbook (neuer Draft), transition_playbook (Status schalten), restore_playbook (alte Version als Draft).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-tools-link",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Verknuepfung: set_playbook_composes (Sub-Playbook-Sequenz eines Composite, Replace-Semantik), set_playbook_resource_links (Resource-Verweise, Replace-Semantik).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-tools-forbidden",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Verboten: kein Hard-Delete ueber MCP; Composes nie auf draft- oder inactive-Playbooks setzen; kein Composite mit nur einem Sub-Playbook (Premature Composite); Personas oder Resources nicht in diesem Playbook editieren — dafuer gibt es eigene Playbooks.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-h-anti",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Anti-Patterns", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-anti-seq",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Composite ohne expliziten Sequenz-Disziplin-Abschnitt anlegen — wann es nicht passt und was bei fehlendem Sub-Playbook gilt, muss im Body stehen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-anti-inactive",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Composes auf nicht-existierende oder nicht-aktive Playbooks setzen — ein Composite ist nur sinnvoll, wenn alle Sub-Playbooks einsatzbereit (active) sind.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-anti-persona",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Persona-Bindung vergessen — ein Playbook ohne zugeordnete Persona wird von keinem Agenten gefunden.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-anti-triggers",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Triggers ohne Semikolon-Trennung oder ohne [Platzhalter] wo flexibel — Konvention: Trigger-Phrase A; Trigger-Phrase B; Trigger fuer [X].", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-anti-activate",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Direkt auf active anlegen wollen — create_playbook erzeugt immer einen Draft; Aktivierung laeuft ausschliesslich ueber transition_playbook.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-anti-loose",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Procedure-Body als loses Stueck Fliesstext — nummerierte Schritte oder klare Phasen-Header nutzen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-h-notes",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Notes", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-notes-composite",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Composite-Konvention: Die Reihenfolge in set_playbook_composes ist die ausfuehrungs-relevante Wahrheit. Beim Render eines Composite wird die nummerierte Sub-Playbook-Sequenz automatisch an den Body angehaengt; inaktive oder fehlende Kinder werden uebersprungen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-notes-draft",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Der Draft-zu-active-Workflow bleibt serverseitig: MCP-Write-Tools legen nur Drafts an; die Veroeffentlichung laeuft immer ueber transition_playbook. Ein Hard-Delete gibt es ueber MCP bewusst nicht.", "styles": {}}],
+    "children": []
+  }
+]
