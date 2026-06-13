@@ -15,3 +15,10 @@ SQL-Migrationen fuer die Who2Be-Datenbank. Anwendung ueber den Runner in
   nicht editiert — Korrekturen kommen als neue Migration.
 
 Die Tabelle `schema_migrations` legt der Runner selbst an.
+
+## Hinweise zu einzelnen Migrationen
+
+- `0047_seed_builder_default_agent.sql` — Backfill des Default-Agenten „Builder"
+  (Persona + 4 Playbooks + `agent-builder`-Template + Agent-Row) ueber alle
+  Bestands-Workspaces. Spiegelt `_seed_default_agents` in
+  `repositories/workspace_repository.py` — beide Schichten synchron halten.

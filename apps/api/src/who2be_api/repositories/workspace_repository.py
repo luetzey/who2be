@@ -5,13 +5,14 @@ Liest und schreibt `workspace`. Die Membership-Pruefung ist Aufgabe der
 und bekommt die User-Identitaet vom Service-Layer durchgereicht.
 """
 
+import json
 from pathlib import Path
 from typing import Protocol
 from uuid import UUID
 
 import asyncpg
 
-from who2be_models import WorkspaceRead
+from who2be_models import AgentToolPolicy, WorkspaceRead
 
 
 class LastWorkspaceError(Exception):
@@ -65,6 +66,7 @@ async def ensure_personal_workspace(
         user_id,
     )
     await _seed_default_templates(conn, workspace_id, user_id)
+    await _seed_default_agents(conn, workspace_id, user_id)
     return workspace_id
 
 
@@ -143,6 +145,7 @@ class PgWorkspaceRepository:
                 user_id,
             )
             await _seed_default_templates(conn, row["id"], user_id)
+            await _seed_default_agents(conn, row["id"], user_id)
         return WorkspaceRead.model_validate(dict(row))
 
     async def update_name(self, workspace_id: UUID, name: str) -> WorkspaceRead | None:
@@ -226,6 +229,11 @@ _DEFAULT_TEMPLATES: tuple[tuple[str, str, str], ...] = (
         "Workflow-Starter",
         _WORKFLOW_STARTER_BLOCKNOTE_BODY,
     ),
+    (
+        "agent-builder",
+        "Agent-Builder",
+        _sidecar("agent_builder_body.json"),
+    ),
 )
 
 
@@ -275,3 +283,243 @@ async def _seed_default_templates(
             {"description": "", "body": body},
             owner_id,
         )
+
+
+# ---------------------------------------------------------------------------
+# Default-Agent „Builder" (Meta-Agent — der Agent, der Agenten baut).
+#
+# Wird nach den Default-Templates in jedem neuen Workspace mitgeseedet und
+# spiegelt exakt die SQL-Backfill-Migration 0047 (beide Schichten synchron
+# halten — bekannte Drift-Quelle, siehe Kommentar in 0023b). Inhaltlich
+# re-targeted auf die Who2Be-MCP-Write-Tools (kein Notion).
+#
+# Reihenfolge wegen der Composite-FKs (agent -> persona, agent -> template):
+#   1. Persona „Builder"      (persona + persona_version v1 active)
+#   2. 4 Playbooks            (playbook + playbook_version v1 active)
+#   3. persona_playbook-Links (Persona <-> 4 Playbooks)
+#   4. agent-Row              (persona_id + Template 'agent-builder' +
+#                              write-faehige tool_policy, status 'enabled')
+# Das Template 'agent-builder' selbst legt bereits `_seed_default_templates`
+# an (Eintrag in `_DEFAULT_TEMPLATES`); hier wird nur seine id nachgeschlagen.
+#
+# Idempotenz: jede Identitaets-Zeile wird per NOT EXISTS (workspace_id + name
+# bzw. slug) angelegt, die Links via ON CONFLICT DO NOTHING. JSONB-Bind: dict
+# uebergeben, KEINEN vor-serialisierten String (Codec-Falle, siehe oben).
+_BUILDER_PERSONA_NAME = "Builder"
+_BUILDER_AGENT_NAME = "Builder"
+_AGENT_BUILDER_TEMPLATE_SLUG = "agent-builder"
+
+_BUILDER_PERSONA_DESCRIPTION = (
+    "Meta-Agent, der Personas, Playbooks, Resources und Agenten im Workspace "
+    "anlegt und pflegt — der Agent, der Agenten baut."
+)
+_BUILDER_PERSONA_TRAITS: tuple[str, ...] = (
+    "strukturell",
+    "kritisch",
+    "phasen-orientiert",
+    "trade-offs-explizit",
+)
+_BUILDER_PERSONA_TAGS: tuple[str, ...] = ("meta-agent", "agent-building", "crud")
+
+_BUILDER_AGENT_DESCRIPTION = (
+    "Standard-Meta-Agent zum Anlegen und Pflegen von Personas, Playbooks, "
+    "Resources und Agenten."
+)
+
+# (name, type, triggers, tags, description, sidecar) — Reihenfolge fix, damit
+# Python-Seed und Migration 0047 dieselben Playbooks erzeugen.
+_BUILDER_PLAYBOOKS: tuple[tuple[str, str, str, tuple[str, ...], str, str], ...] = (
+    (
+        "Persona anlegen & pflegen",
+        "workflow",
+        "persona anlegen, persona bearbeiten, persona pflegen, neue persona",
+        ("persona", "crud", "agent-building"),
+        "Eine Persona via MCP-Write-Tools anlegen, als Draft aendern und nach active schalten.",
+        "builder_playbook_persona_body.json",
+    ),
+    (
+        "Playbook anlegen & pflegen",
+        "workflow",
+        "playbook anlegen, playbook bearbeiten, composite, neues playbook",
+        ("playbook", "crud", "agent-building"),
+        "Playbooks anlegen und pflegen — inkl. Resource-Verweisen und Composite-Sequenzen.",
+        "builder_playbook_playbook_body.json",
+    ),
+    (
+        "Agent anlegen & pflegen",
+        "workflow",
+        "agent anlegen, agent konfigurieren, agent bearbeiten, tool policy, agent kopieren",
+        ("agent", "crud", "agent-building"),
+        "Einen Agenten konfigurieren: Persona + Template verdrahten, Tool-Policy setzen, kopieren.",
+        "builder_playbook_agent_body.json",
+    ),
+    (
+        "Konsistenz- & Drift-Check",
+        "checklist",
+        "konsistenz, drift, pruefen, aktivierbar, activatable, qualitaetscheck",
+        ("konsistenz", "qa", "agent-building"),
+        "Read-only-Pruefung auf Aktivierbarkeit, aktive Versionen und sauberes Prompt-Rendering.",
+        "builder_playbook_consistency_body.json",
+    ),
+)
+
+
+def _builder_persona_content() -> dict[str, object]:
+    """Persona-Versions-Content (PersonaVersionContent-Form) als dict fuer JSONB.
+
+    Der BlockNote-Profil-Body kommt aus dem Sidecar (Array von Blocks) und wird
+    unter `content.blocks` gehaengt; `modes` ist bewusst leer (Single-Mode).
+    """
+    blocks = json.loads(_sidecar("builder_persona_content.json"))
+    return {
+        "description": _BUILDER_PERSONA_DESCRIPTION,
+        "traits": list(_BUILDER_PERSONA_TRAITS),
+        "tags": list(_BUILDER_PERSONA_TAGS),
+        "content": {"description": "", "blocks": blocks},
+        "modes": [],
+        "skills": [],
+    }
+
+
+def _builder_playbook_content(
+    sidecar: str, ptype: str, tags: tuple[str, ...], triggers: str, description: str
+) -> dict[str, object]:
+    """Playbook-Versions-Content (PlaybookContent-Form) als dict fuer JSONB.
+
+    `body` ist das stringifizierte BlockNote-Dokument (`json.dumps` des Sidecar-
+    Arrays) — analog zum Frontend-`JSON.stringify(editor.document)`.
+    """
+    body = json.dumps(json.loads(_sidecar(sidecar)), ensure_ascii=False)
+    return {
+        "description": description,
+        "body": body,
+        "type": ptype,
+        "tags": list(tags),
+        "triggers": triggers,
+    }
+
+
+def _builder_tool_policy() -> dict[str, object]:
+    """Write-faehige Policy fuer den Meta-Agenten (Plan §5.2).
+
+    Alle Schreib-Capabilities + `promote_retire`, Reads = `all`. Die
+    Autorisierung bleibt serverseitig (editor; Promote/Retire admin) — die
+    Policy steuert nur die Tool-Sichtbarkeit im System-Prompt.
+    """
+    return AgentToolPolicy(
+        persona_write=True,
+        playbook_write=True,
+        resource_write=True,
+        agent_write=True,
+        promote_retire=True,
+    ).model_dump(mode="json")
+
+
+async def _seed_default_agents(
+    conn: asyncpg.Connection, workspace_id: UUID, owner_id: UUID
+) -> None:
+    """Legt den Default-Agenten „Builder" eines neuen Workspaces an.
+
+    Laeuft NACH `_seed_default_templates` (braucht das 'agent-builder'-Template).
+    Idempotent ueber NOT-EXISTS-Guards (workspace_id + name/slug) und
+    ON-CONFLICT-DO-NOTHING auf den Links. Spiegelt Migration 0047.
+    """
+    # 1. Persona „Builder" + v1 (active). Der NOT-EXISTS-Guard liefert None,
+    #    wenn der Builder-Seed bereits lief — der Lauf ist atomar, also sind
+    #    in dem Fall auch Playbooks/Agent schon da: frueh raus.
+    persona_id = await conn.fetchval(
+        "INSERT INTO persona (workspace_id, owner_id, name) "
+        "SELECT $1, $2, $3 "
+        "WHERE NOT EXISTS ("
+        "  SELECT 1 FROM persona WHERE workspace_id = $1 AND name = $3"
+        ") "
+        "RETURNING id",
+        workspace_id,
+        owner_id,
+        _BUILDER_PERSONA_NAME,
+    )
+    if persona_id is None:
+        return
+    await conn.execute(
+        "INSERT INTO persona_version "
+        "(persona_id, version, content, status, created_by, locale) "
+        "VALUES ($1, 1, $2::jsonb, 'active', $3, 'de')",
+        persona_id,
+        _builder_persona_content(),
+        owner_id,
+    )
+
+    # 2. 4 Playbooks + v1 (active); ids fuer die Verlinkung einsammeln.
+    playbook_ids: list[UUID] = []
+    for name, ptype, triggers, tags, description, sidecar in _BUILDER_PLAYBOOKS:
+        playbook_id = await conn.fetchval(
+            "INSERT INTO playbook (workspace_id, owner_id, name, type, tags, triggers) "
+            "SELECT $1, $2, $3, $4, $5, $6 "
+            "WHERE NOT EXISTS ("
+            "  SELECT 1 FROM playbook WHERE workspace_id = $1 AND name = $3"
+            ") "
+            "RETURNING id",
+            workspace_id,
+            owner_id,
+            name,
+            ptype,
+            list(tags),
+            triggers,
+        )
+        if playbook_id is None:
+            # Gleichnamiges Playbook gab es schon (Re-Lauf/Race) — id nachladen,
+            # damit der Link trotzdem gesetzt wird.
+            playbook_id = await conn.fetchval(
+                "SELECT id FROM playbook WHERE workspace_id = $1 AND name = $2 "
+                "ORDER BY created_at ASC LIMIT 1",
+                workspace_id,
+                name,
+            )
+        else:
+            await conn.execute(
+                "INSERT INTO playbook_version "
+                "(playbook_id, version, content, status, created_by, locale) "
+                "VALUES ($1, 1, $2::jsonb, 'active', $3, 'de')",
+                playbook_id,
+                _builder_playbook_content(sidecar, ptype, tags, triggers, description),
+                owner_id,
+            )
+        if playbook_id is not None:
+            playbook_ids.append(playbook_id)
+
+    # 3. Persona <-> Playbook-Links (additiv-idempotent).
+    if playbook_ids:
+        await conn.execute(
+            "INSERT INTO persona_playbook "
+            "(persona_id, playbook_id, workspace_id, owner_id) "
+            "SELECT $1, unnest($2::uuid[]), $3, $4 "
+            "ON CONFLICT (persona_id, playbook_id) DO NOTHING",
+            persona_id,
+            playbook_ids,
+            workspace_id,
+            owner_id,
+        )
+
+    # 4. agent-Row. Template 'agent-builder' kommt aus _seed_default_templates.
+    template_id = await conn.fetchval(
+        "SELECT id FROM system_prompt_template WHERE workspace_id = $1 AND slug = $2",
+        workspace_id,
+        _AGENT_BUILDER_TEMPLATE_SLUG,
+    )
+    if template_id is None:
+        return
+    await conn.execute(
+        "INSERT INTO agent (workspace_id, owner_id, name, description, "
+        " persona_id, system_prompt_template_id, status, tool_policy) "
+        "SELECT $1, $2, $3, $4, $5, $6, 'enabled', $7::jsonb "
+        "WHERE NOT EXISTS ("
+        "  SELECT 1 FROM agent WHERE workspace_id = $1 AND name = $3"
+        ")",
+        workspace_id,
+        owner_id,
+        _BUILDER_AGENT_NAME,
+        _BUILDER_AGENT_DESCRIPTION,
+        persona_id,
+        template_id,
+        _builder_tool_policy(),
+    )
