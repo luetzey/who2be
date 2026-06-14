@@ -1,20 +1,10 @@
 # CLAUDE.md
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Agent-Bootstrap: Coder
-Du bist Coder. Beim ersten User-Input jeder Session:
-1. Fetche deinen Systemprompt in Notion:
-   https://www.notion.so/367be5372ab881ebb004fc56dde43d5c
-2. Folge ihm strikt (3-Phasen-Schleife Read→Work→Document, /goal, Plan-Ablage
-   unter .claude/plan/, Doku-Log zurueck nach Notion).
-3. Projekt-Verknuepfung: `.claude/project.json` enthaelt
-   `notion_project_id` (Notion-Projektseite) und `notion_project_pid` —
-   Phase 1 nutzt diese, statt im Repo zu raten.
-
-Ebenen-Trennung: Der Notion-Systemprompt definiert die Coder-METHODE.
-Diese CLAUDE.md definiert die REPO-FAKTEN + repo-spezifischen Konventionen
-(Struktur, Befehle, Code-Style, Etikette, Security) — die sind fuer dieses
-Repo verbindlich und genau das, was der Coder in Phase 1 "Repo-Kontext lesen" liest.
+Diese Datei definiert die REPO-FAKTEN + repo-spezifischen Konventionen
+(Struktur, Befehle, Code-Style, Etikette, Security) — verbindlich fuer dieses
+Repo. (Optionale persoenliche Agent-Workflows gehoeren in eine lokale, nicht
+eingecheckte `CLAUDE.local.md`.)
 
 # Projektkontext
 
@@ -164,13 +154,11 @@ Web (lint/tsc/test/build). Vor dem Push lokal gegenpruefen.
 
 ## Frontend-Standards (repo-spezifisch)
 
-Prinzipien (Single-Source pro Entscheidung, Design-Tokens, Komponenten-Bibliothek,
-Layout-Primitives, fuenfschichtige UI-Architektur, UX-Kohaerenz, A11y-Minimum,
-keine Utility-Suppe) leben im Notion-Playbook
-[`Frontend-Standards`](https://www.notion.so/36cbe5372ab881dba042fe2bdf4eea1d)
-(`playbook_id=36cbe537-2ab8-81db-a042-fe2bdf4eea1d`, Datenbank `Playbooks`).
-Diese Sektion fuellt nur die im Playbook delegierten repo-spezifischen Stellen
-(Stack/Pfade/Header-Ebene); bei Konflikt mit Notion gewinnt dieser Eintrag.
+Die tragenden Prinzipien (Single-Source pro Entscheidung, Design-Tokens,
+Komponenten-Bibliothek, Layout-Primitives, fuenfschichtige UI-Architektur,
+UX-Kohaerenz, A11y-Minimum, keine Utility-Suppe) gelten projektweit. Diese
+Sektion + `docs/frontend/design-language.md` sind die verbindliche Quelle und
+fuellen die repo-spezifischen Stellen (Stack/Pfade/Header-Ebene).
 
 **Designsprache (verbindlich):** [`docs/frontend/design-language.md`](docs/frontend/design-language.md)
 — Token-Werte, Komponenten-Anwendungsmuster, Motion-Tokens und der

@@ -10,7 +10,7 @@
 
 ## Kontext
 
-Der Audit gegen das Notion-Composite *Compliance-Standards (DE/SaaS)* hat zwei
+Der Audit gegen die internen *Compliance-Standards (DE/SaaS)* hat zwei
 zusammenhaengende Luecken gefunden:
 
 1. **`status_history` ist DB-seitig nicht append-only.** Migration 0036 vergibt

@@ -6,9 +6,8 @@
 
 Diese Datei ist die **verbindliche Designsprache** der Who2Be-Web-UI
 (`apps/web/`). Sie konkretisiert, wie die in [`architecture.md`](./architecture.md)
-beschriebene Architektur aussieht und sich verhaelt. Bei Konflikt mit dem
-Notion-Playbook **Frontend-Standards** gewinnt diese Datei (siehe
-`CLAUDE.md` §Frontend-Standards).
+beschriebene Architektur aussieht und sich verhaelt. Sie ist fuer die Web-UI
+die verbindliche Quelle (siehe `CLAUDE.md` §Frontend-Standards).
 
 ## 1. Designphilosophie
 
@@ -464,9 +463,8 @@ nachfragen, **nicht** stillschweigend umgehen.
 8. **A11y-Pflicht:** Jede neue klickbare/eingebbare Komponente bekommt
    einen `*.a11y.test.tsx` (`vitest-axe`). Pages, die echte
    Daten/Forms zeigen, sowieso. Focus-Ring nie wegklassen.
-9. **Bei Konflikt zwischen dieser Guideline und dem Notion-Playbook
-   "Frontend-Standards":** dieses Repo-Doc gewinnt (Konsistenz mit
-   `CLAUDE.md` §Frontend-Standards, Konflikt-Klausel).
+9. **Verbindlichkeit:** Diese Guideline ist fuer die Web-UI die
+   maßgebliche Quelle (Konsistenz mit `CLAUDE.md` §Frontend-Standards).
 10. **DoD pro Aenderung:** `npm run lint && npx tsc --noEmit &&
     npm test && npm run build` (in `apps/web/`) — alle vier gruen, lokal
     verifiziert, **vor** dem Push.

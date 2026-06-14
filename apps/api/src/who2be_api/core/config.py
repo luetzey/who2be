@@ -82,7 +82,7 @@ class Settings(BaseSettings):
         default=False,
         validation_alias=AliasChoices("WHO2BE_DOCS_PUBLIC", "docs_public"),
     )
-    # Track D — Editionen/Entitlements (Notion-Vault: Deployment-/Licensing-Standards).
+    # Track D — Editionen/Entitlements (interne Deployment-/Licensing-Standards).
     # Ein Build, ein Image; der Unterschied Cloud vs. On-Prem liegt allein in dieser
     # Runtime-Config (12-Factor III). Default `onprem` ⇒ OSS-sicher (unbegrenztes
     # `OSS_ENTITLEMENT`, kein Billing). Nur `cloud` aktiviert Limits + Webhook-Adapter.

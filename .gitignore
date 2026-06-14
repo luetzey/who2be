@@ -40,5 +40,7 @@ test-results/
 .claude/worktrees/
 .claude/scheduled_tasks.lock
 
-# Claude Code project link (Notion-IDs lokal halten; Template: project.example.json)
+# Lokale Agent-/Projekt-Kopplung (nicht im oeffentlichen Repo)
+CLAUDE.local.md
+# Claude Code project link (lokale Projekt-IDs; Template: project.example.json)
 .claude/project.json
