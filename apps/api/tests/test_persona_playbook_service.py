@@ -52,12 +52,16 @@ class FakePersonaPlaybookRepository:
         self._playbooks = playbooks
         self.links: dict[UUID, list[UUID]] = {}
         self.last_active_only: bool | None = None
+        self.last_workspace_id: UUID | None = None
 
     async def persona_belongs_to(self, workspace_id: UUID, persona_id: UUID) -> bool:
         return self._personas.get(persona_id) == workspace_id
 
-    async def list_linked(self, persona_id: UUID, active_only: bool = False) -> list[PlaybookRead]:
+    async def list_linked(
+        self, workspace_id: UUID, persona_id: UUID, active_only: bool = False
+    ) -> list[PlaybookRead]:
         self.last_active_only = active_only
+        self.last_workspace_id = workspace_id
         owner = uuid4()
         return [
             _playbook_read(pid, self._playbooks[pid], owner)
@@ -87,6 +91,16 @@ def test_list_links_unknown_persona_raises_404() -> None:
     with pytest.raises(HTTPException) as exc:
         asyncio.run(service.list_links(_ctx(uuid4()), uuid4()))
     assert exc.value.status_code == 404
+
+
+def test_list_links_scopes_lookup_to_context_workspace() -> None:
+    # F-Phase2-02: der Service muss `ctx.workspace_id` an den Reverse-Lookup
+    # durchreichen, damit der Repo-SQL-Filter (Defense-in-Depth) greift.
+    workspace, persona_id = uuid4(), uuid4()
+    repo = FakePersonaPlaybookRepository({persona_id: workspace}, {})
+    service = PersonaPlaybookService(repo)
+    asyncio.run(service.list_links(_ctx(workspace), persona_id))
+    assert repo.last_workspace_id == workspace
 
 
 def test_set_links_unknown_persona_raises_404() -> None:

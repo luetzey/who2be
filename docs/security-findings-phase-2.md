@@ -14,8 +14,10 @@
 
 ## Zusammenfassung
 
-8 Bereiche geprueft: **6 PASS, 2 REVIEW, 0 FAIL**. Drei Findings
-(F-Phase2-01, F-Phase2-02, F-Phase2-03) — alle Medium, keine Critical.
+8 Bereiche geprueft: urspruenglich **6 PASS, 2 REVIEW, 0 FAIL**; die beiden
+REVIEW-Bereiche sind inzwischen geschlossen (Stand 2026-06-14, siehe
+Findings-Tabelle). Drei Findings (F-Phase2-01, F-Phase2-02, F-Phase2-03) —
+alle inzwischen **Closed**, keine Critical.
 Cross-Workspace-Isolation, Status-Promotion-RBAC, Invite-Token-Hashing
 und Single-Use, BlockNote-XSS-Profil, API-Token-Snapshot-Verhalten,
 Last-Admin-Invariante und die JWT-Validation sind sauber.
@@ -29,10 +31,10 @@ realer Leak — Composite-FK + vorheriger Membership-Check decken ab).
 | ID            | Severity | Bereich            | Titel                                                          | Status |
 | ------------- | -------- | ------------------ | -------------------------------------------------------------- | ------ |
 | F-Phase2-01   | Medium   | Rate-Limit         | Fehlende `@limiter.limit(write_limit)` auf Member/Link-Mutating | Closed |
-| F-Phase2-02   | Low      | Cross-Workspace    | `list_linked` ohne expliziten `workspace_id`-Filter (Defense)  | Review |
-| F-Phase2-03   | Low      | Cross-Workspace    | `workspace_repository.fetch/update_name` ohne `workspace_id`-Re-Bind | Review |
+| F-Phase2-02   | Low      | Cross-Workspace    | `list_linked` ohne expliziten `workspace_id`-Filter (Defense)  | Closed |
+| F-Phase2-03   | Low      | Cross-Workspace    | `workspace_repository.fetch/update_name` ohne `workspace_id`-Re-Bind | Closed |
 
-## 1. Cross-Workspace-Read — REVIEW
+## 1. Cross-Workspace-Read — CLOSED (war REVIEW)
 
 Geprueft: alle `repositories/*.py`. Persona, Playbook, Resource, Token,
 Invitation und Member-Reads tragen durchgaengig `WHERE workspace_id = $X`.
@@ -67,6 +69,10 @@ Belege fuer den Pass:
 - **Empfehlung:** Signatur auf `list_linked(workspace_id, persona_id, …)`
   ziehen und SQL um `AND pp.workspace_id = $X` ergaenzen (analog
   `playbook_resource_link_repository`).
+- **Fix (2026-06-14):** `list_linked` traegt jetzt `workspace_id` als ersten
+  Parameter, das SQL filtert `WHERE pp.persona_id = $1 AND pp.workspace_id = $2`.
+  Beide Service-Call-Sites reichen `ctx.workspace_id` durch; Regressionstest
+  `test_list_links_scopes_lookup_to_context_workspace`. **Status: Closed.**
 
 ### F-Phase2-03 — `workspace_repository.fetch/update_name` ohne Re-Bind (Low, Review)
 
@@ -81,6 +87,12 @@ Belege fuer den Pass:
   `require_role(ctx, admin)` setzen (Name-Aenderung ist heute auch fuer
   `viewer`/`editor` offen) und in den SQL-Queries den `workspace_id` aus dem
   Member-Kontext re-binden.
+- **Fix (Track C / bestaetigt 2026-06-14):** `routers/workspaces.py::update_workspace`
+  gatet mit `require_role(ctx, WorkspaceRole.admin)`; der `workspace_id` aus dem
+  Pfad ist via `get_current_workspace` an den Member-/Token-Kontext gebunden und
+  zugleich der PK der `workspace`-Zeile — `fetch`/`update_name` schluesseln genau
+  darauf, ein separater Re-Bind ist ohne eigene Spalte gegenstandslos.
+  **Status: Closed.**
 
 ## 2. Status-Promotion / Rolle-Drift — PASS
 
@@ -177,6 +189,11 @@ Geprueft: `repositories/workspace_member_repository.py:51-100`.
 - **Empfehlung (kein Finding, Anmerkung):** Wenn das in Praxis vorkommt, ein
   Advisory-Lock pro `workspace_id` vor dem Count anlegen. Aktuell
   Annahme-konform — vermerkt.
+- **Umgesetzt (bestaetigt 2026-06-14):** `PgWorkspaceMemberRepository` haelt vor
+  `update_role`/`remove` ein `pg_advisory_xact_lock(hashtext('ws_admins:'||
+  workspace_id))` (`workspace_member_repository.py::_lock_workspace_admins`).
+  Damit serialisieren parallele Admin-Downgrades/Removals desselben Workspaces
+  auch unter READ COMMITTED — die Last-Admin-Invariante ist jetzt race-fest.
 
 ## 7. JWT-Validation — PASS
 
@@ -240,10 +257,12 @@ Geprueft: alle `routers/*.py`. Erfasst (PASS):
 
 ## Akzeptanz / Ampel
 
-**Gesamt-Ampel:** Gelb. Keine Critical/High. **F-Phase2-01 (Rate-Limit) ist
-seit 2026-06-03 geschlossen**; offen bleiben nur noch 2× Low Defense-in-Depth
-(F-Phase2-02, F-Phase2-03) plus die Last-Admin-Race-Anmerkung, die vor dem
-Public-Switch adressiert werden sollen.
+**Gesamt-Ampel:** Grün. Keine Critical/High. **Alle Phase-2-Findings
+geschlossen** (Stand 2026-06-14): F-Phase2-01 Rate-Limit (2026-06-03),
+F-Phase2-02 `list_linked`-Filter (2026-06-14), F-Phase2-03 Role-Gate +
+Re-Bind (Track C, bestaetigt), Last-Admin-Advisory-Lock (umgesetzt) sowie der
+CSP/Header-Pass (F-12, 2026-06-03). Keine offenen Public-Switch-Blocker mehr
+aus dieser Datei.
 
 ### TODO vor Public-Switch
 
@@ -253,12 +272,18 @@ Public-Switch adressiert werden sollen.
    `routers/workspaces.py`, `routers/invitations.py`-Revoke,
    `routers/tokens.py`-Revoke); Regressionstest
    `apps/api/tests/test_rate_limit_mutations.py`.
-2. **F-Phase2-02** — `list_linked` um `workspace_id`-Filter ergaenzen
-   (Defense-in-Depth gegen kuenftige Service-Refactors).
-3. **F-Phase2-03** — `workspace_repository.update_name` mit `require_role(ctx,
-   admin)` im Router gaten und im SQL den `workspace_id` re-binden.
-4. **Last-Admin (Anmerkung §6)** — Advisory-Lock auf `workspace_id` vor dem
-   `_last_admin`-Count erwaegen, falls Parallel-Downgrades realistisch werden.
+2. **F-Phase2-02** — ✅ **erledigt (2026-06-14)**: `list_linked` traegt jetzt
+   `workspace_id` als ersten Parameter, SQL filtert
+   `AND pp.workspace_id = $2`, beide Service-Call-Sites reichen
+   `ctx.workspace_id` durch. Regressionstest
+   `test_list_links_scopes_lookup_to_context_workspace`.
+3. **F-Phase2-03** — ✅ **erledigt (Track C, bestaetigt 2026-06-14)**:
+   `update_workspace` gatet `require_role(ctx, admin)`; der Pfad-`workspace_id`
+   ist via `get_current_workspace` an den Kontext gebunden und zugleich PK der
+   `workspace`-Zeile — separater Re-Bind gegenstandslos.
+4. **Last-Admin (Anmerkung §6)** — ✅ **erledigt**: Advisory-Lock
+   (`pg_advisory_xact_lock`) auf `workspace_id` vor dem `_last_admin`-Count in
+   `update_role`/`remove` umgesetzt.
 5. **CSP/Header-Pass (offen aus Phase 1, F-12)** — ✅ **erledigt (2026-06-03)**:
    `deploy/hetzner/Caddyfile` finalisiert (HSTS, X-Content-Type-Options,
    X-Frame-Options, Referrer-Policy, Permissions-Policy, Cross-Origin-Opener-
