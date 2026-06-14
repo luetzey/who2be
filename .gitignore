@@ -44,5 +44,3 @@ test-results/
 CLAUDE.local.md
 # Claude Code project link (lokale Projekt-IDs; Template: project.example.json)
 .claude/project.json
-# Interne Plan-/Living-Docs des Agent-Workflows
-.claude/plan/
