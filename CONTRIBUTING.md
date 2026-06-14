@@ -29,6 +29,15 @@ werden unter derselben Lizenz aufgenommen.
 - Cloud-/Web-Sessions (Claude Code) nutzen automatisch das `claude/`-Praefix.
 - Branch immer von `main` abzweigen; nicht direkt auf `main` pushen.
 
+### Sandbox / Experimente
+
+Schnelle, unfertige Experimente laufen auf lokalen `sandbox/*`-Branches
+**ohne Remote-Tracking** — sie werden nicht gepusht und durchlaufen keine CI.
+Sobald etwas vorzeigbar ist, wandert es als sauberer `feat/`- bzw.
+`fix/`-Branch in den normalen PR-Pfad (oder per Cherry-Pick der relevanten
+Commits). So bleibt der oeffentliche Verlauf aufgeraeumt, ohne den
+Solo-Dev-Komfort zu verlieren.
+
 ## Commit-Konvention
 
 - [Conventional Commits](https://www.conventionalcommits.org/) (z. B.

@@ -37,7 +37,7 @@ class PersonaPlaybookRepository(Protocol):
     async def persona_belongs_to(self, workspace_id: UUID, persona_id: UUID) -> bool: ...
 
     async def list_linked(
-        self, persona_id: UUID, active_only: bool = False
+        self, workspace_id: UUID, persona_id: UUID, active_only: bool = False
     ) -> list[PlaybookRead]: ...
 
     async def set_links(
@@ -63,7 +63,9 @@ class PgPersonaPlaybookRepository:
         )
         return owned is not None
 
-    async def list_linked(self, persona_id: UUID, active_only: bool = False) -> list[PlaybookRead]:
+    async def list_linked(
+        self, workspace_id: UUID, persona_id: UUID, active_only: bool = False
+    ) -> list[PlaybookRead]:
         # `active_only` schwenkt den Join: statt der Current-Version wird die
         # Active-Version geliefert, eintraege ohne Active-Version fallen raus
         # (MCP-Pfad, Plan §2.1.D).
@@ -90,9 +92,14 @@ class PgPersonaPlaybookRepository:
             "FROM persona_playbook pp "
             "JOIN playbook p ON p.id = pp.playbook_id "
             f"{join_clause}"
-            "WHERE pp.persona_id = $1 "
+            # `pp.workspace_id` ist Defense-in-Depth (F-Phase2-02): der Caller
+            # prueft die Persona-Workspace-Bindung bereits via
+            # `persona_belongs_to`, aber der Filter schliesst kuenftige
+            # Call-Sites ohne Vorab-Check ab.
+            "WHERE pp.persona_id = $1 AND pp.workspace_id = $2 "
             "ORDER BY p.created_at DESC",
             persona_id,
+            workspace_id,
         )
         return [PlaybookRead.model_validate(dict(row)) for row in rows]
 
