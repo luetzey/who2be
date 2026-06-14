@@ -4,7 +4,7 @@
 - Datum: 2026-06-13
 - Kontext: Repo-Review-Remediation — Plan
   `.claude/plan/2026-06-13-1512_repo-review-remediation.md` (Welle 1, QW-4).
-  Notion-Atomic *Security-Standards* (Coding-Standards-Composite).
+  Interner Standard *Security-Standards* (Coding-Standards).
 - Bezug: `apps/web/src/lib/supabase.ts`, `apps/web/src/auth/auth-token-context.ts`,
   ADR-0006 (Auth: Supabase-JWT + API-Token), F-12 (Security-Header/CSP in Caddy)
 

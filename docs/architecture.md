@@ -1,6 +1,6 @@
 # Who2Be — Architektur-Blueprint (MVP)
 
-> Upfront-Blueprint fuer den MVP (Notion-Projekt PROJ-19). Living document —
+> Upfront-Blueprint fuer den MVP. Living document —
 > wird bei tragenden Aenderungen aktualisiert. Tragende Einzelentscheidungen
 > liegen als ADR unter `docs/adr/`.
 >
@@ -412,8 +412,8 @@ DoD pro Stack: `pytest` gruen, `ruff`/`mypy` ohne Findings — bzw. `vitest`,
 
 ## 8. Umsetzungs-Roadmap
 
-Folgt dem Phasing des Notion-Projekts; konkrete Tasks liegen in der Notion-
-Tasks-DB von PROJ-19 (44 Eintraege).
+Folgt dem geplanten Phasing; die konkreten Tasks werden projektintern
+getrackt.
 
 - **Phase 0 — Setup** *(abgeschlossen)*: Mono-Repo, Geruest, lokale Postgres.
   Offen: Docker-Compose-Stub durch self-hosted Supabase ersetzen (Task T1).

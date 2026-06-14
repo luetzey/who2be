@@ -10,7 +10,7 @@
 > abgeleiteten Fakten: 2026-06-05.
 
 Dieses Verzeichnis buendelt die Nachweis-/Pflichtdokumente, die das Audit gegen
-das Notion-Composite *Compliance-Standards (DE/SaaS)* als fehlend markiert hat
+die internen *Compliance-Standards (DE/SaaS)* als fehlend markiert hat
 (Befunde P1, P5, F2 sowie der Standort-/Supply-Chain-Teil aus P4/S2/S5).
 
 ## Inhalt
@@ -25,9 +25,8 @@ das Notion-Composite *Compliance-Standards (DE/SaaS)* als fehlend markiert hat
 
 ## Verweise
 
-- **Notion-Composite** *Compliance-Standards (DE/SaaS)*
-  (`376be537-2ab8-8150-a55d-e6906c200ae2`) — Quelle des Audits und der
-  Disclaimer-Pflicht; vier Atomics (Privacy-by-Design, Legal-Texts,
+- **Interner Standard** *Compliance-Standards (DE/SaaS)* — Quelle des Audits und
+  der Disclaimer-Pflicht; vier Domaenen (Privacy-by-Design, Legal-Texts,
   Security-Infra, Finance-Compliance).
 - **Ausfuehrungsplan:**
   [`.claude/plan/2026-06-05-1311_compliance-de-saas-remediation.md`](../../.claude/plan/2026-06-05-1311_compliance-de-saas-remediation.md)

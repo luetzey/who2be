@@ -1,6 +1,6 @@
 """Licensing/Entitlement-Schicht (Track D).
 
-Hexagonale Umsetzung der Notion-Vault-Standards *Deployment-Standards (Single
+Hexagonale Umsetzung der internen *Deployment-Standards (Single
 Codebase)* + *Licensing-Standards (Entitlements)*:
 
 - **Ein Codebase, zwei Build-Profile** (ADR-0029) — die Read-Seite ist editions-

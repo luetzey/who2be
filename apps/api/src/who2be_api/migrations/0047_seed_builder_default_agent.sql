@@ -3,7 +3,7 @@
 -- Spiegelt `_seed_default_agents` (+ den 'agent-builder'-Template-Eintrag in
 -- `_DEFAULT_TEMPLATES`) aus workspace_repository.py ueber ALLE bestehenden
 -- Workspaces. Inhaltlich re-targeted auf die Who2Be-MCP-Write-Tools (kein
--- Notion). Beide Schichten synchron halten (bekannte Drift-Quelle, vgl. 0023b).
+-- externer Store). Beide Schichten synchron halten (bekannte Drift-Quelle, vgl. 0023b).
 --
 -- Reihenfolge wegen der Composite-FKs (agent -> persona, agent -> template):
 --   1. Template 'agent-builder' (falls 0023b/Seed es noch nicht hat)

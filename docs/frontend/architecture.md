@@ -5,9 +5,8 @@
 > Einzelentscheidungen liegen als ADR unter `docs/adr/0014`–`0018`.
 
 Spiegelt die `apps/web/`-Schicht des modularen Monolithen (ADR-0001) und
-konkretisiert das Notion-Playbook **Frontend-Standards**
-(`playbook_id=36cbe537-2ab8-81db-a042-fe2bdf4eea1d`) fuer das Repo. Bei
-Konflikt gewinnt fuer dieses Repo die `CLAUDE.md`/Skill-Ebene.
+konkretisiert die **Frontend-Standards** fuer das Repo. Bei Konflikt gewinnt
+fuer dieses Repo die `CLAUDE.md`/Skill-Ebene.
 
 ## 1. Schichten-Diagramm
 

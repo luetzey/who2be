@@ -291,7 +291,7 @@ async def _seed_default_templates(
 # Wird nach den Default-Templates in jedem neuen Workspace mitgeseedet und
 # spiegelt exakt die SQL-Backfill-Migration 0047 (beide Schichten synchron
 # halten — bekannte Drift-Quelle, siehe Kommentar in 0023b). Inhaltlich
-# re-targeted auf die Who2Be-MCP-Write-Tools (kein Notion).
+# re-targeted auf die Who2Be-MCP-Write-Tools (kein externer Store).
 #
 # Reihenfolge wegen der Composite-FKs (agent -> persona, agent -> template):
 #   1. Persona „Builder"      (persona + persona_version v1 active)
