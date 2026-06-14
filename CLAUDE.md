@@ -6,6 +6,18 @@ Diese Datei definiert die REPO-FAKTEN + repo-spezifischen Konventionen
 Repo. (Optionale persoenliche Agent-Workflows gehoeren in eine lokale, nicht
 eingecheckte `CLAUDE.local.md`.)
 
+## LLM-/Agent-Kontext (zuerst lesen)
+
+- **[`AGENTS.md`](AGENTS.md)** — tool-agnostischer Einstieg (Lese-Reihenfolge).
+- **[`docs/standards/`](docs/standards/)** — stehende Engineering-Standards
+  (Architektur, Coding, Testing, Security, Frontend, Compliance) + die
+  **Arbeitsmethode** (`engineering-method.md`). Generisch; diese CLAUDE.md +
+  Skills sind die repo-spezifische Konkretisierung und haben Vorrang.
+- **[`.claude/context/`](.claude/context/)** — persistentes Projekt-Gedaechtnis
+  (PROJECT / ARCHITECTURE / DECISIONS / STATE) gegen Session-Drift. **Vor dem
+  Planen lesen, nach jedem Run pflegen** (STATE immer; DECISIONS bei jeder
+  Entscheidung; ARCHITECTURE/PROJECT nur bei Struktur-/Ziel-Aenderung).
+
 # Projektkontext
 
 Who2Be — selbst-gehostete AgentDB fuer versionierte Persona- und Playbook-Verwaltung.
