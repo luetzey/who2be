@@ -21,23 +21,19 @@ History-Rewrite).
 
 ## Real offen → diese Iteration
 
-- [ ] **WP-1 — F-Phase2-02 (Low, Defense-in-Depth).** `list_linked` um
-  `workspace_id` erweitern. Protocol + Pg-Impl + SQL-`AND pp.workspace_id = $2`
-  + beide Service-Call-Sites (`ctx.workspace_id`) + Test-Fake. Regressionstest:
-  Service reicht `ctx.workspace_id` an `list_linked` durch.
-- [ ] **WP-2 — Findings-Doku nachziehen.** F-Phase2-02 → Closed (mit Fix),
-  F-Phase2-03 → Closed (require_role(admin) seit Track-C-Workspaces da; SQL-Key
-  IST der workspace_id, kein Re-Bind nötig), Last-Admin-Anmerkung → erledigt
-  (Advisory-Lock vorhanden). Ampel auf Grün.
-- [ ] **WP-3 — Sandbox-Konvention 3a dokumentieren** in `CONTRIBUTING.md`
-  (kurzer Abschnitt: `sandbox/*`-Branches, kein Remote-Tracking, fertige Sachen
-  via PR).
-- [ ] **WP-4 — Verifikation:** `uv run ruff check .`, `uv run ruff format
-  --check .`, `uv run mypy .`, betroffene Tests
-  (`test_persona_playbook_service.py`).
-- [ ] **WP-5 — Commit + Push + Draft-PR** auf den Feature-Branch.
-- [ ] **WP-6 — GitHub-Settings via MCP** (NICHT Visibility): Description,
-  Topics, Issues/Discussions/Security-Advisories, Branch-Protection auf `main`.
+- [x] **WP-1 — F-Phase2-02 (Low, Defense-in-Depth).** `list_linked` um
+  `workspace_id` erweitert (Protocol + Pg-Impl + SQL-`AND pp.workspace_id = $2`
+  + beide Service-Call-Sites + Test-Fake + Regressionstest). ✅
+- [x] **WP-2 — Findings-Doku nachgezogen.** F-Phase2-02/03 + Last-Admin → Closed,
+  Ampel Grün. ✅
+- [x] **WP-3 — Sandbox-Konvention 3a in `CONTRIBUTING.md`.** ✅
+- [x] **WP-4 — Verifikation:** ruff ✓, ruff format --check ✓, mypy strict
+  (256 files) ✓, `pytest apps/api/tests` → 358 passed / 177 skipped ✓.
+- [x] **WP-5 — Commit + Push + Draft-PR** → PR #211 (Commit `85afcf1`). ✅
+- [~] **WP-6 — GitHub-Settings.** ⚠️ **Blockiert/manuell:** Die in dieser
+  Session verfügbaren GitHub-MCP-Tools exponieren **keinen** Endpoint für
+  Repo-Settings (Description/Topics/Visibility) oder Branch-Protection
+  (nur PR-/File-/Branch-Operationen). Diese Schritte bleiben manuell beim User.
 
 ## Bewusst NICHT in dieser Iteration
 
