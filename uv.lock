@@ -2304,7 +2304,7 @@ requires-dist = [
     { name = "redis", specifier = ">=5.0" },
     { name = "slowapi", specifier = ">=0.1.9" },
     { name = "structlog", specifier = ">=24.1" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.34" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.49.0" },
     { name = "who2be-models", editable = "packages/models" },
 ]
 
