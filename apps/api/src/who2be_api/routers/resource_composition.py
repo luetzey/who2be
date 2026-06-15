@@ -27,7 +27,7 @@ def get_resource_composition_service(
     pool: Annotated[asyncpg.Pool, Depends(get_pool)],
 ) -> ResourceCompositionService:
     """FastAPI-Dependency: verdrahtet den Service mit der Pg-Implementierung."""
-    return ResourceCompositionService(PgResourceCompositionRepository(pool))
+    return ResourceCompositionService(PgResourceCompositionRepository(pool), pool)
 
 
 Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]

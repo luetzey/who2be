@@ -1348,13 +1348,14 @@ class TestToolsOverviewResolver:
         assert "create_agent" not in result
 
     def test_default_policy_shows_reads_no_writes(self) -> None:
-        """Default-Policy = Read-All ohne Writes."""
+        """Default-Policy = Read-Assigned ohne Writes (secure by default)."""
         result = _async_run(
             ToolsOverviewResolver().resolve("", self._policy_ctx(), _make_db())
         ).text
         assert "list_playbooks" in result
         assert "create_playbook" not in result
-        assert "nur die dir zugewiesenen" not in result
+        # Default ist jetzt `assigned` → der Scope-Hinweis erscheint.
+        assert "nur die dir zugewiesenen" in result
 
     def test_playbook_write_capability_reveals_write_tools(self) -> None:
         result = _async_run(
@@ -1775,3 +1776,93 @@ class TestRenderTemplateBody:
         _text, unresolved = _async_run(render_template_body(doc, ctx, db))
 
         assert unresolved == []
+
+
+# ---------------------------------------------------------------------------
+# Read-Scoping (assigned) der Inhalts-/Katalog-Resolver (MEDIUM-Findings)
+# ---------------------------------------------------------------------------
+
+
+def _agent_render_ctx(scope: Any = None, persona_id: UUID | None = None) -> RenderContext:
+    from who2be_models import AgentToolPolicy, ReadScope
+
+    rs = scope if scope is not None else ReadScope.assigned
+    return RenderContext(
+        workspace_id=UUID("00000000-0000-0000-0000-000000000099"),
+        persona_id=persona_id or UUID("00000000-0000-0000-0000-000000000001"),
+        now=datetime(2026, 5, 31, 12, 0, 0, tzinfo=UTC),
+        tool_policy=AgentToolPolicy(playbook_read=rs, resource_read=rs),
+        agent_id=uuid4(),
+    )
+
+
+def _scope_db(
+    assigned: list[UUID], *, fetch_rows: Any = None, fetchrow_return: Any = None
+) -> MagicMock:
+    """Fake-Connection, die `assigned_*_ids` (RECURSIVE „FROM agent a") vom
+    Resolver-Query trennt: erstere liefert die assigned-Menge, letztere die
+    konfigurierten Entity-Zeilen."""
+    db = MagicMock()
+
+    async def _fetch(sql: str, *_args: object) -> Any:
+        if "FROM agent a" in sql:
+            return [{"id": a} for a in assigned]
+        return fetch_rows if fetch_rows is not None else []
+
+    db.fetch = AsyncMock(side_effect=_fetch)
+    db.fetchrow = AsyncMock(return_value=fetchrow_return)
+    return db
+
+
+class TestRenderReadScope:
+    def test_resource_catalog_filters_to_assigned(self) -> None:
+        visible, hidden = uuid4(), uuid4()
+        rows = [
+            {"id": visible, "name": "Sichtbar", "content": {"description": "d", "tags": []}},
+            {"id": hidden, "name": "Geheim", "content": {"description": "d", "tags": []}},
+        ]
+        db = _scope_db([visible], fetch_rows=rows)
+        result = _async_run(ResourcesCatalogResolver().resolve("all", _agent_render_ctx(), db))
+        assert "Sichtbar" in result.text
+        assert "Geheim" not in result.text
+
+    def test_resource_catalog_all_scope_unfiltered(self) -> None:
+        from who2be_models import ReadScope
+
+        a, b = uuid4(), uuid4()
+        rows = [
+            {"id": a, "name": "Eins", "content": {"description": "", "tags": []}},
+            {"id": b, "name": "Zwei", "content": {"description": "", "tags": []}},
+        ]
+        db = _scope_db([], fetch_rows=rows)
+        result = _async_run(
+            ResourcesCatalogResolver().resolve("all", _agent_render_ctx(ReadScope.all), db)
+        )
+        assert "Eins" in result.text
+        assert "Zwei" in result.text
+
+    def test_playbook_pill_gated_when_unassigned(self) -> None:
+        db = _scope_db([uuid4()])  # Ziel-Pill nicht in der assigned-Menge
+        result = _async_run(PlaybookResolver().resolve(str(uuid4()), _agent_render_ctx(), db))
+        assert result.text == "<Playbook nicht verfuegbar>"
+        assert result.unresolved_key is not None
+        db.fetchrow.assert_not_called()
+
+    def test_playbook_pill_visible_when_assigned(self) -> None:
+        pid = uuid4()
+        row = MagicMock()
+        row.__getitem__ = MagicMock(
+            side_effect=lambda k: {
+                "name": "Mein PB",
+                "content": {"description": "x", "body": "y"},
+            }[k]
+        )
+        db = _scope_db([pid], fetchrow_return=row)
+        result = _async_run(PlaybookResolver().resolve(str(pid), _agent_render_ctx(), db))
+        assert "### Mein PB" in result.text
+
+    def test_resource_pill_gated_when_unassigned(self) -> None:
+        db = _scope_db([uuid4()])
+        result = _async_run(ResourceResolver().resolve(str(uuid4()), _agent_render_ctx(), db))
+        assert result.text == "<Resource nicht verfuegbar>"
+        db.fetchrow.assert_not_called()

@@ -7,8 +7,10 @@ Zyklus-Guard erfolgen atomar im Repository.
 
 from uuid import UUID
 
+import asyncpg
 from fastapi import HTTPException, status
 
+from who2be_api.core.agent_scope import visible_playbook_ids
 from who2be_api.core.security import WorkspaceContext, require_capability, require_role
 from who2be_api.repositories.playbook_composition_repository import (
     PlaybookCompositionRepository,
@@ -32,23 +34,43 @@ def _parent_not_found() -> HTTPException:
 class PlaybookCompositionService:
     """Verwaltet die Composition (Sub-Playbook-Sequenz) eines Playbooks."""
 
-    def __init__(self, repo: PlaybookCompositionRepository) -> None:
+    def __init__(
+        self, repo: PlaybookCompositionRepository, pool: asyncpg.Pool | None = None
+    ) -> None:
         self._repo = repo
+        self._pool = pool
 
     async def list_children(self, ctx: WorkspaceContext, parent_id: UUID) -> list[PlaybookRead]:
         """Gibt die geordneten Kinder des Composite zurueck.
 
-        `active_only` wird aus `ctx.is_api_token` abgeleitet (MCP-Pfad).
+        `active_only` wird aus `ctx.is_api_token` abgeleitet (MCP-Pfad). Read-
+        Scoping: nur fuer ein dem Agenten zugewiesenes Composite (sonst 404) —
+        dessen Kinder sind ueber die assigned-Closure ohnehin sichtbar.
         """
         if not await self._repo.parent_belongs_to(ctx.workspace_id, parent_id):
+            raise _parent_not_found()
+        scope = await visible_playbook_ids(self._pool, ctx)
+        if scope is not None and parent_id not in scope:
             raise _parent_not_found()
         return await self._repo.list_children(parent_id, active_only=ctx.is_api_token)
 
     async def list_parents(self, ctx: WorkspaceContext, child_id: UUID) -> list[PlaybookRef]:
-        """Gibt die Parent-Playbooks (Composed-By) zurueck."""
+        """Gibt die Parent-Playbooks (Composed-By) zurueck.
+
+        Read-Scoping: das Kind muss zugewiesen sein (sonst 404); die
+        zurueckgegebenen Eltern liegen NICHT in der assigned-Closure und werden
+        daher gegen die sichtbare Menge gefiltert — ein `assigned`-Agent sieht
+        nur Eltern-Composites, die ihm ebenfalls zugewiesen sind.
+        """
         if not await self._repo.parent_belongs_to(ctx.workspace_id, child_id):
             raise _parent_not_found()
-        return await self._repo.list_parents(child_id)
+        scope = await visible_playbook_ids(self._pool, ctx)
+        if scope is not None and child_id not in scope:
+            raise _parent_not_found()
+        parents = await self._repo.list_parents(child_id)
+        if scope is not None:
+            parents = [p for p in parents if p.id in scope]
+        return parents
 
     async def set_composition(
         self,

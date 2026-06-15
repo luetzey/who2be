@@ -8,8 +8,10 @@ Zyklus-Guard erfolgen atomar im Repository — Aufbau analog
 
 from uuid import UUID
 
+import asyncpg
 from fastapi import HTTPException, status
 
+from who2be_api.core.agent_scope import visible_resource_ids
 from who2be_api.core.security import WorkspaceContext, require_capability, require_role
 from who2be_api.repositories.resource_composition_repository import (
     ResourceCompositionRepository,
@@ -34,22 +36,43 @@ def _resource_not_found() -> HTTPException:
 class ResourceCompositionService:
     """Verwaltet die Sub-Resource-Sequenz einer Resource."""
 
-    def __init__(self, repo: ResourceCompositionRepository) -> None:
+    def __init__(
+        self, repo: ResourceCompositionRepository, pool: asyncpg.Pool | None = None
+    ) -> None:
         self._repo = repo
+        self._pool = pool
 
     async def list_children(self, ctx: WorkspaceContext, parent_id: UUID) -> list[SubResourceRead]:
-        """Gibt die geordneten direkten Sub-Resources zurueck."""
+        """Gibt die geordneten direkten Sub-Resources zurueck.
+
+        Read-Scoping: nur fuer eine dem Agenten zugewiesene Resource (sonst
+        404) — ihre Sub-Resources liegen ueber die assigned-Closure im Scope.
+        """
         if not await self._repo.parent_belongs_to(ctx.workspace_id, parent_id):
+            raise _resource_not_found()
+        scope = await visible_resource_ids(self._pool, ctx)
+        if scope is not None and parent_id not in scope:
             raise _resource_not_found()
         return await self._repo.list_children(
             ctx.workspace_id, parent_id, active_only=ctx.is_api_token
         )
 
     async def list_parents(self, ctx: WorkspaceContext, child_id: UUID) -> list[ResourceRef]:
-        """Gibt die Parent-Resources (Used-By) zurueck."""
+        """Gibt die Parent-Resources (Used-By) zurueck.
+
+        Read-Scoping: das Kind muss zugewiesen sein (sonst 404); die Eltern
+        liegen nicht in der Closure und werden gegen die sichtbare Menge
+        gefiltert (siehe `PlaybookCompositionService.list_parents`).
+        """
         if not await self._repo.parent_belongs_to(ctx.workspace_id, child_id):
             raise _resource_not_found()
-        return await self._repo.list_parents(ctx.workspace_id, child_id)
+        scope = await visible_resource_ids(self._pool, ctx)
+        if scope is not None and child_id not in scope:
+            raise _resource_not_found()
+        parents = await self._repo.list_parents(ctx.workspace_id, child_id)
+        if scope is not None:
+            parents = [p for p in parents if p.id in scope]
+        return parents
 
     async def set_links(
         self,

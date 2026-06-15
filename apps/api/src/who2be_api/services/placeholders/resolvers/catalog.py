@@ -12,6 +12,7 @@ from who2be_api.services.placeholders._core import (
     ResolveResult,
     table_cell,
 )
+from who2be_api.services.placeholders._scope import render_visible_resource_ids
 
 logger = logging.getLogger(__name__)
 
@@ -168,6 +169,12 @@ class ResourcesCatalogResolver:
             tag_filter,
             _CATALOG_LIMIT + 1,
         )
+        # Read-Scoping: ein `assigned`-Agent sieht im Katalog nur die ihm ueber
+        # seine zugewiesenen Playbooks erreichbaren Resources — sonst leakt die
+        # Tabelle Namen/IDs des ganzen Workspace (inkl. fetch_resource-Aufruf).
+        scope = await render_visible_resource_ids(db, ctx)
+        if scope is not None:
+            rows = [row for row in rows if row["id"] in scope]
         overflow = len(rows) > _CATALOG_LIMIT
         rows = rows[:_CATALOG_LIMIT]
 

@@ -26,10 +26,12 @@ def _ctx(tool_policy: AgentToolPolicy | None) -> WorkspaceContext:
 
 
 class TestAgentToolPolicyDefaults:
-    def test_default_is_read_all_no_writes(self) -> None:
+    def test_default_is_read_assigned_no_writes(self) -> None:
+        # Secure by default: ohne expliziten Eintrag sieht ein Agent nur die
+        # ihm zugewiesenen Playbooks/Resources, nicht den ganzen Workspace.
         policy = AgentToolPolicy()
-        assert policy.playbook_read == ReadScope.all
-        assert policy.resource_read == ReadScope.all
+        assert policy.playbook_read == ReadScope.assigned
+        assert policy.resource_read == ReadScope.assigned
         assert policy.persona_read is True
         assert policy.agent_read is True
         assert policy.persona_write is False

@@ -13,8 +13,10 @@ Heading-Block ist. Non-Heading-Anker werden mit 422 abgelehnt.
 
 from uuid import UUID
 
+import asyncpg
 from fastapi import HTTPException, status
 
+from who2be_api.core.agent_scope import visible_playbook_ids
 from who2be_api.core.security import WorkspaceContext, require_capability, require_role
 from who2be_api.repositories.playbook_resource_link_repository import (
     PlaybookResourceLinkRepository,
@@ -36,12 +38,21 @@ def _playbook_not_found() -> HTTPException:
 class PlaybookResourceLinkService:
     """Verwaltet die Resource-Block-Refs eines Playbooks."""
 
-    def __init__(self, link_repo: PlaybookResourceLinkRepository) -> None:
+    def __init__(
+        self, link_repo: PlaybookResourceLinkRepository, pool: asyncpg.Pool | None = None
+    ) -> None:
         self._repo = link_repo
+        self._pool = pool
 
     async def list_links(self, ctx: WorkspaceContext, playbook_id: UUID) -> list[ResourceLinkRead]:
         links = await self._repo.list_links(ctx.workspace_id, playbook_id)
         if links is None:
+            raise _playbook_not_found()
+        # Read-Scoping: Block-Refs nur fuer ein dem Agenten zugewiesenes
+        # Playbook (sonst 404) — verhindert das Enumerieren fremder Resource-
+        # Verlinkungen ueber eine geratene Playbook-ID.
+        scope = await visible_playbook_ids(self._pool, ctx)
+        if scope is not None and playbook_id not in scope:
             raise _playbook_not_found()
         return links
 

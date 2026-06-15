@@ -208,9 +208,17 @@ class ResourceService:
             raise _not_found()
         return outcome.resource
 
+    async def _assert_in_scope(self, ctx: WorkspaceContext, resource_id: UUID) -> None:
+        """Read-Scoping fuer Per-ID-Lesepfade ausserhalb von `get`/`list_all`
+        (Versionen/Diff/Export): `assigned`-Agent → 404 fuer fremde Resources."""
+        restrict_ids = await self._read_restrict(ctx)
+        if restrict_ids is not None and resource_id not in set(restrict_ids):
+            raise _not_found()
+
     async def list_versions(
         self, ctx: WorkspaceContext, resource_id: UUID, locale: str = DEFAULT_LOCALE
     ) -> list[ResourceVersionRead]:
+        await self._assert_in_scope(ctx, resource_id)
         versions = await self._repo.list_versions(ctx.workspace_id, resource_id, locale)
         if versions is None:
             raise _not_found()
@@ -219,6 +227,7 @@ class ResourceService:
     async def get_version(
         self, ctx: WorkspaceContext, resource_id: UUID, version: int, locale: str = DEFAULT_LOCALE
     ) -> ResourceVersionRead:
+        await self._assert_in_scope(ctx, resource_id)
         found = await self._repo.fetch_version(ctx.workspace_id, resource_id, version, locale)
         if found is None:
             raise _not_found()
@@ -257,6 +266,7 @@ class ResourceService:
         locale: str = DEFAULT_LOCALE,
     ) -> VersionDiff:
         """Strukturierter Feld-/Block-Diff der Version `version` gegen `against`."""
+        await self._assert_in_scope(ctx, resource_id)
         target = await self._repo.fetch_version(ctx.workspace_id, resource_id, version, locale)
         if target is None:
             raise _not_found()

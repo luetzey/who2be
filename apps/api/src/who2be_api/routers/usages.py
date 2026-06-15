@@ -24,7 +24,7 @@ router = APIRouter(tags=["usages"])
 def get_usage_service(
     pool: Annotated[asyncpg.Pool, Depends(get_pool)],
 ) -> UsageService:
-    return UsageService(PgUsageRepository(pool))
+    return UsageService(PgUsageRepository(pool), pool)
 
 
 Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]

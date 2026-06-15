@@ -119,6 +119,7 @@ class AgentFetchRenderedService:
             persona_id=agent.persona_id,
             now=datetime.now(UTC),
             tool_policy=agent.tool_policy,
+            agent_id=agent.id,
         )
 
         # Renderer braucht eine einzelne Connection fuer DB-Lookups.

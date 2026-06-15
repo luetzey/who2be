@@ -6,6 +6,7 @@ from uuid import UUID
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
+from who2be_api.core.agent_scope import visible_resource_ids
 from who2be_api.core.db import get_pool
 from who2be_api.core.locale import LocaleQuery
 from who2be_api.core.pagination import DEFAULT_LIMIT, PageCursor, PageLimit
@@ -142,10 +143,17 @@ async def export_resource(
     ctx: Ctx,
     export_service: ExportService,
     response: Response,
+    pool: Annotated[asyncpg.Pool, Depends(get_pool)],
     format: ExportFormat = "json",
 ) -> Any:
     """Einzel-Export der Resource als JSON (alle Versionen) oder Markdown (aktive
-    Version gerendert). Lesen ist fuer Viewer offen (kein require_role)."""
+    Version gerendert). Lesen ist fuer Viewer offen (kein require_role); ein
+    `assigned`-Agent darf aber nur ihm zugewiesene Resources exportieren."""
+    scope = await visible_resource_ids(pool, ctx)
+    if scope is not None and resource_id not in scope:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Resource nicht gefunden."
+        )
     if format == "markdown":
         rendered = await export_service.export_markdown(ctx.workspace_id, "resource", resource_id)
         if rendered is None:
