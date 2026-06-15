@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 
 import { AgentEditorForm } from '../components/AgentEditorForm'
 import { AgentHierarchyView } from '../components/AgentHierarchyView'
+import { AgentTokensSection } from '../components/AgentTokensSection'
 import { CopyPromptButton } from '../components/CopyPromptButton'
 import { DeleteAgentButton } from '../components/DeleteAgentButton'
 import { DuplicateAgentButton } from '../components/DuplicateAgentButton'
@@ -87,6 +88,8 @@ export function AgentDetailPage() {
                 templates={templates}
                 agent={agent}
               />
+
+              <AgentTokensSection agentId={agent.id} />
             </Stack>
           ) : null}
         </DataView>

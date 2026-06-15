@@ -94,7 +94,7 @@ from who2be_models.system_prompt_template import (
     SystemPromptTemplateUpdate,
     SystemPromptTemplateVersionRead,
 )
-from who2be_models.token import TokenCreate, TokenCreated, TokenRead
+from who2be_models.token import TokenCreate, TokenCreated, TokenRead, TokenRename
 from who2be_models.tool_policy import AgentCapability, AgentToolPolicy, ReadScope
 from who2be_models.version_diff import DiffOp, VersionDiff, VersionDiffChange
 from who2be_models.workspace import WorkspaceCreate, WorkspaceRead, WorkspaceUpdate
@@ -188,6 +188,7 @@ __all__ = [
     "TokenCreate",
     "TokenCreated",
     "TokenRead",
+    "TokenRename",
     "TriggerOverview",
     "VersionDiff",
     "VersionDiffChange",

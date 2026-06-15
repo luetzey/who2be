@@ -122,8 +122,25 @@ class _FakeTokenRepo:
     ) -> list[TokenRead]:
         return []
 
+    async def list_by_agent(
+        self,
+        workspace_id: UUID,
+        agent_id: UUID,
+        limit: int,
+        after: tuple[datetime, UUID] | None,
+    ) -> list[TokenRead]:
+        return []
+
     async def fetch_auth_by_hash(self, token_hash: str) -> None:
         return None
+
+    async def rename(self, workspace_id: UUID, token_id: UUID, name: str) -> TokenRead | None:
+        return self.last_inserted
+
+    async def rotate(
+        self, workspace_id: UUID, token_id: UUID, new_hash: str
+    ) -> TokenRead | None:
+        return self.last_inserted
 
     async def revoke(self, workspace_id: UUID, token_id: UUID) -> bool:
         self.revoked.append(token_id)
@@ -131,6 +148,13 @@ class _FakeTokenRepo:
 
     async def touch_last_used(self, token_hash: str) -> None:  # pragma: no cover
         return None
+
+
+class _FakePool:
+    """Minimaler Pool-Stub: `_assert_agent_in_workspace` braucht nur `fetchval`."""
+
+    async def fetchval(self, *_args: object) -> int:
+        return 1
 
 
 def _ctx(role: WorkspaceRole = WorkspaceRole.admin) -> WorkspaceContext:
@@ -141,11 +165,14 @@ def test_token_service_records_issued_and_revoked() -> None:
     audit_repo = FakeAuditLogRepository()
     audit = AuditService(audit_repo)
     repo = _FakeTokenRepo()
-    # Pool darf irgendetwas Nicht-None sein — der Fake-Audit-Repo nutzt es nicht.
-    service = TokenService(repo, audit_service=audit, pool=object())
+    # Pool muss `fetchval` koennen (Agent-Workspace-Check); der Fake-Audit-Repo
+    # nutzt den Pool selbst nicht.
+    service = TokenService(repo, audit_service=audit, pool=_FakePool())
     ctx = _ctx()
 
-    asyncio.run(service.create(ctx, TokenCreate(name="ci", role=WorkspaceRole.editor)))
+    asyncio.run(
+        service.create(ctx, TokenCreate(name="ci", role=WorkspaceRole.editor, agent_id=uuid4()))
+    )
     asyncio.run(service.revoke(ctx, uuid4()))
 
     actions = [call.action for call in audit_repo.calls]

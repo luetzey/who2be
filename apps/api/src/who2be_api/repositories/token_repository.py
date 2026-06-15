@@ -52,7 +52,21 @@ class TokenRepository(Protocol):
         after: tuple[datetime, UUID] | None,
     ) -> list[TokenRead]: ...
 
+    async def list_by_agent(
+        self,
+        workspace_id: UUID,
+        agent_id: UUID,
+        limit: int,
+        after: tuple[datetime, UUID] | None,
+    ) -> list[TokenRead]: ...
+
     async def fetch_auth_by_hash(self, token_hash: str) -> TokenAuthRow | None: ...
+
+    async def rename(self, workspace_id: UUID, token_id: UUID, name: str) -> TokenRead | None: ...
+
+    async def rotate(
+        self, workspace_id: UUID, token_id: UUID, new_hash: str
+    ) -> TokenRead | None: ...
 
     async def revoke(self, workspace_id: UUID, token_id: UUID) -> bool: ...
 
@@ -117,6 +131,38 @@ class PgTokenRepository:
             )
         return [TokenRead.model_validate(dict(row)) for row in rows]
 
+    async def list_by_agent(
+        self,
+        workspace_id: UUID,
+        agent_id: UUID,
+        limit: int,
+        after: tuple[datetime, UUID] | None,
+    ) -> list[TokenRead]:
+        if after is None:
+            rows = await self._pool.fetch(
+                "SELECT id, workspace_id, name, role, agent_id, "
+                "created_at, last_used_at, revoked_at "
+                "FROM api_token WHERE workspace_id = $1 AND agent_id = $2 "
+                "ORDER BY created_at DESC, id DESC LIMIT $3",
+                workspace_id,
+                agent_id,
+                limit,
+            )
+        else:
+            rows = await self._pool.fetch(
+                "SELECT id, workspace_id, name, role, agent_id, "
+                "created_at, last_used_at, revoked_at "
+                "FROM api_token WHERE workspace_id = $1 AND agent_id = $2 "
+                "AND (created_at, id) < ($3, $4) "
+                "ORDER BY created_at DESC, id DESC LIMIT $5",
+                workspace_id,
+                agent_id,
+                after[0],
+                after[1],
+                limit,
+            )
+        return [TokenRead.model_validate(dict(row)) for row in rows]
+
     async def fetch_auth_by_hash(self, token_hash: str) -> TokenAuthRow | None:
         row = await self._pool.fetchrow(
             "SELECT owner_id, workspace_id, role, agent_id FROM api_token "
@@ -131,6 +177,36 @@ class PgTokenRepository:
             role=WorkspaceRole(row["role"]),
             agent_id=row["agent_id"],
         )
+
+    async def rename(self, workspace_id: UUID, token_id: UUID, name: str) -> TokenRead | None:
+        row = await self._pool.fetchrow(
+            "UPDATE api_token SET name = $3 "
+            "WHERE id = $1 AND workspace_id = $2 AND revoked_at IS NULL "
+            "RETURNING id, workspace_id, name, role, agent_id, "
+            "created_at, last_used_at, revoked_at",
+            token_id,
+            workspace_id,
+            name,
+        )
+        return TokenRead.model_validate(dict(row)) if row is not None else None
+
+    async def rotate(
+        self, workspace_id: UUID, token_id: UUID, new_hash: str
+    ) -> TokenRead | None:
+        # In-place: nur der Hash wird ersetzt, `last_used_at` zurueckgesetzt
+        # (neues Secret). id/agent_id/role/name/created_at bleiben — Snapshot
+        # intakt (ADR-0023). Das alte Secret hashed auf den alten Wert und wird
+        # von `fetch_auth_by_hash` ab sofort nicht mehr gefunden.
+        row = await self._pool.fetchrow(
+            "UPDATE api_token SET token_hash = $3, last_used_at = NULL "
+            "WHERE id = $1 AND workspace_id = $2 AND revoked_at IS NULL "
+            "RETURNING id, workspace_id, name, role, agent_id, "
+            "created_at, last_used_at, revoked_at",
+            token_id,
+            workspace_id,
+            new_hash,
+        )
+        return TokenRead.model_validate(dict(row)) if row is not None else None
 
     async def revoke(self, workspace_id: UUID, token_id: UUID) -> bool:
         result = await self._pool.execute(
