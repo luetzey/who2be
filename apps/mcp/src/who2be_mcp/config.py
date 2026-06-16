@@ -32,6 +32,13 @@ class Settings(BaseSettings):
     http_host: str = "0.0.0.0"
     http_port: int = 8765
     http_path: str = "/mcp"
+    # OAuth-Resource-Server (ADR-0034-Folge, nur HTTP-Transport):
+    # `oauth_issuer_url` = die Who2Be-API als Authorization-Server (PRM-Pointer);
+    # `mcp_public_url` = oeffentliche ORIGIN dieses MCP-Servers (ohne `{http_path}`;
+    # FastMCP haengt den Mount-Pfad an → die advertisierte Resource wird
+    # `{mcp_public_url}{http_path}` und muss `MCP_RESOURCE_URL` der API gleichen).
+    oauth_issuer_url: str = "http://localhost:8000"
+    mcp_public_url: str = "http://127.0.0.1:8765"
 
 
 @lru_cache

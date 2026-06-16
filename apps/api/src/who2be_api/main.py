@@ -41,6 +41,7 @@ from who2be_api.routers import (
     invitations,
     me,
     members,
+    oauth,
     organizations,
     persona_playbooks,
     personas,
@@ -201,6 +202,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(workspaces.router)
     app.include_router(gdpr.router)
     app.include_router(invitations.accept_router)
+    # OAuth-2.1-Authorization-Server (Remote-MCP-Connector): top-level, anonym
+    # erreichbar (`/oauth/*`), plus RFC-8414-Metadaten unter `/.well-known`.
+    app.include_router(oauth.router)
+    app.include_router(oauth.metadata_router)
     # Billing-SCHREIBSEITE (Webhooks/Checkout) lebt im optionalen `who2be-billing`-
     # Paket (ADR-0029). Build-Zeit-isoliert: On-Prem hat es nicht installiert →
     # der Import schlaegt fehl und es wird nichts registriert. Der Kern kennt das

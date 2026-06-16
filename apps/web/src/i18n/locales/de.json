@@ -347,6 +347,20 @@
       "google": "Mit Google anmelden",
       "github": "Mit GitHub anmelden"
     },
+    "connector": {
+      "title": "Verbindung autorisieren",
+      "description": "{{client}} möchte sich mit Who2Be verbinden. Wähle den Agenten, dessen Wissen und Tools du freigibst — die Verbindung erhält genau dessen Berechtigungen.",
+      "descriptionGeneric": "Eine Anwendung möchte sich mit Who2Be verbinden. Wähle den Agenten, dessen Wissen und Tools du freigibst — die Verbindung erhält genau dessen Berechtigungen.",
+      "agentLabel": "Agent",
+      "agentHint": "Pro Verbindung genau ein Agent. Für weitere Agenten je eine eigene Verbindung anlegen.",
+      "redirectTo": "Nach der Bestätigung wirst du zurückgeleitet an:",
+      "approve": "Verbinden",
+      "deny": "Ablehnen",
+      "loadingAgents": "Agenten werden geladen…",
+      "noAgents": "Keine Agenten in diesem Workspace. Lege zuerst einen Agenten an.",
+      "error": "Autorisierung fehlgeschlagen. Bitte erneut versuchen.",
+      "missingRequest": "Ungültiger Verbindungs-Link — der Autorisierungs-Request fehlt."
+    },
     "validation": {
       "emailInvalid": "Bitte gueltige E-Mail eingeben.",
       "passwordRequired": "Passwort erforderlich.",

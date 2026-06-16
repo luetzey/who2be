@@ -200,6 +200,30 @@ export function acceptInvitation(
   )
 }
 
+// OAuth-Remote-MCP-Consent (ADR-0034-Folge): die eingeloggte Web-Session
+// autorisiert einen LLM-Client fuer GENAU einen Agenten. Nicht workspace-scoped
+// im Pfad — der signierte `request`-Blob traegt den Kontext, der Server leitet
+// den Workspace aus `agent_id` ab. Response = Redirect-URL zurueck zum Client.
+export interface OAuthConsentInput {
+  request: string
+  agent_id: string
+  approve: boolean
+}
+
+export interface OAuthConsentResult {
+  redirect: string
+}
+
+export function oauthConsent(
+  token: string,
+  input: OAuthConsentInput,
+): Promise<OAuthConsentResult> {
+  return request<OAuthConsentResult>(token, '/oauth/consent', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
 export interface Api {
   listPersonas: () => Promise<Persona[]>
   getPersona: (id: string) => Promise<Persona>

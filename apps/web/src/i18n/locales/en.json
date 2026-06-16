@@ -347,6 +347,20 @@
       "google": "Sign in with Google",
       "github": "Sign in with GitHub"
     },
+    "connector": {
+      "title": "Authorize connection",
+      "description": "{{client}} wants to connect to Who2Be. Pick the agent whose knowledge and tools you grant — the connection inherits exactly its permissions.",
+      "descriptionGeneric": "An application wants to connect to Who2Be. Pick the agent whose knowledge and tools you grant — the connection inherits exactly its permissions.",
+      "agentLabel": "Agent",
+      "agentHint": "Exactly one agent per connection. For more agents, create one connection each.",
+      "redirectTo": "After confirming, you will be redirected to:",
+      "approve": "Connect",
+      "deny": "Deny",
+      "loadingAgents": "Loading agents…",
+      "noAgents": "No agents in this workspace. Create an agent first.",
+      "error": "Authorization failed. Please try again.",
+      "missingRequest": "Invalid connection link — the authorization request is missing."
+    },
     "validation": {
       "emailInvalid": "Please enter a valid email address.",
       "passwordRequired": "Password required.",

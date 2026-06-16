@@ -17,7 +17,7 @@ class OAuthClientRegistration(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    redirect_uris: list[str] = Field(min_length=1)
+    redirect_uris: list[str] = Field(min_length=1, max_length=8)
     client_name: str | None = Field(default=None, max_length=200)
     token_endpoint_auth_method: str = "none"
 

@@ -713,9 +713,13 @@ def main() -> None:
     settings = get_settings()
     configure_logging(settings.log_format)
     if settings.transport == "http":
-        # Streamable-HTTP (MCP-Spec 2025-03-26). Auth via vorgelagertem
-        # Reverse-Proxy (z.B. Caddy `mcp.{$DOMAIN}` → forwarded Bearer landet
-        # als `WHO2BE_API_TOKEN` im API-Client). ADR-0034.
+        # Streamable-HTTP (MCP-Spec 2025-03-26). OAuth-Resource-Server (ADR-0034-
+        # Folge): FastMCP introspectiert jeden Bearer (`Who2BeTokenVerifier`) vor
+        # dem Tool-Run und serviert RFC-9728-PRM + 401/`WWW-Authenticate`, sodass
+        # Remote-MCP-Clients (Claude/ChatGPT) sich per OAuth-Login verbinden.
+        from who2be_mcp.auth import build_auth_provider
+
+        mcp.auth = build_auth_provider(settings)
         mcp.run(
             transport="http",
             host=settings.http_host,

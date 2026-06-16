@@ -2,6 +2,7 @@
 export { AuthCallbackPage } from './pages/AuthCallbackPage'
 export { InvitationAcceptPage } from './pages/InvitationAcceptPage'
 export { LoginPage } from './pages/LoginPage'
+export { OAuthConsentPage } from './pages/OAuthConsentPage'
 export { ResetPasswordPage } from './pages/ResetPasswordPage'
 export { SetPasswordPage } from './pages/SetPasswordPage'
 export { SignupPage } from './pages/SignupPage'

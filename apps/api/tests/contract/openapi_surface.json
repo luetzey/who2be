@@ -1,6 +1,31 @@
 [
   {
     "method": "GET",
+    "path": "/.well-known/oauth-authorization-server",
+    "operationId": "authorization_server_metadata__well_known_oauth_authorization_server_get"
+  },
+  {
+    "method": "GET",
+    "path": "/oauth/authorize",
+    "operationId": "authorize_oauth_authorize_get"
+  },
+  {
+    "method": "POST",
+    "path": "/oauth/consent",
+    "operationId": "consent_oauth_consent_post"
+  },
+  {
+    "method": "POST",
+    "path": "/oauth/register",
+    "operationId": "register_client_oauth_register_post"
+  },
+  {
+    "method": "POST",
+    "path": "/oauth/token",
+    "operationId": "token_oauth_token_post"
+  },
+  {
+    "method": "GET",
     "path": "/v1/gdpr/export",
     "operationId": "export_my_data_v1_gdpr_export_get"
   },

@@ -1,21 +1,31 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-06-14_
+_Stand: 2026-06-16_
 
 ## Funktioniert
 
 - Phase 1–3 abgeschlossen: Tenancy, Status-Workflow + Dashboard, Resources +
   BlockNote, Multi-User-RBAC, MCP Read/Write-Tools, Einzel-Delete/Export, i18n.
 - Security-Findings (Phase 1 + 2) alle **Closed**, Ampel Grün.
+- MCP-HTTP-Transport (ADR-0034) + Per-Request-Bearer + Ein-Klick-MCP-Config;
+  Agent-Read-Scope secure-by-default; API-Tokens am Agenten verwaltet.
+- **OAuth-Remote-MCP-Connector (ADR-0036), Branch `feat/oauth-remote-mcp`:**
+  Who2Be ist OAuth-2.1-AS (`apps/api` `/oauth/*` + Metadaten), MCP ist RS
+  (FastMCP `RemoteAuthProvider`, PRM/401), Consent-UI (`apps/web`
+  `/oauth/consent`). DCR + PKCE + agent-gebundener `w2b_`-Access-Token +
+  rotierende Refresh-Tokens. Security-Review durch, Befunde behoben (RLS-Bruch
+  in Cloud, Consent-Phishing, Rate-Limits, Refresh-Re-Auth, konstantzeit-PKCE).
 - Public-Switch-Vorbereitung: LICENSE.md (FSL-1.1), CONTRIBUTING.md, SECURITY.md;
   Notion-Entkopplung; LLM-Standards-Schicht (`docs/standards/`, `AGENTS.md`,
   `.claude/context/`).
-- Lokale Verifikation grün: ruff, mypy strict (256 Dateien), pytest
-  (358 passed / 177 skipped ohne DB).
+- Lokale Verifikation grün: ruff, mypy strict, Web (lint/tsc/387 Tests/build),
+  MCP (85 Tests), API-OAuth/RS/Unit grün (gegen lokale Wegwerf-Postgres).
 
 ## In Arbeit
 
-- LLM-Optimierung / Standards-Materialisierung (dieser Run) — PR offen.
+- OAuth-Connector: **E2E mit echtem Claude/ChatGPT-Client** steht aus (braucht
+  Stack mit `api.`/`app.`/`mcp.`-Subdomains). Offen-Tasks: TTL-Cleanup der
+  OAuth-Tabellen, optional Audience-Trennung am RS, MFA/aal2-Consent (Phase 2).
 
 ## Bekannte Probleme
 
@@ -23,6 +33,10 @@ _Stand: 2026-06-14_
   `runner_id=0`, keine Logs → mutmaßlich erschöpfte **Actions-Minuten / Billing**
   des privaten Repos. Nicht im Code behebbar. **Public-Flip löst es** (Actions ist
   für öffentliche Repos frei/unbegrenzt).
+- **21 DB-gated Integrationstests rot auf dem Branch** (vorbestehend, nicht von
+  OAuth): agent-gebundene Tokens → 403 auf Management/Read-Endpunkten; die Tests
+  erwarten 200. Per Stash gegen Clean-HEAD verifiziert. Aufzuräumen, sobald eine
+  Test-DB in CI steht.
 - E2E-Gate bleibt Soft, bis die CI-Infra steht.
 
 ## Nächste Schritte (nicht-Code, manuell beim Owner)

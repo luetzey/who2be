@@ -43,6 +43,7 @@ class TokenRepository(Protocol):
         token_hash: str,
         role: WorkspaceRole,
         agent_id: UUID | None = None,
+        expires_at: datetime | None = None,
     ) -> TokenRead: ...
 
     async def list_by_workspace(
@@ -87,10 +88,12 @@ class PgTokenRepository:
         token_hash: str,
         role: WorkspaceRole,
         agent_id: UUID | None = None,
+        expires_at: datetime | None = None,
     ) -> TokenRead:
         row = await self._pool.fetchrow(
-            "INSERT INTO api_token (workspace_id, owner_id, name, token_hash, role, agent_id) "
-            "VALUES ($1, $2, $3, $4, $5, $6) "
+            "INSERT INTO api_token "
+            "(workspace_id, owner_id, name, token_hash, role, agent_id, expires_at) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7) "
             "RETURNING id, workspace_id, name, role, agent_id, "
             "created_at, last_used_at, revoked_at",
             workspace_id,
@@ -99,6 +102,7 @@ class PgTokenRepository:
             token_hash,
             role.value,
             agent_id,
+            expires_at,
         )
         return TokenRead.model_validate(dict(row))
 
@@ -166,7 +170,8 @@ class PgTokenRepository:
     async def fetch_auth_by_hash(self, token_hash: str) -> TokenAuthRow | None:
         row = await self._pool.fetchrow(
             "SELECT owner_id, workspace_id, role, agent_id FROM api_token "
-            "WHERE token_hash = $1 AND revoked_at IS NULL",
+            "WHERE token_hash = $1 AND revoked_at IS NULL "
+            "AND (expires_at IS NULL OR expires_at > now())",
             token_hash,
         )
         if row is None:
