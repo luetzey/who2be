@@ -1,6 +1,7 @@
 import { Copy, KeyRound } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { McpConfigCopy } from '@/components/data/McpConfigCopy'
 import { Stack } from '@/components/layout/Stack'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -54,6 +55,10 @@ export function TokenSecretReveal({ token, onDismiss }: TokenSecretRevealProps) 
             <Button type="button" size="sm" variant="outline" onClick={onDismiss}>
               {t('common:actions.close')}
             </Button>
+          </div>
+          <div className="border-t pt-3">
+            <p className="mb-2 text-sm font-medium">{t('mcp.title')}</p>
+            <McpConfigCopy token={token} />
           </div>
         </Stack>
       </AlertDescription>

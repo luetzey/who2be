@@ -1548,6 +1548,19 @@
       "ariaLabel": "Plaintext token",
       "copyButton": "Copy to clipboard"
     },
+    "mcp": {
+      "title": "MCP configuration",
+      "label": "Format",
+      "ariaLabel": "MCP configuration",
+      "copyButton": "Copy configuration",
+      "format": {
+        "json": "JSON (mcpServers)",
+        "cli": "Claude Code (CLI)",
+        "manual": "URL + header",
+        "prompt": "Prompt snippet"
+      },
+      "promptTemplate": "You have access to the Who2Be MCP server (streamable HTTP).\nEndpoint: {{url}}\nAuthorization: Bearer {{token}}\n\nAvailable tools: get_persona, list_playbooks, list_triggers, fetch_playbook, list_resources, fetch_resource, fetch_agent (write tools depending on agent policy).\nUse list_triggers/list_playbooks/get_persona to find the right playbook for the task, load it via fetch_playbook and follow its steps."
+    },
     "override": {
       "title": "Activate headless token",
       "description": "Override for future headless use-cases: the entered token will be sent to the API instead of the Supabase JWT from now on. Lives only in this tab session — a reload removes it.",

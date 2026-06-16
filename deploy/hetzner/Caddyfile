@@ -58,10 +58,10 @@ supabase.{$DOMAIN} {
 
 # MCP-Streamable-HTTP-Endpunkt (ADR-0034). Aktiv nur bei `--profile mcp-http`
 # im App-Compose; ohne aktiven Backend-Container antwortet Caddy mit 502.
-# Auth: Bearer-Token aus dem Who2Be-Settings-/v1/tokens-Endpunkt — Caddy reicht
-# `Authorization` unveraendert weiter, der MCP-Server konsumiert ihn als
-# `WHO2BE_API_TOKEN` aus der ASGI-Lifespan-Settings (eigenstaendig pro Request
-# als Followup, siehe ADR-0034 §"Multi-Tenant").
+# Auth: Bearer-Token (am Agenten erzeugt, `/v1/tokens`). Caddy reicht
+# `Authorization` unveraendert weiter; der MCP-Server wertet den Header pro
+# Request aus (Multi-Tenant, ADR-0034) — jede Session agiert als ihr eigener,
+# serverseitig gescopter Token/Agent.
 mcp.{$DOMAIN} {
     import security_headers
     # Streamable-HTTP liefert SSE-Frames (`text/event-stream`); HTML-Inline-Code

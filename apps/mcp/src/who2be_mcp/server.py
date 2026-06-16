@@ -10,13 +10,16 @@ Phase 2.1a-2: Beim ersten Tool-Call wird die Workspace-ID des Tokens via
 `/v1/workspaces/{workspace_id}/...`.
 """
 
-import asyncio
+import hashlib
 import logging
+import time
+from collections import OrderedDict
 from uuid import UUID
 
 import httpx
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
+from fastmcp.server.dependencies import get_http_headers
 from pydantic import BaseModel
 
 from who2be_mcp.client import ApiClient
@@ -55,8 +58,39 @@ logger = logging.getLogger(__name__)
 
 mcp: FastMCP = FastMCP("who2be")
 
-_BOOTSTRAP_LOCK = asyncio.Lock()
-_cached_workspace_id: UUID | None = None
+# Workspace-Resolution wird PRO TOKEN gecacht (Streamable-HTTP ist multi-tenant:
+# jeder Request traegt seinen eigenen Bearer, ADR-0034). Key ist der sha256-Hash
+# des Tokens (defense-in-depth: kein Klartext-Token als Dict-Key), Wert ist
+# (workspace_id, Ablauf-Monotonic). LRU-Schranke + TTL halten den Cache in einem
+# langlebigen HTTP-Server beschraenkt und vermeiden stale WS-Aufloesung.
+_WS_CACHE_MAX = 512
+_WS_CACHE_TTL_SECONDS = 300.0
+_workspace_cache: OrderedDict[str, tuple[UUID, float]] = OrderedDict()
+
+
+def _token_key(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _ws_cache_get(token: str) -> UUID | None:
+    key = _token_key(token)
+    entry = _workspace_cache.get(key)
+    if entry is None:
+        return None
+    workspace_id, expires_at = entry
+    if time.monotonic() >= expires_at:
+        _workspace_cache.pop(key, None)
+        return None
+    _workspace_cache.move_to_end(key)
+    return workspace_id
+
+
+def _ws_cache_put(token: str, workspace_id: UUID) -> None:
+    key = _token_key(token)
+    _workspace_cache[key] = (workspace_id, time.monotonic() + _WS_CACHE_TTL_SECONDS)
+    _workspace_cache.move_to_end(key)
+    while len(_workspace_cache) > _WS_CACHE_MAX:
+        _workspace_cache.popitem(last=False)
 
 
 class PersonaWithPlaybooks(BaseModel):
@@ -120,51 +154,81 @@ class PlaybookWithResources(BaseModel):
     body_rendered: str = ""
 
 
-async def _resolve_workspace_id(settings: Settings) -> UUID:
-    """Resolved die Default-Workspace-ID ueber `GET /v1/me`.
+def _request_token(settings: Settings) -> str:
+    """Der fuer DIESEN Aufruf gueltige API-Token.
 
-    Cached fuer Server-Lifetime — die WS-Mitgliedschaft eines Tokens kann
-    sich ohnehin nicht aendern (Token sind workspace-gepinnt).
+    HTTP-Transport (ADR-0034): ausschliesslich der vom Client mitgeschickte
+    `Authorization: Bearer`-Header — jede MCP-Session ist ihr eigener,
+    serverseitig gescopter Token/Agent (Multi-Tenant). Fehlt der Bearer oder ist
+    er leer/ungueltig, wird HART abgelehnt — KEIN Rueckfall auf den statischen
+    Env-Token, sonst agierte ein Caller mit kaputtem Header als der privilegierte
+    Server-Token (Privilege-Konfusion).
+
+    Wichtig: FastMCP filtert `authorization` per Default aus `get_http_headers()`
+    heraus — der Header muss explizit via `include` angefordert werden.
+
+    stdio (kein HTTP-Kontext): der statische `WHO2BE_API_TOKEN` aus der Env.
     """
-    global _cached_workspace_id
-    if _cached_workspace_id is not None:
-        return _cached_workspace_id
-    async with _BOOTSTRAP_LOCK:
-        if _cached_workspace_id is not None:
-            return _cached_workspace_id
-        if settings.workspace_id:
-            try:
-                _cached_workspace_id = UUID(settings.workspace_id)
-            except ValueError as exc:
-                raise ToolError("WHO2BE_WORKSPACE_ID ist keine gueltige UUID.") from exc
-            return _cached_workspace_id
+    if settings.transport == "http":
+        headers = get_http_headers(include={"authorization"})
+        auth = headers.get("authorization", "")
+        if auth.lower().startswith("bearer "):
+            token = auth[len("bearer ") :].strip()
+            if token:
+                return token
+        raise ToolError("Nicht autorisiert — Authorization: Bearer-Header fehlt oder ist leer.")
+    return settings.api_token
+
+
+async def _resolve_workspace_id(settings: Settings, token: str) -> UUID:
+    """Resolved die Default-Workspace-ID eines Tokens ueber `GET /v1/me`.
+
+    Pro Token gecacht (LRU + TTL) — die WS-Mitgliedschaft eines Tokens ist stabil
+    (Token sind workspace-gepinnt), die TTL deckt rotierte/revozierte Tokens ab.
+    Ein explizit gepinnter `WHO2BE_WORKSPACE_ID` ueberschreibt die Resolution
+    (stdio/Single-Tenant). Kein globaler Lock: paralleler Erst-Resolve desselben
+    Tokens fuehrt hoechstens zu einem doppelten, idempotenten `/v1/me`-Aufruf.
+    """
+    if settings.workspace_id:
         try:
-            async with httpx.AsyncClient(
-                base_url=settings.api_base_url.rstrip("/"),
-                headers={"Authorization": f"Bearer {settings.api_token}"},
-                timeout=10.0,
-            ) as client:
-                response = await client.get("/v1/me")
-        except httpx.HTTPError as exc:
-            logger.warning("Who2Be-/v1/me nicht erreichbar: %s", type(exc).__name__)
-            raise ToolError("Who2Be-API nicht erreichbar.") from exc
-        if response.status_code == 401:
-            raise ToolError("Nicht autorisiert — WHO2BE_API_TOKEN pruefen.")
-        if response.is_error:
-            raise ToolError(f"Who2Be-API-Fehler ({response.status_code}).")
-        data = response.json()
-        ws_id = data.get("default_workspace_id")
-        if not isinstance(ws_id, str):
-            raise ToolError("Token hat keinen Default-Workspace.")
-        _cached_workspace_id = UUID(ws_id)
-        return _cached_workspace_id
+            return UUID(settings.workspace_id)
+        except ValueError as exc:
+            raise ToolError("WHO2BE_WORKSPACE_ID ist keine gueltige UUID.") from exc
+    cached = _ws_cache_get(token)
+    if cached is not None:
+        return cached
+    try:
+        async with httpx.AsyncClient(
+            base_url=settings.api_base_url.rstrip("/"),
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=10.0,
+        ) as client:
+            response = await client.get("/v1/me")
+    except httpx.HTTPError as exc:
+        logger.warning("Who2Be-/v1/me nicht erreichbar: %s", type(exc).__name__)
+        raise ToolError("Who2Be-API nicht erreichbar.") from exc
+    if response.status_code == 401:
+        raise ToolError("Nicht autorisiert — API-Token pruefen.")
+    if response.is_error:
+        raise ToolError(f"Who2Be-API-Fehler ({response.status_code}).")
+    data = response.json()
+    ws_id = data.get("default_workspace_id")
+    if not isinstance(ws_id, str):
+        raise ToolError("Token hat keinen Default-Workspace.")
+    resolved = UUID(ws_id)
+    _ws_cache_put(token, resolved)
+    return resolved
 
 
 async def build_client() -> ApiClient:
-    """Baut den API-Client aus der Konfiguration (inkl. Workspace-Resolution)."""
+    """Baut den API-Client fuer den aktuellen Aufruf (Token + Workspace)."""
     settings = get_settings()
-    workspace_id = await _resolve_workspace_id(settings)
-    return ApiClient(settings.api_base_url, settings.api_token, workspace_id)
+    token = _request_token(settings)
+    if not token:
+        # Nur erreichbar im stdio-Pfad mit leerem WHO2BE_API_TOKEN.
+        raise ToolError("Kein API-Token — WHO2BE_API_TOKEN ist nicht gesetzt.")
+    workspace_id = await _resolve_workspace_id(settings, token)
+    return ApiClient(settings.api_base_url, token, workspace_id)
 
 
 def _parse_uuid(value: str, label: str) -> UUID:

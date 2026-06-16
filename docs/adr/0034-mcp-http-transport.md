@@ -72,13 +72,19 @@ Infra (Caddy + TLS auf `api.${DOMAIN}` / `app.${DOMAIN}` /
 - **Healthcheck nutzt Python-urllib** (kein curl im Image). Funktioniert,
   ist aber etwas teurer als ein C-Tool. Lebbar bei 15s-Intervall.
 
-### Multi-Tenant (Followup)
+### Multi-Tenant (implementiert, 2026-06-16)
 
-Per-Request-Auth-Forwarding heisst: der eingehende `Authorization`-Header
-ersetzt fuer die Dauer des Tool-Calls den `WHO2BE_API_TOKEN`. FastMCP
-exponiert pro Tool-Call `ToolContext.request`; der API-Client muss aus
-einem Lifespan-Singleton in ein Request-Scoped-Pattern wandern. Aufwand:
-~50 LOC + Tests. Out-of-Scope dieses ADRs.
+Per-Request-Auth ist jetzt umgesetzt (`server.py` `_request_token`/
+`build_client`): im HTTP-Transport bestimmt der eingehende `Authorization:
+Bearer`-Header pro Tool-Call den API-Token — jede Session ist ihr eigener,
+serverseitig (in der API) gescopter Token/Agent. Der `authorization`-Header
+muss explizit via `get_http_headers(include={"authorization"})` angefordert
+werden (FastMCP filtert ihn sonst per Default). Fehlt/leer der Bearer im
+HTTP-Modus, wird **hart abgelehnt** — kein Rueckfall auf den statischen
+`WHO2BE_API_TOKEN` (sonst agierte ein Caller mit kaputtem Header als der
+privilegierte Server-Token). stdio nutzt unveraendert den Env-Token. Die
+Workspace-Resolution (`/v1/me`) wird pro Token (sha256-Key) mit LRU+TTL
+gecacht.
 
 ## Verifizierung
 
