@@ -29,18 +29,24 @@ export function buildMcpConfig(
   const bearer = `Bearer ${token}`
   switch (format) {
     case 'json':
-      // mcpServers-Block fuer Claude Desktop / Cursor / VS Code (Remote-HTTP).
+      // mcpServers-Block fuer Claude Desktop / Cowork / Cursor. Deren Config-
+      // Datei kennt nur stdio-Server (command/args), KEIN Inline-`type: http` —
+      // daher die `mcp-remote`-Bruecke, die auf den HTTP-Server zeigt und den
+      // Bearer-Header durchreicht. Funktioniert auch in Claude Code.
       return JSON.stringify(
         {
           mcpServers: {
-            who2be: { type: 'http', url: mcpUrl, headers: { Authorization: bearer } },
+            who2be: {
+              command: 'npx',
+              args: ['-y', 'mcp-remote', mcpUrl, '--header', `Authorization: ${bearer}`],
+            },
           },
         },
         null,
         2,
       )
     case 'cli':
-      // Claude-Code-CLI: HTTP-Transport mit Auth-Header.
+      // Claude-Code-CLI: nativer HTTP-Transport mit Auth-Header (kein mcp-remote noetig).
       return `claude mcp add --transport http who2be ${mcpUrl} --header "Authorization: ${bearer}"`
     case 'manual':
       return `URL: ${mcpUrl}\nHeader: Authorization: ${bearer}`

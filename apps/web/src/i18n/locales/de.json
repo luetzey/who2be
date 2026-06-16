@@ -1554,7 +1554,7 @@
       "ariaLabel": "MCP-Konfiguration",
       "copyButton": "Konfiguration kopieren",
       "format": {
-        "json": "JSON (mcpServers)",
+        "json": "JSON (Claude Desktop / Cursor)",
         "cli": "Claude Code (CLI)",
         "manual": "URL + Header",
         "prompt": "Prompt-Snippet"

@@ -5,12 +5,17 @@ import { buildMcpConfig } from './mcpConfig'
 const input = { mcpUrl: 'https://mcp.example.com/mcp', token: 'w2b_secret' }
 
 describe('buildMcpConfig', () => {
-  it('JSON: valider mcpServers-Block mit URL + Bearer-Header', () => {
+  it('JSON: mcp-remote-stdio-Bruecke mit URL + Bearer-Header', () => {
     const parsed = JSON.parse(buildMcpConfig('json', input))
     expect(parsed.mcpServers.who2be).toEqual({
-      type: 'http',
-      url: 'https://mcp.example.com/mcp',
-      headers: { Authorization: 'Bearer w2b_secret' },
+      command: 'npx',
+      args: [
+        '-y',
+        'mcp-remote',
+        'https://mcp.example.com/mcp',
+        '--header',
+        'Authorization: Bearer w2b_secret',
+      ],
     })
   })
 

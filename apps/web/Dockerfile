@@ -18,12 +18,17 @@ COPY apps/web/ ./
 ARG VITE_API_BASE_URL
 ARG VITE_SUPABASE_URL
 ARG VITE_SUPABASE_ANON_KEY
+# Optional: expliziter MCP-Endpoint fuer die Copy-Config. Leer → aus
+# VITE_API_BASE_URL abgeleitet (api.→mcp.). Lokal sinnvoll der direkte
+# mcp-http-Port (mcp-remote akzeptiert http nur fuer 127.0.0.1/localhost).
+ARG VITE_MCP_URL=
 # Edition-Flag (ADR-0029): Default `onprem` → Billing-UI wird aus dem Bundle
 # tree-shaked. Cloud-Build setzt VITE_WHO2BE_EDITION=cloud.
 ARG VITE_WHO2BE_EDITION=onprem
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL \
     VITE_SUPABASE_URL=$VITE_SUPABASE_URL \
     VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY \
+    VITE_MCP_URL=$VITE_MCP_URL \
     VITE_WHO2BE_EDITION=$VITE_WHO2BE_EDITION
 
 RUN npm run build
