@@ -117,10 +117,63 @@ Playbook (nicht die Seed-Playbooks). Damit ist OAuth-Login + Agent-Bindung +
 Tool-Surface + serverseitiges Read-Scoping end-to-end bewiesen — verifiziert vom
 LLM.
 
+## 9. Auto-Deploy bei jedem Push (CD)
+
+Ziel: `git push` auf `main` → Dokploy baut + startet die neue Version
+automatisch. **Funktioniert unabhängig von GitHub Actions** — Dokploy empfängt
+den Push-Webhook direkt von GitHub und baut selbst (die tote CI ist irrelevant).
+
+### Variante A — GitHub-App (empfohlen)
+
+1. Dokploy → **Settings → Git → GitHub → Create GitHub App** (bzw. „Connect").
+   Dokploy leitet zu GitHub; **App installieren** und Zugriff auf
+   `luetzey/who2be` gewähren.
+2. Im Compose-Service → **General/Provider**: Source von „Git URL" auf den
+   verbundenen **GitHub-Provider** umstellen, Repo `luetzey/who2be`, Branch
+   `main`, Compose-Path `deploy/dokploy/docker-compose.yml`.
+3. Im Service den Schalter **Auto Deploy** aktivieren.
+
+Damit registriert Dokploy automatisch den Webhook; jeder Push auf `main` löst
+einen Rebuild + Restart aus.
+
+### Variante B — Generischer Webhook (ohne GitHub-App)
+
+1. Im Compose-Service die **Webhook-URL** kopieren (Tab „Deployments" bzw.
+   „General" → „Webhook URL").
+2. GitHub → Repo **Settings → Webhooks → Add webhook**:
+   - **Payload URL:** die Dokploy-Webhook-URL
+   - **Content type:** `application/json`
+   - **Events:** „Just the push event"
+   - **Active** anhaken.
+3. Im Service **Auto Deploy** aktivieren.
+
+### Testen
+
+```bash
+git commit --allow-empty -m "chore: trigger dokploy redeploy" && git push origin main
+```
+In Dokploy unter **Deployments** läuft sofort ein neuer Build an. Logs zeigen
+`db → migrate → auth → api → web → mcp-http`.
+
+### Hinweise
+
+- **Branch-Filter:** Auto-Deploy feuert nur für den konfigurierten Branch
+  (`main`). Feature-Branches lösen nichts aus. Tag-/Release-basiertes Deployen
+  ist nicht der Standard — dafür bräuchte es einen eigenen Webhook-Filter.
+- **Build-Last:** Jeder Push baut die Images neu (Docker-Layer-Cache greift, der
+  Web-Build bleibt der schwerste Schritt). Auf kleinen Boxen Swap aktivieren.
+- **Migrationen** laufen bei jedem Deploy (idempotent). Kurzer Restart-Downtime
+  beim Compose-Redeploy ist für Staging ok.
+- **Secrets bleiben in Dokploy** (Environment) — nicht im Repo. Ein Push ändert
+  nur den Code, nicht die Env.
+
 ## Troubleshooting
 
 - **`mcp.<DOMAIN>` 502** → der `mcp-http`-Dienst läuft nicht / Domain falsch
   gemappt. Dokploy-Logs prüfen.
+- **Push löst keinen Deploy aus** → „Auto Deploy" aus, falscher Branch, oder der
+  Webhook in GitHub liefert nicht aus (Repo → Settings → Webhooks → „Recent
+  Deliveries" prüfen; muss `2xx` von Dokploy zeigen).
 - **Consent endet mit Fehler** → API-Logs in Dokploy; On-Prem (Owner-DB) trifft
   der RLS-Pfad nicht.
 - **Web zeigt auf localhost** → `VITE_*`-Build-Args nicht gesetzt: Web neu
