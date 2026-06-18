@@ -200,11 +200,20 @@ curl -fsS -H 'Accept: text/event-stream' \
   https://mcp.${DOMAIN}/mcp/ -m 5 | head
 ```
 
-Auth: derselbe Bearer-Token wie die REST-API (`WHO2BE_API_TOKEN`, beziehbar
-ueber `/v1/tokens` in den Workspace-Settings). Caddy reicht `Authorization`
-unveraendert weiter; der MCP-Server verwendet ihn aktuell als globalen
-Server-Token. Per-Request-Auth-Forwarding ist ADR-0034 §"Multi-Tenant"
-Followup.
+Auth: **per-Request-Bearer** (ADR-0034 Multi-Tenant). Caddy reicht
+`Authorization` unveraendert weiter; der MCP-Server wertet pro Request den
+mitgeschickten, agent-gebundenen `w2b_`-Token aus (`/v1/tokens` in den
+Workspace-Settings) — jede Session agiert als ihr eigener, serverseitig
+gescopter Agent. Kein globaler Server-Token mehr.
+
+**OAuth-Remote-MCP-Connector (ADR-0036).** Mit aktivem `--profile mcp-http`
+ist der MCP-Server zugleich OAuth-2.1-Resource-Server: ein LLM-Client
+(Claude/ChatGPT) verbindet sich per `https://mcp.${DOMAIN}/mcp` ueber
+Browser-Login + Agent-Wahl — ohne Token-Copy-Paste. Voraussetzung ist nur, dass
+`api.${DOMAIN}` (Authorization-Server), `app.${DOMAIN}` (Consent-Seite) und
+`mcp.${DOMAIN}` erreichbar sind; die OAuth-URLs leiten sich im Compose aus
+`DOMAIN` ab (keine eigenen Vars). Discovery laeuft automatisch ueber die
+Protected-Resource-Metadata des MCP-Servers.
 
 ## Security-Header / Proxy-Headers
 

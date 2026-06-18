@@ -20,6 +20,9 @@ _Stand: 2026-06-16_
   `.claude/context/`).
 - Lokale Verifikation grün: ruff, mypy strict, Web (lint/tsc/387 Tests/build),
   **gesamte pytest-Suite grün (765 passed, 0 failed)** gegen eine Wegwerf-Postgres.
+- **Deploy verdrahtet:** `deploy/hetzner` (api + mcp-http) trägt die OAuth-Env
+  (aus `DOMAIN` abgeleitet); README/`.env.example` aktualisiert. Feature greift
+  damit im echten Cloud/On-Prem-Deploy (Caddy `api./app./mcp.` + `--profile mcp-http`).
 - **OAuth-Smoke beide Editionen grün** (`scripts/oauth_smoke.sh onprem|cloud`,
   Doku `docs/oauth-smoke.md`): voller Flow gegen echten API+MCP-Prozess, Cloud
   als `who2be_app` (RLS aktiv). Fand + fixte einen Cloud-Bug: fehlende
