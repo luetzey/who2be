@@ -51,6 +51,7 @@ import type {
   Token,
   TokenCreated,
   TokenInput,
+  TokenRenameInput,
   VersionDiff,
   VersionStatus,
   Workspace,
@@ -226,8 +227,10 @@ export interface Api {
   // liefert das Endpoint mit Track A; bis dahin antwortet es 404 — der
   // TagInput-Konsument faengt das als leeres Vorschlag-Set ab.
   listPlaybookTags: () => Promise<string[]>
-  listTokens: () => Promise<Token[]>
+  listTokens: (filters?: { agentId?: string }) => Promise<Token[]>
   createToken: (input: TokenInput) => Promise<TokenCreated>
+  renameToken: (id: string, input: TokenRenameInput) => Promise<Token>
+  rotateToken: (id: string) => Promise<TokenCreated>
   revokeToken: (id: string) => Promise<void>
   getDashboard: (page?: number) => Promise<DashboardData>
   transitionPersonaVersion: (
@@ -424,12 +427,23 @@ export function createApi(token: string, workspaceId: string): Api {
     listPlaybookVersions: (id) =>
       request<PlaybookVersion[]>(token, `${ws}/playbooks/${id}/versions`),
     listPlaybookTags: () => request<string[]>(token, `${ws}/playbooks/tags`),
-    listTokens: () => request<Token[]>(token, `${ws}/tokens`),
+    listTokens: (filters) =>
+      request<Token[]>(
+        token,
+        `${ws}/tokens${filters?.agentId !== undefined ? `?agent_id=${filters.agentId}` : ''}`,
+      ),
     createToken: (input) =>
       request<TokenCreated>(token, `${ws}/tokens`, {
         method: 'POST',
         body: JSON.stringify(input),
       }),
+    renameToken: (id, input) =>
+      request<Token>(token, `${ws}/tokens/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      }),
+    rotateToken: (id) =>
+      request<TokenCreated>(token, `${ws}/tokens/${id}/rotate`, { method: 'POST' }),
     revokeToken: (id) =>
       request<void>(token, `${ws}/tokens/${id}`, { method: 'DELETE' }),
     getDashboard: (page) =>

@@ -87,11 +87,10 @@ class TokenService:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Ein Token darf keine hoehere Rolle als sein Ersteller haben.",
             )
-        # Optionale Agent-Bindung: der Agent muss im selben Workspace leben. Der
+        # Pflicht-Agent-Bindung: der Agent muss im selben Workspace leben. Der
         # Single-Column-FK auf `agent.id` garantiert nur Existenz, nicht die
         # Workspace-Zugehoerigkeit — die pruefen wir hier vor dem INSERT.
-        if data.agent_id is not None:
-            await self._assert_agent_in_workspace(ctx.workspace_id, data.agent_id)
+        await self._assert_agent_in_workspace(ctx.workspace_id, data.agent_id)
         plaintext = new_token()
         stored = await self._repo.insert(
             ctx.workspace_id,
@@ -111,7 +110,7 @@ class TokenService:
                 detail={
                     "name": data.name,
                     "role": role.value,
-                    "agent_id": str(data.agent_id) if data.agent_id is not None else None,
+                    "agent_id": str(data.agent_id),
                 },
             )
         return TokenCreated(**stored.model_dump(), token=plaintext)
@@ -130,6 +129,74 @@ class TokenService:
             tail = items[-1]
             return items, encode_cursor(tail.created_at, tail.id)
         return rows, None
+
+    async def list_by_agent(
+        self,
+        ctx: WorkspaceContext,
+        agent_id: UUID,
+        limit: int,
+        cursor: tuple[datetime, UUID] | None,
+    ) -> tuple[list[TokenRead], str | None]:
+        """Listet die Tokens eines bestimmten Agenten (Agent-Konfig-Sektion)."""
+        require_role(ctx, WorkspaceRole.editor)
+        self._deny_agent_bound(ctx)
+        await self._assert_agent_in_workspace(ctx.workspace_id, agent_id)
+        rows = await self._repo.list_by_agent(ctx.workspace_id, agent_id, limit + 1, cursor)
+        if len(rows) > limit:
+            items = rows[:limit]
+            tail = items[-1]
+            return items, encode_cursor(tail.created_at, tail.id)
+        return rows, None
+
+    async def rename(self, ctx: WorkspaceContext, token_id: UUID, name: str) -> TokenRead:
+        """Benennt einen Token um; 404, wenn er nicht (mehr) existiert.
+
+        Nur der Name ist editierbar — Secret/Rolle/Agent-Bindung bleiben (ADR-0023).
+        """
+        require_role(ctx, WorkspaceRole.editor)
+        self._deny_agent_bound(ctx)
+        renamed = await self._repo.rename(ctx.workspace_id, token_id, name)
+        if renamed is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Token nicht gefunden.",
+            )
+        if self._audit is not None and self._pool is not None:
+            await self._audit.record(
+                self._pool,
+                action="token.renamed",
+                actor_id=ctx.user_id,
+                workspace_id=ctx.workspace_id,
+                target=token_id,
+                detail={"name": name},
+            )
+        return renamed
+
+    async def rotate(self, ctx: WorkspaceContext, token_id: UUID) -> TokenCreated:
+        """Erzeugt ein neues Secret fuer einen bestehenden Token (in-place).
+
+        Das alte Secret wird sofort ungueltig; Name/Rolle/Agent-Bindung bleiben.
+        404, wenn der Token nicht existiert oder bereits widerrufen ist. Der neue
+        Klartext wird genau einmal zurueckgegeben.
+        """
+        require_role(ctx, WorkspaceRole.editor)
+        self._deny_agent_bound(ctx)
+        plaintext = new_token()
+        stored = await self._repo.rotate(ctx.workspace_id, token_id, hash_token(plaintext))
+        if stored is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Token nicht gefunden.",
+            )
+        if self._audit is not None and self._pool is not None:
+            await self._audit.record(
+                self._pool,
+                action="token.rotated",
+                actor_id=ctx.user_id,
+                workspace_id=ctx.workspace_id,
+                target=token_id,
+            )
+        return TokenCreated(**stored.model_dump(), token=plaintext)
 
     async def revoke(self, ctx: WorkspaceContext, token_id: UUID) -> None:
         """Widerruft einen eigenen Token; 404, wenn er nicht (mehr) existiert."""

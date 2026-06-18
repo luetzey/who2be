@@ -1,11 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useState } from 'react'
+import { type FormEvent, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 
 import { useApi } from '@/api/useApi'
+import { useAuthTokenContext } from '@/auth/auth-token-context'
 import { useSession } from '@/auth/session-context'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
 import { Container } from '@/components/layout/Container'
@@ -107,6 +108,8 @@ export function AccountPage() {
           </CardContent>
         </Card>
 
+        <OverrideTokenSection />
+
         <Card>
           <CardHeader>
             <CardTitle>{t('account.dataPrivacy.title')}</CardTitle>
@@ -127,6 +130,72 @@ export function AccountPage() {
         </Card>
       </Stack>
     </Container>
+  )
+}
+
+function maskTail(token: string): string {
+  return token.length <= 6 ? token : `…${token.slice(-6)}`
+}
+
+// Headless-/Dev-Override: ein manuell eingefuegter w2b_-Token wird fuer
+// API-Aufrufe genutzt (z. B. ohne eingeloggte Session). Frueher Teil der
+// Settings-Token-Seite; dort entfernt (Token-Verwaltung lebt jetzt am Agenten).
+function OverrideTokenSection() {
+  const { t } = useTranslation('tokens')
+  const { overrideToken, setOverrideToken } = useAuthTokenContext()
+  const [overrideInput, setOverrideInput] = useState('')
+
+  function handleActivate(event: FormEvent) {
+    event.preventDefault()
+    if (overrideInput === '') {
+      return
+    }
+    setOverrideToken(overrideInput)
+    setOverrideInput('')
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t('override.title')}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Stack gap="md">
+          <p className="text-sm text-muted-foreground">{t('override.description')}</p>
+          <p className="text-sm">
+            {t('override.statusLabel')}{' '}
+            {overrideToken === null
+              ? t('override.statusNone')
+              : t('override.statusActive', { tail: maskTail(overrideToken) })}
+          </p>
+          <form onSubmit={handleActivate} className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="override-token">{t('override.inputLabel')}</Label>
+              <Input
+                id="override-token"
+                type="password"
+                value={overrideInput}
+                onChange={(event) => setOverrideInput(event.target.value)}
+                placeholder="w2b_..."
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" disabled={overrideInput === ''}>
+                {t('common:actions.activate')}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setOverrideToken(null)}
+                disabled={overrideToken === null}
+              >
+                {t('override.remove')}
+              </Button>
+            </div>
+          </form>
+        </Stack>
+      </CardContent>
+    </Card>
   )
 }
 

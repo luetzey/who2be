@@ -1,4 +1,4 @@
-import { Building2, KeyRound, Settings2, User, Users } from 'lucide-react'
+import { Building2, Settings2, User, Users } from 'lucide-react'
 import type { ComponentType, SVGProps } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -14,15 +14,14 @@ interface SettingsNavItem {
   adminOnly?: boolean
 }
 
-// Sub-Navigation der drei Spaces (Konto / Organisation / Workspace) plus die
-// Workspace-internen Bereiche Mitglieder + API-Tokens. Mitglieder ist
-// admin-only (ADR-0023) — Editor/Viewer würden ohnehin zurückgeworfen.
+// Sub-Navigation der drei Spaces (Konto / Organisation / Workspace) plus den
+// Workspace-internen Bereich Mitglieder (admin-only, ADR-0023). API-Tokens
+// werden direkt am Agenten verwaltet (kein eigener Settings-Eintrag mehr).
 const ITEMS: SettingsNavItem[] = [
   { to: '/settings/account', labelKey: 'nav.account', icon: User },
   { to: '/settings/org', labelKey: 'nav.org', icon: Building2 },
   { to: '/settings/workspace', labelKey: 'nav.workspace', icon: Settings2 },
   { to: '/settings/members', labelKey: 'nav.members', icon: Users, adminOnly: true },
-  { to: '/settings/tokens', labelKey: 'nav.tokens', icon: KeyRound },
 ]
 
 export function SettingsNav() {

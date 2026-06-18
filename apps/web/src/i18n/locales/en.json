@@ -1169,8 +1169,7 @@
       "account": "Account",
       "org": "Organization",
       "workspace": "Workspace",
-      "members": "Members",
-      "tokens": "API Tokens"
+      "members": "Members"
     },
     "account": {
       "title": "Account",
@@ -1525,21 +1524,42 @@
       "revoked": "· revoked {{date}}",
       "revoke": "Revoke"
     },
+    "agentSection": {
+      "title": "API tokens",
+      "description": "Tokens for this agent. Every token is bound to the agent and inherits its MCP tool policy (reads scoped, writes gated). The role independently governs REST mutations."
+    },
     "create": {
       "title": "Create new token",
       "submit": "Create",
       "nameRequired": "Name required.",
       "roleLabel": "Role",
-      "roleHint": "The token inherits at most your own role — higher permissions cannot be selected.",
-      "agentLabel": "Bind to agent (optional)",
-      "agentNone": "— no binding —",
-      "agentHint": "A bound token inherits the agent's MCP tool policy: writes are gated, reads scoped per policy."
+      "roleHint": "The token inherits at most your own role — higher permissions cannot be selected."
+    },
+    "rename": {
+      "action": "Rename",
+      "ariaLabel": "New token name"
+    },
+    "rotate": {
+      "action": "Rotate"
     },
     "reveal": {
       "title": "New token — copy now",
       "body": "The plaintext is shown exactly once. After closing it cannot be retrieved again.",
       "ariaLabel": "Plaintext token",
       "copyButton": "Copy to clipboard"
+    },
+    "mcp": {
+      "title": "MCP configuration",
+      "label": "Format",
+      "ariaLabel": "MCP configuration",
+      "copyButton": "Copy configuration",
+      "format": {
+        "json": "JSON (Claude Desktop / Cursor)",
+        "cli": "Claude Code (CLI)",
+        "manual": "URL + header",
+        "prompt": "Prompt snippet"
+      },
+      "promptTemplate": "You have access to the Who2Be MCP server (streamable HTTP).\nEndpoint: {{url}}\nAuthorization: Bearer {{token}}\n\nAvailable tools: get_persona, list_playbooks, list_triggers, fetch_playbook, list_resources, fetch_resource, fetch_agent (write tools depending on agent policy).\nUse list_triggers/list_playbooks/get_persona to find the right playbook for the task, load it via fetch_playbook and follow its steps."
     },
     "override": {
       "title": "Activate headless token",

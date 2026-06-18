@@ -1169,8 +1169,7 @@
       "account": "Konto",
       "org": "Organisation",
       "workspace": "Workspace",
-      "members": "Mitglieder",
-      "tokens": "API-Tokens"
+      "members": "Mitglieder"
     },
     "account": {
       "title": "Konto",
@@ -1525,21 +1524,42 @@
       "revoked": "· widerrufen {{date}}",
       "revoke": "Widerrufen"
     },
+    "agentSection": {
+      "title": "API-Tokens",
+      "description": "Tokens für diesen Agenten. Jeder Token ist an den Agenten gebunden und erbt seine MCP-Tool-Policy (Lesezugriffe gescoped, Schreibrechte gegated). Die Rolle steuert davon unabhängig die REST-Mutationen."
+    },
     "create": {
       "title": "Neuen Token anlegen",
       "submit": "Anlegen",
       "nameRequired": "Name erforderlich.",
       "roleLabel": "Rolle",
-      "roleHint": "Der Token erhält höchstens deine eigene Rolle — höhere Rechte sind nicht wählbar.",
-      "agentLabel": "An Agenten binden (optional)",
-      "agentNone": "— keine Bindung —",
-      "agentHint": "Ein gebundener Token erbt die MCP-Tool-Policy des Agenten: Schreibrechte werden gegated, Lesezugriffe gemäß Policy gescoped."
+      "roleHint": "Der Token erhält höchstens deine eigene Rolle — höhere Rechte sind nicht wählbar."
+    },
+    "rename": {
+      "action": "Umbenennen",
+      "ariaLabel": "Neuer Token-Name"
+    },
+    "rotate": {
+      "action": "Rotieren"
     },
     "reveal": {
       "title": "Neuer Token — jetzt kopieren",
       "body": "Der Klartext wird genau einmal angezeigt. Nach dem Schließen ist er nicht mehr abrufbar.",
       "ariaLabel": "Klartext-Token",
       "copyButton": "In Zwischenablage kopieren"
+    },
+    "mcp": {
+      "title": "MCP-Konfiguration",
+      "label": "Format",
+      "ariaLabel": "MCP-Konfiguration",
+      "copyButton": "Konfiguration kopieren",
+      "format": {
+        "json": "JSON (Claude Desktop / Cursor)",
+        "cli": "Claude Code (CLI)",
+        "manual": "URL + Header",
+        "prompt": "Prompt-Snippet"
+      },
+      "promptTemplate": "Du hast Zugriff auf den Who2Be-MCP-Server (Streamable-HTTP).\nEndpoint: {{url}}\nAuthorization: Bearer {{token}}\n\nVerfügbare Tools: get_persona, list_playbooks, list_triggers, fetch_playbook, list_resources, fetch_resource, fetch_agent (Schreib-Tools je nach Agent-Policy).\nNutze list_triggers/list_playbooks/get_persona, um das passende Playbook für die Aufgabe zu finden, lade es per fetch_playbook und folge seinen Schritten."
     },
     "override": {
       "title": "Headless-Token aktivieren",

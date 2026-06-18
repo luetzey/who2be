@@ -498,5 +498,15 @@
     "method": "DELETE",
     "path": "/v1/workspaces/{workspace_id}/tokens/{token_id}",
     "operationId": "revoke_token_v1_workspaces__workspace_id__tokens__token_id__delete"
+  },
+  {
+    "method": "PATCH",
+    "path": "/v1/workspaces/{workspace_id}/tokens/{token_id}",
+    "operationId": "rename_token_v1_workspaces__workspace_id__tokens__token_id__patch"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/tokens/{token_id}/rotate",
+    "operationId": "rotate_token_v1_workspaces__workspace_id__tokens__token_id__rotate_post"
   }
 ]

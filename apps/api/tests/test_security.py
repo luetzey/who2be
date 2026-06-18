@@ -74,8 +74,25 @@ class FakeTokenRepository:
     ) -> list[TokenRead]:
         raise NotImplementedError
 
+    async def list_by_agent(
+        self,
+        workspace_id: UUID,
+        agent_id: UUID,
+        limit: int,
+        after: tuple[datetime, UUID] | None,
+    ) -> list[TokenRead]:
+        raise NotImplementedError
+
     async def fetch_auth_by_hash(self, token_hash: str) -> TokenAuthRow | None:
         return self._auth_by_hash.get(token_hash)
+
+    async def rename(self, workspace_id: UUID, token_id: UUID, name: str) -> TokenRead | None:
+        raise NotImplementedError
+
+    async def rotate(
+        self, workspace_id: UUID, token_id: UUID, new_hash: str
+    ) -> TokenRead | None:
+        raise NotImplementedError
 
     async def revoke(self, workspace_id: UUID, token_id: UUID) -> bool:
         raise NotImplementedError

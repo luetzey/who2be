@@ -9,7 +9,13 @@ from who2be_models import TokenCreate, TokenCreated, TokenRead, WorkspaceRole
 
 def test_create_requires_non_empty_name() -> None:
     with pytest.raises(ValidationError):
-        TokenCreate(name="")
+        TokenCreate(name="", agent_id=uuid4())
+
+
+def test_create_requires_agent_id() -> None:
+    # Pflicht-Bindung: ohne agent_id ist ein Token nicht erstellbar (secure by default).
+    with pytest.raises(ValidationError):
+        TokenCreate(name="agent")  # type: ignore[call-arg]
 
 
 def test_read_has_no_secret_fields() -> None:
@@ -33,7 +39,7 @@ def test_read_allows_null_usage_timestamps() -> None:
 
 def test_create_role_defaults_to_none() -> None:
     # role=None signalisiert dem Service "Snapshot der Ersteller-Rolle".
-    assert TokenCreate(name="agent").role is None
+    assert TokenCreate(name="agent", agent_id=uuid4()).role is None
 
 
 def test_created_exposes_plaintext_token_once() -> None:

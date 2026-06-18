@@ -25,10 +25,24 @@ class TokenCreate(BaseModel):
 
     name: str = Field(min_length=1, max_length=200)
     role: WorkspaceRole | None = None
-    # Optionale Bindung an einen Agenten: ist sie gesetzt, setzt das Backend die
-    # MCP-Tool-Policy dieses Agenten bei jedem Aufruf des Tokens durch (Writes
-    # gated, Reads gescoped). `None` = ungebundener Token (nur Rollen-Gate).
-    agent_id: UUID | None = None
+    # Pflicht-Bindung an einen Agenten: das Backend setzt die MCP-Tool-Policy
+    # dieses Agenten bei jedem Aufruf des Tokens durch (Writes gated, Reads
+    # gescoped). Ungebundene Tokens sind nicht mehr erlaubt — sie wuerden das
+    # Read-Scoping umgehen (secure by default). Fehlt `agent_id` im Body, liefert
+    # der API-Layer ein 422.
+    agent_id: UUID
+
+
+class TokenRename(BaseModel):
+    """Eingabe fuer `PATCH /v1/tokens/{id}` — nur der Name ist editierbar.
+
+    Secret, Rolle und Agent-Bindung bleiben bewusst unveraenderlich (ADR-0023-
+    Snapshot). Fuer ein neues Secret gibt es `POST /v1/tokens/{id}/rotate`.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=200)
 
 
 class TokenRead(BaseModel):

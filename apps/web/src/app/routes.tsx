@@ -67,11 +67,6 @@ const ResourceDetailPage = lazy(() =>
     default: mod.ResourceDetailPage,
   })),
 )
-const SettingsTokensPage = lazy(() =>
-  import('@/features/tokens/pages/SettingsTokensPage').then((mod) => ({
-    default: mod.SettingsTokensPage,
-  })),
-)
 const MembersPage = lazy(() =>
   import('@/features/settings/pages/MembersPage').then((mod) => ({
     default: mod.MembersPage,
@@ -282,10 +277,6 @@ export function RouterRoot() {
                   <Route
                     path="/w/:workspaceId/settings/members"
                     element={<MembersPage />}
-                  />
-                  <Route
-                    path="/w/:workspaceId/settings/tokens"
-                    element={<SettingsTokensPage />}
                   />
                 </Route>
                 <Route

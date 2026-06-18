@@ -242,8 +242,13 @@ export interface TokenInput {
   // Phase 2.3 — optionaler Rollen-Snapshot. Bleibt weg, solange die Rolle
   // unbekannt ist (Service defaultet dann auf die Rolle des Erstellers).
   role?: WorkspaceRole
-  // Optionale Bindung an einen Agenten: der Token erbt dann dessen MCP-Tool-Policy.
-  agent_id?: string | null
+  // Pflicht-Bindung an einen Agenten (secure by default): der Token erbt dessen
+  // MCP-Tool-Policy. Ungebundene Tokens sind nicht mehr erlaubt.
+  agent_id: string
+}
+
+export interface TokenRenameInput {
+  name: string
 }
 
 // Phase 2.3-C — Multi-User pro Workspace. Spiegelt WorkspaceMemberRead /

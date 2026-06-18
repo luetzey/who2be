@@ -46,16 +46,20 @@ vi.mock('@/auth/session-context', () => ({
   }),
 }))
 
+import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
+
 import { AccountPage } from './AccountPage'
 
 function renderPage() {
   return render(
-    <MemoryRouter initialEntries={['/w/abc/settings/account']}>
-      <Routes>
-        <Route path="/w/abc/settings/account" element={<AccountPage />} />
-        <Route path="/login" element={<div>LOGIN</div>} />
-      </Routes>
-    </MemoryRouter>,
+    <AuthTokenProvider>
+      <MemoryRouter initialEntries={['/w/abc/settings/account']}>
+        <Routes>
+          <Route path="/w/abc/settings/account" element={<AccountPage />} />
+          <Route path="/login" element={<div>LOGIN</div>} />
+        </Routes>
+      </MemoryRouter>
+    </AuthTokenProvider>,
   )
 }
 

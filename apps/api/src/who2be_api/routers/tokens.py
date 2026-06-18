@@ -4,7 +4,7 @@ from typing import Annotated
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 
 from who2be_api.core.db import get_pool
 from who2be_api.core.pagination import DEFAULT_LIMIT, PageCursor, PageLimit
@@ -14,7 +14,7 @@ from who2be_api.repositories.audit_log_repository import PgAuditLogRepository
 from who2be_api.repositories.token_repository import PgTokenRepository
 from who2be_api.services.audit_service import AuditService
 from who2be_api.services.token_service import TokenService
-from who2be_models import TokenCreate, TokenCreated, TokenRead
+from who2be_models import TokenCreate, TokenCreated, TokenRead, TokenRename
 
 router = APIRouter(prefix="/tokens", tags=["tokens"])
 
@@ -47,11 +47,33 @@ async def list_tokens(
     response: Response,
     cursor: PageCursor,
     limit: PageLimit = DEFAULT_LIMIT,
+    agent_id: Annotated[UUID | None, Query()] = None,
 ) -> list[TokenRead]:
-    items, next_cursor = await service.list_all(ctx, limit, cursor)
+    # `agent_id` gesetzt → nur die Tokens dieses Agenten (Agent-Konfig-Sektion);
+    # ohne → alle Tokens des Workspaces.
+    if agent_id is not None:
+        items, next_cursor = await service.list_by_agent(ctx, agent_id, limit, cursor)
+    else:
+        items, next_cursor = await service.list_all(ctx, limit, cursor)
     if next_cursor is not None:
         response.headers["X-Next-Cursor"] = next_cursor
     return items
+
+
+@router.patch("/{token_id}")
+@limiter.limit(write_limit)
+async def rename_token(
+    request: Request, token_id: UUID, data: TokenRename, ctx: Ctx, service: Service
+) -> TokenRead:
+    return await service.rename(ctx, token_id, data.name)
+
+
+@router.post("/{token_id}/rotate")
+@limiter.limit(write_limit)
+async def rotate_token(
+    request: Request, token_id: UUID, ctx: Ctx, service: Service
+) -> TokenCreated:
+    return await service.rotate(ctx, token_id)
 
 
 @router.delete("/{token_id}", status_code=status.HTTP_204_NO_CONTENT)

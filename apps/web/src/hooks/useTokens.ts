@@ -10,3 +10,11 @@ export function useTokens() {
   const { data, loading, error, reload } = useListData<Token>(loader)
   return { tokens: data, loading, error, reload }
 }
+
+/** Tokens eines einzelnen Agenten (Agent-Konfig-Sektion). */
+export function useAgentTokens(agentId: string) {
+  const api = useApi()
+  const loader = useCallback(() => api.listTokens({ agentId }), [api, agentId])
+  const { data, loading, error, reload } = useListData<Token>(loader)
+  return { tokens: data, loading, error, reload }
+}
