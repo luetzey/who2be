@@ -60,3 +60,21 @@ CREATE TABLE IF NOT EXISTS oauth_refresh_token (
 
 CREATE INDEX IF NOT EXISTS oauth_refresh_token_api_token_idx
     ON oauth_refresh_token (api_token_id);
+
+-- Grants fuer die Cloud-App-Rolle `who2be_app` (NOBYPASSRLS, Migration 0036).
+-- Ohne diese Grants laeuft der OAuth-Flow on-prem (Owner) zwar, scheitert in der
+-- Cloud aber mit `permission denied` — die neuen Tabellen entstanden NACH dem
+-- Sammel-Grant in 0036. Die OAuth-Tabellen sind NICHT RLS-isoliert (control-
+-- plane: Clients sind global, Codes/Refresh single-use + sha256-gehasht).
+-- Guard auf pg_roles, damit On-Prem-DBs ohne die Rolle nicht scheitern.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'who2be_app') THEN
+        GRANT SELECT, INSERT, UPDATE, DELETE ON
+            oauth_client,
+            oauth_authorization_code,
+            oauth_refresh_token
+        TO who2be_app;
+    END IF;
+END
+$$;

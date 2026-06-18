@@ -20,6 +20,10 @@ _Stand: 2026-06-16_
   `.claude/context/`).
 - Lokale Verifikation grün: ruff, mypy strict, Web (lint/tsc/387 Tests/build),
   MCP (85 Tests), API-OAuth/RS/Unit grün (gegen lokale Wegwerf-Postgres).
+- **OAuth-Smoke beide Editionen grün** (`scripts/oauth_smoke.sh onprem|cloud`,
+  Doku `docs/oauth-smoke.md`): voller Flow gegen echten API+MCP-Prozess, Cloud
+  als `who2be_app` (RLS aktiv). Fand + fixte einen Cloud-Bug: fehlende
+  `who2be_app`-GRANTs auf den OAuth-Tabellen (Migration 0049 ergänzt).
 
 ## In Arbeit
 
