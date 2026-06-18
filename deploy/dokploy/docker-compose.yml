@@ -1,0 +1,180 @@
+# Who2Be — kombinierter Stack fuer Dokploy (On-Prem-Edition, Staging-E2E).
+#
+# Anders als deploy/hetzner/* (zwei Compose-Files + Caddy + externe Netze) ist
+# das HIER EIN Stack ohne Caddy: Dokploys Traefik uebernimmt Routing + TLS.
+# Die vier Subdomains mappst du in der Dokploy-UI auf die Dienste:
+#   api.<DOMAIN>      -> api:8000        (OAuth-Authorization-Server)
+#   app.<DOMAIN>      -> web:80          (Consent-UI)
+#   supabase.<DOMAIN> -> auth-gateway:9999
+#   mcp.<DOMAIN>      -> mcp-http:8765   (OAuth-Resource-Server)
+#
+# Images werden AUS DEM QUELLCODE gebaut (die ghcr-:latest-Images sind veraltet
+# und das Web-Image ist domain-fest zur Build-Zeit). Anleitung:
+# docs/oauth-e2e-dokploy.md.
+#
+# Pflicht-Env (in Dokploy → Environment): DOMAIN, POSTGRES_PASSWORD, JWT_SECRET
+# (>=32 Zeichen), VITE_SUPABASE_ANON_KEY (JWT role=anon, signiert mit JWT_SECRET
+# via scripts/gen_test_jwt.py). Fuer einen Staging-Smoke ohne SMTP:
+# GOTRUE_MAILER_AUTOCONFIRM=true.
+
+services:
+  db:
+    image: supabase/postgres:15.1.1.78
+    environment:
+      POSTGRES_HOST: /var/run/postgresql
+      POSTGRES_DB: postgres
+      POSTGRES_USER: supabase_admin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      # Legt die Supabase-Rollen an (supabase_auth_admin, anon, authenticated …).
+      - ../hetzner/supabase/init:/docker-entrypoint-initdb.d:ro
+    networks: [who2be]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U supabase_admin -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  auth:
+    image: supabase/gotrue:v2.158.1
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: "9999"
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db:5432/postgres?search_path=auth
+      GOTRUE_SITE_URL: https://app.${DOMAIN}
+      GOTRUE_URI_ALLOW_LIST: https://app.${DOMAIN},https://app.${DOMAIN}/*
+      GOTRUE_DISABLE_SIGNUP: "false"
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_ISSUER: https://supabase.${DOMAIN}/auth/v1
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      # Staging-Smoke: Autoconfirm AN ⇒ kein SMTP noetig (Signups sofort nutzbar).
+      # Fuer Prod auf false + GOTRUE_SMTP_* setzen.
+      GOTRUE_MAILER_AUTOCONFIRM: ${GOTRUE_MAILER_AUTOCONFIRM:-true}
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: /auth/callback
+      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: /auth/callback
+      GOTRUE_MAILER_URLPATHS_RECOVERY: /onboarding/set-password
+      GOTRUE_MAILER_URLPATHS_INVITE: /invitations
+      API_EXTERNAL_URL: https://supabase.${DOMAIN}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [who2be]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9999/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  auth-gateway:
+    image: nginx:1.27-alpine
+    volumes:
+      - ../hetzner/supabase/auth-gateway.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      auth:
+        condition: service_healthy
+    networks: [who2be, dokploy-network]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9999/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    command: ["who2be-migrate"]
+    environment:
+      DATABASE_URL: postgresql://supabase_admin:${POSTGRES_PASSWORD}@db:5432/postgres
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [who2be]
+    restart: "no"
+
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://supabase_admin:${POSTGRES_PASSWORD}@db:5432/postgres
+      JWT_SECRET: ${JWT_SECRET}
+      SUPABASE_URL: https://supabase.${DOMAIN}
+      CORS_ORIGINS: https://app.${DOMAIN}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      WHO2BE_EDITION: onprem
+      # OAuth-Remote-MCP-Connector (ADR-0036) — aus DOMAIN abgeleitet.
+      OAUTH_ISSUER_URL: https://api.${DOMAIN}
+      OAUTH_CONSENT_URL: https://app.${DOMAIN}/oauth/consent
+      MCP_RESOURCE_URL: https://mcp.${DOMAIN}/mcp
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks: [who2be, dokploy-network]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  web:
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+      # Vite verdrahtet die URLs zur BUILD-Zeit — deshalb als build args (nicht
+      # environment). Ohne diese zeigt die Consent-Seite auf localhost.
+      args:
+        VITE_API_BASE_URL: https://api.${DOMAIN}
+        VITE_SUPABASE_URL: https://supabase.${DOMAIN}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
+        VITE_MCP_URL: https://mcp.${DOMAIN}/mcp
+        VITE_WHO2BE_EDITION: onprem
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [who2be, dokploy-network]
+    restart: unless-stopped
+
+  mcp-http:
+    build:
+      context: ../..
+      dockerfile: apps/mcp/Dockerfile
+    environment:
+      WHO2BE_API_BASE_URL: http://api:8000
+      WHO2BE_LOG_FORMAT: ${LOG_FORMAT:-json}
+      WHO2BE_TRANSPORT: http
+      WHO2BE_HTTP_HOST: 0.0.0.0
+      WHO2BE_HTTP_PORT: "8765"
+      WHO2BE_HTTP_PATH: /mcp
+      # OAuth-Resource-Server (ADR-0036): PRM zeigt auf den AS, Resource = die
+      # eigene oeffentliche URL (Origin; FastMCP haengt WHO2BE_HTTP_PATH an).
+      WHO2BE_OAUTH_ISSUER_URL: https://api.${DOMAIN}
+      WHO2BE_MCP_PUBLIC_URL: https://mcp.${DOMAIN}
+    depends_on:
+      api:
+        condition: service_healthy
+    networks: [who2be, dokploy-network]
+    restart: unless-stopped
+
+networks:
+  who2be:
+    driver: bridge
+  # Dokploys eigenes Netz — Traefik erreicht darueber die Domain-Dienste. Vom
+  # Dokploy-Installer angelegt; Name ggf. mit `docker network ls | grep dokploy`
+  # pruefen und hier anpassen.
+  dokploy-network:
+    external: true
+
+volumes:
+  db-data:
