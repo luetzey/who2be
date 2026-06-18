@@ -93,6 +93,12 @@ def test_playbook_triggers_aggregates_dedup_and_isolates_per_workspace(
 
     try:
         with TestClient(app) as client:
+            # Onboarding-Seed legt Playbooks mit Triggern an → Baseline erfassen
+            # und das Delta pruefen (robust gegen Aenderungen am Seed-Inhalt).
+            baseline_names = {
+                item["trigger"] for item in client.get(f"{base}/triggers", headers=auth).json()
+            }
+
             # Drei Playbooks: zwei teilen sich "reset", "logout" ist exklusiv,
             # eines hat keine Trigger.
             create_resps = [
@@ -115,8 +121,12 @@ def test_playbook_triggers_aggregates_dedup_and_isolates_per_workspace(
             assert resp.status_code == 200, resp.text
             triggers = resp.json()
 
-            # Lexikografisch sortiert (callback, logout, reset).
-            assert [item["trigger"] for item in triggers] == ["callback", "logout", "reset"]
+            names = [item["trigger"] for item in triggers]
+            # Lexikografisch sortiert; Seed-Baseline + die eigenen Trigger,
+            # OHNE das fremde `spam` (reset/logout/callback kollidieren nicht
+            # mit Seed-Triggern).
+            assert names == sorted(names)
+            assert set(names) == baseline_names | {"callback", "logout", "reset"}
 
             by_trigger = {item["trigger"]: item["playbooks"] for item in triggers}
             assert {pb["name"] for pb in by_trigger["reset"]} == {"Reset-Mail", "Reset-Telefon"}
@@ -127,9 +137,11 @@ def test_playbook_triggers_aggregates_dedup_and_isolates_per_workspace(
             assert by_trigger["logout"][0]["name"] == "Reset-Mail"
             assert by_trigger["callback"][0]["name"] == "Reset-Telefon"
 
-            # Fremd-Workspace darf nicht durchschlagen.
+            # Fremd-Workspace (gleicher Seed) bekommt seine Baseline + `spam`,
+            # NICHT die Owner-Trigger.
             other_resp = client.get(f"{other_base}/triggers", headers=other_auth)
-            assert [item["trigger"] for item in other_resp.json()] == ["spam"]
+            other_names = {item["trigger"] for item in other_resp.json()}
+            assert other_names == baseline_names | {"spam"}
 
             # Nicht-Mitglied wird vor dem Lookup geblockt (403).
             assert client.get(f"{base}/triggers", headers=other_auth).status_code == 403
@@ -138,7 +150,12 @@ def test_playbook_triggers_aggregates_dedup_and_isolates_per_workspace(
 
 
 @pytest.mark.integration
-def test_playbook_triggers_empty_for_fresh_workspace(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_playbook_triggers_only_seed_baseline_for_fresh_workspace(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein frischer Workspace hat keine NUTZER-Playbooks, aber die vom Onboarding
+    geseedeten Builder-Playbooks tragen Trigger — die Aggregation ist daher die
+    Seed-Baseline (sortiert), nicht leer, und enthaelt keine Nutzer-Trigger."""
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
     _prepare_db()
@@ -152,6 +169,9 @@ def test_playbook_triggers_empty_for_fresh_workspace(monkeypatch: pytest.MonkeyP
         with TestClient(app) as client:
             resp = client.get(f"/v1/workspaces/{ws}/playbooks/triggers", headers=auth)
             assert resp.status_code == 200
-            assert resp.json() == []
+            names = [item["trigger"] for item in resp.json()]
+            assert names and names == sorted(names)
+            assert {"konsistenz", "drift"} <= set(names)  # bekannte Seed-Trigger
+            assert "reset" not in names  # keine Nutzer-Trigger
     finally:
         cleanup_workspaces([owner])

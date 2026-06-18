@@ -38,6 +38,14 @@ from who2be_models.links import (
 )
 from who2be_models.locale import DEFAULT_LOCALE, SUPPORTED_LOCALES, ContentLocale
 from who2be_models.me import MeOrganization, MeRead, MeWorkspace
+from who2be_models.oauth import (
+    OAuthClientRegistered,
+    OAuthClientRegistration,
+    OAuthConsentApprove,
+    OAuthConsentResult,
+    OAuthError,
+    OAuthTokenResponse,
+)
 from who2be_models.organization import OrganizationCreate, OrganizationRead
 from who2be_models.pagination import DEFAULT_LIMIT, MAX_LIMIT, decode_cursor, encode_cursor
 from who2be_models.persona import (
@@ -185,6 +193,12 @@ __all__ = [
     "SystemPromptTemplateRead",
     "SystemPromptTemplateUpdate",
     "SystemPromptTemplateVersionRead",
+    "OAuthClientRegistration",
+    "OAuthClientRegistered",
+    "OAuthConsentApprove",
+    "OAuthConsentResult",
+    "OAuthTokenResponse",
+    "OAuthError",
     "TokenCreate",
     "TokenCreated",
     "TokenRead",

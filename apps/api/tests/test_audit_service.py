@@ -101,6 +101,7 @@ class _FakeTokenRepo:
         token_hash: str,
         role: WorkspaceRole,
         agent_id: UUID | None = None,
+        expires_at: datetime | None = None,
     ) -> TokenRead:
         stored = TokenRead(
             id=uuid4(),

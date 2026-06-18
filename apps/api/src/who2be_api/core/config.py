@@ -58,6 +58,22 @@ class Settings(BaseSettings):
     # Basis-URL der Web-App fuer den Accept-Link in der Einladungs-Mail
     # (`{web_base_url}/invitations/{token}/accept`).
     web_base_url: str = "http://localhost:5173"
+    # --- OAuth-Remote-MCP-Connector (Authorization Server, ADR-0034-Folge) ---
+    # `oauth_issuer_url`: oeffentliche Basis-URL der API (= OAuth-Issuer, z.B.
+    # https://api.<domain>). `oauth_consent_url`: die Web-Consent-Seite.
+    # `mcp_resource_url`: kanonische MCP-Resource-URL (RFC 8707 audience).
+    oauth_issuer_url: str = Field(
+        default="http://localhost:8000",
+        validation_alias=AliasChoices("OAUTH_ISSUER_URL", "oauth_issuer_url"),
+    )
+    oauth_consent_url: str = Field(
+        default="http://localhost:5173/oauth/consent",
+        validation_alias=AliasChoices("OAUTH_CONSENT_URL", "oauth_consent_url"),
+    )
+    mcp_resource_url: str = Field(
+        default="http://127.0.0.1:8765/mcp",
+        validation_alias=AliasChoices("MCP_RESOURCE_URL", "mcp_resource_url"),
+    )
     cors_origins_raw: str = Field(
         default="http://localhost:5173",
         validation_alias=AliasChoices("CORS_ORIGINS", "cors_origins"),

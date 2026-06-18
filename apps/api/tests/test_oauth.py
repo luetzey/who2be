@@ -1,0 +1,445 @@
+"""Integrationstest fuer den OAuth-2.1-Authorization-Server (Remote-MCP-Connector).
+
+Deckt den vollen Flow ab — DCR → authorize → consent → token (Code + Refresh) —
+plus die Sicherheits-Invarianten: Open-Redirect-Choke-Point (unbekannter Client /
+Mismatch ⇒ 400 OHNE Redirect), PKCE-S256-Zwang, Code-Single-Use (Replay ⇒
+invalid_grant), Refresh-Rotation inkl. Replay-Detection und Access-Token-Expiry.
+
+Laeuft nur mit erreichbarer Datenbank; ohne DB werden die Tests uebersprungen.
+"""
+
+import asyncio
+import base64
+import hashlib
+import secrets
+from datetime import UTC, datetime, timedelta
+from urllib.parse import parse_qs, urlparse
+from uuid import UUID
+
+import asyncpg
+import jwt
+import pytest
+from fastapi.testclient import TestClient
+
+from who2be_api.core import security
+from who2be_api.core.config import Settings, get_settings
+from who2be_api.core.migrations import MIGRATIONS_DIR, apply_migrations
+from who2be_api.main import app
+from who2be_api.services import oauth_service
+from who2be_api.testing.workspace_setup import cleanup_workspaces, fresh_user_id, setup_workspace
+
+_TEST_SECRET = "integration-test-jwt-secret-padding-0123456789"
+_RESOURCE = "http://testserver/mcp"
+_REDIRECT = "https://claude.ai/api/mcp/auth_callback"
+
+
+def _db_reachable() -> bool:
+    async def _check() -> bool:
+        try:
+            conn = await asyncpg.connect(get_settings().database_url)
+        except (asyncpg.PostgresError, OSError):
+            return False
+        await conn.close()
+        return True
+
+    return asyncio.run(_check())
+
+
+def _prepare_db() -> None:
+    async def _run() -> None:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            await apply_migrations(conn, MIGRATIONS_DIR)
+        finally:
+            await conn.close()
+
+    asyncio.run(_run())
+
+
+def _agent_in(ws: UUID) -> UUID:
+    async def _run() -> UUID:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            agent_id: UUID | None = await conn.fetchval(
+                "SELECT id FROM agent WHERE workspace_id = $1 LIMIT 1", ws
+            )
+            assert agent_id is not None, "Seed-Agent fehlt"
+            return agent_id
+        finally:
+            await conn.close()
+
+    return asyncio.run(_run())
+
+
+def _token_expires_at(token_hash: str) -> datetime | None:
+    async def _run() -> datetime | None:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            value: datetime | None = await conn.fetchval(
+                "SELECT expires_at FROM api_token WHERE token_hash = $1", token_hash
+            )
+            return value
+        finally:
+            await conn.close()
+
+    return asyncio.run(_run())
+
+
+def _expire_token(token_hash: str) -> None:
+    async def _run() -> None:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            await conn.execute(
+                "UPDATE api_token SET expires_at = now() - interval '1 hour' "
+                "WHERE token_hash = $1",
+                token_hash,
+            )
+        finally:
+            await conn.close()
+
+    asyncio.run(_run())
+
+
+def _remove_member(ws: UUID, user_id: UUID) -> None:
+    async def _run() -> None:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            await conn.execute(
+                "DELETE FROM workspace_member WHERE workspace_id = $1 AND user_id = $2",
+                ws,
+                user_id,
+            )
+        finally:
+            await conn.close()
+
+    asyncio.run(_run())
+
+
+def _jwt(owner_id: UUID) -> str:
+    return jwt.encode(
+        {
+            "sub": str(owner_id),
+            "aud": "authenticated",
+            "role": "authenticated",
+            "exp": datetime.now(UTC) + timedelta(hours=1),
+        },
+        _TEST_SECRET,
+        algorithm="HS256",
+    )
+
+
+def _pkce() -> tuple[str, str]:
+    verifier = base64.urlsafe_b64encode(secrets.token_bytes(48)).rstrip(b"=").decode()
+    challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=")
+    return verifier, challenge.decode()
+
+
+def _settings() -> Settings:
+    return Settings(
+        jwt_secret=_TEST_SECRET,
+        mcp_resource_url=_RESOURCE,
+        oauth_consent_url="http://localhost:5173/oauth/consent",
+        oauth_issuer_url="http://testserver",
+    )
+
+
+def _register(client: TestClient) -> str:
+    resp = client.post(
+        "/oauth/register",
+        json={"redirect_uris": [_REDIRECT], "client_name": "Claude"},
+    )
+    assert resp.status_code == 201, resp.text
+    return str(resp.json()["client_id"])
+
+
+def _authorize_blob(client: TestClient, client_id: str, challenge: str) -> str:
+    resp = client.get(
+        "/oauth/authorize",
+        params={
+            "response_type": "code",
+            "client_id": client_id,
+            "redirect_uri": _REDIRECT,
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+            "resource": _RESOURCE,
+            "state": "xyz",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302, resp.text
+    location = resp.headers["location"]
+    blob = parse_qs(urlparse(location).query)["request"][0]
+    return blob
+
+
+def _consent_code(client: TestClient, blob: str, agent_id: str, jwt_auth: dict[str, str]) -> str:
+    resp = client.post(
+        "/oauth/consent",
+        json={"request": blob, "agent_id": agent_id, "approve": True},
+        headers=jwt_auth,
+    )
+    assert resp.status_code == 200, resp.text
+    redirect = resp.json()["redirect"]
+    params = parse_qs(urlparse(redirect).query)
+    assert params["state"] == ["xyz"]
+    return str(params["code"][0])
+
+
+@pytest.mark.integration
+def test_oauth_full_flow_and_security(monkeypatch: pytest.MonkeyPatch) -> None:
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: _settings())
+    monkeypatch.setattr(oauth_service, "get_settings", lambda: _settings())
+
+    owner_id = fresh_user_id()
+    ws = setup_workspace(owner_id)
+    agent_id = str(_agent_in(ws))
+    jwt_auth = {"Authorization": f"Bearer {_jwt(owner_id)}"}
+
+    try:
+        with TestClient(app) as client:
+            # --- Metadaten (RFC 8414) ---
+            meta = client.get("/.well-known/oauth-authorization-server").json()
+            assert meta["code_challenge_methods_supported"] == ["S256"]
+            assert meta["token_endpoint"].endswith("/oauth/token")
+
+            # --- DCR ---
+            client_id = _register(client)
+
+            # --- authorize: Open-Redirect-Choke-Point ---
+            verifier, challenge = _pkce()
+            # Unbekannter Client → 400 OHNE Redirect.
+            bad = client.get(
+                "/oauth/authorize",
+                params={
+                    "response_type": "code",
+                    "client_id": "oac_unknown",
+                    "redirect_uri": _REDIRECT,
+                    "code_challenge": challenge,
+                    "resource": _RESOURCE,
+                },
+                follow_redirects=False,
+            )
+            assert bad.status_code == 400
+            # Nicht registrierte redirect_uri → 400.
+            mism = client.get(
+                "/oauth/authorize",
+                params={
+                    "response_type": "code",
+                    "client_id": client_id,
+                    "redirect_uri": "https://evil.example/cb",
+                    "code_challenge": challenge,
+                    "resource": _RESOURCE,
+                },
+                follow_redirects=False,
+            )
+            assert mism.status_code == 400
+            # PKCE plain → 400.
+            plain = client.get(
+                "/oauth/authorize",
+                params={
+                    "response_type": "code",
+                    "client_id": client_id,
+                    "redirect_uri": _REDIRECT,
+                    "code_challenge": challenge,
+                    "code_challenge_method": "plain",
+                    "resource": _RESOURCE,
+                },
+                follow_redirects=False,
+            )
+            assert plain.status_code == 400
+
+            # --- authorize (gueltig) → consent → code ---
+            blob = _authorize_blob(client, client_id, challenge)
+            code = _consent_code(client, blob, agent_id, jwt_auth)
+
+            # --- token: authorization_code (PKCE) ---
+            tok = client.post(
+                "/oauth/token",
+                data={
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "redirect_uri": _REDIRECT,
+                    "client_id": client_id,
+                    "code_verifier": verifier,
+                },
+            )
+            assert tok.status_code == 200, tok.text
+            assert tok.headers["cache-control"] == "no-store"
+            payload = tok.json()
+            access = payload["access_token"]
+            refresh = payload["refresh_token"]
+            assert access.startswith("w2b_")
+            assert payload["expires_in"] == 3600
+            assert payload["token_type"] == "bearer"
+
+            # Access-Token ist agent-gebunden + hat expires_at.
+            assert _token_expires_at(security.hash_token(access)) is not None
+            api_auth = {"Authorization": f"Bearer {access}"}
+            assert client.get("/v1/me", headers=api_auth).status_code == 200
+
+            # --- Code-Replay → invalid_grant ---
+            replay = client.post(
+                "/oauth/token",
+                data={
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "redirect_uri": _REDIRECT,
+                    "client_id": client_id,
+                    "code_verifier": verifier,
+                },
+            )
+            assert replay.status_code == 400
+            assert replay.json()["error"] == "invalid_grant"
+
+            # --- Refresh-Rotation ---
+            r1 = client.post(
+                "/oauth/token",
+                data={
+                    "grant_type": "refresh_token",
+                    "refresh_token": refresh,
+                    "client_id": client_id,
+                },
+            )
+            assert r1.status_code == 200, r1.text
+            new_access = r1.json()["access_token"]
+            new_refresh = r1.json()["refresh_token"]
+            assert new_access != access
+            assert new_refresh != refresh
+            # Alter Access-Token ist durch Rotation widerrufen.
+            assert client.get("/v1/me", headers=api_auth).status_code == 401
+            # Neuer Access-Token funktioniert.
+            new_api_auth = {"Authorization": f"Bearer {new_access}"}
+            assert (
+                client.get("/v1/me", headers=new_api_auth).status_code == 200
+            )
+
+            # --- Refresh-Replay (alter Refresh) → invalid_grant + Kette gekillt ---
+            replay_refresh = client.post(
+                "/oauth/token",
+                data={
+                    "grant_type": "refresh_token",
+                    "refresh_token": refresh,
+                    "client_id": client_id,
+                },
+            )
+            assert replay_refresh.status_code == 400
+            assert replay_refresh.json()["error"] == "invalid_grant"
+            # Der aus dem konsumierten Refresh entstandene Access-Token ist widerrufen.
+            assert (
+                client.get("/v1/me", headers=new_api_auth).status_code == 401
+            )
+
+            # --- Access-Token-Expiry → 401 ---
+            verifier2, challenge2 = _pkce()
+            blob2 = _authorize_blob(client, client_id, challenge2)
+            code2 = _consent_code(client, blob2, agent_id, jwt_auth)
+            tok2 = client.post(
+                "/oauth/token",
+                data={
+                    "grant_type": "authorization_code",
+                    "code": code2,
+                    "redirect_uri": _REDIRECT,
+                    "client_id": client_id,
+                    "code_verifier": verifier2,
+                },
+            ).json()
+            access2 = tok2["access_token"]
+            auth2 = {"Authorization": f"Bearer {access2}"}
+            assert client.get("/v1/me", headers=auth2).status_code == 200
+            _expire_token(security.hash_token(access2))
+            assert client.get("/v1/me", headers=auth2).status_code == 401
+    finally:
+        cleanup_workspaces([owner_id])
+
+
+@pytest.mark.integration
+def test_oauth_refresh_revoked_when_user_deprovisioned(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Wird der User aus dem Workspace entfernt, schlaegt der Refresh fehl und die
+    ganze Token-Kette wird widerrufen (Refresh = Re-Authorization-Punkt)."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: _settings())
+    monkeypatch.setattr(oauth_service, "get_settings", lambda: _settings())
+
+    owner_id = fresh_user_id()
+    ws = setup_workspace(owner_id)
+    agent_id = str(_agent_in(ws))
+    jwt_auth = {"Authorization": f"Bearer {_jwt(owner_id)}"}
+
+    try:
+        with TestClient(app) as client:
+            client_id = _register(client)
+            verifier, challenge = _pkce()
+            blob = _authorize_blob(client, client_id, challenge)
+            code = _consent_code(client, blob, agent_id, jwt_auth)
+            tok = client.post(
+                "/oauth/token",
+                data={
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "redirect_uri": _REDIRECT,
+                    "client_id": client_id,
+                    "code_verifier": verifier,
+                },
+            ).json()
+            access, refresh = tok["access_token"], tok["refresh_token"]
+            api_auth = {"Authorization": f"Bearer {access}"}
+            assert client.get("/v1/me", headers=api_auth).status_code == 200
+
+            # User wird aus dem Workspace entfernt → Refresh muss scheitern.
+            _remove_member(ws, owner_id)
+            resp = client.post(
+                "/oauth/token",
+                data={
+                    "grant_type": "refresh_token",
+                    "refresh_token": refresh,
+                    "client_id": client_id,
+                },
+            )
+            assert resp.status_code == 400
+            assert resp.json()["error"] == "invalid_grant"
+            # Der aktive Access-Token der Kette ist mit-widerrufen.
+            assert client.get("/v1/me", headers=api_auth).status_code == 401
+    finally:
+        cleanup_workspaces([owner_id])
+
+
+@pytest.mark.integration
+def test_oauth_consent_rejects_non_member(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ein Nicht-Mitglied des Agent-Workspace darf keinen Code erhalten (403)."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: _settings())
+    monkeypatch.setattr(oauth_service, "get_settings", lambda: _settings())
+
+    owner_id = fresh_user_id()
+    stranger_id = fresh_user_id()
+    ws = setup_workspace(owner_id)
+    stranger_ws = setup_workspace(stranger_id)
+    agent_id = str(_agent_in(ws))
+    stranger_auth = {"Authorization": f"Bearer {_jwt(stranger_id)}"}
+
+    try:
+        with TestClient(app) as client:
+            client_id = _register(client)
+            _verifier, challenge = _pkce()
+            blob = _authorize_blob(client, client_id, challenge)
+            # Fremder User versucht, einen Agenten EINES ANDEREN Workspace zu binden.
+            resp = client.post(
+                "/oauth/consent",
+                json={"request": blob, "agent_id": agent_id, "approve": True},
+                headers=stranger_auth,
+            )
+            assert resp.status_code == 403
+    finally:
+        cleanup_workspaces([owner_id, stranger_id])
+        # stranger_ws nur referenziert, Cleanup raeumt via user_ids.
+        _ = stranger_ws

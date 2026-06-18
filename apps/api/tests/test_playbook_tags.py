@@ -93,6 +93,11 @@ def test_playbook_tags_distinct_sorted_and_workspace_scoped(
 
     try:
         with TestClient(app) as client:
+            # Neue Workspaces sind NICHT leer: der Onboarding-Seed legt 4
+            # Builder-Playbooks mit Tags an. Baseline dynamisch erfassen und das
+            # Delta pruefen — robust gegen Aenderungen am Seed-Inhalt.
+            baseline = client.get(f"{base}/tags", headers=auth).json()
+
             # Owner-Workspace: drei Playbooks mit ueberlappenden Tags + 1 ohne Tags.
             for tags in [["beta", "alpha"], ["beta", "gamma"], [], ["alpha"]]:
                 resp = client.post(
@@ -107,11 +112,13 @@ def test_playbook_tags_distinct_sorted_and_workspace_scoped(
 
             resp = client.get(f"{base}/tags", headers=auth)
             assert resp.status_code == 200, resp.text
-            assert resp.json() == ["alpha", "beta", "gamma"]
+            # Distinct + sortiert + workspace-scoped: Seed-Baseline plus eigene
+            # Tags, OHNE das fremde `delta`.
+            assert resp.json() == sorted(set(baseline) | {"alpha", "beta", "gamma"})
 
-            # Fremder Workspace bekommt nur seine eigenen Tags.
+            # Fremder Workspace (gleicher Seed) bekommt seine Baseline + `delta`.
             other_resp = client.get(f"{other_base}/tags", headers=other_auth)
-            assert other_resp.json() == ["delta"]
+            assert other_resp.json() == sorted(set(baseline) | {"delta"})
 
             # Nicht-Mitglied wird vor dem Lookup geblockt (403).
             assert client.get(f"{base}/tags", headers=other_auth).status_code == 403
@@ -120,7 +127,13 @@ def test_playbook_tags_distinct_sorted_and_workspace_scoped(
 
 
 @pytest.mark.integration
-def test_playbook_tags_empty_for_fresh_workspace(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_playbook_tags_only_seed_baseline_for_fresh_workspace(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein frischer Workspace hat keine NUTZER-Playbooks, aber die vom Onboarding
+    geseedeten Builder-Playbooks — die Tag-Liste ist daher die Seed-Baseline
+    (sortiert, distinct), nicht leer. Aendert sich der Seed, gehoert dieser Wert
+    mit angepasst."""
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
     _prepare_db()
@@ -134,6 +147,14 @@ def test_playbook_tags_empty_for_fresh_workspace(monkeypatch: pytest.MonkeyPatch
         with TestClient(app) as client:
             resp = client.get(f"/v1/workspaces/{ws}/playbooks/tags", headers=auth)
             assert resp.status_code == 200
-            assert resp.json() == []
+            assert resp.json() == [
+                "agent",
+                "agent-building",
+                "crud",
+                "konsistenz",
+                "persona",
+                "playbook",
+                "qa",
+            ]
     finally:
         cleanup_workspaces([owner])

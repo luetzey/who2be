@@ -154,18 +154,24 @@ def test_phase23_api_token_role_default(tmp_path: Path) -> None:
             "INSERT INTO workspace (org_id, name, slug) VALUES ($1, 'w', 'w') RETURNING id",
             org_id,
         )
+        # `revoked_at` erfuellt den Agent-Bound-CHECK (Migration 0048:
+        # agent_id IS NOT NULL OR revoked_at IS NOT NULL) ohne einen echten
+        # Agenten seeden zu muessen — hier geht es allein um den ROLLEN-Default
+        # und den Rollen-CHECK.
         role: str = await conn.fetchval(
-            "INSERT INTO api_token (workspace_id, owner_id, name, token_hash) "
-            "VALUES ($1, $2, 't', $3) RETURNING role",
+            "INSERT INTO api_token (workspace_id, owner_id, name, token_hash, revoked_at) "
+            "VALUES ($1, $2, 't', $3, now()) RETURNING role",
             ws_id,
             uuid4(),
             secrets.token_hex(16),
         )
-        # Ungueltige Rolle muss vom CHECK abgewiesen werden.
+        # Ungueltige Rolle muss vom Rollen-CHECK abgewiesen werden (revoked_at
+        # gesetzt, damit nicht der Agent-Bound-CHECK zuerst feuert).
         with pytest.raises(asyncpg.CheckViolationError):
             await conn.execute(
-                "INSERT INTO api_token (workspace_id, owner_id, name, token_hash, role) "
-                "VALUES ($1, $2, 't2', $3, 'superuser')",
+                "INSERT INTO api_token "
+                "(workspace_id, owner_id, name, token_hash, role, revoked_at) "
+                "VALUES ($1, $2, 't2', $3, 'superuser', now())",
                 ws_id,
                 uuid4(),
                 secrets.token_hex(16),

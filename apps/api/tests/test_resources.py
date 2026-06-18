@@ -305,6 +305,24 @@ def test_resource_patch_draft_on_review_returns_409(
 
 
 @pytest.mark.integration
+def _agent_in(ws: UUID) -> str:
+    """ID des Seed-„Builder"-Agenten (Tokens sind agent-gebunden, 0048; Builder
+    hat resource_read='all')."""
+
+    async def _run() -> str:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            agent_id = await conn.fetchval(
+                "SELECT id FROM agent WHERE workspace_id = $1 LIMIT 1", ws
+            )
+            assert agent_id is not None, "Seed-Agent fehlt"
+            return str(agent_id)
+        finally:
+            await conn.close()
+
+    return asyncio.run(_run())
+
+
 def test_resource_active_filter_for_api_token(monkeypatch: pytest.MonkeyPatch) -> None:
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
@@ -313,6 +331,7 @@ def test_resource_active_filter_for_api_token(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
     owner = fresh_user_id()
     ws = setup_workspace(owner)
+    agent_id = _agent_in(ws)
     jwt_auth = _auth(owner)
     base = f"/v1/workspaces/{ws}/resources"
 
@@ -330,16 +349,21 @@ def test_resource_active_filter_for_api_token(monkeypatch: pytest.MonkeyPatch) -
                 )
 
             token = client.post(
-                f"/v1/workspaces/{ws}/tokens", json={"name": "mcp"}, headers=jwt_auth
+                f"/v1/workspaces/{ws}/tokens",
+                json={"name": "mcp", "agent_id": agent_id},
+                headers=jwt_auth,
             ).json()["token"]
             token_auth = {"Authorization": f"Bearer {token}"}
 
-            jwt_list = client.get(base, headers=jwt_auth).json()
-            assert {r["id"] for r in jwt_list} == {inactive_id, active_id}
+            jwt_ids = {r["id"] for r in client.get(base, headers=jwt_auth).json()}
+            assert {inactive_id, active_id} <= jwt_ids
 
+            # Token sieht NUR Active (resource_read='all' beim Builder).
             token_list = client.get(base, headers=token_auth).json()
-            assert [r["id"] for r in token_list] == [active_id]
-            assert token_list[0]["current_status"] == "active"
+            token_ids = {r["id"] for r in token_list}
+            assert active_id in token_ids
+            assert inactive_id not in token_ids
+            assert all(r["current_status"] == "active" for r in token_list)
 
             assert client.get(f"{base}/{inactive_id}", headers=token_auth).status_code == 404
             assert client.get(f"{base}/{active_id}", headers=token_auth).status_code == 200

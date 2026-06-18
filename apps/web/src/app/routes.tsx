@@ -10,6 +10,7 @@ import {
   AuthCallbackPage,
   InvitationAcceptPage,
   LoginPage,
+  OAuthConsentPage,
   ResetPasswordPage,
   SetPasswordPage,
   SignupPage,
@@ -224,6 +225,10 @@ export function RouterRoot() {
               path="/invitations/:token/accept"
               element={<InvitationAcceptPage />}
             />
+            {/* OAuth-Remote-MCP-Consent (ADR-0034-Folge): public Route, der
+                eingeloggte User autorisiert hier einen LLM-Client fuer genau
+                einen Agenten. Ohne Session springt die Page auf den Login. */}
+            <Route path="/oauth/consent" element={<OAuthConsentPage />} />
             {/* Oeffentliche Pflichtseiten: auch ausgeloggt erreichbar. */}
             <Route path="/legal" element={<LegalLayout />}>
               <Route index element={<Navigate to="/legal/impressum" replace />} />

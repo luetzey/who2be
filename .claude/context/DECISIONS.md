@@ -1,7 +1,7 @@
 # DECISIONS — Warum so (append-only)
 
 Tragende **Architektur**-Entscheidungen leben als ADR unter
-[`../../docs/adr/`](../../docs/adr/) — das ist die kanonische Quelle (0001–0035).
+[`../../docs/adr/`](../../docs/adr/) — das ist die kanonische Quelle (0001–0036).
 Diese Datei hält **leichtere, session-übergreifende** Entscheidungen, die keinen
 eigenen ADR rechtfertigen. Append-only: nie umschreiben; eine Revision bekommt
 einen neuen Eintrag mit Verweis.

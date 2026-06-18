@@ -199,6 +199,26 @@ def _add_member(workspace_id: UUID, user_id: UUID, role: WorkspaceRole) -> None:
     asyncio.run(_run())
 
 
+def _agent_in(ws: UUID) -> str:
+    """Liefert die ID des Seed-„Builder"-Agenten (Tokens sind agent-gebunden,
+    Migration 0048). Der Builder hat eine permissive Tool-Policy, sodass das
+    Rollen-Gate (`require_role`) — und nicht die Tool-Policy — die Assertions
+    treibt."""
+
+    async def _run() -> str:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            agent_id = await conn.fetchval(
+                "SELECT id FROM agent WHERE workspace_id = $1 LIMIT 1", ws
+            )
+            assert agent_id is not None, "Seed-Agent fehlt"
+            return str(agent_id)
+        finally:
+            await conn.close()
+
+    return asyncio.run(_run())
+
+
 def _jwt(owner_id: UUID) -> str:
     return jwt.encode(
         {
@@ -245,6 +265,7 @@ def test_endpoint_gates_per_role(monkeypatch: pytest.MonkeyPatch) -> None:
     viewer = fresh_user_id()
     editor = fresh_user_id()
     ws = setup_workspace(owner)
+    agent_id = _agent_in(ws)
     _add_member(ws, viewer, WorkspaceRole.viewer)
     _add_member(ws, editor, WorkspaceRole.editor)
 
@@ -271,10 +292,13 @@ def test_endpoint_gates_per_role(monkeypatch: pytest.MonkeyPatch) -> None:
             )
 
             # Token-CRUD ist editor+ (ADR-0023): viewer 403 auf create UND list.
+            # Tokens sind agent-gebunden (Migration 0048) → agent_id Pflicht,
+            # sonst feuert die Validierung (422) vor dem Rollen-Gate.
             tokens = f"/v1/workspaces/{ws}/tokens"
-            assert client.post(tokens, json={"name": "t"}, headers=viewer_auth).status_code == 403
+            tok_body = {"name": "t", "agent_id": agent_id}
+            assert client.post(tokens, json=tok_body, headers=viewer_auth).status_code == 403
             assert client.get(tokens, headers=viewer_auth).status_code == 403
-            assert client.post(tokens, json={"name": "t"}, headers=editor_auth).status_code == 201
+            assert client.post(tokens, json=tok_body, headers=editor_auth).status_code == 201
 
             # Phase 3-0: frische v1 startet bereits als `draft` (Migration
             # 0019) — nur noch nach review. draft->review darf editor;
@@ -299,6 +323,7 @@ def test_token_role_snapshot(monkeypatch: pytest.MonkeyPatch) -> None:
     owner = fresh_user_id()
     editor = fresh_user_id()
     ws = setup_workspace(owner)
+    agent_id = _agent_in(ws)
     _add_member(ws, editor, WorkspaceRole.editor)
     editor_auth = {"Authorization": f"Bearer {_jwt(editor)}"}
     tokens = f"/v1/workspaces/{ws}/tokens"
@@ -307,15 +332,21 @@ def test_token_role_snapshot(monkeypatch: pytest.MonkeyPatch) -> None:
     try:
         with TestClient(app) as client:
             # Editor darf keinen admin-Token erzeugen (hoeher als Ersteller).
+            # agent_id Pflicht (0048); der Seed-Builder ist permissiv, also greift
+            # das Rollen-Gate, nicht die Tool-Policy.
             assert (
                 client.post(
-                    tokens, json={"name": "up", "role": "admin"}, headers=editor_auth
+                    tokens,
+                    json={"name": "up", "role": "admin", "agent_id": agent_id},
+                    headers=editor_auth,
                 ).status_code
                 == 403
             )
 
             # Ohne explizite Rolle: Snapshot = editor.
-            created = client.post(tokens, json={"name": "t"}, headers=editor_auth)
+            created = client.post(
+                tokens, json={"name": "t", "agent_id": agent_id}, headers=editor_auth
+            )
             assert created.status_code == 201
             assert created.json()["role"] == "editor"
             token = created.json()["token"]

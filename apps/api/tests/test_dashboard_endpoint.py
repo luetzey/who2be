@@ -143,9 +143,14 @@ def _insert_history(
 
 
 @pytest.mark.integration
-def test_dashboard_empty_workspace_returns_zeroes_and_empty_activity(
+def test_dashboard_seed_baseline_for_fresh_workspace(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Ein frischer Workspace ist NICHT leer: der Onboarding-Seed legt 1 aktive
+    „Builder"-Persona + 4 aktive Builder-Playbooks an. Die KPIs/Distribution
+    spiegeln genau diese Baseline; Aktivitaet bleibt leer (der Seed schreibt
+    keine status_history). Aendert sich der Seed, gehoeren die Werte mit
+    angepasst."""
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
     _prepare_db()
@@ -161,15 +166,15 @@ def test_dashboard_empty_workspace_returns_zeroes_and_empty_activity(
             assert resp.status_code == 200
             body = resp.json()
             assert body["kpis"] == {
-                "active_personas": 0,
-                "active_playbooks": 0,
+                "active_personas": 1,
+                "active_playbooks": 4,
                 "active_resources": 0,
                 "pending_reviews": 0,
             }
             assert body["activity"] == []
             empty_dist = {"draft": 0, "review": 0, "active": 0, "inactive": 0}
-            assert body["status_distribution"]["persona"] == empty_dist
-            assert body["status_distribution"]["playbook"] == empty_dist
+            assert body["status_distribution"]["persona"] == {**empty_dist, "active": 1}
+            assert body["status_distribution"]["playbook"] == {**empty_dist, "active": 4}
             assert body["status_distribution"]["resource"] == empty_dist
     finally:
         cleanup_workspaces([owner])
@@ -198,6 +203,13 @@ def test_dashboard_aggregates_status_and_activity(
 
     try:
         with TestClient(app) as client:
+            # Onboarding-Seed-Baseline (1 aktive Persona, 4 aktive Playbooks)
+            # erfassen — die folgenden Assertions pruefen das Delta darauf.
+            base = client.get(f"/v1/workspaces/{ws}/dashboard", headers=auth).json()
+            base_kpi = base["kpis"]
+            base_pd = base["status_distribution"]["persona"]
+            base_pb = base["status_distribution"]["playbook"]
+
             # Persona "A": v1 inactive, v2 review.
             # Phase 3-0: neue v1 startet als Draft (Migration 0019). Damit
             # `PUT` v2 anlegen kann, seedet der Test v1 erst auf `inactive`
@@ -250,22 +262,24 @@ def test_dashboard_aggregates_status_and_activity(
             assert resp.status_code == 200
             body = resp.json()
 
-            assert body["kpis"]["active_personas"] == 1  # Persona B
-            assert body["kpis"]["active_playbooks"] == 1  # Playbook P v1
-            assert body["kpis"]["pending_reviews"] == 1  # Persona A v2
+            # Deltas auf die Seed-Baseline (Persona B aktiv; Playbook P v1 aktiv;
+            # Persona A v2 in review).
+            assert body["kpis"]["active_personas"] == base_kpi["active_personas"] + 1
+            assert body["kpis"]["active_playbooks"] == base_kpi["active_playbooks"] + 1
+            assert body["kpis"]["pending_reviews"] == base_kpi["pending_reviews"] + 1
 
             persona_dist = body["status_distribution"]["persona"]
-            assert persona_dist["active"] == 1
-            assert persona_dist["review"] == 1
+            assert persona_dist["active"] == base_pd["active"] + 1
+            assert persona_dist["review"] == base_pd["review"] + 1
             # Persona A v1 ist nach UPDATE durch den API-Endpoint zwar nicht
             # mehr current — Status bleibt jedoch 'inactive' (Default), weil
-            # `update` keine Status-Logik kennt. Macht insgesamt 1 inactive.
-            assert persona_dist["inactive"] == 1
-            assert persona_dist["draft"] == 0
+            # `update` keine Status-Logik kennt. Macht +1 inactive.
+            assert persona_dist["inactive"] == base_pd["inactive"] + 1
+            assert persona_dist["draft"] == base_pd["draft"]
 
             playbook_dist = body["status_distribution"]["playbook"]
-            assert playbook_dist["active"] == 1
-            assert playbook_dist["draft"] == 1
+            assert playbook_dist["active"] == base_pb["active"] + 1
+            assert playbook_dist["draft"] == base_pb["draft"] + 1
 
             activity = body["activity"]
             assert len(activity) == 2
@@ -307,6 +321,10 @@ def test_dashboard_isolates_other_workspace_data(
 
     try:
         with TestClient(app) as client:
+            # Beide Workspaces starten mit identischem Onboarding-Seed. A bekommt
+            # nie Nutzerdaten — seine Baseline ist die reine Seed-Baseline.
+            base = client.get(f"/v1/workspaces/{ws_a}/dashboard", headers=auth_a).json()
+
             # Workspace B: eine active Persona + ein History-Eintrag.
             persona_b = client.post(
                 f"/v1/workspaces/{ws_b}/personas",
@@ -318,23 +336,20 @@ def test_dashboard_isolates_other_workspace_data(
             )
             _insert_history("persona", UUID(persona_b["id"]), "draft", "active", owner_b)
 
-            # Workspace A bleibt leer — Activity-Empty-Case ist hier
-            # explizit Teil der Isolation: B hat eine Activity, A muss
-            # trotzdem `[]` sehen.
+            # Workspace A unveraendert: weder Bs Persona noch Bs Activity leaken.
+            # (Der Seed schreibt keine status_history → As Activity bleibt leer.)
             dash_a = client.get(f"/v1/workspaces/{ws_a}/dashboard", headers=auth_a).json()
-            assert dash_a["kpis"] == {
-                "active_personas": 0,
-                "active_playbooks": 0,
-                "active_resources": 0,
-                "pending_reviews": 0,
-            }
-            assert dash_a["status_distribution"]["persona"]["active"] == 0
+            assert dash_a["kpis"] == base["kpis"]
+            assert (
+                dash_a["status_distribution"]["persona"]["active"]
+                == base["status_distribution"]["persona"]["active"]
+            )
             assert dash_a["activity"] == []
 
-            # Sanity-Check: Workspace B sieht die eigenen Daten — sonst
-            # koennte die Isolation auch "alles leer" sein.
+            # Sanity-Check: Workspace B sieht die eigenen Daten (Baseline + 1) —
+            # sonst koennte die Isolation auch "alles leer" sein.
             dash_b = client.get(f"/v1/workspaces/{ws_b}/dashboard", headers=auth_b).json()
-            assert dash_b["kpis"]["active_personas"] == 1
+            assert dash_b["kpis"]["active_personas"] == base["kpis"]["active_personas"] + 1
             assert len(dash_b["activity"]) == 1
             assert dash_b["activity"][0]["entity_id"] == persona_b["id"]
 

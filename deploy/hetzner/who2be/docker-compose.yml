@@ -33,6 +33,13 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS}
       RATE_LIMIT_WRITE: ${RATE_LIMIT_WRITE:-30/minute}
       LOG_FORMAT: ${LOG_FORMAT:-json}
+      # OAuth-Remote-MCP-Connector (ADR-0036): die API ist OAuth-2.1-AS. Die URLs
+      # leiten sich aus ${DOMAIN} ab (wie Caddys api./app./mcp.-Bloecke).
+      # MCP_RESOURCE_URL muss der vom MCP-Server advertisierten Resource gleichen
+      # (= WHO2BE_MCP_PUBLIC_URL + WHO2BE_HTTP_PATH, siehe mcp-http unten).
+      OAUTH_ISSUER_URL: https://api.${DOMAIN}
+      OAUTH_CONSENT_URL: https://app.${DOMAIN}/oauth/consent
+      MCP_RESOURCE_URL: https://mcp.${DOMAIN}/mcp
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -100,6 +107,12 @@ services:
       WHO2BE_HTTP_HOST: 0.0.0.0
       WHO2BE_HTTP_PORT: "8765"
       WHO2BE_HTTP_PATH: /mcp
+      # OAuth-Resource-Server (ADR-0036): zeigt im PRM auf die API als
+      # Authorization-Server und advertisiert die eigene Resource-URL (Origin
+      # ohne Pfad — FastMCP haengt WHO2BE_HTTP_PATH an, ergibt
+      # https://mcp.${DOMAIN}/mcp = MCP_RESOURCE_URL der API).
+      WHO2BE_OAUTH_ISSUER_URL: https://api.${DOMAIN}
+      WHO2BE_MCP_PUBLIC_URL: https://mcp.${DOMAIN}
     depends_on:
       api:
         condition: service_healthy
