@@ -24,6 +24,7 @@ import os
 import secrets
 import sys
 from datetime import UTC, datetime, timedelta
+from typing import NoReturn
 from urllib.parse import parse_qs, urlparse
 from uuid import UUID
 
@@ -53,7 +54,7 @@ def ok(msg: str) -> None:
     print(f"  {_OK} {msg}")
 
 
-def die(msg: str) -> None:
+def die(msg: str) -> NoReturn:
     print(f"  {_FAIL} {msg}")
     sys.exit(1)
 
@@ -80,10 +81,12 @@ def mint_jwt(user_id: UUID) -> str:
 async def agent_in(ws: UUID) -> UUID:
     conn = await asyncpg.connect(DB)
     try:
-        agent_id = await conn.fetchval("SELECT id FROM agent WHERE workspace_id = $1 LIMIT 1", ws)
+        agent_id: UUID | None = await conn.fetchval(
+            "SELECT id FROM agent WHERE workspace_id = $1 LIMIT 1", ws
+        )
         if agent_id is None:
             die("Kein Seed-Agent im Workspace gefunden.")
-        return agent_id  # type: ignore[return-value]
+        return agent_id
     finally:
         await conn.close()
 
