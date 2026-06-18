@@ -59,6 +59,24 @@ def _auth(owner_id: UUID) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+def _agent_in(ws: UUID) -> str:
+    """ID des Seed-„Builder"-Agenten (Tokens sind agent-gebunden, Migration
+    0048; Builder ist permissiv → liest alle Personae)."""
+
+    async def _run() -> str:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            agent_id = await conn.fetchval(
+                "SELECT id FROM agent WHERE workspace_id = $1 LIMIT 1", ws
+            )
+            assert agent_id is not None, "Seed-Agent fehlt"
+            return str(agent_id)
+        finally:
+            await conn.close()
+
+    return asyncio.run(_run())
+
+
 def _persona_body(description: str) -> dict[str, object]:
     # Welle 4: Promote-Validator verlangt fuer draft -> review/active eine
     # nicht-leere Beschreibung UND einen nicht-leeren Profil-Body
@@ -114,8 +132,10 @@ def test_persona_crud_versioning_and_isolation(
             fetched = client.get(f"{base}/{persona_id}", headers=auth).json()
             assert fetched["content"]["description"] == "v1"
 
+            # Die erstellte Persona erscheint in der Liste (neben der
+            # Seed-„Builder"-Persona). Isolation wird unten via 403 geprueft.
             listed = client.get(base, headers=auth).json()
-            assert [p["id"] for p in listed] == [persona_id]
+            assert persona_id in {p["id"] for p in listed}
 
             # Phase 3-0: neue v1 startet als Draft (Migration 0019). PUT
             # wuerde sonst sofort 409 werfen, weil schon ein Draft existiert
@@ -147,9 +167,11 @@ def test_persona_crud_versioning_and_isolation(
             # Cross-Workspace: fremder User mit eigenem Workspace sieht 403,
             # weil er keine Membership im Owner-Workspace hat.
             assert client.get(base, headers=_auth(other)).status_code == 403
-            # Im eigenen Workspace ist die Persona nicht sichtbar.
+            # Im fremden Workspace ist die Owner-Persona nicht sichtbar (dort
+            # liegt nur dessen eigene Seed-Persona).
             other_base = f"/v1/workspaces/{other_ws}/personas"
-            assert client.get(other_base, headers=_auth(other)).json() == []
+            other_ids = {p["id"] for p in client.get(other_base, headers=_auth(other)).json()}
+            assert persona_id not in other_ids
     finally:
         cleanup_workspaces([owner, other])
 
@@ -249,19 +271,28 @@ def test_persona_pagination_via_cursor_and_limit_validation(
                 assert resp.status_code == 201
                 created_ids.append(resp.json()["id"])
 
-            page1 = client.get(f"{base}?limit=2", headers=auth)
-            assert page1.status_code == 200
-            assert len(page1.json()) == 2
-            cursor = page1.headers.get("X-Next-Cursor")
-            assert cursor is not None
+            # Durch ALLE Seiten blaettern (die Seed-„Builder"-Persona erhoeht die
+            # Gesamtzahl): Limit wird eingehalten, der Cursor terminiert, und
+            # alle eigenen Personae erscheinen — robust gegen die Seed-Anzahl.
+            seen: set[str] = set()
+            url: str | None = f"{base}?limit=2"
+            pages = 0
+            while url is not None:
+                resp = client.get(url, headers=auth)
+                assert resp.status_code == 200
+                items = resp.json()
+                assert len(items) <= 2  # Limit eingehalten
+                seen |= {p["id"] for p in items}
+                pages += 1
+                assert pages < 20, "Cursor terminiert nicht"
+                cursor = resp.headers.get("X-Next-Cursor")
+                if cursor is None:
+                    break
+                assert len(items) == 2  # volle Seite, solange es weitergeht
+                url = f"{base}?limit=2&cursor={cursor}"
 
-            page2 = client.get(f"{base}?limit=2&cursor={cursor}", headers=auth)
-            assert page2.status_code == 200
-            assert len(page2.json()) == 1
-            assert "X-Next-Cursor" not in page2.headers
-
-            seen = {p["id"] for p in page1.json()} | {p["id"] for p in page2.json()}
-            assert seen == set(created_ids)
+            assert set(created_ids) <= seen  # alle eigenen Personae erschienen
+            assert pages >= 2  # 3 eigene + Seed → mehr als eine Seite
 
             # Cross-Workspace: fremder Aufruf 403 (kein Membership).
             assert client.get(base, headers=_auth(other)).status_code == 403
@@ -501,6 +532,7 @@ def test_persona_active_filter_for_api_token(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
     owner = fresh_user_id()
     ws = setup_workspace(owner)
+    agent_id = _agent_in(ws)
     jwt_auth = _auth(owner)
     base = f"/v1/workspaces/{ws}/personas"
 
@@ -520,21 +552,28 @@ def test_persona_active_filter_for_api_token(monkeypatch: pytest.MonkeyPatch) ->
                     headers=jwt_auth,
                 )
 
-            # API-Token anlegen + nutzen.
+            # API-Token anlegen + nutzen (agent-gebunden, Migration 0048; der
+            # Seed-Builder hat persona_read=true → liest alle Personae).
             token_resp = client.post(
-                f"/v1/workspaces/{ws}/tokens", json={"name": "mcp"}, headers=jwt_auth
+                f"/v1/workspaces/{ws}/tokens",
+                json={"name": "mcp", "agent_id": agent_id},
+                headers=jwt_auth,
             )
             token = token_resp.json()["token"]
             token_auth = {"Authorization": f"Bearer {token}"}
 
-            # JWT sieht beide.
-            jwt_list = client.get(base, headers=jwt_auth).json()
-            assert {p["id"] for p in jwt_list} == {inactive_id, active_id}
+            # JWT sieht beide eigenen (neben der Seed-Persona).
+            jwt_ids = {p["id"] for p in client.get(base, headers=jwt_auth).json()}
+            assert {inactive_id, active_id} <= jwt_ids
 
-            # Token sieht nur Active.
+            # Token sieht NUR Active: die eigene aktive ja, die inaktive nicht,
+            # und jede sichtbare Persona ist aktiv (Seed-Builder ist ebenfalls
+            # aktiv und darf daher mit erscheinen).
             token_list = client.get(base, headers=token_auth).json()
-            assert [p["id"] for p in token_list] == [active_id]
-            assert token_list[0]["current_status"] == "active"
+            token_ids = {p["id"] for p in token_list}
+            assert active_id in token_ids
+            assert inactive_id not in token_ids
+            assert all(p["current_status"] == "active" for p in token_list)
 
             # Direkter Fetch der inaktiven Persona per Token → 404.
             assert client.get(f"{base}/{inactive_id}", headers=token_auth).status_code == 404

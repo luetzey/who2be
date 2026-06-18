@@ -260,6 +260,10 @@ def test_fetch_agent_rendered_expands_all_placeholder_kinds(
             _promote_to_active(client, f"/v1/workspaces/{ws}/system-prompts", tpl_id, auth)
 
             # 5. Agent anlegen (enabled — Persona + Template sind aktiv).
+            #    Read-Scope auf 'all': der Render filtert Playbook-/Resource-
+            #    Platzhalter nach der Tool-Policy des gerenderten Agenten
+            #    (secure-by-default = 'assigned' wuerde die nicht zugewiesenen
+            #    Refs als „<… nicht verfuegbar>" ausblenden).
             agent = client.post(
                 f"/v1/workspaces/{ws}/agents",
                 json={
@@ -268,6 +272,7 @@ def test_fetch_agent_rendered_expands_all_placeholder_kinds(
                     "persona_id": persona["id"],
                     "system_prompt_template_id": tpl_id,
                     "status": "enabled",
+                    "tool_policy": {"playbook_read": "all", "resource_read": "all"},
                 },
                 headers=auth,
             )

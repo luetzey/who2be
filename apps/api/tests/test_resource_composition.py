@@ -257,6 +257,24 @@ def test_sub_resource_transitive_cycle_guard(monkeypatch: pytest.MonkeyPatch) ->
 
 
 @pytest.mark.integration
+def _agent_in(ws: UUID) -> str:
+    """ID des Seed-„Builder"-Agenten (Tokens sind agent-gebunden, 0048; Builder
+    hat resource_read='all')."""
+
+    async def _run() -> str:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            agent_id = await conn.fetchval(
+                "SELECT id FROM agent WHERE workspace_id = $1 LIMIT 1", ws
+            )
+            assert agent_id is not None, "Seed-Agent fehlt"
+            return str(agent_id)
+        finally:
+            await conn.close()
+
+    return asyncio.run(_run())
+
+
 def test_sub_resource_active_filter_for_api_token(monkeypatch: pytest.MonkeyPatch) -> None:
     """MCP-/API-Token-Pfad blendet Sub-Resources ohne aktive Kind-Version aus.
 
@@ -300,8 +318,12 @@ def test_sub_resource_active_filter_for_api_token(monkeypatch: pytest.MonkeyPatc
                 headers=auth,
             )
 
+            # Token ist agent-gebunden (0048); der Seed-Builder hat
+            # resource_read='all'.
             token = client.post(
-                f"/v1/workspaces/{ws}/tokens", json={"name": "mcp"}, headers=auth
+                f"/v1/workspaces/{ws}/tokens",
+                json={"name": "mcp", "agent_id": _agent_in(ws)},
+                headers=auth,
             ).json()["token"]
             token_auth = {"Authorization": f"Bearer {token}"}
 

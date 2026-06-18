@@ -131,7 +131,11 @@ def test_token_lifecycle_and_both_auth_paths(monkeypatch: pytest.MonkeyPatch) ->
             assert "token_hash" not in listed[0]
 
             api_auth = {"Authorization": f"Bearer {plaintext}"}
-            assert client.get(base, headers=api_auth).status_code == 200
+            # Der w2b_-Token authentifiziert (Auth-Weg #2) — belegt an /v1/me ...
+            assert client.get("/v1/me", headers=api_auth).status_code == 200
+            # ... darf als AGENT-GEBUNDENER Token aber keine Tokens verwalten
+            # (Privilege-Escalation-Schutz, ADR-0023): 403 auf die Token-Liste.
+            assert client.get(base, headers=api_auth).status_code == 403
 
             # Umbenennen ändert nur den Namen.
             renamed = client.patch(f"{base}/{token_id}", json={"name": "neu"}, headers=jwt_auth)
@@ -145,14 +149,16 @@ def test_token_lifecycle_and_both_auth_paths(monkeypatch: pytest.MonkeyPatch) ->
             new_plaintext = rotated.json()["token"]
             assert new_plaintext != plaintext
             new_auth = {"Authorization": f"Bearer {new_plaintext}"}
-            assert client.get(base, headers=api_auth).status_code == 401
-            assert client.get(base, headers=new_auth).status_code == 200
+            # Liveness an /v1/me (GET /tokens waere fuer beide agent-gebundenen
+            # Tokens 403): alter Token tot, rotierter gueltig.
+            assert client.get("/v1/me", headers=api_auth).status_code == 401
+            assert client.get("/v1/me", headers=new_auth).status_code == 200
 
             revoke = client.delete(f"{base}/{token_id}", headers=jwt_auth)
             assert revoke.status_code == 204
 
-            # Nach Revoke sind sowohl Auth als auch rename/rotate tot (404).
-            assert client.get(base, headers=new_auth).status_code == 401
+            # Nach Revoke sind sowohl Auth als auch rename/rotate tot.
+            assert client.get("/v1/me", headers=new_auth).status_code == 401
             assert client.delete(f"{base}/{token_id}", headers=jwt_auth).status_code == 404
             assert (
                 client.post(f"{base}/{token_id}/rotate", headers=jwt_auth).status_code == 404
@@ -183,12 +189,14 @@ def test_agent_delete_cascades_tokens(monkeypatch: pytest.MonkeyPatch) -> None:
             assert created.status_code == 201
             plaintext = created.json()["token"]
             api_auth = {"Authorization": f"Bearer {plaintext}"}
-            assert client.get(base, headers=api_auth).status_code == 200
+            # Token authentifiziert (an /v1/me — GET /tokens waere als agent-
+            # gebundener Token 403, irrelevant fuer den Cascade-Beleg).
+            assert client.get("/v1/me", headers=api_auth).status_code == 200
 
             _delete_agent(UUID(agent_id))
 
             # Token ist mit dem Agenten verschwunden → Auth schlägt fehl.
-            assert client.get(base, headers=api_auth).status_code == 401
+            assert client.get("/v1/me", headers=api_auth).status_code == 401
     finally:
         cleanup_workspaces([owner_id])
 

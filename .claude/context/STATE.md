@@ -19,7 +19,7 @@ _Stand: 2026-06-16_
   Notion-Entkopplung; LLM-Standards-Schicht (`docs/standards/`, `AGENTS.md`,
   `.claude/context/`).
 - Lokale Verifikation grün: ruff, mypy strict, Web (lint/tsc/387 Tests/build),
-  MCP (85 Tests), API-OAuth/RS/Unit grün (gegen lokale Wegwerf-Postgres).
+  **gesamte pytest-Suite grün (765 passed, 0 failed)** gegen eine Wegwerf-Postgres.
 - **OAuth-Smoke beide Editionen grün** (`scripts/oauth_smoke.sh onprem|cloud`,
   Doku `docs/oauth-smoke.md`): voller Flow gegen echten API+MCP-Prozess, Cloud
   als `who2be_app` (RLS aktiv). Fand + fixte einen Cloud-Bug: fehlende
@@ -37,10 +37,6 @@ _Stand: 2026-06-16_
   `runner_id=0`, keine Logs → mutmaßlich erschöpfte **Actions-Minuten / Billing**
   des privaten Repos. Nicht im Code behebbar. **Public-Flip löst es** (Actions ist
   für öffentliche Repos frei/unbegrenzt).
-- **21 DB-gated Integrationstests rot auf dem Branch** (vorbestehend, nicht von
-  OAuth): agent-gebundene Tokens → 403 auf Management/Read-Endpunkten; die Tests
-  erwarten 200. Per Stash gegen Clean-HEAD verifiziert. Aufzuräumen, sobald eine
-  Test-DB in CI steht.
 - E2E-Gate bleibt Soft, bis die CI-Infra steht.
 
 ## Nächste Schritte (nicht-Code, manuell beim Owner)
