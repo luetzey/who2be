@@ -271,9 +271,22 @@ class PlaybookService:
         await self._sync_body_pills(ctx, outcome.playbook.id, data.content)
         return outcome.playbook
 
+    async def _assert_in_scope(self, ctx: WorkspaceContext, playbook_id: UUID) -> None:
+        """Read-Scoping fuer Per-ID-Lesepfade ausserhalb von `get`/`list_all`.
+
+        Ein `assigned`-Agent darf Versionen/Diff/Export nur fuer ihm sichtbare
+        Playbooks abrufen — sonst 404 (kein Workspace-Enumerieren ueber die
+        REST-Pfade, die kein MCP-Tool nutzt, ein Agent-Token aber direkt
+        ansprechen koennte).
+        """
+        restrict_ids = await playbook_read_restrict(self._pool, ctx)
+        if restrict_ids is not None and playbook_id not in set(restrict_ids):
+            raise _not_found()
+
     async def list_versions(
         self, ctx: WorkspaceContext, playbook_id: UUID, locale: str = DEFAULT_LOCALE
     ) -> list[PlaybookVersionRead]:
+        await self._assert_in_scope(ctx, playbook_id)
         versions = await self._repo.list_versions(ctx.workspace_id, playbook_id, locale)
         if versions is None:
             raise _not_found()
@@ -282,6 +295,7 @@ class PlaybookService:
     async def get_version(
         self, ctx: WorkspaceContext, playbook_id: UUID, version: int, locale: str = DEFAULT_LOCALE
     ) -> PlaybookVersionRead:
+        await self._assert_in_scope(ctx, playbook_id)
         found = await self._repo.fetch_version(ctx.workspace_id, playbook_id, version, locale)
         if found is None:
             raise _not_found()
@@ -325,6 +339,7 @@ class PlaybookService:
         locale: str = DEFAULT_LOCALE,
     ) -> VersionDiff:
         """Strukturierter Feld-/Block-Diff der Version `version` gegen `against`."""
+        await self._assert_in_scope(ctx, playbook_id)
         target = await self._repo.fetch_version(ctx.workspace_id, playbook_id, version, locale)
         if target is None:
             raise _not_found()

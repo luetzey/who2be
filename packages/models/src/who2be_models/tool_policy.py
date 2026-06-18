@@ -26,9 +26,10 @@ from pydantic import BaseModel, ConfigDict
 class ReadScope(StrEnum):
     """Sichtbarkeitsumfang eines lesenden Tools.
 
-    - ``all``: der gesamte Workspace (Default — „alles sehen").
+    - ``all``: der gesamte Workspace („alles sehen").
     - ``assigned``: nur die dem Agenten ueber seine Persona zugewiesenen
-      Playbooks bzw. die daraus erreichbaren Resources.
+      Playbooks bzw. die daraus erreichbaren Resources (Default — least
+      privilege/„secure by default").
     - ``none``: das Tool ist fuer diesen Agenten gar nicht verfuegbar.
     """
 
@@ -58,14 +59,16 @@ class AgentToolPolicy(BaseModel):
 
     Wird als JSONB auf `agent.tool_policy` persistiert. Ein leeres JSON-Objekt
     (`{}`) deserialisiert zur Default-Policy unten — so erben Bestands-Agenten
-    ohne expliziten Eintrag das „Read-All, keine Writes"-Verhalten.
+    ohne expliziten Eintrag das „nur Zugewiesenes lesen, keine Writes"-Verhalten
+    (least privilege/„secure by default").
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    # Reads — Default: alles sehen.
-    playbook_read: ReadScope = ReadScope.all
-    resource_read: ReadScope = ReadScope.all
+    # Reads — Default: nur Zugewiesenes (secure by default). Owner kann pro Agent
+    # auf `all` (ganzer Workspace) oder `none` (Tool aus) hochstufen.
+    playbook_read: ReadScope = ReadScope.assigned
+    resource_read: ReadScope = ReadScope.assigned
     persona_read: bool = True
     agent_read: bool = True
 

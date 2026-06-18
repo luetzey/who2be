@@ -12,7 +12,7 @@ from uuid import UUID
 
 import asyncpg
 
-from who2be_models import AgentToolPolicy, WorkspaceRead
+from who2be_models import AgentToolPolicy, ReadScope, WorkspaceRead
 
 
 class LastWorkspaceError(Exception):
@@ -401,11 +401,16 @@ def _builder_playbook_content(
 def _builder_tool_policy() -> dict[str, object]:
     """Write-faehige Policy fuer den Meta-Agenten (Plan §5.2).
 
-    Alle Schreib-Capabilities + `promote_retire`, Reads = `all`. Die
-    Autorisierung bleibt serverseitig (editor; Promote/Retire admin) — die
-    Policy steuert nur die Tool-Sichtbarkeit im System-Prompt.
+    Alle Schreib-Capabilities + `promote_retire`, Reads = `all`. Die Reads sind
+    bewusst EXPLIZIT auf `all` gesetzt: der Meta-Agent verwaltet den ganzen
+    Workspace und darf nicht den (seit „secure by default") auf `assigned`
+    abgesenkten Read-Default erben. Die Autorisierung bleibt serverseitig
+    (editor; Promote/Retire admin) — die Policy steuert nur die
+    Tool-Sichtbarkeit im System-Prompt.
     """
     return AgentToolPolicy(
+        playbook_read=ReadScope.all,
+        resource_read=ReadScope.all,
         persona_write=True,
         playbook_write=True,
         resource_write=True,

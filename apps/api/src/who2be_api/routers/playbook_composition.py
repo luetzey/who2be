@@ -27,7 +27,7 @@ def get_composition_service(
     pool: Annotated[asyncpg.Pool, Depends(get_pool)],
 ) -> PlaybookCompositionService:
     """FastAPI-Dependency: verdrahtet den Service mit der Pg-Implementierung."""
-    return PlaybookCompositionService(PgPlaybookCompositionRepository(pool))
+    return PlaybookCompositionService(PgPlaybookCompositionRepository(pool), pool)
 
 
 Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]

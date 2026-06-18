@@ -16,6 +16,10 @@ from who2be_api.services.placeholders._core import (
     ResolveResult,
     block_plain_text,
 )
+from who2be_api.services.placeholders._scope import (
+    render_visible_playbook_ids,
+    render_visible_resource_ids,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +49,12 @@ class PlaybookResolver:
             playbook_id = UUID(target_id)
         except ValueError:
             logger.warning("PlaybookResolver: ungueltige UUID '%s'", target_id)
+            return ResolveResult(text="<Playbook nicht verfuegbar>", unresolved_key=miss_key)
+
+        # Read-Scoping: ein `assigned`-Agent darf ueber ein eingebettetes Pill
+        # kein nicht-zugewiesenes Playbook expandieren — sauberer Miss statt Leak.
+        scope = await render_visible_playbook_ids(db, ctx)
+        if scope is not None and playbook_id not in scope:
             return ResolveResult(text="<Playbook nicht verfuegbar>", unresolved_key=miss_key)
 
         row = await db.fetchrow(
@@ -139,6 +149,11 @@ class ResourceResolver:
             resource_id = UUID(resource_part)
         except ValueError:
             logger.warning("ResourceResolver: ungueltige UUID '%s'", resource_part)
+            return ResolveResult(text="<Resource nicht verfuegbar>", unresolved_key=miss_key)
+
+        # Read-Scoping: nicht-zugewiesene Resource ueber ein Pill → Miss, kein Leak.
+        scope = await render_visible_resource_ids(db, ctx)
+        if scope is not None and resource_id not in scope:
             return ResolveResult(text="<Resource nicht verfuegbar>", unresolved_key=miss_key)
 
         row = await db.fetchrow(

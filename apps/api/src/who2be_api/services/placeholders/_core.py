@@ -46,6 +46,11 @@ class RenderContext(BaseModel):
     # darf. `None` (z. B. Persona-Body-Render): nur die Read-Tools werden gezeigt
     # (Verhalten vor dem Pro-Agent-Feature).
     tool_policy: AgentToolPolicy | None = None
+    # ID des gerenderten Agenten — noetig fuers Read-Scoping der Inhalts-/
+    # Katalog-Resolver (`assigned`-Scope filtert eingebettete Resource-Pills und
+    # den Resource-Katalog auf die sichtbare Menge). `None` ausserhalb des
+    # Agent-Render-Pfads (Persona-/Preview-/Export-Render) → kein Scoping.
+    agent_id: UUID | None = None
 
 
 class ResolveResult(BaseModel):

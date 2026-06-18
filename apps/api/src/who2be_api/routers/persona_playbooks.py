@@ -27,7 +27,7 @@ def get_link_service(
     pool: Annotated[asyncpg.Pool, Depends(get_pool)],
 ) -> PersonaPlaybookService:
     """FastAPI-Dependency: verdrahtet den Service mit der Pg-Implementierung."""
-    return PersonaPlaybookService(PgPersonaPlaybookRepository(pool))
+    return PersonaPlaybookService(PgPersonaPlaybookRepository(pool), pool)
 
 
 Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]

@@ -558,10 +558,11 @@ export interface AgentToolPolicy {
   promote_retire: boolean
 }
 
-// Default-Policy fuer neue Agenten: alles lesen, nichts schreiben.
+// Default-Policy fuer neue Agenten: nur Zugewiesenes lesen (least privilege/
+// "secure by default"), nichts schreiben. Owner kann pro Agent auf 'all' hochstufen.
 export const DEFAULT_TOOL_POLICY: AgentToolPolicy = {
-  playbook_read: 'all',
-  resource_read: 'all',
+  playbook_read: 'assigned',
+  resource_read: 'assigned',
   persona_read: true,
   agent_read: true,
   persona_write: false,

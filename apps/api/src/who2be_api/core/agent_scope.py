@@ -17,6 +17,7 @@ bleiben):
 
 from __future__ import annotations
 
+from typing import TypeAlias
 from uuid import UUID
 
 import asyncpg
@@ -74,8 +75,14 @@ SELECT id FROM closure
 """
 
 
+# `Pool | Connection`: die REST-Services reichen den Pool durch, der Render-Pfad
+# (Placeholder-Resolver) eine bereits acquirte Single-Connection — beide haben
+# `.fetch` mit identischer Signatur.
+_Fetcher: TypeAlias = asyncpg.Pool | asyncpg.Connection
+
+
 async def assigned_playbook_ids(
-    pool: asyncpg.Pool, workspace_id: UUID, agent_id: UUID
+    pool: _Fetcher, workspace_id: UUID, agent_id: UUID
 ) -> set[UUID]:
     """IDs der dem Agenten (ueber seine Persona) zugewiesenen Playbooks."""
     rows = await pool.fetch(_ASSIGNED_PLAYBOOKS_SQL, agent_id, workspace_id)
@@ -83,7 +90,7 @@ async def assigned_playbook_ids(
 
 
 async def assigned_resource_ids(
-    pool: asyncpg.Pool, workspace_id: UUID, agent_id: UUID
+    pool: _Fetcher, workspace_id: UUID, agent_id: UUID
 ) -> set[UUID]:
     """IDs der aus den zugewiesenen Playbooks erreichbaren Resources."""
     rows = await pool.fetch(_ASSIGNED_RESOURCES_SQL, agent_id, workspace_id)
@@ -140,3 +147,32 @@ async def resource_read_restrict(pool: asyncpg.Pool, ctx: WorkspaceContext) -> l
     if policy.resource_read == ReadScope.none:
         raise _tool_unavailable("Resources")
     return sorted(await assigned_resource_ids(pool, ctx.workspace_id, ctx.agent_id))
+
+
+async def visible_playbook_ids(
+    pool: asyncpg.Pool | None, ctx: WorkspaceContext
+) -> set[UUID] | None:
+    """Sichtbare Playbook-IDs fuer Sekundaer-Reads (Composition/Links/Usages).
+
+    Diese Reads laufen nicht ueber die `restrict_ids`-Repos der Haupt-Lesepfade
+    und brauchen daher denselben `assigned`-Scope explizit: Gate die per-ID
+    abgefragte Entitaet bzw. filtere zurueckgegebene Listen gegen diese Menge.
+
+    `None` = keine Einschraenkung (ungebundener Token oder Scope `all`; oder
+    Test-Fake ohne Pool). Sonst die Menge der zugewiesenen Playbook-IDs. Bei
+    Scope `none` wirft `playbook_read_restrict` ein 403.
+    """
+    if pool is None:
+        return None
+    restrict = await playbook_read_restrict(pool, ctx)
+    return None if restrict is None else set(restrict)
+
+
+async def visible_resource_ids(
+    pool: asyncpg.Pool | None, ctx: WorkspaceContext
+) -> set[UUID] | None:
+    """Sichtbare Resource-IDs fuer Sekundaer-Reads (siehe `visible_playbook_ids`)."""
+    if pool is None:
+        return None
+    restrict = await resource_read_restrict(pool, ctx)
+    return None if restrict is None else set(restrict)
