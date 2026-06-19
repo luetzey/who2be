@@ -13,7 +13,10 @@
 # vorhanden. Nur der Cloud-Build zieht sie ueber `--group billing`.
 FROM python:3.14-slim AS base
 
-COPY --from=ghcr.io/astral-sh/uv:0.4.27 /uv /usr/local/bin/uv
+# uv (nur Build-Zeit) via PyPI statt per `COPY --from=ghcr.io/astral-sh/uv`:
+# der Cross-Registry-Pull bricht auf Hosts mit (abgelaufener) ghcr-Anmeldung —
+# buildkit faellt dann nicht auf anonym zurueck. PyPI-Wheel ist ghcr-unabhaengig.
+RUN pip install --no-cache-dir uv==0.4.27
 
 WORKDIR /app
 ENV UV_LINK_MODE=copy \
