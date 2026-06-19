@@ -50,22 +50,30 @@ GOTRUE_MAILER_AUTOCONFIRM=true   # Staging ohne SMTP; fuer Prod auf false + SMTP
 Mehr ist nicht nötig — alle URLs (api./app./mcp./supabase., OAuth, VITE) leitet
 die Compose aus `DOMAIN` ab.
 
-## 4. Domains hinzufügen (Traefik-Routing)
+## 4. Domains — schon in der Compose verdrahtet (KEIN UI-Mapping nötig)
 
-Im Service unter **Domains** vier Einträge — jeweils Host → **Service + Port**,
-HTTPS/Let's-Encrypt aktiv:
+Wichtig (aktuelle Dokploy-Version): Bei **Docker Compose** läuft das Routing
+**nicht** über einen UI-„Domains"-Tab mit Service:Port — sondern über
+**Traefik-Labels in der Compose-Datei**. Die sind in
+`deploy/dokploy/docker-compose.yml` bereits gesetzt (HTTPS via `websecure` +
+Cert-Resolver `letsencrypt`), und die Host-Regeln leiten sich aus `${DOMAIN}` ab:
 
-| Host                | Service        | Container-Port |
-| ------------------- | -------------- | -------------- |
-| `api.<DOMAIN>`      | `api`          | 8000           |
-| `app.<DOMAIN>`      | `web`          | 80             |
-| `supabase.<DOMAIN>` | `auth-gateway` | 9999           |
-| `mcp.<DOMAIN>`      | `mcp-http`     | 8765           |
+| Host                | Dienst         | Port | Router-Label    |
+| ------------------- | -------------- | ---- | --------------- |
+| `api.<DOMAIN>`      | `api`          | 8000 | `who2be-api`    |
+| `app.<DOMAIN>`      | `web`          | 80   | `who2be-web`    |
+| `supabase.<DOMAIN>` | `auth-gateway` | 9999 | `who2be-supabase` |
+| `mcp.<DOMAIN>`      | `mcp-http`     | 8765 | `who2be-mcp`    |
 
-> Dokploy-Netz: Die domain-tragenden Dienste hängen in der Compose zusätzlich am
-> externen `dokploy-network` (damit Traefik sie erreicht). Heißt das Netz auf
-> deinem Host anders, mit `docker network ls | grep dokploy` prüfen und in
-> `deploy/dokploy/docker-compose.yml` anpassen.
+Du musst hier also **nichts** mappen — es reicht, dass `DOMAIN` in der Env steht
+(Schritt 3). Falls deine Dokploy-Version zusätzlich einen „Domains"-Tab für
+Compose zeigt: ignorierbar, die Labels erledigen es.
+
+> **`dokploy-network`:** Die Domain-Dienste hängen in der Compose am externen
+> `dokploy-network` (so erreicht Traefik sie) — vom Dokploy-Installer angelegt.
+> Heißt es bei dir anders, im Dokploy-**Web-Terminal** `docker network ls | grep
+> dokploy` prüfen und in der Compose anpassen. **Compose-Typ = „Docker Compose"**
+> wählen (nicht „Stack" — sonst werden die `build:`-Kontexte ignoriert).
 
 ## 5. Deploy
 
