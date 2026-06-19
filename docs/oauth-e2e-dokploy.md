@@ -19,13 +19,19 @@ und das Web-Image ist domain-fest zur Build-Zeit).
 ## 1. Secrets vorbereiten (lokal, einmalig)
 
 ```bash
-# JWT_SECRET: >= 32 Zeichen, EINMAL erzeugen, ueberall identisch verwenden
+# JWT_SECRET: >= 32 Zeichen (base64 ist ok — kommt in KEINE URL).
 openssl rand -base64 36
 
-# anon-Key fuer das Web (mit GENAU diesem JWT_SECRET signieren):
+# POSTGRES_PASSWORD: NUR URL-sichere Zeichen (Buchstaben/Ziffern)! Es wird in
+# Connection-URLs eingebettet (postgresql://supabase_admin:<pw>@db/...). Ein
+# `/`, `+`, `@` oder `:` aus base64 zerlegt die URL → migrate/auth scheitern.
+openssl rand -hex 24
+
+# anon-Key fuer das Web (mit GENAU dem JWT_SECRET signieren):
 uv run python scripts/gen_test_jwt.py --secret "<DEIN_JWT_SECRET>" --role anon --ttl 315360000
 ```
-Den anon-Token merken → das ist `VITE_SUPABASE_ANON_KEY`.
+Den anon-Token merken → `VITE_SUPABASE_ANON_KEY` (in diesem Setup auch ein
+Platzhalter-String ok). **Wichtig:** `POSTGRES_PASSWORD` URL-sicher halten.
 
 ## 2. Dokploy: Compose-Service anlegen
 
