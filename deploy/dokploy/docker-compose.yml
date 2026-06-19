@@ -28,8 +28,12 @@ services:
       JWT_SECRET: ${JWT_SECRET}
     volumes:
       - db-data:/var/lib/postgresql/data
-      # Legt die Supabase-Rollen an (supabase_auth_admin, anon, authenticated …).
-      - ../hetzner/supabase/init:/docker-entrypoint-initdb.d:ro
+      # KEIN init-Mount: `supabase/postgres` legt seine Rollen (supabase_admin,
+      # supabase_auth_admin, anon, authenticated, …) + die auth/storage-Schemata
+      # ueber EIGENE, ins Image gebackene Init-Skripte in
+      # /docker-entrypoint-initdb.d an. Ein Volume-Mount dorthin VERDECKT die und
+      # bricht GoTrue ("password authentication failed for supabase_auth_admin"
+      # bzw. "no schema selected"). Empirisch verifiziert.
     networks: [who2be]
     restart: unless-stopped
     healthcheck:
