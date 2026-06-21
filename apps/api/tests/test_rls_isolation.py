@@ -72,6 +72,15 @@ async def _seed(conn: asyncpg.Connection) -> dict[str, UUID]:
             "VALUES ($1, 'active', '[]'::jsonb)",
             org_id,
         )
+        await conn.execute(
+            "INSERT INTO workspace_invitation "
+            "(workspace_id, email, role, token_hash, expires_at, created_by) "
+            "VALUES ($1, $2, 'editor', $3, now() + interval '1 day', $4)",
+            ws_id,
+            f"invitee-{key}@example.com",
+            secrets.token_hex(16),
+            owner,
+        )
         ids[f"org_{key}"] = org_id
         ids[f"ws_{key}"] = ws_id
         ids[f"persona_{key}"] = persona_id
@@ -148,6 +157,21 @@ def test_rls_blocks_cross_workspace_reads_for_app_role() -> None:
             await app.execute("RESET app.current_org")
             ent_all = await app.fetch("SELECT org_id FROM org_entitlement")
             assert {row["org_id"] for row in ent_all} == {ids["org_a"], ids["org_b"]}
+
+            # --- workspace_invitation (0050): strikt bei gesetztem Tenant ... ---
+            await app.execute(
+                "SELECT set_config('app.current_tenant', $1, false)", str(ids["ws_a"])
+            )
+            inv = await app.fetch("SELECT workspace_id FROM workspace_invitation")
+            assert {row["workspace_id"] for row in inv} == {ids["ws_a"]}, (
+                "RLS leakt fremde Invitation-Zeilen trotz gesetztem Tenant A"
+            )
+            # --- ... permissiv-bei-unset (token-basierter Accept-Pfad, kein Scope). ---
+            await app.execute("RESET app.current_tenant")
+            inv_all = await app.fetch("SELECT workspace_id FROM workspace_invitation")
+            assert {row["workspace_id"] for row in inv_all} == {ids["ws_a"], ids["ws_b"]}, (
+                "Accept-Pfad ohne Tenant-Scope muss die Invitation finden (permissiv-bei-unset)"
+            )
         finally:
             if app is not None:
                 await app.close()
