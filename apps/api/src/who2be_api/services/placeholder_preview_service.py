@@ -65,6 +65,14 @@ class PlaceholderPreviewService:
             workspace_id=ctx.workspace_id,
             persona_id=persona_id,
             now=datetime.now(UTC),
+            # Read-Scope des AUFRUFERS durchreichen (Security-Review HIGH-1):
+            # Preview loest eine einzelne, FREI WAEHLBARE Pill auf — ohne
+            # tool_policy/agent_id konnte ein `assigned`/`none`-Agent ueber
+            # `?kind=playbook&target_id=<beliebige_uuid>` (bzw. resources-catalog)
+            # jeden Inhalt/Katalog des Workspace lesen. None (Mensch/JWT) =
+            # unrestricted.
+            tool_policy=ctx.tool_policy,
+            agent_id=ctx.agent_id,
         )
         async with self._pool.acquire() as conn:
             result = await resolver.resolve(target_id, render_ctx, conn)
