@@ -81,7 +81,10 @@ services:
       GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db:5432/postgres?search_path=auth
       GOTRUE_SITE_URL: https://app.${DOMAIN}
       GOTRUE_URI_ALLOW_LIST: https://app.${DOMAIN},https://app.${DOMAIN}/*
-      GOTRUE_DISABLE_SIGNUP: "false"
+      # Public-Signup an/aus. `true` blockt neue Registrierungen (POST /signup
+      # → 422), Bestands-Logins + Admin-Invites bleiben erlaubt. In Dokploy
+      # ueber die Env `GOTRUE_DISABLE_SIGNUP=true` setzen.
+      GOTRUE_DISABLE_SIGNUP: ${GOTRUE_DISABLE_SIGNUP:-false}
       GOTRUE_JWT_SECRET: ${JWT_SECRET}
       GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
       GOTRUE_JWT_ADMIN_ROLES: service_role
