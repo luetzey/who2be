@@ -13,9 +13,15 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class OAuthClientRegistration(BaseModel):
-    """Dynamic-Client-Registration-Request (RFC 7591). Public client (PKCE)."""
+    """Dynamic-Client-Registration-Request (RFC 7591). Public client (PKCE).
 
-    model_config = ConfigDict(extra="forbid")
+    `extra="ignore"` (nicht `forbid`): echte DCR-Clients (Claude/ChatGPT) senden
+    zusaetzliche Standard-Metadaten (`grant_types`, `response_types`, `scope`,
+    `client_uri`, …). RFC 7591 schreibt vor, nicht unterstuetzte Metadaten zu
+    IGNORIEREN — `forbid` wuerde die Registrierung mit 422 brechen.
+    """
+
+    model_config = ConfigDict(extra="ignore")
 
     redirect_uris: list[str] = Field(min_length=1, max_length=8)
     client_name: str | None = Field(default=None, max_length=200)
