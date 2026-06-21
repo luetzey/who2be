@@ -198,6 +198,9 @@ services:
         VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
         VITE_MCP_URL: https://mcp.${DOMAIN}/mcp
         VITE_WHO2BE_EDITION: onprem
+        # Public-Signup in der UI ausblenden (true), gemeinsam mit dem
+        # Backend-GOTRUE_DISABLE_SIGNUP setzen. Default false.
+        VITE_WHO2BE_SIGNUP_DISABLED: ${VITE_WHO2BE_SIGNUP_DISABLED:-false}
     depends_on:
       api:
         condition: service_healthy

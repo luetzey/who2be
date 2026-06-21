@@ -19,6 +19,18 @@ vi.mock('@/auth/session-context', () => ({
   useSession: () => ({ session: null, me: null }),
 }))
 
+const { mockConfig } = vi.hoisted(() => ({
+  mockConfig: {
+    apiBaseUrl: 'http://localhost:8000',
+    mcpUrl: 'http://localhost:8000/mcp',
+    supabaseUrl: 'http://localhost:54321',
+    supabaseAnonKey: 'anon',
+    signupDisabled: false,
+  },
+}))
+
+vi.mock('@/config', () => ({ config: mockConfig }))
+
 import { SignupPage } from './SignupPage'
 
 function renderPage(entry = '/signup') {
@@ -51,6 +63,7 @@ function fillForm({ consent = true }: { consent?: boolean } = {}) {
 afterEach(() => {
   signUp.mockReset()
   signInWithOAuth.mockReset()
+  mockConfig.signupDisabled = false
 })
 
 describe('SignupPage', () => {
@@ -77,6 +90,22 @@ describe('SignupPage', () => {
     await waitFor(() => {
       expect(screen.getByText(/Bestaetigungs-Link/i)).toBeInTheDocument()
     })
+  })
+
+  it('leitet bei deaktiviertem Signup auf /login um (kein Formular)', () => {
+    mockConfig.signupDisabled = true
+
+    render(
+      <MemoryRouter initialEntries={['/signup']}>
+        <Routes>
+          <Route path="/signup" element={<SignupPage />} />
+          <Route path="/login" element={<div>LOGIN</div>} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByText('LOGIN')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Konto erstellen' })).not.toBeInTheDocument()
   })
 
   it('blockt Signup ohne Consent (Submit + OAuth deaktiviert)', () => {

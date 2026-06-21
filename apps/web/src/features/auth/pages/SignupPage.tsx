@@ -14,6 +14,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { config } from '@/config'
 import { supabase } from '@/lib/supabase'
 
 import { OAuthButtons } from '../components/OAuthButtons'
@@ -65,6 +66,13 @@ export function SignupPage() {
 
   // Gate fuer Submit UND OAuth: erst nach Zustimmung freigeschaltet (WP-I).
   const consentGiven = form.watch('consent')
+
+  // Self-Service-Registrierung deaktiviert (VITE_WHO2BE_SIGNUP_DISABLED, spiegelt
+  // GOTRUE_DISABLE_SIGNUP) → die Seite ist nicht erreichbar, zurueck zum Login.
+  // Defense-in-Depth: GoTrue weist signUp ohnehin mit 422 ab.
+  if (config.signupDisabled) {
+    return <Navigate to="/login" replace />
+  }
 
   // Bereits eingeloggt (z. B. zurueck-navigiert) → nicht erneut registrieren.
   if (session !== null && !confirmationPending) {

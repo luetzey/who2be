@@ -64,6 +64,9 @@ services:
         VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
         VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
         VITE_MCP_URL: ${VITE_MCP_URL:-}
+        # Public-Signup in der UI ausblenden (true), gemeinsam mit dem
+        # Backend-GOTRUE_DISABLE_SIGNUP setzen. Default false.
+        VITE_WHO2BE_SIGNUP_DISABLED: ${VITE_WHO2BE_SIGNUP_DISABLED:-false}
     networks: [app-net]
     restart: unless-stopped
     healthcheck:

@@ -12,6 +12,11 @@ interface Config {
   mcpUrl: string
   supabaseUrl: string
   supabaseAnonKey: string
+  // Versteckt die Self-Service-Registrierung in der UI (Login-Link + die
+  // `/signup`-Route). Spiegelt das Backend-`GOTRUE_DISABLE_SIGNUP`: GoTrue setzt
+  // die echte Durchsetzung (signUp → 422), dieses Build-Flag entfernt nur die
+  // dann tote Signup-UI. Beide werden im Deploy gemeinsam gesetzt.
+  signupDisabled: boolean
 }
 
 function read(name: string, devFallback: string): string {
@@ -48,4 +53,5 @@ export const config: Config = {
   mcpUrl: mcpUrlOverride !== '' ? mcpUrlOverride : deriveMcpUrl(apiBaseUrl),
   supabaseUrl: read('VITE_SUPABASE_URL', 'http://localhost:54321'),
   supabaseAnonKey: read('VITE_SUPABASE_ANON_KEY', 'anon-key-placeholder'),
+  signupDisabled: (import.meta.env.VITE_WHO2BE_SIGNUP_DISABLED as string | undefined) === 'true',
 }
