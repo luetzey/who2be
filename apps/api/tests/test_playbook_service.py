@@ -322,11 +322,20 @@ class FakePlaybookRepository:
             return None
         return next((v for v in self._versions[playbook_id] if v.version == version), None)
 
-    async def list_distinct_tags(self, workspace_id: UUID, locale: str = "de") -> list[str]:
+    async def list_distinct_tags(
+        self,
+        workspace_id: UUID,
+        locale: str = "de",
+        restrict_ids: list[UUID] | None = None,
+    ) -> list[str]:
+        allowed = None if restrict_ids is None else set(restrict_ids)
         tags: set[str] = set()
         for playbook in self._playbooks.values():
-            if playbook.workspace_id == workspace_id:
-                tags.update(playbook.tags)
+            if playbook.workspace_id != workspace_id:
+                continue
+            if allowed is not None and playbook.id not in allowed:
+                continue
+            tags.update(playbook.tags)
         return sorted(tags)
 
     async def list_triggers_with_playbooks(self, workspace_id: UUID) -> list[TriggerOverview]:

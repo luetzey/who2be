@@ -118,7 +118,10 @@ class ResourceRepository(Protocol):
     async def delete(self, workspace_id: UUID, resource_id: UUID) -> bool: ...
 
     async def list_distinct_tags(
-        self, workspace_id: UUID, locale: str = DEFAULT_LOCALE
+        self,
+        workspace_id: UUID,
+        locale: str = DEFAULT_LOCALE,
+        restrict_ids: list[UUID] | None = None,
     ) -> list[str]: ...
 
 
@@ -267,17 +270,25 @@ class PgResourceRepository(VersionedAggregateRepository[ResourceRead, ResourceVe
         return [ResourceRead.model_validate(dict(row)) for row in rows]
 
     async def list_distinct_tags(
-        self, workspace_id: UUID, locale: str = DEFAULT_LOCALE
+        self,
+        workspace_id: UUID,
+        locale: str = DEFAULT_LOCALE,
+        restrict_ids: list[UUID] | None = None,
     ) -> list[str]:
         # Track E3: Tags liegen denormalisiert in `resource_version.content->'tags'`
         # (keine Array-Spalte auf `resource`, anders als bei Playbooks). DISTINCT
         # ueber die jeweils aktuelle Version pro Sprache (`_select_current`).
+        # `restrict_ids` (Read-Scoping `assigned`) begrenzt auf die sichtbaren
+        # Resources: NULL ⇒ keine Einschraenkung, leere Liste ⇒ keine Treffer —
+        # sonst leakt ein `assigned`-Agent fremde Tags ueber den Picker (LOW-1).
         select = self._select_current("$2")
         rows = await self._pool.fetch(
-            f"SELECT DISTINCT tag FROM ( {select} WHERE e.workspace_id = $1 ) AS cur, "
+            f"SELECT DISTINCT tag FROM ( {select} WHERE e.workspace_id = $1 "
+            "AND ($3::uuid[] IS NULL OR e.id = ANY($3)) ) AS cur, "
             "jsonb_array_elements_text(cur.content->'tags') AS tag "
             "ORDER BY tag ASC",
             workspace_id,
             locale,
+            restrict_ids,
         )
         return [row["tag"] for row in rows]
