@@ -193,7 +193,7 @@ def main() -> None:
             assert tok.headers.get("cache-control") == "no-store"
             body = tok.json()
             access, refresh = body["access_token"], body["refresh_token"]
-            assert access.startswith("w2b_") and body["expires_in"] == 3600, body
+            assert access.startswith("w2b_") and body["expires_in"] == 28800, body
             ok(f"token: Access (w2b_, exp={body['expires_in']}s) + Refresh ausgestellt")
 
             # DB-Beleg: agent-gebunden + Rolle-Snapshot + expires_at
