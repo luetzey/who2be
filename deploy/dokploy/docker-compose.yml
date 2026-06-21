@@ -48,6 +48,30 @@ services:
       timeout: 5s
       retries: 20
 
+  # Einmal-Service: setzt das Passwort von supabase_auth_admin auf
+  # POSTGRES_PASSWORD. Das supabase/postgres-Image LEGT diese GoTrue-Rolle an,
+  # aber OHNE Passwort (nur lokal-`trust` nutzbar). GoTrue verbindet per TCP
+  # (scram) → scheitert sonst mit "has no password assigned". Laeuft als
+  # supabase_admin (hat POSTGRES_PASSWORD per TCP), idempotent bei jedem Deploy.
+  db-roles:
+    image: postgres:16-alpine
+    environment:
+      PGHOST: db
+      PGUSER: supabase_admin
+      PGDATABASE: postgres
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      ROLE_PW: ${POSTGRES_PASSWORD}
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        until pg_isready; do echo "warte auf db..."; sleep 2; done
+        psql -v ON_ERROR_STOP=1 -c "ALTER ROLE supabase_auth_admin WITH LOGIN PASSWORD '$$ROLE_PW'"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [who2be]
+    restart: "no"
+
   auth:
     image: supabase/gotrue:v2.158.1
     environment:
@@ -75,6 +99,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      db-roles:
+        condition: service_completed_successfully
     networks: [who2be]
     restart: unless-stopped
     healthcheck:
