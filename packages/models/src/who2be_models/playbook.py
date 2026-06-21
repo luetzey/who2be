@@ -36,6 +36,11 @@ class PlaybookType(StrEnum):
     faq = "faq"
 
 
+# Kuratiertes Typ-Set fuer die Modell-Validierung — Spiegel des DB-CHECKs
+# `playbook_type_check` (Migrationen 0020/0025). Einzige Quelle ist das Enum.
+_PLAYBOOK_TYPE_VALUES: frozenset[str] = frozenset(member.value for member in PlaybookType)
+
+
 class PlaybookContent(BaseModel):
     """Typisierter Inhalt einer Playbook-Version (`playbook_version.content`).
 
@@ -59,6 +64,23 @@ class PlaybookContent(BaseModel):
     type: str = Field(default="", max_length=100)
     tags: list[TagStr] = Field(default_factory=list, max_length=50)
     triggers: str | None = Field(default=None, max_length=2_000)
+
+    @field_validator("type")
+    @classmethod
+    def _check_type(cls, value: str) -> str:
+        """Spiegelt den DB-CHECK `playbook_type_check` (Migration 0020/0025) am
+        Modell-Rand: erlaubt sind die kuratierten `PlaybookType`-Werte plus der
+        Leerstring (Draft ohne Typ). Ohne diese Pruefung passiert ein nicht-
+        kuratierter Typ (z. B. "Atomic" aus einem Import) die Pydantic-Schicht
+        und schlaegt erst als unbehandelte `CheckViolationError` beim INSERT auf
+        — der Client sieht dann faelschlich 500 statt 422. Reads sind sicher:
+        die Migrationen garantieren, dass jeder persistierte Wert im Set liegt."""
+        if value == "" or value in _PLAYBOOK_TYPE_VALUES:
+            return value
+        allowed = ", ".join(sorted(_PLAYBOOK_TYPE_VALUES))
+        raise ValueError(
+            f"Ungueltiger Playbook-Typ {value!r}; erlaubt: {allowed} (oder leer fuer Drafts)."
+        )
 
 
 class PlaybookCreate(BaseModel):

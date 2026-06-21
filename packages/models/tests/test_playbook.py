@@ -105,6 +105,14 @@ def test_content_rejects_oversized_type() -> None:
         PlaybookContent(description="d", body="b", type="x" * 101)
 
 
+def test_content_rejects_type_outside_curated_set() -> None:
+    # Regression: ein nicht-kuratierter Typ (z. B. "Atomic" aus einem Import)
+    # muss am Modell-Rand mit ValidationError -> 422 scheitern, nicht erst am
+    # DB-CHECK (`playbook_type_check`) als unbehandelter 500.
+    with pytest.raises(ValidationError):
+        PlaybookContent(description="d", body="b", type="Atomic")
+
+
 def test_version_read_carries_version() -> None:
     version = PlaybookVersionRead(
         version=5,
