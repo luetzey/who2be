@@ -282,7 +282,7 @@ def test_oauth_full_flow_and_security(monkeypatch: pytest.MonkeyPatch) -> None:
             access = payload["access_token"]
             refresh = payload["refresh_token"]
             assert access.startswith("w2b_")
-            assert payload["expires_in"] == 3600
+            assert payload["expires_in"] == 28800  # 8 h
             assert payload["token_type"] == "bearer"
 
             # Access-Token ist agent-gebunden + hat expires_at.

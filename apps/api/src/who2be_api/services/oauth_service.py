@@ -36,7 +36,9 @@ from who2be_models import (
     WorkspaceRole,
 )
 
-_ACCESS_TTL = timedelta(hours=1)
+# 8 h: lange genug, dass interaktive Connector-Sessions (Claude/ChatGPT) nicht
+# am Refresh-Fenster in transiente 401 laufen; der Refresh-Token rotiert weiter.
+_ACCESS_TTL = timedelta(hours=8)
 _REFRESH_TTL = timedelta(days=30)
 _CODE_TTL = timedelta(seconds=60)
 _REQUEST_BLOB_TTL = 600  # s
