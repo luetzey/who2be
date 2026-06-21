@@ -187,6 +187,13 @@ class PersonaService:
             workspace_id=ctx.workspace_id,
             persona_id=persona.id,
             now=datetime.now(UTC),
+            # Read-Scope des AUFRUFERS durchreichen (Security-Review MEDIUM-1):
+            # ohne tool_policy/agent_id expandieren Katalog-Pills
+            # (`playbooks-catalog`/`resources-catalog`) und `{{playbook:id}}`/
+            # `{{resource:id}}`-Refs workspace-weit — ein `assigned`-Agent saehe
+            # so nicht zugewiesene Inhalte. None (Mensch/JWT) = unrestricted.
+            tool_policy=ctx.tool_policy,
+            agent_id=ctx.agent_id,
         )
         if self._pool is None:  # pragma: no cover - im Prod immer gesetzt
             raise RuntimeError("PersonaService.render benoetigt einen DB-Pool.")

@@ -161,6 +161,13 @@ class PlaybookService:
             workspace_id=ctx.workspace_id,
             persona_id=None,
             now=datetime.now(UTC),
+            # Read-Scope des AUFRUFERS durchreichen (Security-Review MEDIUM-2):
+            # `self.get` scopt nur das Playbook selbst; eingebettete
+            # `{{resource:id}}`/`resources-catalog`-Pills im Body expandierten
+            # sonst ungescopt — ein zugewiesenes Playbook diente als Hebel, nicht
+            # zugewiesene Resources zu lesen. None (Mensch/JWT) = unrestricted.
+            tool_policy=ctx.tool_policy,
+            agent_id=ctx.agent_id,
         )
         async with self._pool.acquire() as conn:
             body_rendered, unresolved = await render_template_body(
