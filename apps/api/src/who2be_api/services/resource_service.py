@@ -20,6 +20,7 @@ from who2be_models import (
     DEFAULT_LOCALE,
     AgentCapability,
     DeleteBlocked,
+    ReadScope,
     ResourceContent,
     ResourceCreate,
     ResourceRead,
@@ -122,8 +123,24 @@ class ResourceService:
         )
 
     async def list_tags(self, ctx: WorkspaceContext, locale: str = DEFAULT_LOCALE) -> list[str]:
-        """DISTINCT-Tags des Workspaces — Datenquelle fuer den Resource-Tag-Picker."""
-        return await self._repo.list_distinct_tags(ctx.workspace_id, locale)
+        """DISTINCT-Tags des Workspaces — Datenquelle fuer den Resource-Tag-Picker.
+
+        Read-Scoping (`assigned`): nur Tags der sichtbaren Resources — sonst
+        leakt ein gebundener Token fremde Tag-Namen ueber den Picker (LOW-1).
+        Scope `none` → leere Liste (kein 403; Tags sind reine Metadaten).
+        Mensch/JWT (`tool_policy=None`) und ohne Pool (Test-Fakes) → alle Tags.
+        """
+        policy = ctx.tool_policy
+        if (
+            policy is not None
+            and ctx.agent_id is not None
+            and policy.resource_read == ReadScope.none
+        ):
+            return []
+        restrict_ids = await self._read_restrict(ctx)
+        return await self._repo.list_distinct_tags(
+            ctx.workspace_id, locale, restrict_ids=restrict_ids
+        )
 
     async def list_all(
         self,

@@ -175,7 +175,10 @@ class PlaybookRepository(Protocol):
     ) -> PlaybookVersionRead | None: ...
 
     async def list_distinct_tags(
-        self, workspace_id: UUID, locale: str = DEFAULT_LOCALE
+        self,
+        workspace_id: UUID,
+        locale: str = DEFAULT_LOCALE,
+        restrict_ids: list[UUID] | None = None,
     ) -> list[str]: ...
 
     async def list_triggers_with_playbooks(self, workspace_id: UUID) -> list[TriggerOverview]: ...
@@ -633,7 +636,10 @@ class PgPlaybookRepository(VersionedAggregateRepository[PlaybookRead, PlaybookVe
         return await self._fetch_version(workspace_id, playbook_id, version, locale)
 
     async def list_distinct_tags(
-        self, workspace_id: UUID, locale: str = DEFAULT_LOCALE
+        self,
+        workspace_id: UUID,
+        locale: str = DEFAULT_LOCALE,
+        restrict_ids: list[UUID] | None = None,
     ) -> list[str]:
         """DISTINCT alle Tags des Workspaces, lexikografisch sortiert.
 
@@ -641,6 +647,11 @@ class PgPlaybookRepository(VersionedAggregateRepository[PlaybookRead, PlaybookVe
         Playbooks ohne aktuelle Version ab. Cross-Workspace-Filter ueber
         `workspace_id` ist hier essenziell — Tags eines anderen Workspaces
         wuerden sonst durchschlagen (siehe `test_playbook_tags`).
+
+        `restrict_ids` (Read-Scoping `assigned`) begrenzt die Tag-Menge auf die
+        sichtbaren Playbooks: NULL ⇒ keine Einschraenkung, leere Liste ⇒ keine
+        Treffer. Sonst leakt ein `assigned`-Agent ueber den Tag-Picker die Tags
+        nicht zugewiesener Playbooks (LOW-1).
 
         `locale` steht nur fuer Protocol-Kompatibilitaet in der Signatur: Tags
         liegen entity-weit/denormalisiert auf `playbook.tags`, nicht pro Sprache
@@ -650,8 +661,10 @@ class PgPlaybookRepository(VersionedAggregateRepository[PlaybookRead, PlaybookVe
             "SELECT DISTINCT tag "
             "FROM playbook, unnest(tags) AS tag "
             "WHERE workspace_id = $1 "
+            "AND ($2::uuid[] IS NULL OR id = ANY($2)) "
             "ORDER BY tag ASC",
             workspace_id,
+            restrict_ids,
         )
         return [row["tag"] for row in rows]
 

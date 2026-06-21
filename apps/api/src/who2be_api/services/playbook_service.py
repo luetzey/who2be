@@ -35,6 +35,7 @@ from who2be_models import (
     PlaybookUpdate,
     PlaybookUsage,
     PlaybookVersionRead,
+    ReadScope,
     ResourceLinkSet,
     TriggerOverview,
     VersionDiff,
@@ -381,8 +382,25 @@ class PlaybookService:
         raise _not_found()
 
     async def list_tags(self, ctx: WorkspaceContext, locale: str = DEFAULT_LOCALE) -> list[str]:
-        """DISTINCT-Tags des Workspaces — Datenquelle fuer den Tag-Picker."""
-        return await self._repo.list_distinct_tags(ctx.workspace_id, locale)
+        """DISTINCT-Tags des Workspaces — Datenquelle fuer den Tag-Picker.
+
+        Read-Scoping (`assigned`): nur Tags der zugewiesenen Playbooks — sonst
+        leakt ein gebundener Token ueber den Tag-Picker die Tag-Namen nicht
+        zugewiesener Playbooks (LOW-1). Scope `none` → leere Liste (kein 403;
+        Tags sind reine Metadaten, konsistent mit den Render-Pfaden). Mensch/JWT
+        (`tool_policy=None`) → unveraendert alle Tags.
+        """
+        policy = ctx.tool_policy
+        if (
+            policy is not None
+            and ctx.agent_id is not None
+            and policy.playbook_read == ReadScope.none
+        ):
+            return []
+        restrict_ids = await playbook_read_restrict(self._pool, ctx)
+        return await self._repo.list_distinct_tags(
+            ctx.workspace_id, locale, restrict_ids=restrict_ids
+        )
 
     async def list_triggers(self, ctx: WorkspaceContext) -> list[TriggerOverview]:
         """Welle 5: Discovery-Liste aller Trigger im Workspace mit Playbook-Verweis.
