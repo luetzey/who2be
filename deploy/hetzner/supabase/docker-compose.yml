@@ -71,7 +71,7 @@ services:
       # In-App-Pfade darunter). Deckt die Reset-/Confirm-/OAuth-Callback-Routen
       # ab, ohne fremde Origins zuzulassen (Open-Redirect-Schutz, Track K).
       GOTRUE_URI_ALLOW_LIST: ${SITE_URL},${SITE_URL}/*
-      GOTRUE_DISABLE_SIGNUP: "false"
+      GOTRUE_DISABLE_SIGNUP: ${GOTRUE_DISABLE_SIGNUP:-false}
       GOTRUE_JWT_SECRET: ${JWT_SECRET}
       GOTRUE_JWT_EXP: ${JWT_EXP:-3600}
       GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
