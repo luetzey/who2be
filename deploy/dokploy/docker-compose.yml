@@ -23,7 +23,13 @@ services:
     environment:
       POSTGRES_HOST: /var/run/postgresql
       POSTGRES_DB: postgres
-      POSTGRES_USER: supabase_admin
+      # KEIN POSTGRES_USER setzen: die Image-Init (migrate.sh → 00-schema.sql)
+      # braucht die Default-Superuser-Rolle `postgres`. Mit POSTGRES_USER=
+      # supabase_admin legt der Entrypoint stattdessen supabase_admin als
+      # Superuser an → die Init bricht mit `role "postgres" does not exist` ab →
+      # supabase_auth_admin wird nie erzeugt. Ohne POSTGRES_USER legt das Image
+      # supabase_admin + supabase_auth_admin (beide mit POSTGRES_PASSWORD) selbst
+      # an. Empirisch verifiziert (App- + GoTrue-Migrationen laufen durch).
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
     volumes:
