@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const { signInWithPassword, getSession, onAuthStateChange } = vi.hoisted(() => ({
   signInWithPassword: vi.fn(),
@@ -16,11 +16,40 @@ vi.mock('@/lib/supabase', () => ({
   },
 }))
 
+const { mockConfig } = vi.hoisted(() => ({
+  mockConfig: {
+    apiBaseUrl: 'http://localhost:8000',
+    mcpUrl: 'http://localhost:8000/mcp',
+    supabaseUrl: 'http://localhost:54321',
+    supabaseAnonKey: 'anon',
+    signupDisabled: false,
+  },
+}))
+
+vi.mock('@/config', () => ({ config: mockConfig }))
+
 import { SessionProvider } from '@/auth/SessionProvider'
 import { sanitizeNext } from '@/features/auth/lib/sanitize-next'
 import { LoginPage } from './LoginPage'
 
 describe('LoginPage', () => {
+  afterEach(() => {
+    mockConfig.signupDisabled = false
+  })
+
+  it('versteckt den Registrieren-Link bei deaktiviertem Signup', () => {
+    mockConfig.signupDisabled = true
+    render(
+      <BrowserRouter>
+        <SessionProvider>
+          <LoginPage />
+        </SessionProvider>
+      </BrowserRouter>,
+    )
+
+    expect(document.querySelector('a[href*="/signup"]')).toBeNull()
+  })
+
   it('ruft signInWithPassword mit den eingegebenen Daten', async () => {
     signInWithPassword.mockResolvedValue({ data: { session: null }, error: null })
     render(

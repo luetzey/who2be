@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { config } from '@/config'
 import { useSession } from '@/auth/session-context'
 import { supabase } from '@/lib/supabase'
 import { notify } from '@/lib/feedback'
@@ -167,15 +168,19 @@ export function LoginPage() {
               <span className="h-px flex-1 bg-border" />
             </div>
             <OAuthButtons next={next} />
-            <p className="text-center text-sm text-muted-foreground">
-              {t('login.noAccount')}{' '}
-              <Link
-                to={next === '/' ? '/signup' : `/signup?next=${encodeURIComponent(next)}`}
-                className="font-medium text-foreground underline-offset-4 hover:underline"
-              >
-                {t('login.register')}
-              </Link>
-            </p>
+            {/* Self-Service-Registrierung nur zeigen, wenn nicht deaktiviert
+                (VITE_WHO2BE_SIGNUP_DISABLED, spiegelt GOTRUE_DISABLE_SIGNUP). */}
+            {!config.signupDisabled && (
+              <p className="text-center text-sm text-muted-foreground">
+                {t('login.noAccount')}{' '}
+                <Link
+                  to={next === '/' ? '/signup' : `/signup?next=${encodeURIComponent(next)}`}
+                  className="font-medium text-foreground underline-offset-4 hover:underline"
+                >
+                  {t('login.register')}
+                </Link>
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>

@@ -25,11 +25,16 @@ ARG VITE_MCP_URL=
 # Edition-Flag (ADR-0029): Default `onprem` → Billing-UI wird aus dem Bundle
 # tree-shaked. Cloud-Build setzt VITE_WHO2BE_EDITION=cloud.
 ARG VITE_WHO2BE_EDITION=onprem
+# Signup-Flag: `true` versteckt die Self-Service-Registrierung (Login-Link +
+# /signup-Route). Gemeinsam mit dem Backend-GOTRUE_DISABLE_SIGNUP setzen — GoTrue
+# ist die echte Durchsetzung, dieses Flag entfernt nur die tote UI.
+ARG VITE_WHO2BE_SIGNUP_DISABLED=false
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL \
     VITE_SUPABASE_URL=$VITE_SUPABASE_URL \
     VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY \
     VITE_MCP_URL=$VITE_MCP_URL \
-    VITE_WHO2BE_EDITION=$VITE_WHO2BE_EDITION
+    VITE_WHO2BE_EDITION=$VITE_WHO2BE_EDITION \
+    VITE_WHO2BE_SIGNUP_DISABLED=$VITE_WHO2BE_SIGNUP_DISABLED
 
 RUN npm run build
 
