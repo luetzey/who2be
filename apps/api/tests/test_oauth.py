@@ -144,9 +144,18 @@ def _settings() -> Settings:
 
 
 def _register(client: TestClient) -> str:
+    # Body wie ihn echte DCR-Clients (Claude/ChatGPT) senden: zusaetzliche
+    # RFC-7591-Standardfelder muessen IGNORIERT werden, nicht mit 422 abgelehnt.
     resp = client.post(
         "/oauth/register",
-        json={"redirect_uris": [_REDIRECT], "client_name": "Claude"},
+        json={
+            "redirect_uris": [_REDIRECT],
+            "client_name": "Claude",
+            "grant_types": ["authorization_code", "refresh_token"],
+            "response_types": ["code"],
+            "token_endpoint_auth_method": "none",
+            "scope": "openid",
+        },
     )
     assert resp.status_code == 201, resp.text
     return str(resp.json()["client_id"])
