@@ -21,8 +21,8 @@ import { describeAgentMissing } from '../lib/activation'
 
 // Read-Scope-Domains (Select all|assigned|none), An/Aus-Reads und Write-
 // Capability-Gruppen. Reihenfolge = Anzeigereihenfolge im Formular.
-const READ_SCOPE_FIELDS = ['playbook_read', 'resource_read'] as const
-const READ_FLAG_FIELDS = ['persona_read', 'agent_read'] as const
+const READ_SCOPE_FIELDS = ['playbook_read', 'resource_read', 'agent_read'] as const
+const READ_FLAG_FIELDS = ['persona_read'] as const
 const WRITE_CAP_FIELDS = [
   'persona_write',
   'playbook_write',
@@ -239,28 +239,33 @@ export function AgentEditorForm({
               >
                 <fieldset className="flex flex-col gap-3" disabled={isViewer}>
                   <legend className="text-sm font-medium">{t('form.policy.reads')}</legend>
-                  {READ_SCOPE_FIELDS.map((name) => (
-                    <FormField
-                      key={name}
-                      control={form.control}
-                      name={name}
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t(`form.policy.scopeField.${name}`)}</FormLabel>
-                          <FormControl>
-                            <Select disabled={isViewer} {...field}>
-                              {READ_SCOPES.map((scope) => (
-                                <option key={scope} value={scope}>
-                                  {t(`form.policy.scope.${scope}`)}
-                                </option>
-                              ))}
-                            </Select>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  ))}
+                  {READ_SCOPE_FIELDS.map((name) => {
+                    // agent_read nutzt agent-spezifische Optionslabels
+                    // ("Nur eigener Agent" statt "Nur zugewiesene").
+                    const scopeKey = name === 'agent_read' ? 'agentScope' : 'scope'
+                    return (
+                      <FormField
+                        key={name}
+                        control={form.control}
+                        name={name}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t(`form.policy.scopeField.${name}`)}</FormLabel>
+                            <FormControl>
+                              <Select disabled={isViewer} {...field}>
+                                {READ_SCOPES.map((scope) => (
+                                  <option key={scope} value={scope}>
+                                    {t(`form.policy.${scopeKey}.${scope}`)}
+                                  </option>
+                                ))}
+                              </Select>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )
+                  })}
                   {READ_FLAG_FIELDS.map((name) => (
                     <PolicyCheckbox
                       key={name}

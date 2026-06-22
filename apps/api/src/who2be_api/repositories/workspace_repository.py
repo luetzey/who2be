@@ -411,6 +411,7 @@ def _builder_tool_policy() -> dict[str, object]:
     return AgentToolPolicy(
         playbook_read=ReadScope.all,
         resource_read=ReadScope.all,
+        agent_read=ReadScope.all,
         persona_write=True,
         playbook_write=True,
         resource_write=True,

@@ -208,16 +208,21 @@
         "writesHint": "Standardmäßig aus. Nur aktivieren, was der Agent wirklich verändern können soll.",
         "scopeField": {
           "playbook_read": "Playbooks lesen",
-          "resource_read": "Resources lesen"
+          "resource_read": "Resources lesen",
+          "agent_read": "Agenten lesen"
         },
         "scope": {
           "all": "Alle (ganzer Workspace)",
           "assigned": "Nur zugewiesene",
           "none": "Aus"
         },
+        "agentScope": {
+          "all": "Alle Agenten",
+          "assigned": "Nur eigener Agent",
+          "none": "Aus"
+        },
         "flagField": {
-          "persona_read": "Eigene Persona lesen",
-          "agent_read": "Agenten lesen"
+          "persona_read": "Eigene Persona lesen"
         },
         "capField": {
           "persona_write": "Personas erstellen/ändern",

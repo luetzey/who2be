@@ -548,14 +548,15 @@ export type AgentStatus = 'enabled' | 'disabled'
 export type AgentMissing = 'persona' | 'template' | 'persona_active'
 
 // Pro-Agent-MCP-Tool-Policy (spiegelt AgentToolPolicy aus packages/models).
-// Read-Scope: 'all' = ganzer Workspace, 'assigned' = nur zugewiesene, 'none' = aus.
+// Read-Scope: 'all' = ganzer Workspace, 'assigned' = nur zugewiesene (fuer
+// agent_read: nur der eigene Agent), 'none' = aus.
 export type ReadScope = 'all' | 'assigned' | 'none'
 
 export interface AgentToolPolicy {
   playbook_read: ReadScope
   resource_read: ReadScope
+  agent_read: ReadScope
   persona_read: boolean
-  agent_read: boolean
   persona_write: boolean
   playbook_write: boolean
   resource_write: boolean
@@ -564,12 +565,13 @@ export interface AgentToolPolicy {
 }
 
 // Default-Policy fuer neue Agenten: nur Zugewiesenes lesen (least privilege/
-// "secure by default"), nichts schreiben. Owner kann pro Agent auf 'all' hochstufen.
+// "secure by default"), nichts schreiben. Fuer agent_read heisst 'assigned'
+// "nur der eigene Agent"; Owner kann pro Agent auf 'all' hochstufen.
 export const DEFAULT_TOOL_POLICY: AgentToolPolicy = {
   playbook_read: 'assigned',
   resource_read: 'assigned',
+  agent_read: 'assigned',
   persona_read: true,
-  agent_read: true,
   persona_write: false,
   playbook_write: false,
   resource_write: false,

@@ -32,8 +32,8 @@ class TestAgentToolPolicyDefaults:
         policy = AgentToolPolicy()
         assert policy.playbook_read == ReadScope.assigned
         assert policy.resource_read == ReadScope.assigned
+        assert policy.agent_read == ReadScope.assigned
         assert policy.persona_read is True
-        assert policy.agent_read is True
         assert policy.persona_write is False
         assert policy.playbook_write is False
         assert policy.resource_write is False
@@ -70,6 +70,14 @@ class TestIsWithin:
         # `none` ist die engste Stufe — innerhalb von allem.
         none = AgentToolPolicy(resource_read=ReadScope.none)
         assert none.is_within(assigned) is True
+
+    def test_wider_agent_read_scope_not_within(self) -> None:
+        # agent_read ist jetzt ebenfalls scope-gerankt: ein self-Agent darf via
+        # agent_write keinen `all`-Agenten erzeugen.
+        all_scope = AgentToolPolicy(agent_read=ReadScope.all)
+        assigned = AgentToolPolicy(agent_read=ReadScope.assigned)
+        assert all_scope.is_within(assigned) is False
+        assert assigned.is_within(all_scope) is True
 
 
 class TestRequireCapability:

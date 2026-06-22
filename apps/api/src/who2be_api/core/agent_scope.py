@@ -100,14 +100,31 @@ async def assigned_resource_ids(
 def require_read_flag(ctx: WorkspaceContext, flag: str, domain: str) -> None:
     """An/Aus-Lesegate (No-Op fuer ungebundene Tokens).
 
-    Fuer Reads ohne Scope-Abstufung (`persona_read`/`agent_read`): ist der Token
-    an einen Agenten gebunden und das Flag aus, wirft das ein 403.
+    Fuer Reads ohne Scope-Abstufung (`persona_read`): ist der Token an einen
+    Agenten gebunden und das Flag aus, wirft das ein 403.
     """
     policy = ctx.tool_policy
     if policy is None:
         return
     if not getattr(policy, flag):
         raise _tool_unavailable(domain)
+
+
+def agent_read_restrict(ctx: WorkspaceContext) -> set[UUID] | None:
+    """`restrict_ids` fuer Agent-Reads gemaess `agent_read`-Scope (DB-frei).
+
+    `None` = keine Einschraenkung (ungebundener Token/Mensch oder Scope `all`).
+    Bei `assigned` die Menge ``{ctx.agent_id}`` — der Agent sieht nur sich selbst.
+    Bei `none` ein 403, weil das Tool fuer den Agenten gar nicht verfuegbar ist.
+    """
+    policy = ctx.tool_policy
+    if policy is None or ctx.agent_id is None:
+        return None
+    if policy.agent_read == ReadScope.all:
+        return None
+    if policy.agent_read == ReadScope.none:
+        raise _tool_unavailable("Agenten")
+    return {ctx.agent_id}
 
 
 def _tool_unavailable(domain: str) -> HTTPException:

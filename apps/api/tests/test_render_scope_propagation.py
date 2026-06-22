@@ -47,7 +47,7 @@ def _agent_ctx(scope: ReadScope = ReadScope.assigned) -> WorkspaceContext:
             playbook_read=scope,
             resource_read=scope,
             persona_read=True,
-            agent_read=True,
+            agent_read=ReadScope.all,
         ),
     )
 
