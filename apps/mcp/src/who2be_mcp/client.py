@@ -272,6 +272,21 @@ class ApiClient:
         data = await self._get(f"{self._workspace_prefix}/agents/{agent_id}/rendered")
         return AgentWithRenderedPrompt.model_validate(data)
 
+    async def list_agents(self) -> list[AgentRead]:
+        """Laedt die Agenten-Konfigurationen des Workspace (eine Seite, Metadaten).
+
+        Liefert reine `AgentRead`-Konfig (Name/Status/Persona/Template/Policy),
+        keinen gerenderten Prompt. Enthaelt bewusst auch `disabled`-Agenten, damit
+        ein verwaltender Agent frisch angelegte Huellen vervollstaendigen kann.
+        """
+        data = await self._get(f"{self._workspace_prefix}/agents")
+        return [AgentRead.model_validate(item) for item in data]
+
+    async def get_agent(self, agent_id: UUID) -> AgentRead:
+        """Laedt die Konfig eines einzelnen Agenten (Metadaten, kein Render)."""
+        data = await self._get(f"{self._workspace_prefix}/agents/{agent_id}")
+        return AgentRead.model_validate(data)
+
     async def get_playbook_rendered(self, playbook_id: UUID, locale: str = DEFAULT_LOCALE) -> str:
         """Laedt den serverseitig expandierten Playbook-Body (B5).
 

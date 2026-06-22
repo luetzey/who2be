@@ -221,7 +221,7 @@
     "id": "pb-agent-li-create-p4-1",
     "type": "numberedListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Pruefe das Ergebnis mit fetch_agent(agent_id): Der gerenderte System-Prompt darf keine ungefuellten Platzhalter enthalten (unresolved_placeholders ist leer).", "styles": {}}],
+    "content": [{"type": "text", "text": "Pruefe das Ergebnis mit get_agent(agent_id): Persona und Template sind verknuepft und missing ist leer (activatable). Den vollstaendig gerenderten Prompt (unresolved_placeholders) kann nur der Agent selbst per fetch_agent bzw. der Nutzer in der Web-UI sehen — fetch_agent rendert ausschliesslich deinen eigenen Agenten.", "styles": {}}],
     "children": []
   },
   {
@@ -242,7 +242,7 @@
     "id": "pb-agent-li-update-1",
     "type": "numberedListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Verstehen: fetch_agent(agent_id) liest den aktuellen Stand (Persona, Template, tool_policy, Status, missing).", "styles": {}}],
+    "content": [{"type": "text", "text": "Verstehen: get_agent(agent_id) liest den aktuellen Stand (Persona, Template, tool_policy, Status, missing). list_agents findet bestehende Agenten, wenn du die ID nicht kennst.", "styles": {}}],
     "children": []
   },
   {
@@ -267,7 +267,7 @@
     "id": "pb-agent-li-update-4",
     "type": "numberedListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Hand-Off: Erneut fetch_agent zum Verifizieren des Renders. Wenn aktive Sitzungen laufen, weise darauf hin, dass eine neue Sitzung noetig ist, damit die geaenderte Konfiguration greift.", "styles": {}}],
+    "content": [{"type": "text", "text": "Hand-Off: Erneut get_agent zum Verifizieren der Konfig (missing leer, Status korrekt). Wenn aktive Sitzungen laufen, weise darauf hin, dass eine neue Sitzung noetig ist, damit die geaenderte Konfiguration greift.", "styles": {}}],
     "children": []
   },
   {
@@ -281,7 +281,7 @@
     "id": "pb-agent-li-copy-1",
     "type": "numberedListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Nur aktivierbare Agenten lassen sich kopieren — eine unvollstaendige Huelle (Persona oder Template fehlt) ist nicht kopierbar. Pruefe das vorab mit fetch_agent.", "styles": {}}],
+    "content": [{"type": "text", "text": "Nur aktivierbare Agenten lassen sich kopieren — eine unvollstaendige Huelle (Persona oder Template fehlt) ist nicht kopierbar. Pruefe das vorab mit get_agent (activatable).", "styles": {}}],
     "children": []
   },
   {
@@ -299,7 +299,7 @@
     "id": "pb-agent-li-copy-3",
     "type": "numberedListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Passe die Kopie anschliessend per update_agent an (z. B. andere Persona oder engere tool_policy) und verifiziere mit fetch_agent.", "styles": {}}],
+    "content": [{"type": "text", "text": "Passe die Kopie anschliessend per update_agent an (z. B. andere Persona oder engere tool_policy) und verifiziere mit get_agent.", "styles": {}}],
     "children": []
   },
   {
@@ -415,7 +415,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Lesen: ", "styles": {"bold": true}},
-      {"type": "text", "text": "get_persona (Persona + aktive Version pruefen), fetch_agent (aktueller Stand + gerenderter Prompt + missing), list_playbooks zur Orientierung.", "styles": {}}
+      {"type": "text", "text": "get_persona (Persona + aktive Version pruefen), list_agents (bestehende Agenten finden) und get_agent (Konfig eines Agenten: Persona, Template, tool_policy, Status, missing) — fuer JEDEN Agenten im Workspace. fetch_agent liefert zusaetzlich den gerenderten Prompt, aber nur fuer deinen EIGENEN Agenten. list_playbooks zur Orientierung.", "styles": {}}
     ],
     "children": []
   },
@@ -478,7 +478,7 @@
     "id": "pb-agent-li-anti-5",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Den Render nach create_agent oder update_agent nicht mit fetch_agent verifizieren — ungefuellte Platzhalter blieben sonst unbemerkt.", "styles": {}}],
+    "content": [{"type": "text", "text": "Die Konfig nach create_agent oder update_agent nicht mit get_agent verifizieren (missing leer, Status korrekt) — eine unvollstaendige Huelle bliebe sonst unbemerkt.", "styles": {}}],
     "children": []
   },
   {

@@ -391,6 +391,10 @@ async def fetch_agent(agent_id: str) -> AgentWithRenderedPrompt:
     Der System-Prompt wird serverseitig expandiert: alle Placeholder-Bloecke
     (Playbook, Resource, Persona-Feld, Datum) sind bereits aufgeloest und als
     Plain-Text eingebettet. MCP-Konsumenten sehen den fertigen Prompt.
+
+    Hinweis: Ein agent-gebundener Token darf ueber dieses Tool nur den EIGENEN
+    Agenten rendern (fremde UUID => „nicht gefunden"). Fuer die Konfig anderer
+    Agenten — etwa direkt nach `create_agent` — nimm `get_agent`/`list_agents`.
     """
     try:
         parsed = UUID(agent_id)
@@ -398,6 +402,35 @@ async def fetch_agent(agent_id: str) -> AgentWithRenderedPrompt:
         raise ToolError(f"Ungueltige Agent-UUID: '{agent_id}'.") from exc
     client = await build_client()
     return await client.get_agent_rendered(parsed)
+
+
+@mcp.tool
+@with_tool_log("list_agents")
+async def list_agents() -> list[AgentRead]:
+    """Listet die Agenten-Konfigurationen des Workspace (Metadaten, kein Prompt).
+
+    Liefert Name, Status, verknuepfte Persona/Template und die Tool-Policy jedes
+    Agenten — inklusive `disabled`-Agenten. Damit findest du bestehende Agenten
+    und kannst sie per `get_agent`/`update_agent` weiterbearbeiten. Den fertig
+    gerenderten Systemprompt liefert nur `fetch_agent` (und nur fuer dich selbst).
+    """
+    client = await build_client()
+    return await client.list_agents()
+
+
+@mcp.tool
+@with_tool_log("get_agent")
+async def get_agent(agent_id: str) -> AgentRead:
+    """Laedt die Konfig eines Agenten anhand seiner UUID (Metadaten, kein Render).
+
+    Der richtige Read nach `create_agent`/`copy_agent`, um den frisch angelegten
+    Agenten zu pruefen und zu vervollstaendigen. Gibt `AgentRead` zurueck
+    (Persona/Template/Status/Policy/activatable) — fuer den expandierten
+    Systemprompt siehe `fetch_agent` (self-only).
+    """
+    parsed = _parse_uuid(agent_id, "Agent")
+    client = await build_client()
+    return await client.get_agent(parsed)
 
 
 @mcp.tool
