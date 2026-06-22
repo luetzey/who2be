@@ -40,7 +40,7 @@ jobs:
             target: runtime-cloud
             build_args: ""
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: docker/setup-buildx-action@v4
 
