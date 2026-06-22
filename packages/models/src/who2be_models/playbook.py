@@ -7,7 +7,7 @@ Join filtern kann (siehe architecture.md §3).
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
@@ -54,9 +54,12 @@ class PlaybookContent(BaseModel):
 
     description: str = Field(default="", max_length=2_000)
     body: str = Field(default="", max_length=50_000)
-    # Welle 4: min_length entfernt; Default "" erlaubt Draft-Create ohne Typ.
-    # Der denormalisierte DB-Wert wird im Repo auf "prompt" gemappt wenn leer.
-    type: str = Field(default="", max_length=100)
+    # Welle 4: Default "" erlaubt Draft-Create ohne Typ. An `PlaybookType`
+    # gebunden (∪ ""), damit ein ungueltiger Typ an der API-/MCP-Grenze ein
+    # sauberes 422 liefert, statt erst beim INSERT als CheckViolation (500)
+    # aufzuschlagen — und damit das MCP-Tool-Schema die erlaubten Werte
+    # annonciert. Spiegelt den DB-CHECK `playbook_type_check` (Migration 0025).
+    type: PlaybookType | Literal[""] = ""
     tags: list[TagStr] = Field(default_factory=list, max_length=50)
     triggers: str | None = Field(default=None, max_length=2_000)
 
