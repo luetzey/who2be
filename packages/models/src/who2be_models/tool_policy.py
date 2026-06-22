@@ -1,15 +1,16 @@
 """Pro-Agent-Policy fuer MCP-Tool-Zugriff (Capability-Gruppen + Read-Scoping).
 
 Single Source of Truth fuer die Frage „welche MCP-Tools darf dieser Agent?":
-- **Reads** (`playbook_read`/`resource_read`) sind als `ReadScope` granular —
-  `all` (ganzer Workspace), `assigned` (nur die der eigenen Persona zugewiesenen
-  Playbooks/Resources) oder `none` (Tool nicht verfuegbar). `persona_read`/
-  `agent_read` sind einfache An/Aus-Schalter.
+- **Reads** (`playbook_read`/`resource_read`/`agent_read`) sind als `ReadScope`
+  granular — `all` (ganzer Workspace), `assigned` (nur Zugewiesenes; fuer
+  `agent_read` heisst das **nur der eigene Agent**) oder `none` (Tool nicht
+  verfuegbar). `persona_read` ist ein einfacher An/Aus-Schalter.
 - **Writes** sind Capability-Gruppen (Default aus): Persona/Playbook/Resource/Agent
   schreiben sowie `promote_retire` (Versionen aktiv/inaktiv schalten).
 
-Die Default-Instanz entspricht „Read-All, keine Writes" — neu angelegte Agenten
-duerfen alles lesen, aber nichts veraendern, bis der Owner es freischaltet.
+Die Default-Instanz ist „secure by default": Reads auf `assigned` (nur
+Zugewiesenes bzw. der eigene Agent), keine Writes — neu angelegte Agenten sehen
+nur ihren eigenen Scope und veraendern nichts, bis der Owner es freischaltet.
 
 Genutzt von API (Durchsetzung am Endpoint, System-Prompt-Filter) und — als
 geteiltes Modell — vom MCP-Adapter. Ueber MCP gibt es kein Delete (ADR-0030),
@@ -36,6 +37,11 @@ class ReadScope(StrEnum):
     all = "all"
     assigned = "assigned"
     none = "none"
+
+
+# Lese-Domains, deren Sichtbarkeit ueber `ReadScope` abgestuft ist. `agent_read`
+# nutzt denselben Enum: `assigned` = „nur der eigene Agent".
+_SCOPED_READ_FIELDS = ("playbook_read", "resource_read", "agent_read")
 
 
 class AgentCapability(StrEnum):
@@ -66,11 +72,14 @@ class AgentToolPolicy(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     # Reads — Default: nur Zugewiesenes (secure by default). Owner kann pro Agent
-    # auf `all` (ganzer Workspace) oder `none` (Tool aus) hochstufen.
+    # auf `all` (ganzer Workspace) oder `none` (Tool aus) hochstufen. Fuer
+    # `agent_read` bedeutet `assigned` „nur der eigene Agent" — ein Agent sieht
+    # standardmaessig keine fremden Agenten; nur ein Verwalter (z. B. der Builder)
+    # bekommt `all`.
     playbook_read: ReadScope = ReadScope.assigned
     resource_read: ReadScope = ReadScope.assigned
+    agent_read: ReadScope = ReadScope.assigned
     persona_read: bool = True
-    agent_read: bool = True
 
     # Writes — Default: nichts.
     persona_write: bool = False
@@ -91,13 +100,11 @@ class AgentToolPolicy(BaseModel):
         uebersteigen. Reads vergleichen den Scope-Rang (`none<assigned<all`),
         Writes/Bool-Reads die Teilmengen-Beziehung (`self ⇒ other`).
         """
-        if _SCOPE_RANK[self.playbook_read] > _SCOPE_RANK[other.playbook_read]:
-            return False
-        if _SCOPE_RANK[self.resource_read] > _SCOPE_RANK[other.resource_read]:
-            return False
+        for field in _SCOPED_READ_FIELDS:
+            if _SCOPE_RANK[getattr(self, field)] > _SCOPE_RANK[getattr(other, field)]:
+                return False
         bool_fields = (
             "persona_read",
-            "agent_read",
             "persona_write",
             "playbook_write",
             "resource_write",

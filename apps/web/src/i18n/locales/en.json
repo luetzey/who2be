@@ -208,16 +208,21 @@
         "writesHint": "Off by default. Only enable what the agent should actually be able to change.",
         "scopeField": {
           "playbook_read": "Read playbooks",
-          "resource_read": "Read resources"
+          "resource_read": "Read resources",
+          "agent_read": "Read agents"
         },
         "scope": {
           "all": "All (entire workspace)",
           "assigned": "Assigned only",
           "none": "Off"
         },
+        "agentScope": {
+          "all": "All agents",
+          "assigned": "Own agent only",
+          "none": "Off"
+        },
         "flagField": {
-          "persona_read": "Read own persona",
-          "agent_read": "Read agents"
+          "persona_read": "Read own persona"
         },
         "capField": {
           "persona_write": "Create/edit personas",

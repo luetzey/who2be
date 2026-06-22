@@ -13,7 +13,7 @@ from uuid import UUID
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
-from who2be_api.core.agent_scope import require_read_flag
+from who2be_api.core.agent_scope import agent_read_restrict
 from who2be_api.core.db import get_pool
 from who2be_api.core.pagination import DEFAULT_LIMIT, PageCursor, PageLimit
 from who2be_api.core.rate_limit import limiter, write_limit
@@ -168,7 +168,10 @@ async def fetch_agent_rendered(
     Wird vom MCP-Tool `fetch_agent` genutzt; kann auch direkt von der UI
     fuer einen Copy-Button eingesetzt werden.
     """
-    require_read_flag(ctx, "agent_read", "Agenten")
+    # `agent_read=none` => Tool aus (403). Der Scope `assigned`/`all` aendert hier
+    # nichts: Render bleibt fuer agent-gebundene Tokens IMMER self-only (s. u.) —
+    # `all` schaltet nur die Metadaten-Tools (list/get) workspace-weit frei.
+    agent_read_restrict(ctx)
     # Confinement (Security-Review MEDIUM-3): Ein agent-gebundener Token darf nur
     # seinen EIGENEN Agenten rendern. `fetch_rendered` expandiert den Body mit der
     # Policy des ZIEL-Agenten — fetchte ein `assigned`-Agent einen breiter

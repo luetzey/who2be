@@ -80,7 +80,7 @@ class _ToolDoc(BaseModel):
         if self.read_domain == "persona":
             return policy.persona_read
         if self.read_domain == "agent":
-            return policy.agent_read
+            return policy.agent_read != ReadScope.none
         return True
 
     def scope_suffix(self, policy: AgentToolPolicy | None) -> str:
@@ -91,6 +91,8 @@ class _ToolDoc(BaseModel):
             return " — **nur die dir zugewiesenen Playbooks**."
         if self.read_domain == "resource" and policy.resource_read == ReadScope.assigned:
             return " — **nur die dir zugewiesenen Resources**."
+        if self.read_domain == "agent" and policy.agent_read == ReadScope.assigned:
+            return " — **nur dein eigener Agent**."
         return ""
 
 
