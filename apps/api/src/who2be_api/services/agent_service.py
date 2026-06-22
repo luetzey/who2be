@@ -13,6 +13,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 
+from who2be_api.core.agent_scope import require_read_flag
 from who2be_api.core.security import WorkspaceContext, require_capability, require_role
 from who2be_api.repositories.agent_repository import AgentRepository
 from who2be_models import (
@@ -141,6 +142,10 @@ class AgentService:
         limit: int,
         cursor: tuple[datetime, UUID] | None,
     ) -> tuple[list[AgentRead], str | None]:
+        # An/Aus-Gate „Agenten lesen" (No-Op fuer Menschen/JWT). Bewusst KEIN
+        # `enabled`-only-Filter: ein Builder muss auch frisch erstellte (=disabled)
+        # und deaktivierte Agenten sehen, um sie zu vervollstaendigen.
+        require_read_flag(ctx, "agent_read", "Agenten")
         rows = await self._repo.list_by_workspace(ctx.workspace_id, limit + 1, cursor)
         if len(rows) > limit:
             items = rows[:limit]
@@ -149,6 +154,7 @@ class AgentService:
         return rows, None
 
     async def get(self, ctx: WorkspaceContext, agent_id: UUID) -> AgentRead:
+        require_read_flag(ctx, "agent_read", "Agenten")
         agent = await self._repo.fetch(ctx.workspace_id, agent_id)
         if agent is None:
             raise _not_found()
