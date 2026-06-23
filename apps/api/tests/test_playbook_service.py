@@ -18,12 +18,14 @@ from who2be_api.services.playbook_composition_service import PlaybookComposition
 from who2be_api.services.playbook_resource_link_service import PlaybookResourceLinkService
 from who2be_api.services.playbook_service import PlaybookService
 from who2be_models import (
+    AgentToolPolicy,
     PlaybookContent,
     PlaybookCreate,
     PlaybookRead,
     PlaybookRef,
     PlaybookUpdate,
     PlaybookVersionRead,
+    ReadScope,
     ResourceLinkItem,
     ResourceLinkRead,
     TriggerOverview,
@@ -47,13 +49,19 @@ def _content(
 
 
 def _ctx(
-    workspace_id: UUID, user_id: UUID | None = None, is_api_token: bool = False
+    workspace_id: UUID,
+    user_id: UUID | None = None,
+    is_api_token: bool = False,
+    tool_policy: AgentToolPolicy | None = None,
+    agent_id: UUID | None = None,
 ) -> WorkspaceContext:
     return WorkspaceContext(
         workspace_id=workspace_id,
         user_id=user_id or uuid4(),
         role=WorkspaceRole.admin,
         is_api_token=is_api_token,
+        tool_policy=tool_policy,
+        agent_id=agent_id,
     )
 
 
@@ -589,6 +597,49 @@ def test_api_token_context_filters_to_active_only() -> None:
     assert repo.last_active_only is True
     with pytest.raises(HTTPException) as exc:
         asyncio.run(service.get(token_ctx, inactive.id))
+    assert exc.value.status_code == 404
+
+
+def test_agent_with_playbook_write_sees_drafts() -> None:
+    """Editor-/Meta-Agent (playbook_write): Reads zeigen die Current-Version
+    inkl. Draft — sonst koennte er die Playbooks gar nicht pflegen."""
+    repo = FakePlaybookRepository()
+    service = _make_service(repo)
+    ws = uuid4()
+    user = uuid4()
+    web_ctx = _ctx(ws, user_id=user)
+    draft = asyncio.run(service.create(web_ctx, PlaybookCreate(name="D", content=_content())))
+    active = asyncio.run(service.create(web_ctx, PlaybookCreate(name="A", content=_content())))
+    repo.promote_current_to_active(active.id)
+
+    # playbook_read=all + playbook_write=true (read=all → kein restrict_ids).
+    policy = AgentToolPolicy(playbook_read=ReadScope.all, playbook_write=True)
+    editor_ctx = _ctx(ws, user_id=user, is_api_token=True, tool_policy=policy, agent_id=uuid4())
+    items, _ = asyncio.run(service.list_all(editor_ctx, None, None, 100, None))
+    assert {p.id for p in items} == {draft.id, active.id}
+    assert repo.last_active_only is False
+    # Den reinen Draft direkt lesen: kein 404 (anders als beim Konsum-Token).
+    assert asyncio.run(service.get(editor_ctx, draft.id)).id == draft.id
+
+
+def test_agent_without_playbook_write_stays_active_only() -> None:
+    """Konsum-Agent ohne playbook_write bleibt auf `active` — auch mit read=all."""
+    repo = FakePlaybookRepository()
+    service = _make_service(repo)
+    ws = uuid4()
+    user = uuid4()
+    web_ctx = _ctx(ws, user_id=user)
+    draft = asyncio.run(service.create(web_ctx, PlaybookCreate(name="D", content=_content())))
+    active = asyncio.run(service.create(web_ctx, PlaybookCreate(name="A", content=_content())))
+    repo.promote_current_to_active(active.id)
+
+    policy = AgentToolPolicy(playbook_read=ReadScope.all, playbook_write=False)
+    consumer_ctx = _ctx(ws, user_id=user, is_api_token=True, tool_policy=policy, agent_id=uuid4())
+    items, _ = asyncio.run(service.list_all(consumer_ctx, None, None, 100, None))
+    assert [p.id for p in items] == [active.id]
+    assert repo.last_active_only is True
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(service.get(consumer_ctx, draft.id))
     assert exc.value.status_code == 404
 
 

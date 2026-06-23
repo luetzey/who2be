@@ -137,6 +137,31 @@ class WorkspaceContext:
     # Writes und die Read-Services scopen ueber `tool_policy`.
     tool_policy: AgentToolPolicy | None = None
 
+    def sees_drafts(self, capability: AgentCapability) -> bool:
+        """True, wenn dieser Aufrufer die Current-Version (inkl. Draft/Review)
+        lesen darf, statt nur die `active`-Version.
+
+        „Wer pflegen darf, darf auch Drafts sehen" — die Draft-Sichtbarkeit eines
+        Read-Pfads folgt der zugehoerigen Write-Capability der Entitaet. Drei
+        Faelle:
+
+        - **Mensch/JWT** (`is_api_token=False`): immer — der Web-Editor arbeitet
+          grundsaetzlich auf der Current-Version.
+        - **Agent-gebundener Token**: nur, wenn die Policy `capability` gewaehrt
+          (z. B. ein Editor-/Meta-Agent wie der Builder mit `playbook_write`).
+          Reine Konsum-Agenten (Write aus) bleiben auf `active` — kein Leck
+          unfertiger Inhalte.
+        - **Ungebundener API-Token** (`tool_policy is None`, aber `is_api_token`):
+          bleibt auf `active` (bestehendes MCP-Konsum-Verhalten, Phase 2.1b).
+
+        Aufrufer leiten daraus `active_only = not ctx.sees_drafts(cap)` ab.
+        """
+        if not self.is_api_token:
+            return True
+        if self.tool_policy is None:
+            return False
+        return self.tool_policy.allows(capability)
+
 
 # Rollen-Hierarchie admin > editor > viewer (ADR-0023). Numerischer Rang fuer
 # `require_role`-Vergleiche — Single-Source der Ordnung im Backend.

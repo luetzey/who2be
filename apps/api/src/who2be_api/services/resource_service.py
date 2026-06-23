@@ -156,7 +156,7 @@ class ResourceService:
             tag,
             limit + 1,
             cursor,
-            active_only=ctx.is_api_token,
+            active_only=not ctx.sees_drafts(AgentCapability.resource_write),
             locale=locale,
             restrict_ids=restrict_ids,
         )
@@ -179,7 +179,7 @@ class ResourceService:
         resource = await self._repo.fetch(
             ctx.workspace_id,
             resource_id,
-            active_only=ctx.is_api_token,
+            active_only=not ctx.sees_drafts(AgentCapability.resource_write),
             locale=locale,
             restrict_ids=restrict_ids,
         )

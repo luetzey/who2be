@@ -40,7 +40,9 @@ class PersonaPlaybookService:
         if not await self._repo.persona_belongs_to(ctx.workspace_id, persona_id):
             raise _persona_not_found()
         links = await self._repo.list_linked(
-            ctx.workspace_id, persona_id, active_only=ctx.is_api_token
+            ctx.workspace_id,
+            persona_id,
+            active_only=not ctx.sees_drafts(AgentCapability.playbook_write),
         )
         # Read-Scoping: ein `assigned`-Agent darf ueber eine (ggf. fremde)
         # Persona keine nicht-zugewiesenen Playbooks dumpen — auf die sichtbare
@@ -68,5 +70,7 @@ class PersonaPlaybookService:
                 "gehoert einem anderen Workspace.",
             )
         return await self._repo.list_linked(
-            ctx.workspace_id, persona_id, active_only=ctx.is_api_token
+            ctx.workspace_id,
+            persona_id,
+            active_only=not ctx.sees_drafts(AgentCapability.playbook_write),
         )

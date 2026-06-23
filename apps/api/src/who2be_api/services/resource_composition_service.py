@@ -54,7 +54,9 @@ class ResourceCompositionService:
         if scope is not None and parent_id not in scope:
             raise _resource_not_found()
         return await self._repo.list_children(
-            ctx.workspace_id, parent_id, active_only=ctx.is_api_token
+            ctx.workspace_id,
+            parent_id,
+            active_only=not ctx.sees_drafts(AgentCapability.resource_write),
         )
 
     async def list_parents(self, ctx: WorkspaceContext, child_id: UUID) -> list[ResourceRef]:
@@ -122,5 +124,7 @@ class ResourceCompositionService:
             )
 
         return await self._repo.list_children(
-            ctx.workspace_id, parent_id, active_only=ctx.is_api_token
+            ctx.workspace_id,
+            parent_id,
+            active_only=not ctx.sees_drafts(AgentCapability.resource_write),
         )

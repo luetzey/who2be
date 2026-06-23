@@ -3,9 +3,12 @@
 Workspace-Pruefung liegt im SQL der Repository-Schicht; der Service
 uebersetzt ein fehlendes Ergebnis (`None`) in ein `HTTPException 404`.
 
-Phase 2.1b: Der `active_only`-Schalter (gesetzt fuer API-Token-Aufrufer ueber
-`ctx.is_api_token`, Plan §2.1.D) reicht in den Lese-Pfad durch; die
-Draft-on-Edit-Konfliktlage aus dem Repo wird auf 409 gemappt.
+Phase 2.1b: Der `active_only`-Schalter reicht in den Lese-Pfad durch (Plan
+§2.1.D). Statt pauschal fuer jeden API-Token folgt die Draft-Sichtbarkeit der
+Write-Capability: ein Agent mit `persona_write` (Editor-/Meta-Agent wie der
+Builder) liest die Current-Version inkl. Draft/Review (`ctx.sees_drafts`), reine
+Konsum-Agenten bleiben auf `active`. Die Draft-on-Edit-Konfliktlage aus dem Repo
+wird auf 409 gemappt.
 """
 
 import json
@@ -145,7 +148,11 @@ class PersonaService:
         # `limit + 1`-Peek: gibt es eine Folge-Zeile, codieren wir den
         # Cursor aus der letzten Zeile der Seite — sonst `None` (Ende).
         rows = await self._repo.list_by_workspace(
-            ctx.workspace_id, limit + 1, cursor, active_only=ctx.is_api_token, locale=locale
+            ctx.workspace_id,
+            limit + 1,
+            cursor,
+            active_only=not ctx.sees_drafts(AgentCapability.persona_write),
+            locale=locale,
         )
         if len(rows) > limit:
             items = rows[:limit]
@@ -158,7 +165,10 @@ class PersonaService:
     ) -> PersonaRead:
         require_read_flag(ctx, "persona_read", "Personas")
         persona = await self._repo.fetch(
-            ctx.workspace_id, persona_id, active_only=ctx.is_api_token, locale=locale
+            ctx.workspace_id,
+            persona_id,
+            active_only=not ctx.sees_drafts(AgentCapability.persona_write),
+            locale=locale,
         )
         if persona is None:
             raise _not_found()
