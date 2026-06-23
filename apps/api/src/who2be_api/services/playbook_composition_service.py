@@ -43,16 +43,20 @@ class PlaybookCompositionService:
     async def list_children(self, ctx: WorkspaceContext, parent_id: UUID) -> list[PlaybookRead]:
         """Gibt die geordneten Kinder des Composite zurueck.
 
-        `active_only` wird aus `ctx.is_api_token` abgeleitet (MCP-Pfad). Read-
-        Scoping: nur fuer ein dem Agenten zugewiesenes Composite (sonst 404) —
-        dessen Kinder sind ueber die assigned-Closure ohnehin sichtbar.
+        `active_only` folgt der `playbook_write`-Capability (`ctx.sees_drafts`):
+        ein Editor-/Meta-Agent sieht die Current-Version der Kinder inkl. Drafts,
+        reine Konsum-Agenten nur `active`. Read-Scoping: nur fuer ein dem Agenten
+        zugewiesenes Composite (sonst 404) — dessen Kinder sind ueber die
+        assigned-Closure ohnehin sichtbar.
         """
         if not await self._repo.parent_belongs_to(ctx.workspace_id, parent_id):
             raise _parent_not_found()
         scope = await visible_playbook_ids(self._pool, ctx)
         if scope is not None and parent_id not in scope:
             raise _parent_not_found()
-        return await self._repo.list_children(parent_id, active_only=ctx.is_api_token)
+        return await self._repo.list_children(
+            parent_id, active_only=not ctx.sees_drafts(AgentCapability.playbook_write)
+        )
 
     async def list_parents(self, ctx: WorkspaceContext, child_id: UUID) -> list[PlaybookRef]:
         """Gibt die Parent-Playbooks (Composed-By) zurueck.
@@ -110,4 +114,6 @@ class PlaybookCompositionService:
                 detail="Verknuepfung wuerde einen Zyklus erzeugen.",
             )
 
-        return await self._repo.list_children(parent_id, active_only=ctx.is_api_token)
+        return await self._repo.list_children(
+            parent_id, active_only=not ctx.sees_drafts(AgentCapability.playbook_write)
+        )

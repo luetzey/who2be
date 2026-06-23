@@ -3,8 +3,11 @@
 Workspace-Pruefung liegt im SQL der Repository-Schicht; der Service
 uebersetzt ein fehlendes Ergebnis (`None`) in ein `HTTPException 404`.
 
-Phase 2.1b: `active_only` ueber `ctx.is_api_token` (MCP-Pfad) und
-Draft-on-Edit-Konflikt aus dem Repo → 409.
+Phase 2.1b: `active_only` filtert Reads auf die `active`-Version. Statt pauschal
+fuer jeden API-Token (`is_api_token`) folgt die Draft-Sichtbarkeit der
+Write-Capability: ein Agent mit `playbook_write` (Editor-/Meta-Agent wie der
+Builder) liest die Current-Version inkl. Draft/Review (`ctx.sees_drafts`), reine
+Konsum-Agenten bleiben auf `active`. Draft-on-Edit-Konflikt aus dem Repo → 409.
 """
 
 from datetime import UTC, datetime
@@ -214,7 +217,7 @@ class PlaybookService:
             trigger,
             limit + 1,
             cursor,
-            active_only=ctx.is_api_token,
+            active_only=not ctx.sees_drafts(AgentCapability.playbook_write),
             locale=locale,
             restrict_ids=restrict_ids,
         )
@@ -231,7 +234,7 @@ class PlaybookService:
         playbook = await self._repo.fetch(
             ctx.workspace_id,
             playbook_id,
-            active_only=ctx.is_api_token,
+            active_only=not ctx.sees_drafts(AgentCapability.playbook_write),
             locale=locale,
             restrict_ids=restrict_ids,
         )
