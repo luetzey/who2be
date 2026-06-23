@@ -1393,6 +1393,38 @@ class TestToolsOverviewResolver:
         # Resources bleiben (Default all) sichtbar.
         assert "list_resources(tag?)" in result
 
+    def test_agent_read_tools_listed_in_overview(self) -> None:
+        """list_agents/get_agent stehen in der Werkzeug-Uebersicht (nicht nur fetch_agent)."""
+        result = _async_run(ToolsOverviewResolver().resolve("", _ctx(), _make_db())).text
+        assert "list_agents()" in result
+        assert "get_agent(agent_id)" in result
+        assert "fetch_agent(agent_id)" in result
+
+    def test_agent_read_assigned_marks_self_only(self) -> None:
+        """Scope `assigned`: Hinweis „nur dein eigener Agent" + fetch_agent self-only."""
+        from who2be_models import ReadScope
+
+        result = _async_run(
+            ToolsOverviewResolver().resolve(
+                "", self._policy_ctx(agent_read=ReadScope.assigned), _make_db()
+            )
+        ).text
+        assert "nur dein eigener Agent" in result
+        # fetch_agent-Beschreibung verweist fuer fremde Agenten auf get_agent.
+        assert "get_agent" in result
+
+    def test_agent_read_none_hides_agent_tools(self) -> None:
+        from who2be_models import ReadScope
+
+        result = _async_run(
+            ToolsOverviewResolver().resolve(
+                "", self._policy_ctx(agent_read=ReadScope.none), _make_db()
+            )
+        ).text
+        assert "list_agents()" not in result
+        assert "get_agent(agent_id)" not in result
+        assert "fetch_agent(agent_id)" not in result
+
 
 # ---------------------------------------------------------------------------
 # render_template_body (Renderer-Integration) — Welle 6: tuple return
