@@ -158,11 +158,31 @@ _TOOLS: list[_ToolDoc] = [
         ),
     ),
     _ToolDoc(
+        signature="list_agents()",
+        read_domain="agent",
+        description=(
+            "Katalog der Agenten im Workspace (Konfig/Metadaten: Name, Status, "
+            "Persona, Template, Policy) — inklusive deaktivierter und gerade erst "
+            "angelegter. Nutze das, um bestehende Agenten zu finden, bevor du "
+            "einen davon mit get_agent im Detail liest."
+        ),
+    ),
+    _ToolDoc(
+        signature="get_agent(agent_id)",
+        read_domain="agent",
+        description=(
+            "Konfig eines Agenten anhand seiner UUID (Persona, Template, Status, "
+            "tool_policy, missing/activatable) — kein gerenderter Prompt. Der "
+            "richtige Read direkt nach dem Anlegen oder Kopieren und vor dem Editieren."
+        ),
+    ),
+    _ToolDoc(
         signature="fetch_agent(agent_id)",
         read_domain="agent",
         description=(
             "Laedt einen Agenten samt Persona und fertig expandiertem "
-            "System-Prompt — etwa um einen anderen Agenten zu inspizieren."
+            "System-Prompt. Nur fuer DEINEN eigenen Agenten (fremde UUID => nicht "
+            "gefunden) — die Konfiguration anderer Agenten liest du mit get_agent."
         ),
     ),
     # --- Schreib-Tools (nur sichtbar, wenn die Policy die Capability gewaehrt) ---
