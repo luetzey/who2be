@@ -106,6 +106,7 @@ from who2be_models.system_prompt_template import (
 from who2be_models.token import TokenCreate, TokenCreated, TokenRead, TokenRename
 from who2be_models.tool_policy import AgentCapability, AgentToolPolicy, ReadScope
 from who2be_models.version_diff import DiffOp, VersionDiff, VersionDiffChange
+from who2be_models.whoami import WhoAmIRead
 from who2be_models.workspace import WorkspaceCreate, WorkspaceRead, WorkspaceUpdate
 from who2be_models.workspace_member import (
     WorkspaceMemberRead,
@@ -212,6 +213,7 @@ __all__ = [
     "VersionDiffChange",
     "VersionStatus",
     "VersionTransitionRequest",
+    "WhoAmIRead",
     "OrganizationDeletionRead",
     "WorkspaceCreate",
     "WorkspaceMemberRead",

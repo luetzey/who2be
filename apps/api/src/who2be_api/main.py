@@ -56,6 +56,7 @@ from who2be_api.routers import (
     system_prompts,
     tokens,
     usages,
+    whoami,
     workspaces,
 )
 from who2be_api.services.bootstrap_service import bootstrap_admin_if_needed
@@ -245,6 +246,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(system_prompts.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(agents.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(dashboard.router, prefix=_WORKSPACE_PREFIX)
+    # Identitaets-/Capability-Introspektion (#253) — ungated Read, Viewer-offen.
+    app.include_router(whoami.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(members.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(invitations.router, prefix=_WORKSPACE_PREFIX)
     # Entitlement-READ (editionsunabhaengig, reiner Read auf die Org-SSoT).
