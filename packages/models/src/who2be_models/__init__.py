@@ -92,6 +92,7 @@ from who2be_models.resource import (
 )
 from who2be_models.status import (
     ALLOWED_TRANSITIONS,
+    TRANSITION_RULE_DOC,
     VersionStatus,
     VersionTransitionRequest,
     is_allowed_transition,
@@ -119,6 +120,7 @@ __version__ = "0.1.0"
 
 __all__ = [
     "ALLOWED_TRANSITIONS",
+    "TRANSITION_RULE_DOC",
     "AccountDeletionRead",
     "ActionableBy",
     "ActivityPagination",
