@@ -18,7 +18,7 @@ import json
 import secrets
 import time
 from datetime import UTC, datetime, timedelta
-from urllib.parse import urlencode, urlparse, urlunparse
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 from uuid import UUID
 
 import asyncpg
@@ -140,8 +140,7 @@ class OAuthService:
             raise OAuthError("unsupported_response_type", "Nur response_type=code.")
         if code_challenge_method != "S256" or not code_challenge:
             raise OAuthError("invalid_request", "PKCE S256 erforderlich.")
-        if resource != self._settings.mcp_resource_url:
-            raise OAuthError("invalid_target", "resource passt nicht zum MCP-Server.")
+        agent_hint = _resource_agent_hint(resource, self._settings.mcp_resource_url)
         blob = self._sign(
             {
                 "client_id": client_id,
@@ -149,7 +148,10 @@ class OAuthService:
                 "redirect_uri": redirect_uri,
                 "code_challenge": code_challenge,
                 "state": state,
-                "resource": resource,
+                # KANONISCHE Resource (ohne Query) in den Blob — die Audience-Kette
+                # bleibt an den MCP-Server gebunden. Der Agent-Hint reist separat.
+                "resource": self._settings.mcp_resource_url,
+                "agent_id": str(agent_hint) if agent_hint is not None else None,
                 "scope": scope,
                 "exp": time.time() + _REQUEST_BLOB_TTL,
             }
@@ -171,7 +173,21 @@ class OAuthService:
         if str(payload["resource"]) != self._settings.mcp_resource_url:
             raise OAuthError("invalid_target", "resource passt nicht zum MCP-Server.")
 
+        # Hard-Lock: trug die Connector-URL einen `?agent=<uuid>`, bindet GENAU
+        # dieser (signierte) Agent — der client-gesendete `agent_id` wird ignoriert
+        # (Trust-Anker ist der HMAC-signierte Blob, nicht der Web-Submit). Ohne Hint
+        # gilt die Consent-Auswahl des Users.
+        blob_agent = payload.get("agent_id")
+        if blob_agent is not None:
+            try:
+                agent_id = UUID(str(blob_agent))
+            except ValueError as exc:
+                raise OAuthError("invalid_request", "Ungueltiger Agent im Consent.") from exc
+
         # Agent → Workspace + Rolle, NUR ueber die Memberships des Consent-Users.
+        # DIES ist das autoritative Gate — egal ob `agent_id` aus dem signierten
+        # Hint oder der User-Auswahl stammt: ein fremder Agent (kein eigener
+        # Workspace) faellt hier mit 403 durch.
         # `agent` ist RLS-isoliert (Migration 0037, strikt auf `app.current_tenant`):
         # ein roher Pool-Read ohne Tenant-Scope liefert in der Cloud 0 Zeilen. Wir
         # pruefen den Agenten je Kandidaten-Workspace UNTER `tenant_scope`
@@ -332,6 +348,29 @@ class OAuthService:
             refresh_token=refresh_plain,
             scope=scope,
         )
+
+
+def _resource_agent_hint(resource: str, expected_base: str) -> UUID | None:
+    """Validiert `resource` und liefert den optionalen `?agent=<uuid>`-Hint.
+
+    Erlaubt ist `expected_base` exakt ODER `expected_base?agent=<uuid>` — genau
+    der Schluessel `agent` mit gueltiger UUID, sonst `invalid_target`. So bekommt
+    jeder Agent eine EINDEUTIGE Connector-URL (Claude lehnt Duplikat-URLs ab),
+    waehrend die RFC-8707-Audience-Bindung an die KANONISCHE MCP-Resource
+    (`expected_base`, ohne Query) erhalten bleibt. `None`, wenn kein Hint da ist.
+    """
+    base, sep, query = resource.partition("?")
+    if base != expected_base:
+        raise OAuthError("invalid_target", "resource passt nicht zum MCP-Server.")
+    if not sep or query == "":
+        return None
+    params = parse_qs(query, keep_blank_values=True)
+    if set(params) != {"agent"} or len(params["agent"]) != 1:
+        raise OAuthError("invalid_target", "resource-Query erlaubt nur ?agent=<uuid>.")
+    try:
+        return UUID(params["agent"][0])
+    except ValueError as exc:
+        raise OAuthError("invalid_target", "agent in resource ist keine gueltige UUID.") from exc
 
 
 def _is_allowed_redirect(uri: str) -> bool:

@@ -273,6 +273,18 @@
       "createError": "Anlegen fehlgeschlagen.",
       "saved": "Agent gespeichert.",
       "unknownError": "Unbekannter Fehler."
+    },
+    "connector": {
+      "title": "Claude-Connector",
+      "description": "Verbindungsparameter für einen Remote-MCP-Connector dieses Agenten. Beim Verbinden meldest du dich per OAuth an — kein Token nötig. Die URL ist pro Agent eindeutig, damit Claude sie nicht als Duplikat ablehnt.",
+      "nameLabel": "Connector-Name",
+      "nameValue": "Who2Be – {{name}}",
+      "urlLabel": "Server-URL",
+      "urlHint": "In Claude unter „Connector hinzufügen\" als URL einfügen. Beim Login bestätigst du den Agenten im Consent-Dialog.",
+      "copyUrl": "URL kopieren",
+      "copyName": "Namen kopieren",
+      "copied": "In Zwischenablage kopiert.",
+      "error": "Kopieren fehlgeschlagen."
     }
   },
   "auth": {
@@ -364,7 +376,9 @@
       "loadingAgents": "Agenten werden geladen…",
       "noAgents": "Keine Agenten in diesem Workspace. Lege zuerst einen Agenten an.",
       "error": "Autorisierung fehlgeschlagen. Bitte erneut versuchen.",
-      "missingRequest": "Ungültiger Verbindungs-Link — der Autorisierungs-Request fehlt."
+      "missingRequest": "Ungültiger Verbindungs-Link — der Autorisierungs-Request fehlt.",
+      "lockedLabel": "Agent (über die Verbindungs-URL festgelegt)",
+      "lockedHint": "Dieser Agent ist durch die Connector-URL vorgegeben und kann hier nicht gewechselt werden."
     },
     "validation": {
       "emailInvalid": "Bitte gueltige E-Mail eingeben.",

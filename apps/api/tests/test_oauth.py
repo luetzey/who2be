@@ -14,7 +14,7 @@ import hashlib
 import secrets
 from datetime import UTC, datetime, timedelta
 from urllib.parse import parse_qs, urlparse
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import asyncpg
 import jwt
@@ -71,6 +71,20 @@ def _agent_in(ws: UUID) -> UUID:
     return asyncio.run(_run())
 
 
+def _token_agent_id(token_hash: str) -> UUID | None:
+    async def _run() -> UUID | None:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            value: UUID | None = await conn.fetchval(
+                "SELECT agent_id FROM api_token WHERE token_hash = $1", token_hash
+            )
+            return value
+        finally:
+            await conn.close()
+
+    return asyncio.run(_run())
+
+
 def _token_expires_at(token_hash: str) -> datetime | None:
     async def _run() -> datetime | None:
         conn = await asyncpg.connect(get_settings().database_url)
@@ -90,8 +104,7 @@ def _expire_token(token_hash: str) -> None:
         conn = await asyncpg.connect(get_settings().database_url)
         try:
             await conn.execute(
-                "UPDATE api_token SET expires_at = now() - interval '1 hour' "
-                "WHERE token_hash = $1",
+                "UPDATE api_token SET expires_at = now() - interval '1 hour' WHERE token_hash = $1",
                 token_hash,
             )
         finally:
@@ -181,6 +194,26 @@ def _authorize_blob(client: TestClient, client_id: str, challenge: str) -> str:
     return blob
 
 
+def _authorize_blob_resource(
+    client: TestClient, client_id: str, challenge: str, resource: str
+) -> str:
+    resp = client.get(
+        "/oauth/authorize",
+        params={
+            "response_type": "code",
+            "client_id": client_id,
+            "redirect_uri": _REDIRECT,
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+            "resource": resource,
+            "state": "xyz",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302, resp.text
+    return str(parse_qs(urlparse(resp.headers["location"]).query)["request"][0])
+
+
 def _consent_code(client: TestClient, blob: str, agent_id: str, jwt_auth: dict[str, str]) -> str:
     resp = client.post(
         "/oauth/consent",
@@ -192,6 +225,89 @@ def _consent_code(client: TestClient, blob: str, agent_id: str, jwt_auth: dict[s
     params = parse_qs(urlparse(redirect).query)
     assert params["state"] == ["xyz"]
     return str(params["code"][0])
+
+
+def test_resource_agent_hint_parses_and_validates() -> None:
+    """`_resource_agent_hint` akzeptiert die kanonische Resource und genau einen
+    optionalen `?agent=<uuid>`; alles andere ist `invalid_target` (DB-frei)."""
+    base = "https://mcp.example.com/mcp"
+    aid = uuid4()
+
+    # Kanonisch (kein/leerer Query) → kein Hint.
+    assert oauth_service._resource_agent_hint(base, base) is None
+    assert oauth_service._resource_agent_hint(f"{base}?", base) is None
+    # Gueltiger agent-Query → UUID.
+    assert oauth_service._resource_agent_hint(f"{base}?agent={aid}", base) == aid
+
+    # Falsche Basis, fremder/zusaetzlicher Key, mehrfacher agent, kaputte UUID.
+    for bad_resource in (
+        "https://evil.example/mcp",
+        f"{base}?foo=bar",
+        f"{base}?agent={aid}&x=1",
+        f"{base}?agent={aid}&agent={aid}",
+        f"{base}?agent=not-a-uuid",
+    ):
+        with pytest.raises(oauth_service.OAuthError) as exc:
+            oauth_service._resource_agent_hint(bad_resource, base)
+        assert exc.value.error == "invalid_target"
+
+
+@pytest.mark.integration
+def test_oauth_resource_agent_hint_hard_locks(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Traegt die Connector-URL `?agent=<uuid>`, bindet der SIGNIERTE Blob-Agent —
+    ein abweichender, vom Web gesendeter `agent_id` wird ignoriert (Hard-Lock)."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: _settings())
+    monkeypatch.setattr(oauth_service, "get_settings", lambda: _settings())
+
+    owner_id = fresh_user_id()
+    ws = setup_workspace(owner_id)
+    agent_id = str(_agent_in(ws))
+    jwt_auth = {"Authorization": f"Bearer {_jwt(owner_id)}"}
+
+    try:
+        with TestClient(app) as client:
+            client_id = _register(client)
+            verifier, challenge = _pkce()
+            blob = _authorize_blob_resource(
+                client, client_id, challenge, f"{_RESOURCE}?agent={agent_id}"
+            )
+            # Web sendet absichtlich einen FREMDEN agent_id — der Seed-Agent aus
+            # dem Blob muss gewinnen: Consent gelingt (Seed ist Mitglied), und der
+            # ausgegebene Token ist an den Seed-Agenten gebunden.
+            code = _consent_code(client, blob, str(uuid4()), jwt_auth)
+            access = client.post(
+                "/oauth/token",
+                data={
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "redirect_uri": _REDIRECT,
+                    "client_id": client_id,
+                    "code_verifier": verifier,
+                },
+            ).json()["access_token"]
+            assert _token_agent_id(security.hash_token(access)) == UUID(agent_id)
+
+            # Ungueltige UUID in der resource → authorize 400 invalid_target.
+            bad = client.get(
+                "/oauth/authorize",
+                params={
+                    "response_type": "code",
+                    "client_id": client_id,
+                    "redirect_uri": _REDIRECT,
+                    "code_challenge": challenge,
+                    "code_challenge_method": "S256",
+                    "resource": f"{_RESOURCE}?agent=not-a-uuid",
+                },
+                follow_redirects=False,
+            )
+            assert bad.status_code == 400
+            assert bad.json()["error"] == "invalid_target"
+    finally:
+        cleanup_workspaces([owner_id])
 
 
 @pytest.mark.integration
@@ -322,9 +438,7 @@ def test_oauth_full_flow_and_security(monkeypatch: pytest.MonkeyPatch) -> None:
             assert client.get("/v1/me", headers=api_auth).status_code == 401
             # Neuer Access-Token funktioniert.
             new_api_auth = {"Authorization": f"Bearer {new_access}"}
-            assert (
-                client.get("/v1/me", headers=new_api_auth).status_code == 200
-            )
+            assert client.get("/v1/me", headers=new_api_auth).status_code == 200
 
             # --- Refresh-Replay (alter Refresh) → invalid_grant + Kette gekillt ---
             replay_refresh = client.post(
@@ -338,9 +452,7 @@ def test_oauth_full_flow_and_security(monkeypatch: pytest.MonkeyPatch) -> None:
             assert replay_refresh.status_code == 400
             assert replay_refresh.json()["error"] == "invalid_grant"
             # Der aus dem konsumierten Refresh entstandene Access-Token ist widerrufen.
-            assert (
-                client.get("/v1/me", headers=new_api_auth).status_code == 401
-            )
+            assert client.get("/v1/me", headers=new_api_auth).status_code == 401
 
             # --- Access-Token-Expiry → 401 ---
             verifier2, challenge2 = _pkce()
