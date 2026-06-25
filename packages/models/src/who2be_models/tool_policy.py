@@ -92,6 +92,31 @@ class AgentToolPolicy(BaseModel):
         """True, wenn die Policy die gegebene Schreib-Capability gewaehrt."""
         return bool(getattr(self, capability.value))
 
+    def granted_capabilities(self) -> list[AgentCapability]:
+        """Die gewaehrten Schreib-Capabilities, in Enum-Reihenfolge.
+
+        Additiver Lister fuer Introspektion (z. B. der `whoami`-Endpunkt, #253):
+        spiegelt genau die Capabilities, fuer die `allows` True liefert. Reine
+        Lese-Scopes (`*_read`) sind hier bewusst NICHT enthalten — sie sind ueber
+        `ReadScope` abgestuft und werden separat ausgegeben.
+        """
+        return [cap for cap in AgentCapability if self.allows(cap)]
+
+    def read_scopes(self) -> dict[str, ReadScope]:
+        """Die effektiven Read-Scopes pro Domain als Mapping.
+
+        `persona_read` ist ein An/Aus-Schalter und wird auf `all`/`none`
+        normalisiert, damit alle vier Domains denselben `ReadScope`-Wertebereich
+        tragen; die drei granular gescopten Reads geben ihren `ReadScope` direkt
+        aus. Fuer die Introspektion via `whoami` (#253).
+        """
+        return {
+            "persona": ReadScope.all if self.persona_read else ReadScope.none,
+            "playbook": self.playbook_read,
+            "resource": self.resource_read,
+            "agent": self.agent_read,
+        }
+
     def is_within(self, other: AgentToolPolicy) -> bool:
         """True, wenn diese Policy nichts gewaehrt, was `other` nicht auch gewaehrt.
 

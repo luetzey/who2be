@@ -533,5 +533,10 @@
     "method": "POST",
     "path": "/v1/workspaces/{workspace_id}/tokens/{token_id}/rotate",
     "operationId": "rotate_token_v1_workspaces__workspace_id__tokens__token_id__rotate_post"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/whoami",
+    "operationId": "whoami_v1_workspaces__workspace_id__whoami_get"
   }
 ]

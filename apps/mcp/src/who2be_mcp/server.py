@@ -52,6 +52,7 @@ from who2be_models import (
     TriggerOverview,
     VersionStatus,
     VersionTransitionRequest,
+    WhoAmIRead,
 )
 
 logger = logging.getLogger(__name__)
@@ -242,8 +243,39 @@ def _parse_uuid(value: str, label: str) -> UUID:
 @mcp.tool
 @with_tool_log("ping")
 def ping() -> str:
-    """Liveness-Check fuer den Who2Be-MCP-Server."""
+    """Liveness-Check fuer den Who2Be-MCP-Server.
+
+    Bewusst auth-frei (kein API-Aufruf): bestaetigt nur, dass der MCP-Server
+    erreichbar ist. Fuer *wer bin ich und was darf ich* (Identitaet, Rolle,
+    Agent-Bindung, gewaehrte Capabilities, Read-Scopes, Entitlement-Features)
+    nutze stattdessen `whoami` — das den Token gegen die API aufloest.
+    """
     return "pong"
+
+
+@mcp.tool
+@with_tool_log("whoami")
+async def whoami() -> WhoAmIRead:
+    """Identitaet + effektive Berechtigungen des aktuellen API-Tokens (#253).
+
+    Loest den Bearer-Token gegen die API auf und liefert, wer du bist und was du
+    darfst — ohne Raten: `role`, `is_api_token`, `agent_id` (null wenn der Token
+    nicht an einen Agenten gebunden ist), die gewaehrten Write-`capabilities`,
+    die `read_scopes` je Domain und die org-weiten `features` (Entitlement).
+
+    Wichtig — `unrestricted`: bei einem Menschen/JWT oder einem ungebundenen
+    Token ist `unrestricted=True` und `capabilities`/`read_scopes` sind `null`.
+    Das heisst **"keine Pro-Agent-Restriktion"**, NICHT "nichts erlaubt": es
+    greift dann allein das Rollen-Gate. Nur ein agent-gebundener Token traegt
+    eine konkrete Policy (`unrestricted=False`) mit aufgelisteten Capabilities.
+
+    Wer eine Write-Capability haelt, sieht ueber die Lese-Tools zudem die
+    Current-Version inkl. Draft/Review der betreffenden Domain (nicht nur
+    `active`) — so erscheint z. B. eine frisch via `create_*` angelegte Draft
+    sofort im eigenen `fetch_*`.
+    """
+    client = await build_client()
+    return await client.whoami()
 
 
 @mcp.tool
@@ -438,7 +470,14 @@ async def get_agent(agent_id: str) -> AgentRead:
 async def fetch_resource(
     resource_id: str, block_ids: list[str] | None = None, locale: str = "de"
 ) -> ResourceRead:
-    """Laedt die aktive Version einer Resource (per UUID).
+    """Laedt eine Resource (per UUID) in ihrer fuer dich sichtbaren Version.
+
+    Welche Version du siehst, haengt von deiner Berechtigung ab (`sees_drafts`):
+    Wer die `resource_write`-Capability haelt (Mensch/Editor-Agent), bekommt die
+    **Current-Version inkl. Draft/Review** — eine frisch via `create_resource`
+    angelegte Draft erscheint also sofort hier. Reine Konsum-Tokens (kein
+    `resource_write`) sehen weiterhin nur die **aktive** Version; existiert keine
+    aktive, antwortet die API mit 404. Pruefe deine Capabilities via `whoami`.
 
     `locale` waehlt die Sprachvariante der Resource und ihrer inline
     mitgelieferten Sub-Resources (Default `'de'`).

@@ -40,6 +40,7 @@ from who2be_models import (
     SubResourceRead,
     TriggerOverview,
     VersionTransitionRequest,
+    WhoAmIRead,
 )
 
 logger = logging.getLogger(__name__)
@@ -153,6 +154,11 @@ class ApiClient:
         payload = body.model_dump(mode="json") if body is not None else None
         response = await self._request(method, path, params=params, json=payload)
         return response.json()
+
+    async def whoami(self) -> WhoAmIRead:
+        """Laedt Identitaet + effektive Berechtigungen des aufrufenden Tokens (#253)."""
+        data = await self._get(f"{self._workspace_prefix}/whoami")
+        return WhoAmIRead.model_validate(data)
 
     async def get_persona(self, identifier: str, locale: str = DEFAULT_LOCALE) -> PersonaRead:
         """Laedt eine Persona per UUID oder — sonst — per Name (in `locale`)."""
