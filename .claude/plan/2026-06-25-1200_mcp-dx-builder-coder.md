@@ -351,12 +351,45 @@ Welle 2 erst nach den jeweiligen Merges.
 
 ## 7. Gesamt-Definition-of-Done
 
-- [ ] WP-1 `whoami` gemerged; `ping` bleibt auth-frei.
-- [ ] WP-2 strukturierte Fehler mit `actionable_by`/`reason` gemerged.
-- [ ] WP-3 reproduziert: Draft-Sichtbarkeit bestätigt (Issue geschlossen/umgeschrieben) **oder** Lücke gefixt.
-- [ ] WP-4 Composite-Invariante an Promote-Zeit; Doku korrigiert.
-- [ ] WP-5 Transition-Doku in allen drei Tools.
-- [ ] WP-6 Block-Anker lesbar.
-- [ ] Epic #259-Checkliste vollständig; alle PRs `Closes #NNN`; security-reviewer
-      auf Auth-/Read-berührenden PRs durchlaufen.
-- [ ] `.claude/context/STATE` + (bei Architekturwirkung) `DECISIONS` gepflegt.
+- [x] WP-1 `whoami` gemerged (PR #263, `dcb69e1`); `ping` bleibt auth-frei. Scope inkl. Entitlement-Features.
+- [x] WP-2 strukturierte Fehler mit `actionable_by`/`reason` gemerged (PR #264, `203ecb8`).
+- [x] WP-3 reproduziert: Draft-Sichtbarkeit bestätigt → #255 als „bereits gelöst" geschlossen; Docstring-Fix in #263 mitgereist.
+- [x] WP-4 Composite-Invariante an Promote-Zeit (PR #265, `003d02b`); MCP-Doku präzisiert.
+- [x] WP-5 Transition-Doku in allen drei Tools (PR #261, `f426838`).
+- [x] WP-6 Block-Anker lesbar (PR #262, `406d5ae`).
+- [x] Epic #259 vollständig; alle PRs `Closes #NNN`; security-reviewer auf WP-1/WP-2/WP-6 + WP-4-Selbstreview durchlaufen.
+- [ ] `.claude/context/STATE` + (bei Architekturwirkung) `DECISIONS` pflegen — **offen** (ggf. ADR für `whoami`/Fehler-Taxonomie/`composite_child_inactive`).
+
+---
+
+## 8. Abschluss-Notizen (2026-06-25)
+
+Welle 1 (WP-1/2/5/6) + Welle 2 (WP-4) vollständig nach `main` gemergt (squash,
+sequenziell mit Rebase). `main` final verifiziert: `ruff` grün, 20 passed /
+8 DB-skip (Contract, Fehler-Taxonomie, Composition, MCP-Server).
+
+**Erkenntnisse, die Annahmen korrigierten:**
+- **WP-3 (#255):** Draft-Sichtbarkeit war bereits vollständig verdrahtet
+  (`sees_drafts`) — kein Code-Change, nur Doku. Gate 0 hat einen überflüssigen
+  Build verhindert.
+- **WP-4 (#256):** Die „aktive Kinder"-Regel war **nirgends** erzwungen (kein
+  Service-/Repo-/DB-CHECK) — Draft-Kinder schon immer verkettbar. WP-4 ergänzte
+  nur die fehlende Promote-Zeit-Prüfung (`composite_child_inactive`).
+- **WP-5 (#257):** f-String-Docstrings landen **nicht** in `__doc__` (Plan-
+  Annahme war falsch) → `@mcp.tool(description=…)` genutzt.
+- **WP-6-Follow-up:** WP-6 ergänzte die `…/blocks`-Route ohne OpenAPI-Golden-
+  Regen → Contract-Test war kurzzeitig auf `main` rot; im WP-4-PR (`REGEN=1`)
+  mitbehoben.
+
+**Umwelt/CI:** Alle PR-CI-Läufe waren umgebungsbedingt rot (`startup_failure`,
+repo-weit, keine Branch-Protection-Pflichtchecks) — Merges davon nicht
+blockiert. DB-gebundene Integrationstests konnten in der Sandbox nicht real
+laufen (kein Postgres); sie greifen erst, wenn die CI-Umgebung eine DB bekommt.
+Vorbestehende Reds (2 Billing-`*_rejects_unknown_plan` aus MFA-Gate WP-F/S1;
+~19 mypy-Findings in fremden Testdateien) wurden als out-of-scope bestätigt und
+nicht angefasst.
+
+**Folge-Roadmap (aus dem ursprünglichen Feedback, noch offen):** `approval_pending`-
+reason ist reserviert, aber ohne Call-Site (kein Approval-Gate existiert) —
+verdrahten, sobald ein Approval-Mechanismus gebaut wird. ADR für die drei neuen
+Bausteine (`whoami`, Fehler-Taxonomie, `composite_child_inactive`) erwägen.
