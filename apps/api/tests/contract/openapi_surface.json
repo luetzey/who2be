@@ -400,6 +400,11 @@
     "operationId": "update_resource_v1_workspaces__workspace_id__resources__resource_id__put"
   },
   {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/resources/{resource_id}/blocks",
+    "operationId": "list_resource_blocks_v1_workspaces__workspace_id__resources__resource_id__blocks_get"
+  },
+  {
     "method": "PATCH",
     "path": "/v1/workspaces/{workspace_id}/resources/{resource_id}/draft",
     "operationId": "update_resource_draft_v1_workspaces__workspace_id__resources__resource_id__draft_patch"
