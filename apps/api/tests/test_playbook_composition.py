@@ -332,3 +332,190 @@ def test_playbook_composition_self_ref_rejected(
 
     finally:
         cleanup_workspaces([owner])
+
+
+# ---------------------------------------------------------------------------
+# WP-4 / #256: Composite-Aktiv-Invariante an Promote-Zeit (nicht Link-Zeit)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+def test_composite_links_draft_children(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Draft-Kinder duerfen verkettet werden — `set_composition` prueft keinen Status."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    pbase = f"/v1/workspaces/{ws}/playbooks"
+
+    try:
+        with TestClient(app) as client:
+            parent_id = client.post(pbase, json=_pb_body("Parent"), headers=auth).json()["id"]
+            # Kinder bleiben Drafts (kein _activate-Aufruf).
+            child_a = client.post(pbase, json=_pb_body("Child-A"), headers=auth).json()["id"]
+            child_b = client.post(pbase, json=_pb_body("Child-B"), headers=auth).json()["id"]
+
+            resp = client.put(
+                f"{pbase}/{parent_id}/composes",
+                json={"child_ids": [child_a, child_b]},
+                headers=auth,
+            )
+            assert resp.status_code == 200, resp.text
+            assert [p["id"] for p in resp.json()] == [child_a, child_b]
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+def test_composite_promote_blocked_by_draft_child(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Composite -> active scheitert (409), solange ein Kind keine aktive Version hat."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    pbase = f"/v1/workspaces/{ws}/playbooks"
+
+    try:
+        with TestClient(app) as client:
+            parent_id = client.post(pbase, json=_pb_body("Parent"), headers=auth).json()["id"]
+            active_child = client.post(pbase, json=_pb_body("ActiveChild"), headers=auth).json()[
+                "id"
+            ]
+            draft_child = client.post(pbase, json=_pb_body("DraftChild"), headers=auth).json()["id"]
+
+            _activate(client, pbase, active_child, 1, auth)
+            # draft_child bleibt bewusst Draft.
+
+            client.put(
+                f"{pbase}/{parent_id}/composes",
+                json={"child_ids": [active_child, draft_child]},
+                headers=auth,
+            )
+
+            # Parent zuerst nach review heben (Pflichtfelder sind gesetzt).
+            r1 = client.post(
+                f"{pbase}/{parent_id}/versions/1/transition", json={"to": "review"}, headers=auth
+            )
+            assert r1.status_code == 200, r1.text
+            # review -> active muss am Draft-Kind scheitern.
+            resp = client.post(
+                f"{pbase}/{parent_id}/versions/1/transition", json={"to": "active"}, headers=auth
+            )
+            assert resp.status_code == 409, resp.text
+            assert resp.headers["content-type"].startswith("application/problem+json")
+            body = resp.json()
+            assert body["reason"] == "composite_child_inactive"
+            assert body["actionable_by"] == "human"
+            assert "DraftChild" in body["detail"]
+            assert str(draft_child) in body["detail"]
+            # Das aktive Kind darf nicht im Block-Detail auftauchen.
+            assert "ActiveChild" not in body["detail"]
+
+            # Parent ist nicht aktiv geworden.
+            versions = client.get(f"{pbase}/{parent_id}/versions", headers=auth).json()
+            assert next(v["status"] for v in versions if v["version"] == 1) == "review"
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+def test_composite_promote_succeeds_after_children_active(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Sind alle Kinder aktiv, gelingt Composite -> active."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    pbase = f"/v1/workspaces/{ws}/playbooks"
+
+    try:
+        with TestClient(app) as client:
+            parent_id = client.post(pbase, json=_pb_body("Parent"), headers=auth).json()["id"]
+            child_a = client.post(pbase, json=_pb_body("Child-A"), headers=auth).json()["id"]
+            child_b = client.post(pbase, json=_pb_body("Child-B"), headers=auth).json()["id"]
+
+            client.put(
+                f"{pbase}/{parent_id}/composes",
+                json={"child_ids": [child_a, child_b]},
+                headers=auth,
+            )
+            # Beide Kinder aktivieren.
+            _activate(client, pbase, child_a, 1, auth)
+            _activate(client, pbase, child_b, 1, auth)
+
+            # Parent durch die State-Machine bis active.
+            _activate(client, pbase, parent_id, 1, auth)
+
+            versions = client.get(f"{pbase}/{parent_id}/versions", headers=auth).json()
+            assert next(v["status"] for v in versions if v["version"] == 1) == "active"
+    finally:
+        cleanup_workspaces([owner])
+
+
+# ---------------------------------------------------------------------------
+# WP-4: DB-freier Unit-Test der Invarianten-Helper-Logik
+# ---------------------------------------------------------------------------
+
+
+class _FakeConn:
+    """Minimaler asyncpg.Connection-Stub: gibt eine feste `fetch`-Antwort zurueck."""
+
+    def __init__(self, rows: list[dict[str, object]]) -> None:
+        self._rows = rows
+
+    async def fetch(self, _query: str, *_args: object) -> list[dict[str, object]]:
+        return self._rows
+
+
+def test_assert_composite_children_active_passes_when_all_active() -> None:
+    from typing import cast
+
+    import asyncpg
+
+    from who2be_api.services.status_history_service import StatusHistoryService
+    from who2be_api.services.version_status import VersionStatusService
+
+    svc = VersionStatusService(cast(asyncpg.Pool, None), cast(StatusHistoryService, None))
+    conn = cast(asyncpg.Connection, _FakeConn([]))
+    # Keine blockierenden Kinder -> kein Fehler.
+    asyncio.run(svc._assert_composite_children_active(conn, fresh_user_id()))
+
+
+def test_assert_composite_children_active_blocks_and_names_child() -> None:
+    from typing import cast
+    from uuid import uuid4
+
+    import asyncpg
+
+    from who2be_api.core.errors import ApiGateError
+    from who2be_api.services.status_history_service import StatusHistoryService
+    from who2be_api.services.version_status import VersionStatusService
+
+    svc = VersionStatusService(cast(asyncpg.Pool, None), cast(StatusHistoryService, None))
+    child_id = uuid4()
+    conn = cast(asyncpg.Connection, _FakeConn([{"id": child_id, "name": "DraftChild"}]))
+    with pytest.raises(ApiGateError) as exc_info:
+        asyncio.run(svc._assert_composite_children_active(conn, uuid4()))
+    err = exc_info.value
+    assert err.status == 409
+    assert err.reason == "composite_child_inactive"
+    assert err.actionable_by == "human"
+    assert "DraftChild" in err.detail
+    assert str(child_id) in err.detail

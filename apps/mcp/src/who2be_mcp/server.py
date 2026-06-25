@@ -709,6 +709,12 @@ async def set_playbook_composes(playbook_id: str, child_ids: list[str]) -> list[
 
     `child_ids` ist die geordnete Sequenz der Kind-Playbooks (ADR-0024). Eine
     leere Liste macht das Playbook wieder zu einem Nicht-Composite.
+
+    Die Kinder duerfen hier noch Drafts sein — das Verketten prueft keinen
+    Kind-Status. Die Aktiv-Invariante greift erst beim Promote des Eltern-
+    Composite: `transition_playbook(parent, ..., to='active')` schlaegt mit 409
+    fehl, solange ein referenziertes Sub-Playbook keine aktive Version hat
+    (WP-4 / #256). Aktiviere die Kinder also vor dem Promote des Composite.
     """
     parsed = [_parse_uuid(cid, "Playbook") for cid in child_ids]
     client = await build_client()
