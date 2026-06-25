@@ -12,6 +12,7 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi import HTTPException
 
+from who2be_api.core.errors import ApiGateError
 from who2be_api.core.security import WorkspaceContext
 from who2be_api.repositories.playbook_composition_repository import SetCompositionResult
 from who2be_api.services.playbook_composition_service import PlaybookCompositionService
@@ -111,9 +112,10 @@ def test_set_composition_viewer_raises_403() -> None:
     repo = FakePlaybookCompositionRepository({parent_id: workspace})
     service = PlaybookCompositionService(repo)
     ctx = _ctx(workspace, role=WorkspaceRole.viewer)
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(ApiGateError) as exc:
         asyncio.run(service.set_composition(ctx, parent_id, PlaybookCompositionLinkSet()))
-    assert exc.value.status_code == 403
+    assert exc.value.status == 403
+    assert exc.value.reason == "insufficient_role"
 
 
 def test_set_composition_editor_allowed() -> None:

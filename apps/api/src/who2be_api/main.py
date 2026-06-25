@@ -15,6 +15,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import cast
 
+import structlog
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
@@ -25,6 +26,7 @@ from who2be_api import __version__
 from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.db import database
 from who2be_api.core.db import lifespan as db_lifespan
+from who2be_api.core.errors import ApiGateError
 from who2be_api.core.logging import configure_logging
 from who2be_api.core.middleware import AccessLogMiddleware, RequestIDMiddleware
 from who2be_api.core.rate_limit import (
@@ -58,6 +60,7 @@ from who2be_api.routers import (
 )
 from who2be_api.services.bootstrap_service import bootstrap_admin_if_needed
 from who2be_api.services.promote_validation import PromoteValidationError
+from who2be_models import ApiProblem
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +86,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 _WORKSPACE_PREFIX = "/v1/workspaces/{workspace_id}"
+
+# Menschenlesbarer Titel je Taxonomie-`reason` (RFC-7807 `title`). Zentral
+# gehalten, damit Call-Sites nur den maschinenlesbaren `reason` liefern (D2).
+_PROBLEM_TITLES: dict[str, str] = {
+    "missing_capability": "Aktion nicht erlaubt: fehlende Berechtigung",
+    "approval_pending": "Aktion blockiert: Freigabe ausstehend",
+    "domain_disabled": "Bereich deaktiviert",
+    "forbidden_transition": "Unzulaessiger Status-Uebergang",
+    "insufficient_role": "Aktion nicht erlaubt: Rolle zu niedrig",
+    "mfa_required": "Zwei-Faktor-Authentifizierung erforderlich",
+    "concurrent_conflict": "Konflikt durch parallele Aenderung",
+}
 
 
 class Health(BaseModel):
@@ -114,6 +129,44 @@ def _on_promote_validation_error(request: Request, exc: Exception) -> Response:
     return JSONResponse(
         status_code=409,
         content=body,
+        media_type="application/problem+json",
+    )
+
+
+def _current_request_id(request: Request) -> str | None:
+    """Korrelations-ID fuer den Fehler-Body.
+
+    Primaerquelle ist die von `RequestIDMiddleware` an `structlog.contextvars`
+    gebundene `request_id` (identisch mit dem `X-Request-ID`-Response-Header).
+    Faellt sie aus (z. B. Handler ohne Middleware), wird der eingehende
+    `X-Request-ID`-Header gespiegelt; sonst `None`.
+    """
+    bound = structlog.contextvars.get_contextvars().get("request_id")
+    if isinstance(bound, str) and bound:
+        return bound
+    incoming = request.headers.get("x-request-id")
+    return incoming or None
+
+
+def _on_api_gate_error(request: Request, exc: Exception) -> Response:
+    """application/problem+json-Handler fuer `ApiGateError` (WP-2 / #254).
+
+    Setzt `type`/`title`/`request_id` zentral; Call-Sites liefern nur
+    `(status, reason, actionable_by, detail)`. RFC-7807-Body via `ApiProblem`.
+    """
+    err = cast(ApiGateError, exc)
+    problem = ApiProblem(
+        type=f"https://who2be.dev/errors/{err.reason.replace('_', '-')}",
+        title=_PROBLEM_TITLES[err.reason],
+        status=err.status,
+        detail=err.detail,
+        actionable_by=err.actionable_by,
+        reason=err.reason,
+        request_id=_current_request_id(request),
+    )
+    return JSONResponse(
+        status_code=err.status,
+        content=problem.model_dump(),
         media_type="application/problem+json",
     )
 
@@ -160,6 +213,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _on_rate_limit)
     app.add_exception_handler(PromoteValidationError, _on_promote_validation_error)
+    app.add_exception_handler(ApiGateError, _on_api_gate_error)
     # SlowAPIMiddleware vor CORSMiddleware adden: Starlette stacked LIFO, dann liegt
     # CORS aussen und Preflight-OPTIONS triggert das Limit nicht.
     app.add_middleware(SlowAPIMiddleware)

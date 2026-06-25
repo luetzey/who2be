@@ -25,6 +25,7 @@ from who2be_models.dashboard import (
     DashboardStatusDistribution,
     EntityStatusDistribution,
 )
+from who2be_models.errors import ActionableBy, ApiProblem, ProblemReason
 from who2be_models.invitation import (
     InvitationAccept,
     InvitationCreate,
@@ -117,7 +118,9 @@ __version__ = "0.1.0"
 __all__ = [
     "ALLOWED_TRANSITIONS",
     "AccountDeletionRead",
+    "ActionableBy",
     "ActivityPagination",
+    "ApiProblem",
     "ContentLocale",
     "DEFAULT_LOCALE",
     "SUPPORTED_LOCALES",
@@ -171,6 +174,7 @@ __all__ = [
     "PlaybookUpdate",
     "PlaybookUsage",
     "PlaybookVersionRead",
+    "ProblemReason",
     "ReadScope",
     "ResourceBlock",
     "ResourceContent",

@@ -8,8 +8,8 @@ und das Read-Scoping leben in den DB-gebundenen Integrationstests.
 from uuid import uuid4
 
 import pytest
-from fastapi import HTTPException
 
+from who2be_api.core.errors import ApiGateError
 from who2be_api.core.security import WorkspaceContext, require_capability
 from who2be_models import AgentCapability, AgentToolPolicy, ReadScope, WorkspaceRole
 
@@ -91,6 +91,7 @@ class TestRequireCapability:
 
     def test_missing_capability_raises_403(self) -> None:
         ctx = _ctx(AgentToolPolicy())
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(ApiGateError) as exc:
             require_capability(ctx, AgentCapability.playbook_write)
-        assert exc.value.status_code == 403
+        assert exc.value.status == 403
+        assert exc.value.reason == "missing_capability"
