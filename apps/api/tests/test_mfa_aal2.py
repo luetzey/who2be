@@ -13,8 +13,8 @@ Reine Unit-Tests ueber `require_role`/`require_aal2` mit konstruierten
 from uuid import uuid4
 
 import pytest
-from fastapi import HTTPException
 
+from who2be_api.core.errors import ApiGateError
 from who2be_api.core.security import (
     WorkspaceContext,
     require_aal2,
@@ -39,9 +39,10 @@ def _ctx(
 
 
 def test_admin_action_with_aal1_is_blocked() -> None:
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(ApiGateError) as exc:
         require_role(_ctx(WorkspaceRole.admin, aal="aal1"), WorkspaceRole.admin)
-    assert exc.value.status_code == 403
+    assert exc.value.status == 403
+    assert exc.value.reason == "mfa_required"
     assert "MFA" in exc.value.detail
 
 
@@ -64,9 +65,10 @@ def test_admin_action_without_aal_claim_blocked_in_cloud(
     # Cloud: GoTrue setzt aal immer; ein fehlender Claim ist verdaechtig und
     # wird fail-closed behandelt (Zero-Trust, QW-2).
     monkeypatch.setattr("who2be_api.core.security.is_onprem", lambda: False)
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(ApiGateError) as exc:
         require_role(_ctx(WorkspaceRole.admin, aal=None), WorkspaceRole.admin)
-    assert exc.value.status_code == 403
+    assert exc.value.status == 403
+    assert exc.value.reason == "mfa_required"
     assert "MFA" in exc.value.detail
 
 
@@ -91,13 +93,15 @@ def test_non_admin_actions_are_not_gated_by_aal2() -> None:
 
 def test_insufficient_role_still_takes_precedence() -> None:
     # Rollen-Check schlaegt vor dem AAL2-Check zu (Rollen-Meldung, nicht MFA).
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(ApiGateError) as exc:
         require_role(_ctx(WorkspaceRole.editor, aal="aal2"), WorkspaceRole.admin)
-    assert exc.value.status_code == 403
+    assert exc.value.status == 403
+    assert exc.value.reason == "insufficient_role"
     assert "Rolle" in exc.value.detail
 
 
 def test_require_aal2_blocks_unknown_present_value() -> None:
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(ApiGateError) as exc:
         require_aal2(_ctx(WorkspaceRole.admin, aal="aal1"))
-    assert exc.value.status_code == 403
+    assert exc.value.status == 403
+    assert exc.value.reason == "mfa_required"

@@ -26,6 +26,7 @@ from uuid import UUID
 import asyncpg
 from fastapi import HTTPException, status
 
+from who2be_api.core.errors import ApiGateError
 from who2be_api.core.security import WorkspaceContext, require_capability, require_role
 from who2be_api.services.promote_validation import (
     validate_promote_persona,
@@ -61,18 +62,25 @@ def _not_found(entity_type: EntityType) -> HTTPException:
     )
 
 
-def _forbidden_transition(from_status: VersionStatus, to_status: VersionStatus) -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_409_CONFLICT,
+def _forbidden_transition(from_status: VersionStatus, to_status: VersionStatus) -> ApiGateError:
+    # State-Machine verbietet den Uebergang — fuer den Aufrufer endgueltig an
+    # diesem Ausgangsstatus (`none`); ein anderer Pfad waere noetig.
+    return ApiGateError(
+        status=status.HTTP_409_CONFLICT,
+        reason="forbidden_transition",
+        actionable_by="none",
         detail=(f"Status-Uebergang {from_status.value} → {to_status.value} ist nicht erlaubt."),
     )
 
 
-def _invariant_violation() -> HTTPException:
+def _invariant_violation() -> ApiGateError:
     # Partial-Unique-Index aus 0011 hat zugeschlagen. Race zwischen
     # zwei parallelen Promotions — der zweite Versuch bekommt 409 statt 500.
-    return HTTPException(
-        status_code=status.HTTP_409_CONFLICT,
+    # Der Agent kann nach Re-Read des aktuellen Stands erneut versuchen (`agent`).
+    return ApiGateError(
+        status=status.HTTP_409_CONFLICT,
+        reason="concurrent_conflict",
+        actionable_by="agent",
         detail="Konfliktierende Status-Aenderung (parallele Transition).",
     )
 
@@ -137,8 +145,12 @@ def _require_transition_capability(
     if ctx.tool_policy is None:
         return
     if entity_type not in _WRITE_CAPABILITY:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
+        # Templates sind ueber MCP nie verwaltbar — fuer einen agent-gebundenen
+        # Token endgueltig gesperrt (`none`), keine Capability schaltet das frei.
+        raise ApiGateError(
+            status=status.HTTP_403_FORBIDDEN,
+            reason="missing_capability",
+            actionable_by="none",
             detail="Agent-gebundene Tokens duerfen System-Prompt-Templates nicht aendern.",
         )
     if to_status in (VersionStatus.active, VersionStatus.inactive):

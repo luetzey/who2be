@@ -21,11 +21,11 @@ from uuid import UUID, uuid4
 import asyncpg
 import jwt
 import pytest
-from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from who2be_api.core import security
 from who2be_api.core.config import Settings, get_settings
+from who2be_api.core.errors import ApiGateError
 from who2be_api.core.migrations import MIGRATIONS_DIR, apply_migrations
 from who2be_api.core.security import WorkspaceContext, require_role
 from who2be_api.main import app
@@ -120,9 +120,9 @@ def test_rbac_matrix(action: str, role: WorkspaceRole) -> None:
     if expected_allowed:
         require_role(ctx, gate)  # darf nicht werfen
     else:
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(ApiGateError) as exc:
             require_role(ctx, gate)
-        assert exc.value.status_code == 403
+        assert exc.value.status == 403
 
 
 def test_required_role_for_transition_table() -> None:

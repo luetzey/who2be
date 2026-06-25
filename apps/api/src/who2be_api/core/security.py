@@ -26,6 +26,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from who2be_api.core.config import get_settings
 from who2be_api.core.db import get_pool
+from who2be_api.core.errors import ApiGateError
 from who2be_api.core.tenancy import tenant_scope
 from who2be_api.licensing.edition import is_onprem
 from who2be_api.repositories.token_repository import PgTokenRepository, TokenRepository
@@ -209,8 +210,10 @@ def require_aal2(ctx: WorkspaceContext) -> None:
     # `is_cloud()`-Editions-Muster, ohne den On-Prem-Default zu brechen.
     if ctx.aal is None and is_onprem():
         return
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
+    raise ApiGateError(
+        status=status.HTTP_403_FORBIDDEN,
+        reason="mfa_required",
+        actionable_by="human",
         detail=(
             "Diese Admin-Aktion erfordert Zwei-Faktor-Authentifizierung (MFA). "
             "Richte in den Kontoeinstellungen einen TOTP-Faktor ein und melde "
@@ -228,8 +231,10 @@ def require_role(ctx: WorkspaceContext, minimum: WorkspaceRole) -> None:
     dass die einzelnen Call-Sites es duplizieren.
     """
     if not role_satisfies(ctx.role, minimum):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
+        raise ApiGateError(
+            status=status.HTTP_403_FORBIDDEN,
+            reason="insufficient_role",
+            actionable_by="human",
             detail=f"Diese Aktion erfordert mindestens die Rolle '{minimum.value}'.",
         )
     if minimum == WorkspaceRole.admin:
@@ -261,8 +266,10 @@ def require_capability(ctx: WorkspaceContext, capability: AgentCapability) -> No
         return
     if not policy.allows(capability):
         what = _CAPABILITY_LABELS.get(capability, capability.value)
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
+        raise ApiGateError(
+            status=status.HTTP_403_FORBIDDEN,
+            reason="missing_capability",
+            actionable_by="human",
             detail=(
                 f"Dieser Agent ist nicht berechtigt, {what}. "
                 "Der Workspace-Besitzer kann das in der Agent-Konfiguration freischalten."
@@ -435,8 +442,12 @@ async def get_current_workspace(
 
     if principal.token_workspace_id is not None:
         if principal.token_workspace_id != workspace_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
+            # Cross-Workspace-Token-Reuse: der Token darf in diesem Workspace
+            # ueberhaupt nicht agieren — fuer den Aufrufer endgueltig (`none`).
+            raise ApiGateError(
+                status=status.HTTP_403_FORBIDDEN,
+                reason="forbidden_transition",
+                actionable_by="none",
                 detail="Token gehoert nicht zu diesem Workspace.",
             )
         if principal.token_role is None:
@@ -462,8 +473,12 @@ async def get_current_workspace(
             principal.user_id,
         )
         if role is None:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
+            # Kein Membership-Eintrag: der Aufrufer braucht eine Einladung/Rolle
+            # in diesem Workspace — ein Mensch (Admin) muss ihn aufnehmen.
+            raise ApiGateError(
+                status=status.HTTP_403_FORBIDDEN,
+                reason="insufficient_role",
+                actionable_by="human",
                 detail="Kein Zugriff auf diesen Workspace.",
             )
         ctx = WorkspaceContext(
@@ -486,8 +501,10 @@ async def get_current_workspace(
         workspace_id,
     )
     if org_row is not None and org_row["deleted_at"] is not None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
+        raise ApiGateError(
+            status=status.HTTP_403_FORBIDDEN,
+            reason="domain_disabled",
+            actionable_by="human",
             detail="Diese Organisation wurde zur Loeschung vorgemerkt.",
         )
     org_id: UUID | None = org_row["org_id"] if org_row is not None else None

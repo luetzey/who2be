@@ -12,6 +12,7 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi import HTTPException
 
+from who2be_api.core.errors import ApiGateError
 from who2be_api.core.security import WorkspaceContext
 from who2be_api.repositories.resource_composition_repository import SetSubResourcesResult
 from who2be_api.services.resource_composition_service import ResourceCompositionService
@@ -99,9 +100,10 @@ def test_set_links_viewer_raises_403() -> None:
     repo = FakeResourceCompositionRepository({parent: ws})
     service = ResourceCompositionService(repo)
     ctx = _ctx(ws, role=WorkspaceRole.viewer)
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(ApiGateError) as exc:
         asyncio.run(service.set_links(ctx, parent, SubResourceLinkSet()))
-    assert exc.value.status_code == 403
+    assert exc.value.status == 403
+    assert exc.value.reason == "insufficient_role"
 
 
 def test_list_children_unknown_parent_raises_404() -> None:
