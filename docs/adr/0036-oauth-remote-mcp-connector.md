@@ -96,3 +96,29 @@ Bewusst offen (akzeptierte Tradeoffs):
   Login-Redirect ohne Session, fehlender Request.
 - Offen: **E2E mit echtem Claude/ChatGPT-Client** gegen einen Stack mit
   `api.`/`app.`/`mcp.`-Subdomains (Plan-Schlussschritt).
+
+## Addendum 2026-06-25 — Per-Agent-Connector-URL (`?agent=<uuid>`)
+
+**Problem:** Claude dedupliziert Connectoren nach URL-String; mehrere Agenten an
+EINER MCP-URL (`…/mcp`) lassen sich nicht als getrennte Connectoren anlegen
+(„A server with this URL already exists"). Der Agent wurde bisher nur im
+Consent-Dropdown gewählt.
+
+**Entscheidung:** Die Connector-URL darf `…/mcp?agent=<uuid>` tragen. `authorize`
+akzeptiert die `resource` jetzt als kanonische Basis (`mcp_resource_url`) **oder**
+Basis + genau einem `?agent=<uuid>` (`_resource_agent_hint`). In den signierten
+Request-Blob wandert weiterhin die **kanonische** Resource (ohne Query) — die
+RFC-8707-Audience-Kette bleibt an den MCP-Server gebunden; der Agent-Hint reist
+getrennt. Trägt der Blob einen Hint, **sperrt** der Consent genau diesen Agenten
+(Hard-Lock); der client-gesendete `agent_id` wird ignoriert (Trust-Anker =
+HMAC-signierter Blob). Das autoritative Gate bleibt `_resolve_agent_membership`
+unter `tenant_scope` — ein fremder Agent fällt mit 403 durch.
+
+**Fail-safe:** Schickt der Client die kanonische PRM-Resource ohne Query, gilt
+unverändert die Consent-Auswahl — nichts bricht. Bewusst **kein** Subdomain-/
+Pfad-pro-Agent (Infra-Overhead) und **kein** Token im Connector. Die UI zeigt die
+fertige Per-Agent-URL auf der Agent-Detail-Seite (`AgentConnectorSection`).
+
+Verifizierung: `test_oauth.py::test_resource_agent_hint_parses_and_validates`
+(DB-frei, Grammatik) + `…::test_oauth_resource_agent_hint_hard_locks` (DB-gated,
+Hard-Lock + invalid-UUID-Reject). E2E gegen echten Claude-Client weiter offen.

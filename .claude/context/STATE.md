@@ -9,6 +9,13 @@ _Stand: 2026-06-16_
 - Security-Findings (Phase 1 + 2) alle **Closed**, Ampel Grün.
 - MCP-HTTP-Transport (ADR-0034) + Per-Request-Bearer + Ein-Klick-MCP-Config;
   Agent-Read-Scope secure-by-default; API-Tokens am Agenten verwaltet.
+- **Per-Agent-Connector-URL (ADR-0036-Addendum, 2026-06-25), Branch
+  `claude/determined-noether-wi53zd`:** `…/mcp?agent=<uuid>` macht die Connector-URL
+  pro Agent eindeutig (Claude-Dedup); `authorize` akzeptiert kanonische Resource oder
+  Basis+`?agent=`, Consent sperrt den signierten Agenten hart (client-Wert ignoriert),
+  Membership-Prüfung bleibt autoritativ. UI: `AgentConnectorSection` (kopierbare URL,
+  kein Token). Security-Review clean; Python/Web-DoD lokal grün; E2E gegen echten
+  Claude-Client offen (Fail-safe: ohne Query gilt Consent-Auswahl).
 - **OAuth-Remote-MCP-Connector (ADR-0036), Branch `feat/oauth-remote-mcp`:**
   Who2Be ist OAuth-2.1-AS (`apps/api` `/oauth/*` + Metadaten), MCP ist RS
   (FastMCP `RemoteAuthProvider`, PRM/401), Consent-UI (`apps/web`

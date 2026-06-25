@@ -27,5 +27,19 @@ einen neuen Eintrag mit Verweis.
 - **Begründung:** IDs/E-Mail gewähren ohne Auth keinen Zugriff; Rewrite-Risiko
   überwiegt den Nutzen.
 
+## 2026-06-25 — Per-Agent-Connector-URL `?agent=<uuid>` (OAuth)
+- **Entscheidung:** Connector-URL darf `…/mcp?agent=<uuid>` tragen; `authorize`
+  akzeptiert kanonische Resource **oder** Basis + genau `?agent=<uuid>`. Hint wandert
+  in den signierten Blob (kanonische Resource bleibt die Audience); Consent **sperrt**
+  den Agenten hart (signierter Wert gewinnt, client-`agent_id` ignoriert). UI zeigt die
+  fertige URL auf der Agent-Detail-Seite (`AgentConnectorSection`). Detail: ADR-0036-Addendum.
+- **Begründung:** Claude dedupliziert Connectoren nach URL → eindeutige URL je Agent nötig.
+  Membership-Prüfung bleibt das autoritative IDOR-Gate; Audience-Kette unangetastet.
+  Security-Review ohne ausnutzbaren Befund.
+- **Verworfen:** Subdomain-/Pfad-pro-Agent (Infra-Overhead pro Agent); Token im Connector/
+  Systemprompt (unnötig, da OAuth-gebunden). **Fail-safe:** ohne Query gilt die Consent-Auswahl.
+- **Offen:** E2E gegen echten Claude-Client (ob der `?agent=`-Query als OAuth-`resource`
+  ankommt) — durch Fail-safe unkritisch.
+
 _Bei Wachstum: älteste Einträge zu Einzeilern komprimieren (Titel + Entscheidung
 bleiben)._

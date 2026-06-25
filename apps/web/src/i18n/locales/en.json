@@ -273,6 +273,18 @@
       "createError": "Creation failed.",
       "saved": "Agent saved.",
       "unknownError": "Unknown error."
+    },
+    "connector": {
+      "title": "Claude connector",
+      "description": "Connection parameters for a remote MCP connector bound to this agent. You sign in via OAuth when connecting — no token needed. The URL is unique per agent so Claude won't reject it as a duplicate.",
+      "nameLabel": "Connector name",
+      "nameValue": "Who2Be – {{name}}",
+      "urlLabel": "Server URL",
+      "urlHint": "Paste it as the URL when adding a connector in Claude. You confirm the agent in the consent dialog during login.",
+      "copyUrl": "Copy URL",
+      "copyName": "Copy name",
+      "copied": "Copied to clipboard.",
+      "error": "Copy failed."
     }
   },
   "auth": {
@@ -364,7 +376,9 @@
       "loadingAgents": "Loading agents…",
       "noAgents": "No agents in this workspace. Create an agent first.",
       "error": "Authorization failed. Please try again.",
-      "missingRequest": "Invalid connection link — the authorization request is missing."
+      "missingRequest": "Invalid connection link — the authorization request is missing.",
+      "lockedLabel": "Agent (set by the connection URL)",
+      "lockedHint": "This agent is fixed by the connector URL and can't be changed here."
     },
     "validation": {
       "emailInvalid": "Please enter a valid email address.",

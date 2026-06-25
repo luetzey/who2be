@@ -12,6 +12,7 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
 import { Button } from '@/components/ui/button'
 
+import { AgentConnectorSection } from '../components/AgentConnectorSection'
 import { AgentEditorForm } from '../components/AgentEditorForm'
 import { AgentHierarchyView } from '../components/AgentHierarchyView'
 import { AgentTokensSection } from '../components/AgentTokensSection'
@@ -88,6 +89,8 @@ export function AgentDetailPage() {
                 templates={templates}
                 agent={agent}
               />
+
+              <AgentConnectorSection agentId={agent.id} agentName={agent.name} />
 
               <AgentTokensSection agentId={agent.id} />
             </Stack>
