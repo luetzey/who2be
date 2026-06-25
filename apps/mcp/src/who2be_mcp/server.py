@@ -41,6 +41,7 @@ from who2be_models import (
     PlaybookRead,
     PlaybookUpdate,
     PlaybookVersionRead,
+    ResourceBlockAnchor,
     ResourceCreate,
     ResourceLinkRead,
     ResourceLinkSet,
@@ -520,6 +521,29 @@ async def fetch_resource(
             inline_ids.append(sub.id)
     resource.inline_sub_resources = [await client.get_resource(cid, locale) for cid in inline_ids]
     return resource
+
+
+@mcp.tool
+@with_tool_log("list_resource_blocks")
+async def list_resource_blocks(resource_id: str, locale: str = "de") -> list[ResourceBlockAnchor]:
+    """Listet die linkbaren Heading-Anker einer Resource (WP-6).
+
+    Jeder Eintrag traegt `block_id` (stabile BlockNote-ID), `level`
+    (Heading-Ebene, 1 = h1) und `text` (Heading-Klartext). Nur Heading-Bloecke
+    sind verlinkbar (ADR-0021, Heading-Only-Anker). Nutze die `block_id`, um
+    beim Setzen von Playbook-Resource-Links (`set_playbook_resource_links`) bzw.
+    Sub-Resource-Links einen `link_scope='block'`-Anker zu referenzieren — so
+    musst du keine Block-ID aus dem Volldokument raten.
+
+    `locale` waehlt die Sprachvariante (Default `'de'`); es werden nur Anker der
+    aktiven Resource-Version geliefert.
+    """
+    try:
+        parsed = UUID(resource_id)
+    except ValueError as exc:
+        raise ToolError(f"Ungueltige Resource-UUID: '{resource_id}'.") from exc
+    client = await build_client()
+    return await client.list_resource_blocks(parsed, locale)
 
 
 # ---------------------------------------------------------------------------

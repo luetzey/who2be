@@ -13,6 +13,11 @@ from fastapi import HTTPException, status
 
 from who2be_api.core.agent_scope import resource_read_restrict
 from who2be_api.core.security import WorkspaceContext, require_capability, require_role
+from who2be_api.repositories.playbook_resource_link_repository import (
+    _heading_level,
+    block_plain_text,
+    is_heading_block,
+)
 from who2be_api.repositories.resource_repository import ResourceRepository
 from who2be_api.repositories.usage_repository import UsageRepository
 from who2be_api.services.version_diff import compute_version_diff
@@ -21,6 +26,7 @@ from who2be_models import (
     AgentCapability,
     DeleteBlocked,
     ReadScope,
+    ResourceBlockAnchor,
     ResourceContent,
     ResourceCreate,
     ResourceRead,
@@ -186,6 +192,34 @@ class ResourceService:
         if resource is None:
             raise _not_found()
         return resource
+
+    async def list_blocks(
+        self, ctx: WorkspaceContext, resource_id: UUID, locale: str = DEFAULT_LOCALE
+    ) -> list[ResourceBlockAnchor]:
+        """Listet die linkbaren Heading-Anker einer Resource (WP-6, ADR-0021).
+
+        Liest ueber `get()` — damit gelten dieselben Garantien wie fuer alle
+        Resource-Reads: Read-Scoping (`assigned`-Agent → 404), Active-/Draft-
+        Sicht via `sees_drafts(resource_write)` und die angefragte `locale`.
+        (Bewusst NICHT der `load_resource_blocks`-Pfad des Link-Repos: der pinnt
+        die Active-Variante hart auf Locale `'de'` — hier folgt die Block-Liste
+        konsistent der Request-Locale.) Nur Heading-Bloecke sind verlinkbar
+        (Heading-Only-Anker); Klartext via `block_plain_text`.
+        """
+        resource = await self.get(ctx, resource_id, locale=locale)
+        anchors: list[ResourceBlockAnchor] = []
+        for block in resource.content.blocks:
+            raw = block.model_dump(mode="json")
+            if not is_heading_block(raw):
+                continue
+            anchors.append(
+                ResourceBlockAnchor(
+                    block_id=block.id,
+                    level=_heading_level(raw),
+                    text=block_plain_text(raw),
+                )
+            )
+        return anchors
 
     async def update(
         self,

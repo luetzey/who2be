@@ -64,6 +64,23 @@ class ResourceBlock(BaseModel):
     type: BlockType
 
 
+class ResourceBlockAnchor(BaseModel):
+    """Ein linkbarer Heading-Anker einer Resource (Read-only, WP-6).
+
+    Quelle: die Heading-Bloecke der gelieferten Resource-Version (Active fuer
+    MCP-/Token-Reads, Current fuer Mensch/JWT). `block_id` ist die stabile
+    BlockNote-ID, auf die ein Playbook-Block-Ref bzw. Sub-Resource-Block-Link
+    zeigen kann (ADR-0021, Heading-Only-Anker); `level` ist `props.level`
+    (Default 1 = BlockNote-h1); `text` der Heading-Klartext.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    block_id: BlockId
+    level: int
+    text: str
+
+
 class ResourceContent(BaseModel):
     """Typisierter Inhalt einer Resource-Version (`resource_version.content`).
 

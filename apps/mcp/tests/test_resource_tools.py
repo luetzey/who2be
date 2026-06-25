@@ -21,9 +21,10 @@ from who2be_mcp.server import (
     ResourceSummary,
     fetch_playbook,
     fetch_resource,
+    list_resource_blocks,
     list_resources,
 )
-from who2be_models import ResourceRead
+from who2be_models import ResourceBlockAnchor, ResourceRead
 
 _WORKSPACE_ID = uuid4()
 
@@ -284,6 +285,54 @@ def test_fetch_resource_inlines_inline_mode_sub_resource(
     assert [b.id for b in result.inline_sub_resources[0].content.blocks] == ["c1"]
     # Das Lazy-Kind wird NICHT nachgeladen.
     assert child_fetches == 1
+
+
+def test_list_resource_blocks_returns_anchors(monkeypatch: pytest.MonkeyPatch) -> None:
+    """WP-6: list_resource_blocks reicht die Heading-Anker der API durch."""
+    rid = uuid4()
+    anchors = [
+        {"block_id": "h1", "level": 1, "text": "Erster Block"},
+        {"block_id": "h2", "level": 2, "text": "Zweiter"},
+    ]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path.endswith(f"/resources/{rid}/blocks")
+        return httpx.Response(200, json=anchors)
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    result = asyncio.run(list_resource_blocks(str(rid)))
+    assert len(result) == 2
+    assert all(isinstance(a, ResourceBlockAnchor) for a in result)
+    assert [a.block_id for a in result] == ["h1", "h2"]
+    assert result[0].level == 1
+    assert result[0].text == "Erster Block"
+    assert result[1].level == 2
+
+
+def test_list_resource_blocks_passes_locale(monkeypatch: pytest.MonkeyPatch) -> None:
+    """WP-6: list_resource_blocks reicht den locale-Parameter an die API durch."""
+    rid = uuid4()
+    received: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        for key, value in request.url.params.items():
+            received[key] = value
+        return httpx.Response(200, json=[])
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    result = asyncio.run(list_resource_blocks(str(rid), locale="en"))
+    assert result == []
+    assert received.get("locale") == "en"
+
+
+def test_list_resource_blocks_validates_uuid(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        server,
+        "build_client",
+        _factory(lambda request: httpx.Response(200, json=[])),
+    )
+    with pytest.raises(ToolError):
+        asyncio.run(list_resource_blocks("not-a-uuid"))
 
 
 def test_fetch_resource_validates_uuid(monkeypatch: pytest.MonkeyPatch) -> None:
