@@ -180,20 +180,125 @@ von Coder abgenommen, bevor Implementierung startet. DoD-Befehle pro Stack siehe
 
 ---
 
+## 3a. Gate-0-Ergebnisse (2026-06-25, Audit abgeschlossen)
+
+Fünf parallele Read-only-Audits gelaufen; Verdicts verbindlich für die
+Umsetzung. Reihenfolge nach Folgenschwere:
+
+### WP-3 (#255) → **VERDICT (A): bereits im Code gelöst — kein Read-Path-Change**
+
+`WorkspaceContext.sees_drafts(cap)` durchzieht **alle** Resource-Lesepfade:
+`ResourceService.get` (`resource_service.py:182`) **und** `list_all`
+(`:159`) setzen `active_only=not ctx.sees_drafts(resource_write)`. Der
+geseedete Builder hat `resource_read=ReadScope.all` + `resource_write`
+(`workspace_repository.py:411` `_builder_tool_policy`) → sieht seinen frischen
+Draft via fetch UND list. Das Feedback-Szenario ist in sich widersprüchlich:
+`create_resource` verlangt `require_capability(resource_write)` — dieselbe
+Capability schaltet via `sees_drafts` das Draft-Lesen frei. Wahre Ursache eines
+historischen Reports lag vermutlich in **fehlender Capability** (→ #254/#253),
+nicht in einem Read-Filter. Persona-/Playbook-LIST honorieren `sees_drafts`
+ebenso (`persona_service.py:154`, `playbook_service.py:220`).
+
+→ **#255 umwidmen auf Doku statt Code:**
+1. Veralteten Docstring `apps/mcp/src/who2be_mcp/server.py:441`
+   („Laedt die aktive Version") korrigieren — beschreibt das Draft-Lese-Verhalten
+   falsch.
+2. Mechanik dokumentieren („wer schreiben darf, sieht Drafts").
+3. Effektive Policy via `whoami` (#253) sichtbar machen — schließt den Loop.
+4. Secure-by-default-Note: ein `assigned`-scoped Agent mit `*_write` sähe eine
+   frisch erstellte, unverlinkte Resource **nicht** (nicht in Assigned-Closure →
+   404). Bewusst so; betrifft den Builder (`all`) nicht.
+
+→ **Aufwand: XS (Doku).** Issue als „already solved" schließen oder zur
+Doku-Aufgabe umschreiben. **Kein eigener Build-PR nötig** — Punkte 1–2 fließen
+in den WP-1-PR (whoami) als zugehörige Doku ein.
+
+### WP-2 (#254) → **tragfähig; folgt `PromoteValidationError`-Muster 1:1**
+
+Vorbild: `main.py:100–118` + `:162` (`app.add_exception_handler` →
+`JSONResponse(media_type="application/problem+json")`, RFC-7807). Zweiter
+Präzedenzfall: `DeleteBlocked` (`packages/models/.../links.py:34`).
+Raise-Inventar: `core/security.py` (require_aal2 :212, require_role :231,
+require_capability :264 + 3 sekundäre im `get_current_workspace`-Pfad) und
+`version_status.py` (`_forbidden_transition` :64, `_invariant_violation` :71,
+Template-Block :140). Test-Blast-Radius **klein** — nur ~3 `detail`-Substring-
+Asserts (alle `test_mfa_aal2.py`); `test_rbac_matrix`/`test_tool_policy`/
+`test_security` prüfen nur Statuscodes.
+
+→ **Festgezurrte Entscheidungen (Coder, gültig sofern kein Einspruch):**
+- **D1 — `reason`-Enum erweitern:** Die fünf Werte decken MFA + Concurrency-Race
+  nicht. **+`mfa_required`** (für `require_aal2`) **+`concurrent_conflict`**
+  (für `_invariant_violation`, der einzige echte Retry-Fall).
+- **D2 — eigene Exception statt nackter `HTTPException`:** neue `ApiGateError`
+  + **ein** zentraler `problem+json`-Handler (wie PromoteValidationError), damit
+  `type`/`title`/`request_id` einmal im Handler gesetzt werden und Call-Sites
+  nur `(status, reason, actionable_by, detail)` liefern. `request_id` aus dem
+  bestehenden `RequestIDMiddleware`.
+- **D3 — `actionable_by`-Achse = „wer kann den nächsten produktiven Schritt
+  tun?":** `missing_capability`→**`human`** (Agent kann sich Caps nicht selbst
+  geben; Owner schaltet frei), `insufficient_role`→`human`,
+  `mfa_required`→`human`, `forbidden_transition`→`none`,
+  `concurrent_conflict`→**`agent`** (Retry sinnvoll), Template-Sperre→`none`,
+  Org-deleted→`domain_disabled`/`human`.
+- Neues Model `ApiProblem` in `packages/models/.../errors.py` (RFC-7807 +
+  `actionable_by`/`reason`/`request_id`).
+
+→ **Aufwand: M.** Basis für WP-4 — vor WP-4 mergen.
+
+### WP-1 (#253) → **tragfähig; Scope = inkl. Entitlement-Features (User-Entscheid)**
+
+`/v1/me` ist workspace-agnostisch (`get_current_user`) → kein Ersatz. Eigener
+Router nach Vorlage `routers/dashboard.py` → `/v1/workspaces/{ws_id}/whoami`,
+Dependency `get_current_workspace`. `AgentToolPolicy` hat **keinen**
+Capability-Lister → additiven Helper `granted_capabilities()` am Model ergänzen
++ die 3 Read-Scopes (`*_read`) separat ausgeben. **`tool_policy is None` =
+„keine Pro-Agent-Restriktion"**, nicht „nichts erlaubt" — explizit so
+darstellen. **User-Entscheid: Entitlement-Features mitliefern** → zusätzlicher
+org-scoped `EntitlementPort.resolve(org_id)`-Call (Muster `routers/entitlement.py:71`).
+
+→ **Aufwand: M** (Identität S + Entitlement-Achse). WP-3-Doku (Docstring-Fix +
+sees_drafts-Doku) reist in diesem PR mit.
+
+### WP-5 (#257) → **bestätigt, Aufwand S**
+
+Nur `transition_persona` (`server.py:528`) trägt die Aufzählung;
+`transition_playbook` (:594) / `transition_resource` (:673) verweisen nur „wie
+bei Persona". Keine Tests brechen. **SSoT:** Konstante `TRANSITION_RULE_DOC` in
+`packages/models/.../status.py` neben `ALLOWED_TRANSITIONS`, per f-String in alle
+drei Docstrings (FastMCP liest `__doc__` zur Laufzeit). Optional neuer
+Description-Konsistenz-Test in `apps/mcp/tests/test_server.py`.
+
+### WP-6 (#258) → **Option (a) `list_resource_blocks`, Aufwand S–M**
+
+Heading-Extraktion existiert serverseitig wiederverwendbar
+(`playbook_resource_link_repository.py`: `is_heading_block`,
+`block_section_text`, `load_resource_blocks`). Neuer Read
+`GET …/resources/{id}/blocks` + MCP-Tool + Client + Read-Model
+`ResourceBlockAnchor{block_id, level, text}`. **Nebenbefund:**
+`set_playbook_resource_links` erkennt einen **nicht existierenden** Anker heute
+nicht als Fehler (stiller toter Link) — der neue Read macht Raten überflüssig;
+„unbekannter Anker → 422" ist eine kleine Folgeentscheidung (separat halten).
+**Stolperstein:** `load_resource_blocks` pinnt die Active-Variante hart auf
+Locale `'de'` (`:211`) — für Multi-Locale parametrisieren.
+
+---
+
 ## 4. Abhängigkeiten & Reihenfolge
+
+**Aktualisiert nach Gate 0 (§3a):** WP-3 ist kein Code-WP mehr (Doku, reist in
+WP-1 mit). Verbleibende Build-WPs: WP-1, WP-2, WP-4, WP-5, WP-6.
 
 ```
 WP-5 (Doku)        ─┐  unabhängig, sofort, parallel
 WP-6 (Anker)       ─┘  unabhängig, parallel
 
-WP-1 (whoami)      ── unabhängig; liefert Modell-Muster für Fehler-Surface
-WP-2 (Taxonomie)   ── Basis für WP-4; vor WP-4 mergen
-WP-3 (Draft-Repro) ── Gate 0 zuerst; oft Doku-/Close-Ergebnis
+WP-1 (whoami+WP-3-Doku) ── unabhängig
+WP-2 (Taxonomie)        ── Basis für WP-4; vor WP-4 mergen
 
 WP-2 ──▶ WP-4 (nutzt strukturiertes Fehlerformat)
 ```
 
-- **Welle 1 (parallel, worktree-isoliert):** WP-1, WP-2, WP-3-Gate0, WP-5, WP-6.
+- **Welle 1 (parallel, worktree-isoliert):** WP-1 (inkl. WP-3-Doku), WP-2, WP-5, WP-6.
 - **Welle 2:** WP-4 (nach WP-2-Merge), WP-3-Fix (nur falls Gate 0 Lücke zeigt).
 - **Konfliktflächen:** WP-2 und WP-4 fassen beide `version_status.py`/`security.py`
   an → **nicht gleichzeitig** denselben File; WP-2 zuerst landen, WP-4 darauf rebasen.
