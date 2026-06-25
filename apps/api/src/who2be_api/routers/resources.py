@@ -22,6 +22,7 @@ from who2be_api.services.resource_service import ResourceService
 from who2be_api.services.status_history_service import StatusHistoryService
 from who2be_api.services.version_status import VersionStatusService
 from who2be_models import (
+    ResourceBlockAnchor,
     ResourceCreate,
     ResourceRead,
     ResourceUpdate,
@@ -107,6 +108,19 @@ async def get_resource(
     resource_id: UUID, ctx: Ctx, service: Service, locale: LocaleQuery
 ) -> ResourceRead:
     return await service.get(ctx, resource_id, locale=locale)
+
+
+@router.get("/{resource_id}/blocks")
+async def list_resource_blocks(
+    resource_id: UUID, ctx: Ctx, service: Service, locale: LocaleQuery
+) -> list[ResourceBlockAnchor]:
+    """WP-6: linkbare Heading-Anker einer Resource (id/level/text).
+
+    Read-only, Viewer-offen — gleiche Scoping-/Locale-/Active-Draft-Semantik wie
+    `GET /{resource_id}`. Datenquelle fuer den Block-Picker beim Setzen von
+    Playbook-Resource-Block-Refs (ADR-0021, Heading-Only-Anker).
+    """
+    return await service.list_blocks(ctx, resource_id, locale)
 
 
 @router.put("/{resource_id}")

@@ -30,6 +30,7 @@ from who2be_models import (
     PlaybookRead,
     PlaybookUpdate,
     PlaybookVersionRead,
+    ResourceBlockAnchor,
     ResourceCreate,
     ResourceLinkRead,
     ResourceLinkSet,
@@ -245,6 +246,20 @@ class ApiClient:
             f"{self._workspace_prefix}/resources/{resource_id}", params={"locale": locale}
         )
         return ResourceRead.model_validate(data)
+
+    async def list_resource_blocks(
+        self, resource_id: UUID, locale: str = DEFAULT_LOCALE
+    ) -> list[ResourceBlockAnchor]:
+        """Laedt die linkbaren Heading-Anker einer Resource (WP-6).
+
+        `locale` waehlt die Sprachvariante (Default `'de'`); ein API-Token-Pfad
+        sieht nur aktive Versionen.
+        """
+        data = await self._get(
+            f"{self._workspace_prefix}/resources/{resource_id}/blocks",
+            params={"locale": locale},
+        )
+        return [ResourceBlockAnchor.model_validate(item) for item in data]
 
     async def get_resource_sub_resources(self, resource_id: UUID) -> list[SubResourceRead]:
         """Laedt die direkten Sub-Resources einer Resource (Track E §3.3).
