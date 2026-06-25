@@ -26,6 +26,7 @@ from who2be_mcp.client import ApiClient
 from who2be_mcp.config import Settings, get_settings
 from who2be_mcp.core_logging import configure_logging, with_tool_log
 from who2be_models import (
+    TRANSITION_RULE_DOC,
     AgentCopy,
     AgentCreate,
     AgentRead,
@@ -581,17 +582,20 @@ async def update_persona(persona_id: str, data: PersonaUpdate, locale: str = "de
     return await client.update_persona(_parse_uuid(persona_id, "Persona"), data, locale)
 
 
-@mcp.tool
+@mcp.tool(
+    description=(
+        f"Schaltet eine Persona-Version in einen neuen Status. {TRANSITION_RULE_DOC} "
+        "`note` landet in der Status-Historie."
+    )
+)
 @with_tool_log("transition_persona")
 async def transition_persona(
     persona_id: str, version: int, to: VersionStatus, note: str | None = None, locale: str = "de"
 ) -> PersonaVersionRead:
     """Schaltet eine Persona-Version in einen neuen Status.
 
-    Erlaubte Uebergaenge (State-Machine): draft→review, review→{active,draft},
-    active→{inactive,draft}, inactive→draft. Promote (→active) und Retire
-    (active→inactive) erfordern die admin-Rolle, sonst genuegt editor. `note`
-    landet in der Status-Historie.
+    Tool-`description` wird via `description=` aus `TRANSITION_RULE_DOC` gesetzt
+    (SSoT, WP-5/#257), da f-String-Docstrings nicht in `__doc__` landen.
     """
     client = await build_client()
     return await client.transition_persona_version(
@@ -649,13 +653,21 @@ async def update_playbook(
     return await client.update_playbook(_parse_uuid(playbook_id, "Playbook"), data, locale)
 
 
-@mcp.tool
+@mcp.tool(
+    description=(
+        f"Schaltet eine Playbook-Version in einen neuen Status. {TRANSITION_RULE_DOC} "
+        "`note` landet in der Status-Historie."
+    )
+)
 @with_tool_log("transition_playbook")
 async def transition_playbook(
     playbook_id: str, version: int, to: VersionStatus, note: str | None = None, locale: str = "de"
 ) -> PlaybookVersionRead:
-    """Schaltet eine Playbook-Version in einen neuen Status (State-Machine wie bei
-    Persona; Promote/Retire = admin)."""
+    """Schaltet eine Playbook-Version in einen neuen Status.
+
+    Tool-`description` wird via `description=` aus `TRANSITION_RULE_DOC` gesetzt
+    (SSoT, WP-5/#257), da f-String-Docstrings nicht in `__doc__` landen.
+    """
     client = await build_client()
     return await client.transition_playbook_version(
         _parse_uuid(playbook_id, "Playbook"),
@@ -728,13 +740,21 @@ async def update_resource(
     return await client.update_resource(_parse_uuid(resource_id, "Resource"), data, locale)
 
 
-@mcp.tool
+@mcp.tool(
+    description=(
+        f"Schaltet eine Resource-Version in einen neuen Status. {TRANSITION_RULE_DOC} "
+        "`note` landet in der Status-Historie."
+    )
+)
 @with_tool_log("transition_resource")
 async def transition_resource(
     resource_id: str, version: int, to: VersionStatus, note: str | None = None, locale: str = "de"
 ) -> ResourceVersionRead:
-    """Schaltet eine Resource-Version in einen neuen Status (State-Machine wie bei
-    Persona; Promote/Retire = admin)."""
+    """Schaltet eine Resource-Version in einen neuen Status.
+
+    Tool-`description` wird via `description=` aus `TRANSITION_RULE_DOC` gesetzt
+    (SSoT, WP-5/#257), da f-String-Docstrings nicht in `__doc__` landen.
+    """
     client = await build_client()
     return await client.transition_resource_version(
         _parse_uuid(resource_id, "Resource"),

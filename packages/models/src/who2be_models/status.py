@@ -41,6 +41,19 @@ ALLOWED_TRANSITIONS: Mapping[VersionStatus, frozenset[VersionStatus]] = {
 }
 
 
+# Menschenlesbare SSoT-Beschreibung der State-Machine fuer Tool-/API-Docs.
+# Spiegelt `ALLOWED_TRANSITIONS` 1:1 — bei Aenderungen der Map hier mitziehen.
+# Genutzt in den drei MCP-`transition_*`-Docstrings (per f-String), damit der
+# Wortlaut nicht dreifach driftet.
+TRANSITION_RULE_DOC = (
+    "Erlaubte Uebergaenge (State-Machine): draft->review, review->{active,draft}, "
+    "active->{inactive,draft}, inactive->draft. "
+    "draft->active geht NICHT direkt — der Zwischenstopp review ist Pflicht. "
+    "Promote (->active) und Retire (->inactive) erfordern die admin-Rolle, "
+    "sonst genuegt editor."
+)
+
+
 def is_allowed_transition(from_status: VersionStatus, to_status: VersionStatus) -> bool:
     """True wenn der Uebergang in der State-Machine erlaubt ist."""
     return to_status in ALLOWED_TRANSITIONS[from_status]

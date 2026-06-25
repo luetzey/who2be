@@ -71,6 +71,17 @@ def test_server_exposes_write_tools() -> None:
     } <= names
 
 
+def test_transition_tools_share_state_machine_doc() -> None:
+    """WP-5 (#257): alle drei transition_*-Tools tragen dieselbe State-Machine-
+    Doku (SSoT `TRANSITION_RULE_DOC`) inkl. des review-Zwischenstopp-Hinweises."""
+    tools = {tool.name: tool for tool in asyncio.run(mcp.list_tools())}
+    for name in ("transition_persona", "transition_playbook", "transition_resource"):
+        description = tools[name].description or ""
+        assert "review" in description, name
+        assert "draft->active geht NICHT direkt" in description, name
+        assert "admin-Rolle" in description, name
+
+
 def test_create_persona_tool_posts_and_returns_model(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
