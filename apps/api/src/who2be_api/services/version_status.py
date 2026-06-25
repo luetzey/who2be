@@ -347,6 +347,15 @@ class VersionStatusService:
                 content_dict: dict[str, Any] = target["content"]
                 validator(target["name"], content_dict, to_status)
 
+            # Composite-Aktiv-Invariante (WP-4 / #256): ein Composite-Playbook
+            # darf erst `active` werden, wenn ALLE referenzierten Sub-Playbooks
+            # eine aktive Version haben. Die Pruefung sitzt bewusst hier (Promote-
+            # Zeit) statt an Link-Zeit (`set_composition`) — so darf man Drafts
+            # frei verketten und die Invariante haelt erst beim Publish des
+            # Eltern-Composite. Nur fuer playbook->active relevant.
+            if entity_type == "playbook" and to_status == VersionStatus.active:
+                await self._assert_composite_children_active(conn, entity_id)
+
             # Active-Promotion: die bisherige Active-Version derselben
             # Entity zuerst auf `inactive` setzen — sonst kollidiert der
             # Partial-Unique-Index. Audit-Eintrag fuer das implizite
@@ -413,6 +422,42 @@ class VersionStatusService:
                     conn, entity_type, version_tbl, fk_col, entity_id, version, ctx.user_id, locale
                 )
             return updated
+
+    async def _assert_composite_children_active(
+        self, conn: asyncpg.Connection, parent_id: UUID
+    ) -> None:
+        """Wirft 409, wenn ein referenziertes Sub-Playbook nicht aktiv ist.
+
+        Composite-Aktiv-Invariante (WP-4 / #256, ADR-0024): ein Composite darf
+        nur `active` werden, wenn jedes seiner Kinder eine aktive Version hat.
+        Geprueft in derselben Transaktion wie der Transition-UPDATE (konsistent
+        gegen parallele Kind-Retires). Ein Kind ohne `status='active'`-Version
+        blockiert — der Owner muss das Kind erst aktivieren (`human`).
+        """
+        blocked = await conn.fetch(
+            "SELECT child.id, child.name "
+            "FROM playbook_composition pc "
+            "JOIN playbook child ON child.id = pc.child_id "
+            "WHERE pc.parent_id = $1 "
+            "AND NOT EXISTS ("
+            "    SELECT 1 FROM playbook_version cv "
+            "    WHERE cv.playbook_id = child.id AND cv.status = 'active'"
+            ") "
+            "ORDER BY pc.position ASC",
+            parent_id,
+        )
+        if not blocked:
+            return
+        names = ", ".join(f"{row['name']} ({row['id']})" for row in blocked)
+        raise ApiGateError(
+            status=status.HTTP_409_CONFLICT,
+            reason="composite_child_inactive",
+            actionable_by="human",
+            detail=(
+                "Composite kann nicht aktiviert werden — folgende Sub-Playbooks "
+                f"haben keine aktive Version: {names}. Aktiviere sie zuerst."
+            ),
+        )
 
     async def _reactivate_previous(
         self,

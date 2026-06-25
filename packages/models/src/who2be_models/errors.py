@@ -28,6 +28,7 @@ ProblemReason = Literal[
     "insufficient_role",
     "mfa_required",
     "concurrent_conflict",
+    "composite_child_inactive",
 ]
 
 # Wer den Fehler beheben kann: `agent` = der aufrufende Agent kann es selbst
