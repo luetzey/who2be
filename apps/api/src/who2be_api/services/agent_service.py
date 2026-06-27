@@ -9,7 +9,7 @@ gehoert.
 """
 
 from datetime import datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import HTTPException, status
 
@@ -232,16 +232,35 @@ class AgentService:
         # nur, soweit sie ihre eigene nicht uebersteigt.
         _guard_policy_escalation(ctx, source.tool_policy)
         name = data.name if data.name is not None else f"{source.name} (Kopie)"
-        agent = await self._repo.insert(
-            ctx.workspace_id,
-            ctx.user_id,
-            name,
-            source.description,
-            source.persona_id,
-            source.system_prompt_template_id,
-            source.status,
-            source.tool_policy,
-        )
+        # `activatable` garantiert Persona + Template (mit aktiver Persona-Version).
+        if source.persona_id is None or source.system_prompt_template_id is None:
+            raise _not_activatable(source.missing)
+        if source.is_managed:
+            # Voll-Klon: ein verwalteter Agent (Builder) wird mit unverwalteten,
+            # editierbaren Kopien von Persona + Playbooks + Template dupliziert —
+            # so erhaelt der User einen frei anpassbaren eigenen Builder.
+            agent = await self._repo.deep_copy(
+                ctx.workspace_id,
+                ctx.user_id,
+                source.persona_id,
+                source.system_prompt_template_id,
+                f"agent-builder-copy-{uuid4().hex[:8]}",
+                name,
+                source.description,
+                source.status,
+                source.tool_policy,
+            )
+        else:
+            agent = await self._repo.insert(
+                ctx.workspace_id,
+                ctx.user_id,
+                name,
+                source.description,
+                source.persona_id,
+                source.system_prompt_template_id,
+                source.status,
+                source.tool_policy,
+            )
         if agent is None:
             # Persona/Template wurde zwischen fetch und insert geloescht.
             raise _invalid_reference()
