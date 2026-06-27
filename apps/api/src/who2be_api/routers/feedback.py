@@ -19,6 +19,7 @@ from who2be_models import (
     AgentFeedbackRead,
     FeedbackCreate,
     FeedbackEvents,
+    FeedbackItems,
     FeedbackOverview,
     FeedbackResolutionCreate,
     FeedbackSummary,
@@ -49,6 +50,11 @@ async def record_usage(data: UsageEventCreate, ctx: Ctx, service: Service) -> Us
 @router.post("/feedback", status_code=201)
 async def submit_feedback(data: FeedbackCreate, ctx: Ctx, service: Service) -> AgentFeedbackRead:
     return await service.submit_feedback(ctx, data)
+
+
+@router.get("/feedback-items")
+async def get_feedback_items(ctx: Ctx, service: Service) -> FeedbackItems:
+    return await service.get_items(ctx)
 
 
 @router.get("/feedback-overview")

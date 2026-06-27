@@ -1,0 +1,96 @@
+import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import type { FeedbackItems } from '@/api/types'
+import { renderInRoutes } from '@/test/render'
+
+import { FeedbackInbox } from './FeedbackInbox'
+
+const { getFeedbackItems, setFeedbackResolution } = vi.hoisted(() => ({
+  getFeedbackItems: vi.fn(),
+  setFeedbackResolution: vi.fn(),
+}))
+
+vi.mock('@/api/useApi', () => {
+  const api = { getFeedbackItems, setFeedbackResolution }
+  return { useApi: () => api }
+})
+
+const data: FeedbackItems = {
+  items: [
+    {
+      id: 'fb-open',
+      entity_type: 'playbook',
+      entity_id: 'pb1',
+      name: 'Onboarding',
+      version: 2,
+      signal: 'outdated',
+      note: 'Schritt 4 ist veraltet',
+      agent_id: 'a1',
+      created_at: '2026-06-20T10:00:00Z',
+      resolution: null,
+    },
+    {
+      id: 'fb-done',
+      entity_type: 'resource',
+      entity_id: 'r1',
+      name: 'API-Doku',
+      version: null,
+      signal: 'helpful',
+      note: null,
+      agent_id: null,
+      created_at: '2026-06-19T10:00:00Z',
+      resolution: 'addressed',
+    },
+  ],
+  counts: { open: 1, in_progress: 0, addressed: 1, dismissed: 0 },
+}
+
+function renderInbox() {
+  return renderInRoutes(<FeedbackInbox unusedCount={3} />, {
+    path: '/w/:workspaceId/feedback',
+    initialEntries: ['/w/ws-1/feedback'],
+  })
+}
+
+beforeEach(() => {
+  getFeedbackItems.mockResolvedValue(data)
+  setFeedbackResolution.mockResolvedValue({ ...data.items[0], resolution: 'addressed' })
+})
+
+describe('FeedbackInbox', () => {
+  it('zeigt die KPI-Zähler und standardmäßig nur offene Feedbacks', async () => {
+    renderInbox()
+
+    // Default-Filter „Offen" → nur das untriagierte Feedback ist sichtbar.
+    expect(await screen.findByRole('link', { name: 'Onboarding' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'API-Doku' })).not.toBeInTheDocument()
+    // Ungenutzt-KPI kommt aus der Prop.
+    expect(screen.getByText('3')).toBeInTheDocument()
+  })
+
+  it('blendet erledigte Feedbacks ein, wenn der Status-Filter „Alle" ist', async () => {
+    renderInbox()
+    await screen.findByRole('link', { name: 'Onboarding' })
+
+    const statusSelect = screen.getByLabelText('Status')
+    fireEvent.change(statusSelect, { target: { value: 'all' } })
+    expect(await screen.findByRole('link', { name: 'API-Doku' })).toBeInTheDocument()
+  })
+
+  it('triagiert ein Feedback inline und lädt die Liste neu', async () => {
+    renderInbox()
+    await screen.findByRole('link', { name: 'Onboarding' })
+    const before = getFeedbackItems.mock.calls.length
+
+    const triage = screen.getByLabelText(/Triage — Onboarding/)
+    fireEvent.change(triage, { target: { value: 'addressed' } })
+    await waitFor(() =>
+      expect(setFeedbackResolution).toHaveBeenCalledWith('fb-open', { resolution: 'addressed' }),
+    )
+    // Reload nach der Triage (mindestens ein weiterer Items-Fetch).
+    await waitFor(() =>
+      expect(getFeedbackItems.mock.calls.length).toBeGreaterThan(before),
+    )
+  })
+})

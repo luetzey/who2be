@@ -119,6 +119,48 @@ class AgentFeedbackRead(BaseModel):
     resolution: FeedbackResolution | None = None
 
 
+class FeedbackItem(BaseModel):
+    """Ein einzelnes Feedback workspace-weit, angereichert um den Element-Namen.
+
+    Das Ruckgrat des zentralen Feedback-Posteingangs (`GET …/feedback-items`):
+    jedes qualitative Feedback mit Element-Bezug, Triage-Status und Metadaten —
+    damit Kuratoren ALLE Feedbacks an einem Ort sehen und abarbeiten koennen.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    entity_type: FeedbackTarget
+    entity_id: UUID
+    name: str
+    version: int | None = None
+    signal: FeedbackSignal
+    note: str | None = None
+    agent_id: UUID | None = None
+    created_at: datetime
+    resolution: FeedbackResolution | None = None
+
+
+class FeedbackItemCounts(BaseModel):
+    """Status-Verteilung ueber ALLE Feedbacks (speist die KPI-Leiste)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    open: int = Field(ge=0, default=0)
+    in_progress: int = Field(ge=0, default=0)
+    addressed: int = Field(ge=0, default=0)
+    dismissed: int = Field(ge=0, default=0)
+
+
+class FeedbackItems(BaseModel):
+    """Workspace-weiter Feedback-Posteingang: Eintraege + Status-Zaehler."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    items: list[FeedbackItem] = Field(default_factory=list)
+    counts: FeedbackItemCounts = Field(default_factory=FeedbackItemCounts)
+
+
 class FeedbackSummary(BaseModel):
     """Aggregat fuer `get_feedback` — Kurations-Sicht auf ein Element.
 

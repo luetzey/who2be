@@ -104,6 +104,25 @@ Laufzeit ueber die append-only Tabellen):
 
 Der `note`-Freitext wird ueber React-Textnodes escaped; kein HTML-Render.
 
+## Management-Redesign der Feedback-Seite (Folge, 2026-06-27)
+
+Die zentrale `/feedback`-Seite war zu sehr „Statistik" (nur Element-Aggregate) —
+die handlungsrelevante Einheit (Einzel-Feedback + Triage) lag nur versteckt im
+Detailseiten-Panel. Redesign zum **Management-Center** (eine gestapelte Seite):
+
+- **Neuer Endpunkt `GET …/feedback-items`** (editor-gated): ALLE Feedbacks
+  workspace-weit, angereichert um Element-Name (Namens-JOIN filtert geloeschte
+  Elemente) + aktuellen Triage-Status, plus Status-Zaehler fuer die KPI-Leiste.
+  Serverseitig auf 500 gekappt; Zaehler aus derselben Liste (bei realistischem
+  Kurations-Volumen exakt).
+- **Posteingang (`FeedbackInbox`)**: KPI-Leiste (Offen/In Arbeit/Erledigt/
+  Ungenutzt, klickbar als Status-Filter) + Filter (Status/Signal/Typ) + Liste mit
+  **Inline-Triage** pro Eintrag und „Element oeffnen". Default-Filter „Offen" =
+  die To-do-Liste des Kurators. Filterung client-seitig (eine Liste, kein
+  Refetch pro Filter).
+- Die bisherigen Element-Aggregate (meistgenutzt/bemaengelt) + Stale-Sektion
+  bleiben als sekundaerer **„Ueberblick"**-Block unter dem Posteingang.
+
 ## Stale-Sicht + Triage (Folge, 2026-06-27)
 
 - **Ungenutzt/Stale (`GET …/feedback-unused`):** veroeffentlichte Elemente

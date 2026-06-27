@@ -18,6 +18,8 @@ import {
 } from '@/components/ui/table'
 import { useFeedbackOverview, useFeedbackUnused } from '@/hooks/useFeedback'
 
+import { FeedbackInbox } from '../components/FeedbackInbox'
+
 // entity_type → Listen-Pfad-Segment der Detailseite.
 const DETAIL_SEGMENT: Record<FeedbackTarget, string> = {
   persona: 'personas',
@@ -36,6 +38,12 @@ export function FeedbackOverviewPage() {
   return (
     <Container>
       <PageHeader title={t('overview.title')} description={t('overview.description')} />
+
+      <FeedbackInbox unusedCount={unusedItems.length} />
+
+      <h2 className="mt-10 mb-4 text-lg font-semibold tracking-tight">
+        {t('overview.sectionTitle')}
+      </h2>
       <Card>
         <CardContent className="pt-6">
           <DataView

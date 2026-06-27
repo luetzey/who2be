@@ -17,6 +17,7 @@ import type {
   EntityExport,
   EntityExportFormat,
   FeedbackEvents,
+  FeedbackItems,
   FeedbackOverview,
   FeedbackResolutionInput,
   FeedbackSummary,
@@ -267,6 +268,7 @@ export interface Api {
   getFeedback: (type: FeedbackTarget, id: string) => Promise<FeedbackSummary>
   getFeedbackEvents: (type: FeedbackTarget, id: string) => Promise<FeedbackEvents>
   getFeedbackOverview: () => Promise<FeedbackOverview>
+  getFeedbackItems: () => Promise<FeedbackItems>
   getFeedbackUnused: () => Promise<FeedbackUnused>
   setFeedbackResolution: (
     feedbackId: string,
@@ -496,6 +498,8 @@ export function createApi(token: string, workspaceId: string): Api {
       request<FeedbackEvents>(token, `${ws}/feedback/${type}/${id}/events`),
     getFeedbackOverview: () =>
       request<FeedbackOverview>(token, `${ws}/feedback-overview`),
+    getFeedbackItems: () =>
+      request<FeedbackItems>(token, `${ws}/feedback-items`),
     getFeedbackUnused: () =>
       request<FeedbackUnused>(token, `${ws}/feedback-unused`),
     setFeedbackResolution: (feedbackId, input) =>
