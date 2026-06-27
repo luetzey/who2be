@@ -561,6 +561,11 @@ export interface AgentToolPolicy {
   playbook_write: boolean
   resource_write: boolean
   agent_write: boolean
+  // ADR-0040: System-Prompt-Templates verfassen + zur Review einreichen
+  // (Aktivieren bleibt serverseitig gesperrt). ADR-0038: feedback_write deckt
+  // das Usage-/Feedback-Flywheel ab (Default an).
+  system_prompt_write: boolean
+  feedback_write: boolean
   promote_retire: boolean
 }
 
@@ -576,6 +581,9 @@ export const DEFAULT_TOOL_POLICY: AgentToolPolicy = {
   playbook_write: false,
   resource_write: false,
   agent_write: false,
+  system_prompt_write: false,
+  // Flywheel-Telemetrie ist Default an (ADR-0038), opt-out pro Agent.
+  feedback_write: true,
   promote_retire: false,
 }
 

@@ -229,6 +229,8 @@
           "playbook_write": "Create/edit/link playbooks",
           "resource_write": "Create/edit/link resources",
           "agent_write": "Create/edit agents",
+          "system_prompt_write": "Author system prompts (submit for review)",
+          "feedback_write": "Report usage/feedback",
           "promote_retire": "Activate/deactivate versions"
         }
       }

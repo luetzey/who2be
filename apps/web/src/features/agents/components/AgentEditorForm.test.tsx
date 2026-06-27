@@ -94,5 +94,9 @@ describe('AgentEditorForm', () => {
     // Eine Write-Capability-Checkbox ist vorhanden und per Default aus.
     const playbookWrite = screen.getByLabelText('Playbooks erstellen/ändern/verknüpfen')
     expect(playbookWrite).not.toBeChecked()
+    // ADR-0040/0038: System-Prompt- + Feedback-Capability sind im Editor sichtbar;
+    // Feedback ist secure-by-default AN, System-Prompt aus.
+    expect(screen.getByLabelText('System-Prompts verfassen (Review einreichen)')).not.toBeChecked()
+    expect(screen.getByLabelText('Nutzung/Feedback melden')).toBeChecked()
   })
 })

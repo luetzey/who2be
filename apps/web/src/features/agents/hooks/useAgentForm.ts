@@ -28,6 +28,8 @@ const editorSchema = z.object({
   playbook_write: z.boolean(),
   resource_write: z.boolean(),
   agent_write: z.boolean(),
+  system_prompt_write: z.boolean(),
+  feedback_write: z.boolean(),
   promote_retire: z.boolean(),
 })
 
@@ -43,6 +45,8 @@ function valuesToPolicy(values: AgentEditorValues): AgentToolPolicy {
     playbook_write: values.playbook_write,
     resource_write: values.resource_write,
     agent_write: values.agent_write,
+    system_prompt_write: values.system_prompt_write,
+    feedback_write: values.feedback_write,
     promote_retire: values.promote_retire,
   }
 }

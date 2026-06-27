@@ -229,6 +229,8 @@
           "playbook_write": "Playbooks erstellen/ändern/verknüpfen",
           "resource_write": "Resources erstellen/ändern/verknüpfen",
           "agent_write": "Agenten erstellen/ändern",
+          "system_prompt_write": "System-Prompts verfassen (Review einreichen)",
+          "feedback_write": "Nutzung/Feedback melden",
           "promote_retire": "Versionen aktivieren/deaktivieren"
         }
       }

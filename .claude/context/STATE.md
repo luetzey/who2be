@@ -4,6 +4,13 @@ _Stand: 2026-06-16_
 
 ## Funktioniert
 
+- **Track 4-B Web-Policy-Editor-Sync (2026-06-27), Branch
+  `claude/track4-finer-rights`:** Der `AgentEditorForm` exponiert jetzt die
+  feineren Backend-Capabilities `system_prompt_write` (ADR-0040, aus) +
+  `feedback_write` (ADR-0038, secure-by-default an) als Write-Switches
+  (types.ts/DEFAULT_TOOL_POLICY, useAgentForm-Schema, i18n de/en, Test). Web-DoD
+  grün (tsc/lint/391 Tests/build). Offen aus Track 4-B: Tag-Prädikat-Write-
+  Scoping (Backend) + UI für transition_grants/Token-Ablauf.
 - **Track 4-A feinere Rechte (ADR-0039, 2026-06-27), Branch
   `claude/track4-finer-rights` (gestapelt):** getrennte Promote/Retire pro Domain
   (`transition_grants`, Narrowing von `promote_retire`) + Token-TTL
