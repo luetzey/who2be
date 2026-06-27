@@ -4,6 +4,10 @@ _Stand: 2026-06-16_
 
 ## Funktioniert
 
+- **Track 2 Search (ADR-0037, 2026-06-27), Branch `claude/track2-search`
+  (gestapelt):** MCP-Tool `search` + `GET /search` — Postgres-Runtime-Volltext
+  über Name + Content der aktiven Version, read-scope-gefiltert, nur active.
+  Kein Migration (GIN-Index + pgvector als Folge). ruff/mypy clean; eigener PR.
 - **Track 3 Feedback-Flywheel (ADR-0038, 2026-06-27), Branch
   `claude/track3-feedback-flywheel` (gestapelt):** append-only `usage_event` +
   `agent_feedback` (Migration 0053, RLS + SELECT/INSERT-only), Capability

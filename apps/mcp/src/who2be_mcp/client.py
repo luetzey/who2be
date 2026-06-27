@@ -42,6 +42,8 @@ from who2be_models import (
     ResourceUpdate,
     ResourceUsage,
     ResourceVersionRead,
+    SearchHit,
+    SearchType,
     SubResourceLinkSet,
     SubResourceRead,
     SystemPromptTemplateCreate,
@@ -666,3 +668,16 @@ class ApiClient:
     async def get_feedback(self, entity_type: str, entity_id: UUID) -> FeedbackSummary:
         data = await self._get(f"{self._workspace_prefix}/feedback/{entity_type}/{entity_id}")
         return FeedbackSummary.model_validate(data)
+
+    # ------------------------------------------------------------------
+    # Discovery/Search (ADR-0037). Volltext ueber die aktive Version.
+    # ------------------------------------------------------------------
+
+    async def search(
+        self, query: str, types: list[SearchType] | None, limit: int
+    ) -> list[SearchHit]:
+        params: dict[str, str] = {"q": query, "limit": str(limit)}
+        if types:
+            params["types"] = ",".join(types)
+        data = await self._get(f"{self._workspace_prefix}/search", params=params)
+        return [SearchHit.model_validate(item) for item in data]

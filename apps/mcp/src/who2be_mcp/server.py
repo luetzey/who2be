@@ -59,6 +59,8 @@ from who2be_models import (
     ResourceRead,
     ResourceUpdate,
     ResourceVersionRead,
+    SearchHit,
+    SearchType,
     SubResourceLinkSet,
     SubResourceRead,
     SystemPromptTemplateCreate,
@@ -1066,6 +1068,30 @@ async def get_feedback(entity_type: FeedbackTarget, entity_id: str) -> FeedbackS
     parsed = _parse_uuid(entity_id, entity_type)
     client = await build_client()
     return await client.get_feedback(entity_type, parsed)
+
+
+# ---------------------------------------------------------------------------
+# Discovery/Search (ADR-0037). Volltext ueber die aktive Version der
+# Kern-Inhaltselemente — read-scope-gefiltert, nur `status='active'`.
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool
+@with_tool_log("search")
+async def search(
+    query: str, types: list[SearchType] | None = None, limit: int = 20
+) -> list[SearchHit]:
+    """Inhaltliche Suche ueber Personae/Playbooks/Resources (rangsortiert).
+
+    Volltext ueber Name + Inhalt der aktiven Version. `types` optional auf
+    {persona, playbook, resource} einschraenken (Default alle), `limit` ≤ 50.
+    Jeder Treffer traegt `type`, `id`, `name`, `snippet` und `score`. Nutze das,
+    um relevante Inhalte zu FINDEN, statt ganze Listen zu laden — danach das
+    Element gezielt via `fetch_playbook`/`fetch_resource`/`get_persona` ziehen.
+    Du siehst nur aktive und (bei `assigned`-Scope) dir zugewiesene Elemente.
+    """
+    client = await build_client()
+    return await client.search(query, types, limit)
 
 
 def main() -> None:

@@ -81,6 +81,14 @@ class _ToolDoc(BaseModel):
             return policy.persona_read
         if self.read_domain == "agent":
             return policy.agent_read != ReadScope.none
+        if self.read_domain == "search":
+            # Such-Tool spannt mehrere Domains: sichtbar, sobald der Agent
+            # mindestens eine Inhalts-Domain lesen darf.
+            return (
+                policy.persona_read
+                or policy.playbook_read != ReadScope.none
+                or policy.resource_read != ReadScope.none
+            )
         return True
 
     def scope_suffix(self, policy: AgentToolPolicy | None) -> str:
@@ -107,6 +115,16 @@ _TOOLS: list[_ToolDoc] = [
             "des Modus-Triggers den passenden Modus und wende dessen "
             "`identity_add` + `output_style_override` an; ohne Trigger-Match "
             "gilt der Default-Modus."
+        ),
+    ),
+    _ToolDoc(
+        signature="search(query, types?, limit?)",
+        read_domain="search",
+        description=(
+            "Inhaltliche Volltext-Suche ueber Personae/Playbooks/Resources "
+            "(rangsortiert). Nutze das, um relevante Inhalte zu FINDEN, statt "
+            "ganze Kataloge zu laden — danach gezielt via fetch_* nachladen. "
+            "`types` optional einschraenken, `limit` <= 50."
         ),
     ),
     _ToolDoc(
