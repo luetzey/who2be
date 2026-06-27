@@ -80,7 +80,7 @@ def _ctx(agent_read: ReadScope | None) -> WorkspaceContext:
         role=WorkspaceRole.editor,
         is_api_token=bound,
         agent_id=_OWN_ID if bound else None,
-        tool_policy=AgentToolPolicy(agent_read=agent_read) if bound else None,
+        tool_policy=(AgentToolPolicy(agent_read=agent_read) if agent_read is not None else None),
     )
 
 

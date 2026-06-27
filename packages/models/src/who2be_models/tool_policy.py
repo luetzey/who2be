@@ -62,6 +62,25 @@ class AgentCapability(StrEnum):
     promote_retire = "promote_retire"
 
 
+_TRANSITION_DOMAINS = ("persona", "playbook", "resource")
+
+
+class TransitionGrant(BaseModel):
+    """Pro-Domain-Verfeinerung von `promote_retire` (ADR-0039).
+
+    Wirkt NUR als Einschraenkung: greift ausschliesslich, wenn der Agent
+    `promote_retire` haelt. Ist fuer eine Domain ein Eintrag gesetzt, sind nur die
+    explizit gewaehrten Richtungen erlaubt — so laesst sich „darf Playbooks
+    promoten, aber keine Personas; nie retiren" abbilden, ohne `promote_retire`
+    aufzuweiten. Fehlt der Domain-Eintrag, gilt die ungeteilte `promote_retire`.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    promote: bool = True
+    retire: bool = True
+
+
 class AgentToolPolicy(BaseModel):
     """Welche MCP-Tools ein Agent nutzen darf.
 
@@ -97,10 +116,53 @@ class AgentToolPolicy(BaseModel):
     # der Zweck des Flywheels; der Owner kann sie pro Agent abschalten.
     feedback_write: bool = True
     promote_retire: bool = False
+    # Optionale Pro-Domain-Verfeinerung von `promote_retire` (ADR-0039).
+    # Leer = ungeteilt (Backward-Compat). Keys: persona/playbook/resource.
+    transition_grants: dict[str, TransitionGrant] = {}
+    # Optionales Tag-Praedikat-Write-Scoping (ADR-0039). Pro Domain
+    # (persona/playbook/resource) eine Liste erlaubter Tags: ist sie gesetzt UND
+    # nicht leer, darf der Agent in dieser Domain nur Inhalte schreiben, deren
+    # Tags die erlaubte Menge schneiden ("darf nur `support`-Playbooks editieren").
+    # Fehlender/leerer Eintrag = keine Tag-Einschraenkung (Backward-Compat).
+    write_tags: dict[str, list[str]] = {}
+    # Optionales Write-Rate-Limit (ADR-0039): max. Schreib-Mutationen pro Minute
+    # fuer diesen Agenten. None/<=0 = unbegrenzt (Default). Serverseitig ueber
+    # einen Sliding-Window-Limiter (keyed auf agent_id) durchgesetzt.
+    write_rate_limit: int | None = None
 
     def allows(self, capability: AgentCapability) -> bool:
         """True, wenn die Policy die gegebene Schreib-Capability gewaehrt."""
         return bool(getattr(self, capability.value))
+
+    def write_tags_for(self, domain: str) -> list[str] | None:
+        """Erlaubte Tags fuer Writes in `domain`, oder None (keine Einschraenkung)."""
+        tags = self.write_tags.get(domain)
+        return tags if tags else None
+
+    def tags_permitted(self, domain: str, target_tags: list[str]) -> bool:
+        """Darf der Agent Inhalte mit `target_tags` in `domain` schreiben?
+
+        Ohne Tag-Einschraenkung immer True; sonst muss die Schnittmenge der
+        Ziel-Tags mit der erlaubten Menge nicht leer sein.
+        """
+        allowed = self.write_tags_for(domain)
+        if allowed is None:
+            return True
+        return bool(set(target_tags) & set(allowed))
+
+    def can_transition(self, domain: str, *, promote: bool) -> bool:
+        """Darf der Agent in `domain` promoten (`promote=True`) bzw. retiren?
+
+        Verlangt `promote_retire`; ein `transition_grants`-Eintrag fuer die Domain
+        schraenkt zusaetzlich pro Richtung ein. Ohne Eintrag gilt die ungeteilte
+        `promote_retire`.
+        """
+        if not self.promote_retire:
+            return False
+        grant = self.transition_grants.get(domain)
+        if grant is None:
+            return True
+        return grant.promote if promote else grant.retire
 
     def granted_capabilities(self) -> list[AgentCapability]:
         """Die gewaehrten Schreib-Capabilities, in Enum-Reihenfolge.
@@ -148,7 +210,34 @@ class AgentToolPolicy(BaseModel):
             "feedback_write",
             "promote_retire",
         )
-        return all(not getattr(self, name) or getattr(other, name) for name in bool_fields)
+        if not all(not getattr(self, name) or getattr(other, name) for name in bool_fields):
+            return False
+        # Effektive Transition-Rechte (promote_retire + transition_grants) duerfen
+        # die des Verwalters pro Domain/Richtung nicht uebersteigen.
+        for domain in _TRANSITION_DOMAINS:
+            for promote in (True, False):
+                if self.can_transition(domain, promote=promote) and not other.can_transition(
+                    domain, promote=promote
+                ):
+                    return False
+        # Write-Tag-Scope: `self` darf in keiner Domain breiter schreiben als
+        # `other`. `other` unrestricted (None) erlaubt jeden self-Scope; ist
+        # `other` eingeschraenkt, muss `self` ebenfalls eingeschraenkt sein und
+        # eine Teilmenge bilden.
+        for domain in _TRANSITION_DOMAINS:
+            other_tags = other.write_tags_for(domain)
+            if other_tags is None:
+                continue
+            self_tags = self.write_tags_for(domain)
+            if self_tags is None or not set(self_tags) <= set(other_tags):
+                return False
+        # Write-Rate-Limit: None = unbegrenzt (am breitesten). Hat `other` ein
+        # Limit, darf `self` nicht unbegrenzt oder hoeher sein.
+        if other.write_rate_limit is not None and (
+            self.write_rate_limit is None or self.write_rate_limit > other.write_rate_limit
+        ):
+            return False
+        return True
 
 
 # Scope-Rang fuer den Teilmengen-Vergleich (`is_within`): mehr Sicht = hoeher.

@@ -245,6 +245,8 @@ export interface TokenInput {
   // Pflicht-Bindung an einen Agenten (secure by default): der Token erbt dessen
   // MCP-Tool-Policy. Ungebundene Tokens sind nicht mehr erlaubt.
   agent_id: string
+  // Optionaler Ablaufzeitpunkt (ISO-8601, ADR-0039); weggelassen = kein Ablauf.
+  expires_at?: string
 }
 
 export interface TokenRenameInput {
@@ -561,7 +563,21 @@ export interface AgentToolPolicy {
   playbook_write: boolean
   resource_write: boolean
   agent_write: boolean
+  // ADR-0040: System-Prompt-Templates verfassen + zur Review einreichen
+  // (Aktivieren bleibt serverseitig gesperrt). ADR-0038: feedback_write deckt
+  // das Usage-/Feedback-Flywheel ab (Default an).
+  system_prompt_write: boolean
+  feedback_write: boolean
   promote_retire: boolean
+  // ADR-0039: Tag-Praedikat-Write-Scoping. Pro Domain (persona/playbook/resource)
+  // erlaubte Tags; fehlend/leer = keine Tag-Einschraenkung. Optional, damit
+  // Bestands-Payloads ohne das Feld weiterhin valide sind.
+  write_tags?: Record<string, string[]>
+  // ADR-0039: per-Domain-Verfeinerung von promote_retire (Narrowing). Fehlt ein
+  // Domain-Eintrag, gilt das ungeteilte promote_retire.
+  transition_grants?: Record<string, { promote: boolean; retire: boolean }>
+  // ADR-0039: max. Schreib-Mutationen/Minute (null/fehlend = unbegrenzt).
+  write_rate_limit?: number | null
 }
 
 // Default-Policy fuer neue Agenten: nur Zugewiesenes lesen (least privilege/
@@ -576,6 +592,9 @@ export const DEFAULT_TOOL_POLICY: AgentToolPolicy = {
   playbook_write: false,
   resource_write: false,
   agent_write: false,
+  system_prompt_write: false,
+  // Flywheel-Telemetrie ist Default an (ADR-0038), opt-out pro Agent.
+  feedback_write: true,
   promote_retire: false,
 }
 

@@ -4,6 +4,40 @@ _Stand: 2026-06-16_
 
 ## Funktioniert
 
+- **Track 4-C Write-Rate-Limit (ADR-0039 abgeschlossen, 2026-06-27), Branch
+  `claude/track4-finer-rights`:** `AgentToolPolicy.write_rate_limit: int|None`
+  (Writes/Min; None=unbegrenzt, JSONB-abwärtskompatibel) + `is_within`-Anti-
+  Escalation; Gate `require_write_rate` (Sliding-Window `token_rate_limiter`,
+  Key `write:{agent_id}`, 429) nach `require_capability` in allen Write-Pfaden
+  von persona/playbook/resource; `whoami` gibt das Limit aus; AgentEditorForm hat
+  ein optionales Zahlenfeld. Damit ist ADR-0039 (alle 3 Achsen + Rate-Limit)
+  vollständig. **DoD grün:** Python 891 passed, mypy 296, ruff clean; Web 393
+  Tests, 0 Lint-Errors, tsc/build clean.
+- **Track 4-B Tag-Scoping (ADR-0039, 2026-06-27), Branch
+  `claude/track4-finer-rights`:** `AgentToolPolicy.write_tags` (Dict Domain→Tags;
+  leer=unrestricted) + `require_write_tags`-Gate in persona/playbook/resource
+  create+update+restore (eingehende Tags immer, Bestands-Tags beim Update →
+  keine Übernahme out-of-scope). `is_within`-Anti-Escalation. DB-Integrationstest
+  grün; volle Suite 888 passed, mypy 296, ruff/Web clean. Offen: UI-Widgets für
+  write_tags/transition_grants/Ablauf + Rate-Limit.
+- **Track 4-B write_tags-UI + whoami (2026-06-27):** AgentEditorForm hat den
+  Tag-Picker (3 Domain-Felder → write_tags-Dict); whoami gibt write_tags +
+  transition_grants aus. Web 392 Tests grün, Python 888, mypy 296, ruff clean.
+  ADR-0039 komplett: transition_grants-Toggles + Token-Ablauf-Feld im
+  Editor/Token-Sektion. Alle 3 Achsen mit Backend+UI. Python 888, mypy 296,
+  ruff clean, Web 393/0-Lint/build. Offen nur optionales Write-Rate-Limit.
+- **Track 4-B Web-Policy-Editor-Sync (2026-06-27), Branch
+  `claude/track4-finer-rights`:** Der `AgentEditorForm` exponiert jetzt die
+  feineren Backend-Capabilities `system_prompt_write` (ADR-0040, aus) +
+  `feedback_write` (ADR-0038, secure-by-default an) als Write-Switches
+  (types.ts/DEFAULT_TOOL_POLICY, useAgentForm-Schema, i18n de/en, Test). Web-DoD
+  grün (tsc/lint/391 Tests/build). Offen aus Track 4-B: Tag-Prädikat-Write-
+  Scoping (Backend) + UI für transition_grants/Token-Ablauf.
+- **Track 4-A feinere Rechte (ADR-0039, 2026-06-27), Branch
+  `claude/track4-finer-rights` (gestapelt):** getrennte Promote/Retire pro Domain
+  (`transition_grants`, Narrowing von `promote_retire`) + Token-TTL
+  (`TokenCreate.expires_at`; Enforcement+Spalte gab es schon). Additiv, DB-frei
+  verifiziert. Track 4-B (Tag-Scoping + Web-Policy-Editor) offen.
 - **Track 2 Search (ADR-0037, 2026-06-27), Branch `claude/track2-search`
   (gestapelt):** MCP-Tool `search` + `GET /search` — Postgres-Runtime-Volltext
   über Name + Content der aktiven Version, read-scope-gefiltert, nur active.

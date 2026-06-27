@@ -94,9 +94,7 @@ def test_stdio_uses_env_token(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_resolve_honours_explicit_pin() -> None:
     ws = uuid4()
-    resolved = asyncio.run(
-        server._resolve_workspace_id(_settings(workspace_id=str(ws)), "w2b_x")
-    )
+    resolved = asyncio.run(server._resolve_workspace_id(_settings(workspace_id=str(ws)), "w2b_x"))
     assert resolved == ws
 
 

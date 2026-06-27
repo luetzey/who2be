@@ -95,13 +95,25 @@ def test_invariant_violation_concurrent_conflict_agent() -> None:
 
 
 def test_template_lock_missing_capability_none() -> None:
-    # Agent-gebundener Token darf System-Prompt-Templates nicht transitionieren.
-    ctx = _ctx(tool_policy=AgentToolPolicy())
+    # ADR-0040: Agent-gebundener Token darf System-Prompt-Templates NIE aktivieren
+    # oder zurueckziehen — selbst mit system_prompt_write bleibt das hart gesperrt
+    # (actionable_by="none"). Verfassen/Review ist hingegen freischaltbar.
+    ctx = _ctx(tool_policy=AgentToolPolicy(system_prompt_write=True))
     with pytest.raises(ApiGateError) as exc:
-        _require_transition_capability(ctx, "system_prompt_template", VersionStatus.review)
+        _require_transition_capability(ctx, "system_prompt_template", VersionStatus.active)
     assert exc.value.status == 403
     assert exc.value.reason == "missing_capability"
     assert exc.value.actionable_by == "none"
+
+
+def test_template_review_needs_capability_actionable_human() -> None:
+    # Ohne system_prompt_write ist draft→review gesperrt, aber ein Mensch kann die
+    # Capability gewaehren (actionable_by="human") — kein harter "none"-Lock.
+    ctx = _ctx(tool_policy=AgentToolPolicy())
+    with pytest.raises(ApiGateError) as exc:
+        _require_transition_capability(ctx, "system_prompt_template", VersionStatus.review)
+    assert exc.value.reason == "missing_capability"
+    assert exc.value.actionable_by == "human"
 
 
 # --- Handler-Test: problem+json-Shape ---------------------------------------

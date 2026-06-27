@@ -13,7 +13,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from who2be_models.tool_policy import AgentCapability, ReadScope
+from who2be_models.tool_policy import AgentCapability, ReadScope, TransitionGrant
 from who2be_models.workspace_member import WorkspaceRole
 
 
@@ -49,5 +49,11 @@ class WhoAmIRead(BaseModel):
     # Effektive Read-Scopes je Domain (persona/playbook/resource/agent); `None`
     # wenn `unrestricted`.
     read_scopes: dict[str, ReadScope] | None
+    # Feinkoernige Write-Verfeinerungen (ADR-0039); `None` wenn `unrestricted`,
+    # leere Dicts = keine Verfeinerung (ungeteiltes promote_retire / alle Tags).
+    transition_grants: dict[str, TransitionGrant] | None = None
+    write_tags: dict[str, list[str]] | None = None
+    # Schreib-Rate-Limit (Mutationen/Minute); None = unbegrenzt oder unrestricted.
+    write_rate_limit: int | None = None
     # Org-weite Entitlement-Features (z. B. "core", "agents", "composite_playbooks").
     features: list[str]

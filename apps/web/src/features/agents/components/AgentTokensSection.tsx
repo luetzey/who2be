@@ -49,6 +49,7 @@ export function AgentTokensSection({ agentId }: AgentTokensSectionProps) {
   const currentRole = useCurrentWorkspaceRole()
   const roleOptions = currentRole !== null ? rolesAtMost(currentRole) : []
   const [roleOverride, setRoleOverride] = useState<WorkspaceRole | null>(null)
+  const [expiresAt, setExpiresAt] = useState('')
   const role = roleOverride ?? currentRole
 
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -64,9 +65,12 @@ export function AgentTokensSection({ agentId }: AgentTokensSectionProps) {
       currentRole !== null && role !== null
         ? { name: values.name, role, agent_id: agentId }
         : { name: values.name, agent_id: agentId }
+    // Datum (YYYY-MM-DD) → Ende des Tages in UTC; leer = kein Ablauf.
+    if (expiresAt !== '') input.expires_at = new Date(`${expiresAt}T23:59:59Z`).toISOString()
     const result = await createToken(input)
     if (result !== null) {
       form.reset({ name: '' })
+      setExpiresAt('')
     }
   }
 
@@ -210,6 +214,16 @@ export function AgentTokensSection({ agentId }: AgentTokensSectionProps) {
                   <p className="text-xs text-muted-foreground">{t('create.roleHint')}</p>
                 </div>
               ) : null}
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="agent-token-expires">{t('create.expiresLabel')}</Label>
+                <Input
+                  id="agent-token-expires"
+                  type="date"
+                  value={expiresAt}
+                  onChange={(event) => setExpiresAt(event.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">{t('create.expiresHint')}</p>
+              </div>
               {createError !== null ? <ErrorAlert message={createError} /> : null}
               <div className="flex justify-end">
                 <Button type="submit" variant="brand" disabled={form.formState.isSubmitting}>

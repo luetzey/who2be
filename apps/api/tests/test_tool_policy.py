@@ -16,6 +16,7 @@ from who2be_models import (
     AgentCapability,
     AgentToolPolicy,
     ReadScope,
+    TransitionGrant,
     VersionStatus,
     WorkspaceRole,
 )
@@ -171,3 +172,162 @@ class TestFeedbackWriteCapability:
         ctx = _ctx(AgentToolPolicy(feedback_write=False))
         with pytest.raises(ApiGateError):
             require_capability(ctx, AgentCapability.feedback_write)
+
+
+class TestTransitionGrants:
+    """ADR-0039: per-Domain-Verfeinerung von promote_retire (Narrowing)."""
+
+    def test_no_promote_retire_means_no_transition(self) -> None:
+        p = AgentToolPolicy(promote_retire=False)
+        assert p.can_transition("playbook", promote=True) is False
+
+    def test_promote_retire_without_grants_is_full(self) -> None:
+        p = AgentToolPolicy(promote_retire=True)
+        assert p.can_transition("playbook", promote=True) is True
+        assert p.can_transition("persona", promote=False) is True
+
+    def test_grant_narrows_direction_per_domain(self) -> None:
+        p = AgentToolPolicy(
+            promote_retire=True,
+            transition_grants={"playbook": TransitionGrant(promote=True, retire=False)},
+        )
+        assert p.can_transition("playbook", promote=True) is True
+        assert p.can_transition("playbook", promote=False) is False
+        # Nicht gelistete Domain bleibt voll (Grants schraenken nur Gelistetes ein).
+        assert p.can_transition("persona", promote=False) is True
+
+    def test_is_within_blocks_broader_transition(self) -> None:
+        full = AgentToolPolicy(promote_retire=True)
+        narrowed = AgentToolPolicy(
+            promote_retire=True,
+            transition_grants={"playbook": TransitionGrant(promote=True, retire=False)},
+        )
+        assert narrowed.is_within(full) is True
+        assert full.is_within(narrowed) is False
+
+    def test_gate_allows_promote_blocks_retire_when_grant_restricts(self) -> None:
+        ctx = _ctx(
+            AgentToolPolicy(
+                promote_retire=True,
+                transition_grants={"playbook": TransitionGrant(promote=True, retire=False)},
+            )
+        )
+        # Promote (→active) erlaubt; Retire (→inactive) durch Grant gesperrt.
+        _require_transition_capability(ctx, "playbook", VersionStatus.active)
+        with pytest.raises(ApiGateError) as exc:
+            _require_transition_capability(ctx, "playbook", VersionStatus.inactive)
+        assert exc.value.actionable_by == "human"
+
+
+class TestTokenExpiry:
+    """ADR-0039: optionaler Ablaufzeitpunkt im TokenCreate-Modell."""
+
+    def test_default_is_none(self) -> None:
+        from who2be_models import TokenCreate
+
+        tok = TokenCreate(name="t", agent_id=uuid4())
+        assert tok.expires_at is None
+
+    def test_accepts_datetime(self) -> None:
+        from datetime import UTC, datetime, timedelta
+
+        from who2be_models import TokenCreate
+
+        when = datetime.now(UTC) + timedelta(days=14)
+        tok = TokenCreate(name="t", agent_id=uuid4(), expires_at=when)
+        assert tok.expires_at == when
+
+
+class TestWriteTagsScope:
+    """ADR-0039: Tag-Praedikat-Write-Scoping (write_tags) + Anti-Escalation."""
+
+    def test_unrestricted_permits_any_tags(self) -> None:
+        p = AgentToolPolicy()
+        assert p.write_tags_for("playbook") is None
+        assert p.tags_permitted("playbook", ["legal"]) is True
+
+    def test_empty_list_is_unrestricted(self) -> None:
+        # Leerer Eintrag == keine Einschraenkung (Backward-Compat).
+        p = AgentToolPolicy(write_tags={"playbook": []})
+        assert p.write_tags_for("playbook") is None
+        assert p.tags_permitted("playbook", ["legal"]) is True
+
+    def test_restricted_requires_intersection(self) -> None:
+        p = AgentToolPolicy(write_tags={"playbook": ["support"]})
+        assert p.tags_permitted("playbook", ["support", "billing"]) is True
+        assert p.tags_permitted("playbook", ["legal"]) is False
+        assert p.tags_permitted("playbook", []) is False
+        # Andere Domain bleibt unbeschraenkt.
+        assert p.tags_permitted("persona", ["legal"]) is True
+
+    def test_is_within_blocks_broader_or_unrestricted(self) -> None:
+        manager = AgentToolPolicy(playbook_write=True, write_tags={"playbook": ["support"]})
+        narrow = AgentToolPolicy(playbook_write=True, write_tags={"playbook": ["support"]})
+        broader = AgentToolPolicy(
+            playbook_write=True, write_tags={"playbook": ["support", "legal"]}
+        )
+        unrestricted = AgentToolPolicy(playbook_write=True)
+        assert narrow.is_within(manager) is True
+        # Breiterer Tag-Satz als der Verwalter → nicht innerhalb.
+        assert broader.is_within(manager) is False
+        # Unrestringiert (alle Tags) ist breiter als ein eingeschraenkter Verwalter.
+        assert unrestricted.is_within(manager) is False
+        # Ein eingeschraenkter Agent ist innerhalb eines unrestringierten Verwalters.
+        assert manager.is_within(unrestricted) is True
+
+
+class TestRequireWriteTagsGate:
+    """`require_write_tags`-Gate (core.security)."""
+
+    def test_no_policy_is_noop(self) -> None:
+        from who2be_api.core.security import require_write_tags
+
+        require_write_tags(_ctx(None), "playbook", ["legal"])
+
+    def test_permitted_passes(self) -> None:
+        from who2be_api.core.security import require_write_tags
+
+        ctx = _ctx(AgentToolPolicy(playbook_write=True, write_tags={"playbook": ["support"]}))
+        require_write_tags(ctx, "playbook", ["support"])
+
+    def test_forbidden_raises_403_human(self) -> None:
+        from who2be_api.core.security import require_write_tags
+
+        ctx = _ctx(AgentToolPolicy(playbook_write=True, write_tags={"playbook": ["support"]}))
+        with pytest.raises(ApiGateError) as exc:
+            require_write_tags(ctx, "playbook", ["legal"])
+        assert exc.value.status == 403
+        assert exc.value.actionable_by == "human"
+
+
+class TestWriteRateLimit:
+    """ADR-0039: per-Agent Write-Rate-Limit (write_rate_limit) + Gate."""
+
+    def test_is_within_unlimited_not_within_limited(self) -> None:
+        limited = AgentToolPolicy(write_rate_limit=10)
+        unlimited = AgentToolPolicy()
+        assert AgentToolPolicy(write_rate_limit=5).is_within(limited) is True
+        assert AgentToolPolicy(write_rate_limit=20).is_within(limited) is False
+        # Unbegrenzt ist breiter als ein limitierter Verwalter → nicht innerhalb.
+        assert unlimited.is_within(limited) is False
+        assert limited.is_within(unlimited) is True
+
+    def test_no_limit_is_noop(self) -> None:
+        from who2be_api.core.security import require_write_rate
+
+        require_write_rate(_ctx(None))
+        require_write_rate(_ctx(AgentToolPolicy()))  # write_rate_limit None
+
+    def test_gate_blocks_after_threshold(self) -> None:
+        from fastapi import HTTPException
+
+        from who2be_api.core.rate_limit import token_rate_limiter
+        from who2be_api.core.security import require_write_rate
+
+        token_rate_limiter.reset()
+        ctx = _ctx(AgentToolPolicy(write_rate_limit=2))
+        require_write_rate(ctx)
+        require_write_rate(ctx)
+        with pytest.raises(HTTPException) as exc:
+            require_write_rate(ctx)
+        assert exc.value.status_code == 429

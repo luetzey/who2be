@@ -109,9 +109,7 @@ def test_token_lifecycle_and_both_auth_paths(monkeypatch: pytest.MonkeyPatch) ->
             assert client.get(base).status_code == 401
 
             # Ohne agent_id ist ein Token nicht mehr erstellbar (422).
-            assert (
-                client.post(base, json={"name": "agent"}, headers=jwt_auth).status_code == 422
-            )
+            assert client.post(base, json={"name": "agent"}, headers=jwt_auth).status_code == 422
 
             created = client.post(
                 base, json={"name": "agent", "agent_id": agent_id}, headers=jwt_auth
@@ -160,9 +158,7 @@ def test_token_lifecycle_and_both_auth_paths(monkeypatch: pytest.MonkeyPatch) ->
             # Nach Revoke sind sowohl Auth als auch rename/rotate tot.
             assert client.get("/v1/me", headers=new_auth).status_code == 401
             assert client.delete(f"{base}/{token_id}", headers=jwt_auth).status_code == 404
-            assert (
-                client.post(f"{base}/{token_id}/rotate", headers=jwt_auth).status_code == 404
-            )
+            assert client.post(f"{base}/{token_id}/rotate", headers=jwt_auth).status_code == 404
     finally:
         cleanup_workspaces([owner_id])
 

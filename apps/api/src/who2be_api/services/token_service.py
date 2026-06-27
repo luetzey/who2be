@@ -99,6 +99,7 @@ class TokenService:
             hash_token(plaintext),
             role,
             agent_id=data.agent_id,
+            expires_at=data.expires_at,
         )
         if self._audit is not None and self._pool is not None:
             await self._audit.record(

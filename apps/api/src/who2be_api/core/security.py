@@ -279,6 +279,55 @@ def require_capability(ctx: WorkspaceContext, capability: AgentCapability) -> No
         )
 
 
+def require_write_tags(ctx: WorkspaceContext, domain: str, target_tags: list[str]) -> None:
+    """Wirft 403, wenn ein agent-gebundener Token in `domain` Inhalte mit diesen
+    Tags nicht schreiben darf (Tag-Praedikat-Write-Scoping, ADR-0039).
+
+    No-Op fuer ungebundene Tokens (Mensch/Web-UI) und fuer Agenten ohne
+    `write_tags`-Einschraenkung in dieser Domain. Greift bei create UND update:
+    der Agent darf nur Inhalte schreiben, deren Tags die erlaubte Menge schneiden
+    — sowohl der NEUE Inhalt als auch (beim Update) der BESTEHENDE muessen passen.
+    """
+    policy = ctx.tool_policy
+    if policy is None:
+        return
+    if not policy.tags_permitted(domain, target_tags):
+        allowed = policy.write_tags_for(domain) or []
+        raise ApiGateError(
+            status=status.HTTP_403_FORBIDDEN,
+            reason="missing_capability",
+            actionable_by="human",
+            detail=(
+                f"Dieser Agent darf nur {domain}-Inhalte mit den Tags {sorted(allowed)} "
+                "schreiben. Der Workspace-Besitzer kann den Tag-Scope in der "
+                "Agent-Konfiguration anpassen."
+            ),
+        )
+
+
+def require_write_rate(ctx: WorkspaceContext) -> None:
+    """Drosselt Schreib-Mutationen eines Agenten auf `write_rate_limit`/min (ADR-0039).
+
+    No-Op fuer ungebundene Tokens (Mensch/Web-UI) und ohne gesetztes Limit.
+    Sliding-Window keyed auf `agent_id`; ueberschritten ⇒ 429. Der globale
+    slowapi-`write_limit` bleibt orthogonal die grobe Obergrenze.
+    """
+    from fastapi import HTTPException
+
+    from who2be_api.core.rate_limit import token_rate_limiter
+
+    policy = ctx.tool_policy
+    if policy is None or policy.write_rate_limit is None or policy.write_rate_limit <= 0:
+        return
+    if ctx.agent_id is None:
+        return
+    if not token_rate_limiter.allow(f"write:{ctx.agent_id}", policy.write_rate_limit):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Schreib-Rate-Limit dieses Agenten erreicht — bitte spaeter erneut versuchen.",
+        )
+
+
 def verify_supabase_jwt(token: str) -> tuple[UUID, str | None, str | None]:
     """Verifiziert ein Supabase-JWT lokal (HS256) und liest `sub` + optional `email`/`aal`.
 

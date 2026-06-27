@@ -48,7 +48,7 @@ def _playbook_read(playbook_id: UUID, workspace_id: UUID) -> PlaybookRead:
         type="workflow",
         tags=[],
         triggers=None,
-        content=PlaybookContent(description="d", body="b", type="workflow"),
+        content=PlaybookContent(description="d", body="b", type="workflow"),  # type: ignore[arg-type]
         created_at=now,
         updated_at=now,
     )

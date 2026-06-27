@@ -316,6 +316,15 @@ def _agent_in(ws: UUID) -> str:
                 "SELECT id FROM agent WHERE workspace_id = $1 LIMIT 1", ws
             )
             assert agent_id is not None, "Seed-Agent fehlt"
+            # Token an einen Read-all-CONSUMER binden (keine Writes → sees_drafts
+            # False → nur active sichtbar). Der Seed-Builder traegt Writes und
+            # saehe sonst auch Drafts (korrektes sees_drafts-Verhalten).
+            await conn.execute(
+                "UPDATE agent SET tool_policy = $2::jsonb WHERE id = $1",
+                agent_id,
+                '{"playbook_read":"all","resource_read":"all",'
+                '"agent_read":"all","persona_read":true}',
+            )
             return str(agent_id)
         finally:
             await conn.close()

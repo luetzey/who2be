@@ -171,8 +171,7 @@ class PgOAuthRepository:
     async def revoke_api_token(self, api_token_id: UUID) -> None:
         """Widerruft einen einzelnen Access-Token per ID (Rotation)."""
         await self._pool.execute(
-            "UPDATE api_token SET revoked_at = now() "
-            "WHERE id = $1 AND revoked_at IS NULL",
+            "UPDATE api_token SET revoked_at = now() WHERE id = $1 AND revoked_at IS NULL",
             api_token_id,
         )
 

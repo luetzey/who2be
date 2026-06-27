@@ -12,7 +12,13 @@ import asyncpg
 from fastapi import HTTPException, status
 
 from who2be_api.core.agent_scope import resource_read_restrict
-from who2be_api.core.security import WorkspaceContext, require_capability, require_role
+from who2be_api.core.security import (
+    WorkspaceContext,
+    require_capability,
+    require_role,
+    require_write_rate,
+    require_write_tags,
+)
 from who2be_api.repositories.playbook_resource_link_repository import (
     _heading_level,
     block_plain_text,
@@ -124,6 +130,8 @@ class ResourceService:
     async def create(self, ctx: WorkspaceContext, data: ResourceCreate) -> ResourceRead:
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.resource_write)
+        require_write_rate(ctx)
+        require_write_tags(ctx, "resource", data.content.tags)
         return await self._repo.insert(
             ctx.workspace_id, ctx.user_id, data.name, data.content, data.locales
         )
@@ -221,6 +229,15 @@ class ResourceService:
             )
         return anchors
 
+    async def _check_update_tags(
+        self, ctx: WorkspaceContext, resource_id: UUID, incoming_tags: list[str], locale: str
+    ) -> None:
+        """Tag-Scope beim Update: eingehende Tags + (nur bei Restriktion) Bestand."""
+        require_write_tags(ctx, "resource", incoming_tags)
+        if ctx.tool_policy is not None and ctx.tool_policy.write_tags_for("resource") is not None:
+            existing = await self.get(ctx, resource_id, locale)
+            require_write_tags(ctx, "resource", existing.content.tags)
+
     async def update(
         self,
         ctx: WorkspaceContext,
@@ -231,6 +248,8 @@ class ResourceService:
         """Erzeugt eine neue Version der Resource (Draft-on-Edit bei Active)."""
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.resource_write)
+        require_write_rate(ctx)
+        await self._check_update_tags(ctx, resource_id, data.content.tags, locale)
         outcome = await self._repo.update(
             ctx.workspace_id, ctx.user_id, resource_id, data.name, data.content, locale
         )
@@ -250,6 +269,8 @@ class ResourceService:
         """Auto-Save-Pfad (PATCH `.../draft`) — upsertet die Draft-Version."""
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.resource_write)
+        require_write_rate(ctx)
+        await self._check_update_tags(ctx, resource_id, data.content.tags, locale)
         outcome = await self._repo.upsert_draft(
             ctx.workspace_id, ctx.user_id, resource_id, data.name, data.content, locale
         )
@@ -294,11 +315,13 @@ class ResourceService:
         """Stellt den Snapshot `source_version` als neue Draft wieder her (§3.1)."""
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.resource_write)
+        require_write_rate(ctx)
         snapshot = await self._repo.fetch_version(
             ctx.workspace_id, resource_id, source_version, locale
         )
         if snapshot is None:
             raise _not_found()
+        require_write_tags(ctx, "resource", snapshot.content.tags)
         outcome = await self._repo.restore_version(
             ctx.workspace_id, ctx.user_id, resource_id, snapshot.content, locale
         )
@@ -361,6 +384,7 @@ class ResourceService:
         """
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.resource_write)
+        require_write_rate(ctx)
         resource = await self._repo.fetch(ctx.workspace_id, resource_id)
         if resource is None:
             raise _not_found()

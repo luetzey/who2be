@@ -81,17 +81,13 @@ SELECT id FROM closure
 _Fetcher: TypeAlias = asyncpg.Pool | asyncpg.Connection
 
 
-async def assigned_playbook_ids(
-    pool: _Fetcher, workspace_id: UUID, agent_id: UUID
-) -> set[UUID]:
+async def assigned_playbook_ids(pool: _Fetcher, workspace_id: UUID, agent_id: UUID) -> set[UUID]:
     """IDs der dem Agenten (ueber seine Persona) zugewiesenen Playbooks."""
     rows = await pool.fetch(_ASSIGNED_PLAYBOOKS_SQL, agent_id, workspace_id)
     return {row["id"] for row in rows}
 
 
-async def assigned_resource_ids(
-    pool: _Fetcher, workspace_id: UUID, agent_id: UUID
-) -> set[UUID]:
+async def assigned_resource_ids(pool: _Fetcher, workspace_id: UUID, agent_id: UUID) -> set[UUID]:
     """IDs der aus den zugewiesenen Playbooks erreichbaren Resources."""
     rows = await pool.fetch(_ASSIGNED_RESOURCES_SQL, agent_id, workspace_id)
     return {row["id"] for row in rows}

@@ -28,12 +28,20 @@ const WRITE_CAP_FIELDS = [
   'playbook_write',
   'resource_write',
   'agent_write',
+  'system_prompt_write',
+  'feedback_write',
   'promote_retire',
 ] as const
 const READ_SCOPES = ['all', 'assigned', 'none'] as const
+const TAG_SCOPE_DOMAINS = ['persona', 'playbook', 'resource'] as const
+// Per-Domain Promote/Retire (ADR-0039 transition_grants) — Checkbox-Feldnamen.
+type TransitionGrantField = `tg_${(typeof TAG_SCOPE_DOMAINS)[number]}_${'promote' | 'retire'}`
 
-// Boolean-Policy-Felder (An/Aus-Reads + Write-Capabilities) — die Checkbox-Zeilen.
-type PolicyBoolField = (typeof READ_FLAG_FIELDS)[number] | (typeof WRITE_CAP_FIELDS)[number]
+// Boolean-Policy-Felder (An/Aus-Reads + Write-Capabilities + Transition-Grants).
+type PolicyBoolField =
+  | (typeof READ_FLAG_FIELDS)[number]
+  | (typeof WRITE_CAP_FIELDS)[number]
+  | TransitionGrantField
 
 /** Eine Policy-Checkbox-Zeile im etablierten Form-Checkbox-Muster (vgl. SignupPage). */
 function PolicyCheckbox({
@@ -289,6 +297,66 @@ export function AgentEditorForm({
                       disabled={isViewer}
                     />
                   ))}
+                  <p className="text-sm text-muted-foreground">{t('form.policy.writeTags.hint')}</p>
+                  {TAG_SCOPE_DOMAINS.map((domain) => (
+                    <FormField
+                      key={domain}
+                      control={form.control}
+                      name={`write_tags_${domain}` as const}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t(`form.policy.writeTags.${domain}`)}</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder={t('form.policy.writeTags.placeholder')}
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  ))}
+                  <p className="text-sm text-muted-foreground">
+                    {t('form.policy.transitionGrants.hint')}
+                  </p>
+                  {TAG_SCOPE_DOMAINS.map((domain) => (
+                    <div key={domain} className="flex flex-col gap-2">
+                      <span className="text-sm font-medium">
+                        {t(`form.policy.transitionGrants.${domain}`)}
+                      </span>
+                      <PolicyCheckbox
+                        form={form}
+                        name={`tg_${domain}_promote`}
+                        label={t('form.policy.transitionGrants.promote')}
+                        disabled={isViewer}
+                      />
+                      <PolicyCheckbox
+                        form={form}
+                        name={`tg_${domain}_retire`}
+                        label={t('form.policy.transitionGrants.retire')}
+                        disabled={isViewer}
+                      />
+                    </div>
+                  ))}
+                  <FormField
+                    control={form.control}
+                    name="write_rate_limit"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('form.policy.rateLimit.label')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min={0}
+                            placeholder={t('form.policy.rateLimit.placeholder')}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </fieldset>
               </FormSection>
 

@@ -1,7 +1,48 @@
 # ADR-0039 — Feinkoernige Per-Agent-Write-Rechte (Praedikat-Scopes, getrennte Promote/Retire, TTL)
 
-- Status: Proposed
+- Status: Accepted (Backend + UI vollstaendig inkl. optionalem Write-Rate-Limit)
 - Datum: 2026-06-27
+
+## Umsetzungsstand (2026-06-27)
+
+**Umgesetzt (Track 4-A, Branch `claude/track4-finer-rights`):**
+- **Getrennte Promote/Retire pro Domain** — `TransitionGrant{promote,retire}` +
+  `AgentToolPolicy.transition_grants` (Narrowing von `promote_retire`, additiv/
+  JSONB-abwaertskompatibel), Gate `_require_transition_capability` + `can_transition`,
+  `is_within`-Anti-Escalation. DB-frei getestet.
+- **Befristete Grants (TTL)** — `TokenCreate.expires_at` exponiert (Spalte +
+  Auth-Enforcement existierten bereits, Migration 0049).
+
+**Umgesetzt (Track 4-B):**
+- **Web-Policy-Editor-Sync** — `AgentEditorForm` exponiert `system_prompt_write`
+  + `feedback_write`; `valuesToPolicy` merged unbekannte Policy-Felder (kein
+  Datenverlust beim Speichern).
+- **Tag-Praedikat-Write-Scoping** — `AgentToolPolicy.write_tags` (Dict je Domain
+  → erlaubte Tags; leer = unrestricted, JSONB-abwaertskompatibel),
+  `tags_permitted`/`write_tags_for`, `is_within`-Anti-Escalation. Gate
+  `require_write_tags` in persona/playbook/resource create+update+restore:
+  eingehende Tags immer, Bestands-Tags beim Update (verhindert Uebernahme/Retag
+  eines out-of-scope-Elements). DB-Integrationstest gruen.
+
+- **`write_tags`-Tag-Picker im `AgentEditorForm`** — drei kommaseparierte
+  Tag-Felder je Domain (persona/playbook/resource), gemappt zum `write_tags`-Dict
+  (Submit + Reset). `whoami` gibt `write_tags` + `transition_grants` aus.
+- **`transition_grants`-Toggles im `AgentEditorForm`** — per-Domain Promote/Retire
+  (Narrowing; beide an = ungeteilt). **Token-Ablauf-Feld** in der Token-Sektion
+  (`AgentTokensSection`, `TokenInput.expires_at`).
+
+Damit sind alle drei Achsen (Tag-Scoping, getrennte Promote/Retire, TTL) mit
+Backend **und** UI umgesetzt.
+
+**Umgesetzt (Track 4-C, optionales Write-Rate-Limit):**
+- **Per-Agent-Write-Rate-Limit** — `AgentToolPolicy.write_rate_limit: int | None`
+  (Writes/Minute; `None` = unbegrenzt, additiv/JSONB-abwaertskompatibel),
+  `is_within`-Anti-Escalation (niedrigeres oder gleiches Limit erforderlich).
+  Gate `require_write_rate` (Sliding-Window `token_rate_limiter`, Key
+  `write:{agent_id}`, 429 bei Ueberschreitung) nach `require_capability` in allen
+  Write-Pfaden von persona/playbook/resource. `whoami` gibt `write_rate_limit`
+  aus; `AgentEditorForm` bekommt ein optionales Zahlen-Feld. DB-frei + Integration
+  getestet. Damit ist ADR-0039 vollstaendig.
 - Kontext: User-Wunsch nach detaillierterer Einstellbarkeit; die Per-Agent-Policy
   ist heute grobkoerniger als das Vertrauensmodell erlaubt.
 - Bezug: ADR-0023 (RBAC / Token-Snapshot), ADR-0009 (JSONB-Schema-Evolution),

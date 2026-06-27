@@ -27,7 +27,7 @@ def _ctx(workspace_id: UUID, user_id: UUID | None = None) -> WorkspaceContext:
 
 def _playbook_read(playbook_id: UUID, workspace_id: UUID, owner_id: UUID) -> PlaybookRead:
     now = datetime.now(UTC)
-    content = PlaybookContent(description="d", body="b", type="workflow")
+    content = PlaybookContent(description="d", body="b", type="workflow")  # type: ignore[arg-type]
     return PlaybookRead(
         id=playbook_id,
         workspace_id=workspace_id,

@@ -144,12 +144,15 @@ def test_whoami_agent_token_lists_capabilities(monkeypatch: pytest.MonkeyPatch) 
             assert body["agent_id"] == agent_id
             # Builder traegt eine echte Tool-Policy → nicht unrestricted.
             assert body["unrestricted"] is False
-            # Builder gewaehrt alle Writes + promote_retire.
+            # Builder gewaehrt alle Writes + system_prompt_write (ADR-0040) +
+            # feedback_write (ADR-0038, default an) + promote_retire.
             assert set(body["capabilities"]) == {
                 "persona_write",
                 "playbook_write",
                 "resource_write",
                 "agent_write",
+                "system_prompt_write",
+                "feedback_write",
                 "promote_retire",
             }
             # Builder-Reads = `all` (persona ist An/Aus → 'all').

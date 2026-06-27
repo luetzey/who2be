@@ -20,7 +20,13 @@ from fastapi import HTTPException, status
 from pydantic import BaseModel
 
 from who2be_api.core.agent_scope import require_read_flag
-from who2be_api.core.security import WorkspaceContext, require_capability, require_role
+from who2be_api.core.security import (
+    WorkspaceContext,
+    require_capability,
+    require_role,
+    require_write_rate,
+    require_write_tags,
+)
 from who2be_api.repositories.persona_repository import PersonaRepository
 from who2be_api.repositories.usage_repository import UsageRepository
 from who2be_api.services.placeholders import RenderContext, render_template_body
@@ -133,6 +139,8 @@ class PersonaService:
     async def create(self, ctx: WorkspaceContext, data: PersonaCreate) -> PersonaRead:
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.persona_write)
+        require_write_rate(ctx)
+        require_write_tags(ctx, "persona", data.content.tags)
         return await self._repo.insert(
             ctx.workspace_id, ctx.user_id, data.name, data.content, data.locales
         )
@@ -218,6 +226,15 @@ class PersonaService:
 
         return PersonaRenderResponse(body_rendered=body_rendered, unresolved=unresolved)
 
+    async def _check_update_tags(
+        self, ctx: WorkspaceContext, persona_id: UUID, incoming_tags: list[str], locale: str
+    ) -> None:
+        """Tag-Scope beim Update: eingehende Tags + (nur bei Restriktion) Bestand."""
+        require_write_tags(ctx, "persona", incoming_tags)
+        if ctx.tool_policy is not None and ctx.tool_policy.write_tags_for("persona") is not None:
+            existing = await self.get(ctx, persona_id, locale)
+            require_write_tags(ctx, "persona", existing.content.tags)
+
     async def update(
         self,
         ctx: WorkspaceContext,
@@ -232,6 +249,8 @@ class PersonaService:
         """
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.persona_write)
+        require_write_rate(ctx)
+        await self._check_update_tags(ctx, persona_id, data.content.tags, locale)
         outcome = await self._repo.update(
             ctx.workspace_id, ctx.user_id, persona_id, data.name, data.content, locale
         )
@@ -257,6 +276,8 @@ class PersonaService:
         """
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.persona_write)
+        require_write_rate(ctx)
+        await self._check_update_tags(ctx, persona_id, data.content.tags, locale)
         outcome = await self._repo.upsert_draft(
             ctx.workspace_id, ctx.user_id, persona_id, data.name, data.content, locale
         )
@@ -297,11 +318,13 @@ class PersonaService:
         """
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.persona_write)
+        require_write_rate(ctx)
         snapshot = await self._repo.fetch_version(
             ctx.workspace_id, persona_id, source_version, locale
         )
         if snapshot is None:
             raise _not_found()
+        require_write_tags(ctx, "persona", snapshot.content.tags)
         outcome = await self._repo.restore_version(
             ctx.workspace_id, ctx.user_id, persona_id, snapshot.content, locale
         )
@@ -368,6 +391,7 @@ class PersonaService:
         """
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.persona_write)
+        require_write_rate(ctx)
         persona = await self._repo.fetch(ctx.workspace_id, persona_id)
         if persona is None:
             raise _not_found()

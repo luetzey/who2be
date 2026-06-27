@@ -229,7 +229,28 @@
           "playbook_write": "Create/edit/link playbooks",
           "resource_write": "Create/edit/link resources",
           "agent_write": "Create/edit agents",
+          "system_prompt_write": "Author system prompts (submit for review)",
+          "feedback_write": "Report usage/feedback",
           "promote_retire": "Activate/deactivate versions"
+        },
+        "writeTags": {
+          "hint": "Tag scope (optional): empty = all tags. Otherwise the agent may only write content carrying these tags in that domain.",
+          "placeholder": "e.g. support, billing",
+          "persona": "Persona tags",
+          "playbook": "Playbook tags",
+          "resource": "Resource tags"
+        },
+        "transitionGrants": {
+          "hint": "Promote/retire per domain (only effective with 'Activate/deactivate versions' on). Unchecking restricts the direction.",
+          "promote": "Promote (→ active)",
+          "retire": "Retire (→ inactive)",
+          "persona": "Persona",
+          "playbook": "Playbook",
+          "resource": "Resource"
+        },
+        "rateLimit": {
+          "label": "Write rate limit (mutations/minute)",
+          "placeholder": "empty = unlimited"
         }
       }
     },
@@ -1566,7 +1587,9 @@
       "submit": "Create",
       "nameRequired": "Name required.",
       "roleLabel": "Role",
-      "roleHint": "The token inherits at most your own role — higher permissions cannot be selected."
+      "roleHint": "The token inherits at most your own role — higher permissions cannot be selected.",
+      "expiresLabel": "Expiry (optional)",
+      "expiresHint": "Empty = no expiry. After this day the token is rejected server-side (401)."
     },
     "rename": {
       "action": "Rename",

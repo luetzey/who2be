@@ -36,12 +36,12 @@ _TEST_SECRET = "integration-test-jwt-secret-padding-0123456789"
 
 def test_playbook_content_rejects_unknown_type() -> None:
     with pytest.raises(ValidationError):
-        PlaybookContent(type="guideline")
+        PlaybookContent(type="guideline")  # type: ignore[arg-type]
 
 
 def test_playbook_content_accepts_enum_and_empty() -> None:
     assert PlaybookContent(type="").type == ""
-    assert PlaybookContent(type="workflow").type == PlaybookType.workflow
+    assert PlaybookContent(type="workflow").type == PlaybookType.workflow  # type: ignore[arg-type]
     # Default (Draft ohne Typ) bleibt leer.
     assert PlaybookContent().type == ""
 

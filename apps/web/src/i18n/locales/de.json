@@ -229,7 +229,28 @@
           "playbook_write": "Playbooks erstellen/ändern/verknüpfen",
           "resource_write": "Resources erstellen/ändern/verknüpfen",
           "agent_write": "Agenten erstellen/ändern",
+          "system_prompt_write": "System-Prompts verfassen (Review einreichen)",
+          "feedback_write": "Nutzung/Feedback melden",
           "promote_retire": "Versionen aktivieren/deaktivieren"
+        },
+        "writeTags": {
+          "hint": "Tag-Scope (optional): leer = alle Tags. Sonst darf der Agent in der Domain nur Inhalte mit diesen Tags schreiben.",
+          "placeholder": "z. B. support, billing",
+          "persona": "Persona-Tags",
+          "playbook": "Playbook-Tags",
+          "resource": "Resource-Tags"
+        },
+        "transitionGrants": {
+          "hint": "Promote/Retire je Domain (nur mit aktivem „Versionen aktivieren/deaktivieren“ wirksam). Abwählen schränkt die Richtung ein.",
+          "promote": "Promoten (→ aktiv)",
+          "retire": "Zurückziehen (→ inaktiv)",
+          "persona": "Persona",
+          "playbook": "Playbook",
+          "resource": "Resource"
+        },
+        "rateLimit": {
+          "label": "Schreib-Rate-Limit (Mutationen/Minute)",
+          "placeholder": "leer = unbegrenzt"
         }
       }
     },
@@ -1566,7 +1587,9 @@
       "submit": "Anlegen",
       "nameRequired": "Name erforderlich.",
       "roleLabel": "Rolle",
-      "roleHint": "Der Token erhält höchstens deine eigene Rolle — höhere Rechte sind nicht wählbar."
+      "roleHint": "Der Token erhält höchstens deine eigene Rolle — höhere Rechte sind nicht wählbar.",
+      "expiresLabel": "Ablauf (optional)",
+      "expiresHint": "Leer = kein Ablauf. Nach diesem Tag wird der Token serverseitig abgelehnt (401)."
     },
     "rename": {
       "action": "Umbenennen",

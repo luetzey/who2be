@@ -18,7 +18,13 @@ from fastapi import HTTPException, status
 from pydantic import BaseModel
 
 from who2be_api.core.agent_scope import playbook_read_restrict
-from who2be_api.core.security import WorkspaceContext, require_capability, require_role
+from who2be_api.core.security import (
+    WorkspaceContext,
+    require_capability,
+    require_role,
+    require_write_rate,
+    require_write_tags,
+)
 from who2be_api.repositories.playbook_repository import PlaybookRepository
 from who2be_api.repositories.usage_repository import UsageRepository
 from who2be_api.services.placeholders import RenderContext, render_template_body
@@ -145,6 +151,8 @@ class PlaybookService:
     async def create(self, ctx: WorkspaceContext, data: PlaybookCreate) -> PlaybookRead:
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.playbook_write)
+        require_write_rate(ctx)
+        require_write_tags(ctx, "playbook", data.content.tags)
         playbook = await self._repo.insert(
             ctx.workspace_id, ctx.user_id, data.name, data.content, data.locales
         )
@@ -242,6 +250,15 @@ class PlaybookService:
             raise _not_found()
         return playbook
 
+    async def _check_update_tags(
+        self, ctx: WorkspaceContext, playbook_id: UUID, incoming_tags: list[str], locale: str
+    ) -> None:
+        """Tag-Scope beim Update: eingehende Tags + (nur bei Restriktion) Bestand."""
+        require_write_tags(ctx, "playbook", incoming_tags)
+        if ctx.tool_policy is not None and ctx.tool_policy.write_tags_for("playbook") is not None:
+            existing = await self.get(ctx, playbook_id, locale)
+            require_write_tags(ctx, "playbook", existing.content.tags)
+
     async def update(
         self,
         ctx: WorkspaceContext,
@@ -252,6 +269,8 @@ class PlaybookService:
         """Erzeugt eine neue Version des Playbooks (Draft-on-Edit bei Active)."""
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.playbook_write)
+        require_write_rate(ctx)
+        await self._check_update_tags(ctx, playbook_id, data.content.tags, locale)
         outcome = await self._repo.update(
             ctx.workspace_id, ctx.user_id, playbook_id, data.name, data.content, locale
         )
@@ -272,6 +291,8 @@ class PlaybookService:
         """Auto-Save-Pfad (PATCH `.../draft`) — upsertet die Draft-Version."""
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.playbook_write)
+        require_write_rate(ctx)
+        await self._check_update_tags(ctx, playbook_id, data.content.tags, locale)
         outcome = await self._repo.upsert_draft(
             ctx.workspace_id, ctx.user_id, playbook_id, data.name, data.content, locale
         )
@@ -327,11 +348,13 @@ class PlaybookService:
         """
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.playbook_write)
+        require_write_rate(ctx)
         snapshot = await self._repo.fetch_version(
             ctx.workspace_id, playbook_id, source_version, locale
         )
         if snapshot is None:
             raise _not_found()
+        require_write_tags(ctx, "playbook", snapshot.content.tags)
         outcome = await self._repo.restore_version(
             ctx.workspace_id, ctx.user_id, playbook_id, snapshot.content, locale
         )
@@ -435,6 +458,7 @@ class PlaybookService:
         """
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.playbook_write)
+        require_write_rate(ctx)
         playbook = await self._repo.fetch(ctx.workspace_id, playbook_id)
         if playbook is None:
             raise _not_found()
