@@ -4,6 +4,22 @@ _Stand: 2026-06-16_
 
 ## Funktioniert
 
+- **Builder-Managed-Lock Web-UI (4/4, 2026-06-27), Branch
+  `feat/builder-managed-ui`:** Macht den serverseitigen Lock (PR1–3) im
+  Frontend sichtbar. `is_managed?` in den 5 Read-Typen (Agent/Persona/Playbook/
+  Resource/SystemPromptTemplate). Neue geteilte `ManagedNotice` (Alert,
+  „Vom System verwaltet" + optional Duplizieren-Hinweis, common-i18n de/en).
+  Jede Detail-Page rendert bei `is_managed`: Notice oben, Editor read-only
+  (Editor-Forms nehmen `locked` → verhalten sich wie Viewer; auch die bisher
+  ungesperrten Name/Description/Type-Felder jetzt disabled, damit der Auto-Save
+  keine vergeblichen 403-PATCHes feuert), keine Status-/Transition-Buttons,
+  kein Lösch-/Danger-Zone, Persona-Playbook-Verknüpfen gesperrt. Agent-Page
+  behält Duplizieren prominent (+ Hinweis), blendet nur Löschen aus.
+  **DoD grün (Web):** lint 0 Errors, tsc clean, 408 Vitest (neu:
+  ManagedNotice-Unit, AgentEditorForm-locked, PersonaDetailPage-managed),
+  build clean. Damit ist die Builder-Lock-/Verteilungs-Reihe (4 PRs)
+  vollständig. Kein Python berührt.
+
 - **Builder-Content-Start-Sync (3/4, 2026-06-27), Branch
   `feat/builder-content-sync`:** Zentrale Verteilung von Builder-Updates an alle
   Workspaces ohne Per-Change-Migration. Neue Funktion

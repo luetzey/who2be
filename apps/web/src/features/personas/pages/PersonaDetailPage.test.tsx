@@ -49,6 +49,7 @@ interface PersonaShape {
   content: { description: string; system_prompt: string; traits: string[] }
   created_at: string
   updated_at: string
+  is_managed?: boolean
 }
 
 function persona(version: number, systemPrompt: string): PersonaShape {
@@ -219,5 +220,63 @@ describe('PersonaDetailPage', () => {
     })
     expect(putCalls).toHaveLength(1)
     expect(putCalls[0].body).toEqual({ playbook_ids: ['pb1', 'pb2'] })
+  })
+
+  it('vom System verwaltet: Notice + read-only, keine Status-/Lösch-Aktionen', async () => {
+    const managed: PersonaShape = { ...persona(1, 's1'), is_managed: true }
+    // Draft-Version => ohne Lock erschiene der „Draft abschliessen"-Button.
+    const v1 = {
+      version: 1,
+      status: 'draft',
+      content: persona(1, 's1').content,
+      created_by: 'o1',
+      created_at: 't1',
+    }
+    const handlers: Record<string, () => Response> = {
+      [route('GET', `${WS_PREFIX}/personas/p1`)]: () => jsonResponse(managed),
+      [route('GET', `${WS_PREFIX}/personas/p1/versions`)]: () => jsonResponse([v1]),
+      [route('GET', `${WS_PREFIX}/personas/p1/playbooks`)]: () => jsonResponse([]),
+      [route('GET', `${WS_PREFIX}/playbooks`)]: () => jsonResponse([]),
+    }
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const method = init?.method ?? 'GET'
+      const key = route(method, new URL(String(input)).pathname)
+      const handler = handlers[key]
+      if (!handler) {
+        throw new Error(`Unmocked ${key}`)
+      }
+      return handler()
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(
+      <SessionContext.Provider value={{ session, me, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}>
+        <AuthTokenProvider>
+          <MemoryRouter initialEntries={['/w/ws-1/personas/p1']}>
+            <Routes>
+              <Route path="/w/:workspaceId/personas/:id" element={<PersonaDetailPage />} />
+            </Routes>
+          </MemoryRouter>
+        </AuthTokenProvider>
+      </SessionContext.Provider>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Name')).toHaveValue('Coach')
+    })
+    // Managed-Notice sichtbar.
+    expect(screen.getByTestId('managed-notice')).toBeInTheDocument()
+    // Editor read-only: Name-Feld gesperrt.
+    expect(screen.getByLabelText('Name')).toBeDisabled()
+    // Keine Status-Aktion trotz vorhandener Draft-Version.
+    expect(
+      screen.queryByRole('button', { name: 'Draft abschliessen' }),
+    ).not.toBeInTheDocument()
+    // Kein Lösch-Bereich.
+    expect(screen.queryByText('Persona löschen')).not.toBeInTheDocument()
+    // Playbook-Verknüpfen gesperrt.
+    expect(
+      screen.getByRole('button', { name: 'Verknüpfungen speichern' }),
+    ).toBeDisabled()
   })
 })

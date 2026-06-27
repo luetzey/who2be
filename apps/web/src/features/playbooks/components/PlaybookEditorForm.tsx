@@ -31,6 +31,8 @@ interface PlaybookEditorFormProps {
   onSubmit?: (event: FormEvent<HTMLFormElement>) => void
   // Optionaler Slot fuer Submit-/Cancel-Buttons (nur Neu-Page).
   actions?: ReactNode
+  // Vom System verwaltet (Builder-Playbook): Editor read-only wie fuer Viewer.
+  locked?: boolean
 }
 
 interface TypeOption {
@@ -55,11 +57,12 @@ export function PlaybookEditorForm({
   initialBodyBlocks,
   onSubmit,
   actions,
+  locked = false,
 }: PlaybookEditorFormProps) {
   const { t } = useTranslation('playbooks')
   // Viewer dürfen nur lesen (ADR-0023) — Auto-Save deaktiviert sich auf
-  // Detail-Page-Ebene.
-  const isViewer = useCurrentWorkspaceRole() === 'viewer'
+  // Detail-Page-Ebene. `locked` (vom System verwaltet) verhaelt sich identisch.
+  const isViewer = useCurrentWorkspaceRole() === 'viewer' || locked
   const api = useApi()
   const currentType = form.watch('type')
 
@@ -119,6 +122,7 @@ export function PlaybookEditorForm({
                           required
                           placeholder={t('form.namePlaceholder')}
                           {...field}
+                          disabled={isViewer}
                         />
                       </FormControl>
                       <FormMessage />
@@ -132,7 +136,7 @@ export function PlaybookEditorForm({
                     <FormItem>
                       <FormLabel>{t('form.typeLabel')}</FormLabel>
                       <FormControl>
-                        <Select required {...field}>
+                        <Select required {...field} disabled={isViewer}>
                           {PLAYBOOK_TYPES.map((option) => {
                             const meta = typeOptions.find((entry) => entry.value === option)
                             return (
@@ -161,6 +165,7 @@ export function PlaybookEditorForm({
                           required
                           placeholder={t('form.descriptionPlaceholder')}
                           {...field}
+                          disabled={isViewer}
                         />
                       </FormControl>
                       <FormMessage />

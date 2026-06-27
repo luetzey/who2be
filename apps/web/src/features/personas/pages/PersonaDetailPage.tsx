@@ -9,6 +9,7 @@ import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { BranchStatus, type BranchAction } from '@/components/data/BranchStatus'
 import { DataView } from '@/components/data/DataView'
+import { ManagedNotice } from '@/components/data/ManagedNotice'
 import { FeedbackPanel } from '@/components/feedback/FeedbackPanel'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -38,6 +39,9 @@ export function PersonaDetailPage() {
   const api = useApi()
   const role = useCurrentWorkspaceRole()
   const [actionBusy, setActionBusy] = useState(false)
+  // Vom System verwaltet (Builder): Editor read-only, keine Status-/Lösch-
+  // Aktionen. Das Backend sperrt Mutationen ohnehin (403 managed_aggregate).
+  const locked = persona?.is_managed === true
 
   if (id === undefined) {
     return <Navigate to={wsPath('/personas')} replace />
@@ -108,8 +112,10 @@ export function PersonaDetailPage() {
                       })
 
                 const canPromote = role === 'admin'
+                // `locked` (vom System verwaltet) wird oben berechnet — keine
+                // Status-Aktionen, wenn gesperrt.
                 const actions: BranchAction[] = []
-                if (draftVersion !== undefined) {
+                if (!locked && draftVersion !== undefined) {
                   actions.push({
                     key: 'submit',
                     label: t('detail.branch.submit'),
@@ -123,7 +129,7 @@ export function PersonaDetailPage() {
                       ),
                   })
                 }
-                if (reviewVersion !== undefined) {
+                if (!locked && reviewVersion !== undefined) {
                   actions.push({
                     key: 'publish',
                     label: t('detail.branch.publish'),
@@ -150,7 +156,7 @@ export function PersonaDetailPage() {
                       ),
                   })
                 }
-                if (inactiveCurrent !== undefined) {
+                if (!locked && inactiveCurrent !== undefined) {
                   actions.push({
                     key: 'reactivate',
                     label: t('detail.branch.reactivate'),
@@ -172,6 +178,7 @@ export function PersonaDetailPage() {
                       description={description}
                       actions={<ExportPersonaButton persona={persona} />}
                     />
+                    {locked ? <ManagedNotice /> : null}
                     <BranchStatus
                       activeVersion={activeVersion?.version}
                       draftVersion={draftVersion?.version}
@@ -190,6 +197,7 @@ export function PersonaDetailPage() {
                 initialProfileBlocks={persona.content.content?.blocks ?? []}
                 personaId={persona.id}
                 legacySystemPrompt={persona.content.system_prompt}
+                locked={locked}
               />
 
               <SkillsComingSoon compact />
@@ -248,7 +256,7 @@ export function PersonaDetailPage() {
                       <Button
                         type="button"
                         onClick={() => void links.save()}
-                        disabled={links.saving || links.loading}
+                        disabled={links.saving || links.loading || locked}
                       >
                         {t('detail.playbooks.save')}
                       </Button>
@@ -257,7 +265,7 @@ export function PersonaDetailPage() {
                 </CardContent>
               </Card>
 
-              {role !== 'viewer' ? (
+              {role !== 'viewer' && !locked ? (
                 <Card className="border-destructive/40">
                   <CardHeader>
                     <CardTitle className="text-destructive">

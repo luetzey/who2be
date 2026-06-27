@@ -61,6 +61,9 @@ export interface Persona {
   content: PersonaContent
   created_at: string
   updated_at: string
+  // Vom System verwaltet (z. B. der geseedete Builder). User-Mutationen sind
+  // serverseitig gesperrt (403 managed_aggregate); die UI rendert read-only.
+  is_managed?: boolean
 }
 
 export interface PersonaVersion {
@@ -118,6 +121,9 @@ export interface Playbook {
   updated_at: string
   // Track A8 — abgeleitet: hat Kinder in playbook_composition.
   is_composite?: boolean
+  // Vom System verwaltet (Builder-Playbook) — User-Mutationen serverseitig
+  // gesperrt (403 managed_aggregate); die UI rendert read-only.
+  is_managed?: boolean
 }
 
 // Track A8 — Schlanke Referenz fuer Backlinks (Composed-by-Liste).
@@ -372,6 +378,9 @@ export interface Resource {
   content: ResourceContent
   created_at: string
   updated_at: string
+  // Vom System verwaltet — User-Mutationen serverseitig gesperrt
+  // (403 managed_aggregate); die UI rendert read-only.
+  is_managed?: boolean
 }
 
 export interface ResourceVersion {
@@ -527,6 +536,9 @@ export interface SystemPromptTemplate {
   content: SystemPromptTemplateContent
   created_at: string
   updated_at: string
+  // Vom System verwaltet (Builder-Template) — User-Mutationen serverseitig
+  // gesperrt (403 managed_aggregate); die UI rendert read-only.
+  is_managed?: boolean
 }
 
 export interface SystemPromptTemplateVersion {
@@ -618,6 +630,9 @@ export interface Agent {
   missing: AgentMissing[]
   created_at: string
   updated_at: string
+  // Vom System verwaltet (geseedeter Builder) — User-Mutationen serverseitig
+  // gesperrt (403 managed_aggregate). Duplizieren bleibt erlaubt (Deep-Copy).
+  is_managed?: boolean
 }
 
 export interface AgentInput {

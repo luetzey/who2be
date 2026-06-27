@@ -20,15 +20,18 @@ interface SystemPromptEditorFormProps {
   form: UseFormReturn<SystemPromptEditorValues>
   onSubmit: (event?: BaseSyntheticEvent) => Promise<void>
   saveError: string | null
+  // Vom System verwaltet (Builder-Template): Editor read-only wie fuer Viewer.
+  locked?: boolean
 }
 
 export function SystemPromptEditorForm({
   form,
   onSubmit,
   saveError,
+  locked = false,
 }: SystemPromptEditorFormProps) {
   const { t } = useTranslation('systemPrompts')
-  const isViewer = useCurrentWorkspaceRole() === 'viewer'
+  const isViewer = useCurrentWorkspaceRole() === 'viewer' || locked
   const bodyValue = form.watch('body')
 
   // Beim BlockNote-Editor: blocks → JSON-String in form.body setzen.
@@ -73,7 +76,12 @@ export function SystemPromptEditorForm({
                       <FormItem>
                         <FormLabel>{t('common:fields.name')}</FormLabel>
                         <FormControl>
-                          <Input required placeholder={t('form.identity.name.placeholder')} {...field} />
+                          <Input
+                            required
+                            placeholder={t('form.identity.name.placeholder')}
+                            {...field}
+                            disabled={isViewer}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -89,6 +97,7 @@ export function SystemPromptEditorForm({
                           <Input
                             placeholder={t('form.identity.description.placeholder')}
                             {...field}
+                            disabled={isViewer}
                           />
                         </FormControl>
                         <FormMessage />

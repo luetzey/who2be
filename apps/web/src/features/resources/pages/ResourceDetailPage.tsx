@@ -8,6 +8,7 @@ import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { BranchStatus } from '@/components/data/BranchStatus'
 import { DataList } from '@/components/data/DataList'
 import { DataView } from '@/components/data/DataView'
+import { ManagedNotice } from '@/components/data/ManagedNotice'
 import { FeedbackPanel } from '@/components/feedback/FeedbackPanel'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -40,7 +41,10 @@ export function ResourceDetailPage() {
   const wsPath = useWorkspacePath()
   const api = useApi()
   const role = useCurrentWorkspaceRole()
-  const canEdit = role === 'admin' || role === 'editor'
+  // Vom System verwaltet: Editor read-only, keine Status-/Lösch-/Sub-Resource-
+  // Aktionen (Backend sperrt mit 403 managed_aggregate).
+  const locked = resource?.is_managed === true
+  const canEdit = (role === 'admin' || role === 'editor') && !locked
 
   if (id === undefined) {
     return <Navigate to={wsPath('/resources')} replace />
@@ -93,6 +97,7 @@ export function ResourceDetailPage() {
                       description={description}
                       actions={<ExportResourceButton resource={resource} />}
                     />
+                    {locked ? <ManagedNotice /> : null}
                     <BranchStatus
                       activeVersion={activeVersion?.version}
                       draftVersion={draftVersion?.version}
@@ -102,7 +107,7 @@ export function ResourceDetailPage() {
                       saveState={autoSave}
                       actions={[]}
                     />
-                    {promotableVersion !== undefined ? (
+                    {!locked && promotableVersion !== undefined ? (
                       <StatusActionBar
                         resourceId={resource.id}
                         version={promotableVersion.version}
@@ -110,7 +115,7 @@ export function ResourceDetailPage() {
                         onTransitioned={reload}
                       />
                     ) : null}
-                    {inactiveCurrent !== undefined ? (
+                    {!locked && inactiveCurrent !== undefined ? (
                       <StatusActionBar
                         resourceId={resource.id}
                         version={inactiveCurrent.version}
@@ -126,6 +131,7 @@ export function ResourceDetailPage() {
                 form={form}
                 formKey={`${resource.id}-${resource.current_version}`}
                 initialBodyBlocks={resource.content.blocks ?? []}
+                locked={locked}
               />
 
               <Card>

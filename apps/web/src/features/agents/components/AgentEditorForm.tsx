@@ -89,6 +89,12 @@ interface AgentEditorFormProps {
   /** Gespeicherter Agent — liefert die serverseitige Aktivierbarkeit. */
   agent: Agent
   submitLabel?: string
+  /**
+   * Vom System verwaltet (Builder): Editor read-only wie fuer Viewer. Das
+   * Backend sperrt Mutationen ohnehin (403 managed_aggregate) — die UI macht
+   * es nur sichtbar und verhindert vergebliche Speicher-Versuche.
+   */
+  locked?: boolean
 }
 
 export function AgentEditorForm({
@@ -99,9 +105,11 @@ export function AgentEditorForm({
   templates,
   agent,
   submitLabel,
+  locked = false,
 }: AgentEditorFormProps) {
   const { t } = useTranslation('agents')
-  const isViewer = useCurrentWorkspaceRole() === 'viewer'
+  const readOnly = useCurrentWorkspaceRole() === 'viewer' || locked
+  const isViewer = readOnly
 
   const resolvedSubmitLabel = submitLabel ?? t('detail.submitLabel')
 
@@ -136,7 +144,7 @@ export function AgentEditorForm({
                     <FormItem>
                       <FormLabel>{t('common:fields.name')}</FormLabel>
                       <FormControl>
-                        <Input required {...field} />
+                        <Input required {...field} disabled={readOnly} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -149,7 +157,7 @@ export function AgentEditorForm({
                     <FormItem>
                       <FormLabel>{t('common:fields.description')}</FormLabel>
                       <FormControl>
-                        <Textarea rows={3} {...field} />
+                        <Textarea rows={3} {...field} disabled={readOnly} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
