@@ -119,10 +119,32 @@ class AgentToolPolicy(BaseModel):
     # Optionale Pro-Domain-Verfeinerung von `promote_retire` (ADR-0039).
     # Leer = ungeteilt (Backward-Compat). Keys: persona/playbook/resource.
     transition_grants: dict[str, TransitionGrant] = {}
+    # Optionales Tag-Praedikat-Write-Scoping (ADR-0039). Pro Domain
+    # (persona/playbook/resource) eine Liste erlaubter Tags: ist sie gesetzt UND
+    # nicht leer, darf der Agent in dieser Domain nur Inhalte schreiben, deren
+    # Tags die erlaubte Menge schneiden ("darf nur `support`-Playbooks editieren").
+    # Fehlender/leerer Eintrag = keine Tag-Einschraenkung (Backward-Compat).
+    write_tags: dict[str, list[str]] = {}
 
     def allows(self, capability: AgentCapability) -> bool:
         """True, wenn die Policy die gegebene Schreib-Capability gewaehrt."""
         return bool(getattr(self, capability.value))
+
+    def write_tags_for(self, domain: str) -> list[str] | None:
+        """Erlaubte Tags fuer Writes in `domain`, oder None (keine Einschraenkung)."""
+        tags = self.write_tags.get(domain)
+        return tags if tags else None
+
+    def tags_permitted(self, domain: str, target_tags: list[str]) -> bool:
+        """Darf der Agent Inhalte mit `target_tags` in `domain` schreiben?
+
+        Ohne Tag-Einschraenkung immer True; sonst muss die Schnittmenge der
+        Ziel-Tags mit der erlaubten Menge nicht leer sein.
+        """
+        allowed = self.write_tags_for(domain)
+        if allowed is None:
+            return True
+        return bool(set(target_tags) & set(allowed))
 
     def can_transition(self, domain: str, *, promote: bool) -> bool:
         """Darf der Agent in `domain` promoten (`promote=True`) bzw. retiren?
@@ -194,6 +216,17 @@ class AgentToolPolicy(BaseModel):
                     domain, promote=promote
                 ):
                     return False
+        # Write-Tag-Scope: `self` darf in keiner Domain breiter schreiben als
+        # `other`. `other` unrestricted (None) erlaubt jeden self-Scope; ist
+        # `other` eingeschraenkt, muss `self` ebenfalls eingeschraenkt sein und
+        # eine Teilmenge bilden.
+        for domain in _TRANSITION_DOMAINS:
+            other_tags = other.write_tags_for(domain)
+            if other_tags is None:
+                continue
+            self_tags = self.write_tags_for(domain)
+            if self_tags is None or not set(self_tags) <= set(other_tags):
+                return False
         return True
 
 

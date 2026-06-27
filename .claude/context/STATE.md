@@ -4,6 +4,13 @@ _Stand: 2026-06-16_
 
 ## Funktioniert
 
+- **Track 4-B Tag-Scoping (ADR-0039, 2026-06-27), Branch
+  `claude/track4-finer-rights`:** `AgentToolPolicy.write_tags` (Dict Domain→Tags;
+  leer=unrestricted) + `require_write_tags`-Gate in persona/playbook/resource
+  create+update+restore (eingehende Tags immer, Bestands-Tags beim Update →
+  keine Übernahme out-of-scope). `is_within`-Anti-Escalation. DB-Integrationstest
+  grün; volle Suite 888 passed, mypy 296, ruff/Web clean. Offen: UI-Widgets für
+  write_tags/transition_grants/Ablauf + Rate-Limit.
 - **Track 4-B Web-Policy-Editor-Sync (2026-06-27), Branch
   `claude/track4-finer-rights`:** Der `AgentEditorForm` exponiert jetzt die
   feineren Backend-Capabilities `system_prompt_write` (ADR-0040, aus) +

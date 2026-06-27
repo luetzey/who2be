@@ -279,6 +279,32 @@ def require_capability(ctx: WorkspaceContext, capability: AgentCapability) -> No
         )
 
 
+def require_write_tags(ctx: WorkspaceContext, domain: str, target_tags: list[str]) -> None:
+    """Wirft 403, wenn ein agent-gebundener Token in `domain` Inhalte mit diesen
+    Tags nicht schreiben darf (Tag-Praedikat-Write-Scoping, ADR-0039).
+
+    No-Op fuer ungebundene Tokens (Mensch/Web-UI) und fuer Agenten ohne
+    `write_tags`-Einschraenkung in dieser Domain. Greift bei create UND update:
+    der Agent darf nur Inhalte schreiben, deren Tags die erlaubte Menge schneiden
+    — sowohl der NEUE Inhalt als auch (beim Update) der BESTEHENDE muessen passen.
+    """
+    policy = ctx.tool_policy
+    if policy is None:
+        return
+    if not policy.tags_permitted(domain, target_tags):
+        allowed = policy.write_tags_for(domain) or []
+        raise ApiGateError(
+            status=status.HTTP_403_FORBIDDEN,
+            reason="missing_capability",
+            actionable_by="human",
+            detail=(
+                f"Dieser Agent darf nur {domain}-Inhalte mit den Tags {sorted(allowed)} "
+                "schreiben. Der Workspace-Besitzer kann den Tag-Scope in der "
+                "Agent-Konfiguration anpassen."
+            ),
+        )
+
+
 def verify_supabase_jwt(token: str) -> tuple[UUID, str | None, str | None]:
     """Verifiziert ein Supabase-JWT lokal (HS256) und liest `sub` + optional `email`/`aal`.
 

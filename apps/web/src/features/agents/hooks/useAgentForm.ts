@@ -35,8 +35,12 @@ const editorSchema = z.object({
 
 export type AgentEditorValues = z.infer<typeof editorSchema>
 
-function valuesToPolicy(values: AgentEditorValues): AgentToolPolicy {
+// `base` erhaelt Policy-Felder, die das Formular (noch) nicht editiert
+// (z. B. transition_grants/write_tags, ADR-0039). Der PUT ersetzt die Policy
+// ganz — ohne diesen Merge wuerden sie beim Speichern stillschweigend geloescht.
+function valuesToPolicy(values: AgentEditorValues, base: AgentToolPolicy): AgentToolPolicy {
   return {
+    ...base,
     playbook_read: values.playbook_read,
     resource_read: values.resource_read,
     agent_read: values.agent_read,
@@ -106,7 +110,7 @@ export function useAgentForm(
         persona_id: values.persona_id || undefined,
         system_prompt_template_id: values.system_prompt_template_id || undefined,
         status: values.status,
-        tool_policy: valuesToPolicy(values),
+        tool_policy: valuesToPolicy(values, agent.tool_policy),
       })
       notify.success(i18n.t('agents:toast.saved'))
       onSaved()

@@ -236,3 +236,65 @@ class TestTokenExpiry:
         when = datetime.now(UTC) + timedelta(days=14)
         tok = TokenCreate(name="t", agent_id=uuid4(), expires_at=when)
         assert tok.expires_at == when
+
+
+class TestWriteTagsScope:
+    """ADR-0039: Tag-Praedikat-Write-Scoping (write_tags) + Anti-Escalation."""
+
+    def test_unrestricted_permits_any_tags(self) -> None:
+        p = AgentToolPolicy()
+        assert p.write_tags_for("playbook") is None
+        assert p.tags_permitted("playbook", ["legal"]) is True
+
+    def test_empty_list_is_unrestricted(self) -> None:
+        # Leerer Eintrag == keine Einschraenkung (Backward-Compat).
+        p = AgentToolPolicy(write_tags={"playbook": []})
+        assert p.write_tags_for("playbook") is None
+        assert p.tags_permitted("playbook", ["legal"]) is True
+
+    def test_restricted_requires_intersection(self) -> None:
+        p = AgentToolPolicy(write_tags={"playbook": ["support"]})
+        assert p.tags_permitted("playbook", ["support", "billing"]) is True
+        assert p.tags_permitted("playbook", ["legal"]) is False
+        assert p.tags_permitted("playbook", []) is False
+        # Andere Domain bleibt unbeschraenkt.
+        assert p.tags_permitted("persona", ["legal"]) is True
+
+    def test_is_within_blocks_broader_or_unrestricted(self) -> None:
+        manager = AgentToolPolicy(playbook_write=True, write_tags={"playbook": ["support"]})
+        narrow = AgentToolPolicy(playbook_write=True, write_tags={"playbook": ["support"]})
+        broader = AgentToolPolicy(
+            playbook_write=True, write_tags={"playbook": ["support", "legal"]}
+        )
+        unrestricted = AgentToolPolicy(playbook_write=True)
+        assert narrow.is_within(manager) is True
+        # Breiterer Tag-Satz als der Verwalter → nicht innerhalb.
+        assert broader.is_within(manager) is False
+        # Unrestringiert (alle Tags) ist breiter als ein eingeschraenkter Verwalter.
+        assert unrestricted.is_within(manager) is False
+        # Ein eingeschraenkter Agent ist innerhalb eines unrestringierten Verwalters.
+        assert manager.is_within(unrestricted) is True
+
+
+class TestRequireWriteTagsGate:
+    """`require_write_tags`-Gate (core.security)."""
+
+    def test_no_policy_is_noop(self) -> None:
+        from who2be_api.core.security import require_write_tags
+
+        require_write_tags(_ctx(None), "playbook", ["legal"])
+
+    def test_permitted_passes(self) -> None:
+        from who2be_api.core.security import require_write_tags
+
+        ctx = _ctx(AgentToolPolicy(playbook_write=True, write_tags={"playbook": ["support"]}))
+        require_write_tags(ctx, "playbook", ["support"])
+
+    def test_forbidden_raises_403_human(self) -> None:
+        from who2be_api.core.security import require_write_tags
+
+        ctx = _ctx(AgentToolPolicy(playbook_write=True, write_tags={"playbook": ["support"]}))
+        with pytest.raises(ApiGateError) as exc:
+            require_write_tags(ctx, "playbook", ["legal"])
+        assert exc.value.status == 403
+        assert exc.value.actionable_by == "human"

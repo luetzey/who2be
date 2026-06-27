@@ -13,11 +13,20 @@
 - **Befristete Grants (TTL)** — `TokenCreate.expires_at` exponiert (Spalte +
   Auth-Enforcement existierten bereits, Migration 0049).
 
-**Offen (Folge-Schritt, Track 4-B):** praedikat-basiertes Write-Scoping
-(`WriteScope tagged`), Write-Rate-Limit und der **Web-Policy-Editor**
-(`AgentEditorForm`: Scope-/Transition-/Expiry-Controls) inkl. `whoami`-Ausgabe
-der `transition_grants`. Bewusst getrennt, weil Tag-Scoping per-Service-
-Enforcement + Frontend braucht (DB/Web-Verifikation noetig).
+**Umgesetzt (Track 4-B):**
+- **Web-Policy-Editor-Sync** — `AgentEditorForm` exponiert `system_prompt_write`
+  + `feedback_write`; `valuesToPolicy` merged unbekannte Policy-Felder (kein
+  Datenverlust beim Speichern).
+- **Tag-Praedikat-Write-Scoping** — `AgentToolPolicy.write_tags` (Dict je Domain
+  → erlaubte Tags; leer = unrestricted, JSONB-abwaertskompatibel),
+  `tags_permitted`/`write_tags_for`, `is_within`-Anti-Escalation. Gate
+  `require_write_tags` in persona/playbook/resource create+update+restore:
+  eingehende Tags immer, Bestands-Tags beim Update (verhindert Uebernahme/Retag
+  eines out-of-scope-Elements). DB-Integrationstest gruen.
+
+**Offen (Folge):** Write-Rate-Limit; UI-Eingabe-Widgets fuer `write_tags`/
+`transition_grants`/Token-Ablauf im `AgentEditorForm` (Backend + Merge-Schutz
+stehen); `whoami`-Ausgabe der neuen Felder.
 - Kontext: User-Wunsch nach detaillierterer Einstellbarkeit; die Per-Agent-Policy
   ist heute grobkoerniger als das Vertrauensmodell erlaubt.
 - Bezug: ADR-0023 (RBAC / Token-Snapshot), ADR-0009 (JSONB-Schema-Evolution),
