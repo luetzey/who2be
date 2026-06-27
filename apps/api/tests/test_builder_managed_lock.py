@@ -123,13 +123,34 @@ def test_builder_is_locked_but_copyable(monkeypatch: pytest.MonkeyPatch) -> None
             assert r.status_code == 403, r.text
             assert r.json().get("reason") == "managed_aggregate"
 
-            # Duplizieren bleibt erlaubt -> 201, Kopie ist unverwaltet + editierbar.
+            # Duplizieren bleibt erlaubt -> 201, Voll-Klon: Kopie ist unverwaltet
+            # und zeigt auf NEUE, unverwaltete Persona + Template (Deep-Copy).
             copy = client.post(
                 f"{base}/agents/{ids['agent']}/copy",
                 json={"name": "Mein Builder"},
                 headers=auth,
             )
             assert copy.status_code == 201, copy.text
-            assert copy.json()["is_managed"] is False
+            cbody = copy.json()
+            assert cbody["is_managed"] is False
+            assert cbody["persona_id"] != ids["persona"], "Persona muss geklont sein."
+            assert cbody["system_prompt_template_id"] is not None
+            assert cbody["activatable"] is True, "Klon muss einsetzbar sein."
+
+            # Die geklonte Persona ist unverwaltet -> editierbar (kein 403).
+            new_pid = cbody["persona_id"]
+            new_persona = client.get(f"{base}/personas/{new_pid}", headers=auth).json()
+            assert new_persona["is_managed"] is False
+            upd = client.put(
+                f"{base}/personas/{new_pid}",
+                json={"name": "Mein Builder-Profil", "content": new_persona["content"]},
+                headers=auth,
+            )
+            assert upd.status_code == 200, upd.text
+
+            # Die vier Builder-Playbooks wurden mitkopiert (an die Klon-Persona).
+            links = client.get(f"{base}/personas/{new_pid}/playbooks", headers=auth)
+            assert links.status_code == 200, links.text
+            assert len(links.json()) == 4, "Alle vier Builder-Playbooks sollten geklont sein."
     finally:
         cleanup_workspaces([owner])

@@ -72,6 +72,19 @@ class AgentRepository(Protocol):
 
     async def fetch(self, workspace_id: UUID, agent_id: UUID) -> AgentRead | None: ...
 
+    async def deep_copy(
+        self,
+        workspace_id: UUID,
+        owner_id: UUID,
+        source_persona_id: UUID,
+        source_template_id: UUID,
+        new_slug: str,
+        agent_name: str,
+        description: str,
+        status: AgentStatus,
+        tool_policy: AgentToolPolicy,
+    ) -> AgentRead | None: ...
+
     async def update(
         self,
         workspace_id: UUID,
@@ -126,6 +139,120 @@ class PgAgentRepository:
             # nicht im gleichen Workspace (oder wurde geloescht).
             return None
         return AgentRead.model_validate(dict(row))
+
+    async def deep_copy(
+        self,
+        workspace_id: UUID,
+        owner_id: UUID,
+        source_persona_id: UUID,
+        source_template_id: UUID,
+        new_slug: str,
+        agent_name: str,
+        description: str,
+        status: AgentStatus,
+        tool_policy: AgentToolPolicy,
+    ) -> AgentRead | None:
+        """Tiefe Kopie eines verwalteten Agenten (Builder-Voll-Klon).
+
+        Persona, die daran geknuepften Playbooks und das Template werden als
+        unverwaltete, editierbare v1-active-Aggregate dupliziert (Inhalt der
+        jeweils aktiven Quell-Version), dann ein unverwalteter Agent darauf
+        gezeigt. Alles in einer Transaktion. `workspace_id` der Versions-Zeilen
+        fuellt der 0035-Trigger. Gibt None zurueck, wenn Persona/Template der
+        Quelle nicht (mehr) im Workspace liegen.
+        """
+        async with self._pool.acquire() as conn, conn.transaction():
+            new_persona_id = await conn.fetchval(
+                "INSERT INTO persona (workspace_id, owner_id, name, is_managed) "
+                "SELECT $1, $2, name, false FROM persona "
+                "WHERE id = $3 AND workspace_id = $1 RETURNING id",
+                workspace_id,
+                owner_id,
+                source_persona_id,
+            )
+            if new_persona_id is None:
+                return None
+            await conn.execute(
+                "INSERT INTO persona_version "
+                "(persona_id, version, content, status, created_by, locale) "
+                "SELECT $1, 1, content, 'active', $2, locale FROM persona_version "
+                "WHERE persona_id = $3 AND status = 'active'",
+                new_persona_id,
+                owner_id,
+                source_persona_id,
+            )
+            links = await conn.fetch(
+                "SELECT pb.id, pb.name, pb.type, pb.tags, pb.triggers "
+                "FROM persona_playbook pp JOIN playbook pb ON pb.id = pp.playbook_id "
+                "WHERE pp.persona_id = $1",
+                source_persona_id,
+            )
+            for pb in links:
+                new_pb_id = await conn.fetchval(
+                    "INSERT INTO playbook "
+                    "(workspace_id, owner_id, name, type, tags, triggers, is_managed) "
+                    "VALUES ($1, $2, $3, $4, $5, $6, false) RETURNING id",
+                    workspace_id,
+                    owner_id,
+                    pb["name"],
+                    pb["type"],
+                    pb["tags"],
+                    pb["triggers"],
+                )
+                await conn.execute(
+                    "INSERT INTO playbook_version "
+                    "(playbook_id, version, content, status, created_by, locale) "
+                    "SELECT $1, 1, content, 'active', $2, locale FROM playbook_version "
+                    "WHERE playbook_id = $3 AND status = 'active'",
+                    new_pb_id,
+                    owner_id,
+                    pb["id"],
+                )
+                await conn.execute(
+                    "INSERT INTO persona_playbook "
+                    "(persona_id, playbook_id, workspace_id, owner_id) "
+                    "VALUES ($1, $2, $3, $4)",
+                    new_persona_id,
+                    new_pb_id,
+                    workspace_id,
+                    owner_id,
+                )
+            new_template_id = await conn.fetchval(
+                "INSERT INTO system_prompt_template "
+                "(workspace_id, owner_id, name, slug, is_managed) "
+                "SELECT $1, $2, name, $3, false FROM system_prompt_template "
+                "WHERE id = $4 AND workspace_id = $1 RETURNING id",
+                workspace_id,
+                owner_id,
+                new_slug,
+                source_template_id,
+            )
+            if new_template_id is None:
+                return None
+            await conn.execute(
+                "INSERT INTO system_prompt_template_version "
+                "(template_id, version, content, status, created_by) "
+                "SELECT $1, 1, content, 'active', $2 FROM system_prompt_template_version "
+                "WHERE template_id = $3 AND status = 'active'",
+                new_template_id,
+                owner_id,
+                source_template_id,
+            )
+            row = await conn.fetchrow(
+                "INSERT INTO agent (workspace_id, owner_id, name, description, "
+                "  persona_id, system_prompt_template_id, status, tool_policy) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8) "
+                f"{_RETURNING}",
+                workspace_id,
+                owner_id,
+                agent_name,
+                description,
+                new_persona_id,
+                new_template_id,
+                status.value,
+                tool_policy.model_dump(mode="json"),
+            )
+            return AgentRead.model_validate(dict(row))
 
     async def list_by_workspace(
         self,

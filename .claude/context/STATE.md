@@ -4,6 +4,17 @@ _Stand: 2026-06-16_
 
 ## Funktioniert
 
+- **Builder Deep-Copy-Duplizieren (2/4, 2026-06-27), Branch
+  `feat/builder-deep-copy`:** `copy_agent` macht für `is_managed`-Quellen jetzt
+  einen Voll-Klon — neue Methode `AgentRepository.deep_copy` (eine Transaktion):
+  Persona + die verknüpften Playbooks + Template werden als unverwaltete
+  v1-active-Aggregate dupliziert (Inhalt der aktiven Quell-Version), der neue
+  Agent zeigt darauf. Eindeutiger Klon-Slug fürs Template (UNIQUE-Constraint).
+  Nicht-managed Quellen: unveränderte Shallow-Copy. **DoD grün:** Python 897
+  pytest (Lock-Test erweitert: Klon → neue unmanaged Persona/Template + 4
+  geklonte Playbooks, Persona editierbar), mypy 299, ruff clean. Folgt: PR3
+  Start-Sync, PR4 UI.
+
 - **Builder-Managed-Lock — Fundament (1/4, 2026-06-27), Branch
   `feat/builder-managed-lock`:** Neue Spalten `is_managed` + `managed_content_version`
   auf persona/playbook/resource/system_prompt_template/agent (Migration 0057,
