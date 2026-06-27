@@ -24,9 +24,12 @@
   eingehende Tags immer, Bestands-Tags beim Update (verhindert Uebernahme/Retag
   eines out-of-scope-Elements). DB-Integrationstest gruen.
 
-**Offen (Folge):** Write-Rate-Limit; UI-Eingabe-Widgets fuer `write_tags`/
-`transition_grants`/Token-Ablauf im `AgentEditorForm` (Backend + Merge-Schutz
-stehen); `whoami`-Ausgabe der neuen Felder.
+- **`write_tags`-Tag-Picker im `AgentEditorForm`** — drei kommaseparierte
+  Tag-Felder je Domain (persona/playbook/resource), gemappt zum `write_tags`-Dict
+  (Submit + Reset). `whoami` gibt `write_tags` + `transition_grants` aus.
+
+**Offen (Folge):** Write-Rate-Limit; UI-Widgets fuer `transition_grants`
+(per-Domain Promote/Retire) + Token-Ablauf im Editor (Backend steht).
 - Kontext: User-Wunsch nach detaillierterer Einstellbarkeit; die Per-Agent-Policy
   ist heute grobkoerniger als das Vertrauensmodell erlaubt.
 - Bezug: ADR-0023 (RBAC / Token-Snapshot), ADR-0009 (JSONB-Schema-Evolution),

@@ -232,6 +232,13 @@
           "system_prompt_write": "System-Prompts verfassen (Review einreichen)",
           "feedback_write": "Nutzung/Feedback melden",
           "promote_retire": "Versionen aktivieren/deaktivieren"
+        },
+        "writeTags": {
+          "hint": "Tag-Scope (optional): leer = alle Tags. Sonst darf der Agent in der Domain nur Inhalte mit diesen Tags schreiben.",
+          "placeholder": "z. B. support, billing",
+          "persona": "Persona-Tags",
+          "playbook": "Playbook-Tags",
+          "resource": "Resource-Tags"
         }
       }
     },

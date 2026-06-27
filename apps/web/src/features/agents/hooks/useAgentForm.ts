@@ -31,9 +31,30 @@ const editorSchema = z.object({
   system_prompt_write: z.boolean(),
   feedback_write: z.boolean(),
   promote_retire: z.boolean(),
+  // ADR-0039 Tag-Scope: kommaseparierte erlaubte Tags je Domain (leer = alle).
+  write_tags_persona: z.string(),
+  write_tags_playbook: z.string(),
+  write_tags_resource: z.string(),
 })
 
 export type AgentEditorValues = z.infer<typeof editorSchema>
+
+const TAG_DOMAINS = ['persona', 'playbook', 'resource'] as const
+
+function parseTags(raw: string): string[] {
+  return raw
+    .split(',')
+    .map((t) => t.trim())
+    .filter(Boolean)
+}
+
+function tagFieldsFromPolicy(policy: AgentToolPolicy): Record<string, string> {
+  return {
+    write_tags_persona: (policy.write_tags?.persona ?? []).join(', '),
+    write_tags_playbook: (policy.write_tags?.playbook ?? []).join(', '),
+    write_tags_resource: (policy.write_tags?.resource ?? []).join(', '),
+  }
+}
 
 // `base` erhaelt Policy-Felder, die das Formular (noch) nicht editiert
 // (z. B. transition_grants/write_tags, ADR-0039). Der PUT ersetzt die Policy
@@ -52,7 +73,20 @@ function valuesToPolicy(values: AgentEditorValues, base: AgentToolPolicy): Agent
     system_prompt_write: values.system_prompt_write,
     feedback_write: values.feedback_write,
     promote_retire: values.promote_retire,
+    write_tags: buildWriteTags(values),
   }
+}
+
+// Baut das write_tags-Dict aus den drei Tag-Feldern; nur Domains mit Tags
+// erscheinen (leer = keine Einschraenkung). Ersetzt bewusst base.write_tags,
+// da das Formular dieses Feld nun verwaltet.
+function buildWriteTags(values: AgentEditorValues): Record<string, string[]> {
+  const out: Record<string, string[]> = {}
+  for (const domain of TAG_DOMAINS) {
+    const tags = parseTags(values[`write_tags_${domain}` as keyof AgentEditorValues] as string)
+    if (tags.length > 0) out[domain] = tags
+  }
+  return out
 }
 
 function describeError(cause: unknown): string {
@@ -80,6 +114,7 @@ export function useAgentForm(
       system_prompt_template_id: '',
       status: 'enabled',
       ...DEFAULT_TOOL_POLICY,
+      ...tagFieldsFromPolicy(DEFAULT_TOOL_POLICY),
     },
   })
 
@@ -93,6 +128,7 @@ export function useAgentForm(
         system_prompt_template_id: agent.system_prompt_template_id ?? '',
         status: agent.status,
         ...agent.tool_policy,
+        ...tagFieldsFromPolicy(agent.tool_policy),
       })
     }
   }, [agent, form])

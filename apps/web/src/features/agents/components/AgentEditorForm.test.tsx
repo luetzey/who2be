@@ -43,6 +43,9 @@ function Harness({ agent }: { agent: Agent }) {
       system_prompt_template_id: agent.system_prompt_template_id ?? '',
       status: agent.status,
       ...agent.tool_policy,
+      write_tags_persona: (agent.tool_policy.write_tags?.persona ?? []).join(', '),
+      write_tags_playbook: (agent.tool_policy.write_tags?.playbook ?? []).join(', '),
+      write_tags_resource: (agent.tool_policy.write_tags?.resource ?? []).join(', '),
     },
   })
   return (
@@ -98,5 +101,15 @@ describe('AgentEditorForm', () => {
     // Feedback ist secure-by-default AN, System-Prompt aus.
     expect(screen.getByLabelText('System-Prompts verfassen (Review einreichen)')).not.toBeChecked()
     expect(screen.getByLabelText('Nutzung/Feedback melden')).toBeChecked()
+  })
+
+  it('zeigt den write_tags-Tag-Scope pro Domain (ADR-0039)', () => {
+    const agent = makeAgent({
+      tool_policy: { ...DEFAULT_TOOL_POLICY, write_tags: { playbook: ['support', 'billing'] } },
+    })
+    render(<Harness agent={agent} />)
+    // Playbook-Tag-Feld traegt die erlaubten Tags; Persona bleibt leer (= alle).
+    expect(screen.getByLabelText('Playbook-Tags')).toHaveValue('support, billing')
+    expect(screen.getByLabelText('Persona-Tags')).toHaveValue('')
   })
 })

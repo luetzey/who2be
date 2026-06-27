@@ -232,6 +232,13 @@
           "system_prompt_write": "Author system prompts (submit for review)",
           "feedback_write": "Report usage/feedback",
           "promote_retire": "Activate/deactivate versions"
+        },
+        "writeTags": {
+          "hint": "Tag scope (optional): empty = all tags. Otherwise the agent may only write content carrying these tags in that domain.",
+          "placeholder": "e.g. support, billing",
+          "persona": "Persona tags",
+          "playbook": "Playbook tags",
+          "resource": "Resource tags"
         }
       }
     },

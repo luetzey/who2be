@@ -291,6 +291,26 @@ export function AgentEditorForm({
                       disabled={isViewer}
                     />
                   ))}
+                  <p className="text-sm text-muted-foreground">{t('form.policy.writeTags.hint')}</p>
+                  {(['persona', 'playbook', 'resource'] as const).map((domain) => (
+                    <FormField
+                      key={domain}
+                      control={form.control}
+                      name={`write_tags_${domain}` as const}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t(`form.policy.writeTags.${domain}`)}</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder={t('form.policy.writeTags.placeholder')}
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  ))}
                 </fieldset>
               </FormSection>
 

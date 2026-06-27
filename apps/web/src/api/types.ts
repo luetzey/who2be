@@ -567,6 +567,10 @@ export interface AgentToolPolicy {
   system_prompt_write: boolean
   feedback_write: boolean
   promote_retire: boolean
+  // ADR-0039: Tag-Praedikat-Write-Scoping. Pro Domain (persona/playbook/resource)
+  // erlaubte Tags; fehlend/leer = keine Tag-Einschraenkung. Optional, damit
+  // Bestands-Payloads ohne das Feld weiterhin valide sind.
+  write_tags?: Record<string, string[]>
 }
 
 // Default-Policy fuer neue Agenten: nur Zugewiesenes lesen (least privilege/
