@@ -1686,10 +1686,17 @@
     "tiles": {
       "mostUsed": "Meistgenutzt",
       "mostFlagged": "Am häufigsten bemängelt",
+      "unused": "Ungenutzt",
       "usageUnit": "{{count}} Nutzungen",
       "negativeUnit": "{{count}} negativ",
       "empty": "Noch kein Feedback.",
+      "unusedEmpty": "Alles Aktive wird genutzt.",
       "viewAll": "Alle ansehen"
+    },
+    "unused": {
+      "title": "Ungenutzt",
+      "description": "Aktive Elemente, die bisher kein Agent genutzt oder bewertet hat.",
+      "empty": "Alle aktiven Elemente werden genutzt."
     }
   }
 }

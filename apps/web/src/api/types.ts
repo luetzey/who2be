@@ -792,3 +792,15 @@ export interface FeedbackOverviewItem {
 export interface FeedbackOverview {
   items: FeedbackOverviewItem[]
 }
+
+// Veroeffentlichte, aber ungenutzte Elemente (`GET …/feedback-unused`): aktive
+// Version vorhanden, aber kein einziges Usage-/Feedback-Ereignis (Stale).
+export interface FeedbackUnusedItem {
+  entity_type: FeedbackTarget
+  entity_id: string
+  name: string
+}
+
+export interface FeedbackUnused {
+  items: FeedbackUnusedItem[]
+}

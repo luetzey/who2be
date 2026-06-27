@@ -19,6 +19,7 @@ import type {
   FeedbackOverview,
   FeedbackSummary,
   FeedbackTarget,
+  FeedbackUnused,
   GdprExport,
   Invitation,
   InvitationAcceptResult,
@@ -264,6 +265,7 @@ export interface Api {
   getFeedback: (type: FeedbackTarget, id: string) => Promise<FeedbackSummary>
   getFeedbackEvents: (type: FeedbackTarget, id: string) => Promise<FeedbackEvents>
   getFeedbackOverview: () => Promise<FeedbackOverview>
+  getFeedbackUnused: () => Promise<FeedbackUnused>
   transitionPersonaVersion: (
     id: string,
     version: number,
@@ -488,6 +490,8 @@ export function createApi(token: string, workspaceId: string): Api {
       request<FeedbackEvents>(token, `${ws}/feedback/${type}/${id}/events`),
     getFeedbackOverview: () =>
       request<FeedbackOverview>(token, `${ws}/feedback-overview`),
+    getFeedbackUnused: () =>
+      request<FeedbackUnused>(token, `${ws}/feedback-unused`),
     transitionPersonaVersion: (id, version, to) =>
       request<PersonaVersion>(
         token,

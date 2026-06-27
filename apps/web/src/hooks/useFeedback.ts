@@ -5,6 +5,7 @@ import type {
   FeedbackOverview,
   FeedbackSummary,
   FeedbackTarget,
+  FeedbackUnused,
 } from '@/api/types'
 import { useApi } from '@/api/useApi'
 
@@ -105,4 +106,33 @@ export function useFeedbackOverview(): UseFeedbackOverviewResult {
   useEffect(load, [load])
 
   return { overview, loading, error, reload: load }
+}
+
+export interface UseFeedbackUnusedResult {
+  unused: FeedbackUnused | null
+  loading: boolean
+  error: string | null
+  reload: () => void
+}
+
+/** Laedt die veroeffentlichten, aber ungenutzten Elemente (Stale-Kandidaten). */
+export function useFeedbackUnused(): UseFeedbackUnusedResult {
+  const api = useApi()
+  const [unused, setUnused] = useState<FeedbackUnused | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = useCallback(() => {
+    setLoading(true)
+    setError(null)
+    api
+      .getFeedbackUnused()
+      .then(setUnused)
+      .catch((cause: unknown) => setError(describeError(cause)))
+      .finally(() => setLoading(false))
+  }, [api])
+
+  useEffect(load, [load])
+
+  return { unused, loading, error, reload: load }
 }

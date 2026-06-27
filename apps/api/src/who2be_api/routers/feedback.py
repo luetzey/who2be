@@ -22,6 +22,7 @@ from who2be_models import (
     FeedbackOverview,
     FeedbackSummary,
     FeedbackTarget,
+    FeedbackUnused,
     UsageEventCreate,
     UsageEventRead,
 )
@@ -52,6 +53,11 @@ async def submit_feedback(data: FeedbackCreate, ctx: Ctx, service: Service) -> A
 @router.get("/feedback-overview")
 async def get_feedback_overview(ctx: Ctx, service: Service) -> FeedbackOverview:
     return await service.get_overview(ctx)
+
+
+@router.get("/feedback-unused")
+async def get_feedback_unused(ctx: Ctx, service: Service) -> FeedbackUnused:
+    return await service.get_unused(ctx)
 
 
 @router.get("/feedback/{entity_type}/{entity_id}")
