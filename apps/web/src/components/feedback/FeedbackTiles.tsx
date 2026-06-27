@@ -1,10 +1,10 @@
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
-import type { FeedbackOverviewItem, FeedbackTarget } from '@/api/types'
+import type { FeedbackTarget } from '@/api/types'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { useFeedbackOverview } from '@/hooks/useFeedback'
+import { useFeedbackOverview, useFeedbackUnused } from '@/hooks/useFeedback'
 
 const DETAIL_SEGMENT: Record<FeedbackTarget, string> = {
   persona: 'personas',
@@ -13,14 +13,22 @@ const DETAIL_SEGMENT: Record<FeedbackTarget, string> = {
 }
 const TILE_LIMIT = 3
 
-interface TileProps {
+// Minimal-Shape, die sowohl Overview- als auch Unused-Items erfuellen.
+interface TileEntry {
+  entity_type: FeedbackTarget
+  entity_id: string
+  name: string
+}
+
+interface TileProps<T extends TileEntry> {
   title: string
-  items: FeedbackOverviewItem[]
-  metric: (item: FeedbackOverviewItem) => string
+  items: T[]
+  // Optionale Kennzahl rechts (z. B. Nutzungszahl); bei Unused-Items entfaellt sie.
+  metric?: (item: T) => string
   emptyLabel: string
 }
 
-function Tile({ title, items, metric, emptyLabel }: TileProps) {
+function Tile<T extends TileEntry>({ title, items, metric, emptyLabel }: TileProps<T>) {
   const wsPath = useWorkspacePath()
   return (
     <Card>
@@ -41,9 +49,11 @@ function Tile({ title, items, metric, emptyLabel }: TileProps) {
                 >
                   {item.name}
                 </Link>
-                <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                  {metric(item)}
-                </span>
+                {metric !== undefined ? (
+                  <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                    {metric(item)}
+                  </span>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -64,7 +74,9 @@ export function FeedbackTiles() {
   const { t } = useTranslation('feedback')
   const wsPath = useWorkspacePath()
   const { overview } = useFeedbackOverview()
+  const { unused } = useFeedbackUnused()
   const items = overview?.items ?? []
+  const unusedItems = (unused?.items ?? []).slice(0, TILE_LIMIT)
 
   // Backend liefert nach last_activity sortiert — fuer die Kacheln re-sortieren.
   const mostUsed = [...items]
@@ -84,7 +96,7 @@ export function FeedbackTiles() {
           {t('tiles.viewAll')}
         </Link>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Tile
           title={t('tiles.mostUsed')}
           items={mostUsed}
@@ -96,6 +108,11 @@ export function FeedbackTiles() {
           items={mostFlagged}
           metric={(item) => t('tiles.negativeUnit', { count: item.negative_count })}
           emptyLabel={t('tiles.empty')}
+        />
+        <Tile
+          title={t('tiles.unused')}
+          items={unusedItems}
+          emptyLabel={t('tiles.unusedEmpty')}
         />
       </div>
     </section>

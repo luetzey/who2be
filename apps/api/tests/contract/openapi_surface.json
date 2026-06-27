@@ -151,6 +151,11 @@
   },
   {
     "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/feedback-unused",
+    "operationId": "get_feedback_unused_v1_workspaces__workspace_id__feedback_unused_get"
+  },
+  {
+    "method": "GET",
     "path": "/v1/workspaces/{workspace_id}/feedback/{entity_type}/{entity_id}",
     "operationId": "get_feedback_v1_workspaces__workspace_id__feedback__entity_type___entity_id__get"
   },

@@ -146,6 +146,33 @@ def test_flywheel_records_usage_feedback_and_summarizes(
             assert row["helpful_count"] == 0
             assert row["last_activity_at"] is not None
 
+            # --- Ungenutzt-Sicht: aktive Version, aber kein Usage/Feedback. ---
+            # PB (oben) ist Draft + hat Usage → erscheint NICHT als ungenutzt.
+            # PB2 promoten wir auf active und lassen es unberuehrt → es erscheint.
+            pid2 = client.post(pbase, json=_playbook_body("PB2"), headers=auth).json()["id"]
+            for to in ("review", "active"):
+                tr = client.post(
+                    f"{pbase}/{pid2}/versions/1/transition",
+                    json={"to": to},
+                    headers=auth,
+                )
+                assert tr.status_code == 200, tr.text
+
+            unused = client.get(f"{fbase}/feedback-unused", headers=auth)
+            assert unused.status_code == 200, unused.text
+            unused_ids = {i["entity_id"] for i in unused.json()["items"]}
+            assert pid2 in unused_ids, "Aktives, ungenutztes Element fehlt in der Stale-Sicht."
+            assert pid not in unused_ids, "Element mit Usage darf nicht als ungenutzt gelten."
+
+            # Sobald PB2 genutzt wird, faellt es aus der Ungenutzt-Sicht.
+            client.post(
+                f"{fbase}/usage-events",
+                json={"entity_type": "playbook", "entity_id": pid2, "outcome": "applied"},
+                headers=auth,
+            )
+            unused2 = client.get(f"{fbase}/feedback-unused", headers=auth)
+            assert pid2 not in {i["entity_id"] for i in unused2.json()["items"]}
+
             # Unbekannte Entity -> 404.
             unknown = "00000000-0000-0000-0000-000000000000"
             r = client.post(

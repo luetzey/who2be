@@ -4,6 +4,14 @@ _Stand: 2026-06-16_
 
 ## Funktioniert
 
+- **Stale/Ungenutzt-Sicht (ADR-0038-Folge, 2026-06-27), Branch
+  `feat/feedback-unused`:** „Ungenutzt" = Element mit aktiver Version, aber 0
+  Usage/Feedback. Backend additiv (keine Migration): `GET …/feedback-unused`
+  (UNION über persona/playbook/resource mit active-Version + NOT-EXISTS-
+  Doppelfilter), editor-gated. Web: 3. Dashboard-Kachel „Ungenutzt" + Stale-
+  Sektion auf der Feedback-Übersichtsseite. **DoD grün:** Python 894, mypy 296,
+  ruff clean; Web 401, 0 Lint-Errors, tsc/build clean. (Triage folgt als
+  nächster PR.)
 - **Feedback-Nutzung im Agenten verankert (ADR-0038, 2026-06-27), Branch
   `feat/feedback-usage-anchoring`:** Damit Agenten das Flywheel auch *nutzen*
   (Tool verfügbar ≠ genutzt), dreifach instruktiv verankert: ① `tools-overview`-

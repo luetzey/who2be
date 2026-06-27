@@ -23,6 +23,7 @@ from who2be_models import (
     FeedbackOverview,
     FeedbackSummary,
     FeedbackTarget,
+    FeedbackUnused,
     UsageEventCreate,
     UsageEventRead,
     WorkspaceRole,
@@ -102,3 +103,9 @@ class FeedbackService:
         require_role(ctx, WorkspaceRole.editor)
         items = await self._repo.overview(ctx.workspace_id)
         return FeedbackOverview(items=items)
+
+    async def get_unused(self, ctx: WorkspaceContext) -> FeedbackUnused:
+        # Veroeffentlichte, aber ungenutzte Elemente (Stale-Kandidaten).
+        require_role(ctx, WorkspaceRole.editor)
+        items = await self._repo.unused(ctx.workspace_id)
+        return FeedbackUnused(items=items)

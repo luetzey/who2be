@@ -153,3 +153,26 @@ class FeedbackOverview(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     items: list[FeedbackOverviewItem] = Field(default_factory=list)
+
+
+class FeedbackUnusedItem(BaseModel):
+    """Ein veroeffentlichtes, aber ungenutztes Element.
+
+    „Ungenutzt" = das Element hat eine aktive Version (Agenten KOENNTEN es nutzen),
+    aber bisher kein einziges Usage- oder Feedback-Ereignis. Das ist das
+    handlungsrelevante Stale-Signal: publiziert, aber niemand greift darauf zu.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    entity_type: FeedbackTarget
+    entity_id: UUID
+    name: str
+
+
+class FeedbackUnused(BaseModel):
+    """Liste veroeffentlichter, aber ungenutzter Elemente (Stale-Kandidaten)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    items: list[FeedbackUnusedItem] = Field(default_factory=list)

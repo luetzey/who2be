@@ -7,7 +7,7 @@ import { DataView } from '@/components/data/DataView'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Table,
   TableBody,
@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { useFeedbackOverview } from '@/hooks/useFeedback'
+import { useFeedbackOverview, useFeedbackUnused } from '@/hooks/useFeedback'
 
 // entity_type → Listen-Pfad-Segment der Detailseite.
 const DETAIL_SEGMENT: Record<FeedbackTarget, string> = {
@@ -29,7 +29,9 @@ export function FeedbackOverviewPage() {
   const { t } = useTranslation('feedback')
   const wsPath = useWorkspacePath()
   const { overview, loading, error } = useFeedbackOverview()
+  const unusedState = useFeedbackUnused()
   const items: FeedbackOverviewItem[] = overview?.items ?? []
+  const unusedItems = unusedState.unused?.items ?? []
 
   return (
     <Container>
@@ -86,6 +88,42 @@ export function FeedbackOverviewPage() {
                   ))}
                 </TableBody>
               </Table>
+            ) : null}
+          </DataView>
+        </CardContent>
+      </Card>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>{t('unused.title')}</CardTitle>
+          <p className="text-sm text-muted-foreground">{t('unused.description')}</p>
+        </CardHeader>
+        <CardContent>
+          <DataView
+            loading={unusedState.loading && unusedState.unused === null}
+            error={unusedState.error}
+            empty={!unusedState.loading && unusedItems.length === 0}
+            emptyTitle={t('unused.empty')}
+          >
+            {unusedItems.length > 0 ? (
+              <ul className="flex flex-col gap-2">
+                {unusedItems.map((item) => (
+                  <li
+                    key={`${item.entity_type}-${item.entity_id}`}
+                    className="flex items-center justify-between gap-2 text-sm"
+                  >
+                    <Link
+                      to={wsPath(`/${DETAIL_SEGMENT[item.entity_type]}/${item.entity_id}`)}
+                      className="font-medium text-brand hover:underline"
+                    >
+                      {item.name}
+                    </Link>
+                    <span className="text-xs text-muted-foreground">
+                      {t(`overview.type.${item.entity_type}`)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             ) : null}
           </DataView>
         </CardContent>

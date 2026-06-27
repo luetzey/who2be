@@ -15,6 +15,7 @@ from who2be_models import (
     FeedbackEvents,
     FeedbackOverviewItem,
     FeedbackSummary,
+    FeedbackUnusedItem,
     UsageEventRead,
 )
 
@@ -58,6 +59,8 @@ class FeedbackRepository(Protocol):
     ) -> FeedbackEvents: ...
 
     async def overview(self, workspace_id: UUID) -> list[FeedbackOverviewItem]: ...
+
+    async def unused(self, workspace_id: UUID) -> list[FeedbackUnusedItem]: ...
 
 
 # Polymorphes entity_type → physische Tabelle fuer den Workspace-Belongs-Check.
@@ -259,3 +262,36 @@ class PgFeedbackRepository:
             workspace_id,
         )
         return [FeedbackOverviewItem.model_validate(dict(r)) for r in rows]
+
+    async def unused(self, workspace_id: UUID) -> list[FeedbackUnusedItem]:
+        # „Ungenutzt" = hat eine aktive Version (Agenten KOENNTEN es nutzen), aber
+        # kein einziges Usage-/Feedback-Ereignis. Pro Entitaetstyp dieselbe Logik,
+        # via UNION ALL zusammengefuehrt. Der NOT-EXISTS-Doppelfilter haelt die
+        # Stale-Definition streng (weder genutzt noch bewertet).
+        rows = await self._pool.fetch(
+            "SELECT entity_type, entity_id, name FROM ("
+            "  SELECT 'persona' AS entity_type, p.id AS entity_id, p.name AS name "
+            "  FROM persona p WHERE p.workspace_id = $1 "
+            "    AND EXISTS (SELECT 1 FROM persona_version v "
+            "      WHERE v.persona_id = p.id AND v.status = 'active') "
+            "  UNION ALL "
+            "  SELECT 'playbook', pb.id, pb.name "
+            "  FROM playbook pb WHERE pb.workspace_id = $1 "
+            "    AND EXISTS (SELECT 1 FROM playbook_version v "
+            "      WHERE v.playbook_id = pb.id AND v.status = 'active') "
+            "  UNION ALL "
+            "  SELECT 'resource', r.id, r.name "
+            "  FROM resource r WHERE r.workspace_id = $1 "
+            "    AND EXISTS (SELECT 1 FROM resource_version v "
+            "      WHERE v.resource_id = r.id AND v.status = 'active') "
+            ") AS active_elements "
+            "WHERE NOT EXISTS (SELECT 1 FROM usage_event u "
+            "    WHERE u.workspace_id = $1 AND u.entity_type = active_elements.entity_type "
+            "      AND u.entity_id = active_elements.entity_id) "
+            "  AND NOT EXISTS (SELECT 1 FROM agent_feedback f "
+            "    WHERE f.workspace_id = $1 AND f.entity_type = active_elements.entity_type "
+            "      AND f.entity_id = active_elements.entity_id) "
+            "ORDER BY entity_type, name",
+            workspace_id,
+        )
+        return [FeedbackUnusedItem.model_validate(dict(r)) for r in rows]
