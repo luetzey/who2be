@@ -90,9 +90,7 @@ class FakeTokenRepository:
     async def rename(self, workspace_id: UUID, token_id: UUID, name: str) -> TokenRead | None:
         raise NotImplementedError
 
-    async def rotate(
-        self, workspace_id: UUID, token_id: UUID, new_hash: str
-    ) -> TokenRead | None:
+    async def rotate(self, workspace_id: UUID, token_id: UUID, new_hash: str) -> TokenRead | None:
         raise NotImplementedError
 
     async def revoke(self, workspace_id: UUID, token_id: UUID) -> bool:

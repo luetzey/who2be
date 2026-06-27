@@ -42,7 +42,7 @@ def _content(
     return PlaybookContent(
         description=description,
         body="1. Do it.",
-        type="workflow",
+        type="workflow",  # type: ignore[arg-type]
         tags=tags if tags is not None else [],
         triggers=triggers,
     )
@@ -650,7 +650,7 @@ def _blocknote_content(body: str, description: str = "Flow") -> PlaybookContent:
     return PlaybookContent(
         description=description,
         body=body,
-        type="workflow",
+        type="workflow",  # type: ignore[arg-type]
         tags=[],
         triggers=None,
     )

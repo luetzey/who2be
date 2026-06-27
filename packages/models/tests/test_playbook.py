@@ -20,7 +20,7 @@ def _content() -> PlaybookContent:
     return PlaybookContent(
         description="Onboarding flow",
         body="1. Greet.",
-        type="workflow",
+        type="workflow",  # type: ignore[arg-type]
         tags=["onboarding"],
     )
 
@@ -33,7 +33,7 @@ def test_content_allows_empty_type_for_draft() -> None:
 
 
 def test_content_defaults_tags_and_triggers() -> None:
-    content = PlaybookContent(description="d", body="b", type="workflow")
+    content = PlaybookContent(description="d", body="b", type="workflow")  # type: ignore[arg-type]
     assert content.tags == []
     assert content.triggers is None
 
@@ -41,7 +41,7 @@ def test_content_defaults_tags_and_triggers() -> None:
 def test_content_body_is_plain_string_field() -> None:
     # Track B (Nur-BlockNote): `body` ist immer ein (stringifizierter BlockNote-)
     # String; es gibt keinen `body_format`-Schalter mehr.
-    content = PlaybookContent(description="d", body="[]", type="workflow")
+    content = PlaybookContent(description="d", body="[]", type="workflow")  # type: ignore[arg-type]
     assert content.body == "[]"
 
 
@@ -83,26 +83,26 @@ def test_read_round_trip_preserves_denormalised_fields() -> None:
 
 def test_content_rejects_oversized_body() -> None:
     with pytest.raises(ValidationError):
-        PlaybookContent(description="d", body="x" * 50_001, type="workflow")
+        PlaybookContent(description="d", body="x" * 50_001, type="workflow")  # type: ignore[arg-type]
 
 
 def test_content_rejects_oversized_description_or_triggers() -> None:
     with pytest.raises(ValidationError):
-        PlaybookContent(description="x" * 2_001, body="b", type="workflow")
+        PlaybookContent(description="x" * 2_001, body="b", type="workflow")  # type: ignore[arg-type]
     with pytest.raises(ValidationError):
-        PlaybookContent(description="d", body="b", type="workflow", triggers="x" * 2_001)
+        PlaybookContent(description="d", body="b", type="workflow", triggers="x" * 2_001)  # type: ignore[arg-type]
 
 
 def test_content_rejects_too_many_or_too_long_tags() -> None:
     with pytest.raises(ValidationError):
-        PlaybookContent(description="d", body="b", type="workflow", tags=["t"] * 51)
+        PlaybookContent(description="d", body="b", type="workflow", tags=["t"] * 51)  # type: ignore[arg-type]
     with pytest.raises(ValidationError):
-        PlaybookContent(description="d", body="b", type="workflow", tags=["x" * 101])
+        PlaybookContent(description="d", body="b", type="workflow", tags=["x" * 101])  # type: ignore[arg-type]
 
 
 def test_content_rejects_oversized_type() -> None:
     with pytest.raises(ValidationError):
-        PlaybookContent(description="d", body="b", type="x" * 101)
+        PlaybookContent(description="d", body="b", type="x" * 101)  # type: ignore[arg-type]
 
 
 def test_content_rejects_type_outside_curated_set() -> None:
@@ -110,7 +110,7 @@ def test_content_rejects_type_outside_curated_set() -> None:
     # muss am Modell-Rand mit ValidationError -> 422 scheitern, nicht erst am
     # DB-CHECK (`playbook_type_check`) als unbehandelter 500.
     with pytest.raises(ValidationError):
-        PlaybookContent(description="d", body="b", type="Atomic")
+        PlaybookContent(description="d", body="b", type="Atomic")  # type: ignore[arg-type]
 
 
 def test_version_read_carries_version() -> None:
@@ -165,7 +165,7 @@ def test_playbook_type_enum_covers_curated_set() -> None:
 def test_playbook_type_is_str_compatible() -> None:
     # StrEnum-Werte muessen sich direkt mit PlaybookContent.type vergleichen
     # lassen — das nutzt die UI fuer "selected"-Vergleiche und der MCP-Filter.
-    content = PlaybookContent(description="d", body="b", type=PlaybookType.workflow.value)
+    content = PlaybookContent(description="d", body="b", type=PlaybookType.workflow.value)  # type: ignore[arg-type]
     assert content.type == "workflow"
     assert PlaybookType("workflow") is PlaybookType.workflow
 

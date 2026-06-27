@@ -158,13 +158,14 @@ def test_playbook_render_human_unrestricted(monkeypatch: pytest.MonkeyPatch) -> 
 
 def _preview_service(captured: list[RenderContext], monkeypatch: pytest.MonkeyPatch) -> Any:
     from who2be_api.services import placeholder_preview_service as mod
+    from who2be_api.services.placeholders.registry import REGISTRY
 
     class _FakeResolver:
         async def resolve(self, _tid: str, ctx: RenderContext, _conn: object) -> Any:
             captured.append(ctx)
             return SimpleNamespace(text="x", unresolved_key=None)
 
-    monkeypatch.setitem(mod.REGISTRY, "playbook", cast(Any, _FakeResolver()))
+    monkeypatch.setitem(REGISTRY, "playbook", cast(Any, _FakeResolver()))
     return mod.PlaceholderPreviewService(_pool())
 
 
