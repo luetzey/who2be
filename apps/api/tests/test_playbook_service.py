@@ -369,6 +369,10 @@ class FakePlaybookRepository:
         del self._playbooks[playbook_id]
         return True
 
+    async def is_managed(self, workspace_id: UUID, entity_id: UUID) -> bool:
+        playbook = self._playbooks.get(entity_id)
+        return playbook is not None and playbook.is_managed
+
 
 class FakeCompositionRepo:
     """In-Memory-Stub: erfasst die zuletzt gesetzte Composition-Kinderliste.

@@ -22,6 +22,7 @@ from who2be_api.core.security import (
     WorkspaceContext,
     require_capability,
     require_role,
+    require_unmanaged,
     require_write_rate,
     require_write_tags,
 )
@@ -269,6 +270,7 @@ class PlaybookService:
         """Erzeugt eine neue Version des Playbooks (Draft-on-Edit bei Active)."""
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.playbook_write)
+        require_unmanaged(await self._repo.is_managed(ctx.workspace_id, playbook_id))
         require_write_rate(ctx)
         await self._check_update_tags(ctx, playbook_id, data.content.tags, locale)
         outcome = await self._repo.update(
@@ -291,6 +293,7 @@ class PlaybookService:
         """Auto-Save-Pfad (PATCH `.../draft`) — upsertet die Draft-Version."""
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.playbook_write)
+        require_unmanaged(await self._repo.is_managed(ctx.workspace_id, playbook_id))
         require_write_rate(ctx)
         await self._check_update_tags(ctx, playbook_id, data.content.tags, locale)
         outcome = await self._repo.upsert_draft(
@@ -348,6 +351,7 @@ class PlaybookService:
         """
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.playbook_write)
+        require_unmanaged(await self._repo.is_managed(ctx.workspace_id, playbook_id))
         require_write_rate(ctx)
         snapshot = await self._repo.fetch_version(
             ctx.workspace_id, playbook_id, source_version, locale
@@ -462,6 +466,7 @@ class PlaybookService:
         playbook = await self._repo.fetch(ctx.workspace_id, playbook_id)
         if playbook is None:
             raise _not_found()
+        require_unmanaged(playbook.is_managed)
         if self._usage_repo is None:  # pragma: no cover - im Prod immer gesetzt
             raise RuntimeError("PlaybookService.delete benoetigt ein UsageRepository.")
         personas = await self._usage_repo.list_playbook_usages(ctx.workspace_id, playbook_id)

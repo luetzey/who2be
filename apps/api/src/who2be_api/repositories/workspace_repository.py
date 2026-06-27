@@ -249,16 +249,21 @@ async def _seed_default_templates(
     Promote-Schritt feuert.
     """
     for slug, name, body in _DEFAULT_TEMPLATES:
+        # Nur das agent-builder-Template ist managed (gesperrt + zentral
+        # gepflegt); die uebrigen Default-Templates bleiben frei editierbar.
+        managed = slug == _AGENT_BUILDER_TEMPLATE_SLUG
         template_id = await conn.fetchval(
             "INSERT INTO system_prompt_template "
-            "(workspace_id, owner_id, name, slug) "
-            "VALUES ($1, $2, $3, $4) "
+            "(workspace_id, owner_id, name, slug, is_managed, managed_content_version) "
+            "VALUES ($1, $2, $3, $4, $5, $6) "
             "ON CONFLICT (workspace_id, slug) DO NOTHING "
             "RETURNING id",
             workspace_id,
             owner_id,
             name,
             slug,
+            managed,
+            BUILDER_CONTENT_VERSION if managed else 0,
         )
         if template_id is None:
             # Template gab es schon — der Versions-Insert unten wuerde
@@ -308,6 +313,12 @@ async def _seed_default_templates(
 _BUILDER_PERSONA_NAME = "Builder"
 _BUILDER_AGENT_NAME = "Builder"
 _AGENT_BUILDER_TEMPLATE_SLUG = "agent-builder"
+
+# Kanonischer Content-Stand des verwalteten Builders. Wird bei jeder zentralen
+# Aenderung an Persona/Template/Playbooks (Sidecars) hochgezaehlt; der Start-Sync
+# hebt managed-Aggregate, deren `managed_content_version` zurueckliegt, auf diesen
+# Stand. Seed stempelt neue Builder direkt hierauf.
+BUILDER_CONTENT_VERSION = 1
 
 _BUILDER_PERSONA_DESCRIPTION = (
     "Meta-Agent, der Personas, Playbooks, Resources und Agenten im Workspace "
@@ -436,8 +447,9 @@ async def _seed_default_agents(
     #    wenn der Builder-Seed bereits lief — der Lauf ist atomar, also sind
     #    in dem Fall auch Playbooks/Agent schon da: frueh raus.
     persona_id = await conn.fetchval(
-        "INSERT INTO persona (workspace_id, owner_id, name) "
-        "SELECT $1, $2, $3 "
+        "INSERT INTO persona "
+        "(workspace_id, owner_id, name, is_managed, managed_content_version) "
+        "SELECT $1, $2, $3, true, $4 "
         "WHERE NOT EXISTS ("
         "  SELECT 1 FROM persona WHERE workspace_id = $1 AND name = $3"
         ") "
@@ -445,6 +457,7 @@ async def _seed_default_agents(
         workspace_id,
         owner_id,
         _BUILDER_PERSONA_NAME,
+        BUILDER_CONTENT_VERSION,
     )
     if persona_id is None:
         return
@@ -461,8 +474,10 @@ async def _seed_default_agents(
     playbook_ids: list[UUID] = []
     for name, ptype, triggers, tags, description, sidecar in _BUILDER_PLAYBOOKS:
         playbook_id = await conn.fetchval(
-            "INSERT INTO playbook (workspace_id, owner_id, name, type, tags, triggers) "
-            "SELECT $1, $2, $3, $4, $5, $6 "
+            "INSERT INTO playbook "
+            "(workspace_id, owner_id, name, type, tags, triggers, "
+            " is_managed, managed_content_version) "
+            "SELECT $1, $2, $3, $4, $5, $6, true, $7 "
             "WHERE NOT EXISTS ("
             "  SELECT 1 FROM playbook WHERE workspace_id = $1 AND name = $3"
             ") "
@@ -473,6 +488,7 @@ async def _seed_default_agents(
             ptype,
             list(tags),
             triggers,
+            BUILDER_CONTENT_VERSION,
         )
         if playbook_id is None:
             # Gleichnamiges Playbook gab es schon (Re-Lauf/Race) — id nachladen,
@@ -518,8 +534,9 @@ async def _seed_default_agents(
         return
     await conn.execute(
         "INSERT INTO agent (workspace_id, owner_id, name, description, "
-        " persona_id, system_prompt_template_id, status, tool_policy) "
-        "SELECT $1, $2, $3, $4, $5, $6, 'enabled', $7::jsonb "
+        " persona_id, system_prompt_template_id, status, tool_policy, "
+        " is_managed, managed_content_version) "
+        "SELECT $1, $2, $3, $4, $5, $6, 'enabled', $7::jsonb, true, $8 "
         "WHERE NOT EXISTS ("
         "  SELECT 1 FROM agent WHERE workspace_id = $1 AND name = $3"
         ")",
@@ -530,4 +547,5 @@ async def _seed_default_agents(
         persona_id,
         template_id,
         _builder_tool_policy(),
+        BUILDER_CONTENT_VERSION,
     )

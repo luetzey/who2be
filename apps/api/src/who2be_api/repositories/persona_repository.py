@@ -121,6 +121,8 @@ class PersonaRepository(Protocol):
 
     async def delete(self, workspace_id: UUID, persona_id: UUID) -> bool: ...
 
+    async def is_managed(self, workspace_id: UUID, entity_id: UUID) -> bool: ...
+
 
 class PgPersonaRepository(VersionedAggregateRepository[PersonaRead, PersonaVersionRead]):
     """asyncpg-Implementierung von `PersonaRepository` auf dem generischen Kern."""

@@ -101,6 +101,7 @@ _PROBLEM_TITLES: dict[str, str] = {
     "mfa_required": "Zwei-Faktor-Authentifizierung erforderlich",
     "concurrent_conflict": "Konflikt durch parallele Aenderung",
     "composite_child_inactive": "Composite nicht aktivierbar: Sub-Playbook nicht aktiv",
+    "managed_aggregate": "Aktion nicht erlaubt: vom System verwaltet",
 }
 
 

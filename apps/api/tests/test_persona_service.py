@@ -295,6 +295,10 @@ class FakePersonaRepository:
         del self._personas[persona_id]
         return True
 
+    async def is_managed(self, workspace_id: UUID, entity_id: UUID) -> bool:
+        persona = self._personas.get(entity_id)
+        return persona is not None and persona.is_managed
+
 
 def _service() -> tuple[PersonaService, WorkspaceContext]:
     return PersonaService(FakePersonaRepository()), _ctx(uuid4())

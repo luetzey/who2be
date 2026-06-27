@@ -24,6 +24,7 @@ from who2be_api.core.security import (
     WorkspaceContext,
     require_capability,
     require_role,
+    require_unmanaged,
     require_write_rate,
     require_write_tags,
 )
@@ -249,6 +250,7 @@ class PersonaService:
         """
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.persona_write)
+        require_unmanaged(await self._repo.is_managed(ctx.workspace_id, persona_id))
         require_write_rate(ctx)
         await self._check_update_tags(ctx, persona_id, data.content.tags, locale)
         outcome = await self._repo.update(
@@ -276,6 +278,7 @@ class PersonaService:
         """
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.persona_write)
+        require_unmanaged(await self._repo.is_managed(ctx.workspace_id, persona_id))
         require_write_rate(ctx)
         await self._check_update_tags(ctx, persona_id, data.content.tags, locale)
         outcome = await self._repo.upsert_draft(
@@ -318,6 +321,7 @@ class PersonaService:
         """
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.persona_write)
+        require_unmanaged(await self._repo.is_managed(ctx.workspace_id, persona_id))
         require_write_rate(ctx)
         snapshot = await self._repo.fetch_version(
             ctx.workspace_id, persona_id, source_version, locale
@@ -395,6 +399,7 @@ class PersonaService:
         persona = await self._repo.fetch(ctx.workspace_id, persona_id)
         if persona is None:
             raise _not_found()
+        require_unmanaged(persona.is_managed)
         if self._usage_repo is None:  # pragma: no cover - im Prod immer gesetzt
             raise RuntimeError("PersonaService.delete benoetigt ein UsageRepository.")
         usages = await self._usage_repo.list_persona_usages(ctx.workspace_id, persona_id)

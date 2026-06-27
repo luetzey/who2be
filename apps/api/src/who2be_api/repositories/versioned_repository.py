@@ -85,7 +85,7 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
         """
         e, ev, fk = self._t.entity, self._t.version_table, self._t.fk
         return (
-            "SELECT e.id, e.workspace_id, e.owner_id, e.name, "
+            "SELECT e.id, e.workspace_id, e.owner_id, e.name, e.is_managed, "
             "ev.version AS current_version, "
             "e.created_at, e.updated_at, ev.content, ev.locale, "
             "ev.status AS current_status, "
@@ -105,7 +105,7 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
         """Active-Read pro Sprache: die `status='active'`-Version des Tracks."""
         e, ev, fk = self._t.entity, self._t.version_table, self._t.fk
         return (
-            "SELECT e.id, e.workspace_id, e.owner_id, e.name, "
+            "SELECT e.id, e.workspace_id, e.owner_id, e.name, e.is_managed, "
             "ev.version AS current_version, "
             "e.created_at, e.updated_at, ev.content, ev.locale, "
             "ev.status AS current_status, "
@@ -432,7 +432,16 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
         )
         return built, None
 
-    # --- Versions-Lesepfade + Delete (identisch) -----------------------------
+    # --- Managed-Lock + Versions-Lesepfade + Delete (identisch) --------------
+
+    async def is_managed(self, workspace_id: UUID, entity_id: UUID) -> bool:
+        """True, wenn das Aggregat vom System verwaltet ist (Builder-Lock)."""
+        val = await self._pool.fetchval(
+            f"SELECT is_managed FROM {self._t.entity} WHERE id = $1 AND workspace_id = $2",
+            entity_id,
+            workspace_id,
+        )
+        return bool(val)
 
     async def _list_versions(
         self, workspace_id: UUID, entity_id: UUID, locale: str = DEFAULT_LOCALE

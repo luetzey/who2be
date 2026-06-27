@@ -74,6 +74,10 @@ class SystemPromptTemplateRead(BaseModel):
     owner_id: UUID
     name: str
     slug: str
+    # Vom System verwaltet (Builder-Lock): User-Edits werden serverseitig
+    # mit 403 geblockt; nur Duplizieren ist erlaubt.
+    is_managed: bool = False
+
     current_version: int
     current_status: VersionStatus = VersionStatus.inactive
     has_pending_draft: bool = False

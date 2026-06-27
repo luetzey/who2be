@@ -279,6 +279,29 @@ def require_capability(ctx: WorkspaceContext, capability: AgentCapability) -> No
         )
 
 
+def require_unmanaged(is_managed: bool) -> None:
+    """Wirft 403, wenn das Aggregat vom System verwaltet ist (Builder-Lock).
+
+    Managed-Aggregate (geseedeter Builder: Persona/Template/Playbooks/Agent)
+    duerfen von Usern NICHT bearbeitet, transitioniert oder geloescht werden —
+    sie werden zentral gepflegt und per Start-Sync aktualisiert. Der Weg fuer
+    eigene Anpassungen ist das Duplizieren des Agenten (erzeugt unverwaltete
+    Kopien). Gilt fuer alle Aufrufer (Mensch wie Agent).
+    """
+    if not is_managed:
+        return
+    raise ApiGateError(
+        status=status.HTTP_403_FORBIDDEN,
+        reason="managed_aggregate",
+        actionable_by="human",
+        detail=(
+            "Dieser Eintrag wird vom System verwaltet und kann nicht geaendert "
+            "oder geloescht werden. Dupliziere den Agenten, um eine eigene, "
+            "anpassbare Kopie zu erhalten."
+        ),
+    )
+
+
 def require_write_tags(ctx: WorkspaceContext, domain: str, target_tags: list[str]) -> None:
     """Wirft 403, wenn ein agent-gebundener Token in `domain` Inhalte mit diesen
     Tags nicht schreiben darf (Tag-Praedikat-Write-Scoping, ADR-0039).

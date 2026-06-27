@@ -4,6 +4,18 @@ _Stand: 2026-06-16_
 
 ## Funktioniert
 
+- **Builder-Managed-Lock — Fundament (1/4, 2026-06-27), Branch
+  `feat/builder-managed-lock`:** Neue Spalten `is_managed` + `managed_content_version`
+  auf persona/playbook/resource/system_prompt_template/agent (Migration 0057,
+  Builder per name/slug/Link gebackfillt + auf Content-Version 1 gestempelt; Seed
+  setzt sie für neue Builder, Konstante `BUILDER_CONTENT_VERSION`). Edit-Lock
+  `require_unmanaged` (403 `managed_aggregate`) an allen Mutations-Chokepoints
+  (update/update_draft/restore/delete + version_status-Transition für alle 4
+  Typen); `copy_agent` bleibt erlaubt → unverwaltete Kopie. `is_managed` in den
+  Read-Modellen + SELECTs exponiert. **DoD grün (fresh DB):** Python 897 pytest
+  (neuer Lock-Test: Builder update/transition/delete → 403, copy → 201 unmanaged),
+  mypy 299, ruff clean. Folgt: PR2 Deep-Copy-Duplizieren, PR3 Start-Sync, PR4 UI.
+
 - **Builder-Playbooks + Feedback (ADR-0038, Option C, 2026-06-27), Branch
   `feat/builder-playbook-feedback`:** Die vier Builder-Playbooks (persona/playbook/
   agent/consistency) bekommen eine kleine „Feedback"-Sektion (Heading+Paragraph):
