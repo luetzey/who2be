@@ -53,7 +53,8 @@ def _select_current(locale_param: str) -> str:
     return (
         "SELECT p.id, p.workspace_id, p.owner_id, p.name, "
         "pv.version AS current_version, "
-        "p.type, p.tags, p.triggers, p.created_at, p.updated_at, pv.content, pv.locale, "
+        "p.type, p.tags, p.triggers, p.created_at, p.updated_at, p.is_managed, "
+        "pv.content, pv.locale, "
         "pv.status AS current_status, "
         "EXISTS ( "
         "    SELECT 1 FROM playbook_version dv "
@@ -76,7 +77,8 @@ def _select_active(locale_param: str) -> str:
     return (
         "SELECT p.id, p.workspace_id, p.owner_id, p.name, "
         "pv.version AS current_version, "
-        "p.type, p.tags, p.triggers, p.created_at, p.updated_at, pv.content, pv.locale, "
+        "p.type, p.tags, p.triggers, p.created_at, p.updated_at, p.is_managed, "
+        "pv.content, pv.locale, "
         "pv.status AS current_status, "
         "EXISTS ( "
         "    SELECT 1 FROM playbook_version dv "

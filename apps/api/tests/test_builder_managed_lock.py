@@ -73,7 +73,15 @@ def _builder_ids(ws: UUID) -> dict[str, str]:
             agent = await conn.fetchval(
                 "SELECT id FROM agent WHERE workspace_id = $1 AND name = 'Builder'", ws
             )
-            return {"persona": str(persona), "agent": str(agent)}
+            playbook = await conn.fetchval(
+                "SELECT pb.id FROM playbook pb "
+                "JOIN persona_playbook pp ON pp.playbook_id = pb.id "
+                "JOIN persona per ON per.id = pp.persona_id "
+                "WHERE pb.workspace_id = $1 AND per.name = 'Builder' AND pb.is_managed = true "
+                "ORDER BY pb.created_at ASC LIMIT 1",
+                ws,
+            )
+            return {"persona": str(persona), "agent": str(agent), "playbook": str(playbook)}
         finally:
             await conn.close()
 
@@ -101,6 +109,22 @@ def test_builder_is_locked_but_copyable(monkeypatch: pytest.MonkeyPatch) -> None
 
             # Delete des Builder-Agenten -> 403 managed_aggregate.
             r = client.delete(f"{base}/agents/{ids['agent']}", headers=auth)
+            assert r.status_code == 403, r.text
+            assert r.json().get("reason") == "managed_aggregate"
+
+            # Builder-Playbook: GET muss is_managed=True exponieren, damit die
+            # UI den Lock anzeigt (Read-Pfad, nicht nur das serverseitige Gate).
+            pb = client.get(f"{base}/playbooks/{ids['playbook']}", headers=auth)
+            assert pb.status_code == 200, pb.text
+            assert pb.json()["is_managed"] is True, pb.json()
+
+            # Update des Builder-Playbooks -> 403 managed_aggregate.
+            current_pb = pb.json()
+            r = client.put(
+                f"{base}/playbooks/{ids['playbook']}",
+                json={"name": current_pb["name"], "content": current_pb["content"]},
+                headers=auth,
+            )
             assert r.status_code == 403, r.text
             assert r.json().get("reason") == "managed_aggregate"
 

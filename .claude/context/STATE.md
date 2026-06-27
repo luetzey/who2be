@@ -4,6 +4,18 @@ _Stand: 2026-06-16_
 
 ## Funktioniert
 
+- **Fix: Builder-Playbook-Lock im Read-Pfad sichtbar (2026-06-27), Branch
+  `fix/builder-playbook-is-managed-read`:** Das Playbook-Repository hat eigene
+  `_select_current`/`_select_active` (Sonderspalten type/tags/triggers/
+  is_composite) statt des generischen `versioned_repository`-SELECTs — und die
+  ließen `p.is_managed` aus. Folge: `PlaybookRead.is_managed` war im GET/List
+  immer `false`, die UI-Sperre (PR #282) griff für Builder-Playbooks nie und
+  sie wirkten editierbar (Speichern lief serverseitig zwar in 403, aber der
+  Lock war unsichtbar). Fix: `p.is_managed` in beide Playbook-SELECTs. Persona/
+  Resource waren nie betroffen (nutzen `versioned_repository` mit `e.is_managed`).
+  **DoD grün:** Python 898 pytest (Lock-Test um Playbook-GET `is_managed=true`
+  + Update→403 erweitert; reproduzierte vorher den Bug), mypy 300, ruff clean.
+
 - **Builder-Managed-Lock Web-UI (4/4, 2026-06-27), Branch
   `feat/builder-managed-ui`:** Macht den serverseitigen Lock (PR1–3) im
   Frontend sichtbar. `is_managed?` in den 5 Read-Typen (Agent/Persona/Playbook/
