@@ -21,6 +21,7 @@ from who2be_models import (
     FeedbackCreate,
     FeedbackEvents,
     FeedbackOverview,
+    FeedbackResolutionCreate,
     FeedbackSummary,
     FeedbackTarget,
     FeedbackUnused,
@@ -109,3 +110,19 @@ class FeedbackService:
         require_role(ctx, WorkspaceRole.editor)
         items = await self._repo.unused(ctx.workspace_id)
         return FeedbackUnused(items=items)
+
+    async def set_resolution(
+        self, ctx: WorkspaceContext, feedback_id: UUID, data: FeedbackResolutionCreate
+    ) -> AgentFeedbackRead:
+        # Triage ist eine Kurations-Handlung → editor+. Append-only Event; das
+        # Feedback muss im eigenen Workspace liegen (sonst 404, kein Enumerieren).
+        require_role(ctx, WorkspaceRole.editor)
+        if not await self._repo.feedback_belongs_to(ctx.workspace_id, feedback_id):
+            raise _entity_not_found()
+        return await self._repo.insert_resolution(
+            ctx.workspace_id,
+            feedback_id,
+            ctx.user_id,
+            data.resolution.value,
+            data.note,
+        )

@@ -103,5 +103,18 @@ Laufzeit ueber die append-only Tabellen):
   + eigene **Feedback-Uebersichtsseite** (`/w/{ws}/feedback`, Nav-Eintrag).
 
 Der `note`-Freitext wird ueber React-Textnodes escaped; kein HTML-Render.
-Triage (erledigt/ignoriert) bleibt bewusst offen — append-only erlaubt nur ein
-*zusaetzliches* Resolution-Event, kein Mutieren der Feedback-Zeile.
+
+## Stale-Sicht + Triage (Folge, 2026-06-27)
+
+- **Ungenutzt/Stale (`GET …/feedback-unused`):** veroeffentlichte Elemente
+  (aktive Version) mit 0 Usage + 0 Feedback — das Gegenstueck zu „meistgenutzt".
+  UNION ueber persona/playbook/resource + NOT-EXISTS-Doppelfilter, editor-gated,
+  keine Migration. Web: 3. Dashboard-Kachel + Sektion auf der Uebersichtsseite.
+- **Triage pro Feedback-Eintrag — append-only geloest:** Statt die
+  `agent_feedback`-Zeile zu mutieren (verstoesst gegen die append-only-Grants),
+  traegt jede Triage-Aktion ein eigenes **Resolution-Event** (Migration 0054,
+  `feedback_resolution`, FK→`agent_feedback` ON DELETE CASCADE, RLS + nur
+  SELECT/INSERT). Der „aktuelle" Status = juengstes Event (`created_at DESC`).
+  Zustaende: `addressed`/`in_progress`/`dismissed`. `POST …/feedback/{id}/resolution`
+  (editor-gated); der Drill-down (`…/events`) gibt pro Feedback den aktuellen
+  Status mit aus. Web: Status-Select je Feedback-Eintrag im `FeedbackPanel`.

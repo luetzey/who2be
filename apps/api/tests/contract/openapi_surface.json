@@ -165,6 +165,11 @@
     "operationId": "get_feedback_events_v1_workspaces__workspace_id__feedback__entity_type___entity_id__events_get"
   },
   {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/feedback/{feedback_id}/resolution",
+    "operationId": "set_feedback_resolution_v1_workspaces__workspace_id__feedback__feedback_id__resolution_post"
+  },
+  {
     "method": "GET",
     "path": "/v1/workspaces/{workspace_id}/invitations",
     "operationId": "list_invitations_v1_workspaces__workspace_id__invitations_get"

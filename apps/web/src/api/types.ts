@@ -737,6 +737,8 @@ export interface CheckoutResult {
 export type FeedbackTarget = 'persona' | 'playbook' | 'resource'
 export type UsageOutcome = 'applied' | 'skipped' | 'error'
 export type FeedbackSignal = 'helpful' | 'outdated' | 'incorrect' | 'unclear'
+// Triage-Status eines Feedback-Eintrags (ADR-0038, append-only).
+export type FeedbackResolution = 'addressed' | 'in_progress' | 'dismissed'
 
 // Aggregat fuer das Detail-Panel (`GET …/feedback/{type}/{id}`).
 export interface FeedbackSummary {
@@ -758,6 +760,13 @@ export interface AgentFeedback {
   note: string | null
   agent_id: string | null
   created_at: string
+  // Aktueller Triage-Status (juengstes Resolution-Event) oder null.
+  resolution: FeedbackResolution | null
+}
+
+export interface FeedbackResolutionInput {
+  resolution: FeedbackResolution
+  note?: string
 }
 
 export interface UsageEvent {

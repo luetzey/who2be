@@ -132,7 +132,37 @@ def test_flywheel_records_usage_feedback_and_summarizes(
             assert len(ev["feedback"]) == 1
             assert ev["feedback"][0]["signal"] == "outdated"
             assert ev["feedback"][0]["note"] == "bitte aktualisieren"
+            assert ev["feedback"][0]["resolution"] is None
             assert len(ev["usage"]) == 2
+
+            # Triage (append-only): Feedback als in_progress, dann addressed
+            # markieren — der juengste Status gewinnt; die Feedback-Zeile bleibt.
+            fid = fb.json()["id"]
+            r1 = client.post(
+                f"{fbase}/feedback/{fid}/resolution",
+                json={"resolution": "in_progress", "note": "schaue ich mir an"},
+                headers=auth,
+            )
+            assert r1.status_code == 201, r1.text
+            assert r1.json()["resolution"] == "in_progress"
+            r2 = client.post(
+                f"{fbase}/feedback/{fid}/resolution",
+                json={"resolution": "addressed"},
+                headers=auth,
+            )
+            assert r2.status_code == 201, r2.text
+            # Drill-down zeigt nun den aktuellen (juengsten) Triage-Status.
+            ev2 = client.get(f"{fbase}/feedback/playbook/{pid}/events", headers=auth).json()
+            assert ev2["feedback"][0]["resolution"] == "addressed"
+            # Unbekanntes Feedback -> 404.
+            assert (
+                client.post(
+                    f"{fbase}/feedback/00000000-0000-0000-0000-000000000000/resolution",
+                    json={"resolution": "dismissed"},
+                    headers=auth,
+                ).status_code
+                == 404
+            )
 
             # Workspace-Uebersicht: ein Element mit 2 Usages + 1 negativem Signal.
             overview = client.get(f"{fbase}/feedback-overview", headers=auth)

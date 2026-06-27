@@ -5,6 +5,7 @@ import type {
   AccountDeletion,
   Agent,
   AgentCopyInput,
+  AgentFeedback,
   AgentInput,
   AgentRenderFormat,
   AgentRenderResult,
@@ -17,6 +18,7 @@ import type {
   EntityExportFormat,
   FeedbackEvents,
   FeedbackOverview,
+  FeedbackResolutionInput,
   FeedbackSummary,
   FeedbackTarget,
   FeedbackUnused,
@@ -266,6 +268,10 @@ export interface Api {
   getFeedbackEvents: (type: FeedbackTarget, id: string) => Promise<FeedbackEvents>
   getFeedbackOverview: () => Promise<FeedbackOverview>
   getFeedbackUnused: () => Promise<FeedbackUnused>
+  setFeedbackResolution: (
+    feedbackId: string,
+    input: FeedbackResolutionInput,
+  ) => Promise<AgentFeedback>
   transitionPersonaVersion: (
     id: string,
     version: number,
@@ -492,6 +498,11 @@ export function createApi(token: string, workspaceId: string): Api {
       request<FeedbackOverview>(token, `${ws}/feedback-overview`),
     getFeedbackUnused: () =>
       request<FeedbackUnused>(token, `${ws}/feedback-unused`),
+    setFeedbackResolution: (feedbackId, input) =>
+      request<AgentFeedback>(token, `${ws}/feedback/${feedbackId}/resolution`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
     transitionPersonaVersion: (id, version, to) =>
       request<PersonaVersion>(
         token,

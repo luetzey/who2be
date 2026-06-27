@@ -5,16 +5,17 @@ import type { FeedbackEvents, FeedbackSummary } from '@/api/types'
 
 import { FeedbackPanel } from './FeedbackPanel'
 
-const { getFeedback, getFeedbackEvents } = vi.hoisted(() => ({
+const { getFeedback, getFeedbackEvents, setFeedbackResolution } = vi.hoisted(() => ({
   getFeedback: vi.fn(),
   getFeedbackEvents: vi.fn(),
+  setFeedbackResolution: vi.fn(),
 }))
 
 // Stabile API-Referenz (wie der echte `useMemo`-basierte `useApi`) — sonst
 // wechselt die Identitaet pro Render und der `useEffect(load,[load])` der Hooks
 // feuert in einer Schleife.
 vi.mock('@/api/useApi', () => {
-  const api = { getFeedback, getFeedbackEvents }
+  const api = { getFeedback, getFeedbackEvents, setFeedbackResolution }
   return { useApi: () => api }
 })
 
@@ -40,6 +41,7 @@ const events: FeedbackEvents = {
       note: 'bitte aktualisieren',
       agent_id: 'a1',
       created_at: '2026-06-20T10:00:00Z',
+      resolution: null,
     },
   ],
   usage: [],
@@ -78,6 +80,21 @@ describe('FeedbackPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Einzelne Ereignisse anzeigen' }))
     await waitFor(() => expect(getFeedbackEvents).toHaveBeenCalledTimes(1))
     expect(await screen.findByText('bitte aktualisieren')).toBeInTheDocument()
+  })
+
+  it('triagiert ein Feedback ueber das Status-Select (ADR-0038)', async () => {
+    getFeedback.mockResolvedValue(summary)
+    getFeedbackEvents.mockResolvedValue(events)
+    setFeedbackResolution.mockResolvedValue({ ...events.feedback[0], resolution: 'addressed' })
+    render(<FeedbackPanel type="playbook" id="pb1" />)
+
+    await waitFor(() => expect(screen.getByText('5')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Einzelne Ereignisse anzeigen' }))
+    const select = await screen.findByLabelText('Triage')
+    fireEvent.change(select, { target: { value: 'addressed' } })
+    await waitFor(() =>
+      expect(setFeedbackResolution).toHaveBeenCalledWith('f1', { resolution: 'addressed' }),
+    )
   })
 
   it('zeigt einen Empty-State ohne Feedback', async () => {

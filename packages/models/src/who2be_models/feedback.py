@@ -39,6 +39,20 @@ class FeedbackSignal(StrEnum):
     unclear = "unclear"
 
 
+class FeedbackResolution(StrEnum):
+    """Triage-Status eines Feedback-Eintrags (ADR-0038, append-only).
+
+    Kuratoren markieren einzelne Signale: `addressed` (umgesetzt), `in_progress`
+    (in Bearbeitung) oder `dismissed` (bewusst verworfen). Der „aktuelle" Status
+    ist das juengste Resolution-Event — die Feedback-Zeile selbst bleibt
+    unveraendert (append-only).
+    """
+
+    addressed = "addressed"
+    in_progress = "in_progress"
+    dismissed = "dismissed"
+
+
 class UsageEventCreate(BaseModel):
     """Eingabe von `record_usage`: ein Nutzungs-Ereignis."""
 
@@ -76,8 +90,21 @@ class UsageEventRead(BaseModel):
     created_at: datetime
 
 
+class FeedbackResolutionCreate(BaseModel):
+    """Eingabe von `set_feedback_resolution`: ein Triage-Ereignis."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    resolution: FeedbackResolution
+    note: str | None = Field(default=None, max_length=2_000)
+
+
 class AgentFeedbackRead(BaseModel):
-    """Ein persistiertes Feedback (read-only)."""
+    """Ein persistiertes Feedback (read-only).
+
+    `resolution` traegt den aktuellen Triage-Status (juengstes Resolution-Event)
+    oder None, solange das Feedback nicht triagiert wurde.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -89,6 +116,7 @@ class AgentFeedbackRead(BaseModel):
     note: str | None = None
     agent_id: UUID | None = None
     created_at: datetime
+    resolution: FeedbackResolution | None = None
 
 
 class FeedbackSummary(BaseModel):
