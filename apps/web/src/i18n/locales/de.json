@@ -54,6 +54,11 @@
       "slugRequired": "Slug erforderlich.",
       "slugInvalid": "Nur Kleinbuchstaben, Ziffern und Bindestriche.",
       "emailInvalid": "Bitte gültige E-Mail eingeben."
+    },
+    "managed": {
+      "title": "Vom System verwaltet",
+      "body": "Dieser Eintrag wird zentral vom System gepflegt und automatisch aktualisiert. Änderungen sind gesperrt.",
+      "duplicateHint": "Dupliziere den Agenten, um eine eigene, frei anpassbare Kopie zu erhalten."
     }
   },
   "layout": {

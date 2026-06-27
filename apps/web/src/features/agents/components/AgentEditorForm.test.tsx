@@ -34,7 +34,7 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
 const personas: Persona[] = []
 const templates: SystemPromptTemplate[] = []
 
-function Harness({ agent }: { agent: Agent }) {
+function Harness({ agent, locked }: { agent: Agent; locked?: boolean }) {
   const form = useForm<AgentEditorValues>({
     defaultValues: {
       name: agent.name,
@@ -66,6 +66,7 @@ function Harness({ agent }: { agent: Agent }) {
       personas={personas}
       templates={templates}
       agent={agent}
+      locked={locked}
     />
   )
 }
@@ -121,6 +122,26 @@ describe('AgentEditorForm', () => {
     // Playbook-Tag-Feld traegt die erlaubten Tags; Persona bleibt leer (= alle).
     expect(screen.getByLabelText('Playbook-Tags')).toHaveValue('support, billing')
     expect(screen.getByLabelText('Persona-Tags')).toHaveValue('')
+  })
+
+  it('sperrt alle Felder + Speichern, wenn vom System verwaltet (locked)', () => {
+    render(
+      <Harness
+        agent={makeAgent({
+          persona_id: 'p-1',
+          system_prompt_template_id: 't-1',
+          persona_active: true,
+          activatable: true,
+          missing: [],
+          is_managed: true,
+        })}
+        locked
+      />,
+    )
+
+    expect(screen.getByLabelText('Name')).toBeDisabled()
+    expect(screen.getByLabelText('Playbooks lesen')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Speichern' })).toBeDisabled()
   })
 
   it('spiegelt transition_grants als per-Domain Promote/Retire (ADR-0039)', () => {

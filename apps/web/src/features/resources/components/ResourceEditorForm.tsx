@@ -32,6 +32,8 @@ interface ResourceEditorFormProps {
    * Typisch: Submit-Button + ErrorAlert auf der New-Page.
    */
   actions?: ReactNode
+  // Vom System verwaltet: Editor read-only wie fuer Viewer.
+  locked?: boolean
 }
 
 export function ResourceEditorForm({
@@ -40,9 +42,10 @@ export function ResourceEditorForm({
   initialBodyBlocks,
   onSubmit,
   actions,
+  locked = false,
 }: ResourceEditorFormProps) {
   const { t } = useTranslation('resources')
-  const isViewer = useCurrentWorkspaceRole() === 'viewer'
+  const isViewer = useCurrentWorkspaceRole() === 'viewer' || locked
   const api = useApi()
 
   return (
@@ -73,6 +76,7 @@ export function ResourceEditorForm({
                         required
                         placeholder={t('form.namePlaceholder')}
                         {...field}
+                        disabled={isViewer}
                       />
                     </FormControl>
                     <FormMessage />
@@ -89,6 +93,7 @@ export function ResourceEditorForm({
                       <Input
                         placeholder={t('form.descriptionPlaceholder')}
                         {...field}
+                        disabled={isViewer}
                       />
                     </FormControl>
                     <FormMessage />

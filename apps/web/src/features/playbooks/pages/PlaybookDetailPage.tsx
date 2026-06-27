@@ -10,6 +10,7 @@ import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { BranchStatus, type BranchAction } from '@/components/data/BranchStatus'
 import { DataList } from '@/components/data/DataList'
 import { DataView } from '@/components/data/DataView'
+import { ManagedNotice } from '@/components/data/ManagedNotice'
 import { FeedbackPanel } from '@/components/feedback/FeedbackPanel'
 import { VersionHistory } from '@/components/version'
 import { Container } from '@/components/layout/Container'
@@ -47,6 +48,9 @@ export function PlaybookDetailPage() {
   const api = useApi()
   const role = useCurrentWorkspaceRole()
   const [actionBusy, setActionBusy] = useState(false)
+  // Vom System verwaltet (Builder-Playbook): Editor read-only, keine Status-/
+  // Lösch-Aktionen (Backend sperrt mit 403 managed_aggregate).
+  const locked = playbook?.is_managed === true
 
   // Track B (Nur-BlockNote): die Pills im Body sind immer die Quelle der
   // Relationen — die separaten Picker sind daher read-only (Editier-Aktion
@@ -139,8 +143,9 @@ export function PlaybookDetailPage() {
                 const triggers = splitTriggers(playbook.triggers ?? null)
 
                 const canPromote = role === 'admin'
+                // `locked` (vom System verwaltet) wird oben berechnet.
                 const actions: BranchAction[] = []
-                if (draftVersion !== undefined) {
+                if (!locked && draftVersion !== undefined) {
                   actions.push({
                     key: 'submit',
                     label: t('actions.draftSubmit'),
@@ -154,7 +159,7 @@ export function PlaybookDetailPage() {
                       ),
                   })
                 }
-                if (reviewVersion !== undefined) {
+                if (!locked && reviewVersion !== undefined) {
                   actions.push({
                     key: 'publish',
                     label: t('actions.publish'),
@@ -181,7 +186,7 @@ export function PlaybookDetailPage() {
                       ),
                   })
                 }
-                if (inactiveCurrent !== undefined) {
+                if (!locked && inactiveCurrent !== undefined) {
                   actions.push({
                     key: 'reactivate',
                     label: t('actions.reactivateDraft'),
@@ -219,6 +224,7 @@ export function PlaybookDetailPage() {
                         </div>
                       }
                     />
+                    {locked ? <ManagedNotice /> : null}
                     {triggers.length > 0 ? (
                       <div
                         className="flex flex-wrap items-center gap-2"
@@ -251,6 +257,7 @@ export function PlaybookDetailPage() {
                 form={form}
                 formKey={`${playbook.id}-${playbook.current_version}`}
                 initialBodyBlocks={initialBodyBlocks}
+                locked={locked}
               />
 
               <VersionHistory
@@ -400,7 +407,7 @@ export function PlaybookDetailPage() {
                 </CardContent>
               </Card>
 
-              {role !== 'viewer' ? (
+              {role !== 'viewer' && !locked ? (
                 <Card className="border-destructive/40">
                   <CardHeader>
                     <CardTitle className="text-destructive">

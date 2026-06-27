@@ -7,6 +7,7 @@ import type { Persona, SystemPromptTemplate } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { DataView } from '@/components/data/DataView'
+import { ManagedNotice } from '@/components/data/ManagedNotice'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
@@ -56,6 +57,9 @@ export function AgentDetailPage() {
         </Button>
         <DataView loading={loading && agent === null} error={error}>
           {agent !== null ? (
+            (() => {
+              const locked = agent.is_managed === true
+              return (
             <Stack gap="lg">
               <Stack gap="md">
                 <PageHeader
@@ -68,10 +72,11 @@ export function AgentDetailPage() {
                         disabled={agent.status !== 'enabled'}
                       />
                       <DuplicateAgentButton agent={agent} />
-                      <DeleteAgentButton agent={agent} />
+                      {locked ? null : <DeleteAgentButton agent={agent} />}
                     </div>
                   }
                 />
+                {locked ? <ManagedNotice showDuplicateHint /> : null}
               </Stack>
 
               <AgentHierarchyView
@@ -88,12 +93,15 @@ export function AgentDetailPage() {
                 personas={personas}
                 templates={templates}
                 agent={agent}
+                locked={locked}
               />
 
               <AgentConnectorSection agentId={agent.id} agentName={agent.name} />
 
               <AgentTokensSection agentId={agent.id} />
             </Stack>
+              )
+            })()
           ) : null}
         </DataView>
       </Stack>

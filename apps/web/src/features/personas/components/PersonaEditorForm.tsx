@@ -156,6 +156,11 @@ interface PersonaEditorFormProps {
    * Typisch: Submit-Button + ErrorAlert auf der New-Page.
    */
   actions?: ReactNode
+  /**
+   * Vom System verwaltet (Builder): Editor read-only wie fuer Viewer. Das
+   * Backend sperrt Mutationen ohnehin (403 managed_aggregate).
+   */
+  locked?: boolean
 }
 
 const PROFILE_EXAMPLE_SNIPPET = `Rolle: Senior-Customer-Support-Coach.
@@ -171,12 +176,13 @@ export function PersonaEditorForm({
   legacySystemPrompt,
   onSubmit,
   actions,
+  locked = false,
 }: PersonaEditorFormProps) {
   // Viewer dürfen nur lesen (ADR-0023) — Auto-Save bleibt gesperrt (Detail-
   // Page reicht `isReady=false` durch, falls die Rolle das Editieren
-  // unterbindet).
+  // unterbindet). `locked` (vom System verwaltet) verhaelt sich identisch.
   const { t } = useTranslation('personas')
-  const isViewer = useCurrentWorkspaceRole() === 'viewer'
+  const isViewer = useCurrentWorkspaceRole() === 'viewer' || locked
   const api = useApi()
   const showLegacyHint =
     legacySystemPrompt !== undefined && legacySystemPrompt.trim() !== ''
@@ -204,7 +210,12 @@ export function PersonaEditorForm({
                   <FormItem>
                     <FormLabel>{t('common:fields.name')}</FormLabel>
                     <FormControl>
-                      <Input required placeholder={t('editor.identity.namePlaceholder')} {...field} />
+                      <Input
+                        required
+                        placeholder={t('editor.identity.namePlaceholder')}
+                        {...field}
+                        disabled={isViewer}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -221,6 +232,7 @@ export function PersonaEditorForm({
                         required
                         placeholder={t('editor.identity.descriptionPlaceholder')}
                         {...field}
+                        disabled={isViewer}
                       />
                     </FormControl>
                     <FormMessage />

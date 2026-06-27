@@ -54,6 +54,11 @@
       "slugRequired": "Slug is required.",
       "slugInvalid": "Only lowercase letters, digits and hyphens.",
       "emailInvalid": "Please enter a valid email."
+    },
+    "managed": {
+      "title": "Managed by the system",
+      "body": "This entry is maintained centrally by the system and updated automatically. Edits are locked.",
+      "duplicateHint": "Duplicate the agent to get your own, freely editable copy."
     }
   },
   "layout": {

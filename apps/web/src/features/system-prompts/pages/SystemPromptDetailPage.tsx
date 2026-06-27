@@ -5,6 +5,7 @@ import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { DataView } from '@/components/data/DataView'
+import { ManagedNotice } from '@/components/data/ManagedNotice'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
@@ -24,6 +25,9 @@ export function SystemPromptDetailPage() {
   const role = useCurrentWorkspaceRole()
   const { template, versions, loading, error, reload } = useSystemPrompt(id)
   const { form, onSubmit, saveError } = useSystemPromptForm(template, reload)
+  // Vom System verwaltet (Builder-Template): Editor read-only, keine Status-
+  // Aktionen (Backend sperrt mit 403 managed_aggregate).
+  const locked = template?.is_managed === true
 
   if (id === undefined) {
     return <Navigate to={wsPath('/system-prompts')} replace />
@@ -46,7 +50,8 @@ export function SystemPromptDetailPage() {
                   title={template.name}
                   description={`Slug: ${template.slug} · Aktuelle Version: v${template.current_version}`}
                 />
-                {template.current_status !== undefined ? (
+                {locked ? <ManagedNotice /> : null}
+                {!locked && template.current_status !== undefined ? (
                   <SystemPromptStatusActionBar
                     templateId={template.id}
                     version={template.current_version}
@@ -60,6 +65,7 @@ export function SystemPromptDetailPage() {
                 form={form}
                 onSubmit={onSubmit}
                 saveError={saveError}
+                locked={locked}
               />
 
               <VersionHistory
