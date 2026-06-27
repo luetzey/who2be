@@ -173,6 +173,17 @@ def _require_transition_capability(
         )
     if to_status in (VersionStatus.active, VersionStatus.inactive):
         require_capability(ctx, AgentCapability.promote_retire)
+        # Optionale Pro-Domain-Verfeinerung (ADR-0039): `transition_grants` kann
+        # `promote_retire` pro Domain/Richtung weiter einschraenken.
+        promote = to_status == VersionStatus.active
+        if not ctx.tool_policy.can_transition(entity_type, promote=promote):
+            action = "aktivieren" if promote else "zurueckziehen"
+            raise ApiGateError(
+                status=status.HTTP_403_FORBIDDEN,
+                reason="missing_capability",
+                actionable_by="human",
+                detail=f"Dieser Agent darf {entity_type} nicht {action} (transition_grants).",
+            )
     else:
         require_capability(ctx, _WRITE_CAPABILITY[entity_type])
 

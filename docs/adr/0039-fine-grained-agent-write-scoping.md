@@ -1,7 +1,23 @@
 # ADR-0039 — Feinkoernige Per-Agent-Write-Rechte (Praedikat-Scopes, getrennte Promote/Retire, TTL)
 
-- Status: Proposed
+- Status: Partially Accepted
 - Datum: 2026-06-27
+
+## Umsetzungsstand (2026-06-27)
+
+**Umgesetzt (Track 4-A, Branch `claude/track4-finer-rights`):**
+- **Getrennte Promote/Retire pro Domain** — `TransitionGrant{promote,retire}` +
+  `AgentToolPolicy.transition_grants` (Narrowing von `promote_retire`, additiv/
+  JSONB-abwaertskompatibel), Gate `_require_transition_capability` + `can_transition`,
+  `is_within`-Anti-Escalation. DB-frei getestet.
+- **Befristete Grants (TTL)** — `TokenCreate.expires_at` exponiert (Spalte +
+  Auth-Enforcement existierten bereits, Migration 0049).
+
+**Offen (Folge-Schritt, Track 4-B):** praedikat-basiertes Write-Scoping
+(`WriteScope tagged`), Write-Rate-Limit und der **Web-Policy-Editor**
+(`AgentEditorForm`: Scope-/Transition-/Expiry-Controls) inkl. `whoami`-Ausgabe
+der `transition_grants`. Bewusst getrennt, weil Tag-Scoping per-Service-
+Enforcement + Frontend braucht (DB/Web-Verifikation noetig).
 - Kontext: User-Wunsch nach detaillierterer Einstellbarkeit; die Per-Agent-Policy
   ist heute grobkoerniger als das Vertrauensmodell erlaubt.
 - Bezug: ADR-0023 (RBAC / Token-Snapshot), ADR-0009 (JSONB-Schema-Evolution),

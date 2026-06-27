@@ -31,6 +31,10 @@ class TokenCreate(BaseModel):
     # Read-Scoping umgehen (secure by default). Fehlt `agent_id` im Body, liefert
     # der API-Layer ein 422.
     agent_id: UUID
+    # Optionaler Ablaufzeitpunkt (ADR-0039, befristete Grants). `None` = kein
+    # Ablauf. Das Backend erzwingt ihn bereits in `fetch_auth_by_hash`
+    # (`expires_at IS NULL OR expires_at > now()`) — ein abgelaufener Token ⇒ 401.
+    expires_at: datetime | None = None
 
 
 class TokenRename(BaseModel):

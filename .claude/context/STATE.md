@@ -4,6 +4,11 @@ _Stand: 2026-06-16_
 
 ## Funktioniert
 
+- **Track 4-A feinere Rechte (ADR-0039, 2026-06-27), Branch
+  `claude/track4-finer-rights` (gestapelt):** getrennte Promote/Retire pro Domain
+  (`transition_grants`, Narrowing von `promote_retire`) + Token-TTL
+  (`TokenCreate.expires_at`; Enforcement+Spalte gab es schon). Additiv, DB-frei
+  verifiziert. Track 4-B (Tag-Scoping + Web-Policy-Editor) offen.
 - **Track 2 Search (ADR-0037, 2026-06-27), Branch `claude/track2-search`
   (gestapelt):** MCP-Tool `search` + `GET /search` — Postgres-Runtime-Volltext
   über Name + Content der aktiven Version, read-scope-gefiltert, nur active.

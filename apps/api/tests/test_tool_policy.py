@@ -16,6 +16,7 @@ from who2be_models import (
     AgentCapability,
     AgentToolPolicy,
     ReadScope,
+    TransitionGrant,
     VersionStatus,
     WorkspaceRole,
 )
@@ -171,3 +172,67 @@ class TestFeedbackWriteCapability:
         ctx = _ctx(AgentToolPolicy(feedback_write=False))
         with pytest.raises(ApiGateError):
             require_capability(ctx, AgentCapability.feedback_write)
+
+
+class TestTransitionGrants:
+    """ADR-0039: per-Domain-Verfeinerung von promote_retire (Narrowing)."""
+
+    def test_no_promote_retire_means_no_transition(self) -> None:
+        p = AgentToolPolicy(promote_retire=False)
+        assert p.can_transition("playbook", promote=True) is False
+
+    def test_promote_retire_without_grants_is_full(self) -> None:
+        p = AgentToolPolicy(promote_retire=True)
+        assert p.can_transition("playbook", promote=True) is True
+        assert p.can_transition("persona", promote=False) is True
+
+    def test_grant_narrows_direction_per_domain(self) -> None:
+        p = AgentToolPolicy(
+            promote_retire=True,
+            transition_grants={"playbook": TransitionGrant(promote=True, retire=False)},
+        )
+        assert p.can_transition("playbook", promote=True) is True
+        assert p.can_transition("playbook", promote=False) is False
+        # Nicht gelistete Domain bleibt voll (Grants schraenken nur Gelistetes ein).
+        assert p.can_transition("persona", promote=False) is True
+
+    def test_is_within_blocks_broader_transition(self) -> None:
+        full = AgentToolPolicy(promote_retire=True)
+        narrowed = AgentToolPolicy(
+            promote_retire=True,
+            transition_grants={"playbook": TransitionGrant(promote=True, retire=False)},
+        )
+        assert narrowed.is_within(full) is True
+        assert full.is_within(narrowed) is False
+
+    def test_gate_allows_promote_blocks_retire_when_grant_restricts(self) -> None:
+        ctx = _ctx(
+            AgentToolPolicy(
+                promote_retire=True,
+                transition_grants={"playbook": TransitionGrant(promote=True, retire=False)},
+            )
+        )
+        # Promote (→active) erlaubt; Retire (→inactive) durch Grant gesperrt.
+        _require_transition_capability(ctx, "playbook", VersionStatus.active)
+        with pytest.raises(ApiGateError) as exc:
+            _require_transition_capability(ctx, "playbook", VersionStatus.inactive)
+        assert exc.value.actionable_by == "human"
+
+
+class TestTokenExpiry:
+    """ADR-0039: optionaler Ablaufzeitpunkt im TokenCreate-Modell."""
+
+    def test_default_is_none(self) -> None:
+        from who2be_models import TokenCreate
+
+        tok = TokenCreate(name="t", agent_id=uuid4())
+        assert tok.expires_at is None
+
+    def test_accepts_datetime(self) -> None:
+        from datetime import UTC, datetime, timedelta
+
+        from who2be_models import TokenCreate
+
+        when = datetime.now(UTC) + timedelta(days=14)
+        tok = TokenCreate(name="t", agent_id=uuid4(), expires_at=when)
+        assert tok.expires_at == when

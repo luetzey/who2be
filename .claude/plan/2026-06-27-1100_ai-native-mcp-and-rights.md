@@ -47,7 +47,14 @@ abschliessbar und liefert eigenstaendigen Wert.
   ruff `.` + mypy (179 Source) clean; DB-freie Tests grün (246). Branch
   `claude/track2-search` (gestapelt auf Track 3). GIN-Index + pgvector (Stufe B)
   als Folge.
-- Track 4 offen (feinkörnige Rechte + Web-Policy-Editor).
+- **Track 4-A — ERLEDIGT (2026-06-27):** getrennte Promote/Retire pro Domain
+  (`TransitionGrant` + `transition_grants`, Narrowing von `promote_retire`, Gate
+  + `is_within`) + Token-TTL exponiert (`TokenCreate.expires_at`; Enforcement +
+  Spalte existierten schon). Additiv, DB-frei verifiziert (ruff/mypy 181 Source
+  clean, tool_policy-Tests 29 grün). Branch `claude/track4-finer-rights`.
+- **Track 4-B — OFFEN:** Tag-Prädikat-Write-Scoping (`WriteScope tagged`),
+  Write-Rate-Limit, **Web-Policy-Editor** (AgentEditorForm + whoami-Ausgabe).
+  Braucht per-Service-Enforcement + Frontend (DB/Web-Verifikation).
 
 ## Track 1 — Read-only-Adapter-Tools (billigste Wins, kein neuer ADR)
 
