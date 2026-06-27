@@ -4,6 +4,14 @@ _Stand: 2026-06-16_
 
 ## Funktioniert
 
+- **AI-native MCP-Ausbau (2026-06-27), Branch `claude/charming-pasteur-pxz2l8`,
+  PR #266:** Design für 4 Tracks abgelegt (Plan
+  `.claude/plan/2026-06-27-1100_ai-native-mcp-and-rights.md`; ADR-0037 Search,
+  ADR-0038 Feedback-Flywheel, ADR-0039 feinkörnige Write-Rechte). **Track 1
+  implementiert:** neue MCP-Read-Tools `find_usages`/`list_versions`/
+  `get_version`/`diff_versions` (dünne Adapter über bestehende REST-Endpunkte,
+  Entity-Dispatch). 12 Tool-Tests + MCP-Suite (111) grün, ruff/mypy sauber.
+  Tracks 2/3/4 offen.
 - Phase 1–3 abgeschlossen: Tenancy, Status-Workflow + Dashboard, Resources +
   BlockNote, Multi-User-RBAC, MCP Read/Write-Tools, Einzel-Delete/Export, i18n.
 - Security-Findings (Phase 1 + 2) alle **Closed**, Ampel Grün.

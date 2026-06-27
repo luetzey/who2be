@@ -22,7 +22,13 @@ from fastmcp.exceptions import ToolError
 from fastmcp.server.dependencies import get_http_headers
 from pydantic import BaseModel
 
-from who2be_mcp.client import ApiClient
+from who2be_mcp.client import (
+    AnyUsage,
+    AnyVersionRead,
+    ApiClient,
+    EntityType,
+    UsageEntityType,
+)
 from who2be_mcp.config import Settings, get_settings
 from who2be_mcp.core_logging import configure_logging, with_tool_log
 from who2be_models import (
@@ -52,6 +58,7 @@ from who2be_models import (
     SubResourceLinkSet,
     SubResourceRead,
     TriggerOverview,
+    VersionDiff,
     VersionStatus,
     VersionTransitionRequest,
     WhoAmIRead,
@@ -545,6 +552,86 @@ async def list_resource_blocks(resource_id: str, locale: str = "de") -> list[Res
         raise ToolError(f"Ungueltige Resource-UUID: '{resource_id}'.") from exc
     client = await build_client()
     return await client.list_resource_blocks(parsed, locale)
+
+
+# ---------------------------------------------------------------------------
+# Read-only Reverse-Lookups + Versions-Historie (Track 1, erweitert ADR-0030/
+# 0021). Duenne Adapter ueber bestehende REST-Endpunkte — kein neuer
+# Backend-Code. Read-Scope und `status='active'`-Sichtbarkeit erzwingt die API.
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool
+@with_tool_log("find_usages")
+async def find_usages(entity_type: UsageEntityType, entity_id: str) -> list[AnyUsage]:
+    """Reverse-Lookup: welche Aggregate referenzieren dieses Element?
+
+    `entity_type='playbook'` listet die Personae, die das Playbook verknuepfen;
+    `entity_type='resource'` die Playbooks, die Bloecke der Resource referenzieren
+    (je mit `block_count`). Nutze das, um den Impact zu verstehen, BEVOR du ein
+    Element aenderst oder retirest — referenzierende Aggregate brechen sonst.
+
+    Personae haben bewusst keinen Usage-Lookup (ihr Backlink ist die
+    Agent-Zuordnung, nicht ueber MCP-Reads exponiert).
+    """
+    parsed = _parse_uuid(entity_id, entity_type)
+    client = await build_client()
+    return await client.list_usages(entity_type, parsed)
+
+
+@mcp.tool
+@with_tool_log("list_versions")
+async def list_versions(
+    entity_type: EntityType, entity_id: str, locale: str = "de"
+) -> list[AnyVersionRead]:
+    """Listet die Versions-Historie eines Persona-/Playbook-/Resource-Elements.
+
+    Jeder Eintrag traegt `version`, `status` (draft/review/active/inactive),
+    `content`, `created_by` und `created_at`. Reine Konsum-Tokens sehen nur
+    aktive Versionen; ein Token mit der passenden `*_write`-Capability sieht auch
+    Draft/Review. `locale` waehlt die Sprachvariante (Default `'de'`).
+    """
+    parsed = _parse_uuid(entity_id, entity_type)
+    client = await build_client()
+    return await client.list_versions(entity_type, parsed, locale)
+
+
+@mcp.tool
+@with_tool_log("get_version")
+async def get_version(
+    entity_type: EntityType, entity_id: str, version: int, locale: str = "de"
+) -> AnyVersionRead:
+    """Laedt einen einzelnen, unveraenderlichen Versions-Snapshot.
+
+    `entity_type` ∈ {persona, playbook, resource}, `version` ist die
+    Versionsnummer (1-basiert). Liefert den vollstaendigen Content-Snapshot
+    dieser Version. `locale` waehlt die Sprachvariante (Default `'de'`).
+    """
+    parsed = _parse_uuid(entity_id, entity_type)
+    client = await build_client()
+    return await client.get_version(entity_type, parsed, version, locale)
+
+
+@mcp.tool
+@with_tool_log("diff_versions")
+async def diff_versions(
+    entity_type: EntityType,
+    entity_id: str,
+    version: int,
+    against: str = "active",
+    locale: str = "de",
+) -> VersionDiff:
+    """Strukturierter Feld-/Block-Diff einer Version gegen einen Vergleichsstand.
+
+    `version` ist die betrachtete Version, `against` der Vergleich (Default
+    `'active'` = die aktive Version; sonst eine Versionsnummer als String). Die
+    `changes`-Liste nennt pro Aenderung `path`, `op` (added/removed/changed) und
+    before/after. Nutze das, um einen Draft vor dem Promote selbst zu reviewen.
+    `locale` waehlt die Sprachvariante (Default `'de'`).
+    """
+    parsed = _parse_uuid(entity_id, entity_type)
+    client = await build_client()
+    return await client.diff_version(entity_type, parsed, version, against, locale)
 
 
 # ---------------------------------------------------------------------------

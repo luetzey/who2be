@@ -24,6 +24,14 @@ abschliessbar und liefert eigenstaendigen Wert.
 
 ---
 
+## Fortschritt
+
+- **Track 1 — ERLEDIGT (2026-06-27):** `find_usages`, `list_versions`,
+  `get_version`, `diff_versions` als MCP-Tools (Entity-Dispatch über
+  Pfad-/Model-Maps im Client). 12 neue Tool-Tests + volle MCP-Suite grün (111),
+  ruff/mypy sauber. Keine Migration. Branch `claude/charming-pasteur-pxz2l8`.
+- Tracks 2/3/4 offen, sequenziell nach diesem Plan.
+
 ## Track 1 — Read-only-Adapter-Tools (billigste Wins, kein neuer ADR)
 
 Erweitert ADR-0030/0021. Reine MCP-Adapter ueber **bestehende** REST-Endpunkte;
