@@ -401,7 +401,9 @@ def _builder_playbook_content(
 def _builder_tool_policy() -> dict[str, object]:
     """Write-faehige Policy fuer den Meta-Agenten (Plan §5.2).
 
-    Alle Schreib-Capabilities + `promote_retire`, Reads = `all`. Die Reads sind
+    Alle Schreib-Capabilities + `promote_retire` + `system_prompt_write`
+    (ADR-0040: Templates verfassen + zur Review einreichen; das Aktivieren bleibt
+    serverseitig auch fuer den Builder gesperrt), Reads = `all`. Die Reads sind
     bewusst EXPLIZIT auf `all` gesetzt: der Meta-Agent verwaltet den ganzen
     Workspace und darf nicht den (seit „secure by default") auf `assigned`
     abgesenkten Read-Default erben. Die Autorisierung bleibt serverseitig
@@ -416,6 +418,7 @@ def _builder_tool_policy() -> dict[str, object]:
         playbook_write=True,
         resource_write=True,
         agent_write=True,
+        system_prompt_write=True,
         promote_retire=True,
     ).model_dump(mode="json")
 

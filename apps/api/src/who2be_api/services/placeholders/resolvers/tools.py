@@ -238,6 +238,33 @@ _TOOLS: list[_ToolDoc] = [
             "(veroeffentlichen/zurueckziehen) ist die Capability `promote_retire` noetig."
         ),
     ),
+    # --- System-Prompt-Templates (ADR-0040) — nur mit `system_prompt_write` ---
+    _ToolDoc(
+        signature="list_system_prompts() / get_system_prompt(template_id)",
+        capabilities=(AgentCapability.system_prompt_write,),
+        description=(
+            "System-Prompt-Templates auflisten bzw. eines laden — das versionierte "
+            "Aggregat hinter `system_prompt_template_id` eines Agenten."
+        ),
+    ),
+    _ToolDoc(
+        signature="create_system_prompt(…) / update_system_prompt(…) / restore_system_prompt(…)",
+        capabilities=(AgentCapability.system_prompt_write,),
+        description=(
+            "System-Prompt-Templates anlegen, als neuen Draft aendern oder eine "
+            "Version wiederherstellen. Setze die UUID via update_agent als "
+            "`system_prompt_template_id`."
+        ),
+    ),
+    _ToolDoc(
+        signature="transition_system_prompt(template_id, version, to, note?)",
+        capabilities=(AgentCapability.system_prompt_write,),
+        description=(
+            "Eine Template-Version weiterschalten — du darfst NUR `to='review'` "
+            "(zur Freigabe einreichen). Das Aktivieren (`active`) uebernimmt ein "
+            "Mensch/Admin; ein Agent-Versuch wird serverseitig abgelehnt."
+        ),
+    ),
 ]
 
 # Applied-vs-Triggered-Hinweis: Fest im System-Prompt eingebettete Playbooks

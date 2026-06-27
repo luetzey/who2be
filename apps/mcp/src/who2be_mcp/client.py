@@ -6,7 +6,7 @@ uebersetzt.
 """
 
 import logging
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 import httpx
@@ -29,6 +29,7 @@ from who2be_models import (
     PlaybookCreate,
     PlaybookRead,
     PlaybookUpdate,
+    PlaybookUsage,
     PlaybookVersionRead,
     ResourceBlockAnchor,
     ResourceCreate,
@@ -36,10 +37,16 @@ from who2be_models import (
     ResourceLinkSet,
     ResourceRead,
     ResourceUpdate,
+    ResourceUsage,
     ResourceVersionRead,
     SubResourceLinkSet,
     SubResourceRead,
+    SystemPromptTemplateCreate,
+    SystemPromptTemplateRead,
+    SystemPromptTemplateUpdate,
+    SystemPromptTemplateVersionRead,
     TriggerOverview,
+    VersionDiff,
     VersionTransitionRequest,
     WhoAmIRead,
 )
@@ -47,6 +54,39 @@ from who2be_models import (
 logger = logging.getLogger(__name__)
 
 _TIMEOUT = 10.0
+
+# Read-only Reverse-Lookups + Versions-Historie (Track 1). Die drei Kernelemente
+# teilen sich uniforme REST-Pfade (`/{plural}/{id}/versions|usages`), daher
+# genuegt ein Entity-Dispatch ueber diese Maps statt 3x near-duplicate Methoden.
+EntityType = Literal["persona", "playbook", "resource", "system_prompt"]
+UsageEntityType = Literal["playbook", "resource"]
+AnyVersionRead = (
+    PersonaVersionRead | PlaybookVersionRead | ResourceVersionRead | SystemPromptTemplateVersionRead
+)
+AnyUsage = PlaybookUsage | ResourceUsage
+
+_ENTITY_PLURAL: dict[str, str] = {
+    "persona": "personas",
+    "playbook": "playbooks",
+    "resource": "resources",
+    "system_prompt": "system-prompts",
+}
+_VERSION_MODEL: dict[
+    str,
+    type[PersonaVersionRead]
+    | type[PlaybookVersionRead]
+    | type[ResourceVersionRead]
+    | type[SystemPromptTemplateVersionRead],
+] = {
+    "persona": PersonaVersionRead,
+    "playbook": PlaybookVersionRead,
+    "resource": ResourceVersionRead,
+    "system_prompt": SystemPromptTemplateVersionRead,
+}
+_USAGE_MODEL: dict[str, type[PlaybookUsage] | type[ResourceUsage]] = {
+    "playbook": PlaybookUsage,
+    "resource": ResourceUsage,
+}
 
 
 class ApiClient:
@@ -325,6 +365,74 @@ class ApiClient:
         body = data.get("body_rendered") if isinstance(data, dict) else None
         return body if isinstance(body, str) else ""
 
+    async def list_system_prompts(self) -> list[SystemPromptTemplateRead]:
+        """Laedt die System-Prompt-Templates des Workspace (ADR-0040)."""
+        data = await self._get(f"{self._workspace_prefix}/system-prompts")
+        return [SystemPromptTemplateRead.model_validate(item) for item in data]
+
+    async def get_system_prompt(self, template_id: UUID) -> SystemPromptTemplateRead:
+        """Laedt ein einzelnes System-Prompt-Template (Konfig + aktueller Body)."""
+        data = await self._get(f"{self._workspace_prefix}/system-prompts/{template_id}")
+        return SystemPromptTemplateRead.model_validate(data)
+
+    # ------------------------------------------------------------------
+    # Read-only Reverse-Lookups + Versions-Historie (Track 1, erweitert
+    # ADR-0030/0021). Reine Adapter ueber bestehende REST-Endpunkte; der
+    # Server erzwingt Read-Scope und `status='active'` wie bei jedem Read.
+    # ------------------------------------------------------------------
+
+    async def list_usages(self, entity_type: UsageEntityType, entity_id: UUID) -> list[AnyUsage]:
+        """Reverse-Lookup: welche Aggregate referenzieren dieses Element?
+
+        `playbook` → referenzierende Personae, `resource` → referenzierende
+        Playbooks. Personae haben bewusst keinen Usage-Endpunkt (Backlink ist
+        `agent.persona_id`, nicht ueber MCP-Reads exponiert).
+        """
+        plural = _ENTITY_PLURAL[entity_type]
+        data = await self._get(f"{self._workspace_prefix}/{plural}/{entity_id}/usages")
+        model = _USAGE_MODEL[entity_type]
+        return [model.model_validate(item) for item in data]
+
+    async def list_versions(
+        self, entity_type: EntityType, entity_id: UUID, locale: str = DEFAULT_LOCALE
+    ) -> list[AnyVersionRead]:
+        """Listet die Versions-Snapshots eines Elements (Historie)."""
+        plural = _ENTITY_PLURAL[entity_type]
+        model = _VERSION_MODEL[entity_type]
+        data = await self._get(
+            f"{self._workspace_prefix}/{plural}/{entity_id}/versions",
+            params={"locale": locale},
+        )
+        return [model.model_validate(item) for item in data]
+
+    async def get_version(
+        self, entity_type: EntityType, entity_id: UUID, version: int, locale: str = DEFAULT_LOCALE
+    ) -> AnyVersionRead:
+        """Laedt einen einzelnen Versions-Snapshot."""
+        plural = _ENTITY_PLURAL[entity_type]
+        model = _VERSION_MODEL[entity_type]
+        data = await self._get(
+            f"{self._workspace_prefix}/{plural}/{entity_id}/versions/{version}",
+            params={"locale": locale},
+        )
+        return model.model_validate(data)
+
+    async def diff_version(
+        self,
+        entity_type: EntityType,
+        entity_id: UUID,
+        version: int,
+        against: str = "active",
+        locale: str = DEFAULT_LOCALE,
+    ) -> VersionDiff:
+        """Strukturierter Feld-/Block-Diff von `version` gegen `against`."""
+        plural = _ENTITY_PLURAL[entity_type]
+        data = await self._get(
+            f"{self._workspace_prefix}/{plural}/{entity_id}/versions/{version}/diff",
+            params={"locale": locale, "against": against},
+        )
+        return VersionDiff.model_validate(data)
+
     # ------------------------------------------------------------------
     # Write-Pfad (ADR-0012). Alle Mutationen brauchen einen Token mit
     # editor-Rolle (Status-Promote/Retire: admin) — die API erzwingt das.
@@ -496,3 +604,43 @@ class ApiClient:
     async def copy_agent(self, agent_id: UUID, data: AgentCopy) -> AgentRead:
         body = await self._write("POST", f"{self._workspace_prefix}/agents/{agent_id}/copy", data)
         return AgentRead.model_validate(body)
+
+    # ------------------------------------------------------------------
+    # System-Prompt-Template-Writes (ADR-0040). Verfassen + zur Review
+    # einreichen braucht `system_prompt_write`; das Aktivieren (→active/
+    # →inactive) bleibt fuer agent-gebundene Tokens serverseitig gesperrt.
+    # ------------------------------------------------------------------
+
+    async def create_system_prompt(
+        self, data: SystemPromptTemplateCreate
+    ) -> SystemPromptTemplateRead:
+        body = await self._write("POST", f"{self._workspace_prefix}/system-prompts", data)
+        return SystemPromptTemplateRead.model_validate(body)
+
+    async def update_system_prompt(
+        self, template_id: UUID, data: SystemPromptTemplateUpdate
+    ) -> SystemPromptTemplateRead:
+        body = await self._write(
+            "PUT", f"{self._workspace_prefix}/system-prompts/{template_id}", data
+        )
+        return SystemPromptTemplateRead.model_validate(body)
+
+    async def restore_system_prompt(
+        self, template_id: UUID, version: int
+    ) -> SystemPromptTemplateRead:
+        body = await self._write(
+            "POST",
+            f"{self._workspace_prefix}/system-prompts/{template_id}/versions/{version}/restore",
+            None,
+        )
+        return SystemPromptTemplateRead.model_validate(body)
+
+    async def transition_system_prompt_version(
+        self, template_id: UUID, version: int, data: VersionTransitionRequest
+    ) -> SystemPromptTemplateVersionRead:
+        body = await self._write(
+            "POST",
+            f"{self._workspace_prefix}/system-prompts/{template_id}/versions/{version}/transition",
+            data,
+        )
+        return SystemPromptTemplateVersionRead.model_validate(body)

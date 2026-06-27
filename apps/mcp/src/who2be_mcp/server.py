@@ -22,7 +22,13 @@ from fastmcp.exceptions import ToolError
 from fastmcp.server.dependencies import get_http_headers
 from pydantic import BaseModel
 
-from who2be_mcp.client import ApiClient
+from who2be_mcp.client import (
+    AnyUsage,
+    AnyVersionRead,
+    ApiClient,
+    EntityType,
+    UsageEntityType,
+)
 from who2be_mcp.config import Settings, get_settings
 from who2be_mcp.core_logging import configure_logging, with_tool_log
 from who2be_models import (
@@ -51,7 +57,12 @@ from who2be_models import (
     ResourceVersionRead,
     SubResourceLinkSet,
     SubResourceRead,
+    SystemPromptTemplateCreate,
+    SystemPromptTemplateRead,
+    SystemPromptTemplateUpdate,
+    SystemPromptTemplateVersionRead,
     TriggerOverview,
+    VersionDiff,
     VersionStatus,
     VersionTransitionRequest,
     WhoAmIRead,
@@ -547,6 +558,114 @@ async def list_resource_blocks(resource_id: str, locale: str = "de") -> list[Res
     return await client.list_resource_blocks(parsed, locale)
 
 
+@mcp.tool
+@with_tool_log("list_system_prompts")
+async def list_system_prompts() -> list[SystemPromptTemplateRead]:
+    """Listet die System-Prompt-Templates des Workspace (ADR-0040).
+
+    Jedes Template ist das versionierte Aggregat hinter `agent.system_prompt_
+    template_id`. Nutze das, um ein bestehendes Template fuer `create_agent`/
+    `update_agent` auszuwaehlen oder vor dem Anpassen zu finden. Den vollen Body
+    einer Version liefert `get_system_prompt` bzw. `get_version`.
+    """
+    client = await build_client()
+    return await client.list_system_prompts()
+
+
+@mcp.tool
+@with_tool_log("get_system_prompt")
+async def get_system_prompt(template_id: str) -> SystemPromptTemplateRead:
+    """Laedt ein System-Prompt-Template (Konfig + Body der sichtbaren Version).
+
+    Der richtige Read nach `create_system_prompt`/`update_system_prompt` und vor
+    dem Editieren. Versions-Historie + Diff laufen ueber `list_versions`/
+    `diff_versions` mit `entity_type='system_prompt'`.
+    """
+    parsed = _parse_uuid(template_id, "system_prompt")
+    client = await build_client()
+    return await client.get_system_prompt(parsed)
+
+
+# ---------------------------------------------------------------------------
+# Read-only Reverse-Lookups + Versions-Historie (Track 1, erweitert ADR-0030/
+# 0021). Duenne Adapter ueber bestehende REST-Endpunkte — kein neuer
+# Backend-Code. Read-Scope und `status='active'`-Sichtbarkeit erzwingt die API.
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool
+@with_tool_log("find_usages")
+async def find_usages(entity_type: UsageEntityType, entity_id: str) -> list[AnyUsage]:
+    """Reverse-Lookup: welche Aggregate referenzieren dieses Element?
+
+    `entity_type='playbook'` listet die Personae, die das Playbook verknuepfen;
+    `entity_type='resource'` die Playbooks, die Bloecke der Resource referenzieren
+    (je mit `block_count`). Nutze das, um den Impact zu verstehen, BEVOR du ein
+    Element aenderst oder retirest — referenzierende Aggregate brechen sonst.
+
+    Personae haben bewusst keinen Usage-Lookup (ihr Backlink ist die
+    Agent-Zuordnung, nicht ueber MCP-Reads exponiert).
+    """
+    parsed = _parse_uuid(entity_id, entity_type)
+    client = await build_client()
+    return await client.list_usages(entity_type, parsed)
+
+
+@mcp.tool
+@with_tool_log("list_versions")
+async def list_versions(
+    entity_type: EntityType, entity_id: str, locale: str = "de"
+) -> list[AnyVersionRead]:
+    """Listet die Versions-Historie eines Persona-/Playbook-/Resource-Elements.
+
+    Jeder Eintrag traegt `version`, `status` (draft/review/active/inactive),
+    `content`, `created_by` und `created_at`. Reine Konsum-Tokens sehen nur
+    aktive Versionen; ein Token mit der passenden `*_write`-Capability sieht auch
+    Draft/Review. `locale` waehlt die Sprachvariante (Default `'de'`).
+    """
+    parsed = _parse_uuid(entity_id, entity_type)
+    client = await build_client()
+    return await client.list_versions(entity_type, parsed, locale)
+
+
+@mcp.tool
+@with_tool_log("get_version")
+async def get_version(
+    entity_type: EntityType, entity_id: str, version: int, locale: str = "de"
+) -> AnyVersionRead:
+    """Laedt einen einzelnen, unveraenderlichen Versions-Snapshot.
+
+    `entity_type` ∈ {persona, playbook, resource}, `version` ist die
+    Versionsnummer (1-basiert). Liefert den vollstaendigen Content-Snapshot
+    dieser Version. `locale` waehlt die Sprachvariante (Default `'de'`).
+    """
+    parsed = _parse_uuid(entity_id, entity_type)
+    client = await build_client()
+    return await client.get_version(entity_type, parsed, version, locale)
+
+
+@mcp.tool
+@with_tool_log("diff_versions")
+async def diff_versions(
+    entity_type: EntityType,
+    entity_id: str,
+    version: int,
+    against: str = "active",
+    locale: str = "de",
+) -> VersionDiff:
+    """Strukturierter Feld-/Block-Diff einer Version gegen einen Vergleichsstand.
+
+    `version` ist die betrachtete Version, `against` der Vergleich (Default
+    `'active'` = die aktive Version; sonst eine Versionsnummer als String). Die
+    `changes`-Liste nennt pro Aenderung `path`, `op` (added/removed/changed) und
+    before/after. Nutze das, um einen Draft vor dem Promote selbst zu reviewen.
+    `locale` waehlt die Sprachvariante (Default `'de'`).
+    """
+    parsed = _parse_uuid(entity_id, entity_type)
+    client = await build_client()
+    return await client.diff_version(entity_type, parsed, version, against, locale)
+
+
 # ---------------------------------------------------------------------------
 # Write-Tools (ADR-0012). Verlangen einen API-Token mit editor-Rolle;
 # Status-Promote (draft→active) und Retire (active→inactive) brauchen admin.
@@ -829,6 +948,68 @@ async def copy_agent(agent_id: str, name: str | None = None) -> AgentRead:
     """
     client = await build_client()
     return await client.copy_agent(_parse_uuid(agent_id, "Agent"), AgentCopy(name=name))
+
+
+# ---------------------------------------------------------------------------
+# System-Prompt-Template-Writes (ADR-0040). Verlangen `system_prompt_write`.
+# Verfassen (create/update/restore) + draft→review sind erlaubt; das Aktivieren
+# (→active/→inactive) lehnt die API fuer agent-gebundene Tokens hart ab — der
+# eigene System-Prompt wird von einem Menschen/Admin scharfgeschaltet.
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool
+@with_tool_log("create_system_prompt")
+async def create_system_prompt(data: SystemPromptTemplateCreate) -> SystemPromptTemplateRead:
+    """Legt ein neues System-Prompt-Template an (initiale Draft-Version).
+
+    Der Body traegt Liquid-Style-Placeholder (z. B. `{{persona:profile}}`,
+    `{{playbook:...}}`, `{{tools-overview}}`), die beim Agent-Rendern expandiert
+    werden. Setze die neue Template-UUID anschliessend via `update_agent` als
+    `system_prompt_template_id`. Das Scharfschalten uebernimmt ein Mensch/Admin.
+    """
+    client = await build_client()
+    return await client.create_system_prompt(data)
+
+
+@mcp.tool
+@with_tool_log("update_system_prompt")
+async def update_system_prompt(
+    template_id: str, data: SystemPromptTemplateUpdate
+) -> SystemPromptTemplateRead:
+    """Aendert ein System-Prompt-Template als neuen Draft (Draft-on-Edit bei Active).
+
+    Auf einer aktiven Version legt das einen neuen Draft an (409, falls bereits
+    ein Draft offen ist). Die aktive Version bleibt unveraendert, bis ein
+    Mensch/Admin den Draft promotet.
+    """
+    client = await build_client()
+    return await client.update_system_prompt(_parse_uuid(template_id, "system_prompt"), data)
+
+
+@mcp.tool
+@with_tool_log("restore_system_prompt")
+async def restore_system_prompt(template_id: str, version: int) -> SystemPromptTemplateRead:
+    """Stellt eine fruehere Template-Version als neuen Draft wieder her (non-destruktiv)."""
+    client = await build_client()
+    return await client.restore_system_prompt(_parse_uuid(template_id, "system_prompt"), version)
+
+
+@mcp.tool
+@with_tool_log("transition_system_prompt")
+async def transition_system_prompt(
+    template_id: str, version: int, data: VersionTransitionRequest
+) -> SystemPromptTemplateVersionRead:
+    """Schaltet eine Template-Version weiter — fuer Agenten nur draft→review.
+
+    Ein agent-gebundener Token darf einen Draft `to='review'` zur Freigabe
+    einreichen; ein Uebergang nach `active`/`inactive` wird serverseitig hart
+    abgelehnt (403, ADR-0040) — das Aktivieren bleibt eine menschliche Handlung.
+    """
+    client = await build_client()
+    return await client.transition_system_prompt_version(
+        _parse_uuid(template_id, "system_prompt"), version, data
+    )
 
 
 def main() -> None:

@@ -4,6 +4,22 @@ _Stand: 2026-06-16_
 
 ## Funktioniert
 
+- **Builder-System-Prompt-Tools (ADR-0040, 2026-06-27), Branch
+  `claude/charming-pasteur-pxz2l8`, PR #266:** Der Builder kann System-Prompt-
+  Templates über MCP verfassen/anpassen/lesen + draft→review einreichen; das
+  Aktivieren (→active) bleibt für Agent-Token hart gesperrt (Injection-Schutz).
+  Neue Capability `system_prompt_write` (secure-by-default; Builder-Seed +
+  Migration 0052). Neue MCP-Tools `list/get/create/update/restore/transition_
+  system_prompt`; Track-1-Versions-Tools decken `entity_type='system_prompt'`
+  mit ab. security-reviewer clean. Web-UI-Policy-Toggle → Track 4.
+- **AI-native MCP-Ausbau (2026-06-27), Branch `claude/charming-pasteur-pxz2l8`,
+  PR #266:** Design für 4 Tracks abgelegt (Plan
+  `.claude/plan/2026-06-27-1100_ai-native-mcp-and-rights.md`; ADR-0037 Search,
+  ADR-0038 Feedback-Flywheel, ADR-0039 feinkörnige Write-Rechte). **Track 1
+  implementiert:** neue MCP-Read-Tools `find_usages`/`list_versions`/
+  `get_version`/`diff_versions` (dünne Adapter über bestehende REST-Endpunkte,
+  Entity-Dispatch). 12 Tool-Tests + MCP-Suite (111) grün, ruff/mypy sauber.
+  Tracks 2/3/4 offen.
 - Phase 1–3 abgeschlossen: Tenancy, Status-Workflow + Dashboard, Resources +
   BlockNote, Multi-User-RBAC, MCP Read/Write-Tools, Einzel-Delete/Export, i18n.
 - Security-Findings (Phase 1 + 2) alle **Closed**, Ampel Grün.

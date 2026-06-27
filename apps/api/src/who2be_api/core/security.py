@@ -247,6 +247,7 @@ _CAPABILITY_LABELS: dict[AgentCapability, str] = {
     AgentCapability.playbook_write: "Playbooks zu erstellen, zu aendern oder zu verknuepfen",
     AgentCapability.resource_write: "Resources zu erstellen, zu aendern oder zu verknuepfen",
     AgentCapability.agent_write: "Agenten zu erstellen oder zu aendern",
+    AgentCapability.system_prompt_write: "System-Prompt-Templates zu verfassen oder zu aendern",
     AgentCapability.promote_retire: "Versionen zu aktivieren oder zu deaktivieren",
 }
 

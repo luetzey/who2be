@@ -11,7 +11,14 @@ import pytest
 
 from who2be_api.core.errors import ApiGateError
 from who2be_api.core.security import WorkspaceContext, require_capability
-from who2be_models import AgentCapability, AgentToolPolicy, ReadScope, WorkspaceRole
+from who2be_api.services.version_status import _require_transition_capability
+from who2be_models import (
+    AgentCapability,
+    AgentToolPolicy,
+    ReadScope,
+    VersionStatus,
+    WorkspaceRole,
+)
 
 
 def _ctx(tool_policy: AgentToolPolicy | None) -> WorkspaceContext:
@@ -95,3 +102,53 @@ class TestRequireCapability:
             require_capability(ctx, AgentCapability.playbook_write)
         assert exc.value.status == 403
         assert exc.value.reason == "missing_capability"
+
+
+class TestSystemPromptWriteCapability:
+    """ADR-0040: system_prompt_write + die Template-Transition-Sonderregel."""
+
+    def test_default_is_false(self) -> None:
+        assert AgentToolPolicy().system_prompt_write is False
+
+    def test_granted_capabilities_lists_it_when_set(self) -> None:
+        caps = AgentToolPolicy(system_prompt_write=True).granted_capabilities()
+        assert AgentCapability.system_prompt_write in caps
+
+    def test_is_within_blocks_escalation(self) -> None:
+        broad = AgentToolPolicy(system_prompt_write=True)
+        narrow = AgentToolPolicy()
+        assert broad.is_within(narrow) is False
+        assert narrow.is_within(broad) is True
+
+
+class TestTemplateTransitionGate:
+    """`_require_transition_capability` fuer entity_type='system_prompt_template'."""
+
+    def test_review_allowed_with_capability(self) -> None:
+        ctx = _ctx(AgentToolPolicy(system_prompt_write=True))
+        # draft→review ist erlaubt — kein Raise.
+        _require_transition_capability(ctx, "system_prompt_template", VersionStatus.review)
+
+    def test_review_blocked_without_capability(self) -> None:
+        ctx = _ctx(AgentToolPolicy())  # system_prompt_write=False
+        with pytest.raises(ApiGateError) as exc:
+            _require_transition_capability(ctx, "system_prompt_template", VersionStatus.review)
+        assert exc.value.reason == "missing_capability"
+
+    def test_activation_hard_blocked_even_with_capability(self) -> None:
+        # Auch MIT der Capability bleibt →active fuer Agent-Token gesperrt.
+        ctx = _ctx(AgentToolPolicy(system_prompt_write=True))
+        with pytest.raises(ApiGateError) as exc:
+            _require_transition_capability(ctx, "system_prompt_template", VersionStatus.active)
+        assert exc.value.status == 403
+        assert exc.value.actionable_by == "none"
+
+    def test_retire_hard_blocked(self) -> None:
+        ctx = _ctx(AgentToolPolicy(system_prompt_write=True))
+        with pytest.raises(ApiGateError) as exc:
+            _require_transition_capability(ctx, "system_prompt_template", VersionStatus.inactive)
+        assert exc.value.actionable_by == "none"
+
+    def test_unbound_token_is_noop(self) -> None:
+        # Mensch/ungebundener Token: gar kein Pro-Agent-Gate, auch nicht fuer Templates.
+        _require_transition_capability(_ctx(None), "system_prompt_template", VersionStatus.active)
