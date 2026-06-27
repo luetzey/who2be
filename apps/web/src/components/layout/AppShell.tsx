@@ -4,6 +4,7 @@ import {
   FileText,
   LayoutDashboard,
   LogOut,
+  MessageSquare,
   ScrollText,
   Settings,
   Users,
@@ -42,6 +43,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/personas', labelKey: 'nav.personas', icon: Users },
   { to: '/playbooks', labelKey: 'nav.playbooks', icon: BookOpen },
   { to: '/resources', labelKey: 'nav.resources', icon: FileText },
+  { to: '/feedback', labelKey: 'nav.feedback', icon: MessageSquare },
   { to: '/settings/account', labelKey: 'nav.settings', icon: Settings },
 ]
 

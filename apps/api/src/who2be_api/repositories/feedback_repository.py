@@ -12,6 +12,8 @@ import asyncpg
 
 from who2be_models import (
     AgentFeedbackRead,
+    FeedbackEvents,
+    FeedbackOverviewItem,
     FeedbackSummary,
     UsageEventRead,
 )
@@ -50,6 +52,12 @@ class FeedbackRepository(Protocol):
     async def summarize(
         self, workspace_id: UUID, entity_type: str, entity_id: UUID
     ) -> FeedbackSummary: ...
+
+    async def list_events(
+        self, workspace_id: UUID, entity_type: str, entity_id: UUID, limit: int
+    ) -> FeedbackEvents: ...
+
+    async def overview(self, workspace_id: UUID) -> list[FeedbackOverviewItem]: ...
 
 
 # Polymorphes entity_type → physische Tabelle fuer den Workspace-Belongs-Check.
@@ -174,3 +182,80 @@ class PgFeedbackRepository:
             by_signal={row["signal"]: row["n"] for row in signal_rows},
             recent_notes=[row["note"] for row in note_rows],
         )
+
+    async def list_events(
+        self, workspace_id: UUID, entity_type: str, entity_id: UUID, limit: int
+    ) -> FeedbackEvents:
+        feedback_rows = await self._pool.fetch(
+            "SELECT id, entity_type, entity_id, version, signal, note, agent_id, created_at "
+            "FROM agent_feedback "
+            "WHERE workspace_id = $1 AND entity_type = $2 AND entity_id = $3 "
+            "ORDER BY created_at DESC LIMIT $4",
+            workspace_id,
+            entity_type,
+            entity_id,
+            limit,
+        )
+        usage_rows = await self._pool.fetch(
+            "SELECT id, entity_type, entity_id, version, outcome, agent_id, created_at "
+            "FROM usage_event "
+            "WHERE workspace_id = $1 AND entity_type = $2 AND entity_id = $3 "
+            "ORDER BY created_at DESC LIMIT $4",
+            workspace_id,
+            entity_type,
+            entity_id,
+            limit,
+        )
+        return FeedbackEvents(
+            entity_type=entity_type,  # type: ignore[arg-type]
+            entity_id=entity_id,
+            feedback=[AgentFeedbackRead.model_validate(dict(r)) for r in feedback_rows],
+            usage=[UsageEventRead.model_validate(dict(r)) for r in usage_rows],
+        )
+
+    async def overview(self, workspace_id: UUID) -> list[FeedbackOverviewItem]:
+        # Workspace-weite Aggregation pro Element ueber beide Telemetrie-Tabellen.
+        # FULL OUTER JOIN, damit auch Elemente mit nur Usage ODER nur Feedback
+        # erscheinen. Der Namens-JOIN auf die drei Ziel-Tabellen filtert
+        # implizit geloeschte Elemente (name NULL) heraus.
+        rows = await self._pool.fetch(
+            "WITH usage_agg AS ("
+            "  SELECT entity_type, entity_id, COUNT(*)::int AS usage_count, "
+            "         MAX(created_at) AS last_usage "
+            "  FROM usage_event WHERE workspace_id = $1 "
+            "  GROUP BY entity_type, entity_id"
+            "), fb_agg AS ("
+            "  SELECT entity_type, entity_id, COUNT(*)::int AS feedback_count, "
+            "    COUNT(*) FILTER (WHERE signal IN ('outdated','incorrect','unclear'))::int "
+            "      AS negative_count, "
+            "    COUNT(*) FILTER (WHERE signal = 'helpful')::int AS helpful_count, "
+            "    MAX(created_at) AS last_feedback "
+            "  FROM agent_feedback WHERE workspace_id = $1 "
+            "  GROUP BY entity_type, entity_id"
+            "), combined AS ("
+            "  SELECT COALESCE(u.entity_type, f.entity_type) AS entity_type, "
+            "         COALESCE(u.entity_id, f.entity_id) AS entity_id, "
+            "         COALESCE(u.usage_count, 0) AS usage_count, "
+            "         COALESCE(f.feedback_count, 0) AS feedback_count, "
+            "         COALESCE(f.negative_count, 0) AS negative_count, "
+            "         COALESCE(f.helpful_count, 0) AS helpful_count, "
+            "         GREATEST(u.last_usage, f.last_feedback) AS last_activity_at "
+            "  FROM usage_agg u "
+            "  FULL OUTER JOIN fb_agg f "
+            "    ON u.entity_type = f.entity_type AND u.entity_id = f.entity_id"
+            ") "
+            "SELECT c.entity_type, c.entity_id, c.usage_count, c.feedback_count, "
+            "       c.negative_count, c.helpful_count, c.last_activity_at, "
+            "       COALESCE(p.name, pb.name, r.name) AS name "
+            "FROM combined c "
+            "LEFT JOIN persona p   ON c.entity_type = 'persona'  "
+            "  AND p.id = c.entity_id  AND p.workspace_id = $1 "
+            "LEFT JOIN playbook pb ON c.entity_type = 'playbook' "
+            "  AND pb.id = c.entity_id AND pb.workspace_id = $1 "
+            "LEFT JOIN resource r  ON c.entity_type = 'resource' "
+            "  AND r.id = c.entity_id  AND r.workspace_id = $1 "
+            "WHERE COALESCE(p.name, pb.name, r.name) IS NOT NULL "
+            "ORDER BY c.last_activity_at DESC NULLS LAST",
+            workspace_id,
+        )
+        return [FeedbackOverviewItem.model_validate(dict(r)) for r in rows]

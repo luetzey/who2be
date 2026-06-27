@@ -730,3 +730,65 @@ export interface CheckoutInput {
 export interface CheckoutResult {
   checkout_url: string
 }
+
+// --- Usage-/Feedback-Flywheel (ADR-0038) ---------------------------------
+// Telemetrie-Rueckkanal: Agenten melden Nutzung + Qualitaet, Kuratoren lesen das
+// Aggregat. `entity_type` ist auf die drei Kern-Inhaltselemente beschraenkt.
+export type FeedbackTarget = 'persona' | 'playbook' | 'resource'
+export type UsageOutcome = 'applied' | 'skipped' | 'error'
+export type FeedbackSignal = 'helpful' | 'outdated' | 'incorrect' | 'unclear'
+
+// Aggregat fuer das Detail-Panel (`GET …/feedback/{type}/{id}`).
+export interface FeedbackSummary {
+  entity_type: FeedbackTarget
+  entity_id: string
+  usage_count: number
+  by_outcome: Partial<Record<UsageOutcome, number>>
+  by_signal: Partial<Record<FeedbackSignal, number>>
+  recent_notes: string[]
+}
+
+// Einzel-Ereignisse (Drill-down, `GET …/feedback/{type}/{id}/events`).
+export interface AgentFeedback {
+  id: string
+  entity_type: FeedbackTarget
+  entity_id: string
+  version: number | null
+  signal: FeedbackSignal
+  note: string | null
+  agent_id: string | null
+  created_at: string
+}
+
+export interface UsageEvent {
+  id: string
+  entity_type: FeedbackTarget
+  entity_id: string
+  version: number | null
+  outcome: UsageOutcome | null
+  agent_id: string | null
+  created_at: string
+}
+
+export interface FeedbackEvents {
+  entity_type: FeedbackTarget
+  entity_id: string
+  feedback: AgentFeedback[]
+  usage: UsageEvent[]
+}
+
+// Workspace-weite Kurations-Uebersicht (`GET …/feedback-overview`).
+export interface FeedbackOverviewItem {
+  entity_type: FeedbackTarget
+  entity_id: string
+  name: string
+  usage_count: number
+  feedback_count: number
+  negative_count: number
+  helpful_count: number
+  last_activity_at: string | null
+}
+
+export interface FeedbackOverview {
+  items: FeedbackOverviewItem[]
+}

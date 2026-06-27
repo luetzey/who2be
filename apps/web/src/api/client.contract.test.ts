@@ -22,7 +22,10 @@ import { acceptInvitation, createApi, fetchMe } from './client'
 // einem Sentinel entspricht, wird beim Normalisieren zu `{}`.
 const WS = '__WS__'
 const ID = '__ID__'
-const SENTINELS = new Set([WS, ID, '7', 'tok-plain', '__USER__', '__ORG__'])
+// `playbook` ist der `entity_type`-Pfadparameter der Feedback-Routen (OpenAPI
+// `{entity_type}`) — als Sentinel normalisiert, damit der Literal nicht den
+// Golden-Vergleich bricht.
+const SENTINELS = new Set([WS, ID, '7', 'tok-plain', '__USER__', '__ORG__', 'playbook'])
 
 // Cloud-only Endpoints (ADR-0029): per `_register_billing_if_present` nur in der
 // Cloud-Edition gemountet und im On-Prem-Web-Bundle tree-geshaked. Das On-Prem-
@@ -99,6 +102,9 @@ test('jeder vom Web-Client genutzte Pfad existiert im OpenAPI-Golden', async () 
     api.createToken({} as never),
     api.revokeToken(ID),
     api.getDashboard(),
+    api.getFeedback('playbook', ID),
+    api.getFeedbackEvents('playbook', ID),
+    api.getFeedbackOverview(),
     api.transitionPersonaVersion(ID, 7, 'active'),
     api.transitionPlaybookVersion(ID, 7, 'active'),
     api.listResources(),

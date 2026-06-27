@@ -10,6 +10,7 @@ import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { BranchStatus, type BranchAction } from '@/components/data/BranchStatus'
 import { DataList } from '@/components/data/DataList'
 import { DataView } from '@/components/data/DataView'
+import { FeedbackPanel } from '@/components/feedback/FeedbackPanel'
 import { VersionHistory } from '@/components/version'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -265,6 +266,17 @@ export function PlaybookDetailPage() {
                   api.provenancePlaybookVersion(playbook.id, version)
                 }
               />
+
+              {role !== 'viewer' ? (
+                <FeedbackPanel
+                  type="playbook"
+                  id={playbook.id}
+                  onRevise={() => {
+                    window.scrollTo({ top: 0, behavior: 'smooth' })
+                    notify.info(t('feedback:panel.reviseToast'))
+                  }}
+                />
+              ) : null}
 
               <Card>
                 <CardHeader>

@@ -125,6 +125,27 @@ def test_flywheel_records_usage_feedback_and_summarizes(
             assert body["by_signal"] == {"outdated": 1}
             assert body["recent_notes"] == ["bitte aktualisieren"]
 
+            # Drill-down: Einzel-Ereignisse (Feedback + Usage) chronologisch.
+            events = client.get(f"{fbase}/feedback/playbook/{pid}/events", headers=auth)
+            assert events.status_code == 200, events.text
+            ev = events.json()
+            assert len(ev["feedback"]) == 1
+            assert ev["feedback"][0]["signal"] == "outdated"
+            assert ev["feedback"][0]["note"] == "bitte aktualisieren"
+            assert len(ev["usage"]) == 2
+
+            # Workspace-Uebersicht: ein Element mit 2 Usages + 1 negativem Signal.
+            overview = client.get(f"{fbase}/feedback-overview", headers=auth)
+            assert overview.status_code == 200, overview.text
+            items = overview.json()["items"]
+            row = next(i for i in items if i["entity_id"] == pid)
+            assert row["name"] == "PB"
+            assert row["usage_count"] == 2
+            assert row["feedback_count"] == 1
+            assert row["negative_count"] == 1
+            assert row["helpful_count"] == 0
+            assert row["last_activity_at"] is not None
+
             # Unbekannte Entity -> 404.
             unknown = "00000000-0000-0000-0000-000000000000"
             r = client.post(
@@ -133,5 +154,9 @@ def test_flywheel_records_usage_feedback_and_summarizes(
                 headers=auth,
             )
             assert r.status_code == 404
+            assert (
+                client.get(f"{fbase}/feedback/playbook/{unknown}/events", headers=auth).status_code
+                == 404
+            )
     finally:
         cleanup_workspaces([owner])

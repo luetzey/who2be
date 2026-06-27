@@ -1,0 +1,108 @@
+import { useCallback, useEffect, useState } from 'react'
+
+import type {
+  FeedbackEvents,
+  FeedbackOverview,
+  FeedbackSummary,
+  FeedbackTarget,
+} from '@/api/types'
+import { useApi } from '@/api/useApi'
+
+function describeError(cause: unknown): string {
+  return cause instanceof Error ? cause.message : 'Unbekannter Fehler.'
+}
+
+export interface UseFeedbackResult {
+  summary: FeedbackSummary | null
+  loading: boolean
+  error: string | null
+  reload: () => void
+  // Drill-down: Einzel-Ereignisse werden erst auf Anforderung geladen (lazy).
+  events: FeedbackEvents | null
+  eventsLoading: boolean
+  eventsError: string | null
+  loadEvents: () => void
+}
+
+/**
+ * Laedt das Feedback-Aggregat (`summary`) eines Elements und — auf Anforderung —
+ * die Einzel-Ereignisse (`events`). Beide Endpunkte sind editor-gated; die Page
+ * rendert das Panel nur fuer editor+, daher faengt der Hook 403 nur defensiv ab.
+ */
+export function useFeedback(type: FeedbackTarget, id: string | undefined): UseFeedbackResult {
+  const api = useApi()
+  const [summary, setSummary] = useState<FeedbackSummary | null>(null)
+  const [loading, setLoading] = useState(id !== undefined)
+  const [error, setError] = useState<string | null>(null)
+  const [events, setEvents] = useState<FeedbackEvents | null>(null)
+  const [eventsLoading, setEventsLoading] = useState(false)
+  const [eventsError, setEventsError] = useState<string | null>(null)
+
+  const load = useCallback(() => {
+    if (id === undefined) {
+      return
+    }
+    setLoading(true)
+    setError(null)
+    api
+      .getFeedback(type, id)
+      .then(setSummary)
+      .catch((cause: unknown) => setError(describeError(cause)))
+      .finally(() => setLoading(false))
+  }, [api, type, id])
+
+  useEffect(load, [load])
+
+  const loadEvents = useCallback(() => {
+    if (id === undefined) {
+      return
+    }
+    setEventsLoading(true)
+    setEventsError(null)
+    api
+      .getFeedbackEvents(type, id)
+      .then(setEvents)
+      .catch((cause: unknown) => setEventsError(describeError(cause)))
+      .finally(() => setEventsLoading(false))
+  }, [api, type, id])
+
+  return {
+    summary,
+    loading,
+    error,
+    reload: load,
+    events,
+    eventsLoading,
+    eventsError,
+    loadEvents,
+  }
+}
+
+export interface UseFeedbackOverviewResult {
+  overview: FeedbackOverview | null
+  loading: boolean
+  error: string | null
+  reload: () => void
+}
+
+/** Laedt die workspace-weite Kurations-Uebersicht (Dashboard-Kacheln + Seite). */
+export function useFeedbackOverview(): UseFeedbackOverviewResult {
+  const api = useApi()
+  const [overview, setOverview] = useState<FeedbackOverview | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = useCallback(() => {
+    setLoading(true)
+    setError(null)
+    api
+      .getFeedbackOverview()
+      .then(setOverview)
+      .catch((cause: unknown) => setError(describeError(cause)))
+      .finally(() => setLoading(false))
+  }, [api])
+
+  useEffect(load, [load])
+
+  return { overview, loading, error, reload: load }
+}

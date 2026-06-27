@@ -1,12 +1,14 @@
 import { BookOpen, ClipboardCheck, LayoutDashboard, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
 import { DataList } from '@/components/data/DataList'
 import { DataView } from '@/components/data/DataView'
 import { EmptyState } from '@/components/data/EmptyState'
+import { FeedbackTiles } from '@/components/feedback/FeedbackTiles'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 import { ActivityRow } from '../components/ActivityRow'
@@ -17,6 +19,7 @@ import { useDashboard } from '../hooks/useDashboard'
 
 export function DashboardPage() {
   const { t } = useTranslation('dashboard')
+  const role = useCurrentWorkspaceRole()
   const { data, loading, error, notFound, preparing, page, setPage } = useDashboard()
 
   const pagination = data?.activity_pagination
@@ -67,6 +70,8 @@ export function DashboardPage() {
                     description={t('kpis.pendingReviewsDescription')}
                   />
                 </section>
+
+                {role !== 'viewer' ? <FeedbackTiles /> : null}
 
                 <Card>
                   <CardHeader>

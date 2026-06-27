@@ -8,6 +8,7 @@ import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { BranchStatus } from '@/components/data/BranchStatus'
 import { DataList } from '@/components/data/DataList'
 import { DataView } from '@/components/data/DataView'
+import { FeedbackPanel } from '@/components/feedback/FeedbackPanel'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
@@ -233,6 +234,17 @@ export function ResourceDetailPage() {
                   api.provenanceResourceVersion(resource.id, version)
                 }
               />
+
+              {role !== 'viewer' ? (
+                <FeedbackPanel
+                  type="resource"
+                  id={resource.id}
+                  onRevise={() => {
+                    window.scrollTo({ top: 0, behavior: 'smooth' })
+                    notify.info(t('feedback:panel.reviseToast'))
+                  }}
+                />
+              ) : null}
 
               {canEdit ? (
                 <Card className="border-destructive/40">

@@ -64,3 +64,26 @@ sofort. Free-Text-`note` wird im UI escaped angezeigt (kein HTML-Render).
   „als veraltet markiert", „fehlerhaft gemeldet" → Kurations-Backlog.
 - MCP: drei Tools; `tools-overview` listet sie gemaess Policy.
 - Bewusst **kein** MCP-Delete/Edit auf Events (Audit-Integritaet, ADR-0031).
+
+## Web-Surfacing (Folge, 2026-06-27)
+
+Das Kurations-Aggregat ist jetzt in der Web-UI sichtbar — bewusst rein lesend,
+kein neuer Schreibpfad, keine Migration (beide Read-Endpunkte aggregieren zur
+Laufzeit ueber die append-only Tabellen):
+
+- **Zwei additive editor-gated Read-Endpunkte** neben `GET …/feedback/{type}/{id}`:
+  `GET …/feedback/{type}/{id}/events` (Drill-down auf die juengsten Einzel-
+  Ereignisse, je Liste serverseitig auf 50 gekappt) und `GET …/feedback-overview`
+  (workspace-weite Aggregation pro Element via FULL-OUTER-JOIN der beiden
+  Tabellen; geloeschte Elemente fallen ueber den Namens-JOIN raus).
+- **`FeedbackPanel`** auf den Detailseiten (Persona/Playbook/Resource, editor+):
+  Nutzungszahl + Ergebnis-/Signal-Verteilung (Token-Balken, kein Chart-Dep),
+  letzte Notizen (escaped), Lazy-Drill-down und — bei negativen Signalen — eine
+  „Ueberarbeiten"-Aktion (scrollt zum Editor; der Auto-Save legt beim Bearbeiten
+  einen Draft an).
+- **`FeedbackTiles`** auf dem Dashboard (meistgenutzt / am haeufigsten bemaengelt)
+  + eigene **Feedback-Uebersichtsseite** (`/w/{ws}/feedback`, Nav-Eintrag).
+
+Der `note`-Freitext wird ueber React-Textnodes escaped; kein HTML-Render.
+Triage (erledigt/ignoriert) bleibt bewusst offen — append-only erlaubt nur ein
+*zusaetzliches* Resolution-Event, kein Mutieren der Feedback-Zeile.
