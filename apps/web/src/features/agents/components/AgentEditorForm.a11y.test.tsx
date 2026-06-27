@@ -41,6 +41,9 @@ function Harness() {
       system_prompt_template_id: '',
       status: agent.status,
       ...agent.tool_policy,
+      // write_rate_limit ist im Formular ein String — den number|null-Spread
+      // aus der Policy hier ueberschreiben (sonst Typkollision).
+      write_rate_limit: '',
     },
   })
   return (

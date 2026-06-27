@@ -247,6 +247,10 @@
           "persona": "Persona",
           "playbook": "Playbook",
           "resource": "Resource"
+        },
+        "rateLimit": {
+          "label": "Schreib-Rate-Limit (Mutationen/Minute)",
+          "placeholder": "leer = unbegrenzt"
         }
       }
     },

@@ -339,6 +339,24 @@ export function AgentEditorForm({
                       />
                     </div>
                   ))}
+                  <FormField
+                    control={form.control}
+                    name="write_rate_limit"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('form.policy.rateLimit.label')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min={0}
+                            placeholder={t('form.policy.rateLimit.placeholder')}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </fieldset>
               </FormSection>
 

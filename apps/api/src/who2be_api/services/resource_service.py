@@ -16,6 +16,7 @@ from who2be_api.core.security import (
     WorkspaceContext,
     require_capability,
     require_role,
+    require_write_rate,
     require_write_tags,
 )
 from who2be_api.repositories.playbook_resource_link_repository import (
@@ -129,6 +130,7 @@ class ResourceService:
     async def create(self, ctx: WorkspaceContext, data: ResourceCreate) -> ResourceRead:
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.resource_write)
+        require_write_rate(ctx)
         require_write_tags(ctx, "resource", data.content.tags)
         return await self._repo.insert(
             ctx.workspace_id, ctx.user_id, data.name, data.content, data.locales
@@ -246,6 +248,7 @@ class ResourceService:
         """Erzeugt eine neue Version der Resource (Draft-on-Edit bei Active)."""
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.resource_write)
+        require_write_rate(ctx)
         await self._check_update_tags(ctx, resource_id, data.content.tags, locale)
         outcome = await self._repo.update(
             ctx.workspace_id, ctx.user_id, resource_id, data.name, data.content, locale
@@ -266,6 +269,7 @@ class ResourceService:
         """Auto-Save-Pfad (PATCH `.../draft`) — upsertet die Draft-Version."""
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.resource_write)
+        require_write_rate(ctx)
         await self._check_update_tags(ctx, resource_id, data.content.tags, locale)
         outcome = await self._repo.upsert_draft(
             ctx.workspace_id, ctx.user_id, resource_id, data.name, data.content, locale
@@ -311,6 +315,7 @@ class ResourceService:
         """Stellt den Snapshot `source_version` als neue Draft wieder her (§3.1)."""
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.resource_write)
+        require_write_rate(ctx)
         snapshot = await self._repo.fetch_version(
             ctx.workspace_id, resource_id, source_version, locale
         )
@@ -379,6 +384,7 @@ class ResourceService:
         """
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.resource_write)
+        require_write_rate(ctx)
         resource = await self._repo.fetch(ctx.workspace_id, resource_id)
         if resource is None:
             raise _not_found()

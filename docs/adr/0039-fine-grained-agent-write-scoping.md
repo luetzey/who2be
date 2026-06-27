@@ -1,6 +1,6 @@
 # ADR-0039 — Feinkoernige Per-Agent-Write-Rechte (Praedikat-Scopes, getrennte Promote/Retire, TTL)
 
-- Status: Accepted (Backend + UI vollstaendig; optionales Write-Rate-Limit offen)
+- Status: Accepted (Backend + UI vollstaendig inkl. optionalem Write-Rate-Limit)
 - Datum: 2026-06-27
 
 ## Umsetzungsstand (2026-06-27)
@@ -32,7 +32,17 @@
   (`AgentTokensSection`, `TokenInput.expires_at`).
 
 Damit sind alle drei Achsen (Tag-Scoping, getrennte Promote/Retire, TTL) mit
-Backend **und** UI umgesetzt. **Offen (Folge, optional):** Write-Rate-Limit.
+Backend **und** UI umgesetzt.
+
+**Umgesetzt (Track 4-C, optionales Write-Rate-Limit):**
+- **Per-Agent-Write-Rate-Limit** — `AgentToolPolicy.write_rate_limit: int | None`
+  (Writes/Minute; `None` = unbegrenzt, additiv/JSONB-abwaertskompatibel),
+  `is_within`-Anti-Escalation (niedrigeres oder gleiches Limit erforderlich).
+  Gate `require_write_rate` (Sliding-Window `token_rate_limiter`, Key
+  `write:{agent_id}`, 429 bei Ueberschreitung) nach `require_capability` in allen
+  Write-Pfaden von persona/playbook/resource. `whoami` gibt `write_rate_limit`
+  aus; `AgentEditorForm` bekommt ein optionales Zahlen-Feld. DB-frei + Integration
+  getestet. Damit ist ADR-0039 vollstaendig.
 - Kontext: User-Wunsch nach detaillierterer Einstellbarkeit; die Per-Agent-Policy
   ist heute grobkoerniger als das Vertrauensmodell erlaubt.
 - Bezug: ADR-0023 (RBAC / Token-Snapshot), ADR-0009 (JSONB-Schema-Evolution),

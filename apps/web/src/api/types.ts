@@ -576,6 +576,8 @@ export interface AgentToolPolicy {
   // ADR-0039: per-Domain-Verfeinerung von promote_retire (Narrowing). Fehlt ein
   // Domain-Eintrag, gilt das ungeteilte promote_retire.
   transition_grants?: Record<string, { promote: boolean; retire: boolean }>
+  // ADR-0039: max. Schreib-Mutationen/Minute (null/fehlend = unbegrenzt).
+  write_rate_limit?: number | null
 }
 
 // Default-Policy fuer neue Agenten: nur Zugewiesenes lesen (least privilege/

@@ -44,6 +44,8 @@ const editorSchema = z.object({
   tg_playbook_retire: z.boolean(),
   tg_resource_promote: z.boolean(),
   tg_resource_retire: z.boolean(),
+  // ADR-0039 Write-Rate-Limit: Mutationen/Minute als String (leer = unbegrenzt).
+  write_rate_limit: z.string(),
 })
 
 export type AgentEditorValues = z.infer<typeof editorSchema>
@@ -108,6 +110,7 @@ function valuesToPolicy(values: AgentEditorValues, base: AgentToolPolicy): Agent
     promote_retire: values.promote_retire,
     write_tags: buildWriteTags(values),
     transition_grants: buildTransitionGrants(values),
+    write_rate_limit: values.write_rate_limit.trim() === '' ? null : Number(values.write_rate_limit),
   }
 }
 
@@ -150,6 +153,7 @@ export function useAgentForm(
       ...DEFAULT_TOOL_POLICY,
       ...tagFieldsFromPolicy(DEFAULT_TOOL_POLICY),
       ...transitionFieldsFromPolicy(DEFAULT_TOOL_POLICY),
+      write_rate_limit: '',
     },
   })
 
@@ -165,6 +169,10 @@ export function useAgentForm(
         ...agent.tool_policy,
         ...tagFieldsFromPolicy(agent.tool_policy),
         ...transitionFieldsFromPolicy(agent.tool_policy),
+        write_rate_limit:
+          agent.tool_policy.write_rate_limit != null
+            ? String(agent.tool_policy.write_rate_limit)
+            : '',
       })
     }
   }, [agent, form])

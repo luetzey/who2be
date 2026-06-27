@@ -74,5 +74,6 @@ async def whoami(ctx: Ctx, pool: Pool) -> WhoAmIRead:
         read_scopes=None if policy is None else policy.read_scopes(),
         transition_grants=None if policy is None else policy.transition_grants,
         write_tags=None if policy is None else policy.write_tags,
+        write_rate_limit=None if policy is None else policy.write_rate_limit,
         features=sorted(entitlement.features),
     )

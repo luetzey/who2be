@@ -125,6 +125,10 @@ class AgentToolPolicy(BaseModel):
     # Tags die erlaubte Menge schneiden ("darf nur `support`-Playbooks editieren").
     # Fehlender/leerer Eintrag = keine Tag-Einschraenkung (Backward-Compat).
     write_tags: dict[str, list[str]] = {}
+    # Optionales Write-Rate-Limit (ADR-0039): max. Schreib-Mutationen pro Minute
+    # fuer diesen Agenten. None/<=0 = unbegrenzt (Default). Serverseitig ueber
+    # einen Sliding-Window-Limiter (keyed auf agent_id) durchgesetzt.
+    write_rate_limit: int | None = None
 
     def allows(self, capability: AgentCapability) -> bool:
         """True, wenn die Policy die gegebene Schreib-Capability gewaehrt."""
@@ -227,6 +231,12 @@ class AgentToolPolicy(BaseModel):
             self_tags = self.write_tags_for(domain)
             if self_tags is None or not set(self_tags) <= set(other_tags):
                 return False
+        # Write-Rate-Limit: None = unbegrenzt (am breitesten). Hat `other` ein
+        # Limit, darf `self` nicht unbegrenzt oder hoeher sein.
+        if other.write_rate_limit is not None and (
+            self.write_rate_limit is None or self.write_rate_limit > other.write_rate_limit
+        ):
+            return False
         return True
 
 

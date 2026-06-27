@@ -298,3 +298,36 @@ class TestRequireWriteTagsGate:
             require_write_tags(ctx, "playbook", ["legal"])
         assert exc.value.status == 403
         assert exc.value.actionable_by == "human"
+
+
+class TestWriteRateLimit:
+    """ADR-0039: per-Agent Write-Rate-Limit (write_rate_limit) + Gate."""
+
+    def test_is_within_unlimited_not_within_limited(self) -> None:
+        limited = AgentToolPolicy(write_rate_limit=10)
+        unlimited = AgentToolPolicy()
+        assert AgentToolPolicy(write_rate_limit=5).is_within(limited) is True
+        assert AgentToolPolicy(write_rate_limit=20).is_within(limited) is False
+        # Unbegrenzt ist breiter als ein limitierter Verwalter → nicht innerhalb.
+        assert unlimited.is_within(limited) is False
+        assert limited.is_within(unlimited) is True
+
+    def test_no_limit_is_noop(self) -> None:
+        from who2be_api.core.security import require_write_rate
+
+        require_write_rate(_ctx(None))
+        require_write_rate(_ctx(AgentToolPolicy()))  # write_rate_limit None
+
+    def test_gate_blocks_after_threshold(self) -> None:
+        from fastapi import HTTPException
+
+        from who2be_api.core.rate_limit import token_rate_limiter
+        from who2be_api.core.security import require_write_rate
+
+        token_rate_limiter.reset()
+        ctx = _ctx(AgentToolPolicy(write_rate_limit=2))
+        require_write_rate(ctx)
+        require_write_rate(ctx)
+        with pytest.raises(HTTPException) as exc:
+            require_write_rate(ctx)
+        assert exc.value.status_code == 429

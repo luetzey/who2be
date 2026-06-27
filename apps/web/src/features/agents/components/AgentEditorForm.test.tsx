@@ -52,6 +52,10 @@ function Harness({ agent }: { agent: Agent }) {
       tg_playbook_retire: agent.tool_policy.transition_grants?.playbook?.retire ?? true,
       tg_resource_promote: agent.tool_policy.transition_grants?.resource?.promote ?? true,
       tg_resource_retire: agent.tool_policy.transition_grants?.resource?.retire ?? true,
+      write_rate_limit:
+        agent.tool_policy.write_rate_limit != null
+          ? String(agent.tool_policy.write_rate_limit)
+          : '',
     },
   })
   return (

@@ -22,6 +22,7 @@ from who2be_api.core.security import (
     WorkspaceContext,
     require_capability,
     require_role,
+    require_write_rate,
     require_write_tags,
 )
 from who2be_api.repositories.playbook_repository import PlaybookRepository
@@ -150,6 +151,7 @@ class PlaybookService:
     async def create(self, ctx: WorkspaceContext, data: PlaybookCreate) -> PlaybookRead:
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.playbook_write)
+        require_write_rate(ctx)
         require_write_tags(ctx, "playbook", data.content.tags)
         playbook = await self._repo.insert(
             ctx.workspace_id, ctx.user_id, data.name, data.content, data.locales
@@ -267,6 +269,7 @@ class PlaybookService:
         """Erzeugt eine neue Version des Playbooks (Draft-on-Edit bei Active)."""
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.playbook_write)
+        require_write_rate(ctx)
         await self._check_update_tags(ctx, playbook_id, data.content.tags, locale)
         outcome = await self._repo.update(
             ctx.workspace_id, ctx.user_id, playbook_id, data.name, data.content, locale
@@ -288,6 +291,7 @@ class PlaybookService:
         """Auto-Save-Pfad (PATCH `.../draft`) — upsertet die Draft-Version."""
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.playbook_write)
+        require_write_rate(ctx)
         await self._check_update_tags(ctx, playbook_id, data.content.tags, locale)
         outcome = await self._repo.upsert_draft(
             ctx.workspace_id, ctx.user_id, playbook_id, data.name, data.content, locale
@@ -344,6 +348,7 @@ class PlaybookService:
         """
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.playbook_write)
+        require_write_rate(ctx)
         snapshot = await self._repo.fetch_version(
             ctx.workspace_id, playbook_id, source_version, locale
         )
@@ -453,6 +458,7 @@ class PlaybookService:
         """
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.playbook_write)
+        require_write_rate(ctx)
         playbook = await self._repo.fetch(ctx.workspace_id, playbook_id)
         if playbook is None:
             raise _not_found()

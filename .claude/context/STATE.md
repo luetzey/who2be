@@ -4,6 +4,15 @@ _Stand: 2026-06-16_
 
 ## Funktioniert
 
+- **Track 4-C Write-Rate-Limit (ADR-0039 abgeschlossen, 2026-06-27), Branch
+  `claude/track4-finer-rights`:** `AgentToolPolicy.write_rate_limit: int|None`
+  (Writes/Min; None=unbegrenzt, JSONB-abwärtskompatibel) + `is_within`-Anti-
+  Escalation; Gate `require_write_rate` (Sliding-Window `token_rate_limiter`,
+  Key `write:{agent_id}`, 429) nach `require_capability` in allen Write-Pfaden
+  von persona/playbook/resource; `whoami` gibt das Limit aus; AgentEditorForm hat
+  ein optionales Zahlenfeld. Damit ist ADR-0039 (alle 3 Achsen + Rate-Limit)
+  vollständig. **DoD grün:** Python 891 passed, mypy 296, ruff clean; Web 393
+  Tests, 0 Lint-Errors, tsc/build clean.
 - **Track 4-B Tag-Scoping (ADR-0039, 2026-06-27), Branch
   `claude/track4-finer-rights`:** `AgentToolPolicy.write_tags` (Dict Domain→Tags;
   leer=unrestricted) + `require_write_tags`-Gate in persona/playbook/resource

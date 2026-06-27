@@ -53,5 +53,7 @@ class WhoAmIRead(BaseModel):
     # leere Dicts = keine Verfeinerung (ungeteiltes promote_retire / alle Tags).
     transition_grants: dict[str, TransitionGrant] | None = None
     write_tags: dict[str, list[str]] | None = None
+    # Schreib-Rate-Limit (Mutationen/Minute); None = unbegrenzt oder unrestricted.
+    write_rate_limit: int | None = None
     # Org-weite Entitlement-Features (z. B. "core", "agents", "composite_playbooks").
     features: list[str]

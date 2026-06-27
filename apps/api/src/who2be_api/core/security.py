@@ -305,6 +305,29 @@ def require_write_tags(ctx: WorkspaceContext, domain: str, target_tags: list[str
         )
 
 
+def require_write_rate(ctx: WorkspaceContext) -> None:
+    """Drosselt Schreib-Mutationen eines Agenten auf `write_rate_limit`/min (ADR-0039).
+
+    No-Op fuer ungebundene Tokens (Mensch/Web-UI) und ohne gesetztes Limit.
+    Sliding-Window keyed auf `agent_id`; ueberschritten ⇒ 429. Der globale
+    slowapi-`write_limit` bleibt orthogonal die grobe Obergrenze.
+    """
+    from fastapi import HTTPException
+
+    from who2be_api.core.rate_limit import token_rate_limiter
+
+    policy = ctx.tool_policy
+    if policy is None or policy.write_rate_limit is None or policy.write_rate_limit <= 0:
+        return
+    if ctx.agent_id is None:
+        return
+    if not token_rate_limiter.allow(f"write:{ctx.agent_id}", policy.write_rate_limit):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Schreib-Rate-Limit dieses Agenten erreicht — bitte spaeter erneut versuchen.",
+        )
+
+
 def verify_supabase_jwt(token: str) -> tuple[UUID, str | None, str | None]:
     """Verifiziert ein Supabase-JWT lokal (HS256) und liest `sub` + optional `email`/`aal`.
 
