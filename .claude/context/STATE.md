@@ -4,6 +4,17 @@ _Stand: 2026-06-16_
 
 ## Funktioniert
 
+- **Builder-Feedback-Refresh-Migration (ADR-0038, 2026-06-27), Branch
+  `feat/builder-feedback-refresh`:** PR #272 hat die Feedback-Bullets nur in die
+  Seed-Quelldateien geschrieben; bestehende Workspaces (Builder vor #272 geseedet,
+  Seed ist skip-if-exists) bekamen sie nicht. Migration 0055 zieht sie nach:
+  hängt den Bullet an den aktiven Persona-/agent-builder-Template-Inhalt an
+  (append-only, Customizations bleiben) und schreibt eine NEUE aktive Version
+  (alte → inactive, current_version gehoben), idempotent per Block-id. DO-Block-
+  Loops (Persona: blocks-Array; Template: stringified body). **DoD grün:** Python
+  895 pytest (neuer Migrations-Test: alte v1 → v2 active mit Bullet, append-only,
+  idempotent), mypy 297, ruff clean. Web unberührt.
+
 - **Feedback-Seite Management-Redesign (ADR-0038, 2026-06-27), Branch
   `feat/feedback-management`:** `/feedback` ist jetzt ein Management-Center statt
   Statistik-Seite. Neuer Endpunkt `GET …/feedback-items` (alle Feedbacks
