@@ -321,5 +321,19 @@
       {"type": "text", "text": "semantischer Inhalts-Check, Trigger-Konflikte zwischen Playbooks, Cross-Reference auf nicht-existierende Verweise.", "styles": {}}
     ],
     "children": []
+  },
+  {
+    "id": "pb-feedback-h",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Feedback", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-feedback-p",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Faellt dir beim Lesen bestehender Elemente Veraltetes oder Falsches auf, melde es via submit_feedback (signal outdated/incorrect/unclear) statt es stillschweigend zu uebergehen; genutzte Playbooks/Resources via record_usage (applied/skipped/error). So wird die AgentDB selbst-verbessernd.", "styles": {}}],
+    "children": []
   }
 ]
