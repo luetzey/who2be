@@ -35,6 +35,15 @@ const editorSchema = z.object({
   write_tags_persona: z.string(),
   write_tags_playbook: z.string(),
   write_tags_resource: z.string(),
+  // ADR-0039 Transition-Grants: per-Domain Promote/Retire (nur mit promote_retire
+  // wirksam). Beide an = ungeteilt (kein Eintrag); ein abgewaehlter Haken
+  // schraenkt die Richtung in der Domain ein.
+  tg_persona_promote: z.boolean(),
+  tg_persona_retire: z.boolean(),
+  tg_playbook_promote: z.boolean(),
+  tg_playbook_retire: z.boolean(),
+  tg_resource_promote: z.boolean(),
+  tg_resource_retire: z.boolean(),
 })
 
 export type AgentEditorValues = z.infer<typeof editorSchema>
@@ -56,6 +65,30 @@ function tagFieldsFromPolicy(policy: AgentToolPolicy): Record<string, string> {
   }
 }
 
+// Fehlt ein Domain-Eintrag, gilt das ungeteilte promote_retire → beide Haken an.
+function transitionFieldsFromPolicy(policy: AgentToolPolicy): Record<string, boolean> {
+  const out: Record<string, boolean> = {}
+  for (const domain of TAG_DOMAINS) {
+    const grant = policy.transition_grants?.[domain]
+    out[`tg_${domain}_promote`] = grant ? grant.promote : true
+    out[`tg_${domain}_retire`] = grant ? grant.retire : true
+  }
+  return out
+}
+
+// Nur Domains mit einer Einschraenkung (nicht beide an) erhalten einen Eintrag.
+function buildTransitionGrants(
+  values: AgentEditorValues,
+): Record<string, { promote: boolean; retire: boolean }> {
+  const out: Record<string, { promote: boolean; retire: boolean }> = {}
+  for (const domain of TAG_DOMAINS) {
+    const promote = values[`tg_${domain}_promote` as keyof AgentEditorValues] as boolean
+    const retire = values[`tg_${domain}_retire` as keyof AgentEditorValues] as boolean
+    if (!(promote && retire)) out[domain] = { promote, retire }
+  }
+  return out
+}
+
 // `base` erhaelt Policy-Felder, die das Formular (noch) nicht editiert
 // (z. B. transition_grants/write_tags, ADR-0039). Der PUT ersetzt die Policy
 // ganz — ohne diesen Merge wuerden sie beim Speichern stillschweigend geloescht.
@@ -74,6 +107,7 @@ function valuesToPolicy(values: AgentEditorValues, base: AgentToolPolicy): Agent
     feedback_write: values.feedback_write,
     promote_retire: values.promote_retire,
     write_tags: buildWriteTags(values),
+    transition_grants: buildTransitionGrants(values),
   }
 }
 
@@ -115,6 +149,7 @@ export function useAgentForm(
       status: 'enabled',
       ...DEFAULT_TOOL_POLICY,
       ...tagFieldsFromPolicy(DEFAULT_TOOL_POLICY),
+      ...transitionFieldsFromPolicy(DEFAULT_TOOL_POLICY),
     },
   })
 
@@ -129,6 +164,7 @@ export function useAgentForm(
         status: agent.status,
         ...agent.tool_policy,
         ...tagFieldsFromPolicy(agent.tool_policy),
+        ...transitionFieldsFromPolicy(agent.tool_policy),
       })
     }
   }, [agent, form])

@@ -245,6 +245,8 @@ export interface TokenInput {
   // Pflicht-Bindung an einen Agenten (secure by default): der Token erbt dessen
   // MCP-Tool-Policy. Ungebundene Tokens sind nicht mehr erlaubt.
   agent_id: string
+  // Optionaler Ablaufzeitpunkt (ISO-8601, ADR-0039); weggelassen = kein Ablauf.
+  expires_at?: string
 }
 
 export interface TokenRenameInput {
@@ -571,6 +573,9 @@ export interface AgentToolPolicy {
   // erlaubte Tags; fehlend/leer = keine Tag-Einschraenkung. Optional, damit
   // Bestands-Payloads ohne das Feld weiterhin valide sind.
   write_tags?: Record<string, string[]>
+  // ADR-0039: per-Domain-Verfeinerung von promote_retire (Narrowing). Fehlt ein
+  // Domain-Eintrag, gilt das ungeteilte promote_retire.
+  transition_grants?: Record<string, { promote: boolean; retire: boolean }>
 }
 
 // Default-Policy fuer neue Agenten: nur Zugewiesenes lesen (least privilege/

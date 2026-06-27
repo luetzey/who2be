@@ -14,7 +14,9 @@ _Stand: 2026-06-16_
 - **Track 4-B write_tags-UI + whoami (2026-06-27):** AgentEditorForm hat den
   Tag-Picker (3 Domain-Felder → write_tags-Dict); whoami gibt write_tags +
   transition_grants aus. Web 392 Tests grün, Python 888, mypy 296, ruff clean.
-  Offen: UI für transition_grants/Token-Ablauf + Rate-Limit.
+  ADR-0039 komplett: transition_grants-Toggles + Token-Ablauf-Feld im
+  Editor/Token-Sektion. Alle 3 Achsen mit Backend+UI. Python 888, mypy 296,
+  ruff clean, Web 393/0-Lint/build. Offen nur optionales Write-Rate-Limit.
 - **Track 4-B Web-Policy-Editor-Sync (2026-06-27), Branch
   `claude/track4-finer-rights`:** Der `AgentEditorForm` exponiert jetzt die
   feineren Backend-Capabilities `system_prompt_write` (ADR-0040, aus) +

@@ -239,6 +239,14 @@
           "persona": "Persona-Tags",
           "playbook": "Playbook-Tags",
           "resource": "Resource-Tags"
+        },
+        "transitionGrants": {
+          "hint": "Promote/Retire je Domain (nur mit aktivem „Versionen aktivieren/deaktivieren“ wirksam). Abwählen schränkt die Richtung ein.",
+          "promote": "Promoten (→ aktiv)",
+          "retire": "Zurückziehen (→ inaktiv)",
+          "persona": "Persona",
+          "playbook": "Playbook",
+          "resource": "Resource"
         }
       }
     },
@@ -1575,7 +1583,9 @@
       "submit": "Anlegen",
       "nameRequired": "Name erforderlich.",
       "roleLabel": "Rolle",
-      "roleHint": "Der Token erhält höchstens deine eigene Rolle — höhere Rechte sind nicht wählbar."
+      "roleHint": "Der Token erhält höchstens deine eigene Rolle — höhere Rechte sind nicht wählbar.",
+      "expiresLabel": "Ablauf (optional)",
+      "expiresHint": "Leer = kein Ablauf. Nach diesem Tag wird der Token serverseitig abgelehnt (401)."
     },
     "rename": {
       "action": "Umbenennen",

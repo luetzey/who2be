@@ -1,6 +1,6 @@
 # ADR-0039 — Feinkoernige Per-Agent-Write-Rechte (Praedikat-Scopes, getrennte Promote/Retire, TTL)
 
-- Status: Partially Accepted
+- Status: Accepted (Backend + UI vollstaendig; optionales Write-Rate-Limit offen)
 - Datum: 2026-06-27
 
 ## Umsetzungsstand (2026-06-27)
@@ -27,9 +27,12 @@
 - **`write_tags`-Tag-Picker im `AgentEditorForm`** — drei kommaseparierte
   Tag-Felder je Domain (persona/playbook/resource), gemappt zum `write_tags`-Dict
   (Submit + Reset). `whoami` gibt `write_tags` + `transition_grants` aus.
+- **`transition_grants`-Toggles im `AgentEditorForm`** — per-Domain Promote/Retire
+  (Narrowing; beide an = ungeteilt). **Token-Ablauf-Feld** in der Token-Sektion
+  (`AgentTokensSection`, `TokenInput.expires_at`).
 
-**Offen (Folge):** Write-Rate-Limit; UI-Widgets fuer `transition_grants`
-(per-Domain Promote/Retire) + Token-Ablauf im Editor (Backend steht).
+Damit sind alle drei Achsen (Tag-Scoping, getrennte Promote/Retire, TTL) mit
+Backend **und** UI umgesetzt. **Offen (Folge, optional):** Write-Rate-Limit.
 - Kontext: User-Wunsch nach detaillierterer Einstellbarkeit; die Per-Agent-Policy
   ist heute grobkoerniger als das Vertrauensmodell erlaubt.
 - Bezug: ADR-0023 (RBAC / Token-Snapshot), ADR-0009 (JSONB-Schema-Evolution),

@@ -239,6 +239,14 @@
           "persona": "Persona tags",
           "playbook": "Playbook tags",
           "resource": "Resource tags"
+        },
+        "transitionGrants": {
+          "hint": "Promote/retire per domain (only effective with 'Activate/deactivate versions' on). Unchecking restricts the direction.",
+          "promote": "Promote (→ active)",
+          "retire": "Retire (→ inactive)",
+          "persona": "Persona",
+          "playbook": "Playbook",
+          "resource": "Resource"
         }
       }
     },
@@ -1575,7 +1583,9 @@
       "submit": "Create",
       "nameRequired": "Name required.",
       "roleLabel": "Role",
-      "roleHint": "The token inherits at most your own role — higher permissions cannot be selected."
+      "roleHint": "The token inherits at most your own role — higher permissions cannot be selected.",
+      "expiresLabel": "Expiry (optional)",
+      "expiresHint": "Empty = no expiry. After this day the token is rejected server-side (401)."
     },
     "rename": {
       "action": "Rename",
