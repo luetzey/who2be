@@ -4,6 +4,23 @@ _Stand: 2026-06-16_
 
 ## Funktioniert
 
+- **Builder-Content-Start-Sync (3/4, 2026-06-27), Branch
+  `feat/builder-content-sync`:** Zentrale Verteilung von Builder-Updates an alle
+  Workspaces ohne Per-Change-Migration. Neue Funktion
+  `sync_managed_builder_content(conn)` (workspace_repository): hebt jede managed
+  Builder-Persona/-Template/-4-Playbooks mit `managed_content_version <
+  BUILDER_CONTENT_VERSION` workspace-übergreifend auf den kanonischen
+  Sidecar-Stand (In-place-Replace des aktiven Versions-Inhalts) + stempelt neu.
+  Verdrahtet in den FastAPI-Lifespan nach dem Bootstrap über eine
+  **privilegierte Owner-Connection** (`settings.database_url`, da der App-Pool
+  in Cloud RLS-scoped ist), fail-open (try/except, blockiert den Start nie).
+  Künftige Updates = Sidecar-JSON editieren + `BUILDER_CONTENT_VERSION` erhöhen,
+  keine Migration. Weil der Inhalt managed/gesperrt ist (PR1), gibt es keine
+  User-Customizations zu überschreiben → sicheres Replace. **DoD grün:** Python
+  898 pytest (neuer Sync-Test: veralteter Builder → 6 Aggregate restauriert,
+  Stempel=1, idempotent zweiter Lauf=0, Feedback-Bullets wiederhergestellt),
+  mypy 300, ruff clean. Folgt: PR4 Web-UI (Lock/Duplizieren sichtbar machen).
+
 - **Builder Deep-Copy-Duplizieren (2/4, 2026-06-27), Branch
   `feat/builder-deep-copy`:** `copy_agent` macht für `is_managed`-Quellen jetzt
   einen Voll-Klon — neue Methode `AgentRepository.deep_copy` (eine Transaktion):

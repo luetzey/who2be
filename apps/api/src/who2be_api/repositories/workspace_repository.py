@@ -549,3 +549,87 @@ async def _seed_default_agents(
         _builder_tool_policy(),
         BUILDER_CONTENT_VERSION,
     )
+
+
+async def sync_managed_builder_content(conn: asyncpg.Connection) -> int:
+    """Hebt verwaltete Builder-Aggregate mit veraltetem Stempel auf den kanonischen
+    Stand (`BUILDER_CONTENT_VERSION`).
+
+    Zentrale Verteilung: bei jeder Aenderung an den Sidecars
+    (Persona/Template/Playbooks) wird `BUILDER_CONTENT_VERSION` hochgezaehlt; dieser
+    Sync ersetzt dann beim App-Start in JEDEM Workspace den aktiven Versions-Inhalt
+    der managed Builder-Aggregate durch den kanonischen — sicher, weil managed =
+    gesperrt (keine User-Edits zu erhalten). In-place-Replace (keine Versions-
+    Proliferation); idempotent ueber den `managed_content_version`-Stempel.
+
+    Erwartet eine privilegierte Verbindung (Owner/Migrations-URL) — der RLS-
+    gescopte App-Pool saehe ohne Tenant keine Zeilen. JSONB wird als String
+    gebunden (`$n::jsonb`), damit kein Pool-Codec noetig ist. Gibt die Anzahl
+    aktualisierter Aggregate zurueck.
+    """
+    updated = 0
+
+    persona_json = json.dumps(_builder_persona_content())
+    for row in await conn.fetch(
+        "SELECT id FROM persona WHERE name = $1 AND is_managed = true "
+        "AND managed_content_version < $2",
+        _BUILDER_PERSONA_NAME,
+        BUILDER_CONTENT_VERSION,
+    ):
+        await conn.execute(
+            "UPDATE persona_version SET content = $2::jsonb "
+            "WHERE persona_id = $1 AND status = 'active'",
+            row["id"],
+            persona_json,
+        )
+        await conn.execute(
+            "UPDATE persona SET managed_content_version = $2, updated_at = now() WHERE id = $1",
+            row["id"],
+            BUILDER_CONTENT_VERSION,
+        )
+        updated += 1
+
+    template_json = json.dumps({"description": "", "body": _sidecar("agent_builder_body.json")})
+    for row in await conn.fetch(
+        "SELECT id FROM system_prompt_template WHERE slug = $1 AND is_managed = true "
+        "AND managed_content_version < $2",
+        _AGENT_BUILDER_TEMPLATE_SLUG,
+        BUILDER_CONTENT_VERSION,
+    ):
+        await conn.execute(
+            "UPDATE system_prompt_template_version SET content = $2::jsonb "
+            "WHERE template_id = $1 AND status = 'active'",
+            row["id"],
+            template_json,
+        )
+        await conn.execute(
+            "UPDATE system_prompt_template SET managed_content_version = $2, updated_at = now() "
+            "WHERE id = $1",
+            row["id"],
+            BUILDER_CONTENT_VERSION,
+        )
+        updated += 1
+
+    for name, ptype, triggers, tags, description, sidecar in _BUILDER_PLAYBOOKS:
+        pb_json = json.dumps(_builder_playbook_content(sidecar, ptype, tags, triggers, description))
+        for row in await conn.fetch(
+            "SELECT id FROM playbook WHERE name = $1 AND is_managed = true "
+            "AND managed_content_version < $2",
+            name,
+            BUILDER_CONTENT_VERSION,
+        ):
+            await conn.execute(
+                "UPDATE playbook_version SET content = $2::jsonb "
+                "WHERE playbook_id = $1 AND status = 'active'",
+                row["id"],
+                pb_json,
+            )
+            await conn.execute(
+                "UPDATE playbook SET managed_content_version = $2, updated_at = now() "
+                "WHERE id = $1",
+                row["id"],
+                BUILDER_CONTENT_VERSION,
+            )
+            updated += 1
+
+    return updated

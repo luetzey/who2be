@@ -15,6 +15,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import cast
 
+import asyncpg
 import structlog
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -35,6 +36,7 @@ from who2be_api.core.rate_limit import (
     limiter,
 )
 from who2be_api.licensing.edition import is_cloud, is_onprem
+from who2be_api.repositories.workspace_repository import sync_managed_builder_content
 from who2be_api.routers import (
     agents,
     dashboard,
@@ -85,6 +87,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 logger.warning("On-Prem-Bootstrap uebersprungen: %s", type(exc).__name__)
             except Exception:  # noqa: BLE001 — Boot darf nie an Bootstrap scheitern
                 logger.exception("On-Prem-Bootstrap fehlgeschlagen.")
+        # Zentrale Verteilung: managed Builder-Aggregate mit veraltetem
+        # Content-Stempel auf den kanonischen Stand heben. Braucht eine
+        # privilegierte (Owner-)Verbindung — der RLS-gescopte App-Pool saehe ohne
+        # Tenant keine Zeilen. Fail-open: ein Sync-Fehler darf den Start nie
+        # verhindern.
+        try:
+            sync_conn = await asyncpg.connect(settings.database_url)
+            try:
+                count = await sync_managed_builder_content(sync_conn)
+                if count:
+                    logger.info("Builder-Content-Sync: %d Aggregate aktualisiert.", count)
+            finally:
+                await sync_conn.close()
+        except Exception:  # noqa: BLE001 — Boot darf nie am Sync scheitern
+            logger.exception("Builder-Content-Sync uebersprungen.")
         yield
 
 
