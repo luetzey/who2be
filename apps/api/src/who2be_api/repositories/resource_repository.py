@@ -117,6 +117,8 @@ class ResourceRepository(Protocol):
 
     async def delete(self, workspace_id: UUID, resource_id: UUID) -> bool: ...
 
+    async def is_managed(self, workspace_id: UUID, entity_id: UUID) -> bool: ...
+
     async def list_distinct_tags(
         self,
         workspace_id: UUID,

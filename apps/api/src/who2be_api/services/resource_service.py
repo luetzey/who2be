@@ -16,6 +16,7 @@ from who2be_api.core.security import (
     WorkspaceContext,
     require_capability,
     require_role,
+    require_unmanaged,
     require_write_rate,
     require_write_tags,
 )
@@ -248,6 +249,7 @@ class ResourceService:
         """Erzeugt eine neue Version der Resource (Draft-on-Edit bei Active)."""
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.resource_write)
+        require_unmanaged(await self._repo.is_managed(ctx.workspace_id, resource_id))
         require_write_rate(ctx)
         await self._check_update_tags(ctx, resource_id, data.content.tags, locale)
         outcome = await self._repo.update(
@@ -269,6 +271,7 @@ class ResourceService:
         """Auto-Save-Pfad (PATCH `.../draft`) — upsertet die Draft-Version."""
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.resource_write)
+        require_unmanaged(await self._repo.is_managed(ctx.workspace_id, resource_id))
         require_write_rate(ctx)
         await self._check_update_tags(ctx, resource_id, data.content.tags, locale)
         outcome = await self._repo.upsert_draft(
@@ -315,6 +318,7 @@ class ResourceService:
         """Stellt den Snapshot `source_version` als neue Draft wieder her (§3.1)."""
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.resource_write)
+        require_unmanaged(await self._repo.is_managed(ctx.workspace_id, resource_id))
         require_write_rate(ctx)
         snapshot = await self._repo.fetch_version(
             ctx.workspace_id, resource_id, source_version, locale
@@ -388,6 +392,7 @@ class ResourceService:
         resource = await self._repo.fetch(ctx.workspace_id, resource_id)
         if resource is None:
             raise _not_found()
+        require_unmanaged(resource.is_managed)
         if self._usage_repo is None:  # pragma: no cover - im Prod immer gesetzt
             raise RuntimeError("ResourceService.delete benoetigt ein UsageRepository.")
         playbooks = await self._usage_repo.list_resource_usages(ctx.workspace_id, resource_id)

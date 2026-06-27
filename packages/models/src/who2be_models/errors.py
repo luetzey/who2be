@@ -29,6 +29,7 @@ ProblemReason = Literal[
     "mfa_required",
     "concurrent_conflict",
     "composite_child_inactive",
+    "managed_aggregate",
 ]
 
 # Wer den Fehler beheben kann: `agent` = der aufrufende Agent kann es selbst

@@ -31,7 +31,7 @@ from who2be_models import (
 # BlockNote-JSON.
 _SELECT_CURRENT = """
     SELECT t.id, t.workspace_id, t.owner_id, t.name, t.slug,
-           t.current_version,
+           t.is_managed, t.current_version,
            t.created_at, t.updated_at, tv.content, tv.locale,
            tv.status AS current_status,
            EXISTS (
@@ -104,6 +104,8 @@ class SystemPromptTemplateRepository(Protocol):
         self, workspace_id: UUID, template_id: UUID, version: int
     ) -> SystemPromptTemplateVersionRead | None: ...
 
+    async def is_managed(self, workspace_id: UUID, template_id: UUID) -> bool: ...
+
 
 def _row_to_read(row: dict[str, Any]) -> SystemPromptTemplateRead:
     """Wandelt eine SELECT-Row in ein Read-Modell — `content` als jsonb-dict."""
@@ -115,6 +117,15 @@ class PgSystemPromptTemplateRepository:
 
     def __init__(self, pool: asyncpg.Pool) -> None:
         self._pool = pool
+
+    async def is_managed(self, workspace_id: UUID, template_id: UUID) -> bool:
+        val = await self._pool.fetchval(
+            "SELECT is_managed FROM system_prompt_template "
+            "WHERE id = $1 AND workspace_id = $2",
+            template_id,
+            workspace_id,
+        )
+        return bool(val)
 
     async def insert(
         self,

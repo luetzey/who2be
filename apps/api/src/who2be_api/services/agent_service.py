@@ -14,7 +14,12 @@ from uuid import UUID
 from fastapi import HTTPException, status
 
 from who2be_api.core.agent_scope import agent_read_restrict
-from who2be_api.core.security import WorkspaceContext, require_capability, require_role
+from who2be_api.core.security import (
+    WorkspaceContext,
+    require_capability,
+    require_role,
+    require_unmanaged,
+)
 from who2be_api.repositories.agent_repository import AgentRepository
 from who2be_models import (
     AgentCapability,
@@ -177,6 +182,7 @@ class AgentService:
         existing = await self._repo.fetch(ctx.workspace_id, agent_id)
         if existing is None:
             raise _not_found()
+        require_unmanaged(existing.is_managed)
         # Enable-Gate auf den *effektiven* Stand nach dem Update (None = unveraendert).
         # Greift auch, wenn ein bereits aktiver Agent durch Ref-Wechsel
         # unvollstaendig wuerde — so bleibt die Invariante „enabled ⇒ aktivierbar".
@@ -244,6 +250,10 @@ class AgentService:
     async def delete(self, ctx: WorkspaceContext, agent_id: UUID) -> None:
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.agent_write)
+        existing = await self._repo.fetch(ctx.workspace_id, agent_id)
+        if existing is None:
+            raise _not_found()
+        require_unmanaged(existing.is_managed)
         deleted = await self._repo.delete(ctx.workspace_id, agent_id)
         if not deleted:
             raise _not_found()

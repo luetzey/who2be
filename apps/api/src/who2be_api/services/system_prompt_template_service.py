@@ -14,7 +14,12 @@ from uuid import UUID
 import asyncpg
 from fastapi import HTTPException, status
 
-from who2be_api.core.security import WorkspaceContext, require_capability, require_role
+from who2be_api.core.security import (
+    WorkspaceContext,
+    require_capability,
+    require_role,
+    require_unmanaged,
+)
 from who2be_api.repositories.system_prompt_template_repository import (
     SystemPromptTemplateRepository,
 )
@@ -131,6 +136,7 @@ class SystemPromptTemplateService:
         """Erzeugt eine neue Version des Templates (Draft-on-Edit bei Active)."""
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.system_prompt_write)  # ADR-0040
+        require_unmanaged(await self._repo.is_managed(ctx.workspace_id, template_id))
         outcome = await self._repo.update(
             ctx.workspace_id, ctx.user_id, template_id, data.name, data.content
         )
@@ -165,6 +171,7 @@ class SystemPromptTemplateService:
         """
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.system_prompt_write)  # ADR-0040
+        require_unmanaged(await self._repo.is_managed(ctx.workspace_id, template_id))
         snapshot = await self._repo.fetch_version(ctx.workspace_id, template_id, source_version)
         if snapshot is None:
             raise _not_found()

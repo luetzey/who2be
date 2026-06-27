@@ -107,6 +107,9 @@ class AgentRead(BaseModel):
     persona_id: UUID | None
     system_prompt_template_id: UUID | None
     status: AgentStatus
+    # Vom System verwaltet (Builder-Lock): User-Edits/Delete werden serverseitig
+    # mit 403 geblockt; nur Duplizieren ist erlaubt.
+    is_managed: bool = False
     # Ob die verknuepfte Persona eine aktive Version hat. Default False, damit
     # direkt konstruierte Reads (ohne DB-Join) konservativ als "nicht aktivierbar"
     # gelten; die Repository-SELECTs befuellen es per EXISTS-Subquery.

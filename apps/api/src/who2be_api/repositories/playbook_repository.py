@@ -185,6 +185,8 @@ class PlaybookRepository(Protocol):
 
     async def delete(self, workspace_id: UUID, playbook_id: UUID) -> bool: ...
 
+    async def is_managed(self, workspace_id: UUID, entity_id: UUID) -> bool: ...
+
 
 class PgPlaybookRepository(VersionedAggregateRepository[PlaybookRead, PlaybookVersionRead]):
     """asyncpg-Implementierung von `PlaybookRepository`.

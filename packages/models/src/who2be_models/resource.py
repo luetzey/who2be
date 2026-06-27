@@ -152,6 +152,10 @@ class ResourceRead(BaseModel):
     owner_id: UUID
     name: str
     current_version: int
+    # Vom System verwaltet (Builder-Lock): User-Edits werden serverseitig
+    # mit 403 geblockt; nur Duplizieren ist erlaubt.
+    is_managed: bool = False
+
     current_status: VersionStatus = VersionStatus.inactive
     has_pending_draft: bool = False
     locale: ContentLocale = DEFAULT_LOCALE

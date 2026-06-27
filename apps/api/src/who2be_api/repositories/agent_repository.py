@@ -31,7 +31,7 @@ _PERSONA_ACTIVE_EXPR = """
 _SELECT = f"""
     SELECT a.id, a.workspace_id, a.owner_id, a.name, a.description,
            a.persona_id, a.system_prompt_template_id, a.status, a.tool_policy,
-           a.created_at, a.updated_at,
+           a.is_managed, a.created_at, a.updated_at,
            {_PERSONA_ACTIVE_EXPR.format(col="a.persona_id")} AS persona_active
     FROM agent a
 """
@@ -43,7 +43,7 @@ _SELECT = f"""
 _RETURNING = f"""
     RETURNING id, workspace_id, owner_id, name, description,
               persona_id, system_prompt_template_id, status, tool_policy,
-              created_at, updated_at,
+              is_managed, created_at, updated_at,
               {_PERSONA_ACTIVE_EXPR.format(col="agent.persona_id")} AS persona_active
 """
 

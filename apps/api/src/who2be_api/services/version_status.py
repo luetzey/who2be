@@ -27,7 +27,12 @@ import asyncpg
 from fastapi import HTTPException, status
 
 from who2be_api.core.errors import ApiGateError
-from who2be_api.core.security import WorkspaceContext, require_capability, require_role
+from who2be_api.core.security import (
+    WorkspaceContext,
+    require_capability,
+    require_role,
+    require_unmanaged,
+)
 from who2be_api.services.promote_validation import (
     validate_promote_persona,
     validate_promote_playbook,
@@ -345,7 +350,7 @@ class VersionStatusService:
             # `e.name` und `pv.content` werden fuer die Promote-Validation
             # mitgeladen (Welle 4).
             target = await conn.fetchrow(
-                f"SELECT pv.status, pv.content, e.name FROM {version_tbl} pv "
+                f"SELECT pv.status, pv.content, e.name, e.is_managed FROM {version_tbl} pv "
                 f"JOIN {entity_tbl} e ON e.id = pv.{fk_col} "
                 f"WHERE pv.{fk_col} = $1 AND pv.version = $2 "
                 "AND e.workspace_id = $3 AND pv.locale = $4 "
@@ -357,6 +362,9 @@ class VersionStatusService:
             )
             if target is None:
                 raise _not_found(entity_type)
+            # Managed-Lock: vom System verwaltete Aggregate duerfen ueber die API
+            # nicht transitioniert werden (der Start-Sync nutzt rohes SQL).
+            require_unmanaged(target["is_managed"])
             from_status = VersionStatus(target["status"])
             validate_transition(from_status, to_status)
             # RBAC-Gate nach der State-Machine: erst pruefen, ob der Uebergang
