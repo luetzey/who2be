@@ -41,6 +41,10 @@ from who2be_models import (
     ResourceVersionRead,
     SubResourceLinkSet,
     SubResourceRead,
+    SystemPromptTemplateCreate,
+    SystemPromptTemplateRead,
+    SystemPromptTemplateUpdate,
+    SystemPromptTemplateVersionRead,
     TriggerOverview,
     VersionDiff,
     VersionTransitionRequest,
@@ -54,22 +58,30 @@ _TIMEOUT = 10.0
 # Read-only Reverse-Lookups + Versions-Historie (Track 1). Die drei Kernelemente
 # teilen sich uniforme REST-Pfade (`/{plural}/{id}/versions|usages`), daher
 # genuegt ein Entity-Dispatch ueber diese Maps statt 3x near-duplicate Methoden.
-EntityType = Literal["persona", "playbook", "resource"]
+EntityType = Literal["persona", "playbook", "resource", "system_prompt"]
 UsageEntityType = Literal["playbook", "resource"]
-AnyVersionRead = PersonaVersionRead | PlaybookVersionRead | ResourceVersionRead
+AnyVersionRead = (
+    PersonaVersionRead | PlaybookVersionRead | ResourceVersionRead | SystemPromptTemplateVersionRead
+)
 AnyUsage = PlaybookUsage | ResourceUsage
 
 _ENTITY_PLURAL: dict[str, str] = {
     "persona": "personas",
     "playbook": "playbooks",
     "resource": "resources",
+    "system_prompt": "system-prompts",
 }
 _VERSION_MODEL: dict[
-    str, type[PersonaVersionRead] | type[PlaybookVersionRead] | type[ResourceVersionRead]
+    str,
+    type[PersonaVersionRead]
+    | type[PlaybookVersionRead]
+    | type[ResourceVersionRead]
+    | type[SystemPromptTemplateVersionRead],
 ] = {
     "persona": PersonaVersionRead,
     "playbook": PlaybookVersionRead,
     "resource": ResourceVersionRead,
+    "system_prompt": SystemPromptTemplateVersionRead,
 }
 _USAGE_MODEL: dict[str, type[PlaybookUsage] | type[ResourceUsage]] = {
     "playbook": PlaybookUsage,
@@ -353,6 +365,16 @@ class ApiClient:
         body = data.get("body_rendered") if isinstance(data, dict) else None
         return body if isinstance(body, str) else ""
 
+    async def list_system_prompts(self) -> list[SystemPromptTemplateRead]:
+        """Laedt die System-Prompt-Templates des Workspace (ADR-0040)."""
+        data = await self._get(f"{self._workspace_prefix}/system-prompts")
+        return [SystemPromptTemplateRead.model_validate(item) for item in data]
+
+    async def get_system_prompt(self, template_id: UUID) -> SystemPromptTemplateRead:
+        """Laedt ein einzelnes System-Prompt-Template (Konfig + aktueller Body)."""
+        data = await self._get(f"{self._workspace_prefix}/system-prompts/{template_id}")
+        return SystemPromptTemplateRead.model_validate(data)
+
     # ------------------------------------------------------------------
     # Read-only Reverse-Lookups + Versions-Historie (Track 1, erweitert
     # ADR-0030/0021). Reine Adapter ueber bestehende REST-Endpunkte; der
@@ -582,3 +604,43 @@ class ApiClient:
     async def copy_agent(self, agent_id: UUID, data: AgentCopy) -> AgentRead:
         body = await self._write("POST", f"{self._workspace_prefix}/agents/{agent_id}/copy", data)
         return AgentRead.model_validate(body)
+
+    # ------------------------------------------------------------------
+    # System-Prompt-Template-Writes (ADR-0040). Verfassen + zur Review
+    # einreichen braucht `system_prompt_write`; das Aktivieren (→active/
+    # →inactive) bleibt fuer agent-gebundene Tokens serverseitig gesperrt.
+    # ------------------------------------------------------------------
+
+    async def create_system_prompt(
+        self, data: SystemPromptTemplateCreate
+    ) -> SystemPromptTemplateRead:
+        body = await self._write("POST", f"{self._workspace_prefix}/system-prompts", data)
+        return SystemPromptTemplateRead.model_validate(body)
+
+    async def update_system_prompt(
+        self, template_id: UUID, data: SystemPromptTemplateUpdate
+    ) -> SystemPromptTemplateRead:
+        body = await self._write(
+            "PUT", f"{self._workspace_prefix}/system-prompts/{template_id}", data
+        )
+        return SystemPromptTemplateRead.model_validate(body)
+
+    async def restore_system_prompt(
+        self, template_id: UUID, version: int
+    ) -> SystemPromptTemplateRead:
+        body = await self._write(
+            "POST",
+            f"{self._workspace_prefix}/system-prompts/{template_id}/versions/{version}/restore",
+            None,
+        )
+        return SystemPromptTemplateRead.model_validate(body)
+
+    async def transition_system_prompt_version(
+        self, template_id: UUID, version: int, data: VersionTransitionRequest
+    ) -> SystemPromptTemplateVersionRead:
+        body = await self._write(
+            "POST",
+            f"{self._workspace_prefix}/system-prompts/{template_id}/versions/{version}/transition",
+            data,
+        )
+        return SystemPromptTemplateVersionRead.model_validate(body)

@@ -123,9 +123,10 @@ def required_role_for_transition(
 
 
 # Schreib-Capability je EntityType fuer draft/review-Uebergaenge. Promote/Retire
-# (active/inactive) mappt unabhaengig vom Typ auf `promote_retire`. Templates
-# haben keine MCP-Tool-Capability — agent-gebundene Tokens duerfen sie nicht
-# transitionieren (siehe `_require_transition_capability`).
+# (active/inactive) mappt unabhaengig vom Typ auf `promote_retire`.
+# System-Prompt-Templates haben einen eigenen Sonderzweig in
+# `_require_transition_capability` (ADR-0040): draft/review via
+# `system_prompt_write`, active/inactive bleibt fuer Agent-Token hart gesperrt.
 _WRITE_CAPABILITY: dict[str, AgentCapability] = {
     "persona": AgentCapability.persona_write,
     "playbook": AgentCapability.playbook_write,
@@ -139,19 +140,36 @@ def _require_transition_capability(
     """Pro-Agent-Gate fuer Status-Uebergaenge (No-Op fuer ungebundene Tokens).
 
     Promote/Retire (→active/→inactive) verlangen `promote_retire`; draft/review
-    die Schreib-Capability der Domain. System-Prompt-Templates sind ueber MCP
-    nicht verwaltbar, daher fuer agent-gebundene Tokens komplett gesperrt.
+    die Schreib-Capability der Domain. System-Prompt-Templates: draft/review via
+    `system_prompt_write`, aber active/inactive bleibt hart gesperrt (ADR-0040).
     """
     if ctx.tool_policy is None:
         return
+    if entity_type == "system_prompt_template":
+        # ADR-0040: Agenten duerfen Templates verfassen + zur Review einreichen
+        # (draft/review mit `system_prompt_write`), aber NIE selbst scharfschalten
+        # oder zurueckziehen — das Aktivieren des eigenen System-Prompts bleibt
+        # eine menschliche Handlung (Injection-Schutz, ADR-0012).
+        if to_status in (VersionStatus.active, VersionStatus.inactive):
+            raise ApiGateError(
+                status=status.HTTP_403_FORBIDDEN,
+                reason="missing_capability",
+                actionable_by="none",
+                detail=(
+                    "Agent-gebundene Tokens duerfen System-Prompt-Templates nicht "
+                    "aktivieren oder zurueckziehen — das uebernimmt ein Mensch/Admin."
+                ),
+            )
+        require_capability(ctx, AgentCapability.system_prompt_write)
+        return
     if entity_type not in _WRITE_CAPABILITY:
-        # Templates sind ueber MCP nie verwaltbar — fuer einen agent-gebundenen
-        # Token endgueltig gesperrt (`none`), keine Capability schaltet das frei.
+        # Sonstige Nicht-MCP-Entities (z. B. Version-Sub-Typen) bleiben fuer einen
+        # agent-gebundenen Token endgueltig gesperrt (`none`).
         raise ApiGateError(
             status=status.HTTP_403_FORBIDDEN,
             reason="missing_capability",
             actionable_by="none",
-            detail="Agent-gebundene Tokens duerfen System-Prompt-Templates nicht aendern.",
+            detail="Agent-gebundene Tokens duerfen diese Entitaet nicht aendern.",
         )
     if to_status in (VersionStatus.active, VersionStatus.inactive):
         require_capability(ctx, AgentCapability.promote_retire)

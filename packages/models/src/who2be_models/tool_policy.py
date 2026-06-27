@@ -57,6 +57,7 @@ class AgentCapability(StrEnum):
     playbook_write = "playbook_write"
     resource_write = "resource_write"
     agent_write = "agent_write"
+    system_prompt_write = "system_prompt_write"
     promote_retire = "promote_retire"
 
 
@@ -86,6 +87,10 @@ class AgentToolPolicy(BaseModel):
     playbook_write: bool = False
     resource_write: bool = False
     agent_write: bool = False
+    # System-Prompt-Templates verfassen + zur Review einreichen (ADR-0040). Das
+    # Aktivieren (→active) bleibt serverseitig fuer agent-gebundene Tokens hart
+    # gesperrt — diese Capability schaltet es NICHT frei.
+    system_prompt_write: bool = False
     promote_retire: bool = False
 
     def allows(self, capability: AgentCapability) -> bool:
@@ -134,6 +139,7 @@ class AgentToolPolicy(BaseModel):
             "playbook_write",
             "resource_write",
             "agent_write",
+            "system_prompt_write",
             "promote_retire",
         )
         return all(not getattr(self, name) or getattr(other, name) for name in bool_fields)

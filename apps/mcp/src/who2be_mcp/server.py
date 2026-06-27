@@ -57,6 +57,10 @@ from who2be_models import (
     ResourceVersionRead,
     SubResourceLinkSet,
     SubResourceRead,
+    SystemPromptTemplateCreate,
+    SystemPromptTemplateRead,
+    SystemPromptTemplateUpdate,
+    SystemPromptTemplateVersionRead,
     TriggerOverview,
     VersionDiff,
     VersionStatus,
@@ -554,6 +558,34 @@ async def list_resource_blocks(resource_id: str, locale: str = "de") -> list[Res
     return await client.list_resource_blocks(parsed, locale)
 
 
+@mcp.tool
+@with_tool_log("list_system_prompts")
+async def list_system_prompts() -> list[SystemPromptTemplateRead]:
+    """Listet die System-Prompt-Templates des Workspace (ADR-0040).
+
+    Jedes Template ist das versionierte Aggregat hinter `agent.system_prompt_
+    template_id`. Nutze das, um ein bestehendes Template fuer `create_agent`/
+    `update_agent` auszuwaehlen oder vor dem Anpassen zu finden. Den vollen Body
+    einer Version liefert `get_system_prompt` bzw. `get_version`.
+    """
+    client = await build_client()
+    return await client.list_system_prompts()
+
+
+@mcp.tool
+@with_tool_log("get_system_prompt")
+async def get_system_prompt(template_id: str) -> SystemPromptTemplateRead:
+    """Laedt ein System-Prompt-Template (Konfig + Body der sichtbaren Version).
+
+    Der richtige Read nach `create_system_prompt`/`update_system_prompt` und vor
+    dem Editieren. Versions-Historie + Diff laufen ueber `list_versions`/
+    `diff_versions` mit `entity_type='system_prompt'`.
+    """
+    parsed = _parse_uuid(template_id, "system_prompt")
+    client = await build_client()
+    return await client.get_system_prompt(parsed)
+
+
 # ---------------------------------------------------------------------------
 # Read-only Reverse-Lookups + Versions-Historie (Track 1, erweitert ADR-0030/
 # 0021). Duenne Adapter ueber bestehende REST-Endpunkte — kein neuer
@@ -916,6 +948,68 @@ async def copy_agent(agent_id: str, name: str | None = None) -> AgentRead:
     """
     client = await build_client()
     return await client.copy_agent(_parse_uuid(agent_id, "Agent"), AgentCopy(name=name))
+
+
+# ---------------------------------------------------------------------------
+# System-Prompt-Template-Writes (ADR-0040). Verlangen `system_prompt_write`.
+# Verfassen (create/update/restore) + draft→review sind erlaubt; das Aktivieren
+# (→active/→inactive) lehnt die API fuer agent-gebundene Tokens hart ab — der
+# eigene System-Prompt wird von einem Menschen/Admin scharfgeschaltet.
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool
+@with_tool_log("create_system_prompt")
+async def create_system_prompt(data: SystemPromptTemplateCreate) -> SystemPromptTemplateRead:
+    """Legt ein neues System-Prompt-Template an (initiale Draft-Version).
+
+    Der Body traegt Liquid-Style-Placeholder (z. B. `{{persona:profile}}`,
+    `{{playbook:...}}`, `{{tools-overview}}`), die beim Agent-Rendern expandiert
+    werden. Setze die neue Template-UUID anschliessend via `update_agent` als
+    `system_prompt_template_id`. Das Scharfschalten uebernimmt ein Mensch/Admin.
+    """
+    client = await build_client()
+    return await client.create_system_prompt(data)
+
+
+@mcp.tool
+@with_tool_log("update_system_prompt")
+async def update_system_prompt(
+    template_id: str, data: SystemPromptTemplateUpdate
+) -> SystemPromptTemplateRead:
+    """Aendert ein System-Prompt-Template als neuen Draft (Draft-on-Edit bei Active).
+
+    Auf einer aktiven Version legt das einen neuen Draft an (409, falls bereits
+    ein Draft offen ist). Die aktive Version bleibt unveraendert, bis ein
+    Mensch/Admin den Draft promotet.
+    """
+    client = await build_client()
+    return await client.update_system_prompt(_parse_uuid(template_id, "system_prompt"), data)
+
+
+@mcp.tool
+@with_tool_log("restore_system_prompt")
+async def restore_system_prompt(template_id: str, version: int) -> SystemPromptTemplateRead:
+    """Stellt eine fruehere Template-Version als neuen Draft wieder her (non-destruktiv)."""
+    client = await build_client()
+    return await client.restore_system_prompt(_parse_uuid(template_id, "system_prompt"), version)
+
+
+@mcp.tool
+@with_tool_log("transition_system_prompt")
+async def transition_system_prompt(
+    template_id: str, version: int, data: VersionTransitionRequest
+) -> SystemPromptTemplateVersionRead:
+    """Schaltet eine Template-Version weiter — fuer Agenten nur draft→review.
+
+    Ein agent-gebundener Token darf einen Draft `to='review'` zur Freigabe
+    einreichen; ein Uebergang nach `active`/`inactive` wird serverseitig hart
+    abgelehnt (403, ADR-0040) — das Aktivieren bleibt eine menschliche Handlung.
+    """
+    client = await build_client()
+    return await client.transition_system_prompt_version(
+        _parse_uuid(template_id, "system_prompt"), version, data
+    )
 
 
 def main() -> None:

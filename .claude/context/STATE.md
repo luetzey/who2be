@@ -4,6 +4,14 @@ _Stand: 2026-06-16_
 
 ## Funktioniert
 
+- **Builder-System-Prompt-Tools (ADR-0040, 2026-06-27), Branch
+  `claude/charming-pasteur-pxz2l8`, PR #266:** Der Builder kann System-Prompt-
+  Templates über MCP verfassen/anpassen/lesen + draft→review einreichen; das
+  Aktivieren (→active) bleibt für Agent-Token hart gesperrt (Injection-Schutz).
+  Neue Capability `system_prompt_write` (secure-by-default; Builder-Seed +
+  Migration 0052). Neue MCP-Tools `list/get/create/update/restore/transition_
+  system_prompt`; Track-1-Versions-Tools decken `entity_type='system_prompt'`
+  mit ab. security-reviewer clean. Web-UI-Policy-Toggle → Track 4.
 - **AI-native MCP-Ausbau (2026-06-27), Branch `claude/charming-pasteur-pxz2l8`,
   PR #266:** Design für 4 Tracks abgelegt (Plan
   `.claude/plan/2026-06-27-1100_ai-native-mcp-and-rights.md`; ADR-0037 Search,
