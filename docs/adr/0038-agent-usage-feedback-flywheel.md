@@ -65,6 +65,24 @@ sofort. Free-Text-`note` wird im UI escaped angezeigt (kein HTML-Render).
 - MCP: drei Tools; `tools-overview` listet sie gemaess Policy.
 - Bewusst **kein** MCP-Delete/Edit auf Events (Audit-Integritaet, ADR-0031).
 
+## Agenten-Verankerung (Folge, 2026-06-27)
+
+Die Tools *verfuegbar* zu haben heisst nicht, dass das LLM sie *nutzt* — ein
+Tool-Docstring wird erst beim Aufruf gelesen, nicht im Planungs-Prompt. Damit
+Agenten das Flywheel auch bedienen, ist die Nutzung dreifach im Prompt verankert
+(rein instruktiv, kein Zwang — passt zu „Vorschlag, kein Auto-Edit"):
+
+1. **`tools-overview`-Resolver (global, hoechster Hebel):** Ist `feedback_write`
+   aktiv, haengt der Resolver ein **Rueckmelde-Protokoll mit konkretem Beispiel**
+   an die Tool-Liste (`record_usage` nach jedem Einsatz, `submit_feedback` bei
+   veralteten/falschen Inhalten). Policy-gated — Agenten ohne die Capability
+   sehen weder Tool noch Protokoll. Erreicht jeden Agenten mit dem
+   `{{tools-overview}}`-Placeholder ohne Template-Pflege.
+2. **Default-System-Prompt-Templates:** je ein Methodik-Bullet in der
+   Hinweise-Sektion (im prozeduralen Fluss, nicht nur im Tool-Anhang).
+3. **Builder-Persona:** Rueckmelde-Disziplin in der „Erlaubt"-Sektion (beim
+   Konsistenz-Check Veraltetes melden statt uebergehen).
+
 ## Web-Surfacing (Folge, 2026-06-27)
 
 Das Kurations-Aggregat ist jetzt in der Web-UI sichtbar — bewusst rein lesend,

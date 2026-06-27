@@ -1400,6 +1400,32 @@ class TestToolsOverviewResolver:
         assert "get_agent(agent_id)" in result
         assert "fetch_agent(agent_id)" in result
 
+    def test_feedback_protocol_shown_when_feedback_write(self) -> None:
+        """Bei aktivem feedback_write erscheint das Rueckmelde-Protokoll (ADR-0038)."""
+        # Default-Policy hat feedback_write=True.
+        result = _async_run(
+            ToolsOverviewResolver().resolve("", self._policy_ctx(), _make_db())
+        ).text
+        assert "record_usage" in result
+        assert "Rueckmeldung" in result
+        assert "outcome" in result
+
+    def test_feedback_protocol_hidden_when_feedback_write_off(self) -> None:
+        """Ohne feedback_write: weder Tool-Eintrag noch Protokoll-Hinweis."""
+        result = _async_run(
+            ToolsOverviewResolver().resolve(
+                "", self._policy_ctx(feedback_write=False), _make_db()
+            )
+        ).text
+        assert "record_usage" not in result
+        assert "Rueckmeldung" not in result
+
+    def test_no_policy_hides_feedback_protocol(self) -> None:
+        """Ohne Policy (Persona-Body): kein Feedback-Tool, kein Protokoll."""
+        result = _async_run(ToolsOverviewResolver().resolve("", _ctx(), _make_db())).text
+        assert "record_usage" not in result
+        assert "Rueckmeldung" not in result
+
     def test_agent_read_assigned_marks_self_only(self) -> None:
         """Scope `assigned`: Hinweis „nur dein eigener Agent" + fetch_agent self-only."""
         from who2be_models import ReadScope

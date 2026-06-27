@@ -48,6 +48,12 @@ class ToolsOverviewResolver:
         if any_write:
             lines.append("")
             lines.append(_TOOLS_WRITE_NOTE)
+        # Rueckmelde-Protokoll: nur wenn der Agent das Flywheel auch bedienen darf.
+        # `policy is None` (z. B. Persona-Body) zeigt ohnehin keine Schreib-/
+        # Feedback-Tools — dann auch keinen Protokoll-Hinweis.
+        if policy is not None and policy.allows(AgentCapability.feedback_write):
+            lines.append("")
+            lines.append(_TOOLS_FEEDBACK_NOTE)
         return ResolveResult(text="\n".join(lines))
 
 
@@ -292,7 +298,7 @@ _TOOLS: list[_ToolDoc] = [
             "error) und gib Feedback (`submit_feedback`, signal helpful/outdated/"
             "incorrect/unclear) — so wird die AgentDB selbst-verbessernd. "
             "`get_feedback` liest das Aggregat (Kurations-Sicht). Feedback aendert "
-            "nie selbst Inhalte."
+            "nie selbst Inhalte. Wann genau: siehe Rueckmelde-Hinweis unten."
         ),
     ),
 ]
@@ -312,4 +318,24 @@ _TOOLS_WRITE_NOTE = (
     "**Schreibzugriff:** Die oben gelisteten Schreib-Tools sind fuer dich "
     "freigeschaltet. Tools, die hier nicht stehen, sind fuer diesen Agenten "
     "gesperrt und werden serverseitig abgelehnt — versuche sie nicht."
+)
+
+# Rueckmelde-Protokoll (ADR-0038). Erscheint nur, wenn `feedback_write` aktiv ist
+# — macht aus der reinen Tool-Liste eine Handlungsanweisung: WANN melde ich was?
+# Bewusst instruktiv, nicht erzwungen (append-only „Vorschlag, kein Auto-Edit").
+_TOOLS_FEEDBACK_NOTE = (
+    "**Rueckmeldung (mach das routinemaessig):** Damit die AgentDB lernt, welche "
+    "Inhalte wirklich helfen, melde nach JEDEM Einsatz eines Playbooks oder einer "
+    "Resource kurz zurueck:\n"
+    "- `record_usage(entity_type, entity_id, version?, outcome)` mit outcome "
+    "`applied` (angewandt), `skipped` (bewusst verworfen) oder `error` "
+    "(fehlgeschlagen).\n"
+    "- Wirkt ein Inhalt veraltet, falsch oder unklar? `submit_feedback(entity_type, "
+    "entity_id, signal, note?)` mit signal `outdated`/`incorrect`/`unclear` (oder "
+    "`helpful`, wenn es gut gepasst hat) — statt selbst umzuschreiben; ein Kurator "
+    "entscheidet ueber die Pflege.\n"
+    "Beispiel: nach fetch_playbook(P) angewandt → "
+    "record_usage('playbook', P, outcome='applied'); fiel ein veralteter Schritt "
+    "auf → submit_feedback('playbook', P, signal='outdated', note='Schritt 4 …'). "
+    "Diese Rueckmeldungen aendern nie selbst Inhalte und sind fuer den User unsichtbar."
 )
