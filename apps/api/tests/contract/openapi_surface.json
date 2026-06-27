@@ -146,6 +146,11 @@
   },
   {
     "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/feedback-items",
+    "operationId": "get_feedback_items_v1_workspaces__workspace_id__feedback_items_get"
+  },
+  {
+    "method": "GET",
     "path": "/v1/workspaces/{workspace_id}/feedback-overview",
     "operationId": "get_feedback_overview_v1_workspaces__workspace_id__feedback_overview_get"
   },

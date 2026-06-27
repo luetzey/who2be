@@ -1671,10 +1671,35 @@
       "dismissed": "Ignoriert",
       "error": "Status konnte nicht gesetzt werden."
     },
+    "inbox": {
+      "kpi": {
+        "open": "Offen",
+        "inProgress": "In Arbeit",
+        "addressed": "Erledigt",
+        "unused": "Ungenutzt"
+      },
+      "filter": {
+        "status": "Status",
+        "signal": "Signal",
+        "type": "Typ",
+        "allSignals": "Alle Signale",
+        "allTypes": "Alle Typen"
+      },
+      "status": {
+        "open": "Offen",
+        "in_progress": "In Arbeit",
+        "addressed": "Erledigt",
+        "dismissed": "Ignoriert",
+        "all": "Alle"
+      },
+      "empty": "Keine Feedbacks für diese Auswahl.",
+      "openElement": "Element öffnen"
+    },
     "overview": {
       "nav": "Feedback",
       "title": "Feedback",
-      "description": "Wie Agenten deine Inhalte nutzen und bewerten.",
+      "description": "Alle Rückmeldungen deiner Agenten an einem Ort verwalten.",
+      "sectionTitle": "Überblick (Elemente)",
       "empty": "Noch kein Feedback in diesem Workspace.",
       "loadError": "Übersicht konnte nicht geladen werden.",
       "col": {

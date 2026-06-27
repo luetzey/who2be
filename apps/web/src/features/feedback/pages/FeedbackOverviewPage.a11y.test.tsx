@@ -7,13 +7,14 @@ import { renderInRoutes } from '@/test/render'
 
 import { FeedbackOverviewPage } from './FeedbackOverviewPage'
 
-const { getFeedbackOverview, getFeedbackUnused } = vi.hoisted(() => ({
+const { getFeedbackOverview, getFeedbackUnused, getFeedbackItems } = vi.hoisted(() => ({
   getFeedbackOverview: vi.fn(),
   getFeedbackUnused: vi.fn(),
+  getFeedbackItems: vi.fn(),
 }))
 
 vi.mock('@/api/useApi', () => {
-  const api = { getFeedbackOverview, getFeedbackUnused }
+  const api = { getFeedbackOverview, getFeedbackUnused, getFeedbackItems }
   return { useApi: () => api }
 })
 
@@ -34,6 +35,23 @@ describe('FeedbackOverviewPage (a11y)', () => {
       ],
     }
     getFeedbackOverview.mockResolvedValue(overview)
+    getFeedbackItems.mockResolvedValue({
+      items: [
+        {
+          id: 'fb1',
+          entity_type: 'persona',
+          entity_id: 'pe1',
+          name: 'Coach-Persona',
+          version: 2,
+          signal: 'outdated',
+          note: 'Schritt 4 veraltet',
+          agent_id: 'a1',
+          created_at: '2026-06-20T10:00:00Z',
+          resolution: null,
+        },
+      ],
+      counts: { open: 1, in_progress: 0, addressed: 0, dismissed: 0 },
+    })
     getFeedbackUnused.mockResolvedValue({
       items: [{ entity_type: 'resource', entity_id: 'r9', name: 'Altes Doku' }],
     })

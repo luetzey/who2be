@@ -1,24 +1,35 @@
 import { screen, waitFor } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { FeedbackOverview, FeedbackUnused } from '@/api/types'
 import { renderInRoutes } from '@/test/render'
 
 import { FeedbackOverviewPage } from './FeedbackOverviewPage'
 
-const { getFeedbackOverview, getFeedbackUnused } = vi.hoisted(() => ({
+const { getFeedbackOverview, getFeedbackUnused, getFeedbackItems } = vi.hoisted(() => ({
   getFeedbackOverview: vi.fn(),
   getFeedbackUnused: vi.fn(),
+  getFeedbackItems: vi.fn(),
 }))
 
 // Stabile API-Referenz (wie der echte `useMemo`-basierte `useApi`) — sonst
 // feuert der `useEffect(load,[load])` des Hooks in einer Schleife.
 vi.mock('@/api/useApi', () => {
-  const api = { getFeedbackOverview, getFeedbackUnused }
+  const api = { getFeedbackOverview, getFeedbackUnused, getFeedbackItems }
   return { useApi: () => api }
 })
 
 const EMPTY_UNUSED: FeedbackUnused = { items: [] }
+const EMPTY_ITEMS = {
+  items: [],
+  counts: { open: 0, in_progress: 0, addressed: 0, dismissed: 0 },
+}
+
+beforeEach(() => {
+  // Der Posteingang (FeedbackInbox) laedt eigenstaendig; in den Page-Tests
+  // pruefen wir den Ueberblick-Teil, daher der Posteingang hier leer.
+  getFeedbackItems.mockResolvedValue(EMPTY_ITEMS)
+})
 
 function renderPage() {
   return renderInRoutes(<FeedbackOverviewPage />, {

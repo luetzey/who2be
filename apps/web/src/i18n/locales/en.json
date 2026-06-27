@@ -1671,10 +1671,35 @@
       "dismissed": "Dismissed",
       "error": "Could not set the status."
     },
+    "inbox": {
+      "kpi": {
+        "open": "Open",
+        "inProgress": "In progress",
+        "addressed": "Done",
+        "unused": "Unused"
+      },
+      "filter": {
+        "status": "Status",
+        "signal": "Signal",
+        "type": "Type",
+        "allSignals": "All signals",
+        "allTypes": "All types"
+      },
+      "status": {
+        "open": "Open",
+        "in_progress": "In progress",
+        "addressed": "Done",
+        "dismissed": "Dismissed",
+        "all": "All"
+      },
+      "empty": "No feedback for this selection.",
+      "openElement": "Open element"
+    },
     "overview": {
       "nav": "Feedback",
       "title": "Feedback",
-      "description": "How agents use and rate your content.",
+      "description": "Manage all your agents' feedback in one place.",
+      "sectionTitle": "Overview (elements)",
       "empty": "No feedback in this workspace yet.",
       "loadError": "Could not load the overview.",
       "col": {

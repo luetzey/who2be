@@ -4,6 +4,14 @@ _Stand: 2026-06-16_
 
 ## Funktioniert
 
+- **Feedback-Seite Management-Redesign (ADR-0038, 2026-06-27), Branch
+  `feat/feedback-management`:** `/feedback` ist jetzt ein Management-Center statt
+  Statistik-Seite. Neuer Endpunkt `GET …/feedback-items` (alle Feedbacks
+  workspace-weit + Element-Name + Triage-Status + KPI-Zähler, editor-gated, ≤500).
+  Web: `FeedbackInbox` mit KPI-Leiste (klickbare Status-Filter) + Filtern
+  (Status/Signal/Typ, client-seitig) + Inline-Triage je Eintrag; darunter der
+  bisherige „Überblick" (Aggregate + Stale). Default „Offen". **DoD grün:** Python
+  894, mypy 296, ruff clean; Web 405, 0 Lint-Errors, tsc/build clean.
 - **Feedback-Triage (ADR-0038-Folge, 2026-06-27), Branch `feat/feedback-triage`
   (gestapelt auf `feat/feedback-unused`):** Triage pro Feedback-Eintrag,
   append-only gelöst — Migration 0054 `feedback_resolution` (FK→agent_feedback

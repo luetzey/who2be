@@ -154,6 +154,18 @@ def test_flywheel_records_usage_feedback_and_summarizes(
             # Drill-down zeigt nun den aktuellen (juengsten) Triage-Status.
             ev2 = client.get(f"{fbase}/feedback/playbook/{pid}/events", headers=auth).json()
             assert ev2["feedback"][0]["resolution"] == "addressed"
+
+            # Zentraler Posteingang: das Feedback erscheint mit Element-Name +
+            # aktuellem Status; die Zaehler spiegeln die Triage.
+            inbox = client.get(f"{fbase}/feedback-items", headers=auth)
+            assert inbox.status_code == 200, inbox.text
+            ibody = inbox.json()
+            entry = next(i for i in ibody["items"] if i["id"] == fid)
+            assert entry["name"] == "PB"
+            assert entry["signal"] == "outdated"
+            assert entry["resolution"] == "addressed"
+            assert ibody["counts"]["addressed"] >= 1
+            assert ibody["counts"]["open"] == 0
             # Unbekanntes Feedback -> 404.
             assert (
                 client.post(

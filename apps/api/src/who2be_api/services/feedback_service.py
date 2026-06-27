@@ -20,6 +20,8 @@ from who2be_models import (
     AgentFeedbackRead,
     FeedbackCreate,
     FeedbackEvents,
+    FeedbackItemCounts,
+    FeedbackItems,
     FeedbackOverview,
     FeedbackResolutionCreate,
     FeedbackSummary,
@@ -32,6 +34,8 @@ from who2be_models import (
 
 # Maximale Anzahl Einzel-Ereignisse je Liste in der Drill-down-Sicht.
 _EVENTS_LIMIT = 50
+# Obergrenze fuer den workspace-weiten Feedback-Posteingang.
+_ITEMS_LIMIT = 500
 
 
 def _entity_not_found() -> HTTPException:
@@ -110,6 +114,20 @@ class FeedbackService:
         require_role(ctx, WorkspaceRole.editor)
         items = await self._repo.unused(ctx.workspace_id)
         return FeedbackUnused(items=items)
+
+    async def get_items(self, ctx: WorkspaceContext) -> FeedbackItems:
+        # Zentraler Posteingang: alle Feedbacks + Status-Zaehler fuer die KPI-
+        # Leiste. Die Zaehler leiten sich aus derselben (gekappten) Liste ab —
+        # bei realistischem Kurations-Volumen exakt.
+        require_role(ctx, WorkspaceRole.editor)
+        items = await self._repo.list_items(ctx.workspace_id, _ITEMS_LIMIT)
+        counts = FeedbackItemCounts(
+            open=sum(1 for i in items if i.resolution is None),
+            in_progress=sum(1 for i in items if i.resolution == "in_progress"),
+            addressed=sum(1 for i in items if i.resolution == "addressed"),
+            dismissed=sum(1 for i in items if i.resolution == "dismissed"),
+        )
+        return FeedbackItems(items=items, counts=counts)
 
     async def set_resolution(
         self, ctx: WorkspaceContext, feedback_id: UUID, data: FeedbackResolutionCreate

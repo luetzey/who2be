@@ -769,6 +769,33 @@ export interface FeedbackResolutionInput {
   note?: string
 }
 
+// Ein Feedback workspace-weit, angereichert um den Element-Namen — Ruckgrat des
+// zentralen Posteingangs (`GET …/feedback-items`).
+export interface FeedbackItem {
+  id: string
+  entity_type: FeedbackTarget
+  entity_id: string
+  name: string
+  version: number | null
+  signal: FeedbackSignal
+  note: string | null
+  agent_id: string | null
+  created_at: string
+  resolution: FeedbackResolution | null
+}
+
+export interface FeedbackItemCounts {
+  open: number
+  in_progress: number
+  addressed: number
+  dismissed: number
+}
+
+export interface FeedbackItems {
+  items: FeedbackItem[]
+  counts: FeedbackItemCounts
+}
+
 export interface UsageEvent {
   id: string
   entity_type: FeedbackTarget

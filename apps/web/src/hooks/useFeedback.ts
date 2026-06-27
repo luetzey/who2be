@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 import type {
   FeedbackEvents,
+  FeedbackItems,
   FeedbackOverview,
   FeedbackResolution,
   FeedbackSummary,
@@ -118,6 +119,45 @@ export function useFeedbackOverview(): UseFeedbackOverviewResult {
   useEffect(load, [load])
 
   return { overview, loading, error, reload: load }
+}
+
+export interface UseFeedbackItemsResult {
+  data: FeedbackItems | null
+  loading: boolean
+  error: string | null
+  reload: () => void
+  // Inline-Triage aus dem Posteingang: setzt den Status + laedt die Liste neu.
+  setResolution: (feedbackId: string, resolution: FeedbackResolution) => Promise<void>
+}
+
+/** Laedt den workspace-weiten Feedback-Posteingang (alle Eintraege + Status-Zaehler). */
+export function useFeedbackItems(): UseFeedbackItemsResult {
+  const api = useApi()
+  const [data, setData] = useState<FeedbackItems | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = useCallback(() => {
+    setLoading(true)
+    setError(null)
+    api
+      .getFeedbackItems()
+      .then(setData)
+      .catch((cause: unknown) => setError(describeError(cause)))
+      .finally(() => setLoading(false))
+  }, [api])
+
+  useEffect(load, [load])
+
+  const setResolution = useCallback(
+    async (feedbackId: string, resolution: FeedbackResolution) => {
+      await api.setFeedbackResolution(feedbackId, { resolution })
+      load()
+    },
+    [api, load],
+  )
+
+  return { data, loading, error, reload: load, setResolution }
 }
 
 export interface UseFeedbackUnusedResult {

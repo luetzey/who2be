@@ -13,6 +13,7 @@ import asyncpg
 from who2be_models import (
     AgentFeedbackRead,
     FeedbackEvents,
+    FeedbackItem,
     FeedbackOverviewItem,
     FeedbackSummary,
     FeedbackUnusedItem,
@@ -61,6 +62,8 @@ class FeedbackRepository(Protocol):
     async def overview(self, workspace_id: UUID) -> list[FeedbackOverviewItem]: ...
 
     async def unused(self, workspace_id: UUID) -> list[FeedbackUnusedItem]: ...
+
+    async def list_items(self, workspace_id: UUID, limit: int) -> list[FeedbackItem]: ...
 
     async def feedback_belongs_to(self, workspace_id: UUID, feedback_id: UUID) -> bool: ...
 
@@ -311,6 +314,31 @@ class PgFeedbackRepository:
             workspace_id,
         )
         return [FeedbackUnusedItem.model_validate(dict(r)) for r in rows]
+
+    async def list_items(self, workspace_id: UUID, limit: int) -> list[FeedbackItem]:
+        # Alle qualitativen Feedbacks des Workspaces + Element-Name (Namens-JOIN
+        # filtert geloeschte Elemente raus) + aktueller Triage-Status. Speist den
+        # zentralen Posteingang; serverseitig gekappt.
+        rows = await self._pool.fetch(
+            "SELECT f.id, f.entity_type, f.entity_id, f.version, f.signal, f.note, "
+            "f.agent_id, f.created_at, "
+            "(SELECT r.resolution FROM feedback_resolution r "
+            "   WHERE r.feedback_id = f.id ORDER BY r.created_at DESC LIMIT 1) AS resolution, "
+            "COALESCE(p.name, pb.name, rs.name) AS name "
+            "FROM agent_feedback f "
+            "LEFT JOIN persona p   ON f.entity_type = 'persona'  "
+            "  AND p.id = f.entity_id  AND p.workspace_id = $1 "
+            "LEFT JOIN playbook pb  ON f.entity_type = 'playbook' "
+            "  AND pb.id = f.entity_id AND pb.workspace_id = $1 "
+            "LEFT JOIN resource rs  ON f.entity_type = 'resource' "
+            "  AND rs.id = f.entity_id AND rs.workspace_id = $1 "
+            "WHERE f.workspace_id = $1 "
+            "  AND COALESCE(p.name, pb.name, rs.name) IS NOT NULL "
+            "ORDER BY f.created_at DESC LIMIT $2",
+            workspace_id,
+            limit,
+        )
+        return [FeedbackItem.model_validate(dict(r)) for r in rows]
 
     async def feedback_belongs_to(self, workspace_id: UUID, feedback_id: UUID) -> bool:
         owned = await self._pool.fetchval(
