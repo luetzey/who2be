@@ -140,6 +140,16 @@
     "operationId": "get_dashboard_v1_workspaces__workspace_id__dashboard_get"
   },
   {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/feedback",
+    "operationId": "submit_feedback_v1_workspaces__workspace_id__feedback_post"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/feedback/{entity_type}/{entity_id}",
+    "operationId": "get_feedback_v1_workspaces__workspace_id__feedback__entity_type___entity_id__get"
+  },
+  {
     "method": "GET",
     "path": "/v1/workspaces/{workspace_id}/invitations",
     "operationId": "list_invitations_v1_workspaces__workspace_id__invitations_get"
@@ -466,6 +476,11 @@
   },
   {
     "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/search",
+    "operationId": "search_v1_workspaces__workspace_id__search_get"
+  },
+  {
+    "method": "GET",
     "path": "/v1/workspaces/{workspace_id}/system-prompts",
     "operationId": "list_templates_v1_workspaces__workspace_id__system_prompts_get"
   },
@@ -538,6 +553,11 @@
     "method": "POST",
     "path": "/v1/workspaces/{workspace_id}/tokens/{token_id}/rotate",
     "operationId": "rotate_token_v1_workspaces__workspace_id__tokens__token_id__rotate_post"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/usage-events",
+    "operationId": "record_usage_v1_workspaces__workspace_id__usage_events_post"
   },
   {
     "method": "GET",
