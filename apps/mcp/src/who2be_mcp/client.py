@@ -17,9 +17,12 @@ from who2be_models import (
     DEFAULT_LOCALE,
     AgentCopy,
     AgentCreate,
+    AgentFeedbackRead,
     AgentRead,
     AgentUpdate,
     AgentWithRenderedPrompt,
+    FeedbackCreate,
+    FeedbackSummary,
     PersonaCreate,
     PersonaPlaybookLinkSet,
     PersonaRead,
@@ -46,6 +49,8 @@ from who2be_models import (
     SystemPromptTemplateUpdate,
     SystemPromptTemplateVersionRead,
     TriggerOverview,
+    UsageEventCreate,
+    UsageEventRead,
     VersionDiff,
     VersionTransitionRequest,
     WhoAmIRead,
@@ -644,3 +649,20 @@ class ApiClient:
             data,
         )
         return SystemPromptTemplateVersionRead.model_validate(body)
+
+    # ------------------------------------------------------------------
+    # Usage-/Feedback-Flywheel (ADR-0038). Append-only Telemetrie; verlangt
+    # `feedback_write` (Default an). `get_feedback` ist editor-gated.
+    # ------------------------------------------------------------------
+
+    async def record_usage(self, data: UsageEventCreate) -> UsageEventRead:
+        body = await self._write("POST", f"{self._workspace_prefix}/usage-events", data)
+        return UsageEventRead.model_validate(body)
+
+    async def submit_feedback(self, data: FeedbackCreate) -> AgentFeedbackRead:
+        body = await self._write("POST", f"{self._workspace_prefix}/feedback", data)
+        return AgentFeedbackRead.model_validate(body)
+
+    async def get_feedback(self, entity_type: str, entity_id: UUID) -> FeedbackSummary:
+        data = await self._get(f"{self._workspace_prefix}/feedback/{entity_type}/{entity_id}")
+        return FeedbackSummary.model_validate(data)

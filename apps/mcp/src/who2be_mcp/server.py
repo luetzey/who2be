@@ -35,9 +35,13 @@ from who2be_models import (
     TRANSITION_RULE_DOC,
     AgentCopy,
     AgentCreate,
+    AgentFeedbackRead,
     AgentRead,
     AgentUpdate,
     AgentWithRenderedPrompt,
+    FeedbackCreate,
+    FeedbackSummary,
+    FeedbackTarget,
     PersonaCreate,
     PersonaPlaybookLinkSet,
     PersonaRead,
@@ -62,6 +66,8 @@ from who2be_models import (
     SystemPromptTemplateUpdate,
     SystemPromptTemplateVersionRead,
     TriggerOverview,
+    UsageEventCreate,
+    UsageEventRead,
     VersionDiff,
     VersionStatus,
     VersionTransitionRequest,
@@ -1010,6 +1016,56 @@ async def transition_system_prompt(
     return await client.transition_system_prompt_version(
         _parse_uuid(template_id, "system_prompt"), version, data
     )
+
+
+# ---------------------------------------------------------------------------
+# Usage-/Feedback-Flywheel (ADR-0038). Append-only Telemetrie, mit der ein Agent
+# zurueckmeldet, was er genutzt hat und wie gut es war — macht die AgentDB
+# selbst-verbessernd. Verlangt `feedback_write` (Default an); fliesst NIE in
+# einen gerenderten System-Prompt (kein Injection-Vektor).
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool
+@with_tool_log("record_usage")
+async def record_usage(data: UsageEventCreate) -> UsageEventRead:
+    """Meldet, dass du ein Element genutzt hast (append-only Telemetrie).
+
+    `entity_type` ∈ {persona, playbook, resource}, `entity_id` das genutzte
+    Element, optional `version` und `outcome` ∈ {applied, skipped, error}. Nutze
+    das nach jedem Einsatz eines Playbooks/einer Resource — die Aggregate
+    speisen die Kurations-Sicht (welche Inhalte wirklich helfen).
+    """
+    client = await build_client()
+    return await client.record_usage(data)
+
+
+@mcp.tool
+@with_tool_log("submit_feedback")
+async def submit_feedback(data: FeedbackCreate) -> AgentFeedbackRead:
+    """Gibt qualitatives Feedback zu einem Element (Vorschlag, kein Auto-Edit).
+
+    `signal` ∈ {helpful, outdated, incorrect, unclear} + optionale `note`. Melde
+    so veraltete/fehlerhafte Inhalte, statt sie selbst umzuschreiben — ein
+    Kurator/Mensch entscheidet ueber die Pflege. Feedback aktiviert oder aendert
+    nie Inhalte.
+    """
+    client = await build_client()
+    return await client.submit_feedback(data)
+
+
+@mcp.tool
+@with_tool_log("get_feedback")
+async def get_feedback(entity_type: FeedbackTarget, entity_id: str) -> FeedbackSummary:
+    """Liest das Feedback-Aggregat eines Elements (Kurations-Sicht, editor+).
+
+    Liefert `usage_count`, `by_outcome`/`by_signal`-Zaehler und die juengsten
+    Notizen — die Grundlage, um zu entscheiden, was gepflegt, gemerged oder
+    retired gehoert.
+    """
+    parsed = _parse_uuid(entity_id, entity_type)
+    client = await build_client()
+    return await client.get_feedback(entity_type, parsed)
 
 
 def main() -> None:

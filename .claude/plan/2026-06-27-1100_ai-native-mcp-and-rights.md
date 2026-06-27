@@ -30,7 +30,16 @@ abschliessbar und liefert eigenstaendigen Wert.
   `get_version`, `diff_versions` als MCP-Tools (Entity-Dispatch über
   Pfad-/Model-Maps im Client). 12 neue Tool-Tests + volle MCP-Suite grün (111),
   ruff/mypy sauber. Keine Migration. Branch `claude/charming-pasteur-pxz2l8`.
-- Tracks 2/3/4 offen, sequenziell nach diesem Plan.
+- **Track 3 — ERLEDIGT (2026-06-27):** Feedback-Flywheel. Migration 0053
+  (append-only `usage_event` + `agent_feedback`, RLS + nur SELECT/INSERT-Grant),
+  Models (`feedback.py`), Capability `feedback_write` (default True), Repo +
+  Service + Router (`/usage-events`, `/feedback`, `/feedback/{type}/{id}`),
+  MCP-Tools `record_usage`/`submit_feedback`/`get_feedback`, Tools-Übersicht.
+  Tests: Gate (default True/disable), MCP-Adapter, DB-Integrationstest. ruff `.`
+  + mypy (177 Source) clean; DB-freie Tests grün. Branch
+  `claude/track3-feedback-flywheel` (gestapelt auf Track 1/Builder). Dashboard-
+  Surfacing der Aggregate als Folge-Schritt vermerkt.
+- Tracks 2/4 offen, sequenziell nach diesem Plan.
 
 ## Track 1 — Read-only-Adapter-Tools (billigste Wins, kein neuer ADR)
 

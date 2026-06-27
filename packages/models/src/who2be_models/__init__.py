@@ -26,6 +26,16 @@ from who2be_models.dashboard import (
     EntityStatusDistribution,
 )
 from who2be_models.errors import ActionableBy, ApiProblem, ProblemReason
+from who2be_models.feedback import (
+    AgentFeedbackRead,
+    FeedbackCreate,
+    FeedbackSignal,
+    FeedbackSummary,
+    FeedbackTarget,
+    UsageEventCreate,
+    UsageEventRead,
+    UsageOutcome,
+)
 from who2be_models.invitation import (
     InvitationAccept,
     InvitationCreate,
@@ -148,6 +158,14 @@ __all__ = [
     "EmbeddingMode",
     "EntityStatusDistribution",
     "EntityType",
+    "AgentFeedbackRead",
+    "FeedbackCreate",
+    "FeedbackSignal",
+    "FeedbackSummary",
+    "FeedbackTarget",
+    "UsageEventCreate",
+    "UsageEventRead",
+    "UsageOutcome",
     "InvitationAccept",
     "InvitationCreate",
     "InvitationCreated",

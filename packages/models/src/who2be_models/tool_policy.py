@@ -58,6 +58,7 @@ class AgentCapability(StrEnum):
     resource_write = "resource_write"
     agent_write = "agent_write"
     system_prompt_write = "system_prompt_write"
+    feedback_write = "feedback_write"
     promote_retire = "promote_retire"
 
 
@@ -91,6 +92,10 @@ class AgentToolPolicy(BaseModel):
     # Aktivieren (→active) bleibt serverseitig fuer agent-gebundene Tokens hart
     # gesperrt — diese Capability schaltet es NICHT frei.
     system_prompt_write: bool = False
+    # Usage-/Feedback-Flywheel (ADR-0038). Default True, abweichend vom
+    # secure-by-default-Writes-Prinzip: append-only Telemetrie ist risikoarm und
+    # der Zweck des Flywheels; der Owner kann sie pro Agent abschalten.
+    feedback_write: bool = True
     promote_retire: bool = False
 
     def allows(self, capability: AgentCapability) -> bool:
@@ -140,6 +145,7 @@ class AgentToolPolicy(BaseModel):
             "resource_write",
             "agent_write",
             "system_prompt_write",
+            "feedback_write",
             "promote_retire",
         )
         return all(not getattr(self, name) or getattr(other, name) for name in bool_fields)
