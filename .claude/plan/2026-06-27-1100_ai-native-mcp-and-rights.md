@@ -39,7 +39,15 @@ abschliessbar und liefert eigenstaendigen Wert.
   + mypy (177 Source) clean; DB-freie Tests grün. Branch
   `claude/track3-feedback-flywheel` (gestapelt auf Track 1/Builder). Dashboard-
   Surfacing der Aggregate als Folge-Schritt vermerkt.
-- Tracks 2/4 offen, sequenziell nach diesem Plan.
+- **Track 2 — ERLEDIGT (2026-06-27):** Discovery/Search. Kein Migration —
+  Runtime-FTS (`to_tsvector`/`plainto_tsquery`/`ts_rank`) über Name + Content der
+  aktiven Version (Locale de). `SearchHit`-Model, Repo + Service (Read-Scope-
+  Filter) + Router (`GET /search?q=&types=&limit=`), MCP-Tool `search`, Tools-
+  Übersicht (`search`-read_domain). Tests: MCP-Adapter + DB-Integrationstest.
+  ruff `.` + mypy (179 Source) clean; DB-freie Tests grün (246). Branch
+  `claude/track2-search` (gestapelt auf Track 3). GIN-Index + pgvector (Stufe B)
+  als Folge.
+- Track 4 offen (feinkörnige Rechte + Web-Policy-Editor).
 
 ## Track 1 — Read-only-Adapter-Tools (billigste Wins, kein neuer ADR)
 

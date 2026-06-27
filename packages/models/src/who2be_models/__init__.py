@@ -100,6 +100,7 @@ from who2be_models.resource import (
     SubResourceLinkSet,
     SubResourceRead,
 )
+from who2be_models.search import SearchHit, SearchType
 from who2be_models.status import (
     ALLOWED_TRANSITIONS,
     TRANSITION_RULE_DOC,
@@ -166,6 +167,8 @@ __all__ = [
     "UsageEventCreate",
     "UsageEventRead",
     "UsageOutcome",
+    "SearchHit",
+    "SearchType",
     "InvitationAccept",
     "InvitationCreate",
     "InvitationCreated",
