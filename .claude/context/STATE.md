@@ -4,6 +4,16 @@ _Stand: 2026-06-16_
 
 ## Funktioniert
 
+- **Builder-Playbooks + Feedback (ADR-0038, Option C, 2026-06-27), Branch
+  `feat/builder-playbook-feedback`:** Die vier Builder-Playbooks (persona/playbook/
+  agent/consistency) bekommen eine kleine „Feedback"-Sektion (Heading+Paragraph):
+  beim Lesen bestehender Elemente Veraltetes/Falsches via submit_feedback melden,
+  Nutzung via record_usage. Quelle (4 *_body.json, +14 je) + Refresh-Migration
+  0056 für Bestand (append an content.body, neue aktive Version, current_version
+  gehoben; nur Playbooks, die an Persona 'Builder' geknüpft sind + Builder-Name,
+  idempotent per Block-id). **DoD grün:** Python 896 pytest (Migrations-Test über
+  alle 4 Playbooks), mypy 298, ruff clean. Web/API-Surface unberührt.
+
 - **Builder-Feedback-Refresh-Migration (ADR-0038, 2026-06-27), Branch
   `feat/builder-feedback-refresh`:** PR #272 hat die Feedback-Bullets nur in die
   Seed-Quelldateien geschrieben; bestehende Workspaces (Builder vor #272 geseedet,

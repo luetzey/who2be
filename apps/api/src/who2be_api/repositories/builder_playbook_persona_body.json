@@ -180,5 +180,19 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [{"type": "text", "text": "Bei verhaltensrelevanten Updates: laufende Sitzungen halten den alten Stand gecached — fuer die neue Stimme einen neuen Chat starten. Bei Themen ausserhalb der Persona-Pflege hoeflich an die zustaendige Stelle rueckverweisen.", "styles": {}}],
     "children": []
+  },
+  {
+    "id": "pb-feedback-h",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Feedback", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-feedback-p",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Faellt dir beim Lesen bestehender Elemente Veraltetes oder Falsches auf, melde es via submit_feedback (signal outdated/incorrect/unclear) statt es stillschweigend zu uebergehen; genutzte Playbooks/Resources via record_usage (applied/skipped/error). So wird die AgentDB selbst-verbessernd.", "styles": {}}],
+    "children": []
   }
 ]
