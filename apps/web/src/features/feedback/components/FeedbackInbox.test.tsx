@@ -47,7 +47,7 @@ const data: FeedbackItems = {
 }
 
 function renderInbox() {
-  return renderInRoutes(<FeedbackInbox unusedCount={3} />, {
+  return renderInRoutes(<FeedbackInbox />, {
     path: '/w/:workspaceId/feedback',
     initialEntries: ['/w/ws-1/feedback'],
   })
@@ -65,8 +65,8 @@ describe('FeedbackInbox', () => {
     // Default-Filter „Offen" → nur das untriagierte Feedback ist sichtbar.
     expect(await screen.findByRole('link', { name: 'Onboarding' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'API-Doku' })).not.toBeInTheDocument()
-    // Ungenutzt-KPI kommt aus der Prop.
-    expect(screen.getByText('3')).toBeInTheDocument()
+    // KPI-Karte „Offen" als eigene Button-Kachel (Zaehler + Label).
+    expect(screen.getByRole('button', { name: /Offen/ })).toBeInTheDocument()
   })
 
   it('blendet erledigte Feedbacks ein, wenn der Status-Filter „Alle" ist', async () => {

@@ -1,25 +1,23 @@
 import { screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { FeedbackOverview, FeedbackUnused } from '@/api/types'
+import type { FeedbackOverview } from '@/api/types'
 import { renderInRoutes } from '@/test/render'
 
 import { FeedbackOverviewPage } from './FeedbackOverviewPage'
 
-const { getFeedbackOverview, getFeedbackUnused, getFeedbackItems } = vi.hoisted(() => ({
+const { getFeedbackOverview, getFeedbackItems } = vi.hoisted(() => ({
   getFeedbackOverview: vi.fn(),
-  getFeedbackUnused: vi.fn(),
   getFeedbackItems: vi.fn(),
 }))
 
 // Stabile API-Referenz (wie der echte `useMemo`-basierte `useApi`) — sonst
 // feuert der `useEffect(load,[load])` des Hooks in einer Schleife.
 vi.mock('@/api/useApi', () => {
-  const api = { getFeedbackOverview, getFeedbackUnused, getFeedbackItems }
+  const api = { getFeedbackOverview, getFeedbackItems }
   return { useApi: () => api }
 })
 
-const EMPTY_UNUSED: FeedbackUnused = { items: [] }
 const EMPTY_ITEMS = {
   items: [],
   counts: { open: 0, in_progress: 0, addressed: 0, dismissed: 0 },
@@ -55,7 +53,6 @@ describe('FeedbackOverviewPage', () => {
       ],
     }
     getFeedbackOverview.mockResolvedValue(overview)
-    getFeedbackUnused.mockResolvedValue(EMPTY_UNUSED)
     renderPage()
 
     const link = await screen.findByRole('link', { name: 'Onboarding' })
@@ -67,22 +64,10 @@ describe('FeedbackOverviewPage', () => {
 
   it('zeigt einen Empty-State, wenn kein Feedback vorliegt', async () => {
     getFeedbackOverview.mockResolvedValue({ items: [] } satisfies FeedbackOverview)
-    getFeedbackUnused.mockResolvedValue(EMPTY_UNUSED)
     renderPage()
 
     await waitFor(() =>
       expect(screen.getByText('Noch kein Feedback in diesem Workspace.')).toBeInTheDocument(),
     )
-  })
-
-  it('listet ungenutzte aktive Elemente in der Stale-Sektion', async () => {
-    getFeedbackOverview.mockResolvedValue({ items: [] } satisfies FeedbackOverview)
-    getFeedbackUnused.mockResolvedValue({
-      items: [{ entity_type: 'resource', entity_id: 'r9', name: 'Altes Doku' }],
-    } satisfies FeedbackUnused)
-    renderPage()
-
-    const link = await screen.findByRole('link', { name: 'Altes Doku' })
-    expect(link).toHaveAttribute('href', '/w/ws-1/resources/r9')
   })
 })

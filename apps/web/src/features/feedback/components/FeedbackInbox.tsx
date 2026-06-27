@@ -45,17 +45,12 @@ function matchesStatus(item: FeedbackItem, status: StatusFilter): boolean {
   return item.resolution === status
 }
 
-interface FeedbackInboxProps {
-  /** Anzahl ungenutzter Elemente — fuer die KPI-Leiste (aus der Stale-Sicht). */
-  unusedCount?: number
-}
-
 /**
  * Zentraler Feedback-Posteingang (ADR-0038): KPI-Leiste + Filter + abarbeitbare
  * Liste aller Einzel-Feedbacks mit Inline-Triage. Editor-gated; die Page rendert
  * das nur fuer editor+.
  */
-export function FeedbackInbox({ unusedCount }: FeedbackInboxProps) {
+export function FeedbackInbox() {
   const { t } = useTranslation('feedback')
   const wsPath = useWorkspacePath()
   const { data, loading, error, setResolution } = useFeedbackItems()
@@ -80,9 +75,8 @@ export function FeedbackInbox({ unusedCount }: FeedbackInboxProps) {
     }
   }
 
-  // KPI-Karten: die ersten drei setzen den Status-Filter; Ungenutzt ist rein
-  // informativ (gehoert in den Ueberblick).
-  const kpis: { key: string; label: string; value: number; filter?: StatusFilter }[] = [
+  // KPI-Karten setzen den Status-Filter.
+  const kpis: { key: string; label: string; value: number; filter: StatusFilter }[] = [
     { key: 'open', label: t('inbox.kpi.open'), value: counts?.open ?? 0, filter: 'open' },
     {
       key: 'in_progress',
@@ -96,43 +90,27 @@ export function FeedbackInbox({ unusedCount }: FeedbackInboxProps) {
       value: counts?.addressed ?? 0,
       filter: 'addressed',
     },
-    { key: 'unused', label: t('inbox.kpi.unused'), value: unusedCount ?? 0 },
   ]
 
   return (
     <div className="flex flex-col gap-4">
-      {/* KPI-Leiste */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {kpis.map((kpi) => {
-          const filter = kpi.filter
-          const content = (
-            <>
-              <span className="text-2xl font-semibold tabular-nums">{kpi.value}</span>
-              <span className="text-sm text-muted-foreground">{kpi.label}</span>
-            </>
-          )
-          return filter !== undefined ? (
-            <Button
-              key={kpi.key}
-              type="button"
-              variant="ghost"
-              onClick={() => setStatus(filter)}
-              className={cn(
-                'flex h-auto flex-col items-start gap-1 rounded-lg border p-4 whitespace-normal',
-                status === filter && 'border-brand bg-accent',
-              )}
-            >
-              {content}
-            </Button>
-          ) : (
-            <div
-              key={kpi.key}
-              className="flex flex-col gap-1 rounded-lg border p-4 text-left"
-            >
-              {content}
-            </div>
-          )
-        })}
+      {/* KPI-Leiste — klickbar als Status-Filter */}
+      <div className="grid gap-3 sm:grid-cols-3">
+        {kpis.map((kpi) => (
+          <Button
+            key={kpi.key}
+            type="button"
+            variant="ghost"
+            onClick={() => setStatus(kpi.filter)}
+            className={cn(
+              'flex h-auto flex-col items-start gap-1 rounded-lg border p-4 whitespace-normal',
+              status === kpi.filter && 'border-brand bg-accent',
+            )}
+          >
+            <span className="text-2xl font-semibold tabular-nums">{kpi.value}</span>
+            <span className="text-sm text-muted-foreground">{kpi.label}</span>
+          </Button>
+        ))}
       </div>
 
       {/* Filterleiste */}
