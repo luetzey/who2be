@@ -15,6 +15,10 @@ import type {
   EntitlementInfo,
   EntityExport,
   EntityExportFormat,
+  FeedbackEvents,
+  FeedbackOverview,
+  FeedbackSummary,
+  FeedbackTarget,
   GdprExport,
   Invitation,
   InvitationAcceptResult,
@@ -257,6 +261,9 @@ export interface Api {
   rotateToken: (id: string) => Promise<TokenCreated>
   revokeToken: (id: string) => Promise<void>
   getDashboard: (page?: number) => Promise<DashboardData>
+  getFeedback: (type: FeedbackTarget, id: string) => Promise<FeedbackSummary>
+  getFeedbackEvents: (type: FeedbackTarget, id: string) => Promise<FeedbackEvents>
+  getFeedbackOverview: () => Promise<FeedbackOverview>
   transitionPersonaVersion: (
     id: string,
     version: number,
@@ -475,6 +482,12 @@ export function createApi(token: string, workspaceId: string): Api {
         token,
         `${ws}/dashboard${page && page > 1 ? `?page=${page}` : ''}`,
       ),
+    getFeedback: (type, id) =>
+      request<FeedbackSummary>(token, `${ws}/feedback/${type}/${id}`),
+    getFeedbackEvents: (type, id) =>
+      request<FeedbackEvents>(token, `${ws}/feedback/${type}/${id}/events`),
+    getFeedbackOverview: () =>
+      request<FeedbackOverview>(token, `${ws}/feedback-overview`),
     transitionPersonaVersion: (id, version, to) =>
       request<PersonaVersion>(
         token,

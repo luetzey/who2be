@@ -107,3 +107,49 @@ class FeedbackSummary(BaseModel):
     by_outcome: dict[str, int] = Field(default_factory=dict)
     by_signal: dict[str, int] = Field(default_factory=dict)
     recent_notes: list[str] = Field(default_factory=list)
+
+
+class FeedbackEvents(BaseModel):
+    """Drill-down fuer `get_feedback_events` — die juengsten Einzel-Ereignisse.
+
+    Im Gegensatz zu `FeedbackSummary` (reine Zaehler) traegt dies die einzelnen
+    Feedback- und Usage-Eintraege mit Akteur/Zeit/Version/Signal — die Kuratoren-
+    Detailsicht. Beide Listen sind chronologisch absteigend und serverseitig
+    gekappt.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    entity_type: FeedbackTarget
+    entity_id: UUID
+    feedback: list[AgentFeedbackRead] = Field(default_factory=list)
+    usage: list[UsageEventRead] = Field(default_factory=list)
+
+
+class FeedbackOverviewItem(BaseModel):
+    """Eine Zeile der workspace-weiten Feedback-Uebersicht.
+
+    Pro Element (mit mindestens einem Usage-/Feedback-Ereignis) die Kennzahlen,
+    aus denen sich die Kurations-Prioritaeten ableiten: `usage_count` (wie oft
+    genutzt), `negative_count` (Summe aus `outdated`/`incorrect`/`unclear` —
+    Handlungsbedarf), `helpful_count` und der Zeitpunkt der letzten Aktivitaet.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    entity_type: FeedbackTarget
+    entity_id: UUID
+    name: str
+    usage_count: int = Field(ge=0, default=0)
+    feedback_count: int = Field(ge=0, default=0)
+    negative_count: int = Field(ge=0, default=0)
+    helpful_count: int = Field(ge=0, default=0)
+    last_activity_at: datetime | None = None
+
+
+class FeedbackOverview(BaseModel):
+    """Workspace-weite Kurations-Uebersicht — speist Dashboard-Kacheln + Seite."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    items: list[FeedbackOverviewItem] = Field(default_factory=list)

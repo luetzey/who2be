@@ -103,6 +103,11 @@ const AgentsPage = lazy(() =>
     default: mod.AgentsPage,
   })),
 )
+const FeedbackOverviewPage = lazy(() =>
+  import('@/features/feedback/pages/FeedbackOverviewPage').then((mod) => ({
+    default: mod.FeedbackOverviewPage,
+  })),
+)
 const AgentDetailPage = lazy(() =>
   import('@/features/agents/pages/AgentDetailPage').then((mod) => ({
     default: mod.AgentDetailPage,
@@ -252,6 +257,7 @@ export function RouterRoot() {
                 <Route path="/w/:workspaceId/resources" element={<ResourcesPage />} />
                 <Route path="/w/:workspaceId/resources/new" element={<ResourceNewPage />} />
                 <Route path="/w/:workspaceId/resources/:id" element={<ResourceDetailPage />} />
+                <Route path="/w/:workspaceId/feedback" element={<FeedbackOverviewPage />} />
                 <Route path="/w/:workspaceId/agents" element={<AgentsPage />} />
                 <Route path="/w/:workspaceId/agents/:id" element={<AgentDetailPage />} />
                 <Route

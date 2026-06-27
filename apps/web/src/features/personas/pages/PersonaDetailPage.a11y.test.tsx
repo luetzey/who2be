@@ -71,6 +71,17 @@ describe('PersonaDetailPage (a11y)', () => {
       'GET /v1/workspaces/ws-1/personas/p1/versions': () => jsonResponse([version]),
       'GET /v1/workspaces/ws-1/personas/p1/playbooks': () => jsonResponse([playbook]),
       'GET /v1/workspaces/ws-1/playbooks': () => jsonResponse([playbook]),
+      // ADR-0038: Feedback-Panel laedt das Aggregat; leeres Summary → EmptyState
+      // (kein ErrorAlert-Heading, das die heading-order brechen wuerde).
+      'GET /v1/workspaces/ws-1/feedback/persona/p1': () =>
+        jsonResponse({
+          entity_type: 'persona',
+          entity_id: 'p1',
+          usage_count: 0,
+          by_outcome: {},
+          by_signal: {},
+          recent_notes: [],
+        }),
     }
     vi.stubGlobal(
       'fetch',

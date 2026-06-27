@@ -4,6 +4,16 @@ _Stand: 2026-06-16_
 
 ## Funktioniert
 
+- **Feedback-Views (ADR-0038-Surfacing, 2026-06-27), Branch
+  `feat/feedback-views`:** Agenten-Feedback ist jetzt in der Web-UI sichtbar.
+  Backend additiv (keine Migration): `GET …/feedback/{type}/{id}/events`
+  (Drill-down, ≤50) + `GET …/feedback-overview` (workspace-weit, FULL-OUTER-JOIN
+  beider Telemetrie-Tabellen), beide editor-gated. Web: `FeedbackPanel` auf den
+  Detailseiten (Persona/Playbook/Resource) mit Verteilungs-Balken, Notizen,
+  Lazy-Drill-down + „Überarbeiten"-Aktion; `FeedbackTiles` aufs Dashboard;
+  eigene Übersichtsseite `/w/{ws}/feedback` + Nav-Eintrag. **DoD grün:** Python
+  891 passed, mypy 296, ruff clean; Web 400 Tests, 0 Lint-Errors, tsc/build clean.
+  Offen (bewusst): Triage als append-only Resolution-Event.
 - **Track 4-C Write-Rate-Limit (ADR-0039 abgeschlossen, 2026-06-27), Branch
   `claude/track4-finer-rights`:** `AgentToolPolicy.write_rate_limit: int|None`
   (Writes/Min; None=unbegrenzt, JSONB-abwärtskompatibel) + `is_within`-Anti-

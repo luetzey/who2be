@@ -19,12 +19,17 @@ from who2be_models import (
     AgentCapability,
     AgentFeedbackRead,
     FeedbackCreate,
+    FeedbackEvents,
+    FeedbackOverview,
     FeedbackSummary,
     FeedbackTarget,
     UsageEventCreate,
     UsageEventRead,
     WorkspaceRole,
 )
+
+# Maximale Anzahl Einzel-Ereignisse je Liste in der Drill-down-Sicht.
+_EVENTS_LIMIT = 50
 
 
 def _entity_not_found() -> HTTPException:
@@ -80,3 +85,20 @@ class FeedbackService:
         if not await self._repo.entity_belongs_to(ctx.workspace_id, entity_type, entity_id):
             raise _entity_not_found()
         return await self._repo.summarize(ctx.workspace_id, entity_type, entity_id)
+
+    async def get_events(
+        self, ctx: WorkspaceContext, entity_type: FeedbackTarget, entity_id: UUID
+    ) -> FeedbackEvents:
+        # Drill-down auf Einzel-Ereignisse — wie das Aggregat editor-gated.
+        require_role(ctx, WorkspaceRole.editor)
+        if not await self._repo.entity_belongs_to(ctx.workspace_id, entity_type, entity_id):
+            raise _entity_not_found()
+        return await self._repo.list_events(
+            ctx.workspace_id, entity_type, entity_id, _EVENTS_LIMIT
+        )
+
+    async def get_overview(self, ctx: WorkspaceContext) -> FeedbackOverview:
+        # Workspace-weite Kurations-Uebersicht (Dashboard-Kacheln + Feedback-Seite).
+        require_role(ctx, WorkspaceRole.editor)
+        items = await self._repo.overview(ctx.workspace_id)
+        return FeedbackOverview(items=items)

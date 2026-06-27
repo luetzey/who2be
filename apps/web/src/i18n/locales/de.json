@@ -67,6 +67,7 @@
       "personas": "Personae",
       "playbooks": "Playbooks",
       "resources": "Resources",
+      "feedback": "Feedback",
       "settings": "Einstellungen"
     },
     "signOut": "Abmelden",
@@ -1629,6 +1630,66 @@
     "toast": {
       "created": "Token „{{name}}\" angelegt. Klartext jetzt einmalig kopieren.",
       "unknownError": "Unbekannter Fehler."
+    }
+  },
+  "feedback": {
+    "panel": {
+      "title": "Feedback & Nutzung",
+      "description": "Was Agenten mit diesem Element gemeldet haben.",
+      "usageCount": "Nutzungen",
+      "outcomes": "Ergebnisse",
+      "signals": "Signale",
+      "notes": "Letzte Notizen",
+      "empty": "Noch kein Feedback. Agenten melden Nutzung und Qualität über den MCP-Server.",
+      "loadError": "Feedback konnte nicht geladen werden.",
+      "revise": "Überarbeiten",
+      "reviseHint": "Negative Signale auf der aktiven Version — bearbeite sie in einem neuen Draft.",
+      "reviseToast": "Bearbeite die aktive Version — Änderungen landen automatisch in einem neuen Draft.",
+      "showEvents": "Einzelne Ereignisse anzeigen",
+      "hideEvents": "Einzelne Ereignisse ausblenden",
+      "eventsEmpty": "Keine Einzel-Ereignisse.",
+      "agent": "Agent",
+      "human": "Mensch/ungebunden",
+      "noVersion": "ohne Version"
+    },
+    "outcome": {
+      "applied": "Angewendet",
+      "skipped": "Übersprungen",
+      "error": "Fehler"
+    },
+    "signal": {
+      "helpful": "Hilfreich",
+      "outdated": "Veraltet",
+      "incorrect": "Falsch",
+      "unclear": "Unklar"
+    },
+    "overview": {
+      "nav": "Feedback",
+      "title": "Feedback",
+      "description": "Wie Agenten deine Inhalte nutzen und bewerten.",
+      "empty": "Noch kein Feedback in diesem Workspace.",
+      "loadError": "Übersicht konnte nicht geladen werden.",
+      "col": {
+        "name": "Element",
+        "type": "Typ",
+        "usage": "Nutzungen",
+        "helpful": "Hilfreich",
+        "negative": "Negativ",
+        "lastActivity": "Letzte Aktivität"
+      },
+      "type": {
+        "persona": "Persona",
+        "playbook": "Playbook",
+        "resource": "Resource"
+      }
+    },
+    "tiles": {
+      "mostUsed": "Meistgenutzt",
+      "mostFlagged": "Am häufigsten bemängelt",
+      "usageUnit": "{{count}} Nutzungen",
+      "negativeUnit": "{{count}} negativ",
+      "empty": "Noch kein Feedback.",
+      "viewAll": "Alle ansehen"
     }
   }
 }

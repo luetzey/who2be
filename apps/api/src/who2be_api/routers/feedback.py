@@ -18,6 +18,8 @@ from who2be_api.services.feedback_service import FeedbackService
 from who2be_models import (
     AgentFeedbackRead,
     FeedbackCreate,
+    FeedbackEvents,
+    FeedbackOverview,
     FeedbackSummary,
     FeedbackTarget,
     UsageEventCreate,
@@ -47,8 +49,20 @@ async def submit_feedback(data: FeedbackCreate, ctx: Ctx, service: Service) -> A
     return await service.submit_feedback(ctx, data)
 
 
+@router.get("/feedback-overview")
+async def get_feedback_overview(ctx: Ctx, service: Service) -> FeedbackOverview:
+    return await service.get_overview(ctx)
+
+
 @router.get("/feedback/{entity_type}/{entity_id}")
 async def get_feedback(
     entity_type: FeedbackTarget, entity_id: UUID, ctx: Ctx, service: Service
 ) -> FeedbackSummary:
     return await service.get_feedback(ctx, entity_type, entity_id)
+
+
+@router.get("/feedback/{entity_type}/{entity_id}/events")
+async def get_feedback_events(
+    entity_type: FeedbackTarget, entity_id: UUID, ctx: Ctx, service: Service
+) -> FeedbackEvents:
+    return await service.get_events(ctx, entity_type, entity_id)

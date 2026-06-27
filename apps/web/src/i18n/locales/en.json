@@ -67,6 +67,7 @@
       "personas": "Personae",
       "playbooks": "Playbooks",
       "resources": "Resources",
+      "feedback": "Feedback",
       "settings": "Settings"
     },
     "signOut": "Sign out",
@@ -1629,6 +1630,66 @@
     "toast": {
       "created": "Token \"{{name}}\" created. Copy the plaintext now — it won't be shown again.",
       "unknownError": "Unknown error."
+    }
+  },
+  "feedback": {
+    "panel": {
+      "title": "Feedback & usage",
+      "description": "What agents reported about this element.",
+      "usageCount": "Uses",
+      "outcomes": "Outcomes",
+      "signals": "Signals",
+      "notes": "Recent notes",
+      "empty": "No feedback yet. Agents report usage and quality via the MCP server.",
+      "loadError": "Could not load feedback.",
+      "revise": "Revise",
+      "reviseHint": "Negative signals on the active version — revise it in a new draft.",
+      "reviseToast": "Edit the active version — changes land automatically in a new draft.",
+      "showEvents": "Show individual events",
+      "hideEvents": "Hide individual events",
+      "eventsEmpty": "No individual events.",
+      "agent": "Agent",
+      "human": "Human/unbound",
+      "noVersion": "no version"
+    },
+    "outcome": {
+      "applied": "Applied",
+      "skipped": "Skipped",
+      "error": "Error"
+    },
+    "signal": {
+      "helpful": "Helpful",
+      "outdated": "Outdated",
+      "incorrect": "Incorrect",
+      "unclear": "Unclear"
+    },
+    "overview": {
+      "nav": "Feedback",
+      "title": "Feedback",
+      "description": "How agents use and rate your content.",
+      "empty": "No feedback in this workspace yet.",
+      "loadError": "Could not load the overview.",
+      "col": {
+        "name": "Element",
+        "type": "Type",
+        "usage": "Uses",
+        "helpful": "Helpful",
+        "negative": "Negative",
+        "lastActivity": "Last activity"
+      },
+      "type": {
+        "persona": "Persona",
+        "playbook": "Playbook",
+        "resource": "Resource"
+      }
+    },
+    "tiles": {
+      "mostUsed": "Most used",
+      "mostFlagged": "Most flagged",
+      "usageUnit": "{{count}} uses",
+      "negativeUnit": "{{count}} negative",
+      "empty": "No feedback yet.",
+      "viewAll": "View all"
     }
   }
 }
