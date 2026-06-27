@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import type { FeedbackTarget } from '@/api/types'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { useFeedbackOverview, useFeedbackUnused } from '@/hooks/useFeedback'
+import { useFeedbackOverview } from '@/hooks/useFeedback'
 
 const DETAIL_SEGMENT: Record<FeedbackTarget, string> = {
   persona: 'personas',
@@ -74,9 +74,7 @@ export function FeedbackTiles() {
   const { t } = useTranslation('feedback')
   const wsPath = useWorkspacePath()
   const { overview } = useFeedbackOverview()
-  const { unused } = useFeedbackUnused()
   const items = overview?.items ?? []
-  const unusedItems = (unused?.items ?? []).slice(0, TILE_LIMIT)
 
   // Backend liefert nach last_activity sortiert — fuer die Kacheln re-sortieren.
   const mostUsed = [...items]
@@ -96,7 +94,7 @@ export function FeedbackTiles() {
           {t('tiles.viewAll')}
         </Link>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         <Tile
           title={t('tiles.mostUsed')}
           items={mostUsed}
@@ -108,11 +106,6 @@ export function FeedbackTiles() {
           items={mostFlagged}
           metric={(item) => t('tiles.negativeUnit', { count: item.negative_count })}
           emptyLabel={t('tiles.empty')}
-        />
-        <Tile
-          title={t('tiles.unused')}
-          items={unusedItems}
-          emptyLabel={t('tiles.unusedEmpty')}
         />
       </div>
     </section>
