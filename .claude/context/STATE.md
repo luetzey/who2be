@@ -4,6 +4,12 @@ _Stand: 2026-06-16_
 
 ## Funktioniert
 
+- **Track 3 Feedback-Flywheel (ADR-0038, 2026-06-27), Branch
+  `claude/track3-feedback-flywheel` (gestapelt):** append-only `usage_event` +
+  `agent_feedback` (Migration 0053, RLS + SELECT/INSERT-only), Capability
+  `feedback_write` (default an), Repo/Service/Router + MCP-Tools `record_usage`/
+  `submit_feedback`/`get_feedback`. Telemetrie fliesst nie in einen Prompt (kein
+  Injection-Vektor). ruff/mypy clean, DB-freie Tests grün; eigener PR.
 - **Builder-System-Prompt-Tools (ADR-0040, 2026-06-27), Branch
   `claude/charming-pasteur-pxz2l8`, PR #266:** Der Builder kann System-Prompt-
   Templates über MCP verfassen/anpassen/lesen + draft→review einreichen; das

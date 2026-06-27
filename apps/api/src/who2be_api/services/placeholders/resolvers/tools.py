@@ -265,6 +265,18 @@ _TOOLS: list[_ToolDoc] = [
             "Mensch/Admin; ein Agent-Versuch wird serverseitig abgelehnt."
         ),
     ),
+    # --- Usage-/Feedback-Flywheel (ADR-0038) — `feedback_write` (Default an) ---
+    _ToolDoc(
+        signature="record_usage(...) / submit_feedback(...) / get_feedback(entity_type, entity_id)",
+        capabilities=(AgentCapability.feedback_write,),
+        description=(
+            "Melde, was du genutzt hast (`record_usage`, outcome applied/skipped/"
+            "error) und gib Feedback (`submit_feedback`, signal helpful/outdated/"
+            "incorrect/unclear) — so wird die AgentDB selbst-verbessernd. "
+            "`get_feedback` liest das Aggregat (Kurations-Sicht). Feedback aendert "
+            "nie selbst Inhalte."
+        ),
+    ),
 ]
 
 # Applied-vs-Triggered-Hinweis: Fest im System-Prompt eingebettete Playbooks

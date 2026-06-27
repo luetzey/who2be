@@ -152,3 +152,22 @@ class TestTemplateTransitionGate:
     def test_unbound_token_is_noop(self) -> None:
         # Mensch/ungebundener Token: gar kein Pro-Agent-Gate, auch nicht fuer Templates.
         _require_transition_capability(_ctx(None), "system_prompt_template", VersionStatus.active)
+
+
+class TestFeedbackWriteCapability:
+    """ADR-0038: feedback_write ist default an (Telemetrie fuer alle, opt-out)."""
+
+    def test_default_is_true(self) -> None:
+        assert AgentToolPolicy().feedback_write is True
+
+    def test_granted_by_default_policy(self) -> None:
+        assert AgentCapability.feedback_write in AgentToolPolicy().granted_capabilities()
+
+    def test_can_be_disabled(self) -> None:
+        policy = AgentToolPolicy(feedback_write=False)
+        assert policy.allows(AgentCapability.feedback_write) is False
+
+    def test_require_capability_blocks_when_disabled(self) -> None:
+        ctx = _ctx(AgentToolPolicy(feedback_write=False))
+        with pytest.raises(ApiGateError):
+            require_capability(ctx, AgentCapability.feedback_write)
