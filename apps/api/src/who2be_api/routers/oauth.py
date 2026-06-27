@@ -173,4 +173,6 @@ async def token(
             raise OAuthError("unsupported_grant_type", f"Grant {grant_type} nicht unterstuetzt.")
     except OAuthError as exc:
         return _error_response(exc)
-    return JSONResponse(content=result.model_dump(exclude_none=True), headers=_NO_STORE)
+    return JSONResponse(
+        content=result.model_dump(exclude_none=True), headers=_NO_STORE
+    )

@@ -195,7 +195,9 @@ class PgTokenRepository:
         )
         return TokenRead.model_validate(dict(row)) if row is not None else None
 
-    async def rotate(self, workspace_id: UUID, token_id: UUID, new_hash: str) -> TokenRead | None:
+    async def rotate(
+        self, workspace_id: UUID, token_id: UUID, new_hash: str
+    ) -> TokenRead | None:
         # In-place: nur der Hash wird ersetzt, `last_used_at` zurueckgesetzt
         # (neues Secret). id/agent_id/role/name/created_at bleiben — Snapshot
         # intakt (ADR-0023). Das alte Secret hashed auf den alten Wert und wird
