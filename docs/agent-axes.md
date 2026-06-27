@@ -98,6 +98,15 @@ ruft:
 | Trigger-Erkennung | `list_triggers` | Keyword-Match → Playbook-ID |
 | Playbook | `fetch_playbook` | Body lesen; bei Composite: Sequenz abarbeiten |
 | Wissen | `list_resources` / `fetch_resource` | Tag-Filter + gezielter Body-Fetch |
+| Rueckmeldung | `record_usage` / `submit_feedback` | Nach jedem genutzten Playbook/Resource zurueckmelden (outcome) bzw. Veraltetes/Falsches signalisieren (ADR-0038) |
+
+**Rueckmeldung (Flywheel, ADR-0038):** Ein Agent mit `feedback_write` (Default
+an) meldet nach jedem Einsatz `record_usage(typ, id, outcome=applied|skipped|error)`
+und gibt bei veralteten/fehlerhaften Inhalten `submit_feedback(…, signal=…)` —
+nur Vorschlag, kein Auto-Edit. Verankert ist das dreifach: global im
+`tools-overview`-Block (policy-gated Rueckmelde-Protokoll), als Methodik-Bullet in
+den Default-Templates und in der Builder-Persona. Wer das nicht soll, bekommt
+`feedback_write=false`.
 
 Verweis: ADR-0024 (Composite-Playbooks), Plan `2026-05-31-1630_composite-applied-modi.md`
 Tracks A–E. Default-Template-Seed: `workspace_repository.py::_DEFAULT_TEMPLATES`

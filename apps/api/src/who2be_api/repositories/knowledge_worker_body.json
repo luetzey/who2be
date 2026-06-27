@@ -98,6 +98,13 @@
     "children": []
   },
   {
+    "id": "kw-li-fb",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Rueckmeldung: Melde nach jedem genutzten Playbook bzw. jeder Resource via record_usage (outcome applied/skipped/error); melde Veraltetes oder Falsches via submit_feedback statt es selbst umzuschreiben.", "styles": {}}],
+    "children": []
+  },
+  {
     "id": "kw-p5",
     "type": "paragraph",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},

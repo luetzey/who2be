@@ -4,6 +4,14 @@ _Stand: 2026-06-16_
 
 ## Funktioniert
 
+- **Feedback-Nutzung im Agenten verankert (ADR-0038, 2026-06-27), Branch
+  `feat/feedback-usage-anchoring`:** Damit Agenten das Flywheel auch *nutzen*
+  (Tool verfügbar ≠ genutzt), dreifach instruktiv verankert: ① `tools-overview`-
+  Resolver hängt bei aktivem `feedback_write` ein Rückmelde-Protokoll + Beispiel
+  an (global, policy-gated); ② je ein Methodik-Bullet in den 5 Default-Templates;
+  ③ Rückmelde-Disziplin in der Builder-Persona. Docs: agent-axes-Journey-Tabelle
+  + ADR-0038. Backend-only, keine Migration. **DoD grün:** Python 894 passed
+  (+3 Resolver-Tests), mypy clean, ruff clean.
 - **Feedback-Views (ADR-0038-Surfacing, 2026-06-27), Branch
   `feat/feedback-views`:** Agenten-Feedback ist jetzt in der Web-UI sichtbar.
   Backend additiv (keine Migration): `GET …/feedback/{type}/{id}/events`
