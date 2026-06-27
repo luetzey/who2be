@@ -1,13 +1,22 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import type { FeedbackSignal, FeedbackTarget, UsageOutcome } from '@/api/types'
+import type {
+  FeedbackResolution,
+  FeedbackSignal,
+  FeedbackTarget,
+  UsageOutcome,
+} from '@/api/types'
 import { DataView } from '@/components/data/DataView'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Select } from '@/components/ui/select'
 import { useFeedback } from '@/hooks/useFeedback'
+import { notify } from '@/lib/feedback'
 import { cn } from '@/lib/utils'
+
+const RESOLUTIONS: readonly FeedbackResolution[] = ['addressed', 'in_progress', 'dismissed']
 
 // Reihenfolge + Farbton der Auspraegungen. Positiv (applied/helpful) = brand
 // (Warm Citrus), negativ + Fehler = destructive, neutral = muted. Keine neuen
@@ -43,8 +52,20 @@ interface FeedbackPanelProps {
  */
 export function FeedbackPanel({ type, id, onRevise }: FeedbackPanelProps) {
   const { t } = useTranslation('feedback')
-  const { summary, loading, error, events, eventsLoading, loadEvents } = useFeedback(type, id)
+  const { summary, loading, error, events, eventsLoading, loadEvents, setResolution } = useFeedback(
+    type,
+    id,
+  )
   const [showEvents, setShowEvents] = useState(false)
+
+  const onResolution = async (feedbackId: string, value: string) => {
+    if (value === '') return
+    try {
+      await setResolution(feedbackId, value as FeedbackResolution)
+    } catch {
+      notify.error(t('resolution.error'))
+    }
+  }
 
   const negativeCount = summary
     ? NEGATIVE_SIGNALS.reduce((sum, s) => sum + (summary.by_signal[s] ?? 0), 0)
@@ -211,6 +232,24 @@ export function FeedbackPanel({ type, id, onRevise }: FeedbackPanelProps) {
                             {ev.note !== null && ev.note !== '' ? (
                               <p className="text-muted-foreground">{ev.note}</p>
                             ) : null}
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-muted-foreground">
+                                {t('resolution.label')}
+                              </span>
+                              <Select
+                                aria-label={t('resolution.label')}
+                                value={ev.resolution ?? ''}
+                                onChange={(e) => void onResolution(ev.id, e.target.value)}
+                                className="h-8 w-40 text-xs"
+                              >
+                                <option value="">{t('resolution.placeholder')}</option>
+                                {RESOLUTIONS.map((r) => (
+                                  <option key={r} value={r}>
+                                    {t(`resolution.${r}`)}
+                                  </option>
+                                ))}
+                              </Select>
+                            </div>
                           </li>
                         ))}
                       </ul>

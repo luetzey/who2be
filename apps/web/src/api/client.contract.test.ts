@@ -106,6 +106,7 @@ test('jeder vom Web-Client genutzte Pfad existiert im OpenAPI-Golden', async () 
     api.getFeedbackEvents('playbook', ID),
     api.getFeedbackOverview(),
     api.getFeedbackUnused(),
+    api.setFeedbackResolution(ID, { resolution: 'addressed' }),
     api.transitionPersonaVersion(ID, 7, 'active'),
     api.transitionPlaybookVersion(ID, 7, 'active'),
     api.listResources(),

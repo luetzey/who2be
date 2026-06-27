@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type {
   FeedbackEvents,
   FeedbackOverview,
+  FeedbackResolution,
   FeedbackSummary,
   FeedbackTarget,
   FeedbackUnused,
@@ -23,6 +24,8 @@ export interface UseFeedbackResult {
   eventsLoading: boolean
   eventsError: string | null
   loadEvents: () => void
+  // Triage: setzt den Status eines Feedback-Eintrags und laedt die Liste neu.
+  setResolution: (feedbackId: string, resolution: FeedbackResolution) => Promise<void>
 }
 
 /**
@@ -67,6 +70,14 @@ export function useFeedback(type: FeedbackTarget, id: string | undefined): UseFe
       .finally(() => setEventsLoading(false))
   }, [api, type, id])
 
+  const setResolution = useCallback(
+    async (feedbackId: string, resolution: FeedbackResolution) => {
+      await api.setFeedbackResolution(feedbackId, { resolution })
+      loadEvents()
+    },
+    [api, loadEvents],
+  )
+
   return {
     summary,
     loading,
@@ -76,6 +87,7 @@ export function useFeedback(type: FeedbackTarget, id: string | undefined): UseFe
     eventsLoading,
     eventsError,
     loadEvents,
+    setResolution,
   }
 }
 

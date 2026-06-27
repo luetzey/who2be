@@ -1663,6 +1663,14 @@
       "incorrect": "Falsch",
       "unclear": "Unklar"
     },
+    "resolution": {
+      "label": "Triage",
+      "placeholder": "— offen —",
+      "addressed": "Erledigt",
+      "in_progress": "In Arbeit",
+      "dismissed": "Ignoriert",
+      "error": "Status konnte nicht gesetzt werden."
+    },
     "overview": {
       "nav": "Feedback",
       "title": "Feedback",

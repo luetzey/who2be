@@ -20,6 +20,7 @@ from who2be_models import (
     FeedbackCreate,
     FeedbackEvents,
     FeedbackOverview,
+    FeedbackResolutionCreate,
     FeedbackSummary,
     FeedbackTarget,
     FeedbackUnused,
@@ -72,3 +73,10 @@ async def get_feedback_events(
     entity_type: FeedbackTarget, entity_id: UUID, ctx: Ctx, service: Service
 ) -> FeedbackEvents:
     return await service.get_events(ctx, entity_type, entity_id)
+
+
+@router.post("/feedback/{feedback_id}/resolution", status_code=201)
+async def set_feedback_resolution(
+    feedback_id: UUID, data: FeedbackResolutionCreate, ctx: Ctx, service: Service
+) -> AgentFeedbackRead:
+    return await service.set_resolution(ctx, feedback_id, data)

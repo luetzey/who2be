@@ -62,6 +62,17 @@ class FeedbackRepository(Protocol):
 
     async def unused(self, workspace_id: UUID) -> list[FeedbackUnusedItem]: ...
 
+    async def feedback_belongs_to(self, workspace_id: UUID, feedback_id: UUID) -> bool: ...
+
+    async def insert_resolution(
+        self,
+        workspace_id: UUID,
+        feedback_id: UUID,
+        actor_id: UUID,
+        resolution: str,
+        note: str | None,
+    ) -> AgentFeedbackRead: ...
+
 
 # Polymorphes entity_type → physische Tabelle fuer den Workspace-Belongs-Check.
 _ENTITY_TABLE: dict[str, str] = {
@@ -189,11 +200,16 @@ class PgFeedbackRepository:
     async def list_events(
         self, workspace_id: UUID, entity_type: str, entity_id: UUID, limit: int
     ) -> FeedbackEvents:
+        # Jedes Feedback traegt seinen aktuellen Triage-Status (juengstes
+        # Resolution-Event, via korrelierter Subquery) — oder NULL.
         feedback_rows = await self._pool.fetch(
-            "SELECT id, entity_type, entity_id, version, signal, note, agent_id, created_at "
-            "FROM agent_feedback "
-            "WHERE workspace_id = $1 AND entity_type = $2 AND entity_id = $3 "
-            "ORDER BY created_at DESC LIMIT $4",
+            "SELECT f.id, f.entity_type, f.entity_id, f.version, f.signal, f.note, "
+            "f.agent_id, f.created_at, "
+            "(SELECT r.resolution FROM feedback_resolution r "
+            "   WHERE r.feedback_id = f.id ORDER BY r.created_at DESC LIMIT 1) AS resolution "
+            "FROM agent_feedback f "
+            "WHERE f.workspace_id = $1 AND f.entity_type = $2 AND f.entity_id = $3 "
+            "ORDER BY f.created_at DESC LIMIT $4",
             workspace_id,
             entity_type,
             entity_id,
@@ -295,3 +311,43 @@ class PgFeedbackRepository:
             workspace_id,
         )
         return [FeedbackUnusedItem.model_validate(dict(r)) for r in rows]
+
+    async def feedback_belongs_to(self, workspace_id: UUID, feedback_id: UUID) -> bool:
+        owned = await self._pool.fetchval(
+            "SELECT 1 FROM agent_feedback WHERE id = $1 AND workspace_id = $2",
+            feedback_id,
+            workspace_id,
+        )
+        return owned is not None
+
+    async def insert_resolution(
+        self,
+        workspace_id: UUID,
+        feedback_id: UUID,
+        actor_id: UUID,
+        resolution: str,
+        note: str | None,
+    ) -> AgentFeedbackRead:
+        # Append-only Triage-Event schreiben, dann den Feedback-Eintrag mit dem
+        # nun aktuellen Status (= dieses Event) zurueckgeben.
+        await self._pool.execute(
+            "INSERT INTO feedback_resolution "
+            "(workspace_id, feedback_id, actor_id, resolution, note) "
+            "VALUES ($1, $2, $3, $4, $5)",
+            workspace_id,
+            feedback_id,
+            actor_id,
+            resolution,
+            note,
+        )
+        row = await self._pool.fetchrow(
+            "SELECT f.id, f.entity_type, f.entity_id, f.version, f.signal, f.note, "
+            "f.agent_id, f.created_at, "
+            "(SELECT r.resolution FROM feedback_resolution r "
+            "   WHERE r.feedback_id = f.id ORDER BY r.created_at DESC LIMIT 1) AS resolution "
+            "FROM agent_feedback f WHERE f.id = $1 AND f.workspace_id = $2",
+            feedback_id,
+            workspace_id,
+        )
+        assert row is not None
+        return AgentFeedbackRead.model_validate(dict(row))

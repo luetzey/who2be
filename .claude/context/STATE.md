@@ -4,6 +4,15 @@ _Stand: 2026-06-16_
 
 ## Funktioniert
 
+- **Feedback-Triage (ADR-0038-Folge, 2026-06-27), Branch `feat/feedback-triage`
+  (gestapelt auf `feat/feedback-unused`):** Triage pro Feedback-Eintrag,
+  append-only gelöst — Migration 0054 `feedback_resolution` (FK→agent_feedback
+  ON DELETE CASCADE, RLS, nur SELECT/INSERT); aktueller Status = jüngstes Event.
+  Zustände addressed/in_progress/dismissed. `POST …/feedback/{id}/resolution`
+  (editor-gated); `…/events` gibt pro Feedback den aktuellen Status mit aus.
+  Web: Status-Select je Eintrag im FeedbackPanel-Drill-down. **DoD grün:** Python
+  894, mypy 296, ruff clean; Web 402, 0 Lint-Errors, tsc/build clean. Damit sind
+  beide Feedback-Folgen (Stale + Triage) erledigt.
 - **Stale/Ungenutzt-Sicht (ADR-0038-Folge, 2026-06-27), Branch
   `feat/feedback-unused`:** „Ungenutzt" = Element mit aktiver Version, aber 0
   Usage/Feedback. Backend additiv (keine Migration): `GET …/feedback-unused`
