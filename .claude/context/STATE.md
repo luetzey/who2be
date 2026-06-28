@@ -4,6 +4,28 @@ _Stand: 2026-06-16_
 
 ## Funktioniert
 
+- **System-/MCP-Feedback (zielloser Typ) (2026-06-28), Branch
+  `feat/feedback-system-type` (gestapelt auf `feat/feedback-delete`):** Neuer
+  Feedback-Typ fuer Probleme an der Plattform selbst (technisch/MCP), ohne
+  Inhalts-Bezug. Modell: `entity_type='system'`, `entity_id=NULL`, Kategorie
+  (technical/mcp/performance/other) im `signal`-Feld; fliesst in denselben
+  Posteingang (Triage/Delete). Models: `SystemFeedbackCategory`,
+  `SystemFeedbackCreate`, `FeedbackEntityType`; Read-Modelle
+  (AgentFeedbackRead/FeedbackItem) auf `entity_id: UUID|None` +
+  `signal: FeedbackSignal|SystemFeedbackCategory` geweitet. Migration 0059
+  (`entity_id` NOT NULL gedroppt). Backend: `POST /system-feedback`
+  (feedback_write-No-Op fuer Mensch, jede Rolle), Service/Repo
+  `submit_system_feedback`/`insert_system_feedback`; `list_items` nimmt
+  System-Zeilen mit Label „System" auf. MCP-Tool `report_problem` (Agenten
+  melden MCP-/Tech-Fehler) + Client-Methode. Web: `ReportProblemDialog`
+  („Problem melden" im Posteingang, Kategorie+Beschreibung), `submitSystemFeedback`
+  im Client, Posteingang rendert System-Eintraege (Kategorie-Badge statt
+  Signal, kein Detail-Link, Typ-Filter „System"); i18n de/en. **DoD gruen:**
+  Python 900 pytest (System-Feedback-Inbox/Triage/Delete-Test + MCP
+  report_problem-Test; OpenAPI-Golden regeneriert), mypy 300, ruff clean; Web
+  412 Vitest (ReportProblemDialog + Inbox-System-Render), 0 Lint-Errors,
+  tsc/build clean.
+
 - **Feedback-Hard-Delete (Admin/Editor) (2026-06-28), Branch
   `feat/feedback-delete`:** Admin/Editor koennen einzelne Feedback-Eintraege
   loeschen. Backend: `DELETE /v1/workspaces/{ws}/feedback/{feedback_id}`

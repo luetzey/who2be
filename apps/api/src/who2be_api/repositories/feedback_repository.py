@@ -67,6 +67,15 @@ class FeedbackRepository(Protocol):
 
     async def feedback_belongs_to(self, workspace_id: UUID, feedback_id: UUID) -> bool: ...
 
+    async def insert_system_feedback(
+        self,
+        workspace_id: UUID,
+        agent_id: UUID | None,
+        actor_id: UUID | None,
+        category: str,
+        note: str,
+    ) -> AgentFeedbackRead: ...
+
     async def delete_feedback(self, workspace_id: UUID, feedback_id: UUID) -> None: ...
 
     async def insert_resolution(
@@ -326,7 +335,8 @@ class PgFeedbackRepository:
             "f.agent_id, f.created_at, "
             "(SELECT r.resolution FROM feedback_resolution r "
             "   WHERE r.feedback_id = f.id ORDER BY r.created_at DESC LIMIT 1) AS resolution, "
-            "COALESCE(p.name, pb.name, rs.name) AS name "
+            "COALESCE(p.name, pb.name, rs.name, "
+            "         CASE WHEN f.entity_type = 'system' THEN 'System' END) AS name "
             "FROM agent_feedback f "
             "LEFT JOIN persona p   ON f.entity_type = 'persona'  "
             "  AND p.id = f.entity_id  AND p.workspace_id = $1 "
@@ -335,7 +345,11 @@ class PgFeedbackRepository:
             "LEFT JOIN resource rs  ON f.entity_type = 'resource' "
             "  AND rs.id = f.entity_id AND rs.workspace_id = $1 "
             "WHERE f.workspace_id = $1 "
-            "  AND COALESCE(p.name, pb.name, rs.name) IS NOT NULL "
+            # System-Feedback hat kein Element (entity_id NULL) — der Namens-JOIN
+            # filtert sonst geloeschte Inhalts-Elemente raus, soll System aber
+            # behalten.
+            "  AND (f.entity_type = 'system' "
+            "       OR COALESCE(p.name, pb.name, rs.name) IS NOT NULL) "
             "ORDER BY f.created_at DESC LIMIT $2",
             workspace_id,
             limit,
@@ -349,6 +363,31 @@ class PgFeedbackRepository:
             workspace_id,
         )
         return owned is not None
+
+    async def insert_system_feedback(
+        self,
+        workspace_id: UUID,
+        agent_id: UUID | None,
+        actor_id: UUID | None,
+        category: str,
+        note: str,
+    ) -> AgentFeedbackRead:
+        # Zielloses System-/MCP-Feedback: entity_type='system', entity_id=NULL,
+        # signal traegt die Kategorie. Speist denselben Posteingang wie das
+        # Inhalts-Feedback (Triage/Delete identisch).
+        row = await self._pool.fetchrow(
+            "INSERT INTO agent_feedback "
+            "(workspace_id, agent_id, actor_id, entity_type, entity_id, version, signal, note) "
+            "VALUES ($1, $2, $3, 'system', NULL, NULL, $4, $5) "
+            "RETURNING id, entity_type, entity_id, version, signal, note, agent_id, created_at",
+            workspace_id,
+            agent_id,
+            actor_id,
+            category,
+            note,
+        )
+        assert row is not None
+        return AgentFeedbackRead.model_validate(dict(row))
 
     async def delete_feedback(self, workspace_id: UUID, feedback_id: UUID) -> None:
         # Hard-Delete des Feedback-Eintrags. Die feedback_resolution-Kinder

@@ -27,6 +27,7 @@ from who2be_models import (
     FeedbackSummary,
     FeedbackTarget,
     FeedbackUnused,
+    SystemFeedbackCreate,
     UsageEventCreate,
     UsageEventRead,
     WorkspaceRole,
@@ -80,6 +81,22 @@ class FeedbackService:
             data.entity_id,
             data.version,
             data.signal.value,
+            data.note,
+        )
+
+    async def submit_system_feedback(
+        self, ctx: WorkspaceContext, data: SystemFeedbackCreate
+    ) -> AgentFeedbackRead:
+        # Zielloses System-/MCP-Problem — wie das Inhalts-Feedback ueber die
+        # feedback_write-Capability gated (No-Op fuer Mensch/JWT; ein
+        # agent-gebundener Token braucht die Capability). Kein entity-belongs-to-
+        # Check, da das Feedback an keinem Inhalt haengt.
+        require_capability(ctx, AgentCapability.feedback_write)
+        return await self._repo.insert_system_feedback(
+            ctx.workspace_id,
+            ctx.agent_id,
+            ctx.user_id,
+            data.category.value,
             data.note,
         )
 

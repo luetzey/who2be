@@ -15,11 +15,12 @@ from fastmcp.exceptions import ToolError
 
 from who2be_mcp import server
 from who2be_mcp.client import ApiClient
-from who2be_mcp.server import get_feedback, record_usage, submit_feedback
+from who2be_mcp.server import get_feedback, record_usage, report_problem, submit_feedback
 from who2be_models import (
     AgentFeedbackRead,
     FeedbackCreate,
     FeedbackSummary,
+    SystemFeedbackCreate,
     UsageEventCreate,
     UsageEventRead,
 )
@@ -95,6 +96,37 @@ def test_submit_feedback_posts_signal(monkeypatch: pytest.MonkeyPatch) -> None:
     assert isinstance(result, AgentFeedbackRead)
     assert result.signal == "outdated"
     assert seen["path"].endswith("/feedback")
+
+
+def test_report_problem_posts_system_feedback(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["method"] = request.method
+        seen["path"] = request.url.path
+        return httpx.Response(
+            201,
+            json={
+                "id": str(uuid4()),
+                "entity_type": "system",
+                "entity_id": None,
+                "version": None,
+                "signal": "mcp",
+                "note": "fetch_playbook 500",
+                "agent_id": None,
+                "created_at": "2024-01-01T00:00:00Z",
+            },
+        )
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    data = SystemFeedbackCreate.model_validate({"category": "mcp", "note": "fetch_playbook 500"})
+    result = asyncio.run(report_problem(data))
+    assert isinstance(result, AgentFeedbackRead)
+    assert result.entity_type == "system"
+    assert result.entity_id is None
+    assert result.signal == "mcp"
+    assert seen["method"] == "POST"
+    assert seen["path"].endswith("/system-feedback")
 
 
 def test_get_feedback_returns_summary(monkeypatch: pytest.MonkeyPatch) -> None:

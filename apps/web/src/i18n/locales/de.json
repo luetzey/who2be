@@ -1718,7 +1718,8 @@
       "type": {
         "persona": "Persona",
         "playbook": "Playbook",
-        "resource": "Resource"
+        "resource": "Resource",
+        "system": "System"
       }
     },
     "tiles": {
@@ -1745,6 +1746,23 @@
       "confirmLabel": "Endgültig löschen",
       "success": "Feedback gelöscht.",
       "error": "Feedback konnte nicht gelöscht werden."
+    },
+    "systemCategory": {
+      "technical": "Technisch",
+      "mcp": "MCP",
+      "performance": "Performance",
+      "other": "Sonstiges"
+    },
+    "report": {
+      "label": "Problem melden",
+      "dialogTitle": "System-/MCP-Problem melden",
+      "dialogDescription": "Melde ein Problem an der Plattform selbst (technisch oder am MCP) — es landet im Feedback-Posteingang und kann dort bearbeitet werden.",
+      "categoryLabel": "Kategorie",
+      "noteLabel": "Beschreibung",
+      "notePlaceholder": "Was ist passiert? Welches Tool/welche Seite, was war erwartet vs. tatsächlich?",
+      "submit": "Melden",
+      "success": "Problem gemeldet. Danke!",
+      "error": "Problem konnte nicht gemeldet werden."
     }
   }
 }

@@ -63,6 +63,7 @@ from who2be_models import (
     SearchType,
     SubResourceLinkSet,
     SubResourceRead,
+    SystemFeedbackCreate,
     SystemPromptTemplateCreate,
     SystemPromptTemplateRead,
     SystemPromptTemplateUpdate,
@@ -1054,6 +1055,22 @@ async def submit_feedback(data: FeedbackCreate) -> AgentFeedbackRead:
     """
     client = await build_client()
     return await client.submit_feedback(data)
+
+
+@mcp.tool
+@with_tool_log("report_problem")
+async def report_problem(data: SystemFeedbackCreate) -> AgentFeedbackRead:
+    """Meldet ein Problem an der Plattform selbst (technisch oder am MCP).
+
+    Anders als `submit_feedback` (Qualitaet eines Inhalts-Elements) ist das
+    zielloses System-Feedback OHNE entity-Bezug: `category` ∈ {technical, mcp,
+    performance, other} + `note` (Pflicht, beschreibe das Problem konkret). Nutze
+    es, wenn ein MCP-Tool fehlschlaegt, sich falsch verhaelt, zu langsam ist oder
+    die Plattform anderweitig klemmt — ein Kurator/Mensch sieht es im
+    Feedback-Posteingang.
+    """
+    client = await build_client()
+    return await client.submit_system_feedback(data)
 
 
 @mcp.tool

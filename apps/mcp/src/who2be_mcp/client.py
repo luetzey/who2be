@@ -46,6 +46,7 @@ from who2be_models import (
     SearchType,
     SubResourceLinkSet,
     SubResourceRead,
+    SystemFeedbackCreate,
     SystemPromptTemplateCreate,
     SystemPromptTemplateRead,
     SystemPromptTemplateUpdate,
@@ -663,6 +664,10 @@ class ApiClient:
 
     async def submit_feedback(self, data: FeedbackCreate) -> AgentFeedbackRead:
         body = await self._write("POST", f"{self._workspace_prefix}/feedback", data)
+        return AgentFeedbackRead.model_validate(body)
+
+    async def submit_system_feedback(self, data: SystemFeedbackCreate) -> AgentFeedbackRead:
+        body = await self._write("POST", f"{self._workspace_prefix}/system-feedback", data)
         return AgentFeedbackRead.model_validate(body)
 
     async def get_feedback(self, entity_type: str, entity_id: UUID) -> FeedbackSummary:

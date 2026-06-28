@@ -1718,7 +1718,8 @@
       "type": {
         "persona": "Persona",
         "playbook": "Playbook",
-        "resource": "Resource"
+        "resource": "Resource",
+        "system": "System"
       }
     },
     "tiles": {
@@ -1745,6 +1746,23 @@
       "confirmLabel": "Delete permanently",
       "success": "Feedback deleted.",
       "error": "Feedback could not be deleted."
+    },
+    "systemCategory": {
+      "technical": "Technical",
+      "mcp": "MCP",
+      "performance": "Performance",
+      "other": "Other"
+    },
+    "report": {
+      "label": "Report a problem",
+      "dialogTitle": "Report a system/MCP problem",
+      "dialogDescription": "Report a problem with the platform itself (technical or with the MCP) — it lands in the feedback inbox where it can be triaged.",
+      "categoryLabel": "Category",
+      "noteLabel": "Description",
+      "notePlaceholder": "What happened? Which tool/page, expected vs. actual?",
+      "submit": "Report",
+      "success": "Problem reported. Thanks!",
+      "error": "Could not report the problem."
     }
   }
 }
