@@ -22,3 +22,8 @@ Die Tabelle `schema_migrations` legt der Runner selbst an.
   (Persona + 4 Playbooks + `agent-builder`-Template + Agent-Row) ueber alle
   Bestands-Workspaces. Spiegelt `_seed_default_agents` in
   `repositories/workspace_repository.py` — beide Schichten synchron halten.
+- `0060_seed_builder_lite_agent.sql` — Backfill der schlanken Builder-Variante
+  „Builder-Lite" (managed `agent-builder-lite`-Template + Agent-Row, die die
+  bestehende Builder-Persona wiederverwendet) ueber alle Bestands-Workspaces.
+  Fuer LLMs mit kleinem System-Prompt-Budget. Spiegelt `_DEFAULT_TEMPLATES` +
+  `_seed_default_agents` in `repositories/workspace_repository.py`.
