@@ -234,6 +234,11 @@ _DEFAULT_TEMPLATES: tuple[tuple[str, str, str], ...] = (
         "Agent-Builder",
         _sidecar("agent_builder_body.json"),
     ),
+    (
+        "agent-builder-lite",
+        "Agent-Builder-Lite",
+        _sidecar("agent_builder_lite_body.json"),
+    ),
 )
 
 
@@ -249,9 +254,9 @@ async def _seed_default_templates(
     Promote-Schritt feuert.
     """
     for slug, name, body in _DEFAULT_TEMPLATES:
-        # Nur das agent-builder-Template ist managed (gesperrt + zentral
-        # gepflegt); die uebrigen Default-Templates bleiben frei editierbar.
-        managed = slug == _AGENT_BUILDER_TEMPLATE_SLUG
+        # Die agent-builder-Templates (voll + lite) sind managed (gesperrt +
+        # zentral gepflegt); die uebrigen Default-Templates bleiben frei editierbar.
+        managed = slug in (_AGENT_BUILDER_TEMPLATE_SLUG, _AGENT_BUILDER_LITE_TEMPLATE_SLUG)
         template_id = await conn.fetchval(
             "INSERT INTO system_prompt_template "
             "(workspace_id, owner_id, name, slug, is_managed, managed_content_version) "
@@ -312,7 +317,9 @@ async def _seed_default_templates(
 # uebergeben, KEINEN vor-serialisierten String (Codec-Falle, siehe oben).
 _BUILDER_PERSONA_NAME = "Builder"
 _BUILDER_AGENT_NAME = "Builder"
+_BUILDER_LITE_AGENT_NAME = "Builder-Lite"
 _AGENT_BUILDER_TEMPLATE_SLUG = "agent-builder"
+_AGENT_BUILDER_LITE_TEMPLATE_SLUG = "agent-builder-lite"
 
 # Kanonischer Content-Stand des verwalteten Builders. Wird bei jeder zentralen
 # Aenderung an Persona/Template/Playbooks (Sidecars) hochgezaehlt; der Start-Sync
@@ -334,6 +341,10 @@ _BUILDER_PERSONA_TAGS: tuple[str, ...] = ("meta-agent", "agent-building", "crud"
 
 _BUILDER_AGENT_DESCRIPTION = (
     "Standard-Meta-Agent zum Anlegen und Pflegen von Personas, Playbooks, Resources und Agenten."
+)
+_BUILDER_LITE_AGENT_DESCRIPTION = (
+    "Schlanke Builder-Variante mit kompaktem System-Prompt — fuer LLMs mit kleinem "
+    "System-Prompt-Budget. Gleiche Persona und Schreib-Policy wie der Builder."
 )
 
 # (name, type, triggers, tags, description, sidecar) — Reihenfolge fix, damit
@@ -550,6 +561,34 @@ async def _seed_default_agents(
         BUILDER_CONTENT_VERSION,
     )
 
+    # 5. Builder-Lite-agent — selbe Persona + Schreib-Policy, aber das schlanke
+    #    'agent-builder-lite'-Template (kleinerer Render fuer LLMs mit kleinem
+    #    System-Prompt-Budget). Reused die Builder-Persona aus Schritt 1.
+    lite_template_id = await conn.fetchval(
+        "SELECT id FROM system_prompt_template WHERE workspace_id = $1 AND slug = $2",
+        workspace_id,
+        _AGENT_BUILDER_LITE_TEMPLATE_SLUG,
+    )
+    if lite_template_id is None:
+        return
+    await conn.execute(
+        "INSERT INTO agent (workspace_id, owner_id, name, description, "
+        " persona_id, system_prompt_template_id, status, tool_policy, "
+        " is_managed, managed_content_version) "
+        "SELECT $1, $2, $3, $4, $5, $6, 'enabled', $7::jsonb, true, $8 "
+        "WHERE NOT EXISTS ("
+        "  SELECT 1 FROM agent WHERE workspace_id = $1 AND name = $3"
+        ")",
+        workspace_id,
+        owner_id,
+        _BUILDER_LITE_AGENT_NAME,
+        _BUILDER_LITE_AGENT_DESCRIPTION,
+        persona_id,
+        lite_template_id,
+        _builder_tool_policy(),
+        BUILDER_CONTENT_VERSION,
+    )
+
 
 async def sync_managed_builder_content(conn: asyncpg.Connection) -> int:
     """Hebt verwaltete Builder-Aggregate mit veraltetem Stempel auf den kanonischen
@@ -601,6 +640,29 @@ async def sync_managed_builder_content(conn: asyncpg.Connection) -> int:
             "WHERE template_id = $1 AND status = 'active'",
             row["id"],
             template_json,
+        )
+        await conn.execute(
+            "UPDATE system_prompt_template SET managed_content_version = $2, updated_at = now() "
+            "WHERE id = $1",
+            row["id"],
+            BUILDER_CONTENT_VERSION,
+        )
+        updated += 1
+
+    lite_template_json = json.dumps(
+        {"description": "", "body": _sidecar("agent_builder_lite_body.json")}
+    )
+    for row in await conn.fetch(
+        "SELECT id FROM system_prompt_template WHERE slug = $1 AND is_managed = true "
+        "AND managed_content_version < $2",
+        _AGENT_BUILDER_LITE_TEMPLATE_SLUG,
+        BUILDER_CONTENT_VERSION,
+    ):
+        await conn.execute(
+            "UPDATE system_prompt_template_version SET content = $2::jsonb "
+            "WHERE template_id = $1 AND status = 'active'",
+            row["id"],
+            lite_template_json,
         )
         await conn.execute(
             "UPDATE system_prompt_template SET managed_content_version = $2, updated_at = now() "
