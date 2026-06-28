@@ -27,6 +27,8 @@ export interface UseFeedbackResult {
   loadEvents: () => void
   // Triage: setzt den Status eines Feedback-Eintrags und laedt die Liste neu.
   setResolution: (feedbackId: string, resolution: FeedbackResolution) => Promise<void>
+  // Hard-Delete (editor+): loescht den Eintrag und laedt Aggregat + Events neu.
+  deleteFeedback: (feedbackId: string) => Promise<void>
 }
 
 /**
@@ -79,6 +81,16 @@ export function useFeedback(type: FeedbackTarget, id: string | undefined): UseFe
     [api, loadEvents],
   )
 
+  const deleteFeedback = useCallback(
+    async (feedbackId: string) => {
+      await api.deleteFeedback(feedbackId)
+      // Aggregat (Zaehler) UND Drill-down spiegeln den Wegfall.
+      load()
+      loadEvents()
+    },
+    [api, load, loadEvents],
+  )
+
   return {
     summary,
     loading,
@@ -89,6 +101,7 @@ export function useFeedback(type: FeedbackTarget, id: string | undefined): UseFe
     eventsError,
     loadEvents,
     setResolution,
+    deleteFeedback,
   }
 }
 
@@ -128,6 +141,8 @@ export interface UseFeedbackItemsResult {
   reload: () => void
   // Inline-Triage aus dem Posteingang: setzt den Status + laedt die Liste neu.
   setResolution: (feedbackId: string, resolution: FeedbackResolution) => Promise<void>
+  // Hard-Delete (editor+): loescht den Eintrag und laedt den Posteingang neu.
+  deleteFeedback: (feedbackId: string) => Promise<void>
 }
 
 /** Laedt den workspace-weiten Feedback-Posteingang (alle Eintraege + Status-Zaehler). */
@@ -157,7 +172,15 @@ export function useFeedbackItems(): UseFeedbackItemsResult {
     [api, load],
   )
 
-  return { data, loading, error, reload: load, setResolution }
+  const deleteFeedback = useCallback(
+    async (feedbackId: string) => {
+      await api.deleteFeedback(feedbackId)
+      load()
+    },
+    [api, load],
+  )
+
+  return { data, loading, error, reload: load, setResolution, deleteFeedback }
 }
 
 export interface UseFeedbackUnusedResult {

@@ -4,6 +4,22 @@ _Stand: 2026-06-16_
 
 ## Funktioniert
 
+- **Feedback-Hard-Delete (Admin/Editor) (2026-06-28), Branch
+  `feat/feedback-delete`:** Admin/Editor koennen einzelne Feedback-Eintraege
+  loeschen. Backend: `DELETE /v1/workspaces/{ws}/feedback/{feedback_id}`
+  (editor+-Gate via `require_role`, 404 bei fremdem Workspace, 204 bei Erfolg);
+  Service `delete_feedback` + Repo `delete_feedback` (`DELETE FROM agent_feedback`
+  mit workspace_id-Klausel als Verteidigung neben RLS). Migration 0058 grantet
+  `DELETE ON agent_feedback` an `who2be_app` (war seit 0053 append-only nur
+  SELECT/INSERT); die `feedback_resolution`-Triage raeumt der FK ON DELETE
+  CASCADE (0054). **Kein** MCP-Tool (Kuration, nicht agent-facing). Web: geteilte
+  `DeleteFeedbackButton` (Confirm-Dialog) im Posteingang (`FeedbackInbox`) **und**
+  im Inline-`FeedbackPanel` neben der Triage; `deleteFeedback` in `client.ts` +
+  beiden Feedback-Hooks (Reload nach Delete). i18n de/en. **DoD gruen:** Python
+  898 pytest (Feedback-Test um Delete 204/404 + Cascade-Pruefung erweitert;
+  OpenAPI-Golden regeneriert), mypy 300, ruff clean; Web 409 Vitest (neu:
+  Inbox-Delete-Confirm), 0 Lint-Errors, tsc/build clean.
+
 - **Fix: Builder-Playbook-Lock im Read-Pfad sichtbar (2026-06-27), Branch
   `fix/builder-playbook-is-managed-read`:** Das Playbook-Repository hat eigene
   `_select_current`/`_select_active` (Sonderspalten type/tags/triggers/

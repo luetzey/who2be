@@ -227,5 +227,30 @@ def test_flywheel_records_usage_feedback_and_summarizes(
                 client.get(f"{fbase}/feedback/playbook/{unknown}/events", headers=auth).status_code
                 == 404
             )
+
+            # --- Hard-Delete (editor+): Feedback samt Triage-Events loeschen. ---
+            # Unbekanntes Feedback -> 404 (kein Enumerieren).
+            assert client.delete(f"{fbase}/feedback/{unknown}", headers=auth).status_code == 404
+            # Bestehendes Feedback -> 204; danach aus dem Posteingang verschwunden.
+            d = client.delete(f"{fbase}/feedback/{fid}", headers=auth)
+            assert d.status_code == 204, d.text
+            inbox_after = client.get(f"{fbase}/feedback-items", headers=auth).json()
+            assert all(
+                i["id"] != fid for i in inbox_after["items"]
+            ), "Feedback noch im Posteingang."
+            # Drill-down zeigt das Feedback (und seine Triage-Events via Cascade)
+            # nicht mehr; der Usage-Verlauf bleibt unberuehrt.
+            ev_after = client.get(f"{fbase}/feedback/playbook/{pid}/events", headers=auth).json()
+            assert len(ev_after["feedback"]) == 0
+            assert len(ev_after["usage"]) == 2
+            # Triage auf das geloeschte Feedback -> 404 (Zeile ist weg).
+            assert (
+                client.post(
+                    f"{fbase}/feedback/{fid}/resolution",
+                    json={"resolution": "dismissed"},
+                    headers=auth,
+                ).status_code
+                == 404
+            )
     finally:
         cleanup_workspaces([owner])

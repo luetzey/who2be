@@ -67,6 +67,8 @@ class FeedbackRepository(Protocol):
 
     async def feedback_belongs_to(self, workspace_id: UUID, feedback_id: UUID) -> bool: ...
 
+    async def delete_feedback(self, workspace_id: UUID, feedback_id: UUID) -> None: ...
+
     async def insert_resolution(
         self,
         workspace_id: UUID,
@@ -347,6 +349,17 @@ class PgFeedbackRepository:
             workspace_id,
         )
         return owned is not None
+
+    async def delete_feedback(self, workspace_id: UUID, feedback_id: UUID) -> None:
+        # Hard-Delete des Feedback-Eintrags. Die feedback_resolution-Kinder
+        # raeumt der FK ON DELETE CASCADE (0054). Die workspace_id-Klausel ist
+        # eine zusaetzliche Verteidigungslinie zur RLS (kein Cross-Workspace-
+        # Delete, selbst wenn der Tenant-Kontext fehlte).
+        await self._pool.execute(
+            "DELETE FROM agent_feedback WHERE id = $1 AND workspace_id = $2",
+            feedback_id,
+            workspace_id,
+        )
 
     async def insert_resolution(
         self,
