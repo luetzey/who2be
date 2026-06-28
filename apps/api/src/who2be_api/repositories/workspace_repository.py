@@ -318,7 +318,7 @@ _AGENT_BUILDER_TEMPLATE_SLUG = "agent-builder"
 # Aenderung an Persona/Template/Playbooks (Sidecars) hochgezaehlt; der Start-Sync
 # hebt managed-Aggregate, deren `managed_content_version` zurueckliegt, auf diesen
 # Stand. Seed stempelt neue Builder direkt hierauf.
-BUILDER_CONTENT_VERSION = 1
+BUILDER_CONTENT_VERSION = 2
 
 _BUILDER_PERSONA_DESCRIPTION = (
     "Meta-Agent, der Personas, Playbooks, Resources und Agenten im Workspace "

@@ -478,7 +478,7 @@
     "id": "pb-agent-li-anti-5",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Die Konfig nach create_agent oder update_agent nicht mit get_agent verifizieren (missing leer, Status korrekt) — eine unvollstaendige Huelle bliebe sonst unbemerkt.", "styles": {}}],
+    "content": [{"type": "text", "text": "Die Konfig nach create_agent oder update_agent nicht mit get_agent verifizieren (missing leer, Status korrekt) — eine unvollstaendige Huelle bliebe sonst unbemerkt. Ein 404 von fetch_agent bei einem FREMDEN Agenten ist dagegen erwartetes Verhalten (fetch_agent rendert nur deinen eigenen Agenten), kein fehlender Verifikationsschritt — die Konfig pruefst du mit get_agent (missing=[] und activatable), den gerenderten Prompt ueberlaesst du dem ersten echten Start.", "styles": {}}],
     "children": []
   },
   {
