@@ -53,7 +53,7 @@ INSERT INTO agent (workspace_id, owner_id, name, description,
                    is_managed, managed_content_version)
 SELECT pe.workspace_id, pe.owner_id, 'Builder-Lite',
        'Schlanke Builder-Variante mit kompaktem System-Prompt — fuer LLMs mit kleinem System-Prompt-Budget. Gleiche Persona und Schreib-Policy wie der Builder.',
-       pe.id, t.id, 'enabled', $w2bltpol${"playbook_read": "all", "resource_read": "all", "persona_read": true, "agent_read": true, "persona_write": true, "playbook_write": true, "resource_write": true, "agent_write": true, "promote_retire": true, "system_prompt_write": true}$w2bltpol$::jsonb, true, 2
+       pe.id, t.id, 'enabled', $w2bltpol${"playbook_read": "all", "resource_read": "all", "persona_read": true, "agent_read": "all", "persona_write": true, "playbook_write": true, "resource_write": true, "agent_write": true, "promote_retire": true, "system_prompt_write": true}$w2bltpol$::jsonb, true, 2
   FROM persona pe
   JOIN system_prompt_template t
     ON t.workspace_id = pe.workspace_id AND t.slug = 'agent-builder-lite'

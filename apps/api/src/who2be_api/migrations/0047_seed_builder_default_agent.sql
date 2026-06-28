@@ -219,7 +219,7 @@ ON CONFLICT (persona_id, playbook_id) DO NOTHING;
 INSERT INTO agent (workspace_id, owner_id, name, description,
                    persona_id, system_prompt_template_id, status, tool_policy)
 SELECT pe.workspace_id, pe.owner_id, 'Builder', 'Standard-Meta-Agent zum Anlegen und Pflegen von Personas, Playbooks, Resources und Agenten.',
-       pe.id, t.id, 'enabled', $w2bpol${"playbook_read": "all", "resource_read": "all", "persona_read": true, "agent_read": true, "persona_write": true, "playbook_write": true, "resource_write": true, "agent_write": true, "promote_retire": true}$w2bpol$::jsonb
+       pe.id, t.id, 'enabled', $w2bpol${"playbook_read": "all", "resource_read": "all", "persona_read": true, "agent_read": "all", "persona_write": true, "playbook_write": true, "resource_write": true, "agent_write": true, "promote_retire": true}$w2bpol$::jsonb
   FROM persona pe
   JOIN system_prompt_template t
     ON t.workspace_id = pe.workspace_id AND t.slug = 'agent-builder'
