@@ -18,7 +18,10 @@ import pytest
 
 from who2be_api.core.config import get_settings
 from who2be_api.core.migrations import MIGRATIONS_DIR, apply_migrations
-from who2be_api.repositories.workspace_repository import sync_managed_builder_content
+from who2be_api.repositories.workspace_repository import (
+    BUILDER_CONTENT_VERSION,
+    sync_managed_builder_content,
+)
 from who2be_api.testing.workspace_setup import cleanup_workspaces, fresh_user_id, setup_workspace
 
 _JUNK = json.dumps(
@@ -158,7 +161,7 @@ def test_sync_restores_outdated_builder() -> None:
     # 6 Aggregate aktualisiert (Persona + Template + 4 Playbooks); zweiter Lauf 0.
     assert res["first"] == 6, res["first"]
     assert res["second"] == 0, "Sync muss idempotent sein (Stempel-Guard)."
-    assert res["persona_stamp"] == 1
+    assert res["persona_stamp"] == BUILDER_CONTENT_VERSION
     # Kanonischer Inhalt wiederhergestellt (Feedback-Bullets aus den Sidecars).
     assert "bp-li-allowed-fb" in res["persona_block_ids"]
     assert "ab-li-fb" in res["template_body_ids"]
