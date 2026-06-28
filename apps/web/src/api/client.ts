@@ -53,6 +53,7 @@ import type {
   ResourceVersion,
   SubResource,
   SubResourceLinkInput,
+  SystemFeedbackInput,
   SystemPromptTemplate,
   SystemPromptTemplateInput,
   SystemPromptTemplateVersion,
@@ -276,6 +277,8 @@ export interface Api {
   ) => Promise<AgentFeedback>
   // Hard-Delete eines Feedback-Eintrags (editor+); 204 bei Erfolg, 404 fremd.
   deleteFeedback: (feedbackId: string) => Promise<void>
+  // Zielloses System-/MCP-Problem melden (jede Rolle; feedback_write-No-Op).
+  submitSystemFeedback: (input: SystemFeedbackInput) => Promise<void>
   transitionPersonaVersion: (
     id: string,
     version: number,
@@ -511,6 +514,11 @@ export function createApi(token: string, workspaceId: string): Api {
       }),
     deleteFeedback: (feedbackId) =>
       request<void>(token, `${ws}/feedback/${feedbackId}`, { method: 'DELETE' }),
+    submitSystemFeedback: (input) =>
+      request<void>(token, `${ws}/system-feedback`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
     transitionPersonaVersion: (id, version, to) =>
       request<PersonaVersion>(
         token,

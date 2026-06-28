@@ -6,14 +6,16 @@ import { renderInRoutes } from '@/test/render'
 
 import { FeedbackInbox } from './FeedbackInbox'
 
-const { getFeedbackItems, setFeedbackResolution, deleteFeedback } = vi.hoisted(() => ({
-  getFeedbackItems: vi.fn(),
-  setFeedbackResolution: vi.fn(),
-  deleteFeedback: vi.fn(),
-}))
+const { getFeedbackItems, setFeedbackResolution, deleteFeedback, submitSystemFeedback } =
+  vi.hoisted(() => ({
+    getFeedbackItems: vi.fn(),
+    setFeedbackResolution: vi.fn(),
+    deleteFeedback: vi.fn(),
+    submitSystemFeedback: vi.fn(),
+  }))
 
 vi.mock('@/api/useApi', () => {
-  const api = { getFeedbackItems, setFeedbackResolution, deleteFeedback }
+  const api = { getFeedbackItems, setFeedbackResolution, deleteFeedback, submitSystemFeedback }
   return { useApi: () => api }
 })
 
@@ -112,5 +114,33 @@ describe('FeedbackInbox', () => {
     await waitFor(() => expect(deleteFeedback).toHaveBeenCalledWith('fb-open'))
     // Reload nach dem Löschen (mindestens ein weiterer Items-Fetch).
     await waitFor(() => expect(getFeedbackItems.mock.calls.length).toBeGreaterThan(before))
+  })
+
+  it('zeigt System-Feedback mit Kategorie statt Element-Link', async () => {
+    getFeedbackItems.mockResolvedValue({
+      items: [
+        {
+          id: 'sys1',
+          entity_type: 'system',
+          entity_id: null,
+          name: 'System',
+          version: null,
+          signal: 'mcp',
+          note: 'fetch_playbook liefert 500',
+          agent_id: null,
+          created_at: '2026-06-28T10:00:00Z',
+          resolution: null,
+        },
+      ],
+      counts: { open: 1, in_progress: 0, addressed: 0, dismissed: 0 },
+    })
+    renderInbox()
+
+    // Kategorie-Badge (statt Inhalts-Signal) + Beschreibung sichtbar.
+    expect(await screen.findByText('MCP')).toBeInTheDocument()
+    expect(screen.getByText('fetch_playbook liefert 500')).toBeInTheDocument()
+    // Kein Detail-Link — System-Feedback hat kein Element.
+    expect(screen.queryByRole('link', { name: 'System' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Element öffnen' })).not.toBeInTheDocument()
   })
 })

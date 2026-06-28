@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
 import type {
+  FeedbackEntityType,
   FeedbackItem,
   FeedbackResolution,
   FeedbackSignal,
@@ -20,15 +21,18 @@ import { useFeedbackItems } from '@/hooks/useFeedback'
 import { notify } from '@/lib/feedback'
 import { cn } from '@/lib/utils'
 
+import { ReportProblemDialog } from './ReportProblemDialog'
+
 const DETAIL_SEGMENT: Record<FeedbackTarget, string> = {
   persona: 'personas',
   playbook: 'playbooks',
   resource: 'resources',
 }
 const SIGNALS: readonly FeedbackSignal[] = ['helpful', 'outdated', 'incorrect', 'unclear']
-const NEGATIVE: readonly FeedbackSignal[] = ['outdated', 'incorrect', 'unclear']
+const NEGATIVE: readonly string[] = ['outdated', 'incorrect', 'unclear']
 const RESOLUTIONS: readonly FeedbackResolution[] = ['addressed', 'in_progress', 'dismissed']
-const TYPES: readonly FeedbackTarget[] = ['persona', 'playbook', 'resource']
+// Typ-Filter inkl. 'system' (zielloses Plattform-/MCP-Feedback).
+const TYPES: readonly FeedbackEntityType[] = ['persona', 'playbook', 'resource', 'system']
 
 // Status-Filter: 'open' = noch nicht triagiert (resolution null).
 type StatusFilter = 'open' | FeedbackResolution | 'all'
@@ -54,10 +58,10 @@ function matchesStatus(item: FeedbackItem, status: StatusFilter): boolean {
 export function FeedbackInbox() {
   const { t } = useTranslation('feedback')
   const wsPath = useWorkspacePath()
-  const { data, loading, error, setResolution, deleteFeedback } = useFeedbackItems()
+  const { data, loading, error, setResolution, deleteFeedback, reload } = useFeedbackItems()
   const [status, setStatus] = useState<StatusFilter>('open')
   const [signal, setSignal] = useState<FeedbackSignal | 'all'>('all')
-  const [type, setType] = useState<FeedbackTarget | 'all'>('all')
+  const [type, setType] = useState<FeedbackEntityType | 'all'>('all')
 
   const counts = data?.counts
   const items = (data?.items ?? []).filter(
@@ -95,6 +99,11 @@ export function FeedbackInbox() {
 
   return (
     <div className="flex flex-col gap-4">
+      {/* System-/MCP-Problem melden — landet als 'system'-Eintrag im Posteingang. */}
+      <div className="flex justify-end">
+        <ReportProblemDialog onReported={reload} />
+      </div>
+
       {/* KPI-Leiste — klickbar als Status-Filter */}
       <div className="grid gap-3 sm:grid-cols-3">
         {kpis.map((kpi) => (
@@ -149,7 +158,7 @@ export function FeedbackInbox() {
           <span className="text-muted-foreground">{t('inbox.filter.type')}</span>
           <Select
             value={type}
-            onChange={(e) => setType(e.target.value as FeedbackTarget | 'all')}
+            onChange={(e) => setType(e.target.value as FeedbackEntityType | 'all')}
             className="h-9 w-40"
           >
             <option value="all">{t('inbox.filter.allTypes')}</option>
@@ -173,20 +182,33 @@ export function FeedbackInbox() {
           >
             {items.length > 0 ? (
               <ul className="flex flex-col divide-y">
-                {items.map((item) => (
+                {items.map((item) => {
+                  const isSystem = item.entity_type === 'system'
+                  // System-Feedback hat kein Element → kein Detail-Link; das
+                  // signal-Feld traegt dann die Kategorie statt eines Signals.
+                  const detailPath = isSystem
+                    ? null
+                    : wsPath(
+                        `/${DETAIL_SEGMENT[item.entity_type as FeedbackTarget]}/${item.entity_id}`,
+                      )
+                  const signalLabel = isSystem
+                    ? t(`systemCategory.${item.signal}`)
+                    : t(`signal.${item.signal}`)
+                  return (
                   <li key={item.id} className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge
-                        variant={NEGATIVE.includes(item.signal) ? 'destructive' : 'secondary'}
+                        variant={NEGATIVE.includes(item.signal) || isSystem ? 'destructive' : 'secondary'}
                       >
-                        {t(`signal.${item.signal}`)}
+                        {signalLabel}
                       </Badge>
-                      <Link
-                        to={wsPath(`/${DETAIL_SEGMENT[item.entity_type]}/${item.entity_id}`)}
-                        className="font-medium text-brand hover:underline"
-                      >
-                        {item.name}
-                      </Link>
+                      {detailPath !== null ? (
+                        <Link to={detailPath} className="font-medium text-brand hover:underline">
+                          {item.name}
+                        </Link>
+                      ) : (
+                        <span className="font-medium">{item.name}</span>
+                      )}
                       <span className="text-xs text-muted-foreground">
                         {t(`overview.type.${item.entity_type}`)}
                       </span>
@@ -213,12 +235,11 @@ export function FeedbackInbox() {
                           </option>
                         ))}
                       </Select>
-                      <Link
-                        to={wsPath(`/${DETAIL_SEGMENT[item.entity_type]}/${item.entity_id}`)}
-                        className="text-xs text-brand hover:underline"
-                      >
-                        {t('inbox.openElement')}
-                      </Link>
+                      {detailPath !== null ? (
+                        <Link to={detailPath} className="text-xs text-brand hover:underline">
+                          {t('inbox.openElement')}
+                        </Link>
+                      ) : null}
                       <div className="ml-auto">
                         <DeleteFeedbackButton
                           entityName={item.name}
@@ -227,7 +248,8 @@ export function FeedbackInbox() {
                       </div>
                     </div>
                   </li>
-                ))}
+                  )
+                })}
               </ul>
             ) : null}
           </DataView>

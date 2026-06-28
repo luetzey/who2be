@@ -750,8 +750,19 @@ export interface CheckoutResult {
 // Telemetrie-Rueckkanal: Agenten melden Nutzung + Qualitaet, Kuratoren lesen das
 // Aggregat. `entity_type` ist auf die drei Kern-Inhaltselemente beschraenkt.
 export type FeedbackTarget = 'persona' | 'playbook' | 'resource'
+// Posteingangs-Typ inkl. zielloses System-/MCP-Feedback ('system' = Problem an
+// der Plattform selbst, ohne Inhalts-Bezug).
+export type FeedbackEntityType = FeedbackTarget | 'system'
 export type UsageOutcome = 'applied' | 'skipped' | 'error'
 export type FeedbackSignal = 'helpful' | 'outdated' | 'incorrect' | 'unclear'
+// Kategorie eines System-/MCP-Problems (liegt bei System-Feedback im signal-Feld).
+export type SystemFeedbackCategory = 'technical' | 'mcp' | 'performance' | 'other'
+
+// Eingabe von `POST /system-feedback` (Mensch via UI, Agent via MCP).
+export interface SystemFeedbackInput {
+  category: SystemFeedbackCategory
+  note: string
+}
 // Triage-Status eines Feedback-Eintrags (ADR-0038, append-only).
 export type FeedbackResolution = 'addressed' | 'in_progress' | 'dismissed'
 
@@ -788,11 +799,13 @@ export interface FeedbackResolutionInput {
 // zentralen Posteingangs (`GET …/feedback-items`).
 export interface FeedbackItem {
   id: string
-  entity_type: FeedbackTarget
-  entity_id: string
+  // 'system' = zielloses Plattform-/MCP-Feedback (entity_id null, signal traegt
+  // eine SystemFeedbackCategory, name = "System").
+  entity_type: FeedbackEntityType
+  entity_id: string | null
   name: string
   version: number | null
-  signal: FeedbackSignal
+  signal: FeedbackSignal | SystemFeedbackCategory
   note: string | null
   agent_id: string | null
   created_at: string

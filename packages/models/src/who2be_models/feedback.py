@@ -20,6 +20,11 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 FeedbackTarget = Literal["persona", "playbook", "resource"]
+# Read-/Speicher-seitiger Typ: Inhalts-Feedback (persona/playbook/resource) PLUS
+# zielloses System-Feedback ("system" — technische/MCP-Probleme an der Plattform
+# selbst, ohne Inhalts-Bezug). `FeedbackTarget` bleibt bewusst auf die drei
+# konsumierbaren Inhaltselemente beschraenkt (Usage/Per-Element-Reads).
+FeedbackEntityType = Literal["persona", "playbook", "resource", "system"]
 
 
 class UsageOutcome(StrEnum):
@@ -37,6 +42,23 @@ class FeedbackSignal(StrEnum):
     outdated = "outdated"
     incorrect = "incorrect"
     unclear = "unclear"
+
+
+class SystemFeedbackCategory(StrEnum):
+    """Kategorie eines System-/Plattform-Problems (zielloses Feedback).
+
+    Anders als `FeedbackSignal` (Qualitaet eines Inhalts-Elements) klassifiziert
+    dies ein Problem an der Plattform selbst: `technical` (allgemeiner Bug/Fehler
+    in der App), `mcp` (Problem am MCP-Server/-Tooling), `performance` (zu
+    langsam/haengt) oder `other`. Wird in derselben `agent_feedback`-Spalte
+    `signal` gespeichert (entity_type='system', entity_id=NULL) und fliesst in
+    den gemeinsamen Kurations-Posteingang.
+    """
+
+    technical = "technical"
+    mcp = "mcp"
+    performance = "performance"
+    other = "other"
 
 
 class FeedbackResolution(StrEnum):
@@ -76,6 +98,20 @@ class FeedbackCreate(BaseModel):
     note: str | None = Field(default=None, max_length=2_000)
 
 
+class SystemFeedbackCreate(BaseModel):
+    """Eingabe von `report_problem`: ein zielloses System-/MCP-Problem.
+
+    Kein `entity_*` — das Problem haengt an der Plattform, nicht an einem Inhalt.
+    `category` klassifiziert es, `note` beschreibt es (Pflicht — ein Report ohne
+    Beschreibung ist nutzlos).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    category: SystemFeedbackCategory
+    note: str = Field(min_length=1, max_length=2_000)
+
+
 class UsageEventRead(BaseModel):
     """Ein persistiertes Nutzungs-Ereignis (read-only)."""
 
@@ -109,10 +145,12 @@ class AgentFeedbackRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    entity_type: FeedbackTarget
-    entity_id: UUID
+    # 'system' fuer zielloses Plattform-/MCP-Feedback (dann entity_id=None und
+    # signal traegt eine SystemFeedbackCategory).
+    entity_type: FeedbackEntityType
+    entity_id: UUID | None = None
     version: int | None = None
-    signal: FeedbackSignal
+    signal: FeedbackSignal | SystemFeedbackCategory
     note: str | None = None
     agent_id: UUID | None = None
     created_at: datetime
@@ -130,11 +168,13 @@ class FeedbackItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    entity_type: FeedbackTarget
-    entity_id: UUID
+    # 'system' = zielloses Plattform-/MCP-Feedback: dann entity_id=None, `name`
+    # traegt ein Label ("System") und `signal` eine SystemFeedbackCategory.
+    entity_type: FeedbackEntityType
+    entity_id: UUID | None = None
     name: str
     version: int | None = None
-    signal: FeedbackSignal
+    signal: FeedbackSignal | SystemFeedbackCategory
     note: str | None = None
     agent_id: UUID | None = None
     created_at: datetime

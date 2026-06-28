@@ -75,6 +75,81 @@ def _playbook_body(name: str) -> dict[str, object]:
 
 
 @pytest.mark.integration
+def test_system_feedback_flows_into_inbox(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Zielloses System-/MCP-Feedback (entity_type='system') landet im Posteingang
+    und ist dort triagier- und loeschbar wie Inhalts-Feedback."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    fbase = f"/v1/workspaces/{ws}"
+
+    try:
+        with TestClient(app) as client:
+            # Note ist Pflicht: leer -> 422.
+            assert (
+                client.post(
+                    f"{fbase}/system-feedback",
+                    json={"category": "mcp", "note": ""},
+                    headers=auth,
+                ).status_code
+                == 422
+            )
+            # Unbekannte Kategorie -> 422.
+            assert (
+                client.post(
+                    f"{fbase}/system-feedback",
+                    json={"category": "nope", "note": "x"},
+                    headers=auth,
+                ).status_code
+                == 422
+            )
+            # Gueltiger Report -> 201; zielloses Feedback (entity_id None), die
+            # Kategorie liegt im signal-Feld.
+            r = client.post(
+                f"{fbase}/system-feedback",
+                json={"category": "mcp", "note": "fetch_playbook liefert 500"},
+                headers=auth,
+            )
+            assert r.status_code == 201, r.text
+            body = r.json()
+            assert body["entity_type"] == "system"
+            assert body["entity_id"] is None
+            assert body["signal"] == "mcp"
+            assert body["note"] == "fetch_playbook liefert 500"
+            fid = body["id"]
+
+            # Erscheint im zentralen Posteingang mit Label "System".
+            inbox = client.get(f"{fbase}/feedback-items", headers=auth).json()
+            entry = next(i for i in inbox["items"] if i["id"] == fid)
+            assert entry["entity_type"] == "system"
+            assert entry["entity_id"] is None
+            assert entry["name"] == "System"
+            assert entry["signal"] == "mcp"
+            assert entry["resolution"] is None
+            assert inbox["counts"]["open"] >= 1
+
+            # Triagierbar wie jedes Feedback.
+            tr = client.post(
+                f"{fbase}/feedback/{fid}/resolution",
+                json={"resolution": "addressed"},
+                headers=auth,
+            )
+            assert tr.status_code == 201, tr.text
+            assert tr.json()["resolution"] == "addressed"
+
+            # Loeschbar (editor+).
+            assert client.delete(f"{fbase}/feedback/{fid}", headers=auth).status_code == 204
+            inbox2 = client.get(f"{fbase}/feedback-items", headers=auth).json()
+            assert all(i["id"] != fid for i in inbox2["items"])
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
 def test_flywheel_records_usage_feedback_and_summarizes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

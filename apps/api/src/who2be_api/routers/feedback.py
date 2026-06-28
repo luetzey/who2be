@@ -25,6 +25,7 @@ from who2be_models import (
     FeedbackSummary,
     FeedbackTarget,
     FeedbackUnused,
+    SystemFeedbackCreate,
     UsageEventCreate,
     UsageEventRead,
 )
@@ -50,6 +51,15 @@ async def record_usage(data: UsageEventCreate, ctx: Ctx, service: Service) -> Us
 @router.post("/feedback", status_code=201)
 async def submit_feedback(data: FeedbackCreate, ctx: Ctx, service: Service) -> AgentFeedbackRead:
     return await service.submit_feedback(ctx, data)
+
+
+@router.post("/system-feedback", status_code=201)
+async def submit_system_feedback(
+    data: SystemFeedbackCreate, ctx: Ctx, service: Service
+) -> AgentFeedbackRead:
+    # Zielloses System-/MCP-Problem (kein entity-Bezug). feedback_write-Gate im
+    # Service (No-Op fuer Mensch/JWT). Erscheint im Kurations-Posteingang.
+    return await service.submit_system_feedback(ctx, data)
 
 
 @router.get("/feedback-items")
