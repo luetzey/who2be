@@ -6,15 +6,20 @@ import { renderInRoutes } from '@/test/render'
 
 import { FeedbackInbox } from './FeedbackInbox'
 
-const { getFeedbackItems, setFeedbackResolution } = vi.hoisted(() => ({
+const { getFeedbackItems, setFeedbackResolution, deleteFeedback } = vi.hoisted(() => ({
   getFeedbackItems: vi.fn(),
   setFeedbackResolution: vi.fn(),
+  deleteFeedback: vi.fn(),
 }))
 
 vi.mock('@/api/useApi', () => {
-  const api = { getFeedbackItems, setFeedbackResolution }
+  const api = { getFeedbackItems, setFeedbackResolution, deleteFeedback }
   return { useApi: () => api }
 })
+
+vi.mock('@/lib/feedback', () => ({
+  notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
+}))
 
 const data: FeedbackItems = {
   items: [
@@ -56,6 +61,7 @@ function renderInbox() {
 beforeEach(() => {
   getFeedbackItems.mockResolvedValue(data)
   setFeedbackResolution.mockResolvedValue({ ...data.items[0], resolution: 'addressed' })
+  deleteFeedback.mockResolvedValue(undefined)
 })
 
 describe('FeedbackInbox', () => {
@@ -92,5 +98,19 @@ describe('FeedbackInbox', () => {
     await waitFor(() =>
       expect(getFeedbackItems.mock.calls.length).toBeGreaterThan(before),
     )
+  })
+
+  it('löscht ein Feedback nach Bestätigung und lädt die Liste neu', async () => {
+    renderInbox()
+    await screen.findByRole('link', { name: 'Onboarding' })
+    const before = getFeedbackItems.mock.calls.length
+
+    // Öffnet den Bestätigungs-Dialog und bestätigt den Hard-Delete.
+    fireEvent.click(screen.getByRole('button', { name: 'Feedback löschen' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Endgültig löschen' }))
+
+    await waitFor(() => expect(deleteFeedback).toHaveBeenCalledWith('fb-open'))
+    // Reload nach dem Löschen (mindestens ein weiterer Items-Fetch).
+    await waitFor(() => expect(getFeedbackItems.mock.calls.length).toBeGreaterThan(before))
   })
 })

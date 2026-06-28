@@ -86,3 +86,10 @@ async def set_feedback_resolution(
     feedback_id: UUID, data: FeedbackResolutionCreate, ctx: Ctx, service: Service
 ) -> AgentFeedbackRead:
     return await service.set_resolution(ctx, feedback_id, data)
+
+
+@router.delete("/feedback/{feedback_id}", status_code=204)
+async def delete_feedback(feedback_id: UUID, ctx: Ctx, service: Service) -> None:
+    # Hard-Delete eines Feedback-Eintrags (editor+). 404, wenn das Feedback
+    # nicht im eigenen Workspace liegt; 204 bei Erfolg.
+    await service.delete_feedback(ctx, feedback_id)

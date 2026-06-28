@@ -144,3 +144,13 @@ class FeedbackService:
             data.resolution.value,
             data.note,
         )
+
+    async def delete_feedback(self, ctx: WorkspaceContext, feedback_id: UUID) -> None:
+        # Hard-Delete eines Feedback-Eintrags ist eine Kurations-Handlung →
+        # editor+ (Admin/Editor). Das Feedback muss im eigenen Workspace liegen
+        # (sonst 404, kein Enumerieren). Die Triage-Events (feedback_resolution)
+        # raeumt der FK ON DELETE CASCADE mit.
+        require_role(ctx, WorkspaceRole.editor)
+        if not await self._repo.feedback_belongs_to(ctx.workspace_id, feedback_id):
+            raise _entity_not_found()
+        await self._repo.delete_feedback(ctx.workspace_id, feedback_id)

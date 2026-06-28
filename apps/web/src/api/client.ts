@@ -274,6 +274,8 @@ export interface Api {
     feedbackId: string,
     input: FeedbackResolutionInput,
   ) => Promise<AgentFeedback>
+  // Hard-Delete eines Feedback-Eintrags (editor+); 204 bei Erfolg, 404 fremd.
+  deleteFeedback: (feedbackId: string) => Promise<void>
   transitionPersonaVersion: (
     id: string,
     version: number,
@@ -507,6 +509,8 @@ export function createApi(token: string, workspaceId: string): Api {
         method: 'POST',
         body: JSON.stringify(input),
       }),
+    deleteFeedback: (feedbackId) =>
+      request<void>(token, `${ws}/feedback/${feedbackId}`, { method: 'DELETE' }),
     transitionPersonaVersion: (id, version, to) =>
       request<PersonaVersion>(
         token,

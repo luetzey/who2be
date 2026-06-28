@@ -8,6 +8,7 @@ import type {
   UsageOutcome,
 } from '@/api/types'
 import { DataView } from '@/components/data/DataView'
+import { DeleteFeedbackButton } from '@/components/feedback/DeleteFeedbackButton'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -52,10 +53,16 @@ interface FeedbackPanelProps {
  */
 export function FeedbackPanel({ type, id, onRevise }: FeedbackPanelProps) {
   const { t } = useTranslation('feedback')
-  const { summary, loading, error, events, eventsLoading, loadEvents, setResolution } = useFeedback(
-    type,
-    id,
-  )
+  const {
+    summary,
+    loading,
+    error,
+    events,
+    eventsLoading,
+    loadEvents,
+    setResolution,
+    deleteFeedback,
+  } = useFeedback(type, id)
   const [showEvents, setShowEvents] = useState(false)
 
   const onResolution = async (feedbackId: string, value: string) => {
@@ -249,6 +256,7 @@ export function FeedbackPanel({ type, id, onRevise }: FeedbackPanelProps) {
                                   </option>
                                 ))}
                               </Select>
+                              <DeleteFeedbackButton onConfirm={() => deleteFeedback(ev.id)} />
                             </div>
                           </li>
                         ))}

@@ -1735,6 +1735,16 @@
       "title": "Ungenutzt",
       "description": "Aktive Elemente, die bisher kein Agent genutzt oder bewertet hat.",
       "empty": "Alle aktiven Elemente werden genutzt."
+    },
+    "delete": {
+      "label": "Löschen",
+      "ariaLabel": "Feedback löschen",
+      "dialogTitle": "Feedback löschen?",
+      "dialogDescription": "Das Feedback zu „{{name}}“ wird mit seinem Triage-Verlauf endgültig gelöscht. Das lässt sich nicht rückgängig machen.",
+      "dialogDescriptionGeneric": "Dieses Feedback wird mit seinem Triage-Verlauf endgültig gelöscht. Das lässt sich nicht rückgängig machen.",
+      "confirmLabel": "Endgültig löschen",
+      "success": "Feedback gelöscht.",
+      "error": "Feedback konnte nicht gelöscht werden."
     }
   }
 }

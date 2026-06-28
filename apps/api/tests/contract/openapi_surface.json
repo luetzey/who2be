@@ -170,6 +170,11 @@
     "operationId": "get_feedback_events_v1_workspaces__workspace_id__feedback__entity_type___entity_id__events_get"
   },
   {
+    "method": "DELETE",
+    "path": "/v1/workspaces/{workspace_id}/feedback/{feedback_id}",
+    "operationId": "delete_feedback_v1_workspaces__workspace_id__feedback__feedback_id__delete"
+  },
+  {
     "method": "POST",
     "path": "/v1/workspaces/{workspace_id}/feedback/{feedback_id}/resolution",
     "operationId": "set_feedback_resolution_v1_workspaces__workspace_id__feedback__feedback_id__resolution_post"

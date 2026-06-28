@@ -1735,6 +1735,16 @@
       "title": "Unused",
       "description": "Active elements no agent has used or rated yet.",
       "empty": "All active elements are in use."
+    },
+    "delete": {
+      "label": "Delete",
+      "ariaLabel": "Delete feedback",
+      "dialogTitle": "Delete feedback?",
+      "dialogDescription": "The feedback on “{{name}}” will be permanently deleted along with its triage history. This cannot be undone.",
+      "dialogDescriptionGeneric": "This feedback will be permanently deleted along with its triage history. This cannot be undone.",
+      "confirmLabel": "Delete permanently",
+      "success": "Feedback deleted.",
+      "error": "Feedback could not be deleted."
     }
   }
 }

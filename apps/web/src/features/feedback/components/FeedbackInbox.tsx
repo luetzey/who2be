@@ -10,6 +10,7 @@ import type {
 } from '@/api/types'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { DataView } from '@/components/data/DataView'
+import { DeleteFeedbackButton } from '@/components/feedback/DeleteFeedbackButton'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -53,7 +54,7 @@ function matchesStatus(item: FeedbackItem, status: StatusFilter): boolean {
 export function FeedbackInbox() {
   const { t } = useTranslation('feedback')
   const wsPath = useWorkspacePath()
-  const { data, loading, error, setResolution } = useFeedbackItems()
+  const { data, loading, error, setResolution, deleteFeedback } = useFeedbackItems()
   const [status, setStatus] = useState<StatusFilter>('open')
   const [signal, setSignal] = useState<FeedbackSignal | 'all'>('all')
   const [type, setType] = useState<FeedbackTarget | 'all'>('all')
@@ -218,6 +219,12 @@ export function FeedbackInbox() {
                       >
                         {t('inbox.openElement')}
                       </Link>
+                      <div className="ml-auto">
+                        <DeleteFeedbackButton
+                          entityName={item.name}
+                          onConfirm={() => deleteFeedback(item.id)}
+                        />
+                      </div>
                     </div>
                   </li>
                 ))}
