@@ -8,7 +8,11 @@ export interface SessionValue {
   // Identity-/Memberships-Snapshot des Tokens — wird nach erfolgreichem
   // Login einmal via `GET /v1/me` resolved und im State gehalten.
   me: Me | null
-  signIn: (email: string, password: string) => Promise<void>
+  // Passwort-Login. Liefert `{ mfaRequired: true }`, wenn ein verifizierter
+  // zweiter Faktor eine Step-up-Challenge braucht (nextLevel 'aal2' > current).
+  // In dem Fall wird die aal1-Session NICHT committed — die LoginPage fuehrt
+  // die TOTP-Challenge durch, erst danach committet `apply()` die aal2-Session.
+  signIn: (email: string, password: string) => Promise<{ mfaRequired: boolean }>
   signOut: () => Promise<void>
   // Expliziter Re-Fetch von `/v1/me` — wird von `DefaultWorkspaceRedirect`
   // genutzt, wenn der Lazy-Seed noch nicht abgeschlossen war (Fallback).

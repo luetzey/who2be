@@ -2,17 +2,39 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { signInWithPassword, getSession, onAuthStateChange } = vi.hoisted(() => ({
+const {
+  signInWithPassword,
+  getSession,
+  onAuthStateChange,
+  getAuthenticatorAssuranceLevel,
+  listFactors,
+  challenge,
+  verify,
+} = vi.hoisted(() => ({
   signInWithPassword: vi.fn(),
   getSession: vi.fn(async () => ({ data: { session: null }, error: null })),
   onAuthStateChange: vi.fn(() => ({
     data: { subscription: { unsubscribe: vi.fn() } },
   })),
+  // Default: kein Step-up faellig.
+  getAuthenticatorAssuranceLevel: vi.fn(async () => ({
+    data: { currentLevel: 'aal1', nextLevel: 'aal1' },
+    error: null,
+  })),
+  listFactors: vi.fn(async () => ({ data: { all: [], totp: [{ id: 'f1' }] }, error: null })),
+  challenge: vi.fn(async () => ({ data: { id: 'ch1' }, error: null })),
+  verify: vi.fn(async () => ({ data: {}, error: null })),
 }))
 
 vi.mock('@/lib/supabase', () => ({
   supabase: {
-    auth: { signInWithPassword, signOut: vi.fn(), getSession, onAuthStateChange },
+    auth: {
+      signInWithPassword,
+      signOut: vi.fn(),
+      getSession,
+      onAuthStateChange,
+      mfa: { getAuthenticatorAssuranceLevel, listFactors, challenge, verify },
+    },
   },
 }))
 
@@ -73,6 +95,41 @@ describe('LoginPage', () => {
         email: 'agent@who2be.dev',
         password: 'streng-geheim',
       })
+    })
+  })
+
+  it('fordert bei faelligem zweiten Faktor den TOTP-Code an und verifiziert ihn', async () => {
+    signInWithPassword.mockResolvedValue({ data: { session: null }, error: null })
+    // Step-up faellig: Passwort ok, aber Session ist erst aal1.
+    getAuthenticatorAssuranceLevel.mockResolvedValue({
+      data: { currentLevel: 'aal1', nextLevel: 'aal2' },
+      error: null,
+    })
+
+    render(
+      <BrowserRouter>
+        <SessionProvider>
+          <LoginPage />
+        </SessionProvider>
+      </BrowserRouter>,
+    )
+
+    fireEvent.change(screen.getByLabelText('E-Mail'), {
+      target: { value: 'admin@who2be.dev' },
+    })
+    fireEvent.change(screen.getByLabelText('Passwort'), {
+      target: { value: 'streng-geheim' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Anmelden' }))
+
+    // Zweite Stufe: Code-Feld erscheint.
+    const codeField = await screen.findByLabelText('Code')
+    fireEvent.change(codeField, { target: { value: '123456' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Bestaetigen' }))
+
+    await waitFor(() => {
+      expect(challenge).toHaveBeenCalledWith({ factorId: 'f1' })
+      expect(verify).toHaveBeenCalledWith({ factorId: 'f1', challengeId: 'ch1', code: '123456' })
     })
   })
 })

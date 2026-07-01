@@ -9,6 +9,7 @@ const {
   onAuthStateChange,
   unsubscribe,
   fetchMe,
+  getAuthenticatorAssuranceLevel,
 } = vi.hoisted(() => ({
   getSession: vi.fn(),
   signInWithPassword: vi.fn(),
@@ -21,11 +22,22 @@ const {
     organizations: [],
     has_password: true,
   })),
+  // Default: kein Step-up faellig (currentLevel == nextLevel).
+  getAuthenticatorAssuranceLevel: vi.fn(async () => ({
+    data: { currentLevel: 'aal1', nextLevel: 'aal1' },
+    error: null,
+  })),
 }))
 
 vi.mock('@/lib/supabase', () => ({
   supabase: {
-    auth: { getSession, signInWithPassword, signOut, onAuthStateChange },
+    auth: {
+      getSession,
+      signInWithPassword,
+      signOut,
+      onAuthStateChange,
+      mfa: { getAuthenticatorAssuranceLevel },
+    },
   },
 }))
 
@@ -132,6 +144,36 @@ describe('SessionProvider', () => {
       expect(screen.getByTestId('session').textContent).toBe('magic-jwt')
       expect(screen.getByTestId('me').textContent).toBe('u1')
     })
+  })
+
+  it('haelt eine aal1-Session mit faelligem zweiten Faktor zurueck (kein Commit)', async () => {
+    // Passwort ok, aber TOTP-Faktor verlangt Step-up: nextLevel > currentLevel.
+    // Die Session darf NICHT committed werden, sonst landet der User mit aal1
+    // in der App und jede Admin-Aktion 403t (mfa_required).
+    getAuthenticatorAssuranceLevel.mockResolvedValueOnce({
+      data: { currentLevel: 'aal1', nextLevel: 'aal2' },
+      error: null,
+    })
+
+    render(
+      <SessionProvider>
+        <Probe />
+      </SessionProvider>,
+    )
+    await waitFor(() => {
+      expect(listener).not.toBeNull()
+    })
+
+    const aal1Session = { access_token: 'aal1-jwt' } as unknown as Session
+    await act(async () => {
+      listener?.('SIGNED_IN', aal1Session)
+      await Promise.resolve()
+    })
+
+    // Weder Session noch me committed; fetchMe erst gar nicht aufgerufen.
+    expect(screen.getByTestId('session').textContent).toBe('<none>')
+    expect(screen.getByTestId('me').textContent).toBe('<none>')
+    expect(fetchMe).not.toHaveBeenCalled()
   })
 
   it('unsubscribed das onAuthStateChange-Listener beim Unmount', async () => {

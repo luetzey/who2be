@@ -349,7 +349,16 @@
       "unconfirmedEmail": "Deine E-Mail-Adresse ist noch nicht bestaetigt.",
       "loginFailed": "Login fehlgeschlagen.",
       "resendConfirmation": "Bestaetigungs-Mail erneut senden",
-      "confirmationResent": "Bestaetigungs-Mail erneut gesendet."
+      "confirmationResent": "Bestaetigungs-Mail erneut gesendet.",
+      "mfa": {
+        "title": "Zwei-Faktor-Authentifizierung",
+        "description": "Gib den 6-stelligen Code aus deiner Authenticator-App ein.",
+        "codeLabel": "Code",
+        "codePlaceholder": "123456",
+        "codeInvalid": "Bitte einen 6-stelligen Code eingeben.",
+        "submit": "Bestaetigen",
+        "failed": "Code konnte nicht verifiziert werden. Bitte erneut versuchen."
+      }
     },
     "signup": {
       "title": "Registrieren",
