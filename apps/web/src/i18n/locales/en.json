@@ -114,6 +114,21 @@
       "savedAgoMinutes": "Saved ({{minutes}}min ago).",
       "error": "Error while saving.",
       "errorWithMessage": "Error while saving: {{message}}"
+    },
+    "filter": {
+      "statusGroup": "Filter by status",
+      "all": "All",
+      "attention": "Needs attention",
+      "searchLabel": "Search",
+      "searchPlaceholder": "Search by name…",
+      "tagLabel": "Tag",
+      "typeLabel": "Type",
+      "allTags": "All tags",
+      "allTypes": "All types",
+      "reset": "Reset filters",
+      "pendingDraft": "Draft open",
+      "emptyFilteredTitle": "No matches",
+      "emptyFilteredDescription": "No entries match the active filters. Adjust the search or status."
     }
   },
   "version": {

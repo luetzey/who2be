@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react'
+import { Link } from 'react-router-dom'
 
 import type { StatusDistribution, VersionStatus } from '@/api/types'
 
@@ -7,6 +8,9 @@ import { statusLabel } from '../lib/statusLabel'
 interface StatusDonutProps {
   label: string
   distribution: StatusDistribution
+  // Optional: macht die Legenden-Eintraege klickbar → verlinkt auf die
+  // nach diesem Status vorgefilterte Listen-Seite (`…?status=<status>`).
+  hrefFor?: (status: VersionStatus) => string
 }
 
 // Lifecycle-Reihenfolge des Rings: Draft → Review → Active → Inactive.
@@ -23,7 +27,7 @@ function strokeFor(status: VersionStatus): CSSProperties {
   return { stroke: `var(--status-${status})` }
 }
 
-export function StatusDonut({ label, distribution }: StatusDonutProps) {
+export function StatusDonut({ label, distribution, hrefFor }: StatusDonutProps) {
   const total = SEGMENTS.reduce((sum, status) => sum + (distribution[status] ?? 0), 0)
 
   const ariaLabel = `${label}: ${SEGMENTS.map(
@@ -76,16 +80,34 @@ export function StatusDonut({ label, distribution }: StatusDonutProps) {
         </div>
       </div>
       <ul className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-        {SEGMENTS.map((status) => (
-          <li key={status} className="flex items-center gap-2">
+        {SEGMENTS.map((status) => {
+          const dot = (
             <span
               className="inline-block size-2 rounded-full"
               style={{ backgroundColor: `var(--status-${status})` }}
               aria-hidden="true"
             />
-            {statusLabel(status)}: {distribution[status] ?? 0}
-          </li>
-        ))}
+          )
+          const text = `${statusLabel(status)}: ${distribution[status] ?? 0}`
+          return (
+            <li key={status} className="flex items-center gap-2">
+              {hrefFor ? (
+                <Link
+                  to={hrefFor(status)}
+                  className="flex items-center gap-2 rounded-sm hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
+                >
+                  {dot}
+                  {text}
+                </Link>
+              ) : (
+                <>
+                  {dot}
+                  {text}
+                </>
+              )}
+            </li>
+          )
+        })}
       </ul>
     </div>
   )

@@ -4,6 +4,20 @@ _Stand: 2026-06-16_
 
 ## Funktioniert
 
+- **Listen-Status-Filter + Quick-Filter (2026-07-01), Branch
+  `claude/code-agent-setup-qh480c`:** Alle vier Listen-Seiten (Personas,
+  Playbooks, Resources, System-Prompts) bekommen eine einheitliche, URL-
+  synchronisierte Filterleiste — reines Frontend, `current_status`/
+  `has_pending_draft` kamen schon aus den List-Endpoints. Neu:
+  `@/lib/listFilter.ts` (reine Logik: `needsAttention` = draft ∪ review ∪
+  pending-draft, `countByStatus`, `matchesStatusFilter`), Hook
+  `@/hooks/useListFilters` (kombinierbare Facetten Status+Freitext+Tag+Typ,
+  Query-Keys `?status=&q=&tag=&type=`, faceted counts), Shared-Components
+  `@/components/data/StatusBadge` (Status-Punkt+Label je Zeile, „Entwurf offen"-
+  Marker) und `@/components/data/ListFilterBar` (Status-Quick-Chips mit Zähler,
+  inkl. akzentuiertem „Braucht Aufmerksamkeit (N)"). Dashboard-`StatusDonut`-
+  Legende verlinkt jetzt auf die vorgefilterte Liste (`hrefFor`). i18n
+  `data.filter.*` (de+en). DoD grün: lint 0 Errors, tsc, 422 Tests, build.
 - **System-/MCP-Feedback (zielloser Typ) (2026-06-28), Branch
   `feat/feedback-system-type` (gestapelt auf `feat/feedback-delete`):** Neuer
   Feedback-Typ fuer Probleme an der Plattform selbst (technisch/MCP), ohne
