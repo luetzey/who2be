@@ -2,6 +2,7 @@ import { BookOpen, ClipboardCheck, LayoutDashboard, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
+import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
@@ -20,6 +21,7 @@ import { useDashboard } from '../hooks/useDashboard'
 export function DashboardPage() {
   const { t } = useTranslation('dashboard')
   const role = useCurrentWorkspaceRole()
+  const wsPath = useWorkspacePath()
   const { data, loading, error, notFound, preparing, page, setPage } = useDashboard()
 
   const pagination = data?.activity_pagination
@@ -82,15 +84,18 @@ export function DashboardPage() {
                       <StatusDonut
                         label={t('statusDistribution.personas')}
                         distribution={data.status_distribution.persona}
+                        hrefFor={(status) => wsPath(`/personas?status=${status}`)}
                       />
                       <StatusDonut
                         label={t('statusDistribution.playbooks')}
                         distribution={data.status_distribution.playbook}
+                        hrefFor={(status) => wsPath(`/playbooks?status=${status}`)}
                       />
                       {data.status_distribution.resource ? (
                         <StatusDonut
                           label={t('statusDistribution.resources')}
                           distribution={data.status_distribution.resource}
+                          hrefFor={(status) => wsPath(`/resources?status=${status}`)}
                         />
                       ) : null}
                     </div>

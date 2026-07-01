@@ -1,5 +1,5 @@
-import { FileText, Plus, X } from 'lucide-react'
-import { useState } from 'react'
+import { FileText, Plus } from 'lucide-react'
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
@@ -10,102 +10,89 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
 import { DataList } from '@/components/data/DataList'
 import { EmptyState } from '@/components/data/EmptyState'
+import { ListFilterBar } from '@/components/data/ListFilterBar'
+import { StatusBadge } from '@/components/data/StatusBadge'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { useListFilters, type ListFilterAccessors } from '@/hooks/useListFilters'
 import { useResources } from '@/hooks/useResources'
 
 export function ResourcesPage() {
-  const { t } = useTranslation('resources')
+  const { t } = useTranslation(['resources', 'data'])
   const { resources, loading, error } = useResources()
   const wsPath = useWorkspacePath()
-  const [activeTag, setActiveTag] = useState<string | null>(null)
 
-  // Client-seitiger Tag-Filter — einfach und ohne extra API-Call fuer die Listenseite.
-  // Bei grossen Workspaces kann spaeter auf GET /resources?tag= umgestellt werden.
-  const filtered: Resource[] =
-    activeTag === null
-      ? resources
-      : resources.filter((r) => (r.content.tags ?? []).includes(activeTag))
-
-  // Alle vorhandenen Tags aus der geladenen Liste sammeln.
-  const allTags = Array.from(
-    new Set(resources.flatMap((r) => r.content.tags ?? [])),
-  ).sort()
+  const accessors = useMemo<ListFilterAccessors<Resource>>(
+    () => ({
+      name: (resource) => resource.name,
+      status: (resource) => resource.current_status,
+      hasPendingDraft: (resource) => resource.has_pending_draft,
+      tags: (resource) => resource.content.tags ?? [],
+    }),
+    [],
+  )
+  const filters = useListFilters(resources, accessors)
 
   return (
     <Container>
       <Stack gap="lg">
         <PageHeader
-          title={t('list.title')}
-          description={t('list.description')}
+          title={t('resources:list.title')}
+          description={t('resources:list.description')}
           actions={
             <Button asChild variant="brand">
               <Link to={wsPath('/resources/new')}>
                 <Plus className="h-4 w-4" />
-                {t('list.newResource')}
+                {t('resources:list.newResource')}
               </Link>
             </Button>
           }
         />
 
-        {allTags.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-2" role="group" aria-label={t('list.tagFilter')}>
-            <span className="text-xs font-medium text-muted-foreground">Tags:</span>
-            {allTags.map((tag) => (
-              <Badge
-                key={tag}
-                variant={activeTag === tag ? 'default' : 'outline'}
-                className="cursor-pointer select-none"
-                onClick={() => setActiveTag(activeTag === tag ? null : tag)}
-                role="button"
-                aria-pressed={activeTag === tag}
-              >
-                {tag}
-              </Badge>
-            ))}
-            {activeTag !== null ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-6 gap-1 px-2 text-xs"
-                onClick={() => setActiveTag(null)}
-              >
-                <X className="size-3" />
-                {t('list.resetFilter')}
-              </Button>
-            ) : null}
-          </div>
+        {resources.length > 0 ? (
+          <ListFilterBar
+            idPrefix="resources"
+            counts={filters.counts}
+            status={filters.status}
+            onStatusChange={filters.setStatus}
+            query={filters.query}
+            onQueryChange={filters.setQuery}
+            availableTags={filters.availableTags}
+            tag={filters.tag}
+            onTagChange={filters.setTag}
+            active={filters.active}
+            onReset={filters.reset}
+          />
         ) : null}
 
         <DataList
-          items={filtered}
+          items={filters.filtered}
           loading={loading}
           error={error}
           getKey={(resource) => resource.id}
           empty={
-            activeTag !== null ? (
+            resources.length === 0 ? (
               <EmptyState
                 icon={FileText}
-                title={t('list.emptyTagTitle', { tag: activeTag })}
-                description={t('list.emptyTagDescription')}
+                title={t('resources:list.emptyTitle')}
+                description={t('resources:list.emptyDescription')}
                 action={
-                  <Button type="button" variant="outline" onClick={() => setActiveTag(null)}>
-                    {t('list.resetFilter')}
+                  <Button asChild variant="brand">
+                    <Link to={wsPath('/resources/new')}>
+                      <Plus className="h-4 w-4" />
+                      {t('resources:list.newResource')}
+                    </Link>
                   </Button>
                 }
               />
             ) : (
               <EmptyState
                 icon={FileText}
-                title={t('list.emptyTitle')}
-                description={t('list.emptyDescription')}
+                title={t('data:filter.emptyFilteredTitle')}
+                description={t('data:filter.emptyFilteredDescription')}
                 action={
-                  <Button asChild variant="brand">
-                    <Link to={wsPath('/resources/new')}>
-                      <Plus className="h-4 w-4" />
-                      {t('list.newResource')}
-                    </Link>
+                  <Button type="button" variant="outline" onClick={filters.reset}>
+                    {t('data:filter.reset')}
                   </Button>
                 }
               />
@@ -120,29 +107,21 @@ export function ResourcesPage() {
                 >
                   {resource.name}
                 </Link>
+                <StatusBadge
+                  status={resource.current_status}
+                  pendingDraft={resource.has_pending_draft}
+                />
                 {(resource.content.tags ?? []).length > 0 ? (
-                  <div className="flex flex-wrap gap-1" aria-label="Tags">
+                  <div className="flex flex-wrap gap-1" aria-label={t('resources:list.tagFilter')}>
                     {(resource.content.tags ?? []).map((tag) => (
-                      <Badge
-                        key={tag}
-                        variant={activeTag === tag ? 'default' : 'secondary'}
-                        className="cursor-pointer text-xs"
-                        onClick={(e) => {
-                          e.preventDefault()
-                          setActiveTag(activeTag === tag ? null : tag)
-                        }}
-                        role="button"
-                        aria-pressed={activeTag === tag}
-                      >
+                      <Badge key={tag} variant="secondary" className="text-xs">
                         {tag}
                       </Badge>
                     ))}
                   </div>
                 ) : null}
               </div>
-              <span className="text-xs text-muted-foreground">
-                v{resource.current_version}
-              </span>
+              <span className="text-xs text-muted-foreground">v{resource.current_version}</span>
             </div>
           )}
         />

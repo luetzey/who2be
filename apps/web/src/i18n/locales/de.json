@@ -114,6 +114,21 @@
       "savedAgoMinutes": "Gespeichert (vor {{minutes}} min).",
       "error": "Fehler beim Speichern.",
       "errorWithMessage": "Fehler beim Speichern: {{message}}"
+    },
+    "filter": {
+      "statusGroup": "Nach Status filtern",
+      "all": "Alle",
+      "attention": "Braucht Aufmerksamkeit",
+      "searchLabel": "Suche",
+      "searchPlaceholder": "Nach Name suchen…",
+      "tagLabel": "Tag",
+      "typeLabel": "Typ",
+      "allTags": "Alle Tags",
+      "allTypes": "Alle Typen",
+      "reset": "Filter zurücksetzen",
+      "pendingDraft": "Entwurf offen",
+      "emptyFilteredTitle": "Keine Treffer",
+      "emptyFilteredDescription": "Keine Einträge passen zu den aktiven Filtern. Passe Suche oder Status an."
     }
   },
   "version": {
