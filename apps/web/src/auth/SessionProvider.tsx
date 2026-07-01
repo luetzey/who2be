@@ -26,6 +26,22 @@ async function resolveMe(accessToken: string | undefined): Promise<Me | null> {
   }
 }
 
+// Admin-MFA (WP-F/S1): Steht ein verifizierter zweiter Faktor bereit, liefert
+// ein reiner Passwort-Login nur eine `aal1`-Session — GoTrue meldet dann
+// `nextLevel: 'aal2'`, waehrend `currentLevel` noch `aal1` ist. Eine solche
+// Session darf nicht in die App gelassen werden (sonst 403 `mfa_required` bei
+// jeder Admin-Aktion, ohne Weg zurueck auf aal2). Fehlerhafte Abfrage faellt
+// bewusst fail-open auf `false` zurueck, damit ein getAAL-Ausfall den Login
+// nicht komplett blockiert — das Backend-Gate bleibt die harte Grenze.
+async function mfaStepUpPending(): Promise<boolean> {
+  try {
+    const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+    return data?.nextLevel === 'aal2' && data.currentLevel !== 'aal2'
+  } catch {
+    return false
+  }
+}
+
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [me, setMe] = useState<Me | null>(null)
@@ -50,6 +66,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         return
       }
       lastTokenRef.current = nextToken
+      // Aal1-Session mit faelligem zweiten Faktor zurueckhalten — egal ob der
+      // Event aus signIn, einem Reload oder einem Refresh stammt. Erst der
+      // Challenge-Schritt der LoginPage hebt sie auf aal2 und committet dann.
+      if (nextSession !== null && (await mfaStepUpPending())) {
+        if (cancelled) return
+        setMe(null)
+        setSession(null)
+        return
+      }
       const resolved = await resolveMe(nextSession?.access_token)
       if (cancelled) return
       setMe(resolved)
@@ -78,10 +103,18 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (error) {
       throw new Error(error.message)
     }
+    // Steht eine Step-up-Challenge aus, die aal1-Session NICHT committen — die
+    // LoginPage fordert dann den TOTP-Code an. `apply()` (via onAuthStateChange)
+    // haelt dieselbe Session ohnehin zurueck; hier signalisieren wir es nur an
+    // den Aufrufer.
+    if (await mfaStepUpPending()) {
+      return { mfaRequired: true }
+    }
     const resolved = await resolveMe(data.session?.access_token)
     lastTokenRef.current = data.session?.access_token ?? null
     setMe(resolved)
     setSession(data.session)
+    return { mfaRequired: false }
   }, [])
 
   const signOut = useCallback(async () => {

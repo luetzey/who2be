@@ -20,6 +20,36 @@ import { buildRedirectTo } from '../lib/redirect'
 import { sanitizeNext } from '../lib/sanitize-next'
 
 type LoginValues = { email: string; password: string }
+type MfaValues = { code: string }
+
+// Step-up-Challenge (WP-F/S1): Hat der Account einen verifizierten TOTP-Faktor,
+// liefert der Passwort-Login nur eine aal1-Session. Diese Challenge hebt sie auf
+// aal2 — ohne sie bleiben Admin-Aktionen serverseitig geblockt. Analog zum
+// Enrollment in `settings/components/MfaSection.tsx` ueber `supabase.auth.mfa`.
+async function completeMfaChallenge(code: string): Promise<void> {
+  const { data: factors, error: listError } = await supabase.auth.mfa.listFactors()
+  if (listError || factors === null) {
+    throw new Error(listError?.message ?? 'MFA-Faktoren konnten nicht geladen werden.')
+  }
+  // `totp` enthaelt nur verifizierte Faktoren — der erste genuegt fuer die
+  // Step-up-Challenge (Reihenfolge/Auswahl irrelevant, alle heben auf aal2).
+  if (factors.totp.length === 0) {
+    throw new Error('Kein verifizierter TOTP-Faktor gefunden.')
+  }
+  const factorId = factors.totp[0].id
+  const { data: challenge, error: challengeError } = await supabase.auth.mfa.challenge({ factorId })
+  if (challengeError || challenge === null) {
+    throw new Error(challengeError?.message ?? 'MFA-Challenge konnte nicht gestartet werden.')
+  }
+  const { error: verifyError } = await supabase.auth.mfa.verify({
+    factorId,
+    challengeId: challenge.id,
+    code,
+  })
+  if (verifyError) {
+    throw new Error(verifyError.message)
+  }
+}
 
 // GoTrue meldet einen noch nicht bestaetigten Account mit diesem Code; wir
 // fuehren den User dann gezielt zum erneuten Versand der Confirm-Mail.
@@ -38,6 +68,9 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   // Unbestaetigter Login: blendet den „Bestaetigungs-Mail erneut senden"-CTA ein.
   const [unconfirmed, setUnconfirmed] = useState(false)
+  // Zweite Login-Stufe: Passwort war korrekt, aber der Account braucht eine
+  // TOTP-Challenge (Step-up auf aal2), bevor die Session in die App darf.
+  const [mfaRequired, setMfaRequired] = useState(false)
 
   // `next` bringt den User nach dem Login dorthin zurück, wo ihn ein
   // Auth-Gate abgefangen hat (z. B. /invitations/:token/accept). Nur relative
@@ -55,6 +88,17 @@ export function LoginPage() {
     defaultValues: { email: '', password: '' },
   })
 
+  const mfaSchema = z.object({
+    code: z
+      .string()
+      .trim()
+      .regex(/^\d{6}$/, t('login.mfa.codeInvalid')),
+  })
+  const mfaForm = useForm<MfaValues>({
+    resolver: zodResolver(mfaSchema),
+    defaultValues: { code: '' },
+  })
+
   if (session !== null) {
     return <Navigate to={next} replace />
   }
@@ -63,7 +107,13 @@ export function LoginPage() {
     setError(null)
     setUnconfirmed(false)
     try {
-      await signIn(values.email, values.password)
+      const { mfaRequired: needsMfa } = await signIn(values.email, values.password)
+      if (needsMfa) {
+        // Session noch nicht committed — erst die Challenge, dann navigiert der
+        // reaktive `session !== null`-Guard von selbst.
+        setMfaRequired(true)
+        return
+      }
       navigate(next)
     } catch (cause) {
       if (isUnconfirmedEmail(cause)) {
@@ -72,6 +122,22 @@ export function LoginPage() {
         return
       }
       setError(cause instanceof Error ? cause.message : t('login.loginFailed'))
+    }
+  }
+
+  async function onVerifyMfa(values: MfaValues) {
+    setError(null)
+    try {
+      await completeMfaChallenge(values.code)
+      // `verify` hebt die Session auf aal2; `SessionProvider.apply()` committet
+      // sie ueber onAuthStateChange, woraufhin der Guard oben nach `next`
+      // navigiert. Kein manuelles navigate() → keine Race gegen den Commit.
+    } catch {
+      // Haeufigster Fall ist ein falscher Code; interne Invarianten (kein
+      // Faktor, Challenge-Fehler) fallen auf dieselbe lokalisierte Meldung —
+      // die rohen GoTrue-/Guard-Messages werden bewusst nicht durchgereicht.
+      mfaForm.reset({ code: '' })
+      setError(t('login.mfa.failed'))
     }
   }
 
@@ -96,10 +162,47 @@ export function LoginPage() {
           <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
             {t('brand')}
           </span>
-          <CardTitle className="text-3xl tracking-tight">{t('login.title')}</CardTitle>
-          <CardDescription>{t('login.description')}</CardDescription>
+          <CardTitle className="text-3xl tracking-tight">
+            {mfaRequired ? t('login.mfa.title') : t('login.title')}
+          </CardTitle>
+          <CardDescription>
+            {mfaRequired ? t('login.mfa.description') : t('login.description')}
+          </CardDescription>
         </CardHeader>
         <CardContent>
+          {mfaRequired ? (
+            <Form {...mfaForm}>
+              <form onSubmit={mfaForm.handleSubmit(onVerifyMfa)} className="flex flex-col gap-4">
+                <FormField
+                  control={mfaForm.control}
+                  name="code"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('login.mfa.codeLabel')}</FormLabel>
+                      <FormControl>
+                        <Input
+                          inputMode="numeric"
+                          autoComplete="one-time-code"
+                          placeholder={t('login.mfa.codePlaceholder')}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                {error !== null ? <ErrorAlert message={error} /> : null}
+                <Button
+                  type="submit"
+                  variant="brand"
+                  className="w-full"
+                  disabled={mfaForm.formState.isSubmitting}
+                >
+                  {t('login.mfa.submit')}
+                </Button>
+              </form>
+            </Form>
+          ) : (
           <div className="flex flex-col gap-4">
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
@@ -182,6 +285,7 @@ export function LoginPage() {
               </p>
             )}
           </div>
+          )}
         </CardContent>
       </Card>
     </main>

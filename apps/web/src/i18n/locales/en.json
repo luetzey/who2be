@@ -349,7 +349,16 @@
       "unconfirmedEmail": "Your email address has not been confirmed yet.",
       "loginFailed": "Login failed.",
       "resendConfirmation": "Resend confirmation email",
-      "confirmationResent": "Confirmation email resent."
+      "confirmationResent": "Confirmation email resent.",
+      "mfa": {
+        "title": "Two-factor authentication",
+        "description": "Enter the 6-digit code from your authenticator app.",
+        "codeLabel": "Code",
+        "codePlaceholder": "123456",
+        "codeInvalid": "Please enter a 6-digit code.",
+        "submit": "Verify",
+        "failed": "Could not verify the code. Please try again."
+      }
     },
     "signup": {
       "title": "Sign up",

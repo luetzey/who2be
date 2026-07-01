@@ -81,12 +81,28 @@ In **Konto-Einstellungen → Sicherheit → Zwei-Faktor (MFA)**:
 2. Authenticator-App (z. B. 1Password, Google Authenticator) scannt den
    QR-Code (oder das Secret manuell eingeben).
 3. Den 6-stelligen Code eingeben → `supabase.auth.mfa.challengeAndVerify`.
-   Nach Erfolg ist der Faktor verifiziert; die naechste Anmeldung fuehrt zur
-   MFA-Challenge und hebt die Sitzung auf `aal2`.
+   Nach Erfolg ist der Faktor verifiziert; die verifizierende Sitzung ist
+   bereits `aal2`.
 
 Faktoren lassen sich in derselben Sektion auflisten und entfernen
 (`supabase.auth.mfa.unenroll`). **Hinweis:** Ohne verbleibenden Faktor sind
 Admin-Aktionen wieder blockiert.
+
+## Login-Step-up (Challenge bei der Anmeldung)
+
+Ein reiner Passwort-Login liefert bei einem Account mit verifiziertem TOTP-
+Faktor nur eine `aal1`-Sitzung (GoTrue meldet `nextLevel: 'aal2'`). Da die
+Sitzung in tab-lebensdauer-`sessionStorage` liegt, ist nach neuem Tab, Ablauf
+oder erneutem Login ein Step-up noetig — sonst blieben Admin-Aktionen blockiert.
+Der Login-Flow erledigt das automatisch (`apps/web/.../auth/pages/LoginPage.tsx`
++ `auth/SessionProvider.tsx`):
+
+1. Nach `signInWithPassword` prueft `SessionProvider` via
+   `mfa.getAuthenticatorAssuranceLevel`, ob ein Step-up faellig ist. Wenn ja,
+   wird die `aal1`-Sitzung **nicht** committed (kein Durchlassen in die App).
+2. Die LoginPage zeigt ein TOTP-Code-Feld und fuehrt
+   `mfa.challenge` + `mfa.verify` aus. Nach Erfolg traegt die Sitzung `aal2` und
+   wird committed; der Nutzer landet an seinem urspruenglichen Ziel (`next`).
 
 ## Betreiber-Empfehlung: Host-/Infra-Zugang
 
@@ -102,4 +118,6 @@ Admin-Aktionen wieder blockiert.
   mit `aal2` → ok, fehlender Claim/Token → exempt; Rollen-Check hat Vorrang.
   `apps/api/tests/test_security.py::test_verify_jwt_reads_aal_claim`.
 - Frontend: `apps/web/src/features/settings/components/MfaSection.test.tsx`
-  (Enroll/Verify/Liste) + `MfaSection.a11y.test.tsx` (axe).
+  (Enroll/Verify/Liste) + `MfaSection.a11y.test.tsx` (axe). Login-Step-up:
+  `apps/web/src/auth/SessionProvider.test.tsx` (aal1+pending → kein Commit) +
+  `apps/web/src/features/auth/pages/LoginPage.test.tsx` (Code-Feld + verify).

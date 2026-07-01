@@ -4,6 +4,18 @@ _Stand: 2026-06-16_
 
 ## Funktioniert
 
+- **MFA-Login-Step-up (2026-07-01), Branch `claude/code-agent-setup-2zrtxb`:**
+  Bugfix — Admin-Aktionen forderten trotz eingerichtetem TOTP `aal2`, weil der
+  Login keinen MFA-Challenge-Schritt hatte (Enrollment hob nur die aktuelle
+  Session; nach neuem Tab/Ablauf/Re-Login wieder `aal1`, kein Weg zurück).
+  Backend-Gate `require_aal2` war korrekt. Fix im Web-Login: `SessionProvider`
+  prüft nach `signInWithPassword` via `mfa.getAuthenticatorAssuranceLevel`, ob
+  Step-up fällig ist, und hält eine `aal1`-Session mit fälligem zweitem Faktor
+  zurück (`apply()` committet sie nicht); `LoginPage` zeigt dann ein TOTP-Feld
+  und fährt `mfa.challenge` + `mfa.verify` → `aal2`. `signIn` liefert jetzt
+  `{ mfaRequired }`. i18n `auth.login.mfa.*` (de+en). Doku `docs/mfa-admin.md`.
+  DoD grün: lint 0 Errors, tsc, 450 Tests, build. Plan:
+  `.claude/plan/2026-07-01-1200_mfa-login-step-up.md`.
 - **Listen-Status-Filter + Quick-Filter (2026-07-01), Branch
   `claude/code-agent-setup-qh480c`:** Alle vier Listen-Seiten (Personas,
   Playbooks, Resources, System-Prompts) bekommen eine einheitliche, URL-

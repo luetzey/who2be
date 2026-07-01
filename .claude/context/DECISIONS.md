@@ -41,5 +41,21 @@ einen neuen Eintrag mit Verweis.
 - **Offen:** E2E gegen echten Claude-Client (ob der `?agent=`-Query als OAuth-`resource`
   ankommt) — durch Fail-safe unkritisch.
 
+## 2026-07-01 — MFA-Step-up: Hold-back im `apply()`, nicht neuer Context-Vertrag
+- **Entscheidung:** Die `aal1`-mit-fälligem-Step-up-Session wird zentral in
+  `SessionProvider.apply()` zurückgehalten (autoritatives Gate gegen die
+  onAuthStateChange-Race), nicht nur im `signIn`-Rückgabewert. Die Challenge/
+  Verify-Logik lebt direkt in der `LoginPage` (via `supabase.auth.mfa`, analog
+  `MfaSection`) statt als neue `verifyMfa`-Methode im `SessionValue`-Interface.
+  `getAuthenticatorAssuranceLevel` fällt bei Fehler fail-open auf „kein Step-up"
+  zurück — das Backend-Gate `require_aal2` bleibt die harte Grenze.
+- **Begründung:** `apply()`-Gate schließt die Race deterministisch (egal ob der
+  Event aus signIn, Reload oder Refresh stammt). Kein Interface-Zwang auf ~28
+  Test-Literale (`signIn: vi.fn()` bleibt zuweisbar; Rückgabetyp-Wechsel auf
+  `{ mfaRequired }` ist kompatibel). Fail-open verhindert, dass ein getAAL-
+  Ausfall den Login komplett blockiert, ohne die Server-Autorität zu schwächen.
+- **Verworfen:** Globaler Step-up-Modal bei jedem 403 `mfa_required` (größerer
+  Eingriff, App-weiter Zustand); `verifyMfa` im Context (Test-Churn ohne Nutzen).
+
 _Bei Wachstum: älteste Einträge zu Einzeilern komprimieren (Titel + Entscheidung
 bleiben)._
