@@ -264,21 +264,31 @@ def test_dashboard_aggregates_status_and_activity(
 
             # Deltas auf die Seed-Baseline (Persona B aktiv; Playbook P v1 aktiv;
             # Persona A v2 in review).
+            # KPIs leiten sich aus der (current-status-)Distribution ab. Persona B
+            # ist current active → +1. Playbook P ist current DRAFT (v2 ueber der
+            # aktiven v1) → zaehlt NICHT als aktiv; active_playbooks bleibt gleich.
+            # Persona A ist current review → +1 pending_reviews.
             assert body["kpis"]["active_personas"] == base_kpi["active_personas"] + 1
-            assert body["kpis"]["active_playbooks"] == base_kpi["active_playbooks"] + 1
+            assert body["kpis"]["active_playbooks"] == base_kpi["active_playbooks"]
             assert body["kpis"]["pending_reviews"] == base_kpi["pending_reviews"] + 1
 
+            # Die Distribution zaehlt jedes Aggregat GENAU EINMAL nach seinem
+            # aktuellen (hoechste-Version-)Status — wie die Listen-Sicht.
             persona_dist = body["status_distribution"]["persona"]
+            # Persona B (v1 active) → +1 active.
             assert persona_dist["active"] == base_pd["active"] + 1
+            # Persona A: current ist v2 (review) → +1 review.
             assert persona_dist["review"] == base_pd["review"] + 1
-            # Persona A v1 ist nach UPDATE durch den API-Endpoint zwar nicht
-            # mehr current — Status bleibt jedoch 'inactive' (Default), weil
-            # `update` keine Status-Logik kennt. Macht +1 inactive.
-            assert persona_dist["inactive"] == base_pd["inactive"] + 1
+            # Persona A v1 (inactive) ist eine ueberholte Alt-Version, NICHT
+            # current → zaehlt nicht mehr in die Verteilung.
+            assert persona_dist["inactive"] == base_pd["inactive"]
             assert persona_dist["draft"] == base_pd["draft"]
 
             playbook_dist = body["status_distribution"]["playbook"]
-            assert playbook_dist["active"] == base_pb["active"] + 1
+            # Playbook P: current ist v2 (draft) → +1 draft; die aktive v1 ist
+            # nicht current, daher KEIN +1 active in der Verteilung (die KPI
+            # `active_playbooks` zaehlt hingegen live-dienende Aggregate, s. o.).
+            assert playbook_dist["active"] == base_pb["active"]
             assert playbook_dist["draft"] == base_pb["draft"] + 1
 
             activity = body["activity"]

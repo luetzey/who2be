@@ -4,6 +4,19 @@ _Stand: 2026-06-16_
 
 ## Funktioniert
 
+- **Fix: Dashboard-Status-Verteilung = aktueller Status (2026-07-02), Branch
+  `claude/code-agent-setup-qh480c`:** Die Donut-`status_distribution` zählte alle
+  `*_version`-Zeilen nach Status — überholte Alt-Versionen (das `inactive` einer
+  abgelösten Vorversion) blähten den Inaktiv-Topf auf, sodass das Dashboard
+  „Inaktiv (N)" zeigte, der Listen-Filter aber (korrekt) nichts. Fix in
+  `dashboard_repository`: die drei Distribution-Queries zählen jedes Aggregat
+  jetzt GENAU EINMAL nach dem Status seiner aktuellen Version (`DISTINCT ON` +
+  höchste Version im Default-Locale-Track) — identisch zu `_select_current`/der
+  Listen-Sicht. Konsequenz (bewusst): die KPIs leiten sich aus der Distribution
+  ab, daher zählt ein aktives Aggregat mit offenem Draft jetzt als „Entwurf"
+  (nicht „Aktiv") — konsistent mit Liste + Donut. `test_dashboard_endpoint`
+  angepasst. **DoD grün:** ruff clean, mypy 226, Python 660 pytest (Dashboard-
+  Tests gegen echtes Postgres verifiziert).
 - **MFA-Login-Step-up (2026-07-01), Branch `claude/code-agent-setup-2zrtxb`:**
   Bugfix — Admin-Aktionen forderten trotz eingerichtetem TOTP `aal2`, weil der
   Login keinen MFA-Challenge-Schritt hatte (Enrollment hob nur die aktuelle
