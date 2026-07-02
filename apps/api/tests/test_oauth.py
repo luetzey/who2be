@@ -440,7 +440,30 @@ def test_oauth_full_flow_and_security(monkeypatch: pytest.MonkeyPatch) -> None:
             new_api_auth = {"Authorization": f"Bearer {new_access}"}
             assert client.get("/v1/me", headers=new_api_auth).status_code == 200
 
-            # --- Refresh-Replay (alter Refresh) → invalid_grant + Kette gekillt ---
+            # --- Refresh-Replay INNERHALB der Grace (1x) → gutartiger Retry ---
+            # Sofortiger Replay des soeben rotierten Refresh (verlorene Antwort /
+            # paralleler Refresh): frischer Token, OHNE die Kette zu killen
+            # (RFC 9700 Grace-Window).
+            grace_replay = client.post(
+                "/oauth/token",
+                data={
+                    "grant_type": "refresh_token",
+                    "refresh_token": refresh,
+                    "client_id": client_id,
+                },
+            )
+            assert grace_replay.status_code == 200, grace_replay.text
+            grace_access = grace_replay.json()["access_token"]
+            assert grace_access not in (access, new_access)
+            grace_api_auth = {"Authorization": f"Bearer {grace_access}"}
+            # Kette lebt: r1-Nachfolger UND Grace-Token funktionieren beide.
+            assert client.get("/v1/me", headers=new_api_auth).status_code == 200
+            assert client.get("/v1/me", headers=grace_api_auth).status_code == 200
+
+            # --- Zweiter Grace-Replay → single-use erschoepft → Kette gekillt ---
+            # Der Grace-Retry ist atomar genau-einmal (grace_consumed_at); ein
+            # zweiter Einloese-Versuch desselben Tokens gilt als echter Replay und
+            # widerruft die ganze Kette (verhindert N Zweige aus einem Race).
             replay_refresh = client.post(
                 "/oauth/token",
                 data={
@@ -451,8 +474,9 @@ def test_oauth_full_flow_and_security(monkeypatch: pytest.MonkeyPatch) -> None:
             )
             assert replay_refresh.status_code == 400
             assert replay_refresh.json()["error"] == "invalid_grant"
-            # Der aus dem konsumierten Refresh entstandene Access-Token ist widerrufen.
+            # Die ganze Kette (beide Zweige) ist widerrufen.
             assert client.get("/v1/me", headers=new_api_auth).status_code == 401
+            assert client.get("/v1/me", headers=grace_api_auth).status_code == 401
 
             # --- Access-Token-Expiry → 401 ---
             verifier2, challenge2 = _pkce()

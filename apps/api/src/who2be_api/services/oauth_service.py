@@ -41,6 +41,12 @@ from who2be_models import (
 _ACCESS_TTL = timedelta(hours=8)
 _REFRESH_TTL = timedelta(days=30)
 _CODE_TTL = timedelta(seconds=60)
+# Grace-Window fuer die Refresh-Rotation (RFC 9700 §4.14.2): innerhalb dieses
+# Fensters gilt ein bereits rotierter Refresh-Token als GUTARTIGER Retry
+# (verlorene Token-Antwort / paralleler Refresh) und wird nochmals eingeloest,
+# statt die ganze Kette zu killen. Eng gehalten — ausserhalb greift die
+# Replay-Detection unveraendert.
+_REFRESH_GRACE = timedelta(seconds=30)
 _REQUEST_BLOB_TTL = 600  # s
 
 
@@ -263,12 +269,19 @@ class OAuthService:
     async def exchange_refresh(self, refresh_token: str, client_id: str) -> OAuthTokenResponse:
         token_hash = hash_token(refresh_token)
         consumed = await self._oauth.consume_refresh(token_hash)
+        rotated = consumed is not None
         if consumed is None:
-            # Konnte nicht konsumiert werden: bereits verbraucht (Replay),
-            # abgelaufen oder unbekannt. Beim Replay haengt am `rotated_from`-
-            # Pfad der AKTUELL aktive Access-Token — die ganze Kette killen.
-            await self._oauth.revoke_refresh_chain(token_hash)
-            raise OAuthError("invalid_grant", "Refresh-Token ungueltig.")
+            # Nicht (mehr) konsumierbar — zwei Faelle:
+            #  * GUTARTIGER Retry: der Token wurde soeben (<= Grace) schon rotiert
+            #    (verlorene Antwort / paralleler Refresh). Innerhalb des Fensters
+            #    nochmals einloesen, OHNE die Kette zu killen (RFC 9700 §4.14.2);
+            #    der aus der Erstrotation entstandene Nachfolger bleibt gueltig.
+            #  * Echter Replay / abgelaufen / unbekannt: am `rotated_from`-Pfad
+            #    haengt der AKTUELL aktive Access-Token — die ganze Kette killen.
+            consumed = await self._oauth.consume_refresh_grace(token_hash, _REFRESH_GRACE)
+            if consumed is None:
+                await self._oauth.revoke_refresh_chain(token_hash)
+                raise OAuthError("invalid_grant", "Refresh-Token ungueltig.")
         old_token_id, bound_client = consumed
         if bound_client != client_id:
             raise OAuthError("invalid_grant", "Client stimmt nicht.")
@@ -289,7 +302,11 @@ class OAuthService:
             await self._oauth.revoke_refresh_chain(token_hash)
             await self._oauth.revoke_api_token(old_token_id)
             raise OAuthError("invalid_grant", "Kein Mitglied dieses Workspace mehr.")
-        await self._oauth.revoke_api_token(old_token_id)  # Rotation: alten Access widerrufen
+        # Rotation: den soeben konsumierten Access widerrufen. Im Grace-Pfad ist
+        # er bereits aus der Erstrotation widerrufen — nicht erneut anfassen,
+        # damit der (erste) Nachfolger gueltig bleibt.
+        if rotated:
+            await self._oauth.revoke_api_token(old_token_id)
         return await self._issue(
             workspace_id=workspace_id,
             owner_id=owner_id,

@@ -8,7 +8,7 @@ single-use-Konsumption ist atomar (`UPDATE … WHERE consumed_at IS NULL`).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import UUID
 
 import asyncpg
@@ -165,6 +165,34 @@ class PgOAuthRepository:
             "WHERE token_hash = $1 AND consumed_at IS NULL AND expires_at > now() "
             "RETURNING api_token_id, client_id",
             token_hash,
+        )
+        return (row["api_token_id"], row["client_id"]) if row is not None else None
+
+    async def consume_refresh_grace(
+        self, token_hash: str, grace: timedelta
+    ) -> tuple[UUID, str] | None:
+        """Atomar-single-use Grace-Einloesung eines KUERZLICH rotierten Tokens.
+
+        Setzt `grace_consumed_at` GENAU EINMAL und liefert `(api_token_id,
+        client_id)`, wenn der Token bereits konsumiert wurde, aber vor <= `grace`,
+        noch nicht abgelaufen ist UND der Grace-Retry noch nicht bedient wurde —
+        das Signal fuer einen GUTARTIGEN Retry (verlorene Token-Antwort /
+        paralleler Refresh), KEIN Replay/Diebstahl.
+
+        `None` sonst (nie konsumiert, ausserhalb Grace, abgelaufen, unbekannt
+        ODER Grace bereits eingeloest) — dann greift die Ketten-Revocation. Wie
+        `consume_refresh` genau-einmal: der zweite Grace-Versuch fuer denselben
+        Token faellt durch, sodass aus einem Race keine unbegrenzte Zahl
+        unabhaengiger Ketten-Zweige entstehen kann.
+        """
+        row = await self._pool.fetchrow(
+            "UPDATE oauth_refresh_token SET grace_consumed_at = now() "
+            "WHERE token_hash = $1 AND consumed_at IS NOT NULL "
+            "AND consumed_at > now() - $2::interval AND expires_at > now() "
+            "AND grace_consumed_at IS NULL "
+            "RETURNING api_token_id, client_id",
+            token_hash,
+            grace,
         )
         return (row["api_token_id"], row["client_id"]) if row is not None else None
 
