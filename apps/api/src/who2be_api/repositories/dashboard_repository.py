@@ -26,30 +26,48 @@ from uuid import UUID
 
 import asyncpg
 
-from who2be_models import EntityType, VersionStatus
+from who2be_models import DEFAULT_LOCALE, EntityType, VersionStatus
 
+# Distribution je Entity-Typ: zaehlt jedes Aggregat GENAU EINMAL nach dem Status
+# seiner aktuellen Version (hoechste Version im Default-Locale-Track) — identisch
+# zur Listen-Sicht (`_select_current` in den Entity-Repos). Bewusst NICHT ueber
+# alle `*_version`-Zeilen: sonst blaehen ueberholte Alt-Versionen (z. B. das
+# `inactive` einer abgeloesten Vorversion) die Verteilung auf und die Donut
+# widerspricht dem Status-Filter der Liste. `$2` = Locale.
 _PERSONA_DISTRIBUTION = """
-    SELECT pv.status, COUNT(*)::int AS n
-    FROM persona_version pv
-    JOIN persona p ON p.id = pv.persona_id
-    WHERE p.workspace_id = $1
-    GROUP BY pv.status
+    SELECT cur.status, COUNT(*)::int AS n
+    FROM (
+        SELECT DISTINCT ON (pv.persona_id) pv.status
+        FROM persona_version pv
+        JOIN persona p ON p.id = pv.persona_id
+        WHERE p.workspace_id = $1 AND pv.locale = $2
+        ORDER BY pv.persona_id, pv.version DESC
+    ) cur
+    GROUP BY cur.status
 """
 
 _PLAYBOOK_DISTRIBUTION = """
-    SELECT pv.status, COUNT(*)::int AS n
-    FROM playbook_version pv
-    JOIN playbook p ON p.id = pv.playbook_id
-    WHERE p.workspace_id = $1
-    GROUP BY pv.status
+    SELECT cur.status, COUNT(*)::int AS n
+    FROM (
+        SELECT DISTINCT ON (pv.playbook_id) pv.status
+        FROM playbook_version pv
+        JOIN playbook p ON p.id = pv.playbook_id
+        WHERE p.workspace_id = $1 AND pv.locale = $2
+        ORDER BY pv.playbook_id, pv.version DESC
+    ) cur
+    GROUP BY cur.status
 """
 
 _RESOURCE_DISTRIBUTION = """
-    SELECT rv.status, COUNT(*)::int AS n
-    FROM resource_version rv
-    JOIN resource r ON r.id = rv.resource_id
-    WHERE r.workspace_id = $1
-    GROUP BY rv.status
+    SELECT cur.status, COUNT(*)::int AS n
+    FROM (
+        SELECT DISTINCT ON (rv.resource_id) rv.status
+        FROM resource_version rv
+        JOIN resource r ON r.id = rv.resource_id
+        WHERE r.workspace_id = $1 AND rv.locale = $2
+        ORDER BY rv.resource_id, rv.version DESC
+    ) cur
+    GROUP BY cur.status
 """
 
 # Single UNION-ALL — persona/playbook/resource in einer Query, plus
@@ -136,9 +154,9 @@ class PgDashboardRepository:
     async def status_distribution(
         self, workspace_id: UUID
     ) -> tuple[dict[VersionStatus, int], dict[VersionStatus, int], dict[VersionStatus, int]]:
-        persona_rows = await self._pool.fetch(_PERSONA_DISTRIBUTION, workspace_id)
-        playbook_rows = await self._pool.fetch(_PLAYBOOK_DISTRIBUTION, workspace_id)
-        resource_rows = await self._pool.fetch(_RESOURCE_DISTRIBUTION, workspace_id)
+        persona_rows = await self._pool.fetch(_PERSONA_DISTRIBUTION, workspace_id, DEFAULT_LOCALE)
+        playbook_rows = await self._pool.fetch(_PLAYBOOK_DISTRIBUTION, workspace_id, DEFAULT_LOCALE)
+        resource_rows = await self._pool.fetch(_RESOURCE_DISTRIBUTION, workspace_id, DEFAULT_LOCALE)
         return (
             {VersionStatus(row["status"]): row["n"] for row in persona_rows},
             {VersionStatus(row["status"]): row["n"] for row in playbook_rows},
