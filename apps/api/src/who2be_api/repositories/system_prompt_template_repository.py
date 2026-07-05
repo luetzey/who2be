@@ -120,8 +120,7 @@ class PgSystemPromptTemplateRepository:
 
     async def is_managed(self, workspace_id: UUID, template_id: UUID) -> bool:
         val = await self._pool.fetchval(
-            "SELECT is_managed FROM system_prompt_template "
-            "WHERE id = $1 AND workspace_id = $2",
+            "SELECT is_managed FROM system_prompt_template WHERE id = $1 AND workspace_id = $2",
             template_id,
             workspace_id,
         )

@@ -1413,9 +1413,7 @@ class TestToolsOverviewResolver:
     def test_feedback_protocol_hidden_when_feedback_write_off(self) -> None:
         """Ohne feedback_write: weder Tool-Eintrag noch Protokoll-Hinweis."""
         result = _async_run(
-            ToolsOverviewResolver().resolve(
-                "", self._policy_ctx(feedback_write=False), _make_db()
-            )
+            ToolsOverviewResolver().resolve("", self._policy_ctx(feedback_write=False), _make_db())
         ).text
         assert "record_usage" not in result
         assert "Rueckmeldung" not in result

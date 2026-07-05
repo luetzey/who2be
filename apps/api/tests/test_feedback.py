@@ -310,9 +310,9 @@ def test_flywheel_records_usage_feedback_and_summarizes(
             d = client.delete(f"{fbase}/feedback/{fid}", headers=auth)
             assert d.status_code == 204, d.text
             inbox_after = client.get(f"{fbase}/feedback-items", headers=auth).json()
-            assert all(
-                i["id"] != fid for i in inbox_after["items"]
-            ), "Feedback noch im Posteingang."
+            assert all(i["id"] != fid for i in inbox_after["items"]), (
+                "Feedback noch im Posteingang."
+            )
             # Drill-down zeigt das Feedback (und seine Triage-Events via Cascade)
             # nicht mehr; der Usage-Verlauf bleibt unberuehrt.
             ev_after = client.get(f"{fbase}/feedback/playbook/{pid}/events", headers=auth).json()

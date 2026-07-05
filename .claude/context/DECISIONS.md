@@ -57,5 +57,24 @@ einen neuen Eintrag mit Verweis.
 - **Verworfen:** Globaler Step-up-Modal bei jedem 403 `mfa_required` (größerer
   Eingriff, App-weiter Zustand); `verifyMfa` im Context (Test-Churn ohne Nutzen).
 
+## 2026-07-05 — OAuth-Refresh-Reuse: Reject-only statt Ketten-Revocation
+- **Entscheidung:** Wiederverwendung eines bereits konsumierten Refresh-Tokens
+  außerhalb des 30-s-Grace-Fensters wird nur noch mit `invalid_grant` + Warn-Log
+  abgelehnt — `revoke_refresh_chain` läuft dabei NICHT mehr. Die Ketten-Revocation
+  bleibt für echte Sicherheits-Events (Membership-Verlust beim Refresh /
+  Deprovisioning). Bewusste Abweichung von RFC 9700 §4.14.2 (Revocation-on-Reuse).
+- **Begründung:** MCP-Clients (Claude) sind multi-runtime: mehrere Agenten teilen
+  sich die Connector-Tokens, veraltete Refresh-Kopien werden gutartig retried.
+  Jeder Retry killte alle aktiven Access-Tokens der Kette (auch frisch rotierte
+  der gesunden Runtime) → permanenter „verbunden, aber keine Tools"-Lockout
+  (Repro gegen echten Stack; #293-Grace war zu eng und single-use). Die
+  Revocation stoppte zudem keinen echten Dieb: sie widerrief nur `api_token`-
+  Zeilen, nie die Refresh-Kette — ein Dieb mit Nachfolge-Refresh mintet einfach
+  neu. Kosten (täglicher Lockout) ohne Nutzen (kein Diebstahl-Schutz).
+- **Verworfen:** Grace-Fenster verbreitern (Retry-Loops fallen aus jedem endlichen
+  Fenster und killen dann doch); Refresh-Rotation abschaffen (OAuth-2.1-Vorgabe
+  für Public Clients); Ketten-Kill inkl. Refresh-Tokens „richtig" bauen (würde
+  multi-runtime Clients erst recht hart aussperren).
+
 _Bei Wachstum: älteste Einträge zu Einzeilern komprimieren (Titel + Entscheidung
 bleiben)._

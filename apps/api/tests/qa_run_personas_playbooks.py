@@ -576,7 +576,10 @@ def test_FT_VER_01_to_10_persona(monkeypatch: pytest.MonkeyPatch) -> None:
         body: dict[str, str] = {"to": to}
         if note:
             body["note"] = note
-        return c.post(f"{base}/{pid}/versions/{v}/transition", json=body, headers=auth)
+        resp: httpx.Response = c.post(
+            f"{base}/{pid}/versions/{v}/transition", json=body, headers=auth
+        )
+        return resp
 
     with TestClient(app) as c:
         r = c.post(base, json=_persona_body("VER persona"), headers=editor_h)
@@ -690,7 +693,10 @@ def test_FT_VER_01_to_10_playbook(monkeypatch: pytest.MonkeyPatch) -> None:
         body: dict[str, str] = {"to": to}
         if note:
             body["note"] = note
-        return c.post(f"{base}/{eid}/versions/{v}/transition", json=body, headers=auth)
+        resp: httpx.Response = c.post(
+            f"{base}/{eid}/versions/{v}/transition", json=body, headers=auth
+        )
+        return resp
 
     with TestClient(app) as c:
         r = c.post(base, json=_playbook_body("VER playbook"), headers=editor_h)

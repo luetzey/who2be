@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from uuid import uuid4
 
+import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -23,7 +24,11 @@ from who2be_models import WorkspaceRole
 
 def _admin_ctx() -> WorkspaceContext:
     return WorkspaceContext(
-        workspace_id=uuid4(), user_id=uuid4(), role=WorkspaceRole.admin, is_api_token=False
+        workspace_id=uuid4(),
+        user_id=uuid4(),
+        role=WorkspaceRole.admin,
+        is_api_token=False,
+        aal="aal2",
     )
 
 
@@ -45,7 +50,7 @@ def cloud_app(monkeypatch: pytest.MonkeyPatch) -> Iterator[FastAPI]:
 
 def _post(app: FastAPI, body: dict[str, object]) -> int:
     with TestClient(app) as client:
-        resp = client.post(
+        resp: httpx.Response = client.post(
             f"/v1/workspaces/{uuid4()}/billing/override",
             json=body,
             headers={"Authorization": "Bearer w2b_dummy"},

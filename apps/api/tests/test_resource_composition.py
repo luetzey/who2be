@@ -11,6 +11,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import asyncpg
+import httpx
 import jwt
 import pytest
 from fastapi.testclient import TestClient
@@ -236,11 +237,12 @@ def test_sub_resource_transitive_cycle_guard(monkeypatch: pytest.MonkeyPatch) ->
     base = f"/v1/workspaces/{ws}/resources"
 
     def _set(parent: str, child: str) -> int:
-        return client.put(
+        resp: httpx.Response = client.put(
             f"{base}/{parent}/sub_resources",
             json={"links": [{"child_id": child, "link_scope": "resource", "position": 0}]},
             headers=auth,
-        ).status_code
+        )
+        return resp.status_code
 
     try:
         with TestClient(app) as client:
