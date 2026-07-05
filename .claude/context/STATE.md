@@ -330,11 +330,15 @@ _Stand: 2026-07-05_
 
 ## Bekannte Probleme
 
-- **CI-Runner-Infra defekt:** alle GitHub-Actions-Jobs scheitern in ~2 s,
-  `runner_id=0`, keine Logs → mutmaßlich erschöpfte **Actions-Minuten / Billing**
-  des privaten Repos. Nicht im Code behebbar. **Public-Flip löst es** (Actions ist
-  für öffentliche Repos frei/unbegrenzt).
-- E2E-Gate bleibt Soft, bis die CI-Infra steht.
+- **CI-Runner-Infra läuft wieder** (Stand 2026-07-05, PR #294): Jobs starten
+  und laufen durch. Dadurch sichtbar gewordene Alt-Schuld:
+  **web-Job rot wegen Branch-Coverage** (69,5 % < 79 %-Floor in
+  `apps/web/vite.config.ts`) — über die Feature-PRs seit ~#266 angesammelt
+  (lokale DoD lief `npm test` ohne Coverage-Gate). Owner-Entscheidung
+  2026-07-05: Floor NICHT senken; Schuld in einem **dedizierten Coverage-PR**
+  abtragen (≈240 fehlende Branches, Top-Kandidaten: PlaybookDetailPage,
+  AccountPage, OAuthConsentPage, LoginPage, ResourceDetailPage, api/client.ts).
+- E2E-Gate bleibt Soft, bis die CI-Infra dauerhaft stabil ist.
 
 ## Nächste Schritte (nicht-Code, manuell beim Owner)
 
