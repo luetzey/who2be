@@ -116,9 +116,7 @@ class FeedbackService:
         require_role(ctx, WorkspaceRole.editor)
         if not await self._repo.entity_belongs_to(ctx.workspace_id, entity_type, entity_id):
             raise _entity_not_found()
-        return await self._repo.list_events(
-            ctx.workspace_id, entity_type, entity_id, _EVENTS_LIMIT
-        )
+        return await self._repo.list_events(ctx.workspace_id, entity_type, entity_id, _EVENTS_LIMIT)
 
     async def get_overview(self, ctx: WorkspaceContext) -> FeedbackOverview:
         # Workspace-weite Kurations-Uebersicht (Dashboard-Kacheln + Feedback-Seite).
