@@ -39,6 +39,7 @@ def _admin_ctx() -> WorkspaceContext:
         user_id=uuid4(),
         role=WorkspaceRole.admin,
         is_api_token=False,
+        aal="aal2",
     )
 
 

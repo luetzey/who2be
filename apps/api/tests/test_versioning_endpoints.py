@@ -83,9 +83,10 @@ def _to(
     status: str,
     auth: dict[str, str],
 ) -> httpx.Response:
-    return client.post(
+    resp: httpx.Response = client.post(
         f"{base}/{pid}/versions/{version}/transition", json={"to": status}, headers=auth
     )
+    return resp
 
 
 @pytest.mark.integration

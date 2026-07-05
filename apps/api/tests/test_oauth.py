@@ -211,7 +211,7 @@ def _authorize_blob(client: TestClient, client_id: str, challenge: str) -> str:
         follow_redirects=False,
     )
     assert resp.status_code == 302, resp.text
-    location = resp.headers["location"]
+    location: str = resp.headers["location"]
     blob = parse_qs(urlparse(location).query)["request"][0]
     return blob
 
