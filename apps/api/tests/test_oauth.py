@@ -113,6 +113,28 @@ def _expire_token(token_hash: str) -> None:
     asyncio.run(_run())
 
 
+def _backdate_refresh_consumption(refresh_plain: str, seconds: int) -> None:
+    """Verschiebt `consumed_at`/`grace_consumed_at` eines Refresh-Tokens in die
+    Vergangenheit — simuliert eine Runtime, die eine veraltete Refresh-Kopie
+    erst NACH Ablauf des Grace-Fensters wiederverwendet (multi-runtime Claude)."""
+
+    async def _run() -> None:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            await conn.execute(
+                "UPDATE oauth_refresh_token SET "
+                "consumed_at = consumed_at - $2 * interval '1 second', "
+                "grace_consumed_at = grace_consumed_at - $2 * interval '1 second' "
+                "WHERE token_hash = $1",
+                security.hash_token(refresh_plain),
+                seconds,
+            )
+        finally:
+            await conn.close()
+
+    asyncio.run(_run())
+
+
 def _remove_member(ws: UUID, user_id: UUID) -> None:
     async def _run() -> None:
         conn = await asyncpg.connect(get_settings().database_url)
@@ -460,10 +482,14 @@ def test_oauth_full_flow_and_security(monkeypatch: pytest.MonkeyPatch) -> None:
             assert client.get("/v1/me", headers=new_api_auth).status_code == 200
             assert client.get("/v1/me", headers=grace_api_auth).status_code == 200
 
-            # --- Zweiter Grace-Replay → single-use erschoepft → Kette gekillt ---
+            # --- Zweiter Grace-Replay → single-use erschoepft → NUR abgelehnt ---
             # Der Grace-Retry ist atomar genau-einmal (grace_consumed_at); ein
-            # zweiter Einloese-Versuch desselben Tokens gilt als echter Replay und
-            # widerruft die ganze Kette (verhindert N Zweige aus einem Race).
+            # weiterer Einloese-Versuch desselben Tokens wird abgelehnt, killt
+            # aber NICHT die Kette: multi-runtime MCP-Clients (mehrere Claude-
+            # Agenten teilen sich die Connector-Tokens) retrien tote Refresh-
+            # Kopien gutartig — eine Ketten-Revocation wuerde bei jedem Retry
+            # die frisch rotierten Access-Tokens der gesunden Runtime mit
+            # widerrufen → dauerhafter "verbunden, aber keine Tools"-Lockout.
             replay_refresh = client.post(
                 "/oauth/token",
                 data={
@@ -474,9 +500,37 @@ def test_oauth_full_flow_and_security(monkeypatch: pytest.MonkeyPatch) -> None:
             )
             assert replay_refresh.status_code == 400
             assert replay_refresh.json()["error"] == "invalid_grant"
-            # Die ganze Kette (beide Zweige) ist widerrufen.
-            assert client.get("/v1/me", headers=new_api_auth).status_code == 401
-            assert client.get("/v1/me", headers=grace_api_auth).status_code == 401
+            # Beide gesunden Zweige LEBEN weiter — kein Lockout.
+            assert client.get("/v1/me", headers=new_api_auth).status_code == 200
+            assert client.get("/v1/me", headers=grace_api_auth).status_code == 200
+
+            # --- Stale-Reuse AUSSERHALB der Grace → abgelehnt, Kette lebt ---
+            # Runtime B haelt eine veraltete Refresh-Kopie und verwendet sie
+            # deutlich nach der Rotation wieder (Backdating simuliert >Grace).
+            _backdate_refresh_consumption(refresh, seconds=3600)
+            stale = client.post(
+                "/oauth/token",
+                data={
+                    "grant_type": "refresh_token",
+                    "refresh_token": refresh,
+                    "client_id": client_id,
+                },
+            )
+            assert stale.status_code == 400
+            assert stale.json()["error"] == "invalid_grant"
+            # Die aktiven Access-Tokens der gesunden Runtimes bleiben gueltig …
+            assert client.get("/v1/me", headers=new_api_auth).status_code == 200
+            assert client.get("/v1/me", headers=grace_api_auth).status_code == 200
+            # … und der nie benutzte Nachfolge-Refresh rotiert weiterhin normal.
+            r2 = client.post(
+                "/oauth/token",
+                data={
+                    "grant_type": "refresh_token",
+                    "refresh_token": new_refresh,
+                    "client_id": client_id,
+                },
+            )
+            assert r2.status_code == 200, r2.text
 
             # --- Access-Token-Expiry → 401 ---
             verifier2, challenge2 = _pkce()

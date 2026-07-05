@@ -204,12 +204,15 @@ class PgOAuthRepository:
         )
 
     async def revoke_refresh_chain(self, token_hash: str) -> int:
-        """Widerruft die GANZE Rotationskette ab `token_hash` (Replay-Mitigation).
+        """Widerruft die GANZE Rotationskette ab `token_hash`.
 
         Folgt `rotated_from` vorwaerts (rekursiv) und widerruft die `api_token`-
-        Rows aller Glieder — der wiederverwendete Refresh und jeder daraus
-        rotierte Nachfolger (= der aktuell aktive Access-Token). Liefert die
-        Zahl der betroffenen Rows (0 ⇒ Hash unbekannt, kein echter Replay).
+        Rows aller Glieder — inklusive des aktuell aktiven Access-Tokens.
+        Einsatz NUR fuer echte Sicherheits-Events (Membership-Verlust beim
+        Refresh, Deprovisioning) — NICHT fuer Refresh-Reuse: multi-runtime
+        MCP-Clients wiederholen tote Refresh-Tokens gutartig, ein Kill wuerde
+        die gesunde Kette bricken (Lockout, siehe `exchange_refresh`). Liefert
+        die Zahl der betroffenen Rows (0 ⇒ Hash unbekannt).
         """
         revoked = await self._pool.fetchval(
             "WITH RECURSIVE chain AS ("

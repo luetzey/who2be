@@ -6,7 +6,11 @@ Request-Blob → Web-Consent) → `consent` (User-Login + Agent-Wahl → Auth-Co
 
 Der Access-Token ist ein gewoehnlicher `api_token` mit `expires_at`; der
 MCP-Resource-Server validiert ihn wie jeden Bearer (`/v1/me`). Refresh-Tokens
-rotieren; ein wiederverwendeter Refresh widerruft die ganze Token-Kette.
+rotieren (single-use + kurzes Grace-Fenster fuer gutartige Retries); ein
+wiederverwendeter Refresh wird abgelehnt, widerruft aber NICHT die Kette —
+multi-runtime MCP-Clients (mehrere Claude-Agenten teilen sich die Connector-
+Tokens) machen Reuse zum Alltagsfall, nicht zum Diebstahl-Signal. Die Kette
+stirbt nur bei echten Sicherheits-Events (Membership-Verlust, Deprovisioning).
 """
 
 from __future__ import annotations
@@ -15,6 +19,8 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
+import re
 import secrets
 import time
 from datetime import UTC, datetime, timedelta
@@ -36,6 +42,8 @@ from who2be_models import (
     WorkspaceRole,
 )
 
+logger = logging.getLogger(__name__)
+
 # 8 h: lange genug, dass interaktive Connector-Sessions (Claude/ChatGPT) nicht
 # am Refresh-Fenster in transiente 401 laufen; der Refresh-Token rotiert weiter.
 _ACCESS_TTL = timedelta(hours=8)
@@ -48,6 +56,8 @@ _CODE_TTL = timedelta(seconds=60)
 # Replay-Detection unveraendert.
 _REFRESH_GRACE = timedelta(seconds=30)
 _REQUEST_BLOB_TTL = 600  # s
+# DCR-Client-IDs sind `oac_` + token_urlsafe — nur dieses Format darf ins Log.
+_CLIENT_ID_RE = re.compile(r"[A-Za-z0-9_\-]{1,64}")
 
 
 class OAuthError(Exception):
@@ -276,11 +286,27 @@ class OAuthService:
             #    (verlorene Antwort / paralleler Refresh). Innerhalb des Fensters
             #    nochmals einloesen, OHNE die Kette zu killen (RFC 9700 §4.14.2);
             #    der aus der Erstrotation entstandene Nachfolger bleibt gueltig.
-            #  * Echter Replay / abgelaufen / unbekannt: am `rotated_from`-Pfad
-            #    haengt der AKTUELL aktive Access-Token — die ganze Kette killen.
+            #  * Reuse ausserhalb der Grace / abgelaufen / unbekannt: NUR ablehnen,
+            #    KEINE Ketten-Revocation. MCP-Connector-Clients (Claude/ChatGPT)
+            #    laufen multi-runtime: mehrere Agenten/Surfaces teilen sich die
+            #    Connector-Tokens, und eine Runtime mit veralteter Refresh-Kopie
+            #    RETRIED den toten Token minutenlang. Die fruehere RFC-9700-
+            #    Replay-Revocation widerrief dabei bei JEDEM Retry alle aktiven
+            #    Access-Tokens der Kette — auch die soeben frisch rotierten der
+            #    gesunden Runtime → dauerhafter "verbunden, aber keine Tools"-
+            #    Lockout (Introspektion 401, tools/list leer). Der wiederverwendete
+            #    Token selbst bleibt tot (single-use + single-Grace), ein Replay
+            #    gewinnt hier also nichts; echte Sicherheits-Revocation (Membership-
+            #    Verlust, Deprovisioning) laeuft unveraendert unten bzw. im
+            #    Deprovisioning-Pfad. Beobachtbarkeit: Warn-Log statt Kill.
             consumed = await self._oauth.consume_refresh_grace(token_hash, _REFRESH_GRACE)
             if consumed is None:
-                await self._oauth.revoke_refresh_chain(token_hash)
+                # `client_id` ist ein unvalidiertes Form-Feld — vor dem Logging
+                # auf das DCR-Format klemmen (Log-Injection via CR/LF).
+                logger.warning(
+                    "OAuth-Refresh-Reuse ausserhalb der Grace abgelehnt (client_id=%s).",
+                    client_id if _CLIENT_ID_RE.fullmatch(client_id) else "<invalid>",
+                )
                 raise OAuthError("invalid_grant", "Refresh-Token ungueltig.")
         old_token_id, bound_client = consumed
         if bound_client != client_id:

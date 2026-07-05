@@ -1,8 +1,26 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-06-16_
+_Stand: 2026-07-05_
 
 ## Funktioniert
+
+- **Fix: MCP-Tool-Discovery-Lockout (OAuth-Refresh-Reuse) (2026-07-05), Branch
+  `claude/who2be-mcp-tools-discovery-y4bxde`:** Claude-Agenten verloren nach der
+  OAuth-Umstellung dauerhaft alle Who2Be-MCP-Tools („verbunden, aber keine
+  Tools"). Repro gegen echten Stack (Wegwerf-Postgres + API + MCP-HTTP): eine
+  Runtime mit veralteter Refresh-Kopie (>30s-Grace, multi-runtime Claude)
+  triggerte die RFC-9700-Replay-Revocation, die bei JEDEM Retry alle aktiven
+  Access-Tokens der Kette killte (auch frisch rotierte) → Introspektion
+  (`/v1/me`) 401 → tools/list leer, permanent. Fix in
+  `oauth_service.exchange_refresh`: Reuse außerhalb der Grace wird nur noch
+  abgelehnt (`invalid_grant` + Warn-Log), keine Ketten-Revocation mehr;
+  Rotation/Grace/Single-Use unverändert, Deprovisioning killt weiterhin die
+  Kette. Zusatzbefund dokumentiert: die Revocation kappte nie die
+  Refresh-Kette und stoppte daher keinen Dieb. Details:
+  `.claude/plan/2026-07-05-1200_oauth-refresh-reuse-no-chain-kill.md`,
+  DECISIONS 2026-07-05. **DoD grün:** ruff/mypy (betroffene Module), 788 pytest
+  (API+MCP gegen echtes Postgres, Stale-Reuse-Regressionstest neu),
+  `oauth_smoke.py onprem` alle Checks, Repro-Skript zeigt Kette-überlebt.
 
 - **Fix: Dashboard-Status-Verteilung = aktueller Status (2026-07-02), Branch
   `claude/code-agent-setup-qh480c`:** Die Donut-`status_distribution` zählte alle
