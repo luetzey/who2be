@@ -8,7 +8,7 @@ authors = [{ name = "Yannick Lützenburg", email = "luetzey@gmail.com" }]
 # Richtung: who2be-billing → who2be-api (hexagonal); der Kern haengt NIE umgekehrt.
 # Das Mollie-SDK lebt ausschliesslich hier → nicht im On-Prem-Artefakt.
 dependencies = [
-    "fastapi>=0.115",
+    "fastapi>=0.139.0",
     "asyncpg>=0.30",
     "mollie-api-python>=3.7",
     "python-multipart>=0.0.9",
