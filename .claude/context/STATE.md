@@ -4,6 +4,19 @@ _Stand: 2026-07-05_
 
 ## Funktioniert
 
+- **Fix: MCP-tools/list-Payload −72 % — Claude Chat zeigt Tools wieder
+  (2026-07-07), Branch `claude/who2be-mcp-tools-discovery-y4bxde`:** Zweites,
+  vom OAuth-Lockout unabhängiges Problem hinter „verbunden, aber keine Tools":
+  Live-Logs zeigten Auth 200 + `ListToolsRequest` 200, Claude Chat blieb
+  trotzdem leer. Messung: die tools/list-Antwort war **230 KB** für 46 Tools —
+  72 % davon die von FastMCP 3 auto-generierten `outputSchema`-Blöcke aus den
+  Pydantic-Rückgabetypen. Claude Chat budgetiert die Connector-Tool-Payload
+  hart und verwarf die Liste komplett (Claude Code verdaut sie, daher dort
+  sichtbar). Fix: alle 46 Tool-Registrierungen mit `output_schema=None`
+  (MCP-optional; Ergebnisse fließen unverändert als Text/structured content) →
+  **65 KB**. Tests auf `structured_content`/Text-Content umgestellt (ohne
+  Schema hydriert `result.data` nicht mehr; Listen ohne structured_content).
+  DoD: 127 MCP-Tests, ruff, mypy grün; Tool-Call-Smoke lokal.
 - **Fix: MCP-Tool-Discovery-Lockout (OAuth-Refresh-Reuse) (2026-07-05), Branch
   `claude/who2be-mcp-tools-discovery-y4bxde`:** Claude-Agenten verloren nach der
   OAuth-Umstellung dauerhaft alle Who2Be-MCP-Tools („verbunden, aber keine
