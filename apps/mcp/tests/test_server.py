@@ -1,8 +1,8 @@
 """Tests fuer den Who2Be-MCP-Server: Tool-Registrierung und ein Tool-Pfad."""
 
 import asyncio
+import json
 from datetime import UTC, datetime
-from typing import cast
 from uuid import uuid4
 
 import httpx
@@ -12,7 +12,7 @@ from fastmcp.exceptions import ToolError
 
 from who2be_mcp import server
 from who2be_mcp.client import ApiClient
-from who2be_mcp.server import PersonaWithPlaybooks, mcp
+from who2be_mcp.server import mcp
 
 
 def _playbook_json(name: str, workspace_id: str) -> dict[str, object]:
@@ -106,12 +106,15 @@ def test_create_persona_tool_posts_and_returns_model(
     async def _run() -> object:
         async with Client(mcp) as client:
             result = await client.call_tool("create_persona", {"data": {"name": "Neu"}})
-            return result.data
+            # Ohne outputSchema (bewusst abgeschaltet, Claude-Chat-Tool-Budget)
+            # liefert der Client das strukturierte Ergebnis als dict.
+            return result.structured_content
 
     data = asyncio.run(_run())
     assert seen["method"] == "POST"
     assert str(seen["path"]).endswith("/personas")
-    assert data.name == "Neu"  # type: ignore[attr-defined]
+    assert isinstance(data, dict)
+    assert data["name"] == "Neu"
 
 
 def test_transition_persona_tool_rejects_invalid_uuid() -> None:
@@ -182,13 +185,12 @@ def test_get_persona_tool_includes_body_rendered(
     async def _run() -> object:
         async with Client(mcp) as client:
             result = await client.call_tool("get_persona", {"identifier": str(persona_id)})
-            return result.data
+            return result.structured_content
 
-    # fastmcp deserialisiert in ein dynamisch generiertes Modell mit denselben
-    # Feldern; `cast` ist ein Runtime-No-Op und stillt nur den Typecheck.
-    data = cast(PersonaWithPlaybooks, asyncio.run(_run()))
-    assert data.body_rendered == "Profil-Briefing\n\n## Skills"
-    assert data.persona.name == "QA"
+    data = asyncio.run(_run())
+    assert isinstance(data, dict)
+    assert data["body_rendered"] == "Profil-Briefing\n\n## Skills"
+    assert data["persona"]["name"] == "QA"
 
 
 def test_list_playbooks_tool_returns_playbooks(
@@ -214,7 +216,10 @@ def test_list_playbooks_tool_returns_playbooks(
     async def _run() -> object:
         async with Client(mcp) as client:
             result = await client.call_tool("list_playbooks", {})
-            return result.data
+            # Ohne outputSchema liefern Listen-Ergebnisse kein structured_content —
+            # der Client bekommt das JSON als Text-Content (so parst es auch Claude).
+            assert result.content and result.content[0].type == "text"
+            return json.loads(result.content[0].text)
 
     data = asyncio.run(_run())
     assert isinstance(data, list)

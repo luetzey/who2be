@@ -81,6 +81,14 @@ logger = logging.getLogger(__name__)
 
 mcp: FastMCP = FastMCP("who2be")
 
+# Alle Tools registrieren sich mit `output_schema=None`: FastMCP 3 generiert
+# sonst aus den Pydantic-Rueckgabetypen voluminoese outputSchemas, die ~72 %
+# der tools/list-Antwort ausmachten (230 KB bei 46 Tools). Claude Chat
+# budgetiert die Connector-Tool-Payload hart und verwarf die Liste dann
+# KOMPLETT — Symptom "verbunden, aber keine Tools" trotz 200 auf tools/list.
+# outputSchema ist MCP-optional; die Ergebnisse fliessen unveraendert als
+# Text + structured content an den Client.
+
 # Workspace-Resolution wird PRO TOKEN gecacht (Streamable-HTTP ist multi-tenant:
 # jeder Request traegt seinen eigenen Bearer, ADR-0034). Key ist der sha256-Hash
 # des Tokens (defense-in-depth: kein Klartext-Token als Dict-Key), Wert ist
@@ -262,7 +270,7 @@ def _parse_uuid(value: str, label: str) -> UUID:
         raise ToolError(f"Ungueltige {label}-UUID: '{value}'.") from exc
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("ping")
 def ping() -> str:
     """Liveness-Check fuer den Who2Be-MCP-Server.
@@ -275,7 +283,7 @@ def ping() -> str:
     return "pong"
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("whoami")
 async def whoami() -> WhoAmIRead:
     """Identitaet + effektive Berechtigungen des aktuellen API-Tokens (#253).
@@ -300,7 +308,7 @@ async def whoami() -> WhoAmIRead:
     return await client.whoami()
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("get_persona")
 async def get_persona(identifier: str, locale: str = "de") -> PersonaWithPlaybooks:
     """Laedt eine Persona (per UUID oder Name) samt verknuepfter Playbooks.
@@ -330,7 +338,7 @@ async def get_persona(identifier: str, locale: str = "de") -> PersonaWithPlayboo
     return PersonaWithPlaybooks(persona=persona, playbooks=playbooks, body_rendered=body_rendered)
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("list_playbooks")
 async def list_playbooks(
     tag: str | None = None, trigger: str | None = None, locale: str = "de"
@@ -344,7 +352,7 @@ async def list_playbooks(
     return await client.list_playbooks(tag, trigger, locale)
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("list_triggers")
 async def list_triggers() -> list[TriggerOverview]:
     """Welle 5: Discovery-Liste aller Trigger im Workspace mit Playbook-Verweis.
@@ -358,7 +366,7 @@ async def list_triggers() -> list[TriggerOverview]:
     return await client.list_triggers()
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("fetch_playbook")
 async def fetch_playbook(playbook_id: str, locale: str = "de") -> PlaybookWithResources:
     """Laedt ein Playbook per UUID samt seiner Resource-Verweise und Sub-Playbooks.
@@ -415,7 +423,7 @@ async def fetch_playbook(playbook_id: str, locale: str = "de") -> PlaybookWithRe
     )
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("list_resources")
 async def list_resources(tag: str | None = None, locale: str = "de") -> list[ResourceSummary]:
     """Listet die aktiven Resources des Workspaces, optional nach Tag gefiltert.
@@ -437,7 +445,7 @@ async def list_resources(tag: str | None = None, locale: str = "de") -> list[Res
     ]
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("fetch_agent")
 async def fetch_agent(agent_id: str) -> AgentWithRenderedPrompt:
     """Laedt einen Agent samt Persona + gerendertem Systemprompt (Placeholder bereits expandiert).
@@ -458,7 +466,7 @@ async def fetch_agent(agent_id: str) -> AgentWithRenderedPrompt:
     return await client.get_agent_rendered(parsed)
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("list_agents")
 async def list_agents() -> list[AgentRead]:
     """Listet die Agenten-Konfigurationen des Workspace (Metadaten, kein Prompt).
@@ -472,7 +480,7 @@ async def list_agents() -> list[AgentRead]:
     return await client.list_agents()
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("get_agent")
 async def get_agent(agent_id: str) -> AgentRead:
     """Laedt die Konfig eines Agenten anhand seiner UUID (Metadaten, kein Render).
@@ -487,7 +495,7 @@ async def get_agent(agent_id: str) -> AgentRead:
     return await client.get_agent(parsed)
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("fetch_resource")
 async def fetch_resource(
     resource_id: str, block_ids: list[str] | None = None, locale: str = "de"
@@ -544,7 +552,7 @@ async def fetch_resource(
     return resource
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("list_resource_blocks")
 async def list_resource_blocks(resource_id: str, locale: str = "de") -> list[ResourceBlockAnchor]:
     """Listet die linkbaren Heading-Anker einer Resource (WP-6).
@@ -567,7 +575,7 @@ async def list_resource_blocks(resource_id: str, locale: str = "de") -> list[Res
     return await client.list_resource_blocks(parsed, locale)
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("list_system_prompts")
 async def list_system_prompts() -> list[SystemPromptTemplateRead]:
     """Listet die System-Prompt-Templates des Workspace (ADR-0040).
@@ -581,7 +589,7 @@ async def list_system_prompts() -> list[SystemPromptTemplateRead]:
     return await client.list_system_prompts()
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("get_system_prompt")
 async def get_system_prompt(template_id: str) -> SystemPromptTemplateRead:
     """Laedt ein System-Prompt-Template (Konfig + Body der sichtbaren Version).
@@ -602,7 +610,7 @@ async def get_system_prompt(template_id: str) -> SystemPromptTemplateRead:
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("find_usages")
 async def find_usages(entity_type: UsageEntityType, entity_id: str) -> list[AnyUsage]:
     """Reverse-Lookup: welche Aggregate referenzieren dieses Element?
@@ -620,7 +628,7 @@ async def find_usages(entity_type: UsageEntityType, entity_id: str) -> list[AnyU
     return await client.list_usages(entity_type, parsed)
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("list_versions")
 async def list_versions(
     entity_type: EntityType, entity_id: str, locale: str = "de"
@@ -637,7 +645,7 @@ async def list_versions(
     return await client.list_versions(entity_type, parsed, locale)
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("get_version")
 async def get_version(
     entity_type: EntityType, entity_id: str, version: int, locale: str = "de"
@@ -653,7 +661,7 @@ async def get_version(
     return await client.get_version(entity_type, parsed, version, locale)
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("diff_versions")
 async def diff_versions(
     entity_type: EntityType,
@@ -685,7 +693,7 @@ async def diff_versions(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("create_persona")
 async def create_persona(data: PersonaCreate) -> PersonaRead:
     """Legt eine neue Persona an (initiale Draft-Version 1).
@@ -699,7 +707,7 @@ async def create_persona(data: PersonaCreate) -> PersonaRead:
     return await client.create_persona(data)
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("update_persona")
 async def update_persona(persona_id: str, data: PersonaUpdate, locale: str = "de") -> PersonaRead:
     """Aktualisiert eine Persona (versioniert). PUT auf eine aktive Version legt
@@ -714,7 +722,8 @@ async def update_persona(persona_id: str, data: PersonaUpdate, locale: str = "de
     description=(
         f"Schaltet eine Persona-Version in einen neuen Status. {TRANSITION_RULE_DOC} "
         "`note` landet in der Status-Historie."
-    )
+    ),
+    output_schema=None,
 )
 @with_tool_log("transition_persona")
 async def transition_persona(
@@ -734,7 +743,7 @@ async def transition_persona(
     )
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("restore_persona")
 async def restore_persona(persona_id: str, version: int, locale: str = "de") -> PersonaRead:
     """Stellt eine aeltere Persona-Version als neue Draft wieder her (non-destruktiv)."""
@@ -742,7 +751,7 @@ async def restore_persona(persona_id: str, version: int, locale: str = "de") -> 
     return await client.restore_persona_version(_parse_uuid(persona_id, "Persona"), version, locale)
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("set_persona_playbooks")
 async def set_persona_playbooks(persona_id: str, playbook_ids: list[str]) -> list[PlaybookRead]:
     """Setzt die mit einer Persona verknuepften Playbooks (Set-Replace-Semantik).
@@ -757,7 +766,7 @@ async def set_persona_playbooks(persona_id: str, playbook_ids: list[str]) -> lis
     )
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("create_playbook")
 async def create_playbook(data: PlaybookCreate) -> PlaybookRead:
     """Legt ein neues Playbook an (initiale Draft-Version 1).
@@ -770,7 +779,7 @@ async def create_playbook(data: PlaybookCreate) -> PlaybookRead:
     return await client.create_playbook(data)
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("update_playbook")
 async def update_playbook(
     playbook_id: str, data: PlaybookUpdate, locale: str = "de"
@@ -785,7 +794,8 @@ async def update_playbook(
     description=(
         f"Schaltet eine Playbook-Version in einen neuen Status. {TRANSITION_RULE_DOC} "
         "`note` landet in der Status-Historie."
-    )
+    ),
+    output_schema=None,
 )
 @with_tool_log("transition_playbook")
 async def transition_playbook(
@@ -805,7 +815,7 @@ async def transition_playbook(
     )
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("restore_playbook")
 async def restore_playbook(playbook_id: str, version: int, locale: str = "de") -> PlaybookRead:
     """Stellt eine aeltere Playbook-Version als neue Draft wieder her (non-destruktiv)."""
@@ -815,7 +825,7 @@ async def restore_playbook(playbook_id: str, version: int, locale: str = "de") -
     )
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("set_playbook_resource_links")
 async def set_playbook_resource_links(
     playbook_id: str, links: ResourceLinkSet
@@ -830,7 +840,7 @@ async def set_playbook_resource_links(
     return await client.set_playbook_resource_links(_parse_uuid(playbook_id, "Playbook"), links)
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("set_playbook_composes")
 async def set_playbook_composes(playbook_id: str, child_ids: list[str]) -> list[PlaybookRead]:
     """Setzt die geordneten Sub-Playbooks eines Composite (Set-Replace-Semantik).
@@ -851,7 +861,7 @@ async def set_playbook_composes(playbook_id: str, child_ids: list[str]) -> list[
     )
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("create_resource")
 async def create_resource(data: ResourceCreate) -> ResourceRead:
     """Legt eine neue Resource an (BlockNote-Dokument, initiale Draft-Version 1).
@@ -863,7 +873,7 @@ async def create_resource(data: ResourceCreate) -> ResourceRead:
     return await client.create_resource(data)
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("update_resource")
 async def update_resource(
     resource_id: str, data: ResourceUpdate, locale: str = "de"
@@ -878,7 +888,8 @@ async def update_resource(
     description=(
         f"Schaltet eine Resource-Version in einen neuen Status. {TRANSITION_RULE_DOC} "
         "`note` landet in der Status-Historie."
-    )
+    ),
+    output_schema=None,
 )
 @with_tool_log("transition_resource")
 async def transition_resource(
@@ -898,7 +909,7 @@ async def transition_resource(
     )
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("restore_resource")
 async def restore_resource(resource_id: str, version: int, locale: str = "de") -> ResourceRead:
     """Stellt eine aeltere Resource-Version als neue Draft wieder her (non-destruktiv)."""
@@ -908,7 +919,7 @@ async def restore_resource(resource_id: str, version: int, locale: str = "de") -
     )
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("set_resource_sub_resources")
 async def set_resource_sub_resources(
     resource_id: str, links: SubResourceLinkSet
@@ -923,7 +934,7 @@ async def set_resource_sub_resources(
     return await client.set_resource_sub_resources(_parse_uuid(resource_id, "Resource"), links)
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("create_agent")
 async def create_agent(data: AgentCreate) -> AgentRead:
     """Legt einen neuen Agent an (Persona + System-Prompt-Template).
@@ -936,7 +947,7 @@ async def create_agent(data: AgentCreate) -> AgentRead:
     return await client.create_agent(data)
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("update_agent")
 async def update_agent(agent_id: str, data: AgentUpdate) -> AgentRead:
     """Aktualisiert einen Agent (Name, Beschreibung, Persona, Template, Status).
@@ -947,7 +958,7 @@ async def update_agent(agent_id: str, data: AgentUpdate) -> AgentRead:
     return await client.update_agent(_parse_uuid(agent_id, "Agent"), data)
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("copy_agent")
 async def copy_agent(agent_id: str, name: str | None = None) -> AgentRead:
     """Dupliziert einen Agent unter neuem Namen (Default: '<Name> (Kopie)').
@@ -967,7 +978,7 @@ async def copy_agent(agent_id: str, name: str | None = None) -> AgentRead:
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("create_system_prompt")
 async def create_system_prompt(data: SystemPromptTemplateCreate) -> SystemPromptTemplateRead:
     """Legt ein neues System-Prompt-Template an (initiale Draft-Version).
@@ -981,7 +992,7 @@ async def create_system_prompt(data: SystemPromptTemplateCreate) -> SystemPrompt
     return await client.create_system_prompt(data)
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("update_system_prompt")
 async def update_system_prompt(
     template_id: str, data: SystemPromptTemplateUpdate
@@ -996,7 +1007,7 @@ async def update_system_prompt(
     return await client.update_system_prompt(_parse_uuid(template_id, "system_prompt"), data)
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("restore_system_prompt")
 async def restore_system_prompt(template_id: str, version: int) -> SystemPromptTemplateRead:
     """Stellt eine fruehere Template-Version als neuen Draft wieder her (non-destruktiv)."""
@@ -1004,7 +1015,7 @@ async def restore_system_prompt(template_id: str, version: int) -> SystemPromptT
     return await client.restore_system_prompt(_parse_uuid(template_id, "system_prompt"), version)
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("transition_system_prompt")
 async def transition_system_prompt(
     template_id: str, version: int, data: VersionTransitionRequest
@@ -1029,7 +1040,7 @@ async def transition_system_prompt(
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("record_usage")
 async def record_usage(data: UsageEventCreate) -> UsageEventRead:
     """Meldet, dass du ein Element genutzt hast (append-only Telemetrie).
@@ -1043,7 +1054,7 @@ async def record_usage(data: UsageEventCreate) -> UsageEventRead:
     return await client.record_usage(data)
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("submit_feedback")
 async def submit_feedback(data: FeedbackCreate) -> AgentFeedbackRead:
     """Gibt qualitatives Feedback zu einem Element (Vorschlag, kein Auto-Edit).
@@ -1057,7 +1068,7 @@ async def submit_feedback(data: FeedbackCreate) -> AgentFeedbackRead:
     return await client.submit_feedback(data)
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("report_problem")
 async def report_problem(data: SystemFeedbackCreate) -> AgentFeedbackRead:
     """Meldet ein Problem an der Plattform selbst (technisch oder am MCP).
@@ -1073,7 +1084,7 @@ async def report_problem(data: SystemFeedbackCreate) -> AgentFeedbackRead:
     return await client.submit_system_feedback(data)
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("get_feedback")
 async def get_feedback(entity_type: FeedbackTarget, entity_id: str) -> FeedbackSummary:
     """Liest das Feedback-Aggregat eines Elements (Kurations-Sicht, editor+).
@@ -1093,7 +1104,7 @@ async def get_feedback(entity_type: FeedbackTarget, entity_id: str) -> FeedbackS
 # ---------------------------------------------------------------------------
 
 
-@mcp.tool
+@mcp.tool(output_schema=None)
 @with_tool_log("search")
 async def search(
     query: str, types: list[SearchType] | None = None, limit: int = 20
