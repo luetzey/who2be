@@ -1,8 +1,27 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-07-05_
+_Stand: 2026-07-08_
 
 ## Funktioniert
+
+- **Standards-Review 2026-07-08, Branch `claude/code-agent-setup-1cdosv`:**
+  Repo-weites Audit gegen alle sechs Standards aus `docs/standards/` (sechs
+  parallele Prüf-Agenten, Security via `security-reviewer`; Tooling-Gates +
+  CI-Run #644 real verifiziert). Ergebnis + Umsetzungs-Change-Log (WP-1–9):
+  `docs/standards-review-2026-07-08.md`. Kernbefunde: Security 🟢 (TODO 1–3
+  + F-12 verifiziert geschlossen, nur ADR-akzeptierte Rest-Risiken);
+  Testing 🔴 (main-CI rot: Branch-Coverage 69,52 % < 79 % = exakt 241
+  Branches, maskiert A11y/Build/Bundle-Gates; Root-Cause DoD-Drift
+  `npm test` ohne Coverage; REST↔MCP-Paritätstest fehlt trotz „umgesetzt");
+  Frontend 🟡 (ESLint-`FEATURES`-Liste veraltet → 7/11 Features ohne
+  Cross-Feature-Gate, erster Verstoß personas→resources durchgerutscht);
+  Compliance 🟡 (DSGVO-Purge deckt `agent_feedback`/`usage_event`/`oauth_*`
+  nicht ab; VVT stale ggü. Schema 0062); Coding 🟡 (ADR-0002-Schichtregel
+  real verletzt: HTTPException in 23 Services, SQL in ~10 Services + 2
+  Routern); Methode 🟡 (CLAUDE.md „Aktueller Stand" ~4 Wochen alt,
+  ADR-0032 doppelt vergeben, Plan-README ungepflegt, ADR-Status
+  0037/0038/0040 fälschlich „Proposed"). Empfohlene Reihenfolge: WP-1
+  Coverage-PR (entsperrt 4 Gates) → WP-2 DoD-Drift → WP-3 DSGVO-Purge.
 
 - **Fix: MCP-tools/list-Payload −72 % — Claude Chat zeigt Tools wieder
   (2026-07-07), Branch `claude/who2be-mcp-tools-discovery-y4bxde`:** Zweites,
