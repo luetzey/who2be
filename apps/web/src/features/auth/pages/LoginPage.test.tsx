@@ -13,7 +13,14 @@ const {
   resend,
 } = vi.hoisted(() => ({
   signInWithPassword: vi.fn(),
-  getSession: vi.fn(async () => ({ data: { session: null }, error: null })),
+  // Rueckgaben weit typisieren (Union statt inferiertem Literal), damit
+  // einzelne Tests Erfolgs- UND Fehlzweige per mockResolvedValue setzen koennen.
+  getSession: vi.fn(
+    async (): Promise<{
+      data: { session: { access_token: string; user: { id: string; email: string } } | null }
+      error: { message: string } | null
+    }> => ({ data: { session: null }, error: null }),
+  ),
   onAuthStateChange: vi.fn(() => ({
     data: { subscription: { unsubscribe: vi.fn() } },
   })),
@@ -23,8 +30,18 @@ const {
     error: null,
   })),
   listFactors: vi.fn(async () => ({ data: { all: [], totp: [{ id: 'f1' }] }, error: null })),
-  challenge: vi.fn(async () => ({ data: { id: 'ch1' }, error: null })),
-  verify: vi.fn(async () => ({ data: {}, error: null })),
+  challenge: vi.fn(
+    async (): Promise<{ data: { id: string } | null; error: { message: string } | null }> => ({
+      data: { id: 'ch1' },
+      error: null,
+    }),
+  ),
+  verify: vi.fn(
+    async (): Promise<{ data: object | null; error: { message: string } | null }> => ({
+      data: {},
+      error: null,
+    }),
+  ),
   resend: vi.fn(),
 }))
 
