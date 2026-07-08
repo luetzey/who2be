@@ -13,8 +13,8 @@ import { useTranslation } from 'react-i18next'
 
 import type { Playbook, ResourceBlock } from '@/api/types'
 import { useApi } from '@/api/useApi'
-import { ResourceEditor } from '@/features/resources/components/ResourceEditor'
 import type { PersonaEditorValues } from '@/features/personas/hooks/usePersonaForm'
+import { ResourceEditor } from '@/components/editor/ResourceEditor'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
