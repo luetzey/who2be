@@ -27,73 +27,38 @@ Skills `python-conventions` und `react-conventions`, Projekt-Profil siehe
 
 ## Aktueller Stand
 
-Phase 3 ist abgeschlossen (Stand 2026-05-29). Master-Plan:
-`.claude/plan/2026-05-29-1900_phase-3-ux-polish.md` — alle Sub-Pläne geflippt.
+**Führende Quelle ist [`.claude/context/STATE.md`](.claude/context/STATE.md)**
+(pro Run gepflegt). Dieser Abschnitt ist nur der grobe Rahmen und bleibt
+bewusst knapp — Details, DoD-Belege und PR-/Plan-Verweise stehen in STATE.md
+und `.claude/plan/README.md`.
 
-**Phase 3 — UX-Polish nach Live-Smoke:**
+**Phase 2 — Vollwertige App (2026-05-29):** Tenancy
+(`User → org_member → Organization → Workspace → Entity`, API hart auf
+`/v1/workspaces/{ws_id}/...`), Status-Workflow pro Version + Dashboard,
+Resources + BlockNote-Insel (ADR-0022), Multi-User-RBAC
+(`admin > editor > viewer`, ADR-0023) + Invitations.
 
-- **3-0 Sync:** Migration `0017` (Status-Default `draft` für neue Versions),
-  Migration `0018` (Playbook-Type-CHECK-Enum), Models `PersonaContent` +
-  `PlaybookType` + `PlaybookUsage`/`ResourceUsage`. ADR-0020 um Default-Draft
-  ergänzt.
-- **3-A Backend:** Repo-Inserts setzen `status='draft'` explizit;
-  Section-aware Block-Refs (Heading-Anker + Section-Slice serverseitig);
-  Reverse-Lookups `GET /playbooks/{id}/usages` und `/resources/{id}/usages`;
-  Tags-DISTINCT-Endpoint `GET /playbooks/tags`.
-- **3-B Frontend Editor/Forms:** BlockNote-CSS-Scope-Fix (Slash-Menü mit
-  Hintergrund, Heading-Sizes), Persona-`properties` → BlockNote-Profil +
-  TagInput, Playbook-Type-Select + Multi-Select-TagInput, BlockNote-Body.
-- **3-C Frontend Navigation/UX:** `WorkspaceSwitcher` in der AppShell,
-  Status-Action-Bar auf jeder Detail-Page sichtbar (auch bei `inactive` →
-  „Reaktivieren als Draft"), Backlinks-Anzeige in Playbook- und
-  Resource-Detail.
-- **3-D Invitation Onboarding:** GoTrue-Magic-Link mit `redirect_to=…/accept?via=magic`,
-  Email-Mismatch-Guard auf der Accept-Route, Login-Page `next`-Param gegen
-  Open-Redirects gehärtet.
+**Phase 3 — UX-Polish (2026-05-29):** Status-Default `draft`, Section-aware
+Block-Refs + Reverse-Lookups, Editor-/Form-Polish, WorkspaceSwitcher +
+Status-Action-Bar + Backlinks, Magic-Link-Invitation-Onboarding. Master-Plan:
+`.claude/plan/2026-05-29-1900_phase-3-ux-polish.md`.
 
-**Phase 2 — Vollwertige App** (Stand 2026-05-29):
+**Danach (2026-05-31 – 2026-06-05):** Agenten-Achsen (Composite-Playbooks
+ADR-0024, Persona-Modi, Resource-Tags — `docs/agent-axes.md`); MCP-Write-Tools
+(ADR-0030); Einzel-Element-Delete/-Export (ADR-0032); Editionen/Entitlements
+(ADR-0028/0029).
 
-- **2.1a — Tenancy:** `User → org_member → Organization → Workspace → Entity`;
-  API hart auf `/v1/workspaces/{ws_id}/...`; API-Tokens pro Workspace gepinnt.
-- **2.1b — Status + Dashboard:** `VersionStatus {draft, review, active, inactive}`
-  pro Version, DB-Invariante via partial-unique-index; `POST .../versions/{v}/transition`;
-  PUT auf Active erzeugt Draft (409 bei vorhandenem Draft); MCP-Reads filtern auf
-  `status='active'`; Dashboard-Endpoint + -Page (KPIs + Activity + Status-Distribution).
-- **2.2 — Resources + BlockNote:** Resource-Aggregat versioniert wie Persona/Playbook;
-  Playbook→Resource-Block-Refs via `block_id`; MCP `list_resources` / `fetch_resource`;
-  Web-Editor isolierte BlockNote-Insel (ADR-0022).
-- **2.3 — Multi-User RBAC:** Rollen `admin > editor > viewer` via `workspace_member`;
-  `require_role`-Gate auf Mutating-Endpoints; Token-Snapshot-Rolle (ADR-0023);
-  Invitations + GoTrue-Mail (single-use, sha256-Hash); Members-Page + Accept-Flow.
+**Stand seit 2026-06 (Details: STATE.md):** OAuth-2.1-Remote-MCP-Connector
+(ADR-0036) auf MCP-HTTP-Transport (ADR-0034); Search (ADR-0037);
+Feedback-Flywheel + Triage/Posteingang (ADR-0038); feinkörnige
+Agent-Schreibrechte inkl. Rate-Limit (ADR-0039); Builder-System-Prompt-Tools
+(ADR-0040); Builder-Managed-Lock + Deep-Copy-Duplizieren + Content-Start-Sync;
+MFA-Login-Step-up; OSS-Lizenz-Gates (ADR-0033); Public-Switch-Vorbereitung
+(FSL-1.1, Standards-Schicht).
 
-**Agenten-Achsen (Track D/E, 2026-05-31):** Composite-Playbooks (ADR-0024),
-  Applied-via-Pill, Persona-Modi + `profile`-Target, Resource-Tags —
-  vollstaendige Agenten-Reise-Doku in `docs/agent-axes.md`. Plan:
-  `.claude/plan/2026-05-31-1630_composite-applied-modi.md`.
-
-**MCP-Write-Tools (ADR-0030, 2026-06-05):** Der MCP-Server exponiert
-  Mutations-Tools fuer alle vier Kernelemente (Persona, Playbook, Resource,
-  Agent): create/update/transition/restore + Verknuepfungs-Setter. Duenner
-  Adapter — Autorisierung (editor; jeder Uebergang ab/zu `active` —
-  Promote/Retire/Reset — admin), Owner-Scoping und
-  der Draft→active-Workflow bleiben serverseitig. Kein delete ueber MCP.
-  Loest ADR-0012 (deferred) ab.
-
-**Einzel-Element Delete + Export (ADR-0032, 2026-06-05):** Hard-Delete fuer
-  Persona/Playbook/Resource (`DELETE …/{entity}/{id}`, `editor`-Gate, FK-Cascade
-  raeumt Versionen + ausgehende Links). Eingehende Referenzen blockieren mit
-  **409** + `DeleteBlocked`-Body (`message` + `blocked_by`-Map: Persona←Agenten,
-  Playbook←Personas/Composites, Resource←Playbooks/Composites) — kein Cascade auf
-  fremde Aggregate. Einzel-Export `GET …/{entity}/{id}/export?format=json|markdown`
-  (Viewer-offen; JSON = Identitaet + alle Versionen, Markdown = gerenderter Body
-  der aktiven Version + YAML-Frontmatter). Bewusst **kein** MCP-Delete/-Export
-  (ADR-0030 bleibt). Plan: `.claude/plan/2026-06-05-1500_single-element-delete-export.md`.
-
-Nächste Blöcke offen (kein aktiver Plan): Security-Quick-Wins
-(`docs/security-findings-phase-2.md` §TODO 1–3), CSP/Header-Pass (F-12),
-Public-Switch + FSL-Lizenz (`…1935_license-fsl-setup`,
-`…2028_public-switch-github-repo`),
-Enterprise-License-Hooks (`…0528_enterprise-license-management`).
+Offene/nächste Blöcke: siehe STATE.md §Bekannte Probleme (u. a. Web-Coverage-PR
+gegen roten `main`-CI-Job) und §Nächste Schritte (Public-Switch, CLA,
+CI-Billing) sowie `docs/standards-review-2026-07-08.md` (WP-1–9).
 
 ## Struktur
 
@@ -102,7 +67,12 @@ Enterprise-License-Hooks (`…0528_enterprise-license-management`).
   `fetch_playbook`, `list_resources`, `fetch_resource`, `fetch_agent`,
   `list_triggers` — workspace-aware, filtern auf `status='active'`) plus
   Write-Tools (ADR-0030: create/update/transition/restore + Link-Setter fuer
-  Persona/Playbook/Resource/Agent; Autorisierung serverseitig)
+  Persona/Playbook/Resource/Agent; Autorisierung serverseitig). Dazu:
+  `search` (ADR-0037), `whoami`, Versions-/Discovery-Tools (`find_usages`,
+  `list_versions`, `get_version`, `diff_versions`), Feedback-Flywheel
+  (`record_usage`, `submit_feedback`, `get_feedback`, `report_problem` —
+  ADR-0038) und System-Prompt-Tools (`list/get/create/update/restore/
+  transition_system_prompt` — ADR-0040)
 - `apps/web/` — React/TypeScript-Web-UI (Vite, Tailwind v4, shadcn-Primitives,
   BlockNote-Insel für den Resource-Editor; Designsprache "Warm Citrus" laut
   `docs/frontend/design-language.md`)
@@ -134,7 +104,8 @@ Python (uv-Workspace im Repo-Root):
 
 - Dependencies: `uv sync --group billing` (inkl. Cloud-Billing-Paket; ohne
   `--group billing` laeuft der On-Prem-Kern, dann fehlen die Billing-Tests)
-- Tests: `uv run pytest -q`
+- Tests: `uv run pytest --cov --cov-fail-under=85` (Coverage-Gate wie in CI —
+  lokal = CI, Coverage-Ratchet)
 - Einzeltest: `uv run pytest apps/api/tests/test_health.py::test_health`
 - Lint: `uv run ruff check .`
 - Format: `uv run ruff format .`
@@ -146,7 +117,8 @@ Web (in `apps/web/`):
 
 - Dependencies: `npm ci`
 - Dev-Server: `npm run dev`
-- Tests: `npm test` (Vitest); Einzeldatei: `npm test -- src/App.test.tsx`
+- Tests: `npm run test:coverage` (Vitest mit Coverage-Gate wie in CI — lokal =
+  CI, Coverage-Ratchet); Einzeldatei: `npm test -- src/App.test.tsx`
 - Lint: `npm run lint`
 - Typecheck: `npx tsc --noEmit`
 - Build: `npm run build`
@@ -226,7 +198,7 @@ duplizieren. Der lokale `apps/web/nginx.conf` setzt bewusst **keine** Header
 
 ### DoD (Frontend-Aenderung)
 
-`npm run lint`, `npx tsc --noEmit`, `npm test`, `npm run build` — alle gruen,
+`npm run lint`, `npx tsc --noEmit`, `npm run test:coverage`, `npm run build` — alle gruen,
 lokal verifiziert vor jedem Push. Stack-uebergreifend siehe auch
 `docs/CLAUDE-PROFILE.md`.
 

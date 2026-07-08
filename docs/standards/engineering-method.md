@@ -21,9 +21,10 @@ zentrale Werkzeug gegen Drift.
 ## 2. Plan (nicht verhandelbar bei nicht-trivialer Arbeit)
 
 - Der Plan wird **immer** erstellt — **nie** fragen „planen oder direkt coden?".
-- Ablage als living document unter
-  [`.claude/plan/<YYYY-MM-DD-HHmm>_<titel>.md`](../../.claude/plan/): Ziel/Condition,
-  Schritte, betroffene Dateien, Verifikations-Schritt, offene Punkte.
+- Ablage unter
+  [`.claude/plan/<YYYY-MM-DD[-HHmm]>_<titel>.md`](../../.claude/plan/) (Uhrzeit
+  im Namen optional): Ziel/Condition, Schritte, betroffene Dateien,
+  Verifikations-Schritt, offene Punkte.
 - **Drei-Optionen-Regel:** bei einer *inhaltlichen* Design-Weiche (Architektur-/
   Lösungsalternative) nicht raten — genau **drei** projekt- und problemspezifische
   Optionen mit Trade-offs anbieten, eine empfehlen, rückfragen. (Gilt für das
@@ -42,7 +43,9 @@ Datei-Overlap nie in dieselbe Welle.
 - **In einem Branch arbeiten, nie direkt auf `main`** (`feat/<kurz>`,
   `fix/<kurz>`; Cloud-Sessions nutzen `claude/`-Präfix).
 - Schritt für Schritt: pro Schritt coden, dann verifizieren (Test/Build/Lint).
-  Plan als living document führen, erledigte Schritte als ✅ markieren.
+  Bei Abweichungen vom Plan während der Umsetzung den Plan nachziehen;
+  ✅-Marker im Plan sind optional — der verbindliche Abgleich passiert in der
+  Document-Phase (STATE.md).
 - **Selbstkorrektur:** bei Testfehlschlag Ursache lesen, Hypothese korrigieren,
   fixen, erneut testen — iterieren bis grün. Ursache statt Symptom beheben.
 - **Check-ins:** keine irreversiblen Aktionen ohne Freigabe (Commit/Push `main`,
@@ -54,14 +57,18 @@ Datei-Overlap nie in dieselbe Welle.
 - Vollständige Test-/Check-Suite gegen die Done-Condition laufen lassen und das
   Ergebnis **explizit im Output sichtbar** machen (Behauptung „grün" ohne Beleg
   zählt nicht).
-- **Definition of Done** (siehe [`../../CONTRIBUTING.md`](../../CONTRIBUTING.md)):
-  ruff + mypy + pytest grün; eslint + tsc + vitest + build grün.
+- **Definition of Done:** die Kommandos aus
+  [`../../CONTRIBUTING.md`](../../CONTRIBUTING.md) §Definition of Done — dort
+  steht die **einzige** DoD-Kommandoliste (inkl. Coverage- und Lizenz-Gates,
+  identisch zur CI); hier bewusst keine Kopie (Verlink-statt-Kopieren).
 
 ## 5. Document
 
 - **Plan-Abgleich:** Plan Punkt für Punkt mit dem realen Code-Stand reconciliieren;
-  bewusste Abweichungen begründen, nicht stillschweigend droppen. Abgeschlossene
-  Pläne auf `_done.md` umbenennen.
+  bewusste Abweichungen begründen, nicht stillschweigend droppen. **Ort der
+  Reconciliation ist `.claude/context/STATE.md`** (+ Status-Eintrag in
+  [`.claude/plan/README.md`](../../.claude/plan/README.md)); ein Umbenennen
+  abgeschlossener Pläne auf `_done.md` ist optional.
 - **Projekt-Gedächtnis pflegen** ([`.claude/context/`](../../.claude/context/)):
   `STATE.md` immer; `DECISIONS.md` bei jeder getroffenen Design-Entscheidung
   (append-only); `ARCHITECTURE.md` nur bei Strukturänderung; `PROJECT.md` nur bei
@@ -78,7 +85,8 @@ Datei-Overlap nie in dieselbe Welle.
 
 ## Anti-Patterns
 
-- Implementieren ohne Plan-Datei; Plan einmal schreiben und nie aktualisieren.
+- Implementieren ohne Plan-Datei; Ergebnis nie reconciliieren (weder
+  `STATE.md` noch `.claude/plan/README.md`).
 - Session starten ohne `.claude/context/` zu lesen → Drift am gewachsenen
   Warum/Wohin vorbei.
 - Bei Unklarheit raten oder eigene Konvention erfinden (Pattern Drift) statt der

@@ -1,7 +1,9 @@
-# ADR-0032 — Test-Strategie & Test-Pyramide
+# ADR-0041 — Test-Strategie & Test-Pyramide
 
 - Status: Accepted
 - Datum: 2026-06-05
+- Hinweis: bis 2026-07-08 als „ADR-0032" gefuehrt (Nummern-Doppelvergabe mit
+  ADR-0032 Einzel-Element-Delete/-Export); auf 0041 umnummeriert.
 - Kontext: Phase 3 abgeschlossen; breite Test-Basis (162 Dateien) vorhanden,
   aber unvermessen und ohne E2E-Spitze
 - Bezug: ADR-0005 (MCP als HTTP-Client), ADR-0023 (Token-Snapshot-Rolle),

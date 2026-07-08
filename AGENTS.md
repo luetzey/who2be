@@ -27,8 +27,8 @@ Konkretisierung steht in `CLAUDE.md` und den Skills.
 
 - **Plan-first** bei nicht-trivialer Arbeit (siehe `engineering-method.md`).
 - **Single Source of Truth** pro Entscheidung — keine zweite, abweichende Kopie.
-- **Definition of Done** vor jedem Push: `uv run ruff check . && uv run mypy . &&
-  uv run pytest -q` (Python) · `npm run lint && npx tsc --noEmit && npm test &&
-  npm run build` (in `apps/web/`).
+- **Definition of Done** vor jedem Push: die Kommandos aus
+  [`CONTRIBUTING.md`](CONTRIBUTING.md) §Definition of Done — die **einzige**
+  DoD-Kommandoliste (inkl. Coverage- und Lizenz-Gates, identisch zur CI).
 - Bei Unklarheit / Design-Weiche: **nicht raten** — drei Optionen mit Trade-offs
   vorschlagen und rückfragen.
