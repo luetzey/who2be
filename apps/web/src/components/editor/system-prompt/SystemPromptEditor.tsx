@@ -93,6 +93,9 @@ export function SystemPromptEditor({
       return
     }
     editor.insertInlineContent([
+      // `as any` noetig, weil BlockNotes `insertInlineContent`-Signatur das
+      // Custom-Placeholder-Inline-Schema nicht kennt (Typing-Grenze der
+      // Custom-Schema-API); die Props selbst sind via `PlaceholderProps` typisiert.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       { type: 'placeholder', props } as any,
       ' ',

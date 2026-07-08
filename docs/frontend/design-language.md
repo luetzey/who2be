@@ -1,7 +1,7 @@
 # Frontend Designsprache — "Warm Citrus"
 
-> Living document. Stand: 2026-05-27 · Phase D1 (Tokens) etabliert,
-> D2–D5 (Primitives, Pages, Motion) folgen. Plan-Ablage:
+> Living document. Stand: 2026-07-08 · Tokens, Primitives, Pages und Motion
+> sind etabliert. Plan-Ablage:
 > [`.claude/plans/erarbeite-eine-konkrete-designsprache-shiny-lollipop.md`](/.claude/plans/erarbeite-eine-konkrete-designsprache-shiny-lollipop.md).
 
 Diese Datei ist die **verbindliche Designsprache** der Who2Be-Web-UI
@@ -14,7 +14,7 @@ die verbindliche Quelle (siehe `CLAUDE.md` §Frontend-Standards).
 **Profil:** Hybrid aus macOS-HIG (Admin-App) und Apple-Marketing-Touch
 (Auth/Brand-Momente).
 
-- **Admin-Pages** (Personae, Playbooks, Tokens, Detail/New) folgen HIG:
+- **Admin-Pages** (Personae, Playbooks, Resources, Settings, Detail/New) folgen HIG:
   dichte Surfaces, klare Hierarchie, dezente Tinten, funktional vor
   emotional.
 - **Marketing-Pages** (heute nur `LoginPage`) duerfen einen Hero-Moment:
@@ -55,8 +55,8 @@ Beispiele:
 
 - `PersonasPage`: Header-CTA "Neue Persona" = brand.
 - `LoginPage`: Submit "Anmelden" = brand.
-- `SettingsTokensPage`: "Anlegen" in der Token-Create-Card = brand;
-  "Widerrufen" / "Override entfernen" bleiben `variant="outline"`.
+- `MembersPage`: "Einladen" in der Invite-Card = brand; "Entfernen" /
+  "Widerrufen" bleiben `variant="destructive"` bzw. `variant="outline"`.
 
 ### 2.3 Surface-Hierarchie
 
@@ -162,6 +162,16 @@ fuer `gap-*`. Abweichungen wie `p-[7px]` werden im Code-Review
 zurueckgewiesen — bei genuinem Bedarf einen neuen Token einfuehren, nicht
 inline improvisieren.
 
+**Zusatzstufe 10 — nur Page-Level-Vertikalabstand:** `py-10` (40px) ist
+zusaetzlich freigegeben fuer den aeusseren Vertikal-Abstand ganzer
+Page-Surfaces (Auth-/Marketing-`<main>` wie in §10.2, `EmptyState`,
+`LegalLayout`). **Nicht** fuer Abstaende innerhalb von Cards, Forms oder
+Listen — dort gilt die Basis-Skala oben.
+
+Funktional begruendete Ausnahmen (z. B. der Icon-Inset `pl-9` im
+Such-Input der `ListFilterBar`) sind erlaubt, brauchen aber einen
+Begruendungskommentar an der Stelle.
+
 ### 4.2 Container-Sizes
 
 | Page-Typ | Container | Begruendung |
@@ -263,7 +273,7 @@ Durations werden via Arbitrary-Value verwendet (`duration-[var(--duration-fast)]
 
 | Variant | Wann |
 |---|---|
-| `brand` (D2) | DIE eine Primary-Action pro Page-Surface |
+| `brand` | DIE eine Primary-Action pro Page-Surface |
 | `default` | Neutrale Secondary-Action (Form-Submit ohne CTA-Charakter) |
 | `outline` | Tertiary-Action neben einer primaeren |
 | `ghost` | Header/Toolbar (Logout, Theme-Toggle, Back-Link) |
@@ -277,14 +287,15 @@ Form-CTAs) · `lg` (h-11, Marketing-Hero) · `icon` (40×40, square).
 ### 9.2 Card
 
 ```
-<Card class="shadow-card border-transparent dark:border-border/50">
+<Card>
   <CardHeader><CardTitle>...</CardTitle></CardHeader>
   <CardContent>...</CardContent>
 </Card>
 ```
 
-(D2 verkabelt die Standard-Klassen direkt im Primitive; ab dann reicht
-`<Card>...</Card>`.)
+Die Standard-Klassen (`shadow-card` + dezente Border) sind direkt im
+Primitive (`components/ui/card.tsx`) verkabelt — nicht pro Call-Site
+duplizieren.
 
 ### 9.3 DataList — Row-Affordance
 
@@ -300,11 +311,12 @@ und einen Chevron rechts:
 </li>
 ```
 
-(D5 fixiert das in `DataList`; bis dahin in Pages manuell.)
+`DataList` liefert Surface/Divider; die Row selbst komponieren die Pages
+ueber `renderItem` nach diesem Muster.
 
 ### 9.4 EmptyState — Hero + CTA
 
-Erweitert in D3 um einen `icon`-Slot:
+Mit `icon`-Slot:
 
 ```
 <EmptyState
@@ -319,7 +331,7 @@ Wenn die Page einen Primary-CTA im Header hat, **spiegelt** der
 EmptyState diesen — sonst landet der User auf einer leeren Liste ohne
 sichtbaren Anker.
 
-### 9.5 FormSection (NEU, D3)
+### 9.5 FormSection
 
 Gruppierung in Editor-Forms, damit eine 4–10-Feld-Form nicht als
 endlose Linie wirkt:
@@ -373,7 +385,7 @@ ueber dem H1; H1 wechselt auf `text-3xl tracking-tight`.
 </Container>
 ```
 
-Beispiele: `PersonasPage`, `PlaybooksPage`, `SettingsTokensPage`,
+Beispiele: `PersonasPage`, `PlaybooksPage`, `MembersPage`,
 `PersonaDetailPage`, `PlaybookDetailPage`.
 
 ### 10.2 Marketing-Page (Auth, Brand)
@@ -429,6 +441,15 @@ demselben Muster.
 | Microcopy | Im Page/Component-File direkt. Pflicht: Volltext-Umlaute (`ü/ö/ä/ß`). |
 | Iconografie | `lucide-react`. Kein zweites Icon-Set. |
 
+**Feature-Barrels (Ausnahme zur Pages-only-Regel):** `features/<x>/index.ts`
+exportiert Pages — und darf zusaetzlich Layout-/Slot-Komponenten exportieren,
+die auf Route-/Shell-Ebene gemountet werden (heute: `SettingsLayout`,
+`LegalLayout` + `CookieConsentBanner`, `BillingPanel` als
+Org-Settings-Slot). Begruendung: Routing und Shell brauchen diese Slots,
+ohne per Deep-Import am Barrel vorbeizugreifen. Domaenen-Komponenten und
+Hooks bleiben feature-intern; feature-uebergreifend Geteiltes wandert
+weiterhin nach `@/components/` bzw. `@/hooks/`.
+
 ## 13. Fuer AI-Agenten — Lese- und Schreib-Regeln
 
 Diese Sektion ist der **Vertrag** fuer jeden AI-Agenten, der UI-Code
@@ -442,7 +463,8 @@ nachfragen, **nicht** stillschweigend umgehen.
    `oklch()` inline, keine eigenen Schatten/Easings/Durations. Alle
    Werte leben in `apps/web/src/styles/globals.css`.
 3. **Skalen respektieren:** Spacing nur in `p-{1,2,3,4,6,8,12,16}` und
-   gleichen `gap-*`; Typo nur aus der Skala (§3.2); Radii nur per
+   gleichen `gap-*` (Zusatzstufe 10 nur fuer Page-Level-Vertikalabstand,
+   siehe §4.1); Typo nur aus der Skala (§3.2); Radii nur per
    Anwendungsregel (§5). Abweichungen brauchen **Token-Aenderung + ADR**,
    nicht inline.
 4. **Brand sparsam:** `variant="brand"` ist die **eine** Primary-Aktion
@@ -477,3 +499,7 @@ nachfragen, **nicht** stillschweigend umgehen.
 
 - 2026-05-27 — Initial (Phase D1 Tokens etabliert). Plan:
   [`.claude/plans/erarbeite-eine-konkrete-designsprache-shiny-lollipop.md`](/.claude/plans/erarbeite-eine-konkrete-designsprache-shiny-lollipop.md).
+- 2026-07-08 — Konsistenz-Pass (Standards-Review WP-5): `tokens`-Feature-
+  Referenzen ersetzt, abgelaufene D2–D5-Marker entfernt, Spacing-Zusatzstufe
+  10 fuer Page-Level-Vertikalabstand dokumentiert (§4.1 ↔ §10.2 aufgeloest),
+  Feature-Barrel-Ausnahme fuer Layout-/Slot-Exports dokumentiert (§12).

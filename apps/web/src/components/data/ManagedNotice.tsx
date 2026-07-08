@@ -25,7 +25,7 @@ export function ManagedNotice({ showDuplicateHint = false, className }: ManagedN
   const { t } = useTranslation('common')
   return (
     <Alert
-      className={cn('border-brand/30 bg-brand/5 [&>svg]:text-brand', className)}
+      className={cn('border-brand/30 bg-brand/5 [&>svg]:text-muted-foreground', className)}
       data-testid="managed-notice"
     >
       <Lock className="h-4 w-4" />

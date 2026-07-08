@@ -153,7 +153,7 @@ export function OrgSettingsPage() {
                     >
                       <div className="flex min-w-0 items-center gap-2">
                         {active ? (
-                          <Check className="size-4 shrink-0 text-brand" aria-hidden="true" />
+                          <Check className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                         ) : null}
                         <span className="truncate font-medium">{ws.name}</span>
                         <Badge variant="outline">{roleLabel(ws.role)}</Badge>

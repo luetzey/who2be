@@ -59,9 +59,7 @@ function PersonaModesInfoPill() {
       data-testid="persona-modes-info-pill"
       aria-label={t('editor.modes.infoAriaLabel', { count: modes.length, defaultLabel })}
     >
-      <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
-        {modes.length}
-      </Badge>
+      <Badge variant="secondary">{modes.length}</Badge>
       <span>
         {t('editor.modes.infoPillText')} <strong className="font-semibold">{defaultLabel}</strong>
       </span>

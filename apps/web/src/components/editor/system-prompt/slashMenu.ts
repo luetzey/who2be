@@ -55,6 +55,9 @@ export function buildSlashMenuItems(
   // wir filtern nur die Slash-Items.
   allowedKinds?: Set<PlaceholderKind>,
 ): DefaultReactSuggestionItem[] {
+  // `as any` noetig, weil `getDefaultReactSlashMenuItems` den Default-Schema-
+  // Editor erwartet, unser Editor aber das Custom-Placeholder-Schema traegt —
+  // reine Typing-Grenze der BlockNote-Custom-Schema-API, laufzeitkompatibel.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const defaults = getDefaultReactSlashMenuItems(editor as any)
 
