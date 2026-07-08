@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { Factor } from '@supabase/supabase-js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -117,5 +117,130 @@ describe('MfaSection', () => {
       expect(screen.getByText('Bitte einen 6-stelligen Code eingeben.')).toBeInTheDocument(),
     )
     expect(challengeAndVerify).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Branch-Abdeckung (WP-1/TST-1): Fehlerpfade des Enroll-/Verify-/Unenroll-
+// Flows und der Abbruch-Cleanup. MfaSection ist die MFA-Enrollment-Sektion
+// der AccountPage (dort als Platzhalter gemockt).
+// ---------------------------------------------------------------------------
+
+describe('MfaSection — Fehlerpfade', () => {
+  it('zeigt den Ladefehler, wenn die Faktorenliste nicht geladen werden kann', async () => {
+    listFactors.mockResolvedValue({ data: null, error: { message: 'factors down' } })
+    render(<MfaSection />)
+
+    expect(await screen.findByText('factors down')).toBeInTheDocument()
+  })
+
+  it('zeigt die GoTrue-Meldung, wenn das Enrollment nicht startet', async () => {
+    listFactors.mockResolvedValue(listResult([]))
+    enroll.mockResolvedValue({ data: null, error: { message: 'enroll kaputt' } })
+    render(<MfaSection />)
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Authenticator hinzufügen' }),
+    )
+
+    expect(await screen.findByText('enroll kaputt')).toBeInTheDocument()
+    // Ohne Faktor-Daten erscheint kein QR-Code/Verify-Formular.
+    expect(screen.queryByLabelText('6-stelliger Code')).not.toBeInTheDocument()
+  })
+
+  it('faellt auf die generische Enroll-Meldung zurueck, wenn Daten fehlen', async () => {
+    listFactors.mockResolvedValue(listResult([]))
+    enroll.mockResolvedValue({ data: null, error: null })
+    render(<MfaSection />)
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Authenticator hinzufügen' }),
+    )
+
+    expect(
+      await screen.findByText('Einrichtung konnte nicht gestartet werden.'),
+    ).toBeInTheDocument()
+  })
+
+  it('zeigt den Verify-Fehler im Dialog, ohne den Erfolgs-Toast auszuloesen', async () => {
+    listFactors.mockResolvedValue(listResult([]))
+    enroll.mockResolvedValue({
+      data: { id: 'new-factor', totp: { qr_code: '<svg/>', secret: 'ABCDEF', uri: 'otpauth://x' } },
+      error: null,
+    })
+    challengeAndVerify.mockResolvedValue({ data: null, error: { message: 'falscher Code' } })
+    render(<MfaSection />)
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Authenticator hinzufügen' }),
+    )
+    await waitFor(() => expect(screen.getByText('ABCDEF')).toBeInTheDocument())
+
+    fireEvent.change(screen.getByLabelText('6-stelliger Code'), { target: { value: '123456' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Bestätigen' }))
+
+    expect(await screen.findByText('falscher Code')).toBeInTheDocument()
+    expect(success).not.toHaveBeenCalled()
+    // Dialog bleibt offen fuer einen erneuten Versuch.
+    expect(screen.getByLabelText('6-stelliger Code')).toBeInTheDocument()
+  })
+
+  it('raeumt einen abgebrochenen Enroll per Unenroll wieder auf', async () => {
+    listFactors.mockResolvedValue(listResult([]))
+    enroll.mockResolvedValue({
+      data: { id: 'new-factor', totp: { qr_code: '<svg/>', secret: 'ABCDEF', uri: 'otpauth://x' } },
+      error: null,
+    })
+    unenroll.mockResolvedValue({ data: {}, error: null })
+    render(<MfaSection />)
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Authenticator hinzufügen' }),
+    )
+    await waitFor(() => expect(screen.getByText('ABCDEF')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Abbrechen' }))
+
+    await waitFor(() => {
+      expect(unenroll).toHaveBeenCalledWith({ factorId: 'new-factor' })
+    })
+  })
+
+  it('entfernt einen verifizierten Faktor und aktualisiert die Liste', async () => {
+    listFactors
+      .mockResolvedValueOnce(listResult([verifiedFactor]))
+      .mockResolvedValue(listResult([]))
+    unenroll.mockResolvedValue({ data: {}, error: null })
+    render(<MfaSection />)
+
+    await waitFor(() => expect(screen.getByText('iPhone')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Entfernen' }))
+
+    // Bestaetigen-Button lebt im Dialog-Portal; der Listen-Button heisst gleich.
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Entfernen' }))
+
+    await waitFor(() => {
+      expect(unenroll).toHaveBeenCalledWith({ factorId: 'factor-1' })
+    })
+    expect(success).toHaveBeenCalledWith('Faktor entfernt.')
+    await waitFor(() =>
+      expect(screen.getByText('Noch kein Authenticator eingerichtet.')).toBeInTheDocument(),
+    )
+  })
+
+  it('zeigt den Fehler im Entfernen-Dialog, wenn Unenroll scheitert', async () => {
+    listFactors.mockResolvedValue(listResult([verifiedFactor]))
+    unenroll.mockResolvedValue({ data: null, error: { message: 'nicht erlaubt' } })
+    render(<MfaSection />)
+
+    await waitFor(() => expect(screen.getByText('iPhone')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Entfernen' }))
+
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Entfernen' }))
+
+    expect(await within(dialog).findByText('nicht erlaubt')).toBeInTheDocument()
+    expect(success).not.toHaveBeenCalled()
   })
 })
