@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test'
 
 /**
- * Playwright-E2E (ADR-0032, Phase 4 — duenne Spitze).
+ * Playwright-E2E (ADR-0041, Phase 4 — duenne Spitze).
  *
  * Laeuft gegen einen bereits laufenden Stack (Compose: Web auf :5173, API auf
  * :8000). Es gibt bewusst KEINEN `webServer`-Block — der Stack wird extern

@@ -56,7 +56,7 @@ jobs:
           --fail-on "GPL;AGPL;LGPL;SSPL;CDDL;EPL;EUPL;OSL;CPL;NPL;Sleepycat;UNKNOWN"
       - name: Test (coverage ratchet + DB-Skip-Guard)
         # WHO2BE_REQUIRE_DB=1: ohne erreichbare DB bricht die Suite hart ab
-        # (conftest.py, ADR-0032) — kein stilles "gruen durch Skip" mehr.
+        # (conftest.py, ADR-0041) — kein stilles "gruen durch Skip" mehr.
         # --cov-fail-under: Ratchet-Floor. CI-gemessen (722 Tests inkl. DB):
         # 86.92 % -> Floor 85 (2 Pkt Headroom). Anhebung nur in Coverage-PRs.
         env:
@@ -92,7 +92,7 @@ jobs:
         run: npx tsc -b
       - name: Test (coverage ratchet)
         # `test:coverage` faehrt die volle Vitest-Suite mit v8-Coverage und
-        # erzwingt die Thresholds aus vite.config.ts (Floor, ADR-0032).
+        # erzwingt die Thresholds aus vite.config.ts (Floor, ADR-0041).
         run: npm run test:coverage
       - name: Upload web coverage
         if: always()
@@ -135,10 +135,11 @@ jobs:
         run: docker compose down -v
 
   e2e:
-    # Duenne E2E-Spitze (ADR-0032, Phase 4): Playwright gegen den echten
-    # Compose-Stack (Web :5173, API :8000). Soft-Gate (`continue-on-error`)
-    # waehrend der Stabilisierung — bricht den Build noch nicht; nach 1–2
-    # gruenen Laeufen wird `continue-on-error` entfernt (hartes Gate).
+    # Duenne E2E-Spitze (ADR-0041, Phase 4): Playwright gegen den echten
+    # Compose-Stack (Web :5173, API :8000). Soft-Gate (`continue-on-error`),
+    # bis die E2E-Journeys aktiviert sind (apps/web/e2e/journeys.spec.ts ist
+    # noch `test.fixme`, Audit TST-5) — erst Journeys scharf schalten, dann
+    # `continue-on-error` entfernen (hartes Gate), in dieser Reihenfolge.
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:

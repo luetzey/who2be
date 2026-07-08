@@ -1,7 +1,7 @@
 import { test } from '@playwright/test'
 
 /**
- * Kritische User-Journeys (ADR-0032, Phase 4 — duenne Spitze, 3–5 Pfade).
+ * Kritische User-Journeys (ADR-0041, Phase 4 — duenne Spitze, 3–5 Pfade).
  *
  * Diese Journeys brauchen einen echten Auth-Seed (GoTrue-User + Session) und
  * einen frisch geseedeten Workspace pro Lauf. Sie sind hier als `test.fixme`

@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 /**
- * Oeffentliche Routen — die robuste Basis der E2E-Spitze (ADR-0032, Phase 4).
+ * Oeffentliche Routen — die robuste Basis der E2E-Spitze (ADR-0041, Phase 4).
  *
  * Bewusst strukturelle (locale-unabhaengige) Assertions: dass die App im echten
  * Browser bootet, die Auth-Seiten ihre Felder rendern und ungeschuetzte Routen

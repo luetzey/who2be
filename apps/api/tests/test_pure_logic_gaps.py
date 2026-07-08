@@ -1,4 +1,4 @@
-"""Gezielte Unit-Tests fuer reine Logik-Branches (ADR-0032, Phase 1).
+"""Gezielte Unit-Tests fuer reine Logik-Branches (ADR-0041, Phase 1).
 
 Schliesst die im Coverage-Report sichtbaren Luecken in `version_diff` und
 `promote_validation` — bewusst DB-frei, jede Assertion deckt einen konkreten

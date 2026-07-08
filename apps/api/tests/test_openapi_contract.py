@@ -1,4 +1,4 @@
-"""OpenAPI-Contract-Snapshot (ADR-0032, Phase 3).
+"""OpenAPI-Contract-Snapshot (ADR-0041, Phase 3).
 
 Friert die **oeffentliche API-Oberflaeche** (Methode + Pfad + operationId) als
 Golden-File ein. Ein versehentlicher Drift (umbenannte Route, geloeschter
@@ -18,6 +18,8 @@ import json
 import os
 from pathlib import Path
 from typing import Any
+
+import pytest
 
 from who2be_api.main import app
 
@@ -42,6 +44,7 @@ def _live_surface() -> list[dict[str, Any]]:
     return surface
 
 
+@pytest.mark.contract
 def test_openapi_surface_matches_golden() -> None:
     live = _live_surface()
     if os.environ.get("REGEN") == "1":
@@ -64,6 +67,7 @@ def test_openapi_surface_matches_golden() -> None:
     assert not changed, f"operationId(s) geaendert: {changed}"
 
 
+@pytest.mark.contract
 def test_every_operation_has_operation_id_and_responses() -> None:
     """Invariante: jede Operation hat operationId + mindestens eine Response.
 
