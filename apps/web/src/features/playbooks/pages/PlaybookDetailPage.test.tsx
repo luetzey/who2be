@@ -1,9 +1,9 @@
 import type { Session } from '@supabase/supabase-js'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
-import type { Me } from '@/api/types'
+import type { Me, VersionStatus, WorkspaceRole } from '@/api/types'
 import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
 import { SessionContext } from '@/auth/session-context'
 import { notify } from '@/lib/feedback'
@@ -340,5 +340,606 @@ describe('PlaybookDetailPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Noch in keiner Persona verwendet')).toBeInTheDocument()
     })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Branch-Coverage-Ergaenzungen (WP-1/TST-1): Lade-/Fehler-Zustaende, Status-
+// Transitions (draft/review/active/inactive), Managed-Lock, Composite-/Tag-/
+// Trigger-Zweige, Resource-Links, Backlinks, Delete-Flow inkl. 409.
+// Bestandstests oben bleiben unangetastet.
+// ---------------------------------------------------------------------------
+
+// Radix-Primitives (Dialog) brauchen Pointer-Capture-Stubs in jsdom
+// (Muster aus DeletePlaybookButton.test.tsx).
+beforeAll(() => {
+  for (const fn of [
+    'hasPointerCapture',
+    'releasePointerCapture',
+    'setPointerCapture',
+    'scrollIntoView',
+  ] as const) {
+    Object.defineProperty(window.HTMLElement.prototype, fn, {
+      value: () => (fn === 'hasPointerCapture' ? false : undefined),
+      configurable: true,
+    })
+  }
+})
+
+type FetchHandler = (
+  path: string,
+  method: string,
+  init?: RequestInit,
+) => Response | Promise<Response>
+
+function errorResponse(status: number, detail?: string): Response {
+  if (detail === undefined) {
+    return new Response('', { status })
+  }
+  return new Response(JSON.stringify({ detail }), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+function playbookWith(
+  overrides: Partial<PlaybookShape> & Record<string, unknown> = {},
+): PlaybookShape & Record<string, unknown> {
+  return { ...playbook(1, 'b1'), ...overrides }
+}
+
+function pbVersion(v: number, status: VersionStatus) {
+  return {
+    version: v,
+    status,
+    content: playbook(v, 'b1').content,
+    created_by: 'o1',
+    created_at: 't1',
+  }
+}
+
+function meWithRole(role: WorkspaceRole): Me {
+  return {
+    user_id: 'u1',
+    default_workspace_id: 'ws-1',
+    organizations: [
+      {
+        id: 'o1',
+        name: 'Org',
+        slug: 'org',
+        kind: 'personal',
+        workspaces: [{ id: 'ws-1', name: 'WS', slug: 'ws', role }],
+      },
+    ],
+  }
+}
+
+interface PlaybookHandlerOptions {
+  playbook?: Record<string, unknown>
+  versions?: unknown[]
+  resourceLinks?: unknown[]
+  usages?: unknown[]
+  composes?: unknown[]
+  composedBy?: unknown[]
+}
+
+function playbookHandlers(opts: PlaybookHandlerOptions = {}): FetchHandler {
+  return (path, method) => {
+    if (method === 'GET') {
+      if (path === `${WS_PREFIX}/playbooks/pb1`)
+        return jsonResponse(opts.playbook ?? playbook(1, 'b1'))
+      if (path === `${WS_PREFIX}/playbooks/pb1/versions`)
+        return jsonResponse(opts.versions ?? [pbVersion(1, 'draft')])
+      if (path === `${WS_PREFIX}/playbooks/pb1/resource_links`)
+        return jsonResponse(opts.resourceLinks ?? [])
+      if (path === `${WS_PREFIX}/playbooks/pb1/usages`)
+        return jsonResponse(opts.usages ?? [])
+      if (path === `${WS_PREFIX}/playbooks/pb1/composes`)
+        return jsonResponse(opts.composes ?? [])
+      if (path === `${WS_PREFIX}/playbooks/pb1/composed_by`)
+        return jsonResponse(opts.composedBy ?? [])
+      if (path === `${WS_PREFIX}/feedback/playbook/pb1`)
+        return jsonResponse({
+          entity_type: 'playbook',
+          entity_id: 'pb1',
+          usage_count: 0,
+          by_outcome: {},
+          by_signal: {},
+          recent_notes: [],
+        })
+    }
+    throw new Error(`Unmocked ${method} ${path}`)
+  }
+}
+
+function renderPlaybookDetail(handler: FetchHandler, options: { me?: Me } = {}) {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
+    handler(new URL(String(input)).pathname, init?.method ?? 'GET', init),
+  )
+  vi.stubGlobal('fetch', fetchMock)
+  render(
+    <SessionContext.Provider
+      value={{
+        session,
+        me: options.me ?? me,
+        signIn: vi.fn(),
+        signOut: vi.fn(),
+        refreshMe: vi.fn(),
+      }}
+    >
+      <AuthTokenProvider>
+        <MemoryRouter initialEntries={['/w/ws-1/playbooks/pb1']}>
+          <Routes>
+            <Route path="/w/:workspaceId/playbooks/:id" element={<PlaybookDetailPage />} />
+            <Route path="/w/:workspaceId/playbooks" element={<div>PLAYBOOKS-LISTE</div>} />
+          </Routes>
+        </MemoryRouter>
+      </AuthTokenProvider>
+    </SessionContext.Provider>,
+  )
+  return fetchMock
+}
+
+describe('PlaybookDetailPage — Lade-/Fehler-Zustaende', () => {
+  it('zeigt den Ladezustand, solange das Playbook noch nicht geladen ist', () => {
+    renderPlaybookDetail(() => new Promise<Response>(() => {}))
+
+    expect(screen.getAllByText('Lädt…').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Coach')).not.toBeInTheDocument()
+  })
+
+  it('zeigt die Fehlermeldung aus dem Error-Detail, wenn der Load 500 liefert', async () => {
+    const base = playbookHandlers()
+    renderPlaybookDetail((path, method, init) => {
+      if (method === 'GET' && path === `${WS_PREFIX}/playbooks/pb1`) {
+        return errorResponse(500, 'Playbook kaputt')
+      }
+      return base(path, method, init)
+    })
+
+    expect(await screen.findByText('Playbook kaputt')).toBeInTheDocument()
+    expect(screen.queryByText('Coach')).not.toBeInTheDocument()
+  })
+
+  it('leitet ohne :id-Routenparameter zur Playbook-Liste um', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse([])),
+    )
+    render(
+      <SessionContext.Provider
+        value={{ session, me, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
+      >
+        <AuthTokenProvider>
+          <MemoryRouter initialEntries={['/w/ws-1/playbook-detail']}>
+            <Routes>
+              <Route path="/w/:workspaceId/playbook-detail" element={<PlaybookDetailPage />} />
+              <Route path="/w/:workspaceId/playbooks" element={<div>PLAYBOOKS-LISTE</div>} />
+            </Routes>
+          </MemoryRouter>
+        </AuthTokenProvider>
+      </SessionContext.Provider>,
+    )
+
+    expect(await screen.findByText('PLAYBOOKS-LISTE')).toBeInTheDocument()
+  })
+})
+
+describe('PlaybookDetailPage — Status-Transitions', () => {
+  it('Draft: "Draft abschliessen" reicht die Version zur Review ein', async () => {
+    const transitionBodies: string[] = []
+    const base = playbookHandlers()
+    renderPlaybookDetail((path, method, init) => {
+      if (method === 'POST' && path === `${WS_PREFIX}/playbooks/pb1/versions/1/transition`) {
+        transitionBodies.push(String(init?.body))
+        return jsonResponse(pbVersion(1, 'review'))
+      }
+      return base(path, method, init)
+    })
+
+    expect(
+      await screen.findByText('Aktuelle Version: v1 (Entwurf)'),
+    ).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Draft abschliessen' }))
+
+    await waitFor(() => {
+      expect(notify.success).toHaveBeenCalledWith('Zur Review eingereicht.')
+    })
+    expect(transitionBodies[0]).toContain('"to":"review"')
+  })
+
+  it('Review (Admin): "Veroeffentlichen" aktiviert die Version', async () => {
+    const transitionBodies: string[] = []
+    const base = playbookHandlers({ versions: [pbVersion(1, 'review')] })
+    renderPlaybookDetail(
+      (path, method, init) => {
+        if (method === 'POST' && path === `${WS_PREFIX}/playbooks/pb1/versions/1/transition`) {
+          transitionBodies.push(String(init?.body))
+          return jsonResponse(pbVersion(1, 'active'))
+        }
+        return base(path, method, init)
+      },
+      { me: meWithRole('admin') },
+    )
+
+    const publish = await screen.findByRole('button', { name: 'Veroeffentlichen' })
+    expect(publish).toBeEnabled()
+
+    fireEvent.click(publish)
+
+    await waitFor(() => {
+      expect(notify.success).toHaveBeenCalledWith('Version aktiviert.')
+    })
+    expect(transitionBodies[0]).toContain('"to":"active"')
+  })
+
+  it('Review (kein Admin): Publish ist gesperrt, "Zurueck zu Draft" lehnt ab', async () => {
+    const transitionBodies: string[] = []
+    const base = playbookHandlers({ versions: [pbVersion(1, 'review')] })
+    renderPlaybookDetail((path, method, init) => {
+      if (method === 'POST' && path === `${WS_PREFIX}/playbooks/pb1/versions/1/transition`) {
+        transitionBodies.push(String(init?.body))
+        return jsonResponse(pbVersion(1, 'draft'))
+      }
+      return base(path, method, init)
+    })
+
+    const publish = await screen.findByRole('button', { name: 'Veroeffentlichen' })
+    expect(publish).toBeDisabled()
+    expect(publish).toHaveAttribute('title', 'Nur Admins können aktivieren')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Zurueck zu Draft' }))
+
+    await waitFor(() => {
+      expect(notify.success).toHaveBeenCalledWith('Review abgelehnt.')
+    })
+    expect(transitionBodies[0]).toContain('"to":"draft"')
+  })
+
+  it('Inactive: "Reaktivieren als Draft" reaktiviert die aktuelle Version', async () => {
+    const transitionBodies: string[] = []
+    const base = playbookHandlers({
+      playbook: playbookWith({ current_status: 'inactive' }),
+      versions: [pbVersion(1, 'inactive')],
+    })
+    renderPlaybookDetail((path, method, init) => {
+      if (method === 'POST' && path === `${WS_PREFIX}/playbooks/pb1/versions/1/transition`) {
+        transitionBodies.push(String(init?.body))
+        return jsonResponse(pbVersion(1, 'draft'))
+      }
+      return base(path, method, init)
+    })
+
+    expect(
+      await screen.findByText('Aktuelle Version: v1 (Inaktiv)'),
+    ).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reaktivieren als Draft' }))
+
+    await waitFor(() => {
+      expect(notify.success).toHaveBeenCalledWith('Reaktiviert als Entwurf.')
+    })
+    expect(transitionBodies[0]).toContain('"to":"draft"')
+  })
+
+  it('meldet den Fehler per Toast, wenn die Transition fehlschlaegt', async () => {
+    const base = playbookHandlers()
+    renderPlaybookDetail((path, method, init) => {
+      if (method === 'POST' && path === `${WS_PREFIX}/playbooks/pb1/versions/1/transition`) {
+        return errorResponse(500, 'Transition kaputt')
+      }
+      return base(path, method, init)
+    })
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Draft abschliessen' }),
+    )
+
+    await waitFor(() => {
+      expect(notify.error).toHaveBeenCalledWith('Transition kaputt')
+    })
+    expect(notify.success).not.toHaveBeenCalled()
+  })
+
+  it('Active + Draft: Header nennt beide Versionen, Submit-Action bleibt sichtbar', async () => {
+    renderPlaybookDetail(
+      playbookHandlers({
+        playbook: playbookWith({ current_version: 2 }),
+        versions: [pbVersion(1, 'active'), pbVersion(2, 'draft')],
+      }),
+    )
+
+    expect(
+      await screen.findByText(/Active: v1 · Du arbeitest auf Draft v2/),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Draft abschliessen' }),
+    ).toBeInTheDocument()
+  })
+
+  it('Active + Review: Header nennt die Review-Version, Publish + Reject sichtbar', async () => {
+    renderPlaybookDetail(
+      playbookHandlers({
+        playbook: playbookWith({ current_version: 2 }),
+        versions: [pbVersion(1, 'active'), pbVersion(2, 'review')],
+      }),
+    )
+
+    expect(await screen.findByText(/Active: v1 · In Review: v2/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Veroeffentlichen' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Zurueck zu Draft' })).toBeInTheDocument()
+  })
+
+  it('nur Active (ohne Draft/Review): Header ohne Suffix, keine Branch-Aktionen', async () => {
+    renderPlaybookDetail(
+      playbookHandlers({
+        playbook: playbookWith({ current_status: 'active' }),
+        versions: [pbVersion(1, 'active')],
+      }),
+    )
+
+    expect(await screen.findByText('Active: v1')).toBeInTheDocument()
+    expect(screen.queryByRole('toolbar')).not.toBeInTheDocument()
+  })
+})
+
+describe('PlaybookDetailPage — Versions-Insel & Feedback', () => {
+  it('Restore stellt die Version als Draft wieder her, Diff/Provenance laden lazy', async () => {
+    const calledPaths: string[] = []
+    const base = playbookHandlers({
+      playbook: playbookWith({ current_status: 'inactive' }),
+      versions: [pbVersion(1, 'inactive')],
+    })
+    renderPlaybookDetail(
+      (path, method, init) => {
+        if (method === 'GET' && path === `${WS_PREFIX}/playbooks/pb1/versions/1/diff`) {
+          calledPaths.push(path)
+          return jsonResponse({
+            version: 1,
+            against: 'active',
+            against_version: null,
+            changes: [],
+            identical: true,
+          })
+        }
+        if (
+          method === 'GET' &&
+          path === `${WS_PREFIX}/playbooks/pb1/versions/1/provenance`
+        ) {
+          calledPaths.push(path)
+          return jsonResponse([])
+        }
+        if (
+          method === 'POST' &&
+          path === `${WS_PREFIX}/playbooks/pb1/versions/1/restore`
+        ) {
+          calledPaths.push(path)
+          return jsonResponse(playbook(1, 'b1'))
+        }
+        return base(path, method, init)
+      },
+      { me: meWithRole('editor') },
+    )
+
+    await screen.findByText('Versionen')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Diff' }))
+    await waitFor(() => {
+      expect(calledPaths).toContain(`${WS_PREFIX}/playbooks/pb1/versions/1/diff`)
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Verlauf' }))
+    await waitFor(() => {
+      expect(calledPaths).toContain(
+        `${WS_PREFIX}/playbooks/pb1/versions/1/provenance`,
+      )
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Wiederherstellen' }))
+    await waitFor(() => {
+      expect(notify.success).toHaveBeenCalledWith(
+        'v1 als Entwurf wiederhergestellt.',
+      )
+    })
+    expect(calledPaths).toContain(`${WS_PREFIX}/playbooks/pb1/versions/1/restore`)
+  })
+
+  it('Feedback-Revise: scrollt nach oben und zeigt den Hinweis-Toast', async () => {
+    const scrollTo = vi.fn()
+    vi.stubGlobal('scrollTo', scrollTo)
+    const base = playbookHandlers()
+    renderPlaybookDetail((path, method, init) => {
+      if (method === 'GET' && path === `${WS_PREFIX}/feedback/playbook/pb1`) {
+        return jsonResponse({
+          entity_type: 'playbook',
+          entity_id: 'pb1',
+          usage_count: 2,
+          by_outcome: { applied: 2 },
+          by_signal: { unclear: 1 },
+          recent_notes: [],
+        })
+      }
+      return base(path, method, init)
+    })
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Überarbeiten' }))
+
+    await waitFor(() => {
+      expect(notify.info).toHaveBeenCalledWith(
+        'Bearbeite die aktive Version — Änderungen landen automatisch in einem neuen Draft.',
+      )
+    })
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' })
+  })
+})
+
+describe('PlaybookDetailPage — Managed-Lock & Rollen', () => {
+  it('is_managed: zeigt die Managed-Notice und blendet Aktionen + Danger-Zone aus', async () => {
+    renderPlaybookDetail(
+      playbookHandlers({ playbook: playbookWith({ is_managed: true }) }),
+    )
+
+    expect(await screen.findByTestId('managed-notice')).toBeInTheDocument()
+    expect(screen.queryByRole('toolbar')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('delete-playbook-trigger')).not.toBeInTheDocument()
+  })
+
+  it('ohne Managed-Flag: keine Notice, Branch-Aktionen und Danger-Zone sichtbar', async () => {
+    renderPlaybookDetail(playbookHandlers())
+
+    expect(await screen.findByTestId('delete-playbook-trigger')).toBeInTheDocument()
+    expect(screen.queryByTestId('managed-notice')).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('toolbar', { name: 'Branch-Aktionen' }),
+    ).toBeInTheDocument()
+  })
+
+  it('Viewer: sieht weder Danger-Zone noch Feedback-Panel', async () => {
+    renderPlaybookDetail(playbookHandlers(), { me: meWithRole('viewer') })
+
+    await screen.findByText('Verwendet in')
+    expect(screen.queryByTestId('delete-playbook-trigger')).not.toBeInTheDocument()
+    expect(screen.queryByText('Feedback & Nutzung')).not.toBeInTheDocument()
+  })
+})
+
+describe('PlaybookDetailPage — Composite-, Tag- und Link-Zweige', () => {
+  it('Composite: zeigt Badge, geordnete Sub-Playbooks und Composed-by-Backlinks', async () => {
+    renderPlaybookDetail(
+      playbookHandlers({
+        playbook: playbookWith({ is_composite: true }),
+        composes: [
+          { id: 'c1', name: 'Schritt Eins', is_composite: false },
+          { id: 'c2', name: 'Verschachtelt', is_composite: true },
+        ],
+        composedBy: [{ id: 'p9', name: 'Eltern-Composite' }],
+      }),
+    )
+
+    await screen.findByText('Sub-Playbooks (Composes)')
+    // Header-Badge + Badge am verschachtelten Kind.
+    expect(screen.getAllByText('Composite')).toHaveLength(2)
+
+    const list = screen.getByRole('list', { name: 'Sub-Playbooks' })
+    const items = within(list).getAllByRole('listitem')
+    expect(items[0]).toHaveTextContent('Schritt Eins')
+    expect(items[1]).toHaveTextContent('Verschachtelt')
+
+    expect(screen.getByText('Eltern-Composite')).toBeInTheDocument()
+    // Tags aus dem Fixture als Badge-Cluster im Header. Das Editor-Formular
+    // traegt ebenfalls ein "Tags"-Label (TagInput) — daher auf den DIV-Cluster
+    // filtern statt getByLabelText.
+    const tagCluster = screen
+      .getAllByLabelText('Tags')
+      .find((el) => el.tagName === 'DIV')
+    expect(tagCluster).toBeDefined()
+    expect(within(tagCluster as HTMLElement).getByText('coaching')).toBeInTheDocument()
+  })
+
+  it('Leer-Zweige: kein Composite-Badge, keine Tags/Trigger, Empty-Hinweise', async () => {
+    renderPlaybookDetail(
+      playbookHandlers({
+        playbook: playbookWith({
+          tags: [],
+          content: { ...playbook(1, 'b1').content, tags: [] },
+        }),
+      }),
+    )
+
+    expect(
+      await screen.findByText(
+        'Keine Sub-Playbooks verknüpft. Dieses Playbook ist atomar.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('Kein Composite-Playbook referenziert dieses Playbook.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Composite')).not.toBeInTheDocument()
+    // Kein Header-Tag-Cluster (das TagInput-Formularfeld traegt weiterhin
+    // sein eigenes "Tags"-Label und bleibt bewusst unberuehrt).
+    expect(
+      screen.queryAllByLabelText('Tags').filter((el) => el.tagName === 'DIV'),
+    ).toHaveLength(0)
+    expect(
+      screen.queryByRole('list', { name: 'Trigger-Liste' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('Resource-Links: rendert verlinkte Bloecke read-only mit Body-Hinweis', async () => {
+    renderPlaybookDetail(
+      playbookHandlers({
+        resourceLinks: [
+          {
+            resource_id: 'r1',
+            resource_name: 'Glossar',
+            block_id: 'b1',
+            position: 0,
+            available: true,
+            preview: 'Abschnitt A',
+          },
+        ],
+      }),
+    )
+
+    expect(await screen.findByText('Glossar')).toBeInTheDocument()
+    expect(screen.getByText('Abschnitt A')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Resource-Verknüpfungen werden im BlockNote-Body als Pills gepflegt — bearbeite sie dort.',
+      ),
+    ).toBeInTheDocument()
+    // Track B: Pills im Body sind die Quelle — kein Entfernen-Button.
+    expect(
+      screen.queryByRole('button', { name: 'Entfernen' }),
+    ).not.toBeInTheDocument()
+  })
+})
+
+describe('PlaybookDetailPage — Delete-Flow', () => {
+  it('loescht nach Bestaetigung und navigiert zurueck zur Liste', async () => {
+    const base = playbookHandlers()
+    renderPlaybookDetail((path, method, init) => {
+      if (method === 'DELETE' && path === `${WS_PREFIX}/playbooks/pb1`) {
+        return new Response(null, { status: 204 })
+      }
+      return base(path, method, init)
+    })
+
+    fireEvent.click(await screen.findByTestId('delete-playbook-trigger'))
+    fireEvent.click(await screen.findByTestId('delete-playbook-confirm'))
+
+    await waitFor(() => {
+      expect(notify.success).toHaveBeenCalledWith('Playbook gelöscht.')
+    })
+    expect(await screen.findByText('PLAYBOOKS-LISTE')).toBeInTheDocument()
+  })
+
+  it('409 DeleteBlocked: listet die Verwender und sperrt den Confirm-Button', async () => {
+    const base = playbookHandlers()
+    renderPlaybookDetail((path, method, init) => {
+      if (method === 'DELETE' && path === `${WS_PREFIX}/playbooks/pb1`) {
+        return new Response(
+          JSON.stringify({
+            detail: {
+              message: 'Wird noch verwendet',
+              blocked_by: {
+                personas: [{ persona_id: 'per1', persona_name: 'Blocker Persona' }],
+              },
+            },
+          }),
+          { status: 409, headers: { 'Content-Type': 'application/json' } },
+        )
+      }
+      return base(path, method, init)
+    })
+
+    fireEvent.click(await screen.findByTestId('delete-playbook-trigger'))
+    fireEvent.click(await screen.findByTestId('delete-playbook-confirm'))
+
+    expect(await screen.findByText('Löschen blockiert')).toBeInTheDocument()
+    expect(screen.getByText(/Blocker Persona/)).toBeInTheDocument()
+    expect(screen.getByTestId('delete-playbook-confirm')).toBeDisabled()
+    expect(notify.success).not.toHaveBeenCalled()
   })
 })
