@@ -347,6 +347,29 @@ _Behebt: CMP-4, CMP-5, CMP-6. Kein Code — Checklisten-Punkte für
 - [ ] Projektbezogene Kontakt-Adresse (security@/licensing@) statt privater
       Gmail in README/SECURITY.md/pyproject-authors erwägen.
 
+## 3. Umsetzungsstand (2026-07-08, PR #299)
+
+Die Umsetzung lief noch am Audit-Tag in zwei Agenten-Wellen auf demselben
+Branch. Stand nach Abschluss:
+
+| WP | Status | Beleg |
+|---|---|---|
+| WP-1 Coverage-PR | ✅ umgesetzt (6 Teilpakete) | Branches **69,52 % → 80,64 %** (Floor 79), Statements 87,2 %, Functions 83,5 %, Lines 88 %; 450 → **734 Tests**; `client.ts` 100 % Branches; A11y-Tests für Auth-/Detail-/agents-/system-prompts-/legal-Pages. Offen: `coverage.all: true` (bewusst zurückgestellt — senkt die Messbasis, Owner-Entscheidung zu neuen Floors). |
+| WP-2 DoD-Drift | ✅ umgesetzt | CONTRIBUTING §DoD führt; CLAUDE.md/AGENTS.md/Standards verweisen statt kopieren. |
+| WP-3 DSGVO-Purge + Doku | ✅ umgesetzt | Purge deckt `agent_feedback`/`usage_event`/`oauth_*` ab + `cleanup_expired_oauth()`; VVT (V15/V16), Retention, C5 nachgezogen. Testgetrieben (Repro-Test zuerst). |
+| WP-4 Doku-/Status-Drift | ✅ umgesetzt | CLAUDE.md-Stand aktuell (STATE.md = SSoT), Test-Strategie-ADR **0032 → 0041** inkl. Sweep (Doku + Code-Kommentare), 0037/0038/0040 → Accepted, Plan-README nachgezogen. |
+| WP-5 Frontend-Gates | ✅ umgesetzt | `FEATURES` dynamisch, personas→resources-Import via `@/components/editor/ResourceEditor` aufgelöst, Kosmetik + design-language-Doku-Pass. |
+| WP-6 Quick-Wins | ✅ umgesetzt; **Grundsatzfrage offen** | `resolve_org_id`-Helper, Export-Triplikat → `routers/_export.py`, `assert` ersetzt. Die ADR-0002-Entscheidung (enforce vs. amend, COD-1/COD-3) braucht den Owner. |
+| WP-7 Test-Nähte | ✅ umgesetzt (Kern) | REST↔MCP-Paritätstest + `contract`-Marker (960 pytest, `-m contract`: 5); QA-Skript → `scripts/`. Offen: E2E-Journeys aktivieren (TST-5, braucht Auth-Seed-Helper), erst danach Soft-Gate härten (TST-6, so im ci.yml dokumentiert). |
+| WP-8 Security-Sichtbarkeit | ✅ umgesetzt | Warn-Event `aal_missing_onprem` + Schalter `WHO2BE_REQUIRE_MFA_ONPREM`. |
+| WP-9 Public-Switch-Blocker | ⬜ offen (Owner, kein Code) | CLA, AVV-/Rechtstext-Platzhalter, Kontakt-Adresse. |
+
+Neue Befunde aus der Umsetzung (Folge-Kandidaten): `PlaceholderHelpContent`
+rendert `h3` direkt unter `h1` (axe heading-order, im Test begründet
+deaktiviert); toter `bodyIsBlockNote`-false-Pfad in `PlaybookDetailPage`
+(~10 untestbare Branches); stale i18n-Kommentar in `features/legal/index.ts`;
+`client.contract.test.ts` referenziert noch ADR-0032 (Test-Strategie).
+
 ### Bewusst nicht adressiert
 
 - **ENG-5/ENG-10/ENG-11** (Plan-`_done`-Renames, HHmm-Schema, ✅-Marker):
