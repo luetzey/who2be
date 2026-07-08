@@ -137,6 +137,8 @@ class AccountPurgeRepository(Protocol):
 
     async def cleanup_expired_invitations(self, now: datetime) -> int: ...
 
+    async def cleanup_expired_oauth(self, now: datetime) -> int: ...
+
     async def mark_account_purged(self, user_id: UUID) -> None: ...
 
 
@@ -176,9 +178,17 @@ class PgAccountPurgeRepository:
         Atomar in einer Owner-Transaktion (RLS-Bypass + UPDATE-Recht trotz
         Append-only-REVOKE aus 0044 — WP-D):
           * Personal-Org loeschen (CASCADE der ganzen Hierarchie).
-          * API-Tokens und Memberships loeschen.
-          * `status_history.changed_by` und `audit_log.actor_id` des Users auf
-            den Sentinel anonymisieren (Audit-Integritaet bleibt, PII weg).
+          * API-Tokens und Memberships loeschen. Der `api_token`-Delete raeumt
+            per FK-CASCADE (0049) auch die `oauth_refresh_token`-Zeilen des
+            Users ab — Refresh-Tokens haengen an `api_token_id`, nicht an einer
+            eigenen `user_id`-Spalte.
+          * `oauth_authorization_code`-Zeilen des Users loeschen (CMP-1): die
+            Tabelle traegt `user_id` ohne CASCADE auf den User; nach der
+            Konto-Loeschung sind die Codes wertlos.
+          * `status_history.changed_by`, `audit_log.actor_id` sowie
+            `usage_event.actor_id` und `agent_feedback.actor_id` (0053) des
+            Users auf den Sentinel anonymisieren (Audit-/Telemetrie-Integritaet
+            bleibt, PII weg).
           * `entitlement_history` bleibt **bewusst unberuehrt** (gesetzliche
             Aufbewahrung §14b UStG / §147 AO, ADR-0031).
         """
@@ -188,6 +198,9 @@ class PgAccountPurgeRepository:
                 str(user_id),
             )
             await self._conn.execute("DELETE FROM api_token WHERE owner_id = $1", user_id)
+            await self._conn.execute(
+                "DELETE FROM oauth_authorization_code WHERE user_id = $1", user_id
+            )
             await self._conn.execute("DELETE FROM org_member WHERE user_id = $1", user_id)
             await self._conn.execute("DELETE FROM workspace_member WHERE user_id = $1", user_id)
             sh_result = await self._conn.execute(
@@ -200,7 +213,17 @@ class PgAccountPurgeRepository:
                 user_id,
                 ANONYMIZED_USER_ID,
             )
-        return _count(sh_result) + _count(al_result)
+            ue_result = await self._conn.execute(
+                "UPDATE usage_event SET actor_id = $2 WHERE actor_id = $1",
+                user_id,
+                ANONYMIZED_USER_ID,
+            )
+            fb_result = await self._conn.execute(
+                "UPDATE agent_feedback SET actor_id = $2 WHERE actor_id = $1",
+                user_id,
+                ANONYMIZED_USER_ID,
+            )
+        return _count(sh_result) + _count(al_result) + _count(ue_result) + _count(fb_result)
 
     async def cleanup_expired_invitations(self, now: datetime) -> int:
         """Bereinigt die Klartext-`email` akzeptierter/abgelaufener Einladungen.
@@ -217,6 +240,33 @@ class PgAccountPurgeRepository:
             now,
         )
         return _count(result)
+
+    async def cleanup_expired_oauth(self, now: datetime) -> int:
+        """Raeumt wertlose OAuth-Zeilen ab (Datenminimierung, CMP-1) — analog
+        `cleanup_expired_invitations` bei jedem Purge-Lauf.
+
+        - `oauth_authorization_code`: abgelaufen ODER konsumiert. Codes sind
+          single-use; `consume_code` filtert ohnehin auf `consumed_at IS NULL
+          AND expires_at > now()` — ein Replay verhaelt sich nach dem Delete
+          identisch (nicht gefunden).
+        - `oauth_refresh_token`: nur ABGELAUFENE Zeilen. Konsumierte, noch
+          nicht abgelaufene Glieder bleiben stehen: `consume_refresh_grace`
+          (Grace-Retry kurz nach der Rotation) und die Ketten-Revocation
+          (`revoke_refresh_chain`, `rotated_from`) brauchen sie; nach
+          `expires_at` sind sie fuer beide Pfade wertlos.
+
+        Idempotent: ein zweiter Lauf ohne neue faellige Zeilen ist ein No-op.
+        Liefert die Zahl der geloeschten Zeilen (Codes + Refresh).
+        """
+        codes = await self._conn.execute(
+            "DELETE FROM oauth_authorization_code WHERE expires_at < $1 OR consumed_at IS NOT NULL",
+            now,
+        )
+        refresh = await self._conn.execute(
+            "DELETE FROM oauth_refresh_token WHERE expires_at < $1",
+            now,
+        )
+        return _count(codes) + _count(refresh)
 
     async def mark_account_purged(self, user_id: UUID) -> None:
         await self._conn.execute(

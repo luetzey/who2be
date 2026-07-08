@@ -5,7 +5,7 @@
 > verbindlich wird das VVT erst mit den Betreiber-Angaben (Verantwortlicher,
 > Kontakt, Aufsichtsbehoerde, finale Auftragsverarbeiter-Vertraege). Alle
 > `<PLATZHALTER: …>` sind vom Betreiber zu fuellen. Stand der abgeleiteten
-> Fakten: 2026-06-05.
+> Fakten: 2026-07-08.
 
 Dieses Verzeichnis ist die nach **Art. 30 Abs. 1 DSGVO** zu fuehrende Uebersicht
 der Verarbeitungstaetigkeiten des Verantwortlichen. Es ist aus der Code-Realitaet
@@ -46,6 +46,8 @@ der Verarbeitungstaetigkeiten des Verantwortlichen. Es ist aus der Code-Realitae
 | V12 | Server-Logs / Zugriffsdaten | Betrieb, Missbrauchsabwehr | lit. f |
 | V13 | Backups (verschluesselt, lokal + Offsite) | Datensicherung / Wiederherstellbarkeit | lit. f / lit. c |
 | V14 | Konto-/Org-Loeschung (Soft-Delete + Hard-Purge) | Erfuellung Art. 17 (Loeschung) | lit. c / lit. b |
+| V15 | OAuth-Connector (Authorization-Server fuer Remote-MCP: Authorization-Codes, Refresh-Tokens, dynamische Clients — Migration 0049, ADR-0034-Folge) | Verbindung von LLM-Clients (Claude/ChatGPT) per OAuth-Login statt Token-Copy-Paste | lit. b (Vertrag) |
+| V16 | Agent-Usage-/Feedback-Events (`usage_event`, `agent_feedback` — Migration 0053, ADR-0038) | Nutzungs-/Qualitaets-Telemetrie konsumierender Agenten fuer Kurations-Aggregate | lit. f (berechtigtes Interesse) |
 
 > Hinweis: V8 und V10 (`audit_log`, `entitlement_history`) werden durch die
 > Schwester-Pakete **WP-A/B/C** eingefuehrt; dieses VVT beschreibt den Ziel-Stand
@@ -72,6 +74,8 @@ Identitaetsdaten liegen in der von GoTrue verwalteten `auth.users` (PostgreSQL-
 | Abrechnungs-/Tarifdaten | `org_id`, `status`, `source` (mollie/cloud/manual_override/signed_license), `external_ref`, `created_by`, `reason`, `expires_at`, `grace_until` | `org_entitlement`, `entitlement_history` (WP-A/C) | `migrations/0030`, `0043`; ADR-0031 |
 | Nutzungs-/Quota-Daten | `org_id`, `period`, `count` (org-Ebene, nicht personenbezogen pro Nutzer) | `mcp_usage` | `migrations/0031` |
 | Webhook-Dedupe | `provider` (mollie), `event_id`, `received_at` (Zahlungsaktivitaets-Zeitpunkte) | `processed_webhook_event` | `migrations/0039` |
+| OAuth-Connector-Daten | `user_id`, `workspace_id`, `agent_id`, `role`, `code_hash`/`token_hash` (SHA-256), `expires_at`, `consumed_at`; Client-Metadaten (`client_name`, `redirect_uris`) | `oauth_authorization_code`, `oauth_refresh_token` (via `api_token_id`), `oauth_client` | `migrations/0049`, `0062` |
+| Agent-Usage-/Feedback-Events | `actor_id` (UUID), `agent_id`, `entity_type/-id`, `version`, `outcome` bzw. `signal`, `note` (Freitext), `created_at` | `usage_event`, `agent_feedback` (append-only) | `migrations/0053` |
 | Loesch-Lifecycle | `user_id`, `requested_at`, `purge_after`, `purged_at`; `organization.deleted_at/purge_after` | `account_deletion`, `organization` | `migrations/0038` |
 | Server-Logs/Zugriffsdaten | IP, User-Agent, Zeitstempel (Reverse-Proxy/App) | Caddy/App-Logs (nicht in der DB) | `deploy/hetzner/Caddyfile` |
 | Backup-Daten | verschluesselter Voll-Dump (enthaelt alle obigen Kategorien) | `*.pgc.gpg` + restic-Repo | `deploy/hetzner/scripts/backup.sh` |
@@ -129,7 +133,8 @@ Kurzfassung:
 |---|---|
 | Konto-/Inhalts-/Mitgliedsdaten | Soft-Delete bei Loeschwunsch → **30-Tage-Grace** → Hard-Purge (CASCADE), inkl. `auth.users` |
 | Einladungs-E-Mail (Klartext) | Bereinigung nach Annahme/Ablauf (WP-D `cleanup_expired_invitations`) |
-| Status-/Audit-Referenzen (`changed_by`/`actor_id`) | beim Purge **anonymisiert** (Sentinel `00000000-…-0`), Eintrag bleibt erhalten (WP-D) |
+| Status-/Audit-Referenzen (`changed_by`/`actor_id`, inkl. `usage_event`/`agent_feedback`) | beim Purge **anonymisiert** (Sentinel `00000000-…-0`), Eintrag bleibt erhalten (WP-D, CMP-1) |
+| OAuth-Codes/-Refresh-Tokens | Codes 60 s TTL/single-use, Refresh 30 Tage rotierend; laufender Cleanup (`cleanup_expired_oauth`) + Loeschung beim Account-Purge (Codes direkt, Refresh via `api_token`-CASCADE) |
 | Backups | lokal 7 Tage; Offsite restic `keep-daily 7 / keep-weekly 4 / keep-monthly 6` |
 | Entitlement-/Tarifdaten (`entitlement_history`) | **Aufbewahrung** trotz Erasure: §14b UStG/§147 AO (gesetzliche Ausnahme, ADR-0031) |
 | Server-Logs | `<PLATZHALTER: konkrete Log-Retention (z. B. 7–30 Tage)>` |

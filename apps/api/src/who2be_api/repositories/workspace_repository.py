@@ -12,7 +12,30 @@ from uuid import UUID
 
 import asyncpg
 
+from who2be_api.core.errors import ApiGateError
 from who2be_models import AgentToolPolicy, ReadScope, WorkspaceRead
+
+
+async def resolve_org_id(pool: asyncpg.Pool, workspace_id: UUID) -> UUID:
+    """Org des Workspace fuer org-scoped Aufloesungen (Entitlement, whoami).
+
+    Gemeinsamer Helper fuer `routers/entitlement.py` und `routers/whoami.py`
+    (COD-2, Standards-Review 2026-07-08) — vorher als `_resolve_org_id`
+    copy-gepastet. Ein Workspace ohne Org ist ein inkonsistenter Zustand →
+    403 statt stiller Voll-/Null-Annahme; expliziter `isinstance`-Check statt
+    `assert` (asserts entfallen unter `-O`, COD-9). `ApiGateError` statt
+    `HTTPException`, damit das Repository fastapi-frei bleibt (ADR-0002); der
+    zentrale Handler in `main.py` serialisiert `application/problem+json`.
+    """
+    org_id = await pool.fetchval("SELECT org_id FROM workspace WHERE id = $1", workspace_id)
+    if not isinstance(org_id, UUID):
+        raise ApiGateError(
+            status=403,
+            reason="insufficient_role",
+            actionable_by="human",
+            detail="Workspace ohne Organisation.",
+        )
+    return org_id
 
 
 class LastWorkspaceError(Exception):
