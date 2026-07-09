@@ -1,10 +1,10 @@
 """REST-Endpunkte fuer Playbooks (`/v1/workspaces/{workspace_id}/playbooks`)."""
 
-from typing import Annotated, Any, Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 
 from who2be_api.core.agent_scope import visible_playbook_ids
 from who2be_api.core.db import get_pool
@@ -21,6 +21,7 @@ from who2be_api.repositories.playbook_resource_link_repository import (
 )
 from who2be_api.repositories.status_history_repository import PgStatusHistoryRepository
 from who2be_api.repositories.usage_repository import PgUsageRepository
+from who2be_api.routers._export import ExportResult, export_entity
 from who2be_api.services.entity_export_service import EntityExportService
 from who2be_api.services.entity_quota_service import enforce_entity_quota
 from who2be_api.services.mcp_limit_service import enforce_mcp_read_limit
@@ -160,7 +161,9 @@ async def delete_playbook(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.get("/{playbook_id}/export")
+# response_model=None: der Union-Rueckgabetyp (Response | dict) ist kein
+# Pydantic-Feld — FastAPI soll kein Response-Model daraus generieren.
+@router.get("/{playbook_id}/export", response_model=None)
 @limiter.limit(write_limit)
 async def export_playbook(
     request: Request,
@@ -170,37 +173,19 @@ async def export_playbook(
     response: Response,
     pool: Annotated[asyncpg.Pool, Depends(get_pool)],
     format: ExportFormat = "json",
-) -> Any:
+) -> ExportResult:
     """Einzel-Export des Playbooks als JSON (alle Versionen) oder Markdown (aktive
     Version gerendert). Lesen ist fuer Viewer offen (kein require_role); ein
     `assigned`-Agent darf aber nur ihm zugewiesene Playbooks exportieren."""
-    scope = await visible_playbook_ids(pool, ctx)
-    if scope is not None and playbook_id not in scope:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Playbook nicht gefunden."
-        )
-    if format == "markdown":
-        rendered = await export_service.export_markdown(ctx.workspace_id, "playbook", playbook_id)
-        if rendered is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Playbook nicht gefunden."
-            )
-        return Response(
-            content=rendered,
-            media_type="text/markdown",
-            headers={
-                "Content-Disposition": (f'attachment; filename="who2be-playbook-{playbook_id}.md"')
-            },
-        )
-    bundle = await export_service.export_json(ctx.workspace_id, "playbook", playbook_id)
-    if bundle is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Playbook nicht gefunden."
-        )
-    response.headers["Content-Disposition"] = (
-        f'attachment; filename="who2be-playbook-{playbook_id}.json"'
+    return await export_entity(
+        export_service,
+        ctx.workspace_id,
+        "playbook",
+        playbook_id,
+        format,
+        response,
+        scope=await visible_playbook_ids(pool, ctx),
     )
-    return bundle
 
 
 @router.patch("/{playbook_id}/draft")

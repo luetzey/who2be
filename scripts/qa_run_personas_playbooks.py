@@ -1,7 +1,10 @@
 """QA-Durchlauf: Stränge D (Personas), E (Playbooks), I (State-Machine), J-Links.
 
-Ausführen:
-    uv run pytest apps/api/tests/qa_run_personas_playbooks.py -v --tb=short
+Manuelles QA-Skript, KEIN Teil der regulären Suite: der Dateiname matcht das
+pytest-Collection-Pattern bewusst nicht und `scripts/` liegt außerhalb der
+`testpaths` (Audit TST-11). Ausführen nur explizit per Pfad:
+
+    uv run pytest scripts/qa_run_personas_playbooks.py -v --tb=short
 """
 
 import asyncio

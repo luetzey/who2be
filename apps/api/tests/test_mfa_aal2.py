@@ -5,6 +5,9 @@ Reine Unit-Tests ueber `require_role`/`require_aal2` mit konstruierten
 - Admin-Aktion mit `aal1` → 403 (MFA-Pflicht greift),
 - Admin-Aktion mit `aal2` → ok,
 - fehlender aal-Claim (`None`) On-Prem → ok (fail-open, Bestands-/Test-JWTs),
+  aber mit strukturiertem Warn-Event `aal_missing_onprem` (SEC-1),
+- fehlender aal-Claim (`None`) On-Prem + `WHO2BE_REQUIRE_MFA_ONPREM=true`
+  → 403 (Betreiber schliesst den fail-open-Zweig hart),
 - fehlender aal-Claim (`None`) Cloud → 403 (fail-closed, Zero-Trust),
 - API-Token (Maschinen-Pfad) → ok (vom Gate ausgenommen),
 - nicht-administrative Aktionen (editor/viewer) → kein AAL2-Gate.
@@ -13,7 +16,9 @@ Reine Unit-Tests ueber `require_role`/`require_aal2` mit konstruierten
 from uuid import uuid4
 
 import pytest
+from structlog.testing import capture_logs
 
+from who2be_api.core.config import Settings
 from who2be_api.core.errors import ApiGateError
 from who2be_api.core.security import (
     WorkspaceContext,
@@ -54,9 +59,35 @@ def test_admin_action_with_aal2_is_allowed() -> None:
 def test_admin_action_without_aal_claim_is_allowed_fail_open_onprem(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # On-Prem/Dev: fehlender Claim (Legacy-/Magic-Link-/Test-JWT) → erlaubt.
+    # On-Prem/Dev: fehlender Claim (Legacy-/Magic-Link-/Test-JWT) → erlaubt,
+    # aber der Durchlass ist sichtbar (Warn-Event `aal_missing_onprem`, SEC-1).
     monkeypatch.setattr("who2be_api.core.security.is_onprem", lambda: True)
-    require_role(_ctx(WorkspaceRole.admin, aal=None), WorkspaceRole.admin)
+    monkeypatch.setattr(
+        "who2be_api.core.security.get_settings",
+        lambda: Settings(_env_file=None, require_mfa_onprem=False),  # type: ignore[call-arg]
+    )
+    with capture_logs() as logs:
+        require_role(_ctx(WorkspaceRole.admin, aal=None), WorkspaceRole.admin)
+    events = [entry for entry in logs if entry.get("event") == "aal_missing_onprem"]
+    assert len(events) == 1
+    assert events[0]["log_level"] == "warning"
+
+
+def test_admin_action_without_aal_claim_blocked_when_onprem_mfa_required(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # WHO2BE_REQUIRE_MFA_ONPREM=true schliesst den fail-open-Zweig hart:
+    # auch On-Prem wird ein fehlender aal-Claim abgelehnt (SEC-1).
+    monkeypatch.setattr("who2be_api.core.security.is_onprem", lambda: True)
+    monkeypatch.setattr(
+        "who2be_api.core.security.get_settings",
+        lambda: Settings(_env_file=None, require_mfa_onprem=True),  # type: ignore[call-arg]
+    )
+    with pytest.raises(ApiGateError) as exc:
+        require_role(_ctx(WorkspaceRole.admin, aal=None), WorkspaceRole.admin)
+    assert exc.value.status == 403
+    assert exc.value.reason == "mfa_required"
+    assert "MFA" in exc.value.detail
 
 
 def test_admin_action_without_aal_claim_blocked_in_cloud(

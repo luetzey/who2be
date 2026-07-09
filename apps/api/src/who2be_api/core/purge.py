@@ -40,6 +40,7 @@ class PurgeResult:
     accounts: int
     anonymized_audit_rows: int = 0
     cleaned_invitations: int = 0
+    cleaned_oauth_rows: int = 0
 
 
 async def purge_expired(
@@ -80,15 +81,19 @@ async def purge_expired(
                 user_id,
             )
 
-    # Generischer Cleanup-Schritt: PII abgelaufener/akzeptierter Invitations
-    # (WP-D, P7). Laeuft unabhaengig von Account-/Org-Purges; idempotent.
+    # Generische Cleanup-Schritte: PII abgelaufener/akzeptierter Invitations
+    # (WP-D, P7) und abgelaufene/konsumierte OAuth-Codes/-Refresh-Tokens
+    # (CMP-1, Datenminimierung). Laufen unabhaengig von Account-/Org-Purges;
+    # beide idempotent.
     cleaned_invitations = await repo.cleanup_expired_invitations(reference)
+    cleaned_oauth_rows = await repo.cleanup_expired_oauth(reference)
 
     return PurgeResult(
         organizations=len(org_ids),
         accounts=purged_accounts,
         anonymized_audit_rows=anonymized_rows,
         cleaned_invitations=cleaned_invitations,
+        cleaned_oauth_rows=cleaned_oauth_rows,
     )
 
 
@@ -109,7 +114,8 @@ def cli() -> None:
     print(
         f"Purge: {result.organizations} Org(s), {result.accounts} Account(s) "
         f"geloescht; {result.anonymized_audit_rows} Audit-Zeile(n) anonymisiert, "
-        f"{result.cleaned_invitations} Invitation(s) bereinigt."
+        f"{result.cleaned_invitations} Invitation(s) bereinigt, "
+        f"{result.cleaned_oauth_rows} OAuth-Zeile(n) geloescht."
     )
 
 

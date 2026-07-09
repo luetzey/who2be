@@ -13,10 +13,42 @@ Bei Konflikt zwischen Plan-Header und dieser Übersicht **gewinnt die Übersicht
 
 | Datei | Inhalt |
 |---|---|
-| `2026-06-04-1000_ux-fixes-i18n-embedding.md` | Dashboard-Fix + Agent-Create-Flow + Embed-Modi/Resource-Compose (Welle 1, parallel) + i18n UI/Content (Welle 2). Agenten-Prompts enthalten; User startet manuell |
-| `2026-05-27-1935_license-fsl-setup.md` | FSL-1.1-Apache-2.0 als Lizenzmodell + CLA — User-Entscheidungen offen |
-| `2026-05-27-2028_public-switch-github-repo.md` | Repo privat → öffentlich; hängt auf Lizenz + CSP-Pass + Security-TODOs |
+| `2026-05-27-1935_license-fsl-setup.md` | FSL-1.1-Apache-2.0 als Lizenzmodell — LICENSE.md/CONTRIBUTING liegen; CLA-Aktivierung offen (Owner) |
+| `2026-05-27-2028_public-switch-github-repo.md` | Repo privat → öffentlich; finaler Flip + GitHub-Settings beim Owner (siehe STATE.md §Nächste Schritte) |
 | `2026-05-28-0528_enterprise-license-management.md` | Code-Hooks-only; aktiviert bei erstem qualifizierten Lead |
+
+## Blöcke seit 2026-05-30 (nachgeführt 2026-07-08)
+
+Kompakte Status-Nachführung; Details + DoD-Belege in
+[`.claude/context/STATE.md`](../context/STATE.md). Status: ✅ erledigt,
+🔄 offen/teilweise. Die Feedback-/Builder-Lock-PR-Serien von Ende Juni
+(`feat/feedback-*`, `feat/builder-*`, u. a. PR #272, #282) liefen ohne eigene
+Plan-Dateien unter dem ai-native-Plan + ADR-0038.
+
+| Plan-Datei | Thema | Status |
+|---|---|---|
+| `2026-05-30-*` + `2026-05-31-{1200,1400,1700,2030}_*` (8 Dateien) | Phase-3-Fix-Runden 2+3 (Agent-Prompt-Wellen, Autosave, Forms, Slash-Templates, Frontend-Standards-Cleanup) | ✅ |
+| `2026-05-31-1630_composite-applied-modi.md` | Agenten-Achsen Track D/E: Composite-Playbooks (ADR-0024), Applied-via-Pill, Persona-Modi, Resource-Tags | ✅ |
+| `2026-06-01-*`, `2026-06-02_pill-*`, `2026-06-02-1700_track-f-persona-pills-skills.md` | Pill-/Editor-Ausbau (Preview-Overlay, Popover, Persona-Modi im BlockNote, Placeholder-Pills ADR-0025) | ✅ |
+| `2026-06-02-1349_feature-expansion-cloud-onprem-spaces-versioning.md`, `2026-06-02-1819_followups-rls-mollie-auth-fsl.md`, `2026-06-03-2030_cloud-launch-readiness.md` | Cloud/On-Prem-Ausbau, RLS/Mollie/Auth-Followups, Launch-Readiness | ✅ |
+| `2026-06-03-2200_account-lifecycle-gdpr.md` | Account-Lifecycle + DSGVO-Purge/-Export | ✅ (Purge-Lücken neu: Audit WP-3) |
+| `2026-06-04-1000_ux-fixes-i18n-embedding.md`, `2026-06-04-1200_i18n-content-model.md`, `2026-06-04_embedding-mode-resource-compose.md` | UX-Fixes, Content-i18n (ADR-0027), Embedding-Modus + Resource-Compose | ✅ |
+| `2026-06-05-1200_build-isolation-entitlement-sources.md`, `2026-06-05-1311_compliance-de-saas-remediation.md` | Editionen/Entitlements (ADR-0028/0029), Compliance-Remediation (ADR-0031) | ✅ |
+| `2026-06-05-1500_per-agent-mcp-tool-policy.md`, `2026-06-05-1500_single-element-delete-export.md` | Per-Agent-Tool-Policy; Einzel-Delete/-Export (ADR-0032) | ✅ |
+| `2026-06-05-1700_test-pyramid-tdd.md` | Test-Pyramide + Coverage-Ratchet (ADR-0041, ex-0032) — PR #149 | ✅ |
+| `2026-06-05-1930_coding-standards-audit-remediation.md` | Coding-Standards-Audit + OSS-Lizenz-Gates (ADR-0033) | ✅ |
+| `2026-06-12-1200_seed-builder-default-agent.md`, `2026-06-13-1512_repo-review-remediation.md` | Builder-Seed (Default-Agent); Repo-Review-Remediation | ✅ |
+| `2026-06-14-0810_public-switch-execution.md`, `2026-06-14-0832_notion-decoupling.md`, `2026-06-14-0947_llm-standards-materialization.md` | Public-Switch-Vorbereitung, Notion-Entkopplung, Standards-Schicht (`docs/standards/`, AGENTS.md, `.claude/context/`) | ✅ (finaler Public-Flip 🔄 Owner) |
+| `2026-06-25-1200_mcp-dx-builder-coder.md`, `2026-06-25-1324_agent-connector-params.md` | MCP-DX (HTTP-Transport ADR-0034, Ein-Klick-Config); Per-Agent-Connector-URL (ADR-0036-Addendum) | ✅ |
+| `2026-06-27-1100_ai-native-mcp-and-rights.md` | AI-native MCP: Tracks 1–4 (Versions-/Discovery-Tools, Search ADR-0037, Feedback-Flywheel ADR-0038, feinkörnige Rechte ADR-0039) | ✅ |
+| `2026-06-27-1500_builder-system-prompt-tools.md` | Builder-System-Prompt-Tools (ADR-0040) — PR #266 | ✅ |
+| `2026-06-27-1200_ux-axes-improvements-grouping.md` | UX-Achsen-Analyse (Draft-Discard, Schnellfreigabe, Gruppierung) | 🔄 Backlog |
+| `2026-07-01-1200_mfa-login-step-up.md` | MFA-Login-Step-up (TOTP-Challenge im Web-Login) | ✅ |
+| `2026-07-02-1100_oauth-refresh-grace-window.md`, `2026-07-05-1200_oauth-refresh-reuse-no-chain-kill.md` | OAuth-Refresh-Fixes (Grace-Window; Reuse ohne Ketten-Revocation) + tools/list-Payload-Fix | ✅ |
+
+Offen außerhalb der Plan-Dateien: dedizierter Web-Coverage-PR (main-CI rot,
+Owner-Entscheidung 2026-07-05) und die Arbeitspakete aus
+`docs/standards-review-2026-07-08.md` (WP-1–9).
 
 ## Phase 3 — UX-Polish (alle ✅ Done)
 

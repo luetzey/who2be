@@ -76,7 +76,7 @@ updates:
     ignore:
       # Framework-Majors sind bewusste, koordinierte Migrationen — kein
       # Bot-Auto-Bump. React 18->19 ist ein eigenes Projekt (Test-Pyramide
-      # ADR-0032 als Sicherheitsnetz); Mantine 9 setzt React 19 voraus
+      # ADR-0041 als Sicherheitsnetz); Mantine 9 setzt React 19 voraus
       # (`useEffectEvent`), darf also nicht vor dem React-Sprung kommen.
       - dependency-name: "react"
         update-types: ["version-update:semver-major"]

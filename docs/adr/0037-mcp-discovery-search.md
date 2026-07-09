@@ -1,6 +1,7 @@
 # ADR-0037 — MCP Discovery & Search (Volltext jetzt, Vektor-bereit)
 
-- Status: Proposed
+- Status: Accepted (umgesetzt: MCP-Tool `search` + `GET /search`, Volltext;
+  Proposed → Accepted 2026-07-08)
 - Datum: 2026-06-27
 - Kontext: AI-native-Optimierung des MCP-Toolsets; Agenten muessen Inhalte
   *finden*, nicht nur per UUID/Name abrufen.

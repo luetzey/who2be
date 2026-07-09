@@ -39,7 +39,7 @@ export function FeedbackOverviewPage() {
 
       <FeedbackInbox />
 
-      <h2 className="mt-10 mb-4 text-lg font-semibold tracking-tight">
+      <h2 className="mt-8 mb-4 text-lg font-semibold tracking-tight">
         {t('overview.sectionTitle')}
       </h2>
       <Card>

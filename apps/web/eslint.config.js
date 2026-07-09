@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -11,7 +12,13 @@ import tseslint from 'typescript-eslint'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const tailwindEntry = path.join(__dirname, 'src/styles/globals.css')
 
-const FEATURES = ['auth', 'dashboard', 'personas', 'playbooks', 'tokens']
+// Feature-Liste dynamisch aus dem Dateisystem, damit neue Features automatisch
+// unter dem Cross-Feature-Import-Gate stehen (eine harte Liste veraltet still).
+const FEATURES = fs
+  .readdirSync(path.join(__dirname, 'src/features'), { withFileTypes: true })
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => entry.name)
+  .sort()
 
 const APP_SHELL_RESTRICTED_PATH = {
   name: '@/components/layout/AppShell',
@@ -72,7 +79,7 @@ const crossFeatureOverrides = FEATURES.map((name) => ({
 
 export default tseslint.config(
   // `e2e/` faehrt unter Playwright (eigener Runner/Globals), nicht unter dem
-  // App-/Vitest-ESLint-Profil — daher hier ignoriert (ADR-0032, Phase 4).
+  // App-/Vitest-ESLint-Profil — daher hier ignoriert (ADR-0041, Phase 4).
   { ignores: ['dist', 'e2e', 'playwright-report', 'test-results'] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],

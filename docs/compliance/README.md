@@ -7,7 +7,7 @@
 > (`<PLATZHALTER: …>`) — **keine** verbindlichen Rechts-/Steueraussagen. Vor
 > jedem Launch sind die konkreten Pflichten mit einer fachkundigen Stelle
 > (Anwalt/Steuerberater/Wirtschaftspruefer) zu verifizieren. Stand der
-> abgeleiteten Fakten: 2026-06-05.
+> abgeleiteten Fakten: 2026-07-08.
 
 Dieses Verzeichnis buendelt die Nachweis-/Pflichtdokumente, die das Audit gegen
 die internen *Compliance-Standards (DE/SaaS)* als fehlend markiert hat

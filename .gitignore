@@ -6,7 +6,7 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 
-# Coverage (ADR-0032)
+# Coverage (ADR-0041)
 .coverage
 .coverage.*
 coverage.xml
@@ -20,7 +20,7 @@ build/
 *.local
 *.tsbuildinfo
 
-# Playwright (ADR-0032, Phase 4)
+# Playwright (ADR-0041, Phase 4)
 playwright-report/
 test-results/
 /apps/web/playwright/.cache/

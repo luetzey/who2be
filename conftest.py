@@ -1,4 +1,4 @@
-"""Geteiltes Pytest-Setup (ADR-0032 — Test-Pyramide).
+"""Geteiltes Pytest-Setup (ADR-0041 — Test-Pyramide).
 
 Zentralisiert, was bisher in ~40 Integrationstest-Dateien dupliziert lag:
 
@@ -12,7 +12,9 @@ Zentralisiert, was bisher in ~40 Integrationstest-Dateien dupliziert lag:
   Phase 0 diagnostizierte "gruen-durch-Skip"-Effekt in CI nie wieder auftreten.
 - **Geteilte Fixtures** (JWT-Secret/Header-Factory, Migrationen, Workspace-Seed)
   fuer neue Tests, damit kuenftiger Integrations-Code das Boilerplate nicht
-  erneut kopiert.
+  erneut kopiert. **Review-Regel: kein neues Inline-``_db_reachable`` in
+  Testdateien — die zentralen Fixtures/den zentralen Skip hier nutzen (Audit
+  TST-10); der Bestand wird inkrementell abgebaut, nicht vermehrt.**
 
 Schwere Importe (``who2be_api``, ``asyncpg``, ``jwt``) bleiben *lazy* in den
 Funktionen, damit das Sammeln der reinen Unit-Suites (models/billing) nicht an
@@ -39,13 +41,13 @@ _PG_CONTAINER: Any = None
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    """Opt-in: ephemere Postgres via Testcontainers (ADR-0032, Phase 2).
+    """Opt-in: ephemere Postgres via Testcontainers (ADR-0041, Phase 2).
 
     Mit ``WHO2BE_TEST_TESTCONTAINERS=1`` (und laufendem Docker) wird vor der
     Collection ein Postgres-Container gestartet, ``DATABASE_URL`` darauf gesetzt
     und der ``get_settings``-Cache geleert — so laufen die Integrationstests
     auch *lokal* wirklich, ohne manuelles ``docker compose``. Default ist aus:
-    CI nutzt bewusst den vorhandenen Postgres-Service (eine DB-Quelle, ADR-0032),
+    CI nutzt bewusst den vorhandenen Postgres-Service (eine DB-Quelle, ADR-0041),
     normale lokale Laeufe bleiben unveraendert.
     """
     global _PG_CONTAINER
@@ -113,7 +115,7 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         raise pytest.UsageError(
             f"WHO2BE_REQUIRE_DB gesetzt, aber keine DB erreichbar — "
             f"{len(integration_items)} Integrationstests koennen nicht laufen. "
-            "Skip-Guard (ADR-0032): in CI muss die DB stehen, sonst ist 'gruen' "
+            "Skip-Guard (ADR-0041): in CI muss die DB stehen, sonst ist 'gruen' "
             "eine Luege."
         )
     skip = pytest.mark.skip(

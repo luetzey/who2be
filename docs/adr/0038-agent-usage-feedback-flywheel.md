@@ -1,6 +1,8 @@
 # ADR-0038 — Agent-Usage- & Feedback-Flywheel
 
-- Status: Proposed
+- Status: Accepted (umgesetzt inkl. Triage/Posteingang, System-Feedback und
+  MCP-Tools `record_usage`/`submit_feedback`/`get_feedback`/`report_problem`;
+  Proposed → Accepted 2026-07-08)
 - Datum: 2026-06-27
 - Kontext: AI-native-Optimierung; eine AgentDB wird erst dann selbst-verbessernd,
   wenn die konsumierenden Agenten zuruckmelden, *was* sie genutzt haben und *wie

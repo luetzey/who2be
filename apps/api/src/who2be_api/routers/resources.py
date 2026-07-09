@@ -1,10 +1,10 @@
 """REST-Endpunkte fuer Resources (`/v1/workspaces/{workspace_id}/resources`)."""
 
-from typing import Annotated, Any, Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 
 from who2be_api.core.agent_scope import visible_resource_ids
 from who2be_api.core.db import get_pool
@@ -15,6 +15,7 @@ from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.repositories.resource_repository import PgResourceRepository
 from who2be_api.repositories.status_history_repository import PgStatusHistoryRepository
 from who2be_api.repositories.usage_repository import PgUsageRepository
+from who2be_api.routers._export import ExportResult, export_entity
 from who2be_api.services.entity_export_service import EntityExportService
 from who2be_api.services.entity_quota_service import enforce_entity_quota
 from who2be_api.services.mcp_limit_service import enforce_mcp_read_limit
@@ -149,7 +150,9 @@ async def delete_resource(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.get("/{resource_id}/export")
+# response_model=None: der Union-Rueckgabetyp (Response | dict) ist kein
+# Pydantic-Feld — FastAPI soll kein Response-Model daraus generieren.
+@router.get("/{resource_id}/export", response_model=None)
 @limiter.limit(write_limit)
 async def export_resource(
     request: Request,
@@ -159,37 +162,19 @@ async def export_resource(
     response: Response,
     pool: Annotated[asyncpg.Pool, Depends(get_pool)],
     format: ExportFormat = "json",
-) -> Any:
+) -> ExportResult:
     """Einzel-Export der Resource als JSON (alle Versionen) oder Markdown (aktive
     Version gerendert). Lesen ist fuer Viewer offen (kein require_role); ein
     `assigned`-Agent darf aber nur ihm zugewiesene Resources exportieren."""
-    scope = await visible_resource_ids(pool, ctx)
-    if scope is not None and resource_id not in scope:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Resource nicht gefunden."
-        )
-    if format == "markdown":
-        rendered = await export_service.export_markdown(ctx.workspace_id, "resource", resource_id)
-        if rendered is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Resource nicht gefunden."
-            )
-        return Response(
-            content=rendered,
-            media_type="text/markdown",
-            headers={
-                "Content-Disposition": (f'attachment; filename="who2be-resource-{resource_id}.md"')
-            },
-        )
-    bundle = await export_service.export_json(ctx.workspace_id, "resource", resource_id)
-    if bundle is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Resource nicht gefunden."
-        )
-    response.headers["Content-Disposition"] = (
-        f'attachment; filename="who2be-resource-{resource_id}.json"'
+    return await export_entity(
+        export_service,
+        ctx.workspace_id,
+        "resource",
+        resource_id,
+        format,
+        response,
+        scope=await visible_resource_ids(pool, ctx),
     )
-    return bundle
 
 
 @router.patch("/{resource_id}/draft")

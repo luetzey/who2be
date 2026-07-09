@@ -4,7 +4,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { Me } from '@/api/types'
+import type { Me, VersionStatus, WorkspaceRole } from '@/api/types'
 import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
 import { SessionContext } from '@/auth/session-context'
 import { notify } from '@/lib/feedback'
@@ -278,5 +278,324 @@ describe('PersonaDetailPage', () => {
     expect(
       screen.getByRole('button', { name: 'Verknüpfungen speichern' }),
     ).toBeDisabled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Branch-Coverage-Ergaenzungen (Coverage-Nachrunde): Redirect ohne :id,
+// Status-Transitions (draft/review/active/inactive) inkl. Fehlerpfade,
+// Header-Beschreibungs-Zweige, Admin-/Editor-/Viewer-Rollen. Muster analog
+// PlaybookDetailPage.test.tsx / ResourceDetailPage.test.tsx.
+// Bestandstests oben bleiben unangetastet.
+// ---------------------------------------------------------------------------
+
+type FetchHandler = (
+  path: string,
+  method: string,
+  init?: RequestInit,
+) => Response | Promise<Response>
+
+function errorResponse(status: number, detail: string): Response {
+  return new Response(JSON.stringify({ detail }), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+function personaWith(
+  overrides: Partial<PersonaShape> & Record<string, unknown> = {},
+): PersonaShape & Record<string, unknown> {
+  return { ...persona(1, 's1'), ...overrides }
+}
+
+function pVersion(v: number, status: VersionStatus) {
+  return {
+    version: v,
+    status,
+    content: persona(v, 's1').content,
+    created_by: 'o1',
+    created_at: 't1',
+  }
+}
+
+function meWithRole(role: WorkspaceRole): Me {
+  return {
+    user_id: 'u1',
+    default_workspace_id: 'ws-1',
+    organizations: [
+      {
+        id: 'o1',
+        name: 'Org',
+        slug: 'org',
+        kind: 'personal',
+        workspaces: [{ id: 'ws-1', name: 'WS', slug: 'ws', role }],
+      },
+    ],
+  }
+}
+
+interface PersonaHandlerOptions {
+  persona?: Record<string, unknown>
+  versions?: unknown[]
+}
+
+function personaHandlers(opts: PersonaHandlerOptions = {}): FetchHandler {
+  return (path, method) => {
+    if (method === 'GET') {
+      if (path === `${WS_PREFIX}/personas/p1`)
+        return jsonResponse(opts.persona ?? persona(1, 's1'))
+      if (path === `${WS_PREFIX}/personas/p1/versions`)
+        return jsonResponse(opts.versions ?? [pVersion(1, 'draft')])
+      if (path === `${WS_PREFIX}/personas/p1/playbooks`) return jsonResponse([])
+      if (path === `${WS_PREFIX}/playbooks`) return jsonResponse([])
+      if (path === `${WS_PREFIX}/feedback/persona/p1`)
+        return jsonResponse({
+          entity_type: 'persona',
+          entity_id: 'p1',
+          usage_count: 0,
+          by_outcome: {},
+          by_signal: {},
+          recent_notes: [],
+        })
+    }
+    throw new Error(`Unmocked ${method} ${path}`)
+  }
+}
+
+function renderPersonaDetail(handler: FetchHandler, options: { me?: Me } = {}) {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
+    handler(new URL(String(input)).pathname, init?.method ?? 'GET', init),
+  )
+  vi.stubGlobal('fetch', fetchMock)
+  render(
+    <SessionContext.Provider
+      value={{
+        session,
+        me: options.me ?? me,
+        signIn: vi.fn(),
+        signOut: vi.fn(),
+        refreshMe: vi.fn(),
+      }}
+    >
+      <AuthTokenProvider>
+        <MemoryRouter initialEntries={['/w/ws-1/personas/p1']}>
+          <Routes>
+            <Route path="/w/:workspaceId/personas/:id" element={<PersonaDetailPage />} />
+            <Route path="/w/:workspaceId/personas" element={<div>PERSONAE-LISTE</div>} />
+          </Routes>
+        </MemoryRouter>
+      </AuthTokenProvider>
+    </SessionContext.Provider>,
+  )
+  return fetchMock
+}
+
+describe('PersonaDetailPage — Redirect & Status-Transitions', () => {
+  it('leitet ohne :id-Routenparameter zur Personae-Liste um', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse([])),
+    )
+    render(
+      <SessionContext.Provider
+        value={{ session, me, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
+      >
+        <AuthTokenProvider>
+          <MemoryRouter initialEntries={['/w/ws-1/persona-detail']}>
+            <Routes>
+              <Route path="/w/:workspaceId/persona-detail" element={<PersonaDetailPage />} />
+              <Route path="/w/:workspaceId/personas" element={<div>PERSONAE-LISTE</div>} />
+            </Routes>
+          </MemoryRouter>
+        </AuthTokenProvider>
+      </SessionContext.Provider>,
+    )
+
+    expect(await screen.findByText('PERSONAE-LISTE')).toBeInTheDocument()
+  })
+
+  it('Draft: "Draft abschliessen" reicht die Version zur Review ein', async () => {
+    const transitionBodies: string[] = []
+    const base = personaHandlers()
+    renderPersonaDetail((path, method, init) => {
+      if (method === 'POST' && path === `${WS_PREFIX}/personas/p1/versions/1/transition`) {
+        transitionBodies.push(String(init?.body))
+        return jsonResponse(pVersion(1, 'review'))
+      }
+      return base(path, method, init)
+    })
+
+    expect(
+      await screen.findByText('Aktuelle Version: v1 (Entwurf)'),
+    ).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Draft abschliessen' }))
+
+    await waitFor(() => {
+      expect(notify.success).toHaveBeenCalledWith('Zur Review eingereicht.')
+    })
+    expect(transitionBodies[0]).toContain('"to":"review"')
+  })
+
+  it('Active + Review (Admin): Header nennt beide, "Veroeffentlichen" aktiviert', async () => {
+    const transitionBodies: string[] = []
+    const base = personaHandlers({
+      persona: personaWith({ current_version: 2 }),
+      versions: [pVersion(1, 'active'), pVersion(2, 'review')],
+    })
+    renderPersonaDetail(
+      (path, method, init) => {
+        if (method === 'POST' && path === `${WS_PREFIX}/personas/p1/versions/2/transition`) {
+          transitionBodies.push(String(init?.body))
+          return jsonResponse(pVersion(2, 'active'))
+        }
+        return base(path, method, init)
+      },
+      { me: meWithRole('admin') },
+    )
+
+    expect(await screen.findByText(/Active: v1 · In Review: v2/)).toBeInTheDocument()
+
+    const publish = screen.getByRole('button', { name: 'Veroeffentlichen' })
+    expect(publish).toBeEnabled()
+
+    fireEvent.click(publish)
+
+    await waitFor(() => {
+      expect(notify.success).toHaveBeenCalledWith('Version aktiviert.')
+    })
+    expect(transitionBodies[0]).toContain('"to":"active"')
+  })
+
+  it('Review (kein Admin): Publish ist gesperrt, "Zurueck zu Draft" lehnt ab', async () => {
+    const transitionBodies: string[] = []
+    const base = personaHandlers({ versions: [pVersion(1, 'review')] })
+    renderPersonaDetail(
+      (path, method, init) => {
+        if (method === 'POST' && path === `${WS_PREFIX}/personas/p1/versions/1/transition`) {
+          transitionBodies.push(String(init?.body))
+          return jsonResponse(pVersion(1, 'draft'))
+        }
+        return base(path, method, init)
+      },
+      { me: meWithRole('editor') },
+    )
+
+    const publish = await screen.findByRole('button', { name: 'Veroeffentlichen' })
+    expect(publish).toBeDisabled()
+    expect(publish).toHaveAttribute('title', 'Nur Admins können aktivieren')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Zurueck zu Draft' }))
+
+    await waitFor(() => {
+      expect(notify.success).toHaveBeenCalledWith('Review abgelehnt.')
+    })
+    expect(transitionBodies[0]).toContain('"to":"draft"')
+  })
+
+  it('Inactive: "Reaktivieren als Draft" reaktiviert die aktuelle Version', async () => {
+    const transitionBodies: string[] = []
+    const base = personaHandlers({
+      persona: personaWith({ current_status: 'inactive' }),
+      versions: [pVersion(1, 'inactive')],
+    })
+    renderPersonaDetail((path, method, init) => {
+      if (method === 'POST' && path === `${WS_PREFIX}/personas/p1/versions/1/transition`) {
+        transitionBodies.push(String(init?.body))
+        return jsonResponse(pVersion(1, 'draft'))
+      }
+      return base(path, method, init)
+    })
+
+    expect(
+      await screen.findByText('Aktuelle Version: v1 (Inaktiv)'),
+    ).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reaktivieren als Draft' }))
+
+    await waitFor(() => {
+      expect(notify.success).toHaveBeenCalledWith('Reaktiviert als Entwurf.')
+    })
+    expect(transitionBodies[0]).toContain('"to":"draft"')
+  })
+
+  it('meldet die Server-Message per Toast, wenn die Transition fehlschlaegt', async () => {
+    const base = personaHandlers()
+    renderPersonaDetail((path, method, init) => {
+      if (method === 'POST' && path === `${WS_PREFIX}/personas/p1/versions/1/transition`) {
+        return errorResponse(500, 'Transition kaputt')
+      }
+      return base(path, method, init)
+    })
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Draft abschliessen' }),
+    )
+
+    await waitFor(() => {
+      expect(notify.error).toHaveBeenCalledWith('Transition kaputt')
+    })
+    expect(notify.success).not.toHaveBeenCalled()
+  })
+
+  it('faellt bei Nicht-Error-Ursachen auf die generische Fehlermeldung zurueck', async () => {
+    const base = personaHandlers()
+    renderPersonaDetail((path, method, init) => {
+      if (method === 'POST' && path === `${WS_PREFIX}/personas/p1/versions/1/transition`) {
+        return jsonResponse(pVersion(1, 'review'))
+      }
+      return base(path, method, init)
+    })
+
+    // Non-Error-Rejection im try-Block: der Success-Toast wirft einen String.
+    vi.mocked(notify.success).mockImplementationOnce(() => {
+      throw 'kaputt'
+    })
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Draft abschliessen' }),
+    )
+
+    await waitFor(() => {
+      expect(notify.error).toHaveBeenCalledWith('Aktion fehlgeschlagen.')
+    })
+  })
+})
+
+describe('PersonaDetailPage — Header-Beschreibung & Rollen', () => {
+  it('Active + Draft: Header nennt beide Versionen, Submit-Action sichtbar', async () => {
+    renderPersonaDetail(
+      personaHandlers({
+        persona: personaWith({ current_version: 2 }),
+        versions: [pVersion(1, 'active'), pVersion(2, 'draft')],
+      }),
+    )
+
+    expect(
+      await screen.findByText(/Active: v1 · Du arbeitest auf Draft v2/),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Draft abschliessen' }),
+    ).toBeInTheDocument()
+  })
+
+  it('nur Active (ohne Draft/Review): Header ohne Suffix, keine Branch-Aktionen', async () => {
+    renderPersonaDetail(
+      personaHandlers({
+        persona: personaWith({ current_status: 'active' }),
+        versions: [pVersion(1, 'active')],
+      }),
+    )
+
+    expect(await screen.findByText('Active: v1')).toBeInTheDocument()
+    expect(screen.queryByRole('toolbar')).not.toBeInTheDocument()
+  })
+
+  it('Viewer: sieht weder Feedback-Panel noch Danger-Zone', async () => {
+    renderPersonaDetail(personaHandlers(), { me: meWithRole('viewer') })
+
+    expect(await screen.findByText('Verknüpfte Playbooks')).toBeInTheDocument()
+    expect(screen.queryByText('Feedback & Nutzung')).not.toBeInTheDocument()
+    expect(screen.queryByText('Persona löschen')).not.toBeInTheDocument()
   })
 })

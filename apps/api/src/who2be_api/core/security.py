@@ -200,15 +200,31 @@ def require_aal2(ctx: WorkspaceContext) -> None:
       ein dort fehlender Claim ist verdaechtig und wird fail-**closed** behandelt
       (Zero-Trust). Ein *expliziter* Nicht-aal2-Wert (typisch "aal1") wird in
       beiden Editionen geblockt.
+
+    Der On-Prem-fail-open-Zweig ist nicht mehr unsichtbar (SEC-1,
+    Standards-Review 2026-07-08): jeder Durchlass emittiert das strukturierte
+    Warn-Event `aal_missing_onprem` (ADR-0007), und der Config-Schalter
+    `WHO2BE_REQUIRE_MFA_ONPREM=true` schliesst ihn hart (fail-closed wie Cloud).
     """
     if ctx.is_api_token:
         return
     if ctx.aal == _AAL2:
         return
-    # Fehlender Claim: fail-open nur On-Prem/Dev (Bestands-/Test-JWTs ohne aal).
-    # In der Cloud faellt der Pfad durch zum Raise (fail-closed) — folgt dem
-    # `is_cloud()`-Editions-Muster, ohne den On-Prem-Default zu brechen.
-    if ctx.aal is None and is_onprem():
+    # Fehlender Claim: fail-open nur On-Prem/Dev (Bestands-/Test-JWTs ohne aal)
+    # und nur, solange der Betreiber es nicht per WHO2BE_REQUIRE_MFA_ONPREM
+    # hart abdreht. In der Cloud faellt der Pfad durch zum Raise (fail-closed)
+    # — folgt dem `is_cloud()`-Editions-Muster, ohne den On-Prem-Default zu
+    # brechen. Der Durchlass ist sichtbar: strukturiertes Warn-Event.
+    if ctx.aal is None and is_onprem() and not get_settings().require_mfa_onprem:
+        structlog.get_logger(__name__).warning(
+            "aal_missing_onprem",
+            user_id=str(ctx.user_id),
+            workspace_id=str(ctx.workspace_id),
+            detail=(
+                "Admin-Aktion ohne aal-Claim On-Prem durchgelassen (fail-open). "
+                "WHO2BE_REQUIRE_MFA_ONPREM=true erzwingt MFA auch On-Prem."
+            ),
+        )
         return
     raise ApiGateError(
         status=status.HTTP_403_FORBIDDEN,

@@ -33,7 +33,7 @@ docs/standards/
   README.md                       # Index: welche Regel wo
   engineering-method.md           # de-personalisiert aus Code-Task-Flow
   coding-standards.md             # Clean-Code + Architektur + Design-Prinzipien (+ Skill/ADR-Links)
-  testing-standards.md            # Test-Strategie & QA / TDD / Pyramide (+ ADR-0032)
+  testing-standards.md            # Test-Strategie & QA / TDD / Pyramide (+ ADR-0041, ex-0032)
   security-standards.md           # Zero-Trust/fail-closed/Auth/Infra (+ Security-Findings/ADRs)
   frontend-standards.md           # konsolidiert design-language + react-skill
   compliance-standards.md         # Pointer auf docs/compliance + Kurzfassung

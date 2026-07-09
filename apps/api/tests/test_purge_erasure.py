@@ -192,5 +192,205 @@ def test_purge_anonymises_audit_and_keeps_entitlement_history() -> None:
     asyncio.run(_run())
 
 
+@pytest.mark.integration
+def test_purge_covers_feedback_usage_and_oauth() -> None:
+    """Reproduziert die Erasure-Luecke CMP-1 (Standards-Review 2026-07-08).
+
+    Beweist auf der echten DB:
+    - `usage_event.actor_id` und `agent_feedback.actor_id` (Migration 0053) des
+      geloeschten Users werden auf den Sentinel anonymisiert; fremde Akteure
+      bleiben unveraendert.
+    - `oauth_authorization_code`-Zeilen des Users (Migration 0049) werden
+      geloescht; fremde Codes bleiben.
+    - `oauth_refresh_token`-Zeilen des Users verschwinden ueber den
+      `api_token`-CASCADE (FK ON DELETE CASCADE, 0049).
+    - `cleanup_expired_oauth` raeumt abgelaufene/konsumierte Codes und
+      abgelaufene Refresh-Tokens ab; konsumierte, noch nicht abgelaufene
+      Refresh-Tokens bleiben (Grace-Retry + Rotationskette). Idempotent.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+
+    settings = get_settings()
+    schema = f"erasure_{secrets.token_hex(6)}"
+
+    async def _run() -> None:
+        owner = await asyncpg.connect(settings.database_url)
+        try:
+            await owner.execute(f'CREATE SCHEMA "{schema}"')
+            await owner.execute(f'SET search_path TO "{schema}"')
+            await apply_migrations(owner, MIGRATIONS_DIR)
+
+            user = uuid4()
+            other_user = uuid4()
+            org_id = await owner.fetchval(
+                "INSERT INTO organization (name, slug, kind) "
+                "VALUES ('o', $1, 'company') RETURNING id",
+                f"o-{secrets.token_hex(4)}",
+            )
+            ws_id = await owner.fetchval(
+                "INSERT INTO workspace (org_id, name, slug) VALUES ($1, 'w', 'w') RETURNING id",
+                org_id,
+            )
+            persona_id = await owner.fetchval(
+                "INSERT INTO persona (workspace_id, owner_id, name) "
+                "VALUES ($1, $2, 'p') RETURNING id",
+                ws_id,
+                user,
+            )
+
+            # Feedback-Flywheel (0053): je eine Zeile des Users + eine fremde.
+            for actor in (user, other_user):
+                await owner.execute(
+                    "INSERT INTO usage_event (workspace_id, actor_id, entity_type, entity_id) "
+                    "VALUES ($1, $2, 'persona', $3)",
+                    ws_id,
+                    actor,
+                    persona_id,
+                )
+                await owner.execute(
+                    "INSERT INTO agent_feedback "
+                    "(workspace_id, actor_id, entity_type, entity_id, signal) "
+                    "VALUES ($1, $2, 'persona', $3, 'helpful')",
+                    ws_id,
+                    actor,
+                    persona_id,
+                )
+
+            # OAuth-Connector (0049): Client + Agent (Codes brauchen agent_id).
+            await owner.execute(
+                "INSERT INTO oauth_client (client_id, redirect_uris) "
+                "VALUES ('test-client', ARRAY['https://client.example/cb'])"
+            )
+            template_id = await owner.fetchval(
+                "INSERT INTO system_prompt_template (workspace_id, owner_id, name, slug) "
+                "VALUES ($1, $2, 't', 't') RETURNING id",
+                ws_id,
+                user,
+            )
+            agent_id = await owner.fetchval(
+                "INSERT INTO agent "
+                "(workspace_id, owner_id, name, persona_id, system_prompt_template_id) "
+                "VALUES ($1, $2, 'a', $3, $4) RETURNING id",
+                ws_id,
+                user,
+                persona_id,
+                template_id,
+            )
+
+            now = datetime.now(UTC)
+            past = now - timedelta(hours=1)
+            future = now + timedelta(days=1)
+
+            async def _insert_code(code_hash: str, code_user: UUID, **kw: object) -> None:
+                await owner.execute(
+                    "INSERT INTO oauth_authorization_code "
+                    "(code_hash, client_id, redirect_uri, code_challenge, user_id, "
+                    " workspace_id, agent_id, role, resource, expires_at, consumed_at) "
+                    "VALUES ($1, 'test-client', 'https://client.example/cb', 'ch', $2, "
+                    "        $3, $4, 'editor', 'https://mcp.example/mcp', $5, $6)",
+                    code_hash,
+                    code_user,
+                    ws_id,
+                    agent_id,
+                    kw.get("expires_at", future),
+                    kw.get("consumed_at"),
+                )
+
+            await _insert_code("code-user-live", user)
+            await _insert_code("code-other-live", other_user)
+            await _insert_code("code-other-expired", other_user, expires_at=past)
+            await _insert_code("code-other-consumed", other_user, consumed_at=now)
+
+            # api_token (revoked ⇒ CHECK agent_bound_or_revoked erfuellt) +
+            # Refresh-Tokens: einer des Users (live), drei des fremden Users.
+            async def _insert_token(owner_id: UUID) -> UUID:
+                token_id: UUID = await owner.fetchval(
+                    "INSERT INTO api_token (owner_id, name, token_hash, workspace_id, "
+                    " revoked_at) VALUES ($1, 't', $2, $3, now()) RETURNING id",
+                    owner_id,
+                    f"h-{secrets.token_hex(8)}",
+                    ws_id,
+                )
+                return token_id
+
+            user_token = await _insert_token(user)
+            other_token = await _insert_token(other_user)
+
+            async def _insert_refresh(token_hash: str, api_token_id: UUID, **kw: object) -> None:
+                await owner.execute(
+                    "INSERT INTO oauth_refresh_token "
+                    "(token_hash, api_token_id, client_id, expires_at, consumed_at) "
+                    "VALUES ($1, $2, 'test-client', $3, $4)",
+                    token_hash,
+                    api_token_id,
+                    kw.get("expires_at", future),
+                    kw.get("consumed_at"),
+                )
+
+            await _insert_refresh("refresh-user-live", user_token)
+            await _insert_refresh("refresh-other-live", other_token)
+            await _insert_refresh("refresh-other-expired", other_token, expires_at=past)
+            await _insert_refresh("refresh-other-consumed", other_token, consumed_at=now)
+
+            repo = PgAccountPurgeRepository(owner)
+            anonymized = await repo.purge_account_data(user)
+            # Je eine usage_event- + agent_feedback-Zeile gehoeren dem User.
+            assert anonymized == 2
+
+            # usage_event/agent_feedback: User-Zeile anonymisiert, fremde intakt.
+            for table in ("usage_event", "agent_feedback"):
+                actors = {
+                    row["actor_id"]
+                    for row in await owner.fetch(f"SELECT actor_id FROM {table}")  # noqa: S608
+                }
+                assert actors == {ANONYMIZED_USER_ID, other_user}, table
+
+            # Authorization-Codes des Users geloescht, fremde vollstaendig da.
+            remaining_codes = {
+                row["code_hash"]
+                for row in await owner.fetch("SELECT code_hash FROM oauth_authorization_code")
+            }
+            assert remaining_codes == {
+                "code-other-live",
+                "code-other-expired",
+                "code-other-consumed",
+            }
+
+            # Refresh-Tokens des Users via api_token-CASCADE weg, fremde da.
+            remaining_refresh = {
+                row["token_hash"]
+                for row in await owner.fetch("SELECT token_hash FROM oauth_refresh_token")
+            }
+            assert remaining_refresh == {
+                "refresh-other-live",
+                "refresh-other-expired",
+                "refresh-other-consumed",
+            }
+
+            # Expiry-/Consumed-Cleanup: 2 Codes (expired + consumed) + 1
+            # Refresh (expired). Der konsumierte, nicht abgelaufene Refresh
+            # bleibt (30s-Grace-Retry + Rotationskette, oauth_service).
+            cleaned = await repo.cleanup_expired_oauth(now)
+            assert cleaned == 3
+            assert await repo.cleanup_expired_oauth(now) == 0
+
+            remaining_codes = {
+                row["code_hash"]
+                for row in await owner.fetch("SELECT code_hash FROM oauth_authorization_code")
+            }
+            assert remaining_codes == {"code-other-live"}
+            remaining_refresh = {
+                row["token_hash"]
+                for row in await owner.fetch("SELECT token_hash FROM oauth_refresh_token")
+            }
+            assert remaining_refresh == {"refresh-other-live", "refresh-other-consumed"}
+        finally:
+            await owner.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+            await owner.close()
+
+    asyncio.run(_run())
+
+
 def test_anonymized_user_id_is_zero_uuid() -> None:
     assert ANONYMIZED_USER_ID == UUID("00000000-0000-0000-0000-000000000000")

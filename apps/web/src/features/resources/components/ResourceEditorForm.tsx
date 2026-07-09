@@ -11,7 +11,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input'
 import { TagInput } from '@/components/ui/tag-input'
 
-import { ResourceEditor } from './ResourceEditor'
+import { ResourceEditor } from '@/components/editor/ResourceEditor'
 import type { ResourceEditorValues } from '../hooks/useResourceForm'
 
 interface ResourceEditorFormProps {

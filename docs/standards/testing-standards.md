@@ -1,8 +1,9 @@
 # Test-Strategie & QA
 
 Tests sind Teil der Definition of Done, nicht ein nachgelagerter Schritt.
-Repo-spezifische Strategie: [`../adr/0032-test-strategie-pyramide.md`](../adr/0032-test-strategie-pyramide.md);
-DoD-Befehle in [`../../CONTRIBUTING.md`](../../CONTRIBUTING.md).
+Repo-spezifische Strategie: [`../adr/0041-test-strategie-pyramide.md`](../adr/0041-test-strategie-pyramide.md);
+DoD-Befehle (einzige Quelle, inkl. Coverage-Gates) in
+[`../../CONTRIBUTING.md`](../../CONTRIBUTING.md) §Definition of Done.
 
 ## Prinzipien
 
@@ -16,9 +17,9 @@ DoD-Befehle in [`../../CONTRIBUTING.md`](../../CONTRIBUTING.md).
 
 ## Im Repo
 
-- Python: `pytest` (`uv run pytest -q`); DB-Integrationstests skippen ohne
-  Postgres-Container. Coverage-Ratchets als Gate.
-- Web: `vitest` (`npm test`), A11y-Tests (`vitest-axe`) für klickbare/eingebbare
+- Python: `pytest`; DB-Integrationstests skippen ohne Postgres-Container.
+  Coverage-Ratchets als Gate (Kommandos: CONTRIBUTING §DoD).
+- Web: `vitest`, A11y-Tests (`vitest-axe`) für klickbare/eingebbare
   Komponenten (ADR-0016).
 - E2E: vorhanden, aber Soft-Gate solange die CI-Runner-Infra instabil ist.
 

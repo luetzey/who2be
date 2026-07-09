@@ -153,6 +153,15 @@ class Settings(BaseSettings):
         default="",
         validation_alias=AliasChoices("WHO2BE_BOOTSTRAP_ADMIN_EMAIL", "bootstrap_admin_email"),
     )
+    # MFA-Haertung On-Prem (SEC-1, Standards-Review 2026-07-08): `require_aal2`
+    # laesst On-Prem/Dev-JWTs OHNE `aal`-Claim (Legacy-/Magic-Link-/Test-Tokens)
+    # per Default durch (fail-open, nur mit Warn-Log `aal_missing_onprem`).
+    # true ⇒ auch On-Prem wird ein fehlender Claim hart abgelehnt (fail-closed
+    # wie in der Cloud). Default false = bisheriges Verhalten.
+    require_mfa_onprem: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("WHO2BE_REQUIRE_MFA_ONPREM", "require_mfa_onprem"),
+    )
 
     @property
     def cors_origins(self) -> list[str]:

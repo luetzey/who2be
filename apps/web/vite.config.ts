@@ -26,9 +26,9 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     // Nur Unit/Component-Tests unter src — die Playwright-E2E-Specs in `e2e/`
     // laufen im eigenen Runner und duerfen NICHT von Vitest gesammelt werden
-    // (sie importieren @playwright/test). ADR-0032, Phase 4.
+    // (sie importieren @playwright/test). ADR-0041, Phase 4.
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
-    // Coverage-Ratchet (ADR-0032): v8-Provider, Thresholds als Floor in CI
+    // Coverage-Ratchet (ADR-0041): v8-Provider, Thresholds als Floor in CI
     // (`npm run test:coverage`). Bewusst ohne `all: true` — gemessen wird die
     // von Tests beruehrte Surface; Schwellen liegen knapp unter der Baseline
     // und werden in dedizierten Coverage-PRs angehoben, nie gesenkt.

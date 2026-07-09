@@ -7,7 +7,9 @@ Journeys als `test.fixme`-Scaffolds bis Auth-Seed-Helper steht).
 **Erstellt:** 2026-06-05. **Branch:** `claude/laughing-lovelace-0OWCg`.
 **Entscheidungen (User 2026-06-05):** E2E **dünn** (3–5 Journeys) · Integration via
 **Testcontainers** (lokal+CI) · Coverage als **Ratchet-Floor** in CI.
-**Geplanter ADR:** `docs/adr/0032-test-strategie-pyramide.md`.
+**Geplanter ADR:** `docs/adr/0041-test-strategie-pyramide.md` (bei Erstellung
+als „ADR-0032" nummeriert; 2026-07-08 wegen Doppelvergabe auf 0041 umnummeriert
+— die ADR-0041-Verweise in diesem Plan entsprechend nachgezogen).
 
 ## Ziel (DoD)
 
@@ -21,7 +23,7 @@ Eine ehrliche, messbare Test-Pyramide mit durchgängigen Gates:
   Web-Client↔OpenAPI).
 - **Dünne** E2E-Spitze (Playwright, 3–5 Journeys) gegen den Compose-Stack.
 - Alle Gates grün: `uv run pytest/ruff/mypy` + `npm lint/tsc/test/build` + neue
-  e2e/contract-Jobs. Draft-PR mit verlinktem ADR-0032.
+  e2e/contract-Jobs. Draft-PR mit verlinktem ADR-0041.
 
 ## Diagnose — gemessene Ist-Form (Stand 2026-06-05)
 
@@ -172,7 +174,7 @@ failing Test:
 ## Risiken / offene Punkte
 
 - **Testcontainers in CI:** entweder Service **oder** Container, nicht beides — im
-  ADR-0032 festschreiben, sonst doppelte DB-Quelle.
+  ADR-0041 festschreiben, sonst doppelte DB-Quelle.
 - **Playwright-Flake:** Journeys idempotent seeden (frischer Workspace pro Lauf),
   feste `data-testid`-Hooks statt Text-Selektoren.
 - **Ratchet-Reibung:** Baseline ehrlich (nicht zu hoch) setzen, sonst blockiert das
@@ -187,6 +189,6 @@ failing Test:
 3. PR-C: Phase 1 Unit-Lücken (report-getrieben).
 4. PR-D: Phase 3 Contract-Tests.
 5. PR-E: Phase 4 Playwright-E2E.
-6. PR-F: Phase 5 Querschnitt + ADR-0032 final.
+6. PR-F: Phase 5 Querschnitt + ADR-0041 final.
 
-(Alle als Draft, je mit Session-Link; ADR-0032 begleitet PR-A und wird in PR-F finalisiert.)
+(Alle als Draft, je mit Session-Link; ADR-0041 begleitet PR-A und wird in PR-F finalisiert.)

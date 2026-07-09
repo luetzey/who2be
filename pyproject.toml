@@ -68,6 +68,7 @@ testpaths = ["apps/api/tests", "apps/mcp/tests", "packages/models/tests", "packa
 addopts = ["--strict-markers"]
 markers = [
     "integration: Test benoetigt eine erreichbare Datenbank (DB). Zentral in conftest.py uebersprungen, wenn keine DB erreichbar ist; mit WHO2BE_REQUIRE_DB=1 (CI) schlaegt der fehlende DB-Zugriff stattdessen hart fehl.",
+    "contract: Contract-Test an einer Vertrags-Naht (ADR-0041, Phase 3): OpenAPI-Snapshot, REST-MCP-Paritaet. Laeuft im normalen python-Job mit; der Marker macht die Naht-Tests gezielt adressierbar (-m contract).",
 ]
 # Upstream-Deprecation (nicht selbstverursacht, WP-3.1): OpenTelemetry nutzt die
 # als deprecated markierte `SelectableGroups`-dict-API von importlib.metadata —
@@ -78,7 +79,7 @@ filterwarnings = [
     "ignore:SelectableGroups dict interface is deprecated:DeprecationWarning",
 ]
 
-# --- Coverage (ADR-0032) -----------------------------------------------------
+# --- Coverage (ADR-0041) -----------------------------------------------------
 # Gemessen ueber die importierbaren Paketnamen (editable installs zeigen auf die
 # jeweiligen src/-Baeume). `--cov` zieht diese Config; der Ratchet-Floor laeuft in
 # CI via `--cov-fail-under`. branch=true, damit der Floor auch Zweige abdeckt.

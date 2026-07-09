@@ -1,4 +1,4 @@
-"""Integrationstest fuer `GET /v1/workspaces/{ws}/resources/tags` (ADR-0032, Phase 3).
+"""Integrationstest fuer `GET /v1/workspaces/{ws}/resources/tags` (ADR-0041, Phase 3).
 
 Belegt die in Phase 3 vom Web-Contract-Test aufgedeckte und behobene Luecke:
 das Frontend (`ResourceEditorForm` → TagInput) ruft `resources/tags` auf, der
@@ -7,7 +7,7 @@ Quelle ist `resource_version.content->'tags'` der jeweils aktuellen Version.
 
 Nutzt bewusst die **zentralen conftest-Fixtures** (``patched_jwt_secret``,
 ``migrated_db``, ``make_auth_headers``) statt des frueher duplizierten Bootstraps
-(ADR-0032, Phase 0).
+(ADR-0041, Phase 0).
 """
 
 from collections.abc import Callable

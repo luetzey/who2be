@@ -11,11 +11,10 @@ Billing-Slot dort ohnehin schon zur Build-Zeit aus (Tree-Shaking).
 
 from __future__ import annotations
 
-from typing import Annotated, cast
-from uuid import UUID
+from typing import Annotated
 
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from who2be_api.core.config import get_settings
@@ -24,6 +23,11 @@ from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.licensing.edition import current_edition
 from who2be_api.licensing.service import build_entitlement_port
 from who2be_api.repositories.mcp_usage_repository import PgMcpUsageRepository
+
+# Re-Export unter dem historischen Namen (`import … as …` = expliziter
+# Re-Export): `who2be_billing.router` importiert `resolve_org_id` von hier;
+# die Implementierung lebt jetzt geteilt im Workspace-Repository (COD-2).
+from who2be_api.repositories.workspace_repository import resolve_org_id as resolve_org_id
 from who2be_api.services.mcp_limit_service import current_period
 
 router = APIRouter(prefix="/billing", tags=["billing"])
@@ -52,16 +56,6 @@ class EntitlementInfo(BaseModel):
     # Grace-Period nachgeholt werden kann (Banner in der Web-UI).
     grace_until: str | None
     usage: EntitlementUsage
-
-
-async def resolve_org_id(pool: asyncpg.Pool, workspace_id: UUID) -> UUID:
-    org_id = await pool.fetchval("SELECT org_id FROM workspace WHERE id = $1", workspace_id)
-    if org_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Workspace ohne Organisation.",
-        )
-    return cast(UUID, org_id)
 
 
 @router.get("/entitlement")

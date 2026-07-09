@@ -47,7 +47,10 @@ Solo-Dev-Komfort zu verlieren.
 
 ## Definition of Done
 
-Vor jedem Push lokal gegenpruefen (beide Stacks gruen):
+Vor jedem Push lokal gegenpruefen (beide Stacks gruen). Die Test-Schritte
+laufen bewusst mit denselben Coverage-Gates wie die CI (Coverage-Ratchet):
+**lokal gruen = CI gruen** — ein Testlauf ohne Coverage-Gate erfuellt die DoD
+nicht.
 
 **Python (uv-Workspace im Repo-Root):**
 
@@ -55,7 +58,7 @@ Vor jedem Push lokal gegenpruefen (beide Stacks gruen):
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy .
-uv run pytest -q
+uv run pytest --cov --cov-fail-under=85
 # OSS-Lizenz-Gate (ADR-0033) — fail-closed gegen Copyleft/AGPL:
 uv run --with pip-licenses python -m piplicenses --partial-match \
   --fail-on "GPL;AGPL;LGPL;SSPL;CDDL;EPL;EUPL;OSL;CPL;NPL;Sleepycat;UNKNOWN"
@@ -66,7 +69,7 @@ uv run --with pip-licenses python -m piplicenses --partial-match \
 ```bash
 npm run lint
 npx tsc --noEmit
-npm test
+npm run test:coverage
 npm run build
 npm run license:check   # OSS-Lizenz-Gate (ADR-0033)
 ```

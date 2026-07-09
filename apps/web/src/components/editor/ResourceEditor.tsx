@@ -7,11 +7,12 @@ interface ResourceEditorProps {
   onChange?: (blocks: ResourceBlock[]) => void
 }
 
-// Dunner Domaenen-Wrapper um die geteilte BlockNote-Insel (ADR-0022). Die
-// eigentliche Editor-Logik (Portal-Mount, Theme, CSS-Scope) lebt in
-// `@/components/editor/BlockNoteEditor` und wird auch vom Persona-System-
-// Prompt sowie Playbook-Body verwendet. Reine Re-Wiring-Komponente, damit
-// bestehende Call-Sites stabil bleiben.
+// Duenner Wrapper um die geteilte BlockNote-Insel (ADR-0022). Die eigentliche
+// Editor-Logik (Portal-Mount, Theme, CSS-Scope) lebt in
+// `@/components/editor/BlockNoteEditor`. Lebt hier in `@/components/editor/`
+// (nicht im resources-Feature), weil neben den Resource-Forms auch der
+// Persona-Modi-Editor die Komponente nutzt — Cross-Feature-Imports sind per
+// Lint-Gate verboten, Geteiltes wandert nach `@/components/`.
 export function ResourceEditor({ initialBlocks, editable = true, onChange }: ResourceEditorProps) {
   return (
     <div data-testid="resource-editor">

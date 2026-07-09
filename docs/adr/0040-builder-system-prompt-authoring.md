@@ -1,6 +1,8 @@
 # ADR-0040 — Builder darf System-Prompt-Templates verfassen (nicht aktivieren)
 
-- Status: Proposed
+- Status: Accepted (umgesetzt: Capability `system_prompt_write` +
+  System-Prompt-MCP-Tools + Web-Policy-Toggle, PR #266;
+  Proposed → Accepted 2026-07-08)
 - Datum: 2026-06-27
 - Kontext: Der Meta-Agent „Builder" soll den gesamten Agent-Erstellungs-/
   Anpassungs-Workflow fahren — inkl. des System-Prompts eines Agenten.

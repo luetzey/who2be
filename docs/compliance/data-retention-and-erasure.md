@@ -5,7 +5,7 @@
 > dem Backup-Skript rekonstruiert. **Keine Rechtsberatung.** Fristen und
 > Abwaegungen (insb. Aufbewahrung vs. Loeschung) sind rechtlich zu verifizieren.
 > Alle `<PLATZHALTER: …>` sind vom Betreiber zu fuellen. Stand der abgeleiteten
-> Fakten: 2026-06-05.
+> Fakten: 2026-07-08.
 
 Dieses Dokument beschreibt, **wie lange welche Daten aufbewahrt** und **wie sie
 geloescht** werden — und wie der Konflikt zwischen DSGVO-Loeschpflicht (Art. 17)
@@ -53,12 +53,18 @@ Referenzen auf einen Sentinel statt sie zu loeschen:
 |---|---|---|
 | `status_history` | `changed_by` | → Sentinel `00000000-0000-0000-0000-000000000000` |
 | `audit_log` (WP-A/B) | `actor_id` | → Sentinel `00000000-0000-0000-0000-000000000000` |
+| `usage_event` (Migration 0053, ADR-0038) | `actor_id` | → Sentinel `00000000-0000-0000-0000-000000000000` |
+| `agent_feedback` (Migration 0053, ADR-0038) | `actor_id` | → Sentinel `00000000-0000-0000-0000-000000000000` |
 | `workspace_invitation` | `email` (Klartext) | Bereinigung bei `accepted_at IS NOT NULL OR expires_at < now()` (`cleanup_expired_invitations`) |
+| `oauth_authorization_code` (Migration 0049) | ganze Zeile (`user_id`-gebunden) | beim Account-Purge **geloescht** (Codes sind nach Konto-Loeschung wertlos); zusaetzlich laufender Cleanup abgelaufener/konsumierter Codes (`cleanup_expired_oauth`) |
+| `oauth_refresh_token` (Migration 0049) | ganze Zeile (via `api_token_id`) | beim Account-Purge ueber den `api_token`-FK-CASCADE **geloescht**; zusaetzlich laufender Cleanup abgelaufener Tokens (`cleanup_expired_oauth`; konsumierte, nicht abgelaufene Glieder bleiben fuer Grace-Retry/Rotationsketten-Revocation) |
 
-So bleibt nachvollziehbar, **dass** ein Statuswechsel/Audit-Ereignis stattfand,
-aber nicht mehr **welche Person** dahinterstand. Diese Anonymisierung wird durch
-**WP-D** umgesetzt (der Purge laeuft als Owner und darf trotz Append-only-REVOKE
-aus WP-A das `UPDATE` ausfuehren).
+So bleibt nachvollziehbar, **dass** ein Statuswechsel/Audit-/Telemetrie-Ereignis
+stattfand, aber nicht mehr **welche Person** dahinterstand. Diese Anonymisierung
+wird durch **WP-D** umgesetzt (der Purge laeuft als Owner und darf trotz
+Append-only-REVOKE aus WP-A das `UPDATE` ausfuehren); die Abdeckung von
+`usage_event`/`agent_feedback`/`oauth_*` schliesst Befund **CMP-1**
+(Standards-Review 2026-07-08).
 
 > Hinweis: `audit_log`/`entitlement_history` sowie die Anonymisierungsschritte
 > stammen aus den Schwester-Paketen **WP-A/B/D**; dieses Dokument beschreibt den
@@ -126,20 +132,27 @@ Retention (z. B. 7–30 Tage) + Rotationsverfahren>`.
 | Konto-/Inhalts-/Mitgliedsdaten | bis Loeschwunsch + 30 Tage Grace | Hard-Purge (CASCADE) inkl. `auth.users` |
 | Einladungs-E-Mail (Klartext) | bis Annahme/Ablauf | `cleanup_expired_invitations` |
 | `status_history.changed_by`, `audit_log.actor_id` | Eintrag dauerhaft | beim Purge **anonymisiert** (Sentinel) |
+| `usage_event.actor_id`, `agent_feedback.actor_id` (0053) | Eintrag dauerhaft (Kurations-Aggregate) | beim Purge **anonymisiert** (Sentinel) |
+| OAuth-Authorization-Codes (`oauth_authorization_code`, 0049) | 60 s TTL, single-use | laufender Cleanup (`cleanup_expired_oauth`: abgelaufen ODER konsumiert) + Loeschung der User-Zeilen beim Account-Purge |
+| OAuth-Refresh-Tokens (`oauth_refresh_token`, 0049) | 30 Tage TTL, rotierend | laufender Cleanup (`cleanup_expired_oauth`: abgelaufen) + CASCADE-Loeschung beim Account-Purge (`api_token`) |
 | `entitlement_history` | gesetzliche Frist (§147 AO/§14b UStG) | **keine** Loeschung im Purge; Loeschung erst nach Frist |
 | Backups lokal / Offsite | 7 Tage / bis 6 Monate | Retention-Ablauf + Restore-only-Re-Deletion |
 | Server-Logs | `<PLATZHALTER>` | Log-Rotation |
 
 ---
 
-## 7 · Code-Referenzen (Stand 2026-06-05)
+## 7 · Code-Referenzen (Stand 2026-07-08)
 
 - `apps/api/src/who2be_api/core/purge.py` — `purge_expired()`, `PurgeResult`,
   CLI-Entrypoint `who2be-purge`.
 - `apps/api/src/who2be_api/repositories/account_repository.py` —
   `request_account_deletion()`, `soft_delete_organization()`, Purge-Helper,
-  (WP-D) `cleanup_expired_invitations()`.
+  (WP-D) `cleanup_expired_invitations()`, (CMP-1) `cleanup_expired_oauth()`.
 - `apps/api/src/who2be_api/migrations/0038_account_org_lifecycle.sql` —
   `account_deletion`, Soft-Delete-Felder.
+- `apps/api/src/who2be_api/migrations/0049_oauth_connector.sql` —
+  `oauth_client`/`oauth_authorization_code`/`oauth_refresh_token`.
+- `apps/api/src/who2be_api/migrations/0053_feedback_flywheel.sql` —
+  `usage_event`/`agent_feedback` (append-only, `actor_id`).
 - `deploy/hetzner/scripts/backup.sh` — Backup-Retention.
 - ADR-0031 — Append-only/Anonymisierung/Aufbewahrungs-Abwaegung.

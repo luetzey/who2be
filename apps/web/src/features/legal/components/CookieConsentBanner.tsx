@@ -26,7 +26,7 @@ export function CookieConsentBanner() {
       <Card
         role="region"
         aria-label={t('cookie.regionLabel')}
-        className="pointer-events-auto flex w-full max-w-2xl flex-col gap-4 p-5 shadow-modal sm:flex-row sm:items-center"
+        className="pointer-events-auto flex w-full max-w-2xl flex-col gap-4 p-4 shadow-modal sm:flex-row sm:items-center"
       >
         <div className="flex-1 space-y-1">
           <p className="text-sm font-medium">{t('cookie.title')}</p>
