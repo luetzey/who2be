@@ -81,6 +81,52 @@ describe('ListFilterBar', () => {
     expect(screen.getByRole('option', { name: 'WORKFLOW' })).toBeInTheDocument()
   })
 
+  it('rendert Agent-Select mit Optionen und meldet Auswahl', () => {
+    const onAgentChange = vi.fn()
+    render(
+      <ListFilterBar
+        {...baseProps()}
+        agents={[
+          { id: 'a1', name: 'Support-Bot' },
+          { id: 'a2', name: 'QA-Bot' },
+        ]}
+        agent=""
+        onAgentChange={onAgentChange}
+      />,
+    )
+    const select = screen.getByLabelText('Agent')
+    expect(screen.getByRole('option', { name: 'Support-Bot' })).toBeInTheDocument()
+    fireEvent.change(select, { target: { value: 'a2' } })
+    expect(onAgentChange).toHaveBeenCalledWith('a2')
+  })
+
+  it('zeigt den aktiven Agent-Filter als entfernbaren Chip mit Agent-Name', () => {
+    const onAgentChange = vi.fn()
+    render(
+      <ListFilterBar
+        {...baseProps()}
+        agents={[{ id: 'a1', name: 'Support-Bot' }]}
+        agent="a1"
+        onAgentChange={onAgentChange}
+      />,
+    )
+    const chip = screen.getByRole('button', { name: /Agent-Filter entfernen \(Support-Bot\)/ })
+    expect(chip).toHaveTextContent('Agent: Support-Bot')
+    fireEvent.click(chip)
+    expect(onAgentChange).toHaveBeenCalledWith('')
+  })
+
+  it('faellt beim Chip auf die rohe ID zurueck, wenn der Agent unbekannt ist', () => {
+    render(
+      <ListFilterBar {...baseProps()} agents={[]} agent="a-geloescht" onAgentChange={vi.fn()} />,
+    )
+    // Kein Select (keine Agenten), aber der Chip bleibt entfernbar.
+    expect(screen.queryByLabelText('Agent')).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /Agent-Filter entfernen \(a-geloescht\)/ }),
+    ).toBeInTheDocument()
+  })
+
   it('zeigt den Reset-Button nur bei aktiven Filtern', () => {
     const props = baseProps()
     const { rerender } = render(<ListFilterBar {...props} active={false} />)

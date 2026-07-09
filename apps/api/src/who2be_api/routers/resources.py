@@ -74,9 +74,12 @@ async def list_resources(
     cursor: PageCursor,
     locale: LocaleQuery,
     tag: Annotated[str | None, Query(max_length=100)] = None,
+    agent: Annotated[UUID | None, Query()] = None,
     limit: PageLimit = DEFAULT_LIMIT,
 ) -> list[ResourceRead]:
-    items, next_cursor = await service.list_all(ctx, tag, limit, cursor, locale=locale)
+    """Listet Resources; `?agent=` filtert auf die aus den zugewiesenen Playbooks
+    erreichbaren Resources inkl. Sub-Resource-Closure (WP-B), kombinierbar mit `tag`."""
+    items, next_cursor = await service.list_all(ctx, tag, limit, cursor, locale=locale, agent=agent)
     if next_cursor is not None:
         response.headers["X-Next-Cursor"] = next_cursor
     return items

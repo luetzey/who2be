@@ -14,12 +14,21 @@ import { ListFilterBar } from '@/components/data/ListFilterBar'
 import { StatusBadge } from '@/components/data/StatusBadge'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { useListFilters, type ListFilterAccessors } from '@/hooks/useListFilters'
+import { useAgents } from '@/hooks/useAgents'
+import {
+  useAgentFilterParam,
+  useListFilters,
+  type ListFilterAccessors,
+} from '@/hooks/useListFilters'
 import { useResources } from '@/hooks/useResources'
 
 export function ResourcesPage() {
   const { t } = useTranslation(['resources', 'data'])
-  const { resources, loading, error } = useResources()
+  // Serverseitige Agent-Facette (WP-B): Param VOR dem Daten-Hook lesen,
+  // damit ein Facetten-Wechsel den Refetch ausloest.
+  const agentFilter = useAgentFilterParam()
+  const { resources, loading, error } = useResources(agentFilter || undefined)
+  const { agents } = useAgents()
   const wsPath = useWorkspacePath()
 
   const accessors = useMemo<ListFilterAccessors<Resource>>(
@@ -49,7 +58,7 @@ export function ResourcesPage() {
           }
         />
 
-        {resources.length > 0 ? (
+        {resources.length > 0 || filters.agent !== '' ? (
           <ListFilterBar
             idPrefix="resources"
             counts={filters.counts}
@@ -60,6 +69,9 @@ export function ResourcesPage() {
             availableTags={filters.availableTags}
             tag={filters.tag}
             onTagChange={filters.setTag}
+            agents={agents}
+            agent={filters.agent}
+            onAgentChange={filters.setAgent}
             active={filters.active}
             onReset={filters.reset}
           />
@@ -71,7 +83,9 @@ export function ResourcesPage() {
           error={error}
           getKey={(resource) => resource.id}
           empty={
-            resources.length === 0 ? (
+            // Bei aktiver Agent-Facette kommt die Liste serverseitig gefiltert
+            // an — dann ist "leer" ein Filter-Ergebnis, kein leerer Workspace.
+            resources.length === 0 && filters.agent === '' ? (
               <EmptyState
                 icon={FileText}
                 title={t('resources:list.emptyTitle')}

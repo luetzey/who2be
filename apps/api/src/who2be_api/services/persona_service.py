@@ -19,7 +19,7 @@ import asyncpg
 from fastapi import HTTPException, status
 from pydantic import BaseModel
 
-from who2be_api.core.agent_scope import require_read_flag
+from who2be_api.core.agent_scope import agent_filter_persona_ids, require_read_flag
 from who2be_api.core.security import (
     WorkspaceContext,
     require_capability,
@@ -152,8 +152,16 @@ class PersonaService:
         limit: int,
         cursor: tuple[datetime, UUID] | None,
         locale: str = DEFAULT_LOCALE,
+        agent: UUID | None = None,
     ) -> tuple[list[PersonaRead], str | None]:
         require_read_flag(ctx, "persona_read", "Personas")
+        # `?agent=`-Listenfilter (WP-B): genau die Persona des Agenten;
+        # unbekannter/workspace-fremder Agent → 404 (in agent_scope).
+        restrict_ids: list[UUID] | None = None
+        if agent is not None:
+            if self._pool is None:  # pragma: no cover - im Prod immer gesetzt
+                raise RuntimeError("PersonaService.list_all(agent=…) benoetigt einen DB-Pool.")
+            restrict_ids = await agent_filter_persona_ids(self._pool, ctx.workspace_id, agent)
         # `limit + 1`-Peek: gibt es eine Folge-Zeile, codieren wir den
         # Cursor aus der letzten Zeile der Seite — sonst `None` (Ende).
         rows = await self._repo.list_by_workspace(
@@ -162,6 +170,7 @@ class PersonaService:
             cursor,
             active_only=not ctx.sees_drafts(AgentCapability.persona_write),
             locale=locale,
+            restrict_ids=restrict_ids,
         )
         if len(rows) > limit:
             items = rows[:limit]

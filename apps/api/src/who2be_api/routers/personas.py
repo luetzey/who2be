@@ -73,9 +73,11 @@ async def list_personas(
     response: Response,
     cursor: PageCursor,
     locale: LocaleQuery,
+    agent: Annotated[UUID | None, Query()] = None,
     limit: PageLimit = DEFAULT_LIMIT,
 ) -> list[PersonaRead]:
-    items, next_cursor = await service.list_all(ctx, limit, cursor, locale=locale)
+    """Listet Personae; `?agent=` filtert auf die Persona des Agenten (WP-B)."""
+    items, next_cursor = await service.list_all(ctx, limit, cursor, locale=locale, agent=agent)
     if next_cursor is not None:
         response.headers["X-Next-Cursor"] = next_cursor
     return items

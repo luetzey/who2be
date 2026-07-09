@@ -88,6 +88,7 @@ class FakePersonaRepository:
         after: tuple[datetime, UUID] | None,
         active_only: bool = False,
         locale: str = "de",
+        restrict_ids: list[UUID] | None = None,
     ) -> list[PersonaRead]:
         self.last_active_only = active_only
         own = sorted(
@@ -97,6 +98,8 @@ class FakePersonaRepository:
         )
         if active_only:
             own = [p for p in own if p.current_status == VersionStatus.active]
+        if restrict_ids is not None:
+            own = [p for p in own if p.id in set(restrict_ids)]
         if after is not None:
             own = [p for p in own if (p.created_at, p.id) < after]
         return own[:limit]

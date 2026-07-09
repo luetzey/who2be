@@ -13,13 +13,22 @@ import { ListFilterBar } from '@/components/data/ListFilterBar'
 import { StatusBadge } from '@/components/data/StatusBadge'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { useListFilters, type ListFilterAccessors } from '@/hooks/useListFilters'
+import { useAgents } from '@/hooks/useAgents'
+import {
+  useAgentFilterParam,
+  useListFilters,
+  type ListFilterAccessors,
+} from '@/hooks/useListFilters'
 import { usePlaybooks } from '@/hooks/usePlaybooks'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 
 export function PlaybooksPage() {
   const { t } = useTranslation(['playbooks', 'data', 'common'])
-  const { playbooks, loading, error } = usePlaybooks()
+  // Serverseitige Agent-Facette (WP-B): Param VOR dem Daten-Hook lesen,
+  // damit ein Facetten-Wechsel den Refetch ausloest.
+  const agentFilter = useAgentFilterParam()
+  const { playbooks, loading, error } = usePlaybooks(agentFilter || undefined)
+  const { agents } = useAgents()
   const wsPath = useWorkspacePath()
 
   const accessors = useMemo<ListFilterAccessors<Playbook>>(
@@ -49,7 +58,7 @@ export function PlaybooksPage() {
             </Button>
           }
         />
-        {playbooks.length > 0 ? (
+        {playbooks.length > 0 || filters.agent !== '' ? (
           <ListFilterBar
             idPrefix="playbooks"
             counts={filters.counts}
@@ -63,6 +72,9 @@ export function PlaybooksPage() {
             availableTypes={filters.availableTypes}
             type={filters.type}
             onTypeChange={filters.setType}
+            agents={agents}
+            agent={filters.agent}
+            onAgentChange={filters.setAgent}
             active={filters.active}
             onReset={filters.reset}
           />
@@ -74,7 +86,9 @@ export function PlaybooksPage() {
           error={error}
           getKey={(playbook) => playbook.id}
           empty={
-            playbooks.length === 0 ? (
+            // Bei aktiver Agent-Facette kommt die Liste serverseitig gefiltert
+            // an — dann ist "leer" ein Filter-Ergebnis, kein leerer Workspace.
+            playbooks.length === 0 && filters.agent === '' ? (
               <EmptyState
                 icon={BookOpen}
                 title={t('playbooks:list.empty.title')}

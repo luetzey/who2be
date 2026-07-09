@@ -234,7 +234,8 @@ export function oauthConsent(
 }
 
 export interface Api {
-  listPersonas: () => Promise<Persona[]>
+  // `agent` filtert serverseitig auf die Persona des Agenten (WP-B).
+  listPersonas: (filters?: { agent?: string }) => Promise<Persona[]>
   getPersona: (id: string) => Promise<Persona>
   createPersona: (input: PersonaInput) => Promise<Persona>
   updatePersona: (id: string, input: PersonaInput) => Promise<Persona>
@@ -251,7 +252,9 @@ export interface Api {
   listPersonaTags: () => Promise<string[]>
   listPersonaPlaybooks: (id: string) => Promise<Playbook[]>
   setPersonaPlaybooks: (id: string, playbookIds: string[]) => Promise<Playbook[]>
-  listPlaybooks: (filters?: { tag?: string; trigger?: string }) => Promise<Playbook[]>
+  // `agent` filtert serverseitig auf die dem Agenten zugewiesenen Playbooks
+  // inkl. Composite-Closure (WP-B).
+  listPlaybooks: (filters?: { tag?: string; trigger?: string; agent?: string }) => Promise<Playbook[]>
   getPlaybook: (id: string) => Promise<Playbook>
   createPlaybook: (input: PlaybookInput) => Promise<Playbook>
   updatePlaybook: (id: string, input: PlaybookInput) => Promise<Playbook>
@@ -289,7 +292,9 @@ export interface Api {
     version: number,
     to: VersionStatus,
   ) => Promise<PlaybookVersion>
-  listResources: () => Promise<Resource[]>
+  // `agent` filtert serverseitig auf die aus den zugewiesenen Playbooks
+  // erreichbaren Resources inkl. Sub-Resource-Closure (WP-B).
+  listResources: (filters?: { agent?: string }) => Promise<Resource[]>
   getResource: (id: string) => Promise<Resource>
   createResource: (input: ResourceInput) => Promise<Resource>
   updateResource: (id: string, input: ResourceInput) => Promise<Resource>
@@ -415,7 +420,12 @@ export interface Api {
 export function createApi(token: string, workspaceId: string): Api {
   const ws = `/v1/workspaces/${workspaceId}`
   return {
-    listPersonas: () => request<Persona[]>(token, `${ws}/personas`),
+    listPersonas: (filters) => {
+      const params = new URLSearchParams()
+      if (filters?.agent) params.set('agent', filters.agent)
+      const query = params.toString()
+      return request<Persona[]>(token, `${ws}/personas${query ? `?${query}` : ''}`)
+    },
     getPersona: (id) => request<Persona>(token, `${ws}/personas/${id}`),
     createPersona: (input) =>
       request<Persona>(token, `${ws}/personas`, {
@@ -456,6 +466,7 @@ export function createApi(token: string, workspaceId: string): Api {
       const params = new URLSearchParams()
       if (filters?.tag) params.set('tag', filters.tag)
       if (filters?.trigger) params.set('trigger', filters.trigger)
+      if (filters?.agent) params.set('agent', filters.agent)
       const query = params.toString()
       return request<Playbook[]>(token, `${ws}/playbooks${query ? `?${query}` : ''}`)
     },
@@ -531,7 +542,12 @@ export function createApi(token: string, workspaceId: string): Api {
         `${ws}/playbooks/${id}/versions/${version}/transition`,
         { method: 'POST', body: JSON.stringify({ to }) },
       ),
-    listResources: () => request<Resource[]>(token, `${ws}/resources`),
+    listResources: (filters) => {
+      const params = new URLSearchParams()
+      if (filters?.agent) params.set('agent', filters.agent)
+      const query = params.toString()
+      return request<Resource[]>(token, `${ws}/resources${query ? `?${query}` : ''}`)
+    },
     getResource: (id) => request<Resource>(token, `${ws}/resources/${id}`),
     createResource: (input) =>
       request<Resource>(token, `${ws}/resources`, {

@@ -80,6 +80,58 @@ SELECT id FROM closure
 # `.fetch` mit identischer Signatur.
 _Fetcher: TypeAlias = asyncpg.Pool | asyncpg.Connection
 
+_AGENT_PERSONA_SQL = "SELECT persona_id FROM agent WHERE id = $1 AND workspace_id = $2"
+
+
+def _agent_not_found() -> HTTPException:
+    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent nicht gefunden.")
+
+
+async def _require_agent_persona(pool: _Fetcher, workspace_id: UUID, agent_id: UUID) -> UUID | None:
+    """Persona-ID des Agenten; 404 fuer unbekannte/workspace-fremde Agenten.
+
+    Der `?agent=`-Listenfilter darf keine Existenz-Orakel ueber fremde
+    Workspaces bilden — ein Agent ausserhalb des Request-Workspace ist von
+    einem nicht existierenden nicht unterscheidbar (beides 404).
+    """
+    row = await pool.fetchrow(_AGENT_PERSONA_SQL, agent_id, workspace_id)
+    if row is None:
+        raise _agent_not_found()
+    persona_id: UUID | None = row["persona_id"]
+    return persona_id
+
+
+async def agent_filter_persona_ids(
+    pool: _Fetcher, workspace_id: UUID, agent_id: UUID
+) -> list[UUID]:
+    """`?agent=`-Filter fuer die Persona-Liste: genau die Persona des Agenten.
+
+    Leere Liste (= keine Treffer) fuer eine Agent-Huelle ohne Persona;
+    404 fuer unbekannte/workspace-fremde Agenten.
+    """
+    persona_id = await _require_agent_persona(pool, workspace_id, agent_id)
+    return [] if persona_id is None else [persona_id]
+
+
+async def agent_filter_playbook_ids(
+    pool: _Fetcher, workspace_id: UUID, agent_id: UUID
+) -> list[UUID]:
+    """`?agent=`-Filter fuer die Playbook-Liste (inkl. Composite-Closure).
+
+    404 fuer unbekannte/workspace-fremde Agenten (anders als
+    `assigned_playbook_ids`, das dann still leer liefert).
+    """
+    await _require_agent_persona(pool, workspace_id, agent_id)
+    return sorted(await assigned_playbook_ids(pool, workspace_id, agent_id))
+
+
+async def agent_filter_resource_ids(
+    pool: _Fetcher, workspace_id: UUID, agent_id: UUID
+) -> list[UUID]:
+    """`?agent=`-Filter fuer die Resource-Liste (inkl. Sub-Resource-Closure)."""
+    await _require_agent_persona(pool, workspace_id, agent_id)
+    return sorted(await assigned_resource_ids(pool, workspace_id, agent_id))
+
 
 async def assigned_playbook_ids(pool: _Fetcher, workspace_id: UUID, agent_id: UUID) -> set[UUID]:
     """IDs der dem Agenten (ueber seine Persona) zugewiesenen Playbooks."""

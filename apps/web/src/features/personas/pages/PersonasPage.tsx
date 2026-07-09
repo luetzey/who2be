@@ -13,13 +13,22 @@ import { ListFilterBar } from '@/components/data/ListFilterBar'
 import { StatusBadge } from '@/components/data/StatusBadge'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { useListFilters, type ListFilterAccessors } from '@/hooks/useListFilters'
+import { useAgents } from '@/hooks/useAgents'
+import {
+  useAgentFilterParam,
+  useListFilters,
+  type ListFilterAccessors,
+} from '@/hooks/useListFilters'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { usePersonas } from '@/hooks/usePersonas'
 
 export function PersonasPage() {
   const { t } = useTranslation(['personas', 'data'])
-  const { personas, loading, error } = usePersonas()
+  // Serverseitige Agent-Facette (WP-B): Param VOR dem Daten-Hook lesen,
+  // damit ein Facetten-Wechsel den Refetch ausloest.
+  const agentFilter = useAgentFilterParam()
+  const { personas, loading, error } = usePersonas(agentFilter || undefined)
+  const { agents } = useAgents()
   const wsPath = useWorkspacePath()
 
   const accessors = useMemo<ListFilterAccessors<Persona>>(
@@ -48,7 +57,7 @@ export function PersonasPage() {
             </Button>
           }
         />
-        {personas.length > 0 ? (
+        {personas.length > 0 || filters.agent !== '' ? (
           <ListFilterBar
             idPrefix="personas"
             counts={filters.counts}
@@ -59,6 +68,9 @@ export function PersonasPage() {
             availableTags={filters.availableTags}
             tag={filters.tag}
             onTagChange={filters.setTag}
+            agents={agents}
+            agent={filters.agent}
+            onAgentChange={filters.setAgent}
             active={filters.active}
             onReset={filters.reset}
           />
@@ -69,7 +81,9 @@ export function PersonasPage() {
           error={error}
           getKey={(persona) => persona.id}
           empty={
-            personas.length === 0 ? (
+            // Bei aktiver Agent-Facette kommt die Liste serverseitig gefiltert
+            // an — dann ist "leer" ein Filter-Ergebnis, kein leerer Workspace.
+            personas.length === 0 && filters.agent === '' ? (
               <EmptyState
                 icon={Users}
                 title={t('personas:list.empty.title')}

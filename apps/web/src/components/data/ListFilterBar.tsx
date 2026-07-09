@@ -13,6 +13,11 @@ import {
   type StatusFilterValue,
 } from '@/lib/listFilter'
 
+export interface AgentFilterOption {
+  id: string
+  name: string
+}
+
 interface ListFilterBarProps {
   counts: StatusCounts
   status: StatusFilterValue
@@ -30,6 +35,11 @@ interface ListFilterBarProps {
   onTypeChange?: (value: string) => void
   // Uebersetzte Typ-Labels (z. B. Playbook-Typen) — Fallback: Rohwert.
   typeLabel?: (value: string) => string
+  // Serverseitige Agent-Facette (WP-B): Auswahl loest einen Refetch aus;
+  // der aktive Filter erscheint als entfernbarer Chip mit Agent-Name.
+  agents?: AgentFilterOption[]
+  agent?: string
+  onAgentChange?: (value: string) => void
   idPrefix: string
 }
 
@@ -89,9 +99,15 @@ export function ListFilterBar({
   type = '',
   onTypeChange,
   typeLabel,
+  agents = [],
+  agent = '',
+  onAgentChange,
   idPrefix,
 }: ListFilterBarProps) {
   const { t } = useTranslation(['data', 'common'])
+  // Chip-Label: Agent-Name, solange die Agenten-Liste ihn kennt — sonst die
+  // rohe ID aus der URL (geteilter Link auf einen inzwischen geloeschten Agent).
+  const agentName = agents.find((entry) => entry.id === agent)?.name ?? agent
 
   // Status-Chips: `all` immer, `attention` sobald es welche gibt (oder aktiv),
   // ein Status-Chip nur bei Vorkommen (oder wenn aktuell gewaehlt). Vermeidet
@@ -193,7 +209,41 @@ export function ListFilterBar({
               </Select>
             </div>
           ) : null}
+
+          {onAgentChange && agents.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor={`${idPrefix}-agent`}>{t('data:filter.agentLabel')}</Label>
+              <Select
+                id={`${idPrefix}-agent`}
+                value={agent}
+                onChange={(event) => onAgentChange(event.target.value)}
+              >
+                <option value="">{t('data:filter.allAgents')}</option>
+                {agents.map((entry) => (
+                  <option key={entry.id} value={entry.id}>
+                    {entry.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          ) : null}
         </div>
+
+        {onAgentChange && agent !== '' ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="h-7 gap-1 rounded-full px-3 text-xs"
+              onClick={() => onAgentChange('')}
+              aria-label={t('data:filter.agentChipRemove', { name: agentName })}
+            >
+              {t('data:filter.agentChip', { name: agentName })}
+              <X className="size-3" aria-hidden="true" />
+            </Button>
+          </div>
+        ) : null}
 
         {active ? (
           <div>
