@@ -17,14 +17,13 @@ import { Stack } from '@/components/layout/Stack'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { VersionHistory } from '@/components/version'
-import { usePersonaPlaybooks } from '@/hooks/usePersonaPlaybooks'
 import { notify } from '@/lib/feedback'
 
 import { DeletePersonaButton } from '../components/DeletePersonaButton'
 import { ExportPersonaButton } from '../components/ExportPersonaButton'
 import { PersonaEditorForm } from '../components/PersonaEditorForm'
 import { SkillsComingSoon } from '../components/SkillsComingSoon'
-import { PlaybookLinkItem } from '../components/PlaybookLinkItem'
+import { PersonaPlaybooksCard } from '../components/PersonaPlaybooksCard'
 import { usePersona } from '../hooks/usePersona'
 import { usePersonaForm } from '../hooks/usePersonaForm'
 import { statusLabel } from '../lib/status'
@@ -34,7 +33,6 @@ export function PersonaDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { persona, versions, loading, error, reload } = usePersona(id)
   const { form, autoSave } = usePersonaForm(persona, reload)
-  const links = usePersonaPlaybooks(id)
   const wsPath = useWorkspacePath()
   const api = useApi()
   const role = useCurrentWorkspaceRole()
@@ -228,42 +226,12 @@ export function PersonaDetailPage() {
                 />
               ) : null}
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>{t('detail.playbooks.title')}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Stack gap="sm">
-                    <DataView
-                      loading={links.loading}
-                      error={links.error}
-                      empty={!links.loading && links.playbooks.length === 0}
-                      emptyTitle={t('detail.playbooks.empty')}
-                    >
-                      <ul className="flex flex-col gap-2">
-                        {links.playbooks.map((playbook) => (
-                          <PlaybookLinkItem
-                            key={playbook.id}
-                            id={playbook.id}
-                            name={playbook.name}
-                            checked={links.linkedIds.includes(playbook.id)}
-                            onToggle={() => links.toggle(playbook.id)}
-                          />
-                        ))}
-                      </ul>
-                    </DataView>
-                    <div className="flex justify-end">
-                      <Button
-                        type="button"
-                        onClick={() => void links.save()}
-                        disabled={links.saving || links.loading || locked}
-                      >
-                        {t('detail.playbooks.save')}
-                      </Button>
-                    </div>
-                  </Stack>
-                </CardContent>
-              </Card>
+              {/* WP-E: Anzeige-Modus default; der Checkbox-Picker liegt im
+                  Bearbeiten-Modus der Karte. Viewer + managed nur Anzeige. */}
+              <PersonaPlaybooksCard
+                personaId={persona.id}
+                canEdit={role !== 'viewer' && !locked}
+              />
 
               {role !== 'viewer' && !locked ? (
                 <Card className="border-destructive/40">

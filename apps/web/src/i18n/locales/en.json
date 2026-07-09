@@ -811,8 +811,15 @@
       },
       "playbooks": {
         "title": "Linked playbooks",
-        "empty": "No playbooks available.",
-        "save": "Save links"
+        "empty": "No playbooks linked.",
+        "edit": "Edit links",
+        "save": "Save links",
+        "noneAvailable": "No playbooks available.",
+        "searchLabel": "Search playbooks",
+        "searchPlaceholder": "Filter by name…",
+        "searchEmpty": "No playbooks match this search.",
+        "triggerCount_one": "{{count}} trigger",
+        "triggerCount_other": "{{count}} triggers"
       }
     },
     "new": {

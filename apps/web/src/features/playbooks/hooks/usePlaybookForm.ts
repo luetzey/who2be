@@ -10,7 +10,7 @@ import {
   type UseAutoSaveDraftResult,
 } from '@/hooks/useAutoSaveDraft'
 
-import { joinTriggers, splitTriggers } from '../lib/triggers'
+import { joinTriggers, splitTriggers } from '@/lib/triggers'
 
 const PLAYBOOK_TYPES = [
   'prompt',

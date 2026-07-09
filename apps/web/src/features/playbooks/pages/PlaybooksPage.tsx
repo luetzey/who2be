@@ -23,7 +23,7 @@ import {
 import { usePlaybooks } from '@/hooks/usePlaybooks'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { groupPlaybooks, parseGroupMode } from '../lib/grouping'
-import { splitTriggers } from '../lib/triggers'
+import { splitTriggers } from '@/lib/triggers'
 
 // WP-D2: maximal sichtbare Trigger-Pills pro Zeile — der Rest wird zu „+N",
 // damit triggerreiche Playbooks die Listenzeile nicht ueberladen.

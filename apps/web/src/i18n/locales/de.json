@@ -811,8 +811,15 @@
       },
       "playbooks": {
         "title": "Verknüpfte Playbooks",
-        "empty": "Keine Playbooks vorhanden.",
-        "save": "Verknüpfungen speichern"
+        "empty": "Keine Playbooks verknüpft.",
+        "edit": "Verknüpfungen bearbeiten",
+        "save": "Verknüpfungen speichern",
+        "noneAvailable": "Keine Playbooks vorhanden.",
+        "searchLabel": "Playbooks durchsuchen",
+        "searchPlaceholder": "Nach Name filtern…",
+        "searchEmpty": "Keine Playbooks für diese Suche.",
+        "triggerCount_one": "{{count}} Trigger",
+        "triggerCount_other": "{{count}} Trigger"
       }
     },
     "new": {

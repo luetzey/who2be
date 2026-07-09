@@ -211,6 +211,11 @@ describe('PersonaDetailPage', () => {
       </SessionContext.Provider>,
     )
 
+    // WP-E: Anzeige-Modus default — verknuepftes Playbook als Link, der
+    // Picker liegt hinter „Verknüpfungen bearbeiten".
+    expect(await screen.findByRole('link', { name: 'Coaching' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Verknüpfungen bearbeiten' }))
+
     const checkbox2 = await screen.findByLabelText('Brainstorming')
     fireEvent.click(checkbox2)
     fireEvent.click(screen.getByRole('button', { name: 'Verknüpfungen speichern' }))
@@ -220,6 +225,75 @@ describe('PersonaDetailPage', () => {
     })
     expect(putCalls).toHaveLength(1)
     expect(putCalls[0].body).toEqual({ playbook_ids: ['pb1', 'pb2'] })
+    // Nach dem Speichern: zurueck im Anzeige-Modus, beide Playbooks verlinkt.
+    expect(await screen.findByRole('link', { name: 'Brainstorming' })).toBeInTheDocument()
+  })
+
+  it('Abbrechen verwirft lokale Auswahl-Aenderungen (WP-E)', async () => {
+    const pb1 = {
+      id: 'pb1',
+      workspace_id: 'ws-1',
+      owner_id: 'o1',
+      name: 'Coaching',
+      current_version: 1,
+      type: 'workflow',
+      tags: [],
+      triggers: null,
+      content: { description: '', body: '', type: 'workflow', tags: [], triggers: null },
+      created_at: 't',
+      updated_at: 't',
+    }
+    const pb2 = { ...pb1, id: 'pb2', name: 'Brainstorming' }
+
+    const handlers: Record<string, () => Response> = {
+      [route('GET', `${WS_PREFIX}/personas/p1`)]: () => jsonResponse(persona(1, 's1')),
+      [route('GET', `${WS_PREFIX}/personas/p1/versions`)]: () => jsonResponse([]),
+      [route('GET', `${WS_PREFIX}/personas/p1/playbooks`)]: () => jsonResponse([pb1]),
+      [route('GET', `${WS_PREFIX}/playbooks`)]: () => jsonResponse([pb1, pb2]),
+    }
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const method = init?.method ?? 'GET'
+      const key = route(method, new URL(String(input)).pathname)
+      const handler = handlers[key]
+      if (!handler) {
+        throw new Error(`Unmocked ${key}`)
+      }
+      return handler()
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(
+      <SessionContext.Provider value={{ session, me, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}>
+        <AuthTokenProvider>
+          <MemoryRouter initialEntries={['/w/ws-1/personas/p1']}>
+            <Routes>
+              <Route path="/w/:workspaceId/personas/:id" element={<PersonaDetailPage />} />
+            </Routes>
+          </MemoryRouter>
+        </AuthTokenProvider>
+      </SessionContext.Provider>,
+    )
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Verknüpfungen bearbeiten' }),
+    )
+    fireEvent.click(await screen.findByLabelText('Brainstorming'))
+    expect(screen.getByLabelText('Brainstorming')).toBeChecked()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Abbrechen' }))
+
+    // Zurueck im Anzeige-Modus: kein PUT gefeuert, nur pb1 verlinkt.
+    expect(screen.getByRole('link', { name: 'Coaching' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Brainstorming' })).not.toBeInTheDocument()
+
+    // Erneutes Oeffnen: die verworfene Auswahl ist weg.
+    fireEvent.click(screen.getByRole('button', { name: 'Verknüpfungen bearbeiten' }))
+    expect(screen.getByLabelText('Brainstorming')).not.toBeChecked()
+    expect(screen.getByLabelText('Coaching')).toBeChecked()
+    const putCalls = fetchMock.mock.calls.filter(
+      (call) => (call[1] as RequestInit | undefined)?.method === 'PUT',
+    )
+    expect(putCalls).toHaveLength(0)
   })
 
   it('vom System verwaltet: Notice + read-only, keine Status-/Lösch-Aktionen', async () => {
@@ -274,10 +348,10 @@ describe('PersonaDetailPage', () => {
     ).not.toBeInTheDocument()
     // Kein Lösch-Bereich.
     expect(screen.queryByText('Persona löschen')).not.toBeInTheDocument()
-    // Playbook-Verknüpfen gesperrt.
+    // Playbook-Verknuepfung: nur Anzeige-Modus, kein Bearbeiten-Button (WP-E).
     expect(
-      screen.getByRole('button', { name: 'Verknüpfungen speichern' }),
-    ).toBeDisabled()
+      screen.queryByRole('button', { name: 'Verknüpfungen bearbeiten' }),
+    ).not.toBeInTheDocument()
   })
 })
 
@@ -597,5 +671,9 @@ describe('PersonaDetailPage — Header-Beschreibung & Rollen', () => {
     expect(await screen.findByText('Verknüpfte Playbooks')).toBeInTheDocument()
     expect(screen.queryByText('Feedback & Nutzung')).not.toBeInTheDocument()
     expect(screen.queryByText('Persona löschen')).not.toBeInTheDocument()
+    // WP-E: Viewer sieht keinen Bearbeiten-Button an der Playbooks-Karte.
+    expect(
+      screen.queryByRole('button', { name: 'Verknüpfungen bearbeiten' }),
+    ).not.toBeInTheDocument()
   })
 })

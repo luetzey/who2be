@@ -7,7 +7,7 @@ import type { ResourceBlock } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { notify } from '@/lib/feedback'
 
-import { joinTriggers } from '../lib/triggers'
+import { joinTriggers } from '@/lib/triggers'
 import { PLAYBOOK_TYPES, type PlaybookEditorValues } from './usePlaybookForm'
 
 // Schema deckt sich bewusst mit `usePlaybookForm` — so kann

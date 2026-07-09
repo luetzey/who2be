@@ -34,7 +34,7 @@ import { ResourceBlockLinkPicker } from '../components/ResourceBlockLinkPicker'
 import { usePlaybook } from '../hooks/usePlaybook'
 import { usePlaybookForm } from '../hooks/usePlaybookForm'
 import { statusLabel } from '../lib/status'
-import { splitTriggers } from '../lib/triggers'
+import { splitTriggers } from '@/lib/triggers'
 
 export function PlaybookDetailPage() {
   const { t } = useTranslation('playbooks')
