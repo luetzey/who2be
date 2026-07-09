@@ -27,3 +27,7 @@ Die Tabelle `schema_migrations` legt der Runner selbst an.
   bestehende Builder-Persona wiederverwendet) ueber alle Bestands-Workspaces.
   Fuer LLMs mit kleinem System-Prompt-Budget. Spiegelt `_DEFAULT_TEMPLATES` +
   `_seed_default_agents` in `repositories/workspace_repository.py`.
+- `0063_normalize_playbook_triggers.sql` — Bestands-Normalisierung der
+  Playbook-Trigger (Split `,`/`;`, trim, Dedupe case-insensitiv, Join `, `).
+  Spiegelt `normalize_triggers` in `packages/models/.../playbook.py` —
+  beide Schichten synchron halten.
