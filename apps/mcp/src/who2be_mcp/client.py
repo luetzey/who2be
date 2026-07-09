@@ -28,6 +28,7 @@ from who2be_models import (
     PersonaRead,
     PersonaUpdate,
     PersonaVersionRead,
+    PlaceholderCatalog,
     PlaybookCompositionLinkSet,
     PlaybookCreate,
     PlaybookRead,
@@ -288,6 +289,11 @@ class ApiClient:
     async def list_triggers(self) -> list[TriggerOverview]:
         data = await self._get(f"{self._workspace_prefix}/playbooks/triggers")
         return [TriggerOverview.model_validate(item) for item in data]
+
+    async def list_placeholders(self) -> PlaceholderCatalog:
+        """Laedt den statischen Placeholder-Kind-Katalog (WP-A)."""
+        data = await self._get(f"{self._workspace_prefix}/placeholders")
+        return PlaceholderCatalog.model_validate(data)
 
     async def get_playbook(self, playbook_id: UUID, locale: str = DEFAULT_LOCALE) -> PlaybookRead:
         data = await self._get(

@@ -55,6 +55,43 @@
     "children": []
   },
   {
+    "id": "pb-playbook-h-tokens",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Token-Spar-Strategie: Wiederverwendung vor Neuanlage", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-tokens-search",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Vor JEDER Neuanlage: ", "styles": {"bold": true}},
+      {"type": "text", "text": "mit search nach bestehenden Playbooks mit aehnlichem Inhalt suchen und mit find_usages pruefen, wo ein Kandidat bereits eingesetzt ist. Existiert ein passendes Playbook, verwende es als Sub-Playbook (set_playbook_composes) statt ein Duplikat anzulegen — Duplikate driften auseinander und kosten doppelt Tokens.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-tokens-pointer",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Pointer-Embedding als Default: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Resources ueber set_playbook_resource_links als Pointer verknuepfen (embedding_mode 'lazy') — der Konsument laedt sie bei Bedarf via fetch_resource. Inline-Embedding nur begruendet einsetzen (kleiner Inhalt, der in JEDEM Durchlauf gebraucht wird).", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-tokens-composite",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Composite-Zerlegung: ", "styles": {"bold": true}},
+      {"type": "text", "text": "sobald ein Workflow wiederverwendbare Teilschritte enthaelt, zerlege ihn in atomare Sub-Playbooks plus ein orchestrierendes Composite — die Teilschritte lassen sich dann in anderen Composites wiederverwenden, statt kopiert zu werden.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
     "id": "pb-playbook-h-create",
     "type": "heading",
     "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
@@ -86,7 +123,7 @@
     "id": "pb-playbook-create-p1-triggers",
     "type": "numberedListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Triggers: Welche User-Phrasen aktivieren das Playbook? Semikolon-getrennt, mit [Platzhaltern] wo flexibel. Mit list_triggers() pruefen, ob ein Trigger schon belegt ist (Kollision vermeiden).", "styles": {}}],
+    "content": [{"type": "text", "text": "Triggers: Welche User-Phrasen aktivieren das Playbook? Kommagetrennt (kanonische Form; der Write-Pfad normalisiert Semikolons mit), mit [Platzhaltern] wo flexibel. Mit list_triggers() pruefen, ob ein Trigger schon belegt ist (Kollision vermeiden). Vorher pruefen: Sektion Token-Spar-Strategie — existiert schon ein passendes Playbook?", "styles": {}}],
     "children": []
   },
   {
@@ -322,7 +359,7 @@
     "id": "pb-playbook-tools-read",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Read: fetch_playbook (Body + Felder), list_playbooks (Katalog, Tags), list_triggers (Trigger-Kollisionen pruefen).", "styles": {}}],
+    "content": [{"type": "text", "text": "Read: fetch_playbook (Body + Felder), list_playbooks (Katalog, Tags), list_triggers (Trigger-Kollisionen pruefen), search (inhaltliche Suche vor Neuanlage), find_usages (wo wird ein Playbook schon eingesetzt).", "styles": {}}],
     "children": []
   },
   {
@@ -378,7 +415,7 @@
     "id": "pb-playbook-anti-triggers",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Triggers ohne Semikolon-Trennung oder ohne [Platzhalter] wo flexibel — Konvention: Trigger-Phrase A; Trigger-Phrase B; Trigger fuer [X].", "styles": {}}],
+    "content": [{"type": "text", "text": "Triggers ohne Komma-Trennung oder ohne [Platzhalter] wo flexibel — Konvention: Trigger-Phrase A, Trigger-Phrase B, Trigger fuer [X]. Semikolons werden zwar mitakzeptiert und normalisiert, kanonisch ist das Komma.", "styles": {}}],
     "children": []
   },
   {

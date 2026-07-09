@@ -47,6 +47,7 @@ from who2be_models import (
     PersonaRead,
     PersonaUpdate,
     PersonaVersionRead,
+    PlaceholderCatalog,
     PlaybookCompositionLinkSet,
     PlaybookCreate,
     PlaybookRead,
@@ -388,6 +389,28 @@ async def list_triggers() -> list[TriggerOverview]:
     """
     client = await build_client()
     return await client.list_triggers()
+
+
+@mcp.tool(output_schema=None)
+@with_tool_log("list_placeholders")
+async def list_placeholders() -> PlaceholderCatalog:
+    """Katalog der Placeholder-Kinds fuer System-Prompt-Template-Bodies.
+
+    Ein Template-Body ist ein stringifiziertes BlockNote-Dokument; Placeholder
+    sind Inline-Elemente der Form
+    `{"type": "placeholder", "props": {"kind": ..., "target_id": ..., "label": ...}}`
+    innerhalb des `content`-Arrays eines Blocks. Sie werden beim Agent-Rendern
+    serverseitig expandiert (Persona-Felder, Playbook-/Resource-Inhalte,
+    Kataloge, Datum, Tool-Liste).
+
+    Dieses Tool liefert pro Kind die Beschreibung, den `target_id`-Vertrag
+    (Semantik + abschliessende Werteliste, wo es eine gibt) und ein gueltiges
+    Beispiel-Inline. Rufe es auf, BEVOR du via `create_system_prompt` oder
+    `update_system_prompt` einen Template-Body verfasst — unbekannte Kinds
+    oder falsche `target_id`-Werte rendern spaeter als ungeloeste Platzhalter.
+    """
+    client = await build_client()
+    return await client.list_placeholders()
 
 
 @mcp.tool(output_schema=None)
@@ -1010,9 +1033,20 @@ async def copy_agent(agent_id: str, name: str | None = None) -> AgentRead:
 async def create_system_prompt(data: SystemPromptTemplateCreate) -> SystemPromptTemplateRead:
     """Legt ein neues System-Prompt-Template an (initiale Draft-Version).
 
-    Der Body traegt Liquid-Style-Placeholder (z. B. `{{persona:profile}}`,
-    `{{playbook:...}}`, `{{tools-overview}}`), die beim Agent-Rendern expandiert
-    werden. Setze die neue Template-UUID anschliessend via `update_agent` als
+    `content.body` ist ein STRINGIFIZIERTES BlockNote-Dokument (JSON-Array von
+    Blocks). Placeholder sind Inline-Elemente im `content`-Array eines Blocks:
+    `{"type": "placeholder", "props": {"kind": ..., "target_id": ..., "label": ...}}`
+    — sie werden beim Agent-Rendern serverseitig expandiert. Gueltige Kinds,
+    ihre `target_id`-Vertraege und Beispiele liefert `list_placeholders`
+    (vorher aufrufen; unbekannte Kinds rendern als ungeloeste Platzhalter).
+
+    Kompaktes Beispiel eines gueltigen Bodys (als String uebergeben):
+    `[{"id": "b1", "type": "paragraph", "props": {}, "content": [
+    {"type": "text", "text": "Du bist ", "styles": {}},
+    {"type": "placeholder", "props": {"kind": "persona-field",
+    "target_id": "name", "label": "Persona: Name"}}], "children": []}]`
+
+    Setze die neue Template-UUID anschliessend via `update_agent` als
     `system_prompt_template_id`. Das Scharfschalten uebernimmt ein Mensch/Admin.
     """
     client = await build_client()
@@ -1029,6 +1063,11 @@ async def update_system_prompt(
     Auf einer aktiven Version legt das einen neuen Draft an (409, falls bereits
     ein Draft offen ist). Die aktive Version bleibt unveraendert, bis ein
     Mensch/Admin den Draft promotet.
+
+    `content.body` ist ein stringifiziertes BlockNote-Dokument; Placeholder
+    sind Inline-Elemente `{"type": "placeholder", "props": {"kind": ...,
+    "target_id": ..., "label": ...}}` — Format, gueltige Kinds und ein
+    Beispiel siehe `list_placeholders` und `create_system_prompt`.
     """
     client = await build_client()
     return await client.update_system_prompt(_parse_uuid(template_id, "system_prompt"), data)

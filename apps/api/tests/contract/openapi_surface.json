@@ -296,6 +296,11 @@
   },
   {
     "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/placeholders",
+    "operationId": "list_placeholders_v1_workspaces__workspace_id__placeholders_get"
+  },
+  {
+    "method": "GET",
     "path": "/v1/workspaces/{workspace_id}/placeholders/preview",
     "operationId": "preview_placeholder_v1_workspaces__workspace_id__placeholders_preview_get"
   },

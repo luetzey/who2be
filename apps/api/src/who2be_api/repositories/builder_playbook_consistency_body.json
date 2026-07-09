@@ -115,6 +115,13 @@
         "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
         "content": [{"type": "text", "text": "Composite-Playbook (is_composite=true): hat die Sub-Sequenz aus fetch_playbook tatsaechlich aktive Kinder? Inaktive/fehlende Kinder werden beim Render still uebersprungen — das ist Drift.", "styles": {}}],
         "children": []
+      },
+      {
+        "id": "pb-check-li-pb-triggers-norm",
+        "type": "bulletListItem",
+        "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+        "content": [{"type": "text", "text": "Sind die triggers kommagetrennt normalisiert (keine Semikolons, keine Duplikate)? Der Write-Pfad normalisiert automatisch — Semikolons oder Dubletten im Bestand sind Drift aus Alt-Daten.", "styles": {}}],
+        "children": []
       }
     ]
   },
@@ -151,6 +158,24 @@
     ]
   },
   {
+    "id": "pb-check-ol-template",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "System-Prompt-Template pruefen", "styles": {"bold": true}},
+      {"type": "text", "text": " — get_system_prompt(template_id) und list_placeholders().", "styles": {}}
+    ],
+    "children": [
+      {
+        "id": "pb-check-li-template-kinds",
+        "type": "bulletListItem",
+        "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+        "content": [{"type": "text", "text": "Traegt der Template-Body nur gueltige Placeholder-Kinds? Hole den Katalog mit list_placeholders und pruefe jedes Inline-Element {\"type\": \"placeholder\"} im Body: kind muss im Katalog stehen; wo der Katalog eine abschliessende target_id-Werteliste nennt, muss target_id darin vorkommen. Unbekannte Kinds/Werte rendern still als ungeloeste Platzhalter — das ist Drift.", "styles": {}}],
+        "children": []
+      }
+    ]
+  },
+  {
     "id": "pb-check-h-report",
     "type": "heading",
     "props": {"level": 3, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
@@ -168,7 +193,7 @@
     "id": "pb-check-code-report",
     "type": "codeBlock",
     "props": {"language": "markdown"},
-    "content": [{"type": "text", "text": "## Konsistenz-Check fuer [Agent-Name] — Stand [Datum]\n\n### Persona \"[Name]\"\n✅ Aktive Version vorhanden (v[X], status=active)\n⚠ Modus \"[X]\" ohne trigger\n⚠ description leer\n\n### Playbooks ([n] verlinkt)\n✅ [Playbook A] — aktiv, verlinkt\n❌ [Playbook B] — keine aktive Version\n⚠ [Composite C] — Sub-Sequenz hat inaktive/fehlende Kinder\n⚠ [Playbook D] — ohne Persona-Bindung (Vakuum)\n\n### Agent\n✅ activatable = true\n❌ activatable = false — missing: [persona_active]\n⚠ System-Prompt: offener Platzhalter rendert als <Playbook nicht verfuegbar>\n\n### Empfehlung\n1. [konkret, was tun — verweise auf das passende CRUD-Playbook]\n2. ...", "styles": {}}],
+    "content": [{"type": "text", "text": "## Konsistenz-Check fuer [Agent-Name] — Stand [Datum]\n\n### Persona \"[Name]\"\n✅ Aktive Version vorhanden (v[X], status=active)\n⚠ Modus \"[X]\" ohne trigger\n⚠ description leer\n\n### Playbooks ([n] verlinkt)\n✅ [Playbook A] — aktiv, verlinkt\n❌ [Playbook B] — keine aktive Version\n⚠ [Composite C] — Sub-Sequenz hat inaktive/fehlende Kinder\n⚠ [Playbook D] — ohne Persona-Bindung (Vakuum)\n⚠ [Playbook E] — triggers nicht normalisiert (Semikolon/Duplikat)\n\n### Agent\n✅ activatable = true\n❌ activatable = false — missing: [persona_active]\n⚠ System-Prompt: offener Platzhalter rendert als <Playbook nicht verfuegbar>\n\n### Template\n✅ Alle Placeholder-Kinds im Katalog (list_placeholders)\n❌ Unbekannter Placeholder-Kind \"[kind]\" bzw. ungueltige target_id \"[wert]\"\n\n### Empfehlung\n1. [konkret, was tun — verweise auf das passende CRUD-Playbook]\n2. ...", "styles": {}}],
     "children": []
   },
   {
@@ -219,7 +244,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Read: ", "styles": {"bold": true}},
-      {"type": "text", "text": "get_persona, list_playbooks, fetch_playbook, fetch_agent, list_triggers — sowie list_resources / fetch_resource, falls ein Playbook auf Resources verweist.", "styles": {}}
+      {"type": "text", "text": "get_persona, list_playbooks, fetch_playbook, fetch_agent, list_triggers — sowie list_resources / fetch_resource, falls ein Playbook auf Resources verweist; list_system_prompts / get_system_prompt und list_placeholders fuer den Template-Check.", "styles": {}}
     ],
     "children": []
   },

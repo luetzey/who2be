@@ -45,7 +45,7 @@
     "id": "pb-persona-li-1",
     "type": "numberedListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Create — Verstehen: Klaerungsfragen phasenweise, 1-2 pro Turn, nie alle auf einmal. Identity (eine knappe Zeile), Tone & Style (mit Beispiel-Phrasen), Allowed (4-6 konkrete Capabilities), Forbidden (Domaen-Grenzen + Anti-Patterns), Output Style (Form, Laenge), Modi-Entscheidung (Single-Mode ist Standard; Multi-Mode nur bei fundamental anderer Stimme/Output).", "styles": {}}],
+    "content": [{"type": "text", "text": "Create — Verstehen: Klaerungsfragen phasenweise, 1-2 pro Turn, nie alle auf einmal. Identity (eine knappe Zeile), Tone & Style (mit Beispiel-Phrasen), Allowed (4-6 konkrete Capabilities), Forbidden (Domaen-Grenzen + Anti-Patterns), Output Style (Form, Laenge), Modi-Entscheidung (aktiv pruefen — Kriterien in der Sektion Modi; sobald mehrere Einsatz-Stimmen oder Output-Formate gebraucht werden, Multi-Mode statt Misch-Persona).", "styles": {}}],
     "children": []
   },
   {
@@ -95,6 +95,71 @@
     "type": "numberedListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [{"type": "text", "text": "Retire: get_persona(identifier) lesen; pruefen, ob Agenten diese Persona nutzen, und den Nutzer warnen. Dann transition_persona(persona_id, version, to='inactive') aufrufen. restore_persona(persona_id, version) stellt eine fruehere Version als neuen Draft wieder her, falls ein Rollback noetig ist.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-h-modi",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Modi (Multi-Mode-Personas)", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-p-modi-kriterien",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Lege Modi an, sobald die Persona ", "styles": {}},
+      {"type": "text", "text": "mehrere Einsatz-Stimmen oder Output-Formate", "styles": {"bold": true}},
+      {"type": "text", "text": " bedienen soll — z. B. knapper Chat-Support UND ausfuehrlicher Report, interne Analyse UND kundenfaehige Antwort. Eine einzige Misch-Persona verwaessert beide Stimmen; getrennte Personas duplizieren die Basis-Identitaet. Modi loesen das: eine Basis-Identitaet, pro Modus ein Aufsatz.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-modi-default",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Pflicht-Default: ", "styles": {"bold": true}},
+      {"type": "text", "text": "genau ein Modus traegt is_default=true — er greift, wenn kein Trigger-Keyword passt. Ohne Default-Modus ist die Modus-Wahl undefiniert.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-modi-trigger",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Trigger-Keywords: ", "styles": {"bold": true}},
+      {"type": "text", "text": "jeder Nicht-Default-Modus braucht konkrete, kommagetrennte Erkennungs-Keywords im trigger-Feld (z. B. 'report, bericht, analyse') — daran erkennt der Konsumenten-Agent, welcher Modus zur Anfrage passt.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-modi-felder",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Felder je Modus: ", "styles": {"bold": true}},
+      {"type": "text", "text": "name, trigger, is_default, identity_add (Ergaenzung zur Basis-Identitaet), output_style_override (ersetzt den Basis-Output-Stil) und anti_patterns — die drei Inhalts-Felder sind BlockNote-Block-Arrays wie der Profil-Body.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-persona-code-modi",
+    "type": "codeBlock",
+    "props": {"language": "json"},
+    "content": [{"type": "text", "text": "\"modes\": [\n  {\"name\": \"Chat\", \"trigger\": \"chat, kurzfrage, support\", \"is_default\": true,\n   \"identity_add\": [{\"id\": \"m1\", \"type\": \"paragraph\", \"props\": {}, \"content\": [\n     {\"type\": \"text\", \"text\": \"Antwortet knapp und direkt im Chat-Ton.\", \"styles\": {}}], \"children\": []}],\n   \"output_style_override\": [], \"anti_patterns\": []},\n  {\"name\": \"Report\", \"trigger\": \"report, bericht, analyse\", \"is_default\": false,\n   \"identity_add\": [], \"output_style_override\": [{\"id\": \"m2\", \"type\": \"paragraph\", \"props\": {}, \"content\": [\n     {\"type\": \"text\", \"text\": \"Strukturierter Markdown-Report mit Zwischenueberschriften.\", \"styles\": {}}], \"children\": []}],\n   \"anti_patterns\": []}\n]", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-modi-abruf",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Serverseitiger Abruf: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Konsumenten-Agenten rufen get_persona(identifier, mode='<Modus-Name>') auf — der Server wendet den Modus auf body_rendered an (identity_add ergaenzt, output_style_override ersetzt den Output-Stil, anti_patterns gelten zusaetzlich). Waehle Modus-Namen und Trigger deshalb so konkret, dass die Zuordnung aus der User-Anfrage eindeutig ist. Verwaltet werden Modi weiterhin ueber update_persona (content.modes).", "styles": {}}
+    ],
     "children": []
   },
   {

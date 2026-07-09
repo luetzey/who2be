@@ -17,7 +17,7 @@
     "id": "pb-agent-h-remap",
     "type": "heading",
     "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Wichtig: Template waehlen statt Template bauen", "styles": {}}],
+    "content": [{"type": "text", "text": "Template waehlen oder verfassen (ADR-0040)", "styles": {}}],
     "children": []
   },
   {
@@ -25,9 +25,84 @@
     "type": "paragraph",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "In Who2Be gibt es ", "styles": {}},
-      {"type": "text", "text": "kein MCP-Werkzeug, das System-Prompt-Templates erzeugt", "styles": {"bold": true}},
-      {"type": "text", "text": ". Der frueher noetige Bootstrap-Block lebt heute im Template selbst und wird serverseitig beim Rendern aus Platzhaltern befuellt (Persona-Felder, Werkzeug-Liste, Playbook-Katalog, Datum). Du waehlst beim Anlegen eines Agenten daher eine der bestehenden Default-Templates ueber ihre system_prompt_template_id aus — du schreibst kein Template-Body. Wenn der Nutzer ein eigenes Template braucht, ist das ein Schritt in der Web-Oberflaeche, nicht ueber MCP.", "styles": {}}
+      {"type": "text", "text": "System-Prompt-Templates ", "styles": {}},
+      {"type": "text", "text": "duerfen via MCP verfasst und angepasst werden", "styles": {"bold": true}},
+      {"type": "text", "text": ": create_system_prompt legt ein neues Template als Draft an, update_system_prompt aendert ein bestehendes als neuen Draft, transition_system_prompt reicht den Draft zur Freigabe ein (draft nach review). Das Aktivieren (nach active/inactive) bleibt eine menschliche Handlung in der Web-UI — der Server lehnt es fuer agent-gebundene Tokens hart ab. Pruefe zuerst mit list_system_prompts, ob eine bestehende Default-Template passt (dann nur ihre system_prompt_template_id notieren); verfasse nur dann ein neues Template, wenn keine passt. Der Bootstrap-Block lebt im Template selbst und wird serverseitig beim Rendern aus Platzhaltern befuellt (siehe Sektion Placeholder-Authoring).", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-h-placeholder",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Placeholder-Authoring (Template-Bodies)", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-p-placeholder-format",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Ein Template-Body ist ein stringifiziertes BlockNote-Dokument (JSON-Array von Blocks). Placeholder sind Inline-Elemente im content-Array eines Blocks und werden beim Agent-Rendern serverseitig expandiert. ", "styles": {}},
+      {"type": "text", "text": "Rufe zuerst list_placeholders auf", "styles": {"bold": true}},
+      {"type": "text", "text": " — es liefert alle gueltigen kinds, ihre target_id-Vertraege und je ein Beispiel. Unbekannte kinds oder falsche target_id-Werte rendern spaeter als ungeloeste Platzhalter.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-placeholder-persona",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Identitaet: ", "styles": {"bold": true}},
+      {"type": "text", "text": "persona-ref (Anweisung, die Persona zur Laufzeit via get_persona zu laden — schlanker Default) oder persona-field mit target_id 'profile' (eingebetteter Snapshot; 'name', 'description', 'profile-body', 'modes' fuer Teilfelder).", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-placeholder-tools",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Werkzeuge: ", "styles": {"bold": true}},
+      {"type": "text", "text": "tools-overview rendert die pro tool_policy gefilterte MCP-Werkzeugliste — gehoert in praktisch jedes Template.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-placeholder-catalog",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Kataloge: ", "styles": {"bold": true}},
+      {"type": "text", "text": "playbooks-catalog (target_id 'triggered' = nur getriggerte, '' = alle verknuepften) und resources-catalog ('' = alle, sonst Tag-Filter) rendern Briefing-Tabellen mit fetch-Aufrufen.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-placeholder-inline",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Einzel-Einbettung: ", "styles": {"bold": true}},
+      {"type": "text", "text": "playbook / resource mit einer UUID als target_id betten ein einzelnes Element fest ein (resource optional mit Sektions-Anker '<uuid>#<block_id>') — sparsam einsetzen, Kataloge + fetch zur Laufzeit sind der Token-sparende Default. date ('' = ISO, 'human' = Langformat) fuer das Render-Datum.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-code-placeholder",
+    "type": "codeBlock",
+    "props": {"language": "json"},
+    "content": [{"type": "text", "text": "[{\"id\": \"b1\", \"type\": \"paragraph\", \"props\": {}, \"content\": [\n  {\"type\": \"text\", \"text\": \"Du bist \", \"styles\": {}},\n  {\"type\": \"placeholder\", \"props\": {\"kind\": \"persona-field\", \"target_id\": \"name\", \"label\": \"Persona: Name\"}}\n], \"children\": []}]", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-placeholder-workflow",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Workflow: ", "styles": {"bold": true}},
+      {"type": "text", "text": "list_placeholders lesen, Body als String verfassen, create_system_prompt (Draft), transition_system_prompt(to='review') zur Freigabe — das Aktivieren uebernimmt ein Mensch in der Web-UI.", "styles": {}}
     ],
     "children": []
   },
@@ -113,7 +188,7 @@
     "id": "pb-agent-li-create-p1-3",
     "type": "numberedListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Template auswaehlen: Welche der bestehenden Default-Templates passt zur Aufgabe? Notiere ihre system_prompt_template_id. (Du erzeugst kein Template — du waehlst eines aus.)", "styles": {}}],
+    "content": [{"type": "text", "text": "Template auswaehlen oder verfassen: Passt eine der bestehenden Templates zur Aufgabe (list_system_prompts)? Dann ihre system_prompt_template_id notieren. Falls keine passt: ein neues Template via create_system_prompt als Draft verfassen (siehe Sektion Placeholder-Authoring) und zur Review einreichen — aktivieren muss es ein Mensch.", "styles": {}}],
     "children": []
   },
   {
@@ -425,7 +500,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Schreiben: ", "styles": {"bold": true}},
-      {"type": "text", "text": "create_agent (anlegen), update_agent (Konfig in-place, inkl. Status), copy_agent (duplizieren). Alles braucht die Schreib-Capability agent_write; serverseitig gilt editor.", "styles": {}}
+      {"type": "text", "text": "create_agent (anlegen), update_agent (Konfig in-place, inkl. Status), copy_agent (duplizieren) — braucht agent_write. Templates: create_system_prompt / update_system_prompt (Draft verfassen/aendern), restore_system_prompt, transition_system_prompt (nur draft nach review) — braucht system_prompt_write. Serverseitig gilt editor.", "styles": {}}
     ],
     "children": []
   },
@@ -435,7 +510,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Nicht verfuegbar: ", "styles": {"bold": true}},
-      {"type": "text", "text": "Template-Erzeugung (keine via MCP), Agent-Loeschen (kein MCP-Delete, ADR-0030) und transition_*-Aufrufe auf Agenten (Agenten haben keine Versionen).", "styles": {}}
+      {"type": "text", "text": "Template-Aktivierung via MCP (transition_system_prompt nach active/inactive ist fuer agent-gebundene Tokens serverseitig gesperrt, ADR-0040), Agent-Loeschen (kein MCP-Delete, ADR-0030) und transition_*-Aufrufe auf Agenten (Agenten haben keine Versionen).", "styles": {}}
     ],
     "children": []
   },

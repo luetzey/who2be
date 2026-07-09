@@ -167,3 +167,17 @@ def test_sync_restores_outdated_builder() -> None:
     assert "ab-li-fb" in res["template_body_ids"]
     for ids in res["playbook_body_idsets"]:
         assert "pb-feedback-h" in ids
+    # WP-A (Content-Stand 3): die neuen Builder-Befaehigungs-Sektionen sind
+    # nach dem Sync in den jeweiligen Playbook-Bodies vorhanden.
+    all_playbook_ids = set().union(*res["playbook_body_idsets"])
+    # Agent-Playbook: Placeholder-Authoring + ADR-0040-Aufloesung (Templates via MCP).
+    assert "pb-agent-h-placeholder" in all_playbook_ids
+    assert "pb-agent-code-placeholder" in all_playbook_ids
+    # Persona-Playbook: Modi-Sektion inkl. Schema-Beispiel.
+    assert "pb-persona-h-modi" in all_playbook_ids
+    assert "pb-persona-code-modi" in all_playbook_ids
+    # Playbook-Playbook: Token-Spar-Strategie (search + find_usages vor Neuanlage).
+    assert "pb-playbook-h-tokens" in all_playbook_ids
+    assert "pb-playbook-tokens-search" in all_playbook_ids
+    # Konsistenz-Playbook: Template-/Placeholder-Check + Trigger-Normalisierung.
+    assert "pb-check-ol-template" in all_playbook_ids
