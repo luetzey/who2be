@@ -28,6 +28,7 @@ from who2be_api.core.security import (
 )
 from who2be_api.repositories.playbook_repository import PlaybookRepository
 from who2be_api.repositories.usage_repository import UsageRepository
+from who2be_api.services.content_text import playbook_content_text
 from who2be_api.services.placeholders import RenderContext, render_template_body
 from who2be_api.services.playbook_body_pills import extract_pills
 from who2be_api.services.playbook_composition_service import PlaybookCompositionService
@@ -401,6 +402,7 @@ class PlaybookService:
             against_version=base_version,
             before=before,
             after=target.content.model_dump(mode="json"),
+            serializer=playbook_content_text,
         )
 
     def _resolve_against(

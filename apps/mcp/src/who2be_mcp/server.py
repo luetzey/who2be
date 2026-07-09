@@ -680,8 +680,11 @@ async def diff_versions(
     `version` ist die betrachtete Version, `against` der Vergleich (Default
     `'active'` = die aktive Version; sonst eine Versionsnummer als String). Die
     `changes`-Liste nennt pro Aenderung `path`, `op` (added/removed/changed) und
-    before/after. Nutze das, um einen Draft vor dem Promote selbst zu reviewen.
-    `locale` waehlt die Sprachvariante (Default `'de'`).
+    before/after. Zusaetzlich tragen `before_text`/`after_text` die kanonische
+    Klartext-Serialisierung beider Staende (Placeholder-Pills als
+    `{{kind:target_id}}`-Tokens) fuer einen lesbaren Zeilen-Vergleich. Nutze
+    das, um einen Draft vor dem Promote selbst zu reviewen. `locale` waehlt die
+    Sprachvariante (Default `'de'`).
     """
     parsed = _parse_uuid(entity_id, entity_type)
     client = await build_client()

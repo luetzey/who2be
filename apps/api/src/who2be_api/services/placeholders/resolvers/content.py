@@ -14,7 +14,7 @@ from who2be_api.repositories.playbook_resource_link_repository import block_sect
 from who2be_api.services.placeholders._core import (
     RenderContext,
     ResolveResult,
-    block_plain_text,
+    blocks_plain_text,
 )
 from who2be_api.services.placeholders._scope import (
     render_visible_playbook_ids,
@@ -197,12 +197,7 @@ class ResourceResolver:
                 lines.append(body_text)
             return ResolveResult(text="\n".join(lines))
 
-        parts: list[str] = []
-        for block in blocks:
-            text = block_plain_text(block)
-            if text:
-                parts.append(text)
-        body_text = "\n\n".join(parts).strip()
+        body_text = blocks_plain_text(blocks)
         lines = [f"#### {name}"]
         if body_text:
             lines.append(body_text)

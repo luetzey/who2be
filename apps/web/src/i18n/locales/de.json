@@ -163,7 +163,10 @@
       "comparing": "Vergleich v{{version}} gegen {{against}}",
       "before": "Vorher:",
       "after": "Nachher:",
-      "empty": "(leer)"
+      "empty": "(leer)",
+      "textDiffLabel": "Inhalts-Diff",
+      "lineAdded": "Hinzugefügte Zeile",
+      "lineRemoved": "Entfernte Zeile"
     },
     "provenance": {
       "title": "Herkunft",

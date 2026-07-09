@@ -80,6 +80,44 @@ def test_no_active_base_renders_everything_as_added() -> None:
     assert ops["blocks[b1]"] == "added"
 
 
+def test_serializer_fills_before_and_after_text() -> None:
+    diff = compute_version_diff(
+        version=2,
+        against="active",
+        against_version=1,
+        before={"description": "old"},
+        after={"description": "new"},
+        serializer=lambda content: str(content.get("description", "")),
+    )
+    assert diff.before_text == "old"
+    assert diff.after_text == "new"
+
+
+def test_without_serializer_texts_stay_none() -> None:
+    diff = compute_version_diff(
+        version=2,
+        against="active",
+        against_version=1,
+        before={"description": "old"},
+        after={"description": "new"},
+    )
+    assert diff.before_text is None
+    assert diff.after_text is None
+
+
+def test_serializer_with_missing_baseline_yields_empty_before_text() -> None:
+    diff = compute_version_diff(
+        version=1,
+        against="active",
+        against_version=None,
+        before={},
+        after={"description": "fresh"},
+        serializer=lambda content: str(content.get("description", "")),
+    )
+    assert diff.before_text == ""
+    assert diff.after_text == "fresh"
+
+
 def test_nested_dict_recurses_into_block_lists() -> None:
     # Persona-Form: content.content.blocks liegt verschachtelt.
     before = {"content": {"blocks": [_block("b1", "x")]}}

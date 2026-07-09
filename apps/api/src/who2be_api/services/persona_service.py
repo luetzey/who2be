@@ -30,6 +30,7 @@ from who2be_api.core.security import (
 )
 from who2be_api.repositories.persona_repository import PersonaRepository
 from who2be_api.repositories.usage_repository import UsageRepository
+from who2be_api.services.content_text import persona_content_text
 from who2be_api.services.placeholders import RenderContext, render_template_body
 from who2be_api.services.placeholders.registry import render_skills_table
 from who2be_api.services.version_diff import compute_version_diff
@@ -370,6 +371,7 @@ class PersonaService:
             against_version=base_version,
             before=before,
             after=target.content.model_dump(mode="json"),
+            serializer=persona_content_text,
         )
 
     def _resolve_against(

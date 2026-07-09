@@ -163,7 +163,10 @@
       "comparing": "Comparing v{{version}} against {{against}}",
       "before": "Before:",
       "after": "After:",
-      "empty": "(empty)"
+      "empty": "(empty)",
+      "textDiffLabel": "Content diff",
+      "lineAdded": "Added line",
+      "lineRemoved": "Removed line"
     },
     "provenance": {
       "title": "Provenance",

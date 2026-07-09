@@ -27,6 +27,7 @@ from who2be_api.repositories.playbook_resource_link_repository import (
 )
 from who2be_api.repositories.resource_repository import ResourceRepository
 from who2be_api.repositories.usage_repository import UsageRepository
+from who2be_api.services.content_text import resource_content_text
 from who2be_api.services.version_diff import compute_version_diff
 from who2be_models import (
     DEFAULT_LOCALE,
@@ -370,6 +371,7 @@ class ResourceService:
             against_version=base_version,
             before=before,
             after=target.content.model_dump(mode="json"),
+            serializer=resource_content_text,
         )
 
     def _resolve_against(

@@ -15,7 +15,7 @@ from who2be_api.services.placeholders import _core
 from who2be_api.services.placeholders._core import (
     RenderContext,
     ResolveResult,
-    block_plain_text,
+    blocks_plain_text,
     table_cell,
 )
 
@@ -116,7 +116,7 @@ class PersonaFieldResolver:
             return ResolveResult(text=_render_modes_section(content))
 
         # target_id == "profile": volles Profil rendern (E1 + C4).
-        return ResolveResult(text=_render_persona_profile(content))
+        return ResolveResult(text=render_persona_profile(content))
 
 
 def _render_profile_body(content: dict[str, object]) -> str:
@@ -129,17 +129,10 @@ def _render_profile_body(content: dict[str, object]) -> str:
     inner_content = content.get("content")
     if not isinstance(inner_content, dict):
         return ""
-    raw_blocks = inner_content.get("blocks", [])
-    blocks: list[dict[str, object]] = list(raw_blocks) if isinstance(raw_blocks, list) else []
-    block_parts: list[str] = []
-    for block in blocks:
-        text = block_plain_text(block)
-        if text:
-            block_parts.append(text)
-    return "\n\n".join(block_parts).strip()
+    return blocks_plain_text(inner_content.get("blocks", []))
 
 
-def _render_persona_profile(content: dict[str, object]) -> str:
+def render_persona_profile(content: dict[str, object]) -> str:
     """Rendert das vollstaendige Persona-Profil als Markdown-String.
 
     Aufbau:
@@ -204,7 +197,7 @@ def _render_modes_section(content: dict[str, object]) -> str:
     Pro Modus: Header (mit `(Default)`-Markierung), Trigger, Identity-Ergaenzung,
     Output-Stil, Anti-Patterns und zugehoeriges Playbook — soweit vorhanden.
     `identity_add` / `output_style_override` / `anti_patterns` sind Block-Listen
-    (list[ResourceBlock]) und werden via `_render_block_list` zu Plain-Text.
+    (list[ResourceBlock]) und werden via `blocks_plain_text` zu Plain-Text.
 
     Gibt einen leeren String zurueck, wenn die Persona keine Modi fuehrt — Modi
     sind optional und erzeugen in dem Fall keinen Render-Fehler.
@@ -220,9 +213,9 @@ def _render_modes_section(content: dict[str, object]) -> str:
         name = str(mode.get("name", "")).strip()
         is_default = bool(mode.get("is_default", False))
         trigger = mode.get("trigger")
-        identity_add = _render_block_list(mode.get("identity_add"))
-        output_style_override = _render_block_list(mode.get("output_style_override"))
-        anti_patterns = _render_block_list(mode.get("anti_patterns"))
+        identity_add = blocks_plain_text(mode.get("identity_add"))
+        output_style_override = blocks_plain_text(mode.get("output_style_override"))
+        anti_patterns = blocks_plain_text(mode.get("anti_patterns"))
         playbook_name = str(mode.get("playbook_name", "")).strip()
 
         header = f"### {name}"
@@ -242,26 +235,6 @@ def _render_modes_section(content: dict[str, object]) -> str:
             mode_lines.append(f"**Zugehoeriges Playbook:** {playbook_name}")
 
     return "\n".join(mode_lines)
-
-
-def _render_block_list(raw: object) -> str:
-    """Rendert eine BlockNote-Block-Liste (list[ResourceBlock]) als Plain-Text.
-
-    Pro Block wird `block_plain_text` angewandt, leere Blocks werden
-    uebersprungen, Ergebnisse mit Doppel-Newline verbunden. Nicht-Listen
-    (z. B. None oder ein Alt-String, der die Koerzion nicht durchlief) liefern
-    einen leeren String — so erzeugt der haeufigste Leerfall keine Zeilen.
-    """
-    if not isinstance(raw, list):
-        return ""
-    block_parts: list[str] = []
-    for block in raw:
-        if not isinstance(block, dict):
-            continue
-        text = block_plain_text(block)
-        if text:
-            block_parts.append(text)
-    return "\n\n".join(block_parts).strip()
 
 
 class PersonaRefResolver:

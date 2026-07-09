@@ -8,6 +8,7 @@ ueber die stabile Block-`id` gematcht, damit eine Umsortierung nicht als
 Massen-Aenderung erscheint.
 """
 
+from collections.abc import Callable
 from typing import Any
 
 from who2be_models import VersionDiff, VersionDiffChange
@@ -100,12 +101,18 @@ def compute_version_diff(
     against_version: int | None,
     before: dict[str, Any],
     after: dict[str, Any],
+    serializer: Callable[[dict[str, Any]], str] | None = None,
 ) -> VersionDiff:
     """Berechnet den strukturierten Diff `before → after`.
 
     `before` ist der Vergleichsstand (z. B. die aktive Version), `after` die
     betrachtete Version `version`. Ohne Vergleichsstand (`against_version=None`)
     erscheint der gesamte Inhalt von `after` als `added`.
+
+    `serializer` (WP-C, optional): kanonische Content→Text-Serialisierung des
+    Entity-Typs (siehe `services/content_text.py`). Ist sie gesetzt, traegt der
+    Diff zusaetzlich `before_text`/`after_text` fuer die git-artige
+    Zeilen-Diff-Ansicht; ohne Serializer bleiben beide `None`.
     """
     changes: list[VersionDiffChange] = []
     _diff_value("", before, after, changes)
@@ -115,6 +122,8 @@ def compute_version_diff(
         against_version=against_version,
         changes=changes,
         identical=len(changes) == 0,
+        before_text=serializer(before) if serializer is not None else None,
+        after_text=serializer(after) if serializer is not None else None,
     )
 
 

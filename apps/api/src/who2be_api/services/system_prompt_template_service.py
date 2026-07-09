@@ -23,6 +23,7 @@ from who2be_api.core.security import (
 from who2be_api.repositories.system_prompt_template_repository import (
     SystemPromptTemplateRepository,
 )
+from who2be_api.services.content_text import system_prompt_content_text
 from who2be_api.services.version_diff import compute_version_diff
 from who2be_models import (
     AgentCapability,
@@ -202,6 +203,7 @@ class SystemPromptTemplateService:
             against_version=base_version,
             before=before,
             after=target.content.model_dump(mode="json"),
+            serializer=system_prompt_content_text,
         )
 
     def _resolve_against(

@@ -706,6 +706,11 @@ export interface VersionDiff {
   against_version: number | null
   changes: VersionDiffChange[]
   identical: boolean
+  // WP-C (additiv): kanonische Klartext-Serialisierung beider Content-Staende
+  // fuer den git-artigen Zeilen-Diff. Fehlen die Felder (aeltere API), faellt
+  // die UI auf den reinen Feld-Diff zurueck.
+  before_text?: string | null
+  after_text?: string | null
 }
 
 // Track A — Status-Historie einer Version ("warum aktiv"). Spiegelt
