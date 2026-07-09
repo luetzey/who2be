@@ -162,6 +162,15 @@ class PlaybookUpdate(BaseModel):
     content: PlaybookContent
 
 
+class PlaybookRef(BaseModel):
+    """Schlankes Playbook-Pointer-Tupel (id + name) fuer Aggregate."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
+
+
 class PlaybookRead(BaseModel):
     """Playbook im aktuellen Stand inkl. denormalisierter Filterfelder."""
 
@@ -188,6 +197,11 @@ class PlaybookRead(BaseModel):
     # Abgeleitet: EXISTS(child in playbook_composition). Default False fuer
     # Backward-Compat mit Konsumenten, die das Feld nicht liefern.
     is_composite: bool = False
+    # WP-D2: Sub-Playbooks eines Composites als schlanke Refs (id + name),
+    # geordnet nach `playbook_composition.position`. Wird vom Listen-Pfad per
+    # Batch-Select befuellt (kein N+1); Default leere Liste haelt alle
+    # anderen Read-Pfade und Alt-Konsumenten abwaertskompatibel.
+    compose_children: list[PlaybookRef] = Field(default_factory=list)
 
 
 class PlaybookVersionRead(BaseModel):
@@ -214,15 +228,6 @@ class PlaybookUsage(BaseModel):
 
     persona_id: UUID
     persona_name: str
-
-
-class PlaybookRef(BaseModel):
-    """Schlankes Playbook-Pointer-Tupel (id + name) fuer Aggregate."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    id: UUID
-    name: str
 
 
 class TriggerOverview(BaseModel):

@@ -32,6 +32,11 @@ export interface ListFilters<T> {
   // clientseitigen Facetten filtert der Hook damit NICHT — die Page reicht
   // den Wert an den Daten-Hook durch, der den Refetch ausloest.
   agent: string
+  // ANZEIGE-Praeferenz (WP-D3): Group-by-Modus aus `?group=`. Kein Filter —
+  // grenzt die Liste nicht ein und zaehlt deshalb weder fuer `active` noch
+  // fuer `reset`. Die Page interpretiert/validiert den Wert selbst
+  // (Playbooks: `none|type|composite`) und gruppiert clientseitig.
+  group: string
   availableTags: string[]
   availableTypes: string[]
   active: boolean
@@ -40,6 +45,7 @@ export interface ListFilters<T> {
   setTag: (value: string) => void
   setType: (value: string) => void
   setAgent: (value: string) => void
+  setGroup: (value: string) => void
   reset: () => void
 }
 
@@ -50,6 +56,7 @@ const QUERY_KEY = 'q'
 const TAG_KEY = 'tag'
 const TYPE_KEY = 'type'
 const AGENT_KEY = 'agent'
+const GROUP_KEY = 'group'
 
 /**
  * Aktueller `?agent=`-Wert (serverseitige Facette, WP-B) — fuer die Page,
@@ -83,6 +90,7 @@ export function useListFilters<T>(
   const tag = params.get(TAG_KEY) ?? ''
   const type = params.get(TYPE_KEY) ?? ''
   const agent = params.get(AGENT_KEY) ?? ''
+  const group = params.get(GROUP_KEY) ?? ''
 
   const setParam = useCallback(
     (key: string, value: string) => {
@@ -107,6 +115,7 @@ export function useListFilters<T>(
   const setTag = useCallback((value: string) => setParam(TAG_KEY, value), [setParam])
   const setType = useCallback((value: string) => setParam(TYPE_KEY, value), [setParam])
   const setAgent = useCallback((value: string) => setParam(AGENT_KEY, value), [setParam])
+  const setGroup = useCallback((value: string) => setParam(GROUP_KEY, value), [setParam])
 
   const reset = useCallback(() => {
     setParams(
@@ -186,6 +195,7 @@ export function useListFilters<T>(
     tag,
     type,
     agent,
+    group,
     availableTags,
     availableTypes,
     active,
@@ -194,6 +204,7 @@ export function useListFilters<T>(
     setTag,
     setType,
     setAgent,
+    setGroup,
     reset,
   }
 }

@@ -124,6 +124,10 @@ export interface Playbook {
   // Vom System verwaltet (Builder-Playbook) — User-Mutationen serverseitig
   // gesperrt (403 managed_aggregate); die UI rendert read-only.
   is_managed?: boolean
+  // WP-D2 — Sub-Playbooks eines Composites (id + name, geordnet nach
+  // Position). Vom Listen-Endpoint per Batch-Select befuellt; optional,
+  // andere Read-Pfade liefern eine leere Liste.
+  compose_children?: PlaybookRef[]
 }
 
 // Track A8 — Schlanke Referenz fuer Backlinks (Composed-by-Liste).

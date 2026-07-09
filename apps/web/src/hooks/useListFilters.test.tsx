@@ -138,6 +138,22 @@ describe('useListFilters', () => {
     expect(result.current.active).toBe(false)
   })
 
+  it('group ist Anzeige-Praeferenz: liest/schreibt ?group=, zaehlt nicht als Filter', () => {
+    const { result } = renderFilters(['/?group=type'])
+    expect(result.current.group).toBe('type')
+    // Gruppierung grenzt nichts ein — weder Liste noch `active`.
+    expect(result.current.filtered).toHaveLength(6)
+    expect(result.current.active).toBe(false)
+
+    act(() => result.current.setGroup('composite'))
+    expect(result.current.group).toBe('composite')
+    act(() => result.current.reset())
+    // reset raeumt Filter ab, laesst die Anzeige-Praeferenz stehen.
+    expect(result.current.group).toBe('composite')
+    act(() => result.current.setGroup(''))
+    expect(result.current.group).toBe('')
+  })
+
   it('useAgentFilterParam liest denselben ?agent=-Wert', () => {
     const { result } = renderHook(() => useAgentFilterParam(), {
       wrapper: wrapperFor(['/?agent=a9']),

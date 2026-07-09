@@ -161,6 +161,53 @@ def test_playbook_composition_happy_path(
 
 
 @pytest.mark.integration
+def test_playbook_list_delivers_compose_children(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """WP-D2: Listen-DTO traegt `compose_children` (geordnet), leer fuer Atome."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    pbase = f"/v1/workspaces/{ws}/playbooks"
+
+    try:
+        with TestClient(app) as client:
+            parent_id = client.post(pbase, json=_pb_body("Parent"), headers=auth).json()["id"]
+            child_a = client.post(pbase, json=_pb_body("Child-A"), headers=auth).json()["id"]
+            child_b = client.post(pbase, json=_pb_body("Child-B"), headers=auth).json()["id"]
+            resp = client.put(
+                f"{pbase}/{parent_id}/composes",
+                json={"child_ids": [child_b, child_a]},
+                headers=auth,
+            )
+            assert resp.status_code == 200, resp.text
+
+            listing = client.get(pbase, headers=auth).json()
+            by_id = {entry["id"]: entry for entry in listing}
+
+            # Composite: Kinder als schlanke Refs, in Composition-Reihenfolge.
+            parent_entry = by_id[parent_id]
+            assert parent_entry["is_composite"] is True
+            assert [c["id"] for c in parent_entry["compose_children"]] == [child_b, child_a]
+            assert [c["name"] for c in parent_entry["compose_children"]] == [
+                "Child-B",
+                "Child-A",
+            ]
+            assert set(parent_entry["compose_children"][0]) == {"id", "name"}
+
+            # Atomare Playbooks: leere Default-Liste.
+            assert by_id[child_a]["compose_children"] == []
+            assert by_id[child_b]["compose_children"] == []
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
 def test_playbook_composition_cross_workspace_isolation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

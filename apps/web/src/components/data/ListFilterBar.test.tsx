@@ -127,6 +127,37 @@ describe('ListFilterBar', () => {
     ).toBeInTheDocument()
   })
 
+  it('rendert Group-by-Select mit Optionen und meldet Auswahl', () => {
+    const onGroupChange = vi.fn()
+    render(
+      <ListFilterBar
+        {...baseProps()}
+        groupOptions={[
+          { value: '', label: 'Keine Gruppierung' },
+          { value: 'type', label: 'Nach Typ' },
+        ]}
+        group=""
+        onGroupChange={onGroupChange}
+      />,
+    )
+    const select = screen.getByLabelText('Gruppieren')
+    expect(screen.getByRole('option', { name: 'Keine Gruppierung' })).toBeInTheDocument()
+    fireEvent.change(select, { target: { value: 'type' } })
+    expect(onGroupChange).toHaveBeenCalledWith('type')
+  })
+
+  it('rendert kein Group-by-Select ohne Optionen oder Handler', () => {
+    const { rerender } = render(<ListFilterBar {...baseProps()} />)
+    expect(screen.queryByLabelText('Gruppieren')).not.toBeInTheDocument()
+    rerender(
+      <ListFilterBar
+        {...baseProps()}
+        groupOptions={[{ value: '', label: 'Keine Gruppierung' }]}
+      />,
+    )
+    expect(screen.queryByLabelText('Gruppieren')).not.toBeInTheDocument()
+  })
+
   it('zeigt den Reset-Button nur bei aktiven Filtern', () => {
     const props = baseProps()
     const { rerender } = render(<ListFilterBar {...props} active={false} />)

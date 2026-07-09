@@ -347,6 +347,11 @@ async def list_playbooks(
 
     `locale` waehlt die Sprachvariante des Inhalts (Default `'de'`); es werden
     weiterhin nur aktive Versionen geliefert.
+
+    Composite-Playbooks (`is_composite=True`) tragen in `compose_children`
+    ihre Sub-Playbooks als schlanke Refs (id + name, geordnet nach Position)
+    — die Komposition ist so ohne `fetch_playbook`-Roundtrip sichtbar; die
+    vollen Sub-Playbook-Inhalte liefert weiterhin `fetch_playbook`.
     """
     client = await build_client()
     return await client.list_playbooks(tag, trigger, locale)

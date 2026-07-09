@@ -129,6 +129,7 @@
       "allAgents": "Alle Agenten",
       "agentChip": "Agent: {{name}}",
       "agentChipRemove": "Agent-Filter entfernen ({{name}})",
+      "groupLabel": "Gruppieren",
       "reset": "Filter zurücksetzen",
       "pendingDraft": "Entwurf offen",
       "emptyFilteredTitle": "Keine Treffer",
@@ -974,6 +975,19 @@
       "newButton": "Neues Playbook",
       "tagFilter": "Tag-Filter",
       "triggerFilter": "Trigger-Filter",
+      "composedOf": "komponiert:",
+      "moreTriggers_one": "{{count}} weiterer Trigger",
+      "moreTriggers_other": "{{count}} weitere Trigger",
+      "group": {
+        "none": "Keine Gruppierung",
+        "type": "Nach Typ",
+        "composite": "Composite / Standalone"
+      },
+      "groups": {
+        "composite": "Composite",
+        "standalone": "Standalone",
+        "untyped": "Ohne Typ"
+      },
       "empty": {
         "title": "Noch keine Playbooks",
         "description": "Lege dein erstes Playbook an, um Workflows zu definieren.",

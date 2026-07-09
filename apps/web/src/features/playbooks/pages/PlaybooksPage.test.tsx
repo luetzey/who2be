@@ -21,6 +21,7 @@ function playbook(
   tags: string[],
   triggers: string | null,
   status: VersionStatus = 'active',
+  overrides: Record<string, unknown> = {},
 ) {
   return {
     id,
@@ -35,6 +36,7 @@ function playbook(
     content: { description: '', body: '', type: 'workflow', tags, triggers },
     created_at: '2026-05-24T11:00:00Z',
     updated_at: '2026-05-24T11:00:00Z',
+    ...overrides,
   }
 }
 
@@ -110,5 +112,85 @@ describe('PlaybooksPage', () => {
 
     expect(screen.getByText('Coaching')).toBeInTheDocument()
     expect(screen.queryByText('Brainstorming')).not.toBeInTheDocument()
+  })
+
+  it('zeigt Trigger als einzelne Pills, kappt bei 3 sichtbaren + „+N"-Badge', async () => {
+    renderWith([playbook('pb1', 'Coaching', [], 'alpha, beta; gamma, delta, epsilon')])
+
+    await waitFor(() => {
+      expect(screen.getByText('Coaching')).toBeInTheDocument()
+    })
+
+    // Split an ',' UND ';' (WP-D1) — die ersten drei als Pills sichtbar.
+    expect(screen.getByText('alpha')).toBeInTheDocument()
+    expect(screen.getByText('beta')).toBeInTheDocument()
+    expect(screen.getByText('gamma')).toBeInTheDocument()
+    expect(screen.queryByText('delta')).not.toBeInTheDocument()
+    expect(screen.queryByText('epsilon')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('2 weitere Trigger')).toHaveTextContent('+2')
+  })
+
+  it('zeigt Composite-Badge und verlinkte Sub-Playbooks (kompakte Meta-Zeile)', async () => {
+    renderWith([
+      playbook('pb1', 'Composite-Flow', [], null, 'active', {
+        is_composite: true,
+        compose_children: [
+          { id: 'c1', name: 'Schritt Eins' },
+          { id: 'c2', name: 'Schritt Zwei' },
+        ],
+      }),
+      playbook('pb2', 'Atomar', [], null),
+    ])
+
+    await waitFor(() => {
+      expect(screen.getByText('Composite-Flow')).toBeInTheDocument()
+    })
+
+    expect(screen.getByText('Composite')).toBeInTheDocument()
+    expect(screen.getByText(/komponiert:/)).toBeInTheDocument()
+    const childLink = screen.getByRole('link', { name: 'Schritt Eins' })
+    expect(childLink).toHaveAttribute('href', expect.stringContaining('/playbooks/c1'))
+    expect(screen.getByRole('link', { name: 'Schritt Zwei' })).toBeInTheDocument()
+    // Atomare Zeile traegt weder Badge noch Sub-Playbook-Links.
+    expect(screen.getAllByText('Composite')).toHaveLength(1)
+  })
+
+  it('gruppiert via ?group=composite mit Sektions-Headern und Zaehlern', async () => {
+    window.history.pushState({}, '', '/?group=composite')
+    renderWith([
+      playbook('pb1', 'Composite-Flow', [], null, 'active', { is_composite: true }),
+      playbook('pb2', 'Atomar A', [], null),
+      playbook('pb3', 'Atomar B', [], null),
+    ])
+
+    await waitFor(() => {
+      expect(screen.getByText('Composite-Flow')).toBeInTheDocument()
+    })
+
+    expect(screen.getByRole('heading', { name: /Composite\s?\(1\)/ })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /Standalone\s?\(2\)/ })).toBeInTheDocument()
+  })
+
+  it('Group-by-Selector schaltet auf Typ-Gruppen um (unbekannter Typ-Key = Rohwert)', async () => {
+    renderWith([
+      playbook('pb1', 'Coaching', [], null),
+      playbook('pb2', 'Brainstorming', [], null, 'active', {
+        type: 'prompt',
+        content: { description: '', body: '', type: 'prompt', tags: [], triggers: null },
+      }),
+    ])
+
+    await waitFor(() => {
+      expect(screen.getByText('Coaching')).toBeInTheDocument()
+    })
+    expect(screen.queryByRole('heading', { name: /workflow/ })).not.toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Gruppieren'), { target: { value: 'type' } })
+
+    expect(screen.getByRole('heading', { name: /prompt\s?\(1\)/ })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /workflow\s?\(1\)/ })).toBeInTheDocument()
+    // Beide Items bleiben sichtbar — Gruppierung filtert nicht.
+    expect(screen.getByText('Coaching')).toBeInTheDocument()
+    expect(screen.getByText('Brainstorming')).toBeInTheDocument()
   })
 })

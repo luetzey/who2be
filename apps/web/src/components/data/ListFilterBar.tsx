@@ -18,6 +18,11 @@ export interface AgentFilterOption {
   name: string
 }
 
+export interface GroupByOption {
+  value: string
+  label: string
+}
+
 interface ListFilterBarProps {
   counts: StatusCounts
   status: StatusFilterValue
@@ -40,6 +45,12 @@ interface ListFilterBarProps {
   agents?: AgentFilterOption[]
   agent?: string
   onAgentChange?: (value: string) => void
+  // Group-by-Selector (WP-D3): reine Anzeige-Praeferenz, kein Filter. Die
+  // Page liefert die Optionen fertig uebersetzt (Wert '' = keine Gruppierung)
+  // und gruppiert selbst clientseitig.
+  groupOptions?: GroupByOption[]
+  group?: string
+  onGroupChange?: (value: string) => void
   idPrefix: string
 }
 
@@ -102,6 +113,9 @@ export function ListFilterBar({
   agents = [],
   agent = '',
   onAgentChange,
+  groupOptions = [],
+  group = '',
+  onGroupChange,
   idPrefix,
 }: ListFilterBarProps) {
   const { t } = useTranslation(['data', 'common'])
@@ -222,6 +236,23 @@ export function ListFilterBar({
                 {agents.map((entry) => (
                   <option key={entry.id} value={entry.id}>
                     {entry.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          ) : null}
+
+          {onGroupChange && groupOptions.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor={`${idPrefix}-group`}>{t('data:filter.groupLabel')}</Label>
+              <Select
+                id={`${idPrefix}-group`}
+                value={group}
+                onChange={(event) => onGroupChange(event.target.value)}
+              >
+                {groupOptions.map((entry) => (
+                  <option key={entry.value} value={entry.value}>
+                    {entry.label}
                   </option>
                 ))}
               </Select>
