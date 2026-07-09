@@ -4,6 +4,41 @@ _Stand: 2026-07-08_
 
 ## Funktioniert
 
+- **Builder-Befähigung + Agent-Filter + UI-Polish UMGESETZT (2026-07-09,
+  Branch `claude/builder-agents-ui-improvements-o454yy`, PR #301):** Alle 6
+  WPs des Plans `2026-07-09-1556_builder-agents-ui-improvements.md` per
+  sequenziellem Agenten-Workflow implementiert. **D1:** Trigger-Normalisierung
+  (Validator `normalize_triggers` Split `,`/`;`+dedupe, `splitTriggers` auf
+  `[,;]`, Aggregat-SQL `regexp_split_to_array`, Migration 0063 normalisiert
+  Bestand in-place über ALLE Versions-Snapshots, idempotent). **B:**
+  `?agent=<uuid>` auf den 3 Listen-Endpoints (neue
+  `agent_filter_*_ids`-Funktionen in `agent_scope.py`, 404 bei fremdem Agent,
+  Schnittmenge mit Policy-Restrict; Persona-Repo bekam restrict_ids) +
+  Agent-Facette in `useListFilters`/`ListFilterBar` (serverseitig, Refetch)
+  auf allen 3 Listen; `useAgents` → `@/hooks`. **D2/D3:**
+  `PlaybookRead.compose_children` (Batch-Select, beide SELECT-Pfade, kein
+  N+1; MCP liefert automatisch mit), Trigger-Einzel-Pills (max 3 + „+N"),
+  Composite-Badge + verlinkte Sub-Playbooks, Group-by `?group=none|type|
+  composite` (Anzeige-Präferenz, zählt nicht als Filter). **E:** neue
+  `PersonaPlaybooksCard` — Anzeige-Modus (Links/StatusBadge/Composite/Typ+
+  Trigger-Zahl) + Bearbeiten-Modus mit Suche hinter Button; `splitTriggers`
+  → `@/lib/triggers` (Cross-Feature-Gate). **C:** Diff-Endpunkte liefern
+  additiv `before_text`/`after_text` (neue Single-Source `blocks_plain_text`
+  in `placeholders/_core.py`, Resolver-Duplikate darauf umgestellt);
+  `VersionDiffView` rendert unified Git-Diff (eigene `lineDiff`-Utility,
+  Fallback ohne before_text intakt). **F:** `PersonaService.render(mode=…)`
+  (case-insensitiv, 422 mit Modi-Liste, `PersonaRenderResponse.mode`
+  additiv), REST `?mode=`, MCP `get_persona(mode=…)`, persona-ref-Anweisung
+  ergänzt. **A:** Docstring-Fix create/update_system_prompt (BlockNote-
+  placeholder-Format statt toter Liquid-Syntax), neues Model
+  `placeholder.py` + `GET …/placeholders`-Katalog aus der REGISTRY + MCP-Tool
+  `list_placeholders`, 4 Builder-Seed-Playbooks aktualisiert (ADR-0040-
+  Widerspruch aufgelöst: Templates via MCP verfassen erlaubt; Placeholder-
+  Authoring; Modi-Kriterien; Token-Spar-/Wiederverwendungs-Strategie),
+  `BUILDER_CONTENT_VERSION`++ (Start-Sync verteilt). **DoD je WP grün**
+  (ruff/mypy strict/pytest ≥966–951 passed, Coverage ~89–90 %, gegen echte
+  Wegwerf-Postgres; Web 736→765 Vitest, Branches 80,6→81,2 %, lint/tsc/build
+  clean); CI auf dem Zwischenstand (D1+B+D2/D3) komplett grün.
 - **Standards-Review UMGESETZT (2026-07-08, gleicher Branch/PR #299):** Die
   Audit-WPs 1–8 sind implementiert (2 Agenten-Wellen, 8 Commits). Highlights:
   Web-Coverage-Schuld abgetragen — Branches 69,52 % → **80,64 %** (Floor 79),
@@ -372,16 +407,6 @@ _Stand: 2026-07-08_
 
 ## In Arbeit
 
-- **Plan „Builder-Befähigung + Agent-Filter + UI-Polish" (2026-07-09), Branch
-  `claude/builder-agents-ui-improvements-o454yy`:** Owner-Ideen recherchiert
-  (3 Explore-Agenten), Rückfragen geklärt, 6 WPs geplant —
-  `.claude/plan/2026-07-09-1556_builder-agents-ui-improvements.md`.
-  Kernbefunde: Builder-Seed widerspricht ADR-0040 (verbietet Template-Bau via
-  MCP), `create_system_prompt`-Docstring dokumentiert tote Liquid-Syntax,
-  Placeholder-Format nirgends agent-lesbar; `agent_scope.py` liefert die
-  komplette Kette für einen `?agent=`-Listen-Filter; Trigger-Riesen-Pill kommt
-  von `;`-getrennten Triggern (Split nur an `,`); Versions-Diff zeigt
-  BlockNote-Bodies als JSON. Umsetzung: WPs D1→B→D2/D3→E→C→F→A, je eigener PR.
 - OAuth-Connector: **E2E mit echtem Claude/ChatGPT-Client** steht aus (braucht
   Stack mit `api.`/`app.`/`mcp.`-Subdomains). Offen-Tasks: TTL-Cleanup der
   OAuth-Tabellen, optional Audience-Trennung am RS, MFA/aal2-Consent (Phase 2).

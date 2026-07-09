@@ -1,6 +1,17 @@
 # Builder-Befähigung + Agent-Filter + UI-Polish (Versionen/Playbooks/Persona)
 
-Stand: 2026-07-09 · Branch `claude/builder-agents-ui-improvements-o454yy` · Status: **Aktiv (Plan)**
+Stand: 2026-07-09 · Branch `claude/builder-agents-ui-improvements-o454yy` · Status: **Umgesetzt (2026-07-09, alle 6 WPs, PR #301)**
+
+> **Umsetzungs-Log:** Alle WPs am 2026-07-09 per sequenziellem Agenten-Workflow
+> umgesetzt (Reihenfolge D1→B→D2/D3→E→C→F→A, je ein Commit-Block, DoD-Gates
+> je WP grün gegen echte Wegwerf-Postgres). Wesentliche, bewusste
+> Abweichungen: Migration 0063 normalisiert ALLE Versions-Snapshots (nicht
+> nur aktive), damit Versions-Diffs kein Trigger-Rauschen zeigen;
+> `splitTriggers` nach `@/lib/triggers` gehoben (Cross-Feature-Gate);
+> `useAgents` nach `@/hooks` gehoben; `?group=` zählt nicht als aktiver
+> Filter (Anzeige-Präferenz); `PersonaRenderResponse.mode` additiv;
+> OpenAPI-Golden friert nur die Surface ein — additive Felder/Params ohne
+> Golden-Änderung, neue Route `/placeholders` im Golden ergänzt.
 
 ## Ziel (User-Request)
 
