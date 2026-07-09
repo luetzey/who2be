@@ -110,7 +110,11 @@ async def get_persona(
 
 @router.get("/{persona_id}/rendered", dependencies=[Depends(enforce_mcp_read_limit)])
 async def render_persona(
-    persona_id: UUID, ctx: Ctx, service: Service, locale: LocaleQuery
+    persona_id: UUID,
+    ctx: Ctx,
+    service: Service,
+    locale: LocaleQuery,
+    mode: Annotated[str | None, Query(max_length=100)] = None,
 ) -> PersonaRenderResponse:
     """Liefert den durch den Placeholder-Renderer expandierten Profil-Body (Track F).
 
@@ -118,8 +122,13 @@ async def render_persona(
     werden fetch-time gegen die aktiven Playbooks/Resources des Workspace
     aufgeloest; eine Skills-Tabelle wird angehaengt. Wird vom MCP-Tool
     `get_persona` genutzt.
+
+    `?mode=` (WP-F, additiv) waehlt einen benannten Persona-Modus aus
+    `content.modes` (case-insensitiv) — der Body traegt dann die
+    Aktiver-Modus-Sektion, `mode` in der Antwort den kanonischen Namen.
+    Unbekannter Modus → 422 mit der Liste der verfuegbaren Modi.
     """
-    return await service.render(ctx, persona_id, locale=locale)
+    return await service.render(ctx, persona_id, locale=locale, mode=mode)
 
 
 @router.put("/{persona_id}")

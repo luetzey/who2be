@@ -239,7 +239,9 @@ class ApiClient:
         )
         return [PlaybookRead.model_validate(item) for item in data]
 
-    async def get_persona_rendered(self, persona_id: UUID, locale: str = DEFAULT_LOCALE) -> str:
+    async def get_persona_rendered(
+        self, persona_id: UUID, locale: str = DEFAULT_LOCALE, mode: str | None = None
+    ) -> tuple[str, str | None]:
         """Laedt den serverseitig expandierten Persona-Profil-Body (Track F).
 
         Der API-Endpoint `GET .../personas/{id}/rendered` jagt den Profil-Body
@@ -249,15 +251,28 @@ class ApiClient:
         Der MCP-Prozess hat keinen DB-Zugriff — das Rendering MUSS daher ueber
         diesen Endpoint laufen.
 
-        Gibt nur den `body_rendered`-String zurueck; die `unresolved`-Liste ist
-        fuer den Agent-Konsum nicht relevant (best-effort Expansion).
+        `mode` (WP-F) reicht `?mode=` durch: der Server wendet den benannten
+        Persona-Modus an (Aktiver-Modus-Sektion im Body); ein unbekannter Modus
+        antwortet 422, dessen `detail` (inkl. Liste der verfuegbaren Modi) als
+        `ToolError` beim Agenten landet.
+
+        Gibt `(body_rendered, mode)` zurueck — `mode` ist der kanonische Name
+        des angewendeten Modus oder `None`. Die `unresolved`-Liste ist fuer den
+        Agent-Konsum nicht relevant (best-effort Expansion).
         """
+        params: dict[str, str] = {"locale": locale}
+        if mode is not None:
+            params["mode"] = mode
         data = await self._get(
             f"{self._workspace_prefix}/personas/{persona_id}/rendered",
-            params={"locale": locale},
+            params=params,
         )
         body = data.get("body_rendered") if isinstance(data, dict) else None
-        return body if isinstance(body, str) else ""
+        applied = data.get("mode") if isinstance(data, dict) else None
+        return (
+            body if isinstance(body, str) else "",
+            applied if isinstance(applied, str) else None,
+        )
 
     async def list_playbooks(
         self, tag: str | None, trigger: str | None, locale: str = DEFAULT_LOCALE

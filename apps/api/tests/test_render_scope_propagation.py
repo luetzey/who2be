@@ -91,7 +91,9 @@ def _persona_service(captured: list[RenderContext], monkeypatch: pytest.MonkeyPa
 
     monkeypatch.setattr(mod, "render_template_body", _capture)
     svc = mod.PersonaService(cast(Any, object()), pool=_pool())
-    persona = SimpleNamespace(id=uuid4(), content=SimpleNamespace(content=None, skills=[]))
+    persona = SimpleNamespace(
+        id=uuid4(), content=SimpleNamespace(content=None, skills=[], modes=[])
+    )
 
     async def _get(*_a: object, **_k: object) -> Any:
         return persona

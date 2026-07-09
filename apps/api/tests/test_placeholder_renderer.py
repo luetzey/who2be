@@ -912,6 +912,8 @@ class TestPersonaRefResolver:
         assert str(persona_id) in result.text
         assert "get_persona" in result.text
         assert "content.modes" in result.text
+        # WP-F: Hinweis auf den serverseitig angewendeten Modus-Parameter.
+        assert 'mode="<Modus-Name>"' in result.text
 
     def test_none_persona_id_returns_miss(self) -> None:
         resolver = PersonaRefResolver()

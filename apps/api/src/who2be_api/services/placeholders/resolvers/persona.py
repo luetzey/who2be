@@ -212,29 +212,67 @@ def _render_modes_section(content: dict[str, object]) -> str:
             continue
         name = str(mode.get("name", "")).strip()
         is_default = bool(mode.get("is_default", False))
-        trigger = mode.get("trigger")
-        identity_add = blocks_plain_text(mode.get("identity_add"))
-        output_style_override = blocks_plain_text(mode.get("output_style_override"))
-        anti_patterns = blocks_plain_text(mode.get("anti_patterns"))
-        playbook_name = str(mode.get("playbook_name", "")).strip()
 
         header = f"### {name}"
         if is_default:
             header += " (Default)"
         mode_lines.append(header)
-
-        if trigger:
-            mode_lines.append(f"**Trigger:** {trigger}")
-        if identity_add:
-            mode_lines.append(f"**Identity-Ergaenzung:** {identity_add}")
-        if output_style_override:
-            mode_lines.append(f"**Output-Stil:** {output_style_override}")
-        if anti_patterns:
-            mode_lines.append(f"**Anti-Patterns:** {anti_patterns}")
-        if playbook_name:
-            mode_lines.append(f"**Zugehoeriges Playbook:** {playbook_name}")
+        mode_lines.extend(_mode_field_lines(mode))
 
     return "\n".join(mode_lines)
+
+
+def _mode_field_lines(mode: dict[str, object]) -> list[str]:
+    """Feld-Zeilen eines einzelnen Modus (Trigger/Identity/Output/Anti/Playbook).
+
+    Single-Source fuer die `## Modi`-Uebersicht (`_render_modes_section`) und
+    die Aktiver-Modus-Sektion des Render-Pfads (`render_active_mode_section`,
+    WP-F) — gleiche Labels, gleiche Reihenfolge, leere Felder entfallen.
+    """
+    lines: list[str] = []
+    trigger = mode.get("trigger")
+    identity_add = blocks_plain_text(mode.get("identity_add"))
+    output_style_override = blocks_plain_text(mode.get("output_style_override"))
+    anti_patterns = blocks_plain_text(mode.get("anti_patterns"))
+    playbook_name = str(mode.get("playbook_name", "")).strip()
+
+    if trigger:
+        lines.append(f"**Trigger:** {trigger}")
+    if identity_add:
+        lines.append(f"**Identity-Ergaenzung:** {identity_add}")
+    if output_style_override:
+        lines.append(f"**Output-Stil:** {output_style_override}")
+    if anti_patterns:
+        lines.append(f"**Anti-Patterns:** {anti_patterns}")
+    if playbook_name:
+        lines.append(f"**Zugehoeriges Playbook:** {playbook_name}")
+    return lines
+
+
+def render_active_mode_section(mode: dict[str, object]) -> str:
+    """Rendert die Sektion des serverseitig angewendeten Modus (WP-F).
+
+    Wird von `PersonaService.render(mode=…)` an den gerenderten Profil-Body
+    angehaengt, wenn der Aufrufer einen Modus waehlt. Nutzt dieselben
+    Feld-Zeilen wie die `## Modi`-Uebersicht (`_mode_field_lines`), stellt aber
+    eine Anwendungszeile voran, die die Semantik der Felder explizit macht:
+    `identity_add` ergaenzt die Basis-Identitaet, `output_style_override`
+    ersetzt den Basis-Output-Stil, `anti_patterns` gelten zusaetzlich.
+    """
+    name = str(mode.get("name", "")).strip()
+    header = f"## Aktiver Modus: {name}"
+    if bool(mode.get("is_default", False)):
+        header += " (Default)"
+    lines = [
+        header,
+        (
+            "Dieser Modus ist aktiv: die Identity-Ergaenzung erweitert deine "
+            "Basis-Identitaet, der Output-Stil ERSETZT den Basis-Output-Stil "
+            "aus dem Profil, die Anti-Patterns gelten zusaetzlich."
+        ),
+    ]
+    lines.extend(_mode_field_lines(mode))
+    return "\n".join(lines)
 
 
 class PersonaRefResolver:
@@ -282,7 +320,10 @@ class PersonaRefResolver:
             f'MCP-Tool `get_persona("{ctx.persona_id}")`. '
             "Pruefe danach `content.modes`: Waehle anhand des Modus-`trigger` den "
             "passenden Modus und wende dessen `identity_add` + `output_style_override` "
-            "an; ohne Trigger-Match gilt der Default-Modus."
+            "an; ohne Trigger-Match gilt der Default-Modus. "
+            f'Alternativ liefert `get_persona("{ctx.persona_id}", mode="<Modus-Name>")` '
+            "das Profil bereits serverseitig im gewaehlten Modus (identity_add "
+            "angehaengt, Output-Stil ersetzt, Anti-Patterns ergaenzt)."
         )
         return ResolveResult(text=text)
 

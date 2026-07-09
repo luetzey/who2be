@@ -33,12 +33,14 @@ from who2be_api.repositories.usage_repository import UsageRepository
 from who2be_api.services.content_text import persona_content_text
 from who2be_api.services.placeholders import RenderContext, render_template_body
 from who2be_api.services.placeholders.registry import render_skills_table
+from who2be_api.services.placeholders.resolvers.persona import render_active_mode_section
 from who2be_api.services.version_diff import compute_version_diff
 from who2be_models import (
     DEFAULT_LOCALE,
     AgentCapability,
     DeleteBlocked,
     PersonaCreate,
+    PersonaMode,
     PersonaRead,
     PersonaUpdate,
     PersonaUsage,
@@ -61,10 +63,15 @@ class PersonaRenderResponse(BaseModel):
 
     Hinweis: Die Skills-Tabelle ist derzeit deaktiviert (Coming Soon, ADR-0026) —
     `render_skills_table` liefert `""`, es wird nichts angehaengt.
+
+    `mode` benennt den serverseitig angewendeten Persona-Modus (WP-F) mit seinem
+    kanonischen Namen aus `content.modes` — `None`, wenn kein Modus angefragt
+    wurde (Default-Verhalten unveraendert).
     """
 
     body_rendered: str
     unresolved: list[str]
+    mode: str | None = None
 
 
 def _not_found() -> HTTPException:
@@ -88,6 +95,20 @@ def _delete_blocked(usages: list[PersonaUsage]) -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_409_CONFLICT,
         detail=detail.model_dump(mode="json"),
+    )
+
+
+def _unknown_mode(mode: str, available: list[str]) -> HTTPException:
+    """422: der angefragte Persona-Modus existiert nicht (WP-F).
+
+    Die Fehlermeldung listet die verfuegbaren Modi — der MCP-Client reicht das
+    `detail` als `ToolError` durch, sodass ein Agent den Tippfehler selbst
+    korrigieren kann.
+    """
+    names = ", ".join(available) if available else "keine"
+    return HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        detail=f"Unbekannter Modus '{mode}'. Verfuegbare Modi: {names}.",
     )
 
 
@@ -194,7 +215,11 @@ class PersonaService:
         return persona
 
     async def render(
-        self, ctx: WorkspaceContext, persona_id: UUID, locale: str = DEFAULT_LOCALE
+        self,
+        ctx: WorkspaceContext,
+        persona_id: UUID,
+        locale: str = DEFAULT_LOCALE,
+        mode: str | None = None,
     ) -> PersonaRenderResponse:
         """Expandiert den Persona-Profil-Body durch den Placeholder-Renderer (Track F).
 
@@ -205,10 +230,19 @@ class PersonaService:
         Die Skills-Tabelle ist derzeit deaktiviert (Coming Soon, ADR-0026) und
         wird nicht angehaengt — `render_skills_table` liefert `""`.
 
+        `mode` (WP-F) waehlt einen benannten Persona-Modus aus `content.modes`
+        (case-insensitiv): an den gerenderten Body wird die Aktiver-Modus-
+        Sektion angehaengt (`identity_add` ergaenzt die Identitaet,
+        `output_style_override` ersetzt den Basis-Output-Stil, `anti_patterns`
+        gelten zusaetzlich), und `PersonaRenderResponse.mode` traegt den
+        kanonischen Modus-Namen. Unbekannter Modus → 422 mit der Liste der
+        verfuegbaren Modi. Ohne `mode` bleibt das Verhalten unveraendert.
+
         Wird vom MCP-Tool `get_persona` genutzt (der MCP-Prozess hat keinen
         DB-Zugriff). Leerer Body + keine Skills → leerer `body_rendered`.
         """
         persona = await self.get(ctx, persona_id, locale=locale)
+        active_mode = self._select_mode(persona.content.modes, mode)
         body_blocks = persona.content.content.blocks if persona.content.content is not None else []
         body_json = json.dumps([block.model_dump(mode="json") for block in body_blocks])
 
@@ -235,7 +269,32 @@ class PersonaService:
         if skills_table:
             body_rendered = f"{body_rendered}\n\n{skills_table}" if body_rendered else skills_table
 
-        return PersonaRenderResponse(body_rendered=body_rendered, unresolved=unresolved)
+        if active_mode is not None:
+            section = render_active_mode_section(active_mode.model_dump(mode="json"))
+            body_rendered = f"{body_rendered}\n\n{section}" if body_rendered else section
+
+        return PersonaRenderResponse(
+            body_rendered=body_rendered,
+            unresolved=unresolved,
+            mode=active_mode.name if active_mode is not None else None,
+        )
+
+    @staticmethod
+    def _select_mode(modes: list[PersonaMode], mode: str | None) -> PersonaMode | None:
+        """Loest den angefragten Modus-Namen case-insensitiv gegen `content.modes` auf.
+
+        `None` (kein Modus angefragt) → `None`; unbekannter Name → 422 mit der
+        Liste der verfuegbaren Modi (WP-F). Die Namens-Eindeutigkeit ist durch
+        den `PersonaVersionContent`-Validator (case-insensitiv unique)
+        garantiert — der erste Treffer ist der einzige.
+        """
+        if mode is None:
+            return None
+        wanted = mode.strip().casefold()
+        for candidate in modes:
+            if candidate.name.casefold() == wanted:
+                return candidate
+        raise _unknown_mode(mode, [m.name for m in modes])
 
     async def _check_update_tags(
         self, ctx: WorkspaceContext, persona_id: UUID, incoming_tags: list[str], locale: str

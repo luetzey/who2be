@@ -137,11 +137,16 @@ class PersonaWithPlaybooks(BaseModel):
     Skills sind derzeit deaktiviert ("Coming Soon", ADR-0026): das deskriptive
     `persona.content.skills`-Feld erscheint nicht im `body_rendered` und ist noch
     nicht nutzbar. Ein versioniertes Agent-Skill-Format folgt.
+
+    `mode` benennt den serverseitig angewendeten Persona-Modus (WP-F) mit dem
+    kanonischen Namen aus `content.modes` — `None`, wenn kein Modus angefragt
+    wurde (dann traegt `body_rendered` das Basis-Profil ohne Modus-Sektion).
     """
 
     persona: PersonaRead
     playbooks: list[PlaybookRead]
     body_rendered: str = ""
+    mode: str | None = None
 
 
 class ResourceSummary(BaseModel):
@@ -310,7 +315,9 @@ async def whoami() -> WhoAmIRead:
 
 @mcp.tool(output_schema=None)
 @with_tool_log("get_persona")
-async def get_persona(identifier: str, locale: str = "de") -> PersonaWithPlaybooks:
+async def get_persona(
+    identifier: str, locale: str = "de", mode: str | None = None
+) -> PersonaWithPlaybooks:
     """Laedt eine Persona (per UUID oder Name) samt verknuepfter Playbooks.
 
     `locale` waehlt die Sprachvariante des Inhalts (Default `'de'`); es werden
@@ -328,14 +335,26 @@ async def get_persona(identifier: str, locale: str = "de") -> PersonaWithPlayboo
     bereits zu Plain-Text aufgeloest. Nutze diesen Text als gebrauchsfertiges
     Persona-Briefing.
 
+    Modus-Workflow (WP-F): lies zuerst `content.modes` (z. B. via
+    `get_persona` ohne `mode`), waehle anhand der Modus-`trigger` den passenden
+    Modus und rufe dann `get_persona(identifier, mode="<Modus-Name>")` auf —
+    der Server haengt die Aktiver-Modus-Sektion an `body_rendered` an
+    (`identity_add` ergaenzt die Identitaet, `output_style_override` ersetzt
+    den Basis-Output-Stil, `anti_patterns` gelten zusaetzlich) und benennt den
+    angewendeten Modus im `mode`-Feld der Antwort. Der Namensvergleich ist
+    case-insensitiv; ein unbekannter Modus antwortet mit einem Fehler, der die
+    verfuegbaren Modi auflistet.
+
     Skills sind derzeit deaktiviert ("Coming Soon", ADR-0026) und erscheinen
     nicht im `body_rendered`.
     """
     client = await build_client()
     persona = await client.get_persona(identifier, locale)
     playbooks = await client.get_persona_playbooks(persona.id, locale)
-    body_rendered = await client.get_persona_rendered(persona.id, locale)
-    return PersonaWithPlaybooks(persona=persona, playbooks=playbooks, body_rendered=body_rendered)
+    body_rendered, applied_mode = await client.get_persona_rendered(persona.id, locale, mode)
+    return PersonaWithPlaybooks(
+        persona=persona, playbooks=playbooks, body_rendered=body_rendered, mode=applied_mode
+    )
 
 
 @mcp.tool(output_schema=None)
