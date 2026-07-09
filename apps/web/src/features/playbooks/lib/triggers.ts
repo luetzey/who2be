@@ -4,7 +4,10 @@
  * deshalb wandeln wir an der Hook-Grenze zwischen String und Array um.
  *
  * Parser ist tolerant gegen die alte Eingabeform mit Anfuehrungszeichen
- * ("passwort vergessen", "reset link"). Leere Pills werden geschluckt.
+ * ("passwort vergessen", "reset link") und gegen ';' als Legacy-Separator
+ * (WP-D1 — sonst rendert so ein Bestand als eine Riesen-Pill). Leere Pills
+ * werden geschluckt. Kanonisch (joinTriggers, Backend-Normalisierung) ist
+ * und bleibt kommagetrennt.
  */
 export function splitTriggers(raw: string | null): string[] {
   if (raw === null) {
@@ -15,7 +18,7 @@ export function splitTriggers(raw: string | null): string[] {
     return []
   }
   return trimmed
-    .split(',')
+    .split(/[,;]/)
     .map((entry) => entry.trim().replace(/^["']+|["']+$/g, '').trim())
     .filter((entry) => entry.length > 0)
 }

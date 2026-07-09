@@ -675,15 +675,19 @@ class PgPlaybookRepository(VersionedAggregateRepository[PlaybookRead, PlaybookVe
     async def list_triggers_with_playbooks(self, workspace_id: UUID) -> list[TriggerOverview]:
         """Welle 5: Discovery-Aggregat fuer den `list_triggers`-MCP-Tool.
 
-        Trigger sind heute kommagetrennt in `playbook.triggers` denormalisiert.
-        Wir splitten in SQL via `string_to_array`+`unnest`, trimmen leere
-        Eintraege und gruppieren in Python — `asyncpg` hat keinen praktischen
-        Weg, JSON-Aggregate ohne weitere Decode-Logik zurueckzugeben.
+        Trigger sind kanonisch kommagetrennt in `playbook.triggers`
+        denormalisiert (WP-D1: Modell-Validator + Migration 0063). Wir
+        splitten in SQL via `regexp_split_to_array`+`unnest` — defensiv an
+        `,` UND `;`, damit auch nicht-normalisierter Legacy-Bestand keine
+        Riesen-Trigger liefert —, trimmen leere Eintraege und gruppieren in
+        Python: `asyncpg` hat keinen praktischen Weg, JSON-Aggregate ohne
+        weitere Decode-Logik zurueckzugeben.
         """
         rows = await self._pool.fetch(
             "SELECT p.id, p.name, trim(t.trigger) AS trigger "
             "  FROM playbook p, "
-            "       unnest(string_to_array(coalesce(p.triggers, ''), ',')) AS t(trigger) "
+            "       unnest(regexp_split_to_array(coalesce(p.triggers, ''), '[,;]')) "
+            "         AS t(trigger) "
             " WHERE p.workspace_id = $1 "
             "   AND trim(t.trigger) <> '' "
             " ORDER BY trim(t.trigger) ASC, p.name ASC",

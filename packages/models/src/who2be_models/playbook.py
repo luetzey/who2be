@@ -5,6 +5,7 @@ Service auf die `playbook`-Zeile denormalisiert, damit `list_playbooks` ohne
 Join filtern kann (siehe architecture.md §3).
 """
 
+import re
 from datetime import datetime
 from enum import StrEnum
 from typing import Annotated, Literal
@@ -39,6 +40,33 @@ class PlaybookType(StrEnum):
 # Kuratiertes Typ-Set fuer die Modell-Validierung — Spiegel des DB-CHECKs
 # `playbook_type_check` (Migrationen 0020/0025). Einzige Quelle ist das Enum.
 _PLAYBOOK_TYPE_VALUES: frozenset[str] = frozenset(member.value for member in PlaybookType)
+
+# WP-D1: Trigger sind ein kanonisch kommagetrennter String. Eingaben mit ';'
+# als Separator (Owner-Befund: rendert in der UI als eine Riesen-Pill) werden
+# am Modell-Rand mitakzeptiert und normalisiert.
+_TRIGGER_SEPARATORS = re.compile(r"[,;]")
+
+
+def normalize_triggers(value: str | None) -> str | None:
+    """Normalisiert einen Trigger-String auf die kanonische Form.
+
+    Split an ',' UND ';', trim je Eintrag, Dedupe case-insensitiv (die erste
+    Schreibweise gewinnt), Join mit ', '. `None` bleibt `None`; ein String
+    ohne verwertbare Eintraege (leer/nur Separatoren) wird zum Leerstring —
+    non-None bleibt non-None. Single-Source fuer Modell-Validator und Tests;
+    Migration 0063 bildet dieselbe Logik in SQL fuer den Bestand ab.
+    """
+    if value is None:
+        return None
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for part in _TRIGGER_SEPARATORS.split(value):
+        entry = part.strip()
+        key = entry.casefold()
+        if entry and key not in seen:
+            seen.add(key)
+            ordered.append(entry)
+    return ", ".join(ordered)
 
 
 class PlaybookContent(BaseModel):
@@ -84,6 +112,15 @@ class PlaybookContent(BaseModel):
         raise ValueError(
             f"Ungueltiger Playbook-Typ {value!r}; erlaubt: {allowed} (oder leer fuer Drafts)."
         )
+
+    @field_validator("triggers")
+    @classmethod
+    def _normalize_triggers(cls, value: str | None) -> str | None:
+        """WP-D1: jeder Write-Pfad (REST + MCP) normalisiert Trigger auf die
+        kanonische kommagetrennte Form — der Service denormalisiert genau
+        diesen Wert auf `playbook.triggers`, damit UI-Split, Aggregat-SQL und
+        Bestand dieselbe Form sehen. Details siehe `normalize_triggers`."""
+        return normalize_triggers(value)
 
 
 class PlaybookCreate(BaseModel):

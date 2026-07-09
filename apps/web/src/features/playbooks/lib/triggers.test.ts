@@ -27,6 +27,19 @@ describe('splitTriggers', () => {
   it('filtert Leereintraege (Mehrfach-Komma) raus', () => {
     expect(splitTriggers('a, , b,,c')).toEqual(['a', 'b', 'c'])
   })
+
+  it('zerlegt auch Semikolon-Listen (Legacy-Eingabeform, WP-D1)', () => {
+    expect(splitTriggers('passwort vergessen; reset link;mail')).toEqual([
+      'passwort vergessen',
+      'reset link',
+      'mail',
+    ])
+  })
+
+  it('zerlegt gemischte Komma-/Semikolon-Listen und filtert Leereintraege', () => {
+    expect(splitTriggers('a, b; c;, d')).toEqual(['a', 'b', 'c', 'd'])
+    expect(splitTriggers(' ; , ')).toEqual([])
+  })
 })
 
 describe('joinTriggers', () => {
