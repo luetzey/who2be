@@ -372,6 +372,16 @@ _Stand: 2026-07-08_
 
 ## In Arbeit
 
+- **Plan „Builder-Befähigung + Agent-Filter + UI-Polish" (2026-07-09), Branch
+  `claude/builder-agents-ui-improvements-o454yy`:** Owner-Ideen recherchiert
+  (3 Explore-Agenten), Rückfragen geklärt, 6 WPs geplant —
+  `.claude/plan/2026-07-09-1556_builder-agents-ui-improvements.md`.
+  Kernbefunde: Builder-Seed widerspricht ADR-0040 (verbietet Template-Bau via
+  MCP), `create_system_prompt`-Docstring dokumentiert tote Liquid-Syntax,
+  Placeholder-Format nirgends agent-lesbar; `agent_scope.py` liefert die
+  komplette Kette für einen `?agent=`-Listen-Filter; Trigger-Riesen-Pill kommt
+  von `;`-getrennten Triggern (Split nur an `,`); Versions-Diff zeigt
+  BlockNote-Bodies als JSON. Umsetzung: WPs D1→B→D2/D3→E→C→F→A, je eigener PR.
 - OAuth-Connector: **E2E mit echtem Claude/ChatGPT-Client** steht aus (braucht
   Stack mit `api.`/`app.`/`mcp.`-Subdomains). Offen-Tasks: TTL-Cleanup der
   OAuth-Tabellen, optional Audience-Trennung am RS, MFA/aal2-Consent (Phase 2).
