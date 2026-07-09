@@ -150,6 +150,52 @@ def test_playbook_triggers_aggregates_dedup_and_isolates_per_workspace(
 
 
 @pytest.mark.integration
+def test_playbook_triggers_aggregate_splits_legacy_semicolons(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """WP-D1: Bestand mit ';'-Separator (vor Migration 0063 bzw. aus Fremd-
+    Quellen) darf im Aggregat nicht als EIN Riesen-Trigger auftauchen. Neue
+    Writes normalisiert das Modell — der Legacy-Zustand wird deshalb per
+    Raw-SQL an der Pydantic-Schicht vorbei in die denormalisierte Spalte
+    geschrieben."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    base = f"/v1/workspaces/{ws}/playbooks"
+
+    async def _plant_legacy_triggers(playbook_id: str) -> None:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            await conn.execute(
+                "UPDATE playbook SET triggers = 'alpha; beta,gamma;' WHERE id = $1",
+                UUID(playbook_id),
+            )
+        finally:
+            await conn.close()
+
+    try:
+        with TestClient(app) as client:
+            created = client.post(base, json=_playbook_body("Legacy", None), headers=auth)
+            assert created.status_code == 201, created.text
+            asyncio.run(_plant_legacy_triggers(created.json()["id"]))
+
+            resp = client.get(f"{base}/triggers", headers=auth)
+            assert resp.status_code == 200, resp.text
+            by_trigger = {item["trigger"]: item["playbooks"] for item in resp.json()}
+            assert {"alpha", "beta", "gamma"} <= set(by_trigger)
+            assert "alpha; beta" not in by_trigger  # keine Riesen-Pill
+            for key in ("alpha", "beta", "gamma"):
+                assert by_trigger[key][0]["name"] == "Legacy"
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
 def test_playbook_triggers_only_seed_baseline_for_fresh_workspace(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

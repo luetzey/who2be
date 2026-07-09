@@ -315,7 +315,37 @@ class PgPlaybookRepository(VersionedAggregateRepository[PlaybookRead, PlaybookVe
                 locale,
                 restrict_ids,
             )
-        return [PlaybookRead.model_validate(dict(row)) for row in rows]
+        playbooks = [PlaybookRead.model_validate(dict(row)) for row in rows]
+        return await self._attach_compose_children(playbooks)
+
+    async def _attach_compose_children(self, playbooks: list[PlaybookRead]) -> list[PlaybookRead]:
+        """WP-D2: Sub-Playbook-Refs fuer die Listen-Seite nachladen.
+
+        EIN Batch-Select ueber `playbook_composition` fuer alle Composites der
+        Seite (kein N+1) — laeuft NACH `_select_current`/`_select_active` und
+        deckt damit beide Lese-Pfade ab. Nur id + name, geordnet nach
+        `position` (Ausfuehrungssequenz, ADR-0024). Nicht-Composites behalten
+        die leere Default-Liste des DTOs.
+        """
+        parent_ids = [playbook.id for playbook in playbooks if playbook.is_composite]
+        if not parent_ids:
+            return playbooks
+        rows = await self._pool.fetch(
+            "SELECT c.parent_id, child.id, child.name "
+            "  FROM playbook_composition c "
+            "  JOIN playbook child ON child.id = c.child_id "
+            " WHERE c.parent_id = ANY($1::uuid[]) "
+            " ORDER BY c.position ASC, child.name ASC",
+            parent_ids,
+        )
+        by_parent: dict[UUID, list[PlaybookRef]] = {}
+        for row in rows:
+            by_parent.setdefault(row["parent_id"], []).append(
+                PlaybookRef(id=row["id"], name=row["name"])
+            )
+        for playbook in playbooks:
+            playbook.compose_children = by_parent.get(playbook.id, [])
+        return playbooks
 
     async def fetch(
         self,
@@ -675,15 +705,19 @@ class PgPlaybookRepository(VersionedAggregateRepository[PlaybookRead, PlaybookVe
     async def list_triggers_with_playbooks(self, workspace_id: UUID) -> list[TriggerOverview]:
         """Welle 5: Discovery-Aggregat fuer den `list_triggers`-MCP-Tool.
 
-        Trigger sind heute kommagetrennt in `playbook.triggers` denormalisiert.
-        Wir splitten in SQL via `string_to_array`+`unnest`, trimmen leere
-        Eintraege und gruppieren in Python — `asyncpg` hat keinen praktischen
-        Weg, JSON-Aggregate ohne weitere Decode-Logik zurueckzugeben.
+        Trigger sind kanonisch kommagetrennt in `playbook.triggers`
+        denormalisiert (WP-D1: Modell-Validator + Migration 0063). Wir
+        splitten in SQL via `regexp_split_to_array`+`unnest` — defensiv an
+        `,` UND `;`, damit auch nicht-normalisierter Legacy-Bestand keine
+        Riesen-Trigger liefert —, trimmen leere Eintraege und gruppieren in
+        Python: `asyncpg` hat keinen praktischen Weg, JSON-Aggregate ohne
+        weitere Decode-Logik zurueckzugeben.
         """
         rows = await self._pool.fetch(
             "SELECT p.id, p.name, trim(t.trigger) AS trigger "
             "  FROM playbook p, "
-            "       unnest(string_to_array(coalesce(p.triggers, ''), ',')) AS t(trigger) "
+            "       unnest(regexp_split_to_array(coalesce(p.triggers, ''), '[,;]')) "
+            "         AS t(trigger) "
             " WHERE p.workspace_id = $1 "
             "   AND trim(t.trigger) <> '' "
             " ORDER BY trim(t.trigger) ASC, p.name ASC",

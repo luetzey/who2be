@@ -272,6 +272,16 @@ _TOOLS: list[_ToolDoc] = [
         ),
     ),
     _ToolDoc(
+        signature="list_placeholders()",
+        capabilities=(AgentCapability.system_prompt_write,),
+        description=(
+            "Katalog der Placeholder-Kinds fuer Template-Bodies (kind, "
+            "`target_id`-Vertrag, Beispiel-Inline). Vor dem Verfassen eines "
+            "Template-Bodys aufrufen — unbekannte Kinds rendern als ungeloeste "
+            "Platzhalter."
+        ),
+    ),
+    _ToolDoc(
         signature="create_system_prompt(…) / update_system_prompt(…) / restore_system_prompt(…)",
         capabilities=(AgentCapability.system_prompt_write,),
         description=(

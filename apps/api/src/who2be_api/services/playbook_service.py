@@ -17,7 +17,7 @@ import asyncpg
 from fastapi import HTTPException, status
 from pydantic import BaseModel
 
-from who2be_api.core.agent_scope import playbook_read_restrict
+from who2be_api.core.agent_scope import agent_filter_playbook_ids, playbook_read_restrict
 from who2be_api.core.security import (
     WorkspaceContext,
     require_capability,
@@ -28,6 +28,7 @@ from who2be_api.core.security import (
 )
 from who2be_api.repositories.playbook_repository import PlaybookRepository
 from who2be_api.repositories.usage_repository import UsageRepository
+from who2be_api.services.content_text import playbook_content_text
 from who2be_api.services.placeholders import RenderContext, render_template_body
 from who2be_api.services.playbook_body_pills import extract_pills
 from who2be_api.services.playbook_composition_service import PlaybookCompositionService
@@ -218,8 +219,17 @@ class PlaybookService:
         limit: int,
         cursor: tuple[datetime, UUID] | None,
         locale: str = DEFAULT_LOCALE,
+        agent: UUID | None = None,
     ) -> tuple[list[PlaybookRead], str | None]:
         restrict_ids = await playbook_read_restrict(self._pool, ctx)
+        # `?agent=`-Listenfilter (WP-B): zugewiesene Playbooks inkl. Composite-
+        # Closure; mit einem Policy-Restrict (assigned-Agent-Token) wird
+        # geschnitten — der Filter weitet die Sicht nie aus.
+        if agent is not None:
+            agent_ids = await agent_filter_playbook_ids(self._pool, ctx.workspace_id, agent)
+            restrict_ids = (
+                agent_ids if restrict_ids is None else sorted(set(agent_ids) & set(restrict_ids))
+            )
         rows = await self._repo.list_by_workspace(
             ctx.workspace_id,
             tag,
@@ -392,6 +402,7 @@ class PlaybookService:
             against_version=base_version,
             before=before,
             after=target.content.model_dump(mode="json"),
+            serializer=playbook_content_text,
         )
 
     def _resolve_against(

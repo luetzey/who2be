@@ -49,6 +49,17 @@
   --color-pill-catalog: var(--pill-catalog-bg);
   --color-pill-catalog-fg: var(--pill-catalog-fg);
 
+  /*
+   * Diff-Tinten (WP-C): gruene/rote Flaechen fuer die git-artige
+   * Versions-Diff-Ansicht (`VersionDiffView`). Eine bg/fg-Tinte je Zeilenart
+   * (added/removed). Erweiterungsklausel design-language §2.4: Use-Case ist
+   * der unified Zeilen-Diff. Rohwerte in :root / data-theme (Light/Dark).
+   */
+  --color-diff-added: var(--diff-added-bg);
+  --color-diff-added-fg: var(--diff-added-fg);
+  --color-diff-removed: var(--diff-removed-bg);
+  --color-diff-removed-fg: var(--diff-removed-fg);
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -178,6 +189,12 @@
   --pill-catalog-bg: oklch(0.93 0.05 195);
   --pill-catalog-fg: oklch(0.45 0.12 195);
 
+  /* Diff-Tinten (Light) — weiche Flaechen, lesbare fg. Siehe @theme. */
+  --diff-added-bg: oklch(0.95 0.05 152);
+  --diff-added-fg: oklch(0.4 0.12 152);
+  --diff-removed-bg: oklch(0.95 0.04 27);
+  --diff-removed-fg: oklch(0.45 0.16 27);
+
   /*
    * Motion-Durations. Kein Tailwind-v4-Namespace dafuer; via
    * duration-[var(--duration-fast)] etc. konsumieren.
@@ -217,6 +234,12 @@
     --status-review: oklch(0.74 0.17 55);
     --status-active: oklch(0.68 0.14 152);
     --status-inactive: oklch(0.4 0 0);
+
+    /* Diff-Tinten (System-Dark) — gedaempfte Flaechen, helle fg. */
+    --diff-added-bg: oklch(0.3 0.06 152);
+    --diff-added-fg: oklch(0.85 0.1 152);
+    --diff-removed-bg: oklch(0.3 0.06 27);
+    --diff-removed-fg: oklch(0.85 0.09 27);
   }
 }
 
@@ -268,6 +291,12 @@
   --pill-tools-fg: oklch(0.45 0 0);
   --pill-catalog-bg: oklch(0.93 0.05 195);
   --pill-catalog-fg: oklch(0.45 0.12 195);
+
+  /* Diff-Tinten (Light) — weiche Flaechen, lesbare fg. Siehe @theme. */
+  --diff-added-bg: oklch(0.95 0.05 152);
+  --diff-added-fg: oklch(0.4 0.12 152);
+  --diff-removed-bg: oklch(0.95 0.04 27);
+  --diff-removed-fg: oklch(0.45 0.16 27);
 }
 
 :root[data-theme='dark'] {
@@ -313,6 +342,12 @@
   --pill-tools-fg: oklch(0.85 0 0);
   --pill-catalog-bg: oklch(0.32 0.05 195);
   --pill-catalog-fg: oklch(0.85 0.1 195);
+
+  /* Diff-Tinten (Dark) — gedaempfte Flaechen, helle fg. Siehe @theme. */
+  --diff-added-bg: oklch(0.3 0.06 152);
+  --diff-added-fg: oklch(0.85 0.1 152);
+  --diff-removed-bg: oklch(0.3 0.06 27);
+  --diff-removed-fg: oklch(0.85 0.09 27);
 }
 
 @layer base {

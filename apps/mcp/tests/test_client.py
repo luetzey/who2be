@@ -147,14 +147,17 @@ def test_get_persona_rendered_returns_body_string() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == f"{_WS_PREFIX}/personas/{persona_id}/rendered"
+        # Ohne Modus-Anfrage wird kein `mode`-Query-Param gesendet (additiv).
+        assert "mode" not in request.url.params
         return httpx.Response(
             200,
             json={"body_rendered": "Profil\n\n## Skills\n...", "unresolved": []},
         )
 
-    body = asyncio.run(_client(handler).get_persona_rendered(persona_id))
+    body, applied = asyncio.run(_client(handler).get_persona_rendered(persona_id))
     assert body.startswith("Profil")
     assert "## Skills" in body
+    assert applied is None
 
 
 def test_get_persona_rendered_tolerates_missing_field() -> None:
@@ -163,8 +166,44 @@ def test_get_persona_rendered_tolerates_missing_field() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"unresolved": []})
 
-    body = asyncio.run(_client(handler).get_persona_rendered(persona_id))
+    body, applied = asyncio.run(_client(handler).get_persona_rendered(persona_id))
     assert body == ""
+    assert applied is None
+
+
+def test_get_persona_rendered_forwards_mode_and_returns_applied_name() -> None:
+    """WP-F: `mode` wandert als Query-Param zur API; der kanonische Name kommt zurueck."""
+    persona_id = uuid4()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == f"{_WS_PREFIX}/personas/{persona_id}/rendered"
+        assert request.url.params["mode"] == "sparring"
+        return httpx.Response(
+            200,
+            json={
+                "body_rendered": "Profil\n\n## Aktiver Modus: Sparring",
+                "unresolved": [],
+                "mode": "Sparring",
+            },
+        )
+
+    body, applied = asyncio.run(_client(handler).get_persona_rendered(persona_id, mode="sparring"))
+    assert "## Aktiver Modus: Sparring" in body
+    assert applied == "Sparring"
+
+
+def test_get_persona_rendered_unknown_mode_raises_toolerror_with_detail() -> None:
+    """WP-F: das 422-`detail` (Liste verfuegbarer Modi) landet im ToolError."""
+    persona_id = uuid4()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            422,
+            json={"detail": "Unbekannter Modus 'Ghost'. Verfuegbare Modi: Sparring, Kurzform."},
+        )
+
+    with pytest.raises(ToolError, match="Verfuegbare Modi: Sparring, Kurzform"):
+        asyncio.run(_client(handler).get_persona_rendered(persona_id, mode="Ghost"))
 
 
 def test_list_playbooks_forwards_filters() -> None:

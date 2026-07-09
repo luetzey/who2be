@@ -77,5 +77,25 @@ einen neuen Eintrag mit Verweis.
   für Public Clients); Ketten-Kill inkl. Refresh-Tokens „richtig" bauen (würde
   multi-runtime Clients erst recht hart aussperren).
 
+## 2026-07-09 — Builder-/UI-Block (PR #301): vier kleine Richtungsentscheidungen
+- **Trigger-Migration 0063 normalisiert ALLE Versions-Snapshots in-place** (nicht
+  nur aktive, keine neuen Versionen): rein syntaktische Kanonisierung (`;`→`,`,
+  trim, dedupe) — sonst zeigt jeder künftige Versions-Diff dauerhaft
+  Trigger-Rauschen gegen die neue Kanonik. Write-Pfad normalisiert ab jetzt via
+  Pydantic-Validator (`normalize_triggers`), Read-Pfad heilt sich beim Parsen selbst.
+- **`?group=` ist Anzeige-Präferenz, kein Filter:** zählt nicht in `active`,
+  wird von `reset()` nicht geräumt (Gruppierung reduziert nie die Treffermenge).
+- **`get_persona(mode=…)`/`render(mode=…)` statt persistentem Agent-Modus:**
+  Modus-Anwendung bleibt zustandslos pro Abruf (identity_add append,
+  output_style_override replace, 422 mit Modi-Liste bei Unbekanntem); ein
+  gespeicherter „aktiver Modus" pro Agent wurde bewusst verworfen (Zustand ohne
+  belegten Bedarf).
+- **Builder darf Templates via MCP verfassen (Seed-Korrektur zu ADR-0040):**
+  Das Agent-Playbook verbot den Template-Bau via MCP, obwohl ADR-0040 +
+  `system_prompt_write` ihn vorsehen — Seeds folgen jetzt dem ADR (draft→review;
+  Aktivieren bleibt Mensch/UI). Placeholder-Format ist über den neuen
+  `GET …/placeholders`-Katalog + `list_placeholders` zur Laufzeit entdeckbar
+  statt nur im Frontend-Code.
+
 _Bei Wachstum: älteste Einträge zu Einzeilern komprimieren (Titel + Entscheidung
 bleiben)._

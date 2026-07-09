@@ -91,9 +91,14 @@ async def list_playbooks(
     locale: LocaleQuery,
     tag: Annotated[str | None, Query(max_length=100)] = None,
     trigger: Annotated[str | None, Query(max_length=200)] = None,
+    agent: Annotated[UUID | None, Query()] = None,
     limit: PageLimit = DEFAULT_LIMIT,
 ) -> list[PlaybookRead]:
-    items, next_cursor = await service.list_all(ctx, tag, trigger, limit, cursor, locale=locale)
+    """Listet Playbooks; `?agent=` filtert auf die dem Agenten zugewiesenen
+    Playbooks inkl. Composite-Closure (WP-B), kombinierbar mit `tag`/`trigger`."""
+    items, next_cursor = await service.list_all(
+        ctx, tag, trigger, limit, cursor, locale=locale, agent=agent
+    )
     if next_cursor is not None:
         response.headers["X-Next-Cursor"] = next_cursor
     return items

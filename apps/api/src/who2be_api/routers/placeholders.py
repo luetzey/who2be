@@ -1,7 +1,13 @@
-"""REST-Endpunkt fuer Placeholder-Preview (`/v1/workspaces/{workspace_id}/placeholders`).
+"""REST-Endpunkte fuer Placeholder (`/v1/workspaces/{workspace_id}/placeholders`).
 
-Read-only: liefert den aufgeloesten Output einer einzelnen Editor-Pill fuer das
-Klick-Overlay. Nutzt dieselben Resolver wie der Body-Renderer (REGISTRY).
+Read-only:
+- `GET /placeholders` — statischer Kind-Katalog (WP-A): welches `kind` mit
+  welchem `target_id`-Vertrag existiert, samt Beispiel-Inline. Macht das
+  Placeholder-Format fuer MCP-Agenten (`list_placeholders`) zur Laufzeit
+  entdeckbar.
+- `GET /placeholders/preview` — loest den Output einer einzelnen Editor-Pill
+  fuer das Klick-Overlay auf. Nutzt dieselben Resolver wie der Body-Renderer
+  (REGISTRY).
 """
 
 from typing import Annotated
@@ -16,6 +22,8 @@ from who2be_api.services.placeholder_preview_service import (
     PlaceholderPreviewResponse,
     PlaceholderPreviewService,
 )
+from who2be_api.services.placeholders.kind_catalog import placeholder_catalog
+from who2be_models import PlaceholderCatalog
 
 router = APIRouter(prefix="/placeholders", tags=["placeholders"])
 
@@ -28,6 +36,18 @@ def get_placeholder_preview_service(
 
 Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]
 Service = Annotated[PlaceholderPreviewService, Depends(get_placeholder_preview_service)]
+
+
+@router.get("")
+async def list_placeholders(_ctx: Ctx) -> PlaceholderCatalog:
+    """Statischer Katalog aller Placeholder-Kinds fuer Template-Bodies.
+
+    Pro Kind: Beschreibung, `target_id`-Semantik (+ abschliessende Werteliste,
+    wo es eine gibt) und ein gueltiges Beispiel-Inline-Element. Der Katalog ist
+    workspace-unabhaengig und unsensibel — das Gate ist die normale
+    Workspace-Mitgliedschaft bzw. der API-Token (auch agent-gebunden lesbar,
+    wie die uebrigen Reads)."""
+    return placeholder_catalog()
 
 
 @router.get("/preview")

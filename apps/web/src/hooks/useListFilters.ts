@@ -28,6 +28,15 @@ export interface ListFilters<T> {
   query: string
   tag: string
   type: string
+  // SERVERSEITIGE Facette (WP-B): Agent-ID aus `?agent=`. Anders als die
+  // clientseitigen Facetten filtert der Hook damit NICHT — die Page reicht
+  // den Wert an den Daten-Hook durch, der den Refetch ausloest.
+  agent: string
+  // ANZEIGE-Praeferenz (WP-D3): Group-by-Modus aus `?group=`. Kein Filter —
+  // grenzt die Liste nicht ein und zaehlt deshalb weder fuer `active` noch
+  // fuer `reset`. Die Page interpretiert/validiert den Wert selbst
+  // (Playbooks: `none|type|composite`) und gruppiert clientseitig.
+  group: string
   availableTags: string[]
   availableTypes: string[]
   active: boolean
@@ -35,6 +44,8 @@ export interface ListFilters<T> {
   setQuery: (value: string) => void
   setTag: (value: string) => void
   setType: (value: string) => void
+  setAgent: (value: string) => void
+  setGroup: (value: string) => void
   reset: () => void
 }
 
@@ -44,12 +55,28 @@ const STATUS_KEY = 'status'
 const QUERY_KEY = 'q'
 const TAG_KEY = 'tag'
 const TYPE_KEY = 'type'
+const AGENT_KEY = 'agent'
+const GROUP_KEY = 'group'
+
+/**
+ * Aktueller `?agent=`-Wert (serverseitige Facette, WP-B) — fuer die Page,
+ * die den Wert VOR `useListFilters` an ihren Daten-Hook durchreichen muss
+ * (der Filter wirkt im Backend, die Liste kommt bereits gefiltert an).
+ */
+export function useAgentFilterParam(): string {
+  const [params] = useSearchParams()
+  return params.get(AGENT_KEY) ?? ''
+}
 
 /**
  * Kombinierbare, URL-synchronisierte Filter fuer eine Listen-Seite:
  * Status-Quick-Filter (inkl. „Braucht Aufmerksamkeit") UND Freitext UND Tag
  * UND Typ. Zaehler werden ueber die nach Text/Tag/Typ eingegrenzte Basismenge
  * gerechnet, damit die Chip-Zahlen dem tatsaechlichen Klick-Ergebnis entsprechen.
+ *
+ * Die Agent-Facette (`?agent=`) ist die Ausnahme: sie wirkt SERVERSEITIG.
+ * Der Hook verwaltet nur URL-Wert/Setter/Reset; `items` muessen bereits
+ * gefiltert ankommen (Page: `useAgentFilterParam()` → Daten-Hook → Refetch).
  */
 export function useListFilters<T>(
   items: readonly T[],
@@ -62,6 +89,8 @@ export function useListFilters<T>(
   const query = params.get(QUERY_KEY) ?? ''
   const tag = params.get(TAG_KEY) ?? ''
   const type = params.get(TYPE_KEY) ?? ''
+  const agent = params.get(AGENT_KEY) ?? ''
+  const group = params.get(GROUP_KEY) ?? ''
 
   const setParam = useCallback(
     (key: string, value: string) => {
@@ -85,6 +114,8 @@ export function useListFilters<T>(
   const setQuery = useCallback((value: string) => setParam(QUERY_KEY, value), [setParam])
   const setTag = useCallback((value: string) => setParam(TAG_KEY, value), [setParam])
   const setType = useCallback((value: string) => setParam(TYPE_KEY, value), [setParam])
+  const setAgent = useCallback((value: string) => setParam(AGENT_KEY, value), [setParam])
+  const setGroup = useCallback((value: string) => setParam(GROUP_KEY, value), [setParam])
 
   const reset = useCallback(() => {
     setParams(
@@ -94,6 +125,7 @@ export function useListFilters<T>(
         next.delete(QUERY_KEY)
         next.delete(TAG_KEY)
         next.delete(TYPE_KEY)
+        next.delete(AGENT_KEY)
         return next
       },
       { replace: true },
@@ -153,7 +185,7 @@ export function useListFilters<T>(
     [base, status, accessors],
   )
 
-  const active = status !== 'all' || query !== '' || tag !== '' || type !== ''
+  const active = status !== 'all' || query !== '' || tag !== '' || type !== '' || agent !== ''
 
   return {
     filtered: filtered as T[],
@@ -162,6 +194,8 @@ export function useListFilters<T>(
     query,
     tag,
     type,
+    agent,
+    group,
     availableTags,
     availableTypes,
     active,
@@ -169,6 +203,8 @@ export function useListFilters<T>(
     setQuery,
     setTag,
     setType,
+    setAgent,
+    setGroup,
     reset,
   }
 }

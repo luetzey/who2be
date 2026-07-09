@@ -68,6 +68,7 @@ class PersonaRepository(Protocol):
         after: tuple[datetime, UUID] | None,
         active_only: bool = False,
         locale: str = DEFAULT_LOCALE,
+        restrict_ids: list[UUID] | None = None,
     ) -> list[PersonaRead]: ...
 
     async def fetch(
@@ -225,30 +226,38 @@ class PgPersonaRepository(VersionedAggregateRepository[PersonaRead, PersonaVersi
         after: tuple[datetime, UUID] | None,
         active_only: bool = False,
         locale: str = DEFAULT_LOCALE,
+        restrict_ids: list[UUID] | None = None,
     ) -> list[PersonaRead]:
         builder = self._select_active if active_only else self._select_current
         # Tie-Breaker auf `id` haelt die Sortierung stabil, wenn zwei Rows
-        # auf die Microsekunde gleichzeitig angelegt wurden.
+        # auf die Microsekunde gleichzeitig angelegt wurden. `restrict_ids`
+        # (z. B. `?agent=`-Listenfilter, WP-B) ist der letzte Parameter:
+        # NULL ⇒ keine Einschraenkung, leere Liste ⇒ keine Treffer —
+        # gleiche Mechanik wie bei Playbook/Resource.
         if after is None:
             select = builder("$3")
             rows = await self._pool.fetch(
                 f"{select} WHERE e.workspace_id = $1 "
+                "AND ($4::uuid[] IS NULL OR e.id = ANY($4)) "
                 "ORDER BY e.created_at DESC, e.id DESC LIMIT $2",
                 workspace_id,
                 limit,
                 locale,
+                restrict_ids,
             )
         else:
             select = builder("$5")
             rows = await self._pool.fetch(
                 f"{select} WHERE e.workspace_id = $1 "
                 "AND (e.created_at, e.id) < ($2, $3) "
+                "AND ($6::uuid[] IS NULL OR e.id = ANY($6)) "
                 "ORDER BY e.created_at DESC, e.id DESC LIMIT $4",
                 workspace_id,
                 after[0],
                 after[1],
                 limit,
                 locale,
+                restrict_ids,
             )
         return [PersonaRead.model_validate(dict(row)) for row in rows]
 

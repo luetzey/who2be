@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 
-import { useListFilters, type ListFilterAccessors } from './useListFilters'
+import { useAgentFilterParam, useListFilters, type ListFilterAccessors } from './useListFilters'
 
 interface Item {
   name: string
@@ -109,14 +109,58 @@ describe('useListFilters', () => {
   })
 
   it('reset raeumt alle Filter ab', () => {
-    const { result } = renderFilters(['/?status=review&q=be&tag=y&type=prompt'])
+    const { result } = renderFilters(['/?status=review&q=be&tag=y&type=prompt&agent=a1'])
     expect(result.current.active).toBe(true)
     act(() => result.current.reset())
     expect(result.current.status).toBe('all')
     expect(result.current.query).toBe('')
     expect(result.current.tag).toBe('')
     expect(result.current.type).toBe('')
+    expect(result.current.agent).toBe('')
     expect(result.current.active).toBe(false)
+  })
+
+  it('liest die Agent-Facette aus der URL, ohne clientseitig zu filtern', () => {
+    const { result } = renderFilters(['/?agent=a1'])
+    expect(result.current.agent).toBe('a1')
+    expect(result.current.active).toBe(true)
+    // Serverseitige Facette: items kommen bereits gefiltert an — der Hook
+    // grenzt die Liste NICHT zusaetzlich ein.
+    expect(result.current.filtered).toHaveLength(6)
+  })
+
+  it('setAgent schreibt und entfernt den URL-Param', () => {
+    const { result } = renderFilters()
+    act(() => result.current.setAgent('a1'))
+    expect(result.current.agent).toBe('a1')
+    act(() => result.current.setAgent(''))
+    expect(result.current.agent).toBe('')
+    expect(result.current.active).toBe(false)
+  })
+
+  it('group ist Anzeige-Praeferenz: liest/schreibt ?group=, zaehlt nicht als Filter', () => {
+    const { result } = renderFilters(['/?group=type'])
+    expect(result.current.group).toBe('type')
+    // Gruppierung grenzt nichts ein — weder Liste noch `active`.
+    expect(result.current.filtered).toHaveLength(6)
+    expect(result.current.active).toBe(false)
+
+    act(() => result.current.setGroup('composite'))
+    expect(result.current.group).toBe('composite')
+    act(() => result.current.reset())
+    // reset raeumt Filter ab, laesst die Anzeige-Praeferenz stehen.
+    expect(result.current.group).toBe('composite')
+    act(() => result.current.setGroup(''))
+    expect(result.current.group).toBe('')
+  })
+
+  it('useAgentFilterParam liest denselben ?agent=-Wert', () => {
+    const { result } = renderHook(() => useAgentFilterParam(), {
+      wrapper: wrapperFor(['/?agent=a9']),
+    })
+    expect(result.current).toBe('a9')
+    const empty = renderHook(() => useAgentFilterParam(), { wrapper: wrapperFor(['/']) })
+    expect(empty.result.current).toBe('')
   })
 
   it('ohne tags/type-Accessoren bleiben die Facetten leer', () => {

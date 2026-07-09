@@ -125,6 +125,11 @@
       "typeLabel": "Typ",
       "allTags": "Alle Tags",
       "allTypes": "Alle Typen",
+      "agentLabel": "Agent",
+      "allAgents": "Alle Agenten",
+      "agentChip": "Agent: {{name}}",
+      "agentChipRemove": "Agent-Filter entfernen ({{name}})",
+      "groupLabel": "Gruppieren",
       "reset": "Filter zurücksetzen",
       "pendingDraft": "Entwurf offen",
       "emptyFilteredTitle": "Keine Treffer",
@@ -158,7 +163,10 @@
       "comparing": "Vergleich v{{version}} gegen {{against}}",
       "before": "Vorher:",
       "after": "Nachher:",
-      "empty": "(leer)"
+      "empty": "(leer)",
+      "textDiffLabel": "Inhalts-Diff",
+      "lineAdded": "Hinzugefügte Zeile",
+      "lineRemoved": "Entfernte Zeile"
     },
     "provenance": {
       "title": "Herkunft",
@@ -806,8 +814,15 @@
       },
       "playbooks": {
         "title": "Verknüpfte Playbooks",
-        "empty": "Keine Playbooks vorhanden.",
-        "save": "Verknüpfungen speichern"
+        "empty": "Keine Playbooks verknüpft.",
+        "edit": "Verknüpfungen bearbeiten",
+        "save": "Verknüpfungen speichern",
+        "noneAvailable": "Keine Playbooks vorhanden.",
+        "searchLabel": "Playbooks durchsuchen",
+        "searchPlaceholder": "Nach Name filtern…",
+        "searchEmpty": "Keine Playbooks für diese Suche.",
+        "triggerCount_one": "{{count}} Trigger",
+        "triggerCount_other": "{{count}} Trigger"
       }
     },
     "new": {
@@ -970,6 +985,19 @@
       "newButton": "Neues Playbook",
       "tagFilter": "Tag-Filter",
       "triggerFilter": "Trigger-Filter",
+      "composedOf": "komponiert:",
+      "moreTriggers_one": "{{count}} weiterer Trigger",
+      "moreTriggers_other": "{{count}} weitere Trigger",
+      "group": {
+        "none": "Keine Gruppierung",
+        "type": "Nach Typ",
+        "composite": "Composite / Standalone"
+      },
+      "groups": {
+        "composite": "Composite",
+        "standalone": "Standalone",
+        "untyped": "Ohne Typ"
+      },
       "empty": {
         "title": "Noch keine Playbooks",
         "description": "Lege dein erstes Playbook an, um Workflows zu definieren.",

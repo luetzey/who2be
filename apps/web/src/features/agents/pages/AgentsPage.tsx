@@ -13,9 +13,8 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { useAgents } from '@/hooks/useAgents'
 import { notify } from '@/lib/feedback'
-
-import { useAgents } from '../hooks/useAgents'
 
 export function AgentsPage() {
   const { t } = useTranslation('agents')

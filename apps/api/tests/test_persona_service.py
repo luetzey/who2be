@@ -16,6 +16,7 @@ from who2be_models import (
     AgentToolPolicy,
     PersonaContent,
     PersonaCreate,
+    PersonaMode,
     PersonaRead,
     PersonaUpdate,
     PersonaVersionContent,
@@ -88,6 +89,7 @@ class FakePersonaRepository:
         after: tuple[datetime, UUID] | None,
         active_only: bool = False,
         locale: str = "de",
+        restrict_ids: list[UUID] | None = None,
     ) -> list[PersonaRead]:
         self.last_active_only = active_only
         own = sorted(
@@ -97,6 +99,8 @@ class FakePersonaRepository:
         )
         if active_only:
             own = [p for p in own if p.current_status == VersionStatus.active]
+        if restrict_ids is not None:
+            own = [p for p in own if p.id in set(restrict_ids)]
         if after is not None:
             own = [p for p in own if (p.created_at, p.id) < after]
         return own[:limit]
@@ -599,3 +603,130 @@ def test_render_unknown_persona_raises_404() -> None:
     with pytest.raises(HTTPException) as exc:
         asyncio.run(service.render(ctx, uuid4()))
     assert exc.value.status_code == 404
+
+
+# --- WP-F: Modus-Auswahl im Render-Pfad (`render(mode=…)`) -------------------
+
+
+def _mode_persona_content(modes: "list[PersonaMode]") -> PersonaVersionContent:
+    return PersonaVersionContent(
+        description="Coach",
+        content=PersonaContent(blocks=[_profile_block("Basis-Profil")]),
+        modes=modes,
+    )
+
+
+def test_render_mode_appends_identity_add() -> None:
+    service, ctx = _service_with_pool()
+    content = _mode_persona_content(
+        [PersonaMode(name="Sparring", identity_add=[_profile_block("Du bist provokant")])]
+    )
+    created = asyncio.run(service.create(ctx, PersonaCreate(name="Coach", content=content)))
+
+    result = asyncio.run(service.render(ctx, created.id, mode="Sparring"))
+
+    assert result.mode == "Sparring"
+    assert result.body_rendered.startswith("Basis-Profil")
+    assert "## Aktiver Modus: Sparring" in result.body_rendered
+    assert "**Identity-Ergaenzung:** Du bist provokant" in result.body_rendered
+
+
+def test_render_mode_output_style_override_marked_as_replacement() -> None:
+    service, ctx = _service_with_pool()
+    content = _mode_persona_content(
+        [
+            PersonaMode(
+                name="Kurzform",
+                output_style_override=[_profile_block("Max. drei Saetze")],
+            )
+        ]
+    )
+    created = asyncio.run(service.create(ctx, PersonaCreate(name="Coach", content=content)))
+
+    result = asyncio.run(service.render(ctx, created.id, mode="Kurzform"))
+
+    assert "**Output-Stil:** Max. drei Saetze" in result.body_rendered
+    # Die Anwendungszeile macht die Ersetzungs-Semantik explizit.
+    assert "ERSETZT den Basis-Output-Stil" in result.body_rendered
+
+
+def test_render_mode_includes_anti_patterns() -> None:
+    service, ctx = _service_with_pool()
+    content = _mode_persona_content(
+        [PersonaMode(name="Review", anti_patterns=[_profile_block("Keine Lobhudelei")])]
+    )
+    created = asyncio.run(service.create(ctx, PersonaCreate(name="Coach", content=content)))
+
+    result = asyncio.run(service.render(ctx, created.id, mode="Review"))
+
+    assert "**Anti-Patterns:** Keine Lobhudelei" in result.body_rendered
+
+
+def test_render_mode_default_gets_marker() -> None:
+    service, ctx = _service_with_pool()
+    content = _mode_persona_content(
+        [
+            PersonaMode(name="Standard", is_default=True, trigger="alltag"),
+            PersonaMode(name="Deep-Dive"),
+        ]
+    )
+    created = asyncio.run(service.create(ctx, PersonaCreate(name="Coach", content=content)))
+
+    result = asyncio.run(service.render(ctx, created.id, mode="Standard"))
+
+    assert "## Aktiver Modus: Standard (Default)" in result.body_rendered
+    assert "**Trigger:** alltag" in result.body_rendered
+
+
+def test_render_mode_name_matches_case_insensitively() -> None:
+    service, ctx = _service_with_pool()
+    content = _mode_persona_content([PersonaMode(name="Sparring")])
+    created = asyncio.run(service.create(ctx, PersonaCreate(name="Coach", content=content)))
+
+    result = asyncio.run(service.render(ctx, created.id, mode="sPaRrInG"))
+
+    # Kanonischer Name aus dem Content, nicht die Eingabe-Schreibweise.
+    assert result.mode == "Sparring"
+    assert "## Aktiver Modus: Sparring" in result.body_rendered
+
+
+def test_render_unknown_mode_raises_422_with_available_modes() -> None:
+    service, ctx = _service_with_pool()
+    content = _mode_persona_content([PersonaMode(name="Sparring"), PersonaMode(name="Kurzform")])
+    created = asyncio.run(service.create(ctx, PersonaCreate(name="Coach", content=content)))
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(service.render(ctx, created.id, mode="Ghost"))
+
+    assert exc.value.status_code == 422
+    assert "Ghost" in str(exc.value.detail)
+    assert "Sparring" in str(exc.value.detail)
+    assert "Kurzform" in str(exc.value.detail)
+
+
+def test_render_mode_on_persona_without_modes_raises_422() -> None:
+    service, ctx = _service_with_pool()
+    content = PersonaVersionContent(
+        description="Coach", content=PersonaContent(blocks=[_profile_block("Basis-Profil")])
+    )
+    created = asyncio.run(service.create(ctx, PersonaCreate(name="Coach", content=content)))
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(service.render(ctx, created.id, mode="Sparring"))
+
+    assert exc.value.status_code == 422
+    assert "keine" in str(exc.value.detail)
+
+
+def test_render_without_mode_param_stays_unchanged() -> None:
+    service, ctx = _service_with_pool()
+    content = _mode_persona_content(
+        [PersonaMode(name="Sparring", identity_add=[_profile_block("Provokant")])]
+    )
+    created = asyncio.run(service.create(ctx, PersonaCreate(name="Coach", content=content)))
+
+    result = asyncio.run(service.render(ctx, created.id))
+
+    assert result.body_rendered == "Basis-Profil"
+    assert result.mode is None
+    assert "Aktiver Modus" not in result.body_rendered

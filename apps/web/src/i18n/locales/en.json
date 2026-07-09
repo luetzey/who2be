@@ -125,6 +125,11 @@
       "typeLabel": "Type",
       "allTags": "All tags",
       "allTypes": "All types",
+      "agentLabel": "Agent",
+      "allAgents": "All agents",
+      "agentChip": "Agent: {{name}}",
+      "agentChipRemove": "Remove agent filter ({{name}})",
+      "groupLabel": "Group by",
       "reset": "Reset filters",
       "pendingDraft": "Draft open",
       "emptyFilteredTitle": "No matches",
@@ -158,7 +163,10 @@
       "comparing": "Comparing v{{version}} against {{against}}",
       "before": "Before:",
       "after": "After:",
-      "empty": "(empty)"
+      "empty": "(empty)",
+      "textDiffLabel": "Content diff",
+      "lineAdded": "Added line",
+      "lineRemoved": "Removed line"
     },
     "provenance": {
       "title": "Provenance",
@@ -806,8 +814,15 @@
       },
       "playbooks": {
         "title": "Linked playbooks",
-        "empty": "No playbooks available.",
-        "save": "Save links"
+        "empty": "No playbooks linked.",
+        "edit": "Edit links",
+        "save": "Save links",
+        "noneAvailable": "No playbooks available.",
+        "searchLabel": "Search playbooks",
+        "searchPlaceholder": "Filter by name…",
+        "searchEmpty": "No playbooks match this search.",
+        "triggerCount_one": "{{count}} trigger",
+        "triggerCount_other": "{{count}} triggers"
       }
     },
     "new": {
@@ -970,6 +985,19 @@
       "newButton": "New playbook",
       "tagFilter": "Tag filter",
       "triggerFilter": "Trigger filter",
+      "composedOf": "composes:",
+      "moreTriggers_one": "{{count}} more trigger",
+      "moreTriggers_other": "{{count}} more triggers",
+      "group": {
+        "none": "No grouping",
+        "type": "By type",
+        "composite": "Composite / standalone"
+      },
+      "groups": {
+        "composite": "Composite",
+        "standalone": "Standalone",
+        "untyped": "No type"
+      },
       "empty": {
         "title": "No playbooks yet",
         "description": "Create your first playbook to define workflows.",

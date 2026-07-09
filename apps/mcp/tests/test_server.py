@@ -191,6 +191,59 @@ def test_get_persona_tool_includes_body_rendered(
     assert isinstance(data, dict)
     assert data["body_rendered"] == "Profil-Briefing\n\n## Skills"
     assert data["persona"]["name"] == "QA"
+    # Ohne Modus-Anfrage bleibt `mode` leer (WP-F, additiv).
+    assert data["mode"] is None
+
+
+def test_get_persona_tool_forwards_mode_param(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """WP-F: `get_persona(mode=…)` reicht den Modus als `?mode=` an die API durch
+    und traegt den kanonischen Namen des angewendeten Modus in der Antwort."""
+    workspace_id = uuid4()
+    persona_id = uuid4()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith(f"/personas/{persona_id}/rendered"):
+            assert request.url.params["mode"] == "sparring"
+            return httpx.Response(
+                200,
+                json={
+                    "body_rendered": "Profil\n\n## Aktiver Modus: Sparring",
+                    "unresolved": [],
+                    "mode": "Sparring",
+                },
+            )
+        if path.endswith(f"/personas/{persona_id}/playbooks"):
+            return httpx.Response(200, json=[])
+        if path.endswith(f"/personas/{persona_id}"):
+            return httpx.Response(200, json=_persona_json(str(persona_id), "QA", str(workspace_id)))
+        return httpx.Response(404, json={"detail": "weg"})
+
+    api_client = ApiClient(
+        "http://api.test",
+        "tok",
+        workspace_id,
+        transport=httpx.MockTransport(handler),
+    )
+
+    async def _build() -> ApiClient:
+        return api_client
+
+    monkeypatch.setattr(server, "build_client", _build)
+
+    async def _run() -> object:
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "get_persona", {"identifier": str(persona_id), "mode": "sparring"}
+            )
+            return result.structured_content
+
+    data = asyncio.run(_run())
+    assert isinstance(data, dict)
+    assert data["mode"] == "Sparring"
+    assert "## Aktiver Modus: Sparring" in data["body_rendered"]
 
 
 def test_list_playbooks_tool_returns_playbooks(

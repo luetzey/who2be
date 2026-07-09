@@ -83,6 +83,12 @@ from who2be_models.persona import (
     PersonaVersionRead,
     SkillRef,
 )
+from who2be_models.placeholder import (
+    PlaceholderCatalog,
+    PlaceholderInlineExample,
+    PlaceholderInlineProps,
+    PlaceholderKindInfo,
+)
 from who2be_models.playbook import (
     PlaybookContent,
     PlaybookCreate,
@@ -222,6 +228,10 @@ __all__ = [
     "PersonaVersionContent",
     "PersonaVersionRead",
     "SkillRef",
+    "PlaceholderCatalog",
+    "PlaceholderInlineExample",
+    "PlaceholderInlineProps",
+    "PlaceholderKindInfo",
     "PlaybookContent",
     "PlaybookCreate",
     "PlaybookRead",

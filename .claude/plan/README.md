@@ -16,6 +16,7 @@ Bei Konflikt zwischen Plan-Header und dieser Übersicht **gewinnt die Übersicht
 | `2026-05-27-1935_license-fsl-setup.md` | FSL-1.1-Apache-2.0 als Lizenzmodell — LICENSE.md/CONTRIBUTING liegen; CLA-Aktivierung offen (Owner) |
 | `2026-05-27-2028_public-switch-github-repo.md` | Repo privat → öffentlich; finaler Flip + GitHub-Settings beim Owner (siehe STATE.md §Nächste Schritte) |
 | `2026-05-28-0528_enterprise-license-management.md` | Code-Hooks-only; aktiviert bei erstem qualifizierten Lead |
+| `2026-07-09-1556_builder-agents-ui-improvements.md` | Builder-Befähigung (Placeholder/Modi/Sub-Playbooks) + Agent-Filter + UI-Polish (Git-Diff, Trigger-Pills, Playbooks-Liste, Persona-Sektion) — 6 WPs ✅ umgesetzt (PR #301) |
 
 ## Blöcke seit 2026-05-30 (nachgeführt 2026-07-08)
 

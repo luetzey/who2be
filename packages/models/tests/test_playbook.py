@@ -38,6 +38,31 @@ def test_content_defaults_tags_and_triggers() -> None:
     assert content.triggers is None
 
 
+def test_content_normalizes_semicolon_triggers() -> None:
+    # WP-D1: mit ';' erfasste Trigger rendern in der UI als eine Riesen-Pill —
+    # der Validator normalisiert am Modell-Rand auf kommagetrennt.
+    content = PlaybookContent(triggers="reset; logout;callback")
+    assert content.triggers == "reset, logout, callback"
+
+
+def test_content_triggers_trim_and_mixed_separators() -> None:
+    content = PlaybookContent(triggers=" reset ,  logout ;callback, ")
+    assert content.triggers == "reset, logout, callback"
+
+
+def test_content_triggers_dedupe_case_insensitive_first_spelling_wins() -> None:
+    content = PlaybookContent(triggers="Reset, logout; reset ,LOGOUT; callback")
+    assert content.triggers == "Reset, logout, callback"
+
+
+def test_content_triggers_preserve_none_and_empty_string() -> None:
+    # Leerstring/None-Verhalten bleibt erhalten; nur Separatoren/Whitespace
+    # kollabieren zum Leerstring (nicht zu None).
+    assert PlaybookContent(triggers=None).triggers is None
+    assert PlaybookContent(triggers="").triggers == ""
+    assert PlaybookContent(triggers=" ; , ").triggers == ""
+
+
 def test_content_body_is_plain_string_field() -> None:
     # Track B (Nur-BlockNote): `body` ist immer ein (stringifizierter BlockNote-)
     # String; es gibt keinen `body_format`-Schalter mehr.

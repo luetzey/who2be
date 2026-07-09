@@ -11,7 +11,7 @@ from uuid import UUID
 import asyncpg
 from fastapi import HTTPException, status
 
-from who2be_api.core.agent_scope import resource_read_restrict
+from who2be_api.core.agent_scope import agent_filter_resource_ids, resource_read_restrict
 from who2be_api.core.security import (
     WorkspaceContext,
     require_capability,
@@ -27,6 +27,7 @@ from who2be_api.repositories.playbook_resource_link_repository import (
 )
 from who2be_api.repositories.resource_repository import ResourceRepository
 from who2be_api.repositories.usage_repository import UsageRepository
+from who2be_api.services.content_text import resource_content_text
 from who2be_api.services.version_diff import compute_version_diff
 from who2be_models import (
     DEFAULT_LOCALE,
@@ -164,8 +165,19 @@ class ResourceService:
         limit: int,
         cursor: tuple[datetime, UUID] | None,
         locale: str = DEFAULT_LOCALE,
+        agent: UUID | None = None,
     ) -> tuple[list[ResourceRead], str | None]:
         restrict_ids = await self._read_restrict(ctx)
+        # `?agent=`-Listenfilter (WP-B): erreichbare Resources inkl. Sub-
+        # Resource-Closure; mit einem Policy-Restrict (assigned-Agent-Token)
+        # wird geschnitten — der Filter weitet die Sicht nie aus.
+        if agent is not None:
+            if self._pool is None:  # pragma: no cover - im Prod immer gesetzt
+                raise RuntimeError("ResourceService.list_all(agent=…) benoetigt einen DB-Pool.")
+            agent_ids = await agent_filter_resource_ids(self._pool, ctx.workspace_id, agent)
+            restrict_ids = (
+                agent_ids if restrict_ids is None else sorted(set(agent_ids) & set(restrict_ids))
+            )
         rows = await self._repo.list_by_workspace(
             ctx.workspace_id,
             tag,
@@ -359,6 +371,7 @@ class ResourceService:
             against_version=base_version,
             before=before,
             after=target.content.model_dump(mode="json"),
+            serializer=resource_content_text,
         )
 
     def _resolve_against(

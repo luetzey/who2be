@@ -105,8 +105,9 @@ describe('PersonaDetailPage (a11y)', () => {
     await waitFor(() => {
       expect(screen.getByText(/Aktuelle Version: v1/)).toBeInTheDocument()
     })
+    // WP-E: Anzeige-Modus — das verknuepfte Playbook erscheint als Link.
     await waitFor(() => {
-      expect(screen.getByLabelText('Coaching')).toBeInTheDocument()
+      expect(screen.getByRole('link', { name: 'Coaching' })).toBeInTheDocument()
     })
 
     const results = await axe(container)

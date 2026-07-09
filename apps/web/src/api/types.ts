@@ -124,6 +124,10 @@ export interface Playbook {
   // Vom System verwaltet (Builder-Playbook) — User-Mutationen serverseitig
   // gesperrt (403 managed_aggregate); die UI rendert read-only.
   is_managed?: boolean
+  // WP-D2 — Sub-Playbooks eines Composites (id + name, geordnet nach
+  // Position). Vom Listen-Endpoint per Batch-Select befuellt; optional,
+  // andere Read-Pfade liefern eine leere Liste.
+  compose_children?: PlaybookRef[]
 }
 
 // Track A8 — Schlanke Referenz fuer Backlinks (Composed-by-Liste).
@@ -702,6 +706,11 @@ export interface VersionDiff {
   against_version: number | null
   changes: VersionDiffChange[]
   identical: boolean
+  // WP-C (additiv): kanonische Klartext-Serialisierung beider Content-Staende
+  // fuer den git-artigen Zeilen-Diff. Fehlen die Felder (aeltere API), faellt
+  // die UI auf den reinen Feld-Diff zurueck.
+  before_text?: string | null
+  after_text?: string | null
 }
 
 // Track A — Status-Historie einer Version ("warum aktiv"). Spiegelt

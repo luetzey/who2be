@@ -31,7 +31,14 @@ class VersionDiffChange(BaseModel):
 
 
 class VersionDiff(BaseModel):
-    """Strukturierter Diff einer Version gegen einen Vergleichsstand."""
+    """Strukturierter Diff einer Version gegen einen Vergleichsstand.
+
+    `before_text`/`after_text` (WP-C, additiv): kanonische Markdown-/Klartext-
+    Serialisierung beider Content-Staende (Blocks→Text wie der Compose-Render,
+    Placeholder-Pills als `{{kind:target_id}}`-Tokens). Grundlage fuer die
+    git-artige Zeilen-Diff-Ansicht der UI; `None`, wenn der Endpunkt keine
+    Serialisierung liefert (Backward-Compat).
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -40,3 +47,5 @@ class VersionDiff(BaseModel):
     against_version: int | None = None
     changes: list[VersionDiffChange] = Field(default_factory=list)
     identical: bool = True
+    before_text: str | None = None
+    after_text: str | None = None

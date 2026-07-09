@@ -47,6 +47,7 @@ from who2be_models import (
     PersonaRead,
     PersonaUpdate,
     PersonaVersionRead,
+    PlaceholderCatalog,
     PlaybookCompositionLinkSet,
     PlaybookCreate,
     PlaybookRead,
@@ -137,11 +138,16 @@ class PersonaWithPlaybooks(BaseModel):
     Skills sind derzeit deaktiviert ("Coming Soon", ADR-0026): das deskriptive
     `persona.content.skills`-Feld erscheint nicht im `body_rendered` und ist noch
     nicht nutzbar. Ein versioniertes Agent-Skill-Format folgt.
+
+    `mode` benennt den serverseitig angewendeten Persona-Modus (WP-F) mit dem
+    kanonischen Namen aus `content.modes` — `None`, wenn kein Modus angefragt
+    wurde (dann traegt `body_rendered` das Basis-Profil ohne Modus-Sektion).
     """
 
     persona: PersonaRead
     playbooks: list[PlaybookRead]
     body_rendered: str = ""
+    mode: str | None = None
 
 
 class ResourceSummary(BaseModel):
@@ -310,7 +316,9 @@ async def whoami() -> WhoAmIRead:
 
 @mcp.tool(output_schema=None)
 @with_tool_log("get_persona")
-async def get_persona(identifier: str, locale: str = "de") -> PersonaWithPlaybooks:
+async def get_persona(
+    identifier: str, locale: str = "de", mode: str | None = None
+) -> PersonaWithPlaybooks:
     """Laedt eine Persona (per UUID oder Name) samt verknuepfter Playbooks.
 
     `locale` waehlt die Sprachvariante des Inhalts (Default `'de'`); es werden
@@ -328,14 +336,26 @@ async def get_persona(identifier: str, locale: str = "de") -> PersonaWithPlayboo
     bereits zu Plain-Text aufgeloest. Nutze diesen Text als gebrauchsfertiges
     Persona-Briefing.
 
+    Modus-Workflow (WP-F): lies zuerst `content.modes` (z. B. via
+    `get_persona` ohne `mode`), waehle anhand der Modus-`trigger` den passenden
+    Modus und rufe dann `get_persona(identifier, mode="<Modus-Name>")` auf —
+    der Server haengt die Aktiver-Modus-Sektion an `body_rendered` an
+    (`identity_add` ergaenzt die Identitaet, `output_style_override` ersetzt
+    den Basis-Output-Stil, `anti_patterns` gelten zusaetzlich) und benennt den
+    angewendeten Modus im `mode`-Feld der Antwort. Der Namensvergleich ist
+    case-insensitiv; ein unbekannter Modus antwortet mit einem Fehler, der die
+    verfuegbaren Modi auflistet.
+
     Skills sind derzeit deaktiviert ("Coming Soon", ADR-0026) und erscheinen
     nicht im `body_rendered`.
     """
     client = await build_client()
     persona = await client.get_persona(identifier, locale)
     playbooks = await client.get_persona_playbooks(persona.id, locale)
-    body_rendered = await client.get_persona_rendered(persona.id, locale)
-    return PersonaWithPlaybooks(persona=persona, playbooks=playbooks, body_rendered=body_rendered)
+    body_rendered, applied_mode = await client.get_persona_rendered(persona.id, locale, mode)
+    return PersonaWithPlaybooks(
+        persona=persona, playbooks=playbooks, body_rendered=body_rendered, mode=applied_mode
+    )
 
 
 @mcp.tool(output_schema=None)
@@ -347,6 +367,11 @@ async def list_playbooks(
 
     `locale` waehlt die Sprachvariante des Inhalts (Default `'de'`); es werden
     weiterhin nur aktive Versionen geliefert.
+
+    Composite-Playbooks (`is_composite=True`) tragen in `compose_children`
+    ihre Sub-Playbooks als schlanke Refs (id + name, geordnet nach Position)
+    — die Komposition ist so ohne `fetch_playbook`-Roundtrip sichtbar; die
+    vollen Sub-Playbook-Inhalte liefert weiterhin `fetch_playbook`.
     """
     client = await build_client()
     return await client.list_playbooks(tag, trigger, locale)
@@ -364,6 +389,28 @@ async def list_triggers() -> list[TriggerOverview]:
     """
     client = await build_client()
     return await client.list_triggers()
+
+
+@mcp.tool(output_schema=None)
+@with_tool_log("list_placeholders")
+async def list_placeholders() -> PlaceholderCatalog:
+    """Katalog der Placeholder-Kinds fuer System-Prompt-Template-Bodies.
+
+    Ein Template-Body ist ein stringifiziertes BlockNote-Dokument; Placeholder
+    sind Inline-Elemente der Form
+    `{"type": "placeholder", "props": {"kind": ..., "target_id": ..., "label": ...}}`
+    innerhalb des `content`-Arrays eines Blocks. Sie werden beim Agent-Rendern
+    serverseitig expandiert (Persona-Felder, Playbook-/Resource-Inhalte,
+    Kataloge, Datum, Tool-Liste).
+
+    Dieses Tool liefert pro Kind die Beschreibung, den `target_id`-Vertrag
+    (Semantik + abschliessende Werteliste, wo es eine gibt) und ein gueltiges
+    Beispiel-Inline. Rufe es auf, BEVOR du via `create_system_prompt` oder
+    `update_system_prompt` einen Template-Body verfasst — unbekannte Kinds
+    oder falsche `target_id`-Werte rendern spaeter als ungeloeste Platzhalter.
+    """
+    client = await build_client()
+    return await client.list_placeholders()
 
 
 @mcp.tool(output_schema=None)
@@ -675,8 +722,11 @@ async def diff_versions(
     `version` ist die betrachtete Version, `against` der Vergleich (Default
     `'active'` = die aktive Version; sonst eine Versionsnummer als String). Die
     `changes`-Liste nennt pro Aenderung `path`, `op` (added/removed/changed) und
-    before/after. Nutze das, um einen Draft vor dem Promote selbst zu reviewen.
-    `locale` waehlt die Sprachvariante (Default `'de'`).
+    before/after. Zusaetzlich tragen `before_text`/`after_text` die kanonische
+    Klartext-Serialisierung beider Staende (Placeholder-Pills als
+    `{{kind:target_id}}`-Tokens) fuer einen lesbaren Zeilen-Vergleich. Nutze
+    das, um einen Draft vor dem Promote selbst zu reviewen. `locale` waehlt die
+    Sprachvariante (Default `'de'`).
     """
     parsed = _parse_uuid(entity_id, entity_type)
     client = await build_client()
@@ -983,9 +1033,20 @@ async def copy_agent(agent_id: str, name: str | None = None) -> AgentRead:
 async def create_system_prompt(data: SystemPromptTemplateCreate) -> SystemPromptTemplateRead:
     """Legt ein neues System-Prompt-Template an (initiale Draft-Version).
 
-    Der Body traegt Liquid-Style-Placeholder (z. B. `{{persona:profile}}`,
-    `{{playbook:...}}`, `{{tools-overview}}`), die beim Agent-Rendern expandiert
-    werden. Setze die neue Template-UUID anschliessend via `update_agent` als
+    `content.body` ist ein STRINGIFIZIERTES BlockNote-Dokument (JSON-Array von
+    Blocks). Placeholder sind Inline-Elemente im `content`-Array eines Blocks:
+    `{"type": "placeholder", "props": {"kind": ..., "target_id": ..., "label": ...}}`
+    — sie werden beim Agent-Rendern serverseitig expandiert. Gueltige Kinds,
+    ihre `target_id`-Vertraege und Beispiele liefert `list_placeholders`
+    (vorher aufrufen; unbekannte Kinds rendern als ungeloeste Platzhalter).
+
+    Kompaktes Beispiel eines gueltigen Bodys (als String uebergeben):
+    `[{"id": "b1", "type": "paragraph", "props": {}, "content": [
+    {"type": "text", "text": "Du bist ", "styles": {}},
+    {"type": "placeholder", "props": {"kind": "persona-field",
+    "target_id": "name", "label": "Persona: Name"}}], "children": []}]`
+
+    Setze die neue Template-UUID anschliessend via `update_agent` als
     `system_prompt_template_id`. Das Scharfschalten uebernimmt ein Mensch/Admin.
     """
     client = await build_client()
@@ -1002,6 +1063,11 @@ async def update_system_prompt(
     Auf einer aktiven Version legt das einen neuen Draft an (409, falls bereits
     ein Draft offen ist). Die aktive Version bleibt unveraendert, bis ein
     Mensch/Admin den Draft promotet.
+
+    `content.body` ist ein stringifiziertes BlockNote-Dokument; Placeholder
+    sind Inline-Elemente `{"type": "placeholder", "props": {"kind": ...,
+    "target_id": ..., "label": ...}}` — Format, gueltige Kinds und ein
+    Beispiel siehe `list_placeholders` und `create_system_prompt`.
     """
     client = await build_client()
     return await client.update_system_prompt(_parse_uuid(template_id, "system_prompt"), data)

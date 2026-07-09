@@ -123,6 +123,10 @@ def test_playbook_diff_and_restore_and_provenance(monkeypatch: pytest.MonkeyPatc
             assert paths["body"]["before"] == "body one"
             assert paths["body"]["after"] == "body two"
             assert "description" in paths
+            # WP-C: kanonische Text-Serialisierung fuer die git-artige Diff-UI.
+            # Der Body hier ist kein BlockNote-JSON -> Roh-Fallback.
+            assert payload["before_text"] == "v1\n\nbody one"
+            assert payload["after_text"] == "v2\n\nbody two"
 
             # Restore v1 bei offenem Draft (v2) → 409.
             assert client.post(f"{base}/{pid}/versions/1/restore", headers=auth).status_code == 409
@@ -218,6 +222,9 @@ def test_resource_block_diff(monkeypatch: pytest.MonkeyPatch) -> None:
             ops = {c["path"]: c["op"] for c in diff["changes"]}
             assert ops["blocks[b1]"] == "changed"
             assert ops["blocks[b2]"] == "added"
+            # WP-C: Klartext beider Staende fuer den Zeilen-Diff der UI.
+            assert diff["before_text"] == "v1\n\nx"
+            assert diff["after_text"] == "v1\n\ny\n\nz"
     finally:
         cleanup_workspaces([owner])
 
