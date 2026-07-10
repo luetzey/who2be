@@ -46,7 +46,18 @@
     "type": "numberedListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [{"type": "text", "text": "Create — Verstehen: Klaerungsfragen phasenweise, 1-2 pro Turn, nie alle auf einmal. Identity (eine knappe Zeile), Tone & Style (mit Beispiel-Phrasen), Allowed (4-6 konkrete Capabilities), Forbidden (Domaen-Grenzen + Anti-Patterns), Output Style (Form, Laenge), Modi-Entscheidung (aktiv pruefen — Kriterien in der Sektion Modi; sobald mehrere Einsatz-Stimmen oder Output-Formate gebraucht werden, Multi-Mode statt Misch-Persona).", "styles": {}}],
-    "children": []
+    "children": [
+      {
+        "id": "pb-persona-li-modi-regel",
+        "type": "bulletListItem",
+        "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+        "content": [
+          {"type": "text", "text": "Modi-Regel: ", "styles": {"bold": true}},
+          {"type": "text", "text": "pro Modus name + identity_add + output_style_override (optional anti_patterns); genau ein Modus traegt is_default=true; der Default-Modus traegt KEINEN trigger, jeder Nicht-Default-Modus MUSS einen trigger tragen — sonst ist er unerreichbar bzw. kollidiert mit dem Default.", "styles": {}}
+        ],
+        "children": []
+      }
+    ]
   },
   {
     "id": "pb-persona-li-2",
@@ -80,7 +91,7 @@
     "id": "pb-persona-li-6",
     "type": "numberedListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Verknuepfungen: Welche Playbooks die Persona fuehren soll, via set_persona_playbooks(persona_id, playbook_ids) setzen (Replace-Semantik — die Liste ersetzt den Stand vollstaendig). Vorher mit list_playbooks() die passenden IDs ermitteln.", "styles": {}}],
+    "content": [{"type": "text", "text": "Verknuepfungen: Welche Playbooks die Persona fuehren soll, via set_persona_playbooks(persona_id, playbook_ids) setzen (Replace-Semantik — die Liste ersetzt den Stand vollstaendig). Vorher mit list_playbooks() die passenden IDs ermitteln. Beziehungs-Hinweis: beim Verdrahten pruefen, ob die zugeordneten Playbooks ihrerseits Resource-Links brauchen (set_playbook_resource_links, siehe Playbook „Playbook anlegen & pflegen“).", "styles": {}}],
     "children": []
   },
   {
@@ -131,7 +142,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Trigger-Keywords: ", "styles": {"bold": true}},
-      {"type": "text", "text": "jeder Nicht-Default-Modus braucht konkrete, kommagetrennte Erkennungs-Keywords im trigger-Feld (z. B. 'report, bericht, analyse') — daran erkennt der Konsumenten-Agent, welcher Modus zur Anfrage passt.", "styles": {}}
+      {"type": "text", "text": "jeder Nicht-Default-Modus braucht konkrete, kommagetrennte Erkennungs-Keywords im trigger-Feld (z. B. 'report, bericht, analyse') — daran erkennt der Konsumenten-Agent, welcher Modus zur Anfrage passt. Der Default-Modus selbst traegt keinen trigger — er greift als Fallback und wuerde sonst mit den Nicht-Default-Modi kollidieren.", "styles": {}}
     ],
     "children": []
   },
@@ -149,7 +160,7 @@
     "id": "pb-persona-code-modi",
     "type": "codeBlock",
     "props": {"language": "json"},
-    "content": [{"type": "text", "text": "\"modes\": [\n  {\"name\": \"Chat\", \"trigger\": \"chat, kurzfrage, support\", \"is_default\": true,\n   \"identity_add\": [{\"id\": \"m1\", \"type\": \"paragraph\", \"props\": {}, \"content\": [\n     {\"type\": \"text\", \"text\": \"Antwortet knapp und direkt im Chat-Ton.\", \"styles\": {}}], \"children\": []}],\n   \"output_style_override\": [], \"anti_patterns\": []},\n  {\"name\": \"Report\", \"trigger\": \"report, bericht, analyse\", \"is_default\": false,\n   \"identity_add\": [], \"output_style_override\": [{\"id\": \"m2\", \"type\": \"paragraph\", \"props\": {}, \"content\": [\n     {\"type\": \"text\", \"text\": \"Strukturierter Markdown-Report mit Zwischenueberschriften.\", \"styles\": {}}], \"children\": []}],\n   \"anti_patterns\": []}\n]", "styles": {}}],
+    "content": [{"type": "text", "text": "\"modes\": [\n  {\"name\": \"Chat\", \"trigger\": \"\", \"is_default\": true,\n   \"identity_add\": [{\"id\": \"m1\", \"type\": \"paragraph\", \"props\": {}, \"content\": [\n     {\"type\": \"text\", \"text\": \"Antwortet knapp und direkt im Chat-Ton.\", \"styles\": {}}], \"children\": []}],\n   \"output_style_override\": [], \"anti_patterns\": []},\n  {\"name\": \"Report\", \"trigger\": \"report, bericht, analyse\", \"is_default\": false,\n   \"identity_add\": [], \"output_style_override\": [{\"id\": \"m2\", \"type\": \"paragraph\", \"props\": {}, \"content\": [\n     {\"type\": \"text\", \"text\": \"Strukturierter Markdown-Report mit Zwischenueberschriften.\", \"styles\": {}}], \"children\": []}],\n   \"anti_patterns\": []}\n]", "styles": {}}],
     "children": []
   },
   {

@@ -5,7 +5,7 @@ Deckt den Seed ab, der bei jeder Workspace-Anlage laeuft
 0047):
 
 1. Vollstaendigkeit: nach `setup_workspace` existieren Persona „Builder" (v1
-   active), vier Playbooks (v1 active), vier persona_playbook-Links, das
+   active), fuenf Playbooks (v1 active), fuenf persona_playbook-Links, das
    Template `agent-builder` (active) und der Agent „Builder" (enabled,
    write-faehige tool_policy, Persona + Template verdrahtet).
 2. Idempotenz: ein zweiter Seed-Lauf erzeugt keine Duplikate.
@@ -38,12 +38,14 @@ from who2be_api.testing.workspace_setup import (
 
 _TEST_SECRET = "integration-test-jwt-secret-padding-0123456789"
 
-# Muss exakt zu den Namen in `_BUILDER_PLAYBOOKS` / Migration 0047 passen.
+# Muss exakt zu den Namen in `_BUILDER_PLAYBOOKS` passen (die ersten vier
+# spiegeln Migration 0047; Neuere kommen per Start-Sync in Bestands-Workspaces).
 _BUILDER_PLAYBOOK_NAMES = [
     "Persona anlegen & pflegen",
     "Playbook anlegen & pflegen",
     "Agent anlegen & pflegen",
     "Konsistenz- & Drift-Check",
+    "Library-Pflege & Feedback-Lauf",
 ]
 
 
@@ -168,8 +170,8 @@ def test_builder_agent_seeded_complete() -> None:
         assert data["persona_version"] == 1
         assert data["persona_status"] == "active"
 
-        assert data["playbooks_active"] == 4, "Es fehlen aktive Builder-Playbooks."
-        assert data["links"] == 4, "Persona<->Playbook-Links unvollstaendig."
+        assert data["playbooks_active"] == 5, "Es fehlen aktive Builder-Playbooks."
+        assert data["links"] == 5, "Persona<->Playbook-Links unvollstaendig."
         assert data["template_status"] == "active"
 
         assert data["agent_present"] is True, "Agent 'Builder' wurde nicht geseedet."
@@ -234,8 +236,8 @@ def test_builder_seed_idempotent() -> None:
     try:
         counts = asyncio.run(_counts(ws))
         assert counts["personas"] == 1, "Persona dupliziert."
-        assert counts["playbooks"] == 4, "Playbooks dupliziert."
-        assert counts["links"] == 4, "Links dupliziert."
+        assert counts["playbooks"] == 5, "Playbooks dupliziert."
+        assert counts["links"] == 5, "Links dupliziert."
         assert counts["agents"] == 1, "Agent dupliziert."
     finally:
         cleanup_workspaces([owner])

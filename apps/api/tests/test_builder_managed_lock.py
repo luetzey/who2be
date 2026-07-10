@@ -172,9 +172,9 @@ def test_builder_is_locked_but_copyable(monkeypatch: pytest.MonkeyPatch) -> None
             )
             assert upd.status_code == 200, upd.text
 
-            # Die vier Builder-Playbooks wurden mitkopiert (an die Klon-Persona).
+            # Die fuenf Builder-Playbooks wurden mitkopiert (an die Klon-Persona).
             links = client.get(f"{base}/personas/{new_pid}/playbooks", headers=auth)
             assert links.status_code == 200, links.text
-            assert len(links.json()) == 4, "Alle vier Builder-Playbooks sollten geklont sein."
+            assert len(links.json()) == 5, "Alle fuenf Builder-Playbooks sollten geklont sein."
     finally:
         cleanup_workspaces([owner])

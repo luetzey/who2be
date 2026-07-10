@@ -712,6 +712,12 @@ class PgPlaybookRepository(VersionedAggregateRepository[PlaybookRead, PlaybookVe
         Riesen-Trigger liefert —, trimmen leere Eintraege und gruppieren in
         Python: `asyncpg` hat keinen praktischen Weg, JSON-Aggregate ohne
         weitere Decode-Logik zurueckzugeben.
+
+        Sortierung explizit `COLLATE "C"` (Codepoint-Order wie Pythons
+        `sorted()`): der API-Contract ist lexikografische Ordnung, aber
+        Locale-Collations (z. B. `en_US.utf8`) gewichten `-`/Leerzeichen
+        weich und ordnen etwa `agent-drift` vor `agent konfigurieren` —
+        das Ergebnis hinge sonst von der DB-Locale ab.
         """
         rows = await self._pool.fetch(
             "SELECT p.id, p.name, trim(t.trigger) AS trigger "
@@ -720,7 +726,7 @@ class PgPlaybookRepository(VersionedAggregateRepository[PlaybookRead, PlaybookVe
             "         AS t(trigger) "
             " WHERE p.workspace_id = $1 "
             "   AND trim(t.trigger) <> '' "
-            " ORDER BY trim(t.trigger) ASC, p.name ASC",
+            ' ORDER BY trim(t.trigger) COLLATE "C" ASC, p.name COLLATE "C" ASC',
             workspace_id,
         )
         bucket: dict[str, list[PlaybookRef]] = {}

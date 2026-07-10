@@ -192,6 +192,63 @@
     "children": []
   },
   {
+    "id": "bp-h-relations",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Beziehungs-Denken", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "bp-li-relations-1",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Inhalte als Graph denken: eine Persona ohne Playbooks, ein Playbook ohne Persona-Bindung, eine Resource ohne eingehende Verweise ist ein Pflege-Fund, kein Normalzustand.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "bp-li-relations-2",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Vor jeder Neuanlage: ", "styles": {}},
+      {"type": "text", "text": "search", "styles": {"code": true}},
+      {"type": "text", "text": " + ", "styles": {}},
+      {"type": "text", "text": "find_usages", "styles": {"code": true}},
+      {"type": "text", "text": " — Wiederverwendung und Verknuepfung bestehender Elemente kommt vor Neuanlage.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "bp-li-relations-3",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Nach jedem Anlegen/Aendern: Verknuepfungen explizit verdrahten (", "styles": {}},
+      {"type": "text", "text": "set_persona_playbooks", "styles": {"code": true}},
+      {"type": "text", "text": ", ", "styles": {}},
+      {"type": "text", "text": "set_playbook_resource_links", "styles": {"code": true}},
+      {"type": "text", "text": ", ", "styles": {}},
+      {"type": "text", "text": "set_playbook_composes", "styles": {"code": true}},
+      {"type": "text", "text": ", ", "styles": {}},
+      {"type": "text", "text": "set_resource_sub_resources", "styles": {"code": true}},
+      {"type": "text", "text": ") und via ", "styles": {}},
+      {"type": "text", "text": "fetch_*", "styles": {"code": true}},
+      {"type": "text", "text": " verifizieren — ein Element ohne Verdrahtung ist unfertig.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "bp-li-relations-4",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Regelmaessige Pflege: Feedback- und Zusammenhangs-Pflege laeuft ueber das Playbook „Library-Pflege & Feedback-Lauf“ — Feedback sammeln, triagieren, Luecken pruefen, Fixes als Drafts nach Freigabe.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
     "id": "bp-h-forbidden",
     "type": "heading",
     "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},

@@ -296,7 +296,7 @@
     "id": "pb-agent-li-create-p4-1",
     "type": "numberedListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Pruefe das Ergebnis mit get_agent(agent_id): Persona und Template sind verknuepft und missing ist leer (activatable). Den vollstaendig gerenderten Prompt (unresolved_placeholders) kann nur der Agent selbst per fetch_agent bzw. der Nutzer in der Web-UI sehen — fetch_agent rendert ausschliesslich deinen eigenen Agenten.", "styles": {}}],
+    "content": [{"type": "text", "text": "Pruefe das Ergebnis mit get_agent(agent_id): Persona und Template sind verknuepft und missing ist leer (activatable). Den vollstaendig gerenderten Prompt (unresolved_placeholders) kann nur der Agent selbst per fetch_agent bzw. der Nutzer in der Web-UI sehen — fetch_agent rendert ausschliesslich deinen eigenen Agenten und antwortet fuer fremde (auch frisch gebaute) Agenten mit 404. Ersatz-Indikatoren als Hand-Off-Kriterium: list_agents bzw. get_agent → missing=[] und activatable=true, plus get_persona → body_rendered ohne ungeloeste Platzhalter; den echten Render-Check uebernimmt der erste Start des Ziel-Agenten.", "styles": {}}],
     "children": []
   },
   {

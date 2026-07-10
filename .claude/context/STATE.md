@@ -1,9 +1,28 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-07-08_
+_Stand: 2026-07-10_
 
 ## Funktioniert
 
+- **Builder-Rework: Library-Pflege-Routine + Beziehungs-Denken UMGESETZT
+  (2026-07-10, Branch `claude/builder-agent-setup-pyczxa`, PR #302, Draft):**
+  Fünftes Managed-Playbook „Library-Pflege & Feedback-Lauf" (Sidecar
+  `builder_playbook_maintenance_body.json`, 6 Phasen: Sammeln → Triage →
+  Zusammenhänge/Lücken → Freigabe → Drafts → Hand-Off; Managed-Funde →
+  Repo-Hand-Off, Feedback-Schließung via UI gelistet, ADR-0038).
+  Beziehungs-Denken im Persona-Profil (Graph-Prinzip, search/find_usages vor
+  Neuanlage, set_*-Verdrahtung + fetch_*-Verifikation danach).
+  Feedback-Backlog eingearbeitet (Modi-Regel im Persona-Playbook;
+  fetch_agent-self-only-Ersatzindikatoren im Agent-Playbook; Konsistenz-Check:
+  Scope-Abgrenzung „kein Code-/Repo-Audit", neue read-only
+  Zusammenhangs-Checks, entschärfte Trigger — Kollision „pruefen"/
+  „qualitaetscheck" behoben). `sync_managed_builder_content` erweitert:
+  Insert-missing (neue Playbooks erreichen Bestands-Workspaces ohne
+  Migration) + Metadaten-Nachzug (`type`/`tags`/`triggers` auf der
+  Playbook-Row; Drift-Lücke geschlossen). `BUILDER_CONTENT_VERSION` 3→4.
+  DoD: ruff/format/mypy strict clean, 953 pytest passed, Coverage 90,13 %
+  (Gate 85), Seed-/Sync-/Lock-/Dashboard-/Tag-Tests nachgezogen; keine neue
+  Migration (Entscheidung im Sync-Docstring + DECISIONS.md 2026-07-10).
 - **Builder-Befähigung + Agent-Filter + UI-Polish UMGESETZT (2026-07-09,
   Branch `claude/builder-agents-ui-improvements-o454yy`, PR #301):** Alle 6
   WPs des Plans `2026-07-09-1556_builder-agents-ui-improvements.md` per

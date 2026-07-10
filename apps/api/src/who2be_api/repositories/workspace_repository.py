@@ -321,15 +321,17 @@ async def _seed_default_templates(
 # ---------------------------------------------------------------------------
 # Default-Agent „Builder" (Meta-Agent — der Agent, der Agenten baut).
 #
-# Wird nach den Default-Templates in jedem neuen Workspace mitgeseedet und
-# spiegelt exakt die SQL-Backfill-Migration 0047 (beide Schichten synchron
-# halten — bekannte Drift-Quelle, siehe Kommentar in 0023b). Inhaltlich
-# re-targeted auf die Who2Be-MCP-Write-Tools (kein externer Store).
+# Wird nach den Default-Templates in jedem neuen Workspace mitgeseedet.
+# Migration 0047 war der einmalige Backfill des damaligen Stands (Persona +
+# 4 Playbooks + Agent) fuer Bestands-Workspaces; seither verteilt der
+# Start-Sync (`sync_managed_builder_content`) jede zentrale Aenderung —
+# inkl. spaeter ergaenzter Playbooks — ohne weitere Spiegel-Migration.
+# Inhaltlich re-targeted auf die Who2Be-MCP-Write-Tools (kein externer Store).
 #
 # Reihenfolge wegen der Composite-FKs (agent -> persona, agent -> template):
 #   1. Persona „Builder"      (persona + persona_version v1 active)
-#   2. 4 Playbooks            (playbook + playbook_version v1 active)
-#   3. persona_playbook-Links (Persona <-> 4 Playbooks)
+#   2. Playbooks              (alle `_BUILDER_PLAYBOOKS`, je v1 active)
+#   3. persona_playbook-Links (Persona <-> alle Builder-Playbooks)
 #   4. agent-Row              (persona_id + Template 'agent-builder' +
 #                              write-faehige tool_policy, status 'enabled')
 # Das Template 'agent-builder' selbst legt bereits `_seed_default_templates`
@@ -348,7 +350,7 @@ _AGENT_BUILDER_LITE_TEMPLATE_SLUG = "agent-builder-lite"
 # Aenderung an Persona/Template/Playbooks (Sidecars) hochgezaehlt; der Start-Sync
 # hebt managed-Aggregate, deren `managed_content_version` zurueckliegt, auf diesen
 # Stand. Seed stempelt neue Builder direkt hierauf.
-BUILDER_CONTENT_VERSION = 3
+BUILDER_CONTENT_VERSION = 4
 
 _BUILDER_PERSONA_DESCRIPTION = (
     "Meta-Agent, der Personas, Playbooks, Resources und Agenten im Workspace "
@@ -370,8 +372,14 @@ _BUILDER_LITE_AGENT_DESCRIPTION = (
     "System-Prompt-Budget. Gleiche Persona und Schreib-Policy wie der Builder."
 )
 
-# (name, type, triggers, tags, description, sidecar) — Reihenfolge fix, damit
-# Python-Seed und Migration 0047 dieselben Playbooks erzeugen.
+# (name, type, triggers, tags, description, sidecar) — Reihenfolge fix; die
+# ersten vier Eintraege spiegeln Migration 0047 (Backfill-Seed), alles danach
+# erreicht Bestands-Workspaces ausschliesslich ueber den Start-Sync
+# (`sync_managed_builder_content`, Insert-missing) — keine Spiegel-Migration.
+# Trigger-Hygiene: keine generischen Woerter, die fremde Domaenen matchen
+# (Kollisions-Historie: "pruefen"/"qualitaetscheck" zogen Code-/Repo-Audit-
+# Anfragen auf den Drift-Check); "aufraeumen" ist vom Vault-Playbook
+# „Aufraeumen & Deduplizieren" belegt und bleibt hier bewusst ungenutzt.
 _BUILDER_PLAYBOOKS: tuple[tuple[str, str, str, tuple[str, ...], str, str], ...] = (
     (
         "Persona anlegen & pflegen",
@@ -400,10 +408,23 @@ _BUILDER_PLAYBOOKS: tuple[tuple[str, str, str, tuple[str, ...], str, str], ...] 
     (
         "Konsistenz- & Drift-Check",
         "checklist",
-        "konsistenz, drift, pruefen, aktivierbar, activatable, qualitaetscheck",
+        "konsistenz, drift, agenten pruefen, library pruefen, agent-drift, "
+        "aktivierbar, activatable",
         ("konsistenz", "qa", "agent-building"),
-        "Read-only-Pruefung auf Aktivierbarkeit, aktive Versionen und sauberes Prompt-Rendering.",
+        "Read-only-Pruefung der Agent-Library auf Aktivierbarkeit, aktive Versionen, "
+        "Prompt-Rendering und strukturelle Zusammenhaenge — kein Code-/Repo-Audit.",
         "builder_playbook_consistency_body.json",
+    ),
+    (
+        "Library-Pflege & Feedback-Lauf",
+        "workflow",
+        "library pflegen, pflege-lauf, feedback abarbeiten, feedback umsetzen, "
+        "library aufraeumen, wartungslauf, kuratieren",
+        ("pflege", "feedback", "qa", "agent-building"),
+        "Feedback-getriebener Pflege-Lauf ueber die Agent-Library: Feedback sammeln, "
+        "triagieren, Zusammenhaenge und Luecken pruefen, Fixes nach Freigabe als "
+        "Drafts umsetzen.",
+        "builder_playbook_maintenance_body.json",
     ),
 )
 
@@ -475,7 +496,8 @@ async def _seed_default_agents(
 
     Laeuft NACH `_seed_default_templates` (braucht das 'agent-builder'-Template).
     Idempotent ueber NOT-EXISTS-Guards (workspace_id + name/slug) und
-    ON-CONFLICT-DO-NOTHING auf den Links. Spiegelt Migration 0047.
+    ON-CONFLICT-DO-NOTHING auf den Links. Migration 0047 war der einmalige
+    Backfill des damaligen Stands; neuere Inhalte verteilt der Start-Sync.
     """
     # 1. Persona „Builder" + v1 (active). Der NOT-EXISTS-Guard liefert None,
     #    wenn der Builder-Seed bereits lief — der Lauf ist atomar, also sind
@@ -504,7 +526,7 @@ async def _seed_default_agents(
         owner_id,
     )
 
-    # 2. 4 Playbooks + v1 (active); ids fuer die Verlinkung einsammeln.
+    # 2. Alle Builder-Playbooks + v1 (active); ids fuer die Verlinkung einsammeln.
     playbook_ids: list[UUID] = []
     for name, ptype, triggers, tags, description, sidecar in _BUILDER_PLAYBOOKS:
         playbook_id = await conn.fetchval(
@@ -624,10 +646,22 @@ async def sync_managed_builder_content(conn: asyncpg.Connection) -> int:
     gesperrt (keine User-Edits zu erhalten). In-place-Replace (keine Versions-
     Proliferation); idempotent ueber den `managed_content_version`-Stempel.
 
+    Playbooks werden dabei auf BEIDEN Ebenen nachgezogen: der aktive Versions-
+    Inhalt UND die Metadaten der Playbook-Row (`type`/`tags`/`triggers`) —
+    Letztere speisen Listen/`list_triggers` und wuerden sonst nie verteilen
+    (Metadaten-Drift, sichtbar geworden bei der Trigger-Kollision des
+    Konsistenz-Checks). Zusaetzlich legt der Sync in `_BUILDER_PLAYBOOKS` neu
+    hinzugekommene Eintraege in Bestands-Workspaces mit managed Builder-Persona
+    an (Insert-missing, analog `_seed_default_agents`: Row + v1 active +
+    persona_playbook-Link) — der Seed laeuft dort nie wieder. Damit braucht
+    eine Content-/Playbook-Erweiterung KEINE Spiegel-Migration mehr
+    (Konvention seit 0057/Start-Sync; v1→v2 und v2→v3 liefen ebenso rein ueber
+    den Sync): Sidecar/`_BUILDER_PLAYBOOKS` anpassen + Version hochzaehlen.
+
     Erwartet eine privilegierte Verbindung (Owner/Migrations-URL) — der RLS-
     gescopte App-Pool saehe ohne Tenant keine Zeilen. JSONB wird als String
     gebunden (`$n::jsonb`), damit kein Pool-Codec noetig ist. Gibt die Anzahl
-    aktualisierter Aggregate zurueck.
+    aktualisierter + neu angelegter Aggregate zurueck.
     """
     updated = 0
 
@@ -697,6 +731,61 @@ async def sync_managed_builder_content(conn: asyncpg.Connection) -> int:
 
     for name, ptype, triggers, tags, description, sidecar in _BUILDER_PLAYBOOKS:
         pb_json = json.dumps(_builder_playbook_content(sidecar, ptype, tags, triggers, description))
+
+        # Insert-missing: neue managed Playbooks erreichen Bestands-Workspaces nur
+        # hier (der Seed laeuft dort nie wieder). Match wie im Seed ueber
+        # workspace_id + name; created_by/owner = Owner der Builder-Persona.
+        for prow in await conn.fetch(
+            "SELECT p.id AS persona_id, p.workspace_id, p.owner_id FROM persona p "
+            "WHERE p.name = $1 AND p.is_managed = true "
+            "AND NOT EXISTS ("
+            "  SELECT 1 FROM playbook pb "
+            "  WHERE pb.workspace_id = p.workspace_id AND pb.name = $2"
+            ")",
+            _BUILDER_PERSONA_NAME,
+            name,
+        ):
+            playbook_id = await conn.fetchval(
+                "INSERT INTO playbook "
+                "(workspace_id, owner_id, name, type, tags, triggers, "
+                " is_managed, managed_content_version) "
+                "SELECT $1, $2, $3, $4, $5, $6, true, $7 "
+                "WHERE NOT EXISTS ("
+                "  SELECT 1 FROM playbook WHERE workspace_id = $1 AND name = $3"
+                ") "
+                "RETURNING id",
+                prow["workspace_id"],
+                prow["owner_id"],
+                name,
+                ptype,
+                list(tags),
+                triggers,
+                BUILDER_CONTENT_VERSION,
+            )
+            if playbook_id is None:
+                # Race mit einem parallelen Sync/Seed — der andere Lauf hat
+                # bereits angelegt und gestempelt, nichts mehr zu tun.
+                continue
+            await conn.execute(
+                "INSERT INTO playbook_version "
+                "(playbook_id, version, content, status, created_by, locale) "
+                "VALUES ($1, 1, $2::jsonb, 'active', $3, 'de')",
+                playbook_id,
+                pb_json,
+                prow["owner_id"],
+            )
+            await conn.execute(
+                "INSERT INTO persona_playbook "
+                "(persona_id, playbook_id, workspace_id, owner_id) "
+                "VALUES ($1, $2, $3, $4) "
+                "ON CONFLICT (persona_id, playbook_id) DO NOTHING",
+                prow["persona_id"],
+                playbook_id,
+                prow["workspace_id"],
+                prow["owner_id"],
+            )
+            updated += 1
+
         for row in await conn.fetch(
             "SELECT id FROM playbook WHERE name = $1 AND is_managed = true "
             "AND managed_content_version < $2",
@@ -709,10 +798,17 @@ async def sync_managed_builder_content(conn: asyncpg.Connection) -> int:
                 row["id"],
                 pb_json,
             )
+            # Beim Stempeln auch die Row-Metadaten nachziehen — Trigger-/Tag-/
+            # Type-Aenderungen leben ausserhalb des Versions-Contents und
+            # wuerden ueber das Content-Replace allein nie verteilen.
             await conn.execute(
-                "UPDATE playbook SET managed_content_version = $2, updated_at = now() "
+                "UPDATE playbook SET type = $2, tags = $3, triggers = $4, "
+                "managed_content_version = $5, updated_at = now() "
                 "WHERE id = $1",
                 row["id"],
+                ptype,
+                list(tags),
+                triggers,
                 BUILDER_CONTENT_VERSION,
             )
             updated += 1

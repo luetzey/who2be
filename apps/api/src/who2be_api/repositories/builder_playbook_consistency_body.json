@@ -10,7 +10,7 @@
     "id": "pb-check-p-intro",
     "type": "paragraph",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Read-only-Sweep ueber die Agent-Library: pruefe strukturelle V1-Konformitaet und Aktivierbarkeits-Drift. V1-Scope ist rein struktureller Check (aktive Versionen, Verknuepfungen, sauberer Render). Du liest und reportest — du schreibst nichts. Fixes laufen ueber die CRUD-Playbooks.", "styles": {}}],
+    "content": [{"type": "text", "text": "Read-only-Sweep ueber die Agent-Library: pruefe strukturelle V1-Konformitaet und Aktivierbarkeits-Drift. V1-Scope ist rein struktureller Check (aktive Versionen, Verknuepfungen, sauberer Render). Geprueft wird ausschliesslich die Agent-Library (Personas, Playbooks, Resources, Agenten, Templates) — KEIN Code-/Repo-Audit (dafuer existiert „Standards-Audit & Umsetzung (Repo)\") und keine Vault-Pflege. Du liest und reportest — du schreibst nichts. Fixes laufen ueber die CRUD-Playbooks.", "styles": {}}],
     "children": []
   },
   {
@@ -176,6 +176,70 @@
     ]
   },
   {
+    "id": "pb-check-h-graph",
+    "type": "heading",
+    "props": {"level": 3, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Zusammenhangs-Checks", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-check-p-graph",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Ergaenzend zum Sweep pro Agent: pruefe die Library als Graph — alle Checks bleiben read-only, Funde wandern in den Drift-Report.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-check-li-graph-orphan",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Verwaiste Resources: ", "styles": {"bold": true}},
+      {"type": "text", "text": "via find_usages pruefen, ob eine Resource eingehende Verweise aus Playbooks/Personas hat — ohne eingehende Verweise ist sie ein Pflege-Fund.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-check-li-graph-drift",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Wissens-Drift: ", "styles": {"bold": true}},
+      {"type": "text", "text": "der Playbook-Body verweist in Prosa auf eine Resource, ohne dass ein resource_link gesetzt ist — Prosa-Verweis und Verdrahtung muessen zusammenpassen.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-check-li-graph-vacuum",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Playbooks ohne Persona-Bindung: ", "styles": {"bold": true}},
+      {"type": "text", "text": "von keinem Agenten erreichbar (Vakuum) — via list_playbooks gegen die Persona-Zuordnungen gegenpruefen.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-check-li-graph-composite",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Composites mit inaktiven oder fehlenden Kindern: ", "styles": {"bold": true}},
+      {"type": "text", "text": "die Sub-Sequenz aus fetch_playbook gegen den current_status der Kinder pruefen — still uebersprungene Kinder sind Drift.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-check-li-graph-trigger",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Trigger-Kollisionen und Trigger-Vakuum: ", "styles": {"bold": true}},
+      {"type": "text", "text": "via list_triggers pruefen, ob sich Trigger-Keywords verschiedener Playbooks ueberlappen (Kollision) oder getriggerte Playbooks ohne Trigger dastehen (Vakuum).", "styles": {}}
+    ],
+    "children": []
+  },
+  {
     "id": "pb-check-h-report",
     "type": "heading",
     "props": {"level": 3, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
@@ -229,6 +293,13 @@
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [{"type": "text", "text": "Agent-Drift → Playbook „Agent anlegen & pflegen\" (Persona/Template-Wiring via update_agent).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-check-li-handoff-maintenance",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Alternativ: gesammelte Funde gebuendelt an das Playbook „Library-Pflege & Feedback-Lauf\" uebergeben — kuratierter Pflege-Lauf mit Umsetzung nach Freigabe.", "styles": {}}],
     "children": []
   },
   {
@@ -333,7 +404,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "V1-Scope: ", "styles": {"bold": true}},
-      {"type": "text", "text": "struktureller + Aktivierbarkeits-Check (aktive Persona-Version, Playbook-Verknuepfungen, fetch_agent.activatable/missing, Render ohne offene Platzhalter).", "styles": {}}
+      {"type": "text", "text": "struktureller + Aktivierbarkeits-Check (aktive Persona-Version, Playbook-Verknuepfungen, fetch_agent.activatable/missing, Render ohne offene Platzhalter) inklusive der strukturellen Zusammenhangs-Checks (verwaiste Resources, Wissens-Drift, Vakuum-Playbooks, Composite-Kinder, Trigger-Kollisionen/-Vakuum).", "styles": {}}
     ],
     "children": []
   },
@@ -343,7 +414,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "V2-Scope: ", "styles": {"bold": true}},
-      {"type": "text", "text": "semantischer Inhalts-Check, Trigger-Konflikte zwischen Playbooks, Cross-Reference auf nicht-existierende Verweise.", "styles": {}}
+      {"type": "text", "text": "semantischer Inhalts-Check, Cross-Reference auf nicht-existierende Verweise. Strukturelle Trigger-Konflikte gehoeren seit den Zusammenhangs-Checks zum V1-Scope.", "styles": {}}
     ],
     "children": []
   },

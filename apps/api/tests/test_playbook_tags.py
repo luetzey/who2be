@@ -151,8 +151,10 @@ def test_playbook_tags_only_seed_baseline_for_fresh_workspace(
                 "agent",
                 "agent-building",
                 "crud",
+                "feedback",
                 "konsistenz",
                 "persona",
+                "pflege",
                 "playbook",
                 "qa",
             ]
