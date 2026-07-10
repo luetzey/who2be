@@ -143,6 +143,13 @@ from who2be_models.tool_policy import (
     ReadScope,
     TransitionGrant,
 )
+from who2be_models.tool_requirements import (
+    MCP_TOOL_REQUIREMENTS,
+    ReadDomain,
+    ToolRequirement,
+    is_tool_visible,
+    is_tool_visible_for,
+)
 from who2be_models.version_diff import DiffOp, VersionDiff, VersionDiffChange
 from who2be_models.whoami import WhoAmIRead
 from who2be_models.workspace import WorkspaceCreate, WorkspaceRead, WorkspaceUpdate
@@ -214,6 +221,7 @@ __all__ = [
     "InvitationRead",
     "LinkedBlockSection",
     "MAX_LIMIT",
+    "MCP_TOOL_REQUIREMENTS",
     "MeOrganization",
     "MeRead",
     "MeWorkspace",
@@ -243,6 +251,7 @@ __all__ = [
     "PlaybookUsage",
     "PlaybookVersionRead",
     "ProblemReason",
+    "ReadDomain",
     "ReadScope",
     "ResourceBlock",
     "ResourceBlockAnchor",
@@ -276,6 +285,7 @@ __all__ = [
     "TokenCreated",
     "TokenRead",
     "TokenRename",
+    "ToolRequirement",
     "TransitionGrant",
     "TriggerOverview",
     "VersionDiff",
@@ -294,4 +304,6 @@ __all__ = [
     "decode_cursor",
     "encode_cursor",
     "is_allowed_transition",
+    "is_tool_visible",
+    "is_tool_visible_for",
 ]

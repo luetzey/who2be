@@ -1,0 +1,239 @@
+"""Geteiltes MCP-Tool-Sichtbarkeits-Mapping (Tool-Name → Anforderung, ADR-0042).
+
+Single Source of Truth fuer die Frage „welche MCP-Tools sieht dieser
+Principal?": genutzt vom MCP-Adapter (per-Request-Filterung von `tools/list`)
+und vom API-Prompt-Resolver (`tools-overview`-Placeholder) — ein Mapping,
+kein Drift zwischen beschreibender Tool-Liste im System-Prompt und der
+tatsaechlich angebotenen Tool-Liste des Servers.
+
+Das ist bewusst KEINE Security-Grenze: Die autoritative Durchsetzung bleibt
+serverseitig bei der API (ADR-0039). Die Sichtbarkeits-Filterung ist
+UX-/Kontext-Hygiene plus Defense-in-Depth — ein ausgeblendetes Tool wuerde
+bei direktem Aufruf ohnehin von der API abgelehnt.
+
+Zwei Prueffunktionen fuer die zwei Caller-Welten:
+- `is_tool_visible(name, policy)` — auf `AgentToolPolicy`-Basis (API-Resolver,
+  Semantik identisch zur bisherigen `_ToolDoc.is_visible`-Referenz).
+- `is_tool_visible_for(name, ...)` — auf `whoami`-Feld-Basis (MCP-Adapter, der
+  kein Policy-Objekt hat, sondern `unrestricted`/`role`/`capabilities`/
+  `read_scopes` aus `WhoAmIRead`).
+
+Beide liefern `None` fuer unbekannte Tool-Namen — der Caller entscheidet
+fail-open (Tool sichtbar lassen + Warn-Log), damit ein neues Tool ohne
+Mapping-Eintrag nie stillschweigend verschwindet.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict
+
+from who2be_models.tool_policy import AgentCapability, AgentToolPolicy, ReadScope
+from who2be_models.workspace_member import WorkspaceRole
+
+# Lese-Domain eines Read-Tools. „search" ist die Multi-Domain-Sonderrolle:
+# sichtbar, sobald der Principal mindestens EINE der Inhalts-Domains
+# persona/playbook/resource lesen darf (Discovery-Tools dispatchen ueber alle).
+ReadDomain = Literal["persona", "playbook", "resource", "agent", "search"]
+
+# Die Inhalts-Domains, ueber die „search"-artige Tools dispatchen.
+_CONTENT_READ_DOMAINS: tuple[str, ...] = ("persona", "playbook", "resource")
+
+
+class ToolRequirement(BaseModel):
+    """Sichtbarkeits-Anforderung eines MCP-Tools.
+
+    Genau EINE der drei Achsen greift pro Tool, Prioritaet
+    ``always > capabilities > read_domain``:
+    - ``always=True``: immer sichtbar (Ping/Introspektion), unabhaengig von
+      Policy oder Rolle.
+    - ``capabilities`` nicht leer (Write-Tool): sichtbar, sobald die Policy
+      EINE der Capabilities gewaehrt (Oder-Logik, z. B. Transition-Tools:
+      Schreib-Capability ODER ``promote_retire``).
+    - ``read_domain`` gesetzt (Read-Tool): sichtbar nach Read-Scope der Domain
+      (``none`` blendet aus); ``"search"`` siehe `ReadDomain`.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    read_domain: ReadDomain | None = None
+    capabilities: tuple[AgentCapability, ...] = ()
+    always: bool = False
+
+
+# Geteilte, eingefrorene Instanzen — haelt das Mapping unten lesbar.
+_ALWAYS = ToolRequirement(always=True)
+_PERSONA_READ = ToolRequirement(read_domain="persona")
+_PLAYBOOK_READ = ToolRequirement(read_domain="playbook")
+_RESOURCE_READ = ToolRequirement(read_domain="resource")
+_AGENT_READ = ToolRequirement(read_domain="agent")
+_SEARCH_READ = ToolRequirement(read_domain="search")
+_PERSONA_WRITE = ToolRequirement(capabilities=(AgentCapability.persona_write,))
+_PLAYBOOK_WRITE = ToolRequirement(capabilities=(AgentCapability.playbook_write,))
+_RESOURCE_WRITE = ToolRequirement(capabilities=(AgentCapability.resource_write,))
+_AGENT_WRITE = ToolRequirement(capabilities=(AgentCapability.agent_write,))
+_SYSTEM_PROMPT_WRITE = ToolRequirement(capabilities=(AgentCapability.system_prompt_write,))
+_FEEDBACK_WRITE = ToolRequirement(capabilities=(AgentCapability.feedback_write,))
+
+
+# Alle in `apps/mcp/src/who2be_mcp/server.py` registrierten Tools (Quelle: die
+# `@with_tool_log("<name>")`-Dekoratoren). Ein neues Tool MUSS hier eingetragen
+# werden — der Paritaetstest in `apps/mcp` bricht sonst (fail-open zur Laufzeit,
+# aber CI-rot).
+MCP_TOOL_REQUIREMENTS: dict[str, ToolRequirement] = {
+    # --- Immer sichtbar (Konnektivitaet/Introspektion) ---
+    "ping": _ALWAYS,
+    "whoami": _ALWAYS,
+    # --- Reads nach Domain-Scope ---
+    "get_persona": _PERSONA_READ,
+    "list_playbooks": _PLAYBOOK_READ,
+    "list_triggers": _PLAYBOOK_READ,
+    "fetch_playbook": _PLAYBOOK_READ,
+    "list_resources": _RESOURCE_READ,
+    "fetch_resource": _RESOURCE_READ,
+    "list_resource_blocks": _RESOURCE_READ,
+    "list_agents": _AGENT_READ,
+    "get_agent": _AGENT_READ,
+    "fetch_agent": _AGENT_READ,
+    # Multi-Domain-Discovery-/Versions-Tools: dispatchen ueber
+    # persona/playbook/resource — sichtbar, sobald EINE dieser Inhalts-Domains
+    # lesbar ist (gleiche Regel wie `search` im Prompt-Resolver).
+    "search": _SEARCH_READ,
+    "find_usages": _SEARCH_READ,
+    "list_versions": _SEARCH_READ,
+    "get_version": _SEARCH_READ,
+    "diff_versions": _SEARCH_READ,
+    # --- Writes nach Capability-Gruppe ---
+    "create_persona": _PERSONA_WRITE,
+    "update_persona": _PERSONA_WRITE,
+    "restore_persona": _PERSONA_WRITE,
+    "set_persona_playbooks": _PERSONA_WRITE,
+    "create_playbook": _PLAYBOOK_WRITE,
+    "update_playbook": _PLAYBOOK_WRITE,
+    "restore_playbook": _PLAYBOOK_WRITE,
+    "set_playbook_resource_links": _PLAYBOOK_WRITE,
+    "set_playbook_composes": _PLAYBOOK_WRITE,
+    "create_resource": _RESOURCE_WRITE,
+    "update_resource": _RESOURCE_WRITE,
+    "restore_resource": _RESOURCE_WRITE,
+    "set_resource_sub_resources": _RESOURCE_WRITE,
+    "create_agent": _AGENT_WRITE,
+    "update_agent": _AGENT_WRITE,
+    "copy_agent": _AGENT_WRITE,
+    # Transition-Tools (Oder-Logik): nach draft/review genuegt die jeweilige
+    # Schreib-Capability, nach active/inactive braucht es `promote_retire` —
+    # sichtbar, sobald EINE der beiden gewaehrt ist (wie im Prompt-Resolver).
+    "transition_persona": ToolRequirement(
+        capabilities=(AgentCapability.promote_retire, AgentCapability.persona_write)
+    ),
+    "transition_playbook": ToolRequirement(
+        capabilities=(AgentCapability.promote_retire, AgentCapability.playbook_write)
+    ),
+    "transition_resource": ToolRequirement(
+        capabilities=(AgentCapability.promote_retire, AgentCapability.resource_write)
+    ),
+    # --- System-Prompt-Templates (ADR-0040) — nur mit `system_prompt_write` ---
+    "list_system_prompts": _SYSTEM_PROMPT_WRITE,
+    "get_system_prompt": _SYSTEM_PROMPT_WRITE,
+    "list_placeholders": _SYSTEM_PROMPT_WRITE,
+    "create_system_prompt": _SYSTEM_PROMPT_WRITE,
+    "update_system_prompt": _SYSTEM_PROMPT_WRITE,
+    "restore_system_prompt": _SYSTEM_PROMPT_WRITE,
+    "transition_system_prompt": _SYSTEM_PROMPT_WRITE,
+    # --- Usage-/Feedback-Flywheel (ADR-0038) — `feedback_write` (Default an) ---
+    "record_usage": _FEEDBACK_WRITE,
+    "submit_feedback": _FEEDBACK_WRITE,
+    "report_problem": _FEEDBACK_WRITE,
+    "get_feedback": _FEEDBACK_WRITE,
+    # --- Feedback-Triage — `feedback_resolve` (Default aus): Signale schliessen
+    #     ist Kurations-Macht, getrennt vom blossen Melden (`feedback_write`).
+    "resolve_feedback": ToolRequirement(capabilities=(AgentCapability.feedback_resolve,)),
+}
+
+
+def _read_visible(domain: ReadDomain | None, policy: AgentToolPolicy) -> bool:
+    """Read-Sichtbarkeit gegen eine `AgentToolPolicy` (Semantik: `_ToolDoc`)."""
+    if domain == "persona":
+        return policy.persona_read
+    if domain == "playbook":
+        return policy.playbook_read != ReadScope.none
+    if domain == "resource":
+        return policy.resource_read != ReadScope.none
+    if domain == "agent":
+        return policy.agent_read != ReadScope.none
+    if domain == "search":
+        return (
+            policy.persona_read
+            or policy.playbook_read != ReadScope.none
+            or policy.resource_read != ReadScope.none
+        )
+    return True
+
+
+def is_tool_visible(name: str, policy: AgentToolPolicy | None) -> bool | None:
+    """Ist das Tool `name` fuer die gegebene `AgentToolPolicy` sichtbar?
+
+    `None` fuer unbekannte Tool-Namen — der Caller entscheidet fail-open.
+    Policy `None` (z. B. Persona-Body ohne Agent-Kontext) zeigt nur Read-Tools
+    (Verhalten vor dem Pro-Agent-Feature); `always`-Tools sind immer sichtbar.
+    """
+    requirement = MCP_TOOL_REQUIREMENTS.get(name)
+    if requirement is None:
+        return None
+    if requirement.always:
+        return True
+    if requirement.capabilities:
+        return policy is not None and any(policy.allows(cap) for cap in requirement.capabilities)
+    if policy is None:
+        return True
+    return _read_visible(requirement.read_domain, policy)
+
+
+def _scoped_read_visible(domain: ReadDomain | None, scopes: Mapping[str, ReadScope]) -> bool:
+    """Read-Sichtbarkeit gegen `whoami`-Read-Scopes (fehlender Key = sichtbar)."""
+    if domain == "search":
+        return any(scopes.get(d, ReadScope.all) != ReadScope.none for d in _CONTENT_READ_DOMAINS)
+    if domain is not None:
+        # Fehlender Domain-Key defensiv als sichtbar werten (fail-open) —
+        # `whoami` liefert normal alle vier Domains, inkl. normalisiertem
+        # persona-Scope (all/none).
+        return scopes.get(domain, ReadScope.all) != ReadScope.none
+    return True
+
+
+def is_tool_visible_for(
+    name: str,
+    *,
+    unrestricted: bool,
+    role: WorkspaceRole,
+    capabilities: Sequence[AgentCapability] | None,
+    read_scopes: Mapping[str, ReadScope] | None,
+) -> bool | None:
+    """Ist das Tool `name` fuer diesen `whoami`-Principal sichtbar?
+
+    Variante fuer den MCP-Adapter, der kein `AgentToolPolicy`-Objekt hat,
+    sondern die `WhoAmIRead`-Felder. `None` fuer unbekannte Tool-Namen
+    (Caller entscheidet fail-open).
+
+    - `unrestricted=True` (Mensch/JWT oder ungebundener Token): Reads immer
+      sichtbar; Write-Tools nur, wenn die Rolle nicht `viewer` ist (das
+      Rollen-Gate wuerde sie ohnehin ablehnen).
+    - `unrestricted=False` (agent-gebundener Token): Write-Tools nach
+      Schnittmenge mit den gewaehrten `capabilities` (Oder-Logik), Read-Tools
+      nach `read_scopes` (fehlender Key defensiv sichtbar, fail-open).
+    """
+    requirement = MCP_TOOL_REQUIREMENTS.get(name)
+    if requirement is None:
+        return None
+    if requirement.always:
+        return True
+    if requirement.capabilities:
+        if unrestricted:
+            return role != WorkspaceRole.viewer
+        granted = frozenset(capabilities or ())
+        return any(cap in granted for cap in requirement.capabilities)
+    if unrestricted:
+        return True
+    return _scoped_read_visible(requirement.read_domain, read_scopes or {})
