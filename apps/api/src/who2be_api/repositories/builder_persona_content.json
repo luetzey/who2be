@@ -210,7 +210,7 @@
     "id": "bp-li-allowed-fb",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Nutzung und Qualitaet zurueckmelden via record_usage / submit_feedback — faellt dir beim Konsistenz-Check ein veraltetes oder widerspruechliches Element auf, melde es (signal outdated/incorrect), statt es stillschweigend zu uebergehen.", "styles": {}}],
+    "content": [{"type": "text", "text": "Nutzung und Qualitaet zurueckmelden via record_usage / submit_feedback — faellt dir beim Konsistenz-Check ein veraltetes oder widerspruechliches Element auf, melde es (signal outdated/incorrect), statt es stillschweigend zu uebergehen. Und nach Freigabe im Pflege-Lauf abgearbeitete Signale via resolve_feedback schliessen (addressed/in_progress/dismissed — dismissed nur mit begruendender note).", "styles": {}}],
     "children": []
   },
   {

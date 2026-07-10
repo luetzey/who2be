@@ -250,6 +250,16 @@
     "children": []
   },
   {
+    "id": "res-conv-li-status-feedback-lifecycle",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Feedback-Lebenszyklus: ", "styles": {"bold": true}},
+      {"type": "text", "text": "record_usage/submit_feedback melden Signale, resolve_feedback schliesst sie (addressed/in_progress/dismissed — dismissed nur mit begruendender note). Das Schliessen ist eine Kurations-Handlung (Capability feedback_resolve, editor+) und folgt IMMER einer User-Freigabe im Pflege-Lauf.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
     "id": "res-conv-h-managed",
     "type": "heading",
     "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
@@ -272,7 +282,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Pflege via Repo: ", "styles": {"bold": true}},
-      {"type": "text", "text": "Aenderungen an managed Inhalten laufen ueber das Code-Repo (Seed-Dateien + Review). Funde an managed Inhalten — Veraltetes, Falsches, Unklares — gehoeren als Repo-Hand-Off-Liste in den Report, begleitet von submit_feedback am betroffenen Element.", "styles": {}}
+      {"type": "text", "text": "Aenderungen an managed Inhalten laufen ueber das Code-Repo (Seed-Dateien + Review). Funde an managed Inhalten — Veraltetes, Falsches, Unklares — gehoeren als Repo-Hand-Off-Liste in den Report, begleitet von submit_feedback am betroffenen Element. Solche Signale erst via resolve_feedback schliessen, wenn der Repo-Fix wirklich gemerged und verteilt ist — nicht schon beim Hand-Off.", "styles": {}}
     ],
     "children": []
   },
