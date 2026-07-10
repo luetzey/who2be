@@ -128,3 +128,27 @@ bleiben)._
   Repo eingearbeitet; Beziehungs-Denken (search/find_usages vor Neuanlage,
   set_*-Verdrahtung danach) im Persona-Profil verankert.
   `BUILDER_CONTENT_VERSION` 3 → 4.
+
+## 2026-07-10 — Builder v5: Modi + Konventions-Resource (drei Entscheidungen)
+- **Entscheidung 1 — Modi nur für Haltungswechsel, nicht für Prozeduren:** Der
+  Builder bekommt 3 Modi (Architekt = Default/Bau, Kurator = Pflege,
+  Berater = Read-only-Auskunft ohne Phasen-Zeremonie). Abgrenzung: Modi tragen
+  Stimme/Output-Stil, Playbooks tragen Prozedur — ein Modus wird nie zur
+  Playbook-Kopie. **Verworfen:** 4. Prüfer-Modus (Haltung identisch zum
+  Kurator, Konsistenz-Check bleibt reines Playbook).
+- **Entscheidung 2 — Kurator bindet Playbook in Prosa, nicht via
+  `playbook_id`:** Playbook-UUIDs sind workspace-spezifisch, der kanonische
+  Seed-Content muss workspace-übergreifend identisch bleiben. Kopplung
+  stattdessen über identische Trigger (Modus = Playbook) + Namensnennung im
+  identity_add. Per-Workspace-Auflösung im Sync wäre Komplexität ohne
+  Rendering-Mehrwert.
+- **Entscheidung 3 — Konventionen als Managed-Resource statt Duplikation:**
+  Neue Resource „Agent-Bau-Konventionen" (Trigger-Hygiene, Modi-Regel, Naming,
+  Policy-Muster, Status-/Kurator-Prinzip, Managed-Grenzen, Beziehungs-Graph),
+  per link_scope='resource' aus allen 5 Builder-Playbooks verlinkt (wird bei
+  fetch_playbook als Volldokument mitgeliefert → Playbooks bleiben
+  selbsttragend trotz gekürzter Konventions-Prosa). Schließt die eigene
+  Wissens-Drift-Lücke (Builder-Playbooks hatten null Resource-Links). Seed/
+  Sync um Resource-Insert-missing erweitert; weiterhin keine Spiegel-Migration.
+  Deep-Copy-Befund: Klone kopieren Persona/Playbooks/Template, NICHT die
+  Resource-Links — als Baseline fixiert. `BUILDER_CONTENT_VERSION` 4 → 5.
