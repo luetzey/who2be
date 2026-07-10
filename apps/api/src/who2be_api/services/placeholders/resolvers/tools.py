@@ -6,7 +6,13 @@ import asyncpg
 from pydantic import BaseModel
 
 from who2be_api.services.placeholders._core import RenderContext, ResolveResult
-from who2be_models import AgentCapability, AgentToolPolicy, ReadScope
+from who2be_models import (
+    MCP_TOOL_REQUIREMENTS,
+    AgentCapability,
+    AgentToolPolicy,
+    ReadScope,
+    is_tool_visible,
+)
 
 
 class ToolsOverviewResolver:
@@ -22,7 +28,10 @@ class ToolsOverviewResolver:
     der Agent laut seiner Policy nutzen darf — Reads gemaess Scope
     (`none` blendet aus, `assigned` ergaenzt einen Hinweis), Writes gemaess
     Capability-Gruppe. Ist keine Policy gesetzt (`None`, z. B. Persona-Body),
-    werden nur die Read-Tools gezeigt (Verhalten vor dem Feature).
+    werden nur die Read-Tools gezeigt (Verhalten vor dem Feature). Die
+    Sichtbarkeits-Regeln pro Tool-Name liegen in der geteilten SSoT
+    `who2be_models.tool_requirements` (ADR-0042) — hier lebt nur noch die
+    kuratierte Gruppierung + Beschreibung.
 
     `target_id` bleibt ungenutzt. Nie Miss.
     """
@@ -39,7 +48,7 @@ class ToolsOverviewResolver:
         for tool in _TOOLS:
             if not tool.is_visible(policy):
                 continue
-            if tool.capabilities:
+            if tool.is_write:
                 any_write = True
             suffix = tool.scope_suffix(policy)
             lines.append(f"- **{tool.signature}** — {tool.description}{suffix}")
@@ -60,42 +69,36 @@ class ToolsOverviewResolver:
 class _ToolDoc(BaseModel):
     """Ein Tool-Eintrag fuer den `tools-overview`-Block.
 
-    Genau eines greift fuer die Sichtbarkeit:
-    - `read_domain` (Read-Tool): ``"playbook"``/``"resource"`` (Scope-gefiltert)
-      oder ``"persona"``/``"agent"`` (An/Aus-Flag).
-    - `capabilities` (Write-Tool): nicht leer ⇒ sichtbar, sobald die Policy EINE
-      davon gewaehrt.
-    Read-Tools sind ohne Policy (None) sichtbar, Write-Tools nicht.
+    `tool_names` sind die konkreten MCP-Tool-Namen der kuratierten Gruppe —
+    Schluessel in `who2be_models.MCP_TOOL_REQUIREMENTS`, der geteilten
+    Sichtbarkeits-SSoT (ADR-0042). Die Sichtbarkeit delegiert an
+    `who2be_models.is_tool_visible` (Gruppen-Oder: sichtbar, sobald EIN Tool
+    der Gruppe sichtbar ist); die Semantik pro Tool (Read-Scope vs.
+    Capability, Policy `None` ⇒ nur Reads) lebt dort. `read_domain` bleibt
+    lokal fuer den Scope-Hinweis (`scope_suffix`).
     """
 
     signature: str
     description: str
+    tool_names: tuple[str, ...]
     read_domain: str | None = None
-    capabilities: tuple[AgentCapability, ...] = ()
 
     def is_visible(self, policy: AgentToolPolicy | None) -> bool:
-        if policy is None:
-            # Vor dem Pro-Agent-Feature gab es nur Read-Tools — Verhalten halten.
-            return self.read_domain is not None
-        if self.capabilities:
-            return any(policy.allows(cap) for cap in self.capabilities)
-        if self.read_domain == "playbook":
-            return policy.playbook_read != ReadScope.none
-        if self.read_domain == "resource":
-            return policy.resource_read != ReadScope.none
-        if self.read_domain == "persona":
-            return policy.persona_read
-        if self.read_domain == "agent":
-            return policy.agent_read != ReadScope.none
-        if self.read_domain == "search":
-            # Such-Tool spannt mehrere Domains: sichtbar, sobald der Agent
-            # mindestens eine Inhalts-Domain lesen darf.
-            return (
-                policy.persona_read
-                or policy.playbook_read != ReadScope.none
-                or policy.resource_read != ReadScope.none
-            )
-        return True
+        """Gruppen-Oder ueber die SSoT (`who2be_models.is_tool_visible`).
+
+        `None` (unbekannter Tool-Name) zaehlt hier defensiv als unsichtbar —
+        der Paritaetstest stellt sicher, dass jeder Name im Mapping steht.
+        """
+        return any(is_tool_visible(name, policy) is True for name in self.tool_names)
+
+    @property
+    def is_write(self) -> bool:
+        """True, wenn die Gruppe laut SSoT Capabilities verlangt (Write-Tools)."""
+        return any(
+            bool(MCP_TOOL_REQUIREMENTS[name].capabilities)
+            for name in self.tool_names
+            if name in MCP_TOOL_REQUIREMENTS
+        )
 
     def scope_suffix(self, policy: AgentToolPolicy | None) -> str:
         """Hinweis „(nur zugewiesene…)" bei Read-Scope `assigned`."""
@@ -113,6 +116,7 @@ class _ToolDoc(BaseModel):
 _TOOLS: list[_ToolDoc] = [
     _ToolDoc(
         signature="get_persona(identifier)",
+        tool_names=("get_persona",),
         read_domain="persona",
         description=(
             "Laedt deine eigene Persona inkl. Profil und verknuepfter Playbooks. "
@@ -125,6 +129,7 @@ _TOOLS: list[_ToolDoc] = [
     ),
     _ToolDoc(
         signature="search(query, types?, limit?)",
+        tool_names=("search",),
         read_domain="search",
         description=(
             "Inhaltliche Volltext-Suche ueber Personae/Playbooks/Resources "
@@ -135,6 +140,7 @@ _TOOLS: list[_ToolDoc] = [
     ),
     _ToolDoc(
         signature="list_triggers()",
+        tool_names=("list_triggers",),
         read_domain="playbook",
         description=(
             "Tabelle aller Trigger-Keywords mit dem zugehoerigen Playbook. "
@@ -146,6 +152,7 @@ _TOOLS: list[_ToolDoc] = [
     ),
     _ToolDoc(
         signature="list_playbooks(tag?, trigger?)",
+        tool_names=("list_playbooks",),
         read_domain="playbook",
         description=(
             "Katalog der Playbooks im Workspace, optional gefiltert nach Tag "
@@ -154,6 +161,7 @@ _TOOLS: list[_ToolDoc] = [
     ),
     _ToolDoc(
         signature="fetch_playbook(playbook_id)",
+        tool_names=("fetch_playbook",),
         read_domain="playbook",
         description=(
             "Vollstaendiger Body eines Playbooks (Schritte, Anweisungen). "
@@ -166,6 +174,7 @@ _TOOLS: list[_ToolDoc] = [
     ),
     _ToolDoc(
         signature="list_resources(tag?)",
+        tool_names=("list_resources",),
         read_domain="resource",
         description=(
             "Katalog der Resources im Workspace (Knowledge-Base-Dokumente), "
@@ -175,6 +184,7 @@ _TOOLS: list[_ToolDoc] = [
     ),
     _ToolDoc(
         signature="fetch_resource(resource_id, block_ids?)",
+        tool_names=("fetch_resource",),
         read_domain="resource",
         description=(
             "Body einer Resource — optional gezielt einzelne Bloecke "
@@ -183,6 +193,7 @@ _TOOLS: list[_ToolDoc] = [
     ),
     _ToolDoc(
         signature="list_agents()",
+        tool_names=("list_agents",),
         read_domain="agent",
         description=(
             "Katalog der Agenten im Workspace (Konfig/Metadaten: Name, Status, "
@@ -193,6 +204,7 @@ _TOOLS: list[_ToolDoc] = [
     ),
     _ToolDoc(
         signature="get_agent(agent_id)",
+        tool_names=("get_agent",),
         read_domain="agent",
         description=(
             "Konfig eines Agenten anhand seiner UUID (Persona, Template, Status, "
@@ -202,6 +214,7 @@ _TOOLS: list[_ToolDoc] = [
     ),
     _ToolDoc(
         signature="fetch_agent(agent_id)",
+        tool_names=("fetch_agent",),
         read_domain="agent",
         description=(
             "Laedt einen Agenten samt Persona und fertig expandiertem "
@@ -212,22 +225,22 @@ _TOOLS: list[_ToolDoc] = [
     # --- Schreib-Tools (nur sichtbar, wenn die Policy die Capability gewaehrt) ---
     _ToolDoc(
         signature="create_persona(...) / update_persona(...) / restore_persona(...)",
-        capabilities=(AgentCapability.persona_write,),
+        tool_names=("create_persona", "update_persona", "restore_persona"),
         description="Personas anlegen, als neuen Draft aendern oder eine Version wiederherstellen.",
     ),
     _ToolDoc(
         signature="set_persona_playbooks(persona_id, playbook_ids)",
-        capabilities=(AgentCapability.persona_write,),
+        tool_names=("set_persona_playbooks",),
         description="Die einer Persona zugeordneten Playbooks setzen (Replace-Semantik).",
     ),
     _ToolDoc(
         signature="create_playbook(...) / update_playbook(...) / restore_playbook(...)",
-        capabilities=(AgentCapability.playbook_write,),
+        tool_names=("create_playbook", "update_playbook", "restore_playbook"),
         description="Playbooks anlegen, als neuen Draft aendern oder wiederherstellen.",
     ),
     _ToolDoc(
         signature="set_playbook_resource_links(...) / set_playbook_composes(...)",
-        capabilities=(AgentCapability.playbook_write,),
+        tool_names=("set_playbook_resource_links", "set_playbook_composes"),
         description=(
             "Resource-Verweise bzw. die Sub-Playbook-Sequenz eines Composite-"
             "Playbooks setzen (Replace-Semantik)."
@@ -235,27 +248,22 @@ _TOOLS: list[_ToolDoc] = [
     ),
     _ToolDoc(
         signature="create_resource(...) / update_resource(...) / restore_resource(...)",
-        capabilities=(AgentCapability.resource_write,),
+        tool_names=("create_resource", "update_resource", "restore_resource"),
         description="Resources anlegen, als neuen Draft aendern oder wiederherstellen.",
     ),
     _ToolDoc(
         signature="set_resource_sub_resources(resource_id, links)",
-        capabilities=(AgentCapability.resource_write,),
+        tool_names=("set_resource_sub_resources",),
         description="Die Sub-Resources einer Resource setzen (Replace-Semantik).",
     ),
     _ToolDoc(
         signature="create_agent(...) / update_agent(...) / copy_agent(...)",
-        capabilities=(AgentCapability.agent_write,),
+        tool_names=("create_agent", "update_agent", "copy_agent"),
         description="Agenten anlegen, aendern oder duplizieren.",
     ),
     _ToolDoc(
         signature="transition_persona/playbook/resource(id, version, to, note?)",
-        capabilities=(
-            AgentCapability.promote_retire,
-            AgentCapability.persona_write,
-            AgentCapability.playbook_write,
-            AgentCapability.resource_write,
-        ),
+        tool_names=("transition_persona", "transition_playbook", "transition_resource"),
         description=(
             "Eine Version in einen neuen Status schalten. Nach `draft`/`review` "
             "genuegt die jeweilige Schreib-Capability; nach `active`/`inactive` "
@@ -265,7 +273,7 @@ _TOOLS: list[_ToolDoc] = [
     # --- System-Prompt-Templates (ADR-0040) — nur mit `system_prompt_write` ---
     _ToolDoc(
         signature="list_system_prompts() / get_system_prompt(template_id)",
-        capabilities=(AgentCapability.system_prompt_write,),
+        tool_names=("list_system_prompts", "get_system_prompt"),
         description=(
             "System-Prompt-Templates auflisten bzw. eines laden — das versionierte "
             "Aggregat hinter `system_prompt_template_id` eines Agenten."
@@ -273,7 +281,7 @@ _TOOLS: list[_ToolDoc] = [
     ),
     _ToolDoc(
         signature="list_placeholders()",
-        capabilities=(AgentCapability.system_prompt_write,),
+        tool_names=("list_placeholders",),
         description=(
             "Katalog der Placeholder-Kinds fuer Template-Bodies (kind, "
             "`target_id`-Vertrag, Beispiel-Inline). Vor dem Verfassen eines "
@@ -283,7 +291,7 @@ _TOOLS: list[_ToolDoc] = [
     ),
     _ToolDoc(
         signature="create_system_prompt(…) / update_system_prompt(…) / restore_system_prompt(…)",
-        capabilities=(AgentCapability.system_prompt_write,),
+        tool_names=("create_system_prompt", "update_system_prompt", "restore_system_prompt"),
         description=(
             "System-Prompt-Templates anlegen, als neuen Draft aendern oder eine "
             "Version wiederherstellen. Setze die UUID via update_agent als "
@@ -292,7 +300,7 @@ _TOOLS: list[_ToolDoc] = [
     ),
     _ToolDoc(
         signature="transition_system_prompt(template_id, version, to, note?)",
-        capabilities=(AgentCapability.system_prompt_write,),
+        tool_names=("transition_system_prompt",),
         description=(
             "Eine Template-Version weiterschalten — du darfst NUR `to='review'` "
             "(zur Freigabe einreichen). Das Aktivieren (`active`) uebernimmt ein "
@@ -302,7 +310,7 @@ _TOOLS: list[_ToolDoc] = [
     # --- Usage-/Feedback-Flywheel (ADR-0038) — `feedback_write` (Default an) ---
     _ToolDoc(
         signature="record_usage(...) / submit_feedback(...) / get_feedback(entity_type, entity_id)",
-        capabilities=(AgentCapability.feedback_write,),
+        tool_names=("record_usage", "submit_feedback", "get_feedback"),
         description=(
             "Melde, was du genutzt hast (`record_usage`, outcome applied/skipped/"
             "error) und gib Feedback (`submit_feedback`, signal helpful/outdated/"
