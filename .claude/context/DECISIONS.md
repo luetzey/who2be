@@ -128,3 +128,21 @@ bleiben)._
   Repo eingearbeitet; Beziehungs-Denken (search/find_usages vor Neuanlage,
   set_*-Verdrahtung danach) im Persona-Profil verankert.
   `BUILDER_CONTENT_VERSION` 3 → 4.
+
+## 2026-07-10 — MCP tools/list pro Agent gefiltert: fail-open, SSoT in models (ADR-0042)
+- **Entscheidung:** Per-Request-Filterung der MCP-Tool-Liste über eine
+  FastMCP-Middleware (`PolicyFilterMiddleware`), gespeist aus dem neuen
+  SSoT-Mapping `who2be_models.tool_requirements` (47 Tools), das auch der
+  `tools-overview`-Prompt-Resolver konsumiert. Fehler bei der whoami-Auflösung
+  ⇒ **fail-open** (ungefilterte Liste + Warn-Log); `on_call_tool` blockt
+  ausgeblendete Tools nur bei erfolgreich aufgelöster Identity. Details: ADR-0042.
+- **Begründung:** Durchsetzung bleibt autoritativ bei der API (ADR-0039) — die
+  Filterung ist Kontext-Hygiene/Payload-Ersparnis, keine Security-Grenze. Ein
+  fail-closed `tools/list` reproduzierte das bekannte „verbunden, aber keine
+  Tools"-Symptom (vgl. Fixes 2026-07-05/07). Drift wird nicht organisatorisch,
+  sondern per Paritätstests (MCP: registrierte Tools == Mapping; API: jede
+  Gruppe referenziert echte Tool-Namen) zum CI-Fehler gemacht.
+- **Verworfen:** FastMCP `enabled=False`/Tag-Filter (global pro Instanz,
+  bricht Multi-Tenant-HTTP); fail-closed (UX-Regression wiegt schwerer als der
+  kosmetische Schutz); `notifications/tools/list_changed` (TTL ≤ 300 s +
+  Reconnect reichen dieser Iteration).
