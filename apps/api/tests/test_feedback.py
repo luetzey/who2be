@@ -199,6 +199,13 @@ def test_flywheel_records_usage_feedback_and_summarizes(
             assert body["by_outcome"] == {"applied": 1, "skipped": 1}
             assert body["by_signal"] == {"outdated": 1}
             assert body["recent_notes"] == ["bitte aktualisieren"]
+            # Additiv: die juengsten Einzel-Feedbacks mit id + Triage-Status —
+            # adressierbar fuer resolve_feedback; frisch gemeldet = offen (None).
+            assert len(body["recent_feedback"]) == 1
+            assert body["recent_feedback"][0]["id"] == fb.json()["id"]
+            assert body["recent_feedback"][0]["signal"] == "outdated"
+            assert body["recent_feedback"][0]["note"] == "bitte aktualisieren"
+            assert body["recent_feedback"][0]["resolution"] is None
 
             # Drill-down: Einzel-Ereignisse (Feedback + Usage) chronologisch.
             events = client.get(f"{fbase}/feedback/playbook/{pid}/events", headers=auth)
@@ -229,6 +236,9 @@ def test_flywheel_records_usage_feedback_and_summarizes(
             # Drill-down zeigt nun den aktuellen (juengsten) Triage-Status.
             ev2 = client.get(f"{fbase}/feedback/playbook/{pid}/events", headers=auth).json()
             assert ev2["feedback"][0]["resolution"] == "addressed"
+            # Auch das Aggregat spiegelt den aktuellen Status im Einzel-Feedback.
+            body2 = client.get(f"{fbase}/feedback/playbook/{pid}", headers=auth).json()
+            assert body2["recent_feedback"][0]["resolution"] == "addressed"
 
             # Zentraler Posteingang: das Feedback erscheint mit Element-Name +
             # aktuellem Status; die Zaehler spiegeln die Triage.
@@ -327,5 +337,77 @@ def test_flywheel_records_usage_feedback_and_summarizes(
                 ).status_code
                 == 404
             )
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+def test_resolution_requires_feedback_resolve_for_agent_tokens(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Capability-Gate der Triage: ein agent-gebundener Token braucht
+    `feedback_resolve` (Default aus) — 403 ohne, 201 mit; Mensch (editor+)
+    bleibt unveraendert nur rollen-gated (201)."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    fbase = f"/v1/workspaces/{ws}"
+
+    def _agent_token(client: TestClient, name: str, policy: dict[str, object]) -> dict[str, str]:
+        agent = client.post(
+            f"{fbase}/agents", json={"name": name, "tool_policy": policy}, headers=auth
+        )
+        assert agent.status_code == 201, agent.text
+        token = client.post(
+            f"{fbase}/tokens",
+            json={"name": name, "agent_id": agent.json()["id"]},
+            headers=auth,
+        )
+        assert token.status_code == 201, token.text
+        return {"Authorization": f"Bearer {token.json()['token']}"}
+
+    try:
+        with TestClient(app) as client:
+            pid = client.post(
+                f"{fbase}/playbooks", json=_playbook_body("PB-Triage"), headers=auth
+            ).json()["id"]
+            fid = client.post(
+                f"{fbase}/feedback",
+                json={"entity_type": "playbook", "entity_id": pid, "signal": "outdated"},
+                headers=auth,
+            ).json()["id"]
+
+            # Agent OHNE feedback_resolve (Default-Policy) → 403 missing_capability.
+            no_cap = _agent_token(client, "triage-ohne-cap", {})
+            denied = client.post(
+                f"{fbase}/feedback/{fid}/resolution",
+                json={"resolution": "in_progress"},
+                headers=no_cap,
+            )
+            assert denied.status_code == 403, denied.text
+            assert denied.json()["reason"] == "missing_capability"
+
+            # Agent MIT feedback_resolve → 201; Antwort traegt den neuen Status.
+            with_cap = _agent_token(client, "triage-mit-cap", {"feedback_resolve": True})
+            granted = client.post(
+                f"{fbase}/feedback/{fid}/resolution",
+                json={"resolution": "in_progress", "note": "Draft folgt"},
+                headers=with_cap,
+            )
+            assert granted.status_code == 201, granted.text
+            assert granted.json()["resolution"] == "in_progress"
+
+            # Mensch (JWT, editor+): weiterhin nur rollen-gated → 201.
+            human = client.post(
+                f"{fbase}/feedback/{fid}/resolution",
+                json={"resolution": "addressed"},
+                headers=auth,
+            )
+            assert human.status_code == 201, human.text
+            assert human.json()["resolution"] == "addressed"
     finally:
         cleanup_workspaces([owner])

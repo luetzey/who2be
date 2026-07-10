@@ -30,6 +30,7 @@ const editorSchema = z.object({
   agent_write: z.boolean(),
   system_prompt_write: z.boolean(),
   feedback_write: z.boolean(),
+  feedback_resolve: z.boolean(),
   promote_retire: z.boolean(),
   // ADR-0039 Tag-Scope: kommaseparierte erlaubte Tags je Domain (leer = alle).
   write_tags_persona: z.string(),
@@ -107,6 +108,7 @@ function valuesToPolicy(values: AgentEditorValues, base: AgentToolPolicy): Agent
     agent_write: values.agent_write,
     system_prompt_write: values.system_prompt_write,
     feedback_write: values.feedback_write,
+    feedback_resolve: values.feedback_resolve,
     promote_retire: values.promote_retire,
     write_tags: buildWriteTags(values),
     transition_grants: buildTransitionGrants(values),

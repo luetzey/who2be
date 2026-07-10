@@ -16,6 +16,7 @@ from who2be_models import (
     FeedbackItem,
     FeedbackOverviewItem,
     FeedbackSummary,
+    FeedbackSummaryItem,
     FeedbackUnusedItem,
     UsageEventRead,
 )
@@ -202,6 +203,20 @@ class PgFeedbackRepository:
             entity_type,
             entity_id,
         )
+        # Juengste Einzel-Feedbacks mit id + aktuellem Triage-Status (juengstes
+        # Resolution-Event via korrelierter Subquery, Muster aus list_events/
+        # list_items) — adressierbar fuer die Triage (resolve_feedback).
+        recent_rows = await self._pool.fetch(
+            "SELECT f.id, f.signal, f.note, f.created_at, "
+            "(SELECT r.resolution FROM feedback_resolution r "
+            "   WHERE r.feedback_id = f.id ORDER BY r.created_at DESC LIMIT 1) AS resolution "
+            "FROM agent_feedback f "
+            "WHERE f.workspace_id = $1 AND f.entity_type = $2 AND f.entity_id = $3 "
+            "ORDER BY f.created_at DESC LIMIT 10",
+            workspace_id,
+            entity_type,
+            entity_id,
+        )
         return FeedbackSummary(
             entity_type=entity_type,  # type: ignore[arg-type]
             entity_id=entity_id,
@@ -209,6 +224,7 @@ class PgFeedbackRepository:
             by_outcome={row["outcome"]: row["n"] for row in outcome_rows},
             by_signal={row["signal"]: row["n"] for row in signal_rows},
             recent_notes=[row["note"] for row in note_rows],
+            recent_feedback=[FeedbackSummaryItem.model_validate(dict(r)) for r in recent_rows],
         )
 
     async def list_events(

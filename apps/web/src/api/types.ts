@@ -581,9 +581,11 @@ export interface AgentToolPolicy {
   agent_write: boolean
   // ADR-0040: System-Prompt-Templates verfassen + zur Review einreichen
   // (Aktivieren bleibt serverseitig gesperrt). ADR-0038: feedback_write deckt
-  // das Usage-/Feedback-Flywheel ab (Default an).
+  // das Usage-/Feedback-Flywheel ab (Default an); feedback_resolve die Triage
+  // (Signale schliessen: addressed/in_progress/dismissed — Default aus).
   system_prompt_write: boolean
   feedback_write: boolean
+  feedback_resolve: boolean
   promote_retire: boolean
   // ADR-0039: Tag-Praedikat-Write-Scoping. Pro Domain (persona/playbook/resource)
   // erlaubte Tags; fehlend/leer = keine Tag-Einschraenkung. Optional, damit
@@ -609,8 +611,10 @@ export const DEFAULT_TOOL_POLICY: AgentToolPolicy = {
   resource_write: false,
   agent_write: false,
   system_prompt_write: false,
-  // Flywheel-Telemetrie ist Default an (ADR-0038), opt-out pro Agent.
+  // Flywheel-Telemetrie ist Default an (ADR-0038), opt-out pro Agent; die
+  // Triage (Signale schliessen) ist secure-by-default aus.
   feedback_write: true,
+  feedback_resolve: false,
   promote_retire: false,
 }
 
@@ -775,6 +779,17 @@ export interface SystemFeedbackInput {
 // Triage-Status eines Feedback-Eintrags (ADR-0038, append-only).
 export type FeedbackResolution = 'addressed' | 'in_progress' | 'dismissed'
 
+// Ein einzelnes Feedback im Aggregat: id + aktueller Triage-Status — damit
+// (auch MCP-)Konsumenten offene Signale gezielt schliessen koennen.
+export interface FeedbackSummaryItem {
+  id: string
+  signal: FeedbackSignal | SystemFeedbackCategory
+  note: string | null
+  // Aktueller Triage-Status (juengstes Resolution-Event) oder null = offen.
+  resolution: FeedbackResolution | null
+  created_at: string
+}
+
 // Aggregat fuer das Detail-Panel (`GET …/feedback/{type}/{id}`).
 export interface FeedbackSummary {
   entity_type: FeedbackTarget
@@ -783,6 +798,9 @@ export interface FeedbackSummary {
   by_outcome: Partial<Record<UsageOutcome, number>>
   by_signal: Partial<Record<FeedbackSignal, number>>
   recent_notes: string[]
+  // Additiv (juengste Einzel-Feedbacks inkl. id/resolution); optional, damit
+  // Bestands-Payloads/Mocks ohne das Feld weiterhin valide sind.
+  recent_feedback?: FeedbackSummaryItem[]
 }
 
 // Einzel-Ereignisse (Drill-down, `GET …/feedback/{type}/{id}/events`).

@@ -260,6 +260,7 @@
           "agent_write": "Agenten erstellen/ändern",
           "system_prompt_write": "System-Prompts verfassen (Review einreichen)",
           "feedback_write": "Nutzung/Feedback melden",
+          "feedback_resolve": "Feedback-Triage: Signale schließen (addressed/in_progress/dismissed)",
           "promote_retire": "Versionen aktivieren/deaktivieren"
         },
         "writeTags": {

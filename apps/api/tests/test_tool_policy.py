@@ -174,6 +174,49 @@ class TestFeedbackWriteCapability:
             require_capability(ctx, AgentCapability.feedback_write)
 
 
+class TestFeedbackResolveCapability:
+    """Feedback-Triage (Signale schliessen) ist secure-by-default AUS."""
+
+    def test_default_is_false(self) -> None:
+        assert AgentToolPolicy().feedback_resolve is False
+
+    def test_empty_json_defaults_to_false(self) -> None:
+        # Bestands-Agenten (`{}` in der jsonb-Spalte) erben den sicheren Default.
+        assert AgentToolPolicy.model_validate({}).feedback_resolve is False
+
+    def test_granted_capabilities_lists_it_when_set(self) -> None:
+        caps = AgentToolPolicy(feedback_resolve=True).granted_capabilities()
+        assert AgentCapability.feedback_resolve in caps
+        assert AgentCapability.feedback_resolve not in AgentToolPolicy().granted_capabilities()
+
+    def test_round_trip_preserves_value(self) -> None:
+        policy = AgentToolPolicy(feedback_resolve=True)
+        assert AgentToolPolicy.model_validate(policy.model_dump()) == policy
+        assert AgentToolPolicy.model_validate(policy.model_dump()).feedback_resolve is True
+
+    def test_require_capability_blocks_default_policy(self) -> None:
+        ctx = _ctx(AgentToolPolicy())
+        with pytest.raises(ApiGateError) as exc:
+            require_capability(ctx, AgentCapability.feedback_resolve)
+        assert exc.value.status == 403
+        assert exc.value.reason == "missing_capability"
+
+    def test_require_capability_passes_when_granted(self) -> None:
+        require_capability(
+            _ctx(AgentToolPolicy(feedback_resolve=True)), AgentCapability.feedback_resolve
+        )
+
+    def test_no_policy_is_noop(self) -> None:
+        # Mensch/JWT bzw. ungebundener Token: nur das Rollen-Gate greift.
+        require_capability(_ctx(None), AgentCapability.feedback_resolve)
+
+    def test_is_within_blocks_escalation(self) -> None:
+        broad = AgentToolPolicy(feedback_resolve=True)
+        narrow = AgentToolPolicy()
+        assert broad.is_within(narrow) is False
+        assert narrow.is_within(broad) is True
+
+
 class TestTransitionGrants:
     """ADR-0039: per-Domain-Verfeinerung von promote_retire (Narrowing)."""
 

@@ -1426,6 +1426,22 @@ class TestToolsOverviewResolver:
         assert "record_usage" not in result
         assert "Rueckmeldung" not in result
 
+    def test_resolve_feedback_hidden_by_default(self) -> None:
+        """Die Triage (feedback_resolve) ist secure-by-default aus — das Tool
+        erscheint trotz aktivem feedback_write nicht."""
+        result = _async_run(
+            ToolsOverviewResolver().resolve("", self._policy_ctx(), _make_db())
+        ).text
+        assert "record_usage" in result  # feedback_write ist Default an
+        assert "resolve_feedback" not in result
+
+    def test_feedback_resolve_capability_reveals_triage_tool(self) -> None:
+        result = _async_run(
+            ToolsOverviewResolver().resolve("", self._policy_ctx(feedback_resolve=True), _make_db())
+        ).text
+        assert "resolve_feedback(feedback_id, resolution, note?)" in result
+        assert "dismissed" in result
+
     def test_agent_read_assigned_marks_self_only(self) -> None:
         """Scope `assigned`: Hinweis „nur dein eigener Agent" + fetch_agent self-only."""
         from who2be_models import ReadScope

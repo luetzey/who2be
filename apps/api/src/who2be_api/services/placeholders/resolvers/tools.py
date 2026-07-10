@@ -307,8 +307,21 @@ _TOOLS: list[_ToolDoc] = [
             "Melde, was du genutzt hast (`record_usage`, outcome applied/skipped/"
             "error) und gib Feedback (`submit_feedback`, signal helpful/outdated/"
             "incorrect/unclear) — so wird die AgentDB selbst-verbessernd. "
-            "`get_feedback` liest das Aggregat (Kurations-Sicht). Feedback aendert "
+            "`get_feedback` liest das Aggregat (Kurations-Sicht) inkl. der "
+            "juengsten Einzel-Feedbacks mit `id` + Triage-Status. Feedback aendert "
             "nie selbst Inhalte. Wann genau: siehe Rueckmelde-Hinweis unten."
+        ),
+    ),
+    # --- Feedback-Triage — `feedback_resolve` (Default aus) ---
+    _ToolDoc(
+        signature="resolve_feedback(feedback_id, resolution, note?)",
+        capabilities=(AgentCapability.feedback_resolve,),
+        description=(
+            "Schliesst ein Feedback-Signal: resolution `addressed` (Fix umgesetzt/"
+            "aktiv), `in_progress` (Draft liegt, Aktivierung offen) oder "
+            "`dismissed` (bewusst verworfen — IMMER mit begruendender note). "
+            "Kurations-Handlung: erst get_feedback, dann triagieren; nur offene "
+            "Signale (resolution null) abarbeiten."
         ),
     ),
 ]
