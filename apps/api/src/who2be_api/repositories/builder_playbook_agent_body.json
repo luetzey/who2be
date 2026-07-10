@@ -546,7 +546,7 @@
     "id": "pb-agent-li-anti-4",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Schreib-Capabilities grosszuegiger setzen, als der Agent fuer seine Aufgabe braucht — vergib das Minimum (Least Privilege) und niemals mehr, als du selbst hast.", "styles": {}}],
+    "content": [{"type": "text", "text": "Schreib-Capabilities grosszuegiger setzen, als der Agent fuer seine Aufgabe braucht — es gilt das Tool-Policy-Muster der Resource 'Agent-Bau-Konventionen' (secure by default, minimale Capabilities, promote_retire nur bei echtem Schalt-Bedarf).", "styles": {}}],
     "children": []
   },
   {
@@ -582,6 +582,13 @@
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [{"type": "text", "text": "Der Bootstrap-Loop (Persona laden, Trigger pruefen, Playbook folgen) steckt im Template und wird beim Rendern aus Platzhaltern befuellt — du musst ihn nicht von Hand in den Prompt schreiben.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-notes-konventionen",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Konventionen: das Tool-Policy-Muster (Lese-Scopes, minimale Schreib-Capabilities, promote_retire, transition_grants, write_rate_limit) sowie Trigger-Hygiene, Naming, Modi-Regel und Managed-Grenzen stehen verbindlich in der Resource 'Agent-Bau-Konventionen' — sie wird mit diesem Playbook mitgeliefert (link_scope resource).", "styles": {}}],
     "children": []
   },
   {

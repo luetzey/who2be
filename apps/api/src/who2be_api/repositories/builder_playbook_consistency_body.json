@@ -419,6 +419,16 @@
     "children": []
   },
   {
+    "id": "pb-check-p-notes-konventionen",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Konventionen: ", "styles": {"bold": true}},
+      {"type": "text", "text": "die Pruef-Massstaebe fuer Trigger-Hygiene, Naming, Modi-Regel, Policy-Muster und Managed-Grenzen stehen verbindlich in der Resource 'Agent-Bau-Konventionen' — sie wird mit diesem Playbook mitgeliefert (link_scope resource) und ist der Referenzrahmen fuer den Sweep.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
     "id": "pb-feedback-h",
     "type": "heading",
     "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},

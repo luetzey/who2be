@@ -53,7 +53,7 @@
         "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
         "content": [
           {"type": "text", "text": "Modi-Regel: ", "styles": {"bold": true}},
-          {"type": "text", "text": "pro Modus name + identity_add + output_style_override (optional anti_patterns); genau ein Modus traegt is_default=true; der Default-Modus traegt KEINEN trigger, jeder Nicht-Default-Modus MUSS einen trigger tragen — sonst ist er unerreichbar bzw. kollidiert mit dem Default.", "styles": {}}
+          {"type": "text", "text": "genau ein Default-Modus (is_default=true, ohne trigger), jeder Nicht-Default-Modus mit Pflicht-trigger — Details verbindlich in der Resource 'Agent-Bau-Konventionen', Sektion Modi-Regel.", "styles": {}}
         ],
         "children": []
       }
@@ -220,6 +220,13 @@
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [{"type": "text", "text": "Reads: get_persona, list_playbooks zur Vorbereitung. Verboten: Status beim Anlegen direkt auf active setzen, sowie Schreiben in fremde Aggregate ueber dieses Playbook hinaus.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-t7-konventionen",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Konventionen: Trigger-Hygiene, Naming, Modi-Regel, Policy-Muster und Managed-Grenzen stehen verbindlich in der Resource 'Agent-Bau-Konventionen' — sie wird mit diesem Playbook mitgeliefert (link_scope resource).", "styles": {}}],
     "children": []
   },
   {

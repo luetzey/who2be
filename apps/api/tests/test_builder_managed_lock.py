@@ -175,6 +175,24 @@ def test_builder_is_locked_but_copyable(monkeypatch: pytest.MonkeyPatch) -> None
             # Die fuenf Builder-Playbooks wurden mitkopiert (an die Klon-Persona).
             links = client.get(f"{base}/personas/{new_pid}/playbooks", headers=auth)
             assert links.status_code == 200, links.text
-            assert len(links.json()) == 5, "Alle fuenf Builder-Playbooks sollten geklont sein."
+            cloned_playbooks = links.json()
+            assert len(cloned_playbooks) == 5, "Alle fuenf Builder-Playbooks sollten geklont sein."
+
+            # Copy-Semantik der Managed-Resource „Agent-Bau-Konventionen":
+            # `deep_copy` dupliziert Persona/Playbooks/Template — die Resource
+            # und ihre `playbook_resource_link`s werden NICHT mitkopiert. Die
+            # Klon-Playbooks starten also ohne Resource-Links; die eine managed
+            # Resource bleibt geteilt im Workspace stehen (kein Duplikat).
+            for pb in cloned_playbooks:
+                pb_links = client.get(f"{base}/playbooks/{pb['id']}/resource_links", headers=auth)
+                assert pb_links.status_code == 200, pb_links.text
+                assert pb_links.json() == [], (
+                    "Deep-Copy kopiert keine playbook_resource_links — "
+                    "Klon-Playbooks starten ohne Resource-Refs."
+                )
+            resources = client.get(f"{base}/resources", headers=auth).json()
+            conventions = [r for r in resources if r["name"] == "Agent-Bau-Konventionen"]
+            assert len(conventions) == 1, "Die Managed-Resource darf nicht mitgeklont werden."
+            assert conventions[0]["is_managed"] is True
     finally:
         cleanup_workspaces([owner])

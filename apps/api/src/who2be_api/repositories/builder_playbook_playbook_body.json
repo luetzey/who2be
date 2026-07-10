@@ -123,7 +123,7 @@
     "id": "pb-playbook-create-p1-triggers",
     "type": "numberedListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Triggers: Welche User-Phrasen aktivieren das Playbook? Kommagetrennt (kanonische Form; der Write-Pfad normalisiert Semikolons mit), mit [Platzhaltern] wo flexibel. Mit list_triggers() pruefen, ob ein Trigger schon belegt ist (Kollision vermeiden). Vorher pruefen: Sektion Token-Spar-Strategie — existiert schon ein passendes Playbook?", "styles": {}}],
+    "content": [{"type": "text", "text": "Triggers: Welche User-Phrasen aktivieren das Playbook? Format und Kollisions-Gegenprobe (list_triggers) verbindlich nach der Trigger-Hygiene in der Resource 'Agent-Bau-Konventionen'. Vorher pruefen: Sektion Token-Spar-Strategie — existiert schon ein passendes Playbook?", "styles": {}}],
     "children": []
   },
   {
@@ -415,7 +415,7 @@
     "id": "pb-playbook-anti-triggers",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Triggers ohne Komma-Trennung oder ohne [Platzhalter] wo flexibel — Konvention: Trigger-Phrase A, Trigger-Phrase B, Trigger fuer [X]. Semikolons werden zwar mitakzeptiert und normalisiert, kanonisch ist das Komma.", "styles": {}}],
+    "content": [{"type": "text", "text": "Triggers entgegen der Trigger-Hygiene vergeben (generische Einzelwoerter, keine Komma-Trennung, keine Kollisions-Gegenprobe) — kanonisches Format siehe Resource 'Agent-Bau-Konventionen'.", "styles": {}}],
     "children": []
   },
   {
@@ -451,6 +451,13 @@
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [{"type": "text", "text": "Der Draft-zu-active-Workflow bleibt serverseitig: MCP-Write-Tools legen nur Drafts an; die Veroeffentlichung laeuft immer ueber transition_playbook. Ein Hard-Delete gibt es ueber MCP bewusst nicht.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-playbook-notes-konventionen",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Konventionen: Trigger-Hygiene, Naming, Modi-Regel, Policy-Muster und Managed-Grenzen stehen verbindlich in der Resource 'Agent-Bau-Konventionen', die mit diesem Playbook mitgeliefert wird (link_scope resource) — dort nachschlagen statt Regeln hier zu duplizieren.", "styles": {}}],
     "children": []
   },
   {

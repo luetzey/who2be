@@ -1,9 +1,25 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-07-10_
+_Stand: 2026-07-10 (2. Lauf)_
 
 ## Funktioniert
 
+- **Builder v5: Persona-Modi + Konventions-Resource UMGESETZT (2026-07-10,
+  Branch `claude/builder-agent-setup-pyczxa` neu ab main, Folge-PR zu #302):**
+  Builder-Persona ist jetzt Multi-Mode — Architekt (Default, Vier-Phasen-Bau),
+  Kurator (Pflege-Haltung, Trigger identisch zum Playbook „Library-Pflege &
+  Feedback-Lauf", report-first, Prosa-Bindung statt playbook_id) und Berater
+  (Read-only-Auskunft, enge Phrasen-Trigger, ohne Phasen-Zeremonie); Basis-
+  Identität entsprechend gescoped. Neue Managed-Resource
+  „Agent-Bau-Konventionen" (8 Sektionen) als Single-Source, per
+  link_scope='resource' aus allen 5 Builder-Playbooks verlinkt; duplizierte
+  Konventions-Prosa in den Playbooks auf Pointer eingedampft. Seed/Sync:
+  Resource-Insert-missing + Content-Update analog Playbooks,
+  `BUILDER_CONTENT_VERSION` 4→5, keine Migration (Konvention). Deep-Copy
+  kopiert Resource-Links NICHT (Baseline fixiert). DoD: ruff/format/mypy
+  strict clean, 955 pytest passed, Coverage 89,94 % (Gate 85); Baselines
+  (Dashboard active_resources, Resource-Tags, Seed-/Sync-/Lock-Tests)
+  nachgezogen. Details: DECISIONS.md 2026-07-10 (Builder v5).
 - **Builder-Rework: Library-Pflege-Routine + Beziehungs-Denken UMGESETZT
   (2026-07-10, Branch `claude/builder-agent-setup-pyczxa`, PR #302, Draft):**
   Fünftes Managed-Playbook „Library-Pflege & Feedback-Lauf" (Sidecar

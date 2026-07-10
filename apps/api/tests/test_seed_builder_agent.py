@@ -5,9 +5,12 @@ Deckt den Seed ab, der bei jeder Workspace-Anlage laeuft
 0047):
 
 1. Vollstaendigkeit: nach `setup_workspace` existieren Persona „Builder" (v1
-   active), fuenf Playbooks (v1 active), fuenf persona_playbook-Links, das
-   Template `agent-builder` (active) und der Agent „Builder" (enabled,
-   write-faehige tool_policy, Persona + Template verdrahtet).
+   active, drei Modi: Architekt default/Kurator/Berater), fuenf Playbooks (v1
+   active), fuenf persona_playbook-Links, die Managed-Resource
+   „Agent-Bau-Konventionen" (v1 active) samt fuenf
+   `playbook_resource_link`s (link_scope='resource'), das Template
+   `agent-builder` (active) und der Agent „Builder" (enabled, write-faehige
+   tool_policy, Persona + Template verdrahtet).
 2. Idempotenz: ein zweiter Seed-Lauf erzeugt keine Duplikate.
 3. Render: der `GET .../agents/{id}/rendered`-Endpoint expandiert den Prompt
    ohne offene Persona-Platzhalter (Persona-Name aufgeloest).
@@ -18,6 +21,7 @@ Laeuft nur mit erreichbarer Datenbank; ohne DB werden die Tests uebersprungen.
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -30,6 +34,7 @@ from who2be_api.core import security
 from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.migrations import MIGRATIONS_DIR, apply_migrations
 from who2be_api.main import app
+from who2be_api.repositories.workspace_repository import BUILDER_CONTENT_VERSION
 from who2be_api.testing.workspace_setup import (
     cleanup_workspaces,
     fresh_user_id,
@@ -100,7 +105,7 @@ def test_builder_agent_seeded_complete() -> None:
         conn = await asyncpg.connect(get_settings().database_url)
         try:
             persona = await conn.fetchrow(
-                "SELECT p.current_version, pv.status "
+                "SELECT p.current_version, pv.status, pv.content -> 'modes' AS modes "
                 "FROM persona p "
                 "JOIN persona_version pv "
                 "  ON pv.persona_id = p.id AND pv.version = p.current_version "
@@ -129,6 +134,20 @@ def test_builder_agent_seeded_complete() -> None:
                 "WHERE t.workspace_id = $1 AND t.slug = 'agent-builder'",
                 workspace_id,
             )
+            resource = await conn.fetchrow(
+                "SELECT r.is_managed, r.managed_content_version, rv.status, rv.locale "
+                "FROM resource r "
+                "JOIN resource_version rv "
+                "  ON rv.resource_id = r.id AND rv.version = 1 "
+                "WHERE r.workspace_id = $1 AND r.name = 'Agent-Bau-Konventionen'",
+                workspace_id,
+            )
+            resource_links = await conn.fetch(
+                "SELECT prl.link_scope, prl.block_id FROM playbook_resource_link prl "
+                "JOIN resource r ON r.id = prl.resource_id "
+                "WHERE prl.workspace_id = $1 AND r.name = 'Agent-Bau-Konventionen'",
+                workspace_id,
+            )
             agent = await conn.fetchrow(
                 "SELECT a.status, "
                 "       a.persona_id IS NOT NULL AS has_persona, "
@@ -147,9 +166,17 @@ def test_builder_agent_seeded_complete() -> None:
                 "persona_present": persona is not None,
                 "persona_version": persona["current_version"] if persona else None,
                 "persona_status": persona["status"] if persona else None,
+                "persona_modes": json.loads(persona["modes"]) if persona else None,
                 "playbooks_active": playbooks_active,
                 "links": links,
                 "template_status": template_status,
+                "resource_present": resource is not None,
+                "resource_managed": resource["is_managed"] if resource else None,
+                "resource_stamp": resource["managed_content_version"] if resource else None,
+                "resource_v1_status": resource["status"] if resource else None,
+                "resource_locale": resource["locale"] if resource else None,
+                "resource_link_scopes": [r["link_scope"] for r in resource_links],
+                "resource_link_block_ids": [r["block_id"] for r in resource_links],
                 "agent_present": agent is not None,
                 "agent_status": agent["status"] if agent else None,
                 "has_persona": agent["has_persona"] if agent else None,
@@ -170,9 +197,29 @@ def test_builder_agent_seeded_complete() -> None:
         assert data["persona_version"] == 1
         assert data["persona_status"] == "active"
 
+        # Multi-Mode-Persona (Content-Stand 5): Architekt (Default, ohne
+        # Trigger), Kurator, Berater — genau EIN Default.
+        modes = data["persona_modes"]
+        assert isinstance(modes, list) and len(modes) == 3, modes
+        assert [m["name"] for m in modes] == ["Architekt", "Kurator", "Berater"]
+        defaults = [m for m in modes if m["is_default"]]
+        assert len(defaults) == 1, "Genau ein Modus muss is_default=True sein."
+        assert defaults[0]["name"] == "Architekt"
+        assert defaults[0]["trigger"] is None, "Der Default-Modus traegt keinen Trigger."
+
         assert data["playbooks_active"] == 5, "Es fehlen aktive Builder-Playbooks."
         assert data["links"] == 5, "Persona<->Playbook-Links unvollstaendig."
         assert data["template_status"] == "active"
+
+        # Managed-Resource „Agent-Bau-Konventionen": v1 active, verwaltet und
+        # von allen fuenf Builder-Playbooks als Volldokument referenziert.
+        assert data["resource_present"] is True, "Managed-Resource wurde nicht geseedet."
+        assert data["resource_managed"] is True
+        assert data["resource_stamp"] == BUILDER_CONTENT_VERSION
+        assert data["resource_v1_status"] == "active"
+        assert data["resource_locale"] == "de"
+        assert data["resource_link_scopes"] == ["resource"] * 5, data["resource_link_scopes"]
+        assert data["resource_link_block_ids"] == [None] * 5
 
         assert data["agent_present"] is True, "Agent 'Builder' wurde nicht geseedet."
         assert data["agent_status"] == "enabled"
@@ -224,11 +271,24 @@ def test_builder_seed_idempotent() -> None:
                 "SELECT count(*) FROM agent WHERE workspace_id = $1 AND name = 'Builder'",
                 workspace_id,
             )
+            resources = await conn.fetchval(
+                "SELECT count(*) FROM resource "
+                "WHERE workspace_id = $1 AND name = 'Agent-Bau-Konventionen'",
+                workspace_id,
+            )
+            resource_links = await conn.fetchval(
+                "SELECT count(*) FROM playbook_resource_link prl "
+                "JOIN resource r ON r.id = prl.resource_id "
+                "WHERE prl.workspace_id = $1 AND r.name = 'Agent-Bau-Konventionen'",
+                workspace_id,
+            )
             return {
                 "personas": personas,
                 "playbooks": playbooks,
                 "links": links,
                 "agents": agents,
+                "resources": resources,
+                "resource_links": resource_links,
             }
         finally:
             await conn.close()
@@ -239,6 +299,8 @@ def test_builder_seed_idempotent() -> None:
         assert counts["playbooks"] == 5, "Playbooks dupliziert."
         assert counts["links"] == 5, "Links dupliziert."
         assert counts["agents"] == 1, "Agent dupliziert."
+        assert counts["resources"] == 1, "Managed-Resource dupliziert."
+        assert counts["resource_links"] == 5, "playbook_resource_links dupliziert."
     finally:
         cleanup_workspaces([owner])
 

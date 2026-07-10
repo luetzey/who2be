@@ -147,10 +147,10 @@ def test_dashboard_seed_baseline_for_fresh_workspace(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Ein frischer Workspace ist NICHT leer: der Onboarding-Seed legt 1 aktive
-    „Builder"-Persona + 5 aktive Builder-Playbooks an. Die KPIs/Distribution
-    spiegeln genau diese Baseline; Aktivitaet bleibt leer (der Seed schreibt
-    keine status_history). Aendert sich der Seed, gehoeren die Werte mit
-    angepasst."""
+    „Builder"-Persona + 5 aktive Builder-Playbooks + 1 aktive Managed-Resource
+    („Agent-Bau-Konventionen") an. Die KPIs/Distribution spiegeln genau diese
+    Baseline; Aktivitaet bleibt leer (der Seed schreibt keine status_history).
+    Aendert sich der Seed, gehoeren die Werte mit angepasst."""
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
     _prepare_db()
@@ -168,14 +168,14 @@ def test_dashboard_seed_baseline_for_fresh_workspace(
             assert body["kpis"] == {
                 "active_personas": 1,
                 "active_playbooks": 5,
-                "active_resources": 0,
+                "active_resources": 1,
                 "pending_reviews": 0,
             }
             assert body["activity"] == []
             empty_dist = {"draft": 0, "review": 0, "active": 0, "inactive": 0}
             assert body["status_distribution"]["persona"] == {**empty_dist, "active": 1}
             assert body["status_distribution"]["playbook"] == {**empty_dist, "active": 5}
-            assert body["status_distribution"]["resource"] == empty_dist
+            assert body["status_distribution"]["resource"] == {**empty_dist, "active": 1}
     finally:
         cleanup_workspaces([owner])
 
