@@ -1,0 +1,336 @@
+[
+  {
+    "id": "res-conv-h-zweck",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Zweck", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "res-conv-p-zweck",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Verbindliche Konventionen fuer den Agent-Bau in diesem Workspace — sie gelten fuer Personas, Playbooks, Resources, Agenten und System-Prompt-Templates gleichermassen. Diese Resource ist die Single-Source: die Builder-Playbooks verweisen hierher, statt die Regeln je einzeln zu duplizieren. Wo ein Playbook eine Konvention nur anreisst, gilt der Wortlaut dieser Resource.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "res-conv-p-zweck-pflege",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Die Resource ist system-verwaltet (managed) und wird via link_scope 'resource' mit jedem Builder-Playbook als Volldokument mitgeliefert. Gepflegt wird sie ausschliesslich ueber das Code-Repo — Aenderungswuensche gehoeren in den Repo-Hand-Off, nicht in MCP-Write-Versuche.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "res-conv-h-trigger",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Trigger-Hygiene", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "res-conv-p-trigger-intro",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Trigger sind das Routing der Library: der Konsumenten-Agent entscheidet anhand der Trigger-Phrasen, welches Playbook oder welcher Modus zur Anfrage passt. Schlechte Trigger routen falsch — und Fehl-Routing faellt erst im Betrieb auf.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-trigger-phrasen",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Phrasenhaft statt generisch: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Trigger sind mehrwortige, phrasenhafte Formulierungen ('Konsistenz-Check ueber die Library'), nie generische Einzelwoerter. Kollisions-Historie in diesem Workspace: 'pruefen' und 'qualitaetscheck' zogen Code-Audit-Anfragen faelschlich auf den Konsistenz- & Drift-Check; 'aufraeumen' gehoert dem Vault-Playbook und darf von keinem anderen Element belegt werden.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-trigger-gegenprobe",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Kollisions-Gegenprobe: ", "styles": {"bold": true}},
+      {"type": "text", "text": "vor JEDER Trigger-Vergabe list_triggers() aufrufen und den geplanten Trigger gegen den Bestand pruefen. Gleiche oder sehr aehnliche Phrasen auf mehreren Elementen sind eine Kollision — dann die eigene Phrase schaerfen oder den Bestand als Pflege-Fund melden, nie die Kollision in Kauf nehmen.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-trigger-format",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Kanonisches Format: ", "styles": {"bold": true}},
+      {"type": "text", "text": "kommagetrennte Liste ('Trigger-Phrase A, Trigger-Phrase B'); Semikolons werden vom Write-Pfad zwar mit-normalisiert, kanonisch ist das Komma. Wo eine Phrase flexibel ist, [Platzhalter] verwenden — z. B. 'Persona fuer [Domaene] anlegen'.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-trigger-kopplung",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Modus-Playbook-Kopplung: ", "styles": {"bold": true}},
+      {"type": "text", "text": "sollen ein Persona-Modus und ein Playbook zusammen feuern, ihre Trigger IDENTISCH benennen — nur so landen Stimme (Modus) und Prozedur (Playbook) gemeinsam in derselben Anfrage. Abweichende Formulierungen driften und feuern einseitig.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-h-naming",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Naming & Description", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-naming-desc",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Description: ", "styles": {"bold": true}},
+      {"type": "text", "text": "eine praegnante 1-Zeilen-Zusammenfassung, die den Einsatzzweck traegt. Droht eine Verwechslung mit einem Nachbar-Element, gehoert die Scope-Abgrenzung explizit hinein — also auch, was das Element NICHT tut ('prueft die Agent-Library, KEIN Code-/Repo-Audit').", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-naming-name",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Namen: ", "styles": {"bold": true}},
+      {"type": "text", "text": "benennen den Gegenstand ('Persona anlegen & pflegen', 'Agent-Bau-Konventionen'), nicht die Aktion doppelt ('Playbook zum Anlegen von Playbooks anlegen'). Kurz, eindeutig, im Katalog auf einen Blick unterscheidbar.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-h-modi",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Modi-Regel", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-modi-felder",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Felder je Modus: ", "styles": {"bold": true}},
+      {"type": "text", "text": "name + identity_add + output_style_override, optional anti_patterns. identity_add ergaenzt die Basis-Identitaet, output_style_override ersetzt den Basis-Output-Stil — die Basis-Persona bleibt die eine Quelle, der Modus ist nur ein Aufsatz.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-modi-default",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Default-Invariante: ", "styles": {"bold": true}},
+      {"type": "text", "text": "genau EIN Modus traegt is_default=true. Der Default-Modus traegt KEINEN trigger (er ist der Fallback und wuerde sonst mit den anderen kollidieren); jeder Nicht-Default-Modus MUSS einen trigger tragen — ohne Trigger ist er unerreichbar.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-modi-abgrenzung",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Abgrenzung Modus vs. Playbook: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Modi tragen Haltung, Stimme und Output-Stil; Playbooks tragen die Prozedur. Einen Modus nie zur Playbook-Kopie machen — wandern Arbeitsschritte in ein identity_add, gehoeren sie in ein Playbook.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-modi-kopplung",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Gehoeren Modus und Playbook zusammen: ", "styles": {"bold": true}},
+      {"type": "text", "text": "die Trigger identisch benennen (siehe Trigger-Hygiene) und im identity_add des Modus explizit auf das Playbook verweisen — der Modus stellt die Stimme, das Playbook liefert die Schritte.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-h-policy",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Tool-Policy-Muster", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "res-conv-p-policy-intro",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Secure by default: jede tool_policy startet vom Minimum und waechst nur mit begruendetem Bedarf — nie umgekehrt. Die tool_policy steuert die Tool-Sichtbarkeit; die eigentliche Autorisierung bleibt serverseitig.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-policy-reads",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Lese-Scopes: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Fach-Agenten lesen 'assigned' (nur die der eigenen Persona zugewiesenen Playbooks/Resources); 'all' ist Meta-Agenten vorbehalten, die den ganzen Workspace ueberblicken muessen (Builder, Pflege-Laeufe). 'none' blendet das Werkzeug aus.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-policy-writes",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Schreib-Capabilities: ", "styles": {"bold": true}},
+      {"type": "text", "text": "einzeln und minimal vergeben — nur die Domains freischalten, in die der Agent fuer seine Aufgabe tatsaechlich schreiben muss (persona_write, playbook_write, resource_write, agent_write je fuer sich). Niemals pauschal alles oeffnen, niemals mehr gewaehren, als der anlegende Agent selbst hat.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-policy-promote",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "promote_retire: ", "styles": {"bold": true}},
+      {"type": "text", "text": "nur vergeben, wenn der Agent Versionen aktiv auf active/inactive schalten koennen MUSS. Fuer die meisten Agenten reicht das Anlegen von Drafts — das Promoten bleibt beim Kurator.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-policy-grants",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "transition_grants: ", "styles": {"bold": true}},
+      {"type": "text", "text": "fuer feingranulare Ausnahmen nutzen, statt gleich promote_retire zu vergeben — z. B. wenn ein Agent genau einen Uebergang (draft nach review) an genau einer Element-Klasse braucht.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-policy-ratelimit",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "write_rate_limit: ", "styles": {"bold": true}},
+      {"type": "text", "text": "fuer automatisierte Agenten (Cron-Laeufe, unbeaufsichtigte Pipelines) erwaegen — es begrenzt den Schaden eines Amok-Laufs auf eine kalkulierbare Zahl von Writes pro Zeitfenster.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-h-status",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Status-Workflow & Kurator-Prinzip", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-status-flow",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Workflow: ", "styles": {"bold": true}},
+      {"type": "text", "text": "draft → review → active → inactive. Neuanlagen und Updates starten IMMER als draft — es gibt kein Auto-active und kein direktes Anlegen auf active; die Aktivierung ist eine bewusste, separate Entscheidung.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-status-invariante",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Aktiv-Invariante: ", "styles": {"bold": true}},
+      {"type": "text", "text": "je Element ist hoechstens EINE Version active; das Aktivieren einer neuen Version setzt die alte automatisch auf inactive. Rollbacks laufen ueber restore_* (alte Version als neuer Draft), nie ueber In-Place-Ueberschreiben.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-status-kurator",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Kurator-Prinzip: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Feedback- und Nutzungs-Signale (record_usage, submit_feedback) aendern NIE selbst Inhalte — sie sind Beobachtungen. Ob und wie ein Signal umgesetzt wird, entscheidet der Kurator/User; Agenten liefern Befunde und Vorschlaege, keine ungefragten Fixes.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-h-managed",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Managed-Grenzen", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-managed-lock",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Schreibschutz: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Inhalte mit is_managed=true (der Builder-Bestand: seine Persona, seine Playbooks, seine Templates und diese Resource) sind via MCP schreibgeschuetzt — jeder update_*-Versuch liefert 409. Nicht versuchen, nicht umgehen.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-managed-repo",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Pflege via Repo: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Aenderungen an managed Inhalten laufen ueber das Code-Repo (Seed-Dateien + Review). Funde an managed Inhalten — Veraltetes, Falsches, Unklares — gehoeren als Repo-Hand-Off-Liste in den Report, begleitet von submit_feedback am betroffenen Element.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-managed-copy",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Deep-Copy-Duplikate: ", "styles": {"bold": true}},
+      {"type": "text", "text": "sind NICHT managed und frei editierbar — wer eine Builder-Vorlage anpassen will, dupliziert sie und arbeitet auf der Kopie. Die Kopie uebernimmt den Inhalt, nicht den Schreibschutz.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-h-graph",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Beziehungs-Graph", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-graph-reuse",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Wiederverwendung vor Neuanlage: ", "styles": {"bold": true}},
+      {"type": "text", "text": "vor jeder Neuanlage mit search nach inhaltlich aehnlichen Elementen suchen und mit find_usages pruefen, wo ein Kandidat bereits eingesetzt ist. Existiert Passendes, wird es verlinkt oder komponiert — Duplikate driften auseinander und kosten doppelt.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-graph-wire",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Nach Anlage/Aenderung verdrahten: ", "styles": {"bold": true}},
+      {"type": "text", "text": "set_persona_playbooks, set_playbook_resource_links, set_playbook_composes und set_resource_sub_resources setzen die Kanten des Graphen. ALLE vier haben Replace-Semantik: erst den Ist-Stand lesen (fetch_playbook / fetch_resource / get_persona), dann den VOLLSTAENDIGEN Zielzustand setzen — nie nur das Delta.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-graph-orphan",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Keine Waisen: ", "styles": {"bold": true}},
+      {"type": "text", "text": "unverknuepfte Elemente sind Pflege-Funde — ein Playbook ohne Persona-Bindung haengt im Vakuum, eine Resource ohne eingehende Verweise wird nie geladen. Solche Funde melden (verlinken oder zurueckziehen), nicht stehen lassen.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-graph-verify",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Verdrahtung verifizieren: ", "styles": {"bold": true}},
+      {"type": "text", "text": "nach jedem set_* den Zielzustand via fetch_playbook / fetch_resource / get_persona gegenlesen — Replace-Semantik macht stille Verluste moeglich, die erst der Gegen-Read aufdeckt.", "styles": {}}
+    ],
+    "children": []
+  }
+]

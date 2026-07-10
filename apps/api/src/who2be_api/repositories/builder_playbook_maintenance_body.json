@@ -30,7 +30,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Ganze Library, aber managed-Grenze beachten: ", "styles": {"bold": true}},
-      {"type": "text", "text": "Der Lauf betrachtet alle Personas, Playbooks, Resources und Agenten des Workspace. Inhalte mit is_managed=true (der Builder selbst: seine Persona, seine 5 Playbooks, die Templates) sind via MCP schreibgeschuetzt — jeder update_*-Versuch liefert 409. Solche Funde gehoeren in eine Repo-Hand-Off-Liste im Report; die Pflege laeuft dort ueber das Code-Repo, niemals ueber Write-Versuche via MCP.", "styles": {}}
+      {"type": "text", "text": "Der Lauf betrachtet alle Personas, Playbooks, Resources und Agenten des Workspace. Funde an managed Inhalten (is_managed=true) gehoeren in eine Repo-Hand-Off-Liste im Report, nie in Write-Versuche — Details in der Resource 'Agent-Bau-Konventionen', Sektion Managed-Grenzen.", "styles": {}}
     ],
     "children": []
   },
@@ -40,7 +40,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Kein Delete, kein Auto-active: ", "styles": {"bold": true}},
-      {"type": "text", "text": "Es gibt kein Delete ueber MCP und kein direktes Anlegen auf active. Fixes entstehen ausschliesslich als Drafts; die Aktivierung (transition auf active) entscheidet der User. Rueckzuege laufen als transition auf inactive — auch das nur nach expliziter Freigabe.", "styles": {}}
+      {"type": "text", "text": "Fixes entstehen ausschliesslich als Drafts; Aktivierung und Rueckzug entscheidet der User nach expliziter Freigabe — Status-Workflow & Kurator-Prinzip verbindlich in der Resource 'Agent-Bau-Konventionen'.", "styles": {}}
     ],
     "children": []
   },
@@ -400,6 +400,16 @@
     "content": [
       {"type": "text", "text": "Feedback-Schliessung bewusst UI-seitig: ", "styles": {"bold": true}},
       {"type": "text", "text": "Signale werden im Triage/Posteingang der Web-UI geschlossen (ADR-0038), nicht via MCP. Der Abschluss-Report muss deshalb die Schliessungs-Liste enthalten — sie ist der Uebergabepunkt zwischen Agent-Lauf und UI-Kuration.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-notes-konventionen",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Konventionen: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Trigger-Hygiene, Naming, Modi-Regel, Policy-Muster, Status-Workflow und Managed-Grenzen stehen verbindlich in der Resource 'Agent-Bau-Konventionen' — sie wird mit diesem Playbook mitgeliefert (link_scope resource) und ist der Massstab fuer Triage und Umsetzung.", "styles": {}}
     ],
     "children": []
   },
