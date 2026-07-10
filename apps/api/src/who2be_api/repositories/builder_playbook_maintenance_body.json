@@ -1,0 +1,420 @@
+[
+  {
+    "id": "pb-maint-h-zweck",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Zweck", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-p-zweck",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Feedback-getriebener Pflege-Lauf ueber die Agent-Library. Dieser Lauf sammelt die aufgelaufenen Feedback- und Nutzungs-Signale (", "styles": {}},
+      {"type": "text", "text": "get_feedback", "styles": {"code": true}},
+      {"type": "text", "text": " liefert usage_count, by_outcome, by_signal und recent_notes), prueft Zusammenhaenge und strukturelle Luecken in der Library und setzt Funde nach User-Freigabe als Drafts um. Er ist die wiederkehrende Aufraeum-Routine des Builders: nicht bauen, sondern pflegen — Veraltetes aktualisieren, Verwaistes anbinden oder zurueckziehen, Luecken sichtbar machen. Die Kurations-Hoheit bleibt durchgehend beim User: kein Fund wird ohne Freigabe geschrieben, keine Aktivierung ohne dessen Entscheidung.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-h-scope",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Scope & Grenzen", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-scope-library",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Ganze Library, aber managed-Grenze beachten: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Der Lauf betrachtet alle Personas, Playbooks, Resources und Agenten des Workspace. Inhalte mit is_managed=true (der Builder selbst: seine Persona, seine 5 Playbooks, die Templates) sind via MCP schreibgeschuetzt — jeder update_*-Versuch liefert 409. Solche Funde gehoeren in eine Repo-Hand-Off-Liste im Report; die Pflege laeuft dort ueber das Code-Repo, niemals ueber Write-Versuche via MCP.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-scope-nodelete",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Kein Delete, kein Auto-active: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Es gibt kein Delete ueber MCP und kein direktes Anlegen auf active. Fixes entstehen ausschliesslich als Drafts; die Aktivierung (transition auf active) entscheidet der User. Rueckzuege laufen als transition auf inactive — auch das nur nach expliziter Freigabe.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-scope-feedback-close",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Feedback-Schliessung nur via Web-UI: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Feedback kennt kein 'erledigt' ueber MCP. Abgearbeitete Signale muessen im Abschluss-Report als Liste 'zur Schliessung in der Web-UI (Triage/Posteingang)' auftauchen — sonst stehen dieselben Signale im naechsten Lauf wieder auf dem Tisch.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-scope-abgrenzung",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Abgrenzung: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Kein Code-/Repo-Audit — dafuer gibt es 'Standards-Audit & Umsetzung (Repo)'. Keine Obsidian-Vault-Pflege — dafuer gibt es 'Aufraeumen & Deduplizieren'. Dieser Lauf kuratiert ausschliesslich die Inhalte der AgentDB.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-h-p1",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Phase 1 — Sammeln", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-ol-p1-inventar",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Inventar aufnehmen: ", "styles": {"bold": true}},
+      {"type": "text", "text": "list_agents, list_playbooks, list_resources und list_triggers aufrufen und den Bestand notieren — IDs, Namen, current_status, Tags, Trigger und is_managed-Flag. Das Inventar ist die Landkarte fuer alle folgenden Phasen; ohne vollstaendiges Bild werden Zusammenhaenge in Phase 3 unsichtbar.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-ol-p1-feedback",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Feedback einsammeln: ", "styles": {"bold": true}},
+      {"type": "text", "text": "get_feedback(entity_type, entity_id) je Persona, Playbook und Resource aufrufen. Pro Element notieren: usage_count, by_outcome (applied/skipped/error), by_signal (helpful/outdated/incorrect/unclear) und die recent_notes im Wortlaut. Auffaellige Muster markieren — etwa hohe skipped- oder error-Quoten, Haeufungen von outdated/incorrect, oder Elemente mit usage_count 0 trotz aktivem Status.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-ol-p1-check",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Optional: Konsistenz- & Drift-Check als Vorstufe: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Bei Bedarf den Konsistenz- & Drift-Check ausfuehren (via fetch_playbook laden und dessen Sweep folgen). Sein Drift-Report ist idealer Triage-Input fuer Phase 2 — strukturelle Befunde (fehlende aktive Versionen, offene Platzhalter, Vakuum-Playbooks) landen dann gleich mit auf dem Tisch.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-h-p2",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Phase 2 — Triage", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-p2-gueltig",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Jede Note gegen die aktuelle Version pruefen: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Feedback kann aus einer aelteren Version stammen. Mit list_versions und diff_versions abgleichen, ob der kritisierte Punkt in der aktuellen Version noch existiert — noch gueltig oder laengst erledigt? Bereits erledigte Signale wandern direkt in die Liste 'zur Schliessung in der UI', nicht in die Arbeitsliste.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-p2-zustaendigkeit",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Zustaendigkeit klaeren: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Drei Faelle: (a) via MCP editierbar — kommt als Fix-Vorschlag in den Report; (b) managed (is_managed=true) — geht in die Repo-Hand-Off-Liste, kein Write-Versuch; (c) fachliche User-Entscheidung noetig (z. B. widerspruechliches Feedback, inhaltliche Richtungsfrage) — als Rueckfrage formulieren statt selbst zu entscheiden.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-p2-prio",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Priorisierung: ", "styles": {"bold": true}},
+      {"type": "text", "text": "incorrect vor outdated vor unclear — Falsches schadet aktiv, Veraltetes schleichend, Unklares kostet nur Effizienz. helpful ist Bestaetigung und kein Arbeitsauftrag; es fliesst hoechstens als 'bewaehrt, nicht anfassen' in die Abwaegung ein.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-h-p3",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Phase 3 — Zusammenhaenge & Luecken", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-p-p3-intro",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Struktureller Blick auf das Beziehungsgeflecht der Library — nicht semantisch. Geprueft wird, ob die Verknuepfungen den tatsaechlichen Gebrauch abbilden, nicht ob Inhalte fachlich richtig sind.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-p3-verwaist",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Verwaiste Resources: ", "styles": {"bold": true}},
+      {"type": "text", "text": "je Resource find_usages aufrufen. Keine eingehenden Verweise heisst: die Resource haengt im Vakuum. Vorschlag im Report: entweder gezielt verlinken (welches Playbook wuerde profitieren?) oder Rueckzug auf inactive — die Entscheidung trifft der User.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-p3-drift",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Wissens-Drift: ", "styles": {"bold": true}},
+      {"type": "text", "text": "ein Playbook-Body verweist in Prosa auf eine Resource ('siehe Checkliste X'), ohne dass ein resource_link gesetzt ist. Der Konsument findet die Resource dann nicht zuverlaessig. Vorschlag: set_playbook_resource_links mit dem fehlenden Link nachziehen — embedding_mode lazy (Pointer) als Default.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-p3-bindung",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Bindungs-Luecken: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Playbooks ohne Persona-Bindung (Vakuum — kein Agent findet sie) und Composite-Playbooks, deren Sub-Sequenz inaktive oder fehlende Kinder enthaelt (werden beim Render still uebersprungen). Beides mit list_playbooks/fetch_playbook gegenpruefen und als Fund notieren.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-p3-trigger",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Trigger-Landschaft: ", "styles": {"bold": true}},
+      {"type": "text", "text": "list_triggers auswerten. Kollisionen: derselbe oder ein sehr aehnlicher Trigger auf mehreren Playbooks — der Konsument kann nicht eindeutig routen. Vakuum: ein aktives, nicht fest eingebettetes (applied) Playbook ohne jeden Trigger — es wird nie ausgeloest. Beides als Fund mit konkretem Aufloese-Vorschlag in den Report.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-p3-semantisch",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Semantische Luecken nur beobachten: ", "styles": {"bold": true}},
+      {"type": "text", "text": "faellt beim Durchsehen auf, dass fuer einen wiederkehrenden Anwendungsfall offenbar ein Playbook fehlt ('es fehlt ein Playbook fuer X'), kommt das ausschliesslich als Beobachtung in den Report. Nichts ungefragt anlegen — Neubau ist ein eigener Auftrag mit eigenem Playbook.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-h-p4",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Phase 4 — Vorschlag & Freigabe", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-p-p4-report",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Alle Funde aus Phase 2 und 3 zu einem konsolidierten Pflege-Report zusammenfassen und als Chat-Antwort an den User geben — nicht persistieren, der Report ist Entscheidungsgrundlage, kein DB-Eintrag. Pro Fund: das betroffene Element, der Beleg (Feedback-Note, Diff, find_usages-Ergebnis) und der konkrete Vorschlag. Danach die Freigabe einholen — pro Fund einzeln oder als Batch ('alle unter A umsetzen') — und erst dann schreiben. Ohne Freigabe passiert in Phase 5 nichts.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-code-p4-template",
+    "type": "codeBlock",
+    "props": {"language": "markdown"},
+    "content": [{"type": "text", "text": "## Pflege-Lauf — Stand [Datum]\n\n### A. Feedback (offen)\n- [Element] ([entity_type], v[X]): [Signal] — \"[recent_note]\"\n  Beleg: noch gueltig gegen v[X] (diff geprueft)\n  Vorschlag: [minimaler Fix via update_*, neuer Draft]\n\n### B. Zusammenhaenge & Luecken\n- [Resource Y]: verwaist (find_usages: 0 eingehende Verweise)\n  Vorschlag: an [Playbook Z] linken ODER Rueckzug auf inactive\n- [Playbook Z]: Prosa-Verweis auf [Resource Y] ohne resource_link\n  Vorschlag: set_playbook_resource_links (lazy)\n- Trigger-Kollision: \"[Phrase]\" auf [Playbook A] und [Playbook B]\n  Vorschlag: [einen Trigger schaerfen/entfernen]\n- Beobachtung (nur Notiz): es fehlt evtl. ein Playbook fuer [X]\n\n### C. Managed — Repo-Hand-Off\n- [Builder-Element]: [Fund] — Pflege via Code-Repo, kein MCP-Write\n\n### D. Zur Schliessung in der UI\n- [Element]: Signal [outdated/...] vom [Datum] — erledigt durch [Draft vX / bereits in vY behoben]\n\n### Freigabe\nBitte pro Punkt freigeben (A1, B2, ...) oder als Batch.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-h-p5",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Phase 5 — Umsetzen (nach Freigabe)", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-p5-update",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Inhalts-Fixes: ", "styles": {"bold": true}},
+      {"type": "text", "text": "via update_persona / update_playbook / update_resource — minimal-invasiv am bestehenden Body, nur die freigegebene Stelle aendern. Jeder Update erzeugt eine neue Draft-Version; die Aktivierung bleibt beim User.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-p5-links",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Verknuepfungs-Fixes: ", "styles": {"bold": true}},
+      {"type": "text", "text": "via set_persona_playbooks / set_playbook_resource_links / set_playbook_composes / set_resource_sub_resources. Achtung Replace-Semantik: der Aufruf ersetzt die komplette Verknuepfungsliste. Deshalb vorher den Ist-Stand via fetch_playbook / fetch_resource / get_persona lesen und immer den vollstaendigen Zielzustand setzen — nie nur das Delta.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-p5-retire",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Rueckzuege: ", "styles": {"bold": true}},
+      {"type": "text", "text": "transition auf inactive nur nach expliziter Freigabe genau dieses Rueckzugs — und erst nachdem find_usages bestaetigt hat, dass keine eingehenden Referenzen mehr bestehen oder der User die betroffenen Stellen bewusst in Kauf nimmt.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-p5-usage",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Nachhalten: ", "styles": {"bold": true}},
+      {"type": "text", "text": "nach jedem Umsetzungs-Schritt record_usage auf die genutzten Elemente (applied/skipped/error). Bewusst liegengelassene Funde nicht still verwerfen, sondern via submit_feedback am betroffenen Element begruenden — so bleibt die Entscheidung fuer den naechsten Lauf nachvollziehbar.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-h-p6",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Phase 6 — Hand-Off", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-p6-summary",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Zusammenfassung geben: ", "styles": {"bold": true}},
+      {"type": "text", "text": "welche Drafts und Links umgesetzt wurden; was jetzt zur Aktivierung ansteht (transition entscheidet der User); die Repo-Hand-Off-Liste fuer managed Funde; und die Liste der in der Web-UI (Triage/Posteingang) zu schliessenden Feedback-Signale. Ohne den letzten Punkt tauchen dieselben Signale im naechsten Lauf wieder auf.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-p6-next",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Naechsten Lauf empfehlen: ", "styles": {"bold": true}},
+      {"type": "text", "text": "einen sinnvollen Zeitpunkt fuer den naechsten Pflege-Lauf vorschlagen — z. B. nach der naechsten Bau-Welle oder sobald neues Feedback aufgelaufen ist. Der Lauf ist wiederholbar, solange Triage-Vermerke (erledigt / liegengelassen mit Grund) im Report landen und die Schliessung UI-seitig nachgezogen wird.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-h-tools",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Tools & Operations", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-tools-read",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Read: ", "styles": {"bold": true}},
+      {"type": "text", "text": "list_agents, list_playbooks, list_resources, list_triggers (Inventar); get_feedback(entity_type, entity_id) (Signale und Notes); find_usages (eingehende Referenzen, Verwaisung); list_versions, diff_versions (Note gegen aktuelle Version pruefen); fetch_playbook, fetch_resource, get_persona (Ist-Stand vor jedem set_*); search (inhaltliche Suche bei Verdachtsfaellen).", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-tools-write",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Write (nur nach Freigabe): ", "styles": {"bold": true}},
+      {"type": "text", "text": "update_persona / update_playbook / update_resource (neuer Draft); set_persona_playbooks / set_playbook_resource_links / set_playbook_composes / set_resource_sub_resources (Replace-Semantik — vollstaendigen Zielzustand setzen); transition_persona / transition_playbook / transition_resource (nur freigegebene Uebergaenge); record_usage und submit_feedback (Nachhalten).", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-tools-forbidden",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Verboten: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Delete existiert nicht ueber MCP — nicht versuchen, nicht simulieren. create_* ohne expliziten Bau-Auftrag des Users (semantische Luecken sind Beobachtungen, keine Auftraege). Jeder Schreibversuch an managed Inhalten (is_managed=true liefert 409) — diese Funde gehoeren in den Repo-Hand-Off.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-h-anti",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Anti-Patterns", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-ap-selbst",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Feedback an den eigenen managed Inhalten 'selbst erledigen' wollen — der Builder ist hier Partei, nicht Richter. Managed Funde gehen ausschliesslich in den Repo-Hand-Off; dort entscheidet der User im Code-Review.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-ap-batch",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Alle Funde ungefragt in einem Rutsch wegschreiben — der Report kommt zuerst, die Freigabe (pro Fund oder als Batch) danach, erst dann die Writes. Kurations-Hoheit liegt beim User.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-ap-loop",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Signale ohne Triage-Abgleich gegen die aktuelle Version erneut abarbeiten — wer nicht mit list_versions/diff_versions prueft, ob ein Fund laengst behoben ist, produziert Pflege-Schleifen: dieselbe 'Korrektur' Lauf fuer Lauf.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-ap-raten",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Semantische Luecken raten und ungefragt Inhalte anlegen — 'es fehlt ein Playbook fuer X' ist eine Beobachtung im Report, kein create_*-Auftrag. Neubau hat einen eigenen Auftrag und ein eigenes Playbook.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-ap-persist",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Den Pflege-Report in eine Entitaet schreiben statt als Chat-Antwort zu geben — der Report ist Entscheidungsgrundlage fuer den User, kein DB-Eintrag und keine Resource.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-h-notes",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Notes", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-notes-check",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Abgrenzung zum Konsistenz- & Drift-Check: ", "styles": {"bold": true}},
+      {"type": "text", "text": "der Check ist read-only-Diagnose und schreibt nichts; dieser Pflege-Lauf kuratiert und schreibt nach Freigabe. Der Check ist idealer Phase-1-Input — sein Drift-Report fliesst als Befundliste in die Triage ein.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-notes-ui",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Feedback-Schliessung bewusst UI-seitig: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Signale werden im Triage/Posteingang der Web-UI geschlossen (ADR-0038), nicht via MCP. Der Abschluss-Report muss deshalb die Schliessungs-Liste enthalten — sie ist der Uebergabepunkt zwischen Agent-Lauf und UI-Kuration.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-h-feedback",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Feedback", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-p-feedback",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Faellt dir beim Ausfuehren dieses Playbooks Veraltetes oder Falsches an ihm selbst auf, melde es via submit_feedback (signal outdated/incorrect/unclear) statt es stillschweigend zu uebergehen — dieses Playbook ist managed, die Korrektur laeuft dann ueber den Repo-Hand-Off. Genutzte Playbooks/Resources via record_usage (applied/skipped/error). So wird die AgentDB selbst-verbessernd.", "styles": {}}],
+    "children": []
+  }
+]
