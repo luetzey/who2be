@@ -4,10 +4,14 @@
 `managed_content_version` < `BUILDER_CONTENT_VERSION` liegt, auf den kanonischen
 Sidecar-Stand (In-place-Replace des aktiven Versions-Inhalts). Der erste Test
 simuliert einen veralteten Builder (Stempel 0 + zerstoerter Inhalt), fuehrt den
-Sync und prueft die Wiederherstellung + Idempotenz. Dazu die beiden Sync-
-Erweiterungen (Content-Stand 4): Insert-missing legt in `_BUILDER_PLAYBOOKS`
-neu ergaenzte Playbooks in Bestands-Workspaces nach, und beim Stempeln werden
-die Row-Metadaten (type/tags/triggers) mit verteilt.
+Sync und prueft die Wiederherstellung + Idempotenz. Dazu die Sync-
+Erweiterungen: Insert-missing legt in `_BUILDER_PLAYBOOKS` neu ergaenzte
+Playbooks in Bestands-Workspaces nach, beim Stempeln werden die Playbook-
+Row-Metadaten (type/tags/triggers) mit verteilt (Content-Stand 4), und die
+Managed-Resource „Agent-Bau-Konventionen" wird per Content-Update bzw.
+Insert-missing samt `playbook_resource_link`s verteilt; die Persona-Modi
+(Architekt/Kurator/Berater) kommen ueber das Persona-Content-Replace in
+Bestands-Personas an (Content-Stand 5).
 """
 
 from __future__ import annotations
@@ -40,6 +44,7 @@ _JUNK_PERSONA = json.dumps(
         "skills": [],
     }
 )
+_JUNK_RESOURCE = json.dumps({"description": "x", "blocks": [], "tags": []})
 
 
 def _db_reachable() -> bool:
@@ -104,6 +109,32 @@ def test_sync_restores_outdated_builder() -> None:
                 ws,
             )
             await conn.execute(
+                "UPDATE system_prompt_template_version tv "
+                "SET content = jsonb_set(content, '{body}', to_jsonb($2::text)) "
+                "FROM system_prompt_template t "
+                "WHERE tv.template_id = t.id AND t.workspace_id = $1 "
+                "AND t.slug = 'agent-builder-lite' AND tv.status = 'active'",
+                ws,
+                _JUNK,
+            )
+            await conn.execute(
+                "UPDATE system_prompt_template SET managed_content_version = 0 "
+                "WHERE workspace_id = $1 AND slug = 'agent-builder-lite'",
+                ws,
+            )
+            await conn.execute(
+                "UPDATE resource_version rv SET content = $2::jsonb FROM resource r "
+                "WHERE rv.resource_id = r.id AND r.workspace_id = $1 "
+                "AND r.name = 'Agent-Bau-Konventionen' AND rv.status = 'active'",
+                ws,
+                _JUNK_RESOURCE,
+            )
+            await conn.execute(
+                "UPDATE resource SET managed_content_version = 0 "
+                "WHERE workspace_id = $1 AND name = 'Agent-Bau-Konventionen'",
+                ws,
+            )
+            await conn.execute(
                 "UPDATE playbook_version pv "
                 "SET content = jsonb_set(content, '{body}', to_jsonb($2::text)) "
                 "FROM playbook pb WHERE pv.playbook_id = pb.id AND pb.workspace_id = $1 "
@@ -126,6 +157,12 @@ def test_sync_restores_outdated_builder() -> None:
                 "WHERE p.workspace_id = $1 AND p.name = 'Builder' AND pv.status = 'active'",
                 ws,
             )
+            persona_modes = await conn.fetchval(
+                "SELECT pv.content -> 'modes' FROM persona_version pv "
+                "JOIN persona p ON p.id = pv.persona_id "
+                "WHERE p.workspace_id = $1 AND p.name = 'Builder' AND pv.status = 'active'",
+                ws,
+            )
             persona_stamp = await conn.fetchval(
                 "SELECT managed_content_version FROM persona "
                 "WHERE workspace_id = $1 AND name = 'Builder'",
@@ -143,15 +180,28 @@ def test_sync_restores_outdated_builder() -> None:
                 "WHERE pb.workspace_id = $1 AND pb.is_managed = true AND pv.status = 'active'",
                 ws,
             )
+            resource_row = await conn.fetchrow(
+                "SELECT r.managed_content_version, rv.content -> 'blocks' AS blocks, "
+                "  rv.content -> 'tags' AS tags "
+                "FROM resource r "
+                "JOIN resource_version rv "
+                "  ON rv.resource_id = r.id AND rv.status = 'active' "
+                "WHERE r.workspace_id = $1 AND r.name = 'Agent-Bau-Konventionen'",
+                ws,
+            )
             return {
                 "first": first,
                 "second": second,
                 "persona_block_ids": {b["id"] for b in json.loads(persona_blocks)},
+                "persona_modes": json.loads(persona_modes),
                 "persona_stamp": persona_stamp,
                 "template_body_ids": {b["id"] for b in json.loads(template_body)},
                 "playbook_body_idsets": {
                     r["name"]: {b["id"] for b in json.loads(r["body"])} for r in playbook_bodies
                 },
+                "resource_stamp": resource_row["managed_content_version"],
+                "resource_block_ids": {b["id"] for b in json.loads(resource_row["blocks"])},
+                "resource_tags": json.loads(resource_row["tags"]),
             }
         finally:
             await conn.close()
@@ -161,13 +211,20 @@ def test_sync_restores_outdated_builder() -> None:
     finally:
         cleanup_workspaces([owner])
 
-    # 7 Aggregate aktualisiert (Persona + Template + 5 Playbooks); zweiter Lauf 0.
-    assert res["first"] == 7, res["first"]
+    # 9 Aggregate aktualisiert (Persona + 2 Templates + 5 Playbooks + 1 Resource);
+    # zweiter Lauf 0.
+    assert res["first"] == 9, res["first"]
     assert res["second"] == 0, "Sync muss idempotent sein (Stempel-Guard)."
     assert res["persona_stamp"] == BUILDER_CONTENT_VERSION
     # Kanonischer Inhalt wiederhergestellt (Feedback-Bullets aus den Sidecars).
     assert "bp-li-allowed-fb" in res["persona_block_ids"]
     assert "ab-li-fb" in res["template_body_ids"]
+    # Content-Stand 5: die drei Persona-Modi kommen ueber das Content-Replace an.
+    assert [m["name"] for m in res["persona_modes"]] == ["Architekt", "Kurator", "Berater"]
+    # Content-Stand 5: Resource-Inhalt + Tags wiederhergestellt und gestempelt.
+    assert res["resource_stamp"] == BUILDER_CONTENT_VERSION
+    assert "res-conv-h-trigger" in res["resource_block_ids"]
+    assert res["resource_tags"] == ["konventionen", "agent-building", "meta"]
     # Die vier klassischen Playbooks tragen die 0056-Feedback-Sektion; das
     # Pflege-Playbook (Content-Stand 4) hat eine eigene Feedback-Sektion.
     for name, ids in res["playbook_body_idsets"].items():
@@ -325,3 +382,160 @@ def test_sync_updates_playbook_row_metadata() -> None:
     assert row["triggers"] == (
         "konsistenz, drift, agenten pruefen, library pruefen, agent-drift, aktivierbar, activatable"
     )
+
+
+@pytest.mark.integration
+def test_sync_inserts_missing_resource_in_existing_workspace() -> None:
+    """Insert-missing (Content-Stand 5): ein v4-Bestands-Workspace (ohne die
+    Managed-Resource) bekommt „Agent-Bau-Konventionen" per Sync nachgelegt —
+    Row managed + gestempelt, v1 active (locale 'de', created_by = Owner der
+    Builder-Persona) und die fuenf `playbook_resource_link`s
+    (link_scope='resource') von allen Builder-Playbooks."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    name = "Agent-Bau-Konventionen"
+
+    async def _run() -> dict[str, Any]:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            # Bestands-Workspace auf Content-Stand 4 simulieren: die Resource
+            # loeschen (FK-Cascade raeumt Versionen + Links ab).
+            await conn.execute(
+                "DELETE FROM resource WHERE workspace_id = $1 AND name = $2", ws, name
+            )
+
+            first = await sync_managed_builder_content(conn)
+            second = await sync_managed_builder_content(conn)  # idempotent
+
+            row = await conn.fetchrow(
+                "SELECT r.id, r.is_managed, r.managed_content_version, "
+                "  (SELECT v.version FROM resource_version v "
+                "     WHERE v.resource_id = r.id AND v.status = 'active') AS active_ver, "
+                "  (SELECT v.created_by FROM resource_version v "
+                "     WHERE v.resource_id = r.id AND v.status = 'active') AS created_by, "
+                "  (SELECT v.locale FROM resource_version v "
+                "     WHERE v.resource_id = r.id AND v.status = 'active') AS locale, "
+                "  (SELECT v.content -> 'blocks' FROM resource_version v "
+                "     WHERE v.resource_id = r.id AND v.status = 'active') AS blocks, "
+                "  (SELECT v.content -> 'tags' FROM resource_version v "
+                "     WHERE v.resource_id = r.id AND v.status = 'active') AS tags "
+                "FROM resource r WHERE r.workspace_id = $1 AND r.name = $2",
+                ws,
+                name,
+            )
+            links = await conn.fetch(
+                "SELECT prl.link_scope, prl.block_id, pb.name AS playbook_name, "
+                "  pb.is_managed AS playbook_managed "
+                "FROM playbook_resource_link prl "
+                "JOIN playbook pb ON pb.id = prl.playbook_id "
+                "WHERE prl.workspace_id = $1 AND prl.resource_id = $2",
+                ws,
+                row["id"] if row else None,
+            )
+            return {
+                "first": first,
+                "second": second,
+                "row": dict(row) if row else None,
+                "links": [dict(link) for link in links],
+            }
+        finally:
+            await conn.close()
+
+    try:
+        res = asyncio.run(_run())
+    finally:
+        cleanup_workspaces([owner])
+
+    # Genau die fehlende Resource wurde angelegt; alles andere war aktuell.
+    assert res["first"] == 1, res["first"]
+    assert res["second"] == 0, "Sync muss idempotent sein (Row existiert + Stempel)."
+    row = res["row"]
+    assert row is not None, "Fehlende Resource wurde nicht angelegt."
+    assert row["is_managed"] is True
+    assert row["managed_content_version"] == BUILDER_CONTENT_VERSION
+    assert row["active_ver"] == 1, "v1 muss aktiv sein."
+    assert row["created_by"] is not None, "created_by = Owner der Builder-Persona."
+    assert row["locale"] == "de"
+    assert "res-conv-h-trigger" in {b["id"] for b in json.loads(row["blocks"])}
+    assert json.loads(row["tags"]) == ["konventionen", "agent-building", "meta"]
+    links = res["links"]
+    assert len(links) == 5, "Alle fuenf Builder-Playbooks muessen verlinkt sein."
+    assert all(link["link_scope"] == "resource" for link in links)
+    assert all(link["block_id"] is None for link in links)
+    assert all(link["playbook_managed"] is True for link in links)
+
+
+@pytest.mark.integration
+def test_sync_distributes_persona_modes_to_existing_persona() -> None:
+    """Modi-Verteilung (Content-Stand 5): eine Bestands-Builder-Persona mit
+    altem Content OHNE `modes`-Feld bekommt per Sync die drei kanonischen Modi
+    (Architekt default ohne Trigger, Kurator, Berater)."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+
+    # Alt-Schema-Content (vor Gap 3.4): gar kein `modes`-Key — der Sync ersetzt
+    # den aktiven Versions-Inhalt wholesale, nicht feldweise.
+    old_content = json.dumps(
+        {
+            "description": "alt",
+            "traits": [],
+            "tags": [],
+            "content": {"description": "", "blocks": []},
+            "skills": [],
+        }
+    )
+
+    async def _run() -> dict[str, Any]:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            await conn.execute(
+                "UPDATE persona_version pv SET content = $2::jsonb FROM persona p "
+                "WHERE pv.persona_id = p.id AND p.workspace_id = $1 AND p.name = 'Builder' "
+                "AND pv.status = 'active'",
+                ws,
+                old_content,
+            )
+            await conn.execute(
+                "UPDATE persona SET managed_content_version = 0 "
+                "WHERE workspace_id = $1 AND name = 'Builder'",
+                ws,
+            )
+
+            count = await sync_managed_builder_content(conn)
+
+            modes_json = await conn.fetchval(
+                "SELECT pv.content -> 'modes' FROM persona_version pv "
+                "JOIN persona p ON p.id = pv.persona_id "
+                "WHERE p.workspace_id = $1 AND p.name = 'Builder' AND pv.status = 'active'",
+                ws,
+            )
+            stamp = await conn.fetchval(
+                "SELECT managed_content_version FROM persona "
+                "WHERE workspace_id = $1 AND name = 'Builder'",
+                ws,
+            )
+            return {"count": count, "modes": json.loads(modes_json), "stamp": stamp}
+        finally:
+            await conn.close()
+
+    try:
+        res = asyncio.run(_run())
+    finally:
+        cleanup_workspaces([owner])
+
+    assert res["count"] == 1, res["count"]
+    assert res["stamp"] == BUILDER_CONTENT_VERSION
+    modes = res["modes"]
+    assert [m["name"] for m in modes] == ["Architekt", "Kurator", "Berater"]
+    defaults = [m for m in modes if m["is_default"]]
+    assert len(defaults) == 1 and defaults[0]["name"] == "Architekt"
+    assert defaults[0]["trigger"] is None, "Der Default-Modus traegt keinen Trigger."
+    # Kurator bindet das Pflege-Playbook bewusst in Prosa, nicht via playbook_id
+    # (UUIDs sind workspace-spezifisch, kanonischer Content bleibt identisch).
+    assert all(m.get("playbook_id") is None for m in modes)

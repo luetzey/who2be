@@ -64,12 +64,28 @@ def test_resource_tags_distinct_sorted_and_workspace_scoped(
             # Fremder Workspace: eigener Tag, darf nicht durchschlagen.
             client.post(other_base, json=_resource_body("Other", ["delta"]), headers=other_auth)
 
+            # Seed-Baseline: die Managed-Resource „Agent-Bau-Konventionen"
+            # bringt die Tags konventionen/agent-building/meta in jeden
+            # frischen Workspace mit (DISTINCT + sortiert).
             resp = client.get(f"{base}/tags", headers=auth)
             assert resp.status_code == 200, resp.text
-            assert resp.json() == ["alpha", "beta", "gamma"]
+            assert resp.json() == [
+                "agent-building",
+                "alpha",
+                "beta",
+                "gamma",
+                "konventionen",
+                "meta",
+            ]
 
-            # Workspace-Isolation: fremder Workspace sieht nur seine Tags.
-            assert client.get(f"{other_base}/tags", headers=other_auth).json() == ["delta"]
+            # Workspace-Isolation: fremder Workspace sieht nur seine Tags
+            # (plus die eigene Seed-Baseline).
+            assert client.get(f"{other_base}/tags", headers=other_auth).json() == [
+                "agent-building",
+                "delta",
+                "konventionen",
+                "meta",
+            ]
 
             # Nicht-Mitglied wird vor dem Lookup geblockt (403).
             assert client.get(f"{base}/tags", headers=other_auth).status_code == 403
@@ -79,9 +95,11 @@ def test_resource_tags_distinct_sorted_and_workspace_scoped(
 
 @pytest.mark.integration
 @pytest.mark.usefixtures("patched_jwt_secret", "migrated_db")
-def test_resource_tags_empty_for_fresh_workspace(
+def test_resource_tags_seed_baseline_for_fresh_workspace(
     make_auth_headers: Callable[[UUID], dict[str, str]],
 ) -> None:
+    """Frischer Workspace ist NICHT tag-leer: die geseedete Managed-Resource
+    „Agent-Bau-Konventionen" liefert die Seed-Baseline (sortiert)."""
     owner = fresh_user_id()
     ws = setup_workspace(owner)
     auth = make_auth_headers(owner)
@@ -90,6 +108,6 @@ def test_resource_tags_empty_for_fresh_workspace(
         with TestClient(app) as client:
             resp = client.get(f"/v1/workspaces/{ws}/resources/tags", headers=auth)
             assert resp.status_code == 200
-            assert resp.json() == []
+            assert resp.json() == ["agent-building", "konventionen", "meta"]
     finally:
         cleanup_workspaces([owner])
