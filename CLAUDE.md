@@ -72,7 +72,10 @@ CI-Billing) sowie `docs/standards-review-2026-07-08.md` (WP-1–9).
   `list_versions`, `get_version`, `diff_versions`), Feedback-Flywheel
   (`record_usage`, `submit_feedback`, `get_feedback`, `report_problem` —
   ADR-0038) und System-Prompt-Tools (`list/get/create/update/restore/
-  transition_system_prompt` — ADR-0040)
+  transition_system_prompt` — ADR-0040). `tools/list` ist pro Agent
+  policy-gefiltert (`PolicyFilterMiddleware`, fail-open; SSoT-Mapping
+  `who2be_models.tool_requirements` — ADR-0042); neue MCP-Tools brauchen
+  dort einen Mapping-Eintrag
 - `apps/web/` — React/TypeScript-Web-UI (Vite, Tailwind v4, shadcn-Primitives,
   BlockNote-Insel für den Resource-Editor; Designsprache "Warm Citrus" laut
   `docs/frontend/design-language.md`)

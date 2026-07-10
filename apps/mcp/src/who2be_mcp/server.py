@@ -31,6 +31,7 @@ from who2be_mcp.client import (
 )
 from who2be_mcp.config import Settings, get_settings
 from who2be_mcp.core_logging import configure_logging, with_tool_log
+from who2be_mcp.policy_filter import PolicyFilterMiddleware
 from who2be_models import (
     TRANSITION_RULE_DOC,
     AgentCopy,
@@ -81,6 +82,11 @@ from who2be_models import (
 logger = logging.getLogger(__name__)
 
 mcp: FastMCP = FastMCP("who2be")
+
+# Per-Request-Policy-Filterung von tools/list + Call-Sperre (ADR-0042):
+# fail-open ohne aufloesbare Identitaet (ping bleibt token-frei nutzbar);
+# KEINE Security-Grenze — die API-Durchsetzung bleibt autoritativ (ADR-0039).
+mcp.add_middleware(PolicyFilterMiddleware())
 
 # Alle Tools registrieren sich mit `output_schema=None`: FastMCP 3 generiert
 # sonst aus den Pydantic-Rueckgabetypen voluminoese outputSchemas, die ~72 %

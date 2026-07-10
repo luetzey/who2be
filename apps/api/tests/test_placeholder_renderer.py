@@ -1452,6 +1452,146 @@ class TestToolsOverviewResolver:
         assert "fetch_agent(agent_id)" not in result
 
 
+class TestToolsOverviewSSoTParity:
+    """Drift-Guard: kuratierte `_TOOLS`-Gruppen vs. Sichtbarkeits-SSoT (ADR-0042).
+
+    Die Sichtbarkeit pro Tool-Name lebt in `who2be_models.tool_requirements`
+    (`MCP_TOOL_REQUIREMENTS`); der Resolver gruppiert nur noch kuratiert.
+    Diese Tests halten beide Seiten synchron — in beide Richtungen.
+    """
+
+    # Mapping-Tools, die BEWUSST in keiner kuratierten Prompt-Gruppe stehen —
+    # der `tools-overview`-Katalog ist kuratiert, nicht vollstaendig. Ein
+    # neues MCP-Tool muss entweder in eine `_ToolDoc.tool_names`-Gruppe
+    # einsortiert ODER hier mit Begruendung eingetragen werden.
+    _PROMPT_CATALOG_EXCEPTIONS: frozenset[str] = frozenset(
+        {
+            # Versions-/Discovery-Introspektion — Spezialwerkzeuge, die der
+            # Agent on demand entdeckt; nicht Teil des Prompt-Katalogs.
+            "find_usages",
+            "list_versions",
+            "get_version",
+            "diff_versions",
+            # Block-Introspektion — der Prompt-Fall ist durch
+            # `fetch_resource(resource_id, block_ids?)` abgedeckt.
+            "list_resource_blocks",
+            # Fehler-Meldeweg (ADR-0038) — bewusst nicht im kuratierten
+            # Feedback-Eintrag gelistet.
+            "report_problem",
+        }
+    )
+
+    @staticmethod
+    def _all_group_names() -> list[str]:
+        from who2be_api.services.placeholders.resolvers.tools import _TOOLS
+
+        return [name for tool in _TOOLS for name in tool.tool_names]
+
+    def test_every_group_reference_exists_in_mapping(self) -> None:
+        """Jeder Name in `_ToolDoc.tool_names` ist ein Schluessel der SSoT."""
+        from who2be_models import MCP_TOOL_REQUIREMENTS
+
+        unknown = [n for n in self._all_group_names() if n not in MCP_TOOL_REQUIREMENTS]
+        assert unknown == [], f"unbekannte tool_names (nicht in MCP_TOOL_REQUIREMENTS): {unknown}"
+
+    def test_no_tool_referenced_in_two_groups(self) -> None:
+        """Kein Tool-Name kommt in mehr als einer kuratierten Gruppe vor."""
+        names = self._all_group_names()
+        duplicates = sorted({n for n in names if names.count(n) > 1})
+        assert duplicates == [], f"doppelt gruppierte tool_names: {duplicates}"
+
+    def test_every_non_always_mapping_tool_grouped_or_documented(self) -> None:
+        """Jedes Nicht-`always`-Mapping-Tool ist gruppiert oder dokumentierte Ausnahme."""
+        from who2be_models import MCP_TOOL_REQUIREMENTS
+
+        grouped = set(self._all_group_names())
+        non_always = {n for n, req in MCP_TOOL_REQUIREMENTS.items() if not req.always}
+        always = set(MCP_TOOL_REQUIREMENTS) - non_always
+
+        missing = non_always - grouped - self._PROMPT_CATALOG_EXCEPTIONS
+        assert missing == set(), f"weder gruppiert noch als Ausnahme dokumentiert: {missing}"
+        # Ausnahmen duerfen nicht (mehr) gleichzeitig gruppiert sein.
+        assert grouped & self._PROMPT_CATALOG_EXCEPTIONS == set()
+        # `always`-Tools (ping/whoami) sind bewusst nicht im kuratierten Katalog.
+        assert grouped & always == set()
+        # Kein Stale-Eintrag: jede Ausnahme existiert (nicht-`always`) im Mapping.
+        assert self._PROMPT_CATALOG_EXCEPTIONS <= non_always
+
+    # --- Verhaltens-Aequivalenz nach dem SSoT-Refactor ---------------------
+
+    @staticmethod
+    def _render(**policy_kwargs: Any) -> str:
+        from who2be_models import AgentToolPolicy
+
+        ctx = RenderContext(
+            workspace_id=UUID("00000000-0000-0000-0000-000000000099"),
+            persona_id=UUID("00000000-0000-0000-0000-000000000001"),
+            now=datetime(2026, 5, 31, 12, 0, 0, tzinfo=UTC),
+            tool_policy=AgentToolPolicy(**policy_kwargs),
+        )
+        return str(_async_run(ToolsOverviewResolver().resolve("", ctx, _make_db())).text)
+
+    def test_default_policy_shows_reads_and_feedback_no_writes(self) -> None:
+        """Default-Policy: alle Read-Gruppen + Feedback-Gruppe, keine Writes."""
+        result = self._render()
+        for signature in (
+            "get_persona(identifier)",
+            "search(query, types?, limit?)",
+            "list_triggers()",
+            "list_playbooks(tag?, trigger?)",
+            "fetch_playbook(playbook_id)",
+            "list_resources(tag?)",
+            "fetch_resource(resource_id, block_ids?)",
+            "list_agents()",
+            "get_agent(agent_id)",
+            "fetch_agent(agent_id)",
+            "record_usage(...) / submit_feedback(...)",
+        ):
+            assert signature in result
+        for write_fragment in (
+            "create_persona",
+            "create_playbook",
+            "create_resource",
+            "create_agent",
+            "transition_persona",
+            "create_system_prompt",
+            "list_placeholders()",
+        ):
+            assert write_fragment not in result
+
+    def test_full_policy_shows_all_curated_groups(self) -> None:
+        """Voll-Policy: jede kuratierte Gruppe erscheint im Output."""
+        from who2be_api.services.placeholders.resolvers.tools import _TOOLS
+        from who2be_models import ReadScope
+
+        result = self._render(
+            playbook_read=ReadScope.all,
+            resource_read=ReadScope.all,
+            agent_read=ReadScope.all,
+            persona_read=True,
+            persona_write=True,
+            playbook_write=True,
+            resource_write=True,
+            agent_write=True,
+            system_prompt_write=True,
+            feedback_write=True,
+            promote_retire=True,
+        )
+        for tool in _TOOLS:
+            assert tool.signature in result
+
+    def test_resource_read_none_hides_resource_reads_search_stays(self) -> None:
+        """`resource_read=none`: Resource-Zeilen weg, search + andere Reads bleiben."""
+        from who2be_models import ReadScope
+
+        result = self._render(resource_read=ReadScope.none)
+        assert "list_resources(tag?)" not in result
+        assert "fetch_resource(resource_id, block_ids?)" not in result
+        assert "search(query, types?, limit?)" in result
+        assert "list_playbooks(tag?, trigger?)" in result
+        assert "get_persona(identifier)" in result
+
+
 # ---------------------------------------------------------------------------
 # render_template_body (Renderer-Integration) — Welle 6: tuple return
 # ---------------------------------------------------------------------------
