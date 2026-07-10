@@ -23,6 +23,10 @@ from who2be_api.core.migrations import MIGRATIONS_DIR, apply_migrations
 from who2be_api.testing.workspace_setup import cleanup_workspaces, fresh_user_id, setup_workspace
 
 _MIGRATION_0056 = MIGRATIONS_DIR / "0056_builder_playbook_feedback.sql"
+# Bewusst NUR die vier Playbooks des damaligen Stands: Migration 0056 ist
+# unveraenderlich und adressiert genau diese Namen. Spaeter ergaenzte Builder-
+# Playbooks (z. B. „Library-Pflege & Feedback-Lauf", Content-Stand 4) kommen
+# per Start-Sync mit fertigem Body und liegen ausserhalb ihres Scopes.
 _BUILDER_PLAYBOOKS = [
     "Persona anlegen & pflegen",
     "Playbook anlegen & pflegen",

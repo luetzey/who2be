@@ -99,3 +99,32 @@ einen neuen Eintrag mit Verweis.
 
 _Bei Wachstum: älteste Einträge zu Einzeilern komprimieren (Titel + Entscheidung
 bleiben)._
+
+## 2026-07-10 — Builder-Rework (PR #302): Pflege-Routine + drei Richtungsentscheidungen
+- **Entscheidung 1 — Pflege als Playbook, nicht als Automatik:** Die Feedback-/
+  Aufräum-Routine des Builders ist ein fünftes Managed-Playbook
+  („Library-Pflege & Feedback-Lauf"), trigger-basiert und mit User im Loop
+  (Sammeln → Triage → Zusammenhänge/Lücken → Freigabe → Drafts → Hand-Off).
+  **Begründung:** Who2Be hat keinen Playbook-Scheduler; unbeaufsichtigtes
+  Umsetzen von Feedback widerspräche dem Kurator-Prinzip („Feedback ändert nie
+  selbst Inhalte"). Managed-Funde (Builder selbst) gehen in einen
+  Repo-Hand-Off statt in 409-Write-Versuche. **Verworfen:** Composite mit dem
+  Konsistenz-Check als Kind (Seed kennt kein Composition-Plumbing für managed
+  Playbooks; lohnt erst bei einem zweiten Fall) — stattdessen Prosa-Verweis.
+- **Entscheidung 2 — Sync statt Spiegel-Migration:** Neue/geänderte
+  Builder-Playbooks erreichen Bestands-Workspaces über
+  `sync_managed_builder_content` (neu: Insert-missing + Metadaten-Nachzug
+  `type`/`tags`/`triggers` auf der Playbook-Row). **Begründung:** v1→v2/v2→v3
+  liefen bereits migrationsfrei; 0047/0060 waren einmalige Backfills vor der
+  Insert-Fähigkeit. Metadaten-Drift war real (Trigger-Änderung hätte nie
+  verteilt).
+- **Entscheidung 3 — Trigger-Hygiene:** Generische Trigger („pruefen",
+  „qualitaetscheck") vom Konsistenz-Check entfernt (dokumentierte Kollision
+  mit Code-/Repo-Audit-Anfragen); das Pflege-Playbook nutzt bewusst nicht den
+  vom Vault-Playbook belegten Trigger „aufraeumen". Konvention im
+  `_BUILDER_PLAYBOOKS`-Kommentar festgehalten.
+- **Kontext:** Feedback-Backlog (Modi-Regel, fetch_agent-self-only,
+  Trigger-Kollision) wurde im selben Zug als „erster Pflege-Lauf" über das
+  Repo eingearbeitet; Beziehungs-Denken (search/find_usages vor Neuanlage,
+  set_*-Verdrahtung danach) im Persona-Profil verankert.
+  `BUILDER_CONTENT_VERSION` 3 → 4.
