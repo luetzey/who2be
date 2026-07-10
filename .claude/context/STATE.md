@@ -4,6 +4,26 @@ _Stand: 2026-07-10_
 
 ## Funktioniert
 
+- **MCP tools/list pro Agent policy-gefiltert UMGESETZT (2026-07-10, Branch
+  `claude/code-agent-setup-h3khxa`, PR #305, Issue #304, ADR-0042):** Neues
+  SSoT-Modul `who2be_models.tool_requirements` (`MCP_TOOL_REQUIREMENTS` für
+  alle 47 MCP-Tools; `is_tool_visible` policy-basiert für die API,
+  `is_tool_visible_for` whoami-basiert für den MCP-Adapter). MCP:
+  `PolicyFilterMiddleware` (FastMCP 3 `on_list_tools`/`on_call_tool`) filtert
+  `tools/list` per Request nach der Token-Policy (whoami-Cache pro
+  Token-SHA-256, LRU 512/TTL 300 s) und sperrt Calls ausgeblendeter Tools mit
+  klarer Meldung; **fail-open** bei Auflösungsfehlern (kein „verbunden, aber
+  keine Tools"-Rückfall; ping bleibt token-frei). API: `ToolsOverviewResolver`
+  delegiert Sichtbarkeit an dieselbe SSoT (`_ToolDoc.tool_names`,
+  `is_write`-Property statt Capability-Duplikat) — Prompt-Text und echte
+  Tool-Liste können nicht mehr driften. Drift-Guards beidseitig als Tests
+  (MCP-Registry == Mapping; API-Gruppen ↔ Mapping mit dokumentierter
+  Ausnahmen-Liste). **Neue MCP-Tools brauchen einen Mapping-Eintrag** (sonst
+  CI rot). Default-Policy-Agent sieht 21 statt 47 Tools (Payload-Ersparnis,
+  Claude-Chat-Budget). KEINE Security-Grenze: API-Durchsetzung (ADR-0039)
+  unverändert autoritativ. DoD: ruff/format/mypy strict clean (316 Dateien),
+  **984 pytest passed (0 skipped) gegen Wegwerf-Postgres, Coverage 90,17 %**
+  (Gate 85). Plan: `.claude/plan/2026-07-10-1524_mcp-per-agent-tool-filtering.md`.
 - **Builder-Rework: Library-Pflege-Routine + Beziehungs-Denken UMGESETZT
   (2026-07-10, Branch `claude/builder-agent-setup-pyczxa`, PR #302, Draft):**
   Fünftes Managed-Playbook „Library-Pflege & Feedback-Lauf" (Sidecar
