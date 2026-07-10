@@ -1,9 +1,25 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-07-10 (2. Lauf)_
+_Stand: 2026-07-10 (3. Lauf)_
 
 ## Funktioniert
 
+- **Feedback-Resolve für Agenten + Builder v6 UMGESETZT (2026-07-10, Branch
+  `claude/builder-agent-setup-pyczxa`, Folge-PR zu #303):** Neue Capability
+  `feedback_resolve` (User-Entscheidung; Default False, is_within-Escalation,
+  Policy-UI-Toggle + i18n); `set_resolution` bekam das fehlende
+  Capability-Gate für Agent-Tokens; `get_feedback` additiv um
+  `recent_feedback` (id/signal/note/resolution=jüngstes Triage-Event)
+  erweitert; neues MCP-Tool `resolve_feedback(feedback_id, resolution,
+  note?)` (addressed/in_progress/dismissed, dismissed nur mit Note;
+  tools-overview capability-gekoppelt). Builder-Content v6: Pflege-Lauf
+  triagiert nur offene Signale und schließt nach Freigabe selbst
+  (Report-Sektion D = Geschlossene Signale; Managed-Signale erst nach
+  verteiltem Repo-Fix). Sync-Novum: Start-Sync zieht erstmals auch die
+  tool_policy der Managed-Agenten nach (Builder/Builder-Lite,
+  feedback_resolve=True). DoD: ruff/format/mypy strict clean, 971 pytest
+  passed, Coverage 90,19 % (Gate 85); Web lint/tsc/build clean, 781 Vitest,
+  Branches 81,47 %. Details: DECISIONS.md 2026-07-10 (Feedback-Resolve).
 - **MCP tools/list pro Agent policy-gefiltert UMGESETZT (2026-07-10, Branch
   `claude/code-agent-setup-h3khxa`, PR #305, Issue #304, ADR-0042):** Neues
   SSoT-Modul `who2be_models.tool_requirements` (`MCP_TOOL_REQUIREMENTS` für

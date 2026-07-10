@@ -147,9 +147,12 @@ class FeedbackService:
     async def set_resolution(
         self, ctx: WorkspaceContext, feedback_id: UUID, data: FeedbackResolutionCreate
     ) -> AgentFeedbackRead:
-        # Triage ist eine Kurations-Handlung → editor+. Append-only Event; das
+        # Triage ist eine Kurations-Handlung → editor+. Agent-gebundene Tokens
+        # brauchen zusaetzlich die feedback_resolve-Capability (Default aus;
+        # No-Op fuer Mensch/JWT und ungebundene Tokens). Append-only Event; das
         # Feedback muss im eigenen Workspace liegen (sonst 404, kein Enumerieren).
         require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.feedback_resolve)
         if not await self._repo.feedback_belongs_to(ctx.workspace_id, feedback_id):
             raise _entity_not_found()
         return await self._repo.insert_resolution(

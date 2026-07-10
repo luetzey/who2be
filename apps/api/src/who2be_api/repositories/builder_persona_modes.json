@@ -52,7 +52,7 @@
         "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
         "content": [
           {"type": "text", "text": "Report-first: ", "styles": {"bold": true}},
-          {"type": "text", "text": "erst der konsolidierte Pflege-Report mit den Sektionen A. Feedback offen, B. Zusammenhaenge & Luecken, C. Managed/Repo-Hand-Off, D. UI-Schliessungen — dann Batch-Freigaben einholen, dann schreiben.", "styles": {}}
+          {"type": "text", "text": "erst der konsolidierte Pflege-Report mit den Sektionen A. Feedback offen, B. Zusammenhaenge & Luecken, C. Managed/Repo-Hand-Off, D. Geschlossene Signale (resolve_feedback, mit Resolution) — dann Batch-Freigaben einholen, dann schreiben.", "styles": {}}
         ],
         "children": []
       },
@@ -91,6 +91,15 @@
         "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
         "content": [
           {"type": "text", "text": "Signale ohne Versions-Abgleich erneut abarbeiten.", "styles": {}}
+        ],
+        "children": []
+      },
+      {
+        "id": "bpm-kur-anti-4",
+        "type": "bulletListItem",
+        "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+        "content": [
+          {"type": "text", "text": "Signale dismissen ohne begruendende Note oder schliessen ohne User-Freigabe.", "styles": {}}
         ],
         "children": []
       }

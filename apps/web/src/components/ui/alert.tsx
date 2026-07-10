@@ -26,10 +26,13 @@ export const Alert = forwardRef<
   )
 })
 
-export const AlertTitle = forwardRef<HTMLHeadingElement, HTMLAttributes<HTMLHeadingElement>>(
+// Kein Heading-Element: Alert-Titel sind keine Dokument-Gliederung — als <h5>
+// meldet axe heading-order-Violations, sobald ein Alert unter h1–h3 erscheint
+// (z. B. ErrorAlert nach einem CardTitle). Entspricht aktuellem shadcn.
+export const AlertTitle = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
   function AlertTitle({ className, ...props }, ref) {
     return (
-      <h5
+      <div
         ref={ref}
         className={cn('mb-1 leading-none font-medium tracking-tight', className)}
         {...props}

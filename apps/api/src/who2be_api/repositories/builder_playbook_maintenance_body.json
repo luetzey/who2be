@@ -49,8 +49,8 @@
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "Feedback-Schliessung nur via Web-UI: ", "styles": {"bold": true}},
-      {"type": "text", "text": "Feedback kennt kein 'erledigt' ueber MCP. Abgearbeitete Signale muessen im Abschluss-Report als Liste 'zur Schliessung in der Web-UI (Triage/Posteingang)' auftauchen — sonst stehen dieselben Signale im naechsten Lauf wieder auf dem Tisch.", "styles": {}}
+      {"type": "text", "text": "Feedback-Schliessung via resolve_feedback: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Abgearbeitete Signale werden nach Freigabe via resolve_feedback geschlossen (addressed = Fix umgesetzt, in_progress = Draft liegt oder Aktivierung offen, dismissed = bewusst verworfen — dismissed nur mit begruendender note). Die Web-UI-Triage (Posteingang) bleibt parallel moeglich.", "styles": {}}
     ],
     "children": []
   },
@@ -114,7 +114,17 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Jede Note gegen die aktuelle Version pruefen: ", "styles": {"bold": true}},
-      {"type": "text", "text": "Feedback kann aus einer aelteren Version stammen. Mit list_versions und diff_versions abgleichen, ob der kritisierte Punkt in der aktuellen Version noch existiert — noch gueltig oder laengst erledigt? Bereits erledigte Signale wandern direkt in die Liste 'zur Schliessung in der UI', nicht in die Arbeitsliste.", "styles": {}}
+      {"type": "text", "text": "Feedback kann aus einer aelteren Version stammen. Mit list_versions und diff_versions abgleichen, ob der kritisierte Punkt in der aktuellen Version noch existiert — noch gueltig oder laengst erledigt? Bereits erledigte Signale kommen als Schliessungs-Kandidaten (resolve_feedback, addressed) in den Report, nicht in die Arbeitsliste.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-p2-resolution",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Nur offene Signale triagieren: ", "styles": {"bold": true}},
+      {"type": "text", "text": "get_feedback liefert pro Signal auch id und resolution-Status. Nur offene Signale (resolution leer oder in_progress) in die Triage nehmen; bereits als addressed oder dismissed geschlossene Signale ueberspringen.", "styles": {}}
     ],
     "children": []
   },
@@ -220,7 +230,7 @@
     "id": "pb-maint-code-p4-template",
     "type": "codeBlock",
     "props": {"language": "markdown"},
-    "content": [{"type": "text", "text": "## Pflege-Lauf — Stand [Datum]\n\n### A. Feedback (offen)\n- [Element] ([entity_type], v[X]): [Signal] — \"[recent_note]\"\n  Beleg: noch gueltig gegen v[X] (diff geprueft)\n  Vorschlag: [minimaler Fix via update_*, neuer Draft]\n\n### B. Zusammenhaenge & Luecken\n- [Resource Y]: verwaist (find_usages: 0 eingehende Verweise)\n  Vorschlag: an [Playbook Z] linken ODER Rueckzug auf inactive\n- [Playbook Z]: Prosa-Verweis auf [Resource Y] ohne resource_link\n  Vorschlag: set_playbook_resource_links (lazy)\n- Trigger-Kollision: \"[Phrase]\" auf [Playbook A] und [Playbook B]\n  Vorschlag: [einen Trigger schaerfen/entfernen]\n- Beobachtung (nur Notiz): es fehlt evtl. ein Playbook fuer [X]\n\n### C. Managed — Repo-Hand-Off\n- [Builder-Element]: [Fund] — Pflege via Code-Repo, kein MCP-Write\n\n### D. Zur Schliessung in der UI\n- [Element]: Signal [outdated/...] vom [Datum] — erledigt durch [Draft vX / bereits in vY behoben]\n\n### Freigabe\nBitte pro Punkt freigeben (A1, B2, ...) oder als Batch.", "styles": {}}],
+    "content": [{"type": "text", "text": "## Pflege-Lauf — Stand [Datum]\n\n### A. Feedback (offen)\n- [Element] ([entity_type], v[X]): [Signal] — \"[recent_note]\"\n  Beleg: noch gueltig gegen v[X] (diff geprueft)\n  Vorschlag: [minimaler Fix via update_*, neuer Draft]\n\n### B. Zusammenhaenge & Luecken\n- [Resource Y]: verwaist (find_usages: 0 eingehende Verweise)\n  Vorschlag: an [Playbook Z] linken ODER Rueckzug auf inactive\n- [Playbook Z]: Prosa-Verweis auf [Resource Y] ohne resource_link\n  Vorschlag: set_playbook_resource_links (lazy)\n- Trigger-Kollision: \"[Phrase]\" auf [Playbook A] und [Playbook B]\n  Vorschlag: [einen Trigger schaerfen/entfernen]\n- Beobachtung (nur Notiz): es fehlt evtl. ein Playbook fuer [X]\n\n### C. Managed — Repo-Hand-Off\n- [Builder-Element]: [Fund] — Pflege via Code-Repo, kein MCP-Write\n\n### D. Geschlossene Signale (resolve_feedback)\n- [Element]: Signal [outdated/...] vom [Datum] — geschlossen als [addressed/in_progress/dismissed]: [Draft vX / bereits in vY behoben / Begruendung]\n(Offene Repo-Hand-Off-Signale bleiben in C — Schliessung erst nach gemergtem/verteiltem Repo-Fix.)\n\n### Freigabe\nBitte pro Punkt freigeben (A1, B2, ...) oder als Batch.", "styles": {}}],
     "children": []
   },
   {
@@ -271,6 +281,16 @@
     "children": []
   },
   {
+    "id": "pb-maint-li-p5-resolve",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Signale schliessen: ", "styles": {"bold": true}},
+      {"type": "text", "text": "nach umgesetztem und freigegebenem Fix das zugehoerige Signal via resolve_feedback schliessen — addressed bei umgesetztem Fix; in_progress, wenn der Draft liegt oder die Aktivierung noch offen ist; dismissed mit begruendender note bei bewusst Verworfenem. Signale zu managed Inhalten erst schliessen, wenn der Repo-Fix wirklich gemerged und verteilt ist.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
     "id": "pb-maint-h-p6",
     "type": "heading",
     "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
@@ -283,7 +303,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Zusammenfassung geben: ", "styles": {"bold": true}},
-      {"type": "text", "text": "welche Drafts und Links umgesetzt wurden; was jetzt zur Aktivierung ansteht (transition entscheidet der User); die Repo-Hand-Off-Liste fuer managed Funde; und die Liste der in der Web-UI (Triage/Posteingang) zu schliessenden Feedback-Signale. Ohne den letzten Punkt tauchen dieselben Signale im naechsten Lauf wieder auf.", "styles": {}}
+      {"type": "text", "text": "welche Drafts und Links umgesetzt wurden; was jetzt zur Aktivierung ansteht (transition entscheidet der User); die Repo-Hand-Off-Liste fuer managed Funde; und die Liste der via resolve_feedback geschlossenen Signale mit ihrer Resolution (addressed/in_progress/dismissed). Offene Repo-Hand-Off-Signale bleiben offen und werden erst nach gemergtem und verteiltem Repo-Fix geschlossen.", "styles": {}}
     ],
     "children": []
   },
@@ -293,7 +313,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Naechsten Lauf empfehlen: ", "styles": {"bold": true}},
-      {"type": "text", "text": "einen sinnvollen Zeitpunkt fuer den naechsten Pflege-Lauf vorschlagen — z. B. nach der naechsten Bau-Welle oder sobald neues Feedback aufgelaufen ist. Der Lauf ist wiederholbar, solange Triage-Vermerke (erledigt / liegengelassen mit Grund) im Report landen und die Schliessung UI-seitig nachgezogen wird.", "styles": {}}
+      {"type": "text", "text": "einen sinnvollen Zeitpunkt fuer den naechsten Pflege-Lauf vorschlagen — z. B. nach der naechsten Bau-Welle oder sobald neues Feedback aufgelaufen ist. Der Lauf ist wiederholbar, solange Triage-Vermerke (erledigt / liegengelassen mit Grund) im Report landen und freigegebene Signale via resolve_feedback geschlossen werden.", "styles": {}}
     ],
     "children": []
   },
@@ -320,7 +340,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Write (nur nach Freigabe): ", "styles": {"bold": true}},
-      {"type": "text", "text": "update_persona / update_playbook / update_resource (neuer Draft); set_persona_playbooks / set_playbook_resource_links / set_playbook_composes / set_resource_sub_resources (Replace-Semantik — vollstaendigen Zielzustand setzen); transition_persona / transition_playbook / transition_resource (nur freigegebene Uebergaenge); record_usage und submit_feedback (Nachhalten).", "styles": {}}
+      {"type": "text", "text": "update_persona / update_playbook / update_resource (neuer Draft); set_persona_playbooks / set_playbook_resource_links / set_playbook_composes / set_resource_sub_resources (Replace-Semantik — vollstaendigen Zielzustand setzen); transition_persona / transition_playbook / transition_resource (nur freigegebene Uebergaenge); record_usage und submit_feedback (Nachhalten); resolve_feedback (Signale schliessen — addressed/in_progress/dismissed, dismissed nur mit note; nur nach Freigabe).", "styles": {}}
     ],
     "children": []
   },
@@ -370,6 +390,13 @@
     "children": []
   },
   {
+    "id": "pb-maint-li-ap-dismiss",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Signale dismissen ohne begruendende Note oder schliessen ohne User-Freigabe — resolve_feedback ist eine Kurations-Handlung, keine Aufraeum-Automatik. Ebenso tabu: Signale zu managed Inhalten schliessen, bevor der Repo-Fix gemerged und verteilt ist.", "styles": {}}],
+    "children": []
+  },
+  {
     "id": "pb-maint-li-ap-persist",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
@@ -398,8 +425,8 @@
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "Feedback-Schliessung bewusst UI-seitig: ", "styles": {"bold": true}},
-      {"type": "text", "text": "Signale werden im Triage/Posteingang der Web-UI geschlossen (ADR-0038), nicht via MCP. Der Abschluss-Report muss deshalb die Schliessungs-Liste enthalten — sie ist der Uebergabepunkt zwischen Agent-Lauf und UI-Kuration.", "styles": {}}
+      {"type": "text", "text": "Feedback-Schliessung via MCP und Web-UI: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Signale werden jetzt auch via MCP geschlossen (resolve_feedback, Capability feedback_resolve — Erweiterung von ADR-0038); die Web-UI-Triage (Posteingang) bleibt gleichberechtigt. Der Abschluss-Report muss die geschlossenen Signale mit Resolution enthalten — er bleibt der Uebergabepunkt zwischen Agent-Lauf und Kuration.", "styles": {}}
     ],
     "children": []
   },

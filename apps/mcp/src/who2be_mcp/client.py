@@ -22,6 +22,7 @@ from who2be_models import (
     AgentUpdate,
     AgentWithRenderedPrompt,
     FeedbackCreate,
+    FeedbackResolutionCreate,
     FeedbackSummary,
     PersonaCreate,
     PersonaPlaybookLinkSet,
@@ -694,6 +695,16 @@ class ApiClient:
     async def get_feedback(self, entity_type: str, entity_id: UUID) -> FeedbackSummary:
         data = await self._get(f"{self._workspace_prefix}/feedback/{entity_type}/{entity_id}")
         return FeedbackSummary.model_validate(data)
+
+    async def resolve_feedback(
+        self, feedback_id: UUID, data: FeedbackResolutionCreate
+    ) -> AgentFeedbackRead:
+        # Triage eines einzelnen Signals (append-only Resolution-Event) —
+        # editor+ und fuer agent-gebundene Tokens `feedback_resolve`-gated.
+        body = await self._write(
+            "POST", f"{self._workspace_prefix}/feedback/{feedback_id}/resolution", data
+        )
+        return AgentFeedbackRead.model_validate(body)
 
     # ------------------------------------------------------------------
     # Discovery/Search (ADR-0037). Volltext ueber die aktive Version.

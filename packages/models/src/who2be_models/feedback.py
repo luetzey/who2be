@@ -201,12 +201,33 @@ class FeedbackItems(BaseModel):
     counts: FeedbackItemCounts = Field(default_factory=FeedbackItemCounts)
 
 
+class FeedbackSummaryItem(BaseModel):
+    """Ein einzelnes Feedback im `get_feedback`-Aggregat (Triage-Grundlage).
+
+    Traegt die `id` (adressierbar fuer `resolve_feedback`/den Resolution-
+    Endpoint) und den aktuellen Triage-Status (`resolution` = juengstes
+    Resolution-Event oder None = offen) — damit ein Agent aus dem Aggregat
+    heraus gezielt einzelne Signale schliessen kann.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    signal: FeedbackSignal | SystemFeedbackCategory
+    note: str | None = None
+    resolution: FeedbackResolution | None = None
+    created_at: datetime
+
+
 class FeedbackSummary(BaseModel):
     """Aggregat fuer `get_feedback` — Kurations-Sicht auf ein Element.
 
     `usage_count` = Anzahl Nutzungs-Ereignisse; `by_outcome`/`by_signal` zaehlen
     pro Auspraegung; `recent_notes` traegt die juengsten Freitext-Notizen
-    (escaped im UI angezeigt). Leere Maps/Listen, wenn noch nichts vorliegt.
+    (escaped im UI angezeigt). `recent_feedback` ergaenzt additiv die juengsten
+    Einzel-Feedbacks mit `id` + Triage-Status (`resolution`) — adressierbar fuer
+    die Triage; `recent_notes` bleibt fuer Back-Compat unveraendert. Leere
+    Maps/Listen, wenn noch nichts vorliegt.
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -217,6 +238,7 @@ class FeedbackSummary(BaseModel):
     by_outcome: dict[str, int] = Field(default_factory=dict)
     by_signal: dict[str, int] = Field(default_factory=dict)
     recent_notes: list[str] = Field(default_factory=list)
+    recent_feedback: list[FeedbackSummaryItem] = Field(default_factory=list)
 
 
 class FeedbackEvents(BaseModel):

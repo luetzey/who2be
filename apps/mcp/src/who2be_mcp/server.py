@@ -41,6 +41,8 @@ from who2be_models import (
     AgentUpdate,
     AgentWithRenderedPrompt,
     FeedbackCreate,
+    FeedbackResolution,
+    FeedbackResolutionCreate,
     FeedbackSummary,
     FeedbackTarget,
     PersonaCreate,
@@ -1107,8 +1109,9 @@ async def transition_system_prompt(
 # ---------------------------------------------------------------------------
 # Usage-/Feedback-Flywheel (ADR-0038). Append-only Telemetrie, mit der ein Agent
 # zurueckmeldet, was er genutzt hat und wie gut es war — macht die AgentDB
-# selbst-verbessernd. Verlangt `feedback_write` (Default an); fliesst NIE in
-# einen gerenderten System-Prompt (kein Injection-Vektor).
+# selbst-verbessernd. Verlangt `feedback_write` (Default an); die Triage
+# (`resolve_feedback`) verlangt zusaetzlich `feedback_resolve` (Default aus).
+# Fliesst NIE in einen gerenderten System-Prompt (kein Injection-Vektor).
 # ---------------------------------------------------------------------------
 
 
@@ -1161,13 +1164,43 @@ async def report_problem(data: SystemFeedbackCreate) -> AgentFeedbackRead:
 async def get_feedback(entity_type: FeedbackTarget, entity_id: str) -> FeedbackSummary:
     """Liest das Feedback-Aggregat eines Elements (Kurations-Sicht, editor+).
 
-    Liefert `usage_count`, `by_outcome`/`by_signal`-Zaehler und die juengsten
-    Notizen — die Grundlage, um zu entscheiden, was gepflegt, gemerged oder
-    retired gehoert.
+    Liefert `usage_count`, `by_outcome`/`by_signal`-Zaehler, die juengsten
+    Notizen (`recent_notes`) und `recent_feedback`: die juengsten Einzel-
+    Feedbacks mit `id`, `signal`, `note`, `resolution` (aktueller Triage-Status,
+    null = offen) und `created_at` — die Grundlage, um zu entscheiden, was
+    gepflegt, gemerged oder retired gehoert. Fuer die Triage nur offene Signale
+    (`resolution` null) abarbeiten und sie nach getaner Arbeit via
+    `resolve_feedback(feedback_id, ...)` schliessen.
     """
     parsed = _parse_uuid(entity_id, entity_type)
     client = await build_client()
     return await client.get_feedback(entity_type, parsed)
+
+
+@mcp.tool(output_schema=None)
+@with_tool_log("resolve_feedback")
+async def resolve_feedback(
+    feedback_id: str, resolution: FeedbackResolution, note: str | None = None
+) -> AgentFeedbackRead:
+    """Schliesst ein Feedback-Signal (Triage, append-only Resolution-Event).
+
+    Semantik der `resolution`-Werte:
+    - `addressed`: der Fix ist umgesetzt und aktiv — das Signal ist erledigt.
+    - `in_progress`: ein Draft liegt vor, die Aktivierung/Freigabe steht noch aus.
+    - `dismissed`: bewusst verworfen — IMMER mit begruendender `note`, damit
+      nachvollziehbar bleibt, warum das Signal nicht umgesetzt wurde.
+
+    Schliessen ist eine Kurations-Handlung (editor+, Capability
+    `feedback_resolve`). Typischer Flow: `get_feedback` → offene Signale
+    (`resolution` null) triagieren → Fix umsetzen/freigeben lassen →
+    `resolve_feedback`. Das Feedback selbst bleibt unveraendert (append-only);
+    der juengste Resolution-Eintrag ist der aktuelle Status.
+    """
+    parsed = _parse_uuid(feedback_id, "Feedback")
+    client = await build_client()
+    return await client.resolve_feedback(
+        parsed, FeedbackResolutionCreate(resolution=resolution, note=note)
+    )
 
 
 # ---------------------------------------------------------------------------

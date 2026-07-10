@@ -265,6 +265,9 @@ _CAPABILITY_LABELS: dict[AgentCapability, str] = {
     AgentCapability.agent_write: "Agenten zu erstellen oder zu aendern",
     AgentCapability.system_prompt_write: "System-Prompt-Templates zu verfassen oder zu aendern",
     AgentCapability.feedback_write: "Nutzung/Feedback zu melden",
+    AgentCapability.feedback_resolve: (
+        "Feedback-Signale zu schliessen (addressed/in_progress/dismissed)"
+    ),
     AgentCapability.promote_retire: "Versionen zu aktivieren oder zu deaktivieren",
 }
 

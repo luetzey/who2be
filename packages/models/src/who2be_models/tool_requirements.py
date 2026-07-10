@@ -147,6 +147,9 @@ MCP_TOOL_REQUIREMENTS: dict[str, ToolRequirement] = {
     "submit_feedback": _FEEDBACK_WRITE,
     "report_problem": _FEEDBACK_WRITE,
     "get_feedback": _FEEDBACK_WRITE,
+    # --- Feedback-Triage — `feedback_resolve` (Default aus): Signale schliessen
+    #     ist Kurations-Macht, getrennt vom blossen Melden (`feedback_write`).
+    "resolve_feedback": ToolRequirement(capabilities=(AgentCapability.feedback_resolve,)),
 }
 
 

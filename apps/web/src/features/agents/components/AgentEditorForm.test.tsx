@@ -112,6 +112,10 @@ describe('AgentEditorForm', () => {
     // Feedback ist secure-by-default AN, System-Prompt aus.
     expect(screen.getByLabelText('System-Prompts verfassen (Review einreichen)')).not.toBeChecked()
     expect(screen.getByLabelText('Nutzung/Feedback melden')).toBeChecked()
+    // Feedback-Triage (Signale schliessen) ist secure-by-default AUS.
+    expect(
+      screen.getByLabelText('Feedback-Triage: Signale schließen (addressed/in_progress/dismissed)'),
+    ).not.toBeChecked()
   })
 
   it('zeigt den write_tags-Tag-Scope pro Domain (ADR-0039)', () => {

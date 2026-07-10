@@ -15,10 +15,17 @@ from fastmcp.exceptions import ToolError
 
 from who2be_mcp import server
 from who2be_mcp.client import ApiClient
-from who2be_mcp.server import get_feedback, record_usage, report_problem, submit_feedback
+from who2be_mcp.server import (
+    get_feedback,
+    record_usage,
+    report_problem,
+    resolve_feedback,
+    submit_feedback,
+)
 from who2be_models import (
     AgentFeedbackRead,
     FeedbackCreate,
+    FeedbackResolution,
     FeedbackSummary,
     SystemFeedbackCreate,
     UsageEventCreate,
@@ -131,6 +138,7 @@ def test_report_problem_posts_system_feedback(monkeypatch: pytest.MonkeyPatch) -
 
 def test_get_feedback_returns_summary(monkeypatch: pytest.MonkeyPatch) -> None:
     pid = uuid4()
+    fid = uuid4()
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path.endswith(f"/feedback/playbook/{pid}")
@@ -143,6 +151,22 @@ def test_get_feedback_returns_summary(monkeypatch: pytest.MonkeyPatch) -> None:
                 "by_outcome": {"applied": 4, "skipped": 1},
                 "by_signal": {"helpful": 3, "outdated": 1},
                 "recent_notes": ["super", "bitte aktualisieren"],
+                "recent_feedback": [
+                    {
+                        "id": str(fid),
+                        "signal": "outdated",
+                        "note": "bitte aktualisieren",
+                        "resolution": None,
+                        "created_at": "2024-01-01T00:00:00Z",
+                    },
+                    {
+                        "id": str(uuid4()),
+                        "signal": "helpful",
+                        "note": None,
+                        "resolution": "addressed",
+                        "created_at": "2023-12-31T00:00:00Z",
+                    },
+                ],
             },
         )
 
@@ -153,12 +177,80 @@ def test_get_feedback_returns_summary(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result.by_outcome["applied"] == 4
     assert result.by_signal["helpful"] == 3
     assert len(result.recent_notes) == 2
+    # Passthrough der Einzel-Feedbacks: id + Triage-Status kommen durch,
+    # damit der Agent offene Signale (resolution None) triagieren kann.
+    assert len(result.recent_feedback) == 2
+    assert result.recent_feedback[0].id == fid
+    assert result.recent_feedback[0].resolution is None
+    assert result.recent_feedback[1].resolution == FeedbackResolution.addressed
+
+
+def test_resolve_feedback_tool_registered() -> None:
+    """Das Triage-Tool ist registriert (Durchsetzung der feedback_resolve-
+    Capability liegt serverseitig in der API, wie bei allen Write-Tools)."""
+    names = {tool.name for tool in asyncio.run(server.mcp.list_tools())}
+    assert "resolve_feedback" in names
 
 
 def test_get_feedback_validates_uuid(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(server, "build_client", _factory(lambda r: httpx.Response(200, json={})))
     with pytest.raises(ToolError):
         asyncio.run(get_feedback("playbook", "not-a-uuid"))
+
+
+def test_resolve_feedback_posts_resolution(monkeypatch: pytest.MonkeyPatch) -> None:
+    fid = uuid4()
+    seen: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["method"] = request.method
+        seen["path"] = request.url.path
+        seen["body"] = request.read().decode()
+        return httpx.Response(
+            201,
+            json={
+                "id": str(fid),
+                "entity_type": "playbook",
+                "entity_id": str(uuid4()),
+                "version": None,
+                "signal": "outdated",
+                "note": "Schritt 4 veraltet",
+                "agent_id": None,
+                "created_at": "2024-01-01T00:00:00Z",
+                "resolution": "dismissed",
+            },
+        )
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    result = asyncio.run(
+        resolve_feedback(str(fid), FeedbackResolution.dismissed, note="Absichtlich so — Legacy.")
+    )
+    assert isinstance(result, AgentFeedbackRead)
+    assert result.resolution == FeedbackResolution.dismissed
+    assert seen["method"] == "POST"
+    assert str(seen["path"]).endswith(f"/feedback/{fid}/resolution")
+    assert "dismissed" in str(seen["body"])
+    assert "Absichtlich so" in str(seen["body"])
+
+
+def test_resolve_feedback_validates_uuid(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(server, "build_client", _factory(lambda r: httpx.Response(201, json={})))
+    with pytest.raises(ToolError):
+        asyncio.run(resolve_feedback("not-a-uuid", FeedbackResolution.addressed))
+
+
+def test_resolve_feedback_propagates_403_as_toolerror(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Policy-Durchsetzung liegt serverseitig: fehlt dem agent-gebundenen Token
+    die feedback_resolve-Capability, antwortet die API 403 → ToolError."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            403, json={"detail": "Dieser Agent ist nicht berechtigt, Feedback zu schliessen."}
+        )
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    with pytest.raises(ToolError):
+        asyncio.run(resolve_feedback(str(uuid4()), FeedbackResolution.addressed))
 
 
 def test_record_usage_propagates_404_as_toolerror(monkeypatch: pytest.MonkeyPatch) -> None:

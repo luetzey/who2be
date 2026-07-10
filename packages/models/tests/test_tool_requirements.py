@@ -20,6 +20,7 @@ _FULL_POLICY = AgentToolPolicy(
     agent_write=True,
     system_prompt_write=True,
     feedback_write=True,
+    feedback_resolve=True,
     promote_retire=True,
 )
 
@@ -193,6 +194,6 @@ def test_mapping_covers_all_registered_server_tools() -> None:
     # 47 `@with_tool_log("<name>")`-Registrierungen in apps/mcp/.../server.py
     # (Stand ADR-0042). Neues Tool => hier + im Mapping ergaenzen; der
     # Paritaetstest in apps/mcp prueft die Gegenrichtung gegen den Server.
-    assert len(MCP_TOOL_REQUIREMENTS) == 47
+    assert len(MCP_TOOL_REQUIREMENTS) == 48
     always = {name for name, req in MCP_TOOL_REQUIREMENTS.items() if req.always}
     assert always == {"ping", "whoami"}

@@ -73,6 +73,13 @@ describe('OAuthConsentPage (a11y)', () => {
   })
 
   it('hat keine axe-Violations im Fehlerzustand ohne request-Parameter', async () => {
+    // fetch auch hier stubben: ungestubbt kann ein (timing-abhaengig)
+    // fehlschlagender Hintergrund-Call zusaetzlich einen ErrorAlert rendern —
+    // die axe-Snapshot-DOM war dadurch auf langsamen Runnern nichtdeterministisch.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify([]), { status: 200 })),
+    )
     const { container } = renderConsent('')
     await screen.findByText(/Verbindungs-Link/)
 

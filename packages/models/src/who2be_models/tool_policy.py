@@ -59,6 +59,7 @@ class AgentCapability(StrEnum):
     agent_write = "agent_write"
     system_prompt_write = "system_prompt_write"
     feedback_write = "feedback_write"
+    feedback_resolve = "feedback_resolve"
     promote_retire = "promote_retire"
 
 
@@ -115,6 +116,10 @@ class AgentToolPolicy(BaseModel):
     # secure-by-default-Writes-Prinzip: append-only Telemetrie ist risikoarm und
     # der Zweck des Flywheels; der Owner kann sie pro Agent abschalten.
     feedback_write: bool = True
+    # Feedback-Triage: einzelne Signale schliessen (addressed/in_progress/
+    # dismissed). Anders als das reine Melden (`feedback_write`) ist das eine
+    # Kurations-Handlung — Default aus (secure by default).
+    feedback_resolve: bool = False
     promote_retire: bool = False
     # Optionale Pro-Domain-Verfeinerung von `promote_retire` (ADR-0039).
     # Leer = ungeteilt (Backward-Compat). Keys: persona/playbook/resource.
@@ -208,6 +213,7 @@ class AgentToolPolicy(BaseModel):
             "agent_write",
             "system_prompt_write",
             "feedback_write",
+            "feedback_resolve",
             "promote_retire",
         )
         if not all(not getattr(self, name) or getattr(other, name) for name in bool_fields):

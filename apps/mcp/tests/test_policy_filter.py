@@ -66,6 +66,7 @@ _ALL_CAPABILITIES = [
     "agent_write",
     "system_prompt_write",
     "feedback_write",
+    "feedback_resolve",
     "promote_retire",
 ]
 
@@ -179,7 +180,7 @@ def test_full_policy_agent_sees_all_tools(monkeypatch: pytest.MonkeyPatch) -> No
     _install_identity(monkeypatch, _whoami_handler(payload))
     names = _list_tool_names()
     assert names == set(MCP_TOOL_REQUIREMENTS)
-    assert len(names) == 47
+    assert len(names) == 48
 
 
 def test_resource_read_none_hides_resource_tools(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -201,7 +202,7 @@ def test_unrestricted_admin_sees_all_tools(monkeypatch: pytest.MonkeyPatch) -> N
     _install_identity(monkeypatch, _whoami_handler(payload))
     names = _list_tool_names()
     assert names == set(MCP_TOOL_REQUIREMENTS)
-    assert len(names) == 47
+    assert len(names) == 48
 
 
 def test_unrestricted_viewer_sees_no_write_tools(monkeypatch: pytest.MonkeyPatch) -> None:

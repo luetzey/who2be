@@ -30,6 +30,7 @@ const WRITE_CAP_FIELDS = [
   'agent_write',
   'system_prompt_write',
   'feedback_write',
+  'feedback_resolve',
   'promote_retire',
 ] as const
 const READ_SCOPES = ['all', 'assigned', 'none'] as const
