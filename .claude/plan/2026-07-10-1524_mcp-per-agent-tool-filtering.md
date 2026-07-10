@@ -4,7 +4,7 @@ _Erstellt: 2026-07-10 15:24 · Branch: `claude/code-agent-setup-h3khxa` · Statu
 
 ## Problem
 
-Der MCP-Server (`apps/mcp`) registriert alle ~46 Tools statisch auf einer
+Der MCP-Server (`apps/mcp`) registriert alle ~47 Tools statisch auf einer
 `FastMCP`-Instanz — jeder verbundene Client sieht die komplette Liste,
 unabhängig von der `AgentToolPolicy` seines Tokens. Die Durchsetzung passiert
 erst beim Aufruf serverseitig in der API (ADR-0039). Gleichzeitig ist die
@@ -62,7 +62,7 @@ die `tools/list`-Antwort schrumpft nochmals deutlich.
   - `ToolRequirement` (Pydantic, frozen): `read_domain:
     Literal["persona","playbook","resource","agent","search"] | None`,
     `capabilities: tuple[AgentCapability, ...] = ()`, `always: bool = False`.
-  - `MCP_TOOL_REQUIREMENTS: dict[str, ToolRequirement]` — ALLE 46 in
+  - `MCP_TOOL_REQUIREMENTS: dict[str, ToolRequirement]` — ALLE 47 in
     `apps/mcp/.../server.py` registrierten Tool-Namen (Quelle: die
     `@with_tool_log("<name>")`-Namen). Zuordnung exakt nach der bestehenden
     `_ToolDoc`-Semantik in `resolvers/tools.py` (inkl. `list_system_prompts`/
