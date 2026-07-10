@@ -67,7 +67,8 @@ def test_builder_lite_seeded_managed_and_wired() -> None:
             )
             agent = await conn.fetchrow(
                 "SELECT persona_id, system_prompt_template_id, status, is_managed, "
-                "       (tool_policy ->> 'agent_write')::boolean AS agent_write "
+                "       (tool_policy ->> 'agent_write')::boolean AS agent_write, "
+                "       (tool_policy ->> 'feedback_resolve')::boolean AS feedback_resolve "
                 "FROM agent WHERE workspace_id = $1 AND name = 'Builder-Lite'",
                 workspace_id,
             )
@@ -83,6 +84,7 @@ def test_builder_lite_seeded_managed_and_wired() -> None:
                 "agent_status": agent["status"] if agent else None,
                 "agent_managed": agent["is_managed"] if agent else None,
                 "agent_write": agent["agent_write"] if agent else None,
+                "feedback_resolve": agent["feedback_resolve"] if agent else None,
             }
         finally:
             await conn.close()
@@ -100,6 +102,8 @@ def test_builder_lite_seeded_managed_and_wired() -> None:
         assert data["agent_status"] == "enabled"
         assert data["agent_managed"] is True
         assert data["agent_write"] is True
+        # Content-Stand 6: gleiche Kurations-Capability wie der volle Builder.
+        assert data["feedback_resolve"] is True
 
         # Reuse: selbe Builder-Persona, verdrahtet mit dem lite Template.
         assert data["builder_persona"] is not None, "Builder-Persona fehlt (Voraussetzung)."

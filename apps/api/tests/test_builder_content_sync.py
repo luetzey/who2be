@@ -11,7 +11,10 @@ Row-Metadaten (type/tags/triggers) mit verteilt (Content-Stand 4), und die
 Managed-Resource „Agent-Bau-Konventionen" wird per Content-Update bzw.
 Insert-missing samt `playbook_resource_link`s verteilt; die Persona-Modi
 (Architekt/Kurator/Berater) kommen ueber das Persona-Content-Replace in
-Bestands-Personas an (Content-Stand 5).
+Bestands-Personas an (Content-Stand 5). Seit Content-Stand 6 zieht der Sync
+auch die AGENT-Rows nach: die tool_policy der Builder-Agenten
+(Builder/Builder-Lite) wird bei Stempel-Rueckstand auf den kanonischen Stand
+ersetzt (`feedback_resolve` erreicht so Bestands-Builder).
 """
 
 from __future__ import annotations
@@ -147,6 +150,15 @@ def test_sync_restores_outdated_builder() -> None:
                 "WHERE workspace_id = $1 AND is_managed = true",
                 ws,
             )
+            # Veraltete Agenten simulieren: `feedback_resolve` aus der Policy
+            # entfernen (Stand vor Content-Stand 6) + Stempel 0.
+            await conn.execute(
+                "UPDATE agent SET tool_policy = tool_policy - 'feedback_resolve', "
+                "managed_content_version = 0 "
+                "WHERE workspace_id = $1 AND is_managed = true "
+                "AND name IN ('Builder', 'Builder-Lite')",
+                ws,
+            )
 
             first = await sync_managed_builder_content(conn)
             second = await sync_managed_builder_content(conn)  # idempotent
@@ -189,6 +201,13 @@ def test_sync_restores_outdated_builder() -> None:
                 "WHERE r.workspace_id = $1 AND r.name = 'Agent-Bau-Konventionen'",
                 ws,
             )
+            agent_rows = await conn.fetch(
+                "SELECT name, managed_content_version, "
+                "  (tool_policy ->> 'feedback_resolve')::boolean AS feedback_resolve "
+                "FROM agent WHERE workspace_id = $1 AND is_managed = true "
+                "AND name IN ('Builder', 'Builder-Lite') ORDER BY name",
+                ws,
+            )
             return {
                 "first": first,
                 "second": second,
@@ -202,6 +221,7 @@ def test_sync_restores_outdated_builder() -> None:
                 "resource_stamp": resource_row["managed_content_version"],
                 "resource_block_ids": {b["id"] for b in json.loads(resource_row["blocks"])},
                 "resource_tags": json.loads(resource_row["tags"]),
+                "agents": [dict(r) for r in agent_rows],
             }
         finally:
             await conn.close()
@@ -211,11 +231,17 @@ def test_sync_restores_outdated_builder() -> None:
     finally:
         cleanup_workspaces([owner])
 
-    # 9 Aggregate aktualisiert (Persona + 2 Templates + 5 Playbooks + 1 Resource);
-    # zweiter Lauf 0.
-    assert res["first"] == 9, res["first"]
+    # 11 Aggregate aktualisiert (Persona + 2 Templates + 5 Playbooks + 1 Resource
+    # + 2 Agenten seit Content-Stand 6); zweiter Lauf 0.
+    assert res["first"] == 11, res["first"]
     assert res["second"] == 0, "Sync muss idempotent sein (Stempel-Guard)."
     assert res["persona_stamp"] == BUILDER_CONTENT_VERSION
+    # Content-Stand 6: die kanonische Policy (inkl. feedback_resolve) und der
+    # Stempel kommen auf beiden Builder-Agenten an.
+    assert [a["name"] for a in res["agents"]] == ["Builder", "Builder-Lite"]
+    for agent in res["agents"]:
+        assert agent["feedback_resolve"] is True, agent
+        assert agent["managed_content_version"] == BUILDER_CONTENT_VERSION, agent
     # Kanonischer Inhalt wiederhergestellt (Feedback-Bullets aus den Sidecars).
     assert "bp-li-allowed-fb" in res["persona_block_ids"]
     assert "ab-li-fb" in res["template_body_ids"]
@@ -539,3 +565,76 @@ def test_sync_distributes_persona_modes_to_existing_persona() -> None:
     # Kurator bindet das Pflege-Playbook bewusst in Prosa, nicht via playbook_id
     # (UUIDs sind workspace-spezifisch, kanonischer Content bleibt identisch).
     assert all(m.get("playbook_id") is None for m in modes)
+
+
+@pytest.mark.integration
+def test_sync_updates_agent_policy_of_existing_builder() -> None:
+    """Policy-Verteilung (Content-Stand 6): Bestands-Builder-Agenten mit alter
+    tool_policy (`feedback_resolve` fehlt bzw. explizit false) und altem Stempel
+    bekommen per Sync die kanonische Policy (feedback_resolve=True, Writes/Reads
+    unveraendert breit) + Stempel `BUILDER_CONTENT_VERSION`; zweiter Lauf 0."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+
+    async def _run() -> dict[str, Any]:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            # Alt-Stand simulieren, beide Vor-v6-Formen: beim Builder fehlt der
+            # Key ganz (Policy von vor ADR-0038-Erweiterung), beim Builder-Lite
+            # steht er explizit auf false.
+            await conn.execute(
+                "UPDATE agent SET tool_policy = tool_policy - 'feedback_resolve', "
+                "managed_content_version = 0 "
+                "WHERE workspace_id = $1 AND name = 'Builder'",
+                ws,
+            )
+            await conn.execute(
+                "UPDATE agent SET tool_policy = "
+                "jsonb_set(tool_policy, '{feedback_resolve}', 'false'::jsonb), "
+                "managed_content_version = 0 "
+                "WHERE workspace_id = $1 AND name = 'Builder-Lite'",
+                ws,
+            )
+
+            first = await sync_managed_builder_content(conn)
+            second = await sync_managed_builder_content(conn)  # idempotent
+
+            rows = await conn.fetch(
+                "SELECT name, is_managed, managed_content_version, "
+                "  (tool_policy ->> 'feedback_resolve')::boolean AS feedback_resolve, "
+                "  (tool_policy ->> 'agent_write')::boolean AS agent_write, "
+                "  (tool_policy ->> 'promote_retire')::boolean AS promote_retire, "
+                "  tool_policy ->> 'agent_read' AS agent_read "
+                "FROM agent WHERE workspace_id = $1 "
+                "AND name IN ('Builder', 'Builder-Lite') ORDER BY name",
+                ws,
+            )
+            return {
+                "first": first,
+                "second": second,
+                "agents": [dict(r) for r in rows],
+            }
+        finally:
+            await conn.close()
+
+    try:
+        res = asyncio.run(_run())
+    finally:
+        cleanup_workspaces([owner])
+
+    # Genau die beiden Agent-Rows wurden nachgezogen; alles andere war aktuell.
+    assert res["first"] == 2, res["first"]
+    assert res["second"] == 0, "Sync muss idempotent sein (Stempel-Guard)."
+    assert [a["name"] for a in res["agents"]] == ["Builder", "Builder-Lite"]
+    for agent in res["agents"]:
+        assert agent["is_managed"] is True
+        assert agent["managed_content_version"] == BUILDER_CONTENT_VERSION, agent
+        assert agent["feedback_resolve"] is True, agent
+        # Wholesale-Replace auf die kanonische Policy — die breiten
+        # Meta-Agent-Rechte bleiben erhalten.
+        assert agent["agent_write"] is True, agent
+        assert agent["promote_retire"] is True, agent
+        assert agent["agent_read"] == "all", agent

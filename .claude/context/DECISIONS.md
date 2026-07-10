@@ -152,3 +152,23 @@ bleiben)._
   Sync um Resource-Insert-missing erweitert; weiterhin keine Spiegel-Migration.
   Deep-Copy-Befund: Klone kopieren Persona/Playbooks/Template, NICHT die
   Resource-Links — als Baseline fixiert. `BUILDER_CONTENT_VERSION` 4 → 5.
+
+## 2026-07-10 — Feedback-Resolve für Agenten (Builder v6): Capability-Zuschnitt
+- **Entscheidung (User): neue Capability `feedback_resolve`** statt Überladung
+  von `promote_retire` oder Freigabe über `feedback_write`. Begründung:
+  Schließen (addressed/in_progress/dismissed) ist Kurations-Macht — alle
+  Fach-Agenten tragen `feedback_write` (melden), dürfen aber nicht fremdes
+  Feedback wegtriagieren; saubere Trennung ADR-0039-konform. **Verworfen:**
+  `feedback_write` (Kurations-Macht für alle), `promote_retire`-Überladung
+  (Bedeutungs-Doppelung).
+- Dabei geschlossen: `set_resolution` hatte für agent-gebundene Tokens kein
+  Capability-Gate (nur Rollen-Gate) — jetzt `require_capability`.
+- `get_feedback` additiv um `recent_feedback` (id/signal/note/resolution)
+  erweitert — ohne IDs kein gezieltes Schließen, ohne Status
+  Wiederabarbeitungs-Schleifen.
+- **Sync-Novum:** Der Start-Sync zieht erstmals auch die `tool_policy` der
+  Managed-Agenten (Builder/Builder-Lite) nach — Policies sind Teil des
+  kanonischen Builder-Stands; ohne das bekämen Bestands-Builder neue
+  Capabilities nie. Leitplanken im Content: Schließen nur nach User-Freigabe,
+  `dismissed` nie ohne Note, Managed-Signale erst nach verteiltem Repo-Fix.
+  `BUILDER_CONTENT_VERSION` 5 → 6.

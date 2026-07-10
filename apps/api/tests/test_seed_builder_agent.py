@@ -156,9 +156,15 @@ def test_builder_agent_seeded_complete() -> None:
                 "       (a.tool_policy ->> 'playbook_write')::boolean AS playbook_write, "
                 "       (a.tool_policy ->> 'resource_write')::boolean AS resource_write, "
                 "       (a.tool_policy ->> 'agent_write')::boolean AS agent_write, "
+                "       (a.tool_policy ->> 'feedback_resolve')::boolean AS feedback_resolve, "
                 "       (a.tool_policy ->> 'promote_retire')::boolean AS promote_retire "
                 "FROM agent a "
                 "WHERE a.workspace_id = $1 AND a.name = 'Builder'",
+                workspace_id,
+            )
+            lite_feedback_resolve = await conn.fetchval(
+                "SELECT (tool_policy ->> 'feedback_resolve')::boolean "
+                "FROM agent WHERE workspace_id = $1 AND name = 'Builder-Lite'",
                 workspace_id,
             )
             # Flach halten — verschachtelte object-Indizierung waere mypy-strict-unfreundlich.
@@ -185,7 +191,9 @@ def test_builder_agent_seeded_complete() -> None:
                 "playbook_write": agent["playbook_write"] if agent else None,
                 "resource_write": agent["resource_write"] if agent else None,
                 "agent_write": agent["agent_write"] if agent else None,
+                "feedback_resolve": agent["feedback_resolve"] if agent else None,
                 "promote_retire": agent["promote_retire"] if agent else None,
+                "lite_feedback_resolve": lite_feedback_resolve,
             }
         finally:
             await conn.close()
@@ -231,6 +239,10 @@ def test_builder_agent_seeded_complete() -> None:
         assert data["resource_write"] is True
         assert data["agent_write"] is True
         assert data["promote_retire"] is True
+        # Content-Stand 6: Feedback-Triage ist die Kurations-Handlung des
+        # Meta-Agenten — beide frisch geseedeten Builder tragen sie.
+        assert data["feedback_resolve"] is True
+        assert data["lite_feedback_resolve"] is True
     finally:
         cleanup_workspaces([owner])
 

@@ -355,7 +355,10 @@ _AGENT_BUILDER_LITE_TEMPLATE_SLUG = "agent-builder-lite"
 # auf diesen Stand. Seed stempelt neue Builder direkt hierauf.
 # v5: Persona-Modi (Architekt/Kurator/Berater) + Managed-Resource
 # „Agent-Bau-Konventionen" inkl. Links aus allen Builder-Playbooks.
-BUILDER_CONTENT_VERSION = 5
+# v6: resolve_feedback im Pflege-Lauf (Sidecars referenzieren das Triage-Tool)
+# + `feedback_resolve` in der Builder-Policy (Agent-Rows werden im Sync
+# erstmals mit nachgezogen).
+BUILDER_CONTENT_VERSION = 6
 
 _BUILDER_PERSONA_DESCRIPTION = (
     "Meta-Agent, der Personas, Playbooks, Resources und Agenten im Workspace "
@@ -510,8 +513,11 @@ def _builder_tool_policy() -> dict[str, object]:
     serverseitig auch fuer den Builder gesperrt), Reads = `all`. Die Reads sind
     bewusst EXPLIZIT auf `all` gesetzt: der Meta-Agent verwaltet den ganzen
     Workspace und darf nicht den (seit „secure by default") auf `assigned`
-    abgesenkten Read-Default erben. Die Autorisierung bleibt serverseitig
-    (editor; Promote/Retire admin) — die Policy steuert nur die
+    abgesenkten Read-Default erben. `feedback_resolve` (Content-Stand 6):
+    das Schliessen von Feedback-Signalen ist die Kurations-Handlung des
+    Meta-Agenten im Pflege-Lauf — Fach-Agenten behalten den secure-by-default
+    False und melden nur (`feedback_write`). Die Autorisierung bleibt
+    serverseitig (editor; Promote/Retire admin) — die Policy steuert nur die
     Tool-Sichtbarkeit im System-Prompt.
     """
     return AgentToolPolicy(
@@ -523,6 +529,7 @@ def _builder_tool_policy() -> dict[str, object]:
         resource_write=True,
         agent_write=True,
         system_prompt_write=True,
+        feedback_resolve=True,
         promote_retire=True,
     ).model_dump(mode="json")
 
@@ -738,6 +745,12 @@ async def sync_managed_builder_content(conn: asyncpg.Connection) -> int:
     und verteilen darueber mit — die resource-Row hat keine Tag-Spalte) sowie
     Insert-missing der Resource + v1 active + der `playbook_resource_link`s
     aller Builder-Playbooks (link_scope 'resource') in Bestands-Workspaces.
+    Seit Content-Stand 6 gehoeren auch die AGENT-Rows dazu: die `tool_policy`
+    der Builder-Agenten (Builder/Builder-Lite) ist Teil des kanonischen
+    Builder-Stands und wird bei Stempel-Rueckstand auf `_builder_tool_policy()`
+    ersetzt — sicher, weil managed = gesperrt (keine User-Edits an der Policy
+    zu erhalten); ohne diesen Zweig bekaemen Bestands-Builder neue
+    Capabilities (z. B. `feedback_resolve`) nie.
     Damit braucht eine Content-/Playbook-/Resource-Erweiterung KEINE
     Spiegel-Migration mehr (Konvention seit 0057/Start-Sync; v1→v2 und v2→v3
     liefen ebenso rein ueber den Sync): Sidecar/`_BUILDER_PLAYBOOKS` bzw.
@@ -973,6 +986,28 @@ async def sync_managed_builder_content(conn: asyncpg.Connection) -> int:
         await conn.execute(
             "UPDATE resource SET managed_content_version = $2, updated_at = now() WHERE id = $1",
             row["id"],
+            BUILDER_CONTENT_VERSION,
+        )
+        updated += 1
+
+    # Managed-Agent-Policy-Sync (Content-Stand 6): die tool_policy der beiden
+    # Builder-Agenten wird bei Stempel-Rueckstand auf den kanonischen Stand
+    # (`_builder_tool_policy()`) ersetzt — Bestands-Builder bekommen neue
+    # Capabilities (z. B. `feedback_resolve`) sonst nie. Wholesale-Replace ist
+    # sicher, weil managed = gesperrt (keine User-Edits zu erhalten).
+    agent_policy_json = json.dumps(_builder_tool_policy())
+    for row in await conn.fetch(
+        "SELECT id FROM agent WHERE name IN ($1, $2) AND is_managed = true "
+        "AND managed_content_version < $3",
+        _BUILDER_AGENT_NAME,
+        _BUILDER_LITE_AGENT_NAME,
+        BUILDER_CONTENT_VERSION,
+    ):
+        await conn.execute(
+            "UPDATE agent SET tool_policy = $2::jsonb, managed_content_version = $3, "
+            "updated_at = now() WHERE id = $1",
+            row["id"],
+            agent_policy_json,
             BUILDER_CONTENT_VERSION,
         )
         updated += 1
