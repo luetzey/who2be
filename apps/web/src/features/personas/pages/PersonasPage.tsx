@@ -7,9 +7,11 @@ import type { Persona } from '@/api/types'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
-import { DataList } from '@/components/data/DataList'
+import { DataView } from '@/components/data/DataView'
 import { EmptyState } from '@/components/data/EmptyState'
+import { EntityCard } from '@/components/data/EntityCard'
 import { ListFilterBar } from '@/components/data/ListFilterBar'
+import { MetaPill } from '@/components/data/MetaPill'
 import { StatusBadge } from '@/components/data/StatusBadge'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -75,12 +77,8 @@ export function PersonasPage() {
             onReset={filters.reset}
           />
         ) : null}
-        <DataList
-          items={filters.filtered}
-          loading={loading}
-          error={error}
-          getKey={(persona) => persona.id}
-          empty={
+        <DataView loading={loading} error={error}>
+          {filters.filtered.length === 0 ? (
             // Bei aktiver Agent-Facette kommt die Liste serverseitig gefiltert
             // an — dann ist "leer" ein Filter-Ergebnis, kein leerer Workspace.
             personas.length === 0 && filters.agent === '' ? (
@@ -109,22 +107,40 @@ export function PersonasPage() {
                 }
               />
             )
-          }
-          renderItem={(persona) => (
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <Link
-                  to={wsPath(`/personas/${persona.id}`)}
-                  className="rounded-sm font-medium text-foreground ring-offset-background hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
-                >
-                  {persona.name}
-                </Link>
-                <StatusBadge status={persona.current_status} pendingDraft={persona.has_pending_draft} />
-              </div>
-              <Badge variant="secondary">v{persona.current_version}</Badge>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {filters.filtered.map((persona) => {
+                const tags = persona.content?.tags ?? []
+                return (
+                  <EntityCard
+                    key={persona.id}
+                    icon={Users}
+                    iconTone="persona"
+                    title={persona.name}
+                    href={wsPath(`/personas/${persona.id}`)}
+                    badges={<Badge variant="secondary">v{persona.current_version}</Badge>}
+                    status={
+                      <StatusBadge
+                        status={persona.current_status}
+                        pendingDraft={persona.has_pending_draft}
+                      />
+                    }
+                    description={persona.content.description}
+                    meta={
+                      tags.length > 0
+                        ? tags.map((tag) => (
+                            <MetaPill key={tag} tone="persona">
+                              {tag}
+                            </MetaPill>
+                          ))
+                        : undefined
+                    }
+                  />
+                )
+              })}
             </div>
           )}
-        />
+        </DataView>
       </Stack>
     </Container>
   )

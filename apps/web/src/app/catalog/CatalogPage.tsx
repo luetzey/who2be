@@ -8,6 +8,7 @@ import { AlertShowcase } from './showcases/alert'
 import { BadgeShowcase } from './showcases/badge'
 import { ButtonShowcase } from './showcases/button'
 import { CardShowcase } from './showcases/card'
+import { CardsShowcase } from './showcases/cards'
 import { CheckboxShowcase } from './showcases/checkbox'
 import { DataShowcase } from './showcases/data'
 import { DialogShowcase } from './showcases/dialog'
@@ -21,6 +22,7 @@ import { LayoutShowcase } from './showcases/layout'
 import { SelectShowcase } from './showcases/select'
 import { SkeletonShowcase } from './showcases/skeleton'
 import { TableShowcase } from './showcases/table'
+import { TabsShowcase } from './showcases/tabs'
 import { TextareaShowcase } from './showcases/textarea'
 
 interface NavEntry {
@@ -43,10 +45,12 @@ const NAV_ENTRIES: readonly NavEntry[] = [
   { id: 'form', label: 'Form' },
   { id: 'form-section', label: 'FormSection' },
   { id: 'info-tooltip', label: 'InfoTooltip' },
+  { id: 'tabs', label: 'Tabs' },
   { id: 'skeleton', label: 'Skeleton' },
   { id: 'table', label: 'Table' },
   { id: 'layout', label: 'Layout' },
   { id: 'data', label: 'Data' },
+  { id: 'cards', label: 'Cards' },
 ]
 
 export function CatalogPage() {
@@ -85,10 +89,12 @@ export function CatalogPage() {
         <FormShowcase />
         <FormSectionShowcase />
         <InfoTooltipShowcase />
+        <TabsShowcase />
         <SkeletonShowcase />
         <TableShowcase />
         <LayoutShowcase />
         <DataShowcase />
+        <CardsShowcase />
       </Stack>
     </Container>
   )

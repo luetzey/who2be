@@ -1,5 +1,5 @@
 
-import { screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { axe } from '@/test/a11y'
@@ -101,11 +101,13 @@ describe('PersonaDetailPage (a11y)', () => {
       initialEntries: ['/w/ws-1/personas/p1'],
     })
 
-    // Phase-3-Round-3: Header zeigt jetzt das Versions-Status-Format.
+    // DetailHeader zeigt den Persona-Namen als H1, sobald geladen.
     await waitFor(() => {
-      expect(screen.getByText(/Aktuelle Version: v1/)).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'Coach' })).toBeInTheDocument()
     })
-    // WP-E: Anzeige-Modus — das verknuepfte Playbook erscheint als Link.
+    // WP-E: Playbooks liegen im „Playbooks"-Tab; Anzeige-Modus — das
+    // verknuepfte Playbook erscheint dort als Link.
+    fireEvent.click(screen.getByRole('tab', { name: 'Playbooks' }))
     await waitFor(() => {
       expect(screen.getByRole('link', { name: 'Coaching' })).toBeInTheDocument()
     })

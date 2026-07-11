@@ -126,21 +126,21 @@ describe('SystemPromptDetailPage', () => {
     expect(
       await screen.findByRole('heading', { name: 'Support-Template' }),
     ).toBeInTheDocument()
-    expect(
-      screen.getByText('Slug: support-template · Aktuelle Version: v1'),
-    ).toBeInTheDocument()
+    // Slug- und Versions-Badge im DetailHeader.
+    expect(screen.getByText('support-template')).toBeInTheDocument()
     // Draft-Zweig der Status-Action-Bar.
     expect(screen.getByRole('toolbar', { name: 'Status-Aktionen' })).toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: 'Zur Review einreichen' }),
     ).toBeInTheDocument()
-    // Formular mit geladenen Werten, editierbar (kein Managed-Lock).
+    // Formular mit geladenen Werten, editierbar (kein Managed-Lock) — Tab „Bearbeiten".
     await waitFor(() => {
       expect(screen.getByLabelText('Name')).toHaveValue('Support-Template')
     })
     expect(screen.getByLabelText('Name')).toBeEnabled()
     expect(screen.queryByTestId('managed-notice')).not.toBeInTheDocument()
-    // Versionshistorie.
+    // Versionshistorie liegt im Tab „Versionen".
+    fireEvent.click(screen.getByRole('tab', { name: 'Versionen' }))
     expect(screen.getByRole('heading', { name: 'Versionen' })).toBeInTheDocument()
   })
 

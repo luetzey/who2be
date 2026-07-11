@@ -171,6 +171,9 @@ describe('AgentDetailPage', () => {
     expect(screen.getByTestId('delete-agent-trigger')).toBeInTheDocument()
     expect(screen.queryByTestId('managed-notice')).not.toBeInTheDocument()
 
+    // Connector- + Token-Sektion liegen im Tab „Verbindung".
+    fireEvent.click(screen.getByRole('tab', { name: 'Verbindung' }))
+
     // Connector-Sektion mit agent-eindeutiger URL.
     expect(screen.getByText('Claude-Connector')).toBeInTheDocument()
     const urlInput = screen.getByLabelText<HTMLInputElement>('Server-URL')

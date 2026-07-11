@@ -1,17 +1,16 @@
-import { ArrowLeft } from 'lucide-react'
+import { Bot } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, Navigate, useParams } from 'react-router-dom'
+import { Navigate, useParams } from 'react-router-dom'
 
-import type { Persona, SystemPromptTemplate } from '@/api/types'
+import type { Agent, Persona, SystemPromptTemplate } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { DataView } from '@/components/data/DataView'
+import { DetailHeader } from '@/components/data/DetailHeader'
 import { ManagedNotice } from '@/components/data/ManagedNotice'
 import { Container } from '@/components/layout/Container'
-import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
-import { Button } from '@/components/ui/button'
 
 import { AgentConnectorSection } from '../components/AgentConnectorSection'
 import { AgentEditorForm } from '../components/AgentEditorForm'
@@ -22,6 +21,29 @@ import { DeleteAgentButton } from '../components/DeleteAgentButton'
 import { DuplicateAgentButton } from '../components/DuplicateAgentButton'
 import { useAgent } from '../hooks/useAgent'
 import { useAgentForm } from '../hooks/useAgentForm'
+
+// Agent-Status als bordered Capsule fuer den Detail-Header (Design-Handoff
+// „Detail-Redesign"). Unvollstaendig hat Vorrang; Farbe aus `--status-*`,
+// nie als alleiniges Signal (Punkt + Label, design-language §11).
+function AgentStatusBadge({ agent }: { agent: Agent }) {
+  const { t } = useTranslation('agents')
+  const { token, label } = !agent.activatable
+    ? { token: 'draft', label: t('status.incomplete') }
+    : agent.status === 'enabled'
+      ? { token: 'active', label: t('status.enabled') }
+      : { token: 'inactive', label: t('status.disabled') }
+
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground">
+      <span
+        className="inline-block size-2 rounded-full"
+        style={{ backgroundColor: `var(--status-${token})` }}
+        aria-hidden="true"
+      />
+      {label}
+    </span>
+  )
+}
 
 export function AgentDetailPage() {
   const { t } = useTranslation('agents')
@@ -48,63 +70,60 @@ export function AgentDetailPage() {
 
   return (
     <Container>
-      <Stack gap="md">
-        <Button asChild variant="ghost" size="sm" className="self-start">
-          <Link to={wsPath('/agents')}>
-            <ArrowLeft className="h-4 w-4" />
-            {t('detail.back')}
-          </Link>
-        </Button>
-        <DataView loading={loading && agent === null} error={error}>
-          {agent !== null ? (
-            (() => {
-              const locked = agent.is_managed === true
-              return (
-            <Stack gap="lg">
-              <Stack gap="md">
-                <PageHeader
+      <DataView loading={loading && agent === null} error={error}>
+        {agent !== null ? (
+          (() => {
+            const locked = agent.is_managed === true
+            return (
+              <Stack gap="lg">
+                <DetailHeader
+                  icon={Bot}
+                  iconTone="catalog"
+                  backHref={wsPath('/agents')}
+                  backLabel={t('detail.back')}
                   title={agent.name}
+                  badges={<AgentStatusBadge agent={agent} />}
                   description={agent.description || undefined}
                   actions={
-                    <div className="flex flex-wrap items-center gap-2">
+                    <>
                       <CopyPromptButton
                         agentId={agent.id}
                         disabled={agent.status !== 'enabled'}
                       />
                       <DuplicateAgentButton agent={agent} />
                       {locked ? null : <DeleteAgentButton agent={agent} />}
-                    </div>
+                    </>
                   }
                 />
                 {locked ? <ManagedNotice showDuplicateHint /> : null}
+
+                <AgentHierarchyView
+                  agent={agent}
+                  persona={persona}
+                  template={template}
+                  playbooks={playbooks}
+                />
+
+                <AgentEditorForm
+                  form={form}
+                  onSubmit={onSubmit}
+                  saveError={saveError}
+                  personas={personas}
+                  templates={templates}
+                  agent={agent}
+                  locked={locked}
+                  connectionSlot={
+                    <Stack gap="lg">
+                      <AgentConnectorSection agentId={agent.id} agentName={agent.name} />
+                      <AgentTokensSection agentId={agent.id} />
+                    </Stack>
+                  }
+                />
               </Stack>
-
-              <AgentHierarchyView
-                agent={agent}
-                persona={persona}
-                template={template}
-                playbooks={playbooks}
-              />
-
-              <AgentEditorForm
-                form={form}
-                onSubmit={onSubmit}
-                saveError={saveError}
-                personas={personas}
-                templates={templates}
-                agent={agent}
-                locked={locked}
-              />
-
-              <AgentConnectorSection agentId={agent.id} agentName={agent.name} />
-
-              <AgentTokensSection agentId={agent.id} />
-            </Stack>
-              )
-            })()
-          ) : null}
-        </DataView>
-      </Stack>
+            )
+          })()
+        ) : null}
+      </DataView>
     </Container>
   )
 }

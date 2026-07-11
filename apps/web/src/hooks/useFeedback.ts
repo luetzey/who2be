@@ -25,8 +25,13 @@ export interface UseFeedbackResult {
   eventsLoading: boolean
   eventsError: string | null
   loadEvents: () => void
-  // Triage: setzt den Status eines Feedback-Eintrags und laedt die Liste neu.
-  setResolution: (feedbackId: string, resolution: FeedbackResolution) => Promise<void>
+  // Triage: setzt den Status eines Feedback-Eintrags (optional mit Notiz) und
+  // laedt die Liste neu.
+  setResolution: (
+    feedbackId: string,
+    resolution: FeedbackResolution,
+    note?: string,
+  ) => Promise<void>
   // Hard-Delete (editor+): loescht den Eintrag und laedt Aggregat + Events neu.
   deleteFeedback: (feedbackId: string) => Promise<void>
 }
@@ -74,11 +79,13 @@ export function useFeedback(type: FeedbackTarget, id: string | undefined): UseFe
   }, [api, type, id])
 
   const setResolution = useCallback(
-    async (feedbackId: string, resolution: FeedbackResolution) => {
-      await api.setFeedbackResolution(feedbackId, { resolution })
+    async (feedbackId: string, resolution: FeedbackResolution, note?: string) => {
+      await api.setFeedbackResolution(feedbackId, note !== undefined ? { resolution, note } : { resolution })
+      // Aggregat (recent_feedback/Zaehler) UND Drill-down spiegeln die Triage.
+      load()
       loadEvents()
     },
-    [api, loadEvents],
+    [api, load, loadEvents],
   )
 
   const deleteFeedback = useCallback(

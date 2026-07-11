@@ -195,7 +195,19 @@
     },
     "detail": {
       "back": "Agents",
-      "submitLabel": "Save"
+      "submitLabel": "Save",
+      "tabsAria": "Agent settings",
+      "tabs": {
+        "config": "Configuration",
+        "tools": "Tools & permissions",
+        "connection": "Connection"
+      }
+    },
+    "card": {
+      "setup": "Set up",
+      "personaMissing": "Persona missing",
+      "templateMissing": "System prompt missing",
+      "countAria": "{{count}} agents"
     },
     "form": {
       "identity": {
@@ -287,6 +299,10 @@
       }
     },
     "hierarchy": {
+      "title": "Composition",
+      "systemPrompt": "System prompt",
+      "persona": "Persona",
+      "playbooksLinked": "{{count}} linked playbooks",
       "templateLabel": "Template:",
       "personaLabel": "Persona:",
       "notLoaded": "— not loaded —",
@@ -1245,7 +1261,20 @@
       "scopeDocumentInline": "Document · inline",
       "scopeDocumentLazy": "Document · lazy",
       "usedByTitle": "Used in resources",
-      "restoredAsDraft": "v{{version}} restored as draft."
+      "usedByMeta": "Sub-resource",
+      "restoredAsDraft": "v{{version}} restored as draft.",
+      "bannerDraftTitle": "Draft v{{version}} in progress",
+      "bannerDraftDescription": "Submit it for review when you are done.",
+      "bannerReviewTitle": "Version v{{version}} is in review",
+      "bannerReviewDescription": "Activate it after review, or send it back to draft.",
+      "bannerInactiveTitle": "Version v{{version}} is inactive",
+      "bannerInactiveDescription": "Reactivate it as a draft to keep working on it."
+    },
+    "tabs": {
+      "edit": "Edit",
+      "subResources": "Sub-resources",
+      "usage": "Usage",
+      "versions": "Versions"
     },
     "statusBar": {
       "ariaLabel": "Status actions",
@@ -1810,7 +1839,19 @@
         "playbook": "Playbook",
         "resource": "Resource",
         "system": "System"
-      }
+      },
+      "sortCare": "Needs attention",
+      "sortUsage": "Usage",
+      "sortActivity": "Activity",
+      "curationTitle": "Usage & signals",
+      "curationDescription": "Aggregated agent feedback per element — what works, what needs care.",
+      "sort": "Sort",
+      "careOnly": "Only needs attention",
+      "careEmpty": "No elements need attention. 🎉",
+      "helpfulShort": "{{count}} helpful",
+      "negativeShort": "{{count}} negative",
+      "showLess": "Show less",
+      "showAll": "Show all {{count}}"
     },
     "tiles": {
       "mostUsed": "Most used",
@@ -1853,6 +1894,30 @@
       "submit": "Report",
       "success": "Problem reported. Thanks!",
       "error": "Could not report the problem."
+    },
+    "detail": {
+      "description": "Feedback curation — usage, signals and individual events for this element.",
+      "openElement": "Open element",
+      "empty": "No feedback for this element yet.",
+      "usageTitle": "Usage & outcome",
+      "usageCount": "Uses (30 days)",
+      "successRate": "Success rate",
+      "applied": "applied",
+      "signalsTitle": "Signals",
+      "signalsTotal": "{{count}} total",
+      "negativeTitle_one": "{{count}} negative signal",
+      "negativeTitle_other": "{{count}} negative signals",
+      "negativeHint": "Several signals report problems. A revised version could fix this.",
+      "revise": "Revise",
+      "noteTitle": "Add note",
+      "notePlaceholder": "Capture a note (e.g. “update deadlines to 30 days”)…",
+      "noteNoOpen": "Notes attach to an open signal — there is none right now.",
+      "noteSave": "Save note",
+      "noteSuccess": "Note saved.",
+      "eventsTitle": "Individual events",
+      "eventsHide": "Collapse",
+      "eventsShow": "Expand",
+      "eventsEmpty": "No individual events."
     }
   }
 }

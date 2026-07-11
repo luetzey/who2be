@@ -56,10 +56,10 @@ describe('FeedbackOverviewPage', () => {
     renderPage()
 
     const link = await screen.findByRole('link', { name: 'Onboarding' })
-    expect(link).toHaveAttribute('href', '/w/ws-1/playbooks/pb1')
-    expect(screen.getByText('12')).toBeInTheDocument()
-    // Negativ-Zähler als destructive Badge.
-    expect(screen.getByText('2')).toBeInTheDocument()
+    expect(link).toHaveAttribute('href', '/w/ws-1/feedback/playbook/pb1')
+    expect(screen.getByText(/12 Nutzungen/)).toBeInTheDocument()
+    // Negativ-Zähler in der Meter-Zeile.
+    expect(screen.getByText('2 negativ')).toBeInTheDocument()
   })
 
   it('zeigt einen Empty-State, wenn kein Feedback vorliegt', async () => {

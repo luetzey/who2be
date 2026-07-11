@@ -195,7 +195,19 @@
     },
     "detail": {
       "back": "Agents",
-      "submitLabel": "Speichern"
+      "submitLabel": "Speichern",
+      "tabsAria": "Agent-Einstellungen",
+      "tabs": {
+        "config": "Konfiguration",
+        "tools": "Werkzeuge & Rechte",
+        "connection": "Verbindung"
+      }
+    },
+    "card": {
+      "setup": "Einrichten",
+      "personaMissing": "Persona fehlt",
+      "templateMissing": "Systemprompt fehlt",
+      "countAria": "{{count}} Agents"
     },
     "form": {
       "identity": {
@@ -287,6 +299,10 @@
       }
     },
     "hierarchy": {
+      "title": "Zusammensetzung",
+      "systemPrompt": "System-Prompt",
+      "persona": "Persona",
+      "playbooksLinked": "{{count}} verknüpfte Playbooks",
       "templateLabel": "Template:",
       "personaLabel": "Persona:",
       "notLoaded": "— nicht geladen —",
@@ -1235,7 +1251,7 @@
       "currentVersion": "Aktuelle Version: v{{version}} ({{status}})",
       "linkedIn": "Verlinkt in",
       "block_one": "{{count}} Block",
-      "block_other": "{{count}} Bloecke",
+      "block_other": "{{count}} Blöcke",
       "usagesEmptyTitle": "Noch in keinem Playbook verwendet",
       "usagesEmptyDescription": "Verlinke einen Heading-Block in einem Playbook, um diese Resource sichtbar zu machen.",
       "subResourcesTitle": "Sub-Resources",
@@ -1245,7 +1261,20 @@
       "scopeDocumentInline": "Dokument · inline",
       "scopeDocumentLazy": "Dokument · lazy",
       "usedByTitle": "Verwendet in Resources",
-      "restoredAsDraft": "v{{version}} als Entwurf wiederhergestellt."
+      "usedByMeta": "Sub-Resource",
+      "restoredAsDraft": "v{{version}} als Entwurf wiederhergestellt.",
+      "bannerDraftTitle": "Entwurf v{{version}} in Arbeit",
+      "bannerDraftDescription": "Reiche die Version zur Review ein, wenn du fertig bist.",
+      "bannerReviewTitle": "Version v{{version}} liegt zur Review",
+      "bannerReviewDescription": "Aktiviere die Version nach der Prüfung oder gib sie zurück in den Entwurf.",
+      "bannerInactiveTitle": "Version v{{version}} ist inaktiv",
+      "bannerInactiveDescription": "Reaktiviere sie als Entwurf, um wieder daran zu arbeiten."
+    },
+    "tabs": {
+      "edit": "Bearbeiten",
+      "subResources": "Sub-Resources",
+      "usage": "Verwendung",
+      "versions": "Versionen"
     },
     "statusBar": {
       "ariaLabel": "Status-Aktionen",
@@ -1810,7 +1839,19 @@
         "playbook": "Playbook",
         "resource": "Resource",
         "system": "System"
-      }
+      },
+      "sortCare": "Handlungsbedarf",
+      "sortUsage": "Nutzung",
+      "sortActivity": "Aktivität",
+      "curationTitle": "Nutzung & Signale",
+      "curationDescription": "Aggregiertes Agenten-Feedback pro Element — was läuft gut, was braucht Pflege.",
+      "sort": "Sortieren",
+      "careOnly": "Nur mit Handlungsbedarf",
+      "careEmpty": "Keine Elemente mit Handlungsbedarf. 🎉",
+      "helpfulShort": "{{count}} hilfreich",
+      "negativeShort": "{{count}} negativ",
+      "showLess": "Weniger anzeigen",
+      "showAll": "Alle {{count}} anzeigen"
     },
     "tiles": {
       "mostUsed": "Meistgenutzt",
@@ -1853,6 +1894,30 @@
       "submit": "Melden",
       "success": "Problem gemeldet. Danke!",
       "error": "Problem konnte nicht gemeldet werden."
+    },
+    "detail": {
+      "description": "Feedback-Kuration — Nutzung, Signale und Einzel-Ereignisse dieses Elements.",
+      "openElement": "Element öffnen",
+      "empty": "Für dieses Element liegt noch kein Feedback vor.",
+      "usageTitle": "Nutzung & Ergebnis",
+      "usageCount": "Nutzungen (30 Tage)",
+      "successRate": "Erfolgsquote",
+      "applied": "angewendet",
+      "signalsTitle": "Signale",
+      "signalsTotal": "{{count}} gesamt",
+      "negativeTitle_one": "{{count}} negatives Signal",
+      "negativeTitle_other": "{{count}} negative Signale",
+      "negativeHint": "Mehrere Signale melden Probleme. Eine überarbeitete Version könnte das beheben.",
+      "revise": "Überarbeiten",
+      "noteTitle": "Notiz hinzufügen",
+      "notePlaceholder": "Notiz festhalten (z. B. „Fristen auf 30 Tage aktualisieren“)…",
+      "noteNoOpen": "Notizen hängen an einem offenen Signal — aktuell gibt es keins.",
+      "noteSave": "Notiz speichern",
+      "noteSuccess": "Notiz gespeichert.",
+      "eventsTitle": "Einzel-Ereignisse",
+      "eventsHide": "Einklappen",
+      "eventsShow": "Ausklappen",
+      "eventsEmpty": "Keine Einzel-Ereignisse."
     }
   }
 }
