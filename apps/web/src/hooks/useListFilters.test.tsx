@@ -84,6 +84,21 @@ describe('useListFilters', () => {
     expect(result.current.filtered.map((i) => i.name).sort()).toEqual(['Beta', 'Delta', 'Zeta'])
   })
 
+  it('filtert per Freitext auch ueber searchText-Zusatzfelder', () => {
+    const withSearchText: ListFilterAccessors<Item> = {
+      ...accessors,
+      searchText: (i) => (i.name === 'Alpha' ? ['eskalation', 'beschwerde'] : []),
+    }
+    const { result } = renderHook(() => useListFilters(items, withSearchText), {
+      wrapper: wrapperFor(['/']),
+    })
+    act(() => result.current.setQuery('eskal'))
+    expect(result.current.filtered.map((i) => i.name)).toEqual(['Alpha'])
+    // Name-Treffer funktionieren weiterhin parallel.
+    act(() => result.current.setQuery('zeta'))
+    expect(result.current.filtered.map((i) => i.name)).toEqual(['Zeta'])
+  })
+
   it('filtert per Tag und leitet availableTags sortiert ab', () => {
     const { result } = renderFilters()
     expect(result.current.availableTags).toEqual(['x', 'y', 'z'])

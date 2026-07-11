@@ -1,18 +1,14 @@
-import { BookOpen, Plus } from 'lucide-react'
-import { Fragment, useMemo } from 'react'
+import { Plus } from 'lucide-react'
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
-import type { Playbook } from '@/api/types'
+import type { Playbook, PlaybookRef } from '@/api/types'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Section } from '@/components/layout/Section'
 import { Stack } from '@/components/layout/Stack'
-import { DataList } from '@/components/data/DataList'
-import { EmptyState } from '@/components/data/EmptyState'
-import { ListFilterBar } from '@/components/data/ListFilterBar'
-import { StatusBadge } from '@/components/data/StatusBadge'
-import { Badge } from '@/components/ui/badge'
+import { DataView } from '@/components/data/DataView'
 import { Button } from '@/components/ui/button'
 import { useAgents } from '@/hooks/useAgents'
 import {
@@ -25,9 +21,12 @@ import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { groupPlaybooks, parseGroupMode } from '../lib/grouping'
 import { splitTriggers } from '@/lib/triggers'
 
-// WP-D2: maximal sichtbare Trigger-Pills pro Zeile — der Rest wird zu „+N",
-// damit triggerreiche Playbooks die Listenzeile nicht ueberladen.
-const MAX_VISIBLE_TRIGGERS = 3
+import { PlaybookListToolbar } from '../components/PlaybookListToolbar'
+import { PlaybookRow } from '../components/PlaybookRow'
+import {
+  PlaybooksNoResults,
+  PlaybooksOnboarding,
+} from '../components/PlaybooksEmptyStates'
 
 export function PlaybooksPage() {
   const { t } = useTranslation(['playbooks', 'data', 'common'])
@@ -45,10 +44,29 @@ export function PlaybooksPage() {
       hasPendingDraft: (playbook) => playbook.has_pending_draft,
       tags: (playbook) => playbook.tags,
       type: (playbook) => playbook.type,
+      // Suche trifft „Name oder Trigger" (Design-Handoff §Filterleiste).
+      searchText: (playbook) => splitTriggers(playbook.triggers),
     }),
     [],
   )
   const filters = useListFilters(playbooks, accessors)
+
+  // Rueckrichtung der Composite-Beziehung, clientseitig aus den geladenen
+  // compose_children abgeleitet: Kind-ID → Eltern-Referenz (erste gewinnt).
+  // Plus Lookup Kind-ID → Voll-Objekt fuer Status/Version in Kind-Zeilen.
+  const { parentByChildId, playbookById } = useMemo(() => {
+    const parents = new Map<string, PlaybookRef>()
+    const byId = new Map<string, Playbook>()
+    for (const playbook of playbooks) {
+      byId.set(playbook.id, playbook)
+      for (const child of playbook.compose_children ?? []) {
+        if (!parents.has(child.id)) {
+          parents.set(child.id, { id: playbook.id, name: playbook.name })
+        }
+      }
+    }
+    return { parentByChildId: parents, playbookById: byId }
+  }, [playbooks])
 
   // WP-D3: Gruppierung ist eine Anzeige-Praeferenz auf der bereits
   // gefilterten Liste — unbekannte `?group=`-Werte fallen auf `none` zurueck.
@@ -66,114 +84,37 @@ export function PlaybooksPage() {
     return key === '' ? t('playbooks:list.groups.untyped') : key
   }
 
-  const renderPlaybook = (playbook: Playbook) => {
-    const triggers = splitTriggers(playbook.triggers)
-    const visibleTriggers = triggers.slice(0, MAX_VISIBLE_TRIGGERS)
-    const hiddenTriggerCount = triggers.length - visibleTriggers.length
-    const composeChildren = playbook.compose_children ?? []
-    return (
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-col gap-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <Link
-              to={wsPath(`/playbooks/${playbook.id}`)}
-              className="rounded-sm font-medium text-foreground ring-offset-background hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
-            >
-              {playbook.name}
-            </Link>
-            <StatusBadge
-              status={playbook.current_status}
-              pendingDraft={playbook.has_pending_draft}
-            />
-            {playbook.is_composite === true ? (
-              <Badge variant="secondary">Composite</Badge>
-            ) : null}
-            <span className="text-xs text-muted-foreground">
-              {playbook.type} · v{playbook.current_version}
-            </span>
-          </div>
-          {visibleTriggers.length > 0 || composeChildren.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
-              {visibleTriggers.map((trigger) => (
-                <Badge key={trigger} variant="outline">
-                  {trigger}
-                </Badge>
-              ))}
-              {hiddenTriggerCount > 0 ? (
-                <Badge
-                  variant="outline"
-                  aria-label={t('playbooks:list.moreTriggers', { count: hiddenTriggerCount })}
-                >
-                  +{hiddenTriggerCount}
-                </Badge>
-              ) : null}
-              {composeChildren.length > 0 ? (
-                <span className="min-w-0">
-                  {t('playbooks:list.composedOf')}{' '}
-                  {composeChildren.map((child, index) => (
-                    <Fragment key={child.id}>
-                      {index > 0 ? <span aria-hidden="true"> · </span> : null}
-                      <Link
-                        to={wsPath(`/playbooks/${child.id}`)}
-                        className="rounded-sm text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                      >
-                        {child.name}
-                      </Link>
-                    </Fragment>
-                  ))}
-                </span>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-        {playbook.tags.length > 0 ? (
-          <div className="flex flex-wrap gap-1" aria-label={t('common:fields.tags')}>
-            {playbook.tags.map((tag) => (
-              <Badge key={tag} variant="secondary">
-                {tag}
-              </Badge>
-            ))}
-          </div>
-        ) : null}
-      </div>
-    )
-  }
+  const renderRow = (playbook: Playbook) => (
+    <PlaybookRow
+      key={playbook.id}
+      playbook={playbook}
+      wsPath={wsPath}
+      parent={parentByChildId.get(playbook.id)}
+      resolveChild={(ref) => playbookById.get(ref.id)}
+    />
+  )
 
-  const emptyState =
-    // Bei aktiver Agent-Facette kommt die Liste serverseitig gefiltert
-    // an — dann ist "leer" ein Filter-Ergebnis, kein leerer Workspace.
-    playbooks.length === 0 && filters.agent === '' ? (
-      <EmptyState
-        icon={BookOpen}
-        title={t('playbooks:list.empty.title')}
-        description={t('playbooks:list.empty.description')}
-        action={
-          <Button asChild variant="brand">
-            <Link to={wsPath('/playbooks/new')}>
-              <Plus className="h-4 w-4" />
-              {t('playbooks:list.newButton')}
-            </Link>
-          </Button>
-        }
-      />
-    ) : (
-      <EmptyState
-        icon={BookOpen}
-        title={t('data:filter.emptyFilteredTitle')}
-        description={t('data:filter.emptyFilteredDescription')}
-        action={
-          <Button type="button" variant="outline" onClick={filters.reset}>
-            {t('data:filter.reset')}
-          </Button>
-        }
-      />
-    )
+  // Onboarding nur, wenn der Workspace wirklich leer ist — bei aktiver
+  // Agent-Facette kommt die Liste serverseitig gefiltert an, dann ist
+  // „leer" ein Filter-Ergebnis.
+  const isOnboarding = playbooks.length === 0 && filters.agent === ''
+  const showToolbar = playbooks.length > 0 || filters.agent !== ''
 
   return (
     <Container>
       <Stack gap="lg">
         <PageHeader
           title={t('playbooks:list.title')}
+          titleAddon={
+            playbooks.length > 0 ? (
+              <span
+                className="rounded-full bg-muted px-2 py-0.5 text-sm font-medium text-muted-foreground tabular-nums"
+                aria-label={t('playbooks:list.countLabel', { count: playbooks.length })}
+              >
+                {playbooks.length}
+              </span>
+            ) : undefined
+          }
           description={t('playbooks:list.description')}
           actions={
             <Button asChild variant="brand">
@@ -184,14 +125,15 @@ export function PlaybooksPage() {
             </Button>
           }
         />
-        {playbooks.length > 0 || filters.agent !== '' ? (
-          <ListFilterBar
-            idPrefix="playbooks"
+        {showToolbar ? (
+          <PlaybookListToolbar
             counts={filters.counts}
             status={filters.status}
             onStatusChange={filters.setStatus}
             query={filters.query}
             onQueryChange={filters.setQuery}
+            active={filters.active}
+            onReset={filters.reset}
             availableTags={filters.availableTags}
             tag={filters.tag}
             onTagChange={filters.setTag}
@@ -208,39 +150,32 @@ export function PlaybooksPage() {
             ]}
             group={filters.group}
             onGroupChange={filters.setGroup}
-            active={filters.active}
-            onReset={filters.reset}
           />
         ) : null}
 
-        {groupMode === 'none' || filters.filtered.length === 0 ? (
-          <DataList
-            items={filters.filtered}
-            loading={loading}
-            error={error}
-            getKey={(playbook) => playbook.id}
-            empty={emptyState}
-            renderItem={renderPlaybook}
-          />
-        ) : (
-          // WP-D3: Sektionen pro Gruppe mit Header + Zaehler; leere Gruppen
-          // liefert `groupPlaybooks` gar nicht erst.
-          <Stack gap="lg">
-            {groups.map((group) => (
-              <Section key={group.key} ariaLabel={groupLabel(group.key)} className="gap-2">
-                <h2 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-                  {groupLabel(group.key)}
-                  <span className="font-normal tabular-nums">({group.items.length})</span>
-                </h2>
-                <DataList
-                  items={group.items}
-                  getKey={(playbook) => playbook.id}
-                  renderItem={renderPlaybook}
-                />
-              </Section>
-            ))}
-          </Stack>
-        )}
+        <DataView loading={loading && playbooks.length === 0} error={error}>
+          {isOnboarding ? (
+            <PlaybooksOnboarding newHref={wsPath('/playbooks/new')} />
+          ) : filters.filtered.length === 0 ? (
+            <PlaybooksNoResults query={filters.query} onReset={filters.reset} />
+          ) : groupMode === 'none' ? (
+            <div className="flex flex-col gap-3">{filters.filtered.map(renderRow)}</div>
+          ) : (
+            // WP-D3: Sektionen pro Gruppe mit Header + Zaehler; leere Gruppen
+            // liefert `groupPlaybooks` gar nicht erst.
+            <Stack gap="lg">
+              {groups.map((group) => (
+                <Section key={group.key} ariaLabel={groupLabel(group.key)} className="gap-2">
+                  <h2 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+                    {groupLabel(group.key)}
+                    <span className="font-normal tabular-nums">({group.items.length})</span>
+                  </h2>
+                  <div className="flex flex-col gap-3">{group.items.map(renderRow)}</div>
+                </Section>
+              ))}
+            </Stack>
+          )}
+        </DataView>
       </Stack>
     </Container>
   )

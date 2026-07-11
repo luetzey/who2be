@@ -4,6 +4,29 @@ _Stand: 2026-07-11_
 
 ## Funktioniert
 
+- **Playbooks-UI/UX-Redesign UMGESETZT (2026-07-11, Branch
+  `claude/code-agent-setup-1pes6m`):** Design-Handoff
+  „Playbooks_UIUX_Verbesserung" (Screens 2a/2d/3a/3b) in `apps/web`
+  nachgebaut. **Übersicht:** Karten-Zeilen statt `DataList` (neue
+  `PlaybookRow` mit Typ-Icon-Chip aus Pill-Tokens via `lib/typeMeta`,
+  Soft-Status Dot+„Aktiv · v2", „Entwurf offen"-Brand-Pill, `Zap`+Trigger-
+  Chips max 3+„+N", aufklappbarer Composite-Footer mit verlinkten Kindern,
+  „Teil von"-Marker clientseitig aus der compose_children-Rückrichtung);
+  Filterleiste = Segmented-Status + Suche (Name ODER Trigger — neuer
+  optionaler `searchText`-Accessor in `useListFilters`) + „Filter"-Popover
+  (Tag/Typ/Agent/Gruppieren); Onboarding-Hero + gefilterter Leerzustand;
+  Header mit Count-Pill (`PageHeader.titleAddon` neu). **Detail:** Tabs
+  Bearbeiten/Beziehungen/Versionen (`PlaybookDetailTabs`, ARIA-Tabs mit
+  Pfeiltasten), Hero mit Typ-Icon + Status-Pill, `ReviewBanner` (ersetzt
+  BranchStatus-Block; gleiche BranchActions + exportierter `SaveIndicator`),
+  Beziehungen-Tab = Verwendet-in (Avatar-Initialen) + `SubPlaybookFlow`
+  (nummerierter Ausführungs-Flow) + ComposedBy + Resource-Links +
+  FeedbackPanel (Revise springt in Bearbeiten-Tab), Danger-Zone kollabiert;
+  geteilte `VersionHistory` auf sanfte `StatusBadge`-Chips umgestellt
+  (wirkt auf alle 4 Detail-Pages). Prototyp-Off-Scale-Werte bewusst auf die
+  Token-Skala gerundet (Plan §Entscheidungen). **DoD grün:** lint 0 Errors,
+  tsc clean, 790 Vitest passed, Branches 81,77 % (Floor 79), build clean.
+  Plan: `.claude/plan/2026-07-11-1200_playbooks-uiux-redesign.md`.
 - **Builder v7: Konventionen-Pointer-Fix UMGESETZT (2026-07-11, Branch
   `claude/builder-agent-role-eupbyq`, Pflege-Lauf 3):** Die fünf
   gleichlautenden incorrect-Signale („Agent-Bau-Konventionen wird

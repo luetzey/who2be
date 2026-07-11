@@ -1,40 +1,54 @@
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, ChevronRight, Users } from 'lucide-react'
 import { useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
-import type { ResourceLink, VersionStatus } from '@/api/types'
+import type { VersionStatus } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
-import { BranchStatus, type BranchAction } from '@/components/data/BranchStatus'
-import { DataList } from '@/components/data/DataList'
+import { type BranchAction } from '@/components/data/BranchStatus'
 import { DataView } from '@/components/data/DataView'
 import { ManagedNotice } from '@/components/data/ManagedNotice'
 import { FeedbackPanel } from '@/components/feedback/FeedbackPanel'
 import { VersionHistory } from '@/components/version'
 import { Container } from '@/components/layout/Container'
-import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { usePlaybookComposes } from '@/hooks/usePlaybookComposes'
 import { usePlaybookResourceLinks } from '@/hooks/usePlaybookResourceLinks'
 import { usePlaybookUsages } from '@/hooks/usePlaybookUsages'
+import { cn } from '@/lib/utils'
 import { notify } from '@/lib/feedback'
 
 import { ComposedByList } from '../components/ComposedByList'
 import { DeletePlaybookButton } from '../components/DeletePlaybookButton'
 import { ExportPlaybookButton } from '../components/ExportPlaybookButton'
 import { LinkedBlocksList } from '../components/LinkedBlocksList'
-import { PlaybookComposesPicker } from '../components/PlaybookComposesPicker'
+import {
+  PlaybookDetailTabs,
+  playbookTabId,
+  playbookTabPanelId,
+  type PlaybookDetailTab,
+} from '../components/PlaybookDetailTabs'
 import { PlaybookEditorForm } from '../components/PlaybookEditorForm'
-import { ResourceBlockLinkPicker } from '../components/ResourceBlockLinkPicker'
+import { PlaybookTypeIcon } from '../components/PlaybookTypeIcon'
+import { ReviewBanner } from '../components/ReviewBanner'
+import { SubPlaybookFlow } from '../components/SubPlaybookFlow'
 import { usePlaybook } from '../hooks/usePlaybook'
 import { usePlaybookForm } from '../hooks/usePlaybookForm'
-import { statusLabel } from '../lib/status'
-import { splitTriggers } from '@/lib/triggers'
+
+// Avatar-Initialen fuer die „Verwendet in"-Liste: erste Buchstaben der
+// ersten beiden Woerter („Coach Carla" → „CC").
+function initials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter((word) => word !== '')
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase() ?? '')
+    .join('')
+}
 
 export function PlaybookDetailPage() {
   const { t } = useTranslation('playbooks')
@@ -48,34 +62,11 @@ export function PlaybookDetailPage() {
   const api = useApi()
   const role = useCurrentWorkspaceRole()
   const [actionBusy, setActionBusy] = useState(false)
+  const [activeTab, setActiveTab] = useState<PlaybookDetailTab>('edit')
+  const [dangerOpen, setDangerOpen] = useState(false)
   // Vom System verwaltet (Builder-Playbook): Editor read-only, keine Status-/
   // Lösch-Aktionen (Backend sperrt mit 403 managed_aggregate).
   const locked = playbook?.is_managed === true
-
-  // Track B (Nur-BlockNote): die Pills im Body sind immer die Quelle der
-  // Relationen — die separaten Picker sind daher read-only (Editier-Aktion
-  // ausgeblendet), damit es keine zwei konkurrierenden Quellen gibt.
-  const bodyIsBlockNote = true
-
-  const removeLink = (target: ResourceLink) => {
-    const remaining = resourceLinks.links.filter(
-      (link) =>
-        !(
-          link.resource_id === target.resource_id &&
-          link.block_id === target.block_id &&
-          (link.link_scope ?? 'block') === (target.link_scope ?? 'block')
-        ),
-    )
-    void resourceLinks.save(
-      remaining.map((link, index) => ({
-        resource_id: link.resource_id,
-        block_id: link.block_id,
-        position: index,
-        link_scope: link.link_scope ?? 'block',
-        embedding_mode: link.embedding_mode ?? 'lazy',
-      })),
-    )
-  }
 
   if (id === undefined) {
     return <Navigate to={wsPath('/playbooks')} replace />
@@ -102,6 +93,73 @@ export function PlaybookDetailPage() {
     }
   }
 
+  const activeVersion = versions.find((v) => v.status === 'active')
+  const draftVersion = versions.find((v) => v.status === 'draft')
+  const reviewVersion = versions.find((v) => v.status === 'review')
+  const inactiveCurrent =
+    activeVersion === undefined && playbook !== null
+      ? versions.find(
+          (v) => v.version === playbook.current_version && v.status === 'inactive',
+        )
+      : undefined
+
+  const canPromote = role === 'admin'
+  const actions: BranchAction[] = []
+  if (!locked && draftVersion !== undefined) {
+    actions.push({
+      key: 'submit',
+      label: t('actions.draftSubmit'),
+      variant: 'brand',
+      disabled: actionBusy,
+      onClick: () =>
+        void runTransition(draftVersion.version, 'review', t('toast.submitted')),
+    })
+  }
+  if (!locked && reviewVersion !== undefined) {
+    actions.push({
+      key: 'publish',
+      label: t('actions.publish'),
+      variant: 'brand',
+      disabled: actionBusy || !canPromote,
+      title: canPromote ? undefined : t('actions.activateAdminOnly'),
+      onClick: () =>
+        void runTransition(reviewVersion.version, 'active', t('toast.activated')),
+    })
+    actions.push({
+      key: 'reject',
+      label: t('actions.rejectDraft'),
+      variant: 'destructive',
+      disabled: actionBusy,
+      onClick: () =>
+        void runTransition(reviewVersion.version, 'draft', t('toast.reviewRejected')),
+    })
+  }
+  if (!locked && inactiveCurrent !== undefined) {
+    actions.push({
+      key: 'reactivate',
+      label: t('actions.reactivateDraft'),
+      variant: 'outline',
+      disabled: actionBusy,
+      onClick: () =>
+        void runTransition(inactiveCurrent.version, 'draft', t('toast.reactivated')),
+    })
+  }
+
+  // Banner nur, wenn es einen Branch-Zustand oder Aktionen zu zeigen gibt —
+  // eine rein aktive Version traegt das Hero-Status-Chip allein.
+  const showBanner =
+    draftVersion !== undefined ||
+    reviewVersion !== undefined ||
+    inactiveCurrent !== undefined ||
+    actions.length > 0
+
+  const tabPanelProps = (tab: PlaybookDetailTab) => ({
+    role: 'tabpanel' as const,
+    id: playbookTabPanelId(tab),
+    'aria-labelledby': playbookTabId(tab),
+    hidden: activeTab !== tab,
+  })
+
   return (
     <Container>
       <Stack gap="md">
@@ -114,318 +172,222 @@ export function PlaybookDetailPage() {
 
         <DataView loading={loading && playbook === null} error={error}>
           {playbook !== null ? (
-            <Stack gap="lg">
-              {(() => {
-                const activeVersion = versions.find((v) => v.status === 'active')
-                const draftVersion = versions.find((v) => v.status === 'draft')
-                const reviewVersion = versions.find((v) => v.status === 'review')
-                const inactiveCurrent =
-                  activeVersion === undefined
-                    ? versions.find(
-                        (v) =>
-                          v.version === playbook.current_version &&
-                          v.status === 'inactive',
-                      )
-                    : undefined
-                const description =
-                  activeVersion !== undefined
-                    ? `Active: v${activeVersion.version}${
-                        draftVersion !== undefined
-                          ? t('detail.draftNote', { version: draftVersion.version })
-                          : reviewVersion !== undefined
-                            ? t('detail.reviewNote', { version: reviewVersion.version })
-                            : ''
-                      }`
-                    : t('detail.currentVersion', {
-                        version: playbook.current_version,
-                        status: statusLabel(playbook.current_status ?? 'draft'),
-                      })
-                const triggers = splitTriggers(playbook.triggers ?? null)
-
-                const canPromote = role === 'admin'
-                // `locked` (vom System verwaltet) wird oben berechnet.
-                const actions: BranchAction[] = []
-                if (!locked && draftVersion !== undefined) {
-                  actions.push({
-                    key: 'submit',
-                    label: t('actions.draftSubmit'),
-                    variant: 'brand',
-                    disabled: actionBusy,
-                    onClick: () =>
-                      void runTransition(
-                        draftVersion.version,
-                        'review',
-                        t('toast.submitted'),
-                      ),
-                  })
-                }
-                if (!locked && reviewVersion !== undefined) {
-                  actions.push({
-                    key: 'publish',
-                    label: t('actions.publish'),
-                    variant: 'brand',
-                    disabled: actionBusy || !canPromote,
-                    title: canPromote ? undefined : t('actions.activateAdminOnly'),
-                    onClick: () =>
-                      void runTransition(
-                        reviewVersion.version,
-                        'active',
-                        t('toast.activated'),
-                      ),
-                  })
-                  actions.push({
-                    key: 'reject',
-                    label: t('actions.rejectDraft'),
-                    variant: 'destructive',
-                    disabled: actionBusy,
-                    onClick: () =>
-                      void runTransition(
-                        reviewVersion.version,
-                        'draft',
-                        t('toast.reviewRejected'),
-                      ),
-                  })
-                }
-                if (!locked && inactiveCurrent !== undefined) {
-                  actions.push({
-                    key: 'reactivate',
-                    label: t('actions.reactivateDraft'),
-                    variant: 'outline',
-                    disabled: actionBusy,
-                    onClick: () =>
-                      void runTransition(
-                        inactiveCurrent.version,
-                        'draft',
-                        t('toast.reactivated'),
-                      ),
-                  })
-                }
-
-                return (
-                  <Stack gap="md">
-                    <PageHeader
-                      title={playbook.name}
-                      description={description}
-                      actions={
-                        <div className="flex flex-wrap items-center gap-2">
-                          {playbook.is_composite === true ? (
-                            <Badge variant="secondary">Composite</Badge>
-                          ) : null}
-                          {playbook.tags.length > 0 ? (
-                            <div className="flex flex-wrap gap-1" aria-label={t('common:fields.tags')}>
-                              {playbook.tags.map((tag) => (
-                                <Badge key={tag} variant="secondary">
-                                  {tag}
-                                </Badge>
-                              ))}
-                            </div>
-                          ) : null}
-                          <ExportPlaybookButton playbook={playbook} />
-                        </div>
-                      }
-                    />
-                    {locked ? <ManagedNotice /> : null}
-                    {triggers.length > 0 ? (
-                      <div
-                        className="flex flex-wrap items-center gap-2"
-                        role="list"
-                        aria-label={t('detail.triggerList')}
-                      >
-                        <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                          {t('detail.triggerLabel')}
-                        </span>
-                        {triggers.map((trigger) => (
-                          <Badge key={trigger} variant="outline" role="listitem">
-                            {trigger}
-                          </Badge>
-                        ))}
-                      </div>
+            <Stack gap="md">
+              <header className="flex flex-wrap items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <PlaybookTypeIcon type={playbook.type} />
+                    <h1 className="text-2xl font-semibold tracking-tight">
+                      {playbook.name}
+                    </h1>
+                    {playbook.current_status !== undefined ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground">
+                        <span
+                          className="inline-block size-2 rounded-full"
+                          style={{
+                            backgroundColor: `var(--status-${playbook.current_status})`,
+                          }}
+                          aria-hidden="true"
+                        />
+                        {t(`common:status.${playbook.current_status}`)} · v
+                        {playbook.current_version}
+                      </span>
                     ) : null}
-                    <BranchStatus
-                      activeVersion={activeVersion?.version}
-                      draftVersion={draftVersion?.version}
-                      reviewVersion={reviewVersion?.version}
-                      inactiveVersion={inactiveCurrent?.version}
-                      currentVersion={playbook.current_version}
-                      saveState={autoSave}
-                      actions={actions}
-                    />
-                  </Stack>
-                )
-              })()}
-              <PlaybookEditorForm
-                form={form}
-                formKey={`${playbook.id}-${playbook.current_version}`}
-                initialBodyBlocks={initialBodyBlocks}
-                locked={locked}
-              />
+                  </div>
+                  {playbook.content.description !== '' ? (
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {playbook.content.description}
+                    </p>
+                  ) : null}
+                </div>
+                <ExportPlaybookButton playbook={playbook} />
+              </header>
 
-              <VersionHistory
-                versions={versions}
-                canEdit={role === 'admin' || role === 'editor'}
-                onRestore={async (version) => {
-                  await api.restorePlaybookVersion(playbook.id, version)
-                  notify.success(t('detail.restoreSuccess', { version }))
-                  reload()
-                }}
-                loadDiff={(version) => api.diffPlaybookVersion(playbook.id, version)}
-                loadProvenance={(version) =>
-                  api.provenancePlaybookVersion(playbook.id, version)
-                }
-              />
+              {locked ? <ManagedNotice /> : null}
 
-              {role !== 'viewer' ? (
-                <FeedbackPanel
-                  type="playbook"
-                  id={playbook.id}
-                  onRevise={() => {
-                    window.scrollTo({ top: 0, behavior: 'smooth' })
-                    notify.info(t('feedback:panel.reviseToast'))
-                  }}
+              {showBanner ? (
+                <ReviewBanner
+                  activeVersion={activeVersion?.version}
+                  draftVersion={draftVersion?.version}
+                  reviewVersion={reviewVersion?.version}
+                  inactiveVersion={inactiveCurrent?.version}
+                  saveState={autoSave}
+                  actions={actions}
                 />
               ) : null}
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>{t('detail.usedInTitle')}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <DataView
-                    loading={usages.loading}
-                    error={usages.error}
-                    empty={!usages.loading && usages.usages.length === 0}
-                    emptyTitle={t('detail.usedInEmpty')}
-                    emptyDescription={t('detail.usedInEmptyDescription')}
-                  >
-                    <DataList
-                      items={usages.usages}
-                      getKey={(usage) => usage.persona_id}
-                      renderItem={(usage) => (
-                        <Link
-                          to={wsPath(`/personas/${usage.persona_id}`)}
-                          className="block truncate"
-                        >
-                          {usage.persona_name}
-                        </Link>
-                      )}
-                    />
-                  </DataView>
-                </CardContent>
-              </Card>
+              <PlaybookDetailTabs active={activeTab} onChange={setActiveTab} />
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>{t('detail.resourceLinksTitle')}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Stack gap="sm">
-                    <DataView loading={resourceLinks.loading} error={resourceLinks.error}>
-                      <LinkedBlocksList
-                        links={resourceLinks.links}
-                        onRemove={bodyIsBlockNote ? undefined : removeLink}
-                        disabled={resourceLinks.saving || bodyIsBlockNote}
-                      />
-                    </DataView>
-                    {bodyIsBlockNote ? (
-                      <p className="text-xs text-muted-foreground">
-                        {t('detail.resourceLinksBodyNote')}
-                      </p>
-                    ) : (
-                      <div className="flex justify-end">
-                        <ResourceBlockLinkPicker
-                          existing={resourceLinks.links}
-                          saving={resourceLinks.saving}
-                          onSave={resourceLinks.save}
+              {/* Panels bleiben gemountet (hidden), damit Editor-/Form-State
+                  beim Tab-Wechsel nicht verloren geht. */}
+              <div {...tabPanelProps('edit')}>
+                <Stack gap="md">
+                  <PlaybookEditorForm
+                    form={form}
+                    formKey={`${playbook.id}-${playbook.current_version}`}
+                    initialBodyBlocks={initialBodyBlocks}
+                    locked={locked}
+                  />
+
+                  {role !== 'viewer' && !locked ? (
+                    <section
+                      className="rounded-xl border border-destructive/30"
+                      aria-label={t('delete.dangerZoneTitle')}
+                    >
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        aria-expanded={dangerOpen}
+                        onClick={() => setDangerOpen((open) => !open)}
+                        className="h-auto w-full justify-start gap-2 px-4 py-3 text-sm font-medium text-destructive hover:text-destructive"
+                      >
+                        <ChevronRight
+                          className={cn(
+                            'size-4 transition-transform duration-[var(--duration-fast)] ease-standard',
+                            dangerOpen && 'rotate-90',
+                          )}
+                          aria-hidden="true"
                         />
-                      </div>
-                    )}
-                  </Stack>
-                </CardContent>
-              </Card>
+                        {t('delete.dangerZoneTitle')}
+                      </Button>
+                      {dangerOpen ? (
+                        <div className="flex flex-col gap-3 px-4 pb-4">
+                          <p className="text-sm text-muted-foreground">
+                            {t('delete.dangerZoneDescription')}
+                          </p>
+                          <div>
+                            <DeletePlaybookButton playbook={playbook} />
+                          </div>
+                        </div>
+                      ) : null}
+                    </section>
+                  ) : null}
+                </Stack>
+              </div>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>{t('detail.subPlaybooksTitle')}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Stack gap="sm">
-                    <DataView loading={composition.loading} error={composition.error}>
-                      {composition.children.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">
-                          {t('detail.subPlaybooksEmpty')}
+              <div {...tabPanelProps('relations')}>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Card className="sm:col-span-2">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Users className="size-4 text-muted-foreground" aria-hidden="true" />
+                        {t('detail.usedInTitle')}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <DataView
+                        loading={usages.loading}
+                        error={usages.error}
+                        empty={!usages.loading && usages.usages.length === 0}
+                        emptyTitle={t('detail.usedInEmpty')}
+                        emptyDescription={t('detail.usedInEmptyDescription')}
+                      >
+                        <p className="mb-3 text-xs text-muted-foreground">
+                          {t('detail.usedInDescription')}
                         </p>
-                      ) : (
-                        <ol className="flex flex-col gap-1" aria-label="Sub-Playbooks">
-                          {composition.children.map((child, index) => (
-                            <li
-                              key={child.id}
-                              className="flex items-center gap-2 text-sm"
-                            >
-                              <span className="w-5 text-right text-xs text-muted-foreground">
-                                {index + 1}.
-                              </span>
+                        <ul className="flex flex-col gap-1">
+                          {usages.usages.map((usage) => (
+                            <li key={usage.persona_id}>
                               <Link
-                                to={wsPath(`/playbooks/${child.id}`)}
-                                className="rounded-sm font-medium text-foreground ring-offset-background hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
+                                to={wsPath(`/personas/${usage.persona_id}`)}
+                                className="flex items-center gap-2 rounded-sm py-1 text-sm text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                               >
-                                {child.name}
+                                <span
+                                  className="flex size-6 shrink-0 items-center justify-center rounded-full bg-pill-persona text-xs font-semibold text-pill-persona-fg"
+                                  aria-hidden="true"
+                                >
+                                  {initials(usage.persona_name)}
+                                </span>
+                                <span className="truncate">{usage.persona_name}</span>
                               </Link>
-                              {child.is_composite === true ? (
-                                <Badge variant="outline" className="text-xs">
-                                  Composite
-                                </Badge>
-                              ) : null}
                             </li>
                           ))}
-                        </ol>
-                      )}
-                    </DataView>
-                    {bodyIsBlockNote ? (
-                      <p className="text-xs text-muted-foreground">
-                        {t('detail.subPlaybooksBodyNote')}
-                      </p>
-                    ) : (
-                      <div className="flex justify-end">
-                        <PlaybookComposesPicker
-                          currentPlaybookId={playbook.id}
-                          existing={composition.children}
-                          saving={composition.saving}
-                          onSave={composition.save}
-                        />
-                      </div>
-                    )}
-                  </Stack>
-                </CardContent>
-              </Card>
+                        </ul>
+                      </DataView>
+                    </CardContent>
+                  </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>{t('detail.composedByTitle')}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ComposedByList parents={composition.parents} />
-                </CardContent>
-              </Card>
+                  <Card className="sm:col-span-2">
+                    <CardHeader>
+                      <CardTitle>{t('detail.subPlaybooksTitle')}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <Stack gap="sm">
+                        <DataView loading={composition.loading} error={composition.error}>
+                          {composition.children.length > 0 ? (
+                            <p className="text-xs text-muted-foreground">
+                              {t('detail.subPlaybooksFlowDescription')}
+                            </p>
+                          ) : null}
+                          <SubPlaybookFlow children={composition.children} wsPath={wsPath} />
+                        </DataView>
+                        <p className="text-xs text-muted-foreground">
+                          {t('detail.subPlaybooksBodyNote')}
+                        </p>
+                      </Stack>
+                    </CardContent>
+                  </Card>
 
-              {role !== 'viewer' && !locked ? (
-                <Card className="border-destructive/40">
-                  <CardHeader>
-                    <CardTitle className="text-destructive">
-                      {t('delete.dangerZoneTitle')}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <Stack gap="sm">
-                      <p className="text-sm text-muted-foreground">
-                        {t('delete.dangerZoneDescription')}
-                      </p>
-                      <div>
-                        <DeletePlaybookButton playbook={playbook} />
-                      </div>
-                    </Stack>
-                  </CardContent>
-                </Card>
-              ) : null}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>{t('detail.composedByTitle')}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ComposedByList parents={composition.parents} />
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>{t('detail.resourceLinksTitle')}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <Stack gap="sm">
+                        <DataView
+                          loading={resourceLinks.loading}
+                          error={resourceLinks.error}
+                        >
+                          <LinkedBlocksList links={resourceLinks.links} disabled />
+                        </DataView>
+                        <p className="text-xs text-muted-foreground">
+                          {t('detail.resourceLinksBodyNote')}
+                        </p>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+
+                  {role !== 'viewer' ? (
+                    <div className="sm:col-span-2">
+                      <FeedbackPanel
+                        type="playbook"
+                        id={playbook.id}
+                        onRevise={() => {
+                          setActiveTab('edit')
+                          window.scrollTo({ top: 0, behavior: 'smooth' })
+                          notify.info(t('feedback:panel.reviseToast'))
+                        }}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              <div {...tabPanelProps('versions')}>
+                <VersionHistory
+                  versions={versions}
+                  canEdit={role === 'admin' || role === 'editor'}
+                  onRestore={async (version) => {
+                    await api.restorePlaybookVersion(playbook.id, version)
+                    notify.success(t('detail.restoreSuccess', { version }))
+                    reload()
+                  }}
+                  loadDiff={(version) => api.diffPlaybookVersion(playbook.id, version)}
+                  loadProvenance={(version) =>
+                    api.provenancePlaybookVersion(playbook.id, version)
+                  }
+                />
+              </div>
             </Stack>
           ) : null}
         </DataView>

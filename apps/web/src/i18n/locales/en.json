@@ -133,7 +133,9 @@
       "reset": "Reset filters",
       "pendingDraft": "Draft open",
       "emptyFilteredTitle": "No matches",
-      "emptyFilteredDescription": "No entries match the active filters. Adjust the search or status."
+      "emptyFilteredDescription": "No entries match the active filters. Adjust the search or status.",
+      "moreFilters": "Filters",
+      "clearSearch": "Clear search"
     }
   },
   "version": {
@@ -1004,6 +1006,27 @@
         "description": "Create your first playbook to define workflows.",
         "filteredTitle": "No playbooks match this filter",
         "filteredDescription": "Adjust the tag or trigger filter, or create a new playbook."
+      },
+      "searchPlaceholder": "Search by name or trigger…",
+      "countLabel_one": "{{count}} playbook",
+      "countLabel_other": "{{count}} playbooks",
+      "partOf": "Part of {{name}}",
+      "subPlaybooksCount_one": "{{count}} sub-playbook",
+      "subPlaybooksCount_other": "{{count}} sub-playbooks",
+      "subPlaybooksListLabel": "Sub-playbooks",
+      "onboarding": {
+        "title": "Create your first playbook",
+        "description": "Playbooks describe repeatable workflows your agents follow — from a short snippet to a multi-step escalation process.",
+        "types": {
+          "workflow": "Workflow",
+          "faq": "FAQ",
+          "checklist": "Checklist",
+          "snippet": "Snippet"
+        }
+      },
+      "noResults": {
+        "title": "No results for “{{query}}”",
+        "description": "No playbook matches your search. Check the spelling or reset the filters."
       }
     },
     "new": {
@@ -1028,7 +1051,21 @@
       "subPlaybooksBodyNote": "Sub-playbooks are managed as pills in the BlockNote body — edit them there.",
       "composedByTitle": "Used as sub-playbook in",
       "restoreSuccess": "v{{version}} restored as draft.",
-      "actionFailed": "Action failed."
+      "actionFailed": "Action failed.",
+      "tabs": {
+        "label": "Playbook sections",
+        "edit": "Edit",
+        "relations": "Relations",
+        "versions": "Versions"
+      },
+      "banner": {
+        "activeNode": "Active: v{{version}}",
+        "reviewWaiting": "v{{version}} awaiting review",
+        "draftOpen": "Draft: v{{version}}",
+        "inactiveCurrent": "Inactive: v{{version}}"
+      },
+      "usedInDescription": "Personae using this playbook.",
+      "subPlaybooksFlowDescription": "When rendered, this composite invokes in order:"
     },
     "form": {
       "identityTitle": "Identity",
