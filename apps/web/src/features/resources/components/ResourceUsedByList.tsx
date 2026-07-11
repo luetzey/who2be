@@ -2,6 +2,7 @@
 // Zeigt welche Resources diese Resource als Sub-Resource fuehren (Track E §3.3).
 // Delegiert an die geteilte `UsedByList` (Muster: ComposedByList).
 
+import { FileText } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import type { ResourceRef } from '@/api/types'
@@ -23,6 +24,9 @@ export function ResourceUsedByList({ parents }: ResourceUsedByListProps) {
         id: parent.id,
         name: parent.name,
         href: wsPath(`/resources/${parent.id}`),
+        icon: FileText,
+        iconTone: 'resource',
+        meta: t('detail.usedByMeta'),
       }))}
       empty={<p className="text-sm text-muted-foreground">{t('usedBy.empty')}</p>}
     />

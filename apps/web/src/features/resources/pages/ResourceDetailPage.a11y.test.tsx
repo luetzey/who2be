@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Me } from '@/api/types'
@@ -105,6 +105,8 @@ describe('ResourceDetailPage (a11y)', () => {
     await waitFor(() => {
       expect(screen.getByText('Onboarding')).toBeInTheDocument()
     })
+    // „Coach" lebt im Verwendung-Tab — erst aktivieren, dann axe pruefen.
+    fireEvent.click(await screen.findByRole('tab', { name: 'Verwendung' }))
     await waitFor(() => {
       expect(screen.getByText('Coach')).toBeInTheDocument()
     })

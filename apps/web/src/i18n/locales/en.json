@@ -195,7 +195,19 @@
     },
     "detail": {
       "back": "Agents",
-      "submitLabel": "Save"
+      "submitLabel": "Save",
+      "tabsAria": "Agent settings",
+      "tabs": {
+        "config": "Configuration",
+        "tools": "Tools & permissions",
+        "connection": "Connection"
+      }
+    },
+    "card": {
+      "setup": "Set up",
+      "personaMissing": "Persona missing",
+      "templateMissing": "System prompt missing",
+      "countAria": "{{count}} agents"
     },
     "form": {
       "identity": {
@@ -287,6 +299,10 @@
       }
     },
     "hierarchy": {
+      "title": "Composition",
+      "systemPrompt": "System prompt",
+      "persona": "Persona",
+      "playbooksLinked": "{{count}} linked playbooks",
       "templateLabel": "Template:",
       "personaLabel": "Persona:",
       "notLoaded": "— not loaded —",
@@ -1245,7 +1261,20 @@
       "scopeDocumentInline": "Document · inline",
       "scopeDocumentLazy": "Document · lazy",
       "usedByTitle": "Used in resources",
-      "restoredAsDraft": "v{{version}} restored as draft."
+      "usedByMeta": "Sub-resource",
+      "restoredAsDraft": "v{{version}} restored as draft.",
+      "bannerDraftTitle": "Draft v{{version}} in progress",
+      "bannerDraftDescription": "Submit it for review when you are done.",
+      "bannerReviewTitle": "Version v{{version}} is in review",
+      "bannerReviewDescription": "Activate it after review, or send it back to draft.",
+      "bannerInactiveTitle": "Version v{{version}} is inactive",
+      "bannerInactiveDescription": "Reactivate it as a draft to keep working on it."
+    },
+    "tabs": {
+      "edit": "Edit",
+      "subResources": "Sub-resources",
+      "usage": "Usage",
+      "versions": "Versions"
     },
     "statusBar": {
       "ariaLabel": "Status actions",

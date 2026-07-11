@@ -195,7 +195,19 @@
     },
     "detail": {
       "back": "Agents",
-      "submitLabel": "Speichern"
+      "submitLabel": "Speichern",
+      "tabsAria": "Agent-Einstellungen",
+      "tabs": {
+        "config": "Konfiguration",
+        "tools": "Werkzeuge & Rechte",
+        "connection": "Verbindung"
+      }
+    },
+    "card": {
+      "setup": "Einrichten",
+      "personaMissing": "Persona fehlt",
+      "templateMissing": "Systemprompt fehlt",
+      "countAria": "{{count}} Agents"
     },
     "form": {
       "identity": {
@@ -287,6 +299,10 @@
       }
     },
     "hierarchy": {
+      "title": "Zusammensetzung",
+      "systemPrompt": "System-Prompt",
+      "persona": "Persona",
+      "playbooksLinked": "{{count}} verknüpfte Playbooks",
       "templateLabel": "Template:",
       "personaLabel": "Persona:",
       "notLoaded": "— nicht geladen —",
@@ -1245,7 +1261,20 @@
       "scopeDocumentInline": "Dokument · inline",
       "scopeDocumentLazy": "Dokument · lazy",
       "usedByTitle": "Verwendet in Resources",
-      "restoredAsDraft": "v{{version}} als Entwurf wiederhergestellt."
+      "usedByMeta": "Sub-Resource",
+      "restoredAsDraft": "v{{version}} als Entwurf wiederhergestellt.",
+      "bannerDraftTitle": "Entwurf v{{version}} in Arbeit",
+      "bannerDraftDescription": "Reiche die Version zur Review ein, wenn du fertig bist.",
+      "bannerReviewTitle": "Version v{{version}} liegt zur Review",
+      "bannerReviewDescription": "Aktiviere die Version nach der Prüfung oder gib sie zurück in den Entwurf.",
+      "bannerInactiveTitle": "Version v{{version}} ist inaktiv",
+      "bannerInactiveDescription": "Reaktiviere sie als Entwurf, um wieder daran zu arbeiten."
+    },
+    "tabs": {
+      "edit": "Bearbeiten",
+      "subResources": "Sub-Resources",
+      "usage": "Verwendung",
+      "versions": "Versionen"
     },
     "statusBar": {
       "ariaLabel": "Status-Aktionen",

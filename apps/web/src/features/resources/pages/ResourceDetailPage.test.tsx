@@ -101,6 +101,8 @@ describe('ResourceDetailPage', () => {
       throw new Error(`Unmocked ${path}`)
     })
 
+    // „Verlinkt in" lebt jetzt im Verwendung-Tab.
+    fireEvent.click(await screen.findByRole('tab', { name: 'Verwendung' }))
     await waitFor(() => {
       expect(screen.getByText('Verlinkt in')).toBeInTheDocument()
     })
@@ -126,6 +128,7 @@ describe('ResourceDetailPage', () => {
       throw new Error(`Unmocked ${path}`)
     })
 
+    fireEvent.click(await screen.findByRole('tab', { name: 'Verwendung' }))
     await waitFor(() => {
       expect(screen.getByText('Noch in keinem Playbook verwendet')).toBeInTheDocument()
     })
@@ -155,13 +158,17 @@ describe('ResourceDetailPage', () => {
       throw new Error(`Unmocked ${path}`)
     })
 
+    // Direkte Sub-Resources liegen im Sub-Resources-Tab.
+    fireEvent.click(await screen.findByRole('tab', { name: 'Sub-Resources' }))
     await waitFor(() => {
-      expect(screen.getByText('Sub-Resources')).toBeInTheDocument()
+      expect(screen.getByText('Glossar')).toBeInTheDocument()
     })
-    expect(screen.getByText('Glossar')).toBeInTheDocument()
     expect(screen.getByText('Dokument · lazy')).toBeInTheDocument()
-    // Used-By-Backlink.
-    expect(screen.getByText('Handbuch')).toBeInTheDocument()
+    // Used-By-Backlink liegt im Verwendung-Tab.
+    fireEvent.click(screen.getByRole('tab', { name: 'Verwendung' }))
+    await waitFor(() => {
+      expect(screen.getByText('Handbuch')).toBeInTheDocument()
+    })
   })
 })
 
@@ -568,6 +575,7 @@ describe('ResourceDetailPage — Backlinks & Scope-Zweige', () => {
   it('zeigt den Leer-Hinweis, wenn keine Resource diese als Sub-Resource nutzt', async () => {
     renderDetailPage(detailHandlers({ usedBy: [] }))
 
+    fireEvent.click(await screen.findByRole('tab', { name: 'Verwendung' }))
     expect(
       await screen.findByText(
         'Keine Resource referenziert diese Resource als Sub-Resource.',
@@ -608,6 +616,7 @@ describe('ResourceDetailPage — Backlinks & Scope-Zweige', () => {
       }),
     )
 
+    fireEvent.click(await screen.findByRole('tab', { name: 'Sub-Resources' }))
     expect(await screen.findByText('Block b-1')).toBeInTheDocument()
     expect(screen.getByText('Dokument · inline')).toBeInTheDocument()
     // Block-Scope ohne Anker: Badge faellt auf leere Block-ID zurueck.
@@ -650,9 +659,9 @@ describe('ResourceDetailPage — Versions-Insel & Feedback', () => {
       return base(path, method, init)
     })
 
-    await screen.findByText('Versionen')
+    fireEvent.click(await screen.findByRole('tab', { name: 'Versionen' }))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Diff' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Diff' }))
     await waitFor(() => {
       expect(calledPaths).toContain(`${WS_PREFIX}/resources/r1/versions/1/diff`)
     })

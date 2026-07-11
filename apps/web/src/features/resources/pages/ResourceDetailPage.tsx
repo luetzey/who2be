@@ -1,21 +1,33 @@
-import { ArrowLeft } from 'lucide-react'
+import {
+  Boxes,
+  Clock,
+  FileText,
+  GitBranch,
+  Pencil,
+  RotateCcw,
+  Share2,
+} from 'lucide-react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
+import type { VersionStatus } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
+import { AttentionBanner } from '@/components/data/AttentionBanner'
 import { BranchStatus } from '@/components/data/BranchStatus'
 import { DataList } from '@/components/data/DataList'
 import { DataView } from '@/components/data/DataView'
+import { DetailHeader } from '@/components/data/DetailHeader'
 import { ManagedNotice } from '@/components/data/ManagedNotice'
+import { StatusBadge } from '@/components/data/StatusBadge'
+import { UsedByList } from '@/components/data/UsedByList'
 import { FeedbackPanel } from '@/components/feedback/FeedbackPanel'
 import { Container } from '@/components/layout/Container'
-import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { VersionHistory } from '@/components/version'
 import { useResourceSubResources } from '@/hooks/useResourceSubResources'
 import { useResourceUsages } from '@/hooks/useResourceUsages'
@@ -63,218 +75,299 @@ export function ResourceDetailPage() {
 
   const promotableVersion = reviewVersion ?? draftVersion
 
+  // Titel-/Beschreibungstext im Header (unveraendert gegenueber der alten Page,
+  // damit Status-Text stabil bleibt).
+  const description =
+    resource === null
+      ? ''
+      : activeVersion !== undefined
+        ? `${t('detail.activeVersion', { version: activeVersion.version })}${
+            draftVersion !== undefined
+              ? ` · ${t('detail.workingOnDraft', { version: draftVersion.version })}`
+              : reviewVersion !== undefined
+                ? ` · ${t('detail.inReview', { version: reviewVersion.version })}`
+                : ''
+          }`
+        : t('detail.currentVersion', {
+            version: resource.current_version,
+            status: statusLabel(resource.current_status ?? 'draft'),
+          })
+
+  // Attention-Banner-Texte je Status (Design „Detail-Redesign": Brand-Band statt
+  // nackter Button-Zeile). Die Aktion selbst bleibt die bestehende StatusActionBar.
+  const bannerText = (status: VersionStatus, version: number) => {
+    if (status === 'review') {
+      return {
+        title: t('detail.bannerReviewTitle', { version }),
+        desc: t('detail.bannerReviewDescription'),
+      }
+    }
+    if (status === 'inactive') {
+      return {
+        title: t('detail.bannerInactiveTitle', { version }),
+        desc: t('detail.bannerInactiveDescription'),
+      }
+    }
+    return {
+      title: t('detail.bannerDraftTitle', { version }),
+      desc: t('detail.bannerDraftDescription'),
+    }
+  }
+
+  const tags = resource?.content.tags ?? []
+
   return (
     <Container>
-      <Stack gap="md">
-        <Button asChild variant="ghost" size="sm" className="self-start">
-          <Link to={wsPath('/resources')}>
-            <ArrowLeft className="h-4 w-4" />
-            {t('list.title')}
-          </Link>
-        </Button>
-
-        <DataView loading={loading && resource === null} error={error}>
-          {resource !== null ? (
-            <Stack gap="lg">
-              {(() => {
-                const description =
-                  activeVersion !== undefined
-                    ? `${t('detail.activeVersion', { version: activeVersion.version })}${
-                        draftVersion !== undefined
-                          ? ` · ${t('detail.workingOnDraft', { version: draftVersion.version })}`
-                          : reviewVersion !== undefined
-                            ? ` · ${t('detail.inReview', { version: reviewVersion.version })}`
-                            : ''
-                      }`
-                    : t('detail.currentVersion', {
-                        version: resource.current_version,
-                        status: statusLabel(resource.current_status ?? 'draft'),
-                      })
-                return (
-                  <Stack gap="sm">
-                    <PageHeader
-                      title={resource.name}
-                      description={description}
-                      actions={<ExportResourceButton resource={resource} />}
+      <DataView loading={loading && resource === null} error={error}>
+        {resource !== null ? (
+          <Stack gap="lg">
+            <Stack gap="sm">
+              <DetailHeader
+                backHref={wsPath('/resources')}
+                backLabel={t('list.title')}
+                icon={FileText}
+                iconTone="resource"
+                title={resource.name}
+                badges={
+                  <>
+                    <StatusBadge
+                      status={resource.current_status}
+                      pendingDraft={resource.has_pending_draft}
                     />
-                    {locked ? <ManagedNotice /> : null}
-                    <BranchStatus
-                      activeVersion={activeVersion?.version}
-                      draftVersion={draftVersion?.version}
-                      reviewVersion={reviewVersion?.version}
-                      inactiveVersion={inactiveCurrent?.version}
-                      currentVersion={resource.current_version}
-                      saveState={autoSave}
-                      actions={[]}
-                    />
-                    {!locked && promotableVersion !== undefined ? (
-                      <StatusActionBar
-                        resourceId={resource.id}
-                        version={promotableVersion.version}
-                        status={promotableVersion.status ?? 'draft'}
-                        onTransitioned={reload}
-                      />
-                    ) : null}
-                    {!locked && inactiveCurrent !== undefined ? (
-                      <StatusActionBar
-                        resourceId={resource.id}
-                        version={inactiveCurrent.version}
-                        status="inactive"
-                        onTransitioned={reload}
-                      />
-                    ) : null}
-                  </Stack>
-                )
-              })()}
-
-              <ResourceEditorForm
-                form={form}
-                formKey={`${resource.id}-${resource.current_version}`}
-                initialBodyBlocks={resource.content.blocks ?? []}
-                locked={locked}
-              />
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>{t('detail.linkedIn')}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <DataView
-                    loading={usages.loading}
-                    error={usages.error}
-                    empty={!usages.loading && usages.usages.length === 0}
-                    emptyTitle={t('detail.usagesEmptyTitle')}
-                    emptyDescription={t('detail.usagesEmptyDescription')}
-                  >
-                    <DataList
-                      items={usages.usages}
-                      getKey={(usage) => usage.playbook_id}
-                      renderItem={(usage) => (
-                        <span className="flex items-center justify-between gap-3">
-                          <Link
-                            to={wsPath(`/playbooks/${usage.playbook_id}`)}
-                            className="truncate"
-                          >
-                            {usage.playbook_name}
-                          </Link>
-                          <Badge variant="secondary">
-                            {t('detail.block', { count: usage.block_count })}
-                          </Badge>
-                        </span>
-                      )}
-                    />
-                  </DataView>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>{t('detail.subResourcesTitle')}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Stack gap="sm">
-                    <DataView
-                      loading={subResources.loading}
-                      error={subResources.error}
-                      empty={
-                        !subResources.loading && subResources.children.length === 0
-                      }
-                      emptyTitle={t('detail.subResourcesEmptyTitle')}
-                      emptyDescription={t('detail.subResourcesEmptyDescription')}
-                    >
-                      <DataList
-                        items={subResources.children}
-                        getKey={(sub) => `${sub.id}-${sub.block_id ?? 'doc'}`}
-                        renderItem={(sub) => (
-                          <span className="flex items-center justify-between gap-3">
-                            <Link
-                              to={wsPath(`/resources/${sub.id}`)}
-                              className="truncate"
-                            >
-                              {sub.name}
-                            </Link>
-                            <Badge variant="secondary">
-                              {sub.link_scope === 'block'
-                                ? t('detail.scopeBlock', { blockId: sub.block_id ?? '' })
-                                : sub.embedding_mode === 'inline'
-                                  ? t('detail.scopeDocumentInline')
-                                  : t('detail.scopeDocumentLazy')}
-                            </Badge>
-                          </span>
-                        )}
-                      />
-                    </DataView>
-                    {canEdit ? (
-                      <SubResourcePicker
-                        currentResourceId={resource.id}
-                        existing={subResources.children}
-                        saving={subResources.saving}
-                        onSave={subResources.save}
-                      />
-                    ) : null}
-                  </Stack>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>{t('detail.usedByTitle')}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <DataView loading={subResources.loading} error={subResources.error}>
-                    <ResourceUsedByList parents={subResources.parents} />
-                  </DataView>
-                </CardContent>
-              </Card>
-
-              <VersionHistory
-                versions={versions}
-                canEdit={canEdit}
-                onRestore={async (version) => {
-                  await api.restoreResourceVersion(resource.id, version)
-                  notify.success(t('detail.restoredAsDraft', { version }))
-                  reload()
-                }}
-                loadDiff={(version) => api.diffResourceVersion(resource.id, version)}
-                loadProvenance={(version) =>
-                  api.provenanceResourceVersion(resource.id, version)
+                    {tags.map((tag) => (
+                      <Badge key={tag} variant="secondary" className="text-xs">
+                        {tag}
+                      </Badge>
+                    ))}
+                  </>
+                }
+                description={description}
+                actions={
+                  <>
+                    <ExportResourceButton resource={resource} />
+                    {canEdit ? <DeleteResourceButton resource={resource} /> : null}
+                  </>
                 }
               />
 
-              {role !== 'viewer' ? (
-                <FeedbackPanel
-                  type="resource"
-                  id={resource.id}
-                  onRevise={() => {
-                    window.scrollTo({ top: 0, behavior: 'smooth' })
-                    notify.info(t('feedback:panel.reviseToast'))
-                  }}
-                />
-              ) : null}
+              {locked ? <ManagedNotice /> : null}
 
-              {canEdit ? (
-                <Card className="border-destructive/40">
+              <BranchStatus
+                activeVersion={activeVersion?.version}
+                draftVersion={draftVersion?.version}
+                reviewVersion={reviewVersion?.version}
+                inactiveVersion={inactiveCurrent?.version}
+                currentVersion={resource.current_version}
+                saveState={autoSave}
+                actions={[]}
+              />
+
+              {!locked && promotableVersion !== undefined
+                ? (() => {
+                    const status = promotableVersion.status ?? 'draft'
+                    const text = bannerText(status, promotableVersion.version)
+                    return (
+                      <AttentionBanner
+                        variant="brand"
+                        icon={Clock}
+                        title={text.title}
+                        description={text.desc}
+                        actions={
+                          <StatusActionBar
+                            resourceId={resource.id}
+                            version={promotableVersion.version}
+                            status={status}
+                            onTransitioned={reload}
+                          />
+                        }
+                      />
+                    )
+                  })()
+                : null}
+
+              {!locked && inactiveCurrent !== undefined
+                ? (() => {
+                    const text = bannerText('inactive', inactiveCurrent.version)
+                    return (
+                      <AttentionBanner
+                        variant="brand"
+                        icon={RotateCcw}
+                        title={text.title}
+                        description={text.desc}
+                        actions={
+                          <StatusActionBar
+                            resourceId={resource.id}
+                            version={inactiveCurrent.version}
+                            status="inactive"
+                            onTransitioned={reload}
+                          />
+                        }
+                      />
+                    )
+                  })()
+                : null}
+            </Stack>
+
+            <Tabs defaultValue="edit">
+              <TabsList aria-label={t('detail.subResourcesTitle')}>
+                <TabsTrigger value="edit">
+                  <Pencil aria-hidden="true" />
+                  {t('tabs.edit')}
+                </TabsTrigger>
+                <TabsTrigger value="sub">
+                  <Boxes aria-hidden="true" />
+                  {t('tabs.subResources')}
+                </TabsTrigger>
+                <TabsTrigger value="use">
+                  <Share2 aria-hidden="true" />
+                  {t('tabs.usage')}
+                </TabsTrigger>
+                <TabsTrigger value="versions">
+                  <GitBranch aria-hidden="true" />
+                  {t('tabs.versions')}
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="edit">
+                <ResourceEditorForm
+                  form={form}
+                  formKey={`${resource.id}-${resource.current_version}`}
+                  initialBodyBlocks={resource.content.blocks ?? []}
+                  locked={locked}
+                />
+              </TabsContent>
+
+              <TabsContent value="sub">
+                <Card>
                   <CardHeader>
-                    <CardTitle className="text-destructive">
-                      {t('delete.dangerZoneTitle')}
-                    </CardTitle>
+                    <CardTitle>{t('detail.subResourcesTitle')}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <Stack gap="sm">
-                      <p className="text-sm text-muted-foreground">
-                        {t('delete.dangerZoneDescription')}
-                      </p>
-                      <div>
-                        <DeleteResourceButton resource={resource} />
-                      </div>
+                      <DataView
+                        loading={subResources.loading}
+                        error={subResources.error}
+                        empty={
+                          !subResources.loading &&
+                          subResources.children.length === 0
+                        }
+                        emptyTitle={t('detail.subResourcesEmptyTitle')}
+                        emptyDescription={t('detail.subResourcesEmptyDescription')}
+                      >
+                        <DataList
+                          items={subResources.children}
+                          getKey={(sub) => `${sub.id}-${sub.block_id ?? 'doc'}`}
+                          renderItem={(sub) => (
+                            <span className="flex items-center justify-between gap-3">
+                              <Link
+                                to={wsPath(`/resources/${sub.id}`)}
+                                className="truncate"
+                              >
+                                {sub.name}
+                              </Link>
+                              <Badge variant="secondary">
+                                {sub.link_scope === 'block'
+                                  ? t('detail.scopeBlock', {
+                                      blockId: sub.block_id ?? '',
+                                    })
+                                  : sub.embedding_mode === 'inline'
+                                    ? t('detail.scopeDocumentInline')
+                                    : t('detail.scopeDocumentLazy')}
+                              </Badge>
+                            </span>
+                          )}
+                        />
+                      </DataView>
+                      {canEdit ? (
+                        <SubResourcePicker
+                          currentResourceId={resource.id}
+                          existing={subResources.children}
+                          saving={subResources.saving}
+                          onSave={subResources.save}
+                        />
+                      ) : null}
                     </Stack>
                   </CardContent>
                 </Card>
-              ) : null}
-            </Stack>
-          ) : null}
-        </DataView>
-      </Stack>
+              </TabsContent>
+
+              <TabsContent value="use">
+                <Stack gap="lg">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>{t('detail.linkedIn')}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <DataView
+                        loading={usages.loading}
+                        error={usages.error}
+                        empty={!usages.loading && usages.usages.length === 0}
+                        emptyTitle={t('detail.usagesEmptyTitle')}
+                        emptyDescription={t('detail.usagesEmptyDescription')}
+                      >
+                        <UsedByList
+                          aria-label={t('detail.linkedIn')}
+                          items={usages.usages.map((usage) => ({
+                            id: usage.playbook_id,
+                            name: usage.playbook_name,
+                            href: wsPath(`/playbooks/${usage.playbook_id}`),
+                            icon: GitBranch,
+                            iconTone: 'playbook',
+                            meta: t('detail.block', { count: usage.block_count }),
+                          }))}
+                        />
+                      </DataView>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>{t('detail.usedByTitle')}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <DataView
+                        loading={subResources.loading}
+                        error={subResources.error}
+                      >
+                        <ResourceUsedByList parents={subResources.parents} />
+                      </DataView>
+                    </CardContent>
+                  </Card>
+                </Stack>
+              </TabsContent>
+
+              <TabsContent value="versions">
+                <VersionHistory
+                  versions={versions}
+                  canEdit={canEdit}
+                  onRestore={async (version) => {
+                    await api.restoreResourceVersion(resource.id, version)
+                    notify.success(t('detail.restoredAsDraft', { version }))
+                    reload()
+                  }}
+                  loadDiff={(version) =>
+                    api.diffResourceVersion(resource.id, version)
+                  }
+                  loadProvenance={(version) =>
+                    api.provenanceResourceVersion(resource.id, version)
+                  }
+                />
+              </TabsContent>
+            </Tabs>
+
+            {role !== 'viewer' ? (
+              <FeedbackPanel
+                type="resource"
+                id={resource.id}
+                onRevise={() => {
+                  window.scrollTo({ top: 0, behavior: 'smooth' })
+                  notify.info(t('feedback:panel.reviseToast'))
+                }}
+              />
+            ) : null}
+          </Stack>
+        ) : null}
+      </DataView>
     </Container>
   )
 }
