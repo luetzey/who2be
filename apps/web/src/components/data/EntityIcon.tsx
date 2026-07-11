@@ -1,0 +1,60 @@
+import { cva, type VariantProps } from 'class-variance-authority'
+import type { LucideIcon } from 'lucide-react'
+
+import { cn } from '@/lib/utils'
+
+// Farbige, abgerundete Icon-Kachel (Design-Handoff „Karten-Redesign"). Traegt
+// die kategorie-spezifische Pill-Tinte (`--pill-{tone}-bg`/`-fg`) und ist rein
+// dekorativ — das Icon ist `aria-hidden`, den Kontext liefert der Titel daneben.
+//
+// Lebt unter `components/data/`, weil sie ueber alle Listen-/Detail-Features
+// geteilt wird und semantisch Datendarstellung ist (Muster: StatusBadge).
+
+// Kategorie-Tinten aus globals.css (§2.4 Erweiterungsklausel). Geteilter Typ,
+// den MetaPill / EntityCard / DetailHeader / UsedByList mitbenutzen.
+export type EntityTone = 'playbook' | 'resource' | 'persona' | 'date' | 'tools' | 'catalog'
+
+export type EntityIconSize = 'sm' | 'md' | 'lg'
+
+const entityIconVariants = cva('inline-flex flex-none items-center justify-center', {
+  variants: {
+    tone: {
+      playbook: 'bg-pill-playbook text-pill-playbook-fg',
+      resource: 'bg-pill-resource text-pill-resource-fg',
+      persona: 'bg-pill-persona text-pill-persona-fg',
+      date: 'bg-pill-date text-pill-date-fg',
+      tools: 'bg-pill-tools text-pill-tools-fg',
+      catalog: 'bg-pill-catalog text-pill-catalog-fg',
+    },
+    size: {
+      // sm ~ Sub-Resource-Kachel, md ~ Listen-Karte (44px), lg ~ Detail-Header (48px).
+      sm: 'size-8 rounded-md',
+      md: 'size-11 rounded-xl',
+      lg: 'size-12 rounded-xl',
+    },
+  },
+  defaultVariants: { tone: 'tools', size: 'md' },
+})
+
+const iconSizeClass: Record<EntityIconSize, string> = {
+  sm: 'size-4',
+  md: 'size-5',
+  lg: 'size-6',
+}
+
+interface EntityIconProps extends VariantProps<typeof entityIconVariants> {
+  icon: LucideIcon
+  tone: EntityTone
+  className?: string
+}
+
+export function EntityIcon({ icon: Icon, tone, size, className }: EntityIconProps) {
+  const resolvedSize: EntityIconSize = size ?? 'md'
+  return (
+    <span className={cn(entityIconVariants({ tone, size: resolvedSize }), className)}>
+      <Icon className={iconSizeClass[resolvedSize]} aria-hidden="true" />
+    </span>
+  )
+}
+
+export { entityIconVariants }
