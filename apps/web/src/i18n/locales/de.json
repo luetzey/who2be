@@ -133,7 +133,9 @@
       "reset": "Filter zurücksetzen",
       "pendingDraft": "Entwurf offen",
       "emptyFilteredTitle": "Keine Treffer",
-      "emptyFilteredDescription": "Keine Einträge passen zu den aktiven Filtern. Passe Suche oder Status an."
+      "emptyFilteredDescription": "Keine Einträge passen zu den aktiven Filtern. Passe Suche oder Status an.",
+      "moreFilters": "Filter",
+      "clearSearch": "Suche leeren"
     }
   },
   "version": {
@@ -1004,6 +1006,27 @@
         "description": "Lege dein erstes Playbook an, um Workflows zu definieren.",
         "filteredTitle": "Keine Playbooks für diesen Filter",
         "filteredDescription": "Passe Tag- oder Trigger-Filter an oder lege ein neues Playbook an."
+      },
+      "searchPlaceholder": "Nach Name oder Trigger suchen…",
+      "countLabel_one": "{{count}} Playbook",
+      "countLabel_other": "{{count}} Playbooks",
+      "partOf": "Teil von {{name}}",
+      "subPlaybooksCount_one": "{{count}} Sub-Playbook",
+      "subPlaybooksCount_other": "{{count}} Sub-Playbooks",
+      "subPlaybooksListLabel": "Sub-Playbooks",
+      "onboarding": {
+        "title": "Lege dein erstes Playbook an",
+        "description": "Playbooks beschreiben wiederholbare Workflows, die deine Agenten befolgen — vom kurzen Textbaustein bis zum mehrstufigen Eskalationsprozess.",
+        "types": {
+          "workflow": "Workflow",
+          "faq": "FAQ",
+          "checklist": "Checklist",
+          "snippet": "Snippet"
+        }
+      },
+      "noResults": {
+        "title": "Keine Treffer für „{{query}}“",
+        "description": "Kein Playbook passt zu deiner Suche. Prüfe die Schreibweise oder setze die Filter zurück."
       }
     },
     "new": {
@@ -1028,7 +1051,21 @@
       "subPlaybooksBodyNote": "Sub-Playbooks werden im BlockNote-Body als Pills gepflegt — bearbeite sie dort.",
       "composedByTitle": "Verwendet als Sub-Playbook in",
       "restoreSuccess": "v{{version}} als Entwurf wiederhergestellt.",
-      "actionFailed": "Aktion fehlgeschlagen."
+      "actionFailed": "Aktion fehlgeschlagen.",
+      "tabs": {
+        "label": "Playbook-Bereiche",
+        "edit": "Bearbeiten",
+        "relations": "Beziehungen",
+        "versions": "Versionen"
+      },
+      "banner": {
+        "activeNode": "Aktiv: v{{version}}",
+        "reviewWaiting": "v{{version}} wartet auf Review",
+        "draftOpen": "Entwurf: v{{version}}",
+        "inactiveCurrent": "Inaktiv: v{{version}}"
+      },
+      "usedInDescription": "Personae, die dieses Playbook nutzen.",
+      "subPlaybooksFlowDescription": "Dieses Composite ruft beim Rendern nacheinander auf:"
     },
     "form": {
       "identityTitle": "Identität",

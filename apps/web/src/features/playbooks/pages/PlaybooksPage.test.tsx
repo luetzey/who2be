@@ -56,6 +56,12 @@ function renderWith(list: unknown[]) {
   )
 }
 
+// Erweiterte Facetten (Tag/Typ/Agent/Gruppieren) leben hinter dem
+// „Filter"-Button in einem Popover — fuer Tests erst oeffnen.
+function openFacetPopover() {
+  fireEvent.click(screen.getByRole('button', { name: /^Filter/ }))
+}
+
 afterEach(() => {
   vi.unstubAllGlobals()
   // Filter-Zustand lebt in der URL (useSearchParams) — zwischen Tests
@@ -64,7 +70,7 @@ afterEach(() => {
 })
 
 describe('PlaybooksPage', () => {
-  it('filtert client-seitig nach Tag ueber das Tag-Select', async () => {
+  it('filtert client-seitig nach Tag ueber das Tag-Select im Filter-Popover', async () => {
     renderWith([
       playbook('pb1', 'Coaching', ['coach', 'session'], 'how do i'),
       playbook('pb2', 'Brainstorming', ['brain'], null),
@@ -75,13 +81,14 @@ describe('PlaybooksPage', () => {
       expect(screen.getByText('Brainstorming')).toBeInTheDocument()
     })
 
+    openFacetPopover()
     fireEvent.change(screen.getByLabelText('Tag'), { target: { value: 'brain' } })
 
     expect(screen.queryByText('Coaching')).not.toBeInTheDocument()
     expect(screen.getByText('Brainstorming')).toBeInTheDocument()
   })
 
-  it('filtert ueber den Status-Quick-Filter „Braucht Aufmerksamkeit"', async () => {
+  it('filtert ueber das Status-Segment „Braucht Aufmerksamkeit"', async () => {
     renderWith([
       playbook('pb1', 'Coaching', ['coach'], null, 'active'),
       playbook('pb2', 'Brainstorming', ['brain'], null, 'review'),
@@ -91,14 +98,14 @@ describe('PlaybooksPage', () => {
       expect(screen.getByText('Coaching')).toBeInTheDocument()
     })
 
-    // Chip traegt Zaehler 1 (nur die Review-Version braucht Aufmerksamkeit).
+    // Segment traegt Zaehler 1 (nur die Review-Version braucht Aufmerksamkeit).
     fireEvent.click(screen.getByRole('button', { name: /Braucht Aufmerksamkeit/ }))
 
     expect(screen.queryByText('Coaching')).not.toBeInTheDocument()
     expect(screen.getByText('Brainstorming')).toBeInTheDocument()
   })
 
-  it('filtert per Freitext nach Name', async () => {
+  it('filtert per Freitext nach Name und laesst sich per X leeren', async () => {
     renderWith([
       playbook('pb1', 'Coaching', ['coach'], null),
       playbook('pb2', 'Brainstorming', ['brain'], null),
@@ -112,9 +119,28 @@ describe('PlaybooksPage', () => {
 
     expect(screen.getByText('Coaching')).toBeInTheDocument()
     expect(screen.queryByText('Brainstorming')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Suche leeren' }))
+    expect(screen.getByText('Brainstorming')).toBeInTheDocument()
   })
 
-  it('zeigt Trigger als einzelne Pills, kappt bei 3 sichtbaren + „+N"-Badge', async () => {
+  it('filtert per Freitext auch ueber Trigger', async () => {
+    renderWith([
+      playbook('pb1', 'Coaching', [], 'eskalation starten'),
+      playbook('pb2', 'Brainstorming', [], null),
+    ])
+
+    await waitFor(() => {
+      expect(screen.getByText('Coaching')).toBeInTheDocument()
+    })
+
+    fireEvent.change(screen.getByLabelText('Suche'), { target: { value: 'eskal' } })
+
+    expect(screen.getByText('Coaching')).toBeInTheDocument()
+    expect(screen.queryByText('Brainstorming')).not.toBeInTheDocument()
+  })
+
+  it('zeigt Trigger als einzelne Pills, kappt bei 3 sichtbaren + „+N"', async () => {
     renderWith([playbook('pb1', 'Coaching', [], 'alpha, beta; gamma, delta, epsilon')])
 
     await waitFor(() => {
@@ -130,7 +156,23 @@ describe('PlaybooksPage', () => {
     expect(screen.getByLabelText('2 weitere Trigger')).toHaveTextContent('+2')
   })
 
-  it('zeigt Composite-Badge und verlinkte Sub-Playbooks (kompakte Meta-Zeile)', async () => {
+  it('zeigt sanften Status samt Version und „Entwurf offen"-Marker', async () => {
+    renderWith([
+      playbook('pb1', 'Coaching', [], null, 'active', {
+        current_version: 3,
+        has_pending_draft: true,
+      }),
+    ])
+
+    await waitFor(() => {
+      expect(screen.getByText('Coaching')).toBeInTheDocument()
+    })
+
+    expect(screen.getByText(/Aktiv · v3/)).toBeInTheDocument()
+    expect(screen.getByText('Entwurf offen')).toBeInTheDocument()
+  })
+
+  it('zeigt den Composite-Footer und klappt Sub-Playbooks als Links auf', async () => {
     renderWith([
       playbook('pb1', 'Composite-Flow', [], null, 'active', {
         is_composite: true,
@@ -139,20 +181,39 @@ describe('PlaybooksPage', () => {
           { id: 'c2', name: 'Schritt Zwei' },
         ],
       }),
-      playbook('pb2', 'Atomar', [], null),
     ])
 
     await waitFor(() => {
       expect(screen.getByText('Composite-Flow')).toBeInTheDocument()
     })
 
-    expect(screen.getByText('Composite')).toBeInTheDocument()
-    expect(screen.getByText(/komponiert:/)).toBeInTheDocument()
-    const childLink = screen.getByRole('link', { name: 'Schritt Eins' })
-    expect(childLink).toHaveAttribute('href', expect.stringContaining('/playbooks/c1'))
-    expect(screen.getByRole('link', { name: 'Schritt Zwei' })).toBeInTheDocument()
-    // Atomare Zeile traegt weder Badge noch Sub-Playbook-Links.
-    expect(screen.getAllByText('Composite')).toHaveLength(1)
+    // Zugeklappt: Zusammenfassung mit Zaehler + Kind-Namen, keine Links.
+    const toggle = screen.getByRole('button', { name: /2 Sub-Playbooks/ })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('link', { name: /Schritt Zwei/ })).not.toBeInTheDocument()
+
+    fireEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    const childLink = screen.getByRole('link', { name: /Schritt Zwei/ })
+    expect(childLink).toHaveAttribute('href', expect.stringContaining('/playbooks/c2'))
+    expect(screen.getByRole('link', { name: /Schritt Eins/ })).toBeInTheDocument()
+  })
+
+  it('zeigt den „Teil von"-Marker auf Kind-Zeilen (Rueckrichtung aus compose_children)', async () => {
+    renderWith([
+      playbook('pb1', 'Eskalation Level 2', [], null, 'active', {
+        is_composite: true,
+        compose_children: [{ id: 'pb2', name: 'Kunde begruessen' }],
+      }),
+      playbook('pb2', 'Kunde begruessen', [], null),
+    ])
+
+    // Der Kind-Name erscheint doppelt (eigene Zeile + Footer-Vorschau des
+    // Composites) — direkt auf den Marker-Link warten.
+    const marker = await screen.findByRole('link', {
+      name: /Teil von Eskalation Level 2/,
+    })
+    expect(marker).toHaveAttribute('href', expect.stringContaining('/playbooks/pb1'))
   })
 
   it('gruppiert via ?group=composite mit Sektions-Headern und Zaehlern', async () => {
@@ -171,7 +232,7 @@ describe('PlaybooksPage', () => {
     expect(screen.getByRole('heading', { name: /Standalone\s?\(2\)/ })).toBeInTheDocument()
   })
 
-  it('Group-by-Selector schaltet auf Typ-Gruppen um (unbekannter Typ-Key = Rohwert)', async () => {
+  it('Group-by-Selector im Popover schaltet auf Typ-Gruppen um', async () => {
     renderWith([
       playbook('pb1', 'Coaching', [], null),
       playbook('pb2', 'Brainstorming', [], null, 'active', {
@@ -185,6 +246,7 @@ describe('PlaybooksPage', () => {
     })
     expect(screen.queryByRole('heading', { name: /workflow/ })).not.toBeInTheDocument()
 
+    openFacetPopover()
     fireEvent.change(screen.getByLabelText('Gruppieren'), { target: { value: 'type' } })
 
     expect(screen.getByRole('heading', { name: /prompt\s?\(1\)/ })).toBeInTheDocument()
@@ -192,5 +254,36 @@ describe('PlaybooksPage', () => {
     // Beide Items bleiben sichtbar — Gruppierung filtert nicht.
     expect(screen.getByText('Coaching')).toBeInTheDocument()
     expect(screen.getByText('Brainstorming')).toBeInTheDocument()
+  })
+
+  it('zeigt Header-Count-Pill und Onboarding-Hero bei leerem Workspace', async () => {
+    renderWith([])
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: 'Lege dein erstes Playbook an' }),
+      ).toBeInTheDocument()
+    })
+    // Kein Count-Pill, keine Toolbar im Onboarding-Zustand — dafuer spiegelt
+    // der Hero den Header-CTA (zwei „Neues Playbook"-Links).
+    expect(screen.queryByLabelText('Suche')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: /Neues Playbook/ })).toHaveLength(2)
+  })
+
+  it('zeigt den gefilterten Leerzustand mit Suchbegriff und Reset', async () => {
+    renderWith([playbook('pb1', 'Coaching', [], null)])
+
+    await waitFor(() => {
+      expect(screen.getByText('Coaching')).toBeInTheDocument()
+    })
+    expect(screen.getByLabelText('1 Playbook')).toHaveTextContent('1')
+
+    fireEvent.change(screen.getByLabelText('Suche'), { target: { value: 'nix' } })
+
+    expect(
+      screen.getByRole('heading', { name: /Keine Treffer für „nix“/ }),
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Filter zurücksetzen/ }))
+    expect(screen.getByText('Coaching')).toBeInTheDocument()
   })
 })

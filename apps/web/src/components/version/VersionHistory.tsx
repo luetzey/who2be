@@ -2,14 +2,13 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { ProvenanceEntry, VersionDiff, VersionStatus } from '@/api/types'
-import { Badge } from '@/components/ui/badge'
+import { StatusBadge } from '@/components/data/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { notify } from '@/lib/feedback'
 
 import { ProvenanceList } from './ProvenanceList'
 import { VersionDiffView } from './VersionDiffView'
-import { statusBadgeVariant, statusLabel } from './versionStatus'
 
 export interface VersionHistoryItem {
   version: number
@@ -100,7 +99,7 @@ export function VersionHistory({
             return (
               <li
                 key={version.version}
-                className="rounded-md border border-border p-3"
+                className="rounded-lg border border-border p-3"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="flex items-center gap-2">
@@ -108,11 +107,7 @@ export function VersionHistory({
                     <span className="text-xs text-muted-foreground">
                       {new Date(version.created_at).toLocaleString()}
                     </span>
-                    {version.status !== undefined ? (
-                      <Badge variant={statusBadgeVariant(version.status)}>
-                        {statusLabel(version.status)}
-                      </Badge>
-                    ) : null}
+                    <StatusBadge status={version.status} />
                   </span>
                   <span className="flex flex-wrap items-center gap-1">
                     <Button

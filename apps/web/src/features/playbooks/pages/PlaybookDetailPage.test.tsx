@@ -286,16 +286,11 @@ describe('PlaybookDetailPage', () => {
       </SessionContext.Provider>,
     )
 
-    const cluster = await screen.findByRole('list', { name: 'Trigger-Liste' })
-    expect(cluster).toBeInTheDocument()
-    // Anfuehrungszeichen sind in der UI komplett geschluckt.
-    expect(cluster.textContent ?? '').not.toContain('"')
-    // Beide Pills sind als eigene Listitem-Pills da.
-    const items = screen.getAllByRole('listitem')
-    const itemTexts = items.map((node) => node.textContent ?? '')
-    expect(itemTexts).toEqual(
-      expect.arrayContaining(['passwort vergessen', 'reset link']),
-    )
+    // Trigger leben jetzt ausschliesslich im Formular (TagInput-Chips) —
+    // Anfuehrungszeichen sind geschluckt, jeder Trigger eine eigene Pill.
+    expect(await screen.findByText('passwort vergessen')).toBeInTheDocument()
+    expect(screen.getByText('reset link')).toBeInTheDocument()
+    expect(screen.queryByText(/"passwort/)).not.toBeInTheDocument()
   })
 
   it('zeigt einen EmptyState wenn /usages ein 404 zurueckgibt', async () => {
@@ -537,9 +532,9 @@ describe('PlaybookDetailPage — Status-Transitions', () => {
       return base(path, method, init)
     })
 
-    expect(
-      await screen.findByText('Aktuelle Version: v1 (Entwurf)'),
-    ).toBeInTheDocument()
+    // Review-Banner zeigt den offenen Entwurf als Branch-Knoten.
+    expect(await screen.findByTestId('review-banner')).toBeInTheDocument()
+    expect(screen.getByText('Entwurf: v1')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Draft abschliessen' }))
 
@@ -611,9 +606,7 @@ describe('PlaybookDetailPage — Status-Transitions', () => {
       return base(path, method, init)
     })
 
-    expect(
-      await screen.findByText('Aktuelle Version: v1 (Inaktiv)'),
-    ).toBeInTheDocument()
+    expect(await screen.findByText('Inaktiv: v1')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Reaktivieren als Draft' }))
 
@@ -642,7 +635,7 @@ describe('PlaybookDetailPage — Status-Transitions', () => {
     expect(notify.success).not.toHaveBeenCalled()
   })
 
-  it('Active + Draft: Header nennt beide Versionen, Submit-Action bleibt sichtbar', async () => {
+  it('Active + Draft: Banner nennt beide Versionen, Submit-Action bleibt sichtbar', async () => {
     renderPlaybookDetail(
       playbookHandlers({
         playbook: playbookWith({ current_version: 2 }),
@@ -650,15 +643,14 @@ describe('PlaybookDetailPage — Status-Transitions', () => {
       }),
     )
 
-    expect(
-      await screen.findByText(/Active: v1 · Du arbeitest auf Draft v2/),
-    ).toBeInTheDocument()
+    expect(await screen.findByText('Aktiv: v1')).toBeInTheDocument()
+    expect(screen.getByText('Entwurf: v2')).toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: 'Draft abschliessen' }),
     ).toBeInTheDocument()
   })
 
-  it('Active + Review: Header nennt die Review-Version, Publish + Reject sichtbar', async () => {
+  it('Active + Review: Banner nennt die Review-Version, Publish + Reject sichtbar', async () => {
     renderPlaybookDetail(
       playbookHandlers({
         playbook: playbookWith({ current_version: 2 }),
@@ -666,12 +658,13 @@ describe('PlaybookDetailPage — Status-Transitions', () => {
       }),
     )
 
-    expect(await screen.findByText(/Active: v1 · In Review: v2/)).toBeInTheDocument()
+    expect(await screen.findByText('Aktiv: v1')).toBeInTheDocument()
+    expect(screen.getByText('v2 wartet auf Review')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Veroeffentlichen' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Zurueck zu Draft' })).toBeInTheDocument()
   })
 
-  it('nur Active (ohne Draft/Review): Header ohne Suffix, keine Branch-Aktionen', async () => {
+  it('nur Active (ohne Draft/Review): Hero-Chip statt Banner, keine Branch-Aktionen', async () => {
     renderPlaybookDetail(
       playbookHandlers({
         playbook: playbookWith({ current_status: 'active' }),
@@ -679,7 +672,8 @@ describe('PlaybookDetailPage — Status-Transitions', () => {
       }),
     )
 
-    expect(await screen.findByText('Active: v1')).toBeInTheDocument()
+    expect(await screen.findByText('Aktiv · v1')).toBeInTheDocument()
+    expect(screen.queryByTestId('review-banner')).not.toBeInTheDocument()
     expect(screen.queryByRole('toolbar')).not.toBeInTheDocument()
   })
 })
@@ -722,7 +716,8 @@ describe('PlaybookDetailPage — Versions-Insel & Feedback', () => {
       { me: meWithRole('editor') },
     )
 
-    await screen.findByText('Versionen')
+    // Versions-Insel lebt im Tab „Versionen" — erst umschalten.
+    fireEvent.click(await screen.findByRole('tab', { name: 'Versionen' }))
 
     fireEvent.click(screen.getByRole('button', { name: 'Diff' }))
     await waitFor(() => {
@@ -745,7 +740,7 @@ describe('PlaybookDetailPage — Versions-Insel & Feedback', () => {
     expect(calledPaths).toContain(`${WS_PREFIX}/playbooks/pb1/versions/1/restore`)
   })
 
-  it('Feedback-Revise: scrollt nach oben und zeigt den Hinweis-Toast', async () => {
+  it('Feedback-Revise: springt in den Bearbeiten-Tab, scrollt nach oben und zeigt den Hinweis-Toast', async () => {
     const scrollTo = vi.fn()
     vi.stubGlobal('scrollTo', scrollTo)
     const base = playbookHandlers()
@@ -763,6 +758,8 @@ describe('PlaybookDetailPage — Versions-Insel & Feedback', () => {
       return base(path, method, init)
     })
 
+    // Feedback-Panel lebt im Tab „Beziehungen".
+    fireEvent.click(await screen.findByRole('tab', { name: 'Beziehungen' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Überarbeiten' }))
 
     await waitFor(() => {
@@ -771,6 +768,11 @@ describe('PlaybookDetailPage — Versions-Insel & Feedback', () => {
       )
     })
     expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' })
+    // „Überarbeiten" springt zurueck in den Bearbeiten-Tab.
+    expect(screen.getByRole('tab', { name: 'Bearbeiten' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
   })
 })
 
@@ -787,6 +789,11 @@ describe('PlaybookDetailPage — Managed-Lock & Rollen', () => {
 
   it('ohne Managed-Flag: keine Notice, Branch-Aktionen und Danger-Zone sichtbar', async () => {
     renderPlaybookDetail(playbookHandlers())
+
+    // Danger-Zone ist als dezente Zeile kollabiert — erst aufklappen.
+    const dangerToggle = await screen.findByRole('button', { name: 'Playbook löschen' })
+    expect(screen.queryByTestId('delete-playbook-trigger')).not.toBeInTheDocument()
+    fireEvent.click(dangerToggle)
 
     expect(await screen.findByTestId('delete-playbook-trigger')).toBeInTheDocument()
     expect(screen.queryByTestId('managed-notice')).not.toBeInTheDocument()
@@ -805,7 +812,7 @@ describe('PlaybookDetailPage — Managed-Lock & Rollen', () => {
 })
 
 describe('PlaybookDetailPage — Composite-, Tag- und Link-Zweige', () => {
-  it('Composite: zeigt Badge, geordnete Sub-Playbooks und Composed-by-Backlinks', async () => {
+  it('Composite: zeigt den Ausfuehrungs-Flow und Composed-by-Backlinks im Beziehungen-Tab', async () => {
     renderPlaybookDetail(
       playbookHandlers({
         playbook: playbookWith({ is_composite: true }),
@@ -817,24 +824,20 @@ describe('PlaybookDetailPage — Composite-, Tag- und Link-Zweige', () => {
       }),
     )
 
+    fireEvent.click(await screen.findByRole('tab', { name: 'Beziehungen' }))
     await screen.findByText('Sub-Playbooks (Composes)')
-    // Header-Badge + Badge am verschachtelten Kind.
-    expect(screen.getAllByText('Composite')).toHaveLength(2)
 
     const list = screen.getByRole('list', { name: 'Sub-Playbooks' })
     const items = within(list).getAllByRole('listitem')
     expect(items[0]).toHaveTextContent('Schritt Eins')
     expect(items[1]).toHaveTextContent('Verschachtelt')
+    // Kinder sind Links auf ihre Detail-Seite.
+    expect(within(list).getByRole('link', { name: /Schritt Eins/ })).toHaveAttribute(
+      'href',
+      expect.stringContaining('/playbooks/c1'),
+    )
 
     expect(screen.getByText('Eltern-Composite')).toBeInTheDocument()
-    // Tags aus dem Fixture als Badge-Cluster im Header. Das Editor-Formular
-    // traegt ebenfalls ein "Tags"-Label (TagInput) — daher auf den DIV-Cluster
-    // filtern statt getByLabelText.
-    const tagCluster = screen
-      .getAllByLabelText('Tags')
-      .find((el) => el.tagName === 'DIV')
-    expect(tagCluster).toBeDefined()
-    expect(within(tagCluster as HTMLElement).getByText('coaching')).toBeInTheDocument()
   })
 
   it('Leer-Zweige: kein Composite-Badge, keine Tags/Trigger, Empty-Hinweise', async () => {
@@ -906,6 +909,7 @@ describe('PlaybookDetailPage — Delete-Flow', () => {
       return base(path, method, init)
     })
 
+    fireEvent.click(await screen.findByRole('button', { name: 'Playbook löschen' }))
     fireEvent.click(await screen.findByTestId('delete-playbook-trigger'))
     fireEvent.click(await screen.findByTestId('delete-playbook-confirm'))
 
@@ -934,6 +938,7 @@ describe('PlaybookDetailPage — Delete-Flow', () => {
       return base(path, method, init)
     })
 
+    fireEvent.click(await screen.findByRole('button', { name: 'Playbook löschen' }))
     fireEvent.click(await screen.findByTestId('delete-playbook-trigger'))
     fireEvent.click(await screen.findByTestId('delete-playbook-confirm'))
 

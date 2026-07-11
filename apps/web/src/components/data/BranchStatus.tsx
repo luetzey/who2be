@@ -83,7 +83,9 @@ function describeSaveState(state: AutoSaveState, now: Date, t: TFunction): strin
   }
 }
 
-function SaveIndicator({ state }: { state: AutoSaveState }) {
+// Exportiert, damit das Playbook-Review-Banner denselben Auto-Save-Indikator
+// zeigt wie der klassische BranchStatus-Block (eine Quelle, kein Duplikat).
+export function SaveIndicator({ state }: { state: AutoSaveState }) {
   const { t } = useTranslation('data')
   // 1-Sekunden-Tick fuer den "vor X s"-Text — laeuft nur in "saved", damit
   // wir nicht im Idle/Error sinnlos re-rendern.

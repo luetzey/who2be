@@ -19,6 +19,9 @@ export interface ListFilterAccessors<T> {
   hasPendingDraft: (item: T) => boolean | undefined
   tags?: (item: T) => string[]
   type?: (item: T) => string | undefined
+  // Zusaetzlicher Suchtext neben dem Namen (z. B. Playbook-Trigger) — die
+  // Freitext-Suche trifft, wenn Name ODER einer dieser Strings passt.
+  searchText?: (item: T) => string[]
 }
 
 export interface ListFilters<T> {
@@ -156,7 +159,10 @@ export function useListFilters<T>(
   const base = useMemo(() => {
     const q = query.trim().toLowerCase()
     return items.filter((item) => {
-      if (q !== '' && !accessors.name(item).toLowerCase().includes(q)) return false
+      if (q !== '') {
+        const haystacks = [accessors.name(item), ...(accessors.searchText?.(item) ?? [])]
+        if (!haystacks.some((text) => text.toLowerCase().includes(q))) return false
+      }
       if (tag !== '' && accessors.tags && !accessors.tags(item).includes(tag)) return false
       if (type !== '' && accessors.type && accessors.type(item) !== type) return false
       return true
