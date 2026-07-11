@@ -1,32 +1,33 @@
 import type { LucideIcon } from 'lucide-react'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { EntityIcon, type EntityTone } from '@/components/data'
+import { Card, CardContent } from '@/components/ui/card'
 
 interface KpiCardProps {
   label: string
   value: number
   icon: LucideIcon
+  // Kategorie-Tinte der Icon-Kachel (EntityIcon): persona/playbook/resource
+  // geben der nackten Zahl einen visuellen Anker (Warm-Citrus-Redesign).
+  tone: EntityTone
   description?: string
 }
 
-// KPI-Karte mit Mini-Visual: das `icon` in einem getoenten Quadrat gibt der
-// nackten Zahl einen visuellen Anker (Track G). Icons folgen der
-// Design-Sprache (`text-muted-foreground`, nie `text-brand`).
-export function KpiCard({ label, value, icon: Icon, description }: KpiCardProps) {
+// KPI-Karte: getoente EntityIcon-Kachel links, Label + tabellarische Zahl
+// rechts. Icons folgen der Design-Sprache (EntityIcon traegt die Pill-Tinte,
+// nie `text-brand`).
+export function KpiCard({ label, value, icon, tone, description }: KpiCardProps) {
   return (
     <Card>
-      <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
-        <span
-          className="flex size-8 items-center justify-center rounded-md bg-muted text-muted-foreground"
-          aria-hidden="true"
-        >
-          <Icon className="size-4" />
-        </span>
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-semibold tracking-tight">{value}</div>
-        {description ? <p className="mt-1 text-xs text-muted-foreground">{description}</p> : null}
+      <CardContent className="flex items-center gap-4 p-4">
+        <EntityIcon icon={icon} tone={tone} size="sm" />
+        <div className="min-w-0">
+          <div className="text-sm text-muted-foreground">{label}</div>
+          <div className="text-2xl font-semibold tracking-tight tabular-nums">{value}</div>
+          {description ? (
+            <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+          ) : null}
+        </div>
       </CardContent>
     </Card>
   )

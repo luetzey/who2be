@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { DashboardData } from '@/api/types'
@@ -11,7 +11,7 @@ afterEach(() => {
 })
 
 const sampleData: DashboardData = {
-  kpis: { active_personas: 12, active_playbooks: 34, pending_reviews: 3 },
+  kpis: { active_personas: 12, active_playbooks: 34, active_resources: 7, pending_reviews: 3 },
   activity: [
     {
       ts: '2026-05-28T10:00:00Z',
@@ -27,6 +27,7 @@ const sampleData: DashboardData = {
   status_distribution: {
     persona: { draft: 2, review: 1, active: 12, inactive: 8 },
     playbook: { draft: 1, review: 0, active: 34, inactive: 5 },
+    resource: { draft: 1, review: 0, active: 7, inactive: 1 },
   },
 }
 
@@ -37,7 +38,7 @@ function jsonFetch(payload: unknown, status = 200) {
 }
 
 describe('DashboardPage', () => {
-  it('rendert KPIs, Activity-Eintraege und Status-Bars', async () => {
+  it('rendert KPIs, Attention-Band, Activity-Eintraege und Status-Bars', async () => {
     vi.stubGlobal('fetch', jsonFetch(sampleData))
 
     renderInRoutes(<DashboardPage />, {
@@ -46,18 +47,22 @@ describe('DashboardPage', () => {
     })
 
     await waitFor(() => {
-      expect(screen.getByText('12')).toBeInTheDocument()
+      expect(screen.getByText(/Alice/)).toBeInTheDocument()
     })
-    expect(screen.getByText('34')).toBeInTheDocument()
-    expect(screen.getByText('3')).toBeInTheDocument()
+    // KPI-Zahlen im Kennzahlen-Bereich pruefen (die bloßen Zahlen tauchen sonst
+    // auch in der Balken-Ablesung auf).
+    const kpis = screen.getByRole('region', { name: 'Kennzahlen' })
+    expect(within(kpis).getByText('12')).toBeInTheDocument()
+    expect(within(kpis).getByText('34')).toBeInTheDocument()
+    // Aktive-Resources-KPI (aus kpis.active_resources).
+    expect(within(kpis).getByText('7')).toBeInTheDocument()
+    // Pending-Reviews steckt jetzt im Aufmerksamkeits-Band statt in einer KPI.
+    expect(screen.getByText(/warten auf Review/)).toBeInTheDocument()
     expect(screen.getByText(/Alice/)).toBeInTheDocument()
     expect(screen.getByText(/Coaching/)).toBeInTheDocument()
-    expect(
-      screen.getByRole('img', { name: /Personae:/ }),
-    ).toBeInTheDocument()
-    expect(
-      screen.getByRole('img', { name: /Playbooks:/ }),
-    ).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /Personae:/ })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /Playbooks:/ })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /Resources:/ })).toBeInTheDocument()
   })
 
   it('zeigt einen Empty-State, wenn der Endpoint 404 liefert', async () => {
@@ -104,7 +109,7 @@ describe('DashboardPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Unbekannt')).toBeInTheDocument()
     })
-    expect(screen.getByText(/zur Review eingereicht/)).toBeInTheDocument()
+    expect(screen.getByText(/reichte zur Review ein/)).toBeInTheDocument()
   })
 
   it('blaettert die Activity seitenbasiert und fragt page=2 an', async () => {
