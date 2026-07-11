@@ -1,12 +1,13 @@
-import { FileText, Plus } from 'lucide-react'
+import { Plus, ScrollText } from 'lucide-react'
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
 import type { SystemPromptTemplate } from '@/api/types'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
-import { DataList } from '@/components/data/DataList'
+import { DataView } from '@/components/data/DataView'
 import { EmptyState } from '@/components/data/EmptyState'
+import { EntityCard } from '@/components/data/EntityCard'
 import { ListFilterBar } from '@/components/data/ListFilterBar'
 import { StatusBadge } from '@/components/data/StatusBadge'
 import { Container } from '@/components/layout/Container'
@@ -33,20 +34,32 @@ export function SystemPromptsPage() {
   )
   const filters = useListFilters(templates, accessors)
 
+  const newTemplateCta = (
+    <Button asChild variant="brand">
+      <Link to={wsPath('/system-prompts/new')}>
+        <Plus className="h-4 w-4" />
+        {t('systemPrompts:page.list.newTemplate')}
+      </Link>
+    </Button>
+  )
+
   return (
     <Container>
       <Stack gap="lg">
         <PageHeader
           title={t('systemPrompts:page.list.title')}
-          description={t('systemPrompts:page.list.description')}
-          actions={
-            <Button asChild variant="brand">
-              <Link to={wsPath('/system-prompts/new')}>
-                <Plus className="h-4 w-4" />
-                {t('systemPrompts:page.list.newTemplate')}
-              </Link>
-            </Button>
+          titleAddon={
+            templates.length > 0 ? (
+              <span
+                className="rounded-full bg-muted px-2 py-0.5 text-sm font-medium text-muted-foreground tabular-nums"
+                aria-label={`${templates.length} Templates`}
+              >
+                {templates.length}
+              </span>
+            ) : undefined
           }
+          description={t('systemPrompts:page.list.description')}
+          actions={newTemplateCta}
         />
         {templates.length > 0 ? (
           <ListFilterBar
@@ -60,60 +73,54 @@ export function SystemPromptsPage() {
             onReset={filters.reset}
           />
         ) : null}
-        <DataList
-          items={filters.filtered}
-          loading={loading}
-          error={error}
-          getKey={(template) => template.id}
-          empty={
-            templates.length === 0 ? (
-              <EmptyState
-                icon={FileText}
-                title={t('systemPrompts:page.list.empty.title')}
-                description={t('systemPrompts:page.list.empty.description')}
-                action={
-                  <Button asChild variant="brand">
-                    <Link to={wsPath('/system-prompts/new')}>
-                      <Plus className="h-4 w-4" />
-                      {t('systemPrompts:page.list.newTemplate')}
-                    </Link>
-                  </Button>
-                }
-              />
-            ) : (
-              <EmptyState
-                icon={FileText}
-                title={t('data:filter.emptyFilteredTitle')}
-                description={t('data:filter.emptyFilteredDescription')}
-                action={
-                  <Button type="button" variant="outline" onClick={filters.reset}>
-                    {t('data:filter.reset')}
-                  </Button>
-                }
-              />
-            )
-          }
-          renderItem={(template) => (
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <Link
-                  to={wsPath(`/system-prompts/${template.id}`)}
-                  className="rounded-sm font-medium text-foreground ring-offset-background hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
-                >
-                  {template.name}
-                </Link>
-                <StatusBadge
-                  status={template.current_status}
-                  pendingDraft={template.has_pending_draft}
+        <DataView loading={loading && templates.length === 0} error={error}>
+          {templates.length === 0 ? (
+            <EmptyState
+              icon={ScrollText}
+              title={t('systemPrompts:page.list.empty.title')}
+              description={t('systemPrompts:page.list.empty.description')}
+              action={newTemplateCta}
+            />
+          ) : filters.filtered.length === 0 ? (
+            <EmptyState
+              icon={ScrollText}
+              title={t('data:filter.emptyFilteredTitle')}
+              description={t('data:filter.emptyFilteredDescription')}
+              action={
+                <Button type="button" variant="outline" onClick={filters.reset}>
+                  {t('data:filter.reset')}
+                </Button>
+              }
+            />
+          ) : (
+            <div className="flex flex-col gap-3">
+              {filters.filtered.map((template) => (
+                <EntityCard
+                  key={template.id}
+                  icon={ScrollText}
+                  iconTone="tools"
+                  title={template.name}
+                  href={wsPath(`/system-prompts/${template.id}`)}
+                  badges={
+                    <>
+                      <Badge variant="outline" className="font-mono">
+                        {template.slug}
+                      </Badge>
+                      <Badge variant="secondary">v{template.current_version}</Badge>
+                    </>
+                  }
+                  status={
+                    <StatusBadge
+                      status={template.current_status}
+                      pendingDraft={template.has_pending_draft}
+                    />
+                  }
+                  description={template.content.description}
                 />
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge variant="outline">{template.slug}</Badge>
-                <Badge variant="secondary">v{template.current_version}</Badge>
-              </div>
+              ))}
             </div>
           )}
-        />
+        </DataView>
       </Stack>
     </Container>
   )
