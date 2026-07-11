@@ -74,15 +74,15 @@ describe('FeedbackInbox', () => {
     expect(await screen.findByRole('link', { name: 'Onboarding' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'API-Doku' })).not.toBeInTheDocument()
     // KPI-Karte „Offen" als eigene Button-Kachel (Zaehler + Label).
-    expect(screen.getByRole('button', { name: /Offen/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /1\s*Offen/ })).toBeInTheDocument()
   })
 
   it('blendet erledigte Feedbacks ein, wenn der Status-Filter „Alle" ist', async () => {
     renderInbox()
     await screen.findByRole('link', { name: 'Onboarding' })
 
-    const statusSelect = screen.getByLabelText('Status')
-    fireEvent.change(statusSelect, { target: { value: 'all' } })
+    // Status-Filter läuft jetzt über die KPI-Kacheln/Chips — „Alle" einblenden.
+    fireEvent.click(screen.getByRole('button', { name: /Alle/ }))
     expect(await screen.findByRole('link', { name: 'API-Doku' })).toBeInTheDocument()
   })
 
@@ -91,8 +91,8 @@ describe('FeedbackInbox', () => {
     await screen.findByRole('link', { name: 'Onboarding' })
     const before = getFeedbackItems.mock.calls.length
 
-    const triage = screen.getByLabelText(/Triage — Onboarding/)
-    fireEvent.change(triage, { target: { value: 'addressed' } })
+    // Triage über die segmentierte Status-Steuerung (Button statt Select).
+    fireEvent.click(screen.getByRole('button', { name: 'Erledigt — Onboarding' }))
     await waitFor(() =>
       expect(setFeedbackResolution).toHaveBeenCalledWith('fb-open', { resolution: 'addressed' }),
     )
