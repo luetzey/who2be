@@ -17,7 +17,7 @@
     "id": "res-conv-p-zweck-pflege",
     "type": "paragraph",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Die Resource ist system-verwaltet (managed) und wird via link_scope 'resource' mit jedem Builder-Playbook als Volldokument mitgeliefert. Gepflegt wird sie ausschliesslich ueber das Code-Repo — Aenderungswuensche gehoeren in den Repo-Hand-Off, nicht in MCP-Write-Versuche.", "styles": {}}],
+    "content": [{"type": "text", "text": "Die Resource ist system-verwaltet (managed) und mit jedem Builder-Playbook als lazy-Pointer verlinkt (link_scope 'resource', embedding_mode 'lazy') — sie wird NICHT automatisch mitgeliefert, sondern via fetch_resource nachgeladen. Gepflegt wird sie ausschliesslich ueber das Code-Repo — Aenderungswuensche gehoeren in den Repo-Hand-Off, nicht in MCP-Write-Versuche.", "styles": {}}],
     "children": []
   },
   {

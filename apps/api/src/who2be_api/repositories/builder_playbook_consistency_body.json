@@ -424,7 +424,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Konventionen: ", "styles": {"bold": true}},
-      {"type": "text", "text": "die Pruef-Massstaebe fuer Trigger-Hygiene, Naming, Modi-Regel, Policy-Muster und Managed-Grenzen stehen verbindlich in der Resource 'Agent-Bau-Konventionen' — sie wird mit diesem Playbook mitgeliefert (link_scope resource) und ist der Referenzrahmen fuer den Sweep.", "styles": {}}
+      {"type": "text", "text": "die Pruef-Massstaebe fuer Trigger-Hygiene, Naming, Modi-Regel, Policy-Muster und Managed-Grenzen stehen verbindlich in der Resource 'Agent-Bau-Konventionen' — sie ist der Referenzrahmen fuer den Sweep. Als lazy-Pointer verlinkt kommt sie NICHT automatisch mit: vor dem Sweep via fetch_resource laden; die resource_id steht im linked_blocks-Eintrag dieses Playbooks.", "styles": {}}
     ],
     "children": []
   },

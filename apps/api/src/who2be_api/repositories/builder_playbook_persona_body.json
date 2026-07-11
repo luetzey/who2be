@@ -226,7 +226,7 @@
     "id": "pb-persona-li-t7-konventionen",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Konventionen: Trigger-Hygiene, Naming, Modi-Regel, Policy-Muster und Managed-Grenzen stehen verbindlich in der Resource 'Agent-Bau-Konventionen' — sie wird mit diesem Playbook mitgeliefert (link_scope resource).", "styles": {}}],
+    "content": [{"type": "text", "text": "Konventionen: Trigger-Hygiene, Naming, Modi-Regel, Policy-Muster und Managed-Grenzen stehen verbindlich in der Resource 'Agent-Bau-Konventionen'. Sie ist als lazy-Pointer verlinkt und kommt NICHT automatisch mit — vor Phase 2 (Vorschlag) via fetch_resource nachladen; die resource_id steht im linked_blocks-Eintrag dieses Playbooks.", "styles": {}}],
     "children": []
   },
   {
