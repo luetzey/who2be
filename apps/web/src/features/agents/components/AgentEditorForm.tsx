@@ -1,5 +1,5 @@
-import { AlertCircle } from 'lucide-react'
-import { type BaseSyntheticEvent } from 'react'
+import { AlertCircle, Plug, Settings2, Wrench } from 'lucide-react'
+import { type BaseSyntheticEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { type UseFormReturn } from 'react-hook-form'
 
@@ -14,6 +14,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 
 import type { AgentEditorValues } from '../hooks/useAgentForm'
@@ -96,6 +97,12 @@ interface AgentEditorFormProps {
    * es nur sichtbar und verhindert vergebliche Speicher-Versuche.
    */
   locked?: boolean
+  /**
+   * Inhalt des „Verbindung"-Tabs (Connector- + Token-Sektion). Liegt bewusst
+   * ausserhalb des `<form>`-Elements (eigene, geschachtelte Forms) — daher als
+   * Slot. Ohne diesen Prop entfaellt der Tab (Standalone-Nutzung des Editors).
+   */
+  connectionSlot?: ReactNode
 }
 
 export function AgentEditorForm({
@@ -107,12 +114,26 @@ export function AgentEditorForm({
   agent,
   submitLabel,
   locked = false,
+  connectionSlot,
 }: AgentEditorFormProps) {
   const { t } = useTranslation('agents')
   const readOnly = useCurrentWorkspaceRole() === 'viewer' || locked
   const isViewer = readOnly
 
   const resolvedSubmitLabel = submitLabel ?? t('detail.submitLabel')
+
+  const submitButton = (
+    <div className="flex justify-end">
+      <Button
+        type="submit"
+        variant="brand"
+        disabled={form.formState.isSubmitting || isViewer}
+        title={isViewer ? t('form.viewerReadOnly') : undefined}
+      >
+        {resolvedSubmitLabel}
+      </Button>
+    </div>
+  )
 
   // Aktivierbarkeit kommt vom Backend (Persona + Template gesetzt UND Persona
   // hat eine aktive Version). Bewusst nicht aus dem Live-Formular abgeleitet:
@@ -125,19 +146,34 @@ export function AgentEditorForm({
   return (
     <>
       {saveError !== null ? <ErrorAlert message={saveError} /> : null}
-      <Card>
-        <CardContent className="pt-6">
-          <Form {...form}>
-            <form onSubmit={onSubmit} className="flex flex-col gap-6">
-              <FormSection
-                title={t('form.identity.title')}
-                description={t('form.identity.description')}
-                help={
-                  <p>
-                    {t('form.identity.help')}
-                  </p>
-                }
-              >
+      <Tabs defaultValue="config">
+        <TabsList aria-label={t('detail.tabsAria')}>
+          <TabsTrigger value="config">
+            <Settings2 aria-hidden="true" />
+            {t('detail.tabs.config')}
+          </TabsTrigger>
+          <TabsTrigger value="tools">
+            <Wrench aria-hidden="true" />
+            {t('detail.tabs.tools')}
+          </TabsTrigger>
+          {connectionSlot !== undefined ? (
+            <TabsTrigger value="connection">
+              <Plug aria-hidden="true" />
+              {t('detail.tabs.connection')}
+            </TabsTrigger>
+          ) : null}
+        </TabsList>
+
+        <Form {...form}>
+          <form onSubmit={onSubmit}>
+            <TabsContent value="config">
+              <Card>
+                <CardContent className="flex flex-col gap-6 pt-6">
+                  <FormSection
+                    title={t('form.identity.title')}
+                    description={t('form.identity.description')}
+                    help={<p>{t('form.identity.help')}</p>}
+                  >
                 <FormField
                   control={form.control}
                   name="name"
@@ -247,13 +283,21 @@ export function AgentEditorForm({
                     </FormItem>
                   )}
                 />
-              </FormSection>
+                  </FormSection>
 
-              <FormSection
-                title={t('form.policy.title')}
-                description={t('form.policy.description')}
-                help={<p>{t('form.policy.help')}</p>}
-              >
+                  {submitButton}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="tools">
+              <Card>
+                <CardContent className="flex flex-col gap-6 pt-6">
+                  <FormSection
+                    title={t('form.policy.title')}
+                    description={t('form.policy.description')}
+                    help={<p>{t('form.policy.help')}</p>}
+                  >
                 <fieldset className="flex flex-col gap-3" disabled={isViewer}>
                   <legend className="text-sm font-medium">{t('form.policy.reads')}</legend>
                   {READ_SCOPE_FIELDS.map((name) => {
@@ -367,22 +411,19 @@ export function AgentEditorForm({
                     )}
                   />
                 </fieldset>
-              </FormSection>
+                  </FormSection>
 
-              <div className="flex justify-end">
-                <Button
-                  type="submit"
-                  variant="brand"
-                  disabled={form.formState.isSubmitting || isViewer}
-                  title={isViewer ? t('form.viewerReadOnly') : undefined}
-                >
-                  {resolvedSubmitLabel}
-                </Button>
-              </div>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
+                  {submitButton}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </form>
+        </Form>
+
+        {connectionSlot !== undefined ? (
+          <TabsContent value="connection">{connectionSlot}</TabsContent>
+        ) : null}
+      </Tabs>
     </>
   )
 }

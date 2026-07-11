@@ -95,11 +95,13 @@ describe('AgentsPage', () => {
 
     expect(await screen.findByText('Carla Bot')).toBeInTheDocument()
     expect(screen.getByText('Leere Hülle')).toBeInTheDocument()
-    // Aktivierbarer Agent: Status-Badge "Aktiv", kein "Unvollständig".
+    // Aktivierbarer Agent: Status "Aktiv".
     expect(screen.getByText('Aktiv')).toBeInTheDocument()
-    // Unvollstaendiger Agent: beide Badges.
-    expect(screen.getByText('Deaktiviert')).toBeInTheDocument()
+    // Unvollstaendiger Agent: Status "Unvollständig" (Vorrang vor Deaktiviert),
+    // „Einrichten"-Aktion statt „Kopieren" und ein „Persona fehlt"-Marker.
     expect(screen.getByText('Unvollständig')).toBeInTheDocument()
+    expect(screen.getByText('Einrichten')).toBeInTheDocument()
+    expect(screen.getByText('Persona fehlt')).toBeInTheDocument()
   })
 
   it('zeigt den Empty-State, wenn keine Agents existieren', async () => {

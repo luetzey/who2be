@@ -109,7 +109,7 @@ describe('ResourceDetailPage', () => {
     expect(screen.getByText('Coach')).toBeInTheDocument()
     expect(screen.getByText('Onboarding-Flow')).toBeInTheDocument()
     expect(screen.getByText('1 Block')).toBeInTheDocument()
-    expect(screen.getByText('3 Bloecke')).toBeInTheDocument()
+    expect(screen.getByText('3 Blöcke')).toBeInTheDocument()
   })
 
   it('zeigt einen EmptyState, wenn /usages 404 zurueckgibt', async () => {

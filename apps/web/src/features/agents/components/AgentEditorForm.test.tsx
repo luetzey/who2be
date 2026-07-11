@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { useForm } from 'react-hook-form'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -71,6 +71,11 @@ function Harness({ agent, locked }: { agent: Agent; locked?: boolean }) {
   )
 }
 
+// Policy-Felder liegen im Tab „Werkzeuge & Rechte" (per Default nicht gemountet).
+function openToolsTab() {
+  fireEvent.click(screen.getByRole('tab', { name: 'Werkzeuge & Rechte' }))
+}
+
 describe('AgentEditorForm', () => {
   it('zeigt die fehlenden Punkte und sperrt „Aktiv" bei nicht aktivierbarem Agent', () => {
     render(<Harness agent={makeAgent()} />)
@@ -102,6 +107,7 @@ describe('AgentEditorForm', () => {
 
   it('rendert die Werkzeuge-&-Rechte-Sektion mit Read-Scopes und Write-Switches', () => {
     render(<Harness agent={makeAgent()} />)
+    openToolsTab()
 
     // Read-Scope-Select fuer Playbooks (Default-Policy: alle).
     expect(screen.getByLabelText('Playbooks lesen')).toBeInTheDocument()
@@ -123,6 +129,7 @@ describe('AgentEditorForm', () => {
       tool_policy: { ...DEFAULT_TOOL_POLICY, write_tags: { playbook: ['support', 'billing'] } },
     })
     render(<Harness agent={agent} />)
+    openToolsTab()
     // Playbook-Tag-Feld traegt die erlaubten Tags; Persona bleibt leer (= alle).
     expect(screen.getByLabelText('Playbook-Tags')).toHaveValue('support, billing')
     expect(screen.getByLabelText('Persona-Tags')).toHaveValue('')
@@ -143,7 +150,11 @@ describe('AgentEditorForm', () => {
       />,
     )
 
+    // Konfiguration-Tab (Default): Name + Speichern gesperrt.
     expect(screen.getByLabelText('Name')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Speichern' })).toBeDisabled()
+    // Werkzeuge-&-Rechte-Tab: Policy-Felder + Speichern ebenfalls gesperrt.
+    openToolsTab()
     expect(screen.getByLabelText('Playbooks lesen')).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Speichern' })).toBeDisabled()
   })
@@ -157,6 +168,7 @@ describe('AgentEditorForm', () => {
       },
     })
     render(<Harness agent={agent} />)
+    openToolsTab()
     // Playbook: promoten erlaubt, retiren abgewaehlt; Persona ohne Eintrag = beide an.
     const promotes = screen.getAllByLabelText('Promoten (→ aktiv)')
     const retires = screen.getAllByLabelText('Zurückziehen (→ inaktiv)')

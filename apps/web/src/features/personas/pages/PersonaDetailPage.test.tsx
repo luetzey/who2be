@@ -211,8 +211,10 @@ describe('PersonaDetailPage', () => {
       </SessionContext.Provider>,
     )
 
-    // WP-E: Anzeige-Modus default — verknuepftes Playbook als Link, der
-    // Picker liegt hinter „Verknüpfungen bearbeiten".
+    // WP-E: Playbooks liegen jetzt im „Playbooks"-Tab; Anzeige-Modus default —
+    // verknuepftes Playbook als Link, der Picker liegt hinter „Verknüpfungen
+    // bearbeiten".
+    fireEvent.click(await screen.findByRole('tab', { name: 'Playbooks' }))
     expect(await screen.findByRole('link', { name: 'Coaching' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Verknüpfungen bearbeiten' }))
 
@@ -274,6 +276,7 @@ describe('PersonaDetailPage', () => {
       </SessionContext.Provider>,
     )
 
+    fireEvent.click(await screen.findByRole('tab', { name: 'Playbooks' }))
     fireEvent.click(
       await screen.findByRole('button', { name: 'Verknüpfungen bearbeiten' }),
     )
@@ -346,9 +349,12 @@ describe('PersonaDetailPage', () => {
     expect(
       screen.queryByRole('button', { name: 'Draft abschliessen' }),
     ).not.toBeInTheDocument()
-    // Kein Lösch-Bereich.
+    // Kein Lösch-Bereich (Danger-Zone liegt im „Versionen"-Tab, fuer managed
+    // ohnehin ausgeblendet).
     expect(screen.queryByText('Persona löschen')).not.toBeInTheDocument()
-    // Playbook-Verknuepfung: nur Anzeige-Modus, kein Bearbeiten-Button (WP-E).
+    // Playbook-Verknuepfung: in den „Playbooks"-Tab wechseln — nur Anzeige-
+    // Modus, kein Bearbeiten-Button (WP-E).
+    fireEvent.click(screen.getByRole('tab', { name: 'Playbooks' }))
     expect(
       screen.queryByRole('button', { name: 'Verknüpfungen bearbeiten' }),
     ).not.toBeInTheDocument()
@@ -661,13 +667,20 @@ describe('PersonaDetailPage — Header-Beschreibung & Rollen', () => {
       }),
     )
 
-    expect(await screen.findByText('Active: v1')).toBeInTheDocument()
+    // Nur-Active ohne Handlungsbedarf: kein Attention-Banner; der Status steht
+    // als Badge im DetailHeader, es gibt keine Branch-Aktionen.
+    expect(await screen.findByRole('heading', { name: 'Coach' })).toBeInTheDocument()
+    expect(screen.getByText('Aktiv')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Draft abschliessen' }),
+    ).not.toBeInTheDocument()
     expect(screen.queryByRole('toolbar')).not.toBeInTheDocument()
   })
 
   it('Viewer: sieht weder Feedback-Panel noch Danger-Zone', async () => {
     renderPersonaDetail(personaHandlers(), { me: meWithRole('viewer') })
 
+    fireEvent.click(await screen.findByRole('tab', { name: 'Playbooks' }))
     expect(await screen.findByText('Verknüpfte Playbooks')).toBeInTheDocument()
     expect(screen.queryByText('Feedback & Nutzung')).not.toBeInTheDocument()
     expect(screen.queryByText('Persona löschen')).not.toBeInTheDocument()

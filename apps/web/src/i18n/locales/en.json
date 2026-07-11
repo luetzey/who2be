@@ -1839,7 +1839,19 @@
         "playbook": "Playbook",
         "resource": "Resource",
         "system": "System"
-      }
+      },
+      "sortCare": "Needs attention",
+      "sortUsage": "Usage",
+      "sortActivity": "Activity",
+      "curationTitle": "Usage & signals",
+      "curationDescription": "Aggregated agent feedback per element — what works, what needs care.",
+      "sort": "Sort",
+      "careOnly": "Only needs attention",
+      "careEmpty": "No elements need attention. 🎉",
+      "helpfulShort": "{{count}} helpful",
+      "negativeShort": "{{count}} negative",
+      "showLess": "Show less",
+      "showAll": "Show all {{count}}"
     },
     "tiles": {
       "mostUsed": "Most used",
@@ -1882,6 +1894,30 @@
       "submit": "Report",
       "success": "Problem reported. Thanks!",
       "error": "Could not report the problem."
+    },
+    "detail": {
+      "description": "Feedback curation — usage, signals and individual events for this element.",
+      "openElement": "Open element",
+      "empty": "No feedback for this element yet.",
+      "usageTitle": "Usage & outcome",
+      "usageCount": "Uses (30 days)",
+      "successRate": "Success rate",
+      "applied": "applied",
+      "signalsTitle": "Signals",
+      "signalsTotal": "{{count}} total",
+      "negativeTitle_one": "{{count}} negative signal",
+      "negativeTitle_other": "{{count}} negative signals",
+      "negativeHint": "Several signals report problems. A revised version could fix this.",
+      "revise": "Revise",
+      "noteTitle": "Add note",
+      "notePlaceholder": "Capture a note (e.g. “update deadlines to 30 days”)…",
+      "noteNoOpen": "Notes attach to an open signal — there is none right now.",
+      "noteSave": "Save note",
+      "noteSuccess": "Note saved.",
+      "eventsTitle": "Individual events",
+      "eventsHide": "Collapse",
+      "eventsShow": "Expand",
+      "eventsEmpty": "No individual events."
     }
   }
 }

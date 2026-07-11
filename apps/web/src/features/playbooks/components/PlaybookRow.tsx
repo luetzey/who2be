@@ -67,7 +67,10 @@ export function PlaybookRow({ playbook, wsPath, parent, resolveChild }: Playbook
       className="relative flex gap-4 rounded-xl border bg-card p-4 shadow-card transition-[box-shadow,border-color] duration-[var(--duration-fast)] ease-spring hover:shadow-popover"
       data-testid="playbook-row"
     >
-      <PlaybookTypeIcon type={playbook.type} />
+      {/* Icon-Kachel auf die geteilte `EntityIcon`-Geometrie (md: 44px,
+          rounded-xl) angeglichen, damit Persona-/Playbook-/Resource-Karten
+          dieselbe Kachel teilen — der typ-spezifische Icon-Glyph bleibt. */}
+      <PlaybookTypeIcon type={playbook.type} className="size-11 rounded-xl" />
 
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex flex-wrap items-center gap-2">
@@ -127,7 +130,7 @@ export function PlaybookRow({ playbook, wsPath, parent, resolveChild }: Playbook
         ) : null}
 
         {composeChildren.length > 0 ? (
-          <div className="relative mt-2 overflow-hidden rounded-lg bg-pill-catalog/45">
+          <div className="relative mt-2 overflow-hidden rounded-lg bg-pill-catalog/40">
             <Button
               type="button"
               variant="ghost"
