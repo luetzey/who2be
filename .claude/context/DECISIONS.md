@@ -189,3 +189,28 @@ bleiben)._
   Capabilities nie. Leitplanken im Content: Schließen nur nach User-Freigabe,
   `dismissed` nie ohne Note, Managed-Signale erst nach verteiltem Repo-Fix.
   `BUILDER_CONTENT_VERSION` 5 → 6.
+
+## 2026-07-11 — Builder v7: Konventionen-Resource bleibt lazy, Prosa korrigiert
+- **Kontext:** Die v5-Annahme „Agent-Bau-Konventionen wird bei fetch_playbook
+  als Volldokument mitgeliefert" war nie Realität: Der Seed setzt kein
+  `embedding_mode`, der Link-Default ist `lazy`, und `fetch_playbook` inlined
+  nur `link_scope='resource'` + `embedding_mode='inline'`. Folge: fünf
+  gleichlautende incorrect-Feedback-Signale (Pflege-Läufe 10.07.) — die
+  „verbindlichen" Konventionen wurden faktisch nie geladen (usage_count ~0).
+- **Entscheidung: Verdrahtung bleibt `lazy`; die Playbook-/Resource-Prosa wird
+  auf den realen Pointer korrigiert und weist das explizite
+  `fetch_resource`-Nachladen an** (resource_id aus dem `linked_blocks`-Eintrag,
+  da UUIDs workspace-spezifisch sind — kein Hardcoding im kanonischen Content).
+  **Begründung:** (1) `lazy` ist der dokumentierte Konventions-Default
+  (Token-Budget; Builder-Lite existiert genau dafür — 38 Blöcke Inline-Payload
+  bei jedem der 5 Playbook-Fetches wären das Gegenteil); (2) ein Wechsel auf
+  `inline` müsste bestehende `playbook_resource_link`-Rows in allen Workspaces
+  anfassen — der Start-Sync kann heute nur Content ersetzen und Links
+  insert-missing anlegen, nicht updaten; der Prosa-Fix verteilt dagegen über
+  den vorhandenen Content-Sync. **Verworfen:** `embedding_mode='inline'`
+  (Kontext-Kosten + neues Sync-Plumbing für Link-Updates).
+- Dabei mitkorrigiert: `fetch_playbook`-Docstring + `PlaybookWithResources`-
+  Model-Doku (versprachen Volldokument für ALLE resource-Scope-Links) und der
+  Seed-Kommentar („Volldokument-Referenz"); Persona-Abgleich: Agent-Playbook
+  bietet im Hand-Off jetzt den Konsistenz- & Drift-Check an (Feedback-
+  Mikrobeobachtung an der Builder-Persona). `BUILDER_CONTENT_VERSION` 6 → 7.

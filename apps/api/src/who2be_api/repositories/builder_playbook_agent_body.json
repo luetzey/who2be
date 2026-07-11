@@ -303,7 +303,7 @@
     "id": "pb-agent-li-create-p4-2",
     "type": "numberedListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Melde dem Nutzer Name, ID und Status zurueck und nenne offene Luecken (missing), falls der Agent noch nicht aktivierbar ist.", "styles": {}}],
+    "content": [{"type": "text", "text": "Melde dem Nutzer Name, ID und Status zurueck und nenne offene Luecken (missing), falls der Agent noch nicht aktivierbar ist. Biete zum Abschluss einen Konsistenz- & Drift-Check an, der die neue Konfiguration im Library-Kontext gegenprueft.", "styles": {}}],
     "children": []
   },
   {
@@ -588,7 +588,7 @@
     "id": "pb-agent-li-notes-konventionen",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Konventionen: das Tool-Policy-Muster (Lese-Scopes, minimale Schreib-Capabilities, promote_retire, transition_grants, write_rate_limit) sowie Trigger-Hygiene, Naming, Modi-Regel und Managed-Grenzen stehen verbindlich in der Resource 'Agent-Bau-Konventionen' — sie wird mit diesem Playbook mitgeliefert (link_scope resource).", "styles": {}}],
+    "content": [{"type": "text", "text": "Konventionen: das Tool-Policy-Muster (Lese-Scopes, minimale Schreib-Capabilities, promote_retire, transition_grants, write_rate_limit) sowie Trigger-Hygiene, Naming, Modi-Regel und Managed-Grenzen stehen verbindlich in der Resource 'Agent-Bau-Konventionen'. Sie ist als lazy-Pointer verlinkt und kommt NICHT automatisch mit — vor Phase 2 (Vorschlag) via fetch_resource nachladen; die resource_id steht im linked_blocks-Eintrag dieses Playbooks.", "styles": {}}],
     "children": []
   },
   {

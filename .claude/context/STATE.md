@@ -1,8 +1,28 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-07-10 (3. Lauf)_
+_Stand: 2026-07-11_
 
 ## Funktioniert
+
+- **Builder v7: Konventionen-Pointer-Fix UMGESETZT (2026-07-11, Branch
+  `claude/builder-agent-role-eupbyq`, Pflege-Lauf 3):** Die fünf
+  gleichlautenden incorrect-Signale („Agent-Bau-Konventionen wird
+  mitgeliefert (link_scope resource)" — real ist der Link `lazy`,
+  `linked_resources` kommt leer) sind behoben: Prosa in allen 5
+  Builder-Playbook-Sidecars + der Resource-Selbstbeschreibung auf den
+  realen lazy-Pointer korrigiert inkl. expliziter
+  fetch_resource-Nachlade-Anweisung (resource_id aus `linked_blocks`, kein
+  UUID-Hardcoding); Entscheidung lazy-statt-inline in DECISIONS.md
+  (2026-07-11). Mitkorrigiert: `fetch_playbook`-Docstring +
+  `PlaybookWithResources`-Doku (versprachen Volldokument für alle
+  resource-Scope-Links), Seed-Kommentar; Agent-Playbook bietet im Hand-Off
+  jetzt den Konsistenz- & Drift-Check an (Persona-Abgleich).
+  `BUILDER_CONTENT_VERSION` 6→7 (Verteilung via Start-Sync). Triage:
+  4 Alt-Signale (get_agent-Reads, fetch_agent-self-only, Modi-Regel,
+  Trigger-Kollision) sind in den aktuellen Versionen bereits behoben —
+  Schließung via resolve_feedback erst NACH Merge+Deploy dieses Fixes
+  (managed-Regel). DoD: ruff/format/mypy clean, **1002 pytest passed
+  (0 skipped) gegen lokale Postgres 16, Coverage 90,23 %** (Gate 85).
 
 - **Feedback-Resolve für Agenten + Builder v6 UMGESETZT (2026-07-10, Branch
   `claude/builder-agent-setup-pyczxa`, Folge-PR zu #303):** Neue Capability

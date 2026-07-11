@@ -358,7 +358,12 @@ _AGENT_BUILDER_LITE_TEMPLATE_SLUG = "agent-builder-lite"
 # v6: resolve_feedback im Pflege-Lauf (Sidecars referenzieren das Triage-Tool)
 # + `feedback_resolve` in der Builder-Policy (Agent-Rows werden im Sync
 # erstmals mit nachgezogen).
-BUILDER_CONTENT_VERSION = 6
+# v7: Konventionen-Prosa in allen 5 Builder-Playbooks + der Resource auf den
+# realen lazy-Pointer korrigiert ('mitgeliefert (link_scope resource)' war
+# falsch — der Link ist embedding_mode 'lazy', explizites fetch_resource-
+# Nachladen noetig; Feedback-Signale Pflege-Lauf 10./11.07.2026) +
+# Konsistenz-Check-Angebot im Hand-Off des Agent-Playbooks (Persona-Abgleich).
+BUILDER_CONTENT_VERSION = 7
 
 _BUILDER_PERSONA_DESCRIPTION = (
     "Meta-Agent, der Personas, Playbooks, Resources und Agenten im Workspace "
@@ -626,7 +631,8 @@ async def _seed_default_agents(
         )
 
     # 4. Managed-Resource „Agent-Bau-Konventionen" + v1 (active) + Links von
-    #    ALLEN Builder-Playbooks (link_scope='resource', Volldokument-Referenz).
+    #    ALLEN Builder-Playbooks (link_scope='resource', embedding_mode Default
+    #    'lazy' — Pointer; die Playbook-Prosa weist das fetch_resource-Nachladen an).
     #    Der Guard laeuft wie ueberall ueber workspace_id + name; die Links
     #    prallen per ON CONFLICT DO NOTHING an den partiellen Unique-Indexen
     #    aus Migration 0021 ab.

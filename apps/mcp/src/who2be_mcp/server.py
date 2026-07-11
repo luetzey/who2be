@@ -175,10 +175,11 @@ class PlaybookWithResources(BaseModel):
     """Ein Playbook samt seiner Resource-Verweise und geordneter Sub-Playbooks.
 
     `linked_blocks` traegt alle Links als Pointer (Backward-Compat zum
-    ADR-0021-Vertrag) — sowohl Block-Anker als auch Resource-Volldokument-
-    Refs (`link_scope='resource'`, `block_id` None). `linked_resources`
-    haelt fuer letztere zusaetzlich das vollstaendige Dokument inline,
-    damit Agenten den Snippet-Fetch sparen koennen.
+    ADR-0021-Vertrag) — sowohl Block-Anker als auch Resource-Refs
+    (`link_scope='resource'`, `block_id` None). `linked_resources` haelt
+    das vollstaendige Dokument inline NUR fuer Resource-Refs mit
+    `embedding_mode='inline'`; `lazy`-Links (Default) bleiben Pointer und
+    werden via `fetch_resource` nachgeladen.
 
     `composed_playbooks` enthaelt die geordneten, aktiven Sub-Playbooks falls
     dieses Playbook ein Composite ist (ADR-0024, Gap 2.1). Nur eine Ebene wird
@@ -432,9 +433,10 @@ async def fetch_playbook(playbook_id: str, locale: str = "de") -> PlaybookWithRe
 
     `linked_blocks` enthaelt alle Verweise als Pointer (resource_id +
     block_id, Verfuegbarkeit, Section-Preview) — kein Auto-Inline fuer
-    Block-Refs (ADR-0021). Fuer `link_scope='resource'`-Eintraege wird die
-    Ziel-Resource zusaetzlich als Volldokument in `linked_resources`
-    ausgeliefert; Block-Refs bleiben Pointer und werden bei Bedarf ueber
+    Block-Refs (ADR-0021). Fuer `link_scope='resource'`-Eintraege mit
+    `embedding_mode='inline'` wird die Ziel-Resource zusaetzlich als
+    Volldokument in `linked_resources` ausgeliefert; `lazy`-Links (Default)
+    und Block-Refs bleiben Pointer und werden bei Bedarf ueber
     `fetch_resource` nachgeladen.
 
     Ist das Playbook ein Composite (`is_composite=True`), enthaelt

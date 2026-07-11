@@ -436,7 +436,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Konventionen: ", "styles": {"bold": true}},
-      {"type": "text", "text": "Trigger-Hygiene, Naming, Modi-Regel, Policy-Muster, Status-Workflow und Managed-Grenzen stehen verbindlich in der Resource 'Agent-Bau-Konventionen' — sie wird mit diesem Playbook mitgeliefert (link_scope resource) und ist der Massstab fuer Triage und Umsetzung.", "styles": {}}
+      {"type": "text", "text": "Trigger-Hygiene, Naming, Modi-Regel, Policy-Muster, Status-Workflow und Managed-Grenzen stehen verbindlich in der Resource 'Agent-Bau-Konventionen' — sie ist der Massstab fuer Triage und Umsetzung. Als lazy-Pointer verlinkt kommt sie NICHT automatisch mit: in Phase 1 via fetch_resource laden; die resource_id steht im linked_blocks-Eintrag dieses Playbooks.", "styles": {}}
     ],
     "children": []
   },
