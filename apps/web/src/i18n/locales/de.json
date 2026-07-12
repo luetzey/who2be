@@ -1907,7 +1907,8 @@
         "signal": "Signal",
         "type": "Typ",
         "allSignals": "Alle Signale",
-        "allTypes": "Alle Typen"
+        "allTypes": "Alle Typen",
+        "statusGroup": "Nach Status filtern"
       },
       "status": {
         "open": "Offen",
