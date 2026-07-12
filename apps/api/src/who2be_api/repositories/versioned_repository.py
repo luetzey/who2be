@@ -51,6 +51,9 @@ class AggregateTables(Generic[TRead, TVersionRead]):
     entity: str
     read_model: type[TRead]
     version_read_model: type[TVersionRead]
+    # `has_slug=True` blendet die workspace-eindeutige `slug`-Spalte in alle
+    # Lese-/Schreib-Pfade ein (nur Resource; Persona/Playbook haben keine).
+    has_slug: bool = False
     version_table: str = field(init=False)
     fk: str = field(init=False)
 
@@ -75,6 +78,17 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
         self._pool = pool
         self._t = tables
 
+    # --- Slug-aware Spalten-Bausteine ----------------------------------------
+
+    def _slug_select(self) -> str:
+        """`e.slug, ` fuer slug-fuehrende Aggregate, sonst leer."""
+        return "e.slug, " if self._t.has_slug else ""
+
+    def _returning_cols(self) -> str:
+        """Identitaets-RETURNING-Spalten (inkl. `slug` bei slug-Aggregaten)."""
+        slug = "slug, " if self._t.has_slug else ""
+        return f"id, workspace_id, owner_id, name, {slug}current_version, created_at, updated_at"
+
     # --- SELECT-Bausteine (von Subklassen-fetch/list eingebettet) ------------
 
     def _select_current(self, locale_param: str) -> str:
@@ -85,7 +99,7 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
         """
         e, ev, fk = self._t.entity, self._t.version_table, self._t.fk
         return (
-            "SELECT e.id, e.workspace_id, e.owner_id, e.name, e.is_managed, "
+            f"SELECT e.id, e.workspace_id, e.owner_id, e.name, {self._slug_select()}e.is_managed, "
             "ev.version AS current_version, "
             "e.created_at, e.updated_at, ev.content, ev.locale, "
             "ev.status AS current_status, "
@@ -105,7 +119,7 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
         """Active-Read pro Sprache: die `status='active'`-Version des Tracks."""
         e, ev, fk = self._t.entity, self._t.version_table, self._t.fk
         return (
-            "SELECT e.id, e.workspace_id, e.owner_id, e.name, e.is_managed, "
+            f"SELECT e.id, e.workspace_id, e.owner_id, e.name, {self._slug_select()}e.is_managed, "
             "ev.version AS current_version, "
             "e.created_at, e.updated_at, ev.content, ev.locale, "
             "ev.status AS current_status, "
@@ -131,6 +145,7 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
         name: str,
         content: BaseModel,
         locales: list[str] | None = None,
+        slug: str | None = None,
     ) -> TRead:
         # Content-i18n: pro gewaehlter Sprache eine eigene Draft-v1 (Copy der
         # Vorlage). Default `['de']` haelt Bestands-Aufrufer kompatibel.
@@ -138,15 +153,28 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
         content_json = content.model_dump(mode="json")
         e, ev, fk = self._t.entity, self._t.version_table, self._t.fk
         async with self._pool.acquire() as conn, conn.transaction():
-            row = await conn.fetchrow(
-                f"INSERT INTO {e} (workspace_id, owner_id, name) "
-                "VALUES ($1, $2, $3) "
-                "RETURNING id, workspace_id, owner_id, name, current_version, "
-                "created_at, updated_at",
-                workspace_id,
-                owner_id,
-                name,
-            )
+            if self._t.has_slug:
+                # `slug` ist bei slug-fuehrenden Aggregaten Pflicht (der Service
+                # leitet ihn aus dem Namen ab); die UNIQUE(workspace_id, slug)
+                # meldet Kollisionen als asyncpg.UniqueViolationError.
+                row = await conn.fetchrow(
+                    f"INSERT INTO {e} (workspace_id, owner_id, name, slug) "
+                    "VALUES ($1, $2, $3, $4) "
+                    f"RETURNING {self._returning_cols()}",
+                    workspace_id,
+                    owner_id,
+                    name,
+                    slug,
+                )
+            else:
+                row = await conn.fetchrow(
+                    f"INSERT INTO {e} (workspace_id, owner_id, name) "
+                    "VALUES ($1, $2, $3) "
+                    f"RETURNING {self._returning_cols()}",
+                    workspace_id,
+                    owner_id,
+                    name,
+                )
             for loc in target_locales:
                 await conn.execute(
                     f"INSERT INTO {ev} "
@@ -226,8 +254,7 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
                 "SET current_version = CASE WHEN $4 THEN $1 ELSE current_version END, "
                 "name = COALESCE($2, name), updated_at = now() "
                 "WHERE id = $3 "
-                "RETURNING id, workspace_id, owner_id, name, current_version, "
-                "created_at, updated_at",
+                f"RETURNING {self._returning_cols()}",
                 next_version,
                 name,
                 entity_id,
@@ -300,8 +327,7 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
                     f"UPDATE {e} "
                     "SET name = COALESCE($1, name), updated_at = now() "
                     "WHERE id = $2 "
-                    "RETURNING id, workspace_id, owner_id, name, current_version, "
-                    "created_at, updated_at",
+                    f"RETURNING {self._returning_cols()}",
                     name,
                     entity_id,
                 )
@@ -331,8 +357,7 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
                 "SET current_version = CASE WHEN $4 THEN $1 ELSE current_version END, "
                 "name = COALESCE($2, name), updated_at = now() "
                 "WHERE id = $3 "
-                "RETURNING id, workspace_id, owner_id, name, current_version, "
-                "created_at, updated_at",
+                f"RETURNING {self._returning_cols()}",
                 next_version,
                 name,
                 entity_id,
@@ -405,8 +430,7 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
                 "current_version = CASE WHEN $3 THEN $1 ELSE current_version END, "
                 "updated_at = now() "
                 "WHERE id = $2 "
-                "RETURNING id, workspace_id, owner_id, name, current_version, "
-                "created_at, updated_at",
+                f"RETURNING {self._returning_cols()}",
                 next_version,
                 entity_id,
                 is_default,

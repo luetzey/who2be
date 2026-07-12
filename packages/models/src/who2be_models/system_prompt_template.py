@@ -13,19 +13,18 @@ ist mit Migration `0030_blocknote_only.sql` entfallen.
 """
 
 from datetime import datetime
-from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field
 
 from who2be_models.locale import DEFAULT_LOCALE, ContentLocale
+from who2be_models.slug import SlugStr as SlugStr  # re-export (Bestands-Import-Pfad)
 from who2be_models.status import VersionStatus
 
-# Slug-Form fuer Default-Templates und idempotenten Seed (Migration 0023b).
-# Kleinbuchstaben + Bindestriche; max. 100 Zeichen.
-SlugStr = Annotated[
-    str, StringConstraints(min_length=1, max_length=100, pattern=r"^[a-z0-9][a-z0-9-]*$")
-]
+# `SlugStr` (Kleinbuchstaben + Bindestriche, max. 100 Zeichen) lebt geteilt in
+# `who2be_models.slug` — Default-Templates aus dem Seed (Migration 0023b) sowie
+# Resources nutzen dieselbe Regel. Re-Export haelt den Bestands-Import-Pfad
+# `from who2be_models.system_prompt_template import SlugStr` gueltig.
 
 
 class SystemPromptTemplateContent(BaseModel):

@@ -114,6 +114,19 @@ async def get_resource(
     return await service.get(ctx, resource_id, locale=locale)
 
 
+@router.post("/{resource_id}/duplicate", status_code=status.HTTP_201_CREATED)
+@limiter.limit(write_limit)
+async def duplicate_resource(
+    request: Request,
+    resource_id: UUID,
+    ctx: Ctx,
+    service: Service,
+    locale: LocaleQuery,
+) -> ResourceRead:
+    """Dupliziert eine Resource als frische Draft mit eigenem Slug (editor+)."""
+    return await service.duplicate(ctx, resource_id, locale=locale)
+
+
 @router.get("/{resource_id}/blocks")
 async def list_resource_blocks(
     resource_id: UUID, ctx: Ctx, service: Service, locale: LocaleQuery

@@ -26,6 +26,7 @@ from pydantic import (
 )
 
 from who2be_models.locale import DEFAULT_LOCALE, ContentLocale, normalize_locale
+from who2be_models.slug import SlugStr
 from who2be_models.status import VersionStatus
 
 # Stabile BlockNote-Block-ID bzw. Block-Typ — die ID ist der Anker fuer
@@ -113,6 +114,10 @@ class ResourceCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1, max_length=200)
+    # `slug` wird beim Create automatisch aus `name` abgeleitet, falls nicht
+    # gesetzt (spiegelt SystemPromptTemplateCreate). Workspace-eindeutig; ein
+    # explizit gesetzter Slug erlaubt stabile Kennungen fuer Seeds/Imports.
+    slug: SlugStr | None = None
     content: ResourceContent = Field(default_factory=ResourceContent)
     # Content-i18n (ADR-0027): Sprachvarianten beim Anlegen. Default `['de']`
     # = Backward-Compat; jede Sprache startet als eigene Draft-v1 (Copy).
@@ -151,6 +156,9 @@ class ResourceRead(BaseModel):
     workspace_id: UUID
     owner_id: UUID
     name: str
+    # Workspace-eindeutiger Slug (Migration 0064). Spiegelt
+    # `SystemPromptTemplateRead.slug`; beim Create aus `name` abgeleitet.
+    slug: str
     current_version: int
     # Vom System verwaltet (Builder-Lock): User-Edits werden serverseitig
     # mit 403 geblockt; nur Duplizieren ist erlaubt.
@@ -370,6 +378,12 @@ class SubResourceRead(BaseModel):
     # Embed-Modus (Default 'lazy'): bei 'inline' haengt `fetch_resource` das
     # Volldokument zusaetzlich an `ResourceRead.inline_sub_resources`.
     embedding_mode: EmbeddingMode = "lazy"
+    # List-Card-Summary (nur der Resource-List-Endpoint befuellt diese Felder,
+    # kein N+1): `status`/`version` sind Status + Nummer der aktuellen Version
+    # des Kindes, damit die aufklappbare Karte den Kind-Stand ohne Extra-Fetch
+    # zeigt. Der MCP-`fetch_resource`-Pfad (Link-Tabelle) laesst sie auf None.
+    status: VersionStatus | None = None
+    version: int | None = None
 
     @computed_field  # type: ignore[prop-decorator]
     @property

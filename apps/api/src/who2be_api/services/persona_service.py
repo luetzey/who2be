@@ -168,6 +168,26 @@ class PersonaService:
             ctx.workspace_id, ctx.user_id, data.name, data.content, data.locales
         )
 
+    async def duplicate(
+        self, ctx: WorkspaceContext, persona_id: UUID, locale: str = DEFAULT_LOCALE
+    ) -> PersonaRead:
+        """Dupliziert eine Persona als frische Draft-v1 (Deep-Copy des Inhalts).
+
+        Spiegelt `AgentService.copy`: Editor-Gate + Capability + Rate-Limit, der
+        Inhalt der aktuellen (Locale-)Version wird in eine NEUE Persona kopiert
+        (Version 1, Status draft), Name `"{name} (Kopie)"`. Personas tragen
+        keinen Slug.
+        """
+        require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.persona_write)
+        require_write_rate(ctx)
+        source = await self.get(ctx, persona_id, locale=locale)
+        require_write_tags(ctx, "persona", source.content.tags)
+        name = f"{source.name} (Kopie)"
+        return await self._repo.insert(
+            ctx.workspace_id, ctx.user_id, name, source.content, [locale]
+        )
+
     async def list_all(
         self,
         ctx: WorkspaceContext,

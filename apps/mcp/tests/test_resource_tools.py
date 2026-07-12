@@ -56,6 +56,7 @@ def _resource_payload(
         "workspace_id": str(_WORKSPACE_ID),
         "owner_id": str(uuid4()),
         "name": name,
+        "slug": name.lower().replace(" ", "-"),
         "current_version": 1,
         "current_status": "active",
         "has_pending_draft": False,

@@ -35,6 +35,7 @@ from who2be_models import (
     ResourceContent,
     ResourceRead,
     ResourceVersionRead,
+    SubResourceRead,
 )
 
 
@@ -70,6 +71,7 @@ class ResourceRepository(Protocol):
         name: str,
         content: ResourceContent,
         locales: list[str] | None = None,
+        slug: str | None = None,
     ) -> ResourceRead: ...
 
     async def list_by_workspace(
@@ -144,6 +146,13 @@ class ResourceRepository(Protocol):
         self, workspace_id: UUID, resource_ids: list[UUID]
     ) -> dict[UUID, ResourceListCounts]: ...
 
+    async def list_sub_resource_children(
+        self,
+        workspace_id: UUID,
+        resource_ids: list[UUID],
+        locale: str = DEFAULT_LOCALE,
+    ) -> dict[UUID, list[SubResourceRead]]: ...
+
 
 class PgResourceRepository(VersionedAggregateRepository[ResourceRead, ResourceVersionRead]):
     """asyncpg-Implementierung von `ResourceRepository` auf dem generischen Kern."""
@@ -151,7 +160,9 @@ class PgResourceRepository(VersionedAggregateRepository[ResourceRead, ResourceVe
     def __init__(self, pool: asyncpg.Pool) -> None:
         super().__init__(
             pool,
-            AggregateTables("resource", ResourceRead, ResourceVersionRead),
+            # `has_slug=True`: Resources tragen — wie SystemPromptTemplates —
+            # einen workspace-eindeutigen Slug (Migration 0064).
+            AggregateTables("resource", ResourceRead, ResourceVersionRead, has_slug=True),
         )
 
     # --- Generischer Kern, in die Resource-Signaturen gewrappt ---------------
@@ -163,8 +174,9 @@ class PgResourceRepository(VersionedAggregateRepository[ResourceRead, ResourceVe
         name: str,
         content: ResourceContent,
         locales: list[str] | None = None,
+        slug: str | None = None,
     ) -> ResourceRead:
-        return await self._insert(workspace_id, owner_id, name, content, locales)
+        return await self._insert(workspace_id, owner_id, name, content, locales, slug=slug)
 
     async def update(
         self,
@@ -349,3 +361,56 @@ class PgResourceRepository(VersionedAggregateRepository[ResourceRead, ResourceVe
             )
             for row in rows
         }
+
+    async def list_sub_resource_children(
+        self,
+        workspace_id: UUID,
+        resource_ids: list[UUID],
+        locale: str = DEFAULT_LOCALE,
+    ) -> dict[UUID, list[SubResourceRead]]:
+        """Direkte Sub-Resource-Kinder je Parent als Summary (ein Roundtrip).
+
+        Spiegelt `PgPlaybookRepository._attach_compose_children`: EIN Batch-Select
+        ueber `resource_composition` fuer alle Parents der Seite (kein N+1). Je
+        Kind traegt die Summary `id`, `name` sowie `status`/`version` der
+        aktuellen Version des `locale`-Tracks — genug, damit die aufklappbare
+        List-Karte den Kind-Stand ohne Extra-Fetch zeigt. DISTINCT ueber
+        (parent, child): ein Kind mit mehreren Composition-Kanten (resource +
+        block) erscheint genau einmal, geordnet nach kleinster `position`.
+        """
+        if not resource_ids:
+            return {}
+        rows = await self._pool.fetch(
+            "SELECT parent_id, child_id, name, version, status FROM ( "
+            "  SELECT DISTINCT ON (rc.parent_id, c.id) "
+            "         rc.parent_id, c.id AS child_id, c.name, "
+            "         cv.version, cv.status, rc.position "
+            "    FROM resource_composition rc "
+            "    JOIN resource c ON c.id = rc.child_id "
+            "    JOIN resource_version cv "
+            "      ON cv.resource_id = c.id AND cv.locale = $2 "
+            "     AND cv.version = ( "
+            "         SELECT max(v.version) FROM resource_version v "
+            "         WHERE v.resource_id = c.id AND v.locale = $2 "
+            "     ) "
+            "   WHERE rc.workspace_id = $1 AND rc.parent_id = ANY($3::uuid[]) "
+            "   ORDER BY rc.parent_id, c.id, rc.position ASC "
+            ") t "
+            "ORDER BY t.parent_id, t.position ASC, t.name ASC",
+            workspace_id,
+            locale,
+            resource_ids,
+        )
+        by_parent: dict[UUID, list[SubResourceRead]] = {}
+        for row in rows:
+            by_parent.setdefault(row["parent_id"], []).append(
+                SubResourceRead.model_validate(
+                    {
+                        "id": row["child_id"],
+                        "name": row["name"],
+                        "status": row["status"],
+                        "version": row["version"],
+                    }
+                )
+            )
+        return by_parent

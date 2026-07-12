@@ -165,6 +165,10 @@ export interface Token {
   created_at: string
   last_used_at: string | null
   revoked_at: string | null
+  // Ablaufzeitpunkt (ISO-8601, ADR-0039) oder null = kein Ablauf. Die UI bildet
+  // daraus den „expired"-Bucket (expires_at in der Vergangenheit UND nicht
+  // widerrufen). Optional, weil aeltere Backend-Versionen das Feld nicht liefern.
+  expires_at?: string | null
 }
 
 // Rollen-Hierarchie laut ADR-0023: admin > editor > viewer. Single-Source
@@ -375,11 +379,25 @@ export interface ResourceContent {
   tags?: string[]
 }
 
+// Kompakte Kind-Summary fuer die aufklappbare Resource-List-Karte. Spiegelt
+// die vom List-Endpoint befuellten Felder von `SubResourceRead` (id/name +
+// Status/Version der aktuellen Kind-Version). Optional getragen, weil andere
+// Read-Pfade (get/MCP-fetch) das Feld nicht befuellen.
+export interface SubResourceSummary {
+  id: string
+  name: string
+  status?: VersionStatus
+  version?: number
+}
+
 export interface Resource {
   id: string
   workspace_id: string
   owner_id: string
   name: string
+  // Workspace-eindeutiger Slug (Backend leitet ihn beim Anlegen aus dem Namen
+  // ab). Vom Backend garantiert; im TS als Pflichtfeld gefuehrt.
+  slug: string
   current_version: number
   current_status?: VersionStatus
   has_pending_draft?: boolean
@@ -394,6 +412,10 @@ export interface Resource {
   // eingebetteten/verlinkten Sub-Resources.
   playbook_link_count?: number
   sub_resource_count?: number
+  // List-Card: direkte Sub-Resource-Kinder (Summary), damit die Karte sie
+  // aufklappen kann. Nur der List-Endpoint befuellt das Feld (Batch, kein N+1);
+  // andere Read-Pfade lassen es leer/weg.
+  sub_resources?: SubResourceSummary[]
 }
 
 export interface ResourceVersion {

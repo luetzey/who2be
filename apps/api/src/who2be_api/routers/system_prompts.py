@@ -88,6 +88,18 @@ async def get_template(template_id: UUID, ctx: Ctx, service: Service) -> SystemP
     return await service.get(ctx, template_id)
 
 
+@router.post("/{template_id}/duplicate", status_code=status.HTTP_201_CREATED)
+@limiter.limit(write_limit)
+async def duplicate_template(
+    request: Request,
+    template_id: UUID,
+    ctx: Ctx,
+    service: Service,
+) -> SystemPromptTemplateRead:
+    """Dupliziert ein System-Prompt-Template als frische Draft mit eigenem Slug (editor+)."""
+    return await service.duplicate(ctx, template_id)
+
+
 @router.put("/{template_id}")
 @limiter.limit(write_limit)
 async def update_template(
