@@ -12,6 +12,15 @@ vi.mock('@/auth/useCurrentWorkspaceRole', () => ({
   useCurrentWorkspaceRole: () => 'editor',
 }))
 
+// Stabile Loader-Referenzen fuer den TagInput (siehe AgentEditorForm.test).
+const listPersonaTags = vi.fn().mockResolvedValue([])
+const listPlaybookTags = vi.fn().mockResolvedValue([])
+const listResourceTags = vi.fn().mockResolvedValue([])
+
+vi.mock('@/api/useApi', () => ({
+  useApi: () => ({ listPersonaTags, listPlaybookTags, listResourceTags }),
+}))
+
 const agent: Agent = {
   id: 'a-1',
   workspace_id: 'ws-1',
@@ -41,6 +50,10 @@ function Harness() {
       system_prompt_template_id: '',
       status: agent.status,
       ...agent.tool_policy,
+      // Tag-Scope-Felder liegen flach als string[] im Formular (TagInput-Pills).
+      write_tags_persona: [],
+      write_tags_playbook: [],
+      write_tags_resource: [],
       // write_rate_limit ist im Formular ein String — den number|null-Spread
       // aus der Policy hier ueberschreiben (sonst Typkollision).
       write_rate_limit: '',

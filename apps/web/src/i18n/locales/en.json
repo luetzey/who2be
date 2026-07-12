@@ -841,7 +841,11 @@
         "searchPlaceholder": "Filter by name…",
         "searchEmpty": "No playbooks match this search.",
         "triggerCount_one": "{{count}} trigger",
-        "triggerCount_other": "{{count}} triggers"
+        "triggerCount_other": "{{count}} triggers",
+        "compositeBadge": "Composite"
+      },
+      "tabs": {
+        "modes": "Modes"
       }
     },
     "new": {
@@ -927,6 +931,10 @@
         "antiPatterns": {
           "label": "Anti-patterns"
         }
+      },
+      "section": {
+        "title": "Modes",
+        "description": "Situational variants of the persona. The default mode applies when no trigger matches."
       }
     },
     "skills": {
@@ -1706,6 +1714,13 @@
     "agentSection": {
       "title": "API tokens",
       "description": "Tokens for this agent. Every token is bound to the agent and inherits its MCP tool policy (reads scoped, writes gated). The role independently governs REST mutations."
+    },
+    "active": {
+      "title": "Active tokens"
+    },
+    "revoked": {
+      "toggle_one": "{{count}} revoked token",
+      "toggle_other": "{{count}} revoked tokens"
     },
     "create": {
       "title": "Create new token",

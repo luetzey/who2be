@@ -841,7 +841,11 @@
         "searchPlaceholder": "Nach Name filtern…",
         "searchEmpty": "Keine Playbooks für diese Suche.",
         "triggerCount_one": "{{count}} Trigger",
-        "triggerCount_other": "{{count}} Trigger"
+        "triggerCount_other": "{{count}} Trigger",
+        "compositeBadge": "Composite"
+      },
+      "tabs": {
+        "modes": "Modi"
       }
     },
     "new": {
@@ -927,6 +931,10 @@
         "antiPatterns": {
           "label": "Anti-Patterns"
         }
+      },
+      "section": {
+        "title": "Modi",
+        "description": "Situative Varianten der Persona. Der Standard-Modus greift, wenn kein Trigger passt."
       }
     },
     "skills": {
@@ -1706,6 +1714,13 @@
     "agentSection": {
       "title": "API-Tokens",
       "description": "Tokens für diesen Agenten. Jeder Token ist an den Agenten gebunden und erbt seine MCP-Tool-Policy (Lesezugriffe gescoped, Schreibrechte gegated). Die Rolle steuert davon unabhängig die REST-Mutationen."
+    },
+    "active": {
+      "title": "Aktive Tokens"
+    },
+    "revoked": {
+      "toggle_one": "{{count}} widerrufenes Token",
+      "toggle_other": "{{count}} widerrufene Tokens"
     },
     "create": {
       "title": "Neuen Token anlegen",

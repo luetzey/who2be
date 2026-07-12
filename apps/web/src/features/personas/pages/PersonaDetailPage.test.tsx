@@ -299,6 +299,51 @@ describe('PersonaDetailPage', () => {
     expect(putCalls).toHaveLength(0)
   })
 
+  it('Modi liegen in einem eigenen Tab und teilen die Form des Bearbeiten-Tabs', async () => {
+    const handlers: Record<string, () => Response> = {
+      [route('GET', `${WS_PREFIX}/personas/p1`)]: () => jsonResponse(persona(1, 's1')),
+      [route('GET', `${WS_PREFIX}/personas/p1/versions`)]: () => jsonResponse([]),
+      [route('GET', `${WS_PREFIX}/personas/p1/playbooks`)]: () => jsonResponse([]),
+      [route('GET', `${WS_PREFIX}/playbooks`)]: () => jsonResponse([]),
+    }
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const method = init?.method ?? 'GET'
+      const key = route(method, new URL(String(input)).pathname)
+      const handler = handlers[key]
+      if (!handler) {
+        throw new Error(`Unmocked ${key}`)
+      }
+      return handler()
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(
+      <SessionContext.Provider value={{ session, me, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}>
+        <AuthTokenProvider>
+          <MemoryRouter initialEntries={['/w/ws-1/personas/p1']}>
+            <Routes>
+              <Route path="/w/:workspaceId/personas/:id" element={<PersonaDetailPage />} />
+            </Routes>
+          </MemoryRouter>
+        </AuthTokenProvider>
+      </SessionContext.Provider>,
+    )
+
+    // Bearbeiten-Tab (Default): Profil-Felder, kein Modi-Editor.
+    await waitFor(() => {
+      expect(screen.getByLabelText('Name')).toHaveValue('Coach')
+    })
+    expect(
+      screen.queryByRole('button', { name: 'Ersten Modus anlegen' }),
+    ).not.toBeInTheDocument()
+
+    // In den Modi-Tab wechseln: der Modi-Editor erscheint.
+    fireEvent.click(screen.getByRole('tab', { name: 'Modi' }))
+    expect(
+      await screen.findByRole('button', { name: 'Ersten Modus anlegen' }),
+    ).toBeInTheDocument()
+  })
+
   it('vom System verwaltet: Notice + read-only, keine Status-/Lösch-Aktionen', async () => {
     const managed: PersonaShape = { ...persona(1, 's1'), is_managed: true }
     // Draft-Version => ohne Lock erschiene der „Draft abschliessen"-Button.

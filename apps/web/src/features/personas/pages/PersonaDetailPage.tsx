@@ -1,4 +1,4 @@
-import { Clock, History, Share2, SquarePen, Users } from 'lucide-react'
+import { Clock, History, Layers, Share2, SquarePen, Users } from 'lucide-react'
 import { useState } from 'react'
 import { Navigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -20,14 +20,16 @@ import { Stack } from '@/components/layout/Stack'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Form } from '@/components/ui/form'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { VersionHistory } from '@/components/version'
 import { notify } from '@/lib/feedback'
 
 import { DeletePersonaButton } from '../components/DeletePersonaButton'
 import { ExportPersonaButton } from '../components/ExportPersonaButton'
-import { PersonaEditorForm } from '../components/PersonaEditorForm'
+import { PersonaModesPanel } from '../components/PersonaModesPanel'
 import { PersonaPlaybooksCard } from '../components/PersonaPlaybooksCard'
+import { PersonaProfileFields } from '../components/PersonaProfileFields'
 import { usePersona } from '../hooks/usePersona'
 import { usePersonaForm } from '../hooks/usePersonaForm'
 import { statusLabel } from '../lib/status'
@@ -41,6 +43,9 @@ export function PersonaDetailPage() {
   const api = useApi()
   const role = useCurrentWorkspaceRole()
   const [actionBusy, setActionBusy] = useState(false)
+  // Kontrollierte Tabs — der Modi-Info-Pill im „Bearbeiten"-Tab wechselt
+  // programmatisch in den „Modi"-Tab.
+  const [tab, setTab] = useState('edit')
   // Vom System verwaltet (Builder): Editor read-only, keine Status-/Lösch-
   // Aktionen. Das Backend sperrt Mutationen ohnehin (403 managed_aggregate).
   const locked = persona?.is_managed === true
@@ -202,97 +207,122 @@ export function PersonaDetailPage() {
                   />
                 ) : null}
 
-                <Tabs defaultValue="edit">
-                  <TabsList>
-                    <TabsTrigger value="edit">
-                      <SquarePen aria-hidden="true" />
-                      {t('common:actions.edit')}
-                    </TabsTrigger>
-                    <TabsTrigger value="playbooks">
-                      <Share2 aria-hidden="true" />
-                      {t('playbooks:list.title')}
-                    </TabsTrigger>
-                    <TabsTrigger value="versions">
-                      <History aria-hidden="true" />
-                      {t('version:history.title')}
-                    </TabsTrigger>
-                  </TabsList>
+                {/* Ein gemeinsamer Form-Provider ueber alle Tabs: die Profil-
+                    Felder („Bearbeiten") und der Modi-Editor („Modi") binden an
+                    dieselbe react-hook-form-Instanz und teilen einen Auto-Save.
+                    react-hook-form haelt den State zentral, auch wenn Radix den
+                    inaktiven Tab-Inhalt unmountet. */}
+                <Form {...form}>
+                  <Tabs value={tab} onValueChange={setTab}>
+                    <TabsList>
+                      <TabsTrigger value="edit">
+                        <SquarePen aria-hidden="true" />
+                        {t('common:actions.edit')}
+                      </TabsTrigger>
+                      <TabsTrigger value="modes">
+                        <Layers aria-hidden="true" />
+                        {t('personas:detail.tabs.modes')}
+                      </TabsTrigger>
+                      <TabsTrigger value="playbooks">
+                        <Share2 aria-hidden="true" />
+                        {t('playbooks:list.title')}
+                      </TabsTrigger>
+                      <TabsTrigger value="versions">
+                        <History aria-hidden="true" />
+                        {t('version:history.title')}
+                      </TabsTrigger>
+                    </TabsList>
 
-                  <TabsContent value="edit">
-                    <Stack gap="sm">
-                      <div className="flex justify-end">
-                        <SaveIndicator state={autoSave} />
-                      </div>
-                      <PersonaEditorForm
-                        form={form}
-                        formKey={`${persona.id}-${persona.current_version}`}
-                        initialProfileBlocks={persona.content.content?.blocks ?? []}
-                        personaId={persona.id}
-                        legacySystemPrompt={persona.content.system_prompt}
-                        locked={locked}
-                      />
-                    </Stack>
-                  </TabsContent>
-
-                  <TabsContent value="playbooks">
-                    {/* WP-E: Anzeige-Modus default; der Checkbox-Picker liegt im
-                        Bearbeiten-Modus der Karte. Viewer + managed nur Anzeige. */}
-                    <PersonaPlaybooksCard
-                      personaId={persona.id}
-                      canEdit={role !== 'viewer' && !locked}
-                    />
-                  </TabsContent>
-
-                  <TabsContent value="versions">
-                    <Stack gap="lg">
-                      <VersionHistory
-                        versions={versions}
-                        canEdit={role === 'admin' || role === 'editor'}
-                        onRestore={async (version) => {
-                          await autoSave.flush()
-                          await api.restorePersonaVersion(persona.id, version)
-                          notify.success(t('detail.toast.restored', { version }))
-                          reload()
-                        }}
-                        loadDiff={(version) => api.diffPersonaVersion(persona.id, version)}
-                        loadProvenance={(version) =>
-                          api.provenancePersonaVersion(persona.id, version)
-                        }
-                      />
-
-                      {role !== 'viewer' ? (
-                        <FeedbackPanel
-                          type="persona"
-                          id={persona.id}
-                          onRevise={() => {
-                            window.scrollTo({ top: 0, behavior: 'smooth' })
-                            notify.info(t('feedback:panel.reviseToast'))
-                          }}
-                        />
-                      ) : null}
-
-                      {role !== 'viewer' && !locked ? (
-                        <Card className="border-destructive/40">
-                          <CardHeader>
-                            <CardTitle className="text-destructive">
-                              {t('delete.dangerZoneTitle')}
-                            </CardTitle>
-                          </CardHeader>
-                          <CardContent>
-                            <Stack gap="sm">
-                              <p className="text-sm text-muted-foreground">
-                                {t('delete.dangerZoneDescription')}
-                              </p>
-                              <div>
-                                <DeletePersonaButton persona={persona} />
-                              </div>
-                            </Stack>
+                    <TabsContent value="edit">
+                      <Stack gap="sm">
+                        <div className="flex justify-end">
+                          <SaveIndicator state={autoSave} />
+                        </div>
+                        <Card>
+                          <CardContent className="pt-6">
+                            <PersonaProfileFields
+                              form={form}
+                              formKey={`${persona.id}-${persona.current_version}`}
+                              initialProfileBlocks={persona.content.content?.blocks ?? []}
+                              personaId={persona.id}
+                              legacySystemPrompt={persona.content.system_prompt}
+                              locked={locked}
+                              onJumpToModes={() => setTab('modes')}
+                            />
                           </CardContent>
                         </Card>
-                      ) : null}
-                    </Stack>
-                  </TabsContent>
-                </Tabs>
+                      </Stack>
+                    </TabsContent>
+
+                    <TabsContent value="modes">
+                      <Stack gap="sm">
+                        <div className="flex justify-end">
+                          <SaveIndicator state={autoSave} />
+                        </div>
+                        <PersonaModesPanel form={form} locked={locked} />
+                      </Stack>
+                    </TabsContent>
+
+                    <TabsContent value="playbooks">
+                      {/* WP-E: Anzeige-Modus default; der Checkbox-Picker liegt im
+                          Bearbeiten-Modus der Karte. Viewer + managed nur Anzeige. */}
+                      <PersonaPlaybooksCard
+                        personaId={persona.id}
+                        canEdit={role !== 'viewer' && !locked}
+                      />
+                    </TabsContent>
+
+                    <TabsContent value="versions">
+                      <Stack gap="lg">
+                        <VersionHistory
+                          versions={versions}
+                          canEdit={role === 'admin' || role === 'editor'}
+                          onRestore={async (version) => {
+                            await autoSave.flush()
+                            await api.restorePersonaVersion(persona.id, version)
+                            notify.success(t('detail.toast.restored', { version }))
+                            reload()
+                          }}
+                          loadDiff={(version) => api.diffPersonaVersion(persona.id, version)}
+                          loadProvenance={(version) =>
+                            api.provenancePersonaVersion(persona.id, version)
+                          }
+                        />
+
+                        {role !== 'viewer' ? (
+                          <FeedbackPanel
+                            type="persona"
+                            id={persona.id}
+                            onRevise={() => {
+                              window.scrollTo({ top: 0, behavior: 'smooth' })
+                              notify.info(t('feedback:panel.reviseToast'))
+                            }}
+                          />
+                        ) : null}
+
+                        {role !== 'viewer' && !locked ? (
+                          <Card className="border-destructive/40">
+                            <CardHeader>
+                              <CardTitle className="text-destructive">
+                                {t('delete.dangerZoneTitle')}
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <Stack gap="sm">
+                                <p className="text-sm text-muted-foreground">
+                                  {t('delete.dangerZoneDescription')}
+                                </p>
+                                <div>
+                                  <DeletePersonaButton persona={persona} />
+                                </div>
+                              </Stack>
+                            </CardContent>
+                          </Card>
+                        ) : null}
+                      </Stack>
+                    </TabsContent>
+                  </Tabs>
+                </Form>
               </Stack>
             )
           })()
