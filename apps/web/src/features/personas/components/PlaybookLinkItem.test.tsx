@@ -55,4 +55,25 @@ describe('PlaybookLinkItem', () => {
     fireEvent.click(button)
     expect(onAction).not.toHaveBeenCalled()
   })
+
+  it('zeigt den Referenz-Badge mit Hinweis, wenn referenced gesetzt ist', () => {
+    renderItem({
+      referenced: true,
+      referencedLabel: 'Im Text referenziert',
+      referencedHint: 'Nur ein Hinweis.',
+    })
+
+    const badge = screen.getByText('Im Text referenziert')
+    expect(badge).toBeInTheDocument()
+    // Hinweis liegt als natives title-Tooltip am Badge (rein informativ).
+    expect(badge).toHaveAttribute('title', 'Nur ein Hinweis.')
+    // Die Aktion bleibt uneingeschraenkt nutzbar (kein Lock).
+    expect(screen.getByRole('button', { name: 'Verknüpfen' })).toBeEnabled()
+  })
+
+  it('zeigt keinen Referenz-Badge, wenn referenced nicht gesetzt ist', () => {
+    renderItem({ referencedLabel: 'Im Text referenziert' })
+
+    expect(screen.queryByText('Im Text referenziert')).not.toBeInTheDocument()
+  })
 })
