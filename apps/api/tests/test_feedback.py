@@ -342,6 +342,115 @@ def test_flywheel_records_usage_feedback_and_summarizes(
 
 
 @pytest.mark.integration
+def test_feedback_detail_by_id_surfaces_actor_and_history(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`GET /feedback/{feedback_id}` liefert den aktuellen Triage-Status, die
+    vollstaendige, chronologisch aufsteigende Historie (mit actor/note/created_at),
+    den menschlichen Absender (actor_id) und antwortet 404 fuer unbekannte/fremde
+    ids."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    fbase = f"/v1/workspaces/{ws}"
+
+    other_owner = fresh_user_id()
+    other_ws = setup_workspace(other_owner)
+    other_auth = _auth(other_owner)
+    other_fbase = f"/v1/workspaces/{other_ws}"
+
+    try:
+        with TestClient(app) as client:
+            pid = client.post(
+                f"{fbase}/playbooks", json=_playbook_body("PB-Detail"), headers=auth
+            ).json()["id"]
+            fb = client.post(
+                f"{fbase}/feedback",
+                json={
+                    "entity_type": "playbook",
+                    "entity_id": pid,
+                    "signal": "outdated",
+                    "note": "bitte pruefen",
+                },
+                headers=auth,
+            )
+            assert fb.status_code == 201, fb.text
+            fid = fb.json()["id"]
+
+            # Zwei Triage-Events (append-only): in_progress -> addressed.
+            assert (
+                client.post(
+                    f"{fbase}/feedback/{fid}/resolution",
+                    json={"resolution": "in_progress", "note": "schaue ich an"},
+                    headers=auth,
+                ).status_code
+                == 201
+            )
+            assert (
+                client.post(
+                    f"{fbase}/feedback/{fid}/resolution",
+                    json={"resolution": "addressed", "note": "erledigt"},
+                    headers=auth,
+                ).status_code
+                == 201
+            )
+
+            detail = client.get(f"{fbase}/feedback/{fid}", headers=auth)
+            assert detail.status_code == 200, detail.text
+            body = detail.json()
+            # Item-Teil: Element-Name, Signal, Note, aktueller (juengster) Status.
+            assert body["id"] == fid
+            assert body["entity_type"] == "playbook"
+            assert body["entity_id"] == pid
+            assert body["name"] == "PB-Detail"
+            assert body["signal"] == "outdated"
+            assert body["note"] == "bitte pruefen"
+            assert body["resolution"] == "addressed"
+            # Menschlicher Absender: JWT-Feedback -> agent_id null, actor_id = Owner.
+            assert body["agent_id"] is None
+            assert body["actor_id"] == str(owner)
+            # Vollstaendige Historie, aeltestes zuerst (2 Events mit actor/note/zeit).
+            history = body["history"]
+            assert [h["resolution"] for h in history] == ["in_progress", "addressed"]
+            assert [h["note"] for h in history] == ["schaue ich an", "erledigt"]
+            assert all(h["actor_id"] == str(owner) for h in history)
+            assert all(h["created_at"] is not None for h in history)
+            assert history[0]["created_at"] <= history[1]["created_at"]
+
+            # Frisch gemeldetes, untriagiertes Feedback: leere Historie, offen.
+            fid2 = client.post(
+                f"{fbase}/feedback",
+                json={"entity_type": "playbook", "entity_id": pid, "signal": "helpful"},
+                headers=auth,
+            ).json()["id"]
+            open_detail = client.get(f"{fbase}/feedback/{fid2}", headers=auth).json()
+            assert open_detail["resolution"] is None
+            assert open_detail["history"] == []
+            assert open_detail["actor_id"] == str(owner)
+
+            # Unbekannte id -> 404.
+            unknown = "00000000-0000-0000-0000-000000000000"
+            assert client.get(f"{fbase}/feedback/{unknown}", headers=auth).status_code == 404
+
+            # Fremdes Feedback (anderer Workspace) -> 404, kein Cross-Workspace-Read.
+            other_pid = client.post(
+                f"{other_fbase}/playbooks", json=_playbook_body("PB-Other"), headers=other_auth
+            ).json()["id"]
+            other_fid = client.post(
+                f"{other_fbase}/feedback",
+                json={"entity_type": "playbook", "entity_id": other_pid, "signal": "unclear"},
+                headers=other_auth,
+            ).json()["id"]
+            assert client.get(f"{fbase}/feedback/{other_fid}", headers=auth).status_code == 404
+    finally:
+        cleanup_workspaces([owner, other_owner])
+
+
+@pytest.mark.integration
 def test_resolution_requires_feedback_resolve_for_agent_tokens(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

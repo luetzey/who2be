@@ -12,9 +12,11 @@ import asyncpg
 
 from who2be_models import (
     AgentFeedbackRead,
+    FeedbackDetailRead,
     FeedbackEvents,
     FeedbackItem,
     FeedbackOverviewItem,
+    FeedbackResolutionEvent,
     FeedbackSummary,
     FeedbackSummaryItem,
     FeedbackUnusedItem,
@@ -65,6 +67,10 @@ class FeedbackRepository(Protocol):
     async def unused(self, workspace_id: UUID) -> list[FeedbackUnusedItem]: ...
 
     async def list_items(self, workspace_id: UUID, limit: int) -> list[FeedbackItem]: ...
+
+    async def get_detail(
+        self, workspace_id: UUID, feedback_id: UUID
+    ) -> FeedbackDetailRead | None: ...
 
     async def feedback_belongs_to(self, workspace_id: UUID, feedback_id: UUID) -> bool: ...
 
@@ -371,6 +377,45 @@ class PgFeedbackRepository:
             limit,
         )
         return [FeedbackItem.model_validate(dict(r)) for r in rows]
+
+    async def get_detail(self, workspace_id: UUID, feedback_id: UUID) -> FeedbackDetailRead | None:
+        # Ein einzelnes Feedback + Element-Name + aktueller Triage-Status
+        # (juengstes Resolution-Event) + menschlicher Absender (actor_id). Reuse
+        # des list_items-SELECTs, aber auf genau EINE id gescopet. Der Namens-JOIN
+        # filtert geloeschte Inhalts-Elemente raus; System-Feedback (entity_id
+        # NULL) behaelt sein Label "System". None ⇒ 404 im Service.
+        item_row = await self._pool.fetchrow(
+            "SELECT f.id, f.entity_type, f.entity_id, f.version, f.signal, f.note, "
+            "f.agent_id, f.actor_id, f.created_at, "
+            "(SELECT r.resolution FROM feedback_resolution r "
+            "   WHERE r.feedback_id = f.id ORDER BY r.created_at DESC LIMIT 1) AS resolution, "
+            "COALESCE(p.name, pb.name, rs.name, "
+            "         CASE WHEN f.entity_type = 'system' THEN 'System' END) AS name "
+            "FROM agent_feedback f "
+            "LEFT JOIN persona p   ON f.entity_type = 'persona'  "
+            "  AND p.id = f.entity_id  AND p.workspace_id = $1 "
+            "LEFT JOIN playbook pb  ON f.entity_type = 'playbook' "
+            "  AND pb.id = f.entity_id AND pb.workspace_id = $1 "
+            "LEFT JOIN resource rs  ON f.entity_type = 'resource' "
+            "  AND rs.id = f.entity_id AND rs.workspace_id = $1 "
+            "WHERE f.id = $2 AND f.workspace_id = $1 "
+            "  AND (f.entity_type = 'system' "
+            "       OR COALESCE(p.name, pb.name, rs.name) IS NOT NULL)",
+            workspace_id,
+            feedback_id,
+        )
+        if item_row is None:
+            return None
+        # Vollstaendige Triage-Historie, chronologisch aufsteigend (aeltestes zuerst).
+        history_rows = await self._pool.fetch(
+            "SELECT resolution, actor_id, note, created_at FROM feedback_resolution "
+            "WHERE feedback_id = $1 AND workspace_id = $2 ORDER BY created_at ASC",
+            feedback_id,
+            workspace_id,
+        )
+        detail = dict(item_row)
+        detail["history"] = [FeedbackResolutionEvent.model_validate(dict(h)) for h in history_rows]
+        return FeedbackDetailRead.model_validate(detail)
 
     async def feedback_belongs_to(self, workspace_id: UUID, feedback_id: UUID) -> bool:
         owned = await self._pool.fetchval(

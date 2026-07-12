@@ -19,6 +19,7 @@ from who2be_models import (
     AgentCapability,
     AgentFeedbackRead,
     FeedbackCreate,
+    FeedbackDetailRead,
     FeedbackEvents,
     FeedbackItemCounts,
     FeedbackItems,
@@ -143,6 +144,17 @@ class FeedbackService:
             dismissed=sum(1 for i in items if i.resolution == "dismissed"),
         )
         return FeedbackItems(items=items, counts=counts)
+
+    async def get_detail(self, ctx: WorkspaceContext, feedback_id: UUID) -> FeedbackDetailRead:
+        # Einzel-Feedback-Detailsicht: wie der Posteingang (get_items) editor-gated
+        # (Kurations-Sicht). 404, wenn das Feedback nicht im eigenen Workspace liegt
+        # (kein Enumerieren) — deckt auch das geloeschte Inhalts-Element ab, dessen
+        # Namens-JOIN dann leer bleibt.
+        require_role(ctx, WorkspaceRole.editor)
+        detail = await self._repo.get_detail(ctx.workspace_id, feedback_id)
+        if detail is None:
+            raise _entity_not_found()
+        return detail
 
     async def set_resolution(
         self, ctx: WorkspaceContext, feedback_id: UUID, data: FeedbackResolutionCreate
