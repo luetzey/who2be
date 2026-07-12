@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
-import { EntityIcon, type EntityTone } from './EntityIcon'
+import { EntityAvatar, EntityIcon, type EntityTone } from './EntityIcon'
 
 // Wiederverwendbare Listen-Karte (Design-Handoff „Karten-Redesign"). Ersetzt die
 // bisher pro Feature (System-Prompts / Agents / Resources / Personae) duplizierten
@@ -20,6 +20,8 @@ import { EntityIcon, type EntityTone } from './EntityIcon'
 interface EntityCardProps {
   icon: LucideIcon
   iconTone: EntityTone
+  /** Optionale Initialen-Kachel statt Icon (z. B. Persona-Avatar). */
+  avatar?: string
   title: string
   href: string
   /** Slug-/Version-Badges neben dem Titel. */
@@ -55,6 +57,7 @@ interface EntityCardProps {
 function CardBody({
   icon,
   iconTone,
+  avatar,
   title,
   href,
   badges,
@@ -65,7 +68,16 @@ function CardBody({
   interactiveSurface,
 }: Pick<
   EntityCardProps,
-  'icon' | 'iconTone' | 'title' | 'href' | 'badges' | 'status' | 'description' | 'meta' | 'actions'
+  | 'icon'
+  | 'iconTone'
+  | 'avatar'
+  | 'title'
+  | 'href'
+  | 'badges'
+  | 'status'
+  | 'description'
+  | 'meta'
+  | 'actions'
 > & { interactiveSurface: boolean }) {
   return (
     <article
@@ -75,7 +87,11 @@ function CardBody({
           'rounded-xl border bg-card shadow-card transition-[box-shadow,border-color] duration-[var(--duration-fast)] ease-spring hover:shadow-popover',
       )}
     >
-      <EntityIcon icon={icon} tone={iconTone} size="md" />
+      {avatar !== undefined ? (
+        <EntityAvatar initials={avatar} tone={iconTone} size="md" />
+      ) : (
+        <EntityIcon icon={icon} tone={iconTone} size="md" />
+      )}
 
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
@@ -107,6 +123,7 @@ function CardBody({
 export function EntityCard({
   icon,
   iconTone,
+  avatar,
   title,
   href,
   badges,
@@ -140,6 +157,7 @@ export function EntityCard({
     <CardBody
       icon={icon}
       iconTone={iconTone}
+      avatar={avatar}
       title={title}
       href={href}
       badges={badges}

@@ -10,6 +10,7 @@ import { Stack } from '@/components/layout/Stack'
 import { DataView } from '@/components/data/DataView'
 import { EmptyState } from '@/components/data/EmptyState'
 import { EntityCard } from '@/components/data/EntityCard'
+import { initialsFromName } from '@/components/data/EntityIcon'
 import { ListFilterBar } from '@/components/data/ListFilterBar'
 import { MetaPill } from '@/components/data/MetaPill'
 import { StatusBadge } from '@/components/data/StatusBadge'
@@ -118,6 +119,7 @@ export function PersonasPage() {
                     key={persona.id}
                     icon={Users}
                     iconTone="persona"
+                    avatar={initialsFromName(persona.name)}
                     title={persona.name}
                     href={wsPath(`/personas/${persona.id}`)}
                     badges={

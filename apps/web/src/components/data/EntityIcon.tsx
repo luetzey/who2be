@@ -57,4 +57,45 @@ export function EntityIcon({ icon: Icon, tone, size, className }: EntityIconProp
   )
 }
 
+// Text-Schriftgroesse je Kachelgroesse — die Initialen sollen die Kachel fuellen
+// wie das Icon in EntityIcon.
+const avatarTextClass: Record<EntityIconSize, string> = {
+  sm: 'text-[11px]',
+  md: 'text-sm',
+  lg: 'text-base',
+}
+
+// Ableiten der Initialen aus einem Namen (max. zwei Zeichen, Grossbuchstaben).
+export function initialsFromName(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return '?'
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
+
+interface EntityAvatarProps extends VariantProps<typeof entityIconVariants> {
+  initials: string
+  tone: EntityTone
+  className?: string
+}
+
+// Wie EntityIcon, zeigt aber Initialen statt eines Icons (Design-Handoff:
+// Persona-Kachel). Dekorativ — den Kontext liefert der Name daneben.
+export function EntityAvatar({ initials, tone, size, className }: EntityAvatarProps) {
+  const resolvedSize: EntityIconSize = size ?? 'md'
+  return (
+    <span
+      className={cn(
+        entityIconVariants({ tone, size: resolvedSize }),
+        'font-semibold',
+        avatarTextClass[resolvedSize],
+        className,
+      )}
+      aria-hidden="true"
+    >
+      {initials}
+    </span>
+  )
+}
+
 export { entityIconVariants }
