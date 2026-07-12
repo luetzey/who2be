@@ -207,7 +207,10 @@
       "setup": "Einrichten",
       "personaMissing": "Persona fehlt",
       "templateMissing": "Systemprompt fehlt",
-      "countAria": "{{count}} Agents"
+      "countAria": "{{count}} Agents",
+      "templateWithVersion": "{{name}} · v{{version}}",
+      "playbookCount_one": "{{count}} Playbook",
+      "playbookCount_other": "{{count}} Playbooks"
     },
     "form": {
       "identity": {
@@ -354,6 +357,15 @@
       "copyName": "Namen kopieren",
       "copied": "In Zwischenablage kopiert.",
       "error": "Kopieren fehlgeschlagen."
+    },
+    "filter": {
+      "all": "Alle",
+      "statusGroup": "Nach Status filtern",
+      "searchLabel": "Suche",
+      "searchPlaceholder": "Agents durchsuchen…",
+      "reset": "Filter zurücksetzen",
+      "emptyTitle": "Keine Treffer",
+      "emptyDescription": "Kein Agent passt zu Filter und Suche."
     }
   },
   "auth": {
@@ -1003,6 +1015,15 @@
       "markdown": "Als Markdown",
       "success": "Export heruntergeladen.",
       "error": "Export fehlgeschlagen."
+    },
+    "card": {
+      "modeCount_one": "{{count}} Modus",
+      "modeCount_other": "{{count}} Modi",
+      "playbookCount_one": "{{count}} Playbook",
+      "playbookCount_other": "{{count}} Playbooks",
+      "agentCount_one": "Verwendet von {{count}} Agent",
+      "agentCount_other": "Verwendet von {{count}} Agents",
+      "noAgent": "Kein Agent"
     }
   },
   "playbooks": {
@@ -1348,6 +1369,13 @@
       "markdown": "Als Markdown",
       "success": "Export heruntergeladen.",
       "error": "Export fehlgeschlagen."
+    },
+    "card": {
+      "linkedIn_one": "Verlinkt in {{count}} Playbook",
+      "linkedIn_other": "Verlinkt in {{count}} Playbooks",
+      "notLinked": "Nicht verlinkt",
+      "subResourceCount_one": "{{count}} Sub-Resource",
+      "subResourceCount_other": "{{count}} Sub-Resources"
     }
   },
   "settings": {
@@ -1697,6 +1725,11 @@
           "description": "Liste der MCP-Werkzeuge mit Signatur und Kurzbeschreibung. Schreib drumherum die Reihenfolge (\"zuerst list_triggers, dann fetch_playbook\"), damit der LLM die Tools richtig nutzt."
         }
       }
+    },
+    "card": {
+      "usedByAgents_one": "Verwendet von {{count}} Agent",
+      "usedByAgents_other": "Verwendet von {{count}} Agents",
+      "usedByNone": "Von keinem Agent verwendet"
     }
   },
   "tokens": {

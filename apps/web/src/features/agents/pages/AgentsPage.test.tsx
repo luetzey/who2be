@@ -1,5 +1,5 @@
 import type { Session } from '@supabase/supabase-js'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -95,13 +95,47 @@ describe('AgentsPage', () => {
 
     expect(await screen.findByText('Carla Bot')).toBeInTheDocument()
     expect(screen.getByText('Leere Hülle')).toBeInTheDocument()
-    // Aktivierbarer Agent: Status "Aktiv".
-    expect(screen.getByText('Aktiv')).toBeInTheDocument()
+    // Status-Labels erscheinen jetzt auch in den Filter-Chips — daher je Karte
+    // gescoped pruefen (Status-Pill vs. Filter-Chip auseinanderhalten).
+    const carlaCard = screen.getByText('Carla Bot').closest('article') as HTMLElement
+    expect(within(carlaCard).getByText('Aktiv')).toBeInTheDocument()
     // Unvollstaendiger Agent: Status "Unvollständig" (Vorrang vor Deaktiviert),
     // „Einrichten"-Aktion statt „Kopieren" und ein „Persona fehlt"-Marker.
-    expect(screen.getByText('Unvollständig')).toBeInTheDocument()
-    expect(screen.getByText('Einrichten')).toBeInTheDocument()
-    expect(screen.getByText('Persona fehlt')).toBeInTheDocument()
+    const huelleCard = screen.getByText('Leere Hülle').closest('article') as HTMLElement
+    expect(within(huelleCard).getByText('Unvollständig')).toBeInTheDocument()
+    expect(within(huelleCard).getByText('Einrichten')).toBeInTheDocument()
+    expect(within(huelleCard).getByText('Persona fehlt')).toBeInTheDocument()
+  })
+
+  it('filtert nach Status-Chip und Suche', async () => {
+    const active = agent({ id: 'a1', name: 'Carla Bot' })
+    const incomplete = agent({
+      id: 'a2',
+      name: 'Leere Hülle',
+      persona_id: null,
+      activatable: false,
+      missing: ['persona'],
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(new Response(JSON.stringify([active, incomplete]), { status: 200 })),
+    )
+
+    renderPage()
+    await screen.findByText('Carla Bot')
+
+    // Chip „Unvollständig" — nur der unvollstaendige Agent bleibt.
+    fireEvent.click(screen.getByRole('button', { name: /Unvollständig/ }))
+    expect(screen.getByText('Leere Hülle')).toBeInTheDocument()
+    expect(screen.queryByText('Carla Bot')).not.toBeInTheDocument()
+
+    // Reset + Suche nach Name.
+    fireEvent.click(screen.getByRole('button', { name: /zurücksetzen/i }))
+    fireEvent.change(screen.getByLabelText('Suche'), { target: { value: 'carla' } })
+    expect(screen.getByText('Carla Bot')).toBeInTheDocument()
+    expect(screen.queryByText('Leere Hülle')).not.toBeInTheDocument()
   })
 
   it('zeigt den Empty-State, wenn keine Agents existieren', async () => {

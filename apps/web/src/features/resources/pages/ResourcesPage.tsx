@@ -1,4 +1,4 @@
-import { FileText, Plus } from 'lucide-react'
+import { FileText, GitBranch, Layers, Plus } from 'lucide-react'
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -13,6 +13,7 @@ import { EmptyState } from '@/components/data/EmptyState'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
 import { ListFilterBar } from '@/components/data/ListFilterBar'
 import { LoadingState } from '@/components/data/LoadingState'
+import { MetaPill } from '@/components/data/MetaPill'
 import { StatusBadge } from '@/components/data/StatusBadge'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -127,9 +128,16 @@ export function ResourcesPage() {
                     title={resource.name}
                     href={wsPath(`/resources/${resource.id}`)}
                     badges={
-                      <Badge variant="secondary" className="tabular-nums">
-                        v{resource.current_version}
-                      </Badge>
+                      <>
+                        <Badge variant="secondary" className="tabular-nums">
+                          v{resource.current_version}
+                        </Badge>
+                        {tags.map((tag) => (
+                          <Badge key={tag} variant="outline" className="text-xs">
+                            {tag}
+                          </Badge>
+                        ))}
+                      </>
                     }
                     status={
                       <StatusBadge
@@ -139,18 +147,22 @@ export function ResourcesPage() {
                     }
                     description={resource.content.description}
                     meta={
-                      tags.length > 0 ? (
-                        <div
-                          className="flex flex-wrap gap-1"
-                          aria-label={t('resources:list.tagFilter')}
-                        >
-                          {tags.map((tag) => (
-                            <Badge key={tag} variant="secondary" className="text-xs">
-                              {tag}
-                            </Badge>
-                          ))}
-                        </div>
-                      ) : undefined
+                      <>
+                        <MetaPill icon={GitBranch} iconTone="playbook">
+                          {(resource.playbook_link_count ?? 0) > 0
+                            ? t('resources:card.linkedIn', {
+                                count: resource.playbook_link_count ?? 0,
+                              })
+                            : t('resources:card.notLinked')}
+                        </MetaPill>
+                        {(resource.sub_resource_count ?? 0) > 0 ? (
+                          <MetaPill icon={Layers} iconTone="resource">
+                            {t('resources:card.subResourceCount', {
+                              count: resource.sub_resource_count ?? 0,
+                            })}
+                          </MetaPill>
+                        ) : null}
+                      </>
                     }
                   />
                 </li>
