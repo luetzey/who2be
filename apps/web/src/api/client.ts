@@ -16,6 +16,7 @@ import type {
   EntitlementInfo,
   EntityExport,
   EntityExportFormat,
+  FeedbackDetail,
   FeedbackEvents,
   FeedbackItems,
   FeedbackOverview,
@@ -273,6 +274,8 @@ export interface Api {
   getFeedbackEvents: (type: FeedbackTarget, id: string) => Promise<FeedbackEvents>
   getFeedbackOverview: () => Promise<FeedbackOverview>
   getFeedbackItems: () => Promise<FeedbackItems>
+  // Detailsicht auf ein einzelnes Feedback (Absender + Triage-Historie).
+  getFeedbackDetail: (feedbackId: string) => Promise<FeedbackDetail>
   getFeedbackUnused: () => Promise<FeedbackUnused>
   setFeedbackResolution: (
     feedbackId: string,
@@ -521,6 +524,8 @@ export function createApi(token: string, workspaceId: string): Api {
       request<FeedbackOverview>(token, `${ws}/feedback-overview`),
     getFeedbackItems: () =>
       request<FeedbackItems>(token, `${ws}/feedback-items`),
+    getFeedbackDetail: (feedbackId) =>
+      request<FeedbackDetail>(token, `${ws}/feedback/${feedbackId}`),
     getFeedbackUnused: () =>
       request<FeedbackUnused>(token, `${ws}/feedback-unused`),
     setFeedbackResolution: (feedbackId, input) =>

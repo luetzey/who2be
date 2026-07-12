@@ -218,8 +218,8 @@ describe('PersonaDetailPage', () => {
     expect(await screen.findByRole('link', { name: 'Coaching' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Verknüpfungen bearbeiten' }))
 
-    const checkbox2 = await screen.findByLabelText('Brainstorming')
-    fireEvent.click(checkbox2)
+    // „Playbook hinzufügen": Brainstorming über die Verknüpfen-Schaltflaeche linken.
+    fireEvent.click(await screen.findByRole('button', { name: 'Verknüpfen' }))
     fireEvent.click(screen.getByRole('button', { name: 'Verknüpfungen speichern' }))
 
     await waitFor(() => {
@@ -280,8 +280,9 @@ describe('PersonaDetailPage', () => {
     fireEvent.click(
       await screen.findByRole('button', { name: 'Verknüpfungen bearbeiten' }),
     )
-    fireEvent.click(await screen.findByLabelText('Brainstorming'))
-    expect(screen.getByLabelText('Brainstorming')).toBeChecked()
+    // Brainstorming lokal verknüpfen (verschiebt es in „Verknüpft" → 2× Entfernen).
+    fireEvent.click(await screen.findByRole('button', { name: 'Verknüpfen' }))
+    expect(screen.getAllByRole('button', { name: 'Entfernen' })).toHaveLength(2)
 
     fireEvent.click(screen.getByRole('button', { name: 'Abbrechen' }))
 
@@ -289,10 +290,11 @@ describe('PersonaDetailPage', () => {
     expect(screen.getByRole('link', { name: 'Coaching' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Brainstorming' })).not.toBeInTheDocument()
 
-    // Erneutes Oeffnen: die verworfene Auswahl ist weg.
+    // Erneutes Oeffnen: die verworfene Auswahl ist weg — Brainstorming wieder
+    // verfügbar (Verknüpfen), nur Coaching verknüpft (Entfernen).
     fireEvent.click(screen.getByRole('button', { name: 'Verknüpfungen bearbeiten' }))
-    expect(screen.getByLabelText('Brainstorming')).not.toBeChecked()
-    expect(screen.getByLabelText('Coaching')).toBeChecked()
+    expect(await screen.findByRole('button', { name: 'Verknüpfen' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Entfernen' })).toBeInTheDocument()
     const putCalls = fetchMock.mock.calls.filter(
       (call) => (call[1] as RequestInit | undefined)?.method === 'PUT',
     )

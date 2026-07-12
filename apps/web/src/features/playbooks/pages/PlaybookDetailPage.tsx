@@ -10,7 +10,6 @@ import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { type BranchAction } from '@/components/data/BranchStatus'
 import { DataView } from '@/components/data/DataView'
 import { ManagedNotice } from '@/components/data/ManagedNotice'
-import { FeedbackPanel } from '@/components/feedback/FeedbackPanel'
 import { VersionHistory } from '@/components/version'
 import { Container } from '@/components/layout/Container'
 import { Stack } from '@/components/layout/Stack'
@@ -356,20 +355,6 @@ export function PlaybookDetailPage() {
                       </Stack>
                     </CardContent>
                   </Card>
-
-                  {role !== 'viewer' ? (
-                    <div className="sm:col-span-2">
-                      <FeedbackPanel
-                        type="playbook"
-                        id={playbook.id}
-                        onRevise={() => {
-                          setActiveTab('edit')
-                          window.scrollTo({ top: 0, behavior: 'smooth' })
-                          notify.info(t('feedback:panel.reviseToast'))
-                        }}
-                      />
-                    </div>
-                  ) : null}
                 </div>
               </div>
 

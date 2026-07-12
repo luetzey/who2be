@@ -18,6 +18,7 @@ from who2be_api.services.feedback_service import FeedbackService
 from who2be_models import (
     AgentFeedbackRead,
     FeedbackCreate,
+    FeedbackDetailRead,
     FeedbackEvents,
     FeedbackItems,
     FeedbackOverview,
@@ -75,6 +76,14 @@ async def get_feedback_overview(ctx: Ctx, service: Service) -> FeedbackOverview:
 @router.get("/feedback-unused")
 async def get_feedback_unused(ctx: Ctx, service: Service) -> FeedbackUnused:
     return await service.get_unused(ctx)
+
+
+@router.get("/feedback/{feedback_id}")
+async def get_feedback_detail(feedback_id: UUID, ctx: Ctx, service: Service) -> FeedbackDetailRead:
+    # Detailsicht auf ein einzelnes Feedback (Absender + Triage-Historie). Ein
+    # Pfadsegment — kollidiert nicht mit der zwei-segmentigen Aggregat-Route
+    # `/feedback/{entity_type}/{entity_id}`. 404, wenn nicht im eigenen Workspace.
+    return await service.get_detail(ctx, feedback_id)
 
 
 @router.get("/feedback/{entity_type}/{entity_id}")

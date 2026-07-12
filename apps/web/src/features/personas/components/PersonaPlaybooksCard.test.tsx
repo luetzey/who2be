@@ -109,32 +109,63 @@ describe('PersonaPlaybooksCard — Anzeige-Modus', () => {
 })
 
 describe('PersonaPlaybooksCard — Bearbeiten-Modus', () => {
-  it('wechselt per Button in den Picker mit Suchfeld und Checkboxen', () => {
+  it('teilt Playbooks in „Verknüpft" (Entfernen) und „Hinzufügen" (Verknüpfen)', () => {
     const all = [playbook(), playbook({ id: 'pb2', name: 'Brainstorming' })]
     renderCard(hookState({ playbooks: all, linked: [all[0]], linkedIds: ['pb1'] }))
 
     fireEvent.click(screen.getByRole('button', { name: 'Verknüpfungen bearbeiten' }))
 
+    // Beide Sektionen sind da.
+    expect(screen.getByText('Verknüpft')).toBeInTheDocument()
+    expect(screen.getByText('Playbook hinzufügen')).toBeInTheDocument()
     expect(screen.getByLabelText('Playbooks durchsuchen')).toBeInTheDocument()
-    expect(screen.getByLabelText('Coaching')).toBeChecked()
-    expect(screen.getByLabelText('Brainstorming')).not.toBeChecked()
+
+    // „Coaching" ist verknüpft → hat eine Entfernen-Aktion, keine Verknüpfen.
+    expect(screen.getByText('Coaching')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Entfernen' })).toBeInTheDocument()
+    // „Brainstorming" ist verfügbar → hat eine Verknüpfen-Aktion.
+    expect(screen.getByText('Brainstorming')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Verknüpfen' })).toBeInTheDocument()
+
     // Im Bearbeiten-Modus verschwindet der Bearbeiten-Button.
     expect(
       screen.queryByRole('button', { name: 'Verknüpfungen bearbeiten' }),
     ).not.toBeInTheDocument()
   })
 
-  it('filtert die Auswahl-Liste ueber das Suchfeld nach Namen', () => {
+  it('ruft toggle beim Verknüpfen eines verfügbaren Playbooks', () => {
+    const all = [playbook({ id: 'pb2', name: 'Brainstorming' })]
+    const state = hookState({ playbooks: all, linked: [], linkedIds: [] })
+    renderCard(state)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Verknüpfungen bearbeiten' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Verknüpfen' }))
+
+    expect(state.toggle).toHaveBeenCalledWith('pb2')
+  })
+
+  it('ruft toggle beim Entfernen eines verknüpften Playbooks', () => {
+    const all = [playbook()]
+    const state = hookState({ playbooks: all, linked: all, linkedIds: ['pb1'] })
+    renderCard(state)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Verknüpfungen bearbeiten' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Entfernen' }))
+
+    expect(state.toggle).toHaveBeenCalledWith('pb1')
+  })
+
+  it('filtert die Hinzufügen-Liste ueber das Suchfeld und zeigt den Leerzustand', () => {
     const all = [playbook(), playbook({ id: 'pb2', name: 'Brainstorming' })]
-    renderCard(hookState({ playbooks: all, linked: [] }))
+    renderCard(hookState({ playbooks: all, linked: [], linkedIds: [] }))
 
     fireEvent.click(screen.getByRole('button', { name: 'Verknüpfungen bearbeiten' }))
     fireEvent.change(screen.getByLabelText('Playbooks durchsuchen'), {
       target: { value: 'brain' },
     })
 
-    expect(screen.getByLabelText('Brainstorming')).toBeInTheDocument()
-    expect(screen.queryByLabelText('Coaching')).not.toBeInTheDocument()
+    expect(screen.getByText('Brainstorming')).toBeInTheDocument()
+    expect(screen.queryByText('Coaching')).not.toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText('Playbooks durchsuchen'), {
       target: { value: 'xyz' },

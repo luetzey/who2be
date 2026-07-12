@@ -156,6 +156,8 @@ describe('ResourceDetailPage', () => {
         ])
       if (path === `${WS_PREFIX}/resources/r1/used_by`)
         return jsonResponse([{ id: 'r3', name: 'Handbuch' }])
+      // Der inline Sub-Resource-Picker laedt die Workspace-Resources.
+      if (path === `${WS_PREFIX}/resources`) return jsonResponse([])
       throw new Error(`Unmocked ${path}`)
     })
 
@@ -164,7 +166,12 @@ describe('ResourceDetailPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Glossar')).toBeInTheDocument()
     })
-    expect(screen.getByText('Dokument · lazy')).toBeInTheDocument()
+    // Resource-Links tragen den Lazy/Inline-Toggle (statt eines Scope-Badges) —
+    // ohne embedding_mode ist „Lazy" aktiv.
+    expect(screen.getByRole('button', { name: 'Lazy' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
     // Used-By-Backlink liegt im Verwendung-Tab.
     fireEvent.click(screen.getByRole('tab', { name: 'Verwendung' }))
     await waitFor(() => {
@@ -259,6 +266,7 @@ interface DetailHandlerOptions {
   versions?: unknown[]
   usages?: unknown[]
   subResources?: unknown[]
+  allResources?: unknown[]
   usedBy?: unknown[]
 }
 
@@ -273,6 +281,9 @@ function detailHandlers(opts: DetailHandlerOptions = {}): FetchHandler {
         return jsonResponse(opts.usages ?? [])
       if (path === `${WS_PREFIX}/resources/r1/sub_resources`)
         return jsonResponse(opts.subResources ?? [])
+      // Der inline Sub-Resource-Picker laedt die Workspace-Resources.
+      if (path === `${WS_PREFIX}/resources`)
+        return jsonResponse(opts.allResources ?? [])
       if (path === `${WS_PREFIX}/resources/r1/used_by`)
         return jsonResponse(opts.usedBy ?? [])
       if (path === `${WS_PREFIX}/feedback/resource/r1`)
@@ -618,14 +629,18 @@ describe('ResourceDetailPage — Backlinks & Scope-Zweige', () => {
     )
 
     fireEvent.click(await screen.findByRole('tab', { name: 'Sub-Resources' }))
-    expect(await screen.findByText('Block b-1')).toBeInTheDocument()
-    expect(screen.getByText('Dokument · inline')).toBeInTheDocument()
-    // Block-Scope ohne Anker: Badge faellt auf leere Block-ID zurueck.
-    expect(screen.getByText('Block')).toBeInTheDocument()
+    // Block-Anker sind read-only mit „Im Text"-Badge; ohne Anker ohne Block-Suffix.
+    expect(await screen.findByText('Im Text (Block b-1)')).toBeInTheDocument()
+    expect(screen.getByText('Im Text')).toBeInTheDocument()
+    // Resource-Link mit inline-Modus: der Inline-Toggle ist aktiv.
+    expect(screen.getByRole('button', { name: 'Inline' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
   })
 })
 
-describe('ResourceDetailPage — Versions-Insel & Feedback', () => {
+describe('ResourceDetailPage — Versions-Insel', () => {
   it('Restore stellt die Version als Draft wieder her, Diff/Provenance laden lazy', async () => {
     const calledPaths: string[] = []
     const base = detailHandlers({
@@ -681,34 +696,6 @@ describe('ResourceDetailPage — Versions-Insel & Feedback', () => {
       )
     })
     expect(calledPaths).toContain(`${WS_PREFIX}/resources/r1/versions/1/restore`)
-  })
-
-  it('Feedback-Revise: scrollt nach oben und zeigt den Hinweis-Toast', async () => {
-    const scrollTo = vi.fn()
-    vi.stubGlobal('scrollTo', scrollTo)
-    const base = detailHandlers()
-    renderDetailPage((path, method, init) => {
-      if (method === 'GET' && path === `${WS_PREFIX}/feedback/resource/r1`) {
-        return jsonResponse({
-          entity_type: 'resource',
-          entity_id: 'r1',
-          usage_count: 2,
-          by_outcome: { applied: 2 },
-          by_signal: { outdated: 1 },
-          recent_notes: [],
-        })
-      }
-      return base(path, method, init)
-    })
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Überarbeiten' }))
-
-    await waitFor(() => {
-      expect(notify.info).toHaveBeenCalledWith(
-        'Bearbeite die aktive Version — Änderungen landen automatisch in einem neuen Draft.',
-      )
-    })
-    expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' })
   })
 })
 

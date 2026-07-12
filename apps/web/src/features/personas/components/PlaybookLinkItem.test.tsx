@@ -1,46 +1,58 @@
 import { fireEvent, render, screen } from '@testing-library/react'
+import { Plus, X } from 'lucide-react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { PlaybookLinkItem } from './PlaybookLinkItem'
 
 function renderItem(props?: Partial<Parameters<typeof PlaybookLinkItem>[0]>) {
-  const onToggle = vi.fn()
+  const onAction = vi.fn()
   render(
     <ul>
       <PlaybookLinkItem
-        id="pb1"
         name="Coaching"
-        checked={false}
-        onToggle={onToggle}
+        actionLabel="Verknüpfen"
+        actionIcon={Plus}
+        onAction={onAction}
         {...props}
       />
     </ul>,
   )
-  return { onToggle }
+  return { onAction }
 }
 
 describe('PlaybookLinkItem', () => {
-  it('rendert Label und Checkbox mit korrektem htmlFor/id', () => {
+  it('rendert Name und Aktions-Schaltflaeche', () => {
     renderItem()
 
-    const checkbox = screen.getByLabelText('Coaching') as HTMLInputElement
-    expect(checkbox).toBeInTheDocument()
-    expect(checkbox.id).toBe('playbook-link-pb1')
-    expect(checkbox.checked).toBe(false)
+    expect(screen.getByText('Coaching')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Verknüpfen' })).toBeInTheDocument()
   })
 
-  it('triggert onToggle beim Klick auf das Label', () => {
-    const { onToggle } = renderItem()
+  it('triggert onAction beim Klick auf die Schaltflaeche', () => {
+    const { onAction } = renderItem()
 
-    fireEvent.click(screen.getByLabelText('Coaching'))
+    fireEvent.click(screen.getByRole('button', { name: 'Verknüpfen' }))
 
-    expect(onToggle).toHaveBeenCalledTimes(1)
+    expect(onAction).toHaveBeenCalledTimes(1)
   })
 
-  it('zeigt den checked-Zustand an', () => {
-    renderItem({ checked: true })
+  it('rendert den optionalen Status-Slot und eine „Entfernen"-Aktion', () => {
+    renderItem({
+      status: <span>Aktiv</span>,
+      actionLabel: 'Entfernen',
+      actionIcon: X,
+    })
 
-    const checkbox = screen.getByLabelText('Coaching') as HTMLInputElement
-    expect(checkbox.checked).toBe(true)
+    expect(screen.getByText('Aktiv')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Entfernen' })).toBeInTheDocument()
+  })
+
+  it('deaktiviert die Schaltflaeche bei disabled', () => {
+    const { onAction } = renderItem({ disabled: true })
+
+    const button = screen.getByRole('button', { name: 'Verknüpfen' })
+    expect(button).toBeDisabled()
+    fireEvent.click(button)
+    expect(onAction).not.toHaveBeenCalled()
   })
 })

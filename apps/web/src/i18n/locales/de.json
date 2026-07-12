@@ -852,6 +852,10 @@
         "searchLabel": "Playbooks durchsuchen",
         "searchPlaceholder": "Nach Name filtern…",
         "searchEmpty": "Keine Playbooks für diese Suche.",
+        "linkedTitle": "Verknüpft",
+        "addTitle": "Playbook hinzufügen",
+        "link": "Verknüpfen",
+        "remove": "Entfernen",
         "triggerCount_one": "{{count}} Trigger",
         "triggerCount_other": "{{count}} Trigger",
         "compositeBadge": "Composite"
@@ -1356,6 +1360,24 @@
       "allSelected": "Alle verfügbaren Resources sind bereits ausgewählt.",
       "save": "Speichern ({{count}})",
       "loadError": "Laden fehlgeschlagen."
+    },
+    "subInline": {
+      "title": "Sub-Resources",
+      "description": "Eingebettete Bausteine in Reihenfolge. Lazy = nur Referenz, Inline = Volltext wird mitgeliefert.",
+      "blockManagedHint": "Mit „Im Text\" markierte Bausteine sind direkt im Inhalt eingebettet. Sie lassen sich hier nicht entfernen — bearbeite sie im Editor.",
+      "included": "Eingebunden",
+      "blockManagedRow": "Als Block im Inhalt eingebettet — dort bearbeiten",
+      "inText": "Im Text",
+      "inTextAnchor": "Im Text (Block {{blockId}})",
+      "managedTitle": "Über den Editor verwaltet",
+      "modeLazy": "Lazy",
+      "modeInline": "Inline",
+      "embedModeFor": "Einbettungs-Modus für {{name}}",
+      "removeAria": "{{name}} entfernen",
+      "add": "Sub-Resource hinzufügen",
+      "searchPlaceholder": "Resource suchen…",
+      "addAction": "Hinzufügen",
+      "noResults": "Keine passende Resource gefunden."
     },
     "toast": {
       "created": "Resource angelegt.",
@@ -1996,6 +2018,31 @@
       "eventsHide": "Einklappen",
       "eventsShow": "Ausklappen",
       "eventsEmpty": "Keine Einzel-Ereignisse."
+    },
+    "itemDetail": {
+      "description": "Alle Details zu dieser Rückmeldung — Bezug, Signal, Status und Verlauf.",
+      "openElement": "Element öffnen",
+      "fallbackTitle": "Feedback",
+      "title": "{{signal}} · {{name}}",
+      "bezugTitle": "Bezug",
+      "type": "Typ",
+      "element": "Element",
+      "version": "Version",
+      "source": "Quelle",
+      "submitted": "Eingereicht",
+      "noElement": "Kein Element (System-Feedback)",
+      "signalTitle": "Signal & Notiz",
+      "signalLabel": "Signal",
+      "noteEmpty": "Keine Notiz hinterlassen.",
+      "statusTitle": "Status & Triage",
+      "statusCurrent": "Aktueller Status",
+      "statusHint": "Ändere den Bearbeitungsstand — jede Änderung landet im Verlauf.",
+      "historyTitle": "Verlauf",
+      "historyEmpty": "Noch nicht bearbeitet.",
+      "history": {
+        "actorHuman": "Mensch",
+        "actorSystem": "System"
+      }
     }
   }
 }

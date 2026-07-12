@@ -864,6 +864,32 @@ export interface FeedbackResolutionInput {
   note?: string
 }
 
+// Ein einzelnes Triage-Ereignis der Historie (append-only, aeltestes zuerst).
+export interface FeedbackResolutionEvent {
+  resolution: FeedbackResolution
+  actor_id: string | null
+  note: string | null
+  created_at: string
+}
+
+// Detailsicht auf EIN Feedback (`GET …/feedback/{feedbackId}`): alle Felder aus
+// FeedbackItem + menschlicher Absender (actor_id) + vollstaendige Triage-Historie
+// (aelteste→juengste). Datengrundlage der Einzel-Feedback-Detailseite.
+export interface FeedbackDetail {
+  id: string
+  entity_type: FeedbackEntityType
+  entity_id: string | null
+  name: string
+  version: number | null
+  signal: FeedbackSignal | SystemFeedbackCategory
+  note: string | null
+  agent_id: string | null
+  actor_id: string | null
+  created_at: string
+  resolution: FeedbackResolution | null
+  history: FeedbackResolutionEvent[]
+}
+
 // Ein Feedback workspace-weit, angereichert um den Element-Namen — Ruckgrat des
 // zentralen Posteingangs (`GET …/feedback-items`).
 export interface FeedbackItem {

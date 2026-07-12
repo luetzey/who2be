@@ -181,6 +181,37 @@ class FeedbackItem(BaseModel):
     resolution: FeedbackResolution | None = None
 
 
+class FeedbackResolutionEvent(BaseModel):
+    """Ein einzelnes Triage-Ereignis aus der `feedback_resolution`-Historie.
+
+    Append-only: pro Kurations-Handlung eine Zeile. Der „aktuelle" Status eines
+    Feedbacks ist das juengste Event; die vollstaendige Historie (aelteste→
+    juengste) traegt `FeedbackDetailRead.history` fuer die Einzel-Feedback-
+    Detailsicht.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    resolution: FeedbackResolution
+    actor_id: UUID | None = None
+    note: str | None = None
+    created_at: datetime
+
+
+class FeedbackDetailRead(FeedbackItem):
+    """Detailsicht auf EIN Feedback (`GET …/feedback/{feedback_id}`).
+
+    Erweitert `FeedbackItem` (id, entity_type/-id, Element-`name`, version,
+    signal, note, agent_id, created_at, aktuelle `resolution`) um den menschlichen
+    Absender (`actor_id`) und die vollstaendige, chronologische Triage-Historie
+    (`history`, aelteste→juengste) — die Datengrundlage fuer die
+    Einzel-Feedback-Detailseite.
+    """
+
+    actor_id: UUID | None = None
+    history: list[FeedbackResolutionEvent] = Field(default_factory=list)
+
+
 class FeedbackItemCounts(BaseModel):
     """Status-Verteilung ueber ALLE Feedbacks (speist die KPI-Leiste)."""
 

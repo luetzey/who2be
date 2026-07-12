@@ -23,7 +23,6 @@ import { DetailHeader } from '@/components/data/DetailHeader'
 import { ManagedNotice } from '@/components/data/ManagedNotice'
 import { StatusBadge } from '@/components/data/StatusBadge'
 import { UsedByList } from '@/components/data/UsedByList'
-import { FeedbackPanel } from '@/components/feedback/FeedbackPanel'
 import { Container } from '@/components/layout/Container'
 import { Stack } from '@/components/layout/Stack'
 import { Badge } from '@/components/ui/badge'
@@ -261,41 +260,10 @@ export function ResourceDetailPage() {
                     <CardTitle>{t('detail.subResourcesTitle')}</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <Stack gap="sm">
-                      <DataView
-                        loading={subResources.loading}
-                        error={subResources.error}
-                        empty={
-                          !subResources.loading &&
-                          subResources.children.length === 0
-                        }
-                        emptyTitle={t('detail.subResourcesEmptyTitle')}
-                        emptyDescription={t('detail.subResourcesEmptyDescription')}
-                      >
-                        <DataList
-                          items={subResources.children}
-                          getKey={(sub) => `${sub.id}-${sub.block_id ?? 'doc'}`}
-                          renderItem={(sub) => (
-                            <span className="flex items-center justify-between gap-3">
-                              <Link
-                                to={wsPath(`/resources/${sub.id}`)}
-                                className="truncate"
-                              >
-                                {sub.name}
-                              </Link>
-                              <Badge variant="secondary">
-                                {sub.link_scope === 'block'
-                                  ? t('detail.scopeBlock', {
-                                      blockId: sub.block_id ?? '',
-                                    })
-                                  : sub.embedding_mode === 'inline'
-                                    ? t('detail.scopeDocumentInline')
-                                    : t('detail.scopeDocumentLazy')}
-                              </Badge>
-                            </span>
-                          )}
-                        />
-                      </DataView>
+                    <DataView
+                      loading={subResources.loading}
+                      error={subResources.error}
+                    >
                       {canEdit ? (
                         <SubResourcePicker
                           currentResourceId={resource.id}
@@ -303,8 +271,42 @@ export function ResourceDetailPage() {
                           saving={subResources.saving}
                           onSave={subResources.save}
                         />
-                      ) : null}
-                    </Stack>
+                      ) : (
+                        <DataView
+                          empty={subResources.children.length === 0}
+                          emptyTitle={t('detail.subResourcesEmptyTitle')}
+                          emptyDescription={t(
+                            'detail.subResourcesEmptyDescription',
+                          )}
+                        >
+                          <DataList
+                            items={subResources.children}
+                            getKey={(sub) =>
+                              `${sub.id}-${sub.block_id ?? 'doc'}`
+                            }
+                            renderItem={(sub) => (
+                              <span className="flex items-center justify-between gap-3">
+                                <Link
+                                  to={wsPath(`/resources/${sub.id}`)}
+                                  className="truncate"
+                                >
+                                  {sub.name}
+                                </Link>
+                                <Badge variant="secondary">
+                                  {sub.link_scope === 'block'
+                                    ? t('detail.scopeBlock', {
+                                        blockId: sub.block_id ?? '',
+                                      })
+                                    : sub.embedding_mode === 'inline'
+                                      ? t('detail.scopeDocumentInline')
+                                      : t('detail.scopeDocumentLazy')}
+                                </Badge>
+                              </span>
+                            )}
+                          />
+                        </DataView>
+                      )}
+                    </DataView>
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -372,17 +374,6 @@ export function ResourceDetailPage() {
                 />
               </TabsContent>
             </Tabs>
-
-            {role !== 'viewer' ? (
-              <FeedbackPanel
-                type="resource"
-                id={resource.id}
-                onRevise={() => {
-                  window.scrollTo({ top: 0, behavior: 'smooth' })
-                  notify.info(t('feedback:panel.reviseToast'))
-                }}
-              />
-            ) : null}
           </Stack>
         ) : null}
       </DataView>
