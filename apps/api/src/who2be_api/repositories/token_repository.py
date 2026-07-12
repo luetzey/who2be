@@ -95,7 +95,7 @@ class PgTokenRepository:
             "(workspace_id, owner_id, name, token_hash, role, agent_id, expires_at) "
             "VALUES ($1, $2, $3, $4, $5, $6, $7) "
             "RETURNING id, workspace_id, name, role, agent_id, "
-            "created_at, last_used_at, revoked_at",
+            "created_at, last_used_at, revoked_at, expires_at",
             workspace_id,
             owner_id,
             name,
@@ -115,7 +115,7 @@ class PgTokenRepository:
         if after is None:
             rows = await self._pool.fetch(
                 "SELECT id, workspace_id, name, role, agent_id, "
-                "created_at, last_used_at, revoked_at "
+                "created_at, last_used_at, revoked_at, expires_at "
                 "FROM api_token WHERE workspace_id = $1 "
                 "ORDER BY created_at DESC, id DESC LIMIT $2",
                 workspace_id,
@@ -124,7 +124,7 @@ class PgTokenRepository:
         else:
             rows = await self._pool.fetch(
                 "SELECT id, workspace_id, name, role, agent_id, "
-                "created_at, last_used_at, revoked_at "
+                "created_at, last_used_at, revoked_at, expires_at "
                 "FROM api_token WHERE workspace_id = $1 "
                 "AND (created_at, id) < ($2, $3) "
                 "ORDER BY created_at DESC, id DESC LIMIT $4",
@@ -145,7 +145,7 @@ class PgTokenRepository:
         if after is None:
             rows = await self._pool.fetch(
                 "SELECT id, workspace_id, name, role, agent_id, "
-                "created_at, last_used_at, revoked_at "
+                "created_at, last_used_at, revoked_at, expires_at "
                 "FROM api_token WHERE workspace_id = $1 AND agent_id = $2 "
                 "ORDER BY created_at DESC, id DESC LIMIT $3",
                 workspace_id,
@@ -155,7 +155,7 @@ class PgTokenRepository:
         else:
             rows = await self._pool.fetch(
                 "SELECT id, workspace_id, name, role, agent_id, "
-                "created_at, last_used_at, revoked_at "
+                "created_at, last_used_at, revoked_at, expires_at "
                 "FROM api_token WHERE workspace_id = $1 AND agent_id = $2 "
                 "AND (created_at, id) < ($3, $4) "
                 "ORDER BY created_at DESC, id DESC LIMIT $5",
@@ -188,7 +188,7 @@ class PgTokenRepository:
             "UPDATE api_token SET name = $3 "
             "WHERE id = $1 AND workspace_id = $2 AND revoked_at IS NULL "
             "RETURNING id, workspace_id, name, role, agent_id, "
-            "created_at, last_used_at, revoked_at",
+            "created_at, last_used_at, revoked_at, expires_at",
             token_id,
             workspace_id,
             name,
@@ -204,7 +204,7 @@ class PgTokenRepository:
             "UPDATE api_token SET token_hash = $3, last_used_at = NULL "
             "WHERE id = $1 AND workspace_id = $2 AND revoked_at IS NULL "
             "RETURNING id, workspace_id, name, role, agent_id, "
-            "created_at, last_used_at, revoked_at",
+            "created_at, last_used_at, revoked_at, expires_at",
             token_id,
             workspace_id,
             new_hash,

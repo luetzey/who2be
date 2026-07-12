@@ -10,6 +10,7 @@ const resource: Resource = {
   workspace_id: 'ws-1',
   owner_id: 'o-1',
   name: 'Runbook',
+  slug: 'runbook',
   current_version: 1,
   content: { description: '', blocks: [] },
   created_at: 't',

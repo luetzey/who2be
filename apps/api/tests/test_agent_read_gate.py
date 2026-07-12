@@ -21,6 +21,7 @@ import pytest
 from fastapi import HTTPException
 
 from who2be_api.core.security import WorkspaceContext
+from who2be_api.repositories.agent_repository import AgentListMeta
 from who2be_api.services.agent_service import AgentService
 from who2be_models import AgentRead, AgentStatus, AgentToolPolicy, ReadScope, WorkspaceRole
 
@@ -49,6 +50,9 @@ class _FakeAgentRepo:
 
     def __init__(self, agents: list[AgentRead]) -> None:
         self._agents = agents
+        # Card-Pill-Meta pro Agent-ID (vom Test gesetzt); ohne Eintrag bleibt das
+        # Read auf den Feld-Defaults (None/0).
+        self.meta: dict[UUID, AgentListMeta] = {}
 
     async def list_by_workspace(
         self, workspace_id: UUID, limit: int, cursor: object
@@ -57,6 +61,11 @@ class _FakeAgentRepo:
 
     async def fetch(self, workspace_id: UUID, agent_id: UUID) -> AgentRead | None:
         return next((a for a in self._agents if a.id == agent_id), None)
+
+    async def list_meta(
+        self, workspace_id: UUID, agent_ids: list[UUID]
+    ) -> dict[UUID, AgentListMeta]:
+        return {aid: self.meta[aid] for aid in agent_ids if aid in self.meta}
 
 
 # Zwei Agenten im Workspace: der "eigene" (= ctx.agent_id) ist disabled (frisch
@@ -108,6 +117,30 @@ def test_scope_assigned_sees_only_self() -> None:
     with pytest.raises(HTTPException) as exc:
         asyncio.run(_service().get(ctx, _OTHER_ID))
     assert exc.value.status_code == 404
+
+
+def test_list_enriches_card_pills() -> None:
+    """List-Card-Pills: `list_all` joint Persona-/Template-Namen, aktive
+    Template-Version und Playbook-Anzahl in die Reads (Human-Scope = alle)."""
+    own = _agent(_OWN_ID, "Eigener (frisch)", AgentStatus.disabled)
+    other = _agent(_OTHER_ID, "Fremder", AgentStatus.enabled)
+    repo = _FakeAgentRepo([own, other])
+    repo.meta[_OWN_ID] = AgentListMeta(
+        persona_name="Coach Carla",
+        template_name="Support-Template",
+        template_version=2,
+        playbook_count=3,
+    )
+    service = AgentService(repo)  # type: ignore[arg-type]
+    items, _cursor = asyncio.run(service.list_all(_ctx(None), limit=50, cursor=None))
+    by_id = {a.id: a for a in items}
+    assert by_id[_OWN_ID].persona_name == "Coach Carla"
+    assert by_id[_OWN_ID].template_name == "Support-Template"
+    assert by_id[_OWN_ID].template_version == 2
+    assert by_id[_OWN_ID].playbook_count == 3
+    # Ohne Meta-Eintrag bleibt der fremde Agent auf den Defaults.
+    assert by_id[_OTHER_ID].persona_name is None
+    assert by_id[_OTHER_ID].playbook_count == 0
 
 
 def test_scope_none_blocks_with_403() -> None:

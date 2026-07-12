@@ -20,6 +20,7 @@ const makeResource = (id: string, name: string): Resource => ({
   workspace_id: 'ws-1',
   owner_id: 'o-1',
   name,
+  slug: id,
   current_version: 1,
   content: { description: `Beschreibung von ${name}`, blocks: [] },
   created_at: 't',

@@ -6,7 +6,7 @@ Draft-on-Edit-Konflikt in `409`. Aufbau analog `playbook_service.py`.
 """
 
 from datetime import datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import asyncpg
 from fastapi import HTTPException, status
@@ -28,6 +28,7 @@ from who2be_api.repositories.playbook_resource_link_repository import (
 from who2be_api.repositories.resource_repository import ResourceRepository
 from who2be_api.repositories.usage_repository import UsageRepository
 from who2be_api.services.content_text import resource_content_text
+from who2be_api.services.slug import slugify
 from who2be_api.services.version_diff import compute_version_diff
 from who2be_models import (
     DEFAULT_LOCALE,
@@ -51,6 +52,13 @@ from who2be_models import (
 
 def _not_found() -> HTTPException:
     return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource nicht gefunden.")
+
+
+def _slug_conflict() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail="Eine Resource mit diesem Slug existiert bereits.",
+    )
 
 
 def _delete_blocked(playbooks: list[ResourceUsage], composites: list[ResourceRef]) -> HTTPException:
@@ -134,9 +142,41 @@ class ResourceService:
         require_capability(ctx, AgentCapability.resource_write)
         require_write_rate(ctx)
         require_write_tags(ctx, "resource", data.content.tags)
-        return await self._repo.insert(
-            ctx.workspace_id, ctx.user_id, data.name, data.content, data.locales
-        )
+        # Slug beim Create aus dem Namen ableiten, falls nicht gesetzt (spiegelt
+        # SystemPromptTemplateService.create). Workspace-eindeutig — Kollision →
+        # 409 (UNIQUE(workspace_id, slug), Migration 0064).
+        slug = data.slug or slugify(data.name)
+        try:
+            return await self._repo.insert(
+                ctx.workspace_id, ctx.user_id, data.name, data.content, data.locales, slug=slug
+            )
+        except asyncpg.UniqueViolationError as exc:
+            raise _slug_conflict() from exc
+
+    async def duplicate(
+        self, ctx: WorkspaceContext, resource_id: UUID, locale: str = DEFAULT_LOCALE
+    ) -> ResourceRead:
+        """Dupliziert eine Resource als frische Draft-v1 (Deep-Copy des Inhalts).
+
+        Spiegelt `AgentService.copy`: Editor-Gate + Capability + Rate-Limit, der
+        Inhalt der aktuellen (Locale-)Version wird in eine NEUE, unverwaltete
+        Resource kopiert (Version 1, Status draft), Name `"{name} (Kopie)"`,
+        frischer eindeutiger Slug. Auch verwaltete Resources duerfen dupliziert
+        werden — die Kopie ist unverwaltet und frei editierbar.
+        """
+        require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.resource_write)
+        require_write_rate(ctx)
+        source = await self.get(ctx, resource_id, locale=locale)
+        require_write_tags(ctx, "resource", source.content.tags)
+        name = f"{source.name} (Kopie)"
+        slug = f"{slugify(name)}-{uuid4().hex[:8]}"
+        try:
+            return await self._repo.insert(
+                ctx.workspace_id, ctx.user_id, name, source.content, [locale], slug=slug
+            )
+        except asyncpg.UniqueViolationError as exc:  # pragma: no cover - Slug-Suffix ist eindeutig
+            raise _slug_conflict() from exc
 
     async def list_tags(self, ctx: WorkspaceContext, locale: str = DEFAULT_LOCALE) -> list[str]:
         """DISTINCT-Tags des Workspaces — Datenquelle fuer den Resource-Tag-Picker.
@@ -187,11 +227,37 @@ class ResourceService:
             locale=locale,
             restrict_ids=restrict_ids,
         )
+        next_cursor: str | None = None
         if len(rows) > limit:
-            items = rows[:limit]
-            tail = items[-1]
-            return items, encode_cursor(tail.created_at, tail.id)
-        return rows, None
+            rows = rows[:limit]
+            tail = rows[-1]
+            next_cursor = encode_cursor(tail.created_at, tail.id)
+        return await self._enrich(ctx.workspace_id, rows, locale), next_cursor
+
+    async def _enrich(
+        self, workspace_id: UUID, items: list[ResourceRead], locale: str = DEFAULT_LOCALE
+    ) -> list[ResourceRead]:
+        """Joint die List-Card-Pills (Batch-Aggregat) in die Reads (kein N+1).
+
+        Zwei Batch-Roundtrips fuer die ganze Seite (kein N+1): `list_counts` fuer
+        die Zaehler-Pills und `list_sub_resource_children` fuer die aufklappbaren
+        Kind-Summaries (`sub_resources`). Ohne Treffer bleibt das Read auf den
+        Feld-Defaults (Zaehler 0, leere Kind-Liste).
+        """
+        if not items:
+            return items
+        ids = [r.id for r in items]
+        counts = await self._repo.list_counts(workspace_id, ids)
+        children = await self._repo.list_sub_resource_children(workspace_id, ids, locale)
+        enriched: list[ResourceRead] = []
+        for resource in items:
+            found = counts.get(resource.id)
+            update: dict[str, object] = {"sub_resources": children.get(resource.id, [])}
+            if found is not None:
+                update["playbook_link_count"] = found.playbook_link_count
+                update["sub_resource_count"] = found.sub_resource_count
+            enriched.append(resource.model_copy(update=update))
+        return enriched
 
     async def _read_restrict(self, ctx: WorkspaceContext) -> list[UUID] | None:
         """Read-Scope-Filter; ohne Pool (Test-Fakes) kein Scoping."""

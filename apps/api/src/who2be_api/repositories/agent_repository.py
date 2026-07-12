@@ -10,6 +10,7 @@ Workspace stammen. INSERT/UPDATE bekommen daher nur die `workspace_id` des
 Aufrufers; Cross-Workspace-Verweise werden DB-seitig abgewiesen.
 """
 
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 from uuid import UUID
@@ -17,6 +18,24 @@ from uuid import UUID
 import asyncpg
 
 from who2be_models import AgentRead, AgentStatus, AgentToolPolicy
+
+
+@dataclass(frozen=True)
+class AgentListMeta:
+    """Denormalisierte List-Card-Pills eines Agenten (Batch-Aggregat).
+
+    Von `list_meta` pro Agent-ID geliefert und im Service in das `AgentRead`
+    gejoint. `persona_name`/`template_name` sind None, solange kein Persona/
+    Template verknuepft ist; `template_version` traegt die aktive Template-
+    Version (None ohne aktive Version). `playbook_count` zaehlt die Playbooks
+    der verknuepften Persona (`persona_playbook`).
+    """
+
+    persona_name: str | None
+    template_name: str | None
+    template_version: int | None
+    playbook_count: int
+
 
 # `persona_active` wird per EXISTS-Subquery auf `persona_version.status='active'`
 # mitgelesen — so kennt jedes AgentRead die Aktivierbarkeit ohne Extra-Roundtrip.
@@ -71,6 +90,10 @@ class AgentRepository(Protocol):
     ) -> list[AgentRead]: ...
 
     async def fetch(self, workspace_id: UUID, agent_id: UUID) -> AgentRead | None: ...
+
+    async def list_meta(
+        self, workspace_id: UUID, agent_ids: list[UUID]
+    ) -> dict[UUID, AgentListMeta]: ...
 
     async def deep_copy(
         self,
@@ -286,6 +309,44 @@ class PgAgentRepository:
             workspace_id,
         )
         return AgentRead.model_validate(dict(row)) if row is not None else None
+
+    async def list_meta(
+        self, workspace_id: UUID, agent_ids: list[UUID]
+    ) -> dict[UUID, AgentListMeta]:
+        """Batch-Aggregat fuer die List-Card-Pills (ein Roundtrip, kein N+1).
+
+        Ein Set-basierter Join ueber `= ANY($2)` liefert Persona-/Template-Name,
+        die aktive Template-Version und die Playbook-Anzahl der verknuepften
+        Persona fuer alle uebergebenen Agenten auf einmal. Leere ID-Liste => {}.
+        """
+        if not agent_ids:
+            return {}
+        rows = await self._pool.fetch(
+            "SELECT a.id AS agent_id, p.name AS persona_name, "
+            "       t.name AS template_name, tv.version AS template_version, "
+            "       COALESCE(pc.cnt, 0)::int AS playbook_count "
+            "FROM agent a "
+            "LEFT JOIN persona p ON p.id = a.persona_id "
+            "LEFT JOIN system_prompt_template t ON t.id = a.system_prompt_template_id "
+            "LEFT JOIN system_prompt_template_version tv "
+            "  ON tv.template_id = t.id AND tv.status = 'active' "
+            "LEFT JOIN ( "
+            "    SELECT persona_id, COUNT(*) AS cnt "
+            "    FROM persona_playbook GROUP BY persona_id "
+            ") pc ON pc.persona_id = a.persona_id "
+            "WHERE a.workspace_id = $1 AND a.id = ANY($2)",
+            workspace_id,
+            agent_ids,
+        )
+        return {
+            row["agent_id"]: AgentListMeta(
+                persona_name=row["persona_name"],
+                template_name=row["template_name"],
+                template_version=row["template_version"],
+                playbook_count=row["playbook_count"],
+            )
+            for row in rows
+        }
 
     async def update(
         self,

@@ -1,10 +1,12 @@
+import { Layers, Share2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
-import type { Playbook } from '@/api/types'
+import type { Playbook, PlaybookRef } from '@/api/types'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { DataView } from '@/components/data/DataView'
+import { EntityCard } from '@/components/data/EntityCard'
 import { StatusBadge } from '@/components/data/StatusBadge'
 import { Stack } from '@/components/layout/Stack'
 import { Badge } from '@/components/ui/badge'
@@ -24,13 +26,55 @@ interface PersonaPlaybooksCardProps {
 }
 
 /**
+ * Aufklappbare Sub-Playbook-Liste eines Composite-Playbooks. Spiegelt das
+ * Sub-Resource-/Sub-Playbook-Muster (PlaybookRow): nummerierte, verlinkte
+ * Kind-Zeilen mit Status/Version, sofern das Voll-Objekt aufloesbar ist.
+ */
+function SubPlaybookList({
+  items,
+  wsPath,
+  resolveChild,
+  label,
+}: {
+  items: PlaybookRef[]
+  wsPath: (path: string) => string
+  resolveChild: (ref: PlaybookRef) => Playbook | undefined
+  label: string
+}) {
+  return (
+    <ol className="flex flex-col gap-1.5" aria-label={label}>
+      {items.map((child, index) => {
+        const detail = resolveChild(child)
+        return (
+          <li key={child.id}>
+            <Link
+              to={wsPath(`/playbooks/${child.id}`)}
+              className="flex items-center gap-3 rounded-lg border border-pill-catalog-fg/20 bg-card px-3 py-2 text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+              <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-pill-catalog text-xs font-bold text-pill-catalog-fg">
+                {index + 1}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-sm font-medium">{child.name}</span>
+              {detail !== undefined ? (
+                <StatusBadge status={detail.current_status} />
+              ) : null}
+            </Link>
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
+/**
  * Playbooks-Sektion der Persona-Detailseite (WP-E). Default ist ein
- * navigierbarer Anzeige-Modus (Links + Status/Composite-Badges + Meta);
- * der Checkbox-Picker liegt hinter „Verknüpfungen bearbeiten“ und bekommt
- * ein Namens-Suchfeld. Abbrechen verwirft lokale Auswahl-Änderungen.
+ * navigierbarer Anzeige-Modus (Karten-Zeilen mit Status/Meta und einem
+ * aufklappbaren Composite-Bereich fuer Sub-Playbooks); der Checkbox-Picker
+ * liegt hinter „Verknüpfungen bearbeiten“ und bekommt ein Namens-Suchfeld.
+ * Abbrechen verwirft lokale Auswahl-Änderungen.
  */
 export function PersonaPlaybooksCard({ personaId, canEdit }: PersonaPlaybooksCardProps) {
-  const { t } = useTranslation(['personas', 'common'])
+  const { t } = useTranslation(['personas', 'common', 'playbooks'])
   const wsPath = useWorkspacePath()
   const links = usePersonaPlaybooks(personaId)
   const [editing, setEditing] = useState(false)
@@ -43,6 +87,16 @@ export function PersonaPlaybooksCard({ personaId, canEdit }: PersonaPlaybooksCar
     }
     return links.playbooks.filter((playbook) => playbook.name.toLowerCase().includes(needle))
   }, [links.playbooks, query])
+
+  // Voll-Objekt eines Sub-Playbooks aus der Workspace-Liste — liefert
+  // Status/Version fuer die aufgeklappten Kind-Zeilen (keine neue Query).
+  const byId = useMemo(() => {
+    const map = new Map<string, Playbook>()
+    for (const playbook of links.playbooks) {
+      map.set(playbook.id, playbook)
+    }
+    return map
+  }, [links.playbooks])
 
   const startEditing = () => {
     setQuery('')
@@ -63,33 +117,64 @@ export function PersonaPlaybooksCard({ personaId, canEdit }: PersonaPlaybooksCar
 
   const renderLinked = (playbook: Playbook) => {
     const triggerCount = splitTriggers(playbook.triggers).length
+    const metaText =
+      triggerCount > 0
+        ? `${playbook.type} · ${t('personas:detail.playbooks.triggerCount', { count: triggerCount })}`
+        : playbook.type
+    const composeChildren = playbook.compose_children ?? []
+    const hasChildren = composeChildren.length > 0
+
     return (
-      <li key={playbook.id} className="flex flex-wrap items-center gap-2 text-sm">
-        <Link
-          to={wsPath(`/playbooks/${playbook.id}`)}
-          className="rounded-sm font-medium text-foreground ring-offset-background hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
-        >
-          {playbook.name}
-        </Link>
-        <StatusBadge
-          status={playbook.current_status}
-          pendingDraft={playbook.has_pending_draft}
-        />
-        {playbook.is_composite === true ? <Badge variant="secondary">Composite</Badge> : null}
-        <span className="text-xs text-muted-foreground">
-          {playbook.type}
-          {triggerCount > 0
-            ? ` · ${t('personas:detail.playbooks.triggerCount', { count: triggerCount })}`
-            : ''}
-        </span>
-      </li>
+      <EntityCard
+        key={playbook.id}
+        icon={Share2}
+        iconTone="playbook"
+        title={playbook.name}
+        href={wsPath(`/playbooks/${playbook.id}`)}
+        status={
+          <StatusBadge
+            status={playbook.current_status}
+            pendingDraft={playbook.has_pending_draft}
+          />
+        }
+        badges={
+          playbook.is_composite === true ? (
+            <Badge variant="secondary">{t('personas:detail.playbooks.compositeBadge')}</Badge>
+          ) : null
+        }
+        meta={<span className="text-xs text-muted-foreground">{metaText}</span>}
+        expandable={
+          hasChildren ? (
+            <SubPlaybookList
+              items={composeChildren}
+              wsPath={wsPath}
+              resolveChild={(ref) => byId.get(ref.id)}
+              label={t('playbooks:list.subPlaybooksListLabel')}
+            />
+          ) : undefined
+        }
+        expandIcon={Layers}
+        expandLabel={
+          hasChildren
+            ? t('playbooks:list.subPlaybooksCount', { count: composeChildren.length })
+            : undefined
+        }
+        expandSummary={
+          hasChildren ? composeChildren.map((child) => child.name).join(' · ') : undefined
+        }
+      />
     )
   }
 
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
-        <CardTitle>{t('personas:detail.playbooks.title')}</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          {t('personas:detail.playbooks.title')}
+          {links.linked.length > 0 ? (
+            <Badge variant="secondary">{links.linked.length}</Badge>
+          ) : null}
+        </CardTitle>
         {canEdit && !editing ? (
           <Button
             type="button"
@@ -166,12 +251,7 @@ export function PersonaPlaybooksCard({ personaId, canEdit }: PersonaPlaybooksCar
             empty={links.linked.length === 0}
             emptyTitle={t('personas:detail.playbooks.empty')}
           >
-            <ul
-              className="flex flex-col gap-2"
-              aria-label={t('personas:detail.playbooks.title')}
-            >
-              {links.linked.map(renderLinked)}
-            </ul>
+            <div className="flex flex-col gap-2">{links.linked.map(renderLinked)}</div>
           </DataView>
         )}
       </CardContent>

@@ -93,6 +93,7 @@ def _resource_json(name: str = "R") -> dict[str, object]:
         "workspace_id": str(_WORKSPACE),
         "owner_id": str(uuid4()),
         "name": name,
+        "slug": name.lower(),
         "current_version": 1,
         "content": {"description": "d", "blocks": [], "tags": []},
         "created_at": _now(),

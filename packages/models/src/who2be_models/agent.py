@@ -117,6 +117,17 @@ class AgentRead(BaseModel):
     # MCP-Tool-Policy des Agenten. Default-Instanz (Read-All/keine Writes) deckt
     # direkt konstruierte Reads und Bestands-Agenten mit leerem `{}`-JSON ab.
     tool_policy: AgentToolPolicy = Field(default_factory=AgentToolPolicy)
+    # List-Enrichment (Card-Pills): denormalisierte Namen/Zaehler, die NUR der
+    # List-Endpoint per Batch-Aggregat befuellt (kein N+1). Direkt konstruierte
+    # Reads (get/create/update/copy) lassen sie auf den Defaults (None/0), da die
+    # Detail-Sicht die Refs ohnehin einzeln aufloest. `persona_name`/
+    # `template_name` sind None, solange kein Persona/Template verknuepft ist;
+    # `template_version` traegt die aktive Template-Version (None ohne aktive
+    # Version). `playbook_count` zaehlt die Playbooks der verknuepften Persona.
+    persona_name: str | None = None
+    template_name: str | None = None
+    template_version: int | None = None
+    playbook_count: int = 0
     created_at: datetime
     updated_at: datetime
 

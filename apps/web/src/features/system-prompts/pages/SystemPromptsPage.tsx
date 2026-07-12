@@ -1,4 +1,4 @@
-import { Plus, ScrollText } from 'lucide-react'
+import { Plus, ScrollText, Users } from 'lucide-react'
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -8,6 +8,7 @@ import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { DataView } from '@/components/data/DataView'
 import { EmptyState } from '@/components/data/EmptyState'
 import { EntityCard } from '@/components/data/EntityCard'
+import { MetaPill } from '@/components/data/MetaPill'
 import { ListFilterBar } from '@/components/data/ListFilterBar'
 import { StatusBadge } from '@/components/data/StatusBadge'
 import { Container } from '@/components/layout/Container'
@@ -116,6 +117,13 @@ export function SystemPromptsPage() {
                     />
                   }
                   description={template.content.description}
+                  meta={
+                    <MetaPill icon={Users} iconTone="persona">
+                      {(template.agent_count ?? 0) > 0
+                        ? t('systemPrompts:card.usedByAgents', { count: template.agent_count ?? 0 })
+                        : t('systemPrompts:card.usedByNone')}
+                    </MetaPill>
+                  }
                 />
               ))}
             </div>

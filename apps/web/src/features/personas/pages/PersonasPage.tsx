@@ -1,4 +1,4 @@
-import { Plus, Users } from 'lucide-react'
+import { Bot, GitBranch, Layers, Plus, Users } from 'lucide-react'
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -10,6 +10,7 @@ import { Stack } from '@/components/layout/Stack'
 import { DataView } from '@/components/data/DataView'
 import { EmptyState } from '@/components/data/EmptyState'
 import { EntityCard } from '@/components/data/EntityCard'
+import { initialsFromName } from '@/components/data/EntityIcon'
 import { ListFilterBar } from '@/components/data/ListFilterBar'
 import { MetaPill } from '@/components/data/MetaPill'
 import { StatusBadge } from '@/components/data/StatusBadge'
@@ -111,14 +112,26 @@ export function PersonasPage() {
             <div className="flex flex-col gap-3">
               {filters.filtered.map((persona) => {
                 const tags = persona.content?.tags ?? []
+                const modeCount = persona.content?.modes?.length ?? 0
+                const agentCount = persona.agent_count ?? 0
                 return (
                   <EntityCard
                     key={persona.id}
                     icon={Users}
                     iconTone="persona"
+                    avatar={initialsFromName(persona.name)}
                     title={persona.name}
                     href={wsPath(`/personas/${persona.id}`)}
-                    badges={<Badge variant="secondary">v{persona.current_version}</Badge>}
+                    badges={
+                      <>
+                        <Badge variant="secondary">v{persona.current_version}</Badge>
+                        {tags.map((tag) => (
+                          <Badge key={tag} variant="outline">
+                            {tag}
+                          </Badge>
+                        ))}
+                      </>
+                    }
                     status={
                       <StatusBadge
                         status={persona.current_status}
@@ -127,13 +140,21 @@ export function PersonasPage() {
                     }
                     description={persona.content.description}
                     meta={
-                      tags.length > 0
-                        ? tags.map((tag) => (
-                            <MetaPill key={tag} tone="persona">
-                              {tag}
-                            </MetaPill>
-                          ))
-                        : undefined
+                      <>
+                        <MetaPill icon={Layers} iconTone="persona">
+                          {t('personas:card.modeCount', { count: modeCount })}
+                        </MetaPill>
+                        <MetaPill icon={GitBranch} iconTone="playbook">
+                          {t('personas:card.playbookCount', { count: persona.playbook_count ?? 0 })}
+                        </MetaPill>
+                        {agentCount > 0 ? (
+                          <MetaPill icon={Bot} iconTone="catalog">
+                            {t('personas:card.agentCount', { count: agentCount })}
+                          </MetaPill>
+                        ) : (
+                          <MetaPill icon={Bot}>{t('personas:card.noAgent')}</MetaPill>
+                        )}
+                      </>
                     }
                   />
                 )

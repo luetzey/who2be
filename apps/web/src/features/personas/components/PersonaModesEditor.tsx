@@ -267,12 +267,18 @@ function PersonaModeCard({
   return (
     <div
       className={cn(
-        'flex flex-col gap-3 rounded-lg border p-4',
-        showDefault && 'border-border bg-muted/40',
+        'flex flex-col gap-4 rounded-xl border p-5 shadow-card',
+        showDefault ? 'border-brand/30 bg-brand/5' : 'bg-card',
       )}
     >
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            className="flex size-7 flex-none items-center justify-center rounded-lg bg-muted text-xs font-bold text-muted-foreground"
+            aria-hidden="true"
+          >
+            {index + 1}
+          </span>
           <span className="text-sm font-medium text-muted-foreground">
             {t('modes.card.header', { number: index + 1 })}
           </span>
@@ -319,29 +325,29 @@ function PersonaModeCard({
         )}
       />
 
-      <FormField
-        control={control}
-        name={`modes.${index}.trigger`}
-        render={({ field: f }) => (
-          <FormItem>
-            <FormLabel>{t('modes.field.trigger.label')}</FormLabel>
-            <FormControl>
-              <Input
-                {...f}
-                value={f.value ?? ''}
-                placeholder={t('modes.field.trigger.placeholder')}
-                disabled={disabled}
-              />
-            </FormControl>
-            <p className="text-xs text-muted-foreground">
-              {t('modes.field.trigger.hint')}
-            </p>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <FormField
+          control={control}
+          name={`modes.${index}.trigger`}
+          render={({ field: f }) => (
+            <FormItem>
+              <FormLabel>{t('modes.field.trigger.label')}</FormLabel>
+              <FormControl>
+                <Input
+                  {...f}
+                  value={f.value ?? ''}
+                  placeholder={t('modes.field.trigger.placeholder')}
+                  disabled={disabled}
+                />
+              </FormControl>
+              <p className="text-xs text-muted-foreground">{t('modes.field.trigger.hint')}</p>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
-      <ModePlaybookSelect control={control} index={index} disabled={disabled} />
+        <ModePlaybookSelect control={control} index={index} disabled={disabled} />
+      </div>
 
       <ModeBlockField
         control={control}

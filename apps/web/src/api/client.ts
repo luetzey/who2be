@@ -405,6 +405,11 @@ export interface Api {
   updateAgent: (id: string, input: AgentUpdateInput) => Promise<Agent>
   deleteAgent: (id: string) => Promise<void>
   copyAgent: (id: string, input?: AgentCopyInput) => Promise<Agent>
+  // Duplizieren (Deep-Copy des Inhalts als frische Draft, Muster `copyAgent`).
+  // Der Server leitet Namen ("<Name> (Kopie)") + frischen Slug selbst ab.
+  duplicatePersona: (id: string) => Promise<Persona>
+  duplicateResource: (id: string) => Promise<Resource>
+  duplicateSystemPrompt: (id: string) => Promise<SystemPromptTemplate>
   renderAgentPrompt: (
     id: string,
     format?: AgentRenderFormat,
@@ -751,6 +756,14 @@ export function createApi(token: string, workspaceId: string): Api {
       request<Agent>(token, `${ws}/agents/${id}/copy`, {
         method: 'POST',
         body: JSON.stringify(input ?? {}),
+      }),
+    duplicatePersona: (id) =>
+      request<Persona>(token, `${ws}/personas/${id}/duplicate`, { method: 'POST' }),
+    duplicateResource: (id) =>
+      request<Resource>(token, `${ws}/resources/${id}/duplicate`, { method: 'POST' }),
+    duplicateSystemPrompt: (id) =>
+      request<SystemPromptTemplate>(token, `${ws}/system-prompts/${id}/duplicate`, {
+        method: 'POST',
       }),
     renderAgentPrompt: (id, format) => {
       const query = format !== undefined ? `?format=${format}` : ''

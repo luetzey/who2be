@@ -230,6 +230,13 @@ class PersonaRead(BaseModel):
     # Bestand + Lese-Pfade ohne locale-Angabe.
     locale: ContentLocale = DEFAULT_LOCALE
     content: PersonaVersionContent
+    # List-Enrichment (Card-Pills): NUR der List-Endpoint befuellt diese
+    # Batch-Aggregat-Zaehler (kein N+1). `playbook_count` = Anzahl der ueber
+    # `persona_playbook` verknuepften Playbooks; `agent_count` = Anzahl der
+    # Agenten mit `agent.persona_id = id`. Direkt konstruierte Reads
+    # (get/create/update) lassen sie auf 0.
+    playbook_count: int = 0
+    agent_count: int = 0
     created_at: datetime
     updated_at: datetime
 

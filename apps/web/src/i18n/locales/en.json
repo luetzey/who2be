@@ -207,7 +207,10 @@
       "setup": "Set up",
       "personaMissing": "Persona missing",
       "templateMissing": "System prompt missing",
-      "countAria": "{{count}} agents"
+      "countAria": "{{count}} agents",
+      "templateWithVersion": "{{name}} · v{{version}}",
+      "playbookCount_one": "{{count}} playbook",
+      "playbookCount_other": "{{count}} playbooks"
     },
     "form": {
       "identity": {
@@ -354,6 +357,15 @@
       "copyName": "Copy name",
       "copied": "Copied to clipboard.",
       "error": "Copy failed."
+    },
+    "filter": {
+      "all": "All",
+      "statusGroup": "Filter by status",
+      "searchLabel": "Search",
+      "searchPlaceholder": "Search agents…",
+      "reset": "Reset filters",
+      "emptyTitle": "No matches",
+      "emptyDescription": "No agent matches the filter and search."
     }
   },
   "auth": {
@@ -841,8 +853,21 @@
         "searchPlaceholder": "Filter by name…",
         "searchEmpty": "No playbooks match this search.",
         "triggerCount_one": "{{count}} trigger",
-        "triggerCount_other": "{{count}} triggers"
+        "triggerCount_other": "{{count}} triggers",
+        "compositeBadge": "Composite"
+      },
+      "tabs": {
+        "modes": "Modes"
+      },
+      "feedback": {
+        "label": "Feedback"
       }
+    },
+    "duplicate": {
+      "label": "Duplicate",
+      "success": "Persona duplicated.",
+      "error": "Duplicate failed.",
+      "viewerReadOnly": "Viewers can only view personas"
     },
     "new": {
       "title": "New persona",
@@ -927,6 +952,10 @@
         "antiPatterns": {
           "label": "Anti-patterns"
         }
+      },
+      "section": {
+        "title": "Modes",
+        "description": "Situational variants of the persona. The default mode applies when no trigger matches."
       }
     },
     "skills": {
@@ -995,6 +1024,15 @@
       "markdown": "As Markdown",
       "success": "Export downloaded.",
       "error": "Export failed."
+    },
+    "card": {
+      "modeCount_one": "{{count}} mode",
+      "modeCount_other": "{{count}} modes",
+      "playbookCount_one": "{{count}} playbook",
+      "playbookCount_other": "{{count}} playbooks",
+      "agentCount_one": "Used by {{count}} agent",
+      "agentCount_other": "Used by {{count}} agents",
+      "noAgent": "No agent"
     }
   },
   "playbooks": {
@@ -1268,7 +1306,9 @@
       "bannerReviewTitle": "Version v{{version}} is in review",
       "bannerReviewDescription": "Activate it after review, or send it back to draft.",
       "bannerInactiveTitle": "Version v{{version}} is inactive",
-      "bannerInactiveDescription": "Reactivate it as a draft to keep working on it."
+      "bannerInactiveDescription": "Reactivate it as a draft to keep working on it.",
+      "duplicate": "Duplicate",
+      "feedback": "Feedback"
     },
     "tabs": {
       "edit": "Edit",
@@ -1319,7 +1359,9 @@
     },
     "toast": {
       "created": "Resource created.",
-      "createFailed": "Creation failed."
+      "createFailed": "Creation failed.",
+      "duplicated": "Resource duplicated.",
+      "duplicateError": "Duplication failed."
     },
     "delete": {
       "label": "Delete",
@@ -1340,6 +1382,16 @@
       "markdown": "As Markdown",
       "success": "Export downloaded.",
       "error": "Export failed."
+    },
+    "card": {
+      "linkedIn_one": "Linked in {{count}} playbook",
+      "linkedIn_other": "Linked in {{count}} playbooks",
+      "notLinked": "Not linked",
+      "subResourceCount_one": "{{count}} sub-resource",
+      "subResourceCount_other": "{{count}} sub-resources",
+      "subResourcesToggle_one": "{{count}} sub-resource",
+      "subResourcesToggle_other": "{{count}} sub-resources",
+      "subResourcesListLabel": "Sub-resources"
     }
   },
   "settings": {
@@ -1611,6 +1663,12 @@
     "nav": {
       "backToList": "System prompts"
     },
+    "duplicate": {
+      "label": "Duplicate",
+      "success": "System prompt duplicated.",
+      "error": "Duplicate failed.",
+      "viewerReadOnly": "Viewers can only view system prompts"
+    },
     "form": {
       "identity": {
         "title": "Identity",
@@ -1689,6 +1747,11 @@
           "description": "List of MCP tools with signature and short description. Write the order around it (\"first list_triggers, then fetch_playbook\") so the LLM uses the tools correctly."
         }
       }
+    },
+    "card": {
+      "usedByAgents_one": "Used by {{count}} agent",
+      "usedByAgents_other": "Used by {{count}} agents",
+      "usedByNone": "Not used by any agent"
     }
   },
   "tokens": {
@@ -1701,11 +1764,26 @@
       "createdAt": "created {{date}}",
       "lastUsed": "· last used {{date}}",
       "revoked": "· revoked {{date}}",
+      "expired": "· expired {{date}}",
       "revoke": "Revoke"
     },
     "agentSection": {
       "title": "API tokens",
       "description": "Tokens for this agent. Every token is bound to the agent and inherits its MCP tool policy (reads scoped, writes gated). The role independently governs REST mutations."
+    },
+    "active": {
+      "title": "Active tokens"
+    },
+    "revoked": {
+      "toggle_one": "{{count}} revoked token",
+      "toggle_other": "{{count}} revoked tokens"
+    },
+    "expired": {
+      "toggle_one": "{{count}} expired token",
+      "toggle_other": "{{count}} expired tokens"
+    },
+    "inactive": {
+      "toggleBoth": "{{expired}} expired · {{revoked}} revoked tokens"
     },
     "create": {
       "title": "Create new token",

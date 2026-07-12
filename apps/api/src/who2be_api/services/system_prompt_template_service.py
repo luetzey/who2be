@@ -6,10 +6,8 @@ deterministisch aus dem Namen abgeleitet, wenn der Client keinen liefert —
 das deckt die Standard-UI ab (Editor schickt nur Name + Body).
 """
 
-import re
-import unicodedata
 from datetime import datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import asyncpg
 from fastapi import HTTPException, status
@@ -24,6 +22,7 @@ from who2be_api.repositories.system_prompt_template_repository import (
     SystemPromptTemplateRepository,
 )
 from who2be_api.services.content_text import system_prompt_content_text
+from who2be_api.services.slug import slugify
 from who2be_api.services.version_diff import compute_version_diff
 from who2be_models import (
     AgentCapability,
@@ -37,8 +36,6 @@ from who2be_models import (
     WorkspaceRole,
     encode_cursor,
 )
-
-_SLUG_FALLBACK = "template"
 
 
 def _not_found() -> HTTPException:
@@ -72,18 +69,6 @@ def _invalid_against() -> HTTPException:
     )
 
 
-def slugify(text: str) -> str:
-    """Erzeugt einen URL-tauglichen Slug aus dem Namen.
-
-    Standard-NFKD + ASCII-Zwang: Umlaute werden zerlegt, Punkte/Sonderzeichen
-    fallen raus, Whitespace wird zu `-`, mehrfache Bindestriche zusammengefasst.
-    Bewusst klein gehalten — fuer alles weitere uebergibt der Client den Slug.
-    """
-    normalized = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
-    cleaned = re.sub(r"[^a-zA-Z0-9]+", "-", normalized).strip("-").lower()
-    return cleaned or _SLUG_FALLBACK
-
-
 class SystemPromptTemplateService:
     """Legt Templates an, liest, listet, aktualisiert."""
 
@@ -109,6 +94,27 @@ class SystemPromptTemplateService:
         except asyncpg.UniqueViolationError as exc:
             raise _slug_conflict() from exc
 
+    async def duplicate(self, ctx: WorkspaceContext, template_id: UUID) -> SystemPromptTemplateRead:
+        """Dupliziert ein Template als frische Draft-v1 (Deep-Copy des Inhalts).
+
+        Spiegelt `AgentService.copy`: Editor-Gate + Capability, der Inhalt der
+        aktuellen Version wird in ein NEUES, unverwaltetes Template kopiert
+        (Version 1, Status draft), Name `"{name} (Kopie)"`, frischer eindeutiger
+        Slug. Auch verwaltete Builder-Templates duerfen dupliziert werden — die
+        Kopie ist unverwaltet und frei editierbar.
+        """
+        require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.system_prompt_write)
+        source = await self.get(ctx, template_id)
+        name = f"{source.name} (Kopie)"
+        slug = f"{slugify(name)}-{uuid4().hex[:8]}"
+        try:
+            return await self._repo.insert(
+                ctx.workspace_id, ctx.user_id, name, slug, source.content
+            )
+        except asyncpg.UniqueViolationError as exc:  # pragma: no cover - Slug-Suffix ist eindeutig
+            raise _slug_conflict() from exc
+
     async def list_all(
         self,
         ctx: WorkspaceContext,
@@ -116,11 +122,30 @@ class SystemPromptTemplateService:
         cursor: tuple[datetime, UUID] | None,
     ) -> tuple[list[SystemPromptTemplateRead], str | None]:
         rows = await self._repo.list_by_workspace(ctx.workspace_id, limit + 1, cursor)
+        next_cursor: str | None = None
         if len(rows) > limit:
-            items = rows[:limit]
-            tail = items[-1]
-            return items, encode_cursor(tail.created_at, tail.id)
-        return rows, None
+            rows = rows[:limit]
+            tail = rows[-1]
+            next_cursor = encode_cursor(tail.created_at, tail.id)
+        return await self._enrich(ctx.workspace_id, rows), next_cursor
+
+    async def _enrich(
+        self, workspace_id: UUID, items: list[SystemPromptTemplateRead]
+    ) -> list[SystemPromptTemplateRead]:
+        """Joint die List-Card-Pill (Batch-Aggregat) in die Reads (kein N+1).
+
+        Ein einziger `list_agent_counts`-Roundtrip fuer die ganze Seite; ohne
+        Treffer bleibt das Read auf `agent_count=0`.
+        """
+        if not items:
+            return items
+        counts = await self._repo.list_agent_counts(workspace_id, [t.id for t in items])
+        return [
+            template.model_copy(update={"agent_count": counts[template.id]})
+            if template.id in counts
+            else template
+            for template in items
+        ]
 
     async def get(self, ctx: WorkspaceContext, template_id: UUID) -> SystemPromptTemplateRead:
         template = await self._repo.fetch(ctx.workspace_id, template_id)

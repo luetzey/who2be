@@ -108,6 +108,19 @@ async def get_persona(
     return await service.get(ctx, persona_id, locale=locale)
 
 
+@router.post("/{persona_id}/duplicate", status_code=status.HTTP_201_CREATED)
+@limiter.limit(write_limit)
+async def duplicate_persona(
+    request: Request,
+    persona_id: UUID,
+    ctx: Ctx,
+    service: Service,
+    locale: LocaleQuery,
+) -> PersonaRead:
+    """Dupliziert eine Persona als frische Draft (Deep-Copy des Inhalts, editor+)."""
+    return await service.duplicate(ctx, persona_id, locale=locale)
+
+
 @router.get("/{persona_id}/rendered", dependencies=[Depends(enforce_mcp_read_limit)])
 async def render_persona(
     persona_id: UUID,

@@ -19,7 +19,6 @@ import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { AttentionBanner } from '@/components/data'
 import { DataView } from '@/components/data/DataView'
 import { EmptyState } from '@/components/data/EmptyState'
-import { FeedbackTiles } from '@/components/feedback/FeedbackTiles'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
@@ -224,8 +223,6 @@ export function DashboardPage() {
                     </Stack>
                   </CardContent>
                 </Card>
-
-                {role !== 'viewer' ? <FeedbackTiles /> : null}
               </Stack>
             ) : null}
           </DataView>

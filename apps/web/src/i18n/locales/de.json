@@ -207,7 +207,10 @@
       "setup": "Einrichten",
       "personaMissing": "Persona fehlt",
       "templateMissing": "Systemprompt fehlt",
-      "countAria": "{{count}} Agents"
+      "countAria": "{{count}} Agents",
+      "templateWithVersion": "{{name}} · v{{version}}",
+      "playbookCount_one": "{{count}} Playbook",
+      "playbookCount_other": "{{count}} Playbooks"
     },
     "form": {
       "identity": {
@@ -354,6 +357,15 @@
       "copyName": "Namen kopieren",
       "copied": "In Zwischenablage kopiert.",
       "error": "Kopieren fehlgeschlagen."
+    },
+    "filter": {
+      "all": "Alle",
+      "statusGroup": "Nach Status filtern",
+      "searchLabel": "Suche",
+      "searchPlaceholder": "Agents durchsuchen…",
+      "reset": "Filter zurücksetzen",
+      "emptyTitle": "Keine Treffer",
+      "emptyDescription": "Kein Agent passt zu Filter und Suche."
     }
   },
   "auth": {
@@ -841,8 +853,21 @@
         "searchPlaceholder": "Nach Name filtern…",
         "searchEmpty": "Keine Playbooks für diese Suche.",
         "triggerCount_one": "{{count}} Trigger",
-        "triggerCount_other": "{{count}} Trigger"
+        "triggerCount_other": "{{count}} Trigger",
+        "compositeBadge": "Composite"
+      },
+      "tabs": {
+        "modes": "Modi"
+      },
+      "feedback": {
+        "label": "Feedback"
       }
+    },
+    "duplicate": {
+      "label": "Duplizieren",
+      "success": "Persona dupliziert.",
+      "error": "Duplizieren fehlgeschlagen.",
+      "viewerReadOnly": "Viewer können Personae nur ansehen"
     },
     "new": {
       "title": "Neue Persona",
@@ -927,6 +952,10 @@
         "antiPatterns": {
           "label": "Anti-Patterns"
         }
+      },
+      "section": {
+        "title": "Modi",
+        "description": "Situative Varianten der Persona. Der Standard-Modus greift, wenn kein Trigger passt."
       }
     },
     "skills": {
@@ -995,6 +1024,15 @@
       "markdown": "Als Markdown",
       "success": "Export heruntergeladen.",
       "error": "Export fehlgeschlagen."
+    },
+    "card": {
+      "modeCount_one": "{{count}} Modus",
+      "modeCount_other": "{{count}} Modi",
+      "playbookCount_one": "{{count}} Playbook",
+      "playbookCount_other": "{{count}} Playbooks",
+      "agentCount_one": "Verwendet von {{count}} Agent",
+      "agentCount_other": "Verwendet von {{count}} Agents",
+      "noAgent": "Kein Agent"
     }
   },
   "playbooks": {
@@ -1268,7 +1306,9 @@
       "bannerReviewTitle": "Version v{{version}} liegt zur Review",
       "bannerReviewDescription": "Aktiviere die Version nach der Prüfung oder gib sie zurück in den Entwurf.",
       "bannerInactiveTitle": "Version v{{version}} ist inaktiv",
-      "bannerInactiveDescription": "Reaktiviere sie als Entwurf, um wieder daran zu arbeiten."
+      "bannerInactiveDescription": "Reaktiviere sie als Entwurf, um wieder daran zu arbeiten.",
+      "duplicate": "Duplizieren",
+      "feedback": "Feedback"
     },
     "tabs": {
       "edit": "Bearbeiten",
@@ -1319,7 +1359,9 @@
     },
     "toast": {
       "created": "Resource angelegt.",
-      "createFailed": "Anlegen fehlgeschlagen."
+      "createFailed": "Anlegen fehlgeschlagen.",
+      "duplicated": "Resource dupliziert.",
+      "duplicateError": "Duplizieren fehlgeschlagen."
     },
     "delete": {
       "label": "Löschen",
@@ -1340,6 +1382,16 @@
       "markdown": "Als Markdown",
       "success": "Export heruntergeladen.",
       "error": "Export fehlgeschlagen."
+    },
+    "card": {
+      "linkedIn_one": "Verlinkt in {{count}} Playbook",
+      "linkedIn_other": "Verlinkt in {{count}} Playbooks",
+      "notLinked": "Nicht verlinkt",
+      "subResourceCount_one": "{{count}} Sub-Resource",
+      "subResourceCount_other": "{{count}} Sub-Resources",
+      "subResourcesToggle_one": "{{count}} Sub-Resource",
+      "subResourcesToggle_other": "{{count}} Sub-Resources",
+      "subResourcesListLabel": "Sub-Resources"
     }
   },
   "settings": {
@@ -1611,6 +1663,12 @@
     "nav": {
       "backToList": "System-Prompts"
     },
+    "duplicate": {
+      "label": "Duplizieren",
+      "success": "System-Prompt dupliziert.",
+      "error": "Duplizieren fehlgeschlagen.",
+      "viewerReadOnly": "Viewer können System-Prompts nur ansehen"
+    },
     "form": {
       "identity": {
         "title": "Identität",
@@ -1689,6 +1747,11 @@
           "description": "Liste der MCP-Werkzeuge mit Signatur und Kurzbeschreibung. Schreib drumherum die Reihenfolge (\"zuerst list_triggers, dann fetch_playbook\"), damit der LLM die Tools richtig nutzt."
         }
       }
+    },
+    "card": {
+      "usedByAgents_one": "Verwendet von {{count}} Agent",
+      "usedByAgents_other": "Verwendet von {{count}} Agents",
+      "usedByNone": "Von keinem Agent verwendet"
     }
   },
   "tokens": {
@@ -1701,11 +1764,26 @@
       "createdAt": "erstellt {{date}}",
       "lastUsed": "· zuletzt benutzt {{date}}",
       "revoked": "· widerrufen {{date}}",
+      "expired": "· abgelaufen {{date}}",
       "revoke": "Widerrufen"
     },
     "agentSection": {
       "title": "API-Tokens",
       "description": "Tokens für diesen Agenten. Jeder Token ist an den Agenten gebunden und erbt seine MCP-Tool-Policy (Lesezugriffe gescoped, Schreibrechte gegated). Die Rolle steuert davon unabhängig die REST-Mutationen."
+    },
+    "active": {
+      "title": "Aktive Tokens"
+    },
+    "revoked": {
+      "toggle_one": "{{count}} widerrufenes Token",
+      "toggle_other": "{{count}} widerrufene Tokens"
+    },
+    "expired": {
+      "toggle_one": "{{count}} abgelaufenes Token",
+      "toggle_other": "{{count}} abgelaufene Tokens"
+    },
+    "inactive": {
+      "toggleBoth": "{{expired}} abgelaufene · {{revoked}} widerrufene Tokens"
     },
     "create": {
       "title": "Neuen Token anlegen",

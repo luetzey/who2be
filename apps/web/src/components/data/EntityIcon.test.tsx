@@ -2,7 +2,7 @@ import { render } from '@testing-library/react'
 import { FileText } from 'lucide-react'
 import { describe, expect, it } from 'vitest'
 
-import { EntityIcon } from './EntityIcon'
+import { EntityAvatar, EntityIcon, initialsFromName } from './EntityIcon'
 
 describe('EntityIcon', () => {
   it('rendert das Icon dekorativ (aria-hidden) in der Tinten-Kachel', () => {
@@ -20,5 +20,24 @@ describe('EntityIcon', () => {
     const tile = container.firstElementChild as HTMLElement
     expect(tile.className).toContain('size-12')
     expect(tile.querySelector('svg')?.getAttribute('class')).toContain('size-6')
+  })
+})
+
+describe('initialsFromName', () => {
+  it('leitet bis zu zwei Grossbuchstaben ab', () => {
+    expect(initialsFromName('Coach Carla')).toBe('CC')
+    expect(initialsFromName('support')).toBe('SU')
+    expect(initialsFromName('  Max  Otto  Berger ')).toBe('MB')
+    expect(initialsFromName('   ')).toBe('?')
+  })
+})
+
+describe('EntityAvatar', () => {
+  it('rendert die Initialen dekorativ in der Tinten-Kachel', () => {
+    const { container } = render(<EntityAvatar initials="CC" tone="persona" />)
+    const tile = container.firstElementChild as HTMLElement
+    expect(tile.className).toContain('bg-pill-persona')
+    expect(tile.textContent).toBe('CC')
+    expect(tile.getAttribute('aria-hidden')).toBe('true')
   })
 })

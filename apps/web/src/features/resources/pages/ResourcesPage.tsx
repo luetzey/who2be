@@ -1,9 +1,9 @@
-import { FileText, Plus } from 'lucide-react'
+import { FileText, GitBranch, Layers, Plus } from 'lucide-react'
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
-import type { Resource } from '@/api/types'
+import type { Resource, SubResourceSummary } from '@/api/types'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -13,6 +13,7 @@ import { EmptyState } from '@/components/data/EmptyState'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
 import { ListFilterBar } from '@/components/data/ListFilterBar'
 import { LoadingState } from '@/components/data/LoadingState'
+import { MetaPill } from '@/components/data/MetaPill'
 import { StatusBadge } from '@/components/data/StatusBadge'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -23,6 +24,45 @@ import {
   type ListFilterAccessors,
 } from '@/hooks/useListFilters'
 import { useResources } from '@/hooks/useResources'
+
+/**
+ * Aufklappbare Kind-Liste der Resource-Karte. Spiegelt das Sub-Playbook-Muster
+ * (PersonaPlaybooksCard): nummerierte, verlinkte Zeilen mit Status/Version aus
+ * der vom List-Endpoint mitgelieferten Summary.
+ */
+function SubResourceList({
+  items,
+  wsPath,
+  label,
+}: {
+  items: SubResourceSummary[]
+  wsPath: (path: string) => string
+  label: string
+}) {
+  return (
+    <ol className="flex flex-col gap-1.5" aria-label={label}>
+      {items.map((child, index) => (
+        <li key={child.id}>
+          <Link
+            to={wsPath(`/resources/${child.id}`)}
+            className="flex items-center gap-3 rounded-lg border border-pill-catalog-fg/20 bg-card px-3 py-2 text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          >
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-pill-catalog text-xs font-bold text-pill-catalog-fg">
+              {index + 1}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-sm font-medium">{child.name}</span>
+            {child.status !== undefined ? <StatusBadge status={child.status} /> : null}
+            {child.version !== undefined ? (
+              <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                v{child.version}
+              </span>
+            ) : null}
+          </Link>
+        </li>
+      ))}
+    </ol>
+  )
+}
 
 export function ResourcesPage() {
   const { t } = useTranslation(['resources', 'data'])
@@ -119,6 +159,8 @@ export function ResourcesPage() {
           <ul className="flex flex-col gap-3">
             {filters.filtered.map((resource) => {
               const tags = resource.content.tags ?? []
+              const subResources = resource.sub_resources ?? []
+              const hasSubResources = subResources.length > 0
               return (
                 <li key={resource.id}>
                   <EntityCard
@@ -127,9 +169,21 @@ export function ResourcesPage() {
                     title={resource.name}
                     href={wsPath(`/resources/${resource.id}`)}
                     badges={
-                      <Badge variant="secondary" className="tabular-nums">
-                        v{resource.current_version}
-                      </Badge>
+                      <>
+                        <Badge variant="secondary" className="tabular-nums">
+                          v{resource.current_version}
+                        </Badge>
+                        {resource.slug ? (
+                          <Badge variant="outline" className="font-mono text-xs">
+                            {resource.slug}
+                          </Badge>
+                        ) : null}
+                        {tags.map((tag) => (
+                          <Badge key={tag} variant="outline" className="text-xs">
+                            {tag}
+                          </Badge>
+                        ))}
+                      </>
                     }
                     status={
                       <StatusBadge
@@ -139,18 +193,35 @@ export function ResourcesPage() {
                     }
                     description={resource.content.description}
                     meta={
-                      tags.length > 0 ? (
-                        <div
-                          className="flex flex-wrap gap-1"
-                          aria-label={t('resources:list.tagFilter')}
-                        >
-                          {tags.map((tag) => (
-                            <Badge key={tag} variant="secondary" className="text-xs">
-                              {tag}
-                            </Badge>
-                          ))}
-                        </div>
+                      <MetaPill icon={GitBranch} iconTone="playbook">
+                        {(resource.playbook_link_count ?? 0) > 0
+                          ? t('resources:card.linkedIn', {
+                              count: resource.playbook_link_count ?? 0,
+                            })
+                          : t('resources:card.notLinked')}
+                      </MetaPill>
+                    }
+                    expandable={
+                      hasSubResources ? (
+                        <SubResourceList
+                          items={subResources}
+                          wsPath={wsPath}
+                          label={t('resources:card.subResourcesListLabel')}
+                        />
                       ) : undefined
+                    }
+                    expandIcon={Layers}
+                    expandLabel={
+                      hasSubResources
+                        ? t('resources:card.subResourcesToggle', {
+                            count: subResources.length,
+                          })
+                        : undefined
+                    }
+                    expandSummary={
+                      hasSubResources
+                        ? subResources.map((child) => child.name).join(' · ')
+                        : undefined
                     }
                   />
                 </li>

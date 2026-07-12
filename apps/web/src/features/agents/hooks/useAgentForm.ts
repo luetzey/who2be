@@ -32,10 +32,11 @@ const editorSchema = z.object({
   feedback_write: z.boolean(),
   feedback_resolve: z.boolean(),
   promote_retire: z.boolean(),
-  // ADR-0039 Tag-Scope: kommaseparierte erlaubte Tags je Domain (leer = alle).
-  write_tags_persona: z.string(),
-  write_tags_playbook: z.string(),
-  write_tags_resource: z.string(),
+  // ADR-0039 Tag-Scope: erlaubte Tags je Domain als Liste (leer = alle). Als
+  // string[] gefuehrt, damit der TagInput (Pills + Vorschlaege) direkt bindet.
+  write_tags_persona: z.array(z.string()),
+  write_tags_playbook: z.array(z.string()),
+  write_tags_resource: z.array(z.string()),
   // ADR-0039 Transition-Grants: per-Domain Promote/Retire (nur mit promote_retire
   // wirksam). Beide an = ungeteilt (kein Eintrag); ein abgewaehlter Haken
   // schraenkt die Richtung in der Domain ein.
@@ -53,18 +54,11 @@ export type AgentEditorValues = z.infer<typeof editorSchema>
 
 const TAG_DOMAINS = ['persona', 'playbook', 'resource'] as const
 
-function parseTags(raw: string): string[] {
-  return raw
-    .split(',')
-    .map((t) => t.trim())
-    .filter(Boolean)
-}
-
-function tagFieldsFromPolicy(policy: AgentToolPolicy): Record<string, string> {
+function tagFieldsFromPolicy(policy: AgentToolPolicy): Record<string, string[]> {
   return {
-    write_tags_persona: (policy.write_tags?.persona ?? []).join(', '),
-    write_tags_playbook: (policy.write_tags?.playbook ?? []).join(', '),
-    write_tags_resource: (policy.write_tags?.resource ?? []).join(', '),
+    write_tags_persona: policy.write_tags?.persona ?? [],
+    write_tags_playbook: policy.write_tags?.playbook ?? [],
+    write_tags_resource: policy.write_tags?.resource ?? [],
   }
 }
 
@@ -122,7 +116,7 @@ function valuesToPolicy(values: AgentEditorValues, base: AgentToolPolicy): Agent
 function buildWriteTags(values: AgentEditorValues): Record<string, string[]> {
   const out: Record<string, string[]> = {}
   for (const domain of TAG_DOMAINS) {
-    const tags = parseTags(values[`write_tags_${domain}` as keyof AgentEditorValues] as string)
+    const tags = values[`write_tags_${domain}` as keyof AgentEditorValues] as string[]
     if (tags.length > 0) out[domain] = tags
   }
   return out

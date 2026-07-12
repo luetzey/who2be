@@ -11,6 +11,16 @@ vi.mock('@/auth/useCurrentWorkspaceRole', () => ({
   useCurrentWorkspaceRole: () => 'editor',
 }))
 
+// Stabile Loader-Referenzen (Modul-Ebene) — der TagInput ruft sie beim Mount
+// auf; neue Referenzen pro Render wuerden seinen useEffect endlos triggern.
+const listPersonaTags = vi.fn().mockResolvedValue([])
+const listPlaybookTags = vi.fn().mockResolvedValue([])
+const listResourceTags = vi.fn().mockResolvedValue([])
+
+vi.mock('@/api/useApi', () => ({
+  useApi: () => ({ listPersonaTags, listPlaybookTags, listResourceTags }),
+}))
+
 function makeAgent(overrides: Partial<Agent> = {}): Agent {
   return {
     id: 'a-1',
@@ -43,9 +53,9 @@ function Harness({ agent, locked }: { agent: Agent; locked?: boolean }) {
       system_prompt_template_id: agent.system_prompt_template_id ?? '',
       status: agent.status,
       ...agent.tool_policy,
-      write_tags_persona: (agent.tool_policy.write_tags?.persona ?? []).join(', '),
-      write_tags_playbook: (agent.tool_policy.write_tags?.playbook ?? []).join(', '),
-      write_tags_resource: (agent.tool_policy.write_tags?.resource ?? []).join(', '),
+      write_tags_persona: agent.tool_policy.write_tags?.persona ?? [],
+      write_tags_playbook: agent.tool_policy.write_tags?.playbook ?? [],
+      write_tags_resource: agent.tool_policy.write_tags?.resource ?? [],
       tg_persona_promote: agent.tool_policy.transition_grants?.persona?.promote ?? true,
       tg_persona_retire: agent.tool_policy.transition_grants?.persona?.retire ?? true,
       tg_playbook_promote: agent.tool_policy.transition_grants?.playbook?.promote ?? true,
@@ -124,14 +134,16 @@ describe('AgentEditorForm', () => {
     ).not.toBeChecked()
   })
 
-  it('zeigt den write_tags-Tag-Scope pro Domain (ADR-0039)', () => {
+  it('zeigt den write_tags-Tag-Scope pro Domain als Pills (ADR-0039)', () => {
     const agent = makeAgent({
       tool_policy: { ...DEFAULT_TOOL_POLICY, write_tags: { playbook: ['support', 'billing'] } },
     })
     render(<Harness agent={agent} />)
     openToolsTab()
-    // Playbook-Tag-Feld traegt die erlaubten Tags; Persona bleibt leer (= alle).
-    expect(screen.getByLabelText('Playbook-Tags')).toHaveValue('support, billing')
+    // Playbook-Tag-Feld traegt die erlaubten Tags als entfernbare Pills; Persona
+    // bleibt leer (= alle Tags), das Eingabefeld ist ein Combobox ohne Wert.
+    expect(screen.getByLabelText('Tag support entfernen')).toBeInTheDocument()
+    expect(screen.getByLabelText('Tag billing entfernen')).toBeInTheDocument()
     expect(screen.getByLabelText('Persona-Tags')).toHaveValue('')
   })
 

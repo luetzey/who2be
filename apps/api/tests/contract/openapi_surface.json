@@ -245,6 +245,11 @@
     "operationId": "update_persona_draft_v1_workspaces__workspace_id__personas__persona_id__draft_patch"
   },
   {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/personas/{persona_id}/duplicate",
+    "operationId": "duplicate_persona_v1_workspaces__workspace_id__personas__persona_id__duplicate_post"
+  },
+  {
     "method": "GET",
     "path": "/v1/workspaces/{workspace_id}/personas/{persona_id}/export",
     "operationId": "export_persona_v1_workspaces__workspace_id__personas__persona_id__export_get"
@@ -455,6 +460,11 @@
     "operationId": "update_resource_draft_v1_workspaces__workspace_id__resources__resource_id__draft_patch"
   },
   {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/resources/{resource_id}/duplicate",
+    "operationId": "duplicate_resource_v1_workspaces__workspace_id__resources__resource_id__duplicate_post"
+  },
+  {
     "method": "GET",
     "path": "/v1/workspaces/{workspace_id}/resources/{resource_id}/export",
     "operationId": "export_resource_v1_workspaces__workspace_id__resources__resource_id__export_get"
@@ -538,6 +548,11 @@
     "method": "PUT",
     "path": "/v1/workspaces/{workspace_id}/system-prompts/{template_id}",
     "operationId": "update_template_v1_workspaces__workspace_id__system_prompts__template_id__put"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/system-prompts/{template_id}/duplicate",
+    "operationId": "duplicate_template_v1_workspaces__workspace_id__system_prompts__template_id__duplicate_post"
   },
   {
     "method": "GET",

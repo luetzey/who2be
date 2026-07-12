@@ -446,6 +446,10 @@ _BUILDER_PLAYBOOKS: tuple[tuple[str, str, str, tuple[str, ...], str, str], ...] 
 # Konventions-Prosa in jedem Playbook zu duplizieren). Tags leben im Versions-
 # Content (`ResourceContent.tags`) — die resource-Row hat keine Tag-Spalte.
 _BUILDER_RESOURCE_NAME = "Agent-Bau-Konventionen"
+# Workspace-eindeutiger Slug (Migration 0064). Fester Wert, damit Re-Seeds
+# idempotent bleiben (der Name-Guard verhindert Doppel-Insert, der feste Slug
+# haelt die UNIQUE(workspace_id, slug) sauber).
+_BUILDER_RESOURCE_SLUG = "agent-bau-konventionen"
 _BUILDER_RESOURCE_TAGS: tuple[str, ...] = ("konventionen", "agent-building", "meta")
 _BUILDER_RESOURCE_DESCRIPTION = (
     "Verbindliche Konventionen fuer den Agent-Bau: Trigger-Hygiene, Modi-Regel, "
@@ -638,8 +642,8 @@ async def _seed_default_agents(
     #    aus Migration 0021 ab.
     resource_id = await conn.fetchval(
         "INSERT INTO resource "
-        "(workspace_id, owner_id, name, is_managed, managed_content_version) "
-        "SELECT $1, $2, $3, true, $4 "
+        "(workspace_id, owner_id, name, slug, is_managed, managed_content_version) "
+        "SELECT $1, $2, $3, $5, true, $4 "
         "WHERE NOT EXISTS ("
         "  SELECT 1 FROM resource WHERE workspace_id = $1 AND name = $3"
         ") "
@@ -648,6 +652,7 @@ async def _seed_default_agents(
         owner_id,
         _BUILDER_RESOURCE_NAME,
         BUILDER_CONTENT_VERSION,
+        _BUILDER_RESOURCE_SLUG,
     )
     if resource_id is not None:
         await conn.execute(
@@ -937,8 +942,8 @@ async def sync_managed_builder_content(conn: asyncpg.Connection) -> int:
     ):
         resource_id = await conn.fetchval(
             "INSERT INTO resource "
-            "(workspace_id, owner_id, name, is_managed, managed_content_version) "
-            "SELECT $1, $2, $3, true, $4 "
+            "(workspace_id, owner_id, name, slug, is_managed, managed_content_version) "
+            "SELECT $1, $2, $3, $5, true, $4 "
             "WHERE NOT EXISTS ("
             "  SELECT 1 FROM resource WHERE workspace_id = $1 AND name = $3"
             ") "
@@ -947,6 +952,7 @@ async def sync_managed_builder_content(conn: asyncpg.Connection) -> int:
             rrow["owner_id"],
             _BUILDER_RESOURCE_NAME,
             BUILDER_CONTENT_VERSION,
+            _BUILDER_RESOURCE_SLUG,
         )
         if resource_id is None:
             # Race mit einem parallelen Sync/Seed — der andere Lauf hat

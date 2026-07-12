@@ -64,6 +64,10 @@ export interface Persona {
   // Vom System verwaltet (z. B. der geseedete Builder). User-Mutationen sind
   // serverseitig gesperrt (403 managed_aggregate); die UI rendert read-only.
   is_managed?: boolean
+  // List-Card-Pills: nur der List-Endpoint befuellt diese Batch-Aggregat-Zaehler.
+  // Anzahl verknuepfter Playbooks bzw. Agenten, die diese Persona nutzen.
+  playbook_count?: number
+  agent_count?: number
 }
 
 export interface PersonaVersion {
@@ -161,6 +165,10 @@ export interface Token {
   created_at: string
   last_used_at: string | null
   revoked_at: string | null
+  // Ablaufzeitpunkt (ISO-8601, ADR-0039) oder null = kein Ablauf. Die UI bildet
+  // daraus den „expired"-Bucket (expires_at in der Vergangenheit UND nicht
+  // widerrufen). Optional, weil aeltere Backend-Versionen das Feld nicht liefern.
+  expires_at?: string | null
 }
 
 // Rollen-Hierarchie laut ADR-0023: admin > editor > viewer. Single-Source
@@ -371,11 +379,25 @@ export interface ResourceContent {
   tags?: string[]
 }
 
+// Kompakte Kind-Summary fuer die aufklappbare Resource-List-Karte. Spiegelt
+// die vom List-Endpoint befuellten Felder von `SubResourceRead` (id/name +
+// Status/Version der aktuellen Kind-Version). Optional getragen, weil andere
+// Read-Pfade (get/MCP-fetch) das Feld nicht befuellen.
+export interface SubResourceSummary {
+  id: string
+  name: string
+  status?: VersionStatus
+  version?: number
+}
+
 export interface Resource {
   id: string
   workspace_id: string
   owner_id: string
   name: string
+  // Workspace-eindeutiger Slug (Backend leitet ihn beim Anlegen aus dem Namen
+  // ab). Vom Backend garantiert; im TS als Pflichtfeld gefuehrt.
+  slug: string
   current_version: number
   current_status?: VersionStatus
   has_pending_draft?: boolean
@@ -385,6 +407,15 @@ export interface Resource {
   // Vom System verwaltet — User-Mutationen serverseitig gesperrt
   // (403 managed_aggregate); die UI rendert read-only.
   is_managed?: boolean
+  // List-Card-Pills: nur der List-Endpoint befuellt diese Batch-Aggregat-Zaehler.
+  // DISTINCT-Playbooks, die diese Resource referenzieren, bzw. Anzahl der
+  // eingebetteten/verlinkten Sub-Resources.
+  playbook_link_count?: number
+  sub_resource_count?: number
+  // List-Card: direkte Sub-Resource-Kinder (Summary), damit die Karte sie
+  // aufklappen kann. Nur der List-Endpoint befuellt das Feld (Batch, kein N+1);
+  // andere Read-Pfade lassen es leer/weg.
+  sub_resources?: SubResourceSummary[]
 }
 
 export interface ResourceVersion {
@@ -543,6 +574,9 @@ export interface SystemPromptTemplate {
   // Vom System verwaltet (Builder-Template) — User-Mutationen serverseitig
   // gesperrt (403 managed_aggregate); die UI rendert read-only.
   is_managed?: boolean
+  // List-Card-Pill: nur der List-Endpoint befuellt diesen Batch-Aggregat-Zaehler.
+  // Anzahl der Agenten, die dieses Template nutzen.
+  agent_count?: number
 }
 
 export interface SystemPromptTemplateVersion {
@@ -641,6 +675,14 @@ export interface Agent {
   // Vom System verwaltet (geseedeter Builder) — User-Mutationen serverseitig
   // gesperrt (403 managed_aggregate). Duplizieren bleibt erlaubt (Deep-Copy).
   is_managed?: boolean
+  // List-Card-Pills: nur der List-Endpoint befuellt diese denormalisierten
+  // Namen/Zaehler. persona_name/template_name = null ohne Verknuepfung;
+  // template_version = aktive Template-Version (null ohne aktive Version);
+  // playbook_count = Playbooks der verknuepften Persona.
+  persona_name?: string | null
+  template_name?: string | null
+  template_version?: number | null
+  playbook_count?: number
 }
 
 export interface AgentInput {

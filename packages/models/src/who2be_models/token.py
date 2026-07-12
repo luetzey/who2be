@@ -63,6 +63,10 @@ class TokenRead(BaseModel):
     created_at: datetime
     last_used_at: datetime | None
     revoked_at: datetime | None
+    # Ablaufzeitpunkt (ADR-0039, befristete Grants). None = kein Ablauf. Ein
+    # abgelaufener, nicht widerrufener Token bildet den UI-„expired"-Bucket
+    # (`expires_at < now()` UND `revoked_at is None`).
+    expires_at: datetime | None = None
 
 
 class TokenCreated(TokenRead):

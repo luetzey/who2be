@@ -16,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { VersionHistory } from '@/components/version'
 import { notify } from '@/lib/feedback'
 
+import { DuplicateSystemPromptButton } from '../components/DuplicateSystemPromptButton'
 import { SystemPromptEditorForm } from '../components/SystemPromptEditorForm'
 import { SystemPromptStatusActionBar } from '../components/SystemPromptStatusActionBar'
 import { useSystemPrompt } from '../hooks/useSystemPrompt'
@@ -61,6 +62,7 @@ export function SystemPromptDetailPage() {
                 </>
               }
               description={template.content.description}
+              actions={<DuplicateSystemPromptButton template={template} />}
             />
 
             {/* Managed-Lock, Review-Banner oder schlichte Status-Aktionsleiste —

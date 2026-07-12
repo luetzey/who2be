@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { type UseFormReturn } from 'react-hook-form'
 
 import type { Agent, Persona, SystemPromptTemplate } from '@/api/types'
+import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
 import { FormSection } from '@/components/layout/FormSection'
@@ -14,6 +15,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
+import { TagInput } from '@/components/ui/tag-input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 
@@ -117,8 +119,17 @@ export function AgentEditorForm({
   connectionSlot,
 }: AgentEditorFormProps) {
   const { t } = useTranslation('agents')
+  const api = useApi()
   const readOnly = useCurrentWorkspaceRole() === 'viewer' || locked
   const isViewer = readOnly
+
+  // Tag-Vorschlaege je Domain aus der jeweils eigenen Tag-Quelle (wie Persona-/
+  // Playbook-/Resource-Editor). `api` ist memoisiert → stabile Loader-Referenz.
+  const tagLoaders: Record<(typeof TAG_SCOPE_DOMAINS)[number], () => Promise<string[]>> = {
+    persona: api.listPersonaTags,
+    playbook: api.listPlaybookTags,
+    resource: api.listResourceTags,
+  }
 
   const resolvedSubmitLabel = submitLabel ?? t('detail.submitLabel')
 
@@ -358,11 +369,17 @@ export function AgentEditorForm({
                       name={`write_tags_${domain}` as const}
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>{t(`form.policy.writeTags.${domain}`)}</FormLabel>
+                          <FormLabel id={`${field.name}-label`}>
+                            {t(`form.policy.writeTags.${domain}`)}
+                          </FormLabel>
                           <FormControl>
-                            <Input
+                            <TagInput
+                              value={field.value}
+                              onChange={field.onChange}
+                              loadSuggestions={tagLoaders[domain]}
+                              ariaLabelledby={`${field.name}-label`}
                               placeholder={t('form.policy.writeTags.placeholder')}
-                              {...field}
+                              disabled={isViewer}
                             />
                           </FormControl>
                           <FormMessage />
