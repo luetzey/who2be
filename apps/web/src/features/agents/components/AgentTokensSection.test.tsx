@@ -129,4 +129,35 @@ describe('AgentTokensSection', () => {
     fireEvent.click(screen.getByRole('button', { name: '1 widerrufenes Token' }))
     expect(screen.getByText('Alt')).toBeInTheDocument()
   })
+
+  it('legt abgelaufene Tokens in den eingeklappten Bucket (nicht in die aktive Liste)', async () => {
+    mocks.listTokens.mockResolvedValue([
+      makeToken({ id: 't-active', name: 'Prod' }),
+      makeToken({ id: 't-exp', name: 'Abgelaufen', expires_at: '2000-01-01T00:00:00Z' }),
+    ])
+    render(<AgentTokensSection agentId="a-1" />)
+
+    // Aktiver Token sichtbar, abgelaufener zunaechst verborgen.
+    await waitFor(() => expect(screen.getByText('Prod')).toBeInTheDocument())
+    expect(screen.queryByText('Abgelaufen')).not.toBeInTheDocument()
+
+    // Der Toggle traegt das Ablauf-Label und klappt den Bucket auf.
+    fireEvent.click(screen.getByRole('button', { name: '1 abgelaufenes Token' }))
+    expect(screen.getByText('Abgelaufen')).toBeInTheDocument()
+  })
+
+  it('kombiniert abgelaufene und widerrufene Tokens im Bucket-Label', async () => {
+    mocks.listTokens.mockResolvedValue([
+      makeToken({ id: 't-exp', name: 'Abgelaufen', expires_at: '2000-01-01T00:00:00Z' }),
+      makeToken({ id: 't-old', name: 'Alt', revoked_at: '2026-02-01T00:00:00Z' }),
+    ])
+    render(<AgentTokensSection agentId="a-1" />)
+
+    const toggle = await screen.findByRole('button', {
+      name: '1 abgelaufene · 1 widerrufene Tokens',
+    })
+    fireEvent.click(toggle)
+    expect(screen.getByText('Abgelaufen')).toBeInTheDocument()
+    expect(screen.getByText('Alt')).toBeInTheDocument()
+  })
 })

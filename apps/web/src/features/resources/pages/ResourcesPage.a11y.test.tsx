@@ -18,12 +18,18 @@ describe('ResourcesPage (a11y)', () => {
         workspace_id: 'ws-1',
         owner_id: 'o1',
         name: 'Runbook',
+        slug: 'runbook',
         current_version: 1,
         current_status: 'active',
         has_pending_draft: false,
         content: { description: '', blocks: [] },
         created_at: '2026-05-24T11:00:00Z',
         updated_at: '2026-05-24T11:00:00Z',
+        playbook_link_count: 2,
+        sub_resources: [
+          { id: 'r2', name: 'Glossar', status: 'active', version: 1 },
+          { id: 'r3', name: 'Anhang', status: 'draft', version: 2 },
+        ],
       },
     ]
     vi.stubGlobal(

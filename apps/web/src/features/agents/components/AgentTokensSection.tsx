@@ -56,12 +56,39 @@ export function AgentTokensSection({ agentId }: AgentTokensSectionProps) {
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
-  // Widerrufene Tokens sind selten relevant → in eine eingeklappte Disclosure.
-  const [showRevoked, setShowRevoked] = useState(false)
+  // Widerrufene und abgelaufene Tokens sind selten relevant → in eine
+  // eingeklappte Disclosure.
+  const [showInactive, setShowInactive] = useState(false)
 
-  // Read-Modell kennt kein Ablaufdatum → nur „widerrufen" ist ableitbar.
-  const activeTokens = tokens.filter((token) => token.revoked_at === null)
+  // Ein Token ist abgelaufen, wenn ein Ablaufdatum gesetzt ist, es in der
+  // Vergangenheit liegt UND der Token nicht (auch) widerrufen wurde. Widerruf
+  // hat Vorrang, damit „abgelaufen" und „widerrufen" disjunkt bleiben.
+  // Referenz-Zeitpunkt fuer die Ablauf-Einordnung. `Date.now()` gilt der
+  // purity-Regel als unrein → einmal beim Mount ueber den useState-Initializer
+  // festhalten (Muster wie `BranchStatus`).
+  const [now] = useState(() => new Date().getTime())
+  const isExpired = (token: Token): boolean =>
+    token.revoked_at === null &&
+    token.expires_at !== null &&
+    token.expires_at !== undefined &&
+    new Date(token.expires_at).getTime() < now
+
+  // Aktiv = weder widerrufen noch abgelaufen. Der eingeklappte Bucket sammelt
+  // beide inaktiven Zustaende.
+  const activeTokens = tokens.filter((token) => token.revoked_at === null && !isExpired(token))
+  const expiredTokens = tokens.filter((token) => isExpired(token))
   const revokedTokens = tokens.filter((token) => token.revoked_at !== null)
+  const inactiveTokens = tokens.filter((token) => token.revoked_at !== null || isExpired(token))
+
+  const inactiveToggleLabel =
+    expiredTokens.length > 0 && revokedTokens.length > 0
+      ? t('inactive.toggleBoth', {
+          expired: expiredTokens.length,
+          revoked: revokedTokens.length,
+        })
+      : expiredTokens.length > 0
+        ? t('expired.toggle', { count: expiredTokens.length })
+        : t('revoked.toggle', { count: revokedTokens.length })
 
   const form = useForm<TokenValues>({
     resolver: zodResolver(tokenSchema),
@@ -94,6 +121,7 @@ export function AgentTokensSection({ agentId }: AgentTokensSectionProps) {
 
   function renderToken(token: Token) {
     const isRevoked = token.revoked_at !== null
+    const expired = isExpired(token)
     const isEditing = editingId === token.id
     return (
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -129,6 +157,7 @@ export function AgentTokensSection({ agentId }: AgentTokensSectionProps) {
             {t('list.createdAt', { date: token.created_at })}
             {token.last_used_at !== null ? t('list.lastUsed', { date: token.last_used_at }) : ''}
             {isRevoked ? t('list.revoked', { date: token.revoked_at ?? '' }) : ''}
+            {expired ? t('list.expired', { date: token.expires_at ?? '' }) : ''}
           </div>
         </Stack>
         {!isEditing ? (
@@ -195,28 +224,28 @@ export function AgentTokensSection({ agentId }: AgentTokensSectionProps) {
             renderItem={renderToken}
           />
 
-          {revokedTokens.length > 0 ? (
+          {inactiveTokens.length > 0 ? (
             <div className="flex flex-col gap-3">
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
                 className="self-start"
-                aria-expanded={showRevoked}
-                onClick={() => setShowRevoked((value) => !value)}
+                aria-expanded={showInactive}
+                onClick={() => setShowInactive((value) => !value)}
               >
                 <ChevronDown
                   aria-hidden="true"
                   className={cn(
                     'transition-transform duration-[var(--duration-fast)] ease-standard',
-                    showRevoked ? 'rotate-180' : '',
+                    showInactive ? 'rotate-180' : '',
                   )}
                 />
-                {t('revoked.toggle', { count: revokedTokens.length })}
+                {inactiveToggleLabel}
               </Button>
-              {showRevoked ? (
+              {showInactive ? (
                 <ul className="divide-y rounded-lg border border-border/40 bg-card shadow-card">
-                  {revokedTokens.map((token) => (
+                  {inactiveTokens.map((token) => (
                     <li key={token.id} className="px-4 py-3 text-sm">
                       {renderToken(token)}
                     </li>

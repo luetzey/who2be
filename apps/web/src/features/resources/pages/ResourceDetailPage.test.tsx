@@ -46,6 +46,7 @@ function resource() {
     workspace_id: 'ws-1',
     owner_id: 'o1',
     name: 'Onboarding',
+    slug: 'onboarding',
     current_version: 1,
     content: { description: 'd', blocks: [] },
     created_at: 't',
@@ -708,6 +709,41 @@ describe('ResourceDetailPage — Versions-Insel & Feedback', () => {
       )
     })
     expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' })
+  })
+})
+
+describe('ResourceDetailPage — Header-Aktionen (Slug/Duplizieren/Feedback)', () => {
+  it('zeigt den Slug als Badge und einen Feedback-Link auf die Kuratierungs-Route', async () => {
+    renderDetailPage(detailHandlers())
+
+    expect(await screen.findByText('onboarding')).toBeInTheDocument()
+    const feedback = screen.getByRole('link', { name: 'Feedback' })
+    expect(feedback).toHaveAttribute('href', '/w/ws-1/feedback/resource/r1')
+  })
+
+  it('dupliziert die Resource und meldet den Erfolg', async () => {
+    const duplicatePaths: string[] = []
+    const base = detailHandlers()
+    renderDetailPage((path, method, init) => {
+      if (method === 'POST' && path === `${WS_PREFIX}/resources/r1/duplicate`) {
+        duplicatePaths.push(path)
+        return jsonResponse(resourceWith({ id: 'r2', name: 'Onboarding (Kopie)' }))
+      }
+      return base(path, method, init)
+    })
+
+    fireEvent.click(await screen.findByTestId('duplicate-resource'))
+
+    await waitFor(() => {
+      expect(notify.success).toHaveBeenCalledWith('Resource dupliziert.')
+    })
+    expect(duplicatePaths).toContain(`${WS_PREFIX}/resources/r1/duplicate`)
+  })
+
+  it('Viewer: Duplizieren-Button ist ausgegraut', async () => {
+    renderDetailPage(detailHandlers(), { me: meWithRole('viewer') })
+
+    expect(await screen.findByTestId('duplicate-resource')).toBeDisabled()
   })
 })
 

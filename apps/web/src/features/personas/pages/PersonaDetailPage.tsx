@@ -1,6 +1,6 @@
-import { Clock, History, Layers, Share2, SquarePen, Users } from 'lucide-react'
+import { Clock, History, Layers, MessageSquare, Share2, SquarePen, Users } from 'lucide-react'
 import { useState } from 'react'
-import { Navigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
 import type { VersionStatus } from '@/api/types'
@@ -26,6 +26,7 @@ import { VersionHistory } from '@/components/version'
 import { notify } from '@/lib/feedback'
 
 import { DeletePersonaButton } from '../components/DeletePersonaButton'
+import { DuplicatePersonaButton } from '../components/DuplicatePersonaButton'
 import { ExportPersonaButton } from '../components/ExportPersonaButton'
 import { PersonaModesPanel } from '../components/PersonaModesPanel'
 import { PersonaPlaybooksCard } from '../components/PersonaPlaybooksCard'
@@ -180,7 +181,21 @@ export function PersonaDetailPage() {
                     </>
                   }
                   description={persona.content.description}
-                  actions={<ExportPersonaButton persona={persona} />}
+                  actions={
+                    <>
+                      <Button asChild variant="outline">
+                        <Link
+                          to={wsPath(`/feedback/persona/${persona.id}`)}
+                          state={{ name: persona.name }}
+                        >
+                          <MessageSquare className="h-4 w-4" />
+                          {t('detail.feedback.label')}
+                        </Link>
+                      </Button>
+                      <DuplicatePersonaButton persona={persona} />
+                      <ExportPersonaButton persona={persona} />
+                    </>
+                  }
                 />
 
                 {locked ? <ManagedNotice /> : null}

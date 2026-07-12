@@ -858,7 +858,16 @@
       },
       "tabs": {
         "modes": "Modes"
+      },
+      "feedback": {
+        "label": "Feedback"
       }
+    },
+    "duplicate": {
+      "label": "Duplicate",
+      "success": "Persona duplicated.",
+      "error": "Duplicate failed.",
+      "viewerReadOnly": "Viewers can only view personas"
     },
     "new": {
       "title": "New persona",
@@ -1297,7 +1306,9 @@
       "bannerReviewTitle": "Version v{{version}} is in review",
       "bannerReviewDescription": "Activate it after review, or send it back to draft.",
       "bannerInactiveTitle": "Version v{{version}} is inactive",
-      "bannerInactiveDescription": "Reactivate it as a draft to keep working on it."
+      "bannerInactiveDescription": "Reactivate it as a draft to keep working on it.",
+      "duplicate": "Duplicate",
+      "feedback": "Feedback"
     },
     "tabs": {
       "edit": "Edit",
@@ -1348,7 +1359,9 @@
     },
     "toast": {
       "created": "Resource created.",
-      "createFailed": "Creation failed."
+      "createFailed": "Creation failed.",
+      "duplicated": "Resource duplicated.",
+      "duplicateError": "Duplication failed."
     },
     "delete": {
       "label": "Delete",
@@ -1375,7 +1388,10 @@
       "linkedIn_other": "Linked in {{count}} playbooks",
       "notLinked": "Not linked",
       "subResourceCount_one": "{{count}} sub-resource",
-      "subResourceCount_other": "{{count}} sub-resources"
+      "subResourceCount_other": "{{count}} sub-resources",
+      "subResourcesToggle_one": "{{count}} sub-resource",
+      "subResourcesToggle_other": "{{count}} sub-resources",
+      "subResourcesListLabel": "Sub-resources"
     }
   },
   "settings": {
@@ -1647,6 +1663,12 @@
     "nav": {
       "backToList": "System prompts"
     },
+    "duplicate": {
+      "label": "Duplicate",
+      "success": "System prompt duplicated.",
+      "error": "Duplicate failed.",
+      "viewerReadOnly": "Viewers can only view system prompts"
+    },
     "form": {
       "identity": {
         "title": "Identity",
@@ -1742,6 +1764,7 @@
       "createdAt": "created {{date}}",
       "lastUsed": "· last used {{date}}",
       "revoked": "· revoked {{date}}",
+      "expired": "· expired {{date}}",
       "revoke": "Revoke"
     },
     "agentSection": {
@@ -1754,6 +1777,13 @@
     "revoked": {
       "toggle_one": "{{count}} revoked token",
       "toggle_other": "{{count}} revoked tokens"
+    },
+    "expired": {
+      "toggle_one": "{{count}} expired token",
+      "toggle_other": "{{count}} expired tokens"
+    },
+    "inactive": {
+      "toggleBoth": "{{expired}} expired · {{revoked}} revoked tokens"
     },
     "create": {
       "title": "Create new token",

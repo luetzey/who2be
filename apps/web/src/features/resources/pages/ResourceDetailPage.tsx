@@ -3,6 +3,7 @@ import {
   Clock,
   FileText,
   GitBranch,
+  MessageSquare,
   Pencil,
   RotateCcw,
   Share2,
@@ -26,6 +27,7 @@ import { FeedbackPanel } from '@/components/feedback/FeedbackPanel'
 import { Container } from '@/components/layout/Container'
 import { Stack } from '@/components/layout/Stack'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { VersionHistory } from '@/components/version'
@@ -34,6 +36,7 @@ import { useResourceUsages } from '@/hooks/useResourceUsages'
 import { notify } from '@/lib/feedback'
 
 import { DeleteResourceButton } from '../components/DeleteResourceButton'
+import { DuplicateResourceButton } from '../components/DuplicateResourceButton'
 import { ExportResourceButton } from '../components/ExportResourceButton'
 import { ResourceEditorForm } from '../components/ResourceEditorForm'
 import { ResourceUsedByList } from '../components/ResourceUsedByList'
@@ -134,6 +137,11 @@ export function ResourceDetailPage() {
                       status={resource.current_status}
                       pendingDraft={resource.has_pending_draft}
                     />
+                    {resource.slug ? (
+                      <Badge variant="outline" className="font-mono text-xs">
+                        {resource.slug}
+                      </Badge>
+                    ) : null}
                     {tags.map((tag) => (
                       <Badge key={tag} variant="secondary" className="text-xs">
                         {tag}
@@ -144,7 +152,17 @@ export function ResourceDetailPage() {
                 description={description}
                 actions={
                   <>
+                    <Button asChild variant="outline">
+                      <Link
+                        to={wsPath(`/feedback/resource/${resource.id}`)}
+                        state={{ name: resource.name }}
+                      >
+                        <MessageSquare className="h-4 w-4" />
+                        {t('detail.feedback')}
+                      </Link>
+                    </Button>
                     <ExportResourceButton resource={resource} />
+                    <DuplicateResourceButton resource={resource} />
                     {canEdit ? <DeleteResourceButton resource={resource} /> : null}
                   </>
                 }
