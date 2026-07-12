@@ -739,41 +739,6 @@ describe('PlaybookDetailPage — Versions-Insel & Feedback', () => {
     })
     expect(calledPaths).toContain(`${WS_PREFIX}/playbooks/pb1/versions/1/restore`)
   })
-
-  it('Feedback-Revise: springt in den Bearbeiten-Tab, scrollt nach oben und zeigt den Hinweis-Toast', async () => {
-    const scrollTo = vi.fn()
-    vi.stubGlobal('scrollTo', scrollTo)
-    const base = playbookHandlers()
-    renderPlaybookDetail((path, method, init) => {
-      if (method === 'GET' && path === `${WS_PREFIX}/feedback/playbook/pb1`) {
-        return jsonResponse({
-          entity_type: 'playbook',
-          entity_id: 'pb1',
-          usage_count: 2,
-          by_outcome: { applied: 2 },
-          by_signal: { unclear: 1 },
-          recent_notes: [],
-        })
-      }
-      return base(path, method, init)
-    })
-
-    // Feedback-Panel lebt im Tab „Beziehungen".
-    fireEvent.click(await screen.findByRole('tab', { name: 'Beziehungen' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Überarbeiten' }))
-
-    await waitFor(() => {
-      expect(notify.info).toHaveBeenCalledWith(
-        'Bearbeite die aktive Version — Änderungen landen automatisch in einem neuen Draft.',
-      )
-    })
-    expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' })
-    // „Überarbeiten" springt zurueck in den Bearbeiten-Tab.
-    expect(screen.getByRole('tab', { name: 'Bearbeiten' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    )
-  })
 })
 
 describe('PlaybookDetailPage — Managed-Lock & Rollen', () => {

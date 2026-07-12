@@ -41,7 +41,7 @@ const rB = makeResource('r-b', 'Glossar B')
 const currentId = 'r-current'
 
 describe('SubResourcePicker', () => {
-  it('oeffnet den Dialog und zeigt Workspace-Resources', async () => {
+  it('zeigt die verfuegbaren Workspace-Resources inline', async () => {
     listResourcesMock.mockResolvedValue([rA, rB])
 
     render(
@@ -53,8 +53,7 @@ describe('SubResourcePicker', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sub-Resources bearbeiten' }))
-
+    // Kein Dialog mehr — die Insel ist direkt im Tab sichtbar.
     await waitFor(() => {
       expect(screen.getByText('Glossar A')).toBeInTheDocument()
     })
@@ -74,15 +73,13 @@ describe('SubResourcePicker', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sub-Resources bearbeiten' }))
-
     await waitFor(() => {
       expect(screen.getByText('Glossar A')).toBeInTheDocument()
     })
     expect(screen.queryByText('Current Self')).not.toBeInTheDocument()
   })
 
-  it('ruft onSave mit Volldokument-Links auf', async () => {
+  it('ruft onSave sofort mit Volldokument-Links auf, wenn eine Resource hinzugefuegt wird', async () => {
     listResourcesMock.mockResolvedValue([rA, rB])
     const onSave = vi.fn()
 
@@ -95,16 +92,13 @@ describe('SubResourcePicker', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sub-Resources bearbeiten' }))
-
     await waitFor(() => {
       expect(screen.getByText('Glossar A')).toBeInTheDocument()
     })
+    // Inline-Panel speichert bei jeder Aktion sofort (kein Speichern-Button).
     fireEvent.click(
-      screen.getByRole('checkbox', { name: 'Glossar A als Sub-Resource hinzufügen' }),
+      screen.getByRole('button', { name: 'Glossar A als Sub-Resource hinzufügen' }),
     )
-
-    fireEvent.click(screen.getByRole('button', { name: /Speichern/ }))
 
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledTimes(1)
@@ -121,7 +115,7 @@ describe('SubResourcePicker', () => {
     ])
   })
 
-  it('schaltet eine Sub-Resource auf "Fest einbetten" (inline) um', async () => {
+  it('schaltet eine Sub-Resource auf Inline um und speichert sofort', async () => {
     listResourcesMock.mockResolvedValue([rA, rB])
     const onSave = vi.fn()
 
@@ -134,17 +128,12 @@ describe('SubResourcePicker', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sub-Resources bearbeiten' }))
-
     await waitFor(() => {
-      expect(
-        screen.getByRole('list', { name: 'Ausgewaehlte Sub-Resources' }),
-      ).toBeInTheDocument()
+      expect(screen.getByRole('list', { name: 'Eingebunden' })).toBeInTheDocument()
     })
 
-    // Standard ist 'lazy' — auf 'Fest einbetten' umstellen.
-    fireEvent.click(screen.getByRole('button', { name: 'Fest einbetten' }))
-    fireEvent.click(screen.getByRole('button', { name: /Speichern/ }))
+    // Standard ist 'lazy' — auf 'Inline' umstellen (speichert sofort).
+    fireEvent.click(screen.getByRole('button', { name: 'Inline' }))
 
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledTimes(1)
@@ -182,15 +171,12 @@ describe('SubResourcePicker', () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Sub-Resources bearbeiten' }))
-
     await waitFor(() => {
-      expect(
-        screen.getByRole('list', { name: 'Ausgewaehlte Sub-Resources' }),
-      ).toBeInTheDocument()
+      expect(screen.getByRole('list', { name: 'Eingebunden' })).toBeInTheDocument()
     })
 
-    fireEvent.click(screen.getByRole('button', { name: /Speichern/ }))
+    // Eine Aktion (Inline-Umschalten von r-a) loest das Speichern aus.
+    fireEvent.click(screen.getByRole('button', { name: 'Inline' }))
 
     await waitFor(() => {
       expect(onSave).toHaveBeenCalledTimes(1)
@@ -203,7 +189,7 @@ describe('SubResourcePicker', () => {
         block_id: null,
         position: 0,
         link_scope: 'resource',
-        embedding_mode: 'lazy',
+        embedding_mode: 'inline',
       },
       { child_id: 'r-b', block_id: 'heading-1', position: 1, link_scope: 'block' },
     ])

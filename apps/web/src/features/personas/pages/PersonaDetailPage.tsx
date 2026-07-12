@@ -14,7 +14,6 @@ import { DetailHeader } from '@/components/data/DetailHeader'
 import { ManagedNotice } from '@/components/data/ManagedNotice'
 import { MetaPill } from '@/components/data/MetaPill'
 import { StatusBadge } from '@/components/data/StatusBadge'
-import { FeedbackPanel } from '@/components/feedback/FeedbackPanel'
 import { Container } from '@/components/layout/Container'
 import { Stack } from '@/components/layout/Stack'
 import { Badge } from '@/components/ui/badge'
@@ -303,17 +302,6 @@ export function PersonaDetailPage() {
                             api.provenancePersonaVersion(persona.id, version)
                           }
                         />
-
-                        {role !== 'viewer' ? (
-                          <FeedbackPanel
-                            type="persona"
-                            id={persona.id}
-                            onRevise={() => {
-                              window.scrollTo({ top: 0, behavior: 'smooth' })
-                              notify.info(t('feedback:panel.reviseToast'))
-                            }}
-                          />
-                        ) : null}
 
                         {role !== 'viewer' && !locked ? (
                           <Card className="border-destructive/40">

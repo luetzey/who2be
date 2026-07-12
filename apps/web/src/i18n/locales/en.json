@@ -852,6 +852,10 @@
         "searchLabel": "Search playbooks",
         "searchPlaceholder": "Filter by name…",
         "searchEmpty": "No playbooks match this search.",
+        "linkedTitle": "Linked",
+        "addTitle": "Add playbook",
+        "link": "Link",
+        "remove": "Remove",
         "triggerCount_one": "{{count}} trigger",
         "triggerCount_other": "{{count}} triggers",
         "compositeBadge": "Composite"
@@ -1356,6 +1360,24 @@
       "allSelected": "All available resources are already selected.",
       "save": "Save ({{count}})",
       "loadError": "Loading failed."
+    },
+    "subInline": {
+      "title": "Sub-resources",
+      "description": "Embedded building blocks in order. Lazy = reference only, Inline = full text is shipped along.",
+      "blockManagedHint": "Blocks marked “In text” are embedded directly in the content. They cannot be removed here — edit them in the editor.",
+      "included": "Embedded",
+      "blockManagedRow": "Embedded as a block in the content — edit it there",
+      "inText": "In text",
+      "inTextAnchor": "In text (Block {{blockId}})",
+      "managedTitle": "Managed via the editor",
+      "modeLazy": "Lazy",
+      "modeInline": "Inline",
+      "embedModeFor": "Embedding mode for {{name}}",
+      "removeAria": "Remove {{name}}",
+      "add": "Add sub-resource",
+      "searchPlaceholder": "Search resources…",
+      "addAction": "Add",
+      "noResults": "No matching resource found."
     },
     "toast": {
       "created": "Resource created.",
@@ -1996,6 +2018,31 @@
       "eventsHide": "Collapse",
       "eventsShow": "Expand",
       "eventsEmpty": "No individual events."
+    },
+    "itemDetail": {
+      "description": "Every detail about this feedback — reference, signal, status and history.",
+      "openElement": "Open element",
+      "fallbackTitle": "Feedback",
+      "title": "{{signal}} · {{name}}",
+      "bezugTitle": "Reference",
+      "type": "Type",
+      "element": "Element",
+      "version": "Version",
+      "source": "Source",
+      "submitted": "Submitted",
+      "noElement": "No element (system feedback)",
+      "signalTitle": "Signal & note",
+      "signalLabel": "Signal",
+      "noteEmpty": "No note left.",
+      "statusTitle": "Status & triage",
+      "statusCurrent": "Current status",
+      "statusHint": "Change the handling state — every change lands in the history.",
+      "historyTitle": "History",
+      "historyEmpty": "Not handled yet.",
+      "history": {
+        "actorHuman": "Human",
+        "actorSystem": "System"
+      }
     }
   }
 }
