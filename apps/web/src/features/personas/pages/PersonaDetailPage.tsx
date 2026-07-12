@@ -1,6 +1,6 @@
-import { Clock, History, Layers, MessageSquare, Share2, SquarePen, Users } from 'lucide-react'
+import { Clock, History, Layers, Share2, SquarePen, Users } from 'lucide-react'
 import { useState } from 'react'
-import { Link, Navigate, useParams } from 'react-router-dom'
+import { Navigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
 import type { VersionStatus } from '@/api/types'
@@ -22,6 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Form } from '@/components/ui/form'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { VersionHistory } from '@/components/version'
+import { GiveFeedbackDialog } from '@/features/feedback'
 import { notify } from '@/lib/feedback'
 
 import { DeletePersonaButton } from '../components/DeletePersonaButton'
@@ -182,15 +183,14 @@ export function PersonaDetailPage() {
                   description={persona.content.description}
                   actions={
                     <>
-                      <Button asChild variant="outline">
-                        <Link
-                          to={wsPath(`/feedback/persona/${persona.id}`)}
-                          state={{ name: persona.name }}
-                        >
-                          <MessageSquare className="h-4 w-4" />
-                          {t('detail.feedback.label')}
-                        </Link>
-                      </Button>
+                      {role === 'admin' || role === 'editor' ? (
+                        <GiveFeedbackDialog
+                          entityType="persona"
+                          entityId={persona.id}
+                          entityName={persona.name}
+                          version={persona.current_version}
+                        />
+                      ) : null}
                       <DuplicatePersonaButton persona={persona} />
                       <ExportPersonaButton persona={persona} />
                     </>

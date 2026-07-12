@@ -858,7 +858,9 @@
         "remove": "Remove",
         "triggerCount_one": "{{count}} trigger",
         "triggerCount_other": "{{count}} triggers",
-        "compositeBadge": "Composite"
+        "compositeBadge": "Composite",
+        "referencedBadge": "Referenced in text",
+        "referencedHint": "Referenced in this persona's identity & stance text or in one of its modes — informational only, removal stays possible."
       },
       "tabs": {
         "modes": "Modes"
@@ -1868,7 +1870,6 @@
       "loadError": "Could not load feedback.",
       "revise": "Revise",
       "reviseHint": "Negative signals on the active version — revise it in a new draft.",
-      "reviseToast": "Edit the active version — changes land automatically in a new draft.",
       "showEvents": "Show individual events",
       "hideEvents": "Hide individual events",
       "eventsEmpty": "No individual events.",
@@ -1952,7 +1953,11 @@
       "helpfulShort": "{{count}} helpful",
       "negativeShort": "{{count}} negative",
       "showLess": "Show less",
-      "showAll": "Show all {{count}}"
+      "showAll": "Show all {{count}}",
+      "tabs": {
+        "inbox": "Inbox",
+        "curation": "Curation"
+      }
     },
     "tiles": {
       "mostUsed": "Most used",
@@ -1995,6 +2000,17 @@
       "submit": "Report",
       "success": "Problem reported. Thanks!",
       "error": "Could not report the problem."
+    },
+    "give": {
+      "title": "Give feedback",
+      "description": "Tell us how “{{name}}” works in practice — your signal lands in curation and helps keep the element in shape.",
+      "signalLabel": "Signal",
+      "noteLabel": "Note (optional)",
+      "notePlaceholder": "What did you notice? (e.g. “deadlines are outdated”)",
+      "submit": "Submit",
+      "trigger": "Give feedback",
+      "success": "Thanks for your feedback!",
+      "error": "Could not send the feedback."
     },
     "detail": {
       "description": "Feedback curation — usage, signals and individual events for this element.",

@@ -773,6 +773,18 @@ describe('PlaybookDetailPage — Managed-Lock & Rollen', () => {
     await screen.findByText('Verwendet in')
     expect(screen.queryByTestId('delete-playbook-trigger')).not.toBeInTheDocument()
     expect(screen.queryByText('Feedback & Nutzung')).not.toBeInTheDocument()
+    // Der „Feedback geben"-Trigger ist auf Editor+ beschränkt.
+    expect(
+      screen.queryByRole('button', { name: 'Feedback geben' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('Editor: zeigt den „Feedback geben"-Trigger in den Header-Aktionen', async () => {
+    renderPlaybookDetail(playbookHandlers(), { me: meWithRole('editor') })
+
+    expect(
+      await screen.findByRole('button', { name: 'Feedback geben' }),
+    ).toBeInTheDocument()
   })
 })
 

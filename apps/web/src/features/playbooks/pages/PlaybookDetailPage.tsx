@@ -15,6 +15,7 @@ import { Container } from '@/components/layout/Container'
 import { Stack } from '@/components/layout/Stack'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { GiveFeedbackDialog } from '@/features/feedback'
 import { usePlaybookComposes } from '@/hooks/usePlaybookComposes'
 import { usePlaybookResourceLinks } from '@/hooks/usePlaybookResourceLinks'
 import { usePlaybookUsages } from '@/hooks/usePlaybookUsages'
@@ -199,7 +200,17 @@ export function PlaybookDetailPage() {
                     </p>
                   ) : null}
                 </div>
-                <ExportPlaybookButton playbook={playbook} />
+                <div className="flex flex-wrap items-center gap-2">
+                  {role === 'admin' || role === 'editor' ? (
+                    <GiveFeedbackDialog
+                      entityType="playbook"
+                      entityId={playbook.id}
+                      entityName={playbook.name}
+                      version={playbook.current_version}
+                    />
+                  ) : null}
+                  <ExportPlaybookButton playbook={playbook} />
+                </div>
               </header>
 
               {locked ? <ManagedNotice /> : null}

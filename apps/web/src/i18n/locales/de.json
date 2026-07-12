@@ -858,7 +858,9 @@
         "remove": "Entfernen",
         "triggerCount_one": "{{count}} Trigger",
         "triggerCount_other": "{{count}} Trigger",
-        "compositeBadge": "Composite"
+        "compositeBadge": "Composite",
+        "referencedBadge": "Im Text referenziert",
+        "referencedHint": "Wird im Identität-&-Haltung-Text oder in einem Modus dieser Persona referenziert — nur ein Hinweis, das Entfernen bleibt möglich."
       },
       "tabs": {
         "modes": "Modi"
@@ -1868,7 +1870,6 @@
       "loadError": "Feedback konnte nicht geladen werden.",
       "revise": "Überarbeiten",
       "reviseHint": "Negative Signale auf der aktiven Version — bearbeite sie in einem neuen Draft.",
-      "reviseToast": "Bearbeite die aktive Version — Änderungen landen automatisch in einem neuen Draft.",
       "showEvents": "Einzelne Ereignisse anzeigen",
       "hideEvents": "Einzelne Ereignisse ausblenden",
       "eventsEmpty": "Keine Einzel-Ereignisse.",
@@ -1952,7 +1953,11 @@
       "helpfulShort": "{{count}} hilfreich",
       "negativeShort": "{{count}} negativ",
       "showLess": "Weniger anzeigen",
-      "showAll": "Alle {{count}} anzeigen"
+      "showAll": "Alle {{count}} anzeigen",
+      "tabs": {
+        "inbox": "Posteingang",
+        "curation": "Kuration"
+      }
     },
     "tiles": {
       "mostUsed": "Meistgenutzt",
@@ -1995,6 +2000,17 @@
       "submit": "Melden",
       "success": "Problem gemeldet. Danke!",
       "error": "Problem konnte nicht gemeldet werden."
+    },
+    "give": {
+      "title": "Feedback geben",
+      "description": "Sag uns, wie „{{name}}“ in der Praxis läuft — dein Signal landet in der Kuration und hilft, das Element gezielt zu pflegen.",
+      "signalLabel": "Signal",
+      "noteLabel": "Notiz (optional)",
+      "notePlaceholder": "Was ist dir aufgefallen? (z. B. „Fristen sind veraltet“)",
+      "submit": "Absenden",
+      "trigger": "Feedback geben",
+      "success": "Danke für dein Feedback!",
+      "error": "Feedback konnte nicht gesendet werden."
     },
     "detail": {
       "description": "Feedback-Kuration — Nutzung, Signale und Einzel-Ereignisse dieses Elements.",
