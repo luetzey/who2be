@@ -2,17 +2,52 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { Playbook } from '@/api/types'
+import type { Persona, PersonaContent, Playbook } from '@/api/types'
 import { usePersonaPlaybooks } from '@/hooks/usePersonaPlaybooks'
 
 import { PersonaPlaybooksCard } from './PersonaPlaybooksCard'
 
+// getPersona wird von der Card selbst-enthaltend aufgerufen, um die im
+// Persona-Inhalt referenzierten Playbook-IDs (Modus/Body-Pill) zu bestimmen.
+// `mockApi` ist stabil (wie der echte, memoisierte `useApi`), sonst triggert
+// der Effekt-Dependency `api` bei jedem Render einen erneuten Fetch (Loop).
+const { mockGetPersona, mockApi } = vi.hoisted(() => {
+  const getPersona = vi.fn()
+  return { mockGetPersona: getPersona, mockApi: { getPersona } }
+})
+
+vi.mock('@/api/useApi', () => ({
+  useApi: () => mockApi,
+}))
 vi.mock('@/auth/useWorkspacePath', () => ({
   useWorkspacePath: () => (path: string) => `/w/ws-1${path}`,
 }))
 vi.mock('@/hooks/usePersonaPlaybooks', () => ({
   usePersonaPlaybooks: vi.fn(),
 }))
+
+/** Minimal-Persona mit gegebenem Inhalt — nur `content` liest die Card. */
+function personaContent(content: Partial<PersonaContent> = {}): Persona {
+  return {
+    content: { description: '', system_prompt: '', traits: [], ...content },
+  } as unknown as Persona
+}
+
+/** Baut einen Profil-Body-Block mit einer Playbook-Placeholder-Pill. */
+function playbookPillBlocks(targetId: string): PersonaContent['content'] {
+  return {
+    description: '',
+    blocks: [
+      {
+        id: 'b1',
+        type: 'paragraph',
+        content: [
+          { type: 'placeholder', props: { kind: 'playbook', target_id: targetId, label: '' } },
+        ],
+      },
+    ],
+  } as unknown as PersonaContent['content']
+}
 
 function playbook(overrides: Partial<Playbook> = {}): Playbook {
   return {
@@ -61,6 +96,9 @@ function renderCard(state: HookState, canEdit = true) {
 
 beforeEach(() => {
   vi.mocked(usePersonaPlaybooks).mockReset()
+  // Default: kein Inhalt referenziert ein Playbook → keine Referenz-Badges.
+  mockGetPersona.mockReset()
+  mockGetPersona.mockResolvedValue(personaContent())
 })
 
 describe('PersonaPlaybooksCard — Anzeige-Modus', () => {
@@ -217,5 +255,69 @@ describe('PersonaPlaybooksCard — Bearbeiten-Modus', () => {
       expect(state.save).toHaveBeenCalledTimes(1)
     })
     expect(screen.getByLabelText('Playbooks durchsuchen')).toBeInTheDocument()
+  })
+})
+
+describe('PersonaPlaybooksCard — Referenz-Hinweis (ehrlich, nicht sperrend)', () => {
+  const referencedLabel = 'Im Text referenziert'
+
+  it('zeigt den Badge im Anzeige-Modus, wenn ein Modus das Playbook bindet', async () => {
+    const linked = [playbook()]
+    mockGetPersona.mockResolvedValue(
+      personaContent({
+        modes: [
+          {
+            name: 'Standard',
+            is_default: true,
+            identity_add: [],
+            output_style_override: [],
+            anti_patterns: [],
+            playbook_id: 'pb1',
+          },
+        ],
+      }),
+    )
+    renderCard(hookState({ playbooks: linked, linked }))
+
+    expect(await screen.findByText(referencedLabel)).toBeInTheDocument()
+  })
+
+  it('zeigt den Badge, wenn eine Body-Pill das Playbook referenziert', async () => {
+    const linked = [playbook()]
+    mockGetPersona.mockResolvedValue(
+      personaContent({ content: playbookPillBlocks('pb1') }),
+    )
+    renderCard(hookState({ playbooks: linked, linked }))
+
+    expect(await screen.findByText(referencedLabel)).toBeInTheDocument()
+  })
+
+  it('zeigt KEINEN Badge fuer ein verknuepftes, aber nicht referenziertes Playbook', async () => {
+    const linked = [playbook()]
+    mockGetPersona.mockResolvedValue(personaContent({ content: playbookPillBlocks('other') }))
+    renderCard(hookState({ playbooks: linked, linked }))
+
+    // Warten, bis der Fetch aufgeloest ist, damit ein spaeter Badge nicht durchrutscht.
+    await waitFor(() => expect(mockGetPersona).toHaveBeenCalled())
+    expect(screen.queryByText(referencedLabel)).not.toBeInTheDocument()
+  })
+
+  it('zeigt den Badge im Bearbeiten-Modus und blockiert das Entfernen NICHT', async () => {
+    const linked = [playbook()]
+    const state = hookState({ playbooks: linked, linked, linkedIds: ['pb1'] })
+    mockGetPersona.mockResolvedValue(
+      personaContent({ content: playbookPillBlocks('pb1') }),
+    )
+    renderCard(state)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Verknüpfungen bearbeiten' }))
+
+    // Referenz-Badge steht in der „Verknüpft"-Zeile …
+    expect(await screen.findByText(referencedLabel)).toBeInTheDocument()
+    // … und die Entfernen-Aktion bleibt aktiv (kein Lock).
+    const remove = screen.getByRole('button', { name: 'Entfernen' })
+    expect(remove).toBeEnabled()
+    fireEvent.click(remove)
+    expect(state.toggle).toHaveBeenCalledWith('pb1')
   })
 })

@@ -69,6 +69,10 @@ class FeedbackService:
     async def submit_feedback(
         self, ctx: WorkspaceContext, data: FeedbackCreate
     ) -> AgentFeedbackRead:
+        # Inhalts-Feedback ist eine Kurations-Handlung → editor+ (viewer darf nicht
+        # schreiben). Agent-gebundene Tokens brauchen zusaetzlich die feedback_write-
+        # Capability (No-Op fuer Mensch/JWT und ungebundene Tokens).
+        require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.feedback_write)
         if not await self._repo.entity_belongs_to(
             ctx.workspace_id, data.entity_type, data.entity_id

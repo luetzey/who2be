@@ -1,9 +1,10 @@
 import { Layers, Plus, Share2, X } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
-import type { Playbook, PlaybookRef } from '@/api/types'
+import type { PersonaContent, Playbook, PlaybookRef } from '@/api/types'
+import { useApi } from '@/api/useApi'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { DataView } from '@/components/data/DataView'
 import { EntityCard } from '@/components/data/EntityCard'
@@ -17,7 +18,50 @@ import { Label } from '@/components/ui/label'
 import { usePersonaPlaybooks } from '@/hooks/usePersonaPlaybooks'
 import { splitTriggers } from '@/lib/triggers'
 
-import { PlaybookLinkItem } from './PlaybookLinkItem'
+import { PlaybookLinkItem, PlaybookReferencedBadge } from './PlaybookLinkItem'
+
+/**
+ * Sammelt alle Playbook-IDs, die im Persona-INHALT tatsaechlich referenziert
+ * werden — zwei ehrliche Signale (keine fingierte managed-Herkunft):
+ *
+ * 1. `content.modes[].playbook_id` — ein Modus, der an ein Playbook gebunden
+ *    ist (strukturiert, zuverlaessig).
+ * 2. Inline-Placeholder-Pills der Art `playbook` im Profil-Body
+ *    (`content.content.blocks`) — BlockNote-Inline-Content mit
+ *    `{ type: 'placeholder', props: { kind: 'playbook', target_id } }`.
+ *
+ * Der Walk ist defensiv gegen die offene `ResourceBlock`-Form getypt (Blocks
+ * tragen `content`-Inline-Arrays und `children`-Bloecke); unbekannte Knoten
+ * werden ignoriert statt zu werfen.
+ */
+function collectPlaybookRefsFromNodes(nodes: unknown, into: Set<string>): void {
+  if (!Array.isArray(nodes)) return
+  for (const node of nodes) {
+    if (node === null || typeof node !== 'object') continue
+    const record = node as Record<string, unknown>
+    if (record.type === 'placeholder' && record.props !== null && typeof record.props === 'object') {
+      const props = record.props as Record<string, unknown>
+      if (props.kind === 'playbook' && typeof props.target_id === 'string' && props.target_id !== '') {
+        into.add(props.target_id)
+      }
+    }
+    // Block-Level: Inline-Content und verschachtelte Kind-Bloecke rekursiv.
+    if ('content' in record) collectPlaybookRefsFromNodes(record.content, into)
+    if ('children' in record) collectPlaybookRefsFromNodes(record.children, into)
+  }
+}
+
+function collectReferencedPlaybookIds(content: PersonaContent | undefined): Set<string> {
+  const ids = new Set<string>()
+  if (content === undefined) return ids
+  for (const mode of content.modes ?? []) {
+    if (typeof mode.playbook_id === 'string' && mode.playbook_id !== '') {
+      ids.add(mode.playbook_id)
+    }
+  }
+  collectPlaybookRefsFromNodes(content.content?.blocks, ids)
+  return ids
+}
 
 interface PersonaPlaybooksCardProps {
   personaId: string
@@ -76,16 +120,40 @@ function SubPlaybookList({
  * Aktionen sind `toggle(id)`; Aenderungen bleiben lokal bis „Speichern“,
  * Abbrechen verwirft sie.
  *
- * Bewusst ausgelassen: der Mockup-Marker „Aus Editor-Text“. Persona→Playbook-
- * Links haben (anders als Sub-Resources) keine managed-/Editor-Herkunft im
- * Datenmodell — der Marker haette keine Quelle und wird nicht fingiert.
+ * Bewusst NICHT nachgebaut: der Mockup-Marker „Aus Editor-Text” (managed, nicht
+ * entfernbar). Persona→Playbook-Links haben (anders als Sub-Resources) keine
+ * managed-/Editor-Herkunft im Datenmodell — ein Lock haette keine Quelle und
+ * wird nicht fingiert. Stattdessen ein EHRLICHER, nicht sperrender Hinweis:
+ * `referencedIds` markiert Playbooks, die im Persona-Inhalt (Modus oder
+ * Profil-Body-Pill) tatsaechlich vorkommen, mit einem rein informativen Badge —
+ * das Entfernen bleibt uneingeschraenkt moeglich.
  */
 export function PersonaPlaybooksCard({ personaId, canEdit }: PersonaPlaybooksCardProps) {
   const { t } = useTranslation(['personas', 'common', 'playbooks'])
   const wsPath = useWorkspacePath()
+  const api = useApi()
   const links = usePersonaPlaybooks(personaId)
   const [editing, setEditing] = useState(false)
   const [query, setQuery] = useState('')
+  // Referenz-Set aus dem Persona-Inhalt (selbst-enthaltener Fetch, damit die
+  // Card keine zusaetzliche Prop von der Detail-Page braucht). Fehler bleiben
+  // still — der Badge ist rein informativ, kein blockierender State.
+  const [referencedIds, setReferencedIds] = useState<Set<string>>(() => new Set<string>())
+
+  useEffect(() => {
+    let active = true
+    api
+      .getPersona(personaId)
+      .then((persona) => {
+        if (active) setReferencedIds(collectReferencedPlaybookIds(persona.content))
+      })
+      .catch(() => {
+        if (active) setReferencedIds(new Set<string>())
+      })
+    return () => {
+      active = false
+    }
+  }, [api, personaId])
 
   // Bearbeiten-Modus: zwei Sektionen statt eines Checkbox-Pickers. Beide leiten
   // aus der lokalen (ungespeicherten) Auswahl `linkedIds` ab, damit ein Toggle
@@ -138,6 +206,7 @@ export function PersonaPlaybooksCard({ personaId, canEdit }: PersonaPlaybooksCar
         : playbook.type
     const composeChildren = playbook.compose_children ?? []
     const hasChildren = composeChildren.length > 0
+    const referenced = referencedIds.has(playbook.id)
 
     return (
       <EntityCard
@@ -153,8 +222,18 @@ export function PersonaPlaybooksCard({ personaId, canEdit }: PersonaPlaybooksCar
           />
         }
         badges={
-          playbook.is_composite === true ? (
-            <Badge variant="secondary">{t('personas:detail.playbooks.compositeBadge')}</Badge>
+          playbook.is_composite === true || referenced ? (
+            <>
+              {playbook.is_composite === true ? (
+                <Badge variant="secondary">{t('personas:detail.playbooks.compositeBadge')}</Badge>
+              ) : null}
+              {referenced ? (
+                <PlaybookReferencedBadge
+                  label={t('personas:detail.playbooks.referencedBadge')}
+                  hint={t('personas:detail.playbooks.referencedHint')}
+                />
+              ) : null}
+            </>
           ) : null
         }
         meta={<span className="text-xs text-muted-foreground">{metaText}</span>}
@@ -228,6 +307,9 @@ export function PersonaPlaybooksCard({ personaId, canEdit }: PersonaPlaybooksCar
                           key={playbook.id}
                           name={playbook.name}
                           status={<StatusBadge status={playbook.current_status} />}
+                          referenced={referencedIds.has(playbook.id)}
+                          referencedLabel={t('personas:detail.playbooks.referencedBadge')}
+                          referencedHint={t('personas:detail.playbooks.referencedHint')}
                           actionLabel={t('personas:detail.playbooks.remove')}
                           actionIcon={X}
                           onAction={() => links.toggle(playbook.id)}

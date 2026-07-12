@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { FeedbackOverview } from '@/api/types'
@@ -56,6 +56,13 @@ describe('FeedbackOverviewPage (a11y)', () => {
       initialEntries: ['/w/ws-1/feedback'],
     })
 
+    // Posteingang-Tab (Default) axe-prüfen …
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: 'Coach-Persona' })).toBeInTheDocument(),
+    )
+    expect(await axe(container)).toHaveNoViolations()
+    // … dann in den Kurations-Tab wechseln und dort ebenfalls prüfen.
+    fireEvent.click(screen.getByRole('tab', { name: /Kuration/ }))
     await waitFor(() => expect(screen.getByRole('link', { name: 'Onboarding' })).toBeInTheDocument())
     expect(await axe(container)).toHaveNoViolations()
   })

@@ -735,5 +735,18 @@ describe('PersonaDetailPage — Header-Beschreibung & Rollen', () => {
     expect(
       screen.queryByRole('button', { name: 'Verknüpfungen bearbeiten' }),
     ).not.toBeInTheDocument()
+    // Der „Feedback geben"-Trigger ist auf Editor+ beschränkt.
+    expect(
+      screen.queryByRole('button', { name: 'Feedback geben' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('Editor: zeigt den „Feedback geben"-Trigger im Header (statt des alten Links)', async () => {
+    renderPersonaDetail(personaHandlers(), { me: meWithRole('editor') })
+
+    expect(
+      await screen.findByRole('button', { name: 'Feedback geben' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Feedback' })).not.toBeInTheDocument()
   })
 })

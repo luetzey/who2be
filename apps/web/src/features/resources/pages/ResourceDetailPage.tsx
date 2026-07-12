@@ -3,7 +3,6 @@ import {
   Clock,
   FileText,
   GitBranch,
-  MessageSquare,
   Pencil,
   RotateCcw,
   Share2,
@@ -26,10 +25,10 @@ import { UsedByList } from '@/components/data/UsedByList'
 import { Container } from '@/components/layout/Container'
 import { Stack } from '@/components/layout/Stack'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { VersionHistory } from '@/components/version'
+import { GiveFeedbackDialog } from '@/features/feedback'
 import { useResourceSubResources } from '@/hooks/useResourceSubResources'
 import { useResourceUsages } from '@/hooks/useResourceUsages'
 import { notify } from '@/lib/feedback'
@@ -151,15 +150,14 @@ export function ResourceDetailPage() {
                 description={description}
                 actions={
                   <>
-                    <Button asChild variant="outline">
-                      <Link
-                        to={wsPath(`/feedback/resource/${resource.id}`)}
-                        state={{ name: resource.name }}
-                      >
-                        <MessageSquare className="h-4 w-4" />
-                        {t('detail.feedback')}
-                      </Link>
-                    </Button>
+                    {role === 'admin' || role === 'editor' ? (
+                      <GiveFeedbackDialog
+                        entityType="resource"
+                        entityId={resource.id}
+                        entityName={resource.name}
+                        version={resource.current_version}
+                      />
+                    ) : null}
                     <ExportResourceButton resource={resource} />
                     <DuplicateResourceButton resource={resource} />
                     {canEdit ? <DeleteResourceButton resource={resource} /> : null}

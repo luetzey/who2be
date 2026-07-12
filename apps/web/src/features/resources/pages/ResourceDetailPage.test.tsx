@@ -700,12 +700,24 @@ describe('ResourceDetailPage — Versions-Insel', () => {
 })
 
 describe('ResourceDetailPage — Header-Aktionen (Slug/Duplizieren/Feedback)', () => {
-  it('zeigt den Slug als Badge und einen Feedback-Link auf die Kuratierungs-Route', async () => {
-    renderDetailPage(detailHandlers())
+  it('zeigt den Slug als Badge und den „Feedback geben"-Trigger für Editor+', async () => {
+    renderDetailPage(detailHandlers(), { me: meWithRole('editor') })
 
     expect(await screen.findByText('onboarding')).toBeInTheDocument()
-    const feedback = screen.getByRole('link', { name: 'Feedback' })
-    expect(feedback).toHaveAttribute('href', '/w/ws-1/feedback/resource/r1')
+    // Der alte Kurations-Link ist weg; stattdessen der Dialog-Trigger.
+    expect(screen.queryByRole('link', { name: 'Feedback' })).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Feedback geben' }),
+    ).toBeInTheDocument()
+  })
+
+  it('Viewer: sieht den „Feedback geben"-Trigger nicht', async () => {
+    renderDetailPage(detailHandlers(), { me: meWithRole('viewer') })
+
+    await screen.findByText('Onboarding')
+    expect(
+      screen.queryByRole('button', { name: 'Feedback geben' }),
+    ).not.toBeInTheDocument()
   })
 
   it('dupliziert die Resource und meldet den Erfolg', async () => {

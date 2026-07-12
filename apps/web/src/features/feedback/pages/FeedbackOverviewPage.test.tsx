@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { FeedbackOverview } from '@/api/types'
@@ -55,6 +55,8 @@ describe('FeedbackOverviewPage', () => {
     getFeedbackOverview.mockResolvedValue(overview)
     renderPage()
 
+    // Die Kurations-Aggregat-Liste liegt jetzt im „Kuration"-Tab.
+    fireEvent.click(screen.getByRole('tab', { name: /Kuration/ }))
     const link = await screen.findByRole('link', { name: 'Onboarding' })
     expect(link).toHaveAttribute('href', '/w/ws-1/feedback/playbook/pb1')
     expect(screen.getByText(/12 Nutzungen/)).toBeInTheDocument()
@@ -66,6 +68,7 @@ describe('FeedbackOverviewPage', () => {
     getFeedbackOverview.mockResolvedValue({ items: [] } satisfies FeedbackOverview)
     renderPage()
 
+    fireEvent.click(screen.getByRole('tab', { name: /Kuration/ }))
     await waitFor(() =>
       expect(screen.getByText('Noch kein Feedback in diesem Workspace.')).toBeInTheDocument(),
     )
