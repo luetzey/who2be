@@ -10,7 +10,7 @@ import pytest
 from fastapi import HTTPException
 
 from who2be_api.core.security import WorkspaceContext
-from who2be_api.repositories.persona_repository import PersonaUpdateOutcome
+from who2be_api.repositories.persona_repository import PersonaListCounts, PersonaUpdateOutcome
 from who2be_api.services.persona_service import PersonaService
 from who2be_models import (
     AgentToolPolicy,
@@ -56,6 +56,9 @@ class FakePersonaRepository:
         self._personas: dict[UUID, PersonaRead] = {}
         self._versions: dict[UUID, list[PersonaVersionRead]] = {}
         self.last_active_only: bool | None = None
+        # Card-Pill-Zaehler pro Persona-ID (vom Test gesetzt); ohne Eintrag
+        # bleibt das Read auf den Defaults (0).
+        self.counts: dict[UUID, PersonaListCounts] = {}
 
     async def insert(
         self,
@@ -104,6 +107,11 @@ class FakePersonaRepository:
         if after is not None:
             own = [p for p in own if (p.created_at, p.id) < after]
         return own[:limit]
+
+    async def list_counts(
+        self, workspace_id: UUID, persona_ids: list[UUID]
+    ) -> dict[UUID, PersonaListCounts]:
+        return {pid: self.counts[pid] for pid in persona_ids if pid in self.counts}
 
     async def fetch(
         self, workspace_id: UUID, persona_id: UUID, active_only: bool = False, locale: str = "de"
@@ -359,6 +367,26 @@ def test_list_returns_next_cursor_when_more_items_available() -> None:
     assert len(page2) == 1
     assert cursor2 is None
     assert {p.name for p in page1 + page2} == {"A", "B", "C"}
+
+
+def test_list_enriches_playbook_and_agent_counts() -> None:
+    """List-Card-Pills: `list_all` joint die Batch-Aggregat-Zaehler in die Reads.
+
+    Persona "A" wird von 2 Agenten genutzt und verlinkt 3 Playbooks; "B" hat
+    keinen Eintrag im Aggregat und bleibt auf den Defaults (0/0).
+    """
+    repo = FakePersonaRepository()
+    service = PersonaService(repo)
+    ctx = _ctx(uuid4())
+    a = asyncio.run(service.create(ctx, PersonaCreate(name="A", content=_content())))
+    b = asyncio.run(service.create(ctx, PersonaCreate(name="B", content=_content())))
+    repo.counts[a.id] = PersonaListCounts(playbook_count=3, agent_count=2)
+    items, _ = asyncio.run(service.list_all(ctx, 100, None))
+    by_id = {p.id: p for p in items}
+    assert by_id[a.id].playbook_count == 3
+    assert by_id[a.id].agent_count == 2
+    assert by_id[b.id].playbook_count == 0
+    assert by_id[b.id].agent_count == 0
 
 
 def test_update_bumps_version_and_records_snapshot() -> None:

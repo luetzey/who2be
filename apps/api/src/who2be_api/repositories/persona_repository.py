@@ -35,6 +35,18 @@ from who2be_models import (
 
 
 @dataclass(frozen=True)
+class PersonaListCounts:
+    """Denormalisierte List-Card-Pills einer Persona (Batch-Aggregat).
+
+    `playbook_count` = Anzahl der ueber `persona_playbook` verknuepften
+    Playbooks; `agent_count` = Anzahl der Agenten mit `agent.persona_id = id`.
+    """
+
+    playbook_count: int
+    agent_count: int
+
+
+@dataclass(frozen=True)
 class PersonaUpdateOutcome:
     """Ergebnis eines `update`- oder `upsert_draft`-Aufrufs.
 
@@ -119,6 +131,10 @@ class PersonaRepository(Protocol):
     async def list_distinct_tags(
         self, workspace_id: UUID, locale: str = DEFAULT_LOCALE
     ) -> list[str]: ...
+
+    async def list_counts(
+        self, workspace_id: UUID, persona_ids: list[UUID]
+    ) -> dict[UUID, PersonaListCounts]: ...
 
     async def delete(self, workspace_id: UUID, persona_id: UUID) -> bool: ...
 
@@ -288,3 +304,39 @@ class PgPersonaRepository(VersionedAggregateRepository[PersonaRead, PersonaVersi
             locale,
         )
         return [row["tag"] for row in rows]
+
+    async def list_counts(
+        self, workspace_id: UUID, persona_ids: list[UUID]
+    ) -> dict[UUID, PersonaListCounts]:
+        """Batch-Aggregat fuer die List-Card-Pills (ein Roundtrip, kein N+1).
+
+        Set-basierter Join ueber `= ANY($2)`: Playbook-Anzahl (`persona_playbook`)
+        und Agent-Anzahl (`agent.persona_id`) fuer alle uebergebenen Personae auf
+        einmal. Leere ID-Liste => {}.
+        """
+        if not persona_ids:
+            return {}
+        rows = await self._pool.fetch(
+            "SELECT p.id AS persona_id, "
+            "       COALESCE(pp.cnt, 0)::int AS playbook_count, "
+            "       COALESCE(ac.cnt, 0)::int AS agent_count "
+            "FROM persona p "
+            "LEFT JOIN ( "
+            "    SELECT persona_id, COUNT(*) AS cnt "
+            "    FROM persona_playbook GROUP BY persona_id "
+            ") pp ON pp.persona_id = p.id "
+            "LEFT JOIN ( "
+            "    SELECT persona_id, COUNT(*) AS cnt "
+            "    FROM agent GROUP BY persona_id "
+            ") ac ON ac.persona_id = p.id "
+            "WHERE p.workspace_id = $1 AND p.id = ANY($2)",
+            workspace_id,
+            persona_ids,
+        )
+        return {
+            row["persona_id"]: PersonaListCounts(
+                playbook_count=row["playbook_count"],
+                agent_count=row["agent_count"],
+            )
+            for row in rows
+        }

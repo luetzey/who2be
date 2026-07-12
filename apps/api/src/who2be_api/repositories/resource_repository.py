@@ -39,6 +39,20 @@ from who2be_models import (
 
 
 @dataclass(frozen=True)
+class ResourceListCounts:
+    """Denormalisierte List-Card-Pills einer Resource (Batch-Aggregat).
+
+    `playbook_link_count` = Anzahl der DISTINCT Playbooks, die (ueber
+    `playbook_resource_link`) auf die Resource zeigen; `sub_resource_count` =
+    Anzahl der ueber `resource_composition` eingebetteten/verlinkten
+    Sub-Resources (parent_id = id).
+    """
+
+    playbook_link_count: int
+    sub_resource_count: int
+
+
+@dataclass(frozen=True)
 class ResourceUpdateOutcome:
     """Ergebnis eines `update`- oder `upsert_draft`-Aufrufs (analog Persona)."""
 
@@ -125,6 +139,10 @@ class ResourceRepository(Protocol):
         locale: str = DEFAULT_LOCALE,
         restrict_ids: list[UUID] | None = None,
     ) -> list[str]: ...
+
+    async def list_counts(
+        self, workspace_id: UUID, resource_ids: list[UUID]
+    ) -> dict[UUID, ResourceListCounts]: ...
 
 
 class PgResourceRepository(VersionedAggregateRepository[ResourceRead, ResourceVersionRead]):
@@ -294,3 +312,40 @@ class PgResourceRepository(VersionedAggregateRepository[ResourceRead, ResourceVe
             restrict_ids,
         )
         return [row["tag"] for row in rows]
+
+    async def list_counts(
+        self, workspace_id: UUID, resource_ids: list[UUID]
+    ) -> dict[UUID, ResourceListCounts]:
+        """Batch-Aggregat fuer die List-Card-Pills (ein Roundtrip, kein N+1).
+
+        Set-basierter Join ueber `= ANY($2)`: DISTINCT-Playbook-Anzahl
+        (`playbook_resource_link`) und Sub-Resource-Anzahl
+        (`resource_composition`, parent_id = id) fuer alle uebergebenen Resources
+        auf einmal. Leere ID-Liste => {}.
+        """
+        if not resource_ids:
+            return {}
+        rows = await self._pool.fetch(
+            "SELECT r.id AS resource_id, "
+            "       COALESCE(pl.cnt, 0)::int AS playbook_link_count, "
+            "       COALESCE(sc.cnt, 0)::int AS sub_resource_count "
+            "FROM resource r "
+            "LEFT JOIN ( "
+            "    SELECT resource_id, COUNT(DISTINCT playbook_id) AS cnt "
+            "    FROM playbook_resource_link GROUP BY resource_id "
+            ") pl ON pl.resource_id = r.id "
+            "LEFT JOIN ( "
+            "    SELECT parent_id, COUNT(*) AS cnt "
+            "    FROM resource_composition GROUP BY parent_id "
+            ") sc ON sc.parent_id = r.id "
+            "WHERE r.workspace_id = $1 AND r.id = ANY($2)",
+            workspace_id,
+            resource_ids,
+        )
+        return {
+            row["resource_id"]: ResourceListCounts(
+                playbook_link_count=row["playbook_link_count"],
+                sub_resource_count=row["sub_resource_count"],
+            )
+            for row in rows
+        }

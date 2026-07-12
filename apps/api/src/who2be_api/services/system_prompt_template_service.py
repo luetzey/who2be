@@ -116,11 +116,30 @@ class SystemPromptTemplateService:
         cursor: tuple[datetime, UUID] | None,
     ) -> tuple[list[SystemPromptTemplateRead], str | None]:
         rows = await self._repo.list_by_workspace(ctx.workspace_id, limit + 1, cursor)
+        next_cursor: str | None = None
         if len(rows) > limit:
-            items = rows[:limit]
-            tail = items[-1]
-            return items, encode_cursor(tail.created_at, tail.id)
-        return rows, None
+            rows = rows[:limit]
+            tail = rows[-1]
+            next_cursor = encode_cursor(tail.created_at, tail.id)
+        return await self._enrich(ctx.workspace_id, rows), next_cursor
+
+    async def _enrich(
+        self, workspace_id: UUID, items: list[SystemPromptTemplateRead]
+    ) -> list[SystemPromptTemplateRead]:
+        """Joint die List-Card-Pill (Batch-Aggregat) in die Reads (kein N+1).
+
+        Ein einziger `list_agent_counts`-Roundtrip fuer die ganze Seite; ohne
+        Treffer bleibt das Read auf `agent_count=0`.
+        """
+        if not items:
+            return items
+        counts = await self._repo.list_agent_counts(workspace_id, [t.id for t in items])
+        return [
+            template.model_copy(update={"agent_count": counts[template.id]})
+            if template.id in counts
+            else template
+            for template in items
+        ]
 
     async def get(self, ctx: WorkspaceContext, template_id: UUID) -> SystemPromptTemplateRead:
         template = await self._repo.fetch(ctx.workspace_id, template_id)

@@ -86,6 +86,11 @@ class SystemPromptTemplateRead(BaseModel):
     # den uebrigen Aggregaten und deckt den Migration-Default.
     locale: ContentLocale = DEFAULT_LOCALE
     content: SystemPromptTemplateContent
+    # List-Enrichment (Card-Pill): NUR der List-Endpoint befuellt diesen
+    # Batch-Aggregat-Zaehler (kein N+1) — Anzahl der Agenten mit
+    # `agent.system_prompt_template_id = id`. Direkt konstruierte Reads lassen
+    # ihn auf 0.
+    agent_count: int = 0
     created_at: datetime
     updated_at: datetime
 

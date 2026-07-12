@@ -194,11 +194,37 @@ class PersonaService:
             locale=locale,
             restrict_ids=restrict_ids,
         )
+        next_cursor: str | None = None
         if len(rows) > limit:
-            items = rows[:limit]
-            tail = items[-1]
-            return items, encode_cursor(tail.created_at, tail.id)
-        return rows, None
+            rows = rows[:limit]
+            tail = rows[-1]
+            next_cursor = encode_cursor(tail.created_at, tail.id)
+        return await self._enrich(ctx.workspace_id, rows), next_cursor
+
+    async def _enrich(self, workspace_id: UUID, items: list[PersonaRead]) -> list[PersonaRead]:
+        """Joint die List-Card-Pills (Batch-Aggregat) in die Reads (kein N+1).
+
+        Ein einziger `list_counts`-Roundtrip fuer die ganze Seite; ohne Treffer
+        bleibt das Read auf den Zaehler-Defaults (0).
+        """
+        if not items:
+            return items
+        counts = await self._repo.list_counts(workspace_id, [p.id for p in items])
+        enriched: list[PersonaRead] = []
+        for persona in items:
+            found = counts.get(persona.id)
+            if found is None:
+                enriched.append(persona)
+                continue
+            enriched.append(
+                persona.model_copy(
+                    update={
+                        "playbook_count": found.playbook_count,
+                        "agent_count": found.agent_count,
+                    }
+                )
+            )
+        return enriched
 
     async def get(
         self, ctx: WorkspaceContext, persona_id: UUID, locale: str = DEFAULT_LOCALE

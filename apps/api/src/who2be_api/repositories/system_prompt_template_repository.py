@@ -75,6 +75,10 @@ class SystemPromptTemplateRepository(Protocol):
         self, workspace_id: UUID, template_id: UUID
     ) -> SystemPromptTemplateRead | None: ...
 
+    async def list_agent_counts(
+        self, workspace_id: UUID, template_ids: list[UUID]
+    ) -> dict[UUID, int]: ...
+
     async def fetch_active_content(
         self, workspace_id: UUID, template_id: UUID
     ) -> SystemPromptTemplateContent | None: ...
@@ -198,6 +202,30 @@ class PgSystemPromptTemplateRepository:
             workspace_id,
         )
         return _row_to_read(dict(row)) if row is not None else None
+
+    async def list_agent_counts(
+        self, workspace_id: UUID, template_ids: list[UUID]
+    ) -> dict[UUID, int]:
+        """Batch-Aggregat fuer die List-Card-Pill (ein Roundtrip, kein N+1).
+
+        Set-basierter Join ueber `= ANY($2)`: Anzahl der Agenten mit
+        `agent.system_prompt_template_id = id` fuer alle uebergebenen Templates
+        auf einmal. Leere ID-Liste => {}.
+        """
+        if not template_ids:
+            return {}
+        rows = await self._pool.fetch(
+            "SELECT t.id AS template_id, COALESCE(ac.cnt, 0)::int AS agent_count "
+            "FROM system_prompt_template t "
+            "LEFT JOIN ( "
+            "    SELECT system_prompt_template_id, COUNT(*) AS cnt "
+            "    FROM agent GROUP BY system_prompt_template_id "
+            ") ac ON ac.system_prompt_template_id = t.id "
+            "WHERE t.workspace_id = $1 AND t.id = ANY($2)",
+            workspace_id,
+            template_ids,
+        )
+        return {row["template_id"]: row["agent_count"] for row in rows}
 
     async def fetch_active_content(
         self, workspace_id: UUID, template_id: UUID

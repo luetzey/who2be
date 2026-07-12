@@ -155,13 +155,43 @@ class AgentService:
         if restrict is not None:
             # Self-Scope: hoechstens der eigene Agent, keine Pagination noetig.
             own = await self._repo.fetch(ctx.workspace_id, ctx.agent_id) if ctx.agent_id else None
-            return ([own] if own is not None else []), None
+            items = [own] if own is not None else []
+            return await self._enrich(ctx.workspace_id, items), None
         rows = await self._repo.list_by_workspace(ctx.workspace_id, limit + 1, cursor)
+        next_cursor: str | None = None
         if len(rows) > limit:
-            items = rows[:limit]
-            tail = items[-1]
-            return items, encode_cursor(tail.created_at, tail.id)
-        return rows, None
+            rows = rows[:limit]
+            tail = rows[-1]
+            next_cursor = encode_cursor(tail.created_at, tail.id)
+        return await self._enrich(ctx.workspace_id, rows), next_cursor
+
+    async def _enrich(self, workspace_id: UUID, items: list[AgentRead]) -> list[AgentRead]:
+        """Joint die List-Card-Pills (Batch-Aggregat) in die Reads (kein N+1).
+
+        Ein einziger `list_meta`-Roundtrip fuer alle Agenten der Seite; fehlt ein
+        Meta-Eintrag (theoretisch — Zeile zwischen List und Aggregat geloescht),
+        bleibt das Read auf den Feld-Defaults.
+        """
+        if not items:
+            return items
+        meta = await self._repo.list_meta(workspace_id, [a.id for a in items])
+        enriched: list[AgentRead] = []
+        for agent in items:
+            found = meta.get(agent.id)
+            if found is None:
+                enriched.append(agent)
+                continue
+            enriched.append(
+                agent.model_copy(
+                    update={
+                        "persona_name": found.persona_name,
+                        "template_name": found.template_name,
+                        "template_version": found.template_version,
+                        "playbook_count": found.playbook_count,
+                    }
+                )
+            )
+        return enriched
 
     async def get(self, ctx: WorkspaceContext, agent_id: UUID) -> AgentRead:
         # `none` => 403; `assigned` => nur der eigene Agent (fremde ID => 404,

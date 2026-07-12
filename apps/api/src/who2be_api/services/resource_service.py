@@ -187,11 +187,37 @@ class ResourceService:
             locale=locale,
             restrict_ids=restrict_ids,
         )
+        next_cursor: str | None = None
         if len(rows) > limit:
-            items = rows[:limit]
-            tail = items[-1]
-            return items, encode_cursor(tail.created_at, tail.id)
-        return rows, None
+            rows = rows[:limit]
+            tail = rows[-1]
+            next_cursor = encode_cursor(tail.created_at, tail.id)
+        return await self._enrich(ctx.workspace_id, rows), next_cursor
+
+    async def _enrich(self, workspace_id: UUID, items: list[ResourceRead]) -> list[ResourceRead]:
+        """Joint die List-Card-Pills (Batch-Aggregat) in die Reads (kein N+1).
+
+        Ein einziger `list_counts`-Roundtrip fuer die ganze Seite; ohne Treffer
+        bleibt das Read auf den Zaehler-Defaults (0).
+        """
+        if not items:
+            return items
+        counts = await self._repo.list_counts(workspace_id, [r.id for r in items])
+        enriched: list[ResourceRead] = []
+        for resource in items:
+            found = counts.get(resource.id)
+            if found is None:
+                enriched.append(resource)
+                continue
+            enriched.append(
+                resource.model_copy(
+                    update={
+                        "playbook_link_count": found.playbook_link_count,
+                        "sub_resource_count": found.sub_resource_count,
+                    }
+                )
+            )
+        return enriched
 
     async def _read_restrict(self, ctx: WorkspaceContext) -> list[UUID] | None:
         """Read-Scope-Filter; ohne Pool (Test-Fakes) kein Scoping."""

@@ -172,6 +172,14 @@ class ResourceRead(BaseModel):
     # 'lazy'-Kinder bleiben reine Pointer in `sub_resources`. Spiegelt
     # `PlaybookWithResources.linked_resources`.
     inline_sub_resources: list["ResourceRead"] = Field(default_factory=list)
+    # List-Enrichment (Card-Pills): NUR der List-Endpoint befuellt diese
+    # Batch-Aggregat-Zaehler (kein N+1). `playbook_link_count` = Anzahl der
+    # DISTINCT Playbooks, die (ueber `playbook_resource_link`) auf diese Resource
+    # zeigen; `sub_resource_count` = Anzahl der ueber `resource_composition`
+    # eingebetteten/verlinkten Sub-Resources (parent_id = id). Direkt
+    # konstruierte Reads (get/create/update, MCP-fetch) lassen sie auf 0.
+    playbook_link_count: int = 0
+    sub_resource_count: int = 0
     created_at: datetime
     updated_at: datetime
 

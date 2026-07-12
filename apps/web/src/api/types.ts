@@ -64,6 +64,10 @@ export interface Persona {
   // Vom System verwaltet (z. B. der geseedete Builder). User-Mutationen sind
   // serverseitig gesperrt (403 managed_aggregate); die UI rendert read-only.
   is_managed?: boolean
+  // List-Card-Pills: nur der List-Endpoint befuellt diese Batch-Aggregat-Zaehler.
+  // Anzahl verknuepfter Playbooks bzw. Agenten, die diese Persona nutzen.
+  playbook_count?: number
+  agent_count?: number
 }
 
 export interface PersonaVersion {
@@ -385,6 +389,11 @@ export interface Resource {
   // Vom System verwaltet — User-Mutationen serverseitig gesperrt
   // (403 managed_aggregate); die UI rendert read-only.
   is_managed?: boolean
+  // List-Card-Pills: nur der List-Endpoint befuellt diese Batch-Aggregat-Zaehler.
+  // DISTINCT-Playbooks, die diese Resource referenzieren, bzw. Anzahl der
+  // eingebetteten/verlinkten Sub-Resources.
+  playbook_link_count?: number
+  sub_resource_count?: number
 }
 
 export interface ResourceVersion {
@@ -543,6 +552,9 @@ export interface SystemPromptTemplate {
   // Vom System verwaltet (Builder-Template) — User-Mutationen serverseitig
   // gesperrt (403 managed_aggregate); die UI rendert read-only.
   is_managed?: boolean
+  // List-Card-Pill: nur der List-Endpoint befuellt diesen Batch-Aggregat-Zaehler.
+  // Anzahl der Agenten, die dieses Template nutzen.
+  agent_count?: number
 }
 
 export interface SystemPromptTemplateVersion {
@@ -641,6 +653,14 @@ export interface Agent {
   // Vom System verwaltet (geseedeter Builder) — User-Mutationen serverseitig
   // gesperrt (403 managed_aggregate). Duplizieren bleibt erlaubt (Deep-Copy).
   is_managed?: boolean
+  // List-Card-Pills: nur der List-Endpoint befuellt diese denormalisierten
+  // Namen/Zaehler. persona_name/template_name = null ohne Verknuepfung;
+  // template_version = aktive Template-Version (null ohne aktive Version);
+  // playbook_count = Playbooks der verknuepften Persona.
+  persona_name?: string | null
+  template_name?: string | null
+  template_version?: number | null
+  playbook_count?: number
 }
 
 export interface AgentInput {
