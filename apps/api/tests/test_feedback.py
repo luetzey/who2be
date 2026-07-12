@@ -20,6 +20,7 @@ from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.migrations import MIGRATIONS_DIR, apply_migrations
 from who2be_api.main import app
 from who2be_api.testing.workspace_setup import cleanup_workspaces, fresh_user_id, setup_workspace
+from who2be_models import WorkspaceRole
 
 _TEST_SECRET = "integration-test-jwt-secret-padding-0123456789"
 
@@ -41,6 +42,26 @@ def _prepare_db() -> None:
         conn = await asyncpg.connect(get_settings().database_url)
         try:
             await apply_migrations(conn, MIGRATIONS_DIR)
+        finally:
+            await conn.close()
+
+    asyncio.run(_run())
+
+
+def _add_member(workspace_id: UUID, user_id: UUID, role: WorkspaceRole) -> None:
+    """Fuegt einem bestehenden Workspace ein Mitglied mit `role` hinzu (RBAC-Setup)."""
+
+    async def _run() -> None:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            await conn.execute(
+                "INSERT INTO workspace_member (workspace_id, user_id, role) "
+                "VALUES ($1, $2, $3) "
+                "ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = excluded.role",
+                workspace_id,
+                user_id,
+                role.value,
+            )
         finally:
             await conn.close()
 
@@ -520,3 +541,47 @@ def test_resolution_requires_feedback_resolve_for_agent_tokens(
             assert human.json()["resolution"] == "addressed"
     finally:
         cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+def test_submit_feedback_requires_editor(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Inhalts-Feedback ist eine Kurations-Handlung → editor+: ein viewer bekommt
+    403, ein editor darf einreichen (201). Das Ziel-Element gehoert zum
+    Workspace, sodass das Rollen-Gate (und nicht der belongs-to-Check) greift."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()  # Workspace-Eigner (admin via setup_workspace)
+    viewer = fresh_user_id()
+    editor = fresh_user_id()
+    ws = setup_workspace(owner)
+    _add_member(ws, viewer, WorkspaceRole.viewer)
+    _add_member(ws, editor, WorkspaceRole.editor)
+    admin_auth = _auth(owner)
+    viewer_auth = _auth(viewer)
+    editor_auth = _auth(editor)
+    fbase = f"/v1/workspaces/{ws}"
+
+    try:
+        with TestClient(app) as client:
+            pid = client.post(
+                f"{fbase}/playbooks", json=_playbook_body("PB-Gate"), headers=admin_auth
+            ).json()["id"]
+            body = {
+                "entity_type": "playbook",
+                "entity_id": pid,
+                "signal": "helpful",
+                "note": "danke",
+            }
+
+            # viewer darf kein Inhalts-Feedback einreichen -> 403.
+            denied = client.post(f"{fbase}/feedback", json=body, headers=viewer_auth)
+            assert denied.status_code == 403, denied.text
+
+            # editor darf -> 201.
+            allowed = client.post(f"{fbase}/feedback", json=body, headers=editor_auth)
+            assert allowed.status_code == 201, allowed.text
+            assert allowed.json()["signal"] == "helpful"
+    finally:
+        cleanup_workspaces([owner, viewer, editor])

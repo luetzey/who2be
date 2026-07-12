@@ -18,6 +18,7 @@ import type {
   EntityExportFormat,
   FeedbackDetail,
   FeedbackEvents,
+  FeedbackInput,
   FeedbackItems,
   FeedbackOverview,
   FeedbackResolutionInput,
@@ -283,6 +284,8 @@ export interface Api {
   ) => Promise<AgentFeedback>
   // Hard-Delete eines Feedback-Eintrags (editor+); 204 bei Erfolg, 404 fremd.
   deleteFeedback: (feedbackId: string) => Promise<void>
+  // Inhalts-Feedback zu einem Element einreichen (editor+); 201 ohne Body-Nutzung.
+  submitFeedback: (input: FeedbackInput) => Promise<void>
   // Zielloses System-/MCP-Problem melden (jede Rolle; feedback_write-No-Op).
   submitSystemFeedback: (input: SystemFeedbackInput) => Promise<void>
   transitionPersonaVersion: (
@@ -535,6 +538,11 @@ export function createApi(token: string, workspaceId: string): Api {
       }),
     deleteFeedback: (feedbackId) =>
       request<void>(token, `${ws}/feedback/${feedbackId}`, { method: 'DELETE' }),
+    submitFeedback: (input) =>
+      request<void>(token, `${ws}/feedback`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
     submitSystemFeedback: (input) =>
       request<void>(token, `${ws}/system-feedback`, {
         method: 'POST',

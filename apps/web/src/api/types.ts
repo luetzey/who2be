@@ -818,6 +818,14 @@ export interface SystemFeedbackInput {
   category: SystemFeedbackCategory
   note: string
 }
+// Eingabe von `POST /feedback` (Inhalts-Feedback, spiegelt Backend `FeedbackCreate`).
+export interface FeedbackInput {
+  entity_type: FeedbackTarget
+  entity_id: string
+  version?: number
+  signal: FeedbackSignal
+  note?: string
+}
 // Triage-Status eines Feedback-Eintrags (ADR-0038, append-only).
 export type FeedbackResolution = 'addressed' | 'in_progress' | 'dismissed'
 
