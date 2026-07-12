@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { FeedbackItems } from '@/api/types'
@@ -62,72 +62,37 @@ function renderInbox() {
 
 beforeEach(() => {
   getFeedbackItems.mockResolvedValue(data)
-  setFeedbackResolution.mockResolvedValue({ ...data.items[0], resolution: 'addressed' })
-  deleteFeedback.mockResolvedValue(undefined)
 })
 
 describe('FeedbackInbox', () => {
-  it('zeigt die KPI-Zähler und standardmäßig nur offene Feedbacks', async () => {
+  it('zeigt Status-Chips und standardmäßig nur offene Feedbacks kompakt', async () => {
     renderInbox()
 
     // Default-Filter „Offen" → nur das untriagierte Feedback ist sichtbar.
     expect(await screen.findByRole('link', { name: 'Onboarding' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'API-Doku' })).not.toBeInTheDocument()
-    // KPI-Karte „Offen" als eigene Button-Kachel (Zaehler + Label).
-    expect(screen.getByRole('button', { name: /1\s*Offen/ })).toBeInTheDocument()
+    // Status-Filter-Chip „Offen" mit Zaehler (Button, nicht das Zeilen-Status-Pill).
+    expect(screen.getByRole('button', { name: /Offen/ })).toBeInTheDocument()
+    // Keine Inline-Triage/Notiz mehr im Posteingang — die liegen im Detail.
+    expect(screen.queryByText('Schritt 4 ist veraltet')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Erledigt — Onboarding/ })).not.toBeInTheDocument()
   })
 
   it('blendet erledigte Feedbacks ein, wenn der Status-Filter „Alle" ist', async () => {
     renderInbox()
     await screen.findByRole('link', { name: 'Onboarding' })
 
-    // Status-Filter läuft jetzt über die KPI-Kacheln/Chips — „Alle" einblenden.
     fireEvent.click(screen.getByRole('button', { name: /Alle/ }))
     expect(await screen.findByRole('link', { name: 'API-Doku' })).toBeInTheDocument()
   })
 
-  it('triagiert ein Feedback inline und lädt die Liste neu', async () => {
-    renderInbox()
-    await screen.findByRole('link', { name: 'Onboarding' })
-    const before = getFeedbackItems.mock.calls.length
-
-    // Triage über die segmentierte Status-Steuerung (Button statt Select).
-    fireEvent.click(screen.getByRole('button', { name: 'Erledigt — Onboarding' }))
-    await waitFor(() =>
-      expect(setFeedbackResolution).toHaveBeenCalledWith('fb-open', { resolution: 'addressed' }),
-    )
-    // Reload nach der Triage (mindestens ein weiterer Items-Fetch).
-    await waitFor(() =>
-      expect(getFeedbackItems.mock.calls.length).toBeGreaterThan(before),
-    )
-  })
-
-  it('löscht ein Feedback nach Bestätigung und lädt die Liste neu', async () => {
-    renderInbox()
-    await screen.findByRole('link', { name: 'Onboarding' })
-    const before = getFeedbackItems.mock.calls.length
-
-    // Öffnet den Bestätigungs-Dialog und bestätigt den Hard-Delete.
-    fireEvent.click(screen.getByRole('button', { name: 'Feedback löschen' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Endgültig löschen' }))
-
-    await waitFor(() => expect(deleteFeedback).toHaveBeenCalledWith('fb-open'))
-    // Reload nach dem Löschen (mindestens ein weiterer Items-Fetch).
-    await waitFor(() => expect(getFeedbackItems.mock.calls.length).toBeGreaterThan(before))
-  })
-
-  it('verlinkt den Titel auf die Einzel-Feedback-Detailseite', async () => {
+  it('verlinkt jede Karte auf die Einzel-Feedback-Detailseite', async () => {
     renderInbox()
     const titleLink = await screen.findByRole('link', { name: 'Onboarding' })
     expect(titleLink).toHaveAttribute('href', '/w/ws-1/feedback/item/fb-open')
-    // Der Element-Link bleibt separat und zeigt weiter auf das Element.
-    expect(screen.getByRole('link', { name: 'Element öffnen' })).toHaveAttribute(
-      'href',
-      '/w/ws-1/playbooks/pb1',
-    )
   })
 
-  it('zeigt System-Feedback mit Kategorie und Detail-Link statt Element-Link', async () => {
+  it('zeigt System-Feedback mit Kategorie und Detail-Link (kein Element-Link)', async () => {
     getFeedbackItems.mockResolvedValue({
       items: [
         {
@@ -147,15 +112,16 @@ describe('FeedbackInbox', () => {
     })
     renderInbox()
 
-    // Kategorie-Badge (statt Inhalts-Signal) + Beschreibung sichtbar.
+    // Kategorie-Badge (statt Inhalts-Signal) sichtbar; der Titel verlinkt auf die
+    // Einzel-Feedback-Detailseite (auch System-Feedback hat eine id).
     expect(await screen.findByText('MCP')).toBeInTheDocument()
-    expect(screen.getByText('fetch_playbook liefert 500')).toBeInTheDocument()
-    // System-Feedback hat kein Element → kein Element-Link, aber der Titel
-    // verlinkt trotzdem auf die Einzel-Feedback-Detailseite (hat eine id).
     expect(screen.getByRole('link', { name: 'System' })).toHaveAttribute(
       'href',
       '/w/ws-1/feedback/item/sys1',
     )
+    // Keine „Element öffnen"-Aktion mehr im Posteingang.
     expect(screen.queryByRole('link', { name: 'Element öffnen' })).not.toBeInTheDocument()
+    // Die Notiz erscheint erst in der Detailansicht, nicht im Posteingang.
+    expect(screen.queryByText('fetch_playbook liefert 500')).not.toBeInTheDocument()
   })
 })

@@ -1,30 +1,26 @@
-import { Archive, Bot, CircleCheckBig, Clock, Inbox, List, User } from 'lucide-react'
+import { Bot, User } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
 
 import type {
   FeedbackEntityType,
   FeedbackItem,
   FeedbackResolution,
   FeedbackSignal,
-  FeedbackTarget,
 } from '@/api/types'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { DataView } from '@/components/data/DataView'
-import { EntityIcon } from '@/components/data'
-import { DeleteFeedbackButton } from '@/components/feedback/DeleteFeedbackButton'
+import { EntityCard } from '@/components/data/EntityCard'
+import { MetaPill } from '@/components/data/MetaPill'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { useFeedbackItems } from '@/hooks/useFeedback'
-import { notify } from '@/lib/feedback'
 import { cn } from '@/lib/utils'
 
-import { DETAIL_SEGMENT, entityMeta } from '../lib/entityMeta'
-import { ResolutionSegments } from './ResolutionSegments'
+import { entityMeta } from '../lib/entityMeta'
 
 const SIGNALS: readonly FeedbackSignal[] = ['helpful', 'outdated', 'incorrect', 'unclear']
 const NEGATIVE: readonly string[] = ['outdated', 'incorrect', 'unclear']
@@ -34,10 +30,73 @@ const TYPES: readonly FeedbackEntityType[] = ['persona', 'playbook', 'resource',
 // Status-Filter: 'open' = noch nicht triagiert (resolution null).
 type StatusFilter = 'open' | FeedbackResolution | 'all'
 
+// Resolution → Status-Token (gleiche Farbsprache wie StatusBadge/§2.4).
+const RESOLUTION_TOKEN: Record<'open' | FeedbackResolution, string> = {
+  open: 'draft',
+  in_progress: 'review',
+  addressed: 'active',
+  dismissed: 'inactive',
+}
+
 function matchesStatus(item: FeedbackItem, status: StatusFilter): boolean {
   if (status === 'all') return true
   if (status === 'open') return item.resolution === null
   return item.resolution === status
+}
+
+// Kompaktes Status-Pill (Punkt + Label) fuer den aktuellen Triage-Stand eines
+// Feedbacks. Bewusst nur Anzeige — die Triage passiert in der Detailansicht.
+function ResolutionBadge({ resolution }: { resolution: FeedbackResolution | null }) {
+  const { t } = useTranslation('feedback')
+  const key = resolution ?? 'open'
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground">
+      <span
+        className="inline-block size-2 rounded-full"
+        style={{ backgroundColor: `var(--status-${RESOLUTION_TOKEN[key]})` }}
+        aria-hidden="true"
+      />
+      {t(`inbox.status.${key}`)}
+    </span>
+  )
+}
+
+// Segmentierter Status-Chip — gleiche Optik wie ListFilterBar/AgentsPage.
+function StatusChip({
+  label,
+  count,
+  token,
+  selected,
+  onClick,
+}: {
+  label: string
+  count: number
+  token?: string
+  selected: boolean
+  onClick: () => void
+}) {
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant={selected ? 'default' : 'outline'}
+      aria-pressed={selected}
+      onClick={onClick}
+      className="h-8 gap-1.5 rounded-full"
+    >
+      {token ? (
+        <span
+          className="inline-block size-2 rounded-full"
+          style={{ backgroundColor: `var(--status-${token})` }}
+          aria-hidden="true"
+        />
+      ) : null}
+      <span>{label}</span>
+      <span className={cn('tabular-nums', selected ? 'opacity-90' : 'text-muted-foreground')}>
+        {count}
+      </span>
+    </Button>
+  )
 }
 
 interface FeedbackInboxProps {
@@ -46,14 +105,16 @@ interface FeedbackInboxProps {
 }
 
 /**
- * Zentraler Feedback-Posteingang (ADR-0038): KPI-Kachelleiste (als Status-Filter)
- * + Signal-/Typ-Filter + abarbeitbare Liste aller Einzel-Feedbacks mit
- * Inline-Triage. Editor-gated; die Page rendert das nur fuer editor+.
+ * Zentraler Feedback-Posteingang (ADR-0038): kompakte, scannbare Liste aller
+ * Einzel-Feedbacks — pro Zeile nur Grundinfos (Signal, Element, Quelle, Datum,
+ * Status). Der eigentliche Feedback-Inhalt + Triage/Loeschen liegen in der
+ * Einzel-Feedback-Detailseite (`/feedback/item/:id`), die die Karte oeffnet.
+ * Editor-gated; die Page rendert das nur fuer editor+.
  */
 export function FeedbackInbox({ reloadNonce }: FeedbackInboxProps) {
   const { t } = useTranslation('feedback')
   const wsPath = useWorkspacePath()
-  const { data, loading, error, setResolution, deleteFeedback, reload } = useFeedbackItems()
+  const { data, loading, error, reload } = useFeedbackItems()
   const [status, setStatus] = useState<StatusFilter>('open')
   const [signal, setSignal] = useState<FeedbackSignal | 'all'>('all')
   const [type, setType] = useState<FeedbackEntityType | 'all'>('all')
@@ -77,233 +138,137 @@ export function FeedbackInbox({ reloadNonce }: FeedbackInboxProps) {
       (type === 'all' || i.entity_type === type),
   )
 
-  const onResolution = async (id: string, value: FeedbackResolution) => {
-    try {
-      await setResolution(id, value)
-    } catch {
-      notify.error(t('resolution.error'))
-    }
-  }
-
   const total =
     (counts?.open ?? 0) +
     (counts?.in_progress ?? 0) +
     (counts?.addressed ?? 0) +
     (counts?.dismissed ?? 0)
 
-  // KPI-Kacheln setzen den Status-Filter (active = border-brand bg-accent).
-  const tiles: {
-    key: StatusFilter
-    label: string
-    value: number
-    icon: typeof Inbox
-    tone: string
-  }[] = [
-    { key: 'open', label: t('inbox.kpi.open'), value: counts?.open ?? 0, icon: Inbox, tone: 'bg-brand/10 text-brand' },
+  const statusChips: { key: StatusFilter; label: string; count: number; token?: string }[] = [
+    { key: 'all', label: t('inbox.status.all'), count: total },
+    { key: 'open', label: t('inbox.status.open'), count: counts?.open ?? 0, token: 'draft' },
     {
       key: 'in_progress',
-      label: t('inbox.kpi.inProgress'),
-      value: counts?.in_progress ?? 0,
-      icon: Clock,
-      tone: 'bg-pill-date text-pill-date-fg',
+      label: t('inbox.status.in_progress'),
+      count: counts?.in_progress ?? 0,
+      token: 'review',
     },
     {
       key: 'addressed',
-      label: t('inbox.kpi.addressed'),
-      value: counts?.addressed ?? 0,
-      icon: CircleCheckBig,
-      tone: 'bg-pill-resource text-pill-resource-fg',
+      label: t('inbox.status.addressed'),
+      count: counts?.addressed ?? 0,
+      token: 'active',
     },
-  ]
-  const chips: { key: StatusFilter; label: string; value: number; icon: typeof Archive }[] = [
-    { key: 'dismissed', label: t('inbox.status.dismissed'), value: counts?.dismissed ?? 0, icon: Archive },
-    { key: 'all', label: t('inbox.status.all'), value: total, icon: List },
+    {
+      key: 'dismissed',
+      label: t('inbox.status.dismissed'),
+      count: counts?.dismissed ?? 0,
+      token: 'inactive',
+    },
   ]
 
   return (
     <div className="flex flex-col gap-4">
-      {/* KPI-Kacheln + Verworfen/Alle-Chips — klickbar als Status-Filter. */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[repeat(3,1fr)_10rem]">
-        {tiles.map((tile) => {
-          const Icon = tile.icon
-          return (
-            <Button
-              key={tile.key}
-              type="button"
-              variant="ghost"
-              onClick={() => setStatus(tile.key)}
-              className={cn(
-                'flex h-auto items-center justify-start gap-3.5 rounded-xl border bg-card p-4 text-left shadow-card hover:shadow-popover',
-                status === tile.key && 'border-brand bg-accent',
-              )}
-            >
-              <span
-                className={cn(
-                  'inline-flex size-10 flex-none items-center justify-center rounded-lg',
-                  tile.tone,
-                )}
-              >
-                <Icon aria-hidden="true" />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-2xl font-semibold tracking-tight tabular-nums">
-                  {tile.value}
-                </span>
-                <span className="block text-xs font-normal text-muted-foreground">{tile.label}</span>
-              </span>
-            </Button>
-          )
-        })}
-        <div className="flex flex-col gap-3">
-          {chips.map((chip) => {
-            const Icon = chip.icon
-            return (
-              <Button
-                key={chip.key}
-                type="button"
-                variant="ghost"
-                onClick={() => setStatus(chip.key)}
-                className={cn(
-                  'flex flex-1 items-center justify-between gap-2 rounded-lg border bg-card px-3 text-xs font-medium shadow-card hover:shadow-popover',
-                  status === chip.key && 'border-brand bg-accent',
-                )}
-              >
-                <span className="inline-flex items-center gap-2">
-                  <Icon className="text-muted-foreground" aria-hidden="true" />
-                  {chip.label}
-                </span>
-                <span className="tabular-nums text-muted-foreground">{chip.value}</span>
-              </Button>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Signal-/Typ-Filter (Status kommt jetzt aus den Kacheln). */}
-      <div className="flex flex-wrap items-end gap-3">
-        <Label className="flex flex-col items-start gap-1 text-sm font-normal">
-          <span className="text-muted-foreground">{t('inbox.filter.signal')}</span>
-          <Select
-            value={signal}
-            onChange={(e) => setSignal(e.target.value as FeedbackSignal | 'all')}
-            className="h-9 w-40"
-          >
-            <option value="all">{t('inbox.filter.allSignals')}</option>
-            {SIGNALS.map((s) => (
-              <option key={s} value={s}>
-                {t(`signal.${s}`)}
-              </option>
-            ))}
-          </Select>
-        </Label>
-        <Label className="flex flex-col items-start gap-1 text-sm font-normal">
-          <span className="text-muted-foreground">{t('inbox.filter.type')}</span>
-          <Select
-            value={type}
-            onChange={(e) => setType(e.target.value as FeedbackEntityType | 'all')}
-            className="h-9 w-40"
-          >
-            <option value="all">{t('inbox.filter.allTypes')}</option>
-            {TYPES.map((ty) => (
-              <option key={ty} value={ty}>
-                {t(`overview.type.${ty}`)}
-              </option>
-            ))}
-          </Select>
-        </Label>
-      </div>
-
-      {/* Liste */}
+      {/* Filter-Karte: Status-Chips + Signal-/Typ-Selects (wie die anderen Uebersichten). */}
       <Card>
-        <CardContent className="pt-6">
-          <DataView
-            loading={loading && data === null}
-            error={error}
-            empty={!loading && items.length === 0}
-            emptyTitle={t('inbox.empty')}
+        <CardContent className="flex flex-col gap-4 pt-6">
+          <div
+            className="flex flex-wrap items-center gap-2"
+            role="group"
+            aria-label={t('inbox.filter.statusGroup')}
           >
-            {items.length > 0 ? (
-              <ul className="flex flex-col divide-y">
-                {items.map((item) => {
-                  const meta = entityMeta(item.entity_type)
-                  const isSystem = item.entity_type === 'system'
-                  // Pro-Feedback-Detailseite: jedes Feedback (auch System) hat
-                  // eine id → immer verlinkbar. Der Titel oeffnet die Detailsicht.
-                  const itemPath = wsPath(`/feedback/item/${item.id}`)
-                  // System-Feedback hat kein Element → kein Element-Link; das
-                  // signal-Feld traegt dann die Kategorie statt eines Signals.
-                  const detailPath = isSystem
-                    ? null
-                    : wsPath(
-                        `/${DETAIL_SEGMENT[item.entity_type as FeedbackTarget]}/${item.entity_id}`,
-                      )
-                  const signalLabel = isSystem
-                    ? t(`systemCategory.${item.signal}`)
-                    : t(`signal.${item.signal}`)
-                  const SourceIcon = item.agent_id !== null ? Bot : User
-                  return (
-                    <li key={item.id} className="flex flex-col gap-2.5 py-4 first:pt-0 last:pb-0">
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                        <Badge
-                          variant={
-                            NEGATIVE.includes(item.signal) || isSystem ? 'destructive' : 'secondary'
-                          }
-                        >
-                          <span className="mr-1 inline-block size-1.5 rounded-full bg-current" aria-hidden="true" />
-                          {signalLabel}
-                        </Badge>
-                        <span className="inline-flex min-w-0 items-center gap-2">
-                          <EntityIcon icon={meta.icon} tone={meta.tone} size="sm" />
-                          <Link
-                            to={itemPath}
-                            className="truncate font-medium text-foreground hover:underline"
-                          >
-                            {item.name}
-                          </Link>
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {t(`overview.type.${item.entity_type}`)}
-                        </span>
-                        <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <SourceIcon className="size-3.5" aria-hidden="true" />
-                          {item.agent_id !== null ? t('panel.agent') : t('panel.human')} ·{' '}
-                          {new Date(item.created_at).toLocaleDateString()}
-                        </span>
-                      </div>
-                      {item.note !== null && item.note !== '' ? (
-                        <p className="border-l-2 border-border pl-3 text-sm text-foreground/90">
-                          {item.note}
-                        </p>
-                      ) : null}
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                          {t('resolution.label')}
-                        </span>
-                        <ResolutionSegments
-                          name={item.name}
-                          value={item.resolution}
-                          onChange={(r) => void onResolution(item.id, r)}
-                        />
-                        {detailPath !== null ? (
-                          <Link to={detailPath} className="text-xs font-medium text-brand hover:underline">
-                            {t('inbox.openElement')}
-                          </Link>
-                        ) : null}
-                        <div className="ml-auto">
-                          <DeleteFeedbackButton
-                            entityName={item.name}
-                            onConfirm={() => deleteFeedback(item.id)}
-                          />
-                        </div>
-                      </div>
-                    </li>
-                  )
-                })}
-              </ul>
-            ) : null}
-          </DataView>
+            {statusChips.map((chip) => (
+              <StatusChip
+                key={chip.key}
+                label={chip.label}
+                count={chip.count}
+                token={chip.token}
+                selected={status === chip.key}
+                onClick={() => setStatus(chip.key)}
+              />
+            ))}
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Label className="flex flex-col items-start gap-1 text-sm font-normal">
+              <span className="text-muted-foreground">{t('inbox.filter.signal')}</span>
+              <Select
+                value={signal}
+                onChange={(e) => setSignal(e.target.value as FeedbackSignal | 'all')}
+              >
+                <option value="all">{t('inbox.filter.allSignals')}</option>
+                {SIGNALS.map((s) => (
+                  <option key={s} value={s}>
+                    {t(`signal.${s}`)}
+                  </option>
+                ))}
+              </Select>
+            </Label>
+            <Label className="flex flex-col items-start gap-1 text-sm font-normal">
+              <span className="text-muted-foreground">{t('inbox.filter.type')}</span>
+              <Select
+                value={type}
+                onChange={(e) => setType(e.target.value as FeedbackEntityType | 'all')}
+              >
+                <option value="all">{t('inbox.filter.allTypes')}</option>
+                {TYPES.map((ty) => (
+                  <option key={ty} value={ty}>
+                    {t(`overview.type.${ty}`)}
+                  </option>
+                ))}
+              </Select>
+            </Label>
+          </div>
         </CardContent>
       </Card>
+
+      {/* Liste: pro Feedback eine kompakte Karte → Detailansicht. */}
+      <DataView
+        loading={loading && data === null}
+        error={error}
+        empty={!loading && items.length === 0}
+        emptyTitle={t('inbox.empty')}
+      >
+        {items.length > 0 ? (
+          <div className="flex flex-col gap-3">
+            {items.map((item) => {
+              const meta = entityMeta(item.entity_type)
+              const isSystem = item.entity_type === 'system'
+              const signalLabel = isSystem
+                ? t(`systemCategory.${item.signal}`)
+                : t(`signal.${item.signal}`)
+              const SourceIcon = item.agent_id !== null ? Bot : User
+              return (
+                <EntityCard
+                  key={item.id}
+                  icon={meta.icon}
+                  iconTone={meta.tone}
+                  title={item.name}
+                  href={wsPath(`/feedback/item/${item.id}`)}
+                  badges={
+                    <Badge variant={NEGATIVE.includes(item.signal) || isSystem ? 'destructive' : 'secondary'}>
+                      <span
+                        className="mr-1 inline-block size-1.5 rounded-full bg-current"
+                        aria-hidden="true"
+                      />
+                      {signalLabel}
+                    </Badge>
+                  }
+                  status={<ResolutionBadge resolution={item.resolution} />}
+                  meta={
+                    <>
+                      <MetaPill icon={SourceIcon}>
+                        {item.agent_id !== null ? t('panel.agent') : t('panel.human')} ·{' '}
+                        {new Date(item.created_at).toLocaleDateString()}
+                      </MetaPill>
+                      <MetaPill>{t(`overview.type.${item.entity_type}`)}</MetaPill>
+                    </>
+                  }
+                />
+              )
+            })}
+          </div>
+        ) : null}
+      </DataView>
     </div>
   )
 }
