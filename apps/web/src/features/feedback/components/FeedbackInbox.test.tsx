@@ -116,7 +116,18 @@ describe('FeedbackInbox', () => {
     await waitFor(() => expect(getFeedbackItems.mock.calls.length).toBeGreaterThan(before))
   })
 
-  it('zeigt System-Feedback mit Kategorie statt Element-Link', async () => {
+  it('verlinkt den Titel auf die Einzel-Feedback-Detailseite', async () => {
+    renderInbox()
+    const titleLink = await screen.findByRole('link', { name: 'Onboarding' })
+    expect(titleLink).toHaveAttribute('href', '/w/ws-1/feedback/item/fb-open')
+    // Der Element-Link bleibt separat und zeigt weiter auf das Element.
+    expect(screen.getByRole('link', { name: 'Element öffnen' })).toHaveAttribute(
+      'href',
+      '/w/ws-1/playbooks/pb1',
+    )
+  })
+
+  it('zeigt System-Feedback mit Kategorie und Detail-Link statt Element-Link', async () => {
     getFeedbackItems.mockResolvedValue({
       items: [
         {
@@ -139,8 +150,12 @@ describe('FeedbackInbox', () => {
     // Kategorie-Badge (statt Inhalts-Signal) + Beschreibung sichtbar.
     expect(await screen.findByText('MCP')).toBeInTheDocument()
     expect(screen.getByText('fetch_playbook liefert 500')).toBeInTheDocument()
-    // Kein Detail-Link — System-Feedback hat kein Element.
-    expect(screen.queryByRole('link', { name: 'System' })).not.toBeInTheDocument()
+    // System-Feedback hat kein Element → kein Element-Link, aber der Titel
+    // verlinkt trotzdem auf die Einzel-Feedback-Detailseite (hat eine id).
+    expect(screen.getByRole('link', { name: 'System' })).toHaveAttribute(
+      'href',
+      '/w/ws-1/feedback/item/sys1',
+    )
     expect(screen.queryByRole('link', { name: 'Element öffnen' })).not.toBeInTheDocument()
   })
 })

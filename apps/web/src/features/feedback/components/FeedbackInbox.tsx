@@ -227,7 +227,10 @@ export function FeedbackInbox({ reloadNonce }: FeedbackInboxProps) {
                 {items.map((item) => {
                   const meta = entityMeta(item.entity_type)
                   const isSystem = item.entity_type === 'system'
-                  // System-Feedback hat kein Element → kein Detail-Link; das
+                  // Pro-Feedback-Detailseite: jedes Feedback (auch System) hat
+                  // eine id → immer verlinkbar. Der Titel oeffnet die Detailsicht.
+                  const itemPath = wsPath(`/feedback/item/${item.id}`)
+                  // System-Feedback hat kein Element → kein Element-Link; das
                   // signal-Feld traegt dann die Kategorie statt eines Signals.
                   const detailPath = isSystem
                     ? null
@@ -251,16 +254,12 @@ export function FeedbackInbox({ reloadNonce }: FeedbackInboxProps) {
                         </Badge>
                         <span className="inline-flex min-w-0 items-center gap-2">
                           <EntityIcon icon={meta.icon} tone={meta.tone} size="sm" />
-                          {detailPath !== null ? (
-                            <Link
-                              to={detailPath}
-                              className="truncate font-medium text-foreground hover:underline"
-                            >
-                              {item.name}
-                            </Link>
-                          ) : (
-                            <span className="truncate font-medium">{item.name}</span>
-                          )}
+                          <Link
+                            to={itemPath}
+                            className="truncate font-medium text-foreground hover:underline"
+                          >
+                            {item.name}
+                          </Link>
                         </span>
                         <span className="text-xs text-muted-foreground">
                           {t(`overview.type.${item.entity_type}`)}

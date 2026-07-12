@@ -112,6 +112,11 @@ const FeedbackDetailPage = lazy(() =>
     default: mod.FeedbackDetailPage,
   })),
 )
+const FeedbackItemDetailPage = lazy(() =>
+  import('@/features/feedback/pages/FeedbackItemDetailPage').then((mod) => ({
+    default: mod.FeedbackItemDetailPage,
+  })),
+)
 const AgentDetailPage = lazy(() =>
   import('@/features/agents/pages/AgentDetailPage').then((mod) => ({
     default: mod.AgentDetailPage,
@@ -262,6 +267,14 @@ export function RouterRoot() {
                 <Route path="/w/:workspaceId/resources/new" element={<ResourceNewPage />} />
                 <Route path="/w/:workspaceId/resources/:id" element={<ResourceDetailPage />} />
                 <Route path="/w/:workspaceId/feedback" element={<FeedbackOverviewPage />} />
+                {/* Literal `item`-Segment vor der dynamischen `:entityType`-Route:
+                    ein einzelnes Feedback (per feedbackId), nicht ein Element. In
+                    react-router v7 gewinnt das statische Segment ohnehin, die
+                    Reihenfolge macht die Absicht aber explizit. */}
+                <Route
+                  path="/w/:workspaceId/feedback/item/:feedbackId"
+                  element={<FeedbackItemDetailPage />}
+                />
                 <Route
                   path="/w/:workspaceId/feedback/:entityType/:entityId"
                   element={<FeedbackDetailPage />}
