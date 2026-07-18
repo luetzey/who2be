@@ -31,6 +31,7 @@ import { PlaybookPicker } from '@/components/editor/system-prompt/pickers/Playbo
 import { ResourcePicker } from '@/components/editor/system-prompt/pickers/ResourcePicker'
 import { CatalogScopePicker } from '@/components/editor/system-prompt/pickers/CatalogScopePicker'
 import { ResourcesCatalogScopePicker } from '@/components/editor/system-prompt/pickers/ResourcesCatalogScopePicker'
+import { ToolPicker } from '@/components/editor/system-prompt/pickers/ToolPicker'
 import { type Measurable } from '@/components/ui/popover'
 
 // Das Schema wird einmal pro Modul-Import gebaut (statisch, geteilt mit dem
@@ -38,13 +39,16 @@ import { type Measurable } from '@/components/ui/popover'
 // auf den Persona-Satz reduziert.
 const personaProfileSchema = buildSystemPromptSchema()
 
-// Der volle Persona-Pill-Satz (kein Persona-Feld/-Ref/Datum/MCP-Tools — die
-// Persona referenziert nicht sich selbst).
+// Der volle Persona-Pill-Satz (kein Persona-Feld/-Ref/Datum/MCP-Tools-
+// Uebersicht — die Persona referenziert nicht sich selbst). `tool-ref` (WP-5)
+// ist additiv: reine Alias-Referenz, kein Composition-/Link-Sync beim
+// Speichern.
 const ALLOWED_KINDS: Set<PlaceholderKind> = new Set([
   'playbook',
   'resource',
   'playbooks-catalog',
   'resources-catalog',
+  'tool-ref',
 ])
 
 export interface PersonaProfileEditorProps {
@@ -184,6 +188,13 @@ export function PersonaProfileEditor({
         open={openPicker === 'resources-catalog'}
         anchorRef={anchorRef}
         initial={pendingEdit?.kind === 'resources-catalog' ? pendingEdit : undefined}
+        onConfirm={handlePickerConfirm}
+        onCancel={handlePickerCancel}
+      />
+      <ToolPicker
+        open={openPicker === 'tool-ref'}
+        anchorRef={anchorRef}
+        initial={pendingEdit?.kind === 'tool-ref' ? pendingEdit : undefined}
         onConfirm={handlePickerConfirm}
         onCancel={handlePickerCancel}
       />

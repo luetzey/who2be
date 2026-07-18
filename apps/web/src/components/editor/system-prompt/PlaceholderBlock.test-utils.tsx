@@ -8,6 +8,7 @@ import {
   Calendar,
   FileText,
   Library,
+  Plug,
   Table,
   User,
   UserCog,
@@ -64,6 +65,11 @@ export const KIND_META_TEST_EXPORT: Record<PlaceholderKind, KindMeta> = {
     icon: Wrench,
     pillClass: 'bg-pill-tools text-pill-tools-fg border-pill-tools-fg/25',
     labelPrefix: 'MCP-Tools',
+  },
+  'tool-ref': {
+    icon: Plug,
+    pillClass: 'bg-pill-tools text-pill-tools-fg border-pill-tools-fg/25',
+    labelPrefix: 'Tool',
   },
 }
 

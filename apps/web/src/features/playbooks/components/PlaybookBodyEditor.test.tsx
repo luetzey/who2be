@@ -1,7 +1,8 @@
 // PlaybookBodyEditor.test.tsx — BlockNote-Insel in jsdom mocken (Standard-Pattern,
 // analog SystemPromptEditor.test.tsx). Prueft:
 //   1. Editor rendert ohne Fehler.
-//   2. Nur Playbook/Resource-Slash-Items (kein Persona-Feld/Datum/MCP-Tools).
+//   2. Nur Playbook/Resource/Tool-Ref-Slash-Items (kein Persona-Feld/Datum/MCP-
+//      Tools-Uebersicht).
 //   3. Pill-Insert via Picker ruft insertInlineContent mit korrekten Props.
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -80,9 +81,33 @@ const resources = [
 // Stabile api-Referenz (wie der echte memoisierte useApi) — ein pro Render
 // neues Objekt wuerde die `[…, api]`-Effects in den Pickern in eine
 // Endlosschleife treiben.
+const tools = [
+  {
+    id: 'tool-1',
+    workspace_id: 'ws-1',
+    owner_id: 'o-1',
+    name: 'Todoist',
+    alias: 'todo',
+    current_version: 1,
+    current_status: 'active',
+    has_pending_draft: false,
+    content: {
+      display_name: 'Todoist',
+      mcp_server_name: 'Todoist MCP',
+      tool_names: ['add_task'],
+      usage_notes: '',
+      fallback_note: null,
+      tags: [],
+    },
+    created_at: 't',
+    updated_at: 't',
+  },
+]
+
 const apiMock = {
   listResources: () => Promise.resolve(resources),
   listPlaybooks: () => Promise.resolve([]),
+  listExternalTools: () => Promise.resolve(tools),
   getResource: (id: string) =>
     Promise.resolve({
       ...resources[0],
@@ -113,16 +138,47 @@ describe('PlaybookBodyEditor', () => {
     expect(screen.getByTestId('playbook-body-editor')).toBeInTheDocument()
   })
 
-  it('bietet im Slash-Menue nur Playbook + Resource (kein Persona-Feld/Datum/MCP)', async () => {
+  it('bietet im Slash-Menue nur Playbook + Resource + Externes Tool (kein Persona-Feld/Datum/MCP-Tools-Uebersicht)', async () => {
     render(<PlaybookBodyEditor />)
     expect(slashItemsRef.current).not.toBeNull()
     const items = (await slashItemsRef.current?.('')) as { title: string }[]
     const titles = items.map((i) => i.title)
     expect(titles).toContain('Playbook')
     expect(titles).toContain('Resource')
+    expect(titles).toContain('Externes Tool')
     expect(titles).not.toContain('Persona-Feld')
     expect(titles).not.toContain('Datum')
     expect(titles).not.toContain('MCP-Tools')
+  })
+
+  it('insertet eine Tool-Ref-Pill via Picker (target_id = Alias)', async () => {
+    insertInlineContent.mockClear()
+    render(<PlaybookBodyEditor />)
+
+    const items = (await slashItemsRef.current?.('')) as {
+      title: string
+      onItemClick: () => void
+    }[]
+    const toolItem = items.find((i) => i.title === 'Externes Tool')
+    toolItem?.onItemClick()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('tool-option-todo')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByTestId('tool-option-todo'))
+    fireEvent.click(screen.getByTestId('tool-picker-confirm'))
+
+    expect(insertInlineContent).toHaveBeenCalledTimes(1)
+    const inserted = insertInlineContent.mock.calls[0][0] as [
+      { type: string; props: PlaceholderProps },
+      string,
+    ]
+    expect(inserted[0].type).toBe('placeholder')
+    expect(inserted[0].props).toMatchObject({
+      kind: 'tool-ref',
+      target_id: 'todo',
+      label: 'Tool: Todoist',
+    })
   })
 
   it('insertet eine Resource-Pill via Picker (ganze Resource)', async () => {
