@@ -311,6 +311,92 @@ def test_human_management_edit_delete(make_auth_headers: AuthFactory) -> None:
 
 @pytest.mark.integration
 @pytest.mark.usefixtures("patched_jwt_secret", "migrated_db")
+def test_persona_render_embeds_runtime_memory_section(make_auth_headers: AuthFactory) -> None:
+    """WP-6 (Laufzeit-Einbindung): `get_persona`/`/personas/{id}/rendered` traegt
+    fuer agent-gebundene Aufrufer mit memory_mode != off die Gedaechtnis-Sektion
+    (Anweisung + Top-N freigegebene Fakten). Ohne Memory-Modus bzw. fuer
+    Menschen erscheint KEINE Sektion; pending-Fakten werden nie eingebettet."""
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    prefix = f"/v1/workspaces/{ws}"
+    try:
+        with TestClient(app) as client:
+            persona = client.post(
+                f"{prefix}/personas",
+                json={
+                    "name": "Memory-Persona",
+                    "content": {
+                        "description": "hilfsbereit",
+                        "system_prompt": "Sei praezise.",
+                        "traits": [],
+                        "content": {
+                            "description": "hilfsbereit",
+                            "blocks": [
+                                {
+                                    "id": "b1",
+                                    "type": "paragraph",
+                                    "content": [
+                                        {"type": "text", "text": "Profil.", "styles": {}}
+                                    ],
+                                }
+                            ],
+                        },
+                    },
+                },
+                headers=auth,
+            )
+            assert persona.status_code == 201, persona.text
+            pid = persona.json()["id"]
+            for to in ("review", "active"):
+                res = client.post(
+                    f"{prefix}/personas/{pid}/versions/1/transition",
+                    json={"to": to},
+                    headers=auth,
+                )
+                assert res.status_code == 200, res.text
+
+            _, auto = _agent_token(client, prefix, "m-rt", {"memory_mode": "auto"}, auth)
+            _, sug = _agent_token(client, prefix, "m-rt-sug", {"memory_mode": "suggest"}, auth)
+            _, off = _agent_token(client, prefix, "m-rt-off", {}, auth)
+            assert (
+                _save(client, prefix, auto, "Nutzer plant Deployments auf Hetzner").status_code
+                == 201
+            )
+            assert (
+                _save(client, prefix, sug, "Pending-Fakt darf nie im Prompt landen").status_code
+                == 201
+            )
+
+            rendered_url = f"{prefix}/personas/{pid}/rendered"
+
+            # Agent mit auto: Sektion + freigegebener Fakt eingebettet.
+            body = client.get(rendered_url, headers=auto).json()["body_rendered"]
+            assert "## Gedaechtnis" in body
+            assert "Nutzer plant Deployments auf Hetzner" in body
+
+            # Agent mit suggest, aber nur pending: Sektion ja (Anweisung),
+            # der unfreigegebene Fakt NIE.
+            body_sug = client.get(rendered_url, headers=sug).json()["body_rendered"]
+            assert "## Gedaechtnis" in body_sug
+            assert "Pending-Fakt darf nie im Prompt landen" not in body_sug
+            assert "keine freigegebenen Memories" in body_sug
+
+            # memory_mode off und Mensch/JWT: keine Sektion.
+            assert (
+                "## Gedaechtnis"
+                not in client.get(rendered_url, headers=off).json()["body_rendered"]
+            )
+            assert (
+                "## Gedaechtnis"
+                not in client.get(rendered_url, headers=auth).json()["body_rendered"]
+            )
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db")
 def test_agent_delete_cascades_and_gdpr_export_includes_memories(
     make_auth_headers: AuthFactory,
 ) -> None:

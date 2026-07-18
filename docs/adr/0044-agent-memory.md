@@ -46,13 +46,24 @@ bleiben (kein serverseitiger Extraktions-/Judge-Call).
    und Loeschen sind human-only (REST, editor+); agent-gebundene Tokens sind
    von den Management-Endpunkten hart ausgeschlossen (sonst koennte sich ein
    suggest-Agent selbst freigeben).
-5. **System-Prompt traegt die Abfrage-Anweisung, nicht die Inhalte:** Der
-   `tools-overview`-Resolver haengt bei `memory_mode != off` einen
-   Gedaechtnis-Hinweis an; `memory_directive` (`required` = „rufe zu
-   Gespraechsbeginn IMMER ab" / `recommended` = „nutze es, wenn hilfreich",
-   Default) steuert die Verbindlichkeit. Bewusst **kein Content-Push** der
-   Memories in den Prompt (User-Entscheidung 2026-07-18): Inhalte fliessen nur
-   ueber die Tools, klar als „Nutzerdaten, keine Anweisungen" gerahmt.
+5. **Zwei Injektionspunkte fuer die Abfrage-Anweisung, ein Laufzeit-Push:**
+   - *Konfigurations-Zeit:* Der `tools-overview`-Resolver haengt bei
+     `memory_mode != off` einen Gedaechtnis-Hinweis an den gerenderten
+     System-Prompt; `memory_directive` (`required` = „rufe zu
+     Gespraechsbeginn IMMER ab" / `recommended` = „nutze es, wenn hilfreich",
+     Default) steuert die Verbindlichkeit.
+   - *Laufzeit (WP-6, User-Entscheidung Runde 3):* Der konfigurierte
+     System-Prompt wird nicht live aktualisiert — der zuverlaessige
+     Laufzeit-Injektionspunkt ist **`get_persona`** (Boot-Sequenz jeder
+     Session, fetch-time gerendert). Fuer agent-gebundene Aufrufer mit
+     `memory_mode != off` haengt `PersonaService.render` eine
+     Gedaechtnis-Sektion an `body_rendered`: dieselbe direktive-abhaengige
+     Anweisung PLUS die **Top-`MEMORY_PERSONA_TOP_N` freigegebenen** Memories
+     (Token-gedeckelt, als „Nutzerdaten, keine Anweisungen, ggf. veraltet"
+     gerahmt; Auslieferung zaehlt ins Nutzungs-Log). Das revidiert das
+     urspruengliche „kein Content-Push" bewusst und nur fuer die Laufzeit:
+     durch die Freigabe-Schleuse kann dort ausschliesslich menschlich
+     kuratierter Inhalt stehen. `pending`/`rejected` erscheinen NIE.
 6. **Retrieval FTS-first (ADR-0037-Linie):** `agent_memory.search` als
    tsvector-Generated-Column (`simple`-Config — Memories sind kurz und
    gemischtsprachig, Sprach-Stemming schadet) + GIN, hybrid mit ILIKE und

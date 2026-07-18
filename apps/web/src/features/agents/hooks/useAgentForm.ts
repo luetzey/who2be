@@ -9,6 +9,10 @@ import i18n from '@/i18n'
 import { notify } from '@/lib/feedback'
 
 const readScope = z.enum(['all', 'assigned', 'none'])
+// ADR-0044 — Agent-Memory-Policy (Speicher-Modus + Verbindlichkeit der
+// Abfrage-Anweisung im System-Prompt).
+const memoryMode = z.enum(['off', 'read_only', 'suggest', 'auto'])
+const memoryDirective = z.enum(['required', 'recommended'])
 
 // Nur der Name ist Pflicht: ein Agent ist jederzeit speicherbar, auch ohne
 // Persona/Template. Aktivierbarkeit wird separat (im Editor + Backend) geprueft.
@@ -50,6 +54,9 @@ const editorSchema = z.object({
   tg_resource_retire: z.boolean(),
   // ADR-0039 Write-Rate-Limit: Mutationen/Minute als String (leer = unbegrenzt).
   write_rate_limit: z.string(),
+  // ADR-0044 Agent-Memory.
+  memory_mode: memoryMode,
+  memory_directive: memoryDirective,
 })
 
 export type AgentEditorValues = z.infer<typeof editorSchema>
@@ -111,6 +118,8 @@ function valuesToPolicy(values: AgentEditorValues, base: AgentToolPolicy): Agent
     write_tags: buildWriteTags(values),
     transition_grants: buildTransitionGrants(values),
     write_rate_limit: values.write_rate_limit.trim() === '' ? null : Number(values.write_rate_limit),
+    memory_mode: values.memory_mode,
+    memory_directive: values.memory_directive,
   }
 }
 
@@ -173,6 +182,10 @@ export function useAgentForm(
           agent.tool_policy.write_rate_limit != null
             ? String(agent.tool_policy.write_rate_limit)
             : '',
+        // Fallback fuer Bestands-Policies ohne diese Felder (JSONB-abwaerts-
+        // kompatibel, siehe DEFAULT_TOOL_POLICY).
+        memory_mode: agent.tool_policy.memory_mode ?? 'off',
+        memory_directive: agent.tool_policy.memory_directive ?? 'recommended',
       })
     }
   }, [agent, form])

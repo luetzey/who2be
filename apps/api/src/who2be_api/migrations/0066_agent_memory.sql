@@ -25,6 +25,10 @@
 -- Idempotenz: CREATE via IF NOT EXISTS; Policy via DROP IF EXISTS + CREATE;
 -- GRANT idempotent; pg_roles-Guard schuetzt On-Prem/Dev ohne who2be_app.
 
+-- pg_trgm kann je nach Umgebung in unterschiedlichen Schemata liegen
+-- (lokal: public; Supabase: extensions; isolierte Test-Schemata: eigenes) —
+-- der Trigram-Index unten qualifiziert die Opklasse daher DYNAMISCH ueber
+-- das reale Extension-Schema statt unqualifiziert via search_path.
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 CREATE TABLE IF NOT EXISTS agent_memory (
@@ -60,8 +64,21 @@ CREATE INDEX IF NOT EXISTS agent_memory_scope_idx
 CREATE INDEX IF NOT EXISTS agent_memory_search_idx
     ON agent_memory USING gin (search);
 
-CREATE INDEX IF NOT EXISTS agent_memory_fact_trgm_idx
-    ON agent_memory USING gin (fact gin_trgm_ops);
+DO $$
+DECLARE
+    ext_schema text;
+BEGIN
+    SELECT n.nspname INTO ext_schema
+    FROM pg_extension e
+    JOIN pg_namespace n ON n.oid = e.extnamespace
+    WHERE e.extname = 'pg_trgm';
+    EXECUTE format(
+        'CREATE INDEX IF NOT EXISTS agent_memory_fact_trgm_idx '
+        'ON agent_memory USING gin (fact %I.gin_trgm_ops)',
+        ext_schema
+    );
+END
+$$;
 
 -- RLS strikt auf app.current_tenant (Workspace-Isolation, Muster 0037/0053).
 DO $$

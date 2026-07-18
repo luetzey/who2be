@@ -71,7 +71,7 @@ class ToolsOverviewResolver:
         # NICHT die Memory-Inhalte (kein Content-Push).
         if policy is not None and policy.memory_at_least(MemoryMode.read_only):
             lines.append("")
-            lines.append(_memory_note(policy))
+            lines.append(memory_note(policy))
         return ResolveResult(text="\n".join(lines))
 
 
@@ -428,7 +428,7 @@ _TOOLS_WRITE_NOTE = (
 )
 
 
-def _memory_note(policy: AgentToolPolicy) -> str:
+def memory_note(policy: AgentToolPolicy) -> str:
     """Gedaechtnis-Protokoll (ADR-0044), direktive- und modus-abhaengig.
 
     `memory_directive` steuert die Verbindlichkeit der Abfrage-Anweisung

@@ -276,3 +276,21 @@ bleiben)._
   Presidio-PII-Gate (schwere Dependency, Triage ist das echte Gate);
   Soft-Delete (Repo-Konvention Hard-Delete wie agent_feedback);
   Content-Push-Placeholder (bewusst gegen entschieden, als Ausblick notiert).
+
+## 2026-07-18 — Agent-Memory Runde 3: Laufzeit-Einbindung via get_persona (WP-6)
+- **Entscheidung:** Der konfigurierte System-Prompt wird nicht live
+  aktualisiert — Laufzeit-Injektionspunkt ist `get_persona` (Boot-Sequenz,
+  fetch-time). `PersonaService.render` hängt für agent-gebundene Aufrufer mit
+  `memory_mode != off` eine Gedächtnis-Sektion an `body_rendered`:
+  muss/soll-Anweisung + Top-5 FREIGEGEBENE Memories (Daten-Rahmung,
+  Nutzungs-Log-Bump). Revidiert „kein Content-Push" bewusst nur für die
+  Laufzeit — die Freigabe-Schleuse garantiert, dass nur menschlich
+  kuratierter Inhalt eingebettet wird. Security-Review-Fixes: Nutzungs-Log
+  selbstlimitierend (max. 1 Write/Memory/Minute, N-1), `_require_human`
+  prüft policy UND agent_id (N-2), Cap zählt bewusst alle Status (N-3,
+  dokumentierter Selbst-DoS, menschlich aufräumbar).
+- **Begründung:** User-Einwand: Agenten laden zur Laufzeit nur
+  Persona/Playbooks/Resources — eine Anweisung, die nur im
+  Konfigurations-Prompt lebt, erreicht laufende Agenten nicht zuverlässig.
+- **Verworfen:** Nur-Anweisung ohne Fakten (hängt weiter an der
+  Tool-Disziplin des Modells); Status quo (nur Tool-Beschreibungen).

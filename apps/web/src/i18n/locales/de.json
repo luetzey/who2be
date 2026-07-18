@@ -302,6 +302,23 @@
           "label": "Schreib-Rate-Limit (Mutationen/Minute)",
           "placeholder": "leer = unbegrenzt"
         }
+      },
+      "memory": {
+        "title": "Gedächtnis",
+        "description": "Ob und wie der Agent Fakten über Sitzungen hinweg speichert.",
+        "help": "Vorschläge im Modus „Mit Freigabe“ landen als Entwurf in der Gedächtnis-Sektion unten und werden erst nach menschlicher Freigabe abrufbar. Im Modus „Automatisch“ werden sie sofort aktiv — serverseitige Wächter (Injection-Filter, Dedup, Längen-/Cap-Grenzen) laufen in jedem Modus.",
+        "modeLabel": "Speicher-Modus",
+        "mode": {
+          "off": "Aus",
+          "read_only": "Nur lesen",
+          "suggest": "Mit Freigabe",
+          "auto": "Automatisch"
+        },
+        "directiveLabel": "Verbindlichkeit",
+        "directive": {
+          "required": "Muss",
+          "recommended": "Soll"
+        }
       }
     },
     "hierarchy": {
@@ -369,6 +386,77 @@
       "reset": "Filter zurücksetzen",
       "emptyTitle": "Keine Treffer",
       "emptyDescription": "Kein Agent passt zu Filter und Suche."
+    },
+    "memory": {
+      "title": "Gedächtnis",
+      "description": "Fakten, die der Agent über Sitzungen hinweg gemerkt hat — kuratiert und jederzeit einsehbar, bearbeitbar und löschbar.",
+      "pendingBadge_one": "{{count}} zur Freigabe",
+      "pendingBadge_other": "{{count}} zur Freigabe",
+      "empty": {
+        "title": "Noch keine Erinnerungen",
+        "description": "Dieser Agent hat bisher nichts gespeichert."
+      },
+      "category": {
+        "preference": "Vorliebe",
+        "fact": "Fakt",
+        "project": "Projekt",
+        "instruction": "Anweisung",
+        "entity": "Entität",
+        "general": "Allgemein"
+      },
+      "importance": "Wichtigkeit {{value}}/10",
+      "triage": {
+        "title": "Zur Freigabe",
+        "contextLabel": "Begründung des Agenten",
+        "factLabel": "Fakt",
+        "approve": "Freigeben",
+        "approveSuccess": "Erinnerung freigegeben.",
+        "reject": "Ablehnen",
+        "rejectDialogTitle": "Vorschlag ablehnen?",
+        "rejectDialogDescription": "Der Vorschlag wird abgelehnt und nicht ins Gedächtnis übernommen.",
+        "rejectNoteLabel": "Notiz (optional)",
+        "rejectNotePlaceholder": "Warum wird abgelehnt?",
+        "rejectConfirm": "Ablehnen",
+        "rejectSuccess": "Vorschlag abgelehnt.",
+        "error": "Aktion fehlgeschlagen."
+      },
+      "active": {
+        "title": "Aktive Erinnerungen",
+        "emptyTitle": "Noch keine aktiven Erinnerungen",
+        "edit": "Bearbeiten",
+        "save": "Speichern",
+        "cancel": "Abbrechen",
+        "updateSuccess": "Erinnerung aktualisiert.",
+        "updateError": "Speichern fehlgeschlagen.",
+        "factLabel": "Fakt",
+        "importanceLabel": "Wichtigkeit",
+        "usage_one": "{{count}}× abgerufen, zuletzt {{date}}",
+        "usage_other": "{{count}}× abgerufen, zuletzt {{date}}",
+        "usageNever": "noch nie abgerufen"
+      },
+      "rejected": {
+        "toggle_one": "{{count}} abgelehnte Erinnerung",
+        "toggle_other": "{{count}} abgelehnte Erinnerungen",
+        "noteLabel": "Notiz",
+        "noNote": "Keine Notiz."
+      },
+      "delete": {
+        "label": "Löschen",
+        "ariaLabel": "Erinnerung löschen",
+        "dialogTitle": "Erinnerung löschen?",
+        "dialogDescription": "Wird dauerhaft entfernt. Diese Aktion kann nicht rückgängig gemacht werden.",
+        "confirmLabel": "Endgültig löschen",
+        "success": "Erinnerung gelöscht.",
+        "error": "Löschen fehlgeschlagen."
+      },
+      "deleteAll": {
+        "label": "Alle löschen",
+        "dialogTitle": "Alle Erinnerungen löschen?",
+        "dialogDescription": "Alle Erinnerungen dieses Agenten werden dauerhaft entfernt. Diese Aktion kann nicht rückgängig gemacht werden.",
+        "confirmLabel": "Alle endgültig löschen",
+        "success": "Alle Erinnerungen gelöscht.",
+        "error": "Löschen fehlgeschlagen."
+      }
     }
   },
   "auth": {

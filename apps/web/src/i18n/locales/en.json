@@ -302,6 +302,23 @@
           "label": "Write rate limit (mutations/minute)",
           "placeholder": "empty = unlimited"
         }
+      },
+      "memory": {
+        "title": "Memory",
+        "description": "Whether and how the agent stores facts across sessions.",
+        "help": "Suggestions in \"With approval\" mode land as a draft in the memory section below and only become retrievable after human approval. In \"Automatic\" mode they become active immediately — server-side guards (injection filter, dedup, length/cap limits) run in every mode.",
+        "modeLabel": "Storage mode",
+        "mode": {
+          "off": "Off",
+          "read_only": "Read only",
+          "suggest": "With approval",
+          "auto": "Automatic"
+        },
+        "directiveLabel": "Directive",
+        "directive": {
+          "required": "Required",
+          "recommended": "Recommended"
+        }
       }
     },
     "hierarchy": {
@@ -369,6 +386,77 @@
       "reset": "Reset filters",
       "emptyTitle": "No matches",
       "emptyDescription": "No agent matches the filter and search."
+    },
+    "memory": {
+      "title": "Memory",
+      "description": "Facts the agent has learned across sessions — curated, and viewable, editable and deletable at any time.",
+      "pendingBadge_one": "{{count}} awaiting approval",
+      "pendingBadge_other": "{{count}} awaiting approval",
+      "empty": {
+        "title": "No memories yet",
+        "description": "This agent hasn't stored anything yet."
+      },
+      "category": {
+        "preference": "Preference",
+        "fact": "Fact",
+        "project": "Project",
+        "instruction": "Instruction",
+        "entity": "Entity",
+        "general": "General"
+      },
+      "importance": "Importance {{value}}/10",
+      "triage": {
+        "title": "Awaiting approval",
+        "contextLabel": "Agent's reasoning",
+        "factLabel": "Fact",
+        "approve": "Approve",
+        "approveSuccess": "Memory approved.",
+        "reject": "Reject",
+        "rejectDialogTitle": "Reject suggestion?",
+        "rejectDialogDescription": "The suggestion is rejected and not added to memory.",
+        "rejectNoteLabel": "Note (optional)",
+        "rejectNotePlaceholder": "Why is this being rejected?",
+        "rejectConfirm": "Reject",
+        "rejectSuccess": "Suggestion rejected.",
+        "error": "Action failed."
+      },
+      "active": {
+        "title": "Active memories",
+        "emptyTitle": "No active memories yet",
+        "edit": "Edit",
+        "save": "Save",
+        "cancel": "Cancel",
+        "updateSuccess": "Memory updated.",
+        "updateError": "Save failed.",
+        "factLabel": "Fact",
+        "importanceLabel": "Importance",
+        "usage_one": "retrieved {{count}}×, last {{date}}",
+        "usage_other": "retrieved {{count}}×, last {{date}}",
+        "usageNever": "never retrieved"
+      },
+      "rejected": {
+        "toggle_one": "{{count}} rejected memory",
+        "toggle_other": "{{count}} rejected memories",
+        "noteLabel": "Note",
+        "noNote": "No note."
+      },
+      "delete": {
+        "label": "Delete",
+        "ariaLabel": "Delete memory",
+        "dialogTitle": "Delete memory?",
+        "dialogDescription": "Will be permanently removed. This action cannot be undone.",
+        "confirmLabel": "Delete permanently",
+        "success": "Memory deleted.",
+        "error": "Delete failed."
+      },
+      "deleteAll": {
+        "label": "Delete all",
+        "dialogTitle": "Delete all memories?",
+        "dialogDescription": "All memories of this agent will be permanently removed. This action cannot be undone.",
+        "confirmLabel": "Delete all permanently",
+        "success": "All memories deleted.",
+        "error": "Delete failed."
+      }
     }
   },
   "auth": {

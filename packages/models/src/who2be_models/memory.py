@@ -32,6 +32,10 @@ MEMORY_MAX_PER_AGENT = 500
 # Vorschlaege unterhalb dieser Importance lehnt der Server ab (Kap. 10.2 des
 # Memory-Konzepts: konservativ speichern, Ballast gar nicht erst aufnehmen).
 MEMORY_MIN_IMPORTANCE = 5
+# Anzahl Top-Memories, die `get_persona` zur Laufzeit in `body_rendered`
+# einbettet (WP-6: der System-Prompt wird nicht live aktualisiert — die
+# Persona-Antwort ist der zuverlaessige Laufzeit-Injektionspunkt).
+MEMORY_PERSONA_TOP_N = 5
 
 
 class MemoryStatus(StrEnum):

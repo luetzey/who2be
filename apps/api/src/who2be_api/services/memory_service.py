@@ -119,6 +119,10 @@ class MemoryService:
                     "abgelehnte Vorschlaege) werden nicht erneut aufgenommen."
                 ),
             )
+        # Cap zaehlt bewusst ALLE Status inkl. rejected (Security-Review N-3):
+        # harte Obergrenze pro Agent statt unbegrenzt wachsender rejected-Menge.
+        # Ein Agent kann so sein eigenes Gedaechtnis fuellen (Selbst-DoS) — das
+        # ist in der Triage-UI sichtbar und vom Menschen aufraeumbar.
         count = await self._repo.count_for_agent(ctx.workspace_id, ctx.agent_id)
         if count >= MEMORY_MAX_PER_AGENT:
             raise HTTPException(
@@ -164,7 +168,10 @@ class MemoryService:
         # Kurations-Endpunkte sind human-only: ein agent-gebundener Token darf
         # weder eigene Vorschlaege freigeben (Schleusen-Umgehung) noch fremde
         # Memories lesen/aendern — unabhaengig von Rolle oder Capabilities.
-        if ctx.tool_policy is not None:
+        # Beide Indikatoren pruefen (Security-Review N-2, Defense-in-Depth):
+        # heute impliziert agent_id eine Policy (NOT-NULL-Default), aber die
+        # Schleuse soll nicht an dieser DB-Invariante haengen.
+        if ctx.tool_policy is not None or ctx.agent_id is not None:
             raise ApiGateError(
                 status=status.HTTP_403_FORBIDDEN,
                 reason="missing_capability",

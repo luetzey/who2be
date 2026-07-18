@@ -200,13 +200,17 @@ class PgMemoryRepository:
     async def _bump_retrieval(
         self, workspace_id: UUID, agent_id: UUID, memory_ids: list[UUID]
     ) -> None:
-        # Nutzungs-Log (Transparenz, ADR-0044): jede Auslieferung zaehlt.
+        # Nutzungs-Log (Transparenz, ADR-0044). Selbstlimitierend: pro Memory
+        # hoechstens ein Write/Minute (Security-Review N-1 — Reads sind sonst
+        # ein ungedrosselter Write-Verstaerker am write_rate_limit vorbei).
+        # Der Zaehler ist ein Transparenz-Signal, kein exakter Abruf-Counter.
         if not memory_ids:
             return
         await self._pool.execute(
             "UPDATE agent_memory "
             "SET retrieval_count = retrieval_count + 1, last_retrieved_at = now() "
-            "WHERE workspace_id = $1 AND agent_id = $2 AND id = ANY($3::uuid[])",
+            "WHERE workspace_id = $1 AND agent_id = $2 AND id = ANY($3::uuid[]) "
+            "AND (last_retrieved_at IS NULL OR last_retrieved_at < now() - interval '60 seconds')",
             workspace_id,
             agent_id,
             memory_ids,
