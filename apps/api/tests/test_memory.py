@@ -336,9 +336,7 @@ def test_persona_render_embeds_runtime_memory_section(make_auth_headers: AuthFac
                                 {
                                     "id": "b1",
                                     "type": "paragraph",
-                                    "content": [
-                                        {"type": "text", "text": "Profil.", "styles": {}}
-                                    ],
+                                    "content": [{"type": "text", "text": "Profil.", "styles": {}}],
                                 }
                             ],
                         },
