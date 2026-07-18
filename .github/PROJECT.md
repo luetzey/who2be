@@ -27,9 +27,11 @@ N Edits mit Drift-Risiko. Die Fetch-Time-Placeholder-Architektur liefert die
 
 1. CRUD + Status-Workflow (draft→review→active→inactive) + Versionierung für
    `external_tool` per REST und Web-UI; Alias pro Workspace eindeutig (409).
-2. `tool-ref`-Pill (target_id = Alias) ist in allen 4 Editoren einfügbar und
-   expandiert beim Agent-Rendering zur aktiven Bindung; ohne aktives Tool →
-   sauberer Miss (`unresolved_key`), kein Crash.
+2. `tool-ref`-Pill (target_id = Alias) ist in System-Prompt-, Playbook- und
+   Persona-Editor einfügbar und expandiert beim Agent-Rendering zur aktiven
+   Bindung; ohne aktives Tool → sauberer Miss (`unresolved_key`), kein Crash.
+   Resource-Editor rendiert bauartbedingt keine Pills (kein `render_template_
+   body`-Pfad).
 3. Bindungswechsel per Edit + Promote wird ohne Änderung an referenzierenden
    Inhalten beim nächsten Fetch wirksam (Test belegt Ende-zu-Ende).
 4. MCP: `list_external_tools`/`get_external_tool` (read) + Builder-Writes
@@ -56,3 +58,19 @@ N Edits mit Drift-Risiko. Die Fetch-Time-Placeholder-Architektur liefert die
   späterer Ausbaupfad im ADR.
 - Credential-Store, Runtime-Verbindungsprüfung, Dashboard-KPIs,
   Editionen-Gating, Builder-Playbook-Erweiterung (v1.1-Kandidaten).
+
+### Status
+
+**Umgesetzt via PR #316 (WP-1–5, 2026-07-18):** Backend-Fundament
+(Aggregat + Migration + Alias), Rendering + Katalog, Policy + MCP-Tools
+(54 Total), Web features/tools, Editor-Pills (System-Prompt/Playbook/Persona;
+Resource-Editor ausgenommen). Alle AC erfuellt; DoD beider Stacks gruen.
+
+**v1.1-Kandidaten (vertagt):**
+- `find_usages`-Support fuer external_tool ("Verwendet in"-Sektion)
+- FeedbackPanel / GiveFeedback auf Tool-Detail-Seite
+- Builder lernt `tool-ref` (MCP-basierte Tool-Verwaltung)
+- PlaceholderHelp-Popover-Eintrag fuer tool-ref
+- Dashboard-KPIs fuer Tool-Adoption
+- Editionen-Gating (Cloud vs. On-Prem Feature-Gating)
+- Seed-Beispiel-Tool im Onboarding

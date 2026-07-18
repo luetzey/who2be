@@ -83,11 +83,15 @@ ruft:
   erneutem `fetch_playbook(child_id)` vertieft werden (eine Ebene inline,
   tiefere rekursiv nachladbar).
 
-### 4. Resource / Wissen
+### 4. Resource / Wissen & Externe Tools
 
 - Ueber Playbook-Resource-Refs (bereits in `fetch_playbook`-Antwort).
 - Gezielt: `list_resources(tag?)` → gefilterte Knowledge-Base →
   `fetch_resource(resource_id)`.
+- **Externe Tools** (ADR-0043): Agenten-Prompts koennen `tool-ref`-Pills
+  tragen (z. B. target_id=`todo`) — der Resolver expandiert diese zur
+  aktiven Bindung des Workspace-Tools (display_name, Tool-Namen,
+  Nutzungshinweise), Fetch-Time, ohne dass der Agent Pills selbst editiert.
 
 ### Zusammenfassung als Tabelle
 

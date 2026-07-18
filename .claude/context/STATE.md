@@ -1,8 +1,29 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-07-11_
+_Stand: 2026-07-18_
 
 ## Funktioniert
+
+- **Externe Tools (WP-1–5) UMGESETZT (2026-07-18, Branch
+  `claude/autonomous-code-agent-persona-iikbwe`, PR #316):** Versionierte
+  Workspace-Aggregate `external_tool` (WP-1) mit Alias-Eindeutigkeit pro
+  Workspace, Migration 0065, Status-Workflow draft→active→inactive,
+  GDPR-Export (Kaskaden-FK). Placeholder-Art `tool-ref` mit Resolver +
+  Katalog-Eintrag (WP-2): Pills referenzieren Alias, Fetch-Time-Expansion
+  zur aktiven Bindung (display_name, tool_names, usage_notes, fallback_note).
+  6 MCP-Tools: `list/get_external_tool` (Read-Scope-gefiltert) +
+  `create/update/transition/restore_external_tool` (capability
+  `external_tool_write`, Default aus; WP-3) — **54 Total im Mapping**
+  (`who2be_models.tool_requirements`, Drift-Guards gruen). Web-Features
+  (Liste+Detail nach Resources-Muster, BlockNote fuer usage_notes; WP-4).
+  ToolPicker + tool-ref-Pill in System-Prompt-, Playbook-, Persona-Editor;
+  Resource-Editor rendiert bewusst keine Pills (kein `render_template_body`-
+  Pfad, bauartbedingt; WP-5). Keine Feedback-Migration (entity_type in
+  Pydantic, nicht DB-CHECK). **DoD gruen:** ruff/mypy/pytest (Coverage
+  89,43 %), **1120 passed** (unverändert), lokal verifiziert; Web lint/tsc/
+  Vitest **893 Tests, Branches 81,14 %** (Floor 79), build clean.
+  Plan: `.claude/plan/2026-07-18-1315_external-tools-tool-ref.md`. ADR:
+  `docs/adr/0043-external-tool-bindings.md`.
 
 - **Playbooks-UI/UX-Redesign UMGESETZT (2026-07-11, Branch
   `claude/code-agent-setup-1pes6m`):** Design-Handoff
@@ -527,14 +548,6 @@ _Stand: 2026-07-11_
 
 ## Bekannte Probleme
 
-- **CI-Runner-Infra läuft wieder** (Stand 2026-07-05, PR #294): Jobs starten
-  und laufen durch. Dadurch sichtbar gewordene Alt-Schuld:
-  **web-Job rot wegen Branch-Coverage** (69,5 % < 79 %-Floor in
-  `apps/web/vite.config.ts`) — über die Feature-PRs seit ~#266 angesammelt
-  (lokale DoD lief `npm test` ohne Coverage-Gate). Owner-Entscheidung
-  2026-07-05: Floor NICHT senken; Schuld in einem **dedizierten Coverage-PR**
-  abtragen (≈240 fehlende Branches, Top-Kandidaten: PlaybookDetailPage,
-  AccountPage, OAuthConsentPage, LoginPage, ResourceDetailPage, api/client.ts).
 - E2E-Gate bleibt Soft, bis die CI-Infra dauerhaft stabil ist.
 
 ## Nächste Schritte (nicht-Code, manuell beim Owner)
