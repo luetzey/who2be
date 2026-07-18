@@ -138,8 +138,11 @@ class EntityExportService:
         self, workspace_id: UUID, entity: EntityKind, content: dict[str, Any]
     ) -> str:
         """Expandiert den BlockNote-Body ueber den vorhandenen Renderer-Kern."""
-        if entity == "playbook":
-            body_text = content.get("body", "")
+        if entity in ("playbook", "external_tool"):
+            # Playbook fuehrt den Body als `body`, ExternalTool als `usage_notes`
+            # — beide sind ein stringifiziertes BlockNote-JSON-Dokument.
+            field = "body" if entity == "playbook" else "usage_notes"
+            body_text = content.get(field, "")
             if not isinstance(body_text, str):
                 body_text = ""
         elif entity == "persona":

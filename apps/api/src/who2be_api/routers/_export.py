@@ -31,6 +31,7 @@ _LABELS: dict[EntityKind, str] = {
     "persona": "Persona",
     "playbook": "Playbook",
     "resource": "Resource",
+    "external_tool": "Externes Tool",
 }
 
 

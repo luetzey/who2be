@@ -11,15 +11,16 @@ from __future__ import annotations
 
 from typing import Literal
 
-EntityKind = Literal["persona", "playbook", "resource"]
+EntityKind = Literal["persona", "playbook", "resource", "external_tool"]
 
 # Erlaubte Inhalts-Tabellen als SQL-Identifier. `system_prompt_template` ist
-# bewusst nicht enthalten — Export/GDPR decken nur die drei Kern-Aggregate ab.
-ALLOWED_ENTITIES: frozenset[str] = frozenset({"persona", "playbook", "resource"})
+# bewusst nicht enthalten — dessen Repository ist handgerollt (kein
+# `VersionedAggregateRepository`) und Export/GDPR decken es nicht ab.
+ALLOWED_ENTITIES: frozenset[str] = frozenset({"persona", "playbook", "resource", "external_tool"})
 
 
 def safe_entity(entity: str) -> EntityKind:
-    """Erlaubt nur die drei bekannten Inhalts-Tabellen als SQL-Identifier.
+    """Erlaubt nur die bekannten Inhalts-Tabellen als SQL-Identifier.
 
     Greift, falls ueber einen `Any`-Pfad doch ein Nicht-Literal hereinkommt.
     """

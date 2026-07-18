@@ -132,6 +132,9 @@ class GdprExportService:
             personas = await self._versioned(workspace_id, "persona", "persona_id")
             playbooks = await self._versioned(workspace_id, "playbook", "playbook_id")
             resources = await self._versioned(workspace_id, "resource", "resource_id")
+            external_tools = await self._versioned(
+                workspace_id, "external_tool", "external_tool_id"
+            )
             agents = await self._pool.fetch(
                 "SELECT * FROM agent WHERE workspace_id = $1 ORDER BY created_at ASC, id ASC",
                 workspace_id,
@@ -144,6 +147,7 @@ class GdprExportService:
             "personas": personas,
             "playbooks": playbooks,
             "resources": resources,
+            "external_tools": external_tools,
             "agents": [_clean(row) for row in agents],
         }
 

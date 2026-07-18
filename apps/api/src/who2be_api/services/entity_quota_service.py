@@ -32,12 +32,16 @@ from who2be_api.licensing.service import build_entitlement_port
 
 # Summiert die Inhalts-Entities eines Workspaces. Die App-seitigen
 # `workspace_id`-Filter bleiben erste Verteidigungslinie (RLS ist die zweite).
+# `external_tool` (WP-1) zaehlt mit — sonst waere das Free-Kontingent ueber
+# beliebig viele Tool-Bindungen umgehbar (gleiche Begruendung wie fuer die
+# vier Kern-Aggregate).
 _COUNT_QUERY = (
     "SELECT "
-    "  (SELECT count(*) FROM persona  WHERE workspace_id = $1) "
-    "+ (SELECT count(*) FROM playbook WHERE workspace_id = $1) "
-    "+ (SELECT count(*) FROM resource WHERE workspace_id = $1) "
-    "+ (SELECT count(*) FROM agent    WHERE workspace_id = $1)"
+    "  (SELECT count(*) FROM persona       WHERE workspace_id = $1) "
+    "+ (SELECT count(*) FROM playbook      WHERE workspace_id = $1) "
+    "+ (SELECT count(*) FROM resource      WHERE workspace_id = $1) "
+    "+ (SELECT count(*) FROM agent         WHERE workspace_id = $1) "
+    "+ (SELECT count(*) FROM external_tool WHERE workspace_id = $1)"
 )
 
 
