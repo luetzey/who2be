@@ -130,6 +130,7 @@ class PolicyFilterMiddleware(Middleware):
             role=identity.role,
             capabilities=identity.capabilities,
             read_scopes=identity.read_scopes,
+            memory_mode=identity.memory_mode,
         )
 
     async def on_list_tools(

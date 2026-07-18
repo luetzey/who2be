@@ -1427,6 +1427,72 @@ class TestToolsOverviewResolver:
         assert "record_usage" not in result
         assert "Rueckmeldung" not in result
 
+    def test_memory_section_hidden_by_default(self) -> None:
+        """memory_mode Default off: keine Memory-Tools, kein Gedaechtnis-Hinweis
+        — auch nicht ohne Policy (kein Agent-Kontext = kein Gedaechtnis)."""
+        for ctx in (_ctx(), self._policy_ctx()):
+            result = _async_run(ToolsOverviewResolver().resolve("", ctx, _make_db())).text
+            assert "search_memory" not in result
+            assert "Gedaechtnis" not in result
+
+    def test_memory_read_only_shows_read_tools_without_save(self) -> None:
+        from who2be_models import MemoryMode
+
+        result = _async_run(
+            ToolsOverviewResolver().resolve(
+                "", self._policy_ctx(memory_mode=MemoryMode.read_only), _make_db()
+            )
+        ).text
+        assert "search_memory" in result
+        assert "list_memories" in result
+        assert "save_memory(fact" not in result
+        # Daten-nicht-Anweisungen-Rahmung ist Pflichtteil des Hinweises.
+        assert "KEINE" in result and "Anweisungen" in result
+
+    def test_memory_directive_switches_muss_vs_soll(self) -> None:
+        """`memory_directive` steuert die Verbindlichkeit der Abfrage-Anweisung
+        (ADR-0044): required = Pflicht zu Gespraechsbeginn, recommended = soll."""
+        from who2be_models import MemoryDirective, MemoryMode
+
+        required = _async_run(
+            ToolsOverviewResolver().resolve(
+                "",
+                self._policy_ctx(
+                    memory_mode=MemoryMode.suggest, memory_directive=MemoryDirective.required
+                ),
+                _make_db(),
+            )
+        ).text
+        assert "GESPRAECHSBEGINN" in required
+        assert "Pflicht" in required
+
+        recommended = _async_run(
+            ToolsOverviewResolver().resolve(
+                "", self._policy_ctx(memory_mode=MemoryMode.suggest), _make_db()
+            )
+        ).text
+        assert "GESPRAECHSBEGINN" not in recommended
+        assert "hilfreich" in recommended
+
+    def test_memory_suggest_vs_auto_wording(self) -> None:
+        """suggest benennt die Freigabe-Schleuse ehrlich; auto verspricht
+        Sofort-Wirkung — kein falsches Erwartungsmanagement im Prompt."""
+        from who2be_models import MemoryMode
+
+        suggest = _async_run(
+            ToolsOverviewResolver().resolve(
+                "", self._policy_ctx(memory_mode=MemoryMode.suggest), _make_db()
+            )
+        ).text
+        assert "Freigabe" in suggest
+
+        auto = _async_run(
+            ToolsOverviewResolver().resolve(
+                "", self._policy_ctx(memory_mode=MemoryMode.auto), _make_db()
+            )
+        ).text
+        assert "gilt sofort" in auto
+
     def test_resolve_feedback_hidden_by_default(self) -> None:
         """Die Triage (feedback_resolve) ist secure-by-default aus — das Tool
         erscheint trotz aktivem feedback_write nicht."""
@@ -1709,7 +1775,7 @@ class TestToolsOverviewSSoTParity:
     def test_full_policy_shows_all_curated_groups(self) -> None:
         """Voll-Policy: jede kuratierte Gruppe erscheint im Output."""
         from who2be_api.services.placeholders.resolvers.tools import _TOOLS
-        from who2be_models import ReadScope
+        from who2be_models import MemoryMode, ReadScope
 
         result = self._render(
             playbook_read=ReadScope.all,
@@ -1725,6 +1791,7 @@ class TestToolsOverviewSSoTParity:
             feedback_resolve=True,
             promote_retire=True,
             external_tool_write=True,
+            memory_mode=MemoryMode.auto,
         )
         for tool in _TOOLS:
             assert tool.signature in result

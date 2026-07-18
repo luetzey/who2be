@@ -28,6 +28,9 @@ from who2be_models import (
     FeedbackCreate,
     FeedbackResolutionCreate,
     FeedbackSummary,
+    MemoryCreate,
+    MemoryHit,
+    MemoryRead,
     PersonaCreate,
     PersonaPlaybookLinkSet,
     PersonaRead,
@@ -821,6 +824,28 @@ class ApiClient:
             "POST", f"{self._workspace_prefix}/feedback/{feedback_id}/resolution", data
         )
         return AgentFeedbackRead.model_validate(body)
+
+    # ------------------------------------------------------------------
+    # Agent-Memory (ADR-0044). Nur agent-gebundene Tokens; Gating ueber
+    # `tool_policy.memory_mode` (off/read_only/suggest/auto) serverseitig.
+    # ------------------------------------------------------------------
+
+    async def save_memory(self, data: MemoryCreate) -> MemoryRead:
+        body = await self._write("POST", f"{self._workspace_prefix}/agent-memories", data)
+        return MemoryRead.model_validate(body)
+
+    async def search_memory(self, query: str, k: int) -> list[MemoryHit]:
+        data = await self._get(
+            f"{self._workspace_prefix}/agent-memories/search",
+            params={"query": query, "k": str(k)},
+        )
+        return [MemoryHit.model_validate(item) for item in data]
+
+    async def list_memories(self, limit: int) -> list[MemoryHit]:
+        data = await self._get(
+            f"{self._workspace_prefix}/agent-memories", params={"limit": str(limit)}
+        )
+        return [MemoryHit.model_validate(item) for item in data]
 
     # ------------------------------------------------------------------
     # Discovery/Search (ADR-0037). Volltext ueber die aktive Version.

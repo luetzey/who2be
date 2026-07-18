@@ -256,3 +256,23 @@ bleiben)._
   Seed-Kommentar („Volldokument-Referenz"); Persona-Abgleich: Agent-Playbook
   bietet im Hand-Off jetzt den Konsistenz- & Drift-Check an (Feedback-
   Mikrobeobachtung an der Builder-Persona). `BUILDER_CONTENT_VERSION` 6 → 7.
+
+## 2026-07-18 — Agent-Memory: Kurations-Schleuse statt Auto-Persistenz (ADR-0044)
+- **Entscheidung:** Langzeitgedächtnis als agentische MCP-Tools mit 4-stufigem
+  `memory_mode` (off < read_only < suggest < auto, Default off) + Freigabe-
+  Schleuse (`pending` → menschliche Triage → `active`); `rejected` bleibt als
+  Dedup-Basis erhalten; kein agent-seitiges update/delete in v1; System-Prompt
+  trägt die Abfrage-Anweisung (`memory_directive` muss/soll), NICHT die
+  Memory-Inhalte (kein Content-Push — User-Entscheidung nach zwei
+  Design-Runden); `context`-Parameter nur für die Triage-Ansicht. Details:
+  ADR-0044, Plan `.claude/plan/2026-07-18-1500_agent-memory.md`.
+- **Begründung:** Konsistent mit dem Kurationsprinzip (ADR-0038: Agenten
+  ändern nie selbst Inhalte); die Schleuse ist der strukturelle
+  Injection-/PII-Schutz. Who2Be bleibt LLM-frei (keine Extraktions-Pipeline,
+  kein Judge). FTS-first (tsvector `simple` + pg_trgm) hält On-Prem
+  offline-fähig; pgvector bleibt Stufe B (ADR-0037-Linie).
+- **Verworfen:** Kap.-11-Pipeline (Who2Be führt keine Chat-Loops aus);
+  pgvector/Embeddings ab Tag 1 (neuer Infra-Baustein, On-Prem-Bruch);
+  Presidio-PII-Gate (schwere Dependency, Triage ist das echte Gate);
+  Soft-Delete (Repo-Konvention Hard-Delete wie agent_feedback);
+  Content-Push-Placeholder (bewusst gegen entschieden, als Ausblick notiert).

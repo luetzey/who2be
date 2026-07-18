@@ -2,13 +2,15 @@ from who2be_models import (
     MCP_TOOL_REQUIREMENTS,
     AgentCapability,
     AgentToolPolicy,
+    MemoryMode,
     ReadScope,
     WorkspaceRole,
     is_tool_visible,
     is_tool_visible_for,
 )
 
-# Voll-Policy: alle Reads auf `all`, alle Write-Capabilities gewaehrt.
+# Voll-Policy: alle Reads auf `all`, alle Write-Capabilities gewaehrt,
+# Memory auf hoechster Stufe (ADR-0044).
 _FULL_POLICY = AgentToolPolicy(
     playbook_read=ReadScope.all,
     resource_read=ReadScope.all,
@@ -24,6 +26,7 @@ _FULL_POLICY = AgentToolPolicy(
     feedback_resolve=True,
     promote_retire=True,
     external_tool_write=True,
+    memory_mode=MemoryMode.auto,
 )
 
 # Default-Read-Scopes eines agent-gebundenen Tokens (whoami-normalisiert).
@@ -72,8 +75,9 @@ def test_search_hidden_when_no_content_domain_is_readable() -> None:
 
 def test_policy_none_shows_reads_but_hides_writes() -> None:
     # Vor-Feature-Verhalten: ohne Policy (z. B. Persona-Body) nur Read-Tools.
+    # Memory-Tools (ADR-0044) sind ohne Agent-Kontext ebenfalls unsichtbar.
     for name, requirement in MCP_TOOL_REQUIREMENTS.items():
-        expected = not requirement.capabilities
+        expected = not requirement.capabilities and requirement.memory is None
         assert is_tool_visible(name, None) is expected, name
 
 
@@ -92,7 +96,10 @@ def test_unknown_tool_name_returns_none_in_both_functions() -> None:
 
 
 def test_unrestricted_admin_sees_every_tool() -> None:
-    for name in MCP_TOOL_REQUIREMENTS:
+    # Ausnahme (ADR-0044): Memory-Tools brauchen eine Agent-Bindung — fuer
+    # Unrestricted gibt es keinen Memory-Namespace, sie bleiben unsichtbar.
+    for name, requirement in MCP_TOOL_REQUIREMENTS.items():
+        expected = requirement.memory is None
         assert (
             is_tool_visible_for(
                 name,
@@ -101,7 +108,7 @@ def test_unrestricted_admin_sees_every_tool() -> None:
                 capabilities=None,
                 read_scopes=None,
             )
-            is True
+            is expected
         ), name
 
 
@@ -114,7 +121,7 @@ def test_unrestricted_viewer_sees_reads_but_no_writes() -> None:
             capabilities=None,
             read_scopes=None,
         )
-        expected = not requirement.capabilities
+        expected = not requirement.capabilities and requirement.memory is None
         assert visible is expected, name
 
 
@@ -225,10 +232,80 @@ def test_every_capability_is_used_in_the_mapping() -> None:
 
 
 def test_mapping_covers_all_registered_server_tools() -> None:
-    # 54 `@with_tool_log("<name>")`-Registrierungen in apps/mcp/.../server.py
-    # (Stand WP-3, ADR-0042 + 6 neue ExternalTool-Tools). Neues Tool => hier +
-    # im Mapping ergaenzen; der Paritaetstest in apps/mcp prueft die
-    # Gegenrichtung gegen den Server.
-    assert len(MCP_TOOL_REQUIREMENTS) == 54
+    # 57 `@with_tool_log("<name>")`-Registrierungen in apps/mcp/.../server.py
+    # (Stand ADR-0044: + 3 Memory-Tools search_memory/list_memories/save_memory).
+    # Neues Tool => hier + im Mapping ergaenzen; der Paritaetstest in apps/mcp
+    # prueft die Gegenrichtung gegen den Server.
+    assert len(MCP_TOOL_REQUIREMENTS) == 57
     always = {name for name, req in MCP_TOOL_REQUIREMENTS.items() if req.always}
     assert always == {"ping", "whoami"}
+
+
+def test_memory_tools_follow_memory_mode_ladder() -> None:
+    # ADR-0044: Lesen ab read_only, Vorschlagen ab suggest; off blendet alles
+    # aus; ohne Policy (kein Agent-Kontext) sind Memory-Tools NIE sichtbar —
+    # bewusst anders als Read-Tools (policy=None => True).
+    assert is_tool_visible("search_memory", None) is False
+    assert is_tool_visible("save_memory", None) is False
+    off = AgentToolPolicy()
+    assert is_tool_visible("search_memory", off) is False
+    assert is_tool_visible("list_memories", off) is False
+    assert is_tool_visible("save_memory", off) is False
+    read_only = AgentToolPolicy(memory_mode=MemoryMode.read_only)
+    assert is_tool_visible("search_memory", read_only) is True
+    assert is_tool_visible("list_memories", read_only) is True
+    assert is_tool_visible("save_memory", read_only) is False
+    for mode in (MemoryMode.suggest, MemoryMode.auto):
+        policy = AgentToolPolicy(memory_mode=mode)
+        assert is_tool_visible("search_memory", policy) is True
+        assert is_tool_visible("save_memory", policy) is True
+
+
+def test_memory_tools_hidden_for_unrestricted_whoami() -> None:
+    # Unrestricted (Mensch/ungebundener Token): kein Memory-Namespace, also
+    # keine Memory-Tools — obwohl alle anderen Reads sichtbar sind.
+    for name in ("search_memory", "list_memories", "save_memory"):
+        assert (
+            is_tool_visible_for(
+                name,
+                unrestricted=True,
+                role=WorkspaceRole.admin,
+                capabilities=None,
+                read_scopes=None,
+            )
+            is False
+        )
+    # Agent-gebunden: Stufenlogik ueber `memory_mode`.
+    assert (
+        is_tool_visible_for(
+            "search_memory",
+            unrestricted=False,
+            role=WorkspaceRole.editor,
+            capabilities=[],
+            read_scopes={},
+            memory_mode=MemoryMode.read_only,
+        )
+        is True
+    )
+    assert (
+        is_tool_visible_for(
+            "save_memory",
+            unrestricted=False,
+            role=WorkspaceRole.editor,
+            capabilities=[],
+            read_scopes={},
+            memory_mode=MemoryMode.read_only,
+        )
+        is False
+    )
+    assert (
+        is_tool_visible_for(
+            "save_memory",
+            unrestricted=False,
+            role=WorkspaceRole.editor,
+            capabilities=[],
+            read_scopes={},
+            memory_mode=MemoryMode.suggest,
+        )
+        is True
+    )

@@ -74,6 +74,41 @@ class AgentCapability(StrEnum):
 _TRANSITION_DOMAINS = ("persona", "playbook", "resource", "external_tool")
 
 
+class MemoryMode(StrEnum):
+    """Gedaechtnis-Modus eines Agenten (ADR-0044) — geordnete Stufen.
+
+    Steuert BEIDE Seiten des Agent-Memorys: ob die Memory-MCP-Tools fuer den
+    Agenten ueberhaupt existieren (tools/list-Filter, ADR-0042) und wie
+    `save_memory` persistiert wird.
+
+    - ``off``: kein Gedaechtnis — Memory-Tools sind unsichtbar + gesperrt.
+    - ``read_only``: nur `search_memory`/`list_memories` (aktive Memories).
+    - ``suggest``: zusaetzlich `save_memory`, aber als Vorschlag (`pending`) —
+      retrieval-sichtbar erst nach menschlicher Freigabe (Kurations-Schleuse,
+      Muster ADR-0038).
+    - ``auto``: `save_memory` speichert direkt `active`; die serverseitigen
+      Waechter (Injection-Filter, Dedup, Limits) laufen trotzdem immer.
+    """
+
+    off = "off"
+    read_only = "read_only"
+    suggest = "suggest"
+    auto = "auto"
+
+
+class MemoryDirective(StrEnum):
+    """Verbindlichkeit der Gedaechtnis-Abfrage im System-Prompt (ADR-0044).
+
+    Bestimmt NUR die Formulierung der tools-overview-Sektion („rufe zu
+    Gespraechsbeginn dein Gedaechtnis ab" vs. „nutze es, wenn Kontext
+    hilfreich ist") — KEIN Recht, daher bewusst nicht Teil des
+    `is_within`-Anti-Escalation-Vergleichs.
+    """
+
+    required = "required"
+    recommended = "recommended"
+
+
 class TransitionGrant(BaseModel):
     """Pro-Domain-Verfeinerung von `promote_retire` (ADR-0039).
 
@@ -155,10 +190,25 @@ class AgentToolPolicy(BaseModel):
     # fuer diesen Agenten. None/<=0 = unbegrenzt (Default). Serverseitig ueber
     # einen Sliding-Window-Limiter (keyed auf agent_id) durchgesetzt.
     write_rate_limit: int | None = None
+    # Agent-Memory (ADR-0044). Default `off` (secure by default) — der Owner
+    # schaltet das Gedaechtnis pro Agent bewusst frei. JSONB-abwaertskompatibel:
+    # fehlt das Feld in einer Bestands-Policy, bleibt das Gedaechtnis aus.
+    memory_mode: MemoryMode = MemoryMode.off
+    # Verbindlichkeit der Abfrage-Anweisung im System-Prompt (nur wirksam bei
+    # memory_mode != off). Kein Recht — nur Prompt-Formulierung.
+    memory_directive: MemoryDirective = MemoryDirective.recommended
 
     def allows(self, capability: AgentCapability) -> bool:
         """True, wenn die Policy die gegebene Schreib-Capability gewaehrt."""
         return bool(getattr(self, capability.value))
+
+    def memory_at_least(self, minimum: MemoryMode) -> bool:
+        """True, wenn der Gedaechtnis-Modus mindestens `minimum` gewaehrt.
+
+        Zentrale Ordnung (off < read_only < suggest < auto) fuer API-Gate,
+        MCP-Tool-Sichtbarkeit (ADR-0042) und `is_within` — eine Quelle.
+        """
+        return _MEMORY_MODE_RANK[self.memory_mode] >= _MEMORY_MODE_RANK[minimum]
 
     def write_tags_for(self, domain: str) -> list[str] | None:
         """Erlaubte Tags fuer Writes in `domain`, oder None (keine Einschraenkung)."""
@@ -266,6 +316,11 @@ class AgentToolPolicy(BaseModel):
             self.write_rate_limit is None or self.write_rate_limit > other.write_rate_limit
         ):
             return False
+        # Memory-Modus: geordnete Stufen (off < read_only < suggest < auto) —
+        # ein Agent darf keinen Agenten mit hoeherem Gedaechtnis-Modus anlegen.
+        # `memory_directive` ist kein Recht und bleibt aussen vor.
+        if _MEMORY_MODE_RANK[self.memory_mode] > _MEMORY_MODE_RANK[other.memory_mode]:
+            return False
         return True
 
 
@@ -274,4 +329,12 @@ _SCOPE_RANK: dict[ReadScope, int] = {
     ReadScope.none: 0,
     ReadScope.assigned: 1,
     ReadScope.all: 2,
+}
+
+# Memory-Modus-Rang (`is_within`): mehr Gedaechtnis-Zugriff = hoeher.
+_MEMORY_MODE_RANK: dict[MemoryMode, int] = {
+    MemoryMode.off: 0,
+    MemoryMode.read_only: 1,
+    MemoryMode.suggest: 2,
+    MemoryMode.auto: 3,
 }

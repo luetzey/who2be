@@ -30,7 +30,7 @@ from who2be_api.core.errors import ApiGateError
 from who2be_api.core.tenancy import tenant_scope
 from who2be_api.licensing.edition import is_onprem
 from who2be_api.repositories.token_repository import PgTokenRepository, TokenRepository
-from who2be_models import AgentCapability, AgentToolPolicy, WorkspaceRole
+from who2be_models import AgentCapability, AgentToolPolicy, MemoryMode, WorkspaceRole
 
 logger = logging.getLogger(__name__)
 
@@ -295,6 +295,44 @@ def require_capability(ctx: WorkspaceContext, capability: AgentCapability) -> No
             detail=(
                 f"Dieser Agent ist nicht berechtigt, {what}. "
                 "Der Workspace-Besitzer kann das in der Agent-Konfiguration freischalten."
+            ),
+        )
+
+
+def require_memory_mode(ctx: WorkspaceContext, minimum: MemoryMode) -> None:
+    """Wirft 403, wenn der Agent den geforderten Gedaechtnis-Modus nicht hat (ADR-0044).
+
+    Die Agent-Memory-Endpunkte sind NUR fuer agent-gebundene Tokens gedacht —
+    das Gedaechtnis gehoert einem Agenten, nicht dem Workspace. Menschen/JWTs
+    und ungebundene Tokens verwalten Memories ueber die Management-Endpunkte
+    (`/agents/{agent_id}/memories`, editor+). Daher ist dies KEIN No-Op fuer
+    `tool_policy is None` (anders als `require_capability`): ohne Agent-Bindung
+    gibt es keinen Memory-Namespace, auf dem der Aufruf operieren koennte.
+    """
+    policy = ctx.tool_policy
+    if policy is None or ctx.agent_id is None:
+        raise ApiGateError(
+            status=status.HTTP_403_FORBIDDEN,
+            reason="missing_capability",
+            actionable_by="human",
+            detail=(
+                "Agent-Memory-Endpunkte erfordern einen agent-gebundenen API-Token — "
+                "das Gedaechtnis gehoert einem Agenten. Die Verwaltung laeuft ueber "
+                "die Agent-Detailseite."
+            ),
+        )
+    if not policy.memory_at_least(minimum):
+        needed = (
+            "mindestens 'nur lesen'" if minimum == MemoryMode.read_only else f"'{minimum.value}'"
+        )
+        raise ApiGateError(
+            status=status.HTTP_403_FORBIDDEN,
+            reason="missing_capability",
+            actionable_by="human",
+            detail=(
+                f"Das Gedaechtnis dieses Agenten ist dafuer nicht freigeschaltet "
+                f"(memory_mode='{policy.memory_mode.value}', benoetigt {needed}). "
+                "Der Workspace-Besitzer kann den Modus in der Agent-Konfiguration aendern."
             ),
         )
 

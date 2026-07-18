@@ -75,8 +75,10 @@ CI-Billing) sowie `docs/standards-review-2026-07-08.md` (WP-1–9).
   `list_versions`, `get_version`, `diff_versions`), Feedback-Flywheel
   (`record_usage`, `submit_feedback`, `get_feedback`, `report_problem` —
   ADR-0038), System-Prompt-Tools (`list/get/create/update/restore/
-  transition_system_prompt` — ADR-0040) und External-Tools-Write
-  (`create/update/transition/restore_external_tool` — ADR-0043). `tools/list`
+  transition_system_prompt` — ADR-0040), External-Tools-Write
+  (`create/update/transition/restore_external_tool` — ADR-0043) und
+  Agent-Memory (`search_memory`/`list_memories`/`save_memory` — kuratiertes
+  Langzeitgedaechtnis pro Agent, `memory_mode`-gestuft, ADR-0044). `tools/list`
   ist pro Agent policy-gefiltert (`PolicyFilterMiddleware`, fail-open; SSoT-
   Mapping `who2be_models.tool_requirements` — ADR-0042); neue MCP-Tools
   brauchen dort einen Mapping-Eintrag

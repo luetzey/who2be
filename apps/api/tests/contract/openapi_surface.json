@@ -91,6 +91,21 @@
   },
   {
     "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/agent-memories",
+    "operationId": "list_memories_for_agent_v1_workspaces__workspace_id__agent_memories_get"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/agent-memories",
+    "operationId": "save_memory_v1_workspaces__workspace_id__agent_memories_post"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/agent-memories/search",
+    "operationId": "search_memory_v1_workspaces__workspace_id__agent_memories_search_get"
+  },
+  {
+    "method": "GET",
     "path": "/v1/workspaces/{workspace_id}/agents",
     "operationId": "list_agents_v1_workspaces__workspace_id__agents_get"
   },
@@ -118,6 +133,31 @@
     "method": "POST",
     "path": "/v1/workspaces/{workspace_id}/agents/{agent_id}/copy",
     "operationId": "copy_agent_v1_workspaces__workspace_id__agents__agent_id__copy_post"
+  },
+  {
+    "method": "DELETE",
+    "path": "/v1/workspaces/{workspace_id}/agents/{agent_id}/memories",
+    "operationId": "delete_all_memories_v1_workspaces__workspace_id__agents__agent_id__memories_delete"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/agents/{agent_id}/memories",
+    "operationId": "list_agent_memories_v1_workspaces__workspace_id__agents__agent_id__memories_get"
+  },
+  {
+    "method": "DELETE",
+    "path": "/v1/workspaces/{workspace_id}/agents/{agent_id}/memories/{memory_id}",
+    "operationId": "delete_memory_v1_workspaces__workspace_id__agents__agent_id__memories__memory_id__delete"
+  },
+  {
+    "method": "PUT",
+    "path": "/v1/workspaces/{workspace_id}/agents/{agent_id}/memories/{memory_id}",
+    "operationId": "update_memory_v1_workspaces__workspace_id__agents__agent_id__memories__memory_id__put"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/agents/{agent_id}/memories/{memory_id}/triage",
+    "operationId": "triage_memory_v1_workspaces__workspace_id__agents__agent_id__memories__memory_id__triage_post"
   },
   {
     "method": "GET",

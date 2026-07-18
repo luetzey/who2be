@@ -30,7 +30,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from who2be_models.tool_policy import AgentCapability, AgentToolPolicy, ReadScope
+from who2be_models.tool_policy import AgentCapability, AgentToolPolicy, MemoryMode, ReadScope
 from who2be_models.workspace_member import WorkspaceRole
 
 # Lese-Domain eines Read-Tools. „search" ist die Multi-Domain-Sonderrolle:
@@ -52,13 +52,18 @@ _CONTENT_READ_DOMAINS: tuple[str, ...] = ("persona", "playbook", "resource")
 class ToolRequirement(BaseModel):
     """Sichtbarkeits-Anforderung eines MCP-Tools.
 
-    Genau EINE der drei Achsen greift pro Tool, Prioritaet
-    ``always > capabilities > read_domain``:
+    Genau EINE der vier Achsen greift pro Tool, Prioritaet
+    ``always > capabilities > memory > read_domain``:
     - ``always=True``: immer sichtbar (Ping/Introspektion), unabhaengig von
       Policy oder Rolle.
     - ``capabilities`` nicht leer (Write-Tool): sichtbar, sobald die Policy
       EINE der Capabilities gewaehrt (Oder-Logik, z. B. Transition-Tools:
       Schreib-Capability ODER ``promote_retire``).
+    - ``memory`` gesetzt (Memory-Tool, ADR-0044): sichtbar, sobald der
+      `memory_mode` der Policy MINDESTENS diese Stufe gewaehrt (geordnete
+      Stufen off < read_only < suggest < auto). Anders als Reads sind
+      Memory-Tools OHNE Agent-Bindung nie sichtbar — es gibt keinen
+      Memory-Namespace ohne Agent.
     - ``read_domain`` gesetzt (Read-Tool): sichtbar nach Read-Scope der Domain
       (``none`` blendet aus); ``"search"`` siehe `ReadDomain`.
     """
@@ -67,6 +72,7 @@ class ToolRequirement(BaseModel):
 
     read_domain: ReadDomain | None = None
     capabilities: tuple[AgentCapability, ...] = ()
+    memory: MemoryMode | None = None
     always: bool = False
 
 
@@ -85,6 +91,8 @@ _AGENT_WRITE = ToolRequirement(capabilities=(AgentCapability.agent_write,))
 _SYSTEM_PROMPT_WRITE = ToolRequirement(capabilities=(AgentCapability.system_prompt_write,))
 _FEEDBACK_WRITE = ToolRequirement(capabilities=(AgentCapability.feedback_write,))
 _EXTERNAL_TOOL_WRITE = ToolRequirement(capabilities=(AgentCapability.external_tool_write,))
+_MEMORY_READ = ToolRequirement(memory=MemoryMode.read_only)
+_MEMORY_SUGGEST = ToolRequirement(memory=MemoryMode.suggest)
 
 
 # Alle in `apps/mcp/src/who2be_mcp/server.py` registrierten Tools (Quelle: die
@@ -171,6 +179,12 @@ MCP_TOOL_REQUIREMENTS: dict[str, ToolRequirement] = {
     # --- Feedback-Triage — `feedback_resolve` (Default aus): Signale schliessen
     #     ist Kurations-Macht, getrennt vom blossen Melden (`feedback_write`).
     "resolve_feedback": ToolRequirement(capabilities=(AgentCapability.feedback_resolve,)),
+    # --- Agent-Memory (ADR-0044) — nach `memory_mode`-Stufe (Default off):
+    #     Lesen ab `read_only`, Vorschlagen ab `suggest`. Bei `off` erscheinen
+    #     die Tools gar nicht erst in tools/list.
+    "search_memory": _MEMORY_READ,
+    "list_memories": _MEMORY_READ,
+    "save_memory": _MEMORY_SUGGEST,
 }
 
 
@@ -209,6 +223,11 @@ def is_tool_visible(name: str, policy: AgentToolPolicy | None) -> bool | None:
         return True
     if requirement.capabilities:
         return policy is not None and any(policy.allows(cap) for cap in requirement.capabilities)
+    if requirement.memory is not None:
+        # Memory-Tools brauchen einen Agenten-Kontext (Policy) — ohne Agent
+        # gibt es keinen Memory-Namespace, daher bei policy=None NIE sichtbar
+        # (bewusst anders als Read-Tools).
+        return policy is not None and policy.memory_at_least(requirement.memory)
     if policy is None:
         return True
     return _read_visible(requirement.read_domain, policy)
@@ -233,6 +252,7 @@ def is_tool_visible_for(
     role: WorkspaceRole,
     capabilities: Sequence[AgentCapability] | None,
     read_scopes: Mapping[str, ReadScope] | None,
+    memory_mode: MemoryMode | None = None,
 ) -> bool | None:
     """Ist das Tool `name` fuer diesen `whoami`-Principal sichtbar?
 
@@ -242,10 +262,13 @@ def is_tool_visible_for(
 
     - `unrestricted=True` (Mensch/JWT oder ungebundener Token): Reads immer
       sichtbar; Write-Tools nur, wenn die Rolle nicht `viewer` ist (das
-      Rollen-Gate wuerde sie ohnehin ablehnen).
+      Rollen-Gate wuerde sie ohnehin ablehnen). Memory-Tools sind fuer
+      Unrestricted NIE sichtbar — ohne Agent-Bindung gibt es keinen
+      Memory-Namespace (die API lehnt den Call ohnehin ab).
     - `unrestricted=False` (agent-gebundener Token): Write-Tools nach
-      Schnittmenge mit den gewaehrten `capabilities` (Oder-Logik), Read-Tools
-      nach `read_scopes` (fehlender Key defensiv sichtbar, fail-open).
+      Schnittmenge mit den gewaehrten `capabilities` (Oder-Logik), Memory-Tools
+      nach `memory_mode`-Stufe, Read-Tools nach `read_scopes` (fehlender Key
+      defensiv sichtbar, fail-open).
     """
     requirement = MCP_TOOL_REQUIREMENTS.get(name)
     if requirement is None:
@@ -257,6 +280,20 @@ def is_tool_visible_for(
             return role != WorkspaceRole.viewer
         granted = frozenset(capabilities or ())
         return any(cap in granted for cap in requirement.capabilities)
+    if requirement.memory is not None:
+        if unrestricted or memory_mode is None:
+            return False
+        return _MEMORY_RANK[memory_mode] >= _MEMORY_RANK[requirement.memory]
     if unrestricted:
         return True
     return _scoped_read_visible(requirement.read_domain, read_scopes or {})
+
+
+# Lokale Modus-Ordnung fuer den whoami-Pfad (kein Policy-Objekt zur Hand);
+# identisch zur `memory_at_least`-Ordnung in `tool_policy`.
+_MEMORY_RANK: dict[MemoryMode, int] = {
+    MemoryMode.off: 0,
+    MemoryMode.read_only: 1,
+    MemoryMode.suggest: 2,
+    MemoryMode.auto: 3,
+}

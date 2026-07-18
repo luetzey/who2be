@@ -139,6 +139,17 @@ class GdprExportService:
                 "SELECT * FROM agent WHERE workspace_id = $1 ORDER BY created_at ASC, id ASC",
                 workspace_id,
             )
+            # Agent-Memory (ADR-0044): kuratierte Fakten koennen personenbezogene
+            # Angaben enthalten — Teil des Art.-20-Buendels ab Tag 1.
+            # Explizite Spalten statt `*`: die generierte tsvector-Spalte
+            # `search` ist internes Index-Material, kein Nutzdatum.
+            memories = await self._pool.fetch(
+                "SELECT id, workspace_id, agent_id, status, fact, context, category, "
+                "importance, source, triage_note, retrieval_count, last_retrieved_at, "
+                "created_at, updated_at "
+                "FROM agent_memory WHERE workspace_id = $1 ORDER BY created_at ASC, id ASC",
+                workspace_id,
+            )
         return {
             "id": str(workspace_id),
             "name": name,
@@ -149,6 +160,7 @@ class GdprExportService:
             "resources": resources,
             "external_tools": external_tools,
             "agents": [_clean(row) for row in agents],
+            "agent_memories": [_clean(row) for row in memories],
         }
 
     async def _versioned(
