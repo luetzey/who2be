@@ -158,12 +158,17 @@ def test_whoami_agent_token_lists_capabilities(monkeypatch: pytest.MonkeyPatch) 
                 "feedback_resolve",
                 "promote_retire",
             }
-            # Builder-Reads = `all` (persona ist An/Aus → 'all').
+            # Builder-Reads = `all` (persona ist An/Aus → 'all'). `external_tool`
+            # (WP-3) ist NICHT explizit in `_builder_tool_policy()` gesetzt —
+            # der Pydantic-Default `all` greift trotzdem (Builder verwaltet den
+            # ganzen Workspace); external_tool_write bleibt bewusst aus
+            # (Builder-`tool-ref`-Kenntnis ist v1.1-Scope, Blueprint "Out of Scope").
             assert body["read_scopes"] == {
                 "persona": "all",
                 "playbook": "all",
                 "resource": "all",
                 "agent": "all",
+                "external_tool": "all",
             }
             assert "core" in body["features"]
     finally:

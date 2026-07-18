@@ -21,6 +21,10 @@ from who2be_models import (
     AgentRead,
     AgentUpdate,
     AgentWithRenderedPrompt,
+    ExternalToolCreate,
+    ExternalToolRead,
+    ExternalToolUpdate,
+    ExternalToolVersionRead,
     FeedbackCreate,
     FeedbackResolutionCreate,
     FeedbackSummary,
@@ -68,10 +72,17 @@ _TIMEOUT = 10.0
 # Read-only Reverse-Lookups + Versions-Historie (Track 1). Die drei Kernelemente
 # teilen sich uniforme REST-Pfade (`/{plural}/{id}/versions|usages`), daher
 # genuegt ein Entity-Dispatch ueber diese Maps statt 3x near-duplicate Methoden.
-EntityType = Literal["persona", "playbook", "resource", "system_prompt"]
+# `external_tool` (WP-3) haengt sich an denselben Dispatch fuer list_versions/
+# get_version an — nur `diff_versions` lehnt es explizit ab (kein REST-Diff-
+# Endpunkt fuer ExternalTool, siehe `diff_version` unten).
+EntityType = Literal["persona", "playbook", "resource", "system_prompt", "external_tool"]
 UsageEntityType = Literal["playbook", "resource"]
 AnyVersionRead = (
-    PersonaVersionRead | PlaybookVersionRead | ResourceVersionRead | SystemPromptTemplateVersionRead
+    PersonaVersionRead
+    | PlaybookVersionRead
+    | ResourceVersionRead
+    | SystemPromptTemplateVersionRead
+    | ExternalToolVersionRead
 )
 AnyUsage = PlaybookUsage | ResourceUsage
 
@@ -80,19 +91,27 @@ _ENTITY_PLURAL: dict[str, str] = {
     "playbook": "playbooks",
     "resource": "resources",
     "system_prompt": "system-prompts",
+    "external_tool": "external_tools",
 }
 _VERSION_MODEL: dict[
     str,
     type[PersonaVersionRead]
     | type[PlaybookVersionRead]
     | type[ResourceVersionRead]
-    | type[SystemPromptTemplateVersionRead],
+    | type[SystemPromptTemplateVersionRead]
+    | type[ExternalToolVersionRead],
 ] = {
     "persona": PersonaVersionRead,
     "playbook": PlaybookVersionRead,
     "resource": ResourceVersionRead,
     "system_prompt": SystemPromptTemplateVersionRead,
+    "external_tool": ExternalToolVersionRead,
 }
+
+# entity_types ohne REST-Diff-Endpunkt (WP-1 hat fuer external_tools bewusst
+# keinen `/versions/{v}/diff`-Pfad implementiert). `diff_version` lehnt diese
+# sauber mit `ToolError` ab, statt den generischen 404 der API durchzureichen.
+_NO_DIFF_ENDPOINT: frozenset[str] = frozenset({"external_tool"})
 _USAGE_MODEL: dict[str, type[PlaybookUsage] | type[ResourceUsage]] = {
     "playbook": PlaybookUsage,
     "resource": ResourceUsage,
@@ -406,6 +425,98 @@ class ApiClient:
         return SystemPromptTemplateRead.model_validate(data)
 
     # ------------------------------------------------------------------
+    # ExternalTool-Aggregat (WP-3, Blueprint `.claude/plan/2026-07-18-1315_
+    # external-tools-tool-ref.md`): Faehigkeits-Bindungen an externe MCP-
+    # Server/Tools, referenziert per stabilem Alias (`tool-ref`-Placeholder).
+    # ------------------------------------------------------------------
+
+    async def list_external_tools(self, locale: str = DEFAULT_LOCALE) -> list[ExternalToolRead]:
+        """Laedt die externen Tool-Bindungen des Workspace.
+
+        Kein `tag`-Filter auf REST-Ebene (WP-1 hat keinen `?tag=`-Query-Param
+        implementiert) — der MCP-Tool-Adapter (`server.list_external_tools`)
+        filtert client-seitig nach Tag, spiegelt dabei aber `list_playbooks`/
+        `list_resources`.
+        """
+        data = await self._get(
+            f"{self._workspace_prefix}/external_tools", params={"locale": locale}
+        )
+        return [ExternalToolRead.model_validate(item) for item in data]
+
+    async def get_external_tool(
+        self, tool_id: UUID, locale: str = DEFAULT_LOCALE
+    ) -> ExternalToolRead:
+        """Laedt eine externe Tool-Bindung per UUID."""
+        data = await self._get(
+            f"{self._workspace_prefix}/external_tools/{tool_id}", params={"locale": locale}
+        )
+        return ExternalToolRead.model_validate(data)
+
+    async def resolve_external_tool(
+        self, identifier: str, locale: str = DEFAULT_LOCALE
+    ) -> ExternalToolRead:
+        """Laedt eine externe Tool-Bindung per UUID ODER — sonst — per Alias.
+
+        Spiegelt `get_persona`s UUID-oder-Name-Aufloesung: der Alias ist die
+        stabile, fuer Agenten gedachte Kennung (`external_tool.alias`,
+        Migration 0065), die UUID die interne Identitaet.
+        """
+        try:
+            tool_id = UUID(identifier)
+        except ValueError:
+            return await self._resolve_external_tool_by_alias(identifier, locale)
+        return await self.get_external_tool(tool_id, locale)
+
+    async def _resolve_external_tool_by_alias(
+        self, alias: str, locale: str = DEFAULT_LOCALE
+    ) -> ExternalToolRead:
+        for tool in await self.list_external_tools(locale):
+            if tool.alias == alias:
+                return tool
+        raise ToolError(f"Kein externes Tool mit Alias '{alias}'.")
+
+    async def create_external_tool(self, data: ExternalToolCreate) -> ExternalToolRead:
+        body = await self._write("POST", f"{self._workspace_prefix}/external_tools", data)
+        return ExternalToolRead.model_validate(body)
+
+    async def update_external_tool(
+        self, tool_id: UUID, data: ExternalToolUpdate, locale: str = DEFAULT_LOCALE
+    ) -> ExternalToolRead:
+        body = await self._write(
+            "PUT",
+            f"{self._workspace_prefix}/external_tools/{tool_id}",
+            data,
+            params={"locale": locale},
+        )
+        return ExternalToolRead.model_validate(body)
+
+    async def transition_external_tool_version(
+        self,
+        tool_id: UUID,
+        version: int,
+        data: VersionTransitionRequest,
+        locale: str = DEFAULT_LOCALE,
+    ) -> ExternalToolVersionRead:
+        body = await self._write(
+            "POST",
+            f"{self._workspace_prefix}/external_tools/{tool_id}/versions/{version}/transition",
+            data,
+            params={"locale": locale},
+        )
+        return ExternalToolVersionRead.model_validate(body)
+
+    async def restore_external_tool_version(
+        self, tool_id: UUID, version: int, locale: str = DEFAULT_LOCALE
+    ) -> ExternalToolRead:
+        body = await self._write(
+            "POST",
+            f"{self._workspace_prefix}/external_tools/{tool_id}/versions/{version}/restore",
+            None,
+            params={"locale": locale},
+        )
+        return ExternalToolRead.model_validate(body)
+
+    # ------------------------------------------------------------------
     # Read-only Reverse-Lookups + Versions-Historie (Track 1, erweitert
     # ADR-0030/0021). Reine Adapter ueber bestehende REST-Endpunkte; der
     # Server erzwingt Read-Scope und `status='active'` wie bei jedem Read.
@@ -456,6 +567,11 @@ class ApiClient:
         locale: str = DEFAULT_LOCALE,
     ) -> VersionDiff:
         """Strukturierter Feld-/Block-Diff von `version` gegen `against`."""
+        if entity_type in _NO_DIFF_ENDPOINT:
+            raise ToolError(
+                f"Diff ist fuer entity_type='{entity_type}' nicht verfuegbar "
+                "(kein REST-Diff-Endpunkt)."
+            )
         plural = _ENTITY_PLURAL[entity_type]
         data = await self._get(
             f"{self._workspace_prefix}/{plural}/{entity_id}/versions/{version}/diff",

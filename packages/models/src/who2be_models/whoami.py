@@ -46,8 +46,8 @@ class WhoAmIRead(BaseModel):
     # Gewaehrte Write-Capabilities des gebundenen Agenten; `None` wenn
     # `unrestricted` (kein Pro-Agent-Limit), `[]` = explizit keine gewaehrt.
     capabilities: list[AgentCapability] | None
-    # Effektive Read-Scopes je Domain (persona/playbook/resource/agent); `None`
-    # wenn `unrestricted`.
+    # Effektive Read-Scopes je Domain (persona/playbook/resource/agent/
+    # external_tool, WP-3); `None` wenn `unrestricted`.
     read_scopes: dict[str, ReadScope] | None
     # Feinkoernige Write-Verfeinerungen (ADR-0039); `None` wenn `unrestricted`,
     # leere Dicts = keine Verfeinerung (ungeteiltes promote_retire / alle Tags).

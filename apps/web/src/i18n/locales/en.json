@@ -72,6 +72,7 @@
       "personas": "Personae",
       "playbooks": "Playbooks",
       "resources": "Resources",
+      "tools": "External tools",
       "feedback": "Feedback",
       "settings": "Settings"
     },
@@ -255,7 +256,8 @@
         "scopeField": {
           "playbook_read": "Read playbooks",
           "resource_read": "Read resources",
-          "agent_read": "Read agents"
+          "agent_read": "Read agents",
+          "external_tool_read": "Read external tools"
         },
         "scope": {
           "all": "All (entire workspace)",
@@ -278,7 +280,8 @@
           "system_prompt_write": "Author system prompts (submit for review)",
           "feedback_write": "Report usage/feedback",
           "feedback_resolve": "Feedback triage: close signals (addressed/in_progress/dismissed)",
-          "promote_retire": "Activate/deactivate versions"
+          "promote_retire": "Activate/deactivate versions",
+          "external_tool_write": "Create/edit external tools"
         },
         "writeTags": {
           "hint": "Tag scope (optional): empty = all tags. Otherwise the agent may only write content carrying these tags in that domain.",
@@ -2060,6 +2063,110 @@
         "actorHuman": "Human",
         "actorSystem": "System"
       }
+    }
+  },
+  "tools": {
+    "list": {
+      "title": "External tools",
+      "description": "MCP server bindings with a stable capability alias — maintain once, stay current everywhere.",
+      "newTool": "New tool",
+      "emptyTitle": "No external tools yet",
+      "emptyDescription": "Add your first external tool (e.g. Todoist) to reference it by alias in playbooks and personas."
+    },
+    "new": {
+      "title": "New external tool",
+      "description": "Create a new MCP server binding.",
+      "submit": "Create"
+    },
+    "form": {
+      "identityTitle": "Identity",
+      "identityDescription": "What the tool is called and which alias it is referenced by.",
+      "identityHelp": "Example: \"Todoist\" with alias \"todo\" — playbooks/personas reference the alias, not the concrete tool. Swapping the tool (e.g. Todoist → Things 3) updates every referencing prompt automatically.",
+      "namePlaceholder": "e.g. Todoist",
+      "aliasLabel": "Alias",
+      "aliasHelp": "Stable capability alias (e.g. \"todo\") for the tool-ref reference in playbooks/personas. Derived from the name on create and immutable afterwards.",
+      "displayNameLabel": "Display name",
+      "displayNamePlaceholder": "e.g. Todoist",
+      "mcpServerNameLabel": "MCP server name",
+      "mcpServerNamePlaceholder": "e.g. Todoist MCP",
+      "mcpServerNameHelp": "Display name of the connector in the agent runtime.",
+      "toolNamesLabel": "Tool names",
+      "toolNamesPlaceholder": "Enter tool name and press Enter",
+      "toolNamesHelp": "Relevant MCP tool identifiers (e.g. add_task, list_tasks). Press Enter to add, click X to remove.",
+      "usageNotesTitle": "Usage notes",
+      "usageNotesDescription": "When and how the agent should use this tool.",
+      "usageNotesHelp": "Do/don't, typical use cases. Included in the prompt when the tool-ref expands.",
+      "usageNotesLabel": "Usage notes",
+      "fallbackNoteLabel": "Fallback note",
+      "fallbackNotePlaceholder": "What the agent should do when the server is not connected",
+      "fallbackNoteHelp": "Optional. Applies when the MCP server is not connected in the runtime.",
+      "tagsDescription": "Keywords for searching and filtering.",
+      "tagsHelp": "Press Enter to add, click X to remove.",
+      "tagsPlaceholder": "Enter tag and press Enter",
+      "nameRequired": "Name is required."
+    },
+    "detail": {
+      "activeVersion": "Active: v{{version}}",
+      "workingOnDraft": "You are editing draft v{{version}}",
+      "inReview": "In review: v{{version}}",
+      "currentVersion": "Current version: v{{version}} ({{status}})",
+      "restoredAsDraft": "v{{version}} restored as draft.",
+      "bannerDraftTitle": "Draft v{{version}} in progress",
+      "bannerDraftDescription": "Submit it for review when you are done.",
+      "bannerReviewTitle": "Version v{{version}} is in review",
+      "bannerReviewDescription": "Activate it after review, or send it back to draft.",
+      "bannerInactiveTitle": "Version v{{version}} is inactive",
+      "bannerInactiveDescription": "Reactivate it as a draft to keep working on it."
+    },
+    "tabs": {
+      "edit": "Edit",
+      "versions": "Versions"
+    },
+    "statusBar": {
+      "ariaLabel": "Status actions",
+      "activate": "Activate",
+      "activateAdminOnly": "Only admins can activate",
+      "submitForReview": "Submit for review",
+      "reject": "Reject",
+      "reactivate": "Reactivate as draft",
+      "promoteError": "Fill in before activating: {{fields}}.",
+      "actionFailed": "Action failed.",
+      "promoteErrorTitle": "Cannot promote",
+      "toast": {
+        "activated": "Version activated.",
+        "submitted": "Submitted for review.",
+        "rejected": "Review rejected.",
+        "reactivated": "Reactivated as draft."
+      }
+    },
+    "toast": {
+      "created": "External tool created.",
+      "createFailed": "Creation failed."
+    },
+    "delete": {
+      "label": "Delete",
+      "confirmLabel": "Delete permanently",
+      "dialogTitle": "Delete external tool?",
+      "dialogDescription": "{{name}} and all its versions are removed permanently. This action cannot be undone.",
+      "success": "External tool deleted.",
+      "error": "Deletion failed.",
+      "viewerReadOnly": "Viewers can only view external tools",
+      "blockedTitle": "Deletion blocked",
+      "blockedMessage": "This tool is still used by:",
+      "dangerZoneTitle": "Delete external tool",
+      "dangerZoneDescription": "Permanently removes this tool and all its versions. No undo."
+    },
+    "export": {
+      "label": "Export",
+      "json": "As JSON",
+      "markdown": "As Markdown",
+      "success": "Export downloaded.",
+      "error": "Export failed."
+    },
+    "card": {
+      "toolCount_one": "{{count}} tool name",
+      "toolCount_other": "{{count}} tool names",
+      "noToolNames": "No tool names set"
     }
   }
 }

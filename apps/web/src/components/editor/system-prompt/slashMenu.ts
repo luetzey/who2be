@@ -16,6 +16,7 @@ import {
   Calendar,
   FileText,
   Library,
+  Plug,
   Table,
   User,
   UserCog,
@@ -162,6 +163,17 @@ export function buildSlashMenuItems(
         openPicker('tools-overview')
       },
       aliases: ['mcp', 'tools', 'werkzeuge', 'tools-overview'],
+    },
+    {
+      kind: 'tool-ref',
+      title: 'Externes Tool',
+      subtext: 'Bindung an ein externes MCP-Tool per Fähigkeits-Alias',
+      group: 'Placeholder',
+      icon: createElement(Plug, { size: 18 }),
+      onItemClick: () => {
+        openPicker('tool-ref')
+      },
+      aliases: ['tool', 'external', 'externes tool', 'mcp-server', 'alias', 'tool-ref'],
     },
   ]
 

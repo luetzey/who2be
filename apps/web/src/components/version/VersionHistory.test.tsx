@@ -94,4 +94,11 @@ describe('VersionHistory', () => {
     renderHistory({ canEdit: false })
     expect(screen.queryByRole('button', { name: 'Wiederherstellen' })).not.toBeInTheDocument()
   })
+
+  it('blendet den Diff-Button aus, wenn loadDiff fehlt (Entities ohne Diff-Endpoint)', () => {
+    renderHistory({ loadDiff: undefined })
+    expect(screen.queryByRole('button', { name: 'Diff' })).not.toBeInTheDocument()
+    // Provenance bleibt unberuehrt.
+    expect(screen.getByRole('button', { name: 'Warum aktiv?' })).toBeInTheDocument()
+  })
 })

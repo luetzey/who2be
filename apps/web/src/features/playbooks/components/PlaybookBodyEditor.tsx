@@ -1,7 +1,8 @@
 // PlaybookBodyEditor — BlockNote-Insel fuer den Playbook-Body (Welle 5).
 //
-// Analog zum SystemPromptEditor, aber bewusst reduziert: nur Playbook- und
-// Resource-Pills sind erlaubt (kein Persona-Feld/Datum/MCP-Tools). Das
+// Analog zum SystemPromptEditor, aber bewusst reduziert: nur Playbook-,
+// Resource- und Tool-Ref-Pills sind erlaubt (kein Persona-Feld/Datum/MCP-
+// Tools-Uebersicht). Das
 // gemeinsame PlaceholderBlock-Schema bleibt unveraendert — wir filtern nur
 // die Slash-Items via `allowedKinds`. Die Resource-Pill darf einen
 // Heading-Anker tragen (`allowBlockAnchor`), damit `target_id` die Form
@@ -27,6 +28,7 @@ import { caretMeasurable } from '@/components/editor/system-prompt/caretAnchor'
 import { buildSlashMenuItems } from '@/components/editor/system-prompt/slashMenu'
 import { PlaybookPicker } from '@/components/editor/system-prompt/pickers/PlaybookPicker'
 import { ResourcePicker } from '@/components/editor/system-prompt/pickers/ResourcePicker'
+import { ToolPicker } from '@/components/editor/system-prompt/pickers/ToolPicker'
 import { type Measurable } from '@/components/ui/popover'
 
 // Das Schema wird einmal pro Modul-Import gebaut (statisch, siehe
@@ -34,8 +36,11 @@ import { type Measurable } from '@/components/ui/popover'
 // bleiben gueltig; nur das Slash-Menue ist reduziert.
 const playbookBodySchema = buildSystemPromptSchema()
 
-// Nur diese beiden Kinds sind im Playbook-Body erlaubt.
-const ALLOWED_KINDS: Set<PlaceholderKind> = new Set(['playbook', 'resource'])
+// Nur diese Kinds sind im Playbook-Body erlaubt. `tool-ref` (WP-5) erzeugt
+// beim Speichern KEINEN Composition-/Link-Sync — die bestehende Pill-
+// Extraktion (`playbook_body_pills.py`) filtert nach `kind` und ignoriert
+// unbekannte/nicht-Sync-relevante Kinds bereits defensiv.
+const ALLOWED_KINDS: Set<PlaceholderKind> = new Set(['playbook', 'resource', 'tool-ref'])
 
 export type PlaybookBodyBlock = SystemPromptBlock
 
@@ -161,6 +166,13 @@ export function PlaybookBodyEditor({
         anchorRef={anchorRef}
         allowBlockAnchor
         initial={pendingEdit?.kind === 'resource' ? pendingEdit : undefined}
+        onConfirm={handlePickerConfirm}
+        onCancel={handlePickerCancel}
+      />
+      <ToolPicker
+        open={openPicker === 'tool-ref'}
+        anchorRef={anchorRef}
+        initial={pendingEdit?.kind === 'tool-ref' ? pendingEdit : undefined}
         onConfirm={handlePickerConfirm}
         onCancel={handlePickerCancel}
       />

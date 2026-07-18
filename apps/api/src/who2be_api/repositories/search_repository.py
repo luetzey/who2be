@@ -22,6 +22,9 @@ _TYPE_TABLES: dict[str, tuple[str, str, str]] = {
     "persona": ("persona", "persona_version", "persona_id"),
     "playbook": ("playbook", "playbook_version", "playbook_id"),
     "resource": ("resource", "resource_version", "resource_id"),
+    # WP-3: ExternalTool-Aggregat — Name + Content (u. a. `display_name`,
+    # `usage_notes`) der aktiven Version.
+    "external_tool": ("external_tool", "external_tool_version", "external_tool_id"),
 }
 
 

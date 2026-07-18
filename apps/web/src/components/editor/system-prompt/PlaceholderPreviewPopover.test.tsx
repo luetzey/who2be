@@ -173,6 +173,53 @@ describe('PlaceholderPreviewPopover', () => {
     expect(screen.queryByTestId('placeholder-preview-edit')).not.toBeInTheDocument()
   })
 
+  it('zeigt den aufgeloesten Tool-Ref-Output und bietet "Bearbeiten" (parametergebunden)', async () => {
+    previewPlaceholder.mockResolvedValue({
+      kind: 'tool-ref',
+      target_id: 'todo',
+      text: 'Fähigkeit "todo" → Todoist.',
+      unresolved: false,
+    })
+
+    render(
+      <Host
+        editable
+        detail={makeDetail({ kind: 'tool-ref', target_id: 'todo', label: 'Tool: Todoist' })}
+      />,
+    )
+    fireEvent.click(screen.getByTestId('fire'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('placeholder-preview-text')).toHaveTextContent(
+        'Fähigkeit "todo" → Todoist.',
+      )
+    })
+    expect(previewPlaceholder).toHaveBeenCalledWith({ kind: 'tool-ref', target_id: 'todo' })
+    // Anders als tools-overview/persona-ref ist tool-ref parametergebunden
+    // (target_id = Alias) — der Bearbeiten-Button muss verfuegbar sein.
+    expect(screen.getByTestId('placeholder-preview-edit')).toBeInTheDocument()
+  })
+
+  it('zeigt einen Miss-Hinweis fuer einen nicht gebundenen Tool-Ref-Alias', async () => {
+    previewPlaceholder.mockResolvedValue({
+      kind: 'tool-ref',
+      target_id: 'unbekannt',
+      text: '',
+      unresolved: true,
+    })
+
+    render(
+      <Host
+        detail={makeDetail({ kind: 'tool-ref', target_id: 'unbekannt', label: 'Tool: unbekannt' })}
+      />,
+    )
+    fireEvent.click(screen.getByTestId('fire'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('placeholder-preview-miss')).toBeInTheDocument()
+    })
+  })
+
   it('editierbar: "Bearbeiten" ruft onEdit mit dem Detail (inkl. updateInlineContent)', async () => {
     previewPlaceholder.mockResolvedValue({
       kind: 'playbook',

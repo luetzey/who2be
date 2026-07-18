@@ -1,11 +1,22 @@
 // SystemPromptEditor.test.tsx — BlockNote-Insel in jsdom mocken (Standard-Pattern).
 // Prueft:
 //   1. SystemPromptEditor rendert ohne Fehler.
-//   2. buildSlashMenuItems enthaelt die vier Custom-Items und filtert korrekt.
+//   2. buildSlashMenuItems enthaelt die Custom-Items und filtert korrekt.
 //   3. buildSystemPromptSchema gibt ein Schema-Objekt zurueck.
+//   4. Tool-Ref-Pill-Insertion via ToolPicker (Slash-Menue → Picker → Confirm).
 
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+
+import type { PlaceholderProps } from './PlaceholderBlock'
+
+// Geteilte Spione: `insertInlineContent` wird vom `useCreateBlockNote`-Mock
+// zurueckgegeben, `slashItemsRef` faengt `getItems` aus dem
+// `SuggestionMenuController`-Mock ab — analog PlaybookBodyEditor.test.tsx.
+const insertInlineContent = vi.fn()
+const slashItemsRef: { current: ((q: string) => Promise<unknown[]>) | null } = {
+  current: null,
+}
 
 // BlockNote in jsdom nicht mountfaehig — Standard-Mock (analog PlaybookDetailPage.test.tsx).
 // createReactInlineContentSpec wird benoetigt weil PlaceholderBlock.tsx es
@@ -13,9 +24,16 @@ import { describe, expect, it, vi } from 'vitest'
 vi.mock('@blocknote/react', () => ({
   useCreateBlockNote: () => ({
     document: [],
-    insertInlineContent: vi.fn(),
+    insertInlineContent,
   }),
-  SuggestionMenuController: () => null,
+  SuggestionMenuController: ({
+    getItems,
+  }: {
+    getItems: (q: string) => Promise<unknown[]>
+  }) => {
+    slashItemsRef.current = getItems
+    return null
+  },
   getDefaultReactSlashMenuItems: () => [
     { key: 'paragraph', title: 'Absatz', onItemClick: vi.fn() },
     { key: 'heading_1', title: 'Heading 1', onItemClick: vi.fn() },
@@ -33,7 +51,9 @@ vi.mock('@blocknote/react', () => ({
   }),
 }))
 vi.mock('@blocknote/mantine', () => ({
-  BlockNoteView: () => <div data-testid="blocknote-view" />,
+  BlockNoteView: ({ children }: { children?: React.ReactNode }) => (
+    <div data-testid="blocknote-view">{children}</div>
+  ),
 }))
 vi.mock('@blocknote/core', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@blocknote/core')>()
@@ -54,7 +74,39 @@ vi.mock('@blocknote/core', async (importOriginal) => {
   }
 })
 vi.mock('@/app/theme-context', () => ({ useTheme: () => ({ resolved: 'light' }) }))
-vi.mock('@/api/useApi', () => ({ useApi: () => ({}) }))
+
+const tools = [
+  {
+    id: 'tool-1',
+    workspace_id: 'ws-1',
+    owner_id: 'o1',
+    name: 'Todoist',
+    alias: 'todo',
+    current_version: 1,
+    current_status: 'active',
+    has_pending_draft: false,
+    content: {
+      display_name: 'Todoist',
+      mcp_server_name: 'Todoist MCP',
+      tool_names: ['add_task'],
+      usage_notes: '',
+      fallback_note: null,
+      tags: [],
+    },
+    created_at: 't',
+    updated_at: 't',
+  },
+]
+
+// Stabile api-Referenz (wie der echte memoisierte useApi) — ein pro Render
+// neues Objekt wuerde die `[…, api]`-Effects in den Pickern in eine
+// Endlosschleife treiben (Kommentar-Pattern aus PlaybookBodyEditor.test.tsx).
+const apiMock = {
+  listExternalTools: () => Promise.resolve(tools),
+  listPlaybooks: () => Promise.resolve([]),
+  listResources: () => Promise.resolve([]),
+}
+vi.mock('@/api/useApi', () => ({ useApi: () => apiMock }))
 
 import { SystemPromptEditor } from './SystemPromptEditor'
 import { buildSlashMenuItems } from './slashMenu'
@@ -75,6 +127,38 @@ describe('SystemPromptEditor', () => {
     // dass der Render fehlerfrei bleibt.
     expect(screen.getByTestId('system-prompt-editor')).toBeInTheDocument()
   })
+
+  it('insertet eine Tool-Ref-Pill via ToolPicker (Slash-Menue → Picker → Confirm)', async () => {
+    insertInlineContent.mockClear()
+    render(<SystemPromptEditor />)
+    expect(slashItemsRef.current).not.toBeNull()
+
+    const items = (await slashItemsRef.current?.('')) as {
+      title: string
+      onItemClick: () => void
+    }[]
+    const toolItem = items.find((i) => i.title === 'Externes Tool')
+    expect(toolItem).toBeDefined()
+    toolItem?.onItemClick()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('tool-option-todo')).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByTestId('tool-option-todo'))
+    fireEvent.click(screen.getByTestId('tool-picker-confirm'))
+
+    expect(insertInlineContent).toHaveBeenCalledTimes(1)
+    const inserted = insertInlineContent.mock.calls[0][0] as [
+      { type: string; props: PlaceholderProps },
+      string,
+    ]
+    expect(inserted[0].type).toBe('placeholder')
+    expect(inserted[0].props).toMatchObject({
+      kind: 'tool-ref',
+      target_id: 'todo',
+      label: 'Tool: Todoist',
+    })
+  })
 })
 
 describe('buildSlashMenuItems', () => {
@@ -88,6 +172,7 @@ describe('buildSlashMenuItems', () => {
     expect(titles).toContain('Persona laden (MCP)')
     expect(titles).toContain('Playbook-Katalog')
     expect(titles).toContain('Datum')
+    expect(titles).toContain('Externes Tool')
   })
 
   it('filtert Table und Numbered-List aus Default-Items heraus', () => {
@@ -128,6 +213,10 @@ describe('buildSlashMenuItems', () => {
     const resourceCatalogItem = items.find((i) => i.title === 'Resource-Katalog')
     resourceCatalogItem?.onItemClick()
     expect(openPicker).toHaveBeenCalledWith('resources-catalog')
+
+    const toolRefItem = items.find((i) => i.title === 'Externes Tool')
+    toolRefItem?.onItemClick()
+    expect(openPicker).toHaveBeenCalledWith('tool-ref')
   })
 
   it('allowedKinds filtert die Custom-Items (Persona-Pill-Satz)', () => {
@@ -146,6 +235,7 @@ describe('buildSlashMenuItems', () => {
     expect(titles).not.toContain('Persona-Feld')
     expect(titles).not.toContain('Datum')
     expect(titles).not.toContain('MCP-Tools')
+    expect(titles).not.toContain('Externes Tool')
   })
 })
 

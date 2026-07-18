@@ -97,6 +97,48 @@ einen neuen Eintrag mit Verweis.
   `GET …/placeholders`-Katalog + `list_placeholders` zur Laufzeit entdeckbar
   statt nur im Frontend-Code.
 
+## 2026-07-18 — Externe Tools (ADR-0043): Alias-Referenz, instruktiv, Naming
+
+- **Entscheidung 1 — Ausbaustufe B (instruktiv statt Gateway):** Externe Tools
+  sind versionierte Workspace-Aggregate mit beschreibenden Daten nur (Name,
+  Server-Bezeichnung, Tool-Namen, Nutzungshinweise, Fallback-Text). KEINE
+  URLs/Credentials-Speicherung — das ist die v1-Scope. Ein MCP-Gateway/Proxy
+  (Ausbaustufe C: Who2Be routet Tool-Calls) wird als **späterer Ausbaupfad im
+  ADR** dokumentiert, nicht gebaut. **Begründung:** (1) Instructions im
+  System-Prompt sind der Anwendungsfall (der Agent liest, nicht ruft direkt),
+  (2) Credentials-Store braucht neue Security-Architektur ohne Mehrwert fuer
+  v1, (3) Proxy-Komplexitaet (Timeouts, Routing) lohnt sich erst mit Echo
+  aus dem Feld. **Verworfen:** Credential-Store jetzt (zu viel Scope) —
+  kommt mit C, wenn nötig.
+
+- **Entscheidung 2 — Alias als Referenz, nicht UUID:** Pills speichern
+  target_id = Alias (z. B. `todo`), nicht Tool-UUID. **Begründung:** Ein
+  Workspace-Member bindert Tools neu (z. B. anderes Tool-Produkt für
+  denselben Alias); Pills bleiben valid ohne Re-Edit, kein brittle UUID-
+  Hardcoding. Ausbaupfad C wird aus dem Alias einen Proxy-Namespace bauen.
+
+- **Entscheidung 3 — Naming: `external_tool`, nicht tool/capability/
+  integration:** Entitätsname `external_tool` in der DB/API. **Verworfen:**
+  `tool` (kollidiert mit MCP-Protokoll "tools"), `capability` (kollidiert mit
+  `AgentCapability`), `integration` (zu generisch, kollidiert mit internen
+  OAuth-Adaptern). Placeholder-Art heißt `tool-ref` (kurz, editor-freundlich).
+
+- **Entscheidung 4 — Resource-Editor-Ausnahme:** Resource-Editor rendert
+  Pills bauartbedingt NICHT (der Body-Pfad `render_template_body` ist nur
+  für System-Prompts/Persona/Playbook verdrahtet, nicht für Resource-Body).
+  Pills dort wären tote UI ohne Rendering-Semantik. Pills in Persona-/
+  Playbook-/System-Prompt-Editoren: ja. Resource-Prosa: ohne Pills.
+  **Begründung:** Architektur-Seite (Body-Rendering hat 4 Pfade, Resources
+  nutzen einen nicht) — kein Feature-Limit, sondern Konsistenz.
+
+- **Entscheidung 5 — Keine Feedback-Migration:** Feedback-Ziele werden
+  erweitert um `entity_type='external_tool'`, aber es gibt **keine Migration**
+  auf `feedback` oder `usage_event` Tabellen (kein neues Schema-Feld). Die
+  Validierung lebt in Pydantic (`FeedbackEntityType`-Enum), nicht als DB-
+  CHECK. **Begründung:** Feedback ist append-only und schema-flexibel
+  (entity_type ist bereits Text, wird zur Laufzeit validiert). Null
+  Migrations-Overhead, Schema bleibt stabil.
+
 _Bei Wachstum: älteste Einträge zu Einzeilern komprimieren (Titel + Entscheidung
 bleiben)._
 

@@ -62,20 +62,24 @@ CI-Billing) sowie `docs/standards-review-2026-07-08.md` (WP-1–9).
 
 ## Struktur
 
-- `apps/api/` — FastAPI-Backend (REST, `/v1/workspaces/{ws_id}/...`)
+- `apps/api/` — FastAPI-Backend (REST, `/v1/workspaces/{ws_id}/...`);
+  `/routers/external_tools.py` fuer versionierte Workspace-Aggregate
+  `external_tool` (CRUD + Status-Transitions + Export, ADR-0043)
 - `apps/mcp/` — FastMCP-Server. Read-Tools (`get_persona`, `list_playbooks`,
   `fetch_playbook`, `list_resources`, `fetch_resource`, `fetch_agent`,
-  `list_triggers` — workspace-aware, filtern auf `status='active'`) plus
-  Write-Tools (ADR-0030: create/update/transition/restore + Link-Setter fuer
+  `list_triggers`, `list_external_tools`, `get_external_tool` —
+  workspace-aware, filtern auf `status='active'`) plus Write-Tools
+  (ADR-0030: create/update/transition/restore + Link-Setter fuer
   Persona/Playbook/Resource/Agent; Autorisierung serverseitig). Dazu:
   `search` (ADR-0037), `whoami`, Versions-/Discovery-Tools (`find_usages`,
   `list_versions`, `get_version`, `diff_versions`), Feedback-Flywheel
   (`record_usage`, `submit_feedback`, `get_feedback`, `report_problem` —
-  ADR-0038) und System-Prompt-Tools (`list/get/create/update/restore/
-  transition_system_prompt` — ADR-0040). `tools/list` ist pro Agent
-  policy-gefiltert (`PolicyFilterMiddleware`, fail-open; SSoT-Mapping
-  `who2be_models.tool_requirements` — ADR-0042); neue MCP-Tools brauchen
-  dort einen Mapping-Eintrag
+  ADR-0038), System-Prompt-Tools (`list/get/create/update/restore/
+  transition_system_prompt` — ADR-0040) und External-Tools-Write
+  (`create/update/transition/restore_external_tool` — ADR-0043). `tools/list`
+  ist pro Agent policy-gefiltert (`PolicyFilterMiddleware`, fail-open; SSoT-
+  Mapping `who2be_models.tool_requirements` — ADR-0042); neue MCP-Tools
+  brauchen dort einen Mapping-Eintrag
 - `apps/web/` — React/TypeScript-Web-UI (Vite, Tailwind v4, shadcn-Primitives,
   BlockNote-Insel für den Resource-Editor; Designsprache "Warm Citrus" laut
   `docs/frontend/design-language.md`)

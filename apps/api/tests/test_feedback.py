@@ -543,6 +543,89 @@ def test_resolution_requires_feedback_resolve_for_agent_tokens(
         cleanup_workspaces([owner])
 
 
+def _external_tool_body(name: str) -> dict[str, object]:
+    return {
+        "name": name,
+        "content": {"display_name": name, "usage_notes": "Notiz.", "tags": []},
+    }
+
+
+@pytest.mark.integration
+def test_flywheel_accepts_external_tool_entity(monkeypatch: pytest.MonkeyPatch) -> None:
+    """WP-3: record_usage/submit_feedback/get_feedback akzeptieren
+    entity_type='external_tool' (WP-4 musste den Feedback-Button weglassen,
+    weil das Backend zuvor 422 warf) — und das Feedback erscheint im
+    zentralen Posteingang mit dem Tool-Namen (Namens-JOIN)."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    fbase = f"/v1/workspaces/{ws}"
+
+    try:
+        with TestClient(app) as client:
+            tid = client.post(
+                f"{fbase}/external_tools", json=_external_tool_body("Todoist"), headers=auth
+            ).json()["id"]
+
+            usage = client.post(
+                f"{fbase}/usage-events",
+                json={"entity_type": "external_tool", "entity_id": tid, "outcome": "applied"},
+                headers=auth,
+            )
+            assert usage.status_code == 201, usage.text
+            assert usage.json()["entity_type"] == "external_tool"
+
+            fb = client.post(
+                f"{fbase}/feedback",
+                json={
+                    "entity_type": "external_tool",
+                    "entity_id": tid,
+                    "signal": "helpful",
+                    "note": "funktioniert gut",
+                },
+                headers=auth,
+            )
+            assert fb.status_code == 201, fb.text
+            fid = fb.json()["id"]
+
+            summary = client.get(f"{fbase}/feedback/external_tool/{tid}", headers=auth)
+            assert summary.status_code == 200, summary.text
+            body = summary.json()
+            assert body["entity_type"] == "external_tool"
+            assert body["usage_count"] == 1
+            assert body["by_signal"] == {"helpful": 1}
+
+            # Zentraler Posteingang: der Tool-Name loest ueber den neuen
+            # external_tool-JOIN auf (nicht NULL/gefiltert).
+            inbox = client.get(f"{fbase}/feedback-items", headers=auth).json()
+            entry = next(i for i in inbox["items"] if i["id"] == fid)
+            assert entry["entity_type"] == "external_tool"
+            assert entry["name"] == "Todoist"
+
+            # Uebersicht + Ungenutzt-Sicht kennen external_tool ebenfalls.
+            overview = client.get(f"{fbase}/feedback-overview", headers=auth).json()
+            row = next(i for i in overview["items"] if i["entity_id"] == tid)
+            assert row["name"] == "Todoist"
+            assert row["usage_count"] == 1
+
+            # Unbekanntes external_tool -> 404 (kein Enumerieren).
+            unknown = "00000000-0000-0000-0000-000000000000"
+            assert (
+                client.post(
+                    f"{fbase}/usage-events",
+                    json={"entity_type": "external_tool", "entity_id": unknown},
+                    headers=auth,
+                ).status_code
+                == 404
+            )
+    finally:
+        cleanup_workspaces([owner])
+
+
 @pytest.mark.integration
 def test_submit_feedback_requires_editor(monkeypatch: pytest.MonkeyPatch) -> None:
     """Inhalts-Feedback ist eine Kurations-Handlung → editor+: ein viewer bekommt

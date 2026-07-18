@@ -11,6 +11,7 @@ import {
   Calendar,
   FileText,
   Library,
+  Plug,
   Table,
   User,
   UserCog,
@@ -30,6 +31,7 @@ export type PlaceholderKind =
   | 'resources-catalog'
   | 'date'
   | 'tools-overview'
+  | 'tool-ref'
 
 export interface PlaceholderProps {
   kind: PlaceholderKind
@@ -112,6 +114,15 @@ const KIND_META: Record<PlaceholderKind, KindMeta> = {
     pillClass: 'bg-pill-tools text-pill-tools-fg border-pill-tools-fg/25',
     labelPrefix: 'MCP-Tools',
   },
+  // Teilt die `pill-tools`-Tinte mit `tools-overview` (gleiche Domaene —
+  // externe/MCP-Werkzeuge) statt einen neuen Token einzufuehren (Design-
+  // Sprache §13.3: Token-Aenderung nur bei genuinem Bedarf). `Plug` grenzt
+  // die Einzel-Tool-Bindung visuell vom `Wrench`-Uebersichts-Pill ab.
+  'tool-ref': {
+    icon: Plug,
+    pillClass: 'bg-pill-tools text-pill-tools-fg border-pill-tools-fg/25',
+    labelPrefix: 'Tool',
+  },
 }
 
 // ---------------------- BlockNote Custom-Inline-Spec -------------------------
@@ -139,6 +150,7 @@ export const PlaceholderInlineSpec = createReactInlineContentSpec(
           'resources-catalog',
           'date',
           'tools-overview',
+          'tool-ref',
         ] as const,
       },
       target_id: { default: '' as string },

@@ -13,6 +13,7 @@ _FULL_POLICY = AgentToolPolicy(
     playbook_read=ReadScope.all,
     resource_read=ReadScope.all,
     agent_read=ReadScope.all,
+    external_tool_read=ReadScope.all,
     persona_read=True,
     persona_write=True,
     playbook_write=True,
@@ -22,6 +23,7 @@ _FULL_POLICY = AgentToolPolicy(
     feedback_write=True,
     feedback_resolve=True,
     promote_retire=True,
+    external_tool_write=True,
 )
 
 # Default-Read-Scopes eines agent-gebundenen Tokens (whoami-normalisiert).
@@ -30,6 +32,7 @@ _DEFAULT_SCOPES = {
     "playbook": ReadScope.assigned,
     "resource": ReadScope.assigned,
     "agent": ReadScope.assigned,
+    "external_tool": ReadScope.all,
 }
 
 
@@ -183,6 +186,37 @@ def test_bound_token_capabilities_none_hides_writes() -> None:
     )
 
 
+def test_external_tool_read_default_shows_read_tools_but_not_writes() -> None:
+    # Default-Policy: external_tool_read=all (anders als playbook/resource
+    # assigned) — die Read-Tools sind ohne Extra-Konfiguration sichtbar.
+    policy = AgentToolPolicy()
+    assert is_tool_visible("list_external_tools", policy) is True
+    assert is_tool_visible("get_external_tool", policy) is True
+    assert is_tool_visible("create_external_tool", policy) is False
+
+
+def test_external_tool_read_none_hides_external_tool_reads() -> None:
+    policy = AgentToolPolicy(external_tool_read=ReadScope.none)
+    assert is_tool_visible("list_external_tools", policy) is False
+    assert is_tool_visible("get_external_tool", policy) is False
+
+
+def test_external_tool_write_capability_shows_writes() -> None:
+    policy = AgentToolPolicy(external_tool_write=True)
+    assert is_tool_visible("create_external_tool", policy) is True
+    assert is_tool_visible("update_external_tool", policy) is True
+    assert is_tool_visible("restore_external_tool", policy) is True
+
+
+def test_transition_external_tool_visible_with_either_capability() -> None:
+    for policy in (
+        AgentToolPolicy(external_tool_write=True),
+        AgentToolPolicy(promote_retire=True),
+    ):
+        assert is_tool_visible("transition_external_tool", policy) is True
+    assert is_tool_visible("transition_external_tool", AgentToolPolicy()) is False
+
+
 def test_every_capability_is_used_in_the_mapping() -> None:
     used = {
         cap for requirement in MCP_TOOL_REQUIREMENTS.values() for cap in requirement.capabilities
@@ -191,9 +225,10 @@ def test_every_capability_is_used_in_the_mapping() -> None:
 
 
 def test_mapping_covers_all_registered_server_tools() -> None:
-    # 47 `@with_tool_log("<name>")`-Registrierungen in apps/mcp/.../server.py
-    # (Stand ADR-0042). Neues Tool => hier + im Mapping ergaenzen; der
-    # Paritaetstest in apps/mcp prueft die Gegenrichtung gegen den Server.
-    assert len(MCP_TOOL_REQUIREMENTS) == 48
+    # 54 `@with_tool_log("<name>")`-Registrierungen in apps/mcp/.../server.py
+    # (Stand WP-3, ADR-0042 + 6 neue ExternalTool-Tools). Neues Tool => hier +
+    # im Mapping ergaenzen; der Paritaetstest in apps/mcp prueft die
+    # Gegenrichtung gegen den Server.
+    assert len(MCP_TOOL_REQUIREMENTS) == 54
     always = {name for name, req in MCP_TOOL_REQUIREMENTS.items() if req.always}
     assert always == {"ping", "whoami"}

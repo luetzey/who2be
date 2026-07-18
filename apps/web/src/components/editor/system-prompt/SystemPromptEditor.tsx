@@ -32,6 +32,7 @@ import { PersonaFieldPicker } from './pickers/PersonaFieldPicker'
 import { DateFormatPicker } from './pickers/DateFormatPicker'
 import { CatalogScopePicker } from './pickers/CatalogScopePicker'
 import { ResourcesCatalogScopePicker } from './pickers/ResourcesCatalogScopePicker'
+import { ToolPicker } from './pickers/ToolPicker'
 
 // Das Schema wird einmal pro Modul-Import gebaut; keine Hot-Reload-Probleme
 // weil BlockNote-Schemata statisch sind.
@@ -219,6 +220,13 @@ export function SystemPromptEditor({
         open={openPicker === 'resources-catalog'}
         anchorRef={anchorRef}
         initial={pendingEdit?.kind === 'resources-catalog' ? pendingEdit : undefined}
+        onConfirm={handlePickerConfirm}
+        onCancel={handlePickerCancel}
+      />
+      <ToolPicker
+        open={openPicker === 'tool-ref'}
+        anchorRef={anchorRef}
+        initial={pendingEdit?.kind === 'tool-ref' ? pendingEdit : undefined}
         onConfirm={handlePickerConfirm}
         onCancel={handlePickerCancel}
       />

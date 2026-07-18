@@ -433,6 +433,56 @@ export interface ResourceInput {
   locales?: string[]
 }
 
+// WP-4 (Blueprint `.claude/plan/2026-07-18-1315_external-tools-tool-ref.md`):
+// externe MCP-Server/Tool-Bindings. Rein instruktiv — KEINE Server-URLs,
+// KEINE Credentials (Entscheidung 2). Spiegelt `ExternalToolContent`
+// (packages/models/src/who2be_models/external_tool.py).
+export interface ExternalToolContent {
+  display_name: string
+  mcp_server_name: string
+  tool_names: string[]
+  // Stringifiziertes BlockNote-JSON-Dokument (wie `PlaybookContent.body`).
+  usage_notes: string
+  fallback_note: string | null
+  tags: string[]
+}
+
+export interface ExternalTool {
+  id: string
+  workspace_id: string
+  owner_id: string
+  name: string
+  // Workspace-eindeutiger Faehigkeits-Alias (Ziel der `tool-ref`-Placeholder-
+  // Referenz, WP-2). Vom Backend beim Anlegen aus dem Namen abgeleitet, falls
+  // nicht gesetzt; danach unveraenderlich (kein Feld in `ExternalToolUpdate`).
+  alias: string
+  current_version: number
+  current_status?: VersionStatus
+  has_pending_draft?: boolean
+  content: ExternalToolContent
+  created_at: string
+  updated_at: string
+  // Vom System verwaltet — User-Mutationen serverseitig gesperrt
+  // (403 managed_aggregate); die UI rendert read-only.
+  is_managed?: boolean
+}
+
+export interface ExternalToolVersion {
+  version: number
+  status?: VersionStatus
+  content: ExternalToolContent
+  created_by: string
+  created_at: string
+}
+
+export interface ExternalToolInput {
+  name: string
+  content: ExternalToolContent
+  // Nur beim Create genutzt (ExternalToolCreate); Update-Aufrufer lassen das
+  // Feld weg (ExternalToolUpdate kennt kein `locales`, `extra=forbid`).
+  locales?: string[]
+}
+
 // Phase 3-B — Heading-only Block-Refs. Backend liefert ab Track A
 // `available_in` und `section_preview`; bis dahin sind beide Felder
 // optional und das Frontend faellt auf `available` + `preview` zurueck.
@@ -608,6 +658,11 @@ export interface AgentToolPolicy {
   playbook_read: ReadScope
   resource_read: ReadScope
   agent_read: ReadScope
+  // WP-3: Read-Scope fuer das ExternalTool-Aggregat. Default 'all' (nicht
+  // 'assigned' wie die anderen Domains) — ExternalTool ist ein flacher
+  // Workspace-Katalog ohne Persona-/Playbook-Zuordnung; 'assigned' verhaelt
+  // sich serverseitig wie 'all' (keine Einschraenkung), nur 'none' sperrt.
+  external_tool_read: ReadScope
   persona_read: boolean
   persona_write: boolean
   playbook_write: boolean
@@ -618,6 +673,8 @@ export interface AgentToolPolicy {
   // das Usage-/Feedback-Flywheel ab (Default an); feedback_resolve die Triage
   // (Signale schliessen: addressed/in_progress/dismissed — Default aus).
   system_prompt_write: boolean
+  // WP-3: ExternalTool-Aggregat schreiben (Default aus, secure by default).
+  external_tool_write: boolean
   feedback_write: boolean
   feedback_resolve: boolean
   promote_retire: boolean
@@ -639,12 +696,15 @@ export const DEFAULT_TOOL_POLICY: AgentToolPolicy = {
   playbook_read: 'assigned',
   resource_read: 'assigned',
   agent_read: 'assigned',
+  // Default 'all' (nicht 'assigned') — siehe Feld-Kommentar oben.
+  external_tool_read: 'all',
   persona_read: true,
   persona_write: false,
   playbook_write: false,
   resource_write: false,
   agent_write: false,
   system_prompt_write: false,
+  external_tool_write: false,
   // Flywheel-Telemetrie ist Default an (ADR-0038), opt-out pro Agent; die
   // Triage (Signale schliessen) ist secure-by-default aus.
   feedback_write: true,

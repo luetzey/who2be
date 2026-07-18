@@ -57,6 +57,10 @@ _DEFAULT_POLICY_TOOLS = {
     "submit_feedback",
     "report_problem",
     "get_feedback",
+    # WP-3: external_tool_read faellt fail-open auf `all` (fehlender Key im
+    # whoami-Payload unten), also sind die ExternalTool-Reads Default sichtbar.
+    "list_external_tools",
+    "get_external_tool",
 }
 
 _ALL_CAPABILITIES = [
@@ -68,6 +72,7 @@ _ALL_CAPABILITIES = [
     "feedback_write",
     "feedback_resolve",
     "promote_retire",
+    "external_tool_write",
 ]
 
 
@@ -180,7 +185,7 @@ def test_full_policy_agent_sees_all_tools(monkeypatch: pytest.MonkeyPatch) -> No
     _install_identity(monkeypatch, _whoami_handler(payload))
     names = _list_tool_names()
     assert names == set(MCP_TOOL_REQUIREMENTS)
-    assert len(names) == 48
+    assert len(names) == 54
 
 
 def test_resource_read_none_hides_resource_tools(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -202,7 +207,7 @@ def test_unrestricted_admin_sees_all_tools(monkeypatch: pytest.MonkeyPatch) -> N
     _install_identity(monkeypatch, _whoami_handler(payload))
     names = _list_tool_names()
     assert names == set(MCP_TOOL_REQUIREMENTS)
-    assert len(names) == 48
+    assert len(names) == 54
 
 
 def test_unrestricted_viewer_sees_no_write_tools(monkeypatch: pytest.MonkeyPatch) -> None:

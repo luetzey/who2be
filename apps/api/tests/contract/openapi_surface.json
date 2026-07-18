@@ -140,6 +140,66 @@
     "operationId": "get_dashboard_v1_workspaces__workspace_id__dashboard_get"
   },
   {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/external_tools",
+    "operationId": "list_external_tools_v1_workspaces__workspace_id__external_tools_get"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/external_tools",
+    "operationId": "create_external_tool_v1_workspaces__workspace_id__external_tools_post"
+  },
+  {
+    "method": "DELETE",
+    "path": "/v1/workspaces/{workspace_id}/external_tools/{tool_id}",
+    "operationId": "delete_external_tool_v1_workspaces__workspace_id__external_tools__tool_id__delete"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/external_tools/{tool_id}",
+    "operationId": "get_external_tool_v1_workspaces__workspace_id__external_tools__tool_id__get"
+  },
+  {
+    "method": "PUT",
+    "path": "/v1/workspaces/{workspace_id}/external_tools/{tool_id}",
+    "operationId": "update_external_tool_v1_workspaces__workspace_id__external_tools__tool_id__put"
+  },
+  {
+    "method": "PATCH",
+    "path": "/v1/workspaces/{workspace_id}/external_tools/{tool_id}/draft",
+    "operationId": "update_external_tool_draft_v1_workspaces__workspace_id__external_tools__tool_id__draft_patch"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/external_tools/{tool_id}/export",
+    "operationId": "export_external_tool_v1_workspaces__workspace_id__external_tools__tool_id__export_get"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/external_tools/{tool_id}/versions",
+    "operationId": "list_external_tool_versions_v1_workspaces__workspace_id__external_tools__tool_id__versions_get"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/external_tools/{tool_id}/versions/{version}",
+    "operationId": "get_external_tool_version_v1_workspaces__workspace_id__external_tools__tool_id__versions__version__get"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/external_tools/{tool_id}/versions/{version}/provenance",
+    "operationId": "provenance_external_tool_version_v1_workspaces__workspace_id__external_tools__tool_id__versions__version__provenance_get"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/external_tools/{tool_id}/versions/{version}/restore",
+    "operationId": "restore_external_tool_version_v1_workspaces__workspace_id__external_tools__tool_id__versions__version__restore_post"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/external_tools/{tool_id}/versions/{version}/transition",
+    "operationId": "transition_external_tool_version_v1_workspaces__workspace_id__external_tools__tool_id__versions__version__transition_post"
+  },
+  {
     "method": "POST",
     "path": "/v1/workspaces/{workspace_id}/feedback",
     "operationId": "submit_feedback_v1_workspaces__workspace_id__feedback_post"

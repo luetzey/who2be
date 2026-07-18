@@ -26,6 +26,13 @@ from who2be_models.dashboard import (
     EntityStatusDistribution,
 )
 from who2be_models.errors import ActionableBy, ApiProblem, ProblemReason
+from who2be_models.external_tool import (
+    ExternalToolContent,
+    ExternalToolCreate,
+    ExternalToolRead,
+    ExternalToolUpdate,
+    ExternalToolVersionRead,
+)
 from who2be_models.feedback import (
     AgentFeedbackRead,
     FeedbackCreate,
@@ -193,6 +200,11 @@ __all__ = [
     "EmbeddingMode",
     "EntityStatusDistribution",
     "EntityType",
+    "ExternalToolContent",
+    "ExternalToolCreate",
+    "ExternalToolRead",
+    "ExternalToolUpdate",
+    "ExternalToolVersionRead",
     "AgentFeedbackRead",
     "FeedbackCreate",
     "FeedbackDetailRead",

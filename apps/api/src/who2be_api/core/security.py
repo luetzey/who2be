@@ -269,6 +269,7 @@ _CAPABILITY_LABELS: dict[AgentCapability, str] = {
         "Feedback-Signale zu schliessen (addressed/in_progress/dismissed)"
     ),
     AgentCapability.promote_retire: "Versionen zu aktivieren oder zu deaktivieren",
+    AgentCapability.external_tool_write: "Externe Tools zu erstellen oder zu aendern",
 }
 
 

@@ -13,6 +13,11 @@ Resolver-Regeln (aus der Spec):
 - date:           target_id ist Format-Slug ("" -> ISO-8601, "human" ->
                   "31. Mai 2026"). Standardisiert auf ctx.locale = 'de-DE'. Nie Miss.
 - tools-overview: kuratierte, pro-Agent gefilterte Markdown-Liste. Nie Miss.
+- tool-ref:       target_id ist der Faehigkeits-Alias eines ExternalTool
+                  (Migration 0065); sucht die Active-Version im Workspace.
+                  Nicht gefunden (unbekannter Alias oder kein Active) -> Miss
+                  (unresolved_key gesetzt). Keine Policy-Domain vor WP-3 ->
+                  sichtbar fuer jeden Agenten (siehe `resolvers/tool_ref.py`).
 
 Diese Datei bleibt die stabile Import-Oberflaeche: `RenderContext`,
 `ResolveResult`, `render_skills_table`, die Resolver-Klassen und `REGISTRY`
@@ -35,6 +40,7 @@ from who2be_api.services.placeholders.resolvers import (
     PlaybooksCatalogResolver,
     ResourceResolver,
     ResourcesCatalogResolver,
+    ToolRefResolver,
     ToolsOverviewResolver,
     render_skills_table,
 )
@@ -51,6 +57,7 @@ __all__ = [
     "ResolveResult",
     "ResourceResolver",
     "ResourcesCatalogResolver",
+    "ToolRefResolver",
     "ToolsOverviewResolver",
     "render_skills_table",
 ]
@@ -69,4 +76,5 @@ REGISTRY: dict[str, PlaceholderResolver] = {
     "resources-catalog": ResourcesCatalogResolver(),
     "date": DateResolver(),
     "tools-overview": ToolsOverviewResolver(),
+    "tool-ref": ToolRefResolver(),
 }

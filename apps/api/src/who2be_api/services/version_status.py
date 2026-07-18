@@ -44,6 +44,7 @@ from who2be_models import (
     DEFAULT_LOCALE,
     AgentCapability,
     EntityType,
+    ExternalToolVersionRead,
     PersonaVersionRead,
     PlaybookVersionRead,
     ResourceVersionRead,
@@ -60,6 +61,7 @@ def _not_found(entity_type: EntityType) -> HTTPException:
         "playbook": "Playbook",
         "resource": "Resource",
         "system_prompt_template": "System-Prompt-Template",
+        "external_tool": "Externes Tool",
     }[entity_type]
     return HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
@@ -136,6 +138,9 @@ _WRITE_CAPABILITY: dict[str, AgentCapability] = {
     "persona": AgentCapability.persona_write,
     "playbook": AgentCapability.playbook_write,
     "resource": AgentCapability.resource_write,
+    # WP-3: schliesst die WP-1-Luecke (external_tool war bislang NICHT in dieser
+    # Map — jeder agent-gebundene Token bekam hart `none` im else-Zweig unten).
+    "external_tool": AgentCapability.external_tool_write,
 }
 
 
@@ -200,6 +205,11 @@ _TEMPLATE_TABLES = (
     "system_prompt_template",
     "system_prompt_template_version",
     "template_id",
+)
+_EXTERNAL_TOOL_TABLES = (
+    "external_tool",
+    "external_tool_version",
+    "external_tool_id",
 )
 
 
@@ -273,6 +283,20 @@ class VersionStatusService:
         )
         return SystemPromptTemplateVersionRead.model_validate(dict(row))
 
+    async def transition_external_tool_version(
+        self,
+        ctx: WorkspaceContext,
+        tool_id: UUID,
+        version: int,
+        to_status: VersionStatus,
+        note: str | None,
+        locale: str = DEFAULT_LOCALE,
+    ) -> ExternalToolVersionRead:
+        row = await self._transition(
+            ctx, "external_tool", _EXTERNAL_TOOL_TABLES, tool_id, version, to_status, note, locale
+        )
+        return ExternalToolVersionRead.model_validate(dict(row))
+
     async def provenance_persona(
         self, ctx: WorkspaceContext, persona_id: UUID, version: int
     ) -> list[StatusHistoryEntry]:
@@ -294,6 +318,11 @@ class VersionStatusService:
         return await self._provenance(
             ctx, "system_prompt_template", _TEMPLATE_TABLES, template_id, version
         )
+
+    async def provenance_external_tool(
+        self, ctx: WorkspaceContext, tool_id: UUID, version: int
+    ) -> list[StatusHistoryEntry]:
+        return await self._provenance(ctx, "external_tool", _EXTERNAL_TOOL_TABLES, tool_id, version)
 
     async def _provenance(
         self,

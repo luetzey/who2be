@@ -40,6 +40,10 @@ from who2be_models import (
     AgentRead,
     AgentUpdate,
     AgentWithRenderedPrompt,
+    ExternalToolCreate,
+    ExternalToolRead,
+    ExternalToolUpdate,
+    ExternalToolVersionRead,
     FeedbackCreate,
     FeedbackResolution,
     FeedbackResolutionCreate,
@@ -660,6 +664,35 @@ async def get_system_prompt(template_id: str) -> SystemPromptTemplateRead:
     return await client.get_system_prompt(parsed)
 
 
+@mcp.tool(output_schema=None)
+@with_tool_log("list_external_tools")
+async def list_external_tools(tag: str | None = None, locale: str = "de") -> list[ExternalToolRead]:
+    """Katalog der externen Tool-Bindungen im Workspace (WP-3).
+
+    Jeder Eintrag traegt Alias (Faehigkeits-Kennung, z. B. 'todo'),
+    Anzeigename, MCP-Server-Namen und die relevanten Tool-Bezeichner. `tag`
+    filtert client-seitig (kein REST-`?tag=`-Endpoint fuer ExternalTool).
+    Nutze `get_external_tool(alias)`, um eine Bindung im Detail zu lesen.
+    """
+    client = await build_client()
+    tools = await client.list_external_tools(locale)
+    if tag is None:
+        return tools
+    return [t for t in tools if tag in t.content.tags]
+
+
+@mcp.tool(output_schema=None)
+@with_tool_log("get_external_tool")
+async def get_external_tool(identifier: str, locale: str = "de") -> ExternalToolRead:
+    """Laedt eine externe Tool-Bindung per UUID ODER per Faehigkeits-Alias.
+
+    Der Alias (z. B. 'todo') ist die stabile, fuer `tool-ref`-Placeholder
+    gedachte Kennung — sie ueberlebt ein Re-Binding auf ein neues Tool-Objekt.
+    """
+    client = await build_client()
+    return await client.resolve_external_tool(identifier, locale)
+
+
 # ---------------------------------------------------------------------------
 # Read-only Reverse-Lookups + Versions-Historie (Track 1, erweitert ADR-0030/
 # 0021). Duenne Adapter ueber bestehende REST-Endpunkte — kein neuer
@@ -736,7 +769,8 @@ async def diff_versions(
     Klartext-Serialisierung beider Staende (Placeholder-Pills als
     `{{kind:target_id}}`-Tokens) fuer einen lesbaren Zeilen-Vergleich. Nutze
     das, um einen Draft vor dem Promote selbst zu reviewen. `locale` waehlt die
-    Sprachvariante (Default `'de'`).
+    Sprachvariante (Default `'de'`). `entity_type='external_tool'` wird sauber
+    abgelehnt (`ToolError`) — dafuer gibt es keinen REST-Diff-Endpunkt.
     """
     parsed = _parse_uuid(entity_id, entity_type)
     client = await build_client()
@@ -992,6 +1026,68 @@ async def set_resource_sub_resources(
     """
     client = await build_client()
     return await client.set_resource_sub_resources(_parse_uuid(resource_id, "Resource"), links)
+
+
+@mcp.tool(output_schema=None)
+@with_tool_log("create_external_tool")
+async def create_external_tool(data: ExternalToolCreate) -> ExternalToolRead:
+    """Legt eine neue externe Tool-Bindung an (initiale Draft-Version 1).
+
+    `data.alias` wird aus `data.name` abgeleitet, falls nicht gesetzt —
+    workspace-eindeutig (409 bei Kollision). Rein instruktiv: `data.content`
+    traegt Anzeigename, MCP-Server-Namen, Tool-Bezeichner und Nutzungshinweise
+    — KEINE Server-URLs oder Credentials. Erst nach
+    `transition_external_tool(..., to='active')` fuer `tool-ref`-Placeholder
+    aufloesbar.
+    """
+    client = await build_client()
+    return await client.create_external_tool(data)
+
+
+@mcp.tool(output_schema=None)
+@with_tool_log("update_external_tool")
+async def update_external_tool(
+    tool_id: str, data: ExternalToolUpdate, locale: str = "de"
+) -> ExternalToolRead:
+    """Aktualisiert eine externe Tool-Bindung (versioniert; PUT auf aktiv → neue
+    Draft, 409 bei bestehendem Draft). Der Alias ist nach dem Anlegen fix."""
+    client = await build_client()
+    return await client.update_external_tool(_parse_uuid(tool_id, "ExternalTool"), data, locale)
+
+
+@mcp.tool(
+    description=(
+        f"Schaltet eine ExternalTool-Version in einen neuen Status. {TRANSITION_RULE_DOC} "
+        "`note` landet in der Status-Historie."
+    ),
+    output_schema=None,
+)
+@with_tool_log("transition_external_tool")
+async def transition_external_tool(
+    tool_id: str, version: int, to: VersionStatus, note: str | None = None, locale: str = "de"
+) -> ExternalToolVersionRead:
+    """Schaltet eine ExternalTool-Version in einen neuen Status.
+
+    Tool-`description` wird via `description=` aus `TRANSITION_RULE_DOC` gesetzt
+    (SSoT, WP-5/#257), da f-String-Docstrings nicht in `__doc__` landen.
+    """
+    client = await build_client()
+    return await client.transition_external_tool_version(
+        _parse_uuid(tool_id, "ExternalTool"),
+        version,
+        VersionTransitionRequest(to=to, note=note),
+        locale,
+    )
+
+
+@mcp.tool(output_schema=None)
+@with_tool_log("restore_external_tool")
+async def restore_external_tool(tool_id: str, version: int, locale: str = "de") -> ExternalToolRead:
+    """Stellt eine aeltere ExternalTool-Version als neue Draft wieder her (non-destruktiv)."""
+    client = await build_client()
+    return await client.restore_external_tool_version(
+        _parse_uuid(tool_id, "ExternalTool"), version, locale
+    )
 
 
 @mcp.tool(output_schema=None)

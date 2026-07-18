@@ -31,6 +31,7 @@ from who2be_api.services.placeholders.registry import (
     ResolveResult,
     ResourceResolver,
     ResourcesCatalogResolver,
+    ToolRefResolver,
     ToolsOverviewResolver,
     render_skills_table,
 )
@@ -1468,6 +1469,136 @@ class TestToolsOverviewResolver:
         assert "fetch_agent(agent_id)" not in result
 
 
+# ---------------------------------------------------------------------------
+# ToolRefResolver (WP-2)
+# ---------------------------------------------------------------------------
+
+
+class TestToolRefResolver:
+    """Unit-Tests fuer den `tool-ref`-Resolver (Blueprint
+    `.claude/plan/2026-07-18-1315_external-tools-tool-ref.md`, WP-2)."""
+
+    def _row(
+        self,
+        alias: str = "todo",
+        display_name: str = "Todoist",
+        mcp_server_name: str = "Todoist MCP",
+        tool_names: list[str] | None = None,
+        usage_notes: str = "Immer fuer To-dos nutzen.",
+        fallback_note: str | None = None,
+    ) -> MagicMock:
+        row = MagicMock()
+        data = {
+            "alias": alias,
+            "content": {
+                "display_name": display_name,
+                "mcp_server_name": mcp_server_name,
+                "tool_names": tool_names if tool_names is not None else ["add_task", "list_tasks"],
+                "usage_notes": usage_notes,
+                "fallback_note": fallback_note,
+                "tags": [],
+            },
+        }
+        row.__getitem__ = MagicMock(side_effect=lambda k: data[k])
+        return row
+
+    def test_resolves_active_tool_binding(self) -> None:
+        resolver = ToolRefResolver()
+        ctx = _ctx()
+        db = _make_db(self._row())
+
+        result = _async_run(resolver.resolve("todo", ctx, db))
+
+        assert isinstance(result, ResolveResult)
+        assert result.unresolved_key is None
+        assert "todo" in result.text
+        assert "Todoist" in result.text
+        assert "Todoist MCP" in result.text
+        assert "`add_task`" in result.text
+        assert "`list_tasks`" in result.text
+        assert "Immer fuer To-dos nutzen." in result.text
+
+    def test_resolves_optional_fallback_note(self) -> None:
+        resolver = ToolRefResolver()
+        ctx = _ctx()
+        db = _make_db(self._row(fallback_note="Erinnere den User, es manuell zu erledigen."))
+
+        result = _async_run(resolver.resolve("todo", ctx, db))
+
+        assert result.unresolved_key is None
+        assert "Fallback: Erinnere den User, es manuell zu erledigen." in result.text
+
+    def test_usage_notes_as_blocknote_json_renders_plain_text(self) -> None:
+        """usage_notes als stringifiziertes BlockNote-JSON wird ueber
+        `blocks_plain_text` (Single-Source, `placeholders._core`) zu Klartext."""
+        resolver = ToolRefResolver()
+        ctx = _ctx()
+        doc = json.dumps([_blk("b1", "Nutze fuer alle To-do-Anfragen.")])
+        db = _make_db(self._row(usage_notes=doc))
+
+        result = _async_run(resolver.resolve("todo", ctx, db))
+
+        assert "Nutze fuer alle To-do-Anfragen." in result.text
+        # Rohes JSON darf nicht im Output landen.
+        assert '"type"' not in result.text
+
+    def test_no_tool_names_lists_none_gelistet(self) -> None:
+        resolver = ToolRefResolver()
+        ctx = _ctx()
+        db = _make_db(self._row(tool_names=[]))
+
+        result = _async_run(resolver.resolve("todo", ctx, db))
+
+        assert "keine gelistet" in result.text
+
+    def test_unknown_alias_returns_error_string_and_miss_key(self) -> None:
+        resolver = ToolRefResolver()
+        ctx = _ctx()
+        db = _make_db(None)
+
+        result = _async_run(resolver.resolve("unbekannt", ctx, db))
+
+        assert result.text == "<Tool nicht verfuegbar>"
+        assert result.unresolved_key == "tool-ref:unbekannt"
+
+    def test_draft_only_tool_is_miss(self) -> None:
+        """Nur Draft/Review (kein Active) -> derselbe Miss wie unbekannter Alias:
+        der JOIN filtert bereits auf `status='active'`, daher liefert die Fake-DB
+        hier `None` (kein Match), analog zu `test_unknown_alias_...`."""
+        resolver = ToolRefResolver()
+        ctx = _ctx()
+        db = _make_db(None)
+
+        result = _async_run(resolver.resolve("draft-tool", ctx, db))
+
+        assert result.text == "<Tool nicht verfuegbar>"
+        assert result.unresolved_key == "tool-ref:draft-tool"
+        db.fetchrow.assert_awaited_once()
+
+    def test_empty_alias_returns_miss_without_db_call(self) -> None:
+        resolver = ToolRefResolver()
+        ctx = _ctx()
+        db = _make_db()
+
+        result = _async_run(resolver.resolve("   ", ctx, db))
+
+        assert result.text == "<Tool nicht verfuegbar>"
+        assert result.unresolved_key == "tool-ref:   "
+        db.fetchrow.assert_not_called()
+
+    def test_missing_display_name_falls_back_to_alias(self) -> None:
+        resolver = ToolRefResolver()
+        ctx = _ctx()
+        db = _make_db(self._row(display_name=""))
+
+        result = _async_run(resolver.resolve("todo", ctx, db))
+
+        assert "todo" in result.text
+
+    def test_registered_in_registry(self) -> None:
+        assert isinstance(REGISTRY["tool-ref"], ToolRefResolver)
+
+
 class TestToolsOverviewSSoTParity:
     """Drift-Guard: kuratierte `_TOOLS`-Gruppen vs. Sichtbarkeits-SSoT (ADR-0042).
 
@@ -1593,6 +1724,7 @@ class TestToolsOverviewSSoTParity:
             feedback_write=True,
             feedback_resolve=True,
             promote_retire=True,
+            external_tool_write=True,
         )
         for tool in _TOOLS:
             assert tool.signature in result

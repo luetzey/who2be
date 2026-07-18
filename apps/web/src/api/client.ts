@@ -16,6 +16,9 @@ import type {
   EntitlementInfo,
   EntityExport,
   EntityExportFormat,
+  ExternalTool,
+  ExternalToolInput,
+  ExternalToolVersion,
   FeedbackDetail,
   FeedbackEvents,
   FeedbackInput,
@@ -160,7 +163,7 @@ async function requestText(
 async function exportEntity(
   token: string,
   ws: string,
-  entity: 'personas' | 'playbooks' | 'resources',
+  entity: 'personas' | 'playbooks' | 'resources' | 'external_tools',
   id: string,
   format: EntityExportFormat,
 ): Promise<EntityExport | string> {
@@ -335,6 +338,25 @@ export interface Api {
     links: SubResourceLinkInput[],
   ) => Promise<SubResource[]>
   listResourceUsedBy: (id: string) => Promise<ResourceRef[]>
+  // WP-4 (Blueprint 2026-07-18 external-tools-tool-ref): externe MCP-Server/
+  // Tool-Bindings. Kein `duplicate`, `diff` oder `tags`-Endpoint — die
+  // Backend-Surface (WP-1) traegt sie nicht (siehe
+  // `apps/api/tests/contract/openapi_surface.json`).
+  listExternalTools: () => Promise<ExternalTool[]>
+  getExternalTool: (id: string) => Promise<ExternalTool>
+  createExternalTool: (input: ExternalToolInput) => Promise<ExternalTool>
+  updateExternalTool: (id: string, input: ExternalToolInput) => Promise<ExternalTool>
+  patchExternalToolDraft: (id: string, input: ExternalToolInput) => Promise<ExternalTool>
+  listExternalToolVersions: (id: string) => Promise<ExternalToolVersion[]>
+  transitionExternalToolVersion: (
+    id: string,
+    version: number,
+    to: VersionStatus,
+  ) => Promise<ExternalToolVersion>
+  restoreExternalToolVersion: (id: string, version: number) => Promise<ExternalTool>
+  provenanceExternalToolVersion: (id: string, version: number) => Promise<ProvenanceEntry[]>
+  deleteExternalTool: (id: string) => Promise<void>
+  exportExternalTool: (id: string, format: EntityExportFormat) => Promise<EntityExport | string>
   // Track A8 — Composite-Playbook-Endpoints.
   listPlaybookComposes: (id: string) => Promise<Playbook[]>
   setPlaybookComposes: (id: string, childIds: string[]) => Promise<Playbook[]>
@@ -614,6 +636,43 @@ export function createApi(token: string, workspaceId: string): Api {
       }),
     listResourceUsedBy: (id) =>
       request<ResourceRef[]>(token, `${ws}/resources/${id}/used_by`),
+    listExternalTools: () => request<ExternalTool[]>(token, `${ws}/external_tools`),
+    getExternalTool: (id) => request<ExternalTool>(token, `${ws}/external_tools/${id}`),
+    createExternalTool: (input) =>
+      request<ExternalTool>(token, `${ws}/external_tools`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    updateExternalTool: (id, input) =>
+      request<ExternalTool>(token, `${ws}/external_tools/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(input),
+      }),
+    patchExternalToolDraft: (id, input) =>
+      request<ExternalTool>(token, `${ws}/external_tools/${id}/draft`, {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      }),
+    listExternalToolVersions: (id) =>
+      request<ExternalToolVersion[]>(token, `${ws}/external_tools/${id}/versions`),
+    transitionExternalToolVersion: (id, version, to) =>
+      request<ExternalToolVersion>(
+        token,
+        `${ws}/external_tools/${id}/versions/${version}/transition`,
+        { method: 'POST', body: JSON.stringify({ to }) },
+      ),
+    restoreExternalToolVersion: (id, version) =>
+      request<ExternalTool>(token, `${ws}/external_tools/${id}/versions/${version}/restore`, {
+        method: 'POST',
+      }),
+    provenanceExternalToolVersion: (id, version) =>
+      request<ProvenanceEntry[]>(
+        token,
+        `${ws}/external_tools/${id}/versions/${version}/provenance`,
+      ),
+    deleteExternalTool: (id) =>
+      request<void>(token, `${ws}/external_tools/${id}`, { method: 'DELETE' }),
+    exportExternalTool: (id, format) => exportEntity(token, ws, 'external_tools', id, format),
     listPlaybookComposes: (id) =>
       request<Playbook[]>(token, `${ws}/playbooks/${id}/composes`),
     setPlaybookComposes: (id, childIds) =>

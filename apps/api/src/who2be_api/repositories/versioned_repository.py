@@ -51,15 +51,20 @@ class AggregateTables(Generic[TRead, TVersionRead]):
     entity: str
     read_model: type[TRead]
     version_read_model: type[TVersionRead]
-    # `has_slug=True` blendet die workspace-eindeutige `slug`-Spalte in alle
-    # Lese-/Schreib-Pfade ein (nur Resource; Persona/Playbook haben keine).
+    # `has_slug=True` blendet eine workspace-eindeutige Identitaets-Spalte in
+    # alle Lese-/Schreib-Pfade ein (Resource: `slug`; ExternalTool: `alias` —
+    # `slug_column` waehlt den physischen Spaltennamen, Persona/Playbook haben
+    # keine).
     has_slug: bool = False
+    slug_column: str = "slug"
     version_table: str = field(init=False)
     fk: str = field(init=False)
 
     def __post_init__(self) -> None:
         # Defense-in-Depth: nur bekannte Inhalts-Tabellen als SQL-Identifier.
         safe_entity(self.entity)
+        if self.has_slug and self.slug_column not in {"slug", "alias"}:
+            raise ValueError(f"Unbekannte Slug-Spalte: {self.slug_column!r}")
         object.__setattr__(self, "version_table", f"{self.entity}_version")
         object.__setattr__(self, "fk", f"{self.entity}_id")
 
@@ -81,12 +86,12 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
     # --- Slug-aware Spalten-Bausteine ----------------------------------------
 
     def _slug_select(self) -> str:
-        """`e.slug, ` fuer slug-fuehrende Aggregate, sonst leer."""
-        return "e.slug, " if self._t.has_slug else ""
+        """`e.<slug_column>, ` fuer slug-fuehrende Aggregate, sonst leer."""
+        return f"e.{self._t.slug_column}, " if self._t.has_slug else ""
 
     def _returning_cols(self) -> str:
-        """Identitaets-RETURNING-Spalten (inkl. `slug` bei slug-Aggregaten)."""
-        slug = "slug, " if self._t.has_slug else ""
+        """Identitaets-RETURNING-Spalten (inkl. Slug-Spalte bei slug-Aggregaten)."""
+        slug = f"{self._t.slug_column}, " if self._t.has_slug else ""
         return f"id, workspace_id, owner_id, name, {slug}current_version, created_at, updated_at"
 
     # --- SELECT-Bausteine (von Subklassen-fetch/list eingebettet) ------------
@@ -154,11 +159,12 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
         e, ev, fk = self._t.entity, self._t.version_table, self._t.fk
         async with self._pool.acquire() as conn, conn.transaction():
             if self._t.has_slug:
-                # `slug` ist bei slug-fuehrenden Aggregaten Pflicht (der Service
-                # leitet ihn aus dem Namen ab); die UNIQUE(workspace_id, slug)
-                # meldet Kollisionen als asyncpg.UniqueViolationError.
+                # Die Slug-Spalte ist bei slug-fuehrenden Aggregaten Pflicht (der
+                # Service leitet sie aus dem Namen ab); der partielle
+                # UNIQUE-Index (workspace_id, <slug_column>) meldet Kollisionen
+                # als asyncpg.UniqueViolationError.
                 row = await conn.fetchrow(
-                    f"INSERT INTO {e} (workspace_id, owner_id, name, slug) "
+                    f"INSERT INTO {e} (workspace_id, owner_id, name, {self._t.slug_column}) "
                     "VALUES ($1, $2, $3, $4) "
                     f"RETURNING {self._returning_cols()}",
                     workspace_id,

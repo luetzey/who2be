@@ -72,6 +72,7 @@
       "personas": "Personae",
       "playbooks": "Playbooks",
       "resources": "Resources",
+      "tools": "Externe Tools",
       "feedback": "Feedback",
       "settings": "Einstellungen"
     },
@@ -255,7 +256,8 @@
         "scopeField": {
           "playbook_read": "Playbooks lesen",
           "resource_read": "Resources lesen",
-          "agent_read": "Agenten lesen"
+          "agent_read": "Agenten lesen",
+          "external_tool_read": "Externe Tools lesen"
         },
         "scope": {
           "all": "Alle (ganzer Workspace)",
@@ -278,7 +280,8 @@
           "system_prompt_write": "System-Prompts verfassen (Review einreichen)",
           "feedback_write": "Nutzung/Feedback melden",
           "feedback_resolve": "Feedback-Triage: Signale schließen (addressed/in_progress/dismissed)",
-          "promote_retire": "Versionen aktivieren/deaktivieren"
+          "promote_retire": "Versionen aktivieren/deaktivieren",
+          "external_tool_write": "Externe Tools erstellen/ändern"
         },
         "writeTags": {
           "hint": "Tag-Scope (optional): leer = alle Tags. Sonst darf der Agent in der Domain nur Inhalte mit diesen Tags schreiben.",
@@ -2060,6 +2063,110 @@
         "actorHuman": "Mensch",
         "actorSystem": "System"
       }
+    }
+  },
+  "tools": {
+    "list": {
+      "title": "Externe Tools",
+      "description": "MCP-Server-Bindings mit stabilem Fähigkeits-Alias — einmal pflegen, überall aktuell.",
+      "newTool": "Neues Tool",
+      "emptyTitle": "Noch keine externen Tools",
+      "emptyDescription": "Hinterlege dein erstes externes Tool (z. B. Todoist), um es per Alias in Playbooks und Personas zu referenzieren."
+    },
+    "new": {
+      "title": "Neues externes Tool",
+      "description": "Lege eine neue MCP-Server-Bindung an.",
+      "submit": "Anlegen"
+    },
+    "form": {
+      "identityTitle": "Identität",
+      "identityDescription": "Wie das Tool heißt und über welchen Alias es referenziert wird.",
+      "identityHelp": "Beispiel: „Todoist\" mit Alias „todo\" — Playbooks/Personas referenzieren den Alias, nicht das konkrete Tool. Ein Tool-Wechsel (z. B. Todoist → Things 3) aktualisiert alle referenzierenden Prompts automatisch.",
+      "namePlaceholder": "z. B. Todoist",
+      "aliasLabel": "Alias",
+      "aliasHelp": "Stabiler Fähigkeits-Alias (z. B. „todo\") für die tool-ref-Referenz in Playbooks/Personas. Wird beim Anlegen aus dem Namen abgeleitet und ist danach unveränderlich.",
+      "displayNameLabel": "Anzeigename",
+      "displayNamePlaceholder": "z. B. Todoist",
+      "mcpServerNameLabel": "MCP-Server-Name",
+      "mcpServerNamePlaceholder": "z. B. Todoist MCP",
+      "mcpServerNameHelp": "Anzeigename des Connectors in der Agent-Runtime.",
+      "toolNamesLabel": "Tool-Namen",
+      "toolNamesPlaceholder": "Tool-Namen eingeben und Enter drücken",
+      "toolNamesHelp": "Relevante MCP-Tool-Bezeichner (z. B. add_task, list_tasks). Enter zum Anlegen, Klick auf das X zum Entfernen.",
+      "usageNotesTitle": "Nutzungshinweise",
+      "usageNotesDescription": "Wann und wie der Agent dieses Tool einsetzen soll.",
+      "usageNotesHelp": "Do/Don't, typische Anwendungsfälle. Wird bei der tool-ref-Expansion in den Prompt übernommen.",
+      "usageNotesLabel": "Nutzungshinweise",
+      "fallbackNoteLabel": "Fallback-Hinweis",
+      "fallbackNotePlaceholder": "Was der Agent tun soll, wenn der Server nicht verbunden ist",
+      "fallbackNoteHelp": "Optional. Greift, wenn der MCP-Server in der Runtime nicht verbunden ist.",
+      "tagsDescription": "Stichwörter zur Suche und Filterung.",
+      "tagsHelp": "Enter zum Anlegen, Klick auf das X zum Entfernen.",
+      "tagsPlaceholder": "Tag eingeben und Enter drücken",
+      "nameRequired": "Name ist erforderlich."
+    },
+    "detail": {
+      "activeVersion": "Active: v{{version}}",
+      "workingOnDraft": "Du arbeitest auf Draft v{{version}}",
+      "inReview": "In Review: v{{version}}",
+      "currentVersion": "Aktuelle Version: v{{version}} ({{status}})",
+      "restoredAsDraft": "v{{version}} als Entwurf wiederhergestellt.",
+      "bannerDraftTitle": "Entwurf v{{version}} in Arbeit",
+      "bannerDraftDescription": "Reiche die Version zur Review ein, wenn du fertig bist.",
+      "bannerReviewTitle": "Version v{{version}} liegt zur Review",
+      "bannerReviewDescription": "Aktiviere die Version nach der Prüfung oder gib sie zurück in den Entwurf.",
+      "bannerInactiveTitle": "Version v{{version}} ist inaktiv",
+      "bannerInactiveDescription": "Reaktiviere sie als Entwurf, um wieder daran zu arbeiten."
+    },
+    "tabs": {
+      "edit": "Bearbeiten",
+      "versions": "Versionen"
+    },
+    "statusBar": {
+      "ariaLabel": "Status-Aktionen",
+      "activate": "Aktivieren",
+      "activateAdminOnly": "Nur Admins können aktivieren",
+      "submitForReview": "Zur Review einreichen",
+      "reject": "Ablehnen",
+      "reactivate": "Reaktivieren als Draft",
+      "promoteError": "Vor dem Aktivieren ausfuellen: {{fields}}.",
+      "actionFailed": "Aktion fehlgeschlagen.",
+      "promoteErrorTitle": "Promote nicht möglich",
+      "toast": {
+        "activated": "Version aktiviert.",
+        "submitted": "Zur Review eingereicht.",
+        "rejected": "Review abgelehnt.",
+        "reactivated": "Reaktiviert als Entwurf."
+      }
+    },
+    "toast": {
+      "created": "Externes Tool angelegt.",
+      "createFailed": "Anlegen fehlgeschlagen."
+    },
+    "delete": {
+      "label": "Löschen",
+      "confirmLabel": "Endgültig löschen",
+      "dialogTitle": "Externes Tool löschen?",
+      "dialogDescription": "{{name}} wird mit allen Versionen dauerhaft entfernt. Diese Aktion kann nicht rückgängig gemacht werden.",
+      "success": "Externes Tool gelöscht.",
+      "error": "Löschen fehlgeschlagen.",
+      "viewerReadOnly": "Viewer können externe Tools nur ansehen",
+      "blockedTitle": "Löschen blockiert",
+      "blockedMessage": "Dieses Tool wird noch verwendet von:",
+      "dangerZoneTitle": "Externes Tool löschen",
+      "dangerZoneDescription": "Entfernt dieses Tool samt allen Versionen dauerhaft. Kein Undo."
+    },
+    "export": {
+      "label": "Exportieren",
+      "json": "Als JSON",
+      "markdown": "Als Markdown",
+      "success": "Export heruntergeladen.",
+      "error": "Export fehlgeschlagen."
+    },
+    "card": {
+      "toolCount_one": "{{count}} Tool-Name",
+      "toolCount_other": "{{count}} Tool-Namen",
+      "noToolNames": "Keine Tool-Namen hinterlegt"
     }
   }
 }

@@ -59,10 +59,23 @@ describe('PlaceholderPill', () => {
     expect(pill).toHaveTextContent('Playbook-Katalog (alle)')
   })
 
+  it('rendert Tool-Ref-Pill', () => {
+    render(<PlaceholderPill kind="tool-ref" label="Tool: Todoist" target_id="todo" />)
+    const pill = screen.getByTestId('placeholder-pill-tool-ref')
+    expect(pill).toBeInTheDocument()
+    expect(pill).toHaveTextContent('Tool: Todoist')
+  })
+
   it('faellt auf labelPrefix zurueck wenn label leer ist', () => {
     render(<PlaceholderPill kind="date" label="" target_id="" />)
     const pill = screen.getByTestId('placeholder-pill-date')
     expect(pill).toHaveTextContent('Datum')
+  })
+
+  it('Tool-Ref-Pill faellt auf labelPrefix "Tool" zurueck wenn label leer ist', () => {
+    render(<PlaceholderPill kind="tool-ref" label="" target_id="todo" />)
+    const pill = screen.getByTestId('placeholder-pill-tool-ref')
+    expect(pill).toHaveTextContent('Tool')
   })
 
   it('alle vier Kinds haben unterschiedliche pill-Klassen (distinct color)', () => {

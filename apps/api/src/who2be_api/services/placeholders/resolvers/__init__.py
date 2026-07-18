@@ -18,6 +18,7 @@ from who2be_api.services.placeholders.resolvers.persona import (
     PersonaRefResolver,
     render_skills_table,
 )
+from who2be_api.services.placeholders.resolvers.tool_ref import ToolRefResolver
 from who2be_api.services.placeholders.resolvers.tools import ToolsOverviewResolver
 
 __all__ = [
@@ -28,6 +29,7 @@ __all__ = [
     "PlaybooksCatalogResolver",
     "ResourceResolver",
     "ResourcesCatalogResolver",
+    "ToolRefResolver",
     "ToolsOverviewResolver",
     "render_skills_table",
 ]
