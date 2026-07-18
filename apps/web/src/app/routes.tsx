@@ -67,6 +67,21 @@ const ResourceDetailPage = lazy(() =>
     default: mod.ResourceDetailPage,
   })),
 )
+const ToolsPage = lazy(() =>
+  import('@/features/tools/pages/ToolsPage').then((mod) => ({
+    default: mod.ToolsPage,
+  })),
+)
+const ToolNewPage = lazy(() =>
+  import('@/features/tools/pages/ToolNewPage').then((mod) => ({
+    default: mod.ToolNewPage,
+  })),
+)
+const ToolDetailPage = lazy(() =>
+  import('@/features/tools/pages/ToolDetailPage').then((mod) => ({
+    default: mod.ToolDetailPage,
+  })),
+)
 const MembersPage = lazy(() =>
   import('@/features/settings/pages/MembersPage').then((mod) => ({
     default: mod.MembersPage,
@@ -266,6 +281,9 @@ export function RouterRoot() {
                 <Route path="/w/:workspaceId/resources" element={<ResourcesPage />} />
                 <Route path="/w/:workspaceId/resources/new" element={<ResourceNewPage />} />
                 <Route path="/w/:workspaceId/resources/:id" element={<ResourceDetailPage />} />
+                <Route path="/w/:workspaceId/tools" element={<ToolsPage />} />
+                <Route path="/w/:workspaceId/tools/new" element={<ToolNewPage />} />
+                <Route path="/w/:workspaceId/tools/:id" element={<ToolDetailPage />} />
                 <Route path="/w/:workspaceId/feedback" element={<FeedbackOverviewPage />} />
                 {/* Literal `item`-Segment vor der dynamischen `:entityType`-Route:
                     ein einzelnes Feedback (per feedbackId), nicht ein Element. In

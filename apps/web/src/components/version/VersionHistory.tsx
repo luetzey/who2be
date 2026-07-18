@@ -22,8 +22,12 @@ interface VersionHistoryProps {
   canEdit: boolean
   /** Stellt die Version als neue Draft wieder her (Page wired API + reload). */
   onRestore: (version: number) => Promise<void>
-  /** Lädt den read-only Diff der Version gegen die aktive Version. */
-  loadDiff: (version: number) => Promise<VersionDiff>
+  /**
+   * Lädt den read-only Diff der Version gegen die aktive Version. Optional —
+   * Entities ohne `/versions/{version}/diff`-Endpoint (z. B. ExternalTool,
+   * WP-4) lassen den Prop weg; der Diff-Button entfällt dann.
+   */
+  loadDiff?: (version: number) => Promise<VersionDiff>
   /** Lädt die Status-Historie der Version ("warum aktiv"). */
   loadProvenance: (version: number) => Promise<ProvenanceEntry[]>
 }
@@ -63,7 +67,7 @@ export function VersionHistory({
     setDiff(null)
     setProvenance(null)
     try {
-      if (kind === 'diff') {
+      if (kind === 'diff' && loadDiff !== undefined) {
         setDiff(await loadDiff(version))
       } else {
         setProvenance(await loadProvenance(version))
@@ -110,14 +114,16 @@ export function VersionHistory({
                     <StatusBadge status={version.status} />
                   </span>
                   <span className="flex flex-wrap items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      aria-pressed={isOpen && openPanel?.kind === 'diff'}
-                      onClick={() => void togglePanel(version.version, 'diff')}
-                    >
-                      {t('history.diff')}
-                    </Button>
+                    {loadDiff !== undefined ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        aria-pressed={isOpen && openPanel?.kind === 'diff'}
+                        onClick={() => void togglePanel(version.version, 'diff')}
+                      >
+                        {t('history.diff')}
+                      </Button>
+                    ) : null}
                     <Button
                       variant="ghost"
                       size="sm"
