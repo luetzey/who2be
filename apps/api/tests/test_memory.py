@@ -329,9 +329,7 @@ def test_agent_delete_cascades_and_gdpr_export_includes_memories(
 
             export = client.get("/v1/gdpr/export", headers=auth)
             assert export.status_code == 200
-            workspaces = [
-                w for o in export.json()["organizations"] for w in o["workspaces"]
-            ]
+            workspaces = [w for o in export.json()["organizations"] for w in o["workspaces"]]
             target = next(w for w in workspaces if w["id"] == str(ws))
             facts = [m["fact"] for m in target["agent_memories"]]
             assert "Nutzer exportiert seine Daten regelmaessig" in facts
