@@ -78,10 +78,14 @@ def _add_member(workspace_id: UUID, user_id: UUID, role: WorkspaceRole) -> None:
     asyncio.run(_run())
 
 
-def _promote(client: TestClient, base: str, tool_id: str, auth: dict[str, str]) -> None:
-    """Draft-v1 -> review -> active."""
+def _promote(
+    client: TestClient, base: str, tool_id: str, auth: dict[str, str], version: int = 1
+) -> None:
+    """Draft-`version` -> review -> active."""
     for to in ("review", "active"):
-        res = client.post(f"{base}/{tool_id}/versions/1/transition", json={"to": to}, headers=auth)
+        res = client.post(
+            f"{base}/{tool_id}/versions/{version}/transition", json={"to": to}, headers=auth
+        )
         assert res.status_code == 200, res.text
 
 
@@ -350,6 +354,204 @@ def test_external_tool_org_delete_cascades_tables(make_auth_headers: AuthFactory
     finally:
         # Die Org ist bereits geloescht — cleanup_workspaces ist idempotent
         # gegenueber bereits entfernten Rows.
+        cleanup_workspaces([owner])
+
+
+def _agent_token(
+    client: TestClient, base_prefix: str, name: str, policy: dict[str, object], auth: dict[str, str]
+) -> dict[str, str]:
+    agent = client.post(
+        f"{base_prefix}/agents", json={"name": name, "tool_policy": policy}, headers=auth
+    )
+    assert agent.status_code == 201, agent.text
+    token = client.post(
+        f"{base_prefix}/tokens",
+        json={"name": name, "agent_id": agent.json()["id"]},
+        headers=auth,
+    )
+    assert token.status_code == 201, token.text
+    return {"Authorization": f"Bearer {token.json()['token']}"}
+
+
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db")
+def test_external_tool_write_gates_require_capability(make_auth_headers: AuthFactory) -> None:
+    """WP-3: agent-gebundene Tokens brauchen `external_tool_write` fuer Create/
+    Update/Restore/Delete — 403 ohne, 2xx mit (analog Resource)."""
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    base = f"/v1/workspaces/{ws}/external_tools"
+    prefix = f"/v1/workspaces/{ws}"
+    try:
+        with TestClient(app) as client:
+            tid = client.post(base, json=_tool_body("Todoist"), headers=auth).json()["id"]
+            _promote(client, base, tid, auth)
+
+            no_cap = _agent_token(client, prefix, "et-no-cap", {}, auth)
+            with_cap = _agent_token(
+                client, prefix, "et-with-cap", {"external_tool_write": True}, auth
+            )
+
+            # Create ohne Capability -> 403; mit -> 201.
+            denied_create = client.post(base, json=_tool_body("Dienst-Ohne"), headers=no_cap)
+            assert denied_create.status_code == 403, denied_create.text
+            assert denied_create.json()["reason"] == "missing_capability"
+            allowed_create = client.post(base, json=_tool_body("Dienst-Mit"), headers=with_cap)
+            assert allowed_create.status_code == 201, allowed_create.text
+
+            # Update ohne Capability -> 403; mit -> 200.
+            denied_update = client.put(
+                f"{base}/{tid}", json=_tool_body("Todoist", display_name="v2"), headers=no_cap
+            )
+            assert denied_update.status_code == 403, denied_update.text
+            allowed_update = client.put(
+                f"{base}/{tid}", json=_tool_body("Todoist", display_name="v2"), headers=with_cap
+            )
+            assert allowed_update.status_code == 200, allowed_update.text
+            # v2 muss erst aktiv sein, sonst kollidiert restore() mit dem noch
+            # offenen v2-Draft (409 draft_exists).
+            _promote(client, base, tid, auth, version=2)
+
+            # Restore ohne Capability -> 403; mit -> 201.
+            denied_restore = client.post(f"{base}/{tid}/versions/1/restore", headers=no_cap)
+            assert denied_restore.status_code == 403, denied_restore.text
+            allowed_restore = client.post(f"{base}/{tid}/versions/1/restore", headers=with_cap)
+            assert allowed_restore.status_code == 201, allowed_restore.text
+
+            # Delete ohne Capability -> 403; mit -> 204 (auf dem zweiten Tool).
+            other_tid = allowed_create.json()["id"]
+            denied_delete = client.delete(f"{base}/{other_tid}", headers=no_cap)
+            assert denied_delete.status_code == 403, denied_delete.text
+            allowed_delete = client.delete(f"{base}/{other_tid}", headers=with_cap)
+            assert allowed_delete.status_code == 204, allowed_delete.text
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db")
+def test_external_tool_transition_requires_promote_retire_for_active(
+    make_auth_headers: AuthFactory,
+) -> None:
+    """draft->review genuegt `external_tool_write`; review->active braucht
+    zusaetzlich `promote_retire` (WP-3-Luecke geschlossen: vorher war
+    `external_tool` NICHT in `version_status._WRITE_CAPABILITY`, jeder
+    agent-gebundene Token bekam dort hart 403/`none`)."""
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    base = f"/v1/workspaces/{ws}/external_tools"
+    prefix = f"/v1/workspaces/{ws}"
+    try:
+        with TestClient(app) as client:
+            tid = client.post(base, json=_tool_body("Todoist"), headers=auth).json()["id"]
+
+            write_only = _agent_token(
+                client, prefix, "et-write-only", {"external_tool_write": True}, auth
+            )
+            # draft -> review erlaubt mit external_tool_write.
+            to_review = client.post(
+                f"{base}/{tid}/versions/1/transition", json={"to": "review"}, headers=write_only
+            )
+            assert to_review.status_code == 200, to_review.text
+
+            # review -> active NICHT erlaubt ohne promote_retire.
+            denied_active = client.post(
+                f"{base}/{tid}/versions/1/transition", json={"to": "active"}, headers=write_only
+            )
+            assert denied_active.status_code == 403, denied_active.text
+            assert denied_active.json()["reason"] == "missing_capability"
+
+            with_promote = _agent_token(
+                client,
+                prefix,
+                "et-promote",
+                {"external_tool_write": True, "promote_retire": True},
+                auth,
+            )
+            allowed_active = client.post(
+                f"{base}/{tid}/versions/1/transition", json={"to": "active"}, headers=with_promote
+            )
+            assert allowed_active.status_code == 200, allowed_active.text
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db")
+def test_external_tool_draft_visibility_follows_write_capability(
+    make_auth_headers: AuthFactory,
+) -> None:
+    """`sees_drafts(external_tool_write)`: ein Konsum-Agent (keine Writes) sieht
+    nur `active`; ein Agent MIT `external_tool_write` sieht die Current-Version
+    (inkl. Draft) — schliesst die `_active_only`-WP-1-Luecke."""
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    base = f"/v1/workspaces/{ws}/external_tools"
+    prefix = f"/v1/workspaces/{ws}"
+    try:
+        with TestClient(app) as client:
+            tid = client.post(
+                base, json=_tool_body("Todoist", display_name="Aktiv"), headers=auth
+            ).json()["id"]
+            _promote(client, base, tid, auth)
+            client.put(
+                f"{base}/{tid}", json=_tool_body("Todoist", display_name="Draft-v2"), headers=auth
+            )
+
+            consumer = _agent_token(client, prefix, "et-consumer", {}, auth)
+            editor_agent = _agent_token(
+                client, prefix, "et-editor", {"external_tool_write": True}, auth
+            )
+
+            # Konsum-Agent: sieht nur die aktive v1 (kein Draft-Leak).
+            consumer_view = client.get(f"{base}/{tid}", headers=consumer)
+            assert consumer_view.status_code == 200, consumer_view.text
+            assert consumer_view.json()["current_version"] == 1
+            assert consumer_view.json()["content"]["display_name"] == "Aktiv"
+
+            # Agent mit external_tool_write: sieht die Current-Version (Draft v2).
+            editor_view = client.get(f"{base}/{tid}", headers=editor_agent)
+            assert editor_view.status_code == 200, editor_view.text
+            assert editor_view.json()["current_version"] == 2
+            assert editor_view.json()["content"]["display_name"] == "Draft-v2"
+
+            # Gleiches gilt fuer die Liste.
+            consumer_list = client.get(base, headers=consumer).json()
+            listed = next(t for t in consumer_list if t["id"] == tid)
+            assert listed["current_version"] == 1
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db")
+def test_external_tool_read_scope_none_blocks_agent(make_auth_headers: AuthFactory) -> None:
+    """`external_tool_read=none` sperrt Reads fuer den gebundenen Agenten (403);
+    `assigned` verhaelt sich wie `all` (kein Leak-Risiko, aber auch keine
+    kuenstliche Restriktion — es gibt keine Zuweisungs-Semantik)."""
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    base = f"/v1/workspaces/{ws}/external_tools"
+    prefix = f"/v1/workspaces/{ws}"
+    try:
+        with TestClient(app) as client:
+            tid = client.post(base, json=_tool_body("Todoist"), headers=auth).json()["id"]
+            _promote(client, base, tid, auth)
+
+            blocked = _agent_token(
+                client, prefix, "et-blocked", {"external_tool_read": "none"}, auth
+            )
+            denied = client.get(f"{base}/{tid}", headers=blocked)
+            assert denied.status_code == 403, denied.text
+            denied_list = client.get(base, headers=blocked)
+            assert denied_list.status_code == 403, denied_list.text
+
+            assigned = _agent_token(
+                client, prefix, "et-assigned", {"external_tool_read": "assigned"}, auth
+            )
+            allowed = client.get(f"{base}/{tid}", headers=assigned)
+            assert allowed.status_code == 200, allowed.text
+    finally:
         cleanup_workspaces([owner])
 
 

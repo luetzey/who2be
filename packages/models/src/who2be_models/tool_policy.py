@@ -40,8 +40,13 @@ class ReadScope(StrEnum):
 
 
 # Lese-Domains, deren Sichtbarkeit ueber `ReadScope` abgestuft ist. `agent_read`
-# nutzt denselben Enum: `assigned` = „nur der eigene Agent".
-_SCOPED_READ_FIELDS = ("playbook_read", "resource_read", "agent_read")
+# nutzt denselben Enum: `assigned` = „nur der eigene Agent". `external_tool_read`
+# (WP-3, Blueprint `.claude/plan/2026-07-18-1315_external-tools-tool-ref.md`)
+# ist der Read-Scope fuer das ExternalTool-Aggregat — anders als Playbook/
+# Resource/Agent gibt es dafuer aber KEINE „assigned"-Teilmenge (ExternalTool
+# ist ein flacher Workspace-Katalog ohne Persona-/Playbook-Zuordnung): `assigned`
+# verhaelt sich dort wie `all` (keine Einschraenkung), nur `none` sperrt.
+_SCOPED_READ_FIELDS = ("playbook_read", "resource_read", "agent_read", "external_tool_read")
 
 
 class AgentCapability(StrEnum):
@@ -61,9 +66,12 @@ class AgentCapability(StrEnum):
     feedback_write = "feedback_write"
     feedback_resolve = "feedback_resolve"
     promote_retire = "promote_retire"
+    # ExternalTool-Aggregat schreiben (WP-3, ADR-0039-Muster). Default aus
+    # (secure by default) — analog den anderen Domain-Write-Capabilities.
+    external_tool_write = "external_tool_write"
 
 
-_TRANSITION_DOMAINS = ("persona", "playbook", "resource")
+_TRANSITION_DOMAINS = ("persona", "playbook", "resource", "external_tool")
 
 
 class TransitionGrant(BaseModel):
@@ -102,6 +110,14 @@ class AgentToolPolicy(BaseModel):
     resource_read: ReadScope = ReadScope.assigned
     agent_read: ReadScope = ReadScope.assigned
     persona_read: bool = True
+    # ExternalTool-Aggregat lesen (WP-3). Default `all` (NICHT `assigned` wie die
+    # anderen Domains) — ExternalTool ist ein flacher Workspace-Katalog ohne
+    # Persona-/Playbook-Zuordnung, es gibt also keine sinnvolle „nur Zugewiesenes"-
+    # Teilmenge zu berechnen; `assigned` faellt daher auf dasselbe Verhalten wie
+    # `all` zurueck (nur `none` sperrt). JSONB-abwaertskompatibel: fehlt das Feld
+    # in einer alten Policy, deserialisiert es zu `all` — unveraendertes Verhalten
+    # fuer Bestands-Agenten.
+    external_tool_read: ReadScope = ReadScope.all
 
     # Writes — Default: nichts.
     persona_write: bool = False
@@ -121,14 +137,19 @@ class AgentToolPolicy(BaseModel):
     # Kurations-Handlung — Default aus (secure by default).
     feedback_resolve: bool = False
     promote_retire: bool = False
+    # ExternalTool-Aggregat schreiben (WP-3). Default aus (secure by default),
+    # analog persona_write/playbook_write/resource_write.
+    external_tool_write: bool = False
     # Optionale Pro-Domain-Verfeinerung von `promote_retire` (ADR-0039).
-    # Leer = ungeteilt (Backward-Compat). Keys: persona/playbook/resource.
+    # Leer = ungeteilt (Backward-Compat). Keys: persona/playbook/resource/
+    # external_tool (WP-3).
     transition_grants: dict[str, TransitionGrant] = {}
     # Optionales Tag-Praedikat-Write-Scoping (ADR-0039). Pro Domain
-    # (persona/playbook/resource) eine Liste erlaubter Tags: ist sie gesetzt UND
-    # nicht leer, darf der Agent in dieser Domain nur Inhalte schreiben, deren
-    # Tags die erlaubte Menge schneiden ("darf nur `support`-Playbooks editieren").
-    # Fehlender/leerer Eintrag = keine Tag-Einschraenkung (Backward-Compat).
+    # (persona/playbook/resource/external_tool, WP-3) eine Liste erlaubter Tags:
+    # ist sie gesetzt UND nicht leer, darf der Agent in dieser Domain nur Inhalte
+    # schreiben, deren Tags die erlaubte Menge schneiden ("darf nur `support`-
+    # Playbooks editieren"). Fehlender/leerer Eintrag = keine Tag-Einschraenkung
+    # (Backward-Compat).
     write_tags: dict[str, list[str]] = {}
     # Optionales Write-Rate-Limit (ADR-0039): max. Schreib-Mutationen pro Minute
     # fuer diesen Agenten. None/<=0 = unbegrenzt (Default). Serverseitig ueber
@@ -192,6 +213,7 @@ class AgentToolPolicy(BaseModel):
             "playbook": self.playbook_read,
             "resource": self.resource_read,
             "agent": self.agent_read,
+            "external_tool": self.external_tool_read,
         }
 
     def is_within(self, other: AgentToolPolicy) -> bool:
@@ -215,6 +237,7 @@ class AgentToolPolicy(BaseModel):
             "feedback_write",
             "feedback_resolve",
             "promote_retire",
+            "external_tool_write",
         )
         if not all(not getattr(self, name) or getattr(other, name) for name in bool_fields):
             return False

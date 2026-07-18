@@ -128,6 +128,11 @@ describe('AgentEditorForm', () => {
     // Feedback ist secure-by-default AN, System-Prompt aus.
     expect(screen.getByLabelText('System-Prompts verfassen (Review einreichen)')).not.toBeChecked()
     expect(screen.getByLabelText('Nutzung/Feedback melden')).toBeChecked()
+    // WP-3: ExternalTool-Read-Scope-Select (Default 'all') + Write-Switch
+    // (Default aus) sind im Editor sichtbar — Muster identisch zu
+    // playbook_read/system_prompt_write.
+    expect(screen.getByLabelText('Externe Tools lesen')).toHaveValue('all')
+    expect(screen.getByLabelText('Externe Tools erstellen/ändern')).not.toBeChecked()
     // Feedback-Triage (Signale schliessen) ist secure-by-default AUS.
     expect(
       screen.getByLabelText('Feedback-Triage: Signale schließen (addressed/in_progress/dismissed)'),

@@ -115,3 +115,53 @@ def test_search_finds_active_playbook_by_content(monkeypatch: pytest.MonkeyPatch
             assert res2.json() == []
     finally:
         cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+def test_search_finds_active_external_tool_by_content(monkeypatch: pytest.MonkeyPatch) -> None:
+    """WP-3: Volltext ueber Name + Content der aktiven ExternalTool-Version."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+    tbase = f"/v1/workspaces/{ws}/external_tools"
+    sbase = f"/v1/workspaces/{ws}/search"
+
+    try:
+        with TestClient(app) as client:
+            body = {
+                "name": "Todoist",
+                "content": {
+                    "display_name": "Todoist",
+                    "usage_notes": "Fuer Aufgabenverwaltung im Alltag.",
+                    "tags": [],
+                },
+            }
+            tid = client.post(tbase, json=body, headers=auth).json()["id"]
+            for to in ("review", "active"):
+                r = client.post(
+                    f"{tbase}/{tid}/versions/1/transition", json={"to": to}, headers=auth
+                )
+                assert r.status_code in (200, 201), r.text
+
+            res = client.get(sbase, params={"q": "aufgabenverwaltung"}, headers=auth)
+            assert res.status_code == 200, res.text
+            hits = res.json()
+            assert [h["id"] for h in hits] == [tid]
+            assert hits[0]["type"] == "external_tool"
+
+            # Default (kein types-Filter) findet es ebenfalls.
+            res_default = client.get(sbase, params={"q": "todoist"}, headers=auth)
+            assert tid in {h["id"] for h in res_default.json()}
+
+            # types=persona blendet es aus.
+            res_persona = client.get(
+                sbase, params={"q": "aufgabenverwaltung", "types": "persona"}, headers=auth
+            )
+            assert res_persona.json() == []
+    finally:
+        cleanup_workspaces([owner])

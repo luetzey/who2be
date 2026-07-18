@@ -256,7 +256,8 @@
         "scopeField": {
           "playbook_read": "Read playbooks",
           "resource_read": "Read resources",
-          "agent_read": "Read agents"
+          "agent_read": "Read agents",
+          "external_tool_read": "Read external tools"
         },
         "scope": {
           "all": "All (entire workspace)",
@@ -279,7 +280,8 @@
           "system_prompt_write": "Author system prompts (submit for review)",
           "feedback_write": "Report usage/feedback",
           "feedback_resolve": "Feedback triage: close signals (addressed/in_progress/dismissed)",
-          "promote_retire": "Activate/deactivate versions"
+          "promote_retire": "Activate/deactivate versions",
+          "external_tool_write": "Create/edit external tools"
         },
         "writeTags": {
           "hint": "Tag scope (optional): empty = all tags. Otherwise the agent may only write content carrying these tags in that domain.",

@@ -256,7 +256,8 @@
         "scopeField": {
           "playbook_read": "Playbooks lesen",
           "resource_read": "Resources lesen",
-          "agent_read": "Agenten lesen"
+          "agent_read": "Agenten lesen",
+          "external_tool_read": "Externe Tools lesen"
         },
         "scope": {
           "all": "Alle (ganzer Workspace)",
@@ -279,7 +280,8 @@
           "system_prompt_write": "System-Prompts verfassen (Review einreichen)",
           "feedback_write": "Nutzung/Feedback melden",
           "feedback_resolve": "Feedback-Triage: Signale schließen (addressed/in_progress/dismissed)",
-          "promote_retire": "Versionen aktivieren/deaktivieren"
+          "promote_retire": "Versionen aktivieren/deaktivieren",
+          "external_tool_write": "Externe Tools erstellen/ändern"
         },
         "writeTags": {
           "hint": "Tag-Scope (optional): leer = alle Tags. Sonst darf der Agent in der Domain nur Inhalte mit diesen Tags schreiben.",

@@ -1724,6 +1724,7 @@ class TestToolsOverviewSSoTParity:
             feedback_write=True,
             feedback_resolve=True,
             promote_retire=True,
+            external_tool_write=True,
         )
         for tool in _TOOLS:
             assert tool.signature in result

@@ -241,3 +241,21 @@ async def visible_resource_ids(
         return None
     restrict = await resource_read_restrict(pool, ctx)
     return None if restrict is None else set(restrict)
+
+
+def require_external_tool_read(ctx: WorkspaceContext) -> None:
+    """Read-Gate fuer das ExternalTool-Aggregat (WP-3): `none` sperrt komplett.
+
+    Anders als Playbook/Resource/Agent gibt es fuer `external_tool_read` KEINE
+    `assigned`-Teilmenge zu berechnen (ExternalTool ist ein flacher
+    Workspace-Katalog ohne Persona-/Playbook-Zuordnung) — deshalb liefert diese
+    Funktion (anders als `playbook_read_restrict`/`resource_read_restrict`)
+    keine `restrict_ids`-Liste, sondern ist ein reines An/Aus-Gate: `assigned`
+    verhaelt sich wie `all` (No-Op), nur `none` wirft 403. No-Op fuer
+    ungebundene Tokens/Mensch (`tool_policy is None`).
+    """
+    policy = ctx.tool_policy
+    if policy is None or ctx.agent_id is None:
+        return
+    if policy.external_tool_read == ReadScope.none:
+        raise _tool_unavailable("Externe Tools")

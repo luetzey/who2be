@@ -658,6 +658,11 @@ export interface AgentToolPolicy {
   playbook_read: ReadScope
   resource_read: ReadScope
   agent_read: ReadScope
+  // WP-3: Read-Scope fuer das ExternalTool-Aggregat. Default 'all' (nicht
+  // 'assigned' wie die anderen Domains) — ExternalTool ist ein flacher
+  // Workspace-Katalog ohne Persona-/Playbook-Zuordnung; 'assigned' verhaelt
+  // sich serverseitig wie 'all' (keine Einschraenkung), nur 'none' sperrt.
+  external_tool_read: ReadScope
   persona_read: boolean
   persona_write: boolean
   playbook_write: boolean
@@ -668,6 +673,8 @@ export interface AgentToolPolicy {
   // das Usage-/Feedback-Flywheel ab (Default an); feedback_resolve die Triage
   // (Signale schliessen: addressed/in_progress/dismissed — Default aus).
   system_prompt_write: boolean
+  // WP-3: ExternalTool-Aggregat schreiben (Default aus, secure by default).
+  external_tool_write: boolean
   feedback_write: boolean
   feedback_resolve: boolean
   promote_retire: boolean
@@ -689,12 +696,15 @@ export const DEFAULT_TOOL_POLICY: AgentToolPolicy = {
   playbook_read: 'assigned',
   resource_read: 'assigned',
   agent_read: 'assigned',
+  // Default 'all' (nicht 'assigned') — siehe Feld-Kommentar oben.
+  external_tool_read: 'all',
   persona_read: true,
   persona_write: false,
   playbook_write: false,
   resource_write: false,
   agent_write: false,
   system_prompt_write: false,
+  external_tool_write: false,
   // Flywheel-Telemetrie ist Default an (ADR-0038), opt-out pro Agent; die
   // Triage (Signale schliessen) ist secure-by-default aus.
   feedback_write: true,

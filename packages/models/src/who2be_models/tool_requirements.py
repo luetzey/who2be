@@ -36,7 +36,14 @@ from who2be_models.workspace_member import WorkspaceRole
 # Lese-Domain eines Read-Tools. „search" ist die Multi-Domain-Sonderrolle:
 # sichtbar, sobald der Principal mindestens EINE der Inhalts-Domains
 # persona/playbook/resource lesen darf (Discovery-Tools dispatchen ueber alle).
-ReadDomain = Literal["persona", "playbook", "resource", "agent", "search"]
+# `external_tool` (WP-3) ist eine EIGENE Domain, bewusst NICHT Teil der
+# `search`-Gruppe: `list_external_tools`/`get_external_tool` haben ihre eigenen
+# Tools, waehrend `search`/`find_usages`/`list_versions`/`get_version`/
+# `diff_versions` weiterhin nur ueber persona/playbook/resource dispatchen (ihre
+# Sichtbarkeit als GRUPPE aendert sich durch WP-3 nicht — entity_type=
+# 'external_tool' ist bei list_versions/get_version trotzdem ein gueltiger Wert,
+# das ist eine reine Laufzeit-Frage der Tools, keine SSoT-Sichtbarkeitsfrage).
+ReadDomain = Literal["persona", "playbook", "resource", "agent", "search", "external_tool"]
 
 # Die Inhalts-Domains, ueber die „search"-artige Tools dispatchen.
 _CONTENT_READ_DOMAINS: tuple[str, ...] = ("persona", "playbook", "resource")
@@ -70,12 +77,14 @@ _PLAYBOOK_READ = ToolRequirement(read_domain="playbook")
 _RESOURCE_READ = ToolRequirement(read_domain="resource")
 _AGENT_READ = ToolRequirement(read_domain="agent")
 _SEARCH_READ = ToolRequirement(read_domain="search")
+_EXTERNAL_TOOL_READ = ToolRequirement(read_domain="external_tool")
 _PERSONA_WRITE = ToolRequirement(capabilities=(AgentCapability.persona_write,))
 _PLAYBOOK_WRITE = ToolRequirement(capabilities=(AgentCapability.playbook_write,))
 _RESOURCE_WRITE = ToolRequirement(capabilities=(AgentCapability.resource_write,))
 _AGENT_WRITE = ToolRequirement(capabilities=(AgentCapability.agent_write,))
 _SYSTEM_PROMPT_WRITE = ToolRequirement(capabilities=(AgentCapability.system_prompt_write,))
 _FEEDBACK_WRITE = ToolRequirement(capabilities=(AgentCapability.feedback_write,))
+_EXTERNAL_TOOL_WRITE = ToolRequirement(capabilities=(AgentCapability.external_tool_write,))
 
 
 # Alle in `apps/mcp/src/who2be_mcp/server.py` registrierten Tools (Quelle: die
@@ -97,6 +106,9 @@ MCP_TOOL_REQUIREMENTS: dict[str, ToolRequirement] = {
     "list_agents": _AGENT_READ,
     "get_agent": _AGENT_READ,
     "fetch_agent": _AGENT_READ,
+    # --- ExternalTool-Aggregat (WP-3) — eigene Domain, siehe `ReadDomain` ---
+    "list_external_tools": _EXTERNAL_TOOL_READ,
+    "get_external_tool": _EXTERNAL_TOOL_READ,
     # Multi-Domain-Discovery-/Versions-Tools: dispatchen ueber
     # persona/playbook/resource — sichtbar, sobald EINE dieser Inhalts-Domains
     # lesbar ist (gleiche Regel wie `search` im Prompt-Resolver).
@@ -134,6 +146,15 @@ MCP_TOOL_REQUIREMENTS: dict[str, ToolRequirement] = {
     "transition_resource": ToolRequirement(
         capabilities=(AgentCapability.promote_retire, AgentCapability.resource_write)
     ),
+    # --- ExternalTool-Writes (WP-3) — Muster identisch zu Persona/Playbook/
+    #     Resource: Draft/Review via `external_tool_write`, Transition
+    #     zusaetzlich per Oder-Logik mit `promote_retire`.
+    "create_external_tool": _EXTERNAL_TOOL_WRITE,
+    "update_external_tool": _EXTERNAL_TOOL_WRITE,
+    "restore_external_tool": _EXTERNAL_TOOL_WRITE,
+    "transition_external_tool": ToolRequirement(
+        capabilities=(AgentCapability.promote_retire, AgentCapability.external_tool_write)
+    ),
     # --- System-Prompt-Templates (ADR-0040) — nur mit `system_prompt_write` ---
     "list_system_prompts": _SYSTEM_PROMPT_WRITE,
     "get_system_prompt": _SYSTEM_PROMPT_WRITE,
@@ -163,6 +184,8 @@ def _read_visible(domain: ReadDomain | None, policy: AgentToolPolicy) -> bool:
         return policy.resource_read != ReadScope.none
     if domain == "agent":
         return policy.agent_read != ReadScope.none
+    if domain == "external_tool":
+        return policy.external_tool_read != ReadScope.none
     if domain == "search":
         return (
             policy.persona_read

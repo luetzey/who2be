@@ -138,6 +138,9 @@ _WRITE_CAPABILITY: dict[str, AgentCapability] = {
     "persona": AgentCapability.persona_write,
     "playbook": AgentCapability.playbook_write,
     "resource": AgentCapability.resource_write,
+    # WP-3: schliesst die WP-1-Luecke (external_tool war bislang NICHT in dieser
+    # Map — jeder agent-gebundene Token bekam hart `none` im else-Zweig unten).
+    "external_tool": AgentCapability.external_tool_write,
 }
 
 

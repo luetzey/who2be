@@ -4,6 +4,10 @@ Wendet das Pro-Agent-Read-Scoping auf die Treffer an: ein `assigned`-Agent finde
 nur in seinem zugewiesenen Set, `none` blendet den Typ aus, `persona_read=False`
 verbirgt Personae. Filterung passiert serverseitig NACH dem Repo-Ranking. Nur
 `status='active'` (das Repo joint bereits darauf).
+
+`external_tool` (WP-3) hat keine `assigned`-Teilmenge (flacher Workspace-
+Katalog ohne Persona-/Playbook-Zuordnung) — dort genuegt der `none`-Ausschluss,
+kein zusaetzlicher ID-Set-Filter noetig.
 """
 
 import asyncpg
@@ -13,7 +17,7 @@ from who2be_api.core.security import WorkspaceContext
 from who2be_api.repositories.search_repository import SearchRepository
 from who2be_models import ReadScope, SearchHit, SearchType
 
-_ALL_TYPES: tuple[SearchType, ...] = ("persona", "playbook", "resource")
+_ALL_TYPES: tuple[SearchType, ...] = ("persona", "playbook", "resource", "external_tool")
 
 
 class SearchService:
@@ -45,6 +49,8 @@ class SearchService:
                 if t == "playbook" and policy.playbook_read == ReadScope.none:
                     continue
                 if t == "resource" and policy.resource_read == ReadScope.none:
+                    continue
+                if t == "external_tool" and policy.external_tool_read == ReadScope.none:
                     continue
                 allowed.append(t)
             requested = allowed

@@ -16,7 +16,7 @@ from who2be_api.repositories.search_repository import PgSearchRepository
 from who2be_api.services.search_service import SearchService
 from who2be_models import SearchHit, SearchType
 
-_VALID_TYPES: frozenset[str] = frozenset(("persona", "playbook", "resource"))
+_VALID_TYPES: frozenset[str] = frozenset(("persona", "playbook", "resource", "external_tool"))
 
 
 def _parse_types(types: str | None) -> list[SearchType] | None:

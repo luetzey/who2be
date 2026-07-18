@@ -222,6 +222,29 @@ _TOOLS: list[_ToolDoc] = [
             "gefunden) — die Konfiguration anderer Agenten liest du mit get_agent."
         ),
     ),
+    # --- ExternalTool-Aggregat (WP-3): Faehigkeits-Bindungen an externe
+    #     MCP-Server/Tools (z. B. Todoist), referenziert per stabilem Alias
+    #     (`tool-ref`-Placeholder). ---
+    _ToolDoc(
+        signature="list_external_tools(tag?)",
+        tool_names=("list_external_tools",),
+        read_domain="external_tool",
+        description=(
+            "Katalog der externen Tool-Bindungen im Workspace, optional nach Tag "
+            "gefiltert. Jeder Eintrag traegt Alias, Anzeigename, MCP-Server-Namen "
+            "und die relevanten Tool-Bezeichner."
+        ),
+    ),
+    _ToolDoc(
+        signature="get_external_tool(identifier)",
+        tool_names=("get_external_tool",),
+        read_domain="external_tool",
+        description=(
+            "Laedt eine externe Tool-Bindung per UUID ODER per Faehigkeits-Alias "
+            "(z. B. 'todo'). Nutze das, um Nutzungshinweise + Fallback-Verhalten "
+            "vor dem Verfassen eines `tool-ref`-Placeholders zu pruefen."
+        ),
+    ),
     # --- Schreib-Tools (nur sichtbar, wenn die Policy die Capability gewaehrt) ---
     _ToolDoc(
         signature="create_persona(...) / update_persona(...) / restore_persona(...)",
@@ -255,6 +278,28 @@ _TOOLS: list[_ToolDoc] = [
         signature="set_resource_sub_resources(resource_id, links)",
         tool_names=("set_resource_sub_resources",),
         description="Die Sub-Resources einer Resource setzen (Replace-Semantik).",
+    ),
+    _ToolDoc(
+        signature=(
+            "create_external_tool(...) / update_external_tool(...) / restore_external_tool(...)"
+        ),
+        tool_names=("create_external_tool", "update_external_tool", "restore_external_tool"),
+        description=(
+            "Externe Tool-Bindungen anlegen, als neuen Draft aendern oder eine "
+            "Version wiederherstellen (Alias, Anzeigename, MCP-Server-Name, "
+            "Tool-Namen, Nutzungshinweise). Rein instruktiv — KEINE Server-URLs "
+            "oder Credentials."
+        ),
+    ),
+    _ToolDoc(
+        signature="transition_external_tool(tool_id, version, to, note?)",
+        tool_names=("transition_external_tool",),
+        description=(
+            "Eine ExternalTool-Version in einen neuen Status schalten. Nach "
+            "`draft`/`review` genuegt `external_tool_write`; nach `active`/"
+            "`inactive` (veroeffentlichen/zurueckziehen) ist zusaetzlich "
+            "`promote_retire` noetig."
+        ),
     ),
     _ToolDoc(
         signature="create_agent(...) / update_agent(...) / copy_agent(...)",

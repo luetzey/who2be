@@ -6,8 +6,9 @@ append-only Telemetrie — sie fliessen NIE in einen gerenderten System-Prompt
 (kein Injection-Vektor), sondern speisen nur Kurations-Aggregate
 (`FeedbackSummary`).
 
-`entity_type` ist auf die drei Kern-Inhaltselemente beschraenkt (Persona,
-Playbook, Resource) — Agenten/Templates sind keine konsumierbaren Wissensobjekte.
+`entity_type` ist auf die vier konsumierbaren Wissensobjekte beschraenkt (Persona,
+Playbook, Resource, ExternalTool WP-3) — Agenten/Templates sind keine
+konsumierbaren Wissensobjekte.
 """
 
 from __future__ import annotations
@@ -19,12 +20,16 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-FeedbackTarget = Literal["persona", "playbook", "resource"]
-# Read-/Speicher-seitiger Typ: Inhalts-Feedback (persona/playbook/resource) PLUS
-# zielloses System-Feedback ("system" — technische/MCP-Probleme an der Plattform
-# selbst, ohne Inhalts-Bezug). `FeedbackTarget` bleibt bewusst auf die drei
-# konsumierbaren Inhaltselemente beschraenkt (Usage/Per-Element-Reads).
-FeedbackEntityType = Literal["persona", "playbook", "resource", "system"]
+# `external_tool` (WP-3, Blueprint `.claude/plan/2026-07-18-1315_external-tools-
+# tool-ref.md`) additiv ergaenzt — kein DB-CHECK-Constraint betroffen:
+# `agent_feedback`/`usage_event` (Migration 0053/0059) validieren `entity_type`
+# nicht per SQL-CHECK, nur ueber diesen Pydantic-Literal + `_ENTITY_TABLE`
+# (`feedback_repository.py`).
+FeedbackTarget = Literal["persona", "playbook", "resource", "external_tool"]
+# Read-/Speicher-seitiger Typ: Inhalts-Feedback (persona/playbook/resource/
+# external_tool) PLUS zielloses System-Feedback ("system" — technische/MCP-
+# Probleme an der Plattform selbst, ohne Inhalts-Bezug).
+FeedbackEntityType = Literal["persona", "playbook", "resource", "external_tool", "system"]
 
 
 class UsageOutcome(StrEnum):

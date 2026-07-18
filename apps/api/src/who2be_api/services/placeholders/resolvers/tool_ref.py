@@ -15,15 +15,13 @@ Locale: wie `PlaybookResolver`/`ResourceResolver` wird NICHT nach
 (Default-Locale-Track, identisches Verhalten zu den bestehenden Resolvern;
 mehrsprachige Tool-Bindungen sind kein WP-2-Scope).
 
-Read-Scoping: es gibt (noch) keine Policy-Domain `external_tool` — die kommt
-erst mit WP-3 (Blueprint, Read-Scope-Domain `external_tool`). Bis dahin ist
-ein `tool-ref`-Pill wie ein Katalog ohne Scope: sichtbar fuer jeden Agenten,
-unabhaengig von dessen Playbook-/Resource-Read-Scope (spiegelt
-`ExternalToolService._active_only`, dieselbe "Policy-Domain fehlt noch"-
-Nachziehregel). Sobald WP-3 die Domain einfuehrt, muss hier analog zu
-`_scope.render_visible_playbook_ids`/`render_visible_resource_ids` ein
-`render_visible_external_tool_alias(es)`-Aufruf ergaenzt werden, der bei
-`none`-Scope einen Miss statt eines Leaks liefert.
+Read-Scoping (WP-3): Policy-Domain `external_tool` (`AgentToolPolicy.
+external_tool_read`). `none` blendet den Pill komplett aus (Miss,
+`unresolved_key`) — analog `_scope.render_visible_playbook_ids`/
+`render_visible_resource_ids`, nur ohne DB-Roundtrip (`external_tool_ref_
+visible`, reines Policy-Feld). `assigned` verhaelt sich wie `all`: es gibt
+fuer das ExternalTool-Aggregat (flacher Workspace-Katalog) keine sinnvolle
+"nur Zugewiesenes"-Teilmenge.
 """
 
 from __future__ import annotations
@@ -39,6 +37,7 @@ from who2be_api.services.placeholders._core import (
     ResolveResult,
     blocks_plain_text,
 )
+from who2be_api.services.placeholders._scope import external_tool_ref_visible
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +94,14 @@ class ToolRefResolver:
         alias = target_id.strip()
         if not alias:
             logger.warning("ToolRefResolver: leerer Alias")
+            return ResolveResult(text="<Tool nicht verfuegbar>", unresolved_key=miss_key)
+
+        if not external_tool_ref_visible(ctx):
+            logger.info(
+                "ToolRefResolver: external_tool_read=none, Alias '%s' fuer Agent %s ausgeblendet",
+                alias,
+                ctx.agent_id,
+            )
             return ResolveResult(text="<Tool nicht verfuegbar>", unresolved_key=miss_key)
 
         row = await db.fetchrow(

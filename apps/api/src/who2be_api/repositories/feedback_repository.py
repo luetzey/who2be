@@ -100,6 +100,8 @@ _ENTITY_TABLE: dict[str, str] = {
     "persona": "persona",
     "playbook": "playbook",
     "resource": "resource",
+    # WP-3: ExternalTool-Aggregat ist ein viertes konsumierbares Wissensobjekt.
+    "external_tool": "external_tool",
 }
 
 
@@ -301,7 +303,7 @@ class PgFeedbackRepository:
             ") "
             "SELECT c.entity_type, c.entity_id, c.usage_count, c.feedback_count, "
             "       c.negative_count, c.helpful_count, c.last_activity_at, "
-            "       COALESCE(p.name, pb.name, r.name) AS name "
+            "       COALESCE(p.name, pb.name, r.name, et.name) AS name "
             "FROM combined c "
             "LEFT JOIN persona p   ON c.entity_type = 'persona'  "
             "  AND p.id = c.entity_id  AND p.workspace_id = $1 "
@@ -309,7 +311,9 @@ class PgFeedbackRepository:
             "  AND pb.id = c.entity_id AND pb.workspace_id = $1 "
             "LEFT JOIN resource r  ON c.entity_type = 'resource' "
             "  AND r.id = c.entity_id  AND r.workspace_id = $1 "
-            "WHERE COALESCE(p.name, pb.name, r.name) IS NOT NULL "
+            "LEFT JOIN external_tool et ON c.entity_type = 'external_tool' "
+            "  AND et.id = c.entity_id AND et.workspace_id = $1 "
+            "WHERE COALESCE(p.name, pb.name, r.name, et.name) IS NOT NULL "
             "ORDER BY c.last_activity_at DESC NULLS LAST",
             workspace_id,
         )
@@ -336,6 +340,11 @@ class PgFeedbackRepository:
             "  FROM resource r WHERE r.workspace_id = $1 "
             "    AND EXISTS (SELECT 1 FROM resource_version v "
             "      WHERE v.resource_id = r.id AND v.status = 'active') "
+            "  UNION ALL "
+            "  SELECT 'external_tool', et.id, et.name "
+            "  FROM external_tool et WHERE et.workspace_id = $1 "
+            "    AND EXISTS (SELECT 1 FROM external_tool_version v "
+            "      WHERE v.external_tool_id = et.id AND v.status = 'active') "
             ") AS active_elements "
             "WHERE NOT EXISTS (SELECT 1 FROM usage_event u "
             "    WHERE u.workspace_id = $1 AND u.entity_type = active_elements.entity_type "
@@ -357,7 +366,7 @@ class PgFeedbackRepository:
             "f.agent_id, f.created_at, "
             "(SELECT r.resolution FROM feedback_resolution r "
             "   WHERE r.feedback_id = f.id ORDER BY r.created_at DESC LIMIT 1) AS resolution, "
-            "COALESCE(p.name, pb.name, rs.name, "
+            "COALESCE(p.name, pb.name, rs.name, et.name, "
             "         CASE WHEN f.entity_type = 'system' THEN 'System' END) AS name "
             "FROM agent_feedback f "
             "LEFT JOIN persona p   ON f.entity_type = 'persona'  "
@@ -366,12 +375,14 @@ class PgFeedbackRepository:
             "  AND pb.id = f.entity_id AND pb.workspace_id = $1 "
             "LEFT JOIN resource rs  ON f.entity_type = 'resource' "
             "  AND rs.id = f.entity_id AND rs.workspace_id = $1 "
+            "LEFT JOIN external_tool et ON f.entity_type = 'external_tool' "
+            "  AND et.id = f.entity_id AND et.workspace_id = $1 "
             "WHERE f.workspace_id = $1 "
             # System-Feedback hat kein Element (entity_id NULL) — der Namens-JOIN
             # filtert sonst geloeschte Inhalts-Elemente raus, soll System aber
             # behalten.
             "  AND (f.entity_type = 'system' "
-            "       OR COALESCE(p.name, pb.name, rs.name) IS NOT NULL) "
+            "       OR COALESCE(p.name, pb.name, rs.name, et.name) IS NOT NULL) "
             "ORDER BY f.created_at DESC LIMIT $2",
             workspace_id,
             limit,
@@ -389,7 +400,7 @@ class PgFeedbackRepository:
             "f.agent_id, f.actor_id, f.created_at, "
             "(SELECT r.resolution FROM feedback_resolution r "
             "   WHERE r.feedback_id = f.id ORDER BY r.created_at DESC LIMIT 1) AS resolution, "
-            "COALESCE(p.name, pb.name, rs.name, "
+            "COALESCE(p.name, pb.name, rs.name, et.name, "
             "         CASE WHEN f.entity_type = 'system' THEN 'System' END) AS name "
             "FROM agent_feedback f "
             "LEFT JOIN persona p   ON f.entity_type = 'persona'  "
@@ -398,9 +409,11 @@ class PgFeedbackRepository:
             "  AND pb.id = f.entity_id AND pb.workspace_id = $1 "
             "LEFT JOIN resource rs  ON f.entity_type = 'resource' "
             "  AND rs.id = f.entity_id AND rs.workspace_id = $1 "
+            "LEFT JOIN external_tool et ON f.entity_type = 'external_tool' "
+            "  AND et.id = f.entity_id AND et.workspace_id = $1 "
             "WHERE f.id = $2 AND f.workspace_id = $1 "
             "  AND (f.entity_type = 'system' "
-            "       OR COALESCE(p.name, pb.name, rs.name) IS NOT NULL)",
+            "       OR COALESCE(p.name, pb.name, rs.name, et.name) IS NOT NULL)",
             workspace_id,
             feedback_id,
         )

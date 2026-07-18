@@ -40,7 +40,17 @@ import pytest
 from who2be_api.main import app
 from who2be_api.testing.workspace_setup import cleanup_workspaces, fresh_user_id, setup_workspace
 from who2be_mcp.client import ApiClient
-from who2be_models import PersonaRead, PlaybookRead, ResourceRead, VersionStatus
+from who2be_models import (
+    ExternalToolContent,
+    ExternalToolCreate,
+    ExternalToolRead,
+    ExternalToolUpdate,
+    PersonaRead,
+    PlaybookRead,
+    ResourceRead,
+    VersionStatus,
+    VersionTransitionRequest,
+)
 
 # Unterschiedliche Inhalte fuer active v1 und draft v2 — daran haengt der
 # Nachweis, dass der MCP-Pfad den Draft nicht sieht.
@@ -242,6 +252,216 @@ def test_mcp_read_matches_rest_and_sees_only_active(
                 active_snapshot = next(v for v in versions.json() if v["status"] == "active")
                 assert active_snapshot["version"] == 1
                 assert mcp_read.content.description == (active_snapshot["content"]["description"])
+
+    try:
+        asyncio.run(_run())
+    finally:
+        cleanup_workspaces([owner_id])
+
+
+# ---------------------------------------------------------------------------
+# ExternalTool-Aggregat (WP-3): eigener Contract-Test statt Aufnahme in
+# `_CASES` oben — `ExternalToolContent` hat kein `description`-Feld, an dem
+# der generische `test_mcp_read_matches_rest_and_sees_only_active`-Koerper
+# hart haengt. Deckt Read-Paritaet (UUID UND Alias) + den Write-Pfad
+# (create/update/transition/restore) beidseitig ab.
+# ---------------------------------------------------------------------------
+
+
+def _external_tool_body(usage_notes: str) -> dict[str, object]:
+    return {
+        "name": "[Parity] Todoist",
+        "alias": "parity-todo",
+        "content": {
+            "display_name": "Todoist",
+            "mcp_server_name": "Todoist MCP",
+            "tool_names": ["add_task", "list_tasks"],
+            "usage_notes": usage_notes,
+            "tags": ["parity"],
+        },
+    }
+
+
+def _external_tool_update_body(usage_notes: str) -> dict[str, object]:
+    # `ExternalToolUpdate` (PUT) hat KEIN `alias`-Feld (extra="forbid", Alias ist
+    # nach dem Create unveraenderlich) — eigener Body ohne den Create-Schluessel.
+    body = _external_tool_body(usage_notes)
+    del body["alias"]
+    return body
+
+
+@pytest.mark.contract
+@pytest.mark.integration
+def test_mcp_external_tool_read_matches_rest_and_sees_only_active(
+    patched_jwt_secret: str,
+    migrated_db: None,
+    make_auth_headers: Callable[[UUID], dict[str, str]],
+) -> None:
+    owner_id = fresh_user_id()
+    ws = setup_workspace(owner_id)
+    jwt_headers = make_auth_headers(owner_id)
+
+    async def _run() -> None:
+        async with app.router.lifespan_context(app):
+            transport = httpx.ASGITransport(app=app)
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as rest:
+                prefix = f"/v1/workspaces/{ws}"
+                base = f"{prefix}/external_tools"
+
+                created = await rest.post(
+                    base, json=_external_tool_body("Aktive Hinweise."), headers=jwt_headers
+                )
+                assert created.status_code == 201, created.text
+                eid = UUID(created.json()["id"])
+                for target in ("review", "active"):
+                    moved = await rest.post(
+                        f"{base}/{eid}/versions/1/transition",
+                        json={"to": target},
+                        headers=jwt_headers,
+                    )
+                    assert moved.status_code == 200, moved.text
+                drafted = await rest.put(
+                    f"{base}/{eid}",
+                    json=_external_tool_update_body(
+                        "Draft-Hinweise (darf via MCP nie sichtbar sein)."
+                    ),
+                    headers=jwt_headers,
+                )
+                assert drafted.status_code in (200, 201), drafted.text
+
+                # Konsum-Agent: external_tool_read='all' (Default), keine Writes
+                # -> sees_drafts=False -> MCP-Pfad sieht nur die aktive Version.
+                agent = await rest.post(
+                    f"{prefix}/agents",
+                    json={"name": "[Parity] ExternalTool-Konsum-Agent", "tool_policy": {}},
+                    headers=jwt_headers,
+                )
+                assert agent.status_code == 201, agent.text
+                token_resp = await rest.post(
+                    f"{prefix}/tokens",
+                    json={"name": "parity-external-tool", "agent_id": agent.json()["id"]},
+                    headers=jwt_headers,
+                )
+                assert token_resp.status_code == 201, token_resp.text
+                token: str = token_resp.json()["token"]
+
+                rest_read = await rest.get(
+                    f"{base}/{eid}", headers={"Authorization": f"Bearer {token}"}
+                )
+                assert rest_read.status_code == 200, rest_read.text
+                mcp = ApiClient(
+                    base_url="http://testserver", token=token, workspace_id=ws, transport=transport
+                )
+                # UUID-Pfad (get_external_tool) UND Alias-Pfad (resolve_external_tool)
+                # muessen identisch zum REST-Read sein.
+                mcp_by_id = await mcp.get_external_tool(eid)
+                mcp_by_alias = await mcp.resolve_external_tool("parity-todo")
+
+                rest_model = ExternalToolRead.model_validate(rest_read.json())
+                for field in ExternalToolRead.model_fields:
+                    assert getattr(mcp_by_id, field) == getattr(rest_model, field), (
+                        f"REST↔MCP-Drift im Feld '{field}' (external_tool, UUID-Pfad)"
+                    )
+                    assert getattr(mcp_by_alias, field) == getattr(rest_model, field), (
+                        f"REST↔MCP-Drift im Feld '{field}' (external_tool, Alias-Pfad)"
+                    )
+
+                # Active-only-Vertrag: der Draft-Inhalt (v2) leakt nicht.
+                assert mcp_by_id.current_version == 1
+                assert mcp_by_id.current_status == VersionStatus.active
+                assert mcp_by_id.content.usage_notes == "Aktive Hinweise."
+
+    try:
+        asyncio.run(_run())
+    finally:
+        cleanup_workspaces([owner_id])
+
+
+@pytest.mark.contract
+@pytest.mark.integration
+def test_mcp_external_tool_write_path_matches_rest(
+    patched_jwt_secret: str,
+    migrated_db: None,
+    make_auth_headers: Callable[[UUID], dict[str, str]],
+) -> None:
+    """Write-Pfad (create/update/transition/restore) via MCP-`ApiClient`, spiegelt
+    denselben Zustand wie der aequivalente REST-Aufruf (editor-Token mit
+    `external_tool_write` + `promote_retire`)."""
+    owner_id = fresh_user_id()
+    ws = setup_workspace(owner_id)
+    jwt_headers = make_auth_headers(owner_id)
+
+    async def _run() -> None:
+        async with app.router.lifespan_context(app):
+            transport = httpx.ASGITransport(app=app)
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as rest:
+                prefix = f"/v1/workspaces/{ws}"
+                base = f"{prefix}/external_tools"
+
+                agent = await rest.post(
+                    f"{prefix}/agents",
+                    json={
+                        "name": "[Parity] ExternalTool-Builder-Agent",
+                        "tool_policy": {"external_tool_write": True, "promote_retire": True},
+                    },
+                    headers=jwt_headers,
+                )
+                assert agent.status_code == 201, agent.text
+                token_resp = await rest.post(
+                    f"{prefix}/tokens",
+                    json={"name": "parity-external-tool-write", "agent_id": agent.json()["id"]},
+                    headers=jwt_headers,
+                )
+                assert token_resp.status_code == 201, token_resp.text
+                token: str = token_resp.json()["token"]
+                mcp = ApiClient(
+                    base_url="http://testserver", token=token, workspace_id=ws, transport=transport
+                )
+
+                created = await mcp.create_external_tool(
+                    ExternalToolCreate(
+                        name="[Parity] MCP-Write Todoist",
+                        content=ExternalToolContent(display_name="Todoist", usage_notes="v1"),
+                    )
+                )
+                rest_get = await rest.get(f"{base}/{created.id}", headers=jwt_headers)
+                assert rest_get.status_code == 200, rest_get.text
+                assert rest_get.json()["content"]["usage_notes"] == "v1"
+
+                # v1 muss erst aktiv sein, bevor PUT eine neue Draft (v2) anlegt
+                # (`draft_exists`-409, solange v1 selbst noch draft ist).
+                for target in (VersionStatus.review, VersionStatus.active):
+                    await mcp.transition_external_tool_version(
+                        created.id, 1, VersionTransitionRequest(to=target)
+                    )
+
+                updated = await mcp.update_external_tool(
+                    created.id,
+                    ExternalToolUpdate(
+                        content=ExternalToolContent(display_name="Todoist", usage_notes="v2")
+                    ),
+                )
+                assert updated.content.usage_notes == "v2"
+                assert updated.current_version == 2
+                rest_get = await rest.get(f"{base}/{created.id}", headers=jwt_headers)
+                assert rest_get.json()["content"]["usage_notes"] == "v2"
+                assert rest_get.json()["current_status"] == "draft"
+
+                for target in (VersionStatus.review, VersionStatus.active):
+                    await mcp.transition_external_tool_version(
+                        created.id, 2, VersionTransitionRequest(to=target)
+                    )
+                rest_get = await rest.get(f"{base}/{created.id}", headers=jwt_headers)
+                assert rest_get.json()["current_status"] == "active"
+                assert rest_get.json()["current_version"] == 2
+
+                restored = await mcp.restore_external_tool_version(created.id, 1)
+                assert restored.content.usage_notes == "v1"
+                assert restored.current_version == 3
+                rest_get = await rest.get(f"{base}/{created.id}", headers=jwt_headers)
+                assert rest_get.json()["content"]["usage_notes"] == "v1"
+                assert rest_get.json()["current_status"] == "draft"
+                assert rest_get.json()["current_version"] == 3
 
     try:
         asyncio.run(_run())

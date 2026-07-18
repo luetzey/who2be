@@ -1,11 +1,11 @@
-"""Geschaeftslogik fuer das ExternalTool-Aggregat (WP-1).
+"""Geschaeftslogik fuer das ExternalTool-Aggregat (WP-1 + WP-3).
 
 Workspace-Pruefung liegt im SQL der Repository-Schicht; der Service
 uebersetzt ein fehlendes Ergebnis (`None`) in `HTTPException 404` und den
-Draft-on-Edit-Konflikt in `409`. Aufbau analog `resource_service.py`, aber
-schlanker: WP-1 deckt weder Read-Scoping (`assigned`) noch Capability-Gates
-noch Tag-Write-Scoping ab (Policy-Domain `external_tool` ist WP-3-Scope) —
-nur das Rollen-Gate (editor+ fuer Writes) + das generische Write-Rate-Limit.
+Draft-on-Edit-Konflikt in `409`. Aufbau analog `resource_service.py`: Reads
+sind Read-Scope-gefiltert (`external_tool_read`, WP-3 — `none` sperrt komplett;
+`assigned` verhaelt sich wie `all`, siehe `require_external_tool_read`),
+Writes sind capability- (`external_tool_write`), tag- und rate-gated.
 """
 
 from datetime import datetime
@@ -14,16 +14,20 @@ from uuid import UUID
 import asyncpg
 from fastapi import HTTPException, status
 
+from who2be_api.core.agent_scope import require_external_tool_read
 from who2be_api.core.security import (
     WorkspaceContext,
+    require_capability,
     require_role,
     require_unmanaged,
     require_write_rate,
+    require_write_tags,
 )
 from who2be_api.repositories.external_tool_repository import ExternalToolRepository
 from who2be_api.services.slug import slugify
 from who2be_models import (
     DEFAULT_LOCALE,
+    AgentCapability,
     ExternalToolCreate,
     ExternalToolRead,
     ExternalToolUpdate,
@@ -33,19 +37,7 @@ from who2be_models import (
 )
 
 _ALIAS_FALLBACK = "tool"
-
-
-def _active_only(ctx: WorkspaceContext) -> bool:
-    """Draft-Sichtbarkeit bis WP-3 die Policy-Domain `external_tool` einfuehrt.
-
-    Ohne eigene `AgentCapability` (die kommt erst mit WP-3) kann
-    `WorkspaceContext.sees_drafts` hier nicht befragt werden — Mensch/JWT sieht
-    immer die Current-Version (inkl. Draft/Review, wie der Web-Editor es
-    braucht), JEDER API-Token (gebunden oder nicht) bleibt sicher-by-default
-    auf `active` beschraenkt, analog dem bestehenden Verhalten eines
-    ungebundenen Tokens bei den anderen Entities.
-    """
-    return ctx.is_api_token
+_WRITE_DOMAIN = "external_tool"
 
 
 def _not_found() -> HTTPException:
@@ -89,7 +81,9 @@ class ExternalToolService:
 
     async def create(self, ctx: WorkspaceContext, data: ExternalToolCreate) -> ExternalToolRead:
         require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.external_tool_write)
         require_write_rate(ctx)
+        require_write_tags(ctx, _WRITE_DOMAIN, data.content.tags)
         # Alias beim Create aus dem Namen ableiten, falls nicht gesetzt (spiegelt
         # ResourceService.create). Workspace-eindeutig — Kollision -> 409
         # (partieller UNIQUE-Index, Migration 0065).
@@ -108,11 +102,12 @@ class ExternalToolService:
         cursor: tuple[datetime, UUID] | None,
         locale: str = DEFAULT_LOCALE,
     ) -> tuple[list[ExternalToolRead], str | None]:
+        require_external_tool_read(ctx)
         rows = await self._repo.list_by_workspace(
             ctx.workspace_id,
             limit + 1,
             cursor,
-            active_only=_active_only(ctx),
+            active_only=not ctx.sees_drafts(AgentCapability.external_tool_write),
             locale=locale,
         )
         next_cursor: str | None = None
@@ -125,12 +120,26 @@ class ExternalToolService:
     async def get(
         self, ctx: WorkspaceContext, tool_id: UUID, locale: str = DEFAULT_LOCALE
     ) -> ExternalToolRead:
+        require_external_tool_read(ctx)
         tool = await self._repo.fetch(
-            ctx.workspace_id, tool_id, active_only=_active_only(ctx), locale=locale
+            ctx.workspace_id,
+            tool_id,
+            active_only=not ctx.sees_drafts(AgentCapability.external_tool_write),
+            locale=locale,
         )
         if tool is None:
             raise _not_found()
         return tool
+
+    async def _check_update_tags(
+        self, ctx: WorkspaceContext, tool_id: UUID, incoming_tags: list[str], locale: str
+    ) -> None:
+        """Tag-Scope beim Update: eingehende Tags + (nur bei Restriktion) Bestand."""
+        require_write_tags(ctx, _WRITE_DOMAIN, incoming_tags)
+        policy = ctx.tool_policy
+        if policy is not None and policy.write_tags_for(_WRITE_DOMAIN) is not None:
+            existing = await self.get(ctx, tool_id, locale)
+            require_write_tags(ctx, _WRITE_DOMAIN, existing.content.tags)
 
     async def update(
         self,
@@ -141,8 +150,10 @@ class ExternalToolService:
     ) -> ExternalToolRead:
         """Erzeugt eine neue Version des Tools (Draft-on-Edit bei Active)."""
         require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.external_tool_write)
         require_unmanaged(await self._repo.is_managed(ctx.workspace_id, tool_id))
         require_write_rate(ctx)
+        await self._check_update_tags(ctx, tool_id, data.content.tags, locale)
         outcome = await self._repo.update(
             ctx.workspace_id, ctx.user_id, tool_id, data.name, data.content, locale
         )
@@ -161,8 +172,10 @@ class ExternalToolService:
     ) -> ExternalToolRead:
         """Auto-Save-Pfad (PATCH `.../draft`) — upsertet die Draft-Version."""
         require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.external_tool_write)
         require_unmanaged(await self._repo.is_managed(ctx.workspace_id, tool_id))
         require_write_rate(ctx)
+        await self._check_update_tags(ctx, tool_id, data.content.tags, locale)
         outcome = await self._repo.upsert_draft(
             ctx.workspace_id, ctx.user_id, tool_id, data.name, data.content, locale
         )
@@ -175,6 +188,7 @@ class ExternalToolService:
     async def list_versions(
         self, ctx: WorkspaceContext, tool_id: UUID, locale: str = DEFAULT_LOCALE
     ) -> list[ExternalToolVersionRead]:
+        require_external_tool_read(ctx)
         versions = await self._repo.list_versions(ctx.workspace_id, tool_id, locale)
         if versions is None:
             raise _not_found()
@@ -183,6 +197,7 @@ class ExternalToolService:
     async def get_version(
         self, ctx: WorkspaceContext, tool_id: UUID, version: int, locale: str = DEFAULT_LOCALE
     ) -> ExternalToolVersionRead:
+        require_external_tool_read(ctx)
         found = await self._repo.fetch_version(ctx.workspace_id, tool_id, version, locale)
         if found is None:
             raise _not_found()
@@ -197,11 +212,13 @@ class ExternalToolService:
     ) -> ExternalToolRead:
         """Stellt den Snapshot `source_version` als neue Draft wieder her (§3.1)."""
         require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.external_tool_write)
         require_unmanaged(await self._repo.is_managed(ctx.workspace_id, tool_id))
         require_write_rate(ctx)
         snapshot = await self._repo.fetch_version(ctx.workspace_id, tool_id, source_version, locale)
         if snapshot is None:
             raise _not_found()
+        require_write_tags(ctx, _WRITE_DOMAIN, snapshot.content.tags)
         outcome = await self._repo.restore_version(
             ctx.workspace_id, ctx.user_id, tool_id, snapshot.content, locale
         )
@@ -214,13 +231,15 @@ class ExternalToolService:
     async def delete(self, ctx: WorkspaceContext, tool_id: UUID) -> None:
         """Hard-Delete des ExternalTools (ADR-0032).
 
-        Editor-Gate. 404, wenn das Tool nicht (mehr) existiert. Anders als
-        Resource gibt es in WP-1 keine eingehenden Referenzen zu pruefen —
-        `tool-ref`-Placeholder loesen erst zur Fetch-Zeit ueber den Alias auf
-        (WP-2); ein geloeschtes Tool fuehrt dort zu einem sauberen Miss
-        (`unresolved_key`), nicht zu einer blockierten Loeschung.
+        Editor-Gate + `external_tool_write`-Capability. 404, wenn das Tool
+        nicht (mehr) existiert. Anders als Resource gibt es keine eingehenden
+        Referenzen zu pruefen — `tool-ref`-Placeholder loesen erst zur
+        Fetch-Zeit ueber den Alias auf (WP-2); ein geloeschtes Tool fuehrt dort
+        zu einem sauberen Miss (`unresolved_key`), nicht zu einer blockierten
+        Loeschung.
         """
         require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.external_tool_write)
         require_write_rate(ctx)
         tool = await self._repo.fetch(ctx.workspace_id, tool_id)
         if tool is None:

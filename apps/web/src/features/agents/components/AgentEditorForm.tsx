@@ -24,7 +24,12 @@ import { describeAgentMissing } from '../lib/activation'
 
 // Read-Scope-Domains (Select all|assigned|none), An/Aus-Reads und Write-
 // Capability-Gruppen. Reihenfolge = Anzeigereihenfolge im Formular.
-const READ_SCOPE_FIELDS = ['playbook_read', 'resource_read', 'agent_read'] as const
+const READ_SCOPE_FIELDS = [
+  'playbook_read',
+  'resource_read',
+  'agent_read',
+  'external_tool_read',
+] as const
 const READ_FLAG_FIELDS = ['persona_read'] as const
 const WRITE_CAP_FIELDS = [
   'persona_write',
@@ -32,6 +37,7 @@ const WRITE_CAP_FIELDS = [
   'resource_write',
   'agent_write',
   'system_prompt_write',
+  'external_tool_write',
   'feedback_write',
   'feedback_resolve',
   'promote_retire',

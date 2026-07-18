@@ -433,6 +433,67 @@ def test_tool_ref_pill_expands_via_playbook_rendered_path_too(
 
 
 @pytest.mark.integration
+def test_tool_ref_pill_external_tool_read_none_is_scope_miss(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """WP-3: `external_tool_read='none'` auf der Policy des GERENDERTEN Agenten
+    blendet den `tool-ref`-Pill aus (Miss) — analog `render_visible_playbook_ids`/
+    `render_visible_resource_ids` bei `none`-Scope, nur ohne DB-Roundtrip. Der
+    Alias existiert und ist aktiv; nur die Sichtbarkeit fuer DIESEN Agenten fehlt."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = _auth(owner)
+
+    try:
+        with TestClient(app) as client:
+            persona = client.post(
+                f"/v1/workspaces/{ws}/personas", json=_persona_body(), headers=auth
+            ).json()
+            _promote_to_active(client, f"/v1/workspaces/{ws}/personas", persona["id"], auth)
+
+            tool_base = f"/v1/workspaces/{ws}/external_tools"
+            tool = client.post(tool_base, json=_tool_body(alias="todo"), headers=auth)
+            assert tool.status_code == 201, tool.text
+            _promote_to_active(client, tool_base, tool.json()["id"], auth)
+
+            tpl = client.post(
+                f"/v1/workspaces/{ws}/system-prompts",
+                json=_template_body_with_tool_ref("todo"),
+                headers=auth,
+            )
+            tpl_id = tpl.json()["id"]
+            _promote_to_active(client, f"/v1/workspaces/{ws}/system-prompts", tpl_id, auth)
+
+            # Der GERENDERTE Agent traegt die Policy — `external_tool_read='none'`.
+            agent = client.post(
+                f"/v1/workspaces/{ws}/agents",
+                json={
+                    "name": "Scope-Miss-Agent",
+                    "description": "",
+                    "persona_id": persona["id"],
+                    "system_prompt_template_id": tpl_id,
+                    "status": "enabled",
+                    "tool_policy": {"external_tool_read": "none"},
+                },
+                headers=auth,
+            ).json()
+
+            render_resp = client.get(
+                f"/v1/workspaces/{ws}/agents/{agent['id']}/render", headers=auth
+            )
+            assert render_resp.status_code == 200, render_resp.text
+            data = render_resp.json()
+            assert "tool-ref:todo" in data["unresolved_placeholders"]
+            assert "Todoist" not in data["content"]
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
 def test_tool_ref_placeholder_preview_hit_and_miss(monkeypatch: pytest.MonkeyPatch) -> None:
     """Preview-Endpoint (`GET .../placeholders/preview`) loest `tool-ref` generisch
     ueber die REGISTRY auf — kein kind-spezifischer Code im Preview-Service noetig."""

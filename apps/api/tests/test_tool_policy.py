@@ -262,6 +262,85 @@ class TestTransitionGrants:
         assert exc.value.actionable_by == "human"
 
 
+class TestExternalToolPolicy:
+    """WP-3: `external_tool_read`/`external_tool_write` (Blueprint
+    `.claude/plan/2026-07-18-1315_external-tools-tool-ref.md`)."""
+
+    def test_default_read_is_all_not_assigned(self) -> None:
+        # Anders als playbook/resource/agent: kein 'assigned'-Konzept fuer den
+        # flachen ExternalTool-Katalog — Default ist 'all'.
+        assert AgentToolPolicy().external_tool_read == ReadScope.all
+
+    def test_default_write_is_false(self) -> None:
+        assert AgentToolPolicy().external_tool_write is False
+
+    def test_empty_json_deserialises_to_defaults(self) -> None:
+        # JSONB-Abwaertskompatibilitaet (ADR-0009): eine alte Policy ohne die
+        # neuen Felder verhaelt sich unveraendert (kein destruktiver Migrationsschritt).
+        policy = AgentToolPolicy.model_validate({})
+        assert policy.external_tool_read == ReadScope.all
+        assert policy.external_tool_write is False
+        assert policy == AgentToolPolicy()
+
+    def test_old_policy_json_without_field_still_validates(self) -> None:
+        # Simuliert eine VOR-WP-3 persistierte JSONB-Zeile (kennt die neuen
+        # Felder nicht) — muss weiterhin klaglos validieren.
+        legacy = {"playbook_read": "all", "persona_write": True}
+        policy = AgentToolPolicy.model_validate(legacy)
+        assert policy.external_tool_read == ReadScope.all
+        assert policy.external_tool_write is False
+        assert policy.persona_write is True
+
+    def test_granted_capabilities_lists_it_when_set(self) -> None:
+        caps = AgentToolPolicy(external_tool_write=True).granted_capabilities()
+        assert AgentCapability.external_tool_write in caps
+        assert AgentCapability.external_tool_write not in AgentToolPolicy().granted_capabilities()
+
+    def test_read_scopes_includes_external_tool(self) -> None:
+        assert AgentToolPolicy().read_scopes()["external_tool"] == ReadScope.all
+        assert (
+            AgentToolPolicy(external_tool_read=ReadScope.none).read_scopes()["external_tool"]
+            == ReadScope.none
+        )
+
+    def test_require_capability_blocks_default_policy(self) -> None:
+        ctx = _ctx(AgentToolPolicy())
+        with pytest.raises(ApiGateError) as exc:
+            require_capability(ctx, AgentCapability.external_tool_write)
+        assert exc.value.status == 403
+        assert exc.value.reason == "missing_capability"
+
+    def test_require_capability_passes_when_granted(self) -> None:
+        require_capability(
+            _ctx(AgentToolPolicy(external_tool_write=True)), AgentCapability.external_tool_write
+        )
+
+    def test_is_within_blocks_read_scope_escalation(self) -> None:
+        broad = AgentToolPolicy(external_tool_read=ReadScope.all)
+        narrow = AgentToolPolicy(external_tool_read=ReadScope.none)
+        assert narrow.is_within(broad) is True
+        assert broad.is_within(narrow) is False
+
+    def test_is_within_blocks_write_escalation(self) -> None:
+        broad = AgentToolPolicy(external_tool_write=True)
+        narrow = AgentToolPolicy()
+        assert broad.is_within(narrow) is False
+        assert narrow.is_within(broad) is True
+
+    def test_transition_capability_gate_uses_external_tool_write_for_draft_review(self) -> None:
+        # WP-1-Luecke geschlossen: `external_tool` ist jetzt in
+        # `version_status._WRITE_CAPABILITY` — draft/review verlangt
+        # `external_tool_write`, active/inactive zusaetzlich `promote_retire`.
+        ctx = _ctx(AgentToolPolicy(external_tool_write=True))
+        _require_transition_capability(ctx, "external_tool", VersionStatus.review)
+
+    def test_transition_capability_gate_blocks_active_without_promote_retire(self) -> None:
+        ctx = _ctx(AgentToolPolicy(external_tool_write=True))
+        with pytest.raises(ApiGateError) as exc:
+            _require_transition_capability(ctx, "external_tool", VersionStatus.active)
+        assert exc.value.reason == "missing_capability"
+
+
 class TestTokenExpiry:
     """ADR-0039: optionaler Ablaufzeitpunkt im TokenCreate-Modell."""
 

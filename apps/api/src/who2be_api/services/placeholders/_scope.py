@@ -44,3 +44,20 @@ async def render_visible_resource_ids(db: _Fetcher, ctx: RenderContext) -> set[U
     if policy.resource_read == ReadScope.none:
         return set()
     return await assigned_resource_ids(db, ctx.workspace_id, ctx.agent_id)
+
+
+def external_tool_ref_visible(ctx: RenderContext) -> bool:
+    """True, wenn `tool-ref`-Placeholder-Pills fuer diesen Agenten aufgeloest
+    werden duerfen (WP-3, Read-Scope-Domain `external_tool`).
+
+    Anders als `render_visible_playbook_ids`/`render_visible_resource_ids` gibt
+    es fuer ExternalTool (flacher Workspace-Katalog ohne Persona-/Playbook-
+    Zuordnung) keine `assigned`-Teilmenge zu berechnen — nur `none` blendet
+    komplett aus (`assigned` verhaelt sich wie `all`). Kein DB-Roundtrip noetig
+    (reines Policy-Feld), daher synchron im Gegensatz zu den ID-Set-Helfern
+    oben.
+    """
+    policy = ctx.tool_policy
+    if policy is None or ctx.agent_id is None:
+        return True
+    return policy.external_tool_read != ReadScope.none
