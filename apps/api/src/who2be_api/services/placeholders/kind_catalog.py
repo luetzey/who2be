@@ -126,6 +126,19 @@ _CATALOG: tuple[PlaceholderKindInfo, ...] = (
         target_id_values=[""],
         example=_example("tools-overview", "", "MCP-Tools"),
     ),
+    PlaceholderKindInfo(
+        kind="tool-ref",
+        description=(
+            "Bettet die aktive Bindung eines externen MCP-Server/Tools "
+            "(`external_tool`) ein: Anzeigename, Server-Name, Tool-Namen und "
+            "Nutzungshinweise als kompakter Anweisungsblock. Nicht "
+            "gefundener/inaktiver Alias rendert als Fallback-Hinweis (Miss), "
+            "nie als Fehler."
+        ),
+        target_id_semantics="Faehigkeits-Alias eines externen Tools (z. B. 'todo').",
+        target_id_values=[],
+        example=_example("tool-ref", "todo", "Tool: To-do-Liste"),
+    ),
 )
 
 
