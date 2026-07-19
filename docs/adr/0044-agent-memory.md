@@ -110,6 +110,22 @@ bleiben (kein serverseitiger Extraktions-/Judge-Call).
 - Deep-Copy (Agent duplizieren) kopiert Memories NICHT (Baseline wie
   Resource-Links).
 
+## Addendum 2026-07-19 — Placeholder-Kind `memory`
+
+Auf Builder-Briefing hin gibt es zusaetzlich einen expliziten Placeholder-Kind
+`memory` (Registry + Katalog): Template-Autoren positionieren den
+Gedaechtnis-Hinweis frei; der Text kommt aus der geteilten Quelle
+`memory_prompt_block` (ein Wortlaut fuer Placeholder, tools-overview-Fallback
+und die Laufzeit-Sektion in `get_persona`). `off` rendert leer (kein Miss).
+Doppel-Render-Schutz: enthaelt ein Template den expliziten Placeholder
+(`RenderContext.has_explicit_memory`, vom Renderer per Body-Scan gesetzt),
+unterdrueckt `tools-overview` seinen Auto-Append; Templates ohne Placeholder
+(Bestand) rendern unveraendert. Seed-Templates (agent_builder + die vier
+Default-Templates) tragen den Placeholder direkt nach der tools-overview-Pill;
+`BUILDER_CONTENT_VERSION` 9. Die Direktive bleibt reine Textstaerke (kein
+Tool-Gating); die „Mit Freigabe"-Copy benennt bewusst die reale
+Pending-Schleuse statt einer Chat-Bestaetigung (Briefing-Abweichung).
+
 ## Ausblick (bewusst offen)
 
 pgvector-Retrieval (Stufe B, `mode`-Parameter), Vorschlags-Updates („ersetzt

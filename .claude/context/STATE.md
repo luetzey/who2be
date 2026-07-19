@@ -4,6 +4,21 @@ _Stand: 2026-07-18_
 
 ## Funktioniert
 
+- **Placeholder-Kind `memory` UMGESETZT (2026-07-19, Branch
+  `claude/autonomous-code-agent-setup-iz6ydx` neu ab main, ADR-0044-Addendum):**
+  Builder-Briefing umgesetzt — expliziter, positionierbarer Gedaechtnis-
+  Hinweis als Placeholder (Registry+Katalog+Resolver; off = leer, kein Miss).
+  EINE Text-Quelle `memory_prompt_block` (Placeholder + tools-overview-
+  Fallback + get_persona-Laufzeit-Sektion). Doppel-Render-Schutz via
+  Renderer-Body-Scan (`RenderContext.has_explicit_memory`). Seed-Templates
+  (agent_builder + 4 Default) tragen die Pill nach tools-overview;
+  `BUILDER_CONTENT_VERSION` 9. Web: Editor-Pill + Slash-Menue „Gedaechtnis"
+  (Direkt-Insert, kein Picker). Briefing-Abweichungen dokumentiert
+  (Tool-Gating existierte, Freigabe-Copy auf Pending-Schleuse korrigiert).
+  **DoD gruen:** Python 1092 passed / Coverage 90,47 %; Web 906 Vitest /
+  Branches 81 %, lint/tsc/build clean. Plan:
+  `.claude/plan/2026-07-19-0600_memory-placeholder.md`.
+
 - **Builder-Content v8: Agent-Memory-Wissen UMGESETZT (2026-07-19, Branch
   `claude/autonomous-code-agent-setup-iz6ydx` neu ab main, PR #325):**
   Folge-PR zu #324 — Agent-Playbook („tool_policy verstehen": memory_mode/

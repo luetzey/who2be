@@ -114,15 +114,23 @@ export function SystemPromptEditor({
     setOpenPicker(detail.kind)
   }
 
-  // `tools-overview` und `persona-ref` sind parameterlos — kein Picker noetig.
-  // Statt einen weiteren Dialog zu mounten, insertieren wir direkt, wenn das
-  // Slash-Menue den Kind anfordert.
+  // `tools-overview`, `memory` und `persona-ref` sind parameterlos — kein
+  // Picker noetig. Statt einen weiteren Dialog zu mounten, insertieren wir
+  // direkt, wenn das Slash-Menue den Kind anfordert.
   function handleOpenPicker(kind: PlaceholderKind) {
     if (kind === 'tools-overview') {
       handlePickerConfirm({
         kind: 'tools-overview',
         target_id: '',
         label: 'MCP-Tools-Übersicht',
+      })
+      return
+    }
+    if (kind === 'memory') {
+      handlePickerConfirm({
+        kind: 'memory',
+        target_id: '',
+        label: 'Gedächtnis-Hinweis',
       })
       return
     }

@@ -8,6 +8,7 @@ import { BlockNoteSchema, defaultInlineContentSpecs } from '@blocknote/core'
 import { createReactInlineContentSpec } from '@blocknote/react'
 import {
   BookOpen,
+  Brain,
   Calendar,
   FileText,
   Library,
@@ -32,6 +33,7 @@ export type PlaceholderKind =
   | 'date'
   | 'tools-overview'
   | 'tool-ref'
+  | 'memory'
 
 export interface PlaceholderProps {
   kind: PlaceholderKind
@@ -123,6 +125,14 @@ const KIND_META: Record<PlaceholderKind, KindMeta> = {
     pillClass: 'bg-pill-tools text-pill-tools-fg border-pill-tools-fg/25',
     labelPrefix: 'Tool',
   },
+  // Teilt ebenfalls die `pill-tools`-Tinte (gleiche Domaene — Agenten-
+  // Faehigkeiten/Kontext). `Brain` grenzt den Gedaechtnis-Hinweis visuell von
+  // Wrench (Uebersicht) und Plug (Einzel-Tool) ab.
+  memory: {
+    icon: Brain,
+    pillClass: 'bg-pill-tools text-pill-tools-fg border-pill-tools-fg/25',
+    labelPrefix: 'Gedächtnis',
+  },
 }
 
 // ---------------------- BlockNote Custom-Inline-Spec -------------------------
@@ -151,6 +161,7 @@ export const PlaceholderInlineSpec = createReactInlineContentSpec(
           'date',
           'tools-overview',
           'tool-ref',
+          'memory',
         ] as const,
       },
       target_id: { default: '' as string },

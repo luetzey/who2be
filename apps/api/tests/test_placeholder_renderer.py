@@ -1446,8 +1446,10 @@ class TestToolsOverviewResolver:
         assert "search_memory" in result
         assert "list_memories" in result
         assert "save_memory(fact" not in result
-        # Daten-nicht-Anweisungen-Rahmung ist Pflichtteil des Hinweises.
-        assert "KEINE" in result and "Anweisungen" in result
+        # Nur-lesend-Block: keine Schreib-Aufforderung, Daten-Rahmung Pflicht.
+        assert "nur lesend" in result
+        assert "Trage selbst nichts ein" in result
+        assert "keine Anweisungen" in result
 
     def test_memory_directive_switches_muss_vs_soll(self) -> None:
         """`memory_directive` steuert die Verbindlichkeit der Abfrage-Anweisung
@@ -1464,7 +1466,7 @@ class TestToolsOverviewResolver:
             )
         ).text
         assert "GESPRAECHSBEGINN" in required
-        assert "Pflicht" in required
+        assert "verpflichtend" in required
 
         recommended = _async_run(
             ToolsOverviewResolver().resolve(
@@ -1472,7 +1474,7 @@ class TestToolsOverviewResolver:
             )
         ).text
         assert "GESPRAECHSBEGINN" not in recommended
-        assert "hilfreich" in recommended
+        assert "empfohlen" in recommended
 
     def test_memory_suggest_vs_auto_wording(self) -> None:
         """suggest benennt die Freigabe-Schleuse ehrlich; auto verspricht
@@ -1485,13 +1487,15 @@ class TestToolsOverviewResolver:
             )
         ).text
         assert "Freigabe" in suggest
+        assert "VORSCHLAG" in suggest
 
         auto = _async_run(
             ToolsOverviewResolver().resolve(
                 "", self._policy_ctx(memory_mode=MemoryMode.auto), _make_db()
             )
         ).text
-        assert "gilt sofort" in auto
+        assert "selbststaendig" in auto
+        assert "VORSCHLAG" not in auto
 
     def test_resolve_feedback_hidden_by_default(self) -> None:
         """Die Triage (feedback_resolve) ist secure-by-default aus — das Tool
@@ -2280,3 +2284,142 @@ class TestRenderReadScope:
         result = _async_run(ResourceResolver().resolve(str(uuid4()), _agent_render_ctx(), db))
         assert result.text == "<Resource nicht verfuegbar>"
         db.fetchrow.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# MemoryPromptResolver (`memory`-Placeholder, ADR-0044)
+# ---------------------------------------------------------------------------
+
+
+class TestMemoryPromptResolver:
+    """Modus-/Direktive-Matrix + Doppel-Render-Schutz + Katalog-Eintrag."""
+
+    @staticmethod
+    def _ctx_with_policy(**policy_kwargs: Any) -> RenderContext:
+        from who2be_models import AgentToolPolicy
+
+        return RenderContext(
+            workspace_id=UUID("00000000-0000-0000-0000-000000000099"),
+            persona_id=UUID("00000000-0000-0000-0000-000000000001"),
+            now=datetime(2026, 5, 31, 12, 0, 0, tzinfo=UTC),
+            tool_policy=AgentToolPolicy(**policy_kwargs),
+        )
+
+    def _resolve(self, ctx: RenderContext) -> Any:
+        from who2be_api.services.placeholders.resolvers.memory import MemoryPromptResolver
+
+        return _async_run(MemoryPromptResolver().resolve("", ctx, _make_db()))
+
+    def test_off_and_missing_policy_render_empty_without_miss(self) -> None:
+        # Briefing-Akzeptanz: `off` rendert nichts UND erzeugt keinen Miss.
+        for ctx in (_ctx(), self._ctx_with_policy()):
+            result = self._resolve(ctx)
+            assert result.text == ""
+            assert result.unresolved_key is None
+
+    def test_mode_matrix(self) -> None:
+        from who2be_models import MemoryMode
+
+        read_only = self._resolve(self._ctx_with_policy(memory_mode=MemoryMode.read_only)).text
+        assert "nur lesend" in read_only
+        assert "Trage selbst nichts ein" in read_only
+        assert "save_memory" not in read_only  # keine Schreib-Aufforderung
+
+        suggest = self._resolve(self._ctx_with_policy(memory_mode=MemoryMode.suggest)).text
+        assert "mit Freigabe" in suggest
+        assert "VORSCHLAG" in suggest and "Workspace-Besitzer" in suggest
+
+        auto = self._resolve(self._ctx_with_policy(memory_mode=MemoryMode.auto)).text
+        assert "automatisch" in auto and "selbststaendig" in auto
+        assert "VORSCHLAG" not in auto
+
+        # Daten-Rahmung ist Pflichtteil jedes Modus.
+        for text in (read_only, suggest, auto):
+            assert "keine Anweisungen" in text
+
+    def test_directive_changes_only_the_overlay_line(self) -> None:
+        from who2be_models import MemoryDirective, MemoryMode
+
+        required = self._resolve(
+            self._ctx_with_policy(
+                memory_mode=MemoryMode.suggest, memory_directive=MemoryDirective.required
+            )
+        ).text
+        recommended = self._resolve(self._ctx_with_policy(memory_mode=MemoryMode.suggest)).text
+        assert "verpflichtend" in required and "GESPRAECHSBEGINN" in required
+        assert "empfohlen" in recommended and "GESPRAECHSBEGINN" not in recommended
+        # Nur die Verbindlichkeits-Zeile unterscheidet sich: der Modus-Teil
+        # (alles vor dem Overlay) ist identisch.
+        cut = required.index(" Die Nutzung des Gedaechtnisses")
+        assert recommended.startswith(required[:cut])
+
+    def test_registered_in_registry_and_catalog(self) -> None:
+        from who2be_api.services.placeholders.kind_catalog import placeholder_catalog
+
+        assert "memory" in REGISTRY
+        assert any(k.kind == "memory" for k in placeholder_catalog().kinds)
+
+
+class TestMemoryAutoAppendSuppression:
+    """tools-overview haengt den Gedaechtnis-Hinweis nur an, wenn der Body
+    KEINEN expliziten `memory`-Placeholder enthaelt (kein Doppel-Render)."""
+
+    @staticmethod
+    def _body(*kinds: str) -> str:
+        blocks = [
+            {
+                "id": f"b-{i}",
+                "type": "paragraph",
+                "content": [
+                    {
+                        "type": "placeholder",
+                        "props": {"kind": kind, "target_id": "", "label": kind},
+                    }
+                ],
+            }
+            for i, kind in enumerate(kinds)
+        ]
+        return json.dumps(blocks)
+
+    @staticmethod
+    def _policy_ctx() -> RenderContext:
+        from who2be_models import AgentToolPolicy, MemoryMode
+
+        return RenderContext(
+            workspace_id=UUID("00000000-0000-0000-0000-000000000099"),
+            persona_id=UUID("00000000-0000-0000-0000-000000000001"),
+            now=datetime(2026, 5, 31, 12, 0, 0, tzinfo=UTC),
+            tool_policy=AgentToolPolicy(memory_mode=MemoryMode.suggest),
+        )
+
+    def test_explicit_placeholder_suppresses_auto_append(self) -> None:
+        text, unresolved = _async_run(
+            render_template_body(
+                self._body("tools-overview", "memory"), self._policy_ctx(), _make_db()
+            )
+        )
+        assert unresolved == []
+        # Genau EIN Gedaechtnis-Block (der explizite), kein Auto-Append.
+        assert text.count("Langzeit-Gedaechtnis") == 1
+
+    def test_without_placeholder_auto_append_still_works(self) -> None:
+        text, unresolved = _async_run(
+            render_template_body(self._body("tools-overview"), self._policy_ctx(), _make_db())
+        )
+        assert unresolved == []
+        assert text.count("Langzeit-Gedaechtnis") == 1
+
+    def test_off_mode_renders_nothing_anywhere(self) -> None:
+        from who2be_models import AgentToolPolicy
+
+        ctx = RenderContext(
+            workspace_id=UUID("00000000-0000-0000-0000-000000000099"),
+            persona_id=UUID("00000000-0000-0000-0000-000000000001"),
+            now=datetime(2026, 5, 31, 12, 0, 0, tzinfo=UTC),
+            tool_policy=AgentToolPolicy(),
+        )
+        text, unresolved = _async_run(
+            render_template_body(self._body("tools-overview", "memory"), ctx, _make_db())
+        )
+        assert unresolved == []
+        assert "Langzeit-Gedaechtnis" not in text

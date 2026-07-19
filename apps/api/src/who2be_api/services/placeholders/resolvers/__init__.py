@@ -13,6 +13,10 @@ from who2be_api.services.placeholders.resolvers.content import (
     ResourceResolver,
 )
 from who2be_api.services.placeholders.resolvers.date import DateResolver
+from who2be_api.services.placeholders.resolvers.memory import (
+    MemoryPromptResolver,
+    memory_prompt_block,
+)
 from who2be_api.services.placeholders.resolvers.persona import (
     PersonaFieldResolver,
     PersonaRefResolver,
@@ -22,6 +26,8 @@ from who2be_api.services.placeholders.resolvers.tool_ref import ToolRefResolver
 from who2be_api.services.placeholders.resolvers.tools import ToolsOverviewResolver
 
 __all__ = [
+    "MemoryPromptResolver",
+    "memory_prompt_block",
     "DateResolver",
     "PersonaFieldResolver",
     "PersonaRefResolver",

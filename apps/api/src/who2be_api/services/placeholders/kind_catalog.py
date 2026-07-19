@@ -127,6 +127,21 @@ _CATALOG: tuple[PlaceholderKindInfo, ...] = (
         example=_example("tools-overview", "", "MCP-Tools"),
     ),
     PlaceholderKindInfo(
+        kind="memory",
+        description=(
+            "Rendert den Gedaechtnis-Hinweis passend zum memory_mode des "
+            "gerenderten Agenten (ADR-0044): nur-lesend / mit Freigabe / "
+            "automatisch, plus Verbindlichkeits-Zeile gemaess memory_directive. "
+            "memory_mode 'off' (oder Render ohne Agent-Kontext) rendert leer — "
+            "nie ein Miss, nie ein Fehler. Ohne diesen Placeholder haengt "
+            "tools-overview den Hinweis automatisch an; mit ihm bestimmt die "
+            "Position im Template."
+        ),
+        target_id_semantics="Ungenutzt — leerer String.",
+        target_id_values=[""],
+        example=_example("memory", "", "Gedaechtnis"),
+    ),
+    PlaceholderKindInfo(
         kind="tool-ref",
         description=(
             "Bettet die aktive Bindung eines externen MCP-Server/Tools "

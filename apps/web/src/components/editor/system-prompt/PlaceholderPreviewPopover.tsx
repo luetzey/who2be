@@ -60,9 +60,10 @@ function missHint(kind: PlaceholderKind): string {
     'oder (noch) nicht aktiv.'
 }
 
-// `tools-overview` und `persona-ref` sind parameterlos — nichts zu bearbeiten.
+// `tools-overview`, `memory` und `persona-ref` sind parameterlos — nichts zu
+// bearbeiten.
 function isEditableKind(kind: PlaceholderKind): boolean {
-  return kind !== 'tools-overview' && kind !== 'persona-ref'
+  return kind !== 'tools-overview' && kind !== 'persona-ref' && kind !== 'memory'
 }
 
 export function PlaceholderPreviewPopover({

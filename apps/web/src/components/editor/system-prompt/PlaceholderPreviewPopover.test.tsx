@@ -173,6 +173,29 @@ describe('PlaceholderPreviewPopover', () => {
     expect(screen.queryByTestId('placeholder-preview-edit')).not.toBeInTheDocument()
   })
 
+  it('kein "Bearbeiten" fuer memory (parameterlos)', async () => {
+    previewPlaceholder.mockResolvedValue({
+      kind: 'memory',
+      target_id: '',
+      text: 'Dieser Agent hat Zugriff auf kuratiertes Langzeitgedaechtnis.',
+      unresolved: false,
+    })
+
+    render(
+      <Host
+        editable
+        detail={makeDetail({ kind: 'memory', target_id: '', label: 'Gedächtnis-Hinweis' })}
+      />,
+    )
+    fireEvent.click(screen.getByTestId('fire'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('placeholder-preview-text')).toBeInTheDocument()
+    })
+    expect(previewPlaceholder).toHaveBeenCalledWith({ kind: 'memory', target_id: '' })
+    expect(screen.queryByTestId('placeholder-preview-edit')).not.toBeInTheDocument()
+  })
+
   it('zeigt den aufgeloesten Tool-Ref-Output und bietet "Bearbeiten" (parametergebunden)', async () => {
     previewPlaceholder.mockResolvedValue({
       kind: 'tool-ref',

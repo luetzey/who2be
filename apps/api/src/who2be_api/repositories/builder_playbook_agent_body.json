@@ -80,6 +80,16 @@
     "children": []
   },
   {
+    "id": "pb-agent-li-placeholder-memory",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Gedaechtnis: ", "styles": {"bold": true}},
+      {"type": "text", "text": "der memory-Placeholder (target_id '') rendert den Gedaechtnis-Hinweis passend zum memory_mode des Agenten — bei 'off' bleibt die Stelle leer (kein Miss). Konvention: direkt NACH der tools-overview-Pill setzen. Ohne die Pill haengt tools-overview den Hinweis automatisch ans Ende seiner Sektion (Fallback) — die Pill lohnt sich, wenn die Position bewusst gewaehlt werden soll, und schadet nie.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
     "id": "pb-agent-li-placeholder-inline",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},

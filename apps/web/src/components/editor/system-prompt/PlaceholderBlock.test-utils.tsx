@@ -5,6 +5,7 @@
 
 import {
   BookOpen,
+  Brain,
   Calendar,
   FileText,
   Library,
@@ -70,6 +71,11 @@ export const KIND_META_TEST_EXPORT: Record<PlaceholderKind, KindMeta> = {
     icon: Plug,
     pillClass: 'bg-pill-tools text-pill-tools-fg border-pill-tools-fg/25',
     labelPrefix: 'Tool',
+  },
+  memory: {
+    icon: Brain,
+    pillClass: 'bg-pill-tools text-pill-tools-fg border-pill-tools-fg/25',
+    labelPrefix: 'Gedächtnis',
   },
 }
 
