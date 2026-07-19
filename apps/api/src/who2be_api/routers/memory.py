@@ -19,6 +19,7 @@ from who2be_api.repositories.memory_repository import PgMemoryRepository
 from who2be_api.services.memory_service import MemoryService
 from who2be_models import (
     MemoryCreate,
+    MemoryGuardConfig,
     MemoryHit,
     MemoryRead,
     MemoryStatus,
@@ -66,6 +67,22 @@ async def list_memories_for_agent(
     limit: Annotated[int, Query(ge=1, le=50)] = 20,
 ) -> list[MemoryHit]:
     return await service.list_active(ctx, limit)
+
+
+# ---------------------------------------------------- Waechter-Konfiguration
+
+
+@router.get("/memory-guard")
+async def get_memory_guard(ctx: Ctx, service: Service) -> MemoryGuardConfig:
+    # Workspace-weite Injection-Waechter-Konfiguration (admin + human-only).
+    return await service.get_guard(ctx)
+
+
+@router.put("/memory-guard")
+async def update_memory_guard(
+    data: MemoryGuardConfig, ctx: Ctx, service: Service
+) -> MemoryGuardConfig:
+    return await service.set_guard(ctx, data)
 
 
 # ------------------------------------------------------------- Management-Pfad

@@ -316,6 +316,16 @@
   },
   {
     "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/memory-guard",
+    "operationId": "get_memory_guard_v1_workspaces__workspace_id__memory_guard_get"
+  },
+  {
+    "method": "PUT",
+    "path": "/v1/workspaces/{workspace_id}/memory-guard",
+    "operationId": "update_memory_guard_v1_workspaces__workspace_id__memory_guard_put"
+  },
+  {
+    "method": "GET",
     "path": "/v1/workspaces/{workspace_id}/personas",
     "operationId": "list_personas_v1_workspaces__workspace_id__personas_get"
   },

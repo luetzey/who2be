@@ -22,7 +22,7 @@ from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # Serverseitige Deckel (Waechter laufen in jedem Modus, ADR-0044).
 MEMORY_FACT_MAX_LENGTH = 300
@@ -36,6 +36,61 @@ MEMORY_MIN_IMPORTANCE = 5
 # einbettet (WP-6: der System-Prompt wird nicht live aktualisiert — die
 # Persona-Antwort ist der zuverlaessige Laufzeit-Injektionspunkt).
 MEMORY_PERSONA_TOP_N = 5
+
+
+class MemoryGuardMode(StrEnum):
+    """Modus des workspace-weiten Injection-Waechters (ADR-0044-Addendum).
+
+    - ``standard``: Built-in-Filter (Default).
+    - ``custom``: Built-in-Filter + workspace-eigene Allow-/Block-Phrasen.
+    - ``off``: kein Injection-Filter — bewusste Owner-Entscheidung (gilt auch
+      fuer auto-Agenten); Importance/Dedup/Cap/Rate-Limit bleiben immer aktiv.
+    """
+
+    standard = "standard"
+    custom = "custom"
+    off = "off"
+
+
+MEMORY_GUARD_PHRASE_MIN = 2
+MEMORY_GUARD_PHRASE_MAX = 100
+MEMORY_GUARD_PHRASES_MAX = 50
+
+
+class MemoryGuardConfig(BaseModel):
+    """Workspace-Konfiguration des Injection-Waechters (JSONB `workspace.memory_guard`).
+
+    `{}` deserialisiert zu den Defaults (Konvention wie `agent.tool_policy`).
+    Bewusst LITERALE Phrasen statt Regex (kein ReDoS, keine Validierungs-
+    Sandbox). `allow_phrases` uebersteuern einen Built-in-Treffer nur, wenn
+    der Treffer vollstaendig INNERHALB eines Phrasen-Vorkommens liegt —
+    verhindert den trivialen Bypass „Allow-Phrase irgendwo anhaengen".
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: MemoryGuardMode = MemoryGuardMode.standard
+    allow_phrases: list[str] = Field(default_factory=list, max_length=MEMORY_GUARD_PHRASES_MAX)
+    block_phrases: list[str] = Field(default_factory=list, max_length=MEMORY_GUARD_PHRASES_MAX)
+
+    @field_validator("allow_phrases", "block_phrases")
+    @classmethod
+    def _clean_phrases(cls, phrases: list[str]) -> list[str]:
+        """Trimmen, Laengen pruefen, case-insensitiv deduplizieren."""
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for phrase in phrases:
+            stripped = phrase.strip()
+            if not (MEMORY_GUARD_PHRASE_MIN <= len(stripped) <= MEMORY_GUARD_PHRASE_MAX):
+                raise ValueError(
+                    f"Phrasen muessen {MEMORY_GUARD_PHRASE_MIN}-{MEMORY_GUARD_PHRASE_MAX} "
+                    "Zeichen lang sein."
+                )
+            key = stripped.casefold()
+            if key not in seen:
+                seen.add(key)
+                cleaned.append(stripped)
+        return cleaned
 
 
 class MemoryStatus(StrEnum):

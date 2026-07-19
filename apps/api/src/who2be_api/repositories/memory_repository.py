@@ -13,12 +13,13 @@ Nutzungs-Log (`retrieval_count`/`last_retrieved_at`) in derselben Transaktion.
 
 from __future__ import annotations
 
+import json
 from typing import Protocol
 from uuid import UUID
 
 import asyncpg
 
-from who2be_models import MemoryHit, MemoryRead, MemoryStatus
+from who2be_models import MemoryGuardConfig, MemoryHit, MemoryRead, MemoryStatus
 
 # Trigram-Schwelle fuer den Dedup-Waechter (similarity(fact, kandidat)).
 MEMORY_DEDUP_SIMILARITY = 0.6
@@ -35,6 +36,12 @@ class MemoryRepository(Protocol):
     """Vertrag des Memory-Datenzugriffs (Service-Sicht)."""
 
     async def agent_belongs_to(self, workspace_id: UUID, agent_id: UUID) -> bool: ...
+
+    async def get_guard_config(self, workspace_id: UUID) -> MemoryGuardConfig: ...
+
+    async def set_guard_config(
+        self, workspace_id: UUID, config: MemoryGuardConfig
+    ) -> MemoryGuardConfig: ...
 
     async def count_for_agent(self, workspace_id: UUID, agent_id: UUID) -> int: ...
 
@@ -107,6 +114,25 @@ class PgMemoryRepository:
             workspace_id,
         )
         return owned is not None
+
+    async def get_guard_config(self, workspace_id: UUID) -> MemoryGuardConfig:
+        # `{}` (Spalten-Default) deserialisiert zur Standard-Konfiguration.
+        raw = await self._pool.fetchval(
+            "SELECT memory_guard FROM workspace WHERE id = $1", workspace_id
+        )
+        if raw is None:
+            return MemoryGuardConfig()
+        return MemoryGuardConfig.model_validate(json.loads(raw) if isinstance(raw, str) else raw)
+
+    async def set_guard_config(
+        self, workspace_id: UUID, config: MemoryGuardConfig
+    ) -> MemoryGuardConfig:
+        await self._pool.execute(
+            "UPDATE workspace SET memory_guard = $2::jsonb WHERE id = $1",
+            workspace_id,
+            json.dumps(config.model_dump(mode="json")),
+        )
+        return config
 
     async def count_for_agent(self, workspace_id: UUID, agent_id: UUID) -> int:
         count = await self._pool.fetchval(

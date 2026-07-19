@@ -335,3 +335,13 @@ bleiben)._
   Graubereich entscheidet die Triage; False Positives untergraben die
   Nutzung des Features schneller als seltene False Negatives, die die
   Freigabe-Schleuse ohnehin abfängt.
+
+## 2026-07-19 — Injection-Wächter konfigurierbar (Stufe B, kein Regex)
+- **Entscheidung:** Workspace-Setting `memory_guard` (standard/custom/off +
+  literale Allow-/Block-Phrasen). Allow-Suppression nur bei vollständiger
+  Treffer-Abdeckung (Bypass-fest); off gilt auf User-Wunsch auch für
+  auto-Agenten (UI-Warnung); Verwaltung admin- UND human-only. Details:
+  ADR-0044-Addendum 2, Plan 2026-07-19-1030.
+- **Verworfen:** Stufe C (freie Regex — ReDoS/Fehlkonfigurations-Risiko,
+  Validierungs-Sandbox unverhältnismäßig); Nur-An/Aus (löst False Positives
+  nicht ohne Totalverzicht).
