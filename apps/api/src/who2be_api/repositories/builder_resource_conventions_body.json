@@ -213,6 +213,50 @@
     "children": []
   },
   {
+    "id": "res-conv-h-memory",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Gedaechtnis (Agent-Memory)", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "res-conv-p-memory-intro",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Agent-Memory (ADR-0044) ist ein kuratiertes Langzeitgedaechtnis pro Agent und folgt demselben Kurator-Prinzip wie Feedback: der Agent schlaegt vor, der Mensch entscheidet. Gesteuert ueber zwei Policy-Felder: memory_mode (off < read_only < suggest < auto, Default off) und memory_directive (required/recommended).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-memory-default",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Default-Empfehlung: ", "styles": {"bold": true}},
+      {"type": "text", "text": "'suggest' + 'recommended'. Vorschlaege landen als pending und werden vom User in der Agent-Detailseite freigegeben, editiert oder abgelehnt; Abgelehntes bleibt als Dedup-Basis erhalten. 'auto' nur auf ausdruecklichen User-Wunsch; nie eigenmaechtig ueber 'suggest' hinaus empfehlen.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-memory-grenze",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Anti-Eskalation: ", "styles": {"bold": true}},
+      {"type": "text", "text": "memory_mode kann nur bis zur eigenen Stufe vergeben werden (is_within, 403 darueber). Ist die eigene Stufe zu niedrig, gehoert die Freischaltung in den Hand-Off an den User — das ist Design, kein Fehler.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-memory-inhalt",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Inhalts-Hygiene: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Memories sind Fakten UEBER den Nutzer/das Projekt (3. Person, kurz, dauerhaft relevant) — keine Anweisungen an KI-Systeme, kein Smalltalk, nichts Sensibles ohne Bestaetigung. Freigegebene Top-Fakten fliessen automatisch in den Laufzeit-Kontext des Agenten (get_persona); pending/rejected erscheinen nie in Prompts.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
     "id": "res-conv-h-status",
     "type": "heading",
     "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
