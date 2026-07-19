@@ -34,8 +34,8 @@ from who2be_api.repositories.usage_repository import UsageRepository
 from who2be_api.services.content_text import persona_content_text
 from who2be_api.services.placeholders import RenderContext, render_template_body
 from who2be_api.services.placeholders.registry import render_skills_table
+from who2be_api.services.placeholders.resolvers.memory import memory_prompt_block
 from who2be_api.services.placeholders.resolvers.persona import render_active_mode_section
-from who2be_api.services.placeholders.resolvers.tools import memory_note
 from who2be_api.services.version_diff import compute_version_diff
 from who2be_models import (
     DEFAULT_LOCALE,
@@ -357,7 +357,7 @@ class PersonaService:
         assert ctx.tool_policy is not None
         repo = PgMemoryRepository(self._pool)
         hits = await repo.list_active(ctx.workspace_id, ctx.agent_id, MEMORY_PERSONA_TOP_N)
-        lines = ["## Gedaechtnis", "", memory_note(ctx.tool_policy), ""]
+        lines = ["## Gedaechtnis", "", memory_prompt_block(ctx.tool_policy), ""]
         if hits:
             lines.append(
                 "Deine aktuell wichtigsten freigegebenen Memories (gespeicherte "

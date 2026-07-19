@@ -34,6 +34,7 @@ from who2be_api.services.placeholders._core import (
 )
 from who2be_api.services.placeholders.resolvers import (
     DateResolver,
+    MemoryPromptResolver,
     PersonaFieldResolver,
     PersonaRefResolver,
     PlaybookResolver,
@@ -57,6 +58,7 @@ __all__ = [
     "ResolveResult",
     "ResourceResolver",
     "ResourcesCatalogResolver",
+    "MemoryPromptResolver",
     "ToolRefResolver",
     "ToolsOverviewResolver",
     "render_skills_table",
@@ -76,5 +78,6 @@ REGISTRY: dict[str, PlaceholderResolver] = {
     "resources-catalog": ResourcesCatalogResolver(),
     "date": DateResolver(),
     "tools-overview": ToolsOverviewResolver(),
+    "memory": MemoryPromptResolver(),
     "tool-ref": ToolRefResolver(),
 }

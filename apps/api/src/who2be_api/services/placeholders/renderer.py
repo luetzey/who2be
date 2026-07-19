@@ -74,6 +74,12 @@ async def render_template_body(
         )
         return "", []
 
+    # Doppel-Render-Schutz (ADR-0044): enthaelt der Body einen expliziten
+    # `memory`-Placeholder, unterdrueckt `tools-overview` seinen
+    # Gedaechtnis-Auto-Append (Flag wird VOR der Expansion gesetzt, damit die
+    # Reihenfolge der Bloecke keine Rolle spielt).
+    ctx.has_explicit_memory = _contains_memory_placeholder(top_level_blocks)
+
     unresolved: list[str] = []
     text = await _walk_blocks(top_level_blocks, ctx, db, unresolved)
     # Deduplizieren + lexikografisch sortieren fuer deterministischen Output.
@@ -84,6 +90,25 @@ async def render_template_body(
             seen.add(key)
             deduped.append(key)
     return text, deduped
+
+
+def _contains_memory_placeholder(blocks: list[dict[str, Any]]) -> bool:
+    """True, wenn irgendwo im Baum ein Placeholder mit kind='memory' steht."""
+    for block in blocks:
+        if not isinstance(block, dict):
+            continue
+        content = block.get("content")
+        for inline in content if isinstance(content, list) else []:
+            if (
+                isinstance(inline, dict)
+                and inline.get("type") == "placeholder"
+                and (inline.get("props") or {}).get("kind") == "memory"
+            ):
+                return True
+        children = block.get("children") or []
+        if isinstance(children, list) and _contains_memory_placeholder(children):
+            return True
+    return False
 
 
 async def _walk_blocks(

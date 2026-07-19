@@ -151,6 +151,15 @@
     "children": []
   },
   {
+    "id": "ab-memory",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "placeholder", "props": {"kind": "memory", "target_id": "", "label": "Gedaechtnis"}}
+    ],
+    "children": []
+  },
+  {
     "id": "ab-h7",
     "type": "heading",
     "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},

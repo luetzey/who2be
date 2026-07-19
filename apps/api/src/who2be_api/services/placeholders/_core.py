@@ -52,6 +52,12 @@ class RenderContext(BaseModel):
     # den Resource-Katalog auf die sichtbare Menge). `None` ausserhalb des
     # Agent-Render-Pfads (Persona-/Preview-/Export-Render) → kein Scoping.
     agent_id: UUID | None = None
+    # Doppel-Render-Schutz (ADR-0044): True, wenn der gerade expandierte
+    # Template-Body einen expliziten `memory`-Placeholder enthaelt — dann
+    # unterdrueckt `tools-overview` seinen Gedaechtnis-Auto-Append. Wird vom
+    # Renderer (`render_template_body`) vor der Expansion gesetzt, nicht vom
+    # Aufrufer.
+    has_explicit_memory: bool = False
 
 
 class ResolveResult(BaseModel):

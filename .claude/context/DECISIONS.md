@@ -294,3 +294,20 @@ bleiben)._
   Konfigurations-Prompt lebt, erreicht laufende Agenten nicht zuverlässig.
 - **Verworfen:** Nur-Anweisung ohne Fakten (hängt weiter an der
   Tool-Disziplin des Modells); Status quo (nur Tool-Beschreibungen).
+
+## 2026-07-19 — Placeholder-Kind `memory` (ADR-0044-Addendum)
+- **Entscheidung:** Expliziter Placeholder-Kind `memory` für positionierbare
+  Gedächtnis-Hinweise; Texte aus EINER Quelle (`memory_prompt_block`:
+  Placeholder + tools-overview-Fallback + get_persona-Laufzeit-Sektion).
+  Doppel-Render-Schutz via Renderer-Body-Scan
+  (`RenderContext.has_explicit_memory`) statt Auto-Append-Abschaltung —
+  Bestands-Templates rendern unverändert. Seed-Templates + agent_builder
+  tragen den Placeholder nach der tools-overview-Pill
+  (`BUILDER_CONTENT_VERSION` 9). `off` rendert leer, kein Miss; Direktive
+  bleibt reine Textstärke.
+- **Begründung:** Builder-Briefing (Hand-Off); Auto-Append allein kann die
+  Position nicht steuern. Briefing-Abweichungen dokumentiert: Tool-Gating
+  existierte bereits (ADR-0042), „Mit Freigabe"-Copy auf reale
+  Pending-Schleuse korrigiert (keine Chat-Bestätigung).
+- **Verworfen:** Auto-Append ersatzlos streichen (Regression für
+  Bestands-Workspaces mit user-editierbaren Default-Templates).

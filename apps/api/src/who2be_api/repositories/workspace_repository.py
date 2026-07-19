@@ -366,7 +366,9 @@ _AGENT_BUILDER_LITE_TEMPLATE_SLUG = "agent-builder-lite"
 # v8: Agent-Memory-Wissen (ADR-0044) im Agent-Playbook (tool_policy-Sektion:
 # memory_mode/memory_directive, Empfehlungslogik, is_within-Grenze mit
 # Human-Hand-Off) + eigene Gedaechtnis-Sektion in den Agent-Bau-Konventionen.
-BUILDER_CONTENT_VERSION = 8
+# v9: expliziter `memory`-Placeholder im Agent-Builder-Template (nach der
+# tools-overview-Pill) — positionierter Gedaechtnis-Hinweis statt Auto-Append.
+BUILDER_CONTENT_VERSION = 9
 
 _BUILDER_PERSONA_DESCRIPTION = (
     "Meta-Agent, der Personas, Playbooks, Resources und Agenten im Workspace "
