@@ -311,3 +311,15 @@ bleiben)._
   Pending-Schleuse korrigiert (keine Chat-Bestätigung).
 - **Verworfen:** Auto-Append ersatzlos streichen (Regression für
   Bestands-Workspaces mit user-editierbaren Default-Templates).
+
+## 2026-07-19 — Builder-Gedächtnis: suggest, nicht auto (Content-Stand 10)
+- **Entscheidung:** Builder + Builder-Lite bekommen `memory_mode='suggest'`
+  + `memory_directive='recommended'` in der zentral verwalteten Seed-Policy
+  (Verteilung via Policy-Sync, BUILDER_CONTENT_VERSION 10). Aktivierung über
+  die UI war nicht möglich (Managed-Lock) — Policy-Änderung ist Repo-Sache.
+- **Begründung:** Konsistent zum Kurator-Prinzip des Builders (Vorschläge,
+  keine Auto-Persistenz); `is_within`-Nebeneffekt gewollt: Builder kann
+  anderen Agenten Memory bis `suggest` freischalten, `auto` bleibt
+  Menschen-Entscheidung.
+- **Verworfen:** `auto` (widerspricht dem eigenen Kurationsprinzip);
+  UI-Freischaltung pro Workspace (Managed-Lock + nicht zentral verteilbar).

@@ -4,6 +4,14 @@ _Stand: 2026-07-18_
 
 ## Funktioniert
 
+- **Builder-Gedaechtnis aktiviert (Content-Stand 10, 2026-07-19, Branch
+  `claude/autonomous-code-agent-setup-iz6ydx` neu ab main):**
+  `_builder_tool_policy` traegt jetzt `memory_mode='suggest'` +
+  `memory_directive='recommended'` (Kurations-Stufe, ADR-0044; bewusst nicht
+  `auto`). Policy-Sync verteilt an Bestands-Builder (Builder + Builder-Lite);
+  Nebeneffekt: Builder darf via is_within anderen Agenten Memory bis
+  `suggest` freischalten. Sync-Test um memory-Assertions erweitert.
+
 - **Placeholder-Kind `memory` UMGESETZT (2026-07-19, Branch
   `claude/autonomous-code-agent-setup-iz6ydx` neu ab main, ADR-0044-Addendum):**
   Builder-Briefing umgesetzt — expliziter, positionierbarer Gedaechtnis-

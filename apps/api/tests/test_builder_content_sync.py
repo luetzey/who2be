@@ -203,7 +203,9 @@ def test_sync_restores_outdated_builder() -> None:
             )
             agent_rows = await conn.fetch(
                 "SELECT name, managed_content_version, "
-                "  (tool_policy ->> 'feedback_resolve')::boolean AS feedback_resolve "
+                "  (tool_policy ->> 'feedback_resolve')::boolean AS feedback_resolve, "
+                "  tool_policy ->> 'memory_mode' AS memory_mode, "
+                "  tool_policy ->> 'memory_directive' AS memory_directive "
                 "FROM agent WHERE workspace_id = $1 AND is_managed = true "
                 "AND name IN ('Builder', 'Builder-Lite') ORDER BY name",
                 ws,
@@ -241,6 +243,10 @@ def test_sync_restores_outdated_builder() -> None:
     assert [a["name"] for a in res["agents"]] == ["Builder", "Builder-Lite"]
     for agent in res["agents"]:
         assert agent["feedback_resolve"] is True, agent
+        # Content-Stand 10: Builder-Gedaechtnis in der Kurations-Stufe
+        # (suggest + recommended) erreicht Bestands-Builder via Policy-Sync.
+        assert agent["memory_mode"] == "suggest", agent
+        assert agent["memory_directive"] == "recommended", agent
         assert agent["managed_content_version"] == BUILDER_CONTENT_VERSION, agent
     # Kanonischer Inhalt wiederhergestellt (Feedback-Bullets aus den Sidecars).
     assert "bp-li-allowed-fb" in res["persona_block_ids"]
