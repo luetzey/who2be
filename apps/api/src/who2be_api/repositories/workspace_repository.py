@@ -363,7 +363,10 @@ _AGENT_BUILDER_LITE_TEMPLATE_SLUG = "agent-builder-lite"
 # falsch — der Link ist embedding_mode 'lazy', explizites fetch_resource-
 # Nachladen noetig; Feedback-Signale Pflege-Lauf 10./11.07.2026) +
 # Konsistenz-Check-Angebot im Hand-Off des Agent-Playbooks (Persona-Abgleich).
-BUILDER_CONTENT_VERSION = 7
+# v8: Agent-Memory-Wissen (ADR-0044) im Agent-Playbook (tool_policy-Sektion:
+# memory_mode/memory_directive, Empfehlungslogik, is_within-Grenze mit
+# Human-Hand-Off) + eigene Gedaechtnis-Sektion in den Agent-Bau-Konventionen.
+BUILDER_CONTENT_VERSION = 8
 
 _BUILDER_PERSONA_DESCRIPTION = (
     "Meta-Agent, der Personas, Playbooks, Resources und Agenten im Workspace "

@@ -4,6 +4,14 @@ _Stand: 2026-07-18_
 
 ## Funktioniert
 
+- **Builder-Content v8: Agent-Memory-Wissen UMGESETZT (2026-07-19, Branch
+  `claude/autonomous-code-agent-setup-iz6ydx` neu ab main, PR #325):**
+  Folge-PR zu #324 — Agent-Playbook („tool_policy verstehen": memory_mode/
+  memory_directive, Empfehlungslogik suggest+recommended, is_within-Grenze
+  mit Human-Hand-Off) + neue Gedaechtnis-Sektion in den Agent-Bau-
+  Konventionen; `BUILDER_CONTENT_VERSION` 7→8 (Start-Sync, keine Migration).
+  DoD gruen: ruff/format/mypy clean, 1085 pytest passed, Coverage 90,48 %.
+
 - **Agent-Memory (ADR-0044) UMGESETZT (2026-07-18, Branch
   `claude/autonomous-code-agent-setup-iz6ydx`, PR #324):** Kuratiertes
   Langzeitgedächtnis pro Agent, in drei Design-Runden mit dem User

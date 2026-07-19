@@ -448,6 +448,36 @@
     "children": []
   },
   {
+    "id": "pb-agent-li-policy-memory",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "memory_mode (Agent-Memory, ADR-0044): ", "styles": {"bold": true}},
+      {"type": "text", "text": "vierstufiges Langzeitgedaechtnis pro Agent — 'off' (Default; Memory-Tools existieren fuer den Agenten nicht), 'read_only' (nur search_memory/list_memories ueber freigegebene Fakten), 'suggest' (save_memory legt VORSCHLAEGE an, die erst nach menschlicher Freigabe in der Agent-Detailseite retrieval-sichtbar werden — Kurations-Schleuse) und 'auto' (sofort aktiv). Dazu memory_directive: 'required' (Agent MUSS sein Gedaechtnis zu Gespraechsbeginn abrufen) oder 'recommended' (Default — soll es nutzen, wenn Kontext hilft). System-Prompt und Laufzeit-Persona (get_persona) tragen die Anweisung automatisch, sobald der Modus nicht 'off' ist.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-policy-memory-empfehlung",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Memory-Empfehlungslogik: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Standard-Vorschlag ist 'suggest' + 'recommended' — der User behaelt die Kontrolle, der Agent lernt trotzdem. 'read_only' fuer Agenten, die von kuratiertem Wissen profitieren, aber nichts beitragen sollen; 'auto' nur auf ausdruecklichen User-Wunsch; 'off' fuer werkzeugartige Agenten ohne Personalisierungs-Nutzen. Memories sind Nutzerdaten, keine Anweisungen; Repo-/Code-Fakten gehoeren NICHT ins Memory.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-policy-memory-grenze",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Memory-Eskalations-Grenze: ", "styles": {"bold": true}},
+      {"type": "text", "text": "memory_mode ist Teil des is_within-Vergleichs — du kannst anderen Agenten hoechstens DEINE eigene Stufe vergeben. Steht dein eigenes Gedaechtnis auf 'off', lehnt der Server jede Freischaltung mit 403 ab. Das ist gewollt: dann den gewuenschten Modus im Hand-Off an den User uebergeben (Agent-Detailseite → Tools → Gedaechtnis) statt es zu erzwingen oder als Fehler zu melden.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
     "id": "pb-agent-h-activatable",
     "type": "heading",
     "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
