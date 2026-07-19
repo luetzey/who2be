@@ -48,6 +48,13 @@ function jsonResponse(body: unknown, status = 200): Response {
   return new Response(status === 204 ? null : JSON.stringify(body), { status })
 }
 
+// Admin-Renders zeigen die Memory-Wächter-Sektion, die beim Mount ihre
+// Konfiguration laedt (GET .../memory-guard) — Tests, die die restlichen
+// Workspace-Aktionen pruefen, brauchen dafuer einen Stub-Treffer.
+function memoryGuardResponse(): Response {
+  return jsonResponse({ mode: 'standard', allow_phrases: [], block_phrases: [] })
+}
+
 function LocationProbe() {
   const location = useLocation()
   return <span data-testid="location">{location.pathname}</span>
@@ -115,6 +122,9 @@ describe('WorkspaceSettingsPage', () => {
             created_at: '2026-06-02T10:00:00Z',
           })
         }
+        if (url.includes('/memory-guard')) {
+          return memoryGuardResponse()
+        }
         return jsonResponse([])
       }),
     )
@@ -131,7 +141,15 @@ describe('WorkspaceSettingsPage', () => {
   })
 
   it('sperrt das Löschen, wenn es der letzte Workspace ist', () => {
-    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse([])))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input).includes('/memory-guard')) {
+          return memoryGuardResponse()
+        }
+        return jsonResponse([])
+      }),
+    )
     renderPage('admin', 1)
     expect(screen.getByRole('button', { name: 'Workspace löschen' })).toBeDisabled()
   })
@@ -145,6 +163,9 @@ describe('WorkspaceSettingsPage', () => {
         if ((init?.method ?? 'GET') === 'DELETE') {
           deleteUrl = url
           return jsonResponse(null, 204)
+        }
+        if (url.includes('/memory-guard')) {
+          return memoryGuardResponse()
         }
         return jsonResponse([])
       }),
@@ -175,5 +196,11 @@ describe('WorkspaceSettingsPage', () => {
     expect(
       screen.getByText('Nur Admins können diesen Workspace umbenennen.'),
     ).toBeInTheDocument()
+  })
+
+  it('versteckt den Memory-Wächter für Nicht-Admins', () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse([])))
+    renderPage('editor', 2)
+    expect(screen.queryByText('Memory-Wächter')).toBeNull()
   })
 })

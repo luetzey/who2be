@@ -39,6 +39,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { notify } from '@/lib/feedback'
 
+import { MemoryGuardSection } from '../components/MemoryGuardSection'
 import { useCurrentOrg } from '../hooks/useCurrentOrg'
 
 const renameSchema = z.object({
@@ -189,6 +190,8 @@ export function WorkspaceSettingsPage() {
             </p>
           </CardContent>
         </Card>
+
+        {isAdmin ? <MemoryGuardSection /> : null}
 
         {isAdmin ? (
           <Card className="border-destructive/40">

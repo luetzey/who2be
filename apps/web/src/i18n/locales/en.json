@@ -1682,6 +1682,43 @@
         "descriptionSuffix": ".",
         "linkLabel": "Members"
       },
+      "memoryGuard": {
+        "title": "Memory guard",
+        "formTitle": "Injection filter",
+        "formDescription": "Controls how agents' save_memory calls are checked for prompt injection.",
+        "modeLabel": "Mode",
+        "modes": {
+          "standard": {
+            "label": "Standard",
+            "description": "The built-in injection filter checks every save_memory call."
+          },
+          "custom": {
+            "label": "Custom",
+            "description": "Built-in filter plus your own allow and block phrases."
+          },
+          "off": {
+            "label": "Off",
+            "description": "No injection filter."
+          }
+        },
+        "offWarningTitle": "Injection filter disabled",
+        "offWarningDescription": "Also applies to agents in automatic mode — there is no approval gate there, memories become active unchecked. Dedup, importance threshold and limit remain active.",
+        "allowPhrases": {
+          "label": "Allow phrases",
+          "description": "Allow terms the built-in filter blocks incorrectly (e.g. \"jailbreak detection\")."
+        },
+        "blockPhrases": {
+          "label": "Block phrases",
+          "description": "Your own additional forbidden terms for this workspace."
+        },
+        "phrasePlaceholder": "Type a phrase and press Enter",
+        "phraseLengthError": "A phrase must be 2–100 characters long.",
+        "phraseLimitError": "Maximum of 50 phrases per list.",
+        "saveButton": "Save",
+        "savedToast": "Memory guard saved.",
+        "saveError": "Save failed.",
+        "loadError": "Could not load."
+      },
       "dangerZone": {
         "title": "Danger zone",
         "description": "Deleting removes the workspace along with all personae, playbooks, resources, templates, agents and tokens. This action is irreversible.",

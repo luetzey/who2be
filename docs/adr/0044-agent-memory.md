@@ -126,6 +126,21 @@ Default-Templates) tragen den Placeholder direkt nach der tools-overview-Pill;
 Tool-Gating); die „Mit Freigabe"-Copy benennt bewusst die reale
 Pending-Schleuse statt einer Chat-Bestaetigung (Briefing-Abweichung).
 
+## Addendum 2026-07-19 (2) — Konfigurierbarer Injection-Waechter
+
+Pro Workspace (JSONB `workspace.memory_guard`, `{}` = Defaults):
+`mode = standard | custom | off` plus `allow_phrases`/`block_phrases`
+(literale Phrasen, je 2–100 Zeichen, max. 50 — bewusst KEINE freien Regex:
+kein ReDoS, keine Validierungs-Sandbox; Stufe C abgelehnt). Allow-Phrasen
+uebersteuern einen Built-in-Treffer nur, wenn der Treffer vollstaendig
+INNERHALB eines Phrasen-Vorkommens liegt (Bypass-fest gegen „Phrase
+anhaengen"). `off` deaktiviert ausschliesslich den Injection-Filter — auch
+fuer auto-Agenten (bewusste Owner-Entscheidung, Warnhinweis in der UI);
+Importance-Schwelle, Dedup, Cap und Rate-Limit laufen IMMER. Verwaltung:
+`GET/PUT /memory-guard`, admin- UND human-only (ein Agent darf den Filter,
+der ihn prueft, nie lesen/umkonfigurieren); UI in den
+Workspace-Einstellungen.
+
 ## Ausblick (bewusst offen)
 
 pgvector-Retrieval (Stufe B, `mode`-Parameter), Vorschlags-Updates („ersetzt

@@ -4,6 +4,23 @@ _Stand: 2026-07-18_
 
 ## Funktioniert
 
+- **Memory-Waechter konfigurierbar UMGESETZT (2026-07-19, PR #329,
+  ADR-0044-Addendum 2):** Workspace-Setting `memory_guard` (JSONB, Migration
+  0067): mode standard/custom/off + literale Allow-/Block-Phrasen (kein
+  Regex, Bypass-feste Allow-Suppression via Span-Abdeckung auf dem
+  Originaltext). off deaktiviert NUR den Injection-Filter (auch fuer
+  auto-Agenten, User-Entscheidung); Importance/Dedup/Cap/Rate-Limit laufen
+  immer. GET/PUT /memory-guard strikt JWT-only (Security-Review: 0
+  kritisch/mittel; LOW-1/LOW-2/INFO-3 gehaertet). Web:
+  `MemoryGuardSection` in den Workspace-Einstellungen (admin-only,
+  Warnung bei off, TagInput-Phrasen-Editoren). Davor gemergt: #327
+  (Builder-Memory suggest, Content-Stand 10) + #328
+  (Injection-Waechter-False-Positive-Fix, erster Feldbefund). **DoD gruen:**
+  Python 1094 pytest / Coverage 90,09 %; Web 912 Vitest / Branches 81,08 %.
+  **Achtung:** CI-Laeufe auf #329 scheitern aktuell im 2-Sekunden-Muster
+  ohne Logs — Actions-Kontingent/Billing (bekannter Owner-Punkt), kein
+  Code-Problem; lokal voll verifiziert.
+
 - **Builder-Gedaechtnis aktiviert (Content-Stand 10, 2026-07-19, Branch
   `claude/autonomous-code-agent-setup-iz6ydx` neu ab main):**
   `_builder_tool_policy` traegt jetzt `memory_mode='suggest'` +

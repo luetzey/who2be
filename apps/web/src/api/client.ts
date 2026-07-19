@@ -35,6 +35,7 @@ import type {
   Me,
   Member,
   MemberUpdateInput,
+  MemoryGuardConfig,
   MemoryRead,
   MemoryStatus,
   MemoryTriageInput,
@@ -455,6 +456,10 @@ export interface Api {
   ) => Promise<MemoryRead>
   deleteAgentMemory: (agentId: string, memoryId: string) => Promise<void>
   deleteAllAgentMemories: (agentId: string) => Promise<void>
+  // ADR-0044-Addendum — Workspace-Injection-Filter-Konfiguration. Admin-only
+  // (editor/viewer + Agent-Tokens 403 serverseitig).
+  getMemoryGuard: () => Promise<MemoryGuardConfig>
+  updateMemoryGuard: (config: MemoryGuardConfig) => Promise<MemoryGuardConfig>
   // Duplizieren (Deep-Copy des Inhalts als frische Draft, Muster `copyAgent`).
   // Der Server leitet Namen ("<Name> (Kopie)") + frischen Slug selbst ab.
   duplicatePersona: (id: string) => Promise<Persona>
@@ -871,6 +876,12 @@ export function createApi(token: string, workspaceId: string): Api {
       }),
     deleteAllAgentMemories: (agentId) =>
       request<void>(token, `${ws}/agents/${agentId}/memories`, { method: 'DELETE' }),
+    getMemoryGuard: () => request<MemoryGuardConfig>(token, `${ws}/memory-guard`),
+    updateMemoryGuard: (config) =>
+      request<MemoryGuardConfig>(token, `${ws}/memory-guard`, {
+        method: 'PUT',
+        body: JSON.stringify(config),
+      }),
     duplicatePersona: (id) =>
       request<Persona>(token, `${ws}/personas/${id}/duplicate`, { method: 'POST' }),
     duplicateResource: (id) =>

@@ -1682,6 +1682,43 @@
         "descriptionSuffix": ".",
         "linkLabel": "Mitglieder"
       },
+      "memoryGuard": {
+        "title": "Memory-Wächter",
+        "formTitle": "Injection-Filter",
+        "formDescription": "Steuert, wie save_memory-Aufrufe von Agenten auf Prompt-Injection geprüft werden.",
+        "modeLabel": "Modus",
+        "modes": {
+          "standard": {
+            "label": "Standard",
+            "description": "Der eingebaute Injection-Filter prüft jeden save_memory-Aufruf."
+          },
+          "custom": {
+            "label": "Angepasst",
+            "description": "Eingebauter Filter plus eigene Ausnahme- und Block-Phrasen."
+          },
+          "off": {
+            "label": "Aus",
+            "description": "Kein Injection-Filter."
+          }
+        },
+        "offWarningTitle": "Injection-Filter deaktiviert",
+        "offWarningDescription": "Gilt auch für Agenten im Automatisch-Modus — dort gibt es keine Freigabe-Schleuse, Memories werden ungeprüft aktiv. Dedup, Wichtigkeits-Schwelle und Limit bleiben aktiv.",
+        "allowPhrases": {
+          "label": "Ausnahme-Phrasen",
+          "description": "Erlauben Begriffe, die der eingebaute Filter fälschlich blockt (z. B. „Jailbreak-Detection“)."
+        },
+        "blockPhrases": {
+          "label": "Block-Phrasen",
+          "description": "Eigene, zusätzliche Verbotsbegriffe für diesen Workspace."
+        },
+        "phrasePlaceholder": "Phrase eingeben und Enter drücken",
+        "phraseLengthError": "Eine Phrase muss 2–100 Zeichen lang sein.",
+        "phraseLimitError": "Maximal 50 Phrasen pro Liste.",
+        "saveButton": "Speichern",
+        "savedToast": "Memory-Wächter gespeichert.",
+        "saveError": "Speichern fehlgeschlagen.",
+        "loadError": "Konnte nicht geladen werden."
+      },
       "dangerZone": {
         "title": "Danger-Zone",
         "description": "Das Löschen entfernt den Workspace samt aller Personae, Playbooks, Resources, Templates, Agenten und Tokens. Diese Aktion ist unwiderruflich.",

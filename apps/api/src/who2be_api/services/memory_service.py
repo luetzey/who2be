@@ -36,6 +36,8 @@ from who2be_models import (
     MEMORY_MAX_PER_AGENT,
     MEMORY_MIN_IMPORTANCE,
     MemoryCreate,
+    MemoryGuardConfig,
+    MemoryGuardMode,
     MemoryHit,
     MemoryMode,
     MemoryRead,
@@ -74,6 +76,61 @@ _INJECTION_PATTERN = re.compile(
 )
 
 
+def _covered_by_allow_phrase(text: str, span: tuple[int, int], allow_phrases: list[str]) -> bool:
+    """True, wenn der Regex-Treffer `span` vollstaendig in einem Vorkommen
+    einer Allow-Phrase liegt (case-insensitiv).
+
+    Bewusst NICHT „Phrase kommt irgendwo im Text vor" — sonst koennte ein
+    Angreifer eine Allow-Phrase einfach anhaengen, um den Filter zu umgehen.
+
+    Die Phrasen-Suche laeuft als case-insensitive Regex auf dem ORIGINALTEXT
+    (`re.escape` + IGNORECASE), nicht auf `text.casefold()`: casefold kann
+    Stringlaengen aendern (ß→ss) und wuerde die Treffer-Spans verschieben
+    (False-Allow-/False-Block-Risiko bei deutschem Text).
+    """
+    start, end = span
+    for phrase in allow_phrases:
+        for occurrence in re.finditer(re.escape(phrase), text, re.IGNORECASE):
+            if occurrence.start() <= start and end <= occurrence.end():
+                return True
+    return False
+
+
+def _guard_rejection(config: MemoryGuardConfig, text: str) -> str | None:
+    """Injection-Verdikt fuer `text` gemaess Workspace-Konfiguration.
+
+    Liefert eine menschenlesbare Ablehnungs-Begruendung oder None (ok).
+    `off` prueft nichts (bewusste Owner-Entscheidung — gilt auch fuer
+    auto-Agenten); `custom` = Built-in mit Allow-Suppression + Block-Phrasen;
+    `standard` = nur Built-in.
+    """
+    if config.mode == MemoryGuardMode.off:
+        return None
+    if config.mode == MemoryGuardMode.custom:
+        # Gleiche Matching-Semantik wie die Allow-Suche (re.escape + IGNORECASE
+        # auf dem Originaltext, Security-Review INFO-3). Die getroffene Phrase
+        # wird bewusst NICHT ins Fehlerdetail reflektiert (Security-Review
+        # LOW-2: kein admin-kontrollierter Text in den Agent-Kontext).
+        for phrase in config.block_phrases:
+            if re.search(re.escape(phrase), text, re.IGNORECASE):
+                return (
+                    "Nicht gespeichert — der Inhalt enthaelt eine im Workspace "
+                    "blockierte Phrase. Der Workspace-Besitzer pflegt die Liste "
+                    "in den Einstellungen."
+                )
+    for match in _INJECTION_PATTERN.finditer(text):
+        if config.mode == MemoryGuardMode.custom and _covered_by_allow_phrase(
+            text, match.span(), config.allow_phrases
+        ):
+            continue
+        return (
+            "Nicht gespeichert — der Inhalt enthaelt instruktionsartige "
+            "Manipulationsmuster. Memories sind Fakten ueber den Nutzer, "
+            "keine Anweisungen an ein KI-System."
+        )
+    return None
+
+
 def _memory_not_found() -> HTTPException:
     return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Memory nicht gefunden.")
 
@@ -104,17 +161,21 @@ class MemoryService:
                     "vorschlagen (waere er in 3 Monaten noch nuetzlich?)."
                 ),
             )
-        if _INJECTION_PATTERN.search(data.fact) or (
-            data.context is not None and _INJECTION_PATTERN.search(data.context)
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail=(
-                    "Nicht gespeichert — der Inhalt enthaelt instruktionsartige "
-                    "Manipulationsmuster. Memories sind Fakten ueber den Nutzer, "
-                    "keine Anweisungen an ein KI-System."
-                ),
-            )
+        # Injection-Verdikt gemaess Workspace-Konfiguration (ADR-0044-Addendum):
+        # standard = Built-in, custom = Built-in mit Allow-Suppression +
+        # Block-Phrasen, off = kein Injection-Filter (Owner-Entscheidung,
+        # gilt auch fuer auto-Agenten). Alle anderen Waechter (Importance,
+        # Dedup, Cap, Rate-Limit) laufen unabhaengig davon IMMER.
+        guard = await self._repo.get_guard_config(ctx.workspace_id)
+        for text in (data.fact, data.context or ""):
+            if not text:
+                continue
+            rejection = _guard_rejection(guard, text)
+            if rejection is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail=rejection,
+                )
         duplicate = await self._repo.find_similar(ctx.workspace_id, ctx.agent_id, data.fact)
         if duplicate is not None:
             dup_id, dup_fact = duplicate
@@ -193,6 +254,34 @@ class MemoryService:
     async def _require_agent(self, ctx: WorkspaceContext, agent_id: UUID) -> None:
         if not await self._repo.agent_belongs_to(ctx.workspace_id, agent_id):
             raise _agent_not_found()
+
+    def _require_guard_admin(self, ctx: WorkspaceContext) -> None:
+        # Waechter-Konfiguration ist eine Sicherheits-Einstellung: admin-Rolle
+        # UND echter Mensch (JWT-Login). JEDER API-Token ist gesperrt — auch
+        # ungebundene Admin-Tokens (Security-Review LOW-1: require_aal2
+        # exemptet Maschinen-Tokens, damit wuerde der MFA-Anker entfallen).
+        # Ein Agent darf den Filter, der IHN prueft, ohnehin nie anfassen.
+        require_role(ctx, WorkspaceRole.admin)
+        if ctx.is_api_token:
+            raise ApiGateError(
+                status=status.HTTP_403_FORBIDDEN,
+                reason="missing_capability",
+                actionable_by="human",
+                detail=(
+                    "Die Waechter-Konfiguration ist dem eingeloggten Menschen "
+                    "vorbehalten (Web-UI) — API-Tokens sind hier gesperrt."
+                ),
+            )
+
+    async def get_guard(self, ctx: WorkspaceContext) -> MemoryGuardConfig:
+        self._require_guard_admin(ctx)
+        return await self._repo.get_guard_config(ctx.workspace_id)
+
+    async def set_guard(
+        self, ctx: WorkspaceContext, config: MemoryGuardConfig
+    ) -> MemoryGuardConfig:
+        self._require_guard_admin(ctx)
+        return await self._repo.set_guard_config(ctx.workspace_id, config)
 
     async def list_memories(
         self, ctx: WorkspaceContext, agent_id: UUID, status_filter: MemoryStatus | None
