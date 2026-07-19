@@ -66,6 +66,19 @@ describe('PlaceholderPill', () => {
     expect(pill).toHaveTextContent('Tool: Todoist')
   })
 
+  it('rendert Gedaechtnis-Pill', () => {
+    render(<PlaceholderPill kind="memory" label="Gedächtnis-Hinweis" target_id="" />)
+    const pill = screen.getByTestId('placeholder-pill-memory')
+    expect(pill).toBeInTheDocument()
+    expect(pill).toHaveTextContent('Gedächtnis-Hinweis')
+  })
+
+  it('Gedaechtnis-Pill faellt auf labelPrefix "Gedächtnis" zurueck wenn label leer ist', () => {
+    render(<PlaceholderPill kind="memory" label="" target_id="" />)
+    const pill = screen.getByTestId('placeholder-pill-memory')
+    expect(pill).toHaveTextContent('Gedächtnis')
+  })
+
   it('faellt auf labelPrefix zurueck wenn label leer ist', () => {
     render(<PlaceholderPill kind="date" label="" target_id="" />)
     const pill = screen.getByTestId('placeholder-pill-date')

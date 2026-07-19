@@ -13,6 +13,7 @@
 
 import {
   BookOpen,
+  Brain,
   Calendar,
   FileText,
   Library,
@@ -163,6 +164,17 @@ export function buildSlashMenuItems(
         openPicker('tools-overview')
       },
       aliases: ['mcp', 'tools', 'werkzeuge', 'tools-overview'],
+    },
+    {
+      kind: 'memory',
+      title: 'Gedächtnis',
+      subtext: 'Gedächtnis-Hinweis passend zum Memory-Modus des Agenten',
+      group: 'Placeholder',
+      icon: createElement(Brain, { size: 18 }),
+      onItemClick: () => {
+        openPicker('memory')
+      },
+      aliases: ['gedächtnis', 'gedaechtnis', 'memory', 'langzeitgedächtnis'],
     },
     {
       kind: 'tool-ref',

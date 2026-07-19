@@ -159,6 +159,32 @@ describe('SystemPromptEditor', () => {
       label: 'Tool: Todoist',
     })
   })
+
+  it('insertet eine Gedaechtnis-Pill direkt (parameterlos, kein Picker)', async () => {
+    insertInlineContent.mockClear()
+    render(<SystemPromptEditor />)
+    expect(slashItemsRef.current).not.toBeNull()
+
+    const items = (await slashItemsRef.current?.('')) as {
+      title: string
+      onItemClick: () => void
+    }[]
+    const memoryItem = items.find((i) => i.title === 'Gedächtnis')
+    expect(memoryItem).toBeDefined()
+    memoryItem?.onItemClick()
+
+    expect(insertInlineContent).toHaveBeenCalledTimes(1)
+    const inserted = insertInlineContent.mock.calls[0][0] as [
+      { type: string; props: PlaceholderProps },
+      string,
+    ]
+    expect(inserted[0].type).toBe('placeholder')
+    expect(inserted[0].props).toMatchObject({
+      kind: 'memory',
+      target_id: '',
+      label: 'Gedächtnis-Hinweis',
+    })
+  })
 })
 
 describe('buildSlashMenuItems', () => {
@@ -173,6 +199,7 @@ describe('buildSlashMenuItems', () => {
     expect(titles).toContain('Playbook-Katalog')
     expect(titles).toContain('Datum')
     expect(titles).toContain('Externes Tool')
+    expect(titles).toContain('Gedächtnis')
   })
 
   it('filtert Table und Numbered-List aus Default-Items heraus', () => {
@@ -217,6 +244,10 @@ describe('buildSlashMenuItems', () => {
     const toolRefItem = items.find((i) => i.title === 'Externes Tool')
     toolRefItem?.onItemClick()
     expect(openPicker).toHaveBeenCalledWith('tool-ref')
+
+    const memoryItem = items.find((i) => i.title === 'Gedächtnis')
+    memoryItem?.onItemClick()
+    expect(openPicker).toHaveBeenCalledWith('memory')
   })
 
   it('allowedKinds filtert die Custom-Items (Persona-Pill-Satz)', () => {
@@ -236,6 +267,7 @@ describe('buildSlashMenuItems', () => {
     expect(titles).not.toContain('Datum')
     expect(titles).not.toContain('MCP-Tools')
     expect(titles).not.toContain('Externes Tool')
+    expect(titles).not.toContain('Gedächtnis')
   })
 })
 
