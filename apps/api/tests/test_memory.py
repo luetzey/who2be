@@ -575,5 +575,42 @@ def test_memory_guard_gates(make_auth_headers: AuthFactory) -> None:
 
             assert client.get(guard_url, headers=agent_tok).status_code == 403
             assert client.put(guard_url, json={"mode": "off"}, headers=agent_tok).status_code == 403
+
     finally:
         cleanup_workspaces([owner, editor])
+
+
+def test_memory_guard_blocks_unbound_admin_api_token() -> None:
+    """Security-Review LOW-1 (DB-frei): auch ein UNGEBUNDENER Admin-API-Token
+    (Legacy — via API nicht mehr anlegbar, `TokenCreate.agent_id` ist Pflicht)
+    darf die Waechter-Konfiguration nicht anfassen. Die Sicherheits-Einstellung
+    gehoert hinter den MFA-faehigen JWT-Login."""
+    from uuid import uuid4
+
+    from who2be_api.core.errors import ApiGateError
+    from who2be_api.core.security import WorkspaceContext
+    from who2be_api.services.memory_service import MemoryService
+    from who2be_models import WorkspaceRole
+
+    service = MemoryService(object())  # type: ignore[arg-type]  # Gate feuert vor Repo-Zugriff
+    unbound_admin = WorkspaceContext(
+        workspace_id=uuid4(),
+        user_id=uuid4(),
+        role=WorkspaceRole.admin,
+        is_api_token=True,
+        agent_id=None,
+        tool_policy=None,
+    )
+    with pytest.raises(ApiGateError):
+        service._require_guard_admin(unbound_admin)
+
+    # Mensch/JWT mit admin passiert das Gate.
+    human_admin = WorkspaceContext(
+        workspace_id=uuid4(),
+        user_id=uuid4(),
+        role=WorkspaceRole.admin,
+        is_api_token=False,
+        agent_id=None,
+        tool_policy=None,
+    )
+    service._require_guard_admin(human_admin)

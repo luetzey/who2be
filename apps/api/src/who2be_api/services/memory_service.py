@@ -107,12 +107,16 @@ def _guard_rejection(config: MemoryGuardConfig, text: str) -> str | None:
     if config.mode == MemoryGuardMode.off:
         return None
     if config.mode == MemoryGuardMode.custom:
-        lowered = text.casefold()
+        # Gleiche Matching-Semantik wie die Allow-Suche (re.escape + IGNORECASE
+        # auf dem Originaltext, Security-Review INFO-3). Die getroffene Phrase
+        # wird bewusst NICHT ins Fehlerdetail reflektiert (Security-Review
+        # LOW-2: kein admin-kontrollierter Text in den Agent-Kontext).
         for phrase in config.block_phrases:
-            if phrase.casefold() in lowered:
+            if re.search(re.escape(phrase), text, re.IGNORECASE):
                 return (
-                    f"Nicht gespeichert — der Inhalt enthaelt die im Workspace "
-                    f"blockierte Phrase „{phrase}“."
+                    "Nicht gespeichert — der Inhalt enthaelt eine im Workspace "
+                    "blockierte Phrase. Der Workspace-Besitzer pflegt die Liste "
+                    "in den Einstellungen."
                 )
     for match in _INJECTION_PATTERN.finditer(text):
         if config.mode == MemoryGuardMode.custom and _covered_by_allow_phrase(
@@ -251,19 +255,32 @@ class MemoryService:
         if not await self._repo.agent_belongs_to(ctx.workspace_id, agent_id):
             raise _agent_not_found()
 
-    async def get_guard(self, ctx: WorkspaceContext) -> MemoryGuardConfig:
-        # Waechter-Konfiguration ist eine Sicherheits-Einstellung → admin-only
-        # (require_role(admin) erzwingt aal2) und human-only: ein Agent darf
-        # den Filter, der IHN prueft, weder lesen noch umkonfigurieren.
+    def _require_guard_admin(self, ctx: WorkspaceContext) -> None:
+        # Waechter-Konfiguration ist eine Sicherheits-Einstellung: admin-Rolle
+        # UND echter Mensch (JWT-Login). JEDER API-Token ist gesperrt — auch
+        # ungebundene Admin-Tokens (Security-Review LOW-1: require_aal2
+        # exemptet Maschinen-Tokens, damit wuerde der MFA-Anker entfallen).
+        # Ein Agent darf den Filter, der IHN prueft, ohnehin nie anfassen.
         require_role(ctx, WorkspaceRole.admin)
-        self._require_human(ctx)
+        if ctx.is_api_token:
+            raise ApiGateError(
+                status=status.HTTP_403_FORBIDDEN,
+                reason="missing_capability",
+                actionable_by="human",
+                detail=(
+                    "Die Waechter-Konfiguration ist dem eingeloggten Menschen "
+                    "vorbehalten (Web-UI) — API-Tokens sind hier gesperrt."
+                ),
+            )
+
+    async def get_guard(self, ctx: WorkspaceContext) -> MemoryGuardConfig:
+        self._require_guard_admin(ctx)
         return await self._repo.get_guard_config(ctx.workspace_id)
 
     async def set_guard(
         self, ctx: WorkspaceContext, config: MemoryGuardConfig
     ) -> MemoryGuardConfig:
-        require_role(ctx, WorkspaceRole.admin)
-        self._require_human(ctx)
+        self._require_guard_admin(ctx)
         return await self._repo.set_guard_config(ctx.workspace_id, config)
 
     async def list_memories(
