@@ -13,7 +13,13 @@ from uuid import UUID
 import asyncpg
 
 from who2be_api.core.errors import ApiGateError
-from who2be_models import AgentToolPolicy, ReadScope, WorkspaceRead
+from who2be_models import (
+    AgentToolPolicy,
+    MemoryDirective,
+    MemoryMode,
+    ReadScope,
+    WorkspaceRead,
+)
 
 
 async def resolve_org_id(pool: asyncpg.Pool, workspace_id: UUID) -> UUID:
@@ -368,7 +374,10 @@ _AGENT_BUILDER_LITE_TEMPLATE_SLUG = "agent-builder-lite"
 # Human-Hand-Off) + eigene Gedaechtnis-Sektion in den Agent-Bau-Konventionen.
 # v9: expliziter `memory`-Placeholder im Agent-Builder-Template (nach der
 # tools-overview-Pill) — positionierter Gedaechtnis-Hinweis statt Auto-Append.
-BUILDER_CONTENT_VERSION = 9
+# v10: Builder-Gedaechtnis aktiviert — `memory_mode='suggest'` +
+# `memory_directive='recommended'` in der Builder-Policy (Kurations-Stufe,
+# ADR-0044; der Policy-Sync verteilt das an alle Bestands-Builder).
+BUILDER_CONTENT_VERSION = 10
 
 _BUILDER_PERSONA_DESCRIPTION = (
     "Meta-Agent, der Personas, Playbooks, Resources und Agenten im Workspace "
@@ -533,6 +542,13 @@ def _builder_tool_policy() -> dict[str, object]:
     False und melden nur (`feedback_write`). Die Autorisierung bleibt
     serverseitig (editor; Promote/Retire admin) — die Policy steuert nur die
     Tool-Sichtbarkeit im System-Prompt.
+
+    `memory_mode='suggest'` (Content-Stand 10, ADR-0044): der Builder bekommt
+    das Gedaechtnis in der Kurations-Stufe — Vorschlaege landen als `pending`
+    und werden vom Menschen freigegeben (konsistent zum eigenen
+    Kurator-Prinzip; bewusst NICHT `auto`). Nebeneffekt via `is_within`: der
+    Builder darf damit anderen Agenten das Gedaechtnis bis maximal `suggest`
+    freischalten — `auto` bleibt eine Menschen-Entscheidung.
     """
     return AgentToolPolicy(
         playbook_read=ReadScope.all,
@@ -545,6 +561,8 @@ def _builder_tool_policy() -> dict[str, object]:
         system_prompt_write=True,
         feedback_resolve=True,
         promote_retire=True,
+        memory_mode=MemoryMode.suggest,
+        memory_directive=MemoryDirective.recommended,
     ).model_dump(mode="json")
 
 
