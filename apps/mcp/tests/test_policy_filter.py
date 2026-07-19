@@ -91,6 +91,7 @@ def _whoami_payload(
     role: str,
     capabilities: list[str] | None,
     read_scopes: dict[str, str] | None,
+    memory_mode: str | None = None,
 ) -> dict[str, object]:
     return {
         "user_id": str(uuid4()),
@@ -101,6 +102,7 @@ def _whoami_payload(
         "unrestricted": unrestricted,
         "capabilities": capabilities,
         "read_scopes": read_scopes,
+        "memory_mode": memory_mode,
         "features": ["core"],
     }
 
@@ -181,11 +183,12 @@ def test_full_policy_agent_sees_all_tools(monkeypatch: pytest.MonkeyPatch) -> No
         role="editor",
         capabilities=_ALL_CAPABILITIES,
         read_scopes={"persona": "all", "playbook": "all", "resource": "all", "agent": "all"},
+        memory_mode="auto",
     )
     _install_identity(monkeypatch, _whoami_handler(payload))
     names = _list_tool_names()
     assert names == set(MCP_TOOL_REQUIREMENTS)
-    assert len(names) == 54
+    assert len(names) == 57
 
 
 def test_resource_read_none_hides_resource_tools(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -202,11 +205,49 @@ def test_resource_read_none_hides_resource_tools(monkeypatch: pytest.MonkeyPatch
     assert {"search", "find_usages", "list_versions", "get_version", "diff_versions"} <= names
 
 
+def test_memory_mode_gates_memory_tools(monkeypatch: pytest.MonkeyPatch) -> None:
+    # ADR-0044: read_only zeigt nur die Lese-Tools; suggest/auto auch save_memory;
+    # ohne memory_mode (Bestands-whoami/off) fehlen alle drei.
+    scopes = {"persona": "all", "playbook": "all", "resource": "all", "agent": "all"}
+    payload = _whoami_payload(
+        unrestricted=False,
+        role="editor",
+        capabilities=[],
+        read_scopes=scopes,
+        memory_mode="read_only",
+    )
+    _install_identity(monkeypatch, _whoami_handler(payload))
+    names = _list_tool_names()
+    assert {"search_memory", "list_memories"} <= names
+    assert "save_memory" not in names
+
+    payload_off = _whoami_payload(
+        unrestricted=False, role="editor", capabilities=[], read_scopes=scopes
+    )
+    policy_filter._whoami_cache.clear()  # gleicher Token, neue Identitaet
+    _install_identity(monkeypatch, _whoami_handler(payload_off))
+    assert {"search_memory", "list_memories", "save_memory"} & _list_tool_names() == set()
+
+    payload_suggest = _whoami_payload(
+        unrestricted=False,
+        role="editor",
+        capabilities=[],
+        read_scopes=scopes,
+        memory_mode="suggest",
+    )
+    policy_filter._whoami_cache.clear()
+    _install_identity(monkeypatch, _whoami_handler(payload_suggest))
+    assert {"search_memory", "list_memories", "save_memory"} <= _list_tool_names()
+
+
 def test_unrestricted_admin_sees_all_tools(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Ausser den Memory-Tools (ADR-0044): ohne Agent-Bindung kein
+    # Memory-Namespace — sie bleiben fuer Unrestricted unsichtbar.
     payload = _whoami_payload(unrestricted=True, role="admin", capabilities=None, read_scopes=None)
     _install_identity(monkeypatch, _whoami_handler(payload))
     names = _list_tool_names()
-    assert names == set(MCP_TOOL_REQUIREMENTS)
+    memory_tools = {name for name, req in MCP_TOOL_REQUIREMENTS.items() if req.memory is not None}
+    assert names == set(MCP_TOOL_REQUIREMENTS) - memory_tools
     assert len(names) == 54
 
 
@@ -215,9 +256,11 @@ def test_unrestricted_viewer_sees_no_write_tools(monkeypatch: pytest.MonkeyPatch
     _install_identity(monkeypatch, _whoami_handler(payload))
     names = _list_tool_names()
     write_tools = {name for name, req in MCP_TOOL_REQUIREMENTS.items() if req.capabilities}
+    memory_tools = {name for name, req in MCP_TOOL_REQUIREMENTS.items() if req.memory is not None}
     assert names & write_tools == set()
-    # Alle Reads + always-Tools bleiben sichtbar (Rollen-Gate betrifft nur Writes).
-    assert names == set(MCP_TOOL_REQUIREMENTS) - write_tools
+    # Alle Reads + always-Tools bleiben sichtbar (Rollen-Gate betrifft nur
+    # Writes); Memory-Tools fehlen fuer Unrestricted grundsaetzlich (ADR-0044).
+    assert names == set(MCP_TOOL_REQUIREMENTS) - write_tools - memory_tools
 
 
 # --- Drift-Guard -------------------------------------------------------------

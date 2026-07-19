@@ -13,7 +13,13 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-from who2be_models.tool_policy import AgentCapability, ReadScope, TransitionGrant
+from who2be_models.tool_policy import (
+    AgentCapability,
+    MemoryDirective,
+    MemoryMode,
+    ReadScope,
+    TransitionGrant,
+)
 from who2be_models.workspace_member import WorkspaceRole
 
 
@@ -55,5 +61,11 @@ class WhoAmIRead(BaseModel):
     write_tags: dict[str, list[str]] | None = None
     # Schreib-Rate-Limit (Mutationen/Minute); None = unbegrenzt oder unrestricted.
     write_rate_limit: int | None = None
+    # Agent-Memory (ADR-0044): Gedaechtnis-Modus + Abfrage-Verbindlichkeit des
+    # gebundenen Agenten; `None` wenn `unrestricted` (Mensch/ungebundener Token
+    # hat kein Agent-Gedaechtnis). Der MCP-Adapter filtert die Memory-Tools
+    # anhand von `memory_mode` (ADR-0042, `is_tool_visible_for`).
+    memory_mode: MemoryMode | None = None
+    memory_directive: MemoryDirective | None = None
     # Org-weite Entitlement-Features (z. B. "core", "agents", "composite_playbooks").
     features: list[str]

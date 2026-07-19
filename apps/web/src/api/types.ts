@@ -654,6 +654,54 @@ export type AgentMissing = 'persona' | 'template' | 'persona_active'
 // agent_read: nur der eigene Agent), 'none' = aus.
 export type ReadScope = 'all' | 'assigned' | 'none'
 
+// ADR-0044 — Agent-Memory (kuratiert, agentisch). Lebenszyklus: `pending`
+// (nur Triage-UI, retrieval-unsichtbar) → `active` (einzig retrieval-sichtbar)
+// oder `rejected` (bleibt als Dedup-Wächter-Zeile bestehen, endgültig loeschbar).
+export type MemoryStatus = 'pending' | 'active' | 'rejected'
+export type MemoryCategory =
+  | 'preference'
+  | 'fact'
+  | 'project'
+  | 'instruction'
+  | 'entity'
+  | 'general'
+// Speicher-Modus pro Agent, 4-stufig (geordnet): off < read_only < suggest <
+// auto. Policy-Default 'off' (secure-by-default) — siehe DEFAULT_TOOL_POLICY.
+export type MemoryMode = 'off' | 'read_only' | 'suggest' | 'auto'
+// Verbindlichkeit der Abfrage-Anweisung im System-Prompt (nur bei mode != off
+// wirksam). Default 'recommended'.
+export type MemoryDirective = 'required' | 'recommended'
+
+export interface MemoryRead {
+  id: string
+  agent_id: string
+  status: MemoryStatus
+  fact: string
+  // Nur Triage-Hilfe (1 Satz Begruendung des Agenten) — nie im Retrieval/Prompt.
+  context: string | null
+  category: MemoryCategory
+  importance: number
+  source: string
+  triage_note: string | null
+  retrieval_count: number
+  last_retrieved_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface MemoryTriageInput {
+  action: 'approve' | 'reject'
+  // Fakt-Edition vor Freigabe — nur bei action='approve' sinnvoll.
+  fact?: string
+  note?: string
+}
+
+export interface MemoryUpdateInput {
+  fact?: string
+  category?: MemoryCategory
+  importance?: number
+}
+
 export interface AgentToolPolicy {
   playbook_read: ReadScope
   resource_read: ReadScope
@@ -687,6 +735,11 @@ export interface AgentToolPolicy {
   transition_grants?: Record<string, { promote: boolean; retire: boolean }>
   // ADR-0039: max. Schreib-Mutationen/Minute (null/fehlend = unbegrenzt).
   write_rate_limit?: number | null
+  // ADR-0044: Agent-Memory-Speicher-Modus + Verbindlichkeit der Abfrage-
+  // Anweisung im System-Prompt. Optional fuer Abwaerts-Kompatibilitaet
+  // (JSONB); Defaults siehe DEFAULT_TOOL_POLICY.
+  memory_mode?: MemoryMode
+  memory_directive?: MemoryDirective
 }
 
 // Default-Policy fuer neue Agenten: nur Zugewiesenes lesen (least privilege/
@@ -710,6 +763,10 @@ export const DEFAULT_TOOL_POLICY: AgentToolPolicy = {
   feedback_write: true,
   feedback_resolve: false,
   promote_retire: false,
+  // ADR-0044: Gedaechtnis ist secure-by-default aus; Verbindlichkeit der
+  // (erst bei mode != off aktiven) Abfrage-Anweisung defaultet auf "soll".
+  memory_mode: 'off',
+  memory_directive: 'recommended',
 }
 
 export interface Agent {

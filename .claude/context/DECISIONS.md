@@ -256,3 +256,41 @@ bleiben)._
   Seed-Kommentar („Volldokument-Referenz"); Persona-Abgleich: Agent-Playbook
   bietet im Hand-Off jetzt den Konsistenz- & Drift-Check an (Feedback-
   Mikrobeobachtung an der Builder-Persona). `BUILDER_CONTENT_VERSION` 6 → 7.
+
+## 2026-07-18 — Agent-Memory: Kurations-Schleuse statt Auto-Persistenz (ADR-0044)
+- **Entscheidung:** Langzeitgedächtnis als agentische MCP-Tools mit 4-stufigem
+  `memory_mode` (off < read_only < suggest < auto, Default off) + Freigabe-
+  Schleuse (`pending` → menschliche Triage → `active`); `rejected` bleibt als
+  Dedup-Basis erhalten; kein agent-seitiges update/delete in v1; System-Prompt
+  trägt die Abfrage-Anweisung (`memory_directive` muss/soll), NICHT die
+  Memory-Inhalte (kein Content-Push — User-Entscheidung nach zwei
+  Design-Runden); `context`-Parameter nur für die Triage-Ansicht. Details:
+  ADR-0044, Plan `.claude/plan/2026-07-18-1500_agent-memory.md`.
+- **Begründung:** Konsistent mit dem Kurationsprinzip (ADR-0038: Agenten
+  ändern nie selbst Inhalte); die Schleuse ist der strukturelle
+  Injection-/PII-Schutz. Who2Be bleibt LLM-frei (keine Extraktions-Pipeline,
+  kein Judge). FTS-first (tsvector `simple` + pg_trgm) hält On-Prem
+  offline-fähig; pgvector bleibt Stufe B (ADR-0037-Linie).
+- **Verworfen:** Kap.-11-Pipeline (Who2Be führt keine Chat-Loops aus);
+  pgvector/Embeddings ab Tag 1 (neuer Infra-Baustein, On-Prem-Bruch);
+  Presidio-PII-Gate (schwere Dependency, Triage ist das echte Gate);
+  Soft-Delete (Repo-Konvention Hard-Delete wie agent_feedback);
+  Content-Push-Placeholder (bewusst gegen entschieden, als Ausblick notiert).
+
+## 2026-07-18 — Agent-Memory Runde 3: Laufzeit-Einbindung via get_persona (WP-6)
+- **Entscheidung:** Der konfigurierte System-Prompt wird nicht live
+  aktualisiert — Laufzeit-Injektionspunkt ist `get_persona` (Boot-Sequenz,
+  fetch-time). `PersonaService.render` hängt für agent-gebundene Aufrufer mit
+  `memory_mode != off` eine Gedächtnis-Sektion an `body_rendered`:
+  muss/soll-Anweisung + Top-5 FREIGEGEBENE Memories (Daten-Rahmung,
+  Nutzungs-Log-Bump). Revidiert „kein Content-Push" bewusst nur für die
+  Laufzeit — die Freigabe-Schleuse garantiert, dass nur menschlich
+  kuratierter Inhalt eingebettet wird. Security-Review-Fixes: Nutzungs-Log
+  selbstlimitierend (max. 1 Write/Memory/Minute, N-1), `_require_human`
+  prüft policy UND agent_id (N-2), Cap zählt bewusst alle Status (N-3,
+  dokumentierter Selbst-DoS, menschlich aufräumbar).
+- **Begründung:** User-Einwand: Agenten laden zur Laufzeit nur
+  Persona/Playbooks/Resources — eine Anweisung, die nur im
+  Konfigurations-Prompt lebt, erreicht laufende Agenten nicht zuverlässig.
+- **Verworfen:** Nur-Anweisung ohne Fakten (hängt weiter an der
+  Tool-Disziplin des Modells); Status quo (nur Tool-Beschreibungen).

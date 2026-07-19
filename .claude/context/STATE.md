@@ -4,6 +4,35 @@ _Stand: 2026-07-18_
 
 ## Funktioniert
 
+- **Agent-Memory (ADR-0044) UMGESETZT (2026-07-18, Branch
+  `claude/autonomous-code-agent-setup-iz6ydx`, PR #324):** Kuratiertes
+  Langzeitgedächtnis pro Agent, in drei Design-Runden mit dem User
+  entschieden. Kern: 4-stufiger `AgentToolPolicy.memory_mode`
+  (off<read_only<suggest<auto, Default off, `is_within`-geordnet) +
+  `memory_directive` (muss/soll); Freigabe-Schleuse `pending`→Triage→
+  `active`/`rejected` (rejected bleibt Dedup-Basis); kein agent-seitiges
+  Update/Delete (human-only Management, Agent-Tokens hart ausgeschlossen).
+  Migration 0066 `agent_memory` (tsvector `simple`+GIN, pg_trgm mit
+  dynamisch qualifizierter Opklasse — Supabase-/Schema-robust, RLS+Grants).
+  3 MCP-Tools `search_memory`/`list_memories`/`save_memory` (Kap.-10.5-
+  Kriterien in Beschreibungen; **57 Tools im ADR-0042-Mapping**, neue
+  `memory`-Achse in `ToolRequirement`). **Laufzeit-Einbindung (WP-6):**
+  `get_persona`/`PersonaService.render` hängt fetch-time die Gedächtnis-
+  Sektion an `body_rendered` (Anweisung + Top-5 freigegebene Memories,
+  Daten-Rahmung) — der konfigurierte System-Prompt wird nicht live
+  aktualisiert, die Persona schon. Wächter serverseitig (Injection-Regex,
+  Importance≥5, Trigram-Dedup, Cap 500, Write-Rate-Limit); Nutzungs-Log
+  `retrieval_count`/`last_retrieved_at` (selbstlimitierend 1 Write/Min).
+  Security-Review: 0 kritisch/mittel, N-1/N-2 gefixt, N-3 dokumentiert.
+  Web: Gedächtnis-Sektion Agent-Detail (Triage mit `context`-Anzeige,
+  Nutzungs-Log, Einzel-/Alles-Löschen, rejected eingeklappt) +
+  memory-Selects im Policy-Editor. DSGVO: Export `agent_memories` +
+  FK-CASCADE-Löschung + VVT V17. **DoD grün (lokal, Postgres 16):** ruff/
+  mypy strict clean, **1085 pytest passed, Coverage 90,48 %** (Gate 85);
+  Web lint 0 Errors, tsc clean, **902 Vitest, Branches 80,99 %** (Floor 79),
+  build clean. Plan: `.claude/plan/2026-07-18-1500_agent-memory.md`.
+  ADR: `docs/adr/0044-agent-memory.md`.
+
 - **Externe Tools (WP-1–5) UMGESETZT (2026-07-18, Branch
   `claude/autonomous-code-agent-persona-iikbwe`, PR #316):** Versionierte
   Workspace-Aggregate `external_tool` (WP-1) mit Alias-Eindeutigkeit pro

@@ -35,6 +35,10 @@ import type {
   Me,
   Member,
   MemberUpdateInput,
+  MemoryRead,
+  MemoryStatus,
+  MemoryTriageInput,
+  MemoryUpdateInput,
   Organization,
   OrganizationDeletion,
   OrganizationInput,
@@ -433,6 +437,24 @@ export interface Api {
   updateAgent: (id: string, input: AgentUpdateInput) => Promise<Agent>
   deleteAgent: (id: string) => Promise<void>
   copyAgent: (id: string, input?: AgentCopyInput) => Promise<Agent>
+  // ADR-0044 — Agent-Memory (Mensch-Pfad, editor+ gated). `status` filtert
+  // serverseitig; ohne Filter kommen alle Status (Triage-UI braucht pending +
+  // active + rejected gleichzeitig).
+  listAgentMemories: (agentId: string, status?: MemoryStatus) => Promise<MemoryRead[]>
+  // Triage eines pending-Vorschlags: approve (opt. Fakt-Edition) oder reject
+  // (opt. Notiz). 409, wenn der Eintrag nicht mehr pending ist.
+  triageAgentMemory: (
+    agentId: string,
+    memoryId: string,
+    input: MemoryTriageInput,
+  ) => Promise<MemoryRead>
+  updateAgentMemory: (
+    agentId: string,
+    memoryId: string,
+    input: MemoryUpdateInput,
+  ) => Promise<MemoryRead>
+  deleteAgentMemory: (agentId: string, memoryId: string) => Promise<void>
+  deleteAllAgentMemories: (agentId: string) => Promise<void>
   // Duplizieren (Deep-Copy des Inhalts als frische Draft, Muster `copyAgent`).
   // Der Server leitet Namen ("<Name> (Kopie)") + frischen Slug selbst ab.
   duplicatePersona: (id: string) => Promise<Persona>
@@ -829,6 +851,26 @@ export function createApi(token: string, workspaceId: string): Api {
         method: 'POST',
         body: JSON.stringify(input ?? {}),
       }),
+    listAgentMemories: (agentId, status) => {
+      const query = status !== undefined ? `?status=${status}` : ''
+      return request<MemoryRead[]>(token, `${ws}/agents/${agentId}/memories${query}`)
+    },
+    triageAgentMemory: (agentId, memoryId, input) =>
+      request<MemoryRead>(token, `${ws}/agents/${agentId}/memories/${memoryId}/triage`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    updateAgentMemory: (agentId, memoryId, input) =>
+      request<MemoryRead>(token, `${ws}/agents/${agentId}/memories/${memoryId}`, {
+        method: 'PUT',
+        body: JSON.stringify(input),
+      }),
+    deleteAgentMemory: (agentId, memoryId) =>
+      request<void>(token, `${ws}/agents/${agentId}/memories/${memoryId}`, {
+        method: 'DELETE',
+      }),
+    deleteAllAgentMemories: (agentId) =>
+      request<void>(token, `${ws}/agents/${agentId}/memories`, { method: 'DELETE' }),
     duplicatePersona: (id) =>
       request<Persona>(token, `${ws}/personas/${id}/duplicate`, { method: 'POST' }),
     duplicateResource: (id) =>

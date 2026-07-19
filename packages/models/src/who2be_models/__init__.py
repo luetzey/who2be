@@ -72,6 +72,22 @@ from who2be_models.links import (
 )
 from who2be_models.locale import DEFAULT_LOCALE, SUPPORTED_LOCALES, ContentLocale
 from who2be_models.me import MeOrganization, MeRead, MeWorkspace
+from who2be_models.memory import (
+    MEMORY_CONTEXT_MAX_LENGTH,
+    MEMORY_FACT_MAX_LENGTH,
+    MEMORY_MAX_PER_AGENT,
+    MEMORY_MIN_IMPORTANCE,
+    MEMORY_PERSONA_TOP_N,
+    MEMORY_TRIAGE_NOTE_MAX_LENGTH,
+    MemoryCategory,
+    MemoryCreate,
+    MemoryHit,
+    MemoryRead,
+    MemoryStatus,
+    MemoryTriage,
+    MemoryTriageAction,
+    MemoryUpdate,
+)
 from who2be_models.oauth import (
     OAuthClientRegistered,
     OAuthClientRegistration,
@@ -149,6 +165,8 @@ from who2be_models.token import TokenCreate, TokenCreated, TokenRead, TokenRenam
 from who2be_models.tool_policy import (
     AgentCapability,
     AgentToolPolicy,
+    MemoryDirective,
+    MemoryMode,
     ReadScope,
     TransitionGrant,
 )
@@ -238,6 +256,22 @@ __all__ = [
     "LinkedBlockSection",
     "MAX_LIMIT",
     "MCP_TOOL_REQUIREMENTS",
+    "MEMORY_CONTEXT_MAX_LENGTH",
+    "MEMORY_FACT_MAX_LENGTH",
+    "MEMORY_MAX_PER_AGENT",
+    "MEMORY_MIN_IMPORTANCE",
+    "MEMORY_PERSONA_TOP_N",
+    "MEMORY_TRIAGE_NOTE_MAX_LENGTH",
+    "MemoryCategory",
+    "MemoryCreate",
+    "MemoryDirective",
+    "MemoryHit",
+    "MemoryMode",
+    "MemoryRead",
+    "MemoryStatus",
+    "MemoryTriage",
+    "MemoryTriageAction",
+    "MemoryUpdate",
     "MeOrganization",
     "MeRead",
     "MeWorkspace",

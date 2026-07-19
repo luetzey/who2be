@@ -15,6 +15,7 @@ import { Stack } from '@/components/layout/Stack'
 import { AgentConnectorSection } from '../components/AgentConnectorSection'
 import { AgentEditorForm } from '../components/AgentEditorForm'
 import { AgentHierarchyView } from '../components/AgentHierarchyView'
+import { AgentMemorySection } from '../components/AgentMemorySection'
 import { AgentTokensSection } from '../components/AgentTokensSection'
 import { CopyPromptButton } from '../components/CopyPromptButton'
 import { DeleteAgentButton } from '../components/DeleteAgentButton'
@@ -119,6 +120,8 @@ export function AgentDetailPage() {
                     </Stack>
                   }
                 />
+
+                <AgentMemorySection agentId={agent.id} />
               </Stack>
             )
           })()

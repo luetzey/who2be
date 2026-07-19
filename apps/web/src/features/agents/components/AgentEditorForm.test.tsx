@@ -1,14 +1,19 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useForm } from 'react-hook-form'
 import { describe, expect, it, vi } from 'vitest'
 
 import { DEFAULT_TOOL_POLICY, type Agent, type Persona, type SystemPromptTemplate } from '@/api/types'
 
 import { AgentEditorForm } from './AgentEditorForm'
+import { useAgentForm } from '../hooks/useAgentForm'
 import type { AgentEditorValues } from '../hooks/useAgentForm'
 
 vi.mock('@/auth/useCurrentWorkspaceRole', () => ({
   useCurrentWorkspaceRole: () => 'editor',
+}))
+
+vi.mock('@/lib/feedback', () => ({
+  notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }))
 
 // Stabile Loader-Referenzen (Modul-Ebene) — der TagInput ruft sie beim Mount
@@ -16,9 +21,12 @@ vi.mock('@/auth/useCurrentWorkspaceRole', () => ({
 const listPersonaTags = vi.fn().mockResolvedValue([])
 const listPlaybookTags = vi.fn().mockResolvedValue([])
 const listResourceTags = vi.fn().mockResolvedValue([])
+// ADR-0044-Test: `updateAgent` faengt den PUT-Payload ab, um den
+// memory_mode-Wert aus dem Formular zu verifizieren (useAgentForm-Muster).
+const updateAgent = vi.fn()
 
 vi.mock('@/api/useApi', () => ({
-  useApi: () => ({ listPersonaTags, listPlaybookTags, listResourceTags }),
+  useApi: () => ({ listPersonaTags, listPlaybookTags, listResourceTags, updateAgent }),
 }))
 
 function makeAgent(overrides: Partial<Agent> = {}): Agent {
@@ -84,6 +92,22 @@ function Harness({ agent, locked }: { agent: Agent; locked?: boolean }) {
 // Policy-Felder liegen im Tab „Werkzeuge & Rechte" (per Default nicht gemountet).
 function openToolsTab() {
   fireEvent.click(screen.getByRole('tab', { name: 'Werkzeuge & Rechte' }))
+}
+
+// Nutzt den echten `useAgentForm`-Hook (statt der no-op-Harness oben), damit
+// der PUT-Payload (inkl. `valuesToPolicy`-Merge) end-to-end pruefbar ist.
+function FormHookHarness({ agent }: { agent: Agent }) {
+  const { form, onSubmit } = useAgentForm(agent, () => {})
+  return (
+    <AgentEditorForm
+      form={form}
+      onSubmit={onSubmit}
+      saveError={null}
+      personas={personas}
+      templates={templates}
+      agent={agent}
+    />
+  )
 }
 
 describe('AgentEditorForm', () => {
@@ -194,5 +218,51 @@ describe('AgentEditorForm', () => {
     expect(retires[1]).not.toBeChecked()
     expect(promotes[0]).toBeChecked()
     expect(retires[0]).toBeChecked()
+  })
+
+  it('rendert die Gedächtnis-Sektion mit Default „Aus" und gesperrter Verbindlichkeit', () => {
+    render(<Harness agent={makeAgent()} />)
+    openToolsTab()
+
+    expect(screen.getByLabelText('Speicher-Modus')).toHaveValue('off')
+    // Verbindlichkeit ist erst ab mode != off wirksam — bei "Aus" gesperrt.
+    expect(screen.getByLabelText('Verbindlichkeit')).toBeDisabled()
+    expect(screen.getByLabelText('Verbindlichkeit')).toHaveValue('recommended')
+  })
+
+  it('submitted den memory_mode-Wert im PUT-Payload (ADR-0044)', async () => {
+    const testAgent = makeAgent({
+      persona_id: 'p-1',
+      system_prompt_template_id: 't-1',
+      persona_active: true,
+      activatable: true,
+      missing: [],
+    })
+    updateAgent.mockResolvedValue(testAgent)
+
+    render(<FormHookHarness agent={testAgent} />)
+    openToolsTab()
+
+    fireEvent.change(screen.getByLabelText('Speicher-Modus'), {
+      target: { value: 'suggest' },
+    })
+    // Erst ab mode != off editierbar.
+    fireEvent.change(screen.getByLabelText('Verbindlichkeit'), {
+      target: { value: 'required' },
+    })
+
+    const submitButton = screen.getByRole('button', { name: 'Speichern' })
+    fireEvent.click(submitButton)
+    const formEl = submitButton.closest('form')
+    if (formEl !== null) {
+      fireEvent.submit(formEl)
+    }
+
+    await waitFor(() => {
+      expect(updateAgent).toHaveBeenCalled()
+    })
+    const payload = updateAgent.mock.calls[0]?.[1] as { tool_policy: { memory_mode: string; memory_directive: string } }
+    expect(payload.tool_policy.memory_mode).toBe('suggest')
+    expect(payload.tool_policy.memory_directive).toBe('required')
   })
 })

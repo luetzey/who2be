@@ -15,6 +15,8 @@ from who2be_api.services.version_status import _require_transition_capability
 from who2be_models import (
     AgentCapability,
     AgentToolPolicy,
+    MemoryDirective,
+    MemoryMode,
     ReadScope,
     TransitionGrant,
     VersionStatus,
@@ -86,6 +88,24 @@ class TestIsWithin:
         assigned = AgentToolPolicy(agent_read=ReadScope.assigned)
         assert all_scope.is_within(assigned) is False
         assert assigned.is_within(all_scope) is True
+
+    def test_higher_memory_mode_not_within(self) -> None:
+        # memory_mode ist geordnet (off < read_only < suggest < auto): ein Agent
+        # darf keinen Agenten mit hoeherem Gedaechtnis-Modus anlegen (ADR-0044).
+        ordered = [MemoryMode.off, MemoryMode.read_only, MemoryMode.suggest, MemoryMode.auto]
+        for lower, higher in zip(ordered, ordered[1:], strict=False):
+            narrow = AgentToolPolicy(memory_mode=lower)
+            broad = AgentToolPolicy(memory_mode=higher)
+            assert broad.is_within(narrow) is False
+            assert narrow.is_within(broad) is True
+
+    def test_memory_directive_is_not_a_right(self) -> None:
+        # `required` vs `recommended` ist reine Prompt-Formulierung — kein
+        # Eskalations-Vektor, daher symmetrisch within.
+        required = AgentToolPolicy(memory_directive=MemoryDirective.required)
+        recommended = AgentToolPolicy(memory_directive=MemoryDirective.recommended)
+        assert required.is_within(recommended) is True
+        assert recommended.is_within(required) is True
 
 
 class TestRequireCapability:

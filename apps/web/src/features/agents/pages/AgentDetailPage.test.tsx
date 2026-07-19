@@ -104,6 +104,7 @@ function fullHandlers(loadedAgent: Agent): Record<string, () => Response> {
     [`GET ${WS_PREFIX}/personas`]: () => jsonResponse([personaFixture]),
     [`GET ${WS_PREFIX}/system-prompts`]: () => jsonResponse([templateFixture]),
     [`GET ${WS_PREFIX}/tokens`]: () => jsonResponse([]),
+    [`GET ${WS_PREFIX}/agents/${loadedAgent.id}/memories`]: () => jsonResponse([]),
   }
 }
 
@@ -198,6 +199,7 @@ describe('AgentDetailPage', () => {
       [`GET ${WS_PREFIX}/personas`]: () => jsonResponse([personaFixture]),
       [`GET ${WS_PREFIX}/system-prompts`]: () => jsonResponse([templateFixture]),
       [`GET ${WS_PREFIX}/tokens`]: () => jsonResponse([]),
+      [`GET ${WS_PREFIX}/agents/a1/memories`]: () => jsonResponse([]),
     })
 
     renderPage()

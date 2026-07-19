@@ -44,6 +44,10 @@ const WRITE_CAP_FIELDS = [
 ] as const
 const READ_SCOPES = ['all', 'assigned', 'none'] as const
 const TAG_SCOPE_DOMAINS = ['persona', 'playbook', 'resource'] as const
+// ADR-0044 — Agent-Memory: Speicher-Modus (geordnet off < read_only < suggest
+// < auto) + Verbindlichkeit der Abfrage-Anweisung im System-Prompt.
+const MEMORY_MODES = ['off', 'read_only', 'suggest', 'auto'] as const
+const MEMORY_DIRECTIVES = ['required', 'recommended'] as const
 // Per-Domain Promote/Retire (ADR-0039 transition_grants) — Checkbox-Feldnamen.
 type TransitionGrantField = `tg_${(typeof TAG_SCOPE_DOMAINS)[number]}_${'promote' | 'retire'}`
 
@@ -138,6 +142,9 @@ export function AgentEditorForm({
   }
 
   const resolvedSubmitLabel = submitLabel ?? t('detail.submitLabel')
+  // Verbindlichkeit ist nur wirksam, wenn das Gedaechtnis ueberhaupt aktiv ist
+  // (mode != off) — sonst gibt es keine Abfrage-Anweisung, die sie steuern koennte.
+  const memoryModeValue = form.watch('memory_mode')
 
   const submitButton = (
     <div className="flex justify-end">
@@ -434,6 +441,51 @@ export function AgentEditorForm({
                     )}
                   />
                 </fieldset>
+                  </FormSection>
+
+                  <FormSection
+                    title={t('form.memory.title')}
+                    description={t('form.memory.description')}
+                    help={<p>{t('form.memory.help')}</p>}
+                  >
+                    <FormField
+                      control={form.control}
+                      name="memory_mode"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('form.memory.modeLabel')}</FormLabel>
+                          <FormControl>
+                            <Select disabled={isViewer} {...field}>
+                              {MEMORY_MODES.map((mode) => (
+                                <option key={mode} value={mode}>
+                                  {t(`form.memory.mode.${mode}`)}
+                                </option>
+                              ))}
+                            </Select>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="memory_directive"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('form.memory.directiveLabel')}</FormLabel>
+                          <FormControl>
+                            <Select disabled={isViewer || memoryModeValue === 'off'} {...field}>
+                              {MEMORY_DIRECTIVES.map((directive) => (
+                                <option key={directive} value={directive}>
+                                  {t(`form.memory.directive.${directive}`)}
+                                </option>
+                              ))}
+                            </Select>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </FormSection>
 
                   {submitButton}
