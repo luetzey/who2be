@@ -323,3 +323,15 @@ bleiben)._
   Menschen-Entscheidung.
 - **Verworfen:** `auto` (widerspricht dem eigenen Kurationsprinzip);
   UI-Freischaltung pro Workspace (Managed-Lock + nicht zentral verteilbar).
+
+## 2026-07-19 — Injection-Wächter: „System-Prompt" allein blockt nicht mehr
+- **Entscheidung:** Erster echter Feldbefund des Memory-Features: das
+  standalone `system.?prompt`-Muster blockte legitime Domänen-Fakten
+  („System-Prompt-Templates" ist Who2Be-Alltagsvokabular). Muster verengt:
+  nur noch Manipulations-Verb + System-Prompt (verrate/zeige/gib/leak/...)
+  bzw. ignoriere/missachte + Regelwerk-Objekt (inkl. System-Prompt).
+  Regressions- und Angriffs-Tests ergänzt.
+- **Begründung:** Der Filter ist Vorfilter, nicht Richter (ADR-0044) — den
+  Graubereich entscheidet die Triage; False Positives untergraben die
+  Nutzung des Features schneller als seltene False Negatives, die die
+  Freigabe-Schleuse ohnehin abfängt.

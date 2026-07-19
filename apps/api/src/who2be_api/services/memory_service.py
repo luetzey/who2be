@@ -54,11 +54,18 @@ _LIST_LIMIT_MAX = 50
 # jede legitime Instruktions-Praeferenz („antworte immer auf Deutsch" ist ein
 # gewolltes Memory der Kategorie `instruction`). Der Filter ist Vorfilter,
 # nicht Richter: den Graubereich entscheidet die menschliche Triage.
+#
+# WICHTIG (False-Positive-Fix 2026-07-19): „System-Prompt" allein ist in
+# Who2Be Alltagsvokabular (Templates, Placeholder, Builder-Arbeit) und darf
+# NICHT blocken — nur die Kombination mit einem Manipulations-Verb
+# („verrate/zeige/gib ... System-Prompt", „ignoriere ... System-Prompt")
+# ist ein Angriffsmuster.
 _INJECTION_PATTERN = re.compile(
     r"(?i)("
-    r"ignor\w*\s+(alle\s+|deine\s+|all\s+|your\s+|previous\s+)?"
-    r"(regeln|anweisungen|instruktionen|rules|instructions|guidelines)"
-    r"|system.?prompt"
+    r"(ignor\w*|missachte)\s+(alle[nr]?\s+|deine[nr]?\s+|den\s+|all\s+|your\s+|previous\s+|the\s+)?"
+    r"(regeln|anweisungen|instruktionen|rules|instructions|guidelines|system.?prompts?)"
+    r"|(reveal|leak|dump|print|zeige|verrate|nenne|gib)\s+"
+    r"(mir\s+)?(deinen\s+|den\s+|the\s+|your\s+)?system.?prompts?"
     r"|jailbreak"
     r"|disregard\s+(all|previous|your)"
     r"|vergiss\s+(alle|deine)\s+(regeln|anweisungen)"
