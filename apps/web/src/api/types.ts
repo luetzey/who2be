@@ -702,6 +702,22 @@ export interface MemoryUpdateInput {
   importance?: number
 }
 
+// ADR-0044-Addendum — Workspace-weiter Injection-Filter fuer save_memory,
+// konfigurierbar pro Workspace (admin-only, Agent-Tokens 403). 'standard'
+// (Default) = eingebauter Filter; 'custom' = eingebauter Filter + eigene
+// literale Ausnahme-/Block-Phrasen (kein Regex, ADR-0044-Addendum); 'off' =
+// kein Injection-Filter — gilt auch fuer Agenten im Automatisch-Modus (Dedup/
+// Wichtigkeits-Schwelle/Limit bleiben davon unberuehrt). Phrasen: 2-100
+// Zeichen, max. 50 pro Liste (Server validiert hart; Client spiegelt die
+// Grenzen).
+export type MemoryGuardMode = 'standard' | 'custom' | 'off'
+
+export interface MemoryGuardConfig {
+  mode: MemoryGuardMode
+  allow_phrases: string[]
+  block_phrases: string[]
+}
+
 export interface AgentToolPolicy {
   playbook_read: ReadScope
   resource_read: ReadScope
