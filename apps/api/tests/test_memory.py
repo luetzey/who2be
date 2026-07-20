@@ -704,9 +704,7 @@ def test_memory_writes_respect_write_rate_limit(
 
             guard_url = f"{prefix}/memory-guard"
             assert client.put(guard_url, json={"mode": "off"}, headers=auth).status_code == 200
-            assert (
-                client.put(guard_url, json={"mode": "standard"}, headers=auth).status_code == 429
-            )
+            assert client.put(guard_url, json={"mode": "standard"}, headers=auth).status_code == 429
     finally:
         rate_limit.limiter.reset()
         cleanup_workspaces([owner])
