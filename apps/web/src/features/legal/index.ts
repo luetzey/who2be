@@ -1,8 +1,6 @@
-// Registriert den `legal`-i18n-Namespace als Side-Effect — muss vor dem ersten
-// Render einer Legal-Komponente ausgefuehrt worden sein.
-
-export { CookieConsentBanner } from './components/CookieConsentBanner'
-export { LegalLayout } from './components/LegalLayout'
+// Pages-Barrel — nur lazy aus `app/routes.tsx` importiert. Statische
+// Route-/Shell-Exporte (LegalLayout, CookieConsentBanner) liegen in
+// `./layout.ts`, damit dieser Einstieg dynamisch bleibt.
 export { DpaPage } from './pages/DpaPage'
 export { ImpressumPage } from './pages/ImpressumPage'
 export { PrivacyPage } from './pages/PrivacyPage'
