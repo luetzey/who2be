@@ -99,9 +99,11 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("WHO2BE_DOCS_PUBLIC", "docs_public"),
     )
     # Track D — Editionen/Entitlements (interne Deployment-/Licensing-Standards).
-    # Ein Build, ein Image; der Unterschied Cloud vs. On-Prem liegt allein in dieser
-    # Runtime-Config (12-Factor III). Default `onprem` ⇒ OSS-sicher (unbegrenztes
-    # `OSS_ENTITLEMENT`, kein Billing). Nur `cloud` aktiviert Limits + Webhook-Adapter.
+    # Ein Codebase, zwei Build-Profile (ADR-0029): die Edition-Weiche liest diese
+    # Runtime-Config, aber die Artefakte unterscheiden sich physisch um das
+    # Billing-Paket (`who2be-billing` nur im Cloud-Build). Default `onprem` ⇒
+    # OSS-sicher (unbegrenztes `OSS_ENTITLEMENT`, kein Billing). Nur `cloud`
+    # aktiviert Limits + Webhook-Adapter.
     edition: Literal["cloud", "onprem"] = Field(
         default="onprem",
         validation_alias=AliasChoices("WHO2BE_EDITION", "edition"),
