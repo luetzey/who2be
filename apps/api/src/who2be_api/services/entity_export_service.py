@@ -31,7 +31,7 @@ from uuid import UUID
 
 import asyncpg
 
-from who2be_api.services.entity_sql import EntityKind, safe_entity
+from who2be_api.core.entity_sql import EntityKind, safe_entity
 from who2be_api.services.placeholders import RenderContext, render_template_body
 
 # Tabellen-/FK-/Inhalts-Konfiguration je Entity. `body_blocks` extrahiert aus

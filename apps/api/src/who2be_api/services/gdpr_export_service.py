@@ -20,8 +20,8 @@ from uuid import UUID
 
 import asyncpg
 
+from who2be_api.core.entity_sql import safe_entity
 from who2be_api.core.tenancy import tenant_scope
-from who2be_api.services.entity_sql import safe_entity
 
 # Tabellen, deren interne Mandanten-Spalte aus dem Export entfernt wird.
 _INTERNAL_COLUMNS = frozenset({"workspace_id"})

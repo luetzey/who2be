@@ -18,8 +18,8 @@ from uuid import UUID
 
 from fastapi import HTTPException, Response, status
 
+from who2be_api.core.entity_sql import EntityKind
 from who2be_api.services.entity_export_service import EntityExportService
-from who2be_api.services.entity_sql import EntityKind
 
 # Expliziter Rueckgabetyp der Export-Endpoints: Markdown-Download ODER das
 # JSON-Bundle. FastAPI erkennt `Response` in der Union und liefert das dict
