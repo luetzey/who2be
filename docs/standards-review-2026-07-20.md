@@ -20,7 +20,7 @@ wurden auf heutigen Stand geprüft; Owner-Entscheidungen nicht neu bewertet.
 | 5 | Warm Citrus | 🟡 | 1 | 13 | Token-Disziplin im Kern vorbildlich; 1 Brand-Regelbruch + Off-Scale-Streuung; AgentDB-Norm driftet gegen design-language.md |
 | 6 | Clean-Code-Style | 🟢 | 0 | 5 | ruff/format/mypy alle Exit 0 (334 Dateien); Restbefunde nur Funktionslängen/Begründungen |
 | 7 | Security | 🟡 | 1 | 2 | External-Tool-Export umgeht Read-Scope-Gate (Policy-Bypass inkl. Drafts); 2 Rate-Limit-Lücken (ADR-0044-Kette im Default unvollständig) |
-| 8 | Test/QA | ⏳ | – | – | (läuft — Sektion 2.8 folgt) |
+| 8 | Test/QA | 🟡 | 0 | 3 | Beide Coverage-Gates lokal grün (1146 pytest / 89,65 %; 912 Vitest / 81,08 % Branches); aber CI kann das Gate gerade nicht durchsetzen (Billing) und E2E bleibt Soft-Gate |
 | 9 | Licensing | 🟡 | 1 | 4 | `manual_override` ist Kunden-Self-Service statt Ops-Override — Cloud-Kunde kann sich selbst Pro-Entitlement schreiben |
 | 10 | OSS-Compliance | 🟢 | 0 | 3 | Beide Lizenz-Gates real grün; nur Härtung (UNKNOWN im Web-Gate), NOTICES, SBOM offen |
 | 11 | Git | 🟡 | 3* | 6 | Commit-/PR-Disziplin 100 % konform; aber keine Branch-Protection + CI seit 2026-07-19 ausgefallen (Actions-Billing bestätigt) |
@@ -125,7 +125,18 @@ Konform: Memory-Autorisierung fail-closed; Kurations-Schleuse race-fest, `Memory
 
 ### 2.8 Test/QA (TST)
 
-_(Sektion folgt — Agent läuft; wird vor Commit ergänzt.)_
+Gates (exakt CI, lokal gegen Postgres 16 ausgeführt, 2026-07-20):
+
+- Python: `uv run pytest --cov --cov-fail-under=85` → **1146 passed**, 0 failed/skipped, Coverage **89,65 %** (Gate 85, `branch=true` über alle 4 Pakete), 196 s, Exit 0.
+- Web: `npm run test:coverage` → **164 Dateien / 912 Tests passed**, Branches **81,08 %** (Floor 79), Statements 86,93 %, 174 s, Exit 0.
+
+CI-Verifikation: Die Gates können derzeit in CI **nicht durchgesetzt** werden — alle Runs seit 2026-07-19 scheitern ohne Runner-Zuweisung (= GIT-2, Actions-Billing, Owner).
+
+- **TST-1 ⚠:** E2E bleibt Soft-Gate — `ci.yml:144` `continue-on-error: true`, Journeys per `test.fixme` geparkt (`apps/web/e2e/journeys.spec.ts:11`, einziges TODO des Repos, = CODE-4). Der Härtungsweg ist im CI-Kommentar (Z. 139–142) selbst dokumentiert (Seed-/Login-Helper → Gate hart). Wiedervorlage TST-5/6 alt.
+- **TST-2 ⚠:** Gate-Durchsetzung faktisch nur lokal — solange GIT-2 offen ist, ruht „Tests als DoD" auf Selbstdisziplin (Merges #328/#329 ohne CI-Beleg, = GIT-3). Fix außerhalb des Repos (Owner); Interim: DoD-Nachweis im PR (PR-Template, WP-13).
+- **TST-3 ⚠ offen (Owner):** `coverage.all`-Entscheidung (ungetestete neue Dateien zählen erst, wenn importiert) — unverändert aus dem Vorgänger-Audit.
+
+Konform: REST↔MCP-Paritätstest existiert (`apps/api/tests/test_rest_mcp_parity.py`) + OpenAPI-Snapshot (`test_openapi_contract.py`, `tests/contract/openapi_surface.json`) mit `contract`-Marker (ADR-0041 Phase 3) — TST-4 alt verifiziert geschlossen; `--strict-markers` + zentraler Integration-Skip mit CI-Skip-Guard (`WHO2BE_REQUIRE_DB`); Coverage-Ratchets dokumentiert (CONTRIBUTING führt, lokal = CI); Testpyramide gelebt (Unit/Integration/Contract; E2E als bekannte Lücke).
 
 ### 2.9 Licensing (LIC)
 
