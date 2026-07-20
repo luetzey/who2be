@@ -556,6 +556,77 @@ def test_external_tool_read_scope_none_blocks_agent(make_auth_headers: AuthFacto
 
 
 @pytest.mark.usefixtures("patched_jwt_secret", "migrated_db")
+def test_external_tool_export_respects_read_scope_and_draft_visibility(
+    make_auth_headers: AuthFactory,
+) -> None:
+    """SEC-1 (Standards-Review 2026-07-20): der Einzel-Export laeuft durch
+    dieselben Gates wie get/list — `external_tool_read='none'` sperrt komplett
+    (403), und ein Konsum-Agent ohne `external_tool_write` bekommt keine
+    Draft-Versionen (JSON gefiltert, Markdown rendert nur `active`,
+    Draft-only-Tool -> 404 statt Existenz-/Inhalts-Leak)."""
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    base = f"/v1/workspaces/{ws}/external_tools"
+    prefix = f"/v1/workspaces/{ws}"
+    try:
+        with TestClient(app) as client:
+            tid = client.post(
+                base, json=_tool_body("Todoist", usage_notes="Aktive Notiz."), headers=auth
+            ).json()["id"]
+            _promote(client, base, tid, auth)
+            # Draft v2 mit unveroeffentlichtem Inhalt (Draft-on-Edit).
+            updated = client.put(
+                f"{base}/{tid}",
+                json=_tool_body(
+                    "Todoist", display_name="Draft-v2", usage_notes="Geheime Draft-Notiz."
+                ),
+                headers=auth,
+            )
+            assert updated.status_code == 200, updated.text
+
+            # `external_tool_read='none'`: Export in beiden Formaten gesperrt.
+            blocked = _agent_token(
+                client, prefix, "et-exp-blocked", {"external_tool_read": "none"}, auth
+            )
+            denied = client.get(f"{base}/{tid}/export", headers=blocked)
+            assert denied.status_code == 403, denied.text
+            denied_md = client.get(f"{base}/{tid}/export?format=markdown", headers=blocked)
+            assert denied_md.status_code == 403, denied_md.text
+
+            # Konsum-Agent (Read ok, kein external_tool_write): JSON ohne Drafts.
+            consumer = _agent_token(client, prefix, "et-exp-consumer", {}, auth)
+            exported = client.get(f"{base}/{tid}/export", headers=consumer)
+            assert exported.status_code == 200, exported.text
+            versions = exported.json()["external_tool"]["versions"]
+            assert [v["status"] for v in versions] == ["active"]
+            assert "Geheime Draft-Notiz." not in exported.text
+
+            # Markdown rendert die aktive Version, nie den Draft.
+            md = client.get(f"{base}/{tid}/export?format=markdown", headers=consumer)
+            assert md.status_code == 200, md.text
+            assert "Aktive Notiz." in md.text
+            assert "Geheime Draft-Notiz." not in md.text
+
+            # Draft-only-Tool: fuer den Konsum-Agenten unsichtbar (404, wie get).
+            draft_tid = client.post(base, json=_tool_body("Nur-Draft"), headers=auth).json()["id"]
+            assert client.get(f"{base}/{draft_tid}/export", headers=consumer).status_code == 404
+            draft_md = client.get(f"{base}/{draft_tid}/export?format=markdown", headers=consumer)
+            assert draft_md.status_code == 404, draft_md.text
+
+            # Agent MIT external_tool_write behaelt die volle Versionshistorie.
+            editor_agent = _agent_token(
+                client, prefix, "et-exp-editor", {"external_tool_write": True}, auth
+            )
+            full = client.get(f"{base}/{tid}/export", headers=editor_agent)
+            assert full.status_code == 200, full.text
+            full_statuses = {v["status"] for v in full.json()["external_tool"]["versions"]}
+            assert full_statuses == {"active", "draft"}
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db")
 def test_external_tool_gdpr_export_includes_tool(make_auth_headers: AuthFactory) -> None:
     owner = fresh_user_id()
     ws = setup_workspace(owner)
