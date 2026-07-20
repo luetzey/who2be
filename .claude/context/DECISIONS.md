@@ -345,3 +345,24 @@ bleiben)._
 - **Verworfen:** Stufe C (freie Regex — ReDoS/Fehlkonfigurations-Risiko,
   Validierungs-Sandbox unverhältnismäßig); Nur-An/Aus (löst False Positives
   nicht ohne Totalverzicht).
+
+## 2026-07-20 — Standards-Pflege-Lauf: Konsolidierung + zwei Leitplanken
+- **Konsolidierung (append-only-konform):** Die Einträge 2026-07-18/-19
+  (Externe Tools; Agent-Memory Runden 1–3, Placeholder `memory`,
+  Builder-Gedächtnis, Injection-Wächter) leben jetzt kanonisch in ADR-0043
+  (`docs/adr/0043-external-tool-bindings.md`) und ADR-0044
+  (`docs/adr/0044-agent-memory.md` inkl. Addenda) — die ADRs sind die
+  maßgebliche Quelle. Die Alt-Einträge hier bleiben unverändert stehen
+  (append-only, Historie); die Kürzung dieser Datei aufs Budget (MEM-5,
+  `docs/standards-review-2026-07-20.md` §2.12) ist dokumentierter Follow-up.
+- **LIC-1 — Billing-Override gehärtet (heute entschieden):** Der Admin-
+  `manual_override`-Endpoint verlangt jetzt `require_aal2` UND eine
+  Betreiber-Allowlist `WHO2BE_BILLING_OVERRIDE_OPERATORS` — **fail-closed**
+  (leere/fehlende Liste ⇒ niemand darf overriden). Die Mechanik-Wahl
+  (env-Allowlist als Operator-Identität) ist im PR-Review zu bestätigen
+  (Owner-Punkt, Bericht §4).
+- **ARC-3 — Interims-Leitplanke bis zur ADR-0002-Entscheidung (enforce vs.
+  amend):** keine NEUEN `HTTPException`-/SQL-Vorkommen in
+  `apps/api/**/services/` — Fehler als Domain-Exception, SQL übers
+  Repository. Bestand bleibt bis zur Owner-Entscheidung unangetastet;
+  Leitplanke ist auch in `CLAUDE.md` §Code-Style verankert.
