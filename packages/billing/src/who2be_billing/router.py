@@ -10,6 +10,10 @@ Defense-in-Depth):
 - ``POST /v1/workspaces/{ws}/billing/checkout`` (admin): startet einen Mollie-
   Checkout fuer den gebuchten Tier.
 
+Dazu ``POST /v1/workspaces/{ws}/billing/override``: befristetes `manual_override`
+— **Betreiber-only** (Operator-Allowlist `WHO2BE_BILLING_OVERRIDE_OPERATORS` +
+aal2), kein Kunden-Self-Service (LIC-1).
+
 Guardrails (ADR-0028): kein Webhook ohne Signaturpruefung; Schreiben ausschliesslich
 in `org_entitlement` ueber `EntitlementRepository`; Zugriff am Entitlement, nicht am
 rohen Zahlungsstatus.
@@ -19,6 +23,7 @@ from __future__ import annotations
 
 import hmac
 import logging
+import os
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 from uuid import UUID
@@ -29,7 +34,12 @@ from pydantic import BaseModel, Field
 
 from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.db import get_pool
-from who2be_api.core.security import WorkspaceContext, get_current_workspace, require_role
+from who2be_api.core.security import (
+    WorkspaceContext,
+    get_current_workspace,
+    require_aal2,
+    require_role,
+)
 from who2be_api.licensing.edition import is_cloud
 from who2be_api.licensing.entitlement import Entitlement
 from who2be_api.repositories.entitlement_repository import PgEntitlementRepository
@@ -253,6 +263,56 @@ async def create_checkout(
 
 # --- Manual-Override (kontrollierter Cloud-Ausnahmepfad, ADR-0028) ----------------
 
+# ADR-0028 definiert den `manual_override`-Writer als **Cloud-OPS-Override** —
+# ein Betreiber-Pfad, kein Kunden-Self-Service (Befund LIC-1, Standards-Review
+# 2026-07-20: zuvor konnte sich jeder Workspace-Admin selbst ein Pro-Entitlement
+# schreiben). Die Operator-Allowlist lebt bewusst **paketlokal** als eigener
+# Env-Read statt als Feld in `who2be_api.core.config.Settings`: das Billing-Paket
+# ist build-zeit-isoliert (ADR-0029), der Kern soll keine billing-only-Config
+# tragen. Default leer ⇒ fail-closed (niemand darf schreiben).
+_OVERRIDE_OPERATORS_ENV = "WHO2BE_BILLING_OVERRIDE_OPERATORS"
+
+
+def _override_operator_ids() -> frozenset[UUID]:
+    """Parst die kommaseparierte Operator-Allowlist (User-UUIDs) aus dem Env.
+
+    Unparsbare Eintraege werden geloggt und verworfen — ein Tippfehler darf die
+    Liste niemals versehentlich oeffnen (fail-closed). Bewusst ungecacht: der
+    Wert wird pro Aufruf gelesen, damit eine Rotation ohne Prozess-Neustart
+    greift und Tests ihn per `monkeypatch.setenv` setzen koennen.
+    """
+    ids: set[UUID] = set()
+    for part in os.environ.get(_OVERRIDE_OPERATORS_ENV, "").split(","):
+        candidate = part.strip()
+        if not candidate:
+            continue
+        try:
+            ids.add(UUID(candidate))
+        except ValueError:
+            logger.warning(
+                "Unparsbarer Eintrag in %s ignoriert (erwartet: User-UUID).",
+                _OVERRIDE_OPERATORS_ENV,
+            )
+    return frozenset(ids)
+
+
+def _require_override_operator(ctx: WorkspaceContext) -> None:
+    """403, wenn der Aufrufer kein gelisteter Betreiber-Operator ist (ADR-0028).
+
+    Leere/fehlende Allowlist ⇒ immer 403 (fail-closed). API-Tokens sind
+    kategorisch ausgeschlossen: `require_aal2` exempted Maschinen-Tokens, fuer
+    den Betreiber-Pfad gibt es aber keinen legitimen Maschinen-Aufrufer.
+    """
+    if ctx.is_api_token or ctx.user_id not in _override_operator_ids():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "manual_override ist Betreiber-only (Cloud-OPS-Override, ADR-0028) — "
+                "der aufrufende User steht nicht in der Operator-Allowlist "
+                f"({_OVERRIDE_OPERATORS_ENV})."
+            ),
+        )
+
 
 class OverrideRequest(BaseModel):
     """Befristeter manueller Override fuer Support-/Kulanz-/Webhook-Haenger-Faelle.
@@ -279,7 +339,7 @@ async def create_override(
     body: OverrideRequest,
     ctx: Ctx,
 ) -> OverrideResponse:
-    """Setzt ein befristetes `manual_override` (admin-only, nur Cloud).
+    """Setzt ein befristetes `manual_override` (Betreiber-only, nur Cloud).
 
     Schreibt ausschliesslich in `org_entitlement` ueber den Repository-Vertrag —
     keine anderen App-Interna. Urheber (`created_by`) + `reason` werden auditiert,
@@ -287,6 +347,12 @@ async def create_override(
     """
     _require_cloud()
     require_role(ctx, WorkspaceRole.admin)
+    # Betreiber-Gate (ADR-0028, LIC-1): Workspace-Admin (Kunden-Kontext) reicht
+    # NICHT — zusaetzlich MFA-Session (aal2, explizit statt nur via
+    # `require_role`-Kaskade, damit das Gate hier sichtbar bleibt) + Eintrag in
+    # der Operator-Allowlist. Leere Allowlist ⇒ immer 403.
+    require_aal2(ctx)
+    _require_override_operator(ctx)
     plan = plan_by_code(body.plan)
     if plan is None:
         raise HTTPException(
