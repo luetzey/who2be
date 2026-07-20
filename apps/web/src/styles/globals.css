@@ -529,8 +529,10 @@
  * uppercase, mit unterem Border zur visuellen Trennung.
  */
 .bn-mantine .bn-suggestion-menu-label {
-  font-size: 10px;
-  line-height: 1rem;
+  /* Eyebrow-Muster (§3.2/§3.3): kleinste Skalenstufe text-xs statt
+     10px-Literal — die Typo-Skala kennt keine Stufe unter 0.75rem. */
+  font-size: var(--text-xs);
+  line-height: var(--text-xs--line-height);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: var(--tracking-wide);

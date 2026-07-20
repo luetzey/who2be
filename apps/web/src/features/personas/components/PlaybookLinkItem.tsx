@@ -22,6 +22,8 @@ interface PlaybookReferencedBadgeProps {
 export function PlaybookReferencedBadge({ label, hint }: PlaybookReferencedBadgeProps) {
   return (
     <Badge variant="outline" title={hint} className="gap-1 font-normal text-muted-foreground">
+      {/* size-3 bewusst (funktionaler Sonderfall §8): Icon im kompakten
+          text-xs-Badge, size-4 wuerde die Pille dominieren. */}
       <Quote className="size-3 shrink-0" aria-hidden="true" />
       {label}
     </Badge>

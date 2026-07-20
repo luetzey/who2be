@@ -119,7 +119,7 @@ export function AgentHierarchyView({
 
   return (
     <Card data-testid="agent-hierarchy">
-      <CardContent className="flex flex-col gap-5 pt-6">
+      <CardContent className="flex flex-col gap-4 pt-6">
         <SectionLabel>{t('hierarchy.title')}</SectionLabel>
 
         <div className="flex flex-col gap-2">

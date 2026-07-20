@@ -51,6 +51,8 @@ export function PlaybooksOnboarding({ newHref }: { newHref: string }) {
                 )}
                 aria-hidden="true"
               >
+                {/* size-3 bewusst (funktionaler Sonderfall §8): Icon muss in
+                    den size-4-Tint-Container passen. */}
                 <Icon className="size-3" />
               </span>
               {t(`list.onboarding.types.${type}`)}

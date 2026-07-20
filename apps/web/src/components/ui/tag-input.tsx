@@ -178,6 +178,8 @@ export const TagInput = forwardRef<HTMLInputElement, TagInputProps>(function Tag
               onClick={() => removeTag(tag)}
               disabled={disabled}
             >
+              {/* size-3 bewusst (funktionaler Sonderfall §8): Remove-X im
+                  kompakten Badge — size-4 wuerde die Tag-Pille aufblaehen. */}
               <X className="size-3" />
             </button>
           </Badge>

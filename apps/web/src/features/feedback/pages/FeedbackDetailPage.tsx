@@ -187,7 +187,7 @@ export function FeedbackDetailPage() {
       >
         {summary !== null ? (
           <div className="flex flex-col gap-6">
-            <div className="grid gap-5 md:grid-cols-2">
+            <div className="grid gap-6 md:grid-cols-2">
               {/* Nutzung & Ergebnis */}
               <Card>
                 <CardHeader>
@@ -195,7 +195,7 @@ export function FeedbackDetailPage() {
                 </CardHeader>
                 <CardContent className="flex flex-col gap-4">
                   <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-semibold tracking-tight tabular-nums">
+                    <span className="text-2xl font-semibold tracking-tight tabular-nums">
                       {usageCount}
                     </span>
                     <span className="text-sm text-muted-foreground">{t('detail.usageCount')}</span>

@@ -60,7 +60,7 @@ export function EntityIcon({ icon: Icon, tone, size, className }: EntityIconProp
 // Text-Schriftgroesse je Kachelgroesse — die Initialen sollen die Kachel fuellen
 // wie das Icon in EntityIcon.
 const avatarTextClass: Record<EntityIconSize, string> = {
-  sm: 'text-[11px]',
+  sm: 'text-xs',
   md: 'text-sm',
   lg: 'text-base',
 }

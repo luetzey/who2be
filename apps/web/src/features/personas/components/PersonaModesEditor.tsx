@@ -267,7 +267,7 @@ function PersonaModeCard({
   return (
     <div
       className={cn(
-        'flex flex-col gap-4 rounded-xl border p-5 shadow-card',
+        'flex flex-col gap-4 rounded-xl border p-6 shadow-card',
         showDefault ? 'border-brand/30 bg-brand/5' : 'bg-card',
       )}
     >

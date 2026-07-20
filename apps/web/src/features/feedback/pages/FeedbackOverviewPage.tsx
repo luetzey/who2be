@@ -161,7 +161,7 @@ export function FeedbackOverviewPage() {
                               <li key={`${item.entity_type}-${item.entity_id}`} className="relative">
                                 <div
                                   className={cn(
-                                    'flex items-center gap-4 border-l-[3px] py-3 pr-4 pl-3 transition-[background-color] duration-[var(--duration-fast)] ease-standard hover:bg-muted/40',
+                                    'flex items-center gap-4 border-l-2 py-3 pr-4 pl-3 transition-[background-color] duration-[var(--duration-fast)] ease-standard hover:bg-muted/40',
                                     item.negative_count >= 3
                                       ? 'border-l-destructive'
                                       : item.negative_count > 0
@@ -185,6 +185,9 @@ export function FeedbackOverviewPage() {
                                       </span>
                                     </span>
                                   </span>
+                                  {/* min-w-[7.5rem]: funktionale Mindestbreite, damit der
+                                      Signal-Balken auch bei schmalen Viewports lesbar bleibt —
+                                      die Spacing-Skala kennt diesen Wert nicht (§4.1). */}
                                   <span className="flex min-w-[7.5rem] flex-1 flex-col gap-1.5">
                                     <span className="flex h-1.5 overflow-hidden rounded-full bg-muted">
                                       <span className="bg-brand" style={{ width: `${helpfulPct}%` }} />
@@ -195,7 +198,7 @@ export function FeedbackOverviewPage() {
                                     </span>
                                     <span className="flex gap-3 text-xs text-muted-foreground">
                                       <span className="inline-flex items-center gap-1">
-                                        <ThumbsUp className="size-3" aria-hidden="true" />
+                                        <ThumbsUp className="size-4" aria-hidden="true" />
                                         {t('overview.helpfulShort', { count: item.helpful_count })}
                                       </span>
                                       <span
@@ -206,7 +209,7 @@ export function FeedbackOverviewPage() {
                                             : 'text-muted-foreground',
                                         )}
                                       >
-                                        <TriangleAlert className="size-3" aria-hidden="true" />
+                                        <TriangleAlert className="size-4" aria-hidden="true" />
                                         {t('overview.negativeShort', { count: item.negative_count })}
                                       </span>
                                     </span>
@@ -228,9 +231,9 @@ export function FeedbackOverviewPage() {
                         {sorted.length > MAX_COLLAPSED ? (
                           <Button
                             type="button"
-                            variant="ghost"
+                            variant="link"
                             onClick={() => setShowAll((v) => !v)}
-                            className="w-full rounded-none border-t text-xs font-medium text-brand hover:text-brand"
+                            className="w-full rounded-none border-t text-xs font-medium"
                           >
                             {showAll
                               ? t('overview.showLess')

@@ -239,6 +239,9 @@ export function AgentsPage() {
                         className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
                         aria-hidden="true"
                       />
+                      {/* pl-9 ist bewusst off-scale (funktionaler Icon-Inset):
+                          left-3 (12px) + size-4 (16px) + 8px Luft = 36px, damit der
+                          Eingabetext nicht unter dem Such-Icon liegt. */}
                       <Input
                         id="agents-search"
                         value={query}
@@ -260,7 +263,7 @@ export function AgentsPage() {
                           setQuery('')
                         }}
                       >
-                        <X className="size-3" aria-hidden="true" />
+                        <X className="size-4" aria-hidden="true" />
                         {t('filter.reset')}
                       </Button>
                     </div>

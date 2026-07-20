@@ -187,10 +187,15 @@ describe('SystemPromptEditor', () => {
   })
 })
 
+// Editor-Stub fuer buildSlashMenuItems: Der Parameter ist dort bewusst als
+// `unknown` getypt (s. slashMenu.ts) und wird nur an das gemockte
+// getDefaultReactSlashMenuItems durchgereicht — ein leeres Objekt genuegt,
+// kein `as any` noetig (CODE-3).
+const editorStub: unknown = {}
+
 describe('buildSlashMenuItems', () => {
   it('enthaelt alle Custom-Placeholder-Items', () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const items = buildSlashMenuItems({} as any, vi.fn(), '')
+    const items = buildSlashMenuItems(editorStub, vi.fn(), '')
     const titles = items.map((i) => i.title)
     expect(titles).toContain('Playbook')
     expect(titles).toContain('Resource')
@@ -203,24 +208,21 @@ describe('buildSlashMenuItems', () => {
   })
 
   it('filtert Table und Numbered-List aus Default-Items heraus', () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const items = buildSlashMenuItems({} as any, vi.fn(), '')
+    const items = buildSlashMenuItems(editorStub, vi.fn(), '')
     const titles = items.map((i) => i.title)
     expect(titles).not.toContain('Tabelle')
     expect(titles).not.toContain('Nummeriert')
   })
 
   it('filtert nach Query (case-insensitive)', () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const items = buildSlashMenuItems({} as any, vi.fn(), 'play')
+    const items = buildSlashMenuItems(editorStub, vi.fn(), 'play')
     expect(items.some((i) => i.title === 'Playbook')).toBe(true)
     expect(items.some((i) => i.title === 'Resource')).toBe(false)
   })
 
   it('Custom-Items rufen openPicker mit dem richtigen Kind auf', () => {
     const openPicker = vi.fn()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const items = buildSlashMenuItems({} as any, openPicker, '')
+    const items = buildSlashMenuItems(editorStub, openPicker, '')
     const playbookItem = items.find((i) => i.title === 'Playbook')
     playbookItem?.onItemClick()
     expect(openPicker).toHaveBeenCalledWith('playbook')
@@ -257,8 +259,7 @@ describe('buildSlashMenuItems', () => {
       'playbooks-catalog',
       'resources-catalog',
     ] as const)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const items = buildSlashMenuItems({} as any, vi.fn(), '', allowed)
+    const items = buildSlashMenuItems(editorStub, vi.fn(), '', allowed)
     const titles = items.map((i) => i.title)
     expect(titles).toContain('Resource-Katalog')
     expect(titles).toContain('Playbook-Katalog')

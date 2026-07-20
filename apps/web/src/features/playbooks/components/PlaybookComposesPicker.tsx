@@ -140,7 +140,7 @@ export function PlaybookComposesPicker({
                       disabled={index === 0}
                       aria-label={t('composesPicker.moveUp', { name: nameOf(id) })}
                     >
-                      <ChevronUp className="size-3" />
+                      <ChevronUp className="size-4" />
                     </Button>
                     <Button
                       type="button"
@@ -151,7 +151,7 @@ export function PlaybookComposesPicker({
                       disabled={index === selected.length - 1}
                       aria-label={t('composesPicker.moveDown', { name: nameOf(id) })}
                     >
-                      <ChevronDown className="size-3" />
+                      <ChevronDown className="size-4" />
                     </Button>
                     <Button
                       type="button"
