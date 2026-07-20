@@ -219,6 +219,33 @@ Repo-Umsetzung bei der Substanz. **Owner-Entscheidungen werden nicht autonom get
 6. **LIC-1-Mechanik** — das Gate wird in WP-3 fail-closed gehärtet; die endgültige Ops-Identitäts-Mechanik bitte im PR-Review bestätigen.
 7. **`coverage.all` / E2E-Gate-Härtung / WP-9 alt (CLA/AVV/Kontakt)** — unverändert aus dem Vorgänger-Audit.
 
-## 5 Umsetzungsstand (Phase B)
+## 5 Umsetzungsstand (Phase B, 2026-07-20)
 
-_(wird nach den Umsetzungs-Wellen ergänzt)_
+Drei Wellen mit disjunkten Dateimengen (parallele Sub-Agenten, Commits pro WP durch den
+Orchestrator, Verifikation zentral mit den exakten CI-Kommandos). CI selbst konnte die
+Gates nicht durchsetzen (GIT-2, Actions-Billing) — alle DoD-Belege sind lokale Läufe.
+
+| WP | Status | Commit | Beleg |
+|---|---|---|---|
+| WP-1 (SEC-1) | ✅ | `c7af91f` | Export-Gate + Draft-Filter, Repro-Test (403/404 + Draft-Leak-Negativ) |
+| WP-2 (SEC-2/3) | ✅ | `d2f50a9` | 4 Routen gegated, 429-Integrationstests |
+| WP-3 (LIC-1) | ✅ | `6ae6b91` | Betreiber-Allowlist + aal2, fail-closed; Mechanik-Wahl = Owner-Review |
+| WP-4 (DEP-2) | ✅ | `b0d47d8` | MCP-Image ohne Billing-Quellcode |
+| WP-5/11 (DEP-1/6, LIC-4, OSS-2) | ✅ | `5d6c4ba` | Cloud-Web-Bundle verdrahtet; CI-Positiv-Assert (Nebenfund: alter Negativ-Assert halb tot — Marker existierte nicht mehr); `runtime-cloud`-Build-Step; Lizenz-Gates gehärtet, `license:check` Exit 0 |
+| WP-6 (FE-1) | ✅ | `79617b3` | GiveFeedbackDialog → `@/components/feedback`, Barrel nur Pages |
+| WP-7 (FE-2…6, WC-4…10/12…14, CODE-3) | ✅ | `e41bb0f` | Skalen-Sweep 20 Dateien; WC-11 bewusst Follow-up |
+| WP-8 (FE-10/11) | ✅ | `da88674` | Legal-Chunk separat (12 kB lazy), `INEFFECTIVE_DYNAMIC_IMPORT` weg |
+| WP-9 (MEM-1…8, ARC-3/5) | ✅ | `fd6ef0c` | STATE 636→110 Zeilen; Plan-README +9 Juli-Einträge; DECISIONS-Konsolidierung append-only; Leitplanke in CLAUDE.md |
+| WP-10 (DEP-5, LIC-2/3/5) | ✅ | `b6b2f56` | Kommentare + ADR-0028/0029-Nachträge |
+| WP-12 (ARC-4) | ✅ | `8484260` | `entity_sql` → `core/`, 4 Importer, 0 Restverweise |
+| WP-13 (GIT-8) | ✅ | `d3d9e5e` | PR-Template mit DoD-Nachweis |
+| WP-14 | offen | – | Folge-Backlog (DSN-1…6, CODE-1/2, FE-7/8, OSS-1/3, GIT-9, WC-11, TST-1) — je eigener PR |
+
+**End-DoD (lokal = CI, 2026-07-20):** Python `ruff check` / `ruff format --check` /
+`mypy` clean (334 Dateien), **1155 pytest passed, Coverage 89,74 %** (Gate 85, +9 neue
+Security-Tests); Web `lint` 0 Errors / `tsc -b` clean / `build` clean, **912 Vitest,
+Branches 81,07 %** (Floor 79); `license:check` beidseitig grün mit gehärteter Liste.
+
+**Neue Folge-Befunde aus der Umsetzung:** keine. Nebenfund (toter Bundle-Assert-Marker)
+wurde direkt in WP-5 mitbehoben. AgentDB-Seite: Norm-Drift des Warm-Citrus-Playbooks
+(WC-1…3) als `outdated`-Feedback an die Kuration gemeldet (kein Repo-Gegenstand).
