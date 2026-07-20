@@ -16,6 +16,7 @@ coverage/
 # Node / React
 node_modules/
 dist/
+dist-cloud/
 build/
 *.local
 *.tsbuildinfo

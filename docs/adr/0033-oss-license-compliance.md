@@ -52,7 +52,7 @@ integriert (keine neuen Runner — Actions-Minuten schonen):
 
 ```
 uv run --with pip-licenses python -m piplicenses --partial-match \
-  --fail-on "GPL;AGPL;LGPL;SSPL;CDDL;EPL;EUPL;OSL;CPL;NPL;Sleepycat;UNKNOWN"
+  --fail-on "GPL;AGPL;LGPL;SSPL;CDDL;EPL;EUPL;OSL;CPL;CPAL;NPL;Sleepycat;UNKNOWN"
 ```
 
 `--partial-match` faengt Schreibvarianten der GPL-Familie; `UNKNOWN` faengt Deps
@@ -65,7 +65,7 @@ reproduzierbar via Lockfile):
 
 ```
 license-checker-rseidelsohn --production --excludePrivatePackages \
-  --failOn "GPL;LGPL;AGPL;SSPL;CDDL;EPL;EUPL;OSL;CPAL;NPL;Sleepycat"
+  --failOn "GPL;LGPL;AGPL;SSPL;CDDL;EPL;EUPL;OSL;CPAL;CPL;NPL;Sleepycat;UNKNOWN"
 ```
 
 `--production` prueft nur den ausgelieferten Bundle-Anteil; `--excludePrivatePackages`

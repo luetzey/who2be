@@ -30,6 +30,9 @@
 #   ~ api      — WHO2BE_EDITION=cloud, APP_DATABASE_URL (who2be_app, RLS aktiv),
 #                RATE_LIMIT_STORAGE_URI=redis://…, Mollie-Env, SUPABASE_SERVICE_KEY,
 #                WEB_BASE_URL; baut das runtime-cloud-Image.
+#   ~ web      — Build-Arg VITE_WHO2BE_EDITION=cloud: die Billing-UI ist
+#                Compile-Time tree-geshaked (ADR-0029), das GHCR-On-Prem-Image
+#                enthaelt sie nicht — die Cloud braucht ein eigenes Web-Bundle.
 #
 # Supabase-seitig (separater Stack) fuer echte Cloud-Paritaet zusaetzlich setzen:
 #   GOTRUE_MAILER_AUTOCONFIRM=false + echter SMTP-Provider (siehe
@@ -75,6 +78,16 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+
+  # Cloud-Web-Bundle: VITE_* wirkt zur Compile-Zeit (Vite) — das On-Prem-Image
+  # aus GHCR hat die Billing-UI tree-geshaked (ADR-0029). pull_policy=build
+  # erzwingt den lokalen Cloud-Build statt eines (on-prem) GHCR-Pulls, analog
+  # zu migrate/api oben.
+  web:
+    build:
+      args:
+        VITE_WHO2BE_EDITION: cloud
+    pull_policy: build
 
   redis:
     image: redis:7-alpine

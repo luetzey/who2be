@@ -18,8 +18,9 @@ Reise: **Signup → Verify-Mail (Mailpit) → Login → Pro-Entitlement
 
 ## Beide Editionen lokal testbar — Run-Modi
 
-Genau ein Image, zwei Run-Modi (12-Factor III). Die Edition wird zur Laufzeit
-ueber das Overlay umgeschaltet, nicht ueber den Build.
+Genau ein API-Image, zwei Run-Modi (12-Factor III). Backend-seitig wird die
+Edition zur Laufzeit ueber das Overlay umgeschaltet, nicht ueber den Build.
+Einzige Compile-Time-Ausnahme ist das **Web-Bundle** (Fussnote ¹ unten).
 
 | Modus              | Befehl                                                                                                  |
 |--------------------|---------------------------------------------------------------------------------------------------------|
@@ -31,11 +32,21 @@ ueber das Overlay umgeschaltet, nicht ueber den Build.
 | `WHO2BE_EDITION`        | `onprem`                         | `cloud`                                      |
 | DB-Rolle der API        | Owner (`postgres`) — RLS-Bypass  | `who2be_app` — **RLS aktiv**                 |
 | MCP-Quota / Rate        | unbegrenzt (`OSS_ENTITLEMENT`)   | **erzwungen** (429 bei Ueberschreiten)       |
-| Billing-UI / Endpoints  | versteckt (404 / Feature-Flag)   | sichtbar (`/v1/billing/...`)                 |
+| Billing-UI / Endpoints  | versteckt (404 / Feature-Flag)   | sichtbar (`/v1/billing/...`) ¹               |
 | Mail (Verify/Invite)    | `GOTRUE_MAILER_AUTOCONFIRM=true` | Mailpit, **Confirm-Pflicht**                 |
 | Downgrade-Enforcement   | n/a                              | greift (Free-Limits, gated Features blockt)  |
 | Rate-Limit-Storage      | in-memory                        | Redis (`redis://redis:6379`)                 |
 | Mollie-Test             | n/a                              | optional (`MOLLIE_API_KEY`), s. §4 Variante B |
+
+> ¹ Die Billing-**UI** ist Compile-Time (ADR-0029): sichtbar wird sie nur mit
+> dem **Cloud-Web-Bundle**, d. h. das `web`-Image muss mit dem Build-Arg
+> `VITE_WHO2BE_EDITION=cloud` gebaut sein. Lokal dafuer `VITE_WHO2BE_EDITION=cloud`
+> in die `.env` setzen (siehe §1) und mit `--build` neu bauen — ein zuvor
+> gebautes On-Prem-Web-Image zeigt die Billing-UI nicht. Die
+> `/v1/billing/...`-Endpoints der API funktionieren davon unabhaengig
+> (Laufzeit-Schalter `WHO2BE_EDITION` aus dem Overlay). Im Hetzner-Deploy pinnt
+> das Cloud-Overlay (`deploy/hetzner/who2be/docker-compose.cloud.yml`) das
+> Build-Arg fuer den `web`-Service selbst.
 
 Diese Datei beschreibt den **Cloud**-Modus. Fuer einen klassischen Dev-Lauf
 (On-Prem) reicht `docker compose up -d --build --wait` — siehe
@@ -67,13 +78,17 @@ Im `.env` die cloud-local-Sektion entkommentieren/setzen (siehe
 ```dotenv
 APP_DB_PASSWORD=who2be_app_local_pw          # frei waehlbar (lokal)
 
+# Cloud-Web-Bundle (Fussnote ¹): Billing-UI in den Web-Build compilen.
+VITE_WHO2BE_EDITION=cloud
+
 # Optional (nur Variante B, §4): Test-Key freigeben, sonst leer lassen.
 # MOLLIE_API_KEY=test_xxxxxxxxxxxxxxxxxxxxxxxx
 # Nur wenn du den Webhook-Pull live testen willst:
 # MOLLIE_WEBHOOK_URL=https://<tunnel-host>/v1/billing/mollie/webhook
 ```
 
-`JWT_SECRET` / `VITE_*` bleiben auf den Defaults (passen zum Compose-Stack).
+`JWT_SECRET` und die uebrigen `VITE_*` bleiben auf den Defaults (passen zum
+Compose-Stack).
 
 > `MOLLIE_API_KEY` ist **optional**. Der Cloud-Stack bootet ohne Key; nur die
 > Mollie-Checkout/-Webhook-Pfade sind dann 503 (Variante B). Variante A nutzt

@@ -88,6 +88,15 @@ services:
       mailpit:
         condition: service_healthy
 
+  # Cloud-Web-Bundle erzwingen (DEP-1-Analogon zum Hetzner-Overlay): das
+  # Basis-Compose defaultet das Build-Arg auf onprem; im Cloud-Stack MUSS die
+  # Billing-UI im Bundle sein — unabhaengig davon, ob die .env die Var setzt.
+  web:
+    build:
+      args:
+        VITE_WHO2BE_EDITION: cloud
+    pull_policy: build
+
   api:
     environment:
       # Cloud-Edition scharf: Limits + Billing-Adapter aktiv (config.py:edition).
