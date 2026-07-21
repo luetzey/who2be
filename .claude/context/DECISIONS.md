@@ -366,3 +366,17 @@ bleiben)._
   `apps/api/**/services/` — Fehler als Domain-Exception, SQL übers
   Repository. Bestand bleibt bis zur Owner-Entscheidung unangetastet;
   Leitplanke ist auch in `CLAUDE.md` §Code-Style verankert.
+
+## 2026-07-21 — Builder erhält `external_tool_write` (Content-Stand 11)
+- **Entscheidung:** Die kanonische Builder-Policy trägt `external_tool_write`
+  (ADR-0043): External-Tool-Bindungen anlegen/pflegen ist Verwaltungs-Arbeit
+  des Meta-Agenten; via `is_within` kann er das Recht damit auch gezielt an
+  Fach-Agenten vergeben. Verteilung über den Start-Sync (keine
+  Spiegel-Migration, Konvention seit 0057). Dazu: sechstes Builder-Playbook
+  „External Tool anlegen & pflegen" + External-Tools-Sektion in den
+  Agent-Bau-Konventionen; der Playbook-Insert-missing-Zweig des Syncs setzt
+  jetzt auch den `playbook_resource_link` auf die Konventions-Resource
+  (Lücke: bei vorhandener Resource lief der Link-Zweig nie).
+- **Verworfen:** MCP-Tools für Memory-Triage/-Guard (bewusst UI-only — die
+  Pending-Schleuse ist die Human-in-the-loop-Grenze, ADR-0044);
+  `memory_mode='auto'` für den Builder (Kurator-Prinzip).

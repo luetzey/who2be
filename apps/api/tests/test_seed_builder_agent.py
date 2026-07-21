@@ -51,6 +51,7 @@ _BUILDER_PLAYBOOK_NAMES = [
     "Agent anlegen & pflegen",
     "Konsistenz- & Drift-Check",
     "Library-Pflege & Feedback-Lauf",
+    "External Tool anlegen & pflegen",
 ]
 
 
@@ -157,6 +158,7 @@ def test_builder_agent_seeded_complete() -> None:
                 "       (a.tool_policy ->> 'resource_write')::boolean AS resource_write, "
                 "       (a.tool_policy ->> 'agent_write')::boolean AS agent_write, "
                 "       (a.tool_policy ->> 'feedback_resolve')::boolean AS feedback_resolve, "
+                "       (a.tool_policy ->> 'external_tool_write')::boolean AS external_tool_write, "
                 "       (a.tool_policy ->> 'promote_retire')::boolean AS promote_retire "
                 "FROM agent a "
                 "WHERE a.workspace_id = $1 AND a.name = 'Builder'",
@@ -164,6 +166,11 @@ def test_builder_agent_seeded_complete() -> None:
             )
             lite_feedback_resolve = await conn.fetchval(
                 "SELECT (tool_policy ->> 'feedback_resolve')::boolean "
+                "FROM agent WHERE workspace_id = $1 AND name = 'Builder-Lite'",
+                workspace_id,
+            )
+            lite_external_tool_write = await conn.fetchval(
+                "SELECT (tool_policy ->> 'external_tool_write')::boolean "
                 "FROM agent WHERE workspace_id = $1 AND name = 'Builder-Lite'",
                 workspace_id,
             )
@@ -192,8 +199,10 @@ def test_builder_agent_seeded_complete() -> None:
                 "resource_write": agent["resource_write"] if agent else None,
                 "agent_write": agent["agent_write"] if agent else None,
                 "feedback_resolve": agent["feedback_resolve"] if agent else None,
+                "external_tool_write": agent["external_tool_write"] if agent else None,
                 "promote_retire": agent["promote_retire"] if agent else None,
                 "lite_feedback_resolve": lite_feedback_resolve,
+                "lite_external_tool_write": lite_external_tool_write,
             }
         finally:
             await conn.close()
@@ -215,19 +224,19 @@ def test_builder_agent_seeded_complete() -> None:
         assert defaults[0]["name"] == "Architekt"
         assert defaults[0]["trigger"] is None, "Der Default-Modus traegt keinen Trigger."
 
-        assert data["playbooks_active"] == 5, "Es fehlen aktive Builder-Playbooks."
-        assert data["links"] == 5, "Persona<->Playbook-Links unvollstaendig."
+        assert data["playbooks_active"] == 6, "Es fehlen aktive Builder-Playbooks."
+        assert data["links"] == 6, "Persona<->Playbook-Links unvollstaendig."
         assert data["template_status"] == "active"
 
         # Managed-Resource „Agent-Bau-Konventionen": v1 active, verwaltet und
-        # von allen fuenf Builder-Playbooks als Volldokument referenziert.
+        # von allen sechs Builder-Playbooks als Volldokument referenziert.
         assert data["resource_present"] is True, "Managed-Resource wurde nicht geseedet."
         assert data["resource_managed"] is True
         assert data["resource_stamp"] == BUILDER_CONTENT_VERSION
         assert data["resource_v1_status"] == "active"
         assert data["resource_locale"] == "de"
-        assert data["resource_link_scopes"] == ["resource"] * 5, data["resource_link_scopes"]
-        assert data["resource_link_block_ids"] == [None] * 5
+        assert data["resource_link_scopes"] == ["resource"] * 6, data["resource_link_scopes"]
+        assert data["resource_link_block_ids"] == [None] * 6
 
         assert data["agent_present"] is True, "Agent 'Builder' wurde nicht geseedet."
         assert data["agent_status"] == "enabled"
@@ -243,6 +252,10 @@ def test_builder_agent_seeded_complete() -> None:
         # Meta-Agenten — beide frisch geseedeten Builder tragen sie.
         assert data["feedback_resolve"] is True
         assert data["lite_feedback_resolve"] is True
+        # Content-Stand 11: External-Tool-Schreibrecht (ADR-0043) — beide
+        # Builder koennen Bindungen anlegen/pflegen und via is_within vergeben.
+        assert data["external_tool_write"] is True
+        assert data["lite_external_tool_write"] is True
     finally:
         cleanup_workspaces([owner])
 
@@ -308,11 +321,11 @@ def test_builder_seed_idempotent() -> None:
     try:
         counts = asyncio.run(_counts(ws))
         assert counts["personas"] == 1, "Persona dupliziert."
-        assert counts["playbooks"] == 5, "Playbooks dupliziert."
-        assert counts["links"] == 5, "Links dupliziert."
+        assert counts["playbooks"] == 6, "Playbooks dupliziert."
+        assert counts["links"] == 6, "Links dupliziert."
         assert counts["agents"] == 1, "Agent dupliziert."
         assert counts["resources"] == 1, "Managed-Resource dupliziert."
-        assert counts["resource_links"] == 5, "playbook_resource_links dupliziert."
+        assert counts["resource_links"] == 6, "playbook_resource_links dupliziert."
     finally:
         cleanup_workspaces([owner])
 

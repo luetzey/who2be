@@ -257,6 +257,70 @@
     "children": []
   },
   {
+    "id": "res-conv-h-exttool",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "External Tools (Tool-Bindungen)", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "res-conv-p-exttool-intro",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "External Tools (ADR-0043) sind versionierte, rein instruktive Bindungen an externe MCP-Server — die Single-Source fuer 'wann/wie nutzt ein Agent Tool X'. Referenziert werden sie ueber tool-ref-Pills (target_id = Alias), die fetch-time zur aktiven Version expandieren.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-exttool-alias",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Alias-Vertrag: ", "styles": {"bold": true}},
+      {"type": "text", "text": "der Alias ist eine FAEHIGKEITS-Kennung ('todo', 'calendar'), kein Produktname ('todoist') — er ist nach dem Create unveraenderlich und workspace-eindeutig (Slug 1-64, 409 bei Kollision). Das Produkt hinter dem Alias ist wechselbar, der Alias nicht.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-exttool-instruktiv",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Instruktiv-Grenze: ", "styles": {"bold": true}},
+      {"type": "text", "text": "der Content beschreibt (display_name, mcp_server_name, tool_names, usage_notes, fallback_note) — NIEMALS Server-URLs, Credentials, API-Keys oder andere Secrets. Verbindungsdaten leben in der Agent-Runtime, nie in Who2Be (ADR-0043 Stufe B). Eine fallback_note gehoert dazu: was tut der Agent, wenn der Server fehlt.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-exttool-rebind",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Rebind-Muster: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Tool-Wechsel = Content der bestehenden Bindung tauschen (update → neue Draft → promoten), Alias behalten. NIE eine zweite Bindung fuer dieselbe Faehigkeit anlegen — das hinterlaesst verwaiste Pills und zwei konkurrierende Aliasse.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-exttool-pills",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "tool-ref statt Freitext: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Tool-Anweisungen in Playbooks/Personas/Templates immer als tool-ref-Pill referenzieren, nie als Prosa duplizieren (Drift-Risiko). Kein aktives Tool hinter dem Alias → die Pill rendert als Miss; vor dem Setzen via get_external_tool(alias) pruefen.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-exttool-policy",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Policy-Vergabe: ", "styles": {"bold": true}},
+      {"type": "text", "text": "external_tool_write nur an Agenten vergeben, die Bindungen wirklich selbst pflegen muessen (is_within: nur vergebbar, wenn man es selbst traegt) — im Zweifel lesen Fach-Agenten nur (external_tool_read 'all'; 'none' blendet die Tools aus, 'assigned' faellt auf 'all' zurueck, da External Tools ein flacher Workspace-Katalog ohne Zuordnung sind).", "styles": {}}
+    ],
+    "children": []
+  },
+  {
     "id": "res-conv-h-status",
     "type": "heading",
     "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},

@@ -1,0 +1,149 @@
+[
+  {
+    "id": "pb-exttool-h-zweck",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Zweck", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-p-zweck",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "CRUD-Workflow fuer External-Tool-Bindungen (ADR-0043): versionierte, REIN INSTRUKTIVE Bindungen an externe MCP-Server (z. B. Todo-App, Kalender) — sie beschreiben, wann und wie ein Agent ein externes Tool nutzt, sie verbinden nichts. Drei Modi: Create (neue Bindung), Update/Rebind (Inhalt aendern oder das konkrete Tool hinter dem Alias wechseln), Retire (deaktivieren). Geschrieben wird ausschliesslich ueber die Who2Be-MCP-Write-Tools; der Draft→active-Workflow bleibt serverseitig.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-h-trigger",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Trigger-Stichworte", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-p-trigger",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "External Tool anlegen; External Tool pflegen; Tool-Bindung anlegen; Tool-Bindung pflegen; Tool anbinden; Tool wechseln; tool-ref einsetzen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-h-prozedur",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Prozedur", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-p-modus",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Erkenne zuerst den Modus: Create, wenn eine Faehigkeit noch keine Bindung hat; Update/Rebind, wenn eine bestehende Bindung geaendert oder das Tool dahinter gewechselt wird; Retire, wenn eine Bindung ausser Betrieb geht. Lies vorher IMMER list_external_tools() bzw. get_external_tool(alias) — der Alias ist per UUID ODER Faehigkeits-Alias aufloesbar.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-li-1",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Create — Verstehen: Klaere die FAEHIGKEIT (was soll der Agent koennen: Todos verwalten, Termine lesen, ...), das konkrete Tool (Produktname), den MCP-Server-Namen in der Runtime und die relevanten Tool-Bezeichner. Waehle den Alias als Faehigkeits-Kennung, NICHT als Produktname ('todo' statt 'todoist') — der Alias ist nach dem Create unveraenderlich, das Produkt dahinter bleibt wechselbar. Slug-Regeln: alphanumerisch/Bindestrich/Unterstrich, 1-64 Zeichen, workspace-eindeutig (409 bei Kollision).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-li-2",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Create — Schreiben: create_external_tool(data) mit name, alias und content: display_name (Anzeigename des konkreten Tools), mcp_server_name (Connector-Name in der Runtime), tool_names (relevante MCP-Tool-Bezeichner), usage_notes (stringifiziertes BlockNote-Dokument: wann/wie nutzen, Do/Don't) und fallback_note (Verhalten, wenn der Server fehlt oder nicht verbunden ist). Es entsteht eine Draft-Version 1.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-li-3",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Update/Rebind: update_external_tool(tool_id, data) — ein PUT auf eine aktive Version erzeugt eine neue Draft (409, solange schon eine Draft offen ist). Tool-Wechsel (z. B. Todoist → Things 3) heisst: Content tauschen, Alias behalten — alle tool-ref-Pills bleiben gueltig, kein einziges Playbook-/Persona-Edit noetig. Genau dafuer existiert das Aggregat.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-li-4",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Einsetzen: Referenziere die Bindung in Playbook-, Persona-, Resource- oder Template-Bodies ueber den tool-ref-Placeholder: {\"type\": \"placeholder\", \"props\": {\"kind\": \"tool-ref\", \"target_id\": \"<alias>\", \"label\": \"Tool: <Anzeigename>\"}} als Inline-Element im content-Array eines Blocks. Er expandiert fetch-time zur jeweils AKTIVEN Bindung; ohne aktive Version rendert er als unaufgeloester Platzhalter (Miss). Pruefe Nutzungshinweise + Fallback vorher via get_external_tool(alias).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-li-5",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Status: transition_external_tool(tool_id, version, to) folgt draft→review→active→inactive. Erst 'active' macht die Bindung fuer tool-ref-Expansion und die Agent-Reads sichtbar (Agents filtern auf status='active'). Promote/Retire (→active/→inactive) verlangt serverseitig Admin-Recht bzw. promote_retire. restore_external_tool(tool_id, version) stellt eine aeltere Version non-destruktiv als neue Draft wieder her.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-li-6",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Policy-Vergabe: Soll ein Fach-Agent Bindungen selbst pflegen, setze via update_agent dessen tool_policy.external_tool_write=true (is_within: du kannst nur vergeben, was du selbst traegst). Lese-Sichtbarkeit steuert external_tool_read (all/none; 'assigned' faellt auf 'all' zurueck — External Tools sind ein flacher Workspace-Katalog ohne Zuordnung). Im Zweifel: Fach-Agenten lesen nur, Schreiben bleibt beim Builder.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-li-konv",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Konventionen: Alias-Vertrag, Instruktiv-Grenze, Rebind-Muster und tool-ref-Regeln stehen verbindlich in der Resource 'Agent-Bau-Konventionen' (Sektion External Tools). Sie ist als lazy-Pointer verlinkt und kommt NICHT automatisch mit — vor dem Schreiben per fetch_resource nachladen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-h-anti",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Anti-Patterns", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-li-a1",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Produktname als Alias ('todoist' statt 'todo') — der Alias ueberlebt den Tool-Wechsel nicht sinnvoll. Alias nachtraeglich aendern wollen (unveraenderlich; bei wirklich falschem Alias: neue Bindung anlegen, alte retiren, Pills umziehen).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-li-a2",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Server-URLs, Credentials, API-Keys oder andere Secrets in usage_notes/fallback_note ablegen — die Bindung ist rein instruktiv (ADR-0043 Stufe B); Verbindungsdaten leben in der Agent-Runtime, nie in Who2Be.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-li-a3",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Tool-Anweisungen als Freitext in Playbooks/Personas duplizieren statt tool-ref-Pill zu setzen (Drift-Risiko — genau das loest das Aggregat). Beim Tool-Wechsel eine NEUE Bindung anlegen statt zu rebinden (hinterlaesst verwaiste Pills und zwei konkurrierende Aliasse fuer eine Faehigkeit).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-h-handoff",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Hand-Off", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-p-handoff",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Nenne nach dem Schreiben: Alias + Anzeigename, Versions-Status (Draft/Review/active) und den naechsten Schritt (Review/Aktivierung — selbst promoten nur nach expliziter Freigabe). Zeige, wo die Bindung eingesetzt wird oder werden soll (tool-ref-Pills), und ob Fach-Agenten Policy-Aenderungen brauchen.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-h-feedback",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Feedback", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-p-feedback",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Faellt dir beim Lesen bestehender Bindungen Veraltetes oder Falsches auf (z. B. tote Tool-Bezeichner nach einem Server-Update), melde es via submit_feedback (signal outdated/incorrect/unclear) statt es stillschweigend zu uebergehen; genutzte Playbooks/Resources via record_usage (applied/skipped/error).", "styles": {}}],
+    "children": []
+  }
+]

@@ -377,7 +377,11 @@ _AGENT_BUILDER_LITE_TEMPLATE_SLUG = "agent-builder-lite"
 # v10: Builder-Gedaechtnis aktiviert — `memory_mode='suggest'` +
 # `memory_directive='recommended'` in der Builder-Policy (Kurations-Stufe,
 # ADR-0044; der Policy-Sync verteilt das an alle Bestands-Builder).
-BUILDER_CONTENT_VERSION = 10
+# v11: External Tools (ADR-0043) fuer den Builder — `external_tool_write=True`
+# in der Policy (damit via `is_within` auch an Fach-Agenten vergebbar), neues
+# Playbook „External Tool anlegen & pflegen" + External-Tools-Sektion in den
+# Agent-Bau-Konventionen.
+BUILDER_CONTENT_VERSION = 11
 
 _BUILDER_PERSONA_DESCRIPTION = (
     "Meta-Agent, der Personas, Playbooks, Resources und Agenten im Workspace "
@@ -452,6 +456,17 @@ _BUILDER_PLAYBOOKS: tuple[tuple[str, str, str, tuple[str, ...], str, str], ...] 
         "triagieren, Zusammenhaenge und Luecken pruefen, Fixes nach Freigabe als "
         "Drafts umsetzen.",
         "builder_playbook_maintenance_body.json",
+    ),
+    (
+        "External Tool anlegen & pflegen",
+        "workflow",
+        "external tool anlegen, external tool pflegen, tool-bindung anlegen, "
+        "tool-bindung pflegen, tool anbinden, tool wechseln, tool-ref",
+        ("external-tool", "crud", "agent-building"),
+        "External-Tool-Bindungen (ADR-0043) anlegen, pflegen und rebinden — "
+        "Alias-Vertrag, instruktiver Content, tool-ref-Pills und Policy-Vergabe "
+        "an Fach-Agenten.",
+        "builder_playbook_external_tool_body.json",
     ),
 )
 
@@ -549,6 +564,11 @@ def _builder_tool_policy() -> dict[str, object]:
     Kurator-Prinzip; bewusst NICHT `auto`). Nebeneffekt via `is_within`: der
     Builder darf damit anderen Agenten das Gedaechtnis bis maximal `suggest`
     freischalten — `auto` bleibt eine Menschen-Entscheidung.
+
+    `external_tool_write=True` (Content-Stand 11, ADR-0043): External-Tool-
+    Bindungen anlegen/pflegen ist Verwaltungs-Arbeit des Meta-Agenten; via
+    `is_within` kann er das Recht damit auch gezielt an Fach-Agenten vergeben.
+    Memory-Kuration (Triage/Guard) bleibt bewusst ausserhalb — UI-only.
     """
     return AgentToolPolicy(
         playbook_read=ReadScope.all,
@@ -561,6 +581,7 @@ def _builder_tool_policy() -> dict[str, object]:
         system_prompt_write=True,
         feedback_resolve=True,
         promote_retire=True,
+        external_tool_write=True,
         memory_mode=MemoryMode.suggest,
         memory_directive=MemoryDirective.recommended,
     ).model_dump(mode="json")
@@ -915,6 +936,23 @@ async def sync_managed_builder_content(conn: asyncpg.Connection) -> int:
                 playbook_id,
                 prow["workspace_id"],
                 prow["owner_id"],
+            )
+            # Konventions-Link auch fuer nachgeruestete Playbooks: der
+            # Resource-Insert-missing-Zweig unten verlinkt ALLE Builder-
+            # Playbooks nur, wenn die Resource selbst noch fehlt — in
+            # Bestands-Workspaces (Resource seit Content-Stand 5 vorhanden)
+            # bekaeme ein neues Playbook sonst nie seinen lazy-Pointer.
+            await conn.execute(
+                "INSERT INTO playbook_resource_link "
+                "(playbook_id, resource_id, block_id, workspace_id, owner_id, "
+                " position, link_scope) "
+                "SELECT $1, r.id, NULL, $2, $3, 0, 'resource' "
+                "FROM resource r WHERE r.workspace_id = $2 AND r.name = $4 "
+                "ON CONFLICT DO NOTHING",
+                playbook_id,
+                prow["workspace_id"],
+                prow["owner_id"],
+                _BUILDER_RESOURCE_NAME,
             )
             updated += 1
 

@@ -204,6 +204,7 @@ def test_sync_restores_outdated_builder() -> None:
             agent_rows = await conn.fetch(
                 "SELECT name, managed_content_version, "
                 "  (tool_policy ->> 'feedback_resolve')::boolean AS feedback_resolve, "
+                "  (tool_policy ->> 'external_tool_write')::boolean AS external_tool_write, "
                 "  tool_policy ->> 'memory_mode' AS memory_mode, "
                 "  tool_policy ->> 'memory_directive' AS memory_directive "
                 "FROM agent WHERE workspace_id = $1 AND is_managed = true "
@@ -233,9 +234,9 @@ def test_sync_restores_outdated_builder() -> None:
     finally:
         cleanup_workspaces([owner])
 
-    # 11 Aggregate aktualisiert (Persona + 2 Templates + 5 Playbooks + 1 Resource
+    # 12 Aggregate aktualisiert (Persona + 2 Templates + 6 Playbooks + 1 Resource
     # + 2 Agenten seit Content-Stand 6); zweiter Lauf 0.
-    assert res["first"] == 11, res["first"]
+    assert res["first"] == 12, res["first"]
     assert res["second"] == 0, "Sync muss idempotent sein (Stempel-Guard)."
     assert res["persona_stamp"] == BUILDER_CONTENT_VERSION
     # Content-Stand 6: die kanonische Policy (inkl. feedback_resolve) und der
@@ -247,6 +248,9 @@ def test_sync_restores_outdated_builder() -> None:
         # (suggest + recommended) erreicht Bestands-Builder via Policy-Sync.
         assert agent["memory_mode"] == "suggest", agent
         assert agent["memory_directive"] == "recommended", agent
+        # Content-Stand 11: External-Tool-Schreibrecht (ADR-0043) kommt via
+        # Policy-Sync auf Bestands-Buildern an.
+        assert agent["external_tool_write"] is True, agent
         assert agent["managed_content_version"] == BUILDER_CONTENT_VERSION, agent
     # Kanonischer Inhalt wiederhergestellt (Feedback-Bullets aus den Sidecars).
     assert "bp-li-allowed-fb" in res["persona_block_ids"]
@@ -256,12 +260,17 @@ def test_sync_restores_outdated_builder() -> None:
     # Content-Stand 5: Resource-Inhalt + Tags wiederhergestellt und gestempelt.
     assert res["resource_stamp"] == BUILDER_CONTENT_VERSION
     assert "res-conv-h-trigger" in res["resource_block_ids"]
+    # Content-Stand 11: External-Tools-Sektion in den Konventionen.
+    assert "res-conv-h-exttool" in res["resource_block_ids"]
     assert res["resource_tags"] == ["konventionen", "agent-building", "meta"]
-    # Die vier klassischen Playbooks tragen die 0056-Feedback-Sektion; das
-    # Pflege-Playbook (Content-Stand 4) hat eine eigene Feedback-Sektion.
+    # Die vier klassischen Playbooks tragen die 0056-Feedback-Sektion; Pflege-
+    # (Content-Stand 4) und External-Tool-Playbook (Content-Stand 11) haben
+    # eigene Feedback-Sektionen.
     for name, ids in res["playbook_body_idsets"].items():
         if name == "Library-Pflege & Feedback-Lauf":
             assert "pb-maint-h-feedback" in ids
+        elif name == "External Tool anlegen & pflegen":
+            assert "pb-exttool-h-feedback" in ids
         else:
             assert "pb-feedback-h" in ids, name
     # WP-A (Content-Stand 3): die neuen Builder-Befaehigungs-Sektionen sind
@@ -280,6 +289,8 @@ def test_sync_restores_outdated_builder() -> None:
     assert "pb-check-ol-template" in all_playbook_ids
     # Content-Stand 4: Pflege-Playbook mit dabei (Zweck-Sektion aus dem Sidecar).
     assert "pb-maint-h-zweck" in all_playbook_ids
+    # Content-Stand 11: External-Tool-Playbook mit dabei.
+    assert "pb-exttool-h-zweck" in all_playbook_ids
 
 
 @pytest.mark.integration
@@ -329,11 +340,20 @@ def test_sync_inserts_missing_playbook_in_existing_workspace() -> None:
                 ws,
                 row["id"] if row else None,
             )
+            resource_link = await conn.fetchval(
+                "SELECT count(*) FROM playbook_resource_link prl "
+                "JOIN resource r ON r.id = prl.resource_id "
+                "WHERE prl.workspace_id = $1 AND prl.playbook_id = $2 "
+                "AND r.name = 'Agent-Bau-Konventionen' AND prl.link_scope = 'resource'",
+                ws,
+                row["id"] if row else None,
+            )
             return {
                 "first": first,
                 "second": second,
                 "row": dict(row) if row else None,
                 "link": link,
+                "resource_link": resource_link,
             }
         finally:
             await conn.close()
@@ -358,6 +378,10 @@ def test_sync_inserts_missing_playbook_in_existing_workspace() -> None:
     assert row["locale"] == "de"
     assert "pb-maint-h-zweck" in {b["id"] for b in json.loads(row["body"])}
     assert res["link"] == 1, "persona_playbook-Link zur Builder-Persona fehlt."
+    # Nachgeruestete Playbooks bekommen den lazy-Pointer auf die Konventions-
+    # Resource direkt im Insert-missing (der Resource-Zweig laeuft in
+    # Bestands-Workspaces mit vorhandener Resource nicht mehr).
+    assert res["resource_link"] == 1, "playbook_resource_link auf die Konventionen fehlt."
 
 
 @pytest.mark.integration
@@ -421,7 +445,7 @@ def test_sync_inserts_missing_resource_in_existing_workspace() -> None:
     """Insert-missing (Content-Stand 5): ein v4-Bestands-Workspace (ohne die
     Managed-Resource) bekommt „Agent-Bau-Konventionen" per Sync nachgelegt —
     Row managed + gestempelt, v1 active (locale 'de', created_by = Owner der
-    Builder-Persona) und die fuenf `playbook_resource_link`s
+    Builder-Persona) und die sechs `playbook_resource_link`s
     (link_scope='resource') von allen Builder-Playbooks."""
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
@@ -494,7 +518,7 @@ def test_sync_inserts_missing_resource_in_existing_workspace() -> None:
     assert "res-conv-h-trigger" in {b["id"] for b in json.loads(row["blocks"])}
     assert json.loads(row["tags"]) == ["konventionen", "agent-building", "meta"]
     links = res["links"]
-    assert len(links) == 5, "Alle fuenf Builder-Playbooks muessen verlinkt sein."
+    assert len(links) == 6, "Alle sechs Builder-Playbooks muessen verlinkt sein."
     assert all(link["link_scope"] == "resource" for link in links)
     assert all(link["block_id"] is None for link in links)
     assert all(link["playbook_managed"] is True for link in links)
@@ -613,6 +637,7 @@ def test_sync_updates_agent_policy_of_existing_builder() -> None:
                 "  (tool_policy ->> 'feedback_resolve')::boolean AS feedback_resolve, "
                 "  (tool_policy ->> 'agent_write')::boolean AS agent_write, "
                 "  (tool_policy ->> 'promote_retire')::boolean AS promote_retire, "
+                "  (tool_policy ->> 'external_tool_write')::boolean AS external_tool_write, "
                 "  tool_policy ->> 'agent_read' AS agent_read "
                 "FROM agent WHERE workspace_id = $1 "
                 "AND name IN ('Builder', 'Builder-Lite') ORDER BY name",
@@ -643,4 +668,6 @@ def test_sync_updates_agent_policy_of_existing_builder() -> None:
         # Meta-Agent-Rechte bleiben erhalten.
         assert agent["agent_write"] is True, agent
         assert agent["promote_retire"] is True, agent
+        # Content-Stand 11: External-Tool-Schreibrecht (ADR-0043).
+        assert agent["external_tool_write"] is True, agent
         assert agent["agent_read"] == "all", agent
