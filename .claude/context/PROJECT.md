@@ -20,6 +20,8 @@ verwalten Zugriff mandantenfähig (Org → Workspace → Rollen).
 ## Pointer
 
 - Einstieg: [`../../README.md`](../../README.md), [`../../AGENTS.md`](../../AGENTS.md)
+- WAS/WARUM des aktiven Vorhabens: [`../../.github/PROJECT.md`](../../.github/PROJECT.md)
+  (Outcome, Why, Acceptance Criteria, Constraints, Out of Scope)
 - Architektur-Blueprint: [`../../docs/architecture.md`](../../docs/architecture.md)
 - Aktueller Stand: [`STATE.md`](STATE.md)
 

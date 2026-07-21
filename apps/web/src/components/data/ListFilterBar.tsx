@@ -271,7 +271,7 @@ export function ListFilterBar({
               aria-label={t('data:filter.agentChipRemove', { name: agentName })}
             >
               {t('data:filter.agentChip', { name: agentName })}
-              <X className="size-3" aria-hidden="true" />
+              <X className="size-4" aria-hidden="true" />
             </Button>
           </div>
         ) : null}
@@ -285,7 +285,7 @@ export function ListFilterBar({
               className="h-8 gap-1 px-2 text-xs"
               onClick={onReset}
             >
-              <X className="size-3" aria-hidden="true" />
+              <X className="size-4" aria-hidden="true" />
               {t('data:filter.reset')}
             </Button>
           </div>

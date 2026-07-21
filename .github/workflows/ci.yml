@@ -53,7 +53,7 @@ jobs:
         # python-Job bereits via `uv sync --group billing` installiert sind.
         run: >-
           uv run --with pip-licenses python -m piplicenses --partial-match
-          --fail-on "GPL;AGPL;LGPL;SSPL;CDDL;EPL;EUPL;OSL;CPL;NPL;Sleepycat;UNKNOWN"
+          --fail-on "GPL;AGPL;LGPL;SSPL;CDDL;EPL;EUPL;OSL;CPL;CPAL;NPL;Sleepycat;UNKNOWN"
       - name: Test (coverage ratchet + DB-Skip-Guard)
         # WHO2BE_REQUIRE_DB=1: ohne erreichbare DB bricht die Suite hart ab
         # (conftest.py, ADR-0041) — kein stilles "gruen durch Skip" mehr.
@@ -110,12 +110,30 @@ jobs:
         run: npm run build
       - name: Assert on-prem bundle excludes Billing-UI (ADR-0029)
         # Default-Build = On-Prem (kein VITE_WHO2BE_EDITION) → features/billing
-        # muss aus dem Bundle tree-geshaked sein. Marker: BillingPanel-CTA.
+        # muss aus dem Bundle tree-geshaked sein. Marker: BillingPanel-Strings
+        # aus features/billing/i18n.ts — identisches Set wie im Cloud-Positiv-
+        # Assert unten, damit Marker-Drift dort auffaellt (DEP-6).
         run: |
-          if grep -rlE "Jetzt upgraden|Monatsverbrauch" dist; then
+          if grep -rlE "Jetzt upgraden|MCP-Reads diesen Monat" dist; then
             echo "::error::Billing-UI ist ins On-Prem-Bundle gelangt"; exit 1
           fi
           echo "OK: Billing-UI nicht im On-Prem-Bundle."
+      - name: Build (cloud) + assert bundle includes Billing-UI (DEP-6)
+        # Gegenprobe zum On-Prem-Assert: mit VITE_WHO2BE_EDITION=cloud MUESSEN
+        # dieselben Marker im Bundle auftauchen — sonst ist das Negativ-Assert
+        # ein No-Op (stale Marker) oder das Cloud-Web-Bundle kaputt (DEP-1).
+        # `npx vite build` ohne `tsc -b` (Typecheck lief oben schon); eigenes
+        # outDir, damit das On-Prem-dist fuer Folge-Steps unangetastet bleibt.
+        env:
+          VITE_WHO2BE_EDITION: cloud
+        run: |
+          npx vite build --outDir dist-cloud
+          for marker in "Jetzt upgraden" "MCP-Reads diesen Monat"; do
+            if ! grep -rq "$marker" dist-cloud; then
+              echo "::error::Marker '$marker' fehlt im Cloud-Bundle"; exit 1
+            fi
+          done
+          echo "OK: Billing-UI im Cloud-Bundle."
 
   compose-smoke:
     runs-on: ubuntu-latest
@@ -127,6 +145,13 @@ jobs:
         run: docker compose up -d --build --wait --wait-timeout 240
       - name: Smoke
         run: bash scripts/smoke.sh
+      - name: Build runtime-cloud image (ADR-0029, build-only)
+        # Cloud-Profil-Gegenprobe (LIC-4): das Docker-Target `runtime-cloud`
+        # (inkl. who2be-billing) wurde in CI sonst nie gebaut — ein Bruch
+        # fiele erst beim Deploy auf. Kein Push, kein Start. Haengt an diesem
+        # Job, weil der Compose-Build oben den Layer-Cache der gemeinsamen
+        # Stages teilt (kein neuer Runner, Actions-Minuten schonen).
+        run: docker build --target runtime-cloud -f apps/api/Dockerfile .
       - name: Logs on failure
         if: failure()
         run: docker compose logs --no-color

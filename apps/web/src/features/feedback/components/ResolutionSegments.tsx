@@ -55,10 +55,10 @@ export function ResolutionSegments({ value, onChange, name, disabled }: Resoluti
             onClick={isOpen ? undefined : () => onChange(segment)}
             className={cn(
               'h-7 rounded-md px-2.5 text-xs font-medium',
+              // Aktives Segment hebt sich neutral (Surface + Shadow), nicht per
+              // Brand-Fill — Brand-Tinte bleibt CTAs vorbehalten (§2.2/§9.1).
               active
-                ? isOpen
-                  ? 'bg-card text-foreground shadow-card disabled:opacity-100'
-                  : 'bg-brand text-brand-foreground hover:bg-brand-hover'
+                ? 'bg-card text-foreground shadow-card disabled:opacity-100'
                 : 'text-muted-foreground hover:bg-transparent hover:text-foreground',
             )}
           >

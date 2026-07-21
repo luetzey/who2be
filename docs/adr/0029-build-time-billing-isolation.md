@@ -92,3 +92,14 @@ Laufzeit nur noch unter dem, was im Artefakt überhaupt vorhanden ist.
   App-Artefakts.
 - Nebenbefund (separat): der Cloud-**Read**-Adapter bleibt im On-Prem-Build; ohne
   Writer harmlos, optional später ebenfalls ausschließbar.
+
+## Nachtrag 2026-07-20
+
+Der Read-Endpunkt `GET …/billing/entitlement` ist bewusst **editionsneutral**
+(kein Cloud-Guard): On-Prem liefert er `edition='onprem'` samt aufgelöstem
+Entitlement. Die Zeile „unter Cloud-Guard" oben ist damit überholt.
+
+Außerdem baut/prüft CI seit 2026-07-20 tatsächlich beide Profile: der Web-Job
+ergänzt einen Cloud-Bundle-Build mit Positiv-Assert
+(`VITE_WHO2BE_EDITION=cloud`), und ein Build-only-Step baut das Docker-Target
+`runtime-cloud`.

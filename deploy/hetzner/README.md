@@ -247,8 +247,11 @@ manuell per `workflow_dispatch`):
      `ghcr.io/luetzey/who2be-{api,web,mcp}:<sha>` und `:latest`.
    - **Cloud-API** (Target `runtime-cloud`, MIT `who2be-billing`):
      `ghcr.io/luetzey/who2be-api-cloud:<sha>` und `:latest`. Eigenes Tag,
-     damit das On-Prem-`who2be-api`-Image **unangetastet** bleibt; `web`/`mcp`
-     haben keine Cloud-Variante.
+     damit das On-Prem-`who2be-api`-Image **unangetastet** bleibt. `mcp` hat
+     keine Cloud-Variante; das **Cloud-Web-Bundle** (Build-Arg
+     `VITE_WHO2BE_EDITION=cloud`, Billing-UI im Bundle — ADR-0029) wird nicht
+     als GHCR-Image gepusht, sondern vom Cloud-Overlay auf dem Host gebaut
+     (siehe unten).
 2. **`deploy`** ist conditional (`if: vars.DEPLOY_HOST != ''`): solange
    die Host-Konfig im Repo fehlt (C1 nicht fertig), ueberspringt der
    Job sich sauber. Sobald `DEPLOY_HOST` gesetzt ist, ruft er via SSH
@@ -260,12 +263,14 @@ manuell per `workflow_dispatch`):
      (`docker-compose.yml`), `docker compose pull api web migrate` + `up -d --wait`.
    - **Cloud** (`WHO2BE_EDITION=cloud`): **beide** `-f`-Files
      (`docker-compose.yml` + `docker-compose.cloud.yml`). Das Overlay (PR #181)
-     pinnt `pull_policy: build` + `target: runtime-cloud` fuer `api`+`migrate`,
-     also entsteht der Cloud-API-Build auf dem Host aus dem ausgecheckten SHA;
-     `web` wird aus GHCR gezogen. Das in CI gepushte `who2be-api-cloud:<sha>`
-     dient Paritaet/Verifikation und ist die SSoT, falls das Overlay spaeter auf
-     Pull umgestellt wird. Reihenfolge intern (Overlay): `migrate` →
-     `set-app-role-password` → `redis` → `api`.
+     pinnt `pull_policy: build` + `target: runtime-cloud` fuer `api`+`migrate`
+     sowie `pull_policy: build` + Build-Arg `VITE_WHO2BE_EDITION=cloud` fuer
+     `web` — Cloud-API **und** Cloud-Web-Bundle entstehen also auf dem Host aus
+     dem ausgecheckten SHA (das GHCR-`who2be-web` ist On-Prem, ohne Billing-UI).
+     Das in CI gepushte `who2be-api-cloud:<sha>` dient Paritaet/Verifikation
+     und ist die SSoT, falls das Overlay spaeter auf Pull umgestellt wird.
+     Reihenfolge intern (Overlay): `migrate` → `set-app-role-password` →
+     `redis` → `api`.
 
    Idempotenz/Rollback bleiben in beiden Editionen erhalten: erneuter Aufruf mit
    demselben (oder einem frueheren) SHA setzt die Tags neu und faehrt den Stack

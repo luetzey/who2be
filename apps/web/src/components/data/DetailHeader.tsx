@@ -42,7 +42,7 @@ export function DetailHeader({
   className,
 }: DetailHeaderProps) {
   return (
-    <div className={cn('flex flex-col gap-5', className)}>
+    <div className={cn('flex flex-col gap-4', className)}>
       {backHref !== undefined ? (
         <Button asChild variant="ghost" size="sm" className="w-fit gap-2 text-muted-foreground">
           <Link to={backHref}>

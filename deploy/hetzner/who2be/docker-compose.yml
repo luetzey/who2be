@@ -67,6 +67,9 @@ services:
         # Public-Signup in der UI ausblenden (true), gemeinsam mit dem
         # Backend-GOTRUE_DISABLE_SIGNUP setzen. Default false.
         VITE_WHO2BE_SIGNUP_DISABLED: ${VITE_WHO2BE_SIGNUP_DISABLED:-false}
+        # Edition des Web-Bundles (ADR-0029): onprem (Default) shaked die
+        # Billing-UI aus dem Bundle; das Cloud-Overlay pinnt hier `cloud`.
+        VITE_WHO2BE_EDITION: ${VITE_WHO2BE_EDITION:-onprem}
     networks: [app-net]
     restart: unless-stopped
     healthcheck:

@@ -11,6 +11,7 @@ from uuid import UUID
 import asyncpg
 from fastapi import APIRouter, Depends, Request, Response, status
 
+from who2be_api.core.agent_scope import require_external_tool_read
 from who2be_api.core.db import get_pool
 from who2be_api.core.locale import LocaleQuery
 from who2be_api.core.pagination import DEFAULT_LIMIT, PageCursor, PageLimit
@@ -26,6 +27,7 @@ from who2be_api.services.mcp_limit_service import enforce_mcp_read_limit
 from who2be_api.services.status_history_service import StatusHistoryService
 from who2be_api.services.version_status import VersionStatusService
 from who2be_models import (
+    AgentCapability,
     ExternalToolCreate,
     ExternalToolRead,
     ExternalToolUpdate,
@@ -127,15 +129,34 @@ async def export_external_tool(
     request: Request,
     tool_id: UUID,
     ctx: Ctx,
+    service: Service,
     export_service: ExportService,
     response: Response,
     format: Literal["json", "markdown"] = "json",
 ) -> ExportResult:
     """Einzel-Export des externen Tools als JSON (alle Versionen) oder Markdown
-    (aktive Version gerendert). Lesen ist fuer Viewer offen (kein require_role)."""
-    return await export_entity(
+    (aktive Version gerendert). Lesen ist fuer Viewer offen (kein require_role);
+    agent-gebundene Tokens laufen durch dasselbe Read-Gate wie get/list
+    (`external_tool_read='none'` -> 403, SEC-1). Ein `scope`-Set wie bei
+    Playbook/Resource gibt es nicht — `external_tool_read` kennt keine
+    `assigned`-Teilmenge (siehe `require_external_tool_read`)."""
+    require_external_tool_read(ctx)
+    # Draft-Sichtbarkeit wie get/list (`sees_drafts`): reine Konsum-Aufrufer
+    # sehen nur `active`. Der Vorab-`service.get` (active_only) liefert 404,
+    # wenn keine aktive Version existiert — so rendert der Markdown-Pfad nie
+    # eine Draft-/Review-Version (SEC-1).
+    sees_drafts = ctx.sees_drafts(AgentCapability.external_tool_write)
+    if not sees_drafts:
+        await service.get(ctx, tool_id)
+    result = await export_entity(
         export_service, ctx.workspace_id, "external_tool", tool_id, format, response
     )
+    if not sees_drafts and isinstance(result, dict):
+        # JSON-Bundle auf veroeffentlichte Versionen beschraenken — dasselbe
+        # `active_only`-Kriterium, das auch get/list anwenden.
+        item = result["external_tool"]
+        item["versions"] = [v for v in item["versions"] if v["status"] == "active"]
+    return result
 
 
 @router.patch("/{tool_id}/draft")

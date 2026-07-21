@@ -12,7 +12,7 @@
     "test": "vitest run",
     "test:a11y": "vitest run --testNamePattern a11y",
     "test:coverage": "vitest run --coverage",
-    "license:check": "license-checker-rseidelsohn --production --excludePrivatePackages --failOn \"GPL;LGPL;AGPL;SSPL;CDDL;EPL;EUPL;OSL;CPAL;NPL;Sleepycat\"",
+    "license:check": "license-checker-rseidelsohn --production --excludePrivatePackages --failOn \"GPL;LGPL;AGPL;SSPL;CDDL;EPL;EUPL;OSL;CPAL;CPL;NPL;Sleepycat;UNKNOWN\"",
     "e2e": "playwright test",
     "e2e:install": "playwright install --with-deps chromium"
   },

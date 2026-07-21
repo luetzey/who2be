@@ -16,9 +16,8 @@ Bei Konflikt zwischen Plan-Header und dieser Übersicht **gewinnt die Übersicht
 | `2026-05-27-1935_license-fsl-setup.md` | FSL-1.1-Apache-2.0 als Lizenzmodell — LICENSE.md/CONTRIBUTING liegen; CLA-Aktivierung offen (Owner) |
 | `2026-05-27-2028_public-switch-github-repo.md` | Repo privat → öffentlich; finaler Flip + GitHub-Settings beim Owner (siehe STATE.md §Nächste Schritte) |
 | `2026-05-28-0528_enterprise-license-management.md` | Code-Hooks-only; aktiviert bei erstem qualifizierten Lead |
-| `2026-07-09-1556_builder-agents-ui-improvements.md` | Builder-Befähigung (Placeholder/Modi/Sub-Playbooks) + Agent-Filter + UI-Polish (Git-Diff, Trigger-Pills, Playbooks-Liste, Persona-Sektion) — 6 WPs ✅ umgesetzt (PR #301) |
 
-## Blöcke seit 2026-05-30 (nachgeführt 2026-07-08)
+## Blöcke seit 2026-05-30 (nachgeführt 2026-07-20)
 
 Kompakte Status-Nachführung; Details + DoD-Belege in
 [`.claude/context/STATE.md`](../context/STATE.md). Status: ✅ erledigt,
@@ -46,10 +45,18 @@ Plan-Dateien unter dem ai-native-Plan + ADR-0038.
 | `2026-06-27-1200_ux-axes-improvements-grouping.md` | UX-Achsen-Analyse (Draft-Discard, Schnellfreigabe, Gruppierung) | 🔄 Backlog |
 | `2026-07-01-1200_mfa-login-step-up.md` | MFA-Login-Step-up (TOTP-Challenge im Web-Login) | ✅ |
 | `2026-07-02-1100_oauth-refresh-grace-window.md`, `2026-07-05-1200_oauth-refresh-reuse-no-chain-kill.md` | OAuth-Refresh-Fixes (Grace-Window; Reuse ohne Ketten-Revocation) + tools/list-Payload-Fix | ✅ |
+| `2026-07-09-1556_builder-agents-ui-improvements.md` | Builder-Befähigung (Placeholder/Modi/Sub-Playbooks) + Agent-Filter + UI-Polish (Git-Diff, Trigger-Pills, Playbooks-Liste, Persona-Sektion), 6 WPs | ✅ (PR #301) |
+| `2026-07-10-1524_mcp-per-agent-tool-filtering.md` | MCP `tools/list` pro Agent policy-gefiltert (ADR-0042, SSoT `tool_requirements`) | ✅ (PR #305) |
+| `2026-07-11-1200_playbooks-uiux-redesign.md` | Playbooks-UI/UX-Redesign (Karten-Übersicht, Detail-Tabs, ReviewBanner) | ✅ |
+| `2026-07-11-1500_dashboard-design-refresh.md`, `2026-07-12_design-refresh-corrections.md`, `2026-07-12_feedback-and-link-editors.md` | Design-Refresh Dashboard/System-Prompts/Agents/Resources/Feedback + Nachbesserungen; Link-Editoren + zentrales Feedback + Einzel-Feedback-Detail | ✅ (PR-Serie um #309/#310) |
+| `2026-07-18-1315_external-tools-tool-ref.md` | Externe Tools + `tool-ref`-Placeholder (ADR-0043) | ✅ (PR #316) |
+| `2026-07-18-1500_agent-memory.md` | Agent-Memory: Kurations-Schleuse, memory_mode, MCP-Tools, Laufzeit-Einbindung (ADR-0044) | ✅ (PR #324, Builder-Content v8: #325) |
+| `2026-07-19-0600_memory-placeholder.md` | Placeholder-Kind `memory` (ADR-0044-Addendum) | ✅ |
+| `2026-07-19-1030_memory-guard-config.md` | Injection-Wächter konfigurierbar (`memory_guard`, ADR-0044-Addendum 2) | ✅ (PR #329) |
 
-Offen außerhalb der Plan-Dateien: dedizierter Web-Coverage-PR (main-CI rot,
-Owner-Entscheidung 2026-07-05) und die Arbeitspakete aus
-`docs/standards-review-2026-07-08.md` (WP-1–9).
+Offen außerhalb der Plan-Dateien: Owner-Punkte aus
+`docs/standards-review-2026-07-20.md` §4 (v. a. Actions-Billing → CI-Gate tot
+seit 2026-07-19) sowie der dortige Folge-Backlog (WP-14).
 
 ## Phase 3 — UX-Polish (alle ✅ Done)
 

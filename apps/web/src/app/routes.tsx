@@ -15,7 +15,7 @@ import {
   SetPasswordPage,
   SignupPage,
 } from '@/features/auth'
-import { CookieConsentBanner, LegalLayout } from '@/features/legal'
+import { CookieConsentBanner, LegalLayout } from '@/features/legal/layout'
 
 import { AppLayout } from './AppLayout'
 

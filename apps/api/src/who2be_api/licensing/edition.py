@@ -1,9 +1,10 @@
 """Edition-Flag: Cloud vs. On-Prem (Plan §3.5/§3.6, Entscheidung #1).
 
-Ein unveraendertes Docker-Artefakt fuer beide Targets; der Unterschied liegt
-allein in `WHO2BE_EDITION` (12-Factor III). `is_cloud()` ist das einzige Gate,
-das Cloud-spezifische Adapter (Billing-Webhook, MCP-Limit) scharfschaltet —
-On-Prem/OSS laeuft unbegrenzt und ohne Billing.
+Ein Codebase, zwei Build-Profile (ADR-0029): `WHO2BE_EDITION` waehlt zur
+Laufzeit den Adapter, aber die Artefakte unterscheiden sich physisch um das
+Billing-Paket (`who2be-billing` nur im Cloud-Build). `is_cloud()` ist das
+einzige Gate, das Cloud-spezifische Adapter (Billing-Webhook, MCP-Limit)
+scharfschaltet — On-Prem/OSS laeuft unbegrenzt und ohne Billing.
 """
 
 from who2be_api.core.config import Settings, get_settings

@@ -5,17 +5,24 @@ Agent-Pfad (`/agent-memories*`, agent-gebundener Token, operiert IMMER auf
 Pfad (`/agents/{agent_id}/memories*`, human-only editor+): Liste, Triage,
 Bearbeiten, Loeschen. Autorisierung liegt im Service. Mount unter
 `/v1/workspaces/{ws_id}`.
+
+Rate-Limit-Paritaet (Review 2026-07-20 SEC-2/SEC-3): die agent-gerichteten
+Reads tragen `enforce_mcp_read_limit` wie alle anderen agent-facing Read-Routen;
+`save_memory` und der Guard-PUT tragen `@limiter.limit(write_limit)` wie jeder
+andere mutierende Endpunkt (F-Phase2-01-Muster).
 """
 
 from typing import Annotated
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 
 from who2be_api.core.db import get_pool
+from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.repositories.memory_repository import PgMemoryRepository
+from who2be_api.services.mcp_limit_service import enforce_mcp_read_limit
 from who2be_api.services.memory_service import MemoryService
 from who2be_models import (
     MemoryCreate,
@@ -44,13 +51,16 @@ Service = Annotated[MemoryService, Depends(get_memory_service)]
 
 
 @router.post("/agent-memories", status_code=201)
-async def save_memory(data: MemoryCreate, ctx: Ctx, service: Service) -> MemoryRead:
+@limiter.limit(write_limit)
+async def save_memory(
+    request: Request, data: MemoryCreate, ctx: Ctx, service: Service
+) -> MemoryRead:
     # `status` in der Antwort sagt dem Agenten, ob der Fakt live ist (`active`,
     # auto-Modus) oder auf menschliche Freigabe wartet (`pending`, suggest).
     return await service.save(ctx, data)
 
 
-@router.get("/agent-memories/search")
+@router.get("/agent-memories/search", dependencies=[Depends(enforce_mcp_read_limit)])
 async def search_memory(
     ctx: Ctx,
     service: Service,
@@ -60,7 +70,7 @@ async def search_memory(
     return await service.search(ctx, query, k)
 
 
-@router.get("/agent-memories")
+@router.get("/agent-memories", dependencies=[Depends(enforce_mcp_read_limit)])
 async def list_memories_for_agent(
     ctx: Ctx,
     service: Service,
@@ -79,8 +89,9 @@ async def get_memory_guard(ctx: Ctx, service: Service) -> MemoryGuardConfig:
 
 
 @router.put("/memory-guard")
+@limiter.limit(write_limit)
 async def update_memory_guard(
-    data: MemoryGuardConfig, ctx: Ctx, service: Service
+    request: Request, data: MemoryGuardConfig, ctx: Ctx, service: Service
 ) -> MemoryGuardConfig:
     return await service.set_guard(ctx, data)
 

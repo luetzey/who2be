@@ -614,3 +614,97 @@ def test_memory_guard_blocks_unbound_admin_api_token() -> None:
         tool_policy=None,
     )
     service._require_guard_admin(human_admin)
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db")
+def test_memory_reads_respect_mcp_read_limit(
+    monkeypatch: pytest.MonkeyPatch, make_auth_headers: AuthFactory
+) -> None:
+    """Review 2026-07-20 SEC-2: `GET /agent-memories` UND `/agent-memories/search`
+    tragen `enforce_mcp_read_limit` — in der Cloud-Edition deckelt das
+    Per-Token-Rate-Ceiling die Memory-Reads (429), Paritaet zu den uebrigen
+    agent-gerichteten Read-Routen (personas/playbooks/external_tools)."""
+    from who2be_api.core.config import Settings
+    from who2be_api.core.rate_limit import token_rate_limiter
+    from who2be_api.licensing.entitlement import Entitlement
+    from who2be_api.services import mcp_limit_service
+
+    class _FakePort:
+        """Entitlement-Stub wie in `test_mcp_limit_service.py`: Rate 1/min."""
+
+        async def resolve(self, _org_id: UUID) -> Entitlement:
+            return Entitlement(status="active", features=frozenset({"core"}), mcp_rate_per_min=1)
+
+    monkeypatch.setattr(mcp_limit_service, "get_settings", lambda: Settings(edition="cloud"))
+    monkeypatch.setattr(
+        mcp_limit_service, "build_entitlement_port", lambda _pool, _settings: _FakePort()
+    )
+
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    prefix = f"/v1/workspaces/{ws}"
+    list_url = f"{prefix}/agent-memories"
+    search_url = f"{prefix}/agent-memories/search"
+    token_rate_limiter.reset()
+    try:
+        with TestClient(app) as client:
+            _, ro = _agent_token(client, prefix, "m-rlimit", {"memory_mode": "read_only"}, auth)
+
+            # Rate 1/min, gebucketet pro Token: der erste Read passiert, der
+            # zweite (Search) laeuft ins Ceiling → Search traegt das Gate.
+            assert client.get(list_url, headers=ro).status_code == 200
+            limited = client.get(search_url, params={"query": "x"}, headers=ro)
+            assert limited.status_code == 429
+
+            # Frisches Fenster, umgekehrte Reihenfolge → auch die Liste ist gedeckelt.
+            token_rate_limiter.reset()
+            assert client.get(search_url, params={"query": "x"}, headers=ro).status_code == 200
+            assert client.get(list_url, headers=ro).status_code == 429
+    finally:
+        token_rate_limiter.reset()
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("migrated_db")
+def test_memory_writes_respect_write_rate_limit(
+    monkeypatch: pytest.MonkeyPatch, make_auth_headers: AuthFactory
+) -> None:
+    """Review 2026-07-20 SEC-3: `save_memory` und der `memory-guard`-PUT tragen
+    `@limiter.limit(write_limit)` wie jeder andere mutierende Endpunkt
+    (F-Phase2-01-Muster): bei `1/minute` liefert der zweite Aufruf 429."""
+    from who2be_api.core import rate_limit, security
+    from who2be_api.core.config import Settings
+
+    # Gleiches Secret wie `make_auth_headers` (conftest), nur mit knappem Limit.
+    settings = Settings(
+        jwt_secret="integration-test-jwt-secret-padding-0123456789",
+        rate_limit_write="1/minute",
+    )
+    monkeypatch.setattr(security, "get_settings", lambda: settings)
+    monkeypatch.setattr(rate_limit, "get_settings", lambda: settings)
+    rate_limit.limiter.reset()
+
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    prefix = f"/v1/workspaces/{ws}"
+    try:
+        with TestClient(app) as client:
+            _, auto = _agent_token(client, prefix, "m-wlimit", {"memory_mode": "auto"}, auth)
+
+            first = _save(client, prefix, auto, "Write-Limit-Fakt Nummer eins")
+            assert first.status_code == 201, first.text
+            # Zweiter Save im selben Fenster: der Limiter greift VOR dem
+            # Handler-Body (sonst waere die Antwort der Dedup-409).
+            second = _save(client, prefix, auto, "Write-Limit-Fakt Nummer eins")
+            assert second.status_code == 429
+
+            guard_url = f"{prefix}/memory-guard"
+            assert client.put(guard_url, json={"mode": "off"}, headers=auth).status_code == 200
+            assert client.put(guard_url, json={"mode": "standard"}, headers=auth).status_code == 429
+    finally:
+        rate_limit.limiter.reset()
+        cleanup_workspaces([owner])

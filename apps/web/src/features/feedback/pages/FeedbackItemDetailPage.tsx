@@ -156,7 +156,7 @@ export function FeedbackItemDetailPage() {
       <DataView loading={loading && detail === null} error={error}>
         {detail !== null ? (
           <div className="flex flex-col gap-6">
-            <div className="grid gap-5 md:grid-cols-2">
+            <div className="grid gap-6 md:grid-cols-2">
               {/* Bezug — worauf sich das Feedback bezieht und wie es verlinkt ist. */}
               <Card>
                 <CardHeader>

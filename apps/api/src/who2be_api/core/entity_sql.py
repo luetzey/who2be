@@ -5,6 +5,9 @@ Tabellennamen in rohes SQL (Einzel-Export, GDPR-Export). Heute immer Literale
 aus dem Router — aber ein kuenftiger dynamischer Aufrufer waere sonst
 injizierbar. Daher EINE harte Whitelist, gegen die jeder SQL-bauende Pfad
 zuerst prueft (Defense-in-Depth, statt Call-Site-Disziplin per Kommentar).
+
+Lebt in `core/`, weil sowohl Repositories als auch Services darauf aufbauen —
+eine DB-nahe Utility ohne Service-Abhaengigkeiten (Schichtung: core → repositories → services).
 """
 
 from __future__ import annotations

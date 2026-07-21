@@ -141,7 +141,7 @@ export function SubResourcePicker({
     .filter((r) => needle === '' || r.name.toLowerCase().includes(needle))
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
         <h3 className="text-base font-semibold tracking-tight">
           {t('subInline.title')}
@@ -179,6 +179,8 @@ export function SubResourcePicker({
                   <span className="flex flex-wrap items-center gap-2">
                     <span className="truncate text-sm font-medium">{sub.name}</span>
                     <span className="inline-flex items-center gap-1 rounded-full bg-pill-resource px-2 py-0.5 text-xs font-semibold text-pill-resource-fg">
+                      {/* size-3 bewusst (funktionaler Sonderfall §8): Icon in
+                          der kompakten text-xs-Pill. */}
                       <Pencil className="size-3" aria-hidden="true" />
                       {sub.block_id
                         ? t('subInline.inTextAnchor', { blockId: sub.block_id })
@@ -288,6 +290,9 @@ export function SubResourcePicker({
             className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
             aria-hidden="true"
           />
+          {/* pl-9 ist bewusst off-scale (funktionaler Icon-Inset):
+              left-3 (12px) + size-4 (16px) + 8px Luft = 36px, damit der
+              Eingabetext nicht unter dem Such-Icon liegt. */}
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -314,7 +319,7 @@ export function SubResourcePicker({
                 <span className="min-w-0 flex-1 truncate text-left text-sm font-medium">
                   {resource.name}
                 </span>
-                <span className="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold text-brand">
+                <span className="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold text-muted-foreground">
                   <Plus className="size-4" aria-hidden="true" />
                   {t('subInline.addAction')}
                 </span>

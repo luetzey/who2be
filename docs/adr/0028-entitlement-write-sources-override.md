@@ -98,3 +98,15 @@ der App über denselben Port. Die Taxonomie ist offen erweiterbar (neue `source`
   bleibt unverändert; die App-Read-Seite ändert sich nicht.
 - Audit/Compliance verbessern sich: jeder Nicht-Kauf-Grant ist befristet und
   einem Urheber + Grund zugeordnet.
+
+## Nachtrag 2026-07-20 (Q2)
+
+Implementiert ist der On-Prem-Pfad **ohne Token-Persistenz**: es gibt
+`who2be-license verify` plus Env-Validierung von `WHO2BE_LICENSE_KEY`, ein
+`license install` mit persistiertem Token existiert nicht. Der Adapter
+re-verifiziert den Token bei jedem `resolve()` direkt aus der Env — der oben
+beschriebene Install-/Persistenz-Schritt entfällt.
+
+Zusätzlich ist der `manual_override`-Writer seit 2026-07-20 technisch gegated
+(LIC-1, fail-closed): nur Betreiber auf der Allowlist
+`WHO2BE_BILLING_OVERRIDE_OPERATORS` und mit aal2-Step-up dürfen ihn aufrufen.

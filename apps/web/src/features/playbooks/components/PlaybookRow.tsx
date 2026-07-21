@@ -97,6 +97,8 @@ export function PlaybookRow({ playbook, wsPath, parent, resolveChild }: Playbook
             to={wsPath(`/playbooks/${parent.id}`)}
             className="relative mt-1 inline-flex w-fit items-center gap-1.5 rounded-md bg-pill-catalog px-2 py-0.5 text-xs font-medium text-pill-catalog-fg focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
+            {/* size-3 bewusst (funktionaler Sonderfall §8): Icon in der
+                kompakten text-xs-Pill, size-4 wuerde die Pille dominieren. */}
             <Layers className="size-3" aria-hidden="true" />
             {t('playbooks:list.partOf', { name: parent.name })}
           </Link>

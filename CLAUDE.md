@@ -56,9 +56,10 @@ Agent-Schreibrechte inkl. Rate-Limit (ADR-0039); Builder-System-Prompt-Tools
 MFA-Login-Step-up; OSS-Lizenz-Gates (ADR-0033); Public-Switch-Vorbereitung
 (FSL-1.1, Standards-Schicht).
 
-Offene/nächste Blöcke: siehe STATE.md §Bekannte Probleme (u. a. Web-Coverage-PR
-gegen roten `main`-CI-Job) und §Nächste Schritte (Public-Switch, CLA,
-CI-Billing) sowie `docs/standards-review-2026-07-08.md` (WP-1–9).
+Offene/nächste Blöcke: siehe STATE.md §Bekannte Probleme (u. a. CI-Gate seit
+2026-07-19 tot — Actions-Billing, Owner-Punkt) und §Nächste Schritte
+(Public-Switch, CLA, CI-Billing) sowie `docs/standards-review-2026-07-20.md`
+(§4 Owner-Entscheidungen, WP-14-Backlog).
 
 ## Struktur
 
@@ -144,6 +145,9 @@ Web (lint/tsc/test/build). Vor dem Push lokal gegenpruefen.
   ruff `line-length = 100`, mypy `strict`.
 - TypeScript: strikt, kein `any` ohne Begruendung; funktionale Komponenten + Hooks;
   bestehende Patterns wiederverwenden.
+- Interims-Leitplanke bis zur ADR-0002-Entscheidung (enforce vs. amend): keine
+  neuen `HTTPException`-/SQL-Vorkommen in `apps/api/**/services/` — Fehler als
+  Domain-Exception, SQL uebers Repository (DECISIONS 2026-07-20).
 
 ## Frontend-Standards (repo-spezifisch)
 

@@ -27,7 +27,7 @@ from uuid import UUID
 import asyncpg
 from pydantic import BaseModel
 
-from who2be_api.services.entity_sql import safe_entity
+from who2be_api.core.entity_sql import safe_entity
 from who2be_models import DEFAULT_LOCALE, VersionStatus
 
 TRead = TypeVar("TRead", bound=BaseModel)

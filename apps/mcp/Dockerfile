@@ -17,7 +17,11 @@ ENV UV_LINK_MODE=copy \
     UV_COMPILE_BYTECODE=1
 
 COPY pyproject.toml uv.lock ./
-COPY packages packages
+# Nur der Kern-Workspace — packages/billing wird absichtlich NICHT kopiert
+# (ADR-0029: das On-Prem-Artefakt enthaelt keinen Billing-Quellcode; das
+# `packages/*`-Member-Glob matcht nur, was im Build-Context liegt — gleiches
+# Muster wie apps/api/Dockerfile).
+COPY packages/models packages/models
 COPY apps/api apps/api
 COPY apps/mcp apps/mcp
 
