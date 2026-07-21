@@ -53,6 +53,7 @@ Plan-Dateien unter dem ai-native-Plan + ADR-0038.
 | `2026-07-18-1500_agent-memory.md` | Agent-Memory: Kurations-Schleuse, memory_mode, MCP-Tools, Laufzeit-Einbindung (ADR-0044) | ✅ (PR #324, Builder-Content v8: #325) |
 | `2026-07-19-0600_memory-placeholder.md` | Placeholder-Kind `memory` (ADR-0044-Addendum) | ✅ |
 | `2026-07-19-1030_memory-guard-config.md` | Injection-Wächter konfigurierbar (`memory_guard`, ADR-0044-Addendum 2) | ✅ (PR #329) |
+| `2026-07-21-0810_builder-external-tool-write.md` | Builder-Content v11: `external_tool_write` in der Builder-Policy, Playbook „External Tool anlegen & pflegen", Konventions-Sektion, Sync-Link-Fix | ✅ |
 
 Offen außerhalb der Plan-Dateien: Owner-Punkte aus
 `docs/standards-review-2026-07-20.md` §4 (v. a. Actions-Billing → CI-Gate tot

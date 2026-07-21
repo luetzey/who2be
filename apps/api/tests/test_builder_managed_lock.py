@@ -172,11 +172,11 @@ def test_builder_is_locked_but_copyable(monkeypatch: pytest.MonkeyPatch) -> None
             )
             assert upd.status_code == 200, upd.text
 
-            # Die fuenf Builder-Playbooks wurden mitkopiert (an die Klon-Persona).
+            # Die sechs Builder-Playbooks wurden mitkopiert (an die Klon-Persona).
             links = client.get(f"{base}/personas/{new_pid}/playbooks", headers=auth)
             assert links.status_code == 200, links.text
             cloned_playbooks = links.json()
-            assert len(cloned_playbooks) == 5, "Alle fuenf Builder-Playbooks sollten geklont sein."
+            assert len(cloned_playbooks) == 6, "Alle sechs Builder-Playbooks sollten geklont sein."
 
             # Copy-Semantik der Managed-Resource „Agent-Bau-Konventionen":
             # `deep_copy` dupliziert Persona/Playbooks/Template — die Resource

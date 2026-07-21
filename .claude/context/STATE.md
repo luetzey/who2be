@@ -1,6 +1,6 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-07-20_
+_Stand: 2026-07-21_
 
 Ist-Zustands-Snapshot, kein Changelog. Die Umsetzungs-Historie (per-Run-Details,
 Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
@@ -37,11 +37,14 @@ Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
 
 ### Builder
 
-- Managed Builder-Agent (Persona mit 3 Modi, 5 Playbooks, Konventions-
+- Managed Builder-Agent (Persona mit 3 Modi, 6 Playbooks, Konventions-
   Resource) + Managed-Lock, Deep-Copy-Duplizieren, Content-Start-Sync
-  (`BUILDER_CONTENT_VERSION`, Stand 10 = Memory `suggest`/`recommended`).
-  Befähigung + UI-Polish: PR #301/#302; Richtungsentscheidungen in
-  DECISIONS 2026-07-09/-10/-11.
+  (`BUILDER_CONTENT_VERSION`, Stand 11 = `external_tool_write` +
+  Playbook „External Tool anlegen & pflegen" + Konventions-Sektion;
+  Stand 10 = Memory `suggest`/`recommended`). Befähigung + UI-Polish:
+  PR #301/#302; Richtungsentscheidungen in DECISIONS 2026-07-09/-10/-11
+  und 2026-07-21 (Memory-Triage/-Guard bewusst UI-only). Plan:
+  `.claude/plan/2026-07-21-0810_builder-external-tool-write.md`.
 
 ### Feedback-Flywheel (ADR-0038)
 
