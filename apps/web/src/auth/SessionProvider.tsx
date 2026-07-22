@@ -45,6 +45,10 @@ async function mfaStepUpPending(): Promise<boolean> {
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [me, setMe] = useState<Me | null>(null)
+  // `false` bis der Mount-Bootstrap (getSession + apply) einmal durch ist.
+  // Vorher ist `session === null` mehrdeutig ("laedt noch" vs. "ausgeloggt")
+  // — RequireAuth wartet auf dieses Flag, statt sofort zu redirecten.
+  const [sessionLoaded, setSessionLoaded] = useState(false)
   // Dedupe-Marker: speichert das zuletzt verarbeitete Access-Token (oder
   // `null` fuer "keine Session"). `onAuthStateChange` feuert direkt nach
   // `getSession()` mit `INITIAL_SESSION` und liefert das identische Token —
@@ -85,6 +89,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const { data } = await supabase.auth.getSession()
       if (cancelled) return
       await apply(data.session)
+      if (cancelled) return
+      setSessionLoaded(true)
     }
     void bootstrap()
 
@@ -135,8 +141,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value = useMemo<SessionValue>(
-    () => ({ session, me, signIn, signOut, refreshMe }),
-    [session, me, signIn, signOut, refreshMe],
+    () => ({ session, sessionLoaded, me, signIn, signOut, refreshMe }),
+    [session, sessionLoaded, me, signIn, signOut, refreshMe],
   )
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>

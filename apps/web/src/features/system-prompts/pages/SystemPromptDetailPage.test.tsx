@@ -91,7 +91,7 @@ function stubFetchRoutes(handlers: Record<string, () => Response>) {
 function renderPage(activeMe: Me = me) {
   return render(
     <SessionContext.Provider
-      value={{ session, me: activeMe, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
+      value={{ session, me: activeMe, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
     >
       <AuthTokenProvider>
         <MemoryRouter initialEntries={['/w/ws-1/system-prompts/sp1']}>

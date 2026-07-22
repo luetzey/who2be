@@ -36,7 +36,7 @@ function renderConsent(search: string) {
       value={{
         session: authedSession,
         me,
-        signIn: vi.fn(),
+        sessionLoaded: true, signIn: vi.fn(),
         signOut: vi.fn(),
         refreshMe: vi.fn(),
       }}

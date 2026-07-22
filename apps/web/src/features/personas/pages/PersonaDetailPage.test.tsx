@@ -114,7 +114,7 @@ describe('PersonaDetailPage', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     render(
-      <SessionContext.Provider value={{ session, me, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}>
+      <SessionContext.Provider value={{ session, me, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}>
         <AuthTokenProvider>
           <MemoryRouter initialEntries={['/w/ws-1/personas/p1']}>
             <Routes>
@@ -200,7 +200,7 @@ describe('PersonaDetailPage', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     render(
-      <SessionContext.Provider value={{ session, me, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}>
+      <SessionContext.Provider value={{ session, me, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}>
         <AuthTokenProvider>
           <MemoryRouter initialEntries={['/w/ws-1/personas/p1']}>
             <Routes>
@@ -265,7 +265,7 @@ describe('PersonaDetailPage', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     render(
-      <SessionContext.Provider value={{ session, me, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}>
+      <SessionContext.Provider value={{ session, me, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}>
         <AuthTokenProvider>
           <MemoryRouter initialEntries={['/w/ws-1/personas/p1']}>
             <Routes>
@@ -320,7 +320,7 @@ describe('PersonaDetailPage', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     render(
-      <SessionContext.Provider value={{ session, me, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}>
+      <SessionContext.Provider value={{ session, me, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}>
         <AuthTokenProvider>
           <MemoryRouter initialEntries={['/w/ws-1/personas/p1']}>
             <Routes>
@@ -374,7 +374,7 @@ describe('PersonaDetailPage', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     render(
-      <SessionContext.Provider value={{ session, me, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}>
+      <SessionContext.Provider value={{ session, me, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}>
         <AuthTokenProvider>
           <MemoryRouter initialEntries={['/w/ws-1/personas/p1']}>
             <Routes>
@@ -499,7 +499,7 @@ function renderPersonaDetail(handler: FetchHandler, options: { me?: Me } = {}) {
       value={{
         session,
         me: options.me ?? me,
-        signIn: vi.fn(),
+        sessionLoaded: true, signIn: vi.fn(),
         signOut: vi.fn(),
         refreshMe: vi.fn(),
       }}
@@ -525,7 +525,7 @@ describe('PersonaDetailPage — Redirect & Status-Transitions', () => {
     )
     render(
       <SessionContext.Provider
-        value={{ session, me, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
+        value={{ session, me, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
       >
         <AuthTokenProvider>
           <MemoryRouter initialEntries={['/w/ws-1/persona-detail']}>

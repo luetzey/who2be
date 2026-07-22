@@ -46,7 +46,7 @@ function renderWith(list: unknown[]) {
     vi.fn().mockResolvedValue(new Response(JSON.stringify(list), { status: 200 })),
   )
   render(
-    <SessionContext.Provider value={{ session, me, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}>
+    <SessionContext.Provider value={{ session, me, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}>
       <AuthTokenProvider>
         <BrowserRouter>
           <PlaybooksPage />

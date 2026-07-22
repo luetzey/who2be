@@ -75,7 +75,7 @@ function LoginMarker() {
 function renderConsent(session: Session | null, search: string, meValue: Me | null = me) {
   return render(
     <SessionContext.Provider
-      value={{ session, me: meValue, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
+      value={{ session, me: meValue, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
     >
       <AuthTokenProvider>
         <MemoryRouter initialEntries={[`/oauth/consent${search}`]}>

@@ -49,11 +49,12 @@ import { SessionProvider } from './SessionProvider'
 import { useSession } from './session-context'
 
 function Probe() {
-  const { session, me } = useSession()
+  const { session, me, sessionLoaded } = useSession()
   return (
     <div>
       <span data-testid="session">{session?.access_token ?? '<none>'}</span>
       <span data-testid="me">{me?.user_id ?? '<none>'}</span>
+      <span data-testid="loaded">{sessionLoaded ? 'yes' : 'no'}</span>
     </div>
   )
 }
@@ -174,6 +175,38 @@ describe('SessionProvider', () => {
     expect(screen.getByTestId('session').textContent).toBe('<none>')
     expect(screen.getByTestId('me').textContent).toBe('<none>')
     expect(fetchMe).not.toHaveBeenCalled()
+  })
+
+  it('setzt sessionLoaded erst nach abgeschlossenem Bootstrap', async () => {
+    // Solange getSession() pending ist, muss sessionLoaded false bleiben —
+    // RequireAuth zeigt dann eine Ladeanzeige statt nach /login zu redirecten
+    // (sonst gehen Deep-Links beim Reload verloren).
+    let resolveGetSession!: (value: { data: { session: Session | null }; error: null }) => void
+    getSession.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveGetSession = resolve
+        }),
+    )
+
+    render(
+      <SessionProvider>
+        <Probe />
+      </SessionProvider>,
+    )
+
+    expect(screen.getByTestId('loaded').textContent).toBe('no')
+
+    await act(async () => {
+      resolveGetSession({ data: { session: null }, error: null })
+      await Promise.resolve()
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('loaded').textContent).toBe('yes')
+    })
+    // Kein Session-Commit — der User ist tatsaechlich ausgeloggt.
+    expect(screen.getByTestId('session').textContent).toBe('<none>')
   })
 
   it('unsubscribed das onAuthStateChange-Listener beim Unmount', async () => {

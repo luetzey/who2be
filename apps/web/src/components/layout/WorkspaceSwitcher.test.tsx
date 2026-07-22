@@ -66,7 +66,7 @@ function LocationProbe() {
 
 function renderSwitcher(me: Me | null = buildMe(), initialPath = '/w/ws-1/dashboard') {
   return render(
-    <SessionContext.Provider value={{ session, me, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}>
+    <SessionContext.Provider value={{ session, me, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}>
       <MemoryRouter initialEntries={[initialPath]}>
         <Routes>
           <Route
