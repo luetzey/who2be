@@ -5,6 +5,11 @@ import type { Me } from '@/api/types'
 
 export interface SessionValue {
   session: Session | null
+  // `false`, solange der initiale Session-Bootstrap (getSession + me-Fetch)
+  // noch laeuft. In dieser Phase bedeutet `session === null` nur "noch
+  // unbekannt" — Auth-Gates duerfen dann NICHT auf /login redirecten, sonst
+  // geht beim Reload die aktuelle URL verloren (Deep-Link → Dashboard-Bug).
+  sessionLoaded: boolean
   // Identity-/Memberships-Snapshot des Tokens — wird nach erfolgreichem
   // Login einmal via `GET /v1/me` resolved und im State gehalten.
   me: Me | null

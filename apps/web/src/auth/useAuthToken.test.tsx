@@ -10,7 +10,7 @@ import { useAuthToken } from './useAuthToken'
 
 function wrap(children: ReactNode, session: Session | null) {
   return (
-    <SessionContext.Provider value={{ session, me: null, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}>
+    <SessionContext.Provider value={{ session, me: null, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}>
       <AuthTokenProvider>{children}</AuthTokenProvider>
     </SessionContext.Provider>
   )

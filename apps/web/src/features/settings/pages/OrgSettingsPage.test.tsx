@@ -41,7 +41,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 function renderPage(role: WorkspaceRole = 'admin', refreshMe = vi.fn()) {
   return render(
     <SessionContext.Provider
-      value={{ session, me: buildMe(role), signIn: vi.fn(), signOut: vi.fn(), refreshMe }}
+      value={{ session, me: buildMe(role), sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe }}
     >
       <AuthTokenProvider>
         <MemoryRouter initialEntries={['/w/ws-1/settings/org']}>

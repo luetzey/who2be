@@ -46,7 +46,7 @@ function agent(overrides: Partial<Agent> = {}): Agent {
 function renderPage() {
   return render(
     <SessionContext.Provider
-      value={{ session, me, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
+      value={{ session, me, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
     >
       <AuthTokenProvider>
         <MemoryRouter initialEntries={['/w/ws-1/agents']}>

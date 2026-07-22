@@ -70,7 +70,7 @@ function renderPage(
       value={{
         session,
         me: buildMe(role, workspaceCount),
-        signIn: vi.fn(),
+        sessionLoaded: true, signIn: vi.fn(),
         signOut: vi.fn(),
         refreshMe,
       }}

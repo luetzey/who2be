@@ -41,7 +41,7 @@ describe('PersonasPage', () => {
 
     render(
       <SessionContext.Provider
-        value={{ session: fakeSession, me: fakeMe, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
+        value={{ session: fakeSession, me: fakeMe, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
       >
         <AuthTokenProvider>
           <BrowserRouter>
@@ -87,7 +87,7 @@ describe('PersonasPage', () => {
 
     render(
       <SessionContext.Provider
-        value={{ session: fakeSession, me: fakeMe, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
+        value={{ session: fakeSession, me: fakeMe, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
       >
         <AuthTokenProvider>
           <MemoryRouter initialEntries={['/?agent=a1']}>

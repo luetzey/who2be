@@ -24,7 +24,7 @@ const me: Me = { user_id: 'u1', default_workspace_id: 'ws-1', organizations: [] 
 function renderView(ui: ReactElement) {
   return render(
     <SessionContext.Provider
-      value={{ session, me, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
+      value={{ session, me, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
     >
       <MemoryRouter initialEntries={['/w/ws-1/agents/agent-1']}>
         <Routes>

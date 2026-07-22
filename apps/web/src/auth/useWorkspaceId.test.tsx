@@ -16,7 +16,7 @@ function Probe() {
 function wrap(children: ReactNode, me: Me | null, initialPath: string, pattern: string) {
   return (
     <SessionContext.Provider
-      value={{ session: null, me, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
+      value={{ session: null, me, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
     >
       <MemoryRouter initialEntries={[initialPath]}>
         <Routes>

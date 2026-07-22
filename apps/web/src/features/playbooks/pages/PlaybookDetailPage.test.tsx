@@ -147,7 +147,7 @@ describe('PlaybookDetailPage', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     render(
-      <SessionContext.Provider value={{ session, me, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}>
+      <SessionContext.Provider value={{ session, me, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}>
         <AuthTokenProvider>
           <MemoryRouter initialEntries={['/w/ws-1/playbooks/pb1']}>
             <Routes>
@@ -220,7 +220,7 @@ describe('PlaybookDetailPage', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     render(
-      <SessionContext.Provider value={{ session, me, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}>
+      <SessionContext.Provider value={{ session, me, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}>
         <AuthTokenProvider>
           <MemoryRouter initialEntries={['/w/ws-1/playbooks/pb1']}>
             <Routes>
@@ -275,7 +275,7 @@ describe('PlaybookDetailPage', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     render(
-      <SessionContext.Provider value={{ session, me, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}>
+      <SessionContext.Provider value={{ session, me, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}>
         <AuthTokenProvider>
           <MemoryRouter initialEntries={['/w/ws-1/playbooks/pb1']}>
             <Routes>
@@ -321,7 +321,7 @@ describe('PlaybookDetailPage', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     render(
-      <SessionContext.Provider value={{ session, me, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}>
+      <SessionContext.Provider value={{ session, me, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}>
         <AuthTokenProvider>
           <MemoryRouter initialEntries={['/w/ws-1/playbooks/pb1']}>
             <Routes>
@@ -457,7 +457,7 @@ function renderPlaybookDetail(handler: FetchHandler, options: { me?: Me } = {}) 
       value={{
         session,
         me: options.me ?? me,
-        signIn: vi.fn(),
+        sessionLoaded: true, signIn: vi.fn(),
         signOut: vi.fn(),
         refreshMe: vi.fn(),
       }}
@@ -503,7 +503,7 @@ describe('PlaybookDetailPage — Lade-/Fehler-Zustaende', () => {
     )
     render(
       <SessionContext.Provider
-        value={{ session, me, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
+        value={{ session, me, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
       >
         <AuthTokenProvider>
           <MemoryRouter initialEntries={['/w/ws-1/playbook-detail']}>

@@ -47,7 +47,7 @@ function renderSection() {
       value={{
         session,
         me: buildMe(),
-        signIn: vi.fn(),
+        sessionLoaded: true, signIn: vi.fn(),
         signOut: vi.fn(),
         refreshMe: vi.fn().mockResolvedValue(undefined),
       }}

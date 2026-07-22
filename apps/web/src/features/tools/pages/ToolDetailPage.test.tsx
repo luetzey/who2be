@@ -156,7 +156,7 @@ function renderDetailPage(handler: FetchHandler, options: { me?: Me } = {}) {
       value={{
         session,
         me: options.me ?? me,
-        signIn: vi.fn(),
+        sessionLoaded: true, signIn: vi.fn(),
         signOut: vi.fn(),
         refreshMe: vi.fn(),
       }}
@@ -199,7 +199,7 @@ describe('ToolDetailPage — Lade-/Fehler-Zustaende', () => {
     vi.stubGlobal('fetch', vi.fn(async () => jsonResponse([])))
     render(
       <SessionContext.Provider
-        value={{ session, me, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
+        value={{ session, me, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
       >
         <AuthTokenProvider>
           <MemoryRouter initialEntries={['/w/ws-1/tool-detail']}>

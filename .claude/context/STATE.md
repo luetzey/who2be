@@ -1,6 +1,6 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-07-21_
+_Stand: 2026-07-22_
 
 Ist-Zustands-Snapshot, kein Changelog. Die Umsetzungs-Historie (per-Run-Details,
 Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
@@ -23,6 +23,10 @@ Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
 - Listen-UX mit URL-Filtern (`useListFilters`/`ListFilterBar`: Status/Agent/
   Tag/Typ/Gruppierung), Playbooks- + Dashboard-Design-Refresh (Pläne
   2026-07-11/-12), MFA-Login-Step-up (`docs/mfa-admin.md`).
+- Reload-sichere Deep-Links: `SessionProvider` exponiert `sessionLoaded`,
+  `RequireAuth` wartet den Session-Bootstrap ab (Ladeanzeige statt sofortigem
+  `/login`-Redirect) und gibt beim echten Logout die Ziel-URL als `?next=` an
+  die LoginPage weiter — vorher warf jeder Reload den User aufs Dashboard.
 
 ### MCP + OAuth
 
