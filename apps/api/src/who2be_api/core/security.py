@@ -589,7 +589,19 @@ async def get_current_workspace(
         # An einen Agenten gebundener Token: dessen Tool-Policy laden, damit
         # `require_capability` (Writes) und die Read-Services (Scoping) sie
         # durchsetzen. Der Agent ist workspace-gepinnt — kein Cross-WS-Leck.
-        tool_policy = await _load_agent_tool_policy(pool, workspace_id, principal.token_agent_id)
+        #
+        # WICHTIG: `agent` traegt STRIKTE RLS (Migration 0037). Unter der
+        # Cloud-Rolle `who2be_app` (NOBYPASSRLS) liefert dieser Read OHNE
+        # gesetzten `app.current_tenant` 0 Zeilen (fail-closed) — die Policy
+        # waere dann faelschlicherweise `None` (= „keine Pro-Agent-Restriktion")
+        # und die gesamte Least-Privilege-Schicht (Capabilities, Read-Scoping,
+        # Tag-/Rate-Limits) fiele aus. Daher den Read in einen kurzlebigen
+        # Tenant-Scope legen — analog `oauth_service._resolve_agent_membership`.
+        # `org_id` ist hier irrelevant: `agent` ist workspace-, nicht org-scoped.
+        async with tenant_scope(workspace_id, None):
+            tool_policy = await _load_agent_tool_policy(
+                pool, workspace_id, principal.token_agent_id
+            )
         ctx = WorkspaceContext(
             workspace_id=workspace_id,
             user_id=principal.user_id,
