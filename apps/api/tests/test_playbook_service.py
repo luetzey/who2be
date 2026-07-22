@@ -388,10 +388,12 @@ class FakeCompositionRepo:
     async def parent_belongs_to(self, workspace_id: UUID, parent_id: UUID) -> bool:
         return True
 
-    async def list_children(self, parent_id: UUID, active_only: bool = False) -> list[PlaybookRead]:
+    async def list_children(
+        self, workspace_id: UUID, parent_id: UUID, active_only: bool = False
+    ) -> list[PlaybookRead]:
         return []
 
-    async def list_parents(self, child_id: UUID) -> list[PlaybookRef]:
+    async def list_parents(self, workspace_id: UUID, child_id: UUID) -> list[PlaybookRef]:
         return []
 
     async def set_composition(

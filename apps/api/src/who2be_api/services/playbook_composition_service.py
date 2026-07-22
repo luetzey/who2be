@@ -55,7 +55,9 @@ class PlaybookCompositionService:
         if scope is not None and parent_id not in scope:
             raise _parent_not_found()
         return await self._repo.list_children(
-            parent_id, active_only=not ctx.sees_drafts(AgentCapability.playbook_write)
+            ctx.workspace_id,
+            parent_id,
+            active_only=not ctx.sees_drafts(AgentCapability.playbook_write),
         )
 
     async def list_parents(self, ctx: WorkspaceContext, child_id: UUID) -> list[PlaybookRef]:
@@ -71,7 +73,7 @@ class PlaybookCompositionService:
         scope = await visible_playbook_ids(self._pool, ctx)
         if scope is not None and child_id not in scope:
             raise _parent_not_found()
-        parents = await self._repo.list_parents(child_id)
+        parents = await self._repo.list_parents(ctx.workspace_id, child_id)
         if scope is not None:
             parents = [p for p in parents if p.id in scope]
         return parents
@@ -115,5 +117,7 @@ class PlaybookCompositionService:
             )
 
         return await self._repo.list_children(
-            parent_id, active_only=not ctx.sees_drafts(AgentCapability.playbook_write)
+            ctx.workspace_id,
+            parent_id,
+            active_only=not ctx.sees_drafts(AgentCapability.playbook_write),
         )

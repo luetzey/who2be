@@ -84,10 +84,10 @@ class PlaybookCompositionRepository(Protocol):
     async def parent_belongs_to(self, workspace_id: UUID, parent_id: UUID) -> bool: ...
 
     async def list_children(
-        self, parent_id: UUID, active_only: bool = False
+        self, workspace_id: UUID, parent_id: UUID, active_only: bool = False
     ) -> list[PlaybookRead]: ...
 
-    async def list_parents(self, child_id: UUID) -> list[PlaybookRef]: ...
+    async def list_parents(self, workspace_id: UUID, child_id: UUID) -> list[PlaybookRef]: ...
 
     async def set_composition(
         self,
@@ -112,11 +112,17 @@ class PgPlaybookCompositionRepository:
         )
         return owned is not None
 
-    async def list_children(self, parent_id: UUID, active_only: bool = False) -> list[PlaybookRead]:
+    async def list_children(
+        self, workspace_id: UUID, parent_id: UUID, active_only: bool = False
+    ) -> list[PlaybookRead]:
         """Liefert geordnete Kinder des Composite-Playbooks.
 
         `active_only=True` filtert auf Active-Versionen (MCP-Pfad); ohne DB-Join
         auf aktive Versionen fallen Kinder ohne aktive Version heraus.
+
+        Der `pc.workspace_id`-Filter ist die App-seitige erste Verteidigungslinie
+        (Defense-in-Depth, konsistent zur resource_composition-Variante) — die
+        RLS-Policy auf playbook_composition (0037) bleibt die zweite.
         """
         if active_only:
             select_clause = _SELECT_ACTIVE
@@ -125,21 +131,23 @@ class PgPlaybookCompositionRepository:
         rows = await self._pool.fetch(
             f"{select_clause}"
             "JOIN playbook_composition pc ON pc.child_id = p.id "
-            "WHERE pc.parent_id = $1 "
+            "WHERE pc.parent_id = $1 AND pc.workspace_id = $2 "
             "ORDER BY pc.position ASC",
             parent_id,
+            workspace_id,
         )
         return [PlaybookRead.model_validate(dict(row)) for row in rows]
 
-    async def list_parents(self, child_id: UUID) -> list[PlaybookRef]:
+    async def list_parents(self, workspace_id: UUID, child_id: UUID) -> list[PlaybookRef]:
         """Liefert alle Parent-Playbooks (Reverse Composed-By) als schlanke Refs."""
         rows = await self._pool.fetch(
             "SELECT p.id, p.name "
             "FROM playbook_composition pc "
             "JOIN playbook p ON p.id = pc.parent_id "
-            "WHERE pc.child_id = $1 "
+            "WHERE pc.child_id = $1 AND pc.workspace_id = $2 "
             "ORDER BY p.name ASC",
             child_id,
+            workspace_id,
         )
         return [PlaybookRef.model_validate(dict(row)) for row in rows]
 

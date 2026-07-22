@@ -126,10 +126,10 @@ class _FakePbCompRepo:
     async def parent_belongs_to(self, _ws: UUID, _id: UUID) -> bool:
         return True
 
-    async def list_children(self, _id: UUID, active_only: bool) -> list[Any]:
+    async def list_children(self, _ws: UUID, _id: UUID, active_only: bool) -> list[Any]:
         return [SimpleNamespace(id=uuid4())]
 
-    async def list_parents(self, _id: UUID) -> list[PlaybookRef]:
+    async def list_parents(self, _ws: UUID, _id: UUID) -> list[PlaybookRef]:
         return self._parents
 
 

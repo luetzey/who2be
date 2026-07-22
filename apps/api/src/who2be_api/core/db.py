@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 import asyncpg
 from fastapi import FastAPI
 
-from who2be_api.core.config import get_settings
+from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.tenancy import apply_tenant_settings
 
 logger = logging.getLogger(__name__)
@@ -50,6 +50,32 @@ class Database:
             init=_init_connection,
             setup=apply_tenant_settings,
         )
+        await self._assert_rls_enforced(settings)
+
+    async def _assert_rls_enforced(self, settings: Settings) -> None:
+        """Cloud-Guard (Security-Review INFO-2): Ist `APP_DATABASE_URL` gesetzt,
+        MUSS der App-Pool als nicht-privilegierte Rolle (`who2be_app`,
+        NOSUPERUSER/NOBYPASSRLS) verbinden — sonst umginge die App die
+        RLS-Mandantenisolation STILL (typische Fehlkonfig: `DATABASE_URL` statt
+        `APP_DATABASE_URL` fuer den Pool). Fail loud beim Boot.
+
+        On-Prem/Dev (kein `APP_DATABASE_URL`) ist bewusst ausgenommen: dort
+        verbindet die App als Owner mit RLS-Bypass (Plan R2) — das ist gewollt.
+        """
+        if not settings.app_database_url or self._pool is None:
+            return
+        bypasses_rls = await self._pool.fetchval(
+            "SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = current_user"
+        )
+        if bypasses_rls:
+            await self._pool.close()
+            self._pool = None
+            raise RuntimeError(
+                "Cloud-Fehlkonfiguration: Der App-Pool verbindet als RLS-umgehende "
+                "Rolle (superuser oder rolbypassrls=true). APP_DATABASE_URL muss die "
+                "Rolle who2be_app (NOSUPERUSER, NOBYPASSRLS) nutzen — sonst ist die "
+                "Mandanten-Isolation (Row Level Security) inaktiv."
+            )
 
     async def disconnect(self) -> None:
         if self._pool is not None:
