@@ -9,6 +9,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 
+from who2be_api.repositories.token_repository import TokenRepository
 from who2be_api.repositories.workspace_member_repository import (
     LastAdminError,
     WorkspaceMemberRepository,
@@ -20,10 +21,20 @@ _NOT_FOUND_DETAIL = "Mitglied nicht gefunden."
 
 
 class WorkspaceMemberService:
-    """CRUD-Adapter um das Member-Repository."""
+    """CRUD-Adapter um das Member-Repository.
 
-    def __init__(self, member_repo: WorkspaceMemberRepository) -> None:
+    Beim Entfernen und beim Rollenwechsel eines Mitglieds werden dessen aktive
+    API-Tokens in diesem Workspace mit-widerrufen (Deprovisioning, Security-
+    Review): der statische Token-Pfad (`get_current_workspace`) prueft die
+    Membership nicht live, ein gepinnter Token (Snapshot-Rolle) ueberlebte sonst
+    das Entfernen/Herabstufen. Push-Revocation analog zum OAuth-Refresh-Kill.
+    """
+
+    def __init__(
+        self, member_repo: WorkspaceMemberRepository, token_repo: TokenRepository
+    ) -> None:
         self._repo = member_repo
+        self._tokens = token_repo
 
     async def list_members(self, workspace_id: UUID) -> list[WorkspaceMemberRead]:
         return await self._repo.list_by_workspace(workspace_id)
@@ -46,6 +57,10 @@ class WorkspaceMemberService:
             ) from exc
         if member is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND_DETAIL)
+        # Rollenwechsel invalidiert die gepinnte Snapshot-Rolle bestehender
+        # Tokens des Mitglieds — daher alle mit-widerrufen (Neu-Ausstellung mit
+        # der neuen Rolle bleibt moeglich).
+        await self._tokens.revoke_by_owner(workspace_id, user_id)
         return member
 
     async def remove(
@@ -63,3 +78,6 @@ class WorkspaceMemberService:
             ) from exc
         if not removed:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND_DETAIL)
+        # Entferntes Mitglied: seine aktiven Tokens in diesem Workspace sofort
+        # widerrufen — sonst behielte ein Ex-Admin lebende Credentials.
+        await self._tokens.revoke_by_owner(workspace_id, user_id)
