@@ -1,6 +1,7 @@
 # Konzept — MCP-Tool-Import & Sync fuer External Tools (Ausbaustufe B+)
 
-- Status: **Vorschlag — Owner-Entscheidung ausstehend** (kein ADR, keine Umsetzung)
+- Status: **Entschieden 2026-07-22 — Variante A+ (siehe §7)**; Umsetzung folgt
+  nach ADR-Entwurf + WP-Schnitt
 - Datum: 2026-07-22
 - Kontext: ADR-0043 (External-Tool-Bindings, bewusst Ausbaustufe B „rein
   instruktiv"), ADR-0031 (Audit-Journals), ADR-0038 (Feedback-/Triage-Muster),
@@ -49,10 +50,14 @@ aktuell halten — **ohne** dass Who2Be Tool-Calls proxied.
    Tools soll nicht automatisch 20 Aggregate erzeugen. Der Import muss dem
    User die Gruppierung ueberlassen (Default: 1 Binding pro Server,
    abwaehlbare Tools; optional aufsplitten).
-5. **Transport-Realitaet:** Von einem self-hosted Server aus sind nur
-   HTTP-basierte MCP-Server (Streamable HTTP/SSE) erreichbar. `stdio`-Server
-   auf dem Rechner des Users kann das Backend nie erreichen — das muss die UI
-   ehrlich sagen (Erwartungsmanagement), sonst wirkt das Feature kaputt.
+5. **Transport-Realitaet:** Erreichbar ist, was das *Backend* per HTTP
+   erreicht (Streamable HTTP/SSE). Owner-Einwand 2026-07-22, berechtigt:
+   Laeuft Who2Be lokal/On-Prem, sind auch `localhost`-/LAN-Server erreichbar —
+   die Grenze ist also **edition- bzw. deployment-abhaengig** (Egress-Policy,
+   s. §5), kein absolutes „lokal geht nicht". Was weiterhin nicht geht:
+   `stdio`-Server (das hiesse, das Backend spawnt beliebige lokale Prozesse —
+   bewusst out of scope) und, in der Cloud-Edition, private IP-Ranges. Die UI
+   sagt das transparent an der Verbindungsmaske.
 6. **Untrusted Input:** Tool-Namen und -Beschreibungen eines fremden MCP-
    Servers sind fremdgesteuerter Text und landen ueber `tool-ref`-Pills in
    System-Prompts von Agenten → klassischer Prompt-Injection-Pfad. Importierte
@@ -160,3 +165,40 @@ Who2Be proxied zusaetzlich die Tool-Calls des Agenten an den echten Server.
 Offene Owner-Fragen: (a) Option B bestaetigen oder bewusst nur A? (b) Sync-
 Intervall-Job noetig oder reicht manueller Button fuer v1? (c) On-Prem-Egress-
 Default (private Ranges blocken vs. offen)?
+
+## 7. Entscheidung (2026-07-22, Owner)
+
+**Variante A+ statt B:** One-Shot-Import (Option A) **plus** manueller
+„Aktualisieren"-Button am Binding — mit erneuter Anmeldung, ohne persistierte
+Secrets und ohne eigene `mcp_connection`-Entitaet. Damit beantworten sich die
+Owner-Fragen: (a) A (erweitert um Button-Refresh), (b) kein Intervall-Job —
+manueller Button reicht fuer v1, (c) Egress ist deployment-abhaengig:
+On-Prem/lokal Default **offen** fuer private Ranges (der Owner kontrolliert
+die Umgebung; lokale HTTP-Server sind legitime Ziele), Cloud-Edition
+**hart geblockt** (SSRF).
+
+Mechanik des Button-Refresh (praezisiert):
+
+1. **Import (Wizard, wie §4):** Ergebnis-Drafts speichern zusaetzlich ihre
+   Herkunft im JSONB-Content (ADR-0043 §Architektur-Vorbereitung erlaubt das
+   abwaertskompatibel): `source_server_url`, `source_auth_kind`
+   (`none`/`bearer`/`header`), `imported_at`, Snapshot der importierten
+   `tool_names`. **Kein Secret** wird gespeichert — nur die unkritischen
+   Verbindungs-Metadaten.
+2. **Aktualisieren (Detail-Seite):** Button oeffnet einen Dialog mit
+   vorbefuellter URL (editierbar); bei `auth_kind != none` wird das
+   Credential **erneut eingegeben** (write-only, nur fuer diesen einen
+   Request verwendet, nie geloggt/persistiert). Backend ruft `initialize` +
+   `tools/list`, zeigt den Diff (neu/entfernt/geaendert) und legt auf
+   Bestaetigung eine **neue Draft-Version** an — der Status-Workflow bleibt
+   der einzige Weg zu `active` (§2.3 unveraendert gueltig).
+3. **Kein Hintergrund-Sync:** ohne gespeicherte Credentials gibt es prinzipbedingt
+   keinen Cron — bewusster Trade-off (Drift wird nur bei Klick erkannt).
+   Ausbaupfad zu B (gespeicherte Connection + Intervall) bleibt offen und
+   kompatibel: `source_server_url`/`source_auth_kind` sind dann die Basis.
+
+**Reduzierter WP-Schnitt:** WP-1 Backend-Import-Endpoint (MCP-Client-Call
+`initialize`+`tools/list` via httpx, Egress-Guard mit Editions-Default,
+Timeouts/Groessenlimits) + Wizard-UI; WP-2 Refresh-Dialog + Diff-Ansicht +
+Draft-Erzeugung. ADR-0045 dokumentiert A+ inkl. Abgrenzung zu ADR-0043-C und
+Ausbaupfad B.

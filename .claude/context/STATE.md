@@ -102,11 +102,12 @@ Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
   Web 912 Vitest / Branches 81,07 %; alle Gates lokal grün.
 - OAuth-Connector: E2E mit echtem Claude/ChatGPT-Client offen; TTL-Cleanup
   der OAuth-Tabellen, optionale Audience-Trennung, aal2-Consent (Phase 2).
-- **MCP-Tool-Import (Konzept, Owner-Entscheidung offen):** Import + Sync von
-  Tool-Katalogen externer MCP-Server in External-Tool-Bindings (Ausbaustufe
-  B+ zu ADR-0043; drei Optionen, Empfehlung B = Wizard + `mcp_connection` +
-  Diff-Sync ohne Gateway). Konzept:
-  `.claude/plan/2026-07-22-1800_mcp-tool-import-konzept.md`.
+- **MCP-Tool-Import (entschieden: Variante A+, DECISIONS 2026-07-22):**
+  One-Shot-Import-Wizard + manueller Refresh-Button mit Credential-Re-Eingabe
+  (keine persistierten Secrets, kein Sync-Job; Egress On-Prem offen / Cloud
+  geblockt). Konzept + Mechanik:
+  `.claude/plan/2026-07-22-1800_mcp-tool-import-konzept.md` §7. Nächster
+  Schritt: ADR-0045 + WP-1 (Import-Endpoint + Wizard), WP-2 (Refresh-Diff).
 
 ## Bekannte Probleme
 

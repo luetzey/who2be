@@ -380,3 +380,25 @@ bleiben)._
 - **Verworfen:** MCP-Tools für Memory-Triage/-Guard (bewusst UI-only — die
   Pending-Schleuse ist die Human-in-the-loop-Grenze, ADR-0044);
   `memory_mode='auto'` für den Builder (Kurator-Prinzip).
+
+## 2026-07-22 — MCP-Tool-Import als Variante A+ (Button-Refresh statt Sync-Job)
+- **Entscheidung:** Der Feature-Wunsch „Tools von MCP-Servern importieren"
+  wird als **A+** umgesetzt: One-Shot-Import-Wizard (`initialize` +
+  `tools/list`, Ergebnis als Drafts) **plus** manueller „Aktualisieren"-Button
+  am Binding mit erneuter Credential-Eingabe. Keine persistierten Secrets,
+  keine `mcp_connection`-Entität, kein Hintergrund-Sync; Bindings speichern
+  nur unkritische Herkunfts-Metadaten (`source_server_url`,
+  `source_auth_kind`, `imported_at`) im JSONB-Content. Egress-Default
+  deployment-abhängig: On-Prem/lokal offen für private Ranges (Owner
+  kontrolliert die Umgebung, lokale HTTP-Server legitim), Cloud hart geblockt
+  (SSRF). Konzept + Mechanik:
+  `.claude/plan/2026-07-22-1800_mcp-tool-import-konzept.md` §7; ADR-0045 folgt
+  mit der Umsetzung.
+- **Begründung:** Löst den Kern-Painpoint (kein manuelles Abtippen, Drift auf
+  Klick erkennbar) ohne die teuerste Security-Oberfläche (Secret-Storage);
+  Status-Workflow bleibt einziger Weg zu `active` (importierte
+  Tool-Beschreibungen sind untrusted Input). Ausbaupfad zu B (gespeicherte
+  Connection + Intervall-Sync) bleibt kompatibel offen.
+- **Verworfen:** B (gespeicherte Connection + Diff-Sync) — für v1 vom Owner
+  als zu viel bewertet; C/Gateway (bereits per ADR-0043 vertagt);
+  `stdio`-Server-Anbindung (Backend müsste lokale Prozesse spawnen).
