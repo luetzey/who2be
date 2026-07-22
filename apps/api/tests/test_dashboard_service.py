@@ -40,9 +40,15 @@ def _row(name: str) -> DashboardActivityRow:
 class _FakeRepo:
     """Repo-Doppel: merkt sich die zuletzt erfragten (limit, offset)."""
 
-    def __init__(self, rows: list[DashboardActivityRow], total: int) -> None:
+    def __init__(
+        self,
+        rows: list[DashboardActivityRow],
+        total: int,
+        attention: tuple[int, int] = (0, 0),
+    ) -> None:
         self._rows = rows
         self._total = total
+        self._attention = attention
         self.last_limit: int | None = None
         self.last_offset: int | None = None
 
@@ -57,6 +63,9 @@ class _FakeRepo:
         self.last_limit = limit
         self.last_offset = offset
         return self._rows, self._total
+
+    async def attention_counts(self, workspace_id: UUID) -> tuple[int, int]:
+        return self._attention
 
 
 def test_fetch_defaults_to_first_page_size_20() -> None:
@@ -96,3 +105,16 @@ def test_fetch_empty_activity_has_zero_pages() -> None:
     assert response.activity == []
     assert response.activity_pagination.total == 0
     assert response.activity_pagination.total_pages == 0
+    # Ohne Aufmerksamkeits-Signale bleiben die neuen KPI-Felder 0.
+    assert response.kpis.pending_memories == 0
+    assert response.kpis.pending_system_prompts == 0
+
+
+def test_fetch_maps_attention_counts_into_kpis() -> None:
+    repo = _FakeRepo([], total=0, attention=(3, 2))
+    service = DashboardService(repo)
+
+    response = asyncio.run(service.fetch(_ctx()))
+
+    assert response.kpis.pending_memories == 3
+    assert response.kpis.pending_system_prompts == 2

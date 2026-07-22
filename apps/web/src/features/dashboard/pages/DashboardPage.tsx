@@ -3,11 +3,13 @@ import {
   Bell,
   BookOpen,
   Bot,
+  Brain,
   CircleCheck,
   ClipboardCheck,
   FileText,
   LayoutDashboard,
   Plus,
+  ScrollText,
   UserPlus,
   Users,
 } from 'lucide-react'
@@ -45,6 +47,9 @@ export function DashboardPage() {
   const pagination = data?.activity_pagination
   const totalPages = pagination?.total_pages ?? 1
   const pendingReviews = data?.kpis.pending_reviews ?? 0
+  const pendingMemories = data?.kpis.pending_memories ?? 0
+  const pendingSystemPrompts = data?.kpis.pending_system_prompts ?? 0
+  const allClear = pendingReviews === 0 && pendingMemories === 0 && pendingSystemPrompts === 0
   const activeResources =
     data?.kpis.active_resources ?? data?.status_distribution.resource?.active ?? 0
 
@@ -82,14 +87,55 @@ export function DashboardPage() {
                       title={`${pendingReviews} ${t('kpis.pendingReviewsDescription')}`}
                       description="Prüfe die offenen Entwürfe in Personae und Playbooks."
                     />
-                  ) : (
+                  ) : null}
+                  {pendingMemories > 0 ? (
+                    <AttentionBanner
+                      variant="brand"
+                      icon={Brain}
+                      title={
+                        pendingMemories === 1
+                          ? '1 neuer Gedächtniseintrag wartet auf Freigabe'
+                          : `${pendingMemories} neue Gedächtniseinträge warten auf Freigabe`
+                      }
+                      description="Gib die Gedächtnis-Vorschläge deiner Agenten frei oder lehne sie ab."
+                      actions={
+                        <Button asChild variant="outline" size="sm">
+                          <Link to={wsPath('/agents')}>
+                            Agenten öffnen
+                            <ArrowRight />
+                          </Link>
+                        </Button>
+                      }
+                    />
+                  ) : null}
+                  {pendingSystemPrompts > 0 ? (
+                    <AttentionBanner
+                      variant="brand"
+                      icon={ScrollText}
+                      title={
+                        pendingSystemPrompts === 1
+                          ? '1 System-Prompt liegt zur Review'
+                          : `${pendingSystemPrompts} System-Prompts liegen zur Review`
+                      }
+                      description="Prüfe die eingereichten System-Prompt-Versionen."
+                      actions={
+                        <Button asChild variant="outline" size="sm">
+                          <Link to={wsPath('/system-prompts?status=review')}>
+                            Zur Review
+                            <ArrowRight />
+                          </Link>
+                        </Button>
+                      }
+                    />
+                  ) : null}
+                  {allClear ? (
                     <AttentionBanner
                       variant="brand"
                       icon={CircleCheck}
                       title="Alles erledigt"
                       description="Nichts wartet gerade auf dich — leg direkt los."
                     />
-                  )}
+                  ) : null}
                 </section>
 
                 {/* Schnellstart */}

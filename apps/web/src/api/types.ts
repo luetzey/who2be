@@ -320,6 +320,11 @@ export interface DashboardKpis {
   active_playbooks: number
   active_resources?: number
   pending_reviews: number
+  // Aufmerksamkeits-Signale (optional: aeltere Backends liefern sie nicht):
+  // Gedaechtnis-Vorschlaege in der Freigabe-Schleuse (ADR-0044) und
+  // System-Prompt-Templates, deren aktuelle Version zur Review liegt.
+  pending_memories?: number
+  pending_system_prompts?: number
 }
 
 export interface DashboardActor {

@@ -28,6 +28,12 @@ class DashboardKpis(BaseModel):
     active_playbooks: int = Field(ge=0)
     active_resources: int = Field(ge=0, default=0)
     pending_reviews: int = Field(ge=0)
+    # Aufmerksamkeits-Signale fuers Dashboard-Band: Gedaechtnis-Vorschlaege in
+    # der Freigabe-Schleuse (ADR-0044, status='pending') und System-Prompt-
+    # Templates, deren aktuelle Version zur Review liegt. Defaults halten
+    # aeltere Payloads/Fixtures ohne die Felder gueltig.
+    pending_memories: int = Field(ge=0, default=0)
+    pending_system_prompts: int = Field(ge=0, default=0)
 
 
 class EntityStatusDistribution(BaseModel):

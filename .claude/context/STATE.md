@@ -27,6 +27,11 @@ Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
   `RequireAuth` wartet den Session-Bootstrap ab (Ladeanzeige statt sofortigem
   `/login`-Redirect) und gibt beim echten Logout die Ziel-URL als `?next=` an
   die LoginPage weiter — vorher warf jeder Reload den User aufs Dashboard.
+- Dashboard-Aufmerksamkeits-Band zeigt neben offenen Entity-Reviews auch
+  pending Memory-Vorschläge (ADR-0044, Link → Agents) und System-Prompt-
+  Templates in Review (Link → `/system-prompts?status=review`); KPI-Felder
+  `pending_memories`/`pending_system_prompts` (Plan
+  `.claude/plan/2026-07-22-1650_dashboard-attention-memories-system-prompts.md`).
 
 ### MCP + OAuth
 

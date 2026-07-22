@@ -116,6 +116,24 @@ _ACTIVITY = """
 """
 
 
+# Aufmerksamkeits-Zaehler in einem Roundtrip: pending Memories (Freigabe-
+# Schleuse ADR-0044 — `agent_memory` traegt selbst `workspace_id`, kein Join
+# noetig) und System-Prompt-Templates, deren AKTUELLE Version (Pointer
+# `current_version`, identisch zur Listen-Sicht `_SELECT_CURRENT` im
+# Template-Repo) zur Review liegt. Bewusst nicht in die Distribution-Queries
+# gemischt — System-Prompts haben keinen Locale-Track wie die Entity-Typen.
+_ATTENTION_COUNTS = """
+    SELECT
+        (SELECT COUNT(*)::int FROM agent_memory
+         WHERE workspace_id = $1 AND status = 'pending') AS pending_memories,
+        (SELECT COUNT(*)::int
+         FROM system_prompt_template t
+         JOIN system_prompt_template_version tv
+           ON tv.template_id = t.id AND tv.version = t.current_version
+         WHERE t.workspace_id = $1 AND tv.status = 'review') AS pending_system_prompts
+"""
+
+
 @dataclass(frozen=True)
 class DashboardActivityRow:
     """Raw-Row aus `_ACTIVITY` — wird im Service zum DTO gemappt."""
@@ -144,6 +162,10 @@ class DashboardRepository(Protocol):
         """Eine Activity-Seite plus die Gesamtzahl ueber alle Seiten."""
         ...
 
+    async def attention_counts(self, workspace_id: UUID) -> tuple[int, int]:
+        """(pending Memories, System-Prompt-Templates in Review)."""
+        ...
+
 
 class PgDashboardRepository:
     """asyncpg-Implementierung von `DashboardRepository`."""
@@ -162,6 +184,11 @@ class PgDashboardRepository:
             {VersionStatus(row["status"]): row["n"] for row in playbook_rows},
             {VersionStatus(row["status"]): row["n"] for row in resource_rows},
         )
+
+    async def attention_counts(self, workspace_id: UUID) -> tuple[int, int]:
+        row = await self._pool.fetchrow(_ATTENTION_COUNTS, workspace_id)
+        assert row is not None
+        return (int(row["pending_memories"]), int(row["pending_system_prompts"]))
 
     async def recent_activity(
         self, workspace_id: UUID, limit: int, offset: int

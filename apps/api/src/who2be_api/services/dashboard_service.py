@@ -106,9 +106,14 @@ class DashboardService:
         page_size: int = DEFAULT_ACTIVITY_PAGE_SIZE,
     ) -> DashboardResponse:
         offset = (page - 1) * page_size
-        (persona_counts, playbook_counts, resource_counts), (rows, total) = await asyncio.gather(
+        (
+            (persona_counts, playbook_counts, resource_counts),
+            (rows, total),
+            (pending_memories, pending_system_prompts),
+        ) = await asyncio.gather(
             self._repo.status_distribution(ctx.workspace_id),
             self._repo.recent_activity(ctx.workspace_id, page_size, offset),
+            self._repo.attention_counts(ctx.workspace_id),
         )
         persona = _to_distribution(persona_counts)
         playbook = _to_distribution(playbook_counts)
@@ -121,6 +126,8 @@ class DashboardService:
                 active_playbooks=playbook.active,
                 active_resources=resource.active,
                 pending_reviews=persona.review + playbook.review + resource.review,
+                pending_memories=pending_memories,
+                pending_system_prompts=pending_system_prompts,
             ),
             activity=[_to_activity(row) for row in rows],
             activity_pagination=ActivityPagination(
