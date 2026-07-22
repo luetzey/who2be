@@ -1,0 +1,124 @@
+# === Dokploy Cloud-Edition Overlay ===========================================
+# Overlay ueber deploy/dokploy/docker-compose.yml. Schaltet den kombinierten
+# Dokploy-Stack (Single-Stack, Traefik uebernimmt Routing/TLS) von der On-Prem-
+# auf die CLOUD-Edition. Pendant zu deploy/hetzner/who2be/docker-compose.cloud.yml
+# (Split-Stack) und zum lokalen docker-compose.cloud.yml im Repo-Root.
+#
+# Anders als Hetzner liegt die DB HIER im selben Compose (`db`,
+# supabase/postgres) auf dem internen Netz `who2be` — DB-Name `postgres`, Owner
+# `supabase_admin`. redis + set-app-role-password haengen daher ebenfalls an
+# `who2be` (nicht an getrennten app-net/supabase-net wie bei Hetzner).
+#
+# IMMER beide Files zusammen starten:
+#   docker compose \
+#     -f deploy/dokploy/docker-compose.yml \
+#     -f deploy/dokploy/docker-compose.cloud.yml \
+#     up -d --build
+#
+# In der Dokploy-UI: unter "Compose Path" beide Files angeben (das Overlay
+# zusaetzlich zur Basis), damit Dokploy sie zusammen rendert. Ohne Overlay
+# laeuft der On-Prem-Kern unveraendert (kein Billing, RLS-Bypass, In-Memory-
+# Rate-Limit) — das Default-Verhalten bleibt erhalten.
+#
+# Pflicht-Env zusaetzlich zur Basis (in Dokploy → Environment):
+#   APP_DB_PASSWORD   — frei waehlbares Passwort der RLS-Rolle `who2be_app`.
+# Optional (nur fuer den echten Mollie-Payment-Test; sonst leer lassen ⇒ die
+# /v1/billing-Checkout/Webhook-Pfade liefern 503, Limits gehen trotzdem):
+#   MOLLIE_API_KEY        — Test-Key `test_…` (Mollie-Dashboard → Developers).
+#   MOLLIE_WEBHOOK_URL    — https://api.${DOMAIN}/v1/billing/mollie/webhook.
+#                           KEIN Tunnel noetig — Dokploy/Traefik hat eine echte
+#                           oeffentliche TLS-Domain (anders als lokal/localhost).
+#   MOLLIE_WEBHOOK_SECRET — optionaler ?token=-Gate auf dem Mollie-Webhook.
+#   SUPABASE_SERVICE_KEY  — service_role-JWT fuer Invitation-/Account-Mails.
+#
+# Ein Pro-Entitlement OHNE Mollie setzen (fuer Limit-Tests): per Direkt-SQL gegen
+# `org_entitlement` (source='cloud') oder ueber den auditierten Override-Endpoint
+# `POST /v1/workspaces/{ws}/billing/override` — siehe docs/cloud-prod-smoke.md.
+#
+# Fuer echte Cloud-Mail-Paritaet zusaetzlich in der Basis-`auth` setzen:
+#   GOTRUE_MAILER_AUTOCONFIRM=false + GOTRUE_SMTP_* (echter Provider). Fuer einen
+#   ersten Solo-Smoke darf autoconfirm (Basis-Default) `true` bleiben.
+services:
+  # runtime-cloud-Image: zieht das who2be-billing-Paket (Mollie-SDK) in den Build
+  # (ADR-0029). Ohne `target` baut der Dockerfile die On-Prem-Stage ohne Billing —
+  # dann liefern die /v1/billing-Pfade Fehler. pull_policy=build erzwingt den
+  # lokalen Cloud-Build.
+  migrate:
+    build:
+      target: runtime-cloud
+    pull_policy: build
+
+  api:
+    build:
+      target: runtime-cloud
+    pull_policy: build
+    environment:
+      # Cloud-Edition scharf: Limits + Billing-Adapter aktiv (config.py:edition).
+      WHO2BE_EDITION: cloud
+      # Laufzeit-Connection als nicht-privilegierte Rolle `who2be_app` ⇒ RLS
+      # aktiv (Migration 0037). Die Basis-DATABASE_URL (Owner supabase_admin)
+      # bleibt geerbt und wird nur noch von `migrate` genutzt.
+      APP_DATABASE_URL: postgresql://who2be_app:${APP_DB_PASSWORD}@db:5432/postgres
+      # Rate-Limit-Storage auf Redis (Sliding-Window teilt sich ueber Prozesse).
+      RATE_LIMIT_STORAGE_URI: redis://redis:6379
+      # Billing (Mollie). Leer ⇒ Checkout/Webhook 503; die Limit-Tests brauchen
+      # den Key nicht. Live-Key erst bei echten Kunden.
+      MOLLIE_API_KEY: ${MOLLIE_API_KEY:-}
+      MOLLIE_WEBHOOK_SECRET: ${MOLLIE_WEBHOOK_SECRET:-}
+      # Oeffentliche https-Webhook-URL. Mollie ruft sie nach Zahlung — zeigt auf
+      # die API hinter Traefik: https://api.<DOMAIN>/v1/billing/mollie/webhook.
+      MOLLIE_WEBHOOK_URL: ${MOLLIE_WEBHOOK_URL:-}
+      # Invitation-/Account-Delete-Mails via GoTrue-Admin (service_role-JWT).
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
+      # Basis-URL der Web-App fuer Mail-/Redirect-Links.
+      WEB_BASE_URL: ${WEB_BASE_URL:-https://app.${DOMAIN}}
+    depends_on:
+      set-app-role-password:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  # Cloud-Web-Bundle: VITE_* wirkt zur Compile-Zeit (Vite) — die Billing-UI ist
+  # sonst tree-geshaked (ADR-0029). pull_policy=build erzwingt den lokalen
+  # Cloud-Build, analog zu migrate/api. Die uebrigen VITE_*-Build-Args (API-/
+  # Supabase-/MCP-URLs) werden aus der Basis gemergt.
+  web:
+    build:
+      args:
+        VITE_WHO2BE_EDITION: cloud
+    pull_policy: build
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    networks: [who2be]
+    restart: unless-stopped
+    # Bewusst KEIN ports: — nur die API erreicht Redis im internen who2be-Netz.
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-Shot: setzt das Passwort der Rolle `who2be_app` (Migration 0036 legt die
+  # Rolle an, das Secret liegt ausserhalb des Repos). Laeuft nach `migrate` und
+  # vor `api`, damit die App-Connection (APP_DATABASE_URL) sofort verbindet.
+  # Verbindet als Owner `supabase_admin` gegen die in-Compose-DB (analog zum
+  # bestehenden `db-roles`-Service der Basis).
+  set-app-role-password:
+    image: postgres:16
+    entrypoint: ["/bin/sh", "/scripts/set-app-role-password.sh"]
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      PGUSER: ${POSTGRES_USER:-supabase_admin}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:-postgres}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+    volumes:
+      - ../../scripts/set-app-role-password.sh:/scripts/set-app-role-password.sh:ro
+    networks: [who2be]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"

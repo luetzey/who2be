@@ -58,13 +58,12 @@ Diese Datei beschreibt den **Cloud**-Modus. Fuer einen klassischen Dev-Lauf
 
 - `docker` + `docker compose` (Docker Desktop oder Engine).
 - Browser fuer Web-UI und Mailpit-UI.
-- `curl` + `uv` auf dem Host (fuer die MCP-/429-Checks und das CLI-Tool
-  `who2be-set-entitlement`).
+- `curl` + `uv` auf dem Host (fuer die MCP-/429-Checks).
 - **Optional (nur Variante B, §4):** ein **Mollie-Test-Key** (`test_…`) aus dem
   Mollie-Dashboard (Developers → API keys) **und** ggf. ein Tunnel auf die API
   (`ngrok http 8000` oder `cloudflared tunnel --url http://localhost:8000`)
   fuer den echten Webhook-Pull. Ohne Mollie-Key faehrt der Cloud-Stack genauso
-  hoch — Variante A (CLI) deckt die Reise vollstaendig ab.
+  hoch — Variante A (Direkt-SQL) deckt die Reise vollstaendig ab.
 
 ## 1 — `.env` vorbereiten
 
@@ -92,8 +91,7 @@ Compose-Stack).
 
 > `MOLLIE_API_KEY` ist **optional**. Der Cloud-Stack bootet ohne Key; nur die
 > Mollie-Checkout/-Webhook-Pfade sind dann 503 (Variante B). Variante A nutzt
-> stattdessen das Betreiber-CLI `who2be-set-entitlement` und braucht den Key
-> nicht.
+> stattdessen Direkt-SQL gegen `org_entitlement` und braucht den Key nicht.
 
 ## 2 — Cloud-Stack starten (Overlay)
 
@@ -210,33 +208,44 @@ docker compose -f docker-compose.yml -f docker-compose.cloud.yml \
 `<ws-id>` ist die Workspace-Id derselben Org (`organizations[].workspaces[].id`
 aus `/v1/me`).
 
-### 4 — Variante A (Default, OHNE Mollie): CLI
+### 4 — Variante A (Default, OHNE Mollie): Direkt-SQL
 
-Das Betreiber-CLI `who2be-set-entitlement` schreibt den Pro-Tier direkt in
-`org_entitlement` (`source='manual'`, ohne Webhook). Tier-Defaults
-(Features + Quota/Rate) kommen aus `licensing/plans.py` — Single Source of
-Truth, kein hartkodiertes Mapping im CLI.
+Das fruehere Betreiber-CLI `who2be-set-entitlement` ist entfernt (ADR-0028, G-3).
+Lokal setzt du den Pro-Tier am schnellsten per Direkt-SQL in `org_entitlement`
+(`source='cloud'` — vom CHECK erlaubt und ohne Pflicht-Extra-Spalten). Die
+Pro-Defaults (Features + Quota/Rate) stehen als Single Source of Truth in
+`licensing/plans.py`; hier setzen wir sie explizit:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.cloud.yml \
-  exec api who2be-set-entitlement <ORG_ID> pro
-# → Org <ORG_ID> → pro (manual)
-#     status:            active
-#     features:          agents, audit_export, composite_playbooks, core
-#     mcp_monthly_quota: 100000
-#     mcp_rate_per_min:  240
+  exec db psql -U postgres -d who2be -c \
+  "INSERT INTO org_entitlement
+     (org_id, status, features, mcp_monthly_quota, mcp_rate_per_min, source)
+   VALUES ('<ORG_ID>', 'active',
+     '[\"core\",\"composite_playbooks\",\"agents\",\"audit_export\"]'::jsonb,
+     100000, 240, 'cloud')
+   ON CONFLICT (org_id) DO UPDATE SET
+     status=EXCLUDED.status, features=EXCLUDED.features,
+     mcp_monthly_quota=EXCLUDED.mcp_monthly_quota,
+     mcp_rate_per_min=EXCLUDED.mcp_rate_per_min, source=EXCLUDED.source;"
+# → INSERT 0 1  (status active, Pro-Features, Quota 100000 / Rate 240)
 ```
 
-> **Nur lokal / Dev / Betreiber.** Das CLI laeuft als Owner (`DATABASE_URL`,
-> RLS-Bypass) und ist bewusst kein HTTP-Endpoint. In Prod fuehrt der
-> Mollie-Webhook das Upsert — manuelle Overrides bleiben Ausnahmen.
+> **Nur lokal / Dev / Betreiber.** Der `db exec` laeuft als Owner (RLS-Bypass)
+> und ist bewusst kein HTTP-Endpoint. In Prod fuehrt der Mollie-Webhook das
+> Upsert; der auditierte Ersatz fuer manuelle Grants ist der Override-Endpoint
+> `POST /v1/workspaces/<ws-id>/billing/override` (`{"plan":"pro","days":30,
+> "reason":"…"}`, Admin + aal2/MFA + `WHO2BE_BILLING_OVERRIDE_OPERATORS`) —
+> siehe `docs/cloud-prod-smoke.md`.
 
-Mit Override-Flags fuer §5 (kleine Quota zwingt den 429-Fall in Sekunden,
-statt 1.000 Reads):
+Fuer §5 (kleine Quota zwingt den 429-Fall in Sekunden, statt 1.000 Reads) die
+Limits direkt runterdruecken — das Pro-Featureset bleibt:
 
 ```bash
-dcc exec api who2be-set-entitlement <ORG_ID> pro --quota 2 --rate 5
-# Pro-Featureset bleibt; Limits sind auf 2/Monat und 5/min runter.
+dcc exec db psql -U postgres -d who2be -c \
+  "UPDATE org_entitlement SET mcp_monthly_quota=2, mcp_rate_per_min=5
+     WHERE org_id='<ORG_ID>';"
+# Limits auf 2/Monat und 5/min runter.
 ```
 
 ### 4 — Variante B (OPTIONAL, mit Mollie-Test-Key): Test-Checkout
@@ -297,9 +306,9 @@ API-Token-Aufrufer (der MCP-Server) — Web-/JWT-Reads passieren ungehindert.
 Zwei Schranken: **Per-Token-Rate/min** (schnell zu treffen) und das
 **Monats-Kontingent** (beide → **429**); ein `inactive` Entitlement → 402.
 
-Am schnellsten in Sekunden via CLI-Override aus §4 Variante A: kurz vor
-diesem Schritt die Quota auf 2 druecken (`--quota 2 --rate 5`), dann ein
-paar MCP-Reads im Loop:
+Am schnellsten in Sekunden via SQL-Override aus §4 Variante A: kurz vor
+diesem Schritt die Quota per `UPDATE … SET mcp_monthly_quota=2, mcp_rate_per_min=5`
+druecken, dann ein paar MCP-Reads im Loop:
 
 ```bash
 export WHO2BE_API_BASE_URL=http://localhost:8000
@@ -329,8 +338,12 @@ Free (gated Features sind weg, Free-Limits gelten). Zwei Wege, beide
 aequivalent zur Wirkung des Mollie-Webhooks:
 
 ```bash
-# Variante 1 — explizit auf Free zurueck (Featureset = core).
-dcc exec api who2be-set-entitlement <ORG_ID> free
+# Variante 1 — explizit auf Free-Defaults zurueck (Featureset = core).
+dcc exec db psql -U postgres -d who2be -c \
+  "UPDATE org_entitlement
+      SET features='[\"core\"]'::jsonb, mcp_monthly_quota=1000,
+          mcp_rate_per_min=30, source='cloud'
+    WHERE org_id='<ORG_ID>';"
 
 # Variante 2 — Entitlement-Zeile loeschen ⇒ Cloud-Adapter faellt
 # auf `CLOUD_FREE_ENTITLEMENT` zurueck (gleicher Default wie eine
@@ -425,17 +438,19 @@ wird beim naechsten Hochfahren erneut gesetzt).
   Mailpit den Confirm-Link klicken. (Im dev-Stack waere autoconfirm an — hier
   bewusst nicht.)
 
-- **`who2be-set-entitlement: command not found`** → das Console-Script wird
-  beim Image-Build registriert (`apps/api/pyproject.toml`). Nach Code-Aenderungen
-  `dcc up -d --build api` neu bauen; das CLI ist nur im `api`-Container.
+- **`new row … violates check constraint "org_entitlement_source_check"`** →
+  das SQL nutzt einen unerlaubten `source`. Erlaubt sind nur `mollie`, `cloud`,
+  `manual_override`, `signed_license` (Migration 0043). Fuer Variante A `'cloud'`
+  verwenden (das alte CLI schrieb `'manual'` — nicht mehr gueltig).
 
-- **`Unbekannter Plan-Code …`** → erlaubt sind ausschliesslich `free` und `pro`
-  (Tier-Defs aus `licensing/plans.py`). Weitere Tiers werden bewusst hier nicht
-  gespiegelt — die docs/licensing/plans.md bleibt Single Source of Truth.
+- **Plan-Code beim Override-/Checkout-Endpoint abgelehnt** → buchbar ist nur
+  `pro` (Tier-Defs aus `licensing/plans.py`; `free` ist kein Buchungs-Tier).
+  Weitere Tiers werden bewusst nicht gespiegelt — docs/licensing/plans.md bleibt
+  Single Source of Truth.
 
 - **Checkout liefert 503** (nur Variante B) → `MOLLIE_API_KEY` fehlt/leer.
   Test-Key in `.env` setzen und `dcc up -d api` neu ausrollen. Oder einfach
-  Variante A (CLI) nutzen — sie kommt ohne Mollie aus.
+  Variante A (Direkt-SQL) nutzen — sie kommt ohne Mollie aus.
 
 - **Mollie ruft den Webhook nicht** (nur Variante B) → localhost ist fuer
   Mollie nicht erreichbar. Entweder Tunnel + `MOLLIE_WEBHOOK_URL` setzen, oder
@@ -444,8 +459,9 @@ wird beim naechsten Hochfahren erneut gesetzt).
 - **Keine `429` im 429-Check** → Edition pruefen (`dcc exec api printenv
   WHO2BE_EDITION` muss `cloud` sein) und dass ein **API-Token** (`w2b_…`),
   nicht ein Web-JWT, genutzt wird — nur Token-Reads unterliegen dem Gate.
-  Mit `dcc exec api who2be-set-entitlement <ORG_ID> pro --quota 2 --rate 5`
-  laesst sich der Fall in wenigen Reads erzwingen.
+  Mit `dcc exec db psql -U postgres -d who2be -c "UPDATE org_entitlement SET
+  mcp_monthly_quota=2, mcp_rate_per_min=5 WHERE org_id='<ORG_ID>';"` laesst sich
+  der Fall in wenigen Reads erzwingen.
 
 - **`400 Request Header Or Cookie Too Large` (nginx) beim Google/GitHub-Accept**
   → auth-gateway-Header-Puffer. Mit aktuellem `supabase/gateway.conf` behoben;

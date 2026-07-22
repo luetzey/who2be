@@ -132,11 +132,14 @@ docker compose \
 ```
 
 Abnahme-Reise (Signup → Verify → Pro-Entitlement → MCP-Quota 429 → Downgrade →
-RLS-Nachweis): `docs/cloud-local-smoke.md` 1:1 gegen `https://api.${DOMAIN}`
-statt `localhost` fahren. Pro-Entitlement ohne Mollie per CLI:
+RLS-Nachweis): `docs/cloud-prod-smoke.md` gegen `https://api.${DOMAIN}` fahren.
+Pro-Entitlement ohne Mollie ueber den auditierten Override-Endpoint (Admin +
+aal2/MFA + `WHO2BE_BILLING_OVERRIDE_OPERATORS`):
 
 ```bash
-docker compose ... exec api who2be-set-entitlement <ORG_ID> pro
+curl -s -X POST https://api.${DOMAIN}/v1/workspaces/<WS_ID>/billing/override \
+  -H "Authorization: Bearer $TOK" -H "Content-Type: application/json" \
+  -d '{"plan":"pro","days":30,"reason":"cloud smoke"}'
 ```
 
 > **Wichtig:** Ein Wechsel zwischen On-Prem und Cloud auf demselben Volume ist
