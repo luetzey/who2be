@@ -18,7 +18,7 @@ Ebene.**
 | Test-Strategie / TDD / Pyramide | [`testing-standards.md`](testing-standards.md) | ADR-0041 (Test-Strategie), `CONTRIBUTING.md` §DoD |
 | Security (Zero-Trust, fail-closed, Auth, Header) | [`security-standards.md`](security-standards.md) | `docs/security-findings*.md`, ADR-0035, `deploy/hetzner/Caddyfile`, Subagent `security-reviewer` |
 | Frontend (Design-System, Tokens, A11y) | [`frontend-standards.md`](frontend-standards.md) | `docs/frontend/design-language.md`, `.claude/skills/react-conventions` |
-| Compliance + OSS-Lizenz-Hygiene | [`compliance-standards.md`](compliance-standards.md) | `docs/compliance/`, ADR-0033, `LICENSE.md` |
+| Compliance + OSS-Lizenz-Hygiene | [`compliance-standards.md`](compliance-standards.md) | `docs/compliance/`, ADR-0033, `LICENSE` |
 
 ## Prinzip
 

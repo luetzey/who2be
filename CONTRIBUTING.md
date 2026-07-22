@@ -19,7 +19,7 @@ oeffentlich ist. Bis dahin sind externe Beitraege noch nicht freigeschaltet.
 ## Lizenz
 
 Who2Be steht unter der
-[Functional Source License 1.1 (Apache 2.0 Future)](LICENSE.md). Beitraege
+[Functional Source License 1.1 (Apache 2.0 Future)](LICENSE). Beitraege
 werden unter derselben Lizenz aufgenommen.
 
 ## Branch-Konvention
