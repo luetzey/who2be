@@ -170,6 +170,8 @@ def test_dashboard_seed_baseline_for_fresh_workspace(
                 "active_playbooks": 6,
                 "active_resources": 1,
                 "pending_reviews": 0,
+                "pending_memories": 0,
+                "pending_system_prompts": 0,
             }
             assert body["activity"] == []
             empty_dist = {"draft": 0, "review": 0, "active": 0, "inactive": 0}
@@ -311,6 +313,79 @@ def test_dashboard_aggregates_status_and_activity(
             assert second["actor"]["display_name"] == "QA Owner"
     finally:
         cleanup_workspaces([owner])
+
+
+def _insert_pending_memory(workspace_id: UUID, fact: str) -> None:
+    """Legt einen pending Memory-Vorschlag am Seed-Builder-Agenten ab."""
+
+    async def _run() -> None:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            agent_id = await conn.fetchval(
+                "SELECT id FROM agent WHERE workspace_id = $1 LIMIT 1", workspace_id
+            )
+            assert agent_id is not None, "Workspace-Seed hat keinen Agenten angelegt"
+            await conn.execute(
+                "INSERT INTO agent_memory (workspace_id, agent_id, status, fact) "
+                "VALUES ($1, $2, 'pending', $3)",
+                workspace_id,
+                agent_id,
+                fact,
+            )
+        finally:
+            await conn.close()
+
+    asyncio.run(_run())
+
+
+@pytest.mark.integration
+def test_dashboard_counts_pending_memories_and_system_prompt_reviews(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Aufmerksamkeits-Zaehler: pending Memories (ADR-0044) + System-Prompt-
+    Templates, deren aktuelle Version zur Review liegt — inkl. Isolation
+    gegen einen zweiten Workspace."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner_a = fresh_user_id()
+    owner_b = fresh_user_id()
+    ws_a = setup_workspace(owner_a)
+    ws_b = setup_workspace(owner_b)
+    auth_a = _auth(owner_a)
+    auth_b = _auth(owner_b)
+
+    try:
+        with TestClient(app) as client:
+            base_a = client.get(f"/v1/workspaces/{ws_a}/dashboard", headers=auth_a).json()["kpis"]
+            base_b = client.get(f"/v1/workspaces/{ws_b}/dashboard", headers=auth_b).json()["kpis"]
+
+            # Zwei pending Memories in A; ein Template dessen v1 zur Review liegt.
+            _insert_pending_memory(ws_a, "Nutzer bevorzugt knappe Antworten.")
+            _insert_pending_memory(ws_a, "Projekt-Deadline ist Ende Q3.")
+            template = client.post(
+                f"/v1/workspaces/{ws_a}/system-prompts",
+                json={"name": "Attention-Test", "content": {"body": "Du bist ein Test-Agent."}},
+                headers=auth_a,
+            ).json()
+            _seed_version_status(
+                "system_prompt_template_version", "template_id", UUID(template["id"]), 1, "review"
+            )
+
+            kpis_a = client.get(f"/v1/workspaces/{ws_a}/dashboard", headers=auth_a).json()["kpis"]
+            assert kpis_a["pending_memories"] == base_a["pending_memories"] + 2
+            assert kpis_a["pending_system_prompts"] == base_a["pending_system_prompts"] + 1
+            # System-Prompts zaehlen NICHT in die Entity-Review-KPI hinein.
+            assert kpis_a["pending_reviews"] == base_a["pending_reviews"]
+
+            # Workspace B bleibt unberuehrt (Cross-Workspace-Isolation).
+            kpis_b = client.get(f"/v1/workspaces/{ws_b}/dashboard", headers=auth_b).json()["kpis"]
+            assert kpis_b["pending_memories"] == base_b["pending_memories"]
+            assert kpis_b["pending_system_prompts"] == base_b["pending_system_prompts"]
+    finally:
+        cleanup_workspaces([owner_a, owner_b])
 
 
 @pytest.mark.integration

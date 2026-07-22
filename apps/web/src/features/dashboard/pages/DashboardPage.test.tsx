@@ -11,7 +11,14 @@ afterEach(() => {
 })
 
 const sampleData: DashboardData = {
-  kpis: { active_personas: 12, active_playbooks: 34, active_resources: 7, pending_reviews: 3 },
+  kpis: {
+    active_personas: 12,
+    active_playbooks: 34,
+    active_resources: 7,
+    pending_reviews: 3,
+    pending_memories: 2,
+    pending_system_prompts: 1,
+  },
   activity: [
     {
       ts: '2026-05-28T10:00:00Z',
@@ -58,6 +65,22 @@ describe('DashboardPage', () => {
     expect(within(kpis).getByText('7')).toBeInTheDocument()
     // Pending-Reviews steckt jetzt im Aufmerksamkeits-Band statt in einer KPI.
     expect(screen.getByText(/warten auf Review/)).toBeInTheDocument()
+    // Neue Aufmerksamkeits-Signale: pending Memories + System-Prompt-Reviews,
+    // jeweils mit Deep-Link in die Triage-Fläche.
+    expect(
+      screen.getByText('2 neue Gedächtniseinträge warten auf Freigabe'),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Agenten öffnen/ })).toHaveAttribute(
+      'href',
+      '/w/ws-1/agents',
+    )
+    expect(screen.getByText('1 System-Prompt liegt zur Review')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Zur Review/ })).toHaveAttribute(
+      'href',
+      '/w/ws-1/system-prompts?status=review',
+    )
+    // Solange etwas ansteht, gibt es kein „Alles erledigt".
+    expect(screen.queryByText('Alles erledigt')).not.toBeInTheDocument()
     expect(screen.getByText(/Alice/)).toBeInTheDocument()
     expect(screen.getByText(/Coaching/)).toBeInTheDocument()
     expect(screen.getByRole('img', { name: /Personae:/ })).toBeInTheDocument()
@@ -196,5 +219,10 @@ describe('DashboardPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Noch keine Aktivitäten.')).toBeInTheDocument()
     })
+    // Ohne Reviews, pending Memories und System-Prompt-Reviews (Felder fehlen
+    // im Payload → Fallback 0) zeigt das Band den Alles-erledigt-Zustand.
+    expect(screen.getByText('Alles erledigt')).toBeInTheDocument()
+    expect(screen.queryByText(/Gedächtniseint/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/liegt zur Review|liegen zur Review/)).not.toBeInTheDocument()
   })
 })
