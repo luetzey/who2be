@@ -202,3 +202,72 @@ Mechanik des Button-Refresh (praezisiert):
 Timeouts/Groessenlimits) + Wizard-UI; WP-2 Refresh-Dialog + Diff-Ansicht +
 Draft-Erzeugung. ADR-0045 dokumentiert A+ inkl. Abgrenzung zu ADR-0043-C und
 Ausbaupfad B.
+
+## 8. Gateway-Reflexion (2026-07-22, Owner: „eventuell doch ueber die
+Gateway-Idee nachdenken")
+
+### Was der Gateway strategisch boete
+
+Der Gateway (Who2Be routet `call_tool` des Agenten an den echten Server)
+ist nicht nur „Komplexitaet ohne Mehrwert" — die Bewertung aus ADR-0043 galt
+fuer den *instruktiven* Anwendungsfall. Inzwischen existiert Infrastruktur,
+die dem Gateway ueberraschend weit entgegenkommt und seinen Wert erhoeht:
+
+- **Per-Agent-Policy existiert schon:** `PolicyFilterMiddleware` filtert
+  `tools/list` pro Agent (ADR-0042, SSoT `tool_requirements`). Ein Gateway
+  wuerde externe Tools in genau dieses Rechtemodell einreihen — Admins
+  vergeben Todoist an Agent X, nicht an Agent Y. Das kann heute keine
+  Agent-Runtime leisten.
+- **Ein Connector pro Agent existiert schon:** OAuth-2.1-Connector mit
+  per-Agent-URL (ADR-0036). Gateway hiesse: der User konfiguriert in
+  Claude & Co. genau EINEN Connector und bekommt alle externen Tools mit —
+  statt N Connectoren pro Runtime zu pflegen.
+- **Observability existiert schon:** `usage_event`/Feedback-Flywheel
+  (ADR-0038) + Rate-Limits (ADR-0039) wuerden externe Tool-Calls
+  mitprotokollieren/begrenzen — zentrale Audit-Sicht ueber alles, was
+  Agenten tun.
+
+Der eigentliche strategische Hebel: Who2Be wird vom Anweisungs-Katalog zur
+**Kontroll-Ebene fuer Agent-Faehigkeiten** (Persona + Playbooks + Memory +
+Tools an einem Ort, mit RBAC/Audit).
+
+### Was er kostet (die ADR-0043-Gruende gelten weiter)
+
+1. **Credential-Storage wird Pflicht** — genau die Oberflaeche, die A+
+   vermeidet (verschluesselte Secrets pro Workspace, Rotation, Export-Ausschluss).
+2. **Who2Be steht im Laufzeit-Pfad jedes Tool-Calls:** Latenz, Timeouts,
+   Streaming-/Session-Bridging (FastMCP als Client UND Server), neue
+   Fehlerbilder („Server X antwortet nicht" mitten im Agent-Turn),
+   Verfuegbarkeits-Kopplung.
+3. **Confused-Deputy-Risiko:** Who2Be ruft mit Workspace-Credentials, was
+   ein Agent verlangt — Autorisierung muss pro Agent UND pro Downstream-Tool
+   hart geprueft werden; SSRF wird vom Import-Zeitpunkt zum Dauerthema.
+4. **Namespacing:** Tool-Namen kollidieren (`add_task` von zwei Servern) —
+   Alias-Praefix (`todo__add_task`) noetig, inkl. `tool_requirements`-Logik
+   fuer dynamische (nicht mehr statisch gemappte) Tools.
+
+### Drei Optionen fuer den Weg dorthin
+
+- **G1 — Workspace-Credential-Gateway:** `mcp_connection` (aus Option B)
+  speichert Verbindung + Secret; Gateway routet per Alias-Namespace; Policy
+  via bestehendem Rechtemodell. Trade-off: schnellster Weg zum Nutzen, aber
+  ein Workspace-Secret fuer alle Agenten (grobkoernig).
+- **G2 — Delegierte Credentials (OAuth-Downstream pro Agent/User):** jeder
+  Downstream-Server wird per OAuth vom User autorisiert, Who2Be haelt Tokens
+  pro Agent. Feinstes Rechtemodell, aber deutlich groesster Aufwand
+  (Downstream-OAuth-Flows, Token-Refresh, Consent-UX) — v2-Material.
+- **G3 — Kein Laufzeit-Gateway (Kontroll-Ebene ohne Proxy):** A+/B zu Ende
+  bauen; Who2Be verteilt Konfiguration (Connector-Listen, Anweisungen),
+  routet aber nie Calls. Billigste Option, verzichtet auf Policy/Audit fuer
+  externe Calls.
+
+### Einordnung zur A+-Entscheidung
+
+A+ (§7) wird durch die Gateway-Frage **nicht entwertet, sondern ist Stufe 1
+desselben Pfads**: der MCP-Client (`initialize`/`tools/list`), der
+Egress-Guard, `source_server_url`/`source_auth_kind` und die importierten
+Kataloge sind exakt die Bausteine, die G1 braucht. Empfohlener Pfad:
+**A+ jetzt umsetzen → Erfahrung sammeln → Gateway als eigenes ADR (G1 zuerst,
+G2 als Ausbaustufe) entscheiden**, sobald der Treiber klar ist (zentrale
+Rechtevergabe? Ein-Connector-Komfort? Audit?). Der Treiber bestimmt, ob G1
+reicht oder G3 genuegt — Owner-Antwort ausstehend.
