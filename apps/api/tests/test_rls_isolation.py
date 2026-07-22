@@ -26,6 +26,13 @@ from who2be_api.core.migrations import MIGRATIONS_DIR, apply_migrations
 # wird per format() in ALTER ROLE eingesetzt.
 _APP_PASSWORD = "rls_test_secret"  # noqa: S105 — Test-Fixture, kein echtes Secret
 
+# Tabellen, die eine workspace_id/org_id-Spalte tragen, aber BEWUSST keine
+# tenant_isolation-Policy haben. Nur `workspace`: es traegt `org_id`, ist aber
+# die control-plane-Wurzel (Parent des Mandanten, kein Mandant im RLS-Sinn) —
+# dokumentiert in 0037 und core/security.py (org-Lookup laeuft vor tenant_scope).
+# Jeder weitere Eintrag hier muss eine bewusste, begruendete Ausnahme sein.
+_RLS_EXEMPT_SCOPED_TABLES = frozenset({"workspace"})
+
 
 def _db_reachable() -> bool:
     async def _check() -> bool:
@@ -175,6 +182,75 @@ def test_rls_blocks_cross_workspace_reads_for_app_role() -> None:
         finally:
             if app is not None:
                 await app.close()
+            await owner.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+            await owner.close()
+
+    asyncio.run(_run())
+
+
+@pytest.mark.integration
+def test_every_scoped_table_has_rls_policy() -> None:
+    """Generischer Coverage-Guard: JEDE Tabelle mit workspace_id/org_id-Spalte
+    (ausser der dokumentierten Ausnahme `workspace`) MUSS RLS aktiviert haben und
+    mindestens eine Policy tragen.
+
+    Faengt kuenftige Luecken automatisch, ohne dass eine Tabellenliste manuell
+    gepflegt werden muss — genau die Regression, die historisch passierte
+    (`workspace_invitation` fehlte in 0037 und musste per 0050 nachgezogen
+    werden; die 0068-Steuer-Tabellen ebenso). Neue scoped Tabellen ohne Policy
+    lassen diesen Test fehlschlagen, bis entweder eine Policy ergaenzt oder die
+    Tabelle bewusst in `_RLS_EXEMPT_SCOPED_TABLES` aufgenommen wird.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+
+    settings = get_settings()
+    schema = f"rlscov_{secrets.token_hex(6)}"
+
+    async def _run() -> None:
+        owner = await asyncpg.connect(settings.database_url)
+        try:
+            await owner.execute(f'CREATE SCHEMA "{schema}"')
+            await owner.execute(f'SET search_path TO "{schema}"')
+            await apply_migrations(owner, MIGRATIONS_DIR)
+
+            rows = await owner.fetch(
+                "SELECT DISTINCT table_name FROM information_schema.columns "
+                "WHERE table_schema = current_schema() "
+                "AND column_name IN ('workspace_id', 'org_id')"
+            )
+            scoped = {row["table_name"] for row in rows} - _RLS_EXEMPT_SCOPED_TABLES
+            assert scoped, "Sanity: es muessen scoped Tabellen gefunden werden."
+
+            missing_rls: list[str] = []
+            missing_policy: list[str] = []
+            for table in sorted(scoped):
+                rls_enabled = await owner.fetchval(
+                    "SELECT c.relrowsecurity FROM pg_class c "
+                    "JOIN pg_namespace n ON n.oid = c.relnamespace "
+                    "WHERE n.nspname = current_schema() AND c.relname = $1",
+                    table,
+                )
+                if not rls_enabled:
+                    missing_rls.append(table)
+                    continue
+                policy_count = await owner.fetchval(
+                    "SELECT count(*) FROM pg_policies "
+                    "WHERE schemaname = current_schema() AND tablename = $1",
+                    table,
+                )
+                if not policy_count:
+                    missing_policy.append(table)
+
+            assert not missing_rls, (
+                f"Scoped Tabellen OHNE ENABLE ROW LEVEL SECURITY: {missing_rls} — "
+                "Policy ergaenzen oder bewusst in _RLS_EXEMPT_SCOPED_TABLES aufnehmen."
+            )
+            assert not missing_policy, (
+                f"Scoped Tabellen mit RLS aber OHNE Policy: {missing_policy} — "
+                "tenant_isolation-Policy ergaenzen."
+            )
+        finally:
             await owner.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
             await owner.close()
 
