@@ -30,9 +30,7 @@ class WorkspaceMemberService:
     das Entfernen/Herabstufen. Push-Revocation analog zum OAuth-Refresh-Kill.
     """
 
-    def __init__(
-        self, member_repo: WorkspaceMemberRepository, token_repo: TokenRepository
-    ) -> None:
+    def __init__(self, member_repo: WorkspaceMemberRepository, token_repo: TokenRepository) -> None:
         self._repo = member_repo
         self._tokens = token_repo
 
