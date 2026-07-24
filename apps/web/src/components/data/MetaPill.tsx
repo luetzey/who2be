@@ -28,6 +28,9 @@ const metaPillVariants = cva(
         tools: 'bg-pill-tools text-pill-tools-fg',
         catalog: 'bg-pill-catalog text-pill-catalog-fg',
         destructive: 'bg-destructive/10 text-destructive',
+        // Aufmerksamkeits-Marker (Brand-Flaeche wie AttentionBanner §8:
+        // Tinte bleibt Foreground, nie text-brand auf Icons).
+        brand: 'bg-brand/10 text-foreground',
       },
     },
     defaultVariants: { tone: 'muted' },

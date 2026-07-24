@@ -107,6 +107,30 @@ describe('AgentsPage', () => {
     expect(within(huelleCard).getByText('Persona fehlt')).toBeInTheDocument()
   })
 
+  it('zeigt den klickbaren Gedächtnis-Pill nur bei offenen Vorschlägen', async () => {
+    const withPending = agent({ id: 'a1', name: 'Carla Bot', pending_memory_count: 3 })
+    const without = agent({ id: 'a2', name: 'Ohne Memories', pending_memory_count: 0 })
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify([withPending, without]), { status: 200 }),
+        ),
+    )
+
+    renderPage()
+    await screen.findByText('Carla Bot')
+
+    // Pill traegt Zaehler + Deep-Link in die Gedaechtnis-Sektion des Agenten.
+    const pill = screen.getByTestId('pending-memories-pill')
+    expect(pill).toHaveTextContent('3 Gedächtniseinträge zur Freigabe')
+    expect(pill).toHaveAttribute('href', '/w/ws-1/agents/a1#memory')
+    // Ohne offene Vorschlaege kein Pill.
+    const otherCard = screen.getByText('Ohne Memories').closest('article') as HTMLElement
+    expect(within(otherCard).queryByTestId('pending-memories-pill')).not.toBeInTheDocument()
+  })
+
   it('filtert nach Status-Chip und Suche', async () => {
     const active = agent({ id: 'a1', name: 'Carla Bot' })
     const incomplete = agent({

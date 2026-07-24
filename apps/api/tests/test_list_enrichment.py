@@ -3,7 +3,9 @@
 Deckt die vier List-Endpunkte ab, die die Web-UI fuer die Karten-Pills braucht:
 
 - `GET .../agents` → `persona_name`, `template_name`, `template_version`
-  (aktive Template-Version) und `playbook_count` (Playbooks der Persona).
+  (aktive Template-Version), `playbook_count` (Playbooks der Persona) und
+  `pending_memory_count` (Gedaechtnis-Vorschlaege in der Freigabe-Schleuse,
+  ADR-0044 — zaehlt NUR `status='pending'`).
 - `GET .../personas` → `playbook_count` + `agent_count`.
 - `GET .../system-prompts` → `agent_count`.
 - `GET .../resources` → `playbook_link_count` (DISTINCT Playbooks) +
@@ -165,6 +167,51 @@ def test_list_endpoints_expose_enrichment_counts(make_auth_headers: AuthFactory)
                 assert row["template_name"] == "Support-Template"
                 assert row["template_version"] == 1
                 assert row["playbook_count"] == 3
+                assert row["pending_memory_count"] == 0
+
+            # --- Agents: pending_memory_count (Freigabe-Schleuse) -------------
+            # Agent 1 bekommt memory_mode=suggest + Token, schlaegt 3 Fakten vor
+            # (alle pending); einer wird freigegeben (active), einer abgelehnt
+            # (rejected) — zaehlen darf nur der verbliebene pending-Eintrag.
+            upd = client.put(
+                f"{base}/agents/{g.agents[0]}",
+                json={"tool_policy": {"memory_mode": "suggest"}},
+                headers=auth,
+            )
+            assert upd.status_code == 200, upd.text
+            token = client.post(
+                f"{base}/tokens",
+                json={"name": "mem-seed", "agent_id": g.agents[0]},
+                headers=auth,
+            )
+            assert token.status_code == 201, token.text
+            mem_auth = {"Authorization": f"Bearer {token.json()['token']}"}
+            mem_ids: list[str] = []
+            for fact in (
+                "Nutzer arbeitet primaer mit Python",
+                "Nutzer hostet auf Hetzner",
+                "Nutzer bevorzugt knappe Antworten",
+            ):
+                saved = client.post(
+                    f"{base}/agent-memories",
+                    json={"fact": fact, "category": "preference", "importance": 7},
+                    headers=mem_auth,
+                )
+                assert saved.status_code == 201, saved.text
+                assert saved.json()["status"] == "pending"
+                mem_ids.append(saved.json()["id"])
+            mem_base = f"{base}/agents/{g.agents[0]}/memories"
+            for mem_id, action in ((mem_ids[1], "approve"), (mem_ids[2], "reject")):
+                triaged = client.post(
+                    f"{mem_base}/{mem_id}/triage", json={"action": action}, headers=auth
+                )
+                assert triaged.status_code == 200, triaged.text
+
+            agents = client.get(f"{base}/agents", headers=auth)
+            assert agents.status_code == 200, agents.text
+            assert _row(agents.json(), g.agents[0])["pending_memory_count"] == 1
+            # Agent 2 hat keine Memories und bleibt auf 0.
+            assert _row(agents.json(), g.agents[1])["pending_memory_count"] == 0
 
             # --- Personas: playbook_count + agent_count -----------------------
             personas = client.get(f"{base}/personas", headers=auth)

@@ -1,6 +1,7 @@
 import { ChevronDown, Trash2 } from 'lucide-react'
-import { type ReactNode, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useLocation } from 'react-router-dom'
 
 import type { MemoryRead, MemoryUpdateInput } from '@/api/types'
 import { useApi } from '@/api/useApi'
@@ -32,6 +33,10 @@ import { cn } from '@/lib/utils'
 import { useAgentMemories } from '../hooks/useAgentMemories'
 
 const IMPORTANCE_LEVELS = Array.from({ length: 10 }, (_, index) => index + 1)
+
+// Dauer des Deep-Link-Highlights (`#memory`): lang genug, um den Blick zu
+// fuehren, kurz genug, um nicht als Dauerzustand zu wirken.
+const HIGHLIGHT_MS = 2000
 
 interface AgentMemorySectionProps {
   agentId: string
@@ -429,6 +434,19 @@ export function AgentMemorySection({ agentId }: AgentMemorySectionProps) {
   const canWrite = role !== null && role !== 'viewer'
   const [showRejected, setShowRejected] = useState(false)
 
+  // Deep-Link `#memory` (Aufmerksamkeits-Pill der Agenten-Uebersicht bzw.
+  // Dashboard): zur Sektion scrollen und sie kurz hervorheben.
+  const { hash } = useLocation()
+  const sectionRef = useRef<HTMLDivElement>(null)
+  const [highlighted, setHighlighted] = useState(false)
+  useEffect(() => {
+    if (hash !== '#memory') return
+    sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setHighlighted(true)
+    const timer = window.setTimeout(() => setHighlighted(false), HIGHLIGHT_MS)
+    return () => window.clearTimeout(timer)
+  }, [hash])
+
   const pending = memories.filter((memory) => memory.status === 'pending')
   const active = memories.filter((memory) => memory.status === 'active')
   const rejected = memories.filter((memory) => memory.status === 'rejected')
@@ -460,7 +478,15 @@ export function AgentMemorySection({ agentId }: AgentMemorySectionProps) {
   const isEmpty = !loading && error === null && memories.length === 0
 
   return (
-    <Card>
+    <Card
+      id="memory"
+      ref={sectionRef}
+      data-testid="memory-section"
+      className={cn(
+        'scroll-mt-6 transition-shadow duration-[var(--duration-fast)] ease-standard',
+        highlighted && 'ring-2 ring-brand/50',
+      )}
+    >
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">

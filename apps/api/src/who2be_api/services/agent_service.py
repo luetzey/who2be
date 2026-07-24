@@ -188,6 +188,7 @@ class AgentService:
                         "template_name": found.template_name,
                         "template_version": found.template_version,
                         "playbook_count": found.playbook_count,
+                        "pending_memory_count": found.pending_memory_count,
                     }
                 )
             )

@@ -816,11 +816,14 @@ export interface Agent {
   // List-Card-Pills: nur der List-Endpoint befuellt diese denormalisierten
   // Namen/Zaehler. persona_name/template_name = null ohne Verknuepfung;
   // template_version = aktive Template-Version (null ohne aktive Version);
-  // playbook_count = Playbooks der verknuepften Persona.
+  // playbook_count = Playbooks der verknuepften Persona;
+  // pending_memory_count = Gedaechtnis-Vorschlaege in der Freigabe-Schleuse
+  // (agent_memory.status='pending', ADR-0044).
   persona_name?: string | null
   template_name?: string | null
   template_version?: number | null
   playbook_count?: number
+  pending_memory_count?: number
 }
 
 export interface AgentInput {
