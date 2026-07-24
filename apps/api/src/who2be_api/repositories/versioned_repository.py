@@ -1,12 +1,21 @@
 """Generische Basis fuer versionierte Aggregat-Repositories (Repo-Review STR-1).
 
 `persona`/`playbook`/`resource` teilen denselben Versionierungs-Kern:
-History-Tabelle (ADR-0004), Status pro Version (ADR-0020), pro-Sprache-Tracks
-(ADR-0027). Bisher lag dieser Kern dreimal nahezu identisch in den drei
-Repos (~1.960 Z.). Diese Basis haelt ihn EINMAL; die Repos werden duenne
-Subklassen, die nur ihre entity-spezifischen Lesepfade (Filter/Tags/Triggers)
-und — fuer typisierte Rueckgaben — die `update`/`upsert_draft`/`restore_version`-
-Wrapper ergaenzen.
+History-Tabelle (ADR-0004), Status pro Version (ADR-0020). Bisher lag dieser
+Kern dreimal nahezu identisch in den drei Repos (~1.960 Z.). Diese Basis haelt
+ihn EINMAL; die Repos werden duenne Subklassen, die nur ihre entity-
+spezifischen Lesepfade (Filter/Tags/Triggers) und — fuer typisierte
+Rueckgaben — die `update`/`upsert_draft`/`restore_version`-Wrapper ergaenzen.
+
+„Ein Element, eine Sprache" (ADR-0045, Plan 2026-07-24): `locale` lebt auf der
+Identitaets-Zeile — Reads sind locale-agnostisch (die aktive Version ist die
+per-entity eindeutige `status='active'`-Row, die aktuelle die globale
+Max-Version), Versions-Writes uebernehmen die Entity-Sprache, und
+`next_version` wird GLOBAL ueber alle locales berechnet (Legacy-Daten aus dem
+ADR-0027-Multi-Track koennen z. B. DE-v1 UND EN-v1 tragen — der Tie-Break
+`ORDER BY version DESC, (locale = e.locale) DESC` haelt solche Reads
+deterministisch). Ein gesetztes Update-`locale` ist ein Metadaten-Update der
+Entity-Sprache; die Versions-Historie behaelt ihre alten locale-Werte.
 
 Die Tabellennamen werden aus `AggregateTables.entity` abgeleitet und beim
 Konstruieren gegen die geteilte `entity_sql`-Whitelist geprueft (Zero-Trust;
@@ -28,7 +37,7 @@ import asyncpg
 from pydantic import BaseModel
 
 from who2be_api.core.entity_sql import safe_entity
-from who2be_models import DEFAULT_LOCALE, VersionStatus
+from who2be_models import VersionStatus
 
 TRead = TypeVar("TRead", bound=BaseModel)
 TVersionRead = TypeVar("TVersionRead", bound=BaseModel)
@@ -92,54 +101,77 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
     def _returning_cols(self) -> str:
         """Identitaets-RETURNING-Spalten (inkl. Slug-Spalte bei slug-Aggregaten)."""
         slug = f"{self._t.slug_column}, " if self._t.has_slug else ""
-        return f"id, workspace_id, owner_id, name, {slug}current_version, created_at, updated_at"
+        return (
+            f"id, workspace_id, owner_id, name, {slug}locale, "
+            "current_version, created_at, updated_at"
+        )
 
     # --- SELECT-Bausteine (von Subklassen-fetch/list eingebettet) ------------
 
-    def _select_current(self, locale_param: str) -> str:
-        """Current-Read pro Sprache: hoechste Version des `locale`-Tracks.
+    def _select_current(self) -> str:
+        """Current-Read (locale-agnostisch): die global hoechste Version.
 
-        `locale_param` ist der asyncpg-Platzhalter (z. B. `"$3"`), der die Ziel-
-        Sprache traegt; er erscheint mehrfach (JOIN + Max-Subquery + Draft-EXISTS).
+        Legacy-Tie-Break: Alt-Daten aus dem ADR-0027-Multi-Track koennen
+        dieselbe Versionsnummer in zwei Sprachen tragen — bevorzugt wird
+        deterministisch die Row in der Entity-Sprache.
         """
         e, ev, fk = self._t.entity, self._t.version_table, self._t.fk
         return (
             f"SELECT e.id, e.workspace_id, e.owner_id, e.name, {self._slug_select()}e.is_managed, "
             "ev.version AS current_version, "
-            "e.created_at, e.updated_at, ev.content, ev.locale, "
+            "e.created_at, e.updated_at, ev.content, e.locale, "
             "ev.status AS current_status, "
             "EXISTS ( "
             f"    SELECT 1 FROM {ev} dv "
-            f"    WHERE dv.{fk} = e.id AND dv.locale = {locale_param} AND dv.status = 'draft' "
+            f"    WHERE dv.{fk} = e.id AND dv.status = 'draft' "
             ") AS has_pending_draft "
             f"FROM {e} e "
-            f"JOIN {ev} ev ON ev.{fk} = e.id AND ev.locale = {locale_param} "
-            "  AND ev.version = ( "
-            f"      SELECT max(v.version) FROM {ev} v "
-            f"      WHERE v.{fk} = e.id AND v.locale = {locale_param} "
-            "  ) "
+            "JOIN LATERAL ( "
+            f"    SELECT v.version, v.status, v.content FROM {ev} v "
+            f"    WHERE v.{fk} = e.id "
+            "    ORDER BY v.version DESC, (v.locale = e.locale) DESC "
+            "    LIMIT 1 "
+            ") ev ON TRUE "
         )
 
-    def _select_active(self, locale_param: str) -> str:
-        """Active-Read pro Sprache: die `status='active'`-Version des Tracks."""
+    def _select_active(self) -> str:
+        """Active-Read: die per-entity eindeutige `status='active'`-Version."""
         e, ev, fk = self._t.entity, self._t.version_table, self._t.fk
         return (
             f"SELECT e.id, e.workspace_id, e.owner_id, e.name, {self._slug_select()}e.is_managed, "
             "ev.version AS current_version, "
-            "e.created_at, e.updated_at, ev.content, ev.locale, "
+            "e.created_at, e.updated_at, ev.content, e.locale, "
             "ev.status AS current_status, "
             "EXISTS ( "
             f"    SELECT 1 FROM {ev} dv "
-            f"    WHERE dv.{fk} = e.id AND dv.locale = {locale_param} AND dv.status = 'draft' "
+            f"    WHERE dv.{fk} = e.id AND dv.status = 'draft' "
             ") AS has_pending_draft "
             f"FROM {e} e "
-            f"JOIN {ev} ev ON ev.{fk} = e.id AND ev.locale = {locale_param} "
-            "  AND ev.status = 'active' "
+            f"JOIN {ev} ev ON ev.{fk} = e.id AND ev.status = 'active' "
         )
 
     def _build(self, row: asyncpg.Record, **overrides: object) -> TRead:
         """Row + Overrides → Read-Model (zentralisiert das `model_validate`)."""
         return self._t.read_model.model_validate({**dict(row), **overrides})
+
+    def _current_version_sql(self) -> str:
+        """Locked Current-Read fuer die Schreib-Pfade: globale Max-Version.
+
+        Die Sperre liegt auf der Identitaets-Zeile (`FOR UPDATE OF e`);
+        `next_version` = Ergebnis + 1 (globaler Zaehler ueber alle locales).
+        """
+        e, ev, fk = self._t.entity, self._t.version_table, self._t.fk
+        return (
+            "SELECT ev.version AS current_version, ev.status "
+            f"FROM {e} e "
+            "JOIN LATERAL ( "
+            f"    SELECT v.version, v.status FROM {ev} v "
+            f"    WHERE v.{fk} = e.id "
+            "    ORDER BY v.version DESC, (v.locale = e.locale) DESC "
+            "    LIMIT 1 "
+            ") ev ON TRUE "
+            "WHERE e.id = $1 AND e.workspace_id = $2 FOR UPDATE OF e"
+        )
 
     # --- Schreib-Kern (identisch ueber alle Aggregate) -----------------------
 
@@ -149,12 +181,10 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
         owner_id: UUID,
         name: str,
         content: BaseModel,
-        locales: list[str] | None = None,
+        locale: str,
         slug: str | None = None,
     ) -> TRead:
-        # Content-i18n: pro gewaehlter Sprache eine eigene Draft-v1 (Copy der
-        # Vorlage). Default `['de']` haelt Bestands-Aufrufer kompatibel.
-        target_locales = locales or [DEFAULT_LOCALE]
+        """Legt die Identitaets-Zeile (inkl. Entity-Sprache) + Draft-v1 an."""
         content_json = content.model_dump(mode="json")
         e, ev, fk = self._t.entity, self._t.version_table, self._t.fk
         async with self._pool.acquire() as conn, conn.transaction():
@@ -164,42 +194,42 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
                 # UNIQUE-Index (workspace_id, <slug_column>) meldet Kollisionen
                 # als asyncpg.UniqueViolationError.
                 row = await conn.fetchrow(
-                    f"INSERT INTO {e} (workspace_id, owner_id, name, {self._t.slug_column}) "
+                    f"INSERT INTO {e} (workspace_id, owner_id, name, locale, "
+                    f"{self._t.slug_column}) "
+                    "VALUES ($1, $2, $3, $4, $5) "
+                    f"RETURNING {self._returning_cols()}",
+                    workspace_id,
+                    owner_id,
+                    name,
+                    locale,
+                    slug,
+                )
+            else:
+                row = await conn.fetchrow(
+                    f"INSERT INTO {e} (workspace_id, owner_id, name, locale) "
                     "VALUES ($1, $2, $3, $4) "
                     f"RETURNING {self._returning_cols()}",
                     workspace_id,
                     owner_id,
                     name,
-                    slug,
+                    locale,
                 )
-            else:
-                row = await conn.fetchrow(
-                    f"INSERT INTO {e} (workspace_id, owner_id, name) "
-                    "VALUES ($1, $2, $3) "
-                    f"RETURNING {self._returning_cols()}",
-                    workspace_id,
-                    owner_id,
-                    name,
-                )
-            for loc in target_locales:
-                await conn.execute(
-                    f"INSERT INTO {ev} "
-                    f"({fk}, version, content, status, created_by, locale) "
-                    "VALUES ($1, $2, $3, $4, $5, $6)",
-                    row["id"],
-                    row["current_version"],
-                    content_json,
-                    VersionStatus.draft.value,
-                    owner_id,
-                    loc,
-                )
+            await conn.execute(
+                f"INSERT INTO {ev} "
+                f"({fk}, version, content, status, created_by, locale) "
+                "VALUES ($1, $2, $3, $4, $5, $6)",
+                row["id"],
+                row["current_version"],
+                content_json,
+                VersionStatus.draft.value,
+                owner_id,
+                locale,
+            )
         # Neue v1 startet als Draft (Phase 3-0): die UI rendert sofort die
-        # Status-Action-Bar, MCP-Reads ueberspringen sie bis Promotion. Die
-        # Antwort spiegelt die erste gewaehlte Sprache.
+        # Status-Action-Bar, MCP-Reads ueberspringen sie bis Promotion.
         return self._build(
             row,
             content=content_json,
-            locale=target_locales[0],
             current_status=VersionStatus.draft,
             has_pending_draft=True,
         )
@@ -211,36 +241,27 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
         entity_id: UUID,
         name: str | None,
         content: BaseModel,
-        locale: str,
+        new_locale: str | None = None,
     ) -> tuple[TRead | None, WriteConflict | None]:
         """PUT-Pfad: neue Version. Active bleibt unangetastet (→ neuer Draft).
 
-        Blockiert mit `draft_exists`, solange irgendein Draft des Tracks offen ist.
+        Blockiert mit `draft_exists`, solange irgendein Draft offen ist.
+        `new_locale` (gesetzt) wechselt die Entity-Sprache (Metadaten-Update);
+        die neue Versions-Row uebernimmt die (ggf. neue) Entity-Sprache.
         """
         content_json = content.model_dump(mode="json")
-        is_default = locale == DEFAULT_LOCALE
         e, ev, fk = self._t.entity, self._t.version_table, self._t.fk
         async with self._pool.acquire() as conn, conn.transaction():
             current = await conn.fetchrow(
-                "SELECT ev.version AS current_version, ev.status "
-                f"FROM {e} e "
-                f"JOIN {ev} ev "
-                f"  ON ev.{fk} = e.id AND ev.locale = $3 "
-                "  AND ev.version = ( "
-                f"      SELECT max(v.version) FROM {ev} v "
-                f"      WHERE v.{fk} = e.id AND v.locale = $3 "
-                "  ) "
-                "WHERE e.id = $1 AND e.workspace_id = $2 FOR UPDATE OF e",
+                self._current_version_sql(),
                 entity_id,
                 workspace_id,
-                locale,
             )
             if current is None:
                 return None, None
             existing_draft = await conn.fetchval(
-                f"SELECT 1 FROM {ev} WHERE {fk} = $1 AND locale = $2 AND status = 'draft'",
+                f"SELECT 1 FROM {ev} WHERE {fk} = $1 AND status = 'draft'",
                 entity_id,
-                locale,
             )
             if existing_draft is not None:
                 return None, "draft_exists"
@@ -257,15 +278,16 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
                 new_status = VersionStatus.inactive
             row = await conn.fetchrow(
                 f"UPDATE {e} "
-                "SET current_version = CASE WHEN $4 THEN $1 ELSE current_version END, "
-                "name = COALESCE($2, name), updated_at = now() "
+                "SET current_version = $1, name = COALESCE($2, name), "
+                "locale = COALESCE($4, locale), updated_at = now() "
                 "WHERE id = $3 "
                 f"RETURNING {self._returning_cols()}",
                 next_version,
                 name,
                 entity_id,
-                is_default,
+                new_locale,
             )
+            assert row is not None
             await conn.execute(
                 f"INSERT INTO {ev} "
                 f"({fk}, version, content, status, created_by, locale) "
@@ -275,12 +297,11 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
                 content_json,
                 new_status.value,
                 owner_id,
-                locale,
+                row["locale"],
             )
         built = self._build(
             row,
             current_version=next_version,
-            locale=locale,
             content=content_json,
             current_status=new_status,
             has_pending_draft=new_status == VersionStatus.draft,
@@ -294,62 +315,52 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
         entity_id: UUID,
         name: str | None,
         content: BaseModel,
-        locale: str,
+        new_locale: str | None = None,
     ) -> tuple[TRead | None, WriteConflict | None]:
-        """Auto-Save-Pfad (PATCH `.../draft`), jeweils pro Sprache.
+        """Auto-Save-Pfad (PATCH `.../draft`).
 
         - Existiert ein Draft, wird die Draft-Row in-place ueberschrieben —
           kein Versions-Increment. Active bleibt unangetastet.
         - Existiert kein Draft, wird ein neuer Draft v(n+1) angelegt.
         - Edge-Case `current_status='review'` ohne offenen Draft: `review_pending`.
+        `new_locale` wechselt die Entity-Sprache (Metadaten-Update).
         """
         content_json = content.model_dump(mode="json")
-        is_default = locale == DEFAULT_LOCALE
         e, ev, fk = self._t.entity, self._t.version_table, self._t.fk
         async with self._pool.acquire() as conn, conn.transaction():
             current = await conn.fetchrow(
-                "SELECT ev.version AS current_version, ev.status "
-                f"FROM {e} e "
-                f"JOIN {ev} ev "
-                f"  ON ev.{fk} = e.id AND ev.locale = $3 "
-                "  AND ev.version = ( "
-                f"      SELECT max(v.version) FROM {ev} v "
-                f"      WHERE v.{fk} = e.id AND v.locale = $3 "
-                "  ) "
-                "WHERE e.id = $1 AND e.workspace_id = $2 FOR UPDATE OF e",
+                self._current_version_sql(),
                 entity_id,
                 workspace_id,
-                locale,
             )
             if current is None:
                 return None, None
             draft_version = await conn.fetchval(
-                f"SELECT version FROM {ev} WHERE {fk} = $1 AND locale = $2 AND status = 'draft'",
+                f"SELECT version FROM {ev} WHERE {fk} = $1 AND status = 'draft'",
                 entity_id,
-                locale,
             )
             if draft_version is not None:
                 row = await conn.fetchrow(
                     f"UPDATE {e} "
-                    "SET name = COALESCE($1, name), updated_at = now() "
+                    "SET name = COALESCE($1, name), locale = COALESCE($3, locale), "
+                    "updated_at = now() "
                     "WHERE id = $2 "
                     f"RETURNING {self._returning_cols()}",
                     name,
                     entity_id,
+                    new_locale,
                 )
                 await conn.execute(
                     f"UPDATE {ev} SET content = $1, created_by = $2 "
-                    f"WHERE {fk} = $3 AND locale = $4 AND version = $5",
+                    f"WHERE {fk} = $3 AND version = $4 AND status = 'draft'",
                     content_json,
                     owner_id,
                     entity_id,
-                    locale,
                     draft_version,
                 )
                 built = self._build(
                     row,
                     current_version=draft_version,
-                    locale=locale,
                     content=content_json,
                     current_status=VersionStatus.draft,
                     has_pending_draft=True,
@@ -360,15 +371,16 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
             next_version = current["current_version"] + 1
             row = await conn.fetchrow(
                 f"UPDATE {e} "
-                "SET current_version = CASE WHEN $4 THEN $1 ELSE current_version END, "
-                "name = COALESCE($2, name), updated_at = now() "
+                "SET current_version = $1, name = COALESCE($2, name), "
+                "locale = COALESCE($4, locale), updated_at = now() "
                 "WHERE id = $3 "
                 f"RETURNING {self._returning_cols()}",
                 next_version,
                 name,
                 entity_id,
-                is_default,
+                new_locale,
             )
+            assert row is not None
             await conn.execute(
                 f"INSERT INTO {ev} "
                 f"({fk}, version, content, status, created_by, locale) "
@@ -378,12 +390,11 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
                 content_json,
                 VersionStatus.draft.value,
                 owner_id,
-                locale,
+                row["locale"],
             )
         built = self._build(
             row,
             current_version=next_version,
-            locale=locale,
             content=content_json,
             current_status=VersionStatus.draft,
             has_pending_draft=True,
@@ -396,51 +407,47 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
         owner_id: UUID,
         entity_id: UUID,
         content: BaseModel,
-        locale: str,
     ) -> tuple[TRead | None, WriteConflict | None]:
         """Schreibt `content` (Snapshot) als neue Draft-Version (Track A §3.1).
 
-        Non-destruktiv: frische Draft v(n+1) im `locale`-Track, kein Pointer-
-        Reset. `draft_exists` bei bereits offenem Draft. Name bleibt unveraendert.
+        Non-destruktiv: frische Draft v(n+1) (globaler Zaehler), kein Pointer-
+        Reset. `draft_exists` bei bereits offenem Draft. Name und Entity-Sprache
+        bleiben unveraendert; die neue Row traegt die Entity-Sprache.
         """
         content_json = content.model_dump(mode="json")
-        is_default = locale == DEFAULT_LOCALE
         e, ev, fk = self._t.entity, self._t.version_table, self._t.fk
         async with self._pool.acquire() as conn, conn.transaction():
             current = await conn.fetchrow(
-                # Per-locale Max-Version als Scalar-Subquery — Postgres erlaubt
+                # Globale Max-Version als Scalar-Subquery — Postgres erlaubt
                 # `FOR UPDATE` nicht zusammen mit `GROUP BY`. Die Sperre liegt
-                # auf der Identitaets-Zeile; current_version ist NULL, wenn fuer
-                # die Sprache (noch) keine Version existiert.
+                # auf der Identitaets-Zeile; current_version ist NULL, wenn
+                # (theoretisch) keine Version existiert.
                 f"SELECT (SELECT max(v.version) FROM {ev} v "
-                f"        WHERE v.{fk} = e.id AND v.locale = $3) AS current_version "
+                f"        WHERE v.{fk} = e.id) AS current_version "
                 f"FROM {e} e "
                 "WHERE e.id = $1 AND e.workspace_id = $2 "
                 "FOR UPDATE",
                 entity_id,
                 workspace_id,
-                locale,
             )
             if current is None or current["current_version"] is None:
                 return None, None
             existing_draft = await conn.fetchval(
-                f"SELECT 1 FROM {ev} WHERE {fk} = $1 AND locale = $2 AND status = 'draft'",
+                f"SELECT 1 FROM {ev} WHERE {fk} = $1 AND status = 'draft'",
                 entity_id,
-                locale,
             )
             if existing_draft is not None:
                 return None, "draft_exists"
             next_version = current["current_version"] + 1
             row = await conn.fetchrow(
                 f"UPDATE {e} SET "
-                "current_version = CASE WHEN $3 THEN $1 ELSE current_version END, "
-                "updated_at = now() "
+                "current_version = $1, updated_at = now() "
                 "WHERE id = $2 "
                 f"RETURNING {self._returning_cols()}",
                 next_version,
                 entity_id,
-                is_default,
             )
+            assert row is not None
             await conn.execute(
                 f"INSERT INTO {ev} "
                 f"({fk}, version, content, status, created_by, locale) "
@@ -450,12 +457,11 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
                 content_json,
                 VersionStatus.draft.value,
                 owner_id,
-                locale,
+                row["locale"],
             )
         built = self._build(
             row,
             current_version=next_version,
-            locale=locale,
             content=content_json,
             current_status=VersionStatus.draft,
             has_pending_draft=True,
@@ -474,8 +480,13 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
         return bool(val)
 
     async def _list_versions(
-        self, workspace_id: UUID, entity_id: UUID, locale: str = DEFAULT_LOCALE
+        self, workspace_id: UUID, entity_id: UUID
     ) -> list[TVersionRead] | None:
+        """Alle Versions-Snapshots (locale-agnostisch, neueste zuerst).
+
+        Legacy-Rows mit gleicher Versionsnummer in zwei Sprachen erscheinen
+        beide (Historie); Tie-Break auf `locale` haelt die Ordnung stabil.
+        """
         e, ev, fk = self._t.entity, self._t.version_table, self._t.fk
         owned = await self._pool.fetchval(
             f"SELECT 1 FROM {e} WHERE id = $1 AND workspace_id = $2",
@@ -486,26 +497,28 @@ class VersionedAggregateRepository(Generic[TRead, TVersionRead]):
             return None
         rows = await self._pool.fetch(
             "SELECT version, status, locale, content, created_by, created_at "
-            f"FROM {ev} WHERE {fk} = $1 AND locale = $2 "
-            "ORDER BY version DESC",
+            f"FROM {ev} WHERE {fk} = $1 "
+            "ORDER BY version DESC, locale ASC",
             entity_id,
-            locale,
         )
         return [self._t.version_read_model.model_validate(dict(row)) for row in rows]
 
     async def _fetch_version(
-        self, workspace_id: UUID, entity_id: UUID, version: int, locale: str = DEFAULT_LOCALE
+        self, workspace_id: UUID, entity_id: UUID, version: int
     ) -> TVersionRead | None:
+        """Ein Versions-Snapshot nach Nummer — bei Legacy-Duplikaten (DE-v1 UND
+        EN-v1) gewinnt deterministisch die Row in der Entity-Sprache."""
         e, ev, fk = self._t.entity, self._t.version_table, self._t.fk
         row = await self._pool.fetchrow(
             "SELECT ev.version, ev.status, ev.locale, ev.content, ev.created_by, ev.created_at "
             f"FROM {ev} ev "
             f"JOIN {e} e ON e.id = ev.{fk} "
-            "WHERE e.id = $1 AND e.workspace_id = $2 AND ev.version = $3 AND ev.locale = $4",
+            "WHERE e.id = $1 AND e.workspace_id = $2 AND ev.version = $3 "
+            "ORDER BY (ev.locale = e.locale) DESC "
+            "LIMIT 1",
             entity_id,
             workspace_id,
             version,
-            locale,
         )
         if row is None:
             return None

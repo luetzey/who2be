@@ -27,11 +27,12 @@ from who2be_api.repositories.playbook_resource_link_repository import (
 )
 from who2be_api.repositories.resource_repository import ResourceRepository
 from who2be_api.repositories.usage_repository import UsageRepository
+from who2be_api.repositories.workspace_repository import WorkspaceRepository
+from who2be_api.services.content_locale import resolve_content_locale
 from who2be_api.services.content_text import resource_content_text
 from who2be_api.services.slug import slugify
 from who2be_api.services.version_diff import compute_version_diff
 from who2be_models import (
-    DEFAULT_LOCALE,
     AgentCapability,
     DeleteBlocked,
     ReadScope,
@@ -132,10 +133,12 @@ class ResourceService:
         resource_repo: ResourceRepository,
         pool: asyncpg.Pool | None = None,
         usage_repo: UsageRepository | None = None,
+        workspace_repo: WorkspaceRepository | None = None,
     ) -> None:
         self._repo = resource_repo
         self._pool = pool
         self._usage_repo = usage_repo
+        self._workspace_repo = workspace_repo
 
     async def create(self, ctx: WorkspaceContext, data: ResourceCreate) -> ResourceRead:
         require_role(ctx, WorkspaceRole.editor)
@@ -146,39 +149,40 @@ class ResourceService:
         # SystemPromptTemplateService.create). Workspace-eindeutig — Kollision →
         # 409 (UNIQUE(workspace_id, slug), Migration 0064).
         slug = data.slug or slugify(data.name)
+        # ADR-0045: explizite Sprache aus dem Body, sonst Workspace-Default.
+        locale = await resolve_content_locale(self._workspace_repo, ctx.workspace_id, data.locale)
         try:
             return await self._repo.insert(
-                ctx.workspace_id, ctx.user_id, data.name, data.content, data.locales, slug=slug
+                ctx.workspace_id, ctx.user_id, data.name, data.content, locale, slug=slug
             )
         except asyncpg.UniqueViolationError as exc:
             raise _slug_conflict() from exc
 
-    async def duplicate(
-        self, ctx: WorkspaceContext, resource_id: UUID, locale: str = DEFAULT_LOCALE
-    ) -> ResourceRead:
+    async def duplicate(self, ctx: WorkspaceContext, resource_id: UUID) -> ResourceRead:
         """Dupliziert eine Resource als frische Draft-v1 (Deep-Copy des Inhalts).
 
         Spiegelt `AgentService.copy`: Editor-Gate + Capability + Rate-Limit, der
-        Inhalt der aktuellen (Locale-)Version wird in eine NEUE, unverwaltete
-        Resource kopiert (Version 1, Status draft), Name `"{name} (Kopie)"`,
-        frischer eindeutiger Slug. Auch verwaltete Resources duerfen dupliziert
-        werden — die Kopie ist unverwaltet und frei editierbar.
+        Inhalt der aktuellen Version wird in eine NEUE, unverwaltete Resource
+        kopiert (Version 1, Status draft), Name `"{name} (Kopie)"`, frischer
+        eindeutiger Slug. Die Kopie uebernimmt die Sprache der Quelle
+        (ADR-0045). Auch verwaltete Resources duerfen dupliziert werden — die
+        Kopie ist unverwaltet und frei editierbar.
         """
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.resource_write)
         require_write_rate(ctx)
-        source = await self.get(ctx, resource_id, locale=locale)
+        source = await self.get(ctx, resource_id)
         require_write_tags(ctx, "resource", source.content.tags)
         name = f"{source.name} (Kopie)"
         slug = f"{slugify(name)}-{uuid4().hex[:8]}"
         try:
             return await self._repo.insert(
-                ctx.workspace_id, ctx.user_id, name, source.content, [locale], slug=slug
+                ctx.workspace_id, ctx.user_id, name, source.content, source.locale, slug=slug
             )
         except asyncpg.UniqueViolationError as exc:  # pragma: no cover - Slug-Suffix ist eindeutig
             raise _slug_conflict() from exc
 
-    async def list_tags(self, ctx: WorkspaceContext, locale: str = DEFAULT_LOCALE) -> list[str]:
+    async def list_tags(self, ctx: WorkspaceContext) -> list[str]:
         """DISTINCT-Tags des Workspaces — Datenquelle fuer den Resource-Tag-Picker.
 
         Read-Scoping (`assigned`): nur Tags der sichtbaren Resources — sonst
@@ -194,9 +198,7 @@ class ResourceService:
         ):
             return []
         restrict_ids = await self._read_restrict(ctx)
-        return await self._repo.list_distinct_tags(
-            ctx.workspace_id, locale, restrict_ids=restrict_ids
-        )
+        return await self._repo.list_distinct_tags(ctx.workspace_id, restrict_ids=restrict_ids)
 
     async def list_all(
         self,
@@ -204,7 +206,7 @@ class ResourceService:
         tag: str | None,
         limit: int,
         cursor: tuple[datetime, UUID] | None,
-        locale: str = DEFAULT_LOCALE,
+        locale: str | None = None,
         agent: UUID | None = None,
     ) -> tuple[list[ResourceRead], str | None]:
         restrict_ids = await self._read_restrict(ctx)
@@ -232,10 +234,10 @@ class ResourceService:
             rows = rows[:limit]
             tail = rows[-1]
             next_cursor = encode_cursor(tail.created_at, tail.id)
-        return await self._enrich(ctx.workspace_id, rows, locale), next_cursor
+        return await self._enrich(ctx.workspace_id, rows), next_cursor
 
     async def _enrich(
-        self, workspace_id: UUID, items: list[ResourceRead], locale: str = DEFAULT_LOCALE
+        self, workspace_id: UUID, items: list[ResourceRead]
     ) -> list[ResourceRead]:
         """Joint die List-Card-Pills (Batch-Aggregat) in die Reads (kein N+1).
 
@@ -248,7 +250,7 @@ class ResourceService:
             return items
         ids = [r.id for r in items]
         counts = await self._repo.list_counts(workspace_id, ids)
-        children = await self._repo.list_sub_resource_children(workspace_id, ids, locale)
+        children = await self._repo.list_sub_resource_children(workspace_id, ids)
         enriched: list[ResourceRead] = []
         for resource in items:
             found = counts.get(resource.id)
@@ -265,15 +267,12 @@ class ResourceService:
             return None
         return await resource_read_restrict(self._pool, ctx)
 
-    async def get(
-        self, ctx: WorkspaceContext, resource_id: UUID, locale: str = DEFAULT_LOCALE
-    ) -> ResourceRead:
+    async def get(self, ctx: WorkspaceContext, resource_id: UUID) -> ResourceRead:
         restrict_ids = await self._read_restrict(ctx)
         resource = await self._repo.fetch(
             ctx.workspace_id,
             resource_id,
             active_only=not ctx.sees_drafts(AgentCapability.resource_write),
-            locale=locale,
             restrict_ids=restrict_ids,
         )
         if resource is None:
@@ -281,19 +280,16 @@ class ResourceService:
         return resource
 
     async def list_blocks(
-        self, ctx: WorkspaceContext, resource_id: UUID, locale: str = DEFAULT_LOCALE
+        self, ctx: WorkspaceContext, resource_id: UUID
     ) -> list[ResourceBlockAnchor]:
         """Listet die linkbaren Heading-Anker einer Resource (WP-6, ADR-0021).
 
         Liest ueber `get()` — damit gelten dieselben Garantien wie fuer alle
-        Resource-Reads: Read-Scoping (`assigned`-Agent → 404), Active-/Draft-
-        Sicht via `sees_drafts(resource_write)` und die angefragte `locale`.
-        (Bewusst NICHT der `load_resource_blocks`-Pfad des Link-Repos: der pinnt
-        die Active-Variante hart auf Locale `'de'` — hier folgt die Block-Liste
-        konsistent der Request-Locale.) Nur Heading-Bloecke sind verlinkbar
-        (Heading-Only-Anker); Klartext via `block_plain_text`.
+        Resource-Reads: Read-Scoping (`assigned`-Agent → 404) und Active-/
+        Draft-Sicht via `sees_drafts(resource_write)`. Nur Heading-Bloecke
+        sind verlinkbar (Heading-Only-Anker); Klartext via `block_plain_text`.
         """
-        resource = await self.get(ctx, resource_id, locale=locale)
+        resource = await self.get(ctx, resource_id)
         anchors: list[ResourceBlockAnchor] = []
         for block in resource.content.blocks:
             raw = block.model_dump(mode="json")
@@ -309,12 +305,12 @@ class ResourceService:
         return anchors
 
     async def _check_update_tags(
-        self, ctx: WorkspaceContext, resource_id: UUID, incoming_tags: list[str], locale: str
+        self, ctx: WorkspaceContext, resource_id: UUID, incoming_tags: list[str]
     ) -> None:
         """Tag-Scope beim Update: eingehende Tags + (nur bei Restriktion) Bestand."""
         require_write_tags(ctx, "resource", incoming_tags)
         if ctx.tool_policy is not None and ctx.tool_policy.write_tags_for("resource") is not None:
-            existing = await self.get(ctx, resource_id, locale)
+            existing = await self.get(ctx, resource_id)
             require_write_tags(ctx, "resource", existing.content.tags)
 
     async def update(
@@ -322,16 +318,18 @@ class ResourceService:
         ctx: WorkspaceContext,
         resource_id: UUID,
         data: ResourceUpdate,
-        locale: str = DEFAULT_LOCALE,
     ) -> ResourceRead:
-        """Erzeugt eine neue Version der Resource (Draft-on-Edit bei Active)."""
+        """Erzeugt eine neue Version der Resource (Draft-on-Edit bei Active).
+
+        Ein gesetztes `data.locale` wechselt die Entity-Sprache (ADR-0045).
+        """
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.resource_write)
         require_unmanaged(await self._repo.is_managed(ctx.workspace_id, resource_id))
         require_write_rate(ctx)
-        await self._check_update_tags(ctx, resource_id, data.content.tags, locale)
+        await self._check_update_tags(ctx, resource_id, data.content.tags)
         outcome = await self._repo.update(
-            ctx.workspace_id, ctx.user_id, resource_id, data.name, data.content, locale
+            ctx.workspace_id, ctx.user_id, resource_id, data.name, data.content, data.locale
         )
         if outcome.conflict == "draft_exists":
             raise _draft_conflict()
@@ -344,16 +342,15 @@ class ResourceService:
         ctx: WorkspaceContext,
         resource_id: UUID,
         data: ResourceUpdate,
-        locale: str = DEFAULT_LOCALE,
     ) -> ResourceRead:
         """Auto-Save-Pfad (PATCH `.../draft`) — upsertet die Draft-Version."""
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.resource_write)
         require_unmanaged(await self._repo.is_managed(ctx.workspace_id, resource_id))
         require_write_rate(ctx)
-        await self._check_update_tags(ctx, resource_id, data.content.tags, locale)
+        await self._check_update_tags(ctx, resource_id, data.content.tags)
         outcome = await self._repo.upsert_draft(
-            ctx.workspace_id, ctx.user_id, resource_id, data.name, data.content, locale
+            ctx.workspace_id, ctx.user_id, resource_id, data.name, data.content, data.locale
         )
         if outcome.conflict == "review_pending":
             raise _review_conflict()
@@ -369,19 +366,19 @@ class ResourceService:
             raise _not_found()
 
     async def list_versions(
-        self, ctx: WorkspaceContext, resource_id: UUID, locale: str = DEFAULT_LOCALE
+        self, ctx: WorkspaceContext, resource_id: UUID
     ) -> list[ResourceVersionRead]:
         await self._assert_in_scope(ctx, resource_id)
-        versions = await self._repo.list_versions(ctx.workspace_id, resource_id, locale)
+        versions = await self._repo.list_versions(ctx.workspace_id, resource_id)
         if versions is None:
             raise _not_found()
         return versions
 
     async def get_version(
-        self, ctx: WorkspaceContext, resource_id: UUID, version: int, locale: str = DEFAULT_LOCALE
+        self, ctx: WorkspaceContext, resource_id: UUID, version: int
     ) -> ResourceVersionRead:
         await self._assert_in_scope(ctx, resource_id)
-        found = await self._repo.fetch_version(ctx.workspace_id, resource_id, version, locale)
+        found = await self._repo.fetch_version(ctx.workspace_id, resource_id, version)
         if found is None:
             raise _not_found()
         return found
@@ -391,21 +388,18 @@ class ResourceService:
         ctx: WorkspaceContext,
         resource_id: UUID,
         source_version: int,
-        locale: str = DEFAULT_LOCALE,
     ) -> ResourceRead:
         """Stellt den Snapshot `source_version` als neue Draft wieder her (§3.1)."""
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.resource_write)
         require_unmanaged(await self._repo.is_managed(ctx.workspace_id, resource_id))
         require_write_rate(ctx)
-        snapshot = await self._repo.fetch_version(
-            ctx.workspace_id, resource_id, source_version, locale
-        )
+        snapshot = await self._repo.fetch_version(ctx.workspace_id, resource_id, source_version)
         if snapshot is None:
             raise _not_found()
         require_write_tags(ctx, "resource", snapshot.content.tags)
         outcome = await self._repo.restore_version(
-            ctx.workspace_id, ctx.user_id, resource_id, snapshot.content, locale
+            ctx.workspace_id, ctx.user_id, resource_id, snapshot.content
         )
         if outcome.conflict == "draft_exists":
             raise _draft_conflict()
@@ -419,14 +413,13 @@ class ResourceService:
         resource_id: UUID,
         version: int,
         against: str,
-        locale: str = DEFAULT_LOCALE,
     ) -> VersionDiff:
         """Strukturierter Feld-/Block-Diff der Version `version` gegen `against`."""
         await self._assert_in_scope(ctx, resource_id)
-        target = await self._repo.fetch_version(ctx.workspace_id, resource_id, version, locale)
+        target = await self._repo.fetch_version(ctx.workspace_id, resource_id, version)
         if target is None:
             raise _not_found()
-        versions = await self._repo.list_versions(ctx.workspace_id, resource_id, locale)
+        versions = await self._repo.list_versions(ctx.workspace_id, resource_id)
         if versions is None:
             raise _not_found()
         base_version, base_content = self._resolve_against(against, versions)

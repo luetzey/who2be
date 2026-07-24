@@ -14,6 +14,7 @@ import asyncpg
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 
 from who2be_api.core.db import get_pool
+from who2be_api.core.locale import LocaleFilterQuery
 from who2be_api.core.pagination import DEFAULT_LIMIT, PageCursor, PageLimit
 from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
@@ -21,6 +22,7 @@ from who2be_api.repositories.status_history_repository import PgStatusHistoryRep
 from who2be_api.repositories.system_prompt_template_repository import (
     PgSystemPromptTemplateRepository,
 )
+from who2be_api.repositories.workspace_repository import PgWorkspaceRepository
 from who2be_api.services.status_history_service import StatusHistoryService
 from who2be_api.services.system_prompt_template_service import (
     SystemPromptTemplateService,
@@ -42,7 +44,9 @@ router = APIRouter(prefix="/system-prompts", tags=["system-prompts"])
 def get_template_service(
     pool: Annotated[asyncpg.Pool, Depends(get_pool)],
 ) -> SystemPromptTemplateService:
-    return SystemPromptTemplateService(PgSystemPromptTemplateRepository(pool))
+    return SystemPromptTemplateService(
+        PgSystemPromptTemplateRepository(pool), PgWorkspaceRepository(pool)
+    )
 
 
 def get_version_status_service(
@@ -64,9 +68,11 @@ async def list_templates(
     service: Service,
     response: Response,
     cursor: PageCursor,
+    locale: LocaleFilterQuery,
     limit: PageLimit = DEFAULT_LIMIT,
 ) -> list[SystemPromptTemplateRead]:
-    items, next_cursor = await service.list_all(ctx, limit, cursor)
+    """Listet Templates; `?locale=` filtert auf die Element-Sprache (ADR-0045)."""
+    items, next_cursor = await service.list_all(ctx, limit, cursor, locale=locale)
     if next_cursor is not None:
         response.headers["X-Next-Cursor"] = next_cursor
     return items

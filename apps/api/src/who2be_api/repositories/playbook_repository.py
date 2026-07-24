@@ -11,13 +11,13 @@ Phase 2.1b: Status-Felder (`current_status`, `has_pending_draft`) im SELECT;
 `update` erzwingt Draft-on-Edit bei `active`-Current; `active_only=True`
 filtert auf Active-Versionen — MCP-Pfad (Plan §2.1.C/D).
 
-Content-i18n (ADR-0027, Stream D2): jede Version traegt ein `locale`-Kuerzel;
-pro Sprache laeuft ein eigener Versions-Track. Die "aktuelle" Version einer
-Sprache ist die hoechste `version` mit diesem `locale` (statt der einzelnen
-`playbook.current_version`-Spalte, die nur noch den Default-Locale-Track
-`'de'` spiegelt). Alle Lese-/Schreib-Pfade nehmen `locale` (Default `'de'` =
-Backward-Compat). Die denormalisierten Filterspalten (`type`, `tags`,
-`triggers`) bleiben entity-weit auf der `playbook`-Zeile — nicht pro Sprache.
+„Ein Element, eine Sprache" (ADR-0045): `locale` ist ein Attribut der
+`playbook`-Identitaets-Zeile. Reads sind locale-agnostisch (Current = globale
+Max-Version mit Legacy-Tie-Break auf die Entity-Sprache; Active = per-entity
+eindeutige `status='active'`-Row); `list_by_workspace` filtert optional auf
+`playbook.locale`. Versions-Writes uebernehmen die Entity-Sprache;
+`next_version` zaehlt global ueber alle locales. Die denormalisierten
+Filterspalten (`type`, `tags`, `triggers`) bleiben entity-weit.
 """
 
 from dataclasses import dataclass
@@ -32,7 +32,6 @@ from who2be_api.repositories.versioned_repository import (
     VersionedAggregateRepository,
 )
 from who2be_models import (
-    DEFAULT_LOCALE,
     PlaybookContent,
     PlaybookRead,
     PlaybookRef,
@@ -42,55 +41,72 @@ from who2be_models import (
 )
 
 
-def _select_current(locale_param: str) -> str:
-    """Current-Read pro Sprache: hoechste Version des `locale`-Tracks.
+def _select_current() -> str:
+    """Current-Read (locale-agnostisch): die global hoechste Version.
 
-    `locale_param` ist der asyncpg-Platzhalter (z. B. `"$2"`), der die Ziel-
-    Sprache traegt — er erscheint mehrfach (JOIN + Max-Subquery + Draft-EXISTS).
-    `current_version` wird auf die Versionsnummer dieser Sprache aliased, damit
-    `current_version` und `content` in der Antwort matchen.
+    Legacy-Tie-Break: Alt-Daten aus dem ADR-0027-Multi-Track koennen dieselbe
+    Versionsnummer in zwei Sprachen tragen — bevorzugt wird deterministisch die
+    Row in der Entity-Sprache. `current_version` ist auf die Versionsnummer der
+    gelieferten Row aliased, damit `current_version` und `content` matchen.
     """
     return (
         "SELECT p.id, p.workspace_id, p.owner_id, p.name, "
         "pv.version AS current_version, "
         "p.type, p.tags, p.triggers, p.created_at, p.updated_at, p.is_managed, "
-        "pv.content, pv.locale, "
+        "pv.content, p.locale, "
         "pv.status AS current_status, "
         "EXISTS ( "
         "    SELECT 1 FROM playbook_version dv "
-        f"    WHERE dv.playbook_id = p.id AND dv.locale = {locale_param} AND dv.status = 'draft' "
+        "    WHERE dv.playbook_id = p.id AND dv.status = 'draft' "
         ") AS has_pending_draft, "
         "EXISTS ( "
         "    SELECT 1 FROM playbook_composition c WHERE c.parent_id = p.id "
         ") AS is_composite "
         "FROM playbook p "
-        f"JOIN playbook_version pv ON pv.playbook_id = p.id AND pv.locale = {locale_param} "
-        "  AND pv.version = ( "
-        "      SELECT max(v.version) FROM playbook_version v "
-        f"      WHERE v.playbook_id = p.id AND v.locale = {locale_param} "
-        "  ) "
+        "JOIN LATERAL ( "
+        "    SELECT v.version, v.status, v.content FROM playbook_version v "
+        "    WHERE v.playbook_id = p.id "
+        "    ORDER BY v.version DESC, (v.locale = p.locale) DESC "
+        "    LIMIT 1 "
+        ") pv ON TRUE "
     )
 
 
-def _select_active(locale_param: str) -> str:
-    """Active-Read pro Sprache: die `status='active'`-Version des Tracks."""
+def _select_active() -> str:
+    """Active-Read: die per-entity eindeutige `status='active'`-Version."""
     return (
         "SELECT p.id, p.workspace_id, p.owner_id, p.name, "
         "pv.version AS current_version, "
         "p.type, p.tags, p.triggers, p.created_at, p.updated_at, p.is_managed, "
-        "pv.content, pv.locale, "
+        "pv.content, p.locale, "
         "pv.status AS current_status, "
         "EXISTS ( "
         "    SELECT 1 FROM playbook_version dv "
-        f"    WHERE dv.playbook_id = p.id AND dv.locale = {locale_param} AND dv.status = 'draft' "
+        "    WHERE dv.playbook_id = p.id AND dv.status = 'draft' "
         ") AS has_pending_draft, "
         "EXISTS ( "
         "    SELECT 1 FROM playbook_composition c WHERE c.parent_id = p.id "
         ") AS is_composite "
         "FROM playbook p "
-        f"JOIN playbook_version pv ON pv.playbook_id = p.id AND pv.locale = {locale_param} "
+        "JOIN playbook_version pv ON pv.playbook_id = p.id "
         "  AND pv.status = 'active' "
     )
+
+
+# Locked Current-Read fuer die Schreib-Pfade: globale Max-Version (+ Status der
+# juengsten Row, Legacy-Tie-Break auf die Entity-Sprache). Sperre auf der
+# Identitaets-Zeile; `next_version` = Ergebnis + 1 (globaler Zaehler).
+_CURRENT_FOR_UPDATE = (
+    "SELECT pv.version AS current_version, pv.status "
+    "FROM playbook p "
+    "JOIN LATERAL ( "
+    "    SELECT v.version, v.status FROM playbook_version v "
+    "    WHERE v.playbook_id = p.id "
+    "    ORDER BY v.version DESC, (v.locale = p.locale) DESC "
+    "    LIMIT 1 "
+    ") pv ON TRUE "
+    "WHERE p.id = $1 AND p.workspace_id = $2 FOR UPDATE OF p"
+)
 
 
 def _escape_like(value: str) -> str:
@@ -115,7 +131,7 @@ class PlaybookRepository(Protocol):
         owner_id: UUID,
         name: str,
         content: PlaybookContent,
-        locales: list[str] | None = None,
+        locale: str,
     ) -> PlaybookRead: ...
 
     async def list_by_workspace(
@@ -126,7 +142,7 @@ class PlaybookRepository(Protocol):
         limit: int,
         after: tuple[datetime, UUID] | None,
         active_only: bool = False,
-        locale: str = DEFAULT_LOCALE,
+        locale: str | None = None,
         restrict_ids: list[UUID] | None = None,
     ) -> list[PlaybookRead]: ...
 
@@ -135,7 +151,6 @@ class PlaybookRepository(Protocol):
         workspace_id: UUID,
         playbook_id: UUID,
         active_only: bool = False,
-        locale: str = DEFAULT_LOCALE,
         restrict_ids: list[UUID] | None = None,
     ) -> PlaybookRead | None: ...
 
@@ -146,7 +161,7 @@ class PlaybookRepository(Protocol):
         playbook_id: UUID,
         name: str | None,
         content: PlaybookContent,
-        locale: str = DEFAULT_LOCALE,
+        new_locale: str | None = None,
     ) -> PlaybookUpdateOutcome: ...
 
     async def upsert_draft(
@@ -156,7 +171,7 @@ class PlaybookRepository(Protocol):
         playbook_id: UUID,
         name: str | None,
         content: PlaybookContent,
-        locale: str = DEFAULT_LOCALE,
+        new_locale: str | None = None,
     ) -> PlaybookUpdateOutcome: ...
 
     async def restore_version(
@@ -165,21 +180,19 @@ class PlaybookRepository(Protocol):
         owner_id: UUID,
         playbook_id: UUID,
         content: PlaybookContent,
-        locale: str = DEFAULT_LOCALE,
     ) -> PlaybookUpdateOutcome: ...
 
     async def list_versions(
-        self, workspace_id: UUID, playbook_id: UUID, locale: str = DEFAULT_LOCALE
+        self, workspace_id: UUID, playbook_id: UUID
     ) -> list[PlaybookVersionRead] | None: ...
 
     async def fetch_version(
-        self, workspace_id: UUID, playbook_id: UUID, version: int, locale: str = DEFAULT_LOCALE
+        self, workspace_id: UUID, playbook_id: UUID, version: int
     ) -> PlaybookVersionRead | None: ...
 
     async def list_distinct_tags(
         self,
         workspace_id: UUID,
-        locale: str = DEFAULT_LOCALE,
         restrict_ids: list[UUID] | None = None,
     ) -> list[str]: ...
 
@@ -213,48 +226,46 @@ class PgPlaybookRepository(VersionedAggregateRepository[PlaybookRead, PlaybookVe
         owner_id: UUID,
         name: str,
         content: PlaybookContent,
-        locales: list[str] | None = None,
+        locale: str,
     ) -> PlaybookRead:
-        # Content-i18n: pro gewaehlter Sprache eine eigene Draft-v1 (Copy der
-        # Vorlage). Default `['de']` haelt Bestands-Aufrufer kompatibel. Die
-        # denormalisierten Filterspalten (type/tags/triggers) sind entity-weit
-        # und werden nur einmal auf der `playbook`-Zeile gesetzt.
-        target_locales = locales or [DEFAULT_LOCALE]
+        # „Ein Element, eine Sprache": die Entity-Zeile traegt die Sprache,
+        # Draft-v1 uebernimmt sie. Die denormalisierten Filterspalten
+        # (type/tags/triggers) sind entity-weit.
         content_json = content.model_dump(mode="json")
         async with self._pool.acquire() as conn, conn.transaction():
             # Welle 4: type="" ist erlaubter Draft-Zustand (Migration 0025 hat
             # den CHECK um '' erweitert). Direkt content.type uebergeben.
             playbook = await conn.fetchrow(
-                "INSERT INTO playbook (workspace_id, owner_id, name, type, tags, triggers) "
-                "VALUES ($1, $2, $3, $4, $5, $6) "
+                "INSERT INTO playbook "
+                "(workspace_id, owner_id, name, type, tags, triggers, locale) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7) "
                 "RETURNING id, workspace_id, owner_id, name, current_version, type, tags, "
-                "triggers, created_at, updated_at",
+                "triggers, locale, created_at, updated_at",
                 workspace_id,
                 owner_id,
                 name,
                 content.type,
                 content.tags,
                 content.triggers,
+                locale,
             )
-            for loc in target_locales:
-                await conn.execute(
-                    "INSERT INTO playbook_version "
-                    "(playbook_id, version, content, status, created_by, locale) "
-                    "VALUES ($1, $2, $3, $4, $5, $6)",
-                    playbook["id"],
-                    playbook["current_version"],
-                    content_json,
-                    VersionStatus.draft.value,
-                    owner_id,
-                    loc,
-                )
+            await conn.execute(
+                "INSERT INTO playbook_version "
+                "(playbook_id, version, content, status, created_by, locale) "
+                "VALUES ($1, $2, $3, $4, $5, $6)",
+                playbook["id"],
+                playbook["current_version"],
+                content_json,
+                VersionStatus.draft.value,
+                owner_id,
+                locale,
+            )
         # Neue v1 startet als Draft (Phase 3-0, siehe Persona-Pendant fuer
-        # Begruendung). Die Antwort spiegelt die erste gewaehlte Sprache.
+        # Begruendung).
         return PlaybookRead.model_validate(
             {
                 **dict(playbook),
                 "content": content_json,
-                "locale": target_locales[0],
                 "current_status": VersionStatus.draft,
                 "has_pending_draft": True,
             }
@@ -268,24 +279,24 @@ class PgPlaybookRepository(VersionedAggregateRepository[PlaybookRead, PlaybookVe
         limit: int,
         after: tuple[datetime, UUID] | None,
         active_only: bool = False,
-        locale: str = DEFAULT_LOCALE,
+        locale: str | None = None,
         restrict_ids: list[UUID] | None = None,
     ) -> list[PlaybookRead]:
-        builder = _select_active if active_only else _select_current
+        select = _select_active() if active_only else _select_current()
         trigger_pattern = _escape_like(trigger) if trigger is not None else None
         # Tag/Trigger-Filter und Keyset-Pagination teilen sich denselben
-        # WHERE-Block; der Cursor-Pfad haengt einen weiteren Term an. Der
-        # `locale`-Platzhalter haengt hinten an die Parameterliste. `restrict_ids`
-        # (Read-Scoping `assigned`) ist der letzte Parameter: NULL ⇒ keine
-        # Einschraenkung, leere Liste ⇒ keine Treffer.
+        # WHERE-Block; der Cursor-Pfad haengt einen weiteren Term an. `locale`
+        # ist der optionale Sprachfilter auf die Entity-Sprache (NULL ⇒ alle).
+        # `restrict_ids` (Read-Scoping `assigned`) ist der letzte Parameter:
+        # NULL ⇒ keine Einschraenkung, leere Liste ⇒ keine Treffer.
         if after is None:
-            select = builder("$5")
             rows = await self._pool.fetch(
                 f"{select} "
                 "WHERE p.workspace_id = $1 "
                 "AND ($2::text IS NULL OR $2 = ANY(p.tags)) "
                 "AND ($3::text IS NULL OR "
                 "     p.triggers ILIKE '%' || $3 || '%' ESCAPE '\\') "
+                "AND ($5::text IS NULL OR p.locale = $5) "
                 "AND ($6::uuid[] IS NULL OR p.id = ANY($6)) "
                 "ORDER BY p.created_at DESC, p.id DESC LIMIT $4",
                 workspace_id,
@@ -296,7 +307,6 @@ class PgPlaybookRepository(VersionedAggregateRepository[PlaybookRead, PlaybookVe
                 restrict_ids,
             )
         else:
-            select = builder("$7")
             rows = await self._pool.fetch(
                 f"{select} "
                 "WHERE p.workspace_id = $1 "
@@ -304,6 +314,7 @@ class PgPlaybookRepository(VersionedAggregateRepository[PlaybookRead, PlaybookVe
                 "AND ($3::text IS NULL OR "
                 "     p.triggers ILIKE '%' || $3 || '%' ESCAPE '\\') "
                 "AND (p.created_at, p.id) < ($4, $5) "
+                "AND ($7::text IS NULL OR p.locale = $7) "
                 "AND ($8::uuid[] IS NULL OR p.id = ANY($8)) "
                 "ORDER BY p.created_at DESC, p.id DESC LIMIT $6",
                 workspace_id,
@@ -352,17 +363,14 @@ class PgPlaybookRepository(VersionedAggregateRepository[PlaybookRead, PlaybookVe
         workspace_id: UUID,
         playbook_id: UUID,
         active_only: bool = False,
-        locale: str = DEFAULT_LOCALE,
         restrict_ids: list[UUID] | None = None,
     ) -> PlaybookRead | None:
-        builder = _select_active if active_only else _select_current
-        select = builder("$3")
+        select = _select_active() if active_only else _select_current()
         row = await self._pool.fetchrow(
             f"{select} WHERE p.id = $1 AND p.workspace_id = $2 "
-            "AND ($4::uuid[] IS NULL OR p.id = ANY($4))",
+            "AND ($3::uuid[] IS NULL OR p.id = ANY($3))",
             playbook_id,
             workspace_id,
-            locale,
             restrict_ids,
         )
         return PlaybookRead.model_validate(dict(row)) if row is not None else None
@@ -374,34 +382,22 @@ class PgPlaybookRepository(VersionedAggregateRepository[PlaybookRead, PlaybookVe
         playbook_id: UUID,
         name: str | None,
         content: PlaybookContent,
-        locale: str = DEFAULT_LOCALE,
+        new_locale: str | None = None,
     ) -> PlaybookUpdateOutcome:
         content_json = content.model_dump(mode="json")
-        is_default = locale == DEFAULT_LOCALE
         async with self._pool.acquire() as conn, conn.transaction():
             current = await conn.fetchrow(
-                "SELECT pv.version AS current_version, pv.status "
-                "FROM playbook p "
-                "JOIN playbook_version pv "
-                "  ON pv.playbook_id = p.id AND pv.locale = $3 "
-                "  AND pv.version = ( "
-                "      SELECT max(v.version) FROM playbook_version v "
-                "      WHERE v.playbook_id = p.id AND v.locale = $3 "
-                "  ) "
-                "WHERE p.id = $1 AND p.workspace_id = $2 FOR UPDATE OF p",
+                _CURRENT_FOR_UPDATE,
                 playbook_id,
                 workspace_id,
-                locale,
             )
             if current is None:
                 return PlaybookUpdateOutcome(playbook=None)
-            # Solange irgendein Draft (in dieser Sprache) existiert, blockiert
-            # PUT: der Caller soll erst Promote/Discard durchspielen.
+            # Solange irgendein Draft existiert, blockiert PUT: der Caller soll
+            # erst Promote/Discard durchspielen.
             existing_draft = await conn.fetchval(
-                "SELECT 1 FROM playbook_version "
-                "WHERE playbook_id = $1 AND locale = $2 AND status = 'draft'",
+                "SELECT 1 FROM playbook_version WHERE playbook_id = $1 AND status = 'draft'",
                 playbook_id,
-                locale,
             )
             if existing_draft is not None:
                 return PlaybookUpdateOutcome(playbook=None, conflict="draft_exists")
@@ -411,24 +407,24 @@ class PgPlaybookRepository(VersionedAggregateRepository[PlaybookRead, PlaybookVe
                 new_status = VersionStatus.draft
             else:
                 new_status = VersionStatus.inactive
-            # `current_version` auf der Identitaets-Zeile spiegelt nur den
-            # Default-Locale-Track; Filterspalten (type/tags/triggers) sind
-            # entity-weit und wandern bei jedem Edit mit.
+            # Filterspalten (type/tags/triggers) sind entity-weit und wandern
+            # bei jedem Edit mit; ein gesetztes `new_locale` wechselt die
+            # Entity-Sprache (Metadaten-Update).
             playbook = await conn.fetchrow(
                 "UPDATE playbook "
-                "SET current_version = CASE WHEN $7 THEN $1 ELSE current_version END, "
-                "name = COALESCE($2, name), "
-                "type = $3, tags = $4, triggers = $5, updated_at = now() "
+                "SET current_version = $1, name = COALESCE($2, name), "
+                "type = $3, tags = $4, triggers = $5, "
+                "locale = COALESCE($7, locale), updated_at = now() "
                 "WHERE id = $6 "
                 "RETURNING id, workspace_id, owner_id, name, current_version, type, tags, "
-                "triggers, created_at, updated_at",
+                "triggers, locale, created_at, updated_at",
                 next_version,
                 name,
                 content.type,
                 content.tags,
                 content.triggers,
                 playbook_id,
-                is_default,
+                new_locale,
             )
             await conn.execute(
                 "INSERT INTO playbook_version "
@@ -439,14 +435,13 @@ class PgPlaybookRepository(VersionedAggregateRepository[PlaybookRead, PlaybookVe
                 content_json,
                 new_status.value,
                 owner_id,
-                locale,
+                playbook["locale"],
             )
         return PlaybookUpdateOutcome(
             playbook=PlaybookRead.model_validate(
                 {
                     **dict(playbook),
                     "current_version": next_version,
-                    "locale": locale,
                     "content": content_json,
                     "current_status": new_status,
                     "has_pending_draft": new_status == VersionStatus.draft,
@@ -461,12 +456,11 @@ class PgPlaybookRepository(VersionedAggregateRepository[PlaybookRead, PlaybookVe
         playbook_id: UUID,
         name: str | None,
         content: PlaybookContent,
-        locale: str = DEFAULT_LOCALE,
+        new_locale: str | None = None,
     ) -> PlaybookUpdateOutcome:
         """Auto-Save-Pfad fuer Playbook (PATCH `.../draft`).
 
-        Semantik analog zu `PgPersonaRepository.upsert_draft`, jeweils pro
-        Sprache:
+        Semantik analog zu `PgPersonaRepository.upsert_draft`:
         - bestehender Draft → in-place Update (kein Versions-Increment).
         - kein Draft, current=active|inactive → neuer Draft v(n+1).
         - kein Draft, current=review → 409 (review_pending), Frontend
@@ -475,51 +469,40 @@ class PgPlaybookRepository(VersionedAggregateRepository[PlaybookRead, PlaybookVe
         bei jedem Patch mit, sonst spiegelt die Liste den Draft-Inhalt nicht.
         """
         content_json = content.model_dump(mode="json")
-        is_default = locale == DEFAULT_LOCALE
         async with self._pool.acquire() as conn, conn.transaction():
             current = await conn.fetchrow(
-                "SELECT pv.version AS current_version, pv.status "
-                "FROM playbook p "
-                "JOIN playbook_version pv "
-                "  ON pv.playbook_id = p.id AND pv.locale = $3 "
-                "  AND pv.version = ( "
-                "      SELECT max(v.version) FROM playbook_version v "
-                "      WHERE v.playbook_id = p.id AND v.locale = $3 "
-                "  ) "
-                "WHERE p.id = $1 AND p.workspace_id = $2 FOR UPDATE OF p",
+                _CURRENT_FOR_UPDATE,
                 playbook_id,
                 workspace_id,
-                locale,
             )
             if current is None:
                 return PlaybookUpdateOutcome(playbook=None)
             draft_version = await conn.fetchval(
                 "SELECT version FROM playbook_version "
-                "WHERE playbook_id = $1 AND locale = $2 AND status = 'draft'",
+                "WHERE playbook_id = $1 AND status = 'draft'",
                 playbook_id,
-                locale,
             )
             if draft_version is not None:
                 playbook = await conn.fetchrow(
                     "UPDATE playbook "
                     "SET name = COALESCE($1, name), type = $2, tags = $3, "
-                    "triggers = $4, updated_at = now() "
+                    "triggers = $4, locale = COALESCE($6, locale), updated_at = now() "
                     "WHERE id = $5 "
                     "RETURNING id, workspace_id, owner_id, name, current_version, "
-                    "type, tags, triggers, created_at, updated_at",
+                    "type, tags, triggers, locale, created_at, updated_at",
                     name,
                     content.type,
                     content.tags,
                     content.triggers,
                     playbook_id,
+                    new_locale,
                 )
                 await conn.execute(
                     "UPDATE playbook_version SET content = $1, created_by = $2 "
-                    "WHERE playbook_id = $3 AND locale = $4 AND version = $5",
+                    "WHERE playbook_id = $3 AND version = $4 AND status = 'draft'",
                     content_json,
                     owner_id,
                     playbook_id,
-                    locale,
                     draft_version,
                 )
                 return PlaybookUpdateOutcome(
@@ -527,7 +510,6 @@ class PgPlaybookRepository(VersionedAggregateRepository[PlaybookRead, PlaybookVe
                         {
                             **dict(playbook),
                             "current_version": draft_version,
-                            "locale": locale,
                             "content": content_json,
                             "current_status": VersionStatus.draft,
                             "has_pending_draft": True,
@@ -539,19 +521,19 @@ class PgPlaybookRepository(VersionedAggregateRepository[PlaybookRead, PlaybookVe
             next_version = current["current_version"] + 1
             playbook = await conn.fetchrow(
                 "UPDATE playbook "
-                "SET current_version = CASE WHEN $7 THEN $1 ELSE current_version END, "
-                "name = COALESCE($2, name), "
-                "type = $3, tags = $4, triggers = $5, updated_at = now() "
+                "SET current_version = $1, name = COALESCE($2, name), "
+                "type = $3, tags = $4, triggers = $5, "
+                "locale = COALESCE($7, locale), updated_at = now() "
                 "WHERE id = $6 "
                 "RETURNING id, workspace_id, owner_id, name, current_version, "
-                "type, tags, triggers, created_at, updated_at",
+                "type, tags, triggers, locale, created_at, updated_at",
                 next_version,
                 name,
                 content.type,
                 content.tags,
                 content.triggers,
                 playbook_id,
-                is_default,
+                new_locale,
             )
             await conn.execute(
                 "INSERT INTO playbook_version "
@@ -562,14 +544,13 @@ class PgPlaybookRepository(VersionedAggregateRepository[PlaybookRead, PlaybookVe
                 content_json,
                 VersionStatus.draft.value,
                 owner_id,
-                locale,
+                playbook["locale"],
             )
         return PlaybookUpdateOutcome(
             playbook=PlaybookRead.model_validate(
                 {
                     **dict(playbook),
                     "current_version": next_version,
-                    "locale": locale,
                     "content": content_json,
                     "current_status": VersionStatus.draft,
                     "has_pending_draft": True,
@@ -583,57 +564,50 @@ class PgPlaybookRepository(VersionedAggregateRepository[PlaybookRead, PlaybookVe
         owner_id: UUID,
         playbook_id: UUID,
         content: PlaybookContent,
-        locale: str = DEFAULT_LOCALE,
     ) -> PlaybookUpdateOutcome:
         """Schreibt `content` (Snapshot einer fruehen Version) als neue Draft.
 
         Non-destruktiv (Track A §3.1): kein Pointer-Reset, sondern eine frische
-        Draft-Version v(n+1) im `locale`-Track. 409 (`draft_exists`), wenn
+        Draft-Version v(n+1) (globaler Zaehler). 409 (`draft_exists`), wenn
         bereits ein Draft offen ist — konsistent mit `update`/PUT-auf-Active. Der
-        Name bleibt unveraendert (Name ist nicht Teil des versionierten
-        Contents); die denormalisierten Filterspalten wandern aus dem
-        Snapshot-Content mit.
+        Name und die Entity-Sprache bleiben unveraendert; die denormalisierten
+        Filterspalten wandern aus dem Snapshot-Content mit.
         """
         content_json = content.model_dump(mode="json")
-        is_default = locale == DEFAULT_LOCALE
         async with self._pool.acquire() as conn, conn.transaction():
             current = await conn.fetchrow(
-                # Per-locale Max-Version als Scalar-Subquery — Postgres erlaubt
+                # Globale Max-Version als Scalar-Subquery — Postgres erlaubt
                 # `FOR UPDATE` nicht zusammen mit `GROUP BY`. Sperre auf der
                 # `playbook`-Identitaets-Zeile.
                 "SELECT (SELECT max(v.version) FROM playbook_version v "
-                "        WHERE v.playbook_id = p.id AND v.locale = $3) AS current_version "
+                "        WHERE v.playbook_id = p.id) AS current_version "
                 "FROM playbook p "
                 "WHERE p.id = $1 AND p.workspace_id = $2 "
                 "FOR UPDATE",
                 playbook_id,
                 workspace_id,
-                locale,
             )
             if current is None or current["current_version"] is None:
                 return PlaybookUpdateOutcome(playbook=None)
             existing_draft = await conn.fetchval(
-                "SELECT 1 FROM playbook_version "
-                "WHERE playbook_id = $1 AND locale = $2 AND status = 'draft'",
+                "SELECT 1 FROM playbook_version WHERE playbook_id = $1 AND status = 'draft'",
                 playbook_id,
-                locale,
             )
             if existing_draft is not None:
                 return PlaybookUpdateOutcome(playbook=None, conflict="draft_exists")
             next_version = current["current_version"] + 1
             playbook = await conn.fetchrow(
                 "UPDATE playbook "
-                "SET current_version = CASE WHEN $6 THEN $1 ELSE current_version END, "
+                "SET current_version = $1, "
                 "type = $2, tags = $3, triggers = $4, updated_at = now() "
                 "WHERE id = $5 "
                 "RETURNING id, workspace_id, owner_id, name, current_version, type, tags, "
-                "triggers, created_at, updated_at",
+                "triggers, locale, created_at, updated_at",
                 next_version,
                 content.type,
                 content.tags,
                 content.triggers,
                 playbook_id,
-                is_default,
             )
             await conn.execute(
                 "INSERT INTO playbook_version "
@@ -644,14 +618,13 @@ class PgPlaybookRepository(VersionedAggregateRepository[PlaybookRead, PlaybookVe
                 content_json,
                 VersionStatus.draft.value,
                 owner_id,
-                locale,
+                playbook["locale"],
             )
         return PlaybookUpdateOutcome(
             playbook=PlaybookRead.model_validate(
                 {
                     **dict(playbook),
                     "current_version": next_version,
-                    "locale": locale,
                     "content": content_json,
                     "current_status": VersionStatus.draft,
                     "has_pending_draft": True,
@@ -660,19 +633,18 @@ class PgPlaybookRepository(VersionedAggregateRepository[PlaybookRead, PlaybookVe
         )
 
     async def list_versions(
-        self, workspace_id: UUID, playbook_id: UUID, locale: str = DEFAULT_LOCALE
+        self, workspace_id: UUID, playbook_id: UUID
     ) -> list[PlaybookVersionRead] | None:
-        return await self._list_versions(workspace_id, playbook_id, locale)
+        return await self._list_versions(workspace_id, playbook_id)
 
     async def fetch_version(
-        self, workspace_id: UUID, playbook_id: UUID, version: int, locale: str = DEFAULT_LOCALE
+        self, workspace_id: UUID, playbook_id: UUID, version: int
     ) -> PlaybookVersionRead | None:
-        return await self._fetch_version(workspace_id, playbook_id, version, locale)
+        return await self._fetch_version(workspace_id, playbook_id, version)
 
     async def list_distinct_tags(
         self,
         workspace_id: UUID,
-        locale: str = DEFAULT_LOCALE,
         restrict_ids: list[UUID] | None = None,
     ) -> list[str]:
         """DISTINCT alle Tags des Workspaces, lexikografisch sortiert.
@@ -686,10 +658,6 @@ class PgPlaybookRepository(VersionedAggregateRepository[PlaybookRead, PlaybookVe
         sichtbaren Playbooks: NULL ⇒ keine Einschraenkung, leere Liste ⇒ keine
         Treffer. Sonst leakt ein `assigned`-Agent ueber den Tag-Picker die Tags
         nicht zugewiesener Playbooks (LOW-1).
-
-        `locale` steht nur fuer Protocol-Kompatibilitaet in der Signatur: Tags
-        liegen entity-weit/denormalisiert auf `playbook.tags`, nicht pro Sprache
-        — der Parameter wird daher bewusst nicht gefiltert.
         """
         rows = await self._pool.fetch(
             "SELECT DISTINCT tag "

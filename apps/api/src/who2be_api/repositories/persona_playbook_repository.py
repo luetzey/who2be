@@ -69,20 +69,24 @@ class PgPersonaPlaybookRepository:
         # `active_only` schwenkt den Join: statt der Current-Version wird die
         # Active-Version geliefert, eintraege ohne Active-Version fallen raus
         # (MCP-Pfad, Plan §2.1.D).
-        # Content-i18n (ADR-0027): der Active-Join wird auf die Default-Sprache
-        # ('de') gepinnt. Sonst lieferte ein Playbook mit aktiver de- UND
-        # en-Version doppelte Zeilen. Dieser Reverse-Lookup ist (noch) nicht
-        # locale-plumbed — 'de' haelt das Verhalten exakt wie vor i18n.
+        # „Ein Element, eine Sprache" (ADR-0045): Reads sind locale-agnostisch.
+        # Active ist per Entity eindeutig (per-entity Partial-Unique-Index);
+        # Current ist die globale Max-Version — der Lateral-Tie-Break auf die
+        # Entity-Sprache haelt Legacy-Daten (DE-v1 UND EN-v1) deterministisch.
         join_clause = (
-            "JOIN playbook_version pv   ON pv.playbook_id = p.id "
-            "AND pv.status = 'active' AND pv.locale = 'de' "
+            "JOIN playbook_version pv ON pv.playbook_id = p.id "
+            "AND pv.status = 'active' "
             if active_only
-            else "JOIN playbook_version pv "
-            "  ON pv.playbook_id = p.id AND pv.version = p.current_version "
+            else "JOIN LATERAL ( "
+            "  SELECT v.version, v.status, v.content FROM playbook_version v "
+            "  WHERE v.playbook_id = p.id "
+            "  ORDER BY v.version DESC, (v.locale = p.locale) DESC "
+            "  LIMIT 1 "
+            ") pv ON TRUE "
         )
-        version_col = "pv.version AS current_version" if active_only else "p.current_version"
         rows = await self._pool.fetch(
-            f"SELECT p.id, p.workspace_id, p.owner_id, p.name, {version_col}, "
+            "SELECT p.id, p.workspace_id, p.owner_id, p.name, "
+            "pv.version AS current_version, p.locale, "
             "p.type, p.tags, p.triggers, p.created_at, p.updated_at, pv.content, "
             "pv.status AS current_status, "
             "EXISTS ("

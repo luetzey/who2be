@@ -1,58 +1,47 @@
-import { Checkbox } from '@/components/ui/checkbox'
-import { Label } from '@/components/ui/label'
+import { useTranslation } from 'react-i18next'
 
-import { CONTENT_LANGUAGES } from './content-languages'
+import { Label } from '@/components/ui/label'
+import { Select } from '@/components/ui/select'
+
+import { CONTENT_LOCALES } from './content-languages'
 
 export interface LanguageSelectProps {
-  /** Aktuell gewaehlte Sprach-Kuerzel (z. B. `['de']`). */
-  value: string[]
-  /** Liefert die neue Auswahl; mindestens eine Sprache bleibt erzwungen. */
-  onChange: (next: string[]) => void
-  /** Optionale ID-Basis fuer A11y-Verknuepfung von Label und Checkbox. */
+  /** Aktuell gewaehltes Sprach-Kuerzel (z. B. `'de'`). */
+  value: string
+  /** Liefert die neue Auswahl. */
+  onChange: (next: string) => void
+  /** Optionale ID-Basis fuer A11y-Verknuepfung von Label und Select. */
   idBase?: string
 }
 
 /**
- * Mehrfach-Auswahl der Inhalts-Sprachen fuer den Create-Flow. Genau eine
- * Sprache muss gewaehlt bleiben — das Abwaehlen der letzten Sprache ist
- * unterbunden (Backend verlangt `locales` mit min. einem Eintrag).
+ * Einzel-Auswahl der Inhalts-Sprache eines Elements (Persona / Playbook /
+ * Resource / externes Tool / System-Prompt) — „Ein Element, eine Sprache"
+ * (ADR-0045). Ersetzt die frühere Multi-Checkbox-Auswahl (ADR-0027): es gibt
+ * keine parallelen Sprach-Tracks mehr, ein Element ist deutsch ODER
+ * englisch. Der aufrufende Create-Flow liefert den Default aus der
+ * Workspace-Content-Sprache (`useContentLocaleField`).
  */
 export function LanguageSelect({ value, onChange, idBase = 'lang' }: LanguageSelectProps) {
-  function toggle(code: string, checked: boolean): void {
-    if (checked) {
-      if (value.includes(code)) return
-      // Reihenfolge stabil entlang CONTENT_LANGUAGES halten.
-      onChange(CONTENT_LANGUAGES.map((l) => l.value).filter((c) => c === code || value.includes(c)))
-      return
-    }
-    const next = value.filter((c) => c !== code)
-    // Letzte Sprache nicht abwaehlbar — sonst haette das Backend kein `locales`.
-    if (next.length === 0) return
-    onChange(next)
-  }
+  const { t } = useTranslation('common')
+  const id = `${idBase}-select`
 
   return (
-    <fieldset className="flex flex-col gap-2">
-      <legend className="text-sm font-medium text-foreground">Sprachen</legend>
-      <p className="text-sm text-muted-foreground">
-        Je gewaehlter Sprache wird eine eigene Inhalts-Variante angelegt.
-      </p>
-      <div className="flex flex-wrap gap-4">
-        {CONTENT_LANGUAGES.map((lang) => {
-          const id = `${idBase}-${lang.value}`
-          const checked = value.includes(lang.value)
-          return (
-            <Label key={lang.value} htmlFor={id} className="flex items-center gap-2 font-normal">
-              <Checkbox
-                id={id}
-                checked={checked}
-                onChange={(event) => toggle(lang.value, event.target.checked)}
-              />
-              {lang.label}
-            </Label>
-          )
-        })}
-      </div>
-    </fieldset>
+    <div className="flex flex-col gap-2">
+      <Label htmlFor={id}>{t('contentLocale.label')}</Label>
+      <Select
+        id={id}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="max-w-xs"
+      >
+        {CONTENT_LOCALES.map((lang) => (
+          <option key={lang.value} value={lang.value}>
+            {lang.label}
+          </option>
+        ))}
+      </Select>
+      <p className="text-sm text-muted-foreground">{t('contentLocale.helpText')}</p>
+    </div>
   )
 }

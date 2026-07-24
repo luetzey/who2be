@@ -13,12 +13,13 @@ from fastapi import APIRouter, Depends, Request, Response, status
 
 from who2be_api.core.agent_scope import require_external_tool_read
 from who2be_api.core.db import get_pool
-from who2be_api.core.locale import LocaleQuery
+from who2be_api.core.locale import LocaleFilterQuery
 from who2be_api.core.pagination import DEFAULT_LIMIT, PageCursor, PageLimit
 from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.repositories.external_tool_repository import PgExternalToolRepository
 from who2be_api.repositories.status_history_repository import PgStatusHistoryRepository
+from who2be_api.repositories.workspace_repository import PgWorkspaceRepository
 from who2be_api.routers._export import ExportResult, export_entity
 from who2be_api.services.entity_export_service import EntityExportService
 from who2be_api.services.entity_quota_service import enforce_entity_quota
@@ -43,7 +44,7 @@ def get_external_tool_service(
     pool: Annotated[asyncpg.Pool, Depends(get_pool)],
 ) -> ExternalToolService:
     """FastAPI-Dependency: verdrahtet den Service mit der Pg-Implementierung."""
-    return ExternalToolService(PgExternalToolRepository(pool))
+    return ExternalToolService(PgExternalToolRepository(pool), PgWorkspaceRepository(pool))
 
 
 def get_version_status_service(
@@ -70,9 +71,10 @@ async def list_external_tools(
     service: Service,
     response: Response,
     cursor: PageCursor,
-    locale: LocaleQuery,
+    locale: LocaleFilterQuery,
     limit: PageLimit = DEFAULT_LIMIT,
 ) -> list[ExternalToolRead]:
+    """Listet externe Tools; `?locale=` filtert auf die Element-Sprache (ADR-0045)."""
     items, next_cursor = await service.list_all(ctx, limit, cursor, locale=locale)
     if next_cursor is not None:
         response.headers["X-Next-Cursor"] = next_cursor
@@ -92,10 +94,8 @@ async def create_external_tool(
 
 
 @router.get("/{tool_id}", dependencies=[Depends(enforce_mcp_read_limit)])
-async def get_external_tool(
-    tool_id: UUID, ctx: Ctx, service: Service, locale: LocaleQuery
-) -> ExternalToolRead:
-    return await service.get(ctx, tool_id, locale=locale)
+async def get_external_tool(tool_id: UUID, ctx: Ctx, service: Service) -> ExternalToolRead:
+    return await service.get(ctx, tool_id)
 
 
 @router.put("/{tool_id}")
@@ -106,9 +106,8 @@ async def update_external_tool(
     data: ExternalToolUpdate,
     ctx: Ctx,
     service: Service,
-    locale: LocaleQuery,
 ) -> ExternalToolRead:
-    return await service.update(ctx, tool_id, data, locale=locale)
+    return await service.update(ctx, tool_id, data)
 
 
 @router.delete("/{tool_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -167,24 +166,23 @@ async def update_external_tool_draft(
     data: ExternalToolUpdate,
     ctx: Ctx,
     service: Service,
-    locale: LocaleQuery,
 ) -> ExternalToolRead:
     """Auto-Save-Pfad — upsertet die Draft-Version ohne Versions-Increment."""
-    return await service.update_draft(ctx, tool_id, data, locale=locale)
+    return await service.update_draft(ctx, tool_id, data)
 
 
 @router.get("/{tool_id}/versions")
 async def list_external_tool_versions(
-    tool_id: UUID, ctx: Ctx, service: Service, locale: LocaleQuery
+    tool_id: UUID, ctx: Ctx, service: Service
 ) -> list[ExternalToolVersionRead]:
-    return await service.list_versions(ctx, tool_id, locale)
+    return await service.list_versions(ctx, tool_id)
 
 
 @router.get("/{tool_id}/versions/{version}")
 async def get_external_tool_version(
-    tool_id: UUID, version: int, ctx: Ctx, service: Service, locale: LocaleQuery
+    tool_id: UUID, version: int, ctx: Ctx, service: Service
 ) -> ExternalToolVersionRead:
-    return await service.get_version(ctx, tool_id, version, locale)
+    return await service.get_version(ctx, tool_id, version)
 
 
 @router.post("/{tool_id}/versions/{version}/transition")
@@ -196,10 +194,9 @@ async def transition_external_tool_version(
     data: VersionTransitionRequest,
     ctx: Ctx,
     status_service: StatusService,
-    locale: LocaleQuery,
 ) -> ExternalToolVersionRead:
     return await status_service.transition_external_tool_version(
-        ctx, tool_id, version, data.to, data.note, locale=locale
+        ctx, tool_id, version, data.to, data.note
     )
 
 
@@ -211,10 +208,9 @@ async def restore_external_tool_version(
     version: int,
     ctx: Ctx,
     service: Service,
-    locale: LocaleQuery,
 ) -> ExternalToolRead:
     """Stellt Version `version` als neue Draft wieder her (non-destruktiv)."""
-    return await service.restore(ctx, tool_id, version, locale=locale)
+    return await service.restore(ctx, tool_id, version)
 
 
 @router.get("/{tool_id}/versions/{version}/provenance")

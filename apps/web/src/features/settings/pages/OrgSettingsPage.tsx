@@ -13,6 +13,7 @@ import { useApi } from '@/api/useApi'
 import { useSession } from '@/auth/session-context'
 import { useWorkspaceId } from '@/auth/useWorkspaceId'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
+import { CONTENT_LOCALE_OPTIONS } from '@/components/forms/content-languages'
 import { Container } from '@/components/layout/Container'
 import { FormSection } from '@/components/layout/FormSection'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -41,6 +42,8 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select } from '@/components/ui/select'
+import { useLocale } from '@/i18n/useLocale'
 import { notify } from '@/lib/feedback'
 import { roleLabel } from '@/lib/roles'
 
@@ -61,6 +64,7 @@ const workspaceSchema = z.object({
     .min(1, i18n.t('common:validation.slugRequired'))
     .max(64)
     .regex(/^[a-z0-9-]+$/, i18n.t('common:validation.slugInvalid')),
+  content_locale: z.string().min(1),
 })
 
 type WorkspaceValues = z.infer<typeof workspaceSchema>
@@ -79,10 +83,13 @@ export function OrgSettingsPage() {
   const current = useCurrentOrg()
   const wsPath = useWorkspacePath()
   const activeWorkspaceId = useWorkspaceId()
+  // Vorbelegung aus der UI-Sprache (ADR-0045): der neue Workspace startet
+  // typischerweise in derselben Sprache, in der der Anlegende gerade arbeitet.
+  const { locale: uiLocale } = useLocale()
 
   const form = useForm<WorkspaceValues>({
     resolver: zodResolver(workspaceSchema),
-    defaultValues: { name: '', slug: '' },
+    defaultValues: { name: '', slug: '', content_locale: uiLocale },
   })
 
   if (current === null) {
@@ -102,7 +109,7 @@ export function OrgSettingsPage() {
     try {
       const created = await api.createWorkspace(org.id, values)
       notify.success(t('org.workspaces.createdToast', { name: created.name }))
-      form.reset({ name: '', slug: '' })
+      form.reset({ name: '', slug: '', content_locale: uiLocale })
       await refreshMe()
     } catch (cause) {
       notify.error(describeError(cause, t('org.actionFailed')))
@@ -197,6 +204,28 @@ export function OrgSettingsPage() {
                             </FormControl>
                             <FormDescription>
                               {t('org.workspaces.slugDescription')}
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="content_locale"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t('org.workspaces.contentLocaleLabel')}</FormLabel>
+                            <FormControl>
+                              <Select {...field} className="max-w-xs">
+                                {CONTENT_LOCALE_OPTIONS.map((entry) => (
+                                  <option key={entry.value} value={entry.value}>
+                                    {entry.label}
+                                  </option>
+                                ))}
+                              </Select>
+                            </FormControl>
+                            <FormDescription>
+                              {t('org.workspaces.contentLocaleDescription')}
                             </FormDescription>
                             <FormMessage />
                           </FormItem>

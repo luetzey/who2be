@@ -14,9 +14,12 @@ import asyncpg
 
 from who2be_models import PlaybookRead, PlaybookRef
 
-# Spalten-Auswahl fuer Current-Version (non-active_only).
+# Spalten-Auswahl fuer Current-Version (non-active_only). Locale-agnostisch
+# (ADR-0045): globale Max-Version per Lateral-Join, Legacy-Tie-Break auf die
+# Entity-Sprache (Alt-Daten koennen DE-v1 UND EN-v1 tragen).
 _SELECT_CURRENT = """
-    SELECT p.id, p.workspace_id, p.owner_id, p.name, p.current_version,
+    SELECT p.id, p.workspace_id, p.owner_id, p.name,
+           pv.version AS current_version, p.locale,
            p.type, p.tags, p.triggers, p.created_at, p.updated_at, pv.content,
            pv.status AS current_status,
            EXISTS (
@@ -27,14 +30,19 @@ _SELECT_CURRENT = """
                SELECT 1 FROM playbook_composition c WHERE c.parent_id = p.id
            ) AS is_composite
     FROM playbook p
-    JOIN playbook_version pv
-      ON pv.playbook_id = p.id AND pv.version = p.current_version
+    JOIN LATERAL (
+        SELECT v.version, v.status, v.content FROM playbook_version v
+        WHERE v.playbook_id = p.id
+        ORDER BY v.version DESC, (v.locale = p.locale) DESC
+        LIMIT 1
+    ) pv ON TRUE
 """
 
-# Spalten-Auswahl fuer Active-Version (active_only-Pfad, MCP).
+# Spalten-Auswahl fuer Active-Version (active_only-Pfad, MCP). Die aktive
+# Version ist seit Migration 0069 per Entity eindeutig — kein Locale-Pin.
 _SELECT_ACTIVE = """
     SELECT p.id, p.workspace_id, p.owner_id, p.name,
-           pv.version AS current_version,
+           pv.version AS current_version, p.locale,
            p.type, p.tags, p.triggers, p.created_at, p.updated_at, pv.content,
            pv.status AS current_status,
            EXISTS (
@@ -46,11 +54,8 @@ _SELECT_ACTIVE = """
            ) AS is_composite
     FROM playbook p
     JOIN playbook_version pv
-      ON pv.playbook_id = p.id AND pv.status = 'active' AND pv.locale = 'de'
+      ON pv.playbook_id = p.id AND pv.status = 'active'
 """
-# Content-i18n (ADR-0027): Active-Join oben auf Default-Sprache 'de' gepinnt,
-# sonst duplizierte ein Composite-Kind mit aktiver de- UND en-Version die Zeile.
-# Composite-Reads sind (noch) nicht locale-plumbed — 'de' = Verhalten wie vor i18n.
 
 # WITH RECURSIVE-Zyklus-Guard: prueft ob parent_id Nachfahre eines der neuen
 # Kinder ist. Trifft zu → Zyklus. Kommentar im Service erklaert die Logik.

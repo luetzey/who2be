@@ -11,6 +11,7 @@ import { AttentionBanner } from '@/components/data/AttentionBanner'
 import { SaveIndicator, type BranchAction } from '@/components/data/BranchStatus'
 import { DataView } from '@/components/data/DataView'
 import { DetailHeader } from '@/components/data/DetailHeader'
+import { LocaleBadge } from '@/components/data/LocaleBadge'
 import { ManagedNotice } from '@/components/data/ManagedNotice'
 import { MetaPill } from '@/components/data/MetaPill'
 import { StatusBadge } from '@/components/data/StatusBadge'
@@ -169,6 +170,7 @@ export function PersonaDetailPage() {
                   badges={
                     <>
                       <Badge variant="secondary">v{persona.current_version}</Badge>
+                      <LocaleBadge locale={persona.locale} />
                       <StatusBadge
                         status={persona.current_status}
                         pendingDraft={persona.has_pending_draft}

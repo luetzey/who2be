@@ -18,6 +18,11 @@ export interface AgentFilterOption {
   name: string
 }
 
+export interface LocaleFilterOption {
+  value: string
+  label: string
+}
+
 export interface GroupByOption {
   value: string
   label: string
@@ -45,6 +50,11 @@ interface ListFilterBarProps {
   agents?: AgentFilterOption[]
   agent?: string
   onAgentChange?: (value: string) => void
+  // Serverseitige Sprach-Facette (ADR-0045 „Ein Element, eine Sprache"):
+  // Auswahl loest wie beim Agent-Filter einen Refetch aus.
+  locales?: LocaleFilterOption[]
+  locale?: string
+  onLocaleChange?: (value: string) => void
   // Group-by-Selector (WP-D3): reine Anzeige-Praeferenz, kein Filter. Die
   // Page liefert die Optionen fertig uebersetzt (Wert '' = keine Gruppierung)
   // und gruppiert selbst clientseitig.
@@ -113,6 +123,9 @@ export function ListFilterBar({
   agents = [],
   agent = '',
   onAgentChange,
+  locales = [],
+  locale = '',
+  onLocaleChange,
   groupOptions = [],
   group = '',
   onGroupChange,
@@ -122,6 +135,7 @@ export function ListFilterBar({
   // Chip-Label: Agent-Name, solange die Agenten-Liste ihn kennt — sonst die
   // rohe ID aus der URL (geteilter Link auf einen inzwischen geloeschten Agent).
   const agentName = agents.find((entry) => entry.id === agent)?.name ?? agent
+  const localeName = locales.find((entry) => entry.value === locale)?.label ?? locale
 
   // Status-Chips: `all` immer, `attention` sobald es welche gibt (oder aktiv),
   // ein Status-Chip nur bei Vorkommen (oder wenn aktuell gewaehlt). Vermeidet
@@ -242,6 +256,24 @@ export function ListFilterBar({
             </div>
           ) : null}
 
+          {onLocaleChange && locales.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor={`${idPrefix}-locale`}>{t('data:filter.localeLabel')}</Label>
+              <Select
+                id={`${idPrefix}-locale`}
+                value={locale}
+                onChange={(event) => onLocaleChange(event.target.value)}
+              >
+                <option value="">{t('data:filter.allLocales')}</option>
+                {locales.map((entry) => (
+                  <option key={entry.value} value={entry.value}>
+                    {entry.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          ) : null}
+
           {onGroupChange && groupOptions.length > 0 ? (
             <div className="flex flex-col gap-2">
               <Label htmlFor={`${idPrefix}-group`}>{t('data:filter.groupLabel')}</Label>
@@ -271,6 +303,22 @@ export function ListFilterBar({
               aria-label={t('data:filter.agentChipRemove', { name: agentName })}
             >
               {t('data:filter.agentChip', { name: agentName })}
+              <X className="size-4" aria-hidden="true" />
+            </Button>
+          </div>
+        ) : null}
+
+        {onLocaleChange && locale !== '' ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="h-7 gap-1 rounded-full px-3 text-xs"
+              onClick={() => onLocaleChange('')}
+              aria-label={t('data:filter.localeChipRemove', { name: localeName })}
+            >
+              {t('data:filter.localeChip', { name: localeName })}
               <X className="size-4" aria-hidden="true" />
             </Button>
           </div>

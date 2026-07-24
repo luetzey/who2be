@@ -98,8 +98,9 @@ describe('ResourceNewPage', () => {
     expect(createResourceMock).toHaveBeenCalledWith({
       name: 'FAQ',
       content: { description: '', blocks: [], tags: [] },
-      // Content-i18n (ADR-0027): Default-Sprachauswahl wird mitgeschickt.
-      locales: ['de'],
+      // Ein Element, eine Sprache (ADR-0045): Default aus der (in `me` nicht
+      // aufloesbaren) Workspace-Content-Sprache faellt auf 'de' zurueck.
+      locale: 'de',
     })
   })
 })

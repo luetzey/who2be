@@ -35,6 +35,10 @@ export interface ListFilters<T> {
   // clientseitigen Facetten filtert der Hook damit NICHT — die Page reicht
   // den Wert an den Daten-Hook durch, der den Refetch ausloest.
   agent: string
+  // SERVERSEITIGE Facette (ADR-0045 „Ein Element, eine Sprache"): Sprache aus
+  // `?locale=` — wie `agent` kein clientseitiger Filter, sondern an den
+  // Daten-Hook durchgereicht (Refetch mit `?locale=`).
+  locale: string
   // ANZEIGE-Praeferenz (WP-D3): Group-by-Modus aus `?group=`. Kein Filter —
   // grenzt die Liste nicht ein und zaehlt deshalb weder fuer `active` noch
   // fuer `reset`. Die Page interpretiert/validiert den Wert selbst
@@ -48,6 +52,7 @@ export interface ListFilters<T> {
   setTag: (value: string) => void
   setType: (value: string) => void
   setAgent: (value: string) => void
+  setLocale: (value: string) => void
   setGroup: (value: string) => void
   reset: () => void
 }
@@ -59,6 +64,7 @@ const QUERY_KEY = 'q'
 const TAG_KEY = 'tag'
 const TYPE_KEY = 'type'
 const AGENT_KEY = 'agent'
+const LOCALE_KEY = 'locale'
 const GROUP_KEY = 'group'
 
 /**
@@ -69,6 +75,16 @@ const GROUP_KEY = 'group'
 export function useAgentFilterParam(): string {
   const [params] = useSearchParams()
   return params.get(AGENT_KEY) ?? ''
+}
+
+/**
+ * Aktueller `?locale=`-Wert (serverseitige Facette, ADR-0045) — analog zu
+ * `useAgentFilterParam`: die Page liest ihn VOR `useListFilters` und reicht
+ * ihn an ihren Daten-Hook durch.
+ */
+export function useLocaleFilterParam(): string {
+  const [params] = useSearchParams()
+  return params.get(LOCALE_KEY) ?? ''
 }
 
 /**
@@ -93,6 +109,7 @@ export function useListFilters<T>(
   const tag = params.get(TAG_KEY) ?? ''
   const type = params.get(TYPE_KEY) ?? ''
   const agent = params.get(AGENT_KEY) ?? ''
+  const locale = params.get(LOCALE_KEY) ?? ''
   const group = params.get(GROUP_KEY) ?? ''
 
   const setParam = useCallback(
@@ -118,6 +135,7 @@ export function useListFilters<T>(
   const setTag = useCallback((value: string) => setParam(TAG_KEY, value), [setParam])
   const setType = useCallback((value: string) => setParam(TYPE_KEY, value), [setParam])
   const setAgent = useCallback((value: string) => setParam(AGENT_KEY, value), [setParam])
+  const setLocale = useCallback((value: string) => setParam(LOCALE_KEY, value), [setParam])
   const setGroup = useCallback((value: string) => setParam(GROUP_KEY, value), [setParam])
 
   const reset = useCallback(() => {
@@ -129,6 +147,7 @@ export function useListFilters<T>(
         next.delete(TAG_KEY)
         next.delete(TYPE_KEY)
         next.delete(AGENT_KEY)
+        next.delete(LOCALE_KEY)
         return next
       },
       { replace: true },
@@ -191,7 +210,8 @@ export function useListFilters<T>(
     [base, status, accessors],
   )
 
-  const active = status !== 'all' || query !== '' || tag !== '' || type !== '' || agent !== ''
+  const active =
+    status !== 'all' || query !== '' || tag !== '' || type !== '' || agent !== '' || locale !== ''
 
   return {
     filtered: filtered as T[],
@@ -201,6 +221,7 @@ export function useListFilters<T>(
     tag,
     type,
     agent,
+    locale,
     group,
     availableTags,
     availableTypes,
@@ -210,6 +231,7 @@ export function useListFilters<T>(
     setTag,
     setType,
     setAgent,
+    setLocale,
     setGroup,
     reset,
   }

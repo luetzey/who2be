@@ -13,6 +13,7 @@ import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { SystemPromptEditor } from '@/components/editor/system-prompt/SystemPromptEditor'
 import type { SystemPromptBlock } from '@/components/editor/system-prompt/SystemPromptEditor'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
+import { LanguageSelect } from '@/components/forms/LanguageSelect'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
@@ -20,6 +21,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { useContentLocaleField } from '@/hooks/useContentLocaleField'
 import { notify } from '@/lib/feedback'
 
 import { PlaceholderHelp } from '../components/PlaceholderHelp'
@@ -39,6 +41,7 @@ export function SystemPromptNewPage() {
   const api = useApi()
   const navigate = useNavigate()
   const wsPath = useWorkspacePath()
+  const { locale, setLocale } = useContentLocaleField()
   const [saveError, setSaveError] = useState<string | null>(null)
 
   // BlockNote-Bloecke werden ausserhalb des RHF-State gepuffert, damit kein
@@ -74,6 +77,7 @@ export function SystemPromptNewPage() {
           // serialisiert zu "[]", was OK ist.
           body: bodyJson !== '' ? bodyJson : '[]',
         },
+        locale,
       })
       notify.success(t('page.new.toast.created'))
       navigate(wsPath(`/system-prompts/${created.id}`))
@@ -95,6 +99,7 @@ export function SystemPromptNewPage() {
           title={t('page.new.title')}
           description={t('page.new.description')}
         />
+        <LanguageSelect value={locale} onChange={setLocale} idBase="system-prompt-lang" />
         <div className="flex flex-col gap-6">
           <Card>
             <CardContent className="pt-6">

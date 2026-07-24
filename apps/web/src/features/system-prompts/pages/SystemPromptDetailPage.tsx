@@ -8,6 +8,7 @@ import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { AttentionBanner } from '@/components/data/AttentionBanner'
 import { DataView } from '@/components/data/DataView'
 import { DetailHeader } from '@/components/data/DetailHeader'
+import { LocaleBadge } from '@/components/data/LocaleBadge'
 import { ManagedNotice } from '@/components/data/ManagedNotice'
 import { StatusBadge } from '@/components/data/StatusBadge'
 import { Container } from '@/components/layout/Container'
@@ -59,6 +60,7 @@ export function SystemPromptDetailPage() {
                     pendingDraft={template.has_pending_draft}
                   />
                   <Badge variant="secondary">v{template.current_version}</Badge>
+                  <LocaleBadge locale={template.locale} />
                 </>
               }
               description={template.content.description}

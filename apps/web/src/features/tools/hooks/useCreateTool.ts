@@ -30,8 +30,10 @@ export interface UseCreateToolResult {
 
 export function useCreateTool(
   onCreated: (id: string) => void,
-  // Content-i18n (ADR-0027): gewaehlte Sprachvarianten (mind. eine), Default ['de'].
-  locales: string[] = ['de'],
+  // Ein Element, eine Sprache (ADR-0045): einzelne Sprache statt der
+  // frueheren Multi-Auswahl. `undefined` laesst das Backend auf die
+  // Workspace-Content-Sprache defaulten.
+  locale?: string,
 ): UseCreateToolResult {
   const api = useApi()
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -61,7 +63,7 @@ export function useCreateTool(
           fallback_note: values.fallbackNote.trim() === '' ? null : values.fallbackNote,
           tags: values.tags,
         },
-        locales,
+        locale,
       })
       notify.success('Externes Tool angelegt.')
       onCreated(created.id)

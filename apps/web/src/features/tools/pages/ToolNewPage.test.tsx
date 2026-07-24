@@ -108,7 +108,9 @@ describe('ToolNewPage', () => {
         fallback_note: null,
         tags: [],
       },
-      locales: ['de'],
+      // Ein Element, eine Sprache (ADR-0045): Default aus der (in `me` nicht
+      // aufloesbaren) Workspace-Content-Sprache faellt auf 'de' zurueck.
+      locale: 'de',
     })
   })
 

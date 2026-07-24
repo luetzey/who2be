@@ -1,7 +1,11 @@
 import { Search, SlidersHorizontal, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import type { AgentFilterOption, GroupByOption } from '@/components/data/ListFilterBar'
+import type {
+  AgentFilterOption,
+  GroupByOption,
+  LocaleFilterOption,
+} from '@/components/data/ListFilterBar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -39,6 +43,9 @@ interface PlaybookListToolbarProps {
   agents: AgentFilterOption[]
   agent: string
   onAgentChange: (value: string) => void
+  locales: LocaleFilterOption[]
+  locale: string
+  onLocaleChange: (value: string) => void
   groupOptions: GroupByOption[]
   group: string
   onGroupChange: (value: string) => void
@@ -104,16 +111,20 @@ export function PlaybookListToolbar({
   agents,
   agent,
   onAgentChange,
+  locales,
+  locale,
+  onLocaleChange,
   groupOptions,
   group,
   onGroupChange,
 }: PlaybookListToolbarProps) {
   const { t } = useTranslation(['data', 'common', 'playbooks'])
   const agentName = agents.find((entry) => entry.id === agent)?.name ?? agent
+  const localeName = locales.find((entry) => entry.value === locale)?.label ?? locale
   const showAttention = counts.attention > 0 || status === 'attention'
   // Facetten-Zaehler auf dem Filter-Button — macht im zugeklappten Zustand
   // sichtbar, dass Popover-Filter aktiv sind.
-  const facetCount = [tag, type, agent].filter((value) => value !== '').length
+  const facetCount = [tag, type, agent, locale].filter((value) => value !== '').length
 
   return (
     <div className="flex flex-col gap-3">
@@ -241,6 +252,24 @@ export function PlaybookListToolbar({
               </div>
             ) : null}
 
+            {locales.length > 0 ? (
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="playbooks-facet-locale">{t('data:filter.localeLabel')}</Label>
+                <Select
+                  id="playbooks-facet-locale"
+                  value={locale}
+                  onChange={(event) => onLocaleChange(event.target.value)}
+                >
+                  <option value="">{t('data:filter.allLocales')}</option>
+                  {locales.map((entry) => (
+                    <option key={entry.value} value={entry.value}>
+                      {entry.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            ) : null}
+
             {groupOptions.length > 0 ? (
               <div className="flex flex-col gap-2">
                 <Label htmlFor="playbooks-facet-group">{t('data:filter.groupLabel')}</Label>
@@ -287,6 +316,22 @@ export function PlaybookListToolbar({
             aria-label={t('data:filter.agentChipRemove', { name: agentName })}
           >
             {t('data:filter.agentChip', { name: agentName })}
+            <X className="size-4" aria-hidden="true" />
+          </Button>
+        </div>
+      ) : null}
+
+      {locale !== '' ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="h-7 gap-1 rounded-full px-3 text-xs"
+            onClick={() => onLocaleChange('')}
+            aria-label={t('data:filter.localeChipRemove', { name: localeName })}
+          >
+            {t('data:filter.localeChip', { name: localeName })}
             <X className="size-4" aria-hidden="true" />
           </Button>
         </div>

@@ -8,22 +8,31 @@ import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
+import { CONTENT_LOCALE_OPTIONS } from '@/components/forms/content-languages'
 import { EntityCard } from '@/components/data/EntityCard'
 import { EmptyState } from '@/components/data/EmptyState'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
 import { ListFilterBar } from '@/components/data/ListFilterBar'
 import { LoadingState } from '@/components/data/LoadingState'
+import { LocaleBadge } from '@/components/data/LocaleBadge'
 import { MetaPill } from '@/components/data/MetaPill'
 import { StatusBadge } from '@/components/data/StatusBadge'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { useListFilters, type ListFilterAccessors } from '@/hooks/useListFilters'
+import {
+  useListFilters,
+  useLocaleFilterParam,
+  type ListFilterAccessors,
+} from '@/hooks/useListFilters'
 
 import { useTools } from '../hooks/useTools'
 
 export function ToolsPage() {
   const { t } = useTranslation(['tools', 'data'])
-  const { tools, loading, error } = useTools()
+  // Serverseitige Sprach-Facette (ADR-0045): Param VOR dem Daten-Hook lesen,
+  // damit ein Facetten-Wechsel den Refetch ausloest.
+  const localeFilter = useLocaleFilterParam()
+  const { tools, loading, error } = useTools(localeFilter || undefined)
   const wsPath = useWorkspacePath()
 
   const accessors = useMemo<ListFilterAccessors<ExternalTool>>(
@@ -37,6 +46,10 @@ export function ToolsPage() {
     [],
   )
   const filters = useListFilters(tools, accessors)
+  // Leerer Workspace vs. leeres Filter-Ergebnis: bei aktiver Sprach-Facette
+  // kommt die Liste serverseitig gefiltert an — dann ist "leer" ein
+  // Filter-Ergebnis, kein leerer Workspace.
+  const isEmptyWorkspace = tools.length === 0 && filters.locale === ''
 
   const newToolCta = (
     <Button asChild variant="brand">
@@ -66,7 +79,7 @@ export function ToolsPage() {
           actions={newToolCta}
         />
 
-        {tools.length > 0 ? (
+        {tools.length > 0 || filters.locale !== '' ? (
           <ListFilterBar
             idPrefix="tools"
             counts={filters.counts}
@@ -77,6 +90,9 @@ export function ToolsPage() {
             availableTags={filters.availableTags}
             tag={filters.tag}
             onTagChange={filters.setTag}
+            locales={CONTENT_LOCALE_OPTIONS}
+            locale={filters.locale}
+            onLocaleChange={filters.setLocale}
             active={filters.active}
             onReset={filters.reset}
           />
@@ -86,7 +102,7 @@ export function ToolsPage() {
           <LoadingState />
         ) : error ? (
           <ErrorAlert message={error} />
-        ) : tools.length === 0 ? (
+        ) : isEmptyWorkspace ? (
           <EmptyState
             icon={Plug}
             title={t('tools:list.emptyTitle')}
@@ -124,6 +140,7 @@ export function ToolsPage() {
                         <Badge variant="secondary" className="tabular-nums">
                           v{tool.current_version}
                         </Badge>
+                        <LocaleBadge locale={tool.locale} />
                         {tags.map((tag) => (
                           <Badge key={tag} variant="outline" className="text-xs">
                             {tag}

@@ -11,6 +11,7 @@ import { AttentionBanner } from '@/components/data/AttentionBanner'
 import { BranchStatus } from '@/components/data/BranchStatus'
 import { DataView } from '@/components/data/DataView'
 import { DetailHeader } from '@/components/data/DetailHeader'
+import { LocaleBadge } from '@/components/data/LocaleBadge'
 import { ManagedNotice } from '@/components/data/ManagedNotice'
 import { StatusBadge } from '@/components/data/StatusBadge'
 import { Container } from '@/components/layout/Container'
@@ -118,6 +119,7 @@ export function ToolDetailPage() {
                       status={tool.current_status}
                       pendingDraft={tool.has_pending_draft}
                     />
+                    <LocaleBadge locale={tool.locale} />
                     {tags.map((tag) => (
                       <Badge key={tag} variant="secondary" className="text-xs">
                         {tag}

@@ -16,8 +16,9 @@ import asyncpg
 
 from who2be_models import SearchHit
 
-# Pro Typ: (Entity-Tabelle, Version-Tabelle, FK-Spalte). Locale fix auf 'de'
-# (Stufe A) — Multi-Locale-Suche ist eine Folge-Verfeinerung.
+# Pro Typ: (Entity-Tabelle, Version-Tabelle, FK-Spalte). Locale-agnostisch
+# (ADR-0045, „Ein Element, eine Sprache"): die aktive Version ist per Entity
+# eindeutig — kein Locale-Pin mehr noetig.
 _TYPE_TABLES: dict[str, tuple[str, str, str]] = {
     "persona": ("persona", "persona_version", "persona_id"),
     "playbook": ("playbook", "playbook_version", "playbook_id"),
@@ -36,7 +37,7 @@ def _query_for(entity: str, version: str, fk: str) -> str:
         f"       ts_rank({vector}, plainto_tsquery('simple', $2)) AS score, "
         f"       coalesce(ev.content->>'description', '') AS snippet "
         f"FROM {entity} e "
-        f"JOIN {version} ev ON ev.{fk} = e.id AND ev.status = 'active' AND ev.locale = 'de' "
+        f"JOIN {version} ev ON ev.{fk} = e.id AND ev.status = 'active' "
         f"WHERE e.workspace_id = $1 "
         f"  AND {vector} @@ plainto_tsquery('simple', $2) "
         f"ORDER BY score DESC, e.name ASC "

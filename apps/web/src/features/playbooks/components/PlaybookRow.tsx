@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
 import type { Playbook, PlaybookRef, VersionStatus } from '@/api/types'
+import { LocaleBadge } from '@/components/data/LocaleBadge'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -81,6 +82,7 @@ export function PlaybookRow({ playbook, wsPath, parent, resolveChild }: Playbook
             {playbook.name}
           </Link>
           <StatusDotLabel status={playbook.current_status} version={playbook.current_version} />
+          <LocaleBadge locale={playbook.locale} />
           {playbook.has_pending_draft === true ? (
             <span className="rounded-full bg-brand/10 px-2 py-0.5 text-xs font-semibold text-brand">
               {t('data:filter.pendingDraft')}

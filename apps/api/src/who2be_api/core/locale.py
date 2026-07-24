@@ -1,27 +1,33 @@
-"""FastAPI-Dependency fuer den `?locale=`-Query-Parameter (Content-i18n).
+"""FastAPI-Dependency fuer den `?locale=`-Query-Parameter (Sprachfilter).
 
-Liest die Ziel-Sprache aus der Query, normalisiert sie (lowercase/trim) und
-validiert die Form. Default `'de'` (ADR-0027) haelt alle Lese-/Schreib-Pfade
-ohne explizite `locale`-Angabe backward-compatible. Ungueltige Kuerzel → 422.
+„Ein Element, eine Sprache" (ADR-0045, Plan 2026-07-24): Sprache ist ein
+Attribut der Identitaets-Zeile, nicht mehr eine Varianten-Achse pro Version.
+`?locale=` existiert daher nur noch auf LISTEN-Endpoints — als optionaler
+Filter auf `entity.locale`. Ohne Angabe wird NICHT gefiltert (alle Sprachen);
+Detail-Routen kennen den Parameter nicht mehr. Ungueltige Kuerzel → 422.
 """
 
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Query, status
 
-from who2be_models import DEFAULT_LOCALE
 from who2be_models.locale import normalize_locale
 
 
-def locale_param(
+def locale_filter_param(
     locale: Annotated[
-        str,
+        str | None,
         Query(
             max_length=12,
-            description="Sprachvariante des Inhalts (z. B. 'de', 'en'). Default 'de'.",
+            description=(
+                "Optionaler Sprachfilter auf die Element-Sprache (z. B. 'de', "
+                "'en'). Ohne Angabe werden alle Sprachen geliefert."
+            ),
         ),
-    ] = DEFAULT_LOCALE,
-) -> str:
+    ] = None,
+) -> str | None:
+    if locale is None:
+        return None
     try:
         return normalize_locale(locale)
     except ValueError as exc:
@@ -31,6 +37,6 @@ def locale_param(
         ) from exc
 
 
-# Wiederverwendbare Annotation fuer Router-Signaturen: `LocaleQuery` injiziert
-# die normalisierte Ziel-Sprache aus `?locale=`.
-LocaleQuery = Annotated[str, Depends(locale_param)]
+# Wiederverwendbare Annotation fuer Listen-Router-Signaturen: injiziert den
+# normalisierten Sprachfilter aus `?locale=` (None = kein Filter).
+LocaleFilterQuery = Annotated[str | None, Depends(locale_filter_param)]

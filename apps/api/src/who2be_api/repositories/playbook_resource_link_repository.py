@@ -178,11 +178,16 @@ class PgPlaybookResourceLinkRepository:
             "FROM playbook_resource_link prl "
             "JOIN resource r ON r.id = prl.resource_id "
             "LEFT JOIN resource_version rva "
-            # Content-i18n (ADR-0027): Active-Variante auf Default-Sprache 'de'
-            # gepinnt — sonst dupliziert eine aktive de+en-Resource die Zeile.
-            "  ON rva.resource_id = r.id AND rva.status = 'active' AND rva.locale = 'de' "
-            "LEFT JOIN resource_version rvc "
-            "  ON rvc.resource_id = r.id AND rvc.version = r.current_version "
+            # ADR-0045 („Ein Element, eine Sprache"): die Active-Version ist
+            # per Entity eindeutig — kein Locale-Pin mehr. Current = globale
+            # Max-Version mit Legacy-Tie-Break auf die Entity-Sprache.
+            "  ON rva.resource_id = r.id AND rva.status = 'active' "
+            "LEFT JOIN LATERAL ( "
+            "  SELECT v.content FROM resource_version v "
+            "  WHERE v.resource_id = r.id "
+            "  ORDER BY v.version DESC, (v.locale = r.locale) DESC "
+            "  LIMIT 1 "
+            ") rvc ON TRUE "
             "WHERE prl.playbook_id = $1 AND prl.workspace_id = $2 "
             "ORDER BY prl.position, prl.resource_id, "
             "         COALESCE(prl.block_id, '')",
@@ -206,11 +211,16 @@ class PgPlaybookResourceLinkRepository:
             "       COALESCE(rva.content, rvc.content) AS content "
             "FROM resource r "
             "LEFT JOIN resource_version rva "
-            # Content-i18n (ADR-0027): Active-Variante auf Default-Sprache 'de'
-            # gepinnt — sonst dupliziert eine aktive de+en-Resource die Zeile.
-            "  ON rva.resource_id = r.id AND rva.status = 'active' AND rva.locale = 'de' "
-            "LEFT JOIN resource_version rvc "
-            "  ON rvc.resource_id = r.id AND rvc.version = r.current_version "
+            # ADR-0045 („Ein Element, eine Sprache"): die Active-Version ist
+            # per Entity eindeutig — kein Locale-Pin mehr. Current = globale
+            # Max-Version mit Legacy-Tie-Break auf die Entity-Sprache.
+            "  ON rva.resource_id = r.id AND rva.status = 'active' "
+            "LEFT JOIN LATERAL ( "
+            "  SELECT v.content FROM resource_version v "
+            "  WHERE v.resource_id = r.id "
+            "  ORDER BY v.version DESC, (v.locale = r.locale) DESC "
+            "  LIMIT 1 "
+            ") rvc ON TRUE "
             "WHERE r.workspace_id = $1 AND r.id = ANY($2::uuid[])",
             workspace_id,
             ids,

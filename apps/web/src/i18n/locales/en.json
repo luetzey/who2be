@@ -33,7 +33,8 @@
       "slug": "Slug",
       "type": "Type",
       "createdAt": "Created",
-      "updatedAt": "Updated"
+      "updatedAt": "Updated",
+      "language": "Language"
     },
     "status": {
       "draft": "Draft",
@@ -59,6 +60,12 @@
       "title": "Managed by the system",
       "body": "This entry is maintained centrally by the system and updated automatically. Edits are locked.",
       "duplicateHint": "Duplicate the agent to get your own, freely editable copy."
+    },
+    "contentLocale": {
+      "label": "Language",
+      "helpText": "Determines which language this element is created in — changeable afterwards.",
+      "de": "Deutsch",
+      "en": "English"
     }
   },
   "layout": {
@@ -130,6 +137,10 @@
       "allAgents": "All agents",
       "agentChip": "Agent: {{name}}",
       "agentChipRemove": "Remove agent filter ({{name}})",
+      "localeLabel": "Language",
+      "allLocales": "All languages",
+      "localeChip": "Language: {{name}}",
+      "localeChipRemove": "Remove language filter ({{name}})",
       "groupLabel": "Group by",
       "reset": "Reset filters",
       "pendingDraft": "Draft open",
@@ -1643,6 +1654,8 @@
         "nameRequired": "Name required.",
         "slugRequired": "Slug required.",
         "slugInvalid": "Only lowercase letters, digits and hyphens.",
+        "contentLocaleLabel": "Content language",
+        "contentLocaleDescription": "Language of the default content and default for newly created elements in this workspace.",
         "createButton": "Create workspace",
         "createdToast": "Workspace \"{{name}}\" created.",
         "adminOnly": "Only admins can create workspaces in this organization."
@@ -1678,7 +1691,9 @@
         "nameRequired": "Name required.",
         "saveButton": "Save",
         "renamedToast": "Workspace renamed.",
-        "adminOnly": "Only admins can rename this workspace."
+        "adminOnly": "Only admins can rename this workspace.",
+        "contentLocaleLabel": "Content language",
+        "contentLocaleDescription": "Language of the default content in this workspace — only selectable at creation."
       },
       "members": {
         "title": "Members",

@@ -104,7 +104,8 @@ describe('OrgSettingsPage', () => {
       expect(bodies).toHaveLength(1)
     })
     expect(postUrl).toContain('/v1/organizations/org-1/workspaces')
-    expect(bodies[0]).toEqual({ name: 'Sales', slug: 'sales' })
+    // ADR-0045: vorbelegt aus der UI-Sprache (Test-Default 'de').
+    expect(bodies[0]).toEqual({ name: 'Sales', slug: 'sales', content_locale: 'de' })
     expect(refreshMe).toHaveBeenCalled()
   })
 

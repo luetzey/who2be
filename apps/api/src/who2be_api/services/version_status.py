@@ -41,7 +41,6 @@ from who2be_api.services.promote_validation import (
 from who2be_api.services.status_history_service import StatusHistoryService
 from who2be_models import (
     ALLOWED_TRANSITIONS,
-    DEFAULT_LOCALE,
     AgentCapability,
     EntityType,
     ExternalToolVersionRead,
@@ -227,10 +226,9 @@ class VersionStatusService:
         version: int,
         to_status: VersionStatus,
         note: str | None,
-        locale: str = DEFAULT_LOCALE,
     ) -> PersonaVersionRead:
         row = await self._transition(
-            ctx, "persona", _PERSONA_TABLES, persona_id, version, to_status, note, locale
+            ctx, "persona", _PERSONA_TABLES, persona_id, version, to_status, note
         )
         return PersonaVersionRead.model_validate(dict(row))
 
@@ -241,10 +239,9 @@ class VersionStatusService:
         version: int,
         to_status: VersionStatus,
         note: str | None,
-        locale: str = DEFAULT_LOCALE,
     ) -> PlaybookVersionRead:
         row = await self._transition(
-            ctx, "playbook", _PLAYBOOK_TABLES, playbook_id, version, to_status, note, locale
+            ctx, "playbook", _PLAYBOOK_TABLES, playbook_id, version, to_status, note
         )
         return PlaybookVersionRead.model_validate(dict(row))
 
@@ -255,10 +252,9 @@ class VersionStatusService:
         version: int,
         to_status: VersionStatus,
         note: str | None,
-        locale: str = DEFAULT_LOCALE,
     ) -> ResourceVersionRead:
         row = await self._transition(
-            ctx, "resource", _RESOURCE_TABLES, resource_id, version, to_status, note, locale
+            ctx, "resource", _RESOURCE_TABLES, resource_id, version, to_status, note
         )
         return ResourceVersionRead.model_validate(dict(row))
 
@@ -269,7 +265,6 @@ class VersionStatusService:
         version: int,
         to_status: VersionStatus,
         note: str | None,
-        locale: str = DEFAULT_LOCALE,
     ) -> SystemPromptTemplateVersionRead:
         row = await self._transition(
             ctx,
@@ -279,7 +274,6 @@ class VersionStatusService:
             version,
             to_status,
             note,
-            locale,
         )
         return SystemPromptTemplateVersionRead.model_validate(dict(row))
 
@@ -290,10 +284,9 @@ class VersionStatusService:
         version: int,
         to_status: VersionStatus,
         note: str | None,
-        locale: str = DEFAULT_LOCALE,
     ) -> ExternalToolVersionRead:
         row = await self._transition(
-            ctx, "external_tool", _EXTERNAL_TOOL_TABLES, tool_id, version, to_status, note, locale
+            ctx, "external_tool", _EXTERNAL_TOOL_TABLES, tool_id, version, to_status, note
         )
         return ExternalToolVersionRead.model_validate(dict(row))
 
@@ -368,29 +361,33 @@ class VersionStatusService:
         version: int,
         to_status: VersionStatus,
         note: str | None,
-        locale: str = DEFAULT_LOCALE,
     ) -> asyncpg.Record:
         entity_tbl, version_tbl, fk_col = tables
         async with self._pool.acquire() as conn, conn.transaction():
             # Ziel-Version laden + sperren. JOIN ueber das Entity sichert,
-            # dass die Version im richtigen Workspace lebt. `version` ist seit
-            # Content-i18n nur noch je (entity, locale) eindeutig — daher der
-            # zusaetzliche `locale`-Filter (ADR-0027).
+            # dass die Version im richtigen Workspace lebt. Status-Invarianten
+            # gelten per Entity (ADR-0045) — kein locale-Filter mehr; Legacy-
+            # Daten koennen dieselbe Versionsnummer in zwei Sprachen tragen,
+            # der Tie-Break auf die Entity-Sprache waehlt deterministisch EINE
+            # Row (deren `pv.locale` unten die Update-WHEREs praezisiert).
             # `e.name` und `pv.content` werden fuer die Promote-Validation
             # mitgeladen (Welle 4).
             target = await conn.fetchrow(
-                f"SELECT pv.status, pv.content, e.name, e.is_managed FROM {version_tbl} pv "
+                f"SELECT pv.status, pv.content, pv.locale, e.name, e.is_managed "
+                f"FROM {version_tbl} pv "
                 f"JOIN {entity_tbl} e ON e.id = pv.{fk_col} "
                 f"WHERE pv.{fk_col} = $1 AND pv.version = $2 "
-                "AND e.workspace_id = $3 AND pv.locale = $4 "
+                "AND e.workspace_id = $3 "
+                "ORDER BY (pv.locale = e.locale) DESC "
+                "LIMIT 1 "
                 "FOR UPDATE OF pv",
                 entity_id,
                 version,
                 ctx.workspace_id,
-                locale,
             )
             if target is None:
                 raise _not_found(entity_type)
+            target_locale = target["locale"]
             # Managed-Lock: vom System verwaltete Aggregate duerfen ueber die API
             # nicht transitioniert werden (der Start-Sync nutzt rohes SQL).
             require_unmanaged(target["is_managed"])
@@ -427,15 +424,13 @@ class VersionStatusService:
             # Partial-Unique-Index. Audit-Eintrag fuer das implizite
             # Inactive-Setzen schreiben.
             if to_status == VersionStatus.active:
-                # Nur die Active-Version DERSELBEN Sprache inaktivieren — andere
-                # Sprachvarianten haben ihren eigenen Active-Slot (per-locale
-                # Partial-Unique-Index).
+                # Genau EINE Active-Version pro Entity (per-entity Partial-
+                # Unique-Index, Migration 0069) — die bisherige wird inaktiviert.
                 prev_active_version = await conn.fetchval(
                     f"UPDATE {version_tbl} SET status = 'inactive' "
-                    f"WHERE {fk_col} = $1 AND locale = $2 AND status = 'active' "
+                    f"WHERE {fk_col} = $1 AND status = 'active' "
                     "RETURNING version",
                     entity_id,
-                    locale,
                 )
                 if prev_active_version is not None:
                     await self._history.record(
@@ -450,6 +445,9 @@ class VersionStatusService:
                     )
 
             try:
+                # `locale` praezisiert auf die oben gesperrte Row — bei Legacy-
+                # Duplikaten (gleiche Versionsnummer in zwei Sprachen) darf nur
+                # genau eine Row den neuen Status bekommen.
                 updated = await conn.fetchrow(
                     f"UPDATE {version_tbl} SET status = $1 "
                     f"WHERE {fk_col} = $2 AND version = $3 AND locale = $4 "
@@ -457,7 +455,7 @@ class VersionStatusService:
                     to_status.value,
                     entity_id,
                     version,
-                    locale,
+                    target_locale,
                 )
             except asyncpg.UniqueViolationError as exc:
                 raise _invariant_violation() from exc
@@ -485,7 +483,8 @@ class VersionStatusService:
             # Entity ohne aktive Version (erlaubt, §3.1).
             if from_status == VersionStatus.active and to_status == VersionStatus.draft:
                 await self._reactivate_previous(
-                    conn, entity_type, version_tbl, fk_col, entity_id, version, ctx.user_id, locale
+                    conn, entity_type, entity_tbl, version_tbl, fk_col, entity_id, version,
+                    ctx.user_id,
                 )
             return updated
 
@@ -529,12 +528,12 @@ class VersionStatusService:
         self,
         conn: asyncpg.Connection,
         entity_type: EntityType,
+        entity_tbl: str,
         version_tbl: str,
         fk_col: str,
         entity_id: UUID,
         reset_version: int,
         user_id: UUID,
-        locale: str = DEFAULT_LOCALE,
     ) -> None:
         """Reaktiviert die zuletzt aktive Version nach einem Reset-auf-Draft.
 
@@ -542,7 +541,10 @@ class VersionStatusService:
         `to_status='active'` fuer eine ANDERE Version als die gerade
         zurueckgesetzte. Nur reaktiviert, wenn diese Version noch existiert und
         aktuell `inactive` ist (Defense gegen Races / zwischenzeitlich
-        weiterbearbeitete Versionen).
+        weiterbearbeitete Versionen). Das ctid-Subselect mit Tie-Break auf die
+        Entity-Sprache reaktiviert bei Legacy-Duplikaten (gleiche
+        Versionsnummer in zwei Sprachen) genau EINE Row — sonst kollidierte der
+        per-entity Partial-Unique-Index.
         """
         prev_version = await conn.fetchval(
             "SELECT version FROM status_history "
@@ -557,11 +559,16 @@ class VersionStatusService:
             return
         reactivated = await conn.fetchval(
             f"UPDATE {version_tbl} SET status = 'active' "
-            f"WHERE {fk_col} = $1 AND version = $2 AND locale = $3 AND status = 'inactive' "
+            "WHERE ctid = ( "
+            f"    SELECT pv.ctid FROM {version_tbl} pv "
+            f"    JOIN {entity_tbl} e ON e.id = pv.{fk_col} "
+            f"    WHERE pv.{fk_col} = $1 AND pv.version = $2 AND pv.status = 'inactive' "
+            "    ORDER BY (pv.locale = e.locale) DESC "
+            "    LIMIT 1 "
+            ") "
             "RETURNING version",
             entity_id,
             prev_version,
-            locale,
         )
         if reactivated is not None:
             await self._history.record(

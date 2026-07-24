@@ -14,7 +14,9 @@ Read-Scoping (`restrict_ids`) noch List-Card-Pills — beides ist WP-3/WP-5-Scop
 (Blueprint: „Alias liegt auf dem Aggregat wie Template-Slug").
 
 Versionierung ueber History-Tabelle (ADR-0004), Status pro Version (ADR-0020),
-Workspace-Isolation (ADR-0019), Content-i18n pro Sprache (ADR-0027).
+Workspace-Isolation (ADR-0019). „Ein Element, eine Sprache" (ADR-0045):
+`locale` liegt auf der `external_tool`-Identitaets-Zeile, Reads sind
+locale-agnostisch, `list_by_workspace` filtert optional auf die Entity-Sprache.
 `active_only=True` liefert die Active-Version statt der Current-Version.
 """
 
@@ -30,7 +32,6 @@ from who2be_api.repositories.versioned_repository import (
     VersionedAggregateRepository,
 )
 from who2be_models import (
-    DEFAULT_LOCALE,
     ExternalToolContent,
     ExternalToolRead,
     ExternalToolVersionRead,
@@ -54,7 +55,7 @@ class ExternalToolRepository(Protocol):
         owner_id: UUID,
         name: str,
         content: ExternalToolContent,
-        locales: list[str] | None = None,
+        locale: str,
         alias: str | None = None,
     ) -> ExternalToolRead: ...
 
@@ -64,7 +65,7 @@ class ExternalToolRepository(Protocol):
         limit: int,
         after: tuple[datetime, UUID] | None,
         active_only: bool = False,
-        locale: str = DEFAULT_LOCALE,
+        locale: str | None = None,
     ) -> list[ExternalToolRead]: ...
 
     async def fetch(
@@ -72,7 +73,6 @@ class ExternalToolRepository(Protocol):
         workspace_id: UUID,
         tool_id: UUID,
         active_only: bool = False,
-        locale: str = DEFAULT_LOCALE,
     ) -> ExternalToolRead | None: ...
 
     async def update(
@@ -82,7 +82,7 @@ class ExternalToolRepository(Protocol):
         tool_id: UUID,
         name: str | None,
         content: ExternalToolContent,
-        locale: str = DEFAULT_LOCALE,
+        new_locale: str | None = None,
     ) -> ExternalToolUpdateOutcome: ...
 
     async def upsert_draft(
@@ -92,7 +92,7 @@ class ExternalToolRepository(Protocol):
         tool_id: UUID,
         name: str | None,
         content: ExternalToolContent,
-        locale: str = DEFAULT_LOCALE,
+        new_locale: str | None = None,
     ) -> ExternalToolUpdateOutcome: ...
 
     async def restore_version(
@@ -101,15 +101,14 @@ class ExternalToolRepository(Protocol):
         owner_id: UUID,
         tool_id: UUID,
         content: ExternalToolContent,
-        locale: str = DEFAULT_LOCALE,
     ) -> ExternalToolUpdateOutcome: ...
 
     async def list_versions(
-        self, workspace_id: UUID, tool_id: UUID, locale: str = DEFAULT_LOCALE
+        self, workspace_id: UUID, tool_id: UUID
     ) -> list[ExternalToolVersionRead] | None: ...
 
     async def fetch_version(
-        self, workspace_id: UUID, tool_id: UUID, version: int, locale: str = DEFAULT_LOCALE
+        self, workspace_id: UUID, tool_id: UUID, version: int
     ) -> ExternalToolVersionRead | None: ...
 
     async def delete(self, workspace_id: UUID, tool_id: UUID) -> bool: ...
@@ -142,10 +141,10 @@ class PgExternalToolRepository(
         owner_id: UUID,
         name: str,
         content: ExternalToolContent,
-        locales: list[str] | None = None,
+        locale: str,
         alias: str | None = None,
     ) -> ExternalToolRead:
-        return await self._insert(workspace_id, owner_id, name, content, locales, slug=alias)
+        return await self._insert(workspace_id, owner_id, name, content, locale, slug=alias)
 
     async def update(
         self,
@@ -154,9 +153,11 @@ class PgExternalToolRepository(
         tool_id: UUID,
         name: str | None,
         content: ExternalToolContent,
-        locale: str = DEFAULT_LOCALE,
+        new_locale: str | None = None,
     ) -> ExternalToolUpdateOutcome:
-        tool, conflict = await self._update(workspace_id, owner_id, tool_id, name, content, locale)
+        tool, conflict = await self._update(
+            workspace_id, owner_id, tool_id, name, content, new_locale
+        )
         return ExternalToolUpdateOutcome(tool=tool, conflict=conflict)
 
     async def upsert_draft(
@@ -166,10 +167,10 @@ class PgExternalToolRepository(
         tool_id: UUID,
         name: str | None,
         content: ExternalToolContent,
-        locale: str = DEFAULT_LOCALE,
+        new_locale: str | None = None,
     ) -> ExternalToolUpdateOutcome:
         tool, conflict = await self._upsert_draft(
-            workspace_id, owner_id, tool_id, name, content, locale
+            workspace_id, owner_id, tool_id, name, content, new_locale
         )
         return ExternalToolUpdateOutcome(tool=tool, conflict=conflict)
 
@@ -179,22 +180,19 @@ class PgExternalToolRepository(
         owner_id: UUID,
         tool_id: UUID,
         content: ExternalToolContent,
-        locale: str = DEFAULT_LOCALE,
     ) -> ExternalToolUpdateOutcome:
-        tool, conflict = await self._restore_version(
-            workspace_id, owner_id, tool_id, content, locale
-        )
+        tool, conflict = await self._restore_version(workspace_id, owner_id, tool_id, content)
         return ExternalToolUpdateOutcome(tool=tool, conflict=conflict)
 
     async def list_versions(
-        self, workspace_id: UUID, tool_id: UUID, locale: str = DEFAULT_LOCALE
+        self, workspace_id: UUID, tool_id: UUID
     ) -> list[ExternalToolVersionRead] | None:
-        return await self._list_versions(workspace_id, tool_id, locale)
+        return await self._list_versions(workspace_id, tool_id)
 
     async def fetch_version(
-        self, workspace_id: UUID, tool_id: UUID, version: int, locale: str = DEFAULT_LOCALE
+        self, workspace_id: UUID, tool_id: UUID, version: int
     ) -> ExternalToolVersionRead | None:
-        return await self._fetch_version(workspace_id, tool_id, version, locale)
+        return await self._fetch_version(workspace_id, tool_id, version)
 
     async def delete(self, workspace_id: UUID, tool_id: UUID) -> bool:
         return await self._delete(workspace_id, tool_id)
@@ -206,15 +204,13 @@ class PgExternalToolRepository(
         workspace_id: UUID,
         tool_id: UUID,
         active_only: bool = False,
-        locale: str = DEFAULT_LOCALE,
     ) -> ExternalToolRead | None:
         builder = self._select_active if active_only else self._select_current
-        select = builder("$3")
+        select = builder()
         row = await self._pool.fetchrow(
             f"{select} WHERE e.id = $1 AND e.workspace_id = $2",
             tool_id,
             workspace_id,
-            locale,
         )
         return ExternalToolRead.model_validate(dict(row)) if row is not None else None
 
@@ -224,23 +220,24 @@ class PgExternalToolRepository(
         limit: int,
         after: tuple[datetime, UUID] | None,
         active_only: bool = False,
-        locale: str = DEFAULT_LOCALE,
+        locale: str | None = None,
     ) -> list[ExternalToolRead]:
         builder = self._select_active if active_only else self._select_current
+        select = builder()
         if after is None:
-            select = builder("$3")
             rows = await self._pool.fetch(
                 f"{select} WHERE e.workspace_id = $1 "
+                "AND ($3::text IS NULL OR e.locale = $3) "
                 "ORDER BY e.created_at DESC, e.id DESC LIMIT $2",
                 workspace_id,
                 limit,
                 locale,
             )
         else:
-            select = builder("$5")
             rows = await self._pool.fetch(
                 f"{select} WHERE e.workspace_id = $1 "
                 "AND (e.created_at, e.id) < ($2, $3) "
+                "AND ($5::text IS NULL OR e.locale = $5) "
                 "ORDER BY e.created_at DESC, e.id DESC LIMIT $4",
                 workspace_id,
                 after[0],

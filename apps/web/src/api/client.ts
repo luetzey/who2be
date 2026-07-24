@@ -245,7 +245,8 @@ export function oauthConsent(
 
 export interface Api {
   // `agent` filtert serverseitig auf die Persona des Agenten (WP-B).
-  listPersonas: (filters?: { agent?: string }) => Promise<Persona[]>
+  // `locale` filtert serverseitig auf die Element-Sprache (ADR-0045).
+  listPersonas: (filters?: { agent?: string; locale?: string }) => Promise<Persona[]>
   getPersona: (id: string) => Promise<Persona>
   createPersona: (input: PersonaInput) => Promise<Persona>
   updatePersona: (id: string, input: PersonaInput) => Promise<Persona>
@@ -264,7 +265,9 @@ export interface Api {
   setPersonaPlaybooks: (id: string, playbookIds: string[]) => Promise<Playbook[]>
   // `agent` filtert serverseitig auf die dem Agenten zugewiesenen Playbooks
   // inkl. Composite-Closure (WP-B).
-  listPlaybooks: (filters?: { tag?: string; trigger?: string; agent?: string }) => Promise<Playbook[]>
+  listPlaybooks: (
+    filters?: { tag?: string; trigger?: string; agent?: string; locale?: string },
+  ) => Promise<Playbook[]>
   getPlaybook: (id: string) => Promise<Playbook>
   createPlaybook: (input: PlaybookInput) => Promise<Playbook>
   updatePlaybook: (id: string, input: PlaybookInput) => Promise<Playbook>
@@ -308,7 +311,7 @@ export interface Api {
   ) => Promise<PlaybookVersion>
   // `agent` filtert serverseitig auf die aus den zugewiesenen Playbooks
   // erreichbaren Resources inkl. Sub-Resource-Closure (WP-B).
-  listResources: (filters?: { agent?: string }) => Promise<Resource[]>
+  listResources: (filters?: { agent?: string; locale?: string }) => Promise<Resource[]>
   getResource: (id: string) => Promise<Resource>
   createResource: (input: ResourceInput) => Promise<Resource>
   updateResource: (id: string, input: ResourceInput) => Promise<Resource>
@@ -347,7 +350,7 @@ export interface Api {
   // Tool-Bindings. Kein `duplicate`, `diff` oder `tags`-Endpoint — die
   // Backend-Surface (WP-1) traegt sie nicht (siehe
   // `apps/api/tests/contract/openapi_surface.json`).
-  listExternalTools: () => Promise<ExternalTool[]>
+  listExternalTools: (filters?: { locale?: string }) => Promise<ExternalTool[]>
   getExternalTool: (id: string) => Promise<ExternalTool>
   createExternalTool: (input: ExternalToolInput) => Promise<ExternalTool>
   updateExternalTool: (id: string, input: ExternalToolInput) => Promise<ExternalTool>
@@ -390,7 +393,7 @@ export interface Api {
   deleteOrganization: (orgId: string) => Promise<OrganizationDeletion>
   exportMyData: () => Promise<GdprExport>
   // Phase 3 Runde 3 Track 3 — SystemPromptTemplate + Agent.
-  listSystemPromptTemplates: () => Promise<SystemPromptTemplate[]>
+  listSystemPromptTemplates: (filters?: { locale?: string }) => Promise<SystemPromptTemplate[]>
   getSystemPromptTemplate: (id: string) => Promise<SystemPromptTemplate>
   createSystemPromptTemplate: (
     input: SystemPromptTemplateInput,
@@ -483,6 +486,7 @@ export function createApi(token: string, workspaceId: string): Api {
     listPersonas: (filters) => {
       const params = new URLSearchParams()
       if (filters?.agent) params.set('agent', filters.agent)
+      if (filters?.locale) params.set('locale', filters.locale)
       const query = params.toString()
       return request<Persona[]>(token, `${ws}/personas${query ? `?${query}` : ''}`)
     },
@@ -527,6 +531,7 @@ export function createApi(token: string, workspaceId: string): Api {
       if (filters?.tag) params.set('tag', filters.tag)
       if (filters?.trigger) params.set('trigger', filters.trigger)
       if (filters?.agent) params.set('agent', filters.agent)
+      if (filters?.locale) params.set('locale', filters.locale)
       const query = params.toString()
       return request<Playbook[]>(token, `${ws}/playbooks${query ? `?${query}` : ''}`)
     },
@@ -612,6 +617,7 @@ export function createApi(token: string, workspaceId: string): Api {
     listResources: (filters) => {
       const params = new URLSearchParams()
       if (filters?.agent) params.set('agent', filters.agent)
+      if (filters?.locale) params.set('locale', filters.locale)
       const query = params.toString()
       return request<Resource[]>(token, `${ws}/resources${query ? `?${query}` : ''}`)
     },
@@ -663,7 +669,12 @@ export function createApi(token: string, workspaceId: string): Api {
       }),
     listResourceUsedBy: (id) =>
       request<ResourceRef[]>(token, `${ws}/resources/${id}/used_by`),
-    listExternalTools: () => request<ExternalTool[]>(token, `${ws}/external_tools`),
+    listExternalTools: (filters) => {
+      const params = new URLSearchParams()
+      if (filters?.locale) params.set('locale', filters.locale)
+      const query = params.toString()
+      return request<ExternalTool[]>(token, `${ws}/external_tools${query ? `?${query}` : ''}`)
+    },
     getExternalTool: (id) => request<ExternalTool>(token, `${ws}/external_tools/${id}`),
     createExternalTool: (input) =>
       request<ExternalTool>(token, `${ws}/external_tools`, {
@@ -753,8 +764,15 @@ export function createApi(token: string, workspaceId: string): Api {
     deleteOrganization: (orgId) =>
       request<OrganizationDeletion>(token, `/v1/organizations/${orgId}`, { method: 'DELETE' }),
     exportMyData: () => request<GdprExport>(token, `/v1/gdpr/export`),
-    listSystemPromptTemplates: () =>
-      request<SystemPromptTemplate[]>(token, `${ws}/system-prompts`),
+    listSystemPromptTemplates: (filters) => {
+      const params = new URLSearchParams()
+      if (filters?.locale) params.set('locale', filters.locale)
+      const query = params.toString()
+      return request<SystemPromptTemplate[]>(
+        token,
+        `${ws}/system-prompts${query ? `?${query}` : ''}`,
+      )
+    },
     getSystemPromptTemplate: (id) =>
       request<SystemPromptTemplate>(token, `${ws}/system-prompts/${id}`),
     createSystemPromptTemplate: (input) =>

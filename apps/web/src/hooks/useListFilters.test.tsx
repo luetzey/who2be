@@ -3,7 +3,12 @@ import type { ReactNode } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 
-import { useAgentFilterParam, useListFilters, type ListFilterAccessors } from './useListFilters'
+import {
+  useAgentFilterParam,
+  useListFilters,
+  useLocaleFilterParam,
+  type ListFilterAccessors,
+} from './useListFilters'
 
 interface Item {
   name: string
@@ -175,6 +180,41 @@ describe('useListFilters', () => {
     })
     expect(result.current).toBe('a9')
     const empty = renderHook(() => useAgentFilterParam(), { wrapper: wrapperFor(['/']) })
+    expect(empty.result.current).toBe('')
+  })
+
+  it('liest die Sprach-Facette (?locale=) aus der URL, ohne clientseitig zu filtern (ADR-0045)', () => {
+    const { result } = renderFilters(['/?locale=en'])
+    expect(result.current.locale).toBe('en')
+    expect(result.current.active).toBe(true)
+    // Serverseitige Facette: items kommen bereits gefiltert an — der Hook
+    // grenzt die Liste NICHT zusaetzlich ein.
+    expect(result.current.filtered).toHaveLength(6)
+  })
+
+  it('setLocale schreibt und entfernt den URL-Param', () => {
+    const { result } = renderFilters()
+    act(() => result.current.setLocale('en'))
+    expect(result.current.locale).toBe('en')
+    act(() => result.current.setLocale(''))
+    expect(result.current.locale).toBe('')
+    expect(result.current.active).toBe(false)
+  })
+
+  it('reset raeumt auch die Sprach-Facette ab', () => {
+    const { result } = renderFilters(['/?locale=en'])
+    expect(result.current.active).toBe(true)
+    act(() => result.current.reset())
+    expect(result.current.locale).toBe('')
+    expect(result.current.active).toBe(false)
+  })
+
+  it('useLocaleFilterParam liest denselben ?locale=-Wert', () => {
+    const { result } = renderHook(() => useLocaleFilterParam(), {
+      wrapper: wrapperFor(['/?locale=en']),
+    })
+    expect(result.current).toBe('en')
+    const empty = renderHook(() => useLocaleFilterParam(), { wrapper: wrapperFor(['/']) })
     expect(empty.result.current).toBe('')
   })
 
