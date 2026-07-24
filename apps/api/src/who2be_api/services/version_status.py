@@ -483,7 +483,13 @@ class VersionStatusService:
             # Entity ohne aktive Version (erlaubt, §3.1).
             if from_status == VersionStatus.active and to_status == VersionStatus.draft:
                 await self._reactivate_previous(
-                    conn, entity_type, entity_tbl, version_tbl, fk_col, entity_id, version,
+                    conn,
+                    entity_type,
+                    entity_tbl,
+                    version_tbl,
+                    fk_col,
+                    entity_id,
+                    version,
                     ctx.user_id,
                 )
             return updated

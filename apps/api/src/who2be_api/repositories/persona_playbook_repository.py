@@ -74,8 +74,7 @@ class PgPersonaPlaybookRepository:
         # Current ist die globale Max-Version — der Lateral-Tie-Break auf die
         # Entity-Sprache haelt Legacy-Daten (DE-v1 UND EN-v1) deterministisch.
         join_clause = (
-            "JOIN playbook_version pv ON pv.playbook_id = p.id "
-            "AND pv.status = 'active' "
+            "JOIN playbook_version pv ON pv.playbook_id = p.id AND pv.status = 'active' "
             if active_only
             else "JOIN LATERAL ( "
             "  SELECT v.version, v.status, v.content FROM playbook_version v "

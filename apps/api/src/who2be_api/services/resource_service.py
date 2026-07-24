@@ -236,9 +236,7 @@ class ResourceService:
             next_cursor = encode_cursor(tail.created_at, tail.id)
         return await self._enrich(ctx.workspace_id, rows), next_cursor
 
-    async def _enrich(
-        self, workspace_id: UUID, items: list[ResourceRead]
-    ) -> list[ResourceRead]:
+    async def _enrich(self, workspace_id: UUID, items: list[ResourceRead]) -> list[ResourceRead]:
         """Joint die List-Card-Pills (Batch-Aggregat) in die Reads (kein N+1).
 
         Zwei Batch-Roundtrips fuer die ganze Seite (kein N+1): `list_counts` fuer

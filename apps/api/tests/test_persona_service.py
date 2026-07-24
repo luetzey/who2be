@@ -215,9 +215,7 @@ class FakePersonaRepository:
         if persona is None or persona.workspace_id != workspace_id:
             return PersonaUpdateOutcome(persona=None)
         if new_locale is not None:
-            persona = self._personas[persona_id] = persona.model_copy(
-                update={"locale": new_locale}
-            )
+            persona = self._personas[persona_id] = persona.model_copy(update={"locale": new_locale})
         existing_draft = next(
             (v for v in self._versions[persona_id] if v.status == VersionStatus.draft),
             None,

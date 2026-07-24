@@ -207,9 +207,7 @@ async def update_playbook_draft(
 
 
 @router.get("/{playbook_id}/rendered")
-async def render_playbook(
-    playbook_id: UUID, ctx: Ctx, service: Service
-) -> PlaybookRenderResponse:
+async def render_playbook(playbook_id: UUID, ctx: Ctx, service: Service) -> PlaybookRenderResponse:
     """Liefert den durch den Placeholder-Renderer expandierten Playbook-Body (B5).
 
     Track B (Nur-BlockNote): Inline-Pills (playbook/resource/…) werden

@@ -478,8 +478,7 @@ class PgPlaybookRepository(VersionedAggregateRepository[PlaybookRead, PlaybookVe
             if current is None:
                 return PlaybookUpdateOutcome(playbook=None)
             draft_version = await conn.fetchval(
-                "SELECT version FROM playbook_version "
-                "WHERE playbook_id = $1 AND status = 'draft'",
+                "SELECT version FROM playbook_version WHERE playbook_id = $1 AND status = 'draft'",
                 playbook_id,
             )
             if draft_version is not None:
