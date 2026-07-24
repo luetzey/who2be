@@ -1,0 +1,457 @@
+[
+  {
+    "id": "pb-maint-h-zweck",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Purpose", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-p-zweck",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Feedback-driven maintenance run across the agent library. This run collects the accumulated feedback and usage signals (", "styles": {}},
+      {"type": "text", "text": "get_feedback", "styles": {"code": true}},
+      {"type": "text", "text": " returns usage_count, by_outcome, by_signal, and recent_notes), checks the library's relationships and structural gaps, and turns findings into drafts after user approval. It is the builder's recurring cleanup routine: not building, but maintaining — updating what's outdated, connecting or retiring what's orphaned, surfacing gaps. Curation authority stays with the user throughout: no finding is written without approval, no activation without their decision.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-h-scope",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Scope & Boundaries", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-scope-library",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Whole library, but respect the managed boundary: ", "styles": {"bold": true}},
+      {"type": "text", "text": "This run looks at all personas, playbooks, resources, and agents in the workspace. Findings on managed content (is_managed=true) belong in a repo hand-off list in the report, never in write attempts — details in the 'Agent Build Conventions' resource, Managed Boundaries section.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-scope-nodelete",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "No delete, no auto-active: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Fixes are created exclusively as drafts; activation and withdrawal are decided by the user after explicit approval — the status workflow and curator principle are binding in the 'Agent Build Conventions' resource.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-scope-feedback-close",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Feedback closure via resolve_feedback: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Handled signals are closed via resolve_feedback after approval (addressed = fix implemented, in_progress = draft exists or activation is pending, dismissed = deliberately discarded — dismissed only with a justifying note). The web UI triage (inbox) remains available in parallel.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-scope-abgrenzung",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Out of scope: ", "styles": {"bold": true}},
+      {"type": "text", "text": "No code/repo audit — that's what 'Standards Audit & Implementation (Repo)' is for. No Obsidian vault maintenance — that's what 'Clean Up & Deduplicate' is for. This run curates exclusively the content of the AgentDB.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-h-p1",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Phase 1 — Collect", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-ol-p1-inventar",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Take inventory: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Call list_agents, list_playbooks, list_resources, and list_triggers and note the inventory — IDs, names, current_status, tags, triggers, and the is_managed flag. The inventory is the map for all following phases; without a complete picture, relationships stay invisible in Phase 3.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-ol-p1-feedback",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Collect feedback: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Call get_feedback(entity_type, entity_id) for each persona, playbook, and resource. For each element, note: usage_count, by_outcome (applied/skipped/error), by_signal (helpful/outdated/incorrect/unclear), and the recent_notes verbatim. Flag conspicuous patterns — e.g., high skipped or error rates, clusters of outdated/incorrect, or elements with usage_count 0 despite active status.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-ol-p1-check",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Optional: consistency & drift check as a precursor: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Run the consistency & drift check if needed (load it via fetch_playbook and follow its sweep). Its drift report is ideal triage input for Phase 2 — structural findings (missing active versions, open placeholders, playbooks in a vacuum) then land on the table right away.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-h-p2",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Phase 2 — Triage", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-p2-gueltig",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Check every note against the current version: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Feedback may originate from an older version. Cross-check with list_versions and diff_versions whether the criticized point still exists in the current version — still valid, or long since resolved? Signals already resolved go into the report as closure candidates (resolve_feedback, addressed), not into the work list.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-p2-resolution",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Only triage open signals: ", "styles": {"bold": true}},
+      {"type": "text", "text": "get_feedback also returns id and resolution status per signal. Only take open signals (resolution empty or in_progress) into triage; skip signals already closed as addressed or dismissed.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-p2-zustaendigkeit",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Clarify ownership: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Three cases: (a) editable via MCP — goes into the report as a fix proposal; (b) managed (is_managed=true) — goes into the repo hand-off list, no write attempt; (c) requires a domain decision from the user (e.g., contradictory feedback, a content-direction question) — phrase it as a question rather than deciding it yourself.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-p2-prio",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Prioritization: ", "styles": {"bold": true}},
+      {"type": "text", "text": "incorrect before outdated before unclear — wrong content causes active harm, outdated content harms gradually, unclear content only costs efficiency. helpful is confirmation, not a work item; at most it feeds into the weighing as 'proven, don't touch'.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-h-p3",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Phase 3 — Relationships & Gaps", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-p-p3-intro",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "A structural view of the library's relationship graph — not a semantic one. Check whether the links reflect actual usage, not whether content is factually correct.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-p3-verwaist",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Orphaned resources: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Call find_usages for each resource. No inbound references means the resource hangs in a vacuum. Report proposal: either link it deliberately (which playbook would benefit?) or withdraw it to inactive — the user makes the decision.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-p3-drift",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Knowledge drift: ", "styles": {"bold": true}},
+      {"type": "text", "text": "a playbook body references a resource in prose ('see checklist X') without a resource_link being set. The consumer then can't reliably find the resource. Proposal: follow up with set_playbook_resource_links for the missing link — embedding_mode lazy (pointer) as the default.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-p3-bindung",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Binding gaps: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Playbooks without a persona binding (a vacuum — no agent finds them) and composite playbooks whose sub-sequence contains inactive or missing children (silently skipped on render). Cross-check both with list_playbooks/fetch_playbook and note as a finding.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-p3-trigger",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Trigger landscape: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Evaluate list_triggers. Collisions: the same or a very similar trigger on multiple playbooks — the consumer can't route unambiguously. Vacuum: an active, not firmly embedded (applied) playbook without any trigger — it's never invoked. Report both as findings with a concrete resolution proposal.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-p3-semantisch",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Only observe semantic gaps: ", "styles": {"bold": true}},
+      {"type": "text", "text": "if you notice while reviewing that a playbook seems to be missing for a recurring use case ('a playbook for X seems to be missing'), that goes into the report exclusively as an observation. Don't create anything unrequested — building new is a separate task with its own playbook.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-h-p4",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Phase 4 — Proposal & Approval", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-p-p4-report",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Consolidate all findings from Phase 2 and 3 into a maintenance report and give it as a chat reply to the user — do not persist it; the report is a decision basis, not a DB entry. Per finding: the affected element, the evidence (feedback note, diff, find_usages result), and the concrete proposal. Then obtain approval — per finding individually or as a batch ('implement all under A') — and only then write. Nothing happens in Phase 5 without approval.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-code-p4-template",
+    "type": "codeBlock",
+    "props": {"language": "markdown"},
+    "content": [{"type": "text", "text": "## Maintenance Run — As of [Date]\n\n### A. Feedback (open)\n- [Element] ([entity_type], v[X]): [Signal] — \"[recent_note]\"\n  Evidence: still valid against v[X] (diff checked)\n  Proposal: [minimal fix via update_*, new draft]\n\n### B. Relationships & Gaps\n- [Resource Y]: orphaned (find_usages: 0 inbound references)\n  Proposal: link to [Playbook Z] OR withdraw to inactive\n- [Playbook Z]: prose reference to [Resource Y] without resource_link\n  Proposal: set_playbook_resource_links (lazy)\n- Trigger collision: \"[Phrase]\" on [Playbook A] and [Playbook B]\n  Proposal: [sharpen/remove one trigger]\n- Observation (note only): a playbook for [X] may be missing\n\n### C. Managed — Repo Hand-Off\n- [Builder element]: [Finding] — maintained via code repo, no MCP write\n\n### D. Closed Signals (resolve_feedback)\n- [Element]: Signal [outdated/...] from [Date] — closed as [addressed/in_progress/dismissed]: [Draft vX / already fixed in vY / justification]\n(Open repo hand-off signals stay in C — closed only after the repo fix is merged/deployed.)\n\n### Approval\nPlease approve per item (A1, B2, ...) or as a batch.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-h-p5",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Phase 5 — Implement (After Approval)", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-p5-update",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Content fixes: ", "styles": {"bold": true}},
+      {"type": "text", "text": "via update_persona / update_playbook / update_resource — minimally invasive on the existing body, changing only the approved spot. Every update creates a new draft version; activation stays with the user.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-p5-links",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Link fixes: ", "styles": {"bold": true}},
+      {"type": "text", "text": "via set_persona_playbooks / set_playbook_resource_links / set_playbook_composes / set_resource_sub_resources. Watch out for replace semantics: the call replaces the entire link list. So read the current state first via fetch_playbook / fetch_resource / get_persona and always set the complete target state — never just the delta.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-p5-retire",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Withdrawals: ", "styles": {"bold": true}},
+      {"type": "text", "text": "transition to inactive only after explicit approval of exactly that withdrawal — and only after find_usages has confirmed that no inbound references remain, or the user knowingly accepts the affected spots.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-p5-usage",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Track: ", "styles": {"bold": true}},
+      {"type": "text", "text": "after each implementation step, call record_usage on the elements used (applied/skipped/error). Don't silently discard deliberately deferred findings — justify them via submit_feedback on the affected element, so the decision stays traceable for the next run.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-p5-resolve",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Close signals: ", "styles": {"bold": true}},
+      {"type": "text", "text": "after an implemented and approved fix, close the associated signal via resolve_feedback — addressed for an implemented fix; in_progress if the draft exists or activation is still pending; dismissed with a justifying note for deliberately discarded items. Only close signals on managed content once the repo fix is actually merged and deployed.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-h-p6",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Phase 6 — Hand-Off", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-p6-summary",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Give a summary: ", "styles": {"bold": true}},
+      {"type": "text", "text": "which drafts and links were implemented; what is now pending activation (the user decides on transition); the repo hand-off list for managed findings; and the list of signals closed via resolve_feedback with their resolution (addressed/in_progress/dismissed). Open repo hand-off signals stay open and are only closed once the repo fix is merged and deployed.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-p6-next",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Recommend the next run: ", "styles": {"bold": true}},
+      {"type": "text", "text": "suggest a sensible timing for the next maintenance run — e.g., after the next build wave or once new feedback has accumulated. The run is repeatable as long as triage notes (resolved / deferred with reason) land in the report and approved signals are closed via resolve_feedback.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-h-tools",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Tools & Operations", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-tools-read",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Read: ", "styles": {"bold": true}},
+      {"type": "text", "text": "list_agents, list_playbooks, list_resources, list_triggers (inventory); get_feedback(entity_type, entity_id) (signals and notes); find_usages (inbound references, orphan check); list_versions, diff_versions (check a note against the current version); fetch_playbook, fetch_resource, get_persona (current state before every set_*); search (content search for suspected cases).", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-tools-write",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Write (only after approval): ", "styles": {"bold": true}},
+      {"type": "text", "text": "update_persona / update_playbook / update_resource (new draft); set_persona_playbooks / set_playbook_resource_links / set_playbook_composes / set_resource_sub_resources (replace semantics — set the complete target state); transition_persona / transition_playbook / transition_resource (only approved transitions); record_usage and submit_feedback (tracking); resolve_feedback (close signals — addressed/in_progress/dismissed, dismissed only with a note; only after approval).", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-tools-forbidden",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Forbidden: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Delete doesn't exist via MCP — don't attempt it, don't simulate it. create_* without an explicit build request from the user (semantic gaps are observations, not requests). Any write attempt on managed content (is_managed=true returns 409) — these findings belong in the repo hand-off.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-h-anti",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Anti-Patterns", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-ap-selbst",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Wanting to 'just handle' feedback on your own managed content — the builder is a party here, not a judge. Managed findings go exclusively into the repo hand-off; the user decides there in code review.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-ap-batch",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Writing away all findings in one unrequested batch — the report comes first, then approval (per finding or as a batch), then the writes. Curation authority lies with the user.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-ap-loop",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Reworking signals without a triage check against the current version — whoever doesn't verify with list_versions/diff_versions whether a finding has long since been fixed produces maintenance loops: the same 'correction' run after run.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-ap-raten",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Guessing at semantic gaps and creating content unrequested — 'a playbook for X seems to be missing' is an observation in the report, not a create_* request. Building new has its own request and its own playbook.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-ap-dismiss",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Dismissing signals without a justifying note, or closing them without user approval — resolve_feedback is a curation action, not a cleanup automation. Equally off-limits: closing signals on managed content before the repo fix is merged and deployed.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-ap-persist",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Writing the maintenance report into an entity instead of giving it as a chat reply — the report is a decision basis for the user, not a DB entry and not a resource.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-h-notes",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Notes", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-notes-check",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Distinction from the consistency & drift check: ", "styles": {"bold": true}},
+      {"type": "text", "text": "the check is a read-only diagnosis and writes nothing; this maintenance run curates and writes after approval. The check is ideal Phase-1 input — its drift report feeds into the triage as a list of findings.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-notes-ui",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Feedback closure via MCP and web UI: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Signals are now also closed via MCP (resolve_feedback, capability feedback_resolve — an extension of ADR-0038); the web UI triage (inbox) remains equally valid. The closing report must include the closed signals with their resolution — it remains the handoff point between agent run and curation.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-li-notes-konventionen",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Conventions: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Trigger hygiene, naming, the modes rule, policy patterns, the status workflow, and managed boundaries are binding in the 'Agent Build Conventions' resource — it is the standard for triage and implementation. Linked as a lazy pointer, it does NOT come along automatically: load it via fetch_resource in Phase 1; the resource_id is in this playbook's linked_blocks entry.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-maint-h-feedback",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Feedback", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-maint-p-feedback",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "If while executing this playbook you notice something outdated or incorrect about it, report it via submit_feedback (signal outdated/incorrect/unclear) instead of silently passing over it — this playbook is managed, so the correction runs through the repo hand-off. Report used playbooks/resources via record_usage (applied/skipped/error). This is how the AgentDB becomes self-improving.", "styles": {}}],
+    "children": []
+  }
+]

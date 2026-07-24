@@ -187,9 +187,8 @@
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "Call ", "styles": {}},
       {"type": "text", "text": "create_playbook", "styles": {"code": true}},
-      {"type": "text", "text": " with name and content (description, body as BlockNote JSON, type, tags, triggers). This creates a draft version 1 — status is server-side draft, not active.", "styles": {}}
+      {"type": "text", "text": " is called with name and content (description, body as BlockNote JSON, type, tags, triggers). This creates a draft version 1 — status is server-side draft, not active.", "styles": {}}
     ],
     "children": []
   },
