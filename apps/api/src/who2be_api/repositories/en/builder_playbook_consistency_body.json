@@ -424,7 +424,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Conventions: ", "styles": {"bold": true}},
-      {"type": "text", "text": "the check criteria for trigger hygiene, naming, the mode rule, policy patterns, and managed boundaries are binding in the 'Agent Build Conventions' resource — it is the reference frame for the sweep. Linked as a lazy pointer, it does NOT come along automatically: load it via fetch_resource before the sweep; the resource_id is in this playbook's linked_blocks entry.", "styles": {}}
+      {"type": "text", "text": "the check criteria for trigger hygiene, naming, the mode rule, policy patterns, and managed boundaries are binding in the 'Agent-Building Conventions' resource — it is the reference frame for the sweep. Linked as a lazy pointer, it does NOT come along automatically: load it via fetch_resource before the sweep; the resource_id is in this playbook's linked_blocks entry.", "styles": {}}
     ],
     "children": []
   },

@@ -123,7 +123,7 @@
     "id": "pb-playbook-create-p1-triggers",
     "type": "numberedListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Triggers: Which user phrases activate the playbook? Format and collision cross-check (list_triggers) are mandatory per the trigger hygiene rules in the 'Agent Build Conventions' resource. Check beforehand: the Token-Saving Strategy section — does a suitable playbook already exist?", "styles": {}}],
+    "content": [{"type": "text", "text": "Triggers: Which user phrases activate the playbook? Format and collision cross-check (list_triggers) are mandatory per the trigger hygiene rules in the 'Agent-Building Conventions' resource. Check beforehand: the Token-Saving Strategy section — does a suitable playbook already exist?", "styles": {}}],
     "children": []
   },
   {
@@ -415,7 +415,7 @@
     "id": "pb-playbook-anti-triggers",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Assigning triggers against trigger hygiene (generic single words, no comma separation, no collision cross-check) — see the 'Agent Build Conventions' resource for the canonical format.", "styles": {}}],
+    "content": [{"type": "text", "text": "Assigning triggers against trigger hygiene (generic single words, no comma separation, no collision cross-check) — see the 'Agent-Building Conventions' resource for the canonical format.", "styles": {}}],
     "children": []
   },
   {
@@ -457,7 +457,7 @@
     "id": "pb-playbook-notes-konventionen",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Conventions: Trigger hygiene, naming, the modes rule, policy patterns, and managed boundaries are binding in the 'Agent Build Conventions' resource — look them up there instead of duplicating rules here. It is linked as a lazy pointer and does NOT come along automatically: load it via fetch_resource before Phase 2 (Proposal); the resource_id is in this playbook's linked_blocks entry.", "styles": {}}],
+    "content": [{"type": "text", "text": "Conventions: Trigger hygiene, naming, the modes rule, policy patterns, and managed boundaries are binding in the 'Agent-Building Conventions' resource — look them up there instead of duplicating rules here. It is linked as a lazy pointer and does NOT come along automatically: load it via fetch_resource before Phase 2 (Proposal); the resource_id is in this playbook's linked_blocks entry.", "styles": {}}],
     "children": []
   },
   {

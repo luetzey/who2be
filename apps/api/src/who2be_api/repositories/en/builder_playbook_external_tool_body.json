@@ -87,7 +87,7 @@
     "id": "pb-exttool-li-konv",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Conventions: The alias contract, the instructive boundary, the rebind pattern, and tool-ref rules are binding in the 'Agent Build Conventions' resource (External Tools section). It is linked as a lazy pointer and does NOT come along automatically — load it via fetch_resource before writing.", "styles": {}}],
+    "content": [{"type": "text", "text": "Conventions: The alias contract, the instructive boundary, the rebind pattern, and tool-ref rules are binding in the 'Agent-Building Conventions' resource (External Tools section). It is linked as a lazy pointer and does NOT come along automatically — load it via fetch_resource before writing.", "styles": {}}],
     "children": []
   },
   {

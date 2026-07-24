@@ -53,7 +53,7 @@
         "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
         "content": [
           {"type": "text", "text": "Mode rule: ", "styles": {"bold": true}},
-          {"type": "text", "text": "exactly one default mode (is_default=true, without trigger), every non-default mode with a mandatory trigger — details are binding in the 'Agent Build Conventions' resource, Mode Rule section.", "styles": {}}
+          {"type": "text", "text": "exactly one default mode (is_default=true, without trigger), every non-default mode with a mandatory trigger — details are binding in the 'Agent-Building Conventions' resource, Mode Rule section.", "styles": {}}
         ],
         "children": []
       }
@@ -226,7 +226,7 @@
     "id": "pb-persona-li-t7-konventionen",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Conventions: Trigger hygiene, naming, the mode rule, policy patterns, and managed boundaries are binding in the 'Agent Build Conventions' resource. It is linked as a lazy pointer and does NOT come along automatically — load it via fetch_resource before Phase 2 (Propose); the resource_id is in this playbook's linked_blocks entry.", "styles": {}}],
+    "content": [{"type": "text", "text": "Conventions: Trigger hygiene, naming, the mode rule, policy patterns, and managed boundaries are binding in the 'Agent-Building Conventions' resource. It is linked as a lazy pointer and does NOT come along automatically — load it via fetch_resource before Phase 2 (Propose); the resource_id is in this playbook's linked_blocks entry.", "styles": {}}],
     "children": []
   },
   {

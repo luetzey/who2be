@@ -30,7 +30,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Whole library, but respect the managed boundary: ", "styles": {"bold": true}},
-      {"type": "text", "text": "This run looks at all personas, playbooks, resources, and agents in the workspace. Findings on managed content (is_managed=true) belong in a repo hand-off list in the report, never in write attempts — details in the 'Agent Build Conventions' resource, Managed Boundaries section.", "styles": {}}
+      {"type": "text", "text": "This run looks at all personas, playbooks, resources, and agents in the workspace. Findings on managed content (is_managed=true) belong in a repo hand-off list in the report, never in write attempts — details in the 'Agent-Building Conventions' resource, Managed Boundaries section.", "styles": {}}
     ],
     "children": []
   },
@@ -40,7 +40,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "No delete, no auto-active: ", "styles": {"bold": true}},
-      {"type": "text", "text": "Fixes are created exclusively as drafts; activation and withdrawal are decided by the user after explicit approval — the status workflow and curator principle are binding in the 'Agent Build Conventions' resource.", "styles": {}}
+      {"type": "text", "text": "Fixes are created exclusively as drafts; activation and withdrawal are decided by the user after explicit approval — the status workflow and curator principle are binding in the 'Agent-Building Conventions' resource.", "styles": {}}
     ],
     "children": []
   },
@@ -96,8 +96,8 @@
     "type": "numberedListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "Optional: consistency & drift check as a precursor: ", "styles": {"bold": true}},
-      {"type": "text", "text": "Run the consistency & drift check if needed (load it via fetch_playbook and follow its sweep). Its drift report is ideal triage input for Phase 2 — structural findings (missing active versions, open placeholders, playbooks in a vacuum) then land on the table right away.", "styles": {}}
+      {"type": "text", "text": "Optional: Consistency & Drift Check as a precursor: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Run the Consistency & Drift Check if needed (load it via fetch_playbook and follow its sweep). Its drift report is ideal triage input for Phase 2 — structural findings (missing active versions, open placeholders, playbooks in a vacuum) then land on the table right away.", "styles": {}}
     ],
     "children": []
   },
@@ -415,7 +415,7 @@
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "Distinction from the consistency & drift check: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Distinction from the Consistency & Drift Check: ", "styles": {"bold": true}},
       {"type": "text", "text": "the check is a read-only diagnosis and writes nothing; this maintenance run curates and writes after approval. The check is ideal Phase-1 input — its drift report feeds into the triage as a list of findings.", "styles": {}}
     ],
     "children": []
@@ -436,7 +436,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Conventions: ", "styles": {"bold": true}},
-      {"type": "text", "text": "Trigger hygiene, naming, the modes rule, policy patterns, the status workflow, and managed boundaries are binding in the 'Agent Build Conventions' resource — it is the standard for triage and implementation. Linked as a lazy pointer, it does NOT come along automatically: load it via fetch_resource in Phase 1; the resource_id is in this playbook's linked_blocks entry.", "styles": {}}
+      {"type": "text", "text": "Trigger hygiene, naming, the modes rule, policy patterns, the status workflow, and managed boundaries are binding in the 'Agent-Building Conventions' resource — it is the standard for triage and implementation. Linked as a lazy pointer, it does NOT come along automatically: load it via fetch_resource in Phase 1; the resource_id is in this playbook's linked_blocks entry.", "styles": {}}
     ],
     "children": []
   },
