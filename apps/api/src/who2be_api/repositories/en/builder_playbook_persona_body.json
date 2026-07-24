@@ -1,0 +1,281 @@
+[
+  {
+    "id": "pb-persona-h-zweck",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Purpose", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-p-zweck",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "CRUD workflow for personas in Who2Be: create, maintain, or retire a persona — with schema discipline and phase separation (Understand → Propose → Write → Hand-Off). Three modes: Create (new persona), Update (change an existing one), Retire (deactivate). Writing happens exclusively through the Who2Be MCP write tools; the draft→active workflow stays server-side.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-h-trigger",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Trigger Keywords", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-p-trigger",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "new persona; new agent; create persona; edit persona; modify persona; change persona; retire persona; deactivate persona; retiring a persona.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-h-prozedur",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Procedure", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-p-modus",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "First identify the mode: Create, when the user names an agent/persona name that doesn't exist yet; Update, when they name an existing persona plus a change request; Retire, when they want to deactivate a persona. When ambiguous, first read get_persona(identifier) and clearly ask which persona is meant.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-1",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Create — Understand: Ask clarifying questions in phases, 1-2 per turn, never all at once. Identity (one concise line), Tone & Style (with example phrases), Allowed (4-6 concrete capabilities), Forbidden (domain boundaries + anti-patterns), Output Style (form, length), Mode decision (actively check — criteria in the Modes section; as soon as multiple usage voices or output formats are needed, use Multi-Mode instead of a mixed persona).", "styles": {}}],
+    "children": [
+      {
+        "id": "pb-persona-li-modi-regel",
+        "type": "bulletListItem",
+        "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+        "content": [
+          {"type": "text", "text": "Mode rule: ", "styles": {"bold": true}},
+          {"type": "text", "text": "exactly one default mode (is_default=true, without trigger), every non-default mode with a mandatory trigger — details are binding in the 'Agent Build Conventions' resource, Mode Rule section.", "styles": {}}
+        ],
+        "children": []
+      }
+    ]
+  },
+  {
+    "id": "pb-persona-li-2",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Create — Propose: Consolidate the persona body (description + BlockNote profile with Identity, Tone & Style, Allowed, Forbidden, Output Style; optional modes). Show it to the user, explain trade-offs, get confirmation.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-3",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Create — Write: Call create_persona(name, content) — only set locale explicitly if the persona is meant to deliberately deviate from the workspace language. The new version 1 is created server-side as status='draft' — never directly active. Set traits and tags for voice and domain respectively.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-4",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Update — Understand & Propose: Read get_persona(identifier), show the affected section (Identity / Tone & Style / Allowed / Forbidden / Output Style / Modes), clarify the change request, consolidate the edit proposal and have it confirmed.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-5",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Update — Write: update_persona(persona_id, content) automatically creates a new draft (a PUT on an active version creates a draft; if a draft already exists, you get a 409). Batch changes together instead of forcing a new version per micro-edit.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-6",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Links: Set which playbooks the persona should carry via set_persona_playbooks(persona_id, playbook_ids) (replace semantics — the list fully replaces the current state). First determine the right IDs with list_playbooks(). Relationship note: when wiring this up, check whether the linked playbooks themselves need resource links (set_playbook_resource_links, see the \"Create & Maintain Playbook\" playbook).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-7",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Activate: As soon as the user approves, call transition_persona(persona_id, version, to='active') — promoting is admin-gated and is the user's call. Never activate automatically on creation.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-8",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Retire: Read get_persona(identifier); check whether any agents use this persona, and warn the user. Then call transition_persona(persona_id, version, to='inactive'). restore_persona(persona_id, version) restores an earlier version as a new draft if a rollback is needed.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-h-modi",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Modes (Multi-Mode Personas)", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-p-modi-kriterien",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Set up modes as soon as the persona needs to serve ", "styles": {}},
+      {"type": "text", "text": "multiple usage voices or output formats", "styles": {"bold": true}},
+      {"type": "text", "text": " — e.g., concise chat support AND a detailed report, internal analysis AND a customer-facing answer. A single mixed persona dilutes both voices; separate personas duplicate the base identity. Modes solve this: one base identity, one overlay per mode.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-modi-default",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Mandatory default: ", "styles": {"bold": true}},
+      {"type": "text", "text": "exactly one mode carries is_default=true — it applies when no trigger keyword matches. Without a default mode, mode selection is undefined.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-modi-trigger",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Trigger keywords: ", "styles": {"bold": true}},
+      {"type": "text", "text": "every non-default mode needs concrete, comma-separated recognition keywords in the trigger field (e.g. 'report, summary, analysis') — this is how the consuming agent recognizes which mode matches the request. The default mode itself carries no trigger — it applies as a fallback and would otherwise collide with the non-default modes.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-modi-felder",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Fields per mode: ", "styles": {"bold": true}},
+      {"type": "text", "text": "name, trigger, is_default, identity_add (addition to the base identity), output_style_override (replaces the base output style), and anti_patterns — the three content fields are BlockNote block arrays like the profile body.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-persona-code-modi",
+    "type": "codeBlock",
+    "props": {"language": "json"},
+    "content": [{"type": "text", "text": "\"modes\": [\n  {\"name\": \"Chat\", \"trigger\": \"\", \"is_default\": true,\n   \"identity_add\": [{\"id\": \"m1\", \"type\": \"paragraph\", \"props\": {}, \"content\": [\n     {\"type\": \"text\", \"text\": \"Responds concisely and directly in a chat tone.\", \"styles\": {}}], \"children\": []}],\n   \"output_style_override\": [], \"anti_patterns\": []},\n  {\"name\": \"Report\", \"trigger\": \"report, summary, analysis\", \"is_default\": false,\n   \"identity_add\": [], \"output_style_override\": [{\"id\": \"m2\", \"type\": \"paragraph\", \"props\": {}, \"content\": [\n     {\"type\": \"text\", \"text\": \"Structured Markdown report with subheadings.\", \"styles\": {}}], \"children\": []}],\n   \"anti_patterns\": []}\n]", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-modi-abruf",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Server-side retrieval: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Consuming agents call get_persona(identifier, mode='<mode-name>') — the server applies the mode to body_rendered (identity_add appends, output_style_override replaces the output style, anti_patterns apply additionally). Choose mode names and triggers concretely enough that matching from the user's request is unambiguous. Modes continue to be managed via update_persona (content.modes).", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-persona-h-tools",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Tools & Operations", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-t1",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "create_persona — create a new persona as draft version 1.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-t2",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "update_persona — change a persona's content as a new draft.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-t3",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "transition_persona — transition a version (draft/review requires persona_write; active/inactive requires promote_retire).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-t4",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "restore_persona — restore an earlier version as a new draft.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-t5",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "set_persona_playbooks — set the playbooks assigned to a persona (replace semantics).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-t6",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Reads: get_persona, list_playbooks for preparation. Forbidden: setting status directly to active on creation, as well as writing to other aggregates beyond this playbook's scope.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-t7-konventionen",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Conventions: Trigger hygiene, naming, the mode rule, policy patterns, and managed boundaries are binding in the 'Agent Build Conventions' resource. It is linked as a lazy pointer and does NOT come along automatically — load it via fetch_resource before Phase 2 (Propose); the resource_id is in this playbook's linked_blocks entry.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-h-handoff",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Hand-Off", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-ho1",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Have the user review the persona content and transition it to 'active' once approved.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-ho2",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Create matching playbooks (the Create & Maintain Playbook playbook) and link them via set_persona_playbooks.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-ho3",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Create an agent that carries this persona plus a system prompt template (the Create & Maintain Agent playbook).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-persona-li-ho4",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "For behavior-relevant updates: running sessions keep the old state cached — start a new chat for the new voice to take effect. For topics outside persona maintenance, politely redirect to the responsible playbook.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-feedback-h",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Feedback", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-feedback-p",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "If you notice anything outdated or incorrect while reading existing elements, report it via submit_feedback (signal outdated/incorrect/unclear) instead of silently passing over it; report playbooks/resources you used via record_usage (applied/skipped/error). This is what makes the AgentDB self-improving.", "styles": {}}],
+    "children": []
+  }
+]

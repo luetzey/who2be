@@ -31,3 +31,16 @@ Die Tabelle `schema_migrations` legt der Runner selbst an.
   Playbook-Trigger (Split `,`/`;`, trim, Dedupe case-insensitiv, Join `, `).
   Spiegelt `normalize_triggers` in `packages/models/.../playbook.py` —
   beide Schichten synchron halten.
+- `0069_entity_locale_workspace_content_locale.sql` — „Ein Element, eine
+  Sprache" (ADR-0045, Plan `.claude/plan/2026-07-24-1900_sprache-vertiefen-
+  ein-element-eine-sprache.md`, WP2): `workspace.content_locale` +
+  `locale` auf den 5 Identitaets-Tabellen (persona/playbook/resource/
+  external_tool/system_prompt_template), Backfill aus der aktiven bzw.
+  neuesten Version, Legacy-Multi-Track-Konsolidierung (fremdsprachige
+  draft/review/active-Versionen -> `inactive`) und Rueckbau der
+  Partial-Unique-Indices (active/draft/review) von `(entity_id, locale)`
+  (0042/0065) auf `(entity_id)`. `*_version.locale` bleibt als
+  Historien-Spalte bestehen; `UNIQUE (entity_id, locale, version)` aus
+  0042/0065 bleibt bewusst erhalten (Legacy-Multi-Track-Bestand kann
+  gleiche Versionsnummer in zwei Sprachen tragen). Spiegelt keine
+  Anwendungsschicht (Read/Write-Pfade folgen in WP3).

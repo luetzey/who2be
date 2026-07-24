@@ -1,0 +1,445 @@
+[
+  {
+    "id": "pb-check-h-vorgehen",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Approach", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-check-p-intro",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "A read-only sweep over the agent library: check structural V1 conformance and activation drift. V1 scope is a purely structural check (active versions, links, clean rendering). Only the agent library is checked (personas, playbooks, resources, agents, templates) — NOT a code/repo audit (that's what \"Standards Audit & Implementation (Repo)\" is for) and not vault maintenance. You read and report — you write nothing. Fixes run through the CRUD playbooks.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-check-h-scope",
+    "type": "heading",
+    "props": {"level": 3, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Clarify Scope", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-check-li-scope-single",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Single agent: ", "styles": {"bold": true}},
+      {"type": "text", "text": "The user names an agent. Check its persona, all linked playbooks, and the agent itself.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-check-li-scope-library",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Library-wide: ", "styles": {"bold": true}},
+      {"type": "text", "text": "The user wants to check all agents. Iterate over the workspace's agents and run the same sweep per entry.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-check-h-sweep",
+    "type": "heading",
+    "props": {"level": 3, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Per Agent: Read-only Sweep", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-check-ol-persona",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Check persona", "styles": {"bold": true}},
+      {"type": "text", "text": " — get_persona(identifier).", "styles": {}}
+    ],
+    "children": [
+      {
+        "id": "pb-check-li-persona-active",
+        "type": "bulletListItem",
+        "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+        "content": [{"type": "text", "text": "Does the persona have an active version (status=active)? Without an active version, no agent is activatable — this is the most common drift.", "styles": {}}],
+        "children": []
+      },
+      {
+        "id": "pb-check-li-persona-fields",
+        "type": "bulletListItem",
+        "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+        "content": [{"type": "text", "text": "Are description and the profile body filled in? An empty profile later renders into a thin system prompt.", "styles": {}}],
+        "children": []
+      },
+      {
+        "id": "pb-check-li-persona-modes",
+        "type": "bulletListItem",
+        "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+        "content": [{"type": "text", "text": "If the persona carries modes: does every mode have trigger, identity_add, and output_style_override? Multi-mode is allowed — not a violation.", "styles": {}}],
+        "children": []
+      },
+      {
+        "id": "pb-check-li-persona-links",
+        "type": "bulletListItem",
+        "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+        "content": [{"type": "text", "text": "Does get_persona return the expected linked playbooks? Cross-check with list_playbooks: are there playbooks without a persona binding (vacuum playbooks)?", "styles": {}}],
+        "children": []
+      }
+    ]
+  },
+  {
+    "id": "pb-check-ol-playbooks",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Check playbooks", "styles": {"bold": true}},
+      {"type": "text", "text": " — list_playbooks(tag?, trigger?) and fetch_playbook(id) as needed.", "styles": {}}
+    ],
+    "children": [
+      {
+        "id": "pb-check-li-pb-active",
+        "type": "bulletListItem",
+        "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+        "content": [{"type": "text", "text": "Are all playbooks linked to the persona present and in an active version (current_status=active)?", "styles": {}}],
+        "children": []
+      },
+      {
+        "id": "pb-check-li-pb-fields",
+        "type": "bulletListItem",
+        "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+        "content": [{"type": "text", "text": "Are description, type, and tags set? triggers is only expected where the playbook is triggered (not permanently embedded/applied).", "styles": {}}],
+        "children": []
+      },
+      {
+        "id": "pb-check-li-pb-composite",
+        "type": "bulletListItem",
+        "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+        "content": [{"type": "text", "text": "Composite playbook (is_composite=true): does the sub-sequence from fetch_playbook actually have active children? Inactive/missing children are silently skipped during rendering — that is drift.", "styles": {}}],
+        "children": []
+      },
+      {
+        "id": "pb-check-li-pb-triggers-norm",
+        "type": "bulletListItem",
+        "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+        "content": [{"type": "text", "text": "Are triggers normalized as comma-separated (no semicolons, no duplicates)? The write path normalizes automatically — semicolons or duplicates in existing data are drift from legacy data.", "styles": {}}],
+        "children": []
+      }
+    ]
+  },
+  {
+    "id": "pb-check-ol-agent",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Check agent", "styles": {"bold": true}},
+      {"type": "text", "text": " — fetch_agent(agent_id).", "styles": {}}
+    ],
+    "children": [
+      {
+        "id": "pb-check-li-agent-activatable",
+        "type": "bulletListItem",
+        "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+        "content": [{"type": "text", "text": "Is activatable=true? If not: read the missing list. Possible entries are persona (no persona linked), template (no template), and persona_active (persona without an active version).", "styles": {}}],
+        "children": []
+      },
+      {
+        "id": "pb-check-li-agent-wiring",
+        "type": "bulletListItem",
+        "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+        "content": [{"type": "text", "text": "Are persona_id and system_prompt_template_id set? Both are prerequisites for a renderable system prompt.", "styles": {}}],
+        "children": []
+      },
+      {
+        "id": "pb-check-li-agent-render",
+        "type": "bulletListItem",
+        "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+        "content": [{"type": "text", "text": "Does the system prompt from fetch_agent render without open placeholders? Look for fallback pills like <Playbook unavailable> or <Resource unavailable> — they indicate an unresolved reference (a retired/deleted reference block).", "styles": {}}],
+        "children": []
+      }
+    ]
+  },
+  {
+    "id": "pb-check-ol-template",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Check system prompt template", "styles": {"bold": true}},
+      {"type": "text", "text": " — get_system_prompt(template_id) and list_placeholders().", "styles": {}}
+    ],
+    "children": [
+      {
+        "id": "pb-check-li-template-kinds",
+        "type": "bulletListItem",
+        "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+        "content": [{"type": "text", "text": "Does the template body carry only valid placeholder kinds? Fetch the catalog with list_placeholders and check every inline element {\"type\": \"placeholder\"} in the body: kind must be in the catalog; where the catalog names a closed target_id value list, target_id must appear in it. Unknown kinds/values silently render as unresolved placeholders — that is drift.", "styles": {}}],
+        "children": []
+      }
+    ]
+  },
+  {
+    "id": "pb-check-h-graph",
+    "type": "heading",
+    "props": {"level": 3, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Relationship Checks", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-check-p-graph",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "In addition to the per-agent sweep: check the library as a graph — all checks remain read-only, findings go into the drift report.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-check-li-graph-orphan",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Orphaned resources: ", "styles": {"bold": true}},
+      {"type": "text", "text": "check via find_usages whether a resource has incoming references from playbooks/personas — without incoming references it's a maintenance finding.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-check-li-graph-drift",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Knowledge drift: ", "styles": {"bold": true}},
+      {"type": "text", "text": "the playbook body references a resource in prose without a resource_link being set — the prose reference and the wiring must match.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-check-li-graph-vacuum",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Playbooks without a persona binding: ", "styles": {"bold": true}},
+      {"type": "text", "text": "unreachable by any agent (vacuum) — cross-check via list_playbooks against the persona assignments.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-check-li-graph-composite",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Composites with inactive or missing children: ", "styles": {"bold": true}},
+      {"type": "text", "text": "check the sub-sequence from fetch_playbook against the children's current_status — silently skipped children are drift.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-check-li-graph-trigger",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Trigger collisions and trigger vacuum: ", "styles": {"bold": true}},
+      {"type": "text", "text": "check via list_triggers whether trigger keywords from different playbooks overlap (collision) or triggered playbooks exist without a trigger (vacuum).", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-check-h-report",
+    "type": "heading",
+    "props": {"level": 3, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Drift Report", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-check-p-report",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Return the result as a Markdown reply to the user — do not persist it, this is reporting, not maintenance. Use ✅ for conformant, ⚠ for warning (not wrong, just notable), ❌ for violation.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-check-code-report",
+    "type": "codeBlock",
+    "props": {"language": "markdown"},
+    "content": [{"type": "text", "text": "## Consistency Check for [Agent Name] — as of [Date]\n\n### Persona \"[Name]\"\n✅ Active version present (v[X], status=active)\n⚠ Mode \"[X]\" without trigger\n⚠ description empty\n\n### Playbooks ([n] linked)\n✅ [Playbook A] — active, linked\n❌ [Playbook B] — no active version\n⚠ [Composite C] — sub-sequence has inactive/missing children\n⚠ [Playbook D] — no persona binding (vacuum)\n⚠ [Playbook E] — triggers not normalized (semicolon/duplicate)\n\n### Agent\n✅ activatable = true\n❌ activatable = false — missing: [persona_active]\n⚠ System prompt: open placeholder renders as <Playbook unavailable>\n\n### Template\n✅ All placeholder kinds in the catalog (list_placeholders)\n❌ Unknown placeholder kind \"[kind]\" or invalid target_id \"[value]\"\n\n### Recommendation\n1. [concrete action — reference the appropriate CRUD playbook]\n2. ...", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-check-h-handoff",
+    "type": "heading",
+    "props": {"level": 3, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Hand-Off After Report", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-check-p-handoff",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "The user decides which items get fixed. Call the appropriate CRUD playbook per item — this sweep itself fixes nothing.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-check-li-handoff-persona",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Persona drift → the \"Create & Maintain Persona\" playbook (update via update_persona, then transition_persona to active).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-check-li-handoff-playbook",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Playbook drift → the \"Create & Maintain Playbook\" playbook (update via update_playbook, links via set_persona_playbooks / set_playbook_composes).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-check-li-handoff-agent",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Agent drift → the \"Create & Maintain Agent\" playbook (persona/template wiring via update_agent).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-check-li-handoff-maintenance",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Alternative: hand off the collected findings as a batch to the \"Library Maintenance & Feedback Run\" playbook — a curated maintenance run with implementation after approval.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-check-h-tools",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Tools & Operations", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-check-li-tools-read",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Read: ", "styles": {"bold": true}},
+      {"type": "text", "text": "get_persona, list_playbooks, fetch_playbook, fetch_agent, list_triggers — plus list_resources / fetch_resource if a playbook references resources; list_system_prompts / get_system_prompt and list_placeholders for the template check.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-check-li-tools-write",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Write: ", "styles": {"bold": true}},
+      {"type": "text", "text": "none. The consistency check is strictly read-only reporting; the drift report goes to the user as a reply and is not persisted.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-check-li-tools-search",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Search: ", "styles": {"bold": true}},
+      {"type": "text", "text": "list_playbooks(tag?, trigger?) to narrow down, list_triggers() to find trigger drift and vacuum playbooks.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-check-li-tools-forbidden",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Forbidden: ", "styles": {"bold": true}},
+      {"type": "text", "text": "any write operation (create_*, update_*, transition_*, restore_*, set_*). No auto-fix without user confirmation. Do not write the drift report into an entity.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-check-h-antipatterns",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Anti-Patterns", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-check-li-ap-autofix",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Applying fixes automatically without user confirmation — this sweep reads, it does not write. Fixes run through the CRUD playbooks with their own phase discipline.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-check-li-ap-semantic",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Checking semantic correctness — V1 scope is a structural + activatability check. Whether profile content is substantively correct is V2.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-check-li-ap-multimode",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Flagging multi-mode personas as a violation — multiple modes are allowed; only per-mode completeness is checked.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-check-li-ap-applied",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Flagging permanently embedded (applied) playbooks for missing triggers — they always apply and need no triggers.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-check-li-ap-persist",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Writing the drift report into an entity instead of returning it as a chat reply — the report is information, not a database entry.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-check-h-notes",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Notes", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-check-p-notes-v1",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "V1 scope: ", "styles": {"bold": true}},
+      {"type": "text", "text": "structural + activatability check (active persona version, playbook links, fetch_agent.activatable/missing, rendering without open placeholders) including the structural relationship checks (orphaned resources, knowledge drift, vacuum playbooks, composite children, trigger collisions/vacuum).", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-check-p-notes-v2",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "V2 scope: ", "styles": {"bold": true}},
+      {"type": "text", "text": "semantic content check, cross-reference against non-existent references. Structural trigger conflicts have belonged to V1 scope since the relationship checks were added.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-check-p-notes-konventionen",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Conventions: ", "styles": {"bold": true}},
+      {"type": "text", "text": "the check criteria for trigger hygiene, naming, the mode rule, policy patterns, and managed boundaries are binding in the 'Agent Build Conventions' resource — it is the reference frame for the sweep. Linked as a lazy pointer, it does NOT come along automatically: load it via fetch_resource before the sweep; the resource_id is in this playbook's linked_blocks entry.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-feedback-h",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Feedback", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-feedback-p",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "If you notice anything outdated or incorrect while reading existing elements, report it via submit_feedback (signal outdated/incorrect/unclear) instead of silently passing over it; report playbooks/resources you used via record_usage (applied/skipped/error). This is what makes the AgentDB self-improving.", "styles": {}}],
+    "children": []
+  }
+]

@@ -1,0 +1,648 @@
+[
+  {
+    "id": "pb-agent-h-zweck",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Purpose", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-p-zweck",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "This playbook guides you through creating and maintaining an agent in Who2Be. An agent is the executable configuration: exactly one persona, exactly one system prompt template, and a tool_policy that determines which MCP tools the agent is allowed to use. You work in four phases — Understand, Propose, Write, Hand-Off.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-h-remap",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Choose or author a template (ADR-0040)", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-p-remap",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "System prompt templates ", "styles": {}},
+      {"type": "text", "text": "may be authored and adjusted via MCP", "styles": {"bold": true}},
+      {"type": "text", "text": ": create_system_prompt creates a new template as a draft, update_system_prompt changes an existing one as a new draft, transition_system_prompt submits the draft for approval (draft to review). Activation (to active/inactive) remains a human action in the web UI — the server hard-rejects it for agent-bound tokens. First check with list_system_prompts whether an existing default template fits (then just note its system_prompt_template_id); only author a new template if none fits. The bootstrap block lives in the template itself and is populated server-side from placeholders at render time (see the Placeholder Authoring section).", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-h-placeholder",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Placeholder Authoring (Template Bodies)", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-p-placeholder-format",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "A template body is a stringified BlockNote document (JSON array of blocks). Placeholders are inline elements in a block's content array and are expanded server-side when the agent renders. ", "styles": {}},
+      {"type": "text", "text": "Call list_placeholders first", "styles": {"bold": true}},
+      {"type": "text", "text": " — it returns all valid kinds, their target_id contracts, and an example each. Unknown kinds or incorrect target_id values later render as unresolved placeholders.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-placeholder-persona",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Identity: ", "styles": {"bold": true}},
+      {"type": "text", "text": "persona-ref (instruction to load the persona at runtime via get_persona — lean default) or persona-field with target_id 'profile' (embedded snapshot; 'name', 'description', 'profile-body', 'modes' for individual fields).", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-placeholder-tools",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Tools: ", "styles": {"bold": true}},
+      {"type": "text", "text": "tools-overview renders the MCP tool list filtered per tool_policy — it belongs in practically every template.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-placeholder-catalog",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Catalogs: ", "styles": {"bold": true}},
+      {"type": "text", "text": "playbooks-catalog (target_id 'triggered' = only triggered ones, '' = all linked) and resources-catalog ('' = all, otherwise tag filter) render briefing tables with fetch calls.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-placeholder-memory",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Memory: ", "styles": {"bold": true}},
+      {"type": "text", "text": "the memory placeholder (target_id '') renders the memory notice matching the agent's memory_mode — with 'off' the spot stays empty (no miss). Convention: place it directly AFTER the tools-overview pill. Without the pill, tools-overview automatically appends the notice to the end of its section (fallback) — the pill is worth it when the position should be chosen deliberately, and it never hurts.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-placeholder-inline",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Single embedding: ", "styles": {"bold": true}},
+      {"type": "text", "text": "playbook / resource with a UUID as target_id embed a single element permanently (resource optionally with a section anchor '<uuid>#<block_id>') — use sparingly, catalogs + fetch at runtime are the token-saving default. date ('' = ISO, 'human' = long format) for the render date.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-code-placeholder",
+    "type": "codeBlock",
+    "props": {"language": "json"},
+    "content": [{"type": "text", "text": "[{\"id\": \"b1\", \"type\": \"paragraph\", \"props\": {}, \"content\": [\n  {\"type\": \"text\", \"text\": \"You are \", \"styles\": {}},\n  {\"type\": \"placeholder\", \"props\": {\"kind\": \"persona-field\", \"target_id\": \"name\", \"label\": \"Persona: Name\"}}\n], \"children\": []}]", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-placeholder-workflow",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Workflow: ", "styles": {"bold": true}},
+      {"type": "text", "text": "read list_placeholders, author the body as a string, create_system_prompt (draft), transition_system_prompt(to='review') for approval — activation is handled by a human in the web UI.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-h-modus",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Identify the mode", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-modus-create",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Create: ", "styles": {"bold": true}},
+      {"type": "text", "text": "a new agent is needed — create_agent wires up persona, template, and tool_policy.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-modus-update",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Update: ", "styles": {"bold": true}},
+      {"type": "text", "text": "an existing agent gets a new persona, a different template, a changed tool_policy, or a new status — update_agent changes the config in place (agents have no version history).", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-modus-copy",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Copy: ", "styles": {"bold": true}},
+      {"type": "text", "text": "an activatable agent serves as the template for a variant — copy_agent duplicates persona, template, description, and status.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-modus-retire",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Disable / Reactivate: ", "styles": {"bold": true}},
+      {"type": "text", "text": "an agent should be taken out of operation or brought back — that's an update_agent with status=disabled or status=enabled, not a transition_* call.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-h-create",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Create Mode", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-h-create-p1",
+    "type": "heading",
+    "props": {"level": 3, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Phase 1 — Understand", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-create-p1-1",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "The persona must exist and have an active version. ", "styles": {"bold": true}},
+      {"type": "text", "text": "Check with get_persona(identifier). If it's missing, create it first via the \"Create & Maintain Persona\" playbook and then come back here. Without an active persona version, the agent cannot be activated.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-create-p1-2",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Clarify the agent name — short and unambiguous, this is the display name in the agent list.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-create-p1-3",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Choose or author a template: Does one of the existing templates fit the task (list_system_prompts)? If so, note its system_prompt_template_id. If none fits: author a new template as a draft via create_system_prompt (see the Placeholder Authoring section) and submit it for review — a human must activate it.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-create-p1-4",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Clarify permissions: Should the agent only read, or also write? This determines the tool_policy (see the \"Understanding tool_policy\" section).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-h-create-p2",
+    "type": "heading",
+    "props": {"level": 3, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Phase 2 — Propose", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-create-p2-1",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Present the planned configuration to the user: name, chosen persona, chosen template, and the tool_policy (read scopes and write capabilities spelled out in plain language).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-create-p2-2",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Explain the consequences: with an active persona and a set template, the agent is activatable and can be created as enabled right away. Get confirmation.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-h-create-p3",
+    "type": "heading",
+    "props": {"level": 3, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Phase 3 — Write", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-p-create-p3",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Call create_agent with these fields:", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-create-p3-1",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "name", "styles": {"code": true}},
+      {"type": "text", "text": " — the clarified agent name.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-create-p3-2",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "persona_id", "styles": {"code": true}},
+      {"type": "text", "text": " — the ID of the persona with an active version.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-create-p3-3",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "system_prompt_template_id", "styles": {"code": true}},
+      {"type": "text", "text": " — the ID of the chosen default template.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-create-p3-4",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "tool_policy", "styles": {"code": true}},
+      {"type": "text", "text": " — the agreed-upon read scopes and write capabilities. If omitted, the default applies: read everything, write nothing.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-create-p3-5",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "status", "styles": {"code": true}},
+      {"type": "text", "text": " — the default is disabled. Only set enabled if the agent is activatable (persona + template set AND the persona has an active version); otherwise the server responds with 409.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-h-create-p4",
+    "type": "heading",
+    "props": {"level": 3, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Phase 4 — Hand-Off", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-create-p4-1",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Verify the result with get_agent(agent_id): persona and template are linked and missing is empty (activatable). The fully rendered prompt (unresolved_placeholders) can only be seen by the agent itself via fetch_agent, or by the user in the web UI — fetch_agent renders exclusively your own agent and responds with 404 for other agents (even freshly built ones). Substitute indicators as the hand-off criterion: list_agents or get_agent → missing=[] and activatable=true, plus get_persona → body_rendered with no unresolved placeholders; the actual render check is left to the target agent's first start.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-create-p4-2",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Report the name, ID, and status back to the user and name any open gaps (missing) if the agent is not yet activatable. At the end, offer a consistency & drift check that verifies the new configuration against the library context.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-h-update",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Update Mode", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-update-1",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Understand: get_agent(agent_id) reads the current state (persona, template, tool_policy, status, missing). list_agents finds existing agents if you don't know the ID.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-update-2",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Propose: Show exactly the delta — which field changes and why. Only the specified fields get overwritten; an omitted tool_policy stays unchanged.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-update-3",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Write: update_agent with the changed fields (name, description, persona_id, system_prompt_template_id, tool_policy, status). Note: a set ", "styles": {}},
+      {"type": "text", "text": "tool_policy replaces the policy entirely", "styles": {"bold": true}},
+      {"type": "text", "text": " (replace semantics) — carry over the existing values you want to keep.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-update-4",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Hand-Off: get_agent again to verify the config (missing empty, status correct). If active sessions are running, point out that a new session is needed for the changed configuration to take effect.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-h-copy",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Copy Mode", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-copy-1",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Only activatable agents can be copied — an incomplete shell (missing persona or template) is not copyable. Check this beforehand with get_agent (activatable).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-copy-2",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Call copy_agent with the source ID. ", "styles": {}},
+      {"type": "text", "text": "name", "styles": {"code": true}},
+      {"type": "text", "text": " is optional — if omitted, the server derives \"<Name> (Copy)\". The copy takes over the source's persona, template, description, and status.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-copy-3",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Then adjust the copy via update_agent (e.g., a different persona or a tighter tool_policy) and verify with get_agent.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-h-disable",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Disable & Reactivate", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-p-disable",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Agents have no version lifecycle like persona, playbook, or resource — there is only enabled and disabled. You set both via update_agent(status=...). A disabled agent is filtered out of the list and its render endpoint responds with 409. Before disabling: check whether the agent is still actively used, and warn the user accordingly. Reactivating is only possible as long as the agent stays activatable (persona with an active version + template).", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-h-policy",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Understanding tool_policy", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-p-policy",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "The tool_policy determines which MCP tools the agent can see and use. The default is \"read everything, write nothing\" — a fresh agent may read the entire workspace but change nothing until it's unlocked.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-policy-reads",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Read scopes: ", "styles": {"bold": true}},
+      {"type": "text", "text": "playbook_read and resource_read are three-tiered — all (entire workspace), assigned (only those assigned to the agent's own persona), or none (tool hidden). persona_read and agent_read are simple on/off switches.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-policy-writes",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Write capabilities: ", "styles": {"bold": true}},
+      {"type": "text", "text": "persona_write, playbook_write, resource_write, and agent_write each unlock the domain's write tools (create/change a draft, set links). Each defaults to off.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-policy-promote",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "promote_retire: ", "styles": {"bold": true}},
+      {"type": "text", "text": "needed to switch a version to active or inactive (publish/retire). For draft/review, the respective write capability is sufficient; promoting/retiring is the extra tier.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-policy-escalation",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "No privilege escalation: ", "styles": {"bold": true}},
+      {"type": "text", "text": "If you, as an agent, create another agent via agent_write, its policy may not grant more than your own. The tool_policy is only tool visibility — the actual authorization (editor for writing, admin for promote/retire) stays server-side.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-policy-memory",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "memory_mode (agent memory, ADR-0044): ", "styles": {"bold": true}},
+      {"type": "text", "text": "a four-tier long-term memory per agent — 'off' (default; memory tools don't exist for the agent), 'read_only' (only search_memory/list_memories over approved facts), 'suggest' (save_memory creates PROPOSALS that only become retrieval-visible after human approval on the agent detail page — a curation gate), and 'auto' (immediately active). Plus memory_directive: 'required' (the agent MUST retrieve its memory at the start of the conversation) or 'recommended' (default — should use it when context helps). The system prompt and runtime persona (get_persona) automatically carry the instruction once the mode is not 'off'.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-policy-memory-empfehlung",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Memory recommendation logic: ", "styles": {"bold": true}},
+      {"type": "text", "text": "The default suggestion is 'suggest' + 'recommended' — the user retains control, and the agent still learns. 'read_only' for agents that should benefit from curated knowledge but not contribute anything; 'auto' only on explicit user request; 'off' for tool-like agents with no personalization benefit. Memories are user data, not instructions; repo/code facts do NOT belong in memory.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-policy-memory-grenze",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Memory escalation boundary: ", "styles": {"bold": true}},
+      {"type": "text", "text": "memory_mode is part of the is_within comparison — you can grant other agents at most YOUR OWN tier. If your own memory is set to 'off', the server rejects every unlock attempt with 403. This is intentional: hand off the desired mode to the user instead (agent detail page → Tools → Memory) rather than forcing it or reporting it as an error.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-h-activatable",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Activatability (activatable)", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-act-1",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "An agent is activatable when persona AND template are set AND the persona has an active version. Only then may it be enabled or copied.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-act-2",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "The missing field shows the gaps in stable order: persona, template, persona_active. An empty list means activatable.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-act-3",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "As long as persona or template is missing, the agent is a shell (is_shell): not renderable and not copyable. Creating a shell is allowed and gets completed later via update_agent.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-h-tools",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Tools & Operations", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-tools-read",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Read: ", "styles": {"bold": true}},
+      {"type": "text", "text": "get_persona (check persona + active version), list_agents (find existing agents), and get_agent (an agent's config: persona, template, tool_policy, status, missing) — for ANY agent in the workspace. fetch_agent additionally delivers the rendered prompt, but only for your OWN agent. list_playbooks for orientation.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-tools-write",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Write: ", "styles": {"bold": true}},
+      {"type": "text", "text": "create_agent (create), update_agent (config in place, incl. status), copy_agent (duplicate) — requires agent_write. Templates: create_system_prompt / update_system_prompt (author/change a draft), restore_system_prompt, transition_system_prompt (draft to review only) — requires system_prompt_write. Server-side, editor applies.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-tools-forbidden",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Not available: ", "styles": {"bold": true}},
+      {"type": "text", "text": "template activation via MCP (transition_system_prompt to active/inactive is server-side locked for agent-bound tokens, ADR-0040), deleting agents (no MCP delete, ADR-0030), and transition_* calls on agents (agents have no versions).", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "pb-agent-h-anti",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Anti-Patterns", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-anti-1",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Creating an agent with status=enabled even though it isn't activatable — the server rejects with 409. Make sure persona (active) + template are in place first.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-anti-2",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Wiring up a persona without an active version — the agent stays non-activatable (missing lists persona_active).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-anti-3",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Sending only a partial tool_policy on update, assuming the missing fields would be preserved — a set tool_policy replaces the entire policy. Pass along the existing values too.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-anti-4",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Setting write capabilities more generously than the agent needs for its task — the tool policy pattern from the 'Agent Build Conventions' resource applies (secure by default, minimal capabilities, promote_retire only for genuine switching needs).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-anti-5",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Not verifying the config with get_agent after create_agent or update_agent (missing empty, status correct) — an incomplete shell would otherwise go unnoticed. A 404 from fetch_agent for an OTHER agent, on the other hand, is expected behavior (fetch_agent only renders your own agent), not a missing verification step — you check the config with get_agent (missing=[] and activatable) and leave the rendered prompt to the target agent's actual first start.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-h-notes",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Notes", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-notes-1",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Order matters: first persona (with an active version), then choose a template, then create the agent. The natural dependency is persona → template → agent.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-notes-2",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "No version discipline on the agent itself: changes are pure config updates with no version bump. Content versioning lives on persona, playbook, and resource.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-notes-3",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "The bootstrap loop (load persona, check triggers, follow playbook) lives in the template and gets populated from placeholders at render time — you don't need to write it into the prompt by hand.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-agent-li-notes-konventionen",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Conventions: the tool policy pattern (read scopes, minimal write capabilities, promote_retire, transition_grants, write_rate_limit) as well as trigger hygiene, naming, the mode rule, and managed boundaries are binding in the 'Agent Build Conventions' resource. It is linked as a lazy pointer and does NOT come along automatically — load it via fetch_resource before Phase 2 (Propose); the resource_id is in this playbook's linked_blocks entry.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-feedback-h",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Feedback", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-feedback-p",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "If you notice anything outdated or incorrect while reading existing elements, report it via submit_feedback (signal outdated/incorrect/unclear) instead of silently passing over it; report playbooks/resources you used via record_usage (applied/skipped/error). This is how the AgentDB becomes self-improving.", "styles": {}}],
+    "children": []
+  }
+]
