@@ -14,7 +14,6 @@ from fastmcp.exceptions import ToolError
 from pydantic import BaseModel
 
 from who2be_models import (
-    DEFAULT_LOCALE,
     AgentCopy,
     AgentCreate,
     AgentFeedbackRead,
@@ -66,6 +65,7 @@ from who2be_models import (
     VersionDiff,
     VersionTransitionRequest,
     WhoAmIRead,
+    WorkspaceRead,
 )
 
 logger = logging.getLogger(__name__)
@@ -233,21 +233,37 @@ class ApiClient:
         data = await self._get(f"{self._workspace_prefix}/whoami")
         return WhoAmIRead.model_validate(data)
 
-    async def get_persona(self, identifier: str, locale: str = DEFAULT_LOCALE) -> PersonaRead:
-        """Laedt eine Persona per UUID oder — sonst — per Name (in `locale`)."""
+    async def get_workspace(self) -> WorkspaceRead:
+        """Laedt die Workspace-Metadaten (u.a. `content_locale`, Plan 2026-07-24).
+
+        Genutzt vom MCP-Write-Pfad, um bei `locale=None` auf einem Create die
+        Workspace-Content-Sprache als Default aufzuloesen (`GET /v1/workspaces/
+        {ws_id}` — derselbe Pfad wie `self._workspace_prefix`, Membership-Read,
+        keine erhoehte Rolle noetig).
+        """
+        data = await self._get(self._workspace_prefix)
+        return WorkspaceRead.model_validate(data)
+
+    async def get_persona(self, identifier: str, locale: str | None = None) -> PersonaRead:
+        """Laedt eine Persona per UUID oder — sonst — per Name.
+
+        `locale` ist ein Backward-Compat-Parameter (frueher: Variantenwahl,
+        ADR-0027). Bei UUID-Aufloesung wird er seit „Ein Element, eine Sprache"
+        (Plan 2026-07-24) IGNORIERT (gar nicht erst mitgesendet) — die Persona
+        traegt ihre Sprache selbst als `locale`-Metadatum. Bei Namens-Aufloesung
+        wirkt er als optionaler Filter auf gleichnamige Personae in anderen
+        Sprachen (`None` = kein Filter, alle Sprachen).
+        """
         try:
             persona_id = UUID(identifier)
         except ValueError:
             return await self._resolve_persona_by_name(identifier, locale)
-        data = await self._get(
-            f"{self._workspace_prefix}/personas/{persona_id}", params={"locale": locale}
-        )
+        data = await self._get(f"{self._workspace_prefix}/personas/{persona_id}")
         return PersonaRead.model_validate(data)
 
-    async def _resolve_persona_by_name(
-        self, name: str, locale: str = DEFAULT_LOCALE
-    ) -> PersonaRead:
-        data = await self._get(f"{self._workspace_prefix}/personas", params={"locale": locale})
+    async def _resolve_persona_by_name(self, name: str, locale: str | None = None) -> PersonaRead:
+        params = {"locale": locale} if locale is not None else None
+        data = await self._get(f"{self._workspace_prefix}/personas", params=params)
         for entry in data:
             persona = PersonaRead.model_validate(entry)
             if persona.name == name:
@@ -255,16 +271,17 @@ class ApiClient:
         raise ToolError(f"Keine Persona mit Name '{name}'.")
 
     async def get_persona_playbooks(
-        self, persona_id: UUID, locale: str = DEFAULT_LOCALE
+        self, persona_id: UUID, locale: str | None = None
     ) -> list[PlaybookRead]:
+        params = {"locale": locale} if locale is not None else None
         data = await self._get(
             f"{self._workspace_prefix}/personas/{persona_id}/playbooks",
-            params={"locale": locale},
+            params=params,
         )
         return [PlaybookRead.model_validate(item) for item in data]
 
     async def get_persona_rendered(
-        self, persona_id: UUID, locale: str = DEFAULT_LOCALE, mode: str | None = None
+        self, persona_id: UUID, locale: str | None = None, mode: str | None = None
     ) -> tuple[str, str | None]:
         """Laedt den serverseitig expandierten Persona-Profil-Body (Track F).
 
@@ -284,7 +301,9 @@ class ApiClient:
         des angewendeten Modus oder `None`. Die `unresolved`-Liste ist fuer den
         Agent-Konsum nicht relevant (best-effort Expansion).
         """
-        params: dict[str, str] = {"locale": locale}
+        params: dict[str, str] = {}
+        if locale is not None:
+            params["locale"] = locale
         if mode is not None:
             params["mode"] = mode
         data = await self._get(
@@ -299,13 +318,17 @@ class ApiClient:
         )
 
     async def list_playbooks(
-        self, tag: str | None, trigger: str | None, locale: str = DEFAULT_LOCALE
+        self, tag: str | None, trigger: str | None, locale: str | None = None
     ) -> list[PlaybookRead]:
-        params: dict[str, str] = {"locale": locale}
+        """`locale` ist seit „Ein Element, eine Sprache" ein optionaler Sprachfilter
+        (`None` = alle Sprachen, Default)."""
+        params: dict[str, str] = {}
         if tag is not None:
             params["tag"] = tag
         if trigger is not None:
             params["trigger"] = trigger
+        if locale is not None:
+            params["locale"] = locale
         data = await self._get(f"{self._workspace_prefix}/playbooks", params=params)
         return [PlaybookRead.model_validate(item) for item in data]
 
@@ -318,38 +341,42 @@ class ApiClient:
         data = await self._get(f"{self._workspace_prefix}/placeholders")
         return PlaceholderCatalog.model_validate(data)
 
-    async def get_playbook(self, playbook_id: UUID, locale: str = DEFAULT_LOCALE) -> PlaybookRead:
-        data = await self._get(
-            f"{self._workspace_prefix}/playbooks/{playbook_id}", params={"locale": locale}
-        )
+    async def get_playbook(self, playbook_id: UUID, locale: str | None = None) -> PlaybookRead:
+        params = {"locale": locale} if locale is not None else None
+        data = await self._get(f"{self._workspace_prefix}/playbooks/{playbook_id}", params=params)
         return PlaybookRead.model_validate(data)
 
     async def list_resources(
-        self, tag: str | None = None, locale: str = DEFAULT_LOCALE
+        self, tag: str | None = None, locale: str | None = None
     ) -> list[ResourceRead]:
-        params: dict[str, str] = {"locale": locale}
+        """`locale` ist seit „Ein Element, eine Sprache" ein optionaler Sprachfilter
+        (`None` = alle Sprachen, Default)."""
+        params: dict[str, str] = {}
         if tag is not None:
             params["tag"] = tag
+        if locale is not None:
+            params["locale"] = locale
         data = await self._get(f"{self._workspace_prefix}/resources", params=params)
         return [ResourceRead.model_validate(item) for item in data]
 
-    async def get_resource(self, resource_id: UUID, locale: str = DEFAULT_LOCALE) -> ResourceRead:
-        data = await self._get(
-            f"{self._workspace_prefix}/resources/{resource_id}", params={"locale": locale}
-        )
+    async def get_resource(self, resource_id: UUID, locale: str | None = None) -> ResourceRead:
+        params = {"locale": locale} if locale is not None else None
+        data = await self._get(f"{self._workspace_prefix}/resources/{resource_id}", params=params)
         return ResourceRead.model_validate(data)
 
     async def list_resource_blocks(
-        self, resource_id: UUID, locale: str = DEFAULT_LOCALE
+        self, resource_id: UUID, locale: str | None = None
     ) -> list[ResourceBlockAnchor]:
         """Laedt die linkbaren Heading-Anker einer Resource (WP-6).
 
-        `locale` waehlt die Sprachvariante (Default `'de'`); ein API-Token-Pfad
-        sieht nur aktive Versionen.
+        `locale` ist ein Backward-Compat-Parameter (frueher: Variantenwahl); die
+        Resource traegt ihre Sprache seit „Ein Element, eine Sprache" selbst als
+        Metadatum. Ein API-Token-Pfad sieht nur aktive Versionen.
         """
+        params = {"locale": locale} if locale is not None else None
         data = await self._get(
             f"{self._workspace_prefix}/resources/{resource_id}/blocks",
-            params={"locale": locale},
+            params=params,
         )
         return [ResourceBlockAnchor.model_validate(item) for item in data]
 
@@ -367,16 +394,17 @@ class ApiClient:
         return [ResourceLinkRead.model_validate(item) for item in data]
 
     async def get_playbook_composes(
-        self, playbook_id: UUID, locale: str = DEFAULT_LOCALE
+        self, playbook_id: UUID, locale: str | None = None
     ) -> list[PlaybookRead]:
         """Laedt die geordneten aktiven Sub-Playbooks eines Composite (eine Ebene).
 
         Leere Liste wenn das Playbook kein Composite ist oder keine aktiven
         Kinder hat (API-Token-Pfad liefert nur aktive Versionen).
         """
+        params = {"locale": locale} if locale is not None else None
         data = await self._get(
             f"{self._workspace_prefix}/playbooks/{playbook_id}/composes",
-            params={"locale": locale},
+            params=params,
         )
         return [PlaybookRead.model_validate(item) for item in data]
 
@@ -400,7 +428,7 @@ class ApiClient:
         data = await self._get(f"{self._workspace_prefix}/agents/{agent_id}")
         return AgentRead.model_validate(data)
 
-    async def get_playbook_rendered(self, playbook_id: UUID, locale: str = DEFAULT_LOCALE) -> str:
+    async def get_playbook_rendered(self, playbook_id: UUID, locale: str | None = None) -> str:
         """Laedt den serverseitig expandierten Playbook-Body (B5).
 
         Der API-Endpoint `GET .../playbooks/{id}/rendered` jagt den BlockNote-Body
@@ -410,16 +438,25 @@ class ApiClient:
         Gibt nur den `body_rendered`-String zurueck; die `unresolved`-Liste ist fuer
         den Agent-Konsum nicht relevant (best-effort Expansion).
         """
+        params = {"locale": locale} if locale is not None else None
         data = await self._get(
             f"{self._workspace_prefix}/playbooks/{playbook_id}/rendered",
-            params={"locale": locale},
+            params=params,
         )
         body = data.get("body_rendered") if isinstance(data, dict) else None
         return body if isinstance(body, str) else ""
 
-    async def list_system_prompts(self) -> list[SystemPromptTemplateRead]:
-        """Laedt die System-Prompt-Templates des Workspace (ADR-0040)."""
-        data = await self._get(f"{self._workspace_prefix}/system-prompts")
+    async def list_system_prompts(
+        self, locale: str | None = None
+    ) -> list[SystemPromptTemplateRead]:
+        """Laedt die System-Prompt-Templates des Workspace (ADR-0040).
+
+        `locale` ist seit „Ein Element, eine Sprache" (Plan 2026-07-24) ein
+        optionaler Sprachfilter (`None` = alle Sprachen, Default) — spiegelt
+        `list_playbooks`/`list_resources`/`list_external_tools`.
+        """
+        params = {"locale": locale} if locale is not None else None
+        data = await self._get(f"{self._workspace_prefix}/system-prompts", params=params)
         return [SystemPromptTemplateRead.model_validate(item) for item in data]
 
     async def get_system_prompt(self, template_id: UUID) -> SystemPromptTemplateRead:
@@ -433,30 +470,31 @@ class ApiClient:
     # Server/Tools, referenziert per stabilem Alias (`tool-ref`-Placeholder).
     # ------------------------------------------------------------------
 
-    async def list_external_tools(self, locale: str = DEFAULT_LOCALE) -> list[ExternalToolRead]:
+    async def list_external_tools(self, locale: str | None = None) -> list[ExternalToolRead]:
         """Laedt die externen Tool-Bindungen des Workspace.
 
-        Kein `tag`-Filter auf REST-Ebene (WP-1 hat keinen `?tag=`-Query-Param
-        implementiert) — der MCP-Tool-Adapter (`server.list_external_tools`)
-        filtert client-seitig nach Tag, spiegelt dabei aber `list_playbooks`/
-        `list_resources`.
+        `locale` ist seit „Ein Element, eine Sprache" ein optionaler Sprachfilter
+        (`None` = alle Sprachen, Default). Kein `tag`-Filter auf REST-Ebene (WP-1
+        hat keinen `?tag=`-Query-Param implementiert) — der MCP-Tool-Adapter
+        (`server.list_external_tools`) filtert client-seitig nach Tag, spiegelt
+        dabei aber `list_playbooks`/`list_resources`.
         """
-        data = await self._get(
-            f"{self._workspace_prefix}/external_tools", params={"locale": locale}
-        )
+        params = {"locale": locale} if locale is not None else None
+        data = await self._get(f"{self._workspace_prefix}/external_tools", params=params)
         return [ExternalToolRead.model_validate(item) for item in data]
 
-    async def get_external_tool(
-        self, tool_id: UUID, locale: str = DEFAULT_LOCALE
-    ) -> ExternalToolRead:
-        """Laedt eine externe Tool-Bindung per UUID."""
-        data = await self._get(
-            f"{self._workspace_prefix}/external_tools/{tool_id}", params={"locale": locale}
-        )
+    async def get_external_tool(self, tool_id: UUID, locale: str | None = None) -> ExternalToolRead:
+        """Laedt eine externe Tool-Bindung per UUID.
+
+        `locale` ist ein Backward-Compat-Parameter, ohne Wirkung seit „Ein
+        Element, eine Sprache" (Plan 2026-07-24) — wird bei UUID-Aufloesung
+        gar nicht erst mitgesendet, die Bindung traegt ihre Sprache selbst.
+        """
+        data = await self._get(f"{self._workspace_prefix}/external_tools/{tool_id}")
         return ExternalToolRead.model_validate(data)
 
     async def resolve_external_tool(
-        self, identifier: str, locale: str = DEFAULT_LOCALE
+        self, identifier: str, locale: str | None = None
     ) -> ExternalToolRead:
         """Laedt eine externe Tool-Bindung per UUID ODER — sonst — per Alias.
 
@@ -471,7 +509,7 @@ class ApiClient:
         return await self.get_external_tool(tool_id, locale)
 
     async def _resolve_external_tool_by_alias(
-        self, alias: str, locale: str = DEFAULT_LOCALE
+        self, alias: str, locale: str | None = None
     ) -> ExternalToolRead:
         for tool in await self.list_external_tools(locale):
             if tool.alias == alias:
@@ -483,13 +521,15 @@ class ApiClient:
         return ExternalToolRead.model_validate(body)
 
     async def update_external_tool(
-        self, tool_id: UUID, data: ExternalToolUpdate, locale: str = DEFAULT_LOCALE
+        self, tool_id: UUID, data: ExternalToolUpdate
     ) -> ExternalToolRead:
+        """Aktualisiert eine externe Tool-Bindung. Ein Sprachwechsel laeuft ueber
+        `data.locale` (Entity-Metadatum) — kein `?locale=`-Variantenselektor mehr
+        (Plan „Ein Element, eine Sprache", Status-Invarianten sind per-entity)."""
         body = await self._write(
             "PUT",
             f"{self._workspace_prefix}/external_tools/{tool_id}",
             data,
-            params={"locale": locale},
         )
         return ExternalToolRead.model_validate(body)
 
@@ -498,24 +538,19 @@ class ApiClient:
         tool_id: UUID,
         version: int,
         data: VersionTransitionRequest,
-        locale: str = DEFAULT_LOCALE,
     ) -> ExternalToolVersionRead:
         body = await self._write(
             "POST",
             f"{self._workspace_prefix}/external_tools/{tool_id}/versions/{version}/transition",
             data,
-            params={"locale": locale},
         )
         return ExternalToolVersionRead.model_validate(body)
 
-    async def restore_external_tool_version(
-        self, tool_id: UUID, version: int, locale: str = DEFAULT_LOCALE
-    ) -> ExternalToolRead:
+    async def restore_external_tool_version(self, tool_id: UUID, version: int) -> ExternalToolRead:
         body = await self._write(
             "POST",
             f"{self._workspace_prefix}/external_tools/{tool_id}/versions/{version}/restore",
             None,
-            params={"locale": locale},
         )
         return ExternalToolRead.model_validate(body)
 
@@ -538,27 +573,31 @@ class ApiClient:
         return [model.model_validate(item) for item in data]
 
     async def list_versions(
-        self, entity_type: EntityType, entity_id: UUID, locale: str = DEFAULT_LOCALE
+        self, entity_type: EntityType, entity_id: UUID, locale: str | None = None
     ) -> list[AnyVersionRead]:
-        """Listet die Versions-Snapshots eines Elements (Historie)."""
+        """Listet die Versions-Snapshots eines Elements (Historie).
+
+        `locale` ist ein Backward-Compat-Parameter (frueher: Variantenwahl),
+        IGNORIERT (gar nicht erst mitgesendet) seit „Ein Element, eine Sprache"
+        — die Historie gehoert zu EINEM Element. Jeder Snapshot traegt sein
+        eigenes `locale`-Feld (Historienwert).
+        """
         plural = _ENTITY_PLURAL[entity_type]
         model = _VERSION_MODEL[entity_type]
-        data = await self._get(
-            f"{self._workspace_prefix}/{plural}/{entity_id}/versions",
-            params={"locale": locale},
-        )
+        data = await self._get(f"{self._workspace_prefix}/{plural}/{entity_id}/versions")
         return [model.model_validate(item) for item in data]
 
     async def get_version(
-        self, entity_type: EntityType, entity_id: UUID, version: int, locale: str = DEFAULT_LOCALE
+        self, entity_type: EntityType, entity_id: UUID, version: int, locale: str | None = None
     ) -> AnyVersionRead:
-        """Laedt einen einzelnen Versions-Snapshot."""
+        """Laedt einen einzelnen Versions-Snapshot.
+
+        `locale` ist ein Backward-Compat-Parameter, IGNORIERT seit „Ein Element,
+        eine Sprache" — der Snapshot traegt sein eigenes `locale`-Feld.
+        """
         plural = _ENTITY_PLURAL[entity_type]
         model = _VERSION_MODEL[entity_type]
-        data = await self._get(
-            f"{self._workspace_prefix}/{plural}/{entity_id}/versions/{version}",
-            params={"locale": locale},
-        )
+        data = await self._get(f"{self._workspace_prefix}/{plural}/{entity_id}/versions/{version}")
         return model.model_validate(data)
 
     async def diff_version(
@@ -567,9 +606,13 @@ class ApiClient:
         entity_id: UUID,
         version: int,
         against: str = "active",
-        locale: str = DEFAULT_LOCALE,
+        locale: str | None = None,
     ) -> VersionDiff:
-        """Strukturierter Feld-/Block-Diff von `version` gegen `against`."""
+        """Strukturierter Feld-/Block-Diff von `version` gegen `against`.
+
+        `locale` ist ein Backward-Compat-Parameter, IGNORIERT seit „Ein Element,
+        eine Sprache" (beide verglichenen Staende gehoeren zum selben Element).
+        """
         if entity_type in _NO_DIFF_ENDPOINT:
             raise ToolError(
                 f"Diff ist fuer entity_type='{entity_type}' nicht verfuegbar "
@@ -578,7 +621,7 @@ class ApiClient:
         plural = _ENTITY_PLURAL[entity_type]
         data = await self._get(
             f"{self._workspace_prefix}/{plural}/{entity_id}/versions/{version}/diff",
-            params={"locale": locale, "against": against},
+            params={"against": against},
         )
         return VersionDiff.model_validate(data)
 
@@ -591,14 +634,14 @@ class ApiClient:
         body = await self._write("POST", f"{self._workspace_prefix}/personas", data)
         return PersonaRead.model_validate(body)
 
-    async def update_persona(
-        self, persona_id: UUID, data: PersonaUpdate, locale: str = DEFAULT_LOCALE
-    ) -> PersonaRead:
+    async def update_persona(self, persona_id: UUID, data: PersonaUpdate) -> PersonaRead:
+        """Aktualisiert eine Persona. Ein Sprachwechsel laeuft ueber `data.locale`
+        (Entity-Metadatum) — kein `?locale=`-Variantenselektor mehr (Plan „Ein
+        Element, eine Sprache")."""
         body = await self._write(
             "PUT",
             f"{self._workspace_prefix}/personas/{persona_id}",
             data,
-            params={"locale": locale},
         )
         return PersonaRead.model_validate(body)
 
@@ -607,24 +650,19 @@ class ApiClient:
         persona_id: UUID,
         version: int,
         data: VersionTransitionRequest,
-        locale: str = DEFAULT_LOCALE,
     ) -> PersonaVersionRead:
         body = await self._write(
             "POST",
             f"{self._workspace_prefix}/personas/{persona_id}/versions/{version}/transition",
             data,
-            params={"locale": locale},
         )
         return PersonaVersionRead.model_validate(body)
 
-    async def restore_persona_version(
-        self, persona_id: UUID, version: int, locale: str = DEFAULT_LOCALE
-    ) -> PersonaRead:
+    async def restore_persona_version(self, persona_id: UUID, version: int) -> PersonaRead:
         body = await self._write(
             "POST",
             f"{self._workspace_prefix}/personas/{persona_id}/versions/{version}/restore",
             None,
-            params={"locale": locale},
         )
         return PersonaRead.model_validate(body)
 
@@ -640,14 +678,14 @@ class ApiClient:
         body = await self._write("POST", f"{self._workspace_prefix}/playbooks", data)
         return PlaybookRead.model_validate(body)
 
-    async def update_playbook(
-        self, playbook_id: UUID, data: PlaybookUpdate, locale: str = DEFAULT_LOCALE
-    ) -> PlaybookRead:
+    async def update_playbook(self, playbook_id: UUID, data: PlaybookUpdate) -> PlaybookRead:
+        """Aktualisiert ein Playbook. Ein Sprachwechsel laeuft ueber `data.locale`
+        (Entity-Metadatum) — kein `?locale=`-Variantenselektor mehr (Plan „Ein
+        Element, eine Sprache")."""
         body = await self._write(
             "PUT",
             f"{self._workspace_prefix}/playbooks/{playbook_id}",
             data,
-            params={"locale": locale},
         )
         return PlaybookRead.model_validate(body)
 
@@ -656,24 +694,19 @@ class ApiClient:
         playbook_id: UUID,
         version: int,
         data: VersionTransitionRequest,
-        locale: str = DEFAULT_LOCALE,
     ) -> PlaybookVersionRead:
         body = await self._write(
             "POST",
             f"{self._workspace_prefix}/playbooks/{playbook_id}/versions/{version}/transition",
             data,
-            params={"locale": locale},
         )
         return PlaybookVersionRead.model_validate(body)
 
-    async def restore_playbook_version(
-        self, playbook_id: UUID, version: int, locale: str = DEFAULT_LOCALE
-    ) -> PlaybookRead:
+    async def restore_playbook_version(self, playbook_id: UUID, version: int) -> PlaybookRead:
         body = await self._write(
             "POST",
             f"{self._workspace_prefix}/playbooks/{playbook_id}/versions/{version}/restore",
             None,
-            params={"locale": locale},
         )
         return PlaybookRead.model_validate(body)
 
@@ -697,14 +730,14 @@ class ApiClient:
         body = await self._write("POST", f"{self._workspace_prefix}/resources", data)
         return ResourceRead.model_validate(body)
 
-    async def update_resource(
-        self, resource_id: UUID, data: ResourceUpdate, locale: str = DEFAULT_LOCALE
-    ) -> ResourceRead:
+    async def update_resource(self, resource_id: UUID, data: ResourceUpdate) -> ResourceRead:
+        """Aktualisiert eine Resource. Ein Sprachwechsel laeuft ueber `data.locale`
+        (Entity-Metadatum) — kein `?locale=`-Variantenselektor mehr (Plan „Ein
+        Element, eine Sprache")."""
         body = await self._write(
             "PUT",
             f"{self._workspace_prefix}/resources/{resource_id}",
             data,
-            params={"locale": locale},
         )
         return ResourceRead.model_validate(body)
 
@@ -713,24 +746,19 @@ class ApiClient:
         resource_id: UUID,
         version: int,
         data: VersionTransitionRequest,
-        locale: str = DEFAULT_LOCALE,
     ) -> ResourceVersionRead:
         body = await self._write(
             "POST",
             f"{self._workspace_prefix}/resources/{resource_id}/versions/{version}/transition",
             data,
-            params={"locale": locale},
         )
         return ResourceVersionRead.model_validate(body)
 
-    async def restore_resource_version(
-        self, resource_id: UUID, version: int, locale: str = DEFAULT_LOCALE
-    ) -> ResourceRead:
+    async def restore_resource_version(self, resource_id: UUID, version: int) -> ResourceRead:
         body = await self._write(
             "POST",
             f"{self._workspace_prefix}/resources/{resource_id}/versions/{version}/restore",
             None,
-            params={"locale": locale},
         )
         return ResourceRead.model_validate(body)
 

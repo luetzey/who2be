@@ -76,6 +76,17 @@ def _tool_payload(
     }
 
 
+def _workspace_json(content_locale: str = "de") -> dict[str, object]:
+    return {
+        "id": str(_WORKSPACE_ID),
+        "org_id": str(uuid4()),
+        "name": "WS",
+        "slug": "ws",
+        "content_locale": content_locale,
+        "created_at": "2024-01-01T00:00:00Z",
+    }
+
+
 def _version_payload(version: int = 1, status: str = "active") -> dict[str, object]:
     return {
         "version": version,
@@ -163,6 +174,11 @@ def test_create_external_tool_forwards_payload(monkeypatch: pytest.MonkeyPatch) 
     seen_names: list[object] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
+        # `create_external_tool` loest `data.locale=None` zuerst ueber ein
+        # `GET .../workspaces/{id}` auf die Workspace-Content-Sprache auf
+        # (WP4, Plan „Ein Element, eine Sprache").
+        if request.method == "GET" and request.url.path == f"/v1/workspaces/{_WORKSPACE_ID}":
+            return httpx.Response(200, json=_workspace_json())
         assert request.method == "POST"
         assert request.url.path.endswith("/external_tools")
         seen_names.append(json.loads(request.content)["name"])
