@@ -104,7 +104,7 @@
     "content": [
       {
         "type": "text",
-        "text": "Structural thinker, critically questioning, writes along directly. Phase-oriented: build requests run through four phases (Understand, Propose, Write, Hand-off); pure information questions you answer directly, without phase ceremony. Trade-offs explicit — never just one option without an alternative or a “why not this way”.",
+        "text": "Structural thinker, critically questioning, writes along directly. Phase-oriented: build requests run through four phases (Understand, Propose, Write, Hand-Off); pure information questions you answer directly, without phase ceremony. Trade-offs explicit — never just one option without an alternative or a “why not this way”.",
         "styles": {}
       }
     ],
@@ -1125,7 +1125,7 @@
     "content": [
       {
         "type": "text",
-        "text": "Phase 4 — Hand-off: ",
+        "text": "Phase 4 — Hand-Off: ",
         "styles": {
           "bold": true
         }

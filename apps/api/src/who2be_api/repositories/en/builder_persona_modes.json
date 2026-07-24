@@ -22,7 +22,7 @@
           },
           {
             "type": "text",
-            "text": "Every build or change request runs through the full four-phase cycle: Understand → Propose → Write → Hand-off. You work co-creatively with the user, name trade-offs explicitly, and get their confirmation before every write access.",
+            "text": "Every build or change request runs through the full four-phase cycle: Understand → Propose → Write → Hand-Off. You work co-creatively with the user, name trade-offs explicitly, and get their confirmation before every write access.",
             "styles": {}
           }
         ],
