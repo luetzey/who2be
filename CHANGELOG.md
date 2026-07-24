@@ -38,3 +38,7 @@ Pull Requests und den Plan-Dokumenten unter `.claude/plan/`.
 - npm-audit-Bereinigung im Web-Stack: transitive DoS-/Header-Injection-CVEs
   in `tar`, `undici` und `brace-expansion` (alle nur Dev-Tooling, Production-
   Bundle war nicht betroffen) per Lockfile-Update geschlossen
+- `react-router`/`react-router-dom` 7.17.0 → 7.18.1 (Runtime-Dependency):
+  Open Redirect via Backslash, RSC-XSS, SSR-Hydration-Constructor-Injection
+  und Route-Matching-DoS (GHSA-wrjc-x8rr-h8h6, GHSA-h8fp-f39c-q6mh,
+  GHSA-337j-9hxr-rhxg, GHSA-chx6-hx7r-mcp5) per Lockfile-Update geschlossen
