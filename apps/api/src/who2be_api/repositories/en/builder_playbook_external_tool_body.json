@@ -1,0 +1,149 @@
+[
+  {
+    "id": "pb-exttool-h-zweck",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Purpose", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-p-zweck",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "CRUD workflow for external tool bindings (ADR-0043): versioned, PURELY INSTRUCTIVE bindings to external MCP servers (e.g., a to-do app, a calendar) — they describe when and how an agent uses an external tool; they connect nothing. Three modes: Create (new binding), Update/Rebind (change the content or swap the concrete tool behind the alias), Retire (deactivate). Writing happens exclusively through the Who2Be MCP write tools; the draft→active workflow stays server-side.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-h-trigger",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Trigger Keywords", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-p-trigger",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Create external tool; maintain external tool; create tool binding; maintain tool binding; connect a tool; swap a tool; insert a tool-ref.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-h-prozedur",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Procedure", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-p-modus",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "First identify the mode: Create, when a capability has no binding yet; Update/Rebind, when an existing binding is changed or the tool behind it is swapped; Retire, when a binding is taken out of service. ALWAYS read list_external_tools() or get_external_tool(alias) first — the alias resolves by either UUID OR capability alias.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-li-1",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Create — Understand: Clarify the CAPABILITY (what should the agent be able to do: manage to-dos, read appointments, ...), the concrete tool (product name), the MCP server name in the runtime, and the relevant tool identifiers. Choose the alias as a capability identifier, NOT as a product name ('todo' instead of 'todoist') — the alias is immutable after Create, but the product behind it stays swappable. Slug rules: alphanumeric/hyphen/underscore, 1-64 characters, workspace-unique (409 on collision).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-li-2",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Create — Write: create_external_tool(data) with name, alias, and content: display_name (the concrete tool's display name), mcp_server_name (connector name in the runtime), tool_names (relevant MCP tool identifiers), usage_notes (stringified BlockNote document: when/how to use it, do's/don'ts), and fallback_note (behavior when the server is missing or not connected). This produces a draft version 1.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-li-3",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Update/Rebind: update_external_tool(tool_id, data) — a PUT on an active version creates a new draft (409 as long as a draft is already open). Swapping the tool (e.g., Todoist → Things 3) means: swap the content, keep the alias — all tool-ref pills stay valid, not a single playbook/persona edit is needed. That's exactly what this aggregate exists for.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-li-4",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Use: Reference the binding in playbook, persona, resource, or template bodies via the tool-ref placeholder: {\"type\": \"placeholder\", \"props\": {\"kind\": \"tool-ref\", \"target_id\": \"<alias>\", \"label\": \"Tool: <display name>\"}} as an inline element in a block's content array. It expands at fetch time to whichever binding is currently ACTIVE; without an active version it renders as an unresolved placeholder (miss). Check the usage notes + fallback beforehand via get_external_tool(alias).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-li-5",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Status: transition_external_tool(tool_id, version, to) follows draft→review→active→inactive. Only 'active' makes the binding visible for tool-ref expansion and agent reads (agents filter on status='active'). Promote/Retire (→active/→inactive) requires admin rights server-side, or promote_retire. restore_external_tool(tool_id, version) non-destructively restores an older version as a new draft.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-li-6",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Granting policy: If a domain agent should maintain bindings itself, set its tool_policy.external_tool_write=true via update_agent (is_within: you can only grant what you carry yourself). Read visibility is controlled by external_tool_read (all/none; 'assigned' falls back to 'all' — external tools are a flat workspace catalog with no assignment). When in doubt: domain agents only read, writing stays with the builder.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-li-konv",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Conventions: The alias contract, the instructive boundary, the rebind pattern, and tool-ref rules are binding in the 'Agent Build Conventions' resource (External Tools section). It is linked as a lazy pointer and does NOT come along automatically — load it via fetch_resource before writing.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-h-anti",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Anti-Patterns", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-li-a1",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Using the product name as the alias ('todoist' instead of 'todo') — the alias won't meaningfully survive a tool swap. Wanting to change the alias afterward (it's immutable; if the alias is genuinely wrong: create a new binding, retire the old one, migrate the pills).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-li-a2",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Storing server URLs, credentials, API keys, or other secrets in usage_notes/fallback_note — the binding is purely instructive (ADR-0043 tier B); connection data lives in the agent runtime, never in Who2Be.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-li-a3",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Duplicating tool instructions as free text in playbooks/personas instead of setting a tool-ref pill (drift risk — exactly what this aggregate solves). Creating a NEW binding on a tool swap instead of rebinding (leaves orphaned pills and two competing aliases for one capability).", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-h-handoff",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Hand-Off", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-p-handoff",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "After writing, report: alias + display name, version status (draft/review/active), and the next step (review/activation — only promote yourself after explicit approval). Show where the binding is used or should be used (tool-ref pills), and whether domain agents need policy changes.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-h-feedback",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Feedback", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "pb-exttool-p-feedback",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "If you notice anything outdated or incorrect while reading existing bindings (e.g., dead tool identifiers after a server update), report it via submit_feedback (signal outdated/incorrect/unclear) instead of silently passing over it; report playbooks/resources you used via record_usage (applied/skipped/error).", "styles": {}}],
+    "children": []
+  }
+]
