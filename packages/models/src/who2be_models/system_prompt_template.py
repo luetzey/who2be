@@ -15,9 +15,9 @@ ist mit Migration `0030_blocknote_only.sql` entfallen.
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from who2be_models.locale import DEFAULT_LOCALE, ContentLocale
+from who2be_models.locale import DEFAULT_LOCALE, ContentLocale, validate_supported_locale
 from who2be_models.slug import SlugStr as SlugStr  # re-export (Bestands-Import-Pfad)
 from who2be_models.status import VersionStatus
 
@@ -52,6 +52,17 @@ class SystemPromptTemplateCreate(BaseModel):
     # (Default-Templates aus dem Seed nutzen feste Slugs).
     slug: SlugStr | None = None
     content: SystemPromptTemplateContent
+    # „Ein Element, eine Sprache" (Plan 2026-07-24): System-Prompt-Templates
+    # zogen unter ADR-0027 bewusst nicht mit (kein `locales`-Feld); jetzt
+    # ziehen sie nach. `None` bedeutet „Service setzt spaeter den Workspace-
+    # Default" (`workspace.content_locale`); ist der Wert gesetzt, muss er zu
+    # `SUPPORTED_LOCALES` gehoeren.
+    locale: ContentLocale | None = None
+
+    @field_validator("locale")
+    @classmethod
+    def _validate_locale(cls, value: str | None) -> str | None:
+        return None if value is None else validate_supported_locale(value)
 
 
 class SystemPromptTemplateUpdate(BaseModel):
@@ -61,6 +72,14 @@ class SystemPromptTemplateUpdate(BaseModel):
 
     name: str | None = Field(default=None, min_length=1, max_length=200)
     content: SystemPromptTemplateContent
+    # Sprachwechsel (Plan „Ein Element, eine Sprache"): `None` = Sprache
+    # bleibt unveraendert; gesetzt = neue Sprache fuer die Identitaets-Zeile.
+    locale: ContentLocale | None = None
+
+    @field_validator("locale")
+    @classmethod
+    def _validate_locale(cls, value: str | None) -> str | None:
+        return None if value is None else validate_supported_locale(value)
 
 
 class SystemPromptTemplateRead(BaseModel):
