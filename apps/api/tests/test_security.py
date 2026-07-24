@@ -96,6 +96,9 @@ class FakeTokenRepository:
     async def revoke(self, workspace_id: UUID, token_id: UUID) -> bool:
         raise NotImplementedError
 
+    async def revoke_by_owner(self, workspace_id: UUID, owner_id: UUID) -> int:
+        raise NotImplementedError
+
     async def touch_last_used(self, token_hash: str) -> None:
         self.touched.append(token_hash)
 

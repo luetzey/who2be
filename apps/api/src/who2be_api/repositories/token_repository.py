@@ -71,6 +71,8 @@ class TokenRepository(Protocol):
 
     async def revoke(self, workspace_id: UUID, token_id: UUID) -> bool: ...
 
+    async def revoke_by_owner(self, workspace_id: UUID, owner_id: UUID) -> int: ...
+
     async def touch_last_used(self, token_hash: str) -> None: ...
 
 
@@ -219,6 +221,21 @@ class PgTokenRepository:
             workspace_id,
         )
         return bool(result == "UPDATE 1")
+
+    async def revoke_by_owner(self, workspace_id: UUID, owner_id: UUID) -> int:
+        # Deprovisioning-Pfad (Member-Remove/Downgrade): widerruft ALLE aktiven
+        # Tokens eines Owners in diesem Workspace. Notwendig, weil der statische
+        # Token-Pfad (get_current_workspace) bewusst KEINEN Live-Membership-
+        # Lookup macht — die Revocation muss also aktiv gepusht werden (analog
+        # zum OAuth-Refresh-Kill in oauth_service.exchange_refresh). Liefert die
+        # Zahl der widerrufenen Tokens.
+        result = await self._pool.execute(
+            "UPDATE api_token SET revoked_at = now() "
+            "WHERE workspace_id = $1 AND owner_id = $2 AND revoked_at IS NULL",
+            workspace_id,
+            owner_id,
+        )
+        return int(result.split()[-1]) if result.startswith("UPDATE") else 0
 
     async def touch_last_used(self, token_hash: str) -> None:
         await self._pool.execute(

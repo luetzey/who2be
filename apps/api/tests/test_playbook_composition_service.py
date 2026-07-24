@@ -71,14 +71,16 @@ class FakePlaybookCompositionRepository:
     async def parent_belongs_to(self, workspace_id: UUID, parent_id: UUID) -> bool:
         return self._playbooks.get(parent_id) == workspace_id
 
-    async def list_children(self, parent_id: UUID, active_only: bool = False) -> list[PlaybookRead]:
+    async def list_children(
+        self, workspace_id: UUID, parent_id: UUID, active_only: bool = False
+    ) -> list[PlaybookRead]:
         self.last_active_only = active_only
         return [
             _playbook_read(cid, self._playbooks.get(cid, uuid4()))
             for cid in self.composition.get(parent_id, [])
         ]
 
-    async def list_parents(self, child_id: UUID) -> list[PlaybookRef]:
+    async def list_parents(self, workspace_id: UUID, child_id: UUID) -> list[PlaybookRef]:
         return [
             PlaybookRef(id=pid, name="Parent")
             for pid, children in self.composition.items()

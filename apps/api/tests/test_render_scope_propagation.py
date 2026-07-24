@@ -219,3 +219,59 @@ def test_fetch_agent_rendered_human_any_agent_ok() -> None:
 
     result = _run(fetch_agent_rendered(uuid4(), _human_ctx(), cast(Any, _FakeFetchRendered())))
     assert result is _FakeFetchRendered.sentinel
+
+
+# --- render_agent: agent-gebundener Token nur auf eigenen Agenten -------------
+# Sicherheits-Befund (HIGH): `/render` fehlte der Self-Only-Guard, den `/rendered`
+# hat — ein agent-gebundener Token konnte den voll expandierten System-Prompt
+# eines FREMDEN Agenten im selben Workspace abziehen (Persona-/Playbook-/
+# Resource-Inhalte ausserhalb des eigenen Read-Scopes).
+
+
+class _FakeRender:
+    sentinel = object()
+
+    async def render(self, _ws: UUID, _agent_id: UUID, _fmt: str) -> object:
+        return self.sentinel
+
+
+def test_render_agent_foreign_agent_404() -> None:
+    from who2be_api.routers.agents import render_agent
+
+    ctx = _agent_ctx()  # gebunden an ctx.agent_id
+    with pytest.raises(HTTPException) as exc:
+        _run(render_agent(uuid4(), ctx, cast(Any, _FakeRender())))
+    assert exc.value.status_code == 404
+
+
+def test_render_agent_own_agent_ok() -> None:
+    from who2be_api.routers.agents import render_agent
+
+    ctx = _agent_ctx()
+    assert ctx.agent_id is not None
+    result = _run(render_agent(ctx.agent_id, ctx, cast(Any, _FakeRender())))
+    assert result is _FakeRender.sentinel
+
+
+def test_render_agent_human_any_agent_ok() -> None:
+    from who2be_api.routers.agents import render_agent
+
+    result = _run(render_agent(uuid4(), _human_ctx(), cast(Any, _FakeRender())))
+    assert result is _FakeRender.sentinel
+
+
+def test_render_agent_read_none_forbidden() -> None:
+    from who2be_api.routers.agents import render_agent
+
+    ctx = WorkspaceContext(
+        workspace_id=uuid4(),
+        user_id=uuid4(),
+        role=WorkspaceRole.editor,
+        is_api_token=True,
+        agent_id=uuid4(),
+        tool_policy=AgentToolPolicy(agent_read=ReadScope.none),
+    )
+    assert ctx.agent_id is not None
+    with pytest.raises(HTTPException) as exc:
+        _run(render_agent(ctx.agent_id, ctx, cast(Any, _FakeRender())))
+    assert exc.value.status_code == 403

@@ -145,6 +145,9 @@ class _FakeTokenRepo:
         self.revoked.append(token_id)
         return True
 
+    async def revoke_by_owner(self, workspace_id: UUID, owner_id: UUID) -> int:  # pragma: no cover
+        return 0
+
     async def touch_last_used(self, token_hash: str) -> None:  # pragma: no cover
         return None
 

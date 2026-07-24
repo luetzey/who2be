@@ -15,6 +15,7 @@ from who2be_api.core.db import get_pool
 from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace, require_role
 from who2be_api.repositories.audit_log_repository import PgAuditLogRepository
+from who2be_api.repositories.token_repository import PgTokenRepository
 from who2be_api.repositories.workspace_member_repository import (
     PgWorkspaceMemberRepository,
 )
@@ -28,7 +29,8 @@ def get_member_service(
     pool: Annotated[asyncpg.Pool, Depends(get_pool)],
 ) -> WorkspaceMemberService:
     return WorkspaceMemberService(
-        PgWorkspaceMemberRepository(pool, audit_repo=PgAuditLogRepository())
+        PgWorkspaceMemberRepository(pool, audit_repo=PgAuditLogRepository()),
+        PgTokenRepository(pool),
     )
 
 

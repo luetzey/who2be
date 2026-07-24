@@ -151,6 +151,16 @@ async def render_agent(
     render_service: RenderService,
     output_format: Annotated[RenderFormat, Query(alias="format")] = "plain",
 ) -> AgentRenderResponse:
+    # `agent_read=none` => Tool aus (403). Confinement (Security-Review):
+    # identisch zu `fetch_agent_rendered` — ein agent-gebundener Token darf NUR
+    # seinen EIGENEN Agenten rendern. `render` expandiert den System-Prompt mit
+    # der Policy des ZIEL-Agenten; renderte ein `assigned`-Agent einen fremden
+    # (ggf. `all`-gescopten) Agenten, leakten dessen Persona-/Playbook-/Resource-
+    # Inhalte ausserhalb des eigenen Read-Scopes. Menschen/JWT (tool_policy is
+    # None) behalten die Workspace-weite Sicht (UI-Copy-Button).
+    agent_read_restrict(ctx)
+    if ctx.tool_policy is not None and agent_id != ctx.agent_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Agent nicht gefunden.")
     return await render_service.render(ctx.workspace_id, agent_id, output_format)
 
 

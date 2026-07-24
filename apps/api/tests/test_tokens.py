@@ -91,6 +91,28 @@ def _jwt(owner_id: UUID) -> str:
     )
 
 
+def _add_member(ws: UUID, user_id: UUID, role: str) -> None:
+    """Fuegt ein weiteres Mitglied direkt in workspace_member ein.
+
+    Damit das Entfernen/Herabstufen im Test nicht am Last-admin-Guard scheitert,
+    braucht der Workspace neben dem Owner ein zweites (Admin-)Mitglied.
+    """
+
+    async def _run() -> None:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            await conn.execute(
+                "INSERT INTO workspace_member (workspace_id, user_id, role) VALUES ($1, $2, $3)",
+                ws,
+                user_id,
+                role,
+            )
+        finally:
+            await conn.close()
+
+    asyncio.run(_run())
+
+
 @pytest.mark.integration
 def test_token_lifecycle_and_both_auth_paths(monkeypatch: pytest.MonkeyPatch) -> None:
     if not _db_reachable():
@@ -193,6 +215,86 @@ def test_agent_delete_cascades_tokens(monkeypatch: pytest.MonkeyPatch) -> None:
 
             # Token ist mit dem Agenten verschwunden → Auth schlägt fehl.
             assert client.get("/v1/me", headers=api_auth).status_code == 401
+    finally:
+        cleanup_workspaces([owner_id])
+
+
+@pytest.mark.integration
+def test_member_removal_revokes_their_tokens(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Deprovisioning: Wird ein Mitglied entfernt, werden dessen aktive Tokens
+    in diesem Workspace mit-widerrufen (sonst ueberlebte ein Ex-Admin mit
+    lebenden Credentials — der Token-Pfad prueft die Membership nicht live)."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner_id = fresh_user_id()
+    ws = setup_workspace(owner_id)
+    agent_id = str(_agent_in(ws))
+    # Zweites Admin-Mitglied B, damit das Entfernen nicht am Last-admin-Guard scheitert.
+    member_id = fresh_user_id()
+    _add_member(ws, member_id, "admin")
+    base = f"/v1/workspaces/{ws}/tokens"
+
+    try:
+        with TestClient(app) as client:
+            # B erstellt sich einen (agent-gebundenen) Token.
+            created = client.post(
+                base,
+                json={"name": "b-token", "agent_id": agent_id},
+                headers={"Authorization": f"Bearer {_jwt(member_id)}"},
+            )
+            assert created.status_code == 201
+            b_auth = {"Authorization": f"Bearer {created.json()['token']}"}
+            assert client.get("/v1/me", headers=b_auth).status_code == 200
+
+            # Owner (Admin) entfernt B → B's Token muss sofort ungueltig sein.
+            removed = client.delete(
+                f"/v1/workspaces/{ws}/members/{member_id}",
+                headers={"Authorization": f"Bearer {_jwt(owner_id)}"},
+            )
+            assert removed.status_code == 204
+            assert client.get("/v1/me", headers=b_auth).status_code == 401
+    finally:
+        cleanup_workspaces([owner_id])
+
+
+@pytest.mark.integration
+def test_member_downgrade_revokes_their_tokens(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Deprovisioning: Ein Rollenwechsel invalidiert die gepinnte Snapshot-Rolle
+    bestehender Tokens des Mitglieds — sie werden mit-widerrufen."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner_id = fresh_user_id()
+    ws = setup_workspace(owner_id)
+    agent_id = str(_agent_in(ws))
+    member_id = fresh_user_id()
+    _add_member(ws, member_id, "admin")
+    base = f"/v1/workspaces/{ws}/tokens"
+
+    try:
+        with TestClient(app) as client:
+            created = client.post(
+                base,
+                json={"name": "b-token", "agent_id": agent_id},
+                headers={"Authorization": f"Bearer {_jwt(member_id)}"},
+            )
+            assert created.status_code == 201
+            b_auth = {"Authorization": f"Bearer {created.json()['token']}"}
+            assert client.get("/v1/me", headers=b_auth).status_code == 200
+
+            # Owner stuft B admin→editor herab → B's Token wird mit-widerrufen.
+            patched = client.patch(
+                f"/v1/workspaces/{ws}/members/{member_id}",
+                json={"role": "editor"},
+                headers={"Authorization": f"Bearer {_jwt(owner_id)}"},
+            )
+            assert patched.status_code == 200
+            assert client.get("/v1/me", headers=b_auth).status_code == 401
     finally:
         cleanup_workspaces([owner_id])
 
