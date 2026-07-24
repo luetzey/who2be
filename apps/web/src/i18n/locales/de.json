@@ -211,7 +211,11 @@
       "countAria": "{{count}} Agents",
       "templateWithVersion": "{{name}} · v{{version}}",
       "playbookCount_one": "{{count}} Playbook",
-      "playbookCount_other": "{{count}} Playbooks"
+      "playbookCount_other": "{{count}} Playbooks",
+      "pendingMemories_one": "{{count}} Gedächtniseintrag zur Freigabe",
+      "pendingMemories_other": "{{count}} Gedächtniseinträge zur Freigabe",
+      "pendingMemoriesAria_one": "{{count}} offenen Gedächtniseintrag von {{name}} prüfen",
+      "pendingMemoriesAria_other": "{{count}} offene Gedächtniseinträge von {{name}} prüfen"
     },
     "form": {
       "identity": {

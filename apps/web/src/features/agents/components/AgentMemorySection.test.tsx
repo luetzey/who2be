@@ -67,13 +67,13 @@ function stubFetchRoutes(handlers: Record<string, (init?: RequestInit) => Respon
   return fetchMock
 }
 
-function renderSection() {
+function renderSection(entry = '/w/ws-1/agents/a1') {
   return render(
     <SessionContext.Provider
       value={{ session, me, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
     >
       <AuthTokenProvider>
-        <MemoryRouter initialEntries={['/w/ws-1/agents/a1']}>
+        <MemoryRouter initialEntries={[entry]}>
           <Routes>
             <Route
               path="/w/:workspaceId/agents/:id"
@@ -270,5 +270,44 @@ describe('AgentMemorySection', () => {
     await waitFor(() => {
       expect(deleteCalls).toBe(1)
     })
+  })
+
+  it('Deep-Link #memory scrollt zur Sektion und hebt sie kurz hervor', async () => {
+    // jsdom implementiert scrollIntoView nicht — Spy stubben (Muster wie
+    // WorkspaceSwitcher.test).
+    const scrollSpy = vi.fn()
+    Object.defineProperty(window.HTMLElement.prototype, 'scrollIntoView', {
+      value: scrollSpy,
+      writable: true,
+      configurable: true,
+    })
+    stubFetchRoutes({
+      [`GET ${WS_PREFIX}/agents/a1/memories`]: () => jsonResponse([]),
+    })
+
+    renderSection('/w/ws-1/agents/a1#memory')
+
+    const section = screen.getByTestId('memory-section')
+    expect(section).toHaveClass('ring-2')
+    await waitFor(() => {
+      expect(scrollSpy).toHaveBeenCalled()
+    })
+  })
+
+  it('ohne #memory-Hash kein Highlight und kein Scroll', async () => {
+    const scrollSpy = vi.fn()
+    Object.defineProperty(window.HTMLElement.prototype, 'scrollIntoView', {
+      value: scrollSpy,
+      writable: true,
+      configurable: true,
+    })
+    stubFetchRoutes({
+      [`GET ${WS_PREFIX}/agents/a1/memories`]: () => jsonResponse([]),
+    })
+
+    renderSection()
+
+    expect(screen.getByTestId('memory-section')).not.toHaveClass('ring-2')
+    expect(scrollSpy).not.toHaveBeenCalled()
   })
 })

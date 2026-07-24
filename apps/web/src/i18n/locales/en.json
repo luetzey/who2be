@@ -211,7 +211,11 @@
       "countAria": "{{count}} agents",
       "templateWithVersion": "{{name}} · v{{version}}",
       "playbookCount_one": "{{count}} playbook",
-      "playbookCount_other": "{{count}} playbooks"
+      "playbookCount_other": "{{count}} playbooks",
+      "pendingMemories_one": "{{count}} memory entry awaiting approval",
+      "pendingMemories_other": "{{count}} memory entries awaiting approval",
+      "pendingMemoriesAria_one": "Review {{count}} pending memory entry for {{name}}",
+      "pendingMemoriesAria_other": "Review {{count}} pending memory entries for {{name}}"
     },
     "form": {
       "identity": {

@@ -1,6 +1,6 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-07-22_
+_Stand: 2026-07-24_
 
 Ist-Zustands-Snapshot, kein Changelog. Die Umsetzungs-Historie (per-Run-Details,
 Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
@@ -32,6 +32,11 @@ Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
   Templates in Review (Link → `/system-prompts?status=review`); KPI-Felder
   `pending_memories`/`pending_system_prompts` (Plan
   `.claude/plan/2026-07-22-1650_dashboard-attention-memories-system-prompts.md`).
+- Agenten-Übersicht zeigt pro Agent offene Gedächtnis-Vorschläge:
+  List-Enrichment `pending_memory_count` (Batch-Aggregat, kein N+1) +
+  klickbarer Aufmerksamkeits-Pill → Deep-Link `#memory` scrollt zur
+  Gedächtnis-Sektion der Detail-Seite und hebt sie kurz hervor (Plan
+  `.claude/plan/2026-07-24-1623_agents-pending-memory-badge.md`).
 
 ### MCP + OAuth
 

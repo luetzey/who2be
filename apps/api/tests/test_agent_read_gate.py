@@ -130,6 +130,7 @@ def test_list_enriches_card_pills() -> None:
         template_name="Support-Template",
         template_version=2,
         playbook_count=3,
+        pending_memory_count=2,
     )
     service = AgentService(repo)  # type: ignore[arg-type]
     items, _cursor = asyncio.run(service.list_all(_ctx(None), limit=50, cursor=None))
@@ -138,9 +139,11 @@ def test_list_enriches_card_pills() -> None:
     assert by_id[_OWN_ID].template_name == "Support-Template"
     assert by_id[_OWN_ID].template_version == 2
     assert by_id[_OWN_ID].playbook_count == 3
+    assert by_id[_OWN_ID].pending_memory_count == 2
     # Ohne Meta-Eintrag bleibt der fremde Agent auf den Defaults.
     assert by_id[_OTHER_ID].persona_name is None
     assert by_id[_OTHER_ID].playbook_count == 0
+    assert by_id[_OTHER_ID].pending_memory_count == 0
 
 
 def test_scope_none_blocks_with_403() -> None:

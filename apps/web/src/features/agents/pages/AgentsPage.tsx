@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   Bot,
+  Brain,
   FileText,
   GitBranch,
   Plus,
@@ -319,6 +320,30 @@ export function AgentsPage() {
                             <MetaPill icon={GitBranch} iconTone="playbook">
                               {t('card.playbookCount', { count: agent.playbook_count ?? 0 })}
                             </MetaPill>
+                            {(agent.pending_memory_count ?? 0) > 0 ? (
+                              // Aufmerksamkeits-Pill (ADR-0044): liegt via z-10
+                              // ueber dem Stretched-Link der Karte und springt
+                              // direkt in die Gedaechtnis-Sektion des Agenten.
+                              <Link
+                                to={wsPath(`/agents/${agent.id}#memory`)}
+                                className="relative z-10 rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                aria-label={t('card.pendingMemoriesAria', {
+                                  count: agent.pending_memory_count,
+                                  name: agent.name,
+                                })}
+                                data-testid="pending-memories-pill"
+                              >
+                                <MetaPill
+                                  icon={Brain}
+                                  tone="brand"
+                                  className="transition-colors duration-[var(--duration-fast)] hover:bg-brand/20"
+                                >
+                                  {t('card.pendingMemories', {
+                                    count: agent.pending_memory_count,
+                                  })}
+                                </MetaPill>
+                              </Link>
+                            ) : null}
                           </>
                         }
                         actions={

@@ -28,13 +28,16 @@ class AgentListMeta:
     gejoint. `persona_name`/`template_name` sind None, solange kein Persona/
     Template verknuepft ist; `template_version` traegt die aktive Template-
     Version (None ohne aktive Version). `playbook_count` zaehlt die Playbooks
-    der verknuepften Persona (`persona_playbook`).
+    der verknuepften Persona (`persona_playbook`); `pending_memory_count` die
+    Gedaechtnis-Vorschlaege in der Freigabe-Schleuse (`agent_memory.status=
+    'pending'`, ADR-0044).
     """
 
     persona_name: str | None
     template_name: str | None
     template_version: int | None
     playbook_count: int
+    pending_memory_count: int
 
 
 # `persona_active` wird per EXISTS-Subquery auf `persona_version.status='active'`
@@ -324,7 +327,8 @@ class PgAgentRepository:
         rows = await self._pool.fetch(
             "SELECT a.id AS agent_id, p.name AS persona_name, "
             "       t.name AS template_name, tv.version AS template_version, "
-            "       COALESCE(pc.cnt, 0)::int AS playbook_count "
+            "       COALESCE(pc.cnt, 0)::int AS playbook_count, "
+            "       COALESCE(pm.cnt, 0)::int AS pending_memory_count "
             "FROM agent a "
             "LEFT JOIN persona p ON p.id = a.persona_id "
             "LEFT JOIN system_prompt_template t ON t.id = a.system_prompt_template_id "
@@ -334,6 +338,10 @@ class PgAgentRepository:
             "    SELECT persona_id, COUNT(*) AS cnt "
             "    FROM persona_playbook GROUP BY persona_id "
             ") pc ON pc.persona_id = a.persona_id "
+            "LEFT JOIN ( "
+            "    SELECT agent_id, COUNT(*) AS cnt "
+            "    FROM agent_memory WHERE status = 'pending' GROUP BY agent_id "
+            ") pm ON pm.agent_id = a.id "
             "WHERE a.workspace_id = $1 AND a.id = ANY($2)",
             workspace_id,
             agent_ids,
@@ -344,6 +352,7 @@ class PgAgentRepository:
                 template_name=row["template_name"],
                 template_version=row["template_version"],
                 playbook_count=row["playbook_count"],
+                pending_memory_count=row["pending_memory_count"],
             )
             for row in rows
         }

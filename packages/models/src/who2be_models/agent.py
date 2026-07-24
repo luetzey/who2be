@@ -123,11 +123,15 @@ class AgentRead(BaseModel):
     # Detail-Sicht die Refs ohnehin einzeln aufloest. `persona_name`/
     # `template_name` sind None, solange kein Persona/Template verknuepft ist;
     # `template_version` traegt die aktive Template-Version (None ohne aktive
-    # Version). `playbook_count` zaehlt die Playbooks der verknuepften Persona.
+    # Version). `playbook_count` zaehlt die Playbooks der verknuepften Persona;
+    # `pending_memory_count` die Gedaechtnis-Vorschlaege in der Freigabe-
+    # Schleuse (`agent_memory.status='pending'`, ADR-0044) — Grundlage fuer den
+    # Aufmerksamkeits-Pill der Agenten-Uebersicht.
     persona_name: str | None = None
     template_name: str | None = None
     template_version: int | None = None
     playbook_count: int = 0
+    pending_memory_count: int = 0
     created_at: datetime
     updated_at: datetime
 
