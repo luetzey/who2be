@@ -5,7 +5,7 @@
 - Kontext: Coding-Standards-Remediation — Plan
   `.claude/plan/2026-06-05-1930_coding-standards-audit-remediation.md` (Welle 1,
   WP-1.1/1.2). Interner Standard *OSS-License-Compliance* (Coding-Standards).
-- Bezug: `LICENSE.md` (FSL-1.1-Apache-2.0), ADR-0029 (Build-Isolation Billing),
+- Bezug: `LICENSE` (FSL-1.1-Apache-2.0), ADR-0029 (Build-Isolation Billing),
   CI-`audit`-Job (Supply-Chain), Deployment-Standards (Distribution Cloud + On-Prem)
 
 ## Kontext

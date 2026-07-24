@@ -93,6 +93,28 @@ Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
 - Standards-Review 2026-07-08: WP-1–8 umgesetzt
   (`docs/standards-review-2026-07-08.md` §3); heutiger Lauf s. u.
 
+### Release-Vorbereitung / Pre-Publish-Nachweis (2026-07-22)
+
+- **Release-Audit** (Repo-Publish-Flow, Issues #338–#341): Ergebnis „noch
+  nicht release-fertig" — Blocker waren npm-audit, fehlende NOTICES und der
+  tote CI-Nachweis; Wellen 1–2 umgesetzt (dieser Run), Welle 3 (#341) wartet
+  auf CI-Reaktivierung.
+- **Secrets-Gate bestanden:** kein Secret im Tree (nur Dev-/Test-Platzhalter
+  und `${VAR}`-Injektionen); History sauber — nie `.env`/`.pem`/`.key`
+  committet, gitleaks + 8 Pattern-Scans über alle Commits negativ
+  (`.claude/plan/2026-05-27-2028_public-switch-github-repo.md`); **kein
+  History-Rewrite nötig**.
+- **npm-audit-Triage:** 3 CVEs (tar critical, undici + brace-expansion high)
+  waren ausschließlich Dev-Tooling (eslint-Kette, jsdom, license-checker/
+  node-gyp); `npm audit --omit=dev` war durchgehend clean → kein
+  Runtime-Risiko. Per `npm audit fix` (nur Lockfile, 12 transitive Pakete)
+  geschlossen; `npm audit` jetzt 0 Findings, Web-DoD danach grün
+  (917 Tests, Coverage Statements 86,96 %/Branches 81,14 %).
+- **Publish-Artefakte:** CODE_OF_CONDUCT.md (Contributor Covenant 2.1),
+  ROADMAP.md, CHANGELOG.md, README-Ausbau, `LICENSE.md → LICENSE`,
+  `THIRD-PARTY-LICENSES.md` + Generator
+  (`scripts/gen_third_party_notices.sh`, OSS-1/ADR-0033).
+
 ## In Arbeit
 
 - **Standards-Review 2026-07-20** (`docs/standards-review-2026-07-20.md`,
@@ -114,6 +136,9 @@ Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
   On-Prem-RLS, Cloud-Image-Deploy, LIC-1-Mechanik, coverage.all/E2E/CLA).
 
 ## Nächste Schritte (nicht-Code, manuell beim Owner)
+
+Als Owner-Checkliste getrackt in Issue #338 (Welle 3 der Release-Mechanik
+in #341):
 
 1. Actions-Billing klären (entsperrt das CI-Gate) **oder** direkt auf Public
    flippen.
