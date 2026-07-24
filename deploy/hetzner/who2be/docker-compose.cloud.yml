@@ -62,8 +62,10 @@ services:
       # Rate-Limit-Storage auf Redis (Sliding-Window teilt sich ueber Prozesse).
       RATE_LIMIT_STORAGE_URI: redis://redis:6379
       # Billing (Mollie). Leer ⇒ Checkout/Webhook 503 — fuer einen Solo-Test
-      # optional: das Pro-Entitlement laesst sich auch per CLI setzen
-      # (who2be-set-entitlement, siehe RUNBOOK). Live-Key erst bei echten Kunden.
+      # optional: das Pro-Entitlement laesst sich ohne Mollie ueber den
+      # Override-Endpoint (POST /v1/workspaces/{ws}/billing/override) oder per
+      # Direkt-SQL (org_entitlement, source='cloud') setzen — siehe
+      # docs/cloud-prod-smoke.md. Live-Key erst bei echten Kunden.
       MOLLIE_API_KEY: ${MOLLIE_API_KEY:-}
       MOLLIE_WEBHOOK_SECRET: ${MOLLIE_WEBHOOK_SECRET:-}
       # Oeffentliche https-Webhook-URL. Mollie ruft sie nach Zahlung — zeigt auf
