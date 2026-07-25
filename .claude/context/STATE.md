@@ -1,6 +1,6 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-07-24_
+_Stand: 2026-07-25_
 
 Ist-Zustands-Snapshot, kein Changelog. Die Umsetzungs-Historie (per-Run-Details,
 Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
@@ -37,6 +37,19 @@ Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
   klickbarer Aufmerksamkeits-Pill → Deep-Link `#memory` scrollt zur
   Gedächtnis-Sektion der Detail-Seite und hebt sie kurz hervor (Plan
   `.claude/plan/2026-07-24-1623_agents-pending-memory-badge.md`).
+- **Sprache als durchgängiges Konzept (ADR-0045, ersetzt UI-Teil von
+  ADR-0027; PR #357, Issues #348–#356):** ein Element = eine Sprache
+  (`locale` auf der Identitäts-Zeile aller 5 Content-Typen, Migration 0069;
+  System-Prompts erstmals mit Sprachwahl), Reads locale-agnostisch,
+  `?locale=` als Listenfilter, `LocaleBadge` + Sprachfilter in der Web-UI,
+  Workspace-`content_locale` bei Anlage (vorbelegt aus UI-Sprache,
+  Personal-Workspace aus `preferred_locale`), automatische
+  Output-Sprachanweisung im Agent-Renderer (`services/agent_language.py`),
+  MCP-Tools mit locale-Metadatum + Builder-Sprach-Tagging, komplettes
+  EN-Rollout-Paket (`repositories/builder_content.py` + `repositories/en/`,
+  14 Sidecars) mit locale-bewusstem Seeding/Sync
+  (`BUILDER_CONTENT_VERSION = 12`). Plan
+  `.claude/plan/2026-07-24-1900_sprache-vertiefen-ein-element-eine-sprache.md`.
 
 ### MCP + OAuth
 

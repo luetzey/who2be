@@ -1,6 +1,11 @@
 # ADR-0027 — Content-i18n: locale pro Version
 
-- Status: **Akzeptiert** (User-Freigabe 2026-06-04)
+- Status: **Teilweise ersetzt durch ADR-0045** (2026-07-24): der UI-/
+  Selektions-Teil (per-Element-Sprachauswahl, per-Sprache-Versionstracks,
+  `?locale=`-Varianten-Selektor) ist aufgehoben — Sprache ist seither ein
+  einzelnes Entity-Attribut („ein Element, eine Sprache"). Die Schema-Teile
+  (Migration 0042, `*_version.locale`) bleiben als Historien-Spalte bestehen.
+  Ursprünglich: **Akzeptiert** (User-Freigabe 2026-06-04)
 - Datum: 2026-06-04
 - Kontext: Who2Be Welle 2, Stream D2 (i18n Content). Plan
   `.claude/plan/2026-06-04-1000_ux-fixes-i18n-embedding.md` (§D2) +

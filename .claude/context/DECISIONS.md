@@ -380,3 +380,18 @@ bleiben)._
 - **Verworfen:** MCP-Tools für Memory-Triage/-Guard (bewusst UI-only — die
   Pending-Schleuse ist die Human-in-the-loop-Grenze, ADR-0044);
   `memory_mode='auto'` für den Builder (Kurator-Prinzip).
+
+## 2026-07-24 — Ein Element, eine Sprache (ADR-0045, ersetzt UI-Teil von ADR-0027)
+- **Entscheidung:** Sprache wird vertieft statt entfernt: `locale` wandert auf
+  die Identitäts-Zeile (Migration 0069), Reads werden locale-agnostisch,
+  `?locale=` ist nur noch Listenfilter, Workspace-`content_locale` steuert
+  Default + Rollout-Sprache (Packs in `builder_content.py`, EN-Sidecars unter
+  `repositories/en/`), der Renderer injiziert die Output-Sprachanweisung
+  automatisch, MCP-Writes taggen die Sprache. `UNIQUE(entity_id, locale,
+  version)` bleibt bewusst bestehen (Legacy-Multi-Track), dafür `next_version`
+  global + Read-Tie-Break auf die Entity-Sprache.
+- **Verworfen:** Default-Track-Trick (alles bleibt 'de', Sprache wählt nur
+  Seed-Bodies — Sprache wäre nicht echt im Datenmodell); Multi-Track-UI
+  sichtbar machen (genau die per-Element-Mehrsprachigkeit, die nicht gewollt
+  ist); Komplett-Entfernung des Sprach-Features (ursprünglicher Anstoß, vom
+  User revidiert).
