@@ -102,6 +102,73 @@
     "children": []
   },
   {
+    "id": "res-conv-h-sprache",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Sprache", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-sprache-1",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Ein Element = eine Sprache: ", "styles": {"bold": true}},
+      {"type": "text", "text": "locale ist ein Attribut des Elements, keine Rendering-Option — es gibt keine parallelen Sprachvarianten desselben Elements. Eine Uebersetzung ist ein eigenes Element, kein Sprach-Flag am bestehenden.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-sprache-2",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Default = Workspace-Sprache: ", "styles": {"bold": true}},
+      {"type": "text", "text": "locale beim Anlegen weglassen. Nur explizit setzen, wenn das Element bewusst von der Workspace-Sprache abweichen soll — z. B. eine EN-Persona in einem DE-Workspace.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-sprache-3",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Inhalt in der Elementsprache verfassen: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Name, Description, Body, Trigger UND Tags durchgaengig in der Sprache des Elements — keine Sprachmischung innerhalb eines Elements.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-sprache-4",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Sprachwechsel ueber update_*: ", "styles": {"bold": true}},
+      {"type": "text", "text": "ein Sprachwechsel laeuft ueber update_* mit gesetztem locale (Identitaets-Attribut der Entity); die Versions-Historie behaelt ihre alten locale-Werte unangetastet. Es gibt keinen separaten locale-Parameter fuer die Auswahl mehr (fruehere Variantenwahl, ADR-0027 — ersetzt durch ADR-0045).", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-sprache-5",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Sprache ablesen, nicht raten: ", "styles": {"bold": true}},
+      {"type": "text", "text": "die Sprache eines vorhandenen Elements steht im locale-Feld jeder Read-Antwort (get_persona, fetch_playbook, list_*, search, ...) — dort nachsehen statt anzunehmen.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-sprache-6",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Erlaubte Werte: ", "styles": {"bold": true}},
+      {"type": "text", "text": "de und en (Set SUPPORTED_LOCALES); jeder andere Wert wird mit 422 abgelehnt.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
     "id": "res-conv-h-modi",
     "type": "heading",
     "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
