@@ -374,7 +374,12 @@ _MANAGED_TEMPLATE_SLUGS = (_AGENT_BUILDER_TEMPLATE_SLUG, _AGENT_BUILDER_LITE_TEM
 # Beispiele). WICHTIG: Der Stempel ist sprachuebergreifend — Bump bei jeder
 # Content-Aenderung in IRGENDEINER Sprache (DE ODER EN), sonst verteilt der
 # Sync die geaenderte Sprache nie.
-BUILDER_CONTENT_VERSION = 12
+# v13: Sprach-Wissen des Builders nachgezogen (ADR-0045-Nachzug, Issue #360
+# WP-A bis WP-D) — Sprach-Abschnitt in den Agent-Bau-Konventionen, Sprache im
+# Create-/Vorschlags-Schritt der Anlege-Playbooks (Playbook/Agent/External
+# Tool), Sprach-Konsistenz als Pruefpunkt im Drift-Check, Sprach-Aspekt in
+# der Builder-Persona-Erlaubt-Liste — DE + EN.
+BUILDER_CONTENT_VERSION = 13
 
 
 def _builder_persona_content(pack: ContentPack) -> dict[str, object]:
