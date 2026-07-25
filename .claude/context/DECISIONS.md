@@ -395,3 +395,108 @@ bleiben)._
   sichtbar machen (genau die per-Element-Mehrsprachigkeit, die nicht gewollt
   ist); Komplett-Entfernung des Sprach-Features (ursprünglicher Anstoß, vom
   User revidiert).
+
+## 2026-07-25 — Semantische Suche & Passage-Retrieval (ADR-0046, Welle 1)
+- **Entscheidung:** Chunk-basiertes Retrieval als Fundament, Vektor-Semantik
+  additiv darauf (ADR-0046). Löst die als „Stufe B" offen gelassenen
+  Folge-Verweise aus ADR-0037 (§35-38) **und** ADR-0044 (§70-71) gemeinsam ein.
+  Neue Tabelle `content_chunk` (Migration 0070) hält die aktive Version in
+  Passagen, geschnitten an den Heading-Blöcken — `block_id` ist damit exakt der
+  bestehende Anker aus ADR-0021, es entsteht keine zweite Ankersprache. Das
+  **ersetzt** die in ADR-0037 §53-54 zugesagten, nie angelegten
+  Per-Tabelle-`tsvector`-Spalten: eine Textebene statt vier, und sie trägt
+  später den Vektor.
+- **FTS-Config pro Sprache** (Abweichung von 0066): seit ADR-0045 ist jedes
+  Element einsprachig, also stemmt `'german'`/`'english'` sinnvoll. Belegt:
+  „Reklamationen" → Stamm `reklamation`, Singular-Query trifft; mit `'simple'`
+  unmöglich. Memory bleibt bewusst bei `'simple'` (pro Zeile gemischtsprachig).
+- **Zwei Tools, keine Zusammenlegung:** `search` beantwortet „welches ELEMENT",
+  `search_content` „welche STELLE". Kuratierte Inhalte und (später) Memory
+  bleiben getrennte Verträge — unterschiedliche Vertrauensgrade, die Provenienz
+  eines Treffers muss für das Modell ablesbar bleiben.
+- **Zwei Fehler in der bestehenden Suche behoben** (beide durch neue Tests
+  reproduziert, 6 rot gegen den Altstand): der Read-Scope wurde hinter dem
+  `LIMIT` nachgefiltert statt als Prädikat in die Query zu gehen (ADR-0037 §47
+  forderte „vor dem Ranking") — ein `assigned`-Agent bekam `[]`, sobald seine
+  Treffer hinter den globalen Top-k lagen. Und die Scope-Mengen wurden für ALLE
+  Typen geholt, auch für schon ausgeschlossene: ein Agent mit
+  `playbook_read=none` bekam auf eine reine Persona-Suche ein 403 statt seiner
+  Treffer. Das Scoping liegt jetzt als Single-Source in
+  `agent_scope.readable_content_scope`.
+- **Verworfen:** Memory in `content_chunk` mitführen (abgeleitet+regenerierbar
+  vs. laufzeit-geschrieben+kuratiert — verschiedene Lebenszyklen); externer
+  Embedding-Provider (bricht das On-Prem-„kein Phone-Home"-Versprechen, bei
+  persönlichen Memories nicht verhandelbar); ANN-Index in v1 (beide Korpora zu
+  klein, Brute-Force ist schneller als der Indexaufbau sich rentiert);
+  Backfill als SQL-Migration (der Schnitt lebt in Python, eine Migration müsste
+  ihn duplizieren) — stattdessen CLI `who2be-chunk-backfill`.
+- **Offen (Welle 2/3):** pgvector-Infrastruktur, `EmbeddingPort` als optionale
+  Dep-Gruppe, Hybrid-Ranking, Memory-Semantik. Die beiden Lücken sind als
+  ausführbare Tests festgehalten (`test_memory_retrieval_baseline.py`:
+  Paraphrase → Trigram-Similarity 0.14, cross-lingual → 0.03, beide unter der
+  Schwelle 0.3) — Welle 3 muss diese Tests umdrehen.
+
+## 2026-07-25 — ADR-0046 Welle 2: Vektor-Semantik additiv
+- **Entscheidung:** `content_vector vector(384)` auf `content_chunk` (Migration
+  0071) plus Hybrid-Ranking per Reciprocal Rank Fusion (K=60) und ein
+  `mode`-Parameter (`auto|text|semantic|hybrid`) — der in ADR-0037 §35-38
+  zugesagte Schalter. `auto` nimmt Semantik, wenn sie da ist, sonst Volltext;
+  der Tool-Vertrag ändert sich dadurch nicht.
+- **`EmbeddingPort`** als hexagonaler Port (Vorbild `build_entitlement_port`),
+  lokaler `fastembed`-Adapter mit `paraphrase-multilingual-MiniLM-L12-v2`
+  (384 dim, Apache-2.0, ~0,22 GB) in der optionalen Dep-Gruppe `embeddings`.
+  Der Kern importiert `fastembed` nie statisch. Gerechnet wird lokal — kein
+  Text verlässt das Deployment (On-Prem-Versprechen).
+- **Migration 0071 ist fail-soft** — die wichtigste Korrektur gegenüber dem
+  ursprünglichen Plan: `CREATE EXTENSION vector` scheitert hart auf einem
+  Postgres ohne pgvector, also genau auf einer selbst gehosteten On-Prem-
+  Instanz. Für ein rein additives Feature darf das die Migrationskette nicht
+  abbrechen. Fehlt die Extension, entsteht die Spalte nicht;
+  `content_chunk_repository.vector_supported` prüft ihre Existenz einmal pro
+  Prozess, und alle Pfade bleiben dann lexikalisch.
+- **Ähnlichkeitsschranke** `_MIN_VECTOR_SIMILARITY` (Cosinus 0.40) statt reinem
+  Top-k: ohne Schwelle liefert eine Vektor-Suche IMMER k Treffer, auch zu einer
+  völlig unpassenden Frage — das widerspräche der Tool-Anweisung „findest du
+  nichts, sag das offen".
+- **Verworfen:** asyncpg-Codec-freier Ansatz mit `::vector`-Casts im SQL (hängt
+  am `search_path` und bricht bei Supabase, wo die Extension in `extensions`
+  liegt) — stattdessen ein Codec mit dynamischer Schema-Auflösung in
+  `core/db.init_connection`. Ebenfalls verworfen: einen ungenutzten
+  Query-Parameter mitzubinden (Postgres kann seinen Typ dann nicht ableiten) —
+  die Platzhalter werden jetzt dynamisch nummeriert.
+- **Offen:** `_MIN_VECTOR_SIMILARITY` ist gegen das reale Modell **nicht
+  kalibriert**. Der Modell-Download (huggingface.co) ist in der Entwicklungs-
+  umgebung per Netz-Policy gesperrt; die Retrieval-Mechanik ist deshalb gegen
+  deterministische Test-Vektoren mit bekannter Geometrie belegt, die
+  Modell-Qualität nicht.
+
+## 2026-07-25 — ADR-0046 Welle 3: Memory-Semantik
+- **Entscheidung:** `content_vector vector(384)` auf `agent_memory`
+  (Migration 0072, fail-soft wie 0071), und `search_active` von der
+  lexikografischen `ORDER BY`-Kaskade auf **RRF-Fusion über vier Zweige**
+  (FTS, ILIKE, Trigram, Vektor) umgebaut, `importance` als Tiebreak. Die
+  Kaskade ließ den ersten Term dominieren — ein perfekter Vektor-Treffer wäre
+  hinter jedem beliebigen FTS-Treffer gelandet.
+- **Kein Chunking, kein ANN-Index:** `fact` ist auf 300 Zeichen begrenzt (ein
+  Vektor pro Zeile), und `MEMORY_MAX_PER_AGENT` = 500 deckelt hart. Ein
+  sequentieller Scan über höchstens 500 vorgefilterte Zeilen schlägt jeden
+  ANN-Index — und wäre exakt statt approximativ.
+- **Zwei Schwellen mit unterschiedlicher Logik:** Suche `0.45`, Dedup `0.92`.
+  Die Asymmetrie folgt den Fehlerkosten — ein falsch positiver Dedup verwirft
+  einen gültigen Fakt dauerhaft (409), ein falsch negativer kostet nur einen
+  von 500 Listenplätzen.
+- **Best-effort im Laufzeit-Pfad:** `save_memory` ist ein rate-limitierter
+  Agenten-Call, kein Builder-Vorgang. Ein langsames oder kaputtes Modell darf
+  ihn nie scheitern lassen; ohne Vektor greift weiterhin der Trigram-Dedup, und
+  `who2be-retrieval-backfill` holt nach.
+- **Der MCP-Docstring ist eingelöst.** Er versprach dem Modell seit ADR-0044
+  „durchsucht dein Langzeitgedächtnis … semantisch", implementiert waren
+  FTS + ILIKE + Trigram. Jetzt stimmt es — und der Docstring sagt zusätzlich,
+  was ohne aktivierte Semantik gilt.
+- **Verworfen:** `ilike` als CTE-Name (reserviertes Postgres-Keyword);
+  ein zweiter Backfill-CLI für Memories — stattdessen deckt
+  `who2be-retrieval-backfill` (umbenannt von `who2be-chunk-backfill`) beide
+  Vektor-Korpora ab.
+- **Offen bleibt** die Kalibrierung beider Schwellen gegen das reale Modell —
+  huggingface.co ist per Netz-Policy gesperrt, die Retrieval-Mechanik ist gegen
+  deterministische Test-Vektoren belegt, die Modell-Qualität nicht.

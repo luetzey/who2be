@@ -146,7 +146,22 @@ _TOOLS: list[_ToolDoc] = [
             "Inhaltliche Volltext-Suche ueber Personae/Playbooks/Resources "
             "(rangsortiert). Nutze das, um relevante Inhalte zu FINDEN, statt "
             "ganze Kataloge zu laden — danach gezielt via fetch_* nachladen. "
-            "`types` optional einschraenken, `limit` <= 50."
+            "`types` optional einschraenken, `limit` <= 50. Willst du eine "
+            "ANTWORT statt eines Elements, nimm search_content."
+        ),
+    ),
+    _ToolDoc(
+        signature="search_content(query, types?, limit?)",
+        tool_names=("search_content",),
+        read_domain="search",
+        description=(
+            "Liefert die passende STELLE aus deinen Inhalten statt ganzer "
+            "Elemente. Nutze das, wenn du eine inhaltliche Frage beantworten "
+            "willst und KEIN Trigger ein Playbook erzwingt — es ist der "
+            "guenstigste Weg an dein Wissen. Jeder Treffer traegt den Text der "
+            "Passage plus `entity_id`/`block_id` zum Zitieren. Reicht die "
+            "Passage, brauchst du kein fetch_* mehr. Findest du nichts, sag "
+            "das offen, statt zu raten."
         ),
     ),
     _ToolDoc(

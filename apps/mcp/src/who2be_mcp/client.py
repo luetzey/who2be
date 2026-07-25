@@ -20,6 +20,8 @@ from who2be_models import (
     AgentRead,
     AgentUpdate,
     AgentWithRenderedPrompt,
+    ChunkType,
+    ContentChunkHit,
     ExternalToolCreate,
     ExternalToolRead,
     ExternalToolUpdate,
@@ -51,6 +53,7 @@ from who2be_models import (
     ResourceUsage,
     ResourceVersionRead,
     SearchHit,
+    SearchMode,
     SearchType,
     SubResourceLinkSet,
     SubResourceRead,
@@ -887,3 +890,12 @@ class ApiClient:
             params["types"] = ",".join(types)
         data = await self._get(f"{self._workspace_prefix}/search", params=params)
         return [SearchHit.model_validate(item) for item in data]
+
+    async def search_content(
+        self, query: str, types: list[ChunkType] | None, limit: int, mode: SearchMode
+    ) -> list[ContentChunkHit]:
+        params: dict[str, str] = {"q": query, "limit": str(limit), "mode": mode.value}
+        if types:
+            params["types"] = ",".join(types)
+        data = await self._get(f"{self._workspace_prefix}/search/content", params=params)
+        return [ContentChunkHit.model_validate(item) for item in data]

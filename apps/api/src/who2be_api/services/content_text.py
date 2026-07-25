@@ -41,28 +41,44 @@ def _inline_with_pills(inline: dict[str, object]) -> str:
     return ""
 
 
-def blocknote_body_text(body: str) -> str:
-    """Serialisiert einen stringifizierten BlockNote-Body zu Klartext.
+def parse_blocknote_blocks(body: str) -> tuple[list[dict[str, Any]] | None, str]:
+    """Zerlegt einen stringifizierten BlockNote-Body in seine Block-Liste.
 
     Akzeptiert die beiden BlockNote-JSON-Shapes (Top-Level-Array bzw.
-    `{"content": [...]}`-Wrapper, analog `render_template_body`). Kein
-    gueltiges JSON (Alt-Bestand/Plain-Text) → Rohwert getrimmt zurueck.
+    `{"content": [...]}`-Wrapper, analog `render_template_body`).
+
+    Liefert `(blocks, raw)`: `blocks` ist `None`, wenn der Body kein
+    verwertbares BlockNote-Dokument ist (leer, kaputtes JSON aus Alt-Bestand,
+    Plain-Text oder Skalar-JSON) — dann traegt `raw` den getrimmten Rohwert,
+    den die Aufrufer als Klartext behandeln. Single-Source fuer alle Stellen,
+    die den Body strukturell brauchen (Diff-Serialisierung, Chunking).
     """
     stripped = body.strip()
     if not stripped:
-        return ""
+        return None, ""
     try:
         parsed: Any = json.loads(stripped)
     except json.JSONDecodeError:
-        return stripped
+        return None, stripped
     if isinstance(parsed, list):
-        blocks: list[Any] = parsed
-    elif isinstance(parsed, dict):
+        return [b for b in parsed if isinstance(b, dict)], stripped
+    if isinstance(parsed, dict):
         nested = parsed.get("content", [])
         blocks = nested if isinstance(nested, list) else []
-    else:
-        # Skalar-JSON (Zahl/String) — als Rohtext behandeln.
-        return stripped
+        return [b for b in blocks if isinstance(b, dict)], stripped
+    # Skalar-JSON (Zahl/String) — als Rohtext behandeln.
+    return None, stripped
+
+
+def blocknote_body_text(body: str) -> str:
+    """Serialisiert einen stringifizierten BlockNote-Body zu Klartext.
+
+    Kein gueltiges BlockNote-Dokument (Alt-Bestand/Plain-Text) → Rohwert
+    getrimmt zurueck.
+    """
+    blocks, raw = parse_blocknote_blocks(body)
+    if blocks is None:
+        return raw
     return blocks_plain_text(blocks, _inline_with_pills)
 
 
@@ -102,6 +118,7 @@ def system_prompt_content_text(content: dict[str, Any]) -> str:
 
 __all__ = [
     "blocknote_body_text",
+    "parse_blocknote_blocks",
     "persona_content_text",
     "playbook_content_text",
     "resource_content_text",

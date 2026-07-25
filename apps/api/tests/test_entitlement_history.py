@@ -23,7 +23,7 @@ import asyncpg
 import pytest
 
 from who2be_api.core.config import get_settings
-from who2be_api.core.db import _init_connection
+from who2be_api.core.db import init_connection
 from who2be_api.core.migrations import MIGRATIONS_DIR, apply_migrations
 from who2be_api.licensing.entitlement import Entitlement, Feature
 from who2be_api.repositories.entitlement_repository import PgEntitlementRepository
@@ -56,9 +56,9 @@ async def _with_isolated_schema(
         await apply_migrations(owner, MIGRATIONS_DIR)
         pool = await asyncpg.create_pool(
             settings.database_url,
-            # Codec wie der Prod-Pool (core/db._init_connection) — sonst kann
+            # Codec wie der Prod-Pool (core/db.init_connection) — sonst kann
             # asyncpg keine `list`-Argumente in `jsonb`-Spalten binden.
-            init=_init_connection,
+            init=init_connection,
             min_size=1,
             max_size=2,
             server_settings={"search_path": schema},

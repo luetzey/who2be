@@ -39,6 +39,13 @@ dev = [
 billing = [
     "who2be-billing",
 ]
+# Semantische Suche (ADR-0046). Bewusst SEPARAT wie `billing`: die ONNX-Runtime
+# plus Modell-Download sind mehrere hundert MB, und ohne die Gruppe laeuft die
+# Suche vollstaendig im Volltext-Modus weiter (`build_embedding_port` liefert
+# dann `None`). Der Kern importiert `fastembed` nie statisch.
+embeddings = [
+    "fastembed>=0.4",
+]
 
 [tool.ruff]
 line-length = 100
@@ -57,7 +64,10 @@ mypy_path = ["apps/api/src", "apps/mcp/src", "packages/models/src", "packages/bi
 # asyncpg + die Mollie-SDK liefern keine vollstaendigen Typ-Stubs — bewusste, eng
 # begrenzte Ausnahme; unser eigener Code bleibt strict.
 [[tool.mypy.overrides]]
-module = ["asyncpg.*", "mollie.*", "testcontainers.*"]
+# `fastembed` steckt in der optionalen Dep-Gruppe `embeddings` und ist im
+# Default-Sync gar nicht installiert (ADR-0046) — der Import liegt bewusst im
+# Konstruktor des Adapters.
+module = ["asyncpg.*", "mollie.*", "testcontainers.*", "fastembed.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

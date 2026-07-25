@@ -7,7 +7,10 @@
 # MS-2 separat (siehe `## Offene Punkte` im Plan).
 services:
   db:
-    image: postgres:16
+    # pgvector-Variante statt `postgres:16` (ADR-0046): die semantische Suche
+    # braucht die `vector`-Extension, die das Basis-Image nicht mitbringt.
+    # Prod (supabase/postgres) hat sie bereits.
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres

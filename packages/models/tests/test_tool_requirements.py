@@ -232,11 +232,12 @@ def test_every_capability_is_used_in_the_mapping() -> None:
 
 
 def test_mapping_covers_all_registered_server_tools() -> None:
-    # 57 `@with_tool_log("<name>")`-Registrierungen in apps/mcp/.../server.py
-    # (Stand ADR-0044: + 3 Memory-Tools search_memory/list_memories/save_memory).
+    # 58 `@with_tool_log("<name>")`-Registrierungen in apps/mcp/.../server.py
+    # (Stand ADR-0044: + 3 Memory-Tools search_memory/list_memories/save_memory;
+    # Stand ADR-0046: + `search_content` fuer das Passage-Retrieval).
     # Neues Tool => hier + im Mapping ergaenzen; der Paritaetstest in apps/mcp
     # prueft die Gegenrichtung gegen den Server.
-    assert len(MCP_TOOL_REQUIREMENTS) == 57
+    assert len(MCP_TOOL_REQUIREMENTS) == 58
     always = {name for name, req in MCP_TOOL_REQUIREMENTS.items() if req.always}
     assert always == {"ping", "whoami"}
 

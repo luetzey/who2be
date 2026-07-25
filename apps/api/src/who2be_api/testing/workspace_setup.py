@@ -13,7 +13,7 @@ from uuid import UUID
 import asyncpg
 
 from who2be_api.core.config import get_settings
-from who2be_api.core.db import _init_connection
+from who2be_api.core.db import init_connection
 
 _AUTH_USERS_STUB = """
     CREATE SCHEMA IF NOT EXISTS auth;
@@ -73,7 +73,7 @@ async def _connect_with_codec() -> asyncpg.Connection:
     verdeckt. Test-Setup muss die Prod-Realitaet spiegeln.
     """
     conn = await asyncpg.connect(get_settings().database_url)
-    await _init_connection(conn)
+    await init_connection(conn)
     return conn
 
 

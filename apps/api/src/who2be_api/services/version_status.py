@@ -19,7 +19,8 @@ unnoetig aufblaehen wuerden. Wir bleiben hier bei rohem SQL und halten die
 Transition-Logik an einer Stelle.
 """
 
-from collections.abc import Callable
+import logging
+from collections.abc import Callable, Sequence
 from typing import Any
 from uuid import UUID
 
@@ -33,6 +34,9 @@ from who2be_api.core.security import (
     require_role,
     require_unmanaged,
 )
+from who2be_api.embeddings import build_embedding_port
+from who2be_api.repositories.content_chunk_repository import PgContentChunkRepository
+from who2be_api.services.content_chunks import ChunkDraft, chunk_version_content
 from who2be_api.services.promote_validation import (
     validate_promote_persona,
     validate_promote_playbook,
@@ -52,6 +56,8 @@ from who2be_models import (
     VersionStatus,
     WorkspaceRole,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _not_found(entity_type: EntityType) -> HTTPException:
@@ -218,6 +224,73 @@ class VersionStatusService:
     def __init__(self, pool: asyncpg.Pool, history: StatusHistoryService) -> None:
         self._pool = pool
         self._history = history
+        # Passage-Ebene (ADR-0046). Der Rebuild laeuft in DERSELBEN Transaktion
+        # wie der Statuswechsel — sonst koennten Status und Passagen
+        # auseinanderlaufen (aktive Version ohne Chunks oder umgekehrt).
+        self._chunks = PgContentChunkRepository()
+
+    async def _sync_chunks(
+        self,
+        conn: asyncpg.Connection,
+        ctx: WorkspaceContext,
+        entity_type: EntityType,
+        entity_id: UUID,
+        version: int,
+        locale: str,
+        content: Any,
+        *,
+        active: bool,
+    ) -> None:
+        """Haelt `content_chunk` am veroeffentlichten Stand.
+
+        `active=True` baut die Passagen der neuen aktiven Version neu auf,
+        `active=False` raeumt sie weg. `replace` loescht immer den kompletten
+        Entity-Bestand, damit hoechstens ein Versionsstand materialisiert ist.
+        """
+        if not active:
+            await self._chunks.clear(conn, ctx.workspace_id, entity_type, entity_id)
+            return
+        drafts = chunk_version_content(entity_type, content)
+        vectors = await self._embed_drafts(drafts)
+        await self._chunks.replace(
+            conn, ctx.workspace_id, entity_type, entity_id, version, locale, drafts, vectors
+        )
+
+    async def _embed_drafts(self, drafts: Sequence[ChunkDraft]) -> list[list[float] | None] | None:
+        """Vektoren zu den Passagen — BEST EFFORT (ADR-0046).
+
+        Ein fehlgeschlagenes oder fehlendes Embedding darf eine Aktivierung
+        niemals scheitern lassen: der Statuswechsel ist die fachliche Handlung,
+        der Vektor nur eine Beschleunigung des Suchens. Bleibt er aus, ist die
+        Spalte NULL und `who2be-chunk-backfill` holt ihn nach.
+
+        Eingebettet wird derselbe Text, den auch der FTS-Index sieht
+        (`heading_path` + Passage) — sonst suchten Volltext und Vektor auf
+        unterschiedlichem Material.
+        """
+        if not drafts:
+            return None
+        embedder = build_embedding_port()
+        if embedder is None:
+            return None
+        texts = [f"{d.heading_path} {d.text}".strip() for d in drafts]
+        try:
+            vectors = await embedder.embed(texts)
+        except Exception:  # noqa: BLE001 - best effort ist hier Absicht
+            logger.warning(
+                "Embedding der Passagen fehlgeschlagen — Aktivierung laeuft weiter, "
+                "Vektoren holt der Backfill nach.",
+                exc_info=True,
+            )
+            return None
+        if len(vectors) != len(drafts):
+            logger.warning(
+                "Embedding lieferte %s Vektoren fuer %s Passagen — verworfen.",
+                len(vectors),
+                len(drafts),
+            )
+            return None
+        return list(vectors)
 
     async def transition_persona_version(
         self,
@@ -475,6 +548,26 @@ class VersionStatusService:
                 version=version,
             )
 
+            # Passage-Ebene nachziehen (ADR-0046). Nur die aktive Version ist
+            # materialisiert: wird sie es, bauen wir auf; verlaesst sie den
+            # Active-Status, raeumen wir weg. Der `_reactivate_previous`-Pfad
+            # unten baut danach ggf. den Vorgaenger wieder auf.
+            if to_status == VersionStatus.active:
+                await self._sync_chunks(
+                    conn,
+                    ctx,
+                    entity_type,
+                    entity_id,
+                    version,
+                    updated["locale"],
+                    updated["content"],
+                    active=True,
+                )
+            elif from_status == VersionStatus.active:
+                await self._sync_chunks(
+                    conn, ctx, entity_type, entity_id, version, target_locale, None, active=False
+                )
+
             # Reset-auf-Draft (Track A): wird die aktive Version zur Bearbeitung
             # zurueckgeholt, reaktivieren wir die zuletzt aktive Version, damit
             # die Invariante „genau eine aktiv" haelt. `version → draft` hat oben
@@ -484,6 +577,7 @@ class VersionStatusService:
             if from_status == VersionStatus.active and to_status == VersionStatus.draft:
                 await self._reactivate_previous(
                     conn,
+                    ctx,
                     entity_type,
                     entity_tbl,
                     version_tbl,
@@ -533,6 +627,7 @@ class VersionStatusService:
     async def _reactivate_previous(
         self,
         conn: asyncpg.Connection,
+        ctx: WorkspaceContext,
         entity_type: EntityType,
         entity_tbl: str,
         version_tbl: str,
@@ -563,7 +658,7 @@ class VersionStatusService:
         )
         if prev_version is None:
             return
-        reactivated = await conn.fetchval(
+        reactivated = await conn.fetchrow(
             f"UPDATE {version_tbl} SET status = 'active' "
             "WHERE ctid = ( "
             f"    SELECT pv.ctid FROM {version_tbl} pv "
@@ -572,7 +667,7 @@ class VersionStatusService:
             "    ORDER BY (pv.locale = e.locale) DESC "
             "    LIMIT 1 "
             ") "
-            "RETURNING version",
+            "RETURNING version, locale, content",
             entity_id,
             prev_version,
         )
@@ -586,6 +681,18 @@ class VersionStatusService:
                 user_id,
                 note=f"Reaktiviert nach Reset von v{reset_version} auf Draft.",
                 version=prev_version,
+            )
+            # Der Vorgaenger ist jetzt der veroeffentlichte Stand — seine
+            # Passagen ersetzen die eben geraeumten (ADR-0046).
+            await self._sync_chunks(
+                conn,
+                ctx,
+                entity_type,
+                entity_id,
+                reactivated["version"],
+                reactivated["locale"],
+                reactivated["content"],
+                active=True,
             )
 
 

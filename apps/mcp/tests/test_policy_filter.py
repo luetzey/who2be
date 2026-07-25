@@ -40,6 +40,7 @@ _DEFAULT_POLICY_TOOLS = {
     "whoami",
     "get_persona",
     "search",
+    "search_content",
     "list_triggers",
     "list_playbooks",
     "fetch_playbook",
@@ -188,7 +189,7 @@ def test_full_policy_agent_sees_all_tools(monkeypatch: pytest.MonkeyPatch) -> No
     _install_identity(monkeypatch, _whoami_handler(payload))
     names = _list_tool_names()
     assert names == set(MCP_TOOL_REQUIREMENTS)
-    assert len(names) == 57
+    assert len(names) == 58
 
 
 def test_resource_read_none_hides_resource_tools(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -248,7 +249,7 @@ def test_unrestricted_admin_sees_all_tools(monkeypatch: pytest.MonkeyPatch) -> N
     names = _list_tool_names()
     memory_tools = {name for name, req in MCP_TOOL_REQUIREMENTS.items() if req.memory is not None}
     assert names == set(MCP_TOOL_REQUIREMENTS) - memory_tools
-    assert len(names) == 54
+    assert len(names) == 55
 
 
 def test_unrestricted_viewer_sees_no_write_tools(monkeypatch: pytest.MonkeyPatch) -> None:

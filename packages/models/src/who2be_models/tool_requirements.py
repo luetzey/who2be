@@ -121,6 +121,11 @@ MCP_TOOL_REQUIREMENTS: dict[str, ToolRequirement] = {
     # persona/playbook/resource — sichtbar, sobald EINE dieser Inhalts-Domains
     # lesbar ist (gleiche Regel wie `search` im Prompt-Resolver).
     "search": _SEARCH_READ,
+    # Passage-Suche (ADR-0046). Teilt die Sichtbarkeitsregel mit `search`:
+    # sichtbar, sobald der Principal MINDESTENS eine Inhalts-Domain lesen darf.
+    # Die feinere Auswahl (welche Typen tatsaechlich durchsucht werden) trifft
+    # `readable_content_scope` zur Laufzeit.
+    "search_content": _SEARCH_READ,
     "find_usages": _SEARCH_READ,
     "list_versions": _SEARCH_READ,
     "get_version": _SEARCH_READ,

@@ -11,8 +11,14 @@ Auskunft, kein Filter (Sprachfilterung ist bewusst kein Such-Scope).
 
 `content::text` ist die jsonb-Repraesentation inkl. Schluessel — eine bewusst
 grobe, aber robuste Textquelle fuer Stufe A; Stufe B (semantisch) ersetzt das.
+
+Read-Scoping (ADR-0046): der `assigned`-Scope wird als Praedikat MIT in die
+Query gegeben (`restrict`), nicht hinterher gefiltert — ADR-0037 §47 fordert
+die Filterung „vor dem Ranking". Nachfiltern hinter dem `LIMIT` liefert `[]`,
+sobald die globalen Top-k ausserhalb des zugewiesenen Sets liegen.
 """
 
+from collections.abc import Mapping, Sequence
 from typing import Protocol
 from uuid import UUID
 
@@ -33,9 +39,12 @@ _TYPE_TABLES: dict[str, tuple[str, str, str]] = {
 }
 
 
-def _query_for(entity: str, version: str, fk: str) -> str:
+def _query_for(entity: str, version: str, fk: str, *, restricted: bool) -> str:
     # `simple`-Config: keine Stemming-/Stopword-Sprache (robust fuer DE/EN-Mix).
     vector = "to_tsvector('simple', coalesce(e.name, '') || ' ' || coalesce(ev.content::text, ''))"
+    # $4 nur binden, wenn der Aufrufer wirklich einschraenkt — sonst bliebe ein
+    # ungenutzter Parameter uebrig (asyncpg prueft die Stelligkeit strikt).
+    restrict_clause = "  AND e.id = ANY($4::uuid[]) " if restricted else ""
     return (
         f"SELECT e.id, e.name, e.locale, "
         f"       ts_rank({vector}, plainto_tsquery('simple', $2)) AS score, "
@@ -44,6 +53,7 @@ def _query_for(entity: str, version: str, fk: str) -> str:
         f"JOIN {version} ev ON ev.{fk} = e.id AND ev.status = 'active' "
         f"WHERE e.workspace_id = $1 "
         f"  AND {vector} @@ plainto_tsquery('simple', $2) "
+        f"{restrict_clause}"
         f"ORDER BY score DESC, e.name ASC "
         f"LIMIT $3"
     )
@@ -51,7 +61,12 @@ def _query_for(entity: str, version: str, fk: str) -> str:
 
 class SearchRepository(Protocol):
     async def search(
-        self, workspace_id: UUID, query: str, types: list[str], limit: int
+        self,
+        workspace_id: UUID,
+        query: str,
+        types: list[str],
+        limit: int,
+        restrict: Mapping[str, Sequence[UUID]] | None = None,
     ) -> list[SearchHit]: ...
 
 
@@ -62,14 +77,40 @@ class PgSearchRepository:
         self._pool = pool
 
     async def search(
-        self, workspace_id: UUID, query: str, types: list[str], limit: int
+        self,
+        workspace_id: UUID,
+        query: str,
+        types: list[str],
+        limit: int,
+        restrict: Mapping[str, Sequence[UUID]] | None = None,
     ) -> list[SearchHit]:
+        """Rangsortierte Treffer ueber die angefragten Typen.
+
+        `restrict` bildet Entity-Typ → erlaubte IDs ab. Ein **fehlender**
+        Schluessel heisst „keine Einschraenkung"; eine **leere** Sequenz heisst
+        „nichts sichtbar" (ein `assigned`-Agent ohne Zuweisungen findet nichts)
+        — die beiden Faelle duerfen nicht verwechselt werden.
+        """
         hits: list[SearchHit] = []
         for entity_type in types:
             tables = _TYPE_TABLES.get(entity_type)
             if tables is None:
                 continue
-            rows = await self._pool.fetch(_query_for(*tables), workspace_id, query, limit)
+            allowed = None if restrict is None else restrict.get(entity_type)
+            if allowed is None:
+                rows = await self._pool.fetch(
+                    _query_for(*tables, restricted=False), workspace_id, query, limit
+                )
+            else:
+                if not allowed:
+                    continue
+                rows = await self._pool.fetch(
+                    _query_for(*tables, restricted=True),
+                    workspace_id,
+                    query,
+                    limit,
+                    list(allowed),
+                )
             for row in rows:
                 hits.append(
                     SearchHit(
