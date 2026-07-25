@@ -1,4 +1,4 @@
-"""Backfill der Passage-Ebene (`content_chunk`, ADR-0046).
+"""Backfill der Retrieval-Ebenen (`content_chunk` + `agent_memory`, ADR-0046).
 
 Chunks entstehen im Normalbetrieb beim Statuswechsel auf `active`
 (`version_status._transition`). Bestands-Workspaces haben ihre Inhalte aber
@@ -16,7 +16,12 @@ zwar unauffindbar (die Suche joint auf die Entity), aber sie kosten Platz.
 
 Bewusst KEIN Teil einer SQL-Migration: der Schnitt lebt in Python
 (`services/content_chunks.py`), nicht in SQL. Eine Migration koennte ihn nicht
-nachbauen, ohne die Logik zu duplizieren.
+nachbauen, ohne die Logik zu duplizieren. Dasselbe gilt fuer die Vektoren: sie
+entstehen ueber den `EmbeddingPort`, den SQL nicht aufrufen kann.
+
+Deckt beide Vektor-Korpora ab — Passagen (Welle 2) und Agent-Memories
+(Welle 3). Bestehende Memories haben naturgemaess keinen Vektor: sie wurden
+geschrieben, bevor es die Spalte gab.
 """
 
 from __future__ import annotations
@@ -33,6 +38,7 @@ from who2be_api.repositories.content_chunk_repository import (
     CHUNK_TYPE_TABLES,
     PgContentChunkRepository,
 )
+from who2be_api.repositories.memory_repository import PgMemoryRepository
 from who2be_api.services.content_chunks import chunk_version_content
 
 logger = logging.getLogger(__name__)
@@ -126,29 +132,73 @@ async def backfill_vectors(
     return embedded
 
 
+async def backfill_memory_vectors(
+    pool: asyncpg.Pool, embedder: EmbeddingPort | None, batch_size: int = 64
+) -> int:
+    """Holt fehlende Memory-Vektoren nach (ADR-0046 Welle 3).
+
+    Bestehende Memories haben keinen Vektor — sie entstanden vor der Spalte.
+    Ohne diesen Lauf faende `search_memory` sie nur lexikalisch, und die
+    Semantik griffe erst fuer kuenftige Eintraege.
+
+    Nimmt einen Pool statt einer Connection, weil `PgMemoryRepository` (anders
+    als das Chunk-Repository) am Pool haengt.
+    """
+    if embedder is None:
+        return 0
+    repo = PgMemoryRepository(pool)
+    embedded = 0
+    while True:
+        pending = await repo.fetch_missing_vectors(batch_size)
+        if not pending:
+            break
+        try:
+            vectors = await embedder.embed([fact for _, fact in pending])
+        except Exception:  # noqa: BLE001 - Teil-Erfolg ist besser als Abbruch
+            logger.warning("Memory-Embedding-Batch fehlgeschlagen — Backfill bricht ab.")
+            break
+        if len(vectors) != len(pending):
+            logger.warning("Embedding lieferte eine falsche Anzahl Vektoren — Backfill bricht ab.")
+            break
+        for (memory_id, _fact), vector in zip(pending, vectors, strict=True):
+            await repo.set_vector(memory_id, vector)
+        embedded += len(pending)
+    return embedded
+
+
 async def _run() -> None:
+    settings = get_settings()
+    embedder = build_embedding_port()
     try:
-        conn = await asyncpg.connect(get_settings().database_url)
+        conn = await asyncpg.connect(settings.database_url)
     except (asyncpg.PostgresError, OSError) as exc:
         raise SystemExit(f"Datenbank nicht erreichbar: {exc}") from exc
     try:
         await init_connection(conn)
         entities, chunks, orphans = await backfill_chunks(conn)
-        embedded = await backfill_vectors(conn, build_embedding_port())
+        embedded = await backfill_vectors(conn, embedder)
     finally:
         await conn.close()
+
+    pool = await asyncpg.create_pool(settings.database_url, init=init_connection, min_size=1)
+    assert pool is not None
+    try:
+        memories = await backfill_memory_vectors(pool, embedder)
+    finally:
+        await pool.close()
+
     print(
         f"Passagen neu gebaut: {chunks} aus {entities} aktiven Versionen "
         f"({orphans} verwaiste Chunks entfernt)."
     )
-    if embedded:
-        print(f"Vektoren nachgeholt: {embedded}.")
+    if embedded or memories:
+        print(f"Vektoren nachgeholt: {embedded} Passagen, {memories} Memories.")
     else:
         print("Keine Vektoren erzeugt (Semantik nicht aktiv oder nichts offen).")
 
 
 def cli() -> None:
-    """Console-Entrypoint fuer `who2be-chunk-backfill`."""
+    """Console-Entrypoint fuer `who2be-retrieval-backfill`."""
     asyncio.run(_run())
 
 

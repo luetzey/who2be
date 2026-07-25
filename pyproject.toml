@@ -64,7 +64,10 @@ mypy_path = ["apps/api/src", "apps/mcp/src", "packages/models/src", "packages/bi
 # asyncpg + die Mollie-SDK liefern keine vollstaendigen Typ-Stubs — bewusste, eng
 # begrenzte Ausnahme; unser eigener Code bleibt strict.
 [[tool.mypy.overrides]]
-module = ["asyncpg.*", "mollie.*", "testcontainers.*"]
+# `fastembed` steckt in der optionalen Dep-Gruppe `embeddings` und ist im
+# Default-Sync gar nicht installiert (ADR-0046) — der Import liegt bewusst im
+# Konstruktor des Adapters.
+module = ["asyncpg.*", "mollie.*", "testcontainers.*", "fastembed.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

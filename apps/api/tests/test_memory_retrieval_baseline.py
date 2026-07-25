@@ -11,11 +11,12 @@ Zwei Sorten Test hier:
 
 1. **Faehigkeiten, die erhalten bleiben muessen** — Wortstamm-Treffer,
    Teilstring, Fuzzy-Match auf Tippfehler, Status-Isolation, Agent-Isolation.
-2. **Die dokumentierte Luecke** — `test_paraphrase_is_not_found_today` haelt
-   fest, dass Paraphrasen heute NICHT gefunden werden. Der Test ist bewusst so
-   formuliert, dass Welle 3 ihn umdrehen muss: er ist die ausfuehrbare Form
-   des Versprechens aus dem MCP-Docstring („durchsucht … semantisch"), das die
-   Implementierung bis heute nicht einloest.
+2. **Die Grenzen des lexikalischen Pfads** — Paraphrasen und
+   sprachuebergreifende Treffer sind mit FTS, ILIKE und Trigram
+   grundsaetzlich nicht erreichbar. Diese Tests halten das mit Zahlen fest;
+   das Gegenstueck (`test_memory_semantic.py`) belegt, dass der Vektor-Zweig
+   aus ADR-0046 Welle 3 genau diese Faelle loest. Beide Dateien zusammen
+   zeigen, was die Semantik beitraegt und was ohne sie erhalten bleibt.
 """
 
 import asyncio
@@ -241,17 +242,16 @@ def test_dedup_guard_catches_near_identical_wording() -> None:
 
 
 @pytest.mark.integration
-def test_paraphrase_is_not_found_today() -> None:
-    """DIE LUECKE, die ADR-0046 Welle 3 schliessen soll.
+def test_paraphrase_is_not_found_lexically() -> None:
+    """Warum der lexikalische Pfad allein nicht reicht.
 
-    Der MCP-Docstring von `search_memory` verspricht dem Modell heute schon,
-    das Gedaechtnis werde „semantisch" durchsucht. Tatsaechlich scheitern bei
-    einer Paraphrase alle drei Zweige: FTS teilt keine Wortstaemme, ILIKE
-    findet keinen Teilstring, und die Trigram-Similarity liegt weit unter der
-    Schwelle von 0.3.
+    Bei einer Paraphrase scheitern alle drei lexikalischen Zweige: FTS teilt
+    keine Wortstaemme, ILIKE findet keinen Teilstring, und die
+    Trigram-Similarity liegt weit unter der Schwelle von 0.3.
 
-    Dieser Test haelt den Ist-Zustand fest. **Welle 3 muss ihn umdrehen** —
-    dann ist er der Beleg, dass die Semantik wirklich greift.
+    Das ist keine Schwaeche der Implementierung, sondern eine Eigenschaft
+    zeichen- und wortbasierter Verfahren. Geloest wird es vom Vektor-Zweig —
+    siehe `test_memory_semantic.test_paraphrase_is_found_with_semantics`.
     """
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
@@ -270,19 +270,19 @@ def test_paraphrase_is_not_found_today() -> None:
         return [h.fact for h in hits], float(similarity)
 
     facts, similarity = _with_repo(_case)
-    assert facts == [], f"Unerwarteter Treffer — ist die Semantik schon aktiv? {facts}"
+    assert facts == [], f"Unerwarteter Treffer ohne Vektor-Zweig: {facts}"
     # Die Zahl macht sichtbar, WARUM Trigram hier nichts ausrichtet.
     assert similarity < 0.3, similarity
 
 
 @pytest.mark.integration
-def test_cross_lingual_is_not_found_today() -> None:
-    """Zweite Luecke: eine deutsche Query findet keinen englischen Memory.
+def test_cross_lingual_is_not_found_lexically() -> None:
+    """Zweite Grenze: eine deutsche Query findet keinen englischen Memory.
 
     Memories sind laut Migration 0066 ausdruecklich gemischtsprachig — genau
     deshalb steht dort `'simple'` (kein Stemming). Volltext kann diese Luecke
-    strukturell nicht schliessen, ein multilinguales Embedding schon.
-    Auch dieser Test wird in Welle 3 umgedreht.
+    strukturell nicht schliessen, ein multilinguales Embedding schon; siehe
+    `test_memory_semantic.test_cross_lingual_is_found_with_semantics`.
     """
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")

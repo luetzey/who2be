@@ -56,7 +56,8 @@ Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
 - MCP-HTTP-Transport (ADR-0034) + OAuth-2.1-Remote-Connector (ADR-0036,
   per-Agent-URL `?agent=<uuid>`); Refresh-Reuse reject-only statt
   Ketten-Revocation (DECISIONS 2026-07-05); OAuth-Smoke beide Editionen grün.
-- 57 Tools: Read + Write (ADR-0030), `search` (ADR-0037), Versions-/
+- 58 Tools: Read + Write (ADR-0030), `search` + `search_content`
+  (ADR-0037/0046), Versions-/
   Discovery-Tools, System-Prompt-Tools (ADR-0040), feinkörnige
   Agent-Schreibrechte inkl. Rate-Limit (ADR-0039). `tools/list` pro Agent
   policy-gefiltert (fail-open, SSoT `who2be_models.tool_requirements`,
@@ -135,12 +136,12 @@ Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
 
 ## In Arbeit
 
-- **Semantische Suche & Passage-Retrieval (ADR-0046)** — Wellen 1 + 2 fertig,
-  Welle 3 (Memory-Semantik) offen.
+- **Semantische Suche & Passage-Retrieval (ADR-0046)** — vollständig umgesetzt
+  (Wellen 1–3).
   - *Welle 1:* `content_chunk` (Migration 0070, Schnitt an Heading-Blöcken,
     FTS-Config pro Sprache), Chunk-Aufbau im Transition-Pfad, `search_content`
     als REST + MCP-Tool (Passagen statt Aggregate), Backfill-CLI
-    `who2be-chunk-backfill`, plus zwei behobene Fehler der bestehenden Suche
+    `who2be-retrieval-backfill`, plus zwei behobene Fehler der bestehenden Suche
     (Read-Scope hinter dem `LIMIT`; 403 auf Fremdtypen).
   - *Welle 2:* `content_vector` (Migration 0071, **fail-soft** ohne pgvector),
     asyncpg-Vektor-Codec mit dynamischer Schema-Auflösung, `EmbeddingPort` +
@@ -148,15 +149,23 @@ Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
     Hybrid-Ranking per RRF, `mode`-Parameter (`auto|text|semantic|hybrid`),
     Vektor-Backfill. Postgres-Images lokal/CI/Testcontainers auf
     `pgvector/pgvector:pg16`.
-  - Memory-Retrieval hat erstmals eine Test-Baseline, die die zwei Semantik-
-    Lücken ausführbar festhält (Paraphrase, cross-lingual).
-  - **DoD:** Python 1246 pytest / Coverage 90,42 %; ruff + mypy grün; Web
-    unberührt (keine Änderung unter `apps/web/`).
-  - **Offen:** Welle 3 (Memory-Semantik) sowie die Kalibrierung von
-    `_MIN_VECTOR_SIMILARITY` gegen das reale Modell — der Modell-Download ist
-    in der Entwicklungsumgebung per Netz-Policy gesperrt, die Retrieval-
-    Mechanik ist deshalb gegen deterministische Test-Vektoren belegt, die
-    Modell-Qualität nicht.
+  - *Welle 3:* `content_vector` auf `agent_memory` (Migration 0072, fail-soft),
+    `search_active` von der lexikografischen `ORDER BY`-Kaskade auf
+    **RRF-Fusion über vier Zweige** umgebaut (FTS, ILIKE, Trigram, Vektor),
+    semantischer Zweig im Dedup-Wächter, best-effort-Embedding im
+    Laufzeit-Schreibpfad, Memory-Vektor-Backfill. Der MCP-Docstring, der seit
+    ADR-0044 „semantisch" versprach, ist damit eingelöst.
+  - Memory hat zwei komplementäre Testdateien: die Baseline hält fest, was der
+    lexikalische Pfad kann und wo seine Grenzen liegen; `test_memory_semantic`
+    belegt, dass der Vektor-Zweig genau diese Grenzen löst — ohne die
+    lexikalischen Fähigkeiten zu verdrängen.
+  - **DoD:** Python 1256 pytest / Coverage ~90 %; ruff + format-check + mypy
+    grün; Web unberührt (keine Änderung unter `apps/web/`).
+  - **Offen:** Kalibrierung der drei Schwellen (`_MIN_VECTOR_SIMILARITY` je
+    Korpus, `_DEDUP_VECTOR_SIMILARITY`) gegen das reale Modell — der
+    Modell-Download ist in der Entwicklungsumgebung per Netz-Policy gesperrt.
+    Die Retrieval-Mechanik ist gegen deterministische Test-Vektoren mit
+    bekannter Geometrie belegt, die Modell-Qualität nicht.
 - **Standards-Review 2026-07-20** (`docs/standards-review-2026-07-20.md`,
   PR #331): Phase A mit 12 Prüf-Agenten; Phase B Wellen 1–3 umgesetzt
   (SEC-1/2/3, LIC-1, DEP-1/2/6, LIC-4, OSS-2, FE-1/10/11, Kosmetik-Sweep,

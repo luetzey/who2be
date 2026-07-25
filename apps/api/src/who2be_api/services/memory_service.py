@@ -19,6 +19,7 @@ nie in `MemoryHit` (Retrieval) — kein Injection-Vektor Richtung Prompt.
 
 from __future__ import annotations
 
+import logging
 import re
 from uuid import UUID
 
@@ -31,6 +32,7 @@ from who2be_api.core.security import (
     require_role,
     require_write_rate,
 )
+from who2be_api.embeddings import build_embedding_port
 from who2be_api.repositories.memory_repository import MemoryRepository
 from who2be_models import (
     MEMORY_MAX_PER_AGENT,
@@ -47,6 +49,8 @@ from who2be_models import (
     MemoryUpdate,
     WorkspaceRole,
 )
+
+logger = logging.getLogger(__name__)
 
 # Deckel fuer Retrieval-Antworten (Token-Budget des Client-Prompts).
 _SEARCH_K_MAX = 20
@@ -145,6 +149,28 @@ class MemoryService:
     def __init__(self, repo: MemoryRepository) -> None:
         self._repo = repo
 
+    async def _embed(self, text: str) -> list[float] | None:
+        """Vektor eines Textes — BEST EFFORT (ADR-0046 Welle 3).
+
+        `save_memory` ist ein rate-limitierter LAUFZEIT-Call des Agenten, kein
+        Builder-Vorgang: ein langsames oder kaputtes Modell darf ihn nie
+        scheitern lassen. Ohne Vektor greift weiterhin der Trigram-Dedup, und
+        der Backfill holt den Vektor nach.
+
+        Gilt genauso fuer die Anfrage-Seite: schlaegt das Einbetten der Query
+        fehl, sucht `search_active` eben nur lexikalisch. Eine schlechtere
+        Antwort ist besser als keine.
+        """
+        embedder = build_embedding_port()
+        if embedder is None or not text.strip():
+            return None
+        try:
+            vectors = await embedder.embed([text])
+        except Exception:  # noqa: BLE001 - Degradation ist Absicht
+            logger.warning("Memory-Embedding fehlgeschlagen — es wird lexikalisch gearbeitet.")
+            return None
+        return list(vectors[0]) if vectors else None
+
     # ------------------------------------------------------------------ Agent
 
     async def save(self, ctx: WorkspaceContext, data: MemoryCreate) -> MemoryRead:
@@ -176,7 +202,10 @@ class MemoryService:
                     status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail=rejection,
                 )
-        duplicate = await self._repo.find_similar(ctx.workspace_id, ctx.agent_id, data.fact)
+        fact_vector = await self._embed(data.fact)
+        duplicate = await self._repo.find_similar(
+            ctx.workspace_id, ctx.agent_id, data.fact, fact_vector
+        )
         if duplicate is not None:
             dup_id, dup_fact = duplicate
             raise HTTPException(
@@ -206,7 +235,7 @@ class MemoryService:
             if ctx.tool_policy.memory_mode == MemoryMode.auto
             else MemoryStatus.pending
         )
-        return await self._repo.insert(
+        created = await self._repo.insert(
             ctx.workspace_id,
             ctx.agent_id,
             new_status,
@@ -215,6 +244,12 @@ class MemoryService:
             data.category.value,
             data.importance,
         )
+        # Vektor nachziehen. Bewusst NACH dem Insert und ohne Fehlerpfad: das
+        # Memory ist bereits gespeichert, der Vektor nur eine Beschleunigung
+        # des spaeteren Suchens.
+        if fact_vector is not None:
+            await self._repo.set_vector(created.id, fact_vector)
+        return created
 
     async def search(self, ctx: WorkspaceContext, query: str, k: int) -> list[MemoryHit]:
         require_memory_mode(ctx, MemoryMode.read_only)
@@ -222,7 +257,10 @@ class MemoryService:
         if not query.strip():
             return []
         k = max(1, min(k, _SEARCH_K_MAX))
-        return await self._repo.search_active(ctx.workspace_id, ctx.agent_id, query, k)
+        query_vector = await self._embed(query)
+        return await self._repo.search_active(
+            ctx.workspace_id, ctx.agent_id, query, k, query_vector
+        )
 
     async def list_active(self, ctx: WorkspaceContext, limit: int) -> list[MemoryHit]:
         require_memory_mode(ctx, MemoryMode.read_only)

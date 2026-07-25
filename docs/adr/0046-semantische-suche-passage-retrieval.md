@@ -1,6 +1,6 @@
 # ADR-0046 — Semantische Suche & Passage-Retrieval (pgvector, Stufe B)
 
-- Status: Accepted (Wellen 1 + 2 umgesetzt; Welle 3 — Memory-Semantik — offen)
+- Status: Accepted (vollstaendig umgesetzt, Wellen 1-3)
 - Datum: 2026-07-25
 - Kontext: Loest die als „Stufe B" offen gelassenen Folge-Entscheidungen aus
   ADR-0037 (Search) und ADR-0044 (Agent-Memory) ein — beide verweisen
@@ -125,10 +125,18 @@ darf nicht kollidieren.
   Vertrag, der Beduerfnis 2 tatsaechlich bedient. Neues Tool ⇒ Mapping-Eintrag
   in `who2be_models.tool_requirements` (ADR-0042), sonst unsichtbar in
   `tools/list`.
-- `search_memory` behaelt seine Signatur; die Rangberechnung wird intern von der
-  heutigen lexikografischen `ORDER BY`-Kaskade (`ts_rank` → `similarity` →
-  `importance`) auf eine **Score-Fusion** umgebaut. Das ist kein Drop-in,
-  sondern der eigentliche Aufwand von Welle 3.
+- `search_memory` behaelt seine Signatur; die Rangberechnung ist intern von der
+  lexikografischen `ORDER BY`-Kaskade (`ts_rank` → `similarity` → `importance`)
+  auf eine **RRF-Fusion** ueber vier Zweige umgebaut (FTS, ILIKE, Trigram,
+  Vektor), `importance` als Tiebreak. Der Grund ist nicht Eleganz: eine Kaskade
+  laesst den ersten Term dominieren, sodass ein perfekter Vektor-Treffer hinter
+  jedem beliebigen FTS-Treffer landete. Das war kein Drop-in und der eigentliche
+  Aufwand von Welle 3 — abgesichert durch die vorher angelegte Baseline.
+- **Der Dedup-Waechter bekommt einen Vektor-Zweig** neben dem Trigram-Zweig
+  (≥ 0.6, bleibt massgeblich), mit einer DEUTLICH strengeren Schwelle (0.92).
+  Die Asymmetrie ist Absicht: ein falsch positiver Dedup verwirft einen
+  gueltigen Fakt dauerhaft, ein falsch negativer kostet nur einen von 500
+  Listenplaetzen.
 - **Keine Zusammenlegung von Content- und Memory-Suche.** Kuratierte,
   versionierte Inhalte und selbstgeschriebene, unbestaetigte Notizen haben
   unterschiedliche Vertrauensgrade und unterschiedliche Gates. Die Provenienz

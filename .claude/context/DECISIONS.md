@@ -469,3 +469,34 @@ bleiben)._
   umgebung per Netz-Policy gesperrt; die Retrieval-Mechanik ist deshalb gegen
   deterministische Test-Vektoren mit bekannter Geometrie belegt, die
   Modell-Qualität nicht.
+
+## 2026-07-25 — ADR-0046 Welle 3: Memory-Semantik
+- **Entscheidung:** `content_vector vector(384)` auf `agent_memory`
+  (Migration 0072, fail-soft wie 0071), und `search_active` von der
+  lexikografischen `ORDER BY`-Kaskade auf **RRF-Fusion über vier Zweige**
+  (FTS, ILIKE, Trigram, Vektor) umgebaut, `importance` als Tiebreak. Die
+  Kaskade ließ den ersten Term dominieren — ein perfekter Vektor-Treffer wäre
+  hinter jedem beliebigen FTS-Treffer gelandet.
+- **Kein Chunking, kein ANN-Index:** `fact` ist auf 300 Zeichen begrenzt (ein
+  Vektor pro Zeile), und `MEMORY_MAX_PER_AGENT` = 500 deckelt hart. Ein
+  sequentieller Scan über höchstens 500 vorgefilterte Zeilen schlägt jeden
+  ANN-Index — und wäre exakt statt approximativ.
+- **Zwei Schwellen mit unterschiedlicher Logik:** Suche `0.45`, Dedup `0.92`.
+  Die Asymmetrie folgt den Fehlerkosten — ein falsch positiver Dedup verwirft
+  einen gültigen Fakt dauerhaft (409), ein falsch negativer kostet nur einen
+  von 500 Listenplätzen.
+- **Best-effort im Laufzeit-Pfad:** `save_memory` ist ein rate-limitierter
+  Agenten-Call, kein Builder-Vorgang. Ein langsames oder kaputtes Modell darf
+  ihn nie scheitern lassen; ohne Vektor greift weiterhin der Trigram-Dedup, und
+  `who2be-retrieval-backfill` holt nach.
+- **Der MCP-Docstring ist eingelöst.** Er versprach dem Modell seit ADR-0044
+  „durchsucht dein Langzeitgedächtnis … semantisch", implementiert waren
+  FTS + ILIKE + Trigram. Jetzt stimmt es — und der Docstring sagt zusätzlich,
+  was ohne aktivierte Semantik gilt.
+- **Verworfen:** `ilike` als CTE-Name (reserviertes Postgres-Keyword);
+  ein zweiter Backfill-CLI für Memories — stattdessen deckt
+  `who2be-retrieval-backfill` (umbenannt von `who2be-chunk-backfill`) beide
+  Vektor-Korpora ab.
+- **Offen bleibt** die Kalibrierung beider Schwellen gegen das reale Modell —
+  huggingface.co ist per Netz-Policy gesperrt, die Retrieval-Mechanik ist gegen
+  deterministische Test-Vektoren belegt, die Modell-Qualität nicht.
