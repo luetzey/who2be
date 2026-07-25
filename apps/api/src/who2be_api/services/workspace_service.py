@@ -48,7 +48,9 @@ class WorkspaceService:
                 detail="Organization nicht gefunden.",
             )
         try:
-            return await self._workspaces.create(org_id, user_id, data.name, data.slug)
+            return await self._workspaces.create(
+                org_id, user_id, data.name, data.slug, data.content_locale
+            )
         except asyncpg.UniqueViolationError as exc:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,

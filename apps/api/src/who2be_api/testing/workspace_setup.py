@@ -27,6 +27,8 @@ _AUTH_USERS_STUB = """
     );
     -- Defensive: aeltere Test-Runs haben die Tabelle ohne diese Spalten
     -- angelegt; bei geteilter Test-DB sonst Fehler.
+    ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS email text;
+    ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS raw_user_meta_data jsonb;
     ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS encrypted_password text;
     ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS created_at timestamptz;
     ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS last_sign_in_at timestamptz;
@@ -45,16 +47,21 @@ async def _ensure_auth_users_stub(conn: asyncpg.Connection) -> None:
     await conn.execute(_AUTH_USERS_STUB)
 
 
-async def _ensure_workspace(conn: asyncpg.Connection, user_id: UUID) -> UUID:
+async def _ensure_workspace(
+    conn: asyncpg.Connection, user_id: UUID, content_locale: str = "de"
+) -> UUID:
     """Duenner Test-Helper-Wrapper um ``ensure_personal_workspace`` (DRY).
 
     Stellt den `auth.users`-Stub bereit (nur in Test-DBs noetig) und
     delegiert die eigentliche Seed-Logik an das Prod-Modul.
+    ``content_locale`` bestimmt die Sprache der geseedeten Inhalte (ADR-0045).
     """
     await _ensure_auth_users_stub(conn)
     from who2be_api.repositories.workspace_repository import ensure_personal_workspace
 
-    return await ensure_personal_workspace(conn, user_id, user_email=None)
+    return await ensure_personal_workspace(
+        conn, user_id, user_email=None, content_locale=content_locale
+    )
 
 
 async def _connect_with_codec() -> asyncpg.Connection:
@@ -70,13 +77,13 @@ async def _connect_with_codec() -> asyncpg.Connection:
     return conn
 
 
-def setup_workspace(user_id: UUID) -> UUID:
+def setup_workspace(user_id: UUID, content_locale: str = "de") -> UUID:
     """Synchrone Convenience-Wrapper fuer Test-Setup."""
 
     async def _run() -> UUID:
         conn = await _connect_with_codec()
         try:
-            return await _ensure_workspace(conn, user_id)
+            return await _ensure_workspace(conn, user_id, content_locale)
         finally:
             await conn.close()
 
@@ -122,22 +129,33 @@ def fresh_user_id() -> UUID:
     return UUID(bytes=secrets.token_bytes(16))
 
 
-def seed_auth_user(user_id: UUID, email: str | None, name: str | None) -> None:
+def seed_auth_user(
+    user_id: UUID,
+    email: str | None,
+    name: str | None,
+    preferred_locale: str | None = None,
+) -> None:
     """Schreibt eine Zeile in den `auth.users`-Stub (s. `_ensure_auth_users_stub`).
 
     Genutzt von Dashboard-Tests, um `display_name`-Fallbacks (meta.name →
-    Email-Local-Part → User-ID) reproduzierbar abzudecken. UPSERT auf id,
-    damit Re-Runs idempotent bleiben."""
+    Email-Local-Part → User-ID) reproduzierbar abzudecken, sowie von den
+    me-Tests fuer die `preferred_locale`-Ableitung der Workspace-Content-
+    Sprache (ADR-0045). UPSERT auf id, damit Re-Runs idempotent bleiben."""
 
     async def _run() -> None:
         conn = await asyncpg.connect(get_settings().database_url)
         try:
             await _ensure_auth_users_stub(conn)
-            meta_json: str | None = None
+            meta: dict[str, str] = {}
             if name is not None:
+                meta["name"] = name
+            if preferred_locale is not None:
+                meta["preferred_locale"] = preferred_locale
+            meta_json: str | None = None
+            if meta:
                 import json
 
-                meta_json = json.dumps({"name": name})
+                meta_json = json.dumps(meta)
             await conn.execute(
                 "INSERT INTO auth.users (id, email, raw_user_meta_data) "
                 "VALUES ($1, $2, $3::jsonb) "

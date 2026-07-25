@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import UUID
 
 import asyncpg
@@ -43,7 +44,8 @@ from who2be_api.testing.workspace_setup import (
 
 _TEST_SECRET = "integration-test-jwt-secret-padding-0123456789"
 
-# Muss exakt zu den Namen in `_BUILDER_PLAYBOOKS` passen (die ersten vier
+# Muss exakt zu den Playbook-Namen des DE-ContentPacks passen
+# (`builder_content.py`, seit WP8 die SSoT der Seed-Inhalte; die ersten vier
 # spiegeln Migration 0047; Neuere kommen per Start-Sync in Bestands-Workspaces).
 _BUILDER_PLAYBOOK_NAMES = [
     "Persona anlegen & pflegen",
@@ -52,6 +54,16 @@ _BUILDER_PLAYBOOK_NAMES = [
     "Konsistenz- & Drift-Check",
     "Library-Pflege & Feedback-Lauf",
     "External Tool anlegen & pflegen",
+]
+
+# EN-Pack-Namen (Cross-Check fuer den EN-Workspace-Seed).
+_BUILDER_PLAYBOOK_NAMES_EN = [
+    "Create & Maintain Persona",
+    "Create & Maintain Playbook",
+    "Create & Maintain Agent",
+    "Consistency & Drift Check",
+    "Library Maintenance & Feedback Run",
+    "Create & Maintain External Tool",
 ]
 
 
@@ -256,6 +268,126 @@ def test_builder_agent_seeded_complete() -> None:
         # Builder koennen Bindungen anlegen/pflegen und via is_within vergeben.
         assert data["external_tool_write"] is True
         assert data["lite_external_tool_write"] is True
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+def test_builder_agent_seeded_english_workspace() -> None:
+    """EN-Workspace (ADR-0045, WP8): der Seed zieht das EN-ContentPack —
+    EN-Namen/-Bodies, und Entity- wie Versions-Rows tragen `locale='en'`."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    owner = fresh_user_id()
+    ws = setup_workspace(owner, content_locale="en")
+
+    async def _check(workspace_id: UUID) -> dict[str, Any]:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            ws_locale = await conn.fetchval(
+                "SELECT content_locale FROM workspace WHERE id = $1", workspace_id
+            )
+            persona = await conn.fetchrow(
+                "SELECT p.locale, pv.locale AS version_locale, pv.status "
+                "FROM persona p "
+                "JOIN persona_version pv ON pv.persona_id = p.id AND pv.version = 1 "
+                "WHERE p.workspace_id = $1 AND p.name = 'Builder'",
+                workspace_id,
+            )
+            playbooks = await conn.fetch(
+                "SELECT pb.name, pb.locale, pv.locale AS version_locale, "
+                "  pv.content ->> 'body' AS body "
+                "FROM playbook pb "
+                "JOIN playbook_version pv "
+                "  ON pv.playbook_id = pb.id AND pv.status = 'active' "
+                "WHERE pb.workspace_id = $1 AND pb.is_managed = true",
+                workspace_id,
+            )
+            resource = await conn.fetchrow(
+                "SELECT r.name, r.locale, rv.locale AS version_locale "
+                "FROM resource r "
+                "JOIN resource_version rv "
+                "  ON rv.resource_id = r.id AND rv.status = 'active' "
+                "WHERE r.workspace_id = $1 AND r.is_managed = true",
+                workspace_id,
+            )
+            templates = await conn.fetch(
+                "SELECT slug, name, locale FROM system_prompt_template WHERE workspace_id = $1",
+                workspace_id,
+            )
+            starter_body = await conn.fetchval(
+                "SELECT tv.content ->> 'body' FROM system_prompt_template t "
+                "JOIN system_prompt_template_version tv "
+                "  ON tv.template_id = t.id AND tv.version = 1 "
+                "WHERE t.workspace_id = $1 AND t.slug = 'workflow-starter'",
+                workspace_id,
+            )
+            starter_version_locale = await conn.fetchval(
+                "SELECT tv.locale FROM system_prompt_template t "
+                "JOIN system_prompt_template_version tv "
+                "  ON tv.template_id = t.id AND tv.version = 1 "
+                "WHERE t.workspace_id = $1 AND t.slug = 'workflow-starter'",
+                workspace_id,
+            )
+            agent_description = await conn.fetchval(
+                "SELECT description FROM agent WHERE workspace_id = $1 AND name = 'Builder'",
+                workspace_id,
+            )
+            return {
+                "ws_locale": ws_locale,
+                "persona": dict(persona) if persona else None,
+                "playbooks": [dict(r) for r in playbooks],
+                "resource": dict(resource) if resource else None,
+                "templates": [dict(r) for r in templates],
+                "starter_body": starter_body,
+                "starter_version_locale": starter_version_locale,
+                "agent_description": agent_description,
+            }
+        finally:
+            await conn.close()
+
+    try:
+        data = asyncio.run(_check(ws))
+
+        assert data["ws_locale"] == "en"
+
+        persona = data["persona"]
+        assert persona is not None, "Persona 'Builder' wurde nicht geseedet."
+        assert persona["status"] == "active"
+        # Entity UND Version tragen echt 'en' (nicht DB-Default 'de').
+        assert persona["locale"] == "en"
+        assert persona["version_locale"] == "en"
+
+        playbooks = data["playbooks"]
+        assert isinstance(playbooks, list)
+        assert sorted(p["name"] for p in playbooks) == sorted(_BUILDER_PLAYBOOK_NAMES_EN)
+        assert all(p["locale"] == "en" for p in playbooks), playbooks
+        assert all(p["version_locale"] == "en" for p in playbooks), playbooks
+        # Body-Stichprobe: der EN-Sidecar (nicht der DE-Text) wurde geladen.
+        persona_pb = next(p for p in playbooks if p["name"] == "Create & Maintain Persona")
+        assert "CRUD workflow for personas" in persona_pb["body"]
+
+        resource = data["resource"]
+        assert resource is not None, "Managed-Resource wurde nicht geseedet."
+        assert resource["name"] == "Agent-Building Conventions"
+        assert resource["locale"] == "en"
+        assert resource["version_locale"] == "en"
+
+        templates = data["templates"]
+        assert isinstance(templates, list)
+        template_names = {t["name"] for t in templates}
+        assert "Customer Support Agent" in template_names, template_names
+        assert "Workflow Starter" in template_names, template_names
+        assert all(t["locale"] == "en" for t in templates), templates
+        assert data["starter_version_locale"] == "en"
+        starter_body = data["starter_body"]
+        assert isinstance(starter_body, str) and "Available Tools" in starter_body
+
+        agent_description = data["agent_description"]
+        assert isinstance(agent_description, str)
+        assert agent_description.startswith("Standard meta-agent"), agent_description
     finally:
         cleanup_workspaces([owner])
 

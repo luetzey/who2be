@@ -13,7 +13,12 @@ from who2be_api.core import security
 from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.migrations import MIGRATIONS_DIR, apply_migrations
 from who2be_api.main import app
-from who2be_api.testing.workspace_setup import cleanup_workspaces, fresh_user_id, setup_workspace
+from who2be_api.testing.workspace_setup import (
+    cleanup_workspaces,
+    fresh_user_id,
+    seed_auth_user,
+    setup_workspace,
+)
 
 _TEST_SECRET = "integration-test-jwt-secret-padding-0123456789"
 
@@ -225,6 +230,67 @@ def test_me_lazy_seeds_personal_workspace_for_fresh_user(
             assert len(body2["organizations"]) == 1
     finally:
         _delete_auth_user(owner)
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+def test_me_lazy_seed_derives_content_locale_from_preferred_locale(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Lazy-Seed (ADR-0045, WP8): traegt der User `preferred_locale='en'` in
+    `auth.users.raw_user_meta_data`, bekommt der Personal-Workspace
+    `content_locale='en'` und die geseedeten Standard-Inhalte sind englisch."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    # Kein setup_workspace — der Lazy-Seed im /v1/me-Flow muss die Sprache
+    # selbst aus dem Profil ableiten. `seed_auth_user` stellt den vollen
+    # auth.users-Stub (inkl. raw_user_meta_data) bereit.
+    seed_auth_user(owner, "en-user@example.com", None, preferred_locale="en")
+
+    async def _seeded_state(workspace_id: UUID) -> dict[str, object]:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            content_locale = await conn.fetchval(
+                "SELECT content_locale FROM workspace WHERE id = $1", workspace_id
+            )
+            template_names = {
+                row["name"]
+                for row in await conn.fetch(
+                    "SELECT name FROM system_prompt_template WHERE workspace_id = $1",
+                    workspace_id,
+                )
+            }
+            persona_locale = await conn.fetchval(
+                "SELECT locale FROM persona WHERE workspace_id = $1 AND name = 'Builder'",
+                workspace_id,
+            )
+            return {
+                "content_locale": content_locale,
+                "template_names": template_names,
+                "persona_locale": persona_locale,
+            }
+        finally:
+            await conn.close()
+
+    try:
+        with TestClient(app) as client:
+            resp = client.get("/v1/me", headers=_auth(owner))
+            assert resp.status_code == 200
+            ws_id = resp.json()["default_workspace_id"]
+            assert ws_id is not None
+
+        state = asyncio.run(_seeded_state(UUID(ws_id)))
+        assert state["content_locale"] == "en"
+        template_names = state["template_names"]
+        assert isinstance(template_names, set)
+        assert "Customer Support Agent" in template_names, template_names
+        assert "Customer-Support-Agent" not in template_names, template_names
+        assert state["persona_locale"] == "en"
+    finally:
         cleanup_workspaces([owner])
 
 

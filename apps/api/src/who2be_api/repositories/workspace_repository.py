@@ -6,14 +6,20 @@ und bekommt die User-Identitaet vom Service-Layer durchgereicht.
 """
 
 import json
-from pathlib import Path
 from typing import Protocol
 from uuid import UUID
 
 import asyncpg
 
 from who2be_api.core.errors import ApiGateError
+from who2be_api.repositories.builder_content import (
+    SUPPORTED_LOCALES,
+    ContentPack,
+    PlaybookDef,
+    get_content_pack,
+)
 from who2be_models import (
+    DEFAULT_LOCALE,
     AgentToolPolicy,
     MemoryDirective,
     MemoryMode,
@@ -57,6 +63,7 @@ async def ensure_personal_workspace(
     user_id: UUID,
     *,
     user_email: str | None,
+    content_locale: str = DEFAULT_LOCALE,
 ) -> UUID:
     """Lazy-Seed einer Personal-Org + Workspace + Admin-Membership.
 
@@ -64,6 +71,12 @@ async def ensure_personal_workspace(
     Naming-Strategie fuer die Org:
       1. Local-Part der ``user_email``, falls gesetzt und valide.
       2. Fallback: ``"Personal"``.
+
+    ``content_locale`` (ADR-0045) bestimmt die Content-Sprache des Workspaces
+    und damit die Sprache der geseedeten Standard-Inhalte; abgeleitet wird sie
+    vom Aufrufer (me-Flow: ``preferred_locale`` aus ``auth.users``). Bei einem
+    Re-Lauf bleibt die bestehende Workspace-Sprache erhalten (kein Update im
+    ON-CONFLICT-Zweig) — die Seeds prallen dann ohnehin an ihren Guards ab.
 
     Gibt die ``workspace_id`` zurueck.
     """
@@ -83,10 +96,12 @@ async def ensure_personal_workspace(
         user_id,
     )
     workspace_id: UUID = await conn.fetchval(
-        "INSERT INTO workspace (org_id, name, slug) VALUES ($1, 'Personal', 'personal') "
+        "INSERT INTO workspace (org_id, name, slug, content_locale) "
+        "VALUES ($1, 'Personal', 'personal', $2) "
         "ON CONFLICT (org_id, slug) DO UPDATE SET name = excluded.name "
         "RETURNING id",
         org_id,
+        content_locale,
     )
     await conn.execute(
         "INSERT INTO workspace_member (workspace_id, user_id, role) "
@@ -94,8 +109,8 @@ async def ensure_personal_workspace(
         workspace_id,
         user_id,
     )
-    await _seed_default_templates(conn, workspace_id, user_id)
-    await _seed_default_agents(conn, workspace_id, user_id)
+    await _seed_default_templates(conn, workspace_id, user_id, content_locale)
+    await _seed_default_agents(conn, workspace_id, user_id, content_locale)
     return workspace_id
 
 
@@ -119,7 +134,9 @@ class WorkspaceRepository(Protocol):
 
     async def fetch(self, workspace_id: UUID) -> WorkspaceRead | None: ...
 
-    async def create(self, org_id: UUID, user_id: UUID, name: str, slug: str) -> WorkspaceRead: ...
+    async def create(
+        self, org_id: UUID, user_id: UUID, name: str, slug: str, content_locale: str
+    ) -> WorkspaceRead: ...
 
     async def update_name(self, workspace_id: UUID, name: str) -> WorkspaceRead | None: ...
 
@@ -134,7 +151,7 @@ class PgWorkspaceRepository:
 
     async def list_by_org_for_user(self, org_id: UUID, user_id: UUID) -> list[WorkspaceRead]:
         rows = await self._pool.fetch(
-            "SELECT w.id, w.org_id, w.name, w.slug, w.created_at "
+            "SELECT w.id, w.org_id, w.name, w.slug, w.content_locale, w.created_at "
             "FROM workspace w "
             "JOIN workspace_member m ON m.workspace_id = w.id "
             "WHERE w.org_id = $1 AND m.user_id = $2 "
@@ -146,26 +163,33 @@ class PgWorkspaceRepository:
 
     async def fetch(self, workspace_id: UUID) -> WorkspaceRead | None:
         row = await self._pool.fetchrow(
-            "SELECT id, org_id, name, slug, created_at FROM workspace WHERE id = $1",
+            "SELECT id, org_id, name, slug, content_locale, created_at "
+            "FROM workspace WHERE id = $1",
             workspace_id,
         )
         return WorkspaceRead.model_validate(dict(row)) if row is not None else None
 
-    async def create(self, org_id: UUID, user_id: UUID, name: str, slug: str) -> WorkspaceRead:
+    async def create(
+        self, org_id: UUID, user_id: UUID, name: str, slug: str, content_locale: str
+    ) -> WorkspaceRead:
         """Neuer Workspace + Admin-Membership fuer den Anlegenden, atomar.
 
-        Seedet zudem die drei Default-SystemPromptTemplates (Phase 3 Runde 3
+        Seedet zudem die Default-SystemPromptTemplates (Phase 3 Runde 3
         Track 3 — analog Migration 0023b fuer Bestandsworkspaces). Idempotent
         ueber `ON CONFLICT (workspace_id, slug) DO NOTHING`; bei Migration-
-        plus-Create-Race greift derselbe Schutz.
+        plus-Create-Race greift derselbe Schutz. `content_locale` (ADR-0045)
+        bestimmt die Sprache der geseedeten Standard-Inhalte und den Default
+        fuer neue Elemente (`resolve_content_locale`).
         """
         async with self._pool.acquire() as conn, conn.transaction():
             row = await conn.fetchrow(
-                "INSERT INTO workspace (org_id, name, slug) VALUES ($1, $2, $3) "
-                "RETURNING id, org_id, name, slug, created_at",
+                "INSERT INTO workspace (org_id, name, slug, content_locale) "
+                "VALUES ($1, $2, $3, $4) "
+                "RETURNING id, org_id, name, slug, content_locale, created_at",
                 org_id,
                 name,
                 slug,
+                content_locale,
             )
             await conn.execute(
                 "INSERT INTO workspace_member (workspace_id, user_id, role) "
@@ -173,14 +197,14 @@ class PgWorkspaceRepository:
                 row["id"],
                 user_id,
             )
-            await _seed_default_templates(conn, row["id"], user_id)
-            await _seed_default_agents(conn, row["id"], user_id)
+            await _seed_default_templates(conn, row["id"], user_id, content_locale)
+            await _seed_default_agents(conn, row["id"], user_id, content_locale)
         return WorkspaceRead.model_validate(dict(row))
 
     async def update_name(self, workspace_id: UUID, name: str) -> WorkspaceRead | None:
         row = await self._pool.fetchrow(
             "UPDATE workspace SET name = $1 WHERE id = $2 "
-            "RETURNING id, org_id, name, slug, created_at",
+            "RETURNING id, org_id, name, slug, content_locale, created_at",
             name,
             workspace_id,
         )
@@ -218,86 +242,46 @@ class PgWorkspaceRepository:
         return True
 
 
-# BlockNote-Bodies der Default-Templates leben als Sidecar-JSON-Dateien neben
-# dem Modul (Track B: Nur-BlockNote). Triple-Quoted-Stringliterale wurden von
-# ruff (line-length=100) wegen der inneren JSON-Keys flach abgelehnt; die
-# Sidecar-Dateien sind ausserdem die einzige Pflege-Quelle der Pill-Bodies.
-def _sidecar(name: str) -> str:
-    return (Path(__file__).parent / name).read_text(encoding="utf-8")
-
-
-_WORKFLOW_STARTER_BLOCKNOTE_BODY = _sidecar("workflow_starter_body.json")
-
-
-# Seed-Bodies fuer die Default-Templates eines neuen Workspaces. Track B
-# (Nur-BlockNote): alle vier Bodies sind BlockNote-JSON mit Placeholder-Pills
-# (persona-field, playbooks-catalog, tools-overview, date). Format:
-# (slug, name, blocknote_body).
-#
-# E4-Checkliste (jedes Template enthaelt): Persona-Profil-Pill, Playbooks-
-# Katalog-Pill, tools-overview-Pill, date-Pill + Agenten-Hinweise (Modi /
-# Composite / Applied-vs-Triggered).
-_DEFAULT_TEMPLATES: tuple[tuple[str, str, str], ...] = (
-    (
-        "customer-support-agent",
-        "Customer-Support-Agent",
-        _sidecar("customer_support_body.json"),
-    ),
-    (
-        "knowledge-worker",
-        "Knowledge-Worker",
-        _sidecar("knowledge_worker_body.json"),
-    ),
-    (
-        "conversational-coach",
-        "Conversational-Coach",
-        _sidecar("conversational_coach_body.json"),
-    ),
-    (
-        "workflow-starter",
-        "Workflow-Starter",
-        _WORKFLOW_STARTER_BLOCKNOTE_BODY,
-    ),
-    (
-        "agent-builder",
-        "Agent-Builder",
-        _sidecar("agent_builder_body.json"),
-    ),
-    (
-        "agent-builder-lite",
-        "Agent-Builder-Lite",
-        _sidecar("agent_builder_lite_body.json"),
-    ),
-)
+# Alle Seed-/Sync-Inhalte (Default-Templates, Builder-Persona/-Playbooks/
+# -Resource/-Agent-Beschreibungen) kommen seit WP8 (ADR-0045) aus den
+# Sprach-Content-Packs in `builder_content.py` — EIN Pack pro Sprache, SSoT.
+# Die BlockNote-Bodies liegen als Sidecar-JSON (DE flach neben dem Modul,
+# andere Sprachen unter `<locale>/` mit identischem Dateinamen) und werden
+# ueber `TemplateDef.load_body(locale)` etc. aufgeloest.
 
 
 async def _seed_default_templates(
-    conn: asyncpg.Connection, workspace_id: UUID, owner_id: UUID
+    conn: asyncpg.Connection, workspace_id: UUID, owner_id: UUID, content_locale: str
 ) -> None:
-    """Legt die vier Default-Templates eines neuen Workspaces an.
+    """Legt die Default-Templates eines neuen Workspaces an.
 
+    Inhalte kommen aus dem ContentPack der Workspace-Sprache (`content_locale`,
+    ADR-0045); Entity- UND Versions-Row tragen die Sprache explizit — bei
+    EN-Workspaces sind die geseedeten Templates echte EN-Elemente.
     Idempotent ueber ``ON CONFLICT (workspace_id, slug) DO NOTHING`` auf
     `system_prompt_template`. Versions-Insert per ``NOT EXISTS`` — wenn ein
     Template existiert (z. B. nach Re-Lauf), wird kein v1 mehr angelegt.
     Initial-Status ist `active`, sodass der Render-Endpoint sofort ohne
     Promote-Schritt feuert.
     """
-    for slug, name, body in _DEFAULT_TEMPLATES:
+    pack = get_content_pack(content_locale)
+    for template in pack.templates:
         # Die agent-builder-Templates (voll + lite) sind managed (gesperrt +
         # zentral gepflegt); die uebrigen Default-Templates bleiben frei editierbar.
-        managed = slug in (_AGENT_BUILDER_TEMPLATE_SLUG, _AGENT_BUILDER_LITE_TEMPLATE_SLUG)
+        managed = template.slug in _MANAGED_TEMPLATE_SLUGS
         template_id = await conn.fetchval(
             "INSERT INTO system_prompt_template "
-            "(workspace_id, owner_id, name, slug, is_managed, managed_content_version) "
-            "VALUES ($1, $2, $3, $4, $5, $6) "
+            "(workspace_id, owner_id, name, slug, is_managed, managed_content_version, locale) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7) "
             "ON CONFLICT (workspace_id, slug) DO NOTHING "
             "RETURNING id",
             workspace_id,
             owner_id,
-            name,
-            slug,
+            template.name,
+            template.slug,
             managed,
             BUILDER_CONTENT_VERSION if managed else 0,
+            content_locale,
         )
         if template_id is None:
             # Template gab es schon — der Versions-Insert unten wuerde
@@ -306,8 +290,8 @@ async def _seed_default_templates(
             continue
         await conn.execute(
             "INSERT INTO system_prompt_template_version "
-            "(template_id, version, content, status, created_by) "
-            "SELECT $1, 1, $2::jsonb, 'active', $3 "
+            "(template_id, version, content, status, created_by, locale) "
+            "SELECT $1, 1, $2::jsonb, 'active', $3, $4 "
             "WHERE NOT EXISTS ("
             "  SELECT 1 FROM system_prompt_template_version "
             "  WHERE template_id = $1 AND version = 1"
@@ -319,8 +303,9 @@ async def _seed_default_templates(
             # in Quotes verpackt (doppelt-encodierter JSON-String statt Objekt).
             # Der ::jsonb-Cast oben aktiviert den Codec; ohne ihn fuehrt asyncpg
             # keine Typ-Inferenz fuer $2 durch und erwartet einen str.
-            {"description": "", "body": body},
+            {"description": "", "body": template.load_body(content_locale)},
             owner_id,
+            content_locale,
         )
 
 
@@ -349,11 +334,13 @@ async def _seed_default_templates(
 # Idempotenz: jede Identitaets-Zeile wird per NOT EXISTS (workspace_id + name
 # bzw. slug) angelegt, die Links via ON CONFLICT DO NOTHING. JSONB-Bind: dict
 # uebergeben, KEINEN vor-serialisierten String (Codec-Falle, siehe oben).
-_BUILDER_PERSONA_NAME = "Builder"
-_BUILDER_AGENT_NAME = "Builder"
-_BUILDER_LITE_AGENT_NAME = "Builder-Lite"
+#
+# Namen/Trigger/Tags/Beschreibungen leben pro Sprache im ContentPack
+# (`builder_content.py`); hier verbleiben nur die locale-unabhaengigen
+# technischen Schluessel (Template-Slugs) und die Tool-Policy.
 _AGENT_BUILDER_TEMPLATE_SLUG = "agent-builder"
 _AGENT_BUILDER_LITE_TEMPLATE_SLUG = "agent-builder-lite"
+_MANAGED_TEMPLATE_SLUGS = (_AGENT_BUILDER_TEMPLATE_SLUG, _AGENT_BUILDER_LITE_TEMPLATE_SLUG)
 
 # Kanonischer Content-Stand des verwalteten Builders. Wird bei jeder zentralen
 # Aenderung an Persona/Template/Playbooks/Resource (Sidecars) hochgezaehlt; der
@@ -381,165 +368,68 @@ _AGENT_BUILDER_LITE_TEMPLATE_SLUG = "agent-builder-lite"
 # in der Policy (damit via `is_within` auch an Fach-Agenten vergebbar), neues
 # Playbook „External Tool anlegen & pflegen" + External-Tools-Sektion in den
 # Agent-Bau-Konventionen.
-BUILDER_CONTENT_VERSION = 11
-
-_BUILDER_PERSONA_DESCRIPTION = (
-    "Meta-Agent, der Personas, Playbooks, Resources und Agenten im Workspace "
-    "anlegt und pflegt — der Agent, der Agenten baut."
-)
-_BUILDER_PERSONA_TRAITS: tuple[str, ...] = (
-    "strukturell",
-    "kritisch",
-    "phasen-orientiert",
-    "trade-offs-explizit",
-)
-_BUILDER_PERSONA_TAGS: tuple[str, ...] = ("meta-agent", "agent-building", "crud")
-
-_BUILDER_AGENT_DESCRIPTION = (
-    "Standard-Meta-Agent zum Anlegen und Pflegen von Personas, Playbooks, Resources und Agenten."
-)
-_BUILDER_LITE_AGENT_DESCRIPTION = (
-    "Schlanke Builder-Variante mit kompaktem System-Prompt — fuer LLMs mit kleinem "
-    "System-Prompt-Budget. Gleiche Persona und Schreib-Policy wie der Builder."
-)
-
-# (name, type, triggers, tags, description, sidecar) — Reihenfolge fix; die
-# ersten vier Eintraege spiegeln Migration 0047 (Backfill-Seed), alles danach
-# erreicht Bestands-Workspaces ausschliesslich ueber den Start-Sync
-# (`sync_managed_builder_content`, Insert-missing) — keine Spiegel-Migration.
-# Trigger-Hygiene: keine generischen Woerter, die fremde Domaenen matchen
-# (Kollisions-Historie: "pruefen"/"qualitaetscheck" zogen Code-/Repo-Audit-
-# Anfragen auf den Drift-Check); "aufraeumen" ist vom Vault-Playbook
-# „Aufraeumen & Deduplizieren" belegt und bleibt hier bewusst ungenutzt.
-_BUILDER_PLAYBOOKS: tuple[tuple[str, str, str, tuple[str, ...], str, str], ...] = (
-    (
-        "Persona anlegen & pflegen",
-        "workflow",
-        "persona anlegen, persona bearbeiten, persona pflegen, neue persona",
-        ("persona", "crud", "agent-building"),
-        "Eine Persona via MCP-Write-Tools anlegen, als Draft aendern und nach active schalten.",
-        "builder_playbook_persona_body.json",
-    ),
-    (
-        "Playbook anlegen & pflegen",
-        "workflow",
-        "playbook anlegen, playbook bearbeiten, composite, neues playbook",
-        ("playbook", "crud", "agent-building"),
-        "Playbooks anlegen und pflegen — inkl. Resource-Verweisen und Composite-Sequenzen.",
-        "builder_playbook_playbook_body.json",
-    ),
-    (
-        "Agent anlegen & pflegen",
-        "workflow",
-        "agent anlegen, agent konfigurieren, agent bearbeiten, tool policy, agent kopieren",
-        ("agent", "crud", "agent-building"),
-        "Einen Agenten konfigurieren: Persona + Template verdrahten, Tool-Policy setzen, kopieren.",
-        "builder_playbook_agent_body.json",
-    ),
-    (
-        "Konsistenz- & Drift-Check",
-        "checklist",
-        "konsistenz, drift, agenten pruefen, library pruefen, agent-drift, "
-        "aktivierbar, activatable",
-        ("konsistenz", "qa", "agent-building"),
-        "Read-only-Pruefung der Agent-Library auf Aktivierbarkeit, aktive Versionen, "
-        "Prompt-Rendering und strukturelle Zusammenhaenge — kein Code-/Repo-Audit.",
-        "builder_playbook_consistency_body.json",
-    ),
-    (
-        "Library-Pflege & Feedback-Lauf",
-        "workflow",
-        "library pflegen, pflege-lauf, feedback abarbeiten, feedback umsetzen, "
-        "library aufraeumen, wartungslauf, kuratieren",
-        ("pflege", "feedback", "qa", "agent-building"),
-        "Feedback-getriebener Pflege-Lauf ueber die Agent-Library: Feedback sammeln, "
-        "triagieren, Zusammenhaenge und Luecken pruefen, Fixes nach Freigabe als "
-        "Drafts umsetzen.",
-        "builder_playbook_maintenance_body.json",
-    ),
-    (
-        "External Tool anlegen & pflegen",
-        "workflow",
-        "external tool anlegen, external tool pflegen, tool-bindung anlegen, "
-        "tool-bindung pflegen, tool anbinden, tool wechseln, tool-ref",
-        ("external-tool", "crud", "agent-building"),
-        "External-Tool-Bindungen (ADR-0043) anlegen, pflegen und rebinden — "
-        "Alias-Vertrag, instruktiver Content, tool-ref-Pills und Policy-Vergabe "
-        "an Fach-Agenten.",
-        "builder_playbook_external_tool_body.json",
-    ),
-)
-
-# Managed-Resource „Agent-Bau-Konventionen" — Single-Source der Bau-Konventionen,
-# auf die alle Builder-Playbooks per link_scope='resource' zeigen (statt die
-# Konventions-Prosa in jedem Playbook zu duplizieren). Tags leben im Versions-
-# Content (`ResourceContent.tags`) — die resource-Row hat keine Tag-Spalte.
-_BUILDER_RESOURCE_NAME = "Agent-Bau-Konventionen"
-# Workspace-eindeutiger Slug (Migration 0064). Fester Wert, damit Re-Seeds
-# idempotent bleiben (der Name-Guard verhindert Doppel-Insert, der feste Slug
-# haelt die UNIQUE(workspace_id, slug) sauber).
-_BUILDER_RESOURCE_SLUG = "agent-bau-konventionen"
-_BUILDER_RESOURCE_TAGS: tuple[str, ...] = ("konventionen", "agent-building", "meta")
-_BUILDER_RESOURCE_DESCRIPTION = (
-    "Verbindliche Konventionen fuer den Agent-Bau: Trigger-Hygiene, Modi-Regel, "
-    "Naming, Tool-Policy-Muster und Managed/409-Grenzen — Single-Source fuer "
-    "die Builder-Playbooks."
-)
-_BUILDER_RESOURCE_SIDECAR = "builder_resource_conventions_body.json"
+# v12: Content-Packs als SSoT (ADR-0045, WP7/WP8) — Seed + Sync beziehen alle
+# Inhalte aus `builder_content.get_content_pack(locale)`; die DE-Prosa des
+# Persona-Playbooks wurde in WP7 sprachbewusst umformuliert (create_persona-
+# Beispiele). WICHTIG: Der Stempel ist sprachuebergreifend — Bump bei jeder
+# Content-Aenderung in IRGENDEINER Sprache (DE ODER EN), sonst verteilt der
+# Sync die geaenderte Sprache nie.
+BUILDER_CONTENT_VERSION = 12
 
 
-def _builder_persona_content() -> dict[str, object]:
+def _builder_persona_content(pack: ContentPack) -> dict[str, object]:
     """Persona-Versions-Content (PersonaVersionContent-Form) als dict fuer JSONB.
 
-    Der BlockNote-Profil-Body kommt aus dem Sidecar (Array von Blocks) und wird
-    unter `content.blocks` gehaengt. `modes` traegt die drei Persona-Modi aus
-    dem Modes-Sidecar (Multi-Mode: Architekt als Default, Kurator, Berater).
-    Der Kurator bindet das Pflege-Playbook bewusst in Prosa statt via
-    `playbook_id` — Playbook-UUIDs sind workspace-spezifisch, der kanonische
-    Content muss workspace-uebergreifend identisch bleiben.
+    Der BlockNote-Profil-Body kommt aus dem Sidecar der Pack-Sprache (Array von
+    Blocks) und wird unter `content.blocks` gehaengt. `modes` traegt die drei
+    Persona-Modi aus dem Modes-Sidecar (Multi-Mode: Architekt als Default,
+    Kurator, Berater). Der Kurator bindet das Pflege-Playbook bewusst in Prosa
+    statt via `playbook_id` — Playbook-UUIDs sind workspace-spezifisch, der
+    kanonische Content muss workspace-uebergreifend identisch bleiben.
     """
-    blocks = json.loads(_sidecar("builder_persona_content.json"))
-    modes = json.loads(_sidecar("builder_persona_modes.json"))
+    persona = pack.persona
+    blocks = json.loads(persona.load_content(pack.locale))
+    modes = json.loads(persona.load_modes(pack.locale))
     return {
-        "description": _BUILDER_PERSONA_DESCRIPTION,
-        "traits": list(_BUILDER_PERSONA_TRAITS),
-        "tags": list(_BUILDER_PERSONA_TAGS),
+        "description": persona.description,
+        "traits": list(persona.traits),
+        "tags": list(persona.tags),
         "content": {"description": "", "blocks": blocks},
         "modes": modes,
         "skills": [],
     }
 
 
-def _builder_resource_content() -> dict[str, object]:
+def _builder_resource_content(pack: ContentPack) -> dict[str, object]:
     """Resource-Versions-Content (ResourceContent-Form) als dict fuer JSONB.
 
-    `blocks` ist das BlockNote-Array aus dem Sidecar (im Gegensatz zum
-    Playbook-`body` NICHT stringifiziert — `ResourceContent.blocks` ist eine
-    echte Block-Liste); `tags` leben hier im Content, nicht auf der Row.
+    `blocks` ist das BlockNote-Array aus dem Sidecar der Pack-Sprache (im
+    Gegensatz zum Playbook-`body` NICHT stringifiziert —
+    `ResourceContent.blocks` ist eine echte Block-Liste); `tags` leben hier im
+    Content, nicht auf der Row.
     """
-    blocks = json.loads(_sidecar(_BUILDER_RESOURCE_SIDECAR))
+    resource = pack.resource
+    blocks = json.loads(resource.load_body(pack.locale))
     return {
-        "description": _BUILDER_RESOURCE_DESCRIPTION,
+        "description": resource.description,
         "blocks": blocks,
-        "tags": list(_BUILDER_RESOURCE_TAGS),
+        "tags": list(resource.tags),
     }
 
 
-def _builder_playbook_content(
-    sidecar: str, ptype: str, tags: tuple[str, ...], triggers: str, description: str
-) -> dict[str, object]:
+def _builder_playbook_content(playbook: PlaybookDef, locale: str) -> dict[str, object]:
     """Playbook-Versions-Content (PlaybookContent-Form) als dict fuer JSONB.
 
     `body` ist das stringifizierte BlockNote-Dokument (`json.dumps` des Sidecar-
-    Arrays) — analog zum Frontend-`JSON.stringify(editor.document)`.
+    Arrays der Pack-Sprache) — analog zum Frontend-`JSON.stringify(editor.document)`.
     """
-    body = json.dumps(json.loads(_sidecar(sidecar)), ensure_ascii=False)
+    body = json.dumps(json.loads(playbook.load_body(locale)), ensure_ascii=False)
     return {
-        "description": description,
+        "description": playbook.description,
         "body": body,
-        "type": ptype,
-        "tags": list(tags),
-        "triggers": triggers,
+        "type": playbook.type,
+        "tags": list(playbook.tags),
+        "triggers": playbook.triggers,
     }
 
 
@@ -588,61 +478,70 @@ def _builder_tool_policy() -> dict[str, object]:
 
 
 async def _seed_default_agents(
-    conn: asyncpg.Connection, workspace_id: UUID, owner_id: UUID
+    conn: asyncpg.Connection, workspace_id: UUID, owner_id: UUID, content_locale: str
 ) -> None:
     """Legt den Default-Agenten „Builder" eines neuen Workspaces an.
 
-    Laeuft NACH `_seed_default_templates` (braucht das 'agent-builder'-Template).
-    Idempotent ueber NOT-EXISTS-Guards (workspace_id + name/slug) und
-    ON-CONFLICT-DO-NOTHING auf den Links. Migration 0047 war der einmalige
-    Backfill des damaligen Stands; neuere Inhalte verteilt der Start-Sync.
+    Alle Inhalte kommen aus dem ContentPack der Workspace-Sprache
+    (`content_locale`, ADR-0045); Entity- UND Versions-Rows tragen die Sprache
+    explizit — bei EN-Workspaces sind Persona/Playbooks/Resource echte
+    EN-Elemente. Laeuft NACH `_seed_default_templates` (braucht das
+    'agent-builder'-Template). Idempotent ueber NOT-EXISTS-Guards
+    (workspace_id + name/slug) und ON-CONFLICT-DO-NOTHING auf den Links.
+    Migration 0047 war der einmalige Backfill des damaligen Stands; neuere
+    Inhalte verteilt der Start-Sync.
     """
+    pack = get_content_pack(content_locale)
+
     # 1. Persona „Builder" + v1 (active). Der NOT-EXISTS-Guard liefert None,
     #    wenn der Builder-Seed bereits lief — der Lauf ist atomar, also sind
     #    in dem Fall auch Playbooks/Resource/Agent schon da: frueh raus.
     persona_id = await conn.fetchval(
         "INSERT INTO persona "
-        "(workspace_id, owner_id, name, is_managed, managed_content_version) "
-        "SELECT $1, $2, $3, true, $4 "
+        "(workspace_id, owner_id, name, is_managed, managed_content_version, locale) "
+        "SELECT $1, $2, $3, true, $4, $5 "
         "WHERE NOT EXISTS ("
         "  SELECT 1 FROM persona WHERE workspace_id = $1 AND name = $3"
         ") "
         "RETURNING id",
         workspace_id,
         owner_id,
-        _BUILDER_PERSONA_NAME,
+        pack.persona.name,
         BUILDER_CONTENT_VERSION,
+        content_locale,
     )
     if persona_id is None:
         return
     await conn.execute(
         "INSERT INTO persona_version "
         "(persona_id, version, content, status, created_by, locale) "
-        "VALUES ($1, 1, $2::jsonb, 'active', $3, 'de')",
+        "VALUES ($1, 1, $2::jsonb, 'active', $3, $4)",
         persona_id,
-        _builder_persona_content(),
+        _builder_persona_content(pack),
         owner_id,
+        content_locale,
     )
 
     # 2. Alle Builder-Playbooks + v1 (active); ids fuer die Verlinkung einsammeln.
     playbook_ids: list[UUID] = []
-    for name, ptype, triggers, tags, description, sidecar in _BUILDER_PLAYBOOKS:
+    for playbook in pack.playbooks:
         playbook_id = await conn.fetchval(
             "INSERT INTO playbook "
             "(workspace_id, owner_id, name, type, tags, triggers, "
-            " is_managed, managed_content_version) "
-            "SELECT $1, $2, $3, $4, $5, $6, true, $7 "
+            " is_managed, managed_content_version, locale) "
+            "SELECT $1, $2, $3, $4, $5, $6, true, $7, $8 "
             "WHERE NOT EXISTS ("
             "  SELECT 1 FROM playbook WHERE workspace_id = $1 AND name = $3"
             ") "
             "RETURNING id",
             workspace_id,
             owner_id,
-            name,
-            ptype,
-            list(tags),
-            triggers,
+            playbook.name,
+            playbook.type,
+            list(playbook.tags),
+            playbook.triggers,
             BUILDER_CONTENT_VERSION,
+            content_locale,
         )
         if playbook_id is None:
             # Gleichnamiges Playbook gab es schon (Re-Lauf/Race) — id nachladen,
@@ -651,16 +550,17 @@ async def _seed_default_agents(
                 "SELECT id FROM playbook WHERE workspace_id = $1 AND name = $2 "
                 "ORDER BY created_at ASC LIMIT 1",
                 workspace_id,
-                name,
+                playbook.name,
             )
         else:
             await conn.execute(
                 "INSERT INTO playbook_version "
                 "(playbook_id, version, content, status, created_by, locale) "
-                "VALUES ($1, 1, $2::jsonb, 'active', $3, 'de')",
+                "VALUES ($1, 1, $2::jsonb, 'active', $3, $4)",
                 playbook_id,
-                _builder_playbook_content(sidecar, ptype, tags, triggers, description),
+                _builder_playbook_content(playbook, content_locale),
                 owner_id,
+                content_locale,
             )
         if playbook_id is not None:
             playbook_ids.append(playbook_id)
@@ -686,26 +586,28 @@ async def _seed_default_agents(
     #    aus Migration 0021 ab.
     resource_id = await conn.fetchval(
         "INSERT INTO resource "
-        "(workspace_id, owner_id, name, slug, is_managed, managed_content_version) "
-        "SELECT $1, $2, $3, $5, true, $4 "
+        "(workspace_id, owner_id, name, slug, is_managed, managed_content_version, locale) "
+        "SELECT $1, $2, $3, $5, true, $4, $6 "
         "WHERE NOT EXISTS ("
         "  SELECT 1 FROM resource WHERE workspace_id = $1 AND name = $3"
         ") "
         "RETURNING id",
         workspace_id,
         owner_id,
-        _BUILDER_RESOURCE_NAME,
+        pack.resource.name,
         BUILDER_CONTENT_VERSION,
-        _BUILDER_RESOURCE_SLUG,
+        pack.resource.slug,
+        content_locale,
     )
     if resource_id is not None:
         await conn.execute(
             "INSERT INTO resource_version "
             "(resource_id, version, content, status, created_by, locale) "
-            "VALUES ($1, 1, $2::jsonb, 'active', $3, 'de')",
+            "VALUES ($1, 1, $2::jsonb, 'active', $3, $4)",
             resource_id,
-            _builder_resource_content(),
+            _builder_resource_content(pack),
             owner_id,
+            content_locale,
         )
         if playbook_ids:
             await conn.execute(
@@ -738,8 +640,8 @@ async def _seed_default_agents(
         ")",
         workspace_id,
         owner_id,
-        _BUILDER_AGENT_NAME,
-        _BUILDER_AGENT_DESCRIPTION,
+        pack.agent.name,
+        pack.agent.description,
         persona_id,
         template_id,
         _builder_tool_policy(),
@@ -766,8 +668,8 @@ async def _seed_default_agents(
         ")",
         workspace_id,
         owner_id,
-        _BUILDER_LITE_AGENT_NAME,
-        _BUILDER_LITE_AGENT_DESCRIPTION,
+        pack.agent_lite.name,
+        pack.agent_lite.description,
         persona_id,
         lite_template_id,
         _builder_tool_policy(),
@@ -780,19 +682,28 @@ async def sync_managed_builder_content(conn: asyncpg.Connection) -> int:
     Stand (`BUILDER_CONTENT_VERSION`).
 
     Zentrale Verteilung: bei jeder Aenderung an den Sidecars
-    (Persona/Template/Playbooks/Resource) wird `BUILDER_CONTENT_VERSION`
-    hochgezaehlt; dieser
+    (Persona/Template/Playbooks/Resource — in IRGENDEINER Sprache) wird
+    `BUILDER_CONTENT_VERSION` hochgezaehlt; dieser
     Sync ersetzt dann beim App-Start in JEDEM Workspace den aktiven Versions-Inhalt
     der managed Builder-Aggregate durch den kanonischen — sicher, weil managed =
     gesperrt (keine User-Edits zu erhalten). In-place-Replace (keine Versions-
     Proliferation); idempotent ueber den `managed_content_version`-Stempel.
 
+    Locale-bewusst (ADR-0045, WP8): der Sync laeuft pro Sprache aus
+    `SUPPORTED_LOCALES` mit dem jeweiligen ContentPack; JEDE Kandidaten-Query
+    ist ueber `JOIN workspace w ... AND w.content_locale = $n` auf Workspaces
+    dieser Sprache gescopet — pro Workspace gilt genau EIN Pack, EN-Inhalte
+    landen nie in DE-Workspaces und umgekehrt. Das Name-Matching bleibt damit
+    tragfaehig: die Pack-Namen sind pro Sprache eindeutig, und ein Workspace
+    enthaelt nur die Namen seines Packs. Insert-missing-Zweige schreiben
+    `locale` explizit auf Entity- UND Versions-Row.
+
     Playbooks werden dabei auf BEIDEN Ebenen nachgezogen: der aktive Versions-
     Inhalt UND die Metadaten der Playbook-Row (`type`/`tags`/`triggers`) —
     Letztere speisen Listen/`list_triggers` und wuerden sonst nie verteilen
     (Metadaten-Drift, sichtbar geworden bei der Trigger-Kollision des
-    Konsistenz-Checks). Zusaetzlich legt der Sync in `_BUILDER_PLAYBOOKS` neu
-    hinzugekommene Eintraege in Bestands-Workspaces mit managed Builder-Persona
+    Konsistenz-Checks). Zusaetzlich legt der Sync im Pack neu hinzugekommene
+    Playbooks in Bestands-Workspaces mit managed Builder-Persona
     an (Insert-missing, analog `_seed_default_agents`: Row + v1 active +
     persona_playbook-Link) — der Seed laeuft dort nie wieder. Dasselbe Muster
     gilt fuer die Managed-Resource „Agent-Bau-Konventionen" (Content-Stand 5):
@@ -801,15 +712,16 @@ async def sync_managed_builder_content(conn: asyncpg.Connection) -> int:
     Insert-missing der Resource + v1 active + der `playbook_resource_link`s
     aller Builder-Playbooks (link_scope 'resource') in Bestands-Workspaces.
     Seit Content-Stand 6 gehoeren auch die AGENT-Rows dazu: die `tool_policy`
-    der Builder-Agenten (Builder/Builder-Lite) ist Teil des kanonischen
+    (und seit WP8 die Pack-Beschreibung) der Builder-Agenten
+    (Builder/Builder-Lite) ist Teil des kanonischen
     Builder-Stands und wird bei Stempel-Rueckstand auf `_builder_tool_policy()`
     ersetzt — sicher, weil managed = gesperrt (keine User-Edits an der Policy
     zu erhalten); ohne diesen Zweig bekaemen Bestands-Builder neue
     Capabilities (z. B. `feedback_resolve`) nie.
     Damit braucht eine Content-/Playbook-/Resource-Erweiterung KEINE
     Spiegel-Migration mehr (Konvention seit 0057/Start-Sync; v1→v2 und v2→v3
-    liefen ebenso rein ueber den Sync): Sidecar/`_BUILDER_PLAYBOOKS` bzw.
-    Resource-Konstanten anpassen + Version hochzaehlen.
+    liefen ebenso rein ueber den Sync): Sidecar/ContentPack anpassen +
+    Version hochzaehlen.
 
     Erwartet eine privilegierte Verbindung (Owner/Migrations-URL) — der RLS-
     gescopte App-Pool saehe ohne Tenant keine Zeilen. JSONB wird als String
@@ -817,272 +729,294 @@ async def sync_managed_builder_content(conn: asyncpg.Connection) -> int:
     aktualisierter + neu angelegter Aggregate zurueck.
     """
     updated = 0
+    # Die Tool-Policy ist locale-unabhaengig (reine Capability-Flags) — einmal
+    # serialisieren, in jedem Sprach-Durchlauf verwenden.
+    agent_policy_json = json.dumps(_builder_tool_policy())
 
-    persona_json = json.dumps(_builder_persona_content())
-    for row in await conn.fetch(
-        "SELECT id FROM persona WHERE name = $1 AND is_managed = true "
-        "AND managed_content_version < $2",
-        _BUILDER_PERSONA_NAME,
-        BUILDER_CONTENT_VERSION,
-    ):
-        await conn.execute(
-            "UPDATE persona_version SET content = $2::jsonb "
-            "WHERE persona_id = $1 AND status = 'active'",
-            row["id"],
-            persona_json,
-        )
-        await conn.execute(
-            "UPDATE persona SET managed_content_version = $2, updated_at = now() WHERE id = $1",
-            row["id"],
-            BUILDER_CONTENT_VERSION,
-        )
-        updated += 1
+    for locale in SUPPORTED_LOCALES:
+        pack = get_content_pack(locale)
 
-    template_json = json.dumps({"description": "", "body": _sidecar("agent_builder_body.json")})
-    for row in await conn.fetch(
-        "SELECT id FROM system_prompt_template WHERE slug = $1 AND is_managed = true "
-        "AND managed_content_version < $2",
-        _AGENT_BUILDER_TEMPLATE_SLUG,
-        BUILDER_CONTENT_VERSION,
-    ):
-        await conn.execute(
-            "UPDATE system_prompt_template_version SET content = $2::jsonb "
-            "WHERE template_id = $1 AND status = 'active'",
-            row["id"],
-            template_json,
-        )
-        await conn.execute(
-            "UPDATE system_prompt_template SET managed_content_version = $2, updated_at = now() "
-            "WHERE id = $1",
-            row["id"],
-            BUILDER_CONTENT_VERSION,
-        )
-        updated += 1
-
-    lite_template_json = json.dumps(
-        {"description": "", "body": _sidecar("agent_builder_lite_body.json")}
-    )
-    for row in await conn.fetch(
-        "SELECT id FROM system_prompt_template WHERE slug = $1 AND is_managed = true "
-        "AND managed_content_version < $2",
-        _AGENT_BUILDER_LITE_TEMPLATE_SLUG,
-        BUILDER_CONTENT_VERSION,
-    ):
-        await conn.execute(
-            "UPDATE system_prompt_template_version SET content = $2::jsonb "
-            "WHERE template_id = $1 AND status = 'active'",
-            row["id"],
-            lite_template_json,
-        )
-        await conn.execute(
-            "UPDATE system_prompt_template SET managed_content_version = $2, updated_at = now() "
-            "WHERE id = $1",
-            row["id"],
-            BUILDER_CONTENT_VERSION,
-        )
-        updated += 1
-
-    for name, ptype, triggers, tags, description, sidecar in _BUILDER_PLAYBOOKS:
-        pb_json = json.dumps(_builder_playbook_content(sidecar, ptype, tags, triggers, description))
-
-        # Insert-missing: neue managed Playbooks erreichen Bestands-Workspaces nur
-        # hier (der Seed laeuft dort nie wieder). Match wie im Seed ueber
-        # workspace_id + name; created_by/owner = Owner der Builder-Persona.
-        for prow in await conn.fetch(
-            "SELECT p.id AS persona_id, p.workspace_id, p.owner_id FROM persona p "
+        # (1) Persona-Content-Update bei Stempel-Rueckstand.
+        persona_json = json.dumps(_builder_persona_content(pack))
+        for row in await conn.fetch(
+            "SELECT p.id FROM persona p "
+            "JOIN workspace w ON w.id = p.workspace_id "
             "WHERE p.name = $1 AND p.is_managed = true "
-            "AND NOT EXISTS ("
-            "  SELECT 1 FROM playbook pb "
-            "  WHERE pb.workspace_id = p.workspace_id AND pb.name = $2"
-            ")",
-            _BUILDER_PERSONA_NAME,
-            name,
+            "AND p.managed_content_version < $2 AND w.content_locale = $3",
+            pack.persona.name,
+            BUILDER_CONTENT_VERSION,
+            locale,
         ):
-            playbook_id = await conn.fetchval(
-                "INSERT INTO playbook "
-                "(workspace_id, owner_id, name, type, tags, triggers, "
-                " is_managed, managed_content_version) "
-                "SELECT $1, $2, $3, $4, $5, $6, true, $7 "
-                "WHERE NOT EXISTS ("
-                "  SELECT 1 FROM playbook WHERE workspace_id = $1 AND name = $3"
-                ") "
-                "RETURNING id",
-                prow["workspace_id"],
-                prow["owner_id"],
-                name,
-                ptype,
-                list(tags),
-                triggers,
+            await conn.execute(
+                "UPDATE persona_version SET content = $2::jsonb "
+                "WHERE persona_id = $1 AND status = 'active'",
+                row["id"],
+                persona_json,
+            )
+            await conn.execute(
+                "UPDATE persona SET managed_content_version = $2, updated_at = now() WHERE id = $1",
+                row["id"],
                 BUILDER_CONTENT_VERSION,
             )
-            if playbook_id is None:
+            updated += 1
+
+        # (2)+(3) Managed-Templates (agent-builder + agent-builder-lite):
+        # Content-Update bei Stempel-Rueckstand, Body aus dem Pack der
+        # Workspace-Sprache.
+        for template in pack.templates:
+            if template.slug not in _MANAGED_TEMPLATE_SLUGS:
+                continue
+            template_json = json.dumps({"description": "", "body": template.load_body(locale)})
+            for row in await conn.fetch(
+                "SELECT t.id FROM system_prompt_template t "
+                "JOIN workspace w ON w.id = t.workspace_id "
+                "WHERE t.slug = $1 AND t.is_managed = true "
+                "AND t.managed_content_version < $2 AND w.content_locale = $3",
+                template.slug,
+                BUILDER_CONTENT_VERSION,
+                locale,
+            ):
+                await conn.execute(
+                    "UPDATE system_prompt_template_version SET content = $2::jsonb "
+                    "WHERE template_id = $1 AND status = 'active'",
+                    row["id"],
+                    template_json,
+                )
+                await conn.execute(
+                    "UPDATE system_prompt_template "
+                    "SET managed_content_version = $2, updated_at = now() "
+                    "WHERE id = $1",
+                    row["id"],
+                    BUILDER_CONTENT_VERSION,
+                )
+                updated += 1
+
+        for playbook in pack.playbooks:
+            pb_json = json.dumps(_builder_playbook_content(playbook, locale))
+
+            # (4) Insert-missing: neue managed Playbooks erreichen Bestands-
+            # Workspaces nur hier (der Seed laeuft dort nie wieder). Match wie
+            # im Seed ueber workspace_id + Pack-Name (gescopet auf Workspaces
+            # der Pack-Sprache); created_by/owner = Owner der Builder-Persona.
+            for prow in await conn.fetch(
+                "SELECT p.id AS persona_id, p.workspace_id, p.owner_id FROM persona p "
+                "JOIN workspace w ON w.id = p.workspace_id "
+                "WHERE p.name = $1 AND p.is_managed = true AND w.content_locale = $3 "
+                "AND NOT EXISTS ("
+                "  SELECT 1 FROM playbook pb "
+                "  WHERE pb.workspace_id = p.workspace_id AND pb.name = $2"
+                ")",
+                pack.persona.name,
+                playbook.name,
+                locale,
+            ):
+                playbook_id = await conn.fetchval(
+                    "INSERT INTO playbook "
+                    "(workspace_id, owner_id, name, type, tags, triggers, "
+                    " is_managed, managed_content_version, locale) "
+                    "SELECT $1, $2, $3, $4, $5, $6, true, $7, $8 "
+                    "WHERE NOT EXISTS ("
+                    "  SELECT 1 FROM playbook WHERE workspace_id = $1 AND name = $3"
+                    ") "
+                    "RETURNING id",
+                    prow["workspace_id"],
+                    prow["owner_id"],
+                    playbook.name,
+                    playbook.type,
+                    list(playbook.tags),
+                    playbook.triggers,
+                    BUILDER_CONTENT_VERSION,
+                    locale,
+                )
+                if playbook_id is None:
+                    # Race mit einem parallelen Sync/Seed — der andere Lauf hat
+                    # bereits angelegt und gestempelt, nichts mehr zu tun.
+                    continue
+                await conn.execute(
+                    "INSERT INTO playbook_version "
+                    "(playbook_id, version, content, status, created_by, locale) "
+                    "VALUES ($1, 1, $2::jsonb, 'active', $3, $4)",
+                    playbook_id,
+                    pb_json,
+                    prow["owner_id"],
+                    locale,
+                )
+                await conn.execute(
+                    "INSERT INTO persona_playbook "
+                    "(persona_id, playbook_id, workspace_id, owner_id) "
+                    "VALUES ($1, $2, $3, $4) "
+                    "ON CONFLICT (persona_id, playbook_id) DO NOTHING",
+                    prow["persona_id"],
+                    playbook_id,
+                    prow["workspace_id"],
+                    prow["owner_id"],
+                )
+                # Konventions-Link auch fuer nachgeruestete Playbooks: der
+                # Resource-Insert-missing-Zweig unten verlinkt ALLE Builder-
+                # Playbooks nur, wenn die Resource selbst noch fehlt — in
+                # Bestands-Workspaces (Resource seit Content-Stand 5 vorhanden)
+                # bekaeme ein neues Playbook sonst nie seinen lazy-Pointer.
+                await conn.execute(
+                    "INSERT INTO playbook_resource_link "
+                    "(playbook_id, resource_id, block_id, workspace_id, owner_id, "
+                    " position, link_scope) "
+                    "SELECT $1, r.id, NULL, $2, $3, 0, 'resource' "
+                    "FROM resource r WHERE r.workspace_id = $2 AND r.name = $4 "
+                    "ON CONFLICT DO NOTHING",
+                    playbook_id,
+                    prow["workspace_id"],
+                    prow["owner_id"],
+                    pack.resource.name,
+                )
+                updated += 1
+
+            # (5) Playbook-Content-Update bei Stempel-Rueckstand.
+            for row in await conn.fetch(
+                "SELECT pb.id FROM playbook pb "
+                "JOIN workspace w ON w.id = pb.workspace_id "
+                "WHERE pb.name = $1 AND pb.is_managed = true "
+                "AND pb.managed_content_version < $2 AND w.content_locale = $3",
+                playbook.name,
+                BUILDER_CONTENT_VERSION,
+                locale,
+            ):
+                await conn.execute(
+                    "UPDATE playbook_version SET content = $2::jsonb "
+                    "WHERE playbook_id = $1 AND status = 'active'",
+                    row["id"],
+                    pb_json,
+                )
+                # Beim Stempeln auch die Row-Metadaten nachziehen — Trigger-/
+                # Tag-/Type-Aenderungen leben ausserhalb des Versions-Contents
+                # und wuerden ueber das Content-Replace allein nie verteilen.
+                await conn.execute(
+                    "UPDATE playbook SET type = $2, tags = $3, triggers = $4, "
+                    "managed_content_version = $5, updated_at = now() "
+                    "WHERE id = $1",
+                    row["id"],
+                    playbook.type,
+                    list(playbook.tags),
+                    playbook.triggers,
+                    BUILDER_CONTENT_VERSION,
+                )
+                updated += 1
+
+        resource_json = json.dumps(_builder_resource_content(pack))
+        builder_playbook_names = [playbook.name for playbook in pack.playbooks]
+
+        # (6) Insert-missing: die Managed-Resource erreicht Bestands-Workspaces
+        # nur hier (der Seed laeuft dort nie wieder). Match wie im Seed ueber
+        # workspace_id + Pack-Name (gescopet auf Workspaces der Pack-Sprache);
+        # die Builder-Playbooks fuer die Links werden ebenso per Pack-Name
+        # aufgeloest (der Playbook-Insert-missing-Block oben lief bereits, die
+        # sechs Rows existieren also).
+        for rrow in await conn.fetch(
+            "SELECT p.id AS persona_id, p.workspace_id, p.owner_id FROM persona p "
+            "JOIN workspace w ON w.id = p.workspace_id "
+            "WHERE p.name = $1 AND p.is_managed = true AND w.content_locale = $3 "
+            "AND NOT EXISTS ("
+            "  SELECT 1 FROM resource r "
+            "  WHERE r.workspace_id = p.workspace_id AND r.name = $2"
+            ")",
+            pack.persona.name,
+            pack.resource.name,
+            locale,
+        ):
+            resource_id = await conn.fetchval(
+                "INSERT INTO resource "
+                "(workspace_id, owner_id, name, slug, is_managed, "
+                " managed_content_version, locale) "
+                "SELECT $1, $2, $3, $5, true, $4, $6 "
+                "WHERE NOT EXISTS ("
+                "  SELECT 1 FROM resource WHERE workspace_id = $1 AND name = $3"
+                ") "
+                "RETURNING id",
+                rrow["workspace_id"],
+                rrow["owner_id"],
+                pack.resource.name,
+                BUILDER_CONTENT_VERSION,
+                pack.resource.slug,
+                locale,
+            )
+            if resource_id is None:
                 # Race mit einem parallelen Sync/Seed — der andere Lauf hat
                 # bereits angelegt und gestempelt, nichts mehr zu tun.
                 continue
             await conn.execute(
-                "INSERT INTO playbook_version "
-                "(playbook_id, version, content, status, created_by, locale) "
-                "VALUES ($1, 1, $2::jsonb, 'active', $3, 'de')",
-                playbook_id,
-                pb_json,
-                prow["owner_id"],
+                "INSERT INTO resource_version "
+                "(resource_id, version, content, status, created_by, locale) "
+                "VALUES ($1, 1, $2::jsonb, 'active', $3, $4)",
+                resource_id,
+                resource_json,
+                rrow["owner_id"],
+                locale,
             )
-            await conn.execute(
-                "INSERT INTO persona_playbook "
-                "(persona_id, playbook_id, workspace_id, owner_id) "
-                "VALUES ($1, $2, $3, $4) "
-                "ON CONFLICT (persona_id, playbook_id) DO NOTHING",
-                prow["persona_id"],
-                playbook_id,
-                prow["workspace_id"],
-                prow["owner_id"],
-            )
-            # Konventions-Link auch fuer nachgeruestete Playbooks: der
-            # Resource-Insert-missing-Zweig unten verlinkt ALLE Builder-
-            # Playbooks nur, wenn die Resource selbst noch fehlt — in
-            # Bestands-Workspaces (Resource seit Content-Stand 5 vorhanden)
-            # bekaeme ein neues Playbook sonst nie seinen lazy-Pointer.
             await conn.execute(
                 "INSERT INTO playbook_resource_link "
                 "(playbook_id, resource_id, block_id, workspace_id, owner_id, "
                 " position, link_scope) "
-                "SELECT $1, r.id, NULL, $2, $3, 0, 'resource' "
-                "FROM resource r WHERE r.workspace_id = $2 AND r.name = $4 "
+                "SELECT pb.id, $2, NULL, $1, $3, 0, 'resource' "
+                "FROM playbook pb WHERE pb.workspace_id = $1 AND pb.name = ANY($4::text[]) "
                 "ON CONFLICT DO NOTHING",
-                playbook_id,
-                prow["workspace_id"],
-                prow["owner_id"],
-                _BUILDER_RESOURCE_NAME,
+                rrow["workspace_id"],
+                resource_id,
+                rrow["owner_id"],
+                builder_playbook_names,
             )
             updated += 1
 
+        # (7) Resource-Content-Update bei Stempel-Rueckstand — analog Playbooks.
+        # Die Tags leben im Versions-Content (`ResourceContent.tags`) und
+        # verteilen ueber das Content-Replace mit; auf der resource-Row gibt es
+        # nur Stempel + updated_at.
         for row in await conn.fetch(
-            "SELECT id FROM playbook WHERE name = $1 AND is_managed = true "
-            "AND managed_content_version < $2",
-            name,
+            "SELECT r.id FROM resource r "
+            "JOIN workspace w ON w.id = r.workspace_id "
+            "WHERE r.name = $1 AND r.is_managed = true "
+            "AND r.managed_content_version < $2 AND w.content_locale = $3",
+            pack.resource.name,
             BUILDER_CONTENT_VERSION,
+            locale,
         ):
             await conn.execute(
-                "UPDATE playbook_version SET content = $2::jsonb "
-                "WHERE playbook_id = $1 AND status = 'active'",
+                "UPDATE resource_version SET content = $2::jsonb "
+                "WHERE resource_id = $1 AND status = 'active'",
                 row["id"],
-                pb_json,
+                resource_json,
             )
-            # Beim Stempeln auch die Row-Metadaten nachziehen — Trigger-/Tag-/
-            # Type-Aenderungen leben ausserhalb des Versions-Contents und
-            # wuerden ueber das Content-Replace allein nie verteilen.
             await conn.execute(
-                "UPDATE playbook SET type = $2, tags = $3, triggers = $4, "
-                "managed_content_version = $5, updated_at = now() "
+                "UPDATE resource SET managed_content_version = $2, updated_at = now() "
                 "WHERE id = $1",
                 row["id"],
-                ptype,
-                list(tags),
-                triggers,
                 BUILDER_CONTENT_VERSION,
             )
             updated += 1
 
-    resource_json = json.dumps(_builder_resource_content())
-    builder_playbook_names = [name for name, *_ in _BUILDER_PLAYBOOKS]
-
-    # Insert-missing: die Managed-Resource erreicht Bestands-Workspaces nur hier
-    # (der Seed laeuft dort nie wieder). Match wie im Seed ueber workspace_id +
-    # name; die Builder-Playbooks fuer die Links werden ebenso per Name
-    # aufgeloest (der Playbook-Insert-missing-Block oben lief bereits, die
-    # fuenf Rows existieren also).
-    for rrow in await conn.fetch(
-        "SELECT p.id AS persona_id, p.workspace_id, p.owner_id FROM persona p "
-        "WHERE p.name = $1 AND p.is_managed = true "
-        "AND NOT EXISTS ("
-        "  SELECT 1 FROM resource r "
-        "  WHERE r.workspace_id = p.workspace_id AND r.name = $2"
-        ")",
-        _BUILDER_PERSONA_NAME,
-        _BUILDER_RESOURCE_NAME,
-    ):
-        resource_id = await conn.fetchval(
-            "INSERT INTO resource "
-            "(workspace_id, owner_id, name, slug, is_managed, managed_content_version) "
-            "SELECT $1, $2, $3, $5, true, $4 "
-            "WHERE NOT EXISTS ("
-            "  SELECT 1 FROM resource WHERE workspace_id = $1 AND name = $3"
-            ") "
-            "RETURNING id",
-            rrow["workspace_id"],
-            rrow["owner_id"],
-            _BUILDER_RESOURCE_NAME,
-            BUILDER_CONTENT_VERSION,
-            _BUILDER_RESOURCE_SLUG,
-        )
-        if resource_id is None:
-            # Race mit einem parallelen Sync/Seed — der andere Lauf hat
-            # bereits angelegt und gestempelt, nichts mehr zu tun.
-            continue
-        await conn.execute(
-            "INSERT INTO resource_version "
-            "(resource_id, version, content, status, created_by, locale) "
-            "VALUES ($1, 1, $2::jsonb, 'active', $3, 'de')",
-            resource_id,
-            resource_json,
-            rrow["owner_id"],
-        )
-        await conn.execute(
-            "INSERT INTO playbook_resource_link "
-            "(playbook_id, resource_id, block_id, workspace_id, owner_id, "
-            " position, link_scope) "
-            "SELECT pb.id, $2, NULL, $1, $3, 0, 'resource' "
-            "FROM playbook pb WHERE pb.workspace_id = $1 AND pb.name = ANY($4::text[]) "
-            "ON CONFLICT DO NOTHING",
-            rrow["workspace_id"],
-            resource_id,
-            rrow["owner_id"],
-            builder_playbook_names,
-        )
-        updated += 1
-
-    # Content-Update bei Stempel-Rueckstand — analog Playbooks. Die Tags leben
-    # im Versions-Content (`ResourceContent.tags`) und verteilen ueber das
-    # Content-Replace mit; auf der resource-Row gibt es nur Stempel + updated_at.
-    for row in await conn.fetch(
-        "SELECT id FROM resource WHERE name = $1 AND is_managed = true "
-        "AND managed_content_version < $2",
-        _BUILDER_RESOURCE_NAME,
-        BUILDER_CONTENT_VERSION,
-    ):
-        await conn.execute(
-            "UPDATE resource_version SET content = $2::jsonb "
-            "WHERE resource_id = $1 AND status = 'active'",
-            row["id"],
-            resource_json,
-        )
-        await conn.execute(
-            "UPDATE resource SET managed_content_version = $2, updated_at = now() WHERE id = $1",
-            row["id"],
-            BUILDER_CONTENT_VERSION,
-        )
-        updated += 1
-
-    # Managed-Agent-Policy-Sync (Content-Stand 6): die tool_policy der beiden
-    # Builder-Agenten wird bei Stempel-Rueckstand auf den kanonischen Stand
-    # (`_builder_tool_policy()`) ersetzt — Bestands-Builder bekommen neue
-    # Capabilities (z. B. `feedback_resolve`) sonst nie. Wholesale-Replace ist
-    # sicher, weil managed = gesperrt (keine User-Edits zu erhalten).
-    agent_policy_json = json.dumps(_builder_tool_policy())
-    for row in await conn.fetch(
-        "SELECT id FROM agent WHERE name IN ($1, $2) AND is_managed = true "
-        "AND managed_content_version < $3",
-        _BUILDER_AGENT_NAME,
-        _BUILDER_LITE_AGENT_NAME,
-        BUILDER_CONTENT_VERSION,
-    ):
-        await conn.execute(
-            "UPDATE agent SET tool_policy = $2::jsonb, managed_content_version = $3, "
-            "updated_at = now() WHERE id = $1",
-            row["id"],
-            agent_policy_json,
-            BUILDER_CONTENT_VERSION,
-        )
-        updated += 1
+        # (8) Managed-Agent-Sync (Content-Stand 6, seit WP8 locale-bewusst):
+        # tool_policy UND Beschreibung der beiden Builder-Agenten werden bei
+        # Stempel-Rueckstand auf den kanonischen Stand ersetzt — die Policy ist
+        # locale-unabhaengig, die Beschreibung kommt aus dem Pack der
+        # Workspace-Sprache. Wholesale-Replace ist sicher, weil managed =
+        # gesperrt (keine User-Edits zu erhalten); ohne diesen Zweig bekaemen
+        # Bestands-Builder neue Capabilities (z. B. `feedback_resolve`) nie.
+        for agent_def in (pack.agent, pack.agent_lite):
+            for row in await conn.fetch(
+                "SELECT a.id FROM agent a "
+                "JOIN workspace w ON w.id = a.workspace_id "
+                "WHERE a.name = $1 AND a.is_managed = true "
+                "AND a.managed_content_version < $2 AND w.content_locale = $3",
+                agent_def.name,
+                BUILDER_CONTENT_VERSION,
+                locale,
+            ):
+                await conn.execute(
+                    "UPDATE agent SET tool_policy = $2::jsonb, description = $3, "
+                    "managed_content_version = $4, updated_at = now() WHERE id = $1",
+                    row["id"],
+                    agent_policy_json,
+                    agent_def.description,
+                    BUILDER_CONTENT_VERSION,
+                )
+                updated += 1
 
     return updated

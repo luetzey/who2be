@@ -18,7 +18,26 @@ from uuid import UUID
 import asyncpg
 
 from who2be_api.repositories.workspace_repository import ensure_personal_workspace
-from who2be_models import MeOrganization, MeRead, MeWorkspace
+from who2be_models import DEFAULT_LOCALE, MeOrganization, MeRead, MeWorkspace
+from who2be_models.locale import SUPPORTED_LOCALES, normalize_locale
+
+
+def _content_locale_from_preferred(value: str | None) -> str:
+    """UI-Sprache (`preferred_locale`) → Workspace-Content-Sprache (ADR-0045).
+
+    Leere, formwidrige oder nicht unterstuetzte Werte fallen auf
+    `DEFAULT_LOCALE` zurueck — der Lazy-Seed darf an einer kaputten
+    User-Metadaten-Zeile nie scheitern.
+    """
+    if not value:
+        return DEFAULT_LOCALE
+    try:
+        normalized = normalize_locale(value)
+    except ValueError:
+        return DEFAULT_LOCALE
+    if normalized not in SUPPORTED_LOCALES:
+        return DEFAULT_LOCALE
+    return normalized
 
 
 class MeRepository(Protocol):
@@ -53,14 +72,16 @@ class PgMeRepository:
         # sofort erneut abfragen, damit der Response stets eine valide
         # default_workspace_id traegt.
         if not rows:
-            user_email = await self._lookup_email(user_id)
+            user_email, content_locale = await self._lookup_profile(user_id)
             # Transaktion: der Seed besteht aus mehreren Inserts (Org, Member,
             # Workspace, Default-Templates). Atomar, damit zwei parallele
             # Erstaufrufe desselben Users keinen Teilzustand hinterlassen — die
             # ON-CONFLICT-Klauseln in ensure_personal_workspace machen den
             # Re-Lauf idempotent (analog WorkspaceRepository.create).
             async with self._pool.acquire() as conn, conn.transaction():
-                await ensure_personal_workspace(conn, user_id, user_email=user_email)
+                await ensure_personal_workspace(
+                    conn, user_id, user_email=user_email, content_locale=content_locale
+                )
             rows = await self._pool.fetch(_MEMBER_QUERY, user_id)
 
         orgs: dict[UUID, MeOrganization] = {}
@@ -92,21 +113,27 @@ class PgMeRepository:
             has_password=await self._has_password(user_id),
         )
 
-    async def _lookup_email(self, user_id: UUID) -> str | None:
-        """Liest `email` aus `auth.users` — optional, Fehler → None.
+    async def _lookup_profile(self, user_id: UUID) -> tuple[str | None, str]:
+        """Liest `email` + `preferred_locale` aus `auth.users` — EINE Query,
+        optional, Fehler → Defaults (None, `DEFAULT_LOCALE`).
 
         Wird beim Lazy-Seed genutzt, um die Personal-Org nach dem Local-Part
-        der E-Mail zu benennen. Existiert `auth.users` nicht (reine Test-DB),
-        faellt die Seed-Funktion auf ``"Personal"`` zurueck.
+        der E-Mail zu benennen UND die Workspace-Content-Sprache aus der
+        UI-Sprache (`raw_user_meta_data ->> 'preferred_locale'`) abzuleiten
+        (ADR-0045). Existiert `auth.users` nicht oder fehlt eine Spalte
+        (reine Test-DB), faellt der Seed auf ``"Personal"`` + `'de'` zurueck.
         """
         try:
-            value: str | None = await self._pool.fetchval(
-                "SELECT email FROM auth.users WHERE id = $1",
+            row = await self._pool.fetchrow(
+                "SELECT email, raw_user_meta_data ->> 'preferred_locale' AS preferred_locale "
+                "FROM auth.users WHERE id = $1",
                 user_id,
             )
         except asyncpg.PostgresError:
-            return None
-        return value
+            return None, DEFAULT_LOCALE
+        if row is None:
+            return None, DEFAULT_LOCALE
+        return row["email"], _content_locale_from_preferred(row["preferred_locale"])
 
     async def _has_password(self, user_id: UUID) -> bool:
         """`auth.users.encrypted_password IS NOT NULL` — frisch eingeladene
