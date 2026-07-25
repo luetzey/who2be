@@ -41,6 +41,11 @@ class RenderContext(BaseModel):
     workspace_id: UUID
     persona_id: UUID | None
     now: datetime
+    # BCP-47-Tag fuer Datums-/Format-Resolver. Default 'de-DE' deckt Aufrufer
+    # ohne Agent-Kontext (Persona-/Playbook-/Export-Render). Der Agent-Render-
+    # Pfad (`AgentRenderService`/`AgentFetchRenderedService`) setzt ihn explizit
+    # aus der Template-Sprache ab (`services/agent_language.date_locale`,
+    # WP5/ADR-0045: 'de' -> 'de-DE', 'en' -> 'en-US').
     locale: str = "de-DE"
     # Tool-Policy des gerenderten Agenten — filtert den `tools-overview`-Block,
     # sodass der System-Prompt nur die Tools listet, die der Agent auch nutzen

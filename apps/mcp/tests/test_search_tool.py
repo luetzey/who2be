@@ -44,8 +44,16 @@ def test_search_returns_ranked_hits(monkeypatch: pytest.MonkeyPatch) -> None:
                     "name": "Reklamation",
                     "snippet": "x",
                     "score": 0.9,
+                    "locale": "de",
                 },
-                {"type": "resource", "id": str(rid), "name": "Doc", "snippet": "y", "score": 0.3},
+                {
+                    "type": "resource",
+                    "id": str(rid),
+                    "name": "Doc",
+                    "snippet": "y",
+                    "score": 0.3,
+                    "locale": "en",
+                },
             ],
         )
 
@@ -55,6 +63,28 @@ def test_search_returns_ranked_hits(monkeypatch: pytest.MonkeyPatch) -> None:
     assert all(isinstance(h, SearchHit) for h in result)
     assert result[0].type == "playbook"
     assert result[0].score == 0.9
+    # WP5 (ADR-0045): jeder Treffer traegt die Entity-Sprache als Metadatum.
+    assert result[0].locale == "de"
+    assert result[1].locale == "en"
+
+
+def test_search_hit_locale_defaults_when_omitted_by_api(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Backward-Compat: fehlt `locale` in der API-Antwort, greift der Pydantic-Default."""
+    pid = uuid4()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json=[
+                {"type": "playbook", "id": str(pid), "name": "Reklamation", "score": 0.5},
+            ],
+        )
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    result = asyncio.run(search("reklamation"))
+    assert result[0].locale == "de"
 
 
 def test_search_passes_types_and_limit(monkeypatch: pytest.MonkeyPatch) -> None:

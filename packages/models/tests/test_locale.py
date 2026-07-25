@@ -1,16 +1,22 @@
 """Tests fuer das Content-Locale-Modell (ADR-0027 / Plan „Ein Element, eine
 Sprache", 2026-07-24)."""
 
+from datetime import UTC, datetime
+from uuid import uuid4
+
 import pytest
 from pydantic import ValidationError
 
 from who2be_models import (
     DEFAULT_LOCALE,
+    AgentWithRenderedPrompt,
     PersonaCreate,
+    PersonaRead,
     PersonaUpdate,
     PersonaVersionContent,
     PlaybookCreate,
     ResourceCreate,
+    SearchHit,
     SystemPromptTemplateContent,
     SystemPromptTemplateCreate,
     WorkspaceCreate,
@@ -124,3 +130,52 @@ def test_system_prompt_template_create_rejects_unsupported_locale() -> None:
             content=SystemPromptTemplateContent(body="Du bist hilfreich."),
             locale="fr",
         )
+
+
+def _persona_read() -> PersonaRead:
+    now = datetime.now(UTC)
+    return PersonaRead(
+        id=uuid4(),
+        workspace_id=uuid4(),
+        owner_id=uuid4(),
+        name="Coach Carla",
+        current_version=1,
+        content=PersonaVersionContent(description="Senior Coach"),
+        created_at=now,
+        updated_at=now,
+    )
+
+
+def test_agent_with_rendered_prompt_locale_defaults_to_de() -> None:
+    """WP5 (ADR-0045): fehlt `locale` (Alt-Client/Fixture), greift `DEFAULT_LOCALE`."""
+    agent = AgentWithRenderedPrompt(
+        id=uuid4(),
+        name="Carla Bot",
+        persona=_persona_read(),
+        system_prompt_rendered="Du bist Coach Carla.\n\nAntworte auf Deutsch.",
+        system_prompt_template_id=uuid4(),
+    )
+    assert agent.locale == DEFAULT_LOCALE
+
+
+def test_agent_with_rendered_prompt_carries_explicit_locale() -> None:
+    agent = AgentWithRenderedPrompt(
+        id=uuid4(),
+        name="Carla Bot",
+        persona=_persona_read(),
+        system_prompt_rendered="You are Coach Carla.\n\nRespond in English.",
+        system_prompt_template_id=uuid4(),
+        locale="en",
+    )
+    assert agent.locale == "en"
+
+
+def test_search_hit_locale_defaults_to_de() -> None:
+    """WP5 (ADR-0045): fehlt `locale` (Alt-Client/Fixture), greift `DEFAULT_LOCALE`."""
+    hit = SearchHit(type="playbook", id=uuid4(), name="Reklamation", score=0.9)
+    assert hit.locale == DEFAULT_LOCALE
+
+
+def test_search_hit_carries_explicit_locale() -> None:
+    hit = SearchHit(type="resource", id=uuid4(), name="Doc", score=0.3, locale="en")
+    assert hit.locale == "en"

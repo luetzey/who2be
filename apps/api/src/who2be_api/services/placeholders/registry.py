@@ -11,7 +11,11 @@ Resolver-Regeln (aus der Spec):
 - persona-field:  target_id in {"name", "description", "profile", ...}; bei
                   persona_id=None, unbekanntem Feld oder Persona nicht gefunden -> Miss.
 - date:           target_id ist Format-Slug ("" -> ISO-8601, "human" ->
-                  "31. Mai 2026"). Standardisiert auf ctx.locale = 'de-DE'. Nie Miss.
+                  "31. Mai 2026"). `ctx.locale` (WP5, ADR-0045) leitet sich aus
+                  der Template-Sprache ab ('de' -> 'de-DE', 'en' -> 'en-US',
+                  `services/agent_language.py`); der "human"-Slug selbst bleibt
+                  eine deutsche Monatsnamen-Map (`resolvers/date.py`) — volle
+                  Datums-i18n ist nicht WP5-Scope. Nie Miss.
 - tools-overview: kuratierte, pro-Agent gefilterte Markdown-Liste. Nie Miss.
 - tool-ref:       target_id ist der Faehigkeits-Alias eines ExternalTool
                   (Migration 0065); sucht die Active-Version im Workspace.

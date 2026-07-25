@@ -558,7 +558,10 @@ async def fetch_agent(agent_id: str) -> AgentWithRenderedPrompt:
 
     Der System-Prompt wird serverseitig expandiert: alle Placeholder-Bloecke
     (Playbook, Resource, Persona-Feld, Datum) sind bereits aufgeloest und als
-    Plain-Text eingebettet. MCP-Konsumenten sehen den fertigen Prompt.
+    Plain-Text eingebettet, inkl. einer angehaengten Output-Sprachanweisung
+    ("Antworte auf Deutsch."/"Respond in English.", WP5/ADR-0045). Das
+    Top-Level-`locale`-Feld nennt die Sprache des System-Prompt-Templates, MIT
+    der gerendert wurde. MCP-Konsumenten sehen den fertigen Prompt.
 
     Hinweis: Ein agent-gebundener Token darf ueber dieses Tool nur den EIGENEN
     Agenten rendern (fremde UUID => „nicht gefunden"). Fuer die Konfig anderer
@@ -1539,10 +1542,11 @@ async def search(
 
     Volltext ueber Name + Inhalt der aktiven Version. `types` optional auf
     {persona, playbook, resource} einschraenken (Default alle), `limit` ≤ 50.
-    Jeder Treffer traegt `type`, `id`, `name`, `snippet` und `score`. Nutze das,
-    um relevante Inhalte zu FINDEN, statt ganze Listen zu laden — danach das
-    Element gezielt via `fetch_playbook`/`fetch_resource`/`get_persona` ziehen.
-    Du siehst nur aktive und (bei `assigned`-Scope) dir zugewiesene Elemente.
+    Jeder Treffer traegt `type`, `id`, `name`, `snippet`, `score` und `locale`
+    (Sprache des getroffenen Elements, WP5/ADR-0045). Nutze das, um relevante
+    Inhalte zu FINDEN, statt ganze Listen zu laden — danach das Element gezielt
+    via `fetch_playbook`/`fetch_resource`/`get_persona` ziehen. Du siehst nur
+    aktive und (bei `assigned`-Scope) dir zugewiesene Elemente.
     """
     client = await build_client()
     return await client.search(query, types, limit)

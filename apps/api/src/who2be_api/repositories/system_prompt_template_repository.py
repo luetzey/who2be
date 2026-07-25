@@ -96,6 +96,8 @@ class SystemPromptTemplateRepository(Protocol):
         self, workspace_id: UUID, template_id: UUID
     ) -> SystemPromptTemplateContent | None: ...
 
+    async def fetch_locale(self, workspace_id: UUID, template_id: UUID) -> str | None: ...
+
     async def update(
         self,
         workspace_id: UUID,
@@ -269,6 +271,21 @@ class PgSystemPromptTemplateRepository:
         if row is None:
             return None
         return SystemPromptTemplateContent.model_validate(row["content"])
+
+    async def fetch_locale(self, workspace_id: UUID, template_id: UUID) -> str | None:
+        """Liefert die Entity-Sprache der Identitaets-Zeile (WP5, ADR-0045).
+
+        Schlankes Single-Column-Read fuer den Agent-Render-Pfad
+        (`AgentRenderService`/`AgentFetchRenderedService`): die Sprachanweisung
+        und `RenderContext.locale` (Datumsformat) leiten sich daraus ab, ohne
+        die (potenziell grosse) `content`-Spalte der Version mitzuladen.
+        """
+        value: str | None = await self._pool.fetchval(
+            "SELECT locale FROM system_prompt_template WHERE id = $1 AND workspace_id = $2",
+            template_id,
+            workspace_id,
+        )
+        return value
 
     async def update(
         self,
