@@ -640,6 +640,11 @@
     "operationId": "search_v1_workspaces__workspace_id__search_get"
   },
   {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/search/content",
+    "operationId": "search_content_v1_workspaces__workspace_id__search_content_get"
+  },
+  {
     "method": "POST",
     "path": "/v1/workspaces/{workspace_id}/system-feedback",
     "operationId": "submit_system_feedback_v1_workspaces__workspace_id__system_feedback_post"

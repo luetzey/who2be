@@ -148,7 +148,7 @@ from who2be_models.resource import (
     SubResourceLinkSet,
     SubResourceRead,
 )
-from who2be_models.search import SearchHit, SearchType
+from who2be_models.search import ChunkType, ContentChunkHit, SearchHit, SearchType
 from who2be_models.status import (
     ALLOWED_TRANSITIONS,
     TRANSITION_RULE_DOC,
@@ -198,6 +198,8 @@ __all__ = [
     "ActionableBy",
     "ActivityPagination",
     "ApiProblem",
+    "ChunkType",
+    "ContentChunkHit",
     "ContentLocale",
     "DEFAULT_LOCALE",
     "SUPPORTED_LOCALES",

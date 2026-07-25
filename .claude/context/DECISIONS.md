@@ -395,3 +395,43 @@ bleiben)._
   sichtbar machen (genau die per-Element-Mehrsprachigkeit, die nicht gewollt
   ist); Komplett-Entfernung des Sprach-Features (ursprünglicher Anstoß, vom
   User revidiert).
+
+## 2026-07-25 — Semantische Suche & Passage-Retrieval (ADR-0046, Welle 1)
+- **Entscheidung:** Chunk-basiertes Retrieval als Fundament, Vektor-Semantik
+  additiv darauf (ADR-0046). Löst die als „Stufe B" offen gelassenen
+  Folge-Verweise aus ADR-0037 (§35-38) **und** ADR-0044 (§70-71) gemeinsam ein.
+  Neue Tabelle `content_chunk` (Migration 0070) hält die aktive Version in
+  Passagen, geschnitten an den Heading-Blöcken — `block_id` ist damit exakt der
+  bestehende Anker aus ADR-0021, es entsteht keine zweite Ankersprache. Das
+  **ersetzt** die in ADR-0037 §53-54 zugesagten, nie angelegten
+  Per-Tabelle-`tsvector`-Spalten: eine Textebene statt vier, und sie trägt
+  später den Vektor.
+- **FTS-Config pro Sprache** (Abweichung von 0066): seit ADR-0045 ist jedes
+  Element einsprachig, also stemmt `'german'`/`'english'` sinnvoll. Belegt:
+  „Reklamationen" → Stamm `reklamation`, Singular-Query trifft; mit `'simple'`
+  unmöglich. Memory bleibt bewusst bei `'simple'` (pro Zeile gemischtsprachig).
+- **Zwei Tools, keine Zusammenlegung:** `search` beantwortet „welches ELEMENT",
+  `search_content` „welche STELLE". Kuratierte Inhalte und (später) Memory
+  bleiben getrennte Verträge — unterschiedliche Vertrauensgrade, die Provenienz
+  eines Treffers muss für das Modell ablesbar bleiben.
+- **Zwei Fehler in der bestehenden Suche behoben** (beide durch neue Tests
+  reproduziert, 6 rot gegen den Altstand): der Read-Scope wurde hinter dem
+  `LIMIT` nachgefiltert statt als Prädikat in die Query zu gehen (ADR-0037 §47
+  forderte „vor dem Ranking") — ein `assigned`-Agent bekam `[]`, sobald seine
+  Treffer hinter den globalen Top-k lagen. Und die Scope-Mengen wurden für ALLE
+  Typen geholt, auch für schon ausgeschlossene: ein Agent mit
+  `playbook_read=none` bekam auf eine reine Persona-Suche ein 403 statt seiner
+  Treffer. Das Scoping liegt jetzt als Single-Source in
+  `agent_scope.readable_content_scope`.
+- **Verworfen:** Memory in `content_chunk` mitführen (abgeleitet+regenerierbar
+  vs. laufzeit-geschrieben+kuratiert — verschiedene Lebenszyklen); externer
+  Embedding-Provider (bricht das On-Prem-„kein Phone-Home"-Versprechen, bei
+  persönlichen Memories nicht verhandelbar); ANN-Index in v1 (beide Korpora zu
+  klein, Brute-Force ist schneller als der Indexaufbau sich rentiert);
+  Backfill als SQL-Migration (der Schnitt lebt in Python, eine Migration müsste
+  ihn duplizieren) — stattdessen CLI `who2be-chunk-backfill`.
+- **Offen (Welle 2/3):** pgvector-Infrastruktur, `EmbeddingPort` als optionale
+  Dep-Gruppe, Hybrid-Ranking, Memory-Semantik. Die beiden Lücken sind als
+  ausführbare Tests festgehalten (`test_memory_retrieval_baseline.py`:
+  Paraphrase → Trigram-Similarity 0.14, cross-lingual → 0.03, beide unter der
+  Schwelle 0.3) — Welle 3 muss diese Tests umdrehen.

@@ -17,6 +17,8 @@ bleiben):
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from dataclasses import dataclass, field
 from typing import TypeAlias
 from uuid import UUID
 
@@ -24,7 +26,7 @@ import asyncpg
 from fastapi import HTTPException, status
 
 from who2be_api.core.security import WorkspaceContext
-from who2be_models import ReadScope
+from who2be_models import AgentCapability, ReadScope
 
 # Persona → direkt verknuepfte Playbooks + transitive Composition-Kinder.
 _ASSIGNED_PLAYBOOKS_SQL = """
@@ -241,6 +243,80 @@ async def visible_resource_ids(
         return None
     restrict = await resource_read_restrict(pool, ctx)
     return None if restrict is None else set(restrict)
+
+
+@dataclass(frozen=True)
+class ReadableScope:
+    """Was ein Aufrufer inhaltlich finden darf (ADR-0037 §47, ADR-0046).
+
+    `types` sind die nach Policy verbliebenen Element-Typen. `restrict` bildet
+    Typ → erlaubte IDs ab und geht als Praedikat IN die Such-Query: ein
+    fehlender Schluessel heisst „keine Einschraenkung", eine leere Liste
+    „nichts sichtbar". `playbooks`/`resources` tragen dieselben Mengen als Set
+    fuer den nachgelagerten Defense-in-Depth-Filter (`None` = unbeschraenkt).
+    """
+
+    types: list[str]
+    restrict: dict[str, list[UUID]] = field(default_factory=dict)
+    playbooks: set[UUID] | None = None
+    resources: set[UUID] | None = None
+
+
+async def readable_content_scope(
+    pool: asyncpg.Pool | None, ctx: WorkspaceContext, requested: Sequence[str]
+) -> ReadableScope:
+    """Berechnet den Such-Scope eines Aufrufers ueber Inhalts-Elemente.
+
+    Single-Source fuer beide Suchpfade (Entity-Suche und Passage-Suche), damit
+    sie nicht auseinanderlaufen.
+
+    Zwei Eigenschaften sind hier wesentlich:
+
+    1. Die ID-Mengen werden VOR dem Ranking gebildet, damit die Query sie als
+       Praedikat nutzen kann. Nachfiltern hinter dem `LIMIT` liefert `[]`,
+       sobald die globalen Top-k ausserhalb des zugewiesenen Sets liegen.
+    2. Sie werden nur fuer TATSAECHLICH angefragte Typen geholt. Die
+       `*_read_restrict`-Helfer werfen bei Scope `none` ein 403 — ein Typ, der
+       ohnehin schon aus der Anfrage gefallen ist, darf die uebrige Suche
+       nicht mit 403 abbrechen.
+
+    `system_prompt_template` haengt an der Capability `system_prompt_write`
+    (ADR-0040), nicht an einem Read-Scope — Templates sind kein Agenten-
+    Lesestoff, solange der Agent sie nicht auch pflegen darf.
+    """
+    policy = ctx.tool_policy
+    allowed: list[str] = []
+    for entity_type in requested:
+        if policy is not None:
+            if entity_type == "persona" and not policy.persona_read:
+                continue
+            if entity_type == "playbook" and policy.playbook_read == ReadScope.none:
+                continue
+            if entity_type == "resource" and policy.resource_read == ReadScope.none:
+                continue
+            if entity_type == "external_tool" and policy.external_tool_read == ReadScope.none:
+                continue
+            if entity_type == "system_prompt_template" and not policy.allows(
+                AgentCapability.system_prompt_write
+            ):
+                continue
+        allowed.append(entity_type)
+
+    if not allowed:
+        return ReadableScope(types=[])
+
+    restrict: dict[str, list[UUID]] = {}
+    playbooks: set[UUID] | None = None
+    resources: set[UUID] | None = None
+    if "playbook" in allowed:
+        playbooks = await visible_playbook_ids(pool, ctx)
+        if playbooks is not None:
+            restrict["playbook"] = sorted(playbooks)
+    if "resource" in allowed:
+        resources = await visible_resource_ids(pool, ctx)
+        if resources is not None:
+            restrict["resource"] = sorted(resources)
+    return ReadableScope(types=allowed, restrict=restrict, playbooks=playbooks, resources=resources)
 
 
 def require_external_tool_read(ctx: WorkspaceContext) -> None:

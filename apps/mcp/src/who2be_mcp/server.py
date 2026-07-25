@@ -40,6 +40,8 @@ from who2be_models import (
     AgentRead,
     AgentUpdate,
     AgentWithRenderedPrompt,
+    ChunkType,
+    ContentChunkHit,
     ExternalToolCreate,
     ExternalToolRead,
     ExternalToolUpdate,
@@ -1547,9 +1549,38 @@ async def search(
     Inhalte zu FINDEN, statt ganze Listen zu laden — danach das Element gezielt
     via `fetch_playbook`/`fetch_resource`/`get_persona` ziehen. Du siehst nur
     aktive und (bei `assigned`-Scope) dir zugewiesene Elemente.
+
+    Suchst du eine ANTWORT statt eines Elements, nimm `search_content` — das
+    liefert direkt die passende Stelle, ohne den Volltext nachzuladen.
     """
     client = await build_client()
     return await client.search(query, types, limit)
+
+
+@mcp.tool(output_schema=None)
+@with_tool_log("search_content")
+async def search_content(
+    query: str, types: list[ChunkType] | None = None, limit: int = 5
+) -> list[ContentChunkHit]:
+    """Findet die passende STELLE in deinen Inhalten (statt ganzer Elemente).
+
+    WANN NUTZEN: immer, wenn du eine inhaltliche Frage beantworten willst und
+    kein Trigger ein Playbook erzwingt. Das ist der guenstigste Weg an dein
+    Wissen — du bekommst den relevanten Abschnitt, nicht das ganze Dokument.
+
+    Unterschied zu `search`: `search` sagt dir, WELCHES Element passt;
+    `search_content` gibt dir die Passage selbst. Reicht dir die Passage,
+    brauchst du KEIN `fetch_playbook`/`fetch_resource` mehr.
+
+    Jeder Treffer traegt `text` (die Passage), `entity_id` + `name` (woher sie
+    stammt), `block_id` (der Anker — zusammen als `"<entity_id>#<block_id>"`
+    zitierbar), `heading_path` (wo im Dokument) und `locale`.
+
+    Durchsucht nur aktive Versionen und nur, was du lesen darfst. Findest du
+    nichts, sag das offen, statt zu raten.
+    """
+    client = await build_client()
+    return await client.search_content(query, types, limit)
 
 
 def main() -> None:
