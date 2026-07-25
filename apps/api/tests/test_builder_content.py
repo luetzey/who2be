@@ -231,3 +231,55 @@ def test_en_pack_display_texts_are_translated_not_de_literals() -> None:
 
     assert _DE_PACK.agent.description != _EN_PACK.agent.description
     assert _DE_PACK.agent_lite.description != _EN_PACK.agent_lite.description
+
+
+# Sprach-Formulierungen, die auf eine (verbotene) eigene Sprachanweisung im
+# Template-Body hindeuten — Heuristik analog dem urspruenglichen Widerspruch
+# `ab-p8`/`cs-p6` ("...nutze die gleiche Sprache wie der Nutzer." neben der
+# harten Renderer-Injektion "Antworte auf Deutsch.", WP-A/ADR-0045-Nachzug).
+_LANGUAGE_LEAKAGE_PHRASES = (
+    "gleiche Sprache",
+    "gleichen Sprache",
+    "same language",
+    "auf Deutsch",
+    "in English",
+)
+
+
+def _collect_block_texts(node: object) -> list[str]:
+    """Sammelt rekursiv alle `text`-Werte aus einem BlockNote-Body (Liste von
+    Bloecken mit verschachteltem `content`/`children`)."""
+    texts: list[str] = []
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key == "text" and isinstance(value, str):
+                texts.append(value)
+            else:
+                texts.extend(_collect_block_texts(value))
+    elif isinstance(node, list):
+        for item in node:
+            texts.extend(_collect_block_texts(item))
+    return texts
+
+
+def test_no_rolled_out_template_body_contains_its_own_language_instruction() -> None:
+    """Regressionsschutz (WP-A, ADR-0045-Nachzug): Sprachaussagen gehoeren
+    AUSSCHLIESSLICH in die zentrale Renderer-Injektion
+    (`services/agent_language.py::append_language_instruction`), NICHT in die
+    Template-Bodies selbst — sonst entsteht wieder ein Widerspruch wie der
+    ehemalige `ab-p8`/`cs-p6` ("...nutze die gleiche Sprache wie der
+    Nutzer."/"...same language as the user.") neben der harten Injektion
+    ("Antworte auf Deutsch."/"Respond in English."). Prueft ALLE sechs
+    ausgerollten Template-Bodies in BEIDEN Packs (DE + EN, ueber
+    `get_content_pack`)."""
+    for pack in (_DE_PACK, _EN_PACK):
+        for template in pack.templates:
+            body = template.load_body(pack.locale)
+            texts = _collect_block_texts(json.loads(body))
+            for text in texts:
+                for phrase in _LANGUAGE_LEAKAGE_PHRASES:
+                    assert phrase not in text, (
+                        f"Sprachaussage {phrase!r} in Template {template.slug!r} "
+                        f"({pack.locale!r}): {text!r} — gehoert nur in "
+                        "services/agent_language.py"
+                    )

@@ -52,7 +52,7 @@
     "id": "pb-exttool-li-2",
     "type": "numberedListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Create — Schreiben: create_external_tool(data) mit name, alias und content: display_name (Anzeigename des konkreten Tools), mcp_server_name (Connector-Name in der Runtime), tool_names (relevante MCP-Tool-Bezeichner), usage_notes (stringifiziertes BlockNote-Dokument: wann/wie nutzen, Do/Don't) und fallback_note (Verhalten, wenn der Server fehlt oder nicht verbunden ist). Es entsteht eine Draft-Version 1.", "styles": {}}],
+    "content": [{"type": "text", "text": "Create — Schreiben: create_external_tool(data) mit name, alias und content: display_name (Anzeigename des konkreten Tools), mcp_server_name (Connector-Name in der Runtime), tool_names (relevante MCP-Tool-Bezeichner), usage_notes (stringifiziertes BlockNote-Dokument: wann/wie nutzen, Do/Don't) und fallback_note (Verhalten, wenn der Server fehlt oder nicht verbunden ist). Es entsteht eine Draft-Version 1. locale nur explizit setzen, wenn die Bindung bewusst von der Workspace-Sprache abweichen soll — usage_notes und fallback_note in dieser Sprache verfassen (siehe Abschnitt Sprache in den Agent-Bau-Konventionen).", "styles": {}}],
     "children": []
   },
   {

@@ -240,6 +240,16 @@
     "children": []
   },
   {
+    "id": "pb-check-li-graph-locale",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Language consistency: ", "styles": {"bold": true}},
+      {"type": "text", "text": "compare locale from the read responses (get_persona, fetch_playbook, fetch_resource, get_external_tool, list_*) against the content actually written (name, description, body, triggers, tags) — is the element really written in its locale language? Also report outliers against the workspace language. Report/propose only, do NOT change it automatically — a language change is a curatorial decision for the user (see the Language section in the Agent-Building Conventions).", "styles": {}}
+    ],
+    "children": []
+  },
+  {
     "id": "pb-check-h-report",
     "type": "heading",
     "props": {"level": 3, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
@@ -404,7 +414,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "V1 scope: ", "styles": {"bold": true}},
-      {"type": "text", "text": "structural + activatability check (active persona version, playbook links, fetch_agent.activatable/missing, rendering without open placeholders) including the structural relationship checks (orphaned resources, knowledge drift, vacuum playbooks, composite children, trigger collisions/vacuum).", "styles": {}}
+      {"type": "text", "text": "structural + activatability check (active persona version, playbook links, fetch_agent.activatable/missing, rendering without open placeholders) including the structural relationship checks (orphaned resources, knowledge drift, vacuum playbooks, composite children, trigger collisions/vacuum, language consistency).", "styles": {}}
     ],
     "children": []
   },

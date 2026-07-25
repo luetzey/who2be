@@ -13,6 +13,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from who2be_models.locale import DEFAULT_LOCALE, ContentLocale
 from who2be_models.tool_policy import (
     AgentCapability,
     MemoryDirective,
@@ -69,3 +70,9 @@ class WhoAmIRead(BaseModel):
     memory_directive: MemoryDirective | None = None
     # Org-weite Entitlement-Features (z. B. "core", "agents", "composite_playbooks").
     features: list[str]
+    # Content-Sprache DIESES Workspaces (`workspace.content_locale`, ADR-0045):
+    # der Default fuer neue Elemente, wenn ein `create_*`-Aufruf `locale`
+    # weglaesst. Default `'de'` hier deckt Bestandsdaten/Alt-Clients (spiegelt
+    # `WorkspaceRead.content_locale`) — jeder aktuelle `whoami`-Pfad befuellt
+    # das Feld explizit aus dem Workspace-Datensatz.
+    content_locale: ContentLocale = DEFAULT_LOCALE

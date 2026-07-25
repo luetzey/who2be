@@ -193,6 +193,16 @@
     "children": []
   },
   {
+    "id": "pb-playbook-create-p3-locale",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Language: ", "styles": {"bold": true}},
+      {"type": "text", "text": "create_playbook defaults to the workspace language when locale is left unset — only set locale explicitly if the playbook is meant to deliberately deviate. Write name, description, triggers, and tags in that language (see the Language section in the Agent-Building Conventions).", "styles": {}}
+    ],
+    "children": []
+  },
+  {
     "id": "pb-playbook-create-p3-composes",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},

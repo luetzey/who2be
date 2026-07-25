@@ -10,17 +10,24 @@ from pydantic import ValidationError
 from who2be_models import (
     DEFAULT_LOCALE,
     AgentWithRenderedPrompt,
+    ExternalToolCreate,
+    ExternalToolUpdate,
     PersonaCreate,
     PersonaRead,
     PersonaUpdate,
     PersonaVersionContent,
     PlaybookCreate,
+    PlaybookUpdate,
     ResourceCreate,
+    ResourceUpdate,
     SearchHit,
     SystemPromptTemplateContent,
     SystemPromptTemplateCreate,
+    SystemPromptTemplateUpdate,
+    WhoAmIRead,
     WorkspaceCreate,
     WorkspaceRead,
+    WorkspaceRole,
 )
 from who2be_models.locale import normalize_locale, validate_supported_locale
 
@@ -179,3 +186,88 @@ def test_search_hit_locale_defaults_to_de() -> None:
 def test_search_hit_carries_explicit_locale() -> None:
     hit = SearchHit(type="resource", id=uuid4(), name="Doc", score=0.3, locale="en")
     assert hit.locale == "en"
+
+
+# WP-D (#361): Regressionsschutz gegen die Schema-Luecke aus dem Plan
+# "Builder versteht das Sprach-Feld" — die `locale`-Felder der fuenf
+# `*Create`/`*Update`-Modelle hatten nur einen `field_validator`, aber kein
+# `Field(description=...)`. Damit sah das LLM im MCP-Tool-Input-Schema nur
+# `locale: string | null` ohne Semantik/erlaubte Werte. Diese Tests pruefen
+# das generierte JSON-Schema (nicht nur den Python-Docstring) direkt.
+_LOCALE_CREATE_MODELS = (
+    PersonaCreate,
+    PlaybookCreate,
+    ResourceCreate,
+    ExternalToolCreate,
+    SystemPromptTemplateCreate,
+)
+_LOCALE_UPDATE_MODELS = (
+    PersonaUpdate,
+    PlaybookUpdate,
+    ResourceUpdate,
+    ExternalToolUpdate,
+    SystemPromptTemplateUpdate,
+)
+
+
+def test_locale_field_has_description_in_generated_schema() -> None:
+    """Jedes `*Create`/`*Update`-Modell traegt eine `locale.description` im
+    generierten JSON-Schema, die auf beide erlaubten Werte hinweist — das ist
+    genau das, was das LLM im MCP-Tool-Input-Schema sieht (kein Enum, aber
+    die Semantik steht jetzt im Schema statt nur im Tool-Docstring)."""
+    for model in (*_LOCALE_CREATE_MODELS, *_LOCALE_UPDATE_MODELS):
+        schema = model.model_json_schema()
+        locale_schema = schema["properties"]["locale"]
+        description = locale_schema.get("description", "")
+        assert description, f"{model.__name__}.locale hat keine description im Schema"
+        assert "'de'" in description and "'en'" in description, (
+            f"{model.__name__}.locale.description nennt nicht beide erlaubten Werte"
+        )
+
+
+def test_locale_create_description_mentions_workspace_default() -> None:
+    """Create-Variante: leer lassen -> Workspace-Sprache (kein Rendering-Schalter)."""
+    for model in _LOCALE_CREATE_MODELS:
+        description = model.model_json_schema()["properties"]["locale"]["description"]
+        assert "Workspace-Sprache" in description
+        assert "Rendering-Schalter" in description
+
+
+def test_locale_update_description_mentions_unchanged_on_none() -> None:
+    """Update-Variante: `null` laesst die Sprache unveraendert (Sprachwechsel-Semantik)."""
+    for model in _LOCALE_UPDATE_MODELS:
+        description = model.model_json_schema()["properties"]["locale"]["description"]
+        assert "unveraendert" in description
+
+
+def test_whoami_read_content_locale_defaults_to_de() -> None:
+    """Backward-Compat: fehlt `content_locale` (Alt-Client/Fixture ohne WP-D),
+    greift `DEFAULT_LOCALE` (spiegelt `WorkspaceRead.content_locale`)."""
+    who = WhoAmIRead(
+        user_id=uuid4(),
+        workspace_id=uuid4(),
+        role=WorkspaceRole.admin,
+        is_api_token=False,
+        agent_id=None,
+        unrestricted=True,
+        capabilities=None,
+        read_scopes=None,
+        features=["core"],
+    )
+    assert who.content_locale == DEFAULT_LOCALE
+
+
+def test_whoami_read_carries_explicit_content_locale() -> None:
+    who = WhoAmIRead(
+        user_id=uuid4(),
+        workspace_id=uuid4(),
+        role=WorkspaceRole.admin,
+        is_api_token=False,
+        agent_id=None,
+        unrestricted=True,
+        capabilities=None,
+        read_scopes=None,
+        features=["core"],
+        content_locale="en",
+    )
+    assert who.content_locale == "en"

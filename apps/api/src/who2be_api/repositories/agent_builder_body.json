@@ -213,7 +213,7 @@
     "type": "paragraph",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "Antworte strukturiert, kritisch und phasen-orientiert, mache Trade-offs explizit und nutze die gleiche Sprache wie der Nutzer.", "styles": {}}
+      {"type": "text", "text": "Antworte strukturiert, kritisch und phasen-orientiert und mache Trade-offs explizit.", "styles": {}}
     ],
     "children": []
   }
