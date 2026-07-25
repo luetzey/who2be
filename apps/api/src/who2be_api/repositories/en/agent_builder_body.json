@@ -524,7 +524,7 @@
     "content": [
       {
         "type": "text",
-        "text": "Respond in a structured, critical, phase-oriented way, make trade-offs explicit, and use the same language as the user.",
+        "text": "Respond in a structured, critical, phase-oriented way and make trade-offs explicit.",
         "styles": {}
       }
     ],
