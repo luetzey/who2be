@@ -22,15 +22,20 @@ nachbauen, ohne die Logik zu duplizieren.
 from __future__ import annotations
 
 import asyncio
+import logging
 
 import asyncpg
 
 from who2be_api.core.config import get_settings
+from who2be_api.core.db import init_connection
+from who2be_api.embeddings import EmbeddingPort, build_embedding_port
 from who2be_api.repositories.content_chunk_repository import (
     CHUNK_TYPE_TABLES,
     PgContentChunkRepository,
 )
 from who2be_api.services.content_chunks import chunk_version_content
+
+logger = logging.getLogger(__name__)
 
 # Aktive Versionen eines Typs, inklusive Workspace der Identitaets-Zeile.
 _ACTIVE_VERSIONS_SQL = """
@@ -85,19 +90,61 @@ async def backfill_chunks(conn: asyncpg.Connection) -> tuple[int, int, int]:
     return entities, chunks, orphans
 
 
+async def backfill_vectors(
+    conn: asyncpg.Connection, embedder: EmbeddingPort | None, batch_size: int = 64
+) -> int:
+    """Holt fehlende Vektoren nach (ADR-0046 Welle 2).
+
+    Zaehlt, wie viele Passagen einen Vektor bekommen haben. Ohne Port ist das
+    ein No-Op — das ist der Normalfall einer Installation ohne die optionale
+    Dependency-Gruppe, kein Fehler.
+
+    Arbeitet in Baetzen und bricht ab, sobald ein Batch fehlschlaegt: der
+    naechste Lauf setzt dort fort, weil die Auswahl an `content_vector IS NULL`
+    haengt und damit von selbst nur die Nachzuegler sieht.
+    """
+    if embedder is None:
+        return 0
+    repo = PgContentChunkRepository()
+    embedded = 0
+    while True:
+        pending = await repo.fetch_missing_vectors(conn, batch_size)
+        if not pending:
+            break
+        try:
+            vectors = await embedder.embed([text for _, text in pending])
+        except Exception:  # noqa: BLE001 - Teil-Erfolg ist besser als Abbruch
+            logger.warning("Embedding-Batch fehlgeschlagen — Backfill bricht ab.", exc_info=True)
+            break
+        if len(vectors) != len(pending):
+            logger.warning("Embedding lieferte eine falsche Anzahl Vektoren — Backfill bricht ab.")
+            break
+        async with conn.transaction():
+            for (chunk_id, _text), vector in zip(pending, vectors, strict=True):
+                await repo.set_vector(conn, chunk_id, vector)
+        embedded += len(pending)
+    return embedded
+
+
 async def _run() -> None:
     try:
         conn = await asyncpg.connect(get_settings().database_url)
     except (asyncpg.PostgresError, OSError) as exc:
         raise SystemExit(f"Datenbank nicht erreichbar: {exc}") from exc
     try:
+        await init_connection(conn)
         entities, chunks, orphans = await backfill_chunks(conn)
+        embedded = await backfill_vectors(conn, build_embedding_port())
     finally:
         await conn.close()
     print(
         f"Passagen neu gebaut: {chunks} aus {entities} aktiven Versionen "
         f"({orphans} verwaiste Chunks entfernt)."
     )
+    if embedded:
+        print(f"Vektoren nachgeholt: {embedded}.")
+    else:
+        print("Keine Vektoren erzeugt (Semantik nicht aktiv oder nichts offen).")
 
 
 def cli() -> None:

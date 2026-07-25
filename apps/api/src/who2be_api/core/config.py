@@ -108,6 +108,22 @@ class Settings(BaseSettings):
         default="onprem",
         validation_alias=AliasChoices("WHO2BE_EDITION", "edition"),
     )
+    # Semantische Suche (ADR-0046). Default AUS: Embeddings sind additiv, und
+    # eine Installation ohne die optionale Dependency-Gruppe `embeddings` soll
+    # nicht bei jedem Start in einen Adapter-Fehler laufen. An ⇒ Vektoren
+    # werden best-effort erzeugt; fehlt der Adapter trotzdem, bleibt die Suche
+    # im Volltext-Modus (fail-soft, siehe embeddings/service.py).
+    embeddings_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("WHO2BE_EMBEDDINGS_ENABLED", "embeddings_enabled"),
+    )
+    # Modell des lokalen Adapters. Muss 384-dimensionale Vektoren liefern
+    # (Spaltentyp in Migration 0071) und sollte MULTILINGUAL sein — der
+    # Hauptgewinn ist, dass eine deutsche Anfrage englischen Inhalt findet.
+    embedding_model: str = Field(
+        default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        validation_alias=AliasChoices("WHO2BE_EMBEDDING_MODEL", "embedding_model"),
+    )
     # On-Prem-Adapter: signierte Lizenzdatei (Ed25519), offline mit `K_pub` verifiziert.
     # Leer ⇒ reines OSS (unbegrenzt). NIE der Private-Key — nur der Lizenz-Token.
     license_key: str = Field(

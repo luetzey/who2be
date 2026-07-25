@@ -55,7 +55,7 @@ def pytest_configure(config: pytest.Config) -> None:
         return
     from testcontainers.postgres import PostgresContainer
 
-    container = PostgresContainer("postgres:16")
+    container = PostgresContainer("pgvector/pgvector:pg16")
     container.start()
     # Testcontainers liefert eine SQLAlchemy-URL (…+psycopg2://); asyncpg will
     # das nackte ``postgresql://``-Schema.

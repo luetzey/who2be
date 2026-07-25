@@ -19,7 +19,8 @@ unnoetig aufblaehen wuerden. Wir bleiben hier bei rohem SQL und halten die
 Transition-Logik an einer Stelle.
 """
 
-from collections.abc import Callable
+import logging
+from collections.abc import Callable, Sequence
 from typing import Any
 from uuid import UUID
 
@@ -33,8 +34,9 @@ from who2be_api.core.security import (
     require_role,
     require_unmanaged,
 )
+from who2be_api.embeddings import build_embedding_port
 from who2be_api.repositories.content_chunk_repository import PgContentChunkRepository
-from who2be_api.services.content_chunks import chunk_version_content
+from who2be_api.services.content_chunks import ChunkDraft, chunk_version_content
 from who2be_api.services.promote_validation import (
     validate_promote_persona,
     validate_promote_playbook,
@@ -54,6 +56,8 @@ from who2be_models import (
     VersionStatus,
     WorkspaceRole,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _not_found(entity_type: EntityType) -> HTTPException:
@@ -247,9 +251,46 @@ class VersionStatusService:
             await self._chunks.clear(conn, ctx.workspace_id, entity_type, entity_id)
             return
         drafts = chunk_version_content(entity_type, content)
+        vectors = await self._embed_drafts(drafts)
         await self._chunks.replace(
-            conn, ctx.workspace_id, entity_type, entity_id, version, locale, drafts
+            conn, ctx.workspace_id, entity_type, entity_id, version, locale, drafts, vectors
         )
+
+    async def _embed_drafts(self, drafts: Sequence[ChunkDraft]) -> list[list[float] | None] | None:
+        """Vektoren zu den Passagen — BEST EFFORT (ADR-0046).
+
+        Ein fehlgeschlagenes oder fehlendes Embedding darf eine Aktivierung
+        niemals scheitern lassen: der Statuswechsel ist die fachliche Handlung,
+        der Vektor nur eine Beschleunigung des Suchens. Bleibt er aus, ist die
+        Spalte NULL und `who2be-chunk-backfill` holt ihn nach.
+
+        Eingebettet wird derselbe Text, den auch der FTS-Index sieht
+        (`heading_path` + Passage) — sonst suchten Volltext und Vektor auf
+        unterschiedlichem Material.
+        """
+        if not drafts:
+            return None
+        embedder = build_embedding_port()
+        if embedder is None:
+            return None
+        texts = [f"{d.heading_path} {d.text}".strip() for d in drafts]
+        try:
+            vectors = await embedder.embed(texts)
+        except Exception:  # noqa: BLE001 - best effort ist hier Absicht
+            logger.warning(
+                "Embedding der Passagen fehlgeschlagen — Aktivierung laeuft weiter, "
+                "Vektoren holt der Backfill nach.",
+                exc_info=True,
+            )
+            return None
+        if len(vectors) != len(drafts):
+            logger.warning(
+                "Embedding lieferte %s Vektoren fuer %s Passagen — verworfen.",
+                len(vectors),
+                len(drafts),
+            )
+            return None
+        return list(vectors)
 
     async def transition_persona_version(
         self,

@@ -435,3 +435,37 @@ bleiben)._
   ausführbare Tests festgehalten (`test_memory_retrieval_baseline.py`:
   Paraphrase → Trigram-Similarity 0.14, cross-lingual → 0.03, beide unter der
   Schwelle 0.3) — Welle 3 muss diese Tests umdrehen.
+
+## 2026-07-25 — ADR-0046 Welle 2: Vektor-Semantik additiv
+- **Entscheidung:** `content_vector vector(384)` auf `content_chunk` (Migration
+  0071) plus Hybrid-Ranking per Reciprocal Rank Fusion (K=60) und ein
+  `mode`-Parameter (`auto|text|semantic|hybrid`) — der in ADR-0037 §35-38
+  zugesagte Schalter. `auto` nimmt Semantik, wenn sie da ist, sonst Volltext;
+  der Tool-Vertrag ändert sich dadurch nicht.
+- **`EmbeddingPort`** als hexagonaler Port (Vorbild `build_entitlement_port`),
+  lokaler `fastembed`-Adapter mit `paraphrase-multilingual-MiniLM-L12-v2`
+  (384 dim, Apache-2.0, ~0,22 GB) in der optionalen Dep-Gruppe `embeddings`.
+  Der Kern importiert `fastembed` nie statisch. Gerechnet wird lokal — kein
+  Text verlässt das Deployment (On-Prem-Versprechen).
+- **Migration 0071 ist fail-soft** — die wichtigste Korrektur gegenüber dem
+  ursprünglichen Plan: `CREATE EXTENSION vector` scheitert hart auf einem
+  Postgres ohne pgvector, also genau auf einer selbst gehosteten On-Prem-
+  Instanz. Für ein rein additives Feature darf das die Migrationskette nicht
+  abbrechen. Fehlt die Extension, entsteht die Spalte nicht;
+  `content_chunk_repository.vector_supported` prüft ihre Existenz einmal pro
+  Prozess, und alle Pfade bleiben dann lexikalisch.
+- **Ähnlichkeitsschranke** `_MIN_VECTOR_SIMILARITY` (Cosinus 0.40) statt reinem
+  Top-k: ohne Schwelle liefert eine Vektor-Suche IMMER k Treffer, auch zu einer
+  völlig unpassenden Frage — das widerspräche der Tool-Anweisung „findest du
+  nichts, sag das offen".
+- **Verworfen:** asyncpg-Codec-freier Ansatz mit `::vector`-Casts im SQL (hängt
+  am `search_path` und bricht bei Supabase, wo die Extension in `extensions`
+  liegt) — stattdessen ein Codec mit dynamischer Schema-Auflösung in
+  `core/db.init_connection`. Ebenfalls verworfen: einen ungenutzten
+  Query-Parameter mitzubinden (Postgres kann seinen Typ dann nicht ableiten) —
+  die Platzhalter werden jetzt dynamisch nummeriert.
+- **Offen:** `_MIN_VECTOR_SIMILARITY` ist gegen das reale Modell **nicht
+  kalibriert**. Der Modell-Download (huggingface.co) ist in der Entwicklungs-
+  umgebung per Netz-Policy gesperrt; die Retrieval-Mechanik ist deshalb gegen
+  deterministische Test-Vektoren mit bekannter Geometrie belegt, die
+  Modell-Qualität nicht.

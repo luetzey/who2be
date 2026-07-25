@@ -1,6 +1,6 @@
 # ADR-0046 — Semantische Suche & Passage-Retrieval (pgvector, Stufe B)
 
-- Status: Accepted (Welle 1 in Umsetzung)
+- Status: Accepted (Wellen 1 + 2 umgesetzt; Welle 3 — Memory-Semantik — offen)
 - Datum: 2026-07-25
 - Kontext: Loest die als „Stufe B" offen gelassenen Folge-Entscheidungen aus
   ADR-0037 (Search) und ADR-0044 (Agent-Memory) ein — beide verweisen
@@ -94,10 +94,14 @@ darf nicht kollidieren.
 ### 3. Embeddings lokal, optional, best-effort
 
 - **`EmbeddingPort`** nach dem Vorbild von `build_entitlement_port()`, mit einem
-  **lokalen** Default-Adapter (multilinguales Modell, 384 Dimensionen), geladen
-  als **optionale Dependency-Gruppe** (`--group embeddings`) analog zur
-  Billing-Isolation (ADR-0029). Fehlt die Gruppe, bleibt `content_vector` NULL
-  und beide Suchen laufen im Textmodus weiter.
+  **lokalen** Default-Adapter (`fastembed`/ONNX,
+  `paraphrase-multilingual-MiniLM-L12-v2`: 384 Dimensionen, Apache-2.0,
+  ~0,22 GB), geladen als **optionale Dependency-Gruppe** (`--group embeddings`)
+  analog zur Billing-Isolation (ADR-0029). Fehlt die Gruppe, bleibt
+  `content_vector` NULL und beide Suchen laufen im Textmodus weiter.
+  Multilingual ist keine Geschmacksfrage: der Hauptgewinn gegenueber Volltext
+  ist die sprachuebergreifende Trefferlage — ein englisches Modell laege genau
+  daneben.
 - **Kein externer Provider.** `.env.example` sagt fuer On-Prem ausdruecklich
   „KEIN Phone-Home". Ein Embedding-Call schickte kuratierten Kundeninhalt **und
   persoenliche Memories** aus dem selbstgehosteten Deployment und schuefe einen
@@ -164,6 +168,18 @@ genau die Verlaesslichkeit verloren, die eine kuratierte AgentDB ausmacht.
 - **Infra-Wechsel**: lokal/CI/Testcontainers laufen auf `postgres:16`, das
   `vector` **nicht** mitbringt → `pgvector/pgvector:pg16`. Prod
   (`supabase/postgres`) bringt es mit.
+- **Migration 0071 ist fail-soft.** `CREATE EXTENSION vector` scheitert HART auf
+  einem Postgres ohne pgvector — der Normalfall einer selbst gehosteten
+  On-Prem-Instanz. Ein additives Feature darf dort nicht die Migrationskette
+  abbrechen und die App am Start hindern. Fehlt die Extension, wird die Spalte
+  nicht angelegt; `content_chunk_repository.vector_supported` prueft ihre
+  Existenz einmal pro Prozess, und alle Pfade bleiben dann im Volltext-Modus.
+- **Aehnlichkeitsschranke statt reinem Top-k.** Ein Vektor-Ranking liefert ohne
+  Schwelle IMMER die k naechsten Passagen, auch zu einer voellig unpassenden
+  Frage. Das widerspraeche der Tool-Anweisung „findest du nichts, sag das
+  offen". `_MIN_VECTOR_SIMILARITY` (Cosinus, aktuell 0.40) schneidet ab; der
+  Wert ist bewusst konservativ und gegen das reale Modell **noch nicht
+  kalibriert** (offener Punkt unten).
 - Neue Module: `content_chunk_service`/`-repository`, `embeddings/` (Port +
   Adapter), Backfill-CLI analog `who2be-migrate`.
 - Erste ausgehende Modell-Inferenz des Produkts — bisher enthaelt der Kern
@@ -182,5 +198,10 @@ genau die Verlaesslichkeit verloren, die eine kuratierte AgentDB ausmacht.
 - **Content-Injection-Waechter** analog `MemoryGuardConfig` — offen, bis
   Erfahrung mit retrievtem Passagen-Text vorliegt.
 - **ANN-Index (HNSW)** — erst wenn Messwerte ihn rechtfertigen.
+- **Kalibrierung von `_MIN_VECTOR_SIMILARITY`** gegen das reale Modell. Die
+  Retrieval-Mechanik ist gegen deterministische Test-Vektoren mit bekannter
+  Geometrie vollstaendig belegt; die Frage „ab welcher Cosinus-Aehnlichkeit ist
+  ein Treffer fuer DIESES Modell noch relevant" ist eine Modell-Eigenschaft und
+  braucht echte Vektoren aus dem Zielmodell.
 - **Cloud-Embedding-Adapter** — der Port laesst ihn zu; die Entscheidung, ob die
   Cloud-Edition einen nutzt, ist bewusst nicht Teil dieses ADR.

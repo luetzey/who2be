@@ -7,7 +7,7 @@ Liveness-Endpoint bedienbar und der Ausfall sichtbar.
 
 import json
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 
 import asyncpg
@@ -20,14 +20,59 @@ logger = logging.getLogger(__name__)
 
 _MIN_JWT_SECRET_LEN = 32
 
+# pgvector kann je nach Umgebung in unterschiedlichen Schemata liegen (lokal:
+# public; Supabase: extensions; isolierte Test-Schemata: eigenes). Der Codec
+# muss deshalb dasselbe dynamisch aufloesen wie die Migrationen — ein
+# unqualifiziertes `vector` haengt am search_path.
+_VECTOR_TYPE_SCHEMA_SQL = """
+SELECT n.nspname
+FROM pg_type t
+JOIN pg_namespace n ON n.oid = t.typnamespace
+WHERE t.typname = 'vector'
+LIMIT 1
+"""
 
-async def _init_connection(conn: asyncpg.Connection) -> None:
-    """Registriert den jsonb-Codec, damit `dict` direkt persistiert/gelesen wird."""
+
+def encode_vector(value: Sequence[float]) -> str:
+    """Python-Liste → pgvector-Textformat (`[1,2,3]`)."""
+    return "[" + ",".join(repr(float(v)) for v in value) + "]"
+
+
+def decode_vector(value: str) -> list[float]:
+    """pgvector-Textformat → Python-Liste."""
+    inner = value.strip().strip("[]")
+    if not inner:
+        return []
+    return [float(part) for part in inner.split(",")]
+
+
+async def init_connection(conn: asyncpg.Connection) -> None:
+    """Registriert die Typ-Codecs einer frischen Verbindung.
+
+    - `jsonb`, damit `dict` direkt persistiert/gelesen wird.
+    - `vector` (ADR-0046), damit Embeddings als `list[float]` uebergeben werden
+      koennen. Fehlt die Extension (frische DB vor den Migrationen, On-Prem
+      ohne Semantik), wird der Codec still uebersprungen — die Vektor-Spalte
+      ist nullable, und ohne sie laeuft alles im Volltext-Modus weiter.
+
+    Oeffentlich, weil auch die CLIs (`who2be-chunk-backfill`) eine eigene
+    Verbindung aufbauen und dieselben Codecs brauchen.
+    """
     await conn.set_type_codec(
         "jsonb",
         encoder=json.dumps,
         decoder=json.loads,
         schema="pg_catalog",
+    )
+    vector_schema = await conn.fetchval(_VECTOR_TYPE_SCHEMA_SQL)
+    if vector_schema is None:
+        return
+    await conn.set_type_codec(
+        "vector",
+        encoder=encode_vector,
+        decoder=decode_vector,
+        schema=vector_schema,
+        format="text",
     )
 
 
@@ -39,7 +84,7 @@ class Database:
 
     async def connect(self) -> None:
         settings = get_settings()
-        # `init` (einmalig je physischer Connection): jsonb-Codec.
+        # `init` (einmalig je physischer Connection): jsonb- + vector-Codec.
         # `setup` (bei jedem Checkout): Tenant-GUCs aus dem Request-ContextVar
         # (RLS-Choke-Point, core/tenancy.py). Die App verbindet ueber
         # `effective_app_database_url` — Cloud: Rolle `who2be_app` (RLS aktiv),
@@ -47,7 +92,7 @@ class Database:
         # `DATABASE_URL` (who2be-migrate).
         self._pool = await asyncpg.create_pool(
             settings.effective_app_database_url,
-            init=_init_connection,
+            init=init_connection,
             setup=apply_tenant_settings,
         )
         await self._assert_rls_enforced(settings)

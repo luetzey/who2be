@@ -13,6 +13,7 @@ Stufe B (pgvector) legt sich hinter beide Formen; der Agent merkt von der
 Umstellung nichts.
 """
 
+from enum import StrEnum
 from typing import Literal
 from uuid import UUID
 
@@ -21,6 +22,27 @@ from pydantic import BaseModel, ConfigDict, Field
 from who2be_models.locale import DEFAULT_LOCALE, ContentLocale
 
 SearchType = Literal["persona", "playbook", "resource", "external_tool"]
+
+
+class SearchMode(StrEnum):
+    """Wie gesucht wird (ADR-0037 §35-38, eingeloest in ADR-0046).
+
+    - `auto` (Default): semantisch/hybrid, wenn Vektoren verfuegbar sind, sonst
+      Volltext. Der Tool-Vertrag aendert sich dadurch NICHT, wenn eine
+      Installation ohne die optionale Embedding-Gruppe laeuft.
+    - `text`: nur Volltext — deterministisch und reproduzierbar.
+    - `semantic`: nur Vektor-Aehnlichkeit. Findet Umschreibungen und
+      sprachuebergreifend, verfehlt aber exakte Kennungen (IDs, Namen).
+    - `hybrid`: beide Raenge per Reciprocal Rank Fusion verschmolzen.
+
+    Ohne verfuegbaren Embedding-Port verhalten sich alle Stufen wie `text`.
+    """
+
+    auto = "auto"
+    text = "text"
+    semantic = "semantic"
+    hybrid = "hybrid"
+
 
 # Die Passage-Suche deckt zusaetzlich System-Prompt-Templates ab: sie tragen
 # denselben BlockNote-Body und sind fuer den Builder genauso durchsuchbar.

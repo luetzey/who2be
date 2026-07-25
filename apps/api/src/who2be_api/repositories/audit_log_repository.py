@@ -59,7 +59,7 @@ class PgAuditLogRepository:
         detail: dict[str, Any] | None = None,
     ) -> None:
         # ``detail`` als jsonb-String serialisieren — der App-Pool registriert
-        # einen jsonb-Codec (siehe core/db._init_connection), Owner-/Test-
+        # einen jsonb-Codec (siehe core/db.init_connection), Owner-/Test-
         # Connections nicht zwingend. Ein String funktioniert unter beiden.
         detail_json = json.dumps(detail) if detail is not None else "{}"
         await executor.execute(

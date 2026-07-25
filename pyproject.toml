@@ -39,6 +39,13 @@ dev = [
 billing = [
     "who2be-billing",
 ]
+# Semantische Suche (ADR-0046). Bewusst SEPARAT wie `billing`: die ONNX-Runtime
+# plus Modell-Download sind mehrere hundert MB, und ohne die Gruppe laeuft die
+# Suche vollstaendig im Volltext-Modus weiter (`build_embedding_port` liefert
+# dann `None`). Der Kern importiert `fastembed` nie statisch.
+embeddings = [
+    "fastembed>=0.4",
+]
 
 [tool.ruff]
 line-length = 100

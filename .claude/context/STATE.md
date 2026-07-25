@@ -135,17 +135,28 @@ Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
 
 ## In Arbeit
 
-- **Semantische Suche & Passage-Retrieval (ADR-0046)** — Welle 1 fertig, Welle
-  2/3 offen. Fertig: `content_chunk` (Migration 0070, Schnitt an Heading-
-  Blöcken, FTS-Config pro Sprache), Chunk-Aufbau im Transition-Pfad,
-  `search_content` als REST + MCP-Tool (Passagen statt Aggregate),
-  Backfill-CLI `who2be-chunk-backfill`, plus zwei behobene Fehler der
-  bestehenden Suche (Read-Scope hinter dem `LIMIT`; 403 auf Fremdtypen).
-  Memory-Retrieval hat erstmals eine Test-Baseline, die die zwei Semantik-
-  Lücken ausführbar festhält (Paraphrase, cross-lingual). **DoD:** Python
-  1237 pytest / Coverage 90,82 %; ruff + mypy grün; Web unberührt (keine
-  Änderung unter `apps/web/`). Offen: pgvector-Infrastruktur, `EmbeddingPort`
-  (optionale Dep-Gruppe), Hybrid-Ranking, Memory-Semantik.
+- **Semantische Suche & Passage-Retrieval (ADR-0046)** — Wellen 1 + 2 fertig,
+  Welle 3 (Memory-Semantik) offen.
+  - *Welle 1:* `content_chunk` (Migration 0070, Schnitt an Heading-Blöcken,
+    FTS-Config pro Sprache), Chunk-Aufbau im Transition-Pfad, `search_content`
+    als REST + MCP-Tool (Passagen statt Aggregate), Backfill-CLI
+    `who2be-chunk-backfill`, plus zwei behobene Fehler der bestehenden Suche
+    (Read-Scope hinter dem `LIMIT`; 403 auf Fremdtypen).
+  - *Welle 2:* `content_vector` (Migration 0071, **fail-soft** ohne pgvector),
+    asyncpg-Vektor-Codec mit dynamischer Schema-Auflösung, `EmbeddingPort` +
+    lokaler fastembed-Adapter in der optionalen Dep-Gruppe `embeddings`,
+    Hybrid-Ranking per RRF, `mode`-Parameter (`auto|text|semantic|hybrid`),
+    Vektor-Backfill. Postgres-Images lokal/CI/Testcontainers auf
+    `pgvector/pgvector:pg16`.
+  - Memory-Retrieval hat erstmals eine Test-Baseline, die die zwei Semantik-
+    Lücken ausführbar festhält (Paraphrase, cross-lingual).
+  - **DoD:** Python 1246 pytest / Coverage 90,42 %; ruff + mypy grün; Web
+    unberührt (keine Änderung unter `apps/web/`).
+  - **Offen:** Welle 3 (Memory-Semantik) sowie die Kalibrierung von
+    `_MIN_VECTOR_SIMILARITY` gegen das reale Modell — der Modell-Download ist
+    in der Entwicklungsumgebung per Netz-Policy gesperrt, die Retrieval-
+    Mechanik ist deshalb gegen deterministische Test-Vektoren belegt, die
+    Modell-Qualität nicht.
 - **Standards-Review 2026-07-20** (`docs/standards-review-2026-07-20.md`,
   PR #331): Phase A mit 12 Prüf-Agenten; Phase B Wellen 1–3 umgesetzt
   (SEC-1/2/3, LIC-1, DEP-1/2/6, LIC-4, OSS-2, FE-1/10/11, Kosmetik-Sweep,

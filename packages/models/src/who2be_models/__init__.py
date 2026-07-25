@@ -148,7 +148,13 @@ from who2be_models.resource import (
     SubResourceLinkSet,
     SubResourceRead,
 )
-from who2be_models.search import ChunkType, ContentChunkHit, SearchHit, SearchType
+from who2be_models.search import (
+    ChunkType,
+    ContentChunkHit,
+    SearchHit,
+    SearchMode,
+    SearchType,
+)
 from who2be_models.status import (
     ALLOWED_TRANSITIONS,
     TRANSITION_RULE_DOC,
@@ -253,6 +259,7 @@ __all__ = [
     "UsageEventRead",
     "UsageOutcome",
     "SearchHit",
+    "SearchMode",
     "SearchType",
     "InvitationAccept",
     "InvitationCreate",

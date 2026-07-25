@@ -74,6 +74,7 @@ from who2be_models import (
     ResourceUpdate,
     ResourceVersionRead,
     SearchHit,
+    SearchMode,
     SearchType,
     SubResourceLinkSet,
     SubResourceRead,
@@ -1560,7 +1561,10 @@ async def search(
 @mcp.tool(output_schema=None)
 @with_tool_log("search_content")
 async def search_content(
-    query: str, types: list[ChunkType] | None = None, limit: int = 5
+    query: str,
+    types: list[ChunkType] | None = None,
+    limit: int = 5,
+    mode: SearchMode = SearchMode.auto,
 ) -> list[ContentChunkHit]:
     """Findet die passende STELLE in deinen Inhalten (statt ganzer Elemente).
 
@@ -1576,11 +1580,17 @@ async def search_content(
     stammt), `block_id` (der Anker — zusammen als `"<entity_id>#<block_id>"`
     zitierbar), `heading_path` (wo im Dokument) und `locale`.
 
+    `mode` steuert das Verfahren: `auto` (Default) nimmt Semantik, wenn sie
+    verfuegbar ist, sonst Volltext. `text` sucht rein woertlich — nimm das fuer
+    exakte Kennungen, Namen und IDs. `semantic` findet Umschreibungen und auch
+    sprachuebergreifend (deutsche Frage, englischer Inhalt). `hybrid` verbindet
+    beides.
+
     Durchsucht nur aktive Versionen und nur, was du lesen darfst. Findest du
     nichts, sag das offen, statt zu raten.
     """
     client = await build_client()
-    return await client.search_content(query, types, limit)
+    return await client.search_content(query, types, limit, mode)
 
 
 def main() -> None:

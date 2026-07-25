@@ -18,7 +18,9 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16
+        # pgvector-Variante (ADR-0046) — Migration 0071 legt die
+        # `vector`-Extension an, die `postgres:16` nicht mitbringt.
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
