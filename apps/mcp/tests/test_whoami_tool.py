@@ -2,7 +2,9 @@
 
 Muster wie test_agent_read_tools.py: kein pytest-asyncio, `build_client` per
 monkeypatch, `httpx.MockTransport`. Deckt den Roundtrip (Tool → Client → API →
-Model) fuer beide Identitaets-Faelle ab (unrestricted Mensch, agent-gebunden).
+Model) fuer beide Identitaets-Faelle ab (unrestricted Mensch, agent-gebunden)
+sowie `content_locale` (ADR-0045/WP-D, #361) — die Workspace-Content-Sprache,
+die ein Agent vor einem `create_*`/`update_*` erfragen kann.
 """
 
 from __future__ import annotations
@@ -86,6 +88,26 @@ def test_whoami_returns_unrestricted_identity(monkeypatch: pytest.MonkeyPatch) -
     assert result.unrestricted is True
     assert result.capabilities is None
     assert result.read_scopes is None
+    # Payload ohne `content_locale` (Alt-API/Fixture) → Backward-Compat-Default.
+    assert result.content_locale == "de"
+
+
+def test_whoami_reports_workspace_content_locale(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`content_locale` reicht die Workspace-Content-Sprache durch (EN-Fall) —
+    der Agent kann sie vor einem `create_*`/`update_*` erfragen, statt sie aus
+    bestehenden Elementen zu erschliessen (WP-D, #361)."""
+    user_id = uuid4()
+    payload = _unrestricted_payload(user_id)
+    payload["content_locale"] = "en"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=payload)
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+
+    result = asyncio.run(whoami())
+
+    assert result.content_locale == "en"
 
 
 def test_whoami_returns_agent_capabilities(monkeypatch: pytest.MonkeyPatch) -> None:

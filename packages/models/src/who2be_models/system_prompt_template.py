@@ -56,8 +56,18 @@ class SystemPromptTemplateCreate(BaseModel):
     # zogen unter ADR-0027 bewusst nicht mit (kein `locales`-Feld); jetzt
     # ziehen sie nach. `None` bedeutet „Service setzt spaeter den Workspace-
     # Default" (`workspace.content_locale`); ist der Wert gesetzt, muss er zu
-    # `SUPPORTED_LOCALES` gehoeren.
-    locale: ContentLocale | None = None
+    # `SUPPORTED_LOCALES` gehoeren. `description` macht die Semantik auch im
+    # MCP-Tool-Input-Schema sichtbar (WP-D, #361) — bisher stand sie nur im
+    # Tool-Docstring, nicht im Schema selbst.
+    locale: ContentLocale | None = Field(
+        default=None,
+        description=(
+            "Sprache DIESES Templates — kein Antwort-/Rendering-Schalter, "
+            "sondern ein Element-Attribut. Leer lassen: das Template uebernimmt "
+            "die Workspace-Sprache. Nur explizit setzen bei bewusster "
+            "Abweichung. Erlaubte Werte: 'de', 'en'."
+        ),
+    )
 
     @field_validator("locale")
     @classmethod
@@ -74,7 +84,15 @@ class SystemPromptTemplateUpdate(BaseModel):
     content: SystemPromptTemplateContent
     # Sprachwechsel (Plan „Ein Element, eine Sprache"): `None` = Sprache
     # bleibt unveraendert; gesetzt = neue Sprache fuer die Identitaets-Zeile.
-    locale: ContentLocale | None = None
+    locale: ContentLocale | None = Field(
+        default=None,
+        description=(
+            "Sprachwechsel fuer DIESES Template — kein Antwort-/Rendering-"
+            "Schalter. Gesetzt aendert die Sprache der Identitaets-Zeile (die "
+            "Historie behaelt die alten Sprach-Werte); `null` laesst die "
+            "bestehende Sprache unveraendert. Erlaubte Werte: 'de', 'en'."
+        ),
+    )
 
     @field_validator("locale")
     @classmethod
