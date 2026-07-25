@@ -137,8 +137,18 @@ class PlaybookCreate(BaseModel):
     # „Ein Element, eine Sprache" (Plan 2026-07-24, ersetzt das ADR-0027-
     # Multi-Locale-`locales`-Feld): `None` bedeutet „Service setzt spaeter den
     # Workspace-Default" (`workspace.content_locale`); ist der Wert gesetzt,
-    # muss er zu `SUPPORTED_LOCALES` gehoeren.
-    locale: ContentLocale | None = None
+    # muss er zu `SUPPORTED_LOCALES` gehoeren. `description` macht die Semantik
+    # auch im MCP-Tool-Input-Schema sichtbar (WP-D, #361) — bisher stand sie nur
+    # im Tool-Docstring, nicht im Schema selbst.
+    locale: ContentLocale | None = Field(
+        default=None,
+        description=(
+            "Sprache DIESES Playbooks — kein Antwort-/Rendering-Schalter, sondern "
+            "ein Element-Attribut. Leer lassen: das Playbook uebernimmt die "
+            "Workspace-Sprache. Nur explizit setzen bei bewusster Abweichung. "
+            "Erlaubte Werte: 'de', 'en'."
+        ),
+    )
 
     @field_validator("locale")
     @classmethod
@@ -155,7 +165,15 @@ class PlaybookUpdate(BaseModel):
     content: PlaybookContent
     # Sprachwechsel (Plan „Ein Element, eine Sprache"): `None` = Sprache
     # bleibt unveraendert; gesetzt = neue Sprache fuer die Identitaets-Zeile.
-    locale: ContentLocale | None = None
+    locale: ContentLocale | None = Field(
+        default=None,
+        description=(
+            "Sprachwechsel fuer DIESES Playbook — kein Antwort-/Rendering-"
+            "Schalter. Gesetzt aendert die Sprache der Identitaets-Zeile (die "
+            "Historie behaelt die alten Sprach-Werte); `null` laesst die "
+            "bestehende Sprache unveraendert. Erlaubte Werte: 'de', 'en'."
+        ),
+    )
 
     @field_validator("locale")
     @classmethod

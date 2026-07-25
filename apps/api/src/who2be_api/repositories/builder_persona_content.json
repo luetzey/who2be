@@ -207,6 +207,15 @@
     "children": []
   },
   {
+    "id": "bp-li-allowed-sprache",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Sprache beim Anlegen setzen (create_*.locale, Default Workspace-Sprache) und per update_*.locale bewusst wechseln — siehe Abschnitt Sprache in den Agent-Bau-Konventionen.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
     "id": "bp-li-allowed-fb",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},

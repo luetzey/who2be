@@ -7,10 +7,14 @@ Quelle, zentral an einer Stelle gepflegt, damit ALLE Render-Konsumenten
 (API-Render-Endpoint `/agents/{id}/render`, API-Endpoint `/agents/{id}/rendered`
 UND — darueber — das MCP-Tool `fetch_agent`) konsistent bleiben:
 
-1. `language_instruction`: eine explizite Output-Sprachanweisung, die
+1. `language_instruction`: eine explizite, aber weiche Output-Sprachanweisung
+   (Standardsprache mit Vorrang der Nutzersprache), die
    `append_language_instruction` als abschliessender Abschnitt an den
-   expandierten Prompt anhaengt — NICHT in den Template-Bodies selbst
-   (die bleiben sprachneutral editierbar).
+   expandierten Prompt anhaengt. Sprachaussagen gehoeren AUSSCHLIESSLICH
+   hierher — nicht in die Template-Bodies selbst. Nur eine zentrale
+   Injektionsstelle verhindert widerspruechliche Sprachanweisungen (ein
+   Body-Satz „nutze die gleiche Sprache wie der Nutzer" neben der harten
+   Renderer-Injektion war genau so ein Widerspruch, siehe ADR-0045-Nachzug).
 2. `date_locale`: der BCP-47-Tag fuer `RenderContext.locale` (Placeholder-
    Registry, Datums-/Format-Resolver) — ersetzt das frueher hart gesetzte
    `'de-DE'`.
@@ -24,11 +28,20 @@ from __future__ import annotations
 
 from who2be_models import DEFAULT_LOCALE
 
-# Explizite Output-Sprachanweisung pro App-Sprachkuerzel ('de'/'en', wie
-# `who2be_models.locale.SUPPORTED_LOCALES`). Neue Sprache -> ein Eintrag hier.
+# Explizite, aber weiche Output-Sprachanweisung pro App-Sprachkuerzel
+# ('de'/'en', wie `who2be_models.locale.SUPPORTED_LOCALES'): Standardsprache
+# mit Vorrang der Nutzersprache (User-Entscheidung, ADR-0045-Nachzug — Element-
+# Sprache ist Vorgabe, der Nutzer kann sie kippen). Neue Sprache -> ein
+# Eintrag hier.
 LANGUAGE_INSTRUCTIONS: dict[str, str] = {
-    "de": "Antworte auf Deutsch.",
-    "en": "Respond in English.",
+    "de": (
+        "Standard-Antwortsprache ist Deutsch. Schreibt der Nutzer in einer "
+        "anderen Sprache, folge seiner Sprache."
+    ),
+    "en": (
+        "Your default response language is English. If the user writes in "
+        "another language, follow theirs."
+    ),
 }
 
 # BCP-47-Tag fuer `RenderContext.locale` (Datumsformat der Placeholder-

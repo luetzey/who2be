@@ -7,7 +7,9 @@ Deckt die drei Identitaets-Pfade ab:
   gewaehrte Write-Capabilities + Read-Scopes ausgegeben, `agent_id` gesetzt.
 - **Ungueltiger Token:** 401.
 
-Plus: org-weite Entitlement-`features` werden in allen Faellen geliefert.
+Plus: org-weite Entitlement-`features` werden in allen Faellen geliefert und
+`content_locale` (ADR-0045/WP-D, #361) spiegelt die Content-Sprache DES
+Workspaces (DE- und EN-Fall).
 Laeuft nur mit erreichbarer Datenbank; ohne DB wird der Test uebersprungen.
 """
 
@@ -110,6 +112,34 @@ def test_whoami_jwt_is_unrestricted(monkeypatch: pytest.MonkeyPatch) -> None:
             assert body["read_scopes"] is None
             # On-Prem-Default: alle Features (OSS_ENTITLEMENT) — orthogonal zur Policy.
             assert "core" in body["features"]
+            # Default-Workspace ist DE (setup_workspace-Default) — spiegelt
+            # `workspace.content_locale`, nicht bloss den Pydantic-Default.
+            assert body["content_locale"] == "de"
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+def test_whoami_reports_workspace_content_locale_for_en_workspace(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`content_locale` liefert die tatsaechliche Workspace-Sprache — nicht nur
+    den DE-Default (WP-D, #361: der Agent soll die EN-Content-Sprache eines
+    EN-Workspaces korrekt erfragen koennen, statt sie zu erschliessen)."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    ws = setup_workspace(owner, content_locale="en")
+
+    try:
+        with TestClient(app) as client:
+            resp = client.get(f"/v1/workspaces/{ws}/whoami", headers=_auth(owner))
+            assert resp.status_code == 200, resp.text
+            body = resp.json()
+            assert body["content_locale"] == "en"
     finally:
         cleanup_workspaces([owner])
 
@@ -171,6 +201,7 @@ def test_whoami_agent_token_lists_capabilities(monkeypatch: pytest.MonkeyPatch) 
                 "external_tool": "all",
             }
             assert "core" in body["features"]
+            assert body["content_locale"] == "de"
     finally:
         cleanup_workspaces([owner])
 

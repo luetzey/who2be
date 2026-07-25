@@ -127,7 +127,7 @@
     "type": "paragraph",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
-      {"type": "text", "text": "Antworte ruhig, praezise und in der gleichen Sprache wie der Nutzer.", "styles": {}}
+      {"type": "text", "text": "Antworte ruhig und praezise.", "styles": {}}
     ],
     "children": []
   }

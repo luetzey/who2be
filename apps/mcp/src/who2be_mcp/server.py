@@ -341,6 +341,11 @@ async def whoami() -> WhoAmIRead:
     Current-Version inkl. Draft/Review der betreffenden Domain (nicht nur
     `active`) — so erscheint z. B. eine frisch via `create_*` angelegte Draft
     sofort im eigenen `fetch_*`.
+
+    `content_locale` (ADR-0045/WP-D, #361) ist die Standard-Sprache neuer
+    Elemente in diesem Workspace — nutze sie, um vor einem `create_*`/`update_*`
+    zu wissen, ob `locale` unangetastet bleiben kann oder eine bewusste
+    Abweichung vorliegt, statt die Sprache aus bestehenden Elementen zu raten.
     """
     client = await build_client()
     return await client.whoami()
@@ -925,6 +930,7 @@ async def update_persona(persona_id: str, data: PersonaUpdate) -> PersonaRead:
     (Historie behaelt die alten `locale`-Werte, unschaedlich), `None` laesst
     die bestehende Sprache unveraendert. Kein separater `locale`-Parameter mehr
     (fruehere Variantenwahl, ADR-0027) — Status-Invarianten sind per-entity.
+    Die aktuelle Workspace-Sprache erfaehrst du ueber `whoami` → `content_locale`.
     """
     client = await build_client()
     return await client.update_persona(_parse_uuid(persona_id, "Persona"), data)
@@ -1009,7 +1015,8 @@ async def update_playbook(playbook_id: str, data: PlaybookUpdate) -> PlaybookRea
 
     Ein Sprachwechsel laeuft ueber `data.locale` (Element-Attribut, optional) —
     `None` laesst die bestehende Sprache unveraendert. Kein separater
-    `locale`-Parameter mehr (fruehere Variantenwahl, ADR-0027)."""
+    `locale`-Parameter mehr (fruehere Variantenwahl, ADR-0027). Die aktuelle
+    Workspace-Sprache erfaehrst du ueber `whoami` → `content_locale`."""
     client = await build_client()
     return await client.update_playbook(_parse_uuid(playbook_id, "Playbook"), data)
 
@@ -1111,7 +1118,8 @@ async def update_resource(resource_id: str, data: ResourceUpdate) -> ResourceRea
 
     Ein Sprachwechsel laeuft ueber `data.locale` (Element-Attribut, optional) —
     `None` laesst die bestehende Sprache unveraendert. Kein separater
-    `locale`-Parameter mehr (fruehere Variantenwahl, ADR-0027)."""
+    `locale`-Parameter mehr (fruehere Variantenwahl, ADR-0027). Die aktuelle
+    Workspace-Sprache erfaehrst du ueber `whoami` → `content_locale`."""
     client = await build_client()
     return await client.update_resource(_parse_uuid(resource_id, "Resource"), data)
 
@@ -1196,7 +1204,8 @@ async def update_external_tool(tool_id: str, data: ExternalToolUpdate) -> Extern
 
     Ein Sprachwechsel laeuft ueber `data.locale` (Element-Attribut, optional) —
     `None` laesst die bestehende Sprache unveraendert. Kein separater
-    `locale`-Parameter mehr (fruehere Variantenwahl, ADR-0027)."""
+    `locale`-Parameter mehr (fruehere Variantenwahl, ADR-0027). Die aktuelle
+    Workspace-Sprache erfaehrst du ueber `whoami` → `content_locale`."""
     client = await build_client()
     return await client.update_external_tool(_parse_uuid(tool_id, "ExternalTool"), data)
 
@@ -1328,7 +1337,8 @@ async def update_system_prompt(
     Beispiel siehe `list_placeholders` und `create_system_prompt`.
 
     Ein Sprachwechsel laeuft ueber `data.locale` (Element-Attribut, optional) —
-    `None` laesst die bestehende Sprache unveraendert.
+    `None` laesst die bestehende Sprache unveraendert. Die aktuelle
+    Workspace-Sprache erfaehrst du ueber `whoami` → `content_locale`.
     """
     client = await build_client()
     return await client.update_system_prompt(_parse_uuid(template_id, "system_prompt"), data)

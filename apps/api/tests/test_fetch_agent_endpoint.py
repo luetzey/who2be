@@ -23,6 +23,7 @@ from who2be_api.core import security
 from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.migrations import MIGRATIONS_DIR, apply_migrations
 from who2be_api.main import app
+from who2be_api.services.agent_language import LANGUAGE_INSTRUCTIONS
 from who2be_api.testing.workspace_setup import (
     cleanup_workspaces,
     fresh_user_id,
@@ -330,7 +331,7 @@ def test_fetch_agent_rendered_expands_all_placeholder_kinds(
             # WP5 (ADR-0045): zentral angehaengte deutsche Sprachanweisung +
             # Template-Sprache als Top-Level-Metadatum (Template ohne
             # explizites `locale` -> Workspace-Default 'de').
-            assert prompt.rstrip().endswith("Antworte auf Deutsch.")
+            assert prompt.rstrip().endswith(LANGUAGE_INSTRUCTIONS["de"])
             assert data["locale"] == "de"
 
     finally:
@@ -341,7 +342,7 @@ def test_fetch_agent_rendered_expands_all_placeholder_kinds(
 def test_fetch_agent_rendered_en_template_gets_english_instruction(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """WP5 (ADR-0045): ein EN-Template rendert mit 'Respond in English.' + `locale='en'`."""
+    """WP5 (ADR-0045): ein EN-Template rendert mit der EN-Sprachanweisung + `locale='en'`."""
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
     _prepare_db()
@@ -389,7 +390,9 @@ def test_fetch_agent_rendered_en_template_gets_english_instruction(
             )
             assert rendered.status_code == 200, rendered.text
             data = rendered.json()
-            assert data["system_prompt_rendered"] == f"{plain_body}\n\nRespond in English."
+            assert (
+                data["system_prompt_rendered"] == f"{plain_body}\n\n{LANGUAGE_INSTRUCTIONS['en']}"
+            )
             assert data["locale"] == "en"
 
             # /render (Preview-Endpoint) haengt dieselbe Anweisung an — derselbe
@@ -399,7 +402,7 @@ def test_fetch_agent_rendered_en_template_gets_english_instruction(
                 headers=auth,
             )
             assert render_resp.status_code == 200, render_resp.text
-            assert render_resp.json()["content"] == f"{plain_body}\n\nRespond in English."
+            assert render_resp.json()["content"] == f"{plain_body}\n\n{LANGUAGE_INSTRUCTIONS['en']}"
 
     finally:
         cleanup_workspaces([owner])
@@ -457,7 +460,9 @@ def test_fetch_agent_rendered_plain_format_unchanged(
             )
             assert rendered.status_code == 200
             data = rendered.json()
-            assert data["system_prompt_rendered"] == (f"{plain_body}\n\nAntworte auf Deutsch.")
+            assert (
+                data["system_prompt_rendered"] == f"{plain_body}\n\n{LANGUAGE_INSTRUCTIONS['de']}"
+            )
             assert data["locale"] == "de"
 
     finally:

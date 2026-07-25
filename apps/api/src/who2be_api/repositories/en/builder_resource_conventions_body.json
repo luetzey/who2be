@@ -249,6 +249,168 @@
     "children": []
   },
   {
+    "id": "res-conv-h-sprache",
+    "type": "heading",
+    "props": {
+      "level": 2,
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Language",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-sprache-1",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "One element = one language: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "locale is an attribute of the element, not a rendering option — there are no parallel language variants of the same element. A translation is a separate element, not a language flag on the existing one.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-sprache-2",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Default = workspace language: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "leave locale out when creating. Only set it explicitly when the element is meant to deliberately deviate from the workspace language — e.g. an EN persona in a DE workspace.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-sprache-3",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Write content in the element's language: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "name, description, body, trigger, AND tags consistently in the element's language — no language mixing within one element.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-sprache-4",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Language change via update_*: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "a language change runs through update_* with locale set (an identity attribute of the entity); the version history keeps its old locale values untouched. There is no separate locale selection parameter anymore (the earlier variant selection, ADR-0027 — superseded by ADR-0045).",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-sprache-5",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Read the language, don't guess: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "the language of an existing element is in the locale field of every read response (get_persona, fetch_playbook, list_*, search, ...) — check there instead of assuming.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-sprache-6",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Allowed values: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "de and en (the SUPPORTED_LOCALES set); any other value is rejected with 422.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
     "id": "res-conv-h-modi",
     "type": "heading",
     "props": {

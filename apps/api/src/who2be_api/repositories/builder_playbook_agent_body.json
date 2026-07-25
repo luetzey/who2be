@@ -209,6 +209,15 @@
     "children": []
   },
   {
+    "id": "pb-agent-li-create-p1-5",
+    "type": "numberedListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Sprache: list_system_prompts liefert locale je Template — bevorzuge fuer den Agenten ein Template in der Zielsprache. Verfasst du ein neues Template via create_system_prompt, uebernimmt es ohne Angabe die Workspace-Sprache; locale nur explizit setzen, wenn bewusst abgewichen werden soll (siehe Abschnitt Sprache in den Agent-Bau-Konventionen).", "styles": {}}
+    ],
+    "children": []
+  },
+  {
     "id": "pb-agent-h-create-p2",
     "type": "heading",
     "props": {"level": 3, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},

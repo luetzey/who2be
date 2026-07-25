@@ -665,6 +665,23 @@
     "children": []
   },
   {
+    "id": "bp-li-allowed-sprache",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Set the language when creating (create_*.locale, defaults to the workspace language) and switch it deliberately via update_*.locale — see the Language section in the Agent-Building Conventions.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
     "id": "bp-li-allowed-fb",
     "type": "bulletListItem",
     "props": {

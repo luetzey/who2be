@@ -240,6 +240,16 @@
     "children": []
   },
   {
+    "id": "pb-check-li-graph-locale",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Sprach-Konsistenz: ", "styles": {"bold": true}},
+      {"type": "text", "text": "locale aus den Read-Antworten (get_persona, fetch_playbook, fetch_resource, get_external_tool, list_*) mit dem tatsaechlich verfassten Inhalt (Name, Description, Body, Trigger, Tags) abgleichen — schreibt das Element wirklich in seiner locale-Sprache? Zusaetzlich Ausreisser gegenueber der Workspace-Sprache melden. Nur melden/vorschlagen, NICHT automatisch aendern — ein Sprachwechsel ist eine Kurator-Entscheidung des Nutzers (siehe Abschnitt Sprache in den Agent-Bau-Konventionen).", "styles": {}}
+    ],
+    "children": []
+  },
+  {
     "id": "pb-check-h-report",
     "type": "heading",
     "props": {"level": 3, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
@@ -404,7 +414,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "V1-Scope: ", "styles": {"bold": true}},
-      {"type": "text", "text": "struktureller + Aktivierbarkeits-Check (aktive Persona-Version, Playbook-Verknuepfungen, fetch_agent.activatable/missing, Render ohne offene Platzhalter) inklusive der strukturellen Zusammenhangs-Checks (verwaiste Resources, Wissens-Drift, Vakuum-Playbooks, Composite-Kinder, Trigger-Kollisionen/-Vakuum).", "styles": {}}
+      {"type": "text", "text": "struktureller + Aktivierbarkeits-Check (aktive Persona-Version, Playbook-Verknuepfungen, fetch_agent.activatable/missing, Render ohne offene Platzhalter) inklusive der strukturellen Zusammenhangs-Checks (verwaiste Resources, Wissens-Drift, Vakuum-Playbooks, Composite-Kinder, Trigger-Kollisionen/-Vakuum, Sprach-Konsistenz).", "styles": {}}
     ],
     "children": []
   },

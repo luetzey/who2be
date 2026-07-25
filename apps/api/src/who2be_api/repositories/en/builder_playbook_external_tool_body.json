@@ -52,7 +52,7 @@
     "id": "pb-exttool-li-2",
     "type": "numberedListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Create — Write: create_external_tool(data) with name, alias, and content: display_name (the concrete tool's display name), mcp_server_name (connector name in the runtime), tool_names (relevant MCP tool identifiers), usage_notes (stringified BlockNote document: when/how to use it, do's/don'ts), and fallback_note (behavior when the server is missing or not connected). This produces a draft version 1.", "styles": {}}],
+    "content": [{"type": "text", "text": "Create — Write: create_external_tool(data) with name, alias, and content: display_name (the concrete tool's display name), mcp_server_name (connector name in the runtime), tool_names (relevant MCP tool identifiers), usage_notes (stringified BlockNote document: when/how to use it, do's/don'ts), and fallback_note (behavior when the server is missing or not connected). This produces a draft version 1. Only set locale explicitly if the binding is meant to deliberately deviate from the workspace language — write usage_notes and fallback_note in that language (see the Language section in the Agent-Building Conventions).", "styles": {}}],
     "children": []
   },
   {

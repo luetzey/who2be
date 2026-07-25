@@ -321,7 +321,7 @@
     "content": [
       {
         "type": "text",
-        "text": "Respond calmly, precisely, and in the same language as the user.",
+        "text": "Respond calmly and precisely.",
         "styles": {}
       }
     ],
