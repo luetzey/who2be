@@ -28,7 +28,7 @@ from pydantic import (
     field_validator,
 )
 
-from who2be_models.locale import DEFAULT_LOCALE, ContentLocale, normalize_locale
+from who2be_models.locale import DEFAULT_LOCALE, ContentLocale, validate_supported_locale
 from who2be_models.slug import SlugStr
 from who2be_models.status import VersionStatus
 
@@ -77,22 +77,16 @@ class ExternalToolCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     alias: SlugStr | None = None
     content: ExternalToolContent = Field(default_factory=ExternalToolContent)
-    # Content-i18n (ADR-0027): Sprachvarianten beim Anlegen. Default `['de']`.
-    locales: list[ContentLocale] = Field(default_factory=lambda: [DEFAULT_LOCALE])
+    # „Ein Element, eine Sprache" (Plan 2026-07-24, ersetzt das ADR-0027-
+    # Multi-Locale-`locales`-Feld): `None` bedeutet „Service setzt spaeter den
+    # Workspace-Default" (`workspace.content_locale`); ist der Wert gesetzt,
+    # muss er zu `SUPPORTED_LOCALES` gehoeren.
+    locale: ContentLocale | None = None
 
-    @field_validator("locales")
+    @field_validator("locale")
     @classmethod
-    def _dedup_non_empty(cls, value: list[str]) -> list[str]:
-        if not value:
-            raise ValueError("Mindestens eine Sprache ist erforderlich.")
-        seen: set[str] = set()
-        ordered: list[str] = []
-        for loc in value:
-            norm = normalize_locale(loc)
-            if norm not in seen:
-                seen.add(norm)
-                ordered.append(norm)
-        return ordered
+    def _validate_locale(cls, value: str | None) -> str | None:
+        return None if value is None else validate_supported_locale(value)
 
 
 class ExternalToolUpdate(BaseModel):
@@ -106,6 +100,14 @@ class ExternalToolUpdate(BaseModel):
 
     name: str | None = Field(default=None, min_length=1, max_length=200)
     content: ExternalToolContent
+    # Sprachwechsel (Plan „Ein Element, eine Sprache"): `None` = Sprache
+    # bleibt unveraendert; gesetzt = neue Sprache fuer die Identitaets-Zeile.
+    locale: ContentLocale | None = None
+
+    @field_validator("locale")
+    @classmethod
+    def _validate_locale(cls, value: str | None) -> str | None:
+        return None if value is None else validate_supported_locale(value)
 
 
 class ExternalToolRead(BaseModel):

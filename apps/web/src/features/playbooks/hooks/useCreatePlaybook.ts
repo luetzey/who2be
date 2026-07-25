@@ -37,8 +37,10 @@ export interface UseCreatePlaybookResult {
 
 export function useCreatePlaybook(
   onCreated: (id: string) => void,
-  // Content-i18n (ADR-0027): gewaehlte Sprachvarianten (mind. eine), Default ['de'].
-  locales: string[] = ['de'],
+  // Ein Element, eine Sprache (ADR-0045): einzelne Sprache statt der
+  // frueheren Multi-Auswahl. `undefined` laesst das Backend auf die
+  // Workspace-Content-Sprache defaulten.
+  locale?: string,
 ): UseCreatePlaybookResult {
   const api = useApi()
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -66,7 +68,7 @@ export function useCreatePlaybook(
           tags: values.tags,
           triggers: joinTriggers(values.triggers),
         },
-        locales,
+        locale,
       })
       notify.success('Playbook angelegt.')
       onCreated(created.id)

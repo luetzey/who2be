@@ -385,6 +385,143 @@ def test_sync_inserts_missing_playbook_in_existing_workspace() -> None:
 
 
 @pytest.mark.integration
+def test_sync_is_locale_scoped_between_de_and_en_workspaces() -> None:
+    """Locale-Scoping (ADR-0045, WP8): der Sync laeuft pro Sprache mit dem
+    jeweiligen ContentPack und ist ueber `workspace.content_locale` gescopet —
+    EN-Workspaces bekommen EN-Bodies/-Namen zurueck (Content-Restore +
+    Insert-missing mit `locale='en'` auf Entity+Version), und es bleedet kein
+    Pack in Workspaces der anderen Sprache (keine DE-Pack-Rows im EN-Workspace
+    und umgekehrt)."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+    owner_de = fresh_user_id()
+    owner_en = fresh_user_id()
+    ws_de = setup_workspace(owner_de)
+    ws_en = setup_workspace(owner_en, content_locale="en")
+
+    en_missing = "Library Maintenance & Feedback Run"
+    en_outdated = "Create & Maintain Persona"
+
+    from who2be_api.repositories.builder_content import get_content_pack
+
+    de_names = [p.name for p in get_content_pack("de").playbooks]
+    en_names = [p.name for p in get_content_pack("en").playbooks]
+
+    async def _run() -> dict[str, Any]:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            # EN-Workspace praeparieren: ein Playbook fehlt (Insert-missing-Fall),
+            # eines ist veraltet (Junk-Body + Stempel 0, Content-Restore-Fall).
+            await conn.execute(
+                "DELETE FROM playbook WHERE workspace_id = $1 AND name = $2",
+                ws_en,
+                en_missing,
+            )
+            await conn.execute(
+                "UPDATE playbook_version pv "
+                "SET content = jsonb_set(content, '{body}', to_jsonb($2::text)) "
+                "FROM playbook pb WHERE pv.playbook_id = pb.id AND pb.workspace_id = $1 "
+                "AND pb.name = $3 AND pv.status = 'active'",
+                ws_en,
+                _JUNK,
+                en_outdated,
+            )
+            await conn.execute(
+                "UPDATE playbook SET managed_content_version = 0 "
+                "WHERE workspace_id = $1 AND name = $2",
+                ws_en,
+                en_outdated,
+            )
+
+            first = await sync_managed_builder_content(conn)
+            second = await sync_managed_builder_content(conn)  # idempotent
+
+            restored_body = await conn.fetchval(
+                "SELECT pv.content ->> 'body' FROM playbook_version pv "
+                "JOIN playbook pb ON pb.id = pv.playbook_id "
+                "WHERE pb.workspace_id = $1 AND pb.name = $2 AND pv.status = 'active'",
+                ws_en,
+                en_outdated,
+            )
+            missing_row = await conn.fetchrow(
+                "SELECT pb.locale, pb.is_managed, pb.managed_content_version, "
+                "  (SELECT v.locale FROM playbook_version v "
+                "     WHERE v.playbook_id = pb.id AND v.status = 'active') AS version_locale, "
+                "  (SELECT v.content ->> 'body' FROM playbook_version v "
+                "     WHERE v.playbook_id = pb.id AND v.status = 'active') AS body "
+                "FROM playbook pb WHERE pb.workspace_id = $1 AND pb.name = $2",
+                ws_en,
+                en_missing,
+            )
+            de_named_in_en = await conn.fetchval(
+                "SELECT count(*) FROM playbook WHERE workspace_id = $1 AND name = ANY($2::text[])",
+                ws_en,
+                de_names,
+            )
+            en_named_in_de = await conn.fetchval(
+                "SELECT count(*) FROM playbook WHERE workspace_id = $1 AND name = ANY($2::text[])",
+                ws_de,
+                en_names,
+            )
+            de_resource_in_en = await conn.fetchval(
+                "SELECT count(*) FROM resource "
+                "WHERE workspace_id = $1 AND name = 'Agent-Bau-Konventionen'",
+                ws_en,
+            )
+            en_resource_in_de = await conn.fetchval(
+                "SELECT count(*) FROM resource "
+                "WHERE workspace_id = $1 AND name = 'Agent-Building Conventions'",
+                ws_de,
+            )
+            return {
+                "first": first,
+                "second": second,
+                "restored_body": restored_body,
+                "missing_row": dict(missing_row) if missing_row else None,
+                "de_named_in_en": de_named_in_en,
+                "en_named_in_de": en_named_in_de,
+                "de_resource_in_en": de_resource_in_en,
+                "en_resource_in_de": en_resource_in_de,
+            }
+        finally:
+            await conn.close()
+
+    try:
+        res = asyncio.run(_run())
+    finally:
+        cleanup_workspaces([owner_de, owner_en])
+
+    # Genau die beiden praeparierten EN-Aggregate wurden angefasst; der
+    # (aktuelle) DE-Workspace blieb unberuehrt.
+    assert res["first"] == 2, res["first"]
+    assert res["second"] == 0, "Sync muss idempotent sein (Stempel-Guard)."
+
+    # Content-Restore stellt den EN-Body wieder her (nicht den DE-Text).
+    restored_body = res["restored_body"]
+    assert isinstance(restored_body, str)
+    assert "CRUD workflow for personas" in restored_body
+    assert "junk" not in restored_body
+
+    # Insert-missing im EN-Workspace nutzt EN-Namen und schreibt `locale='en'`
+    # explizit auf Entity- UND Versions-Row.
+    row = res["missing_row"]
+    assert row is not None, "Fehlendes EN-Playbook wurde nicht angelegt."
+    assert row["is_managed"] is True
+    assert row["managed_content_version"] == BUILDER_CONTENT_VERSION
+    assert row["locale"] == "en"
+    assert row["version_locale"] == "en"
+    assert "Feedback-driven maintenance run across the agent library" in row["body"]
+
+    # Kein Cross-Locale-Bleed: kein DE-Pack-Element im EN-Workspace, keines
+    # der EN-Pack-Elemente im DE-Workspace.
+    assert res["de_named_in_en"] == 0
+    assert res["en_named_in_de"] == 0
+    assert res["de_resource_in_en"] == 0
+    assert res["en_resource_in_de"] == 0
+
+
+@pytest.mark.integration
 def test_sync_updates_playbook_row_metadata() -> None:
     """Metadaten-Drift: geaenderte Trigger/Tags/Type werden beim Stempeln auf
     der Playbook-Row nachgezogen, nicht nur im Versions-Content."""

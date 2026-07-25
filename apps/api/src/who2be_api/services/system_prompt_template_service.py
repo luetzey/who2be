@@ -21,6 +21,8 @@ from who2be_api.core.security import (
 from who2be_api.repositories.system_prompt_template_repository import (
     SystemPromptTemplateRepository,
 )
+from who2be_api.repositories.workspace_repository import WorkspaceRepository
+from who2be_api.services.content_locale import resolve_content_locale
 from who2be_api.services.content_text import system_prompt_content_text
 from who2be_api.services.slug import slugify
 from who2be_api.services.version_diff import compute_version_diff
@@ -72,8 +74,13 @@ def _invalid_against() -> HTTPException:
 class SystemPromptTemplateService:
     """Legt Templates an, liest, listet, aktualisiert."""
 
-    def __init__(self, repo: SystemPromptTemplateRepository) -> None:
+    def __init__(
+        self,
+        repo: SystemPromptTemplateRepository,
+        workspace_repo: WorkspaceRepository | None = None,
+    ) -> None:
         self._repo = repo
+        self._workspace_repo = workspace_repo
 
     async def create(
         self, ctx: WorkspaceContext, data: SystemPromptTemplateCreate
@@ -83,6 +90,8 @@ class SystemPromptTemplateService:
         # (No-Op fuer ungebundene Tokens → Web-UI unveraendert).
         require_capability(ctx, AgentCapability.system_prompt_write)
         slug = data.slug or slugify(data.name)
+        # ADR-0045: explizite Sprache aus dem Body, sonst Workspace-Default.
+        locale = await resolve_content_locale(self._workspace_repo, ctx.workspace_id, data.locale)
         try:
             return await self._repo.insert(
                 ctx.workspace_id,
@@ -90,6 +99,7 @@ class SystemPromptTemplateService:
                 data.name,
                 slug,
                 data.content,
+                locale,
             )
         except asyncpg.UniqueViolationError as exc:
             raise _slug_conflict() from exc
@@ -109,8 +119,9 @@ class SystemPromptTemplateService:
         name = f"{source.name} (Kopie)"
         slug = f"{slugify(name)}-{uuid4().hex[:8]}"
         try:
+            # Die Kopie uebernimmt die Sprache der Quelle (ADR-0045).
             return await self._repo.insert(
-                ctx.workspace_id, ctx.user_id, name, slug, source.content
+                ctx.workspace_id, ctx.user_id, name, slug, source.content, source.locale
             )
         except asyncpg.UniqueViolationError as exc:  # pragma: no cover - Slug-Suffix ist eindeutig
             raise _slug_conflict() from exc
@@ -120,8 +131,9 @@ class SystemPromptTemplateService:
         ctx: WorkspaceContext,
         limit: int,
         cursor: tuple[datetime, UUID] | None,
+        locale: str | None = None,
     ) -> tuple[list[SystemPromptTemplateRead], str | None]:
-        rows = await self._repo.list_by_workspace(ctx.workspace_id, limit + 1, cursor)
+        rows = await self._repo.list_by_workspace(ctx.workspace_id, limit + 1, cursor, locale)
         next_cursor: str | None = None
         if len(rows) > limit:
             rows = rows[:limit]
@@ -159,12 +171,15 @@ class SystemPromptTemplateService:
         template_id: UUID,
         data: SystemPromptTemplateUpdate,
     ) -> SystemPromptTemplateRead:
-        """Erzeugt eine neue Version des Templates (Draft-on-Edit bei Active)."""
+        """Erzeugt eine neue Version des Templates (Draft-on-Edit bei Active).
+
+        Ein gesetztes `data.locale` wechselt die Entity-Sprache (ADR-0045).
+        """
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.system_prompt_write)  # ADR-0040
         require_unmanaged(await self._repo.is_managed(ctx.workspace_id, template_id))
         outcome = await self._repo.update(
-            ctx.workspace_id, ctx.user_id, template_id, data.name, data.content
+            ctx.workspace_id, ctx.user_id, template_id, data.name, data.content, data.locale
         )
         if outcome.conflict == "draft_exists":
             raise _draft_conflict()

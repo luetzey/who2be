@@ -12,6 +12,16 @@ Pull Requests und den Plan-Dokumenten unter `.claude/plan/`.
 
 ### Added
 
+- **Sprache als durchgängiges Konzept (ADR-0045):** ein Element = eine
+  Sprache (locale als Entity-Attribut mit Badge + Listenfilter statt
+  per-Element-DE/EN-Tracks, System-Prompts erstmals mit Sprachwahl),
+  Workspace-Content-Sprache bei Anlage (vorbelegt aus der UI-Sprache,
+  persönlicher Workspace aus `preferred_locale`), automatische
+  Output-Sprachanweisung im gerenderten Agent-System-Prompt, Builder tagged
+  die Sprache beim Erstellen, komplettes englisches Rollout-Paket
+  (6 Default-Templates + Builder-Agent) mit locale-bewusstem Seeding und
+  Boot-Sync
+
 - **Kern-AgentDB:** versionierte Personae, Playbooks (inkl. Composites),
   Resources mit BlockNote-Editor, Agents, System-Prompt-Templates und
   Externe Tools mit `tool-ref`-Platzhaltern; Status-Workflow

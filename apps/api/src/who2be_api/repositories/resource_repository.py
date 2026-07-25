@@ -15,7 +15,9 @@ Resource-Besonderheiten:
   keine Treffer).
 
 Versionierung ueber History-Tabelle (ADR-0004), Status pro Version (ADR-0020),
-Workspace-Isolation (ADR-0019), Content-i18n pro Sprache (ADR-0027).
+Workspace-Isolation (ADR-0019). „Ein Element, eine Sprache" (ADR-0045):
+`locale` liegt auf der `resource`-Identitaets-Zeile, Reads sind
+locale-agnostisch, `list_by_workspace` filtert optional auf die Entity-Sprache.
 `active_only=True` liefert die Active-Version statt der Current-Version (MCP-Pfad).
 """
 
@@ -31,7 +33,6 @@ from who2be_api.repositories.versioned_repository import (
     VersionedAggregateRepository,
 )
 from who2be_models import (
-    DEFAULT_LOCALE,
     ResourceContent,
     ResourceRead,
     ResourceVersionRead,
@@ -70,7 +71,7 @@ class ResourceRepository(Protocol):
         owner_id: UUID,
         name: str,
         content: ResourceContent,
-        locales: list[str] | None = None,
+        locale: str,
         slug: str | None = None,
     ) -> ResourceRead: ...
 
@@ -81,7 +82,7 @@ class ResourceRepository(Protocol):
         limit: int,
         after: tuple[datetime, UUID] | None,
         active_only: bool = False,
-        locale: str = DEFAULT_LOCALE,
+        locale: str | None = None,
         restrict_ids: list[UUID] | None = None,
     ) -> list[ResourceRead]: ...
 
@@ -90,7 +91,6 @@ class ResourceRepository(Protocol):
         workspace_id: UUID,
         resource_id: UUID,
         active_only: bool = False,
-        locale: str = DEFAULT_LOCALE,
         restrict_ids: list[UUID] | None = None,
     ) -> ResourceRead | None: ...
 
@@ -101,7 +101,7 @@ class ResourceRepository(Protocol):
         resource_id: UUID,
         name: str | None,
         content: ResourceContent,
-        locale: str = DEFAULT_LOCALE,
+        new_locale: str | None = None,
     ) -> ResourceUpdateOutcome: ...
 
     async def upsert_draft(
@@ -111,7 +111,7 @@ class ResourceRepository(Protocol):
         resource_id: UUID,
         name: str | None,
         content: ResourceContent,
-        locale: str = DEFAULT_LOCALE,
+        new_locale: str | None = None,
     ) -> ResourceUpdateOutcome: ...
 
     async def restore_version(
@@ -120,15 +120,14 @@ class ResourceRepository(Protocol):
         owner_id: UUID,
         resource_id: UUID,
         content: ResourceContent,
-        locale: str = DEFAULT_LOCALE,
     ) -> ResourceUpdateOutcome: ...
 
     async def list_versions(
-        self, workspace_id: UUID, resource_id: UUID, locale: str = DEFAULT_LOCALE
+        self, workspace_id: UUID, resource_id: UUID
     ) -> list[ResourceVersionRead] | None: ...
 
     async def fetch_version(
-        self, workspace_id: UUID, resource_id: UUID, version: int, locale: str = DEFAULT_LOCALE
+        self, workspace_id: UUID, resource_id: UUID, version: int
     ) -> ResourceVersionRead | None: ...
 
     async def delete(self, workspace_id: UUID, resource_id: UUID) -> bool: ...
@@ -138,7 +137,6 @@ class ResourceRepository(Protocol):
     async def list_distinct_tags(
         self,
         workspace_id: UUID,
-        locale: str = DEFAULT_LOCALE,
         restrict_ids: list[UUID] | None = None,
     ) -> list[str]: ...
 
@@ -150,7 +148,6 @@ class ResourceRepository(Protocol):
         self,
         workspace_id: UUID,
         resource_ids: list[UUID],
-        locale: str = DEFAULT_LOCALE,
     ) -> dict[UUID, list[SubResourceRead]]: ...
 
 
@@ -173,10 +170,10 @@ class PgResourceRepository(VersionedAggregateRepository[ResourceRead, ResourceVe
         owner_id: UUID,
         name: str,
         content: ResourceContent,
-        locales: list[str] | None = None,
+        locale: str,
         slug: str | None = None,
     ) -> ResourceRead:
-        return await self._insert(workspace_id, owner_id, name, content, locales, slug=slug)
+        return await self._insert(workspace_id, owner_id, name, content, locale, slug=slug)
 
     async def update(
         self,
@@ -185,10 +182,10 @@ class PgResourceRepository(VersionedAggregateRepository[ResourceRead, ResourceVe
         resource_id: UUID,
         name: str | None,
         content: ResourceContent,
-        locale: str = DEFAULT_LOCALE,
+        new_locale: str | None = None,
     ) -> ResourceUpdateOutcome:
         resource, conflict = await self._update(
-            workspace_id, owner_id, resource_id, name, content, locale
+            workspace_id, owner_id, resource_id, name, content, new_locale
         )
         return ResourceUpdateOutcome(resource=resource, conflict=conflict)
 
@@ -199,10 +196,10 @@ class PgResourceRepository(VersionedAggregateRepository[ResourceRead, ResourceVe
         resource_id: UUID,
         name: str | None,
         content: ResourceContent,
-        locale: str = DEFAULT_LOCALE,
+        new_locale: str | None = None,
     ) -> ResourceUpdateOutcome:
         resource, conflict = await self._upsert_draft(
-            workspace_id, owner_id, resource_id, name, content, locale
+            workspace_id, owner_id, resource_id, name, content, new_locale
         )
         return ResourceUpdateOutcome(resource=resource, conflict=conflict)
 
@@ -212,22 +209,21 @@ class PgResourceRepository(VersionedAggregateRepository[ResourceRead, ResourceVe
         owner_id: UUID,
         resource_id: UUID,
         content: ResourceContent,
-        locale: str = DEFAULT_LOCALE,
     ) -> ResourceUpdateOutcome:
         resource, conflict = await self._restore_version(
-            workspace_id, owner_id, resource_id, content, locale
+            workspace_id, owner_id, resource_id, content
         )
         return ResourceUpdateOutcome(resource=resource, conflict=conflict)
 
     async def list_versions(
-        self, workspace_id: UUID, resource_id: UUID, locale: str = DEFAULT_LOCALE
+        self, workspace_id: UUID, resource_id: UUID
     ) -> list[ResourceVersionRead] | None:
-        return await self._list_versions(workspace_id, resource_id, locale)
+        return await self._list_versions(workspace_id, resource_id)
 
     async def fetch_version(
-        self, workspace_id: UUID, resource_id: UUID, version: int, locale: str = DEFAULT_LOCALE
+        self, workspace_id: UUID, resource_id: UUID, version: int
     ) -> ResourceVersionRead | None:
-        return await self._fetch_version(workspace_id, resource_id, version, locale)
+        return await self._fetch_version(workspace_id, resource_id, version)
 
     async def delete(self, workspace_id: UUID, resource_id: UUID) -> bool:
         return await self._delete(workspace_id, resource_id)
@@ -239,17 +235,15 @@ class PgResourceRepository(VersionedAggregateRepository[ResourceRead, ResourceVe
         workspace_id: UUID,
         resource_id: UUID,
         active_only: bool = False,
-        locale: str = DEFAULT_LOCALE,
         restrict_ids: list[UUID] | None = None,
     ) -> ResourceRead | None:
         builder = self._select_active if active_only else self._select_current
-        select = builder("$3")
+        select = builder()
         row = await self._pool.fetchrow(
             f"{select} WHERE e.id = $1 AND e.workspace_id = $2 "
-            "AND ($4::uuid[] IS NULL OR e.id = ANY($4))",
+            "AND ($3::uuid[] IS NULL OR e.id = ANY($3))",
             resource_id,
             workspace_id,
-            locale,
             restrict_ids,
         )
         return ResourceRead.model_validate(dict(row)) if row is not None else None
@@ -261,19 +255,21 @@ class PgResourceRepository(VersionedAggregateRepository[ResourceRead, ResourceVe
         limit: int,
         after: tuple[datetime, UUID] | None,
         active_only: bool = False,
-        locale: str = DEFAULT_LOCALE,
+        locale: str | None = None,
         restrict_ids: list[UUID] | None = None,
     ) -> list[ResourceRead]:
         # Tag-Filter via jsonb-In-Query auf `ev.content->'tags'` (kein
-        # denormalisierter Tag-Array). `restrict_ids` (Read-Scoping `assigned`):
-        # NULL ⇒ keine Einschraenkung, leere Liste ⇒ keine Treffer.
+        # denormalisierter Tag-Array). `locale` filtert optional auf die
+        # Entity-Sprache (NULL ⇒ alle). `restrict_ids` (Read-Scoping
+        # `assigned`): NULL ⇒ keine Einschraenkung, leere Liste ⇒ keine Treffer.
         builder = self._select_active if active_only else self._select_current
+        select = builder()
         if after is None:
-            select = builder("$4")
             rows = await self._pool.fetch(
                 f"{select} WHERE e.workspace_id = $1 "
                 "AND ($2::text IS NULL OR $2 = ANY("
                 "    SELECT jsonb_array_elements_text(ev.content->'tags'))) "
+                "AND ($4::text IS NULL OR e.locale = $4) "
                 "AND ($5::uuid[] IS NULL OR e.id = ANY($5)) "
                 "ORDER BY e.created_at DESC, e.id DESC LIMIT $3",
                 workspace_id,
@@ -283,12 +279,12 @@ class PgResourceRepository(VersionedAggregateRepository[ResourceRead, ResourceVe
                 restrict_ids,
             )
         else:
-            select = builder("$6")
             rows = await self._pool.fetch(
                 f"{select} WHERE e.workspace_id = $1 "
                 "AND ($2::text IS NULL OR $2 = ANY("
                 "    SELECT jsonb_array_elements_text(ev.content->'tags'))) "
                 "AND (e.created_at, e.id) < ($3, $4) "
+                "AND ($6::text IS NULL OR e.locale = $6) "
                 "AND ($7::uuid[] IS NULL OR e.id = ANY($7)) "
                 "ORDER BY e.created_at DESC, e.id DESC LIMIT $5",
                 workspace_id,
@@ -304,23 +300,21 @@ class PgResourceRepository(VersionedAggregateRepository[ResourceRead, ResourceVe
     async def list_distinct_tags(
         self,
         workspace_id: UUID,
-        locale: str = DEFAULT_LOCALE,
         restrict_ids: list[UUID] | None = None,
     ) -> list[str]:
         # Track E3: Tags liegen denormalisiert in `resource_version.content->'tags'`
         # (keine Array-Spalte auf `resource`, anders als bei Playbooks). DISTINCT
-        # ueber die jeweils aktuelle Version pro Sprache (`_select_current`).
+        # ueber die jeweils aktuelle Version (`_select_current`, locale-agnostisch).
         # `restrict_ids` (Read-Scoping `assigned`) begrenzt auf die sichtbaren
         # Resources: NULL ⇒ keine Einschraenkung, leere Liste ⇒ keine Treffer —
         # sonst leakt ein `assigned`-Agent fremde Tags ueber den Picker (LOW-1).
-        select = self._select_current("$2")
+        select = self._select_current()
         rows = await self._pool.fetch(
             f"SELECT DISTINCT tag FROM ( {select} WHERE e.workspace_id = $1 "
-            "AND ($3::uuid[] IS NULL OR e.id = ANY($3)) ) AS cur, "
+            "AND ($2::uuid[] IS NULL OR e.id = ANY($2)) ) AS cur, "
             "jsonb_array_elements_text(cur.content->'tags') AS tag "
             "ORDER BY tag ASC",
             workspace_id,
-            locale,
             restrict_ids,
         )
         return [row["tag"] for row in rows]
@@ -366,17 +360,17 @@ class PgResourceRepository(VersionedAggregateRepository[ResourceRead, ResourceVe
         self,
         workspace_id: UUID,
         resource_ids: list[UUID],
-        locale: str = DEFAULT_LOCALE,
     ) -> dict[UUID, list[SubResourceRead]]:
         """Direkte Sub-Resource-Kinder je Parent als Summary (ein Roundtrip).
 
         Spiegelt `PgPlaybookRepository._attach_compose_children`: EIN Batch-Select
         ueber `resource_composition` fuer alle Parents der Seite (kein N+1). Je
         Kind traegt die Summary `id`, `name` sowie `status`/`version` der
-        aktuellen Version des `locale`-Tracks — genug, damit die aufklappbare
-        List-Karte den Kind-Stand ohne Extra-Fetch zeigt. DISTINCT ueber
-        (parent, child): ein Kind mit mehreren Composition-Kanten (resource +
-        block) erscheint genau einmal, geordnet nach kleinster `position`.
+        aktuellen Version (globale Max-Version, Legacy-Tie-Break auf die
+        Entity-Sprache) — genug, damit die aufklappbare List-Karte den
+        Kind-Stand ohne Extra-Fetch zeigt. DISTINCT ueber (parent, child): ein
+        Kind mit mehreren Composition-Kanten (resource + block) erscheint genau
+        einmal, geordnet nach kleinster `position`.
         """
         if not resource_ids:
             return {}
@@ -387,18 +381,17 @@ class PgResourceRepository(VersionedAggregateRepository[ResourceRead, ResourceVe
             "         cv.version, cv.status, rc.position "
             "    FROM resource_composition rc "
             "    JOIN resource c ON c.id = rc.child_id "
-            "    JOIN resource_version cv "
-            "      ON cv.resource_id = c.id AND cv.locale = $2 "
-            "     AND cv.version = ( "
-            "         SELECT max(v.version) FROM resource_version v "
-            "         WHERE v.resource_id = c.id AND v.locale = $2 "
-            "     ) "
-            "   WHERE rc.workspace_id = $1 AND rc.parent_id = ANY($3::uuid[]) "
+            "    JOIN LATERAL ( "
+            "        SELECT v.version, v.status FROM resource_version v "
+            "        WHERE v.resource_id = c.id "
+            "        ORDER BY v.version DESC, (v.locale = c.locale) DESC "
+            "        LIMIT 1 "
+            "    ) cv ON TRUE "
+            "   WHERE rc.workspace_id = $1 AND rc.parent_id = ANY($2::uuid[]) "
             "   ORDER BY rc.parent_id, c.id, rc.position ASC "
             ") t "
             "ORDER BY t.parent_id, t.position ASC, t.name ASC",
             workspace_id,
-            locale,
             resource_ids,
         )
         by_parent: dict[UUID, list[SubResourceRead]] = {}

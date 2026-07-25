@@ -31,6 +31,8 @@ from who2be_api.core.security import (
 from who2be_api.repositories.memory_repository import PgMemoryRepository
 from who2be_api.repositories.persona_repository import PersonaRepository
 from who2be_api.repositories.usage_repository import UsageRepository
+from who2be_api.repositories.workspace_repository import WorkspaceRepository
+from who2be_api.services.content_locale import resolve_content_locale
 from who2be_api.services.content_text import persona_content_text
 from who2be_api.services.placeholders import RenderContext, render_template_body
 from who2be_api.services.placeholders.registry import render_skills_table
@@ -38,7 +40,6 @@ from who2be_api.services.placeholders.resolvers.memory import memory_prompt_bloc
 from who2be_api.services.placeholders.resolvers.persona import render_active_mode_section
 from who2be_api.services.version_diff import compute_version_diff
 from who2be_models import (
-    DEFAULT_LOCALE,
     MEMORY_PERSONA_TOP_N,
     AgentCapability,
     DeleteBlocked,
@@ -158,38 +159,41 @@ class PersonaService:
         persona_repo: PersonaRepository,
         pool: asyncpg.Pool | None = None,
         usage_repo: UsageRepository | None = None,
+        workspace_repo: WorkspaceRepository | None = None,
     ) -> None:
         self._repo = persona_repo
         self._pool = pool
         self._usage_repo = usage_repo
+        self._workspace_repo = workspace_repo
 
     async def create(self, ctx: WorkspaceContext, data: PersonaCreate) -> PersonaRead:
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.persona_write)
         require_write_rate(ctx)
         require_write_tags(ctx, "persona", data.content.tags)
+        # ADR-0045: explizite Sprache aus dem Body, sonst Workspace-Default.
+        locale = await resolve_content_locale(self._workspace_repo, ctx.workspace_id, data.locale)
         return await self._repo.insert(
-            ctx.workspace_id, ctx.user_id, data.name, data.content, data.locales
+            ctx.workspace_id, ctx.user_id, data.name, data.content, locale
         )
 
-    async def duplicate(
-        self, ctx: WorkspaceContext, persona_id: UUID, locale: str = DEFAULT_LOCALE
-    ) -> PersonaRead:
+    async def duplicate(self, ctx: WorkspaceContext, persona_id: UUID) -> PersonaRead:
         """Dupliziert eine Persona als frische Draft-v1 (Deep-Copy des Inhalts).
 
         Spiegelt `AgentService.copy`: Editor-Gate + Capability + Rate-Limit, der
-        Inhalt der aktuellen (Locale-)Version wird in eine NEUE Persona kopiert
-        (Version 1, Status draft), Name `"{name} (Kopie)"`. Personas tragen
-        keinen Slug.
+        Inhalt der aktuellen Version wird in eine NEUE Persona kopiert
+        (Version 1, Status draft), Name `"{name} (Kopie)"`. Die Kopie
+        uebernimmt die Sprache der Quelle (ADR-0045). Personas tragen keinen
+        Slug.
         """
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.persona_write)
         require_write_rate(ctx)
-        source = await self.get(ctx, persona_id, locale=locale)
+        source = await self.get(ctx, persona_id)
         require_write_tags(ctx, "persona", source.content.tags)
         name = f"{source.name} (Kopie)"
         return await self._repo.insert(
-            ctx.workspace_id, ctx.user_id, name, source.content, [locale]
+            ctx.workspace_id, ctx.user_id, name, source.content, source.locale
         )
 
     async def list_all(
@@ -197,7 +201,7 @@ class PersonaService:
         ctx: WorkspaceContext,
         limit: int,
         cursor: tuple[datetime, UUID] | None,
-        locale: str = DEFAULT_LOCALE,
+        locale: str | None = None,
         agent: UUID | None = None,
     ) -> tuple[list[PersonaRead], str | None]:
         require_read_flag(ctx, "persona_read", "Personas")
@@ -250,15 +254,12 @@ class PersonaService:
             )
         return enriched
 
-    async def get(
-        self, ctx: WorkspaceContext, persona_id: UUID, locale: str = DEFAULT_LOCALE
-    ) -> PersonaRead:
+    async def get(self, ctx: WorkspaceContext, persona_id: UUID) -> PersonaRead:
         require_read_flag(ctx, "persona_read", "Personas")
         persona = await self._repo.fetch(
             ctx.workspace_id,
             persona_id,
             active_only=not ctx.sees_drafts(AgentCapability.persona_write),
-            locale=locale,
         )
         if persona is None:
             raise _not_found()
@@ -268,7 +269,6 @@ class PersonaService:
         self,
         ctx: WorkspaceContext,
         persona_id: UUID,
-        locale: str = DEFAULT_LOCALE,
         mode: str | None = None,
     ) -> PersonaRenderResponse:
         """Expandiert den Persona-Profil-Body durch den Placeholder-Renderer (Track F).
@@ -291,7 +291,7 @@ class PersonaService:
         Wird vom MCP-Tool `get_persona` genutzt (der MCP-Prozess hat keinen
         DB-Zugriff). Leerer Body + keine Skills → leerer `body_rendered`.
         """
-        persona = await self.get(ctx, persona_id, locale=locale)
+        persona = await self.get(ctx, persona_id)
         active_mode = self._select_mode(persona.content.modes, mode)
         body_blocks = persona.content.content.blocks if persona.content.content is not None else []
         body_json = json.dumps([block.model_dump(mode="json") for block in body_blocks])
@@ -387,12 +387,12 @@ class PersonaService:
         raise _unknown_mode(mode, [m.name for m in modes])
 
     async def _check_update_tags(
-        self, ctx: WorkspaceContext, persona_id: UUID, incoming_tags: list[str], locale: str
+        self, ctx: WorkspaceContext, persona_id: UUID, incoming_tags: list[str]
     ) -> None:
         """Tag-Scope beim Update: eingehende Tags + (nur bei Restriktion) Bestand."""
         require_write_tags(ctx, "persona", incoming_tags)
         if ctx.tool_policy is not None and ctx.tool_policy.write_tags_for("persona") is not None:
-            existing = await self.get(ctx, persona_id, locale)
+            existing = await self.get(ctx, persona_id)
             require_write_tags(ctx, "persona", existing.content.tags)
 
     async def update(
@@ -400,20 +400,20 @@ class PersonaService:
         ctx: WorkspaceContext,
         persona_id: UUID,
         data: PersonaUpdate,
-        locale: str = DEFAULT_LOCALE,
     ) -> PersonaRead:
-        """Erzeugt eine neue Version der Persona (im `locale`-Track).
+        """Erzeugt eine neue Version der Persona.
 
         Auf einer Active-Persona entsteht eine neue Draft-Version (Plan §2.1.C);
-        existiert bereits ein Draft, antwortet der Service mit 409.
+        existiert bereits ein Draft, antwortet der Service mit 409. Ein
+        gesetztes `data.locale` wechselt die Entity-Sprache (ADR-0045).
         """
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.persona_write)
         require_unmanaged(await self._repo.is_managed(ctx.workspace_id, persona_id))
         require_write_rate(ctx)
-        await self._check_update_tags(ctx, persona_id, data.content.tags, locale)
+        await self._check_update_tags(ctx, persona_id, data.content.tags)
         outcome = await self._repo.update(
-            ctx.workspace_id, ctx.user_id, persona_id, data.name, data.content, locale
+            ctx.workspace_id, ctx.user_id, persona_id, data.name, data.content, data.locale
         )
         if outcome.conflict == "draft_exists":
             raise _draft_conflict()
@@ -426,7 +426,6 @@ class PersonaService:
         ctx: WorkspaceContext,
         persona_id: UUID,
         data: PersonaUpdate,
-        locale: str = DEFAULT_LOCALE,
     ) -> PersonaRead:
         """Auto-Save-Pfad (PATCH `.../draft`) — upsertet die Draft-Version.
 
@@ -439,9 +438,9 @@ class PersonaService:
         require_capability(ctx, AgentCapability.persona_write)
         require_unmanaged(await self._repo.is_managed(ctx.workspace_id, persona_id))
         require_write_rate(ctx)
-        await self._check_update_tags(ctx, persona_id, data.content.tags, locale)
+        await self._check_update_tags(ctx, persona_id, data.content.tags)
         outcome = await self._repo.upsert_draft(
-            ctx.workspace_id, ctx.user_id, persona_id, data.name, data.content, locale
+            ctx.workspace_id, ctx.user_id, persona_id, data.name, data.content, data.locale
         )
         if outcome.conflict == "review_pending":
             raise _review_conflict()
@@ -450,17 +449,17 @@ class PersonaService:
         return outcome.persona
 
     async def list_versions(
-        self, ctx: WorkspaceContext, persona_id: UUID, locale: str = DEFAULT_LOCALE
+        self, ctx: WorkspaceContext, persona_id: UUID
     ) -> list[PersonaVersionRead]:
-        versions = await self._repo.list_versions(ctx.workspace_id, persona_id, locale)
+        versions = await self._repo.list_versions(ctx.workspace_id, persona_id)
         if versions is None:
             raise _not_found()
         return versions
 
     async def get_version(
-        self, ctx: WorkspaceContext, persona_id: UUID, version: int, locale: str = DEFAULT_LOCALE
+        self, ctx: WorkspaceContext, persona_id: UUID, version: int
     ) -> PersonaVersionRead:
-        found = await self._repo.fetch_version(ctx.workspace_id, persona_id, version, locale)
+        found = await self._repo.fetch_version(ctx.workspace_id, persona_id, version)
         if found is None:
             raise _not_found()
         return found
@@ -470,7 +469,6 @@ class PersonaService:
         ctx: WorkspaceContext,
         persona_id: UUID,
         source_version: int,
-        locale: str = DEFAULT_LOCALE,
     ) -> PersonaRead:
         """Stellt den Snapshot `source_version` als neue Draft wieder her (§3.1).
 
@@ -482,14 +480,12 @@ class PersonaService:
         require_capability(ctx, AgentCapability.persona_write)
         require_unmanaged(await self._repo.is_managed(ctx.workspace_id, persona_id))
         require_write_rate(ctx)
-        snapshot = await self._repo.fetch_version(
-            ctx.workspace_id, persona_id, source_version, locale
-        )
+        snapshot = await self._repo.fetch_version(ctx.workspace_id, persona_id, source_version)
         if snapshot is None:
             raise _not_found()
         require_write_tags(ctx, "persona", snapshot.content.tags)
         outcome = await self._repo.restore_version(
-            ctx.workspace_id, ctx.user_id, persona_id, snapshot.content, locale
+            ctx.workspace_id, ctx.user_id, persona_id, snapshot.content
         )
         if outcome.conflict == "draft_exists":
             raise _draft_conflict()
@@ -503,13 +499,12 @@ class PersonaService:
         persona_id: UUID,
         version: int,
         against: str,
-        locale: str = DEFAULT_LOCALE,
     ) -> VersionDiff:
         """Strukturierter Feld-/Block-Diff der Version `version` gegen `against`."""
-        target = await self._repo.fetch_version(ctx.workspace_id, persona_id, version, locale)
+        target = await self._repo.fetch_version(ctx.workspace_id, persona_id, version)
         if target is None:
             raise _not_found()
-        versions = await self._repo.list_versions(ctx.workspace_id, persona_id, locale)
+        versions = await self._repo.list_versions(ctx.workspace_id, persona_id)
         if versions is None:
             raise _not_found()
         base_version, base_content = self._resolve_against(against, versions)
@@ -540,9 +535,9 @@ class PersonaService:
                 return candidate.version, candidate.content
         raise _not_found()
 
-    async def list_tags(self, ctx: WorkspaceContext, locale: str = DEFAULT_LOCALE) -> list[str]:
+    async def list_tags(self, ctx: WorkspaceContext) -> list[str]:
         """DISTINCT-Tags des Workspaces — Datenquelle fuer den Tag-Picker."""
-        return await self._repo.list_distinct_tags(ctx.workspace_id, locale)
+        return await self._repo.list_distinct_tags(ctx.workspace_id)
 
     async def delete(self, ctx: WorkspaceContext, persona_id: UUID) -> None:
         """Hard-Delete der Persona (ADR-0032).

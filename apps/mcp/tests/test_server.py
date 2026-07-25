@@ -82,6 +82,18 @@ def test_transition_tools_share_state_machine_doc() -> None:
         assert "admin-Rolle" in description, name
 
 
+def _workspace_json(workspace_id: str, content_locale: str = "de") -> dict[str, object]:
+    now = datetime.now(UTC).isoformat()
+    return {
+        "id": workspace_id,
+        "org_id": str(uuid4()),
+        "name": "WS",
+        "slug": "ws",
+        "content_locale": content_locale,
+        "created_at": now,
+    }
+
+
 def test_create_persona_tool_posts_and_returns_model(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -90,6 +102,12 @@ def test_create_persona_tool_posts_and_returns_model(
     seen: dict[str, object] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
+        # `create_persona` loest `data.locale=None` zuerst ueber ein `GET
+        # .../workspaces/{id}` auf die Workspace-Content-Sprache auf (WP4,
+        # Plan „Ein Element, eine Sprache") — DIESER Request muss separat
+        # bedient werden, bevor der eigentliche POST auf /personas kommt.
+        if request.method == "GET" and request.url.path == f"/v1/workspaces/{workspace_id}":
+            return httpx.Response(200, json=_workspace_json(str(workspace_id)))
         seen["method"] = request.method
         seen["path"] = request.url.path
         return httpx.Response(201, json=_persona_json(str(persona_id), "Neu", str(workspace_id)))
@@ -115,6 +133,47 @@ def test_create_persona_tool_posts_and_returns_model(
     assert str(seen["path"]).endswith("/personas")
     assert isinstance(data, dict)
     assert data["name"] == "Neu"
+
+
+def test_create_persona_without_locale_defaults_to_workspace_content_locale(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """WP4 (Plan „Ein Element, eine Sprache"): `create_persona` ohne `locale`
+    in einem Workspace mit `content_locale='en'` legt die Persona als 'en' an —
+    der Default wird explizit im MCP-Layer aufgeloest (eigene kleine Query),
+    nicht implizit der API ueberlassen."""
+    workspace_id = uuid4()
+    persona_id = uuid4()
+    seen_body: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET" and request.url.path == f"/v1/workspaces/{workspace_id}":
+            return httpx.Response(200, json=_workspace_json(str(workspace_id), "en"))
+        seen_body["json"] = json.loads(request.content)
+        payload = _persona_json(str(persona_id), "Neu", str(workspace_id))
+        payload["locale"] = "en"
+        return httpx.Response(201, json=payload)
+
+    api_client = ApiClient(
+        "http://api.test", "tok", workspace_id, transport=httpx.MockTransport(handler)
+    )
+
+    async def _build() -> ApiClient:
+        return api_client
+
+    monkeypatch.setattr(server, "build_client", _build)
+
+    async def _run() -> object:
+        async with Client(mcp) as client:
+            result = await client.call_tool("create_persona", {"data": {"name": "Neu"}})
+            return result.structured_content
+
+    data = asyncio.run(_run())
+    assert isinstance(seen_body["json"], dict)
+    # Der aufgeloeste Default wandert explizit in den POST-Body.
+    assert seen_body["json"]["locale"] == "en"
+    assert isinstance(data, dict)
+    assert data["locale"] == "en"
 
 
 def test_transition_persona_tool_rejects_invalid_uuid() -> None:
@@ -193,6 +252,68 @@ def test_get_persona_tool_includes_body_rendered(
     assert data["persona"]["name"] == "QA"
     # Ohne Modus-Anfrage bleibt `mode` leer (WP-F, additiv).
     assert data["mode"] is None
+
+
+def test_get_persona_tool_carries_locale_and_ignores_alt_client_param(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """WP4 (Plan „Ein Element, eine Sprache"): `get_persona` liefert die
+    Persona-Sprache im Top-Level-Feld `locale`; ein Alt-Client-Aufruf mit
+    explizitem `locale='de'` auf eine UUID funktioniert unveraendert (der
+    Parameter wird akzeptiert, aber bei UUID-Aufloesung ignoriert)."""
+    workspace_id = uuid4()
+    persona_id = uuid4()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith(f"/personas/{persona_id}/rendered"):
+            return httpx.Response(200, json={"body_rendered": "b", "unresolved": []})
+        if path.endswith(f"/personas/{persona_id}/playbooks"):
+            return httpx.Response(200, json=[])
+        if path.endswith(f"/personas/{persona_id}"):
+            payload = _persona_json(str(persona_id), "QA", str(workspace_id))
+            payload["locale"] = "en"
+            return httpx.Response(200, json=payload)
+        return httpx.Response(404, json={"detail": "weg"})
+
+    api_client = ApiClient(
+        "http://api.test",
+        "tok",
+        workspace_id,
+        transport=httpx.MockTransport(handler),
+    )
+
+    async def _build() -> ApiClient:
+        return api_client
+
+    monkeypatch.setattr(server, "build_client", _build)
+
+    async def _run() -> object:
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "get_persona", {"identifier": str(persona_id), "locale": "de"}
+            )
+            return result.structured_content
+
+    data = asyncio.run(_run())
+    assert isinstance(data, dict)
+    # Die Antwort traegt die tatsaechliche Persona-Sprache, NICHT den
+    # (bei UUID-Aufloesung ignorierten) Alt-Client-Parameter.
+    assert data["locale"] == "en"
+    assert data["persona"]["locale"] == "en"
+
+
+def test_create_persona_tool_rejects_unsupported_locale() -> None:
+    """WP4: `locale='fr'` (nicht in `SUPPORTED_LOCALES`) liefert einen sauberen
+    Fehler — die Validierung sitzt bereits im Pydantic-Modell (WP1,
+    `validate_supported_locale`), bevor der Tool-Handler laeuft."""
+
+    async def _run() -> None:
+        async with Client(mcp) as client:
+            await client.call_tool("create_persona", {"data": {"name": "X", "locale": "fr"}})
+
+    with pytest.raises(ToolError):
+        asyncio.run(_run())
 
 
 def test_get_persona_tool_forwards_mode_param(

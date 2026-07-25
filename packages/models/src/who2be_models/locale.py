@@ -48,3 +48,23 @@ def normalize_locale(value: str) -> str:
     if not _LOCALE_RE.match(normalized):
         raise ValueError(f"Ungueltiges Locale-Kuerzel: {value!r}")
     return normalized
+
+
+def validate_supported_locale(value: str) -> str:
+    """Normalisiert ein Locale-Kuerzel UND erzwingt Mitgliedschaft in
+    `SUPPORTED_LOCALES`.
+
+    „Ein Element, eine Sprache" (Plan 2026-07-24): `WorkspaceCreate.
+    content_locale` sowie das `locale`-Feld auf Persona/Playbook/Resource/
+    ExternalTool/SystemPromptTemplate duerfen nur Sprachen tragen, in denen
+    ausgerollte Standard-Inhalte existieren — anders als `normalize_locale`
+    (offenes Sprach-Set) ist das hier ein hartes Gate. Wirft `ValueError` bei
+    unbekannter Sprache (→ 422 an der API-/MCP-Grenze). Zentral, damit die
+    sechs Modelle nicht je einen eigenen Validator gegen `SUPPORTED_LOCALES`
+    pflegen.
+    """
+    normalized = normalize_locale(value)
+    if normalized not in SUPPORTED_LOCALES:
+        allowed = ", ".join(SUPPORTED_LOCALES)
+        raise ValueError(f"Nicht unterstuetztes Locale-Kuerzel: {value!r} (erlaubt: {allowed})")
+    return normalized

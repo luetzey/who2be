@@ -29,9 +29,10 @@ from who2be_api.repositories.persona_repository import PersonaRepository
 from who2be_api.repositories.system_prompt_template_repository import (
     SystemPromptTemplateRepository,
 )
+from who2be_api.services.agent_language import append_language_instruction, date_locale
 from who2be_api.services.agent_service import AgentService
 from who2be_api.services.placeholders import RenderContext, render_template_body
-from who2be_models import AgentWithRenderedPrompt
+from who2be_models import DEFAULT_LOCALE, AgentWithRenderedPrompt
 
 
 def _agent_disabled() -> HTTPException:
@@ -110,6 +111,14 @@ class AgentFetchRenderedService:
         )
         if template_content is None:
             raise _template_not_active()
+        # Entity-Sprache des Templates (WP5, ADR-0045) — Quelle sowohl fuer die
+        # `RenderContext.locale`-Ableitung (Datumsformat) als auch fuer die am
+        # Ende angehaengte Output-Sprachanweisung UND das `locale`-Metadatum der
+        # Antwort (MCP `fetch_agent` liest exakt dieses Feld durch).
+        template_locale = (
+            await self._template_repo.fetch_locale(workspace_id, agent.system_prompt_template_id)
+            or DEFAULT_LOCALE
+        )
 
         # Render-Kontext aufbauen. `tool_policy` des gerenderten Agenten filtert
         # den `tools-overview`-Block: der System-Prompt listet nur die Tools, die
@@ -118,6 +127,7 @@ class AgentFetchRenderedService:
             workspace_id=workspace_id,
             persona_id=agent.persona_id,
             now=datetime.now(UTC),
+            locale=date_locale(template_locale),
             tool_policy=agent.tool_policy,
             agent_id=agent.id,
         )
@@ -129,6 +139,9 @@ class AgentFetchRenderedService:
                 ctx,
                 conn,
             )
+        # Sprachanweisung zentral anhaengen (WP5) — derselbe Helper wie
+        # `AgentRenderService`, genau EIN Aufrufort pro Render-Pfad.
+        rendered = append_language_instruction(rendered, template_locale)
 
         return AgentWithRenderedPrompt(
             id=agent.id,
@@ -137,4 +150,5 @@ class AgentFetchRenderedService:
             system_prompt_rendered=rendered,
             system_prompt_template_id=agent.system_prompt_template_id,
             unresolved_placeholders=unresolved,
+            locale=template_locale,
         )

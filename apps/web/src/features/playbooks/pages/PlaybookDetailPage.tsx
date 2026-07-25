@@ -9,6 +9,7 @@ import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { type BranchAction } from '@/components/data/BranchStatus'
 import { DataView } from '@/components/data/DataView'
+import { LocaleBadge } from '@/components/data/LocaleBadge'
 import { ManagedNotice } from '@/components/data/ManagedNotice'
 import { GiveFeedbackDialog } from '@/components/feedback/GiveFeedbackDialog'
 import { VersionHistory } from '@/components/version'
@@ -193,6 +194,7 @@ export function PlaybookDetailPage() {
                         {playbook.current_version}
                       </span>
                     ) : null}
+                    <LocaleBadge locale={playbook.locale} />
                   </div>
                   {playbook.content.description !== '' ? (
                     <p className="mt-2 text-sm text-muted-foreground">

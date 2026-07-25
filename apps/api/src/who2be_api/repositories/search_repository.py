@@ -1,9 +1,13 @@
 """Volltext-Suche ueber die aktive Version der Kern-Inhaltselemente (ADR-0037).
 
 Stufe A: Postgres-Volltext (`to_tsvector`/`plainto_tsquery`/`ts_rank`) ueber
-Name + Content-Text der `status='active'`-Version (Locale `de`). Laufzeit-FTS
-ohne materialisierten Index — funktional korrekt; ein GIN-Index pro Tabelle ist
-der Folge-Perf-Schritt. Workspace-Scope explizit (Defense + RLS).
+Name + Content-Text der `status='active'`-Version. Laufzeit-FTS ohne
+materialisierten Index — funktional korrekt; ein GIN-Index pro Tabelle ist der
+Folge-Perf-Schritt. Workspace-Scope explizit (Defense + RLS).
+
+WP5 („Ein Element, eine Sprache"): jeder Treffer traegt `e.locale` (Entity-
+Sprache der Identitaets-Zeile) als Metadatum in `SearchHit.locale` — reine
+Auskunft, kein Filter (Sprachfilterung ist bewusst kein Such-Scope).
 
 `content::text` ist die jsonb-Repraesentation inkl. Schluessel — eine bewusst
 grobe, aber robuste Textquelle fuer Stufe A; Stufe B (semantisch) ersetzt das.
@@ -16,8 +20,9 @@ import asyncpg
 
 from who2be_models import SearchHit
 
-# Pro Typ: (Entity-Tabelle, Version-Tabelle, FK-Spalte). Locale fix auf 'de'
-# (Stufe A) — Multi-Locale-Suche ist eine Folge-Verfeinerung.
+# Pro Typ: (Entity-Tabelle, Version-Tabelle, FK-Spalte). Locale-agnostisch
+# (ADR-0045, „Ein Element, eine Sprache"): die aktive Version ist per Entity
+# eindeutig — kein Locale-Pin mehr noetig.
 _TYPE_TABLES: dict[str, tuple[str, str, str]] = {
     "persona": ("persona", "persona_version", "persona_id"),
     "playbook": ("playbook", "playbook_version", "playbook_id"),
@@ -32,11 +37,11 @@ def _query_for(entity: str, version: str, fk: str) -> str:
     # `simple`-Config: keine Stemming-/Stopword-Sprache (robust fuer DE/EN-Mix).
     vector = "to_tsvector('simple', coalesce(e.name, '') || ' ' || coalesce(ev.content::text, ''))"
     return (
-        f"SELECT e.id, e.name, "
+        f"SELECT e.id, e.name, e.locale, "
         f"       ts_rank({vector}, plainto_tsquery('simple', $2)) AS score, "
         f"       coalesce(ev.content->>'description', '') AS snippet "
         f"FROM {entity} e "
-        f"JOIN {version} ev ON ev.{fk} = e.id AND ev.status = 'active' AND ev.locale = 'de' "
+        f"JOIN {version} ev ON ev.{fk} = e.id AND ev.status = 'active' "
         f"WHERE e.workspace_id = $1 "
         f"  AND {vector} @@ plainto_tsquery('simple', $2) "
         f"ORDER BY score DESC, e.name ASC "
@@ -73,6 +78,7 @@ class PgSearchRepository:
                         name=row["name"],
                         snippet=(row["snippet"] or "")[:200],
                         score=float(row["score"]),
+                        locale=row["locale"],
                     )
                 )
         # Ueber alle Typen nach Score sortieren, dann global kappen.

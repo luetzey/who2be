@@ -5,9 +5,11 @@ import { useTranslation } from 'react-i18next'
 
 import type { SystemPromptTemplate } from '@/api/types'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
+import { CONTENT_LOCALE_OPTIONS } from '@/components/forms/content-languages'
 import { DataView } from '@/components/data/DataView'
 import { EmptyState } from '@/components/data/EmptyState'
 import { EntityCard } from '@/components/data/EntityCard'
+import { LocaleBadge } from '@/components/data/LocaleBadge'
 import { MetaPill } from '@/components/data/MetaPill'
 import { ListFilterBar } from '@/components/data/ListFilterBar'
 import { StatusBadge } from '@/components/data/StatusBadge'
@@ -16,13 +18,20 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { useListFilters, type ListFilterAccessors } from '@/hooks/useListFilters'
+import {
+  useListFilters,
+  useLocaleFilterParam,
+  type ListFilterAccessors,
+} from '@/hooks/useListFilters'
 
 import { useSystemPrompts } from '../hooks/useSystemPrompts'
 
 export function SystemPromptsPage() {
   const { t } = useTranslation(['systemPrompts', 'data'])
-  const { templates, loading, error } = useSystemPrompts()
+  // Serverseitige Sprach-Facette (ADR-0045): Param VOR dem Daten-Hook lesen,
+  // damit ein Facetten-Wechsel den Refetch ausloest.
+  const localeFilter = useLocaleFilterParam()
+  const { templates, loading, error } = useSystemPrompts(localeFilter || undefined)
   const wsPath = useWorkspacePath()
 
   const accessors = useMemo<ListFilterAccessors<SystemPromptTemplate>>(
@@ -62,7 +71,7 @@ export function SystemPromptsPage() {
           description={t('systemPrompts:page.list.description')}
           actions={newTemplateCta}
         />
-        {templates.length > 0 ? (
+        {templates.length > 0 || filters.locale !== '' ? (
           <ListFilterBar
             idPrefix="system-prompts"
             counts={filters.counts}
@@ -70,12 +79,15 @@ export function SystemPromptsPage() {
             onStatusChange={filters.setStatus}
             query={filters.query}
             onQueryChange={filters.setQuery}
+            locales={CONTENT_LOCALE_OPTIONS}
+            locale={filters.locale}
+            onLocaleChange={filters.setLocale}
             active={filters.active}
             onReset={filters.reset}
           />
         ) : null}
         <DataView loading={loading && templates.length === 0} error={error}>
-          {templates.length === 0 ? (
+          {templates.length === 0 && filters.locale === '' ? (
             <EmptyState
               icon={ScrollText}
               title={t('systemPrompts:page.list.empty.title')}
@@ -108,6 +120,7 @@ export function SystemPromptsPage() {
                         {template.slug}
                       </Badge>
                       <Badge variant="secondary">v{template.current_version}</Badge>
+                      <LocaleBadge locale={template.locale} />
                     </>
                   }
                   status={

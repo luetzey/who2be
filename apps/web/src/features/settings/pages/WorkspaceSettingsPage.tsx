@@ -11,6 +11,7 @@ import { useApi } from '@/api/useApi'
 import { useSession } from '@/auth/session-context'
 import { useWorkspaceId } from '@/auth/useWorkspaceId'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
+import { CONTENT_LOCALE_OPTIONS } from '@/components/forms/content-languages'
 import { Container } from '@/components/layout/Container'
 import { FormSection } from '@/components/layout/FormSection'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -37,6 +38,7 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useWorkspaceContentLocale } from '@/hooks/useWorkspaceContentLocale'
 import { notify } from '@/lib/feedback'
 
 import { MemoryGuardSection } from '../components/MemoryGuardSection'
@@ -66,6 +68,11 @@ export function WorkspaceSettingsPage() {
 
   const [confirmName, setConfirmName] = useState('')
   const [deleting, setDeleting] = useState(false)
+  // Read-only Anzeige (ADR-0045): Content-Sprache ist bei Anlage fixiert,
+  // nachtraeglich nicht aenderbar — kein Formularfeld hier.
+  const contentLocale = useWorkspaceContentLocale()
+  const contentLocaleLabel =
+    CONTENT_LOCALE_OPTIONS.find((entry) => entry.value === contentLocale)?.label ?? contentLocale
 
   const form = useForm<RenameValues>({
     resolver: zodResolver(renameSchema),
@@ -173,6 +180,13 @@ export function WorkspaceSettingsPage() {
                 {t('workspace.general.adminOnly')}
               </p>
             )}
+            <dl className="mt-6 grid gap-1 border-t pt-6 text-sm sm:grid-cols-[10rem_1fr]">
+              <dt className="text-muted-foreground">{t('workspace.general.contentLocaleLabel')}</dt>
+              <dd className="font-medium">{contentLocaleLabel}</dd>
+              <dd className="text-xs text-muted-foreground sm:col-start-2">
+                {t('workspace.general.contentLocaleDescription')}
+              </dd>
+            </dl>
           </CardContent>
         </Card>
 

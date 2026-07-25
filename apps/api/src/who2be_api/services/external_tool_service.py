@@ -24,9 +24,10 @@ from who2be_api.core.security import (
     require_write_tags,
 )
 from who2be_api.repositories.external_tool_repository import ExternalToolRepository
+from who2be_api.repositories.workspace_repository import WorkspaceRepository
+from who2be_api.services.content_locale import resolve_content_locale
 from who2be_api.services.slug import slugify
 from who2be_models import (
-    DEFAULT_LOCALE,
     AgentCapability,
     ExternalToolCreate,
     ExternalToolRead,
@@ -76,8 +77,13 @@ def _review_conflict() -> HTTPException:
 class ExternalToolService:
     """Legt ExternalTools an, liest, listet (Keyset-Pagination), aktualisiert sie."""
 
-    def __init__(self, repo: ExternalToolRepository) -> None:
+    def __init__(
+        self,
+        repo: ExternalToolRepository,
+        workspace_repo: WorkspaceRepository | None = None,
+    ) -> None:
         self._repo = repo
+        self._workspace_repo = workspace_repo
 
     async def create(self, ctx: WorkspaceContext, data: ExternalToolCreate) -> ExternalToolRead:
         require_role(ctx, WorkspaceRole.editor)
@@ -88,9 +94,11 @@ class ExternalToolService:
         # ResourceService.create). Workspace-eindeutig — Kollision -> 409
         # (partieller UNIQUE-Index, Migration 0065).
         alias = data.alias or slugify(data.name, fallback=_ALIAS_FALLBACK)
+        # ADR-0045: explizite Sprache aus dem Body, sonst Workspace-Default.
+        locale = await resolve_content_locale(self._workspace_repo, ctx.workspace_id, data.locale)
         try:
             return await self._repo.insert(
-                ctx.workspace_id, ctx.user_id, data.name, data.content, data.locales, alias=alias
+                ctx.workspace_id, ctx.user_id, data.name, data.content, locale, alias=alias
             )
         except asyncpg.UniqueViolationError as exc:
             raise _alias_conflict() from exc
@@ -100,7 +108,7 @@ class ExternalToolService:
         ctx: WorkspaceContext,
         limit: int,
         cursor: tuple[datetime, UUID] | None,
-        locale: str = DEFAULT_LOCALE,
+        locale: str | None = None,
     ) -> tuple[list[ExternalToolRead], str | None]:
         require_external_tool_read(ctx)
         rows = await self._repo.list_by_workspace(
@@ -117,28 +125,25 @@ class ExternalToolService:
             next_cursor = encode_cursor(tail.created_at, tail.id)
         return rows, next_cursor
 
-    async def get(
-        self, ctx: WorkspaceContext, tool_id: UUID, locale: str = DEFAULT_LOCALE
-    ) -> ExternalToolRead:
+    async def get(self, ctx: WorkspaceContext, tool_id: UUID) -> ExternalToolRead:
         require_external_tool_read(ctx)
         tool = await self._repo.fetch(
             ctx.workspace_id,
             tool_id,
             active_only=not ctx.sees_drafts(AgentCapability.external_tool_write),
-            locale=locale,
         )
         if tool is None:
             raise _not_found()
         return tool
 
     async def _check_update_tags(
-        self, ctx: WorkspaceContext, tool_id: UUID, incoming_tags: list[str], locale: str
+        self, ctx: WorkspaceContext, tool_id: UUID, incoming_tags: list[str]
     ) -> None:
         """Tag-Scope beim Update: eingehende Tags + (nur bei Restriktion) Bestand."""
         require_write_tags(ctx, _WRITE_DOMAIN, incoming_tags)
         policy = ctx.tool_policy
         if policy is not None and policy.write_tags_for(_WRITE_DOMAIN) is not None:
-            existing = await self.get(ctx, tool_id, locale)
+            existing = await self.get(ctx, tool_id)
             require_write_tags(ctx, _WRITE_DOMAIN, existing.content.tags)
 
     async def update(
@@ -146,16 +151,18 @@ class ExternalToolService:
         ctx: WorkspaceContext,
         tool_id: UUID,
         data: ExternalToolUpdate,
-        locale: str = DEFAULT_LOCALE,
     ) -> ExternalToolRead:
-        """Erzeugt eine neue Version des Tools (Draft-on-Edit bei Active)."""
+        """Erzeugt eine neue Version des Tools (Draft-on-Edit bei Active).
+
+        Ein gesetztes `data.locale` wechselt die Entity-Sprache (ADR-0045).
+        """
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.external_tool_write)
         require_unmanaged(await self._repo.is_managed(ctx.workspace_id, tool_id))
         require_write_rate(ctx)
-        await self._check_update_tags(ctx, tool_id, data.content.tags, locale)
+        await self._check_update_tags(ctx, tool_id, data.content.tags)
         outcome = await self._repo.update(
-            ctx.workspace_id, ctx.user_id, tool_id, data.name, data.content, locale
+            ctx.workspace_id, ctx.user_id, tool_id, data.name, data.content, data.locale
         )
         if outcome.conflict == "draft_exists":
             raise _draft_conflict()
@@ -168,16 +175,15 @@ class ExternalToolService:
         ctx: WorkspaceContext,
         tool_id: UUID,
         data: ExternalToolUpdate,
-        locale: str = DEFAULT_LOCALE,
     ) -> ExternalToolRead:
         """Auto-Save-Pfad (PATCH `.../draft`) — upsertet die Draft-Version."""
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.external_tool_write)
         require_unmanaged(await self._repo.is_managed(ctx.workspace_id, tool_id))
         require_write_rate(ctx)
-        await self._check_update_tags(ctx, tool_id, data.content.tags, locale)
+        await self._check_update_tags(ctx, tool_id, data.content.tags)
         outcome = await self._repo.upsert_draft(
-            ctx.workspace_id, ctx.user_id, tool_id, data.name, data.content, locale
+            ctx.workspace_id, ctx.user_id, tool_id, data.name, data.content, data.locale
         )
         if outcome.conflict == "review_pending":
             raise _review_conflict()
@@ -186,19 +192,19 @@ class ExternalToolService:
         return outcome.tool
 
     async def list_versions(
-        self, ctx: WorkspaceContext, tool_id: UUID, locale: str = DEFAULT_LOCALE
+        self, ctx: WorkspaceContext, tool_id: UUID
     ) -> list[ExternalToolVersionRead]:
         require_external_tool_read(ctx)
-        versions = await self._repo.list_versions(ctx.workspace_id, tool_id, locale)
+        versions = await self._repo.list_versions(ctx.workspace_id, tool_id)
         if versions is None:
             raise _not_found()
         return versions
 
     async def get_version(
-        self, ctx: WorkspaceContext, tool_id: UUID, version: int, locale: str = DEFAULT_LOCALE
+        self, ctx: WorkspaceContext, tool_id: UUID, version: int
     ) -> ExternalToolVersionRead:
         require_external_tool_read(ctx)
-        found = await self._repo.fetch_version(ctx.workspace_id, tool_id, version, locale)
+        found = await self._repo.fetch_version(ctx.workspace_id, tool_id, version)
         if found is None:
             raise _not_found()
         return found
@@ -208,19 +214,18 @@ class ExternalToolService:
         ctx: WorkspaceContext,
         tool_id: UUID,
         source_version: int,
-        locale: str = DEFAULT_LOCALE,
     ) -> ExternalToolRead:
         """Stellt den Snapshot `source_version` als neue Draft wieder her (§3.1)."""
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.external_tool_write)
         require_unmanaged(await self._repo.is_managed(ctx.workspace_id, tool_id))
         require_write_rate(ctx)
-        snapshot = await self._repo.fetch_version(ctx.workspace_id, tool_id, source_version, locale)
+        snapshot = await self._repo.fetch_version(ctx.workspace_id, tool_id, source_version)
         if snapshot is None:
             raise _not_found()
         require_write_tags(ctx, _WRITE_DOMAIN, snapshot.content.tags)
         outcome = await self._repo.restore_version(
-            ctx.workspace_id, ctx.user_id, tool_id, snapshot.content, locale
+            ctx.workspace_id, ctx.user_id, tool_id, snapshot.content
         )
         if outcome.conflict == "draft_exists":
             raise _draft_conflict()

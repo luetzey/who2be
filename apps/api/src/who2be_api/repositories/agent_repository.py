@@ -188,9 +188,10 @@ class PgAgentRepository:
         Quelle nicht (mehr) im Workspace liegen.
         """
         async with self._pool.acquire() as conn, conn.transaction():
+            # ADR-0045: die Kopie uebernimmt die Entity-Sprache der Quelle.
             new_persona_id = await conn.fetchval(
-                "INSERT INTO persona (workspace_id, owner_id, name, is_managed) "
-                "SELECT $1, $2, name, false FROM persona "
+                "INSERT INTO persona (workspace_id, owner_id, name, is_managed, locale) "
+                "SELECT $1, $2, name, false, locale FROM persona "
                 "WHERE id = $3 AND workspace_id = $1 RETURNING id",
                 workspace_id,
                 owner_id,
@@ -208,7 +209,7 @@ class PgAgentRepository:
                 source_persona_id,
             )
             links = await conn.fetch(
-                "SELECT pb.id, pb.name, pb.type, pb.tags, pb.triggers "
+                "SELECT pb.id, pb.name, pb.type, pb.tags, pb.triggers, pb.locale "
                 "FROM persona_playbook pp JOIN playbook pb ON pb.id = pp.playbook_id "
                 "WHERE pp.persona_id = $1",
                 source_persona_id,
@@ -216,14 +217,15 @@ class PgAgentRepository:
             for pb in links:
                 new_pb_id = await conn.fetchval(
                     "INSERT INTO playbook "
-                    "(workspace_id, owner_id, name, type, tags, triggers, is_managed) "
-                    "VALUES ($1, $2, $3, $4, $5, $6, false) RETURNING id",
+                    "(workspace_id, owner_id, name, type, tags, triggers, is_managed, locale) "
+                    "VALUES ($1, $2, $3, $4, $5, $6, false, $7) RETURNING id",
                     workspace_id,
                     owner_id,
                     pb["name"],
                     pb["type"],
                     pb["tags"],
                     pb["triggers"],
+                    pb["locale"],
                 )
                 await conn.execute(
                     "INSERT INTO playbook_version "
@@ -245,8 +247,8 @@ class PgAgentRepository:
                 )
             new_template_id = await conn.fetchval(
                 "INSERT INTO system_prompt_template "
-                "(workspace_id, owner_id, name, slug, is_managed) "
-                "SELECT $1, $2, name, $3, false FROM system_prompt_template "
+                "(workspace_id, owner_id, name, slug, is_managed, locale) "
+                "SELECT $1, $2, name, $3, false, locale FROM system_prompt_template "
                 "WHERE id = $4 AND workspace_id = $1 RETURNING id",
                 workspace_id,
                 owner_id,
@@ -257,8 +259,8 @@ class PgAgentRepository:
                 return None
             await conn.execute(
                 "INSERT INTO system_prompt_template_version "
-                "(template_id, version, content, status, created_by) "
-                "SELECT $1, 1, content, 'active', $2 FROM system_prompt_template_version "
+                "(template_id, version, content, status, created_by, locale) "
+                "SELECT $1, 1, content, 'active', $2, locale FROM system_prompt_template_version "
                 "WHERE template_id = $3 AND status = 'active'",
                 new_template_id,
                 owner_id,

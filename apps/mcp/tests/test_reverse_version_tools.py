@@ -167,7 +167,10 @@ def test_list_versions_persona_dispatches_to_persona_path(
     assert seen_path.endswith(f"/personas/{pid}/versions")
 
 
-def test_list_versions_passes_locale(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_list_versions_ignores_locale(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Plan „Ein Element, eine Sprache" (2026-07-24): `locale` ist ein
+    Backward-Compat-Parameter (frueher: Variantenwahl) und wird nicht mehr an
+    die API weitergereicht — die Historie gehoert zu genau EINEM Element."""
     pid = uuid4()
     received: dict[str, str] = {}
 
@@ -178,7 +181,7 @@ def test_list_versions_passes_locale(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(server, "build_client", _factory(handler))
     asyncio.run(list_versions("playbook", str(pid), locale="en"))
-    assert received.get("locale") == "en"
+    assert "locale" not in received
 
 
 # --- get_version -----------------------------------------------------------

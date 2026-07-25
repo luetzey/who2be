@@ -5,32 +5,32 @@ import { describe, expect, it } from 'vitest'
 import { LanguageSelect } from './LanguageSelect'
 
 function Harness() {
-  const [value, setValue] = useState<string[]>(['de'])
+  const [value, setValue] = useState('de')
   return (
     <>
       <LanguageSelect value={value} onChange={setValue} />
-      <output data-testid="value">{value.join(',')}</output>
+      <output data-testid="value">{value}</output>
     </>
   )
 }
 
 describe('LanguageSelect', () => {
-  it('toggelt eine weitere Sprache hinzu (stabile Reihenfolge)', () => {
+  it('zeigt die uebergebene Sprache vorbelegt', () => {
     render(<Harness />)
-    fireEvent.click(screen.getByLabelText('English'))
-    expect(screen.getByTestId('value').textContent).toBe('de,en')
+    expect(screen.getByLabelText('Sprache')).toHaveValue('de')
+    expect(screen.getByTestId('value').textContent).toBe('de')
   })
 
-  it('entfernt eine abgewaehlte Sprache', () => {
+  it('wechselt die Sprache ueber die Einzel-Auswahl', () => {
     render(<Harness />)
-    fireEvent.click(screen.getByLabelText('English'))
-    fireEvent.click(screen.getByLabelText('Deutsch'))
+    fireEvent.change(screen.getByLabelText('Sprache'), { target: { value: 'en' } })
     expect(screen.getByTestId('value').textContent).toBe('en')
   })
 
-  it('verhindert das Abwaehlen der letzten Sprache', () => {
+  it('rendert genau die zentrale Sprachliste als Optionen', () => {
     render(<Harness />)
-    fireEvent.click(screen.getByLabelText('Deutsch'))
-    expect(screen.getByTestId('value').textContent).toBe('de')
+    const select = screen.getByLabelText('Sprache') as HTMLSelectElement
+    const optionLabels = Array.from(select.options).map((option) => option.textContent)
+    expect(optionLabels).toEqual(['Deutsch', 'English'])
   })
 })

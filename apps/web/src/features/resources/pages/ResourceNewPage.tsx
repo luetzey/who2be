@@ -1,5 +1,4 @@
 import { ArrowLeft } from 'lucide-react'
-import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
@@ -10,6 +9,7 @@ import { ErrorAlert } from '@/components/data/ErrorAlert'
 import { LanguageSelect } from '@/components/forms/LanguageSelect'
 import { Button } from '@/components/ui/button'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
+import { useContentLocaleField } from '@/hooks/useContentLocaleField'
 
 import { ResourceEditorForm } from '../components/ResourceEditorForm'
 import { useCreateResource } from '../hooks/useCreateResource'
@@ -18,10 +18,10 @@ export function ResourceNewPage() {
   const { t } = useTranslation('resources')
   const navigate = useNavigate()
   const wsPath = useWorkspacePath()
-  const [locales, setLocales] = useState<string[]>(['de'])
+  const { locale, setLocale } = useContentLocaleField()
   const { form, onSubmit, saveError } = useCreateResource(
     (id) => navigate(wsPath(`/resources/${id}`)),
-    locales,
+    locale,
   )
 
   return (
@@ -34,7 +34,7 @@ export function ResourceNewPage() {
           </Link>
         </Button>
         <PageHeader title={t('new.title')} description={t('new.description')} />
-        <LanguageSelect value={locales} onChange={setLocales} idBase="resource-lang" />
+        <LanguageSelect value={locale} onChange={setLocale} idBase="resource-lang" />
         <ResourceEditorForm
           form={form}
           formKey="new"

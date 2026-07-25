@@ -8,10 +8,10 @@ Signaturen (`PersonaUpdateOutcome`) und ergaenzt die entity-spezifischen
 Lesepfade (`fetch`, `list_by_workspace`, `list_distinct_tags`).
 
 Versionierung ueber eine History-Tabelle (ADR-0004); Status pro Version
-(ADR-0020); Workspace-Isolation ueber `workspace_id` (ADR-0019). Content-i18n
-(ADR-0027): jede Version traegt ein `locale`-Kuerzel, pro Sprache ein eigener
-Versions-Track; die "aktuelle" Version einer Sprache ist die hoechste `version`
-dieses `locale`. `active_only=True` filtert die Lesepfade auf `status='active'`
+(ADR-0020); Workspace-Isolation ueber `workspace_id` (ADR-0019). „Ein Element,
+eine Sprache" (ADR-0045): `locale` ist ein Attribut der Identitaets-Zeile —
+Reads sind locale-agnostisch, `list_by_workspace` filtert optional auf die
+Entity-Sprache. `active_only=True` filtert die Lesepfade auf `status='active'`
 (MCP-Pfad, Plan §2.1.D).
 """
 
@@ -27,7 +27,6 @@ from who2be_api.repositories.versioned_repository import (
     VersionedAggregateRepository,
 )
 from who2be_models import (
-    DEFAULT_LOCALE,
     PersonaRead,
     PersonaVersionContent,
     PersonaVersionRead,
@@ -70,7 +69,7 @@ class PersonaRepository(Protocol):
         owner_id: UUID,
         name: str,
         content: PersonaVersionContent,
-        locales: list[str] | None = None,
+        locale: str,
     ) -> PersonaRead: ...
 
     async def list_by_workspace(
@@ -79,7 +78,7 @@ class PersonaRepository(Protocol):
         limit: int,
         after: tuple[datetime, UUID] | None,
         active_only: bool = False,
-        locale: str = DEFAULT_LOCALE,
+        locale: str | None = None,
         restrict_ids: list[UUID] | None = None,
     ) -> list[PersonaRead]: ...
 
@@ -88,7 +87,6 @@ class PersonaRepository(Protocol):
         workspace_id: UUID,
         persona_id: UUID,
         active_only: bool = False,
-        locale: str = DEFAULT_LOCALE,
     ) -> PersonaRead | None: ...
 
     async def update(
@@ -98,7 +96,7 @@ class PersonaRepository(Protocol):
         persona_id: UUID,
         name: str | None,
         content: PersonaVersionContent,
-        locale: str = DEFAULT_LOCALE,
+        new_locale: str | None = None,
     ) -> PersonaUpdateOutcome: ...
 
     async def upsert_draft(
@@ -108,7 +106,7 @@ class PersonaRepository(Protocol):
         persona_id: UUID,
         name: str | None,
         content: PersonaVersionContent,
-        locale: str = DEFAULT_LOCALE,
+        new_locale: str | None = None,
     ) -> PersonaUpdateOutcome: ...
 
     async def restore_version(
@@ -117,20 +115,17 @@ class PersonaRepository(Protocol):
         owner_id: UUID,
         persona_id: UUID,
         content: PersonaVersionContent,
-        locale: str = DEFAULT_LOCALE,
     ) -> PersonaUpdateOutcome: ...
 
     async def list_versions(
-        self, workspace_id: UUID, persona_id: UUID, locale: str = DEFAULT_LOCALE
+        self, workspace_id: UUID, persona_id: UUID
     ) -> list[PersonaVersionRead] | None: ...
 
     async def fetch_version(
-        self, workspace_id: UUID, persona_id: UUID, version: int, locale: str = DEFAULT_LOCALE
+        self, workspace_id: UUID, persona_id: UUID, version: int
     ) -> PersonaVersionRead | None: ...
 
-    async def list_distinct_tags(
-        self, workspace_id: UUID, locale: str = DEFAULT_LOCALE
-    ) -> list[str]: ...
+    async def list_distinct_tags(self, workspace_id: UUID) -> list[str]: ...
 
     async def list_counts(
         self, workspace_id: UUID, persona_ids: list[UUID]
@@ -158,9 +153,9 @@ class PgPersonaRepository(VersionedAggregateRepository[PersonaRead, PersonaVersi
         owner_id: UUID,
         name: str,
         content: PersonaVersionContent,
-        locales: list[str] | None = None,
+        locale: str,
     ) -> PersonaRead:
-        return await self._insert(workspace_id, owner_id, name, content, locales)
+        return await self._insert(workspace_id, owner_id, name, content, locale)
 
     async def update(
         self,
@@ -169,10 +164,10 @@ class PgPersonaRepository(VersionedAggregateRepository[PersonaRead, PersonaVersi
         persona_id: UUID,
         name: str | None,
         content: PersonaVersionContent,
-        locale: str = DEFAULT_LOCALE,
+        new_locale: str | None = None,
     ) -> PersonaUpdateOutcome:
         persona, conflict = await self._update(
-            workspace_id, owner_id, persona_id, name, content, locale
+            workspace_id, owner_id, persona_id, name, content, new_locale
         )
         return PersonaUpdateOutcome(persona=persona, conflict=conflict)
 
@@ -183,10 +178,10 @@ class PgPersonaRepository(VersionedAggregateRepository[PersonaRead, PersonaVersi
         persona_id: UUID,
         name: str | None,
         content: PersonaVersionContent,
-        locale: str = DEFAULT_LOCALE,
+        new_locale: str | None = None,
     ) -> PersonaUpdateOutcome:
         persona, conflict = await self._upsert_draft(
-            workspace_id, owner_id, persona_id, name, content, locale
+            workspace_id, owner_id, persona_id, name, content, new_locale
         )
         return PersonaUpdateOutcome(persona=persona, conflict=conflict)
 
@@ -196,22 +191,19 @@ class PgPersonaRepository(VersionedAggregateRepository[PersonaRead, PersonaVersi
         owner_id: UUID,
         persona_id: UUID,
         content: PersonaVersionContent,
-        locale: str = DEFAULT_LOCALE,
     ) -> PersonaUpdateOutcome:
-        persona, conflict = await self._restore_version(
-            workspace_id, owner_id, persona_id, content, locale
-        )
+        persona, conflict = await self._restore_version(workspace_id, owner_id, persona_id, content)
         return PersonaUpdateOutcome(persona=persona, conflict=conflict)
 
     async def list_versions(
-        self, workspace_id: UUID, persona_id: UUID, locale: str = DEFAULT_LOCALE
+        self, workspace_id: UUID, persona_id: UUID
     ) -> list[PersonaVersionRead] | None:
-        return await self._list_versions(workspace_id, persona_id, locale)
+        return await self._list_versions(workspace_id, persona_id)
 
     async def fetch_version(
-        self, workspace_id: UUID, persona_id: UUID, version: int, locale: str = DEFAULT_LOCALE
+        self, workspace_id: UUID, persona_id: UUID, version: int
     ) -> PersonaVersionRead | None:
-        return await self._fetch_version(workspace_id, persona_id, version, locale)
+        return await self._fetch_version(workspace_id, persona_id, version)
 
     async def delete(self, workspace_id: UUID, persona_id: UUID) -> bool:
         return await self._delete(workspace_id, persona_id)
@@ -223,15 +215,13 @@ class PgPersonaRepository(VersionedAggregateRepository[PersonaRead, PersonaVersi
         workspace_id: UUID,
         persona_id: UUID,
         active_only: bool = False,
-        locale: str = DEFAULT_LOCALE,
     ) -> PersonaRead | None:
         builder = self._select_active if active_only else self._select_current
-        select = builder("$3")
+        select = builder()
         row = await self._pool.fetchrow(
             f"{select} WHERE e.id = $1 AND e.workspace_id = $2",
             persona_id,
             workspace_id,
-            locale,
         )
         return PersonaRead.model_validate(dict(row)) if row is not None else None
 
@@ -241,19 +231,21 @@ class PgPersonaRepository(VersionedAggregateRepository[PersonaRead, PersonaVersi
         limit: int,
         after: tuple[datetime, UUID] | None,
         active_only: bool = False,
-        locale: str = DEFAULT_LOCALE,
+        locale: str | None = None,
         restrict_ids: list[UUID] | None = None,
     ) -> list[PersonaRead]:
         builder = self._select_active if active_only else self._select_current
+        select = builder()
         # Tie-Breaker auf `id` haelt die Sortierung stabil, wenn zwei Rows
-        # auf die Microsekunde gleichzeitig angelegt wurden. `restrict_ids`
-        # (z. B. `?agent=`-Listenfilter, WP-B) ist der letzte Parameter:
-        # NULL ⇒ keine Einschraenkung, leere Liste ⇒ keine Treffer —
-        # gleiche Mechanik wie bei Playbook/Resource.
+        # auf die Microsekunde gleichzeitig angelegt wurden. `locale` ist der
+        # optionale Sprachfilter auf die Entity-Sprache (NULL ⇒ alle Sprachen).
+        # `restrict_ids` (z. B. `?agent=`-Listenfilter, WP-B): NULL ⇒ keine
+        # Einschraenkung, leere Liste ⇒ keine Treffer — gleiche Mechanik wie
+        # bei Playbook/Resource.
         if after is None:
-            select = builder("$3")
             rows = await self._pool.fetch(
                 f"{select} WHERE e.workspace_id = $1 "
+                "AND ($3::text IS NULL OR e.locale = $3) "
                 "AND ($4::uuid[] IS NULL OR e.id = ANY($4)) "
                 "ORDER BY e.created_at DESC, e.id DESC LIMIT $2",
                 workspace_id,
@@ -262,10 +254,10 @@ class PgPersonaRepository(VersionedAggregateRepository[PersonaRead, PersonaVersi
                 restrict_ids,
             )
         else:
-            select = builder("$5")
             rows = await self._pool.fetch(
                 f"{select} WHERE e.workspace_id = $1 "
                 "AND (e.created_at, e.id) < ($2, $3) "
+                "AND ($5::text IS NULL OR e.locale = $5) "
                 "AND ($6::uuid[] IS NULL OR e.id = ANY($6)) "
                 "ORDER BY e.created_at DESC, e.id DESC LIMIT $4",
                 workspace_id,
@@ -277,31 +269,29 @@ class PgPersonaRepository(VersionedAggregateRepository[PersonaRead, PersonaVersi
             )
         return [PersonaRead.model_validate(dict(row)) for row in rows]
 
-    async def list_distinct_tags(
-        self, workspace_id: UUID, locale: str = DEFAULT_LOCALE
-    ) -> list[str]:
+    async def list_distinct_tags(self, workspace_id: UUID) -> list[str]:
         """DISTINCT alle Persona-Tags des Workspaces, lexikografisch sortiert.
 
         Persona-Tags liegen — anders als bei Playbooks — nicht denormalisiert
         auf der Identitaets-Zeile, sondern im JSON der aktuellen Version
         (`persona_version.content->'tags'`). Wir lesen daher per Lateral-Join
-        ueber die Current-Version (= hoechste Version des `locale`-Tracks) jeder
-        Persona im Workspace. Historische Versions-Snapshots tragen nicht bei.
+        ueber die Current-Version (= globale Max-Version, Legacy-Tie-Break auf
+        die Entity-Sprache) jeder Persona im Workspace. Historische
+        Versions-Snapshots tragen nicht bei.
         """
         rows = await self._pool.fetch(
             "SELECT DISTINCT tag "
             "FROM persona e "
-            "JOIN persona_version ev "
-            "  ON ev.persona_id = e.id AND ev.locale = $2 "
-            "  AND ev.version = ( "
-            "      SELECT max(v.version) FROM persona_version v "
-            "      WHERE v.persona_id = e.id AND v.locale = $2 "
-            "  ) "
+            "JOIN LATERAL ( "
+            "    SELECT v.content FROM persona_version v "
+            "    WHERE v.persona_id = e.id "
+            "    ORDER BY v.version DESC, (v.locale = e.locale) DESC "
+            "    LIMIT 1 "
+            ") ev ON TRUE "
             "CROSS JOIN LATERAL jsonb_array_elements_text(ev.content->'tags') AS tag "
             "WHERE e.workspace_id = $1 "
             "ORDER BY tag ASC",
             workspace_id,
-            locale,
         )
         return [row["tag"] for row in rows]
 

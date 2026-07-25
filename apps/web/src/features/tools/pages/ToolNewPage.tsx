@@ -1,5 +1,4 @@
 import { ArrowLeft } from 'lucide-react'
-import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
@@ -10,6 +9,7 @@ import { ErrorAlert } from '@/components/data/ErrorAlert'
 import { LanguageSelect } from '@/components/forms/LanguageSelect'
 import { Button } from '@/components/ui/button'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
+import { useContentLocaleField } from '@/hooks/useContentLocaleField'
 
 import { ToolEditorForm } from '../components/ToolEditorForm'
 import { useCreateTool } from '../hooks/useCreateTool'
@@ -18,10 +18,10 @@ export function ToolNewPage() {
   const { t } = useTranslation('tools')
   const navigate = useNavigate()
   const wsPath = useWorkspacePath()
-  const [locales, setLocales] = useState<string[]>(['de'])
+  const { locale, setLocale } = useContentLocaleField()
   const { form, onSubmit, saveError } = useCreateTool(
     (id) => navigate(wsPath(`/tools/${id}`)),
-    locales,
+    locale,
   )
 
   return (
@@ -34,7 +34,7 @@ export function ToolNewPage() {
           </Link>
         </Button>
         <PageHeader title={t('new.title')} description={t('new.description')} />
-        <LanguageSelect value={locales} onChange={setLocales} idBase="tool-lang" />
+        <LanguageSelect value={locale} onChange={setLocale} idBase="tool-lang" />
         <ToolEditorForm
           form={form}
           formKey="new"

@@ -75,8 +75,10 @@ def test_get_persona_by_uuid_sends_token_and_returns_model() -> None:
     assert persona.name == "QA"
 
 
-def test_get_persona_forwards_locale() -> None:
-    """Content-i18n (ADR-0027): `locale` wird als Query-Param durchgereicht."""
+def test_get_persona_by_uuid_ignores_locale() -> None:
+    """Plan „Ein Element, eine Sprache" (2026-07-24): bei UUID-Aufloesung wird
+    `locale` gar nicht erst mitgesendet — die Persona traegt ihre Sprache
+    selbst (Backward-Compat-Parameter, frueher: Variantenwahl ADR-0027)."""
     pid = str(uuid4())
     seen: dict[str, str] = {}
 
@@ -85,10 +87,10 @@ def test_get_persona_forwards_locale() -> None:
         return httpx.Response(200, json=_persona_json(pid, "QA"))
 
     asyncio.run(_client(handler).get_persona(pid, "en"))
-    assert seen["locale"] == "en"
+    assert "locale" not in seen
 
 
-def test_get_persona_defaults_locale_to_de() -> None:
+def test_get_persona_by_uuid_defaults_locale_to_none() -> None:
     pid = str(uuid4())
     seen: dict[str, str] = {}
 
@@ -97,7 +99,33 @@ def test_get_persona_defaults_locale_to_de() -> None:
         return httpx.Response(200, json=_persona_json(pid, "QA"))
 
     asyncio.run(_client(handler).get_persona(pid))
-    assert seen["locale"] == "de"
+    assert "locale" not in seen
+
+
+def test_get_persona_by_name_forwards_locale_as_filter() -> None:
+    """Namens-Aufloesung laeuft ueber die Liste — `locale` wirkt dort als
+    optionaler Sprachfilter."""
+    pid = str(uuid4())
+    seen: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(dict(request.url.params))
+        return httpx.Response(200, json=[_persona_json(pid, "QA")])
+
+    asyncio.run(_client(handler).get_persona("QA", "en"))
+    assert seen["locale"] == "en"
+
+
+def test_get_persona_by_name_omits_locale_by_default() -> None:
+    pid = str(uuid4())
+    seen: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(dict(request.url.params))
+        return httpx.Response(200, json=[_persona_json(pid, "QA")])
+
+    asyncio.run(_client(handler).get_persona("QA"))
+    assert "locale" not in seen
 
 
 def test_get_persona_by_name_resolves_via_list() -> None:
@@ -214,13 +242,16 @@ def test_list_playbooks_forwards_filters() -> None:
         seen["params"] = dict(request.url.params)
         return httpx.Response(200, json=[_playbook_json(str(uuid4()), "PB")])
 
-    result = asyncio.run(_client(handler).list_playbooks("onboarding", "new user"))
-    # `locale` wird seit Content-i18n (ADR-0027) immer mitgesendet (Default 'de').
+    result = asyncio.run(_client(handler).list_playbooks("onboarding", "new user", "de"))
     assert seen["params"] == {"tag": "onboarding", "trigger": "new user", "locale": "de"}
     assert len(result) == 1
 
 
 def test_list_playbooks_omits_unset_filters() -> None:
+    """Plan „Ein Element, eine Sprache" (2026-07-24): `locale=None` (Default)
+    sendet KEINEN Sprachfilter mehr — ein Alt-Client, der keinen `locale`
+    uebergibt, sieht weiterhin Playbooks aller Sprachen (statt sie auf 'de'
+    zu verengen)."""
     seen: dict[str, dict[str, str]] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -228,8 +259,7 @@ def test_list_playbooks_omits_unset_filters() -> None:
         return httpx.Response(200, json=[])
 
     asyncio.run(_client(handler).list_playbooks(None, None))
-    # Ohne Filter bleibt nur der Default-`locale` (ADR-0027).
-    assert seen["params"] == {"locale": "de"}
+    assert seen["params"] == {}
 
 
 def test_get_playbook_returns_model() -> None:

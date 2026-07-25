@@ -152,6 +152,79 @@ def test_workspace_create_rename_delete_lifecycle(monkeypatch: pytest.MonkeyPatc
 
 
 @pytest.mark.integration
+def test_workspace_create_content_locale(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Workspace-Content-Sprache (ADR-0045, WP8): Create mit `content_locale='en'`
+    liefert die Sprache in `WorkspaceRead` zurueck (Create/List/Detail), seedet
+    die EN-Standard-Inhalte, defaultet ohne Angabe auf 'de' und lehnt
+    unbekannte Sprachen mit 422 ab."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner = fresh_user_id()
+    setup_workspace(owner)
+    slug = f"loc-{secrets.token_hex(4)}"
+
+    try:
+        with TestClient(app) as client:
+            org = client.post(
+                "/v1/organizations",
+                json={"name": "Locale", "slug": slug},
+                headers=_auth(owner),
+            ).json()
+
+            # Ohne Angabe: Default 'de'.
+            created_de = client.post(
+                f"/v1/organizations/{org['id']}/workspaces",
+                json={"name": "Deutsch", "slug": "deutsch"},
+                headers=_auth(owner),
+            )
+            assert created_de.status_code == 201, created_de.text
+            assert created_de.json()["content_locale"] == "de"
+
+            # Explizit 'en': Read traegt die Sprache, Seeds sind englisch.
+            created_en = client.post(
+                f"/v1/organizations/{org['id']}/workspaces",
+                json={"name": "English", "slug": "english", "content_locale": "en"},
+                headers=_auth(owner),
+            )
+            assert created_en.status_code == 201, created_en.text
+            assert created_en.json()["content_locale"] == "en"
+            ws_en = created_en.json()["id"]
+
+            # Liste + Detail liefern die Spalte mit (WP8: SELECTs erweitert).
+            listed = client.get(
+                f"/v1/organizations/{org['id']}/workspaces", headers=_auth(owner)
+            ).json()
+            by_slug = {w["slug"]: w["content_locale"] for w in listed}
+            assert by_slug["english"] == "en"
+            assert by_slug["deutsch"] == "de"
+            fetched = client.get(f"/v1/workspaces/{ws_en}", headers=_auth(owner))
+            assert fetched.status_code == 200, fetched.text
+            assert fetched.json()["content_locale"] == "en"
+
+            # Der EN-Workspace wurde mit dem EN-Content-Pack geseedet.
+            templates = client.get(
+                f"/v1/workspaces/{ws_en}/system-prompts", headers=_auth(owner)
+            ).json()
+            names = {t["name"] for t in templates}
+            assert "Customer Support Agent" in names, names
+            assert "Customer-Support-Agent" not in names, names
+
+            # Unbekannte Sprache → 422 an der Modell-Grenze.
+            bad = client.post(
+                f"/v1/organizations/{org['id']}/workspaces",
+                json={"name": "Bad", "slug": "bad", "content_locale": "xx"},
+                headers=_auth(owner),
+            )
+            assert bad.status_code == 422, bad.text
+    finally:
+        _drop_company_org(slug)
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
 def test_delete_last_workspace_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")

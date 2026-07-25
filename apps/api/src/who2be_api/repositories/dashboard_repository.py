@@ -26,22 +26,23 @@ from uuid import UUID
 
 import asyncpg
 
-from who2be_models import DEFAULT_LOCALE, EntityType, VersionStatus
+from who2be_models import EntityType, VersionStatus
 
 # Distribution je Entity-Typ: zaehlt jedes Aggregat GENAU EINMAL nach dem Status
-# seiner aktuellen Version (hoechste Version im Default-Locale-Track) — identisch
-# zur Listen-Sicht (`_select_current` in den Entity-Repos). Bewusst NICHT ueber
+# seiner aktuellen Version (globale Max-Version, ADR-0045) — identisch zur
+# Listen-Sicht (`_select_current` in den Entity-Repos). Bewusst NICHT ueber
 # alle `*_version`-Zeilen: sonst blaehen ueberholte Alt-Versionen (z. B. das
 # `inactive` einer abgeloesten Vorversion) die Verteilung auf und die Donut
-# widerspricht dem Status-Filter der Liste. `$2` = Locale.
+# widerspricht dem Status-Filter der Liste. Der Tie-Break auf die Entity-
+# Sprache haelt Legacy-Daten (DE-v1 UND EN-v1) deterministisch.
 _PERSONA_DISTRIBUTION = """
     SELECT cur.status, COUNT(*)::int AS n
     FROM (
         SELECT DISTINCT ON (pv.persona_id) pv.status
         FROM persona_version pv
         JOIN persona p ON p.id = pv.persona_id
-        WHERE p.workspace_id = $1 AND pv.locale = $2
-        ORDER BY pv.persona_id, pv.version DESC
+        WHERE p.workspace_id = $1
+        ORDER BY pv.persona_id, pv.version DESC, (pv.locale = p.locale) DESC
     ) cur
     GROUP BY cur.status
 """
@@ -52,8 +53,8 @@ _PLAYBOOK_DISTRIBUTION = """
         SELECT DISTINCT ON (pv.playbook_id) pv.status
         FROM playbook_version pv
         JOIN playbook p ON p.id = pv.playbook_id
-        WHERE p.workspace_id = $1 AND pv.locale = $2
-        ORDER BY pv.playbook_id, pv.version DESC
+        WHERE p.workspace_id = $1
+        ORDER BY pv.playbook_id, pv.version DESC, (pv.locale = p.locale) DESC
     ) cur
     GROUP BY cur.status
 """
@@ -64,8 +65,8 @@ _RESOURCE_DISTRIBUTION = """
         SELECT DISTINCT ON (rv.resource_id) rv.status
         FROM resource_version rv
         JOIN resource r ON r.id = rv.resource_id
-        WHERE r.workspace_id = $1 AND rv.locale = $2
-        ORDER BY rv.resource_id, rv.version DESC
+        WHERE r.workspace_id = $1
+        ORDER BY rv.resource_id, rv.version DESC, (rv.locale = r.locale) DESC
     ) cur
     GROUP BY cur.status
 """
@@ -121,7 +122,7 @@ _ACTIVITY = """
 # noetig) und System-Prompt-Templates, deren AKTUELLE Version (Pointer
 # `current_version`, identisch zur Listen-Sicht `_SELECT_CURRENT` im
 # Template-Repo) zur Review liegt. Bewusst nicht in die Distribution-Queries
-# gemischt — System-Prompts haben keinen Locale-Track wie die Entity-Typen.
+# gemischt — System-Prompts sind kein Kern-Inhaltstyp der Donut-Verteilung.
 _ATTENTION_COUNTS = """
     SELECT
         (SELECT COUNT(*)::int FROM agent_memory
@@ -176,9 +177,9 @@ class PgDashboardRepository:
     async def status_distribution(
         self, workspace_id: UUID
     ) -> tuple[dict[VersionStatus, int], dict[VersionStatus, int], dict[VersionStatus, int]]:
-        persona_rows = await self._pool.fetch(_PERSONA_DISTRIBUTION, workspace_id, DEFAULT_LOCALE)
-        playbook_rows = await self._pool.fetch(_PLAYBOOK_DISTRIBUTION, workspace_id, DEFAULT_LOCALE)
-        resource_rows = await self._pool.fetch(_RESOURCE_DISTRIBUTION, workspace_id, DEFAULT_LOCALE)
+        persona_rows = await self._pool.fetch(_PERSONA_DISTRIBUTION, workspace_id)
+        playbook_rows = await self._pool.fetch(_PLAYBOOK_DISTRIBUTION, workspace_id)
+        resource_rows = await self._pool.fetch(_RESOURCE_DISTRIBUTION, workspace_id)
         return (
             {VersionStatus(row["status"]): row["n"] for row in persona_rows},
             {VersionStatus(row["status"]): row["n"] for row in playbook_rows},

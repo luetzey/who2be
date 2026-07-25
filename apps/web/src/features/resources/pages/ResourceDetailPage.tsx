@@ -19,6 +19,7 @@ import { BranchStatus } from '@/components/data/BranchStatus'
 import { DataList } from '@/components/data/DataList'
 import { DataView } from '@/components/data/DataView'
 import { DetailHeader } from '@/components/data/DetailHeader'
+import { LocaleBadge } from '@/components/data/LocaleBadge'
 import { ManagedNotice } from '@/components/data/ManagedNotice'
 import { StatusBadge } from '@/components/data/StatusBadge'
 import { UsedByList } from '@/components/data/UsedByList'
@@ -135,6 +136,7 @@ export function ResourceDetailPage() {
                       status={resource.current_status}
                       pendingDraft={resource.has_pending_draft}
                     />
+                    <LocaleBadge locale={resource.locale} />
                     {resource.slug ? (
                       <Badge variant="outline" className="font-mono text-xs">
                         {resource.slug}

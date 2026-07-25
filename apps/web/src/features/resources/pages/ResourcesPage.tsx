@@ -8,11 +8,13 @@ import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
+import { CONTENT_LOCALE_OPTIONS } from '@/components/forms/content-languages'
 import { EntityCard } from '@/components/data/EntityCard'
 import { EmptyState } from '@/components/data/EmptyState'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
 import { ListFilterBar } from '@/components/data/ListFilterBar'
 import { LoadingState } from '@/components/data/LoadingState'
+import { LocaleBadge } from '@/components/data/LocaleBadge'
 import { MetaPill } from '@/components/data/MetaPill'
 import { StatusBadge } from '@/components/data/StatusBadge'
 import { Badge } from '@/components/ui/badge'
@@ -21,6 +23,7 @@ import { useAgents } from '@/hooks/useAgents'
 import {
   useAgentFilterParam,
   useListFilters,
+  useLocaleFilterParam,
   type ListFilterAccessors,
 } from '@/hooks/useListFilters'
 import { useResources } from '@/hooks/useResources'
@@ -66,10 +69,14 @@ function SubResourceList({
 
 export function ResourcesPage() {
   const { t } = useTranslation(['resources', 'data'])
-  // Serverseitige Agent-Facette (WP-B): Param VOR dem Daten-Hook lesen,
-  // damit ein Facetten-Wechsel den Refetch ausloest.
+  // Serverseitige Agent-/Sprach-Facette (WP-B, ADR-0045): Params VOR dem
+  // Daten-Hook lesen, damit ein Facetten-Wechsel den Refetch ausloest.
   const agentFilter = useAgentFilterParam()
-  const { resources, loading, error } = useResources(agentFilter || undefined)
+  const localeFilter = useLocaleFilterParam()
+  const { resources, loading, error } = useResources(
+    agentFilter || undefined,
+    localeFilter || undefined,
+  )
   const { agents } = useAgents()
   const wsPath = useWorkspacePath()
 
@@ -84,10 +91,11 @@ export function ResourcesPage() {
   )
   const filters = useListFilters(resources, accessors)
 
-  // Leerer Workspace vs. leeres Filter-Ergebnis: bei aktiver Agent-Facette
-  // kommt die Liste serverseitig gefiltert an — dann ist "leer" ein
+  // Leerer Workspace vs. leeres Filter-Ergebnis: bei aktiver Agent-/Sprach-
+  // Facette kommt die Liste serverseitig gefiltert an — dann ist "leer" ein
   // Filter-Ergebnis, kein leerer Workspace.
-  const isEmptyWorkspace = resources.length === 0 && filters.agent === ''
+  const isEmptyWorkspace =
+    resources.length === 0 && filters.agent === '' && filters.locale === ''
 
   return (
     <Container>
@@ -105,7 +113,7 @@ export function ResourcesPage() {
           }
         />
 
-        {resources.length > 0 || filters.agent !== '' ? (
+        {resources.length > 0 || filters.agent !== '' || filters.locale !== '' ? (
           <ListFilterBar
             idPrefix="resources"
             counts={filters.counts}
@@ -119,6 +127,9 @@ export function ResourcesPage() {
             agents={agents}
             agent={filters.agent}
             onAgentChange={filters.setAgent}
+            locales={CONTENT_LOCALE_OPTIONS}
+            locale={filters.locale}
+            onLocaleChange={filters.setLocale}
             active={filters.active}
             onReset={filters.reset}
           />
@@ -173,6 +184,7 @@ export function ResourcesPage() {
                         <Badge variant="secondary" className="tabular-nums">
                           v{resource.current_version}
                         </Badge>
+                        <LocaleBadge locale={resource.locale} />
                         {resource.slug ? (
                           <Badge variant="outline" className="font-mono text-xs">
                             {resource.slug}

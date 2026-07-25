@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response, status
 
 from who2be_api.core.agent_scope import visible_playbook_ids
 from who2be_api.core.db import get_pool
-from who2be_api.core.locale import LocaleQuery
+from who2be_api.core.locale import LocaleFilterQuery
 from who2be_api.core.pagination import DEFAULT_LIMIT, PageCursor, PageLimit
 from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
@@ -21,6 +21,7 @@ from who2be_api.repositories.playbook_resource_link_repository import (
 )
 from who2be_api.repositories.status_history_repository import PgStatusHistoryRepository
 from who2be_api.repositories.usage_repository import PgUsageRepository
+from who2be_api.repositories.workspace_repository import PgWorkspaceRepository
 from who2be_api.routers._export import ExportResult, export_entity
 from who2be_api.services.entity_export_service import EntityExportService
 from who2be_api.services.entity_quota_service import enforce_entity_quota
@@ -58,6 +59,7 @@ def get_playbook_service(
         PlaybookCompositionService(PgPlaybookCompositionRepository(pool)),
         PlaybookResourceLinkService(PgPlaybookResourceLinkRepository(pool)),
         PgUsageRepository(pool),
+        PgWorkspaceRepository(pool),
     )
 
 
@@ -88,14 +90,15 @@ async def list_playbooks(
     service: Service,
     response: Response,
     cursor: PageCursor,
-    locale: LocaleQuery,
+    locale: LocaleFilterQuery,
     tag: Annotated[str | None, Query(max_length=100)] = None,
     trigger: Annotated[str | None, Query(max_length=200)] = None,
     agent: Annotated[UUID | None, Query()] = None,
     limit: PageLimit = DEFAULT_LIMIT,
 ) -> list[PlaybookRead]:
-    """Listet Playbooks; `?agent=` filtert auf die dem Agenten zugewiesenen
-    Playbooks inkl. Composite-Closure (WP-B), kombinierbar mit `tag`/`trigger`."""
+    """Listet Playbooks; `?locale=` filtert auf die Element-Sprache (ADR-0045);
+    `?agent=` filtert auf die dem Agenten zugewiesenen Playbooks inkl.
+    Composite-Closure (WP-B), kombinierbar mit `tag`/`trigger`."""
     items, next_cursor = await service.list_all(
         ctx, tag, trigger, limit, cursor, locale=locale, agent=agent
     )
@@ -117,9 +120,9 @@ async def create_playbook(
 
 
 @router.get("/tags")
-async def list_playbook_tags(ctx: Ctx, service: Service, locale: LocaleQuery) -> list[str]:
+async def list_playbook_tags(ctx: Ctx, service: Service) -> list[str]:
     """DISTINCT-Tags des Workspaces fuer den Tag-Picker im Playbook-Form."""
-    return await service.list_tags(ctx, locale)
+    return await service.list_tags(ctx)
 
 
 @router.get("/triggers")
@@ -134,10 +137,8 @@ async def list_playbook_triggers(ctx: Ctx, service: Service) -> list[TriggerOver
 
 
 @router.get("/{playbook_id}", dependencies=[Depends(enforce_mcp_read_limit)])
-async def get_playbook(
-    playbook_id: UUID, ctx: Ctx, service: Service, locale: LocaleQuery
-) -> PlaybookRead:
-    return await service.get(ctx, playbook_id, locale=locale)
+async def get_playbook(playbook_id: UUID, ctx: Ctx, service: Service) -> PlaybookRead:
+    return await service.get(ctx, playbook_id)
 
 
 @router.put("/{playbook_id}")
@@ -148,9 +149,8 @@ async def update_playbook(
     data: PlaybookUpdate,
     ctx: Ctx,
     service: Service,
-    locale: LocaleQuery,
 ) -> PlaybookRead:
-    return await service.update(ctx, playbook_id, data, locale=locale)
+    return await service.update(ctx, playbook_id, data)
 
 
 @router.delete("/{playbook_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -201,37 +201,34 @@ async def update_playbook_draft(
     data: PlaybookUpdate,
     ctx: Ctx,
     service: Service,
-    locale: LocaleQuery,
 ) -> PlaybookRead:
     """Auto-Save-Pfad — upsertet die Draft-Version ohne Versions-Increment."""
-    return await service.update_draft(ctx, playbook_id, data, locale=locale)
+    return await service.update_draft(ctx, playbook_id, data)
 
 
 @router.get("/{playbook_id}/rendered")
-async def render_playbook(
-    playbook_id: UUID, ctx: Ctx, service: Service, locale: LocaleQuery
-) -> PlaybookRenderResponse:
+async def render_playbook(playbook_id: UUID, ctx: Ctx, service: Service) -> PlaybookRenderResponse:
     """Liefert den durch den Placeholder-Renderer expandierten Playbook-Body (B5).
 
     Track B (Nur-BlockNote): Inline-Pills (playbook/resource/…) werden
     serverseitig zu Plain-Text expandiert. Wird vom MCP-Tool `fetch_playbook`
     genutzt.
     """
-    return await service.render(ctx, playbook_id, locale=locale)
+    return await service.render(ctx, playbook_id)
 
 
 @router.get("/{playbook_id}/versions")
 async def list_playbook_versions(
-    playbook_id: UUID, ctx: Ctx, service: Service, locale: LocaleQuery
+    playbook_id: UUID, ctx: Ctx, service: Service
 ) -> list[PlaybookVersionRead]:
-    return await service.list_versions(ctx, playbook_id, locale)
+    return await service.list_versions(ctx, playbook_id)
 
 
 @router.get("/{playbook_id}/versions/{version}")
 async def get_playbook_version(
-    playbook_id: UUID, version: int, ctx: Ctx, service: Service, locale: LocaleQuery
+    playbook_id: UUID, version: int, ctx: Ctx, service: Service
 ) -> PlaybookVersionRead:
-    return await service.get_version(ctx, playbook_id, version, locale)
+    return await service.get_version(ctx, playbook_id, version)
 
 
 @router.post("/{playbook_id}/versions/{version}/transition")
@@ -243,10 +240,9 @@ async def transition_playbook_version(
     data: VersionTransitionRequest,
     ctx: Ctx,
     status_service: StatusService,
-    locale: LocaleQuery,
 ) -> PlaybookVersionRead:
     return await status_service.transition_playbook_version(
-        ctx, playbook_id, version, data.to, data.note, locale=locale
+        ctx, playbook_id, version, data.to, data.note
     )
 
 
@@ -258,10 +254,9 @@ async def restore_playbook_version(
     version: int,
     ctx: Ctx,
     service: Service,
-    locale: LocaleQuery,
 ) -> PlaybookRead:
     """Stellt Version `version` als neue Draft wieder her (non-destruktiv)."""
-    return await service.restore(ctx, playbook_id, version, locale=locale)
+    return await service.restore(ctx, playbook_id, version)
 
 
 @router.get("/{playbook_id}/versions/{version}/diff")
@@ -270,11 +265,10 @@ async def diff_playbook_version(
     version: int,
     ctx: Ctx,
     service: Service,
-    locale: LocaleQuery,
     against: DiffAgainst = "active",
 ) -> VersionDiff:
     """Strukturierter Feld-/Block-Diff der Version gegen `against` (read-only)."""
-    return await service.diff(ctx, playbook_id, version, against, locale=locale)
+    return await service.diff(ctx, playbook_id, version, against)
 
 
 @router.get("/{playbook_id}/versions/{version}/provenance")

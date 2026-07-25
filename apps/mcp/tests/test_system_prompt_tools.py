@@ -63,6 +63,17 @@ def _template_payload(
     }
 
 
+def _workspace_json(content_locale: str = "de") -> dict[str, object]:
+    return {
+        "id": str(_WORKSPACE_ID),
+        "org_id": str(uuid4()),
+        "name": "WS",
+        "slug": "ws",
+        "content_locale": content_locale,
+        "created_at": "2024-01-01T00:00:00Z",
+    }
+
+
 def _template_version(version: int = 1, status: str = "draft") -> dict[str, object]:
     return {
         "version": version,
@@ -87,6 +98,38 @@ def test_list_system_prompts_returns_templates(monkeypatch: pytest.MonkeyPatch) 
     assert len(result) == 1
     assert isinstance(result[0], SystemPromptTemplateRead)
     assert result[0].slug == "agent-builder"
+    assert result[0].locale == "de"
+
+
+def test_list_system_prompts_forwards_locale_as_filter(monkeypatch: pytest.MonkeyPatch) -> None:
+    """WP4 (Plan „Ein Element, eine Sprache"): `locale` ist ein neuer,
+    optionaler Sprachfilter (`None` = alle Sprachen, Default) — spiegelt
+    `list_playbooks`/`list_resources`/`list_external_tools`."""
+    received_params: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        for key, value in request.url.params.items():
+            received_params[key] = value
+        return httpx.Response(200, json=[])
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    asyncio.run(list_system_prompts(locale="en"))
+    assert received_params.get("locale") == "en"
+
+
+def test_list_system_prompts_without_locale_sends_no_filter(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    received_params: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        for key, value in request.url.params.items():
+            received_params[key] = value
+        return httpx.Response(200, json=[])
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    asyncio.run(list_system_prompts())
+    assert "locale" not in received_params
 
 
 def test_get_system_prompt_returns_template(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -133,6 +176,11 @@ def test_create_system_prompt_posts_template(monkeypatch: pytest.MonkeyPatch) ->
     seen = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
+        # `create_system_prompt` loest `data.locale=None` zuerst ueber ein
+        # `GET .../workspaces/{id}` auf die Workspace-Content-Sprache auf
+        # (WP4, Plan „Ein Element, eine Sprache").
+        if request.method == "GET" and request.url.path == f"/v1/workspaces/{_WORKSPACE_ID}":
+            return httpx.Response(200, json=_workspace_json())
         seen["method"] = request.method
         seen["path"] = request.url.path
         return httpx.Response(200, json=_template_payload())
@@ -145,6 +193,30 @@ def test_create_system_prompt_posts_template(monkeypatch: pytest.MonkeyPatch) ->
     assert isinstance(result, SystemPromptTemplateRead)
     assert seen["method"] == "POST"
     assert seen["path"].endswith("/system-prompts")
+
+
+def test_create_system_prompt_with_explicit_locale_skips_workspace_lookup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein explizit gesetztes `data.locale` laeuft unveraendert durch — keine
+    zusaetzliche Workspace-Query noetig."""
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(f"{request.method} {request.url.path}")
+        return httpx.Response(200, json=_template_payload())
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    data = SystemPromptTemplateCreate.model_validate(
+        {
+            "name": "Neu",
+            "locale": "en",
+            "content": {"description": "d", "body": "{{persona:profile}}"},
+        }
+    )
+    result = asyncio.run(create_system_prompt(data))
+    assert isinstance(result, SystemPromptTemplateRead)
+    assert calls == [f"POST /v1/workspaces/{_WORKSPACE_ID}/system-prompts"]
 
 
 def test_update_system_prompt_puts_template(monkeypatch: pytest.MonkeyPatch) -> None:

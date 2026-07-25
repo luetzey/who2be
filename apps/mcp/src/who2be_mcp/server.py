@@ -158,12 +158,17 @@ class PersonaWithPlaybooks(BaseModel):
     `mode` benennt den serverseitig angewendeten Persona-Modus (WP-F) mit dem
     kanonischen Namen aus `content.modes` — `None`, wenn kein Modus angefragt
     wurde (dann traegt `body_rendered` das Basis-Profil ohne Modus-Sektion).
+
+    `locale` spiegelt `persona.locale` auf Top-Level (Plan „Ein Element, eine
+    Sprache", 2026-07-24) — die Sprache der Persona als bequem erreichbares
+    Metadatum, ohne dass der Agent in `persona.locale` nachsehen muss.
     """
 
     persona: PersonaRead
     playbooks: list[PlaybookRead]
     body_rendered: str = ""
     mode: str | None = None
+    locale: str
 
 
 class ResourceSummary(BaseModel):
@@ -171,12 +176,17 @@ class ResourceSummary(BaseModel):
 
     `tags` spiegelt `content.tags` der aktuellen Version (E3). Leere Liste =
     keine Tags — Backward-Compat mit Resources, die vor E3 angelegt wurden.
+
+    `locale` spiegelt die Resource-Sprache (Plan „Ein Element, eine Sprache",
+    2026-07-24) — pro Eintrag, damit ein Sprachfilter ueber `locale` auf
+    `list_resources` nachvollziehbar bleibt.
     """
 
     id: UUID
     name: str
     block_count: int
     tags: list[str] = []
+    locale: str
 
 
 class PlaybookWithResources(BaseModel):
@@ -194,6 +204,10 @@ class PlaybookWithResources(BaseModel):
     inline mitgeliefert; tiefere Ebenen via erneutem `fetch_playbook(child_id)`
     nachladen. Ein Composite-Agent folgt der Reihenfolge in `composed_playbooks`
     Schritt fuer Schritt.
+
+    `locale` spiegelt `playbook.locale` auf Top-Level (Plan „Ein Element, eine
+    Sprache", 2026-07-24) — die Sprache des Playbooks als bequem erreichbares
+    Metadatum.
     """
 
     playbook: PlaybookRead
@@ -206,6 +220,7 @@ class PlaybookWithResources(BaseModel):
     # stringifiziertes BlockNote-JSON ist. Additives Feld → bricht den
     # bestehenden ADR-0021-Vertrag nicht.
     body_rendered: str = ""
+    locale: str
 
 
 def _request_token(settings: Settings) -> str:
@@ -334,13 +349,22 @@ async def whoami() -> WhoAmIRead:
 @mcp.tool(output_schema=None)
 @with_tool_log("get_persona")
 async def get_persona(
-    identifier: str, locale: str = "de", mode: str | None = None
+    identifier: str, locale: str | None = None, mode: str | None = None
 ) -> PersonaWithPlaybooks:
     """Laedt eine Persona (per UUID oder Name) samt verknuepfter Playbooks.
 
-    `locale` waehlt die Sprachvariante des Inhalts (Default `'de'`); es werden
-    weiterhin nur aktive Versionen geliefert. Liegt fuer die Persona keine
-    Variante in `locale` vor, antwortet die API mit 404.
+    Seit „Ein Element, eine Sprache" (Plan 2026-07-24) IST jede Persona
+    deutsch ODER englisch — `locale` ist ein Backward-Compat-Parameter fuer
+    Alt-Clients:
+    - Aufloesung per UUID (Normalfall): `locale` wird IGNORIERT, es werden
+      weiterhin nur aktive Versionen geliefert. Die tatsaechliche Sprache der
+      Persona steht im Top-Level-Feld `locale` der Antwort — nutze DAS, nicht
+      den Parameter.
+    - Aufloesung per Name (`identifier` ist keine UUID): `locale` wirkt als
+      optionaler Filter auf gleichnamige Personae in anderen Sprachen
+      (`None` = kein Filter, alle Sprachen — der sichere Default, damit ein
+      Alt-Client mit hartkodiertem `locale='de'` keine EN-Personae mehr
+      versteckt).
 
     `persona.content.modes` enthaelt ggf. die Modi einer Multi-Modus-Persona
     (Gap 3.4). Jeder Modus traegt `name`, `trigger` (Erkennungs-Keywords),
@@ -368,21 +392,28 @@ async def get_persona(
     """
     client = await build_client()
     persona = await client.get_persona(identifier, locale)
-    playbooks = await client.get_persona_playbooks(persona.id, locale)
-    body_rendered, applied_mode = await client.get_persona_rendered(persona.id, locale, mode)
+    playbooks = await client.get_persona_playbooks(persona.id)
+    body_rendered, applied_mode = await client.get_persona_rendered(persona.id, mode=mode)
     return PersonaWithPlaybooks(
-        persona=persona, playbooks=playbooks, body_rendered=body_rendered, mode=applied_mode
+        persona=persona,
+        playbooks=playbooks,
+        body_rendered=body_rendered,
+        mode=applied_mode,
+        locale=persona.locale,
     )
 
 
 @mcp.tool(output_schema=None)
 @with_tool_log("list_playbooks")
 async def list_playbooks(
-    tag: str | None = None, trigger: str | None = None, locale: str = "de"
+    tag: str | None = None, trigger: str | None = None, locale: str | None = None
 ) -> list[PlaybookRead]:
     """Listet Playbooks, optional gefiltert nach Tag und/oder Trigger.
 
-    `locale` waehlt die Sprachvariante des Inhalts (Default `'de'`); es werden
+    `locale` ist seit „Ein Element, eine Sprache" (Plan 2026-07-24) ein
+    optionaler Sprachfilter: `None` (Default) liefert Playbooks aller Sprachen,
+    ein gesetzter Wert (z. B. `'de'`) filtert auf Playbooks in genau dieser
+    Sprache. Jedes Ergebnis traegt seine Sprache im `locale`-Feld. Es werden
     weiterhin nur aktive Versionen geliefert.
 
     Composite-Playbooks (`is_composite=True`) tragen in `compose_children`
@@ -432,11 +463,13 @@ async def list_placeholders() -> PlaceholderCatalog:
 
 @mcp.tool(output_schema=None)
 @with_tool_log("fetch_playbook")
-async def fetch_playbook(playbook_id: str, locale: str = "de") -> PlaybookWithResources:
+async def fetch_playbook(playbook_id: str, locale: str | None = None) -> PlaybookWithResources:
     """Laedt ein Playbook per UUID samt seiner Resource-Verweise und Sub-Playbooks.
 
-    `locale` waehlt die Sprachvariante von Playbook, Sub-Playbooks und inline
-    mitgelieferten Resources (Default `'de'`); es werden weiterhin nur aktive
+    `locale` ist ein Backward-Compat-Parameter (frueher: Variantenwahl,
+    ADR-0027) und wird seit „Ein Element, eine Sprache" (Plan 2026-07-24)
+    IGNORIERT — das Playbook traegt seine Sprache selbst; sie steht im
+    Top-Level-Feld `locale` der Antwort. Es werden weiterhin nur aktive
     Versionen geliefert.
 
     `linked_blocks` enthaelt alle Verweise als Pointer (resource_id +
@@ -461,7 +494,9 @@ async def fetch_playbook(playbook_id: str, locale: str = "de") -> PlaybookWithRe
     except ValueError as exc:
         raise ToolError(f"Ungueltige Playbook-UUID: '{playbook_id}'.") from exc
     client = await build_client()
-    playbook = await client.get_playbook(parsed, locale)
+    # `locale` wird auf den Sub-Calls NICHT weitergereicht (ignoriert, s.o.) —
+    # das Playbook ist bereits per UUID eindeutig aufgeloest.
+    playbook = await client.get_playbook(parsed)
     linked = await client.get_playbook_resource_links(parsed)
     # Nur 'resource'-scope-Links mit embedding_mode='inline' ziehen das
     # Volldokument mit; 'lazy'-Links bleiben reine Pointer in `linked_blocks`
@@ -476,26 +511,31 @@ async def fetch_playbook(playbook_id: str, locale: str = "de") -> PlaybookWithRe
         ):
             seen.add(link.resource_id)
             inline_resource_ids.append(link.resource_id)
-    resources = [await client.get_resource(rid, locale) for rid in inline_resource_ids]
-    composed = await client.get_playbook_composes(parsed, locale)
-    body_rendered = await client.get_playbook_rendered(parsed, locale)
+    resources = [await client.get_resource(rid) for rid in inline_resource_ids]
+    composed = await client.get_playbook_composes(parsed)
+    body_rendered = await client.get_playbook_rendered(parsed)
     return PlaybookWithResources(
         playbook=playbook,
         linked_blocks=linked,
         linked_resources=resources,
         composed_playbooks=composed,
         body_rendered=body_rendered,
+        locale=playbook.locale,
     )
 
 
 @mcp.tool(output_schema=None)
 @with_tool_log("list_resources")
-async def list_resources(tag: str | None = None, locale: str = "de") -> list[ResourceSummary]:
+async def list_resources(
+    tag: str | None = None, locale: str | None = None
+) -> list[ResourceSummary]:
     """Listet die aktiven Resources des Workspaces, optional nach Tag gefiltert.
 
     `tag` filtert auf Resources, deren `content.tags` diesen Wert enthalten
     (exakter Treffer, case-sensitiv). Ohne `tag` werden alle aktiven Resources
-    zurueckgegeben. `locale` waehlt die Sprachvariante (Default `'de'`).
+    zurueckgegeben. `locale` ist seit „Ein Element, eine Sprache" ein optionaler
+    Sprachfilter (`None` = alle Sprachen, Default); jeder Treffer traegt seine
+    Sprache im `locale`-Feld.
     """
     client = await build_client()
     resources = await client.list_resources(tag, locale)
@@ -505,6 +545,7 @@ async def list_resources(tag: str | None = None, locale: str = "de") -> list[Res
             name=r.name,
             block_count=len(r.content.blocks),
             tags=r.content.tags,
+            locale=r.locale,
         )
         for r in resources
     ]
@@ -517,7 +558,10 @@ async def fetch_agent(agent_id: str) -> AgentWithRenderedPrompt:
 
     Der System-Prompt wird serverseitig expandiert: alle Placeholder-Bloecke
     (Playbook, Resource, Persona-Feld, Datum) sind bereits aufgeloest und als
-    Plain-Text eingebettet. MCP-Konsumenten sehen den fertigen Prompt.
+    Plain-Text eingebettet, inkl. einer angehaengten Output-Sprachanweisung
+    ("Antworte auf Deutsch."/"Respond in English.", WP5/ADR-0045). Das
+    Top-Level-`locale`-Feld nennt die Sprache des System-Prompt-Templates, MIT
+    der gerendert wurde. MCP-Konsumenten sehen den fertigen Prompt.
 
     Hinweis: Ein agent-gebundener Token darf ueber dieses Tool nur den EIGENEN
     Agenten rendern (fremde UUID => „nicht gefunden"). Fuer die Konfig anderer
@@ -563,7 +607,7 @@ async def get_agent(agent_id: str) -> AgentRead:
 @mcp.tool(output_schema=None)
 @with_tool_log("fetch_resource")
 async def fetch_resource(
-    resource_id: str, block_ids: list[str] | None = None, locale: str = "de"
+    resource_id: str, block_ids: list[str] | None = None, locale: str | None = None
 ) -> ResourceRead:
     """Laedt eine Resource (per UUID) in ihrer fuer dich sichtbaren Version.
 
@@ -574,8 +618,10 @@ async def fetch_resource(
     `resource_write`) sehen weiterhin nur die **aktive** Version; existiert keine
     aktive, antwortet die API mit 404. Pruefe deine Capabilities via `whoami`.
 
-    `locale` waehlt die Sprachvariante der Resource und ihrer inline
-    mitgelieferten Sub-Resources (Default `'de'`).
+    `locale` ist ein Backward-Compat-Parameter (frueher: Variantenwahl,
+    ADR-0027) und wird seit „Ein Element, eine Sprache" (Plan 2026-07-24)
+    IGNORIERT — die Resource traegt ihre Sprache selbst im Top-Level-Feld
+    `locale` der Antwort.
 
     Liefert den **eigenen** Body inline plus `sub_resources`: eine Tabelle der
     **direkten** Sub-Resources (je Eintrag: `id`, `name`, `link_scope`,
@@ -598,7 +644,9 @@ async def fetch_resource(
     except ValueError as exc:
         raise ToolError(f"Ungueltige Resource-UUID: '{resource_id}'.") from exc
     client = await build_client()
-    resource = await client.get_resource(parsed, locale)
+    # `locale` wird NICHT weitergereicht (ignoriert, s.o.) — die Resource ist
+    # bereits per UUID eindeutig aufgeloest.
+    resource = await client.get_resource(parsed)
     if block_ids is not None:
         by_id = {block.id: block for block in resource.content.blocks}
         resource.content.blocks = [by_id[bid] for bid in block_ids if bid in by_id]
@@ -613,13 +661,15 @@ async def fetch_resource(
         if sub.embedding_mode == "inline" and sub.link_scope == "resource" and sub.id not in seen:
             seen.add(sub.id)
             inline_ids.append(sub.id)
-    resource.inline_sub_resources = [await client.get_resource(cid, locale) for cid in inline_ids]
+    resource.inline_sub_resources = [await client.get_resource(cid) for cid in inline_ids]
     return resource
 
 
 @mcp.tool(output_schema=None)
 @with_tool_log("list_resource_blocks")
-async def list_resource_blocks(resource_id: str, locale: str = "de") -> list[ResourceBlockAnchor]:
+async def list_resource_blocks(
+    resource_id: str, locale: str | None = None
+) -> list[ResourceBlockAnchor]:
     """Listet die linkbaren Heading-Anker einer Resource (WP-6).
 
     Jeder Eintrag traegt `block_id` (stabile BlockNote-ID), `level`
@@ -629,29 +679,34 @@ async def list_resource_blocks(resource_id: str, locale: str = "de") -> list[Res
     Sub-Resource-Links einen `link_scope='block'`-Anker zu referenzieren — so
     musst du keine Block-ID aus dem Volldokument raten.
 
-    `locale` waehlt die Sprachvariante (Default `'de'`); es werden nur Anker der
-    aktiven Resource-Version geliefert.
+    `locale` ist ein Backward-Compat-Parameter und wird seit „Ein Element, eine
+    Sprache" IGNORIERT — die Resource ist bereits per UUID eindeutig; es werden
+    nur Anker der aktiven Resource-Version geliefert.
     """
     try:
         parsed = UUID(resource_id)
     except ValueError as exc:
         raise ToolError(f"Ungueltige Resource-UUID: '{resource_id}'.") from exc
     client = await build_client()
-    return await client.list_resource_blocks(parsed, locale)
+    return await client.list_resource_blocks(parsed)
 
 
 @mcp.tool(output_schema=None)
 @with_tool_log("list_system_prompts")
-async def list_system_prompts() -> list[SystemPromptTemplateRead]:
+async def list_system_prompts(locale: str | None = None) -> list[SystemPromptTemplateRead]:
     """Listet die System-Prompt-Templates des Workspace (ADR-0040).
 
     Jedes Template ist das versionierte Aggregat hinter `agent.system_prompt_
     template_id`. Nutze das, um ein bestehendes Template fuer `create_agent`/
     `update_agent` auszuwaehlen oder vor dem Anpassen zu finden. Den vollen Body
     einer Version liefert `get_system_prompt` bzw. `get_version`.
+
+    `locale` ist seit „Ein Element, eine Sprache" (Plan 2026-07-24) ein
+    optionaler Sprachfilter (`None` = alle Sprachen, Default); jedes Template
+    traegt seine Sprache im `locale`-Feld.
     """
     client = await build_client()
-    return await client.list_system_prompts()
+    return await client.list_system_prompts(locale)
 
 
 @mcp.tool(output_schema=None)
@@ -670,13 +725,18 @@ async def get_system_prompt(template_id: str) -> SystemPromptTemplateRead:
 
 @mcp.tool(output_schema=None)
 @with_tool_log("list_external_tools")
-async def list_external_tools(tag: str | None = None, locale: str = "de") -> list[ExternalToolRead]:
+async def list_external_tools(
+    tag: str | None = None, locale: str | None = None
+) -> list[ExternalToolRead]:
     """Katalog der externen Tool-Bindungen im Workspace (WP-3).
 
     Jeder Eintrag traegt Alias (Faehigkeits-Kennung, z. B. 'todo'),
     Anzeigename, MCP-Server-Namen und die relevanten Tool-Bezeichner. `tag`
     filtert client-seitig (kein REST-`?tag=`-Endpoint fuer ExternalTool).
-    Nutze `get_external_tool(alias)`, um eine Bindung im Detail zu lesen.
+    `locale` ist seit „Ein Element, eine Sprache" ein optionaler Sprachfilter
+    (`None` = alle Sprachen, Default); jeder Eintrag traegt seine Sprache im
+    `locale`-Feld. Nutze `get_external_tool(alias)`, um eine Bindung im Detail
+    zu lesen.
     """
     client = await build_client()
     tools = await client.list_external_tools(locale)
@@ -687,11 +747,16 @@ async def list_external_tools(tag: str | None = None, locale: str = "de") -> lis
 
 @mcp.tool(output_schema=None)
 @with_tool_log("get_external_tool")
-async def get_external_tool(identifier: str, locale: str = "de") -> ExternalToolRead:
+async def get_external_tool(identifier: str, locale: str | None = None) -> ExternalToolRead:
     """Laedt eine externe Tool-Bindung per UUID ODER per Faehigkeits-Alias.
 
     Der Alias (z. B. 'todo') ist die stabile, fuer `tool-ref`-Placeholder
     gedachte Kennung — sie ueberlebt ein Re-Binding auf ein neues Tool-Objekt.
+
+    `locale` ist ein Backward-Compat-Parameter: bei UUID-Aufloesung wird er
+    IGNORIERT (die Bindung traegt ihre Sprache selbst im `locale`-Feld der
+    Antwort); bei Alias-Aufloesung wirkt er als optionaler Filter auf
+    gleichnamige Bindungen in anderen Sprachen (`None` = kein Filter).
     """
     client = await build_client()
     return await client.resolve_external_tool(identifier, locale)
@@ -725,14 +790,19 @@ async def find_usages(entity_type: UsageEntityType, entity_id: str) -> list[AnyU
 @mcp.tool(output_schema=None)
 @with_tool_log("list_versions")
 async def list_versions(
-    entity_type: EntityType, entity_id: str, locale: str = "de"
+    entity_type: EntityType, entity_id: str, locale: str | None = None
 ) -> list[AnyVersionRead]:
     """Listet die Versions-Historie eines Persona-/Playbook-/Resource-Elements.
 
     Jeder Eintrag traegt `version`, `status` (draft/review/active/inactive),
-    `content`, `created_by` und `created_at`. Reine Konsum-Tokens sehen nur
-    aktive Versionen; ein Token mit der passenden `*_write`-Capability sieht auch
-    Draft/Review. `locale` waehlt die Sprachvariante (Default `'de'`).
+    `locale` (Historienwert — die Sprache, in der DIESE Version geschrieben
+    wurde), `content`, `created_by` und `created_at`. Reine Konsum-Tokens sehen
+    nur aktive Versionen; ein Token mit der passenden `*_write`-Capability
+    sieht auch Draft/Review.
+
+    `locale`-Parameter ist ein Backward-Compat-Parameter (frueher:
+    Variantenwahl) und wird seit „Ein Element, eine Sprache" (Plan 2026-07-24)
+    IGNORIERT — die Historie gehoert zu genau EINEM Element.
     """
     parsed = _parse_uuid(entity_id, entity_type)
     client = await build_client()
@@ -742,13 +812,15 @@ async def list_versions(
 @mcp.tool(output_schema=None)
 @with_tool_log("get_version")
 async def get_version(
-    entity_type: EntityType, entity_id: str, version: int, locale: str = "de"
+    entity_type: EntityType, entity_id: str, version: int, locale: str | None = None
 ) -> AnyVersionRead:
     """Laedt einen einzelnen, unveraenderlichen Versions-Snapshot.
 
     `entity_type` ∈ {persona, playbook, resource}, `version` ist die
     Versionsnummer (1-basiert). Liefert den vollstaendigen Content-Snapshot
-    dieser Version. `locale` waehlt die Sprachvariante (Default `'de'`).
+    dieser Version inkl. ihres `locale`-Felds (Historienwert). Der
+    `locale`-Parameter ist ein Backward-Compat-Parameter, IGNORIERT seit „Ein
+    Element, eine Sprache".
     """
     parsed = _parse_uuid(entity_id, entity_type)
     client = await build_client()
@@ -762,7 +834,7 @@ async def diff_versions(
     entity_id: str,
     version: int,
     against: str = "active",
-    locale: str = "de",
+    locale: str | None = None,
 ) -> VersionDiff:
     """Strukturierter Feld-/Block-Diff einer Version gegen einen Vergleichsstand.
 
@@ -772,9 +844,11 @@ async def diff_versions(
     before/after. Zusaetzlich tragen `before_text`/`after_text` die kanonische
     Klartext-Serialisierung beider Staende (Placeholder-Pills als
     `{{kind:target_id}}`-Tokens) fuer einen lesbaren Zeilen-Vergleich. Nutze
-    das, um einen Draft vor dem Promote selbst zu reviewen. `locale` waehlt die
-    Sprachvariante (Default `'de'`). `entity_type='external_tool'` wird sauber
-    abgelehnt (`ToolError`) — dafuer gibt es keinen REST-Diff-Endpunkt.
+    das, um einen Draft vor dem Promote selbst zu reviewen. `locale`-Parameter
+    ist ein Backward-Compat-Parameter, IGNORIERT seit „Ein Element, eine
+    Sprache" (beide verglichenen Staende gehoeren zum selben Element).
+    `entity_type='external_tool'` wird sauber abgelehnt (`ToolError`) — dafuer
+    gibt es keinen REST-Diff-Endpunkt.
     """
     parsed = _parse_uuid(entity_id, entity_type)
     client = await build_client()
@@ -788,7 +862,34 @@ async def diff_versions(
 # falls bereits ein Draft existiert). Reads (MCP get_*/fetch_*) sehen nur
 # aktive Versionen — eine neu erstellte/bearbeitete Entitaet wird erst nach
 # `transition(..., to='active')` fuer Agenten sichtbar.
+#
+# Sprache (Plan „Ein Element, eine Sprache", 2026-07-24): `create_*`-Modelle
+# tragen ein optionales `locale`-Feld (`ContentLocale | None`, validiert gegen
+# `SUPPORTED_LOCALES` bereits auf Modell-Ebene, WP1). Bleibt es `None`, loest
+# `_default_content_locale` es explizit auf die Workspace-Content-Sprache auf
+# (eigene kleine `GET .../workspaces/{ws_id}`-Query) — der Builder-Agent
+# taggt so beim Erstellen die Sprache, ohne sie fuer den Standardfall selbst
+# angeben zu muessen. `update_*` traegt Sprachwechsel ueber `data.locale`
+# (Entity-Metadatum) — dafuer braucht es keinen separaten Tool-Parameter mehr,
+# und keinen `?locale=`-Query-Param (Status-Invarianten sind per-entity, nicht
+# per-Sprachvariante).
 # ---------------------------------------------------------------------------
+
+
+async def _default_content_locale(client: ApiClient, locale: str | None) -> str | None:
+    """Loest `None` auf die Workspace-Content-Sprache auf (eigene kleine Query).
+
+    Gesetzte Werte laufen unveraendert durch (Validierung gegen
+    `SUPPORTED_LOCALES` passiert bereits im Pydantic-Modell, WP1). `None`
+    bedeutet „Builder hat keine Sprache angegeben" — dann ist die
+    Workspace-Content-Sprache (`workspace.content_locale`) der richtige
+    Default, DETERMINISTISCH im MCP-Layer aufgeloest statt implizit auf die
+    API-Seite verlassen (Zwei-Team-Parallelbau, WP3 laeuft parallel).
+    """
+    if locale is not None:
+        return locale
+    workspace = await client.get_workspace()
+    return workspace.content_locale
 
 
 @mcp.tool(output_schema=None)
@@ -800,20 +901,33 @@ async def create_persona(data: PersonaCreate) -> PersonaRead:
     Tags, Modi, Profil-Bloecke). Die Persona ist nach dem Anlegen `draft` und
     fuer MCP-Reads noch unsichtbar — erst `transition_persona(..., to='active')`
     schaltet sie scharf.
+
+    `data.locale` ist ein Element-Attribut, kein Rendering-Schalter: bleibt es
+    leer, defaultet es auf die Workspace-Sprache (`workspace.content_locale`);
+    setze es nur explizit, wenn diese Persona bewusst von der Workspace-Sprache
+    abweichen soll (z. B. eine EN-Persona in einem DE-Workspace). Nur Sprachen
+    aus `SUPPORTED_LOCALES` sind erlaubt, sonst 422/`ToolError`.
     """
     client = await build_client()
+    data = data.model_copy(update={"locale": await _default_content_locale(client, data.locale)})
     return await client.create_persona(data)
 
 
 @mcp.tool(output_schema=None)
 @with_tool_log("update_persona")
-async def update_persona(persona_id: str, data: PersonaUpdate, locale: str = "de") -> PersonaRead:
+async def update_persona(persona_id: str, data: PersonaUpdate) -> PersonaRead:
     """Aktualisiert eine Persona (versioniert). PUT auf eine aktive Version legt
     eine neue Draft an; 409, falls bereits ein Draft existiert (dann den Draft
-    weiterbearbeiten und neu transitionieren). `locale` waehlt die Variante.
+    weiterbearbeiten und neu transitionieren).
+
+    Ein Sprachwechsel laeuft ueber `data.locale` (Element-Attribut, optional) —
+    gesetzt aendert es die Persona-Sprache auf der Identitaets-Zeile
+    (Historie behaelt die alten `locale`-Werte, unschaedlich), `None` laesst
+    die bestehende Sprache unveraendert. Kein separater `locale`-Parameter mehr
+    (fruehere Variantenwahl, ADR-0027) — Status-Invarianten sind per-entity.
     """
     client = await build_client()
-    return await client.update_persona(_parse_uuid(persona_id, "Persona"), data, locale)
+    return await client.update_persona(_parse_uuid(persona_id, "Persona"), data)
 
 
 @mcp.tool(
@@ -825,28 +939,31 @@ async def update_persona(persona_id: str, data: PersonaUpdate, locale: str = "de
 )
 @with_tool_log("transition_persona")
 async def transition_persona(
-    persona_id: str, version: int, to: VersionStatus, note: str | None = None, locale: str = "de"
+    persona_id: str, version: int, to: VersionStatus, note: str | None = None
 ) -> PersonaVersionRead:
     """Schaltet eine Persona-Version in einen neuen Status.
 
     Tool-`description` wird via `description=` aus `TRANSITION_RULE_DOC` gesetzt
-    (SSoT, WP-5/#257), da f-String-Docstrings nicht in `__doc__` landen.
+    (SSoT, WP-5/#257), da f-String-Docstrings nicht in `__doc__` landen. Kein
+    `locale`-Parameter mehr — Status-Invarianten sind per-entity (Plan „Ein
+    Element, eine Sprache").
     """
     client = await build_client()
     return await client.transition_persona_version(
         _parse_uuid(persona_id, "Persona"),
         version,
         VersionTransitionRequest(to=to, note=note),
-        locale,
     )
 
 
 @mcp.tool(output_schema=None)
 @with_tool_log("restore_persona")
-async def restore_persona(persona_id: str, version: int, locale: str = "de") -> PersonaRead:
-    """Stellt eine aeltere Persona-Version als neue Draft wieder her (non-destruktiv)."""
+async def restore_persona(persona_id: str, version: int) -> PersonaRead:
+    """Stellt eine aeltere Persona-Version als neue Draft wieder her (non-destruktiv).
+    Kein `locale`-Parameter mehr — die wiederhergestellte Version gehoert zum
+    selben Element (Plan „Ein Element, eine Sprache")."""
     client = await build_client()
-    return await client.restore_persona_version(_parse_uuid(persona_id, "Persona"), version, locale)
+    return await client.restore_persona_version(_parse_uuid(persona_id, "Persona"), version)
 
 
 @mcp.tool(output_schema=None)
@@ -872,20 +989,29 @@ async def create_playbook(data: PlaybookCreate) -> PlaybookRead:
     `data.content.body` ist BlockNote-Markup (oder Plain-Text); `type`, `tags`
     und `triggers` steuern Auffindbarkeit. Erst nach `transition_playbook(...,
     to='active')` fuer MCP-Reads sichtbar.
+
+    `data.locale` ist ein Element-Attribut, kein Rendering-Schalter: bleibt es
+    leer, defaultet es auf die Workspace-Sprache (`workspace.content_locale`);
+    setze es nur explizit, wenn dieses Playbook bewusst von der
+    Workspace-Sprache abweichen soll. Nur Sprachen aus `SUPPORTED_LOCALES` sind
+    erlaubt, sonst 422/`ToolError`.
     """
     client = await build_client()
+    data = data.model_copy(update={"locale": await _default_content_locale(client, data.locale)})
     return await client.create_playbook(data)
 
 
 @mcp.tool(output_schema=None)
 @with_tool_log("update_playbook")
-async def update_playbook(
-    playbook_id: str, data: PlaybookUpdate, locale: str = "de"
-) -> PlaybookRead:
+async def update_playbook(playbook_id: str, data: PlaybookUpdate) -> PlaybookRead:
     """Aktualisiert ein Playbook (versioniert; PUT auf aktiv → neue Draft, 409 bei
-    bestehendem Draft)."""
+    bestehendem Draft).
+
+    Ein Sprachwechsel laeuft ueber `data.locale` (Element-Attribut, optional) —
+    `None` laesst die bestehende Sprache unveraendert. Kein separater
+    `locale`-Parameter mehr (fruehere Variantenwahl, ADR-0027)."""
     client = await build_client()
-    return await client.update_playbook(_parse_uuid(playbook_id, "Playbook"), data, locale)
+    return await client.update_playbook(_parse_uuid(playbook_id, "Playbook"), data)
 
 
 @mcp.tool(
@@ -897,30 +1023,29 @@ async def update_playbook(
 )
 @with_tool_log("transition_playbook")
 async def transition_playbook(
-    playbook_id: str, version: int, to: VersionStatus, note: str | None = None, locale: str = "de"
+    playbook_id: str, version: int, to: VersionStatus, note: str | None = None
 ) -> PlaybookVersionRead:
     """Schaltet eine Playbook-Version in einen neuen Status.
 
     Tool-`description` wird via `description=` aus `TRANSITION_RULE_DOC` gesetzt
-    (SSoT, WP-5/#257), da f-String-Docstrings nicht in `__doc__` landen.
+    (SSoT, WP-5/#257), da f-String-Docstrings nicht in `__doc__` landen. Kein
+    `locale`-Parameter mehr — Status-Invarianten sind per-entity.
     """
     client = await build_client()
     return await client.transition_playbook_version(
         _parse_uuid(playbook_id, "Playbook"),
         version,
         VersionTransitionRequest(to=to, note=note),
-        locale,
     )
 
 
 @mcp.tool(output_schema=None)
 @with_tool_log("restore_playbook")
-async def restore_playbook(playbook_id: str, version: int, locale: str = "de") -> PlaybookRead:
-    """Stellt eine aeltere Playbook-Version als neue Draft wieder her (non-destruktiv)."""
+async def restore_playbook(playbook_id: str, version: int) -> PlaybookRead:
+    """Stellt eine aeltere Playbook-Version als neue Draft wieder her (non-destruktiv).
+    Kein `locale`-Parameter mehr (Plan „Ein Element, eine Sprache")."""
     client = await build_client()
-    return await client.restore_playbook_version(
-        _parse_uuid(playbook_id, "Playbook"), version, locale
-    )
+    return await client.restore_playbook_version(_parse_uuid(playbook_id, "Playbook"), version)
 
 
 @mcp.tool(output_schema=None)
@@ -966,20 +1091,29 @@ async def create_resource(data: ResourceCreate) -> ResourceRead:
 
     `data.content.blocks` ist die BlockNote-Block-Liste; `tags` steuert die
     Auffindbarkeit. Erst nach `transition_resource(..., to='active')` sichtbar.
+
+    `data.locale` ist ein Element-Attribut, kein Rendering-Schalter: bleibt es
+    leer, defaultet es auf die Workspace-Sprache (`workspace.content_locale`);
+    setze es nur explizit, wenn diese Resource bewusst von der
+    Workspace-Sprache abweichen soll. Nur Sprachen aus `SUPPORTED_LOCALES` sind
+    erlaubt, sonst 422/`ToolError`.
     """
     client = await build_client()
+    data = data.model_copy(update={"locale": await _default_content_locale(client, data.locale)})
     return await client.create_resource(data)
 
 
 @mcp.tool(output_schema=None)
 @with_tool_log("update_resource")
-async def update_resource(
-    resource_id: str, data: ResourceUpdate, locale: str = "de"
-) -> ResourceRead:
+async def update_resource(resource_id: str, data: ResourceUpdate) -> ResourceRead:
     """Aktualisiert eine Resource (versioniert; PUT auf aktiv → neue Draft, 409 bei
-    bestehendem Draft)."""
+    bestehendem Draft).
+
+    Ein Sprachwechsel laeuft ueber `data.locale` (Element-Attribut, optional) —
+    `None` laesst die bestehende Sprache unveraendert. Kein separater
+    `locale`-Parameter mehr (fruehere Variantenwahl, ADR-0027)."""
     client = await build_client()
-    return await client.update_resource(_parse_uuid(resource_id, "Resource"), data, locale)
+    return await client.update_resource(_parse_uuid(resource_id, "Resource"), data)
 
 
 @mcp.tool(
@@ -991,30 +1125,29 @@ async def update_resource(
 )
 @with_tool_log("transition_resource")
 async def transition_resource(
-    resource_id: str, version: int, to: VersionStatus, note: str | None = None, locale: str = "de"
+    resource_id: str, version: int, to: VersionStatus, note: str | None = None
 ) -> ResourceVersionRead:
     """Schaltet eine Resource-Version in einen neuen Status.
 
     Tool-`description` wird via `description=` aus `TRANSITION_RULE_DOC` gesetzt
-    (SSoT, WP-5/#257), da f-String-Docstrings nicht in `__doc__` landen.
+    (SSoT, WP-5/#257), da f-String-Docstrings nicht in `__doc__` landen. Kein
+    `locale`-Parameter mehr — Status-Invarianten sind per-entity.
     """
     client = await build_client()
     return await client.transition_resource_version(
         _parse_uuid(resource_id, "Resource"),
         version,
         VersionTransitionRequest(to=to, note=note),
-        locale,
     )
 
 
 @mcp.tool(output_schema=None)
 @with_tool_log("restore_resource")
-async def restore_resource(resource_id: str, version: int, locale: str = "de") -> ResourceRead:
-    """Stellt eine aeltere Resource-Version als neue Draft wieder her (non-destruktiv)."""
+async def restore_resource(resource_id: str, version: int) -> ResourceRead:
+    """Stellt eine aeltere Resource-Version als neue Draft wieder her (non-destruktiv).
+    Kein `locale`-Parameter mehr (Plan „Ein Element, eine Sprache")."""
     client = await build_client()
-    return await client.restore_resource_version(
-        _parse_uuid(resource_id, "Resource"), version, locale
-    )
+    return await client.restore_resource_version(_parse_uuid(resource_id, "Resource"), version)
 
 
 @mcp.tool(output_schema=None)
@@ -1043,20 +1176,29 @@ async def create_external_tool(data: ExternalToolCreate) -> ExternalToolRead:
     — KEINE Server-URLs oder Credentials. Erst nach
     `transition_external_tool(..., to='active')` fuer `tool-ref`-Placeholder
     aufloesbar.
+
+    `data.locale` ist ein Element-Attribut, kein Rendering-Schalter: bleibt es
+    leer, defaultet es auf die Workspace-Sprache (`workspace.content_locale`);
+    setze es nur explizit, wenn diese Bindung bewusst von der
+    Workspace-Sprache abweichen soll. Nur Sprachen aus `SUPPORTED_LOCALES` sind
+    erlaubt, sonst 422/`ToolError`.
     """
     client = await build_client()
+    data = data.model_copy(update={"locale": await _default_content_locale(client, data.locale)})
     return await client.create_external_tool(data)
 
 
 @mcp.tool(output_schema=None)
 @with_tool_log("update_external_tool")
-async def update_external_tool(
-    tool_id: str, data: ExternalToolUpdate, locale: str = "de"
-) -> ExternalToolRead:
+async def update_external_tool(tool_id: str, data: ExternalToolUpdate) -> ExternalToolRead:
     """Aktualisiert eine externe Tool-Bindung (versioniert; PUT auf aktiv → neue
-    Draft, 409 bei bestehendem Draft). Der Alias ist nach dem Anlegen fix."""
+    Draft, 409 bei bestehendem Draft). Der Alias ist nach dem Anlegen fix.
+
+    Ein Sprachwechsel laeuft ueber `data.locale` (Element-Attribut, optional) —
+    `None` laesst die bestehende Sprache unveraendert. Kein separater
+    `locale`-Parameter mehr (fruehere Variantenwahl, ADR-0027)."""
     client = await build_client()
-    return await client.update_external_tool(_parse_uuid(tool_id, "ExternalTool"), data, locale)
+    return await client.update_external_tool(_parse_uuid(tool_id, "ExternalTool"), data)
 
 
 @mcp.tool(
@@ -1068,30 +1210,29 @@ async def update_external_tool(
 )
 @with_tool_log("transition_external_tool")
 async def transition_external_tool(
-    tool_id: str, version: int, to: VersionStatus, note: str | None = None, locale: str = "de"
+    tool_id: str, version: int, to: VersionStatus, note: str | None = None
 ) -> ExternalToolVersionRead:
     """Schaltet eine ExternalTool-Version in einen neuen Status.
 
     Tool-`description` wird via `description=` aus `TRANSITION_RULE_DOC` gesetzt
-    (SSoT, WP-5/#257), da f-String-Docstrings nicht in `__doc__` landen.
+    (SSoT, WP-5/#257), da f-String-Docstrings nicht in `__doc__` landen. Kein
+    `locale`-Parameter mehr — Status-Invarianten sind per-entity.
     """
     client = await build_client()
     return await client.transition_external_tool_version(
         _parse_uuid(tool_id, "ExternalTool"),
         version,
         VersionTransitionRequest(to=to, note=note),
-        locale,
     )
 
 
 @mcp.tool(output_schema=None)
 @with_tool_log("restore_external_tool")
-async def restore_external_tool(tool_id: str, version: int, locale: str = "de") -> ExternalToolRead:
-    """Stellt eine aeltere ExternalTool-Version als neue Draft wieder her (non-destruktiv)."""
+async def restore_external_tool(tool_id: str, version: int) -> ExternalToolRead:
+    """Stellt eine aeltere ExternalTool-Version als neue Draft wieder her (non-destruktiv).
+    Kein `locale`-Parameter mehr (Plan „Ein Element, eine Sprache")."""
     client = await build_client()
-    return await client.restore_external_tool_version(
-        _parse_uuid(tool_id, "ExternalTool"), version, locale
-    )
+    return await client.restore_external_tool_version(_parse_uuid(tool_id, "ExternalTool"), version)
 
 
 @mcp.tool(output_schema=None)
@@ -1158,8 +1299,15 @@ async def create_system_prompt(data: SystemPromptTemplateCreate) -> SystemPrompt
 
     Setze die neue Template-UUID anschliessend via `update_agent` als
     `system_prompt_template_id`. Das Scharfschalten uebernimmt ein Mensch/Admin.
+
+    `data.locale` ist ein Element-Attribut, kein Rendering-Schalter: bleibt es
+    leer, defaultet es auf die Workspace-Sprache (`workspace.content_locale`);
+    setze es nur explizit, wenn dieses Template bewusst von der
+    Workspace-Sprache abweichen soll. Nur Sprachen aus `SUPPORTED_LOCALES` sind
+    erlaubt, sonst 422/`ToolError`.
     """
     client = await build_client()
+    data = data.model_copy(update={"locale": await _default_content_locale(client, data.locale)})
     return await client.create_system_prompt(data)
 
 
@@ -1178,6 +1326,9 @@ async def update_system_prompt(
     sind Inline-Elemente `{"type": "placeholder", "props": {"kind": ...,
     "target_id": ..., "label": ...}}` — Format, gueltige Kinds und ein
     Beispiel siehe `list_placeholders` und `create_system_prompt`.
+
+    Ein Sprachwechsel laeuft ueber `data.locale` (Element-Attribut, optional) —
+    `None` laesst die bestehende Sprache unveraendert.
     """
     client = await build_client()
     return await client.update_system_prompt(_parse_uuid(template_id, "system_prompt"), data)
@@ -1391,10 +1542,11 @@ async def search(
 
     Volltext ueber Name + Inhalt der aktiven Version. `types` optional auf
     {persona, playbook, resource} einschraenken (Default alle), `limit` ≤ 50.
-    Jeder Treffer traegt `type`, `id`, `name`, `snippet` und `score`. Nutze das,
-    um relevante Inhalte zu FINDEN, statt ganze Listen zu laden — danach das
-    Element gezielt via `fetch_playbook`/`fetch_resource`/`get_persona` ziehen.
-    Du siehst nur aktive und (bei `assigned`-Scope) dir zugewiesene Elemente.
+    Jeder Treffer traegt `type`, `id`, `name`, `snippet`, `score` und `locale`
+    (Sprache des getroffenen Elements, WP5/ADR-0045). Nutze das, um relevante
+    Inhalte zu FINDEN, statt ganze Listen zu laden — danach das Element gezielt
+    via `fetch_playbook`/`fetch_resource`/`get_persona` ziehen. Du siehst nur
+    aktive und (bei `assigned`-Scope) dir zugewiesene Elemente.
     """
     client = await build_client()
     return await client.search(query, types, limit)

@@ -70,7 +70,7 @@
     "id": "pb-persona-li-3",
     "type": "numberedListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Create — Schreiben: create_persona(name, content, locale='de') aufrufen. Die neue Version 1 entsteht serverseitig als status='draft' — nie direkt aktiv. traits und tags fuer Stimme bzw. Domaene setzen.", "styles": {}}],
+    "content": [{"type": "text", "text": "Create — Schreiben: create_persona(name, content) aufrufen — locale nur explizit setzen, wenn die Persona bewusst von der Workspace-Sprache abweichen soll. Die neue Version 1 entsteht serverseitig als status='draft' — nie direkt aktiv. traits und tags fuer Stimme bzw. Domaene setzen.", "styles": {}}],
     "children": []
   },
   {

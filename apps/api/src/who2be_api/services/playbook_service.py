@@ -28,6 +28,8 @@ from who2be_api.core.security import (
 )
 from who2be_api.repositories.playbook_repository import PlaybookRepository
 from who2be_api.repositories.usage_repository import UsageRepository
+from who2be_api.repositories.workspace_repository import WorkspaceRepository
+from who2be_api.services.content_locale import resolve_content_locale
 from who2be_api.services.content_text import playbook_content_text
 from who2be_api.services.placeholders import RenderContext, render_template_body
 from who2be_api.services.playbook_body_pills import extract_pills
@@ -35,7 +37,6 @@ from who2be_api.services.playbook_composition_service import PlaybookComposition
 from who2be_api.services.playbook_resource_link_service import PlaybookResourceLinkService
 from who2be_api.services.version_diff import compute_version_diff
 from who2be_models import (
-    DEFAULT_LOCALE,
     AgentCapability,
     DeleteBlocked,
     PlaybookCompositionLinkSet,
@@ -143,34 +144,36 @@ class PlaybookService:
         composition_service: PlaybookCompositionService,
         resource_link_service: PlaybookResourceLinkService,
         usage_repo: UsageRepository | None = None,
+        workspace_repo: WorkspaceRepository | None = None,
     ) -> None:
         self._repo = playbook_repo
         self._pool = pool
         self._composition_service = composition_service
         self._resource_link_service = resource_link_service
         self._usage_repo = usage_repo
+        self._workspace_repo = workspace_repo
 
     async def create(self, ctx: WorkspaceContext, data: PlaybookCreate) -> PlaybookRead:
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.playbook_write)
         require_write_rate(ctx)
         require_write_tags(ctx, "playbook", data.content.tags)
+        # ADR-0045: explizite Sprache aus dem Body, sonst Workspace-Default.
+        locale = await resolve_content_locale(self._workspace_repo, ctx.workspace_id, data.locale)
         playbook = await self._repo.insert(
-            ctx.workspace_id, ctx.user_id, data.name, data.content, data.locales
+            ctx.workspace_id, ctx.user_id, data.name, data.content, locale
         )
         await self._sync_body_pills(ctx, playbook.id, data.content)
         return playbook
 
-    async def render(
-        self, ctx: WorkspaceContext, playbook_id: UUID, locale: str = DEFAULT_LOCALE
-    ) -> PlaybookRenderResponse:
+    async def render(self, ctx: WorkspaceContext, playbook_id: UUID) -> PlaybookRenderResponse:
         """Expandiert den Playbook-Body durch den Placeholder-Renderer (B5).
 
         Track B: Der Body ist immer BlockNote-JSON; Inline-Pills werden
         serverseitig expandiert. MCP nutzt diesen Endpoint, da der MCP-Prozess
         keinen DB-Zugriff hat.
         """
-        playbook = await self.get(ctx, playbook_id, locale=locale)
+        playbook = await self.get(ctx, playbook_id)
         render_ctx = RenderContext(
             workspace_id=ctx.workspace_id,
             persona_id=None,
@@ -218,7 +221,7 @@ class PlaybookService:
         trigger: str | None,
         limit: int,
         cursor: tuple[datetime, UUID] | None,
-        locale: str = DEFAULT_LOCALE,
+        locale: str | None = None,
         agent: UUID | None = None,
     ) -> tuple[list[PlaybookRead], str | None]:
         restrict_ids = await playbook_read_restrict(self._pool, ctx)
@@ -246,15 +249,12 @@ class PlaybookService:
             return items, encode_cursor(tail.created_at, tail.id)
         return rows, None
 
-    async def get(
-        self, ctx: WorkspaceContext, playbook_id: UUID, locale: str = DEFAULT_LOCALE
-    ) -> PlaybookRead:
+    async def get(self, ctx: WorkspaceContext, playbook_id: UUID) -> PlaybookRead:
         restrict_ids = await playbook_read_restrict(self._pool, ctx)
         playbook = await self._repo.fetch(
             ctx.workspace_id,
             playbook_id,
             active_only=not ctx.sees_drafts(AgentCapability.playbook_write),
-            locale=locale,
             restrict_ids=restrict_ids,
         )
         if playbook is None:
@@ -262,12 +262,12 @@ class PlaybookService:
         return playbook
 
     async def _check_update_tags(
-        self, ctx: WorkspaceContext, playbook_id: UUID, incoming_tags: list[str], locale: str
+        self, ctx: WorkspaceContext, playbook_id: UUID, incoming_tags: list[str]
     ) -> None:
         """Tag-Scope beim Update: eingehende Tags + (nur bei Restriktion) Bestand."""
         require_write_tags(ctx, "playbook", incoming_tags)
         if ctx.tool_policy is not None and ctx.tool_policy.write_tags_for("playbook") is not None:
-            existing = await self.get(ctx, playbook_id, locale)
+            existing = await self.get(ctx, playbook_id)
             require_write_tags(ctx, "playbook", existing.content.tags)
 
     async def update(
@@ -275,16 +275,18 @@ class PlaybookService:
         ctx: WorkspaceContext,
         playbook_id: UUID,
         data: PlaybookUpdate,
-        locale: str = DEFAULT_LOCALE,
     ) -> PlaybookRead:
-        """Erzeugt eine neue Version des Playbooks (Draft-on-Edit bei Active)."""
+        """Erzeugt eine neue Version des Playbooks (Draft-on-Edit bei Active).
+
+        Ein gesetztes `data.locale` wechselt die Entity-Sprache (ADR-0045).
+        """
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.playbook_write)
         require_unmanaged(await self._repo.is_managed(ctx.workspace_id, playbook_id))
         require_write_rate(ctx)
-        await self._check_update_tags(ctx, playbook_id, data.content.tags, locale)
+        await self._check_update_tags(ctx, playbook_id, data.content.tags)
         outcome = await self._repo.update(
-            ctx.workspace_id, ctx.user_id, playbook_id, data.name, data.content, locale
+            ctx.workspace_id, ctx.user_id, playbook_id, data.name, data.content, data.locale
         )
         if outcome.conflict == "draft_exists":
             raise _draft_conflict()
@@ -298,16 +300,15 @@ class PlaybookService:
         ctx: WorkspaceContext,
         playbook_id: UUID,
         data: PlaybookUpdate,
-        locale: str = DEFAULT_LOCALE,
     ) -> PlaybookRead:
         """Auto-Save-Pfad (PATCH `.../draft`) — upsertet die Draft-Version."""
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.playbook_write)
         require_unmanaged(await self._repo.is_managed(ctx.workspace_id, playbook_id))
         require_write_rate(ctx)
-        await self._check_update_tags(ctx, playbook_id, data.content.tags, locale)
+        await self._check_update_tags(ctx, playbook_id, data.content.tags)
         outcome = await self._repo.upsert_draft(
-            ctx.workspace_id, ctx.user_id, playbook_id, data.name, data.content, locale
+            ctx.workspace_id, ctx.user_id, playbook_id, data.name, data.content, data.locale
         )
         if outcome.conflict == "review_pending":
             raise _review_conflict()
@@ -329,19 +330,19 @@ class PlaybookService:
             raise _not_found()
 
     async def list_versions(
-        self, ctx: WorkspaceContext, playbook_id: UUID, locale: str = DEFAULT_LOCALE
+        self, ctx: WorkspaceContext, playbook_id: UUID
     ) -> list[PlaybookVersionRead]:
         await self._assert_in_scope(ctx, playbook_id)
-        versions = await self._repo.list_versions(ctx.workspace_id, playbook_id, locale)
+        versions = await self._repo.list_versions(ctx.workspace_id, playbook_id)
         if versions is None:
             raise _not_found()
         return versions
 
     async def get_version(
-        self, ctx: WorkspaceContext, playbook_id: UUID, version: int, locale: str = DEFAULT_LOCALE
+        self, ctx: WorkspaceContext, playbook_id: UUID, version: int
     ) -> PlaybookVersionRead:
         await self._assert_in_scope(ctx, playbook_id)
-        found = await self._repo.fetch_version(ctx.workspace_id, playbook_id, version, locale)
+        found = await self._repo.fetch_version(ctx.workspace_id, playbook_id, version)
         if found is None:
             raise _not_found()
         return found
@@ -351,7 +352,6 @@ class PlaybookService:
         ctx: WorkspaceContext,
         playbook_id: UUID,
         source_version: int,
-        locale: str = DEFAULT_LOCALE,
     ) -> PlaybookRead:
         """Stellt den Snapshot `source_version` als neue Draft wieder her (§3.1).
 
@@ -363,14 +363,12 @@ class PlaybookService:
         require_capability(ctx, AgentCapability.playbook_write)
         require_unmanaged(await self._repo.is_managed(ctx.workspace_id, playbook_id))
         require_write_rate(ctx)
-        snapshot = await self._repo.fetch_version(
-            ctx.workspace_id, playbook_id, source_version, locale
-        )
+        snapshot = await self._repo.fetch_version(ctx.workspace_id, playbook_id, source_version)
         if snapshot is None:
             raise _not_found()
         require_write_tags(ctx, "playbook", snapshot.content.tags)
         outcome = await self._repo.restore_version(
-            ctx.workspace_id, ctx.user_id, playbook_id, snapshot.content, locale
+            ctx.workspace_id, ctx.user_id, playbook_id, snapshot.content
         )
         if outcome.conflict == "draft_exists":
             raise _draft_conflict()
@@ -384,14 +382,13 @@ class PlaybookService:
         playbook_id: UUID,
         version: int,
         against: str,
-        locale: str = DEFAULT_LOCALE,
     ) -> VersionDiff:
         """Strukturierter Feld-/Block-Diff der Version `version` gegen `against`."""
         await self._assert_in_scope(ctx, playbook_id)
-        target = await self._repo.fetch_version(ctx.workspace_id, playbook_id, version, locale)
+        target = await self._repo.fetch_version(ctx.workspace_id, playbook_id, version)
         if target is None:
             raise _not_found()
-        versions = await self._repo.list_versions(ctx.workspace_id, playbook_id, locale)
+        versions = await self._repo.list_versions(ctx.workspace_id, playbook_id)
         if versions is None:
             raise _not_found()
         base_version, base_content = self._resolve_against(against, versions)
@@ -422,7 +419,7 @@ class PlaybookService:
                 return candidate.version, candidate.content
         raise _not_found()
 
-    async def list_tags(self, ctx: WorkspaceContext, locale: str = DEFAULT_LOCALE) -> list[str]:
+    async def list_tags(self, ctx: WorkspaceContext) -> list[str]:
         """DISTINCT-Tags des Workspaces — Datenquelle fuer den Tag-Picker.
 
         Read-Scoping (`assigned`): nur Tags der zugewiesenen Playbooks — sonst
@@ -439,9 +436,7 @@ class PlaybookService:
         ):
             return []
         restrict_ids = await playbook_read_restrict(self._pool, ctx)
-        return await self._repo.list_distinct_tags(
-            ctx.workspace_id, locale, restrict_ids=restrict_ids
-        )
+        return await self._repo.list_distinct_tags(ctx.workspace_id, restrict_ids=restrict_ids)
 
     async def list_triggers(self, ctx: WorkspaceContext) -> list[TriggerOverview]:
         """Welle 5: Discovery-Liste aller Trigger im Workspace mit Playbook-Verweis.

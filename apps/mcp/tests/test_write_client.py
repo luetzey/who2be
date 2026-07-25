@@ -177,24 +177,31 @@ def test_create_agent_posts_to_agents() -> None:
 # --- Update -----------------------------------------------------------------
 
 
-def test_update_persona_puts_with_locale() -> None:
+def test_update_persona_puts_language_switch_in_body() -> None:
+    """Plan „Ein Element, eine Sprache": ein Sprachwechsel laeuft ueber
+    `data.locale` (Entity-Metadatum im Body) — kein `?locale=`-Query-Param mehr
+    (fruehere Variantenwahl, ADR-0027)."""
     pid = uuid4()
     seen: dict[str, object] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen["method"] = request.method
         seen["path"] = request.url.path
-        seen["locale"] = dict(request.url.params).get("locale")
+        seen["query_locale"] = dict(request.url.params).get("locale")
+        seen["body"] = request.read().decode()
         return httpx.Response(200, json=_persona_json())
 
     asyncio.run(
         _client(handler).update_persona(
-            pid, PersonaUpdate(content=PersonaVersionContent(description="x")), "en"
+            pid,
+            PersonaUpdate(content=PersonaVersionContent(description="x"), locale="en"),
         )
     )
     assert seen["method"] == "PUT"
     assert seen["path"] == f"{_WS_PREFIX}/personas/{pid}"
-    assert seen["locale"] == "en"
+    # Kein Variantenselektor mehr auf der Query.
+    assert seen["query_locale"] is None
+    assert '"locale":"en"' in str(seen["body"]).replace(" ", "")
 
 
 def test_update_agent_puts_to_agent() -> None:

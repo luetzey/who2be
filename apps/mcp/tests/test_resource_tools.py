@@ -164,6 +164,35 @@ def test_list_resources_without_tag_sends_no_tag_param(monkeypatch: pytest.Monke
     assert "tag" not in received_params
 
 
+def test_list_resources_summary_carries_locale_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
+    """WP4 (Plan „Ein Element, eine Sprache"): jeder `ResourceSummary`-Eintrag
+    traegt die Sprache der Resource im Top-Level-Feld `locale`."""
+    payload = _resource_payload()
+    payload["locale"] = "en"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=[payload])
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    result = asyncio.run(list_resources())
+    assert result[0].locale == "en"
+
+
+def test_list_resources_forwards_locale_as_filter(monkeypatch: pytest.MonkeyPatch) -> None:
+    """WP4: `list_resources(locale=...)` wirkt als optionaler Sprachfilter auf
+    der REST-Query (`None`-Default = kein Filter, alle Sprachen)."""
+    received_params: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        for key, value in request.url.params.items():
+            received_params[key] = value
+        return httpx.Response(200, json=[])
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    asyncio.run(list_resources(locale="en"))
+    assert received_params.get("locale") == "en"
+
+
 def test_fetch_resource_filters_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
     rid = uuid4()
     payload = _resource_payload(blocks=[_block("b1", "a"), _block("b2", "b"), _block("b3", "c")])
@@ -185,6 +214,32 @@ def test_fetch_resource_filters_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
 
     filtered = asyncio.run(fetch_resource(str(rid), block_ids=["b3", "b1"]))
     assert [b.id for b in filtered.content.blocks] == ["b3", "b1"]
+
+
+def test_fetch_resource_old_client_explicit_locale_still_works(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """WP4: ein Alt-Client-Aufruf mit explizitem `locale='de'` funktioniert
+    unveraendert — der Parameter wird akzeptiert (Backward-Compat), aber nicht
+    mehr zur Aufloesung genutzt (die Resource ist bereits per UUID eindeutig).
+    Die tatsaechliche Sprache traegt die Antwort selbst im `locale`-Feld."""
+    rid = uuid4()
+    payload = _resource_payload()
+    payload["id"] = str(rid)
+    payload["locale"] = "en"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith(f"/resources/{rid}/sub_resources"):
+            return httpx.Response(200, json=[])
+        return httpx.Response(200, json=payload)
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    result = asyncio.run(fetch_resource(str(rid), locale="de"))
+    assert isinstance(result, ResourceRead)
+    # Die Antwort traegt die tatsaechliche Resource-Sprache, NICHT den
+    # (ignorierten) Alt-Client-Parameter.
+    assert result.locale == "en"
 
 
 def test_fetch_resource_attaches_direct_sub_resources(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -310,8 +365,10 @@ def test_list_resource_blocks_returns_anchors(monkeypatch: pytest.MonkeyPatch) -
     assert result[1].level == 2
 
 
-def test_list_resource_blocks_passes_locale(monkeypatch: pytest.MonkeyPatch) -> None:
-    """WP-6: list_resource_blocks reicht den locale-Parameter an die API durch."""
+def test_list_resource_blocks_ignores_locale(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Plan „Ein Element, eine Sprache" (2026-07-24): `locale` ist ein
+    Backward-Compat-Parameter (frueher: Variantenwahl, WP-6/ADR-0027) und wird
+    nicht mehr an die API weitergereicht — die Resource ist per UUID eindeutig."""
     rid = uuid4()
     received: dict[str, str] = {}
 
@@ -323,7 +380,7 @@ def test_list_resource_blocks_passes_locale(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(server, "build_client", _factory(handler))
     result = asyncio.run(list_resource_blocks(str(rid), locale="en"))
     assert result == []
-    assert received.get("locale") == "en"
+    assert "locale" not in received
 
 
 def test_list_resource_blocks_validates_uuid(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -382,6 +439,37 @@ def test_fetch_playbook_includes_linked_blocks(monkeypatch: pytest.MonkeyPatch) 
     assert result.linked_resources == []
     # Kein Composite → leere composed_playbooks.
     assert result.composed_playbooks == []
+
+
+def test_fetch_playbook_carries_locale_metadata_and_ignores_alt_client_param(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """WP4 (Plan „Ein Element, eine Sprache"): `fetch_playbook` liefert die
+    Playbook-Sprache im Top-Level-Feld `locale`; ein Alt-Client-Aufruf mit
+    explizitem `locale='de'` funktioniert unveraendert (der Parameter wird
+    akzeptiert, aber ignoriert — die tatsaechliche Sprache kommt aus der
+    Antwort, nicht dem Parameter)."""
+    pid = uuid4()
+    playbook = _playbook_payload()
+    playbook["id"] = str(pid)
+    playbook["locale"] = "en"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith(f"/playbooks/{pid}/resource_links"):
+            return httpx.Response(200, json=[])
+        if request.url.path.endswith(f"/playbooks/{pid}/composes"):
+            return httpx.Response(200, json=[])
+        if request.url.path.endswith(f"/playbooks/{pid}/rendered"):
+            return httpx.Response(200, json={"body_rendered": "b", "unresolved": []})
+        if request.url.path.endswith(f"/playbooks/{pid}"):
+            return httpx.Response(200, json=playbook)
+        return httpx.Response(404)
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    result = asyncio.run(fetch_playbook(str(pid), locale="de"))
+    assert isinstance(result, PlaybookWithResources)
+    assert result.locale == "en"
+    assert result.playbook.locale == "en"
 
 
 def test_fetch_playbook_inlines_resource_for_resource_scope_links(

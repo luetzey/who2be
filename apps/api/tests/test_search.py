@@ -109,6 +109,9 @@ def test_search_finds_active_playbook_by_content(monkeypatch: pytest.MonkeyPatch
             body = res.json()
             assert [h["id"] for h in body] == [hit]
             assert body[0]["type"] == "playbook"
+            # WP5 (ADR-0045): Treffer tragen die Entity-Sprache als Metadatum
+            # (Playbook ohne explizites `locale` -> Workspace-Default 'de').
+            assert body[0]["locale"] == "de"
 
             # Typ-Filter persona → kein Playbook-Treffer.
             res2 = client.get(sbase, params={"q": "beschwerden", "types": "persona"}, headers=auth)

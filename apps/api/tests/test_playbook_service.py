@@ -79,7 +79,7 @@ class FakePlaybookRepository:
         owner_id: UUID,
         name: str,
         content: PlaybookContent,
-        locales: list[str] | None = None,
+        locale: str,
     ) -> PlaybookRead:
         now = datetime.now(UTC)
         playbook = PlaybookRead(
@@ -88,6 +88,7 @@ class FakePlaybookRepository:
             owner_id=owner_id,
             name=name,
             current_version=1,
+            locale=locale,
             type=content.type,
             tags=content.tags,
             triggers=content.triggers,
@@ -109,7 +110,7 @@ class FakePlaybookRepository:
         limit: int,
         after: tuple[datetime, UUID] | None,
         active_only: bool = False,
-        locale: str = "de",
+        locale: str | None = None,
         restrict_ids: list[UUID] | None = None,
     ) -> list[PlaybookRead]:
         self.last_active_only = active_only
@@ -137,7 +138,6 @@ class FakePlaybookRepository:
         workspace_id: UUID,
         playbook_id: UUID,
         active_only: bool = False,
-        locale: str = "de",
         restrict_ids: list[UUID] | None = None,
     ) -> PlaybookRead | None:
         self.last_active_only = active_only
@@ -157,13 +157,15 @@ class FakePlaybookRepository:
         playbook_id: UUID,
         name: str | None,
         content: PlaybookContent,
-        locale: str = "de",
+        new_locale: str | None = None,
     ) -> PlaybookUpdateOutcome:
         playbook = self._playbooks.get(playbook_id)
         if playbook is None or playbook.workspace_id != workspace_id:
             return PlaybookUpdateOutcome(playbook=None)
         if any(v.status == VersionStatus.draft for v in self._versions[playbook_id]):
             return PlaybookUpdateOutcome(playbook=None, conflict="draft_exists")
+        if new_locale is not None:
+            playbook = playbook.model_copy(update={"locale": new_locale})
         if playbook.current_status == VersionStatus.active:
             new_status = VersionStatus.draft
         else:
@@ -200,7 +202,6 @@ class FakePlaybookRepository:
         owner_id: UUID,
         playbook_id: UUID,
         content: PlaybookContent,
-        locale: str = "de",
     ) -> PlaybookUpdateOutcome:
         playbook = self._playbooks.get(playbook_id)
         if playbook is None or playbook.workspace_id != workspace_id:
@@ -239,11 +240,15 @@ class FakePlaybookRepository:
         playbook_id: UUID,
         name: str | None,
         content: PlaybookContent,
-        locale: str = "de",
+        new_locale: str | None = None,
     ) -> PlaybookUpdateOutcome:
         playbook = self._playbooks.get(playbook_id)
         if playbook is None or playbook.workspace_id != workspace_id:
             return PlaybookUpdateOutcome(playbook=None)
+        if new_locale is not None:
+            playbook = self._playbooks[playbook_id] = playbook.model_copy(
+                update={"locale": new_locale}
+            )
         existing_draft = next(
             (v for v in self._versions[playbook_id] if v.status == VersionStatus.draft),
             None,
@@ -315,7 +320,7 @@ class FakePlaybookRepository:
         )
 
     async def list_versions(
-        self, workspace_id: UUID, playbook_id: UUID, locale: str = "de"
+        self, workspace_id: UUID, playbook_id: UUID
     ) -> list[PlaybookVersionRead] | None:
         playbook = self._playbooks.get(playbook_id)
         if playbook is None or playbook.workspace_id != workspace_id:
@@ -323,7 +328,7 @@ class FakePlaybookRepository:
         return list(reversed(self._versions[playbook_id]))
 
     async def fetch_version(
-        self, workspace_id: UUID, playbook_id: UUID, version: int, locale: str = "de"
+        self, workspace_id: UUID, playbook_id: UUID, version: int
     ) -> PlaybookVersionRead | None:
         playbook = self._playbooks.get(playbook_id)
         if playbook is None or playbook.workspace_id != workspace_id:
@@ -333,7 +338,6 @@ class FakePlaybookRepository:
     async def list_distinct_tags(
         self,
         workspace_id: UUID,
-        locale: str = "de",
         restrict_ids: list[UUID] | None = None,
     ) -> list[str]:
         allowed = None if restrict_ids is None else set(restrict_ids)

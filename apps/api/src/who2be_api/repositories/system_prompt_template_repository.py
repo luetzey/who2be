@@ -10,6 +10,12 @@ API-Token-Pfad konsumiert und der Render-Service waehlt selbst die Active-
 Version. Die Default-Such- und List-Reads liefern daher immer die aktuelle
 Version (analog zur Persona-/Playbook-`active_only`-Logik wuerde sonst der
 Render-Endpoint nichts mehr finden, solange das Template noch im Draft ist).
+
+„Ein Element, eine Sprache" (ADR-0045): Templates ziehen nach — `locale` liegt
+auf der `system_prompt_template`-Identitaets-Zeile (Migration 0069), Reads
+liefern sie Top-Level, `list_by_workspace` filtert optional darauf, Versions-
+Writes uebernehmen die Entity-Sprache, ein gesetztes Update-`locale` wechselt
+sie (Metadaten-Update).
 """
 
 from dataclasses import dataclass
@@ -28,11 +34,11 @@ from who2be_models import (
 
 # Identitaets-Zeile + Inhalt der aktuellen Version (analog Persona).
 # Track B (Nur-BlockNote): `body_format` ist entfallen — der Body ist immer
-# BlockNote-JSON.
+# BlockNote-JSON. `locale` kommt von der Identitaets-Zeile (ADR-0045).
 _SELECT_CURRENT = """
     SELECT t.id, t.workspace_id, t.owner_id, t.name, t.slug,
-           t.is_managed, t.current_version,
-           t.created_at, t.updated_at, tv.content, tv.locale,
+           t.is_managed, t.current_version, t.locale,
+           t.created_at, t.updated_at, tv.content,
            tv.status AS current_status,
            EXISTS (
                SELECT 1 FROM system_prompt_template_version dv
@@ -42,6 +48,11 @@ _SELECT_CURRENT = """
     JOIN system_prompt_template_version tv
       ON tv.template_id = t.id AND tv.version = t.current_version
 """
+
+_RETURNING = (
+    "RETURNING id, workspace_id, owner_id, name, slug, locale, "
+    "current_version, created_at, updated_at"
+)
 
 
 @dataclass(frozen=True)
@@ -62,6 +73,7 @@ class SystemPromptTemplateRepository(Protocol):
         name: str,
         slug: str,
         content: SystemPromptTemplateContent,
+        locale: str,
     ) -> SystemPromptTemplateRead: ...
 
     async def list_by_workspace(
@@ -69,6 +81,7 @@ class SystemPromptTemplateRepository(Protocol):
         workspace_id: UUID,
         limit: int,
         after: tuple[datetime, UUID] | None,
+        locale: str | None = None,
     ) -> list[SystemPromptTemplateRead]: ...
 
     async def fetch(
@@ -83,6 +96,8 @@ class SystemPromptTemplateRepository(Protocol):
         self, workspace_id: UUID, template_id: UUID
     ) -> SystemPromptTemplateContent | None: ...
 
+    async def fetch_locale(self, workspace_id: UUID, template_id: UUID) -> str | None: ...
+
     async def update(
         self,
         workspace_id: UUID,
@@ -90,6 +105,7 @@ class SystemPromptTemplateRepository(Protocol):
         template_id: UUID,
         name: str | None,
         content: SystemPromptTemplateContent,
+        new_locale: str | None = None,
     ) -> SystemPromptTemplateUpdateOutcome: ...
 
     async def restore_version(
@@ -137,29 +153,31 @@ class PgSystemPromptTemplateRepository:
         name: str,
         slug: str,
         content: SystemPromptTemplateContent,
+        locale: str,
     ) -> SystemPromptTemplateRead:
         content_json = content.model_dump(mode="json")
         async with self._pool.acquire() as conn, conn.transaction():
             template = await conn.fetchrow(
                 "INSERT INTO system_prompt_template "
-                "(workspace_id, owner_id, name, slug) "
-                "VALUES ($1, $2, $3, $4) "
-                "RETURNING id, workspace_id, owner_id, name, slug, "
-                "current_version, created_at, updated_at",
+                "(workspace_id, owner_id, name, slug, locale) "
+                "VALUES ($1, $2, $3, $4, $5) "
+                f"{_RETURNING}",
                 workspace_id,
                 owner_id,
                 name,
                 slug,
+                locale,
             )
             await conn.execute(
                 "INSERT INTO system_prompt_template_version "
-                "(template_id, version, content, status, created_by) "
-                "VALUES ($1, $2, $3, $4, $5)",
+                "(template_id, version, content, status, created_by, locale) "
+                "VALUES ($1, $2, $3, $4, $5, $6)",
                 template["id"],
                 template["current_version"],
                 content_json,
                 VersionStatus.draft.value,
                 owner_id,
+                locale,
             )
         return SystemPromptTemplateRead.model_validate(
             {
@@ -175,23 +193,30 @@ class PgSystemPromptTemplateRepository:
         workspace_id: UUID,
         limit: int,
         after: tuple[datetime, UUID] | None,
+        locale: str | None = None,
     ) -> list[SystemPromptTemplateRead]:
+        # `locale` ist der optionale Sprachfilter auf die Entity-Sprache
+        # (NULL ⇒ alle Sprachen).
         if after is None:
             rows = await self._pool.fetch(
                 f"{_SELECT_CURRENT} WHERE t.workspace_id = $1 "
+                "AND ($3::text IS NULL OR t.locale = $3) "
                 "ORDER BY t.created_at DESC, t.id DESC LIMIT $2",
                 workspace_id,
                 limit,
+                locale,
             )
         else:
             rows = await self._pool.fetch(
                 f"{_SELECT_CURRENT} WHERE t.workspace_id = $1 "
                 "AND (t.created_at, t.id) < ($2, $3) "
+                "AND ($5::text IS NULL OR t.locale = $5) "
                 "ORDER BY t.created_at DESC, t.id DESC LIMIT $4",
                 workspace_id,
                 after[0],
                 after[1],
                 limit,
+                locale,
             )
         return [_row_to_read(dict(row)) for row in rows]
 
@@ -247,6 +272,21 @@ class PgSystemPromptTemplateRepository:
             return None
         return SystemPromptTemplateContent.model_validate(row["content"])
 
+    async def fetch_locale(self, workspace_id: UUID, template_id: UUID) -> str | None:
+        """Liefert die Entity-Sprache der Identitaets-Zeile (WP5, ADR-0045).
+
+        Schlankes Single-Column-Read fuer den Agent-Render-Pfad
+        (`AgentRenderService`/`AgentFetchRenderedService`): die Sprachanweisung
+        und `RenderContext.locale` (Datumsformat) leiten sich daraus ab, ohne
+        die (potenziell grosse) `content`-Spalte der Version mitzuladen.
+        """
+        value: str | None = await self._pool.fetchval(
+            "SELECT locale FROM system_prompt_template WHERE id = $1 AND workspace_id = $2",
+            template_id,
+            workspace_id,
+        )
+        return value
+
     async def update(
         self,
         workspace_id: UUID,
@@ -254,6 +294,7 @@ class PgSystemPromptTemplateRepository:
         template_id: UUID,
         name: str | None,
         content: SystemPromptTemplateContent,
+        new_locale: str | None = None,
     ) -> SystemPromptTemplateUpdateOutcome:
         content_json = content.model_dump(mode="json")
         async with self._pool.acquire() as conn, conn.transaction():
@@ -281,26 +322,30 @@ class PgSystemPromptTemplateRepository:
                 new_status = VersionStatus.draft
             else:
                 new_status = VersionStatus.inactive
+            # Ein gesetztes `new_locale` wechselt die Entity-Sprache
+            # (Metadaten-Update, ADR-0045); die neue Versions-Row uebernimmt
+            # die (ggf. neue) Entity-Sprache.
             template = await conn.fetchrow(
                 "UPDATE system_prompt_template "
                 "SET current_version = $1, name = COALESCE($2, name), "
-                "    updated_at = now() "
+                "    locale = COALESCE($4, locale), updated_at = now() "
                 "WHERE id = $3 "
-                "RETURNING id, workspace_id, owner_id, name, slug, "
-                "current_version, created_at, updated_at",
+                f"{_RETURNING}",
                 next_version,
                 name,
                 template_id,
+                new_locale,
             )
             await conn.execute(
                 "INSERT INTO system_prompt_template_version "
-                "(template_id, version, content, status, created_by) "
-                "VALUES ($1, $2, $3, $4, $5)",
+                "(template_id, version, content, status, created_by, locale) "
+                "VALUES ($1, $2, $3, $4, $5, $6)",
                 template_id,
                 next_version,
                 content_json,
                 new_status.value,
                 owner_id,
+                template["locale"],
             )
         return SystemPromptTemplateUpdateOutcome(
             template=SystemPromptTemplateRead.model_validate(
@@ -323,8 +368,8 @@ class PgSystemPromptTemplateRepository:
         """Schreibt `content` (Snapshot) als neue Draft-Version (Track A §3.1).
 
         Non-destruktiv: frische Draft v(n+1), kein Pointer-Reset. 409
-        (`draft_exists`) bei bereits offenem Draft. Name und Slug bleiben
-        unveraendert.
+        (`draft_exists`) bei bereits offenem Draft. Name, Slug und Sprache
+        bleiben unveraendert; die neue Row traegt die Entity-Sprache.
         """
         content_json = content.model_dump(mode="json")
         async with self._pool.acquire() as conn, conn.transaction():
@@ -348,20 +393,20 @@ class PgSystemPromptTemplateRepository:
                 "UPDATE system_prompt_template "
                 "SET current_version = $1, updated_at = now() "
                 "WHERE id = $2 "
-                "RETURNING id, workspace_id, owner_id, name, slug, "
-                "current_version, created_at, updated_at",
+                f"{_RETURNING}",
                 next_version,
                 template_id,
             )
             await conn.execute(
                 "INSERT INTO system_prompt_template_version "
-                "(template_id, version, content, status, created_by) "
-                "VALUES ($1, $2, $3, $4, $5)",
+                "(template_id, version, content, status, created_by, locale) "
+                "VALUES ($1, $2, $3, $4, $5, $6)",
                 template_id,
                 next_version,
                 content_json,
                 VersionStatus.draft.value,
                 owner_id,
+                template["locale"],
             )
         return SystemPromptTemplateUpdateOutcome(
             template=SystemPromptTemplateRead.model_validate(

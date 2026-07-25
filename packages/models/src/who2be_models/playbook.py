@@ -13,7 +13,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
-from who2be_models.locale import DEFAULT_LOCALE, ContentLocale, normalize_locale
+from who2be_models.locale import DEFAULT_LOCALE, ContentLocale, validate_supported_locale
 from who2be_models.status import VersionStatus
 
 # Eingabe-Limits — DoS-Schutz fuer in jsonb persistierte und unveraendert
@@ -134,23 +134,16 @@ class PlaybookCreate(BaseModel):
 
     name: str = Field(min_length=1, max_length=200)
     content: PlaybookContent = Field(default_factory=PlaybookContent)
-    # Content-i18n (ADR-0027): Sprachvarianten beim Anlegen. Default `['de']`
-    # = Backward-Compat; jede Sprache startet als eigene Draft-v1 (Copy).
-    locales: list[ContentLocale] = Field(default_factory=lambda: [DEFAULT_LOCALE])
+    # „Ein Element, eine Sprache" (Plan 2026-07-24, ersetzt das ADR-0027-
+    # Multi-Locale-`locales`-Feld): `None` bedeutet „Service setzt spaeter den
+    # Workspace-Default" (`workspace.content_locale`); ist der Wert gesetzt,
+    # muss er zu `SUPPORTED_LOCALES` gehoeren.
+    locale: ContentLocale | None = None
 
-    @field_validator("locales")
+    @field_validator("locale")
     @classmethod
-    def _dedup_non_empty(cls, value: list[str]) -> list[str]:
-        if not value:
-            raise ValueError("Mindestens eine Sprache ist erforderlich.")
-        seen: set[str] = set()
-        ordered: list[str] = []
-        for loc in value:
-            norm = normalize_locale(loc)
-            if norm not in seen:
-                seen.add(norm)
-                ordered.append(norm)
-        return ordered
+    def _validate_locale(cls, value: str | None) -> str | None:
+        return None if value is None else validate_supported_locale(value)
 
 
 class PlaybookUpdate(BaseModel):
@@ -160,6 +153,14 @@ class PlaybookUpdate(BaseModel):
 
     name: str | None = Field(default=None, min_length=1, max_length=200)
     content: PlaybookContent
+    # Sprachwechsel (Plan „Ein Element, eine Sprache"): `None` = Sprache
+    # bleibt unveraendert; gesetzt = neue Sprache fuer die Identitaets-Zeile.
+    locale: ContentLocale | None = None
+
+    @field_validator("locale")
+    @classmethod
+    def _validate_locale(cls, value: str | None) -> str | None:
+        return None if value is None else validate_supported_locale(value)
 
 
 class PlaybookRef(BaseModel):

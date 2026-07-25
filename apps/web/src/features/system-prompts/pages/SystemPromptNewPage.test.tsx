@@ -128,9 +128,12 @@ describe('SystemPromptNewPage', () => {
     // kommen 1–2 POSTs an; entscheidend ist der Payload.
     expect(postCalls.length).toBeGreaterThanOrEqual(1)
     // Leeres BlockNote-Dokument serialisiert zu "[]" (Pydantic min_length=1).
+    // Ein Element, eine Sprache (ADR-0045): Default aus der (in `me` nicht
+    // aufloesbaren) Workspace-Content-Sprache faellt auf 'de' zurueck.
     expect(postCalls[0].body).toEqual({
       name: 'Mein Template',
       content: { description: '', body: '[]' },
+      locale: 'de',
     })
   })
 

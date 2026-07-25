@@ -52,10 +52,11 @@ export interface UseCreatePersonaResult {
 
 export function useCreatePersona(
   onCreated: (id: string) => void,
-  // Content-i18n (ADR-0027): gewaehlte Sprachvarianten (mind. eine). Default
-  // ['de'] = Backward-Compat. Wird als Page-State gehalten, damit das
-  // geteilte `PersonaEditorForm`-Schema unveraendert bleibt.
-  locales: string[] = ['de'],
+  // Ein Element, eine Sprache (ADR-0045): einzelne Sprache statt der
+  // frueheren Multi-Auswahl. `undefined` laesst das Backend auf die
+  // Workspace-Content-Sprache defaulten. Wird als Page-State gehalten, damit
+  // das geteilte `PersonaEditorForm`-Schema unveraendert bleibt.
+  locale?: string,
 ): UseCreatePersonaResult {
   const api = useApi()
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -85,7 +86,7 @@ export function useCreatePersona(
           modes: values.modes,
           skills: values.skills,
         },
-        locales,
+        locale,
       })
       notify.success('Persona angelegt.')
       onCreated(created.id)

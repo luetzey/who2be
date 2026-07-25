@@ -28,8 +28,10 @@ export interface UseCreateResourceResult {
 
 export function useCreateResource(
   onCreated: (id: string) => void,
-  // Content-i18n (ADR-0027): gewaehlte Sprachvarianten (mind. eine), Default ['de'].
-  locales: string[] = ['de'],
+  // Ein Element, eine Sprache (ADR-0045): einzelne Sprache statt der
+  // frueheren Multi-Auswahl. `undefined` laesst das Backend auf die
+  // Workspace-Content-Sprache defaulten.
+  locale?: string,
 ): UseCreateResourceResult {
   const api = useApi()
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -44,7 +46,7 @@ export function useCreateResource(
       const created = await api.createResource({
         name: values.name,
         content: { description: values.description, blocks: values.bodyBlocks, tags: values.tags },
-        locales,
+        locale,
       })
       notify.success('Resource angelegt.')
       onCreated(created.id)

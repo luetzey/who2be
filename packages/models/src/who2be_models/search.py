@@ -12,11 +12,18 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from who2be_models.locale import DEFAULT_LOCALE, ContentLocale
+
 SearchType = Literal["persona", "playbook", "resource", "external_tool"]
 
 
 class SearchHit(BaseModel):
-    """Ein rangsortierter Treffer der inhaltlichen Suche."""
+    """Ein rangsortierter Treffer der inhaltlichen Suche.
+
+    `locale` (WP5, „Ein Element, eine Sprache"): die Sprache des getroffenen
+    Elements (Identitaets-Zeile). Default `DEFAULT_LOCALE` deckt Alt-Clients/
+    Fixtures ohne das Feld ab.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -25,3 +32,4 @@ class SearchHit(BaseModel):
     name: str
     snippet: str = ""
     score: float = Field(ge=0.0)
+    locale: ContentLocale = DEFAULT_LOCALE

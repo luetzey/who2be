@@ -8,13 +8,14 @@ from fastapi import APIRouter, Depends, Query, Request, Response, status
 
 from who2be_api.core.agent_scope import visible_resource_ids
 from who2be_api.core.db import get_pool
-from who2be_api.core.locale import LocaleQuery
+from who2be_api.core.locale import LocaleFilterQuery
 from who2be_api.core.pagination import DEFAULT_LIMIT, PageCursor, PageLimit
 from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.repositories.resource_repository import PgResourceRepository
 from who2be_api.repositories.status_history_repository import PgStatusHistoryRepository
 from who2be_api.repositories.usage_repository import PgUsageRepository
+from who2be_api.repositories.workspace_repository import PgWorkspaceRepository
 from who2be_api.routers._export import ExportResult, export_entity
 from who2be_api.services.entity_export_service import EntityExportService
 from who2be_api.services.entity_quota_service import enforce_entity_quota
@@ -41,7 +42,10 @@ def get_resource_service(
 ) -> ResourceService:
     """FastAPI-Dependency: verdrahtet den Service mit der Pg-Implementierung."""
     return ResourceService(
-        PgResourceRepository(pool), pool=pool, usage_repo=PgUsageRepository(pool)
+        PgResourceRepository(pool),
+        pool=pool,
+        usage_repo=PgUsageRepository(pool),
+        workspace_repo=PgWorkspaceRepository(pool),
     )
 
 
@@ -72,13 +76,14 @@ async def list_resources(
     service: Service,
     response: Response,
     cursor: PageCursor,
-    locale: LocaleQuery,
+    locale: LocaleFilterQuery,
     tag: Annotated[str | None, Query(max_length=100)] = None,
     agent: Annotated[UUID | None, Query()] = None,
     limit: PageLimit = DEFAULT_LIMIT,
 ) -> list[ResourceRead]:
-    """Listet Resources; `?agent=` filtert auf die aus den zugewiesenen Playbooks
-    erreichbaren Resources inkl. Sub-Resource-Closure (WP-B), kombinierbar mit `tag`."""
+    """Listet Resources; `?locale=` filtert auf die Element-Sprache (ADR-0045);
+    `?agent=` filtert auf die aus den zugewiesenen Playbooks erreichbaren
+    Resources inkl. Sub-Resource-Closure (WP-B), kombinierbar mit `tag`."""
     items, next_cursor = await service.list_all(ctx, tag, limit, cursor, locale=locale, agent=agent)
     if next_cursor is not None:
         response.headers["X-Next-Cursor"] = next_cursor
@@ -98,20 +103,18 @@ async def create_resource(
 
 
 @router.get("/tags")
-async def list_resource_tags(ctx: Ctx, service: Service, locale: LocaleQuery) -> list[str]:
+async def list_resource_tags(ctx: Ctx, service: Service) -> list[str]:
     """Track E3: DISTINCT-Tags des Workspaces fuer den Tag-Picker im Resource-Form.
 
     Bewusst VOR `/{resource_id}` deklariert, sonst faengt der Pfad-Parameter
     `tags` als resource_id ab (Route-Shadowing).
     """
-    return await service.list_tags(ctx, locale)
+    return await service.list_tags(ctx)
 
 
 @router.get("/{resource_id}", dependencies=[Depends(enforce_mcp_read_limit)])
-async def get_resource(
-    resource_id: UUID, ctx: Ctx, service: Service, locale: LocaleQuery
-) -> ResourceRead:
-    return await service.get(ctx, resource_id, locale=locale)
+async def get_resource(resource_id: UUID, ctx: Ctx, service: Service) -> ResourceRead:
+    return await service.get(ctx, resource_id)
 
 
 @router.post("/{resource_id}/duplicate", status_code=status.HTTP_201_CREATED)
@@ -121,23 +124,22 @@ async def duplicate_resource(
     resource_id: UUID,
     ctx: Ctx,
     service: Service,
-    locale: LocaleQuery,
 ) -> ResourceRead:
     """Dupliziert eine Resource als frische Draft mit eigenem Slug (editor+)."""
-    return await service.duplicate(ctx, resource_id, locale=locale)
+    return await service.duplicate(ctx, resource_id)
 
 
 @router.get("/{resource_id}/blocks")
 async def list_resource_blocks(
-    resource_id: UUID, ctx: Ctx, service: Service, locale: LocaleQuery
+    resource_id: UUID, ctx: Ctx, service: Service
 ) -> list[ResourceBlockAnchor]:
     """WP-6: linkbare Heading-Anker einer Resource (id/level/text).
 
-    Read-only, Viewer-offen — gleiche Scoping-/Locale-/Active-Draft-Semantik wie
+    Read-only, Viewer-offen — gleiche Scoping-/Active-Draft-Semantik wie
     `GET /{resource_id}`. Datenquelle fuer den Block-Picker beim Setzen von
     Playbook-Resource-Block-Refs (ADR-0021, Heading-Only-Anker).
     """
-    return await service.list_blocks(ctx, resource_id, locale)
+    return await service.list_blocks(ctx, resource_id)
 
 
 @router.put("/{resource_id}")
@@ -148,9 +150,8 @@ async def update_resource(
     data: ResourceUpdate,
     ctx: Ctx,
     service: Service,
-    locale: LocaleQuery,
 ) -> ResourceRead:
-    return await service.update(ctx, resource_id, data, locale=locale)
+    return await service.update(ctx, resource_id, data)
 
 
 @router.delete("/{resource_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -201,24 +202,23 @@ async def update_resource_draft(
     data: ResourceUpdate,
     ctx: Ctx,
     service: Service,
-    locale: LocaleQuery,
 ) -> ResourceRead:
     """Auto-Save-Pfad — upsertet die Draft-Version ohne Versions-Increment."""
-    return await service.update_draft(ctx, resource_id, data, locale=locale)
+    return await service.update_draft(ctx, resource_id, data)
 
 
 @router.get("/{resource_id}/versions")
 async def list_resource_versions(
-    resource_id: UUID, ctx: Ctx, service: Service, locale: LocaleQuery
+    resource_id: UUID, ctx: Ctx, service: Service
 ) -> list[ResourceVersionRead]:
-    return await service.list_versions(ctx, resource_id, locale)
+    return await service.list_versions(ctx, resource_id)
 
 
 @router.get("/{resource_id}/versions/{version}")
 async def get_resource_version(
-    resource_id: UUID, version: int, ctx: Ctx, service: Service, locale: LocaleQuery
+    resource_id: UUID, version: int, ctx: Ctx, service: Service
 ) -> ResourceVersionRead:
-    return await service.get_version(ctx, resource_id, version, locale)
+    return await service.get_version(ctx, resource_id, version)
 
 
 @router.post("/{resource_id}/versions/{version}/transition")
@@ -230,10 +230,9 @@ async def transition_resource_version(
     data: VersionTransitionRequest,
     ctx: Ctx,
     status_service: StatusService,
-    locale: LocaleQuery,
 ) -> ResourceVersionRead:
     return await status_service.transition_resource_version(
-        ctx, resource_id, version, data.to, data.note, locale=locale
+        ctx, resource_id, version, data.to, data.note
     )
 
 
@@ -245,10 +244,9 @@ async def restore_resource_version(
     version: int,
     ctx: Ctx,
     service: Service,
-    locale: LocaleQuery,
 ) -> ResourceRead:
     """Stellt Version `version` als neue Draft wieder her (non-destruktiv)."""
-    return await service.restore(ctx, resource_id, version, locale=locale)
+    return await service.restore(ctx, resource_id, version)
 
 
 @router.get("/{resource_id}/versions/{version}/diff")
@@ -257,11 +255,10 @@ async def diff_resource_version(
     version: int,
     ctx: Ctx,
     service: Service,
-    locale: LocaleQuery,
     against: DiffAgainst = "active",
 ) -> VersionDiff:
     """Strukturierter Feld-/Block-Diff der Version gegen `against` (read-only)."""
-    return await service.diff(ctx, resource_id, version, against, locale=locale)
+    return await service.diff(ctx, resource_id, version, against)
 
 
 @router.get("/{resource_id}/versions/{version}/provenance")

@@ -56,6 +56,91 @@ describe('PersonasPage', () => {
     })
   })
 
+  it('zeigt die Element-Sprache als Badge (ADR-0045)', async () => {
+    const persona = {
+      id: 'p1',
+      workspace_id: 'ws-1',
+      owner_id: 'o1',
+      name: 'QA-Bot',
+      current_version: 1,
+      content: { description: 'd', system_prompt: 's', traits: [] },
+      locale: 'en',
+      created_at: '2026-05-21T00:00:00Z',
+      updated_at: '2026-05-21T00:00:00Z',
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(JSON.stringify([persona]), { status: 200 })),
+    )
+
+    render(
+      <SessionContext.Provider
+        value={{ session: fakeSession, me: fakeMe, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
+      >
+        <AuthTokenProvider>
+          <BrowserRouter>
+            <PersonasPage />
+          </BrowserRouter>
+        </AuthTokenProvider>
+      </SessionContext.Provider>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('QA-Bot')).toBeInTheDocument()
+    })
+    expect(screen.getByText('EN')).toBeInTheDocument()
+  })
+
+  it('reicht die Sprach-Facette (?locale=) serverseitig durch und zeigt den Chip', async () => {
+    const persona = {
+      id: 'p1',
+      workspace_id: 'ws-1',
+      owner_id: 'o1',
+      name: 'QA-Bot',
+      current_version: 1,
+      content: { description: 'd', system_prompt: 's', traits: [] },
+      locale: 'en',
+      created_at: '2026-05-21T00:00:00Z',
+      updated_at: '2026-05-21T00:00:00Z',
+    }
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify([persona]), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(
+      <SessionContext.Provider
+        value={{ session: fakeSession, me: fakeMe, sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
+      >
+        <AuthTokenProvider>
+          <MemoryRouter initialEntries={['/?locale=en']}>
+            <PersonasPage />
+          </MemoryRouter>
+        </AuthTokenProvider>
+      </SessionContext.Provider>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('QA-Bot')).toBeInTheDocument()
+    })
+
+    // Der Listen-Fetch traegt den serverseitigen Filter-Param.
+    const personaCalls = fetchMock.mock.calls
+      .map((call) => String(call[0]))
+      .filter((url) => url.includes('/personas'))
+    expect(personaCalls.some((url) => url.includes('/personas?locale=en'))).toBe(true)
+
+    // Aktiver Filter als entfernbarer Chip; Entfernen loest einen Refetch
+    // ohne den Param aus.
+    const chip = screen.getByRole('button', { name: /Sprachfilter entfernen \(English\)/ })
+    expect(chip).toHaveTextContent('Sprache: English')
+    fireEvent.click(chip)
+    await waitFor(() => {
+      const urls = fetchMock.mock.calls.map((call) => String(call[0]))
+      expect(urls.some((url) => url.endsWith('/personas'))).toBe(true)
+    })
+  })
+
   it('reicht die Agent-Facette (?agent=) serverseitig durch und zeigt den Chip', async () => {
     const persona = {
       id: 'p1',

@@ -14,7 +14,9 @@ export interface UseSystemPromptsResult {
   reload: () => void
 }
 
-export function useSystemPrompts(): UseSystemPromptsResult {
+// `locale` (ADR-0045) filtert serverseitig — ein Wechsel des Werts aendert
+// den Loader (useCallback-Dependency) und loest damit einen Refetch aus.
+export function useSystemPrompts(locale?: string): UseSystemPromptsResult {
   const api = useApi()
   const [templates, setTemplates] = useState<SystemPromptTemplate[]>([])
   const [loading, setLoading] = useState(true)
@@ -24,11 +26,11 @@ export function useSystemPrompts(): UseSystemPromptsResult {
     setLoading(true)
     setError(null)
     api
-      .listSystemPromptTemplates()
+      .listSystemPromptTemplates(locale ? { locale } : undefined)
       .then(setTemplates)
       .catch((cause: unknown) => setError(describeError(cause)))
       .finally(() => setLoading(false))
-  }, [api])
+  }, [api, locale])
 
   useEffect(load, [load])
 

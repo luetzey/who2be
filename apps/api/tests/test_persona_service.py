@@ -66,7 +66,7 @@ class FakePersonaRepository:
         owner_id: UUID,
         name: str,
         content: PersonaVersionContent,
-        locales: list[str] | None = None,
+        locale: str,
     ) -> PersonaRead:
         now = datetime.now(UTC)
         persona = PersonaRead(
@@ -75,6 +75,7 @@ class FakePersonaRepository:
             owner_id=owner_id,
             name=name,
             current_version=1,
+            locale=locale,
             content=content,
             created_at=now,
             updated_at=now,
@@ -91,7 +92,7 @@ class FakePersonaRepository:
         limit: int,
         after: tuple[datetime, UUID] | None,
         active_only: bool = False,
-        locale: str = "de",
+        locale: str | None = None,
         restrict_ids: list[UUID] | None = None,
     ) -> list[PersonaRead]:
         self.last_active_only = active_only
@@ -114,7 +115,7 @@ class FakePersonaRepository:
         return {pid: self.counts[pid] for pid in persona_ids if pid in self.counts}
 
     async def fetch(
-        self, workspace_id: UUID, persona_id: UUID, active_only: bool = False, locale: str = "de"
+        self, workspace_id: UUID, persona_id: UUID, active_only: bool = False
     ) -> PersonaRead | None:
         self.last_active_only = active_only
         persona = self._personas.get(persona_id)
@@ -131,13 +132,15 @@ class FakePersonaRepository:
         persona_id: UUID,
         name: str | None,
         content: PersonaVersionContent,
-        locale: str = "de",
+        new_locale: str | None = None,
     ) -> PersonaUpdateOutcome:
         persona = self._personas.get(persona_id)
         if persona is None or persona.workspace_id != workspace_id:
             return PersonaUpdateOutcome(persona=None)
         if any(v.status == VersionStatus.draft for v in self._versions[persona_id]):
             return PersonaUpdateOutcome(persona=None, conflict="draft_exists")
+        if new_locale is not None:
+            persona = persona.model_copy(update={"locale": new_locale})
         if persona.current_status == VersionStatus.active:
             new_status = VersionStatus.draft
         else:
@@ -171,7 +174,6 @@ class FakePersonaRepository:
         owner_id: UUID,
         persona_id: UUID,
         content: PersonaVersionContent,
-        locale: str = "de",
     ) -> PersonaUpdateOutcome:
         persona = self._personas.get(persona_id)
         if persona is None or persona.workspace_id != workspace_id:
@@ -207,11 +209,13 @@ class FakePersonaRepository:
         persona_id: UUID,
         name: str | None,
         content: PersonaVersionContent,
-        locale: str = "de",
+        new_locale: str | None = None,
     ) -> PersonaUpdateOutcome:
         persona = self._personas.get(persona_id)
         if persona is None or persona.workspace_id != workspace_id:
             return PersonaUpdateOutcome(persona=None)
+        if new_locale is not None:
+            persona = self._personas[persona_id] = persona.model_copy(update={"locale": new_locale})
         existing_draft = next(
             (v for v in self._versions[persona_id] if v.status == VersionStatus.draft),
             None,
@@ -278,7 +282,7 @@ class FakePersonaRepository:
         )
 
     async def list_versions(
-        self, workspace_id: UUID, persona_id: UUID, locale: str = "de"
+        self, workspace_id: UUID, persona_id: UUID
     ) -> list[PersonaVersionRead] | None:
         persona = self._personas.get(persona_id)
         if persona is None or persona.workspace_id != workspace_id:
@@ -286,14 +290,14 @@ class FakePersonaRepository:
         return list(reversed(self._versions[persona_id]))
 
     async def fetch_version(
-        self, workspace_id: UUID, persona_id: UUID, version: int, locale: str = "de"
+        self, workspace_id: UUID, persona_id: UUID, version: int
     ) -> PersonaVersionRead | None:
         persona = self._personas.get(persona_id)
         if persona is None or persona.workspace_id != workspace_id:
             return None
         return next((v for v in self._versions[persona_id] if v.version == version), None)
 
-    async def list_distinct_tags(self, workspace_id: UUID, locale: str = "de") -> list[str]:
+    async def list_distinct_tags(self, workspace_id: UUID) -> list[str]:
         tags: set[str] = set()
         for persona in self._personas.values():
             if persona.workspace_id == workspace_id:

@@ -1,0 +1,1100 @@
+[
+  {
+    "id": "res-conv-h-zweck",
+    "type": "heading",
+    "props": {
+      "level": 2,
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Purpose",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-p-zweck",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Binding conventions for agent building in this workspace — they apply equally to personas, playbooks, resources, agents, and system prompt templates. This resource is the single source: the builder playbooks refer here instead of duplicating the rules individually. Where a playbook only touches on a convention, the wording of this resource governs.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-p-zweck-pflege",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "The resource is system-managed (managed) and linked to every builder playbook as a lazy pointer (link_scope 'resource', embedding_mode 'lazy') — it is NOT delivered automatically but loaded on demand via fetch_resource. It is maintained exclusively through the code repo — change requests belong in the repo hand-off, not in MCP write attempts.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-h-trigger",
+    "type": "heading",
+    "props": {
+      "level": 2,
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Trigger Hygiene",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-p-trigger-intro",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Triggers are the library's routing: the consuming agent decides which playbook or mode fits the request based on the trigger phrases. Bad triggers route incorrectly — and mis-routing only shows up in production.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-trigger-phrasen",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Phrase-like, not generic: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "triggers are multi-word, phrase-like formulations ('consistency check across the library'), never generic single words. Collision history in this workspace: 'check' and 'quality check' incorrectly pulled code-audit requests to the consistency & drift check; 'clean up' belongs to the Vault playbook and must not be claimed by any other element.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-trigger-gegenprobe",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Collision cross-check: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "call list_triggers() before EVERY trigger assignment and check the planned trigger against the existing set. Identical or very similar phrases on multiple elements are a collision — then sharpen your own phrase or report the existing entry as a maintenance finding; never accept the collision.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-trigger-format",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Canonical format: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "comma-separated list ('trigger phrase A, trigger phrase B'); semicolons are also normalized by the write path, but the comma is canonical. Where a phrase is flexible, use [placeholder] — e.g., 'create persona for [domain]'.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-trigger-kopplung",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Mode-playbook coupling: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "if a persona mode and a playbook should fire together, name their triggers IDENTICALLY — only that way do voice (mode) and procedure (playbook) land together in the same request. Divergent phrasings drift apart and fire one-sidedly.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-h-naming",
+    "type": "heading",
+    "props": {
+      "level": 2,
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Naming & Description",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-naming-desc",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Description: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "a concise one-line summary that conveys the purpose. If confusion with a neighboring element threatens, the scope boundary belongs in explicitly — including what the element does NOT do ('checks the agent library, NOT a code/repo audit').",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-naming-name",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Names: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "name the subject ('create & maintain persona', 'agent build conventions'), not the action twice ('playbook for creating playbooks to create playbooks'). Short, unambiguous, distinguishable at a glance in the catalog.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-h-modi",
+    "type": "heading",
+    "props": {
+      "level": 2,
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Mode Rules",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-modi-felder",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Fields per mode: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "name + identity_add + output_style_override, optionally anti_patterns. identity_add supplements the base identity, output_style_override replaces the base output style — the base persona remains the single source, the mode is only an overlay.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-modi-default",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Default invariant: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "exactly ONE mode carries is_default=true. The default mode carries NO trigger (it is the fallback and would otherwise collide with the others); every non-default mode MUST carry a trigger — without a trigger it is unreachable.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-modi-abgrenzung",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Mode vs. playbook boundary: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "modes carry stance, voice, and output style; playbooks carry the procedure. Never turn a mode into a playbook copy — if work steps migrate into an identity_add, they belong in a playbook.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-modi-kopplung",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "When mode and playbook belong together: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "name the triggers identically (see Trigger Hygiene) and reference the playbook explicitly in the mode's identity_add — the mode provides the voice, the playbook delivers the steps.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-h-policy",
+    "type": "heading",
+    "props": {
+      "level": 2,
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Tool Policy Patterns",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-p-policy-intro",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Secure by default: every tool_policy starts from the minimum and grows only with justified need — never the other way around. The tool_policy controls tool visibility; actual authorization stays server-side.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-policy-reads",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Read scopes: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "domain agents read 'assigned' (only the playbooks/resources assigned to their own persona); 'all' is reserved for meta agents that need to oversee the entire workspace (Builder, maintenance runs). 'none' hides the tool.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-policy-writes",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Write capabilities: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "grant individually and minimally — only enable the domains the agent actually needs to write to for its task (persona_write, playbook_write, resource_write, agent_write, each on its own). Never open everything across the board, never grant more than the creating agent itself has.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-policy-promote",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "promote_retire: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "only grant it if the agent MUST be able to actively switch versions to active/inactive. For most agents, creating drafts is enough — promoting stays with the curator.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-policy-grants",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "transition_grants: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "use for fine-grained exceptions instead of granting promote_retire outright — e.g., when an agent needs exactly one transition (draft to review) on exactly one element class.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-policy-ratelimit",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "write_rate_limit: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "consider it for automated agents (cron runs, unsupervised pipelines) — it limits the damage of a runaway process to a calculable number of writes per time window.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-h-memory",
+    "type": "heading",
+    "props": {
+      "level": 2,
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Memory (Agent Memory)",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-p-memory-intro",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Agent memory (ADR-0044) is a curated long-term memory per agent and follows the same curator principle as feedback: the agent proposes, the human decides. Controlled via two policy fields: memory_mode (off < read_only < suggest < auto, default off) and memory_directive (required/recommended).",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-memory-default",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Default recommendation: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "'suggest' + 'recommended'. Proposals land as pending and are approved, edited, or rejected by the user on the agent detail page; rejected items are kept as a dedup basis. 'auto' only on explicit user request; never recommend going beyond 'suggest' on your own initiative.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-memory-grenze",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Anti-escalation: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "memory_mode can only be granted up to your own level (is_within, 403 above that). If your own level is too low, enabling it belongs in the hand-off to the user — that's by design, not a bug.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-memory-inhalt",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Content hygiene: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "memories are facts ABOUT the user/the project (third person, short, durably relevant) — no instructions to AI systems, no small talk, nothing sensitive without confirmation. Approved top facts flow automatically into the agent's runtime context (get_persona); pending/rejected items never appear in prompts.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-h-exttool",
+    "type": "heading",
+    "props": {
+      "level": 2,
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "External Tools (Tool Bindings)",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-p-exttool-intro",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "External tools (ADR-0043) are versioned, purely instructive bindings to external MCP servers — the single source for 'when/how does an agent use tool X'. They are referenced via tool-ref pills (target_id = alias), which expand to the active version at fetch time.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-exttool-alias",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Alias contract: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "the alias is a CAPABILITY identifier ('todo', 'calendar'), not a product name ('todoist') — it is immutable after create and unique within the workspace (slug 1-64, 409 on collision). The product behind the alias is swappable, the alias is not.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-exttool-instruktiv",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Instructive boundary: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "the content describes (display_name, mcp_server_name, tool_names, usage_notes, fallback_note) — NEVER server URLs, credentials, API keys, or other secrets. Connection data lives in the agent runtime, never in Who2Be (ADR-0043 tier B). A fallback_note belongs there: what the agent does if the server is unavailable.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-exttool-rebind",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Rebind pattern: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "changing tools = swap the content of the existing binding (update → new draft → promote), keep the alias. NEVER create a second binding for the same capability — that leaves orphaned pills and two competing aliases.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-exttool-pills",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "tool-ref instead of free text: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "always reference tool instructions in playbooks/personas/templates as a tool-ref pill, never duplicate them as prose (drift risk). No active tool behind the alias → the pill renders as a miss; check via get_external_tool(alias) before setting it.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-exttool-policy",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Policy assignment: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "grant external_tool_write only to agents that genuinely need to maintain bindings themselves (is_within: only grantable if you hold it yourself) — when in doubt, domain agents only read (external_tool_read 'all'; 'none' hides the tools, 'assigned' falls back to 'all' since external tools are a flat, workspace-wide catalog without assignment).",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-h-status",
+    "type": "heading",
+    "props": {
+      "level": 2,
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Status Workflow & Curator Principle",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-status-flow",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Workflow: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "draft → review → active → inactive. New creations and updates ALWAYS start as draft — there is no auto-active and no direct creation on active; activation is a deliberate, separate decision.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-status-invariante",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Active invariant: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "per element, at most ONE version is active; activating a new version automatically sets the old one to inactive. Rollbacks run via restore_* (old version as a new draft), never via in-place overwriting.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-status-kurator",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Curator principle: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "feedback and usage signals (record_usage, submit_feedback) NEVER change content themselves — they are observations. Whether and how a signal is acted on is decided by the curator/user; agents deliver findings and proposals, not unrequested fixes.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-status-feedback-lifecycle",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Feedback lifecycle: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "record_usage/submit_feedback report signals, resolve_feedback closes them (addressed/in_progress/dismissed — dismissed only with a justifying note). Closing is a curation action (capability feedback_resolve, editor+) and ALWAYS follows user approval in the maintenance run.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-h-managed",
+    "type": "heading",
+    "props": {
+      "level": 2,
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Managed Boundaries",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-managed-lock",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Write protection: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "content with is_managed=true (the Builder's own inventory: its persona, its playbooks, its templates, and this resource) is write-protected via MCP — every update_* attempt returns 409. Don't attempt it, don't work around it.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-managed-repo",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Maintenance via repo: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "changes to managed content run through the code repo (seed files + review). Findings on managed content — outdated, incorrect, unclear — belong in the report as a repo hand-off list, accompanied by submit_feedback on the affected element. Only close such signals via resolve_feedback once the repo fix is actually merged and deployed — not already at the hand-off stage.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-managed-copy",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Deep-copy duplicates: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "are NOT managed and freely editable — anyone who wants to adapt a Builder template duplicates it and works on the copy. The copy inherits the content, not the write protection.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-h-graph",
+    "type": "heading",
+    "props": {
+      "level": 2,
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Relationship Graph",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-graph-reuse",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Reuse before creating new: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "before every new creation, search for content-similar elements with search and check with find_usages where a candidate is already in use. If something suitable exists, it gets linked or composed — duplicates drift apart and cost twice.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-graph-wire",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Wire up after creating/changing: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "set_persona_playbooks, set_playbook_resource_links, set_playbook_composes, and set_resource_sub_resources set the edges of the graph. ALL four have replace semantics: read the current state first (fetch_playbook / fetch_resource / get_persona), then set the COMPLETE target state — never just the delta.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-graph-orphan",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "No orphans: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "unlinked elements are maintenance findings — a playbook without a persona binding hangs in a vacuum, a resource without incoming references never gets loaded. Report such findings (link them or retire them), don't let them sit.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-graph-verify",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Verify wiring: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "after every set_*, cross-check the target state via fetch_playbook / fetch_resource / get_persona — replace semantics can cause silent losses that only the cross-read reveals.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  }
+]

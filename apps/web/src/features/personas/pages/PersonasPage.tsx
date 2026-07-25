@@ -7,11 +7,13 @@ import type { Persona } from '@/api/types'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Stack } from '@/components/layout/Stack'
+import { CONTENT_LOCALE_OPTIONS } from '@/components/forms/content-languages'
 import { DataView } from '@/components/data/DataView'
 import { EmptyState } from '@/components/data/EmptyState'
 import { EntityCard } from '@/components/data/EntityCard'
 import { initialsFromName } from '@/components/data/EntityIcon'
 import { ListFilterBar } from '@/components/data/ListFilterBar'
+import { LocaleBadge } from '@/components/data/LocaleBadge'
 import { MetaPill } from '@/components/data/MetaPill'
 import { StatusBadge } from '@/components/data/StatusBadge'
 import { Badge } from '@/components/ui/badge'
@@ -20,6 +22,7 @@ import { useAgents } from '@/hooks/useAgents'
 import {
   useAgentFilterParam,
   useListFilters,
+  useLocaleFilterParam,
   type ListFilterAccessors,
 } from '@/hooks/useListFilters'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
@@ -27,10 +30,14 @@ import { usePersonas } from '@/hooks/usePersonas'
 
 export function PersonasPage() {
   const { t } = useTranslation(['personas', 'data'])
-  // Serverseitige Agent-Facette (WP-B): Param VOR dem Daten-Hook lesen,
-  // damit ein Facetten-Wechsel den Refetch ausloest.
+  // Serverseitige Agent-/Sprach-Facette (WP-B, ADR-0045): Params VOR dem
+  // Daten-Hook lesen, damit ein Facetten-Wechsel den Refetch ausloest.
   const agentFilter = useAgentFilterParam()
-  const { personas, loading, error } = usePersonas(agentFilter || undefined)
+  const localeFilter = useLocaleFilterParam()
+  const { personas, loading, error } = usePersonas(
+    agentFilter || undefined,
+    localeFilter || undefined,
+  )
   const { agents } = useAgents()
   const wsPath = useWorkspacePath()
 
@@ -60,7 +67,7 @@ export function PersonasPage() {
             </Button>
           }
         />
-        {personas.length > 0 || filters.agent !== '' ? (
+        {personas.length > 0 || filters.agent !== '' || filters.locale !== '' ? (
           <ListFilterBar
             idPrefix="personas"
             counts={filters.counts}
@@ -74,15 +81,19 @@ export function PersonasPage() {
             agents={agents}
             agent={filters.agent}
             onAgentChange={filters.setAgent}
+            locales={CONTENT_LOCALE_OPTIONS}
+            locale={filters.locale}
+            onLocaleChange={filters.setLocale}
             active={filters.active}
             onReset={filters.reset}
           />
         ) : null}
         <DataView loading={loading} error={error}>
           {filters.filtered.length === 0 ? (
-            // Bei aktiver Agent-Facette kommt die Liste serverseitig gefiltert
-            // an — dann ist "leer" ein Filter-Ergebnis, kein leerer Workspace.
-            personas.length === 0 && filters.agent === '' ? (
+            // Bei aktiver Agent-/Sprach-Facette kommt die Liste serverseitig
+            // gefiltert an — dann ist "leer" ein Filter-Ergebnis, kein leerer
+            // Workspace.
+            personas.length === 0 && filters.agent === '' && filters.locale === '' ? (
               <EmptyState
                 icon={Users}
                 title={t('personas:list.empty.title')}
@@ -125,6 +136,7 @@ export function PersonasPage() {
                     badges={
                       <>
                         <Badge variant="secondary">v{persona.current_version}</Badge>
+                        <LocaleBadge locale={persona.locale} />
                         {tags.map((tag) => (
                           <Badge key={tag} variant="outline">
                             {tag}

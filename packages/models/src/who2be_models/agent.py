@@ -15,6 +15,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
+from who2be_models.locale import DEFAULT_LOCALE, ContentLocale
+
 # PersonaRead importiert keine agent-Modelle — kein zirkulaerer Import.
 from who2be_models.persona import PersonaRead
 from who2be_models.tool_policy import AgentToolPolicy
@@ -211,6 +213,11 @@ class AgentWithRenderedPrompt(BaseModel):
     `unresolved_placeholders` enthaelt jeden Placeholder-Key, der beim Render
     nicht aufgeloest werden konnte (z. B. `"playbook:abc-uuid"` bei fehlender
     aktiver Version). Default leere Liste fuer Backward-Compat.
+
+    `locale` (WP5, „Ein Element, eine Sprache"): die Sprache des System-Prompt-
+    Templates, MIT der `system_prompt_rendered` erzeugt wurde (inkl. der vom
+    Renderer angehaengten Sprachanweisung, siehe `agent_language.py`). Default
+    `DEFAULT_LOCALE` deckt Alt-Clients/Fixtures ohne das Feld ab.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -221,3 +228,4 @@ class AgentWithRenderedPrompt(BaseModel):
     system_prompt_rendered: str
     system_prompt_template_id: UUID
     unresolved_placeholders: list[str] = Field(default_factory=list)
+    locale: ContentLocale = DEFAULT_LOCALE

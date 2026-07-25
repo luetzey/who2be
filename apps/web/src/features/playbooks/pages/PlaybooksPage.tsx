@@ -8,12 +8,14 @@ import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Section } from '@/components/layout/Section'
 import { Stack } from '@/components/layout/Stack'
+import { CONTENT_LOCALE_OPTIONS } from '@/components/forms/content-languages'
 import { DataView } from '@/components/data/DataView'
 import { Button } from '@/components/ui/button'
 import { useAgents } from '@/hooks/useAgents'
 import {
   useAgentFilterParam,
   useListFilters,
+  useLocaleFilterParam,
   type ListFilterAccessors,
 } from '@/hooks/useListFilters'
 import { usePlaybooks } from '@/hooks/usePlaybooks'
@@ -30,10 +32,14 @@ import {
 
 export function PlaybooksPage() {
   const { t } = useTranslation(['playbooks', 'data', 'common'])
-  // Serverseitige Agent-Facette (WP-B): Param VOR dem Daten-Hook lesen,
-  // damit ein Facetten-Wechsel den Refetch ausloest.
+  // Serverseitige Agent-/Sprach-Facette (WP-B, ADR-0045): Params VOR dem
+  // Daten-Hook lesen, damit ein Facetten-Wechsel den Refetch ausloest.
   const agentFilter = useAgentFilterParam()
-  const { playbooks, loading, error } = usePlaybooks(agentFilter || undefined)
+  const localeFilter = useLocaleFilterParam()
+  const { playbooks, loading, error } = usePlaybooks(
+    agentFilter || undefined,
+    localeFilter || undefined,
+  )
   const { agents } = useAgents()
   const wsPath = useWorkspacePath()
 
@@ -95,10 +101,10 @@ export function PlaybooksPage() {
   )
 
   // Onboarding nur, wenn der Workspace wirklich leer ist — bei aktiver
-  // Agent-Facette kommt die Liste serverseitig gefiltert an, dann ist
-  // „leer" ein Filter-Ergebnis.
-  const isOnboarding = playbooks.length === 0 && filters.agent === ''
-  const showToolbar = playbooks.length > 0 || filters.agent !== ''
+  // Agent-/Sprach-Facette kommt die Liste serverseitig gefiltert an, dann
+  // ist „leer" ein Filter-Ergebnis.
+  const isOnboarding = playbooks.length === 0 && filters.agent === '' && filters.locale === ''
+  const showToolbar = playbooks.length > 0 || filters.agent !== '' || filters.locale !== ''
 
   return (
     <Container>
@@ -143,6 +149,9 @@ export function PlaybooksPage() {
             agents={agents}
             agent={filters.agent}
             onAgentChange={filters.setAgent}
+            locales={CONTENT_LOCALE_OPTIONS}
+            locale={filters.locale}
+            onLocaleChange={filters.setLocale}
             groupOptions={[
               { value: '', label: t('playbooks:list.group.none') },
               { value: 'type', label: t('playbooks:list.group.type') },

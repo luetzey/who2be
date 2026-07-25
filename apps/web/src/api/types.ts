@@ -59,6 +59,10 @@ export interface Persona {
   current_status?: VersionStatus
   has_pending_draft?: boolean
   content: PersonaContent
+  // Ein Element, eine Sprache (ADR-0045): Top-Level-Attribut statt der
+  // frueheren Multi-Track-Sprachauswahl. Optional getragen, solange aeltere
+  // Backend-Antworten (Rollout-Uebergang) das Feld noch nicht liefern.
+  locale?: string
   created_at: string
   updated_at: string
   // Vom System verwaltet (z. B. der geseedete Builder). User-Mutationen sind
@@ -81,9 +85,10 @@ export interface PersonaVersion {
 export interface PersonaInput {
   name: string
   content: PersonaContent
-  // Content-i18n (ADR-0027): Sprachvarianten, die beim Anlegen erzeugt werden.
-  // Fehlt das Feld, faellt das Backend auf ['de'] zurueck (Backward-Compat).
-  locales?: string[]
+  // Ein Element, eine Sprache (ADR-0045): einzelne Sprache statt der
+  // frueheren Multi-Auswahl (`locales: string[]`). Fehlt das Feld, defaultet
+  // das Backend auf die Workspace-Content-Sprache (`Workspace.content_locale`).
+  locale?: string
 }
 
 // Kuratierte Playbook-Typen (Phase 3-0). Spiegelt `PlaybookType` aus
@@ -121,6 +126,8 @@ export interface Playbook {
   tags: string[]
   triggers: string | null
   content: PlaybookContent
+  // Ein Element, eine Sprache (ADR-0045). Siehe `Persona.locale`.
+  locale?: string
   created_at: string
   updated_at: string
   // Track A8 — abgeleitet: hat Kinder in playbook_composition.
@@ -151,8 +158,8 @@ export interface PlaybookVersion {
 export interface PlaybookInput {
   name: string
   content: PlaybookContent
-  // Content-i18n (ADR-0027): Sprachvarianten beim Anlegen (Default ['de']).
-  locales?: string[]
+  // Ein Element, eine Sprache (ADR-0045). Siehe `PersonaInput.locale`.
+  locale?: string
 }
 
 export interface Token {
@@ -219,6 +226,11 @@ export interface Workspace {
   name: string
   slug: string
   created_at: string
+  // Workspace-Content-Sprache (ADR-0045): Default fuer neu angelegte Elemente
+  // (Persona/Playbook/Resource/Tool/System-Prompt) und Quelle fuer geseedete
+  // Standard-Inhalte. Bei Anlage waehlbar (vorbelegt aus der UI-Sprache),
+  // danach nur ueber das Backend aenderbar.
+  content_locale: string
 }
 
 // Track O — Account-/Org-Lifecycle. `purge_after` ist der frueheste
@@ -240,6 +252,9 @@ export type GdprExport = Record<string, unknown>
 export interface WorkspaceInput {
   name: string
   slug: string
+  // Optional — fehlt das Feld, defaultet das Backend auf 'de'. Die
+  // Anlage-Form (`OrgSettingsPage`) schickt es immer, vorbelegt aus `useLocale()`.
+  content_locale?: string
 }
 
 export interface OrganizationInput {
@@ -407,6 +422,8 @@ export interface Resource {
   current_status?: VersionStatus
   has_pending_draft?: boolean
   content: ResourceContent
+  // Ein Element, eine Sprache (ADR-0045). Siehe `Persona.locale`.
+  locale?: string
   created_at: string
   updated_at: string
   // Vom System verwaltet — User-Mutationen serverseitig gesperrt
@@ -434,8 +451,8 @@ export interface ResourceVersion {
 export interface ResourceInput {
   name: string
   content: ResourceContent
-  // Content-i18n (ADR-0027): Sprachvarianten beim Anlegen (Default ['de']).
-  locales?: string[]
+  // Ein Element, eine Sprache (ADR-0045). Siehe `PersonaInput.locale`.
+  locale?: string
 }
 
 // WP-4 (Blueprint `.claude/plan/2026-07-18-1315_external-tools-tool-ref.md`):
@@ -465,6 +482,8 @@ export interface ExternalTool {
   current_status?: VersionStatus
   has_pending_draft?: boolean
   content: ExternalToolContent
+  // Ein Element, eine Sprache (ADR-0045). Siehe `Persona.locale`.
+  locale?: string
   created_at: string
   updated_at: string
   // Vom System verwaltet — User-Mutationen serverseitig gesperrt
@@ -483,9 +502,10 @@ export interface ExternalToolVersion {
 export interface ExternalToolInput {
   name: string
   content: ExternalToolContent
-  // Nur beim Create genutzt (ExternalToolCreate); Update-Aufrufer lassen das
-  // Feld weg (ExternalToolUpdate kennt kein `locales`, `extra=forbid`).
-  locales?: string[]
+  // Ein Element, eine Sprache (ADR-0045). Nur beim Create genutzt
+  // (ExternalToolCreate); Update-Aufrufer lassen das Feld weg
+  // (ExternalToolUpdate kennt kein `locale`, `extra=forbid`).
+  locale?: string
 }
 
 // Phase 3-B — Heading-only Block-Refs. Backend liefert ab Track A
@@ -624,6 +644,10 @@ export interface SystemPromptTemplate {
   current_status?: VersionStatus
   has_pending_draft?: boolean
   content: SystemPromptTemplateContent
+  // Ein Element, eine Sprache (ADR-0045). System-Prompt-Templates waren beim
+  // urspruenglichen Content-i18n-Rollout (ADR-0027) bewusst ausgespart —
+  // ziehen hier nach.
+  locale?: string
   created_at: string
   updated_at: string
   // Vom System verwaltet (Builder-Template) — User-Mutationen serverseitig
@@ -646,6 +670,9 @@ export interface SystemPromptTemplateInput {
   name: string
   slug?: string
   content: SystemPromptTemplateContent
+  // Ein Element, eine Sprache (ADR-0045). Nur beim Create genutzt — Update
+  // laesst das Feld weg (kein Sprachwechsel im Update-Payload vorgesehen).
+  locale?: string
 }
 
 // Phase 3 Runde 3 Track 3 — Agent-Aggregat (Top-Level-Konfig, keine Versions).

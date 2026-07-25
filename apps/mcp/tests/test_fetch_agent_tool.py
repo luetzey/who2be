@@ -61,14 +61,18 @@ def _agent_rendered_payload(
     persona: dict[str, object],
     tpl_id: UUID,
     prompt: str,
+    locale: str | None = None,
 ) -> dict[str, object]:
-    return {
+    payload: dict[str, object] = {
         "id": str(agent_id),
         "name": "Carla Bot",
         "persona": persona,
         "system_prompt_rendered": prompt,
         "system_prompt_template_id": str(tpl_id),
     }
+    if locale is not None:
+        payload["locale"] = locale
+    return payload
 
 
 def test_fetch_agent_returns_agent_with_rendered_prompt(
@@ -77,8 +81,8 @@ def test_fetch_agent_returns_agent_with_rendered_prompt(
     agent_id = uuid4()
     tpl_id = uuid4()
     persona = _persona_payload()
-    rendered_prompt = "Du bist Coach Carla. Heute ist 31. Mai 2026."
-    payload = _agent_rendered_payload(agent_id, persona, tpl_id, rendered_prompt)
+    rendered_prompt = "Du bist Coach Carla. Heute ist 31. Mai 2026.\n\nAntworte auf Deutsch."
+    payload = _agent_rendered_payload(agent_id, persona, tpl_id, rendered_prompt, locale="de")
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path.endswith(f"/agents/{agent_id}/rendered")
@@ -94,6 +98,47 @@ def test_fetch_agent_returns_agent_with_rendered_prompt(
     assert result.system_prompt_rendered == rendered_prompt
     assert result.system_prompt_template_id == tpl_id
     assert result.persona.name == "Coach Carla"
+    # WP5 (ADR-0045): locale ist Top-Level-Metadatum der Antwort.
+    assert result.locale == "de"
+
+
+def test_fetch_agent_returns_locale_for_en_template(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """fetch_agent reicht die Template-Sprache eines EN-Agenten durch."""
+    agent_id = uuid4()
+    tpl_id = uuid4()
+    persona = _persona_payload()
+    rendered_prompt = "You are Coach Carla.\n\nRespond in English."
+    payload = _agent_rendered_payload(agent_id, persona, tpl_id, rendered_prompt, locale="en")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=payload)
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+
+    result = asyncio.run(fetch_agent(str(agent_id)))
+
+    assert result.locale == "en"
+    assert "Respond in English." in result.system_prompt_rendered
+
+
+def test_fetch_agent_locale_defaults_when_omitted_by_api(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Backward-Compat: fehlt `locale` in der API-Antwort, greift der Pydantic-Default."""
+    agent_id = uuid4()
+    tpl_id = uuid4()
+    persona = _persona_payload()
+    payload = _agent_rendered_payload(agent_id, persona, tpl_id, "Prompt ohne locale-Feld.")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=payload)
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+
+    result = asyncio.run(fetch_agent(str(agent_id)))
+    assert result.locale == "de"
 
 
 def test_fetch_agent_rejects_invalid_uuid() -> None:

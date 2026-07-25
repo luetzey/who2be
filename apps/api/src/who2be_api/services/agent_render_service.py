@@ -23,6 +23,7 @@ from who2be_api.repositories.agent_repository import AgentRepository
 from who2be_api.repositories.system_prompt_template_repository import (
     SystemPromptTemplateRepository,
 )
+from who2be_api.services.agent_language import append_language_instruction, date_locale
 from who2be_api.services.agent_service import AgentService
 from who2be_api.services.placeholders import (
     RenderContext as PlaceholderRenderContext,
@@ -86,11 +87,15 @@ class AgentRenderService:
         )
         if template_content is None:
             raise _template_inactive()
+        template_locale = await self._template_repo.fetch_locale(
+            workspace_id, agent.system_prompt_template_id
+        )
 
         render_ctx = PlaceholderRenderContext(
             workspace_id=workspace_id,
             persona_id=agent.persona_id,
             now=datetime.now(UTC),
+            locale=date_locale(template_locale),
             tool_policy=agent.tool_policy,
             agent_id=agent.id,
         )
@@ -98,6 +103,9 @@ class AgentRenderService:
             substituted, unresolved = await render_template_body(
                 template_content.body, render_ctx, conn
             )
+        # Sprachanweisung zentral anhaengen (WP5) — genau EIN Aufrufort pro
+        # Render-Pfad, VOR der HTML-Konvertierung (damit sie mit-formatiert wird).
+        substituted = append_language_instruction(substituted, template_locale)
         if output_format == "html":
             renderer = MarkdownIt("commonmark", {"html": False, "breaks": True})
             substituted = renderer.render(substituted)
