@@ -245,7 +245,9 @@
     "content": [
       {"type": "text", "text": "Vor jeder Neuanlage: ", "styles": {}},
       {"type": "text", "text": "search", "styles": {"code": true}},
-      {"type": "text", "text": " + ", "styles": {}},
+      {"type": "text", "text": " (Elemente), ", "styles": {}},
+      {"type": "text", "text": "search_content", "styles": {"code": true}},
+      {"type": "text", "text": " (Passagen — beantwortet ein bestehender Abschnitt die Frage schon?) und ", "styles": {}},
       {"type": "text", "text": "find_usages", "styles": {"code": true}},
       {"type": "text", "text": " — Wiederverwendung und Verknuepfung bestehender Elemente kommt vor Neuanlage.", "styles": {}}
     ],

@@ -208,7 +208,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Semantische Luecken nur beobachten: ", "styles": {"bold": true}},
-      {"type": "text", "text": "faellt beim Durchsehen auf, dass fuer einen wiederkehrenden Anwendungsfall offenbar ein Playbook fehlt ('es fehlt ein Playbook fuer X'), kommt das ausschliesslich als Beobachtung in den Report. Nichts ungefragt anlegen — Neubau ist ein eigener Auftrag mit eigenem Playbook.", "styles": {}}
+      {"type": "text", "text": "faellt beim Durchsehen auf, dass fuer einen wiederkehrenden Anwendungsfall offenbar ein Playbook fehlt ('es fehlt ein Playbook fuer X'), kommt das ausschliesslich als Beobachtung in den Report. Vorher gegenpruefen: mit search_content nach dem Thema suchen — oft steht die Antwort bereits als Abschnitt in einem bestehenden Body, und die Luecke ist in Wahrheit eine Trigger- oder Verknuepfungs-Luecke. Nichts ungefragt anlegen — Neubau ist ein eigener Auftrag mit eigenem Playbook.", "styles": {}}
     ],
     "children": []
   },
@@ -330,7 +330,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Read: ", "styles": {"bold": true}},
-      {"type": "text", "text": "list_agents, list_playbooks, list_resources, list_triggers (Inventar); get_feedback(entity_type, entity_id) (Signale und Notes); find_usages (eingehende Referenzen, Verwaisung); list_versions, diff_versions (Note gegen aktuelle Version pruefen); fetch_playbook, fetch_resource, get_persona (Ist-Stand vor jedem set_*); search (inhaltliche Suche bei Verdachtsfaellen).", "styles": {}}
+      {"type": "text", "text": "list_agents, list_playbooks, list_resources, list_triggers (Inventar); get_feedback(entity_type, entity_id) (Signale und Notes); find_usages (eingehende Referenzen, Verwaisung); list_versions, diff_versions (Note gegen aktuelle Version pruefen); fetch_playbook, fetch_resource, get_persona (Ist-Stand vor jedem set_*); search (Elemente bei Verdachtsfaellen); search_content (Passagen-Gegenprobe bei vermuteten Luecken und Wissens-Drift).", "styles": {}}
     ],
     "children": []
   },
@@ -436,7 +436,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Konventionen: ", "styles": {"bold": true}},
-      {"type": "text", "text": "Trigger-Hygiene, Naming, Modi-Regel, Policy-Muster, Status-Workflow und Managed-Grenzen stehen verbindlich in der Resource 'Agent-Bau-Konventionen' — sie ist der Massstab fuer Triage und Umsetzung. Als lazy-Pointer verlinkt kommt sie NICHT automatisch mit: in Phase 1 via fetch_resource laden; die resource_id steht im linked_blocks-Eintrag dieses Playbooks.", "styles": {}}
+      {"type": "text", "text": "Trigger-Hygiene, Naming, Modi-Regel, Policy-Muster, Status-Workflow, Auffindbarkeit/Retrieval und Managed-Grenzen stehen verbindlich in der Resource 'Agent-Bau-Konventionen' — sie ist der Massstab fuer Triage und Umsetzung. Als lazy-Pointer verlinkt kommt sie NICHT automatisch mit: in Phase 1 via fetch_resource laden; die resource_id steht im linked_blocks-Eintrag dieses Playbooks.", "styles": {}}
     ],
     "children": []
   },

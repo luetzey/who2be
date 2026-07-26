@@ -67,7 +67,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Before EVERY new creation: ", "styles": {"bold": true}},
-      {"type": "text", "text": "use search to look for existing playbooks with similar content and use find_usages to check where a candidate is already deployed. If a suitable playbook exists, use it as a sub-playbook (set_playbook_composes) instead of creating a duplicate — duplicates drift apart and cost tokens twice over.", "styles": {}}
+      {"type": "text", "text": "use search to look for existing playbooks with similar content, use search_content to check whether the step already exists as a section in another body, and use find_usages to check where a candidate is already deployed. If a suitable playbook exists, use it as a sub-playbook (set_playbook_composes) instead of creating a duplicate — duplicates drift apart and cost tokens twice over.", "styles": {}}
     ],
     "children": []
   },
@@ -165,7 +165,7 @@
     "id": "pb-playbook-create-p2-atomic",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Atomic: Draft the body as a BlockNote document — clear phases or numbered steps, plus the Tools & Operations, Anti-Patterns, and Notes sections.", "styles": {}}],
+    "content": [{"type": "text", "text": "Atomic: Draft the body as a BlockNote document — clear phases or numbered steps, plus the Tools & Operations, Anti-Patterns, and Notes sections. Those sub-headings are also the cut lines of passage search (search_content): one section = one thought, and the heading names the subject.", "styles": {}}],
     "children": []
   },
   {
@@ -369,7 +369,7 @@
     "id": "pb-playbook-tools-read",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Read: fetch_playbook (body + fields), list_playbooks (catalog, tags), list_triggers (check trigger collisions), search (content search before creating new), find_usages (where a playbook is already deployed).", "styles": {}}],
+    "content": [{"type": "text", "text": "Read: fetch_playbook (body + fields), list_playbooks (catalog, tags), list_triggers (check trigger collisions), search (find elements before creating new), search_content (the matching passage instead of the full text), find_usages (where a playbook is already deployed).", "styles": {}}],
     "children": []
   },
   {
@@ -439,7 +439,7 @@
     "id": "pb-playbook-anti-loose",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Writing the procedure body as a loose block of prose — use numbered steps or clear phase headers.", "styles": {}}],
+    "content": [{"type": "text", "text": "Writing the procedure body as a loose block of prose — use numbered steps or clear phase headers. Without sub-headings the body also becomes a single lump of a search hit: passage search cuts at headings.", "styles": {}}],
     "children": []
   },
   {
@@ -467,7 +467,7 @@
     "id": "pb-playbook-notes-konventionen",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Conventions: Trigger hygiene, naming, the modes rule, policy patterns, and managed boundaries are binding in the 'Agent-Building Conventions' resource — look them up there instead of duplicating rules here. It is linked as a lazy pointer and does NOT come along automatically: load it via fetch_resource before Phase 2 (Proposal); the resource_id is in this playbook's linked_blocks entry.", "styles": {}}],
+    "content": [{"type": "text", "text": "Conventions: Trigger hygiene, naming, the modes rule, policy patterns, findability/retrieval, and managed boundaries are binding in the 'Agent-Building Conventions' resource — look them up there instead of duplicating rules here. It is linked as a lazy pointer and does NOT come along automatically: load it via fetch_resource before Phase 2 (Proposal); the resource_id is in this playbook's linked_blocks entry.", "styles": {}}],
     "children": []
   },
   {

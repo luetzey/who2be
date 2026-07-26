@@ -71,6 +71,16 @@ Chunks sind **abgeleitet und jederzeit regenerierbar** — sie werden bei
 `transition → active` neu gebaut. Kein Verlust bei Neuaufbau, kein
 Migrationsrisiko.
 
+**Zwei Pfade laufen an `_transition` vorbei** und muessen den Chunk-Lauf selbst
+anstossen, sonst faende `search_content` ausgerechnet im ausgerollten
+Builder-Bestand nichts: der **Workspace-Seed** (`_seed_default_agents` schreibt
+Persona/Playbooks/Resource/Templates direkt als `active`; gescopter Lauf ueber
+die `workspace_id`) und der **Start-Sync** (`sync_managed_builder_content`
+ersetzt aktive Versions-Inhalte in-place; globaler Lauf, aber nur nach einem
+`BUILDER_CONTENT_VERSION`-Bump). Beide bleiben auf der Text-Ebene — ein
+Embedding-Lauf gehoert weder in die Workspace-Anlage noch in den Startpfad,
+Vektoren holt `who2be-retrieval-backfill`.
+
 ### 2. Zwei Vektor-Heimaten, eine Infrastruktur
 
 Memory wandert **nicht** in `content_chunk`. Die beiden Korpora unterscheiden
@@ -197,6 +207,13 @@ genau die Verlaesslichkeit verloren, die eine kuratierte AgentDB ausmacht.
   Erweiterungen von `SearchHit`/`MemoryHit` — bewusst regenerieren.
 - `SearchService` bekommt seine ersten Unit-Tests; `memory_repository.
   search_active` bekommt Regressionstests **vor** dem Fusions-Umbau.
+- **Der Builder muss es wissen.** `search_content` ist ueber
+  `tool_requirements` sichtbar und ueber den `tools-overview`-Platzhalter im
+  System-Prompt beschrieben — das macht es aufrufbar, nicht anwendbar. Die
+  Autoren-Seite (Ueberschriften sind Schnittkanten, nur aktive Versionen sind
+  auffindbar, Passage vor Volltext, `mode`-Wahl, Sprachgrenze) gehoert in die
+  Agent-Bau-Konventionen; ohne sie schreibt der Meta-Agent weiter Bodies, die
+  schlecht retrieven. Ausgerollt als Content-Stand 14 (DE + EN).
 
 ## Bewusst nicht entschieden / Ausblick
 

@@ -24,6 +24,7 @@ from pydantic import BaseModel
 from slowapi.middleware import SlowAPIMiddleware
 
 from who2be_api import __version__
+from who2be_api.core.chunk_backfill import backfill_chunks
 from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.db import database
 from who2be_api.core.db import lifespan as db_lifespan
@@ -100,6 +101,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 count = await sync_managed_builder_content(sync_conn)
                 if count:
                     logger.info("Builder-Content-Sync: %d Aggregate aktualisiert.", count)
+                    # Der Sync ersetzt aktive Versions-Inhalte in-place, also an
+                    # `version_status._transition` vorbei — die Passagen (ADR-0046)
+                    # zeigten sonst weiter auf den alten Text. Der Rebuild laeuft
+                    # nur nach einem Content-Bump, nicht bei jedem Start. Vektoren
+                    # bleiben dem CLI-Backfill vorbehalten: ein Embedding-Lauf
+                    # gehoert nicht in den Startpfad.
+                    _, chunks, _ = await backfill_chunks(sync_conn)
+                    logger.info("Passagen nach Content-Sync neu gebaut: %d.", chunks)
             finally:
                 await sync_conn.close()
         except Exception:  # noqa: BLE001 — Boot darf nie am Sync scheitern

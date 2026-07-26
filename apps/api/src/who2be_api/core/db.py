@@ -55,7 +55,7 @@ async def init_connection(conn: asyncpg.Connection) -> None:
       ohne Semantik), wird der Codec still uebersprungen — die Vektor-Spalte
       ist nullable, und ohne sie laeuft alles im Volltext-Modus weiter.
 
-    Oeffentlich, weil auch die CLIs (`who2be-chunk-backfill`) eine eigene
+    Oeffentlich, weil auch die CLIs (`who2be-retrieval-backfill`) eine eigene
     Verbindung aufbauen und dieselben Codecs brauchen.
     """
     await conn.set_type_codec(

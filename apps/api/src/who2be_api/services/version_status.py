@@ -262,7 +262,7 @@ class VersionStatusService:
         Ein fehlgeschlagenes oder fehlendes Embedding darf eine Aktivierung
         niemals scheitern lassen: der Statuswechsel ist die fachliche Handlung,
         der Vektor nur eine Beschleunigung des Suchens. Bleibt er aus, ist die
-        Spalte NULL und `who2be-chunk-backfill` holt ihn nach.
+        Spalte NULL und `who2be-retrieval-backfill` holt ihn nach.
 
         Eingebettet wird derselbe Text, den auch der FTS-Index sieht
         (`heading_path` + Passage) — sonst suchten Volltext und Vektor auf

@@ -500,3 +500,32 @@ bleiben)._
 - **Offen bleibt** die Kalibrierung beider Schwellen gegen das reale Modell —
   huggingface.co ist per Netz-Policy gesperrt, die Retrieval-Mechanik ist gegen
   deterministische Test-Vektoren belegt, die Modell-Qualität nicht.
+
+## 2026-07-26 — ADR-0046-Nachzug: Builder-Wissen (Content-Stand 14) + Seed-/Sync-Passagen
+- **Befund:** Ein frisch angelegter Workspace hatte **null** `content_chunk`-
+  Zeilen (verifiziert: 6 aktive Playbooks, 0 Passagen). Chunks entstehen nur in
+  `version_status._transition`; Seed und Start-Sync schreiben aktive Versionen
+  per direktem Insert/Update daran vorbei. `search_content` fand dort also
+  ausgerechnet den ausgerollten Builder-Bestand nicht.
+- **Entscheidung:** Beide Pfade stoßen den Chunk-Lauf selbst an —
+  `_publish_seeded_chunks` (gescopet über `workspace_id`, best-effort im
+  eigenen Savepoint) im Seed, ein globaler `backfill_chunks` im Startpfad
+  **nur nach einem `BUILDER_CONTENT_VERSION`-Bump**. `backfill_chunks` bekommt
+  dafür einen optionalen `workspace_id`-Filter statt einer zweiten SQL-Kopie.
+- **Text-Ebene ja, Vektoren nein:** ein Embedding-Lauf gehört weder in die
+  Workspace-Anlage noch in den Startpfad (Modell-Ladezeit im Request-/Boot-
+  Pfad); `who2be-retrieval-backfill` bleibt der Ort dafür.
+- **Content-Stand 14 (DE + EN):** neuer Abschnitt „Auffindbarkeit & Retrieval"
+  in den Agent-Bau-Konventionen (Überschriften sind Schnittkanten, nur aktive
+  Versionen sind auffindbar, Passage vor Volltext, `mode`-Wahl, Sprachgrenze,
+  Retrieval ersetzt keine Trigger) + semantisches Gedächtnis in der
+  Memory-Sektion; `search_content` im Beziehungs-Denken der Persona und in den
+  Tool-/Wiederverwendungs-Stellen von Playbook- und Pflege-Playbook.
+- **Begründung:** Sichtbarkeit (`tool_requirements` + `tools-overview`) macht
+  ein Tool aufrufbar, nicht anwendbar. Die Chunk-Grenzen hängen an der
+  Überschriftenstruktur — das ist eine **Autoren**-Regel, und der Builder ist
+  der Autor.
+- **Verworfen:** die Regeln in die Persona schreiben (die Persona trägt die
+  Rolle, nicht das Handwerk — die Konventionen sind die Single-Source, die
+  Persona verweist nur); Chunk-Rebuild bei jedem App-Start (unnötige Last ohne
+  Content-Änderung).

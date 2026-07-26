@@ -3,7 +3,11 @@
 Chunks entstehen im Normalbetrieb beim Statuswechsel auf `active`
 (`version_status._transition`). Bestands-Workspaces haben ihre Inhalte aber
 laengst aktiviert — deren aktive Versionen haetten ohne diesen Lauf **keine**
-Passagen, und `search_content` faende dort nichts.
+Passagen, und `search_content` faende dort nichts. Dasselbe gilt fuer den
+Workspace-Seed und den Start-Sync: beide schreiben aktive Versionen per
+direktem Insert/Update an `_transition` vorbei und rufen den Lauf deshalb
+selbst auf (gescopet ueber `workspace_id` bzw. global nach einem
+Content-Bump).
 
 Der Lauf ist idempotent und jederzeit wiederholbar: Chunks sind abgeleitete
 Daten, `replace` loescht den Entity-Bestand und schreibt ihn neu. Damit ist das
@@ -28,6 +32,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from uuid import UUID
 
 import asyncpg
 
@@ -51,6 +56,15 @@ JOIN {version} ev ON ev.{fk} = e.id AND ev.status = 'active'
 ORDER BY e.workspace_id, e.id
 """
 
+# Dieselbe Auswahl, auf einen Workspace gescopet (Seed-/Sync-Pfad).
+_ACTIVE_VERSIONS_SCOPED_SQL = """
+SELECT e.workspace_id, e.id AS entity_id, ev.version, ev.locale, ev.content
+FROM {entity} e
+JOIN {version} ev ON ev.{fk} = e.id AND ev.status = 'active'
+WHERE e.workspace_id = $1
+ORDER BY e.id
+"""
+
 # Chunks, deren Entity es nicht mehr gibt.
 _ORPHANS_SQL = """
 DELETE FROM content_chunk c
@@ -59,8 +73,18 @@ WHERE c.entity_type = $1
 """
 
 
-async def backfill_chunks(conn: asyncpg.Connection) -> tuple[int, int, int]:
+async def backfill_chunks(
+    conn: asyncpg.Connection, workspace_id: UUID | None = None
+) -> tuple[int, int, int]:
     """Baut die Passagen aller aktiven Versionen neu auf.
+
+    Ohne `workspace_id` laeuft der Lauf ueber den gesamten Bestand (CLI,
+    Start-Sync). Mit `workspace_id` ist er auf einen Workspace gescopet — das
+    ist der Seed-Pfad: ein frisch angelegter Workspace bekommt seine Builder-
+    Inhalte per direktem Insert als `active`, nicht ueber
+    `version_status._transition`, und haette sonst KEINE Passagen. Die
+    Waisen-Ernte entfaellt dabei bewusst: sie ist global und hat mit dem neuen
+    Workspace nichts zu tun.
 
     Liefert `(Entities, Passagen, entfernte Waisen)`. Jede Entity wird in einer
     eigenen Transaktion geschrieben — ein kaputter Content-Snapshot im Bestand
@@ -72,13 +96,18 @@ async def backfill_chunks(conn: asyncpg.Connection) -> tuple[int, int, int]:
     orphans = 0
 
     for entity_type, (entity_tbl, version_tbl, fk) in CHUNK_TYPE_TABLES.items():
-        removed = await conn.execute(_ORPHANS_SQL.format(entity=entity_tbl), entity_type)
-        # asyncpg liefert "DELETE <n>".
-        orphans += int(removed.rsplit(" ", 1)[-1]) if removed.startswith("DELETE") else 0
-
-        rows = await conn.fetch(
-            _ACTIVE_VERSIONS_SQL.format(entity=entity_tbl, version=version_tbl, fk=fk)
-        )
+        if workspace_id is None:
+            removed = await conn.execute(_ORPHANS_SQL.format(entity=entity_tbl), entity_type)
+            # asyncpg liefert "DELETE <n>".
+            orphans += int(removed.rsplit(" ", 1)[-1]) if removed.startswith("DELETE") else 0
+            rows = await conn.fetch(
+                _ACTIVE_VERSIONS_SQL.format(entity=entity_tbl, version=version_tbl, fk=fk)
+            )
+        else:
+            rows = await conn.fetch(
+                _ACTIVE_VERSIONS_SCOPED_SQL.format(entity=entity_tbl, version=version_tbl, fk=fk),
+                workspace_id,
+            )
         for row in rows:
             drafts = chunk_version_content(entity_type, row["content"])
             async with conn.transaction():
