@@ -6,11 +6,13 @@ und bekommt die User-Identitaet vom Service-Layer durchgereicht.
 """
 
 import json
+import logging
 from typing import Protocol
 from uuid import UUID
 
 import asyncpg
 
+from who2be_api.core.chunk_backfill import backfill_chunks
 from who2be_api.core.errors import ApiGateError
 from who2be_api.repositories.builder_content import (
     SUPPORTED_LOCALES,
@@ -26,6 +28,37 @@ from who2be_models import (
     ReadScope,
     WorkspaceRead,
 )
+
+logger = logging.getLogger(__name__)
+
+
+async def _publish_seeded_chunks(conn: asyncpg.Connection, workspace_id: UUID) -> None:
+    """Schreibt die Passagen (`content_chunk`) der frisch geseedeten Inhalte.
+
+    Der Seed legt Persona, Playbooks, Resource und Templates per direktem
+    Insert als `active` an — er laeuft also an
+    `version_status._transition` vorbei, dem einzigen Ort, an dem sonst
+    Passagen entstehen (ADR-0046). Ohne diesen Aufruf haette ein frisch
+    angelegter Workspace null Passagen und `search_content` faende dort
+    nichts — ausgerechnet im Builder-Bestand, der die Suche selbst empfiehlt.
+
+    Best-effort in einem eigenen Savepoint: die Passagen sind abgeleitete
+    Daten, ein Fehler beim Ableiten darf die Workspace-Anlage nicht kippen
+    (und der Savepoint haelt die umgebende Transaktion nutzbar). Reparatur
+    laeuft ueber `who2be-retrieval-backfill`.
+    """
+    try:
+        async with conn.transaction():
+            _, chunks, _ = await backfill_chunks(conn, workspace_id)
+    except Exception:  # noqa: BLE001 - Workspace-Anlage darf daran nie scheitern
+        logger.warning(
+            "Passagen des neuen Workspaces %s nicht geschrieben — "
+            "`who2be-retrieval-backfill` holt sie nach.",
+            workspace_id,
+            exc_info=True,
+        )
+        return
+    logger.debug("Workspace %s geseedet: %d Passagen geschrieben.", workspace_id, chunks)
 
 
 async def resolve_org_id(pool: asyncpg.Pool, workspace_id: UUID) -> UUID:
@@ -111,6 +144,7 @@ async def ensure_personal_workspace(
     )
     await _seed_default_templates(conn, workspace_id, user_id, content_locale)
     await _seed_default_agents(conn, workspace_id, user_id, content_locale)
+    await _publish_seeded_chunks(conn, workspace_id)
     return workspace_id
 
 
@@ -199,6 +233,7 @@ class PgWorkspaceRepository:
             )
             await _seed_default_templates(conn, row["id"], user_id, content_locale)
             await _seed_default_agents(conn, row["id"], user_id, content_locale)
+            await _publish_seeded_chunks(conn, row["id"])
         return WorkspaceRead.model_validate(dict(row))
 
     async def update_name(self, workspace_id: UUID, name: str) -> WorkspaceRead | None:
@@ -379,7 +414,14 @@ _MANAGED_TEMPLATE_SLUGS = (_AGENT_BUILDER_TEMPLATE_SLUG, _AGENT_BUILDER_LITE_TEM
 # Create-/Vorschlags-Schritt der Anlege-Playbooks (Playbook/Agent/External
 # Tool), Sprach-Konsistenz als Pruefpunkt im Drift-Check, Sprach-Aspekt in
 # der Builder-Persona-Erlaubt-Liste — DE + EN.
-BUILDER_CONTENT_VERSION = 13
+# v14: Retrieval-Wissen des Builders nachgezogen (ADR-0046) — neuer Abschnitt
+# „Auffindbarkeit & Retrieval" in den Agent-Bau-Konventionen (Ueberschriften
+# als Schnittkanten der Passagen-Suche, nur aktive Versionen sind auffindbar,
+# Passage vor Volltext, `mode`-Wahl, Sprachgrenze, Retrieval ersetzt keine
+# Trigger) plus semantisches Gedaechtnis in der Memory-Sektion; `search_content`
+# im Beziehungs-Denken der Persona, in der Wiederverwendungs-Regel und in den
+# Tool-Listen von Playbook- und Pflege-Playbook — DE + EN.
+BUILDER_CONTENT_VERSION = 14
 
 
 def _builder_persona_content(pack: ContentPack) -> dict[str, object]:

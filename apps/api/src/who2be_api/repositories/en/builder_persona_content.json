@@ -756,7 +756,19 @@
       },
       {
         "type": "text",
-        "text": " + ",
+        "text": " (elements), ",
+        "styles": {}
+      },
+      {
+        "type": "text",
+        "text": "search_content",
+        "styles": {
+          "code": true
+        }
+      },
+      {
+        "type": "text",
+        "text": " (passages — does an existing section already answer it?), and ",
         "styles": {}
       },
       {

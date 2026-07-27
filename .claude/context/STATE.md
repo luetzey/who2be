@@ -159,6 +159,16 @@ Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
     lexikalische Pfad kann und wo seine Grenzen liegen; `test_memory_semantic`
     belegt, dass der Vektor-Zweig genau diese Grenzen löst — ohne die
     lexikalischen Fähigkeiten zu verdrängen.
+  - *Nachzug (2026-07-26, Content-Stand 14):* Der Builder weiß jetzt, was das
+    Feature von ihm verlangt — neuer Abschnitt „Auffindbarkeit & Retrieval" in
+    den Agent-Bau-Konventionen (Überschriften sind Chunk-Grenzen, nur aktive
+    Versionen sind auffindbar, Passage vor Volltext, `mode`, Sprachgrenze) +
+    semantisches Gedächtnis in der Memory-Sektion; `search_content` in Persona
+    und Playbooks (DE + EN). Dazu die dabei gefundene Lücke geschlossen: Seed
+    und Start-Sync schreiben aktive Versionen an `_transition` vorbei, ein
+    frischer Workspace hatte deshalb **null** Passagen — beide Pfade stoßen den
+    Chunk-Lauf jetzt selbst an (Seed gescopet, Start-Sync nur nach
+    Content-Bump).
   - **DoD:** Python 1256 pytest / Coverage ~90 %; ruff + format-check + mypy
     grün; Web unberührt (keine Änderung unter `apps/web/`).
   - **Offen:** Kalibrierung der drei Schwellen (`_MIN_VECTOR_SIMILARITY` je

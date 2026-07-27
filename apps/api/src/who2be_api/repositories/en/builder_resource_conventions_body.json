@@ -787,6 +787,30 @@
     "children": []
   },
   {
+    "id": "res-conv-li-memory-semantik",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Semantic recall: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "search_memory finds entries via paraphrases and across language boundaries (ADR-0046), not only via literal matches. The same similarity applies on write: an entry that merely rewords an existing one is rejected with 409 even when no word matches — that is the dedup guard, not an error. Persona injection is unaffected: it appends the top facts by importance, without a query.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
     "id": "res-conv-h-exttool",
     "type": "heading",
     "props": {
@@ -1181,7 +1205,7 @@
       },
       {
         "type": "text",
-        "text": "before every new creation, search for content-similar elements with search and check with find_usages where a candidate is already in use. If something suitable exists, it gets linked or composed — duplicates drift apart and cost twice.",
+        "text": "before creating anything, use search to look for elements with similar content, use search_content to check whether the content already exists as a section in an existing body, and use find_usages to see where a candidate is already in play. If something suitable exists, link or compose it — duplicates drift apart and cost twice.",
         "styles": {}
       }
     ],
@@ -1254,6 +1278,209 @@
       {
         "type": "text",
         "text": "after every set_*, cross-check the target state via fetch_playbook / fetch_resource / get_persona — replace semantics can cause silent losses that only the cross-read reveals.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-h-retrieval",
+    "type": "heading",
+    "props": {
+      "level": 2,
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Findability & Retrieval",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-p-retrieval-intro",
+    "type": "paragraph",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Searching has two levels (ADR-0046): search finds ELEMENTS (discovery — which playbook, which resource?), search_content finds PASSAGES (the spot that answers the question, citable as entity_id#block_id). What you write decides what can be found later — findability is an authoring task, not a search setting.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-retrieval-headings",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Headings are cut lines: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "passage search splits every body at its heading blocks. A body without sub-headings becomes a single lump — the hit then returns the whole text instead of the answer. Structure playbook and resource bodies so that one section carries exactly one thought.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-retrieval-headingtext",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Headings name the subject: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "the heading chain (including its parent levels) is indexed along with the text and shipped with the hit. 'Phase 3' alone carries nothing; 'Phase 3 — Writing' makes the section findable and the hit readable.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-retrieval-active",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Only active versions are findable: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "passages are built on the transition to active and removed when it is left. Passage search does not see drafts — if an expected hit is missing, check the status first, not the wording of the query.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-retrieval-passage",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Passage before full text: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "for content questions use search_content instead of fetch_playbook / fetch_resource — the full text pulls kilobytes for a single paragraph. If the passage is enough, the fetch is unnecessary; the hit carries entity_id and block_id, which let you load the full text deliberately and cite the spot.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-retrieval-mode",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Choose the mode deliberately: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "mode='auto' (default) blends the text and semantic ranks and is almost always right. Use 'text' for exact terms, names, slugs, and tool identifiers; 'semantic' for paraphrases and cross-language questions. If no embedding model is available, every mode falls back to text search silently — semantic hits are a bonus, not a guarantee.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-retrieval-locale",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Language boundary: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "text search stems in the language of the element (ADR-0045: one element = one language). A German query therefore reaches an English element only via the semantic level. In mixed-language workspaces 'nothing found' does not mean 'does not exist' — verify before you create something new.",
+        "styles": {}
+      }
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-retrieval-honest",
+    "type": "bulletListItem",
+    "props": {
+      "textColor": "default",
+      "backgroundColor": "default",
+      "textAlignment": "left"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "Retrieval does not replace triggers: ",
+        "styles": {
+          "bold": true
+        }
+      },
+      {
+        "type": "text",
+        "text": "triggers remain the binding routing; search is additive and steps in where no trigger fits. A search hit is a location, not an approval — and if you find nothing, say so plainly instead of assembling an answer from partial matches.",
         "styles": {}
       }
     ],

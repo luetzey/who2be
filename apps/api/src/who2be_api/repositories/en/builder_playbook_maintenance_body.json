@@ -208,7 +208,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Only observe semantic gaps: ", "styles": {"bold": true}},
-      {"type": "text", "text": "if you notice while reviewing that a playbook seems to be missing for a recurring use case ('a playbook for X seems to be missing'), that goes into the report exclusively as an observation. Don't create anything unrequested — building new is a separate task with its own playbook.", "styles": {}}
+      {"type": "text", "text": "if you notice while reviewing that a playbook seems to be missing for a recurring use case ('a playbook for X seems to be missing'), that goes into the report exclusively as an observation. Cross-check first: search the topic with search_content — often the answer already exists as a section in an existing body, and the gap is in truth a trigger or wiring gap. Don't create anything unrequested — building new is a separate task with its own playbook.", "styles": {}}
     ],
     "children": []
   },
@@ -330,7 +330,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Read: ", "styles": {"bold": true}},
-      {"type": "text", "text": "list_agents, list_playbooks, list_resources, list_triggers (inventory); get_feedback(entity_type, entity_id) (signals and notes); find_usages (inbound references, orphan check); list_versions, diff_versions (check a note against the current version); fetch_playbook, fetch_resource, get_persona (current state before every set_*); search (content search for suspected cases).", "styles": {}}
+      {"type": "text", "text": "list_agents, list_playbooks, list_resources, list_triggers (inventory); get_feedback(entity_type, entity_id) (signals and notes); find_usages (inbound references, orphan check); list_versions, diff_versions (check a note against the current version); fetch_playbook, fetch_resource, get_persona (current state before every set_*); search (find elements for suspected cases); search_content (passage cross-check for suspected gaps and knowledge drift).", "styles": {}}
     ],
     "children": []
   },
@@ -436,7 +436,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Conventions: ", "styles": {"bold": true}},
-      {"type": "text", "text": "Trigger hygiene, naming, the modes rule, policy patterns, the status workflow, and managed boundaries are binding in the 'Agent-Building Conventions' resource — it is the standard for triage and implementation. Linked as a lazy pointer, it does NOT come along automatically: load it via fetch_resource in Phase 1; the resource_id is in this playbook's linked_blocks entry.", "styles": {}}
+      {"type": "text", "text": "Trigger hygiene, naming, the modes rule, policy patterns, the status workflow, findability/retrieval, and managed boundaries are binding in the 'Agent-Building Conventions' resource — it is the standard for triage and implementation. Linked as a lazy pointer, it does NOT come along automatically: load it via fetch_resource in Phase 1; the resource_id is in this playbook's linked_blocks entry.", "styles": {}}
     ],
     "children": []
   },

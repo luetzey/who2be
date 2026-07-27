@@ -324,6 +324,16 @@
     "children": []
   },
   {
+    "id": "res-conv-li-memory-semantik",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Semantisches Wiederfinden: ", "styles": {"bold": true}},
+      {"type": "text", "text": "search_memory findet Eintraege auch ueber Umschreibungen und ueber Sprachgrenzen hinweg (ADR-0046), nicht nur ueber woertliche Treffer. Dieselbe Aehnlichkeit greift beim Schreiben: ein sinngleich umformulierter Eintrag wird mit 409 abgelehnt, auch wenn kein Wort uebereinstimmt — das ist der Dedup-Waechter, kein Fehler. Die Persona-Injektion bleibt davon unberuehrt: sie haengt die Top-Fakten nach importance an, ohne Query.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
     "id": "res-conv-h-exttool",
     "type": "heading",
     "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
@@ -484,7 +494,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Wiederverwendung vor Neuanlage: ", "styles": {"bold": true}},
-      {"type": "text", "text": "vor jeder Neuanlage mit search nach inhaltlich aehnlichen Elementen suchen und mit find_usages pruefen, wo ein Kandidat bereits eingesetzt ist. Existiert Passendes, wird es verlinkt oder komponiert — Duplikate driften auseinander und kosten doppelt.", "styles": {}}
+      {"type": "text", "text": "vor jeder Neuanlage mit search nach inhaltlich aehnlichen Elementen suchen, mit search_content pruefen, ob der Inhalt bereits als Abschnitt in einem bestehenden Body steht, und mit find_usages klaeren, wo ein Kandidat bereits eingesetzt ist. Existiert Passendes, wird es verlinkt oder komponiert — Duplikate driften auseinander und kosten doppelt.", "styles": {}}
     ],
     "children": []
   },
@@ -515,6 +525,90 @@
     "content": [
       {"type": "text", "text": "Verdrahtung verifizieren: ", "styles": {"bold": true}},
       {"type": "text", "text": "nach jedem set_* den Zielzustand via fetch_playbook / fetch_resource / get_persona gegenlesen — Replace-Semantik macht stille Verluste moeglich, die erst der Gegen-Read aufdeckt.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-h-retrieval",
+    "type": "heading",
+    "props": {"level": 2, "textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Auffindbarkeit & Retrieval", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "res-conv-p-retrieval-intro",
+    "type": "paragraph",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [{"type": "text", "text": "Suchen hat zwei Ebenen (ADR-0046): search findet ELEMENTE (Discovery — welches Playbook, welche Resource?), search_content findet PASSAGEN (die Stelle, die die Frage beantwortet, zitierbar als entity_id#block_id). Was du schreibst, entscheidet, was spaeter gefunden wird — Auffindbarkeit ist eine Autoren-Aufgabe, keine Sucheinstellung.", "styles": {}}],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-retrieval-headings",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Ueberschriften sind Schnittkanten: ", "styles": {"bold": true}},
+      {"type": "text", "text": "die Passagen-Suche zerlegt jeden Body an seinen Heading-Bloecken. Ein Body ohne Zwischenueberschriften wird ein einziger Klotz — der Treffer liefert dann den ganzen Text statt der Antwort. Gliedere Playbook- und Resource-Bodies so, dass ein Abschnitt genau einen Gedanken traegt.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-retrieval-headingtext",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Ueberschriften benennen den Gegenstand: ", "styles": {"bold": true}},
+      {"type": "text", "text": "die Ueberschriften-Kette (inkl. der uebergeordneten Ebenen) wird mitindiziert und mit dem Treffer ausgeliefert. 'Phase 3' allein traegt nichts; 'Phase 3 — Schreiben' macht den Abschnitt auffindbar und den Treffer lesbar.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-retrieval-active",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Nur aktive Versionen sind auffindbar: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Passagen entstehen beim Wechsel nach active und verschwinden beim Verlassen. Drafts findet die Passagen-Suche nicht — wer einen erwarteten Fund vermisst, prueft zuerst den Status, nicht die Formulierung der Query.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-retrieval-passage",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Passage vor Volltext: ", "styles": {"bold": true}},
+      {"type": "text", "text": "bei inhaltlichen Fragen search_content statt fetch_playbook / fetch_resource — der Volltext holt Kilobytes fuer einen Absatz. Reicht die Passage, ist der fetch ueberfluessig; der Treffer traegt entity_id und block_id, mit denen sich der Volltext gezielt nachladen und die Stelle zitieren laesst.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-retrieval-mode",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Modus bewusst waehlen: ", "styles": {"bold": true}},
+      {"type": "text", "text": "mode='auto' (Default) mischt Text- und Semantik-Rang und ist fast immer richtig. 'text' fuer exakte Begriffe, Namen, Slugs und Tool-Bezeichner; 'semantic' fuer Umschreibungen und sprachuebergreifende Fragen. Ist kein Embedding-Modell verfuegbar, faellt jeder Modus still auf Textsuche zurueck — semantische Treffer sind ein Plus, keine Zusage.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-retrieval-locale",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Sprachgrenze: ", "styles": {"bold": true}},
+      {"type": "text", "text": "die Textsuche stemmt in der Sprache des Elements (ADR-0045: ein Element = eine Sprache). Eine deutsche Query findet ein englisches Element deshalb nur ueber die semantische Ebene. In gemischtsprachigen Workspaces heisst 'nichts gefunden' nicht 'nicht vorhanden' — gegenpruefen, bevor du etwas neu anlegst.", "styles": {}}
+    ],
+    "children": []
+  },
+  {
+    "id": "res-conv-li-retrieval-honest",
+    "type": "bulletListItem",
+    "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
+    "content": [
+      {"type": "text", "text": "Retrieval ersetzt keine Trigger: ", "styles": {"bold": true}},
+      {"type": "text", "text": "Trigger bleiben das verbindliche Routing; die Suche ist additiv und greift, wo kein Trigger passt. Ein Suchtreffer ist eine Fundstelle, keine Freigabe — und findest du nichts, sag das offen, statt aus Teiltreffern eine Antwort zu bauen.", "styles": {}}
     ],
     "children": []
   }

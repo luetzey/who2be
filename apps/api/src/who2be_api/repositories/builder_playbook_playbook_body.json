@@ -67,7 +67,7 @@
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
     "content": [
       {"type": "text", "text": "Vor JEDER Neuanlage: ", "styles": {"bold": true}},
-      {"type": "text", "text": "mit search nach bestehenden Playbooks mit aehnlichem Inhalt suchen und mit find_usages pruefen, wo ein Kandidat bereits eingesetzt ist. Existiert ein passendes Playbook, verwende es als Sub-Playbook (set_playbook_composes) statt ein Duplikat anzulegen — Duplikate driften auseinander und kosten doppelt Tokens.", "styles": {}}
+      {"type": "text", "text": "mit search nach bestehenden Playbooks mit aehnlichem Inhalt suchen, mit search_content pruefen, ob der Schritt schon als Abschnitt in einem anderen Body steht, und mit find_usages klaeren, wo ein Kandidat bereits eingesetzt ist. Existiert ein passendes Playbook, verwende es als Sub-Playbook (set_playbook_composes) statt ein Duplikat anzulegen — Duplikate driften auseinander und kosten doppelt Tokens.", "styles": {}}
     ],
     "children": []
   },
@@ -165,7 +165,7 @@
     "id": "pb-playbook-create-p2-atomic",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Atomic: Body als BlockNote-Dokument entwerfen — klare Phasen oder nummerierte Schritte, dazu die Sektionen Tools & Operations, Anti-Patterns und Notes.", "styles": {}}],
+    "content": [{"type": "text", "text": "Atomic: Body als BlockNote-Dokument entwerfen — klare Phasen oder nummerierte Schritte, dazu die Sektionen Tools & Operations, Anti-Patterns und Notes. Die Zwischenueberschriften sind zugleich die Schnittkanten der Passagen-Suche (search_content): ein Abschnitt = ein Gedanke, die Ueberschrift benennt den Gegenstand.", "styles": {}}],
     "children": []
   },
   {
@@ -369,7 +369,7 @@
     "id": "pb-playbook-tools-read",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Read: fetch_playbook (Body + Felder), list_playbooks (Katalog, Tags), list_triggers (Trigger-Kollisionen pruefen), search (inhaltliche Suche vor Neuanlage), find_usages (wo wird ein Playbook schon eingesetzt).", "styles": {}}],
+    "content": [{"type": "text", "text": "Read: fetch_playbook (Body + Felder), list_playbooks (Katalog, Tags), list_triggers (Trigger-Kollisionen pruefen), search (Elemente finden vor Neuanlage), search_content (die passende Passage statt des Volltexts), find_usages (wo wird ein Playbook schon eingesetzt).", "styles": {}}],
     "children": []
   },
   {
@@ -439,7 +439,7 @@
     "id": "pb-playbook-anti-loose",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Procedure-Body als loses Stueck Fliesstext — nummerierte Schritte oder klare Phasen-Header nutzen.", "styles": {}}],
+    "content": [{"type": "text", "text": "Procedure-Body als loses Stueck Fliesstext — nummerierte Schritte oder klare Phasen-Header nutzen. Ohne Zwischenueberschriften wird der Body ausserdem zu einem einzigen Suchtreffer-Klotz: die Passagen-Suche schneidet an Headings.", "styles": {}}],
     "children": []
   },
   {
@@ -467,7 +467,7 @@
     "id": "pb-playbook-notes-konventionen",
     "type": "bulletListItem",
     "props": {"textColor": "default", "backgroundColor": "default", "textAlignment": "left"},
-    "content": [{"type": "text", "text": "Konventionen: Trigger-Hygiene, Naming, Modi-Regel, Policy-Muster und Managed-Grenzen stehen verbindlich in der Resource 'Agent-Bau-Konventionen' — dort nachschlagen statt Regeln hier zu duplizieren. Sie ist als lazy-Pointer verlinkt und kommt NICHT automatisch mit: vor Phase 2 (Vorschlag) via fetch_resource nachladen; die resource_id steht im linked_blocks-Eintrag dieses Playbooks.", "styles": {}}],
+    "content": [{"type": "text", "text": "Konventionen: Trigger-Hygiene, Naming, Modi-Regel, Policy-Muster, Auffindbarkeit/Retrieval und Managed-Grenzen stehen verbindlich in der Resource 'Agent-Bau-Konventionen' — dort nachschlagen statt Regeln hier zu duplizieren. Sie ist als lazy-Pointer verlinkt und kommt NICHT automatisch mit: vor Phase 2 (Vorschlag) via fetch_resource nachladen; die resource_id steht im linked_blocks-Eintrag dieses Playbooks.", "styles": {}}],
     "children": []
   },
   {
