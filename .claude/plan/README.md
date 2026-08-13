@@ -54,6 +54,7 @@ Plan-Dateien unter dem ai-native-Plan + ADR-0038.
 | `2026-07-19-0600_memory-placeholder.md` | Placeholder-Kind `memory` (ADR-0044-Addendum) | ✅ |
 | `2026-07-19-1030_memory-guard-config.md` | Injection-Wächter konfigurierbar (`memory_guard`, ADR-0044-Addendum 2) | ✅ (PR #329) |
 | `2026-07-21-0810_builder-external-tool-write.md` | Builder-Content v11: `external_tool_write` in der Builder-Policy, Playbook „External Tool anlegen & pflegen", Konventions-Sektion, Sync-Link-Fix | ✅ |
+| `2026-08-13-1200_agent-workarea-knowledge-base.md` | Agent WorkArea + Knowledge Base (unversionierte Subsysteme, MinIO-Blob-Store, SQLite-Tabellen-Store — ADR-0047/0048/0049), 20 WPs in 7 Wellen | 🔄 in Umsetzung |
 
 Offen außerhalb der Plan-Dateien: Owner-Punkte aus
 `docs/standards-review-2026-07-20.md` §4 (v. a. Actions-Billing → CI-Gate tot
