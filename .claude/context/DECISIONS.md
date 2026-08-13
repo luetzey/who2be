@@ -529,3 +529,31 @@ bleiben)._
   Rolle, nicht das Handwerk — die Konventionen sind die Single-Source, die
   Persona verweist nur); Chunk-Rebuild bei jedem App-Start (unnötige Last ohne
   Content-Änderung).
+
+## 2026-08-13 — Agent WorkArea + Knowledge Base — MVP-Zuschnitt
+- **Entscheidung (7 User-Entscheidungen, bindend):**
+  1. **Scope:** Phase 1 (A–E) und Phase 2 (F–G, K–N, O) gleich detailliert in
+     einem Plan.
+  2. **Verortung:** bestehender Stack — apps/api + apps/mcp + packages/models,
+     Workspace-Tenancy, dieselbe Postgres-DB.
+  3. **Blob-Storage:** MinIO/S3-kompatibel, content-addressed (SHA-256),
+     neuer Compose-Dienst.
+  4. **Kontodaten:** Ausgaben-Analyst läuft gegen Cloud-API — mit
+     Lauf-Protokoll; Konto-Ingest bleibt in Phase 2.
+  5. **Private Areas:** Menschen ab Rolle `editor` lesen alles (auch private
+     Agent-Areas); „privat" heißt privat gegenüber anderen **Agenten**.
+     Viewer sehen nur shared Areas.
+  6. **Lauf-Protokoll:** Auto-Zugriffslog + Modell-Config am Agenten — der
+     Server loggt jeden Agent-Zugriff automatisch (append-only, dedupliziert
+     pro Element+Tag); `model_provider`/`model_name` sind betreiber-gepflegte,
+     auditierte Felder am Agenten. Kein `record_run`-Selbstauskunfts-Tool.
+  7. **Auswertung:** Kein serverseitiges Chart-Rendering — stattdessen
+     `query_table` mit Format-Wahl + `save_query_result` (Server persistiert
+     Query + eingefrorenes Ergebnis als doc-Artifact; Zahlen schreibt der
+     Server, nie das Modell).
+- **Begründung:** WorkArea/KB sind Kontext-Speicher für Agenten (kein
+  CMS/Wiki, kein Runtime-Host); das Resource-Aggregat bleibt unangetastet,
+  `promote_artifact` ist die einzige Brücke.
+- **Detail:** ADR-0047 (Umbrella), ADR-0048 (Blob-Storage), ADR-0049
+  (Tabellen-Store); Plan
+  `.claude/plan/2026-08-13-1200_agent-workarea-knowledge-base.md`.
