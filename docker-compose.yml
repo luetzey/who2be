@@ -126,6 +126,11 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+      # `docker compose up --wait` toleriert beendete One-Shots nur, wenn ein
+      # Dienst per service_completed_successfully von ihnen abhaengt (sonst
+      # Exit 1 trotz erfolgreichem Lauf) — gleiches Muster wie bei `migrate`.
+      minio-bootstrap:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/v1/health"]
       interval: 5s
