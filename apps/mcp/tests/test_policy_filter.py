@@ -62,6 +62,13 @@ _DEFAULT_POLICY_TOOLS = {
     # whoami-Payload unten), also sind die ExternalTool-Reads Default sichtbar.
     "list_external_tools",
     "get_external_tool",
+    # WP8 (ADR-0047): die WorkArea-Reads haengen an dynamischen Area-Grants
+    # (Domain "workarea", kein ReadScope) und sind damit Default sichtbar;
+    # die Write-Tools (create/append/patch/delete/ingest) bleiben ohne
+    # `workarea_write` unsichtbar.
+    "read_artifact",
+    "list_artifacts",
+    "search_workarea",
 }
 
 _ALL_CAPABILITIES = [
@@ -74,6 +81,7 @@ _ALL_CAPABILITIES = [
     "feedback_resolve",
     "promote_retire",
     "external_tool_write",
+    "workarea_write",
 ]
 
 
@@ -189,7 +197,8 @@ def test_full_policy_agent_sees_all_tools(monkeypatch: pytest.MonkeyPatch) -> No
     _install_identity(monkeypatch, _whoami_handler(payload))
     names = _list_tool_names()
     assert names == set(MCP_TOOL_REQUIREMENTS)
-    assert len(names) == 58
+    # 58 server.py-Tools + 8 WorkArea-Tools (WP8, `tools/workarea.py`).
+    assert len(names) == 66
 
 
 def test_resource_read_none_hides_resource_tools(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -249,7 +258,8 @@ def test_unrestricted_admin_sees_all_tools(monkeypatch: pytest.MonkeyPatch) -> N
     names = _list_tool_names()
     memory_tools = {name for name, req in MCP_TOOL_REQUIREMENTS.items() if req.memory is not None}
     assert names == set(MCP_TOOL_REQUIREMENTS) - memory_tools
-    assert len(names) == 55
+    # 66 Tools minus die 3 Memory-Tools (ohne Agent-Bindung kein Namespace).
+    assert len(names) == 63
 
 
 def test_unrestricted_viewer_sees_no_write_tools(monkeypatch: pytest.MonkeyPatch) -> None:

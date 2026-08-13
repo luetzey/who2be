@@ -49,7 +49,7 @@ class ToolsOverviewResolver:
         for tool in _TOOLS:
             if not tool.is_visible(policy):
                 continue
-            if tool.is_write:
+            if tool.has_visible_write(policy):
                 any_write = True
             suffix = tool.scope_suffix(policy)
             lines.append(f"- **{tool.signature}** — {tool.description}{suffix}")
@@ -102,11 +102,17 @@ class _ToolDoc(BaseModel):
         """
         return any(is_tool_visible(name, policy) is True for name in self.tool_names)
 
-    @property
-    def is_write(self) -> bool:
-        """True, wenn die Gruppe laut SSoT Capabilities verlangt (Write-Tools)."""
+    def has_visible_write(self, policy: AgentToolPolicy | None) -> bool:
+        """True, wenn ein Capability-Tool der Gruppe fuer DIESE Policy sichtbar ist.
+
+        Bewusst pro Tool statt pro Gruppe (WP8): gemischte Gruppen wie
+        „WorkArea" (Reads grant-dynamisch immer sichtbar, Writes hinter
+        `workarea_write`) duerfen den `Schreibzugriff`-Hinweis nur ausloesen,
+        wenn der Agent die Write-Capability tatsaechlich haelt. Fuer reine
+        Write-Gruppen ist das identisch zum frueheren Gruppen-`is_write`.
+        """
         return any(
-            bool(MCP_TOOL_REQUIREMENTS[name].capabilities)
+            bool(MCP_TOOL_REQUIREMENTS[name].capabilities) and is_tool_visible(name, policy) is True
             for name in self.tool_names
             if name in MCP_TOOL_REQUIREMENTS
         )
@@ -423,6 +429,38 @@ _TOOLS: list[_ToolDoc] = [
             "vor. NUR explizit Gesagtes, dauerhaft Relevantes, kein Duplikat; "
             "nie Smalltalk, Vermutungen oder Sensibles ohne Bestaetigung. "
             "`context` (1 Satz Herkunft) hilft der menschlichen Freigabe."
+        ),
+    ),
+    # --- WorkArea (ADR-0047, WP8): unversioniertes Rohmaterial der Agenten.
+    #     Gemischte Gruppe — die Reads (search/read/list) sind grant-dynamisch
+    #     immer gelistet, die Writes verlangen `workarea_write`.
+    _ToolDoc(
+        signature=(
+            "search_workarea(query, area_id?) / read_artifact(artifact_id, anchor?) / "
+            "list_artifacts(area_id?) / create_artifact(...) / append_artifact(...) / "
+            "patch_artifact(...) / delete_artifact(artifact_id) / ingest(url|file_b64, ...)"
+        ),
+        tool_names=(
+            "search_workarea",
+            "read_artifact",
+            "list_artifacts",
+            "create_artifact",
+            "append_artifact",
+            "patch_artifact",
+            "delete_artifact",
+            "ingest",
+        ),
+        read_domain="workarea",
+        description=(
+            "Deine WorkArea: unversioniertes Rohmaterial (Notizen, Ingest-"
+            "Dokumente) in deiner privaten Area (`area_id=None`) und in shared "
+            "Team-Areas. Einstieg IMMER search_workarea — jeder Treffer traegt "
+            "einen Anker `<artifact_id>#<block_id>`, den "
+            "read_artifact(artifact_id, anchor) direkt zum einzelnen Block "
+            "aufloest; list_artifacts nur zur Bestandsaufnahme kleiner Areas. "
+            "Schreiben (create/append/patch/delete/ingest) verlangt die "
+            "Capability `workarea_write`; `occurred_at` ist der fachliche "
+            "Zeitpunkt des Inhalts, nie now()."
         ),
     ),
 ]

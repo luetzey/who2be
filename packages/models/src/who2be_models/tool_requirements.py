@@ -104,6 +104,10 @@ _FEEDBACK_WRITE = ToolRequirement(capabilities=(AgentCapability.feedback_write,)
 _EXTERNAL_TOOL_WRITE = ToolRequirement(capabilities=(AgentCapability.external_tool_write,))
 _MEMORY_READ = ToolRequirement(memory=MemoryMode.read_only)
 _MEMORY_SUGGEST = ToolRequirement(memory=MemoryMode.suggest)
+# WorkArea (ADR-0047, WP8): Writes hinter `workarea_write`; Reads ueber die
+# grant-dynamische Domain "workarea" (kein `ReadScope` — siehe `_read_visible`).
+_WORKAREA_READ = ToolRequirement(read_domain="workarea")
+_WORKAREA_WRITE = ToolRequirement(capabilities=(AgentCapability.workarea_write,))
 
 
 # Alle in `apps/mcp/src/who2be_mcp/server.py` registrierten Tools (Quelle: die
@@ -201,6 +205,18 @@ MCP_TOOL_REQUIREMENTS: dict[str, ToolRequirement] = {
     "search_memory": _MEMORY_READ,
     "list_memories": _MEMORY_READ,
     "save_memory": _MEMORY_SUGGEST,
+    # --- WorkArea (ADR-0047, WP8) — Rohmaterial-Tools aus `tools/workarea.py`:
+    #     Writes verlangen `workarea_write` (Default aus); die Reads sind
+    #     grant-dynamisch immer gelistet, die API/`core/workarea_scope.py`
+    #     bleibt die Autoritaet (leere Treffer statt Existenz-Leak).
+    "create_artifact": _WORKAREA_WRITE,
+    "append_artifact": _WORKAREA_WRITE,
+    "patch_artifact": _WORKAREA_WRITE,
+    "read_artifact": _WORKAREA_READ,
+    "list_artifacts": _WORKAREA_READ,
+    "delete_artifact": _WORKAREA_WRITE,
+    "ingest": _WORKAREA_WRITE,
+    "search_workarea": _WORKAREA_READ,
 }
 
 
