@@ -21,6 +21,7 @@ from who2be_models.tool_policy import (
     ReadScope,
     TransitionGrant,
 )
+from who2be_models.workarea import WorkAreaAssignment
 from who2be_models.workspace_member import WorkspaceRole
 
 
@@ -76,3 +77,8 @@ class WhoAmIRead(BaseModel):
     # `WorkspaceRead.content_locale`) — jeder aktuelle `whoami`-Pfad befuellt
     # das Feld explizit aus dem Workspace-Datensatz.
     content_locale: ContentLocale = DEFAULT_LOCALE
+    # WorkArea-Zuordnungen des gebundenen Agenten (ADR-0047): id/name/scope/
+    # level je Grant, inkl. der beim whoami-Aufruf auto-angelegten privaten
+    # Area. `None` fuer Menschen/ungebundene Tokens — die haben keine
+    # Grant-Menge (editor+ liest ohnehin alles, viewer die shared Areas).
+    work_areas: list[WorkAreaAssignment] | None = None

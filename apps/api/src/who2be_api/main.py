@@ -63,7 +63,9 @@ from who2be_api.routers import (
     system_prompts,
     tokens,
     usages,
+    wa_artifacts,
     whoami,
+    work_areas,
     workspaces,
 )
 from who2be_api.services.bootstrap_service import bootstrap_admin_if_needed
@@ -292,6 +294,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(usages.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(feedback.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(memory.router, prefix=_WORKSPACE_PREFIX)
+    app.include_router(work_areas.router, prefix=_WORKSPACE_PREFIX)
+    app.include_router(wa_artifacts.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(search.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(system_prompts.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(agents.router, prefix=_WORKSPACE_PREFIX)

@@ -19,8 +19,9 @@ from who2be_api.core.config import get_settings
 from who2be_api.core.db import get_pool
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.licensing.service import build_entitlement_port
+from who2be_api.repositories.work_area_repository import PgWorkAreaRepository
 from who2be_api.repositories.workspace_repository import PgWorkspaceRepository, resolve_org_id
-from who2be_models import DEFAULT_LOCALE, WhoAmIRead
+from who2be_models import DEFAULT_LOCALE, WhoAmIRead, WorkAreaAssignment
 
 router = APIRouter(prefix="/whoami", tags=["whoami"])
 
@@ -60,6 +61,16 @@ async def whoami(ctx: Ctx, pool: Pool) -> WhoAmIRead:
     workspace = await PgWorkspaceRepository(pool).fetch(ctx.workspace_id)
     content_locale = workspace.content_locale if workspace is not None else DEFAULT_LOCALE
 
+    # WorkArea-Zuordnungen (ADR-0047): nur fuer agent-gebundene Tokens — der
+    # whoami-Aufruf zaehlt als „erster Zugriff" und loest die private
+    # Auto-Anlage aus (inkl. materialisiertem Owner-Grant). Menschen haben
+    # keine Grant-Menge (`None`), fuer sie gilt das Rollen-Scoping.
+    work_areas: list[WorkAreaAssignment] | None = None
+    if policy is not None and ctx.agent_id is not None:
+        area_repo = PgWorkAreaRepository(pool)
+        await area_repo.get_or_create_private_area(ctx.workspace_id, ctx.agent_id)
+        work_areas = await area_repo.list_assignments_for_agent(ctx.workspace_id, ctx.agent_id)
+
     return WhoAmIRead(
         user_id=ctx.user_id,
         workspace_id=ctx.workspace_id,
@@ -76,4 +87,5 @@ async def whoami(ctx: Ctx, pool: Pool) -> WhoAmIRead:
         memory_directive=None if policy is None else policy.memory_directive,
         features=sorted(entitlement.features),
         content_locale=content_locale,
+        work_areas=work_areas,
     )
