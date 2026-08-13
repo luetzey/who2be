@@ -46,6 +46,7 @@ from who2be_api.routers import (
     feedback,
     gdpr,
     invitations,
+    kb,
     me,
     members,
     memory,
@@ -64,6 +65,8 @@ from who2be_api.routers import (
     tokens,
     usages,
     wa_artifacts,
+    wa_ingest,
+    wa_search,
     whoami,
     work_areas,
     workspaces,
@@ -296,6 +299,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(memory.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(work_areas.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(wa_artifacts.router, prefix=_WORKSPACE_PREFIX)
+    app.include_router(wa_ingest.router, prefix=_WORKSPACE_PREFIX)
+    app.include_router(wa_search.router, prefix=_WORKSPACE_PREFIX)
+    app.include_router(kb.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(search.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(system_prompts.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(agents.router, prefix=_WORKSPACE_PREFIX)

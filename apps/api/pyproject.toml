@@ -9,6 +9,9 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.34",
     "asyncpg>=0.30",
+    # WorkArea-Ingest (ADR-0048, Pipeline B): HTML-Extraktion serverseitig,
+    # bevor irgendetwas persistiert wird (HTML ist nie Quellformat).
+    "beautifulsoup4>=4.12",
     "cryptography>=44",
     "httpx>=0.28",
     # Pluggable Rate-Limit-Storage (Plan CL2): `limits` liefert die Moving-Window-
@@ -23,6 +26,8 @@ dependencies = [
     "minio>=7.2",
     "pydantic-settings>=2.0",
     "pyjwt>=2.8",
+    # WorkArea-Ingest (ADR-0048): PDF-Text-Extraktion in memory, VOR jedem Write.
+    "pypdf>=5",
     "python-multipart>=0.0.9",
     "redis>=5.0",
     "slowapi>=0.1.9",

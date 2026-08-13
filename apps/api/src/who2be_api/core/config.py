@@ -153,6 +153,13 @@ class Settings(BaseSettings):
         default=False,
         validation_alias=AliasChoices("WHO2BE_BLOBSTORE_SECURE", "blobstore_secure"),
     )
+    # Byte-Obergrenze fuer den WorkArea-Ingest (ADR-0048, Pipeline B): gilt fuer
+    # Datei-Uploads (Base64-Schaetzung VOR dem Dekodieren) und URL-Downloads
+    # (Streaming-Cap pro Hop). Ueberschreitung ⇒ 413 `ingest_too_large`.
+    ingest_max_bytes: int = Field(
+        default=20 * 1024 * 1024,
+        validation_alias=AliasChoices("WHO2BE_INGEST_MAX_BYTES", "ingest_max_bytes"),
+    )
     # On-Prem-Adapter: signierte Lizenzdatei (Ed25519), offline mit `K_pub` verifiziert.
     # Leer ⇒ reines OSS (unbegrenzt). NIE der Private-Key — nur der Lizenz-Token.
     license_key: str = Field(
