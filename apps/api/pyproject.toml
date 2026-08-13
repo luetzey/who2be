@@ -17,6 +17,10 @@ dependencies = [
     # direkt importiert; `redis` wird erst beim redis://-Pfad geladen.
     "limits>=3.0",
     "markdown-it-py>=3.0",
+    # BlobStore (ADR-0048): S3-kompatibler Objekt-Storage fuer den WorkArea-Ingest.
+    # Das SDK ist Apache-2.0 und Kern-Dependency; der AGPL-MinIO-SERVER laeuft nur
+    # als Container (docker-compose: `minio`), wie Postgres.
+    "minio>=7.2",
     "pydantic-settings>=2.0",
     "pyjwt>=2.8",
     "python-multipart>=0.0.9",

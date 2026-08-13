@@ -124,6 +124,35 @@ class Settings(BaseSettings):
         default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
         validation_alias=AliasChoices("WHO2BE_EMBEDDING_MODEL", "embedding_model"),
     )
+    # Content-addressed Blob-Storage (ADR-0048, Agent WorkArea). AUS by default
+    # (Kern-Felder leer): ohne Konfiguration liefert `build_blob_store` `None`,
+    # und NUR Ingest/Blob-Reads antworten 503 `blobstore_unconfigured` — alles
+    # andere laeuft unveraendert. `endpoint` ist host:port OHNE Schema; ob
+    # http oder https gesprochen wird, entscheidet `blobstore_secure`.
+    blobstore_endpoint: str = Field(
+        default="",
+        validation_alias=AliasChoices("WHO2BE_BLOBSTORE_ENDPOINT", "blobstore_endpoint"),
+    )
+    blobstore_access_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("WHO2BE_BLOBSTORE_ACCESS_KEY", "blobstore_access_key"),
+    )
+    blobstore_secret_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("WHO2BE_BLOBSTORE_SECRET_KEY", "blobstore_secret_key"),
+    )
+    # Default passt zum Compose-One-Shot `minio-bootstrap`, der genau diesen
+    # Bucket anlegt — die App erstellt Buckets nie selbst.
+    blobstore_bucket: str = Field(
+        default="who2be-blobs",
+        validation_alias=AliasChoices("WHO2BE_BLOBSTORE_BUCKET", "blobstore_bucket"),
+    )
+    # TLS zum Storage-Endpoint. Dev-MinIO im Compose-Netz spricht http (false);
+    # jede Anbindung ausserhalb davon gehoert auf true.
+    blobstore_secure: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("WHO2BE_BLOBSTORE_SECURE", "blobstore_secure"),
+    )
     # On-Prem-Adapter: signierte Lizenzdatei (Ed25519), offline mit `K_pub` verifiziert.
     # Leer ⇒ reines OSS (unbegrenzt). NIE der Private-Key — nur der Lizenz-Token.
     license_key: str = Field(
