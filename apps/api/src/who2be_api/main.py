@@ -130,6 +130,20 @@ _PROBLEM_TITLES: dict[str, str] = {
     "concurrent_conflict": "Konflikt durch parallele Aenderung",
     "composite_child_inactive": "Composite nicht aktivierbar: Sub-Playbook nicht aktiv",
     "managed_aggregate": "Aktion nicht erlaubt: vom System verwaltet",
+    # WorkArea + Knowledge Base (ADR-0047/0048/0049, WP1):
+    "rev_conflict": "Konflikt durch veraltete Artifact-Revision",
+    "evidence_missing": "Kante nicht anlegbar: Beleg fehlt",
+    "anchor_unresolvable": "Anker nicht aufloesbar",
+    "tier_upgrade_forbidden": "Unzulaessige Tier-Hochstufung",
+    "correlation_underpowered": "Korrelation nicht belastbar: zu wenige Faelle",
+    "area_forbidden": "Aktion nicht erlaubt: kein Schreibzugriff auf diese Area",
+    "query_not_readonly": "Query nicht erlaubt: nur Lesezugriffe",
+    "convention_missing": "Import abgelehnt: Quell-Konvention fehlt",
+    "rule_required": "Kategorisierung abgelehnt: keine passende Regel",
+    "ingest_unsupported": "Ingest nicht moeglich: Format nicht unterstuetzt",
+    "ingest_too_large": "Ingest abgelehnt: Datei zu gross",
+    "url_forbidden": "URL nicht erlaubt",
+    "blobstore_unconfigured": "Blob-Storage nicht konfiguriert",
 }
 
 

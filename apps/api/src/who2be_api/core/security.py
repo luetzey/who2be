@@ -270,6 +270,9 @@ _CAPABILITY_LABELS: dict[AgentCapability, str] = {
     ),
     AgentCapability.promote_retire: "Versionen zu aktivieren oder zu deaktivieren",
     AgentCapability.external_tool_write: "Externe Tools zu erstellen oder zu aendern",
+    AgentCapability.workarea_write: "WorkArea-Artifacts zu erstellen oder zu aendern",
+    AgentCapability.kb_write: "Knowledge-Base-Nodes zu erstellen oder zu aendern",
+    AgentCapability.kb_edge_write: "Knowledge-Base-Kanten anzulegen",
 }
 
 

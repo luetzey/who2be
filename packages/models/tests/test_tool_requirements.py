@@ -228,7 +228,15 @@ def test_every_capability_is_used_in_the_mapping() -> None:
     used = {
         cap for requirement in MCP_TOOL_REQUIREMENTS.values() for cap in requirement.capabilities
     }
-    assert used == set(AgentCapability)
+    # WP1 (ADR-0047): die WorkArea-/KB-Capabilities existieren bereits in der
+    # Policy, ihre MCP-Tools kommen erst mit den MCP-WPs (Welle 3, Count
+    # 58 -> 66 -> 71) — bis dahin bewusst ohne Mapping-Eintrag.
+    pending_wp1 = {
+        AgentCapability.workarea_write,
+        AgentCapability.kb_write,
+        AgentCapability.kb_edge_write,
+    }
+    assert used == set(AgentCapability) - pending_wp1
 
 
 def test_mapping_covers_all_registered_server_tools() -> None:
@@ -240,6 +248,30 @@ def test_mapping_covers_all_registered_server_tools() -> None:
     assert len(MCP_TOOL_REQUIREMENTS) == 58
     always = {name for name, req in MCP_TOOL_REQUIREMENTS.items() if req.always}
     assert always == {"ping", "whoami"}
+
+
+def test_workarea_and_kb_domains_always_visible() -> None:
+    # WP1 (ADR-0047): WorkArea/KB sind fuer agent-gebundene Identitaeten und
+    # unrestricted Menschen sichtbar — Area-Grants sind dynamisch und werden
+    # serverseitig durchgesetzt; der PolicyFilter ist ohnehin fail-open, die
+    # API bleibt die Autoritaet. Noch traegt kein Tool diese Domains (Count
+    # 58) — die Sichtbarkeitslogik wird direkt gegen die Helper geprueft.
+    from who2be_models.tool_requirements import ReadDomain, _read_visible, _scoped_read_visible
+
+    locked_down = AgentToolPolicy(
+        persona_read=False,
+        playbook_read=ReadScope.none,
+        resource_read=ReadScope.none,
+        agent_read=ReadScope.none,
+        external_tool_read=ReadScope.none,
+    )
+    domains: tuple[ReadDomain, ...] = ("workarea", "kb")
+    for domain in domains:
+        assert _read_visible(domain, locked_down) is True
+        assert _read_visible(domain, AgentToolPolicy()) is True
+        # whoami-Pfad: weder ein fehlender Key noch irgendein Scope sperrt.
+        assert _scoped_read_visible(domain, {}) is True
+        assert _scoped_read_visible(domain, _DEFAULT_SCOPES) is True
 
 
 def test_memory_tools_follow_memory_mode_ladder() -> None:

@@ -43,7 +43,18 @@ from who2be_models.workspace_member import WorkspaceRole
 # Sichtbarkeit als GRUPPE aendert sich durch WP-3 nicht — entity_type=
 # 'external_tool' ist bei list_versions/get_version trotzdem ein gueltiger Wert,
 # das ist eine reine Laufzeit-Frage der Tools, keine SSoT-Sichtbarkeitsfrage).
-ReadDomain = Literal["persona", "playbook", "resource", "agent", "search", "external_tool"]
+ReadDomain = Literal[
+    "persona",
+    "playbook",
+    "resource",
+    "agent",
+    "search",
+    "external_tool",
+    # WorkArea/KB (ADR-0047): eigene Domains ohne `ReadScope`-Abstufung —
+    # die Sichtbarkeit haengt an dynamischen Area-Grants, siehe `_read_visible`.
+    "workarea",
+    "kb",
+]
 
 # Die Inhalts-Domains, ueber die „search"-artige Tools dispatchen.
 _CONTENT_READ_DOMAINS: tuple[str, ...] = ("persona", "playbook", "resource")
@@ -205,6 +216,12 @@ def _read_visible(domain: ReadDomain | None, policy: AgentToolPolicy) -> bool:
         return policy.agent_read != ReadScope.none
     if domain == "external_tool":
         return policy.external_tool_read != ReadScope.none
+    if domain in ("workarea", "kb"):
+        # WorkArea/KB (ADR-0047): fuer agent-gebundene Identitaeten immer
+        # sichtbar — Area-Grants sind dynamisch (`work_area_grant`) und werden
+        # serverseitig durchgesetzt (`core/workarea_scope.py`); der
+        # PolicyFilter ist ohnehin fail-open, die API bleibt die Autoritaet.
+        return True
     if domain == "search":
         return (
             policy.persona_read
@@ -240,6 +257,12 @@ def is_tool_visible(name: str, policy: AgentToolPolicy | None) -> bool | None:
 
 def _scoped_read_visible(domain: ReadDomain | None, scopes: Mapping[str, ReadScope]) -> bool:
     """Read-Sichtbarkeit gegen `whoami`-Read-Scopes (fehlender Key = sichtbar)."""
+    if domain in ("workarea", "kb"):
+        # WorkArea/KB (ADR-0047): sichtbar fuer agent-gebundene Identitaeten
+        # wie fuer unrestricted Menschen — es gibt keinen `ReadScope` fuer
+        # diese Domains; die Area-Grants sind dynamisch und werden
+        # serverseitig durchgesetzt (PolicyFilter fail-open, API = Autoritaet).
+        return True
     if domain == "search":
         return any(scopes.get(d, ReadScope.all) != ReadScope.none for d in _CONTENT_READ_DOMAINS)
     if domain is not None:
