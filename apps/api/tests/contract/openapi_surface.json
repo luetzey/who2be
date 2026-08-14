@@ -796,6 +796,21 @@
   },
   {
     "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/wa-tables/{table_id}",
+    "operationId": "describe_table_v1_workspaces__workspace_id__wa_tables__table_id__get"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/wa-tables/{table_id}/query",
+    "operationId": "query_table_v1_workspaces__workspace_id__wa_tables__table_id__query_post"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/wa-tables/{table_id}/rows",
+    "operationId": "insert_rows_v1_workspaces__workspace_id__wa_tables__table_id__rows_post"
+  },
+  {
+    "method": "GET",
     "path": "/v1/workspaces/{workspace_id}/whoami",
     "operationId": "whoami_v1_workspaces__workspace_id__whoami_get"
   },
@@ -833,6 +848,16 @@
     "method": "POST",
     "path": "/v1/workspaces/{workspace_id}/work-areas/{area_id}/ingest",
     "operationId": "ingest_into_area_v1_workspaces__workspace_id__work_areas__area_id__ingest_post"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/work-areas/{area_id}/tables",
+    "operationId": "list_tables_v1_workspaces__workspace_id__work_areas__area_id__tables_get"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/work-areas/{area_id}/tables",
+    "operationId": "create_table_v1_workspaces__workspace_id__work_areas__area_id__tables_post"
   },
   {
     "method": "GET",
