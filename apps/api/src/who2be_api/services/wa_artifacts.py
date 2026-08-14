@@ -1,8 +1,11 @@
 """Geschaeftslogik fuer WorkArea-Artifacts (ADR-0047, WP4 — Spec A+E).
 
-Schreibpfad-Gates (Plan-Stack): Mensch → `require_role(editor)`; Agent →
-`require_capability(workarea_write)` + `require_write_rate`; beide zusaetzlich
-`ensure_area_access(write)` auf der Ziel-Area. Reads filtern ueber
+Schreibpfad-Gates (Security-Review 2026-08-13 H1, Muster
+`resource_service.create`): IMMER zuerst `require_role(editor)` — die Rolle
+ist auch bei agent-gebundenen Tokens am Token gepinnt —, danach
+`require_capability(workarea_write)` + `require_write_rate` (fuer Menschen
+No-Ops); beide zusaetzlich `ensure_area_access(write)` auf der Ziel-Area.
+Reads filtern ueber
 `readable_area_ids` IN der Repo-SQL — ein nicht lesbares Artifact ist von
 einem nicht existierenden nicht unterscheidbar (404, kein Existenz-Leak).
 
@@ -36,7 +39,6 @@ from who2be_api.core.workarea_scope import (
     agent_not_found,
     artifact_not_found,
     ensure_area_access,
-    is_agent_bound,
     readable_area_ids,
 )
 from who2be_api.repositories.wa_artifact_repository import WaArtifactRepository
@@ -52,10 +54,12 @@ from who2be_models import (
     ArtifactMarkdown,
     ArtifactPatch,
     ArtifactRead,
+    ArtifactType,
     DocBlock,
     WorkAreaGrantLevel,
     WorkspaceRole,
 )
+from who2be_models.workarea import INGEST_MAX_BLOCKS
 
 
 def _anchor_unresolvable(anchor: str) -> ApiGateError:
@@ -82,6 +86,27 @@ def _rev_conflict(expected_rev: int, current_rev: int) -> ApiGateError:
     )
 
 
+def _too_many_blocks() -> ApiGateError:
+    """413 fuer einen Append ueber das kumulative Block-Limit (M7).
+
+    Reason ist bewusst das bestehende `ingest_too_large`: es ist DERSELBE
+    Block-Cap derselben Schutzfamilie (geteilte Konstante `INGEST_MAX_BLOCKS`,
+    H3b), 413 ist der semantisch korrekte Status („Inhalt zu gross") und die
+    Taxonomie bleibt geschlossen — ein neuer Reason fuer denselben Sachverhalt
+    waere Vokabular ohne Not.
+    """
+    return ApiGateError(
+        status=status.HTTP_413_CONTENT_TOO_LARGE,
+        reason="ingest_too_large",
+        actionable_by="agent",
+        detail=(
+            f"Der Append wuerde das Block-Limit von {INGEST_MAX_BLOCKS} Bloecken "
+            "pro Artifact ueberschreiten — Inhalt kuerzen oder ein neues "
+            "Artifact anlegen."
+        ),
+    )
+
+
 class WaArtifactService:
     """Artifact-CRUD + Block-Operationen ueber den WorkArea-Repos."""
 
@@ -100,12 +125,13 @@ class WaArtifactService:
     # ------------------------------------------------------------------ Gates
 
     def _require_write(self, ctx: WorkspaceContext) -> None:
-        """Schreib-Gate: Mensch → Rolle; Agent → Capability + Rate (Plan-Stack)."""
-        if is_agent_bound(ctx):
-            require_capability(ctx, AgentCapability.workarea_write)
-            require_write_rate(ctx)
-            return
+        """Schreib-Gate (H1, Muster `resource_service.create`): IMMER zuerst
+        `require_role(editor)` — die Rolle ist auch bei agent-gebundenen
+        Tokens am Token gepinnt (ein viewer-Token schreibt nie) —, danach
+        Capability + Rate (fuer Menschen/JWT No-Ops)."""
         require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.workarea_write)
+        require_write_rate(ctx)
 
     async def _require_writable_area(self, ctx: WorkspaceContext, area_id: UUID) -> None:
         await ensure_area_access(self._pool, ctx, area_id, WorkAreaGrantLevel.write)
@@ -200,7 +226,19 @@ class WaArtifactService:
                 conn, ctx.workspace_id, artifact_id, new_blocks, self._actor(ctx)
             )
             if updated is None:
-                raise artifact_not_found()
+                # 0 Rows: entweder verschwunden/kein doc-Artifact (→ 404) oder
+                # das SQL-Praedikat des kumulativen Block-Caps hat gegriffen
+                # (M7 → 413) — Exists-Nachlese unterscheidet die Faelle.
+                still_there = await self._artifacts.get(
+                    conn,
+                    ctx.workspace_id,
+                    artifact_id,
+                    restrict_area_ids=None,
+                    include_blocks=False,
+                )
+                if still_there is None or still_there.type != ArtifactType.doc:
+                    raise artifact_not_found()
+                raise _too_many_blocks()
             await sync_artifact_chunks(
                 conn,
                 workspace_id=ctx.workspace_id,

@@ -26,6 +26,7 @@ from who2be_api.core.db import get_pool
 from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.repositories.kb_repository import PgKbRepository
+from who2be_api.repositories.work_area_repository import PgWorkAreaRepository
 from who2be_api.services.kb import KbService
 from who2be_api.services.mcp_limit_service import enforce_mcp_read_limit
 from who2be_models import (
@@ -43,7 +44,7 @@ router = APIRouter(tags=["kb"])
 
 
 def get_kb_service(pool: Annotated[asyncpg.Pool, Depends(get_pool)]) -> KbService:
-    return KbService(pool, PgKbRepository())
+    return KbService(pool, PgKbRepository(), PgWorkAreaRepository(pool))
 
 
 Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]

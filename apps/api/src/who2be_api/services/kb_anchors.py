@@ -10,11 +10,20 @@ Aufgeloeste Formen (ADR-0021 + Plan-Datenmodell 0077):
 - ``sha256:<hex64>`` — Blob im Katalog (`wa_blob`, 0075).
 - ``url:<http…>`` — rein syntaktisch (http/https), kein Lookup.
 
-Die Aufloesung ist SCOPE-BEWUSST: Artifact- und Node-Lookups laufen mit der
-Scope-Liste des Aufrufers (`readable_area_ids`) IN der SQL — ein Anker auf
-nicht lesbares Material ist von einem nicht existierenden nicht
-unterscheidbar (422 statt Existenz-Orakel). Unaufloesbar → 422
-`anchor_unresolvable` mit dem Anker im detail.
+**Kanonische Form (Security-Review 2026-08-13 L5):** `ResolvedAnchor.anchor`
+traegt IMMER die kanonische Schreibweise — fuer Artifact-Anker ist das
+``<uuid>[#block]`` OHNE ``artifact:``-Praefix (die Praefix-Schreibweise wird
+akzeptiert, aber normalisiert); ``node:``/``sha256:``/``url:`` bleiben wie
+eingegeben. Edge-Writes speichern und `neighbors`-Anfragen matchen diese
+kanonische Form — dieselbe Kante ist damit unter beiden Schreibweisen
+auffindbar.
+
+Die Aufloesung ist SCOPE-BEWUSST: Artifact-, Node- UND Blob-Lookups laufen
+mit der Scope-Liste des Aufrufers (`readable_area_ids`) IN der SQL — ein
+Anker auf nicht lesbares Material ist von einem nicht existierenden nicht
+unterscheidbar (422 statt Existenz-Orakel; fuer Blobs siehe
+`kb_repository.blob_exists`, L2). Unaufloesbar → 422 `anchor_unresolvable`
+mit dem Anker im detail.
 
 ARC-3: kein SQL — die Lookups laufen ueber das strukturelle
 `AnchorLookup`-Protokoll (erfuellt von `PgKbRepository`); `fetcher` darf die
@@ -84,7 +93,14 @@ class AnchorLookup(Protocol):
         restrict_area_ids: list[UUID] | None,
     ) -> UUID | None: ...
 
-    async def blob_exists(self, fetcher: _Fetcher, workspace_id: UUID, sha256: str) -> bool: ...
+    async def blob_exists(
+        self,
+        fetcher: _Fetcher,
+        workspace_id: UUID,
+        sha256: str,
+        *,
+        restrict_area_ids: list[UUID] | None,
+    ) -> bool: ...
 
     async def node_visible(
         self,
@@ -140,9 +156,11 @@ async def resolve_anchor(
         digest = text.removeprefix("sha256:").lower()
         if _SHA256_RE.fullmatch(digest) is None:
             raise _unresolvable(anchor, "hinter 'sha256:' werden 64 Hex-Zeichen erwartet.")
-        if not await lookup.blob_exists(fetcher, workspace_id, digest):
-            raise _unresolvable(anchor, "kein Blob mit diesem Hash im Workspace-Katalog.")
-        return ResolvedAnchor(anchor=text, kind=AnchorKind.blob)
+        if not await lookup.blob_exists(
+            fetcher, workspace_id, digest, restrict_area_ids=restrict_area_ids
+        ):
+            raise _unresolvable(anchor, "kein Blob mit diesem Hash im Lese-Scope.")
+        return ResolvedAnchor(anchor=f"sha256:{digest}", kind=AnchorKind.blob)
     if text.startswith("url:"):
         # Rein syntaktisch (kein Abruf, kein Lookup) — der Beleg ist die URL.
         if not text.removeprefix("url:").startswith(("http://", "https://")):
@@ -167,8 +185,10 @@ async def resolve_anchor(
     )
     if area_id is None:
         raise _unresolvable(anchor, "kein Artifact (bzw. Block) mit dieser Kennung im Lese-Scope.")
+    # Kanonische Form OHNE `artifact:`-Praefix (L5) — Edge-Writes speichern
+    # und neighbors-Anfragen matchen genau diese Schreibweise.
     return ResolvedAnchor(
-        anchor=text,
+        anchor=body,
         kind=AnchorKind.artifact,
         artifact_id=artifact_id,
         block_id=block_id if sep else None,

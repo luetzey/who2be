@@ -35,6 +35,13 @@ api.{$DOMAIN} {
     # Container, damit auch versehentlich offene Endpoints nicht raus-leaken.
     @internal path /v1/internal/*
     respond @internal "Forbidden" 403
+    # Body-Limit VOR der App (Security-Review 2026-08-13 M1): das Ingest-Limit
+    # ist 20 MiB Nutzdaten (WHO2BE_INGEST_MAX_BYTES) — 32 MB deckt Base64-
+    # Overhead + JSON-Rahmen; groessere Bodies verwirft Caddy, bevor Starlette
+    # sie puffert.
+    request_body {
+        max_size 32MB
+    }
     reverse_proxy api:8000
 }
 

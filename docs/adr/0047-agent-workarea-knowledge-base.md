@@ -196,3 +196,21 @@ Postgres-DB), mit den oben gewählten Optionen O1A–O5A. Tragende Regeln:
   WorkArea/KB (ADR-0046-Infrastruktur läge bereit).
 - **Heben derived→verified** bleibt der P2-UI (menschliche Kuration)
   vorbehalten.
+
+## Nachtrag 2026-08-13 (Security-Review Wellen 1–2)
+
+- **Sourcelose KB-Nodes area-beschränkter Aufrufer (H2):** Ein Node, dessen
+  Belege keine lesbare Artifact-Area treffen (`url:`/`sha256:` ohne
+  Artifact-Bezug), erbt beim Anlegen durch einen agent-gebundenen Token die
+  **private Area des Agenten** als Quell-Area. Ohne diese Regel wäre der Node
+  quell-frei und damit workspace-weit sichtbar — ein Exfiltrationskanal aus
+  privaten Areas. Menschen (editor+) legen weiterhin quell-freie,
+  workspace-sichtbare kuratierte Aussagen an; Agenten teilen breiter, indem
+  sie Artifact-Belege aus shared Areas zitieren.
+- **Node-Updates (M5):** Sichtbarkeit ist keine Schreib-Erlaubnis — Agenten
+  ändern nur selbst erstellte Nodes, `verified`-Nodes ändern ausschließlich
+  Menschen (editor+).
+- **Rollen-Gate (H1):** Alle WorkArea-/KB-Schreibpfade prüfen wie die übrigen
+  Write-Services zuerst `require_role(editor)` (Token-gepinnte Rolle), dann
+  Capability + Rate — ein bewusst lesend angelegter Agent-Token (viewer)
+  schreibt nie.

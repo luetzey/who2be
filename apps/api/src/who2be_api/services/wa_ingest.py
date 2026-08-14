@@ -25,10 +25,12 @@ Ablauf (Plan „Ingest-Pipeline (B)", bindend):
 7. EINE Postgres-Transaktion: `wa_blob`-Upsert + blob-Artifact + doc-Artifact
    + `sync_artifact_chunks`.
 
-Gates wie `wa_artifacts`: Agent → `require_capability(workarea_write)` +
-`require_write_rate`; Mensch → `require_role(editor)`; beide zusaetzlich
-`ensure_area_access(write)`. Ohne BlobStore → 503 `blobstore_unconfigured`.
-ARC-3: kein SQL, keine HTTPException — nur `ApiGateError` + Repos.
+Gates wie `wa_artifacts` (Security-Review 2026-08-13 H1): IMMER zuerst
+`require_role(editor)` — die Rolle ist auch bei agent-gebundenen Tokens am
+Token gepinnt —, fuer Agenten ZUSAETZLICH `require_capability(workarea_write)`
++ `require_write_rate`; beide zusaetzlich `ensure_area_access(write)`. Ohne
+BlobStore → 503 `blobstore_unconfigured`. ARC-3: kein SQL, keine
+HTTPException — nur `ApiGateError` + Repos.
 """
 
 from __future__ import annotations
@@ -63,7 +65,6 @@ from who2be_api.core.security import (
 from who2be_api.core.workarea_scope import (
     agent_not_found,
     ensure_area_access,
-    is_agent_bound,
 )
 from who2be_api.repositories.wa_blob_repository import WaBlobRepository
 from who2be_api.repositories.work_area_repository import WorkAreaRepository
@@ -73,6 +74,7 @@ from who2be_api.services.wa_blocks import split_markdown
 from who2be_api.services.wa_chunks import sync_artifact_chunks
 from who2be_models import (
     AgentCapability,
+    DocBlock,
     IngestRequest,
     IngestResult,
     OccurredPrecision,
@@ -80,10 +82,18 @@ from who2be_models import (
     WorkAreaGrantLevel,
     WorkspaceRole,
 )
+from who2be_models.workarea import ARTIFACT_CONTENT_MAX_LENGTH, INGEST_MAX_BLOCKS
 
 _ALLOWED_SCHEMES = frozenset({"http", "https"})
+# Nur Standard-Web-Ports (Security-Review 2026-08-13 M2): der Ingest ist ein
+# Dokument-Abruf, kein Portscanner — alles ausser 80/443 ist verboten.
+_ALLOWED_PORTS = frozenset({80, 443})
 _MAX_REDIRECTS = 3
 _FETCH_TIMEOUT_SECONDS = 10.0
+# Wall-Clock-Deadline ueber die GESAMTE Redirect-/Download-Schleife (M4):
+# der httpx-Timeout ist per-Operation — ein Tropf-Server koennte sonst
+# beliebig lange unter dem Einzel-Timeout bleiben.
+_FETCH_DEADLINE_SECONDS = 30.0
 _REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
 # Titel-Obergrenze von `wa_artifact.title` (Modell `ArtifactCreate`).
 _TITLE_MAX_LENGTH = 300
@@ -187,16 +197,20 @@ def _blobstore_unconfigured() -> ApiGateError:
 def _is_forbidden_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     """True fuer Adressen, die der Ingest nie kontaktieren darf.
 
-    Loopback, private Netze (inkl. IPv6-ULA fc00::/7), Link-Local
-    (169.254.0.0/16 — Cloud-Metadaten! — bzw. fe80::/10), Multicast,
-    reserved und unspecified. IPv4-mapped-IPv6 (::ffff:a.b.c.d) wird auf die
-    innere IPv4-Adresse normalisiert, damit der Check nicht umgangen wird.
+    Kriterium ist ``not ip.is_global`` (Security-Review 2026-08-13 M2): das
+    deckt neben loopback/private/link-local auch CGNAT (100.64.0.0/10),
+    192.0.0.0/24 und die Dokumentations-Netze ab. Die bisherigen expliziten
+    Pruefungen bleiben als Belt-and-Suspenders bestehen (z. B. falls eine
+    kuenftige stdlib-Aenderung `is_global` fuer einen Spezialbereich lockert).
+    IPv4-mapped-IPv6 (::ffff:a.b.c.d) wird auf die innere IPv4-Adresse
+    normalisiert, damit der Check nicht umgangen wird.
     """
     mapped = getattr(ip, "ipv4_mapped", None)
     if mapped is not None:
         ip = mapped
     return (
-        ip.is_loopback
+        not ip.is_global
+        or ip.is_loopback
         or ip.is_private
         or ip.is_link_local
         or ip.is_multicast
@@ -208,17 +222,16 @@ def _is_forbidden_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
 def ensure_url_allowed(url: str) -> None:
     """SSRF-Guard (Pipeline-Schritt 2) — pur testbar, wirft 403 `url_forbidden`.
 
-    Prueft Schema (nur http/https), loest den Host via `socket.getaddrinfo`
-    auf und prueft JEDE zurueckgegebene Adresse mit `_is_forbidden_ip`.
-    Nicht aufloesbare Hosts sind ebenfalls verboten (fail closed).
+    Prueft Schema (nur http/https), Ziel-Port (nur 80/443, Security-Review
+    2026-08-13 M2), loest den Host via `socket.getaddrinfo` auf und prueft
+    JEDE zurueckgegebene Adresse mit `_is_forbidden_ip`. Nicht aufloesbare
+    Hosts sind ebenfalls verboten (fail closed).
 
-    **DNS-Rebinding-Grenze (bewusste Entscheidung, im Plan freigegeben):**
-    nach diesem Check verbindet httpx normal ueber den Hostnamen und loest ihn
-    dabei ERNEUT auf. Ein Angreifer mit eigenem DNS koennte zwischen Check und
-    Connect auf eine private IP umschwenken (TTL 0). Die Absicherung dagegen
-    (gepinnte IP im Transport) staende in keinem Verhaeltnis zum Risiko dieses
-    authentifizierten, editor-/capability-gegateten Endpunkts — dokumentierte
-    Restluecke statt komplexem Custom-Transport.
+    **DNS-Rebinding (M3):** nach diesem Check verbindet httpx ueber den
+    Hostnamen und loest ihn dabei ERNEUT auf (TTL-0-TOCTOU). Die Restluecke
+    schliesst `_assert_peer_allowed`: nach Verbindungsaufbau und VOR dem
+    Body-Read wird die tatsaechliche Peer-IP der Verbindung erneut gegen
+    `_is_forbidden_ip` geprueft.
     """
     parts = urlsplit(url)
     scheme = parts.scheme.lower()
@@ -228,6 +241,8 @@ def ensure_url_allowed(url: str) -> None:
     if not host:
         raise _url_forbidden("URL ohne Host.")
     port = parts.port or (443 if scheme == "https" else 80)
+    if port not in _ALLOWED_PORTS:
+        raise _url_forbidden(f"Ziel-Port {port} ist nicht erlaubt (nur 80/443).")
     try:
         infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
     except OSError as exc:
@@ -247,6 +262,43 @@ def ensure_url_allowed(url: str) -> None:
             )
 
 
+def _assert_peer_allowed(response: httpx.Response) -> None:
+    """Prueft die TATSAECHLICHE Peer-IP der Verbindung (DNS-Rebinding, M3).
+
+    `ensure_url_allowed` prueft die DNS-Aufloesung VOR dem Connect; ein
+    Angreifer mit eigenem DNS (TTL 0) koennte zwischen Check und Connect auf
+    eine interne IP umschwenken. Deshalb wird hier — nach Verbindungsaufbau,
+    VOR jedem Body-Read — der echte Socket-Peer via httpx-/httpcore-Extension
+    ``network_stream.get_extra_info("socket")`` (httpx 0.28/httpcore 1.0)
+    gegen `_is_forbidden_ip` gehalten; verboten → 403, der Body wird nie
+    gelesen. Fehlt die Extension oder der Socket (z. B. `MockTransport` in
+    Tests — der macht keine echte Verbindung), wird die Pruefung
+    uebersprungen; der DNS-Guard davor bleibt dann die einzige Ebene.
+    """
+    stream = response.extensions.get("network_stream")
+    if stream is None:
+        return
+    sock = stream.get_extra_info("socket")
+    if sock is None:
+        return
+    try:
+        peer = sock.getpeername()
+    except OSError:
+        return
+    address = str(peer[0]).split("%", 1)[0]
+    try:
+        ip = ipaddress.ip_address(address)
+    except ValueError as exc:
+        # Kein IP-Peer (z. B. Unix-Socket) — mit trust_env=False unerwartet,
+        # fail closed.
+        raise _url_forbidden("Verbindungs-Peer ist keine pruefbare IP-Adresse.") from exc
+    if _is_forbidden_ip(ip):
+        raise _url_forbidden(
+            "Die Verbindung endet auf einem internen/reservierten Adressbereich "
+            "(DNS-Rebinding-Schutz)."
+        )
+
+
 async def fetch_url(
     url: str, max_bytes: int, transport: httpx.AsyncBaseTransport | None = None
 ) -> tuple[bytes, str | None]:
@@ -254,38 +306,54 @@ async def fetch_url(
 
     Redirects laufen MANUELL (``follow_redirects=False``, max. 3 Hops), jeder
     Hop wird erneut durch `ensure_url_allowed` geprueft — ein Redirect auf
-    eine interne Adresse bricht mit 403 ab. Rueckgabe: ``(bytes, content_type)``.
+    eine interne Adresse bricht mit 403 ab; nach dem Connect prueft
+    `_assert_peer_allowed` zusaetzlich die echte Peer-IP (M3). Um die GESAMTE
+    Schleife spannt sich eine Wall-Clock-Deadline (`_FETCH_DEADLINE_SECONDS`,
+    M4) — der per-Operation-Timeout von httpx allein liesse einen
+    Tropf-Server beliebig lange senden. Rueckgabe: ``(bytes, content_type)``.
     """
     current = url
-    async with httpx.AsyncClient(
-        follow_redirects=False,
-        trust_env=False,
-        timeout=httpx.Timeout(_FETCH_TIMEOUT_SECONDS),
-        transport=transport,
-    ) as client:
-        for _hop in range(_MAX_REDIRECTS + 1):
-            # Blocking-DNS nicht auf dem Event-Loop ausfuehren.
-            await asyncio.to_thread(ensure_url_allowed, current)
-            try:
-                async with client.stream("GET", current) as response:
-                    if response.status_code in _REDIRECT_STATUSES:
-                        location = response.headers.get("location")
-                        if not location:
-                            raise _unsupported("Redirect-Antwort ohne Location-Header.")
-                        current = urljoin(current, location)
-                        continue
-                    if not (200 <= response.status_code < 300):
+    try:
+        async with asyncio.timeout(_FETCH_DEADLINE_SECONDS):
+            async with httpx.AsyncClient(
+                follow_redirects=False,
+                trust_env=False,
+                timeout=httpx.Timeout(_FETCH_TIMEOUT_SECONDS),
+                transport=transport,
+            ) as client:
+                for _hop in range(_MAX_REDIRECTS + 1):
+                    # Blocking-DNS nicht auf dem Event-Loop ausfuehren.
+                    await asyncio.to_thread(ensure_url_allowed, current)
+                    try:
+                        async with client.stream("GET", current) as response:
+                            _assert_peer_allowed(response)
+                            if response.status_code in _REDIRECT_STATUSES:
+                                location = response.headers.get("location")
+                                if not location:
+                                    raise _unsupported("Redirect-Antwort ohne Location-Header.")
+                                current = urljoin(current, location)
+                                continue
+                            if not (200 <= response.status_code < 300):
+                                raise _unsupported(
+                                    f"URL-Abruf fehlgeschlagen (HTTP {response.status_code})."
+                                )
+                            buffer = bytearray()
+                            async for chunk in response.aiter_bytes():
+                                buffer.extend(chunk)
+                                if len(buffer) > max_bytes:
+                                    raise _too_large(max_bytes)
+                            return bytes(buffer), response.headers.get("content-type")
+                    except httpx.HTTPError as exc:
                         raise _unsupported(
-                            f"URL-Abruf fehlgeschlagen (HTTP {response.status_code})."
-                        )
-                    buffer = bytearray()
-                    async for chunk in response.aiter_bytes():
-                        buffer.extend(chunk)
-                        if len(buffer) > max_bytes:
-                            raise _too_large(max_bytes)
-                    return bytes(buffer), response.headers.get("content-type")
-            except httpx.HTTPError as exc:
-                raise _unsupported(f"URL-Abruf fehlgeschlagen ({exc.__class__.__name__}).") from exc
+                            f"URL-Abruf fehlgeschlagen ({exc.__class__.__name__})."
+                        ) from exc
+    except TimeoutError as exc:
+        # M4: Gesamtbudget ueberschritten. `ingest_unsupported` (422) statt
+        # `url_forbidden`, weil die URL nichts Verbotenes tut — der Abruf ist
+        # schlicht fehlgeschlagen, wie bei jedem anderen httpx-Fehler auch.
+        raise _unsupported(
+            f"URL-Abruf hat das Gesamtzeitbudget ({_FETCH_DEADLINE_SECONDS:g} s) ueberschritten."
+        ) from exc
     raise _url_forbidden(f"Zu viele Redirects (max. {_MAX_REDIRECTS}).")
 
 
@@ -390,6 +458,41 @@ def _extract_markdown(data: bytes, kind: IngestKind) -> str:
     return _decode_utf8(data, kind)
 
 
+def _extract_blocks(data: bytes, kind: IngestKind) -> list[DocBlock]:
+    """Extraktion + Split mit DoS-Deckeln (Security-Review 2026-08-13 H3a/b).
+
+    Der EXTRAHIERTE Text wird VOR dem Split auf `ARTIFACT_CONTENT_MAX_LENGTH`
+    geprueft (das Byte-Limit der Quelle deckelt komprimierte Formate wie PDF
+    nicht — ein kleines PDF kann Megabytes Text extrahieren), die Blockzahl
+    danach auf `INGEST_MAX_BLOCKS` — beides 413 `ingest_too_large`, nichts
+    persistiert. Synchron und CPU-gebunden: der Aufrufer fuehrt die Funktion
+    via `asyncio.to_thread` aus (H3c).
+    """
+    markdown = _extract_markdown(data, kind)
+    if len(markdown) > ARTIFACT_CONTENT_MAX_LENGTH:
+        raise ApiGateError(
+            status=status.HTTP_413_CONTENT_TOO_LARGE,
+            reason="ingest_too_large",
+            actionable_by="agent",
+            detail=(
+                f"Der extrahierte Text ({len(markdown)} Zeichen) ueberschreitet das "
+                f"Artifact-Limit von {ARTIFACT_CONTENT_MAX_LENGTH} Zeichen."
+            ),
+        )
+    blocks = split_markdown(markdown)
+    if len(blocks) > INGEST_MAX_BLOCKS:
+        raise ApiGateError(
+            status=status.HTTP_413_CONTENT_TOO_LARGE,
+            reason="ingest_too_large",
+            actionable_by="agent",
+            detail=(
+                f"Der extrahierte Text ergibt {len(blocks)} Bloecke — erlaubt sind "
+                f"maximal {INGEST_MAX_BLOCKS} pro Artifact."
+            ),
+        )
+    return blocks
+
+
 # ------------------------------------------------------------------ Eingang
 
 
@@ -448,12 +551,13 @@ class WaIngestService:
         self._workspaces = workspace_repo
 
     def _require_write(self, ctx: WorkspaceContext) -> None:
-        """Schreib-Gate: Mensch → Rolle; Agent → Capability + Rate (Plan-Stack)."""
-        if is_agent_bound(ctx):
-            require_capability(ctx, AgentCapability.workarea_write)
-            require_write_rate(ctx)
-            return
+        """Schreib-Gate (H1, Muster `resource_service.create`): IMMER zuerst
+        `require_role(editor)` — die Rolle ist auch bei agent-gebundenen
+        Tokens am Token gepinnt (ein viewer-Token schreibt nie) —, danach
+        Capability + Rate (fuer Menschen/JWT No-Ops)."""
         require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.workarea_write)
+        require_write_rate(ctx)
 
     async def _resolve_area(self, ctx: WorkspaceContext, area_id: UUID | None) -> UUID:
         """Ziel-Area: explizit oder die private Area des gebundenen Agenten.
@@ -499,7 +603,10 @@ class WaIngestService:
                 "Format nicht unterstuetzt — Ingest nimmt PDF, HTML, Markdown und Text an."
             )
         # Extraktion VOR jedem Write: schlaegt sie fehl, ist NICHTS persistiert.
-        blocks = split_markdown(_extract_markdown(raw, kind))
+        # CPU-gebunden (pypdf/bs4/Split) → in den Thread-Pool, damit der
+        # Event-Loop nicht fuer Sekunden steht (H3c, Muster
+        # `blobstore/adapters/minio.py`); H3a/H3b deckeln Text- und Blockzahl.
+        blocks = await asyncio.to_thread(_extract_blocks, raw, kind)
         sha256 = hashlib.sha256(raw).hexdigest()
 
         dedup = await self._blobs.find_dedup(self._pool, ctx.workspace_id, sha256, target_area)

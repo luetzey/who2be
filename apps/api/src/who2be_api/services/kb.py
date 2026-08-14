@@ -40,6 +40,7 @@ from who2be_api.core.security import (
 )
 from who2be_api.core.workarea_scope import is_agent_bound, readable_area_ids
 from who2be_api.repositories.kb_repository import KbRepository
+from who2be_api.repositories.work_area_repository import WorkAreaRepository
 from who2be_api.services.kb_anchors import (
     ResolvedAnchor,
     resolve_anchor,
@@ -110,19 +111,23 @@ def _no_node_side(from_anchor: str, to_anchor: str) -> ApiGateError:
 class KbService:
     """KB-Nodes, -Kanten, Nachbarschaft und Suche ueber dem `KbRepository`."""
 
-    def __init__(self, pool: asyncpg.Pool, repo: KbRepository) -> None:
+    def __init__(
+        self, pool: asyncpg.Pool, repo: KbRepository, work_areas: WorkAreaRepository
+    ) -> None:
         self._pool = pool
         self._repo = repo
+        self._work_areas = work_areas
 
     # ------------------------------------------------------------------ Gates
 
     def _require_write(self, ctx: WorkspaceContext, capability: AgentCapability) -> None:
-        """Schreib-Gate: Mensch → Rolle; Agent → Capability + Rate (Plan-Stack)."""
-        if is_agent_bound(ctx):
-            require_capability(ctx, capability)
-            require_write_rate(ctx)
-            return
+        """Schreib-Gate (H1, Muster `resource_service.create`): IMMER zuerst
+        `require_role(editor)` — die Rolle ist auch bei agent-gebundenen
+        Tokens am Token gepinnt (ein viewer-Token schreibt nie) —, danach
+        Capability + Rate (fuer Menschen/JWT No-Ops)."""
         require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, capability)
+        require_write_rate(ctx)
 
     def _actor(self, ctx: WorkspaceContext) -> UUID:
         """Akteur-UUID fuer `created_by`: der gebundene Agent, sonst der Mensch."""
@@ -157,6 +162,19 @@ class KbService:
                 )
                 if content_res.area_id is not None:
                     areas.add(content_res.area_id)
+            if not areas and restrict is not None and ctx.agent_id is not None:
+                # H2 (Security-Review 2026-08-13): Nodes area-beschraenkter
+                # Aufrufer mit rein externem Beleg (url:/sha256: ohne lesbares
+                # Artifact) duerfen NICHT sourcelos — und damit workspace-weit
+                # sichtbar — entstehen. Sie erben die private Area des
+                # Agenten; wer breiter teilen will, zitiert Artifact-Belege
+                # aus shared Areas. Menschen (editor+, unrestricted) legen
+                # weiterhin workspace-sichtbare kuratierte Aussagen an.
+                private = await self._work_areas.get_or_create_private_area(
+                    ctx.workspace_id, ctx.agent_id
+                )
+                if private is not None:
+                    areas.add(private.id)
             node = await self._repo.insert_node(
                 conn,
                 ctx.workspace_id,
@@ -196,6 +214,38 @@ class KbService:
             if current is None:
                 return None
             self._require_write(ctx, AgentCapability.kb_write)
+            if is_agent_bound(ctx):
+                # M5 (Security-Review 2026-08-13): Sichtbarkeit ist keine
+                # Schreib-Erlaubnis. Agenten aendern nur eigene Nodes, und
+                # `verified` (menschlich kuratiert) bleibt fuer Agenten
+                # unantastbar — sonst liesse sich kuratiertes Wissen leise
+                # verfaelschen. `area_forbidden` ist der bestehende
+                # 403-Reason fuer fehlende Schreibrechte an WorkArea-/KB-
+                # Objekten (keine neue Taxonomie fuer denselben Sachverhalt).
+                # `created_by` kommt als String aus dem Read-Modell (die DB
+                # speichert die nackte Akteur-UUID) — fuer den Vergleich
+                # normalisieren.
+                if current.created_by != str(ctx.agent_id):
+                    raise ApiGateError(
+                        status=status.HTTP_403_FORBIDDEN,
+                        reason="area_forbidden",
+                        actionable_by="human",
+                        detail=(
+                            "Nur der erstellende Agent (oder ein Mensch ab "
+                            "editor) darf diesen Node aendern."
+                        ),
+                    )
+                if current.tier == NodeTier.verified:
+                    raise ApiGateError(
+                        status=status.HTTP_403_FORBIDDEN,
+                        reason="area_forbidden",
+                        actionable_by="human",
+                        detail=(
+                            "Nodes der Stufe 'verified' aendern nur Menschen "
+                            "(editor+) — Agenten koennen kuratierte Aussagen "
+                            "nicht umschreiben."
+                        ),
+                    )
             additional: ResolvedAnchor | None = None
             if data.additional_source_ref is not None:
                 additional = await resolve_source_ref(
@@ -281,8 +331,10 @@ class KbService:
                 conn,
                 ctx.workspace_id,
                 edge_type=data.type.value,
-                from_anchor=data.from_anchor,
-                to_anchor=data.to_anchor,
+                # Kanonische Anker-Form aus dem Resolver (L5) — `artifact:`-
+                # Praefixe sind gestrippt, neighbors matcht dieselbe Form.
+                from_anchor=from_res.anchor,
+                to_anchor=to_res.anchor,
                 from_node_id=from_res.node_id,
                 to_node_id=to_res.node_id,
                 co_query=data.co_query,

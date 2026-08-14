@@ -40,6 +40,12 @@ KB_CONTENT_REF_MAX_LENGTH = 200
 # Evidence-Anker einer Kanten-Seite (``<artifact_id>#<block_id>`` u. ae.).
 EvidenceAnchor = Annotated[str, StringConstraints(min_length=1, max_length=200)]
 
+# Obergrenze der Evidence-Anker PRO Kanten-Seite (DoS-Schutz, Security-Review
+# 2026-08-13 M6): jeder Anker kostet serverseitig eine Aufloesung + eine
+# `kb_edge_evidence`-Row — mehr als 20 Belege pro Seite sind kein sinnvoller
+# Anwendungsfall, aber ein Amplifikations-Vektor.
+KB_EDGE_EVIDENCE_MAX_ANCHORS = 20
+
 
 class NodeTier(StrEnum):
     """Vertrauensstufe eines KB-Nodes (ADR-0047) — geordnete Leiter.
@@ -160,9 +166,10 @@ class EdgeType(StrEnum):
 class KbEdgeCreate(BaseModel):
     """Eingabe fuer `POST .../kb/edges` — getypte, belegpflichtige Kante.
 
-    `evidence_from`/`evidence_to`: min. 1 Anker PRO Seite (der Service prueft
-    Aufloesbarkeit + Persistenz in EINER Transaktion — 422 `evidence_missing`/
-    `anchor_unresolvable`, kein Teilzustand). `co_occurs_with` verlangt die
+    `evidence_from`/`evidence_to`: min. 1, max. `KB_EDGE_EVIDENCE_MAX_ANCHORS`
+    Anker PRO Seite (der Service prueft Aufloesbarkeit + Persistenz in EINER
+    Transaktion — 422 `evidence_missing`/`anchor_unresolvable`, kein
+    Teilzustand). `co_occurs_with` verlangt die
     statistischen Felder co_query/co_n/co_from/co_to; alle anderen Typen
     duerfen sie NICHT tragen. Die Mindest-Fallzahl (n >= 20) prueft der
     SERVICE mit sprechendem 422 `correlation_underpowered` (tatsaechliches n
@@ -174,8 +181,10 @@ class KbEdgeCreate(BaseModel):
     from_anchor: str = Field(min_length=1, max_length=200)
     to_anchor: str = Field(min_length=1, max_length=200)
     type: EdgeType
-    evidence_from: list[EvidenceAnchor] = Field(min_length=1)
-    evidence_to: list[EvidenceAnchor] = Field(min_length=1)
+    evidence_from: list[EvidenceAnchor] = Field(
+        min_length=1, max_length=KB_EDGE_EVIDENCE_MAX_ANCHORS
+    )
+    evidence_to: list[EvidenceAnchor] = Field(min_length=1, max_length=KB_EDGE_EVIDENCE_MAX_ANCHORS)
     co_query: str | None = Field(default=None, max_length=4000)
     co_n: int | None = Field(default=None, ge=1)
     co_from: datetime | None = None

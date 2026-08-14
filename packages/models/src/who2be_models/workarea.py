@@ -30,6 +30,15 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 ARTIFACT_CONTENT_MAX_LENGTH = 500_000
 # Obergrenze fuer den Markdown-Inhalt EINES Blocks (Server-Split haelt sie ein).
 DOC_BLOCK_MD_MAX_LENGTH = 20_000
+# Obergrenze der Blockzahl eines doc-Artifacts (DoS-Schutz, Security-Review
+# 2026-08-13 H3/M7): der Ingest weist mehr Bloecke mit 413 `ingest_too_large`
+# ab, und Appends duerfen die Zahl kumulativ nie ueberschreiten (SQL-Praedikat
+# im `wa_artifact_repository`). EINE geteilte Konstante fuer beide Pfade.
+INGEST_MAX_BLOCKS = 5_000
+# Obergrenze fuer `IngestRequest.file_b64` (Security-Review 2026-08-13 M1):
+# ~20 MiB Nutzdaten als Base64 (x 4/3) plus Puffer. Grobe Modell-Kappe gegen
+# Speicher-Spitzen VOR dem Byte-genauen Server-Limit (`WHO2BE_INGEST_MAX_BYTES`).
+INGEST_FILE_B64_MAX_LENGTH = 28_000_000
 
 
 class WorkAreaScope(StrEnum):
@@ -287,16 +296,19 @@ class ArtifactMarkdown(BaseModel):
 class IngestRequest(BaseModel):
     """Eingabe fuer `POST .../work-areas/{area_id}/ingest` — Datei ODER URL.
 
-    Genau EINE der Quellen `url`/`file_b64` muss gesetzt sein. Das
+    Genau EINE der Quellen `url`/`file_b64` muss gesetzt sein. Das exakte
     Byte-Limit (`WHO2BE_INGEST_MAX_BYTES`, 413 `ingest_too_large`) und der
-    SSRF-Guard (403 `url_forbidden`) werden serverseitig geprueft — darum
-    traegt `file_b64` hier bewusst keine Modell-Obergrenze.
+    SSRF-Guard (403 `url_forbidden`) werden serverseitig geprueft; `file_b64`
+    traegt zusaetzlich eine grobe Modell-Obergrenze
+    (`INGEST_FILE_B64_MAX_LENGTH`, ~20 MiB Base64 + Puffer), damit ein
+    Riesen-Body schon an der Modellgrenze scheitert statt Speicher zu belegen
+    (Security-Review 2026-08-13 M1).
     """
 
     model_config = ConfigDict(extra="forbid")
 
     url: str | None = Field(default=None, max_length=2000)
-    file_b64: str | None = None
+    file_b64: str | None = Field(default=None, max_length=INGEST_FILE_B64_MAX_LENGTH)
     filename: str | None = Field(default=None, max_length=300)
     occurred_at: datetime | None = None
     occurred_precision: OccurredPrecision | None = None

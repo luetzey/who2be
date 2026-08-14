@@ -27,6 +27,7 @@ from uuid import UUID
 import asyncpg
 
 from who2be_models import ArtifactRead, DocBlock
+from who2be_models.workarea import INGEST_MAX_BLOCKS
 
 _Fetcher: TypeAlias = asyncpg.Pool | asyncpg.Connection
 
@@ -217,17 +218,26 @@ class PgWaArtifactRepository:
         new_blocks: list[DocBlock],
         updated_by: UUID,
     ) -> ArtifactRead | None:
-        """Lockfreies Anhaengen: EIN atomares UPDATE, rev + 1 (s. Modul-Kopf)."""
+        """Lockfreies Anhaengen: EIN atomares UPDATE, rev + 1 (s. Modul-Kopf).
+
+        Das Praedikat deckelt die KUMULATIVE Blockzahl atomar auf
+        `INGEST_MAX_BLOCKS` (Security-Review 2026-08-13 M7, geteilte
+        H3b-Konstante): 0 Rows heisst „verschwunden ODER Cap erreicht" — die
+        Unterscheidung (404 vs. 413) trifft der Service per Exists-Nachlese.
+        """
         row = await conn.fetchrow(
             "UPDATE wa_artifact "
             "SET content = coalesce(content, '[]'::jsonb) || $3::jsonb, "
             "    rev = rev + 1, updated_at = now(), updated_by = $4 "
             "WHERE workspace_id = $1 AND id = $2 AND type = 'doc' "
+            "  AND jsonb_array_length(coalesce(content, '[]'::jsonb)) + $5 <= $6 "
             f"RETURNING {_FULL_COLUMNS}",
             workspace_id,
             artifact_id,
             _blocks_payload(new_blocks),
             updated_by,
+            len(new_blocks),
+            INGEST_MAX_BLOCKS,
         )
         return _to_read(row, include_blocks=True) if row is not None else None
 

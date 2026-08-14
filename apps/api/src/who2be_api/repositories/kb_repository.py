@@ -173,7 +173,14 @@ class KbRepository(Protocol):
         restrict_area_ids: list[UUID] | None,
     ) -> UUID | None: ...
 
-    async def blob_exists(self, fetcher: _Fetcher, workspace_id: UUID, sha256: str) -> bool: ...
+    async def blob_exists(
+        self,
+        fetcher: _Fetcher,
+        workspace_id: UUID,
+        sha256: str,
+        *,
+        restrict_area_ids: list[UUID] | None,
+    ) -> bool: ...
 
     async def add_source_areas(
         self,
@@ -373,13 +380,40 @@ class PgKbRepository:
         )
         return area_id if area_id is not None else None
 
-    async def blob_exists(self, fetcher: _Fetcher, workspace_id: UUID, sha256: str) -> bool:
-        """Blob-Katalog-Lookup (`wa_blob`, 0075) — Blobs sind workspace-,
-        nicht area-gebunden, daher ohne Scope-Filter."""
+    async def blob_exists(
+        self,
+        fetcher: _Fetcher,
+        workspace_id: UUID,
+        sha256: str,
+        *,
+        restrict_area_ids: list[UUID] | None,
+    ) -> bool:
+        """Blob-Katalog-Lookup (`wa_blob`, 0075) — SCOPE-BEWUSST (L2).
+
+        `wa_blob` selbst ist workspace-gebunden; damit der Lookup kein
+        workspace-weites Existenz-Orakel wird (Security-Review 2026-08-13 L2),
+        verlangt ein area-beschraenkter Aufrufer ein fuer ihn LESBARES
+        blob-Artifact (`wa_artifact.type='blob'`, `content_ref` = Hash) in
+        einer seiner Areas. Unbeschraenkte Aufrufer (Mensch editor+) pruefen
+        nur den Katalog.
+        """
+        if restrict_area_ids is None:
+            found = await fetcher.fetchval(
+                "SELECT 1 FROM wa_blob WHERE workspace_id = $1 AND sha256 = $2",
+                workspace_id,
+                sha256,
+            )
+            return found is not None
         found = await fetcher.fetchval(
-            "SELECT 1 FROM wa_blob WHERE workspace_id = $1 AND sha256 = $2",
+            "SELECT 1 FROM wa_blob b "
+            "WHERE b.workspace_id = $1 AND b.sha256 = $2 "
+            "  AND EXISTS (SELECT 1 FROM wa_artifact a "
+            "              WHERE a.workspace_id = b.workspace_id "
+            "                AND a.type = 'blob' AND a.content_ref = b.sha256 "
+            "                AND a.area_id = ANY($3::uuid[]))",
             workspace_id,
             sha256,
+            restrict_area_ids,
         )
         return found is not None
 

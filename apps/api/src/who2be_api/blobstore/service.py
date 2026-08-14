@@ -62,13 +62,17 @@ def build_blob_store(settings: Settings | None = None) -> BlobStorePort | None:
             bucket=resolved_settings.blobstore_bucket,
             secure=resolved_settings.blobstore_secure,
         )
-    except Exception:  # noqa: BLE001 - fail-soft ist hier Absicht (siehe Modul-Docstring)
+    except Exception as exc:  # noqa: BLE001 - fail-soft ist hier Absicht (siehe Modul-Docstring)
         # Z.B. ein Endpoint MIT Schema (`http://…`), den Minio() ablehnt.
-        # Degradation statt Startabbruch — der Fehler ist im Log sichtbar.
+        # Degradation statt Startabbruch. BEWUSST ohne Traceback (Security-
+        # Review 2026-08-13 L4): der Konstruktor-Frame truege die Credentials
+        # in argument-repr-Naehe — nur Fehlerklasse + Endpoint ins Log.
         logger.warning(
-            "BlobStore-Adapter nicht konstruierbar (WHO2BE_BLOBSTORE_ENDPOINT pruefen: "
-            "host:port OHNE Schema) — Ingest/Blob-Reads liefern 503, alles andere laeuft.",
-            exc_info=True,
+            "BlobStore-Adapter nicht konstruierbar (%s; WHO2BE_BLOBSTORE_ENDPOINT=%r "
+            "pruefen: host:port OHNE Schema) — Ingest/Blob-Reads liefern 503, "
+            "alles andere laeuft.",
+            exc.__class__.__name__,
+            resolved_settings.blobstore_endpoint,
         )
         _cached_store = None
         return None

@@ -2,10 +2,11 @@
 
 Gate-Stack (Plan 2026-08-13):
 
-- **Shared-Anlage**: Mensch ab `editor`; agent-gebundene Tokens brauchen
-  stattdessen die Capability `workarea_write` + Schreib-Rate (das Rollen-Gate
-  ersetzt bei Agenten die Capability-Pruefung NICHT — Muster der uebrigen
-  Write-Services).
+- **Shared-Anlage** (Security-Review 2026-08-13 H1): IMMER zuerst
+  `require_role(editor)` — die Rolle ist auch bei agent-gebundenen Tokens am
+  Token gepinnt (ein viewer-Token legt nie Areas an) —; agent-gebundene
+  Tokens brauchen ZUSAETZLICH die Capability `workarea_write` + Schreib-Rate
+  (Muster `resource_service.create`).
 - **Grant-Vergabe/-Entzug**: NUR Menschen (editor+). Ein Agent darf sich oder
   anderen Agenten niemals Zugriff verschaffen — sonst waere das Grant-Modell
   eine Selbstbedienung. Grants gibt es nur auf SHARED Areas: der Owner-Grant
@@ -59,12 +60,13 @@ class WorkAreaService:
         self._pool = pool
 
     def _require_write(self, ctx: WorkspaceContext) -> None:
-        """Schreib-Gate: Mensch → Rolle; Agent → Capability + Rate (Plan-Stack)."""
-        if is_agent_bound(ctx):
-            require_capability(ctx, AgentCapability.workarea_write)
-            require_write_rate(ctx)
-            return
+        """Schreib-Gate (H1, Muster `resource_service.create`): IMMER zuerst
+        `require_role(editor)` — die Rolle ist auch bei agent-gebundenen
+        Tokens am Token gepinnt (ein viewer-Token schreibt nie) —, danach
+        Capability + Rate (fuer Menschen/JWT No-Ops)."""
         require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.workarea_write)
+        require_write_rate(ctx)
 
     def _require_human_editor(self, ctx: WorkspaceContext) -> None:
         """Grant-Verwaltung ist Menschen vorbehalten (editor+).

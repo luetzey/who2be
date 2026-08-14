@@ -179,8 +179,11 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     ports:
-      - "9000:9000"  # S3-API (WHO2BE_BLOBSTORE_ENDPOINT=localhost:9000)
-      - "9001:9001"  # Web-Console (Login: minioadmin/minioadmin)
+      # Nur Loopback binden (Security-Review 2026-08-13 L3): der Dev-Store
+      # laeuft mit Default-Credentials — er darf nie im LAN erreichbar sein.
+      # Prod setzt MINIO_ROOT_PASSWORD und exponiert nur ueber Caddy/Netz.
+      - "127.0.0.1:9000:9000"  # S3-API (WHO2BE_BLOBSTORE_ENDPOINT=localhost:9000)
+      - "127.0.0.1:9001:9001"  # Web-Console (Login: minioadmin/minioadmin)
     volumes:
       - minio-data:/data
     healthcheck:
