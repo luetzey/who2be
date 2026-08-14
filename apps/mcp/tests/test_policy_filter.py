@@ -69,6 +69,11 @@ _DEFAULT_POLICY_TOOLS = {
     "read_artifact",
     "list_artifacts",
     "search_workarea",
+    # KB-Reads (WP9, Domain "kb"): sichtbar wie die WorkArea-Reads; die
+    # Write-Tools (create_node/update_node/create_edge) bleiben ohne
+    # `kb_write`/`kb_edge_write` unsichtbar.
+    "search_kb",
+    "neighbors",
 }
 
 _ALL_CAPABILITIES = [
@@ -82,6 +87,8 @@ _ALL_CAPABILITIES = [
     "promote_retire",
     "external_tool_write",
     "workarea_write",
+    "kb_write",
+    "kb_edge_write",
 ]
 
 
@@ -197,8 +204,8 @@ def test_full_policy_agent_sees_all_tools(monkeypatch: pytest.MonkeyPatch) -> No
     _install_identity(monkeypatch, _whoami_handler(payload))
     names = _list_tool_names()
     assert names == set(MCP_TOOL_REQUIREMENTS)
-    # 58 server.py-Tools + 8 WorkArea-Tools (WP8, `tools/workarea.py`).
-    assert len(names) == 66
+    # 58 server.py-Tools + 8 WorkArea-Tools (WP8) + 5 KB-Tools (WP9).
+    assert len(names) == 71
 
 
 def test_resource_read_none_hides_resource_tools(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -258,8 +265,8 @@ def test_unrestricted_admin_sees_all_tools(monkeypatch: pytest.MonkeyPatch) -> N
     names = _list_tool_names()
     memory_tools = {name for name, req in MCP_TOOL_REQUIREMENTS.items() if req.memory is not None}
     assert names == set(MCP_TOOL_REQUIREMENTS) - memory_tools
-    # 66 Tools minus die 3 Memory-Tools (ohne Agent-Bindung kein Namespace).
-    assert len(names) == 63
+    # 71 Tools minus die 3 Memory-Tools (ohne Agent-Bindung kein Namespace).
+    assert len(names) == 68
 
 
 def test_unrestricted_viewer_sees_no_write_tools(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -463,6 +463,37 @@ _TOOLS: list[_ToolDoc] = [
             "Zeitpunkt des Inhalts, nie now()."
         ),
     ),
+    # --- Knowledge Base (ADR-0047, WP9): kuratierte, belegpflichtige
+    #     Wissensschicht ueber der WorkArea. Gemischte Gruppe wie WorkArea —
+    #     die Reads (search_kb/neighbors) sind grant-dynamisch immer gelistet,
+    #     die Writes verlangen `kb_write` (Nodes) bzw. `kb_edge_write` (Kanten).
+    #     `promote_artifact` folgt mit WP14 (REST-Route + Registrierung).
+    _ToolDoc(
+        signature=(
+            "search_kb(query, limit?) / neighbors(anchor, type?, depth?) / "
+            "create_node(...) / update_node(...) / create_edge(...)"
+        ),
+        tool_names=(
+            "search_kb",
+            "neighbors",
+            "create_node",
+            "update_node",
+            "create_edge",
+        ),
+        read_domain="kb",
+        description=(
+            "Die kuratierte Knowledge Base: belegte Aussagen (Nodes, tier "
+            "hypothesis/derived/verified) mit getypten Kanten — strikt getrennt "
+            "von der WorkArea (search_kb findet NIE Rohmaterial, eigener "
+            "Index). Treffer-Anker `node:<id>` loest neighbors(anchor) zu den "
+            "Kontext-Kanten auf; co_occurs_with-Nachbarn tragen IMMER die "
+            "Fallzahl `co_n` — nenne sie mit, nie als blanke Aussage. "
+            "Schreiben verlangt `kb_write` (create_node/update_node — "
+            "Belegpflicht via source_ref, Tier-Aufstieg nur mit andersartigem "
+            "Zusatz-Beleg) bzw. `kb_edge_write` (create_edge — Evidence je "
+            "Seite; aus Gleichzeitigkeit folgt NUR co_occurs_with)."
+        ),
+    ),
 ]
 
 # Applied-vs-Triggered-Hinweis: Fest im System-Prompt eingebettete Playbooks

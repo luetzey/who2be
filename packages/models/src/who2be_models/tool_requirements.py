@@ -108,6 +108,12 @@ _MEMORY_SUGGEST = ToolRequirement(memory=MemoryMode.suggest)
 # grant-dynamische Domain "workarea" (kein `ReadScope` — siehe `_read_visible`).
 _WORKAREA_READ = ToolRequirement(read_domain="workarea")
 _WORKAREA_WRITE = ToolRequirement(capabilities=(AgentCapability.workarea_write,))
+# Knowledge Base (ADR-0047, WP9): Node-Writes hinter `kb_write`, Kanten hinter
+# der eigenen `kb_edge_write` (Kanten-Semantik = Kurations-Macht); Reads ueber
+# die grant-dynamische Domain "kb" (kein `ReadScope` — siehe `_read_visible`).
+_KB_READ = ToolRequirement(read_domain="kb")
+_KB_WRITE = ToolRequirement(capabilities=(AgentCapability.kb_write,))
+_KB_EDGE_WRITE = ToolRequirement(capabilities=(AgentCapability.kb_edge_write,))
 
 
 # Alle in `apps/mcp/src/who2be_mcp/server.py` registrierten Tools (Quelle: die
@@ -217,6 +223,16 @@ MCP_TOOL_REQUIREMENTS: dict[str, ToolRequirement] = {
     "delete_artifact": _WORKAREA_WRITE,
     "ingest": _WORKAREA_WRITE,
     "search_workarea": _WORKAREA_READ,
+    # --- Knowledge Base (ADR-0047, WP9) — kuratierte Wissensschicht aus
+    #     `tools/kb.py`: Reads grant-dynamisch immer gelistet (API bleibt die
+    #     Autoritaet), Node-Writes hinter `kb_write`, Kanten hinter
+    #     `kb_edge_write`. `promote_artifact` folgt erst mit WP14
+    #     (REST-Route + Registrierung; Requirement dann: resource_write).
+    "search_kb": _KB_READ,
+    "create_node": _KB_WRITE,
+    "update_node": _KB_WRITE,
+    "create_edge": _KB_EDGE_WRITE,
+    "neighbors": _KB_READ,
 }
 
 
