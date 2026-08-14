@@ -121,6 +121,13 @@ services:
       MOLLIE_API_KEY: ${MOLLIE_API_KEY:-}
       MOLLIE_WEBHOOK_SECRET: ${MOLLIE_WEBHOOK_SECRET:-}
       MOLLIE_WEBHOOK_URL: ${MOLLIE_WEBHOOK_URL:-}
+      # Tabellen-Store (ADR-0049): eine SQLite-Datei pro WorkArea unter
+      # {workspace_id}/{area_id}.sqlite — die Datei ist die Isolationsgrenze,
+      # read-only erzwingt die Engine (query_only + Authorizer). Persistiert
+      # im Volume tablestore-data, damit Area-Tabellen Neustarts ueberleben.
+      WHO2BE_TABLESTORE_DIR: /data/tablestore
+    volumes:
+      - tablestore-data:/data/tablestore
     ports:
       - "8000:8000"
     depends_on:
@@ -215,3 +222,5 @@ services:
 volumes:
   db-data:
   minio-data:
+  # SQLite-Dateien des Tabellen-Stores (ADR-0049), eine pro WorkArea.
+  tablestore-data:

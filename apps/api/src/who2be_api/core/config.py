@@ -160,6 +160,15 @@ class Settings(BaseSettings):
         default=20 * 1024 * 1024,
         validation_alias=AliasChoices("WHO2BE_INGEST_MAX_BYTES", "ingest_max_bytes"),
     )
+    # Tabellen-Store (ADR-0049, Agent WorkArea): Basisverzeichnis der
+    # SQLite-Dateien `{workspace_id}/{area_id}.sqlite` — die Datei ist die
+    # Isolationsgrenze, read-only erzwingt die Engine (query_only + Authorizer).
+    # Default fuer lokales Dev; Compose mountet das Volume `tablestore-data`
+    # und setzt WHO2BE_TABLESTORE_DIR auf /data/tablestore.
+    tablestore_dir: str = Field(
+        default="./data/tablestore",
+        validation_alias=AliasChoices("WHO2BE_TABLESTORE_DIR", "tablestore_dir"),
+    )
     # On-Prem-Adapter: signierte Lizenzdatei (Ed25519), offline mit `K_pub` verifiziert.
     # Leer ⇒ reines OSS (unbegrenzt). NIE der Private-Key — nur der Lizenz-Token.
     license_key: str = Field(
