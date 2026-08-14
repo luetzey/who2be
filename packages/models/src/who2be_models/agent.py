@@ -65,6 +65,12 @@ class AgentUpdate(BaseModel):
 
     `tool_policy` ist optional: `None` laesst die bestehende Policy unangetastet
     (analog zu name/description). Ein gesetztes Objekt ersetzt die Policy ganz.
+
+    `model_provider`/`model_name` sind die betreiber-gepflegte Modell-Config
+    (User-Entscheidung 6, ADR-0047): das Modell gilt pro Agent-Konfiguration,
+    nicht pro Einzelaufruf. `None` laesst den Bestand unangetastet (analog
+    `tool_policy`); Aenderungen protokolliert der Service ab WP14 im
+    `audit_log`.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -75,6 +81,8 @@ class AgentUpdate(BaseModel):
     system_prompt_template_id: UUID | None = None
     status: AgentStatus | None = None
     tool_policy: AgentToolPolicy | None = None
+    model_provider: str | None = Field(default=None, min_length=1, max_length=100)
+    model_name: str | None = Field(default=None, min_length=1, max_length=200)
 
 
 class AgentCopy(BaseModel):
@@ -134,6 +142,14 @@ class AgentRead(BaseModel):
     template_version: int | None = None
     playbook_count: int = 0
     pending_memory_count: int = 0
+    # Betreiber-gepflegte Modell-Config (User-Entscheidung 6, ADR-0047): welches
+    # LLM diesen Agenten faehrt — gilt pro Agent-Konfiguration, nicht pro
+    # Einzelaufruf (Who2Be ist kein Runtime-Host). None = nicht hinterlegt.
+    # Grundlage der Betreiber-/Compliance-Query zusammen mit dem
+    # Auto-Zugriffslog (`agent_access_log`, 0079); Aenderungen auditiert der
+    # Update-Pfad ab WP14.
+    model_provider: str | None = None
+    model_name: str | None = None
     created_at: datetime
     updated_at: datetime
 
