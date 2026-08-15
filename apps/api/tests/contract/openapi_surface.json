@@ -820,6 +820,11 @@
     "operationId": "insert_rows_v1_workspaces__workspace_id__wa_tables__table_id__rows_post"
   },
   {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/wa-tables/{table_id}/save-result",
+    "operationId": "save_query_result_v1_workspaces__workspace_id__wa_tables__table_id__save_result_post"
+  },
+  {
     "method": "GET",
     "path": "/v1/workspaces/{workspace_id}/whoami",
     "operationId": "whoami_v1_workspaces__workspace_id__whoami_get"

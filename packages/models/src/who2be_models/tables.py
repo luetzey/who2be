@@ -31,7 +31,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from who2be_models.workarea import Sensitivity
+from who2be_models.workarea import OccurredPrecision, Sensitivity
 
 # SQL-Identifier-Sicherheit: Spalten- und Tabellennamen gehen verbatim in
 # SQLite-DDL ein — nur Kleinbuchstaben, Ziffern, Unterstrich, kein
@@ -208,6 +208,27 @@ class TableQuery(BaseModel):
 
     sql: str = Field(min_length=1, max_length=TABLE_QUERY_SQL_MAX_LENGTH)
     format: QueryFormat = QueryFormat.json
+    limit: int = Field(default=200, ge=1, le=TABLE_QUERY_MAX_LIMIT)
+
+
+class SaveQueryResult(BaseModel):
+    """Eingabe fuer `POST .../wa-tables/{id}/save-result` — Query einfrieren (M-Ersatz).
+
+    Entscheidung 7 (kein Chart-Rendering): der SERVER fuehrt das SQL read-only
+    aus und persistiert Query + eingefrorenes Ergebnis als doc-Artifact in der
+    Area der Tabelle — die Zahlen im Artifact stammen aus der Engine, nie aus
+    Modell-Text (Spec §10.6). `occurred_at` ist der fachliche Zeitpunkt des
+    Ergebnisses (Pflicht, kein now()-Fallback — Muster `ArtifactCreate`);
+    Default-Praezision `day`, weil Auswertungen typisch tagesgenau sind.
+    `sql`/`limit` unterliegen denselben Grenzen wie `TableQuery`.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    sql: str = Field(min_length=1, max_length=TABLE_QUERY_SQL_MAX_LENGTH)
+    title: str = Field(min_length=1, max_length=300)
+    occurred_at: datetime
+    occurred_precision: OccurredPrecision = OccurredPrecision.day
     limit: int = Field(default=200, ge=1, le=TABLE_QUERY_MAX_LIMIT)
 
 

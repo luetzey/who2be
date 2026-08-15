@@ -32,7 +32,10 @@ durchgereicht/ignoriert — Konventions- und Regel-Logik (M2/L) ist WP17;
 Zugriffslog (Spec F, WP14): erfolgreiche Agent-Zugriffe werden NACH der
 Operation best-effort geloggt (`services/access_log.log_access`, No-op fuer
 Menschen): `query`/`describe` als ``(table, read)``, der Zeilen-Import als
-``(table, write)`` — `ref_id` ist die Katalog-ID (`wa_table.id`). Die
+``(table, write)`` — `ref_id` ist die Katalog-ID (`wa_table.id`).
+`save_query_result` (WP16) loggt hier NUR ``(table, read)`` fuer die Query;
+das ``(artifact, write)`` kommt aus dem Artifact-Anlage-Pfad
+(`WaArtifactService.create`) — kein Doppel-Log. Die
 Sensitivity ist fix ``general``: Tabellen tragen im MVP KEINE eigene
 Sensitivity-Stufe (weder Katalog noch SQLite-Datei fuehren das Feld);
 sobald sie eine bekommen, snapshottet der Log-Aufruf hier den Server-Wert.
@@ -47,7 +50,7 @@ from __future__ import annotations
 import csv
 import io
 import sqlite3
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from uuid import UUID
 
 import asyncpg
@@ -64,6 +67,7 @@ from who2be_api.core.workarea_scope import ensure_area_access, readable_area_ids
 from who2be_api.repositories.agent_access_log_repository import AccessOperation
 from who2be_api.repositories.wa_table_repository import WaTableRepository
 from who2be_api.services.access_log import log_access
+from who2be_api.services.wa_artifacts import WaArtifactService
 from who2be_api.tablestore import (
     AreaStoreMissingError,
     ColumnSpec,
@@ -74,9 +78,12 @@ from who2be_api.tablestore import (
 )
 from who2be_models import (
     AgentCapability,
+    ArtifactCreate,
+    ArtifactRead,
     QueryFormat,
     QueryResult,
     RowsInsert,
+    SaveQueryResult,
     Sensitivity,
     TableDescription,
     TableQuery,
@@ -87,6 +94,7 @@ from who2be_models import (
     WorkspaceRole,
 )
 from who2be_models.tables import TableColumnType
+from who2be_models.workarea import ARTIFACT_CONTENT_MAX_LENGTH
 
 # JSON-Zeilenwerte, die SQLite parametrisiert tragen kann — Listen/Objekte in
 # Zellen sind kein Tabellen-Datum (ADR-0049: kein json in Spalten).
@@ -138,6 +146,53 @@ def _query_not_readonly(detail: str) -> ApiGateError:
             f"Die Query wurde von der Engine verweigert ({detail}). Nur lesende "
             "Statements (SELECT) sind erlaubt — DDL/DML/ATTACH/PRAGMA nie."
         ),
+    )
+
+
+def _result_too_large() -> ApiGateError:
+    """413 fuer ein gerendertes Query-Ergebnis ueber dem Artifact-Content-Cap.
+
+    Reason ist bewusst das bestehende `ingest_too_large` (Muster
+    `wa_artifacts._too_many_blocks`): dieselbe Schutzfamilie, geschlossene
+    Taxonomie — ein neuer Reason fuer denselben Sachverhalt waere Vokabular
+    ohne Not.
+    """
+    return ApiGateError(
+        status=status.HTTP_413_CONTENT_TOO_LARGE,
+        reason="ingest_too_large",
+        actionable_by="agent",
+        detail=(
+            "Das gerenderte Query-Ergebnis ueberschreitet das Content-Limit "
+            f"von {ARTIFACT_CONTENT_MAX_LENGTH} Zeichen pro Artifact — "
+            "`limit` senken oder das Ergebnis per Aggregation verdichten."
+        ),
+    )
+
+
+def _compose_result_doc(
+    *,
+    title: str,
+    table_name: str,
+    sql: str,
+    columns: list[str],
+    rows: list[list[object]],
+    truncated: bool,
+) -> str:
+    """Komponiert das doc-Artifact eines eingefrorenen Query-Ergebnisses (WP16).
+
+    Spec §10.6: die Zahlen im Artifact stammen aus dem Result-Set der Engine
+    — der SERVER rendert (via `_render_markdown`), nie Modell-Text. Der
+    Zeitstempel ist der Ausfuehrungszeitpunkt (UTC); `occurred_at` des
+    Artifacts traegt davon getrennt den FACHLICHEN Zeitpunkt aus dem Request.
+    """
+    stamp = datetime.now(tz=UTC).strftime("%Y-%m-%d %H:%M UTC")
+    cut = ", gekuerzt" if truncated else ""
+    return (
+        f"# {title}\n\n"
+        f"Eingefrorenes Query-Ergebnis vom {stamp} "
+        f"(Tabelle '{table_name}', {len(rows)} Zeilen{cut}).\n\n"
+        f"```sql\n{sql}\n```\n\n"
+        f"{_render_markdown(columns, rows)}\n"
     )
 
 
@@ -233,11 +288,19 @@ class WaTableService:
     """Tabellen-Katalog + SQLite-Store hinter den Workspace-Gates."""
 
     def __init__(
-        self, pool: asyncpg.Pool, table_repo: WaTableRepository, store: TableStore
+        self,
+        pool: asyncpg.Pool,
+        table_repo: WaTableRepository,
+        store: TableStore,
+        *,
+        artifact_service: WaArtifactService,
     ) -> None:
         self._pool = pool
         self._tables = table_repo
         self._store = store
+        # Bestehender Artifact-Anlage-Pfad (WP4) fuer `save_query_result` —
+        # Gates/Blocks/Chunk-Sync/Zugriffslog liegen dort, nie dupliziert hier.
+        self._artifact_service = artifact_service
 
     # ------------------------------------------------------------------ Gates
 
@@ -331,6 +394,69 @@ class WaTableService:
             raise TableRowsInvalid(f"Import verletzt das Tabellen-Schema: {exc}") from exc
         await self._log(ctx, table.id, "write")
         return result
+
+    async def save_query_result(
+        self, ctx: WorkspaceContext, table_id: UUID, data: SaveQueryResult
+    ) -> ArtifactRead | None:
+        """Friert Query + Ergebnis als doc-Artifact ein (WP16, M-Ersatz); `None` → 404.
+
+        Entscheidung 7 / Spec §10.6: der SERVER fuehrt das SQL read-only aus
+        und rendert die Zahlen ins Artifact — nie Modell-Text. Das Artifact
+        entsteht in DERSELBEN Area wie die Tabelle, ueber den BESTEHENDEN
+        Anlage-Pfad `WaArtifactService.create` (Blocks/Chunk-Sync/Zugriffslog
+        `(artifact, write)` inklusive — kein Doppel-Log hier).
+
+        Gates: Rolle/Capability/Area-WRITE laufen als Fail-fast VOR der Query
+        (ein nicht schreibberechtigter Aufrufer fuehrt kein SQL aus); dieselben
+        Gates laufen in `WaArtifactService.create` erneut — idempotent und
+        bewusst in Kauf genommen. NUR `require_write_rate` haengt allein am
+        Artifact-Create: der Sliding-Window-Zaehler KONSUMIERT pro Aufruf,
+        ein zweiter Aufruf hier wuerde jede Anlage doppelt zaehlen.
+
+        Fehlerbild wie `query`: `ReadOnlyViolation` → 403 `query_not_readonly`,
+        SQL-/Syntaxfehler → `TableQueryInvalid` (Router → 400) — in beiden
+        Faellen entsteht KEIN Artifact.
+        """
+        table = await self._visible_table(ctx, table_id)
+        if table is None:
+            return None
+        require_role(ctx, WorkspaceRole.editor)
+        require_capability(ctx, AgentCapability.workarea_write)
+        await ensure_area_access(self._pool, ctx, table.area_id, WorkAreaGrantLevel.write)
+        try:
+            result = await self._store.run_readonly_query(
+                ctx.workspace_id, table.area_id, data.sql, limit=data.limit
+            )
+        except ReadOnlyViolation as exc:
+            raise _query_not_readonly(str(exc)) from exc
+        except AreaStoreMissingError:
+            return None
+        except sqlite3.DatabaseError as exc:
+            raise TableQueryInvalid(str(exc)) from exc
+        content = _compose_result_doc(
+            title=data.title,
+            table_name=table.name,
+            sql=data.sql,
+            columns=result.columns,
+            rows=result.rows,
+            truncated=result.truncated,
+        )
+        if len(content) > ARTIFACT_CONTENT_MAX_LENGTH:
+            # Server-komponierter Content — der Cap aus `ArtifactCreate` wuerde
+            # sonst als 500 (interne ValidationError) statt als 413 enden.
+            raise _result_too_large()
+        artifact = await self._artifact_service.create(
+            ctx,
+            table.area_id,
+            ArtifactCreate(
+                title=data.title,
+                content_md=content,
+                occurred_at=data.occurred_at,
+                occurred_precision=data.occurred_precision,
+            ),
+        )
+        await self._log(ctx, table.id, "read")
+        return artifact
 
     # ------------------------------------------------------------------- Reads
 

@@ -8,6 +8,8 @@ Pfade unter `/v1/workspaces/{ws_id}` (Prefix aus `main.py`):
   (``{inserted, skipped}``, Spec K).
 - ``POST /wa-tables/{table_id}/query`` — read-only SQL (Engine-Garantie;
   Formate json|markdown|csv, Zeilen-Cap + `truncated`).
+- ``POST /wa-tables/{table_id}/save-result`` — Query + eingefrorenes Ergebnis
+  als doc-Artifact in der Area der Tabelle (WP16, M-Ersatz — Entscheidung 7).
 - ``GET /wa-tables/{table_id}`` — describe (Schema, Zeilenzahl,
   Wertebereiche, Area-Konventionen).
 
@@ -30,12 +32,16 @@ from who2be_api.core.db import get_pool
 from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.repositories.wa_table_repository import PgWaTableRepository
+from who2be_api.routers.wa_artifacts import get_wa_artifact_service
 from who2be_api.services.mcp_limit_service import enforce_mcp_read_limit
 from who2be_api.services.tablestore_provider import get_table_store
+from who2be_api.services.wa_artifacts import WaArtifactService
 from who2be_api.services.wa_tables import TableQueryInvalid, TableRowsInvalid, WaTableService
 from who2be_models import (
+    ArtifactRead,
     QueryResult,
     RowsInsert,
+    SaveQueryResult,
     TableDescription,
     TableQuery,
     WaTableCreate,
@@ -58,8 +64,13 @@ class RowsInsertResult(BaseModel):
 
 def get_wa_table_service(
     pool: Annotated[asyncpg.Pool, Depends(get_pool)],
+    artifact_service: Annotated[WaArtifactService, Depends(get_wa_artifact_service)],
 ) -> WaTableService:
-    return WaTableService(pool, PgWaTableRepository(), get_table_store())
+    """Verdrahtet den Tabellen-Service mit dem BESTEHENDEN Artifact-Stack —
+    `save_query_result` legt das Ergebnis-Artifact ueber dessen Anlage-Pfad an."""
+    return WaTableService(
+        pool, PgWaTableRepository(), get_table_store(), artifact_service=artifact_service
+    )
 
 
 Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]
@@ -122,6 +133,26 @@ async def query_table(table_id: UUID, data: TableQuery, ctx: Ctx, service: Servi
     if result is None:
         raise _table_not_found()
     return result
+
+
+@router.post("/wa-tables/{table_id}/save-result", status_code=status.HTTP_201_CREATED)
+@limiter.limit(write_limit)
+async def save_query_result(
+    request: Request, table_id: UUID, data: SaveQueryResult, ctx: Ctx, service: Service
+) -> ArtifactRead:
+    """Fuehrt das SQL read-only aus und friert Query + Ergebnis als
+    doc-Artifact in der Area der Tabelle ein (WP16, M-Ersatz): die Zahlen im
+    Artifact rendert der SERVER aus dem Result-Set (Spec §10.6).
+    Schreibversuche → 403 `query_not_readonly`, Syntaxfehler → 400 — dann
+    entsteht KEIN Artifact. Die Antwort ist das ArtifactRead; nachgelagerte
+    KB-Nodes referenzieren es als `source_ref` (Spec M)."""
+    try:
+        artifact = await service.save_query_result(ctx, table_id, data)
+    except TableQueryInvalid as exc:
+        raise _query_invalid(exc) from exc
+    if artifact is None:
+        raise _table_not_found()
+    return artifact
 
 
 @router.get("/wa-tables/{table_id}", dependencies=[Depends(enforce_mcp_read_limit)])
