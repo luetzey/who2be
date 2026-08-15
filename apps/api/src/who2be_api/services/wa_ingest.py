@@ -69,6 +69,7 @@ from who2be_api.core.workarea_scope import (
 from who2be_api.repositories.wa_blob_repository import WaBlobRepository
 from who2be_api.repositories.work_area_repository import WorkAreaRepository
 from who2be_api.repositories.workspace_repository import WorkspaceRepository
+from who2be_api.services.access_log import log_access
 from who2be_api.services.content_locale import resolve_content_locale
 from who2be_api.services.wa_blocks import split_markdown
 from who2be_api.services.wa_chunks import sync_artifact_chunks
@@ -678,6 +679,29 @@ class WaIngestService:
                 blocks=blocks,
                 locale=locale,
             )
+        # Zugriffslog (Spec F, WP14): der Ingest hat den Blob UND das
+        # abgeleitete doc-Artifact GESCHRIEBEN — je ein Eintrag, mit der
+        # persistierten Server-Sensitivity. Der Dedup-Fall oben loggt bewusst
+        # NICHT: dort wird nichts geschrieben, und der Inhalt des bestehenden
+        # Artifacts fliesst nicht zurueck (nur die IDs) — erst ein folgender
+        # `read` loggt.
+        persisted = Sensitivity(sensitivity)
+        await log_access(
+            self._pool,
+            ctx,
+            ref_kind="blob",
+            ref_id=sha256,
+            operation="write",
+            sensitivity=persisted,
+        )
+        await log_access(
+            self._pool,
+            ctx,
+            ref_kind="artifact",
+            ref_id=str(doc_artifact_id),
+            operation="write",
+            sensitivity=persisted,
+        )
         return IngestResult(
             blob_artifact_id=blob_artifact_id,
             doc_artifact_id=doc_artifact_id,

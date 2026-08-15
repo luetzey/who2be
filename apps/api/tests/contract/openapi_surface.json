@@ -746,6 +746,11 @@
   },
   {
     "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/timeline",
+    "operationId": "timeline_v1_workspaces__workspace_id__timeline_get"
+  },
+  {
+    "method": "GET",
     "path": "/v1/workspaces/{workspace_id}/tokens",
     "operationId": "list_tokens_v1_workspaces__workspace_id__tokens_get"
   },
@@ -793,6 +798,11 @@
     "method": "POST",
     "path": "/v1/workspaces/{workspace_id}/wa-artifacts/{artifact_id}/append",
     "operationId": "append_artifact_v1_workspaces__workspace_id__wa_artifacts__artifact_id__append_post"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/wa-artifacts/{artifact_id}/promote",
+    "operationId": "promote_artifact_v1_workspaces__workspace_id__wa_artifacts__artifact_id__promote_post"
   },
   {
     "method": "GET",

@@ -53,7 +53,8 @@ _PERSONA_ACTIVE_EXPR = """
 _SELECT = f"""
     SELECT a.id, a.workspace_id, a.owner_id, a.name, a.description,
            a.persona_id, a.system_prompt_template_id, a.status, a.tool_policy,
-           a.is_managed, a.created_at, a.updated_at,
+           a.is_managed, a.model_provider, a.model_name,
+           a.created_at, a.updated_at,
            {_PERSONA_ACTIVE_EXPR.format(col="a.persona_id")} AS persona_active
     FROM agent a
 """
@@ -65,7 +66,7 @@ _SELECT = f"""
 _RETURNING = f"""
     RETURNING id, workspace_id, owner_id, name, description,
               persona_id, system_prompt_template_id, status, tool_policy,
-              is_managed, created_at, updated_at,
+              is_managed, model_provider, model_name, created_at, updated_at,
               {_PERSONA_ACTIVE_EXPR.format(col="agent.persona_id")} AS persona_active
 """
 
@@ -121,6 +122,8 @@ class AgentRepository(Protocol):
         template_id: UUID | None,
         status: AgentStatus | None,
         tool_policy: AgentToolPolicy | None,
+        model_provider: str | None = None,
+        model_name: str | None = None,
     ) -> AgentRead | None: ...
 
     async def delete(self, workspace_id: UUID, agent_id: UUID) -> bool: ...
@@ -369,7 +372,13 @@ class PgAgentRepository:
         template_id: UUID | None,
         status: AgentStatus | None,
         tool_policy: AgentToolPolicy | None,
+        model_provider: str | None = None,
+        model_name: str | None = None,
     ) -> AgentRead | None:
+        # `model_provider`/`model_name` (User-Entscheidung 6, ADR-0047):
+        # COALESCE-Semantik wie alle anderen Felder — `None` laesst den
+        # Bestand unangetastet. Explizites Leeren (zurueck auf NULL) ist
+        # damit bewusst (noch) nicht moeglich — dokumentierter offener Punkt.
         try:
             row = await self._pool.fetchrow(
                 "UPDATE agent SET "
@@ -379,6 +388,8 @@ class PgAgentRepository:
                 "  system_prompt_template_id = COALESCE($6, system_prompt_template_id), "
                 "  status = COALESCE($7, status), "
                 "  tool_policy = COALESCE($8::jsonb, tool_policy), "
+                "  model_provider = COALESCE($9, model_provider), "
+                "  model_name = COALESCE($10, model_name), "
                 "  updated_at = now() "
                 "WHERE id = $1 AND workspace_id = $2 "
                 f"{_RETURNING}",
@@ -390,6 +401,8 @@ class PgAgentRepository:
                 template_id,
                 status.value if status is not None else None,
                 tool_policy.model_dump(mode="json") if tool_policy is not None else None,
+                model_provider,
+                model_name,
             )
         except asyncpg.ForeignKeyViolationError:
             return None

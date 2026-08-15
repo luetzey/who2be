@@ -11,6 +11,7 @@ gehoert.
 from datetime import datetime
 from uuid import UUID, uuid4
 
+import asyncpg
 from fastapi import HTTPException, status
 
 from who2be_api.core.agent_scope import agent_read_restrict
@@ -21,6 +22,7 @@ from who2be_api.core.security import (
     require_unmanaged,
 )
 from who2be_api.repositories.agent_repository import AgentRepository
+from who2be_api.services.audit_service import AuditService
 from who2be_models import (
     AgentCapability,
     AgentCopy,
@@ -88,10 +90,24 @@ def _guard_policy_escalation(ctx: WorkspaceContext, target: AgentToolPolicy) -> 
 
 
 class AgentService:
-    """Agent-CRUD ohne Versionierung."""
+    """Agent-CRUD ohne Versionierung.
 
-    def __init__(self, repo: AgentRepository) -> None:
+    `audit_service` + `pool` sind optional (aeltere Test-Fakes laufen ohne):
+    sind beide gesetzt, protokolliert der Update-Pfad Aenderungen an der
+    betreiber-gepflegten Modell-Config (`model_provider`/`model_name`,
+    User-Entscheidung 6/ADR-0047) als `audit_log`-Eintrag
+    ``agent.model_config_changed`` mit altem UND neuem Wert.
+    """
+
+    def __init__(
+        self,
+        repo: AgentRepository,
+        audit_service: AuditService | None = None,
+        pool: asyncpg.Pool | None = None,
+    ) -> None:
         self._repo = repo
+        self._audit = audit_service
+        self._pool = pool
 
     async def _missing_for_enable(
         self,
@@ -206,6 +222,15 @@ class AgentService:
         return agent
 
     async def update(self, ctx: WorkspaceContext, agent_id: UUID, data: AgentUpdate) -> AgentRead:
+        """Konfig-Update in-place (None = Feld bleibt unangetastet).
+
+        `model_provider`/`model_name` (User-Entscheidung 6, ADR-0047) laufen
+        mit derselben None-Semantik durch; explizites Leeren (zurueck auf
+        NULL) ist dadurch bewusst (noch) nicht moeglich — dokumentierter
+        offener Punkt. Eine tatsaechliche Aenderung der Modell-Config wird im
+        `audit_log` protokolliert (`agent.model_config_changed`, alter +
+        neuer Wert im detail).
+        """
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.agent_write)
         if data.tool_policy is not None:
@@ -237,12 +262,42 @@ class AgentService:
             data.system_prompt_template_id,
             data.status,
             data.tool_policy,
+            data.model_provider,
+            data.model_name,
         )
         if agent is None:
             # Existenz oben bereits bestaetigt → der Composite-FK auf
             # persona/template war das Problem.
             raise _invalid_reference()
+        await self._audit_model_config_change(ctx, existing, agent)
         return agent
+
+    async def _audit_model_config_change(
+        self, ctx: WorkspaceContext, before: AgentRead, after: AgentRead
+    ) -> None:
+        """Auditiert eine Aenderung der Modell-Config (ADR-0047, WP14).
+
+        Vergleich auf dem persistierten Stand (vorher/nachher, nie auf dem
+        Client-Input): nur wenn sich `model_provider` oder `model_name`
+        tatsaechlich geaendert hat, entsteht ein `audit_log`-Eintrag
+        ``agent.model_config_changed`` mit altem + neuem Wert (Muster
+        `token_service`). Ohne Audit-Verdrahtung (Test-Fakes) No-op.
+        """
+        if self._audit is None or self._pool is None:
+            return
+        if before.model_provider == after.model_provider and before.model_name == after.model_name:
+            return
+        await self._audit.record(
+            self._pool,
+            action="agent.model_config_changed",
+            actor_id=ctx.user_id,
+            workspace_id=ctx.workspace_id,
+            target=after.id,
+            detail={
+                "model_provider": {"old": before.model_provider, "new": after.model_provider},
+                "model_name": {"old": before.model_name, "new": after.model_name},
+            },
+        )
 
     async def copy(self, ctx: WorkspaceContext, agent_id: UUID, data: AgentCopy) -> AgentRead:
         """Dupliziert einen Agent unter neuem Namen.

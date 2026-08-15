@@ -15,6 +15,14 @@ Ein `area_id`-Filter ausserhalb des Lese-Scopes liefert schlicht `[]` — ein
 leeres Suchergebnis ist von „Area existiert nicht" nicht unterscheidbar (kein
 Existenz-Orakel, Muster `workarea_scope`).
 
+Zugriffslog (Spec F, WP14): die Suche loggt bewusst NICHT — sie liefert nur
+Anker + Snippets, nie das Dokument. Der eigentliche Inhaltszugriff passiert
+beim folgenden `read_artifact(id, anchor)`, und DER schreibt den
+``(artifact, read)``-Eintrag (`wa_artifacts.read`). Ein Log je Suchtreffer
+wuerde Elemente als „an den Anbieter gegangen" ausweisen, deren Inhalt der
+Agent nie gesehen hat — das Log soll die Spec-F-Frage praezise beantworten,
+nicht maximal rauschen.
+
 ARC-3: kein SQL, keine HTTPException — nur Scope-Helper und das Repository.
 """
 

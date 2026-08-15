@@ -19,6 +19,15 @@ ANDERER Beleg-Art; Downgrades sind frei. `co_occurs_with` verlangt n >= 20 —
 das sprechende 422 `correlation_underpowered` (tatsaechliches n im detail)
 kommt von hier, VOR dem DB-CHECK.
 
+Zugriffslog (Spec F, WP14): erfolgreiche Agent-Zugriffe werden NACH der
+Operation best-effort geloggt (`services/access_log.log_access`, No-op fuer
+Menschen): Einzel-Read als ``(node, read)``, `create_node`/`update_node` als
+``(node, write)``; `create_edge` loggt ``(node, write)`` auf BEIDE
+Node-Seiten (sofern vorhanden) — eine Kante veraendert die Aussagekraft
+beider Nodes. Sensitivity ist IMMER der Server-Stand des Nodes.
+`neighbors`/`search` loggen NICHT (Titel/Snippet-artige Uebersichten, Muster
+`wa_search`) — der Inhalt fliesst beim Einzel-Read, und DER loggt.
+
 ARC-3: kein SQL, keine HTTPException — nur `ApiGateError`, das Repository und
 der Anker-Resolver (`kb_anchors`). Not-Found-Faelle kommen als `None` zurueck;
 der Router uebersetzt sie in 404.
@@ -26,6 +35,7 @@ der Router uebersetzt sie in 404.
 
 from __future__ import annotations
 
+import logging
 from uuid import UUID
 
 import asyncpg
@@ -39,8 +49,10 @@ from who2be_api.core.security import (
     require_write_rate,
 )
 from who2be_api.core.workarea_scope import is_agent_bound, readable_area_ids
+from who2be_api.repositories.agent_access_log_repository import AccessOperation
 from who2be_api.repositories.kb_repository import KbRepository
 from who2be_api.repositories.work_area_repository import WorkAreaRepository
+from who2be_api.services.access_log import log_access
 from who2be_api.services.kb_anchors import (
     ResolvedAnchor,
     resolve_anchor,
@@ -58,8 +70,11 @@ from who2be_models import (
     KbNodeUpdate,
     KbSearchHit,
     NodeTier,
+    Sensitivity,
     WorkspaceRole,
 )
+
+logger = logging.getLogger(__name__)
 
 # Mindest-Fallzahl einer co_occurs_with-Korrelation (Spec O; DB-Backstop:
 # CHECK co_n >= 20 in 0077 — das sprechende 422 liefert dieser Service).
@@ -189,6 +204,7 @@ class KbService:
                 created_by=self._actor(ctx),
             )
             await self._repo.add_source_areas(conn, ctx.workspace_id, node.id, sorted(areas))
+        await self._log_node(ctx, node.id, "write", node.sensitivity)
         return node
 
     async def update_node(
@@ -268,6 +284,8 @@ class KbService:
                 await self._repo.add_source_areas(
                     conn, ctx.workspace_id, node_id, [additional.area_id]
                 )
+        if updated is not None:
+            await self._log_node(ctx, node_id, "write", updated.sensitivity)
         return updated
 
     def _check_tier_transition(
@@ -360,6 +378,8 @@ class KbService:
                 await self._repo.add_source_areas(
                     conn, ctx.workspace_id, from_res.node_id, parent_areas
                 )
+        node_sides = [nid for nid in (from_res.node_id, to_res.node_id) if nid is not None]
+        await self._log_edge_node_writes(ctx, restrict, node_sides)
         return edge.model_copy(
             update={
                 "evidence_from": list(data.evidence_from),
@@ -372,9 +392,54 @@ class KbService:
     async def get_node(self, ctx: WorkspaceContext, node_id: UUID) -> KbNodeRead | None:
         """Node im Sichtbarkeits-Scope; `None` = Router antwortet 404."""
         restrict = await readable_area_ids(self._pool, ctx)
-        return await self._repo.get_node(
+        node = await self._repo.get_node(
             self._pool, ctx.workspace_id, node_id, restrict_area_ids=restrict
         )
+        if node is not None:
+            await self._log_node(ctx, node.id, "read", node.sensitivity)
+        return node
+
+    # ------------------------------------------------------------- Zugriffslog
+
+    async def _log_node(
+        self, ctx: WorkspaceContext, node_id: UUID, operation: AccessOperation, sens: Sensitivity
+    ) -> None:
+        """Best-effort-Zugriffslog NACH erfolgreicher Operation (Spec F);
+        `sens` ist der SERVER-Stand des Nodes, nie ein Client-Input."""
+        await log_access(
+            self._pool,
+            ctx,
+            ref_kind="node",
+            ref_id=str(node_id),
+            operation=operation,
+            sensitivity=sens,
+        )
+
+    async def _log_edge_node_writes(
+        self, ctx: WorkspaceContext, restrict: list[UUID] | None, node_ids: list[UUID]
+    ) -> None:
+        """Loggt ``(node, write)`` fuer die Node-Seiten einer neuen Kante.
+
+        Die Sensitivity jeder Seite wird NACH dem Commit per Einzel-Read
+        nachgeschlagen; der gesamte Block ist best-effort (Muster
+        `access_log.log_access`) — auch ein Lookup-Fehler bricht den
+        Kanten-Erfolg nie. Fuer Menschen-Tokens entfaellt alles ohne Query.
+        """
+        if ctx.agent_id is None:
+            return
+        try:
+            for node_id in node_ids:
+                node = await self._repo.get_node(
+                    self._pool, ctx.workspace_id, node_id, restrict_area_ids=restrict
+                )
+                if node is not None:
+                    await self._log_node(ctx, node.id, "write", node.sensitivity)
+        except Exception:  # noqa: BLE001 — Logging bricht NIE den Hauptpfad
+            logger.warning(
+                "Zugriffslog fuer Kanten-Node-Seiten fehlgeschlagen (agent=%s)",
+                ctx.agent_id,
+                exc_info=True,
+            )
 
     async def neighbors(
         self, ctx: WorkspaceContext, anchor: str, edge_type: EdgeType | None, depth: int

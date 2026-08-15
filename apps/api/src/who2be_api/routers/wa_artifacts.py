@@ -11,8 +11,9 @@ Pfade unter `/v1/workspaces/{ws_id}` (Prefix aus `main.py`):
   `anchor` liefert nur den einen Block.
 - ``GET /work-areas/{area_id}/artifacts`` — Metadaten-Liste.
 - ``DELETE /wa-artifacts/{id}`` — 204 (Chunks via FK CASCADE).
+- ``POST /wa-artifacts/{id}/promote`` — Artifact → Resource-DRAFT (Spec G,
+  WP14); `?target_resource_id=` promotet in eine bestehende Resource.
 
-Promote-Route und Zugriffslog kommen bewusst NICHT hier an (WP14).
 Rate-Limit-Paritaet (Muster `resources.py`): Mutationen
 `@limiter.limit(write_limit)` + `request` als erster Parameter; agent-Reads
 `enforce_mcp_read_limit`. Autorisierung liegt im Service.
@@ -27,17 +28,24 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from who2be_api.core.db import get_pool
 from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
+from who2be_api.repositories.resource_repository import PgResourceRepository
+from who2be_api.repositories.status_history_repository import PgStatusHistoryRepository
 from who2be_api.repositories.wa_artifact_repository import PgWaArtifactRepository
 from who2be_api.repositories.work_area_repository import PgWorkAreaRepository
 from who2be_api.repositories.workspace_repository import PgWorkspaceRepository
+from who2be_api.services.entity_quota_service import enforce_entity_quota
 from who2be_api.services.mcp_limit_service import enforce_mcp_read_limit
+from who2be_api.services.resource_service import ResourceService
+from who2be_api.services.status_history_service import StatusHistoryService
 from who2be_api.services.wa_artifacts import WaArtifactService
+from who2be_api.services.wa_promote import PromoteUnsupportedArtifact, WaPromoteService
 from who2be_models import (
     ArtifactAppend,
     ArtifactCreate,
     ArtifactMarkdown,
     ArtifactPatch,
     ArtifactRead,
+    ResourceRead,
 )
 
 router = APIRouter(tags=["wa-artifacts"])
@@ -54,8 +62,30 @@ def get_wa_artifact_service(
     )
 
 
+def get_wa_promote_service(
+    pool: Annotated[asyncpg.Pool, Depends(get_pool)],
+) -> WaPromoteService:
+    """Verdrahtet den Promote-Service mit dem BESTEHENDEN Resource-Stack.
+
+    `usage_repo` entfaellt bewusst — der Promote loescht nie (nur create/
+    update_draft); die uebrigen Abhaengigkeiten spiegeln
+    `resources.get_resource_service`.
+    """
+    return WaPromoteService(
+        pool,
+        PgWaArtifactRepository(),
+        ResourceService(
+            PgResourceRepository(pool),
+            pool=pool,
+            workspace_repo=PgWorkspaceRepository(pool),
+        ),
+        StatusHistoryService(PgStatusHistoryRepository()),
+    )
+
+
 Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]
 Service = Annotated[WaArtifactService, Depends(get_wa_artifact_service)]
+PromoteService = Annotated[WaPromoteService, Depends(get_wa_promote_service)]
 # Anker-Query (`?anchor=<block_id>`): liefert nur den adressierten Block.
 Anchor = Annotated[str | None, Query(min_length=1, max_length=64)]
 
@@ -130,3 +160,35 @@ async def list_artifacts(area_id: UUID, ctx: Ctx, service: Service) -> list[Arti
 @limiter.limit(write_limit)
 async def delete_artifact(request: Request, artifact_id: UUID, ctx: Ctx, service: Service) -> None:
     await service.delete(ctx, artifact_id)
+
+
+@router.post(
+    "/wa-artifacts/{artifact_id}/promote",
+    status_code=status.HTTP_201_CREATED,
+    # Promote ERZEUGT eine Resource — dasselbe Entity-Quota-Gate wie
+    # `POST /resources` (Cloud-Edition; On-Prem No-op). Konservativ feuert es
+    # auch auf dem `target_resource_id`-Pfad (dort entsteht nichts Neues).
+    dependencies=[Depends(enforce_entity_quota)],
+)
+@limiter.limit(write_limit)
+async def promote_artifact(
+    request: Request,
+    artifact_id: UUID,
+    ctx: Ctx,
+    promote_service: PromoteService,
+    target_resource_id: Annotated[UUID | None, Query()] = None,
+) -> ResourceRead:
+    """Promotet ein doc-Artifact zu einer Resource-DRAFT — nie Active (Spec G).
+
+    Ohne `target_resource_id` entsteht eine neue Resource (Draft v1) mit
+    Herkunfts-Note (`status_history`) + Herkunftszeile in der Description;
+    mit `target_resource_id` ersetzt der Draft-Pfad die Bloecke der
+    bestehenden Resource (Review-Konflikt → 409). Nicht-doc-Artifacts → 422
+    (Domain-Validation, Muster `wa_tables`).
+    """
+    try:
+        return await promote_service.promote_artifact(ctx, artifact_id, target_resource_id)
+    except PromoteUnsupportedArtifact as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc

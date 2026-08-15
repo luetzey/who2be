@@ -29,6 +29,14 @@ IGNORE` macht den Doppel-Import zum No-op (`{inserted, skipped}`).
 durchgereicht/ignoriert — Konventions- und Regel-Logik (M2/L) ist WP17;
 `source_artifact_id` landet als `_source_artifact` in jeder Row (Provenance).
 
+Zugriffslog (Spec F, WP14): erfolgreiche Agent-Zugriffe werden NACH der
+Operation best-effort geloggt (`services/access_log.log_access`, No-op fuer
+Menschen): `query`/`describe` als ``(table, read)``, der Zeilen-Import als
+``(table, write)`` — `ref_id` ist die Katalog-ID (`wa_table.id`). Die
+Sensitivity ist fix ``general``: Tabellen tragen im MVP KEINE eigene
+Sensitivity-Stufe (weder Katalog noch SQLite-Datei fuehren das Feld);
+sobald sie eine bekommen, snapshottet der Log-Aufruf hier den Server-Wert.
+
 ARC-3: kein SQL, keine HTTPException — nur `ApiGateError`, Domain-Exceptions
 (`TableRowsInvalid`/`TableQueryInvalid`, uebersetzt der Router), Repos,
 `core/workarea_scope` und der TableStore (SQLite NUR ueber ihn).
@@ -53,7 +61,9 @@ from who2be_api.core.security import (
     require_write_rate,
 )
 from who2be_api.core.workarea_scope import ensure_area_access, readable_area_ids
+from who2be_api.repositories.agent_access_log_repository import AccessOperation
 from who2be_api.repositories.wa_table_repository import WaTableRepository
+from who2be_api.services.access_log import log_access
 from who2be_api.tablestore import (
     AreaStoreMissingError,
     ColumnSpec,
@@ -67,6 +77,7 @@ from who2be_models import (
     QueryFormat,
     QueryResult,
     RowsInsert,
+    Sensitivity,
     TableDescription,
     TableQuery,
     TableSchema,
@@ -305,7 +316,7 @@ class WaTableService:
             str(data.source_artifact_id) if data.source_artifact_id is not None else None
         )
         try:
-            return await self._store.insert_rows(
+            result = await self._store.insert_rows(
                 ctx.workspace_id,
                 table.area_id,
                 table.name,
@@ -318,6 +329,8 @@ class WaTableService:
             # Backstop hinter der Vorab-Validierung (z. B. Typ-Kollision) —
             # Aufruferfehler, kein Serverzustand.
             raise TableRowsInvalid(f"Import verletzt das Tabellen-Schema: {exc}") from exc
+        await self._log(ctx, table.id, "write")
+        return result
 
     # ------------------------------------------------------------------- Reads
 
@@ -352,6 +365,7 @@ class WaTableService:
             rendered = _render_csv(result.columns, result.rows)
         else:
             rendered = None
+        await self._log(ctx, table.id, "read")
         return QueryResult(
             columns=result.columns,
             rows=result.rows if data.format is QueryFormat.json else None,
@@ -392,6 +406,7 @@ class WaTableService:
         conventions = await self._tables.list_conventions(
             self._pool, ctx.workspace_id, table.area_id
         )
+        await self._log(ctx, table.id, "read")
         return TableDescription(
             schema=table.schema_,
             row_count=described.row_count,
@@ -400,6 +415,29 @@ class WaTableService:
         )
 
     async def list_for_area(self, ctx: WorkspaceContext, area_id: UUID) -> list[WaTableRead]:
-        """Tabellen einer Area (Katalog); fehlender Read-Grant → 404."""
+        """Tabellen einer Area (Katalog); fehlender Read-Grant → 404.
+
+        Zugriffslog: KEIN Eintrag pro Treffer (Metadaten-Liste, Muster
+        `wa_artifacts.list_for_area`) — Daten fliessen erst bei
+        `query`/`describe`, und DIE loggen.
+        """
         await ensure_area_access(self._pool, ctx, area_id, WorkAreaGrantLevel.read)
         return await self._tables.list_for_area(self._pool, ctx.workspace_id, area_id)
+
+    # ------------------------------------------------------------- Zugriffslog
+
+    async def _log(self, ctx: WorkspaceContext, table_id: UUID, operation: AccessOperation) -> None:
+        """Best-effort-Zugriffslog NACH erfolgreicher Operation (Spec F).
+
+        Sensitivity fix ``general`` — Tabellen tragen im MVP keine eigene
+        Sensitivity (s. Modul-Kopf); der Wert kommt trotzdem vom SERVER,
+        nie vom Client.
+        """
+        await log_access(
+            self._pool,
+            ctx,
+            ref_kind="table",
+            ref_id=str(table_id),
+            operation=operation,
+            sensitivity=Sensitivity.general,
+        )

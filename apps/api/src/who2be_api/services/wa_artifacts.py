@@ -16,6 +16,13 @@ detail). Jeder Content-Write synchronisiert die Passagen
 (`wa_chunks.sync_artifact_chunks`) in DERSELBEN Transaktion; beim Delete
 raeumt der FK ON DELETE CASCADE (0076) die Chunks ab.
 
+Zugriffslog (Spec F, WP14): jeder erfolgreiche Agent-Zugriff wird NACH der
+Operation best-effort geloggt (`services/access_log.log_access`, No-op fuer
+Menschen) — Einzel-read und alle Content-Writes als ``(artifact, read|write)``
+mit der SERVER-Sensitivity des Artifacts. Die Metadaten-LISTE loggt bewusst
+NICHT pro Treffer: sie liefert keine Inhalte, und ein Log-Eintrag je
+Listenzeile wuerde das Log mit Nicht-Zugriffen fluten.
+
 ARC-3: kein SQL, keine HTTPException — nur `ApiGateError`, Repos und die
 Helper aus `core/workarea_scope`. Transaktionssteuerung (`pool.acquire` +
 `conn.transaction`) liegt bewusst hier (Muster `version_status`).
@@ -41,9 +48,11 @@ from who2be_api.core.workarea_scope import (
     ensure_area_access,
     readable_area_ids,
 )
+from who2be_api.repositories.agent_access_log_repository import AccessOperation
 from who2be_api.repositories.wa_artifact_repository import WaArtifactRepository
 from who2be_api.repositories.work_area_repository import WorkAreaRepository
 from who2be_api.repositories.workspace_repository import WorkspaceRepository
+from who2be_api.services.access_log import log_access
 from who2be_api.services.content_locale import resolve_content_locale
 from who2be_api.services.wa_blocks import apply_patch, render_markdown, split_markdown
 from who2be_api.services.wa_chunks import sync_artifact_chunks
@@ -56,6 +65,7 @@ from who2be_models import (
     ArtifactRead,
     ArtifactType,
     DocBlock,
+    Sensitivity,
     WorkAreaGrantLevel,
     WorkspaceRole,
 )
@@ -208,6 +218,7 @@ class WaArtifactService:
                 blocks=blocks,
                 locale=locale,
             )
+        await self._log(ctx, created.id, "write", created.sensitivity)
         return created
 
     async def append(
@@ -247,6 +258,7 @@ class WaArtifactService:
                 blocks=updated.blocks or [],
                 locale=locale,
             )
+        await self._log(ctx, artifact_id, "write", updated.sensitivity)
         return updated
 
     async def patch(
@@ -292,6 +304,7 @@ class WaArtifactService:
                 blocks=updated.blocks or [],
                 locale=locale,
             )
+        await self._log(ctx, artifact_id, "write", updated.sensitivity)
         return updated
 
     async def delete(self, ctx: WorkspaceContext, artifact_id: UUID) -> None:
@@ -302,6 +315,7 @@ class WaArtifactService:
         async with self._pool.acquire() as conn, conn.transaction():
             if not await self._artifacts.delete(conn, ctx.workspace_id, artifact_id):
                 raise artifact_not_found()
+        await self._log(ctx, artifact_id, "write", existing.sensitivity)
 
     # ------------------------------------------------------------------- Reads
 
@@ -316,6 +330,7 @@ class WaArtifactService:
             if block is None:
                 raise _anchor_unresolvable(anchor)
             blocks = [block]
+        await self._log(ctx, artifact_id, "read", artifact.sensitivity)
         return ArtifactMarkdown(
             artifact_id=artifact.id,
             title=artifact.title,
@@ -324,6 +339,34 @@ class WaArtifactService:
         )
 
     async def list_for_area(self, ctx: WorkspaceContext, area_id: UUID) -> list[ArtifactRead]:
-        """Artifacts einer Area (Metadaten); fehlender Read-Grant → 404."""
+        """Artifacts einer Area (Metadaten); fehlender Read-Grant → 404.
+
+        Zugriffslog: bewusst KEIN Eintrag pro Treffer (Spec F, s. Modul-Kopf)
+        — die Liste liefert Metadaten, der Inhalt fliesst erst beim
+        Einzel-`read`, und DER loggt.
+        """
         await ensure_area_access(self._pool, ctx, area_id, WorkAreaGrantLevel.read)
         return await self._artifacts.list_for_area(self._pool, ctx.workspace_id, area_id)
+
+    # ------------------------------------------------------------- Zugriffslog
+
+    async def _log(
+        self,
+        ctx: WorkspaceContext,
+        artifact_id: UUID,
+        operation: AccessOperation,
+        sens: Sensitivity,
+    ) -> None:
+        """Best-effort-Zugriffslog NACH erfolgreicher Operation (Spec F).
+
+        `sens` ist IMMER die Server-Sensitivity des Artifacts (gelesener
+        bzw. geschriebener Stand) — nie ein Client-Input.
+        """
+        await log_access(
+            self._pool,
+            ctx,
+            ref_kind="artifact",
+            ref_id=str(artifact_id),
+            operation=operation,
+            sensitivity=sens,
+        )
