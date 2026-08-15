@@ -9,6 +9,14 @@ Kritische Invarianten:
   (tatsaechliches n im detail), n=20 → 201; neighbors traegt die Fallzahl;
   Hochstufen auf `verified` immer 422; `hypothesis → derived` nur mit Beleg
   ANDERER Art.
+- Korrelations-Disziplin (Spec O §10.7, WP18): inhaltliche Kanten
+  (`supports`/`belongs_to`/`derived_from`) mit AUSSCHLIESSLICH
+  Timeline-url:-Evidence auf einer Seite → 422 `evidence_missing`;
+  `hypothesis → derived` an einem Node, dessen einzige Kanten
+  `co_occurs_with` sind, verlangt einen Inhalts-Beleg (artifact|blob) —
+  ein weiterer url:-Anker → 422 `tier_upgrade_forbidden`
+  („Ko-Okkurrenz"), artifact-/sha256-Zweitbeleg → 200; ohne Kanten greift
+  nur die Kind-Verschiedenheit.
 - Sichtbarkeit (Spec E): Node aus zwei Areas ist nur mit BEIDEN Grants
   sichtbar (GET 404 + 0 Suchtreffer sonst); Capability-Gate: Token nur mit
   `workarea_write` darf keine Nodes anlegen (403 `missing_capability`).
@@ -300,6 +308,195 @@ def test_co_occurs_fallzahl_und_neighbors(make_auth_headers: AuthFactory) -> Non
             )
             assert [n["direction"] for n in back.json()] == ["in"]
             assert back.json()[0]["co_n"] == 20
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db")
+def test_content_kanten_verlangen_beleg_jenseits_der_timeline(
+    make_auth_headers: AuthFactory,
+) -> None:
+    """Spec O §10.7 (WP18, Punkt 1): eine inhaltliche Kante, deren Evidence auf
+    einer Seite NUR aus Timeline-url:-Ankern besteht → 422 `evidence_missing`
+    ohne Teilzustand; ein Inhalts-Anker NEBEN dem Timeline-Verweis genuegt;
+    fuer `co_occurs_with` ist reine Timeline-Evidence der Normalfall."""
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    prefix = f"/v1/workspaces/{ws}"
+    timeline = f"url:https://who2be.example{prefix}/timeline?from=2026-01-01&to=2026-06-30"
+    try:
+        with TestClient(app) as client:
+            area_id = _shared_area(client, prefix, auth, "KB-Zeitachse")
+            artifact_id, block_id = _artifact(client, prefix, auth, area_id, "Inhalts-Beleg.")
+            anchor = f"{artifact_id}#{block_id}"
+            a_id = _node(client, prefix, auth, anchor).json()["id"]
+            b_id = _node(
+                client, prefix, auth, anchor, content="Regentage im ersten Halbjahr."
+            ).json()["id"]
+
+            # supports mit NUR Timeline-Evidence auf der from-Seite → 422.
+            blocked = client.post(
+                f"{prefix}/kb/edges",
+                json={
+                    "from_anchor": f"node:{a_id}",
+                    "to_anchor": f"node:{b_id}",
+                    "type": "supports",
+                    "evidence_from": [timeline],
+                    "evidence_to": [anchor],
+                },
+                headers=auth,
+            )
+            assert blocked.status_code == 422, blocked.text
+            problem = blocked.json()
+            assert problem["reason"] == "evidence_missing"
+            assert "co_occurs_with" in problem["detail"]
+            assert _edge_counts(ws) == (0, 0)
+
+            # belongs_to, beide Seiten nur Timeline-Verweise → ebenfalls 422.
+            blocked_both = client.post(
+                f"{prefix}/kb/edges",
+                json={
+                    "from_anchor": f"node:{a_id}",
+                    "to_anchor": f"node:{b_id}",
+                    "type": "belongs_to",
+                    "evidence_from": [timeline],
+                    "evidence_to": [timeline],
+                },
+                headers=auth,
+            )
+            assert blocked_both.status_code == 422
+            assert blocked_both.json()["reason"] == "evidence_missing"
+            assert _edge_counts(ws) == (0, 0)
+
+            # Ein Inhalts-Anker NEBEN dem Timeline-Verweis → 201.
+            ok = client.post(
+                f"{prefix}/kb/edges",
+                json={
+                    "from_anchor": f"node:{a_id}",
+                    "to_anchor": f"node:{b_id}",
+                    "type": "supports",
+                    "evidence_from": [timeline, anchor],
+                    "evidence_to": [anchor],
+                },
+                headers=auth,
+            )
+            assert ok.status_code == 201, ok.text
+
+            # co_occurs_with lebt von der Zeitachse: reine Timeline-Evidence
+            # plus co_-Felder → 201 (die Korrelation IST die Behauptung).
+            co = client.post(
+                f"{prefix}/kb/edges", json=_co_edge(a_id, b_id, timeline, 20), headers=auth
+            )
+            assert co.status_code == 201, co.text
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db")
+def test_tier_upgrade_bei_nur_ko_okkurrenz_belegen(make_auth_headers: AuthFactory) -> None:
+    """Spec-Akzeptanz O (WP18, Punkt 2, starke Form): ein hypothesis-Node aus
+    Korrelation (einzige Kanten: co_occurs_with) steigt NICHT auf derived,
+    solange kein Inhalts-Beleg (artifact|blob) existiert — ein weiterer
+    url:-Anker → 422; ein artifact- oder sha256-Zweitbeleg → 200; ohne
+    Kanten greift die Regel nicht (dort zaehlt nur Kind-Verschiedenheit)."""
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    prefix = f"/v1/workspaces/{ws}"
+    timeline = f"url:https://who2be.example{prefix}/timeline?from=2026-01-01&to=2026-06-30"
+    try:
+        with TestClient(app) as client:
+            area_id = _shared_area(client, prefix, auth, "KB-Ko-Okkurrenz")
+            artifact_id, block_id = _artifact(client, prefix, auth, area_id, "Inhalts-Beleg.")
+            anchor = f"{artifact_id}#{block_id}"
+            b_id = _node(
+                client, prefix, auth, anchor, content="Indigo-Kaeufe im Fruehjahr."
+            ).json()["id"]
+
+            # Node A haengt aus Korrelation heraus NUR an einer co-Kante.
+            a_id = _node(
+                client,
+                prefix,
+                auth,
+                "url:https://example.org/regenstatistik",
+                content="Regen faellt mit Indigo-Kaeufen zusammen.",
+            ).json()["id"]
+            co = client.post(
+                f"{prefix}/kb/edges", json=_co_edge(a_id, b_id, timeline, 20), headers=auth
+            )
+            assert co.status_code == 201, co.text
+
+            # Zweitbeleg WIEDER nur url: → 422 mit dem Ko-Okkurrenz-Detail
+            # (die Korrelations-Regel greift VOR der Kind-Verschiedenheit).
+            url_only = client.patch(
+                f"{prefix}/kb/nodes/{a_id}",
+                json={"tier": "derived", "additional_source_ref": "url:https://example.org/b"},
+                headers=auth,
+            )
+            assert url_only.status_code == 422, url_only.text
+            problem = url_only.json()
+            assert problem["reason"] == "tier_upgrade_forbidden"
+            assert "Ko-Okkurrenz" in problem["detail"]
+
+            # artifact-Zweitbeleg IST ein Inhalts-Beleg jenseits der
+            # Korrelation → 200, obwohl alle Kanten co_occurs_with sind.
+            upgraded = client.patch(
+                f"{prefix}/kb/nodes/{a_id}",
+                json={"tier": "derived", "additional_source_ref": anchor},
+                headers=auth,
+            )
+            assert upgraded.status_code == 200, upgraded.text
+            assert upgraded.json()["tier"] == "derived"
+
+            # sha256-Zweitbeleg (Blob im Katalog) zaehlt ebenfalls als
+            # Inhalts-Beleg → 200.
+            c_id = _node(
+                client,
+                prefix,
+                auth,
+                "url:https://example.org/temperaturreihe",
+                content="Temperatur faellt mit Indigo-Kaeufen zusammen.",
+            ).json()["id"]
+            co_c = client.post(
+                f"{prefix}/kb/edges", json=_co_edge(c_id, b_id, timeline, 20), headers=auth
+            )
+            assert co_c.status_code == 201, co_c.text
+            sha = "ab" * 32
+            _db_fetchval(
+                "INSERT INTO wa_blob (workspace_id, sha256, size_bytes, media_type, storage_key) "
+                "VALUES ($1, $2, 42, 'application/pdf', $3) RETURNING sha256",
+                ws,
+                sha,
+                f"blobs/{ws}/{sha}",
+            )
+            via_blob = client.patch(
+                f"{prefix}/kb/nodes/{c_id}",
+                json={"tier": "derived", "additional_source_ref": f"sha256:{sha}"},
+                headers=auth,
+            )
+            assert via_blob.status_code == 200, via_blob.text
+            assert via_blob.json()["tier"] == "derived"
+
+            # Ohne Kanten greift die Regel nicht: url + url scheitert an der
+            # Kind-Gleichheit (Detail OHNE Ko-Okkurrenz-Bezug).
+            d_id = _node(
+                client,
+                prefix,
+                auth,
+                "url:https://example.org/d",
+                content="These ganz ohne Kanten.",
+            ).json()["id"]
+            same_kind = client.patch(
+                f"{prefix}/kb/nodes/{d_id}",
+                json={"tier": "derived", "additional_source_ref": "url:https://example.org/e"},
+                headers=auth,
+            )
+            assert same_kind.status_code == 422, same_kind.text
+            detail = same_kind.json()["detail"]
+            assert "ANDERER Art" in detail and "Ko-Okkurrenz" not in detail
     finally:
         cleanup_workspaces([owner])
 

@@ -19,6 +19,17 @@ ANDERER Beleg-Art; Downgrades sind frei. `co_occurs_with` verlangt n >= 20 —
 das sprechende 422 `correlation_underpowered` (tatsaechliches n im detail)
 kommt von hier, VOR dem DB-CHECK.
 
+Korrelations-Disziplin (Spec O §10.7 „Zeit ist eine Achse, Zusammenhang ist
+eine Behauptung", WP18): (1) Inhaltliche Kanten (`supports`/`derived_from`/
+`belongs_to`) duerfen je Seite nicht AUSSCHLIESSLICH mit Timeline-url:-Ankern
+belegt sein (`_check_content_edge_evidence` — die harte Regel bleibt die
+co_-Feld-Kopplung im Modell-Validator). (2) Haengt ein Node NUR an
+`co_occurs_with`-Kanten, verlangt `hypothesis → derived` zusaetzlich einen
+Inhalts-Beleg (artifact|blob) unter [source_ref, additional_source_ref] —
+ein weiterer url:-Verweis hebt Ko-Okkurrenz nicht zur Ableitung. (3) Die
+Fallzahl-Garantie (co_n) liegt bewusst NUR in `neighbors` — `get_node` und
+`search` liefern Nodes ohne Kanten-Kontext (kein Modell-Aufbruch).
+
 Zugriffslog (Spec F, WP14): erfolgreiche Agent-Zugriffe werden NACH der
 Operation best-effort geloggt (`services/access_log.log_access`, No-op fuer
 Menschen): Einzel-Read als ``(node, read)``, `create_node`/`update_node` als
@@ -71,6 +82,7 @@ from who2be_models import (
     KbSearchHit,
     NodeTier,
     Sensitivity,
+    SourceRefKind,
     WorkspaceRole,
 )
 
@@ -86,6 +98,61 @@ _TIER_ORDER: dict[NodeTier, int] = {
     NodeTier.derived: 1,
     NodeTier.verified: 2,
 }
+
+# Kantentypen mit INHALTLICHER Behauptung (Spec O §10.7, WP18): ihre
+# Belegkraft darf nicht allein aus zeitlicher Naehe stammen — dafuer gibt es
+# ausschliesslich `co_occurs_with`. (`contradicts`/`supersedes` bleiben
+# draussen: der Spec-Schnitt nennt genau diese drei.)
+_CONTENT_EDGE_TYPES = frozenset({EdgeType.supports, EdgeType.derived_from, EdgeType.belongs_to})
+
+# Substring, an dem ein url:-Evidence-Anker als Verweis auf den EIGENEN
+# Timeline-Endpunkt erkennbar ist (`GET .../timeline`, WP15).
+_TIMELINE_URL_MARKER = "/timeline"
+
+# Inhalts-Belege im Sinne der O-Regeln: im Workspace aufloesbares Material
+# (Artifact/Block oder Blob). `url:` ist ein EXTERNER Verweis ohne
+# serverseitig pruefbaren Inhalt und zaehlt nicht als Inhalts-Beleg.
+_CONTENT_EVIDENCE_KINDS = frozenset({SourceRefKind.artifact, SourceRefKind.blob})
+
+
+def _is_timeline_url_anchor(anchor: str) -> bool:
+    """True fuer url:-Anker, deren URL auf den Timeline-Endpunkt zeigt."""
+    text = anchor.strip()
+    return text.startswith("url:") and _TIMELINE_URL_MARKER in text
+
+
+def _check_content_edge_evidence(data: KbEdgeCreate) -> None:
+    """Spec O §10.7 (WP18): aus Gleichzeitigkeits-Evidence nur `co_occurs_with`.
+
+    Inhaltliche Kanten (`supports`/`derived_from`/`belongs_to`) brauchen je
+    Seite mindestens einen Beleg JENSEITS der Zeitachse. Pragmatischer
+    Schnitt: verboten ist der eindeutig erkennbare Fall, dass ALLE
+    Evidence-Anker einer Seite `url:`-Anker auf den eigenen
+    Timeline-Endpunkt sind (`/timeline`-Substring) → 422 `evidence_missing`.
+
+    Dokumentierte Grenze: der Server kann Belege nicht semantisch bewerten —
+    ob ein Artifact-Anker inhaltlich traegt, bleibt beim Kurator. Die HARTE
+    Regel ist die co_-Feld-Kopplung im Modell-Validator (`KbEdgeCreate`: nur
+    `co_occurs_with` traegt co_query/co_n/co_from/co_to, andere Typen duerfen
+    KEINE co_-Felder tragen); diese Zusatzpruefung faengt nur den
+    offensichtlichen Missbrauch ab und bleibt bewusst klein.
+    """
+    if data.type not in _CONTENT_EDGE_TYPES:
+        return
+    for side, anchors in (("from", data.evidence_from), ("to", data.evidence_to)):
+        if all(_is_timeline_url_anchor(anchor) for anchor in anchors):
+            raise ApiGateError(
+                status=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                reason="evidence_missing",
+                actionable_by="agent",
+                detail=(
+                    f"'{data.type.value}' behauptet einen inhaltlichen Zusammenhang, "
+                    f"aber alle Evidence-Anker der Seite '{side}' sind url:-Anker auf "
+                    "den Timeline-Endpunkt (/timeline). Zeitliche Naehe belegt nur "
+                    "co_occurs_with — mindestens einen Beleg jenseits der Zeitachse "
+                    "ergaenzen (Artifact/Block, sha256 oder externe Quelle)."
+                ),
+            )
 
 
 def _tier_upgrade_forbidden(detail: str) -> ApiGateError:
@@ -220,6 +287,10 @@ class KbService:
           `kb_node_source_area`. Der Primaer-`source_ref` bleibt in v1
           unveraendert — der Zweitbeleg wird (noch) nicht als eigene Spalte
           gefuehrt, nur seine Areas und die Tier-Entscheidung wirken.
+        - Korrelations-Disziplin (Spec O §10.7, WP18): haengt der Node NUR
+          an `co_occurs_with`-Kanten, braucht `hypothesis → derived`
+          zusaetzlich einen Inhalts-Beleg (artifact|blob) unter
+          [source_ref, additional_source_ref] — s. `_check_tier_transition`.
         - Downgrades (z. B. `derived → hypothesis`) sind frei.
         """
         restrict = await readable_area_ids(self._pool, ctx)
@@ -272,7 +343,9 @@ class KbService:
                     restrict_area_ids=restrict,
                 )
             if data.tier is not None:
-                self._check_tier_transition(current, data.tier, additional)
+                await self._check_tier_transition(
+                    conn, ctx.workspace_id, current, data.tier, additional
+                )
             updated = await self._repo.update_node(
                 conn,
                 ctx.workspace_id,
@@ -288,10 +361,26 @@ class KbService:
             await self._log_node(ctx, node_id, "write", updated.sensitivity)
         return updated
 
-    def _check_tier_transition(
-        self, current: KbNodeRead, target: NodeTier, additional: ResolvedAnchor | None
+    async def _check_tier_transition(
+        self,
+        conn: asyncpg.Connection,
+        workspace_id: UUID,
+        current: KbNodeRead,
+        target: NodeTier,
+        additional: ResolvedAnchor | None,
     ) -> None:
-        """Erzwingt die Tier-Leiter (s. `update_node`-Docstring) — oder wirft."""
+        """Erzwingt die Tier-Leiter (s. `update_node`-Docstring) — oder wirft.
+
+        Korrelations-Disziplin (Spec O §10.7, WP18): haengt der Node
+        AUSSCHLIESSLICH an `co_occurs_with`-Kanten, verlangt
+        `hypothesis → derived` zusaetzlich mindestens einen Inhalts-Beleg
+        (artifact|blob) unter [source_ref, additional_source_ref] — ein
+        weiterer url:-Verweis macht aus Ko-Okkurrenz keine Ableitung. Die
+        Pruefung laeuft VOR der Kind-Verschiedenheit, damit das 422 den
+        eigentlichen Mangel benennt („nur Ko-Okkurrenz-Belege"); ohne Kanten
+        oder mit mindestens einer inhaltlichen Kante greift sie nicht. Der
+        Kanten-Lookup laeuft nur, wenn kein Inhalts-Beleg vorliegt.
+        """
         if _TIER_ORDER[target] <= _TIER_ORDER[current.tier]:
             return  # Downgrade oder gleichbleibend: frei.
         if target == NodeTier.verified:
@@ -305,6 +394,17 @@ class KbService:
                 "hypothesis → derived verlangt einen `additional_source_ref` "
                 "(zusaetzlicher Beleg anderer Art)."
             )
+        if not ({current.source_ref_kind, additional.source_kind} & _CONTENT_EVIDENCE_KINDS):
+            edge_types = await self._repo.edge_types_for_node(conn, workspace_id, current.id)
+            if edge_types == {EdgeType.co_occurs_with.value}:
+                raise _tier_upgrade_forbidden(
+                    "hypothesis → derived scheitert: dieser Node hat nur "
+                    "Ko-Okkurrenz-Belege (alle Kanten sind co_occurs_with) und "
+                    "weder source_ref noch additional_source_ref ist ein "
+                    "Inhalts-Beleg (artifact|blob). Zeitliche Naehe wird durch "
+                    "einen weiteren url:-Verweis nicht zur Ableitung — einen "
+                    "inhaltlichen Beleg ergaenzen."
+                )
         if additional.source_kind.value == current.source_ref_kind.value:
             raise _tier_upgrade_forbidden(
                 "hypothesis → derived verlangt einen Beleg ANDERER Art — "
@@ -315,7 +415,9 @@ class KbService:
     async def create_edge(self, ctx: WorkspaceContext, data: KbEdgeCreate) -> KbEdgeRead:
         """Legt eine belegpflichtige Kante an — EINE Transaktion (Spec D).
 
-        Ablauf: from/to aufloesen (mindestens eine Seite muss ein bestehender
+        Ablauf: Timeline-Evidence-Gate fuer inhaltliche Kanten (Spec O §10.7,
+        s. `_check_content_edge_evidence` — statisch, vor jedem DB-Zugriff),
+        from/to aufloesen (mindestens eine Seite muss ein bestehender
         KB-Node sein; `from_node_id`/`to_node_id` werden gesetzt), JEDEN
         Evidence-Anker beider Seiten aufloesen (ein unaufloesbarer → 422 +
         vollstaendiger Rollback), Fallzahl-Gate fuer `co_occurs_with`
@@ -325,6 +427,7 @@ class KbService:
         abgeleiteter Nodes wird nie breiter als ihre Quellen.
         """
         self._require_write(ctx, AgentCapability.kb_edge_write)
+        _check_content_edge_evidence(data)
         restrict = await readable_area_ids(self._pool, ctx)
         async with self._pool.acquire() as conn, conn.transaction():
             from_res = await resolve_edge_end(
@@ -390,7 +493,13 @@ class KbService:
     # ------------------------------------------------------------------- Reads
 
     async def get_node(self, ctx: WorkspaceContext, node_id: UUID) -> KbNodeRead | None:
-        """Node im Sichtbarkeits-Scope; `None` = Router antwortet 404."""
+        """Node im Sichtbarkeits-Scope; `None` = Router antwortet 404.
+
+        Bewusst OHNE Kanten-Kontext (Spec O §10.7, WP18 — Modell-Freeze):
+        wer die Kanten eines Nodes inkl. der Fallzahl `co_n` bei
+        `co_occurs_with` braucht, fragt `neighbors` — dort ist die Fallzahl
+        garantiert immer dabei.
+        """
         restrict = await readable_area_ids(self._pool, ctx)
         node = await self._repo.get_node(
             self._pool, ctx.workspace_id, node_id, restrict_area_ids=restrict
@@ -498,7 +607,11 @@ class KbService:
         """KB-Suche: FTS ueber `kb_node.search` im Sichtbarkeits-Scope.
 
         Per Konstruktion NIE WorkArea-Inhalte (die Query liest nur
-        `kb_node`); jeder Treffer traegt den Anker ``node:<id>``.
+        `kb_node`); jeder Treffer traegt den Anker ``node:<id>``. Treffer
+        sind NODES ohne Kanten-Kontext (Spec O §10.7, WP18): die
+        `co_n`-Garantie fuer `co_occurs_with` liegt in `neighbors` — von
+        einem Suchtreffer aus ist sie ueber dessen ``node:``-Anker einen
+        Aufruf entfernt.
         """
         query = query.strip()
         if not query:

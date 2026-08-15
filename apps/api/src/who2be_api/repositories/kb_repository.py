@@ -194,6 +194,10 @@ class KbRepository(Protocol):
         self, fetcher: _Fetcher, workspace_id: UUID, node_id: UUID
     ) -> list[UUID]: ...
 
+    async def edge_types_for_node(
+        self, fetcher: _Fetcher, workspace_id: UUID, node_id: UUID
+    ) -> set[str]: ...
+
     async def insert_edge(
         self,
         conn: asyncpg.Connection,
@@ -447,6 +451,25 @@ class PgKbRepository:
             node_id,
         )
         return [row["area_id"] for row in rows]
+
+    async def edge_types_for_node(
+        self, fetcher: _Fetcher, workspace_id: UUID, node_id: UUID
+    ) -> set[str]:
+        """Distinkte Kantentypen, an denen der Node haengt (beide Richtungen).
+
+        BEWUSST ohne Sichtbarkeits-Filter: die Tier-Regel „nur
+        Ko-Okkurrenz-Belege" (Serverlogik O, WP18) bewertet die Beleg-Lage
+        des Nodes SELBST — auch Kanten zu fuer den Aufrufer unsichtbaren
+        Nachbarn zaehlen als Beleg-Kontext. Es fliessen nur Typ-Namen, keine
+        Inhalte (kein Existenz-Leak einzelner Nachbarn).
+        """
+        rows = await fetcher.fetch(
+            "SELECT DISTINCT type FROM kb_edge "
+            "WHERE workspace_id = $1 AND (from_node_id = $2 OR to_node_id = $2)",
+            workspace_id,
+            node_id,
+        )
+        return {str(row["type"]) for row in rows}
 
     async def insert_edge(
         self,
