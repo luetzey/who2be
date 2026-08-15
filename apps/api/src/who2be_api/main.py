@@ -68,6 +68,7 @@ from who2be_api.routers import (
     wa_ingest,
     wa_search,
     wa_tables,
+    wa_timeline,
     whoami,
     work_areas,
     workspaces,
@@ -303,6 +304,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(wa_ingest.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(wa_search.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(wa_tables.router, prefix=_WORKSPACE_PREFIX)
+    app.include_router(wa_timeline.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(kb.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(search.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(system_prompts.router, prefix=_WORKSPACE_PREFIX)
