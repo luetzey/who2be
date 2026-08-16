@@ -56,10 +56,9 @@ Agent-Schreibrechte inkl. Rate-Limit (ADR-0039); Builder-System-Prompt-Tools
 MFA-Login-Step-up; OSS-Lizenz-Gates (ADR-0033); Public-Switch-Vorbereitung
 (FSL-1.1, Standards-Schicht).
 
-Offene/nächste Blöcke: siehe STATE.md §Bekannte Probleme (u. a. CI-Gate seit
-2026-07-19 tot — Actions-Billing, Owner-Punkt) und §Nächste Schritte
-(Public-Switch, CLA, CI-Billing) sowie `docs/standards-review-2026-07-20.md`
-(§4 Owner-Entscheidungen, WP-14-Backlog).
+Offene/nächste Blöcke: siehe STATE.md §Bekannte Probleme und §Nächste Schritte
+(Public-Switch, CLA) sowie `docs/standards-review-2026-07-20.md` (§4
+Owner-Entscheidungen, WP-14-Backlog).
 
 ## Struktur
 

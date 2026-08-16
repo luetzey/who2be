@@ -112,13 +112,26 @@ Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
   Security-Findings Phase 1+2 alle Closed.
 - Standards-Review 2026-07-08: WP-1–8 umgesetzt
   (`docs/standards-review-2026-07-08.md` §3); heutiger Lauf s. u.
+- **CI-Gate seit 2026-08-16 wieder aktiv** (war seit 2026-07-19 durch
+  Actions-Billing tot, GIT-2 im Standards-Review 2026-07-20). Alle fünf Jobs
+  laufen: `python` · `web` · `e2e` · `compose-smoke` · `audit`. Beleg — das
+  Krankheitsbild war Abbruch nach 2–6 s mit `runner_id: 0` und ohne Logs;
+  jetzt echte Runner (`runner_id: 1000005113` ff.) und echte Laufzeiten
+  (`python` 8 min inkl. Postgres-Service und voller pytest-Suite, `e2e`
+  2:50 min mit Compose-Up + Playwright, `compose-smoke` baut zusätzlich das
+  `runtime-cloud`-Image). Entscheidend: der erste Lauf (`31950241038`, PR
+  #370) war **rot und zu Recht** — er fand zwei ESLint-Errors, die ein
+  lokaler Lauf durchgelassen hatte. Ein Gate, das einen echten Defekt fängt,
+  ist keins mehr auf dem Papier. Damit ist die lokale DoD-Ausführung wieder
+  Vorstufe statt Ersatz.
 
 ### Release-Vorbereitung / Pre-Publish-Nachweis (2026-07-22)
 
 - **Release-Audit** (Repo-Publish-Flow, Issues #338–#341): Ergebnis „noch
   nicht release-fertig" — Blocker waren npm-audit, fehlende NOTICES und der
-  tote CI-Nachweis; Wellen 1–2 umgesetzt (dieser Run), Welle 3 (#341) wartet
-  auf CI-Reaktivierung.
+  tote CI-Nachweis; Wellen 1–2 umgesetzt (dieser Run). Welle 3 (#341) wartete
+  auf die CI-Reaktivierung — die ist seit 2026-08-16 da (s. §Standards / CI),
+  der Block ist damit entsperrt.
 - **Secrets-Gate bestanden:** kein Secret im Tree (nur Dev-/Test-Platzhalter
   und `${VAR}`-Injektionen); History sauber — nie `.env`/`.pem`/`.key`
   committet, gitleaks + 8 Pattern-Scans über alle Commits negativ
@@ -328,10 +341,10 @@ das Löschen eines Artifacts (editor+).
   er nicht halten darf (`tools/list` filtert sie korrekt weg — er bekäme also
   einen Fehler). Kein Sicherheitsproblem, aber irreführender Prompt; Fix wäre
   eine Trennung der gemischten Gruppen.
-- **CI-Gate seit 2026-07-19 tot** (GitHub-Actions-Billing, Owner-Punkt): alle
-  Runs scheitern nach ~2 s ohne Logs — kein Code-Problem; lokale DoD-Nachweise
-  ersetzen das Gate interim (PR-Template).
-- E2E-Gate bleibt Soft, bis die CI-Infra dauerhaft stabil ist.
+- E2E-Gate bleibt Soft, bis die CI-Infra dauerhaft stabil ist. Die
+  Voraussetzung — eine überhaupt laufende CI — ist seit 2026-08-16 wieder
+  gegeben (§Standards / CI); ob der Soft-Gate-Status fällt, ist eine
+  Owner-Entscheidung (`coverage.all/E2E` im Standards-Review §4).
 - Offene Owner-Entscheidungen: `docs/standards-review-2026-07-20.md` §4
   (ADR-0002 enforce vs. amend, Branch-Protection/Merge-Strategie,
   On-Prem-RLS, Cloud-Image-Deploy, LIC-1-Mechanik, coverage.all/E2E/CLA).
@@ -341,8 +354,8 @@ das Löschen eines Artifacts (editor+).
 Als Owner-Checkliste getrackt in Issue #338 (Welle 3 der Release-Mechanik
 in #341):
 
-1. Actions-Billing klären (entsperrt das CI-Gate) **oder** direkt auf Public
-   flippen.
+1. ~~Actions-Billing klären~~ — erledigt, das CI-Gate läuft seit 2026-08-16
+   wieder (§Standards / CI). Bleibt: der Public-Flip (Punkt 3).
 2. GitHub-Settings: Branch-Protection, Auto-delete head branches,
    Merge-Strategie, Description/Topics/Discussions.
 3. CLA-Assistant aktivieren; Visibility Private → Public (finaler Flip).

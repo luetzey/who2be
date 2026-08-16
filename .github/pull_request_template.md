@@ -6,8 +6,10 @@
 
 ## DoD-Nachweis (lokal = CI, CONTRIBUTING §DoD)
 
-<!-- Exakte Zahlen eintragen — solange CI nicht verlässlich läuft (Actions-Billing),
-     ist dieser Block der Merge-Beleg (Standards-Review 2026-07-20, GIT-3/TST-2). -->
+<!-- Exakte Zahlen eintragen. Die Gates laufen VOR dem Push lokal, die CI ist die
+     Gegenprobe — nicht umgekehrt (CLAUDE.md §Workflow, CONTRIBUTING §DoD;
+     Standards-Review 2026-07-20, GIT-3/TST-2). Dass das kein Ritual ist, zeigt
+     PR #370: ein lokal übersehener Lint-Fehler wurde erst in der CI rot. -->
 
 - [ ] Python: `uv run ruff check .` / `uv run ruff format --check .` / `uv run mypy .` grün
 - [ ] Python: `uv run pytest --cov --cov-fail-under=85` — `____ passed`, Coverage `____ %`
