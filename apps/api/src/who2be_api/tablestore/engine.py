@@ -391,6 +391,16 @@ class TableStore:
 
     # --- Pfade + Locks -------------------------------------------------------
 
+    @property
+    def base_dir(self) -> Path:
+        """Wurzel des Store-Layouts (`WHO2BE_TABLESTORE_DIR`).
+
+        Oeffentlich fuer den Purge-Sweep (`core/purge.py`, WP20): der muss das
+        Verzeichnis ABLAUFEN koennen, um Dateien ohne `work_area`-Zeile zu
+        finden — die IDs stehen nur im Dateisystem, nicht in Postgres.
+        """
+        return self._base_dir
+
     def db_path(self, workspace_id: UUID, area_id: UUID) -> Path:
         """`{base_dir}/{workspace_id}/{area_id}.sqlite` — nur aus UUIDs gebaut."""
         _require_uuid("workspace_id", workspace_id)

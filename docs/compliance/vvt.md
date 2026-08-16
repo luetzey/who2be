@@ -49,6 +49,9 @@ der Verarbeitungstaetigkeiten des Verantwortlichen. Es ist aus der Code-Realitae
 | V15 | OAuth-Connector (Authorization-Server fuer Remote-MCP: Authorization-Codes, Refresh-Tokens, dynamische Clients — Migration 0049, ADR-0034-Folge) | Verbindung von LLM-Clients (Claude/ChatGPT) per OAuth-Login statt Token-Copy-Paste | lit. b (Vertrag) |
 | V16 | Agent-Usage-/Feedback-Events (`usage_event`, `agent_feedback` — Migration 0053, ADR-0038) | Nutzungs-/Qualitaets-Telemetrie konsumierender Agenten fuer Kurations-Aggregate | lit. f (berechtigtes Interesse) |
 | V17 | Agent-Memory (`agent_memory` — Migration 0066, ADR-0044): von Agenten vorgeschlagene, menschlich kuratierte Fakten ueber Nutzer/Projekte | Persistentes, pro Agent steuerbares Langzeitgedaechtnis (Freigabe-Schleuse, UI-Verwaltung, Einzel-/Komplett-Loeschung) | lit. f (berechtigtes Interesse) / lit. a bei sensiblen Inhalten (Freigabe = Einwilligungsakt) |
+| V18 | Agenten-Arbeitsbereich „WorkArea" (`work_area`, `wa_artifact`, `wa_blob`, `wa_chunk`, `wa_table` — Migrationen 0073–0078, ADR-0047/0048/0049): abgelegte Dokumente, hochgeladene/abgerufene Originaldateien und daraus gewonnene Tabellenzeilen | Arbeits-/Kontextspeicher der Agenten: Material ablegen, wiederfinden und auswerten. **Kein** Publikations- oder Redaktionssystem | lit. b (Vertrag) / lit. f (berechtigtes Interesse an nutzbarem Agenten-Kontext) |
+| V19 | Knowledge Base (`kb_node`, `kb_edge`, `kb_edge_evidence`, `kb_node_source_area`, `kb_conflict` — Migration 0077, ADR-0047): belegpflichtige Aussagen samt Herkunftsanker, Beziehungen und offenen Widerspruechen | Verdichtung des Arbeitsmaterials zu nachpruefbaren Aussagen; jede Aussage traegt ihren Beleg (`source_ref`) und ihre Sicherheitsstufe (`tier`) | lit. f (berechtigtes Interesse) |
+| V20 | Agenten-Zugriffslog (`agent_access_log` — Migrationen 0079/0080, ADR-0047): welcher Agent hat wann welches Element gelesen/geschrieben, mit Modell-Anbieter/-Name zum Zugriffszeitpunkt | Auskunftsfaehigkeit gegenueber Betroffenen und Aufsicht: **welche Elemente sind je an welchen externen Modell-Anbieter geflossen** (s. §5 und [agent-access-log.md](./agent-access-log.md)) | lit. c (Rechenschaftspflicht Art. 5 Abs. 2) / lit. f |
 
 > Hinweis: V8 und V10 (`audit_log`, `entitlement_history`) werden durch die
 > Schwester-Pakete **WP-A/B/C** eingefuehrt; dieses VVT beschreibt den Ziel-Stand
@@ -78,6 +81,11 @@ Identitaetsdaten liegen in der von GoTrue verwalteten `auth.users` (PostgreSQL-
 | OAuth-Connector-Daten | `user_id`, `workspace_id`, `agent_id`, `role`, `code_hash`/`token_hash` (SHA-256), `expires_at`, `consumed_at`; Client-Metadaten (`client_name`, `redirect_uris`) | `oauth_authorization_code`, `oauth_refresh_token` (via `api_token_id`), `oauth_client` | `migrations/0049`, `0062` |
 | Agent-Usage-/Feedback-Events | `actor_id` (UUID), `agent_id`, `entity_type/-id`, `version`, `outcome` bzw. `signal`, `note` (Freitext), `created_at` | `usage_event`, `agent_feedback` (append-only) | `migrations/0053` |
 | Agent-Memory | `agent_id`, `fact`/`context`/`triage_note` (Freitext, kann personenbezogene Angaben enthalten), `status`, `category`, `importance`, Nutzungs-Log (`retrieval_count`, `last_retrieved_at`) | `agent_memory` | `migrations/0066` |
+| WorkArea-Inhalte | `updated_by` (UUID), `title`, `content` (jsonb-Blockliste, Freitext), `source_system`/`source_url`, `occurred_at`, `sensitivity` (`general`/`sensitive`) | `work_area`, `wa_artifact`, `wa_chunk` | `migrations/0073`, `0074`, `0076` |
+| Binaer-Originale (Blobs) | Dateiinhalte beliebiger Art (PDF/Text/HTML), `sha256`, `size_bytes`, `media_type`, `source_url` | Katalog `wa_blob` (Postgres) + **Objekte im BlobStore** (MinIO/S3, Key `blobs/{workspace_id}/{sha256}`) | `migrations/0075`; ADR-0048 |
+| Tabellen-Zeilen (Agenten-Auswertung) | frei importierte Spaltenwerte (koennen personenbezogene Angaben enthalten), `_source_artifact` | Katalog `wa_table` (Postgres) + **SQLite-Datei je Area** (`WHO2BE_TABLESTORE_DIR`) | `migrations/0078`; ADR-0049 |
+| Knowledge-Base-Aussagen | `content` (die Aussage, Freitext), `source_ref` (Beleganker), `tier`, `sensitivity`, `created_by` (UUID), `occurred_at` | `kb_node`, `kb_edge`, `kb_edge_evidence`, `kb_conflict` | `migrations/0077` |
+| Agenten-Zugriffslog | `agent_id`, `ref_kind`/`ref_id`, `operation`, `sensitivity_at_access`, `model_provider_at_access`, `model_name_at_access`, `access_date` | `agent_access_log` | `migrations/0079`, `0080` |
 | Loesch-Lifecycle | `user_id`, `requested_at`, `purge_after`, `purged_at`; `organization.deleted_at/purge_after` | `account_deletion`, `organization` | `migrations/0038` |
 | Server-Logs/Zugriffsdaten | IP, User-Agent, Zeitstempel (Reverse-Proxy/App) | Caddy/App-Logs (nicht in der DB) | `deploy/hetzner/Caddyfile` |
 | Backup-Daten | verschluesselter Voll-Dump (enthaelt alle obigen Kategorien) | `*.pgc.gpg` + restic-Repo | `deploy/hetzner/scripts/backup.sh` |
@@ -107,6 +115,23 @@ Identitaetsdaten liegen in der von GoTrue verwalteten `auth.users` (PostgreSQL-
 | GoTrue (self-hosted, Supabase) | Authentifizierung | E-Mail, Auth-Metadaten | selbst gehostet (= Hetzner) | n/a (kein externer Verarbeiter, Eigenbetrieb) |
 | Mail-/SMTP-Provider | Transaktionsmails | E-Mail-Adresse + Mail-Inhalt | `<PLATZHALTER: Provider + Standort>` | `<PLATZHALTER: AVV-Status>` |
 | OAuth-Provider (optional: Google/GitHub) | Social-Login (falls aktiviert) | Login-Identifier/E-Mail | USA/global | `<PLATZHALTER: nur falls aktiviert — Drittland-Pruefung>` |
+| **Externe Modell-Anbieter** (z. B. Anthropic, OpenAI — je nach Agent-Konfiguration) | Sprachmodell-Inferenz **ausserhalb** von Who2Be, ausgeloest durch die Agent-Runtime des Nutzers | alle Elemente, die ein Agent liest oder schreibt: WorkArea-Artifacts, Blob-abgeleitete Texte, Tabellen-Ergebnisse, KB-Aussagen, Resources/Playbooks/Personas | je nach Anbieter, i. d. R. USA/global | `<PLATZHALTER: AVV/Drittland-Garantien je eingesetztem Anbieter — Pflicht des Betreibers bzw. des Nutzers, s. u.>` |
+
+> **Abgrenzung zu den Modell-Anbietern (wichtig, ADR-0047):** Who2Be ist
+> **kein Runtime-Host** — die App ruft selbst kein Sprachmodell auf. Modelle
+> werden von der **Agent-Runtime des Nutzers** (Claude Desktop, IDE-Client,
+> eigener Agent) aufgerufen; Who2Be liefert diesen Runtimes ueber MCP nur die
+> Inhalte. Die Uebermittlung an einen Modell-Anbieter geschieht damit
+> ausserhalb der Systemgrenze und ausserhalb der technischen Kontrolle der
+> App. Who2Be macht sie trotzdem **nachvollziehbar**: `agent_access_log`
+> protokolliert je Element, welcher Agent es gelesen/geschrieben hat, und
+> haelt Anbieter + Modellnamen **als Snapshot zum Zugriffszeitpunkt** fest.
+> Die Grenze dieser Auskunft: das Modell gilt **pro Agent-Konfiguration**,
+> nicht pro Einzelaufruf — ein Agent, dessen Modell falsch gepflegt ist,
+> protokolliert einen falschen Anbieter. Deshalb ist die Pflege der
+> Modell-Konfiguration ein Menschen-Vorbehalt (kein Agent darf sie setzen).
+> Betreiber-Auswertung und Beispiel-Query:
+> [agent-access-log.md](./agent-access-log.md).
 
 Technischer Stand siehe auch
 [`deploy/hetzner/RUNBOOK.md` §Standort & Auftragsverarbeiter](../../deploy/hetzner/RUNBOOK.md#standort--auftragsverarbeiter).
@@ -138,6 +163,11 @@ Kurzfassung:
 | Status-/Audit-Referenzen (`changed_by`/`actor_id`, inkl. `usage_event`/`agent_feedback`) | beim Purge **anonymisiert** (Sentinel `00000000-…-0`), Eintrag bleibt erhalten (WP-D, CMP-1) |
 | Agent-Memory (`agent_memory`) | Hard-Delete jederzeit via UI (einzeln + „alle loeschen"); Loeschung des Agenten/Workspace/Org raeumt via FK-CASCADE (`agent_id → agent`, Migration 0066); kein `actor_id`-Feld, daher keine Anonymisierung noetig |
 | OAuth-Codes/-Refresh-Tokens | Codes 60 s TTL/single-use, Refresh 30 Tage rotierend; laufender Cleanup (`cleanup_expired_oauth`) + Loeschung beim Account-Purge (Codes direkt, Refresh via `api_token`-CASCADE) |
+| WorkArea-Artifacts (+ Such-Passagen) | Frist der Area (`work_area.retention_days`); **Default `NULL` = unbegrenzt**, auch fuer private Areas. Sweep `cleanup_expired_artifacts` loescht faellige Artifacts samt `wa_chunk` |
+| Blobs (Katalog + Objekte im BlobStore) | unreferenziert + 24 h → `cleanup_orphan_blobs` (Zeile, dann Objekt); Objekt-Sweep nur mit Storage-Zeitstempel |
+| Tabellen-Zeilen (SQLite je Area) | mit der Area → `cleanup_deleted_area_stores`; nach Workspace-Hard-Purge **manueller Betreiber-Schritt** (s. Loeschkonzept §4a) |
+| Knowledge Base (`kb_node`/`kb_edge`/…) | mit dem Workspace (explizite Loeschung — kein `workspace`-FK) |
+| Agenten-Zugriffslog (`agent_access_log`) | Eintrag dauerhaft als Nachweis; beim Hard-Purge **geloescht** (expliziter DELETE vor der Org-CASCADE, FK `NO ACTION` seit 0080) |
 | Backups | lokal 7 Tage; Offsite restic `keep-daily 7 / keep-weekly 4 / keep-monthly 6` |
 | Entitlement-/Tarifdaten (`entitlement_history`) | **Aufbewahrung** trotz Erasure: §14b UStG/§147 AO (gesetzliche Ausnahme, ADR-0031) |
 | Server-Logs | `<PLATZHALTER: konkrete Log-Retention (z. B. 7–30 Tage)>` |

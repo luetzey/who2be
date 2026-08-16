@@ -19,6 +19,7 @@ und darf Kern-Dependency sein.
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 from io import BytesIO
 
 from minio import Minio
@@ -111,6 +112,25 @@ class MinioBlobStore:
         # S3-Semantik: DELETE auf einen fehlenden Key ist bereits ein No-op —
         # genau der Port-Contract, kein Zusatz-Check noetig.
         await asyncio.to_thread(self._client.remove_object, self._bucket, key)
+
+    def _last_modified_sync(self, key: str) -> datetime | None:
+        try:
+            stat = self._client.stat_object(self._bucket, key)
+        except S3Error as exc:
+            if exc.code == _NOT_FOUND_CODE:
+                return None
+            raise
+        moment = stat.last_modified
+        if moment is None:
+            return None
+        # S3 liefert die Zeit tz-aware; ein naiver Wert waere nach
+        # S3-Konvention UTC — beides auf aware/UTC normalisieren, damit der
+        # Purge-Sweep rechnen kann, ohne den Adapter zu kennen.
+        return moment if moment.tzinfo is not None else moment.replace(tzinfo=UTC)
+
+    async def last_modified(self, key: str) -> datetime | None:
+        """`BlobAgeSource`: `last_modified` aus `stat_object` (Purge-Sweep)."""
+        return await asyncio.to_thread(self._last_modified_sync, key)
 
     def _list_sync(self, prefix: str) -> list[str]:
         objects = self._client.list_objects(self._bucket, prefix=prefix, recursive=True)

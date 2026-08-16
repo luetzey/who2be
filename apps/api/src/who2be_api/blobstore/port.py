@@ -21,7 +21,8 @@ alles andere laeuft unveraendert.
 from __future__ import annotations
 
 import re
-from typing import Protocol
+from datetime import datetime
+from typing import Protocol, runtime_checkable
 from uuid import UUID
 
 # 64 Hex-Zeichen = ein SHA-256-Hexdigest. `blob_key` normalisiert auf
@@ -91,4 +92,31 @@ class BlobStorePort(Protocol):
 
     async def list_keys(self, prefix: str) -> list[str]:
         """Alle Keys unter `prefix`, lexikographisch aufsteigend."""
+        ...
+
+
+@runtime_checkable
+class BlobAgeSource(Protocol):
+    """OPTIONALE Zusatzfaehigkeit: Alter eines Objekts (Purge, ADR-0048).
+
+    Bewusst NICHT Teil von `BlobStorePort` — Lesen und Schreiben von Blobs
+    braucht kein Alter, nur der Orphan-Sweep in `core/purge.py` braucht es.
+    Der Sweep muss zwei ununterscheidbare Zustaende trennen: ein Objekt ohne
+    `wa_blob`-Zeile ist ENTWEDER Muell aus einer gescheiterten Ingest-
+    Transaktion ODER ein Blob, dessen Ingest gerade laeuft — der PUT liegt
+    VOR der Transaktion (`services/wa_ingest.py`, Pipeline-Schritt 6). Ohne
+    Alter waere die Loeschung des zweiten Falls ein Datenverlust, deshalb
+    loescht der Sweep Objekte NUR ueber einen Store, der diese Faehigkeit
+    mitbringt; sonst meldet er sie bloss (`core/purge.py`).
+
+    `runtime_checkable`, weil der Sweep zur Laufzeit entscheidet — ein
+    Adapter ohne Zeitquelle ist zulaessig, nur eben nicht sweep-faehig.
+    """
+
+    async def last_modified(self, key: str) -> datetime | None:
+        """Zeitpunkt des letzten Schreibens (aware, UTC); `None` = unbekannt.
+
+        `None` steht auch fuer „Key existiert nicht" — der Aufrufer behandelt
+        beide Faelle gleich: kein Alter, keine Loeschung.
+        """
         ...

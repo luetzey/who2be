@@ -65,7 +65,22 @@ Offene/nächste Blöcke: siehe STATE.md §Bekannte Probleme (u. a. CI-Gate seit
 
 - `apps/api/` — FastAPI-Backend (REST, `/v1/workspaces/{ws_id}/...`);
   `/routers/external_tools.py` fuer versionierte Workspace-Aggregate
-  `external_tool` (CRUD + Status-Transitions + Export, ADR-0043)
+  `external_tool` (CRUD + Status-Transitions + Export, ADR-0043).
+  **Agenten-Arbeitsbereich (ADR-0047/0048/0049, unversioniert — NEBEN der
+  Resource-Achse):** Router `work_areas`/`wa_artifacts`/`wa_ingest`/
+  `wa_tables`/`wa_timeline`/`wa_search`/`kb`, Services gleichen Namens plus
+  `wa_promote` (WorkArea → Resource, nie direkt `active`), `wa_chunks`
+  (eigener Suchindex `wa_chunk` — `content_chunk` wird NICHT erweitert) und
+  `access_log` (Auto-Protokoll `agent_access_log`, Modell-Snapshot)
+- `apps/api/src/who2be_api/blobstore/` — BlobStore-Port + Adapter (MinIO,
+  In-Memory) fuer die Binaer-Originale; Keys `blobs/{workspace_id}/{sha256}`,
+  content-addressed, Workspace-Praefix = Tenancy-Grenze (ADR-0048). Ohne
+  `WHO2BE_BLOBSTORE_*` liefert nur Ingest/Blob-Read 503 — kein Fehlerzustand
+- `apps/api/src/who2be_api/tablestore/` — SQLite je WorkArea
+  (`{WHO2BE_TABLESTORE_DIR}/{workspace_id}/{area_id}.sqlite`, ADR-0049); die
+  Datei ist die Isolationsgrenze, read-only ist Engine-Garantie (`mode=ro` +
+  `query_only` + Authorizer mit Opcode- UND Funktions-Allowlist + Zeit-/
+  Groessen-Budgets). Schema/Katalog leben in Postgres (`wa_table`)
 - `apps/mcp/` — FastMCP-Server. Read-Tools (`get_persona`, `list_playbooks`,
   `fetch_playbook`, `list_resources`, `fetch_resource`, `fetch_agent`,
   `list_triggers`, `list_external_tools`, `get_external_tool` —
@@ -79,10 +94,14 @@ Offene/nächste Blöcke: siehe STATE.md §Bekannte Probleme (u. a. CI-Gate seit
   transition_system_prompt` — ADR-0040), External-Tools-Write
   (`create/update/transition/restore_external_tool` — ADR-0043) und
   Agent-Memory (`search_memory`/`list_memories`/`save_memory` — kuratiertes
-  Langzeitgedaechtnis pro Agent, `memory_mode`-gestuft, ADR-0044). `tools/list`
-  ist pro Agent policy-gefiltert (`PolicyFilterMiddleware`, fail-open; SSoT-
-  Mapping `who2be_models.tool_requirements` — ADR-0042); neue MCP-Tools
-  brauchen dort einen Mapping-Eintrag
+  Langzeitgedaechtnis pro Agent, `memory_mode`-gestuft, ADR-0044). Dazu die
+  WorkArea-/KB-Familien (**81 Tools gesamt**, ADR-0047): `tools/workarea.py`
+  (Areas/Artifacts/Ingest/Suche/Promote), `tools/tables.py` (Tabellen +
+  Timeline, read-only SQL) und `tools/kb.py` (belegpflichtige Aussagen +
+  Kanten). `tools/list` ist pro Agent policy-gefiltert
+  (`PolicyFilterMiddleware`, fail-open; SSoT-Mapping
+  `who2be_models.tool_requirements` — ADR-0042); neue MCP-Tools brauchen dort
+  einen Mapping-Eintrag
 - `apps/web/` — React/TypeScript-Web-UI (Vite, Tailwind v4, shadcn-Primitives,
   BlockNote-Insel für den Resource-Editor; Designsprache "Warm Citrus" laut
   `docs/frontend/design-language.md`)

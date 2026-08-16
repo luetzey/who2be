@@ -4,6 +4,7 @@ Der Kern importiert NIE einen konkreten Adapter — nur `build_blob_store`.
 """
 
 from who2be_api.blobstore.port import (
+    BlobAgeSource,
     BlobNotFoundError,
     BlobStorePort,
     blob_key,
@@ -12,6 +13,7 @@ from who2be_api.blobstore.port import (
 from who2be_api.blobstore.service import build_blob_store, reset_blob_store, set_blob_store
 
 __all__ = [
+    "BlobAgeSource",
     "BlobNotFoundError",
     "BlobStorePort",
     "blob_key",
