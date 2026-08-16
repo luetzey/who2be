@@ -54,6 +54,13 @@ services:
       # nach jedem Redeploy weg (stiller Datenverlust statt Fehlermeldung).
       # Backup: `VACUUM INTO`-Snapshots, siehe RUNBOOK.
       WHO2BE_TABLESTORE_DIR: /data/tablestore
+      # NICHT REPLIZIEREN und KEINE `--workers` setzen (ADR-0049-Nachtrag
+      # 2026-08-16): der Tabellen-Store serialisiert Schreibzugriffe ueber
+      # einen prozesslokalen Lock. Ein zweiter Prozess oder Container haette
+      # einen eigenen Lock auf derselben SQLite-Datei — die Folge waere stille
+      # Korruption, kein Fehler. Ein Start-Guard faengt `--workers` ab, aber
+      # mehrere Container kann er prinzipiell nicht sehen. Horizontal skaliert
+      # wird erst mit area-affinem Routing (offener ADR).
     volumes:
       - tablestore-data:/data/tablestore
     depends_on:

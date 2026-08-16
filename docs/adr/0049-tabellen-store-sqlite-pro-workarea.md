@@ -93,3 +93,79 @@ App-Code, der SQL versteht.
 - **Server-seitiges Chart-Rendering** — ausdrücklich kein Ziel
   (User-Entscheidung 7); `query_table`-Formate + `save_query_result` sind
   der Ersatz.
+
+## Nachtrag 2026-08-16 — Betriebsgrenze: genau EIN Schreib-Prozess je Area
+
+Aufgefallen beim Beantworten der Frage „kollidiert das, wenn mehrere Agenten
+gleichzeitig in eine shared Area schreiben?". Die Antwort ist nein — aber nur
+unter einer Randbedingung, die dieser ADR bisher nicht ausgesprochen hat.
+
+### Was heute schützt
+
+1. `asyncio.Lock` pro Area-Datei (`engine.py::_lock_for`) — Writes auf dieselbe
+   Area **warten** aufeinander, sie scheitern nicht.
+2. WAL + `busy_timeout=5000` als zweites Netz in der Engine selbst.
+3. Der Import ist von Natur aus konfliktfrei: `_dedupe_hash` UNIQUE +
+   `INSERT OR IGNORE`. Zwei gleichzeitige identische Importe liefern ein
+   korrektes Ergebnis (einer `inserted`, einer `skipped`).
+
+### Was NICHT schützt
+
+`asyncio.Lock` koordiniert **innerhalb eines Python-Prozesses**. Die
+Annahme „ein Prozess" ist heute erfüllt (Dockerfile-`CMD` ohne `--workers`,
+keine `replicas` in den Composes), war aber nirgends festgehalten. Sie bricht
+bei drei naheliegenden Handgriffen:
+
+- `--workers N` am Uvicorn-Kommando,
+- `deploy.replicas: N` am `api`-Dienst,
+- mehrere API-Container hinter einem Load-Balancer.
+
+Dann existieren zwei Locks auf derselben Datei, und es bleibt nur
+`busy_timeout`. Liegt die Datei zusaetzlich auf einem Netz-Dateisystem
+(NFS/EFS), ist SQLite-Locking laut SQLite-Dokumentation ausdruecklich
+unzuverlaessig. Die Folge waere **stille Korruption, kein Fehler** — genau die
+Fehlerklasse, die auch der Volume-Rechte-Fehler desselben Tages hatte: eine
+Randbedingung, die haelt, solange niemand das Naheliegende tut.
+
+Das ist relevant, weil ADR-0001 horizontale Aufteilung ausdruecklich offen
+haelt. Dieser ADR hat sie fuer den Tabellen-Pfad geschlossen, ohne es zu
+sagen. Der Ausblick-Punkt „Mehr-Writer-Nebenlaeufigkeit" meinte Threads im
+selben Prozess, nicht Instanzen.
+
+### Entscheidung
+
+- **Betriebsgrenze ist bindend:** genau ein API-Prozess schreibt in eine Area.
+  Ein Start-Guard bricht den Boot ab, wenn Multi-Worker konfiguriert ist
+  (`WEB_CONCURRENCY`/`--workers`); beide Deploy-Composes tragen den Grund am
+  `api`-Dienst, ein Test faengt das Wiedereinfuegen ab.
+- **Grenze des Guards:** er sieht nur den eigenen Prozessbaum. Mehrere
+  Container kann kein In-Process-Check erkennen — dagegen helfen nur die
+  Compose-Doku und, als naechster Schritt, ein Postgres-Advisory-Lock im
+  Schreibpfad (koordiniert prozess- und containeruebergreifend, weil alle
+  Instanzen dieselbe Postgres teilen). Der Advisory-Lock loest das
+  Dateisystem-Problem NICHT; die Grenze bleibt.
+
+### Korrektur der Options-Begruendung (Option C)
+
+Die urspruengliche Verwerfung von „Postgres-Schema pro Area" mit
+„Isolationsluecke ohne SQL-Parser" greift zu kurz und wird hiermit korrigiert:
+Postgres erzwingt Isolation ueber **Rechte**, nicht ueber Parsing — eine Rolle
+ohne `USAGE` auf fremde Schemas kommt dort nicht hin, ganz ohne dass jemand
+SQL versteht (dazu `default_transaction_read_only`, `statement_timeout`,
+`SET ROLE`). Technisch waere das tragfaehiger, als der ADR behauptet hat.
+
+Der tatsaechliche Einwand fehlte: `pg_catalog` bleibt lesbar. Ein Agent
+koennte damit **Tabellennamen anderer Mandanten aufzaehlen** — in einer
+Multi-Tenant-Cloud ein echtes Leck, sauber nur mit einer Datenbank pro
+Mandant. Die Entscheidung fuer SQLite bleibt also richtig, aber mit dieser
+Begruendung statt der urspruenglichen.
+
+### Ausblick Cloud (offen, eigener ADR)
+
+Fuer eine horizontal skalierte Cloud-Edition ist der naheliegende Weg **nicht**
+ein Engine-Wechsel, sondern **area-affines Routing**: jede Area gehoert genau
+einer Instanz (konsistentes Hashing auf `area_id`). Damit bleibt die
+Eigenschaft erhalten, die SQLite ueberhaupt erst zur richtigen Wahl gemacht hat
+— die Datei IST die Isolationsgrenze. Alternativen (Tablestore als eigener
+Dienst; anbietergebundene libSQL-Dienste) gehoeren in denselben ADR, sobald die
+Cloud-Edition konkret wird.
