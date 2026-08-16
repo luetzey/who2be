@@ -11,6 +11,8 @@ Routen-Layout nach Phase 2:
 
 import importlib
 import logging
+import os
+import sys
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import cast
@@ -81,6 +83,63 @@ from who2be_models import ApiProblem
 logger = logging.getLogger(__name__)
 
 
+class MultiWorkerNotSupportedError(RuntimeError):
+    """Der Prozess ist als Multi-Worker konfiguriert — Boot wird abgebrochen."""
+
+
+def _configured_worker_count() -> int | None:
+    """Anzahl konfigurierter Uvicorn-/Gunicorn-Worker, oder None wenn unbekannt.
+
+    Zwei Quellen, weil beide in freier Wildbahn vorkommen: `WEB_CONCURRENCY`
+    (respektieren Uvicorn und Gunicorn) und `--workers N` in der
+    Prozess-Kommandozeile. Unparsbare Werte gelten als „unbekannt" — der Guard
+    soll einen Tippfehler in der Env nie zum Start-Blocker machen.
+    """
+    raw = os.environ.get("WEB_CONCURRENCY", "").strip()
+    if raw:
+        try:
+            return int(raw)
+        except ValueError:
+            return None
+    if "--workers" in sys.argv:
+        index = sys.argv.index("--workers")
+        if index + 1 < len(sys.argv):
+            try:
+                return int(sys.argv[index + 1])
+            except ValueError:
+                return None
+    return None
+
+
+def _guard_single_writer_process() -> None:
+    """Bricht den Start ab, wenn mehrere Worker konfiguriert sind (ADR-0049).
+
+    Der Tabellen-Store serialisiert Schreibzugriffe ueber einen
+    `asyncio.Lock` pro Area — der wirkt nur INNERHALB eines Prozesses. Mit
+    mehreren Workern gaebe es zwei Locks auf derselben SQLite-Datei; uebrig
+    bliebe nur `busy_timeout`, und auf einem Netz-Dateisystem ist
+    SQLite-Locking laut SQLite-Doku unzuverlaessig. Die Folge waere stille
+    Korruption statt eines Fehlers — deshalb Abbruch und keine Warnung: eine
+    Log-Zeile faellt genau dann niemandem auf, wenn es zaehlt.
+
+    WICHTIG — was dieser Guard NICHT kann: Er sieht nur den eigenen
+    Prozessbaum. **Mehrere API-Container** kann kein In-Process-Check
+    erkennen. Dass der Guard schweigt, ist also kein Beleg dafuer, dass die
+    Betriebsgrenze eingehalten wird (s. ADR-0049-Nachtrag 2026-08-16).
+    """
+    workers = _configured_worker_count()
+    if workers is None or workers <= 1:
+        return
+    raise MultiWorkerNotSupportedError(
+        f"Who2Be ist mit {workers} Workern konfiguriert, unterstuetzt aber nur EINEN "
+        "Schreib-Prozess je Work-Area (ADR-0049-Nachtrag 2026-08-16): der "
+        "Tabellen-Store sperrt prozesslokal, mehrere Worker fuehren zu stiller "
+        "Datenkorruption. `WEB_CONCURRENCY`/`--workers` entfernen. Achtung: dieser "
+        "Guard erkennt nur Worker im eigenen Prozessbaum — mehrere API-CONTAINER "
+        "kann er nicht sehen, die Betriebsgrenze gilt dort genauso."
+    )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """App-Lifespan: DB-Lifecycle + On-Prem-Admin-Bootstrap (Track D).
@@ -88,7 +147,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     Wrappt den DB-Lifespan und seedet danach — nur On-Prem, nur wenn ein Pool
     verfuegbar ist und `WHO2BE_BOOTSTRAP_ADMIN_EMAIL` gesetzt ist — den Admin.
     Ein Bootstrap-Fehler darf den Start nie verhindern (fail open beim Boot).
+
+    Der Multi-Worker-Guard laeuft als ERSTES — vor DB-Verbindung und
+    Builder-Sync. Eine fehlkonfigurierte Instanz soll gar nicht erst an die
+    Daten kommen.
     """
+    _guard_single_writer_process()
     async with db_lifespan(app):
         settings = get_settings()
         if is_onprem(settings) and settings.bootstrap_admin_email.strip():
