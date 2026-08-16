@@ -28,8 +28,10 @@ afterEach(() => {
 
 describe('WorkAreaSearchPage', () => {
   it('fragt ohne Suchbegriff nicht an und fordert zur Eingabe auf', async () => {
-    const fetchMock = vi.fn(
-      async (_url: string) =>
+    // Signatur explizit am Generic: `mock.calls` traegt dann die URL, ohne
+    // dass ein ungenutzter Parameter deklariert werden muss.
+    const fetchMock = vi.fn<(url: string) => Promise<Response>>(
+      async () =>
         new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } }),
     )
     vi.stubGlobal('fetch', fetchMock)
@@ -63,8 +65,10 @@ describe('WorkAreaSearchPage', () => {
   })
 
   it('sucht nach dem Tippen entprellt mit dem eingegebenen Begriff', async () => {
-    const fetchMock = vi.fn(
-      async (_url: string) =>
+    // Signatur explizit am Generic: `mock.calls` traegt dann die URL, ohne
+    // dass ein ungenutzter Parameter deklariert werden muss.
+    const fetchMock = vi.fn<(url: string) => Promise<Response>>(
+      async () =>
         new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } }),
     )
     vi.stubGlobal('fetch', fetchMock)
