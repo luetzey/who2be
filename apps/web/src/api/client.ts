@@ -10,10 +10,12 @@ import type {
   AgentRenderFormat,
   AgentRenderResult,
   AgentUpdateInput,
+  ArtifactMarkdown,
   CheckoutInput,
   CheckoutResult,
   DashboardData,
   EntitlementInfo,
+  EdgeType,
   EntityExport,
   EntityExportFormat,
   ExternalTool,
@@ -32,6 +34,9 @@ import type {
   Invitation,
   InvitationAcceptResult,
   InvitationInput,
+  KbNeighbor,
+  KbNode,
+  KbSearchHit,
   Me,
   Member,
   MemberUpdateInput,
@@ -73,6 +78,12 @@ import type {
   TokenRenameInput,
   VersionDiff,
   VersionStatus,
+  WaArtifact,
+  WorkArea,
+  WorkAreaCreateInput,
+  WorkAreaGrant,
+  WorkAreaGrantInput,
+  WorkAreaSearchHit,
   Workspace,
   WorkspaceInput,
   WorkspaceRenameInput,
@@ -474,6 +485,41 @@ export interface Api {
   ) => Promise<AgentRenderResult>
   // Pill-Preview-Overlay: loest eine einzelne Editor-Pill zu ihrem Output auf.
   previewPlaceholder: (input: PlaceholderPreviewInput) => Promise<PlaceholderPreview>
+  // ADR-0047 — Agenten-Arbeitsbereich (Lese-Ansicht + Grant-Verwaltung).
+  // Alle Routen sind fuer Menschen (JWT) offen; `require_agent_bound_token`
+  // greift nur bei `w2b_`-Tokens. Sichtbarkeit serverseitig: editor+ sehen
+  // auch fremde private Areas, viewer nur `scope='shared'`.
+  listWorkAreas: () => Promise<WorkArea[]>
+  createWorkArea: (input: WorkAreaCreateInput) => Promise<WorkArea>
+  // Grants gibt es nur auf SHARED Areas (private Area => 403 `area_forbidden`);
+  // die Vergabe ist Menschen vorbehalten.
+  listWorkAreaGrants: (areaId: string) => Promise<WorkAreaGrant[]>
+  setWorkAreaGrant: (
+    areaId: string,
+    agentId: string,
+    input: WorkAreaGrantInput,
+  ) => Promise<WorkAreaGrant>
+  deleteWorkAreaGrant: (areaId: string, agentId: string) => Promise<void>
+  // Metadaten-Liste einer Area; der Inhalt kommt getrennt ueber
+  // `readWaArtifact` (Markdown mit `[#block_id]`-Ankern).
+  listWaArtifacts: (areaId: string) => Promise<WaArtifact[]>
+  readWaArtifact: (artifactId: string, anchor?: string) => Promise<ArtifactMarkdown>
+  deleteWaArtifact: (artifactId: string) => Promise<void>
+  // Passagen-Suche: liefert Anker + Snippet, nie ganze Dokumente. Ausserhalb
+  // des Lese-Scopes ist das Ergebnis leer (kein Existenz-Orakel).
+  searchWorkArea: (filters: {
+    q: string
+    area_id?: string
+    limit?: number
+  }) => Promise<WorkAreaSearchHit[]>
+  // Getrennter Index — findet per Konstruktion nie WorkArea-Rohmaterial.
+  searchKb: (filters: { q: string; limit?: number }) => Promise<KbSearchHit[]>
+  getKbNode: (nodeId: string) => Promise<KbNode>
+  kbNeighbors: (filters: {
+    anchor: string
+    type?: EdgeType
+    depth?: number
+  }) => Promise<KbNeighbor[]>
   // Track D: aufgeloestes Org-Entitlement + MCP-Verbrauch (Billing-Slot).
   getEntitlement: () => Promise<EntitlementInfo>
   // Track J: startet einen Mollie-Checkout und liefert die Hosted-Checkout-URL.
@@ -919,6 +965,55 @@ export function createApi(token: string, workspaceId: string): Api {
       const params = new URLSearchParams({ kind: input.kind, target_id: input.target_id })
       if (input.persona_id !== undefined) params.set('persona_id', input.persona_id)
       return request<PlaceholderPreview>(token, `${ws}/placeholders/preview?${params.toString()}`)
+    },
+    listWorkAreas: () => request<WorkArea[]>(token, `${ws}/work-areas`),
+    createWorkArea: (input) =>
+      request<WorkArea>(token, `${ws}/work-areas`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    listWorkAreaGrants: (areaId) =>
+      request<WorkAreaGrant[]>(token, `${ws}/work-areas/${areaId}/grants`),
+    setWorkAreaGrant: (areaId, agentId, input) =>
+      request<WorkAreaGrant>(token, `${ws}/work-areas/${areaId}/grants/${agentId}`, {
+        method: 'PUT',
+        body: JSON.stringify(input),
+      }),
+    deleteWorkAreaGrant: (areaId, agentId) =>
+      request<void>(token, `${ws}/work-areas/${areaId}/grants/${agentId}`, {
+        method: 'DELETE',
+      }),
+    listWaArtifacts: (areaId) =>
+      request<WaArtifact[]>(token, `${ws}/work-areas/${areaId}/artifacts`),
+    readWaArtifact: (artifactId, anchor) => {
+      const params = new URLSearchParams()
+      if (anchor !== undefined && anchor !== '') params.set('anchor', anchor)
+      const query = params.toString()
+      return request<ArtifactMarkdown>(
+        token,
+        `${ws}/wa-artifacts/${artifactId}${query ? `?${query}` : ''}`,
+      )
+    },
+    deleteWaArtifact: (artifactId) =>
+      request<void>(token, `${ws}/wa-artifacts/${artifactId}`, { method: 'DELETE' }),
+    searchWorkArea: (filters) => {
+      const params = new URLSearchParams({ q: filters.q })
+      if (filters.area_id) params.set('area_id', filters.area_id)
+      if (filters.limit !== undefined) params.set('limit', String(filters.limit))
+      return request<WorkAreaSearchHit[]>(token, `${ws}/workarea-search?${params.toString()}`)
+    },
+    searchKb: (filters) => {
+      const params = new URLSearchParams({ q: filters.q })
+      if (filters.limit !== undefined) params.set('limit', String(filters.limit))
+      return request<KbSearchHit[]>(token, `${ws}/kb-search?${params.toString()}`)
+    },
+    getKbNode: (nodeId) => request<KbNode>(token, `${ws}/kb/nodes/${nodeId}`),
+    kbNeighbors: (filters) => {
+      const params = new URLSearchParams({ anchor: filters.anchor })
+      // Query-Alias ist `type` (der Python-Parameter heisst `edge_type`).
+      if (filters.type !== undefined) params.set('type', filters.type)
+      if (filters.depth !== undefined) params.set('depth', String(filters.depth))
+      return request<KbNeighbor[]>(token, `${ws}/kb/neighbors?${params.toString()}`)
     },
     getEntitlement: () => request<EntitlementInfo>(token, `${ws}/billing/entitlement`),
     createCheckout: (input) =>

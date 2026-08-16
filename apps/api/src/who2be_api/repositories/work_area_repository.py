@@ -65,6 +65,13 @@ _OWNER_GRANT_SQL = (
     "ON CONFLICT (area_id, agent_id) DO NOTHING"
 )
 
+# Stabile Reihenfolge nach `agent_id`: der Grant-Editor der Web-UI soll bei
+# unveraendertem Bestand immer dieselbe Liste sehen.
+_LIST_GRANTS_SQL = (
+    "SELECT area_id, agent_id, level, created_at FROM work_area_grant "
+    "WHERE workspace_id = $1 AND area_id = $2 ORDER BY agent_id"
+)
+
 _AGENT_NAME_SQL = "SELECT name FROM agent WHERE id = $1 AND workspace_id = $2"
 
 
@@ -90,6 +97,8 @@ class WorkAreaRepository(Protocol):
     async def set_grant(
         self, workspace_id: UUID, area_id: UUID, agent_id: UUID, level: WorkAreaGrantLevel
     ) -> WorkAreaGrantRead: ...
+
+    async def list_grants(self, workspace_id: UUID, area_id: UUID) -> list[WorkAreaGrantRead]: ...
 
     async def delete_grant(self, workspace_id: UUID, area_id: UUID, agent_id: UUID) -> bool: ...
 
@@ -175,6 +184,15 @@ class PgWorkAreaRepository:
         )
         assert row is not None
         return WorkAreaGrantRead.model_validate(dict(row))
+
+    async def list_grants(self, workspace_id: UUID, area_id: UUID) -> list[WorkAreaGrantRead]:
+        """Alle Grants einer Area (Ist-Stand fuer den Grant-Editor).
+
+        Kein Existenz-Check: der Service hat die Area vorher aufgeloest — eine
+        leere Liste heisst hier schlicht „keine Grants vergeben".
+        """
+        rows = await self._pool.fetch(_LIST_GRANTS_SQL, workspace_id, area_id)
+        return [WorkAreaGrantRead.model_validate(dict(row)) for row in rows]
 
     async def delete_grant(self, workspace_id: UUID, area_id: UUID, agent_id: UUID) -> bool:
         result = await self._pool.execute(

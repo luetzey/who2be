@@ -41,6 +41,12 @@ const WRITE_CAP_FIELDS = [
   'feedback_write',
   'feedback_resolve',
   'promote_retire',
+  // ADR-0047 — Agenten-Arbeitsbereich + Knowledge Base. Bewusst am Ende und in
+  // dieser Reihenfolge: erst der Arbeitsbereich, dann die belegpflichtigen
+  // Aussagen, zuletzt die Kanten (eigenes Recht, weil im MVP nicht loeschbar).
+  'workarea_write',
+  'kb_write',
+  'kb_edge_write',
 ] as const
 const READ_SCOPES = ['all', 'assigned', 'none'] as const
 const TAG_SCOPE_DOMAINS = ['persona', 'playbook', 'resource'] as const
@@ -307,6 +313,62 @@ export function AgentEditorForm({
                     </FormItem>
                   )}
                 />
+                  </FormSection>
+
+                  {/*
+                    ADR-0047 — betreiber-gepflegte Modell-Config. Sie gilt pro
+                    Agent-KONFIGURATION (Who2Be hostet keine Agenten-Laufzeit)
+                    und wird vom Server bei jedem Arbeitsbereich-/KB-Zugriff
+                    ins `agent_access_log` gespiegelt — nur damit laesst sich
+                    spaeter beantworten, welche sensiblen Inhalte an welchen
+                    externen Anbieter gingen. Pflegen duerfen sie ausschliesslich
+                    Menschen (agent-gebundene Tokens bekommen 403), die Web-UI
+                    ist also der einzige Pflegeweg. Kein `required`: leer ist
+                    ein gueltiger Zustand ("nicht hinterlegt") und leert das
+                    Feld serverseitig auch wieder (siehe `AgentUpdateInput`).
+                    Der Editor wird nur auf der Detail-Page gemountet — das
+                    Create-DTO kennt die Felder nicht, deshalb braucht die
+                    Sektion keinen Create-Zweig.
+                  */}
+                  <FormSection
+                    title={t('form.modelTitle')}
+                    description={t('form.modelDescription')}
+                    help={<p>{t('form.modelHelp')}</p>}
+                  >
+                    <FormField
+                      control={form.control}
+                      name="model_provider"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('form.modelProviderLabel')}</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder={t('form.modelProviderPlaceholder')}
+                              {...field}
+                              disabled={isViewer}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="model_name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('form.modelNameLabel')}</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder={t('form.modelNamePlaceholder')}
+                              {...field}
+                              disabled={isViewer}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </FormSection>
 
                   {submitButton}

@@ -661,3 +661,25 @@ bleiben)._
   `services/gdpr_export_service.py`, `blobstore/port.py`;
   `apps/api/tests/test_workarea_retention.py`;
   `docs/compliance/data-retention-and-erasure.md` §4a.
+
+## 2026-08-16 — Dated Befund-Dokumente werden nie rückwirkend umgeschrieben
+- **Entscheidung:** Berichte, die einen Zustand zu einem Datum festhalten
+  (`docs/standards-review-*.md`, archivierte `.claude/plan/*.md`), bleiben
+  unangetastet, auch wenn ein Befund später erledigt ist. Die **Auflösung**
+  wird in `.claude/context/STATE.md` verzeichnet — dort, wo der Ist-Zustand
+  lebt. Nur *lebende* Dokumente (STATE.md, CLAUDE.md, ROADMAP.md,
+  `.claude/plan/README.md`, PR-Template) werden nachgezogen.
+- **Anlass:** Das CI-Gate war seit 2026-07-19 durch Actions-Billing tot
+  (GIT-2 im Standards-Review 2026-07-20) und läuft seit 2026-08-16 wieder.
+  Die Aussage stand an neun Stellen im Repo.
+- **Begründung:** Ein Review-Bericht, aus dem Befunde nachträglich
+  verschwinden, ist als Beleg wertlos — man kann ihm dann nicht mehr ansehen,
+  ob ein Punkt nie gefunden oder still entfernt wurde. Umgekehrt darf eine
+  überholte Aussage nicht in Dateien stehen bleiben, die jede Session geladen
+  werden (CLAUDE.md): dort würde sie weiterhin Verhalten steuern — konkret:
+  lokale Läufe als *Ersatz* für ein Gate rechtfertigen, das wieder greift.
+- **Verworfen:** die Befunde im Review-Dokument auf ✅ setzen (fälscht den
+  Bericht); nur STATE.md pflegen (die stale Aussage bliebe im
+  Session-Kontext wirksam).
+- **Detail:** STATE.md §Standards / CI trägt die Belegkette (Runner-IDs statt
+  `runner_id: 0`, echte Laufzeiten, der im ersten Lauf gefundene Lint-Fehler).

@@ -421,7 +421,14 @@ _MANAGED_TEMPLATE_SLUGS = (_AGENT_BUILDER_TEMPLATE_SLUG, _AGENT_BUILDER_LITE_TEM
 # Trigger) plus semantisches Gedaechtnis in der Memory-Sektion; `search_content`
 # im Beziehungs-Denken der Persona, in der Wiederverwendungs-Regel und in den
 # Tool-Listen von Playbook- und Pflege-Playbook — DE + EN.
-BUILDER_CONTENT_VERSION = 14
+# v15: Arbeitsbereich + Knowledge Base fuer den Builder (ADR-0047) —
+# `workarea_write`/`kb_write`/`kb_edge_write` in der Builder-Policy. REIN
+# policy-seitig, kein Sidecar-Text: die WorkArea-/KB-/Tabellen-Tools stehen
+# bereits in der kuratierten `_TOOLS`-Liste des tools-overview-Resolvers, und
+# der rendert policy-gefiltert — mit den Capabilities erscheinen die
+# Schreib-Tools automatisch im System-Prompt. Der Bump ist trotzdem noetig:
+# ohne ihn zieht der Sync-Zweig (8) die neue Policy nie auf Bestands-Builder.
+BUILDER_CONTENT_VERSION = 15
 
 
 def _builder_persona_content(pack: ContentPack) -> dict[str, object]:
@@ -506,6 +513,16 @@ def _builder_tool_policy() -> dict[str, object]:
     Bindungen anlegen/pflegen ist Verwaltungs-Arbeit des Meta-Agenten; via
     `is_within` kann er das Recht damit auch gezielt an Fach-Agenten vergeben.
     Memory-Kuration (Triage/Guard) bleibt bewusst ausserhalb — UI-only.
+
+    `workarea_write`/`kb_write`/`kb_edge_write` (Content-Stand 15, ADR-0047):
+    Der Meta-Agent recherchiert fuer den Agenten-Bau — Rohmaterial gehoert in
+    den Arbeitsbereich, belegte Aussagen in die Knowledge Base, statt als
+    unbelegte Prosa in einem Playbook zu landen. Entscheidend ist aber die
+    `is_within`-Wirkung: OHNE die Flags koennte der Builder sie keinem
+    Fach-Agenten vergeben (Anti-Eskalation), und der Arbeitsbereich waere nur
+    ueber die Web-UI verteilbar. Die Kanten sind bewusst mit dabei: eine
+    Aussage ohne ihre Belegkante ist im MVP eine Sackgasse (Kanten sind nicht
+    loeschbar — die Verantwortung dafuer traegt der Meta-Agent).
     """
     return AgentToolPolicy(
         playbook_read=ReadScope.all,
@@ -519,6 +536,9 @@ def _builder_tool_policy() -> dict[str, object]:
         feedback_resolve=True,
         promote_retire=True,
         external_tool_write=True,
+        workarea_write=True,
+        kb_write=True,
+        kb_edge_write=True,
         memory_mode=MemoryMode.suggest,
         memory_directive=MemoryDirective.recommended,
     ).model_dump(mode="json")

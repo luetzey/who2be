@@ -774,6 +774,14 @@ export interface AgentToolPolicy {
   feedback_write: boolean
   feedback_resolve: boolean
   promote_retire: boolean
+  // ADR-0047 — Agenten-Arbeitsbereich. `workarea_write` deckt Artifacts,
+  // Ingest und Tabellen ab; `kb_write` die belegten Aussagen. Die Kanten sind
+  // bewusst ein EIGENES Recht: sie sind im MVP nicht loeschbar, ein Fehlgriff
+  // ist also dauerhaft. Zusaetzlich zur Capability entscheidet immer noch der
+  // Area-Grant, WELCHEN Arbeitsbereich ein Agent sieht.
+  workarea_write: boolean
+  kb_write: boolean
+  kb_edge_write: boolean
   // ADR-0039: Tag-Praedikat-Write-Scoping. Pro Domain (persona/playbook/resource)
   // erlaubte Tags; fehlend/leer = keine Tag-Einschraenkung. Optional, damit
   // Bestands-Payloads ohne das Feld weiterhin valide sind.
@@ -811,6 +819,10 @@ export const DEFAULT_TOOL_POLICY: AgentToolPolicy = {
   feedback_write: true,
   feedback_resolve: false,
   promote_retire: false,
+  // ADR-0047: Arbeitsbereich + Knowledge Base sind secure-by-default aus.
+  workarea_write: false,
+  kb_write: false,
+  kb_edge_write: false,
   // ADR-0044: Gedaechtnis ist secure-by-default aus; Verbindlichkeit der
   // (erst bei mode != off aktiven) Abfrage-Anweisung defaultet auf "soll".
   memory_mode: 'off',
@@ -851,6 +863,15 @@ export interface Agent {
   template_version?: number | null
   playbook_count?: number
   pending_memory_count?: number
+  // ADR-0047 — betreiber-gepflegte Modell-Config: welches LLM diesen Agenten
+  // faehrt. Sie gilt pro Agent-KONFIGURATION, nicht pro Einzelaufruf (Who2Be
+  // ist kein Runtime-Host) und ist zusammen mit `agent_access_log` die
+  // Grundlage der Compliance-Auskunft „welche sensiblen Elemente gingen je an
+  // einen externen Anbieter". Pflege ist MENSCHEN vorbehalten — ein
+  // agent-gebundener Token bekommt 403, sonst koennte ein Agent seine eigene
+  // Attribution faelschen. null = nicht hinterlegt.
+  model_provider?: string | null
+  model_name?: string | null
 }
 
 export interface AgentInput {
@@ -876,6 +897,12 @@ export interface AgentUpdateInput {
   status?: AgentStatus
   // Gesetzt ⇒ ersetzt die Policy ganz; weggelassen ⇒ unveraendert.
   tool_policy?: AgentToolPolicy
+  // Modell-Config (ADR-0047). Drei-Wege-Semantik: weggelassen ⇒ unveraendert,
+  // nicht-leerer String ⇒ setzen, `''` ⇒ explizit auf null LEEREN. Ein
+  // stehengebliebener falscher Anbieter wuerde die Compliance-Auskunft
+  // dauerhaft verfaelschen — deshalb muss Leeren moeglich sein.
+  model_provider?: string
+  model_name?: string
 }
 
 export type AgentRenderFormat = 'plain' | 'markdown' | 'html'
@@ -1138,4 +1165,156 @@ export interface FeedbackUnusedItem {
 
 export interface FeedbackUnused {
   items: FeedbackUnusedItem[]
+}
+
+// ---------------------------------------------------------------------------
+// Agenten-Arbeitsbereich + Knowledge Base (ADR-0047). Spiegelt
+// `packages/models/src/who2be_models/{workarea,kb}.py`. Beide Subsysteme sind
+// UNVERSIONIERT (kein draft/review/active, kein Draft-Lock) — sie stehen NEBEN
+// der Resource-Achse, nicht darin. Die Web-UI liest sie; geschrieben werden
+// Inhalte von Agenten ueber MCP (Ausnahme: Artifact loeschen).
+// ---------------------------------------------------------------------------
+
+// „privat" heisst privat gegenueber anderen AGENTEN — Menschen ab Rolle editor
+// lesen auch fremde private Areas (User-Entscheidung 5). Viewer sehen nur
+// `shared`. Genau eine private Area pro Agent, auto-angelegt beim ersten Zugriff.
+export type WorkAreaScope = 'private' | 'shared'
+export type WorkAreaGrantLevel = 'read' | 'write'
+export type ArtifactType = 'doc' | 'table' | 'blob'
+// `occurred_at` ist serverseitig Pflicht ohne now()-Fallback; der bewusste
+// Ausweg bei unbekanntem Zeitpunkt ist `unknown` (Timeline-Sonderbucket).
+export type OccurredPrecision = 'day' | 'minute' | 'unknown'
+export type Sensitivity = 'general' | 'sensitive'
+
+export interface WorkArea {
+  id: string
+  workspace_id: string
+  scope: WorkAreaScope
+  // Nur bei `scope='private'` gesetzt (CHECK-Constraint in Migration 0073).
+  owner_agent_id: string | null
+  name: string
+  // null = unbegrenzt (Default); sonst raeumt der Retention-Sweep aelteres ab.
+  retention_days: number | null
+  created_at: string
+  updated_at: string
+}
+
+export interface WorkAreaGrant {
+  area_id: string
+  agent_id: string
+  level: WorkAreaGrantLevel
+  created_at: string
+}
+
+export interface WorkAreaCreateInput {
+  name: string
+  retention_days?: number | null
+}
+
+export interface WorkAreaGrantInput {
+  level: WorkAreaGrantLevel
+}
+
+// Metadaten-Zeile eines Artifacts (`GET .../work-areas/{id}/artifacts`).
+// `blocks` liefert nur der MCP-Pfad; die Web-Lese-Ansicht nimmt das gerenderte
+// Markdown aus `ArtifactMarkdown`, deshalb hier bewusst nicht getragen.
+export interface WaArtifact {
+  id: string
+  area_id: string
+  workspace_id: string
+  type: ArtifactType
+  title: string
+  // Optimistische Revision — steigt bei jedem append/patch.
+  rev: number
+  occurred_at: string
+  occurred_precision: OccurredPrecision
+  sensitivity: Sensitivity
+  source_system: string | null
+  source_url: string | null
+  fetched_at: string | null
+  blob_sha256: string | null
+  content_ref: string | null
+  created_at: string
+  updated_at: string
+  // Akteur-Kennung `agent:<id>` | `user:<id>`.
+  updated_by: string | null
+}
+
+// `GET .../wa-artifacts/{id}` — Markdown mit `[#block_id]`-Anker-Annotationen
+// (ADR-0021). Traegt bewusst KEINE Metadaten; die kommen aus der Area-Liste.
+export interface ArtifactMarkdown {
+  artifact_id: string
+  title: string
+  rev: number
+  markdown: string
+}
+
+// Suchtreffer der WorkArea-Suche — Anker + Snippet, nie das ganze Dokument.
+// `anchor` ist `<artifact_id>#<block_id>` und direkt aufloesbar.
+export interface WorkAreaSearchHit {
+  anchor: string
+  artifact_id: string
+  block_id: string
+  title: string
+  snippet: string
+  score: number
+  area_id: string
+}
+
+// Geordnete Vertrauensleiter: hypothesis < derived < verified. Das Heben auf
+// `verified` ist bewusst kein Agenten-Recht (P2-UI-Thema).
+export type NodeTier = 'verified' | 'derived' | 'hypothesis'
+// `stale` setzt nur der (noch nicht gebaute) P1-Verfalls-Sweep.
+export type NodeStatus = 'live' | 'stale'
+export type SourceRefKind = 'blob' | 'url' | 'artifact'
+export type EdgeType =
+  | 'supports'
+  | 'contradicts'
+  | 'supersedes'
+  | 'derived_from'
+  | 'belongs_to'
+  | 'co_occurs_with'
+
+export interface KbNode {
+  id: string
+  workspace_id: string
+  tier: NodeTier
+  // Die Aussage selbst.
+  content: string
+  // Optionaler Herkunfts-Anker des Aussage-TEXTS.
+  content_ref: string | null
+  // Pflicht-Beleg (Belegpflicht, ADR-0047): `sha256:<h>` | `url:<u>` |
+  // `artifact:<uuid>[#block]`. `source_ref_kind` leitet der Server daraus ab.
+  source_ref: string
+  source_ref_kind: SourceRefKind
+  ttl_expires_at: string | null
+  status: NodeStatus
+  // Laenge der `derived_from`-Kette ab Roh-Beleg (P1: Drift-Grenze).
+  derivation_depth: number
+  sensitivity: Sensitivity
+  occurred_at: string
+  occurred_precision: OccurredPrecision
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+// Nachbar aus `GET .../kb/neighbors`. `co_n` traegt bei `co_occurs_with` IMMER
+// die Fallzahl mit — eine Korrelation ohne Fallzahl waere eine Behauptung.
+export interface KbNeighbor {
+  node: KbNode
+  edge_type: EdgeType
+  direction: 'in' | 'out'
+  co_n: number | null
+}
+
+// KB-Treffer; `anchor` ist `node:<uuid>`. Eigener Index — die KB-Suche liefert
+// per Konstruktion nie WorkArea-Rohmaterial.
+export interface KbSearchHit {
+  node_id: string
+  anchor: string
+  snippet: string
+  tier: NodeTier
+  status: NodeStatus
+  score: number
 }

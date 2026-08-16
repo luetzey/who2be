@@ -1,0 +1,6 @@
+export { AreaDetailPage } from './pages/AreaDetailPage'
+export { AreasPage } from './pages/AreasPage'
+export { ArtifactDetailPage } from './pages/ArtifactDetailPage'
+export { KbNodeDetailPage } from './pages/KbNodeDetailPage'
+export { KbSearchPage } from './pages/KbSearchPage'
+export { WorkAreaSearchPage } from './pages/WorkAreaSearchPage'

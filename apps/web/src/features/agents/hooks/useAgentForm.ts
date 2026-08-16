@@ -38,6 +38,11 @@ const editorSchema = z.object({
   feedback_write: z.boolean(),
   feedback_resolve: z.boolean(),
   promote_retire: z.boolean(),
+  // ADR-0047 Arbeitsbereich + Knowledge Base. `kb_edge_write` ist bewusst ein
+  // eigenes Recht: Kanten sind im MVP nicht loeschbar.
+  workarea_write: z.boolean(),
+  kb_write: z.boolean(),
+  kb_edge_write: z.boolean(),
   // ADR-0039 Tag-Scope: erlaubte Tags je Domain als Liste (leer = alle). Als
   // string[] gefuehrt, damit der TagInput (Pills + Vorschlaege) direkt bindet.
   write_tags_persona: z.array(z.string()),
@@ -57,6 +62,11 @@ const editorSchema = z.object({
   // ADR-0044 Agent-Memory.
   memory_mode: memoryMode,
   memory_directive: memoryDirective,
+  // ADR-0047 Modell-Config (betreiber-gepflegt, kein Policy-Feld). Leerer
+  // String ist ein gueltiger Wert und bedeutet beim Submit "explizit leeren"
+  // — siehe `AgentUpdateInput`. Laengen prueft der Server (100/200).
+  model_provider: z.string(),
+  model_name: z.string(),
 })
 
 export type AgentEditorValues = z.infer<typeof editorSchema>
@@ -115,6 +125,9 @@ function valuesToPolicy(values: AgentEditorValues, base: AgentToolPolicy): Agent
     feedback_write: values.feedback_write,
     feedback_resolve: values.feedback_resolve,
     promote_retire: values.promote_retire,
+    workarea_write: values.workarea_write,
+    kb_write: values.kb_write,
+    kb_edge_write: values.kb_edge_write,
     write_tags: buildWriteTags(values),
     transition_grants: buildTransitionGrants(values),
     write_rate_limit: values.write_rate_limit.trim() === '' ? null : Number(values.write_rate_limit),
@@ -163,6 +176,10 @@ export function useAgentForm(
       ...tagFieldsFromPolicy(DEFAULT_TOOL_POLICY),
       ...transitionFieldsFromPolicy(DEFAULT_TOOL_POLICY),
       write_rate_limit: '',
+      // Modell-Config liegt am Agenten, nicht in der Policy — daher kein
+      // Spread-Treffer. Leer = "nicht hinterlegt".
+      model_provider: '',
+      model_name: '',
     },
   })
 
@@ -175,6 +192,12 @@ export function useAgentForm(
         persona_id: agent.persona_id ?? '',
         system_prompt_template_id: agent.system_prompt_template_id ?? '',
         status: agent.status,
+        // Der flache Spread traegt workarea_write/kb_write/kb_edge_write
+        // bereits mit: sie sind in `AgentToolPolicy` NICHT optional, weil der
+        // Server die Policy immer ueber das Pydantic-Modell serialisiert (eine
+        // Bestands-JSONB ohne die Keys deserialisiert zum Default `false` und
+        // kommt mit Keys zurueck). Deshalb kein `??`-Fallback wie unten bei
+        // memory_* — dort ist das Feld im TS-Typ optional.
         ...agent.tool_policy,
         ...tagFieldsFromPolicy(agent.tool_policy),
         ...transitionFieldsFromPolicy(agent.tool_policy),
@@ -186,6 +209,9 @@ export function useAgentForm(
         // kompatibel, siehe DEFAULT_TOOL_POLICY).
         memory_mode: agent.tool_policy.memory_mode ?? 'off',
         memory_directive: agent.tool_policy.memory_directive ?? 'recommended',
+        // ADR-0047: `null` (nicht hinterlegt) wird zum leeren Eingabefeld.
+        model_provider: agent.model_provider ?? '',
+        model_name: agent.model_name ?? '',
       })
     }
   }, [agent, form])
@@ -204,6 +230,13 @@ export function useAgentForm(
         system_prompt_template_id: values.system_prompt_template_id || undefined,
         status: values.status,
         tool_policy: valuesToPolicy(values, agent.tool_policy),
+        // ADR-0047: IMMER mitsenden — anders als die Refs oben ist der leere
+        // String hier kein "nicht gesetzt", sondern die explizite Anweisung
+        // "auf NULL leeren". Wuerde man das Feld bei leerem Wert weglassen,
+        // liesse sich ein falsch eingetragener Anbieter nie mehr entfernen und
+        // die Compliance-Auskunft bliebe dauerhaft verfaelscht.
+        model_provider: values.model_provider.trim(),
+        model_name: values.model_name.trim(),
       })
       notify.success(i18n.t('agents:toast.saved'))
       onSaved()

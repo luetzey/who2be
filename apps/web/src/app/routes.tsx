@@ -158,6 +158,41 @@ const HelpPlaceholdersPage = lazy(() =>
   })),
 )
 
+// Agenten-Arbeitsbereich + Knowledge Base (ADR-0047). Eigenes Sub-Layout mit
+// Sub-Navigation (Muster `SettingsLayout`) — die Lese-Ansicht besteht aus
+// mehreren gleichrangigen Einstiegen (Bereiche / Suche / Knowledge Base).
+const WorkAreaLayout = lazy(() =>
+  import('@/features/workarea/components/WorkAreaLayout').then((mod) => ({
+    default: mod.WorkAreaLayout,
+  })),
+)
+const AreasPage = lazy(() =>
+  import('@/features/workarea/pages/AreasPage').then((mod) => ({ default: mod.AreasPage })),
+)
+const AreaDetailPage = lazy(() =>
+  import('@/features/workarea/pages/AreaDetailPage').then((mod) => ({
+    default: mod.AreaDetailPage,
+  })),
+)
+const ArtifactDetailPage = lazy(() =>
+  import('@/features/workarea/pages/ArtifactDetailPage').then((mod) => ({
+    default: mod.ArtifactDetailPage,
+  })),
+)
+const WorkAreaSearchPage = lazy(() =>
+  import('@/features/workarea/pages/WorkAreaSearchPage').then((mod) => ({
+    default: mod.WorkAreaSearchPage,
+  })),
+)
+const KbSearchPage = lazy(() =>
+  import('@/features/workarea/pages/KbSearchPage').then((mod) => ({ default: mod.KbSearchPage })),
+)
+const KbNodeDetailPage = lazy(() =>
+  import('@/features/workarea/pages/KbNodeDetailPage').then((mod) => ({
+    default: mod.KbNodeDetailPage,
+  })),
+)
+
 // Oeffentliche Rechtsseiten (`/legal/*`) — kein Auth-Gate, lazy mit eigenen
 // Chunks. Die Suspense-Boundary liefert `LegalLayout`.
 const ImpressumPage = lazy(() =>
@@ -311,6 +346,33 @@ export function RouterRoot() {
                   path="/w/:workspaceId/system-prompts/:id"
                   element={<SystemPromptDetailPage />}
                 />
+                <Route element={<WorkAreaLayout />}>
+                  <Route path="/w/:workspaceId/workarea" element={<AreasPage />} />
+                  <Route
+                    path="/w/:workspaceId/workarea/areas/:areaId"
+                    element={<AreaDetailPage />}
+                  />
+                  <Route
+                    path="/w/:workspaceId/workarea/areas/:areaId/artifacts/:artifactId"
+                    element={<ArtifactDetailPage />}
+                  />
+                  {/* Bereichslos: Ziel der KB-Belege (`artifact:<uuid>#<block>`
+                      kennt die Area nicht). Zeigt Inhalt + Anker ohne die
+                      Metadaten aus der Bereichs-Liste. */}
+                  <Route
+                    path="/w/:workspaceId/workarea/artifacts/:artifactId"
+                    element={<ArtifactDetailPage />}
+                  />
+                  <Route
+                    path="/w/:workspaceId/workarea/search"
+                    element={<WorkAreaSearchPage />}
+                  />
+                  <Route path="/w/:workspaceId/workarea/kb" element={<KbSearchPage />} />
+                  <Route
+                    path="/w/:workspaceId/workarea/kb/:nodeId"
+                    element={<KbNodeDetailPage />}
+                  />
+                </Route>
                 <Route element={<SettingsLayout />}>
                   <Route
                     path="/w/:workspaceId/settings/account"

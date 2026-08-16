@@ -311,14 +311,15 @@ class AgentService:
     async def update(self, ctx: WorkspaceContext, agent_id: UUID, data: AgentUpdate) -> AgentRead:
         """Konfig-Update in-place (None = Feld bleibt unangetastet).
 
-        `model_provider`/`model_name` (User-Entscheidung 6, ADR-0047) laufen
-        mit derselben None-Semantik durch; explizites Leeren (zurueck auf
-        NULL) ist dadurch bewusst (noch) nicht moeglich — dokumentierter
-        offener Punkt. Sie sind das EINZIGE Feld-Paar, das ein
-        agent-gebundener Token nicht setzen darf (H4, s. Modul-Kopf). Eine
-        tatsaechliche Aenderung der Modell-Config wird im `audit_log`
-        protokolliert (`agent.model_config_changed`, alter + neuer Wert +
-        `agent_id` des Aufrufers im detail).
+        `model_provider`/`model_name` (User-Entscheidung 6, ADR-0047) sind das
+        einzige Feld-Paar mit LEER-Semantik: `""` setzt den Wert explizit auf
+        NULL zurueck (die Compliance-Config muss korrigierbar sein), `None`/
+        weggelassen laesst ihn unangetastet. Fuer das Menschen-Gate (H4, s.
+        Modul-Kopf) zaehlt `""` als Setzen — ein agent-gebundener Token darf
+        die Attribution auch nicht LEEREN. Eine tatsaechliche Aenderung der
+        Modell-Config wird im `audit_log` protokolliert
+        (`agent.model_config_changed`, alter + neuer Wert + `agent_id` des
+        Aufrufers im detail) — das Leeren erscheint dort mit `new: null`.
         """
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.agent_write)

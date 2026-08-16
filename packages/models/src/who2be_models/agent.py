@@ -68,9 +68,13 @@ class AgentUpdate(BaseModel):
 
     `model_provider`/`model_name` sind die betreiber-gepflegte Modell-Config
     (User-Entscheidung 6, ADR-0047): das Modell gilt pro Agent-Konfiguration,
-    nicht pro Einzelaufruf. `None` laesst den Bestand unangetastet (analog
-    `tool_policy`); Aenderungen protokolliert der Service ab WP14 im
-    `audit_log`.
+    nicht pro Einzelaufruf. Sie sind das einzige Feld-Paar mit einer
+    LEER-Semantik: `""` setzt den Wert explizit auf NULL zurueck, weggelassen
+    bzw. `None` laesst den Bestand unangetastet (analog `tool_policy`). Grund:
+    die Felder tragen die Compliance-Attribution — ein einmal falsch
+    eingetragener Anbieter muss entfernbar sein, sonst verfaelscht er die
+    Auswertung „welche Daten gingen an wen" dauerhaft. Aenderungen (auch das
+    Leeren) protokolliert der Service im `audit_log`.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -81,8 +85,9 @@ class AgentUpdate(BaseModel):
     system_prompt_template_id: UUID | None = None
     status: AgentStatus | None = None
     tool_policy: AgentToolPolicy | None = None
-    model_provider: str | None = Field(default=None, min_length=1, max_length=100)
-    model_name: str | None = Field(default=None, min_length=1, max_length=200)
+    # Kein `min_length`: "" ist hier die gueltige Eingabe fuers Leeren (s. o.).
+    model_provider: str | None = Field(default=None, max_length=100)
+    model_name: str | None = Field(default=None, max_length=200)
 
 
 class AgentCopy(BaseModel):

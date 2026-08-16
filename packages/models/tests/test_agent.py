@@ -11,6 +11,7 @@ from who2be_models import (
     AgentCreate,
     AgentRead,
     AgentStatus,
+    AgentUpdate,
 )
 
 
@@ -101,3 +102,17 @@ def test_copy_name_optional() -> None:
 def test_copy_rejects_blank_name() -> None:
     with pytest.raises(ValidationError):
         AgentCopy(name="")
+
+
+def test_update_model_config_leer_semantik() -> None:
+    """`""` ist die gueltige Leer-Eingabe der Modell-Config, `None` = unveraendert.
+
+    Ein `min_length=1` waere hier falsch: die Compliance-Config muss auch
+    zurueckgenommen werden koennen (der Service uebersetzt `""` nach NULL).
+    """
+    cleared = AgentUpdate(model_provider="", model_name="")
+    assert cleared.model_provider == ""
+    assert cleared.model_name == ""
+    untouched = AgentUpdate()
+    assert untouched.model_provider is None
+    assert untouched.model_name is None

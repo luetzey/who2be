@@ -870,6 +870,11 @@
     "operationId": "set_convention_v1_workspaces__workspace_id__work_areas__area_id__conventions__source_name__put"
   },
   {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/work-areas/{area_id}/grants",
+    "operationId": "list_work_area_grants_v1_workspaces__workspace_id__work_areas__area_id__grants_get"
+  },
+  {
     "method": "DELETE",
     "path": "/v1/workspaces/{workspace_id}/work-areas/{area_id}/grants/{agent_id}",
     "operationId": "delete_work_area_grant_v1_workspaces__workspace_id__work_areas__area_id__grants__agent_id__delete"

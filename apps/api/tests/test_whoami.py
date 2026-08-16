@@ -177,7 +177,10 @@ def test_whoami_agent_token_lists_capabilities(monkeypatch: pytest.MonkeyPatch) 
             # Builder gewaehrt alle Writes + system_prompt_write (ADR-0040) +
             # feedback_write (ADR-0038, default an) + feedback_resolve
             # (Kurations-Handlung des Meta-Agenten, Content-Stand 6) +
-            # promote_retire + external_tool_write (ADR-0043, Content-Stand 11).
+            # promote_retire + external_tool_write (ADR-0043, Content-Stand 11) +
+            # die drei Arbeitsbereichs-Capabilities (ADR-0047, Content-Stand 15;
+            # ohne sie koennte der Builder sie wegen `is_within` auch keinem
+            # Fach-Agenten vergeben).
             assert set(body["capabilities"]) == {
                 "persona_write",
                 "playbook_write",
@@ -188,6 +191,9 @@ def test_whoami_agent_token_lists_capabilities(monkeypatch: pytest.MonkeyPatch) 
                 "feedback_resolve",
                 "promote_retire",
                 "external_tool_write",
+                "workarea_write",
+                "kb_write",
+                "kb_edge_write",
             }
             # Builder-Reads = `all` (persona ist An/Aus → 'all'). `external_tool`
             # (WP-3) ist NICHT explizit in `_builder_tool_policy()` gesetzt —

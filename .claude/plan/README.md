@@ -57,8 +57,9 @@ Plan-Dateien unter dem ai-native-Plan + ADR-0038.
 | `2026-08-13-1200_agent-workarea-knowledge-base.md` | Agent WorkArea + Knowledge Base (unversionierte Subsysteme, MinIO-Blob-Store, SQLite-Tabellen-Store — ADR-0047/0048/0049), 20 WPs in 7 Wellen; WP1–WP20 umgesetzt inkl. Security-Review Phase 2, Retention-Sweeps, GDPR-Export und Compliance-Doku (PR #367). Offen: P1/P2-Backlog (TTL/Challenger/Drift, UI/Graph/semantische Suche) + manuelle Compose-Verifikation | ✅ umgesetzt (PR #367) |
 
 Offen außerhalb der Plan-Dateien: Owner-Punkte aus
-`docs/standards-review-2026-07-20.md` §4 (v. a. Actions-Billing → CI-Gate tot
-seit 2026-07-19) sowie der dortige Folge-Backlog (WP-14).
+`docs/standards-review-2026-07-20.md` §4 sowie der dortige Folge-Backlog
+(WP-14). Der dort führende Punkt „Actions-Billing → CI-Gate tot" ist seit
+2026-08-16 erledigt (STATE.md §Standards / CI).
 
 ## Phase 3 — UX-Polish (alle ✅ Done)
 

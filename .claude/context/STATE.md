@@ -112,13 +112,26 @@ Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
   Security-Findings Phase 1+2 alle Closed.
 - Standards-Review 2026-07-08: WP-1–8 umgesetzt
   (`docs/standards-review-2026-07-08.md` §3); heutiger Lauf s. u.
+- **CI-Gate seit 2026-08-16 wieder aktiv** (war seit 2026-07-19 durch
+  Actions-Billing tot, GIT-2 im Standards-Review 2026-07-20). Alle fünf Jobs
+  laufen: `python` · `web` · `e2e` · `compose-smoke` · `audit`. Beleg — das
+  Krankheitsbild war Abbruch nach 2–6 s mit `runner_id: 0` und ohne Logs;
+  jetzt echte Runner (`runner_id: 1000005113` ff.) und echte Laufzeiten
+  (`python` 8 min inkl. Postgres-Service und voller pytest-Suite, `e2e`
+  2:50 min mit Compose-Up + Playwright, `compose-smoke` baut zusätzlich das
+  `runtime-cloud`-Image). Entscheidend: der erste Lauf (`31950241038`, PR
+  #370) war **rot und zu Recht** — er fand zwei ESLint-Errors, die ein
+  lokaler Lauf durchgelassen hatte. Ein Gate, das einen echten Defekt fängt,
+  ist keins mehr auf dem Papier. Damit ist die lokale DoD-Ausführung wieder
+  Vorstufe statt Ersatz.
 
 ### Release-Vorbereitung / Pre-Publish-Nachweis (2026-07-22)
 
 - **Release-Audit** (Repo-Publish-Flow, Issues #338–#341): Ergebnis „noch
   nicht release-fertig" — Blocker waren npm-audit, fehlende NOTICES und der
-  tote CI-Nachweis; Wellen 1–2 umgesetzt (dieser Run), Welle 3 (#341) wartet
-  auf CI-Reaktivierung.
+  tote CI-Nachweis; Wellen 1–2 umgesetzt (dieser Run). Welle 3 (#341) wartete
+  auf die CI-Reaktivierung — die ist seit 2026-08-16 da (s. §Standards / CI),
+  der Block ist damit entsperrt.
 - **Secrets-Gate bestanden:** kein Secret im Tree (nur Dev-/Test-Platzhalter
   und `${VAR}`-Injektionen); History sauber — nie `.env`/`.pem`/`.key`
   committet, gitleaks + 8 Pattern-Scans über alle Commits negativ
@@ -260,6 +273,42 @@ ADR-0047-Nachtrag 2026-08-16 und in DECISIONS.
   CSV-Injektion im server-gerenderten Export, Timeline-Existenz-Orakel und
   -Quellen-Deckel, Promote-Aktor + Längen-Schnitte.
 
+### Arbeitsbereich in der Web-UI + Builder-Rechte (2026-08-16)
+
+Das WorkArea/KB-Feature war nach PR #367/#369 **nur über MCP erreichbar** —
+die drei Betreiber-Stellschrauben lagen in der Web-UI brach. Nachgezogen:
+
+- **Agenten-Editor:** `workarea_write`/`kb_write`/`kb_edge_write` sind
+  Checkboxen im Policy-Editor; ohne sie konnte ein Betreiber einem
+  Fach-Agenten den Arbeitsbereich gar nicht freischalten. Dazu eine Sektion
+  „Modell-Konfiguration" (`model_provider`/`model_name`) — das Feld ist
+  Menschen vorbehalten und war damit ohne UI **tot**, obwohl die
+  Compliance-Auskunft des Zugriffslogs daran hängt.
+- **Modell-Config ist wieder leerbar:** `AgentUpdate` hatte `min_length=1` +
+  COALESCE, ein gesetzter Wert war nicht mehr zu entfernen (der Code nannte
+  das selbst einen offenen Punkt). Neuer Vertrag: `''` = explizit auf NULL,
+  weggelassen = unverändert; Drei-Wege-`CASE` im Repository, Audit greift.
+- **Neuer Endpunkt `GET /work-areas/{area_id}/grants`** (Menschen-only,
+  Viewer dürfen lesen) — der Grant-Editor braucht den Ist-Stand, es gab nur
+  `PUT`/`DELETE`.
+- **Lese-Ansicht `features/workarea`:** Bereiche (+ Anlage geteilter
+  Bereiche), Bereichs-Detail mit Inhalten und Freigaben, Artifact-Ansicht mit
+  Block-Ankern, WorkArea-Suche und Knowledge-Base-Suche/-Detail inkl.
+  Beleg-Rückverweis und Fallzahl bei `co_occurs_with`.
+- **Builder darf die Tools nutzen** (`BUILDER_CONTENT_VERSION` 14 → 15): rein
+  policy-seitig, der Start-Sync verteilt es an Bestands-Builder. Ohne die
+  Flags könnte der Builder sie wegen `is_within` auch keinem Fach-Agenten
+  vergeben — das ist der eigentliche Zweck.
+
+Zwei bewusste Entscheidungen der Lese-Ansicht: Artifact-Inhalte werden als
+**Rohtext mit Ankern** gerendert (kein Markdown→HTML — der Inhalt stammt von
+Agenten und aus Ingest-Fremdquellen), und `url:`-Belege der KB bleiben
+**unverlinkter Text** aus demselben Grund. Einziger Inhalts-Write der UI ist
+das Löschen eines Artifacts (editor+).
+
+**DoD:** Python 1639 pytest / Coverage 90,98 %; Web 970 Vitest (Statements
+86,2 %, Branches 80,43 %); ruff/mypy/tsc/lint/build lokal grün.
+
 ## Bekannte Probleme
 
 - **Tabellen-Import kappt Zell-Breiten nicht** (gefunden 2026-08-16): der
@@ -278,10 +327,24 @@ ADR-0047-Nachtrag 2026-08-16 und in DECISIONS.
   Workspace gesucht, der im `wa_blob`-Katalog vorkommt. Ein Workspace, dessen
   allererster Ingest scheitert, hat nie eine Katalog-Zeile — sein einzelnes
   Objekt bleibt liegen (Alternative wäre ein Bucket-Vollscan je Cron-Lauf).
-- **CI-Gate seit 2026-07-19 tot** (GitHub-Actions-Billing, Owner-Punkt): alle
-  Runs scheitern nach ~2 s ohne Logs — kein Code-Problem; lokale DoD-Nachweise
-  ersetzen das Gate interim (PR-Template).
-- E2E-Gate bleibt Soft, bis die CI-Infra dauerhaft stabil ist.
+- **`audit_log.detail` liegt doppelt JSON-kodiert in der DB** (gefunden
+  2026-08-16): `PgAuditLogRepository.insert` serialisiert selbst per
+  `json.dumps`, der App-Pool registriert zusätzlich einen jsonb-Codec
+  (`core/db.init_connection`) — in `jsonb` landet ein JSON-*String* statt
+  eines Objekts. Fällt heute nicht auf, weil die Bestandstests per
+  `"…" in str(detail)` prüfen. Beißt, sobald jemand `detail` strukturiert
+  auswerten will (SQL-Zugriff per `->>`).
+- **Tool-Übersicht nennt Schreib-Tools ohne Capability** (gefunden
+  2026-08-16): die kuratierten `_TOOLS`-Gruppen des `tools-overview`-Resolvers
+  führen Read- und Write-Tools in EINER Signatur-Zeile. Ist die Gruppe wegen
+  ihrer Reads sichtbar, liest ein Agent auch die Namen der Schreib-Tools, die
+  er nicht halten darf (`tools/list` filtert sie korrekt weg — er bekäme also
+  einen Fehler). Kein Sicherheitsproblem, aber irreführender Prompt; Fix wäre
+  eine Trennung der gemischten Gruppen.
+- E2E-Gate bleibt Soft, bis die CI-Infra dauerhaft stabil ist. Die
+  Voraussetzung — eine überhaupt laufende CI — ist seit 2026-08-16 wieder
+  gegeben (§Standards / CI); ob der Soft-Gate-Status fällt, ist eine
+  Owner-Entscheidung (`coverage.all/E2E` im Standards-Review §4).
 - Offene Owner-Entscheidungen: `docs/standards-review-2026-07-20.md` §4
   (ADR-0002 enforce vs. amend, Branch-Protection/Merge-Strategie,
   On-Prem-RLS, Cloud-Image-Deploy, LIC-1-Mechanik, coverage.all/E2E/CLA).
@@ -291,8 +354,8 @@ ADR-0047-Nachtrag 2026-08-16 und in DECISIONS.
 Als Owner-Checkliste getrackt in Issue #338 (Welle 3 der Release-Mechanik
 in #341):
 
-1. Actions-Billing klären (entsperrt das CI-Gate) **oder** direkt auf Public
-   flippen.
+1. ~~Actions-Billing klären~~ — erledigt, das CI-Gate läuft seit 2026-08-16
+   wieder (§Standards / CI). Bleibt: der Public-Flip (Punkt 3).
 2. GitHub-Settings: Branch-Protection, Auto-delete head branches,
    Merge-Strategie, Description/Topics/Discussions.
 3. CLA-Assistant aktivieren; Visibility Private → Public (finaler Flip).

@@ -26,9 +26,9 @@ Kuratierter Ueberblick — Details stehen in `.claude/context/STATE.md`
 
 Getrackt in den Issues #338–#341:
 
-1. **Owner-Schritte** (#338): GitHub-Actions-Billing (CI-Gate reaktivieren),
-   Branch-Protection + Repo-Settings, CLA-Assistant, Visibility-Flip
-   Private → Public.
+1. **Owner-Schritte** (#338): Branch-Protection + Repo-Settings,
+   CLA-Assistant, Visibility-Flip Private → Public. (Das CI-Gate war hier
+   mitgelistet — es laeuft seit 2026-08-16 wieder.)
 2. **Release-Blocker** (#339): npm-audit-Bereinigung,
    `THIRD-PARTY-LICENSES.md`, dokumentierter Pre-Publish-Nachweis.
 3. **Publish-Artefakte** (#340): Code of Conduct, Roadmap, README-Ausbau,

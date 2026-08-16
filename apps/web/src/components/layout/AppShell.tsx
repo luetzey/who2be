@@ -2,6 +2,7 @@ import {
   BookOpen,
   Bot,
   FileText,
+  FolderOpen,
   LayoutDashboard,
   LogOut,
   MessageSquare,
@@ -45,6 +46,10 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/playbooks', labelKey: 'nav.playbooks', icon: BookOpen },
   { to: '/resources', labelKey: 'nav.resources', icon: FileText },
   { to: '/tools', labelKey: 'nav.tools', icon: Plug },
+  // ADR-0047: der Arbeitsbereich steht bewusst NEBEN den Resources, nicht
+  // darin — hier liegt unversioniertes Agenten-Rohmaterial, dort kuratierte
+  // und veroeffentlichte Inhalte.
+  { to: '/workarea', labelKey: 'nav.workarea', icon: FolderOpen },
   { to: '/feedback', labelKey: 'nav.feedback', icon: MessageSquare },
   { to: '/settings/account', labelKey: 'nav.settings', icon: Settings },
 ]
