@@ -463,3 +463,69 @@ def test_gates_grants_und_fremder_workspace(make_auth_headers: AuthFactory) -> N
             assert client.get(f"{prefix}/wa-tables/{_GHOST}", headers=auth).status_code == 404
     finally:
         cleanup_workspaces([owner, other])
+
+
+@pytest.fixture
+def broken_table_store(tmp_path: Path) -> Iterator[TableStore]:
+    """TableStore auf einem NICHT benutzbaren Basispfad.
+
+    Stellt den Deploy-Fehlerfall nach: der Store kann sein Verzeichnis nicht
+    anlegen. In Produktion ist das ein Named Volume, dessen Mount-Punkt root
+    gehoert, waehrend der Container als uid 1000 laeuft.
+
+    Nachgestellt wird es hier ueber eine DATEI als Basisverzeichnis — `mkdir`
+    darunter scheitert dann mit `NotADirectoryError` (einem OSError).
+    Bewusst NICHT ueber Rechtebits (`chmod 0o500`): Testlaeufe als root
+    ignorieren die, der Fehlerfall traete gar nicht ein und der Test waere
+    still wirkungslos.
+    """
+    blocker = tmp_path / "kein-verzeichnis"
+    blocker.write_text("Diese Datei steht da, wo ein Verzeichnis sein muesste.")
+    store = TableStore(base_dir=blocker)
+    set_table_store(store)
+    yield store
+    reset_table_store()
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db", "broken_table_store")
+def test_unbenutzbarer_store_meldet_503_statt_500(make_auth_headers: AuthFactory) -> None:
+    """Ein nicht beschreibbarer Tabellen-Store ist 503 `tablestore_unavailable`.
+
+    Regression zu einem echten Deploy-Fehler: das Volume war gemountet, der
+    Mount-Punkt gehoerte aber root, der Container laeuft unprivilegiert — der
+    `PermissionError` aus `tablestore/engine.py::_connect_rw` lief ungefangen
+    bis zum 500 durch. Ein Betreiber sah nur „Who2Be-API-Fehler (500)" und
+    hatte keinen Hinweis, wo er suchen soll.
+
+    Geprueft wird beides, was daran falsch war: der Status (503 statt 500,
+    `actionable_by='human'` — kein Retry hilft) und dass die Meldung die
+    Stellschraube nennt, ohne Serverpfad oder OS-Fehler auszuplaudern.
+    """
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    prefix = f"/v1/workspaces/{ws}"
+
+    try:
+        with TestClient(app) as client:
+            area_id = _shared_area(client, prefix, auth, "kaputter-store")
+            created = _create_table(client, prefix, auth, area_id)
+
+            assert created.status_code == 503, created.text
+            problem = created.json()
+            assert problem["reason"] == "tablestore_unavailable", problem
+            assert problem["actionable_by"] == "human", problem
+            # Die Meldung muss den Betreiber zur Stellschraube fuehren …
+            assert "WHO2BE_TABLESTORE_DIR" in problem["detail"], problem
+            # … aber weder den Serverpfad noch den OS-Fehler nach aussen geben.
+            assert "kein-verzeichnis" not in problem["detail"], problem
+            assert "NotADirectoryError" not in problem["detail"], problem
+
+            # Kein Katalog-Eintrag ohne SQLite-Tabelle: die Transaktion des
+            # create-Pfads muss auch bei diesem Fehler zurueckgerollt haben.
+            listed = client.get(f"{prefix}/work-areas/{area_id}/tables", headers=auth)
+            assert listed.status_code == 200, listed.text
+            assert listed.json() == [], listed.json()
+    finally:
+        cleanup_workspaces([owner])

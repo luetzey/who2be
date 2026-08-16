@@ -58,6 +58,15 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --system --no-create-home --uid 1000 who2be
 
+# Mount-Punkt des Tabellen-Stores (ADR-0049) MUSS im Image existieren und dem
+# unprivilegierten Nutzer gehoeren. Docker uebernimmt Eigentuemer und Rechte
+# aus dem Image, wenn es ein leeres Named Volume das erste Mal mountet —
+# fehlt das Verzeichnis, legt Docker den Mount-Punkt als root:root an, und
+# der als uid 1000 laufende Prozess scheitert beim ersten `mkdir` in
+# `tablestore/engine.py` mit PermissionError. Vor dem USER-Wechsel und in
+# `runtime-base`, damit beide Runtime-Stages es erben.
+RUN mkdir -p /data/tablestore && chown -R who2be:who2be /data
+
 EXPOSE 8000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -fsS http://localhost:8000/v1/health || exit 1

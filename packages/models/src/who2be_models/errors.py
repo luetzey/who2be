@@ -44,6 +44,7 @@ ProblemReason = Literal[
     "ingest_too_large",  # 413 — Ingest ueber dem Byte-Limit
     "url_forbidden",  # 403 — URL vom SSRF-Guard geblockt
     "blobstore_unconfigured",  # 503 — Blob-Storage nicht konfiguriert
+    "tablestore_unavailable",  # 503 — Tabellen-Store nicht beschreibbar
 ]
 
 # Wer den Fehler beheben kann: `agent` = der aufrufende Agent kann es selbst
