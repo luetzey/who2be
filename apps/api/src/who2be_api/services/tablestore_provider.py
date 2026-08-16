@@ -33,7 +33,12 @@ def get_table_store(settings: Settings | None = None) -> TableStore:
     global _cached_store
     if _cached_store is None:
         resolved = settings or get_settings()
-        _cached_store = TableStore(base_dir=Path(resolved.tablestore_dir))
+        # Das Zeitbudget des Query-Pfads (H1) kommt aus der Config, die Engine
+        # bleibt konfig-unabhaengig (WP12) — dieser Provider ist die Naht.
+        _cached_store = TableStore(
+            base_dir=Path(resolved.tablestore_dir),
+            query_timeout_ms=resolved.tablestore_query_timeout_ms,
+        )
     return _cached_store
 
 

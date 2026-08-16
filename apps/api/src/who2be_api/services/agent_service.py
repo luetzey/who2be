@@ -6,15 +6,36 @@ Persona/Template werden DB-seitig per Composite-FK auf den Workspace
 gepinnt; ein 404 statt 422 ist die korrekte Antwort, wenn die referenzierte
 Persona/Template nicht (mehr) existiert oder zu einem anderen Workspace
 gehoert.
+
+Menschen-Vorbehalte (Security-Review Phase 2, H4/H5). Ein agent-gebundener
+Token darf Agenten anlegen und aendern (der Builder tut genau das,
+`agent_write` + `_guard_policy_escalation`) — mit zwei Ausnahmen, die keine
+Konfiguration, sondern Compliance-Anker sind:
+
+- **Modell-Config** (`model_provider`/`model_name`, H4): Sie ist die Basis
+  der Frage „welche Daten gingen an welchen externen Anbieter". Duerfte ein
+  Agent sie an sich selbst schreiben, koennte er seine eigene Attribution
+  faelschen — erst auf 'local' stellen, lesen, zurueckstellen. Sie bleibt
+  deshalb dem Menschen vorbehalten (Muster `memory_service._require_human`).
+- **Loeschen** (H5): Ein Agent-Delete scheitert seit Migration 0080 an den
+  Protokollzeilen (FK ohne Cascade) — es ist damit ein Retention-Vorgang,
+  kein Konfigurationsschritt. Zusaetzlich greift `agent_read_restrict` auch
+  hier, damit ein Agent nicht ueber fremde IDs stochern kann.
+
+Das UPDATE bleibt bewusst agent-faehig: es komplett zu sperren wuerde den
+verwalteten Builder-Pfad (MCP `update_agent`) brechen, ohne die eigentliche
+Luecke — die faelschbare Attribution — enger zu schliessen als das Feld-Gate.
 """
 
 from datetime import datetime
 from uuid import UUID, uuid4
 
 import asyncpg
+from asyncpg.exceptions import ForeignKeyViolationError
 from fastapi import HTTPException, status
 
 from who2be_api.core.agent_scope import agent_read_restrict
+from who2be_api.core.errors import ApiGateError
 from who2be_api.core.security import (
     WorkspaceContext,
     require_capability,
@@ -64,6 +85,72 @@ def _invalid_reference() -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
         detail=("Persona oder Template existiert nicht in diesem Workspace."),
+    )
+
+
+def _is_agent_bound(ctx: WorkspaceContext) -> bool:
+    """True fuer einen agent-gebundenen Token (Defense-in-Depth, beide Indikatoren).
+
+    Muster `memory_service._require_human` / `workarea_scope.is_agent_bound`:
+    heute impliziert `agent_id` eine Policy, aber der Menschen-Vorbehalt soll
+    nicht an dieser DB-Invariante haengen.
+    """
+    return ctx.tool_policy is not None or ctx.agent_id is not None
+
+
+def _model_config_is_human_only() -> ApiGateError:
+    """403 fuer den Versuch eines Agenten, Modell-Config zu schreiben (H4).
+
+    Reason `missing_capability` folgt `memory_service._require_human`: es ist
+    kein Rollen- und kein Transitions-Problem, sondern „dieser Aufrufertyp hat
+    diese Befugnis nicht" — `area_forbidden` waere sachlich falsch (es geht
+    um keine Area), `insufficient_role` irrefuehrend (die Rolle reicht; die
+    Agent-BINDUNG ist das Hindernis).
+    """
+    return ApiGateError(
+        status=status.HTTP_403_FORBIDDEN,
+        reason="missing_capability",
+        actionable_by="human",
+        detail=(
+            "Die Modell-Konfiguration (model_provider/model_name) pflegt "
+            "ausschliesslich ein Mensch: sie ist die Grundlage der "
+            "Compliance-Auswertung des Zugriffslogs, und ein Agent darf seine "
+            "eigene Zuordnung nicht aendern koennen."
+        ),
+    )
+
+
+def _delete_is_human_only() -> ApiGateError:
+    """403 fuer den Agent-Delete durch einen agent-gebundenen Token (H5)."""
+    return ApiGateError(
+        status=status.HTTP_403_FORBIDDEN,
+        reason="missing_capability",
+        actionable_by="human",
+        detail=(
+            "Agenten loeschen ist Menschen vorbehalten — mit dem Agenten "
+            "verschwindet der Bezugspunkt seines Zugriffsprotokolls."
+        ),
+    )
+
+
+def _delete_blocked_by_access_log() -> ApiGateError:
+    """409, wenn Protokollzeilen den Agent-Delete blockieren (H5, Migration 0080).
+
+    Gewollte Konsequenz des FK ohne Cascade: das Compliance-Log ueberlebt den
+    Agenten. Reason `concurrent_conflict` ist die bestehende Wahl fuer „der
+    aktuelle Datenbestand laesst diese Aktion nicht zu" (Muster
+    `wa_tables._name_conflict`) — ein neuer Reason waere Vokabular ohne Not.
+    """
+    return ApiGateError(
+        status=status.HTTP_409_CONFLICT,
+        reason="concurrent_conflict",
+        actionable_by="human",
+        detail=(
+            "Agent hat protokollierte Zugriffe — Loeschung nur ueber den "
+            "Retention-/Purge-Pfad. Das Zugriffsprotokoll ist append-only und "
+            "ueberlebt den Agenten bewusst; wer den Agenten stilllegen will, "
+            "setzt ihn auf 'disabled'."
+        ),
     )
 
 
@@ -227,12 +314,19 @@ class AgentService:
         `model_provider`/`model_name` (User-Entscheidung 6, ADR-0047) laufen
         mit derselben None-Semantik durch; explizites Leeren (zurueck auf
         NULL) ist dadurch bewusst (noch) nicht moeglich — dokumentierter
-        offener Punkt. Eine tatsaechliche Aenderung der Modell-Config wird im
-        `audit_log` protokolliert (`agent.model_config_changed`, alter +
-        neuer Wert im detail).
+        offener Punkt. Sie sind das EINZIGE Feld-Paar, das ein
+        agent-gebundener Token nicht setzen darf (H4, s. Modul-Kopf). Eine
+        tatsaechliche Aenderung der Modell-Config wird im `audit_log`
+        protokolliert (`agent.model_config_changed`, alter + neuer Wert +
+        `agent_id` des Aufrufers im detail).
         """
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.agent_write)
+        if (data.model_provider is not None or data.model_name is not None) and _is_agent_bound(
+            ctx
+        ):
+            # VOR jedem Repo-Zugriff: der Versuch soll nichts anfassen (H4).
+            raise _model_config_is_human_only()
         if data.tool_policy is not None:
             _guard_policy_escalation(ctx, data.tool_policy)
         existing = await self._repo.fetch(ctx.workspace_id, agent_id)
@@ -282,6 +376,12 @@ class AgentService:
         tatsaechlich geaendert hat, entsteht ein `audit_log`-Eintrag
         ``agent.model_config_changed`` mit altem + neuem Wert (Muster
         `token_service`). Ohne Audit-Verdrahtung (Test-Fakes) No-op.
+
+        `agent_id` steht zusaetzlich im detail (Security-Review H4):
+        `actor_id` ist im Token-Pfad der BESITZER des Tokens, nicht der
+        aufrufende Agent — ohne das Feld liesse sich hinterher nicht
+        unterscheiden, ob ein Mensch oder eine Maschine unter seinem Namen
+        gehandelt hat. Bei einem Menschen ist der Wert `None`.
         """
         if self._audit is None or self._pool is None:
             return
@@ -296,6 +396,7 @@ class AgentService:
             detail={
                 "model_provider": {"old": before.model_provider, "new": after.model_provider},
                 "model_name": {"old": before.model_name, "new": after.model_name},
+                "agent_id": str(ctx.agent_id) if ctx.agent_id is not None else None,
             },
         )
 
@@ -353,13 +454,35 @@ class AgentService:
         return agent
 
     async def delete(self, ctx: WorkspaceContext, agent_id: UUID) -> None:
+        """Loescht einen Agenten — Menschen vorbehalten (H5, s. Modul-Kopf).
+
+        Seit Migration 0080 haelt der FK des Zugriffslogs dagegen (NO ACTION
+        statt CASCADE): hat der Agent je etwas gelesen oder geschrieben,
+        scheitert der Delete mit 409. Das ist der gewollte Zustand — das
+        Protokoll ist append-only und wird nur ueber den Retention-/Purge-Pfad
+        (Owner-Connection, DSGVO-Erasure) abgeraeumt.
+        """
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.agent_write)
+        if _is_agent_bound(ctx):
+            raise _delete_is_human_only()
+        # Scope-Gate wie in `list_all`/`get` (Review H5). Heute unerreichbar —
+        # der Menschen-Vorbehalt darueber hat jeden agent-gebundenen Aufrufer
+        # schon abgewiesen, und fuer Menschen liefert `agent_read_restrict`
+        # immer `None`. Bewusst trotzdem hier: es ist das zweite Schloss, das
+        # haelt, falls der Vorbehalt je gelockert wird (der Delete-Pfad war
+        # der einzige Agent-Pfad OHNE Scope-Pruefung).
+        restrict = agent_read_restrict(ctx)
+        if restrict is not None and agent_id not in restrict:
+            raise _not_found()
         existing = await self._repo.fetch(ctx.workspace_id, agent_id)
         if existing is None:
             raise _not_found()
         require_unmanaged(existing.is_managed)
-        deleted = await self._repo.delete(ctx.workspace_id, agent_id)
+        try:
+            deleted = await self._repo.delete(ctx.workspace_id, agent_id)
+        except ForeignKeyViolationError as exc:
+            raise _delete_blocked_by_access_log() from exc
         if not deleted:
             raise _not_found()
 

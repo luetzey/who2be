@@ -185,6 +185,11 @@ async def promote_artifact(
     mit `target_resource_id` ersetzt der Draft-Pfad die Bloecke der
     bestehenden Resource (Review-Konflikt → 409). Nicht-doc-Artifacts → 422
     (Domain-Validation, Muster `wa_tables`).
+
+    `target_resource_id` ist ein QUERY-Parameter — die Route nimmt bewusst
+    KEINEN Body entgegen (der MCP-Client in `apps/mcp/.../clients/kb.py`
+    ruft entsprechend body-los mit `params` auf). Ein Body-Feld daneben waere
+    eine zweite, undokumentierte Eingabe fuer dieselbe Angabe.
     """
     try:
         return await promote_service.promote_artifact(ctx, artifact_id, target_resource_id)

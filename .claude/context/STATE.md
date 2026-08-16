@@ -184,8 +184,31 @@ Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
 - OAuth-Connector: E2E mit echtem Claude/ChatGPT-Client offen; TTL-Cleanup
   der OAuth-Tabellen, optionale Audience-Trennung, aal2-Consent (Phase 2).
 
+### Security-Härtung Agent-WorkArea (2026-08-16, Phase-2-Review)
+
+Zweiter Review-Durchlauf über Tabellen-Store, Zugriffslog und Promote
+(Commits `73fe887..6a8638e`); alle Findings umgesetzt, Regressionstests in
+`apps/api/tests/test_security_fixes_phase2.py`, Begründungen im
+ADR-0047-Nachtrag 2026-08-16 und in DECISIONS.
+
+- Freies Agenten-SQL hat jetzt Ressourcen-Grenzen: Zeitbudget je Query/
+  describe (408), Zell-Cap 1 MB und Result-Budget 2 MB (413). Der Authorizer
+  prüft SQL-Funktionen namentlich (`fts3_tokenizer` & Co. verweigert).
+- Zugriffslog ist fälschungsfest: Modell-Config wird zum Zugriffszeitpunkt
+  gesnapshottet (Migration 0080), agent-gebundene Tokens dürfen sie nicht
+  setzen, und der FK hält gegen Cascade-Löschung (Agent-Delete mit
+  Protokollzeilen → 409, Purge bleibt der Löschpfad).
+- Kleineres: Rate-Limit vor der Query (`peek_write_rate`), Markdown-/
+  CSV-Injektion im server-gerenderten Export, Timeline-Existenz-Orakel und
+  -Quellen-Deckel, Promote-Aktor + Längen-Schnitte.
+
 ## Bekannte Probleme
 
+- **Tabellen-Import kappt Zell-Breiten nicht** (gefunden 2026-08-16): der
+  Lesepfad deckelt Zellen auf 1 MB, der Schreibpfad nicht — ein Agent kann
+  eine überbreite Zelle importieren und damit die eigene Tabelle für alle
+  Queries auf dieser Spalte unlesbar machen (413). Kein System-DoS, aber ein
+  Selbstschuss; Fix wäre eine Längenprüfung in `_validate_rows` (422).
 - **CI-Gate seit 2026-07-19 tot** (GitHub-Actions-Billing, Owner-Punkt): alle
   Runs scheitern nach ~2 s ohne Logs — kein Code-Problem; lokale DoD-Nachweise
   ersetzen das Gate interim (PR-Template).

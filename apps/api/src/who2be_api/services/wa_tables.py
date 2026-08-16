@@ -57,6 +57,7 @@ import csv
 import io
 import sqlite3
 from datetime import UTC, date, datetime
+from typing import Final
 from uuid import UUID
 
 import asyncpg
@@ -65,6 +66,7 @@ from fastapi import status
 from who2be_api.core.errors import ApiGateError
 from who2be_api.core.security import (
     WorkspaceContext,
+    peek_write_rate,
     require_capability,
     require_role,
     require_write_rate,
@@ -77,10 +79,12 @@ from who2be_api.services.access_log import log_access
 from who2be_api.services.wa_artifacts import WaArtifactService
 from who2be_api.services.wa_rules import categorize_rows, convention_missing
 from who2be_api.tablestore import (
+    MAX_RESULT_BYTES,
     AreaStoreMissingError,
     ColumnSpec,
     InsertResult,
     ReadOnlyViolation,
+    ResultTooLarge,
     TableStore,
     row_hash,
 )
@@ -146,13 +150,24 @@ def _name_conflict(name: str) -> ApiGateError:
 
 
 def _query_not_readonly(detail: str) -> ApiGateError:
+    """403 fuer alles, was der Authorizer verweigert hat.
+
+    Zwei Faelle unter einem Reason: Schreib-/Struktur-Statements (DDL/DML/
+    ATTACH/PRAGMA) und seit dem Security-Review Phase 2 auch nicht gelistete
+    SQL-FUNKTIONEN (H3). Beides ist dieselbe Aussage — „die Engine laesst das
+    nicht zu" —, deshalb kein zweiter Reason; der `detail` nennt die
+    Funktions-Allowlist, damit ein Agent weiss, wohin er ausweichen kann.
+    """
     return ApiGateError(
         status=status.HTTP_403_FORBIDDEN,
         reason="query_not_readonly",
         actionable_by="agent",
         detail=(
-            f"Die Query wurde von der Engine verweigert ({detail}). Nur lesende "
-            "Statements (SELECT) sind erlaubt — DDL/DML/ATTACH/PRAGMA nie."
+            f"Die Query wurde von der Engine verweigert ({detail}). Erlaubt sind "
+            "nur lesende Statements (SELECT) — DDL/DML/ATTACH/PRAGMA nie — und "
+            "nur SQL-Funktionen aus der Allowlist (Aggregate, Text-/Datums-/"
+            "Window-Funktionen); Datei-, Blob- und Erweiterungs-Funktionen "
+            "(z. B. randomblob, load_extension, fts3_tokenizer) sind gesperrt."
         ),
     )
 
@@ -177,6 +192,54 @@ def _result_too_large() -> ApiGateError:
     )
 
 
+def _query_result_too_large(detail: str) -> ApiGateError:
+    """413 fuer ein Query-Ergebnis ueber den Engine-Speichergrenzen (H2).
+
+    Gleiche Reason-Wahl wie `_result_too_large` (`ingest_too_large`,
+    geschlossene Taxonomie) — nur die Ursache liegt frueher: die Engine hat
+    schon beim Aufsammeln abgebrochen, es wurde nie gerendert.
+    """
+    return ApiGateError(
+        status=status.HTTP_413_CONTENT_TOO_LARGE,
+        reason="ingest_too_large",
+        actionable_by="agent",
+        detail=(
+            f"{detail} Die Query muss weniger Daten liefern — `limit` senken, "
+            "Spalten einschraenken oder aggregieren (das Budget liegt bei "
+            f"{MAX_RESULT_BYTES} Bytes pro Ergebnis)."
+        ),
+    )
+
+
+def _single_line(text: str) -> str:
+    """Presst Freitext auf EINE Zeile ohne Steuerzeichen (Security-Review M4).
+
+    `title` kommt aus dem Request und landet als ``# {title}`` im
+    server-komponierten Markdown. Ohne diese Normalisierung kann ein Titel
+    mit ``\\n`` beliebige weitere Bloecke, Fences oder Anker-Marker in das
+    Artifact schreiben — der Agent diktierte dann Struktur, die als
+    Server-Ausgabe gelesen wird.
+    """
+    collapsed = "".join(
+        " " if character < " " or character == "\x7f" else character for character in text
+    )
+    return " ".join(collapsed.split()) or "Ergebnis"
+
+
+def _sql_fence(sql: str) -> str:
+    """Waehlt einen Fence, der laenger ist als jede Backtick-Folge im SQL (M4).
+
+    Ein fixes ```` ``` ```` liesse sich mit Backticks IM SQL schliessen — der
+    Rest der Query stuende danach als freier Markdown-Text im Artifact.
+    """
+    longest = 0
+    current = 0
+    for character in sql:
+        current = current + 1 if character == "`" else 0
+        longest = max(longest, current)
+    return "`" * max(3, longest + 1)
+
+
 def _compose_result_doc(
     *,
     title: str,
@@ -192,14 +255,20 @@ def _compose_result_doc(
     — der SERVER rendert (via `_render_markdown`), nie Modell-Text. Der
     Zeitstempel ist der Ausfuehrungszeitpunkt (UTC); `occurred_at` des
     Artifacts traegt davon getrennt den FACHLICHEN Zeitpunkt aus dem Request.
+
+    Alles, was NICHT aus der Engine kommt (`title`, `sql`), wird vorher
+    entschaerft (`_single_line`, `_sql_fence`, `_neutralize_anchor`) — sonst
+    waere „der Server rendert" nur nominell wahr (Security-Review M4).
     """
     stamp = datetime.now(tz=UTC).strftime("%Y-%m-%d %H:%M UTC")
     cut = ", gekuerzt" if truncated else ""
+    safe_title = _neutralize_anchor(_single_line(title))
+    fence = _sql_fence(sql)
     return (
-        f"# {title}\n\n"
+        f"# {safe_title}\n\n"
         f"Eingefrorenes Query-Ergebnis vom {stamp} "
         f"(Tabelle '{table_name}', {len(rows)} Zeilen{cut}).\n\n"
-        f"```sql\n{sql}\n```\n\n"
+        f"{fence}sql\n{sql}\n{fence}\n\n"
         f"{_render_markdown(columns, rows)}\n"
     )
 
@@ -260,27 +329,73 @@ def _validate_occurred_at(index: int, value: object, column_type: TableColumnTyp
         ) from exc
 
 
+def _neutralize_anchor(text: str) -> str:
+    """Entschaerft ``[#...]``-Anker-Marker in Freitext (Security-Review M4).
+
+    ``[#xxxxxxxx]`` ist die ANKER-Sprache der Artifacts (ADR-0021): der
+    Lesepfad rendert damit Block-Adressen. Steht die Sequenz in Zellinhalten
+    oder im Titel, faelscht sie Anker, die es nicht gibt. Ein eingefuegtes
+    Leerzeichen bricht das Muster, ohne den Text unlesbar zu machen (bewusst
+    kein Zero-Width-Zeichen: unsichtbare Fixes sind nicht pruefbar).
+    """
+    return text.replace("[#", "[ #")
+
+
+def _markdown_cell(value: object) -> str:
+    """Eine Zelle als Markdown-Tabellenzelle — strukturneutral (M4).
+
+    Drei Angriffe, drei Antworten: ``|`` bricht die Spaltenstruktur
+    (escaped), ``\\r``/``\\n`` brechen die ZEILE (zu Leerzeichen — sonst
+    schreibt eine Zelle beliebige neue Tabellenzeilen oder Bloecke), und
+    ``[#`` faelscht Anker (`_neutralize_anchor`). Zellinhalte stammen aus
+    importierten Fremddaten und sind damit ebenso untrusted wie Agenten-Text.
+    """
+    if value is None:
+        return ""
+    flattened = "".join(" " if character in "\r\n\t" else character for character in str(value))
+    return _neutralize_anchor(flattened.replace("|", "\\|"))
+
+
 def _render_markdown(columns: list[str], rows: list[list[object]]) -> str:
     """Ergebnis als Markdown-Tabelle (agentengerecht, Entscheidung 7)."""
-
-    def cell(value: object) -> str:
-        return "" if value is None else str(value).replace("|", "\\|")
-
     lines = [
-        "| " + " | ".join(cell(column) for column in columns) + " |",
+        "| " + " | ".join(_markdown_cell(column) for column in columns) + " |",
         "| " + " | ".join("---" for _ in columns) + " |",
     ]
-    lines.extend("| " + " | ".join(cell(value) for value in row) + " |" for row in rows)
+    lines.extend("| " + " | ".join(_markdown_cell(value) for value in row) + " |" for row in rows)
     return "\n".join(lines)
+
+
+# Zeichen, die Tabellenkalkulationen als Formel-Start lesen (OWASP CSV
+# Injection). Ein importierter Zellwert `=cmd|'/c calc'!A1` wird in Excel/
+# Sheets beim Oeffnen des Exports AUSGEFUEHRT — der Export ist damit ein
+# Angriffspfad aus fremden Quelldaten in das Geraet des Menschen.
+_CSV_FORMULA_PREFIXES: Final = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_cell(value: object) -> object:
+    """Entschaerft Formel-Zellen im CSV-Export (Security-Review L5).
+
+    Nur `str`-Werte werden praefixiert: SQLite liefert Zahlen als int/float,
+    und ein numerisches ``-3.2`` ist in jeder Tabellenkalkulation eine ZAHL,
+    keine Formel. So bleibt der haeufigste legitime Fall (negative Betraege
+    aus NUMERIC-Spalten) unveraendert, waehrend jeder Textwert mit
+    Formel-Praefix ein fuehrendes ``'`` bekommt.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, str) and value.startswith(_CSV_FORMULA_PREFIXES):
+        return f"'{value}"
+    return value
 
 
 def _render_csv(columns: list[str], rows: list[list[object]]) -> str:
     """Ergebnis als CSV (stdlib `csv`, QUOTE_MINIMAL); None → leere Zelle."""
     buffer = io.StringIO()
     writer = csv.writer(buffer, quoting=csv.QUOTE_MINIMAL, lineterminator="\n")
-    writer.writerow(columns)
+    writer.writerow([_csv_cell(column) for column in columns])
     for row in rows:
-        writer.writerow(["" if value is None else value for value in row])
+        writer.writerow([_csv_cell(value) for value in row])
     return buffer.getvalue()
 
 
@@ -449,19 +564,24 @@ class WaTableService:
         Gates: Rolle/Capability/Area-WRITE laufen als Fail-fast VOR der Query
         (ein nicht schreibberechtigter Aufrufer fuehrt kein SQL aus); dieselben
         Gates laufen in `WaArtifactService.create` erneut — idempotent und
-        bewusst in Kauf genommen. NUR `require_write_rate` haengt allein am
-        Artifact-Create: der Sliding-Window-Zaehler KONSUMIERT pro Aufruf,
-        ein zweiter Aufruf hier wuerde jede Anlage doppelt zaehlen.
+        bewusst in Kauf genommen. Das Rate-Limit wird hier NICHT-KONSUMIEREND
+        geprueft (`peek_write_rate`, Security-Review M3) und erst im
+        Artifact-Create verbraucht: ohne den peek fuehrt ein am Limit
+        stehender Agent erst das (teure) SQL aus und faellt danach ins 429 —
+        Arbeit ohne Gegenwert und ein Umgehungspfad fuer die Drosselung.
+        Doppelt gezaehlt wird nichts: peek liest das Fenster nur.
 
         Fehlerbild wie `query`: `ReadOnlyViolation` → 403 `query_not_readonly`,
-        SQL-/Syntaxfehler → `TableQueryInvalid` (Router → 400) — in beiden
-        Faellen entsteht KEIN Artifact.
+        `ResultTooLarge` → 413 `ingest_too_large`, `QueryTimeout` → 408
+        (Router), SQL-/Syntaxfehler → `TableQueryInvalid` (Router → 400) — in
+        allen Faellen entsteht KEIN Artifact.
         """
         table = await self._visible_table(ctx, table_id)
         if table is None:
             return None
         require_role(ctx, WorkspaceRole.editor)
         require_capability(ctx, AgentCapability.workarea_write)
+        peek_write_rate(ctx)
         await ensure_area_access(self._pool, ctx, table.area_id, WorkAreaGrantLevel.write)
         try:
             result = await self._store.run_readonly_query(
@@ -469,6 +589,8 @@ class WaTableService:
             )
         except ReadOnlyViolation as exc:
             raise _query_not_readonly(str(exc)) from exc
+        except ResultTooLarge as exc:
+            raise _query_result_too_large(str(exc)) from exc
         except AreaStoreMissingError:
             return None
         except sqlite3.DatabaseError as exc:
@@ -506,9 +628,11 @@ class WaTableService:
         """Freies Agenten-SQL, read-only als Engine-Garantie; `None` → 404.
 
         Area-READ genuegt (der Authorizer erzwingt read-only, ADR-0049).
-        Verweigerte Statements → 403 `query_not_readonly`; SQL-Fehler
-        (Syntax u. ae.) → `TableQueryInvalid` (Router → 400). Das Zeilen-Cap
-        kommt aus `data.limit`; `truncated` zeigt den Schnitt an.
+        Verweigerte Statements → 403 `query_not_readonly`; zu grosses
+        Ergebnis → 413 `ingest_too_large` (H2); ueberschrittenes Zeitbudget →
+        `QueryTimeout` (Router → 408, H1); SQL-Fehler (Syntax u. ae.) →
+        `TableQueryInvalid` (Router → 400). Das Zeilen-Cap kommt aus
+        `data.limit`; `truncated` zeigt den Schnitt an.
         """
         table = await self._visible_table(ctx, table_id)
         if table is None:
@@ -519,6 +643,8 @@ class WaTableService:
             )
         except ReadOnlyViolation as exc:
             raise _query_not_readonly(str(exc)) from exc
+        except ResultTooLarge as exc:
+            raise _query_result_too_large(str(exc)) from exc
         except AreaStoreMissingError:
             # Katalog-Zeile ohne Area-Datei (z. B. Volume-Verlust) — nach
             # aussen nicht von einer unbekannten Tabelle unterscheidbar.
@@ -545,6 +671,8 @@ class WaTableService:
 
         Genug Kontext, um Queries ohne Rohdaten-Dump zu formulieren (K/M);
         die Spalten-Statistik kommt aus `TableStore.describe` (nie Rohzeilen).
+        describe macht pro Spalte einen Full-Scan und unterliegt deshalb
+        demselben Zeitbudget wie eine Agenten-Query (`QueryTimeout` → 408).
         """
         table = await self._visible_table(ctx, table_id)
         if table is None:
@@ -553,6 +681,8 @@ class WaTableService:
             described = await self._store.describe(
                 ctx.workspace_id, table.area_id, table.name, _column_specs(table.schema_)
             )
+        except ResultTooLarge as exc:
+            raise _query_result_too_large(str(exc)) from exc
         except AreaStoreMissingError:
             return None
         column_stats: dict[str, dict[str, object]] = {}

@@ -23,14 +23,21 @@ SQLite-Zeilen haben keine adressierbaren Anker in der Anker-Sprache
 
 Zugriff (Plan-API-Tabelle WP15): Artifacts/Nodes werden STILL auf den
 Lese-Scope gefiltert (`readable_area_ids` bzw. KB-Sichtbarkeit in der
-Repo-SQL). Explizit angeforderte `table:<id>`-Quellen verlangen dagegen
-read-Grants auf ALLE sources — fehlt einer → 403 `area_forbidden` (bewusste
-Plan-Entscheidung: die explizite Quelle still zu verschweigen waere ein
-falsches "leeres" Ergebnis); eine im Workspace unbekannte Tabelle bleibt 404
-(`TimelineTableNotFound`, uebersetzt der Router).
+Repo-SQL). Explizit angeforderte `table:<id>`-Quellen scheitern dagegen
+LAUT — aber ununterscheidbar: unbekannte Tabelle UND Tabelle ohne
+read-Grant liefern beide 404 (`TimelineTableNotFound`, uebersetzt der
+Router).
+
+Das war urspruenglich ein 403 `area_forbidden` fuer den Grant-Fall. Der
+Security-Review Phase 2 (L1) hat das als Existenz-Orakel verworfen: die
+Unterscheidung 403/404 verraet einem Agenten, WELCHE Tabellen-IDs im
+Workspace existieren — inklusive fremder privater Areas. Die laute
+Rueckmeldung bleibt erhalten (die Quelle wird nie still verschwiegen, ein
+falsches "leeres" Ergebnis entsteht nicht), nur die Ursache ist nicht mehr
+ablesbar (Muster `wa_tables._visible_table`).
 
 ARC-3: kein SQL, keine HTTPException — Repos, `core/workarea_scope`,
-TableStore (SQLite NUR ueber ihn) und `ApiGateError`/Domain-Exception.
+TableStore (SQLite NUR ueber ihn) und Domain-Exception.
 """
 
 from __future__ import annotations
@@ -40,9 +47,7 @@ from typing import Final
 from uuid import UUID
 
 import asyncpg
-from fastapi import status
 
-from who2be_api.core.errors import ApiGateError
 from who2be_api.core.security import WorkspaceContext
 from who2be_api.core.workarea_scope import readable_area_ids
 from who2be_api.repositories.timeline_repository import (
@@ -60,25 +65,16 @@ UNKNOWN_ITEM_CAP: Final = 200
 
 
 class TimelineTableNotFound(LookupError):
-    """Eine `table:<id>`-Quelle existiert im Workspace nicht — Router → 404."""
+    """Eine `table:<id>`-Quelle ist nicht sichtbar — Router → 404.
+
+    Deckt BEIDE Faelle ab (Security-Review L1): im Workspace unbekannt und
+    „existiert, aber kein read-Grant". Sie auseinanderzuhalten waere ein
+    Existenz-Orakel ueber fremde private Areas (s. Modul-Kopf).
+    """
 
     def __init__(self, table_id: UUID) -> None:
         super().__init__(f"Tabelle {table_id} nicht gefunden.")
         self.table_id = table_id
-
-
-def _table_source_forbidden(table_id: UUID) -> ApiGateError:
-    """403 fuer eine explizit angeforderte Quelle ohne read-Grant (Plan WP15)."""
-    return ApiGateError(
-        status=status.HTTP_403_FORBIDDEN,
-        reason="area_forbidden",
-        actionable_by="human",
-        detail=(
-            f"Kein Lesezugriff auf die Timeline-Quelle 'table:{table_id}'. Der "
-            "Workspace-Besitzer kann dem Agenten einen read-Grant fuer die Area "
-            "der Tabelle vergeben — oder die Quelle aus dem Aufruf entfernen."
-        ),
-    )
 
 
 def _bucket_for(day: date, granularity: TimelineGranularity) -> date:
@@ -119,15 +115,14 @@ class WaTimelineService:
         hier passiert Scope-Aufloesung, Quellen-Gate und der Merge.
         """
         restrict = await readable_area_ids(self._pool, ctx)
-        # Quellen-Gate ZUERST (Plan: read-Grants auf alle sources, sonst 403)
-        # — ein verbotener Aufruf soll scheitern, bevor Teilergebnisse fliessen.
+        # Quellen-Gate ZUERST (read-Grants auf alle sources) — ein verbotener
+        # Aufruf soll scheitern, bevor Teilergebnisse fliessen. Unbekannt und
+        # nicht lesbar sind derselbe Fall (L1, s. Modul-Kopf).
         sources: list[TableTimelineSource] = []
         for table_id in table_ids:
             source = await self._repo.table_source(self._pool, ctx.workspace_id, table_id)
-            if source is None:
+            if source is None or (restrict is not None and source.area_id not in restrict):
                 raise TimelineTableNotFound(table_id)
-            if restrict is not None and source.area_id not in restrict:
-                raise _table_source_forbidden(table_id)
             sources.append(source)
 
         slices: dict[date, TimelineSlice] = {}

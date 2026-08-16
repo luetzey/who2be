@@ -23,8 +23,19 @@ Rate-Limit-Paritaet (Muster `wa_artifacts`): Mutationen
 `@limiter.limit(write_limit)` + `request` als erster Parameter; agent-lesbare
 Pfade `enforce_mcp_read_limit` — auch der POST-Query-Pfad ist semantisch ein
 Read. Autorisierung liegt im Service; der Router uebersetzt nur die
-Domain-Exceptions (`TableRowsInvalid` → 422, `TableQueryInvalid` → 400) und
-`None` → 404 (kein Existenz-Leak, Muster `routers/kb.py`).
+Domain-Exceptions (`TableRowsInvalid` → 422, `TableQueryInvalid` → 400,
+`QueryTimeout` → 408) und `None` → 404 (kein Existenz-Leak, Muster
+`routers/kb.py`).
+
+Warum `QueryTimeout` (Security-Review Phase 2, H1) OHNE `ApiGateError` laeuft:
+die `ProblemReason`-Taxonomie ist geschlossen und beschreibt
+Berechtigungs-/Zustands-Gruende. Ein ueberschrittenes ZEITBUDGET ist keiner
+davon — `query_not_readonly` waere sachlich falsch (die Query war erlaubt),
+`ingest_too_large` waere eine Groessen- statt Kostenaussage. Statt die
+Taxonomie um Vokabular zu erweitern, das kein Agent verzweigen muss, geht der
+Fall den generischen Domain-Exception-Weg des Repos (Muster
+`TableQueryInvalid`): 408 + sprechendes `detail`, RFC-9110-konform
+selbsterklaerend.
 """
 
 from typing import Annotated
@@ -47,6 +58,7 @@ from who2be_api.services.tablestore_provider import get_table_store
 from who2be_api.services.wa_artifacts import WaArtifactService
 from who2be_api.services.wa_rules import WaRuleService
 from who2be_api.services.wa_tables import TableQueryInvalid, TableRowsInvalid, WaTableService
+from who2be_api.tablestore import QueryTimeout
 from who2be_models import (
     ArtifactRead,
     CategoryRuleRead,
@@ -123,6 +135,17 @@ def _query_invalid(exc: TableQueryInvalid) -> HTTPException:
     return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"SQL-Fehler: {exc}")
 
 
+def _query_timeout(exc: QueryTimeout) -> HTTPException:
+    """408 fuer eine abgebrochene Query (H1) — s. Modul-Kopf zur Reason-Wahl."""
+    return HTTPException(
+        status_code=status.HTTP_408_REQUEST_TIMEOUT,
+        detail=(
+            f"{exc} Die Anfrage muss guenstiger werden: Fenster einschraenken, "
+            "aggregieren oder auf rekursive CTEs ohne Abbruchbedingung verzichten."
+        ),
+    )
+
+
 @router.post("/work-areas/{area_id}/tables", status_code=status.HTTP_201_CREATED)
 @limiter.limit(write_limit)
 async def create_table(
@@ -158,11 +181,14 @@ async def insert_rows(
 @router.post("/wa-tables/{table_id}/query", dependencies=[Depends(enforce_mcp_read_limit)])
 async def query_table(table_id: UUID, data: TableQuery, ctx: Ctx, service: Service) -> QueryResult:
     """Read-only SQL gegen die Area-Datei (Engine-Garantie, ADR-0049);
-    Schreibversuche → 403 `query_not_readonly`, Syntaxfehler → 400."""
+    Schreibversuche → 403 `query_not_readonly`, Syntaxfehler → 400,
+    Zeitbudget gerissen → 408, Ergebnis zu gross → 413."""
     try:
         result = await service.query(ctx, table_id, data)
     except TableQueryInvalid as exc:
         raise _query_invalid(exc) from exc
+    except QueryTimeout as exc:
+        raise _query_timeout(exc) from exc
     if result is None:
         raise _table_not_found()
     return result
@@ -183,6 +209,8 @@ async def save_query_result(
         artifact = await service.save_query_result(ctx, table_id, data)
     except TableQueryInvalid as exc:
         raise _query_invalid(exc) from exc
+    except QueryTimeout as exc:
+        raise _query_timeout(exc) from exc
     if artifact is None:
         raise _table_not_found()
     return artifact
@@ -191,8 +219,12 @@ async def save_query_result(
 @router.get("/wa-tables/{table_id}", dependencies=[Depends(enforce_mcp_read_limit)])
 async def describe_table(table_id: UUID, ctx: Ctx, service: Service) -> TableDescription:
     """describe: Schema, Zeilenzahl, Wertebereiche, Area-Konventionen —
-    Kontext fuer Queries OHNE Rohdaten-Dump (Spec K/M)."""
-    description = await service.describe(ctx, table_id)
+    Kontext fuer Queries OHNE Rohdaten-Dump (Spec K/M). Die Full-Scans
+    unterliegen demselben Zeitbudget wie eine Query (→ 408)."""
+    try:
+        description = await service.describe(ctx, table_id)
+    except QueryTimeout as exc:
+        raise _query_timeout(exc) from exc
     if description is None:
         raise _table_not_found()
     return description

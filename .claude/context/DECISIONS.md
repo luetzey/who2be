@@ -557,3 +557,37 @@ bleiben)._
 - **Detail:** ADR-0047 (Umbrella), ADR-0048 (Blob-Storage), ADR-0049
   (Tabellen-Store); Plan
   `.claude/plan/2026-08-13-1200_agent-workarea-knowledge-base.md`.
+
+## 2026-08-16 — Security-Review Phase 2 (Tabellen-Store, Zugriffslog, Promote)
+- **Entscheidung:**
+  1. **Freies Agenten-SQL bekommt Ressourcen-Grenzen, nicht nur ein
+     Schreibverbot:** Zeitbudget je Query (`set_progress_handler`,
+     `WHO2BE_TABLESTORE_QUERY_TIMEOUT_MS`, Default 5000 ms), Zell-Cap
+     (`SQLITE_LIMIT_LENGTH` 1 MB) und Result-Byte-Budget (2 MB). `describe`
+     teilt alle drei (dieselbe ro-Connection).
+  2. **Authorizer prüft Funktions-NAMEN** statt `SQLITE_FUNCTION` pauschal zu
+     erlauben — `fts3_tokenizer` (roher Pointer-Zugriff, verifiziert) war
+     sonst erreichbar. Allowlist empirisch gegen sqlite 3.45.1 verifiziert;
+     `cast` gehört nicht hinein (Opcode), Window-Funktionen schon.
+  3. **Timeout ohne neuen `ProblemReason`:** 408 über den generischen
+     Domain-Exception-Weg. Die Taxonomie beschreibt Berechtigungs-/
+     Zustandsgründe; Kosten sind keiner davon, und kein Agent muss darauf
+     verzweigen. Größen-Grenzen dagegen nutzen das bestehende
+     `ingest_too_large` (413).
+  4. **Compliance-Attribution ist menschlich:** `model_provider`/`model_name`
+     sind für agent-gebundene Tokens gesperrt (403), das Zugriffslog
+     snapshottet sie zum Zugriffszeitpunkt (Migration 0080). Das Agent-UPDATE
+     bleibt sonst agent-fähig — es ganz zu sperren bräche den Builder-Pfad.
+  5. **Append-only gilt auch gegen FK-Cascade:** `agent_access_log.agent_id`
+     auf `ON DELETE NO ACTION`. Konsequenz (gewollt): Agenten mit
+     protokollierten Zugriffen sind nicht löschbar (409); Purge und
+     Test-Teardown räumen als Owner explizit vor der Org-CASCADE auf.
+  6. **M1 war bereits geschlossen:** ein aktiver ungebundener Token ist seit
+     Migration 0048 per CHECK unmöglich. Das neue Router-Gate
+     (`require_agent_bound_token`) ist Defense-in-Depth für den Fall, dass
+     ein Kontext ohne Agent-Bindung anders entsteht.
+- **Begründung:** Read-only ist eine Aussage über Wirkung, nicht über Kosten;
+  und ein Compliance-Journal, das der Protokollierte selbst löschen oder
+  umschreiben kann, ist keines.
+- **Detail:** ADR-0047 §Nachtrag 2026-08-16; Migration 0080;
+  `apps/api/tests/test_security_fixes_phase2.py`.

@@ -8,12 +8,17 @@ unabhaengig (WP12); WP13 verdrahtet `who2be_models.tables` darauf.
 
 from who2be_api.tablestore.dedupe import row_hash
 from who2be_api.tablestore.engine import (
+    DEFAULT_QUERY_TIMEOUT_MS,
     DESCRIBE_DISTINCT_CAP,
+    MAX_CELL_BYTES,
+    MAX_RESULT_BYTES,
     AreaStoreMissingError,
     ColumnStats,
     InsertResult,
     QueryResult,
+    QueryTimeout,
     ReadOnlyViolation,
+    ResultTooLarge,
     TableDescription,
     TableStore,
 )
@@ -31,7 +36,10 @@ from who2be_api.tablestore.schema import (
 
 __all__ = [
     "COLUMN_NAME_RE",
+    "DEFAULT_QUERY_TIMEOUT_MS",
     "DESCRIBE_DISTINCT_CAP",
+    "MAX_CELL_BYTES",
+    "MAX_RESULT_BYTES",
     "RESERVED_COLUMN_NAMES",
     "AreaStoreMissingError",
     "ColumnSpec",
@@ -39,7 +47,9 @@ __all__ = [
     "ColumnType",
     "InsertResult",
     "QueryResult",
+    "QueryTimeout",
     "ReadOnlyViolation",
+    "ResultTooLarge",
     "SchemaError",
     "TableDescription",
     "TableStore",

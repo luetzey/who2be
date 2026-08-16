@@ -29,6 +29,14 @@ Provenance-Note. Beim Create traegt ZUSAETZLICH die Content-Description die
 Herkunftszeile (sichtbar in der UI, ueberlebt Export/Duplikat); beim
 Ziel-Update bleiben Description/Tags der Ziel-Resource unangetastet.
 
+`status_history.changed_by` ist IMMER `ctx.user_id` (Security-Review Phase 2,
+L3). Die Spalte referenziert einen USER; eine Agent-ID dort einzutragen
+mischte zwei Identitaetsraeume in einer Spalte — Auswertungen ueber
+`changed_by` (inkl. der GDPR-Anonymisierung in `purge_account_data`) wuerden
+Agent-IDs fuer User-IDs halten. Die handelnde Maschine steht stattdessen als
+``agent:<id>`` in der Note: dieselbe Information, im Freitextfeld, ohne den
+Identitaetsraum der Spalte zu verletzen.
+
 Zugriffslog (Spec F): der Promote LIEST das Artifact → ``(artifact, read)``.
 KEIN Resource-Log — Resources sind kein WorkArea-Objekt, `agent_access_log`
 protokolliert nur WorkArea/KB (`ref_kind artifact|node|table|blob`).
@@ -69,6 +77,15 @@ from who2be_models import (
 _BLOCKNOTE_MAX_HEADING_LEVEL = 3
 
 _HEADING_PREFIX_RE = re.compile(r"^#{1,6}\s+")
+
+# Laengen-Deckel beim Uebergang Artifact → Resource (L4). Die beiden
+# Aggregate haben UNTERSCHIEDLICHE Grenzen: `ArtifactCreate.title` erlaubt 300
+# Zeichen, `ResourceCreate.name` nur 200 und `SlugStr` 100. Ohne die Schnitte
+# erzeugt ein langer — voellig legitimer — Artifact-Titel eine
+# ValidationError TIEF im Create-Pfad, die beim Aufrufer als 500 ankommt.
+# Slug: 100 minus das Eindeutigkeits-Suffix `-<8 hex>` (9 Zeichen) ⇒ 90 mit Luft.
+_SLUG_STEM_MAX_LENGTH = 90
+_RESOURCE_NAME_MAX_LENGTH = 200
 
 # Minimal-Props der Builder-Seeds (`builder_resource_conventions_body.json`) —
 # BlockNote erwartet sie auf jedem Block; `ResourceBlock` ist extra="allow".
@@ -123,12 +140,18 @@ def _blocks_to_blocknote(blocks: list[DocBlock]) -> list[dict[str, object]]:
     return result
 
 
-def _provenance_note(artifact: ArtifactRead) -> str:
-    """Herkunfts-Note: Artifact-ID + fachlicher Zeitpunkt (Spec-Akzeptanz G)."""
-    return (
+def _provenance_note(artifact: ArtifactRead, agent_id: UUID | None = None) -> str:
+    """Herkunfts-Note: Artifact-ID + fachlicher Zeitpunkt (Spec-Akzeptanz G).
+
+    Mit `agent_id` haengt die handelnde Maschine als ``agent:<id>`` an (L3,
+    s. Modul-Kopf) — die `status_history`-Spalte `changed_by` bleibt dem
+    User-Identitaetsraum vorbehalten.
+    """
+    note = (
         f"Promotet aus wa_artifact {artifact.id} "
         f"({artifact.occurred_at.isoformat()}), Quelle WorkArea."
     )
+    return f"{note} (agent:{agent_id})" if agent_id is not None else note
 
 
 class WaPromoteService:
@@ -208,15 +231,24 @@ class WaPromoteService:
     async def _create_resource(
         self, ctx: WorkspaceContext, artifact: ArtifactRead, blocks: list[ResourceBlock]
     ) -> ResourceRead:
-        """Neue Resource als Draft v1 — Herkunftszeile in der Description."""
+        """Neue Resource als Draft v1 — Herkunftszeile in der Description.
+
+        Name und Slug werden auf die Resource-Grenzen gekuerzt (L4): der
+        Artifact-Titel darf laenger sein als beide. Ein am Schnitt
+        entstandener Rand-Bindestrich faellt weg, damit die `SlugStr`-Form
+        (`^[a-z0-9][a-z0-9-]*$`) erhalten bleibt; ein leerer Rest faellt auf
+        `slugify`s Fallback zurueck.
+        """
         content = ResourceContent(
             description=_provenance_note(artifact),
             blocks=blocks,
             tags=[],
         )
-        slug = f"{slugify(artifact.title)}-{uuid4().hex[:8]}"
+        stem = slugify(artifact.title)[:_SLUG_STEM_MAX_LENGTH].strip("-") or slugify("")
+        slug = f"{stem}-{uuid4().hex[:8]}"
+        name = artifact.title[:_RESOURCE_NAME_MAX_LENGTH].strip() or artifact.title[:1]
         return await self._resources.create(
-            ctx, ResourceCreate(name=artifact.title, slug=slug, content=content)
+            ctx, ResourceCreate(name=name, slug=slug, content=content)
         )
 
     async def _update_target(
@@ -243,8 +275,10 @@ class WaPromoteService:
         die Draft-Version = `current_version` nach `upsert_draft`). Der
         Create-Pfad des Resource-Aggregats schreibt selbst keine History
         (nur Transitions), darum liegt die Provenance-Zeile hier.
+
+        `changed_by` ist der USER (L3) — auch im Agent-Pfad; die Agent-ID
+        steht in der Note.
         """
-        actor = ctx.agent_id if ctx.agent_id is not None else ctx.user_id
         async with self._pool.acquire() as conn:
             await self._history.record(
                 conn,
@@ -252,7 +286,7 @@ class WaPromoteService:
                 resource.id,
                 None,
                 VersionStatus.draft,
-                actor,
-                _provenance_note(artifact),
+                ctx.user_id,
+                _provenance_note(artifact, ctx.agent_id),
                 version=resource.current_version,
             )

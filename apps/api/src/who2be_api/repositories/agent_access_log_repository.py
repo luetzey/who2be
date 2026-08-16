@@ -12,6 +12,16 @@ Dedupe-Tag und der Timestamp aus derselben Uhr stammen.
 Umstufung des Objekts faelscht das Log nicht. `ref_id` ist polymorph
 (uuid fuer artifact/node/table, sha256 fuer blob), daher ``text`` und ohne FK.
 
+`model_provider_at_access`/`model_name_at_access` (Migration 0080,
+Security-Review H4) folgen derselben Snapshot-Logik: die Modell-Config des
+Agenten wird IM Insert per Skalar-Subquery aus `agent` gezogen (kein
+zweiter Roundtrip, kein Client-Input). Grund: die Compliance-Frage „was ging
+je an einen externen Anbieter" darf nicht von der HEUTIGEN Agent-Config
+abhaengen — sonst loescht ein Umstellen auf 'local' die Vergangenheit.
+Skalar-Subqueries (statt ``INSERT ... SELECT ... FROM agent``) sind Absicht:
+faende der Agent nicht (RLS/Race), entstuende sonst GAR KEIN Log-Eintrag;
+so bleibt der Eintrag erhalten und traegt NULL.
+
 Der Insert akzeptiert einen Executor (Pool ODER Connection, Muster
 `audit_log_repository`) — Aufrufer loggen NACH der erfolgreichen Operation,
 typischerweise best-effort ueber den Pool (`services/access_log.log_access`).
@@ -71,8 +81,12 @@ class PgAgentAccessLogRepository:
         await executor.execute(
             "INSERT INTO agent_access_log "
             "(workspace_id, agent_id, ref_kind, ref_id, operation, "
-            " sensitivity_at_access, access_date) "
-            "VALUES ($1, $2, $3, $4, $5, $6, CURRENT_DATE) "
+            " sensitivity_at_access, model_provider_at_access, "
+            " model_name_at_access, access_date) "
+            "VALUES ($1, $2, $3, $4, $5, $6, "
+            "        (SELECT model_provider FROM agent WHERE id = $2), "
+            "        (SELECT model_name FROM agent WHERE id = $2), "
+            "        CURRENT_DATE) "
             "ON CONFLICT (agent_id, ref_kind, ref_id, operation, access_date) DO NOTHING",
             workspace_id,
             agent_id,

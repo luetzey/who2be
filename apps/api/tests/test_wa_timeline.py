@@ -9,8 +9,8 @@ Kritische Invarianten (Spec-Akzeptanzen N):
   volle Scheibe (Buckets = Vereinigung der Quellen).
 - `occurred_precision='unknown'` landet NIE in einer Datums-Scheibe —
   nur im separaten, fensterlosen unknown-Bucket.
-- Quellen-Gate: explizites `table:<id>` ohne read-Grant → 403
-  `area_forbidden`; unbekannte Tabelle → 404.
+- Quellen-Gate: explizites `table:<id>` ohne read-Grant → 404, exakt wie
+  eine unbekannte Tabelle (Security-Review L1: kein Existenz-Orakel).
 - Scope: Agenten sehen nur Artifacts ihrer Grant-Areas und Nodes, deren
   Source-Areas vollstaendig lesbar sind (Filter IN der SQL).
 - week-Granularitaet bucketet auf den ISO-Wochen-Montag (Postgres UND das
@@ -292,9 +292,11 @@ def test_unknown_precision_nur_im_unknown_bucket(make_auth_headers: AuthFactory)
 
 @pytest.mark.integration
 @pytest.mark.usefixtures("patched_jwt_secret", "migrated_db", "table_store")
-def test_table_quelle_ohne_grant_403(make_auth_headers: AuthFactory) -> None:
-    """Plan WP15: explizite `table:<id>`-Quelle ohne read-Grant → 403
-    `area_forbidden` (kein stilles Weglassen); unbekannte Tabelle → 404."""
+def test_table_quelle_ohne_grant_404(make_auth_headers: AuthFactory) -> None:
+    """Security-Review L1: explizite `table:<id>`-Quelle ohne read-Grant →
+    404 wie eine unbekannte Tabelle (kein Existenz-Orakel, kein stilles
+    Weglassen). Frueher war das ein 403 `area_forbidden` — die
+    Unterscheidung verriet, welche Tabellen-IDs im Workspace existieren."""
     owner = fresh_user_id()
     ws = setup_workspace(owner)
     auth = make_auth_headers(owner)
@@ -309,10 +311,12 @@ def test_table_quelle_ohne_grant_403(make_auth_headers: AuthFactory) -> None:
             _grant(client, prefix, auth, other_area, agent_id, "read")
 
             denied = _timeline(client, prefix, agent_tok, sources=f"table:{table_id}")
-            assert denied.status_code == 403, denied.text
-            problem = denied.json()
-            assert problem["reason"] == "area_forbidden"
-            assert f"table:{table_id}" in problem["detail"]
+            assert denied.status_code == 404, denied.text
+
+            # Ununterscheidbar von einer Tabelle, die es gar nicht gibt.
+            ghost = _timeline(client, prefix, agent_tok, sources=f"table:{_GHOST}")
+            assert ghost.status_code == 404, ghost.text
+            assert ghost.json()["detail"] == denied.json()["detail"]
 
             # Mit read-Grant auf die Tabellen-Area laeuft dieselbe Abfrage.
             _grant(client, prefix, auth, table_area, agent_id, "read")

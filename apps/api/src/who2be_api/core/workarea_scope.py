@@ -19,18 +19,31 @@ Fehlender Read-Zugriff wird als **404** beantwortet (kein Existenz-Orakel
 ueber fremde private Areas — Muster `routers/_export.py`); nur der Fall
 „lesbar, aber kein Write-Grant" ist ein 403 `area_forbidden` (der Agent WEISS
 von der Area, ihm fehlt nur die Schreibstufe — actionable fuer den Menschen).
+
+**Ungebundene Maschinen-Tokens** (Security-Review Phase 2, M1) sind auf
+diesen Routen gesperrt (`require_agent_bound_token`, als Router-Dependency in
+`main.py` verdrahtet). Grund: die beiden Regeln oben kennen nur zwei Faelle —
+Mensch (unbeschraenkt ab editor) und Agent (Grant-gescoped). Ein `w2b_`-Token
+OHNE `agent_id` faellt in den Menschen-Zweig und liest damit ALLE Areas
+inklusive fremder privater — und weil `agent_access_log` an `agent_id`
+haengt, wird davon NICHTS protokolliert. Das war ein unbeobachteter
+Vollzugriff. Ihn zu loggen haette ein nullable `agent_id` im Compliance-Log
+verlangt (die Auswertung „welches Modell sah was" braucht aber genau diesen
+Bezug); die Sperre ist der kleinere, haertere Schnitt und deckt sich mit
+ADR-0047, wo WorkArea/KB durchgehend agent-gebunden gedacht sind. Menschen
+(JWT) sind nicht betroffen.
 """
 
 from __future__ import annotations
 
-from typing import TypeAlias
+from typing import Annotated, TypeAlias
 from uuid import UUID
 
 import asyncpg
-from fastapi import HTTPException, status
+from fastapi import Depends, HTTPException, status
 
 from who2be_api.core.errors import ApiGateError
-from who2be_api.core.security import WorkspaceContext, role_satisfies
+from who2be_api.core.security import WorkspaceContext, get_current_workspace, role_satisfies
 from who2be_models import WorkAreaGrantLevel, WorkspaceRole
 
 # `Pool | Connection`: Services reichen den Pool durch, Transaktions-Pfade eine
@@ -77,6 +90,32 @@ def is_agent_bound(ctx: WorkspaceContext) -> bool:
     aber die Scope-Entscheidung soll nicht an dieser DB-Invariante haengen.
     """
     return ctx.tool_policy is not None or ctx.agent_id is not None
+
+
+def require_agent_bound_token(
+    ctx: Annotated[WorkspaceContext, Depends(get_current_workspace)],
+) -> None:
+    """Sperrt ungebundene Maschinen-Tokens auf WorkArea-/KB-/Tabellen-Routen (M1).
+
+    Router-Dependency (Muster `enforce_mcp_read_limit`), in `main.py` an die
+    betroffenen Router gehaengt — nicht an einzelne Endpunkte, damit auch
+    kuenftige Routen dieser Router sie erben. JWT-Aufrufe (Menschen) und
+    agent-gebundene Tokens passieren; nur `is_api_token` OHNE Agent-Bindung
+    wird abgewiesen. Begruendung im Modul-Kopf.
+    """
+    if not ctx.is_api_token or is_agent_bound(ctx):
+        return
+    raise ApiGateError(
+        status=status.HTTP_403_FORBIDDEN,
+        reason="missing_capability",
+        actionable_by="human",
+        detail=(
+            "Diese Routen verlangen einen agent-gebundenen Token. Ein Token "
+            "ohne `agent_id` hat weder Area-Grants noch einen Eintrag im "
+            "Zugriffsprotokoll — der Workspace-Besitzer kann einen Token mit "
+            "Agent-Bindung ausstellen."
+        ),
+    )
 
 
 async def readable_area_ids(pool: _Fetcher, ctx: WorkspaceContext) -> list[UUID] | None:

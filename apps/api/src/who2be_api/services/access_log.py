@@ -20,6 +20,13 @@ Vertraege (bindend):
   ein Beobachtungs-Loch, ein 500 wegen des Logs waere ein Funktionsausfall;
   der Dedupe pro Tag macht die Luecke klein (der naechste Zugriff desselben
   Tages schreibt denselben Eintrag erneut).
+- **Aber nicht lautlos** (Security-Review Phase 2, M2): jeder verschluckte
+  Fehler zaehlt `failed_log_writes()` hoch. Ein `logger.warning` allein ist
+  in einem Compliance-Journal zu wenig — ein Angreifer, der die Log-Schreibung
+  gezielt zum Scheitern bringt (z. B. per Pool-Erschoepfung), erzeugt sonst
+  eine Luecke, die im Betrieb niemandem auffaellt. Der Zaehler ist die
+  billigste Form, die Luecke SICHTBAR zu machen (Health-/Diagnose-Abfrage,
+  Alarmierung); er ersetzt die Warnung nicht, er ergaenzt sie.
 """
 
 from __future__ import annotations
@@ -39,6 +46,30 @@ from who2be_models import Sensitivity
 logger = logging.getLogger(__name__)
 
 _repo = PgAgentAccessLogRepository()
+
+# Prozess-Zaehler verschluckter Log-Schreibfehler (M2). Bewusst ein einfacher
+# int ohne Lock: er wird nur aus dem Event-Loop-Thread erhoeht (die Services
+# awaiten `log_access`), und ein exakter Wert unter Race-Bedingungen ist fuer
+# den Zweck — „gibt es Luecken?" — nicht noetig.
+_failed_log_writes = 0
+
+
+def failed_log_writes() -> int:
+    """Wie viele Zugriffslog-Schreibungen dieser Prozess verloren hat (M2).
+
+    Fuer Diagnose/Monitoring: jeder Wert > 0 bedeutet eine LUECKE im
+    Compliance-Journal — Zugriffe haben stattgefunden, sind aber nicht
+    protokolliert. Der Dedupe pro Tag heilt das teilweise (der naechste
+    Zugriff desselben Tages schreibt denselben Eintrag), garantiert aber
+    nicht, dass ein zweiter Zugriff kommt.
+    """
+    return _failed_log_writes
+
+
+def reset_failed_log_writes() -> None:
+    """Setzt den Zaehler zurueck — fuer Test-Isolation."""
+    global _failed_log_writes
+    _failed_log_writes = 0
 
 
 async def log_access(
@@ -73,6 +104,8 @@ async def log_access(
             sensitivity=sensitivity.value,
         )
     except Exception:  # noqa: BLE001 — bewusst breit: Logging bricht NIE den Hauptpfad
+        global _failed_log_writes
+        _failed_log_writes += 1
         logger.warning(
             "agent_access_log-Eintrag fehlgeschlagen (agent=%s, %s %s:%s) — "
             "Hauptpfad laeuft weiter",

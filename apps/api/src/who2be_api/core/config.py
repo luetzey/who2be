@@ -169,6 +169,17 @@ class Settings(BaseSettings):
         default="./data/tablestore",
         validation_alias=AliasChoices("WHO2BE_TABLESTORE_DIR", "tablestore_dir"),
     )
+    # Zeitbudget einer einzelnen read-only Agenten-Query bzw. eines describe
+    # (Security-Review Phase 2, H1). Freies SQL kann beliebig teuer sein — eine
+    # `WITH RECURSIVE`-Endlosschleife blockiert ohne dieses Budget dauerhaft
+    # einen `to_thread`-Worker. Ueberschreitung ⇒ SQLite bricht per
+    # Progress-Handler ab (`SQLITE_INTERRUPT`), die API antwortet 408.
+    tablestore_query_timeout_ms: int = Field(
+        default=5000,
+        validation_alias=AliasChoices(
+            "WHO2BE_TABLESTORE_QUERY_TIMEOUT_MS", "tablestore_query_timeout_ms"
+        ),
+    )
     # On-Prem-Adapter: signierte Lizenzdatei (Ed25519), offline mit `K_pub` verifiziert.
     # Leer ⇒ reines OSS (unbegrenzt). NIE der Private-Key — nur der Lizenz-Token.
     license_key: str = Field(

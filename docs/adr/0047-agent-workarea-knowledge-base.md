@@ -214,3 +214,77 @@ Postgres-DB), mit den oben gewählten Optionen O1A–O5A. Tragende Regeln:
   Write-Services zuerst `require_role(editor)` (Token-gepinnte Rolle), dann
   Capability + Rate — ein bewusst lesend angelegter Agent-Token (viewer)
   schreibt nie.
+
+## Nachtrag 2026-08-16 (Security-Review Phase 2, Wellen 3–7)
+
+Der zweite Review (Commits `73fe887..6a8638e`) betraf die Subsysteme
+Tabellen-Store, Zugriffslog und Promote. Die tragenden Entscheidungen:
+
+- **Freies Agenten-SQL ist ein untrusted Input, auch read-only (H1–H3).**
+  Die Engine-Garantie „kann nichts schreiben" war korrekt, aber sie sagt
+  nichts über Kosten. Der Query-Pfad bekommt deshalb drei harte Grenzen:
+  ein Zeitbudget je Query (`set_progress_handler`,
+  `WHO2BE_TABLESTORE_QUERY_TIMEOUT_MS`, Default 5000 ms — eine
+  `WITH RECURSIVE`-Endlosschleife blockierte sonst dauerhaft einen
+  `to_thread`-Worker), eine Zell-Obergrenze (`SQLITE_LIMIT_LENGTH`, 1 MB) und
+  ein Byte-Budget über das gesamte Result-Set (2 MB). `describe` läuft auf
+  derselben Connection und erbt alle drei.
+- **Funktions-Allowlist statt pauschalem `SQLITE_FUNCTION`-OK (H3).** Der
+  Authorizer ignorierte `arg2` und erlaubte damit *jede* eingebaute Funktion —
+  darunter `fts3_tokenizer`, das rohe C-Pointer liest und schreibt
+  (verifiziert). Jetzt entscheidet eine Namens-Allowlist; `cast` steht bewusst
+  nicht darin (es ist ein Opcode, keine Funktion), Window-Funktionen sehr wohl
+  (sie laufen als `SQLITE_FUNCTION`, ohne sie bräche legitime Analytik).
+  `printf`/`format` bleiben erlaubt, weil die Zell-Obergrenze ihren
+  DoS-Vektor entschärft.
+- **Timeout ohne neuen `ProblemReason` (H1).** Die Taxonomie ist geschlossen
+  und beschreibt Berechtigungs-/Zustandsgründe; ein gerissenes Zeitbudget ist
+  keiner davon (`query_not_readonly` wäre sachlich falsch — die Query *war*
+  erlaubt). Statt Vokabular zu erfinden, das kein Agent verzweigen muss, geht
+  der Fall den generischen Domain-Exception-Weg (Muster `TableQueryInvalid`):
+  408 mit sprechendem `detail`. Die Größen-Grenzen dagegen fallen unter das
+  bestehende `ingest_too_large` (413) — dieselbe Schutzfamilie wie der
+  Append-Cap.
+- **Compliance-Attribution ist nicht Agenten-Sache (H4).** `model_provider`/
+  `model_name` sind die Grundlage der Frage „welche Daten gingen an welchen
+  Anbieter". Ein agent-gebundener Token darf sie nicht setzen (403
+  `missing_capability`, Muster `memory_service._require_human`) — sonst
+  fälscht ein Agent seine eigene Zuordnung. Zusätzlich snapshottet
+  `agent_access_log` die Config **zum Zugriffszeitpunkt** (Migration 0080,
+  analog `sensitivity_at_access`); der Join auf die aktuelle Config wäre sonst
+  durch eine spätere Umstellung rückwirkend fälschbar. Der `audit_log`-Eintrag
+  trägt jetzt zusätzlich die `agent_id` des Aufrufers — `actor_id` ist im
+  Token-Pfad der Besitzer, nicht die handelnde Maschine.
+  Das Agent-UPDATE bleibt im Übrigen agent-fähig: es komplett zu sperren
+  bräche den verwalteten Builder-Pfad (MCP `update_agent`), ohne die Lücke
+  enger zu schließen als das Feld-Gate.
+- **Append-only gilt auch gegen FK-Cascade (H5).** Migration 0079 hing
+  `agent_access_log.agent_id` mit `ON DELETE CASCADE` an `agent` — der Cascade
+  läuft mit Owner-Rechten, der Grant-Entzug (nur SELECT/INSERT für
+  `who2be_app`) greift dort nicht: ein normaler API-Delete räumte das
+  Protokoll mit ab. 0080 stellt auf `NO ACTION` um. Gewollte Konsequenz: ein
+  Agent mit protokollierten Zugriffen ist **nicht löschbar** (409, Hinweis auf
+  den Retention-Pfad; Stilllegen heißt `disabled`). Der Purge-Job löscht die
+  Zeilen als Owner explizit vor der Org-CASCADE — der eine legitime Löschpfad.
+  Das Agent-Löschen ist zudem Menschen vorbehalten und respektiert jetzt auch
+  `agent_read_restrict`.
+- **Ungebundene Maschinen-Tokens sind auf WorkArea/KB gesperrt (M1).** Die
+  Scope-Regeln kennen zwei Fälle: Mensch (unbeschränkt ab editor) und Agent
+  (Grant-gescoped). Ein `w2b_`-Token ohne `agent_id` fiel in den
+  Menschen-Zweig — voller Lesezugriff auf alle Areas inklusive fremder
+  privater, und weil das Zugriffslog an `agent_id` hängt, ohne jede Spur. Die
+  Alternative (loggen mit nullable `agent_id`) hätte den Bezug zerstört, den
+  die Auswertung braucht. Gesperrt wird als Router-Dependency in `main.py`,
+  damit auch künftige Routen dieser Router sie erben.
+- **Kleineres:** best-effort-Logging zählt verschluckte Fehler
+  (`failed_log_writes()`) statt sie nur zu warnen (M2); `save_query_result`
+  prüft das Schreib-Rate-Limit **vor** der Query nicht-konsumierend
+  (`peek_write_rate`, M3) und verbraucht den Slot weiterhin nur im
+  Artifact-Create; server-komponiertes Markdown entschärft Titel, SQL-Fence
+  und Zellinhalte (M4), der CSV-Export präfixiert Formel-Zellen (L5, nur
+  `str`-Werte — negative Zahlen bleiben Zahlen); die Timeline beantwortet
+  fehlende Grants wie fehlende Tabellen mit 404 (L1) und deckelt die Zahl der
+  Quellen (L2); der Promote schreibt `status_history.changed_by = user_id` und
+  die Agent-Identität in die Note (L3, die Spalte gehört dem
+  User-Identitätsraum) und kürzt den Slug-Stamm (L4, sonst wird ein langer
+  Titel zum 500er).

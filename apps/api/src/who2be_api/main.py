@@ -17,7 +17,7 @@ from typing import cast
 
 import asyncpg
 import structlog
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
@@ -36,6 +36,7 @@ from who2be_api.core.rate_limit import (
     _rate_limit_exceeded_handler,
     limiter,
 )
+from who2be_api.core.workarea_scope import require_agent_bound_token
 from who2be_api.licensing.edition import is_cloud, is_onprem
 from who2be_api.repositories.workspace_repository import sync_managed_builder_content
 from who2be_api.routers import (
@@ -299,13 +300,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(usages.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(feedback.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(memory.router, prefix=_WORKSPACE_PREFIX)
-    app.include_router(work_areas.router, prefix=_WORKSPACE_PREFIX)
-    app.include_router(wa_artifacts.router, prefix=_WORKSPACE_PREFIX)
-    app.include_router(wa_ingest.router, prefix=_WORKSPACE_PREFIX)
-    app.include_router(wa_search.router, prefix=_WORKSPACE_PREFIX)
-    app.include_router(wa_tables.router, prefix=_WORKSPACE_PREFIX)
-    app.include_router(wa_timeline.router, prefix=_WORKSPACE_PREFIX)
-    app.include_router(kb.router, prefix=_WORKSPACE_PREFIX)
+    # WorkArea + Knowledge Base (ADR-0047): durchgehend agent-gebunden gedacht.
+    # `require_agent_bound_token` haengt am ROUTER, nicht am Endpunkt — ein
+    # `w2b_`-Token ohne `agent_id` faellt sonst in den Menschen-Zweig der
+    # Scope-Aufloesung (liest ALLE Areas) und wird nirgends protokolliert
+    # (Security-Review Phase 2, M1). Menschen (JWT) sind nicht betroffen.
+    _agent_bound = [Depends(require_agent_bound_token)]
+    app.include_router(work_areas.router, prefix=_WORKSPACE_PREFIX, dependencies=_agent_bound)
+    app.include_router(wa_artifacts.router, prefix=_WORKSPACE_PREFIX, dependencies=_agent_bound)
+    app.include_router(wa_ingest.router, prefix=_WORKSPACE_PREFIX, dependencies=_agent_bound)
+    app.include_router(wa_search.router, prefix=_WORKSPACE_PREFIX, dependencies=_agent_bound)
+    app.include_router(wa_tables.router, prefix=_WORKSPACE_PREFIX, dependencies=_agent_bound)
+    app.include_router(wa_timeline.router, prefix=_WORKSPACE_PREFIX, dependencies=_agent_bound)
+    app.include_router(kb.router, prefix=_WORKSPACE_PREFIX, dependencies=_agent_bound)
     app.include_router(search.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(system_prompts.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(agents.router, prefix=_WORKSPACE_PREFIX)

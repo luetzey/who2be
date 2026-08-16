@@ -64,6 +64,8 @@ class TokenRateLimiterPort(Protocol):
 
     def allow(self, key: str, limit_per_min: int | None, now: float | None = None) -> bool: ...
 
+    def peek(self, key: str, limit_per_min: int | None, now: float | None = None) -> bool: ...
+
     def reset(self) -> None: ...
 
 
@@ -97,6 +99,23 @@ class TokenRateLimiter:
                 return False
             events.append(reference)
             return True
+
+    def peek(self, key: str, limit_per_min: int | None, now: float | None = None) -> bool:
+        """Wie `allow`, aber OHNE zu konsumieren (Security-Review Phase 2, M3).
+
+        Fuer Pfade, die vor einer teuren Operation wissen muessen, ob der
+        nachgelagerte konsumierende Aufruf durchginge — `save_query_result`
+        fuehrt sonst erst das SQL aus und laeuft danach ins 429.
+        """
+        if limit_per_min is None or limit_per_min <= 0:
+            return True
+        reference = now if now is not None else time.monotonic()
+        cutoff = reference - self._WINDOW_SECONDS
+        with self._lock:
+            events = self._events[key]
+            while events and events[0] <= cutoff:
+                events.popleft()
+            return len(events) < limit_per_min
 
     def reset(self) -> None:
         """Leert alle Fenster — fuer Test-Isolation."""
@@ -142,6 +161,18 @@ class RedisTokenRateLimiter:
         strategy = self._strategy()
         assert isinstance(strategy, MovingWindowRateLimiter)  # noqa: S101 — Typ-Narrowing
         return strategy.hit(item, key)
+
+    def peek(self, key: str, limit_per_min: int | None, now: float | None = None) -> bool:
+        """Nicht-konsumierende Pruefung (M3) — `limits`-Pendant ist `test`."""
+        if limit_per_min is None or limit_per_min <= 0:
+            return True
+        from limits import RateLimitItemPerMinute
+        from limits.strategies import MovingWindowRateLimiter
+
+        item = RateLimitItemPerMinute(limit_per_min)
+        strategy = self._strategy()
+        assert isinstance(strategy, MovingWindowRateLimiter)  # noqa: S101 — Typ-Narrowing
+        return strategy.test(item, key)
 
     def reset(self) -> None:
         """Verwirft die Strategie — frische Verbindung/Buckets beim naechsten Lauf."""

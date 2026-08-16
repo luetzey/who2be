@@ -13,12 +13,16 @@ Query-Parameter:
 - ``granularity``: ``day`` | ``week`` | ``month`` (Default ``day``).
 - ``sources``: optional, CSV ODER Mehrfach-Parameter — ``artifacts``,
   ``nodes``, ``table:<table_id>``; Default ``artifacts`` + ``nodes``;
-  unbekannte Tokens → 422.
+  unbekannte Tokens → 422. Die Zahl der `table:`-Quellen ist auf
+  `TIMELINE_MAX_SOURCES` gedeckelt (→ 422): jede Quelle ist ein eigener
+  SQLite-Full-Scan, eine Liste beliebiger Laenge waere ein
+  Verstaerker-DoS mit einem einzigen Request (Security-Review L2).
 
 Reiner Read-Pfad (`enforce_mcp_read_limit`, Muster `wa_tables.query`);
 Autorisierung liegt im Service (Scope-Filter in der Repo-SQL; explizite
-`table:<id>`-Quellen ohne read-Grant → 403 `area_forbidden`). Der Router
-uebersetzt nur `TimelineTableNotFound` → 404.
+`table:<id>`-Quellen ohne read-Grant → 404 wie unbekannte, L1). Der Router
+uebersetzt `TimelineTableNotFound` → 404 und `QueryTimeout` → 408 (das
+Zeitbudget des Tabellen-Stores gilt auch hier, H1).
 """
 
 from datetime import UTC, datetime, timedelta
@@ -34,12 +38,19 @@ from who2be_api.repositories.timeline_repository import PgTimelineRepository
 from who2be_api.services.mcp_limit_service import enforce_mcp_read_limit
 from who2be_api.services.tablestore_provider import get_table_store
 from who2be_api.services.wa_timeline import TimelineTableNotFound, WaTimelineService
+from who2be_api.tablestore import QueryTimeout
 from who2be_models import TimelineGranularity, TimelineResult
 
 router = APIRouter(tags=["wa-timeline"])
 
 # Fenster-Obergrenze (Plan WP15): ein Jahr inkl. Schaltjahr.
 TIMELINE_MAX_WINDOW_DAYS: Final = 366
+
+# Obergrenze der `table:`-Quellen pro Aufruf (Security-Review L2): jede Quelle
+# kostet einen eigenen SQLite-Full-Scan ueber das Fenster. Das Zeitbudget (H1)
+# gilt pro Query, nicht pro Request — ohne diesen Deckel multipliziert ein
+# einzelner Aufruf die Kosten beliebig.
+TIMELINE_MAX_SOURCES: Final = 20
 
 _SOURCE_ARTIFACTS: Final = "artifacts"
 _SOURCE_NODES: Final = "nodes"
@@ -102,6 +113,14 @@ def _parse_sources(raw: list[str] | None) -> tuple[bool, bool, list[UUID]]:
                 f"Unbekannte Timeline-Quelle '{token}' — erlaubt: 'artifacts', "
                 "'nodes', 'table:<table_id>'."
             )
+    if len(table_ids) > TIMELINE_MAX_SOURCES:
+        # Nach dem Dedupe gezaehlt: Wiederholungen derselben Tabelle kosten
+        # nichts und sollen den Deckel nicht ausloesen.
+        raise _invalid(
+            f"Zu viele Tabellen-Quellen ({len(table_ids)}) — pro Aufruf sind "
+            f"hoechstens {TIMELINE_MAX_SOURCES} erlaubt. Die Timeline in "
+            "mehreren Aufrufen abfragen."
+        )
     return include_artifacts, include_nodes, table_ids
 
 
@@ -142,4 +161,12 @@ async def timeline(
     except TimelineTableNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Tabelle nicht gefunden."
+        ) from exc
+    except QueryTimeout as exc:
+        raise HTTPException(
+            status_code=status.HTTP_408_REQUEST_TIMEOUT,
+            detail=(
+                f"{exc} Das Zeitfenster verkleinern oder weniger `table:`-Quellen "
+                "in einem Aufruf kombinieren."
+            ),
         ) from exc
