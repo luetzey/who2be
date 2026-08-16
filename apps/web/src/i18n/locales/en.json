@@ -81,7 +81,8 @@
       "resources": "Resources",
       "tools": "External tools",
       "feedback": "Feedback",
-      "settings": "Settings"
+      "settings": "Settings",
+      "workarea": "Work area"
     },
     "signOut": "Sign out",
     "language": {
@@ -296,7 +297,10 @@
           "feedback_write": "Report usage/feedback",
           "feedback_resolve": "Feedback triage: close signals (addressed/in_progress/dismissed)",
           "promote_retire": "Activate/deactivate versions",
-          "external_tool_write": "Create/edit external tools"
+          "external_tool_write": "Create/edit external tools",
+          "workarea_write": "Write to the work area (notes, ingest, tables)",
+          "kb_write": "Create/edit knowledge base statements (evidence required)",
+          "kb_edge_write": "Create knowledge base edges (cannot be deleted later)"
         },
         "writeTags": {
           "hint": "Tag scope (optional): empty = all tags. Otherwise the agent may only write content carrying these tags in that domain.",
@@ -334,7 +338,14 @@
           "required": "Required",
           "recommended": "Recommended"
         }
-      }
+      },
+      "modelTitle": "Model configuration",
+      "modelDescription": "Which language model runs this agent.",
+      "modelHelp": "Who2Be does not run the agent itself — record here what you run it with. The server snapshots this on every work area access; that is the only way to answer later which sensitive content ever went to an external provider. Leave empty for “not recorded”. Only humans may change this.",
+      "modelProviderLabel": "Provider",
+      "modelProviderPlaceholder": "e.g. anthropic, openai, local",
+      "modelNameLabel": "Model",
+      "modelNamePlaceholder": "e.g. claude-opus-5"
     },
     "hierarchy": {
       "title": "Composition",
@@ -2312,5 +2323,153 @@
       "toolCount_other": "{{count}} tool names",
       "noToolNames": "No tool names set"
     }
+  },
+  "workarea": {
+    "nav": {
+      "areas": "Areas",
+      "search": "Search",
+      "kb": "Knowledge base",
+      "label": "Work area"
+    },
+    "list": {
+      "title": "Work area",
+      "description": "What your agents have collected and filed. Unversioned and deliberately separate from resources — this is raw material, not published content.",
+      "newArea": "New area",
+      "emptyTitle": "No areas yet",
+      "emptyDescription": "Private areas appear automatically as soon as an agent files something for the first time. Shared areas are created here and then granted to individual agents.",
+      "scopePrivate": "Private",
+      "scopeShared": "Shared",
+      "ownerAgent": "Agent: {{name}}",
+      "ownerUnknown": "Agent deleted",
+      "retention": "Retention: {{days}} days",
+      "retentionUnlimited": "Retention: unlimited",
+      "loadError": "Areas could not be loaded."
+    },
+    "new": {
+      "title": "Create shared area",
+      "description": "Shared areas can be granted to several agents.",
+      "nameLabel": "Name",
+      "namePlaceholder": "e.g. Market research",
+      "nameRequired": "Name is required.",
+      "retentionLabel": "Retention in days",
+      "retentionPlaceholder": "empty = unlimited",
+      "retentionHelp": "After this period the nightly sweep removes older content of this area. Leave empty for: nothing is deleted automatically.",
+      "retentionInvalid": "Please enter a whole number greater than 0.",
+      "submit": "Create",
+      "createdToast": "Area “{{name}}” created.",
+      "actionFailed": "Area could not be created.",
+      "viewerReadOnly": "As a viewer you cannot create areas."
+    },
+    "detail": {
+      "back": "Back to work area",
+      "tabArtifacts": "Content",
+      "tabGrants": "Access",
+      "privateNoticeTitle": "Private area",
+      "privateNoticeDescription": "This area belongs to exactly one agent. “Private” means private towards other agents — as a human you still see it. There are no grants here; use a shared area for that.",
+      "notFound": "This area does not exist or is not visible to you."
+    },
+    "artifacts": {
+      "title": "Content",
+      "emptyTitle": "Nothing filed yet",
+      "emptyDescription": "As soon as an agent files something here, it shows up in this list.",
+      "typeDoc": "Note",
+      "typeTable": "Table",
+      "typeBlob": "File",
+      "sensitive": "Sensitive",
+      "occurredUnknown": "Time unknown",
+      "source": "Source: {{source}}",
+      "loadError": "Content could not be loaded."
+    },
+    "artifact": {
+      "back": "Back to area",
+      "revision": "Revision {{rev}}",
+      "anchorCopy": "Copy anchor",
+      "anchorCopied": "Anchor copied: {{anchor}}",
+      "anchorCopyFailed": "Anchor could not be copied.",
+      "emptyBody": "This item has no text content.",
+      "rawNotice": "Shown unformatted: the content comes from agents and ingested external sources and is deliberately not rendered as markdown.",
+      "delete": "Delete",
+      "deleteConfirm": "Delete “{{title}}” permanently? This cannot be undone.",
+      "deletedToast": "Item deleted.",
+      "deleteFailed": "Item could not be deleted.",
+      "viewerReadOnly": "As a viewer you cannot delete anything.",
+      "loadError": "Content could not be loaded."
+    },
+    "grants": {
+      "title": "Access",
+      "description": "Which agent may read or write this area. Humans grant access — agents cannot grant it to themselves.",
+      "agentColumn": "Agent",
+      "levelColumn": "Level",
+      "levelRead": "Read",
+      "levelWrite": "Read & write",
+      "addAgent": "Grant agent",
+      "selectAgent": "— Select agent —",
+      "remove": "Remove",
+      "emptyTitle": "No grants yet",
+      "emptyDescription": "Without a grant no agent sees this area.",
+      "savedToast": "Grant saved.",
+      "removedToast": "Grant removed.",
+      "actionFailed": "Grant could not be saved.",
+      "viewerReadOnly": "As a viewer you cannot change grants.",
+      "loadError": "Grants could not be loaded."
+    },
+    "search": {
+      "title": "Search work area",
+      "description": "Finds the relevant passage instead of whole documents — every hit jumps straight into the paragraph.",
+      "label": "Search term",
+      "placeholder": "What are you looking for?",
+      "areaLabel": "Area",
+      "areaAll": "All areas",
+      "promptTitle": "Enter a search term",
+      "promptDescription": "The search covers every area you are allowed to see.",
+      "noResultsTitle": "No hits",
+      "noResultsDescription": "Nothing matches “{{query}}” in the visible areas.",
+      "resultCount_one": "{{count}} hit",
+      "resultCount_other": "{{count}} hits",
+      "loadError": "Search failed."
+    },
+    "kb": {
+      "title": "Knowledge base",
+      "description": "Curated statements with evidence. Separate index — no raw work area material shows up here.",
+      "label": "Search term",
+      "placeholder": "What are you looking for?",
+      "promptTitle": "Enter a search term",
+      "promptDescription": "Searches the evidence-backed statements of your workspace.",
+      "noResultsTitle": "No hits",
+      "noResultsDescription": "No statement matches “{{query}}”.",
+      "tierVerified": "Verified",
+      "tierDerived": "Derived",
+      "tierHypothesis": "Hypothesis",
+      "statusLive": "Current",
+      "statusStale": "Stale",
+      "loadError": "Search failed."
+    },
+    "node": {
+      "back": "Back to knowledge base",
+      "title": "Statement",
+      "sourceTitle": "Evidence",
+      "sourceHelp": "Every statement carries mandatory evidence — nothing is created here without a source.",
+      "sourceOpen": "Open evidence",
+      "sourceArtifactMissing": "The referenced content is no longer visible.",
+      "contentRef": "Origin of the text: {{ref}}",
+      "occurred": "Applies to: {{date}}",
+      "occurredUnknown": "Time unknown",
+      "derivationDepth": "Derivation depth: {{depth}}",
+      "createdBy": "Created by: {{actor}}",
+      "neighborsTitle": "Linked statements",
+      "neighborsEmpty": "This statement is not linked to any other.",
+      "directionIn": "incoming",
+      "directionOut": "outgoing",
+      "coN": "n = {{count}}",
+      "edgeSupports": "supports",
+      "edgeContradicts": "contradicts",
+      "edgeSupersedes": "supersedes",
+      "edgeDerivedFrom": "derived from",
+      "edgeBelongsTo": "belongs to",
+      "edgeCoOccursWith": "co-occurs with",
+      "notFound": "This statement does not exist or is not visible to you.",
+      "loadError": "Statement could not be loaded."
+    },
+    "forbidden": "You do not have permission for this area."
   }
 }

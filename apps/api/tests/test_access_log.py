@@ -6,10 +6,12 @@ Spec-Akzeptanzen (User-Entscheidung 6):
 - Menschen-Tokens erzeugen KEINE Eintraege.
 - `sensitivity_at_access` ist der SERVER-Stand des Objekts.
 - Die Agent-Modell-Config (`model_provider`/`model_name`) laeuft ueber den
-  Agent-Update-Pfad und wird im `audit_log` protokolliert.
+  Agent-Update-Pfad und wird im `audit_log` protokolliert — inklusive des
+  expliziten Leerens (`""` → NULL), das Menschen vorbehalten bleibt.
 """
 
 import asyncio
+import json
 from collections.abc import Callable
 from typing import Any
 from uuid import UUID
@@ -38,6 +40,21 @@ def _db_fetch(sql: str, *args: object) -> list[Any]:
             await conn.close()
 
     return asyncio.run(_run())
+
+
+def _audit_detail(raw: object) -> dict[str, Any]:
+    """Dekodiert das `audit_log.detail` einer Roh-Connection.
+
+    Der App-Pool registriert einen jsonb-Codec (`core/db.init_connection`) und
+    das Audit-Repository serialisiert zusaetzlich selbst — der Wert liegt
+    dadurch als JSON-String IN jsonb. `_db_fetch` verbindet ohne Codec, also
+    so lange dekodieren, bis das Objekt dasteht.
+    """
+    value: object = raw
+    while isinstance(value, str):
+        value = json.loads(value)
+    assert isinstance(value, dict), value
+    return value
 
 
 def _agent_token(
@@ -153,5 +170,86 @@ def test_model_config_change_is_audited(make_auth_headers: AuthFactory) -> None:
             )
             assert len(entries) == 1
             assert "claude-sonnet-5" in str(entries[0]["detail"])
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db")
+def test_model_config_kann_geleert_werden(make_auth_headers: AuthFactory) -> None:
+    """`""` leert die Modell-Config auf NULL; `None`/weggelassen nicht.
+
+    Fuer ein Compliance-Feld ist das Leeren Pflicht: ein falsch eingetragener
+    Anbieter verfaelschte die Attribution sonst dauerhaft. Das Leeren ist
+    ebenfalls auditiert (zweiter Eintrag mit `new: null`) und bleibt — wie das
+    Setzen — Menschen vorbehalten (H4).
+    """
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    prefix = f"/v1/workspaces/{ws}"
+    try:
+        with TestClient(app) as client:
+            agent_id, agent_headers = _agent_token(
+                client, prefix, "analyst", {"agent_write": True}, auth
+            )
+            gesetzt = client.put(
+                f"{prefix}/agents/{agent_id}",
+                json={"model_provider": "anthropic", "model_name": "claude-sonnet-5"},
+                headers=auth,
+            )
+            assert gesetzt.status_code == 200, gesetzt.text
+
+            # Weggelassenes Feld laesst den Bestand unangetastet …
+            unberuehrt = client.put(
+                f"{prefix}/agents/{agent_id}", json={"description": "neu"}, headers=auth
+            )
+            assert unberuehrt.status_code == 200, unberuehrt.text
+            assert unberuehrt.json()["model_provider"] == "anthropic"
+            assert unberuehrt.json()["model_name"] == "claude-sonnet-5"
+
+            # … explizites `null` ebenso (None = unveraendert, nicht leeren).
+            explizit_none = client.put(
+                f"{prefix}/agents/{agent_id}",
+                json={"model_provider": None, "model_name": None},
+                headers=auth,
+            )
+            assert explizit_none.status_code == 200, explizit_none.text
+            assert explizit_none.json()["model_provider"] == "anthropic"
+            assert explizit_none.json()["model_name"] == "claude-sonnet-5"
+
+            # Ein Agent darf die Attribution auch nicht LEEREN.
+            agent_clear = client.put(
+                f"{prefix}/agents/{agent_id}",
+                json={"model_provider": "", "model_name": ""},
+                headers=agent_headers,
+            )
+            assert agent_clear.status_code == 403, agent_clear.text
+            assert agent_clear.json()["reason"] == "missing_capability"
+
+            geleert = client.put(
+                f"{prefix}/agents/{agent_id}",
+                json={"model_provider": "", "model_name": ""},
+                headers=auth,
+            )
+            assert geleert.status_code == 200, geleert.text
+            assert geleert.json()["model_provider"] is None
+            assert geleert.json()["model_name"] is None
+            stored = _db_fetch(
+                "SELECT model_provider, model_name FROM agent WHERE id = $1", UUID(agent_id)
+            )
+            assert stored[0]["model_provider"] is None
+            assert stored[0]["model_name"] is None
+
+            entries = _db_fetch(
+                "SELECT detail FROM audit_log WHERE workspace_id = $1 "
+                "AND action = 'agent.model_config_changed' ORDER BY created_at",
+                ws,
+            )
+            assert len(entries) == 2
+            details = [_audit_detail(row["detail"]) for row in entries]
+            assert details[0]["model_provider"] == {"old": None, "new": "anthropic"}
+            assert details[1]["model_provider"] == {"old": "anthropic", "new": None}
+            assert details[1]["model_name"] == {"old": "claude-sonnet-5", "new": None}
     finally:
         cleanup_workspaces([owner])

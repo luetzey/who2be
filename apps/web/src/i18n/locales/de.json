@@ -81,7 +81,8 @@
       "resources": "Resources",
       "tools": "Externe Tools",
       "feedback": "Feedback",
-      "settings": "Einstellungen"
+      "settings": "Einstellungen",
+      "workarea": "Arbeitsbereich"
     },
     "signOut": "Abmelden",
     "language": {
@@ -296,7 +297,10 @@
           "feedback_write": "Nutzung/Feedback melden",
           "feedback_resolve": "Feedback-Triage: Signale schließen (addressed/in_progress/dismissed)",
           "promote_retire": "Versionen aktivieren/deaktivieren",
-          "external_tool_write": "Externe Tools erstellen/ändern"
+          "external_tool_write": "Externe Tools erstellen/ändern",
+          "workarea_write": "Arbeitsbereich schreiben (Notizen, Ingest, Tabellen)",
+          "kb_write": "Knowledge-Base-Aussagen anlegen/ändern (belegpflichtig)",
+          "kb_edge_write": "Knowledge-Base-Kanten anlegen (nicht mehr löschbar)"
         },
         "writeTags": {
           "hint": "Tag-Scope (optional): leer = alle Tags. Sonst darf der Agent in der Domain nur Inhalte mit diesen Tags schreiben.",
@@ -334,7 +338,14 @@
           "required": "Muss",
           "recommended": "Soll"
         }
-      }
+      },
+      "modelTitle": "Modell-Konfiguration",
+      "modelDescription": "Welches Sprachmodell diesen Agenten fährt.",
+      "modelHelp": "Who2Be betreibt den Agenten nicht selbst — trag hier ein, womit du ihn betreibst. Der Server hält diesen Stand bei jedem Zugriff auf den Arbeitsbereich fest; nur so lässt sich später beantworten, welche sensiblen Inhalte je an einen externen Anbieter gegangen sind. Leer lassen heißt: nicht hinterlegt. Nur Menschen dürfen das ändern.",
+      "modelProviderLabel": "Anbieter",
+      "modelProviderPlaceholder": "z. B. anthropic, openai, local",
+      "modelNameLabel": "Modell",
+      "modelNamePlaceholder": "z. B. claude-opus-5"
     },
     "hierarchy": {
       "title": "Zusammensetzung",
@@ -2312,5 +2323,153 @@
       "toolCount_other": "{{count}} Tool-Namen",
       "noToolNames": "Keine Tool-Namen hinterlegt"
     }
+  },
+  "workarea": {
+    "nav": {
+      "areas": "Bereiche",
+      "search": "Suche",
+      "kb": "Knowledge Base",
+      "label": "Arbeitsbereich"
+    },
+    "list": {
+      "title": "Arbeitsbereich",
+      "description": "Was deine Agenten gesammelt und abgelegt haben. Unversioniert und bewusst getrennt von den Resources — hier liegt Rohmaterial, keine veröffentlichten Inhalte.",
+      "newArea": "Bereich anlegen",
+      "emptyTitle": "Noch keine Bereiche",
+      "emptyDescription": "Private Bereiche entstehen automatisch, sobald ein Agent das erste Mal etwas ablegt. Geteilte Bereiche legst du hier an und gibst sie dann gezielt für einzelne Agenten frei.",
+      "scopePrivate": "Privat",
+      "scopeShared": "Geteilt",
+      "ownerAgent": "Agent: {{name}}",
+      "ownerUnknown": "Agent gelöscht",
+      "retention": "Aufbewahrung: {{days}} Tage",
+      "retentionUnlimited": "Aufbewahrung: unbegrenzt",
+      "loadError": "Bereiche konnten nicht geladen werden."
+    },
+    "new": {
+      "title": "Geteilten Bereich anlegen",
+      "description": "Geteilte Bereiche sind für mehrere Agenten freigebbar.",
+      "nameLabel": "Name",
+      "namePlaceholder": "z. B. Marktrecherche",
+      "nameRequired": "Name ist erforderlich.",
+      "retentionLabel": "Aufbewahrung in Tagen",
+      "retentionPlaceholder": "leer = unbegrenzt",
+      "retentionHelp": "Nach dieser Frist räumt der nächtliche Lauf ältere Inhalte des Bereichs ab. Leer lassen heißt: nichts wird automatisch gelöscht.",
+      "retentionInvalid": "Bitte eine ganze Zahl größer als 0 eintragen.",
+      "submit": "Anlegen",
+      "createdToast": "Bereich „{{name}}“ angelegt.",
+      "actionFailed": "Bereich konnte nicht angelegt werden.",
+      "viewerReadOnly": "Als Viewer kannst du keine Bereiche anlegen."
+    },
+    "detail": {
+      "back": "Zurück zum Arbeitsbereich",
+      "tabArtifacts": "Inhalte",
+      "tabGrants": "Zugriffe",
+      "privateNoticeTitle": "Privater Bereich",
+      "privateNoticeDescription": "Dieser Bereich gehört genau einem Agenten. „Privat“ heißt privat gegenüber anderen Agenten — du siehst ihn als Mensch trotzdem. Freigaben gibt es hier nicht; dafür einen geteilten Bereich nutzen.",
+      "notFound": "Dieser Bereich existiert nicht oder ist für dich nicht sichtbar."
+    },
+    "artifacts": {
+      "title": "Inhalte",
+      "emptyTitle": "Noch nichts abgelegt",
+      "emptyDescription": "Sobald ein Agent hier etwas ablegt, erscheint es in dieser Liste.",
+      "typeDoc": "Notiz",
+      "typeTable": "Tabelle",
+      "typeBlob": "Datei",
+      "sensitive": "Sensibel",
+      "occurredUnknown": "Zeitpunkt unbekannt",
+      "source": "Quelle: {{source}}",
+      "loadError": "Inhalte konnten nicht geladen werden."
+    },
+    "artifact": {
+      "back": "Zurück zum Bereich",
+      "revision": "Revision {{rev}}",
+      "anchorCopy": "Anker kopieren",
+      "anchorCopied": "Anker kopiert: {{anchor}}",
+      "anchorCopyFailed": "Anker konnte nicht kopiert werden.",
+      "emptyBody": "Dieses Element hat keinen Textinhalt.",
+      "rawNotice": "Unformatiert dargestellt: der Inhalt stammt von Agenten und aus eingelesenen Fremdquellen und wird bewusst nicht als Markdown gerendert.",
+      "delete": "Löschen",
+      "deleteConfirm": "„{{title}}“ endgültig löschen? Das lässt sich nicht rückgängig machen.",
+      "deletedToast": "Element gelöscht.",
+      "deleteFailed": "Element konnte nicht gelöscht werden.",
+      "viewerReadOnly": "Als Viewer kannst du nichts löschen.",
+      "loadError": "Inhalt konnte nicht geladen werden."
+    },
+    "grants": {
+      "title": "Zugriffe",
+      "description": "Welcher Agent diesen Bereich lesen oder beschreiben darf. Menschen vergeben Freigaben — Agenten können sich selbst keine geben.",
+      "agentColumn": "Agent",
+      "levelColumn": "Recht",
+      "levelRead": "Lesen",
+      "levelWrite": "Lesen & schreiben",
+      "addAgent": "Agent freigeben",
+      "selectAgent": "— Agent wählen —",
+      "remove": "Entfernen",
+      "emptyTitle": "Noch keine Freigaben",
+      "emptyDescription": "Ohne Freigabe sieht kein Agent diesen Bereich.",
+      "savedToast": "Freigabe gespeichert.",
+      "removedToast": "Freigabe entfernt.",
+      "actionFailed": "Freigabe konnte nicht gespeichert werden.",
+      "viewerReadOnly": "Als Viewer kannst du Freigaben nicht ändern.",
+      "loadError": "Freigaben konnten nicht geladen werden."
+    },
+    "search": {
+      "title": "Arbeitsbereich durchsuchen",
+      "description": "Findet die passende Stelle statt ganzer Dokumente — jeder Treffer springt direkt in den Absatz.",
+      "label": "Suchbegriff",
+      "placeholder": "Wonach suchst du?",
+      "areaLabel": "Bereich",
+      "areaAll": "Alle Bereiche",
+      "promptTitle": "Gib einen Suchbegriff ein",
+      "promptDescription": "Die Suche läuft über alle Bereiche, die du sehen darfst.",
+      "noResultsTitle": "Keine Treffer",
+      "noResultsDescription": "Für „{{query}}“ gibt es nichts in den sichtbaren Bereichen.",
+      "resultCount_one": "{{count}} Treffer",
+      "resultCount_other": "{{count}} Treffer",
+      "loadError": "Suche fehlgeschlagen."
+    },
+    "kb": {
+      "title": "Knowledge Base",
+      "description": "Kuratierte Aussagen mit Beleg. Eigener Index — hier taucht kein Rohmaterial aus dem Arbeitsbereich auf.",
+      "label": "Suchbegriff",
+      "placeholder": "Wonach suchst du?",
+      "promptTitle": "Gib einen Suchbegriff ein",
+      "promptDescription": "Durchsucht die belegten Aussagen deines Workspace.",
+      "noResultsTitle": "Keine Treffer",
+      "noResultsDescription": "Für „{{query}}“ gibt es keine Aussage.",
+      "tierVerified": "Bestätigt",
+      "tierDerived": "Abgeleitet",
+      "tierHypothesis": "Vermutung",
+      "statusLive": "Aktuell",
+      "statusStale": "Überholt",
+      "loadError": "Suche fehlgeschlagen."
+    },
+    "node": {
+      "back": "Zurück zur Knowledge Base",
+      "title": "Aussage",
+      "sourceTitle": "Beleg",
+      "sourceHelp": "Jede Aussage trägt einen Pflicht-Beleg — ohne Quelle entsteht hier nichts.",
+      "sourceOpen": "Beleg öffnen",
+      "sourceArtifactMissing": "Der belegte Inhalt ist nicht mehr sichtbar.",
+      "contentRef": "Herkunft des Textes: {{ref}}",
+      "occurred": "Gilt für: {{date}}",
+      "occurredUnknown": "Zeitpunkt unbekannt",
+      "derivationDepth": "Ableitungstiefe: {{depth}}",
+      "createdBy": "Angelegt von: {{actor}}",
+      "neighborsTitle": "Verknüpfte Aussagen",
+      "neighborsEmpty": "Diese Aussage ist mit keiner anderen verknüpft.",
+      "directionIn": "eingehend",
+      "directionOut": "ausgehend",
+      "coN": "n = {{count}}",
+      "edgeSupports": "stützt",
+      "edgeContradicts": "widerspricht",
+      "edgeSupersedes": "ersetzt",
+      "edgeDerivedFrom": "abgeleitet aus",
+      "edgeBelongsTo": "gehört zu",
+      "edgeCoOccursWith": "tritt gemeinsam auf mit",
+      "notFound": "Diese Aussage existiert nicht oder ist für dich nicht sichtbar.",
+      "loadError": "Aussage konnte nicht geladen werden."
+    },
+    "forbidden": "Für diesen Bereich fehlt dir die Berechtigung."
   }
 }

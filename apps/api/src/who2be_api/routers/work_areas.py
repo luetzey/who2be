@@ -5,6 +5,8 @@ Pfade unter `/v1/workspaces/{ws_id}` (Prefix aus `main.py`):
 - ``POST /work-areas`` — legt eine SHARED Area an (private Areas entstehen
   ausschliesslich per Auto-Anlage beim ersten Agent-Zugriff).
 - ``GET /work-areas`` — sichtbare Areas des Aufrufers (Scope im Service).
+- ``GET /work-areas/{area_id}/grants`` — Ist-Stand der Grants einer shared
+  Area (Grant-Editor der Web-UI), Menschen vorbehalten (Gate im Service).
 - ``PUT/DELETE /work-areas/{area_id}/grants/{agent_id}`` — Grant-Verwaltung,
   Menschen vorbehalten (Gate im Service).
 
@@ -53,6 +55,14 @@ async def list_work_areas(ctx: Ctx, service: Service) -> list[WorkAreaRead]:
     """Sichtbare Areas; loest fuer agent-gebundene Tokens die private
     Auto-Anlage aus (erster Zugriff, Plan-Entscheidung 5)."""
     return await service.list_visible(ctx)
+
+
+@router.get("/work-areas/{area_id}/grants", dependencies=[Depends(enforce_mcp_read_limit)])
+async def list_work_area_grants(
+    area_id: UUID, ctx: Ctx, service: Service
+) -> list[WorkAreaGrantRead]:
+    """Grants einer shared Area (Mensch, ab viewer); Gate liegt im Service."""
+    return await service.list_grants(ctx, area_id)
 
 
 @router.put("/work-areas/{area_id}/grants/{agent_id}")

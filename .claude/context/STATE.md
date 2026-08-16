@@ -260,6 +260,42 @@ ADR-0047-Nachtrag 2026-08-16 und in DECISIONS.
   CSV-Injektion im server-gerenderten Export, Timeline-Existenz-Orakel und
   -Quellen-Deckel, Promote-Aktor + Längen-Schnitte.
 
+### Arbeitsbereich in der Web-UI + Builder-Rechte (2026-08-16)
+
+Das WorkArea/KB-Feature war nach PR #367/#369 **nur über MCP erreichbar** —
+die drei Betreiber-Stellschrauben lagen in der Web-UI brach. Nachgezogen:
+
+- **Agenten-Editor:** `workarea_write`/`kb_write`/`kb_edge_write` sind
+  Checkboxen im Policy-Editor; ohne sie konnte ein Betreiber einem
+  Fach-Agenten den Arbeitsbereich gar nicht freischalten. Dazu eine Sektion
+  „Modell-Konfiguration" (`model_provider`/`model_name`) — das Feld ist
+  Menschen vorbehalten und war damit ohne UI **tot**, obwohl die
+  Compliance-Auskunft des Zugriffslogs daran hängt.
+- **Modell-Config ist wieder leerbar:** `AgentUpdate` hatte `min_length=1` +
+  COALESCE, ein gesetzter Wert war nicht mehr zu entfernen (der Code nannte
+  das selbst einen offenen Punkt). Neuer Vertrag: `''` = explizit auf NULL,
+  weggelassen = unverändert; Drei-Wege-`CASE` im Repository, Audit greift.
+- **Neuer Endpunkt `GET /work-areas/{area_id}/grants`** (Menschen-only,
+  Viewer dürfen lesen) — der Grant-Editor braucht den Ist-Stand, es gab nur
+  `PUT`/`DELETE`.
+- **Lese-Ansicht `features/workarea`:** Bereiche (+ Anlage geteilter
+  Bereiche), Bereichs-Detail mit Inhalten und Freigaben, Artifact-Ansicht mit
+  Block-Ankern, WorkArea-Suche und Knowledge-Base-Suche/-Detail inkl.
+  Beleg-Rückverweis und Fallzahl bei `co_occurs_with`.
+- **Builder darf die Tools nutzen** (`BUILDER_CONTENT_VERSION` 14 → 15): rein
+  policy-seitig, der Start-Sync verteilt es an Bestands-Builder. Ohne die
+  Flags könnte der Builder sie wegen `is_within` auch keinem Fach-Agenten
+  vergeben — das ist der eigentliche Zweck.
+
+Zwei bewusste Entscheidungen der Lese-Ansicht: Artifact-Inhalte werden als
+**Rohtext mit Ankern** gerendert (kein Markdown→HTML — der Inhalt stammt von
+Agenten und aus Ingest-Fremdquellen), und `url:`-Belege der KB bleiben
+**unverlinkter Text** aus demselben Grund. Einziger Inhalts-Write der UI ist
+das Löschen eines Artifacts (editor+).
+
+**DoD:** Python 1639 pytest / Coverage 90,98 %; Web 970 Vitest (Statements
+86,2 %, Branches 80,43 %); ruff/mypy/tsc/lint/build lokal grün.
+
 ## Bekannte Probleme
 
 - **Tabellen-Import kappt Zell-Breiten nicht** (gefunden 2026-08-16): der
@@ -278,6 +314,20 @@ ADR-0047-Nachtrag 2026-08-16 und in DECISIONS.
   Workspace gesucht, der im `wa_blob`-Katalog vorkommt. Ein Workspace, dessen
   allererster Ingest scheitert, hat nie eine Katalog-Zeile — sein einzelnes
   Objekt bleibt liegen (Alternative wäre ein Bucket-Vollscan je Cron-Lauf).
+- **`audit_log.detail` liegt doppelt JSON-kodiert in der DB** (gefunden
+  2026-08-16): `PgAuditLogRepository.insert` serialisiert selbst per
+  `json.dumps`, der App-Pool registriert zusätzlich einen jsonb-Codec
+  (`core/db.init_connection`) — in `jsonb` landet ein JSON-*String* statt
+  eines Objekts. Fällt heute nicht auf, weil die Bestandstests per
+  `"…" in str(detail)` prüfen. Beißt, sobald jemand `detail` strukturiert
+  auswerten will (SQL-Zugriff per `->>`).
+- **Tool-Übersicht nennt Schreib-Tools ohne Capability** (gefunden
+  2026-08-16): die kuratierten `_TOOLS`-Gruppen des `tools-overview`-Resolvers
+  führen Read- und Write-Tools in EINER Signatur-Zeile. Ist die Gruppe wegen
+  ihrer Reads sichtbar, liest ein Agent auch die Namen der Schreib-Tools, die
+  er nicht halten darf (`tools/list` filtert sie korrekt weg — er bekäme also
+  einen Fehler). Kein Sicherheitsproblem, aber irreführender Prompt; Fix wäre
+  eine Trennung der gemischten Gruppen.
 - **CI-Gate seit 2026-07-19 tot** (GitHub-Actions-Billing, Owner-Punkt): alle
   Runs scheitern nach ~2 s ohne Logs — kein Code-Problem; lokale DoD-Nachweise
   ersetzen das Gate interim (PR-Template).

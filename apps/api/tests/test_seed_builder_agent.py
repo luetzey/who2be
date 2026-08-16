@@ -171,6 +171,9 @@ def test_builder_agent_seeded_complete() -> None:
                 "       (a.tool_policy ->> 'agent_write')::boolean AS agent_write, "
                 "       (a.tool_policy ->> 'feedback_resolve')::boolean AS feedback_resolve, "
                 "       (a.tool_policy ->> 'external_tool_write')::boolean AS external_tool_write, "
+                "       (a.tool_policy ->> 'workarea_write')::boolean AS workarea_write, "
+                "       (a.tool_policy ->> 'kb_write')::boolean AS kb_write, "
+                "       (a.tool_policy ->> 'kb_edge_write')::boolean AS kb_edge_write, "
                 "       (a.tool_policy ->> 'promote_retire')::boolean AS promote_retire "
                 "FROM agent a "
                 "WHERE a.workspace_id = $1 AND a.name = 'Builder'",
@@ -183,6 +186,11 @@ def test_builder_agent_seeded_complete() -> None:
             )
             lite_external_tool_write = await conn.fetchval(
                 "SELECT (tool_policy ->> 'external_tool_write')::boolean "
+                "FROM agent WHERE workspace_id = $1 AND name = 'Builder-Lite'",
+                workspace_id,
+            )
+            lite_workarea_write = await conn.fetchval(
+                "SELECT (tool_policy ->> 'workarea_write')::boolean "
                 "FROM agent WHERE workspace_id = $1 AND name = 'Builder-Lite'",
                 workspace_id,
             )
@@ -212,9 +220,13 @@ def test_builder_agent_seeded_complete() -> None:
                 "agent_write": agent["agent_write"] if agent else None,
                 "feedback_resolve": agent["feedback_resolve"] if agent else None,
                 "external_tool_write": agent["external_tool_write"] if agent else None,
+                "workarea_write": agent["workarea_write"] if agent else None,
+                "kb_write": agent["kb_write"] if agent else None,
+                "kb_edge_write": agent["kb_edge_write"] if agent else None,
                 "promote_retire": agent["promote_retire"] if agent else None,
                 "lite_feedback_resolve": lite_feedback_resolve,
                 "lite_external_tool_write": lite_external_tool_write,
+                "lite_workarea_write": lite_workarea_write,
             }
         finally:
             await conn.close()
@@ -268,6 +280,13 @@ def test_builder_agent_seeded_complete() -> None:
         # Builder koennen Bindungen anlegen/pflegen und via is_within vergeben.
         assert data["external_tool_write"] is True
         assert data["lite_external_tool_write"] is True
+        # Content-Stand 15: Arbeitsbereich + Knowledge Base (ADR-0047). Ohne
+        # diese Flags koennte der Builder sie wegen `is_within` auch keinem
+        # Fach-Agenten vergeben — die Weitergabe ist der eigentliche Zweck.
+        assert data["workarea_write"] is True
+        assert data["kb_write"] is True
+        assert data["kb_edge_write"] is True
+        assert data["lite_workarea_write"] is True
     finally:
         cleanup_workspaces([owner])
 

@@ -9,6 +9,8 @@ Kritische Invarianten:
   materialisiertem Owner-Grant.
 - Grant-Verwaltung ist Menschen vorbehalten (Agent-Token → 403); private
   Areas sind nicht grantbar; unbekannte Ziele → 404.
+- Grant-Liste (`GET .../grants`) ist der lesbare Ist-Stand fuer den
+  Grant-Editor: Menschen ab viewer, agent-gebundene Tokens → 403.
 - whoami traegt `work_areas` fuer agent-gebundene Tokens, `None` fuer Menschen.
 """
 
@@ -207,6 +209,72 @@ def test_grant_verwaltung_human_only(make_auth_headers: AuthFactory) -> None:
             assert shared_id not in {a["id"] for a in after}
     finally:
         cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db")
+def test_grant_liste_ist_fuer_menschen_lesbar(make_auth_headers: AuthFactory) -> None:
+    """`GET .../grants` liefert den Ist-Stand fuer den Grant-Editor: leer ohne
+    Grants, nach dem Upsert Agent + Level. Viewer duerfen lesen (read-only
+    Anzeige), agent-gebundene Tokens nicht; private Area → 403, unbekannte
+    Area → 404."""
+    owner = fresh_user_id()
+    viewer = fresh_user_id()
+    ws = setup_workspace(owner)
+    _add_member(ws, viewer, role="viewer")
+    auth = make_auth_headers(owner)
+    viewer_auth = make_auth_headers(viewer)
+    prefix = f"/v1/workspaces/{ws}"
+    try:
+        with TestClient(app) as client:
+            shared_id = _area(client, prefix, auth, "Liste-Area").json()["id"]
+            grants_url = f"{prefix}/work-areas/{shared_id}/grants"
+
+            # Ohne Grants: leere Liste (kein 404 — die Area existiert ja).
+            empty = client.get(grants_url, headers=auth)
+            assert empty.status_code == 200, empty.text
+            assert empty.json() == []
+
+            agent_id, agent_tok = _agent_token(
+                client, prefix, "wa-liste", {"workarea_write": True}, auth
+            )
+            granted = client.put(f"{grants_url}/{agent_id}", json={"level": "write"}, headers=auth)
+            assert granted.status_code == 200, granted.text
+
+            listed = client.get(grants_url, headers=auth)
+            assert listed.status_code == 200, listed.text
+            assert [(g["agent_id"], g["level"]) for g in listed.json()] == [(agent_id, "write")]
+            assert listed.json()[0]["area_id"] == shared_id
+
+            # Viewer sieht denselben Stand.
+            viewer_view = client.get(grants_url, headers=viewer_auth)
+            assert viewer_view.status_code == 200, viewer_view.text
+            assert [g["agent_id"] for g in viewer_view.json()] == [agent_id]
+
+            # Agent-gebundener Token nicht — auch nicht fuer eine Area, auf die
+            # er selbst Zugriff hat.
+            agent_view = client.get(grants_url, headers=agent_tok)
+            assert agent_view.status_code == 403
+            assert agent_view.json()["reason"] == "missing_capability"
+
+            # Private Areas sind nicht grantbar → auch keine Grant-Liste.
+            # (Der Agent-Zugriff oben hat die private Area bereits angelegt.)
+            assert client.get(f"{prefix}/work-areas", headers=agent_tok).status_code == 200
+            private_id = next(
+                a["id"]
+                for a in client.get(f"{prefix}/work-areas", headers=auth).json()
+                if a["scope"] == "private"
+            )
+            private = client.get(f"{prefix}/work-areas/{private_id}/grants", headers=auth)
+            assert private.status_code == 403
+            assert private.json()["reason"] == "area_forbidden"
+
+            # Unbekannte Area → 404 (kein Existenz-Orakel).
+            ghost = "00000000-0000-0000-0000-000000000000"
+            unknown = client.get(f"{prefix}/work-areas/{ghost}/grants", headers=auth)
+            assert unknown.status_code == 404, unknown.text
+    finally:
+        cleanup_workspaces([owner, viewer])
 
 
 @pytest.mark.integration

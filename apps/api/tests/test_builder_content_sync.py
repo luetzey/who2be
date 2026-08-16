@@ -808,3 +808,71 @@ def test_sync_updates_agent_policy_of_existing_builder() -> None:
         # Content-Stand 11: External-Tool-Schreibrecht (ADR-0043).
         assert agent["external_tool_write"] is True, agent
         assert agent["agent_read"] == "all", agent
+
+
+@pytest.mark.integration
+def test_sync_distributes_workarea_capabilities_to_v14_builder() -> None:
+    """Content-Stand 15 (ADR-0047): ein Bestands-Builder auf Stempel 14 kennt
+    `workarea_write`/`kb_write`/`kb_edge_write` nicht — der Sync zieht sie nach.
+
+    Der Test setzt den Stempel bewusst auf `BUILDER_CONTENT_VERSION - 1` statt
+    auf 0: damit belegt er, dass GENAU der Versions-Bump die Verteilung
+    ausloest. Ohne ihn bliebe der Stempel-Guard `<` unerfuellt und die neue
+    Policy erreichte kein einziges bestehendes Deployment — die Flags waeren
+    nur in frisch geseedeten Workspaces vorhanden.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+
+    async def _run() -> dict[str, Any]:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            # v14-Stand simulieren: die drei Keys fehlen ganz (so sah die
+            # Policy vor ADR-0047 aus), Stempel exakt eins zurueck.
+            await conn.execute(
+                "UPDATE agent SET tool_policy = "
+                "  tool_policy - 'workarea_write' - 'kb_write' - 'kb_edge_write', "
+                "  managed_content_version = $2 "
+                "WHERE workspace_id = $1 AND name IN ('Builder', 'Builder-Lite')",
+                ws,
+                BUILDER_CONTENT_VERSION - 1,
+            )
+            before = await conn.fetch(
+                "SELECT name, tool_policy ? 'workarea_write' AS has_key "
+                "FROM agent WHERE workspace_id = $1 "
+                "AND name IN ('Builder', 'Builder-Lite') ORDER BY name",
+                ws,
+            )
+            updated = await sync_managed_builder_content(conn)
+            rows = await conn.fetch(
+                "SELECT name, managed_content_version, "
+                "  (tool_policy ->> 'workarea_write')::boolean AS workarea_write, "
+                "  (tool_policy ->> 'kb_write')::boolean AS kb_write, "
+                "  (tool_policy ->> 'kb_edge_write')::boolean AS kb_edge_write "
+                "FROM agent WHERE workspace_id = $1 "
+                "AND name IN ('Builder', 'Builder-Lite') ORDER BY name",
+                ws,
+            )
+            return {
+                "before": [dict(r) for r in before],
+                "updated": updated,
+                "agents": [dict(r) for r in rows],
+            }
+        finally:
+            await conn.close()
+
+    try:
+        res = asyncio.run(_run())
+    finally:
+        cleanup_workspaces([owner])
+
+    assert all(row["has_key"] is False for row in res["before"]), res["before"]
+    assert res["updated"] == 2, res["updated"]
+    for agent in res["agents"]:
+        assert agent["managed_content_version"] == BUILDER_CONTENT_VERSION, agent
+        assert agent["workarea_write"] is True, agent
+        assert agent["kb_write"] is True, agent
+        assert agent["kb_edge_write"] is True, agent

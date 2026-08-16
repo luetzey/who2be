@@ -375,10 +375,13 @@ class PgAgentRepository:
         model_provider: str | None = None,
         model_name: str | None = None,
     ) -> AgentRead | None:
-        # `model_provider`/`model_name` (User-Entscheidung 6, ADR-0047):
-        # COALESCE-Semantik wie alle anderen Felder — `None` laesst den
-        # Bestand unangetastet. Explizites Leeren (zurueck auf NULL) ist
-        # damit bewusst (noch) nicht moeglich — dokumentierter offener Punkt.
+        # `model_provider`/`model_name` (User-Entscheidung 6, ADR-0047)
+        # brauchen mehr als COALESCE: die Compliance-Config muss auch
+        # LEERBAR sein, sonst bleibt ein falsch eingetragener Anbieter fuer
+        # immer stehen und verfaelscht die Attribution. Darum die
+        # Drei-Wege-CASE: `NULL` = unveraendert, `''` = explizit auf NULL
+        # zuruecksetzen, sonst der neue Wert. Alle anderen Felder bleiben bei
+        # der reinen COALESCE-Semantik.
         try:
             row = await self._pool.fetchrow(
                 "UPDATE agent SET "
@@ -388,8 +391,10 @@ class PgAgentRepository:
                 "  system_prompt_template_id = COALESCE($6, system_prompt_template_id), "
                 "  status = COALESCE($7, status), "
                 "  tool_policy = COALESCE($8::jsonb, tool_policy), "
-                "  model_provider = COALESCE($9, model_provider), "
-                "  model_name = COALESCE($10, model_name), "
+                "  model_provider = CASE WHEN $9::text IS NULL THEN model_provider "
+                "                        WHEN $9 = '' THEN NULL ELSE $9 END, "
+                "  model_name = CASE WHEN $10::text IS NULL THEN model_name "
+                "                    WHEN $10 = '' THEN NULL ELSE $10 END, "
                 "  updated_at = now() "
                 "WHERE id = $1 AND workspace_id = $2 "
                 f"{_RETURNING}",
