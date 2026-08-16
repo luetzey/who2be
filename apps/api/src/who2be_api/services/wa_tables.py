@@ -25,8 +25,14 @@ SQL-SYNTAXfehler ist dagegen `TableQueryInvalid` (Router → 400) — die beiden
 Faelle werden nie vermischt. Der Import ist idempotent (Spec K):
 `row_hash` ueber `dedupe_columns` (Fallback: alle Spalten) + `INSERT OR
 IGNORE` macht den Doppel-Import zum No-op (`{inserted, skipped}`).
-`source_name`/`new_rules` aus `RowsInsert` werden hier bewusst NUR
-durchgereicht/ignoriert — Konventions- und Regel-Logik (M2/L) ist WP17;
+Kategorisierung + Konventionen (WP17, Spec L/M2 — Logik in
+`services/wa_rules.py`): ein `source_name` ohne hinterlegte
+`wa_source_convention` der Area ist 422 `convention_missing`, VOR jedem
+Write. Tragen Katalog-Schema `category_column` UND `match_column`, laeuft
+vor dem SQLite-Import die Regel-Phase (`categorize_rows`, „Regel VOR
+Modell") in EINER Postgres-Transaktion: `new_rules` persistieren, dann
+matchen — 422 `rule_required` rollt auch die neuen Regeln zurueck, SQLite
+sieht erst nach erfolgreicher Regel-Phase Writes (kein Teilzustand).
 `source_artifact_id` landet als `_source_artifact` in jeder Row (Provenance).
 
 Zugriffslog (Spec F, WP14): erfolgreiche Agent-Zugriffe werden NACH der
@@ -65,9 +71,11 @@ from who2be_api.core.security import (
 )
 from who2be_api.core.workarea_scope import ensure_area_access, readable_area_ids
 from who2be_api.repositories.agent_access_log_repository import AccessOperation
+from who2be_api.repositories.wa_rule_repository import WaRuleRepository
 from who2be_api.repositories.wa_table_repository import WaTableRepository
 from who2be_api.services.access_log import log_access
 from who2be_api.services.wa_artifacts import WaArtifactService
+from who2be_api.services.wa_rules import categorize_rows, convention_missing
 from who2be_api.tablestore import (
     AreaStoreMissingError,
     ColumnSpec,
@@ -294,6 +302,7 @@ class WaTableService:
         store: TableStore,
         *,
         artifact_service: WaArtifactService,
+        rule_repo: WaRuleRepository,
     ) -> None:
         self._pool = pool
         self._tables = table_repo
@@ -301,6 +310,9 @@ class WaTableService:
         # Bestehender Artifact-Anlage-Pfad (WP4) fuer `save_query_result` —
         # Gates/Blocks/Chunk-Sync/Zugriffslog liegen dort, nie dupliziert hier.
         self._artifact_service = artifact_service
+        # Regel-/Konventions-Zugriff fuer die Import-Gates (WP17, Spec L/M2) —
+        # die Fachlogik selbst lebt in `services/wa_rules.py`.
+        self._rules = rule_repo
 
     # ------------------------------------------------------------------ Gates
 
@@ -359,11 +371,20 @@ class WaTableService:
     async def insert_rows(
         self, ctx: WorkspaceContext, table_id: UUID, data: RowsInsert
     ) -> InsertResult | None:
-        """Idempotenter Zeilen-Import (Spec K); `None` → Router 404.
+        """Idempotenter Zeilen-Import (Spec K) mit L-/M2-Gates; `None` → Router 404.
 
-        `source_name`/`new_rules` werden ignoriert (WP17, s. Modul-Kopf);
-        `source_artifact_id` wird als `_source_artifact` in jede Row
-        durchgereicht (M2-Provenance).
+        Spec M2: `source_name` ohne hinterlegte Quell-Konvention der Area →
+        422 `convention_missing`, VOR jedem Write. Mit Konvention werden die
+        Rows akzeptiert — die INHALTLICHE Anwendung der Konvention ist Sache
+        der Agent-Runtime, der Server erzwingt nur ihre Existenz.
+
+        Spec L („Regel VOR Modell", nur wenn das Schema `category_column`
+        UND `match_column` traegt): die Regel-Phase (`categorize_rows`)
+        laeuft in EINER Postgres-Transaktion VOR dem SQLite-Write — kein
+        Lauf aendert eine Kategorie ohne Regeltabellen-Eintrag, und ein 422
+        `rule_required` rollt auch frisch persistierte `new_rules` zurueck
+        (kein Teilzustand). `source_artifact_id` wird als `_source_artifact`
+        in jede Row durchgereicht (M2-Provenance).
         """
         table = await self._visible_table(ctx, table_id)
         if table is None:
@@ -373,6 +394,25 @@ class WaTableService:
 
         schema = table.schema_
         _validate_rows(schema, data.rows)
+        if data.source_name is not None:
+            convention = await self._rules.get_convention(
+                self._pool, ctx.workspace_id, table.area_id, data.source_name
+            )
+            if convention is None:
+                raise convention_missing(data.source_name)
+        if schema.category_column is not None and schema.match_column is not None:
+            # Regel-Phase (Spec L) atomar VOR dem SQLite-Write: scheitert sie,
+            # ist nichts persistiert — weder Regeln noch Zeilen.
+            async with self._pool.acquire() as conn, conn.transaction():
+                await categorize_rows(
+                    conn,
+                    ctx,
+                    area_id=table.area_id,
+                    schema=schema,
+                    rows=data.rows,
+                    new_rules=data.new_rules,
+                    repo=self._rules,
+                )
         column_names = [column.name for column in schema.columns]
         dedupe_columns = schema.dedupe_columns or column_names
         source_artifact = (

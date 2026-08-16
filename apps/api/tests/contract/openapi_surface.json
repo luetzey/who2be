@@ -850,6 +850,26 @@
     "operationId": "create_artifact_v1_workspaces__workspace_id__work_areas__area_id__artifacts_post"
   },
   {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/work-areas/{area_id}/category-rules",
+    "operationId": "list_category_rules_v1_workspaces__workspace_id__work_areas__area_id__category_rules_get"
+  },
+  {
+    "method": "POST",
+    "path": "/v1/workspaces/{workspace_id}/work-areas/{area_id}/category-rules",
+    "operationId": "upsert_category_rule_v1_workspaces__workspace_id__work_areas__area_id__category_rules_post"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/work-areas/{area_id}/conventions",
+    "operationId": "list_conventions_v1_workspaces__workspace_id__work_areas__area_id__conventions_get"
+  },
+  {
+    "method": "PUT",
+    "path": "/v1/workspaces/{workspace_id}/work-areas/{area_id}/conventions/{source_name}",
+    "operationId": "set_convention_v1_workspaces__workspace_id__work_areas__area_id__conventions__source_name__put"
+  },
+  {
     "method": "DELETE",
     "path": "/v1/workspaces/{workspace_id}/work-areas/{area_id}/grants/{agent_id}",
     "operationId": "delete_work_area_grant_v1_workspaces__workspace_id__work_areas__area_id__grants__agent_id__delete"

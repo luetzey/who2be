@@ -12,6 +12,12 @@ Pfade unter `/v1/workspaces/{ws_id}` (Prefix aus `main.py`):
   als doc-Artifact in der Area der Tabelle (WP16, M-Ersatz — Entscheidung 7).
 - ``GET /wa-tables/{table_id}`` — describe (Schema, Zeilenzahl,
   Wertebereiche, Area-Konventionen).
+- ``PUT /work-areas/{area_id}/conventions/{source_name}`` /
+  ``GET /work-areas/{area_id}/conventions`` — Quell-Konventionen (WP17,
+  Spec M2): anlegen/ersetzen bzw. Area-Liste.
+- ``POST /work-areas/{area_id}/category-rules`` — Regel-Upsert (WP17,
+  Spec L): 201 bei Anlage, 200 bei Ersetzung; kategorisiert rueckwirkend neu
+  (auditiert). ``GET`` daneben listet die Regeln der Area.
 
 Rate-Limit-Paritaet (Muster `wa_artifacts`): Mutationen
 `@limiter.limit(write_limit)` + `request` als erster Parameter; agent-lesbare
@@ -25,23 +31,31 @@ from typing import Annotated
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response, status
 from pydantic import BaseModel
 
 from who2be_api.core.db import get_pool
 from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
+from who2be_api.repositories.audit_log_repository import PgAuditLogRepository
+from who2be_api.repositories.wa_rule_repository import PgWaRuleRepository
 from who2be_api.repositories.wa_table_repository import PgWaTableRepository
 from who2be_api.routers.wa_artifacts import get_wa_artifact_service
+from who2be_api.services.audit_service import AuditService
 from who2be_api.services.mcp_limit_service import enforce_mcp_read_limit
 from who2be_api.services.tablestore_provider import get_table_store
 from who2be_api.services.wa_artifacts import WaArtifactService
+from who2be_api.services.wa_rules import WaRuleService
 from who2be_api.services.wa_tables import TableQueryInvalid, TableRowsInvalid, WaTableService
 from who2be_models import (
     ArtifactRead,
+    CategoryRuleRead,
+    CategoryRuleUpsert,
     QueryResult,
     RowsInsert,
     SaveQueryResult,
+    SourceConventionRead,
+    SourceConventionSet,
     TableDescription,
     TableQuery,
     WaTableCreate,
@@ -67,14 +81,33 @@ def get_wa_table_service(
     artifact_service: Annotated[WaArtifactService, Depends(get_wa_artifact_service)],
 ) -> WaTableService:
     """Verdrahtet den Tabellen-Service mit dem BESTEHENDEN Artifact-Stack —
-    `save_query_result` legt das Ergebnis-Artifact ueber dessen Anlage-Pfad an."""
+    `save_query_result` legt das Ergebnis-Artifact ueber dessen Anlage-Pfad an;
+    das Regel-Repo bedient die Import-Gates (WP17, Spec L/M2)."""
     return WaTableService(
-        pool, PgWaTableRepository(), get_table_store(), artifact_service=artifact_service
+        pool,
+        PgWaTableRepository(),
+        get_table_store(),
+        artifact_service=artifact_service,
+        rule_repo=PgWaRuleRepository(),
+    )
+
+
+def get_wa_rule_service(pool: Annotated[asyncpg.Pool, Depends(get_pool)]) -> WaRuleService:
+    """Regel-/Konventions-Service (WP17): Re-Kategorisierung schreibt SQLite
+    ueber den TableStore (server-only) und protokolliert im `audit_log`."""
+    return WaRuleService(
+        pool,
+        PgWaRuleRepository(),
+        PgWaTableRepository(),
+        get_table_store(),
+        audit_service=AuditService(PgAuditLogRepository()),
     )
 
 
 Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]
 Service = Annotated[WaTableService, Depends(get_wa_table_service)]
+RuleService = Annotated[WaRuleService, Depends(get_wa_rule_service)]
+SourceName = Annotated[str, Path(min_length=1, max_length=100)]
 
 
 def _table_not_found() -> HTTPException:
@@ -163,3 +196,55 @@ async def describe_table(table_id: UUID, ctx: Ctx, service: Service) -> TableDes
     if description is None:
         raise _table_not_found()
     return description
+
+
+@router.put("/work-areas/{area_id}/conventions/{source_name}")
+@limiter.limit(write_limit)
+async def set_convention(
+    request: Request,
+    area_id: UUID,
+    source_name: SourceName,
+    data: SourceConventionSet,
+    ctx: Ctx,
+    service: RuleService,
+) -> SourceConventionRead:
+    """Quell-Konvention anlegen/ersetzen (WP17, Spec M2) — Pflicht, bevor ein
+    Import mit diesem `source_name` akzeptiert wird (sonst 422
+    `convention_missing`); die inhaltliche Anwendung ist Runtime-Sache."""
+    return await service.set_convention(ctx, area_id, source_name, data)
+
+
+@router.get("/work-areas/{area_id}/conventions", dependencies=[Depends(enforce_mcp_read_limit)])
+async def list_conventions(
+    area_id: UUID, ctx: Ctx, service: RuleService
+) -> list[SourceConventionRead]:
+    """Quell-Konventionen der Area (Spec M2); fehlender Read-Grant → 404."""
+    return await service.list_conventions(ctx, area_id)
+
+
+@router.post("/work-areas/{area_id}/category-rules")
+@limiter.limit(write_limit)
+async def upsert_category_rule(
+    request: Request,
+    response: Response,
+    area_id: UUID,
+    data: CategoryRuleUpsert,
+    ctx: Ctx,
+    service: RuleService,
+) -> CategoryRuleRead:
+    """Regel anlegen/ersetzen (WP17, Spec L — Upsert auf (area, pattern)):
+    201 bei Anlage, 200 bei Ersetzung. Kategorisiert die SQLite-Rows der
+    Area-Tabellen rueckwirkend NEU (nur nicht-konfligierende Rows) und
+    protokolliert den Lauf im `audit_log` (`workarea.rules_reapplied`)."""
+    rule, created = await service.upsert_rule(ctx, area_id, data)
+    if created:
+        response.status_code = status.HTTP_201_CREATED
+    return rule
+
+
+@router.get("/work-areas/{area_id}/category-rules", dependencies=[Depends(enforce_mcp_read_limit)])
+async def list_category_rules(
+    area_id: UUID, ctx: Ctx, service: RuleService
+) -> list[CategoryRuleRead]:
+    """Regeln der Area (Spec L, inkl. inaktiver); fehlender Read-Grant → 404."""
+    return await service.list_rules(ctx, area_id)
