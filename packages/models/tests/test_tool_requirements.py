@@ -237,13 +237,14 @@ def test_every_capability_is_used_in_the_mapping() -> None:
 
 
 def test_mapping_covers_all_registered_server_tools() -> None:
-    # 71 `@with_tool_log("<name>")`-Registrierungen in apps/mcp (58 in
-    # server.py + 8 WorkArea-Tools aus `tools/workarea.py` + 5 KB-Tools aus
-    # `tools/kb.py`, WP8/WP9/ADR-0047 — Welle 7 zaehlt weiter 71 -> 81;
-    # `promote_artifact` kommt mit WP14 dazu, bis dahin unregistriert).
+    # 81 `@with_tool_log("<name>")`-Registrierungen in apps/mcp (58 in
+    # server.py + 8 WorkArea-Tools aus `tools/workarea.py` + 6 KB-Tools aus
+    # `tools/kb.py` inkl. `promote_artifact` + 9 Tabellen-/Timeline-Tools aus
+    # `tools/tables.py`, WP8/WP9/WP19 — ADR-0047/0049; damit ist die
+    # Welle-7-Zaehlung 71 -> 81 erreicht).
     # Neues Tool => hier + im Mapping ergaenzen; der Paritaetstest in apps/mcp
     # prueft die Gegenrichtung gegen den Server.
-    assert len(MCP_TOOL_REQUIREMENTS) == 71
+    assert len(MCP_TOOL_REQUIREMENTS) == 81
     always = {name for name, req in MCP_TOOL_REQUIREMENTS.items() if req.always}
     assert always == {"ping", "whoami"}
 

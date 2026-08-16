@@ -226,13 +226,32 @@ MCP_TOOL_REQUIREMENTS: dict[str, ToolRequirement] = {
     # --- Knowledge Base (ADR-0047, WP9) — kuratierte Wissensschicht aus
     #     `tools/kb.py`: Reads grant-dynamisch immer gelistet (API bleibt die
     #     Autoritaet), Node-Writes hinter `kb_write`, Kanten hinter
-    #     `kb_edge_write`. `promote_artifact` folgt erst mit WP14
-    #     (REST-Route + Registrierung; Requirement dann: resource_write).
+    #     `kb_edge_write`.
     "search_kb": _KB_READ,
     "create_node": _KB_WRITE,
     "update_node": _KB_WRITE,
     "create_edge": _KB_EDGE_WRITE,
     "neighbors": _KB_READ,
+    # `promote_artifact` (WP19 registriert, implementiert in `tools/kb.py`)
+    # ERZEUGT eine Resource-Draft — es haengt deshalb an `resource_write`,
+    # nicht an `workarea_write`/`kb_write`: wer kuratiertes Wissen anlegt,
+    # braucht die Resource-Schreibrechte (gleiches Gate wie `create_resource`).
+    "promote_artifact": _RESOURCE_WRITE,
+    # --- Tabellen & Zeitachse (ADR-0049, WP19) — `tools/tables.py`:
+    #     strukturierte Zahlen der WorkArea. Writes verlangen `workarea_write`
+    #     (die Tabellen liegen IN einer Area), die Reads laufen ueber die
+    #     grant-dynamische Domain "workarea" — auch `query_table`, das
+    #     technisch POST ist, semantisch aber ein Read (read-only als
+    #     Engine-Garantie).
+    "create_table": _WORKAREA_WRITE,
+    "insert_rows": _WORKAREA_WRITE,
+    "query_table": _WORKAREA_READ,
+    "describe_table": _WORKAREA_READ,
+    "save_query_result": _WORKAREA_WRITE,
+    "timeline": _WORKAREA_READ,
+    "set_convention": _WORKAREA_WRITE,
+    "upsert_category_rule": _WORKAREA_WRITE,
+    "list_category_rules": _WORKAREA_READ,
 }
 
 

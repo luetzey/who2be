@@ -9,8 +9,9 @@ zyklisch-sicher in BEIDE Richtungen und laesst den bestehenden
 Test-monkeypatch-Pfad (`monkeypatch.setattr(server, "build_client", ...)`)
 unveraendert greifen.
 
-Besonderheit WP9: `promote_artifact` (Tool 14) ist fertig implementiert,
-wird aber erst in WP14 registriert — seine REST-Route existiert noch nicht.
+`promote_artifact` (Tool 14) wurde hier in WP9 implementiert und wird seit
+WP19 registriert — seine REST-Route (`POST .../wa-artifacts/{id}/promote`)
+kam mit WP14.
 """
 
 from __future__ import annotations
@@ -242,9 +243,9 @@ def register(mcp: FastMCP) -> None:
         update_node,
         create_edge,
         neighbors,
+        # `promote_artifact` (WP9 implementiert) ist seit WP19 registriert —
+        # die REST-Route existiert (WP14) und `target_resource_id` geht als
+        # Query-Parameter raus (siehe `clients/kb.py`).
+        promote_artifact,
     ):
         mcp.tool(output_schema=None)(fn)
-    # promote_artifact wird in WP14 registriert (REST-Route folgt) — Tool- und
-    # Client-Funktion sind fertig; mit der Registrierung kommen dann auch der
-    # `tool_requirements`-Eintrag (resource_write, bestehende Capability), der
-    # `_TOOLS`-Eintrag im Prompt-Resolver und die Count-Guards (71 -> 72).

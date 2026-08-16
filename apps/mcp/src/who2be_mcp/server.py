@@ -33,6 +33,7 @@ from who2be_mcp.config import Settings, get_settings
 from who2be_mcp.core_logging import configure_logging, with_tool_log
 from who2be_mcp.policy_filter import PolicyFilterMiddleware
 from who2be_mcp.tools.kb import register as register_kb_tools
+from who2be_mcp.tools.tables import register as register_table_tools
 from who2be_mcp.tools.workarea import register as register_workarea_tools
 from who2be_models import (
     TRANSITION_RULE_DOC,
@@ -1615,10 +1616,11 @@ async def search_content(
 # Submodul-Registrierung (Architektur-Entscheidung 3.2, ADR-0047): neue
 # Domains leben als `tools/<domain>.py` + `clients/<domain>.py` und haengen
 # sich hier mit genau EINEM `register(mcp)`-Aufruf an, statt server.py weiter
-# wachsen zu lassen. WP19 (Tables) ergaenzt seinen Aufruf daneben.
+# wachsen zu lassen.
 # ---------------------------------------------------------------------------
 register_workarea_tools(mcp)
 register_kb_tools(mcp)
+register_table_tools(mcp)
 
 
 def main() -> None:

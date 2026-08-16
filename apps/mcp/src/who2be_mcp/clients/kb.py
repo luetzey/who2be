@@ -8,16 +8,14 @@ dieses Modul ist ein paket-internes Friend-Modul DESSELBEN Adapters (gleiche
 Fehler-Uebersetzung in `ToolError`, gleiche Timeouts), keine externe API.
 
 Pfade: Welle-2-Router `kb.py` unter `/v1/workspaces/{ws_id}`. Der
-Promote-Pfad (`POST .../wa-artifacts/{id}/promote`) bekommt seine REST-Route
-erst mit WP14 — die Client-Funktion steht hier schon bereit, das zugehoerige
-Tool bleibt bis dahin unregistriert (siehe `tools/kb.py::register`).
+Promote-Pfad (`POST .../wa-artifacts/{id}/promote`, Router `wa_artifacts.py`)
+existiert seit WP14; sein `target_resource_id` ist ein QUERY-Parameter — das
+Tool ist seit WP19 registriert.
 """
 
 from __future__ import annotations
 
 from uuid import UUID
-
-from pydantic import BaseModel, ConfigDict
 
 from who2be_mcp.client import ApiClient
 from who2be_models import (
@@ -77,29 +75,23 @@ async def neighbors(
     return [KbNeighbor.model_validate(item) for item in payload]
 
 
-class _PromoteRequest(BaseModel):
-    """Body fuer `POST .../wa-artifacts/{id}/promote` (WP14, Spec G).
-
-    Interims-Definition am Client: das kanonische Modell gehoert nach
-    `who2be_models.workarea`, die Datei liegt waehrend WP9 aber beim parallel
-    laufenden Security-WP. WP14 zieht die Definition dorthin um und verdrahtet
-    die REST-Route.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    target_resource_id: UUID | None = None
-
-
 async def promote_artifact(
     client: ApiClient, artifact_id: UUID, target_resource_id: UUID | None = None
 ) -> ResourceRead:
-    """`POST .../wa-artifacts/{id}/promote` — WorkArea-Artifact als
-    Resource-DRAFT kuratieren (nie direkt active, Spec G). Die REST-Route
-    kommt mit WP14; bis dahin bleibt das zugehoerige Tool unregistriert."""
+    """`POST .../wa-artifacts/{id}/promote?target_resource_id=` — WorkArea-
+    Artifact als Resource-DRAFT kuratieren (nie direkt active, Spec G).
+
+    `target_resource_id` ist ein QUERY-Parameter (Router `wa_artifacts.py`,
+    `Annotated[UUID | None, Query()]`), kein Body-Feld: die Route nimmt gar
+    keinen Body entgegen, ein mitgeschickter waere still ignoriert worden —
+    der Promote haette dann kommentarlos eine NEUE Resource angelegt, statt
+    die benannte zu ergaenzen. Der Request geht daher bewusst body-los raus.
+    """
+    params = None if target_resource_id is None else {"target_resource_id": str(target_resource_id)}
     payload = await client._write(
         "POST",
         f"{client._workspace_prefix}/wa-artifacts/{artifact_id}/promote",
-        _PromoteRequest(target_resource_id=target_resource_id),
+        None,
+        params=params,
     )
     return ResourceRead.model_validate(payload)
