@@ -309,6 +309,30 @@ das Löschen eines Artifacts (editor+).
 **DoD:** Python 1639 pytest / Coverage 90,98 %; Web 970 Vitest (Statements
 86,2 %, Branches 80,43 %); ruff/mypy/tsc/lint/build lokal grün.
 
+### Tabellen-Store war im Deployment unbenutzbar (2026-08-16, behoben)
+
+Beim Live-Test der Tabellen-Achse antwortete `create_table` mit **500**.
+Ursache war eine Folge meines eigenen Fixes aus PR #369: das dort ergaenzte
+Named Volume auf `/data/tablestore` legt Docker als `root:root` an, weil das
+Image das Verzeichnis nicht mitbringt — der API-Container laeuft aber als
+`USER who2be` (uid 1000). Damit scheiterte schon das `mkdir` in
+`tablestore/engine.py::_connect_rw` mit `PermissionError`.
+
+Der Volume-Fix hat also den stillen Datenverlust beseitigt und dabei das
+Schreiben ganz verhindert. Verifiziert war damals nur `docker compose
+config`, nie ein echter Schreibvorgang — die Luecke lag zwischen
+„Konfiguration korrekt" und „funktioniert".
+
+Zwei Teile behoben (PR #372):
+
+- `apps/api/Dockerfile` legt `/data/tablestore` im Image an und uebergibt es
+  dem Service-Nutzer; Docker uebernimmt Eigentuemer und Rechte beim ersten
+  Mount eines leeren Named Volume.
+- Neuer Reason `tablestore_unavailable` (503): Datei-/Rechte-Fehler des
+  Stores werden zentral uebersetzt (`services/wa_tables._store_failures`)
+  statt als nacktes 500 durchzulaufen. Der Detail-Text nennt die
+  Stellschraube, nicht Pfad oder OS-Fehler; die Ursache steht im Log.
+
 ## Bekannte Probleme
 
 - **Tabellen-Import kappt Zell-Breiten nicht** (gefunden 2026-08-16): der

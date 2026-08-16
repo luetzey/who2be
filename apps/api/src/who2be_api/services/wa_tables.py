@@ -55,7 +55,10 @@ from __future__ import annotations
 
 import csv
 import io
+import logging
 import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, date, datetime
 from typing import Final
 from uuid import UUID
@@ -110,6 +113,8 @@ from who2be_models.workarea import ARTIFACT_CONTENT_MAX_LENGTH
 
 # JSON-Zeilenwerte, die SQLite parametrisiert tragen kann — Listen/Objekte in
 # Zellen sind kein Tabellen-Datum (ADR-0049: kein json in Spalten).
+logger = logging.getLogger(__name__)
+
 _SCALAR_TYPES = (str, int, float, bool)
 
 
@@ -170,6 +175,63 @@ def _query_not_readonly(detail: str) -> ApiGateError:
             "(z. B. randomblob, load_extension, fts3_tokenizer) sind gesperrt."
         ),
     )
+
+
+def _tablestore_unavailable() -> ApiGateError:
+    """503, wenn der Store-Pfad nicht benutzbar ist (Deploy-/Rechte-Problem).
+
+    Der Detail-Text nennt bewusst NUR die Stellschraube, nicht den
+    OS-Fehler oder den Pfad — der Aufrufer ist im Zweifel ein Agent, und
+    ein Serverpfad ist fuer ihn weder verwertbar noch seine Sache. Die
+    echte Ursache steht im Log (`logger.error` an der Fangstelle).
+
+    `actionable_by='human'`: kein Retry hilft. Analog
+    `wa_ingest._blobstore_unconfigured` — dieselbe Familie „Infrastruktur
+    fehlt", damit ein Betreiber beide Faelle gleich erkennt.
+    """
+    return ApiGateError(
+        status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        reason="tablestore_unavailable",
+        actionable_by="human",
+        detail=(
+            "Der Tabellen-Store ist nicht beschreibbar — Tabellen sind auf "
+            "dieser Installation derzeit nicht verfuegbar. Betreiber: "
+            "`WHO2BE_TABLESTORE_DIR` pruefen (Existenz, Schreibrechte des "
+            "Service-Nutzers, gemountetes Volume)."
+        ),
+    )
+
+
+@contextmanager
+def _store_failures() -> Iterator[None]:
+    """Uebersetzt Datei-/Zugriffsfehler des Tabellen-Stores in ein 503.
+
+    Hintergrund: die Store-Pfade legen Verzeichnis und SQLite-Datei bei
+    Bedarf selbst an (`tablestore/engine.py::_connect_rw`). Ist das
+    Basisverzeichnis nicht beschreibbar — der klassische Fall ist ein
+    Named Volume, dessen Mount-Punkt root gehoert, waehrend der Container
+    unprivilegiert laeuft —, schlaegt schon das `mkdir` mit
+    `PermissionError` fehl. Ohne diese Uebersetzung liefe der nackte
+    OSError bis zum 500 durch, und ein Betreiber haette nichts als einen
+    Stacktrace.
+
+    Gefangen werden zwei Formen desselben Problems: `OSError` (mkdir,
+    Rechte, kein Platz) und die SQLite-Meldung „unable to open database
+    file", mit der die Engine dasselbe meldet, wenn sie erst beim
+    `connect` scheitert. Jede ANDERE `sqlite3.OperationalError` — allen
+    voran „already exists" — laeuft bewusst weiter: das sind fachliche
+    Faelle, keine Infrastruktur.
+    """
+    try:
+        yield
+    except OSError as exc:
+        logger.error("Tabellen-Store nicht benutzbar: %s", exc, exc_info=True)
+        raise _tablestore_unavailable() from exc
+    except sqlite3.OperationalError as exc:
+        if "unable to open database file" not in str(exc):
+            raise
+        logger.error("Tabellen-Store nicht oeffenbar: %s", exc, exc_info=True)
+        raise _tablestore_unavailable() from exc
 
 
 def _result_too_large() -> ApiGateError:
@@ -472,9 +534,10 @@ class WaTableService:
             if created is None:
                 raise _name_conflict(data.name)
             try:
-                await self._store.create_table(
-                    ctx.workspace_id, area_id, data.name, _column_specs(data.schema_)
-                )
+                with _store_failures():
+                    await self._store.create_table(
+                        ctx.workspace_id, area_id, data.name, _column_specs(data.schema_)
+                    )
             except sqlite3.OperationalError as exc:
                 if "already exists" in str(exc):
                     # SQLite-Tabelle ohne Katalog-Zeile (WP12-Hinweis) — als
@@ -534,15 +597,16 @@ class WaTableService:
             str(data.source_artifact_id) if data.source_artifact_id is not None else None
         )
         try:
-            result = await self._store.insert_rows(
-                ctx.workspace_id,
-                table.area_id,
-                table.name,
-                column_names,
-                data.rows,
-                lambda row: row_hash(row, dedupe_columns),
-                source_artifact=source_artifact,
-            )
+            with _store_failures():
+                result = await self._store.insert_rows(
+                    ctx.workspace_id,
+                    table.area_id,
+                    table.name,
+                    column_names,
+                    data.rows,
+                    lambda row: row_hash(row, dedupe_columns),
+                    source_artifact=source_artifact,
+                )
         except sqlite3.IntegrityError as exc:
             # Backstop hinter der Vorab-Validierung (z. B. Typ-Kollision) —
             # Aufruferfehler, kein Serverzustand.

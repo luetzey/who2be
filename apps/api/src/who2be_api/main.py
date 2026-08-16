@@ -152,6 +152,7 @@ _PROBLEM_TITLES: dict[str, str] = {
     "ingest_too_large": "Ingest abgelehnt: Datei zu gross",
     "url_forbidden": "URL nicht erlaubt",
     "blobstore_unconfigured": "Blob-Storage nicht konfiguriert",
+    "tablestore_unavailable": "Tabellen-Store nicht beschreibbar",
 }
 
 
