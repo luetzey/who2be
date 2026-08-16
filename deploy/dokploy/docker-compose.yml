@@ -14,8 +14,13 @@
 #
 # Pflicht-Env (in Dokploy → Environment): DOMAIN, POSTGRES_PASSWORD, JWT_SECRET
 # (>=32 Zeichen), VITE_SUPABASE_ANON_KEY (JWT role=anon, signiert mit JWT_SECRET
-# via scripts/gen_test_jwt.py). Fuer einen Staging-Smoke ohne SMTP:
+# via scripts/gen_test_jwt.py), MINIO_ROOT_PASSWORD (Objekt-Store, ADR-0048 —
+# ohne Wert bricht der Stack bewusst ab). Fuer einen Staging-Smoke ohne SMTP:
 # GOTRUE_MAILER_AUTOCONFIRM=true.
+#
+# Persistente Nutzdaten liegen in DREI Volumes: db-data (Postgres),
+# minio-data (Blobs, ADR-0048) und tablestore-data (SQLite je WorkArea,
+# ADR-0049). Alle drei muessen ein Redeploy ueberleben.
 
 services:
   db:
@@ -148,6 +153,43 @@ services:
     networks: [who2be]
     restart: "no"
 
+  # Content-addressed Blob-Storage fuer den WorkArea-Ingest (ADR-0048).
+  # BEWUSST NICHT im dokploy-network und ohne Traefik-Labels: der Objekt-Store
+  # ist ein internes Backend, keine oeffentliche Flaeche. Die App erreicht ihn
+  # ueber das `who2be`-Netz; wer die Console braucht, tunnelt (RUNBOOK).
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-who2be}
+      # KEIN Default: ein Objekt-Store mit `minioadmin` waere in einer
+      # oeffentlich deployten Umgebung eine offene Tuer. Fehlt die Variable,
+      # bricht `docker compose up` mit dieser Meldung ab — fail closed.
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD setzen (Objekt-Store-Passwort)}
+    volumes:
+      - minio-data:/data
+    networks: [who2be]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Einmal-Service: legt den Bucket an (idempotent). Muster wie `db-roles`.
+  minio-bootstrap:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-who2be} ${MINIO_ROOT_PASSWORD} &&
+      mc mb --ignore-existing local/${WHO2BE_BLOBSTORE_BUCKET:-who2be-blobs} &&
+      echo 'Bucket bereit.'"
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks: [who2be]
+    restart: "no"
+
   api:
     build:
       context: ../..
@@ -163,8 +205,25 @@ services:
       OAUTH_ISSUER_URL: https://api.${DOMAIN}
       OAUTH_CONSENT_URL: https://app.${DOMAIN}/oauth/consent
       MCP_RESOURCE_URL: https://mcp.${DOMAIN}/mcp
+      # WorkArea-Ingest (ADR-0048): Endpoint ist host:port OHNE Schema; im
+      # Compose-Netz unverschluesselt (SECURE=false) — der Verkehr verlaesst
+      # das interne Netz nicht. Ohne diese Werte liefern NUR Ingest und
+      # Blob-Reads 503; alles andere laeuft.
+      WHO2BE_BLOBSTORE_ENDPOINT: minio:9000
+      WHO2BE_BLOBSTORE_ACCESS_KEY: ${MINIO_ROOT_USER:-who2be}
+      WHO2BE_BLOBSTORE_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      WHO2BE_BLOBSTORE_BUCKET: ${WHO2BE_BLOBSTORE_BUCKET:-who2be-blobs}
+      WHO2BE_BLOBSTORE_SECURE: "false"
+      # Tabellen-Store (ADR-0049): eine SQLite-Datei je WorkArea. MUSS auf ein
+      # Volume zeigen — ohne den Mount lebt der Store im Container und ist nach
+      # jedem Redeploy weg (stiller Datenverlust statt Fehlermeldung).
+      WHO2BE_TABLESTORE_DIR: /data/tablestore
+    volumes:
+      - tablestore-data:/data/tablestore
     depends_on:
       migrate:
+        condition: service_completed_successfully
+      minio-bootstrap:
         condition: service_completed_successfully
     networks: [who2be, dokploy-network]
     restart: unless-stopped
@@ -255,3 +314,8 @@ networks:
 
 volumes:
   db-data:
+  # Objekt-Store (ADR-0048) und Tabellen-Store (ADR-0049) sind Nutzdaten wie
+  # die DB — beide MUESSEN persistent sein, sonst verliert jeder Redeploy
+  # Blobs bzw. Area-Tabellen.
+  minio-data:
+  tablestore-data:
