@@ -69,6 +69,13 @@ class AgentCapability(StrEnum):
     # ExternalTool-Aggregat schreiben (WP-3, ADR-0039-Muster). Default aus
     # (secure by default) — analog den anderen Domain-Write-Capabilities.
     external_tool_write = "external_tool_write"
+    # WorkArea-Artifacts schreiben (create/append/patch/ingest/delete, ADR-0047).
+    workarea_write = "workarea_write"
+    # Knowledge-Base-Nodes schreiben (create/update, belegpflichtig, ADR-0047).
+    kb_write = "kb_write"
+    # Knowledge-Base-Kanten anlegen (getrennt von `kb_write`: Kanten sind im
+    # MVP nicht loeschbar — eigene, bewusst vergebene Capability, ADR-0047).
+    kb_edge_write = "kb_edge_write"
 
 
 _TRANSITION_DOMAINS = ("persona", "playbook", "resource", "external_tool")
@@ -175,6 +182,15 @@ class AgentToolPolicy(BaseModel):
     # ExternalTool-Aggregat schreiben (WP-3). Default aus (secure by default),
     # analog persona_write/playbook_write/resource_write.
     external_tool_write: bool = False
+    # WorkArea-Artifacts schreiben (ADR-0047). Default aus (secure by default);
+    # die feinere Area-Ebene (welche Area?) entscheiden die dynamischen
+    # Area-Grants serverseitig — die Capability ist nur der An/Aus-Schalter.
+    workarea_write: bool = False
+    # Knowledge-Base-Nodes schreiben (ADR-0047). Default aus (secure by default).
+    kb_write: bool = False
+    # Knowledge-Base-Kanten anlegen (ADR-0047). Default aus (secure by default);
+    # getrennt von `kb_write`, da Kanten im MVP nicht loeschbar sind.
+    kb_edge_write: bool = False
     # Optionale Pro-Domain-Verfeinerung von `promote_retire` (ADR-0039).
     # Leer = ungeteilt (Backward-Compat). Keys: persona/playbook/resource/
     # external_tool (WP-3).
@@ -288,6 +304,9 @@ class AgentToolPolicy(BaseModel):
             "feedback_resolve",
             "promote_retire",
             "external_tool_write",
+            "workarea_write",
+            "kb_write",
+            "kb_edge_write",
         )
         if not all(not getattr(self, name) or getattr(other, name) for name in bool_fields):
             return False

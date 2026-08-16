@@ -62,6 +62,27 @@ _DEFAULT_POLICY_TOOLS = {
     # whoami-Payload unten), also sind die ExternalTool-Reads Default sichtbar.
     "list_external_tools",
     "get_external_tool",
+    # WP8 (ADR-0047): die WorkArea-Reads haengen an dynamischen Area-Grants
+    # (Domain "workarea", kein ReadScope) und sind damit Default sichtbar;
+    # die Write-Tools (create/append/patch/delete/ingest) bleiben ohne
+    # `workarea_write` unsichtbar.
+    "read_artifact",
+    "list_artifacts",
+    "search_workarea",
+    # KB-Reads (WP9, Domain "kb"): sichtbar wie die WorkArea-Reads; die
+    # Write-Tools (create_node/update_node/create_edge) bleiben ohne
+    # `kb_write`/`kb_edge_write` unsichtbar. `promote_artifact` haengt an
+    # `resource_write` und fehlt der Default-Policy ebenfalls.
+    "search_kb",
+    "neighbors",
+    # WP19 (ADR-0049): die Tabellen-/Timeline-Reads liegen in der Domain
+    # "workarea" (auch `query_table` — technisch POST, semantisch Read) und
+    # sind damit Default sichtbar; create_table/insert_rows/save_query_result/
+    # set_convention/upsert_category_rule brauchen `workarea_write`.
+    "query_table",
+    "describe_table",
+    "timeline",
+    "list_category_rules",
 }
 
 _ALL_CAPABILITIES = [
@@ -74,6 +95,9 @@ _ALL_CAPABILITIES = [
     "feedback_resolve",
     "promote_retire",
     "external_tool_write",
+    "workarea_write",
+    "kb_write",
+    "kb_edge_write",
 ]
 
 
@@ -189,7 +213,9 @@ def test_full_policy_agent_sees_all_tools(monkeypatch: pytest.MonkeyPatch) -> No
     _install_identity(monkeypatch, _whoami_handler(payload))
     names = _list_tool_names()
     assert names == set(MCP_TOOL_REQUIREMENTS)
-    assert len(names) == 58
+    # 58 server.py-Tools + 8 WorkArea-Tools (WP8) + 6 KB-Tools (WP9, inkl.
+    # `promote_artifact` seit WP19) + 9 Tabellen-/Timeline-Tools (WP19).
+    assert len(names) == 81
 
 
 def test_resource_read_none_hides_resource_tools(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -249,7 +275,8 @@ def test_unrestricted_admin_sees_all_tools(monkeypatch: pytest.MonkeyPatch) -> N
     names = _list_tool_names()
     memory_tools = {name for name, req in MCP_TOOL_REQUIREMENTS.items() if req.memory is not None}
     assert names == set(MCP_TOOL_REQUIREMENTS) - memory_tools
-    assert len(names) == 55
+    # 81 Tools minus die 3 Memory-Tools (ohne Agent-Bindung kein Namespace).
+    assert len(names) == 78
 
 
 def test_unrestricted_viewer_sees_no_write_tools(monkeypatch: pytest.MonkeyPatch) -> None:

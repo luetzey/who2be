@@ -30,6 +30,20 @@ ProblemReason = Literal[
     "concurrent_conflict",
     "composite_child_inactive",
     "managed_aggregate",
+    # WorkArea + Knowledge Base (ADR-0047/0048/0049, Plan 2026-08-13):
+    "rev_conflict",  # 409 — Artifact-Patch mit veralteter expected_rev
+    "evidence_missing",  # 422 — Kante ohne Evidence auf beiden Seiten
+    "anchor_unresolvable",  # 422 — Anker/Beleg-Referenz nicht aufloesbar
+    "tier_upgrade_forbidden",  # 422 — unzulaessige Tier-Hochstufung
+    "correlation_underpowered",  # 422 — co_occurs_with mit n < 20 (detail: n)
+    "area_forbidden",  # 403 — Write auf lesbare Area ohne Write-Grant
+    "query_not_readonly",  # 403 — Tabellen-Query will schreiben (Authorizer)
+    "convention_missing",  # 422 — Import ohne Quell-Konvention
+    "rule_required",  # 422 — Kategorie ohne matchende aktive Regel
+    "ingest_unsupported",  # 422 — Ingest-Format nicht unterstuetzt
+    "ingest_too_large",  # 413 — Ingest ueber dem Byte-Limit
+    "url_forbidden",  # 403 — URL vom SSRF-Guard geblockt
+    "blobstore_unconfigured",  # 503 — Blob-Storage nicht konfiguriert
 ]
 
 # Wer den Fehler beheben kann: `agent` = der aufrufende Agent kann es selbst

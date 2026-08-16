@@ -117,6 +117,104 @@ inkrementeller Snapshots ist nicht praktikabel.
 
 ---
 
+## 4a · Agenten-Arbeitsbereich: WorkArea, Knowledge Base, Tabellen, Blobs
+
+Der Agenten-Arbeitsbereich (ADR-0047/0048/0049) haelt Daten in **vier
+Speichern** statt nur in Postgres — Loeschung heisst hier deshalb: alle vier
+Wege gehen. Der `who2be-purge`-Lauf deckt sie ab (`core/purge.py`,
+Abschnitt „WorkArea-/KB-Retention"), zusaetzlich zu den Loeschpfaden aus §1.
+
+| Objekt | Speicher | Loeschung beim Org-/Account-Purge | Laufende Retention |
+|---|---|---|---|
+| `work_area` / `work_area_grant` | Postgres | CASCADE ueber `workspace` | — |
+| `wa_artifact` (doc-Blockliste, Metadaten) | Postgres | CASCADE ueber `work_area` | `cleanup_expired_artifacts` (s. u.) |
+| `wa_chunk` (Such-Passagen) | Postgres | CASCADE ueber `wa_artifact` | mit dem Artifact |
+| `wa_blob` (Katalog: sha256/Groesse/Media-Type/Storage-Key) | Postgres | **kein** FK auf `workspace` → bleibt stehen, faellt ueber `cleanup_orphan_blobs` | `cleanup_orphan_blobs` (>24 h, unreferenziert) |
+| Blob-**Objekte** (Binaerinhalte) | MinIO/S3 (`blobs/{workspace_id}/{sha256}`) | nicht vom DB-CASCADE erfasst → `cleanup_orphan_blobs` | s. „Blob-Sweep" |
+| `wa_table` / `wa_category_rule` / `wa_source_convention` (Katalog) | Postgres | CASCADE ueber `work_area` | — |
+| Tabellen-**Zeilen** | SQLite-Datei je Area (`WHO2BE_TABLESTORE_DIR/{workspace_id}/{area_id}.sqlite`) | nicht vom DB-CASCADE erfasst → `cleanup_deleted_area_stores` bzw. Betreiber-Schritt | s. „SQLite-Dateien" |
+| `kb_node` / `kb_edge` / `kb_edge_evidence` / `kb_node_source_area` / `kb_conflict` | Postgres | `kb_node_source_area` CASCADE ueber `work_area`; die KB-Kerntabellen tragen **keinen** FK auf `workspace` und sind beim Workspace-Purge explizit zu loeschen | — |
+| `agent_access_log` | Postgres | **explizites DELETE** im Purge (s. u.) | — |
+
+### Retention-Semantik von `retention_days`
+
+- `work_area.retention_days` ist die Aufbewahrungsfrist **der Area**, nicht des
+  einzelnen Artifacts.
+- **Default ist `NULL` = unbegrenzt** — und zwar fuer *alle* Areas, auch fuer
+  private Agenten-Areas. Ein Agent verliert seinen Arbeitsstand nicht
+  stillschweigend; wer eine Frist will, setzt sie ausdruecklich.
+- Gerechnet wird auf `wa_artifact.created_at` (Zeitpunkt der Ablage), **nicht**
+  auf `occurred_at` (fachlicher Zeitpunkt, darf beliebig weit zurueckliegen).
+- Faellige Artifacts werden **geloescht, nicht anonymisiert** — sie sind
+  Arbeitsmaterial, kein Audit-Nachweis. Die `wa_chunk`-Passagen fallen per
+  CASCADE mit, die Suche verliert sie im selben Zug.
+- Der Sweep ist idempotent und laeuft DB-weit als Owner; ein Lauf ohne faellige
+  Artifacts ist ein No-op.
+
+### Blob-Sweep (zwei Richtungen)
+
+Katalog (`wa_blob`) und Objekt-Storage sind getrennte Systeme; jede Seite kann
+ohne die andere zurueckbleiben. `cleanup_orphan_blobs` raeumt beide:
+
+1. **Zeile ohne Artifact:** kein `wa_artifact.content_ref`/`blob_sha256` zeigt
+   mehr auf den Blob **und** die Zeile ist aelter als **24 h** → Zeile loeschen,
+   danach das Objekt. Diese Reihenfolge ist Absicht: ein liegengebliebenes
+   Objekt faengt Sweep 2 ein, eine ueberlebende Zeile zeigte dagegen ins Leere.
+2. **Objekt ohne Zeile:** Rueckstand einer gescheiterten Ingest-Transaktion
+   (der Blob-PUT liegt *vor* dem COMMIT). Geloescht wird nur, was **aelter als
+   24 h** ist — waehrend eines laufenden Ingests existiert ein Objekt ohne
+   Katalog-Zeile voellig regulaer, und seine Loeschung waere Datenverlust. Das
+   Alter liefert der Storage (`last_modified`); ein Store ohne Zeitquelle wird
+   nicht aufgeraeumt.
+   *Deckelung:* pro Lauf hoechstens `ORPHAN_OBJECT_DELETE_LIMIT` Loeschungen,
+   pro Workspace hoechstens `ORPHAN_OBJECT_SCAN_LIMIT` gelistete Keys — der
+   Purge laeuft neben dem Betrieb, nicht im Wartungsfenster. Was liegen bleibt,
+   nimmt der naechste Lauf.
+   *Bekannte Luecke:* gescopet wird auf Workspaces, die im Katalog vorkommen.
+   Ein Workspace, dessen **allererster** Ingest scheitert, hat nie eine
+   `wa_blob`-Zeile und faellt aus dem Scope; sein einzelnes Objekt bleibt
+   liegen (Betreiber-Bereinigung ueber die Bucket-Uebersicht).
+
+**Ohne konfigurierten BlobStore** (ADR-0048: der Normalfall einer Installation
+ohne Objekt-Storage) laeuft nur Sweep 1 — die Katalog-Zeilen verschwinden, die
+Objekte bleiben unberuehrt; der Lauf vermerkt das in seiner Zusammenfassung.
+
+### SQLite-Dateien der Tabellen-Stores
+
+Die Zeilen der Agenten-Tabellen liegen in **Dateien**, nicht in Postgres, und
+haengen an keinem FK: ein `DELETE FROM work_area` laesst die Datei stehen.
+`cleanup_deleted_area_stores` ist der Gegenpart und entfernt Datei + WAL/SHM
+jeder Area, die es in `work_area` nicht mehr gibt.
+
+**Bewusst zurueckhaltend:** angefasst wird ein Workspace-Verzeichnis nur, wenn
+sein Name eine UUID ist **und** ein Workspace mit dieser ID existiert. Grund
+ist der teuerste Fehlfall: liefe der Purge versehentlich gegen die falsche
+(z. B. frisch migrierte, leere) Datenbank, saehe *jedes* Verzeichnis wie ein
+geloeschter Workspace aus. Die Regel „unbekannt heisst Finger weg" macht daraus
+eine Warnzeile statt eines Totalverlusts.
+
+> ⚠️ **Kehrseite — Betreiber-Pflicht:** Nach einem Org-/Workspace-**Hard-Purge**
+> existiert der Workspace nicht mehr, sein Verzeichnis bleibt damit
+> ausserhalb des automatischen Sweeps und wird nur **gemeldet**
+> (`unknown_store_dirs` in der Purge-Zusammenfassung, WARNING im Log). Die
+> Verzeichnisse sind im Anschluss an einen Hard-Purge **manuell zu loeschen**;
+> siehe [`RUNBOOK.md` §Tabellen-Store](../../deploy/hetzner/RUNBOOK.md#tabellen-store-backup-sqlite-je-workarea).
+> `<PLATZHALTER: Betreiber bestaetigt das Verfahren + Frist fuer die manuelle
+> Nachbereinigung>`.
+
+### Zugriffslog (`agent_access_log`)
+
+Das Log haelt fest, **welcher Agent wann welches Element gelesen/geschrieben
+hat** — inkl. Modell-Anbieter/-Name zum Zugriffszeitpunkt (Snapshot). Es haengt
+seit Migration 0080 **nicht** am Agent-CASCADE (`ON DELETE NO ACTION`), damit
+ein normaler API-Delete das Compliance-Protokoll nicht mitnimmt. Der
+**Hard-Purge ist der legitime Loeschpfad** und entfernt die Zeilen des
+Workspace explizit, *bevor* die Organization-CASCADE die Agenten erreicht
+(`repositories/account_repository.py`, `_PURGE_ACCESS_LOG_SQL`).
+Zweck und Auswertung: [agent-access-log.md](./agent-access-log.md).
+
+---
+
 ## 5 · Server-Logs / Zugriffsdaten
 
 Reverse-Proxy-/App-Logs (IP, User-Agent, Zeitstempel) liegen ausserhalb der DB
@@ -135,6 +233,11 @@ Retention (z. B. 7–30 Tage) + Rotationsverfahren>`.
 | `usage_event.actor_id`, `agent_feedback.actor_id` (0053) | Eintrag dauerhaft (Kurations-Aggregate) | beim Purge **anonymisiert** (Sentinel) |
 | OAuth-Authorization-Codes (`oauth_authorization_code`, 0049) | 60 s TTL, single-use | laufender Cleanup (`cleanup_expired_oauth`: abgelaufen ODER konsumiert) + Loeschung der User-Zeilen beim Account-Purge |
 | OAuth-Refresh-Tokens (`oauth_refresh_token`, 0049) | 30 Tage TTL, rotierend | laufender Cleanup (`cleanup_expired_oauth`: abgelaufen) + CASCADE-Loeschung beim Account-Purge (`api_token`) |
+| WorkArea-Artifacts + Chunks (`wa_artifact`/`wa_chunk`) | Area-Frist `retention_days`; **Default `NULL` = unbegrenzt** (auch privat) | `cleanup_expired_artifacts` (Loeschung, keine Anonymisierung) |
+| Blob-Katalog + Objekte (`wa_blob`, MinIO/S3) | bis unreferenziert + 24 h | `cleanup_orphan_blobs` (Zeile → Objekt; Objekt-Sweep nur mit Storage-Zeitstempel) |
+| Tabellen-Zeilen (SQLite je Area) | bis Area geloescht | `cleanup_deleted_area_stores`; nach Workspace-Hard-Purge **manueller** Betreiber-Schritt |
+| Knowledge Base (`kb_node`/`kb_edge`/…) | bis Loeschung des Workspace | Loeschung (kein `workspace`-FK → explizit) |
+| `agent_access_log` | Eintrag dauerhaft (Compliance-Nachweis) | beim Purge **geloescht** (expliziter DELETE vor der Org-CASCADE) |
 | `entitlement_history` | gesetzliche Frist (§147 AO/§14b UStG) | **keine** Loeschung im Purge; Loeschung erst nach Frist |
 | Backups lokal / Offsite | 7 Tage / bis 6 Monate | Retention-Ablauf + Restore-only-Re-Deletion |
 | Server-Logs | `<PLATZHALTER>` | Log-Rotation |
@@ -156,3 +259,19 @@ Retention (z. B. 7–30 Tage) + Rotationsverfahren>`.
   `usage_event`/`agent_feedback` (append-only, `actor_id`).
 - `deploy/hetzner/scripts/backup.sh` — Backup-Retention.
 - ADR-0031 — Append-only/Anonymisierung/Aufbewahrungs-Abwaegung.
+
+**Agenten-Arbeitsbereich (§4a, Stand 2026-08-16):**
+
+- `apps/api/src/who2be_api/core/purge.py` — `cleanup_expired_artifacts()`,
+  `cleanup_orphan_blobs()`, `cleanup_deleted_area_stores()`,
+  `run_retention_sweeps()`.
+- `apps/api/src/who2be_api/migrations/0073_work_area.sql` — `retention_days`.
+- `apps/api/src/who2be_api/migrations/0075_wa_blob.sql` — Blob-Katalog
+  (kein `workspace`-FK).
+- `apps/api/src/who2be_api/migrations/0079_agent_access_log.sql` +
+  `0080_agent_access_log_hardening.sql` — Zugriffslog, FK `NO ACTION`.
+- `apps/api/src/who2be_api/tablestore/engine.py` — `delete_area_store()`,
+  `snapshot_to()` (`VACUUM INTO`).
+- `apps/api/src/who2be_api/services/gdpr_export_service.py` — Art.-20-Buendel
+  inkl. WorkArea/KB/Tabellen/Zugriffslog.
+- ADR-0047/0048/0049 — WorkArea+KB, Blob-Storage, Tabellen-Store.

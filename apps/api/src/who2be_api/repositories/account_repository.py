@@ -160,9 +160,23 @@ class PgAccountPurgeRepository:
         )
         return [row["id"] for row in rows]
 
+    # Zugriffslog-Zeilen der Workspaces einer Org. Seit Migration 0080 haelt
+    # der FK `agent_access_log.agent_id` den Agent-Delete auf (ON DELETE NO
+    # ACTION statt CASCADE, Security-Review H5) — sonst raeumte ein normaler
+    # API-Delete das Compliance-Protokoll mit ab. Der Purge ist der LEGITIME
+    # Loeschpfad (Owner-Connection, DSGVO-Erasure) und muss die Zeilen daher
+    # selbst entfernen, BEVOR die Organization-CASCADE die Agenten erreicht.
+    _PURGE_ACCESS_LOG_SQL = (
+        "DELETE FROM agent_access_log WHERE workspace_id IN "
+        "(SELECT id FROM workspace WHERE org_id = $1)"
+    )
+
     async def purge_organization(self, org_id: UUID) -> None:
-        # CASCADE raeumt Workspaces, Entities, Versionen, Entitlement + Usage.
-        await self._conn.execute("DELETE FROM organization WHERE id = $1", org_id)
+        # CASCADE raeumt Workspaces, Entities, Versionen, Entitlement + Usage;
+        # das Zugriffslog haengt bewusst NICHT am Cascade (s. o.).
+        async with self._conn.transaction():
+            await self._conn.execute(self._PURGE_ACCESS_LOG_SQL, org_id)
+            await self._conn.execute("DELETE FROM organization WHERE id = $1", org_id)
 
     async def expired_accounts(self, now: datetime) -> list[UUID]:
         rows = await self._conn.fetch(
@@ -193,6 +207,14 @@ class PgAccountPurgeRepository:
             Aufbewahrung §14b UStG / §147 AO, ADR-0031).
         """
         async with self._conn.transaction():
+            personal_org = await self._conn.fetchval(
+                "SELECT id FROM organization WHERE kind = 'personal' AND slug = $1",
+                str(user_id),
+            )
+            if personal_org is not None:
+                # Zugriffslog VOR der Org-CASCADE (s. `purge_organization`):
+                # der FK auf `agent` blockiert seit 0080 sonst den Delete.
+                await self._conn.execute(self._PURGE_ACCESS_LOG_SQL, personal_org)
             await self._conn.execute(
                 "DELETE FROM organization WHERE kind = 'personal' AND slug = $1",
                 str(user_id),

@@ -529,3 +529,135 @@ bleiben)._
   Rolle, nicht das Handwerk — die Konventionen sind die Single-Source, die
   Persona verweist nur); Chunk-Rebuild bei jedem App-Start (unnötige Last ohne
   Content-Änderung).
+
+## 2026-08-13 — Agent WorkArea + Knowledge Base — MVP-Zuschnitt
+- **Entscheidung (7 User-Entscheidungen, bindend):**
+  1. **Scope:** Phase 1 (A–E) und Phase 2 (F–G, K–N, O) gleich detailliert in
+     einem Plan.
+  2. **Verortung:** bestehender Stack — apps/api + apps/mcp + packages/models,
+     Workspace-Tenancy, dieselbe Postgres-DB.
+  3. **Blob-Storage:** MinIO/S3-kompatibel, content-addressed (SHA-256),
+     neuer Compose-Dienst.
+  4. **Kontodaten:** Ausgaben-Analyst läuft gegen Cloud-API — mit
+     Lauf-Protokoll; Konto-Ingest bleibt in Phase 2.
+  5. **Private Areas:** Menschen ab Rolle `editor` lesen alles (auch private
+     Agent-Areas); „privat" heißt privat gegenüber anderen **Agenten**.
+     Viewer sehen nur shared Areas.
+  6. **Lauf-Protokoll:** Auto-Zugriffslog + Modell-Config am Agenten — der
+     Server loggt jeden Agent-Zugriff automatisch (append-only, dedupliziert
+     pro Element+Tag); `model_provider`/`model_name` sind betreiber-gepflegte,
+     auditierte Felder am Agenten. Kein `record_run`-Selbstauskunfts-Tool.
+  7. **Auswertung:** Kein serverseitiges Chart-Rendering — stattdessen
+     `query_table` mit Format-Wahl + `save_query_result` (Server persistiert
+     Query + eingefrorenes Ergebnis als doc-Artifact; Zahlen schreibt der
+     Server, nie das Modell).
+- **Begründung:** WorkArea/KB sind Kontext-Speicher für Agenten (kein
+  CMS/Wiki, kein Runtime-Host); das Resource-Aggregat bleibt unangetastet,
+  `promote_artifact` ist die einzige Brücke.
+- **Detail:** ADR-0047 (Umbrella), ADR-0048 (Blob-Storage), ADR-0049
+  (Tabellen-Store); Plan
+  `.claude/plan/2026-08-13-1200_agent-workarea-knowledge-base.md`.
+
+## 2026-08-16 — Security-Review Phase 2 (Tabellen-Store, Zugriffslog, Promote)
+- **Entscheidung:**
+  1. **Freies Agenten-SQL bekommt Ressourcen-Grenzen, nicht nur ein
+     Schreibverbot:** Zeitbudget je Query (`set_progress_handler`,
+     `WHO2BE_TABLESTORE_QUERY_TIMEOUT_MS`, Default 5000 ms), Zell-Cap
+     (`SQLITE_LIMIT_LENGTH` 1 MB) und Result-Byte-Budget (2 MB). `describe`
+     teilt alle drei (dieselbe ro-Connection).
+  2. **Authorizer prüft Funktions-NAMEN** statt `SQLITE_FUNCTION` pauschal zu
+     erlauben — `fts3_tokenizer` (roher Pointer-Zugriff, verifiziert) war
+     sonst erreichbar. Allowlist empirisch gegen sqlite 3.45.1 verifiziert;
+     `cast` gehört nicht hinein (Opcode), Window-Funktionen schon.
+  3. **Timeout ohne neuen `ProblemReason`:** 408 über den generischen
+     Domain-Exception-Weg. Die Taxonomie beschreibt Berechtigungs-/
+     Zustandsgründe; Kosten sind keiner davon, und kein Agent muss darauf
+     verzweigen. Größen-Grenzen dagegen nutzen das bestehende
+     `ingest_too_large` (413).
+  4. **Compliance-Attribution ist menschlich:** `model_provider`/`model_name`
+     sind für agent-gebundene Tokens gesperrt (403), das Zugriffslog
+     snapshottet sie zum Zugriffszeitpunkt (Migration 0080). Das Agent-UPDATE
+     bleibt sonst agent-fähig — es ganz zu sperren bräche den Builder-Pfad.
+  5. **Append-only gilt auch gegen FK-Cascade:** `agent_access_log.agent_id`
+     auf `ON DELETE NO ACTION`. Konsequenz (gewollt): Agenten mit
+     protokollierten Zugriffen sind nicht löschbar (409); Purge und
+     Test-Teardown räumen als Owner explizit vor der Org-CASCADE auf.
+  6. **M1 war bereits geschlossen:** ein aktiver ungebundener Token ist seit
+     Migration 0048 per CHECK unmöglich. Das neue Router-Gate
+     (`require_agent_bound_token`) ist Defense-in-Depth für den Fall, dass
+     ein Kontext ohne Agent-Bindung anders entsteht.
+- **Begründung:** Read-only ist eine Aussage über Wirkung, nicht über Kosten;
+  und ein Compliance-Journal, das der Protokollierte selbst löschen oder
+  umschreiben kann, ist keines.
+- **Detail:** ADR-0047 §Nachtrag 2026-08-16; Migration 0080;
+  `apps/api/tests/test_security_fixes_phase2.py`.
+
+## 2026-08-16 — Umsetzungs-Entscheidungen WorkArea/KB (Wellen 1–7, nicht im Plan)
+- **Entscheidung:**
+  1. **SQLite-Funktions-Allowlist statt pauschalem `SQLITE_FUNCTION`:** der
+     Authorizer entscheidet über den Funktions-NAMEN (`arg2`), nicht über den
+     Opcode. Ein pauschales OK hätte jede eingebaute Funktion freigegeben —
+     inklusive `fts3_tokenizer` (roher C-Pointer, les- UND schreibbar) und
+     `randomblob`/`zeroblob` als Speicher-DoS. Die Liste ist empirisch gegen
+     sqlite 3.45.1 verifiziert: `cast` ist ein Opcode und gehört nicht hinein,
+     Window-Funktionen laufen sehr wohl als `SQLITE_FUNCTION` und müssen
+     gelistet sein. JSON-Funktionen bleiben draußen — Zellen tragen laut
+     ADR-0049 kein JSON, also gibt es keinen Bedarf, der die zusätzliche
+     Parser-Angriffsfläche rechtfertigt.
+  2. **Menschen-Vorbehalt auf der Modell-Konfiguration:** `model_provider`/
+     `model_name` am Agenten dürfen agent-gebundene Tokens nicht setzen (403).
+     Sonst schriebe sich der Protokollierte seinen eigenen
+     Compliance-Nachweis. Gleiches Prinzip bei Area-Grants: Rechtevergabe ist
+     Menschen-Sache, kein Agent erweitert seinen eigenen Zugriff.
+  3. **Zugriffslog als Snapshot, nicht als Join:** `sensitivity_at_access` und
+     die Modell-Angaben werden zum Zugriffszeitpunkt in die Log-Zeile kopiert
+     statt später über den aktuellen Stand gejoint. Eine spätere Umstufung
+     eines Artifacts (general → sensitive) darf die Vergangenheit nicht
+     umschreiben; die Frage lautet „was galt damals", nicht „was gilt heute".
+  4. **Agent-gebundene Tokens auf allen WorkArea-Routen:**
+     `require_agent_bound_token` als Router-Gate. WorkArea/KB sind
+     Agenten-Werkzeuge — ohne Agent-Identität gibt es weder eine private Area
+     noch eine sinnvolle Protokollzeile. Defense-in-Depth: der aktive
+     ungebundene Token ist seit Migration 0048 ohnehin per CHECK unmöglich.
+  5. **Kein Chart-Rendering, auch nicht als „kleines Extra":** Auswertung
+     endet beim Result Set (`query_table` + `save_query_result`, Server friert
+     Query + Ergebnis als doc-Artifact ein). Ein Renderer wäre der erste
+     Schritt zum BI-Werkzeug und damit Scope-Drift gegen die Non-Goals.
+     Zahlen schreibt der Server aus dem Result Set, nie das Modell.
+  6. **Retention-Sweeps im bestehenden Purge-Cron statt als eigener Job:** ein
+     Org-/Account-Hard-Purge hinterlässt genau die Blob-Zeilen und
+     Area-Dateien, die die Sweeps abräumen — nacheinander im selben Lauf
+     erledigt das eine Runde statt zweier. Die Sweeps laufen bewusst NICHT in
+     einer gemeinsamen Transaktion: jeder ist für sich idempotent, und ein
+     nicht erreichbarer Objekt-Storage darf den Artifact-Sweep nicht
+     zurückrollen.
+  7. **Blob-Orphan-Sweep braucht ein Objekt-Alter, sonst löscht er nichts:**
+     der Ingest schreibt das Objekt VOR der Postgres-Transaktion — zwischen
+     PUT und COMMIT existiert ein Objekt ohne Katalog-Zeile völlig regulär.
+     Ohne Zeitstempel ist dieser Zustand von Müll nicht unterscheidbar.
+     Deshalb die optionale Port-Fähigkeit `BlobAgeSource` (`last_modified`,
+     MinIO liefert es aus `stat_object`); ein Store ohne Zeitquelle wird
+     gemeldet, nicht aufgeräumt. Blind zu löschen wäre Datenverlust.
+  8. **Der Datei-Sweep fasst unbekannte Verzeichnisse NICHT an:** gelöscht
+     wird nur unter einem Workspace-Verzeichnis, dessen Workspace existiert.
+     Grund ist der teuerste Fehlfall: liefe der Purge gegen die falsche (z. B.
+     frisch migrierte, leere) Datenbank, sähe jedes Verzeichnis wie ein
+     gelöschter Workspace aus. Bewusste Kehrseite: nach einem Workspace-
+     Hard-Purge bleiben die Dateien liegen und werden nur gemeldet
+     (`unknown_store_dirs`) — die Nachbereinigung ist ein dokumentierter
+     Betreiber-Schritt (RUNBOOK + Löschkonzept §4a).
+  9. **GDPR-Export trägt Blob-METADATEN, keine Bytes:** base64-kodierte PDFs
+     hätten das Bündel je nach Workspace auf hunderte MB gebracht und im
+     Fehlerfall unauslieferbar gemacht. Der `storage_key` adressiert die
+     Objekte eindeutig; der Betreiber leitet sie über den dokumentierten
+     Bucket-Pfad aus. Tabellen-Zeilen kommen dagegen mit — gedeckelt auf
+     10 000 je Tabelle mit `truncated`-Flag, gelesen über denselben read-only
+     Pfad wie Agenten-SQL (der Export bekommt keine Sonderrechte).
+- **Begründung:** Die Punkte fielen während der Umsetzung, nicht bei der
+  Planung — sie betreffen durchweg die Grenze zwischen „technisch möglich" und
+  „verantwortbar": wer darf Compliance-Daten schreiben, was darf ein
+  Aufräum-Job löschen, und wo hört Auswertung auf.
+- **Detail:** ADR-0047/0048/0049; `core/purge.py`,
+  `services/gdpr_export_service.py`, `blobstore/port.py`;
+  `apps/api/tests/test_workarea_retention.py`;
+  `docs/compliance/data-retention-and-erasure.md` §4a.

@@ -705,6 +705,203 @@ einmal durchziehen und Datum hier protokollieren:
 |---|---|---|---|---|
 | — | — | — | — | — |
 
+## MinIO-/BlobStore-Backup (ADR-0048)
+
+Der `pg_dump`-Pfad oben sichert **nur Postgres**. Die Binaerinhalte der
+WorkArea (PDFs, Textdateien, abgerufene Seiten) liegen als Objekte im MinIO-
+Bucket `who2be-blobs` unter `blobs/{workspace_id}/{sha256}`. Postgres kennt
+davon nur den Katalog (`wa_blob`): **ein Restore ohne Objekte ergibt eine DB,
+deren Blob-Referenzen ins Leere zeigen.** Beide Stufen gehoeren zusammen.
+
+Der Dienst laeuft als Container `minio` (+ One-Shot `minio-bootstrap`, der den
+Bucket idempotent anlegt und terminiert); Daten liegen im Volume `minio-data`.
+
+```bash
+# 1) Bucket in das Backup-Verzeichnis spiegeln (mc mirror ist inkrementell)
+docker compose run --rm --entrypoint /bin/sh minio-bootstrap -c '
+  mc alias set local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" &&
+  mc mirror --overwrite --remove local/who2be-blobs /backup/blobs
+'
+# Dafuer /var/backups/who2be als /backup in den One-Shot mounten
+# (deploy/hetzner/docker-compose.yml, gleiches Muster wie der backup-Service).
+
+# 2) restic nimmt das Verzeichnis mit — es liegt unter /var/backups/who2be,
+#    das der bestehende C5b-Lauf ohnehin sichert. Kein zweites Repo noetig.
+```
+
+- **Retention:** faellt mit dem restic-Repo zusammen (`keep-daily 7 /
+  keep-weekly 4 / keep-monthly 6`).
+- **`--remove`** loescht im Spiegel, was im Bucket nicht mehr existiert —
+  gewollt, damit ein GDPR-Purge nicht ueber das Backup wieder auflebt.
+  Die Snapshot-Historie haelt die Objekte dennoch bis zum Retention-Ablauf;
+  es gilt „Restore-only-Re-Deletion" wie fuer die DB (Loeschkonzept §4).
+- **Verschluesselung:** GPG wie beim Dump ist hier unnoetig — restic
+  verschluesselt das Repo selbst.
+
+**Restore:** erst Objekte, dann DB (oder umgekehrt — die Reihenfolge ist egal,
+solange beide aus demselben Snapshot stammen).
+
+```bash
+restic -r "${RESTIC_REPOSITORY}" restore latest --target /tmp/restore
+docker compose run --rm --entrypoint /bin/sh minio-bootstrap -c '
+  mc alias set local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" &&
+  mc mb --ignore-existing local/who2be-blobs &&
+  mc mirror --overwrite /backup/blobs local/who2be-blobs
+'
+# Konsistenz-Check: jede wa_blob-Zeile muss ein Objekt haben
+docker compose exec db psql -U supabase_admin who2be -tAc \
+  "SELECT count(*) FROM wa_blob"
+docker compose run --rm --entrypoint /bin/sh minio-bootstrap -c '
+  mc alias set local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" &&
+  mc ls --recursive local/who2be-blobs | wc -l
+'
+```
+
+> Die Objekt-Zahl darf **groesser** sein als die Zeilen-Zahl (Rueckstaende
+> gescheiterter Ingests, die der Purge-Sweep noch nicht geholt hat) — aber nie
+> kleiner. Ist sie kleiner, fehlen Blobs.
+
+---
+
+## Tabellen-Store-Backup (SQLite je WorkArea, ADR-0049)
+
+Die Zeilen der Agenten-Tabellen liegen **nicht in Postgres**, sondern in einer
+SQLite-Datei pro WorkArea:
+
+```
+${WHO2BE_TABLESTORE_DIR}/{workspace_id}/{area_id}.sqlite
+# Compose: Volume `tablestore-data`, im API-Container /data/tablestore
+```
+
+In Postgres steht nur der Katalog (`wa_table`, Schema + Name). **Ein
+`pg_dump`-Restore liefert also leere Tabellen**, wenn dieses Verzeichnis fehlt.
+
+**Nicht einfach kopieren:** eine SQLite-Datei im WAL-Modus ist waehrend eines
+laufenden Imports kein konsistenter Stand. Der Store bringt deshalb
+`VACUUM INTO` mit (`TableStore.snapshot_to`) — das erzeugt unter dem
+Area-Write-Lock eine kompaktierte, eigenstaendig lesbare Kopie.
+
+```bash
+# Konsistente Snapshots aller Area-Dateien in das Backup-Verzeichnis
+docker compose exec api python - <<'PY'
+import asyncio, pathlib
+from who2be_api.services.tablestore_provider import get_table_store
+
+async def main() -> None:
+    store = get_table_store()
+    target_root = pathlib.Path("/backup/tablestore")
+    for workspace_dir in store.base_dir.iterdir():
+        if not workspace_dir.is_dir():
+            continue
+        for path in workspace_dir.glob("*.sqlite"):
+            target = target_root / workspace_dir.name / path.name
+            target.unlink(missing_ok=True)   # VACUUM INTO lehnt ein existierendes Ziel ab
+            await store.snapshot_to(
+                __import__("uuid").UUID(workspace_dir.name),
+                __import__("uuid").UUID(path.stem),
+                target,
+            )
+            print("snapshot", target)
+
+asyncio.run(main())
+PY
+```
+
+- `/backup/tablestore` liegt unter `/var/backups/who2be` und faellt damit in
+  denselben restic-Lauf wie Dump und Blob-Spiegel.
+- **Restore:** Snapshot-Dateien zurueck nach
+  `${WHO2BE_TABLESTORE_DIR}/{workspace_id}/{area_id}.sqlite` kopieren
+  (WAL-/SHM-Seitendateien werden **nicht** mitgesichert und sind nicht noetig —
+  der Snapshot ist in sich vollstaendig), danach die API neu starten.
+- **Verifikation:** `sqlite3 <datei> "PRAGMA integrity_check"` muss `ok`
+  liefern; die Tabellennamen muessen zu `wa_table.name` derselben Area passen.
+
+> **Manuelle Nachbereinigung nach einem Hard-Purge:** Der Purge-Sweep
+> `cleanup_deleted_area_stores` loescht nur Dateien von Areas, deren
+> **Workspace noch existiert** (Schutz gegen einen Lauf gegen die falsche DB).
+> Nach einem Org-/Workspace-Hard-Purge bleiben die Verzeichnisse liegen und
+> werden nur gemeldet (`unknown_store_dirs` in der Purge-Ausgabe + WARNING im
+> Log). Diese Verzeichnisse sind manuell zu loeschen — sie enthalten
+> personenbezogene Daten (Loeschkonzept §4a).
+
+```bash
+# Kandidaten: Verzeichnisse ohne Workspace-Zeile
+docker compose exec db psql -U supabase_admin who2be -tAc \
+  "SELECT id FROM workspace" | sort > /tmp/ws-live.txt
+docker compose exec api ls /data/tablestore | sort > /tmp/ws-dirs.txt
+comm -13 /tmp/ws-live.txt /tmp/ws-dirs.txt   # -> nach Pruefung loeschen
+```
+
+---
+
+## Retention-Cron (`who2be-purge`)
+
+Ein Lauf erledigt beides: den DSGVO-Hard-Purge (Orgs/Accounts nach der
+30-Tage-Grace) **und** die drei WorkArea-/KB-Sweeps. Alle Schritte sind
+idempotent — ein Lauf ohne faellige Daten ist ein No-op, ein abgebrochener
+Lauf wird vom naechsten fortgesetzt.
+
+```bash
+# Host-Crontab des Deploy-Users (crontab -e):
+30 3 * * * cd /opt/who2be && docker compose run --rm api who2be-purge >> /var/log/who2be-purge.log 2>&1
+```
+
+Der Lauf braucht `DATABASE_URL` (Owner-Rolle, RLS-Bypass), und fuer die
+Objekt-/Datei-Sweeps dieselben `WHO2BE_BLOBSTORE_*`- und
+`WHO2BE_TABLESTORE_DIR`-Werte wie die API — `docker compose run api` bringt
+beides mit, ein Lauf ausserhalb des Compose-Kontexts nicht.
+
+Ausgabe (zwei Zeilen, beide ins Log):
+
+```
+Purge: 0 Org(s), 0 Account(s) geloescht; 0 Audit-Zeile(n) anonymisiert, …
+Retention: 12 Artifact(s) abgelaufen, 3 Blob-Zeile(n) + 3 Objekt(e) verwaist, 1 Area-Store(s) entfernt
+```
+
+Worauf im Log zu achten ist:
+
+| Meldung | Bedeutung | Aktion |
+|---|---|---|
+| `(kein BlobStore konfiguriert)` | `WHO2BE_BLOBSTORE_*` fehlt im Purge-Kontext | Env pruefen — sonst bleiben Objekte dauerhaft liegen |
+| `… unbekannte(s) Store-Verzeichnis(se) gemeldet` | Tabellen-Store-Verzeichnis ohne Workspace | manuelle Bereinigung (s. o.) |
+| `Objekt-Sweep bei 500 Loeschungen gedeckelt` | Deckel erreicht | normal nach grossem Purge; naechster Lauf macht weiter |
+| `liefert kein Objekt-Alter` | Store ohne `last_modified` | nur bei Fremd-Adaptern; MinIO kann es |
+
+---
+
+## Betrieb der Compose-Dienste `minio` / `minio-bootstrap`
+
+- **`minio`** — S3-API auf `9000`, Web-Console auf `9001`, beide bewusst nur
+  auf `127.0.0.1` gebunden (Dev laeuft mit Default-Credentials und darf nie im
+  LAN haengen). In Prod `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD` setzen und den
+  Zugriff ueber das Docker-Netz bzw. Caddy fuehren, nicht ueber den Host-Port.
+  Image ist **gepinnt** (kein `latest`) — Objekt-Storage soll nicht an einem
+  impliziten Image-Sprung haengen.
+- **`minio-bootstrap`** — One-Shot: legt `who2be-blobs` idempotent an und
+  terminiert (`restart: "no"`). Die App legt **nie** selbst Buckets an. Der
+  `api`-Dienst haengt per `service_completed_successfully` daran; ein
+  fehlgeschlagener Bootstrap haelt also den Start auf — das ist Absicht.
+- **Healthcheck:** `mc ready local`. Rot? → `docker compose logs minio`,
+  meist ein Volume-/Rechteproblem auf `minio-data`.
+- **Degradation:** ohne `WHO2BE_BLOBSTORE_*` in der API laeuft der Stack
+  vollstaendig weiter; nur Ingest und Blob-Reads antworten 503
+  `blobstore_unconfigured` (ADR-0048). Das ist ein gueltiger Betriebsmodus,
+  kein Fehlerzustand.
+- **Tabellen-Store** braucht keinen eigenen Dienst — nur das Volume
+  `tablestore-data` (gemountet auf `/data/tablestore`). Es muss in die
+  Backup-Routine (s. o.); ein verlorenes Volume bedeutet verlorene
+  Tabellen-Zeilen bei intaktem Katalog.
+
+```bash
+# Smoke nach dem Deploy
+docker compose ps minio minio-bootstrap        # minio healthy, bootstrap exited 0
+docker compose exec api python -c \
+  "from who2be_api.blobstore import build_blob_store; print(build_blob_store())"
+# -> MinioBlobStore-Instanz (nicht None), sonst fehlt WHO2BE_BLOBSTORE_*
+```
+
+---
+
 ### Verifikation der Caddy-Hardening (H5)
 
 Nach jedem Caddy-/Compose-Deploy gegen Prod:

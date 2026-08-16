@@ -124,6 +124,62 @@ class Settings(BaseSettings):
         default="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
         validation_alias=AliasChoices("WHO2BE_EMBEDDING_MODEL", "embedding_model"),
     )
+    # Content-addressed Blob-Storage (ADR-0048, Agent WorkArea). AUS by default
+    # (Kern-Felder leer): ohne Konfiguration liefert `build_blob_store` `None`,
+    # und NUR Ingest/Blob-Reads antworten 503 `blobstore_unconfigured` — alles
+    # andere laeuft unveraendert. `endpoint` ist host:port OHNE Schema; ob
+    # http oder https gesprochen wird, entscheidet `blobstore_secure`.
+    blobstore_endpoint: str = Field(
+        default="",
+        validation_alias=AliasChoices("WHO2BE_BLOBSTORE_ENDPOINT", "blobstore_endpoint"),
+    )
+    blobstore_access_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("WHO2BE_BLOBSTORE_ACCESS_KEY", "blobstore_access_key"),
+    )
+    blobstore_secret_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("WHO2BE_BLOBSTORE_SECRET_KEY", "blobstore_secret_key"),
+    )
+    # Default passt zum Compose-One-Shot `minio-bootstrap`, der genau diesen
+    # Bucket anlegt — die App erstellt Buckets nie selbst.
+    blobstore_bucket: str = Field(
+        default="who2be-blobs",
+        validation_alias=AliasChoices("WHO2BE_BLOBSTORE_BUCKET", "blobstore_bucket"),
+    )
+    # TLS zum Storage-Endpoint. Dev-MinIO im Compose-Netz spricht http (false);
+    # jede Anbindung ausserhalb davon gehoert auf true.
+    blobstore_secure: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("WHO2BE_BLOBSTORE_SECURE", "blobstore_secure"),
+    )
+    # Byte-Obergrenze fuer den WorkArea-Ingest (ADR-0048, Pipeline B): gilt fuer
+    # Datei-Uploads (Base64-Schaetzung VOR dem Dekodieren) und URL-Downloads
+    # (Streaming-Cap pro Hop). Ueberschreitung ⇒ 413 `ingest_too_large`.
+    ingest_max_bytes: int = Field(
+        default=20 * 1024 * 1024,
+        validation_alias=AliasChoices("WHO2BE_INGEST_MAX_BYTES", "ingest_max_bytes"),
+    )
+    # Tabellen-Store (ADR-0049, Agent WorkArea): Basisverzeichnis der
+    # SQLite-Dateien `{workspace_id}/{area_id}.sqlite` — die Datei ist die
+    # Isolationsgrenze, read-only erzwingt die Engine (query_only + Authorizer).
+    # Default fuer lokales Dev; Compose mountet das Volume `tablestore-data`
+    # und setzt WHO2BE_TABLESTORE_DIR auf /data/tablestore.
+    tablestore_dir: str = Field(
+        default="./data/tablestore",
+        validation_alias=AliasChoices("WHO2BE_TABLESTORE_DIR", "tablestore_dir"),
+    )
+    # Zeitbudget einer einzelnen read-only Agenten-Query bzw. eines describe
+    # (Security-Review Phase 2, H1). Freies SQL kann beliebig teuer sein — eine
+    # `WITH RECURSIVE`-Endlosschleife blockiert ohne dieses Budget dauerhaft
+    # einen `to_thread`-Worker. Ueberschreitung ⇒ SQLite bricht per
+    # Progress-Handler ab (`SQLITE_INTERRUPT`), die API antwortet 408.
+    tablestore_query_timeout_ms: int = Field(
+        default=5000,
+        validation_alias=AliasChoices(
+            "WHO2BE_TABLESTORE_QUERY_TIMEOUT_MS", "tablestore_query_timeout_ms"
+        ),
+    )
     # On-Prem-Adapter: signierte Lizenzdatei (Ed25519), offline mit `K_pub` verifiziert.
     # Leer ⇒ reines OSS (unbegrenzt). NIE der Private-Key — nur der Lizenz-Token.
     license_key: str = Field(

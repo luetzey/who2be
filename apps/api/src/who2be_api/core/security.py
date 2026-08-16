@@ -270,6 +270,9 @@ _CAPABILITY_LABELS: dict[AgentCapability, str] = {
     ),
     AgentCapability.promote_retire: "Versionen zu aktivieren oder zu deaktivieren",
     AgentCapability.external_tool_write: "Externe Tools zu erstellen oder zu aendern",
+    AgentCapability.workarea_write: "WorkArea-Artifacts zu erstellen oder zu aendern",
+    AgentCapability.kb_write: "Knowledge-Base-Nodes zu erstellen oder zu aendern",
+    AgentCapability.kb_edge_write: "Knowledge-Base-Kanten anzulegen",
 }
 
 
@@ -392,7 +395,27 @@ def require_write_rate(ctx: WorkspaceContext) -> None:
     No-Op fuer ungebundene Tokens (Mensch/Web-UI) und ohne gesetztes Limit.
     Sliding-Window keyed auf `agent_id`; ueberschritten ⇒ 429. Der globale
     slowapi-`write_limit` bleibt orthogonal die grobe Obergrenze.
+
+    **Konsumiert** einen Slot. Wer nur wissen will, ob der nachgelagerte
+    Schreibpfad durchkaeme, nimmt `peek_write_rate` (M3).
     """
+    _enforce_write_rate(ctx, consume=True)
+
+
+def peek_write_rate(ctx: WorkspaceContext) -> None:
+    """Wie `require_write_rate`, aber OHNE Slot-Verbrauch (Security-Review M3).
+
+    Fuer Pfade, die vor einer teuren Vorarbeit fail-fast sein muessen, deren
+    eigentlicher Write aber weiter unten liegt und dort konsumiert —
+    `save_query_result` fuehrt sonst erst das Agenten-SQL aus und laeuft
+    danach im Artifact-Create ins 429 (Arbeit ohne Gegenwert). Doppelt
+    gezaehlt wird dabei nichts: peek liest das Fenster nur.
+    """
+    _enforce_write_rate(ctx, consume=False)
+
+
+def _enforce_write_rate(ctx: WorkspaceContext, *, consume: bool) -> None:
+    """Gemeinsamer Kern von `require_write_rate`/`peek_write_rate`."""
     from fastapi import HTTPException
 
     from who2be_api.core.rate_limit import token_rate_limiter
@@ -402,7 +425,8 @@ def require_write_rate(ctx: WorkspaceContext) -> None:
         return
     if ctx.agent_id is None:
         return
-    if not token_rate_limiter.allow(f"write:{ctx.agent_id}", policy.write_rate_limit):
+    check = token_rate_limiter.allow if consume else token_rate_limiter.peek
+    if not check(f"write:{ctx.agent_id}", policy.write_rate_limit):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Schreib-Rate-Limit dieses Agenten erreicht — bitte spaeter erneut versuchen.",

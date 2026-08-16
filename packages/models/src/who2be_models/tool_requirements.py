@@ -43,7 +43,18 @@ from who2be_models.workspace_member import WorkspaceRole
 # Sichtbarkeit als GRUPPE aendert sich durch WP-3 nicht — entity_type=
 # 'external_tool' ist bei list_versions/get_version trotzdem ein gueltiger Wert,
 # das ist eine reine Laufzeit-Frage der Tools, keine SSoT-Sichtbarkeitsfrage).
-ReadDomain = Literal["persona", "playbook", "resource", "agent", "search", "external_tool"]
+ReadDomain = Literal[
+    "persona",
+    "playbook",
+    "resource",
+    "agent",
+    "search",
+    "external_tool",
+    # WorkArea/KB (ADR-0047): eigene Domains ohne `ReadScope`-Abstufung —
+    # die Sichtbarkeit haengt an dynamischen Area-Grants, siehe `_read_visible`.
+    "workarea",
+    "kb",
+]
 
 # Die Inhalts-Domains, ueber die „search"-artige Tools dispatchen.
 _CONTENT_READ_DOMAINS: tuple[str, ...] = ("persona", "playbook", "resource")
@@ -93,6 +104,16 @@ _FEEDBACK_WRITE = ToolRequirement(capabilities=(AgentCapability.feedback_write,)
 _EXTERNAL_TOOL_WRITE = ToolRequirement(capabilities=(AgentCapability.external_tool_write,))
 _MEMORY_READ = ToolRequirement(memory=MemoryMode.read_only)
 _MEMORY_SUGGEST = ToolRequirement(memory=MemoryMode.suggest)
+# WorkArea (ADR-0047, WP8): Writes hinter `workarea_write`; Reads ueber die
+# grant-dynamische Domain "workarea" (kein `ReadScope` — siehe `_read_visible`).
+_WORKAREA_READ = ToolRequirement(read_domain="workarea")
+_WORKAREA_WRITE = ToolRequirement(capabilities=(AgentCapability.workarea_write,))
+# Knowledge Base (ADR-0047, WP9): Node-Writes hinter `kb_write`, Kanten hinter
+# der eigenen `kb_edge_write` (Kanten-Semantik = Kurations-Macht); Reads ueber
+# die grant-dynamische Domain "kb" (kein `ReadScope` — siehe `_read_visible`).
+_KB_READ = ToolRequirement(read_domain="kb")
+_KB_WRITE = ToolRequirement(capabilities=(AgentCapability.kb_write,))
+_KB_EDGE_WRITE = ToolRequirement(capabilities=(AgentCapability.kb_edge_write,))
 
 
 # Alle in `apps/mcp/src/who2be_mcp/server.py` registrierten Tools (Quelle: die
@@ -190,6 +211,47 @@ MCP_TOOL_REQUIREMENTS: dict[str, ToolRequirement] = {
     "search_memory": _MEMORY_READ,
     "list_memories": _MEMORY_READ,
     "save_memory": _MEMORY_SUGGEST,
+    # --- WorkArea (ADR-0047, WP8) — Rohmaterial-Tools aus `tools/workarea.py`:
+    #     Writes verlangen `workarea_write` (Default aus); die Reads sind
+    #     grant-dynamisch immer gelistet, die API/`core/workarea_scope.py`
+    #     bleibt die Autoritaet (leere Treffer statt Existenz-Leak).
+    "create_artifact": _WORKAREA_WRITE,
+    "append_artifact": _WORKAREA_WRITE,
+    "patch_artifact": _WORKAREA_WRITE,
+    "read_artifact": _WORKAREA_READ,
+    "list_artifacts": _WORKAREA_READ,
+    "delete_artifact": _WORKAREA_WRITE,
+    "ingest": _WORKAREA_WRITE,
+    "search_workarea": _WORKAREA_READ,
+    # --- Knowledge Base (ADR-0047, WP9) — kuratierte Wissensschicht aus
+    #     `tools/kb.py`: Reads grant-dynamisch immer gelistet (API bleibt die
+    #     Autoritaet), Node-Writes hinter `kb_write`, Kanten hinter
+    #     `kb_edge_write`.
+    "search_kb": _KB_READ,
+    "create_node": _KB_WRITE,
+    "update_node": _KB_WRITE,
+    "create_edge": _KB_EDGE_WRITE,
+    "neighbors": _KB_READ,
+    # `promote_artifact` (WP19 registriert, implementiert in `tools/kb.py`)
+    # ERZEUGT eine Resource-Draft — es haengt deshalb an `resource_write`,
+    # nicht an `workarea_write`/`kb_write`: wer kuratiertes Wissen anlegt,
+    # braucht die Resource-Schreibrechte (gleiches Gate wie `create_resource`).
+    "promote_artifact": _RESOURCE_WRITE,
+    # --- Tabellen & Zeitachse (ADR-0049, WP19) — `tools/tables.py`:
+    #     strukturierte Zahlen der WorkArea. Writes verlangen `workarea_write`
+    #     (die Tabellen liegen IN einer Area), die Reads laufen ueber die
+    #     grant-dynamische Domain "workarea" — auch `query_table`, das
+    #     technisch POST ist, semantisch aber ein Read (read-only als
+    #     Engine-Garantie).
+    "create_table": _WORKAREA_WRITE,
+    "insert_rows": _WORKAREA_WRITE,
+    "query_table": _WORKAREA_READ,
+    "describe_table": _WORKAREA_READ,
+    "save_query_result": _WORKAREA_WRITE,
+    "timeline": _WORKAREA_READ,
+    "set_convention": _WORKAREA_WRITE,
+    "upsert_category_rule": _WORKAREA_WRITE,
+    "list_category_rules": _WORKAREA_READ,
 }
 
 
@@ -205,6 +267,12 @@ def _read_visible(domain: ReadDomain | None, policy: AgentToolPolicy) -> bool:
         return policy.agent_read != ReadScope.none
     if domain == "external_tool":
         return policy.external_tool_read != ReadScope.none
+    if domain in ("workarea", "kb"):
+        # WorkArea/KB (ADR-0047): fuer agent-gebundene Identitaeten immer
+        # sichtbar — Area-Grants sind dynamisch (`work_area_grant`) und werden
+        # serverseitig durchgesetzt (`core/workarea_scope.py`); der
+        # PolicyFilter ist ohnehin fail-open, die API bleibt die Autoritaet.
+        return True
     if domain == "search":
         return (
             policy.persona_read
@@ -240,6 +308,12 @@ def is_tool_visible(name: str, policy: AgentToolPolicy | None) -> bool | None:
 
 def _scoped_read_visible(domain: ReadDomain | None, scopes: Mapping[str, ReadScope]) -> bool:
     """Read-Sichtbarkeit gegen `whoami`-Read-Scopes (fehlender Key = sichtbar)."""
+    if domain in ("workarea", "kb"):
+        # WorkArea/KB (ADR-0047): sichtbar fuer agent-gebundene Identitaeten
+        # wie fuer unrestricted Menschen — es gibt keinen `ReadScope` fuer
+        # diese Domains; die Area-Grants sind dynamisch und werden
+        # serverseitig durchgesetzt (PolicyFilter fail-open, API = Autoritaet).
+        return True
     if domain == "search":
         return any(scopes.get(d, ReadScope.all) != ReadScope.none for d in _CONTENT_READ_DOMAINS)
     if domain is not None:

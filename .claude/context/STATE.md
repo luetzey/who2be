@@ -1,6 +1,6 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-07-25_
+_Stand: 2026-08-16_
 
 Ist-Zustands-Snapshot, kein Changelog. Die Umsetzungs-Historie (per-Run-Details,
 Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
@@ -56,7 +56,8 @@ Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
 - MCP-HTTP-Transport (ADR-0034) + OAuth-2.1-Remote-Connector (ADR-0036,
   per-Agent-URL `?agent=<uuid>`); Refresh-Reuse reject-only statt
   Ketten-Revocation (DECISIONS 2026-07-05); OAuth-Smoke beide Editionen grün.
-- 58 Tools: Read + Write (ADR-0030), `search` + `search_content`
+- **81 Tools** (58 + 23 aus WorkArea/KB/Tabellen, ADR-0047): Read + Write
+  (ADR-0030), `search` + `search_content`
   (ADR-0037/0046), Versions-/
   Discovery-Tools, System-Prompt-Tools (ADR-0040), feinkörnige
   Agent-Schreibrechte inkl. Rate-Limit (ADR-0039). `tools/list` pro Agent
@@ -184,8 +185,99 @@ Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
 - OAuth-Connector: E2E mit echtem Claude/ChatGPT-Client offen; TTL-Cleanup
   der OAuth-Tabellen, optionale Audience-Trennung, aal2-Consent (Phase 2).
 
+### Agent WorkArea + Knowledge Base (ADR-0047/0048/0049) — WP1–WP20 umgesetzt
+
+Zweite Achse neben der kuratierten Resource-Achse: **unversionierter
+Arbeitsbereich** für Agenten plus **belegpflichtige Knowledge Base**. Plan
+`.claude/plan/2026-08-13-1200_agent-workarea-knowledge-base.md` (20 WPs in
+7 Wellen), PR #367.
+
+- **WorkArea:** `work_area` (private je Agent, auto-angelegt; shared per
+  Grant — Grant-Vergabe ist Menschen-Sache), `wa_artifact` (doc/table/blob,
+  `occurred_at` als Pflicht-Input ohne `now()`-Fallback, optimistische
+  Nebenläufigkeit über `rev`), `wa_chunk` als **eigener** Suchindex
+  (`content_chunk` bleibt unangetastet — kuratierte und arbeitende Achse
+  trennen auch im Retrieval).
+- **Ingest (Pipeline B):** Datei-/URL-Ingest mit 20-MB-Limit, SSRF-Schutz,
+  content-addressed Blob-PUT (`blobs/{ws}/{sha256}`) vor **einer** Postgres-
+  Transaktion; Doppel-Ingest dedupliziert ohne zweites Objekt.
+- **BlobStore (ADR-0048):** Port + MinIO-/In-Memory-Adapter; ohne
+  `WHO2BE_BLOBSTORE_*` liefern nur Ingest/Blob-Reads 503, alles andere läuft
+  unverändert (gültiger Betriebsmodus).
+- **Tabellen-Store (ADR-0049):** SQLite je Area, Datei = Isolationsgrenze;
+  read-only als Engine-Garantie (`mode=ro` + `query_only` + Authorizer mit
+  Opcode- **und** Funktions-Allowlist + Zeit-/Zell-/Result-Budgets).
+  Deterministische Kategorisierung + Quellen-Konventionen; Timeline-Merge.
+- **Knowledge Base:** Belegpflicht je Aussage (`source_ref`), Tier-Regeln
+  (`verified`/`derived`/`hypothesis`), Kanten inkl. Korrelations-Disziplin
+  (`co_occurs_with` nur mit n ≥ 20 + Zeitfenster), Konflikt-Erfassung.
+- **Compliance:** `agent_access_log` (Auto-Protokoll, Modell-/Sensitivitäts-
+  **Snapshot** zum Zugriffszeitpunkt, FK `NO ACTION`), Betreiber-Query in
+  `docs/compliance/agent-access-log.md`; VVT V18–V20.
+- **Retention (WP20):** `who2be-purge` deckt jetzt drei Speicher ab —
+  `cleanup_expired_artifacts` (Area-Frist `retention_days`, Default `NULL` =
+  unbegrenzt, auch privat), `cleanup_orphan_blobs` (Katalog-Zeile ohne
+  Artifact **und** Objekt ohne Zeile, je > 24 h; Objekt-Sweep nur mit
+  Storage-Zeitstempel) und `cleanup_deleted_area_stores` (SQLite-Dateien
+  gelöschter Areas). GDPR-Export trägt Areas/Artifacts/Blob-Metadaten/
+  Tabellen-Zeilen (Cap 10 000 + `truncated`)/KB/Zugriffslog.
+- **MCP:** 58 → **81 Tools** (`tools/workarea.py`, `tools/tables.py`,
+  `tools/kb.py`), policy-gefiltert, Payload-Budget grün.
+- **Security-Reviews:** nach Welle 2 und Welle 5 je ein Durchlauf; Phase 2
+  siehe eigener Abschnitt unten.
+- **DoD (2026-08-16):** `ruff check` + `ruff format --check` (439 Dateien) +
+  `mypy .` (439 Quellen, strict) grün; **1632 pytest gesamt, Coverage 90,98 %**
+  (Gate 85 %); `apps/api/tests` allein 1152 grün.
+- **Bewusst offen:**
+  - *P1-Backlog:* KB-TTL-Verfall (`ttl_expires_at` wird gesetzt, aber nicht
+    automatisch ausgewertet), Challenger-/Gegenbeleg-Mechanik,
+    Drift-Erkennung auf Aussagen.
+  - *P2-Backlog:* Web-UI für WorkArea/KB (heute API-/MCP-only),
+    Graph-Visualisierung der Kanten, semantische Suche auf `wa_chunk`
+    (Vektor-Zweig wie ADR-0046 auf der Resource-Achse).
+  - *Manuelle Compose-Verifikation steht aus* (WP3-Punkt): `docker compose up`
+    → minio healthy → Bootstrap legt Bucket an und terminiert → ohne
+    Blobstore-Env Ingest = 503 → mit Env PDF-Ingest-Smoke, Objekt unter
+    `blobs/{ws}/{sha}`, Doppel-Ingest ohne zweites Objekt. Braucht eine
+    Umgebung mit Docker; in der Entwicklungsumgebung nicht ausführbar.
+  - *Tabellen-Import kappt Zell-Breiten nicht* — s. §Bekannte Probleme.
+
+### Security-Härtung Agent-WorkArea (2026-08-16, Phase-2-Review)
+
+Zweiter Review-Durchlauf über Tabellen-Store, Zugriffslog und Promote
+(Commits `73fe887..6a8638e`); alle Findings umgesetzt, Regressionstests in
+`apps/api/tests/test_security_fixes_phase2.py`, Begründungen im
+ADR-0047-Nachtrag 2026-08-16 und in DECISIONS.
+
+- Freies Agenten-SQL hat jetzt Ressourcen-Grenzen: Zeitbudget je Query/
+  describe (408), Zell-Cap 1 MB und Result-Budget 2 MB (413). Der Authorizer
+  prüft SQL-Funktionen namentlich (`fts3_tokenizer` & Co. verweigert).
+- Zugriffslog ist fälschungsfest: Modell-Config wird zum Zugriffszeitpunkt
+  gesnapshottet (Migration 0080), agent-gebundene Tokens dürfen sie nicht
+  setzen, und der FK hält gegen Cascade-Löschung (Agent-Delete mit
+  Protokollzeilen → 409, Purge bleibt der Löschpfad).
+- Kleineres: Rate-Limit vor der Query (`peek_write_rate`), Markdown-/
+  CSV-Injektion im server-gerenderten Export, Timeline-Existenz-Orakel und
+  -Quellen-Deckel, Promote-Aktor + Längen-Schnitte.
+
 ## Bekannte Probleme
 
+- **Tabellen-Import kappt Zell-Breiten nicht** (gefunden 2026-08-16): der
+  Lesepfad deckelt Zellen auf 1 MB, der Schreibpfad nicht — ein Agent kann
+  eine überbreite Zelle importieren und damit die eigene Tabelle für alle
+  Queries auf dieser Spalte unlesbar machen (413). Kein System-DoS, aber ein
+  Selbstschuss; Fix wäre eine Längenprüfung in `_validate_rows` (422).
+- **Tabellen-Store-Verzeichnisse überleben den Hard-Purge** (bewusst, WP20):
+  `cleanup_deleted_area_stores` fasst nur Verzeichnisse an, deren Workspace
+  noch existiert — Schutz gegen einen Purge-Lauf gegen die falsche/leere DB.
+  Nach einem Org-/Workspace-Hard-Purge bleiben die SQLite-Dateien deshalb
+  liegen und werden nur gemeldet (`unknown_store_dirs` + WARNING). Die
+  Nachbereinigung ist ein dokumentierter Betreiber-Schritt (RUNBOOK
+  §Tabellen-Store-Backup, Löschkonzept §4a) — kein automatischer Pfad.
+- **Blob-Objekt-Sweep hat eine Scope-Lücke** (dokumentiert): Objekte werden je
+  Workspace gesucht, der im `wa_blob`-Katalog vorkommt. Ein Workspace, dessen
+  allererster Ingest scheitert, hat nie eine Katalog-Zeile — sein einzelnes
+  Objekt bleibt liegen (Alternative wäre ein Bucket-Vollscan je Cron-Lauf).
 - **CI-Gate seit 2026-07-19 tot** (GitHub-Actions-Billing, Owner-Punkt): alle
   Runs scheitern nach ~2 s ohne Logs — kein Code-Problem; lokale DoD-Nachweise
   ersetzen das Gate interim (PR-Template).

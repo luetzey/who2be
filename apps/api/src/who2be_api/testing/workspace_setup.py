@@ -92,12 +92,25 @@ def setup_workspace(user_id: UUID, content_locale: str = "de") -> UUID:
 
 def cleanup_workspaces(user_ids: list[UUID]) -> None:
     """Loescht Memberships und (Personal-)Orgs der Test-User, CASCADE raeumt
-    persona/playbook/api_token/workspace ab."""
+    persona/playbook/api_token/workspace ab.
+
+    `agent_access_log` haengt bewusst NICHT am Cascade (Migration 0080,
+    Security-Review H5: sonst raeumt ein Agent-Delete das Compliance-Log ab).
+    Das Test-Cleanup ist — wie `core/purge.py` — ein OWNER-Pfad und loescht
+    die Zeilen deshalb selbst, bevor die Org-CASCADE die Agenten erreicht.
+    """
 
     async def _run() -> None:
         conn = await asyncpg.connect(get_settings().database_url)
         try:
             slugs = [str(uid) for uid in user_ids]
+            await conn.execute(
+                "DELETE FROM agent_access_log WHERE workspace_id IN ("
+                "  SELECT w.id FROM workspace w"
+                "  JOIN organization o ON o.id = w.org_id"
+                "  WHERE o.kind = 'personal' AND o.slug = ANY($1::text[]))",
+                slugs,
+            )
             await conn.execute(
                 "DELETE FROM organization WHERE kind = 'personal' AND slug = ANY($1::text[])",
                 slugs,

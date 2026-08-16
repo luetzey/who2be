@@ -121,10 +121,22 @@ services:
       MOLLIE_API_KEY: ${MOLLIE_API_KEY:-}
       MOLLIE_WEBHOOK_SECRET: ${MOLLIE_WEBHOOK_SECRET:-}
       MOLLIE_WEBHOOK_URL: ${MOLLIE_WEBHOOK_URL:-}
+      # Tabellen-Store (ADR-0049): eine SQLite-Datei pro WorkArea unter
+      # {workspace_id}/{area_id}.sqlite — die Datei ist die Isolationsgrenze,
+      # read-only erzwingt die Engine (query_only + Authorizer). Persistiert
+      # im Volume tablestore-data, damit Area-Tabellen Neustarts ueberleben.
+      WHO2BE_TABLESTORE_DIR: /data/tablestore
+    volumes:
+      - tablestore-data:/data/tablestore
     ports:
       - "8000:8000"
     depends_on:
       migrate:
+        condition: service_completed_successfully
+      # `docker compose up --wait` toleriert beendete One-Shots nur, wenn ein
+      # Dienst per service_completed_successfully von ihnen abhaengt (sonst
+      # Exit 1 trotz erfolgreichem Lauf) — gleiches Muster wie bei `migrate`.
+      minio-bootstrap:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/v1/health"]
@@ -160,5 +172,55 @@ services:
       timeout: 5s
       retries: 10
 
+  # Content-addressed Blob-Storage fuer den WorkArea-Ingest (ADR-0048).
+  # MinIO ist AGPL und laeuft — wie Postgres — NUR als Container; die App
+  # spricht S3 ueber das Apache-2.0-SDK `minio`. Keys: blobs/{workspace}/{sha256}.
+  # Ohne WHO2BE_BLOBSTORE_*-Env in der API bleibt der Dienst ungenutzt —
+  # nur Ingest/Blob-Reads liefern dann 503, alles andere laeuft.
+  minio:
+    # Gepinnte Release statt `latest` — Objekt-Storage-Daten sollen nicht an
+    # einem impliziten Image-Sprung haengen (Stand 2026-08: aktuell-stabil).
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      # Nur Loopback binden (Security-Review 2026-08-13 L3): der Dev-Store
+      # laeuft mit Default-Credentials — er darf nie im LAN erreichbar sein.
+      # Prod setzt MINIO_ROOT_PASSWORD und exponiert nur ueber Caddy/Netz.
+      - "127.0.0.1:9000:9000"  # S3-API (WHO2BE_BLOBSTORE_ENDPOINT=localhost:9000)
+      - "127.0.0.1:9001:9001"  # Web-Console (Login: minioadmin/minioadmin)
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      # `mc ready local` ist der von MinIO dokumentierte Compose-Check; das
+      # Server-Image bringt mc samt vorkonfiguriertem `local`-Alias mit.
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-Shot (Muster `set-app-role-password`, docker-compose.cloud.yml): legt
+  # den Bucket `who2be-blobs` idempotent an und terminiert. Die App erstellt
+  # Buckets bewusst nie selbst (ADR-0048).
+  minio-bootstrap:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}" &&
+        mc mb --ignore-existing local/who2be-blobs
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
+
 volumes:
   db-data:
+  minio-data:
+  # SQLite-Dateien des Tabellen-Stores (ADR-0049), eine pro WorkArea.
+  tablestore-data:

@@ -17,7 +17,7 @@ from typing import cast
 
 import asyncpg
 import structlog
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
@@ -36,6 +36,7 @@ from who2be_api.core.rate_limit import (
     _rate_limit_exceeded_handler,
     limiter,
 )
+from who2be_api.core.workarea_scope import require_agent_bound_token
 from who2be_api.licensing.edition import is_cloud, is_onprem
 from who2be_api.repositories.workspace_repository import sync_managed_builder_content
 from who2be_api.routers import (
@@ -46,6 +47,7 @@ from who2be_api.routers import (
     feedback,
     gdpr,
     invitations,
+    kb,
     me,
     members,
     memory,
@@ -63,7 +65,13 @@ from who2be_api.routers import (
     system_prompts,
     tokens,
     usages,
+    wa_artifacts,
+    wa_ingest,
+    wa_search,
+    wa_tables,
+    wa_timeline,
     whoami,
+    work_areas,
     workspaces,
 )
 from who2be_api.services.bootstrap_service import bootstrap_admin_if_needed
@@ -130,6 +138,20 @@ _PROBLEM_TITLES: dict[str, str] = {
     "concurrent_conflict": "Konflikt durch parallele Aenderung",
     "composite_child_inactive": "Composite nicht aktivierbar: Sub-Playbook nicht aktiv",
     "managed_aggregate": "Aktion nicht erlaubt: vom System verwaltet",
+    # WorkArea + Knowledge Base (ADR-0047/0048/0049, WP1):
+    "rev_conflict": "Konflikt durch veraltete Artifact-Revision",
+    "evidence_missing": "Kante nicht anlegbar: Beleg fehlt",
+    "anchor_unresolvable": "Anker nicht aufloesbar",
+    "tier_upgrade_forbidden": "Unzulaessige Tier-Hochstufung",
+    "correlation_underpowered": "Korrelation nicht belastbar: zu wenige Faelle",
+    "area_forbidden": "Aktion nicht erlaubt: kein Schreibzugriff auf diese Area",
+    "query_not_readonly": "Query nicht erlaubt: nur Lesezugriffe",
+    "convention_missing": "Import abgelehnt: Quell-Konvention fehlt",
+    "rule_required": "Kategorisierung abgelehnt: keine passende Regel",
+    "ingest_unsupported": "Ingest nicht moeglich: Format nicht unterstuetzt",
+    "ingest_too_large": "Ingest abgelehnt: Datei zu gross",
+    "url_forbidden": "URL nicht erlaubt",
+    "blobstore_unconfigured": "Blob-Storage nicht konfiguriert",
 }
 
 
@@ -278,6 +300,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(usages.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(feedback.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(memory.router, prefix=_WORKSPACE_PREFIX)
+    # WorkArea + Knowledge Base (ADR-0047): durchgehend agent-gebunden gedacht.
+    # `require_agent_bound_token` haengt am ROUTER, nicht am Endpunkt — ein
+    # `w2b_`-Token ohne `agent_id` faellt sonst in den Menschen-Zweig der
+    # Scope-Aufloesung (liest ALLE Areas) und wird nirgends protokolliert
+    # (Security-Review Phase 2, M1). Menschen (JWT) sind nicht betroffen.
+    _agent_bound = [Depends(require_agent_bound_token)]
+    app.include_router(work_areas.router, prefix=_WORKSPACE_PREFIX, dependencies=_agent_bound)
+    app.include_router(wa_artifacts.router, prefix=_WORKSPACE_PREFIX, dependencies=_agent_bound)
+    app.include_router(wa_ingest.router, prefix=_WORKSPACE_PREFIX, dependencies=_agent_bound)
+    app.include_router(wa_search.router, prefix=_WORKSPACE_PREFIX, dependencies=_agent_bound)
+    app.include_router(wa_tables.router, prefix=_WORKSPACE_PREFIX, dependencies=_agent_bound)
+    app.include_router(wa_timeline.router, prefix=_WORKSPACE_PREFIX, dependencies=_agent_bound)
+    app.include_router(kb.router, prefix=_WORKSPACE_PREFIX, dependencies=_agent_bound)
     app.include_router(search.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(system_prompts.router, prefix=_WORKSPACE_PREFIX)
     app.include_router(agents.router, prefix=_WORKSPACE_PREFIX)

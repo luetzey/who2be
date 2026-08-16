@@ -26,6 +26,9 @@ _FULL_POLICY = AgentToolPolicy(
     feedback_resolve=True,
     promote_retire=True,
     external_tool_write=True,
+    workarea_write=True,
+    kb_write=True,
+    kb_edge_write=True,
     memory_mode=MemoryMode.auto,
 )
 
@@ -228,18 +231,87 @@ def test_every_capability_is_used_in_the_mapping() -> None:
     used = {
         cap for requirement in MCP_TOOL_REQUIREMENTS.values() for cap in requirement.capabilities
     }
+    # Seit WP9 (ADR-0047) sind auch `kb_write`/`kb_edge_write` im Mapping
+    # (`tools/kb.py`) — jede Capability gated mindestens ein Tool.
     assert used == set(AgentCapability)
 
 
 def test_mapping_covers_all_registered_server_tools() -> None:
-    # 58 `@with_tool_log("<name>")`-Registrierungen in apps/mcp/.../server.py
-    # (Stand ADR-0044: + 3 Memory-Tools search_memory/list_memories/save_memory;
-    # Stand ADR-0046: + `search_content` fuer das Passage-Retrieval).
+    # 81 `@with_tool_log("<name>")`-Registrierungen in apps/mcp (58 in
+    # server.py + 8 WorkArea-Tools aus `tools/workarea.py` + 6 KB-Tools aus
+    # `tools/kb.py` inkl. `promote_artifact` + 9 Tabellen-/Timeline-Tools aus
+    # `tools/tables.py`, WP8/WP9/WP19 — ADR-0047/0049; damit ist die
+    # Welle-7-Zaehlung 71 -> 81 erreicht).
     # Neues Tool => hier + im Mapping ergaenzen; der Paritaetstest in apps/mcp
     # prueft die Gegenrichtung gegen den Server.
-    assert len(MCP_TOOL_REQUIREMENTS) == 58
+    assert len(MCP_TOOL_REQUIREMENTS) == 81
     always = {name for name, req in MCP_TOOL_REQUIREMENTS.items() if req.always}
     assert always == {"ping", "whoami"}
+
+
+def test_workarea_and_kb_domains_always_visible() -> None:
+    # WP1 (ADR-0047): WorkArea/KB sind fuer agent-gebundene Identitaeten und
+    # unrestricted Menschen sichtbar — Area-Grants sind dynamisch und werden
+    # serverseitig durchgesetzt; der PolicyFilter ist ohnehin fail-open, die
+    # API bleibt die Autoritaet. Seit WP8 traegt "workarea" konkrete Tools
+    # (read_artifact/list_artifacts/search_workarea), seit WP9 auch "kb"
+    # (search_kb/neighbors) — die Sichtbarkeitslogik wird weiterhin direkt
+    # gegen die Helper geprueft.
+    from who2be_models.tool_requirements import ReadDomain, _read_visible, _scoped_read_visible
+
+    locked_down = AgentToolPolicy(
+        persona_read=False,
+        playbook_read=ReadScope.none,
+        resource_read=ReadScope.none,
+        agent_read=ReadScope.none,
+        external_tool_read=ReadScope.none,
+    )
+    domains: tuple[ReadDomain, ...] = ("workarea", "kb")
+    for domain in domains:
+        assert _read_visible(domain, locked_down) is True
+        assert _read_visible(domain, AgentToolPolicy()) is True
+        # whoami-Pfad: weder ein fehlender Key noch irgendein Scope sperrt.
+        assert _scoped_read_visible(domain, {}) is True
+        assert _scoped_read_visible(domain, _DEFAULT_SCOPES) is True
+
+
+_WORKAREA_WRITE_TOOLS = (
+    "create_artifact",
+    "append_artifact",
+    "patch_artifact",
+    "delete_artifact",
+    "ingest",
+)
+_WORKAREA_READ_TOOLS = ("read_artifact", "list_artifacts", "search_workarea")
+
+
+def test_workarea_write_capability_gates_write_tools() -> None:
+    # WP8 (ADR-0047): Default-Policy hat `workarea_write=False` — die fuenf
+    # Write-Tools sind unsichtbar, bis die Capability gewaehrt wird.
+    default = AgentToolPolicy()
+    granted = AgentToolPolicy(workarea_write=True)
+    for name in _WORKAREA_WRITE_TOOLS:
+        assert is_tool_visible(name, default) is False, name
+        assert is_tool_visible(name, granted) is True, name
+        assert _visible_for_bound(name, []) is False, name
+        assert _visible_for_bound(name, [AgentCapability.workarea_write]) is True, name
+
+
+def test_workarea_read_tools_visible_even_when_locked_down() -> None:
+    # Die WorkArea-Reads haengen an dynamischen Area-Grants (Domain
+    # "workarea"), nicht an einem `ReadScope` — sie bleiben auch fuer eine
+    # komplett zugesperrte Inhalts-Policy sichtbar (API = Autoritaet).
+    locked_down = AgentToolPolicy(
+        persona_read=False,
+        playbook_read=ReadScope.none,
+        resource_read=ReadScope.none,
+        agent_read=ReadScope.none,
+        external_tool_read=ReadScope.none,
+    )
+    for name in _WORKAREA_READ_TOOLS:
+        assert is_tool_visible(name, locked_down) is True, name
+        assert is_tool_visible(name, AgentToolPolicy()) is True, name
+        assert _visible_for_bound(name, []) is True, name
 
 
 def test_memory_tools_follow_memory_mode_ladder() -> None:

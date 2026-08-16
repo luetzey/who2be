@@ -19,6 +19,7 @@ from who2be_api.core.pagination import DEFAULT_LIMIT, PageCursor, PageLimit
 from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.repositories.agent_repository import PgAgentRepository
+from who2be_api.repositories.audit_log_repository import PgAuditLogRepository
 from who2be_api.repositories.persona_repository import PgPersonaRepository
 from who2be_api.repositories.system_prompt_template_repository import (
     PgSystemPromptTemplateRepository,
@@ -26,6 +27,7 @@ from who2be_api.repositories.system_prompt_template_repository import (
 from who2be_api.services.agent_fetch_rendered_service import AgentFetchRenderedService
 from who2be_api.services.agent_render_service import AgentRenderService
 from who2be_api.services.agent_service import AgentService
+from who2be_api.services.audit_service import AuditService
 from who2be_api.services.entity_quota_service import enforce_entity_quota
 from who2be_api.services.mcp_limit_service import enforce_mcp_read_limit
 from who2be_models import (
@@ -44,7 +46,13 @@ router = APIRouter(prefix="/agents", tags=["agents"])
 def get_agent_service(
     pool: Annotated[asyncpg.Pool, Depends(get_pool)],
 ) -> AgentService:
-    return AgentService(PgAgentRepository(pool))
+    # Audit-Verdrahtung (WP14): der Update-Pfad protokolliert Aenderungen an
+    # der Modell-Config (`agent.model_config_changed`) im `audit_log`.
+    return AgentService(
+        PgAgentRepository(pool),
+        audit_service=AuditService(PgAuditLogRepository()),
+        pool=pool,
+    )
 
 
 def get_agent_render_service(
