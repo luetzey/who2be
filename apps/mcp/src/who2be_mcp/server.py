@@ -28,6 +28,7 @@ from who2be_mcp.client import (
     ApiClient,
     EntityType,
     UsageEntityType,
+    problem_message,
 )
 from who2be_mcp.config import Settings, get_settings
 from who2be_mcp.core_logging import configure_logging, with_tool_log
@@ -285,7 +286,10 @@ async def _resolve_workspace_id(settings: Settings, token: str) -> UUID:
     if response.status_code == 401:
         raise ToolError("Nicht autorisiert — API-Token pruefen.")
     if response.is_error:
-        raise ToolError(f"Who2Be-API-Fehler ({response.status_code}).")
+        # Auch hier den Server-Grund durchreichen (s. `client.problem_message`)
+        # — ein 503 im Workspace-Lookup ist fuer den Agenten sonst nicht von
+        # einem Tippfehler zu unterscheiden.
+        raise ToolError(problem_message(response, f"Who2Be-API-Fehler ({response.status_code})."))
     data = response.json()
     ws_id = data.get("default_workspace_id")
     if not isinstance(ws_id, str):

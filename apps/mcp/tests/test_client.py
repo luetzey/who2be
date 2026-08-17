@@ -290,6 +290,106 @@ def test_server_error_raises_toolerror() -> None:
         asyncio.run(_client(handler).get_playbook(uuid4()))
 
 
+# --------------------------------------------------- Reason-Codes (Befund C)
+
+
+def _problem(status: int, reason: str, detail: str, actionable_by: str) -> httpx.Response:
+    """`application/problem+json`, wie die API-Gates es liefern."""
+    return httpx.Response(
+        status,
+        json={
+            "type": "about:blank",
+            "title": "Fehler",
+            "status": status,
+            "detail": detail,
+            "reason": reason,
+            "actionable_by": actionable_by,
+            "request_id": "req-1",
+        },
+    )
+
+
+def test_reason_und_actionable_by_landen_im_toolerror() -> None:
+    """Der Schluessel, auf den ein Agent verzweigen soll, muss ihn erreichen.
+
+    `reason` ist ein geschlossenes Vokabular und ausdruecklich dafuer gebaut,
+    dass ein Agent NICHT den `detail`-Freitext parsen muss
+    (`models/errors.py`). Der MCP-Server hat ihn bis 2026-08-17 verworfen.
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _problem(
+            422,
+            "convention_missing",
+            "Die Quelle 'n26' hat keine hinterlegte Konvention.",
+            "agent",
+        )
+
+    with pytest.raises(ToolError) as excinfo:
+        asyncio.run(_client(handler).get_playbook(uuid4()))
+    message = str(excinfo.value)
+    # Die Prosa bleibt vorne — danach handelt das Modell.
+    assert message.startswith("Die Quelle 'n26' hat keine hinterlegte Konvention.")
+    assert "reason=convention_missing" in message
+    assert "actionable_by=agent" in message
+
+
+@pytest.mark.parametrize(
+    ("status", "reason", "actionable_by"),
+    [
+        (503, "tablestore_unavailable", "human"),
+        (413, "ingest_too_large", "agent"),
+        (403, "area_forbidden", "agent"),
+        (409, "rev_conflict", "agent"),
+    ],
+)
+def test_reason_kommt_bei_jedem_status_durch(status: int, reason: str, actionable_by: str) -> None:
+    """Auch die Statuses, die vorher NUR den nackten Code lieferten.
+
+    `Who2Be-API-Fehler (503)` liess einen Agenten im Dunkeln: er konnte weder
+    sehen, dass ein Retry sinnlos ist (`actionable_by=human`), noch warum.
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _problem(status, reason, "Sprechende Begruendung.", actionable_by)
+
+    with pytest.raises(ToolError) as excinfo:
+        asyncio.run(_client(handler).get_playbook(uuid4()))
+    message = str(excinfo.value)
+    assert "Sprechende Begruendung." in message
+    assert f"reason={reason}" in message
+    assert f"actionable_by={actionable_by}" in message
+    # Und nicht mehr die generische Huelle, die vorher alles verdeckt hat.
+    assert "Who2Be-API-Fehler" not in message
+
+
+def test_ohne_reason_bleibt_die_meldung_unveraendert() -> None:
+    """Antworten ohne Taxonomie (FastAPI-`HTTPException`) erfinden nichts.
+
+    Sonst stuende an einer 422-Validierungsantwort ploetzlich ein
+    `reason=`-Schluessel, auf den kein Agent verzweigen kann.
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(422, json={"detail": "Zeile 0: 'occurred_at' fehlt."})
+
+    with pytest.raises(ToolError) as excinfo:
+        asyncio.run(_client(handler).get_playbook(uuid4()))
+    message = str(excinfo.value)
+    assert message == "Zeile 0: 'occurred_at' fehlt."
+    assert "reason=" not in message
+
+
+def test_ohne_body_bleibt_der_fallback() -> None:
+    """Kein JSON (Proxy-Fehlerseite, leerer Body) → generische Meldung."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(502, text="<html>bad gateway</html>")
+
+    with pytest.raises(ToolError, match=r"Who2Be-API-Fehler \(502\)"):
+        asyncio.run(_client(handler).get_playbook(uuid4()))
+
+
 def test_network_error_raises_toolerror() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("Verbindung fehlgeschlagen")
