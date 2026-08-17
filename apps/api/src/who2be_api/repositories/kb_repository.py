@@ -27,6 +27,7 @@ from uuid import UUID
 
 import asyncpg
 
+from who2be_api.repositories.fts_config import fts_config_expr
 from who2be_models import KbEdgeRead, KbNeighbor, KbNodeRead, KbSearchHit
 
 _Fetcher: TypeAlias = asyncpg.Pool | asyncpg.Connection
@@ -133,6 +134,7 @@ class KbRepository(Protocol):
         occurred_at: datetime,
         occurred_precision: str,
         created_by: UUID,
+        locale: str,
     ) -> KbNodeRead: ...
 
     async def update_node(
@@ -276,12 +278,16 @@ class PgKbRepository:
         occurred_at: datetime,
         occurred_precision: str,
         created_by: UUID,
+        locale: str,
     ) -> KbNodeRead:
+        # `locale` steuert die FTS-Config der generierten `search`-Spalte
+        # (0082) — der Service leitet sie aus dem Workspace ab, nie der
+        # Client.
         row = await conn.fetchrow(
             "INSERT INTO kb_node "
             "(workspace_id, tier, content, content_ref, source_ref, source_ref_kind, "
-            " sensitivity, occurred_at, occurred_precision, created_by) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) "
+            " sensitivity, occurred_at, occurred_precision, created_by, locale) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) "
             f"RETURNING {_NODE_COLUMNS}",
             workspace_id,
             tier,
@@ -293,6 +299,7 @@ class PgKbRepository:
             occurred_at,
             occurred_precision,
             created_by,
+            locale,
         )
         assert row is not None
         return _to_node(row)
@@ -600,19 +607,27 @@ class PgKbRepository:
         *,
         restrict_area_ids: list[UUID] | None,
     ) -> list[KbSearchHit]:
-        """FTS ueber `kb_node.search` ('simple' wie die Generated Column 0077).
+        """FTS ueber `kb_node.search` — Config je Zeile aus `n.locale` (0082).
+
+        Die Config MUSS dieselbe sein wie im Ausdruck der generierten Spalte,
+        sonst trifft die Query ihren eigenen Index nicht (und zwar lautlos:
+        keine Treffer, kein Fehler). Beide Seiten stammen deshalb aus
+        `fts_config_expr`. Bis 0082 stand hier fest `'simple'`; damit war eine
+        Aussage ueber den „Fehlercode" fuer eine Suche nach „Fehlercodes"
+        unsichtbar (Befund B).
 
         Sichtbarkeit sitzt IN der WHERE-Klausel (Spec E); die leere
         Scope-Liste wird NICHT kurzgeschlossen — quellenlose Nodes bleiben
         fuer alle sichtbar (s. `_visible_sql`). Liefert Anker + Snippet,
         nie WorkArea-Inhalte (nur `kb_node`, s. Modul-Kopf).
         """
+        cfg = fts_config_expr("n.locale")
         rows = await fetcher.fetch(
             "SELECT n.id, n.tier, n.status, n.content, "
-            "       ts_rank(n.search, plainto_tsquery('simple', $2)) AS score "
+            f"       ts_rank(n.search, plainto_tsquery({cfg}, $2)) AS score "
             "FROM kb_node n "
             "WHERE n.workspace_id = $1 "
-            "  AND n.search @@ plainto_tsquery('simple', $2) "
+            f"  AND n.search @@ plainto_tsquery({cfg}, $2) "
             f"  AND {_visible_sql(4)} "
             "ORDER BY score DESC, n.id "
             "LIMIT $3",

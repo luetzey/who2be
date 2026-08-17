@@ -23,6 +23,7 @@ from uuid import UUID
 
 import asyncpg
 
+from who2be_api.repositories.fts_config import fts_config_expr
 from who2be_models import WorkAreaSearchHit
 
 # Obergrenze des ausgelieferten Snippets. Ein Chunk traegt bis zu 4000 Zeichen
@@ -30,15 +31,10 @@ from who2be_models import WorkAreaSearchHit
 # das Dokument; den Volltext holt `GET /wa-artifacts/{id}?anchor=`.
 _SNIPPET_MAX_CHARS = 200
 
-# FTS-Config exakt wie die Generated Column in Migration 0076 (und wie
-# `content_chunk_repository._FTS_CONFIG` fuer 0070): Sprach-Praefix
-# entscheidet, unbekannte Sprachen fallen auf 'simple' zurueck.
-_FTS_CONFIG = (
-    "CASE split_part(c.locale, '-', 1) "
-    "WHEN 'de' THEN 'german'::regconfig "
-    "WHEN 'en' THEN 'english'::regconfig "
-    "ELSE 'simple'::regconfig END"
-)
+# FTS-Config exakt wie die Generated Column in Migration 0076: Sprach-Praefix
+# entscheidet, unbekannte Sprachen fallen auf 'simple' zurueck. Gemeinsame
+# Quelle mit 0070/0082 — s. `fts_config`.
+_FTS_CONFIG = fts_config_expr("c.locale")
 
 
 def _snippet(text: str) -> str:

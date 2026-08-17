@@ -743,3 +743,33 @@ bleiben)._
 - **Detail:** `services/wa_chunks.split_sections`/`passage_for_anchor`,
   `services/wa_artifacts.read`; `test_wa_blocks.py` (pure Fälle),
   `test_wa_search.py::test_treffer_anker_liefert_die_passage_nicht_nur_die_ueberschrift`.
+
+## 2026-08-17 — KB-Suche wird sprachbewusst (revidiert 0077)
+- **Entscheidung:** `kb_node` bekommt eine `locale`-Spalte (Migration 0082,
+  Backfill aus `workspace.content_locale`), und die generierte `search`-Spalte
+  bildet wie `wa_chunk`/`content_chunk` auf `german`/`english` ab —
+  Fallback `simple` bei unbekannter Sprache. Die Sprache ist
+  **server-abgeleitet** (`resolve_content_locale`); `KbNodeCreate` bekommt
+  kein `locale`-Feld.
+- **Anlass:** Befund B. `'simple'` kennt kein Stemming, also war eine Aussage
+  über den „Fehlercode" für eine Suche nach „Fehlercodes" unsichtbar —
+  während `search_workarea` denselben Text fand.
+- **Begründung:** 0077 begründete `'simple'` mit „kurz und ggf.
+  gemischtsprachig". Der Preis dieser Annahme war nie beziffert: die KB ist
+  für den Agenten der kuratierte Wissensspeicher, und ein stiller Nicht-Treffer
+  ist dort teurer als ein gelegentlich unpassend gestemmtes Wort. Die Sprache
+  muss auch nicht geraten werden — der Workspace trägt sie seit 0069.
+- **Nebenentscheidung:** Die Abbildung Sprache → `regconfig` steht ab jetzt
+  **einmal** (`repositories/fts_config.fts_config_expr`) statt als Kopie je
+  Suchpfad. Sie muss zwingend mit dem Ausdruck der generierten Spalte
+  übereinstimmen; läuft sie auseinander, findet die Query ihren eigenen Index
+  nicht — lautlos, ohne Fehler. Eine Änderung der Abbildung verlangt deshalb
+  immer eine Migration, die die betroffenen Spalten neu baut.
+- **Verworfen:** `locale` als Agenten-Feld in `KbNodeCreate` (eine Entscheidung
+  mehr, die falsch getroffen werden kann); Spracherkennung pro Aussage (rät,
+  wo eine verlässliche Quelle existiert); zusätzlich auf
+  `websearch_to_tsquery` umstellen (beträfe alle drei Suchpfade und gehört
+  eigenständig gemessen).
+- **Detail:** `0082_kb_node_locale.sql`; `repositories/fts_config.py`;
+  `kb_repository.search_nodes`/`insert_node`; `services/kb.create_node`;
+  `test_kb.py` (Wortformen, Sprach-Fallback, Migration gegen Altbestand).
