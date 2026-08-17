@@ -63,7 +63,9 @@ from who2be_api.core.workarea_scope import is_agent_bound, readable_area_ids
 from who2be_api.repositories.agent_access_log_repository import AccessOperation
 from who2be_api.repositories.kb_repository import KbRepository
 from who2be_api.repositories.work_area_repository import WorkAreaRepository
+from who2be_api.repositories.workspace_repository import WorkspaceRepository
 from who2be_api.services.access_log import log_access
+from who2be_api.services.content_locale import resolve_content_locale
 from who2be_api.services.kb_anchors import (
     ResolvedAnchor,
     resolve_anchor,
@@ -194,11 +196,19 @@ class KbService:
     """KB-Nodes, -Kanten, Nachbarschaft und Suche ueber dem `KbRepository`."""
 
     def __init__(
-        self, pool: asyncpg.Pool, repo: KbRepository, work_areas: WorkAreaRepository
+        self,
+        pool: asyncpg.Pool,
+        repo: KbRepository,
+        work_areas: WorkAreaRepository,
+        *,
+        workspace_repo: WorkspaceRepository,
     ) -> None:
         self._pool = pool
         self._repo = repo
         self._work_areas = work_areas
+        # Nur fuer die Content-Sprache (0082): sie steuert die FTS-Config der
+        # generierten `search`-Spalte. Muster `WaArtifactService`.
+        self._workspaces = workspace_repo
 
     # ------------------------------------------------------------------ Gates
 
@@ -269,6 +279,12 @@ class KbService:
                 occurred_at=data.occurred_at,
                 occurred_precision=data.occurred_precision.value,
                 created_by=self._actor(ctx),
+                # Sprache aus dem Workspace, nicht vom Client: sie steuert die
+                # FTS-Config des Index (0082), und `KbNodeCreate` traegt
+                # bewusst kein `locale` — ein Agent soll die Sprache nicht
+                # waehlen muessen, sie steht schon am Workspace (Muster
+                # `WaArtifactService._locale`).
+                locale=await resolve_content_locale(self._workspaces, ctx.workspace_id, None),
             )
             await self._repo.add_source_areas(conn, ctx.workspace_id, node.id, sorted(areas))
         await self._log_node(ctx, node.id, "write", node.sensitivity)

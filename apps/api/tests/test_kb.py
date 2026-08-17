@@ -22,6 +22,9 @@ Kritische Invarianten:
   `workarea_write` darf keine Nodes anlegen (403 `missing_capability`).
 - Index-Trennung (Spec C): ein Begriff, der nur in einem WorkArea-Artifact
   steht, liefert in der KB-Suche 0 Treffer.
+- Sprache (0082): die KB stemmt wie die WorkArea-Suche — „Fehlercodes"
+  findet „Fehlercode"; unbekannte Sprachen fallen auf `'simple'` zurueck
+  (kein Fehler, nur kein Stemming); Migration 0082 zieht Bestandszeilen nach.
 """
 
 import asyncio
@@ -34,6 +37,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from who2be_api.core.config import get_settings
+from who2be_api.core.migrations import MIGRATIONS_DIR
 from who2be_api.main import app
 from who2be_api.testing.workspace_setup import (
     cleanup_workspaces,
@@ -57,6 +61,19 @@ def _db_fetchval(sql: str, *args: object) -> Any:
             await conn.close()
 
     return asyncio.run(_run())
+
+
+def _db_execute(sql: str, *args: object) -> None:
+    """Direkter DB-Write — stellt Altbestand nach bzw. faehrt eine Migration."""
+
+    async def _run() -> None:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            await conn.execute(sql, *args)
+        finally:
+            await conn.close()
+
+    asyncio.run(_run())
 
 
 def _edge_counts(ws: UUID) -> tuple[int, int]:
@@ -698,6 +715,132 @@ def test_kb_suche_findet_keine_workarea_inhalte(make_auth_headers: AuthFactory) 
                 f"{prefix}/kb-search", params={"q": "Zebrastreifenprojekt"}, headers=auth
             )
             assert search.status_code == 200 and search.json() == []
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db")
+def test_kb_suche_findet_deutsche_wortformen(make_auth_headers: AuthFactory) -> None:
+    """Die KB stemmt wie die WorkArea-Suche (Befund B, 2026-08-16).
+
+    Vorher indizierte `kb_node.search` mit `'simple'` — kein Stemming. Eine
+    Aussage ueber den „Fehlercode" war damit fuer eine Suche nach
+    „Fehlercodes" unsichtbar, waehrend `search_workarea` denselben Text
+    fand (`wa_chunk` bildet ueber `locale` auf `german` ab). Fuer einen
+    Agenten ist dieser Unterschied nicht lesbar: kein Treffer sieht aus wie
+    kein Wissen.
+
+    Geprueft wird in BEIDE Richtungen — Singular findet Plural und
+    umgekehrt —, damit der Test nicht zufaellig an einer Richtung haengt.
+    """
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    prefix = f"/v1/workspaces/{ws}"
+    try:
+        with TestClient(app) as client:
+            area_id = _shared_area(client, prefix, auth, "KB-Sprache")
+            artifact_id, block_id = _artifact(client, prefix, auth, area_id, "Beleg.")
+            node_id = _node(
+                client,
+                prefix,
+                auth,
+                f"{artifact_id}#{block_id}",
+                content="Der Fehlercode E-102 betrifft den Vorlagendruck.",
+            ).json()["id"]
+
+            for begriff in ("Fehlercodes", "Fehlercode", "Vorlagendrucks"):
+                hits = client.get(f"{prefix}/kb-search", params={"q": begriff}, headers=auth).json()
+                assert [h["node_id"] for h in hits] == [node_id], begriff
+
+            # Kein Freibrief: ein unbeteiligtes Wort trifft weiterhin nicht.
+            leer = client.get(f"{prefix}/kb-search", params={"q": "Buchhaltung"}, headers=auth)
+            assert leer.json() == []
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db")
+def test_kb_suche_faellt_bei_unbekannter_sprache_auf_simple(
+    make_auth_headers: AuthFactory,
+) -> None:
+    """Unbekannte Content-Sprache → `'simple'`: exakte Treffer, kein Fehler.
+
+    Die Abbildung kennt `de` und `en`; alles andere faellt bewusst auf
+    `'simple'` zurueck (Muster `wa_chunk`/0076). Wichtig ist, dass der
+    Fallback KEIN Fehler ist — die Suche funktioniert, sie stemmt nur nicht.
+
+    `content_locale` wird direkt in der DB gesetzt, NICHT ueber
+    `setup_workspace(content_locale='fr')`: die App-Schicht kennt nur de/en
+    (`builder_content.SUPPORTED_LOCALES`) und koennte einen fr-Workspace gar
+    nicht seeden. Die DB-Schicht ist bewusst offen (0069: kein CHECK) — und
+    genau dort sitzt der Fallback, den dieser Test prueft.
+    """
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    prefix = f"/v1/workspaces/{ws}"
+    _db_execute("UPDATE workspace SET content_locale = 'fr' WHERE id = $1", ws)
+    try:
+        with TestClient(app) as client:
+            area_id = _shared_area(client, prefix, auth, "KB-Sprache-FR")
+            artifact_id, block_id = _artifact(client, prefix, auth, area_id, "Beleg.")
+            node_id = _node(
+                client,
+                prefix,
+                auth,
+                f"{artifact_id}#{block_id}",
+                content="Le code erreur E-102 concerne l'impression.",
+            ).json()["id"]
+            assert _db_fetchval("SELECT locale FROM kb_node WHERE id = $1", UUID(node_id)) == "fr"
+
+            treffer = client.get(f"{prefix}/kb-search", params={"q": "erreur"}, headers=auth)
+            assert treffer.status_code == 200
+            assert [h["node_id"] for h in treffer.json()] == [node_id]
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db")
+def test_migration_0082_zieht_bestandsnodes_nach(make_auth_headers: AuthFactory) -> None:
+    """Bestandsdaten aus der Zeit vor der Sprach-Spalte.
+
+    Nachgestellt wird eine Zeile, deren `locale` nicht zum Workspace passt
+    (vor 0082 gab es die Spalte gar nicht, der Effekt ist derselbe: der
+    Index steht auf der falschen Config). Die Migrationsdatei selbst laeuft
+    darauf — sie backfillt aus `workspace.content_locale` und baut die
+    generierte Spalte neu; ein zweiter Lauf ist ein No-op.
+    """
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    prefix = f"/v1/workspaces/{ws}"
+    try:
+        with TestClient(app) as client:
+            area_id = _shared_area(client, prefix, auth, "KB-Altbestand")
+            artifact_id, block_id = _artifact(client, prefix, auth, area_id, "Beleg.")
+            node_id = _node(
+                client,
+                prefix,
+                auth,
+                f"{artifact_id}#{block_id}",
+                content="Die Wartung der Presse ist faellig.",
+            ).json()["id"]
+
+            _db_execute("UPDATE kb_node SET locale = 'xx' WHERE id = $1", UUID(node_id))
+            assert (
+                client.get(f"{prefix}/kb-search", params={"q": "Wartungen"}, headers=auth).json()
+                == []
+            )
+
+            _db_execute((MIGRATIONS_DIR / "0082_kb_node_locale.sql").read_text(encoding="utf-8"))
+
+            assert _db_fetchval("SELECT locale FROM kb_node WHERE id = $1", UUID(node_id)) == "de"
+            hits = client.get(f"{prefix}/kb-search", params={"q": "Wartungen"}, headers=auth).json()
+            assert [h["node_id"] for h in hits] == [node_id]
     finally:
         cleanup_workspaces([owner])
 

@@ -20,6 +20,7 @@ from uuid import UUID
 
 import asyncpg
 
+from who2be_api.repositories.fts_config import fts_config_expr
 from who2be_api.services.content_chunks import ChunkDraft
 from who2be_models import ContentChunkHit
 
@@ -108,13 +109,9 @@ _MIN_VECTOR_SIMILARITY = 0.40
 
 # FTS-Config identisch zur Generated Column in Migration 0070 — sonst matcht die
 # Query ihren eigenen Index nicht (eine `german`-Spalte gegen eine
-# `simple`-Query findet nichts).
-_FTS_CONFIG = (
-    "CASE split_part(c.locale, '-', 1) "
-    "WHEN 'de' THEN 'german'::regconfig "
-    "WHEN 'en' THEN 'english'::regconfig "
-    "ELSE 'simple'::regconfig END"
-)
+# `simple`-Query findet nichts). Die Abbildung liegt in `fts_config`, weil
+# drei Suchpfade sie teilen.
+_FTS_CONFIG = fts_config_expr("c.locale")
 
 
 def _search_sql(

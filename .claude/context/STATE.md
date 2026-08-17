@@ -397,6 +397,34 @@ Block — das ist der Blick vor einem `patch_artifact`. Die Tool-Beschreibungen
 in `apps/mcp` sagen beide Fälle jetzt an. Gegenprobe gefahren: ohne den Fix
 liefert der Read `'## Fehlercodes [#…]'`, der neue Test wird rot.
 
+### KB-Suche fand keine deutschen Wortformen (2026-08-17, behoben)
+
+Befund B aus dem Builder-Test. `kb_node.search` indizierte mit
+`to_tsvector('simple', content)` (0077) und die Abfrage nutzte konsistent
+`plainto_tsquery('simple', …)` — kein Mismatch, aber **kein Stemming**. Eine
+Aussage über den „Fehlercode" war damit für eine Suche nach „Fehlercodes"
+unsichtbar, während `search_workarea` denselben Text fand (`wa_chunk` bildet
+über `locale` auf `german`/`english` ab). Für einen Agenten ist der
+Unterschied nicht lesbar: kein Treffer sieht aus wie kein Wissen.
+
+Die Begründung in 0077 („Aussagen sind kurz und ggf. gemischtsprachig")
+bleibt dort stehen; 0082 revidiert die Entscheidung, weil ihr Preis im
+Betrieb sichtbar wurde. `workspace.content_locale` (0069) sagt längst, in
+welcher Sprache ein Workspace schreibt.
+
+Behoben: Migration `0082` gibt `kb_node` eine `locale`-Spalte (Backfill aus
+dem Workspace) und ersetzt die generierte `search`-Spalte durch die
+locale-abhängige Config — der Neuaufbau der Spalte **ist** der Reindex.
+`services/kb.create_node` leitet die Sprache serverseitig über den
+bestehenden `resolve_content_locale` ab; `KbNodeCreate` bekommt bewusst
+**kein** `locale`-Feld.
+
+Dazu: die Abbildung Sprache → Textsuch-Config lag zweimal wörtlich identisch
+im Code (`content_chunk_repository`, `wa_search_repository`). Statt einer
+dritten Kopie gibt es jetzt `repositories/fts_config.fts_config_expr`, das
+alle drei Suchpfade nutzen. Gegenprobe: alle drei neuen Tests waren vor dem
+Fix rot (`Fehlercodes` → `[]`, fehlende Spalte, fehlender Backfill).
+
 ## Bekannte Probleme
 
 - **Tabellen-Import kappt Zell-Breiten nicht** (gefunden 2026-08-16): der
