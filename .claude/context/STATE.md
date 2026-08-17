@@ -374,6 +374,29 @@ Behoben (PR folgt in diesem Branch):
   gesetzter Konvention, ein Migrationstest gegen nachgestellten Altbestand
   und ein Drift-Guard über alle Repositories.
 
+### Suchtreffer-Anker lieferte nur die Überschrift (2026-08-16, behoben)
+
+Befund A aus dem Builder-Test. Der dokumentierte Weg lautet
+`search_workarea` → `read_artifact(anchor)`. Der Treffer-Anker ist per
+Konstruktion die `block_id` des **Heading-Blocks** der Passage
+(`wa_chunks.build_chunks`) — der Lesepfad gab darauf aber genau diesen einen
+Block zurück. Der Agent bekam also `## Fehlercodes` ohne eine Zeile Inhalt
+und musste doch das ganze Dokument laden, also genau das, was die Suche
+vermeiden soll.
+
+Warum es kein Test fand: der bestehende End-to-End-Test benutzt ein Dokument
+aus EINEM Absatz ohne Überschrift. Dort sind „ein Block" und „die Passage"
+dasselbe — die einzige Dokumentform, in der beide Verhalten
+ununterscheidbar sind.
+
+Behoben: `wa_chunks.split_sections` ist jetzt die gemeinsame Quelle der
+Passagen-Grenzen für Index UND Lesepfad; `passage_for_anchor` löst einen
+Anker auf. Ein Anker, der eine Passage eröffnet, liefert die ganze Passage
+(bis zur nächsten Überschrift); jeder andere Anker weiterhin genau seinen
+Block — das ist der Blick vor einem `patch_artifact`. Die Tool-Beschreibungen
+in `apps/mcp` sagen beide Fälle jetzt an. Gegenprobe gefahren: ohne den Fix
+liefert der Read `'## Fehlercodes [#…]'`, der neue Test wird rot.
+
 ## Bekannte Probleme
 
 - **Tabellen-Import kappt Zell-Breiten nicht** (gefunden 2026-08-16): der

@@ -105,7 +105,7 @@ async def create_artifact(
     Der Server splittet `content_md` deterministisch in Bloecke und vergibt
     stabile 8-stellige `block_id`s — die Antwort traegt sie in `blocks`.
     `<artifact_id>#<block_id>` ist der Anker, mit dem `read_artifact(anchor)`
-    und `patch_artifact` einen Block direkt adressieren; Suchtreffer liefern
+    und `patch_artifact` eine Stelle direkt adressieren; Suchtreffer liefern
     ihn mit. Weiterschreiben: `append_artifact` (konfliktfrei) oder
     `patch_artifact` (gezielt am Anker).
     """
@@ -186,12 +186,22 @@ async def read_artifact(artifact_id: str, anchor: str | None = None) -> Artifact
     """Liest ein doc-Artifact als Markdown mit `[#block_id]`-Anker-Annotationen.
 
     Jeder Block ist mit seinem stabilen Anker annotiert — der `block_id`-Teil
-    der Anker-Sprache `<artifact_id>#<block_id>` (Suchtreffer, Patches). Mit
-    `anchor` liefert der Server NUR den einen Block — der richtige
-    Folgeschritt nach einem `search_workarea`-Treffer, statt das ganze
-    Dokument zu laden; akzeptiert die reine `block_id` oder den vollen
-    Treffer-Anker. Die Antwort traegt zudem die aktuelle `rev` — nutze sie
-    als `expected_rev` fuer einen anschliessenden `patch_artifact`.
+    der Anker-Sprache `<artifact_id>#<block_id>` (Suchtreffer, Patches).
+    Akzeptiert die reine `block_id` oder den vollen Treffer-Anker.
+
+    `anchor` schneidet zu, und zwar so, wie du es an der Stelle brauchst:
+
+    - **Anker aus einem Suchtreffer** (der Anfang einer Passage): du bekommst
+      die GANZE Passage — Ueberschrift plus zugehoerigen Text bis zur
+      naechsten Ueberschrift. Das ist der Folgeschritt nach
+      `search_workarea`, statt das ganze Dokument zu laden.
+    - **Anker mitten in einer Passage**: du bekommst genau diesen einen Block
+      — der Blick, den du vor einem `patch_artifact` willst.
+
+    Was du bekommen hast, siehst du an den `[#…]`-Ankern in der Antwort: sie
+    stehen an jedem gelieferten Block. Die Antwort traegt zudem die aktuelle
+    `rev` — nutze sie als `expected_rev` fuer einen anschliessenden
+    `patch_artifact`.
     """
     client = await _client()
     block = None if anchor is None else _block_id(anchor)
@@ -298,8 +308,8 @@ async def search_workarea(query: str, area_id: str | None = None) -> list[WorkAr
     Beginne hier statt bei `list_artifacts`. Jeder Treffer traegt `snippet`
     (die Passage), `title`, `area_id` und den Anker
     `<artifact_id>#<block_id>` (ADR-0021): damit liefert
-    `read_artifact(artifact_id, anchor)` direkt den EINEN Block, ohne das
-    ganze Dokument zu laden. Durchsucht werden nur Areas, die du lesen
+    `read_artifact(artifact_id, anchor)` direkt DIESE PASSAGE im Volltext,
+    ohne das ganze Dokument zu laden. Durchsucht werden nur Areas, die du lesen
     darfst; `area_id` schraenkt optional auf eine Area ein — ausserhalb
     deines Scopes ist das Ergebnis leer (kein Existenz-Orakel). Findest du
     nichts, sag das offen, statt zu raten.

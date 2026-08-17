@@ -10,6 +10,9 @@ Kern-Invarianten:
   insert_after/delete positionieren korrekt, unbekannter Anker → None.
 - `build_chunks`: heading_path aus VORFAHREN, fortlaufende `ord`,
   4000-Zeichen-Cap ohne Textverlust.
+- `passage_for_anchor`: ein Passagen-Anker (Heading bzw. erster Block vor dem
+  ersten Heading) loest die ganze Passage auf, ein Anker mitten drin `None` —
+  und die Menge der Passagen-Anker deckt sich mit den Ankern des Index.
 """
 
 from __future__ import annotations
@@ -25,7 +28,7 @@ from who2be_api.services.wa_blocks import (
     render_markdown,
     split_markdown,
 )
-from who2be_api.services.wa_chunks import build_chunks
+from who2be_api.services.wa_chunks import build_chunks, passage_for_anchor
 from who2be_models import DocBlock, DocBlockKind
 from who2be_models.workarea import DOC_BLOCK_MD_MAX_LENGTH
 
@@ -209,3 +212,64 @@ def test_build_chunks_cap_splittet_ohne_verlust() -> None:
 
 def test_build_chunks_leere_blockliste() -> None:
     assert build_chunks([]) == []
+
+
+# -------------------------------------------------------------- passage_for_anchor
+
+
+def test_passage_for_anchor_liefert_die_ganze_sektion() -> None:
+    """Der Anker eines Suchtreffers muss die PASSAGE aufmachen, nicht die Zeile.
+
+    Ein Heading-Anker liefert Ueberschrift + zugehoerigen Text bis zum
+    naechsten Heading — genau die Bloecke, aus denen `build_chunks` den
+    Indextext baut. Vorher gab derselbe Anker nur den Heading-Block zurueck:
+    ein Treffer fuehrte zur Ueberschrift ohne eine Zeile Inhalt.
+    """
+    blocks = split_markdown(
+        "Praeambel vor dem ersten Heading.\n\n"
+        "# Reklamation\n\nGrundlagen.\n\n"
+        "## Eskalation\n\nStufenplan.\n\nZweiter Absatz der Eskalation.\n\n"
+        "# Neues Kapitel\n\nInhalt."
+    )
+    by_md = {block.md: block for block in blocks}
+
+    eskalation = passage_for_anchor(blocks, by_md["## Eskalation"].block_id)
+    assert eskalation is not None
+    assert [b.md for b in eskalation] == [
+        "## Eskalation",
+        "Stufenplan.",
+        "Zweiter Absatz der Eskalation.",
+    ]
+
+    # Die Passage endet am naechsten Heading — auch bei tieferer Ebene.
+    reklamation = passage_for_anchor(blocks, by_md["# Reklamation"].block_id)
+    assert reklamation is not None
+    assert [b.md for b in reklamation] == ["# Reklamation", "Grundlagen."]
+
+    # Praeambel: ankert auf ihrem ersten Block.
+    praeambel = passage_for_anchor(blocks, blocks[0].block_id)
+    assert praeambel is not None
+    assert [b.md for b in praeambel] == ["Praeambel vor dem ersten Heading."]
+
+
+def test_passage_for_anchor_none_mitten_in_der_passage() -> None:
+    """Ein Anker INNERHALB einer Passage ist keine Passage.
+
+    `None` heisst fuer den Lesepfad „bleib beim einzelnen Block" — das ist der
+    Blick, den ein Agent vor einem `patch_artifact` braucht.
+    """
+    blocks = split_markdown("# Reklamation\n\nGrundlagen.\n\nZweiter Absatz.")
+    mitten_drin = next(b for b in blocks if b.md == "Zweiter Absatz.")
+    assert passage_for_anchor(blocks, mitten_drin.block_id) is None
+    assert passage_for_anchor(blocks, "gibtsnich") is None
+
+
+def test_passage_anker_sind_genau_die_indexanker() -> None:
+    """Jeder Anker, den der Index vergibt, loest im Lesepfad eine Passage auf.
+
+    Das ist die Kopplung, um die es geht: waeren es zwei Mengen, liefe ein
+    Suchtreffer wieder ins Leere — nur eben nicht bei jedem Dokument.
+    """
+    blocks = split_markdown("Praeambel.\n\n# A\n\nText A.\n\n## A1\n\nText A1.\n\n# B\n\nText B.")
+    for chunk in build_chunks(blocks):
+        assert passage_for_anchor(blocks, chunk.block_id) is not None
