@@ -11,8 +11,11 @@ dem Token, nie vom Client.
 
 Quell-Konventionen (`wa_source_convention`, 0078 — Spec M2) haben denselben
 deterministischen Upsert ueber `UNIQUE (area_id, source_name)`; `created_by`
-ist hier die Akteur-UUID. Der describe-Pfad liest Konventionen weiterhin
-ueber `wa_table_repository.list_conventions` (Bestand, WP13).
+ist hier die Akteur-UUID. Dieses Modul ist die EINZIGE Stelle, die
+Konventions-Zeilen liest oder schreibt — auch fuer den describe-Pfad
+(`services/wa_tables.describe`). Die frueher parallel gepflegte Kopie in
+`wa_table_repository` ist entfallen, nachdem ihr strengerer Mapper describe
+mit 500 beantwortet hat (Befund 2026-08-16).
 
 Regel-Konflikte („zwei aktive Regeln, verschiedene Kategorien") landen als
 `kb_conflict(kind='rule')` (0077): der Insert dedupliziert offene Konflikte
@@ -115,8 +118,15 @@ def _to_rule(row: asyncpg.Record) -> CategoryRuleRead:
 
 
 def _to_convention(row: asyncpg.Record) -> SourceConventionRead:
-    """Konventions-Zeile → `SourceConventionRead`; jsonb ggf. als String
-    (Owner-/Test-Connections ohne jsonb-Codec, Muster `audit_log_repository`)."""
+    """Konventions-Zeile → `SourceConventionRead`; jsonb ggf. als String.
+
+    Der String-Zweig deckt Connections ohne jsonb-Codec ab (Owner-/Test-,
+    Muster `audit_log_repository`). Er bleibt zusaetzlich die letzte Abwehr
+    gegen doppelt encodierte Altbestaende: bis 2026-08-16 schrieb
+    `upsert_convention` vor-serialisiert, und der einzige Leser OHNE diesen
+    Zweig hat den describe-Pfad mit 500 beendet. Ein Leser, der an einer
+    unerwarteten Zeilenform stirbt, nimmt den ganzen Endpunkt mit.
+    """
     raw = row["convention"]
     convention: dict[str, Any] = raw if isinstance(raw, dict) else json.loads(raw)
     return SourceConventionRead(
@@ -225,13 +235,23 @@ class PgWaRuleRepository:
         convention: dict[str, object],
         created_by: UUID,
     ) -> SourceConventionRead:
-        """Konvention anlegen/ersetzen (M2) — genau eine je (Area, Quelle)."""
+        """Konvention anlegen/ersetzen (M2) — genau eine je (Area, Quelle).
+
+        `convention` geht als **dict** an den Bind-Parameter, NICHT
+        vor-serialisiert: der `::jsonb`-Cast aktiviert den jsonb-Codec des
+        App-Pools (`core/db.init_connection`, `encoder=json.dumps`), ein
+        bereits serialisierter String wuerde dadurch ein zweites Mal in
+        Quotes verpackt (dieselbe Regel wie in `workspace_repository`). Genau
+        das war der Fall bis 2026-08-16 — in der Spalte stand ein
+        JSON-*String* statt eines Objekts, und der describe-Pfad antwortete
+        mit 500. Migration 0081 packt die Bestandszeilen aus.
+        """
         row = await fetcher.fetchrow(
             _UPSERT_CONVENTION_SQL,
             workspace_id,
             area_id,
             source_name,
-            json.dumps(convention),
+            convention,
             created_by,
         )
         assert row is not None  # Upsert liefert immer genau eine Zeile

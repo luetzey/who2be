@@ -13,19 +13,24 @@ RETURNING` und liefert bei Namens-Kollision `None` (Service → 409, Muster
 EINER Postgres-Transaktion zusammen — scheitert die DDL, rollt die
 Katalog-Zeile mit zurueck (kein Katalog-Eintrag ohne SQLite-Tabelle).
 
-Zusaetzlich lebt hier der Konventionen-Read (`wa_source_convention`, M2) fuer
-den describe-Pfad. Jede Query filtert auf `workspace_id` (Defense-in-Depth
-zusaetzlich zur RLS).
+Konventionen (`wa_source_convention`, M2) liegen NICHT hier, obwohl der
+describe-Pfad sie mitliefert: sie gehoeren `wa_rule_repository`. Hier stand
+frueher eine zweite Kopie von Query und Mapper — der strengere der beiden
+Mapper hat `GET /wa-tables/{id}` mit 500 beantwortet, sobald eine Area
+ueberhaupt eine Konvention hatte (Befund 2026-08-16). Eine Zeilenform, ein
+Mapper.
+
+Jede Query filtert auf `workspace_id` (Defense-in-Depth zusaetzlich zur RLS).
 """
 
 from __future__ import annotations
 
-from typing import Any, Protocol, TypeAlias
+from typing import Protocol, TypeAlias
 from uuid import UUID
 
 import asyncpg
 
-from who2be_models import SourceConventionRead, TableSchema, WaTableRead
+from who2be_models import TableSchema, WaTableRead
 
 _Fetcher: TypeAlias = asyncpg.Pool | asyncpg.Connection
 
@@ -47,11 +52,6 @@ _LIST_SQL = (
     "WHERE workspace_id = $1 AND area_id = $2 ORDER BY name, id"
 )
 
-_CONVENTIONS_SQL = (
-    "SELECT id, area_id, source_name, convention, created_by, created_at, updated_at "
-    "FROM wa_source_convention WHERE workspace_id = $1 AND area_id = $2 ORDER BY source_name"
-)
-
 
 def _to_read(row: asyncpg.Record) -> WaTableRead:
     """Katalog-Zeile → `WaTableRead`; `schema_json` kommt via jsonb-Codec als dict."""
@@ -61,19 +61,6 @@ def _to_read(row: asyncpg.Record) -> WaTableRead:
         area_id=row["area_id"],
         name=row["name"],
         schema=TableSchema.model_validate(row["schema_json"]),
-        created_at=row["created_at"],
-        updated_at=row["updated_at"],
-    )
-
-
-def _to_convention(row: asyncpg.Record) -> SourceConventionRead:
-    convention: dict[str, Any] = row["convention"]
-    return SourceConventionRead(
-        id=row["id"],
-        area_id=row["area_id"],
-        source_name=row["source_name"],
-        convention=convention,
-        created_by=row["created_by"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -99,10 +86,6 @@ class WaTableRepository(Protocol):
     async def list_for_area(
         self, fetcher: _Fetcher, workspace_id: UUID, area_id: UUID
     ) -> list[WaTableRead]: ...
-
-    async def list_conventions(
-        self, fetcher: _Fetcher, workspace_id: UUID, area_id: UUID
-    ) -> list[SourceConventionRead]: ...
 
 
 class PgWaTableRepository:
@@ -139,10 +122,3 @@ class PgWaTableRepository:
     ) -> list[WaTableRead]:
         rows = await fetcher.fetch(_LIST_SQL, workspace_id, area_id)
         return [_to_read(row) for row in rows]
-
-    async def list_conventions(
-        self, fetcher: _Fetcher, workspace_id: UUID, area_id: UUID
-    ) -> list[SourceConventionRead]:
-        """Quell-Konventionen der Area (M2) — Kontextteil des describe-Pfads."""
-        rows = await fetcher.fetch(_CONVENTIONS_SQL, workspace_id, area_id)
-        return [_to_convention(row) for row in rows]
