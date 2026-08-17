@@ -8,7 +8,7 @@ Pfade unter `/v1/workspaces/{ws_id}` (Prefix aus `main.py`):
 - ``POST /wa-artifacts/{id}/append`` — lockfreies Anhaengen (rev+1).
 - ``PATCH /wa-artifacts/{id}`` — optimistisches Block-Edit (`expected_rev`).
 - ``GET /wa-artifacts/{id}?anchor=`` — Markdown mit ``[#block_id]``-Ankern;
-  `anchor` liefert nur den einen Block.
+  `anchor` schneidet zu (Passagen-Anker → Passage, sonst der eine Block).
 - ``GET /work-areas/{area_id}/artifacts`` — Metadaten-Liste.
 - ``DELETE /wa-artifacts/{id}`` — 204 (Chunks via FK CASCADE).
 - ``POST /wa-artifacts/{id}/promote`` — Artifact → Resource-DRAFT (Spec G,
@@ -86,7 +86,9 @@ def get_wa_promote_service(
 Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]
 Service = Annotated[WaArtifactService, Depends(get_wa_artifact_service)]
 PromoteService = Annotated[WaPromoteService, Depends(get_wa_promote_service)]
-# Anker-Query (`?anchor=<block_id>`): liefert nur den adressierten Block.
+# Anker-Query (`?anchor=<block_id>`): schneidet auf die adressierte Stelle zu
+# — Passagen-Anker (Suchtreffer) liefern die Passage, jeder andere Anker den
+# einen Block (s. `wa_artifacts.read`).
 Anchor = Annotated[str | None, Query(min_length=1, max_length=64)]
 
 
@@ -145,7 +147,9 @@ async def patch_artifact(
 async def read_artifact(
     artifact_id: UUID, ctx: Ctx, service: Service, anchor: Anchor = None
 ) -> ArtifactMarkdown:
-    """Markdown-Read mit ``[#block_id]``-Ankern; `?anchor=` nur der eine Block."""
+    """Markdown-Read mit ``[#block_id]``-Ankern; `?anchor=` schneidet zu:
+    ein Passagen-Anker (Suchtreffer) liefert die Passage, jeder andere
+    Anker genau seinen Block."""
     return await service.read(ctx, artifact_id, anchor)
 
 

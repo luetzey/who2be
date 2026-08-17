@@ -55,7 +55,7 @@ from who2be_api.repositories.workspace_repository import WorkspaceRepository
 from who2be_api.services.access_log import log_access
 from who2be_api.services.content_locale import resolve_content_locale
 from who2be_api.services.wa_blocks import apply_patch, render_markdown, split_markdown
-from who2be_api.services.wa_chunks import sync_artifact_chunks
+from who2be_api.services.wa_chunks import passage_for_anchor, sync_artifact_chunks
 from who2be_models import (
     AgentCapability,
     ArtifactAppend,
@@ -322,14 +322,32 @@ class WaArtifactService:
     async def read(
         self, ctx: WorkspaceContext, artifact_id: UUID, anchor: str | None
     ) -> ArtifactMarkdown:
-        """Markdown-Read mit ``[#block_id]``-Ankern; `anchor` liefert NUR den Block."""
+        """Markdown-Read mit ``[#block_id]``-Ankern; `anchor` schneidet zu.
+
+        Ein Anker, der eine PASSAGE eroeffnet (Heading-Block bzw. der erste
+        Block vor dem ersten Heading), liefert die ganze Passage — genau die,
+        die der Suchindex unter diesem Anker gefunden hat
+        (`wa_chunks.passage_for_anchor`, eine gemeinsame Quelle fuer beide
+        Seiten). Jeder andere Anker liefert weiterhin GENAU seinen Block; das
+        ist der Blick vor einem `patch_artifact`.
+
+        Vorher gab der Anker immer nur den einen Block zurueck. Fuer den
+        dokumentierten Weg „`search_workarea` → `read_artifact(anchor)`" hiess
+        das: der Treffer-Anker ist der Heading-Block, der Agent bekam die
+        Ueberschrift ohne eine Zeile Inhalt und musste doch das ganze Dokument
+        laden (Befund 2026-08-16).
+        """
         artifact = await self._readable(ctx, artifact_id, include_blocks=True)
         blocks = artifact.blocks or []
         if anchor is not None:
-            block = next((b for b in blocks if b.block_id == anchor), None)
-            if block is None:
-                raise _anchor_unresolvable(anchor)
-            blocks = [block]
+            passage = passage_for_anchor(blocks, anchor)
+            if passage is not None:
+                blocks = passage
+            else:
+                block = next((b for b in blocks if b.block_id == anchor), None)
+                if block is None:
+                    raise _anchor_unresolvable(anchor)
+                blocks = [block]
         await self._log(ctx, artifact_id, "read", artifact.sensitivity)
         return ArtifactMarkdown(
             artifact_id=artifact.id,

@@ -714,3 +714,32 @@ bleiben)._
   `apps/api/tests/test_jsonb_bindings.py` (Semantik + Drift-Guard);
   `test_wa_rules.py` (gespeicherter Zustand + Migrationstest),
   `test_wa_tables.py::test_describe_liefert_gesetzte_konventionen`.
+
+## 2026-08-16 — Ein Anker, zwei Auflösungen: Passage oder Block
+- **Entscheidung:** `read_artifact(anchor)` liefert die ganze **Passage**, wenn
+  der Anker eine Passage eröffnet (Heading-Block bzw. der erste Block vor dem
+  ersten Heading) — und weiterhin genau **einen Block** bei jedem anderen
+  Anker. Die Passagen-Grenzen kommen aus genau einer Funktion
+  (`wa_chunks.split_sections`), die Index und Lesepfad gemeinsam nutzen.
+- **Anlass:** Befund A aus dem Builder-Test. Der Treffer-Anker der Suche ist per
+  Konstruktion der Heading-Block; der Read gab darauf nur diesen Block zurück,
+  also die Überschrift ohne Inhalt. Der dokumentierte Weg
+  `search_workarea` → `read_artifact(anchor)` endete im Nichts.
+- **Begründung:** Die beiden Nutzungen des Ankers sind verschieden: nach einer
+  Suche will man die Fundstelle *lesen*, vor einem `patch_artifact` will man
+  die Stelle *sehen*, die man ändert. Beides an einem Parameter zu bedienen
+  geht, weil die Anker-Herkunft die Absicht schon trägt — der Suchindex vergibt
+  ausschließlich Passagen-Anker. Was geliefert wurde, ist an den `[#…]`-Ankern
+  der Antwort ablesbar; es braucht kein zusätzliches Feld.
+- **Verworfen:** ein zweiter Parameter (`scope=block|passage`) — er verlagert
+  eine Entscheidung auf den Agenten, die die Anker-Herkunft bereits beantwortet;
+  *immer* die umgebende Passage liefern — das nähme dem Patch-Pfad den genauen
+  Blick; den Suchtreffer auf den ersten Textblock ankern lassen — dann verlöre
+  der Treffer seine Überschrift, und `heading_path` im Index würde inkonsistent.
+- **Test-Lehre:** Der bestehende End-to-End-Test war grün, weil sein Dokument
+  aus EINEM Absatz ohne Überschrift besteht — der einzigen Form, in der „ein
+  Block" und „die Passage" dasselbe sind. Ein Beispiel-Dokument, das die
+  Fallunterscheidung des Codes nicht enthält, prüft sie auch nicht.
+- **Detail:** `services/wa_chunks.split_sections`/`passage_for_anchor`,
+  `services/wa_artifacts.read`; `test_wa_blocks.py` (pure Fälle),
+  `test_wa_search.py::test_treffer_anker_liefert_die_passage_nicht_nur_die_ueberschrift`.

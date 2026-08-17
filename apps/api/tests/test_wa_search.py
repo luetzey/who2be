@@ -178,6 +178,90 @@ def test_treffer_mit_anker_und_snippet_end_to_end(make_auth_headers: AuthFactory
 
 @pytest.mark.integration
 @pytest.mark.usefixtures("patched_jwt_secret", "migrated_db")
+def test_treffer_anker_liefert_die_passage_nicht_nur_die_ueberschrift(
+    make_auth_headers: AuthFactory,
+) -> None:
+    """Der dokumentierte Weg an einem Dokument MIT Ueberschriften.
+
+    Der Treffer-Anker ist der Heading-Block der Passage. Bis 2026-08-16 gab
+    der Read darauf genau diesen einen Block zurueck — der Agent bekam auf
+    einen Suchtreffer hin die Ueberschrift ohne eine Zeile Inhalt und musste
+    doch das ganze Dokument laden, also genau das, was die Suche vermeiden
+    soll.
+
+    Warum das niemandem auffiel: der bestehende End-to-End-Test nutzt ein
+    Dokument aus EINEM Absatz ohne Ueberschrift. Dort sind „ein Block" und
+    „die Passage" dasselbe — die einzige Dokumentform, in der beide
+    Verhalten ununterscheidbar sind.
+    """
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    prefix = f"/v1/workspaces/{ws}"
+    try:
+        with TestClient(app) as client:
+            area_id = _shared_area(client, prefix, auth, "Betriebshandbuch")
+            created = _create(
+                client,
+                prefix,
+                auth,
+                area_id,
+                title="Fehlercodes",
+                content_md=(
+                    "# Betriebshandbuch\n\n"
+                    "Allgemeine Hinweise zum Betrieb.\n\n"
+                    "## Fehlercodes\n\n"
+                    "E-102 bedeutet, dass der Vorlagendruck haengt.\n\n"
+                    "Ein Neustart der Presse loest den Zustand.\n\n"
+                    "## Wartung\n\n"
+                    "Vierteljaehrlich schmieren."
+                ),
+            )
+            assert created.status_code == 201, created.text
+            artifact_id = created.json()["id"]
+
+            hits = _search(client, prefix, auth, "E-102")
+            assert len(hits) == 1, hits
+            hit = hits[0]
+
+            passage = client.get(
+                f"{prefix}/wa-artifacts/{artifact_id}",
+                params={"anchor": hit["block_id"]},
+                headers=auth,
+            )
+            assert passage.status_code == 200, passage.text
+            markdown = passage.json()["markdown"]
+
+            # Die Ueberschrift kommt mit — aber eben NICHT allein.
+            assert "## Fehlercodes" in markdown
+            assert "E-102 bedeutet, dass der Vorlagendruck haengt." in markdown
+            assert "Ein Neustart der Presse loest den Zustand." in markdown
+            # Und nur diese Passage: weder Nachbarsektion noch Praeambel.
+            assert "Vierteljaehrlich schmieren." not in markdown
+            assert "Allgemeine Hinweise zum Betrieb." not in markdown
+            # Jeder Block bleibt einzeln adressierbar (Anker fuer patch_artifact).
+            assert markdown.count("[#") == 3
+
+            # Ein Anker MITTEN in der Passage liefert weiterhin genau den Block.
+            blocks = created.json()["blocks"]
+            zweiter = next(
+                b for b in blocks if b["md"] == "Ein Neustart der Presse loest den Zustand."
+            )
+            single = client.get(
+                f"{prefix}/wa-artifacts/{artifact_id}",
+                params={"anchor": zweiter["block_id"]},
+                headers=auth,
+            )
+            assert single.status_code == 200, single.text
+            assert single.json()["markdown"] == (
+                f"Ein Neustart der Presse loest den Zustand. [#{zweiter['block_id']}]"
+            )
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db")
 def test_agent_scope_filter_in_sql(make_auth_headers: AuthFactory) -> None:
     """Spec E: Agent ohne Grants → 0 Treffer/Titel/Snippets, obwohl der
     Begriff existiert; Agent mit Grant nur auf Area A → ausschliesslich
