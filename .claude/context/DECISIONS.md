@@ -683,3 +683,34 @@ bleiben)._
   Session-Kontext wirksam).
 - **Detail:** STATE.md §Standards / CI trägt die Belegkette (Runner-IDs statt
   `runner_id: 0`, echte Laufzeiten, der im ersten Lauf gefundene Lint-Fehler).
+
+## 2026-08-16 — jsonb binden: dict an den Pool, `::text::jsonb` bei offenem Executor
+- **Entscheidung:** Ein `jsonb`-Bind-Parameter bekommt auf einer Connection MIT
+  Pool-Codec (`core/db.init_connection`) das **dict** — nie einen bereits
+  serialisierten String. Wo der Executor offen ist (der Aufrufer übergibt Pool
+  ODER eine beliebige Connection, z. B. `audit_log_repository.insert`), wird
+  `$n::text::jsonb` genutzt: der Parameter ist dann `text`, der Codec greift
+  gar nicht erst, und die Form ist auf beiden Connection-Arten korrekt.
+  Der Start-Sync (`workspace_repository`) bleibt bei String + `$n::jsonb` —
+  er läuft auf einer Owner-Connection ohne Codec; das steht dort begründet und
+  in der Allowlist des Drift-Tests.
+- **Anlass:** `describe_table` antwortete im Betrieb mit 500. `$4::jsonb` +
+  `json.dumps(...)` hatte die Quell-Konvention doppelt encodiert; von den zwei
+  Mappern derselben Zeile starb der strenge (siehe STATE.md).
+- **Begründung:** Die falsche Form wirft keinen Fehler — sie legt still einen
+  JSON-*String* in die Spalte. Gemessen (asyncpg 0.30 / PG 16, festgehalten in
+  `apps/api/tests/test_jsonb_bindings.py`): `::jsonb`+dict → `object`,
+  `::jsonb`+String → `string`, `::text::jsonb`+String → `object` (mit und ohne
+  Codec).
+- **Nebenentscheidung:** Eine Zeilenform hat genau **einen** Mapper. Die zweite
+  Kopie in `wa_table_repository` ist entfallen; parallel gepflegte Mapper
+  driften auseinander, und der tolerantere verdeckt dabei den Fehler, den der
+  strengere in einen 500 verwandelt.
+- **Verworfen:** überall tolerant lesen (versteckt die Ursache, das Datum
+  bleibt falsch); den Codec abschaffen (der Bestand bindet an vielen Stellen
+  dicts); `audit_log`-Altzeilen mitmigrieren (ein Audit-Trail wird nicht
+  rückwirkend umgeschrieben).
+- **Detail:** Migration `0081_jsonb_double_encoded.sql`;
+  `apps/api/tests/test_jsonb_bindings.py` (Semantik + Drift-Guard);
+  `test_wa_rules.py` (gespeicherter Zustand + Migrationstest),
+  `test_wa_tables.py::test_describe_liefert_gesetzte_konventionen`.

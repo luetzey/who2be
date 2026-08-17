@@ -487,8 +487,11 @@ class WaTableService:
         # Bestehender Artifact-Anlage-Pfad (WP4) fuer `save_query_result` —
         # Gates/Blocks/Chunk-Sync/Zugriffslog liegen dort, nie dupliziert hier.
         self._artifact_service = artifact_service
-        # Regel-/Konventions-Zugriff fuer die Import-Gates (WP17, Spec L/M2) —
-        # die Fachlogik selbst lebt in `services/wa_rules.py`.
+        # Regel-/Konventions-Zugriff fuer die Import-Gates (WP17, Spec L/M2)
+        # UND fuer den Konventions-Teil von `describe` — die Fachlogik selbst
+        # lebt in `services/wa_rules.py`. Konventions-Zeilen haben genau einen
+        # Mapper (`wa_rule_repository`); die frueher parallele Kopie im
+        # Tabellen-Repo hat describe mit 500 beendet (Befund 2026-08-16).
         self._rules = rule_repo
 
     # ------------------------------------------------------------------ Gates
@@ -763,7 +766,7 @@ class WaTableService:
                     "min": stats.min_value,
                     "max": stats.max_value,
                 }
-        conventions = await self._tables.list_conventions(
+        conventions = await self._rules.list_conventions(
             self._pool, ctx.workspace_id, table.area_id
         )
         await self._log(ctx, table.id, "read")

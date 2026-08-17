@@ -37,6 +37,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from who2be_api.core.config import get_settings
+from who2be_api.core.migrations import MIGRATIONS_DIR
 from who2be_api.main import app
 from who2be_api.services.tablestore_provider import reset_table_store, set_table_store
 from who2be_api.tablestore import TableStore
@@ -72,6 +73,24 @@ def _db_fetch(sql: str, *args: object) -> list[Any]:
             await conn.close()
 
     return asyncio.run(_run())
+
+
+def _db_execute(sql: str, *args: object) -> None:
+    """Wie `_db_fetch`, aber schreibend — bewusst OHNE jsonb-Codec.
+
+    Genau das macht sie fuer die Migrations-Tests brauchbar: eine Connection
+    ohne Codec schreibt exakt den String, den sie bekommt, sodass sich ein
+    doppelt encodierter Bestand nachstellen laesst.
+    """
+
+    async def _run() -> None:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            await conn.execute(sql, *args)
+        finally:
+            await conn.close()
+
+    asyncio.run(_run())
 
 
 @pytest.fixture
@@ -366,18 +385,21 @@ def test_regel_upsert_rekategorisiert_rueckwirkend_und_auditiert(
             ) == [["DB Bahn", None], ["Shell Tankstelle 42", "mobilitaet"]]
 
             audits = _db_fetch(
-                "SELECT target, detail FROM audit_log "
+                "SELECT target, detail, jsonb_typeof(detail) AS kind FROM audit_log "
                 "WHERE workspace_id = $1 AND action = 'workarea.rules_reapplied'",
                 ws,
             )
             assert len(audits) == 1
             assert audits[0]["target"] == rule_id
-            # `audit_service` uebergibt einen vor-serialisierten String, den der
-            # jsonb-Codec des App-Pools erneut encodiert (Bestand) — bis zum
-            # dict parsen, egal wie oft encodiert wurde.
-            detail = audits[0]["detail"]
-            while isinstance(detail, str):
-                detail = json.loads(detail)
+            # Seit dem jsonb-Bind-Fix (2026-08-16) steht ein OBJEKT in der
+            # Spalte, kein JSON-String mehr: `audit_service` serialisiert
+            # weiterhin selbst, der Insert bindet den String aber an
+            # `$6::text::jsonb` — damit greift der Pool-Codec nicht mehr ein
+            # zweites Mal. Altzeilen bleiben bewusst wie sie sind.
+            assert audits[0]["kind"] == "object"
+            # `_db_fetch` haelt keinen jsonb-Codec, liefert also den rohen
+            # Text — einmal parsen genuegt.
+            detail = json.loads(audits[0]["detail"])
             assert detail["rule_id"] == rule_id
             assert detail["tables"] == {"transactions": 1}
 
@@ -450,6 +472,20 @@ def test_convention_missing_und_mit_konvention(make_auth_headers: AuthFactory) -
             assert convention["created_by"] == str(owner)
             assert convention["convention"]["decimal_separator"] == ","
 
+            # Der GESPEICHERTE Zustand, nicht der Roundtrip: der Mapper faengt
+            # einen JSON-String tolerant ab, ein Roundtrip-Assert wuerde eine
+            # doppelte Encodierung also NICHT bemerken. Genau die stand bis
+            # 2026-08-16 in der Spalte und hat `GET /wa-tables/{id}` mit 500
+            # beendet — hier ist sie sichtbar.
+            stored = _db_fetch(
+                "SELECT jsonb_typeof(convention) AS kind FROM wa_source_convention "
+                "WHERE workspace_id = $1 AND area_id = $2 AND source_name = $3",
+                ws,
+                UUID(area_id),
+                "n26",
+            )
+            assert [row["kind"] for row in stored] == ["object"]
+
             listed = client.get(f"{prefix}/work-areas/{area_id}/conventions", headers=auth)
             assert listed.status_code == 200
             assert [c["source_name"] for c in listed.json()] == ["n26"]
@@ -457,6 +493,60 @@ def test_convention_missing_und_mit_konvention(make_auth_headers: AuthFactory) -
             accepted = _insert(client, prefix, auth, table_id, [_row("Miete")], source_name="n26")
             assert accepted.status_code == 200, accepted.text
             assert accepted.json() == {"inserted": 1, "skipped": 0}
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db", "table_store")
+def test_migration_0081_packt_doppelt_encodierte_konvention_aus(
+    make_auth_headers: AuthFactory,
+) -> None:
+    """Bestandsdaten aus der Zeit vor dem Fix (Befund 2026-08-16).
+
+    Der Code-Fix repariert nur NEUE Zeilen. Wer die Konvention vorher gesetzt
+    hat, traegt weiter einen JSON-String in der Spalte — Migration 0081 packt
+    ihn aus. Der Test stellt den Altbestand ueber eine Connection OHNE
+    jsonb-Codec nach und laesst die Migrationsdatei selbst darauf laufen,
+    statt ihre Logik im Test nachzubauen.
+    """
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    prefix = f"/v1/workspaces/{ws}"
+    convention = {"decimal_separator": ",", "date_format": "DD.MM.YYYY"}
+    kind_sql = (
+        "SELECT jsonb_typeof(convention) AS kind FROM wa_source_convention "
+        "WHERE workspace_id = $1 AND area_id = $2"
+    )
+    try:
+        with TestClient(app) as client:
+            area_id, table_id = _setup_table(client, prefix, auth, "Altbestand")
+            saved = client.put(
+                f"{prefix}/work-areas/{area_id}/conventions/n26",
+                json={"convention": convention},
+                headers=auth,
+            )
+            assert saved.status_code == 200, saved.text
+
+            # Altbestand nachstellen: doppelt encodiert, also ein JSON-String.
+            _db_execute(
+                "UPDATE wa_source_convention SET convention = $1::jsonb "
+                "WHERE workspace_id = $2 AND area_id = $3",
+                json.dumps(json.dumps(convention)),
+                ws,
+                UUID(area_id),
+            )
+            assert [r["kind"] for r in _db_fetch(kind_sql, ws, UUID(area_id))] == ["string"]
+
+            _db_execute(
+                (MIGRATIONS_DIR / "0081_jsonb_double_encoded.sql").read_text(encoding="utf-8")
+            )
+
+            assert [r["kind"] for r in _db_fetch(kind_sql, ws, UUID(area_id))] == ["object"]
+            described = client.get(f"{prefix}/wa-tables/{table_id}", headers=auth)
+            assert described.status_code == 200, described.text
+            assert described.json()["conventions"][0]["convention"] == convention
     finally:
         cleanup_workspaces([owner])
 

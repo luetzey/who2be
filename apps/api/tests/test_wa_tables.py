@@ -205,6 +205,47 @@ def test_create_describe_roundtrip_und_namenskonflikt(make_auth_headers: AuthFac
 
 @pytest.mark.integration
 @pytest.mark.usefixtures("patched_jwt_secret", "migrated_db", "table_store")
+def test_describe_liefert_gesetzte_konventionen(make_auth_headers: AuthFactory) -> None:
+    """describe mit NICHT-leerer Konventions-Liste — der Fall aus dem Betrieb.
+
+    Der Roundtrip-Test oben prueft nur `conventions == []`; damit lief der
+    describe-Pfad nie ueber eine echte Konventions-Zeile. Live war die Folge
+    ein 500, sobald eine Area der dokumentierten Reihenfolge folgte
+    (Konvention setzen → importieren) — ausgerechnet fuer das Tool, das den
+    Agenten als "DER Einstieg vor jeder Query" angeboten wird.
+
+    Der Test prueft deshalb das, was der Agent bekommt: die Konvention muss
+    als OBJEKT ankommen, nicht als JSON-String. Ein `== {...}` faengt beide
+    Bruchstellen — Serverfehler und doppelt encodiertes JSON.
+    """
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    prefix = f"/v1/workspaces/{ws}"
+    convention = {"decimal_separator": ",", "date_format": "DD.MM.YYYY", "currency": "EUR"}
+    try:
+        with TestClient(app) as client:
+            area_id = _shared_area(client, prefix, auth, "Konventionen im describe")
+            table_id = _create_table(client, prefix, auth, area_id).json()["id"]
+
+            saved = client.put(
+                f"{prefix}/work-areas/{area_id}/conventions/n26",
+                json={"convention": convention},
+                headers=auth,
+            )
+            assert saved.status_code == 200, saved.text
+
+            described = client.get(f"{prefix}/wa-tables/{table_id}", headers=auth)
+            assert described.status_code == 200, described.text
+            conventions = described.json()["conventions"]
+            assert [c["source_name"] for c in conventions] == ["n26"]
+            assert conventions[0]["convention"] == convention
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db", "table_store")
 def test_idempotenter_import_und_row_validierung(make_auth_headers: AuthFactory) -> None:
     """Spec K: 3 Zeilen → {3,0}; identischer Doppel-Import → {0,3}. Row ohne
     `occurred_at` → 422, unbekannte Spalte → 422 (nichts persistiert)."""

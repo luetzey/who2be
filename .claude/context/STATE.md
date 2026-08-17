@@ -333,6 +333,47 @@ Zwei Teile behoben (PR #372):
   statt als nacktes 500 durchzulaufen. Der Detail-Text nennt die
   Stellschraube, nicht Pfad oder OS-Fehler; die Ursache steht im Log.
 
+### `describe_table` antwortete mit 500 (2026-08-16, behoben)
+
+Der Live-Test nach dem Redeploy zeigte: der Tabellen-Store hat überlebt (7
+Zeilen, `query_table`/`timeline`/`list_category_rules` alle 200) — nur
+`describe_table` lief in ein **500**. Die Volume-Hypothese war damit
+widerlegt; der Fehler steckte in Postgres, nicht in SQLite.
+
+Ursache war eine Kette aus drei für sich harmlosen Teilen:
+
+1. `upsert_convention` band `json.dumps(convention)` an `$4::jsonb`. Der Cast
+   aktiviert den jsonb-Codec des App-Pools (`core/db.init_connection`,
+   `encoder=json.dumps`) — der String wurde ein **zweites** Mal verpackt, in
+   `wa_source_convention.convention` stand ein JSON-*String*.
+2. Für dieselbe Zeile gab es **zwei** Mapper. Der tolerante
+   (`wa_rule_repository`) trug alles, was über die Regel-/Konventions-Routen
+   lief; der strenge (`wa_table_repository`) hing an genau einem Aufrufer —
+   dem describe-Pfad — und starb an der Zeilenform.
+3. Kein Test deckte die Kombination: der einzige describe-Test prüfte
+   `conventions == []`.
+
+Folge im Betrieb: sobald eine Area der dokumentierten Reihenfolge folgte
+(Konvention setzen → importieren), war `describe_table` für diese Area tot —
+ausgerechnet das Tool, das Agenten als „DER Einstieg vor jeder Query"
+angeboten wird. Die Web-UI war nicht betroffen (sie ruft describe nicht auf).
+
+Behoben (PR folgt in diesem Branch):
+
+- **Write:** `upsert_convention` bindet das dict; `memory_guard` ebenso.
+  `audit_log.detail` nutzt `$6::text::jsonb` — diese Form ist auf beiden
+  Connection-Arten korrekt, weil der Executor dort offen ist.
+- **Ein Mapper:** die Kopie in `wa_table_repository` ist entfallen, der
+  Service liest Konventionen über `wa_rule_repository`.
+- **Bestandsdaten:** Migration `0081` packt doppelt encodierte Werte aus
+  (`wa_source_convention`, `workspace.memory_guard`); `audit_log` bewusst
+  nicht — ein Audit-Trail wird nicht rückwirkend umgeschrieben.
+- **Regressionsschutz:** ein Roundtrip-Test hätte nichts gefunden (der
+  tolerante Leser hält ihn grade), deshalb prüfen die Tests den
+  **gespeicherten Zustand** (`jsonb_typeof = 'object'`), dazu describe mit
+  gesetzter Konvention, ein Migrationstest gegen nachgestellten Altbestand
+  und ein Drift-Guard über alle Repositories.
+
 ## Bekannte Probleme
 
 - **Tabellen-Import kappt Zell-Breiten nicht** (gefunden 2026-08-16): der
@@ -351,13 +392,13 @@ Zwei Teile behoben (PR #372):
   Workspace gesucht, der im `wa_blob`-Katalog vorkommt. Ein Workspace, dessen
   allererster Ingest scheitert, hat nie eine Katalog-Zeile — sein einzelnes
   Objekt bleibt liegen (Alternative wäre ein Bucket-Vollscan je Cron-Lauf).
-- **`audit_log.detail` liegt doppelt JSON-kodiert in der DB** (gefunden
-  2026-08-16): `PgAuditLogRepository.insert` serialisiert selbst per
-  `json.dumps`, der App-Pool registriert zusätzlich einen jsonb-Codec
-  (`core/db.init_connection`) — in `jsonb` landet ein JSON-*String* statt
-  eines Objekts. Fällt heute nicht auf, weil die Bestandstests per
-  `"…" in str(detail)` prüfen. Beißt, sobald jemand `detail` strukturiert
-  auswerten will (SQL-Zugriff per `->>`).
+- **`audit_log.detail`: Altzeilen bleiben doppelt JSON-kodiert** (Rest des
+  Befunds von 2026-08-16): der Schreibpfad ist korrigiert
+  (`$6::text::jsonb`), die BESTEHENDEN Zeilen werden bewusst nicht
+  umgeschrieben — ein Audit-Trail wird nicht rückwirkend angefasst. Wer
+  `detail` per SQL (`->>`) auswertet, muss für Altzeilen mit einem
+  JSON-*String* rechnen. Dass dieselbe Fehlerklasse woanders einen Endpunkt
+  gekillt hat, steht oben (§`describe_table` antwortete mit 500).
 - **Tool-Übersicht nennt Schreib-Tools ohne Capability** (gefunden
   2026-08-16): die kuratierten `_TOOLS`-Gruppen des `tools-overview`-Resolvers
   führen Read- und Write-Tools in EINER Signatur-Zeile. Ist die Gruppe wegen

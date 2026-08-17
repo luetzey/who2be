@@ -185,10 +185,16 @@ class PgMemoryRepository:
     async def set_guard_config(
         self, workspace_id: UUID, config: MemoryGuardConfig
     ) -> MemoryGuardConfig:
+        # dict, NICHT vor-serialisiert: der `::jsonb`-Cast aktiviert den
+        # jsonb-Codec des App-Pools (`core/db.init_connection`), ein String
+        # wuerde ein zweites Mal encodiert und landete als JSON-*String* in
+        # der Spalte. `get_guard_config` faengt das zwar tolerant ab — die
+        # gleiche Doppel-Encodierung hat den describe-Pfad aber ueber einen
+        # strengeren Leser mit 500 beendet (Befund 2026-08-16).
         await self._pool.execute(
             "UPDATE workspace SET memory_guard = $2::jsonb WHERE id = $1",
             workspace_id,
-            json.dumps(config.model_dump(mode="json")),
+            config.model_dump(mode="json"),
         )
         return config
 

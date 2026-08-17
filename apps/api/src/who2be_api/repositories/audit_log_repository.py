@@ -58,14 +58,22 @@ class PgAuditLogRepository:
         target: str | None = None,
         detail: dict[str, Any] | None = None,
     ) -> None:
-        # ``detail`` als jsonb-String serialisieren — der App-Pool registriert
-        # einen jsonb-Codec (siehe core/db.init_connection), Owner-/Test-
-        # Connections nicht zwingend. Ein String funktioniert unter beiden.
+        # ``detail`` als jsonb-String serialisieren: der Executor kann JEDE
+        # Connection sein (App-Pool mit jsonb-Codec, Owner-/Test-Connection
+        # ohne), und ein dict waere ohne Codec ein DataError.
+        #
+        # Deshalb `$6::text::jsonb` statt `$6::jsonb`: der Parameter hat damit
+        # den Typ TEXT, der Codec greift gar nicht erst, und Postgres parst
+        # den String beim Cast. Mit `$6::jsonb` haette der Codec den bereits
+        # serialisierten String ein zweites Mal verpackt — in der Spalte stand
+        # dann ein JSON-*String* statt eines Objekts (der frueher als
+        # "funktioniert unter beiden" notierte Zustand; belegt durch die
+        # `while isinstance(detail, str)`-Schleife in test_wa_rules).
         detail_json = json.dumps(detail) if detail is not None else "{}"
         await executor.execute(
             "INSERT INTO audit_log "
             "(org_id, workspace_id, actor_id, action, target, detail) "
-            "VALUES ($1, $2, $3, $4, $5, $6::jsonb)",
+            "VALUES ($1, $2, $3, $4, $5, $6::text::jsonb)",
             org_id,
             workspace_id,
             actor_id,
