@@ -19,6 +19,7 @@ from uuid import UUID
 import asyncpg
 import pytest
 from fastapi.testclient import TestClient
+from who2be_api.testing.api_helpers import agent_token
 
 from who2be_api.core.config import get_settings
 from who2be_api.main import app
@@ -57,19 +58,6 @@ def _audit_detail(raw: object) -> dict[str, Any]:
     return value
 
 
-def _agent_token(
-    client: TestClient, prefix: str, name: str, policy: dict[str, object], auth: dict[str, str]
-) -> tuple[str, dict[str, str]]:
-    agent = client.post(
-        f"{prefix}/agents", json={"name": name, "tool_policy": policy}, headers=auth
-    )
-    assert agent.status_code == 201, agent.text
-    agent_id = agent.json()["id"]
-    token = client.post(f"{prefix}/tokens", json={"name": name, "agent_id": agent_id}, headers=auth)
-    assert token.status_code == 201, token.text
-    return agent_id, {"Authorization": f"Bearer {token.json()['token']}"}
-
-
 @pytest.mark.integration
 @pytest.mark.usefixtures("patched_jwt_secret", "migrated_db")
 def test_agent_access_is_logged_and_deduped(make_auth_headers: AuthFactory) -> None:
@@ -79,7 +67,7 @@ def test_agent_access_is_logged_and_deduped(make_auth_headers: AuthFactory) -> N
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            agent_id, agent_headers = _agent_token(
+            agent_id, agent_headers = agent_token(
                 client, prefix, "analyst", {"workarea_write": True}, auth
             )
             created = client.post(
@@ -190,7 +178,7 @@ def test_model_config_kann_geleert_werden(make_auth_headers: AuthFactory) -> Non
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            agent_id, agent_headers = _agent_token(
+            agent_id, agent_headers = agent_token(
                 client, prefix, "analyst", {"agent_write": True}, auth
             )
             gesetzt = client.put(

@@ -21,6 +21,7 @@ from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
+from who2be_api.testing.api_helpers import agent_token, grant, shared_area
 
 from who2be_api.main import app
 from who2be_api.testing.workspace_setup import (
@@ -32,19 +33,6 @@ from who2be_api.testing.workspace_setup import (
 AuthFactory = Callable[[UUID], dict[str, str]]
 
 _GHOST = "00000000-0000-0000-0000-000000000000"
-
-
-def _agent_token(
-    client: TestClient, prefix: str, name: str, policy: dict[str, object], auth: dict[str, str]
-) -> tuple[str, dict[str, str]]:
-    agent = client.post(
-        f"{prefix}/agents", json={"name": name, "tool_policy": policy}, headers=auth
-    )
-    assert agent.status_code == 201, agent.text
-    agent_id = agent.json()["id"]
-    token = client.post(f"{prefix}/tokens", json={"name": name, "agent_id": agent_id}, headers=auth)
-    assert token.status_code == 201, token.text
-    return agent_id, {"Authorization": f"Bearer {token.json()['token']}"}
 
 
 def _add_member(workspace_id: UUID, user_id: UUID, role: str = "editor") -> None:
@@ -69,22 +57,6 @@ def _add_member(workspace_id: UUID, user_id: UUID, role: str = "editor") -> None
             await conn.close()
 
     asyncio.run(_run())
-
-
-def _shared_area(client: TestClient, prefix: str, auth: dict[str, str], name: str) -> str:
-    created = client.post(f"{prefix}/work-areas", json={"name": name}, headers=auth)
-    assert created.status_code == 201, created.text
-    area_id: str = created.json()["id"]
-    return area_id
-
-
-def _grant(
-    client: TestClient, prefix: str, auth: dict[str, str], area_id: str, agent_id: str, level: str
-) -> None:
-    res = client.put(
-        f"{prefix}/work-areas/{area_id}/grants/{agent_id}", json={"level": level}, headers=auth
-    )
-    assert res.status_code == 200, res.text
 
 
 def _create(
@@ -115,7 +87,7 @@ def test_crud_roundtrip_mit_ankern(make_auth_headers: AuthFactory) -> None:
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "Roundtrip")
+            area_id = shared_area(client, prefix, auth, "Roundtrip")
 
             created = _create(client, prefix, auth, area_id)
             assert created.status_code == 201, created.text
@@ -217,7 +189,7 @@ def test_parallele_patches_und_lockfreie_appends(make_auth_headers: AuthFactory)
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "Nebenlaeufigkeit")
+            area_id = shared_area(client, prefix, auth, "Nebenlaeufigkeit")
             created = _create(client, prefix, auth, area_id, content_md="Basis-Absatz.")
             artifact_id = created.json()["id"]
             anchor = created.json()["blocks"][0]["block_id"]
@@ -277,8 +249,8 @@ def test_private_isolation_zwischen_agenten(make_auth_headers: AuthFactory) -> N
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            _, a_tok = _agent_token(client, prefix, "wa-priv-a", {"workarea_write": True}, auth)
-            _, b_tok = _agent_token(client, prefix, "wa-priv-b", {"workarea_write": True}, auth)
+            _, a_tok = agent_token(client, prefix, "wa-priv-a", {"workarea_write": True}, auth)
+            _, b_tok = agent_token(client, prefix, "wa-priv-b", {"workarea_write": True}, auth)
 
             # A legt ohne area_id an → private Area (Auto-Anlage).
             created = _create(client, prefix, a_tok, None, content_md="Privates Material.")
@@ -358,20 +330,20 @@ def test_capability_und_grant_gates(make_auth_headers: AuthFactory) -> None:
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "Gate-Area")
+            area_id = shared_area(client, prefix, auth, "Gate-Area")
 
             # Agent OHNE workarea_write: Schreiben 403 — auch in die (nicht
             # existente) private Area, das Capability-Gate feuert zuerst.
-            no_cap_id, no_cap = _agent_token(client, prefix, "wa-nocap", {}, auth)
-            _grant(client, prefix, auth, area_id, no_cap_id, "write")
+            no_cap_id, no_cap = agent_token(client, prefix, "wa-nocap", {}, auth)
+            grant(client, prefix, auth, area_id, no_cap_id, "write")
             blocked = _create(client, prefix, no_cap, area_id)
             assert blocked.status_code == 403
             assert blocked.json()["reason"] == "missing_capability"
             assert _create(client, prefix, no_cap, None).status_code == 403
 
             # Agent MIT Capability, aber nur Read-Grant: 403 area_forbidden.
-            ro_id, ro_tok = _agent_token(client, prefix, "wa-ro", {"workarea_write": True}, auth)
-            _grant(client, prefix, auth, area_id, ro_id, "read")
+            ro_id, ro_tok = agent_token(client, prefix, "wa-ro", {"workarea_write": True}, auth)
+            grant(client, prefix, auth, area_id, ro_id, "read")
             forbidden = _create(client, prefix, ro_tok, area_id)
             assert forbidden.status_code == 403
             assert forbidden.json()["reason"] == "area_forbidden"
@@ -380,7 +352,7 @@ def test_capability_und_grant_gates(make_auth_headers: AuthFactory) -> None:
             assert listed.status_code == 200 and listed.json() == []
 
             # Agent MIT Capability, aber ganz ohne Grant: 404 (kein Leak).
-            _, no_grant = _agent_token(client, prefix, "wa-nogrant", {"workarea_write": True}, auth)
+            _, no_grant = agent_token(client, prefix, "wa-nogrant", {"workarea_write": True}, auth)
             assert _create(client, prefix, no_grant, area_id).status_code == 404
 
             # Mensch ohne area_id: 422 — Menschen haben keine private Area.

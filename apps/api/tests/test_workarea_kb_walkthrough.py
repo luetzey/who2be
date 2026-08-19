@@ -37,6 +37,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from who2be_api.main import app
+from who2be_api.testing.api_helpers import agent_token
 from who2be_api.testing.workspace_setup import cleanup_workspaces, fresh_user_id, setup_workspace
 
 AuthFactory = Callable[[UUID], dict[str, str]]
@@ -55,21 +56,6 @@ _MD_A = (
     "Die Erhoehung wurde im Kundenbrief mit gestiegenen Infrastrukturkosten begruendet."
 )
 _MD_B = "# Kuendigungen Q3 2026\n\nIm dritten Quartal 2026 kuendigten 41 Kunden des Basistarifs."
-
-
-def _agent_token(
-    client: TestClient, prefix: str, name: str, auth: dict[str, str]
-) -> dict[str, str]:
-    """Legt einen Agenten mit Arbeitsbereichs-Rechten an und bindet einen Token daran."""
-    agent = client.post(
-        f"{prefix}/agents", json={"name": name, "tool_policy": _AGENT_POLICY}, headers=auth
-    )
-    assert agent.status_code == 201, agent.text
-    token = client.post(
-        f"{prefix}/tokens", json={"name": name, "agent_id": agent.json()["id"]}, headers=auth
-    )
-    assert token.status_code == 201, token.text
-    return {"Authorization": f"Bearer {token.json()['token']}"}
 
 
 def _create_artifact(
@@ -106,7 +92,7 @@ def test_agent_walkthrough_workarea_to_knowledge_base(
 
     try:
         with TestClient(app) as client:
-            agent = _agent_token(client, prefix, "Walkthrough-Agent", human)
+            _, agent = agent_token(client, prefix, "Walkthrough-Agent", _AGENT_POLICY, human)
 
             # --- A1: Artifact anlegen, private Area entsteht implizit ---------
             first = _create_artifact(

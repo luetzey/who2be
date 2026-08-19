@@ -24,24 +24,13 @@ from uuid import UUID
 import asyncpg
 
 from who2be_api.repositories.fts_config import fts_config_expr
+from who2be_api.repositories.snippet import snippet
 from who2be_models import WorkAreaSearchHit
-
-# Obergrenze des ausgelieferten Snippets. Ein Chunk traegt bis zu 4000 Zeichen
-# (`wa_chunks._MAX_CHUNK_CHARS`) — die Suche liefert Anker + Kostprobe, NIE
-# das Dokument; den Volltext holt `GET /wa-artifacts/{id}?anchor=`.
-_SNIPPET_MAX_CHARS = 200
 
 # FTS-Config exakt wie die Generated Column in Migration 0076: Sprach-Praefix
 # entscheidet, unbekannte Sprachen fallen auf 'simple' zurueck. Gemeinsame
 # Quelle mit 0070/0082 — s. `fts_config`.
 _FTS_CONFIG = fts_config_expr("c.locale")
-
-
-def _snippet(text: str) -> str:
-    """Kuerzt den Passagentext auf Snippet-Laenge (harte Kappung + Ellipse)."""
-    if len(text) <= _SNIPPET_MAX_CHARS:
-        return text
-    return text[: _SNIPPET_MAX_CHARS - 1].rstrip() + "…"
 
 
 def _search_sql(*, restrict_pos: int | None, area_pos: int | None) -> str:
@@ -130,7 +119,7 @@ class PgWaSearchRepository:
                 artifact_id=row["artifact_id"],
                 block_id=row["block_id"],
                 title=row["title"],
-                snippet=_snippet(row["text"]),
+                snippet=snippet(row["text"]),
                 score=float(row["score"]),
                 area_id=row["area_id"],
             )

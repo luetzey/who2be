@@ -27,16 +27,14 @@ Kritische Invarianten:
   (kein Fehler, nur kein Stemming); Migration 0082 zieht Bestandszeilen nach.
 """
 
-import asyncio
 from collections.abc import Callable
 from typing import Any
 from uuid import UUID
 
-import asyncpg
 import pytest
 from fastapi.testclient import TestClient
+from who2be_api.testing.api_helpers import agent_token, db_execute, db_fetchval, grant, shared_area
 
-from who2be_api.core.config import get_settings
 from who2be_api.core.migrations import MIGRATIONS_DIR
 from who2be_api.main import app
 from who2be_api.testing.workspace_setup import (
@@ -50,65 +48,10 @@ AuthFactory = Callable[[UUID], dict[str, str]]
 _GHOST = "00000000-0000-0000-0000-000000000000"
 
 
-def _db_fetchval(sql: str, *args: object) -> Any:
-    """Direkter DB-Read fuer Zustands-Assertions (Superuser, an RLS vorbei)."""
-
-    async def _run() -> Any:
-        conn = await asyncpg.connect(get_settings().database_url)
-        try:
-            return await conn.fetchval(sql, *args)
-        finally:
-            await conn.close()
-
-    return asyncio.run(_run())
-
-
-def _db_execute(sql: str, *args: object) -> None:
-    """Direkter DB-Write — stellt Altbestand nach bzw. faehrt eine Migration."""
-
-    async def _run() -> None:
-        conn = await asyncpg.connect(get_settings().database_url)
-        try:
-            await conn.execute(sql, *args)
-        finally:
-            await conn.close()
-
-    asyncio.run(_run())
-
-
 def _edge_counts(ws: UUID) -> tuple[int, int]:
-    edges = _db_fetchval("SELECT count(*) FROM kb_edge WHERE workspace_id = $1", ws)
-    evidence = _db_fetchval("SELECT count(*) FROM kb_edge_evidence WHERE workspace_id = $1", ws)
+    edges = db_fetchval("SELECT count(*) FROM kb_edge WHERE workspace_id = $1", ws)
+    evidence = db_fetchval("SELECT count(*) FROM kb_edge_evidence WHERE workspace_id = $1", ws)
     return int(edges), int(evidence)
-
-
-def _agent_token(
-    client: TestClient, prefix: str, name: str, policy: dict[str, object], auth: dict[str, str]
-) -> tuple[str, dict[str, str]]:
-    agent = client.post(
-        f"{prefix}/agents", json={"name": name, "tool_policy": policy}, headers=auth
-    )
-    assert agent.status_code == 201, agent.text
-    agent_id = agent.json()["id"]
-    token = client.post(f"{prefix}/tokens", json={"name": name, "agent_id": agent_id}, headers=auth)
-    assert token.status_code == 201, token.text
-    return agent_id, {"Authorization": f"Bearer {token.json()['token']}"}
-
-
-def _shared_area(client: TestClient, prefix: str, auth: dict[str, str], name: str) -> str:
-    created = client.post(f"{prefix}/work-areas", json={"name": name}, headers=auth)
-    assert created.status_code == 201, created.text
-    area_id: str = created.json()["id"]
-    return area_id
-
-
-def _grant(
-    client: TestClient, prefix: str, auth: dict[str, str], area_id: str, agent_id: str, level: str
-) -> None:
-    res = client.put(
-        f"{prefix}/work-areas/{area_id}/grants/{agent_id}", json={"level": level}, headers=auth
-    )
-    assert res.status_code == 200, res.text
 
 
 def _artifact(
@@ -169,7 +112,7 @@ def test_create_node_artifact_quelle_und_source_areas(make_auth_headers: AuthFac
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "KB-Quelle")
+            area_id = shared_area(client, prefix, auth, "KB-Quelle")
             artifact_id, block_id = _artifact(client, prefix, auth, area_id, "Indigo-Notiz.")
 
             created = _node(client, prefix, auth, f"{artifact_id}#{block_id}")
@@ -177,7 +120,7 @@ def test_create_node_artifact_quelle_und_source_areas(make_auth_headers: AuthFac
             node = created.json()
             assert node["source_ref_kind"] == "artifact"
             assert node["tier"] == "hypothesis" and node["status"] == "live"
-            rows = _db_fetchval(
+            rows = db_fetchval(
                 "SELECT count(*) FROM kb_node_source_area WHERE node_id = $1 AND area_id = $2",
                 UUID(node["id"]),
                 UUID(area_id),
@@ -216,7 +159,7 @@ def test_edge_belegpflicht_ohne_teilzustand(make_auth_headers: AuthFactory) -> N
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "KB-Kanten")
+            area_id = shared_area(client, prefix, auth, "KB-Kanten")
             artifact_id, block_id = _artifact(client, prefix, auth, area_id, "Kanten-Beleg.")
             evidence = f"{artifact_id}#{block_id}"
             a_id = _node(client, prefix, auth, evidence).json()["id"]
@@ -286,7 +229,7 @@ def test_co_occurs_fallzahl_und_neighbors(make_auth_headers: AuthFactory) -> Non
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "KB-Korrelation")
+            area_id = shared_area(client, prefix, auth, "KB-Korrelation")
             artifact_id, block_id = _artifact(client, prefix, auth, area_id, "Zahlen-Beleg.")
             evidence = f"{artifact_id}#{block_id}"
             a_id = _node(client, prefix, auth, evidence).json()["id"]
@@ -345,7 +288,7 @@ def test_content_kanten_verlangen_beleg_jenseits_der_timeline(
     timeline = f"url:https://who2be.example{prefix}/timeline?from=2026-01-01&to=2026-06-30"
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "KB-Zeitachse")
+            area_id = shared_area(client, prefix, auth, "KB-Zeitachse")
             artifact_id, block_id = _artifact(client, prefix, auth, area_id, "Inhalts-Beleg.")
             anchor = f"{artifact_id}#{block_id}"
             a_id = _node(client, prefix, auth, anchor).json()["id"]
@@ -426,7 +369,7 @@ def test_tier_upgrade_bei_nur_ko_okkurrenz_belegen(make_auth_headers: AuthFactor
     timeline = f"url:https://who2be.example{prefix}/timeline?from=2026-01-01&to=2026-06-30"
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "KB-Ko-Okkurrenz")
+            area_id = shared_area(client, prefix, auth, "KB-Ko-Okkurrenz")
             artifact_id, block_id = _artifact(client, prefix, auth, area_id, "Inhalts-Beleg.")
             anchor = f"{artifact_id}#{block_id}"
             b_id = _node(
@@ -482,7 +425,7 @@ def test_tier_upgrade_bei_nur_ko_okkurrenz_belegen(make_auth_headers: AuthFactor
             )
             assert co_c.status_code == 201, co_c.text
             sha = "ab" * 32
-            _db_fetchval(
+            db_fetchval(
                 "INSERT INTO wa_blob (workspace_id, sha256, size_bytes, media_type, storage_key) "
                 "VALUES ($1, $2, 42, 'application/pdf', $3) RETURNING sha256",
                 ws,
@@ -530,7 +473,7 @@ def test_tier_regeln(make_auth_headers: AuthFactory) -> None:
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "KB-Tier")
+            area_id = shared_area(client, prefix, auth, "KB-Tier")
             artifact_id, block_id = _artifact(client, prefix, auth, area_id, "Tier-Beleg.")
             anchor = f"{artifact_id}#{block_id}"
 
@@ -600,22 +543,20 @@ def test_capability_gates(make_auth_headers: AuthFactory) -> None:
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "KB-Gates")
+            area_id = shared_area(client, prefix, auth, "KB-Gates")
             artifact_id, block_id = _artifact(client, prefix, auth, area_id, "Gate-Beleg.")
             anchor = f"{artifact_id}#{block_id}"
 
             # Nur workarea_write: KB-Schreiben bleibt zu (403, kein 404/422).
-            wa_id, wa_tok = _agent_token(
-                client, prefix, "kb-nur-wa", {"workarea_write": True}, auth
-            )
-            _grant(client, prefix, auth, area_id, wa_id, "write")
+            wa_id, wa_tok = agent_token(client, prefix, "kb-nur-wa", {"workarea_write": True}, auth)
+            grant(client, prefix, auth, area_id, wa_id, "write")
             blocked = _node(client, prefix, wa_tok, anchor)
             assert blocked.status_code == 403, blocked.text
             assert blocked.json()["reason"] == "missing_capability"
 
             # kb_write reicht fuer Nodes, nicht fuer Kanten.
-            kb_id, kb_tok = _agent_token(client, prefix, "kb-nodes", {"kb_write": True}, auth)
-            _grant(client, prefix, auth, area_id, kb_id, "read")
+            kb_id, kb_tok = agent_token(client, prefix, "kb-nodes", {"kb_write": True}, auth)
+            grant(client, prefix, auth, area_id, kb_id, "read")
             created = _node(client, prefix, kb_tok, anchor)
             assert created.status_code == 201, created.text
             node_id = created.json()["id"]
@@ -648,8 +589,8 @@ def test_sichtbarkeit_node_aus_zwei_areas(make_auth_headers: AuthFactory) -> Non
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_a = _shared_area(client, prefix, auth, "Area-A")
-            area_b = _shared_area(client, prefix, auth, "Area-B")
+            area_a = shared_area(client, prefix, auth, "Area-A")
+            area_b = shared_area(client, prefix, auth, "Area-B")
             art_a, block_a = _artifact(client, prefix, auth, area_a, "Beleg in A.")
             art_b, block_b = _artifact(client, prefix, auth, area_b, "Beleg in B.")
 
@@ -663,16 +604,16 @@ def test_sichtbarkeit_node_aus_zwei_areas(make_auth_headers: AuthFactory) -> Non
             )
             assert created.status_code == 201, created.text
             node_id = created.json()["id"]
-            rows = _db_fetchval(
+            rows = db_fetchval(
                 "SELECT count(*) FROM kb_node_source_area WHERE node_id = $1", UUID(node_id)
             )
             assert int(rows) == 2  # A und B materialisiert
 
-            nur_a_id, nur_a = _agent_token(client, prefix, "kb-nur-a", {}, auth)
-            _grant(client, prefix, auth, area_a, nur_a_id, "read")
-            beide_id, beide = _agent_token(client, prefix, "kb-beide", {}, auth)
-            _grant(client, prefix, auth, area_a, beide_id, "read")
-            _grant(client, prefix, auth, area_b, beide_id, "read")
+            nur_a_id, nur_a = agent_token(client, prefix, "kb-nur-a", {}, auth)
+            grant(client, prefix, auth, area_a, nur_a_id, "read")
+            beide_id, beide = agent_token(client, prefix, "kb-beide", {}, auth)
+            grant(client, prefix, auth, area_a, beide_id, "read")
+            grant(client, prefix, auth, area_b, beide_id, "read")
 
             # Nur A: GET 404 (kein Existenz-Leak) + 0 Suchtreffer.
             assert client.get(f"{prefix}/kb/nodes/{node_id}", headers=nur_a).status_code == 404
@@ -708,7 +649,7 @@ def test_kb_suche_findet_keine_workarea_inhalte(make_auth_headers: AuthFactory) 
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "KB-Trennung")
+            area_id = shared_area(client, prefix, auth, "KB-Trennung")
             _artifact(client, prefix, auth, area_id, "Das Zebrastreifenprojekt startet morgen.")
 
             search = client.get(
@@ -740,7 +681,7 @@ def test_kb_suche_findet_deutsche_wortformen(make_auth_headers: AuthFactory) -> 
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "KB-Sprache")
+            area_id = shared_area(client, prefix, auth, "KB-Sprache")
             artifact_id, block_id = _artifact(client, prefix, auth, area_id, "Beleg.")
             node_id = _node(
                 client,
@@ -782,10 +723,10 @@ def test_kb_suche_faellt_bei_unbekannter_sprache_auf_simple(
     ws = setup_workspace(owner)
     auth = make_auth_headers(owner)
     prefix = f"/v1/workspaces/{ws}"
-    _db_execute("UPDATE workspace SET content_locale = 'fr' WHERE id = $1", ws)
+    db_execute("UPDATE workspace SET content_locale = 'fr' WHERE id = $1", ws)
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "KB-Sprache-FR")
+            area_id = shared_area(client, prefix, auth, "KB-Sprache-FR")
             artifact_id, block_id = _artifact(client, prefix, auth, area_id, "Beleg.")
             node_id = _node(
                 client,
@@ -794,7 +735,7 @@ def test_kb_suche_faellt_bei_unbekannter_sprache_auf_simple(
                 f"{artifact_id}#{block_id}",
                 content="Le code erreur E-102 concerne l'impression.",
             ).json()["id"]
-            assert _db_fetchval("SELECT locale FROM kb_node WHERE id = $1", UUID(node_id)) == "fr"
+            assert db_fetchval("SELECT locale FROM kb_node WHERE id = $1", UUID(node_id)) == "fr"
 
             treffer = client.get(f"{prefix}/kb-search", params={"q": "erreur"}, headers=auth)
             assert treffer.status_code == 200
@@ -820,7 +761,7 @@ def test_migration_0082_zieht_bestandsnodes_nach(make_auth_headers: AuthFactory)
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "KB-Altbestand")
+            area_id = shared_area(client, prefix, auth, "KB-Altbestand")
             artifact_id, block_id = _artifact(client, prefix, auth, area_id, "Beleg.")
             node_id = _node(
                 client,
@@ -830,15 +771,15 @@ def test_migration_0082_zieht_bestandsnodes_nach(make_auth_headers: AuthFactory)
                 content="Die Wartung der Presse ist faellig.",
             ).json()["id"]
 
-            _db_execute("UPDATE kb_node SET locale = 'xx' WHERE id = $1", UUID(node_id))
+            db_execute("UPDATE kb_node SET locale = 'xx' WHERE id = $1", UUID(node_id))
             assert (
                 client.get(f"{prefix}/kb-search", params={"q": "Wartungen"}, headers=auth).json()
                 == []
             )
 
-            _db_execute((MIGRATIONS_DIR / "0082_kb_node_locale.sql").read_text(encoding="utf-8"))
+            db_execute((MIGRATIONS_DIR / "0082_kb_node_locale.sql").read_text(encoding="utf-8"))
 
-            assert _db_fetchval("SELECT locale FROM kb_node WHERE id = $1", UUID(node_id)) == "de"
+            assert db_fetchval("SELECT locale FROM kb_node WHERE id = $1", UUID(node_id)) == "de"
             hits = client.get(f"{prefix}/kb-search", params={"q": "Wartungen"}, headers=auth).json()
             assert [h["node_id"] for h in hits] == [node_id]
     finally:
@@ -857,7 +798,7 @@ def test_derived_from_propagiert_source_areas(make_auth_headers: AuthFactory) ->
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "KB-Ableitung")
+            area_id = shared_area(client, prefix, auth, "KB-Ableitung")
             artifact_id, block_id = _artifact(client, prefix, auth, area_id, "Parent-Beleg.")
             evidence = f"{artifact_id}#{block_id}"
 
@@ -870,7 +811,7 @@ def test_derived_from_propagiert_source_areas(make_auth_headers: AuthFactory) ->
                 "url:https://example.org/ableitung",
                 content="Abgeleitete Indigo-These.",
             ).json()["id"]
-            _, kein_grant = _agent_token(client, prefix, "kb-kein-grant", {}, auth)
+            _, kein_grant = agent_token(client, prefix, "kb-kein-grant", {}, auth)
             assert (
                 client.get(f"{prefix}/kb/nodes/{child_id}", headers=kein_grant).status_code == 200
             )
@@ -888,7 +829,7 @@ def test_derived_from_propagiert_source_areas(make_auth_headers: AuthFactory) ->
             )
             assert edge.status_code == 201, edge.text
 
-            child_areas = _db_fetchval(
+            child_areas = db_fetchval(
                 "SELECT count(*) FROM kb_node_source_area WHERE node_id = $1 AND area_id = $2",
                 UUID(child_id),
                 UUID(area_id),

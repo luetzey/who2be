@@ -28,6 +28,7 @@ from uuid import UUID
 import asyncpg
 
 from who2be_api.repositories.fts_config import fts_config_expr
+from who2be_api.repositories.snippet import snippet
 from who2be_models import KbEdgeRead, KbNeighbor, KbNodeRead, KbSearchHit
 
 _Fetcher: TypeAlias = asyncpg.Pool | asyncpg.Connection
@@ -57,10 +58,6 @@ _EDGE_COLUMNS = (
     "id, workspace_id, type, from_anchor, to_anchor, from_node_id, to_node_id, "
     "co_query, co_n, co_from, co_to, created_by, created_at"
 )
-
-# Obergrenze des Suche-Snippets: Anker + Kostprobe, nie die ganze Aussage
-# (Muster WorkArea-Suche).
-_SNIPPET_MAX_CHARS = 200
 
 
 def _visible_sql(pos: int) -> str:
@@ -108,13 +105,6 @@ def _to_neighbor(row: asyncpg.Record) -> KbNeighbor:
     return KbNeighbor.model_validate(
         {"node": _to_node(data), "edge_type": edge_type, "direction": direction, "co_n": co_n}
     )
-
-
-def _snippet(text: str) -> str:
-    """Kuerzt die Aussage auf Snippet-Laenge (harte Kappung + Ellipse)."""
-    if len(text) <= _SNIPPET_MAX_CHARS:
-        return text
-    return text[: _SNIPPET_MAX_CHARS - 1].rstrip() + "…"
 
 
 class KbRepository(Protocol):
@@ -640,7 +630,7 @@ class PgKbRepository:
             KbSearchHit(
                 node_id=row["id"],
                 anchor=f"node:{row['id']}",
-                snippet=_snippet(row["content"]),
+                snippet=snippet(row["content"]),
                 tier=row["tier"],
                 status=row["status"],
                 score=float(row["score"]),

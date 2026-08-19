@@ -20,6 +20,7 @@ from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
+from who2be_api.testing.api_helpers import agent_token
 
 from who2be_api.main import app
 from who2be_api.testing.workspace_setup import (
@@ -29,19 +30,6 @@ from who2be_api.testing.workspace_setup import (
 )
 
 AuthFactory = Callable[[UUID], dict[str, str]]
-
-
-def _agent_token(
-    client: TestClient, prefix: str, name: str, policy: dict[str, object], auth: dict[str, str]
-) -> tuple[str, dict[str, str]]:
-    agent = client.post(
-        f"{prefix}/agents", json={"name": name, "tool_policy": policy}, headers=auth
-    )
-    assert agent.status_code == 201, agent.text
-    agent_id = agent.json()["id"]
-    token = client.post(f"{prefix}/tokens", json={"name": name, "agent_id": agent_id}, headers=auth)
-    assert token.status_code == 201, token.text
-    return agent_id, {"Authorization": f"Bearer {token.json()['token']}"}
 
 
 def _add_member(workspace_id: UUID, user_id: UUID, role: str = "editor") -> None:
@@ -103,7 +91,7 @@ def test_shared_area_anlage_und_sichtbarkeit(make_auth_headers: AuthFactory) -> 
             assert _area(client, prefix, viewer_auth, "Viewer-Area").status_code == 403
 
             # Agent-Zugriff (Liste) loest die private Auto-Anlage aus.
-            agent_id, agent_tok = _agent_token(
+            agent_id, agent_tok = agent_token(
                 client, prefix, "wa-sicht", {"workarea_write": True}, auth
             )
             agent_areas = client.get(f"{prefix}/work-areas", headers=agent_tok)
@@ -143,7 +131,7 @@ def test_grant_verwaltung_human_only(make_auth_headers: AuthFactory) -> None:
     try:
         with TestClient(app) as client:
             shared_id = _area(client, prefix, auth, "Grant-Area").json()["id"]
-            agent_id, agent_tok = _agent_token(
+            agent_id, agent_tok = agent_token(
                 client, prefix, "wa-grant", {"workarea_write": True}, auth
             )
             grant_url = f"{prefix}/work-areas/{shared_id}/grants/{agent_id}"
@@ -171,7 +159,7 @@ def test_grant_verwaltung_human_only(make_auth_headers: AuthFactory) -> None:
                 for a in client.get(f"{prefix}/work-areas", headers=auth).json()
                 if a["scope"] == "private"
             )
-            other_agent_id, _ = _agent_token(
+            other_agent_id, _ = agent_token(
                 client, prefix, "wa-grant-2", {"workarea_write": True}, auth
             )
             private_grant = client.put(
@@ -235,7 +223,7 @@ def test_grant_liste_ist_fuer_menschen_lesbar(make_auth_headers: AuthFactory) ->
             assert empty.status_code == 200, empty.text
             assert empty.json() == []
 
-            agent_id, agent_tok = _agent_token(
+            agent_id, agent_tok = agent_token(
                 client, prefix, "wa-liste", {"workarea_write": True}, auth
             )
             granted = client.put(f"{grants_url}/{agent_id}", json={"level": "write"}, headers=auth)
@@ -289,7 +277,7 @@ def test_whoami_traegt_work_areas(make_auth_headers: AuthFactory) -> None:
     try:
         with TestClient(app) as client:
             shared_id = _area(client, prefix, auth, "Whoami-Area").json()["id"]
-            agent_id, agent_tok = _agent_token(
+            agent_id, agent_tok = agent_token(
                 client, prefix, "wa-whoami", {"workarea_write": True}, auth
             )
             grant = client.put(

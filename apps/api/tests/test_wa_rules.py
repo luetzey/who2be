@@ -41,6 +41,7 @@ from who2be_api.core.migrations import MIGRATIONS_DIR
 from who2be_api.main import app
 from who2be_api.services.tablestore_provider import reset_table_store, set_table_store
 from who2be_api.tablestore import TableStore
+from who2be_api.testing.api_helpers import agent_token, db_execute, grant
 from who2be_api.testing.workspace_setup import (
     cleanup_workspaces,
     fresh_user_id,
@@ -75,24 +76,6 @@ def _db_fetch(sql: str, *args: object) -> list[Any]:
     return asyncio.run(_run())
 
 
-def _db_execute(sql: str, *args: object) -> None:
-    """Wie `_db_fetch`, aber schreibend — bewusst OHNE jsonb-Codec.
-
-    Genau das macht sie fuer die Migrations-Tests brauchbar: eine Connection
-    ohne Codec schreibt exakt den String, den sie bekommt, sodass sich ein
-    doppelt encodierter Bestand nachstellen laesst.
-    """
-
-    async def _run() -> None:
-        conn = await asyncpg.connect(get_settings().database_url)
-        try:
-            await conn.execute(sql, *args)
-        finally:
-            await conn.close()
-
-    asyncio.run(_run())
-
-
 @pytest.fixture
 def table_store(tmp_path: Path) -> Iterator[TableStore]:
     """Frischer TableStore je Test (Locks binden an die Loop des Tests)."""
@@ -100,28 +83,6 @@ def table_store(tmp_path: Path) -> Iterator[TableStore]:
     set_table_store(store)
     yield store
     reset_table_store()
-
-
-def _agent_token(
-    client: TestClient,
-    prefix: str,
-    name: str,
-    policy: dict[str, object],
-    auth: dict[str, str],
-    *,
-    role: str | None = None,
-) -> tuple[str, dict[str, str]]:
-    agent = client.post(
-        f"{prefix}/agents", json={"name": name, "tool_policy": policy}, headers=auth
-    )
-    assert agent.status_code == 201, agent.text
-    agent_id = agent.json()["id"]
-    body: dict[str, object] = {"name": name, "agent_id": agent_id}
-    if role is not None:
-        body["role"] = role
-    token = client.post(f"{prefix}/tokens", json=body, headers=auth)
-    assert token.status_code == 201, token.text
-    return agent_id, {"Authorization": f"Bearer {token.json()['token']}"}
 
 
 def _setup_table(
@@ -530,7 +491,7 @@ def test_migration_0081_packt_doppelt_encodierte_konvention_aus(
             assert saved.status_code == 200, saved.text
 
             # Altbestand nachstellen: doppelt encodiert, also ein JSON-String.
-            _db_execute(
+            db_execute(
                 "UPDATE wa_source_convention SET convention = $1::jsonb "
                 "WHERE workspace_id = $2 AND area_id = $3",
                 json.dumps(json.dumps(convention)),
@@ -539,7 +500,7 @@ def test_migration_0081_packt_doppelt_encodierte_konvention_aus(
             )
             assert [r["kind"] for r in _db_fetch(kind_sql, ws, UUID(area_id))] == ["string"]
 
-            _db_execute(
+            db_execute(
                 (MIGRATIONS_DIR / "0081_jsonb_double_encoded.sql").read_text(encoding="utf-8")
             )
 
@@ -570,15 +531,11 @@ def test_gates_regel_und_konventions_routen(make_auth_headers: AuthFactory) -> N
             conventions_url = f"{prefix}/work-areas/{area_id}/conventions"
 
             def _grant(agent_id: str, level: str) -> None:
-                res = client.put(
-                    f"{prefix}/work-areas/{area_id}/grants/{agent_id}",
-                    json={"level": level},
-                    headers=auth,
-                )
-                assert res.status_code == 200, res.text
+                """Kurzform ueber Area/`auth` dieses Tests — Logik im Helfer."""
+                grant(client, prefix, auth, area_id, agent_id, level)
 
             # Agent MIT Capability, aber ohne Grant: alles 404 (kein Leak).
-            _, no_grant = _agent_token(
+            _, no_grant = agent_token(
                 client, prefix, "rule-nogrant", {"workarea_write": True}, auth
             )
             assert client.get(rules_url, headers=no_grant).status_code == 404
@@ -592,7 +549,7 @@ def test_gates_regel_und_konventions_routen(make_auth_headers: AuthFactory) -> N
             )
 
             # Read-Grant: Reads ok, Writes 403 area_forbidden.
-            ro_id, ro_tok = _agent_token(client, prefix, "rule-ro", {"workarea_write": True}, auth)
+            ro_id, ro_tok = agent_token(client, prefix, "rule-ro", {"workarea_write": True}, auth)
             _grant(ro_id, "read")
             assert client.get(rules_url, headers=ro_tok).status_code == 200
             assert client.get(conventions_url, headers=ro_tok).status_code == 200
@@ -601,14 +558,14 @@ def test_gates_regel_und_konventions_routen(make_auth_headers: AuthFactory) -> N
             assert ro_write.json()["reason"] == "area_forbidden"
 
             # Agent OHNE workarea_write trotz Write-Grant: 403 missing_capability.
-            no_cap_id, no_cap = _agent_token(client, prefix, "rule-nocap", {}, auth)
+            no_cap_id, no_cap = agent_token(client, prefix, "rule-nocap", {}, auth)
             _grant(no_cap_id, "write")
             blocked = client.post(rules_url, json=rule_body, headers=no_cap)
             assert blocked.status_code == 403
             assert blocked.json()["reason"] == "missing_capability"
 
             # viewer-Token: Rollen-Gate VOR Capability (H1) — schreibt nie.
-            viewer_id, viewer_tok = _agent_token(
+            viewer_id, viewer_tok = agent_token(
                 client, prefix, "rule-viewer", {"workarea_write": True}, auth, role="viewer"
             )
             _grant(viewer_id, "write")
@@ -619,7 +576,7 @@ def test_gates_regel_und_konventions_routen(make_auth_headers: AuthFactory) -> N
             assert viewer_write.json()["reason"] == "insufficient_role"
 
             # Agent MIT Write-Grant + Capability darf beides (Positivkontrolle).
-            ok_id, ok_tok = _agent_token(client, prefix, "rule-rw", {"workarea_write": True}, auth)
+            ok_id, ok_tok = agent_token(client, prefix, "rule-rw", {"workarea_write": True}, auth)
             _grant(ok_id, "write")
             agent_rule = client.post(
                 rules_url, json={"pattern": "db bahn", "category": "mobilitaet"}, headers=ok_tok

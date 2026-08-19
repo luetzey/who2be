@@ -41,6 +41,7 @@ from uuid import UUID
 import asyncpg
 import pytest
 from fastapi.testclient import TestClient
+from who2be_api.testing.api_helpers import agent_token, db_execute, grant, shared_area
 
 import who2be_api.services.access_log as access_log_module
 from who2be_api.core.config import get_settings
@@ -100,17 +101,6 @@ def _db_fetch(sql: str, *args: object) -> list[Any]:
     return asyncio.run(_run())
 
 
-def _db_execute(sql: str, *args: object) -> None:
-    async def _run() -> None:
-        conn = await asyncpg.connect(get_settings().database_url)
-        try:
-            await conn.execute(sql, *args)
-        finally:
-            await conn.close()
-
-    asyncio.run(_run())
-
-
 @pytest.fixture
 def fast_table_store(tmp_path: Path) -> Iterator[TableStore]:
     """TableStore mit kurzem Zeitbudget (H1) — frische Instanz je Test-Loop."""
@@ -118,23 +108,6 @@ def fast_table_store(tmp_path: Path) -> Iterator[TableStore]:
     set_table_store(store)
     yield store
     reset_table_store()
-
-
-def _agent_token(
-    client: TestClient,
-    prefix: str,
-    name: str,
-    policy: dict[str, object],
-    auth: dict[str, str],
-) -> tuple[str, dict[str, str]]:
-    agent = client.post(
-        f"{prefix}/agents", json={"name": name, "tool_policy": policy}, headers=auth
-    )
-    assert agent.status_code == 201, agent.text
-    agent_id = agent.json()["id"]
-    token = client.post(f"{prefix}/tokens", json={"name": name, "agent_id": agent_id}, headers=auth)
-    assert token.status_code == 201, token.text
-    return agent_id, {"Authorization": f"Bearer {token.json()['token']}"}
 
 
 def _machine_ctx(agent_id: UUID | None) -> WorkspaceContext:
@@ -147,22 +120,6 @@ def _machine_ctx(agent_id: UUID | None) -> WorkspaceContext:
         agent_id=agent_id,
         tool_policy=AgentToolPolicy() if agent_id is not None else None,
     )
-
-
-def _shared_area(client: TestClient, prefix: str, auth: dict[str, str], name: str) -> str:
-    created = client.post(f"{prefix}/work-areas", json={"name": name}, headers=auth)
-    assert created.status_code == 201, created.text
-    area_id: str = created.json()["id"]
-    return area_id
-
-
-def _grant(
-    client: TestClient, prefix: str, auth: dict[str, str], area_id: str, agent_id: str, level: str
-) -> None:
-    res = client.put(
-        f"{prefix}/work-areas/{area_id}/grants/{agent_id}", json={"level": level}, headers=auth
-    )
-    assert res.status_code == 200, res.text
 
 
 def _table(
@@ -225,7 +182,7 @@ def test_h1_endless_query_is_interrupted(make_auth_headers: AuthFactory) -> None
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area = _shared_area(client, prefix, auth, "Tabellen")
+            area = shared_area(client, prefix, auth, "Tabellen")
             table_id = _table(client, prefix, auth, area, _ROWS)
 
             started = time.monotonic()
@@ -317,7 +274,7 @@ def test_h2_oversized_cell_and_result_are_413(make_auth_headers: AuthFactory) ->
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area = _shared_area(client, prefix, auth, "Tabellen")
+            area = shared_area(client, prefix, auth, "Tabellen")
             # 200 x 6 KB = 1,2 MB Nutztext: ueber MAX_CELL_BYTES, unter
             # MAX_RESULT_BYTES — beide Grenzen mit EINEM Datenbestand.
             rows = _fat_rows(200, 6_000)
@@ -393,7 +350,7 @@ def test_h3_denied_functions(make_auth_headers: AuthFactory, sql: str) -> None:
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area = _shared_area(client, prefix, auth, "Tabellen")
+            area = shared_area(client, prefix, auth, "Tabellen")
             table_id = _table(client, prefix, auth, area, _ROWS)
             denied = _query(client, prefix, auth, table_id, sql)
             assert denied.status_code == 403, denied.text
@@ -423,7 +380,7 @@ def test_h3_file_functions_are_unreachable(make_auth_headers: AuthFactory, sql: 
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area = _shared_area(client, prefix, auth, "Tabellen")
+            area = shared_area(client, prefix, auth, "Tabellen")
             table_id = _table(client, prefix, auth, area, _ROWS)
             res = _query(client, prefix, auth, table_id, sql)
             assert res.status_code in (400, 403), res.text
@@ -448,7 +405,7 @@ def test_h3_legitimate_analytics_still_runs(make_auth_headers: AuthFactory) -> N
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area = _shared_area(client, prefix, auth, "Tabellen")
+            area = shared_area(client, prefix, auth, "Tabellen")
             table_id = _table(client, prefix, auth, area, _ROWS)
 
             analytics = _query(
@@ -509,7 +466,7 @@ def test_h4_agent_cannot_change_own_model_config(make_auth_headers: AuthFactory)
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            agent_id, agent_headers = _agent_token(
+            agent_id, agent_headers = agent_token(
                 client, prefix, "schreiber", {"agent_write": True}, auth
             )
 
@@ -561,7 +518,7 @@ def test_h4_access_log_snapshots_model_config(make_auth_headers: AuthFactory) ->
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            agent_id, agent_headers = _agent_token(client, prefix, "leser", _ALL_WRITE_POLICY, auth)
+            agent_id, agent_headers = agent_token(client, prefix, "leser", _ALL_WRITE_POLICY, auth)
             configured = client.put(
                 f"{prefix}/agents/{agent_id}",
                 json={"model_provider": "anthropic", "model_name": "claude-x"},
@@ -618,7 +575,7 @@ def test_h5_access_log_survives_agent_delete(make_auth_headers: AuthFactory) -> 
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            agent_id, agent_headers = _agent_token(
+            agent_id, agent_headers = agent_token(
                 client, prefix, "spurenleger", _ALL_WRITE_POLICY, auth
             )
             created = client.post(
@@ -649,7 +606,7 @@ def test_h5_access_log_survives_agent_delete(make_auth_headers: AuthFactory) -> 
             assert self_delete.json()["reason"] == "missing_capability"
 
             # Ohne Protokollzeilen bleibt der Delete moeglich (kein Kollateral).
-            fresh_id, _ = _agent_token(client, prefix, "unbenutzt", {}, auth)
+            fresh_id, _ = agent_token(client, prefix, "unbenutzt", {}, auth)
             assert client.delete(f"{prefix}/agents/{fresh_id}", headers=auth).status_code == 204
     finally:
         cleanup_workspaces([owner])
@@ -675,7 +632,7 @@ def test_m1_db_refuses_an_active_unbound_token(make_auth_headers: AuthFactory) -
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            agent_id, _ = _agent_token(client, prefix, "gebunden", {}, auth)
+            agent_id, _ = agent_token(client, prefix, "gebunden", {}, auth)
             token = client.post(
                 f"{prefix}/tokens", json={"name": "t", "agent_id": agent_id}, headers=auth
             )
@@ -687,7 +644,7 @@ def test_m1_db_refuses_an_active_unbound_token(make_auth_headers: AuthFactory) -
 
             # … und direktes SQL scheitert am CHECK aus 0048.
             with pytest.raises(asyncpg.exceptions.CheckViolationError):
-                _db_execute(
+                db_execute(
                     "UPDATE api_token SET agent_id = NULL WHERE id = $1",
                     UUID(token.json()["id"]),
                 )
@@ -736,7 +693,7 @@ def test_m1_gate_is_wired_to_every_workarea_route(make_auth_headers: AuthFactory
     ghost = "00000000-0000-0000-0000-000000000000"
     try:
         with TestClient(app) as client:
-            area = _shared_area(client, prefix, auth, "Tabellen")
+            area = shared_area(client, prefix, auth, "Tabellen")
             table_id = _table(client, prefix, auth, area, _ROWS)
 
             unbound = WorkspaceContext(
@@ -773,7 +730,7 @@ def test_m1_gate_is_wired_to_every_workarea_route(make_auth_headers: AuthFactory
 
             # Gegenprobe: mit demselben Kontext, aber agent-gebunden, ist die
             # Route wieder erreichbar — das Gate blockt nur die Bindungs-Luecke.
-            agent_id, _ = _agent_token(client, prefix, "gebunden", {}, auth)
+            agent_id, _ = agent_token(client, prefix, "gebunden", {}, auth)
             bound = WorkspaceContext(
                 workspace_id=ws,
                 user_id=owner,
@@ -813,7 +770,7 @@ def test_m2_failed_log_write_is_counted(
 
     try:
         with TestClient(app) as client:
-            _, agent_headers = _agent_token(client, prefix, "schreiber", _ALL_WRITE_POLICY, auth)
+            _, agent_headers = agent_token(client, prefix, "schreiber", _ALL_WRITE_POLICY, auth)
             access_log_module.reset_failed_log_writes()
             monkeypatch.setattr(access_log_module, "_repo", _BrokenRepo())
 
@@ -865,16 +822,16 @@ def test_m3_rate_limit_is_checked_before_the_query(
     token_rate_limiter.reset()
     try:
         with TestClient(app) as client:
-            area = _shared_area(client, prefix, auth, "Tabellen")
+            area = shared_area(client, prefix, auth, "Tabellen")
             table_id = _table(client, prefix, auth, area, _ROWS)
-            agent_id, agent_headers = _agent_token(
+            agent_id, agent_headers = agent_token(
                 client,
                 prefix,
                 "sparsam",
                 {"workarea_write": True, "write_rate_limit": 1},
                 auth,
             )
-            _grant(client, prefix, auth, area, agent_id, "write")
+            grant(client, prefix, auth, area, agent_id, "write")
 
             save_body = {
                 "sql": 'SELECT count(*) FROM "transactions"',
@@ -1040,15 +997,15 @@ def test_l3_l4_promote_actor_and_long_title(make_auth_headers: AuthFactory) -> N
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area = _shared_area(client, prefix, auth, "Eingang")
-            agent_id, agent_headers = _agent_token(
+            area = shared_area(client, prefix, auth, "Eingang")
+            agent_id, agent_headers = agent_token(
                 client,
                 prefix,
                 "promoter",
                 {"workarea_write": True, "resource_write": True},
                 auth,
             )
-            _grant(client, prefix, auth, area, agent_id, "write")
+            grant(client, prefix, auth, area, agent_id, "write")
 
             long_title = "Sehr langer Titel " * 16  # > 100 Slug-Zeichen
             created = client.post(
@@ -1103,7 +1060,7 @@ def test_promote_target_updates_instead_of_creating(make_auth_headers: AuthFacto
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area = _shared_area(client, prefix, auth, "Eingang")
+            area = shared_area(client, prefix, auth, "Eingang")
             first = client.post(
                 f"{prefix}/work-areas/{area}/artifacts",
                 json={

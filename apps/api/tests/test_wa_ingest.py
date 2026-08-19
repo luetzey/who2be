@@ -41,6 +41,7 @@ from who2be_api.services.wa_ingest import (
     reset_ingest_transport,
     set_ingest_transport,
 )
+from who2be_api.testing.api_helpers import agent_token, shared_area
 from who2be_api.testing.workspace_setup import (
     cleanup_workspaces,
     fresh_user_id,
@@ -256,26 +257,6 @@ def _ingest(
     return client.post(url, json=body, headers=headers)
 
 
-def _shared_area(client: TestClient, prefix: str, auth: dict[str, str], name: str) -> str:
-    created = client.post(f"{prefix}/work-areas", json={"name": name}, headers=auth)
-    assert created.status_code == 201, created.text
-    area_id: str = created.json()["id"]
-    return area_id
-
-
-def _agent_token(
-    client: TestClient, prefix: str, name: str, policy: dict[str, object], auth: dict[str, str]
-) -> tuple[str, dict[str, str]]:
-    agent = client.post(
-        f"{prefix}/agents", json={"name": name, "tool_policy": policy}, headers=auth
-    )
-    assert agent.status_code == 201, agent.text
-    agent_id = agent.json()["id"]
-    token = client.post(f"{prefix}/tokens", json={"name": name, "agent_id": agent_id}, headers=auth)
-    assert token.status_code == 201, token.text
-    return agent_id, {"Authorization": f"Bearer {token.json()['token']}"}
-
-
 def _workspace_counts(workspace_id: UUID) -> tuple[int, int, int]:
     """(wa_blob, wa_artifact, wa_chunk)-Zeilen des Workspace — Teilzustands-Check."""
     import asyncpg
@@ -318,7 +299,7 @@ def test_pdf_ingest_roundtrip(
     pdf = _mini_pdf("Zahlung Miete August 2026")
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "Ingest-Roundtrip")
+            area_id = shared_area(client, prefix, auth, "Ingest-Roundtrip")
             res = _ingest(
                 client,
                 prefix,
@@ -375,7 +356,7 @@ def test_pdf_ohne_text_persistiert_nichts(
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "Leeres-PDF")
+            area_id = shared_area(client, prefix, auth, "Leeres-PDF")
             before = _workspace_counts(ws)
             res = _ingest(client, prefix, auth, area_id, file_b64=_b64(_empty_pdf()))
             assert res.status_code == 422, res.text
@@ -403,7 +384,7 @@ def test_html_wird_sanitisiert(make_auth_headers: AuthFactory) -> None:
     )
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "HTML-Sanitisierung")
+            area_id = shared_area(client, prefix, auth, "HTML-Sanitisierung")
             res = _ingest(client, prefix, auth, area_id, file_b64=_b64(html.encode()))
             assert res.status_code == 201, res.text
             doc_id = res.json()["doc_artifact_id"]
@@ -427,7 +408,7 @@ def test_text_ingest(make_auth_headers: AuthFactory) -> None:
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "Text-Ingest")
+            area_id = shared_area(client, prefix, auth, "Text-Ingest")
             res = _ingest(
                 client,
                 prefix,
@@ -460,7 +441,7 @@ def test_dedup_zweiter_ingest_idempotent(
     pdf = _mini_pdf("Dedup-Beleg")
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "Dedup")
+            area_id = shared_area(client, prefix, auth, "Dedup")
             first = _ingest(client, prefix, auth, area_id, file_b64=_b64(pdf))
             assert first.status_code == 201, first.text
             counts_after_first = _workspace_counts(ws)
@@ -503,7 +484,7 @@ def test_url_ingest_mit_provenance_und_ssrf_redirect(make_auth_headers: AuthFact
     set_ingest_transport(httpx.MockTransport(handler))
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "URL-Ingest")
+            area_id = shared_area(client, prefix, auth, "URL-Ingest")
             res = _ingest(client, prefix, auth, area_id, url=f"http://{_PUBLIC_IP}/bericht.html")
             assert res.status_code == 201, res.text
             doc_id = res.json()["doc_artifact_id"]
@@ -545,7 +526,7 @@ def test_zu_grosse_datei_413(
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "Zu-gross")
+            area_id = shared_area(client, prefix, auth, "Zu-gross")
             res = _ingest(
                 client, prefix, auth, area_id, file_b64=_b64(b"x" * 512), filename="gross.txt"
             )
@@ -567,7 +548,7 @@ def test_unbekanntes_format_422(
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "Unbekannt")
+            area_id = shared_area(client, prefix, auth, "Unbekannt")
             res = _ingest(
                 client,
                 prefix,
@@ -595,7 +576,7 @@ def test_ohne_blobstore_503(make_auth_headers: AuthFactory) -> None:
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "Ohne-Store")
+            area_id = shared_area(client, prefix, auth, "Ohne-Store")
             res = _ingest(client, prefix, auth, area_id, file_b64=_b64(b"nur text"))
             assert res.status_code == 503, res.text
             assert res.json()["reason"] == "blobstore_unconfigured"
@@ -617,23 +598,21 @@ def test_gates_area_capability_und_private_area(make_auth_headers: AuthFactory) 
     payload = _b64(b"Agenten-Notiz.")
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "Gate-Area")
+            area_id = shared_area(client, prefix, auth, "Gate-Area")
 
             # Ohne Grant: die Area ist fuer den Agenten unsichtbar → 404.
-            _, no_grant = _agent_token(
-                client, prefix, "ing-nogrant", {"workarea_write": True}, auth
-            )
+            _, no_grant = agent_token(client, prefix, "ing-nogrant", {"workarea_write": True}, auth)
             blocked = _ingest(client, prefix, no_grant, area_id, file_b64=payload, filename="n.txt")
             assert blocked.status_code == 404, blocked.text
 
             # Ohne Capability: 403 `missing_capability` — vor jedem Area-Check.
-            _, no_cap = _agent_token(client, prefix, "ing-nocap", {}, auth)
+            _, no_cap = agent_token(client, prefix, "ing-nocap", {}, auth)
             forbidden = _ingest(client, prefix, no_cap, None, file_b64=payload, filename="n.txt")
             assert forbidden.status_code == 403, forbidden.text
             assert forbidden.json()["reason"] == "missing_capability"
 
             # Mit Capability, ohne Area: private Area (Auto-Anlage) + Ingest.
-            _, agent_tok = _agent_token(client, prefix, "ing-agent", {"workarea_write": True}, auth)
+            _, agent_tok = agent_token(client, prefix, "ing-agent", {"workarea_write": True}, auth)
             private = _ingest(client, prefix, agent_tok, None, file_b64=payload, filename="n.txt")
             assert private.status_code == 201, private.text
             doc_id = private.json()["doc_artifact_id"]

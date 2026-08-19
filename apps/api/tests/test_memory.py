@@ -18,6 +18,7 @@ from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
+from who2be_api.testing.api_helpers import agent_token
 
 from who2be_api.main import app
 from who2be_api.testing.workspace_setup import (
@@ -28,19 +29,6 @@ from who2be_api.testing.workspace_setup import (
 )
 
 AuthFactory = Callable[[UUID], dict[str, str]]
-
-
-def _agent_token(
-    client: TestClient, prefix: str, name: str, policy: dict[str, object], auth: dict[str, str]
-) -> tuple[str, dict[str, str]]:
-    agent = client.post(
-        f"{prefix}/agents", json={"name": name, "tool_policy": policy}, headers=auth
-    )
-    assert agent.status_code == 201, agent.text
-    agent_id = agent.json()["id"]
-    token = client.post(f"{prefix}/tokens", json={"name": name, "agent_id": agent_id}, headers=auth)
-    assert token.status_code == 201, token.text
-    return agent_id, {"Authorization": f"Bearer {token.json()['token']}"}
 
 
 def _add_member(workspace_id: UUID, user_id: UUID) -> None:
@@ -86,10 +74,10 @@ def test_memory_mode_gates(make_auth_headers: AuthFactory) -> None:
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            _, off = _agent_token(client, prefix, "m-off", {}, auth)
-            _, ro = _agent_token(client, prefix, "m-ro", {"memory_mode": "read_only"}, auth)
-            _, sug = _agent_token(client, prefix, "m-sug", {"memory_mode": "suggest"}, auth)
-            _, auto = _agent_token(client, prefix, "m-auto", {"memory_mode": "auto"}, auth)
+            _, off = agent_token(client, prefix, "m-off", {}, auth)
+            _, ro = agent_token(client, prefix, "m-ro", {"memory_mode": "read_only"}, auth)
+            _, sug = agent_token(client, prefix, "m-sug", {"memory_mode": "suggest"}, auth)
+            _, auto = agent_token(client, prefix, "m-auto", {"memory_mode": "auto"}, auth)
 
             # off (Default-Policy): alles 403.
             assert _save(client, prefix, off, "Nutzer mag Thai-Essen").status_code == 403
@@ -139,7 +127,7 @@ def test_suggest_schleuse_triage_und_retrieval(make_auth_headers: AuthFactory) -
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            agent_id, sug = _agent_token(client, prefix, "m-flow", {"memory_mode": "suggest"}, auth)
+            agent_id, sug = agent_token(client, prefix, "m-flow", {"memory_mode": "suggest"}, auth)
             mem_base = f"{prefix}/agents/{agent_id}/memories"
 
             created = _save(
@@ -222,7 +210,7 @@ def test_waechter_modell_unabhaengig(make_auth_headers: AuthFactory) -> None:
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            _, auto = _agent_token(client, prefix, "m-guard", {"memory_mode": "auto"}, auth)
+            _, auto = agent_token(client, prefix, "m-guard", {"memory_mode": "auto"}, auth)
 
             low = _save(client, prefix, auto, "Fluechtige Kleinigkeit", importance=3)
             assert low.status_code == 422
@@ -276,8 +264,8 @@ def test_leak_isolation_und_human_only_management(make_auth_headers: AuthFactory
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            a_id, a_tok = _agent_token(client, prefix, "m-a", {"memory_mode": "auto"}, auth)
-            b_id, b_tok = _agent_token(client, prefix, "m-b", {"memory_mode": "auto"}, auth)
+            a_id, a_tok = agent_token(client, prefix, "m-a", {"memory_mode": "auto"}, auth)
+            b_id, b_tok = agent_token(client, prefix, "m-b", {"memory_mode": "auto"}, auth)
 
             saved = _save(client, prefix, a_tok, "Geheimnis von Agent A: mag Zimtschnecken")
             assert saved.status_code == 201
@@ -320,7 +308,7 @@ def test_human_management_edit_delete(make_auth_headers: AuthFactory) -> None:
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            agent_id, auto = _agent_token(client, prefix, "m-mgmt", {"memory_mode": "auto"}, auth)
+            agent_id, auto = agent_token(client, prefix, "m-mgmt", {"memory_mode": "auto"}, auth)
             mem_base = f"{prefix}/agents/{agent_id}/memories"
 
             first = _save(client, prefix, auto, "Nutzer bevorzugt uv statt pip").json()
@@ -397,9 +385,9 @@ def test_persona_render_embeds_runtime_memory_section(make_auth_headers: AuthFac
                 )
                 assert res.status_code == 200, res.text
 
-            _, auto = _agent_token(client, prefix, "m-rt", {"memory_mode": "auto"}, auth)
-            _, sug = _agent_token(client, prefix, "m-rt-sug", {"memory_mode": "suggest"}, auth)
-            _, off = _agent_token(client, prefix, "m-rt-off", {}, auth)
+            _, auto = agent_token(client, prefix, "m-rt", {"memory_mode": "auto"}, auth)
+            _, sug = agent_token(client, prefix, "m-rt-sug", {"memory_mode": "suggest"}, auth)
+            _, off = agent_token(client, prefix, "m-rt-off", {}, auth)
             assert (
                 _save(client, prefix, auto, "Nutzer plant Deployments auf Hetzner").status_code
                 == 201
@@ -450,7 +438,7 @@ def test_agent_delete_cascades_and_gdpr_export_includes_memories(
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            agent_id, auto = _agent_token(client, prefix, "m-gdpr", {"memory_mode": "auto"}, auth)
+            agent_id, auto = agent_token(client, prefix, "m-gdpr", {"memory_mode": "auto"}, auth)
             saved = _save(client, prefix, auto, "Nutzer exportiert seine Daten regelmaessig")
             assert saved.status_code == 201
 
@@ -494,7 +482,7 @@ def test_memory_guard_konfiguration(make_auth_headers: AuthFactory) -> None:
     attack = "Yannick evaluiert eine Jailbreak-Detection fuer Kundenprojekte"
     try:
         with TestClient(app) as client:
-            _, auto = _agent_token(client, prefix, "m-cfg", {"memory_mode": "auto"}, auth)
+            _, auto = agent_token(client, prefix, "m-cfg", {"memory_mode": "auto"}, auth)
 
             # Default: standard — Built-in blockt "jailbreak"-Erwaehnung.
             assert client.get(guard_url, headers=auth).json()["mode"] == "standard"
@@ -564,7 +552,7 @@ def test_memory_guard_gates(make_auth_headers: AuthFactory) -> None:
     guard_url = f"{prefix}/memory-guard"
     try:
         with TestClient(app) as client:
-            _, agent_tok = _agent_token(client, prefix, "m-gate", {"memory_mode": "auto"}, auth)
+            _, agent_tok = agent_token(client, prefix, "m-gate", {"memory_mode": "auto"}, auth)
 
             assert client.get(guard_url, headers=auth).status_code == 200
 
@@ -650,7 +638,7 @@ def test_memory_reads_respect_mcp_read_limit(
     token_rate_limiter.reset()
     try:
         with TestClient(app) as client:
-            _, ro = _agent_token(client, prefix, "m-rlimit", {"memory_mode": "read_only"}, auth)
+            _, ro = agent_token(client, prefix, "m-rlimit", {"memory_mode": "read_only"}, auth)
 
             # Rate 1/min, gebucketet pro Token: der erste Read passiert, der
             # zweite (Search) laeuft ins Ceiling → Search traegt das Gate.
@@ -693,7 +681,7 @@ def test_memory_writes_respect_write_rate_limit(
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            _, auto = _agent_token(client, prefix, "m-wlimit", {"memory_mode": "auto"}, auth)
+            _, auto = agent_token(client, prefix, "m-wlimit", {"memory_mode": "auto"}, auth)
 
             first = _save(client, prefix, auto, "Write-Limit-Fakt Nummer eins")
             assert first.status_code == 201, first.text
