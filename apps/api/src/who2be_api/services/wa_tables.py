@@ -135,22 +135,34 @@ class TableQueryInvalid(ValueError):
     """
 
 
-def _name_conflict(name: str) -> ApiGateError:
+def _name_conflict(name: str, existing_id: UUID | None) -> ApiGateError:
     """409 fuer eine Namens-Kollision in der Area (UNIQUE (area_id, name)).
 
     Reason `concurrent_conflict` uebernimmt die bestehende Taxonomie-Wahl von
     `work_areas.create_shared` (Area-Name bereits vergeben) — ein neuer Reason
     fuer denselben Sachverhalt waere Vokabular ohne Not.
+
+    Der Text nennt die **ID der bestehenden Tabelle**. Frueher stand hier ein
+    Verweis auf ``GET /work-areas/{area_id}/tables`` — einen REST-Pfad, fuer
+    den es gar kein MCP-Tool gab: die Meldung schickte den Agenten in eine
+    Sackgasse, obwohl der Server die gesuchte ID im selben Moment vorliegen
+    hatte. Damit findet auch ein Agent, der `list_tables` nicht kennt, seine
+    Tabelle wieder — indem er sie schlicht erneut anzulegen versucht. Kein
+    Existenz-Leak: wer diesen 409 sieht, hat Write-Recht auf die Area.
+
+    `existing_id=None` bleibt moeglich (die Zeile wurde zwischen Insert und
+    Lookup geloescht) — dann faellt der Hinweis weg, statt zu luegen.
     """
+    hinweis = (
+        f"Sie hat die ID {existing_id} — mit `describe_table` ansehen oder direkt weiter befuellen."
+        if existing_id is not None
+        else "Mit `list_tables` die Tabellen der Area auflisten."
+    )
     return ApiGateError(
         status=status.HTTP_409_CONFLICT,
         reason="concurrent_conflict",
         actionable_by="agent",
-        detail=(
-            f"Eine Tabelle mit dem Namen '{name}' existiert bereits in dieser "
-            "Area. Anderen Namen waehlen oder die bestehende Tabelle nutzen "
-            "(GET /work-areas/{area_id}/tables)."
-        ),
+        detail=(f"Eine Tabelle mit dem Namen '{name}' existiert bereits in dieser Area. {hinweis}"),
     )
 
 
@@ -535,7 +547,13 @@ class WaTableService:
                 conn, ctx.workspace_id, area_id, name=data.name, schema=data.schema_
             )
             if created is None:
-                raise _name_conflict(data.name)
+                # Die ID der bestehenden Tabelle mitgeben — auf DERSELBEN
+                # Connection, die gleich zurueckrollt: der Read sieht die
+                # fremde, committete Zeile.
+                existing = await self._tables.get_by_name(
+                    conn, ctx.workspace_id, area_id, data.name
+                )
+                raise _name_conflict(data.name, existing.id if existing else None)
             try:
                 with _store_failures():
                     await self._store.create_table(
@@ -545,9 +563,42 @@ class WaTableService:
                 if "already exists" in str(exc):
                     # SQLite-Tabelle ohne Katalog-Zeile (WP12-Hinweis) — als
                     # Konflikt behandeln, die Katalog-Zeile rollt zurueck.
-                    raise _name_conflict(data.name) from exc
+                    # Hier gibt es KEINE Katalog-ID zu nennen (genau das ist
+                    # der Drift-Fall), also ohne ID.
+                    raise _name_conflict(data.name, None) from exc
                 raise
         return created
+
+    async def delete(self, ctx: WorkspaceContext, table_id: UUID) -> bool:
+        """Loescht Katalog-Zeile UND SQLite-Tabelle — atomar wie `create`.
+
+        `False` = nicht sichtbar oder unbekannt (Router → 404, kein
+        Existenz-Leak). Reihenfolge spiegelt `create`: Katalog-Delete in der
+        offenen Transaktion, dann der DROP; scheitert er, rollt die
+        Katalog-Zeile zurueck. So entsteht nie der Zustand „Katalog leer,
+        SQLite-Tabelle liegt noch da" — der wuerde eine gleichnamige
+        Neuanlage dauerhaft blockieren (`already exists` → 409), ohne dass
+        der Agent die Tabelle noch sehen oder loeschen koennte.
+
+        Was NICHT mitgeloescht wird: eingefrorene Query-Ergebnisse
+        (`save_query_result`-Artifacts). Sie sind eigenstaendige Belege — mit
+        der Tabelle auch den Beleg fuer eine bereits zitierte Zahl zu
+        entfernen, wuerde das Nachvollziehbarkeits-Versprechen brechen.
+        Kategorie-Regeln und Konventionen haengen an der AREA, nicht an der
+        Tabelle, und bleiben ebenfalls.
+        """
+        table = await self._visible_table(ctx, table_id)
+        if table is None:
+            return False
+        self._require_write(ctx)
+        await ensure_area_access(self._pool, ctx, table.area_id, WorkAreaGrantLevel.write)
+        async with self._pool.acquire() as conn, conn.transaction():
+            if not await self._tables.delete(conn, ctx.workspace_id, table_id):
+                return False
+            with _store_failures():
+                await self._store.drop_table(ctx.workspace_id, table.area_id, table.name)
+        await self._log(ctx, table.id, "write")
+        return True
 
     async def insert_rows(
         self, ctx: WorkspaceContext, table_id: UUID, data: RowsInsert

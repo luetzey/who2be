@@ -66,6 +66,7 @@ from who2be_api.tablestore.schema import (
     build_create_table_sql,
     quote_identifier,
     validate_column_name,
+    validate_identifier,
 )
 
 # Deckel fuer den Distinct-Count von Textspalten in `describe` — der Zweck
@@ -540,6 +541,26 @@ class TableStore:
         lock = await self._lock_for(path)
         async with lock:
             await asyncio.to_thread(self._execute_statements_sync, path, statements)
+
+    async def drop_table(self, workspace_id: UUID, area_id: UUID, name: str) -> None:
+        """Loescht eine Tabelle samt ihrer Indizes (`DROP TABLE`).
+
+        Gegenstueck zu `create_table` und derselbe Weg: validierter
+        Identifier, Lock der Area-Datei, DDL im Thread. SQLite raeumt die
+        Indizes der Tabelle (u. a. den Dedupe-Index) mit ab — es bleibt nichts
+        liegen, das eine gleichnamige Neuanlage blockieren wuerde.
+
+        `IF EXISTS` bewusst: der Service loescht Katalog-Zeile UND Tabelle in
+        einer Postgres-Transaktion. Fehlt die SQLite-Seite (Area-Datei nie
+        angelegt, Volume-Verlust), soll der Katalog trotzdem aufgeraeumt
+        werden koennen — sonst bliebe eine Karteileiche, die niemand mehr
+        loeschen kann.
+        """
+        statement = f"DROP TABLE IF EXISTS {quote_identifier(validate_identifier(name))}"
+        path = self.db_path(workspace_id, area_id)
+        lock = await self._lock_for(path)
+        async with lock:
+            await asyncio.to_thread(self._execute_statements_sync, path, [statement])
 
     def _execute_statements_sync(self, path: Path, statements: Sequence[str]) -> None:
         connection = self._connect_rw(path)

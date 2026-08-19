@@ -52,6 +52,14 @@ _LIST_SQL = (
     "WHERE workspace_id = $1 AND area_id = $2 ORDER BY name, id"
 )
 
+# Namens-Lookup ueber `UNIQUE (area_id, name)` (0078) — fuer den 409-Pfad:
+# der Konflikt kennt den Namen, der Agent braucht die ID.
+_GET_BY_NAME_SQL = (
+    f"SELECT {_TABLE_COLUMNS} FROM wa_table WHERE workspace_id = $1 AND area_id = $2 AND name = $3"
+)
+
+_DELETE_SQL = "DELETE FROM wa_table WHERE workspace_id = $1 AND id = $2 RETURNING id"
+
 
 def _to_read(row: asyncpg.Record) -> WaTableRead:
     """Katalog-Zeile → `WaTableRead`; `schema_json` kommt via jsonb-Codec als dict."""
@@ -86,6 +94,14 @@ class WaTableRepository(Protocol):
     async def list_for_area(
         self, fetcher: _Fetcher, workspace_id: UUID, area_id: UUID
     ) -> list[WaTableRead]: ...
+
+    async def get_by_name(
+        self, fetcher: _Fetcher, workspace_id: UUID, area_id: UUID, name: str
+    ) -> WaTableRead | None: ...
+
+    async def delete(
+        self, conn: asyncpg.Connection, workspace_id: UUID, table_id: UUID
+    ) -> bool: ...
 
 
 class PgWaTableRepository:
@@ -122,3 +138,18 @@ class PgWaTableRepository:
     ) -> list[WaTableRead]:
         rows = await fetcher.fetch(_LIST_SQL, workspace_id, area_id)
         return [_to_read(row) for row in rows]
+
+    async def get_by_name(
+        self, fetcher: _Fetcher, workspace_id: UUID, area_id: UUID, name: str
+    ) -> WaTableRead | None:
+        """Katalog-Zeile ueber (Area, Name); `None` = kein Treffer."""
+        row = await fetcher.fetchrow(_GET_BY_NAME_SQL, workspace_id, area_id, name)
+        return _to_read(row) if row is not None else None
+
+    async def delete(self, conn: asyncpg.Connection, workspace_id: UUID, table_id: UUID) -> bool:
+        """Katalog-Zeile loeschen; `False` = es gab keine.
+
+        Nimmt bewusst eine `Connection` (wie `insert`): der Service haelt
+        Katalog-Delete und SQLite-DROP in EINER Transaktion zusammen.
+        """
+        return await conn.fetchval(_DELETE_SQL, workspace_id, table_id) is not None

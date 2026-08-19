@@ -103,6 +103,23 @@ async def save_query_result(
     return ArtifactRead.model_validate(payload)
 
 
+async def list_tables(client: ApiClient, area_id: UUID) -> list[WaTableRead]:
+    """`GET .../work-areas/{area_id}/tables` — Katalog der Area (ohne Zeilen).
+
+    Der Discovery-Einstieg: ohne ihn ist eine Tabelle nach dem Anlegen fuer
+    einen Agenten strukturell nicht wiederauffindbar (Befund 2026-08-17) —
+    die Suche indiziert Artifact-Passagen, die Timeline verlangt die ID
+    bereits.
+    """
+    payload = await client._get(f"{client._workspace_prefix}/work-areas/{area_id}/tables")
+    return [WaTableRead.model_validate(item) for item in payload]
+
+
+async def delete_table(client: ApiClient, table_id: UUID) -> None:
+    """`DELETE .../wa-tables/{id}` — Tabelle + Daten endgueltig."""
+    await client._request("DELETE", f"{client._workspace_prefix}/wa-tables/{table_id}")
+
+
 async def describe_table(client: ApiClient, table_id: UUID) -> TableDescription:
     """`GET .../wa-tables/{id}` — Schema, Zeilenzahl, Wertebereiche und die
     Quell-Konventionen der Area (Kontext ohne Rohdaten-Dump)."""
