@@ -2,19 +2,17 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { VersionStatus } from '@/api/types'
-import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
 import { Button } from '@/components/ui/button'
 import { notify } from '@/lib/feedback'
 import { extractMissingFields, formatMissingFields } from '@/lib/promoteError'
 
-import { canTransition } from '../lib/status'
+import { canTransition } from './versionStatus'
 
 interface StatusActionBarProps {
-  playbookId: string
-  version: number
   status: VersionStatus
+  onTransition: (to: VersionStatus) => Promise<void>
   onTransitioned: () => void
 }
 
@@ -22,14 +20,8 @@ interface StatusActionBarProps {
 // Submit (secondary) vor Reject (destructive). Buttons werden nur
 // gerendert wenn der Uebergang aus dem aktuellen Status erlaubt ist —
 // dadurch faellt die Bar bei active/inactive automatisch weg.
-export function StatusActionBar({
-  playbookId,
-  version,
-  status,
-  onTransitioned,
-}: StatusActionBarProps) {
-  const { t } = useTranslation('playbooks')
-  const api = useApi()
+export function StatusActionBar({ status, onTransition, onTransitioned }: StatusActionBarProps) {
+  const { t } = useTranslation('common')
   const role = useCurrentWorkspaceRole()
   const [busy, setBusy] = useState<VersionStatus | null>(null)
   const [promoteError, setPromoteError] = useState<string | null>(null)
@@ -38,7 +30,7 @@ export function StatusActionBar({
     setBusy(to)
     setPromoteError(null)
     try {
-      await api.transitionPlaybookVersion(playbookId, version, to)
+      await onTransition(to)
       notify.success(success)
       onTransitioned()
     } catch (cause: unknown) {
@@ -46,10 +38,10 @@ export function StatusActionBar({
       const missing = extractMissingFields(cause)
       if (missing !== null) {
         setPromoteError(
-          t('actions.promoteError', { fields: formatMissingFields(missing) }),
+          t('statusBar.error.promoteFill', { fields: formatMissingFields(missing) }),
         )
       } else {
-        const message = cause instanceof Error ? cause.message : t('toast.actionFailed')
+        const message = cause instanceof Error ? cause.message : t('statusBar.fallback')
         notify.error(message)
       }
     } finally {
@@ -74,52 +66,52 @@ export function StatusActionBar({
       <div
         className="flex flex-wrap items-center gap-2"
         role="toolbar"
-        aria-label={t('actions.toolbarAriaLabel')}
+        aria-label={t('statusBar.ariaLabel')}
       >
         {showPromote ? (
           <Button
             type="button"
             variant="brand"
-            onClick={() => void transition('active', t('toast.activated'))}
+            onClick={() => void transition('active', t('statusBar.toast.activated'))}
             disabled={busy !== null || !canPromote}
-            title={canPromote ? undefined : t('actions.activateAdminOnly')}
+            title={canPromote ? undefined : t('statusBar.adminOnly')}
           >
-            {t('common:actions.activate')}
+            {t('statusBar.promote')}
           </Button>
         ) : null}
         {showSubmit ? (
           <Button
             type="button"
             variant="default"
-            onClick={() => void transition('review', t('toast.submitted'))}
+            onClick={() => void transition('review', t('statusBar.toast.submitted'))}
             disabled={busy !== null}
           >
-            {t('actions.submitReview')}
+            {t('statusBar.submit')}
           </Button>
         ) : null}
         {showReject ? (
           <Button
             type="button"
             variant="destructive"
-            onClick={() => void transition('draft', t('toast.reviewRejected'))}
+            onClick={() => void transition('draft', t('statusBar.toast.rejected'))}
             disabled={busy !== null}
           >
-            {t('actions.reject')}
+            {t('statusBar.reject')}
           </Button>
         ) : null}
         {showReactivate ? (
           <Button
             type="button"
             variant="outline"
-            onClick={() => void transition('draft', t('toast.reactivated'))}
+            onClick={() => void transition('draft', t('statusBar.toast.reactivated'))}
             disabled={busy !== null}
           >
-            {t('actions.reactivate')}
+            {t('statusBar.reactivate')}
           </Button>
         ) : null}
       </div>
       {promoteError !== null ? (
-        <ErrorAlert message={promoteError} title={t('actions.promoteErrorTitle')} />
+        <ErrorAlert message={promoteError} title={t('statusBar.error.promoteTitle')} />
       ) : null}
     </div>
   )

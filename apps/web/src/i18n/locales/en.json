@@ -42,6 +42,25 @@
       "active": "Active",
       "inactive": "Inactive"
     },
+    "statusBar": {
+      "ariaLabel": "Status actions",
+      "promote": "Activate",
+      "submit": "Submit for review",
+      "reject": "Reject",
+      "reactivate": "Reactivate as draft",
+      "adminOnly": "Only admins can activate",
+      "fallback": "Action failed.",
+      "error": {
+        "promoteFill": "Fill in before activating: {{fields}}.",
+        "promoteTitle": "Cannot promote"
+      },
+      "toast": {
+        "activated": "Version activated.",
+        "submitted": "Submitted for review.",
+        "rejected": "Review rejected.",
+        "reactivated": "Reactivated as draft."
+      }
+    },
     "loading": "Loading…",
     "loadingLong": "Loading…",
     "workspacePreparing": "Preparing workspace…",
@@ -1105,23 +1124,7 @@
       }
     },
     "statusBar": {
-      "ariaLabel": "Status actions",
-      "submit": "Submit for review",
-      "promote": "Activate",
-      "reject": "Reject",
-      "reactivate": "Reactivate as draft",
-      "adminOnly": "Only admins can activate",
-      "toast": {
-        "activated": "Version activated.",
-        "submitted": "Submitted for review.",
-        "rejected": "Review rejected.",
-        "reactivated": "Reactivated as draft."
-      },
-      "error": {
-        "promoteTitle": "Promote not possible",
-        "promoteFill": "Fill in before activating: {{fields}}."
-      },
-      "fallback": "Action failed."
+      "adminOnly": "Only admins can activate"
     },
     "skillsComingSoon": {
       "label": "Skills",
@@ -1278,13 +1281,7 @@
       "faq": "Question-and-answer collection — e.g. the top 10 support questions for a product line."
     },
     "actions": {
-      "toolbarAriaLabel": "Status actions",
-      "submitReview": "Submit for review",
-      "reject": "Reject",
-      "reactivate": "Reactivate as draft",
       "activateAdminOnly": "Only admins can activate",
-      "promoteError": "Fill in before activating: {{fields}}.",
-      "promoteErrorTitle": "Cannot promote",
       "draftSubmit": "Finalise draft",
       "publish": "Publish",
       "rejectDraft": "Back to draft",
@@ -1438,23 +1435,6 @@
       "subResources": "Sub-resources",
       "usage": "Usage",
       "versions": "Versions"
-    },
-    "statusBar": {
-      "ariaLabel": "Status actions",
-      "activate": "Activate",
-      "activateAdminOnly": "Only admins can activate",
-      "submitForReview": "Submit for review",
-      "reject": "Reject",
-      "reactivate": "Reactivate as draft",
-      "promoteError": "Fill in before activating: {{fields}}.",
-      "actionFailed": "Action failed.",
-      "promoteErrorTitle": "Cannot promote",
-      "toast": {
-        "activated": "Version activated.",
-        "submitted": "Submitted for review.",
-        "rejected": "Review rejected.",
-        "reactivated": "Reactivated as draft."
-      }
     },
     "usedBy": {
       "empty": "No resource references this resource as a sub-resource.",
@@ -2276,23 +2256,6 @@
     "tabs": {
       "edit": "Edit",
       "versions": "Versions"
-    },
-    "statusBar": {
-      "ariaLabel": "Status actions",
-      "activate": "Activate",
-      "activateAdminOnly": "Only admins can activate",
-      "submitForReview": "Submit for review",
-      "reject": "Reject",
-      "reactivate": "Reactivate as draft",
-      "promoteError": "Fill in before activating: {{fields}}.",
-      "actionFailed": "Action failed.",
-      "promoteErrorTitle": "Cannot promote",
-      "toast": {
-        "activated": "Version activated.",
-        "submitted": "Submitted for review.",
-        "rejected": "Review rejected.",
-        "reactivated": "Reactivated as draft."
-      }
     },
     "toast": {
       "created": "External tool created.",

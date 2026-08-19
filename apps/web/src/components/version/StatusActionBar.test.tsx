@@ -1,10 +1,9 @@
-import type { Session } from '@supabase/supabase-js'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { ApiError } from '@/api/client'
 import type { Me, VersionStatus, WorkspaceRole } from '@/api/types'
-import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
 import { SessionContext } from '@/auth/session-context'
 import { notify } from '@/lib/feedback'
 
@@ -13,8 +12,6 @@ import { StatusActionBar } from './StatusActionBar'
 vi.mock('@/lib/feedback', () => ({
   notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }))
-
-const session = { access_token: 'jwt' } as unknown as Session
 
 function buildMe(role: WorkspaceRole): Me {
   return {
@@ -34,59 +31,58 @@ function buildMe(role: WorkspaceRole): Me {
 
 function renderBar(
   status: VersionStatus,
+  onTransition = vi.fn().mockResolvedValue(undefined),
   onTransitioned = vi.fn(),
   role: WorkspaceRole = 'admin',
 ) {
   return render(
     <SessionContext.Provider
-      value={{ session, me: buildMe(role), sessionLoaded: true, signIn: vi.fn(), signOut: vi.fn(), refreshMe: vi.fn() }}
+      value={{
+        session: null,
+        me: buildMe(role),
+        sessionLoaded: true,
+        signIn: vi.fn(),
+        signOut: vi.fn(),
+        refreshMe: vi.fn(),
+      }}
     >
-      <AuthTokenProvider>
-        <MemoryRouter initialEntries={['/w/ws-1/resources/r1']}>
-          <Routes>
-            <Route
-              path="/w/:workspaceId/resources/:id"
-              element={
-                <StatusActionBar
-                  resourceId="r1"
-                  version={2}
-                  status={status}
-                  onTransitioned={onTransitioned}
-                />
-              }
-            />
-          </Routes>
-        </MemoryRouter>
-      </AuthTokenProvider>
+      <MemoryRouter>
+        <StatusActionBar status={status} onTransition={onTransition} onTransitioned={onTransitioned} />
+      </MemoryRouter>
     </SessionContext.Provider>,
   )
 }
 
 afterEach(() => {
-  vi.unstubAllGlobals()
   vi.mocked(notify.success).mockClear()
   vi.mocked(notify.error).mockClear()
 })
 
-describe('StatusActionBar (resource)', () => {
+describe('StatusActionBar', () => {
   it('zeigt im Draft nur den Submit-Button', () => {
     renderBar('draft')
-    expect(screen.getByRole('button', { name: 'Zur Review einreichen' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Zur Review einreichen' }),
+    ).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Aktivieren' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Ablehnen' })).toBeNull()
   })
 
   it('zeigt im Review Aktivieren und Ablehnen', () => {
     renderBar('review')
     expect(screen.getByRole('button', { name: 'Aktivieren' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Ablehnen' })).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Zur Review einreichen' }),
+    ).toBeNull()
   })
 
-  it('aktiviert ist für Admins klickbar, für Viewer gesperrt', () => {
-    const { unmount } = renderBar('review', vi.fn(), 'admin')
+  it('aktiviert ist für Admins klickbar, für Editoren gesperrt', () => {
+    const { unmount } = renderBar('review', vi.fn().mockResolvedValue(undefined), vi.fn(), 'admin')
     expect(screen.getByRole('button', { name: 'Aktivieren' })).toBeEnabled()
     unmount()
 
-    renderBar('review', vi.fn(), 'viewer')
+    renderBar('review', vi.fn().mockResolvedValue(undefined), vi.fn(), 'editor')
     const promote = screen.getByRole('button', { name: 'Aktivieren' })
     expect(promote).toBeDisabled()
     expect(promote).toHaveAttribute('title', 'Nur Admins können aktivieren')
@@ -102,70 +98,52 @@ describe('StatusActionBar (resource)', () => {
     expect(
       screen.getByRole('button', { name: 'Reaktivieren als Draft' }),
     ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Aktivieren' })).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: 'Zur Review einreichen' }),
+    ).toBeNull()
   })
 
   it('reaktiviert die Version per inactive→draft-Transition', async () => {
-    const calls: Array<{ url: string; init?: RequestInit }> = []
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        calls.push({ url: String(input), init })
-        return new Response('{}', { status: 200 })
-      }),
-    )
+    const onTransition = vi.fn().mockResolvedValue(undefined)
     const onTransitioned = vi.fn()
 
-    renderBar('inactive', onTransitioned)
+    renderBar('inactive', onTransition, onTransitioned)
     fireEvent.click(screen.getByRole('button', { name: 'Reaktivieren als Draft' }))
 
     await waitFor(() => {
       expect(notify.success).toHaveBeenCalledWith('Reaktiviert als Entwurf.')
     })
     expect(onTransitioned).toHaveBeenCalledTimes(1)
-    expect(JSON.parse(calls[0].init?.body as string)).toEqual({ to: 'draft' })
+    expect(onTransition).toHaveBeenCalledWith('draft')
   })
 
-  it('ruft den Transition-Endpoint und onTransitioned bei Aktivieren auf', async () => {
-    const calls: Array<{ url: string; init?: RequestInit }> = []
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        calls.push({ url: String(input), init })
-        return new Response('{}', { status: 200 })
-      }),
-    )
+  it('ruft den onTransition-Callback und onTransitioned bei Aktivieren auf', async () => {
+    const onTransition = vi.fn().mockResolvedValue(undefined)
     const onTransitioned = vi.fn()
 
-    renderBar('review', onTransitioned)
+    renderBar('review', onTransition, onTransitioned)
     fireEvent.click(screen.getByRole('button', { name: 'Aktivieren' }))
 
     await waitFor(() => {
       expect(notify.success).toHaveBeenCalledWith('Version aktiviert.')
     })
     expect(onTransitioned).toHaveBeenCalledTimes(1)
-    expect(calls[0].url).toContain('/v1/workspaces/ws-1/resources/r1/versions/2/transition')
-    expect(JSON.parse(calls[0].init?.body as string)).toEqual({ to: 'active' })
+    expect(onTransition).toHaveBeenCalledWith('active')
   })
 
   it('zeigt Inline-Fehler mit Feldnamen bei 409 Promote-Validation-Fail', async () => {
-    const problemBody = {
-      type: 'https://who2be.dev/errors/promote-validation-failed',
-      title: 'Promote nicht moeglich: Pflichtfelder fehlen',
-      status: 409,
-      detail: 'Pflichtfelder muessen vor Promote ausgefuellt sein.',
-      missing: ['description', 'body'],
-    }
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () =>
-        new Response(JSON.stringify(problemBody), {
-          status: 409,
-          headers: { 'Content-Type': 'application/problem+json' },
-        }),
-      ),
+    const onTransition = vi.fn().mockRejectedValue(
+      new ApiError(409, 'Promote nicht moeglich: Pflichtfelder fehlen', {
+        type: 'https://who2be.dev/errors/promote-validation-failed',
+        title: 'Promote nicht moeglich: Pflichtfelder fehlen',
+        status: 409,
+        detail: 'Pflichtfelder muessen vor Promote ausgefuellt sein.',
+        missing: ['description', 'body'],
+      }),
     )
 
-    renderBar('review')
+    renderBar('review', onTransition)
     fireEvent.click(screen.getByRole('button', { name: 'Aktivieren' }))
 
     // Button bleibt klickbar (Welle 4: kein disabled-State).

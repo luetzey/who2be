@@ -42,6 +42,25 @@
       "active": "Aktiv",
       "inactive": "Inaktiv"
     },
+    "statusBar": {
+      "ariaLabel": "Status-Aktionen",
+      "promote": "Aktivieren",
+      "submit": "Zur Review einreichen",
+      "reject": "Ablehnen",
+      "reactivate": "Reaktivieren als Draft",
+      "adminOnly": "Nur Admins können aktivieren",
+      "fallback": "Aktion fehlgeschlagen.",
+      "error": {
+        "promoteFill": "Vor dem Aktivieren ausfuellen: {{fields}}.",
+        "promoteTitle": "Promote nicht möglich"
+      },
+      "toast": {
+        "activated": "Version aktiviert.",
+        "submitted": "Zur Review eingereicht.",
+        "rejected": "Review abgelehnt.",
+        "reactivated": "Reaktiviert als Entwurf."
+      }
+    },
     "loading": "Lädt…",
     "loadingLong": "Wird geladen…",
     "workspacePreparing": "Workspace wird vorbereitet…",
@@ -1105,23 +1124,7 @@
       }
     },
     "statusBar": {
-      "ariaLabel": "Status-Aktionen",
-      "submit": "Zur Review einreichen",
-      "promote": "Aktivieren",
-      "reject": "Ablehnen",
-      "reactivate": "Reaktivieren als Draft",
-      "adminOnly": "Nur Admins können aktivieren",
-      "toast": {
-        "activated": "Version aktiviert.",
-        "submitted": "Zur Review eingereicht.",
-        "rejected": "Review abgelehnt.",
-        "reactivated": "Reaktiviert als Entwurf."
-      },
-      "error": {
-        "promoteTitle": "Promote nicht möglich",
-        "promoteFill": "Vor dem Aktivieren ausfuellen: {{fields}}."
-      },
-      "fallback": "Aktion fehlgeschlagen."
+      "adminOnly": "Nur Admins können aktivieren"
     },
     "skillsComingSoon": {
       "label": "Skills",
@@ -1278,13 +1281,7 @@
       "faq": "Frage-Antwort-Sammlung — z. B. die Top-10-Support-Fragen einer Produkt-Linie."
     },
     "actions": {
-      "toolbarAriaLabel": "Status-Aktionen",
-      "submitReview": "Zur Review einreichen",
-      "reject": "Ablehnen",
-      "reactivate": "Reaktivieren als Draft",
       "activateAdminOnly": "Nur Admins können aktivieren",
-      "promoteError": "Vor dem Aktivieren ausfuellen: {{fields}}.",
-      "promoteErrorTitle": "Promote nicht möglich",
       "draftSubmit": "Draft abschliessen",
       "publish": "Veroeffentlichen",
       "rejectDraft": "Zurueck zu Draft",
@@ -1438,23 +1435,6 @@
       "subResources": "Sub-Resources",
       "usage": "Verwendung",
       "versions": "Versionen"
-    },
-    "statusBar": {
-      "ariaLabel": "Status-Aktionen",
-      "activate": "Aktivieren",
-      "activateAdminOnly": "Nur Admins können aktivieren",
-      "submitForReview": "Zur Review einreichen",
-      "reject": "Ablehnen",
-      "reactivate": "Reaktivieren als Draft",
-      "promoteError": "Vor dem Aktivieren ausfuellen: {{fields}}.",
-      "actionFailed": "Aktion fehlgeschlagen.",
-      "promoteErrorTitle": "Promote nicht möglich",
-      "toast": {
-        "activated": "Version aktiviert.",
-        "submitted": "Zur Review eingereicht.",
-        "rejected": "Review abgelehnt.",
-        "reactivated": "Reaktiviert als Entwurf."
-      }
     },
     "usedBy": {
       "empty": "Keine Resource referenziert diese Resource als Sub-Resource.",
@@ -2276,23 +2256,6 @@
     "tabs": {
       "edit": "Bearbeiten",
       "versions": "Versionen"
-    },
-    "statusBar": {
-      "ariaLabel": "Status-Aktionen",
-      "activate": "Aktivieren",
-      "activateAdminOnly": "Nur Admins können aktivieren",
-      "submitForReview": "Zur Review einreichen",
-      "reject": "Ablehnen",
-      "reactivate": "Reaktivieren als Draft",
-      "promoteError": "Vor dem Aktivieren ausfuellen: {{fields}}.",
-      "actionFailed": "Aktion fehlgeschlagen.",
-      "promoteErrorTitle": "Promote nicht möglich",
-      "toast": {
-        "activated": "Version aktiviert.",
-        "submitted": "Zur Review eingereicht.",
-        "rejected": "Review abgelehnt.",
-        "reactivated": "Reaktiviert als Entwurf."
-      }
     },
     "toast": {
       "created": "Externes Tool angelegt.",

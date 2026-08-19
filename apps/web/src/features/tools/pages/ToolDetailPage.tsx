@@ -19,17 +19,15 @@ import { Stack } from '@/components/layout/Stack'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { VersionHistory } from '@/components/version'
+import { StatusActionBar, statusLabel, VersionHistory } from '@/components/version'
 import { cn } from '@/lib/utils'
 import { notify } from '@/lib/feedback'
 
 import { DeleteToolButton } from '../components/DeleteToolButton'
 import { ExportToolButton } from '../components/ExportToolButton'
-import { StatusActionBar } from '../components/StatusActionBar'
 import { ToolEditorForm } from '../components/ToolEditorForm'
 import { useTool } from '../hooks/useTool'
 import { useToolForm } from '../hooks/useToolForm'
-import { statusLabel } from '../lib/status'
 
 export function ToolDetailPage() {
   const { t } = useTranslation('tools')
@@ -155,9 +153,14 @@ export function ToolDetailPage() {
                         description={text.desc}
                         actions={
                           <StatusActionBar
-                            toolId={tool.id}
-                            version={promotableVersion.version}
                             status={status}
+                            onTransition={(to) =>
+                              api.transitionExternalToolVersion(
+                                tool.id,
+                                promotableVersion.version,
+                                to,
+                              )
+                            }
                             onTransitioned={reload}
                           />
                         }
@@ -177,9 +180,14 @@ export function ToolDetailPage() {
                         description={text.desc}
                         actions={
                           <StatusActionBar
-                            toolId={tool.id}
-                            version={inactiveCurrent.version}
                             status="inactive"
+                            onTransition={(to) =>
+                              api.transitionExternalToolVersion(
+                                tool.id,
+                                inactiveCurrent.version,
+                                to,
+                              )
+                            }
                             onTransitioned={reload}
                           />
                         }

@@ -23,7 +23,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Form } from '@/components/ui/form'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { VersionHistory } from '@/components/version'
+import { statusLabel, VersionHistory } from '@/components/version'
 import { notify } from '@/lib/feedback'
 
 import { DeletePersonaButton } from '../components/DeletePersonaButton'
@@ -34,7 +34,6 @@ import { PersonaPlaybooksCard } from '../components/PersonaPlaybooksCard'
 import { PersonaProfileFields } from '../components/PersonaProfileFields'
 import { usePersona } from '../hooks/usePersona'
 import { usePersonaForm } from '../hooks/usePersonaForm'
-import { statusLabel } from '../lib/status'
 
 export function PersonaDetailPage() {
   const { t } = useTranslation(['personas', 'common', 'playbooks', 'version'])
