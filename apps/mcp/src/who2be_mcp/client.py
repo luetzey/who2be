@@ -75,6 +75,47 @@ logger = logging.getLogger(__name__)
 
 _TIMEOUT = 10.0
 
+
+def problem_message(response: httpx.Response, fallback: str) -> str:
+    """Fehlerantwort der API → Meldung fuer den Agenten (best-effort).
+
+    Die API antwortet an ihren Gates mit `application/problem+json`
+    (`who2be_models.ApiProblem`): `detail` erklaert den Fall in Prosa,
+    `reason` ist ein STABILER Schluessel aus einem geschlossenen Vokabular
+    (`convention_missing`, `rev_conflict`, `tablestore_unavailable` …), und
+    `actionable_by` sagt, ob der Agent selbst nachbessern kann (`agent`), ein
+    Mensch ran muss (`human`) oder die Aktion endgueltig nicht erlaubt ist
+    (`none`).
+
+    Genau dafuer wurde `reason` gebaut — „ein Agent kann darauf deterministisch
+    verzweigen, ohne den `detail`-Freitext zu parsen" (`models/errors.py`).
+    Bis 2026-08-17 hat der MCP-Server ihn trotzdem verworfen und nur `detail`
+    weitergereicht; bei allen uebrigen Statuses (400/408/413/429/503) sogar nur
+    den nackten Code. Ein Agent sah `Who2Be-API-Fehler (503)` und konnte weder
+    erkennen, dass ein Retry sinnlos ist, noch warum.
+
+    Die Reihenfolge ist bewusst: erst die Prosa (danach handelt das Modell),
+    dann die Schluessel als ``key=value`` — greppbar und ohne den Lesefluss zu
+    stoeren. Antworten ohne `reason` (FastAPI-`HTTPException`,
+    Validierungsfehler) bleiben unveraendert; es wird nichts erfunden.
+    """
+    try:
+        payload = response.json()
+    except ValueError:
+        return fallback
+    if not isinstance(payload, dict):
+        return fallback
+    detail = payload.get("detail")
+    message = detail if isinstance(detail, str) and detail else fallback
+    reason = payload.get("reason")
+    if not isinstance(reason, str) or not reason:
+        return message
+    actionable_by = payload.get("actionable_by")
+    if isinstance(actionable_by, str) and actionable_by:
+        return f"{message} (reason={reason}, actionable_by={actionable_by})"
+    return f"{message} (reason={reason})"
+
+
 # Read-only Reverse-Lookups + Versions-Historie (Track 1). Die drei Kernelemente
 # teilen sich uniforme REST-Pfade (`/{plural}/{id}/versions|usages`), daher
 # genuegt ein Entity-Dispatch ueber diese Maps statt 3x near-duplicate Methoden.
@@ -172,16 +213,16 @@ class ApiClient:
 
     def _raise_for_status(self, response: httpx.Response, path: str) -> None:
         """Uebersetzt API-Fehlerstatuses in fuer Agenten lesbare `ToolError`s."""
-        if response.status_code == 404:
-            raise ToolError("Angefragte Ressource nicht gefunden.")
         if response.status_code == 401:
             raise ToolError("Nicht autorisiert — WHO2BE_API_TOKEN pruefen.")
+        if response.status_code == 404:
+            raise ToolError(problem_message(response, "Angefragte Ressource nicht gefunden."))
         if response.status_code == 403:
             # Das `detail` der API traegt die genaue Ursache — Rollen-Gate ODER
             # die Pro-Agent-Tool-Policy ("Dieser Agent ist nicht berechtigt …").
             # Durchreichen, damit der Agent versteht, warum das Tool gesperrt ist.
             raise ToolError(
-                self._detail(
+                problem_message(
                     response,
                     "Keine Berechtigung — der API-Token braucht mindestens die editor-Rolle "
                     "(Status-Promote/Retire erfordert admin), bzw. dieser Agent darf das "
@@ -189,27 +230,14 @@ class ApiClient:
                 )
             )
         if response.status_code == 409:
-            raise ToolError(self._detail(response, "Konflikt mit dem aktuellen Stand."))
+            raise ToolError(problem_message(response, "Konflikt mit dem aktuellen Stand."))
         if response.status_code == 422:
-            raise ToolError(self._detail(response, "Ungueltige Eingabe."))
+            raise ToolError(problem_message(response, "Ungueltige Eingabe."))
         if response.is_error:
             logger.warning("Who2Be-API-Fehler %s fuer %s", response.status_code, path)
-            raise ToolError(f"Who2Be-API-Fehler ({response.status_code}).")
-
-    @staticmethod
-    def _detail(response: httpx.Response, fallback: str) -> str:
-        """Extrahiert das `detail`-Feld der API-Fehlerantwort (best-effort).
-
-        409/422 tragen oft eine sprechende `detail`-Meldung (z.B. "Es existiert
-        bereits ein Draft") — die reichen wir an den Agenten durch. Listen-Details
-        (422-Validation) bleiben generisch.
-        """
-        try:
-            payload = response.json()
-        except ValueError:
-            return fallback
-        detail = payload.get("detail") if isinstance(payload, dict) else None
-        return detail if isinstance(detail, str) and detail else fallback
+            raise ToolError(
+                problem_message(response, f"Who2Be-API-Fehler ({response.status_code}).")
+            )
 
     async def _get(self, path: str, params: dict[str, str] | None = None) -> Any:
         response = await self._request("GET", path, params=params)

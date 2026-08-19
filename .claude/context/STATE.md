@@ -425,6 +425,24 @@ dritten Kopie gibt es jetzt `repositories/fts_config.fts_config_expr`, das
 alle drei Suchpfade nutzen. Gegenprobe: alle drei neuen Tests waren vor dem
 Fix rot (`Fehlercodes` → `[]`, fehlende Spalte, fehlender Backfill).
 
+### MCP verschluckte die Reason-Codes (2026-08-17, behoben)
+
+Befund C aus dem Builder-Test. Die API antwortet an ihren Gates mit
+`application/problem+json` und trägt dort `reason` — ein geschlossenes
+Vokabular, ausdrücklich gebaut, damit „ein Agent darauf deterministisch
+verzweigen kann, ohne den `detail`-Freitext zu parsen" (`models/errors.py`).
+Der MCP-Client hat genau dieses Feld verworfen: bei 403/409/422 reichte er
+nur `detail` durch, bei allen übrigen Statuses (400/408/413/429/503) nicht
+einmal das — der Agent sah `Who2Be-API-Fehler (503).` und konnte weder
+erkennen, dass ein Retry sinnlos ist, noch warum.
+
+Behoben: eine Stelle (`client.problem_message`) statt zwei, angewandt auf
+**alle** Fehler-Statuses. Die Meldung führt weiter mit der Prosa und hängt
+`(reason=…, actionable_by=…)` an — greppbar, ohne den Lesefluss zu stören.
+Antworten ohne Taxonomie (FastAPI-`HTTPException`, Validierungsfehler)
+bleiben unverändert; es wird nichts erfunden. Gegenprobe: die neuen Tests
+sind ohne den Fix rot, u. a. mit `Who2Be-API-Fehler (503).` statt der
+Begründung.
 ### Tabellen waren für Agenten unauffindbar und unlöschbar (2026-08-17, behoben)
 
 Aus dem Agentenbetrieb gemeldet, alle Teilbehauptungen geprüft: es gab kein

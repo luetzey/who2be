@@ -774,6 +774,30 @@ bleiben)._
   `kb_repository.search_nodes`/`insert_node`; `services/kb.create_node`;
   `test_kb.py` (Wortformen, Sprach-Fallback, Migration gegen Altbestand).
 
+## 2026-08-17 — MCP reicht `reason` und `actionable_by` an den Agenten durch
+- **Entscheidung:** Jede Fehlerantwort der API wird im MCP-Client über EINE
+  Stelle (`client.problem_message`) übersetzt, für **alle** Statuses. Das
+  Format ist `"<detail> (reason=<reason>, actionable_by=<actionable_by>)"` —
+  Prosa zuerst, Maschinen-Schlüssel als `key=value` hinten. Fehlt die Taxonomie
+  (FastAPI-`HTTPException`, Validierungsfehler), bleibt die Meldung, wie sie
+  ist; es wird kein `reason` erfunden.
+- **Anlass:** Befund C. `reason` existiert seit WP-2 genau dafür, dass ein Agent
+  „deterministisch verzweigen kann, ohne den `detail`-Freitext zu parsen"
+  (`models/errors.py`) — und der MCP-Server hat es verworfen. Bei
+  400/408/413/429/503 kam nicht einmal `detail` an: `Who2Be-API-Fehler (503).`
+- **Begründung:** Das teuerste Missverständnis ist nicht ein Fehler, sondern
+  ein Fehler ohne Handlungsanweisung. `actionable_by=human` sagt einem Agenten,
+  dass jeder Retry Verschwendung ist; `reason=convention_missing` sagt ihm, was
+  er selbst nachholen kann. Beides stand serverseitig bereit und kam nie an.
+- **Verworfen:** strukturierte Fehler-Objekte statt Text (MCP `ToolError`
+  transportiert eine Message — ein JSON-Blob wäre für das Modell schlechter
+  lesbar); den Schlüssel voranstellen (die Prosa ist das, wonach das Modell
+  handelt); eine globale Server-`instructions`-Sektion zur Fehler-Taxonomie
+  (der Connector-Prompt ist knapp budgetiert, und `key=value` erklärt sich).
+- **Detail:** `apps/mcp/src/who2be_mcp/client.py::problem_message`,
+  `server.py` (Workspace-Lookup); `apps/mcp/tests/test_client.py`
+  (Reason-Durchreichung je Status, Nicht-Erfindung ohne Taxonomie, Fallback
+  ohne Body).
 ## 2026-08-17 — Tabellen brauchen einen Discovery- und einen Lösch-Pfad
 - **Entscheidung:** MCP bekommt `list_tables` (Katalog einer Area,
   `area_id=None` = private Area) und `delete_table`; der Namenskonflikt-409
