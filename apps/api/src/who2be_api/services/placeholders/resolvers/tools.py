@@ -432,60 +432,69 @@ _TOOLS: list[_ToolDoc] = [
         ),
     ),
     # --- WorkArea (ADR-0047, WP8): unversioniertes Rohmaterial der Agenten.
-    #     Gemischte Gruppe — die Reads (search/read/list) sind grant-dynamisch
-    #     immer gelistet, die Writes verlangen `workarea_write`.
+    #     Lesen und Schreiben stehen in GETRENNTEN Eintraegen: `is_visible` ist
+    #     ein Gruppen-Oder, gedruckt wird aber die ganze Signatur — eine
+    #     gemischte Gruppe wuerde einem Agenten ohne `workarea_write` Tools
+    #     versprechen, die die `PolicyFilterMiddleware` gleichzeitig aus
+    #     `tools/list` entfernt. Auch die Beschreibung darf darum kein Tool
+    #     nennen, das der Leser nicht hat.
     _ToolDoc(
         signature=(
             "search_workarea(query, area_id?) / read_artifact(artifact_id, anchor?) / "
-            "list_artifacts(area_id?) / create_artifact(...) / append_artifact(...) / "
-            "patch_artifact(...) / delete_artifact(artifact_id) / ingest(url|file_b64, ...) / "
-            "promote_artifact(artifact_id, target_resource_id?)"
+            "list_artifacts(area_id?)"
         ),
-        tool_names=(
-            "search_workarea",
-            "read_artifact",
-            "list_artifacts",
-            "create_artifact",
-            "append_artifact",
-            "patch_artifact",
-            "delete_artifact",
-            "ingest",
-            "promote_artifact",
-        ),
+        tool_names=("search_workarea", "read_artifact", "list_artifacts"),
         read_domain="workarea",
         description=(
             "Deine WorkArea: unversioniertes Rohmaterial (Notizen, Ingest-"
             "Dokumente) in deiner privaten Area (`area_id=None`) und in shared "
             "Team-Areas. Einstieg IMMER search_workarea — jeder Treffer traegt "
             "einen Anker `<artifact_id>#<block_id>`, den "
-            "read_artifact(artifact_id, anchor) direkt zum einzelnen Block "
-            "aufloest; list_artifacts nur zur Bestandsaufnahme kleiner Areas. "
-            "Schreiben (create/append/patch/delete/ingest) verlangt die "
-            "Capability `workarea_write`; `occurred_at` ist der fachliche "
-            "Zeitpunkt des Inhalts, nie now(). Soll Rohmaterial dauerhaft "
-            "kuratiertes Wissen werden, hebt promote_artifact es als "
-            "Resource-DRAFT heraus (nie direkt aktiv, verlangt "
-            "`resource_write`) — der einzige Weg aus der WorkArea heraus."
+            "read_artifact(artifact_id, anchor) direkt zur Passage aufloest; "
+            "list_artifacts nur zur Bestandsaufnahme kleiner Areas."
+        ),
+    ),
+    _ToolDoc(
+        signature=(
+            "create_artifact(...) / append_artifact(...) / patch_artifact(...) / "
+            "delete_artifact(artifact_id) / ingest(url|file_b64, ...)"
+        ),
+        tool_names=(
+            "create_artifact",
+            "append_artifact",
+            "patch_artifact",
+            "delete_artifact",
+            "ingest",
+        ),
+        description=(
+            "Rohmaterial in deine WorkArea schreiben: create/append/patch fuer "
+            "eigene Notizen, ingest fuer fremde Dokumente (URL oder Datei). "
+            "`occurred_at` ist der FACHLICHE Zeitpunkt des Inhalts, nie now() "
+            "— sonst steht dein Material auf der Zeitachse an der falschen "
+            "Stelle. delete_artifact entfernt endgueltig."
+        ),
+    ),
+    # `promote_artifact` steht bewusst allein: es verlangt `resource_write`
+    # (nicht `workarea_write`) — der Uebergang ins versionierte, kuratierte
+    # Material ist eine andere Erlaubnis als das Kritzeln in der WorkArea.
+    _ToolDoc(
+        signature="promote_artifact(artifact_id, target_resource_id?)",
+        tool_names=("promote_artifact",),
+        description=(
+            "Der einzige Weg aus der WorkArea heraus: hebt ein Artifact als "
+            "Resource-DRAFT heraus (nie direkt aktiv — ein Mensch gibt frei). "
+            "Nutze das, wenn Rohmaterial dauerhaft kuratiertes Wissen werden "
+            "soll, nicht fuer Zwischenstaende."
         ),
     ),
     # --- Knowledge Base (ADR-0047, WP9): kuratierte, belegpflichtige
-    #     Wissensschicht ueber der WorkArea. Gemischte Gruppe wie WorkArea —
-    #     die Reads (search_kb/neighbors) sind grant-dynamisch immer gelistet,
-    #     die Writes verlangen `kb_write` (Nodes) bzw. `kb_edge_write` (Kanten).
-    #     `promote_artifact` steht bewusst in der WorkArea-Gruppe oben — es ist
-    #     der Ausgang aus dem Rohmaterial, nicht Teil der Graph-Pflege.
+    #     Wissensschicht ueber der WorkArea. Drei Eintraege, weil drei
+    #     Erlaubnisse: Lesen (Scope `kb`), Nodes (`kb_write`), Kanten
+    #     (`kb_edge_write`) — wer Nodes schreiben darf, darf noch lange keine
+    #     Zusammenhaenge behaupten.
     _ToolDoc(
-        signature=(
-            "search_kb(query, limit?) / neighbors(anchor, type?, depth?) / "
-            "create_node(...) / update_node(...) / create_edge(...)"
-        ),
-        tool_names=(
-            "search_kb",
-            "neighbors",
-            "create_node",
-            "update_node",
-            "create_edge",
-        ),
+        signature="search_kb(query, limit?) / neighbors(anchor, type?, depth?)",
+        tool_names=("search_kb", "neighbors"),
         read_domain="kb",
         description=(
             "Die kuratierte Knowledge Base: belegte Aussagen (Nodes, tier "
@@ -493,64 +502,84 @@ _TOOLS: list[_ToolDoc] = [
             "von der WorkArea (search_kb findet NIE Rohmaterial, eigener "
             "Index). Treffer-Anker `node:<id>` loest neighbors(anchor) zu den "
             "Kontext-Kanten auf; co_occurs_with-Nachbarn tragen IMMER die "
-            "Fallzahl `co_n` — nenne sie mit, nie als blanke Aussage. "
-            "Schreiben verlangt `kb_write` (create_node/update_node — "
-            "Belegpflicht via source_ref, Tier-Aufstieg nur mit andersartigem "
-            "Zusatz-Beleg) bzw. `kb_edge_write` (create_edge — Evidence je "
-            "Seite; aus Gleichzeitigkeit folgt NUR co_occurs_with)."
+            "Fallzahl `co_n` — nenne sie mit, nie als blanke Aussage."
+        ),
+    ),
+    _ToolDoc(
+        signature="create_node(...) / update_node(...)",
+        tool_names=("create_node", "update_node"),
+        description=(
+            "Aussagen in die Knowledge Base schreiben — belegpflichtig: jeder "
+            "Node braucht einen `source_ref` auf das Material, das ihn traegt. "
+            "Der Tier-Aufstieg (hypothesis → derived → verified) verlangt "
+            "einen ANDERSARTIGEN Zusatz-Beleg, nicht denselben noch einmal."
+        ),
+    ),
+    _ToolDoc(
+        signature="create_edge(...)",
+        tool_names=("create_edge",),
+        description=(
+            "Zusammenhaenge zwischen Nodes behaupten — Evidence je Seite "
+            "Pflicht. Aus blosser Gleichzeitigkeit folgt NUR `co_occurs_with` "
+            "(mit n >= 20), nie eine Ursache."
         ),
     ),
     # --- Tabellen & Zeitachse (ADR-0049, WP19): strukturierte Zahlen der
-    #     WorkArea + die gemeinsame Zeitachse. Gemischte Gruppe wie WorkArea/KB
-    #     — die Reads (query/describe/timeline/list_category_rules) sind
-    #     grant-dynamisch immer gelistet, die Writes verlangen `workarea_write`.
+    #     WorkArea + die gemeinsame Zeitachse. Wieder getrennt nach Lesen
+    #     (Scope `workarea`) und Schreiben (`workarea_write`).
     _ToolDoc(
         signature=(
             "list_tables(area_id?) / describe_table(table_id) / "
             "query_table(table_id, sql, format?, limit?) / "
-            "save_query_result(table_id, sql, title, occurred_at, ...) / "
-            "create_table(area_id, name, schema) / insert_rows(table_id, rows, ...) / "
-            "delete_table(table_id) / "
             "timeline(from_, to, sources?, granularity?) / "
-            "set_convention(area_id, source_name, convention) / "
-            "upsert_category_rule(area_id, pattern, category, confidence?) / "
             "list_category_rules(area_id)"
         ),
         tool_names=(
             "list_tables",
             "describe_table",
             "query_table",
-            "save_query_result",
-            "create_table",
-            "insert_rows",
-            "delete_table",
             "timeline",
-            "set_convention",
-            "upsert_category_rule",
             "list_category_rules",
         ),
         read_domain="workarea",
         description=(
+            "Strukturierte Zahlen auswerten, IMMER in dieser Reihenfolge: "
+            "list_tables (welche Tabellen gibt es — Tabellen tauchen weder in "
+            "der Suche noch in der Timeline auf) → describe_table (Schema, "
+            "Wertebereiche, Konventionen) → query_table (read-only SQL). Rechne "
+            "Zahlen NIE selbst aus und tippe sie nie ab — lass die Query "
+            "rechnen. timeline legt Artifacts/Nodes/Tabellen ueber "
+            "`occurred_at` auf eine Achse (unbekannte Zeiten stehen separat im "
+            "unknown-Bucket); Gleichzeitigkeit ist dabei KEIN Zusammenhang. "
+            "Kategorien kommen NUR aus Regeln, nie aus deinem Urteil — "
+            "list_category_rules zeigt die geltenden."
+        ),
+    ),
+    _ToolDoc(
+        signature=(
+            "create_table(area_id, name, schema) / insert_rows(table_id, rows, ...) / "
+            "save_query_result(table_id, sql, title, occurred_at, ...) / "
+            "delete_table(table_id) / set_convention(area_id, source_name, convention) / "
+            "upsert_category_rule(area_id, pattern, category, confidence?)"
+        ),
+        tool_names=(
+            "create_table",
+            "insert_rows",
+            "save_query_result",
+            "delete_table",
+            "set_convention",
+            "upsert_category_rule",
+        ),
+        description=(
             "Strukturierte Zahlen gehoeren in eine Tabelle, nicht in Prosa: "
             "create_table (Spalte `occurred_at` ist Pflicht), insert_rows "
             "(idempotent ueber den Dedupe-Hash, Antwort {inserted, skipped}). "
-            "Auswerten IMMER in dieser Reihenfolge: list_tables (welche "
-            "Tabellen gibt es — Tabellen tauchen weder in der Suche noch in "
-            "der Timeline auf) → describe_table (Schema, "
-            "Wertebereiche, Konventionen) → query_table (read-only SQL). Rechne "
-            "Zahlen NIE selbst aus und tippe sie nie ab — lass die Query "
-            "rechnen; soll das Ergebnis belegbar sein, friert "
-            "save_query_result Abfrage + Ergebnis als Artifact ein (dessen ID "
-            "ist der `source_ref` fuer einen KB-Node). timeline legt "
-            "Artifacts/Nodes/Tabellen ueber `occurred_at` auf eine Achse "
-            "(unbekannte Zeiten stehen separat im unknown-Bucket); "
-            "Gleichzeitigkeit ist KEIN Zusammenhang — daraus folgt hoechstens "
-            "co_occurs_with mit n >= 20. Kategorien kommen NUR aus Regeln "
-            "(upsert_category_rule/list_category_rules, Regel vor Modell), "
-            "Einheiten und Notation je Quelle einmalig aus set_convention — "
-            "nie pro Zeile raten. Aufraeumen: delete_table entfernt Tabelle "
-            "und Daten endgueltig (eingefrorene Auswertungen bleiben). "
-            "Schreiben verlangt `workarea_write`."
+            "Soll ein Ergebnis belegbar sein, friert save_query_result Abfrage "
+            "+ Ergebnis als Artifact ein (dessen ID ist der `source_ref` fuer "
+            "einen KB-Node). Einheiten und Notation je Quelle einmalig ueber "
+            "set_convention, Kategorien ueber upsert_category_rule (Regel vor "
+            "Modell) — nie pro Zeile raten. Aufraeumen: delete_table entfernt "
+            "Tabelle und Daten endgueltig (eingefrorene Auswertungen bleiben)."
         ),
     ),
 ]

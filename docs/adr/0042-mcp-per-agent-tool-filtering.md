@@ -87,3 +87,32 @@ MCP-Server. Ohne gemeinsame Quelle driften sie.
   Teil dieser Iteration.
 - stdio-Transport (Single-Tenant, statischer Env-Token) durchläuft dieselbe
   Middleware — identische Semantik, ein Code-Pfad.
+
+## Nachtrag 2026-08-19 — gemischte Gruppen brachen die Paritäts-Zusage
+
+Die Konsequenz oben — „Prompt-Text (`tools-overview`) und echte Tool-Liste
+können nicht mehr widersprechen" — galt nur für Gruppen, die **entweder**
+Lese- **oder** Schreib-Tools enthielten. `_ToolDoc.is_visible` ist ein
+Gruppen-Oder, gedruckt wird aber die vollständige Signatur samt Beschreibung.
+Die mit ADR-0047/0049 hinzugekommenen Gruppen (WorkArea, KB, Tabellen)
+mischten beides in je einem Eintrag — dadurch nannte der System-Prompt eines
+Agenten mit Default-Policy 13 Schreib-Tools (`create_artifact`,
+`delete_artifact`, `ingest`, `promote_artifact`, `create_node`, `create_edge`,
+`create_table`, `insert_rows`, `delete_table`, `set_convention`,
+`upsert_category_rule`, `save_query_result`, `patch_artifact`), die die
+`PolicyFilterMiddleware` gleichzeitig aus `tools/list` entfernt.
+
+Beide Seiten hingen an `MCP_TOOL_REQUIREMENTS` — die SSoT war nicht das
+Problem. Die Lücke saß in der Granularität der kuratierten Gruppierung.
+
+**Entscheidung:** Eine kuratierte Gruppe umfasst nur Tools mit **derselben**
+Sichtbarkeitsbedingung. WorkArea/KB/Tabellen sind entsprechend aufgeteilt;
+`promote_artifact` (`resource_write`) und `create_edge` (`kb_edge_write`)
+stehen allein, weil sie eine andere Erlaubnis verlangen als ihre
+Nachbar-Tools. Auch die Beschreibung eines Eintrags darf kein Tool nennen,
+das der Leser nicht hat.
+
+**Absicherung:** `test_prompt_nennt_kein_tool_das_die_policy_herausfiltert`
+prüft über die SSoT statt über eine Namensliste — jedes Tool, für das
+`is_tool_visible` verneint, darf im gerenderten Text nicht vorkommen. Damit
+ist die Zusage geprüft statt behauptet.

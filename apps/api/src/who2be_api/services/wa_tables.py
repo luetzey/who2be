@@ -82,6 +82,7 @@ from who2be_api.services.access_log import log_access
 from who2be_api.services.wa_artifacts import WaArtifactService
 from who2be_api.services.wa_rules import categorize_rows, convention_missing
 from who2be_api.tablestore import (
+    MAX_CELL_BYTES,
     MAX_RESULT_BYTES,
     AreaStoreMissingError,
     ColumnSpec,
@@ -371,12 +372,34 @@ def _validate_rows(schema: TableSchema, rows: list[dict[str, object]]) -> None:
                     f"Zeile {index}: Spalte '{name}' traegt {type(value).__name__} — "
                     "erlaubt sind nur Skalare (string/number/boolean/null)."
                 )
+            _validate_cell_size(index, name, value)
         for column in schema.columns:
             if not column.nullable and row.get(column.name) is None:
                 raise TableRowsInvalid(
                     f"Zeile {index}: Spalte '{column.name}' ist NOT NULL und fehlt."
                 )
         _validate_occurred_at(index, row.get("occurred_at"), occurred_type)
+
+
+def _validate_cell_size(index: int, name: str, value: object) -> None:
+    """Zelle gegen `MAX_CELL_BYTES` — dieselbe Grenze, die der Lesepfad setzt.
+
+    Die rw-Connection kennt kein ``SQLITE_LIMIT_LENGTH`` (der Server
+    schreibt, er unterliegt dem Limit nicht), die ro-Connection des
+    Query-Pfads schon. Ohne diese Pruefung nimmt der Import eine
+    ueberlange Zelle an und JEDES spaetere SELECT auf die Spalte endet in
+    ``SQLITE_TOOBIG`` — die Zeile stuende drin und die Tabelle waere
+    unlesbar. Darum hier ablehnen (422), bevor etwas geschrieben wird.
+    """
+    if not isinstance(value, str):
+        return
+    size = len(value.encode("utf-8"))
+    if size > MAX_CELL_BYTES:
+        raise TableRowsInvalid(
+            f"Zeile {index}: Spalte '{name}' ist mit {size} Bytes groesser als "
+            f"das Zell-Limit von {MAX_CELL_BYTES} Bytes — kuerze den Wert oder "
+            "lege den Volltext als Artifact ab und referenziere ihn."
+        )
 
 
 def _validate_occurred_at(index: int, value: object, column_type: TableColumnType) -> None:

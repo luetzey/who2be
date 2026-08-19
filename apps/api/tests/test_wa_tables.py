@@ -30,7 +30,7 @@ from fastapi.testclient import TestClient
 
 from who2be_api.main import app
 from who2be_api.services.tablestore_provider import reset_table_store, set_table_store
-from who2be_api.tablestore import TableStore
+from who2be_api.tablestore import MAX_CELL_BYTES, TableStore
 from who2be_api.testing.api_helpers import agent_token, grant, shared_area
 from who2be_api.testing.workspace_setup import (
     cleanup_workspaces,
@@ -626,5 +626,55 @@ def test_unbenutzbarer_store_meldet_503_statt_500(make_auth_headers: AuthFactory
             listed = client.get(f"{prefix}/work-areas/{area_id}/tables", headers=auth)
             assert listed.status_code == 200, listed.text
             assert listed.json() == [], listed.json()
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db", "table_store")
+def test_uebergrosse_zelle_wird_beim_schreiben_abgewiesen(make_auth_headers: AuthFactory) -> None:
+    """Eine Zelle ueber `MAX_CELL_BYTES` muss der Schreibpfad ablehnen (422).
+
+    Sonst nimmt die rw-Connection sie an (sie setzt kein
+    `SQLITE_LIMIT_LENGTH`), und die ro-Connection des Query-Pfads kann die
+    Zeile danach nicht mehr lesen: jedes SELECT auf die Spalte endet in
+    ``SQLITE_TOOBIG``. Die Zeile waere geschrieben und die Tabelle
+    trotzdem kaputt — der Agent kann sich sein eigenes Material vergiften.
+    Deshalb 422 VOR dem Write, nicht ein Fehler beim spaeteren Lesen.
+    """
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    prefix = f"/v1/workspaces/{ws}"
+    try:
+        with TestClient(app) as client:
+            area_id = shared_area(client, prefix, auth, "Zellgrenze")
+            table_id = _create_table(client, prefix, auth, area_id).json()["id"]
+
+            oversized = _insert(
+                client,
+                prefix,
+                auth,
+                table_id,
+                [
+                    {
+                        "occurred_at": "2026-08-01T12:00:00+00:00",
+                        "amount": 1,
+                        "purpose": "x" * (MAX_CELL_BYTES + 1),
+                        "account": "giro",
+                    }
+                ],
+            )
+            assert oversized.status_code == 422, oversized.text
+            assert "purpose" in oversized.text
+
+            # Und die Tabelle ist danach unversehrt lesbar — nicht nur
+            # `count(*)`, sondern die Spalte selbst.
+            assert _insert(client, prefix, auth, table_id, _ROWS).status_code == 200
+            readable = _query(
+                client, prefix, auth, table_id, 'SELECT "purpose" FROM "transactions"'
+            )
+            assert readable.status_code == 200, readable.text
+            assert len(readable.json()["rows"]) == 3
     finally:
         cleanup_workspaces([owner])

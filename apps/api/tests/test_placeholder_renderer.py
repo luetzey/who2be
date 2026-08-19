@@ -1396,6 +1396,37 @@ class TestToolsOverviewResolver:
         # Resources bleiben (Default all) sichtbar.
         assert "list_resources(tag?)" in result
 
+    def test_prompt_nennt_kein_tool_das_die_policy_herausfiltert(self) -> None:
+        """Der Prompt darf kein Tool nennen, das `tools/list` fuer diese Policy filtert.
+
+        `_ToolDoc.is_visible` ist ein Gruppen-Oder, gedruckt wird aber die
+        ganze Signatur samt Beschreibung. Bei gemischten Gruppen (Reads +
+        Writes in EINEM Eintrag) versprach der System-Prompt damit Tools,
+        die die `PolicyFilterMiddleware` gleichzeitig aus `tools/list`
+        entfernt — Prompt und Tool-Oberflaeche widersprachen sich, und der
+        Agent probiert etwas, das er nicht hat.
+
+        Die Pruefung laeuft ueber die SSoT statt ueber eine Namensliste:
+        jedes Tool, das `is_tool_visible` fuer diese Policy verneint, darf
+        im gerenderten Text nicht vorkommen — auch nicht in der
+        Beschreibung.
+        """
+        from who2be_models import MCP_TOOL_REQUIREMENTS, is_tool_visible
+
+        for label, policy_kwargs in (
+            ("Default (keine Writes)", {}),
+            ("nur workarea_write", {"workarea_write": True}),
+            ("nur kb_write", {"kb_write": True}),
+        ):
+            ctx = self._policy_ctx(**policy_kwargs)
+            text = _async_run(ToolsOverviewResolver().resolve("", ctx, _make_db())).text
+            for name in MCP_TOOL_REQUIREMENTS:
+                if is_tool_visible(name, ctx.tool_policy) is True:
+                    continue
+                assert name not in text, (
+                    f"{label}: '{name}' steht im Prompt, wird aber aus tools/list gefiltert"
+                )
+
     def test_agent_read_tools_listed_in_overview(self) -> None:
         """list_agents/get_agent stehen in der Werkzeug-Uebersicht (nicht nur fetch_agent)."""
         result = _async_run(ToolsOverviewResolver().resolve("", _ctx(), _make_db())).text
@@ -1777,26 +1808,53 @@ class TestToolsOverviewSSoTParity:
             assert write_fragment not in result
 
     def test_full_policy_shows_all_curated_groups(self) -> None:
-        """Voll-Policy: jede kuratierte Gruppe erscheint im Output."""
-        from who2be_api.services.placeholders.resolvers.tools import _TOOLS
-        from who2be_models import MemoryMode, ReadScope
+        """Voll-Policy: jede kuratierte Gruppe erscheint im Output.
 
-        result = self._render(
-            playbook_read=ReadScope.all,
-            resource_read=ReadScope.all,
-            agent_read=ReadScope.all,
-            persona_read=True,
-            persona_write=True,
-            playbook_write=True,
-            resource_write=True,
-            agent_write=True,
-            system_prompt_write=True,
-            feedback_write=True,
-            feedback_resolve=True,
-            promote_retire=True,
-            external_tool_write=True,
-            memory_mode=MemoryMode.auto,
+        Die Policy muss JEDES Feld setzen, sonst prueft der Test weniger,
+        als sein Name verspricht: solange WorkArea/KB/Tabellen gemischte
+        Gruppen waren, machte das Gruppen-Oder sie schon ueber die
+        Leseseite sichtbar — die fehlenden Write-Capabilities fielen nicht
+        auf. Der Abgleich gegen `model_fields` haelt das offen, wenn eine
+        neue Capability dazukommt.
+        """
+        from who2be_api.services.placeholders.resolvers.tools import _TOOLS
+        from who2be_models import AgentToolPolicy, MemoryMode, ReadScope
+
+        policy: dict[str, Any] = {
+            "playbook_read": ReadScope.all,
+            "resource_read": ReadScope.all,
+            "agent_read": ReadScope.all,
+            "external_tool_read": ReadScope.all,
+            "persona_read": True,
+            "persona_write": True,
+            "playbook_write": True,
+            "resource_write": True,
+            "agent_write": True,
+            "system_prompt_write": True,
+            "feedback_write": True,
+            "feedback_resolve": True,
+            "promote_retire": True,
+            "external_tool_write": True,
+            "workarea_write": True,
+            "kb_write": True,
+            "kb_edge_write": True,
+            "memory_mode": MemoryMode.auto,
+        }
+        # Jedes Sichtbarkeits-Feld ist gesetzt (die uebrigen steuern keine
+        # Sichtbarkeit) — sonst waere „Voll-Policy" nur ein Name.
+        ungesetzt = (
+            set(AgentToolPolicy.model_fields)
+            - set(policy)
+            - {
+                "transition_grants",
+                "write_tags",
+                "write_rate_limit",
+                "memory_directive",
+            }
         )
+        assert not ungesetzt, f"Policy-Felder ohne Wert im Voll-Policy-Test: {ungesetzt}"
+
+        result = self._render(**policy)
         for tool in _TOOLS:
             assert tool.signature in result
 

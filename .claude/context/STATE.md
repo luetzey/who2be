@@ -493,9 +493,43 @@ vorher wie nachher**, Coverage 91,11 %, und keine inhaltliche Assertion im
 Diff — die 46 entfernten `assert`-Zeilen sind ausschließlich die
 Setup-Prüfungen der Helfer selbst, die jetzt einmal statt fünfzehnmal stehen.
 
-Offen aus dem Aufräum-Plan: Zell-Cap im Schreibpfad, gemischte
-`_TOOLS`-Gruppen (Stufe 2); Rendering/Entschärfung aus `services/wa_tables.py`
-und SQL-Bau aus `services/wa_rules.py` (Stufe 3).
+Offen aus dem Aufräum-Plan: Rendering/Entschärfung aus
+`services/wa_tables.py` und SQL-Bau aus `services/wa_rules.py` (Stufe 3).
+
+### Aufräumen Stufe 2 (2026-08-19) — zwei echte Defekte statt Kosmetik
+
+Beide Punkte, die als „Aufräumen" auf der Liste standen, waren bei näherem
+Hinsehen Fehler mit Wirkung. Beide zuerst als reproduzierender, failing Test.
+
+**1. Zell-Cap fehlte im Schreibpfad — die Tabelle wurde unlesbar.**
+`_connect_ro` setzt `SQLITE_LIMIT_LENGTH = MAX_CELL_BYTES` (1 MB), `_connect_rw`
+nicht; `_validate_rows` prüfte Spalten, Skalare, NOT-NULL und `occurred_at` —
+Größe nicht. Gemessen: eine 2-MB-Zelle wird geschrieben, danach endet **jedes**
+`SELECT` auf die Spalte in `SQLITE_TOOBIG` (nur `count(*)` läuft noch). Ein
+Agent konnte sich sein eigenes Material vergiften, ohne dass der Import etwas
+meldete. Jetzt 422 vor dem Write, gegen dieselbe Konstante aus dem Store —
+keine zweite Zahl im Service. ADR-0047-Nachtrag.
+
+**2. Der System-Prompt versprach Tools, die `tools/list` herausfiltert.**
+`_ToolDoc.is_visible` ist ein Gruppen-Oder, gedruckt wird aber die ganze
+Signatur samt Beschreibung. Die gemischten Gruppen (WorkArea, KB, Tabellen)
+nannten einem Agenten mit Default-Policy **13 Schreib-Tools**, die die
+`PolicyFilterMiddleware` gleichzeitig entfernt — der Agent probiert etwas, das
+er nicht hat. Damit war die ADR-0042-Zusage „Prompt-Text und echte Tool-Liste
+können nicht mehr widersprechen" für diese Gruppen falsch; die SSoT war nicht
+das Problem, die Granularität der Gruppierung schon. Jetzt umfasst eine Gruppe
+nur Tools mit **derselben** Sichtbarkeitsbedingung (`promote_artifact` und
+`create_edge` stehen allein — andere Capability als ihre Nachbarn), und die
+Beschreibungen nennen nichts Unsichtbares mehr. ADR-0042-Nachtrag.
+
+Nebenbefund: `test_full_policy_shows_all_curated_groups` war nie voll —
+`workarea_write`/`kb_write`/`kb_edge_write` fehlten in seiner Policy, was das
+Gruppen-Oder verdeckte. Der Test gleicht seine Policy jetzt gegen
+`AgentToolPolicy.model_fields` ab, damit eine neue Capability ihn rot macht.
+
+Absicherung gegen Rückfall: `test_prompt_nennt_kein_tool_das_die_policy_
+herausfiltert` prüft über die SSoT statt über eine Namensliste. 1681 Tests
+grün, Coverage 91,09 %.
 
 ## Bekannte Probleme
 
