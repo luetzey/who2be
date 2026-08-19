@@ -23,18 +23,15 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Form } from '@/components/ui/form'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { VersionHistory } from '@/components/version'
+import { statusLabel, VersionHistory } from '@/components/version'
+import { EntityDeleteButton, EntityDuplicateButton, EntityExportButton } from '@/components/entity'
 import { notify } from '@/lib/feedback'
 
-import { DeletePersonaButton } from '../components/DeletePersonaButton'
-import { DuplicatePersonaButton } from '../components/DuplicatePersonaButton'
-import { ExportPersonaButton } from '../components/ExportPersonaButton'
 import { PersonaModesPanel } from '../components/PersonaModesPanel'
 import { PersonaPlaybooksCard } from '../components/PersonaPlaybooksCard'
 import { PersonaProfileFields } from '../components/PersonaProfileFields'
 import { usePersona } from '../hooks/usePersona'
 import { usePersonaForm } from '../hooks/usePersonaForm'
-import { statusLabel } from '../lib/status'
 
 export function PersonaDetailPage() {
   const { t } = useTranslation(['personas', 'common', 'playbooks', 'version'])
@@ -193,8 +190,23 @@ export function PersonaDetailPage() {
                           version={persona.current_version}
                         />
                       ) : null}
-                      <DuplicatePersonaButton persona={persona} />
-                      <ExportPersonaButton persona={persona} />
+                      <EntityDuplicateButton
+                        texts={{
+                          success: t('duplicate.success'),
+                          error: t('duplicate.error'),
+                          viewerReadOnly: t('duplicate.viewerReadOnly'),
+                        }}
+                        label={t('duplicate.label')}
+                        onDuplicate={() => api.duplicatePersona(persona.id)}
+                        detailPath={(newId) => wsPath(`/personas/${newId}`)}
+                        testId="duplicate-persona"
+                      />
+                      <EntityExportButton
+                        entityKind="persona"
+                        name={persona.name || persona.id}
+                        onExport={(format) => api.exportPersona(persona.id, format)}
+                        testIdPrefix="export-persona"
+                      />
                     </>
                   }
                 />
@@ -318,7 +330,18 @@ export function PersonaDetailPage() {
                                   {t('delete.dangerZoneDescription')}
                                 </p>
                                 <div>
-                                  <DeletePersonaButton persona={persona} />
+                                  <EntityDeleteButton
+                                    name={persona.name}
+                                    texts={{
+                                      dialogTitle: t('delete.dialogTitle'),
+                                      success: t('delete.success'),
+                                      viewerReadOnly: t('delete.viewerReadOnly'),
+                                      blockedMessage: t('delete.blockedMessage'),
+                                    }}
+                                    onDelete={() => api.deletePersona(persona.id)}
+                                    listPath={wsPath('/personas')}
+                                    testIdPrefix="delete-persona"
+                                  />
                                 </div>
                               </Stack>
                             </CardContent>

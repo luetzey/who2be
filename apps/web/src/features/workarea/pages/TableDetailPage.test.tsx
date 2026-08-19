@@ -39,7 +39,7 @@ let createdAnchors: HTMLAnchorElement[]
 
 beforeAll(() => {
   // Radix-Dropdown braucht Pointer-Capture + scrollIntoView, JSDOM hat beides
-  // nicht (Muster `ExportPersonaButton.test.tsx`).
+  // nicht (Muster `EntityExportButton.test.tsx`).
   for (const fn of [
     'hasPointerCapture',
     'releasePointerCapture',

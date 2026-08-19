@@ -2,8 +2,7 @@ import { Fragment } from 'react'
 import { Link } from 'react-router-dom'
 
 import type { StatusDistribution, VersionStatus } from '@/api/types'
-
-import { statusLabel } from '../lib/statusLabel'
+import { statusLabel } from '@/components/version'
 
 interface StatusBarProps {
   label: string

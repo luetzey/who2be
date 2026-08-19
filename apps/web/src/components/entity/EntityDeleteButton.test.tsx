@@ -2,26 +2,17 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '@/api/client'
-import type { Persona } from '@/api/types'
 
-import { DeletePersonaButton } from './DeletePersonaButton'
+import { EntityDeleteButton } from './EntityDeleteButton'
 
-const deletePersona = vi.fn()
+const onDelete = vi.fn()
 const navigate = vi.fn()
 const notifySuccess = vi.fn()
 const notifyError = vi.fn()
 let role = 'editor'
 
-vi.mock('@/api/useApi', () => ({
-  useApi: () => ({ deletePersona }),
-}))
-
 vi.mock('@/auth/useCurrentWorkspaceRole', () => ({
   useCurrentWorkspaceRole: () => role,
-}))
-
-vi.mock('@/auth/useWorkspacePath', () => ({
-  useWorkspacePath: () => (path: string) => `/w/ws-1${path}`,
 }))
 
 vi.mock('react-router-dom', () => ({
@@ -36,18 +27,23 @@ vi.mock('@/lib/feedback', () => ({
   },
 }))
 
-function makePersona(overrides: Partial<Persona> = {}): Persona {
-  return {
-    id: 'p-1',
-    workspace_id: 'ws-1',
-    owner_id: 'u-1',
-    name: 'Carla',
-    current_version: 1,
-    content: { description: '', system_prompt: '' },
-    created_at: '2026-01-01T00:00:00Z',
-    updated_at: '2026-01-01T00:00:00Z',
-    ...overrides,
-  } as Persona
+const texts = {
+  dialogTitle: 'Persona löschen?',
+  success: 'Persona gelöscht.',
+  viewerReadOnly: 'Viewer können Personae nur ansehen',
+  blockedMessage: 'Diese Persona wird noch verwendet von:',
+}
+
+function renderButton() {
+  return render(
+    <EntityDeleteButton
+      name="Carla"
+      texts={texts}
+      onDelete={onDelete}
+      listPath="/w/ws-1/personas"
+      testIdPrefix="delete-persona"
+    />,
+  )
 }
 
 beforeAll(() => {
@@ -65,7 +61,7 @@ beforeAll(() => {
 })
 
 beforeEach(() => {
-  deletePersona.mockReset()
+  onDelete.mockReset()
   navigate.mockReset()
   notifySuccess.mockReset()
   notifyError.mockReset()
@@ -76,23 +72,23 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-describe('DeletePersonaButton', () => {
-  it('löscht nach Bestätigung und navigiert zur Liste', async () => {
-    deletePersona.mockResolvedValue(undefined)
-    render(<DeletePersonaButton persona={makePersona()} />)
+describe('EntityDeleteButton', () => {
+  it('löscht nach Bestätigung, toastet und navigiert zur Liste', async () => {
+    onDelete.mockResolvedValue(undefined)
+    renderButton()
 
     fireEvent.click(screen.getByTestId('delete-persona-trigger'))
-    const confirm = await screen.findByTestId('delete-persona-confirm')
-    fireEvent.click(confirm)
+    fireEvent.click(await screen.findByTestId('delete-persona-confirm'))
 
     await waitFor(() => {
-      expect(deletePersona).toHaveBeenCalledWith('p-1')
+      expect(onDelete).toHaveBeenCalledTimes(1)
+      expect(notifySuccess).toHaveBeenCalledWith('Persona gelöscht.')
       expect(navigate).toHaveBeenCalledWith('/w/ws-1/personas')
     })
   })
 
   it('zeigt bei 409 die blockierenden Verwender und navigiert nicht', async () => {
-    deletePersona.mockRejectedValue(
+    onDelete.mockRejectedValue(
       new ApiError(409, 'Who2Be-API-Fehler (409).', {
         detail: {
           message: 'Persona wird noch von Agenten verwendet.',
@@ -100,7 +96,7 @@ describe('DeletePersonaButton', () => {
         },
       }),
     )
-    render(<DeletePersonaButton persona={makePersona()} />)
+    renderButton()
 
     fireEvent.click(screen.getByTestId('delete-persona-trigger'))
     fireEvent.click(await screen.findByTestId('delete-persona-confirm'))
@@ -109,11 +105,28 @@ describe('DeletePersonaButton', () => {
       expect(screen.getByText(/Agent Sam/)).toBeInTheDocument()
     })
     expect(navigate).not.toHaveBeenCalled()
+    // Blocker-Anzeige sperrt den Confirm-Button — kein blindes Retry.
+    expect(screen.getByTestId('delete-persona-confirm')).toBeDisabled()
+  })
+
+  it('toastet den Fehler bei Nicht-409 und bleibt auf der Seite', async () => {
+    onDelete.mockRejectedValue(new Error('Kaputt'))
+    renderButton()
+
+    fireEvent.click(screen.getByTestId('delete-persona-trigger'))
+    fireEvent.click(await screen.findByTestId('delete-persona-confirm'))
+
+    await waitFor(() => {
+      expect(notifyError).toHaveBeenCalledWith('Kaputt')
+    })
+    expect(navigate).not.toHaveBeenCalled()
   })
 
   it('ist für Viewer ausgegraut', () => {
     role = 'viewer'
-    render(<DeletePersonaButton persona={makePersona()} />)
-    expect(screen.getByTestId('delete-persona-trigger')).toBeDisabled()
+    renderButton()
+    const trigger = screen.getByTestId('delete-persona-trigger')
+    expect(trigger).toBeDisabled()
+    expect(trigger).toHaveAttribute('title', texts.viewerReadOnly)
   })
 })

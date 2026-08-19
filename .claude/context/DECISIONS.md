@@ -960,3 +960,29 @@ bleiben)._
   `.claude/plan/2026-08-19-1700_tabellen-ui-und-exporte.md`;
   `apps/api/pyproject.toml`, `apps/api/src/who2be_api/tablestore/engine.py`
   (`EXPORT_ROW_LIMIT`), `apps/api/src/who2be_api/services/wa_render.py`.
+
+## 2026-08-19 — Status-/Entity-Aktions-UI wird geteilt statt pro Feature kopiert
+- **Entscheidung:** Die per-Feature-Kopien der Status-/Entity-Aktions-UI sind
+  aufgelöst: `StatusActionBar` + Status-State-Machine leben in
+  `components/version/` (Erweiterung von `versionStatus.ts`), die
+  Delete-/Export-/Duplicate-Buttons als parametrisierte
+  `EntityDeleteButton`/`EntityExportButton`/`EntityDuplicateButton` in
+  `components/entity/`. Entity-spezifische Texte übergeben die Seiten als
+  fertig übersetzte Props; textidentische Keys liegen in
+  `common.statusBar/entityDelete/entityExport`. `data-testid`-Werte blieben
+  unverändert. User-Entscheidung im Refactoring-Lauf (Option A von dreien).
+- **Begründung:** Die Alt-Kommentare („bewusst pro Feature dupliziert wegen
+  Cross-Feature-Lint-Regel") waren durch die Repo-Konvention überholt — die
+  Lint-Regel verbietet nur Feature→Feature-Deep-Imports, `@/components/` ist
+  der sanktionierte geteilte Ort (CLAUDE.md), und
+  `components/version/versionStatus.ts` praktizierte das bereits. Die Drift
+  war eingetreten: drei i18n-Key-Schemata für identische Texte, und die
+  Personas-/Playbooks-Bars wurden nie gerendert (tote Komponenten).
+- **Verworfen:** Duplikate behalten und nur Drift syncen (der nächste
+  Content-Typ kopiert wieder ~350 Zeilen); nur die State-Machine teilen
+  (lässt die größten Clones, 86 Zeilen/Paar, stehen).
+- **Detail:** `.claude/plan/2026-08-19-1805_refactor-web-dedup-status-actions.md`;
+  bewusst ausgelassen: `SystemPromptStatusActionBar` (eigener Workflow),
+  `DeleteAgentButton`/`DeleteFeedbackButton`/`DuplicateAgentButton`
+  (abweichendes Verhalten), Python-Service-Duplikate (Sicherheitsnetz nur in
+  CI — Folgelauf mit DB-Umgebung).

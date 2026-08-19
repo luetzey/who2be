@@ -42,6 +42,25 @@
       "active": "Aktiv",
       "inactive": "Inaktiv"
     },
+    "statusBar": {
+      "ariaLabel": "Status-Aktionen",
+      "promote": "Aktivieren",
+      "submit": "Zur Review einreichen",
+      "reject": "Ablehnen",
+      "reactivate": "Reaktivieren als Draft",
+      "adminOnly": "Nur Admins können aktivieren",
+      "fallback": "Aktion fehlgeschlagen.",
+      "error": {
+        "promoteFill": "Vor dem Aktivieren ausfuellen: {{fields}}.",
+        "promoteTitle": "Promote nicht möglich"
+      },
+      "toast": {
+        "activated": "Version aktiviert.",
+        "submitted": "Zur Review eingereicht.",
+        "rejected": "Review abgelehnt.",
+        "reactivated": "Reaktiviert als Entwurf."
+      }
+    },
     "loading": "Lädt…",
     "loadingLong": "Wird geladen…",
     "workspacePreparing": "Workspace wird vorbereitet…",
@@ -66,6 +85,20 @@
       "helpText": "Bestimmt, in welcher Sprache dieses Element angelegt wird — nachträglich änderbar.",
       "de": "Deutsch",
       "en": "English"
+    },
+    "entityDelete": {
+      "label": "Löschen",
+      "confirmLabel": "Endgültig löschen",
+      "dialogDescription": "{{name}} wird mit allen Versionen dauerhaft entfernt. Diese Aktion kann nicht rückgängig gemacht werden.",
+      "error": "Löschen fehlgeschlagen.",
+      "blockedTitle": "Löschen blockiert"
+    },
+    "entityExport": {
+      "label": "Exportieren",
+      "json": "Als JSON",
+      "markdown": "Als Markdown",
+      "success": "Export heruntergeladen.",
+      "error": "Export fehlgeschlagen."
     }
   },
   "layout": {
@@ -1105,23 +1138,7 @@
       }
     },
     "statusBar": {
-      "ariaLabel": "Status-Aktionen",
-      "submit": "Zur Review einreichen",
-      "promote": "Aktivieren",
-      "reject": "Ablehnen",
-      "reactivate": "Reaktivieren als Draft",
-      "adminOnly": "Nur Admins können aktivieren",
-      "toast": {
-        "activated": "Version aktiviert.",
-        "submitted": "Zur Review eingereicht.",
-        "rejected": "Review abgelehnt.",
-        "reactivated": "Reaktiviert als Entwurf."
-      },
-      "error": {
-        "promoteTitle": "Promote nicht möglich",
-        "promoteFill": "Vor dem Aktivieren ausfuellen: {{fields}}."
-      },
-      "fallback": "Aktion fehlgeschlagen."
+      "adminOnly": "Nur Admins können aktivieren"
     },
     "skillsComingSoon": {
       "label": "Skills",
@@ -1129,24 +1146,12 @@
       "description": "Skills bekommen bald ein eigenes, versioniertes Format — als paketierte, wiederverwendbare Fähigkeit für deine Agenten. Die Funktion ist aktuell noch nicht aktiv."
     },
     "delete": {
-      "label": "Löschen",
-      "confirmLabel": "Endgültig löschen",
       "dialogTitle": "Persona löschen?",
-      "dialogDescription": "{{name}} wird mit allen Versionen dauerhaft entfernt. Diese Aktion kann nicht rückgängig gemacht werden.",
       "success": "Persona gelöscht.",
-      "error": "Löschen fehlgeschlagen.",
       "viewerReadOnly": "Viewer können Personae nur ansehen",
-      "blockedTitle": "Löschen blockiert",
       "blockedMessage": "Diese Persona wird noch verwendet von:",
       "dangerZoneTitle": "Persona löschen",
       "dangerZoneDescription": "Entfernt diese Persona samt allen Versionen dauerhaft. Kein Undo."
-    },
-    "export": {
-      "label": "Exportieren",
-      "json": "Als JSON",
-      "markdown": "Als Markdown",
-      "success": "Export heruntergeladen.",
-      "error": "Export fehlgeschlagen."
     },
     "card": {
       "modeCount_one": "{{count}} Modus",
@@ -1278,13 +1283,7 @@
       "faq": "Frage-Antwort-Sammlung — z. B. die Top-10-Support-Fragen einer Produkt-Linie."
     },
     "actions": {
-      "toolbarAriaLabel": "Status-Aktionen",
-      "submitReview": "Zur Review einreichen",
-      "reject": "Ablehnen",
-      "reactivate": "Reaktivieren als Draft",
       "activateAdminOnly": "Nur Admins können aktivieren",
-      "promoteError": "Vor dem Aktivieren ausfuellen: {{fields}}.",
-      "promoteErrorTitle": "Promote nicht möglich",
       "draftSubmit": "Draft abschliessen",
       "publish": "Veroeffentlichen",
       "rejectDraft": "Zurueck zu Draft",
@@ -1353,24 +1352,12 @@
       "saveButton": "Speichern ({{count}})"
     },
     "delete": {
-      "label": "Löschen",
-      "confirmLabel": "Endgültig löschen",
       "dialogTitle": "Playbook löschen?",
-      "dialogDescription": "{{name}} wird mit allen Versionen dauerhaft entfernt. Diese Aktion kann nicht rückgängig gemacht werden.",
       "success": "Playbook gelöscht.",
-      "error": "Löschen fehlgeschlagen.",
       "viewerReadOnly": "Viewer können Playbooks nur ansehen",
-      "blockedTitle": "Löschen blockiert",
       "blockedMessage": "Dieses Playbook wird noch verwendet von:",
       "dangerZoneTitle": "Playbook löschen",
       "dangerZoneDescription": "Entfernt dieses Playbook samt allen Versionen dauerhaft. Kein Undo."
-    },
-    "export": {
-      "label": "Exportieren",
-      "json": "Als JSON",
-      "markdown": "Als Markdown",
-      "success": "Export heruntergeladen.",
-      "error": "Export fehlgeschlagen."
     }
   },
   "resources": {
@@ -1439,23 +1426,6 @@
       "usage": "Verwendung",
       "versions": "Versionen"
     },
-    "statusBar": {
-      "ariaLabel": "Status-Aktionen",
-      "activate": "Aktivieren",
-      "activateAdminOnly": "Nur Admins können aktivieren",
-      "submitForReview": "Zur Review einreichen",
-      "reject": "Ablehnen",
-      "reactivate": "Reaktivieren als Draft",
-      "promoteError": "Vor dem Aktivieren ausfuellen: {{fields}}.",
-      "actionFailed": "Aktion fehlgeschlagen.",
-      "promoteErrorTitle": "Promote nicht möglich",
-      "toast": {
-        "activated": "Version aktiviert.",
-        "submitted": "Zur Review eingereicht.",
-        "rejected": "Review abgelehnt.",
-        "reactivated": "Reaktiviert als Entwurf."
-      }
-    },
     "usedBy": {
       "empty": "Keine Resource referenziert diese Resource als Sub-Resource.",
       "ariaLabel": "Referenziert als Sub-Resource in"
@@ -1505,24 +1475,12 @@
       "duplicateError": "Duplizieren fehlgeschlagen."
     },
     "delete": {
-      "label": "Löschen",
-      "confirmLabel": "Endgültig löschen",
       "dialogTitle": "Resource löschen?",
-      "dialogDescription": "{{name}} wird mit allen Versionen dauerhaft entfernt. Diese Aktion kann nicht rückgängig gemacht werden.",
       "success": "Resource gelöscht.",
-      "error": "Löschen fehlgeschlagen.",
       "viewerReadOnly": "Viewer können Resources nur ansehen",
-      "blockedTitle": "Löschen blockiert",
       "blockedMessage": "Diese Resource wird noch verwendet von:",
       "dangerZoneTitle": "Resource löschen",
       "dangerZoneDescription": "Entfernt diese Resource samt allen Versionen dauerhaft. Kein Undo."
-    },
-    "export": {
-      "label": "Exportieren",
-      "json": "Als JSON",
-      "markdown": "Als Markdown",
-      "success": "Export heruntergeladen.",
-      "error": "Export fehlgeschlagen."
     },
     "card": {
       "linkedIn_one": "Verlinkt in {{count}} Playbook",
@@ -2277,46 +2235,17 @@
       "edit": "Bearbeiten",
       "versions": "Versionen"
     },
-    "statusBar": {
-      "ariaLabel": "Status-Aktionen",
-      "activate": "Aktivieren",
-      "activateAdminOnly": "Nur Admins können aktivieren",
-      "submitForReview": "Zur Review einreichen",
-      "reject": "Ablehnen",
-      "reactivate": "Reaktivieren als Draft",
-      "promoteError": "Vor dem Aktivieren ausfuellen: {{fields}}.",
-      "actionFailed": "Aktion fehlgeschlagen.",
-      "promoteErrorTitle": "Promote nicht möglich",
-      "toast": {
-        "activated": "Version aktiviert.",
-        "submitted": "Zur Review eingereicht.",
-        "rejected": "Review abgelehnt.",
-        "reactivated": "Reaktiviert als Entwurf."
-      }
-    },
     "toast": {
       "created": "Externes Tool angelegt.",
       "createFailed": "Anlegen fehlgeschlagen."
     },
     "delete": {
-      "label": "Löschen",
-      "confirmLabel": "Endgültig löschen",
       "dialogTitle": "Externes Tool löschen?",
-      "dialogDescription": "{{name}} wird mit allen Versionen dauerhaft entfernt. Diese Aktion kann nicht rückgängig gemacht werden.",
       "success": "Externes Tool gelöscht.",
-      "error": "Löschen fehlgeschlagen.",
       "viewerReadOnly": "Viewer können externe Tools nur ansehen",
-      "blockedTitle": "Löschen blockiert",
       "blockedMessage": "Dieses Tool wird noch verwendet von:",
       "dangerZoneTitle": "Externes Tool löschen",
       "dangerZoneDescription": "Entfernt dieses Tool samt allen Versionen dauerhaft. Kein Undo."
-    },
-    "export": {
-      "label": "Exportieren",
-      "json": "Als JSON",
-      "markdown": "Als Markdown",
-      "success": "Export heruntergeladen.",
-      "error": "Export fehlgeschlagen."
     },
     "card": {
       "toolCount_one": "{{count}} Tool-Name",

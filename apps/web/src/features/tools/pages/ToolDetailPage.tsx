@@ -19,17 +19,14 @@ import { Stack } from '@/components/layout/Stack'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { VersionHistory } from '@/components/version'
+import { StatusActionBar, statusLabel, VersionHistory } from '@/components/version'
+import { EntityDeleteButton, EntityExportButton } from '@/components/entity'
 import { cn } from '@/lib/utils'
 import { notify } from '@/lib/feedback'
 
-import { DeleteToolButton } from '../components/DeleteToolButton'
-import { ExportToolButton } from '../components/ExportToolButton'
-import { StatusActionBar } from '../components/StatusActionBar'
 import { ToolEditorForm } from '../components/ToolEditorForm'
 import { useTool } from '../hooks/useTool'
 import { useToolForm } from '../hooks/useToolForm'
-import { statusLabel } from '../lib/status'
 
 export function ToolDetailPage() {
   const { t } = useTranslation('tools')
@@ -128,7 +125,14 @@ export function ToolDetailPage() {
                   </>
                 }
                 description={description}
-                actions={<ExportToolButton tool={tool} />}
+                actions={
+                  <EntityExportButton
+                    entityKind="external-tool"
+                    name={tool.name || tool.id}
+                    onExport={(format) => api.exportExternalTool(tool.id, format)}
+                    testIdPrefix="export-tool"
+                  />
+                }
               />
 
               {locked ? <ManagedNotice /> : null}
@@ -155,9 +159,14 @@ export function ToolDetailPage() {
                         description={text.desc}
                         actions={
                           <StatusActionBar
-                            toolId={tool.id}
-                            version={promotableVersion.version}
                             status={status}
+                            onTransition={(to) =>
+                              api.transitionExternalToolVersion(
+                                tool.id,
+                                promotableVersion.version,
+                                to,
+                              )
+                            }
                             onTransitioned={reload}
                           />
                         }
@@ -177,9 +186,14 @@ export function ToolDetailPage() {
                         description={text.desc}
                         actions={
                           <StatusActionBar
-                            toolId={tool.id}
-                            version={inactiveCurrent.version}
                             status="inactive"
+                            onTransition={(to) =>
+                              api.transitionExternalToolVersion(
+                                tool.id,
+                                inactiveCurrent.version,
+                                to,
+                              )
+                            }
                             onTransitioned={reload}
                           />
                         }
@@ -239,7 +253,18 @@ export function ToolDetailPage() {
                             {t('delete.dangerZoneDescription')}
                           </p>
                           <div>
-                            <DeleteToolButton tool={tool} />
+                            <EntityDeleteButton
+                              name={tool.name}
+                              texts={{
+                                dialogTitle: t('delete.dialogTitle'),
+                                success: t('delete.success'),
+                                viewerReadOnly: t('delete.viewerReadOnly'),
+                                blockedMessage: t('delete.blockedMessage'),
+                              }}
+                              onDelete={() => api.deleteExternalTool(tool.id)}
+                              listPath={wsPath('/tools')}
+                              testIdPrefix="delete-tool"
+                            />
                           </div>
                         </div>
                       ) : null}

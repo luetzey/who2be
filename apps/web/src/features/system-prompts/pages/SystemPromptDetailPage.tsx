@@ -15,9 +15,9 @@ import { Container } from '@/components/layout/Container'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { VersionHistory } from '@/components/version'
+import { EntityDuplicateButton } from '@/components/entity'
 import { notify } from '@/lib/feedback'
 
-import { DuplicateSystemPromptButton } from '../components/DuplicateSystemPromptButton'
 import { SystemPromptEditorForm } from '../components/SystemPromptEditorForm'
 import { SystemPromptStatusActionBar } from '../components/SystemPromptStatusActionBar'
 import { useSystemPrompt } from '../hooks/useSystemPrompt'
@@ -64,7 +64,19 @@ export function SystemPromptDetailPage() {
                 </>
               }
               description={template.content.description}
-              actions={<DuplicateSystemPromptButton template={template} />}
+              actions={
+                <EntityDuplicateButton
+                  texts={{
+                    success: t('duplicate.success'),
+                    error: t('duplicate.error'),
+                    viewerReadOnly: t('duplicate.viewerReadOnly'),
+                  }}
+                  label={t('duplicate.label')}
+                  onDuplicate={() => api.duplicateSystemPrompt(template.id)}
+                  detailPath={(newId) => wsPath(`/system-prompts/${newId}`)}
+                  testId="duplicate-system-prompt"
+                />
+              }
             />
 
             {/* Managed-Lock, Review-Banner oder schlichte Status-Aktionsleiste —

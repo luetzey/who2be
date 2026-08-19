@@ -1,17 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { Persona } from '@/api/types'
+import { EntityExportButton } from './EntityExportButton'
 
-import { ExportPersonaButton } from './ExportPersonaButton'
-
-const exportPersona = vi.fn()
+const onExport = vi.fn()
 const notifySuccess = vi.fn()
 const notifyError = vi.fn()
-
-vi.mock('@/api/useApi', () => ({
-  useApi: () => ({ exportPersona }),
-}))
 
 vi.mock('@/lib/feedback', () => ({
   notify: {
@@ -20,20 +14,6 @@ vi.mock('@/lib/feedback', () => ({
     info: vi.fn(),
   },
 }))
-
-function makePersona(overrides: Partial<Persona> = {}): Persona {
-  return {
-    id: 'p-1',
-    workspace_id: 'ws-1',
-    owner_id: 'u-1',
-    name: 'Carla',
-    current_version: 1,
-    content: { description: '', system_prompt: '' },
-    created_at: '2026-01-01T00:00:00Z',
-    updated_at: '2026-01-01T00:00:00Z',
-    ...overrides,
-  } as Persona
-}
 
 let anchorClick: ReturnType<typeof vi.fn>
 let createdAnchors: HTMLAnchorElement[]
@@ -55,7 +35,7 @@ beforeAll(() => {
 })
 
 beforeEach(() => {
-  exportPersona.mockReset()
+  onExport.mockReset()
   notifySuccess.mockReset()
   notifyError.mockReset()
   createdAnchors = []
@@ -75,21 +55,33 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+function renderButton() {
+  return render(
+    <EntityExportButton
+      entityKind="persona"
+      name="Carla"
+      onExport={onExport}
+      testIdPrefix="export-persona"
+    />,
+  )
+}
+
 function openDropdown() {
-  // Radix oeffnet auf pointerdown+up; in jsdom kommen wir per Enter ans Ziel.
+  // Radix oeffnet auf pointerdown+up; in jsdom kommen wir per Enter ans Ziel
+  // (Muster der frueheren Export*Button-Tests).
   fireEvent.keyDown(screen.getByTestId('export-persona-trigger'), { key: 'Enter' })
 }
 
-describe('ExportPersonaButton', () => {
+describe('EntityExportButton', () => {
   it('exportiert als JSON und löst einen Download-Anchor aus', async () => {
-    exportPersona.mockResolvedValue({ id: 'p-1', name: 'Carla' })
-    render(<ExportPersonaButton persona={makePersona()} />)
+    onExport.mockResolvedValue({ id: 'p-1', name: 'Carla' })
+    renderButton()
 
     openDropdown()
     fireEvent.click(await screen.findByTestId('export-persona-json'))
 
     await waitFor(() => {
-      expect(exportPersona).toHaveBeenCalledWith('p-1', 'json')
+      expect(onExport).toHaveBeenCalledWith('json')
       expect(anchorClick).toHaveBeenCalled()
     })
     const anchor = createdAnchors.at(-1)
@@ -97,17 +89,30 @@ describe('ExportPersonaButton', () => {
   })
 
   it('exportiert als Markdown mit dem korrekten Format', async () => {
-    exportPersona.mockResolvedValue('# Carla')
-    render(<ExportPersonaButton persona={makePersona()} />)
+    onExport.mockResolvedValue('# Carla')
+    renderButton()
 
     openDropdown()
     fireEvent.click(await screen.findByTestId('export-persona-markdown'))
 
     await waitFor(() => {
-      expect(exportPersona).toHaveBeenCalledWith('p-1', 'markdown')
+      expect(onExport).toHaveBeenCalledWith('markdown')
       expect(anchorClick).toHaveBeenCalled()
     })
     const anchor = createdAnchors.at(-1)
     expect(anchor?.download).toBe('who2be-persona-carla.md')
+  })
+
+  it('toastet den Fehler, wenn der Export scheitert', async () => {
+    onExport.mockRejectedValue(new Error('Export kaputt'))
+    renderButton()
+
+    openDropdown()
+    fireEvent.click(await screen.findByTestId('export-persona-json'))
+
+    await waitFor(() => {
+      expect(notifyError).toHaveBeenCalledWith('Export kaputt')
+    })
+    expect(anchorClick).not.toHaveBeenCalled()
   })
 })

@@ -42,6 +42,25 @@
       "active": "Active",
       "inactive": "Inactive"
     },
+    "statusBar": {
+      "ariaLabel": "Status actions",
+      "promote": "Activate",
+      "submit": "Submit for review",
+      "reject": "Reject",
+      "reactivate": "Reactivate as draft",
+      "adminOnly": "Only admins can activate",
+      "fallback": "Action failed.",
+      "error": {
+        "promoteFill": "Fill in before activating: {{fields}}.",
+        "promoteTitle": "Cannot promote"
+      },
+      "toast": {
+        "activated": "Version activated.",
+        "submitted": "Submitted for review.",
+        "rejected": "Review rejected.",
+        "reactivated": "Reactivated as draft."
+      }
+    },
     "loading": "Loading…",
     "loadingLong": "Loading…",
     "workspacePreparing": "Preparing workspace…",
@@ -66,6 +85,20 @@
       "helpText": "Determines which language this element is created in — changeable afterwards.",
       "de": "Deutsch",
       "en": "English"
+    },
+    "entityDelete": {
+      "label": "Delete",
+      "confirmLabel": "Delete permanently",
+      "dialogDescription": "{{name}} and all its versions are removed permanently. This action cannot be undone.",
+      "error": "Deletion failed.",
+      "blockedTitle": "Deletion blocked"
+    },
+    "entityExport": {
+      "label": "Export",
+      "json": "As JSON",
+      "markdown": "As Markdown",
+      "success": "Export downloaded.",
+      "error": "Export failed."
     }
   },
   "layout": {
@@ -1105,23 +1138,7 @@
       }
     },
     "statusBar": {
-      "ariaLabel": "Status actions",
-      "submit": "Submit for review",
-      "promote": "Activate",
-      "reject": "Reject",
-      "reactivate": "Reactivate as draft",
-      "adminOnly": "Only admins can activate",
-      "toast": {
-        "activated": "Version activated.",
-        "submitted": "Submitted for review.",
-        "rejected": "Review rejected.",
-        "reactivated": "Reactivated as draft."
-      },
-      "error": {
-        "promoteTitle": "Promote not possible",
-        "promoteFill": "Fill in before activating: {{fields}}."
-      },
-      "fallback": "Action failed."
+      "adminOnly": "Only admins can activate"
     },
     "skillsComingSoon": {
       "label": "Skills",
@@ -1129,24 +1146,12 @@
       "description": "Skills will soon get their own versioned format — as packaged, reusable capabilities for your agents. The feature is not yet active."
     },
     "delete": {
-      "label": "Delete",
-      "confirmLabel": "Delete permanently",
       "dialogTitle": "Delete persona?",
-      "dialogDescription": "{{name}} and all its versions are removed permanently. This action cannot be undone.",
       "success": "Persona deleted.",
-      "error": "Deletion failed.",
       "viewerReadOnly": "Viewers can only view personas",
-      "blockedTitle": "Deletion blocked",
       "blockedMessage": "This persona is still used by:",
       "dangerZoneTitle": "Delete persona",
       "dangerZoneDescription": "Permanently removes this persona and all its versions. No undo."
-    },
-    "export": {
-      "label": "Export",
-      "json": "As JSON",
-      "markdown": "As Markdown",
-      "success": "Export downloaded.",
-      "error": "Export failed."
     },
     "card": {
       "modeCount_one": "{{count}} mode",
@@ -1278,13 +1283,7 @@
       "faq": "Question-and-answer collection — e.g. the top 10 support questions for a product line."
     },
     "actions": {
-      "toolbarAriaLabel": "Status actions",
-      "submitReview": "Submit for review",
-      "reject": "Reject",
-      "reactivate": "Reactivate as draft",
       "activateAdminOnly": "Only admins can activate",
-      "promoteError": "Fill in before activating: {{fields}}.",
-      "promoteErrorTitle": "Cannot promote",
       "draftSubmit": "Finalise draft",
       "publish": "Publish",
       "rejectDraft": "Back to draft",
@@ -1353,24 +1352,12 @@
       "saveButton": "Save ({{count}})"
     },
     "delete": {
-      "label": "Delete",
-      "confirmLabel": "Delete permanently",
       "dialogTitle": "Delete playbook?",
-      "dialogDescription": "{{name}} and all its versions are removed permanently. This action cannot be undone.",
       "success": "Playbook deleted.",
-      "error": "Deletion failed.",
       "viewerReadOnly": "Viewers can only view playbooks",
-      "blockedTitle": "Deletion blocked",
       "blockedMessage": "This playbook is still used by:",
       "dangerZoneTitle": "Delete playbook",
       "dangerZoneDescription": "Permanently removes this playbook and all its versions. No undo."
-    },
-    "export": {
-      "label": "Export",
-      "json": "As JSON",
-      "markdown": "As Markdown",
-      "success": "Export downloaded.",
-      "error": "Export failed."
     }
   },
   "resources": {
@@ -1439,23 +1426,6 @@
       "usage": "Usage",
       "versions": "Versions"
     },
-    "statusBar": {
-      "ariaLabel": "Status actions",
-      "activate": "Activate",
-      "activateAdminOnly": "Only admins can activate",
-      "submitForReview": "Submit for review",
-      "reject": "Reject",
-      "reactivate": "Reactivate as draft",
-      "promoteError": "Fill in before activating: {{fields}}.",
-      "actionFailed": "Action failed.",
-      "promoteErrorTitle": "Cannot promote",
-      "toast": {
-        "activated": "Version activated.",
-        "submitted": "Submitted for review.",
-        "rejected": "Review rejected.",
-        "reactivated": "Reactivated as draft."
-      }
-    },
     "usedBy": {
       "empty": "No resource references this resource as a sub-resource.",
       "ariaLabel": "Referenced as sub-resource in"
@@ -1505,24 +1475,12 @@
       "duplicateError": "Duplication failed."
     },
     "delete": {
-      "label": "Delete",
-      "confirmLabel": "Delete permanently",
       "dialogTitle": "Delete resource?",
-      "dialogDescription": "{{name}} and all its versions are removed permanently. This action cannot be undone.",
       "success": "Resource deleted.",
-      "error": "Deletion failed.",
       "viewerReadOnly": "Viewers can only view resources",
-      "blockedTitle": "Deletion blocked",
       "blockedMessage": "This resource is still used by:",
       "dangerZoneTitle": "Delete resource",
       "dangerZoneDescription": "Permanently removes this resource and all its versions. No undo."
-    },
-    "export": {
-      "label": "Export",
-      "json": "As JSON",
-      "markdown": "As Markdown",
-      "success": "Export downloaded.",
-      "error": "Export failed."
     },
     "card": {
       "linkedIn_one": "Linked in {{count}} playbook",
@@ -2277,46 +2235,17 @@
       "edit": "Edit",
       "versions": "Versions"
     },
-    "statusBar": {
-      "ariaLabel": "Status actions",
-      "activate": "Activate",
-      "activateAdminOnly": "Only admins can activate",
-      "submitForReview": "Submit for review",
-      "reject": "Reject",
-      "reactivate": "Reactivate as draft",
-      "promoteError": "Fill in before activating: {{fields}}.",
-      "actionFailed": "Action failed.",
-      "promoteErrorTitle": "Cannot promote",
-      "toast": {
-        "activated": "Version activated.",
-        "submitted": "Submitted for review.",
-        "rejected": "Review rejected.",
-        "reactivated": "Reactivated as draft."
-      }
-    },
     "toast": {
       "created": "External tool created.",
       "createFailed": "Creation failed."
     },
     "delete": {
-      "label": "Delete",
-      "confirmLabel": "Delete permanently",
       "dialogTitle": "Delete external tool?",
-      "dialogDescription": "{{name}} and all its versions are removed permanently. This action cannot be undone.",
       "success": "External tool deleted.",
-      "error": "Deletion failed.",
       "viewerReadOnly": "Viewers can only view external tools",
-      "blockedTitle": "Deletion blocked",
       "blockedMessage": "This tool is still used by:",
       "dangerZoneTitle": "Delete external tool",
       "dangerZoneDescription": "Permanently removes this tool and all its versions. No undo."
-    },
-    "export": {
-      "label": "Export",
-      "json": "As JSON",
-      "markdown": "As Markdown",
-      "success": "Export downloaded.",
-      "error": "Export failed."
     },
     "card": {
       "toolCount_one": "{{count}} tool name",

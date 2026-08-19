@@ -30,7 +30,7 @@ function stubArtifact(): void {
 
 beforeAll(() => {
   // Radix-Dropdown braucht Pointer-Capture + scrollIntoView, JSDOM hat beides
-  // nicht (Muster `TableDetailPage.test.tsx` / `ExportPersonaButton.test.tsx`).
+  // nicht (Muster `TableDetailPage.test.tsx` / `EntityExportButton.test.tsx`).
   for (const fn of [
     'hasPointerCapture',
     'releasePointerCapture',

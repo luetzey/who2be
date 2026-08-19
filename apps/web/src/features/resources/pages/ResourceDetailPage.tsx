@@ -29,21 +29,17 @@ import { Stack } from '@/components/layout/Stack'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { VersionHistory } from '@/components/version'
+import { StatusActionBar, statusLabel, VersionHistory } from '@/components/version'
+import { EntityDeleteButton, EntityDuplicateButton, EntityExportButton } from '@/components/entity'
 import { useResourceSubResources } from '@/hooks/useResourceSubResources'
 import { useResourceUsages } from '@/hooks/useResourceUsages'
 import { notify } from '@/lib/feedback'
 
-import { DeleteResourceButton } from '../components/DeleteResourceButton'
-import { DuplicateResourceButton } from '../components/DuplicateResourceButton'
-import { ExportResourceButton } from '../components/ExportResourceButton'
 import { ResourceEditorForm } from '../components/ResourceEditorForm'
 import { ResourceUsedByList } from '../components/ResourceUsedByList'
-import { StatusActionBar } from '../components/StatusActionBar'
 import { SubResourcePicker } from '../components/SubResourcePicker'
 import { useResource } from '../hooks/useResource'
 import { useResourceForm } from '../hooks/useResourceForm'
-import { statusLabel } from '../lib/status'
 
 export function ResourceDetailPage() {
   const { t } = useTranslation('resources')
@@ -160,9 +156,37 @@ export function ResourceDetailPage() {
                         version={resource.current_version}
                       />
                     ) : null}
-                    <ExportResourceButton resource={resource} />
-                    <DuplicateResourceButton resource={resource} />
-                    {canEdit ? <DeleteResourceButton resource={resource} /> : null}
+                    <EntityExportButton
+                      entityKind="resource"
+                      name={resource.name || resource.id}
+                      onExport={(format) => api.exportResource(resource.id, format)}
+                      testIdPrefix="export-resource"
+                    />
+                    <EntityDuplicateButton
+                      texts={{
+                        success: t('toast.duplicated'),
+                        error: t('toast.duplicateError'),
+                        viewerReadOnly: t('delete.viewerReadOnly'),
+                      }}
+                      label={t('detail.duplicate')}
+                      onDuplicate={() => api.duplicateResource(resource.id)}
+                      detailPath={(newId) => wsPath(`/resources/${newId}`)}
+                      testId="duplicate-resource"
+                    />
+                    {canEdit ? (
+                      <EntityDeleteButton
+                        name={resource.name}
+                        texts={{
+                          dialogTitle: t('delete.dialogTitle'),
+                          success: t('delete.success'),
+                          viewerReadOnly: t('delete.viewerReadOnly'),
+                          blockedMessage: t('delete.blockedMessage'),
+                        }}
+                        onDelete={() => api.deleteResource(resource.id)}
+                        listPath={wsPath('/resources')}
+                        testIdPrefix="delete-resource"
+                      />
+                    ) : null}
                   </>
                 }
               />
@@ -191,9 +215,14 @@ export function ResourceDetailPage() {
                         description={text.desc}
                         actions={
                           <StatusActionBar
-                            resourceId={resource.id}
-                            version={promotableVersion.version}
                             status={status}
+                            onTransition={(to) =>
+                              api.transitionResourceVersion(
+                                resource.id,
+                                promotableVersion.version,
+                                to,
+                              )
+                            }
                             onTransitioned={reload}
                           />
                         }
@@ -213,9 +242,14 @@ export function ResourceDetailPage() {
                         description={text.desc}
                         actions={
                           <StatusActionBar
-                            resourceId={resource.id}
-                            version={inactiveCurrent.version}
                             status="inactive"
+                            onTransition={(to) =>
+                              api.transitionResourceVersion(
+                                resource.id,
+                                inactiveCurrent.version,
+                                to,
+                              )
+                            }
                             onTransitioned={reload}
                           />
                         }
