@@ -9,6 +9,8 @@ Pfade unter `/v1/workspaces/{ws_id}` (Prefix aus `main.py`):
 - ``PATCH /wa-artifacts/{id}`` — optimistisches Block-Edit (`expected_rev`).
 - ``GET /wa-artifacts/{id}?anchor=`` — Markdown mit ``[#block_id]``-Ankern;
   `anchor` schneidet zu (Passagen-Anker → Passage, sonst der eine Block).
+- ``GET /wa-artifacts/{id}/export?format=markdown|html`` — Datei-Download
+  (`Content-Disposition: attachment`, Muster `routers/_export.py`).
 - ``GET /work-areas/{area_id}/artifacts`` — Metadaten-Liste.
 - ``DELETE /wa-artifacts/{id}`` — 204 (Chunks via FK CASCADE).
 - ``POST /wa-artifacts/{id}/promote`` — Artifact → Resource-DRAFT (Spec G,
@@ -23,7 +25,7 @@ from typing import Annotated
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
 from who2be_api.core.db import get_pool
 from who2be_api.core.rate_limit import limiter, write_limit
@@ -37,7 +39,7 @@ from who2be_api.services.entity_quota_service import enforce_entity_quota
 from who2be_api.services.mcp_limit_service import enforce_mcp_read_limit
 from who2be_api.services.resource_service import ResourceService
 from who2be_api.services.status_history_service import StatusHistoryService
-from who2be_api.services.wa_artifacts import WaArtifactService
+from who2be_api.services.wa_artifacts import ArtifactExportFormat, WaArtifactService
 from who2be_api.services.wa_promote import PromoteUnsupportedArtifact, WaPromoteService
 from who2be_models import (
     ArtifactAppend,
@@ -90,6 +92,10 @@ PromoteService = Annotated[WaPromoteService, Depends(get_wa_promote_service)]
 # — Passagen-Anker (Suchtreffer) liefern die Passage, jeder andere Anker den
 # einen Block (s. `wa_artifacts.read`).
 Anchor = Annotated[str | None, Query(min_length=1, max_length=64)]
+# Export-Format als geschlossene Literal-Allowlist (Muster `resources.py`):
+# alles ausserhalb faellt in die FastAPI-Validierung (422), bevor der Service
+# ueberhaupt laeuft.
+ExportFormat = Annotated[ArtifactExportFormat, Query()]
 
 
 @router.post("/work-areas/{area_id}/artifacts", status_code=status.HTTP_201_CREATED)
@@ -151,6 +157,43 @@ async def read_artifact(
     ein Passagen-Anker (Suchtreffer) liefert die Passage, jeder andere
     Anker genau seinen Block."""
     return await service.read(ctx, artifact_id, anchor)
+
+
+# response_model=None: die Route liefert einen Datei-`Response`, kein
+# Pydantic-Modell — FastAPI soll daraus kein Response-Model ableiten
+# (Muster `resources.export_resource`).
+@router.get(
+    "/wa-artifacts/{artifact_id}/export",
+    response_model=None,
+    dependencies=[Depends(enforce_mcp_read_limit)],
+)
+# Zusaetzlich zum Lese-Gate das write_limit (ADR-0032: Exporte laufen unter
+# dem Rate-Limit, analog dem Entity-Export).
+@limiter.limit(write_limit)
+async def export_artifact(
+    request: Request,
+    artifact_id: UUID,
+    ctx: Ctx,
+    service: Service,
+    format: ExportFormat = "markdown",
+) -> Response:
+    """Artifact als Datei-Download: Markdown mit YAML-Frontmatter oder
+    eigenstaendiges HTML-Dokument.
+
+    Export ist LESEN (ADR-0032) — dasselbe Gate wie der Agent-Read, kein
+    `require_role`. Immer `attachment`, nie inline: der Inhalt stammt aus
+    Ingest und Agenten-Text; ein inline ausgeliefertes HTML-Dokument liefe im
+    Browser des Menschen als Seite dieser Origin."""
+    export = await service.export(ctx, artifact_id, format)
+    return Response(
+        content=export.content,
+        media_type=export.media_type,
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="who2be-artifact-{artifact_id}.{export.extension}"'
+            )
+        },
+    )
 
 
 @router.get("/work-areas/{area_id}/artifacts", dependencies=[Depends(enforce_mcp_read_limit)])

@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 import { AreaGrants } from '../components/AreaGrants'
 import { ArtifactList } from '../components/ArtifactList'
+import { TableList } from '../components/TableList'
 import { useWorkAreas } from '../hooks/useWorkAreas'
 
 export function AreaDetailPage() {
@@ -61,24 +62,31 @@ export function AreaDetailPage() {
                 />
               ) : null}
             </Stack>
-            {isShared ? (
-              <Tabs defaultValue="artifacts">
-                <TabsList aria-label={t('detail.tabArtifacts')}>
-                  <TabsTrigger value="artifacts">{t('detail.tabArtifacts')}</TabsTrigger>
+            {/* Inhalte und Tabellen gibt es in JEDEM Bereich — Tabellen legen
+                Agenten sogar bevorzugt in ihrem privaten an. Nur der
+                Zugriffs-Tab bleibt geteilten Bereichen vorbehalten: private
+                Areas sind serverseitig nicht grantbar (403 `area_forbidden`),
+                ein Tab dorthin waere eine Sackgasse. */}
+            <Tabs defaultValue="artifacts">
+              <TabsList aria-label={t('detail.tabArtifacts')}>
+                <TabsTrigger value="artifacts">{t('detail.tabArtifacts')}</TabsTrigger>
+                <TabsTrigger value="tables">{t('tables.tab')}</TabsTrigger>
+                {isShared ? (
                   <TabsTrigger value="grants">{t('detail.tabGrants')}</TabsTrigger>
-                </TabsList>
-                <TabsContent value="artifacts">
-                  <ArtifactList areaId={area.id} />
-                </TabsContent>
+                ) : null}
+              </TabsList>
+              <TabsContent value="artifacts">
+                <ArtifactList areaId={area.id} />
+              </TabsContent>
+              <TabsContent value="tables">
+                <TableList areaId={area.id} />
+              </TabsContent>
+              {isShared ? (
                 <TabsContent value="grants">
                   <AreaGrants areaId={area.id} />
                 </TabsContent>
-              </Tabs>
-            ) : (
-              // Private Areas sind nicht grantbar (403 `area_forbidden`) — ein
-              // Zugriffs-Tab waere hier nur eine Sackgasse.
-              <ArtifactList areaId={area.id} />
-            )}
+              ) : null}
+            </Tabs>
           </Stack>
         ) : null}
       </DataView>

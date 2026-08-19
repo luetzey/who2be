@@ -4,7 +4,17 @@ import type { ReactElement } from 'react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { vi } from 'vitest'
 
-import type { Agent, KbNode, Me, WaArtifact, WorkArea, WorkAreaGrant } from '@/api/types'
+import type {
+  Agent,
+  KbNode,
+  Me,
+  TableDescription,
+  TableQueryResult,
+  WaArtifact,
+  WaTable,
+  WorkArea,
+  WorkAreaGrant,
+} from '@/api/types'
 import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
 import { SessionContext } from '@/auth/session-context'
 
@@ -96,6 +106,56 @@ export function agent(overrides: Partial<Agent> = {}): Agent {
     missing: [],
     created_at: '2026-08-01T10:00:00Z',
     updated_at: '2026-08-01T10:00:00Z',
+    ...overrides,
+  }
+}
+
+// Tabellen-Store (ADR-0049). `occurred_at` ist Pflicht-Systemspalte jeder
+// Tabelle — die Vorschau sortiert danach, das Fixture traegt sie deshalb mit.
+export function waTable(overrides: Partial<WaTable> = {}): WaTable {
+  return {
+    id: 'tbl-1',
+    workspace_id: 'ws-1',
+    area_id: 'area-1',
+    name: 'preisliste',
+    schema: {
+      columns: [
+        { name: 'occurred_at', type: 'timestamp', nullable: false },
+        { name: 'produkt', type: 'text', nullable: false },
+        { name: 'preis', type: 'numeric', nullable: true },
+      ],
+      dedupe_columns: ['produkt'],
+      match_column: 'produkt',
+      category_column: 'kategorie',
+    },
+    // Im Katalog-Pfad immer null — die Zeilenzahl kommt erst aus describe.
+    row_count: null,
+    created_at: '2026-08-01T10:00:00Z',
+    updated_at: '2026-08-01T10:00:00Z',
+    ...overrides,
+  }
+}
+
+export function tableDescription(overrides: Partial<TableDescription> = {}): TableDescription {
+  return {
+    schema: waTable().schema,
+    row_count: 128,
+    column_stats: {},
+    conventions: [],
+    ...overrides,
+  }
+}
+
+export function tableQueryResult(overrides: Partial<TableQueryResult> = {}): TableQueryResult {
+  return {
+    columns: ['occurred_at', 'produkt', 'preis'],
+    rows: [
+      ['2026-08-05T00:00:00Z', 'Basis-Lizenz', 49],
+      ['2026-08-04T00:00:00Z', 'Team-Lizenz', null],
+    ],
+    rendered: null,
+    row_count: 2,
+    truncated: false,
     ...overrides,
   }
 }

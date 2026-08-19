@@ -13,6 +13,10 @@ Kritische Invarianten:
 - Capability-Gate: Agent ohne `workarea_write` → 403 `missing_capability`;
   Read-Grant ohne Write-Grant → 403 `area_forbidden`;
   Mensch ohne area_id → 422 (keine private Area).
+- Datei-Export (`GET .../export?format=markdown|html`): Frontmatter +
+  ankerfreier Body als `attachment`; rohes HTML im Inhalt wird escaped
+  ausgeliefert (nie als aktives Markup); Export ist LESEN — ein Viewer darf
+  ihn ziehen.
 """
 
 from collections.abc import Callable
@@ -361,5 +365,145 @@ def test_capability_und_grant_gates(make_auth_headers: AuthFactory) -> None:
 
             # Viewer (Mensch) darf nirgends schreiben: 403 via Rollen-Gate.
             assert _create(client, prefix, viewer_auth, area_id).status_code == 403
+    finally:
+        cleanup_workspaces([owner, viewer])
+
+
+def _export(
+    client: TestClient,
+    prefix: str,
+    headers: dict[str, str],
+    artifact_id: str,
+    fmt: str,
+) -> Any:
+    return client.get(
+        f"{prefix}/wa-artifacts/{artifact_id}/export", params={"format": fmt}, headers=headers
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db")
+def test_export_markdown_traegt_frontmatter_und_keine_anker(
+    make_auth_headers: AuthFactory,
+) -> None:
+    """`format=markdown` ist der Download FUER MENSCHEN, nicht der Agent-Read.
+
+    Zwei Unterschiede zum `GET /wa-artifacts/{id}`: die Metadaten stehen als
+    YAML-Frontmatter davor (ohne sie ist ein exportiertes Dokument nicht mehr
+    einzuordnen), und die ``[#block_id]``-Anker fehlen — sie sind die
+    Adress-Sprache der Patch-API und in einer abgelegten Datei nur Rauschen.
+    """
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    prefix = f"/v1/workspaces/{ws}"
+    try:
+        with TestClient(app) as client:
+            area_id = shared_area(client, prefix, auth, "Markdown-Export")
+            # `source_system` verlangt `fetched_at` (Schatten-System-Schutz) —
+            # beide Metadaten muessen im Export wieder auftauchen.
+            created = _create(
+                client,
+                prefix,
+                auth,
+                area_id,
+                source_system="notion",
+                fetched_at="2026-08-05T09:00:00Z",
+            )
+            assert created.status_code == 201, created.text
+            artifact_id = created.json()["id"]
+
+            exported = _export(client, prefix, auth, artifact_id, "markdown")
+            assert exported.status_code == 200, exported.text
+            assert exported.headers["content-type"] == "text/markdown; charset=utf-8"
+            assert exported.headers["content-disposition"] == (
+                f'attachment; filename="who2be-artifact-{artifact_id}.md"'
+            )
+
+            body = exported.text
+            assert body.startswith("---\n")
+            assert 'title: "Notiz"' in body
+            assert "2026-08-01T12:00:00" in body  # occurred_at
+            assert 'source_system: "notion"' in body
+            assert "exported_at:" in body
+
+            # Body: der Inhalt, aber OHNE Anker-Annotation.
+            assert "# Kapitel" in body
+            assert "Erster Absatz." in body
+            assert "[#" not in body
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db")
+def test_export_html_escapt_rohes_markup(make_auth_headers: AuthFactory) -> None:
+    """Rohes HTML im Artifact darf im Export NIE aktiv werden.
+
+    Artifact-Inhalte stammen aus Ingest und Agenten-Text — also aus fremder
+    Hand. Der HTML-Export ist die eine Stelle, an der dieser Text im BROWSER
+    eines Menschen landet; ein durchgereichtes ``<script>`` liefe dort. Der
+    Renderer laeuft deshalb mit ``html: False``, und der Download geht als
+    `attachment` raus, nie inline.
+    """
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    prefix = f"/v1/workspaces/{ws}"
+    try:
+        with TestClient(app) as client:
+            area_id = shared_area(client, prefix, auth, "HTML-Export")
+            created = _create(
+                client,
+                prefix,
+                auth,
+                area_id,
+                content_md="# Kapitel\n\n<script>alert(1)</script>",
+            )
+            assert created.status_code == 201, created.text
+            artifact_id = created.json()["id"]
+
+            exported = _export(client, prefix, auth, artifact_id, "html")
+            assert exported.status_code == 200, exported.text
+            assert exported.headers["content-type"] == "text/html; charset=utf-8"
+            assert exported.headers["content-disposition"] == (
+                f'attachment; filename="who2be-artifact-{artifact_id}.html"'
+            )
+
+            body = exported.text
+            assert "&lt;script&gt;alert(1)&lt;/script&gt;" in body
+            assert "<script>" not in body
+            assert "<h1>Notiz</h1>" in body
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db")
+def test_export_ist_lesen_und_kennt_nur_zwei_formate(make_auth_headers: AuthFactory) -> None:
+    """Export ist LESEN (ADR-0032): ein Viewer darf ihn ziehen.
+
+    Und die Format-Allowlist ist geschlossen — alles ausserhalb von
+    `markdown|html` faellt in die FastAPI-Validierung (422), bevor
+    irgendetwas gerendert wird.
+    """
+    owner = fresh_user_id()
+    viewer = fresh_user_id()
+    ws = setup_workspace(owner)
+    _add_member(ws, viewer, role="viewer")
+    auth = make_auth_headers(owner)
+    viewer_auth = make_auth_headers(viewer)
+    prefix = f"/v1/workspaces/{ws}"
+    try:
+        with TestClient(app) as client:
+            area_id = shared_area(client, prefix, auth, "Viewer-Export")
+            artifact_id = _create(client, prefix, auth, area_id).json()["id"]
+
+            viewer_export = _export(client, prefix, viewer_auth, artifact_id, "markdown")
+            assert viewer_export.status_code == 200, viewer_export.text
+            assert "Erster Absatz." in viewer_export.text
+
+            assert _export(client, prefix, auth, artifact_id, "pdf").status_code == 422
+            assert _export(client, prefix, auth, _GHOST, "markdown").status_code == 404
     finally:
         cleanup_workspaces([owner, viewer])

@@ -10,6 +10,7 @@ from who2be_api.tablestore.dedupe import row_hash
 from who2be_api.tablestore.engine import (
     DEFAULT_QUERY_TIMEOUT_MS,
     DESCRIBE_DISTINCT_CAP,
+    EXPORT_ROW_LIMIT,
     MAX_CELL_BYTES,
     MAX_RESULT_BYTES,
     AreaStoreMissingError,
@@ -38,6 +39,7 @@ __all__ = [
     "COLUMN_NAME_RE",
     "DEFAULT_QUERY_TIMEOUT_MS",
     "DESCRIBE_DISTINCT_CAP",
+    "EXPORT_ROW_LIMIT",
     "MAX_CELL_BYTES",
     "MAX_RESULT_BYTES",
     "RESERVED_COLUMN_NAMES",

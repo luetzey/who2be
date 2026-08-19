@@ -18,9 +18,9 @@ raeumt der FK ON DELETE CASCADE (0076) die Chunks ab.
 
 Zugriffslog (Spec F, WP14): jeder erfolgreiche Agent-Zugriff wird NACH der
 Operation best-effort geloggt (`services/access_log.log_access`, No-op fuer
-Menschen) — Einzel-read und alle Content-Writes als ``(artifact, read|write)``
-mit der SERVER-Sensitivity des Artifacts. Die Metadaten-LISTE loggt bewusst
-NICHT pro Treffer: sie liefert keine Inhalte, und ein Log-Eintrag je
+Menschen) — Einzel-read, Datei-`export` und alle Content-Writes als
+``(artifact, read|write)`` mit der SERVER-Sensitivity des Artifacts. Die
+Metadaten-LISTE loggt bewusst NICHT pro Treffer: sie liefert keine Inhalte, und ein Log-Eintrag je
 Listenzeile wuerde das Log mit Nicht-Zugriffen fluten.
 
 ARC-3: kein SQL, keine HTTPException — nur `ApiGateError`, Repos und die
@@ -30,6 +30,8 @@ Helper aus `core/workarea_scope`. Transaktionssteuerung (`pool.acquire` +
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from typing import Literal, NamedTuple
 from uuid import UUID
 
 import asyncpg
@@ -56,6 +58,10 @@ from who2be_api.services.access_log import log_access
 from who2be_api.services.content_locale import resolve_content_locale
 from who2be_api.services.wa_blocks import apply_patch, render_markdown, split_markdown
 from who2be_api.services.wa_chunks import passage_for_anchor, sync_artifact_chunks
+from who2be_api.services.wa_render import (
+    render_artifact_export_html,
+    render_artifact_export_markdown,
+)
 from who2be_models import (
     AgentCapability,
     ArtifactAppend,
@@ -70,6 +76,23 @@ from who2be_models import (
     WorkspaceRole,
 )
 from who2be_models.workarea import INGEST_MAX_BLOCKS
+
+# Export-Formate eines doc-Artifacts (ADR-0032-Muster: geschlossene
+# Literal-Allowlist, alles andere weist FastAPI im Router mit 422 ab).
+ArtifactExportFormat = Literal["markdown", "html"]
+
+
+class ArtifactExport(NamedTuple):
+    """Fertig gerenderter Artifact-Download plus Auslieferungs-Metadaten.
+
+    Der Service liefert Daten, der ROUTER baut daraus die `Response` samt
+    `Content-Disposition` (ARC-3: kein HTTP-Wissen im Service, Muster
+    `routers/_export.py`).
+    """
+
+    content: str
+    media_type: str
+    extension: str
 
 
 def _anchor_unresolvable(anchor: str) -> ApiGateError:
@@ -355,6 +378,45 @@ class WaArtifactService:
             rev=artifact.rev,
             markdown=render_markdown(blocks, with_anchors=True),
         )
+
+    async def export(
+        self, ctx: WorkspaceContext, artifact_id: UUID, format: ArtifactExportFormat
+    ) -> ArtifactExport:
+        """Ein Artifact als Datei-Download (Markdown mit Frontmatter | HTML).
+
+        Sichtbarkeit und doc-Verhalten sind EXAKT die von `read`: derselbe
+        `_readable`-Schnitt (nicht lesbar = nicht existent → 404), und ein
+        blob-/table-Artifact traegt keine Bloecke, liefert hier also
+        denselben leeren Body wie dort. Der Export ist ein READ und damit
+        fuer Viewer offen (ADR-0032).
+
+        Zwei bewusste Unterschiede zum Agenten-Read: die
+        ``[#block_id]``-Anker fehlen (`with_anchors=False`) — sie sind die
+        Adress-Sprache der Patch-API und in einer abgelegten Datei nur
+        Rauschen —, und die Metadaten stehen als Frontmatter davor, weil ein
+        exportiertes Dokument sonst nicht mehr einzuordnen ist. `exported_at`
+        vergibt der SERVER (nie ein Client-Wert); der fachliche Zeitpunkt
+        bleibt davon getrennt `occurred_at`.
+        """
+        artifact = await self._readable(ctx, artifact_id, include_blocks=True)
+        markdown = render_markdown(artifact.blocks or [], with_anchors=False)
+        if format == "markdown":
+            content = render_artifact_export_markdown(
+                title=artifact.title,
+                markdown=markdown,
+                occurred_at=artifact.occurred_at,
+                occurred_precision=artifact.occurred_precision,
+                sensitivity=artifact.sensitivity,
+                source_system=artifact.source_system,
+                source_url=artifact.source_url,
+                exported_at=datetime.now(tz=UTC),
+            )
+            media_type, extension = "text/markdown; charset=utf-8", "md"
+        else:
+            content = render_artifact_export_html(title=artifact.title, markdown=markdown)
+            media_type, extension = "text/html; charset=utf-8", "html"
+        await self._log(ctx, artifact_id, "read", artifact.sensitivity)
+        return ArtifactExport(content=content, media_type=media_type, extension=extension)
 
     async def list_for_area(self, ctx: WorkspaceContext, area_id: UUID) -> list[ArtifactRead]:
         """Artifacts einer Area (Metadaten); fehlender Read-Grant → 404.

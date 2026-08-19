@@ -10,6 +10,7 @@ import type {
   AgentRenderFormat,
   AgentRenderResult,
   AgentUpdateInput,
+  ArtifactExportFormat,
   ArtifactMarkdown,
   CheckoutInput,
   CheckoutResult,
@@ -72,6 +73,10 @@ import type {
   SystemPromptTemplate,
   SystemPromptTemplateInput,
   SystemPromptTemplateVersion,
+  TableDescription,
+  TableExportFormat,
+  TableQueryInput,
+  TableQueryResult,
   Token,
   TokenCreated,
   TokenInput,
@@ -79,6 +84,7 @@ import type {
   VersionDiff,
   VersionStatus,
   WaArtifact,
+  WaTable,
   WorkArea,
   WorkAreaCreateInput,
   WorkAreaGrant,
@@ -172,6 +178,34 @@ async function requestText(
     throw new ApiError(response.status, message, body)
   }
   return response.text()
+}
+
+// Wie `request`, gibt aber den Roh-Body als Blob zurueck — fuer Downloads,
+// deren Format Binaerdaten sein kann (XLSX-Tabellen-Export). Aus
+// Einheitlichkeit gilt derselbe Helper auch fuer die reinen Text-Exporte
+// (CSV/Markdown/HTML): der Aufrufer (`downloadFile`) braucht nur einen Blob,
+// egal ob binaer oder Text. Fehler-Handling identisch zu `request`.
+async function requestBlob(token: string, path: string, init?: RequestInit): Promise<Blob> {
+  const headers: Record<string, string> = {
+    'Accept-Language': i18n.resolvedLanguage ?? i18n.language ?? DEFAULT_LOCALE,
+    ...(init?.headers as Record<string, string> | undefined),
+  }
+  if (token !== '') {
+    headers.Authorization = `Bearer ${token}`
+  }
+  let response: Response
+  const url = `${config.apiBaseUrl}${path}`
+  try {
+    response = await fetch(url, { ...init, headers })
+  } catch (cause) {
+    console.error(`Who2Be-API nicht erreichbar: ${init?.method ?? 'GET'} ${url}`, cause)
+    throw new ApiError(0, 'Who2Be-API nicht erreichbar.')
+  }
+  if (!response.ok) {
+    const { message, body } = await readErrorBody(response)
+    throw new ApiError(response.status, message, body)
+  }
+  return response.blob()
 }
 
 // Einzel-Element-Export (Plan 2026-06-05). `json` liefert ein geparstes Objekt,
@@ -505,6 +539,17 @@ export interface Api {
   listWaArtifacts: (areaId: string) => Promise<WaArtifact[]>
   readWaArtifact: (artifactId: string, anchor?: string) => Promise<ArtifactMarkdown>
   deleteWaArtifact: (artifactId: string) => Promise<void>
+  // Export eines einzelnen Artifacts als Datei-Download (naechste
+  // Backend-Welle — Endpoint existiert im OpenAPI-Golden noch nicht).
+  exportWaArtifact: (artifactId: string, format: ArtifactExportFormat) => Promise<Blob>
+  // Tabellen-Store (ADR-0049): Katalog-Liste je Area, Beschreibung mit
+  // Spalten-Statistik, read-only SQL-Query und Datei-Export.
+  listWaTables: (areaId: string) => Promise<WaTable[]>
+  describeWaTable: (tableId: string) => Promise<TableDescription>
+  queryWaTable: (tableId: string, input: TableQueryInput) => Promise<TableQueryResult>
+  // Export einer Tabelle als Datei-Download (naechste Backend-Welle —
+  // Endpoint existiert im OpenAPI-Golden noch nicht).
+  exportWaTable: (tableId: string, format: TableExportFormat) => Promise<Blob>
   // Passagen-Suche: liefert Anker + Snippet, nie ganze Dokumente. Ausserhalb
   // des Lese-Scopes ist das Ergebnis leer (kein Existenz-Orakel).
   searchWorkArea: (filters: {
@@ -996,6 +1041,18 @@ export function createApi(token: string, workspaceId: string): Api {
     },
     deleteWaArtifact: (artifactId) =>
       request<void>(token, `${ws}/wa-artifacts/${artifactId}`, { method: 'DELETE' }),
+    exportWaArtifact: (artifactId, format) =>
+      requestBlob(token, `${ws}/wa-artifacts/${artifactId}/export?format=${format}`),
+    listWaTables: (areaId) => request<WaTable[]>(token, `${ws}/work-areas/${areaId}/tables`),
+    describeWaTable: (tableId) =>
+      request<TableDescription>(token, `${ws}/wa-tables/${tableId}`),
+    queryWaTable: (tableId, input) =>
+      request<TableQueryResult>(token, `${ws}/wa-tables/${tableId}/query`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    exportWaTable: (tableId, format) =>
+      requestBlob(token, `${ws}/wa-tables/${tableId}/export?format=${format}`),
     searchWorkArea: (filters) => {
       const params = new URLSearchParams({ q: filters.q })
       if (filters.area_id) params.set('area_id', filters.area_id)

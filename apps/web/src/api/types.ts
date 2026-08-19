@@ -1318,3 +1318,96 @@ export interface KbSearchHit {
   status: NodeStatus
   score: number
 }
+
+// ---------------------------------------------------------------------------
+// Tabellen-Store (ADR-0049). Spiegelt
+// `packages/models/src/who2be_models/tables.py`. Eine Tabelle liegt als
+// SQLite-Datei je WorkArea; Postgres traegt nur den Katalog (`schema_json`).
+// Wire-Feld heisst `schema` (Python-Alias fuer `schema_`, weil `.schema`
+// bei Pydantic-Modellen belegt ist) — hier direkt als `schema` typisiert.
+// ---------------------------------------------------------------------------
+
+// Typen-Allowlist der Tabellen-Spalten — bewusst klein (kein blob/json).
+export type TableColumnType = 'text' | 'integer' | 'numeric' | 'date' | 'timestamp' | 'boolean'
+
+export interface TableColumn {
+  // SQL-sicherer Identifier (`^[a-z][a-z0-9_]*$`) — geht verbatim in DDL ein.
+  name: string
+  type: TableColumnType
+  nullable: boolean
+}
+
+export interface TableSchema {
+  columns: TableColumn[]
+  // Spalten fuer den idempotenten Zeilen-Import (Dedupe-Hash).
+  dedupe_columns: string[]
+  // Kategorisierungs-Eingang (Regel-Matching).
+  match_column: string | null
+  // Kategorisierungs-Ziel.
+  category_column: string | null
+}
+
+// Eine Tabelle im aktuellen Stand (`GET .../work-areas/{id}/tables` |
+// `wa_table`). `row_count` ist im Listen-Pfad null; der describe-Pfad
+// (`TableDescription`) befuellt die Zeilenzahl separat.
+export interface WaTable {
+  id: string
+  workspace_id: string
+  area_id: string
+  name: string
+  schema: TableSchema
+  row_count: number | null
+  created_at: string
+  updated_at: string
+}
+
+// Quell-Konvention (Einheiten, Notation, Dezimal-/Datumsformat einer
+// Importquelle) — Pflicht, sobald ein Import `source_name` setzt.
+export interface SourceConvention {
+  id: string
+  area_id: string
+  source_name: string
+  convention: Record<string, unknown>
+  // Mensch, der die Konvention gesetzt hat (null = System-Seed).
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+// Antwort von `GET .../wa-tables/{id}` (describe) — Kontext fuer Agenten und
+// die UI, ohne Rohdaten-Dump. `column_stats` liefert pro Spalte
+// Wertebereiche/Verteilung (z. B. min, max, distinct) aus der SQLite-Datei.
+export interface TableDescription {
+  schema: TableSchema
+  row_count: number
+  column_stats: Record<string, Record<string, unknown>>
+  conventions: SourceConvention[]
+}
+
+// Ausgabeformat einer Tabellen-Query (agentengerecht).
+export type TableQueryFormat = 'json' | 'markdown' | 'csv'
+
+// Eingabe fuer `POST .../wa-tables/{id}/query` — read-only SQL. `format`
+// default `json` serverseitig, `limit` default 200 (Zeilen-Cap).
+export interface TableQueryInput {
+  sql: string
+  format?: TableQueryFormat
+  limit?: number
+}
+
+// Ergebnis einer Tabellen-Query. `rows` ist bei `format='json'` gefuellt,
+// `rendered` bei markdown/csv — genau eine der beiden Darstellungen.
+// `truncated` zeigt an, dass das Zeilen-Cap (`limit`) das Ergebnis
+// beschnitten hat.
+export interface TableQueryResult {
+  columns: string[]
+  rows: unknown[][] | null
+  rendered: string | null
+  row_count: number
+  truncated: boolean
+}
+
+// Export-Formate fuer Tabellen- bzw. Artifact-Downloads (Binaer-/Text-Blob,
+// naechste Backend-Welle — Client-Methoden existieren bereits).
+export type TableExportFormat = 'csv' | 'xlsx'
+export type ArtifactExportFormat = 'markdown' | 'html'

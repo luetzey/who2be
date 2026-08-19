@@ -179,6 +179,11 @@ const ArtifactDetailPage = lazy(() =>
     default: mod.ArtifactDetailPage,
   })),
 )
+const TableDetailPage = lazy(() =>
+  import('@/features/workarea/pages/TableDetailPage').then((mod) => ({
+    default: mod.TableDetailPage,
+  })),
+)
 const WorkAreaSearchPage = lazy(() =>
   import('@/features/workarea/pages/WorkAreaSearchPage').then((mod) => ({
     default: mod.WorkAreaSearchPage,
@@ -355,6 +360,12 @@ export function RouterRoot() {
                   <Route
                     path="/w/:workspaceId/workarea/areas/:areaId/artifacts/:artifactId"
                     element={<ArtifactDetailPage />}
+                  />
+                  {/* Bereichs-geschachtelt, weil nur der Katalog der Area den
+                      Tabellennamen traegt (describe liefert ihn nicht). */}
+                  <Route
+                    path="/w/:workspaceId/workarea/areas/:areaId/tables/:tableId"
+                    element={<TableDetailPage />}
                   />
                   {/* Bereichslos: Ziel der KB-Belege (`artifact:<uuid>#<block>`
                       kennt die Area nicht). Zeigt Inhalt + Anker ohne die

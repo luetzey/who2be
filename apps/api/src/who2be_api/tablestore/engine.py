@@ -95,6 +95,14 @@ MAX_CELL_BYTES: Final = 1_000_000
 # grosszuegig gegenueber dem Artifact-Content-Cap und trotzdem beschraenkt.
 MAX_RESULT_BYTES: Final = 2_000_000
 
+# Zeilen-Cap des Export-Lesepfads (`read_table_rows`). Das Byte-Budget oben
+# deckelt die Ausgabe ohnehin; der Row-Cap haelt zusaetzlich die in-memory
+# XLSX-Erzeugung des Export-Endpoints in gebundenem Speicher (viele kleine
+# Zellen sind byte-guenstig, aber teuer je Zeile). Bewusst weit ueber dem
+# Query-Limit 1000 der UI-Preview: ein Export soll die Tabelle abbilden,
+# nicht nur ihren Anfang.
+EXPORT_ROW_LIMIT: Final = 10_000
+
 # Authorizer-Allowlist (ADR-0049, Entscheidung 2): SELECT + Spalten-READ +
 # RECURSIVE (WITH RECURSIVE-CTEs, konkret verifiziert: ohne SQLITE_RECURSIVE
 # scheitern rekursive CTEs). SQLITE_FUNCTION steht bewusst NICHT hier —
@@ -491,6 +499,48 @@ class TableStore:
         """
         if limit < 1:
             raise ValueError("limit muss >= 1 sein.")
+        path = self.db_path(workspace_id, area_id)
+        return await asyncio.to_thread(self._run_readonly_query_sync, path, sql, limit)
+
+    async def read_table_rows(
+        self,
+        workspace_id: UUID,
+        area_id: UUID,
+        table: str,
+        columns: Sequence[str],
+        limit: int = EXPORT_ROW_LIMIT,
+    ) -> QueryResult:
+        """Alle Zeilen einer Tabelle — Lesepfad des Tabellen-Exports (ADR-0049).
+
+        Der SQL-Bau lebt HIER und nicht im Service (ARC-3): Services kennen
+        kein SQL, der Store ist die einzige Stelle, die Identifier gegen die
+        Allowlist (`tablestore/schema.py`) validiert und quotet. Selektiert
+        werden die uebergebenen Katalog-Spalten EXPLIZIT — ein ``SELECT *``
+        wuerde auch die internen Store-Spalten `_dedupe_hash` /
+        `_source_artifact` in die Export-Datei eines Menschen tragen.
+        Sortiert wird nach ``"occurred_at"`` — Pflicht-Systemspalte jeder
+        Tabelle (Timeline-Anforderung N), die Reihenfolge des Exports ist
+        damit fachlich (und nicht Insert-Reihenfolge oder rowid).
+
+        Ausgefuehrt wird ueber denselben ro-Pfad wie das freie Agenten-SQL:
+        es gelten unveraendert Zeitbudget (H1), Zell-Limit `MAX_CELL_BYTES`
+        (H2a) und Result-Budget `MAX_RESULT_BYTES` (H2b) — ein Export ist
+        sonst der bequemste Weg, an den Query-Grenzen vorbei Speicher zu
+        ziehen. Fehlerbild deshalb identisch: `QueryTimeout`,
+        `ResultTooLarge`, `AreaStoreMissingError`, sonstige SQL-Fehler (z. B.
+        unbekannte Tabelle) als rohe ``sqlite3``-Exception.
+
+        `truncated=True` im `QueryResult` heisst: der Zeilen-Cap hat gegriffen,
+        der Export waere UNVOLLSTAENDIG. Ob das ein Fehler ist oder nur eine
+        Warnung am Download, entscheidet der Aufrufer — der Store meldet nur
+        den Fakt.
+        """
+        if limit < 1:
+            raise ValueError("limit muss >= 1 sein.")
+        if not columns:
+            raise ValueError("columns darf nicht leer sein.")
+        select_list = ", ".join(quote_identifier(validate_column_name(c)) for c in columns)
+        sql = f'SELECT {select_list} FROM {quote_identifier(table)} ORDER BY "occurred_at"'
         path = self.db_path(workspace_id, area_id)
         return await asyncio.to_thread(self._run_readonly_query_sync, path, sql, limit)
 

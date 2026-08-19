@@ -627,3 +627,65 @@
     scroll-behavior: auto !important;
   }
 }
+
+/*
+ * Druck-Stylesheet ("Als PDF drucken", ArtifactDetailPage-Export). Ziel: die
+ * Browser-Druckvorschau zeigt den Inhalt, nicht das App-Chrome.
+ *
+ * AppShell und WorkAreaLayout duerfen dafuer nicht angefasst werden — deshalb
+ * hier ueber eine kleine Zahl robuster Element-Selektoren statt Klassen in
+ * jenen Dateien. Seiten-eigene Aktionen (Export-Dropdown, Loeschen-Button,
+ * Anker-Kopieren) tragen stattdessen direkt im JSX die Tailwind-v4-Variante
+ * `print:hidden` — das ist der saubere Weg fuer alles, was die Seite selbst
+ * kontrolliert.
+ */
+@media print {
+  /*
+   * Helle Flaechen erzwingen: ohne das druckt Chromium im Dark Mode dunkle
+   * Flaechen (heller Text auf "transparentem" Hintergrund wird auf Papier
+   * unlesbar bzw. verschwendet Toner).
+   */
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  /*
+   * App-Chrome der AppShell: Sidebar-Navigation (`<aside>`) und der obere
+   * Header-Balken. Ein blosses `header`-Selektor waere zu breit — Detail-
+   * Seiten (u. a. `DetailHeader`, `PageHeader`) rendern selbst ein
+   * `<header>` fuer Titel + Badges, das beim Drucken sichtbar bleiben soll.
+   * `.h-14` ist im Markup einzig der AppShell-Header-Balken (siehe
+   * `components/layout/AppShell.tsx`) und trennt die beiden Faelle.
+   */
+  aside,
+  header.h-14,
+  footer {
+    display: none !important;
+  }
+
+  /*
+   * Radix rendert Dropdown-/Menue-Inhalte per Portal direkt unter `<body>` —
+   * ausserhalb jedes `print:hidden`-Containers im Seiten-Markup. Ohne diese
+   * Regel bliebe ein zufaellig offenes Menue (z. B. der Export-Dropdown) beim
+   * Drucken sichtbar.
+   */
+  [role='menu'] {
+    display: none !important;
+  }
+
+  /* Inhalt nutzt die volle Druckbreite statt der Admin-Page-Spalte. */
+  .max-w-5xl {
+    max-width: none !important;
+  }
+
+  /*
+   * Cards ohne Schatten/Rahmen: auf Papier grenzt der umgebende Weissraum
+   * die Flaeche ab, der Shadow-Stack (design-language.md §6) ist ein reines
+   * Bildschirm-Konzept.
+   */
+  .shadow-card {
+    box-shadow: none !important;
+    border-color: transparent !important;
+  }
+}

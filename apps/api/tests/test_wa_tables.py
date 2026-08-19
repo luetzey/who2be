@@ -11,6 +11,10 @@ Kritische Invarianten:
   403 `query_not_readonly`; ein Aggregat ueber 10.000 Zeilen liefert NUR
   Aggregatzeilen (row_count 1, keine Rohzeilen in der Antwort).
 - Formate: markdown/csv via `rendered`; `limit` deckelt + `truncated`.
+- Datei-Export (`GET .../export?format=csv|xlsx`): Download mit
+  `Content-Disposition: attachment`, Formel-Guard auch im Download,
+  XLSX als echte Arbeitsmappe; ein gerissener Zeilen-Cap ist 413 mit
+  nennbarem Workaround statt eines stillen Teil-Exports.
 - Gates (H1-Muster): Agent ohne Grant → 404 (kein Existenz-Leak), Read-Grant
   ohne Write → 403 `area_forbidden`, ohne Capability → 403
   `missing_capability`, viewer-Agent-Token → 403 `insufficient_role`;
@@ -20,6 +24,7 @@ Laeuft gegen echte Postgres (Katalog) + tmp-TableStore (`set_table_store`,
 frische Instanz je Test — die per-Area-Locks binden an die Test-Loop).
 """
 
+import io
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
@@ -28,9 +33,13 @@ from uuid import UUID
 import pytest
 from fastapi.testclient import TestClient
 
+# openpyxl liefert keine Typ-Stubs (kein `py.typed`) — eng begrenzte Ausnahme
+# an genau dieser Import-Zeile, wie in `services/wa_render.py`.
+from openpyxl import load_workbook  # type: ignore[import-untyped]
+
 from who2be_api.main import app
 from who2be_api.services.tablestore_provider import reset_table_store, set_table_store
-from who2be_api.tablestore import MAX_CELL_BYTES, TableStore
+from who2be_api.tablestore import EXPORT_ROW_LIMIT, MAX_CELL_BYTES, QueryResult, TableStore
 from who2be_api.testing.api_helpers import agent_token, grant, shared_area
 from who2be_api.testing.workspace_setup import (
     cleanup_workspaces,
@@ -119,6 +128,29 @@ def _query(
     body: dict[str, Any] = {"sql": sql}
     body.update(overrides)
     return client.post(f"{prefix}/wa-tables/{table_id}/query", json=body, headers=headers)
+
+
+def _export(
+    client: TestClient,
+    prefix: str,
+    headers: dict[str, str],
+    table_id: str,
+    fmt: str,
+) -> Any:
+    return client.get(
+        f"{prefix}/wa-tables/{table_id}/export", params={"format": fmt}, headers=headers
+    )
+
+
+# Zelle, die eine Tabellenkalkulation als FORMEL liest (OWASP CSV Injection).
+# Der Guard sitzt im Renderer; die Export-Tests pruefen, dass er den ganzen
+# Weg bis in die heruntergeladene Datei ueberlebt.
+_FORMULA_ROW: dict[str, Any] = {
+    "occurred_at": "2026-08-04T07:00:00+00:00",
+    "amount": 7,
+    "purpose": "=SUMME(A1)",
+    "account": "giro",
+}
 
 
 @pytest.mark.integration
@@ -676,5 +708,244 @@ def test_uebergrosse_zelle_wird_beim_schreiben_abgewiesen(make_auth_headers: Aut
             )
             assert readable.status_code == 200, readable.text
             assert len(readable.json()["rows"]) == 3
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db", "table_store")
+def test_export_csv_liefert_download_mit_formel_guard(make_auth_headers: AuthFactory) -> None:
+    """`GET .../export?format=csv` ist ein DOWNLOAD, kein JSON-Body.
+
+    Geprueft wird die ganze Kette bis zur Datei: Content-Type, `attachment`
+    mit sprechendem Dateinamen, Kopfzeile aus dem Katalog-Schema, die
+    importierten Werte — und dass der Formel-Guard (`csv_cell`) auch im
+    Download greift. Der Guard nuetzt nichts, wenn er nur im
+    `rendered`-Feld der Query sitzt: der Angriffspfad ist genau die Datei,
+    die ein Mensch lokal oeffnet.
+    """
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    prefix = f"/v1/workspaces/{ws}"
+    try:
+        with TestClient(app) as client:
+            area_id = shared_area(client, prefix, auth, "CSV-Export")
+            table_id = _create_table(client, prefix, auth, area_id).json()["id"]
+            imported = _insert(client, prefix, auth, table_id, [*_ROWS, _FORMULA_ROW])
+            assert imported.status_code == 200, imported.text
+
+            exported = _export(client, prefix, auth, table_id, "csv")
+            assert exported.status_code == 200, exported.text
+            assert exported.headers["content-type"] == "text/csv; charset=utf-8"
+            assert exported.headers["content-disposition"] == (
+                f'attachment; filename="who2be-table-{table_id}.csv"'
+            )
+
+            lines = exported.text.splitlines()
+            assert lines[0].split(",")[:4] == ["occurred_at", "amount", "purpose", "account"]
+            assert len(lines) == 5  # Kopfzeile + 4 importierte Zeilen
+            assert "Miete" in exported.text
+            assert "Kaffee" in exported.text
+
+            # Der Formel-Guard: die Zelle kommt mit fuehrendem ' an, nie roh.
+            assert "'=SUMME(A1)" in exported.text
+            assert ",=SUMME(A1)" not in exported.text
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db", "table_store")
+def test_export_xlsx_liefert_echte_arbeitsmappe(make_auth_headers: AuthFactory) -> None:
+    """`format=xlsx` liefert eine oeffenbare Arbeitsmappe (Zip-Magic `PK`).
+
+    Zusaetzlich zum Byte-Bild wird die Mappe wirklich geladen: nur so ist
+    belegt, dass der Export nicht bloss "irgendein Binaerblob" ist, sondern
+    Kopfzeile und Werte an der erwarteten Stelle traegt — inklusive
+    Formel-Guard, denn openpyxl leitet aus einem `=`-Praefix sonst eine
+    Formelzelle ab.
+    """
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    prefix = f"/v1/workspaces/{ws}"
+    try:
+        with TestClient(app) as client:
+            area_id = shared_area(client, prefix, auth, "XLSX-Export")
+            table_id = _create_table(client, prefix, auth, area_id).json()["id"]
+            imported = _insert(client, prefix, auth, table_id, [*_ROWS, _FORMULA_ROW])
+            assert imported.status_code == 200, imported.text
+
+            exported = _export(client, prefix, auth, table_id, "xlsx")
+            assert exported.status_code == 200, exported.text
+            assert exported.headers["content-type"] == (
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+            assert exported.headers["content-disposition"] == (
+                f'attachment; filename="who2be-table-{table_id}.xlsx"'
+            )
+            assert exported.content[:2] == b"PK"
+
+            workbook = load_workbook(io.BytesIO(exported.content))
+            sheet = workbook.worksheets[0]
+            assert sheet.title == "transactions"
+            rows = list(sheet.iter_rows(values_only=True))
+            assert rows[0][:4] == ("occurred_at", "amount", "purpose", "account")
+            purposes = [row[2] for row in rows[1:]]
+            assert "Miete" in purposes
+            # Kein Formel-Praefix in der Zelle — sonst rechnet Excel beim Oeffnen.
+            assert "'=SUMME(A1)" in purposes
+            assert "=SUMME(A1)" not in purposes
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db", "table_store")
+def test_export_gates_und_ungueltiges_format(make_auth_headers: AuthFactory) -> None:
+    """Export ist LESEN (ADR-0032): derselbe Sichtbarkeits-Schnitt wie query.
+
+    Agent ohne Grant → 404 (kein Existenz-Leak), dieselbe ID im fremden
+    Workspace → 404, ein Format ausserhalb der Literal-Allowlist → 422 aus
+    der FastAPI-Validierung (nie ein halb gerenderter Download).
+    """
+    owner = fresh_user_id()
+    other = fresh_user_id()
+    ws = setup_workspace(owner)
+    ws_other = setup_workspace(other)
+    auth = make_auth_headers(owner)
+    other_auth = make_auth_headers(other)
+    prefix = f"/v1/workspaces/{ws}"
+    try:
+        with TestClient(app) as client:
+            area_id = shared_area(client, prefix, auth, "Export-Gates")
+            table_id = _create_table(client, prefix, auth, area_id).json()["id"]
+            assert _insert(client, prefix, auth, table_id, _ROWS).status_code == 200
+
+            _, no_grant = agent_token(client, prefix, "exp-nogrant", {"workarea_write": True}, auth)
+            assert _export(client, prefix, no_grant, table_id, "csv").status_code == 404
+
+            # Read-Grant genuegt: der Export ist ein Read, kein Write.
+            ro_id, ro_tok = agent_token(client, prefix, "exp-ro", {}, auth)
+            grant(client, prefix, auth, area_id, ro_id, "read")
+            assert _export(client, prefix, ro_tok, table_id, "csv").status_code == 200
+
+            other_prefix = f"/v1/workspaces/{ws_other}"
+            assert _export(client, other_prefix, other_auth, table_id, "csv").status_code == 404
+            assert _export(client, prefix, auth, _GHOST, "csv").status_code == 404
+
+            assert _export(client, prefix, auth, table_id, "pdf").status_code == 422
+    finally:
+        cleanup_workspaces([owner, other])
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db")
+def test_export_413_wenn_der_zeilen_cap_greift(
+    make_auth_headers: AuthFactory, table_store: TableStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein gerissener Zeilen-Cap ist 413 — nie ein stiller Teil-Export.
+
+    Ein Download, dem ohne Hinweis Zeilen fehlen, ist schlimmer als gar
+    keiner: der Mensch rechnet mit einer unvollstaendigen Tabelle weiter.
+    Deshalb bricht der Export ab und nennt den Weg, der trotzdem zum Ziel
+    fuehrt (filtern per `query_table`, einfrieren per `save_query_result`).
+
+    Nachgestellt ueber den Store statt ueber {EXPORT_ROW_LIMIT} echte Zeilen:
+    die Grenze ist identisch (`truncated=True` aus derselben Engine), der
+    Test bleibt aber in Sekunden statt Minuten.
+    """
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    prefix = f"/v1/workspaces/{ws}"
+    original = table_store.read_table_rows
+
+    async def _capped(
+        workspace_id: UUID,
+        area_id: UUID,
+        table: str,
+        columns: list[str],
+        limit: int = EXPORT_ROW_LIMIT,
+    ) -> QueryResult:
+        return await original(workspace_id, area_id, table, columns, limit=1)
+
+    monkeypatch.setattr(table_store, "read_table_rows", _capped)
+    try:
+        with TestClient(app) as client:
+            area_id = shared_area(client, prefix, auth, "Export-Cap")
+            table_id = _create_table(client, prefix, auth, area_id).json()["id"]
+            assert _insert(client, prefix, auth, table_id, _ROWS).status_code == 200
+
+            too_large = _export(client, prefix, auth, table_id, "csv")
+            assert too_large.status_code == 413, too_large.text
+            problem = too_large.json()
+            assert problem["reason"] == "ingest_too_large", problem
+            assert problem["actionable_by"] == "agent", problem
+            # Der Workaround MUSS in der Meldung stehen — sonst ist der Fehler
+            # eine Sackgasse.
+            assert str(EXPORT_ROW_LIMIT) in problem["detail"], problem
+            assert "query_table" in problem["detail"], problem
+            assert "save_query_result" in problem["detail"], problem
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db", "table_store")
+def test_steuerzeichen_zelle_wird_beim_schreiben_abgewiesen(
+    make_auth_headers: AuthFactory,
+) -> None:
+    """M-2 (Security-Review 2026-08-19): XML-illegale Steuerzeichen muss der
+    Schreibpfad mit 422 ablehnen — openpyxl verweigert sie, eine einzige
+    solche Zeile machte den XLSX-Export der Tabelle sonst dauerhaft zum
+    500er (CSV liefe weiter — von aussen beobachtbar und gezielt setzbar)."""
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    prefix = f"/v1/workspaces/{ws}"
+    try:
+        with TestClient(app) as client:
+            area_id = shared_area(client, prefix, auth, "Steuerzeichen")
+            table_id = _create_table(client, prefix, auth, area_id).json()["id"]
+
+            poisoned = _insert(
+                client,
+                prefix,
+                auth,
+                table_id,
+                [
+                    {
+                        "occurred_at": "2026-08-01T12:00:00+00:00",
+                        "amount": 1,
+                        "purpose": "a\x01b",
+                        "account": "giro",
+                    }
+                ],
+            )
+            assert poisoned.status_code == 422, poisoned.text
+            assert "U+0001" in poisoned.text
+
+            # Mehrzeiliger Text bleibt legitim (Tab/LF/CR erlaubt).
+            multiline = _insert(
+                client,
+                prefix,
+                auth,
+                table_id,
+                [
+                    {
+                        "occurred_at": "2026-08-01T13:00:00+00:00",
+                        "amount": 2,
+                        "purpose": "Zeile 1\nZeile 2",
+                        "account": "giro",
+                    }
+                ],
+            )
+            assert multiline.status_code == 200, multiline.text
+
+            # Der XLSX-Export der Tabelle funktioniert.
+            exported = _export(client, prefix, auth, table_id, "xlsx")
+            assert exported.status_code == 200, exported.text
     finally:
         cleanup_workspaces([owner])
