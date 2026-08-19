@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { agent, area, artifact, grant, renderAt, stubFetch } from '../test-utils'
+import { agent, area, artifact, grant, renderAt, stubFetch, waTable } from '../test-utils'
 
 import { AreaDetailPage } from './AreaDetailPage'
 
@@ -93,6 +93,70 @@ describe('AreaDetailPage', () => {
       expect(screen.getByRole('combobox', { name: 'Recht' })).toBeDisabled()
     })
     expect(screen.getByRole('button', { name: /Entfernen/ })).toBeDisabled()
+  })
+
+  it('zeigt den Tabellen-Tab in geteilten Bereichen und listet den Katalog', async () => {
+    stubFetch([
+      ['/work-areas/area-1/tables', [waTable()]],
+      ['/work-areas/area-1/artifacts', [artifact()]],
+      ['/work-areas', [area()]],
+    ])
+    renderAt(<AreaDetailPage />, PATH, ENTRY)
+
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: 'Tabellen' })).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByRole('tab', { name: 'Tabellen' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: 'preisliste' })).toBeInTheDocument()
+    })
+    // Spaltenzahl statt Zeilenzahl: `row_count` ist im Katalog-Pfad null.
+    expect(screen.getByRole('cell', { name: '3' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'preisliste' })).toHaveAttribute(
+      'href',
+      '/w/ws-1/workarea/areas/area-1/tables/tbl-1',
+    )
+  })
+
+  it('bietet auch privaten Bereichen den Tabellen-Tab an', async () => {
+    // Gerade private Agent-Bereiche sind der Ort, an dem Tabellen entstehen —
+    // anders als Freigaben sind sie dort kein Sonderfall.
+    stubFetch([
+      ['/work-areas/area-1/tables', [waTable()]],
+      ['/work-areas/area-1/artifacts', []],
+      ['/work-areas', [area({ scope: 'private', owner_agent_id: 'agent-1' })]],
+    ])
+    renderAt(<AreaDetailPage />, PATH, ENTRY)
+
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: 'Tabellen' })).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByRole('tab', { name: 'Tabellen' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: 'preisliste' })).toBeInTheDocument()
+    })
+    expect(screen.queryByRole('tab', { name: 'Zugriffe' })).not.toBeInTheDocument()
+  })
+
+  it('zeigt einen leeren Tabellen-Katalog ohne Anlege-Aufforderung', async () => {
+    stubFetch([
+      ['/work-areas/area-1/tables', []],
+      ['/work-areas/area-1/artifacts', []],
+      ['/work-areas', [area()]],
+    ])
+    renderAt(<AreaDetailPage />, PATH, ENTRY)
+
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: 'Tabellen' })).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByRole('tab', { name: 'Tabellen' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Noch keine Tabellen')).toBeInTheDocument()
+    })
+    expect(screen.queryByRole('button', { name: /Tabelle/ })).not.toBeInTheDocument()
   })
 
   it('meldet einen nicht sichtbaren Bereich als nicht gefunden', async () => {
