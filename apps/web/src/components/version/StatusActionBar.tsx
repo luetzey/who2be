@@ -12,7 +12,9 @@ import { canTransition } from './versionStatus'
 
 interface StatusActionBarProps {
   status: VersionStatus
-  onTransition: (to: VersionStatus) => Promise<void>
+  // Promise<unknown>: die api.transition*Version-Methoden liefern teils die
+  // aktualisierte Version zurueck — die Bar ignoriert den Wert.
+  onTransition: (to: VersionStatus) => Promise<unknown>
   onTransitioned: () => void
 }
 
