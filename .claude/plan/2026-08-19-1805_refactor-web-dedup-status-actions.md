@@ -149,6 +149,23 @@ Anfassen:
 - [x] Phase 1 Hotspot-Inventar + Baseline
 - [x] Phase 2 Sicherheitsnetz: Web-Suite vollstaendig lokal, je Kopie ein Test
 - [x] Phase 3 Plan + Scope-Vertrag (dieses Dokument)
-- [ ] Welle 1 umgesetzt, Suite gruen, Commit
-- [ ] Welle 2 umgesetzt, Suite gruen, Commit
-- [ ] Phase 5 Konsolidierung: volle DoD, Metrik-Tabelle, Diff-Gegenprobe, PR + Issues, STATE/DECISIONS
+- [x] Welle 1 umgesetzt, Suite gruen, Commit `bd3ea03` (+ Typ-Nachtrag `c14cd1d`)
+- [x] Welle 2 umgesetzt, Suite gruen, Commit `7b72e38`
+- [x] Phase 5 Konsolidierung: volle DoD, Metrik-Tabelle, Diff-Gegenprobe, PR + Issues, STATE/DECISIONS
+
+## 8. Ergebnis (2026-08-19)
+
+| Metrik | Vorher | Nachher |
+| --- | --- | --- |
+| jscpd gesamt | 2,94 % · 177 Clones · 3196 Zeilen | 2,47 % · 152 Clones · 2658 Zeilen |
+| Dup-Zeilen nur Code | 2073 | 1510 (−563; Plan-Schaetzung „≥ 800" verfehlt — jscpd zaehlte Paar-Kombinationen mehrfach) |
+| Clone-Paare Ziel-Cluster | 24 Paare | **0** |
+| Web-Tests | 991 · 86,34/80,25/82,54/87,28 | 956 · 86,50/80,61/82,44/87,50 (35 Tests weniger = 13 geloeschte Kopien-Testdateien, konsolidiert in 4 geteilte) |
+| Netto-Diff | — | 54 Dateien, +934/−3232 |
+
+Funde des Laufs: Personas-/Playbooks-StatusActionBar waren nie gerendert
+(tote Komponenten, mit entfernt); beide Detail-Seiten tragen eigene
+Inline-Transition-Logik — Kandidat fuer einen Folgelauf. Deklarierte
+Abweichungen: EN `personas`-promoteTitle auf Mehrheitsfassung „Cannot
+promote"; 2 Kommentarzeilen in Workarea-Tests (Verweis auf geloeschte
+Muster-Dateien) aktualisiert.

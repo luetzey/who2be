@@ -599,6 +599,34 @@ für beide Artifact-Typen. Plan:
   (13 neu, inkl. a11y je Tab), Coverage 86,3/80,3/82,5/87,2 (Floors
   80/79/75/80), tsc/lint/build grün.
 
+### Refactoring-Lauf Web-Dedup: Status-/Entity-Aktionen (2026-08-19)
+
+Hotspot-getriebener Lauf (Playbook Refactoring-Lauf; Churn × Komplexität,
+jscpd, radon): Python nach den Aufräum-Stufen 1–3 zahm (max. C-16), der
+messbare Tech-Debt lag in per-Feature-Kopien der Web-UI. Plan:
+`.claude/plan/2026-08-19-1805_refactor-web-dedup-status-actions.md`.
+
+- **Welle 1:** 4× `StatusActionBar` + 5× Status-Lib-Kopien →
+  `components/version/` (StatusActionBar mit `onTransition`-Callback,
+  State-Machine in `versionStatus.ts`, i18n `common.statusBar.*`).
+  Nebenfund: die Personas-/Playbooks-Bars wurden nie gerendert (tote
+  Komponenten); beide Seiten haben eigene Inline-Transition-Logik —
+  Kandidat für einen Folgelauf.
+- **Welle 2:** 11 Button-Kopien (Delete ×4, Export ×4, Duplicate ×3) →
+  `components/entity/{EntityDeleteButton,EntityExportButton,
+  EntityDuplicateButton}`; entity-spezifische Texte als Props, testids
+  unverändert. Bewusst ausgelassen: `SystemPromptStatusActionBar`,
+  Agents-/Feedback-Buttons (abweichendes Verhalten).
+- **Metriken:** jscpd 2,94 % → 2,47 % (Code-Dup-Zeilen 2073 → 1510,
+  Ziel-Cluster 0 Clone-Paare); Netto −2298 Zeilen über 54 Dateien.
+  Design-Weiche in DECISIONS 2026-08-19 (User-Entscheidung Option A).
+- **Bewusst ausgelassen (Folgelauf mit DB-Umgebung):** Python-Service-
+  Duplikate (`persona_service ↔ resource_service` u. a.) und
+  `workspace_repository.py` — das Sicherheitsnetz ist DB-gebunden und in
+  der Cloud-Session ohne Postgres nicht lokal ausführbar.
+- **DoD:** eslint 0 Errors, tsc + `tsc -b` (Build) grün, 956 Vitest grün,
+  Coverage 86,50/80,61/82,44/87,50 (Floors 80/79/75/80).
+
 ## Bekannte Probleme
 
 - **Tabellen-Store-Verzeichnisse überleben den Hard-Purge** (bewusst, WP20):
