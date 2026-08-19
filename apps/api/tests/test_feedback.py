@@ -19,6 +19,7 @@ from who2be_api.core import security
 from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.migrations import MIGRATIONS_DIR, apply_migrations
 from who2be_api.main import app
+from who2be_api.testing.api_helpers import agent_token
 from who2be_api.testing.workspace_setup import cleanup_workspaces, fresh_user_id, setup_workspace
 from who2be_models import WorkspaceRole
 
@@ -488,17 +489,9 @@ def test_resolution_requires_feedback_resolve_for_agent_tokens(
     fbase = f"/v1/workspaces/{ws}"
 
     def _agent_token(client: TestClient, name: str, policy: dict[str, object]) -> dict[str, str]:
-        agent = client.post(
-            f"{fbase}/agents", json={"name": name, "tool_policy": policy}, headers=auth
-        )
-        assert agent.status_code == 201, agent.text
-        token = client.post(
-            f"{fbase}/tokens",
-            json={"name": name, "agent_id": agent.json()["id"]},
-            headers=auth,
-        )
-        assert token.status_code == 201, token.text
-        return {"Authorization": f"Bearer {token.json()['token']}"}
+        """Kurzform ueber `prefix`/`auth` dieses Tests — Logik im Helfer."""
+        _, headers = agent_token(client, fbase, name, policy, auth)
+        return headers
 
     try:
         with TestClient(app) as client:

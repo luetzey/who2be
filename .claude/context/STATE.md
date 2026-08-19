@@ -469,6 +469,34 @@ Bewusst nicht mitgelöscht: eingefrorene `save_query_result`-Artifacts (sie
 sind eigenständige Belege für bereits zitierte Zahlen) sowie Regeln und
 Konventionen, die an der Area hängen.
 
+### Aufräumen nach der WorkArea-/KB-Session (2026-08-19)
+
+Gezielt gegen die Fehlerklasse, die an diesem Wochenende dreimal zugeschlagen
+hat — *eine Sache, zwei Definitionen* (#375 doppelter Konventions-Mapper →
+500; #376 zwei Passagen-Grenzen → Treffer ohne Inhalt; #377 fast eine dritte
+FTS-Config).
+
+- **`_snippet`** lag zweimal byte-identisch vor (`kb_repository`,
+  `wa_search_repository`) → `repositories/snippet.py`. Beide Suchpfade
+  liefern „Anker + Kostprobe"; wäre die Grenze verschieden, hinge die
+  Snippet-Länge davon ab, welcher Index zufällig getroffen hat.
+- **Test-Helfer** lagen bis zu 15-fach vor — `_agent_token` in **fünf
+  verschiedenen Fassungen** (mit/ohne `role`, `prefix` vs. `base_prefix`, zwei
+  gaben nur die Header statt `(agent_id, headers)`). Jetzt einmal in
+  `who2be_api.testing.api_helpers` (neben `workspace_setup`, dem etablierten
+  Ort): `agent_token`, `shared_area`, `grant`, `db_fetchval`, `db_execute`.
+  Damit ist die `conftest.py`-Regel aus dem TST-10-Audit eingelöst („der
+  Bestand wird inkrementell abgebaut, nicht vermehrt").
+
+Diff: 221 Zeilen dazu, 691 weg. Beleg für „verhaltensneutral": **1679 Tests
+vorher wie nachher**, Coverage 91,11 %, und keine inhaltliche Assertion im
+Diff — die 46 entfernten `assert`-Zeilen sind ausschließlich die
+Setup-Prüfungen der Helfer selbst, die jetzt einmal statt fünfzehnmal stehen.
+
+Offen aus dem Aufräum-Plan: Zell-Cap im Schreibpfad, gemischte
+`_TOOLS`-Gruppen (Stufe 2); Rendering/Entschärfung aus `services/wa_tables.py`
+und SQL-Bau aus `services/wa_rules.py` (Stufe 3).
+
 ## Bekannte Probleme
 
 - **Tabellen fehlen in der Web-UI** (gefunden 2026-08-17): `features/workarea`

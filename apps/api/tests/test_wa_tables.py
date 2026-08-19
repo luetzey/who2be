@@ -31,6 +31,7 @@ from fastapi.testclient import TestClient
 from who2be_api.main import app
 from who2be_api.services.tablestore_provider import reset_table_store, set_table_store
 from who2be_api.tablestore import TableStore
+from who2be_api.testing.api_helpers import agent_token, grant, shared_area
 from who2be_api.testing.workspace_setup import (
     cleanup_workspaces,
     fresh_user_id,
@@ -83,44 +84,6 @@ def table_store(tmp_path: Path) -> Iterator[TableStore]:
     reset_table_store()
 
 
-def _agent_token(
-    client: TestClient,
-    prefix: str,
-    name: str,
-    policy: dict[str, object],
-    auth: dict[str, str],
-    *,
-    role: str | None = None,
-) -> tuple[str, dict[str, str]]:
-    agent = client.post(
-        f"{prefix}/agents", json={"name": name, "tool_policy": policy}, headers=auth
-    )
-    assert agent.status_code == 201, agent.text
-    agent_id = agent.json()["id"]
-    body: dict[str, object] = {"name": name, "agent_id": agent_id}
-    if role is not None:
-        body["role"] = role
-    token = client.post(f"{prefix}/tokens", json=body, headers=auth)
-    assert token.status_code == 201, token.text
-    return agent_id, {"Authorization": f"Bearer {token.json()['token']}"}
-
-
-def _shared_area(client: TestClient, prefix: str, auth: dict[str, str], name: str) -> str:
-    created = client.post(f"{prefix}/work-areas", json={"name": name}, headers=auth)
-    assert created.status_code == 201, created.text
-    area_id: str = created.json()["id"]
-    return area_id
-
-
-def _grant(
-    client: TestClient, prefix: str, auth: dict[str, str], area_id: str, agent_id: str, level: str
-) -> None:
-    res = client.put(
-        f"{prefix}/work-areas/{area_id}/grants/{agent_id}", json={"level": level}, headers=auth
-    )
-    assert res.status_code == 200, res.text
-
-
 def _create_table(
     client: TestClient,
     prefix: str,
@@ -169,7 +132,7 @@ def test_create_describe_roundtrip_und_namenskonflikt(make_auth_headers: AuthFac
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "Tabellen")
+            area_id = shared_area(client, prefix, auth, "Tabellen")
 
             created = _create_table(client, prefix, auth, area_id)
             assert created.status_code == 201, created.text
@@ -223,7 +186,7 @@ def test_tabelle_bleibt_auffindbar_und_ist_loeschbar(make_auth_headers: AuthFact
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "Auffindbarkeit")
+            area_id = shared_area(client, prefix, auth, "Auffindbarkeit")
             table_id = _create_table(client, prefix, auth, area_id).json()["id"]
             assert _insert(client, prefix, auth, table_id, _ROWS).status_code == 200
 
@@ -273,25 +236,23 @@ def test_delete_gates(make_auth_headers: AuthFactory) -> None:
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "Delete-Gates")
+            area_id = shared_area(client, prefix, auth, "Delete-Gates")
             table_id = _create_table(client, prefix, auth, area_id).json()["id"]
 
             # Agent mit Read-Grant + Write-Capability → 403 `area_forbidden`.
-            ro_id, ro_tok = _agent_token(
-                client, prefix, "nur-lesen", {"workarea_write": True}, auth
-            )
-            _grant(client, prefix, auth, area_id, ro_id, "read")
+            ro_id, ro_tok = agent_token(client, prefix, "nur-lesen", {"workarea_write": True}, auth)
+            grant(client, prefix, auth, area_id, ro_id, "read")
             verweigert = client.delete(f"{prefix}/wa-tables/{table_id}", headers=ro_tok)
             assert verweigert.status_code == 403, verweigert.text
             assert verweigert.json()["reason"] == "area_forbidden"
 
             # Agent OHNE Grant → 404 (die Tabelle existiert fuer ihn nicht).
-            _, fremd = _agent_token(client, prefix, "ohne-grant", {"workarea_write": True}, auth)
+            _, fremd = agent_token(client, prefix, "ohne-grant", {"workarea_write": True}, auth)
             assert client.delete(f"{prefix}/wa-tables/{table_id}", headers=fremd).status_code == 404
 
             # Write-Grant ohne Capability → 403 `missing_capability`.
-            wr_id, wr_tok = _agent_token(client, prefix, "ohne-cap", {}, auth)
-            _grant(client, prefix, auth, area_id, wr_id, "write")
+            wr_id, wr_tok = agent_token(client, prefix, "ohne-cap", {}, auth)
+            grant(client, prefix, auth, area_id, wr_id, "write")
             ohne_cap = client.delete(f"{prefix}/wa-tables/{table_id}", headers=wr_tok)
             assert ohne_cap.status_code == 403, ohne_cap.text
             assert ohne_cap.json()["reason"] == "missing_capability"
@@ -324,7 +285,7 @@ def test_describe_liefert_gesetzte_konventionen(make_auth_headers: AuthFactory) 
     convention = {"decimal_separator": ",", "date_format": "DD.MM.YYYY", "currency": "EUR"}
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "Konventionen im describe")
+            area_id = shared_area(client, prefix, auth, "Konventionen im describe")
             table_id = _create_table(client, prefix, auth, area_id).json()["id"]
 
             saved = client.put(
@@ -354,7 +315,7 @@ def test_idempotenter_import_und_row_validierung(make_auth_headers: AuthFactory)
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "Import")
+            area_id = shared_area(client, prefix, auth, "Import")
             table_id = _create_table(client, prefix, auth, area_id).json()["id"]
 
             first = _insert(client, prefix, auth, table_id, _ROWS)
@@ -411,7 +372,7 @@ def test_query_readonly_engine_garantie(make_auth_headers: AuthFactory) -> None:
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "ReadOnly")
+            area_id = shared_area(client, prefix, auth, "ReadOnly")
             table_id = _create_table(client, prefix, auth, area_id).json()["id"]
             assert _insert(client, prefix, auth, table_id, _ROWS).status_code == 200
 
@@ -448,7 +409,7 @@ def test_aggregat_ueber_10000_zeilen_ohne_rohzeilen(make_auth_headers: AuthFacto
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "Masse")
+            area_id = shared_area(client, prefix, auth, "Masse")
             table_id = _create_table(client, prefix, auth, area_id).json()["id"]
 
             total_rows = 10_000
@@ -501,7 +462,7 @@ def test_query_formate_und_truncated(make_auth_headers: AuthFactory) -> None:
     sql = 'SELECT purpose, amount FROM "transactions" ORDER BY amount'
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "Formate")
+            area_id = shared_area(client, prefix, auth, "Formate")
             table_id = _create_table(client, prefix, auth, area_id).json()["id"]
             assert _insert(client, prefix, auth, table_id, _ROWS).status_code == 200
 
@@ -547,14 +508,12 @@ def test_gates_grants_und_fremder_workspace(make_auth_headers: AuthFactory) -> N
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "Gates")
+            area_id = shared_area(client, prefix, auth, "Gates")
             table_id = _create_table(client, prefix, auth, area_id).json()["id"]
             assert _insert(client, prefix, auth, table_id, _ROWS).status_code == 200
 
             # Agent MIT Capability, aber ohne Grant: alles 404 (kein Leak).
-            _, no_grant = _agent_token(
-                client, prefix, "tbl-nogrant", {"workarea_write": True}, auth
-            )
+            _, no_grant = agent_token(client, prefix, "tbl-nogrant", {"workarea_write": True}, auth)
             sql = 'SELECT count(*) FROM "transactions"'
             assert _query(client, prefix, no_grant, table_id, sql).status_code == 404
             assert client.get(f"{prefix}/wa-tables/{table_id}", headers=no_grant).status_code == 404
@@ -565,8 +524,8 @@ def test_gates_grants_und_fremder_workspace(make_auth_headers: AuthFactory) -> N
             )
 
             # Read-Grant: query/describe ok, Schreiben 403 area_forbidden.
-            ro_id, ro_tok = _agent_token(client, prefix, "tbl-ro", {"workarea_write": True}, auth)
-            _grant(client, prefix, auth, area_id, ro_id, "read")
+            ro_id, ro_tok = agent_token(client, prefix, "tbl-ro", {"workarea_write": True}, auth)
+            grant(client, prefix, auth, area_id, ro_id, "read")
             assert _query(client, prefix, ro_tok, table_id, sql).status_code == 200
             assert client.get(f"{prefix}/wa-tables/{table_id}", headers=ro_tok).status_code == 200
             ro_insert = _insert(client, prefix, ro_tok, table_id, _ROWS)
@@ -574,8 +533,8 @@ def test_gates_grants_und_fremder_workspace(make_auth_headers: AuthFactory) -> N
             assert ro_insert.json()["reason"] == "area_forbidden"
 
             # Agent OHNE workarea_write, trotz Write-Grant: 403 missing_capability.
-            no_cap_id, no_cap = _agent_token(client, prefix, "tbl-nocap", {}, auth)
-            _grant(client, prefix, auth, area_id, no_cap_id, "write")
+            no_cap_id, no_cap = agent_token(client, prefix, "tbl-nocap", {}, auth)
+            grant(client, prefix, auth, area_id, no_cap_id, "write")
             blocked = _create_table(client, prefix, no_cap, area_id, name="zweite")
             assert blocked.status_code == 403
             assert blocked.json()["reason"] == "missing_capability"
@@ -584,10 +543,10 @@ def test_gates_grants_und_fremder_workspace(make_auth_headers: AuthFactory) -> N
             assert cap_insert.json()["reason"] == "missing_capability"
 
             # viewer-Agent-Token: Rollen-Gate VOR Capability (H1) — schreibt nie.
-            viewer_id, viewer_tok = _agent_token(
+            viewer_id, viewer_tok = agent_token(
                 client, prefix, "tbl-viewer", {"workarea_write": True}, auth, role="viewer"
             )
-            _grant(client, prefix, auth, area_id, viewer_id, "write")
+            grant(client, prefix, auth, area_id, viewer_id, "write")
             viewer_insert = _insert(client, prefix, viewer_tok, table_id, _ROWS)
             assert viewer_insert.status_code == 403
             assert viewer_insert.json()["reason"] == "insufficient_role"
@@ -649,7 +608,7 @@ def test_unbenutzbarer_store_meldet_503_statt_500(make_auth_headers: AuthFactory
 
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "kaputter-store")
+            area_id = shared_area(client, prefix, auth, "kaputter-store")
             created = _create_table(client, prefix, auth, area_id)
 
             assert created.status_code == 503, created.text

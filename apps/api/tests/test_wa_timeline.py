@@ -33,6 +33,7 @@ from fastapi.testclient import TestClient
 from who2be_api.main import app
 from who2be_api.services.tablestore_provider import reset_table_store, set_table_store
 from who2be_api.tablestore import TableStore
+from who2be_api.testing.api_helpers import agent_token, grant, shared_area
 from who2be_api.testing.workspace_setup import (
     cleanup_workspaces,
     fresh_user_id,
@@ -65,35 +66,6 @@ def table_store(tmp_path: Path) -> Iterator[TableStore]:
     set_table_store(store)
     yield store
     reset_table_store()
-
-
-def _agent_token(
-    client: TestClient, prefix: str, name: str, policy: dict[str, object], auth: dict[str, str]
-) -> tuple[str, dict[str, str]]:
-    agent = client.post(
-        f"{prefix}/agents", json={"name": name, "tool_policy": policy}, headers=auth
-    )
-    assert agent.status_code == 201, agent.text
-    agent_id = agent.json()["id"]
-    token = client.post(f"{prefix}/tokens", json={"name": name, "agent_id": agent_id}, headers=auth)
-    assert token.status_code == 201, token.text
-    return agent_id, {"Authorization": f"Bearer {token.json()['token']}"}
-
-
-def _shared_area(client: TestClient, prefix: str, auth: dict[str, str], name: str) -> str:
-    created = client.post(f"{prefix}/work-areas", json={"name": name}, headers=auth)
-    assert created.status_code == 201, created.text
-    area_id: str = created.json()["id"]
-    return area_id
-
-
-def _grant(
-    client: TestClient, prefix: str, auth: dict[str, str], area_id: str, agent_id: str, level: str
-) -> None:
-    res = client.put(
-        f"{prefix}/work-areas/{area_id}/grants/{agent_id}", json={"level": level}, headers=auth
-    )
-    assert res.status_code == 200, res.text
 
 
 def _create_artifact(
@@ -184,7 +156,7 @@ def test_bucket_nach_occurred_at_nicht_erfassungsdatum(make_auth_headers: AuthFa
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "Timeline")
+            area_id = shared_area(client, prefix, auth, "Timeline")
             artifact_id = _create_artifact(client, prefix, auth, area_id, occurred_at=_TUESDAY)
 
             res = _timeline(client, prefix, auth)
@@ -212,7 +184,7 @@ def test_merge_eine_scheibe_mit_allen_counts(make_auth_headers: AuthFactory) -> 
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "Merge")
+            area_id = shared_area(client, prefix, auth, "Merge")
             artifact_id = _create_artifact(client, prefix, auth, area_id, occurred_at=_TUESDAY)
             node_id = _create_node(client, prefix, auth, f"artifact:{artifact_id}")
             table_id = _table_with_rows(
@@ -265,7 +237,7 @@ def test_unknown_precision_nur_im_unknown_bucket(make_auth_headers: AuthFactory)
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "Unknown")
+            area_id = shared_area(client, prefix, auth, "Unknown")
             unknown_id = _create_artifact(
                 client,
                 prefix,
@@ -303,12 +275,12 @@ def test_table_quelle_ohne_grant_404(make_auth_headers: AuthFactory) -> None:
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            table_area = _shared_area(client, prefix, auth, "Tabellen-Area")
-            other_area = _shared_area(client, prefix, auth, "Andere-Area")
+            table_area = shared_area(client, prefix, auth, "Tabellen-Area")
+            other_area = shared_area(client, prefix, auth, "Andere-Area")
             table_id = _table_with_rows(client, prefix, auth, table_area, rows=[])
 
-            agent_id, agent_tok = _agent_token(client, prefix, "tl-agent", {}, auth)
-            _grant(client, prefix, auth, other_area, agent_id, "read")
+            agent_id, agent_tok = agent_token(client, prefix, "tl-agent", {}, auth)
+            grant(client, prefix, auth, other_area, agent_id, "read")
 
             denied = _timeline(client, prefix, agent_tok, sources=f"table:{table_id}")
             assert denied.status_code == 404, denied.text
@@ -319,7 +291,7 @@ def test_table_quelle_ohne_grant_404(make_auth_headers: AuthFactory) -> None:
             assert ghost.json()["detail"] == denied.json()["detail"]
 
             # Mit read-Grant auf die Tabellen-Area laeuft dieselbe Abfrage.
-            _grant(client, prefix, auth, table_area, agent_id, "read")
+            grant(client, prefix, auth, table_area, agent_id, "read")
             allowed = _timeline(client, prefix, agent_tok, sources=f"table:{table_id}")
             assert allowed.status_code == 200, allowed.text
 
@@ -340,10 +312,10 @@ def test_agent_sieht_nur_areas_mit_grant(make_auth_headers: AuthFactory) -> None
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            _, a_tok = _agent_token(client, prefix, "tl-a", {"workarea_write": True}, auth)
-            b_id, b_tok = _agent_token(client, prefix, "tl-b", {"workarea_write": True}, auth)
-            shared_id = _shared_area(client, prefix, auth, "Geteilt")
-            _grant(client, prefix, auth, shared_id, b_id, "read")
+            _, a_tok = agent_token(client, prefix, "tl-a", {"workarea_write": True}, auth)
+            b_id, b_tok = agent_token(client, prefix, "tl-b", {"workarea_write": True}, auth)
+            shared_id = shared_area(client, prefix, auth, "Geteilt")
+            grant(client, prefix, auth, shared_id, b_id, "read")
 
             private_artifact = _create_artifact(client, prefix, a_tok, None)
             shared_artifact = _create_artifact(client, prefix, auth, shared_id)
@@ -375,10 +347,10 @@ def test_node_sichtbarkeit_respektiert(make_auth_headers: AuthFactory) -> None:
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            _, a_tok = _agent_token(client, prefix, "tl-node-a", {"workarea_write": True}, auth)
-            b_id, b_tok = _agent_token(client, prefix, "tl-node-b", {"workarea_write": True}, auth)
-            shared_id = _shared_area(client, prefix, auth, "Node-Geteilt")
-            _grant(client, prefix, auth, shared_id, b_id, "read")
+            _, a_tok = agent_token(client, prefix, "tl-node-a", {"workarea_write": True}, auth)
+            b_id, b_tok = agent_token(client, prefix, "tl-node-b", {"workarea_write": True}, auth)
+            shared_id = shared_area(client, prefix, auth, "Node-Geteilt")
+            grant(client, prefix, auth, shared_id, b_id, "read")
 
             private_artifact = _create_artifact(client, prefix, a_tok, None)
             node_id = _create_node(client, prefix, auth, f"artifact:{private_artifact}")
@@ -407,7 +379,7 @@ def test_week_granularitaet_bucketet_auf_montag(make_auth_headers: AuthFactory) 
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "Wochen")
+            area_id = shared_area(client, prefix, auth, "Wochen")
             _create_artifact(client, prefix, auth, area_id, occurred_at=_TUESDAY)
             _create_artifact(client, prefix, auth, area_id, occurred_at="2026-08-05T10:00:00Z")
             _create_artifact(client, prefix, auth, area_id, occurred_at="2026-08-11T10:00:00Z")

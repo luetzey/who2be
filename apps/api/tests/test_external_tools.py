@@ -21,6 +21,7 @@ from fastapi.testclient import TestClient
 
 from who2be_api.core.config import get_settings
 from who2be_api.main import app
+from who2be_api.testing.api_helpers import agent_token
 from who2be_api.testing.workspace_setup import (
     cleanup_workspaces,
     fresh_user_id,
@@ -357,22 +358,6 @@ def test_external_tool_org_delete_cascades_tables(make_auth_headers: AuthFactory
         cleanup_workspaces([owner])
 
 
-def _agent_token(
-    client: TestClient, base_prefix: str, name: str, policy: dict[str, object], auth: dict[str, str]
-) -> dict[str, str]:
-    agent = client.post(
-        f"{base_prefix}/agents", json={"name": name, "tool_policy": policy}, headers=auth
-    )
-    assert agent.status_code == 201, agent.text
-    token = client.post(
-        f"{base_prefix}/tokens",
-        json={"name": name, "agent_id": agent.json()["id"]},
-        headers=auth,
-    )
-    assert token.status_code == 201, token.text
-    return {"Authorization": f"Bearer {token.json()['token']}"}
-
-
 @pytest.mark.usefixtures("patched_jwt_secret", "migrated_db")
 def test_external_tool_write_gates_require_capability(make_auth_headers: AuthFactory) -> None:
     """WP-3: agent-gebundene Tokens brauchen `external_tool_write` fuer Create/
@@ -387,8 +372,8 @@ def test_external_tool_write_gates_require_capability(make_auth_headers: AuthFac
             tid = client.post(base, json=_tool_body("Todoist"), headers=auth).json()["id"]
             _promote(client, base, tid, auth)
 
-            no_cap = _agent_token(client, prefix, "et-no-cap", {}, auth)
-            with_cap = _agent_token(
+            _, no_cap = agent_token(client, prefix, "et-no-cap", {}, auth)
+            _, with_cap = agent_token(
                 client, prefix, "et-with-cap", {"external_tool_write": True}, auth
             )
 
@@ -445,7 +430,7 @@ def test_external_tool_transition_requires_promote_retire_for_active(
         with TestClient(app) as client:
             tid = client.post(base, json=_tool_body("Todoist"), headers=auth).json()["id"]
 
-            write_only = _agent_token(
+            _, write_only = agent_token(
                 client, prefix, "et-write-only", {"external_tool_write": True}, auth
             )
             # draft -> review erlaubt mit external_tool_write.
@@ -461,7 +446,7 @@ def test_external_tool_transition_requires_promote_retire_for_active(
             assert denied_active.status_code == 403, denied_active.text
             assert denied_active.json()["reason"] == "missing_capability"
 
-            with_promote = _agent_token(
+            _, with_promote = agent_token(
                 client,
                 prefix,
                 "et-promote",
@@ -498,8 +483,8 @@ def test_external_tool_draft_visibility_follows_write_capability(
                 f"{base}/{tid}", json=_tool_body("Todoist", display_name="Draft-v2"), headers=auth
             )
 
-            consumer = _agent_token(client, prefix, "et-consumer", {}, auth)
-            editor_agent = _agent_token(
+            _, consumer = agent_token(client, prefix, "et-consumer", {}, auth)
+            _, editor_agent = agent_token(
                 client, prefix, "et-editor", {"external_tool_write": True}, auth
             )
 
@@ -538,7 +523,7 @@ def test_external_tool_read_scope_none_blocks_agent(make_auth_headers: AuthFacto
             tid = client.post(base, json=_tool_body("Todoist"), headers=auth).json()["id"]
             _promote(client, base, tid, auth)
 
-            blocked = _agent_token(
+            _, blocked = agent_token(
                 client, prefix, "et-blocked", {"external_tool_read": "none"}, auth
             )
             denied = client.get(f"{base}/{tid}", headers=blocked)
@@ -546,7 +531,7 @@ def test_external_tool_read_scope_none_blocks_agent(make_auth_headers: AuthFacto
             denied_list = client.get(base, headers=blocked)
             assert denied_list.status_code == 403, denied_list.text
 
-            assigned = _agent_token(
+            _, assigned = agent_token(
                 client, prefix, "et-assigned", {"external_tool_read": "assigned"}, auth
             )
             allowed = client.get(f"{base}/{tid}", headers=assigned)
@@ -586,7 +571,7 @@ def test_external_tool_export_respects_read_scope_and_draft_visibility(
             assert updated.status_code == 200, updated.text
 
             # `external_tool_read='none'`: Export in beiden Formaten gesperrt.
-            blocked = _agent_token(
+            _, blocked = agent_token(
                 client, prefix, "et-exp-blocked", {"external_tool_read": "none"}, auth
             )
             denied = client.get(f"{base}/{tid}/export", headers=blocked)
@@ -595,7 +580,7 @@ def test_external_tool_export_respects_read_scope_and_draft_visibility(
             assert denied_md.status_code == 403, denied_md.text
 
             # Konsum-Agent (Read ok, kein external_tool_write): JSON ohne Drafts.
-            consumer = _agent_token(client, prefix, "et-exp-consumer", {}, auth)
+            _, consumer = agent_token(client, prefix, "et-exp-consumer", {}, auth)
             exported = client.get(f"{base}/{tid}/export", headers=consumer)
             assert exported.status_code == 200, exported.text
             versions = exported.json()["external_tool"]["versions"]
@@ -615,7 +600,7 @@ def test_external_tool_export_respects_read_scope_and_draft_visibility(
             assert draft_md.status_code == 404, draft_md.text
 
             # Agent MIT external_tool_write behaelt die volle Versionshistorie.
-            editor_agent = _agent_token(
+            _, editor_agent = agent_token(
                 client, prefix, "et-exp-editor", {"external_tool_write": True}, auth
             )
             full = client.get(f"{base}/{tid}/export", headers=editor_agent)

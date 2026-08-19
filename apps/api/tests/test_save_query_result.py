@@ -29,6 +29,7 @@ from fastapi.testclient import TestClient
 from who2be_api.main import app
 from who2be_api.services.tablestore_provider import reset_table_store, set_table_store
 from who2be_api.tablestore import TableStore
+from who2be_api.testing.api_helpers import agent_token
 from who2be_api.testing.workspace_setup import (
     cleanup_workspaces,
     fresh_user_id,
@@ -77,23 +78,6 @@ def table_store(tmp_path: Path) -> Iterator[TableStore]:
     set_table_store(store)
     yield store
     reset_table_store()
-
-
-def _agent_token(
-    client: TestClient,
-    prefix: str,
-    name: str,
-    policy: dict[str, object],
-    auth: dict[str, str],
-) -> tuple[str, dict[str, str]]:
-    agent = client.post(
-        f"{prefix}/agents", json={"name": name, "tool_policy": policy}, headers=auth
-    )
-    assert agent.status_code == 201, agent.text
-    agent_id = agent.json()["id"]
-    token = client.post(f"{prefix}/tokens", json={"name": name, "agent_id": agent_id}, headers=auth)
-    assert token.status_code == 201, token.text
-    return agent_id, {"Authorization": f"Bearer {token.json()['token']}"}
 
 
 def _setup_table(
@@ -268,12 +252,10 @@ def test_gates_agent_ohne_grant_404_und_read_grant_403(make_auth_headers: AuthFa
         with TestClient(app) as client:
             area_id, table_id = _setup_table(client, prefix, auth, "Gates")
 
-            _, no_grant = _agent_token(
-                client, prefix, "sqr-nogrant", {"workarea_write": True}, auth
-            )
+            _, no_grant = agent_token(client, prefix, "sqr-nogrant", {"workarea_write": True}, auth)
             assert _save(client, prefix, no_grant, table_id).status_code == 404
 
-            ro_id, ro_tok = _agent_token(client, prefix, "sqr-ro", {"workarea_write": True}, auth)
+            ro_id, ro_tok = agent_token(client, prefix, "sqr-ro", {"workarea_write": True}, auth)
             granted = client.put(
                 f"{prefix}/work-areas/{area_id}/grants/{ro_id}",
                 json={"level": "read"},

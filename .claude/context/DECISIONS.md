@@ -827,3 +827,32 @@ bleiben)._
   (`get_by_name`/`delete`), `services/wa_tables` (`delete`, `_name_conflict`),
   `DELETE /wa-tables/{id}`, `tools/tables.py` + `tools/area_ref.py`;
   `test_wa_tables.py::test_tabelle_bleibt_auffindbar_und_ist_loeschbar`.
+
+## 2026-08-19 — Test-Helfer liegen in `who2be_api.testing`, nicht je Testdatei
+- **Entscheidung:** Geteilte Integrationstest-Helfer (`agent_token`,
+  `shared_area`, `grant`, `db_fetchval`, `db_execute`) leben in
+  `who2be_api/testing/api_helpers.py` — als **Modul-Funktionen**, nicht als
+  Fixtures, und **nicht** als Modul im Testordner.
+- **Begründung, drei Teile:**
+  1. *Keine Fixtures:* die Helfer brauchen den `TestClient`, den jeder Test
+     selbst als Kontextmanager aufmacht. Eine Fixture könnte ihn nicht
+     einfangen — sie müsste ihn als Parameter nehmen und wäre eine Funktion
+     mit Umweg. `conftest.py` bleibt für echtes Setup (JWT-Secret,
+     Migrationen, Auth-Header-Factory).
+  2. *Nicht im Testordner:* `apps/api/tests/helpers.py` löst pytest auf
+     (Testverzeichnis landet auf `sys.path`), **mypy aber nicht** — dort ist
+     es kein Paket. Statt mypy zu konfigurieren, liegt der Helfer neben
+     `workspace_setup` im `testing`-Paket, das das Repo dafür schon hat.
+  3. *Union statt kleinstem Nenner:* `agent_token` gibt IMMER
+     `(agent_id, headers)` zurück und nimmt optional `role` — die Vereinigung
+     der fünf vorgefundenen Fassungen. Aufrufer, die nur die Header brauchen,
+     entpacken.
+- **Anlass:** `_agent_token` lag in 15 Dateien in fünf Fassungen vor. Jede war
+  für ihren Testfall plausibel; in Summe gab es keine gemeinsame Wahrheit mehr
+  darüber, wie ein Agent-Token im Test entsteht.
+- **Prüfregel für solche Umbauten:** verhaltensneutral heißt *gleiche
+  Testzahl, keine geänderte Assertion*. Beides wurde nachgezählt (1679 vorher
+  wie nachher; die einzigen `assert`-Zeilen im Diff sind die Setup-Prüfungen
+  der Helfer selbst) — nicht behauptet.
+- **Detail:** `who2be_api/testing/api_helpers.py`,
+  `repositories/snippet.py`; 18 Testdateien (+221/−691).

@@ -21,6 +21,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from who2be_api.main import app
+from who2be_api.testing.api_helpers import agent_token, grant, shared_area
 from who2be_api.testing.workspace_setup import (
     cleanup_workspaces,
     fresh_user_id,
@@ -30,19 +31,6 @@ from who2be_api.testing.workspace_setup import (
 AuthFactory = Callable[[UUID], dict[str, str]]
 
 _GHOST = "00000000-0000-0000-0000-000000000000"
-
-
-def _agent_token(
-    client: TestClient, prefix: str, name: str, policy: dict[str, object], auth: dict[str, str]
-) -> tuple[str, dict[str, str]]:
-    agent = client.post(
-        f"{prefix}/agents", json={"name": name, "tool_policy": policy}, headers=auth
-    )
-    assert agent.status_code == 201, agent.text
-    agent_id = agent.json()["id"]
-    token = client.post(f"{prefix}/tokens", json={"name": name, "agent_id": agent_id}, headers=auth)
-    assert token.status_code == 201, token.text
-    return agent_id, {"Authorization": f"Bearer {token.json()['token']}"}
 
 
 def _add_member(workspace_id: UUID, user_id: UUID, role: str = "editor") -> None:
@@ -67,22 +55,6 @@ def _add_member(workspace_id: UUID, user_id: UUID, role: str = "editor") -> None
             await conn.close()
 
     asyncio.run(_run())
-
-
-def _shared_area(client: TestClient, prefix: str, auth: dict[str, str], name: str) -> str:
-    created = client.post(f"{prefix}/work-areas", json={"name": name}, headers=auth)
-    assert created.status_code == 201, created.text
-    area_id: str = created.json()["id"]
-    return area_id
-
-
-def _grant(
-    client: TestClient, prefix: str, auth: dict[str, str], area_id: str, agent_id: str, level: str
-) -> None:
-    res = client.put(
-        f"{prefix}/work-areas/{area_id}/grants/{agent_id}", json={"level": level}, headers=auth
-    )
-    assert res.status_code == 200, res.text
 
 
 def _create(
@@ -120,7 +92,7 @@ def test_treffer_mit_anker_und_snippet_end_to_end(make_auth_headers: AuthFactory
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "Falterkunde")
+            area_id = shared_area(client, prefix, auth, "Falterkunde")
             created = _create(
                 client,
                 prefix,
@@ -200,7 +172,7 @@ def test_treffer_anker_liefert_die_passage_nicht_nur_die_ueberschrift(
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "Betriebshandbuch")
+            area_id = shared_area(client, prefix, auth, "Betriebshandbuch")
             created = _create(
                 client,
                 prefix,
@@ -272,8 +244,8 @@ def test_agent_scope_filter_in_sql(make_auth_headers: AuthFactory) -> None:
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_a = _shared_area(client, prefix, auth, "Alpen")
-            area_b = _shared_area(client, prefix, auth, "Baltikum")
+            area_a = shared_area(client, prefix, auth, "Alpen")
+            area_b = shared_area(client, prefix, auth, "Baltikum")
             for area_id, title in ((area_a, "Alpen-Wanderkarte"), (area_b, "Ostsee-Wanderkarte")):
                 res = _create(
                     client,
@@ -286,14 +258,14 @@ def test_agent_scope_filter_in_sql(make_auth_headers: AuthFactory) -> None:
                 assert res.status_code == 201, res.text
 
             # Agent mit read-Grant NUR auf A: ausschliesslich A-Treffer.
-            granted_id, granted_tok = _agent_token(client, prefix, "wa-search-a", {}, auth)
-            _grant(client, prefix, auth, area_a, granted_id, "read")
+            granted_id, granted_tok = agent_token(client, prefix, "wa-search-a", {}, auth)
+            grant(client, prefix, auth, area_a, granted_id, "read")
             hits = _search(client, prefix, granted_tok, "Wanderkarte")
             assert {h["area_id"] for h in hits} == {area_a}
             assert {h["title"] for h in hits} == {"Alpen-Wanderkarte"}
 
             # Agent OHNE Grants: 0 Treffer — keine Titel, keine Snippets.
-            _, none_tok = _agent_token(client, prefix, "wa-search-none", {}, auth)
+            _, none_tok = agent_token(client, prefix, "wa-search-none", {}, auth)
             assert _search(client, prefix, none_tok, "Wanderkarte") == []
 
             # Mensch editor+: unbeschraenkt, beide Areas.
@@ -317,7 +289,7 @@ def test_viewer_sieht_nur_shared_areas(make_auth_headers: AuthFactory) -> None:
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            shared_id = _shared_area(client, prefix, auth, "Gemeinsam")
+            shared_id = shared_area(client, prefix, auth, "Gemeinsam")
             res = _create(
                 client,
                 prefix,
@@ -329,7 +301,7 @@ def test_viewer_sieht_nur_shared_areas(make_auth_headers: AuthFactory) -> None:
             assert res.status_code == 201, res.text
 
             # Agent legt ohne area_id an → private Area (Auto-Anlage).
-            _, agent_tok = _agent_token(
+            _, agent_tok = agent_token(
                 client, prefix, "wa-search-priv", {"workarea_write": True}, auth
             )
             private = _create(
@@ -366,8 +338,8 @@ def test_area_id_filter_ohne_existenz_orakel(make_auth_headers: AuthFactory) -> 
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_a = _shared_area(client, prefix, auth, "Filter-A")
-            area_b = _shared_area(client, prefix, auth, "Filter-B")
+            area_a = shared_area(client, prefix, auth, "Filter-A")
+            area_b = shared_area(client, prefix, auth, "Filter-B")
             for area_id, title in ((area_a, "Moorlehrpfad A"), (area_b, "Moorlehrpfad B")):
                 res = _create(
                     client,
@@ -389,8 +361,8 @@ def test_area_id_filter_ohne_existenz_orakel(make_auth_headers: AuthFactory) -> 
 
             # Agent mit Grant nur auf A, Filter auf (existierende) Area B:
             # leer — von einer unbekannten Area nicht unterscheidbar.
-            granted_id, granted_tok = _agent_token(client, prefix, "wa-filter", {}, auth)
-            _grant(client, prefix, auth, area_a, granted_id, "read")
+            granted_id, granted_tok = agent_token(client, prefix, "wa-filter", {}, auth)
+            grant(client, prefix, auth, area_a, granted_id, "read")
             assert _search(client, prefix, granted_tok, "Moorlehrpfad", area_id=area_b) == []
             in_scope = _search(client, prefix, granted_tok, "Moorlehrpfad", area_id=area_a)
             assert {h["area_id"] for h in in_scope} == {area_a}
@@ -410,7 +382,7 @@ def test_snippet_kappung_und_chunk_sync_nach_patch(make_auth_headers: AuthFactor
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area_id = _shared_area(client, prefix, auth, "Snippets")
+            area_id = shared_area(client, prefix, auth, "Snippets")
             filler = "Der Bergwald liegt still im Morgennebel und wartet. " * 30
             long_md = f"{filler}Mitten im Text steht der Feuersalamander. {filler}".strip()
             created = _create(

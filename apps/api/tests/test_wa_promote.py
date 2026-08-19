@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 
 from who2be_api.core.config import get_settings
 from who2be_api.main import app
+from who2be_api.testing.api_helpers import db_fetchval, shared_area
 from who2be_api.testing.workspace_setup import (
     cleanup_workspaces,
     fresh_user_id,
@@ -25,24 +26,6 @@ from who2be_api.testing.workspace_setup import (
 )
 
 AuthFactory = Callable[[UUID], dict[str, str]]
-
-
-def _db_fetchval(sql: str, *args: object) -> Any:
-    async def _run() -> Any:
-        conn = await asyncpg.connect(get_settings().database_url)
-        try:
-            return await conn.fetchval(sql, *args)
-        finally:
-            await conn.close()
-
-    return asyncio.run(_run())
-
-
-def _shared_area(client: TestClient, prefix: str, auth: dict[str, str], name: str) -> str:
-    created = client.post(f"{prefix}/work-areas", json={"name": name}, headers=auth)
-    assert created.status_code == 201, created.text
-    area_id: str = created.json()["id"]
-    return area_id
 
 
 def _artifact(
@@ -76,7 +59,7 @@ def test_promote_creates_draft_with_provenance(make_auth_headers: AuthFactory) -
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area = _shared_area(client, prefix, auth, "Team")
+            area = shared_area(client, prefix, auth, "Team")
             artifact = _artifact(client, prefix, auth, area)
             promoted = client.post(f"{prefix}/wa-artifacts/{artifact['id']}/promote", headers=auth)
             assert promoted.status_code == 201, promoted.text
@@ -92,7 +75,7 @@ def test_promote_creates_draft_with_provenance(make_auth_headers: AuthFactory) -
             assert artifact["id"] in description
             assert "2026-08-04" in description
             # … und als status_history-Note (append-only).
-            note = _db_fetchval(
+            note = db_fetchval(
                 "SELECT note FROM status_history WHERE entity_type = 'resource' "
                 "AND entity_id = $1 ORDER BY changed_at DESC LIMIT 1",
                 UUID(resource["id"]),
@@ -111,7 +94,7 @@ def test_promote_into_existing_resource_updates_draft(make_auth_headers: AuthFac
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area = _shared_area(client, prefix, auth, "Team")
+            area = shared_area(client, prefix, auth, "Team")
             artifact = _artifact(client, prefix, auth, area, content_md="Neuer Stand.")
             first = client.post(f"{prefix}/wa-artifacts/{artifact['id']}/promote", headers=auth)
             assert first.status_code == 201, first.text
@@ -144,11 +127,11 @@ def test_promote_rejects_non_doc_and_gates(make_auth_headers: AuthFactory) -> No
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            area = _shared_area(client, prefix, auth, "Team")
+            area = shared_area(client, prefix, auth, "Team")
             digest = "cd" * 32
             # blob-Artifact direkt anlegen (Superuser, an der API vorbei).
             asyncio.run(_insert_blob_artifact(ws, UUID(area), digest))
-            blob_id = _db_fetchval(
+            blob_id = db_fetchval(
                 "SELECT id FROM wa_artifact WHERE workspace_id = $1 AND type = 'blob'", ws
             )
             rejected = client.post(f"{prefix}/wa-artifacts/{blob_id}/promote", headers=auth)

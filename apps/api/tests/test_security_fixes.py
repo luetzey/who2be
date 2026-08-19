@@ -17,13 +17,11 @@ Je Finding mindestens ein reproduzierender Fall (ADR-0047 Nachtrag):
 - **L5**: `artifact:`-Praefix und kanonische Form finden dieselbe Kante.
 """
 
-import asyncio
 import socket
 from collections.abc import Callable, Iterator
 from typing import Any
 from uuid import UUID
 
-import asyncpg
 import pytest
 from fastapi.testclient import TestClient
 
@@ -31,10 +29,10 @@ import who2be_api.repositories.wa_artifact_repository as wa_artifact_repo_module
 import who2be_api.services.wa_ingest as wa_ingest_module
 from who2be_api.blobstore import reset_blob_store, set_blob_store
 from who2be_api.blobstore.adapters.memory import MemoryBlobStore
-from who2be_api.core.config import get_settings
 from who2be_api.core.errors import ApiGateError
 from who2be_api.main import app
 from who2be_api.services.wa_ingest import ensure_url_allowed
+from who2be_api.testing.api_helpers import agent_token, db_execute, db_fetchval, grant, shared_area
 from who2be_api.testing.workspace_setup import (
     cleanup_workspaces,
     fresh_user_id,
@@ -48,66 +46,6 @@ _ALL_WRITE_POLICY: dict[str, object] = {
     "kb_write": True,
     "kb_edge_write": True,
 }
-
-
-def _db_fetchval(sql: str, *args: object) -> Any:
-    async def _run() -> Any:
-        conn = await asyncpg.connect(get_settings().database_url)
-        try:
-            return await conn.fetchval(sql, *args)
-        finally:
-            await conn.close()
-
-    return asyncio.run(_run())
-
-
-def _db_execute(sql: str, *args: object) -> None:
-    async def _run() -> None:
-        conn = await asyncpg.connect(get_settings().database_url)
-        try:
-            await conn.execute(sql, *args)
-        finally:
-            await conn.close()
-
-    asyncio.run(_run())
-
-
-def _agent_token(
-    client: TestClient,
-    prefix: str,
-    name: str,
-    policy: dict[str, object],
-    auth: dict[str, str],
-    *,
-    role: str | None = None,
-) -> tuple[str, dict[str, str]]:
-    agent = client.post(
-        f"{prefix}/agents", json={"name": name, "tool_policy": policy}, headers=auth
-    )
-    assert agent.status_code == 201, agent.text
-    agent_id = agent.json()["id"]
-    body: dict[str, object] = {"name": name, "agent_id": agent_id}
-    if role is not None:
-        body["role"] = role
-    token = client.post(f"{prefix}/tokens", json=body, headers=auth)
-    assert token.status_code == 201, token.text
-    return agent_id, {"Authorization": f"Bearer {token.json()['token']}"}
-
-
-def _shared_area(client: TestClient, prefix: str, auth: dict[str, str], name: str) -> str:
-    created = client.post(f"{prefix}/work-areas", json={"name": name}, headers=auth)
-    assert created.status_code == 201, created.text
-    area_id: str = created.json()["id"]
-    return area_id
-
-
-def _grant(
-    client: TestClient, prefix: str, auth: dict[str, str], area_id: str, agent_id: str, level: str
-) -> None:
-    res = client.put(
-        f"{prefix}/work-areas/{area_id}/grants/{agent_id}", json={"level": level}, headers=auth
-    )
-    assert res.status_code == 200, res.text
 
 
 def _artifact(
@@ -155,7 +93,7 @@ def test_h1_viewer_agent_token_cannot_write(make_auth_headers: AuthFactory) -> N
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            _, viewer_headers = _agent_token(
+            _, viewer_headers = agent_token(
                 client, prefix, "leser", _ALL_WRITE_POLICY, auth, role="viewer"
             )
             artifact = client.post(
@@ -200,8 +138,8 @@ def test_h2_external_source_node_inherits_private_area(make_auth_headers: AuthFa
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            _, a_headers = _agent_token(client, prefix, "autor", _ALL_WRITE_POLICY, auth)
-            _, b_headers = _agent_token(client, prefix, "fremd", _ALL_WRITE_POLICY, auth)
+            _, a_headers = agent_token(client, prefix, "autor", _ALL_WRITE_POLICY, auth)
+            _, b_headers = agent_token(client, prefix, "fremd", _ALL_WRITE_POLICY, auth)
             created = client.post(
                 f"{prefix}/kb/nodes",
                 json=_node_body("url:https://example.com", content="Geheimnis aus P"),
@@ -209,7 +147,7 @@ def test_h2_external_source_node_inherits_private_area(make_auth_headers: AuthFa
             )
             assert created.status_code == 201, created.text
             node_id = created.json()["id"]
-            source_areas = _db_fetchval(
+            source_areas = db_fetchval(
                 "SELECT count(*) FROM kb_node_source_area WHERE node_id = $1", UUID(node_id)
             )
             assert int(source_areas) == 1  # private Area des Autors materialisiert
@@ -251,7 +189,7 @@ def test_h3_ingest_caps_content_and_blocks(
 
             # Menschen ingestieren mit expliziter Area (der area-lose Pfad ist
             # agent-gebundenen Tokens vorbehalten).
-            area = _shared_area(client, prefix, auth, "Eingang")
+            area = shared_area(client, prefix, auth, "Eingang")
             monkeypatch.setattr(wa_ingest_module, "ARTIFACT_CONTENT_MAX_LENGTH", 100)
             payload = base64.b64encode(b"x" * 200).decode()
             too_long = client.post(
@@ -271,7 +209,7 @@ def test_h3_ingest_caps_content_and_blocks(
                 headers=auth,
             )
             assert too_many.status_code == 413, too_many.text
-            count = _db_fetchval("SELECT count(*) FROM wa_artifact WHERE workspace_id = $1", ws)
+            count = db_fetchval("SELECT count(*) FROM wa_artifact WHERE workspace_id = $1", ws)
             assert int(count) == 0  # kein Teilzustand
     finally:
         cleanup_workspaces([owner])
@@ -311,11 +249,11 @@ def test_m5_node_updates_require_ownership(make_auth_headers: AuthFactory) -> No
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            shared = _shared_area(client, prefix, auth, "Team")
-            a_id, a_headers = _agent_token(client, prefix, "autor", _ALL_WRITE_POLICY, auth)
-            b_id, b_headers = _agent_token(client, prefix, "fremd", _ALL_WRITE_POLICY, auth)
-            _grant(client, prefix, auth, shared, a_id, "write")
-            _grant(client, prefix, auth, shared, b_id, "read")
+            shared = shared_area(client, prefix, auth, "Team")
+            a_id, a_headers = agent_token(client, prefix, "autor", _ALL_WRITE_POLICY, auth)
+            b_id, b_headers = agent_token(client, prefix, "fremd", _ALL_WRITE_POLICY, auth)
+            grant(client, prefix, auth, shared, a_id, "write")
+            grant(client, prefix, auth, shared, b_id, "read")
             artifact_id, block_id = _artifact(client, prefix, auth, shared, "Team-Notiz Indigo")
             created = client.post(
                 f"{prefix}/kb/nodes",
@@ -401,7 +339,7 @@ def test_m7_append_respects_cumulative_block_cap(
     try:
         with TestClient(app) as client:
             monkeypatch.setattr(wa_artifact_repo_module, "INGEST_MAX_BLOCKS", 3)
-            shared = _shared_area(client, prefix, auth, "Log")
+            shared = shared_area(client, prefix, auth, "Log")
             artifact_id, _ = _artifact(client, prefix, auth, shared, "eins\n\nzwei")
             rejected = client.post(
                 f"{prefix}/wa-artifacts/{artifact_id}/append",
@@ -430,15 +368,15 @@ def test_l2_sha256_anchor_is_scoped(make_auth_headers: AuthFactory) -> None:
     digest = "ab" * 32
     try:
         with TestClient(app) as client:
-            shared = _shared_area(client, prefix, auth, "Quellen")
-            _db_execute(
+            shared = shared_area(client, prefix, auth, "Quellen")
+            db_execute(
                 "INSERT INTO wa_blob (workspace_id, sha256, size_bytes, media_type, storage_key) "
                 "VALUES ($1, $2, 5, 'text/plain', $3)",
                 ws,
                 digest,
                 f"blobs/{ws}/{digest}",
             )
-            _db_execute(
+            db_execute(
                 "INSERT INTO wa_artifact (workspace_id, area_id, type, title, occurred_at, "
                 "occurred_precision, content_ref) "
                 "VALUES ($1, $2::uuid, 'blob', 'Quelle', now(), 'minute', $3)",
@@ -446,7 +384,7 @@ def test_l2_sha256_anchor_is_scoped(make_auth_headers: AuthFactory) -> None:
                 shared,
                 digest,
             )
-            agent_id, agent_headers = _agent_token(
+            agent_id, agent_headers = agent_token(
                 client, prefix, "analyst", _ALL_WRITE_POLICY, auth
             )
             blocked = client.post(
@@ -456,7 +394,7 @@ def test_l2_sha256_anchor_is_scoped(make_auth_headers: AuthFactory) -> None:
             )
             assert blocked.status_code == 422, blocked.text
             assert blocked.json()["reason"] == "anchor_unresolvable"
-            _grant(client, prefix, auth, shared, agent_id, "read")
+            grant(client, prefix, auth, shared, agent_id, "read")
             allowed = client.post(
                 f"{prefix}/kb/nodes",
                 json=_node_body(f"sha256:{digest}"),
@@ -479,7 +417,7 @@ def test_l5_prefixed_and_bare_anchor_find_same_edge(make_auth_headers: AuthFacto
     prefix = f"/v1/workspaces/{ws}"
     try:
         with TestClient(app) as client:
-            shared = _shared_area(client, prefix, auth, "Wissen")
+            shared = shared_area(client, prefix, auth, "Wissen")
             artifact_id, block_id = _artifact(client, prefix, auth, shared, "Indigo-Beleg")
             node = client.post(
                 f"{prefix}/kb/nodes",
@@ -502,7 +440,7 @@ def test_l5_prefixed_and_bare_anchor_find_same_edge(make_auth_headers: AuthFacto
                 headers=auth,
             )
             assert edge.status_code == 201, edge.text
-            stored = _db_fetchval(
+            stored = db_fetchval(
                 "SELECT from_anchor FROM kb_edge WHERE id = $1", UUID(edge.json()["id"])
             )
             assert stored == f"{artifact_id}#{block_id}"  # ohne Praefix
