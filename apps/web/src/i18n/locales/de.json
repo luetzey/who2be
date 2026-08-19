@@ -2395,6 +2395,14 @@
       "viewerReadOnly": "Als Viewer kannst du nichts löschen.",
       "loadError": "Inhalt konnte nicht geladen werden."
     },
+    "export": {
+      "label": "Exportieren",
+      "markdown": "Als Markdown",
+      "html": "Als HTML",
+      "printPdf": "Als PDF drucken",
+      "success": "Export heruntergeladen.",
+      "error": "Export fehlgeschlagen."
+    },
     "grants": {
       "title": "Zugriffe",
       "description": "Welcher Agent diesen Bereich lesen oder beschreiben darf. Menschen vergeben Freigaben — Agenten können sich selbst keine geben.",

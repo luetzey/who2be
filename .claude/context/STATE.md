@@ -245,9 +245,9 @@ Arbeitsbereich** für Agenten plus **belegpflichtige Knowledge Base**. Plan
   - *P1-Backlog:* KB-TTL-Verfall (`ttl_expires_at` wird gesetzt, aber nicht
     automatisch ausgewertet), Challenger-/Gegenbeleg-Mechanik,
     Drift-Erkennung auf Aussagen.
-  - *P2-Backlog:* Web-UI für WorkArea/KB (heute API-/MCP-only),
-    Graph-Visualisierung der Kanten, semantische Suche auf `wa_chunk`
-    (Vektor-Zweig wie ADR-0046 auf der Resource-Achse).
+  - *P2-Backlog:* Graph-Visualisierung der Kanten, semantische Suche auf
+    `wa_chunk` (Vektor-Zweig wie ADR-0046 auf der Resource-Achse) — die
+    Tabellen-UI ist seit 2026-08-19 umgesetzt (s. u.), KB bleibt API-/MCP-only.
   - *Manuelle Compose-Verifikation steht aus* (WP3-Punkt): `docker compose up`
     → minio healthy → Bootstrap legt Bucket an und terminiert → ohne
     Blobstore-Env Ingest = 503 → mit Env PDF-Ingest-Smoke, Objekt unter
@@ -556,15 +556,51 @@ Absicherung gegen Rückfall: `test_prompt_nennt_kein_tool_das_die_policy_
 herausfiltert` prüft über die SSoT statt über eine Namensliste. 1681 Tests
 grün, Coverage 91,09 %.
 
+### Tabellen-UI + WorkArea-Exporte (2026-08-19)
+
+Schließt die in §Bekannte Probleme dokumentierte Asymmetrie „Artifacts sind
+sichtbar, Tabellen nicht" (gefunden 2026-08-17) UND liefert Datei-Downloads
+für beide Artifact-Typen. Plan:
+`.claude/plan/2026-08-19-1700_tabellen-ui-und-exporte.md`.
+
+- **Export-Endpoints:** `GET /wa-tables/{id}/export?format=csv|xlsx` und
+  `GET /wa-artifacts/{id}/export?format=markdown|html` — Muster
+  `routers/_export.py` (ADR-0032): `attachment`, Lesen für Viewer offen,
+  `write_limit` als Rate-Limit. Store-Lesepfad `TableStore.read_table_rows`
+  (SQL-Bau im Store, ARC-3; explizite Katalog-Spalten — interne
+  Store-Spalten bleiben draußen); `EXPORT_ROW_LIMIT = 10_000`, darüber 413
+  statt stillem Teil-Export. Renderer in `wa_render.py`: `render_table_xlsx`
+  (openpyxl, MIT-lizenziert, Formel-Guard aus derselben Quelle wie CSV),
+  `render_artifact_export_markdown` (YAML-Frontmatter),
+  `render_artifact_export_html` (MarkdownIt `html: False` wie
+  `agent_render_service`, Meta-CSP im Dokument — sanktionierte Ausnahme von
+  der Rohtext-Regel der Web-UI, s. ADR-0047-Nachtrag 2026-08-19).
+- **Security-Review:** 5 Findings, alle behoben — XLSX-Rendering blockierte
+  den Event-Loop (`asyncio.to_thread` + `write_limit`), XML-illegale
+  Steuerzeichen brachen den XLSX-Export von Bestandsdaten (Schreibpfad jetzt
+  422, Renderer strippt zusätzlich), Frontmatter-Injection über
+  `source_system`/`source_url` (`single_line`), Meta-CSP + `no-referrer`
+  gegen Tracking beim `file://`-Öffnen, Formel-Guard prüft auf getrimmter
+  Kopie (Google Sheets trimmt beim Import). Details: ADR-0047-Nachtrag
+  2026-08-19.
+- **Web:** Tabellen-Tab in der Area-Detailseite (in BEIDEN Zweigen — private
+  Agent-Areas hatten bislang gar keine Tabs), neue TableDetailPage (Schema,
+  Konventionen, Vorschau der neuesten 50 Zeilen, Export-Dropdown CSV/Excel),
+  Hooks `useWaTables`/`useWaTable`. Notizen-Export in der ArtifactDetailPage
+  (Markdown-/HTML-Download plus „Als PDF drucken" via `window.print` und
+  eigenem Print-Stylesheet).
+- **User-Entscheidungen (bindend):** CSV + echtes `.xlsx` (openpyxl
+  genehmigt); PDF über Browser-Druck statt Server-PDF (keine schwere
+  Dependency). Details/Alternativen: DECISIONS.md 2026-08-19.
+- **Info-Befund I-1 (bewusst offen):** der Export zählt bis zu 10 000 Zeilen
+  als EIN `agent_access_log`-Eintrag bzw. eine Kontingent-Einheit — das
+  Volumen wird untererfasst.
+- **DoD:** Python 1698 Tests grün, Coverage-Gate erfüllt; Web 986 Tests grün
+  (13 neu, inkl. a11y je Tab), Coverage 86,3/80,3/82,5/87,2 (Floors
+  80/79/75/80), tsc/lint/build grün.
+
 ## Bekannte Probleme
 
-- **Tabellen fehlen in der Web-UI** (gefunden 2026-08-17): `features/workarea`
-  hat Seiten für Areas, Artifacts, Suche und KB — aber keine für Tabellen, und
-  `api/client.ts` ruft keinen `wa-tables`-Pfad. Ein Mensch sieht also weder,
-  welche Tabellen ein Agent angelegt hat, noch kann er aufräumen; der einzige
-  Weg führt über MCP/API. Seit dem Discovery-Fix ist das kein Sackgassen-
-  Problem mehr, aber die Asymmetrie bleibt (Artifacts sind sichtbar,
-  Tabellen nicht).
 - **Tabellen-Store-Verzeichnisse überleben den Hard-Purge** (bewusst, WP20):
   `cleanup_deleted_area_stores` fasst nur Verzeichnisse an, deren Workspace
   noch existiert — Schutz gegen einen Purge-Lauf gegen die falsche/leere DB.

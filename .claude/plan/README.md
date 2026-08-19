@@ -56,6 +56,7 @@ Plan-Dateien unter dem ai-native-Plan + ADR-0038.
 | `2026-07-21-0810_builder-external-tool-write.md` | Builder-Content v11: `external_tool_write` in der Builder-Policy, Playbook „External Tool anlegen & pflegen", Konventions-Sektion, Sync-Link-Fix | ✅ |
 | `2026-08-13-1200_agent-workarea-knowledge-base.md` | Agent WorkArea + Knowledge Base (unversionierte Subsysteme, MinIO-Blob-Store, SQLite-Tabellen-Store — ADR-0047/0048/0049), 20 WPs in 7 Wellen; WP1–WP20 umgesetzt inkl. Security-Review Phase 2, Retention-Sweeps, GDPR-Export und Compliance-Doku (PR #367). Offen: P1/P2-Backlog (TTL/Challenger/Drift, UI/Graph/semantische Suche) + manuelle Compose-Verifikation | ✅ umgesetzt (PR #367) |
 | `2026-08-19-1500_stufe3-wa-render-tablestore.md` | Aufräumen Stufe 3: Render-/Entschärfungs-Helfer aus `wa_tables.py` nach `wa_render.py`; SQL-Bau aus `wa_rules.py` in `TableStore.reapply_category` — letzter offener Punkt aus dem Aufräum-Plan (nach Stufe 1 PR #380, Stufe 2 PR #381) | ✅ umgesetzt |
+| `2026-08-19-1700_tabellen-ui-und-exporte.md` | Tabellen-UI in der WorkArea (Tab + TableDetailPage) + Export-Endpoints Tabellen (CSV/XLSX) und Notizen (Markdown/HTML + PDF-Druck); Security-Review 5 Findings behoben | ✅ umgesetzt |
 
 Offen außerhalb der Plan-Dateien: Owner-Punkte aus
 `docs/standards-review-2026-07-20.md` §4 sowie der dortige Folge-Backlog

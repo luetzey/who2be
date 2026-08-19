@@ -312,3 +312,87 @@ etwas meldete.
 Konstante `MAX_CELL_BYTES` (UTF-8-Bytes, wie `SQLITE_LIMIT_LENGTH` zählt) und
 lehnt mit 422 ab, **bevor** geschrieben wird. Eine Quelle für die Grenze, aus
 dem Store importiert — keine zweite Zahl im Service.
+
+## Nachtrag 2026-08-19 — Exporte aus der WorkArea (Tabellen + Notizen)
+
+Zwei neue Lese-Endpoints (ADR-0032-Muster: `attachment`, `response_model=None`,
+`write_limit` als Rate-Limit, Lesen für Viewer offen, kein MCP-Tool):
+`GET /wa-tables/{id}/export?format=csv|xlsx` und
+`GET /wa-artifacts/{id}/export?format=markdown|html`. Drei Entscheidungen sind
+tragend genug für diesen ADR statt nur für DECISIONS.md.
+
+**(a) Der HTML-Export ist die sanktionierte Ausnahme von der Rohtext-Regel der
+Web-UI.** Die WorkArea-UI rendert Artifact-Inhalte grundsätzlich als Rohtext,
+nie als interpretiertes Markdown/HTML (`features/workarea/lib/blocks.ts`,
+`KbNodeDetailPage.tsx`) — kein `dangerouslySetInnerHTML` im gesamten
+`apps/web/src`-Baum, weil ein Client-seitiger Markdown→HTML-Renderer eine neue
+Abhängigkeit UND eine Injektionsfläche für genau die Inhalte wäre, die aus
+Agenten-Hand und Fremd-Ingest kommen und damit am wenigsten vertrauenswürdig
+sind. Der HTML-Export tut trotzdem genau das: Markdown → HTML. Das bricht die
+Regel nicht, weil keine der drei Bedingungen greift, die sie begründet
+haben:
+- **Serverseitig, nicht im Browser der App** — kein neuer Client-Renderer,
+  keine neue Angriffsfläche IM App-Origin. Die Konfiguration ist wörtlich
+  dieselbe wie `agent_render_service` (`MarkdownIt("commonmark", {"html":
+  False, "breaks": True})`) — bereits geprüft, zweite Verwendung statt
+  zweiter Definition.
+- **`html: False` escapet rohes HTML im Quell-Markdown**, statt es
+  durchzureichen — ein eingebettetes `<script>` aus Ingest-Material landet als
+  Text im Export, nicht als ausführbarer Tag.
+- **Immer `attachment`, nie inline** — der Export wird nie als Seite DIESER
+  Origin ausgeliefert, kann also nie App-Session/Cookies erreichen. Der
+  Mensch öffnet eine heruntergeladene Datei lokal, nicht eine Ansicht der
+  App.
+- **Meta-CSP im Dokument selbst** (`default-src 'none'; style-src
+  'unsafe-inline'; img-src data:`) plus `no-referrer` deckt genau den Fall,
+  den die Origin-Trennung offen lässt: öffnet der Mensch die Datei von der
+  Platte (`file://`), gilt die Caddy-CSP der API dort nicht — ein
+  Tracking-Pixel oder ein Fremdquellen-Bild aus dem Ingest-Material würde
+  sonst beim Öffnen laden (Security-Review 2026-08-19, L-1).
+
+**(b) Der XLSX-Formel-Guard ist keine zweite Definition der CSV-Entschärfung.**
+`render_table_xlsx` (`wa_render.py`) leitet jede String-Zelle durch `csv_cell`
+— dieselbe Funktion, dieselbe `CSV_FORMULA_PREFIXES`-Konstante, die den
+CSV-Export gegen OWASP CSV Injection (Nachtrag 2026-08-16, L5) absichert.
+Der Angriffspfad ist identisch: Fremdquellen landen über Ingest in einer
+Tabelle, der Export trägt eine Formel-Zelle in die Datei eines Menschen,
+Excel/Sheets führt sie beim Öffnen aus. Eine zweite Präfix-Liste in
+`_xlsx_cell` hätte genau die Fehlerklasse riskiert, gegen die dieses ADR
+mehrfach vorgeht — eine Entschärfung, zwei Definitionen, die auseinanderlaufen
+können.
+
+**(c) Schreibpfad-Regel erweitert: XML-illegale Steuerzeichen → 422.**
+Derselbe Grundsatz wie beim Zell-Cap-Nachtrag oben (2026-08-19): wo Lese- und
+Schreibpfad verschiedene Grenzen kennen, gilt die strengere beim Schreiben.
+openpyxl verweigert die C0-Steuerzeichen außer Tab/LF/CR
+(`IllegalCharacterError`) — SQLite und CSV nehmen sie klaglos an. Ohne
+Vorab-Prüfung hätte eine einzige solche Alt-Zeile den XLSX-Export einer
+Tabelle dauerhaft zum 500er gemacht, während CSV weiter funktioniert (von
+außen beobachtbar, also gezielt herbeiführbar). `_validate_cell_text`
+(`wa_tables.py`) prüft deshalb jede String-Zelle beim Schreiben gegen dieselbe
+Zeichenmenge, die openpyxl beim Export ablehnt, und lehnt mit 422 ab, bevor
+sie in die Tabelle gelangt; `_xlsx_cell` strippt zusätzlich als zweite Linie
+für Bestandsdaten, die vor dieser Prüfung geschrieben wurden.
+
+**Die fünf Review-Findings (alle behoben, Tests je Finding):**
+- **M-1** — XLSX-Rendering blockierte den Event-Loop (~2 s beim vollen
+  Result-Budget) → `asyncio.to_thread` + `write_limit` auf beiden Export-Routen.
+- **M-2** — XML-illegale Steuerzeichen → 422 im Schreibpfad (s. (c) oben) +
+  Strip im Renderer als zweite Linie.
+- **M-3** — Frontmatter-Injection über `source_system`/`source_url`
+  (Fremdsystem-Felder ohne Pattern-Constraint) → `_yaml_scalar` schickt jeden
+  Wert durch `single_line`, ein roher Zeilenumbruch kann die
+  Frontmatter-Struktur nicht mehr aufbrechen.
+- **L-1** — Meta-CSP + `no-referrer` im HTML-Export (s. (a) oben).
+- **L-2** — Formel-Guard prüfte nur das erste Zeichen; Google Sheets trimmt
+  beim CSV-Import führenden Whitespace vor der Auswertung, ein ` =1+1` hätte
+  den Guard umgangen. Geprüft wird jetzt auf einer getrimmten Kopie,
+  präfixiert wird der Originalwert; `\n` ergänzt die Präfix-Liste.
+
+**Info-Befund I-1 (nicht umgesetzt, bewusst offene Grenze):** Der
+Tabellen-Export liefert bis zu `EXPORT_ROW_LIMIT` (10 000) Zeilen für EINEN
+`agent_access_log`-Eintrag bzw. eine Kontingent-Einheit im Rate-Limit — das
+erfasste Volumen unterzeichnet damit systematisch, wie viele Zeilen ein
+Zugriff tatsächlich bewegt hat. Für ein Compliance-Zählwerk auf
+Zugriffs-Ebene (nicht Zeilen-Ebene) ist das tolerierbar; für eine künftige
+Volumen-genaue Auswertung nicht.

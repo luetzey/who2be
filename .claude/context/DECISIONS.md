@@ -927,3 +927,36 @@ bleiben)._
 - **Detail:** `.claude/plan/2026-08-19-1500_stufe3-wa-render-tablestore.md`;
   `services/wa_render.py` (neu), `services/wa_tables.py`,
   `services/wa_rules.py`, `tablestore/engine.py`.
+
+## 2026-08-19 — WorkArea-Exporte: Formate, Grenzen, Auslieferung
+- **Entscheidung:** openpyxl (>=3.1.5) als NORMALE Dependency in
+  `apps/api/pyproject.toml`, nicht als optionale Gruppe. PDF-Export läuft über
+  den Browser-Druck des Menschen (`window.print` + Print-Stylesheet in der
+  ArtifactDetailPage), nicht serverseitig. `EXPORT_ROW_LIMIT = 10_000` im
+  Tabellen-Export: eine Tabelle darüber antwortet 413 statt eines still
+  gekürzten Downloads. Der Export bleibt REST-only — kein MCP-Tool (ADR-0032:
+  Export ist Menschen-Werkzeug, kein Agenten-Workflow). Info-Befund I-1
+  (Export zählt bis 10 000 Zeilen als EIN Zugriffslog-Eintrag/eine
+  Kontingent-Einheit, Volumen wird untererfasst) bleibt bewusst offen.
+- **Begründung:** openpyxl ist MIT-lizenziert (wie seine einzige transitive
+  Abhängigkeit et-xmlfile) — Lizenz-Gate-konform (ADR-0033) ohne
+  Edition-Prüfung nötig; der XLSX-Export ist ein Kern-Feature (Tabellen
+  existieren on-prem wie cloud gleichermaßen), keine Cloud-Zusatzfunktion,
+  die eine Build-Grenze rechtfertigen würde. Server-seitiges PDF-Rendering
+  bräuchte eine Rendering-Engine (Browser-Nachbau oder Systemlib-Kette) für
+  ein Format, das der Browser des Menschen bereits beherrscht — der
+  Mehraufwand steht in keinem Verhältnis zum Nutzen. Ein stiller Teil-Export
+  bei Zeilen-Überlauf ist gefährlicher als ein Fehler: der Mensch rechnet mit
+  einer unvollständigen Tabelle weiter, ohne es zu merken (s. ADR-0047-Nachtrag
+  2026-08-19). Export bleibt REST-only, weil ein Agent keine Datei
+  „herunterlädt" — die MCP-Werkzeuge liefern Inhalte, keine Downloads.
+- **Verworfen:** openpyxl als optionale Gruppe analog `who2be-billing`
+  (verworfen — das Billing-Muster trennt nach EDITION, nicht nach Feature;
+  eine Build-Grenze um den XLSX-Export hätte On-Prem einen Kern-Export ohne
+  fachlichen Grund genommen); weasyprint für Server-PDF (verworfen — schwere
+  Systemlib-Kette, in der Vorgabe des Users bereits ausgeschlossen zugunsten
+  von Browser-Druck).
+- **Detail:** ADR-0047-Nachtrag 2026-08-19;
+  `.claude/plan/2026-08-19-1700_tabellen-ui-und-exporte.md`;
+  `apps/api/pyproject.toml`, `apps/api/src/who2be_api/tablestore/engine.py`
+  (`EXPORT_ROW_LIMIT`), `apps/api/src/who2be_api/services/wa_render.py`.

@@ -1,8 +1,9 @@
-import { FileText, Link2, Trash2 } from 'lucide-react'
-import { useEffect } from 'react'
+import { ChevronDown, Download, FileText, Link2, Printer, Trash2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 
+import type { ArtifactExportFormat } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
@@ -14,12 +15,33 @@ import { Stack } from '@/components/layout/Stack'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { downloadFile } from '@/lib/download'
 import { notify } from '@/lib/feedback'
 import { cn } from '@/lib/utils'
 
 import { useArtifact } from '../hooks/useArtifact'
 import { useWorkAreaArtifacts } from '../hooks/useWorkAreaArtifacts'
 import { buildAnchor, parseAnchoredMarkdown } from '../lib/blocks'
+
+// Dateinamens-Sanitizing wie in `downloadExport` (`lib/download.ts`) bzw.
+// `TableDetailPage::safeFileName` — der Titel geht in einen Dateinamen ein,
+// nicht in einen Pfad, und bleibt ASCII-konservativ.
+function safeFileName(name: string): string {
+  return name.trim().replace(/[^\w-]+/g, '-').toLowerCase() || 'export'
+}
+
+// `format` ist der Query-Wert des Export-Endpunkts ('markdown'), die
+// Dateiendung bleibt die uebliche Kurzform ('.md').
+const EXPORT_EXTENSIONS: Record<ArtifactExportFormat, string> = {
+  markdown: 'md',
+  html: 'html',
+}
 
 export function ArtifactDetailPage() {
   const { t } = useTranslation('workarea')
@@ -29,6 +51,7 @@ export function ArtifactDetailPage() {
   const api = useApi()
   const isViewer = useCurrentWorkspaceRole() === 'viewer'
   const { areaId, artifactId } = useParams<{ areaId: string; artifactId: string }>()
+  const [exportBusy, setExportBusy] = useState(false)
 
   const { artifact, loading, error } = useArtifact(artifactId ?? '')
   // Metadaten (Typ, Sensibilitaet, Zeitpunkt, Quelle) liefert nur die
@@ -93,6 +116,29 @@ export function ArtifactDetailPage() {
     }
   }
 
+  // Export ist Lesen — der Dropdown steht auch Viewern offen (kein
+  // Rollen-Gate, anders als beim Loeschen).
+  const onExport = async (format: ArtifactExportFormat) => {
+    if (artifact === null) return
+    setExportBusy(true)
+    try {
+      const blob = await api.exportWaArtifact(artifactId, format)
+      const ext = EXPORT_EXTENSIONS[format]
+      downloadFile(blob, `who2be-artifact-${safeFileName(artifact.title)}.${ext}`)
+      notify.success(t('export.success'))
+    } catch (cause: unknown) {
+      notify.error(cause instanceof Error ? cause.message : t('export.error'))
+    } finally {
+      setExportBusy(false)
+    }
+  }
+
+  // Kein Server-PDF: der Browser-Druckdialog bietet "Als PDF speichern" —
+  // das Print-Stylesheet (globals.css) blendet dafuer das App-Chrome aus.
+  const onPrint = () => {
+    window.print()
+  }
+
   return (
     <Container>
       <DataView loading={loading && artifact === null} error={error}>
@@ -113,16 +159,55 @@ export function ArtifactDetailPage() {
                 </>
               }
               actions={
-                <Button
-                  type="button"
-                  variant="destructive"
-                  disabled={isViewer}
-                  title={isViewer ? t('artifact.viewerReadOnly') : undefined}
-                  onClick={() => void remove()}
-                >
-                  <Trash2 className="h-4 w-4" />
-                  {t('artifact.delete')}
-                </Button>
+                // `print:hidden` (Tailwind-v4-Variante) statt einer globalen
+                // Regel: Loeschen und Export sind Seiten-Aktionen, keine
+                // Druck-Inhalte. Das App-Chrome (AppShell/Footer) ist nicht
+                // Teil dieser Seite und wird stattdessen in globals.css ueber
+                // wenige Element-Selektoren ausgeblendet.
+                <div className="flex flex-wrap items-center gap-2 print:hidden">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={exportBusy}
+                        data-testid="export-artifact-trigger"
+                      >
+                        <Download className="h-4 w-4" />
+                        {t('export.label')}
+                        <ChevronDown className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onSelect={() => void onExport('markdown')}
+                        data-testid="export-artifact-markdown"
+                      >
+                        {t('export.markdown')}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() => void onExport('html')}
+                        data-testid="export-artifact-html"
+                      >
+                        {t('export.html')}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={onPrint} data-testid="export-artifact-print">
+                        <Printer className="h-4 w-4" />
+                        {t('export.printPdf')}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    disabled={isViewer}
+                    title={isViewer ? t('artifact.viewerReadOnly') : undefined}
+                    onClick={() => void remove()}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    {t('artifact.delete')}
+                  </Button>
+                </div>
               }
             />
             {meta?.source_url !== null && meta?.source_url !== undefined ? (
@@ -157,6 +242,7 @@ export function ArtifactDetailPage() {
                             type="button"
                             variant="ghost"
                             size="sm"
+                            className="print:hidden"
                             aria-label={t('artifact.anchorCopy')}
                             title={t('artifact.anchorCopy')}
                             onClick={() => void copyAnchor(block.blockId as string)}

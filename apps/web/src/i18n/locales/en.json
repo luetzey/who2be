@@ -2395,6 +2395,14 @@
       "viewerReadOnly": "As a viewer you cannot delete anything.",
       "loadError": "Content could not be loaded."
     },
+    "export": {
+      "label": "Export",
+      "markdown": "As Markdown",
+      "html": "As HTML",
+      "printPdf": "Print as PDF",
+      "success": "Export downloaded.",
+      "error": "Export failed."
+    },
     "grants": {
       "title": "Access",
       "description": "Which agent may read or write this area. Humans grant access — agents cannot grant it to themselves.",
