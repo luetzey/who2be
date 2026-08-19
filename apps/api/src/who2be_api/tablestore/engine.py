@@ -372,6 +372,17 @@ def _to_sql_value(value: object) -> object:
     return value
 
 
+def _like_parameter(pattern: str) -> str:
+    """LIKE-Parameter der Re-Kategorisierung — Substring, case-insensitive.
+
+    Identische Semantik wie das In-Memory-Matching der Regel-Phase
+    (`services/wa_rules._matches`): Wildcards werden escaped (``ESCAPE '\\'``
+    im SQL), das Pattern laeuft lowercased gegen ``lower(match_column)``.
+    """
+    escaped = pattern.lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
 class TableStore:
     """SQLite-Store mit einer Datei pro WorkArea (ADR-0049, Entscheidung 1).
 
@@ -648,6 +659,48 @@ class TableStore:
             return cursor.rowcount
         finally:
             connection.close()
+
+    async def reapply_category(
+        self,
+        workspace_id: UUID,
+        area_id: UUID,
+        *,
+        table: str,
+        category_column: str,
+        match_column: str,
+        category: str,
+        pattern: str,
+        excluded_patterns: Sequence[str],
+    ) -> int:
+        """Rueckwirkende Re-Kategorisierung einer Regel (WP17, server-only).
+
+        Setzt `category_column` auf `category` fuer alle Zeilen, deren
+        `match_column` das `pattern` als Substring traegt (case-insensitive)
+        UND kein `excluded_patterns`-Element matcht — die NOT-Klauseln lassen
+        Konflikt-Zeilen unangetastet (Zeilen, die eine ANDERE aktive Regel mit
+        anderer Kategorie matcht). Rueckgabe: Anzahl geaenderter Zeilen.
+
+        Laeuft ueber `run_admin_sql` und ist damit derselbe SERVER-ONLY
+        Schreibpfad (rw-Connection ohne Authorizer, ADR-0049, Entscheidung 2)
+        — NIE mit Agenten-/User-Input als Identifier aufrufen.
+
+        Der SQL-Bau lebt HIER und nicht im Service (ARC-3): Services kennen
+        kein SQL, der Store ist die einzige Stelle, die Identifier gegen die
+        Allowlist (`tablestore/schema.py`) validiert und quotet. Die
+        Domaenen-Pruefung, OB eine Tabelle ueberhaupt category-/match-Spalten
+        hat, bleibt beim Service (Katalog-Schema). Werte laufen
+        parametrisiert.
+        """
+        quoted_table = quote_identifier(table)
+        quoted_category = quote_identifier(validate_column_name(category_column))
+        quoted_match = quote_identifier(validate_column_name(match_column))
+        conditions = [f"lower({quoted_match}) LIKE ? ESCAPE '\\'"]
+        parameters: list[object] = [category, _like_parameter(pattern)]
+        for excluded in excluded_patterns:
+            conditions.append(f"NOT (lower({quoted_match}) LIKE ? ESCAPE '\\')")
+            parameters.append(_like_parameter(excluded))
+        sql = f"UPDATE {quoted_table} SET {quoted_category} = ? WHERE " + " AND ".join(conditions)
+        return await self.run_admin_sql(workspace_id, area_id, sql, parameters)
 
     # --- Discovery / Betrieb -------------------------------------------------
 

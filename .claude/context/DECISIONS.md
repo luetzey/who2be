@@ -896,3 +896,34 @@ bleiben)._
   gilt die STRENGERE beim Schreiben — sonst entsteht Zustand, den das System
   selbst nicht mehr lesen kann.
 - **Detail:** ADR-0047-Nachtrag 2026-08-19; `services/wa_tables.py`.
+
+## 2026-08-19 — Stufe 3: Render-Helfer und SQL-Bau an ihren Ort
+- **Entscheidung:** Die Render-/Entschärfungs-Helfer aus `services/wa_tables.py`
+  bekommen ein eigenes Modul `services/wa_render.py` mit sprechenden Namen
+  (`render_table_markdown`, `render_table_csv`, `compose_result_doc`,
+  `csv_cell`) statt einer dritten `_render_markdown`-Definition. Der SQL-Bau
+  der Re-Kategorisierung wandert aus `services/wa_rules.py` in
+  `TableStore.reapply_category(...)` (`tablestore/engine.py`) — der Service
+  liefert nur Namen aus dem validierten Katalog-Schema und Werte, SQL-Bau und
+  Identifier-Quoting sitzen im Store.
+- **Begründung:** ARC-3 (kein SQL in `apps/api/**/services/`) war bislang nur
+  im Sinn erfüllt, nicht im Buchstaben — `wa_rules.py` baute selbst
+  UPDATE-Statements. Der Render-Schnitt zielt auf dieselbe Fehlerklasse wie
+  die Stufe-1-Extraktion (`repositories/snippet.py`): „eine Sache, zwei
+  Definitionen" — `entity_export_service._render_markdown` und
+  `wa_blocks.render_markdown` existieren bereits, eine dritte gleichnamige
+  Funktion in `wa_tables.py` hätte die Verwechslungsgefahr vergrößert statt
+  sie zu vermeiden.
+- **Verworfen:** ein reines SQL-Build-Modul `tablestore/rules_sql.py` (Store
+  bliebe SQL-frei, Service importiert nur die Funktion) — verworfen, weil der
+  Service dann weiterhin SQL-Strings hielte (nur importiert statt selbst
+  gebaut) und die ARC-3-Leitplanke wieder nur im Sinn, nicht im Buchstaben
+  erfüllt wäre. Die Methode auf `TableStore` macht den Store zur einzigen
+  Stelle, die Identifier gegen die Allowlist validiert und quotet.
+- **Prüfregel:** verhaltensneutral heißt *gleiche Testzahl, keine geänderte
+  Assertion*. Nachgezählt: 1681 Tests vorher wie nachher; die einzige
+  Teständerung ist der Import-Umbau in `test_security_fixes_phase2.py` auf
+  die neuen Namen, keine Assertion geändert.
+- **Detail:** `.claude/plan/2026-08-19-1500_stufe3-wa-render-tablestore.md`;
+  `services/wa_render.py` (neu), `services/wa_tables.py`,
+  `services/wa_rules.py`, `tablestore/engine.py`.

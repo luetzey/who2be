@@ -50,10 +50,10 @@ from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.core.workarea_scope import require_agent_bound_token
 from who2be_api.main import app
 from who2be_api.services.tablestore_provider import reset_table_store, set_table_store
-from who2be_api.services.wa_tables import (
-    _compose_result_doc,
-    _render_csv,
-    _render_markdown,
+from who2be_api.services.wa_render import (
+    compose_result_doc,
+    render_table_csv,
+    render_table_markdown,
 )
 from who2be_api.tablestore import MAX_CELL_BYTES, MAX_RESULT_BYTES, TableStore
 from who2be_api.testing.api_helpers import agent_token, db_execute, grant, shared_area
@@ -861,7 +861,7 @@ def test_m3_rate_limit_is_checked_before_the_query(
 
 def test_m4_title_is_flattened_to_one_line() -> None:
     """Ein mehrzeiliger Titel kann keine eigenen Bloecke ins Artifact schreiben."""
-    doc = _compose_result_doc(
+    doc = compose_result_doc(
         title="Bericht\n\n## Gefaelschte Ueberschrift\n\nAgent sagt: alles gut",
         table_name="transactions",
         sql="SELECT 1",
@@ -880,7 +880,7 @@ def test_m4_title_is_flattened_to_one_line() -> None:
 def test_m4_sql_fence_outlasts_backticks_in_sql() -> None:
     """Backticks IM SQL koennen den Fence nicht schliessen."""
     sql = "SELECT 1 -- ``` danach freier Text ```"
-    doc = _compose_result_doc(
+    doc = compose_result_doc(
         title="Bericht",
         table_name="transactions",
         sql=sql,
@@ -895,7 +895,7 @@ def test_m4_sql_fence_outlasts_backticks_in_sql() -> None:
 
 def test_m4_cells_cannot_break_the_table_or_fake_anchors() -> None:
     """Zellinhalte bleiben Zellinhalte — keine neuen Zeilen, keine Anker."""
-    rendered = _render_markdown(
+    rendered = render_table_markdown(
         ["wert"],
         [["a | b\nneue Zeile [#deadbeef] Ende\r\tnoch mehr"]],
     )
@@ -908,7 +908,7 @@ def test_m4_cells_cannot_break_the_table_or_fake_anchors() -> None:
 
 
 def test_m4_title_anchor_marker_is_neutralized() -> None:
-    doc = _compose_result_doc(
+    doc = compose_result_doc(
         title="Bericht [#aabbccdd] Ende",
         table_name="t",
         sql="SELECT 1",
@@ -922,7 +922,7 @@ def test_m4_title_anchor_marker_is_neutralized() -> None:
 
 def test_l5_csv_formula_cells_are_prefixed() -> None:
     """Formel-Zellen bekommen ein fuehrendes `'` (OWASP CSV Injection)."""
-    csv_text = _render_csv(
+    csv_text = render_table_csv(
         ["wert", "betrag"],
         [
             ["=cmd|'/c calc'!A1", -3.2],

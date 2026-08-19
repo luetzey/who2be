@@ -32,10 +32,11 @@ Existenz.
 
 Rueckwirkende Re-Kategorisierung: der Regel-Upsert (`WaRuleService.
 upsert_rule`) kategorisiert die SQLite-Rows aller Area-Tabellen mit
-category/match-Spalten NEU — ueber `TableStore.run_admin_sql` (server-only
-Schreibpfad, ADR-0049: der Server unterliegt dem Authorizer nicht).
-Identifier stammen aus dem validierten Katalog-Schema, Werte laufen
-parametrisiert. Konflikt-Rows (eine ANDERE aktive Regel mit anderer
+category/match-Spalten NEU — ueber `TableStore.reapply_category`
+(server-only Schreibpfad, ADR-0049: der Server unterliegt dem Authorizer
+nicht). Der Service liefert nur Namen aus dem validierten Katalog-Schema
+und Werte; SQL-Bau und Identifier-Quoting liegen im Store (ARC-3).
+Konflikt-Rows (eine ANDERE aktive Regel mit anderer
 Kategorie matcht dieselbe Row) werden dabei NICHT angefasst — nur
 nicht-konfligierende Rows updaten. Jeder Upsert wird im `audit_log`
 protokolliert (``workarea.rules_reapplied``: rule_id, Tabellen, Zeilenzahlen).
@@ -67,8 +68,7 @@ from who2be_api.core.workarea_scope import ensure_area_access
 from who2be_api.repositories.wa_rule_repository import WaRuleRepository
 from who2be_api.repositories.wa_table_repository import WaTableRepository
 from who2be_api.services.audit_service import AuditService
-from who2be_api.tablestore import TableStore, quote_identifier, validate_column_name
-from who2be_api.tablestore.schema import validate_identifier
+from who2be_api.tablestore import TableStore
 from who2be_models import (
     AgentCapability,
     CategoryRuleRead,
@@ -140,42 +140,6 @@ def convention_missing(source_name: str) -> ApiGateError:
 def _matches(pattern: str, value: object) -> bool:
     """Case-insensitive Substring-Match des Patterns im Match-Spalten-Wert."""
     return isinstance(value, str) and pattern.lower() in value.lower()
-
-
-def _like_parameter(pattern: str) -> str:
-    """LIKE-Parameter fuer die Re-Kategorisierung — identische Semantik wie
-    `_matches` (Substring, case-insensitive): Wildcards werden escaped
-    (``ESCAPE '\\'`` im SQL), das Pattern laeuft lowercased gegen
-    ``lower(match_column)``."""
-    escaped = pattern.lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-    return f"%{escaped}%"
-
-
-def _reapply_sql(
-    table_name: str,
-    schema: TableSchema,
-    rule: CategoryRuleRead,
-    other_rules: list[CategoryRuleRead],
-) -> tuple[str, list[object]]:
-    """UPDATE-Statement der Re-Kategorisierung (server-only, `run_admin_sql`).
-
-    Identifier kommen aus dem VALIDIERTEN Katalog-Schema (Allowlist
-    `tablestore/schema.py`), Werte parametrisiert. Die NOT-Klauseln lassen
-    Konflikt-Rows aus: nur Rows, die von GENAU dieser Regel gematcht werden
-    und von keiner anderen aktiven Regel mit anderer Kategorie.
-    """
-    if schema.category_column is None or schema.match_column is None:
-        raise ValueError("Re-Kategorisierung verlangt category_column UND match_column.")
-    quoted_table = quote_identifier(validate_identifier(table_name))
-    category_column = quote_identifier(validate_column_name(schema.category_column))
-    match_column = quote_identifier(validate_column_name(schema.match_column))
-    conditions = [f"lower({match_column}) LIKE ? ESCAPE '\\'"]
-    parameters: list[object] = [rule.category, _like_parameter(rule.pattern)]
-    for other in other_rules:
-        conditions.append(f"NOT (lower({match_column}) LIKE ? ESCAPE '\\')")
-        parameters.append(_like_parameter(other.pattern))
-    sql = f"UPDATE {quoted_table} SET {category_column} = ? WHERE " + " AND ".join(conditions)
-    return sql, parameters
 
 
 async def categorize_rows(
@@ -335,10 +299,12 @@ class WaRuleService:
     ) -> dict[str, int]:
         """Wendet `rule` rueckwirkend auf alle Area-Tabellen an (server-only).
 
-        `run_admin_sql` ist der EINE serverseitige Schreibpfad an der
+        `TableStore.reapply_category` ist der serverseitige Schreibpfad an der
         SQLite-Datei (ADR-0049) — Konflikt-Rows bleiben unangetastet (die
-        NOT-Klauseln in `_reapply_sql`). Rueckgabe: Tabellenname → Anzahl
-        geaenderter Zeilen (fuer das Audit-Detail).
+        `excluded_patterns` werden dort zu NOT-Klauseln). Der Service prueft
+        nur das Katalog-Schema: Tabellen ohne category-/match-Spalte werden
+        uebersprungen. Rueckgabe: Tabellenname → Anzahl geaenderter Zeilen
+        (fuer das Audit-Detail).
         """
         active_rules = await self._rules.list_rules(
             self._pool, ctx.workspace_id, area_id, active_only=True
@@ -353,8 +319,14 @@ class WaRuleService:
             schema = table.schema_
             if schema.category_column is None or schema.match_column is None:
                 continue
-            sql, parameters = _reapply_sql(table.name, schema, rule, other_rules)
-            counts[table.name] = await self._store.run_admin_sql(
-                ctx.workspace_id, area_id, sql, parameters
+            counts[table.name] = await self._store.reapply_category(
+                ctx.workspace_id,
+                area_id,
+                table=table.name,
+                category_column=schema.category_column,
+                match_column=schema.match_column,
+                category=rule.category,
+                pattern=rule.pattern,
+                excluded_patterns=[other.pattern for other in other_rules],
             )
         return counts
