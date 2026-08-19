@@ -27,6 +27,7 @@ from who2be_mcp.client import ApiClient
 from who2be_mcp.clients import tables as tables_api
 from who2be_mcp.clients.tables import RowsInsertResult
 from who2be_mcp.core_logging import with_tool_log
+from who2be_mcp.tools.area_ref import parse_area_id, resolve_private_area_id
 from who2be_models import (
     ArtifactRead,
     CategoryRuleRead,
@@ -174,6 +175,45 @@ async def query_table(
     except ValidationError as exc:
         raise ToolError(f"Ungueltige Eingabe: {_first_error(exc)}") from exc
     return await tables_api.query_table(client, _parse_uuid(table_id, "Tabellen"), data)
+
+
+@with_tool_log("list_tables")
+async def list_tables(area_id: str | None = None) -> list[WaTableRead]:
+    """DER Einstieg zu Tabellen: welche gibt es, und wie heissen ihre IDs?
+
+    Liefert den Katalog einer Area (Name, ID, Schema — keine Zeilen).
+    `area_id=None` = deine private Area. Danach `describe_table` (Umfang und
+    Wertebereiche) und `query_table` (rechnen).
+
+    Nutze das am ANFANG eines Laufs, statt eine Tabelle neu anzulegen, die es
+    schon gibt: Tabellen tauchen weder in `search_workarea` (die indiziert
+    Artifact-Passagen) noch in `timeline` auf — dort musst du die ID schon
+    kennen.
+    """
+    client = await _client()
+    parsed_area = parse_area_id(area_id)
+    if parsed_area is None:
+        parsed_area = await resolve_private_area_id(client)
+    return await tables_api.list_tables(client, parsed_area)
+
+
+@with_tool_log("delete_table")
+async def delete_table(table_id: str) -> str:
+    """Loescht eine Tabelle samt aller Zeilen — endgueltig.
+
+    Es gibt KEINEN Papierkorb: Katalog-Eintrag und Daten sind danach weg, der
+    Name in der Area wieder frei. Nutze das fuer Fehlversuche und obsolete
+    Zwischenstaende — nicht fuer Daten, die noch jemand braucht.
+
+    Bereits eingefrorene Auswertungen (`save_query_result`-Artifacts) bleiben
+    bestehen: sie sind eigenstaendige Belege fuer Zahlen, die du vielleicht
+    schon zitiert hast. Kategorie-Regeln und Quell-Konventionen haengen an der
+    Area und bleiben ebenfalls.
+    """
+    client = await _client()
+    parsed = _parse_uuid(table_id, "Tabellen")
+    await tables_api.delete_table(client, parsed)
+    return f"Tabelle {parsed} geloescht."
 
 
 @with_tool_log("describe_table")
@@ -324,7 +364,7 @@ async def list_category_rules(area_id: str) -> list[CategoryRuleRead]:
 
 
 def register(mcp: FastMCP) -> None:
-    """Registriert die 9 Tabellen-/Timeline-Tools an der FastMCP-Instanz.
+    """Registriert die 11 Tabellen-/Timeline-Tools an der FastMCP-Instanz.
 
     Die Tool-Funktionen bleiben modulweite, direkt importier- und aufrufbare
     async-Funktionen (Test-Muster A); hier werden sie lediglich mit
@@ -334,6 +374,8 @@ def register(mcp: FastMCP) -> None:
     """
     for fn in (
         create_table,
+        list_tables,
+        delete_table,
         insert_rows,
         query_table,
         describe_table,

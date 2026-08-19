@@ -12,6 +12,7 @@ Pfade unter `/v1/workspaces/{ws_id}` (Prefix aus `main.py`):
   als doc-Artifact in der Area der Tabelle (WP16, M-Ersatz — Entscheidung 7).
 - ``GET /wa-tables/{table_id}`` — describe (Schema, Zeilenzahl,
   Wertebereiche, Area-Konventionen).
+- ``DELETE /wa-tables/{table_id}`` — Tabelle + Daten endgueltig loeschen.
 - ``PUT /work-areas/{area_id}/conventions/{source_name}`` /
   ``GET /work-areas/{area_id}/conventions`` — Quell-Konventionen (WP17,
   Spec M2): anlegen/ersetzen bzw. Area-Liste.
@@ -160,6 +161,15 @@ async def create_table(
 async def list_tables(area_id: UUID, ctx: Ctx, service: Service) -> list[WaTableRead]:
     """Katalog-Liste der Area (ohne Zeilenzahlen — die liefert describe)."""
     return await service.list_for_area(ctx, area_id)
+
+
+@router.delete("/wa-tables/{table_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(write_limit)
+async def delete_table(request: Request, table_id: UUID, ctx: Ctx, service: Service) -> None:
+    """Loescht Tabelle + Daten endgueltig (Katalog-Zeile UND SQLite-Tabelle);
+    unbekannt oder nicht sichtbar → 404 (kein Existenz-Leak)."""
+    if not await service.delete(ctx, table_id):
+        raise _table_not_found()
 
 
 @router.post("/wa-tables/{table_id}/rows")

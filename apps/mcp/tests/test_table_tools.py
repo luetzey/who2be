@@ -32,9 +32,11 @@ from who2be_mcp.client import ApiClient
 from who2be_mcp.tools.kb import promote_artifact
 from who2be_mcp.tools.tables import (
     create_table,
+    delete_table,
     describe_table,
     insert_rows,
     list_category_rules,
+    list_tables,
     query_table,
     save_query_result,
     set_convention,
@@ -211,6 +213,88 @@ def test_create_table_validates_area_uuid(monkeypatch: pytest.MonkeyPatch) -> No
     )
     with pytest.raises(ToolError, match="Area-UUID"):
         asyncio.run(create_table(area_id="not-a-uuid", name="umsaetze", schema=_SCHEMA))
+
+
+# --- list_tables / delete_table ----------------------------------------------
+
+
+def test_list_tables_roundtrip(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Der Discovery-Pfad: welche Tabellen gibt es in dieser Area?
+
+    Ohne ihn war eine Tabelle nach dem Anlegen ueber MCP strukturell nicht
+    wiederauffindbar (Betriebsbefund 2026-08-17) — die Suche indiziert
+    Artifact-Passagen, `timeline` verlangt die ID bereits.
+    """
+    area_id = uuid4()
+    seen: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["method"] = request.method
+        seen["path"] = request.url.path
+        return httpx.Response(200, json=[_table_payload(area_id=area_id)])
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    result = asyncio.run(list_tables(area_id=str(area_id)))
+
+    assert [isinstance(t, WaTableRead) for t in result] == [True]
+    assert seen["method"] == "GET"
+    assert seen["path"] == f"{_PREFIX}/work-areas/{area_id}/tables"
+
+
+def test_list_tables_ohne_area_nimmt_die_private(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`area_id=None` = private Area — dieselbe Aufloesung wie `list_artifacts`.
+
+    Beide ziehen sie aus `tools/area_ref`; zwei Kopien der Regel wuerden
+    bedeuten, dass benachbarte Tools in verschiedene Areas schauen.
+    """
+    private_id = uuid4()
+    pfade: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        pfade.append(request.url.path)
+        if request.url.path.endswith("/work-areas"):
+            return httpx.Response(
+                200,
+                json=[
+                    {
+                        "id": str(private_id),
+                        "workspace_id": str(_WORKSPACE_ID),
+                        "name": "privat",
+                        "scope": "private",
+                        "agent_id": str(uuid4()),
+                        "created_at": _OCCURRED.isoformat(),
+                        "updated_at": _OCCURRED.isoformat(),
+                    }
+                ],
+            )
+        return httpx.Response(200, json=[])
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    asyncio.run(list_tables())
+    assert pfade[-1] == f"{_PREFIX}/work-areas/{private_id}/tables"
+
+
+def test_delete_table_roundtrip(monkeypatch: pytest.MonkeyPatch) -> None:
+    table_id = uuid4()
+    seen: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["method"] = request.method
+        seen["path"] = request.url.path
+        return httpx.Response(204)
+
+    monkeypatch.setattr(server, "build_client", _factory(handler))
+    antwort = asyncio.run(delete_table(str(table_id)))
+
+    assert seen["method"] == "DELETE"
+    assert seen["path"] == f"{_PREFIX}/wa-tables/{table_id}"
+    assert str(table_id) in antwort
+
+
+def test_delete_table_validiert_uuid(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(server, "build_client", _factory(lambda request: httpx.Response(204)))
+    with pytest.raises(ToolError, match="Tabellen-UUID"):
+        asyncio.run(delete_table("keine-uuid"))
 
 
 # --- insert_rows -------------------------------------------------------------

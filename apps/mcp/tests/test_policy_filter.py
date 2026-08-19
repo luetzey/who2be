@@ -81,6 +81,7 @@ _DEFAULT_POLICY_TOOLS = {
     # set_convention/upsert_category_rule brauchen `workarea_write`.
     "query_table",
     "describe_table",
+    "list_tables",
     "timeline",
     "list_category_rules",
 }
@@ -214,8 +215,10 @@ def test_full_policy_agent_sees_all_tools(monkeypatch: pytest.MonkeyPatch) -> No
     names = _list_tool_names()
     assert names == set(MCP_TOOL_REQUIREMENTS)
     # 58 server.py-Tools + 8 WorkArea-Tools (WP8) + 6 KB-Tools (WP9, inkl.
-    # `promote_artifact` seit WP19) + 9 Tabellen-/Timeline-Tools (WP19).
-    assert len(names) == 81
+    # `promote_artifact` seit WP19) + 11 Tabellen-/Timeline-Tools (WP19 plus
+    # `list_tables`/`delete_table`, Befund 2026-08-17: Tabellen waren ueber
+    # MCP weder auffindbar noch loeschbar).
+    assert len(names) == 83
 
 
 def test_resource_read_none_hides_resource_tools(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -275,8 +278,8 @@ def test_unrestricted_admin_sees_all_tools(monkeypatch: pytest.MonkeyPatch) -> N
     names = _list_tool_names()
     memory_tools = {name for name, req in MCP_TOOL_REQUIREMENTS.items() if req.memory is not None}
     assert names == set(MCP_TOOL_REQUIREMENTS) - memory_tools
-    # 81 Tools minus die 3 Memory-Tools (ohne Agent-Bindung kein Namespace).
-    assert len(names) == 78
+    # 83 Tools minus die 3 Memory-Tools (ohne Agent-Bindung kein Namespace).
+    assert len(names) == 80
 
 
 def test_unrestricted_viewer_sees_no_write_tools(monkeypatch: pytest.MonkeyPatch) -> None:
