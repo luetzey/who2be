@@ -20,11 +20,10 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { StatusActionBar, statusLabel, VersionHistory } from '@/components/version'
+import { EntityDeleteButton, EntityExportButton } from '@/components/entity'
 import { cn } from '@/lib/utils'
 import { notify } from '@/lib/feedback'
 
-import { DeleteToolButton } from '../components/DeleteToolButton'
-import { ExportToolButton } from '../components/ExportToolButton'
 import { ToolEditorForm } from '../components/ToolEditorForm'
 import { useTool } from '../hooks/useTool'
 import { useToolForm } from '../hooks/useToolForm'
@@ -126,7 +125,14 @@ export function ToolDetailPage() {
                   </>
                 }
                 description={description}
-                actions={<ExportToolButton tool={tool} />}
+                actions={
+                  <EntityExportButton
+                    entityKind="external-tool"
+                    name={tool.name || tool.id}
+                    onExport={(format) => api.exportExternalTool(tool.id, format)}
+                    testIdPrefix="export-tool"
+                  />
+                }
               />
 
               {locked ? <ManagedNotice /> : null}
@@ -247,7 +253,18 @@ export function ToolDetailPage() {
                             {t('delete.dangerZoneDescription')}
                           </p>
                           <div>
-                            <DeleteToolButton tool={tool} />
+                            <EntityDeleteButton
+                              name={tool.name}
+                              texts={{
+                                dialogTitle: t('delete.dialogTitle'),
+                                success: t('delete.success'),
+                                viewerReadOnly: t('delete.viewerReadOnly'),
+                                blockedMessage: t('delete.blockedMessage'),
+                              }}
+                              onDelete={() => api.deleteExternalTool(tool.id)}
+                              listPath={wsPath('/tools')}
+                              testIdPrefix="delete-tool"
+                            />
                           </div>
                         </div>
                       ) : null}

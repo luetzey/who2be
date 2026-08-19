@@ -187,7 +187,7 @@ describe('ResourceDetailPage', () => {
 // ---------------------------------------------------------------------------
 
 // Radix-Primitives (Dialog/DropdownMenu) brauchen Pointer-Capture-Stubs in
-// jsdom (Muster aus DeleteResourceButton.test.tsx / ExportResourceButton.test.tsx).
+// jsdom (Muster aus EntityDeleteButton.test.tsx / EntityExportButton.test.tsx).
 beforeAll(() => {
   for (const fn of [
     'hasPointerCapture',

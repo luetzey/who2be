@@ -30,13 +30,11 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { StatusActionBar, statusLabel, VersionHistory } from '@/components/version'
+import { EntityDeleteButton, EntityDuplicateButton, EntityExportButton } from '@/components/entity'
 import { useResourceSubResources } from '@/hooks/useResourceSubResources'
 import { useResourceUsages } from '@/hooks/useResourceUsages'
 import { notify } from '@/lib/feedback'
 
-import { DeleteResourceButton } from '../components/DeleteResourceButton'
-import { DuplicateResourceButton } from '../components/DuplicateResourceButton'
-import { ExportResourceButton } from '../components/ExportResourceButton'
 import { ResourceEditorForm } from '../components/ResourceEditorForm'
 import { ResourceUsedByList } from '../components/ResourceUsedByList'
 import { SubResourcePicker } from '../components/SubResourcePicker'
@@ -158,9 +156,37 @@ export function ResourceDetailPage() {
                         version={resource.current_version}
                       />
                     ) : null}
-                    <ExportResourceButton resource={resource} />
-                    <DuplicateResourceButton resource={resource} />
-                    {canEdit ? <DeleteResourceButton resource={resource} /> : null}
+                    <EntityExportButton
+                      entityKind="resource"
+                      name={resource.name || resource.id}
+                      onExport={(format) => api.exportResource(resource.id, format)}
+                      testIdPrefix="export-resource"
+                    />
+                    <EntityDuplicateButton
+                      texts={{
+                        success: t('toast.duplicated'),
+                        error: t('toast.duplicateError'),
+                        viewerReadOnly: t('delete.viewerReadOnly'),
+                      }}
+                      label={t('detail.duplicate')}
+                      onDuplicate={() => api.duplicateResource(resource.id)}
+                      detailPath={(newId) => wsPath(`/resources/${newId}`)}
+                      testId="duplicate-resource"
+                    />
+                    {canEdit ? (
+                      <EntityDeleteButton
+                        name={resource.name}
+                        texts={{
+                          dialogTitle: t('delete.dialogTitle'),
+                          success: t('delete.success'),
+                          viewerReadOnly: t('delete.viewerReadOnly'),
+                          blockedMessage: t('delete.blockedMessage'),
+                        }}
+                        onDelete={() => api.deleteResource(resource.id)}
+                        listPath={wsPath('/resources')}
+                        testIdPrefix="delete-resource"
+                      />
+                    ) : null}
                   </>
                 }
               />

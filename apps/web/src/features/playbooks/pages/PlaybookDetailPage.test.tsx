@@ -346,7 +346,7 @@ describe('PlaybookDetailPage', () => {
 // ---------------------------------------------------------------------------
 
 // Radix-Primitives (Dialog) brauchen Pointer-Capture-Stubs in jsdom
-// (Muster aus DeletePlaybookButton.test.tsx).
+// (Muster aus EntityDeleteButton.test.tsx).
 beforeAll(() => {
   for (const fn of [
     'hasPointerCapture',

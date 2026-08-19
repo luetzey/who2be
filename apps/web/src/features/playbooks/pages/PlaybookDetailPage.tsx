@@ -17,6 +17,7 @@ import { Container } from '@/components/layout/Container'
 import { Stack } from '@/components/layout/Stack'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { EntityDeleteButton, EntityExportButton } from '@/components/entity'
 import { usePlaybookComposes } from '@/hooks/usePlaybookComposes'
 import { usePlaybookResourceLinks } from '@/hooks/usePlaybookResourceLinks'
 import { usePlaybookUsages } from '@/hooks/usePlaybookUsages'
@@ -24,8 +25,6 @@ import { cn } from '@/lib/utils'
 import { notify } from '@/lib/feedback'
 
 import { ComposedByList } from '../components/ComposedByList'
-import { DeletePlaybookButton } from '../components/DeletePlaybookButton'
-import { ExportPlaybookButton } from '../components/ExportPlaybookButton'
 import { LinkedBlocksList } from '../components/LinkedBlocksList'
 import {
   PlaybookDetailTabs,
@@ -211,7 +210,12 @@ export function PlaybookDetailPage() {
                       version={playbook.current_version}
                     />
                   ) : null}
-                  <ExportPlaybookButton playbook={playbook} />
+                  <EntityExportButton
+                    entityKind="playbook"
+                    name={playbook.name || playbook.id}
+                    onExport={(format) => api.exportPlaybook(playbook.id, format)}
+                    testIdPrefix="export-playbook"
+                  />
                 </div>
               </header>
 
@@ -269,7 +273,18 @@ export function PlaybookDetailPage() {
                             {t('delete.dangerZoneDescription')}
                           </p>
                           <div>
-                            <DeletePlaybookButton playbook={playbook} />
+                            <EntityDeleteButton
+                              name={playbook.name}
+                              texts={{
+                                dialogTitle: t('delete.dialogTitle'),
+                                success: t('delete.success'),
+                                viewerReadOnly: t('delete.viewerReadOnly'),
+                                blockedMessage: t('delete.blockedMessage'),
+                              }}
+                              onDelete={() => api.deletePlaybook(playbook.id)}
+                              listPath={wsPath('/playbooks')}
+                              testIdPrefix="delete-playbook"
+                            />
                           </div>
                         </div>
                       ) : null}

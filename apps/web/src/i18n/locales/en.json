@@ -85,6 +85,20 @@
       "helpText": "Determines which language this element is created in — changeable afterwards.",
       "de": "Deutsch",
       "en": "English"
+    },
+    "entityDelete": {
+      "label": "Delete",
+      "confirmLabel": "Delete permanently",
+      "dialogDescription": "{{name}} and all its versions are removed permanently. This action cannot be undone.",
+      "error": "Deletion failed.",
+      "blockedTitle": "Deletion blocked"
+    },
+    "entityExport": {
+      "label": "Export",
+      "json": "As JSON",
+      "markdown": "As Markdown",
+      "success": "Export downloaded.",
+      "error": "Export failed."
     }
   },
   "layout": {
@@ -1132,24 +1146,12 @@
       "description": "Skills will soon get their own versioned format — as packaged, reusable capabilities for your agents. The feature is not yet active."
     },
     "delete": {
-      "label": "Delete",
-      "confirmLabel": "Delete permanently",
       "dialogTitle": "Delete persona?",
-      "dialogDescription": "{{name}} and all its versions are removed permanently. This action cannot be undone.",
       "success": "Persona deleted.",
-      "error": "Deletion failed.",
       "viewerReadOnly": "Viewers can only view personas",
-      "blockedTitle": "Deletion blocked",
       "blockedMessage": "This persona is still used by:",
       "dangerZoneTitle": "Delete persona",
       "dangerZoneDescription": "Permanently removes this persona and all its versions. No undo."
-    },
-    "export": {
-      "label": "Export",
-      "json": "As JSON",
-      "markdown": "As Markdown",
-      "success": "Export downloaded.",
-      "error": "Export failed."
     },
     "card": {
       "modeCount_one": "{{count}} mode",
@@ -1350,24 +1352,12 @@
       "saveButton": "Save ({{count}})"
     },
     "delete": {
-      "label": "Delete",
-      "confirmLabel": "Delete permanently",
       "dialogTitle": "Delete playbook?",
-      "dialogDescription": "{{name}} and all its versions are removed permanently. This action cannot be undone.",
       "success": "Playbook deleted.",
-      "error": "Deletion failed.",
       "viewerReadOnly": "Viewers can only view playbooks",
-      "blockedTitle": "Deletion blocked",
       "blockedMessage": "This playbook is still used by:",
       "dangerZoneTitle": "Delete playbook",
       "dangerZoneDescription": "Permanently removes this playbook and all its versions. No undo."
-    },
-    "export": {
-      "label": "Export",
-      "json": "As JSON",
-      "markdown": "As Markdown",
-      "success": "Export downloaded.",
-      "error": "Export failed."
     }
   },
   "resources": {
@@ -1485,24 +1475,12 @@
       "duplicateError": "Duplication failed."
     },
     "delete": {
-      "label": "Delete",
-      "confirmLabel": "Delete permanently",
       "dialogTitle": "Delete resource?",
-      "dialogDescription": "{{name}} and all its versions are removed permanently. This action cannot be undone.",
       "success": "Resource deleted.",
-      "error": "Deletion failed.",
       "viewerReadOnly": "Viewers can only view resources",
-      "blockedTitle": "Deletion blocked",
       "blockedMessage": "This resource is still used by:",
       "dangerZoneTitle": "Delete resource",
       "dangerZoneDescription": "Permanently removes this resource and all its versions. No undo."
-    },
-    "export": {
-      "label": "Export",
-      "json": "As JSON",
-      "markdown": "As Markdown",
-      "success": "Export downloaded.",
-      "error": "Export failed."
     },
     "card": {
       "linkedIn_one": "Linked in {{count}} playbook",
@@ -2262,24 +2240,12 @@
       "createFailed": "Creation failed."
     },
     "delete": {
-      "label": "Delete",
-      "confirmLabel": "Delete permanently",
       "dialogTitle": "Delete external tool?",
-      "dialogDescription": "{{name}} and all its versions are removed permanently. This action cannot be undone.",
       "success": "External tool deleted.",
-      "error": "Deletion failed.",
       "viewerReadOnly": "Viewers can only view external tools",
-      "blockedTitle": "Deletion blocked",
       "blockedMessage": "This tool is still used by:",
       "dangerZoneTitle": "Delete external tool",
       "dangerZoneDescription": "Permanently removes this tool and all its versions. No undo."
-    },
-    "export": {
-      "label": "Export",
-      "json": "As JSON",
-      "markdown": "As Markdown",
-      "success": "Export downloaded.",
-      "error": "Export failed."
     },
     "card": {
       "toolCount_one": "{{count}} tool name",
