@@ -496,6 +496,31 @@ Setup-Prüfungen der Helfer selbst, die jetzt einmal statt fünfzehnmal stehen.
 Offen aus dem Aufräum-Plan: Rendering/Entschärfung aus
 `services/wa_tables.py` und SQL-Bau aus `services/wa_rules.py` (Stufe 3).
 
+### Aufräumen Stufe 3 (2026-08-19) — abgeschlossen
+
+Letzter offener Punkt aus dem Aufräum-Plan, verhaltensneutrale Extraktion,
+keine neue Logik. Plan: `.claude/plan/2026-08-19-1500_stufe3-wa-render-tablestore.md`.
+
+- **Render-/Entschärfungs-Helfer** aus `services/wa_tables.py` (880 → 755 Z.)
+  nach `services/wa_render.py` (neu, 168 Z., reine Funktionen — kein I/O, kein
+  `ApiGateError`). Umbenannt: `_render_markdown` → `render_table_markdown`,
+  `_render_csv` → `render_table_csv`, `_compose_result_doc` →
+  `compose_result_doc`, `_csv_cell` → `csv_cell`, `_CSV_FORMULA_PREFIXES` →
+  `CSV_FORMULA_PREFIXES`. Sprechende Namen statt einer dritten
+  `_render_markdown`-Definition — `entity_export_service._render_markdown`
+  und `wa_blocks.render_markdown` existieren bereits, alle drei tun etwas
+  anderes. Einzige Teständerung: der Import in `test_security_fixes_phase2.py`.
+- **SQL-Bau** aus `services/wa_rules.py::_reapply_sql` (+ `_like_parameter`) in
+  `TableStore.reapply_category(...)` (`tablestore/engine.py`) gezogen
+  (`wa_rules.py` 360 → 332 Z.). `wa_rules.py` kennt jetzt kein SQL mehr — die
+  ARC-3-Leitplanke (kein SQL in `apps/api/**/services/`) ist für die
+  WorkArea-Services damit buchstäblich erfüllt. Die redundante
+  Doppel-Validierung `quote_identifier(validate_identifier(...))` entfiel
+  (`quote_identifier` validiert intern).
+
+Neutralitätsbeweis: volle Suite vorher wie nachher **1681 passed**, keine
+inhaltliche Assertion im Diff.
+
 ### Aufräumen Stufe 2 (2026-08-19) — zwei echte Defekte statt Kosmetik
 
 Beide Punkte, die als „Aufräumen" auf der Liste standen, waren bei näherem
@@ -540,11 +565,6 @@ grün, Coverage 91,09 %.
   Weg führt über MCP/API. Seit dem Discovery-Fix ist das kein Sackgassen-
   Problem mehr, aber die Asymmetrie bleibt (Artifacts sind sichtbar,
   Tabellen nicht).
-- **Tabellen-Import kappt Zell-Breiten nicht** (gefunden 2026-08-16): der
-  Lesepfad deckelt Zellen auf 1 MB, der Schreibpfad nicht — ein Agent kann
-  eine überbreite Zelle importieren und damit die eigene Tabelle für alle
-  Queries auf dieser Spalte unlesbar machen (413). Kein System-DoS, aber ein
-  Selbstschuss; Fix wäre eine Längenprüfung in `_validate_rows` (422).
 - **Tabellen-Store-Verzeichnisse überleben den Hard-Purge** (bewusst, WP20):
   `cleanup_deleted_area_stores` fasst nur Verzeichnisse an, deren Workspace
   noch existiert — Schutz gegen einen Purge-Lauf gegen die falsche/leere DB.
@@ -563,13 +583,6 @@ grün, Coverage 91,09 %.
   `detail` per SQL (`->>`) auswertet, muss für Altzeilen mit einem
   JSON-*String* rechnen. Dass dieselbe Fehlerklasse woanders einen Endpunkt
   gekillt hat, steht oben (§`describe_table` antwortete mit 500).
-- **Tool-Übersicht nennt Schreib-Tools ohne Capability** (gefunden
-  2026-08-16): die kuratierten `_TOOLS`-Gruppen des `tools-overview`-Resolvers
-  führen Read- und Write-Tools in EINER Signatur-Zeile. Ist die Gruppe wegen
-  ihrer Reads sichtbar, liest ein Agent auch die Namen der Schreib-Tools, die
-  er nicht halten darf (`tools/list` filtert sie korrekt weg — er bekäme also
-  einen Fehler). Kein Sicherheitsproblem, aber irreführender Prompt; Fix wäre
-  eine Trennung der gemischten Gruppen.
 - E2E-Gate bleibt Soft, bis die CI-Infra dauerhaft stabil ist. Die
   Voraussetzung — eine überhaupt laufende CI — ist seit 2026-08-16 wieder
   gegeben (§Standards / CI); ob der Soft-Gate-Status fällt, ist eine

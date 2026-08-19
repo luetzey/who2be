@@ -49,18 +49,20 @@ sobald sie eine bekommen, snapshottet der Log-Aufruf hier den Server-Wert.
 ARC-3: kein SQL, keine HTTPException — nur `ApiGateError`, Domain-Exceptions
 (`TableRowsInvalid`/`TableQueryInvalid`, uebersetzt der Router), Repos,
 `core/workarea_scope` und der TableStore (SQLite NUR ueber ihn).
+
+Die AUSGABE-Seite liegt in `services/wa_render.py` (reine Funktionen ohne
+I/O): Markdown-Tabelle, CSV mit Formel-Prefix-Guard und die Komposition des
+Result-Docs samt der Entschaerfungen fuer alles, was nicht aus der Engine
+kommt (Titel, SQL, Zellinhalte — Security-Review M4/L5).
 """
 
 from __future__ import annotations
 
-import csv
-import io
 import logging
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import UTC, date, datetime
-from typing import Final
+from datetime import date, datetime
 from uuid import UUID
 
 import asyncpg
@@ -80,6 +82,11 @@ from who2be_api.repositories.wa_rule_repository import WaRuleRepository
 from who2be_api.repositories.wa_table_repository import WaTableRepository
 from who2be_api.services.access_log import log_access
 from who2be_api.services.wa_artifacts import WaArtifactService
+from who2be_api.services.wa_render import (
+    compose_result_doc,
+    render_table_csv,
+    render_table_markdown,
+)
 from who2be_api.services.wa_rules import categorize_rows, convention_missing
 from who2be_api.tablestore import (
     MAX_CELL_BYTES,
@@ -286,68 +293,6 @@ def _query_result_too_large(detail: str) -> ApiGateError:
     )
 
 
-def _single_line(text: str) -> str:
-    """Presst Freitext auf EINE Zeile ohne Steuerzeichen (Security-Review M4).
-
-    `title` kommt aus dem Request und landet als ``# {title}`` im
-    server-komponierten Markdown. Ohne diese Normalisierung kann ein Titel
-    mit ``\\n`` beliebige weitere Bloecke, Fences oder Anker-Marker in das
-    Artifact schreiben — der Agent diktierte dann Struktur, die als
-    Server-Ausgabe gelesen wird.
-    """
-    collapsed = "".join(
-        " " if character < " " or character == "\x7f" else character for character in text
-    )
-    return " ".join(collapsed.split()) or "Ergebnis"
-
-
-def _sql_fence(sql: str) -> str:
-    """Waehlt einen Fence, der laenger ist als jede Backtick-Folge im SQL (M4).
-
-    Ein fixes ```` ``` ```` liesse sich mit Backticks IM SQL schliessen — der
-    Rest der Query stuende danach als freier Markdown-Text im Artifact.
-    """
-    longest = 0
-    current = 0
-    for character in sql:
-        current = current + 1 if character == "`" else 0
-        longest = max(longest, current)
-    return "`" * max(3, longest + 1)
-
-
-def _compose_result_doc(
-    *,
-    title: str,
-    table_name: str,
-    sql: str,
-    columns: list[str],
-    rows: list[list[object]],
-    truncated: bool,
-) -> str:
-    """Komponiert das doc-Artifact eines eingefrorenen Query-Ergebnisses (WP16).
-
-    Spec §10.6: die Zahlen im Artifact stammen aus dem Result-Set der Engine
-    — der SERVER rendert (via `_render_markdown`), nie Modell-Text. Der
-    Zeitstempel ist der Ausfuehrungszeitpunkt (UTC); `occurred_at` des
-    Artifacts traegt davon getrennt den FACHLICHEN Zeitpunkt aus dem Request.
-
-    Alles, was NICHT aus der Engine kommt (`title`, `sql`), wird vorher
-    entschaerft (`_single_line`, `_sql_fence`, `_neutralize_anchor`) — sonst
-    waere „der Server rendert" nur nominell wahr (Security-Review M4).
-    """
-    stamp = datetime.now(tz=UTC).strftime("%Y-%m-%d %H:%M UTC")
-    cut = ", gekuerzt" if truncated else ""
-    safe_title = _neutralize_anchor(_single_line(title))
-    fence = _sql_fence(sql)
-    return (
-        f"# {safe_title}\n\n"
-        f"Eingefrorenes Query-Ergebnis vom {stamp} "
-        f"(Tabelle '{table_name}', {len(rows)} Zeilen{cut}).\n\n"
-        f"{fence}sql\n{sql}\n{fence}\n\n"
-        f"{_render_markdown(columns, rows)}\n"
-    )
-
-
 def _validate_rows(schema: TableSchema, rows: list[dict[str, object]]) -> None:
     """Prueft jede Zeile gegen das Katalog-Schema (VOR jedem SQLite-Write).
 
@@ -424,76 +369,6 @@ def _validate_occurred_at(index: int, value: object, column_type: TableColumnTyp
             f"Zeile {index}: 'occurred_at' ist nicht parsebar ({value!r}) — "
             f"erwartet ISO-8601 als {column_type.value}."
         ) from exc
-
-
-def _neutralize_anchor(text: str) -> str:
-    """Entschaerft ``[#...]``-Anker-Marker in Freitext (Security-Review M4).
-
-    ``[#xxxxxxxx]`` ist die ANKER-Sprache der Artifacts (ADR-0021): der
-    Lesepfad rendert damit Block-Adressen. Steht die Sequenz in Zellinhalten
-    oder im Titel, faelscht sie Anker, die es nicht gibt. Ein eingefuegtes
-    Leerzeichen bricht das Muster, ohne den Text unlesbar zu machen (bewusst
-    kein Zero-Width-Zeichen: unsichtbare Fixes sind nicht pruefbar).
-    """
-    return text.replace("[#", "[ #")
-
-
-def _markdown_cell(value: object) -> str:
-    """Eine Zelle als Markdown-Tabellenzelle — strukturneutral (M4).
-
-    Drei Angriffe, drei Antworten: ``|`` bricht die Spaltenstruktur
-    (escaped), ``\\r``/``\\n`` brechen die ZEILE (zu Leerzeichen — sonst
-    schreibt eine Zelle beliebige neue Tabellenzeilen oder Bloecke), und
-    ``[#`` faelscht Anker (`_neutralize_anchor`). Zellinhalte stammen aus
-    importierten Fremddaten und sind damit ebenso untrusted wie Agenten-Text.
-    """
-    if value is None:
-        return ""
-    flattened = "".join(" " if character in "\r\n\t" else character for character in str(value))
-    return _neutralize_anchor(flattened.replace("|", "\\|"))
-
-
-def _render_markdown(columns: list[str], rows: list[list[object]]) -> str:
-    """Ergebnis als Markdown-Tabelle (agentengerecht, Entscheidung 7)."""
-    lines = [
-        "| " + " | ".join(_markdown_cell(column) for column in columns) + " |",
-        "| " + " | ".join("---" for _ in columns) + " |",
-    ]
-    lines.extend("| " + " | ".join(_markdown_cell(value) for value in row) + " |" for row in rows)
-    return "\n".join(lines)
-
-
-# Zeichen, die Tabellenkalkulationen als Formel-Start lesen (OWASP CSV
-# Injection). Ein importierter Zellwert `=cmd|'/c calc'!A1` wird in Excel/
-# Sheets beim Oeffnen des Exports AUSGEFUEHRT — der Export ist damit ein
-# Angriffspfad aus fremden Quelldaten in das Geraet des Menschen.
-_CSV_FORMULA_PREFIXES: Final = ("=", "+", "-", "@", "\t", "\r")
-
-
-def _csv_cell(value: object) -> object:
-    """Entschaerft Formel-Zellen im CSV-Export (Security-Review L5).
-
-    Nur `str`-Werte werden praefixiert: SQLite liefert Zahlen als int/float,
-    und ein numerisches ``-3.2`` ist in jeder Tabellenkalkulation eine ZAHL,
-    keine Formel. So bleibt der haeufigste legitime Fall (negative Betraege
-    aus NUMERIC-Spalten) unveraendert, waehrend jeder Textwert mit
-    Formel-Praefix ein fuehrendes ``'`` bekommt.
-    """
-    if value is None:
-        return ""
-    if isinstance(value, str) and value.startswith(_CSV_FORMULA_PREFIXES):
-        return f"'{value}"
-    return value
-
-
-def _render_csv(columns: list[str], rows: list[list[object]]) -> str:
-    """Ergebnis als CSV (stdlib `csv`, QUOTE_MINIMAL); None → leere Zelle."""
-    buffer = io.StringIO()
-    writer = csv.writer(buffer, quoting=csv.QUOTE_MINIMAL, lineterminator="\n")
-    writer.writerow([_csv_cell(column) for column in columns])
-    for row in rows:
-        writer.writerow([_csv_cell(value) for value in row])
-    return buffer.getvalue()
 
 
 def _column_specs(schema: TableSchema) -> list[ColumnSpec]:
@@ -736,7 +611,7 @@ class WaTableService:
             return None
         except sqlite3.DatabaseError as exc:
             raise TableQueryInvalid(str(exc)) from exc
-        content = _compose_result_doc(
+        content = compose_result_doc(
             title=data.title,
             table_name=table.name,
             sql=data.sql,
@@ -793,9 +668,9 @@ class WaTableService:
         except sqlite3.DatabaseError as exc:
             raise TableQueryInvalid(str(exc)) from exc
         if data.format is QueryFormat.markdown:
-            rendered: str | None = _render_markdown(result.columns, result.rows)
+            rendered: str | None = render_table_markdown(result.columns, result.rows)
         elif data.format is QueryFormat.csv:
-            rendered = _render_csv(result.columns, result.rows)
+            rendered = render_table_csv(result.columns, result.rows)
         else:
             rendered = None
         await self._log(ctx, table.id, "read")
