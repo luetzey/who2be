@@ -856,3 +856,43 @@ bleiben)._
   der Helfer selbst) — nicht behauptet.
 - **Detail:** `who2be_api/testing/api_helpers.py`,
   `repositories/snippet.py`; 18 Testdateien (+221/−691).
+
+## 2026-08-19 — Eine kuratierte Tool-Gruppe = eine Sichtbarkeitsbedingung
+- **Entscheidung:** Ein `_ToolDoc` im `tools-overview`-Resolver bündelt nur
+  Tools, die **dieselbe** Bedingung sichtbar macht. Lesen und Schreiben stehen
+  in getrennten Einträgen; `promote_artifact` (`resource_write`) und
+  `create_edge` (`kb_edge_write`) stehen allein, weil sie eine andere Erlaubnis
+  verlangen als ihre Nachbarn. Auch die **Beschreibung** darf kein Tool nennen,
+  das der Leser nicht hat — sie wird mitgeteilt, nicht nur die Signatur.
+- **Begründung:** `is_visible` ist ein Gruppen-Oder, gedruckt wird aber der
+  ganze Eintrag. Bei gemischten Gruppen nannte der System-Prompt eines Agenten
+  mit Default-Policy 13 Tools, die die `PolicyFilterMiddleware` gleichzeitig
+  aus `tools/list` entfernt. Beide Seiten hingen an derselben SSoT — eine
+  gemeinsame Quelle genügt nicht, wenn die Konsumseite gröber gruppiert als
+  die Quelle unterscheidet.
+- **Verworfen:** die Signatur pro Policy zusammensetzen (Textbau zur Laufzeit
+  statt kuratierter Text — der Sinn des Resolvers ist ja die gepflegte
+  Formulierung); `has_visible_write` zum Ausblenden zweckentfremden (es
+  steuert nur den Schreibzugriff-Hinweis).
+- **Absicherung:** `test_prompt_nennt_kein_tool_das_die_policy_herausfiltert`
+  iteriert über `MCP_TOOL_REQUIREMENTS` statt über eine gepflegte Namensliste
+  — ein neues Tool ist automatisch mitgeprüft.
+- **Detail:** ADR-0042-Nachtrag 2026-08-19;
+  `services/placeholders/resolvers/tools.py`.
+
+## 2026-08-19 — Größen-Grenzen gelten im Schreibpfad, nicht erst beim Lesen
+- **Entscheidung:** `_validate_rows` prüft jede String-Zelle gegen dieselbe
+  Konstante `MAX_CELL_BYTES`, die der Query-Pfad als `SQLITE_LIMIT_LENGTH`
+  setzt, und lehnt mit 422 ab, bevor geschrieben wird. Die Konstante wird aus
+  `tablestore` importiert — keine zweite Zahl im Service.
+- **Begründung:** Die rw-Connection kennt das Limit bewusst nicht (der Server
+  unterliegt seinen eigenen Agenten-Grenzen nicht). Ohne Vorab-Prüfung nimmt
+  der Import eine überlange Zelle an und die ro-Connection kann die Zeile
+  danach nicht mehr lesen — geschrieben und trotzdem kaputt. Ein Schreibpfad,
+  der Daten annimmt, die der Lesepfad ablehnt, ist die gefährlichere Hälfte
+  von „eine Sache, zwei Definitionen": der Fehler zeigt sich erst später und
+  an anderer Stelle.
+- **Verallgemeinerung:** Wo Lese- und Schreibpfad verschiedene Grenzen kennen,
+  gilt die STRENGERE beim Schreiben — sonst entsteht Zustand, den das System
+  selbst nicht mehr lesen kann.
+- **Detail:** ADR-0047-Nachtrag 2026-08-19; `services/wa_tables.py`.

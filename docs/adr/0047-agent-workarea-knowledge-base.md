@@ -288,3 +288,27 @@ Tabellen-Store, Zugriffslog und Promote. Die tragenden Entscheidungen:
   die Agent-Identität in die Note (L3, die Spalte gehört dem
   User-Identitätsraum) und kürzt den Slug-Stamm (L4, sonst wird ein langer
   Titel zum 500er).
+
+## Nachtrag 2026-08-19 — die Zell-Obergrenze fehlte im Schreibpfad
+
+Die drei harten Grenzen oben sichern den **Query**-Pfad; `_connect_rw` setzt
+kein `SQLITE_LIMIT_LENGTH` (der Server schreibt, er unterliegt dem Limit
+nicht). `_validate_rows` prüfte Spalten, Skalare, NOT-NULL und `occurred_at`
+— Größe nicht. Damit nahm `insert_rows` eine Zelle über 1 MB an. Gemessen:
+
+```
+Schreiben ohne Limit: OK, 2 MB liegen in der Tabelle
+Lesen (ro-Connection): DataError SQLITE_TOOBIG  string or blob too big
+COUNT(*): 1
+```
+
+Die Folge ist nicht „ein Fehler an der falschen Stelle", sondern eine
+Tabelle, die nach dem Import kaputt ist: die Zeile steht drin, aber **jedes**
+`SELECT` auf die Spalte bricht ab; nur `count(*)` läuft noch. Ein Agent
+konnte sich sein eigenes Material unlesbar machen, ohne dass ihm der Import
+etwas meldete.
+
+**Entscheidung:** `_validate_rows` prüft jede String-Zelle gegen dieselbe
+Konstante `MAX_CELL_BYTES` (UTF-8-Bytes, wie `SQLITE_LIMIT_LENGTH` zählt) und
+lehnt mit 422 ab, **bevor** geschrieben wird. Eine Quelle für die Grenze, aus
+dem Store importiert — keine zweite Zahl im Service.
