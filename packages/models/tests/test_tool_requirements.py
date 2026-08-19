@@ -241,10 +241,12 @@ def test_mapping_covers_all_registered_server_tools() -> None:
     # server.py + 8 WorkArea-Tools aus `tools/workarea.py` + 6 KB-Tools aus
     # `tools/kb.py` inkl. `promote_artifact` + 9 Tabellen-/Timeline-Tools aus
     # `tools/tables.py`, WP8/WP9/WP19 — ADR-0047/0049; damit ist die
-    # Welle-7-Zaehlung 71 -> 81 erreicht).
+    # Welle-7-Zaehlung 71 -> 81 erreicht). 83 seit `list_tables`/`delete_table`
+    # (Befund 2026-08-17: Tabellen waren ueber MCP weder auffindbar noch
+    # loeschbar).
     # Neues Tool => hier + im Mapping ergaenzen; der Paritaetstest in apps/mcp
     # prueft die Gegenrichtung gegen den Server.
-    assert len(MCP_TOOL_REQUIREMENTS) == 81
+    assert len(MCP_TOOL_REQUIREMENTS) == 83
     always = {name for name, req in MCP_TOOL_REQUIREMENTS.items() if req.always}
     assert always == {"ping", "whoami"}
 

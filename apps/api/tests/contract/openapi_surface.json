@@ -805,6 +805,11 @@
     "operationId": "promote_artifact_v1_workspaces__workspace_id__wa_artifacts__artifact_id__promote_post"
   },
   {
+    "method": "DELETE",
+    "path": "/v1/workspaces/{workspace_id}/wa-tables/{table_id}",
+    "operationId": "delete_table_v1_workspaces__workspace_id__wa_tables__table_id__delete"
+  },
+  {
     "method": "GET",
     "path": "/v1/workspaces/{workspace_id}/wa-tables/{table_id}",
     "operationId": "describe_table_v1_workspaces__workspace_id__wa_tables__table_id__get"
