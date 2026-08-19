@@ -773,3 +773,33 @@ bleiben)._
 - **Detail:** `0082_kb_node_locale.sql`; `repositories/fts_config.py`;
   `kb_repository.search_nodes`/`insert_node`; `services/kb.create_node`;
   `test_kb.py` (Wortformen, Sprach-Fallback, Migration gegen Altbestand).
+
+## 2026-08-17 — Tabellen brauchen einen Discovery- und einen Lösch-Pfad
+- **Entscheidung:** MCP bekommt `list_tables` (Katalog einer Area,
+  `area_id=None` = private Area) und `delete_table`; der Namenskonflikt-409
+  nennt die **ID der bestehenden Tabelle** statt eines REST-Pfads. Der Delete
+  räumt Katalog-Zeile und SQLite-Tabelle in EINER Transaktion — dieselbe
+  Reihenfolge wie beim Anlegen.
+- **Anlass:** Meldung aus dem Agentenbetrieb. Ein Agent konnte eine Tabelle
+  anlegen und im nächsten Lauf strukturell nicht wiederfinden: kein Listing,
+  der 409 verwies auf einen Pfad ohne Tool, `search_workarea` indiziert
+  Passagen, `timeline` verlangt die ID. Ohne Delete hinterließ jeder
+  Ausweichname eine Leiche.
+- **Begründung:** Die API konnte das Listing längst — es fehlte nur die letzte
+  Meile zum Agenten (dieselbe Klasse wie Befund C). Und ein Werkzeug, mit dem
+  man etwas anlegen, aber nicht aufräumen kann, erzieht zum Müllproduzieren.
+  Der 409 mit ID ist der selbstheilende Teil: er beantwortet die Frage, die
+  der Agent in genau diesem Moment hat, aus Daten, die der Server ohnehin
+  vorliegen hat.
+- **Nebenentscheidung:** Die Auflösung `area_id=None → private Area` steht ab
+  jetzt einmal in `tools/area_ref.py`. Zwei Kopien derselben Regel hätten
+  bedeutet, dass benachbarte Tools in verschiedene Areas schauen.
+- **Verworfen:** Tabellen in den Passagen-Index (`wa_chunk`) aufnehmen —
+  Tabellen haben keine Passagen; eine Katalog-Suche über Name/Spalten wäre ein
+  eigener Entwurf. Beim Delete auch die eingefrorenen
+  `save_query_result`-Artifacts entfernen — sie sind eigenständige Belege für
+  Zahlen, die schon zitiert sein können.
+- **Detail:** `tablestore/engine.drop_table`, `wa_table_repository`
+  (`get_by_name`/`delete`), `services/wa_tables` (`delete`, `_name_conflict`),
+  `DELETE /wa-tables/{id}`, `tools/tables.py` + `tools/area_ref.py`;
+  `test_wa_tables.py::test_tabelle_bleibt_auffindbar_und_ist_loeschbar`.

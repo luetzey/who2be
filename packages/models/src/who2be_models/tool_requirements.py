@@ -244,6 +244,8 @@ MCP_TOOL_REQUIREMENTS: dict[str, ToolRequirement] = {
     #     technisch POST ist, semantisch aber ein Read (read-only als
     #     Engine-Garantie).
     "create_table": _WORKAREA_WRITE,
+    "delete_table": _WORKAREA_WRITE,
+    "list_tables": _WORKAREA_READ,
     "insert_rows": _WORKAREA_WRITE,
     "query_table": _WORKAREA_READ,
     "describe_table": _WORKAREA_READ,

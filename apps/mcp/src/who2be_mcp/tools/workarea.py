@@ -22,6 +22,7 @@ from pydantic import ValidationError
 from who2be_mcp.client import ApiClient
 from who2be_mcp.clients import workarea as wa_api
 from who2be_mcp.core_logging import with_tool_log
+from who2be_mcp.tools.area_ref import parse_area_id, resolve_private_area_id
 from who2be_models import (
     ArtifactAppend,
     ArtifactCreate,
@@ -33,7 +34,6 @@ from who2be_models import (
     IngestResult,
     OccurredPrecision,
     Sensitivity,
-    WorkAreaScope,
     WorkAreaSearchHit,
 )
 
@@ -58,10 +58,6 @@ def _parse_uuid(value: str, label: str) -> UUID:
         return UUID(value)
     except ValueError as exc:
         raise ToolError(f"Ungueltige {label}-UUID: '{value}'.") from exc
-
-
-def _parse_area_id(area_id: str | None) -> UUID | None:
-    return None if area_id is None else _parse_uuid(area_id, "Area")
 
 
 def _block_id(anchor: str) -> str:
@@ -123,7 +119,7 @@ async def create_artifact(
         )
     except ValidationError as exc:
         raise ToolError(f"Ungueltige Eingabe: {_first_error(exc)}") from exc
-    return await wa_api.create_artifact(client, _parse_area_id(area_id), data)
+    return await wa_api.create_artifact(client, parse_area_id(area_id), data)
 
 
 @with_tool_log("append_artifact")
@@ -221,30 +217,10 @@ async def list_artifacts(area_id: str | None = None) -> list[ArtifactRead]:
     durchgehen musst.
     """
     client = await _client()
-    parsed_area = _parse_area_id(area_id)
+    parsed_area = parse_area_id(area_id)
     if parsed_area is None:
-        parsed_area = await _resolve_private_area_id(client)
+        parsed_area = await resolve_private_area_id(client)
     return await wa_api.list_artifacts(client, parsed_area)
-
-
-async def _resolve_private_area_id(client: ApiClient) -> UUID:
-    """Loest `area_id=None` auf die private Area des Aufrufers auf.
-
-    `GET .../work-areas` legt die private Area eines agent-gebundenen Tokens
-    beim ersten Zugriff automatisch an (ADR-0047). Menschen/ungebundene
-    Tokens haben keine (bzw. editor+ sieht mehrere fremde private Areas) —
-    dann ist eine explizite `area_id` gefordert.
-    """
-    areas = await wa_api.list_work_areas(client)
-    private = [area for area in areas if area.scope == WorkAreaScope.private]
-    if len(private) == 1:
-        return private[0].id
-    if not private:
-        raise ToolError(
-            "Keine private Area aufloesbar — nur agent-gebundene Tokens haben eine. "
-            "Gib `area_id` explizit an (sichtbare Areas: `whoami.work_areas`)."
-        )
-    raise ToolError("Mehrere private Areas sichtbar (Mensch/editor+) — gib `area_id` explizit an.")
 
 
 @with_tool_log("delete_artifact")
@@ -298,7 +274,7 @@ async def ingest(
         )
     except ValidationError as exc:
         raise ToolError(f"Ungueltige Eingabe: {_first_error(exc)}") from exc
-    return await wa_api.ingest(client, _parse_area_id(area_id), data)
+    return await wa_api.ingest(client, parse_area_id(area_id), data)
 
 
 @with_tool_log("search_workarea")
@@ -315,7 +291,7 @@ async def search_workarea(query: str, area_id: str | None = None) -> list[WorkAr
     nichts, sag das offen, statt zu raten.
     """
     client = await _client()
-    return await wa_api.search_workarea(client, query, _parse_area_id(area_id))
+    return await wa_api.search_workarea(client, query, parse_area_id(area_id))
 
 
 def register(mcp: FastMCP) -> None:

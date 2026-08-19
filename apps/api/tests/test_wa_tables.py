@@ -205,6 +205,105 @@ def test_create_describe_roundtrip_und_namenskonflikt(make_auth_headers: AuthFac
 
 @pytest.mark.integration
 @pytest.mark.usefixtures("patched_jwt_secret", "migrated_db", "table_store")
+def test_tabelle_bleibt_auffindbar_und_ist_loeschbar(make_auth_headers: AuthFactory) -> None:
+    """Der Betriebsbefund vom 2026-08-17: Tabellen waren eine Sackgasse.
+
+    Ein Agent konnte eine Tabelle anlegen und sie im naechsten Lauf
+    strukturell nicht wiederfinden — `search_workarea` indiziert
+    Artifact-Passagen, `timeline` verlangt die ID bereits, und ein Listing gab
+    es ueber MCP nicht. Loeschen ging gar nicht, jeder Ausweichname hinterliess
+    eine Leiche.
+
+    Geprueft wird die Kette, die ein Agent tatsaechlich geht:
+    auflisten → wiederfinden → Namenskonflikt mit ID → loeschen → Name frei.
+    """
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    prefix = f"/v1/workspaces/{ws}"
+    try:
+        with TestClient(app) as client:
+            area_id = _shared_area(client, prefix, auth, "Auffindbarkeit")
+            table_id = _create_table(client, prefix, auth, area_id).json()["id"]
+            assert _insert(client, prefix, auth, table_id, _ROWS).status_code == 200
+
+            # 1) Wiederfinden — mit nichts als der Area.
+            listed = client.get(f"{prefix}/work-areas/{area_id}/tables", headers=auth)
+            assert listed.status_code == 200, listed.text
+            assert [(t["id"], t["name"]) for t in listed.json()] == [(table_id, "transactions")]
+
+            # 2) Der Namenskonflikt nennt die ID der bestehenden Tabelle,
+            #    statt auf einen Pfad zu verweisen, den ein Agent nicht gehen
+            #    kann — damit heilt sich auch ein Agent ohne Listing selbst.
+            konflikt = _create_table(client, prefix, auth, area_id)
+            assert konflikt.status_code == 409, konflikt.text
+            assert konflikt.json()["reason"] == "concurrent_conflict"
+            assert table_id in konflikt.json()["detail"]
+
+            # 3) Loeschen raeumt BEIDE Seiten — Katalog und SQLite-Datei.
+            assert client.delete(f"{prefix}/wa-tables/{table_id}", headers=auth).status_code == 204
+            assert client.get(f"{prefix}/wa-tables/{table_id}", headers=auth).status_code == 404
+            assert client.get(f"{prefix}/work-areas/{area_id}/tables", headers=auth).json() == []
+
+            # 4) Der eigentliche Beweis fuer (3): der Name ist wieder frei.
+            #    Bliebe die SQLite-Tabelle liegen, liefe die Neuanlage in
+            #    "already exists" → 409, und der Name waere dauerhaft verbrannt.
+            erneut = _create_table(client, prefix, auth, area_id)
+            assert erneut.status_code == 201, erneut.text
+            assert erneut.json()["id"] != table_id
+            # Frische Tabelle: die alten Zeilen sind mitgegangen.
+            beschrieben = client.get(
+                f"{prefix}/wa-tables/{erneut.json()['id']}", headers=auth
+            ).json()
+            assert beschrieben["row_count"] == 0
+
+            # Unbekannte Tabelle → 404 (kein Existenz-Leak).
+            assert client.delete(f"{prefix}/wa-tables/{_GHOST}", headers=auth).status_code == 404
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db", "table_store")
+def test_delete_gates(make_auth_headers: AuthFactory) -> None:
+    """Loeschen ist ein Schreibpfad: Rolle, Capability und Area-Grant zaehlen."""
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    prefix = f"/v1/workspaces/{ws}"
+    try:
+        with TestClient(app) as client:
+            area_id = _shared_area(client, prefix, auth, "Delete-Gates")
+            table_id = _create_table(client, prefix, auth, area_id).json()["id"]
+
+            # Agent mit Read-Grant + Write-Capability → 403 `area_forbidden`.
+            ro_id, ro_tok = _agent_token(
+                client, prefix, "nur-lesen", {"workarea_write": True}, auth
+            )
+            _grant(client, prefix, auth, area_id, ro_id, "read")
+            verweigert = client.delete(f"{prefix}/wa-tables/{table_id}", headers=ro_tok)
+            assert verweigert.status_code == 403, verweigert.text
+            assert verweigert.json()["reason"] == "area_forbidden"
+
+            # Agent OHNE Grant → 404 (die Tabelle existiert fuer ihn nicht).
+            _, fremd = _agent_token(client, prefix, "ohne-grant", {"workarea_write": True}, auth)
+            assert client.delete(f"{prefix}/wa-tables/{table_id}", headers=fremd).status_code == 404
+
+            # Write-Grant ohne Capability → 403 `missing_capability`.
+            wr_id, wr_tok = _agent_token(client, prefix, "ohne-cap", {}, auth)
+            _grant(client, prefix, auth, area_id, wr_id, "write")
+            ohne_cap = client.delete(f"{prefix}/wa-tables/{table_id}", headers=wr_tok)
+            assert ohne_cap.status_code == 403, ohne_cap.text
+            assert ohne_cap.json()["reason"] == "missing_capability"
+
+            # Und die Tabelle steht nach allen Fehlversuchen unveraendert da.
+            assert client.get(f"{prefix}/wa-tables/{table_id}", headers=auth).status_code == 200
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db", "table_store")
 def test_describe_liefert_gesetzte_konventionen(make_auth_headers: AuthFactory) -> None:
     """describe mit NICHT-leerer Konventions-Liste — der Fall aus dem Betrieb.
 

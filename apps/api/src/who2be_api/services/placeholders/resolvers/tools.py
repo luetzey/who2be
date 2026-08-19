@@ -506,20 +506,24 @@ _TOOLS: list[_ToolDoc] = [
     #     grant-dynamisch immer gelistet, die Writes verlangen `workarea_write`.
     _ToolDoc(
         signature=(
-            "describe_table(table_id) / query_table(table_id, sql, format?, limit?) / "
+            "list_tables(area_id?) / describe_table(table_id) / "
+            "query_table(table_id, sql, format?, limit?) / "
             "save_query_result(table_id, sql, title, occurred_at, ...) / "
             "create_table(area_id, name, schema) / insert_rows(table_id, rows, ...) / "
+            "delete_table(table_id) / "
             "timeline(from_, to, sources?, granularity?) / "
             "set_convention(area_id, source_name, convention) / "
             "upsert_category_rule(area_id, pattern, category, confidence?) / "
             "list_category_rules(area_id)"
         ),
         tool_names=(
+            "list_tables",
             "describe_table",
             "query_table",
             "save_query_result",
             "create_table",
             "insert_rows",
+            "delete_table",
             "timeline",
             "set_convention",
             "upsert_category_rule",
@@ -530,7 +534,9 @@ _TOOLS: list[_ToolDoc] = [
             "Strukturierte Zahlen gehoeren in eine Tabelle, nicht in Prosa: "
             "create_table (Spalte `occurred_at` ist Pflicht), insert_rows "
             "(idempotent ueber den Dedupe-Hash, Antwort {inserted, skipped}). "
-            "Auswerten IMMER in dieser Reihenfolge: describe_table (Schema, "
+            "Auswerten IMMER in dieser Reihenfolge: list_tables (welche "
+            "Tabellen gibt es — Tabellen tauchen weder in der Suche noch in "
+            "der Timeline auf) → describe_table (Schema, "
             "Wertebereiche, Konventionen) → query_table (read-only SQL). Rechne "
             "Zahlen NIE selbst aus und tippe sie nie ab — lass die Query "
             "rechnen; soll das Ergebnis belegbar sein, friert "
@@ -542,7 +548,9 @@ _TOOLS: list[_ToolDoc] = [
             "co_occurs_with mit n >= 20. Kategorien kommen NUR aus Regeln "
             "(upsert_category_rule/list_category_rules, Regel vor Modell), "
             "Einheiten und Notation je Quelle einmalig aus set_convention — "
-            "nie pro Zeile raten. Schreiben verlangt `workarea_write`."
+            "nie pro Zeile raten. Aufraeumen: delete_table entfernt Tabelle "
+            "und Daten endgueltig (eingefrorene Auswertungen bleiben). "
+            "Schreiben verlangt `workarea_write`."
         ),
     ),
 ]

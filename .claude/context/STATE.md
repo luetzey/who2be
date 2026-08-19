@@ -425,8 +425,41 @@ dritten Kopie gibt es jetzt `repositories/fts_config.fts_config_expr`, das
 alle drei Suchpfade nutzen. Gegenprobe: alle drei neuen Tests waren vor dem
 Fix rot (`Fehlercodes` → `[]`, fehlende Spalte, fehlender Backfill).
 
+### Tabellen waren für Agenten unauffindbar und unlöschbar (2026-08-17, behoben)
+
+Aus dem Agentenbetrieb gemeldet, alle Teilbehauptungen geprüft: es gab kein
+`list_tables` über MCP (wohl aber `list_category_rules` — man konnte die
+*Regeln* auflisten, nicht die Tabellen); der 409 bei Namenskollision verwies
+auf `GET /work-areas/{area_id}/tables`, also auf einen REST-Pfad ohne Tool;
+`search_workarea` indiziert Artifact-Passagen und `timeline` verlangt die ID
+bereits. Ein Agent konnte eine Tabelle anlegen und sie im nächsten Lauf
+strukturell nicht wiederfinden. Löschen ging gar nicht — jeder Ausweichname
+hinterließ eine Leiche.
+
+Die API konnte das Listing die ganze Zeit; es fehlte nur die letzte Meile zum
+Agenten — dieselbe Klasse wie Befund C (Reason-Codes).
+
+Behoben: MCP-Tools `list_tables` (mit `area_id=None` = private Area) und
+`delete_table`; der 409 nennt jetzt die **ID der bestehenden Tabelle**, womit
+sich auch ein Agent ohne Listing selbst heilt; neu `DELETE /wa-tables/{id}`
+plus `TableStore.drop_table` — Katalog-Delete und `DROP TABLE` atomar wie beim
+Anlegen, damit nie „Katalog leer, SQLite-Tabelle liegt noch da" entsteht (das
+würde den Namen dauerhaft verbrennen). Die Auflösung von `area_id=None` liegt
+jetzt einmal in `tools/area_ref.py` statt je Tool-Familie.
+
+Bewusst nicht mitgelöscht: eingefrorene `save_query_result`-Artifacts (sie
+sind eigenständige Belege für bereits zitierte Zahlen) sowie Regeln und
+Konventionen, die an der Area hängen.
+
 ## Bekannte Probleme
 
+- **Tabellen fehlen in der Web-UI** (gefunden 2026-08-17): `features/workarea`
+  hat Seiten für Areas, Artifacts, Suche und KB — aber keine für Tabellen, und
+  `api/client.ts` ruft keinen `wa-tables`-Pfad. Ein Mensch sieht also weder,
+  welche Tabellen ein Agent angelegt hat, noch kann er aufräumen; der einzige
+  Weg führt über MCP/API. Seit dem Discovery-Fix ist das kein Sackgassen-
+  Problem mehr, aber die Asymmetrie bleibt (Artifacts sind sichtbar,
+  Tabellen nicht).
 - **Tabellen-Import kappt Zell-Breiten nicht** (gefunden 2026-08-16): der
   Lesepfad deckelt Zellen auf 1 MB, der Schreibpfad nicht — ein Agent kann
   eine überbreite Zelle importieren und damit die eigene Tabelle für alle
