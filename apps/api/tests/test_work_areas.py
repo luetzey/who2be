@@ -20,9 +20,9 @@ from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
-from who2be_api.testing.api_helpers import agent_token
 
 from who2be_api.main import app
+from who2be_api.testing.api_helpers import agent_token
 from who2be_api.testing.workspace_setup import (
     cleanup_workspaces,
     fresh_user_id,

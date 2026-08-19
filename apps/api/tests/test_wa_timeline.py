@@ -29,11 +29,11 @@ from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
-from who2be_api.testing.api_helpers import agent_token, grant, shared_area
 
 from who2be_api.main import app
 from who2be_api.services.tablestore_provider import reset_table_store, set_table_store
 from who2be_api.tablestore import TableStore
+from who2be_api.testing.api_helpers import agent_token, grant, shared_area
 from who2be_api.testing.workspace_setup import (
     cleanup_workspaces,
     fresh_user_id,

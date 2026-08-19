@@ -41,7 +41,6 @@ from uuid import UUID
 import asyncpg
 import pytest
 from fastapi.testclient import TestClient
-from who2be_api.testing.api_helpers import agent_token, db_execute, grant, shared_area
 
 import who2be_api.services.access_log as access_log_module
 from who2be_api.core.config import get_settings
@@ -57,6 +56,7 @@ from who2be_api.services.wa_tables import (
     _render_markdown,
 )
 from who2be_api.tablestore import MAX_CELL_BYTES, MAX_RESULT_BYTES, TableStore
+from who2be_api.testing.api_helpers import agent_token, db_execute, grant, shared_area
 from who2be_api.testing.workspace_setup import (
     cleanup_workspaces,
     fresh_user_id,
