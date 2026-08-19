@@ -800,6 +800,11 @@
     "operationId": "append_artifact_v1_workspaces__workspace_id__wa_artifacts__artifact_id__append_post"
   },
   {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/wa-artifacts/{artifact_id}/export",
+    "operationId": "export_artifact_v1_workspaces__workspace_id__wa_artifacts__artifact_id__export_get"
+  },
+  {
     "method": "POST",
     "path": "/v1/workspaces/{workspace_id}/wa-artifacts/{artifact_id}/promote",
     "operationId": "promote_artifact_v1_workspaces__workspace_id__wa_artifacts__artifact_id__promote_post"
@@ -813,6 +818,11 @@
     "method": "GET",
     "path": "/v1/workspaces/{workspace_id}/wa-tables/{table_id}",
     "operationId": "describe_table_v1_workspaces__workspace_id__wa_tables__table_id__get"
+  },
+  {
+    "method": "GET",
+    "path": "/v1/workspaces/{workspace_id}/wa-tables/{table_id}/export",
+    "operationId": "export_table_v1_workspaces__workspace_id__wa_tables__table_id__export_get"
   },
   {
     "method": "POST",

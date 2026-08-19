@@ -24,6 +24,10 @@ dependencies = [
     # Das SDK ist Apache-2.0 und Kern-Dependency; der AGPL-MinIO-SERVER laeuft nur
     # als Container (docker-compose: `minio`), wie Postgres.
     "minio>=7.2",
+    # XLSX-Export der WorkArea-Tabellen (ADR-0049): openpyxl schreibt die
+    # Arbeitsmappe rein in memory. MIT-Lizenz (wie et-xmlfile, die einzige
+    # transitive Abhaengigkeit) — Lizenz-Gate-konform (ADR-0033).
+    "openpyxl>=3.1.5",
     "pydantic-settings>=2.0",
     "pyjwt>=2.8",
     # WorkArea-Ingest (ADR-0048): PDF-Text-Extraktion in memory, VOR jedem Write.

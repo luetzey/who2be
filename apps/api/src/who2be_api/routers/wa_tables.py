@@ -12,6 +12,8 @@ Pfade unter `/v1/workspaces/{ws_id}` (Prefix aus `main.py`):
   als doc-Artifact in der Area der Tabelle (WP16, M-Ersatz — Entscheidung 7).
 - ``GET /wa-tables/{table_id}`` — describe (Schema, Zeilenzahl,
   Wertebereiche, Area-Konventionen).
+- ``GET /wa-tables/{table_id}/export?format=csv|xlsx`` — die ganze Tabelle als
+  Datei-Download (`Content-Disposition: attachment`, Muster `routers/_export.py`).
 - ``DELETE /wa-tables/{table_id}`` — Tabelle + Daten endgueltig loeschen.
 - ``PUT /work-areas/{area_id}/conventions/{source_name}`` /
   ``GET /work-areas/{area_id}/conventions`` — Quell-Konventionen (WP17,
@@ -43,7 +45,7 @@ from typing import Annotated
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response, status
 from pydantic import BaseModel
 
 from who2be_api.core.db import get_pool
@@ -58,7 +60,12 @@ from who2be_api.services.mcp_limit_service import enforce_mcp_read_limit
 from who2be_api.services.tablestore_provider import get_table_store
 from who2be_api.services.wa_artifacts import WaArtifactService
 from who2be_api.services.wa_rules import WaRuleService
-from who2be_api.services.wa_tables import TableQueryInvalid, TableRowsInvalid, WaTableService
+from who2be_api.services.wa_tables import (
+    TableExportFormat,
+    TableQueryInvalid,
+    TableRowsInvalid,
+    WaTableService,
+)
 from who2be_api.tablestore import QueryTimeout
 from who2be_models import (
     ArtifactRead,
@@ -121,6 +128,10 @@ Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]
 Service = Annotated[WaTableService, Depends(get_wa_table_service)]
 RuleService = Annotated[WaRuleService, Depends(get_wa_rule_service)]
 SourceName = Annotated[str, Path(min_length=1, max_length=100)]
+# Export-Format als geschlossene Literal-Allowlist (Muster `resources.py`):
+# alles ausserhalb faellt in die FastAPI-Validierung (422), bevor der Service
+# ueberhaupt laeuft.
+ExportFormat = Annotated[TableExportFormat, Query()]
 
 
 def _table_not_found() -> HTTPException:
@@ -238,6 +249,52 @@ async def describe_table(table_id: UUID, ctx: Ctx, service: Service) -> TableDes
     if description is None:
         raise _table_not_found()
     return description
+
+
+# response_model=None: die Route liefert einen Datei-`Response`, kein
+# Pydantic-Modell — FastAPI soll daraus kein Response-Model ableiten
+# (Muster `resources.export_resource`).
+@router.get(
+    "/wa-tables/{table_id}/export",
+    response_model=None,
+    dependencies=[Depends(enforce_mcp_read_limit)],
+)
+# Zusaetzlich zum Lese-Gate das write_limit (ADR-0032: Exporte laufen unter
+# dem Rate-Limit) — die XLSX-Erzeugung ist CPU-teuer, ohne Limit koennte ein
+# blosser Read-Grant die API in einer Schleife stilllegen (Review M-1).
+@limiter.limit(write_limit)
+async def export_table(
+    request: Request,
+    table_id: UUID,
+    ctx: Ctx,
+    service: Service,
+    format: ExportFormat = "csv",
+) -> Response:
+    """Ganze Tabelle als Datei-Download (CSV oder XLSX).
+
+    Export ist LESEN (ADR-0032) — deshalb dasselbe Gate wie describe/query
+    und kein `require_role`; die Sichtbarkeit schneidet der Service. Immer
+    `attachment`, nie inline: der Inhalt stammt aus importierten Fremddaten
+    und darf im Browser des Menschen nicht als Dokument gerendert werden.
+    Mehr als `EXPORT_ROW_LIMIT` Zeilen → 413 (kein stiller Teil-Export);
+    Zeitbudget gerissen → 408, SQL-Fehler → 400."""
+    try:
+        export = await service.export(ctx, table_id, format)
+    except TableQueryInvalid as exc:
+        raise _query_invalid(exc) from exc
+    except QueryTimeout as exc:
+        raise _query_timeout(exc) from exc
+    if export is None:
+        raise _table_not_found()
+    return Response(
+        content=export.content,
+        media_type=export.media_type,
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="who2be-table-{table_id}.{export.extension}"'
+            )
+        },
+    )
 
 
 @router.put("/work-areas/{area_id}/conventions/{source_name}")

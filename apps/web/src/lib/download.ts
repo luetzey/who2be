@@ -26,3 +26,19 @@ export function downloadExport(
   anchor.click()
   URL.revokeObjectURL(url)
 }
+
+/**
+ * Generischer Datei-Download: Blob (z. B. XLSX-Export) oder String (CSV/
+ * Markdown/HTML) → `<a download>`. Gleiche Mechanik wie `downloadExport`,
+ * aber ohne Who2Be-spezifisches Namensschema — `filename` traegt bereits
+ * Endung und Praefix.
+ */
+export function downloadFile(content: Blob | string, filename: string): void {
+  const blob = typeof content === 'string' ? new Blob([content]) : content
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  anchor.click()
+  URL.revokeObjectURL(url)
+}

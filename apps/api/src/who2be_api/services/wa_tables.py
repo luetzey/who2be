@@ -37,8 +37,11 @@ sieht erst nach erfolgreicher Regel-Phase Writes (kein Teilzustand).
 
 Zugriffslog (Spec F, WP14): erfolgreiche Agent-Zugriffe werden NACH der
 Operation best-effort geloggt (`services/access_log.log_access`, No-op fuer
-Menschen): `query`/`describe` als ``(table, read)``, der Zeilen-Import als
-``(table, write)`` — `ref_id` ist die Katalog-ID (`wa_table.id`).
+Menschen): `query`/`describe`/`export` als ``(table, read)``, der Zeilen-Import
+als ``(table, write)`` — `ref_id` ist die Katalog-ID (`wa_table.id`). Der
+Datei-Export bekommt bewusst KEINE eigene Operation: die
+`AccessOperation`-Taxonomie kennt nur ``read|write``, und ein Export IST ein
+Read (er liefert genau die Zeilen, die eine Query auch liefern wuerde).
 `save_query_result` (WP16) loggt hier NUR ``(table, read)`` fuer die Query;
 das ``(artifact, write)`` kommt aus dem Artifact-Anlage-Pfad
 (`WaArtifactService.create`) — kein Doppel-Log. Die
@@ -51,18 +54,23 @@ ARC-3: kein SQL, keine HTTPException — nur `ApiGateError`, Domain-Exceptions
 `core/workarea_scope` und der TableStore (SQLite NUR ueber ihn).
 
 Die AUSGABE-Seite liegt in `services/wa_render.py` (reine Funktionen ohne
-I/O): Markdown-Tabelle, CSV mit Formel-Prefix-Guard und die Komposition des
-Result-Docs samt der Entschaerfungen fuer alles, was nicht aus der Engine
-kommt (Titel, SQL, Zellinhalte — Security-Review M4/L5).
+I/O): Markdown-Tabelle, CSV/XLSX mit Formel-Prefix-Guard und die Komposition
+des Result-Docs samt der Entschaerfungen fuer alles, was nicht aus der Engine
+kommt (Titel, SQL, Zellinhalte — Security-Review M4/L5). `export` reicht die
+gerenderte Datei als `TableExport` an den Router weiter, der daraus den
+Download baut (ARC-3: kein HTTP-Wissen hier).
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import re
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import date, datetime
+from typing import Final, Literal, NamedTuple
 from uuid import UUID
 
 import asyncpg
@@ -86,9 +94,11 @@ from who2be_api.services.wa_render import (
     compose_result_doc,
     render_table_csv,
     render_table_markdown,
+    render_table_xlsx,
 )
 from who2be_api.services.wa_rules import categorize_rows, convention_missing
 from who2be_api.tablestore import (
+    EXPORT_ROW_LIMIT,
     MAX_CELL_BYTES,
     MAX_RESULT_BYTES,
     AreaStoreMissingError,
@@ -125,6 +135,10 @@ logger = logging.getLogger(__name__)
 
 _SCALAR_TYPES = (str, int, float, bool)
 
+# C0-Steuerzeichen ausser Tab/LF/CR — dieselbe Menge, die openpyxl als
+# XML-illegal zurueckweist (s. `_validate_cell_text`).
+_ILLEGAL_XML_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+
 
 class TableRowsInvalid(ValueError):
     """Zeilen-Import passt nicht zum Katalog-Schema — Router antwortet 422.
@@ -141,6 +155,29 @@ class TableQueryInvalid(ValueError):
     Bewusst getrennt von `ReadOnlyViolation` (→ 403 `query_not_readonly`):
     ein Tippfehler ist kein Schreibversuch.
     """
+
+
+# Export-Formate der Tabelle (ADR-0032-Muster: geschlossene Literal-Allowlist,
+# der Router laesst FastAPI alles andere mit 422 abweisen).
+TableExportFormat = Literal["csv", "xlsx"]
+
+# Offizieller OOXML-Typ der Arbeitsmappe (IANA) — nicht `application/x-excel`
+# o. ae.: nur damit erkennt der Browser die Datei ohne Endungs-Raterei.
+_XLSX_MEDIA_TYPE: Final = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+class TableExport(NamedTuple):
+    """Fertig gerenderter Tabellen-Download plus Auslieferungs-Metadaten.
+
+    Der Service liefert Daten, der ROUTER baut daraus die `Response` samt
+    `Content-Disposition` (ARC-3: kein HTTP-Wissen im Service, Muster
+    `routers/_export.py`). `content` ist Text (CSV) ODER Bytes (XLSX) — beides
+    traegt `Response` unveraendert.
+    """
+
+    content: str | bytes
+    media_type: str
+    extension: str
 
 
 def _name_conflict(name: str, existing_id: UUID | None) -> ApiGateError:
@@ -293,6 +330,33 @@ def _query_result_too_large(detail: str) -> ApiGateError:
     )
 
 
+def _export_too_large(row_count: int) -> ApiGateError:
+    """413 fuer eine Tabelle ueber dem Export-Zeilen-Cap (`EXPORT_ROW_LIMIT`).
+
+    Reason wie bei den beiden Geschwistern oben: das bestehende
+    `ingest_too_large` (geschlossene Taxonomie — dieselbe Schutzfamilie
+    „Inhalt zu gross", kein neues Vokabular fuer denselben Sachverhalt).
+
+    Warum ueberhaupt ein Fehler und nicht ein gekuerzter Download: eine
+    Export-Datei, der ohne Hinweis Zeilen fehlen, ist schlimmer als gar
+    keine — der Mensch rechnet mit einer unvollstaendigen Tabelle weiter und
+    merkt es nie. Deshalb nennt das `detail` den Weg, der zum Ziel fuehrt,
+    statt den Aufrufer mit einem "zu gross" stehen zu lassen.
+    """
+    return ApiGateError(
+        status=status.HTTP_413_CONTENT_TOO_LARGE,
+        reason="ingest_too_large",
+        actionable_by="agent",
+        detail=(
+            f"Die Tabelle hat mehr als {EXPORT_ROW_LIMIT} Zeilen "
+            f"({row_count} gelesen) — ein vollstaendiger Datei-Export ist damit "
+            "nicht moeglich. Filtere die Zeilen per `query_table` und friere "
+            "das Ergebnis mit `save_query_result` ein; das Artifact laesst sich "
+            "danach exportieren."
+        ),
+    )
+
+
 def _validate_rows(schema: TableSchema, rows: list[dict[str, object]]) -> None:
     """Prueft jede Zeile gegen das Katalog-Schema (VOR jedem SQLite-Write).
 
@@ -318,6 +382,7 @@ def _validate_rows(schema: TableSchema, rows: list[dict[str, object]]) -> None:
                     "erlaubt sind nur Skalare (string/number/boolean/null)."
                 )
             _validate_cell_size(index, name, value)
+            _validate_cell_text(index, name, value)
         for column in schema.columns:
             if not column.nullable and row.get(column.name) is None:
                 raise TableRowsInvalid(
@@ -344,6 +409,29 @@ def _validate_cell_size(index: int, name: str, value: object) -> None:
             f"Zeile {index}: Spalte '{name}' ist mit {size} Bytes groesser als "
             f"das Zell-Limit von {MAX_CELL_BYTES} Bytes — kuerze den Wert oder "
             "lege den Volltext als Artifact ab und referenziere ihn."
+        )
+
+
+def _validate_cell_text(index: int, name: str, value: object) -> None:
+    """Zelle gegen XML-illegale Steuerzeichen — Grenze des XLSX-Lesepfads.
+
+    openpyxl verweigert die C0-Steuerzeichen ausser Tab/LF/CR
+    (`IllegalCharacterError`). SQLite und CSV nehmen sie an — eine einzige
+    solche Zeile machte den XLSX-Export der Tabelle dauerhaft zum 500er,
+    waehrend CSV weiter funktioniert (von aussen beobachtbar und damit
+    gezielt setzbar, Security-Review 2026-08-19 M-2). Dieselbe Regel wie
+    beim Zell-Cap: wo Lese- und Schreibpfad verschiedene Grenzen kennen,
+    gilt die strengere beim Schreiben — 422 statt spaeterem 500.
+    Tab/LF/CR bleiben erlaubt (mehrzeiliger Text ist legitim).
+    """
+    if not isinstance(value, str):
+        return
+    match = _ILLEGAL_XML_CHARS.search(value)
+    if match is not None:
+        raise TableRowsInvalid(
+            f"Zeile {index}: Spalte '{name}' enthaelt das Steuerzeichen "
+            f"U+{ord(match.group()):04X} — entferne es; erlaubt sind Tab, "
+            "Zeilenumbruch und druckbare Zeichen."
         )
 
 
@@ -681,6 +769,60 @@ class WaTableService:
             row_count=len(result.rows),
             truncated=result.truncated,
         )
+
+    async def export(
+        self, ctx: WorkspaceContext, table_id: UUID, format: TableExportFormat
+    ) -> TableExport | None:
+        """Ganze Tabelle als Datei-Download (CSV/XLSX); `None` → Router 404.
+
+        Sichtbarkeit exakt wie `query`/`describe` (`_visible_table`): der
+        Export ist ein READ und damit fuer Viewer offen (ADR-0032), er
+        oeffnet aber keine Zeile, die eine Query nicht auch liefern wuerde.
+
+        Das SQL baut der STORE (`read_table_rows`, ARC-3) — hier steht keine
+        Zeile SQL. Damit gelten unveraendert Zeitbudget, Zell- und
+        Result-Budget des Query-Pfads, und das Fehlerbild ist dasselbe:
+        `ResultTooLarge` → 413, `QueryTimeout` → 408 (Router),
+        `AreaStoreMissingError` → 404 (Katalog-Zeile ohne Area-Datei ist von
+        aussen nicht von einer unbekannten Tabelle unterscheidbar), sonstige
+        SQL-Fehler → `TableQueryInvalid` (Router → 400).
+
+        Greift der Zeilen-Cap (`truncated`), bricht der Export mit 413 ab,
+        statt eine unvollstaendige Datei auszuliefern (s. `_export_too_large`).
+        """
+        table = await self._visible_table(ctx, table_id)
+        if table is None:
+            return None
+        try:
+            with _store_failures():
+                result = await self._store.read_table_rows(
+                    ctx.workspace_id,
+                    table.area_id,
+                    table.name,
+                    [column.name for column in table.schema_.columns],
+                )
+        except ResultTooLarge as exc:
+            raise _query_result_too_large(str(exc)) from exc
+        except AreaStoreMissingError:
+            return None
+        except sqlite3.DatabaseError as exc:
+            raise TableQueryInvalid(str(exc)) from exc
+        if result.truncated:
+            raise _export_too_large(len(result.rows))
+        if format == "csv":
+            content: str | bytes = render_table_csv(result.columns, result.rows)
+            media_type, extension = "text/csv; charset=utf-8", "csv"
+        else:
+            # In den Thread: die Workbook-Erzeugung ist CPU-gebunden (~2 s
+            # beim vollen Result-Budget) und wuerde sonst den Event-Loop und
+            # damit JEDEN anderen Request blockieren (Security-Review M-1;
+            # Muster `wa_ingest._extract_blocks`).
+            content = await asyncio.to_thread(
+                render_table_xlsx, table.name, result.columns, result.rows
+            )
+            media_type, extension = _XLSX_MEDIA_TYPE, "xlsx"
+        await self._log(ctx, table.id, "read")
+        return TableExport(content=content, media_type=media_type, extension=extension)
 
     async def describe(self, ctx: WorkspaceContext, table_id: UUID) -> TableDescription | None:
         """Schema + Zeilenzahl + Wertebereiche + Area-Konventionen; `None` → 404.

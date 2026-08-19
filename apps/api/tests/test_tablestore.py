@@ -24,11 +24,14 @@ import pytest
 
 from who2be_api.tablestore import (
     DESCRIBE_DISTINCT_CAP,
+    EXPORT_ROW_LIMIT,
+    MAX_RESULT_BYTES,
     AreaStoreMissingError,
     ColumnSpec,
     ColumnType,
     InsertResult,
     ReadOnlyViolation,
+    ResultTooLarge,
     SchemaError,
     TableStore,
     build_create_table_sql,
@@ -59,8 +62,23 @@ _ROWS = [
 ]
 
 
+# Export-Lesepfad: `read_table_rows` sortiert ueber `occurred_at`, die
+# Pflicht-Systemspalte jeder Tabelle (ADR-0049, Timeline-Anforderung N) — die
+# Store-Tests brauchen dafuer eine Tabelle, die sie wirklich traegt.
+_EVENT_COLUMNS = [
+    ColumnSpec(name="occurred_at", type=ColumnType.TIMESTAMP, nullable=False),
+    ColumnSpec(name="purpose", type=ColumnType.TEXT),
+]
+_EVENT_COLUMN_NAMES = ["occurred_at", "purpose"]
+_EVENT_DEDUPE_COLUMNS = ("occurred_at", "purpose")
+
+
 def _hash_fn(row: Mapping[str, object]) -> str:
     return row_hash(row, _DEDUPE_COLUMNS)
+
+
+def _event_hash_fn(row: Mapping[str, object]) -> str:
+    return row_hash(row, _EVENT_DEDUPE_COLUMNS)
 
 
 def _seeded_store(tmp_path: Path, rows: Sequence[Mapping[str, object]]) -> TableStore:
@@ -71,6 +89,19 @@ def _seeded_store(tmp_path: Path, rows: Sequence[Mapping[str, object]]) -> Table
         await store.create_table(_WS, _AREA, "transactions", _COLUMNS)
         if rows:
             await store.insert_rows(_WS, _AREA, "transactions", _COLUMN_NAMES, rows, _hash_fn)
+
+    asyncio.run(_seed())
+    return store
+
+
+def _seeded_event_store(tmp_path: Path, rows: Sequence[Mapping[str, object]]) -> TableStore:
+    """Store mit `events`-Tabelle (inkl. `occurred_at`) fuer den Export-Pfad."""
+    store = TableStore(base_dir=tmp_path)
+
+    async def _seed() -> None:
+        await store.create_table(_WS, _AREA, "events", _EVENT_COLUMNS)
+        if rows:
+            await store.insert_rows(_WS, _AREA, "events", _EVENT_COLUMN_NAMES, rows, _event_hash_fn)
 
     asyncio.run(_seed())
     return store
@@ -172,6 +203,87 @@ def test_readonly_query_truncates_at_limit(tmp_path: Path) -> None:
     complete = asyncio.run(store.run_readonly_query(_WS, _AREA, sql, limit=3))
     assert len(complete.rows) == 3
     assert complete.truncated is False
+
+
+# --- Export-Lesepfad (alle Zeilen, SQL-Bau im Store) -------------------------
+
+
+def test_read_table_rows_returns_all_rows_ordered_by_occurred_at(tmp_path: Path) -> None:
+    # Der Export-Endpoint kennt kein SQL (ARC-3): der Store baut das
+    # SELECT ueber die Katalog-Spalten selbst und liefert alle Zeilen.
+    rows = [
+        {"occurred_at": "2026-08-03T09:00:00", "purpose": "drei"},
+        {"occurred_at": "2026-08-01T09:00:00", "purpose": "eins"},
+        {"occurred_at": "2026-08-02T09:00:00", "purpose": "zwei"},
+    ]
+    store = _seeded_event_store(tmp_path, rows)
+
+    result = asyncio.run(store.read_table_rows(_WS, _AREA, "events", _EVENT_COLUMN_NAMES))
+
+    # Explizite Katalog-Spalten — die internen Store-Spalten `_dedupe_hash` /
+    # `_source_artifact` gehoeren nicht in die Export-Datei eines Menschen.
+    assert result.columns == ["occurred_at", "purpose"]
+    assert [row[1] for row in result.rows] == ["eins", "zwei", "drei"]
+    assert result.truncated is False
+
+
+def test_read_table_rows_flags_truncation_at_row_cap(tmp_path: Path) -> None:
+    # Der Row-Cap haelt die in-memory XLSX-Erzeugung gebunden; `truncated`
+    # sagt dem Aufrufer, dass der Export UNVOLLSTAENDIG waere.
+    rows = [
+        {"occurred_at": f"2026-08-{1 + i:02d}T09:00:00", "purpose": f"zweck-{i}"} for i in range(5)
+    ]
+    store = _seeded_event_store(tmp_path, rows)
+
+    capped = asyncio.run(store.read_table_rows(_WS, _AREA, "events", _EVENT_COLUMN_NAMES, limit=3))
+    assert len(capped.rows) == 3
+    assert capped.truncated is True
+
+    complete = asyncio.run(
+        store.read_table_rows(_WS, _AREA, "events", _EVENT_COLUMN_NAMES, limit=5)
+    )
+    assert len(complete.rows) == 5
+    assert complete.truncated is False
+
+    # Default ist der Export-Cap, nicht das Query-Limit der UI-Preview.
+    assert EXPORT_ROW_LIMIT == 10_000
+    default = asyncio.run(store.read_table_rows(_WS, _AREA, "events", _EVENT_COLUMN_NAMES))
+    assert len(default.rows) == 5
+    assert default.truncated is False
+
+
+def test_read_table_rows_unknown_table_fails_like_query_path(tmp_path: Path) -> None:
+    # Dieselbe Fehlerklasse wie beim Agenten-SQL: eine unbekannte Tabelle ist
+    # ein SQL-Fehler (Service → 400/404), KEINE Read-only-Verletzung.
+    store = _seeded_event_store(tmp_path, [])
+
+    with pytest.raises(sqlite3.OperationalError) as export_error:
+        asyncio.run(store.read_table_rows(_WS, _AREA, "gibt_es_nicht", _EVENT_COLUMN_NAMES))
+    with pytest.raises(sqlite3.OperationalError):
+        asyncio.run(
+            store.run_readonly_query(
+                _WS, _AREA, 'SELECT * FROM "gibt_es_nicht"', limit=EXPORT_ROW_LIMIT
+            )
+        )
+    assert not isinstance(export_error.value, ReadOnlyViolation)
+
+
+def test_read_table_rows_respects_result_byte_budget(tmp_path: Path) -> None:
+    # Der Export laeuft ueber denselben ro-Pfad wie das Agenten-SQL und erbt
+    # dessen Speicher-Budget (H2b) — sonst waere er der bequemste OOM-Hebel.
+    cell = "x" * 900_000
+    rows = [
+        {"occurred_at": f"2026-08-{1 + i:02d}T09:00:00", "purpose": f"{i}{cell}"} for i in range(3)
+    ]
+    store = _seeded_event_store(tmp_path, rows)
+    assert 3 * len(cell) > MAX_RESULT_BYTES
+
+    with pytest.raises(ResultTooLarge):
+        asyncio.run(store.read_table_rows(_WS, _AREA, "events", _EVENT_COLUMN_NAMES))
+    with pytest.raises(ResultTooLarge):
+        asyncio.run(
+            store.run_readonly_query(_WS, _AREA, 'SELECT * FROM "events"', limit=EXPORT_ROW_LIMIT)
+        )
 
 
 # --- Idempotenter Import + 10k-Aggregat (Spec K) -----------------------------
