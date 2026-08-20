@@ -7,7 +7,7 @@ import type { Me, VersionStatus, WorkspaceRole } from '@/api/types'
 import { SessionContext } from '@/auth/session-context'
 import { notify } from '@/lib/feedback'
 
-import { StatusActionBar } from './StatusActionBar'
+import { StatusActionBar, type StatusActionKey } from './StatusActionBar'
 
 vi.mock('@/lib/feedback', () => ({
   notify: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
@@ -34,6 +34,7 @@ function renderBar(
   onTransition = vi.fn().mockResolvedValue(undefined),
   onTransitioned = vi.fn(),
   role: WorkspaceRole = 'admin',
+  labels?: Partial<Record<StatusActionKey, string>>,
 ) {
   return render(
     <SessionContext.Provider
@@ -47,7 +48,12 @@ function renderBar(
       }}
     >
       <MemoryRouter>
-        <StatusActionBar status={status} onTransition={onTransition} onTransitioned={onTransitioned} />
+        <StatusActionBar
+          status={status}
+          onTransition={onTransition}
+          onTransitioned={onTransitioned}
+          labels={labels}
+        />
       </MemoryRouter>
     </SessionContext.Provider>,
   )
@@ -155,5 +161,87 @@ describe('StatusActionBar', () => {
     expect(await screen.findByText(/Inhalt/)).toBeInTheDocument()
     // Kein globaler notify.error bei Promote-Validation-Fail.
     expect(notify.error).not.toHaveBeenCalled()
+  })
+
+  // Issue #391: optionaler Label-Override + Testid-Schema fuer die zentrale
+  // Bar, damit Personas/Playbooks ihre historisch gewachsenen Button-Texte
+  // behalten koennen, waehrend e2e/journeys.spec.ts stabil auf
+  // `branch-action-<suffix>` selektiert.
+  describe('Testids (branch-action-<suffix>, Schema aus BranchStatus.tsx)', () => {
+    it('traegt branch-action-submit im Draft', () => {
+      renderBar('draft')
+      expect(screen.getByTestId('branch-action-submit')).toBe(
+        screen.getByRole('button', { name: 'Zur Review einreichen' }),
+      )
+    })
+
+    it('traegt branch-action-publish (nicht branch-action-promote) und branch-action-reject im Review', () => {
+      renderBar('review')
+      expect(screen.getByTestId('branch-action-publish')).toBe(
+        screen.getByRole('button', { name: 'Aktivieren' }),
+      )
+      expect(screen.getByTestId('branch-action-reject')).toBe(
+        screen.getByRole('button', { name: 'Ablehnen' }),
+      )
+      expect(screen.queryByTestId('branch-action-promote')).toBeNull()
+    })
+
+    it('traegt branch-action-reactivate im Status inactive', () => {
+      renderBar('inactive')
+      expect(screen.getByTestId('branch-action-reactivate')).toBe(
+        screen.getByRole('button', { name: 'Reaktivieren als Draft' }),
+      )
+    })
+  })
+
+  describe('labels-Override', () => {
+    it('ueberschreibt den Submit-Text, ohne Testid/Verhalten zu aendern', async () => {
+      const onTransition = vi.fn().mockResolvedValue(undefined)
+      const onTransitioned = vi.fn()
+      renderBar('draft', onTransition, onTransitioned, 'admin', {
+        submit: 'Draft abschliessen',
+      })
+
+      expect(screen.queryByRole('button', { name: 'Zur Review einreichen' })).toBeNull()
+      const button = screen.getByRole('button', { name: 'Draft abschliessen' })
+      expect(button).toBe(screen.getByTestId('branch-action-submit'))
+
+      fireEvent.click(button)
+      await waitFor(() => {
+        expect(onTransitioned).toHaveBeenCalledTimes(1)
+      })
+      expect(onTransition).toHaveBeenCalledWith('review')
+      // Toast bleibt der geteilte common:statusBar-Text — nur das Button-
+      // Label wird ueberschrieben.
+      expect(notify.success).toHaveBeenCalledWith('Zur Review eingereicht.')
+    })
+
+    it('ueberschreibt Promote/Reject im Review, Admin-Gate bleibt unveraendert', () => {
+      renderBar('review', vi.fn().mockResolvedValue(undefined), vi.fn(), 'editor', {
+        promote: 'Veroeffentlichen',
+        reject: 'Zurueck zu Draft',
+      })
+
+      const publish = screen.getByRole('button', { name: 'Veroeffentlichen' })
+      expect(publish).toBe(screen.getByTestId('branch-action-publish'))
+      expect(publish).toBeDisabled()
+      expect(publish).toHaveAttribute('title', 'Nur Admins können aktivieren')
+
+      expect(
+        screen.getByRole('button', { name: 'Zurueck zu Draft' }),
+      ).toBe(screen.getByTestId('branch-action-reject'))
+      expect(screen.queryByRole('button', { name: 'Ablehnen' })).toBeNull()
+    })
+
+    it('fehlende Label-Keys fallen auf die Default-Texte zurueck', () => {
+      renderBar('review', vi.fn().mockResolvedValue(undefined), vi.fn(), 'admin', {
+        reject: 'Zurueck zu Draft',
+      })
+
+      // Nur `reject` ist ueberschrieben — `promote` bleibt beim geteilten
+      // Default-Text.
+      expect(screen.getByRole('button', { name: 'Aktivieren' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Zurueck zu Draft' })).toBeInTheDocument()
+    })
   })
 })

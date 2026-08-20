@@ -387,6 +387,56 @@ describe('AgentEditorForm', () => {
     expect(payload).toHaveProperty('model_name', '')
   })
 
+  it('setzt bei Preset-Klick „Editor ohne Freigabe“ die erwarteten Checkboxen (Issue #394)', () => {
+    render(<Harness agent={makeAgent()} />)
+    openToolsTab()
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Editor ohne Freigabe' }))
+
+    expect(screen.getByLabelText('Playbooks erstellen/ändern/verknüpfen')).toBeChecked()
+    expect(screen.getByLabelText('Resources erstellen/ändern/verknüpfen')).toBeChecked()
+    expect(screen.getByLabelText('Arbeitsbereich schreiben (Notizen, Ingest, Tabellen)')).toBeChecked()
+    // Freigabe (promote_retire) bleibt beim „Editor ohne Freigabe“-Preset aus.
+    expect(screen.getByLabelText('Versionen aktivieren/deaktivieren')).not.toBeChecked()
+  })
+
+  it('setzt bei Preset-Klick „Editor mit Freigabe“ zusaetzlich promote_retire (Issue #394)', () => {
+    render(<Harness agent={makeAgent()} />)
+    openToolsTab()
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Editor mit Freigabe' }))
+
+    expect(screen.getByLabelText('Playbooks erstellen/ändern/verknüpfen')).toBeChecked()
+    expect(screen.getByLabelText('Versionen aktivieren/deaktivieren')).toBeChecked()
+  })
+
+  it('springt nach manueller Checkbox-Aenderung auf „Benutzerdefiniert“ (Issue #394)', () => {
+    render(<Harness agent={makeAgent()} />)
+    openToolsTab()
+
+    // Default-Policy hat `feedback_write` secure-by-default AN (Telemetrie),
+    // alle uebrigen Writes aus -> passt zu keinem der drei Presets.
+    expect(screen.getByRole('radio', { name: 'Nur lesen' })).not.toBeChecked()
+    expect(screen.getByRole('radio', { name: 'Editor ohne Freigabe' })).not.toBeChecked()
+    expect(screen.getByRole('radio', { name: 'Editor mit Freigabe' })).not.toBeChecked()
+    expect(screen.getByTestId('agent-policy-preset-custom')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Nur lesen' }))
+    expect(screen.getByRole('radio', { name: 'Nur lesen' })).toBeChecked()
+    expect(screen.queryByTestId('agent-policy-preset-custom')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Editor mit Freigabe' }))
+    expect(screen.getByRole('radio', { name: 'Editor mit Freigabe' })).toBeChecked()
+
+    // Ein einzelnes Haekchen manuell abwaehlen -> keines der drei Presets passt mehr.
+    fireEvent.click(screen.getByLabelText('Knowledge-Base-Kanten anlegen (nicht mehr löschbar)'))
+
+    expect(screen.getByRole('radio', { name: 'Nur lesen' })).not.toBeChecked()
+    expect(screen.getByRole('radio', { name: 'Editor ohne Freigabe' })).not.toBeChecked()
+    expect(screen.getByRole('radio', { name: 'Editor mit Freigabe' })).not.toBeChecked()
+    expect(screen.getByTestId('agent-policy-preset-custom')).toBeInTheDocument()
+  })
+
   it('sperrt Modell-Config und Arbeitsbereich-Rechte fuer Viewer', () => {
     roleRef.current = 'viewer'
     render(

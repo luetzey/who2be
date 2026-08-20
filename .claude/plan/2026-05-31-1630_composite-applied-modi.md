@@ -102,6 +102,7 @@ CREATE INDEX playbook_composition_child_idx
 class PlaybookCompositionLinkSet(BaseModel):
     """Eingabe für PUT /playbooks/{id}/composes — geordnete Set-Replace.
     Reihenfolge der Liste = position (0..n). Leere Liste löst alle Kinder."""
+
     model_config = ConfigDict(extra="forbid")
     child_ids: list[UUID] = Field(default_factory=list, max_length=200)
 ```
@@ -287,10 +288,12 @@ additive jsonb-Evolution). Modi sind damit automatisch versioniert.
 class PersonaMode(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1, max_length=100)
-    trigger: str | None = Field(default=None, max_length=2_000)  # kommagetrennt; leer/None = Default-Modus
+    trigger: str | None = Field(
+        default=None, max_length=2_000
+    )  # kommagetrennt; leer/None = Default-Modus
     is_default: bool = False
-    identity_add: str = Field(default="", max_length=5_000)            # was dieser Modus zur Identity ergänzt
-    output_style_override: str = Field(default="", max_length=5_000)   # wie sich der Output ändert
+    identity_add: str = Field(default="", max_length=5_000)  # was dieser Modus zur Identity ergänzt
+    output_style_override: str = Field(default="", max_length=5_000)  # wie sich der Output ändert
 ```
 `PersonaVersionContent` ergänzen:
 ```python

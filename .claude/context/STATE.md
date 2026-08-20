@@ -1,6 +1,6 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-08-20_
+_Stand: 2026-08-20 (3. Lauf)_
 
 Ist-Zustands-Snapshot, kein Changelog. Die Umsetzungs-Historie (per-Run-Details,
 Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
@@ -112,7 +112,14 @@ Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
   Security-Findings Phase 1+2 alle Closed.
 - Standards-Review 2026-07-08: WP-1–8 umgesetzt
   (`docs/standards-review-2026-07-08.md` §3); heutiger Lauf s. u.
-- **CI-Gate seit 2026-08-16 wieder aktiv** (war seit 2026-07-19 durch
+- **CI-Gate: Regression seit 2026-08-19 ~16:37 UTC** — das alte
+  Krankheitsbild ist zurück: jeder Lauf (main, Feature-Branches, Dependabot)
+  bricht nach 2–8 s ab, `runner_id: 0`, keine Logs (Belege: Runs
+  `32277214197` ff. bis `32359545985`; letzter echter grüner Lauf
+  `32268362194`, 2026-08-19 15:09–15:21). Re-Run aus der Session nicht
+  möglich (403). #338 O1 ist damit wieder offen — der Abschnitt darunter
+  beschreibt den Stand 2026-08-16–19, als das Gate real lief:
+- CI-Gate war 2026-08-16 bis 2026-08-19 aktiv (war zuvor seit 2026-07-19 durch
   Actions-Billing tot, GIT-2 im Standards-Review 2026-07-20). Alle fünf Jobs
   laufen: `python` · `web` · `e2e` · `compose-smoke` · `audit`. Beleg — das
   Krankheitsbild war Abbruch nach 2–6 s mit `runner_id: 0` und ohne Logs;
@@ -659,7 +666,7 @@ Plan: `.claude/plan/2026-08-19-2110_repo-pflege-branches-tests.md` (PR #387).
   tsc + gezielter e2e-Typ-Check grün, 956 Vitest, Coverage
   86,50/80,61/82,44/87,50, Build grün.
 
-### Repo-Pflege: Doku & Struktur (2026-08-20)
+### Repo-Pflege: Doku & Struktur (2026-08-20) — gemergt (PR #389)
 
 Playbook-Lauf über beide Tracks; Plan
 `.claude/plan/2026-08-20-0813_repo-pflege-doku-struktur.md`. Vier Weichen
@@ -686,6 +693,93 @@ Diataxis-Umbau; Community-Health Stufe 2.
   Topics (Textvorschläge im PR), Screenshot/GIF als visueller Anker im
   README, ggf. Discussions aktivieren, Social-Preview-Bild.
 
+### Repo-Pflege: Status-Nachführung & Abhaken (2026-08-20, 2. Lauf)
+
+Kleiner Pflege-Lauf auf User-Auftrag; Plan (inkl. Gap-Report und
+vollständiger Zusammenfassung der offenen Aufgaben):
+`.claude/plan/2026-08-20-1031_repo-pflege-status-abhaken.md`.
+
+- **Status-Tracking nachgeführt:** `.claude/plan/README.md` um die Zeilen
+  der Läufe 2026-08-19-1805 (Refactoring Web-Dedup), 2026-08-19-2110
+  (Branch-Hygiene/E2E, PR #387), 2026-08-20-0813 (Doku & Struktur, PR #389)
+  ergänzt — die Übersicht war drei Läufe hinterher.
+- **Issue #338 O1: erst abgehakt, dann revidiert** — beim Abhaken galt der
+  Stand „CI-Gate aktiv seit 2026-08-16"; der CI-Lauf auf PR #390 deckte
+  auf, dass die Infra-Regression seit 2026-08-19 ~16:37 zurück ist (s.
+  §Standards / CI). O1 wieder auf offen gesetzt, Befund im Issue
+  dokumentiert; O2–O4 bleiben Owner-Schritte.
+- **Abhak-Prüfung #341:** WP-8 offen (`version = "0"`, kein Tag), WP-9
+  teilerledigt (Journeys scharf, aber `continue-on-error` steht noch und
+  der CI-Grün-Nachweis auf einem Release-Commit fehlt), WP-10 offen —
+  keine Checkbox setzbar.
+- Public-Doku ohne Stale-Fund (Stand PR #389, heute gemergt);
+  Negativ-Listen-Scan sauber.
+
+### Offene Aufgaben abarbeiten (2026-08-20, 3. Lauf — PR #390)
+
+Code-Task-Flow über die codebaren offenen Aufgaben; Plan (inkl.
+Owner-Schrittfolge Teil B):
+`.claude/plan/2026-08-20-1047_offene-aufgaben-abarbeiten.md`.
+
+- **#385 behoben:** die 17 ERRORs ohne erreichbares Postgres verteilten sich
+  auf ZWEI Dateien ohne `integration`-Marker —
+  `test_resource_slug_children_duplicate.py` (5) und `test_external_tools.py`
+  (12; im Issue nicht genannt, selbe Fehlerklasse). Fix: `pytestmark =
+  pytest.mark.integration` je Modul; Repro vorher 17 ERRORs, nachher
+  17 Skips.
+- **#384 superseded:** die 8 Bumps der `python-minor-patch`-Gruppe (pytest
+  9.1.1, mypy 2.3.1, ruff 0.16.3, fastapi 0.141.1, pydantic-settings 2.15.0,
+  pypdf 6.16.1, redis 8.1.0, fastmcp 3.4.7) per `uv lock --upgrade-package`
+  + Reformat in einem Schritt. Aufklärung des Format-Drifts: **Ruff 0.16
+  formatiert Python-Codeblöcke in Markdown** — die „5 Dateien" sind
+  `.md`-Dateien (4 Plan-/ADR-Dokumente + 1 Test-Run-Protokoll).
+- **#341 WP-8 (Teil):** Root-`pyproject.toml` `version = "0"` → `0.1.0`
+  (Workspace-Members standen schon auf 0.1.0). Tag + Release bewusst erst
+  nach Merge + grünem CI-Lauf (Blocker #338 O1).
+- **DoD (ohne DB/Docker in der Session):** ruff check + `ruff format
+  --check` (697 Dateien) + mypy strict (449 Quellen) grün; **1315 pytest
+  passed / 445 skipped** (DB-Integrationstests zentral geskippt);
+  Coverage-Gate ist CI-Sache (Postgres-Service dort).
+
+### UX-Backlog-Welle mit Sub-Agents (2026-08-20, Issues #391–#394)
+
+Orchestrierter Lauf (Code-Task-Flow) über die Reste des Juni-UX-Backlogs
+(`2026-06-27-1200`) + den STATE-Refactor-Kandidaten; Plan
+`.claude/plan/2026-08-20-1115_ux-backlog-welle-subagents.md`. Inventur
+vorab: System-Prompt-MCP-Tools, Tool-Anker (→ ADR-0043) und
+Draft-on-Edit-Sichtbarkeit waren längst erledigt/überholt.
+
+- **#391 StatusActionBar-Refactor:** Personas-/Playbooks-Detailseiten auf
+  die zentrale Bar (neuer optionaler `labels`-Override, Testids
+  `branch-action-*`, Promote-Suffix historisch `publish`), Button-/Toast-
+  Texte unverändert (Neutralität via i18n-Textabgleich + unveränderte
+  Label-Assertions). Dabei den E2E-Defekt behoben: die scharfen Journeys
+  klickten Testids, die auf den Seiten nicht existierten. Befund:
+  `BranchStatus`-`actions`-Zweig ist jetzt toter Code (Folge-Kandidat).
+- **#392 MCP-Docstring-DX:** Modi-Schema (`create/update_persona`),
+  kanonisches BlockNote-Body-/Pill-Format (`create/update_playbook`,
+  `create/update_resource`), alles gegen die Pydantic-Modelle belegt;
+  `tools/list`-Payload 127 KB < 160-KB-Budget; 241 mcp-Tests grün.
+- **#393 Tag-Gruppierung:** Playbooks-Modus `tag` (Mehrfach-Tag-
+  Zugehörigkeit, „Ohne Tag"-Gruppe), Resources erstmals mit Gruppierung
+  (`features/resources/lib/grouping.ts`). Agent-/Persona-Gruppierung
+  bewusst NICHT gebaut: List-Payloads tragen keine Verknüpfung — braucht
+  Batch-Feld am List-Endpoint (sonst N+1), als Befund dokumentiert.
+- **Rest des Juni-Plans:** Draft-Discard = erste Python-Aufgabe nach
+  CI-Wiederbelebung (kein lokales Sicherheitsnetz ohne DB); Quick-Release
+  widerspricht `TRANSITION_RULE_DOC` → Owner-Weiche; proaktive
+  Pflichtfeld-Hinweise = Folgewelle.
+- **#394 Policy-Presets (Welle 2):** Preset-Auswahl im Agent-Policy-Editor
+  („Nur lesen" / „Editor ohne Freigabe" / „Editor mit Freigabe"), abgeleitet
+  aus den 12 Write-Capability-Checkboxen (`lib/policyPresets.ts` als SSoT,
+  pure functions), Abweichung zeigt „Benutzerdefiniert"; reine UI, kein
+  Persistenz-Feld. Produkt-Nuance dokumentiert: der Default-Agent zeigt
+  „Benutzerdefiniert", weil `feedback_write` per Default an ist —
+  Owner-Feinschliff wäre, Feedback-Caps aus dem Preset-Scope zu nehmen.
+- **Konsolidierungs-DoD (beide Wellen):** eslint 0 Errors, tsc grün, volle
+  Suite **985 Vitest passed** (Coverage 86,61/80,99/82,6/87,63, Floors
+  80/79/75/80), Build grün; mcp: 241 pytest grün.
+
 ## Bekannte Probleme
 
 - **Tabellen-Store-Verzeichnisse überleben den Hard-Purge** (bewusst, WP20):
@@ -707,9 +801,10 @@ Diataxis-Umbau; Community-Health Stufe 2.
   JSON-*String* rechnen. Dass dieselbe Fehlerklasse woanders einen Endpunkt
   gekillt hat, steht oben (§`describe_table` antwortete mit 500).
 - E2E-Gate bleibt Soft, bis die CI-Infra dauerhaft stabil ist. Die
-  Voraussetzung — eine überhaupt laufende CI — ist seit 2026-08-16 wieder
-  gegeben (§Standards / CI); ob der Soft-Gate-Status fällt, ist eine
-  Owner-Entscheidung (`coverage.all/E2E` im Standards-Review §4).
+  Voraussetzung — eine überhaupt laufende CI — ist seit 2026-08-19 ~16:37
+  wieder **nicht** gegeben (Regression, s. §Standards / CI); ob der
+  Soft-Gate-Status danach fällt, ist eine Owner-Entscheidung
+  (`coverage.all/E2E` im Standards-Review §4).
 - Offene Owner-Entscheidungen: `docs/standards-review-2026-07-20.md` §4
   (ADR-0002 enforce vs. amend, Branch-Protection/Merge-Strategie,
   On-Prem-RLS, Cloud-Image-Deploy, LIC-1-Mechanik, coverage.all/E2E/CLA).
@@ -719,8 +814,10 @@ Diataxis-Umbau; Community-Health Stufe 2.
 Als Owner-Checkliste getrackt in Issue #338 (Welle 3 der Release-Mechanik
 in #341):
 
-1. ~~Actions-Billing klären~~ — erledigt, das CI-Gate läuft seit 2026-08-16
-   wieder (§Standards / CI). Bleibt: der Public-Flip (Punkt 3).
+1. Actions-Billing/Runner-Problem **erneut** klären — das CI-Gate lief
+   2026-08-16 bis 2026-08-19, seit 2026-08-19 ~16:37 ist die Regression
+   zurück (§Standards / CI). Alternative bleibt der Public-Flip (Punkt 3,
+   freie Actions-Minuten für Public-Repos).
 2. GitHub-Settings: Branch-Protection, Auto-delete head branches,
    Merge-Strategie, Description/Topics/Discussions.
 3. CLA-Assistant aktivieren; Visibility Private → Public (finaler Flip).

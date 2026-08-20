@@ -917,6 +917,21 @@ async def create_persona(data: PersonaCreate) -> PersonaRead:
     fuer MCP-Reads noch unsichtbar — erst `transition_persona(..., to='active')`
     schaltet sie scharf.
 
+    `data.content.modes` (max. 20, Gap 3.4) beschreibt Multi-Modus-Verhalten.
+    Schema je Modus: `name` (Pflicht, <=100 Zeichen, case-insensitiv im Set
+    eindeutig), `trigger` (Komma-Keywords, optional), `is_default` (bool,
+    hoechstens EIN Modus darf `true` sein), `identity_add`/
+    `output_style_override`/`anti_patterns` (je eine BlockNote-Block-Liste,
+    max. 500 Bloecke), `playbook_id` (optionale UUID eines zugehoerigen
+    Playbooks) + `playbook_name` (Anzeige-Snapshot, veraltet stillschweigend
+    bei Umbenennung — `playbook_id` bleibt die Wahrheit).
+
+    Beispiel eines Modus in `content.modes`:
+    `{"name": "Brainstorm", "trigger": "ideen, brainstorm", "is_default": false,
+    "identity_add": [{"id": "b1", "type": "paragraph", "content": [
+    {"type": "text", "text": "Denke divergent.", "styles": {}}]}],
+    "output_style_override": [], "anti_patterns": [], "playbook_id": null}`
+
     `data.locale` ist ein Element-Attribut, kein Rendering-Schalter: bleibt es
     leer, defaultet es auf die Workspace-Sprache (`workspace.content_locale`);
     setze es nur explizit, wenn diese Persona bewusst von der Workspace-Sprache
@@ -934,6 +949,9 @@ async def update_persona(persona_id: str, data: PersonaUpdate) -> PersonaRead:
     """Aktualisiert eine Persona (versioniert). PUT auf eine aktive Version legt
     eine neue Draft an; 409, falls bereits ein Draft existiert (dann den Draft
     weiterbearbeiten und neu transitionieren).
+
+    `data.content.modes` folgt demselben Schema wie bei `create_persona`
+    (siehe dort fuer Feldliste + Beispiel).
 
     Ein Sprachwechsel laeuft ueber `data.locale` (Element-Attribut, optional) —
     gesetzt aendert es die Persona-Sprache auf der Identitaets-Zeile
@@ -1002,9 +1020,25 @@ async def set_persona_playbooks(persona_id: str, playbook_ids: list[str]) -> lis
 async def create_playbook(data: PlaybookCreate) -> PlaybookRead:
     """Legt ein neues Playbook an (initiale Draft-Version 1).
 
-    `data.content.body` ist BlockNote-Markup (oder Plain-Text); `type`, `tags`
-    und `triggers` steuern Auffindbarkeit. Erst nach `transition_playbook(...,
-    to='active')` fuer MCP-Reads sichtbar.
+    `data.content.body` ist ein STRINGIFIZIERTES BlockNote-JSON-Array (wie bei
+    System-Prompt-Templates, `list_placeholders`); `type` (leer oder ein
+    `PlaybookType`-Wert), `tags` und `triggers` steuern Auffindbarkeit. Erst
+    nach `transition_playbook(..., to='active')` fuer MCP-Reads sichtbar.
+
+    Inline-Pills im Body werden beim Speichern automatisch gesynct: Kind
+    "playbook" (`target_id`=Playbook-UUID) fuellt die Sub-Playbook-Composition;
+    Kind "resource" (`target_id`=Resource-UUID, optional `#<block_id>`-Suffix
+    fuer einen Abschnitts-Anker) fuellt die Resource-Links. Kind "tool-ref"
+    (`target_id`=External-Tool-Alias) ist ebenfalls erlaubt, wird aber NICHT
+    gesynct — er expandiert nur zur Fetch-Zeit (ADR-0043). Andere Kinds sind
+    fuer Playbook-Bodies nicht vorgesehen; vollstaendiger Katalog inkl.
+    Vertraegen: `list_placeholders`.
+
+    Beispiel-Body (als String uebergeben):
+    `[{"id": "b1", "type": "paragraph", "props": {}, "content": [
+    {"type": "placeholder", "props": {"kind": "resource",
+    "target_id": "9a2b7c1d-0000-4000-8000-000000000002", "label": "Resource: Tonalitaet"}}],
+    "children": []}]`
 
     `data.locale` ist ein Element-Attribut, kein Rendering-Schalter: bleibt es
     leer, defaultet es auf die Workspace-Sprache (`workspace.content_locale`);
@@ -1022,6 +1056,9 @@ async def create_playbook(data: PlaybookCreate) -> PlaybookRead:
 async def update_playbook(playbook_id: str, data: PlaybookUpdate) -> PlaybookRead:
     """Aktualisiert ein Playbook (versioniert; PUT auf aktiv → neue Draft, 409 bei
     bestehendem Draft).
+
+    `data.content.body` folgt demselben BlockNote-Body-Format + Pill-Sync-
+    Vertrag wie bei `create_playbook` (siehe dort fuer Format, Kinds + Beispiel).
 
     Ein Sprachwechsel laeuft ueber `data.locale` (Element-Attribut, optional) —
     `None` laesst die bestehende Sprache unveraendert. Kein separater
@@ -1106,8 +1143,19 @@ async def set_playbook_composes(playbook_id: str, child_ids: list[str]) -> list[
 async def create_resource(data: ResourceCreate) -> ResourceRead:
     """Legt eine neue Resource an (BlockNote-Dokument, initiale Draft-Version 1).
 
-    `data.content.blocks` ist die BlockNote-Block-Liste; `tags` steuert die
+    `data.content.blocks` ist die BlockNote-Block-Liste (max. 2000 Bloecke,
+    Gesamtgroesse <=1 MB); jeder Block ist ein Objekt mit Pflichtfeldern `id`
+    (stabile Anker-ID, <=100 Zeichen) und `type` (BlockNote-Typ, z. B.
+    "paragraph"/"heading"), plus offenen BlockNote-Feldern (`props`, `content`,
+    `children` — Schema ist nicht geschlossen). Heading-Bloecke sind linkbare
+    Anker: ein Playbook referenziert sie ueber eine `resource`-Pill mit
+    `target_id="<resource-uuid>#<block_id>"` im Body (siehe `create_playbook`)
+    oder ueber `set_playbook_resource_links`. `tags` steuert die
     Auffindbarkeit. Erst nach `transition_resource(..., to='active')` sichtbar.
+
+    Beispiel-Block: `{"id": "b1", "type": "heading", "props": {"level": 1},
+    "content": [{"type": "text", "text": "Tonalitaet", "styles": {}}],
+    "children": []}`
 
     `data.locale` ist ein Element-Attribut, kein Rendering-Schalter: bleibt es
     leer, defaultet es auf die Workspace-Sprache (`workspace.content_locale`);
@@ -1125,6 +1173,9 @@ async def create_resource(data: ResourceCreate) -> ResourceRead:
 async def update_resource(resource_id: str, data: ResourceUpdate) -> ResourceRead:
     """Aktualisiert eine Resource (versioniert; PUT auf aktiv → neue Draft, 409 bei
     bestehendem Draft).
+
+    `data.content.blocks` folgt demselben BlockNote-Block-Format wie bei
+    `create_resource` (siehe dort fuer Feldliste + Beispiel).
 
     Ein Sprachwechsel laeuft ueber `data.locale` (Element-Attribut, optional) —
     `None` laesst die bestehende Sprache unveraendert. Kein separater

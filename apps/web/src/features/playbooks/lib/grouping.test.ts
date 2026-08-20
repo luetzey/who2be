@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { Playbook } from '@/api/types'
 import { groupPlaybooks, parseGroupMode } from './grouping'
 
-function pb(id: string, type: string, isComposite = false): Playbook {
+function pb(id: string, type: string, isComposite = false, tags: string[] = []): Playbook {
   return {
     id,
     workspace_id: 'ws-1',
@@ -11,9 +11,9 @@ function pb(id: string, type: string, isComposite = false): Playbook {
     name: `PB ${id}`,
     current_version: 1,
     type,
-    tags: [],
+    tags,
     triggers: null,
-    content: { description: '', body: '', type, tags: [], triggers: null },
+    content: { description: '', body: '', type, tags, triggers: null },
     created_at: '2026-07-09T10:00:00Z',
     updated_at: '2026-07-09T10:00:00Z',
     is_composite: isComposite,
@@ -21,9 +21,10 @@ function pb(id: string, type: string, isComposite = false): Playbook {
 }
 
 describe('parseGroupMode', () => {
-  it('akzeptiert nur type und composite, alles andere wird none', () => {
+  it('akzeptiert nur type, composite und tag, alles andere wird none', () => {
     expect(parseGroupMode('type')).toBe('type')
     expect(parseGroupMode('composite')).toBe('composite')
+    expect(parseGroupMode('tag')).toBe('tag')
     expect(parseGroupMode('')).toBe('none')
     expect(parseGroupMode('none')).toBe('none')
     expect(parseGroupMode('bogus')).toBe('none')
@@ -60,5 +61,22 @@ describe('groupPlaybooks', () => {
   it('type: leere Eingabe ergibt keine Gruppen', () => {
     expect(groupPlaybooks([], 'type')).toEqual([])
     expect(groupPlaybooks([], 'composite')).toEqual([])
+  })
+
+  it('tag: alphabetisch nach Tag, Mehrfach-Tags landen in jeder ihrer Gruppen', () => {
+    const items = [
+      pb('a', 'workflow', false, ['coach', 'brain']),
+      pb('b', 'prompt', false, ['brain']),
+      pb('c', 'faq', false, []),
+    ]
+    const groups = groupPlaybooks(items, 'tag')
+    expect(groups.map((g) => g.key)).toEqual(['brain', 'coach', ''])
+    expect(groups.find((g) => g.key === 'brain')?.items.map((p) => p.id)).toEqual(['a', 'b'])
+    expect(groups.find((g) => g.key === 'coach')?.items.map((p) => p.id)).toEqual(['a'])
+    expect(groups.find((g) => g.key === '')?.items.map((p) => p.id)).toEqual(['c'])
+  })
+
+  it('tag: leere Eingabe ergibt keine Gruppen', () => {
+    expect(groupPlaybooks([], 'tag')).toEqual([])
   })
 })

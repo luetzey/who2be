@@ -42,7 +42,7 @@ Plan-Dateien unter dem ai-native-Plan + ADR-0038.
 | `2026-06-25-1200_mcp-dx-builder-coder.md`, `2026-06-25-1324_agent-connector-params.md` | MCP-DX (HTTP-Transport ADR-0034, Ein-Klick-Config); Per-Agent-Connector-URL (ADR-0036-Addendum) | ✅ |
 | `2026-06-27-1100_ai-native-mcp-and-rights.md` | AI-native MCP: Tracks 1–4 (Versions-/Discovery-Tools, Search ADR-0037, Feedback-Flywheel ADR-0038, feinkörnige Rechte ADR-0039) | ✅ |
 | `2026-06-27-1500_builder-system-prompt-tools.md` | Builder-System-Prompt-Tools (ADR-0040) — PR #266 | ✅ |
-| `2026-06-27-1200_ux-axes-improvements-grouping.md` | UX-Achsen-Analyse (Draft-Discard, Schnellfreigabe, Gruppierung) | 🔄 Backlog |
+| `2026-06-27-1200_ux-axes-improvements-grouping.md` | UX-Achsen-Analyse (Draft-Discard, Schnellfreigabe, Gruppierung) | 🔄 weitgehend abgearbeitet (Welle 2026-08-20, Issues #391–#394); Rest: Draft-Discard (nach CI-Wiederbelebung), Quick-Release (Owner-Weiche), proaktive Pflichtfeld-Hinweise |
 | `2026-07-01-1200_mfa-login-step-up.md` | MFA-Login-Step-up (TOTP-Challenge im Web-Login) | ✅ |
 | `2026-07-02-1100_oauth-refresh-grace-window.md`, `2026-07-05-1200_oauth-refresh-reuse-no-chain-kill.md` | OAuth-Refresh-Fixes (Grace-Window; Reuse ohne Ketten-Revocation) + tools/list-Payload-Fix | ✅ |
 | `2026-07-09-1556_builder-agents-ui-improvements.md` | Builder-Befähigung (Placeholder/Modi/Sub-Playbooks) + Agent-Filter + UI-Polish (Git-Diff, Trigger-Pills, Playbooks-Liste, Persona-Sektion), 6 WPs | ✅ (PR #301) |
@@ -57,6 +57,12 @@ Plan-Dateien unter dem ai-native-Plan + ADR-0038.
 | `2026-08-13-1200_agent-workarea-knowledge-base.md` | Agent WorkArea + Knowledge Base (unversionierte Subsysteme, MinIO-Blob-Store, SQLite-Tabellen-Store — ADR-0047/0048/0049), 20 WPs in 7 Wellen; WP1–WP20 umgesetzt inkl. Security-Review Phase 2, Retention-Sweeps, GDPR-Export und Compliance-Doku (PR #367). Offen: P1/P2-Backlog (TTL/Challenger/Drift, UI/Graph/semantische Suche) + manuelle Compose-Verifikation | ✅ umgesetzt (PR #367) |
 | `2026-08-19-1500_stufe3-wa-render-tablestore.md` | Aufräumen Stufe 3: Render-/Entschärfungs-Helfer aus `wa_tables.py` nach `wa_render.py`; SQL-Bau aus `wa_rules.py` in `TableStore.reapply_category` — letzter offener Punkt aus dem Aufräum-Plan (nach Stufe 1 PR #380, Stufe 2 PR #381) | ✅ umgesetzt |
 | `2026-08-19-1700_tabellen-ui-und-exporte.md` | Tabellen-UI in der WorkArea (Tab + TableDetailPage) + Export-Endpoints Tabellen (CSV/XLSX) und Notizen (Markdown/HTML + PDF-Druck); Security-Review 5 Findings behoben | ✅ umgesetzt |
+| `2026-08-19-1805_refactor-web-dedup-status-actions.md` | Refactoring-Lauf Web-Dedup: StatusActionBar + Status-Lib nach `components/version/`, Entity-Buttons nach `components/entity/` (jscpd 2,94 % → 2,47 %, netto −2298 Zeilen) | ✅ umgesetzt |
+| `2026-08-19-2110_repo-pflege-branches-tests.md` | Repo-Pflege: Branch-Hygiene (81 Branches klassifiziert → Owner-Issue #388), Dependabot-Triage (#368 gemergt, #245/#243/#242 geschlossen), E2E-Journeys scharf (4 fixme → aktiv) | ✅ umgesetzt (PR #387) |
+| `2026-08-20-0813_repo-pflege-doku-struktur.md` | Repo-Pflege Doku & Struktur: Public-Artefakte englisch + aktuell (README/CHANGELOG/CONTRIBUTING/SECURITY/ROADMAP), Issue-Forms + SUPPORT.md + docs-Index + OpenAPI-Referenz, PROJECT.md auf Release-Vorhaben | ✅ umgesetzt (PR #389) |
+| `2026-08-20-1031_repo-pflege-status-abhaken.md` | Repo-Pflege: Status-Nachführung (diese Übersicht + STATE.md), Abhak-Prüfung #338/#341, CI-Regression seit 2026-08-19 ~16:37 aufgedeckt + dokumentiert, Zusammenfassung offener Aufgaben | ✅ umgesetzt |
+| `2026-08-20-1047_offene-aufgaben-abarbeiten.md` | Offene Aufgaben (codebar): #385 Skip-Guard (2 Dateien ohne `integration`-Marker), #384 Bump+Reformat (8 Pakete, Ruff-0.16-Markdown-Format), #341 WP-8-Teil (Version 0 → 0.1.0); Teil B = Owner-Schrittfolge | ✅ umgesetzt (PR #390) |
+| `2026-08-20-1115_ux-backlog-welle-subagents.md` | UX-Backlog-Welle mit Sub-Agents (Issues #391–#394): StatusActionBar-Refactor Personas/Playbooks + E2E-Testid-Fix, MCP-Docstring-DX, Tag-Gruppierung Playbooks/Resources, Policy-Presets; Juni-Plan `2026-06-27-1200` damit abgearbeitet/überholt (Rest: Draft-Discard nach CI, Quick-Release = Owner-Weiche) | ✅ Wellen 1–2 (PR #390) |
 
 Offen außerhalb der Plan-Dateien: Owner-Punkte aus
 `docs/standards-review-2026-07-20.md` §4 sowie der dortige Folge-Backlog

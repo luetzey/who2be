@@ -302,6 +302,25 @@
         "reads": "Reading",
         "writes": "Writing",
         "writesHint": "Off by default. Only enable what the agent should actually be able to change.",
+        "presets": {
+          "title": "Preset",
+          "description": "Sets the write permissions below in one step. Individual checkboxes stay editable afterward — the display then switches to \"Custom\".",
+          "readOnly": {
+            "label": "Read only",
+            "description": "No write permissions — the agent cannot create, change, or activate anything."
+          },
+          "editorNoApproval": {
+            "label": "Editor without approval",
+            "description": "May create/edit content and submit it for review (draft → review), but cannot activate or retire a version."
+          },
+          "editorWithApproval": {
+            "label": "Editor with approval",
+            "description": "Same as \"Editor without approval\", plus the agent may activate/retire versions itself."
+          },
+          "custom": {
+            "label": "Custom"
+          }
+        },
         "scopeField": {
           "playbook_read": "Read playbooks",
           "resource_read": "Read resources",
@@ -1176,12 +1195,14 @@
       "group": {
         "none": "No grouping",
         "type": "By type",
-        "composite": "Composite / standalone"
+        "composite": "Composite / standalone",
+        "tag": "By tag"
       },
       "groups": {
         "composite": "Composite",
         "standalone": "Standalone",
-        "untyped": "No type"
+        "untyped": "No type",
+        "untagged": "No tag"
       },
       "empty": {
         "title": "No playbooks yet",
@@ -1370,7 +1391,14 @@
       "emptyTagTitle": "No resources with tag \"{{tag}}\"",
       "emptyTagDescription": "Remove the filter or create a new resource with this tag.",
       "emptyTitle": "No resources yet",
-      "emptyDescription": "Create your first resource to capture knowledge in blocks."
+      "emptyDescription": "Create your first resource to capture knowledge in blocks.",
+      "group": {
+        "none": "No grouping",
+        "tag": "By tag"
+      },
+      "groups": {
+        "untagged": "No tag"
+      }
     },
     "new": {
       "title": "New resource",

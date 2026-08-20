@@ -87,6 +87,9 @@ export function PlaybooksPage() {
         ? t('playbooks:list.groups.composite')
         : t('playbooks:list.groups.standalone')
     }
+    if (groupMode === 'tag') {
+      return key === '' ? t('playbooks:list.groups.untagged') : key
+    }
     return key === '' ? t('playbooks:list.groups.untyped') : key
   }
 
@@ -156,6 +159,7 @@ export function PlaybooksPage() {
               { value: '', label: t('playbooks:list.group.none') },
               { value: 'type', label: t('playbooks:list.group.type') },
               { value: 'composite', label: t('playbooks:list.group.composite') },
+              { value: 'tag', label: t('playbooks:list.group.tag') },
             ]}
             group={filters.group}
             onGroupChange={filters.setGroup}

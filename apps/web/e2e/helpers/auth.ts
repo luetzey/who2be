@@ -1,3 +1,5 @@
+import { createHmac } from 'node:crypto'
+
 import type { APIRequestContext, Page } from '@playwright/test'
 import type { Session } from '@supabase/supabase-js'
 
@@ -29,7 +31,10 @@ export interface E2EUser {
  * (fullyParallel-Worker duerfen nicht kollidieren).
  */
 export async function createUser(request: APIRequestContext): Promise<E2EUser> {
-  const email = `e2e-${crypto.randomUUID()}@example.test`
+  // Kein Special-Use-TLD (.test/.example): GoTrue akzeptiert die zwar beim
+  // Signup, aber der pydantic-EmailStr-Validator der API (z. B. Invitations)
+  // lehnt Special-Use-Domains ab — erster echter CI-Lauf 2026-08-20.
+  const email = `e2e-${crypto.randomUUID()}@e2e.who2be.dev`
   const password = `pw-${crypto.randomUUID()}`
   const response = await request.post(`${AUTH_URL}/auth/v1/signup`, {
     data: { email, password },
@@ -43,7 +48,79 @@ export async function createUser(request: APIRequestContext): Promise<E2EUser> {
       'Signup lieferte keine Session — GOTRUE_MAILER_AUTOCONFIRM im Stack pruefen.',
     )
   }
-  return { email, password, session }
+  // Admin-Aktionen (Promote, Invitations, Tokens) verlangen aal2
+  // (`core/security.require_aal2`, docs/mfa-admin.md) — eine frische
+  // Signup-Session ist aal1. Der Helper geht den ECHTEN Weg: TOTP-Faktor
+  // einschreiben + Challenge verifizieren, GoTrue liefert die aal2-Session.
+  const aal2Session = await enrollTotpAal2(request, session)
+  return { email, password, session: aal2Session }
+}
+
+/** RFC-4648-Base32-Decode (GoTrue-TOTP-Secret, ohne Padding). */
+function base32Decode(input: string): Buffer {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
+  let bits = 0
+  let value = 0
+  const out: number[] = []
+  for (const char of input.replace(/=+$/, '').toUpperCase()) {
+    const idx = alphabet.indexOf(char)
+    if (idx === -1) throw new Error(`Ungueltiges Base32-Zeichen: ${char}`)
+    value = (value << 5) | idx
+    bits += 5
+    if (bits >= 8) {
+      out.push((value >>> (bits - 8)) & 0xff)
+      bits -= 8
+    }
+  }
+  return Buffer.from(out)
+}
+
+/** RFC-6238-TOTP (SHA-1, 30-s-Fenster, 6 Stellen) — dependency-frei. */
+export function totpCode(secret: string, atMs: number = Date.now()): string {
+  const counter = Math.floor(atMs / 1000 / 30)
+  const msg = Buffer.alloc(8)
+  msg.writeBigUInt64BE(BigInt(counter))
+  const digest = createHmac('sha1', base32Decode(secret)).update(msg).digest()
+  const offset = digest[digest.length - 1] & 0x0f
+  const code =
+    ((digest[offset] & 0x7f) << 24) |
+    (digest[offset + 1] << 16) |
+    (digest[offset + 2] << 8) |
+    digest[offset + 3]
+  return String(code % 1_000_000).padStart(6, '0')
+}
+
+/**
+ * TOTP-Faktor einschreiben und verifizieren: enroll -> challenge -> verify.
+ * GoTrue antwortet auf den Verify mit einer frischen Session (`aal=aal2`).
+ */
+async function enrollTotpAal2(request: APIRequestContext, session: Session): Promise<Session> {
+  const headers = { Authorization: `Bearer ${session.access_token}` }
+  const enroll = await request.post(`${AUTH_URL}/auth/v1/factors`, {
+    headers,
+    data: { factor_type: 'totp', friendly_name: 'e2e-totp' },
+  })
+  if (!enroll.ok()) {
+    throw new Error(`TOTP-Enroll fehlgeschlagen (${enroll.status()}): ${await enroll.text()}`)
+  }
+  const factor = (await enroll.json()) as { id: string; totp: { secret: string } }
+  const challenge = await request.post(`${AUTH_URL}/auth/v1/factors/${factor.id}/challenge`, {
+    headers,
+  })
+  if (!challenge.ok()) {
+    throw new Error(
+      `TOTP-Challenge fehlgeschlagen (${challenge.status()}): ${await challenge.text()}`,
+    )
+  }
+  const { id: challengeId } = (await challenge.json()) as { id: string }
+  const verify = await request.post(`${AUTH_URL}/auth/v1/factors/${factor.id}/verify`, {
+    headers,
+    data: { challenge_id: challengeId, code: totpCode(factor.totp.secret) },
+  })
+  if (!verify.ok()) {
+    throw new Error(`TOTP-Verify fehlgeschlagen (${verify.status()}): ${await verify.text()}`)
+  }
+  return (await verify.json()) as Session
 }
 
 /**

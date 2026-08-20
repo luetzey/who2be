@@ -535,6 +535,10 @@ describe('PlaybookDetailPage — Status-Transitions', () => {
     // Review-Banner zeigt den offenen Entwurf als Branch-Knoten.
     expect(await screen.findByTestId('review-banner')).toBeInTheDocument()
     expect(screen.getByText('Entwurf: v1')).toBeInTheDocument()
+    // E2E-Selektor-Fix (Issue #391): die zentrale StatusActionBar traegt das
+    // Testid-Schema aus components/data/BranchStatus.tsx, an das
+    // e2e/journeys.spec.ts bindet.
+    expect(screen.getByTestId('branch-action-submit')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Draft abschliessen' }))
 
@@ -560,6 +564,7 @@ describe('PlaybookDetailPage — Status-Transitions', () => {
 
     const publish = await screen.findByRole('button', { name: 'Veroeffentlichen' })
     expect(publish).toBeEnabled()
+    expect(screen.getByTestId('branch-action-publish')).toBe(publish)
 
     fireEvent.click(publish)
 
@@ -762,8 +767,11 @@ describe('PlaybookDetailPage — Managed-Lock & Rollen', () => {
 
     expect(await screen.findByTestId('delete-playbook-trigger')).toBeInTheDocument()
     expect(screen.queryByTestId('managed-notice')).not.toBeInTheDocument()
+    // Die Toolbar kommt seit Issue #391 aus der zentralen StatusActionBar
+    // (aria-label "Status-Aktionen", common:statusBar.ariaLabel) statt aus
+    // dem frueheren eigenen Toolbar-Wrapper im ReviewBanner.
     expect(
-      screen.getByRole('toolbar', { name: 'Branch-Aktionen' }),
+      screen.getByRole('toolbar', { name: 'Status-Aktionen' }),
     ).toBeInTheDocument()
   })
 

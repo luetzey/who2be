@@ -3,16 +3,14 @@ import { useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
-import type { VersionStatus } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
-import { type BranchAction } from '@/components/data/BranchStatus'
 import { DataView } from '@/components/data/DataView'
 import { LocaleBadge } from '@/components/data/LocaleBadge'
 import { ManagedNotice } from '@/components/data/ManagedNotice'
 import { GiveFeedbackDialog } from '@/components/feedback/GiveFeedbackDialog'
-import { VersionHistory } from '@/components/version'
+import { StatusActionBar, VersionHistory } from '@/components/version'
 import { Container } from '@/components/layout/Container'
 import { Stack } from '@/components/layout/Stack'
 import { Button } from '@/components/ui/button'
@@ -61,7 +59,6 @@ export function PlaybookDetailPage() {
   const wsPath = useWorkspacePath()
   const api = useApi()
   const role = useCurrentWorkspaceRole()
-  const [actionBusy, setActionBusy] = useState(false)
   const [activeTab, setActiveTab] = useState<PlaybookDetailTab>('edit')
   const [dangerOpen, setDangerOpen] = useState(false)
   // Vom System verwaltet (Builder-Playbook): Editor read-only, keine Status-/
@@ -70,27 +67,6 @@ export function PlaybookDetailPage() {
 
   if (id === undefined) {
     return <Navigate to={wsPath('/playbooks')} replace />
-  }
-
-  const runTransition = async (
-    version: number,
-    to: VersionStatus,
-    successMessage: string,
-  ) => {
-    if (playbook === null) {
-      return
-    }
-    setActionBusy(true)
-    try {
-      await autoSave.flush()
-      await api.transitionPlaybookVersion(playbook.id, version, to)
-      notify.success(successMessage)
-      reload()
-    } catch (cause) {
-      notify.error(cause instanceof Error ? cause.message : t('toast.actionFailed'))
-    } finally {
-      setActionBusy(false)
-    }
   }
 
   const activeVersion = versions.find((v) => v.status === 'active')
@@ -103,46 +79,22 @@ export function PlaybookDetailPage() {
         )
       : undefined
 
-  const canPromote = role === 'admin'
-  const actions: BranchAction[] = []
-  if (!locked && draftVersion !== undefined) {
-    actions.push({
-      key: 'submit',
-      label: t('actions.draftSubmit'),
-      variant: 'brand',
-      disabled: actionBusy,
-      onClick: () =>
-        void runTransition(draftVersion.version, 'review', t('toast.submitted')),
-    })
-  }
-  if (!locked && reviewVersion !== undefined) {
-    actions.push({
-      key: 'publish',
-      label: t('actions.publish'),
-      variant: 'brand',
-      disabled: actionBusy || !canPromote,
-      title: canPromote ? undefined : t('actions.activateAdminOnly'),
-      onClick: () =>
-        void runTransition(reviewVersion.version, 'active', t('toast.activated')),
-    })
-    actions.push({
-      key: 'reject',
-      label: t('actions.rejectDraft'),
-      variant: 'destructive',
-      disabled: actionBusy,
-      onClick: () =>
-        void runTransition(reviewVersion.version, 'draft', t('toast.reviewRejected')),
-    })
-  }
-  if (!locked && inactiveCurrent !== undefined) {
-    actions.push({
-      key: 'reactivate',
-      label: t('actions.reactivateDraft'),
-      variant: 'outline',
-      disabled: actionBusy,
-      onClick: () =>
-        void runTransition(inactiveCurrent.version, 'draft', t('toast.reactivated')),
-    })
+  // Zentrale StatusActionBar (Issue #391) ersetzt die frühere Inline-
+  // Transition-Logik (`runTransition` + manuelles `BranchAction[]`).
+  // Promotable-Version wie in ResourceDetailPage/ToolDetailPage: das Backend
+  // garantiert, dass nie Draft UND Review gleichzeitig existieren.
+  const promotableVersion = !locked ? (reviewVersion ?? draftVersion) : undefined
+  const inactiveTarget = !locked ? inactiveCurrent : undefined
+  const hasBranchActions = promotableVersion !== undefined || inactiveTarget !== undefined
+
+  // Sichtbare Button-Texte bleiben ueber `labels` die bestehenden
+  // `actions.*`-Keys; Toasts/Fehlerpfad/Admin-Gate uebernimmt die Bar
+  // (identische Texte in common:statusBar.* wie zuvor in playbooks:toast.*).
+  const branchLabels = {
+    submit: t('actions.draftSubmit'),
+    promote: t('actions.publish'),
+    reject: t('actions.rejectDraft'),
+    reactivate: t('actions.reactivateDraft'),
   }
 
   // Banner nur, wenn es einen Branch-Zustand oder Aktionen zu zeigen gibt —
@@ -151,7 +103,7 @@ export function PlaybookDetailPage() {
     draftVersion !== undefined ||
     reviewVersion !== undefined ||
     inactiveCurrent !== undefined ||
-    actions.length > 0
+    hasBranchActions
 
   const tabPanelProps = (tab: PlaybookDetailTab) => ({
     role: 'tabpanel' as const,
@@ -228,7 +180,42 @@ export function PlaybookDetailPage() {
                   reviewVersion={reviewVersion?.version}
                   inactiveVersion={inactiveCurrent?.version}
                   saveState={autoSave}
-                  actions={actions}
+                  actions={
+                    hasBranchActions ? (
+                      <>
+                        {promotableVersion !== undefined ? (
+                          <StatusActionBar
+                            status={promotableVersion.status ?? 'draft'}
+                            labels={branchLabels}
+                            onTransition={async (to) => {
+                              await autoSave.flush()
+                              return api.transitionPlaybookVersion(
+                                playbook.id,
+                                promotableVersion.version,
+                                to,
+                              )
+                            }}
+                            onTransitioned={reload}
+                          />
+                        ) : null}
+                        {inactiveTarget !== undefined ? (
+                          <StatusActionBar
+                            status="inactive"
+                            labels={branchLabels}
+                            onTransition={async (to) => {
+                              await autoSave.flush()
+                              return api.transitionPlaybookVersion(
+                                playbook.id,
+                                inactiveTarget.version,
+                                to,
+                              )
+                            }}
+                            onTransitioned={reload}
+                          />
+                        ) : null}
+                      </>
+                    ) : undefined
+                  }
                 />
               ) : null}
 

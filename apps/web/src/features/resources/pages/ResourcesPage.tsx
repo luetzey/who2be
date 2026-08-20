@@ -7,6 +7,7 @@ import type { Resource, SubResourceSummary } from '@/api/types'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { Container } from '@/components/layout/Container'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { Section } from '@/components/layout/Section'
 import { Stack } from '@/components/layout/Stack'
 import { CONTENT_LOCALE_OPTIONS } from '@/components/forms/content-languages'
 import { EntityCard } from '@/components/data/EntityCard'
@@ -27,6 +28,7 @@ import {
   type ListFilterAccessors,
 } from '@/hooks/useListFilters'
 import { useResources } from '@/hooks/useResources'
+import { groupResources, parseGroupMode } from '../lib/grouping'
 
 /**
  * Aufklappbare Kind-Liste der Resource-Karte. Spiegelt das Sub-Playbook-Muster
@@ -91,11 +93,87 @@ export function ResourcesPage() {
   )
   const filters = useListFilters(resources, accessors)
 
+  // #393: Gruppierung ist eine Anzeige-Praeferenz auf der bereits
+  // gefilterten Liste — unbekannte `?group=`-Werte fallen auf `none` zurueck.
+  // Analog zu PlaybooksPage (WP-D3).
+  const groupMode = parseGroupMode(filters.group)
+  const groups = useMemo(
+    () => groupResources(filters.filtered, groupMode),
+    [filters.filtered, groupMode],
+  )
+  const groupLabel = (key: string): string =>
+    key === '' ? t('resources:list.groups.untagged') : key
+
   // Leerer Workspace vs. leeres Filter-Ergebnis: bei aktiver Agent-/Sprach-
   // Facette kommt die Liste serverseitig gefiltert an — dann ist "leer" ein
   // Filter-Ergebnis, kein leerer Workspace.
   const isEmptyWorkspace =
     resources.length === 0 && filters.agent === '' && filters.locale === ''
+
+  const renderResource = (resource: Resource) => {
+    const tags = resource.content.tags ?? []
+    const subResources = resource.sub_resources ?? []
+    const hasSubResources = subResources.length > 0
+    return (
+      <li key={resource.id}>
+        <EntityCard
+          icon={FileText}
+          iconTone="resource"
+          title={resource.name}
+          href={wsPath(`/resources/${resource.id}`)}
+          badges={
+            <>
+              <Badge variant="secondary" className="tabular-nums">
+                v{resource.current_version}
+              </Badge>
+              <LocaleBadge locale={resource.locale} />
+              {resource.slug ? (
+                <Badge variant="outline" className="font-mono text-xs">
+                  {resource.slug}
+                </Badge>
+              ) : null}
+              {tags.map((tag) => (
+                <Badge key={tag} variant="outline" className="text-xs">
+                  {tag}
+                </Badge>
+              ))}
+            </>
+          }
+          status={
+            <StatusBadge status={resource.current_status} pendingDraft={resource.has_pending_draft} />
+          }
+          description={resource.content.description}
+          meta={
+            <MetaPill icon={GitBranch} iconTone="playbook">
+              {(resource.playbook_link_count ?? 0) > 0
+                ? t('resources:card.linkedIn', {
+                    count: resource.playbook_link_count ?? 0,
+                  })
+                : t('resources:card.notLinked')}
+            </MetaPill>
+          }
+          expandable={
+            hasSubResources ? (
+              <SubResourceList
+                items={subResources}
+                wsPath={wsPath}
+                label={t('resources:card.subResourcesListLabel')}
+              />
+            ) : undefined
+          }
+          expandIcon={Layers}
+          expandLabel={
+            hasSubResources
+              ? t('resources:card.subResourcesToggle', { count: subResources.length })
+              : undefined
+          }
+          expandSummary={
+            hasSubResources ? subResources.map((child) => child.name).join(' · ') : undefined
+          }
+        />
+      </li>
+    )
+  }
 
   return (
     <Container>
@@ -130,6 +208,12 @@ export function ResourcesPage() {
             locales={CONTENT_LOCALE_OPTIONS}
             locale={filters.locale}
             onLocaleChange={filters.setLocale}
+            groupOptions={[
+              { value: '', label: t('resources:list.group.none') },
+              { value: 'tag', label: t('resources:list.group.tag') },
+            ]}
+            group={filters.group}
+            onGroupChange={filters.setGroup}
             active={filters.active}
             onReset={filters.reset}
           />
@@ -166,80 +250,22 @@ export function ResourcesPage() {
               }
             />
           )
+        ) : groupMode === 'none' ? (
+          <ul className="flex flex-col gap-3">{filters.filtered.map(renderResource)}</ul>
         ) : (
-          <ul className="flex flex-col gap-3">
-            {filters.filtered.map((resource) => {
-              const tags = resource.content.tags ?? []
-              const subResources = resource.sub_resources ?? []
-              const hasSubResources = subResources.length > 0
-              return (
-                <li key={resource.id}>
-                  <EntityCard
-                    icon={FileText}
-                    iconTone="resource"
-                    title={resource.name}
-                    href={wsPath(`/resources/${resource.id}`)}
-                    badges={
-                      <>
-                        <Badge variant="secondary" className="tabular-nums">
-                          v{resource.current_version}
-                        </Badge>
-                        <LocaleBadge locale={resource.locale} />
-                        {resource.slug ? (
-                          <Badge variant="outline" className="font-mono text-xs">
-                            {resource.slug}
-                          </Badge>
-                        ) : null}
-                        {tags.map((tag) => (
-                          <Badge key={tag} variant="outline" className="text-xs">
-                            {tag}
-                          </Badge>
-                        ))}
-                      </>
-                    }
-                    status={
-                      <StatusBadge
-                        status={resource.current_status}
-                        pendingDraft={resource.has_pending_draft}
-                      />
-                    }
-                    description={resource.content.description}
-                    meta={
-                      <MetaPill icon={GitBranch} iconTone="playbook">
-                        {(resource.playbook_link_count ?? 0) > 0
-                          ? t('resources:card.linkedIn', {
-                              count: resource.playbook_link_count ?? 0,
-                            })
-                          : t('resources:card.notLinked')}
-                      </MetaPill>
-                    }
-                    expandable={
-                      hasSubResources ? (
-                        <SubResourceList
-                          items={subResources}
-                          wsPath={wsPath}
-                          label={t('resources:card.subResourcesListLabel')}
-                        />
-                      ) : undefined
-                    }
-                    expandIcon={Layers}
-                    expandLabel={
-                      hasSubResources
-                        ? t('resources:card.subResourcesToggle', {
-                            count: subResources.length,
-                          })
-                        : undefined
-                    }
-                    expandSummary={
-                      hasSubResources
-                        ? subResources.map((child) => child.name).join(' · ')
-                        : undefined
-                    }
-                  />
-                </li>
-              )
-            })}
-          </ul>
+          // #393: Sektionen pro Gruppe mit Header + Zaehler; leere Gruppen
+          // liefert `groupResources` gar nicht erst (analog PlaybooksPage/WP-D3).
+          <Stack gap="lg">
+            {groups.map((group) => (
+              <Section key={group.key} ariaLabel={groupLabel(group.key)} className="gap-2">
+                <h2 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+                  {groupLabel(group.key)}
+                  <span className="font-normal tabular-nums">({group.items.length})</span>
+                </h2>
+                <ul className="flex flex-col gap-3">{group.items.map(renderResource)}</ul>
+              </Section>
+            ))}
+          </Stack>
         )}
       </Stack>
     </Container>

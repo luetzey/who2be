@@ -164,6 +164,7 @@ export function PlaybookEditorForm({
                       <FormControl>
                         <Input
                           required
+                          data-testid="playbook-description-input"
                           placeholder={t('form.descriptionPlaceholder')}
                           {...field}
                           disabled={isViewer}
