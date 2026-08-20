@@ -14,6 +14,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Select } from '@/components/ui/select'
 import { TagInput } from '@/components/ui/tag-input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -21,9 +22,18 @@ import { Textarea } from '@/components/ui/textarea'
 
 import type { AgentEditorValues } from '../hooks/useAgentForm'
 import { describeAgentMissing } from '../lib/activation'
+import {
+  applyPolicyPreset,
+  derivePolicyPreset,
+  POLICY_PRESETS,
+  WRITE_CAP_FIELDS,
+  type WriteCapValues,
+} from '../lib/policyPresets'
 
-// Read-Scope-Domains (Select all|assigned|none), An/Aus-Reads und Write-
-// Capability-Gruppen. Reihenfolge = Anzeigereihenfolge im Formular.
+// Read-Scope-Domains (Select all|assigned|none) und An/Aus-Reads. Reihenfolge
+// = Anzeigereihenfolge im Formular. Die Write-Capability-Gruppe
+// (`WRITE_CAP_FIELDS`) lebt in `lib/policyPresets.ts` — dort ist sie
+// zugleich die Grundlage der Preset-Ableitung (Issue #394).
 const READ_SCOPE_FIELDS = [
   'playbook_read',
   'resource_read',
@@ -31,23 +41,6 @@ const READ_SCOPE_FIELDS = [
   'external_tool_read',
 ] as const
 const READ_FLAG_FIELDS = ['persona_read'] as const
-const WRITE_CAP_FIELDS = [
-  'persona_write',
-  'playbook_write',
-  'resource_write',
-  'agent_write',
-  'system_prompt_write',
-  'external_tool_write',
-  'feedback_write',
-  'feedback_resolve',
-  'promote_retire',
-  // ADR-0047 — Agenten-Arbeitsbereich + Knowledge Base. Bewusst am Ende und in
-  // dieser Reihenfolge: erst der Arbeitsbereich, dann die belegpflichtigen
-  // Aussagen, zuletzt die Kanten (eigenes Recht, weil im MVP nicht loeschbar).
-  'workarea_write',
-  'kb_write',
-  'kb_edge_write',
-] as const
 const READ_SCOPES = ['all', 'assigned', 'none'] as const
 const TAG_SCOPE_DOMAINS = ['persona', 'playbook', 'resource'] as const
 // ADR-0044 — Agent-Memory: Speicher-Modus (geordnet off < read_only < suggest
@@ -151,6 +144,23 @@ export function AgentEditorForm({
   // Verbindlichkeit ist nur wirksam, wenn das Gedaechtnis ueberhaupt aktiv ist
   // (mode != off) — sonst gibt es keine Abfrage-Anweisung, die sie steuern koennte.
   const memoryModeValue = form.watch('memory_mode')
+
+  // Issue #394 — Policy-Preset ist abgeleiteter Zustand: bei jedem Render aus
+  // den aktuellen Write-Capability-Checkboxen neu berechnet (`lib/policyPresets`),
+  // nie separat gespeichert. Passt keines der drei Muster, zeigt sich
+  // „Benutzerdefiniert" (kein waehlbares viertes Preset).
+  const writeCapWatch = form.watch(WRITE_CAP_FIELDS)
+  const writeCapValues = Object.fromEntries(
+    WRITE_CAP_FIELDS.map((name, index) => [name, Boolean(writeCapWatch[index])]),
+  ) as WriteCapValues
+  const activePreset = derivePolicyPreset(writeCapValues)
+
+  function applyPreset(preset: (typeof POLICY_PRESETS)[number]) {
+    const next = applyPolicyPreset(preset)
+    for (const name of WRITE_CAP_FIELDS) {
+      form.setValue(name, next[name], { shouldDirty: true, shouldTouch: true })
+    }
+  }
 
   const submitButton = (
     <div className="flex justify-end">
@@ -427,6 +437,42 @@ export function AgentEditorForm({
                 <fieldset className="flex flex-col gap-3" disabled={isViewer}>
                   <legend className="text-sm font-medium">{t('form.policy.writes')}</legend>
                   <p className="text-sm text-muted-foreground">{t('form.policy.writesHint')}</p>
+
+                  <div className="flex flex-col gap-2">
+                    <span className="text-sm font-medium">{t('form.policy.presets.title')}</span>
+                    <p className="text-sm text-muted-foreground">
+                      {t('form.policy.presets.description')}
+                    </p>
+                    <RadioGroup
+                      value={activePreset === 'custom' ? '' : activePreset}
+                      onValueChange={(value) => applyPreset(value as (typeof POLICY_PRESETS)[number])}
+                      disabled={isViewer}
+                      aria-label={t('form.policy.presets.title')}
+                    >
+                      {POLICY_PRESETS.map((preset) => {
+                        const optionId = `agent-policy-preset-${preset}`
+                        return (
+                          <div key={preset} className="flex items-start gap-3 rounded-md border p-3">
+                            <RadioGroupItem value={preset} id={optionId} className="mt-1" />
+                            <div className="flex flex-col gap-1">
+                              <Label htmlFor={optionId} className="font-normal">
+                                {t(`form.policy.presets.${preset}.label`)}
+                              </Label>
+                              <p className="text-sm text-muted-foreground">
+                                {t(`form.policy.presets.${preset}.description`)}
+                              </p>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </RadioGroup>
+                    {activePreset === 'custom' ? (
+                      <p className="text-sm text-muted-foreground" data-testid="agent-policy-preset-custom">
+                        {t('form.policy.presets.custom.label')}
+                      </p>
+                    ) : null}
+                  </div>
+
                   {WRITE_CAP_FIELDS.map((name) => (
                     <PolicyCheckbox
                       key={name}

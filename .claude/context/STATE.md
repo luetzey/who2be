@@ -769,9 +769,16 @@ Draft-on-Edit-Sichtbarkeit waren längst erledigt/überholt.
   CI-Wiederbelebung (kein lokales Sicherheitsnetz ohne DB); Quick-Release
   widerspricht `TRANSITION_RULE_DOC` → Owner-Weiche; proaktive
   Pflichtfeld-Hinweise = Folgewelle.
-- **Konsolidierungs-DoD (Welle 1):** eslint 0 Errors, tsc grün, volle
-  Suite **972 Vitest passed** (Coverage 86,54/80,91/82,5/87,57, Floors
-  80/79/75/80), Build grün. #394 (Policy-Presets) läuft als Welle 2.
+- **#394 Policy-Presets (Welle 2):** Preset-Auswahl im Agent-Policy-Editor
+  („Nur lesen" / „Editor ohne Freigabe" / „Editor mit Freigabe"), abgeleitet
+  aus den 12 Write-Capability-Checkboxen (`lib/policyPresets.ts` als SSoT,
+  pure functions), Abweichung zeigt „Benutzerdefiniert"; reine UI, kein
+  Persistenz-Feld. Produkt-Nuance dokumentiert: der Default-Agent zeigt
+  „Benutzerdefiniert", weil `feedback_write` per Default an ist —
+  Owner-Feinschliff wäre, Feedback-Caps aus dem Preset-Scope zu nehmen.
+- **Konsolidierungs-DoD (beide Wellen):** eslint 0 Errors, tsc grün, volle
+  Suite **985 Vitest passed** (Coverage 86,61/80,99/82,6/87,63, Floors
+  80/79/75/80), Build grün; mcp: 241 pytest grün.
 
 ## Bekannte Probleme
 

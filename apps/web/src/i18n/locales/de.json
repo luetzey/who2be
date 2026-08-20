@@ -302,6 +302,25 @@
         "reads": "Lesen",
         "writes": "Schreiben",
         "writesHint": "Standardmäßig aus. Nur aktivieren, was der Agent wirklich verändern können soll.",
+        "presets": {
+          "title": "Preset",
+          "description": "Setzt die Schreibrechte unten in einem Schritt. Einzelne Häkchen bleiben danach weiter änderbar — die Anzeige springt dann auf „Benutzerdefiniert“.",
+          "readOnly": {
+            "label": "Nur lesen",
+            "description": "Keine Schreibrechte — der Agent kann nichts anlegen, ändern oder aktivieren."
+          },
+          "editorNoApproval": {
+            "label": "Editor ohne Freigabe",
+            "description": "Darf Inhalte anlegen/ändern und zur Review einreichen (Entwurf → Review), aber keine Version aktivieren oder zurückziehen."
+          },
+          "editorWithApproval": {
+            "label": "Editor mit Freigabe",
+            "description": "Wie „Editor ohne Freigabe“, zusätzlich darf der Agent Versionen selbst aktivieren/zurückziehen."
+          },
+          "custom": {
+            "label": "Benutzerdefiniert"
+          }
+        },
         "scopeField": {
           "playbook_read": "Playbooks lesen",
           "resource_read": "Resources lesen",
