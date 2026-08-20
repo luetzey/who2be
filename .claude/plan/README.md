@@ -57,6 +57,10 @@ Plan-Dateien unter dem ai-native-Plan + ADR-0038.
 | `2026-08-13-1200_agent-workarea-knowledge-base.md` | Agent WorkArea + Knowledge Base (unversionierte Subsysteme, MinIO-Blob-Store, SQLite-Tabellen-Store — ADR-0047/0048/0049), 20 WPs in 7 Wellen; WP1–WP20 umgesetzt inkl. Security-Review Phase 2, Retention-Sweeps, GDPR-Export und Compliance-Doku (PR #367). Offen: P1/P2-Backlog (TTL/Challenger/Drift, UI/Graph/semantische Suche) + manuelle Compose-Verifikation | ✅ umgesetzt (PR #367) |
 | `2026-08-19-1500_stufe3-wa-render-tablestore.md` | Aufräumen Stufe 3: Render-/Entschärfungs-Helfer aus `wa_tables.py` nach `wa_render.py`; SQL-Bau aus `wa_rules.py` in `TableStore.reapply_category` — letzter offener Punkt aus dem Aufräum-Plan (nach Stufe 1 PR #380, Stufe 2 PR #381) | ✅ umgesetzt |
 | `2026-08-19-1700_tabellen-ui-und-exporte.md` | Tabellen-UI in der WorkArea (Tab + TableDetailPage) + Export-Endpoints Tabellen (CSV/XLSX) und Notizen (Markdown/HTML + PDF-Druck); Security-Review 5 Findings behoben | ✅ umgesetzt |
+| `2026-08-19-1805_refactor-web-dedup-status-actions.md` | Refactoring-Lauf Web-Dedup: StatusActionBar + Status-Lib nach `components/version/`, Entity-Buttons nach `components/entity/` (jscpd 2,94 % → 2,47 %, netto −2298 Zeilen) | ✅ umgesetzt |
+| `2026-08-19-2110_repo-pflege-branches-tests.md` | Repo-Pflege: Branch-Hygiene (81 Branches klassifiziert → Owner-Issue #388), Dependabot-Triage (#368 gemergt, #245/#243/#242 geschlossen), E2E-Journeys scharf (4 fixme → aktiv) | ✅ umgesetzt (PR #387) |
+| `2026-08-20-0813_repo-pflege-doku-struktur.md` | Repo-Pflege Doku & Struktur: Public-Artefakte englisch + aktuell (README/CHANGELOG/CONTRIBUTING/SECURITY/ROADMAP), Issue-Forms + SUPPORT.md + docs-Index + OpenAPI-Referenz, PROJECT.md auf Release-Vorhaben | ✅ umgesetzt (PR #389) |
+| `2026-08-20-1031_repo-pflege-status-abhaken.md` | Repo-Pflege: Status-Nachführung (diese Übersicht + STATE.md), Issue #338 O1 abgehakt, Zusammenfassung offener Aufgaben | ✅ umgesetzt |
 
 Offen außerhalb der Plan-Dateien: Owner-Punkte aus
 `docs/standards-review-2026-07-20.md` §4 sowie der dortige Folge-Backlog

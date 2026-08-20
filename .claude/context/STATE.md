@@ -1,6 +1,6 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-08-20_
+_Stand: 2026-08-20 (2. Lauf)_
 
 Ist-Zustands-Snapshot, kein Changelog. Die Umsetzungs-Historie (per-Run-Details,
 Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
@@ -659,7 +659,7 @@ Plan: `.claude/plan/2026-08-19-2110_repo-pflege-branches-tests.md` (PR #387).
   tsc + gezielter e2e-Typ-Check grün, 956 Vitest, Coverage
   86,50/80,61/82,44/87,50, Build grün.
 
-### Repo-Pflege: Doku & Struktur (2026-08-20)
+### Repo-Pflege: Doku & Struktur (2026-08-20) — gemergt (PR #389)
 
 Playbook-Lauf über beide Tracks; Plan
 `.claude/plan/2026-08-20-0813_repo-pflege-doku-struktur.md`. Vier Weichen
@@ -686,7 +686,25 @@ Diataxis-Umbau; Community-Health Stufe 2.
   Topics (Textvorschläge im PR), Screenshot/GIF als visueller Anker im
   README, ggf. Discussions aktivieren, Social-Preview-Bild.
 
-## Bekannte Probleme
+### Repo-Pflege: Status-Nachführung & Abhaken (2026-08-20, 2. Lauf)
+
+Kleiner Pflege-Lauf auf User-Auftrag; Plan (inkl. Gap-Report und
+vollständiger Zusammenfassung der offenen Aufgaben):
+`.claude/plan/2026-08-20-1031_repo-pflege-status-abhaken.md`.
+
+- **Status-Tracking nachgeführt:** `.claude/plan/README.md` um die Zeilen
+  der Läufe 2026-08-19-1805 (Refactoring Web-Dedup), 2026-08-19-2110
+  (Branch-Hygiene/E2E, PR #387), 2026-08-20-0813 (Doku & Struktur, PR #389)
+  ergänzt — die Übersicht war drei Läufe hinterher.
+- **Issue #338 O1 abgehakt** (CI-Gate seit 2026-08-16 aktiv, Beleg
+  §Standards / CI) — per Body-Update + Beleg-Kommentar; O2–O4 bleiben
+  Owner-Schritte.
+- **Abhak-Prüfung #341:** WP-8 offen (`version = "0"`, kein Tag), WP-9
+  teilerledigt (Journeys scharf, aber `continue-on-error` steht noch und
+  der CI-Grün-Nachweis auf einem Release-Commit fehlt), WP-10 offen —
+  keine Checkbox setzbar.
+- Public-Doku ohne Stale-Fund (Stand PR #389, heute gemergt);
+  Negativ-Listen-Scan sauber.
 
 - **Tabellen-Store-Verzeichnisse überleben den Hard-Purge** (bewusst, WP20):
   `cleanup_deleted_area_stores` fasst nur Verzeichnisse an, deren Workspace
