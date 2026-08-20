@@ -1,6 +1,43 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-08-20 (3. Lauf)_
+_Stand: 2026-08-20 (4. Lauf — Public-Day)_
+
+## Public-Switch vollzogen + CI wiederbelebt (2026-08-20)
+
+**Das Repo ist seit heute PUBLIC** (Owner-Flip ~13:00 UTC), PR #390 ist
+gemergt (`e6ea003`), und die CI lief erstmals **komplett grün** inkl.
+harter E2E-Spitze (Run `32377333096`: python 7:27 · web 6:15 · e2e 10/10
+· compose-smoke · audit · 3× CodeQL).
+
+- **Wurzelursache der CI-„Regression" seit 2026-08-19 ~16:37 gefunden:**
+  KEIN Billing-Problem — die Actions-Policy „Require actions to be pinned
+  to a full-length commit SHA" war aktiv geworden; jeder Lauf starb im
+  „Set up job". Fix: alle 19 `uses:` in `ci.yml`/`deploy.yml` SHA-gepinnt
+  (Tag als Kommentar für Dependabot). Die Policy bleibt bewusst an
+  (Supply-Chain-Hardening).
+- **E2E-Journeys erstmals real gelaufen und in 3 Runden repariert** (alle
+  Fehler in der Spec, keine im Produkt): Promote-Validierung verlangt
+  Body-Blocks schon bei draft→review; ResourcePicker zeigt Block-Optionen
+  nur bei Heading-Blöcken; `@example.test` = Special-Use-TLD (pydantic
+  lehnt ab, GoTrue nicht); `waitForURL` matchte `/playbooks/new` als ID;
+  required Description ohne Testid blockte den Submit still; **Admin-MFA-
+  Gate (aal2)**: der Helper macht jetzt echtes TOTP-Enroll gegen GoTrue
+  (`/factors`→challenge→verify, RFC-6238 gegen Anhang-B-Vektor
+  verifiziert) statt das Gate zu umgehen.
+- **e2e ist hartes Gate** (#341 WP-9 komplett): `continue-on-error`
+  entfernt nach grünem Beleg. **#338 O1 endgültig erledigt.**
+- **Sicherheits-Setup nach dem Flip** (Owner): Dependency graph, Dependabot
+  alerts/security updates, CodeQL (default) aktiv; Private vulnerability
+  reporting, Secret/Push-Protection, Grouped updates, Malware alerts
+  angestoßen.
+- **Vor dem Flip bereinigt:** PR #314 geschlossen + Pitch-Dossier-Branch
+  und `…-setup-4fk7ed` (Gateway-Reflexion) gelöscht (Inhalte dem Owner als
+  Dateien gesichert); 72+2 tote Branches weg — Remote hat noch 5 Branches.
+- **Release v0.1.0:** Version + CHANGELOG-Release-Block fertig (dieser
+  Branch); **Tag + GitHub-Release = Owner-Schritt** (Git-Proxy erlaubt nur
+  den Arbeits-Branch): `git tag -a v0.1.0 e6ea003 -m "Who2Be v0.1.0" &&
+  git push origin v0.1.0`, dann Release aus dem Tag mit den
+  CHANGELOG-0.1.0-Notes.
 
 Ist-Zustands-Snapshot, kein Changelog. Die Umsetzungs-Historie (per-Run-Details,
 Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
@@ -814,10 +851,12 @@ Draft-on-Edit-Sichtbarkeit waren längst erledigt/überholt.
 Als Owner-Checkliste getrackt in Issue #338 (Welle 3 der Release-Mechanik
 in #341):
 
-1. Actions-Billing/Runner-Problem **erneut** klären — das CI-Gate lief
-   2026-08-16 bis 2026-08-19, seit 2026-08-19 ~16:37 ist die Regression
-   zurück (§Standards / CI). Alternative bleibt der Public-Flip (Punkt 3,
-   freie Actions-Minuten für Public-Repos).
-2. GitHub-Settings: Branch-Protection, Auto-delete head branches,
-   Merge-Strategie, Description/Topics/Discussions.
-3. CLA-Assistant aktivieren; Visibility Private → Public (finaler Flip).
+1. ~~CI-Gate~~ ✅ (SHA-Pinning-Fix, s. o.) · ~~Public-Flip~~ ✅ 2026-08-20.
+2. **Tag `v0.1.0` pushen + GitHub-Release anlegen** (Kommando s. o.;
+   Notes = CHANGELOG-0.1.0-Block).
+3. GitHub-Settings-Rest: Branch-Protection für `main`, Auto-delete head
+   branches, Merge-Strategie, Description/Topics, Secret-/Push-Protection
+   + Private vulnerability reporting bestätigen, ggf. Discussions +
+   Social-Preview.
+4. CLA-Assistant aktivieren (vor den ersten externen PRs).
+5. Optional vor 1.0: Deploy-Verifikation (#341 WP-10, `DEPLOY_HOST`).
