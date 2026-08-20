@@ -112,7 +112,14 @@ Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
   Security-Findings Phase 1+2 alle Closed.
 - Standards-Review 2026-07-08: WP-1–8 umgesetzt
   (`docs/standards-review-2026-07-08.md` §3); heutiger Lauf s. u.
-- **CI-Gate seit 2026-08-16 wieder aktiv** (war seit 2026-07-19 durch
+- **CI-Gate: Regression seit 2026-08-19 ~16:37 UTC** — das alte
+  Krankheitsbild ist zurück: jeder Lauf (main, Feature-Branches, Dependabot)
+  bricht nach 2–8 s ab, `runner_id: 0`, keine Logs (Belege: Runs
+  `32277214197` ff. bis `32359545985`; letzter echter grüner Lauf
+  `32268362194`, 2026-08-19 15:09–15:21). Re-Run aus der Session nicht
+  möglich (403). #338 O1 ist damit wieder offen — der Abschnitt darunter
+  beschreibt den Stand 2026-08-16–19, als das Gate real lief:
+- CI-Gate war 2026-08-16 bis 2026-08-19 aktiv (war zuvor seit 2026-07-19 durch
   Actions-Billing tot, GIT-2 im Standards-Review 2026-07-20). Alle fünf Jobs
   laufen: `python` · `web` · `e2e` · `compose-smoke` · `audit`. Beleg — das
   Krankheitsbild war Abbruch nach 2–6 s mit `runner_id: 0` und ohne Logs;
@@ -696,9 +703,11 @@ vollständiger Zusammenfassung der offenen Aufgaben):
   der Läufe 2026-08-19-1805 (Refactoring Web-Dedup), 2026-08-19-2110
   (Branch-Hygiene/E2E, PR #387), 2026-08-20-0813 (Doku & Struktur, PR #389)
   ergänzt — die Übersicht war drei Läufe hinterher.
-- **Issue #338 O1 abgehakt** (CI-Gate seit 2026-08-16 aktiv, Beleg
-  §Standards / CI) — per Body-Update + Beleg-Kommentar; O2–O4 bleiben
-  Owner-Schritte.
+- **Issue #338 O1: erst abgehakt, dann revidiert** — beim Abhaken galt der
+  Stand „CI-Gate aktiv seit 2026-08-16"; der CI-Lauf auf PR #390 deckte
+  auf, dass die Infra-Regression seit 2026-08-19 ~16:37 zurück ist (s.
+  §Standards / CI). O1 wieder auf offen gesetzt, Befund im Issue
+  dokumentiert; O2–O4 bleiben Owner-Schritte.
 - **Abhak-Prüfung #341:** WP-8 offen (`version = "0"`, kein Tag), WP-9
   teilerledigt (Journeys scharf, aber `continue-on-error` steht noch und
   der CI-Grün-Nachweis auf einem Release-Commit fehlt), WP-10 offen —
@@ -725,9 +734,10 @@ vollständiger Zusammenfassung der offenen Aufgaben):
   JSON-*String* rechnen. Dass dieselbe Fehlerklasse woanders einen Endpunkt
   gekillt hat, steht oben (§`describe_table` antwortete mit 500).
 - E2E-Gate bleibt Soft, bis die CI-Infra dauerhaft stabil ist. Die
-  Voraussetzung — eine überhaupt laufende CI — ist seit 2026-08-16 wieder
-  gegeben (§Standards / CI); ob der Soft-Gate-Status fällt, ist eine
-  Owner-Entscheidung (`coverage.all/E2E` im Standards-Review §4).
+  Voraussetzung — eine überhaupt laufende CI — ist seit 2026-08-19 ~16:37
+  wieder **nicht** gegeben (Regression, s. §Standards / CI); ob der
+  Soft-Gate-Status danach fällt, ist eine Owner-Entscheidung
+  (`coverage.all/E2E` im Standards-Review §4).
 - Offene Owner-Entscheidungen: `docs/standards-review-2026-07-20.md` §4
   (ADR-0002 enforce vs. amend, Branch-Protection/Merge-Strategie,
   On-Prem-RLS, Cloud-Image-Deploy, LIC-1-Mechanik, coverage.all/E2E/CLA).
@@ -737,8 +747,10 @@ vollständiger Zusammenfassung der offenen Aufgaben):
 Als Owner-Checkliste getrackt in Issue #338 (Welle 3 der Release-Mechanik
 in #341):
 
-1. ~~Actions-Billing klären~~ — erledigt, das CI-Gate läuft seit 2026-08-16
-   wieder (§Standards / CI). Bleibt: der Public-Flip (Punkt 3).
+1. Actions-Billing/Runner-Problem **erneut** klären — das CI-Gate lief
+   2026-08-16 bis 2026-08-19, seit 2026-08-19 ~16:37 ist die Regression
+   zurück (§Standards / CI). Alternative bleibt der Public-Flip (Punkt 3,
+   freie Actions-Minuten für Public-Repos).
 2. GitHub-Settings: Branch-Protection, Auto-delete head branches,
    Merge-Strategie, Description/Topics/Discussions.
 3. CLA-Assistant aktivieren; Visibility Private → Public (finaler Flip).

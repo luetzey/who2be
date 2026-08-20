@@ -31,7 +31,12 @@ Code-Fix (Test-Skip-Guard), kein Doku-Fund — bleibt offen im Backlog;
 
 ## Abhak-Prüfung der offenen Issues (Belege)
 
-- **#338 O1** ✅ — CI-Gate aktiv seit 2026-08-16 (s. o.). O2–O4 offen (Owner).
+- **#338 O1** — zunächst abgehakt (Stand „CI-Gate aktiv seit 2026-08-16"),
+  dann **revidiert**: der CI-Lauf auf PR #390 zeigte, dass die
+  Infra-Regression seit 2026-08-19 ~16:37 UTC zurück ist (alle Läufe
+  brechen nach 2–8 s ab, `runner_id: 0`, keine Logs; letzter grüner Lauf
+  `32268362194` am 2026-08-19 15:09–15:21; Re-Run aus der Session 403).
+  O1 wieder offen. O2–O4 offen (Owner).
 - **#341 WP-8** offen — Root-`pyproject.toml` trägt weiterhin `version = "0"`,
   kein Tag. **WP-9** teilerledigt: die vier E2E-Journeys sind scharf
   (`journeys.spec.ts` ohne `fixme`, PR #387), aber `continue-on-error: true`
@@ -54,6 +59,9 @@ Kein CHANGELOG-Eintrag: reine interne Status-Pflege ohne Außenwirkung.
 **Vorhaben „Public-Switch & erstes Release (v0.1.0)"** (`.github/PROJECT.md`):
 
 *Owner-Schritte (nicht aus der Session setzbar):*
+- #338 O1 (**wieder offen, dringend**): Actions-/Runner-Problem erneut
+  klären — CI-Regression seit 2026-08-19 ~16:37 (alle Läufe Sofort-Abbruch)
+  — oder Public-Flip vorziehen (freie Actions-Minuten).
 - #338 O2: Repo-Settings — Branch-Protection `main`, Auto-delete head
   branches, Merge-Strategie, Description + Topics (Textvorschläge in PR #389).
 - #338 O3: CLA-Assistant aktivieren + Link in CONTRIBUTING.
