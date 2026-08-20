@@ -46,6 +46,7 @@ export function ResourceNewPage() {
               <div className="flex justify-end">
                 <Button
                   type="submit"
+                  data-testid="resource-new-submit"
                   variant="brand"
                   disabled={form.formState.isSubmitting}
                 >

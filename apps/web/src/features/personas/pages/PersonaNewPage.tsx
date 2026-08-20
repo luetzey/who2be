@@ -46,6 +46,7 @@ export function PersonaNewPage() {
               <div className="flex justify-end">
                 <Button
                   type="submit"
+                  data-testid="persona-new-submit"
                   variant="brand"
                   disabled={form.formState.isSubmitting}
                 >

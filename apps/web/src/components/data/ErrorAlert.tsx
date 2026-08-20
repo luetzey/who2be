@@ -12,7 +12,7 @@ export function ErrorAlert({ message, title }: ErrorAlertProps) {
   const { t } = useTranslation('data')
   const resolvedTitle = title ?? t('error.title')
   return (
-    <Alert variant="destructive">
+    <Alert variant="destructive" data-testid="error-alert">
       <AlertCircle />
       <AlertTitle>{resolvedTitle}</AlertTitle>
       <AlertDescription>{message}</AlertDescription>

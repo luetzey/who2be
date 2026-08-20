@@ -46,6 +46,7 @@ export function PlaybookNewPage() {
               <div className="flex justify-end">
                 <Button
                   type="submit"
+                  data-testid="playbook-new-submit"
                   variant="brand"
                   disabled={form.formState.isSubmitting}
                 >

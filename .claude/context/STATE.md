@@ -627,6 +627,38 @@ messbare Tech-Debt lag in per-Feature-Kopien der Web-UI. Plan:
 - **DoD:** eslint 0 Errors, tsc + `tsc -b` (Build) grün, 956 Vitest grün,
   Coverage 86,50/80,61/82,44/87,50 (Floors 80/79/75/80).
 
+### Repo-Pflege: Branch-Hygiene + Dependabot + E2E-Spitze (2026-08-19/20)
+
+Plan: `.claude/plan/2026-08-19-2110_repo-pflege-branches-tests.md` (PR #387).
+
+- **Branch-Hygiene:** 81 Remote-Branches klassifiziert — 70 tot (22 per
+  Merge-Commit enthalten, 48 mit gemergtem Squash-/Inhalts-PR bzw. ohne
+  Delta), 9 aktiv (offene PRs/Dependabot), 1 Restliste
+  (`claude/autonomous-code-agent-setup-4fk7ed`, PR #336 closed-unmerged).
+  Löschung aus der Cloud-Session nicht möglich (Git-Proxy erlaubt nur den
+  Arbeits-Branch) → fertiger Lösch-Befehl liegt beim Owner; Empfehlung:
+  GitHub-Setting „Automatically delete head branches" aktivieren (#338).
+- **Dependabot:** #368 (Web-minor-patch, 28 Pakete) lokal voll verifiziert
+  und gemergt; #245/#243/#242 geschlossen (Juni-Basen mit
+  Lockfile-Konflikten; #242 zudem Major-Bump → bewusster eigener PR);
+  #384 offen: funktional grün, aber der Ruff-Bump erzeugt Format-Drift in
+  5 Dateien → Bump+Reformat in einem Schritt nötig (PR-Kommentar);
+  #330/#240 (Actions-Bumps) warten auf lebende CI.
+- **E2E-Spitze (ADR-0041 Phase 4) scharf:** die vier fixme-Journeys sind
+  implementiert — `e2e/helpers/auth.ts` (Signup mit Autoconfirm,
+  Session-Injektion via `sessionStorage['who2be.auth.session']`,
+  Lazy-Workspace-Seed über `GET /v1/me`), Journeys Persona-Lifecycle,
+  Playbook→Resource-Block-Ref-Backlink, Agent-Read-Active (REST-Äquivalent
+  zu MCP-`get_persona`, im Spec begründet), Invitation-Accept inkl.
+  Email-Mismatch-Guard; minimale `data-testid`-Anker (branch-action-*,
+  tab-*, used-by-item-*, error-alert u. a.). Der CI-e2e-Job bleibt
+  Soft-Gate — Härtung erst nach grünem CI-Beleg; ein echter
+  Playwright-Lauf steht aus (CI-Infra bricht weiterhin nach ~4 s ab, #338;
+  lokal kein Docker).
+- Lokale DoD auf dem PR-#387-Head (inkl. gemergtem #368): eslint 0 Errors,
+  tsc + gezielter e2e-Typ-Check grün, 956 Vitest, Coverage
+  86,50/80,61/82,44/87,50, Build grün.
+
 ## Bekannte Probleme
 
 - **Tabellen-Store-Verzeichnisse überleben den Hard-Purge** (bewusst, WP20):

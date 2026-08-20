@@ -110,6 +110,7 @@ export function SaveIndicator({ state }: { state: AutoSaveState }) {
       role="status"
       aria-live="polite"
       data-testid="branch-save-indicator"
+      data-save-status={state.status}
     >
       {describeSaveState(state, now, t)}
     </p>
@@ -174,6 +175,7 @@ export function BranchStatus({
           {actions.map((action) => (
             <Button
               key={action.key}
+              data-testid={`branch-action-${action.key}`}
               type="button"
               variant={action.variant}
               onClick={action.onClick}

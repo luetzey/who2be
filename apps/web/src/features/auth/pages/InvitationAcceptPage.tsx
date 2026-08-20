@@ -153,6 +153,7 @@ export function InvitationAcceptPage() {
             {isMagicLink ? null : (
               <Button
                 type="button"
+                data-testid="invitation-accept-submit"
                 variant="brand"
                 className="w-full"
                 onClick={() => void runAccept(token, authToken)}

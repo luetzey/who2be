@@ -39,7 +39,7 @@ export function UsedByList({ items, empty, className, ...props }: UsedByListProp
   return (
     <ul className={cn('flex flex-col gap-1', className)} aria-label={props['aria-label']}>
       {items.map((entry) => (
-        <li key={entry.id} className="relative">
+        <li key={entry.id} data-testid={`used-by-item-${entry.id}`} className="relative">
           <div className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-[background-color] duration-[var(--duration-fast)] ease-standard hover:bg-muted/40">
             {entry.icon !== undefined ? (
               <EntityIcon
