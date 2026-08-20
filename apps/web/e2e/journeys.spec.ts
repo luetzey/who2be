@@ -117,7 +117,9 @@ test('Playbook->Resource-Block-Ref erzeugt Backlink in Resource-Detail', async (
   await page.getByTestId('resource-picker-confirm').click()
 
   await page.getByTestId('playbook-new-submit').click()
-  await page.waitForURL(/\/w\/[^/]+\/playbooks\/([^/]+)$/)
+  // `(?!new$)`: /playbooks/new matcht das Segment-Muster ebenfalls — ohne den
+  // Ausschluss "wartete" der erste echte CI-Lauf gar nicht und las `new` als ID.
+  await page.waitForURL(/\/w\/[^/]+\/playbooks\/(?!new$)[^/]+$/)
   const playbookId = page.url().split('/').pop() as string
 
   await page.goto(`/w/${workspaceId}/resources/${resource.id}`)
