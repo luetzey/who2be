@@ -14,8 +14,8 @@ list[SkillRef]` (`packages/models/src/who2be_models/persona.py`). Ein
 
 ```python
 class SkillRef(BaseModel):
-    name: SkillNameStr      # 1..100 Zeichen
-    note: str = ""          # 0..1000 Zeichen, Relevanz-Hinweis
+    name: SkillNameStr  # 1..100 Zeichen
+    note: str = ""  # 0..1000 Zeichen, Relevanz-Hinweis
 ```
 
 Wirkung im Lauf: `render_skills_table`

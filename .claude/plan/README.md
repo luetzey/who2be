@@ -60,7 +60,8 @@ Plan-Dateien unter dem ai-native-Plan + ADR-0038.
 | `2026-08-19-1805_refactor-web-dedup-status-actions.md` | Refactoring-Lauf Web-Dedup: StatusActionBar + Status-Lib nach `components/version/`, Entity-Buttons nach `components/entity/` (jscpd 2,94 % → 2,47 %, netto −2298 Zeilen) | ✅ umgesetzt |
 | `2026-08-19-2110_repo-pflege-branches-tests.md` | Repo-Pflege: Branch-Hygiene (81 Branches klassifiziert → Owner-Issue #388), Dependabot-Triage (#368 gemergt, #245/#243/#242 geschlossen), E2E-Journeys scharf (4 fixme → aktiv) | ✅ umgesetzt (PR #387) |
 | `2026-08-20-0813_repo-pflege-doku-struktur.md` | Repo-Pflege Doku & Struktur: Public-Artefakte englisch + aktuell (README/CHANGELOG/CONTRIBUTING/SECURITY/ROADMAP), Issue-Forms + SUPPORT.md + docs-Index + OpenAPI-Referenz, PROJECT.md auf Release-Vorhaben | ✅ umgesetzt (PR #389) |
-| `2026-08-20-1031_repo-pflege-status-abhaken.md` | Repo-Pflege: Status-Nachführung (diese Übersicht + STATE.md), Issue #338 O1 abgehakt, Zusammenfassung offener Aufgaben | ✅ umgesetzt |
+| `2026-08-20-1031_repo-pflege-status-abhaken.md` | Repo-Pflege: Status-Nachführung (diese Übersicht + STATE.md), Abhak-Prüfung #338/#341, CI-Regression seit 2026-08-19 ~16:37 aufgedeckt + dokumentiert, Zusammenfassung offener Aufgaben | ✅ umgesetzt |
+| `2026-08-20-1047_offene-aufgaben-abarbeiten.md` | Offene Aufgaben (codebar): #385 Skip-Guard (2 Dateien ohne `integration`-Marker), #384 Bump+Reformat (8 Pakete, Ruff-0.16-Markdown-Format), #341 WP-8-Teil (Version 0 → 0.1.0); Teil B = Owner-Schrittfolge | ✅ umgesetzt (PR #390) |
 
 Offen außerhalb der Plan-Dateien: Owner-Punkte aus
 `docs/standards-review-2026-07-20.md` §4 sowie der dortige Folge-Backlog

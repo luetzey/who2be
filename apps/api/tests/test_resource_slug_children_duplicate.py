@@ -31,6 +31,8 @@ from who2be_api.testing.workspace_setup import (
 
 AuthFactory = Callable[[UUID], dict[str, str]]
 
+pytestmark = pytest.mark.integration
+
 
 def _block(block_id: str, text: str) -> dict[str, object]:
     return {

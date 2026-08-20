@@ -1,6 +1,6 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-08-20 (2. Lauf)_
+_Stand: 2026-08-20 (3. Lauf)_
 
 Ist-Zustands-Snapshot, kein Changelog. Die Umsetzungs-Historie (per-Run-Details,
 Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
@@ -714,6 +714,34 @@ vollständiger Zusammenfassung der offenen Aufgaben):
   keine Checkbox setzbar.
 - Public-Doku ohne Stale-Fund (Stand PR #389, heute gemergt);
   Negativ-Listen-Scan sauber.
+
+### Offene Aufgaben abarbeiten (2026-08-20, 3. Lauf — PR #390)
+
+Code-Task-Flow über die codebaren offenen Aufgaben; Plan (inkl.
+Owner-Schrittfolge Teil B):
+`.claude/plan/2026-08-20-1047_offene-aufgaben-abarbeiten.md`.
+
+- **#385 behoben:** die 17 ERRORs ohne erreichbares Postgres verteilten sich
+  auf ZWEI Dateien ohne `integration`-Marker —
+  `test_resource_slug_children_duplicate.py` (5) und `test_external_tools.py`
+  (12; im Issue nicht genannt, selbe Fehlerklasse). Fix: `pytestmark =
+  pytest.mark.integration` je Modul; Repro vorher 17 ERRORs, nachher
+  17 Skips.
+- **#384 superseded:** die 8 Bumps der `python-minor-patch`-Gruppe (pytest
+  9.1.1, mypy 2.3.1, ruff 0.16.3, fastapi 0.141.1, pydantic-settings 2.15.0,
+  pypdf 6.16.1, redis 8.1.0, fastmcp 3.4.7) per `uv lock --upgrade-package`
+  + Reformat in einem Schritt. Aufklärung des Format-Drifts: **Ruff 0.16
+  formatiert Python-Codeblöcke in Markdown** — die „5 Dateien" sind
+  `.md`-Dateien (4 Plan-/ADR-Dokumente + 1 Test-Run-Protokoll).
+- **#341 WP-8 (Teil):** Root-`pyproject.toml` `version = "0"` → `0.1.0`
+  (Workspace-Members standen schon auf 0.1.0). Tag + Release bewusst erst
+  nach Merge + grünem CI-Lauf (Blocker #338 O1).
+- **DoD (ohne DB/Docker in der Session):** ruff check + `ruff format
+  --check` (697 Dateien) + mypy strict (449 Quellen) grün; **1315 pytest
+  passed / 445 skipped** (DB-Integrationstests zentral geskippt);
+  Coverage-Gate ist CI-Sache (Postgres-Service dort).
+
+## Bekannte Probleme
 
 - **Tabellen-Store-Verzeichnisse überleben den Hard-Purge** (bewusst, WP20):
   `cleanup_deleted_area_stores` fasst nur Verzeichnisse an, deren Workspace

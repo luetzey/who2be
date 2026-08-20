@@ -31,6 +31,8 @@ from who2be_models import WorkspaceRole
 
 AuthFactory = Callable[[UUID], dict[str, str]]
 
+pytestmark = pytest.mark.integration
+
 _UNKNOWN = "00000000-0000-0000-0000-000000000000"
 
 

@@ -74,15 +74,14 @@ JSON als Stringified-JSON; bei `'plain'` ist es weiter Plain-Text.
 ```python
 # apps/api/src/who2be_api/services/placeholders/registry.py
 class PlaceholderResolver(Protocol):
-    async def resolve(
-        self, target_id: str, ctx: RenderContext, db: Database
-    ) -> str: ...
+    async def resolve(self, target_id: str, ctx: RenderContext, db: Database) -> str: ...
+
 
 REGISTRY: dict[str, PlaceholderResolver] = {
-    "playbook":      PlaybookResolver(),
-    "resource":      ResourceResolver(),
+    "playbook": PlaybookResolver(),
+    "resource": ResourceResolver(),
     "persona-field": PersonaFieldResolver(),
-    "date":          DateResolver(),
+    "date": DateResolver(),
 }
 ```
 
@@ -95,7 +94,7 @@ Abstraktheit.
 ```python
 class RenderContext(BaseModel):
     workspace_id: UUID
-    persona_id: UUID | None   # Persona des Agents (fuer persona-field)
+    persona_id: UUID | None  # Persona des Agents (fuer persona-field)
     now: datetime
     locale: str = "de-DE"
 ```
@@ -150,7 +149,7 @@ class AgentWithRenderedPrompt(BaseModel):
     id: UUID
     name: str
     persona: PersonaRead
-    system_prompt_rendered: str    # finaler Plain-Text
+    system_prompt_rendered: str  # finaler Plain-Text
     system_prompt_template_id: UUID
 ```
 
