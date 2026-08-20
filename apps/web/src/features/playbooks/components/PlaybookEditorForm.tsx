@@ -120,6 +120,7 @@ export function PlaybookEditorForm({
                       <FormControl>
                         <Input
                           required
+                          data-testid="playbook-name-input"
                           placeholder={t('form.namePlaceholder')}
                           {...field}
                           disabled={isViewer}

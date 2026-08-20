@@ -127,6 +127,7 @@ export function PersonaProfileFields({
               <FormControl>
                 <Input
                   required
+                  data-testid="persona-name-input"
                   placeholder={t('editor.identity.namePlaceholder')}
                   {...field}
                   disabled={isViewer}
@@ -145,6 +146,7 @@ export function PersonaProfileFields({
               <FormControl>
                 <Input
                   required
+                  data-testid="persona-description-input"
                   placeholder={t('editor.identity.descriptionPlaceholder')}
                   {...field}
                   disabled={isViewer}

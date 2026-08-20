@@ -16,14 +16,16 @@ interface StatusBadgeProps {
   // reine `active`-Status den Handlungsbedarf sonst verstecken wuerde.
   pendingDraft?: boolean
   className?: string
+  /** Optionaler `data-testid`-Anker fuer E2E-Selektoren (ADR-0041 Phase 4). */
+  testId?: string
 }
 
-export function StatusBadge({ status, pendingDraft, className }: StatusBadgeProps) {
+export function StatusBadge({ status, pendingDraft, className, testId }: StatusBadgeProps) {
   const { t } = useTranslation(['common', 'data'])
   if (status === undefined) return null
 
   return (
-    <span className={cn('inline-flex items-center gap-1.5', className)}>
+    <span className={cn('inline-flex items-center gap-1.5', className)} data-testid={testId}>
       <span
         className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-xs font-medium text-muted-foreground"
         data-status={status}

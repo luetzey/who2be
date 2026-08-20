@@ -171,6 +171,7 @@ export function PersonaDetailPage() {
                       <StatusBadge
                         status={persona.current_status}
                         pendingDraft={persona.has_pending_draft}
+                        testId="persona-status-badge"
                       />
                       {tags.map((tag) => (
                         <MetaPill key={tag} tone="persona">

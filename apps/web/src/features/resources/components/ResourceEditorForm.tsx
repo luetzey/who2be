@@ -74,6 +74,7 @@ export function ResourceEditorForm({
                     <FormControl>
                       <Input
                         required
+                        data-testid="resource-name-input"
                         placeholder={t('form.namePlaceholder')}
                         {...field}
                         disabled={isViewer}
