@@ -38,8 +38,21 @@ GitHub-Aktionen beim Orchestrator.
 
 ## Status
 
-- [ ] Welle 1 Klassifikation
-- [ ] Welle 2 Löschung + Gegenprobe (`git ls-remote`)
-- [ ] Welle 3 Dependabot (je PR Ergebnis dokumentiert)
-- [ ] Welle 4 E2E-PR (Draft, Aktivierung wartet auf CI-Beleg)
-- [ ] STATE.md-Pflege + Abschlussbericht
+- [x] Welle 1 Klassifikation (23×a, 48×b, 6×c1; Restliste: 1 Branch;
+  Artefakte: scratchpad BRANCH_CLASSIFICATION.md + prmap.json)
+- [x] Welle 2 — ABWEICHUNG: Löschung aus der Cloud-Session technisch
+  gesperrt (Git-Proxy 403, Schreibrecht nur auf den Arbeits-Branch; kein
+  Lösch-Tool im GitHub-MCP). Deliverable: fertiger
+  `git push origin --delete`-Block (70 Branches) im Abschlussbericht —
+  Owner führt lokal aus. Restliste: `claude/autonomous-code-agent-setup-4fk7ed`
+  (PR #336 closed-unmerged, MCP-Tool-Import-Konzept-Doku).
+- [x] Welle 3 Dependabot: #368 gemergt (lokal voll verifiziert); #245/#243/
+  #242 geschlossen (Juni-Basen, Lockfile-Konflikte, #242 zudem Major);
+  #384 offen mit Befund (Ruff-Bump → Format-Drift in 5 Dateien, Empfehlung
+  Bump+Reformat in einem Schritt); #330/#240 (Actions-Bumps) warten auf
+  lebende CI.
+- [x] Welle 4 E2E: Journeys scharf implementiert (`dc897c8`) — Helper
+  e2e/helpers/auth.ts, 4 Journeys, minimale data-testid-Anker. Soft-Gate
+  bleibt; Gate-Härtung erst nach grünem CI-e2e-Beleg (CI-Infra weiterhin
+  tot, ~4-s-Abbrüche, #338).
+- [x] STATE.md-Pflege + Abschlussbericht
