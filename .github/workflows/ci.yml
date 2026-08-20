@@ -33,9 +33,9 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
       - name: Sync dependencies
         # `--group billing` installiert das optionale Cloud-Billing-Paket, damit
         # dessen Tests + Typecheck laufen. Die Build-Zeit-Isolation (kein Mollie
@@ -68,7 +68,7 @@ jobs:
           --cov-report=xml --cov-fail-under=85
       - name: Upload Python coverage
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: coverage-python
           path: coverage.xml
@@ -80,8 +80,8 @@ jobs:
       run:
         working-directory: apps/web
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
           cache: npm
@@ -98,7 +98,7 @@ jobs:
         run: npm run test:coverage
       - name: Upload web coverage
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: coverage-web
           path: apps/web/coverage
@@ -140,7 +140,7 @@ jobs:
   compose-smoke:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Compose env
         run: cp .env.example .env
       - name: Compose up (build + wait healthy)
@@ -170,12 +170,12 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Compose env
         run: cp .env.example .env
       - name: Compose up (build + wait healthy)
         run: docker compose up -d --build --wait --wait-timeout 240
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
           cache: npm
@@ -193,7 +193,7 @@ jobs:
         run: npm run e2e
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: playwright-report
           path: apps/web/playwright-report
@@ -212,16 +212,16 @@ jobs:
     # deploy/hetzner/RUNBOOK.md §CVE-Response.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
       - name: Export non-workspace deps
         # Editable Workspace-Members (apps/api, apps/mcp, packages/models)
         # filtern, weil pip-audit fuer sie keinen Hash aufloesen kann.
         run: uv export --format requirements-txt --no-emit-workspace --no-hashes --group billing > /tmp/who2be-reqs.txt
       - name: pip-audit (Python)
         run: uv tool run pip-audit --disable-pip --no-deps -r /tmp/who2be-reqs.txt
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
           cache: npm
