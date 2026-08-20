@@ -1,94 +1,108 @@
 # Who2Be
 
-Selbst-gehostete **AgentDB** fuer versionierte Persona- und
-Playbook-Verwaltung — die zentrale Konfigurationsquelle fuer AI-Agenten.
+[![CI](https://github.com/luetzey/who2be/actions/workflows/ci.yml/badge.svg)](https://github.com/luetzey/who2be/actions/workflows/ci.yml)
+[![License: FSL-1.1-Apache-2.0](https://img.shields.io/badge/license-FSL--1.1--Apache--2.0-blue.svg)](LICENSE)
 
-Statt System-Prompts, Workflows und Wissensdokumente in Chat-Verlaeufen,
-Notizen oder Repos zu verstreuen, verwaltet Who2Be sie als **versionierte,
-status-gefuehrte Aggregate** (Draft → Review → Active → Archived) und liefert
-sie Agenten zur Laufzeit ueber einen **MCP-Server** aus.
+Self-hosted **AgentDB** for versioned persona and playbook management — the
+central configuration source for AI agents.
+
+Instead of scattering system prompts, workflows, and knowledge documents
+across chat histories, notes, or repositories, Who2Be manages them as
+**versioned, status-tracked aggregates** (Draft → Review → Active → Archived)
+and serves them to agents at runtime through an **MCP server**.
 
 ## Features
 
-- **Personae** — Identitaet, Ton, Grenzen und Modi eines Agenten, versioniert
-  mit Status-Workflow und Diff-Ansicht
-- **Playbooks** — Schritt-Workflows mit Trigger-Keywords, komponierbar zu
-  Composite-Buendeln (ADR-0024)
-- **Resources** — Wissensdokumente mit Block-Editor (BlockNote), Block-Refs
-  und Reverse-Lookups (ADR-0022)
-- **Agents** — konkrete Agenten-Konfigurationen mit expandiertem
-  System-Prompt, Tool-Policy und kuratiertem Langzeit-Gedaechtnis (ADR-0044)
-- **System-Prompt-Templates & Externe Tools** — wiederverwendbare
-  Prompt-Bausteine (ADR-0040) und MCP-Tool-Bindings mit `tool-ref`-Platzhaltern
+- **Personae** — an agent's identity, tone, boundaries, and modes, versioned
+  with a status workflow and diff view
+- **Playbooks** — step-by-step workflows with trigger keywords, composable
+  into composite bundles (ADR-0024)
+- **Resources** — knowledge documents with a block editor (BlockNote),
+  block refs, and reverse lookups (ADR-0022)
+- **Agents** — concrete agent configurations with an expanded system prompt,
+  tool policy, and curated long-term memory (ADR-0044)
+- **Agent work area & knowledge base** — an unversioned workspace per agent
+  (notes, file/URL ingest, read-only SQL tables, timeline) next to the
+  curated resource axis, plus an evidence-backed knowledge base with typed
+  edges; promotion into resources is an explicit step (ADR-0047–0049)
+- **System prompt templates & external tools** — reusable prompt building
+  blocks (ADR-0040) and MCP tool bindings with `tool-ref` placeholders
   (ADR-0043)
-- **MCP-Server** — Read-, Write-, Search- und Discovery-Tools inkl.
-  Feedback-Flywheel (`record_usage`/`submit_feedback`, ADR-0038); Anbindung via
-  stdio oder OAuth-2.1-Remote-Connector (ADR-0036), z. B. an Claude Code oder
-  Claude.ai
-- **Multi-Tenancy & RBAC** — Organisationen → Workspaces,
-  Rollen `admin > editor > viewer`, Magic-Link-Invitations, MFA-Step-up
-  (ADR-0023)
-- **Zwei Editionen aus einer Codebase** — On-Prem (signierter Lizenz-Key) und
-  Cloud (Billing-Paket), build-isoliert (ADR-0028/0029)
+- **MCP server** — 81 tools: read, write, full-text + semantic search
+  (ADR-0046), discovery, and the feedback flywheel
+  (`record_usage`/`submit_feedback`, ADR-0038); connect via stdio or the
+  OAuth 2.1 remote connector (ADR-0036), e.g. to Claude Code or Claude.ai
+- **Multi-tenancy & RBAC** — organizations → workspaces, roles
+  `admin > editor > viewer`, magic-link invitations, MFA step-up (ADR-0023)
+- **Two editions from one codebase** — on-prem (signed license key) and
+  cloud (billing package), isolated at build time (ADR-0028/0029)
 
-## Architektur
+## Architecture
 
-| Komponente | Pfad | Stack |
+| Component | Path | Stack |
 |---|---|---|
-| REST-API | `apps/api/` | FastAPI, `/v1/workspaces/{ws_id}/...` |
-| MCP-Server | `apps/mcp/` | FastMCP (stdio + HTTP/OAuth) |
-| Web-UI | `apps/web/` | Vite + React 18 + TypeScript, Tailwind v4, shadcn |
-| Geteilte Models | `packages/models/` | Pydantic |
-| Cloud-Billing (optional) | `packages/billing/` | Mollie; nur im Cloud-Build |
-| Datenbank | — | Supabase (Postgres), lokal via Docker-Compose |
-| Deployment | `deploy/hetzner/` | Docker Compose + Caddy (Auto-HTTPS) |
+| REST API | `apps/api/` | FastAPI, `/v1/workspaces/{ws_id}/...` |
+| MCP server | `apps/mcp/` | FastMCP (stdio + HTTP/OAuth) |
+| Web UI | `apps/web/` | Vite + React 18 + TypeScript, Tailwind v4, shadcn |
+| Shared models | `packages/models/` | Pydantic |
+| Cloud billing (optional) | `packages/billing/` | Mollie; cloud build only |
+| Blob store | `apps/api/.../blobstore/` | MinIO / in-memory adapter, content-addressed (ADR-0048) |
+| Table store | `apps/api/.../tablestore/` | SQLite per work area, read-only query engine (ADR-0049) |
+| Database | — | Supabase (Postgres), locally via Docker Compose |
+| Deployment | `deploy/hetzner/` | Docker Compose + Caddy (auto-HTTPS) |
 
-Python laeuft als uv-Workspace im Repo-Root; Architektur-Entscheidungen sind
-als ADRs unter [`docs/adr/`](docs/adr/) dokumentiert.
+Python runs as a uv workspace in the repo root; architecture decisions are
+documented as ADRs under [`docs/adr/`](docs/adr/).
 
-## Quickstart (lokal)
+## Quickstart (local)
 
-Voraussetzungen: Docker, [uv](https://docs.astral.sh/uv/), Node 22+.
+Prerequisites: Docker, [uv](https://docs.astral.sh/uv/), Node 22+.
 
 ```bash
 git clone https://github.com/luetzey/who2be.git && cd who2be
-cp .env.example .env       # Env-Vorlage anpassen
-docker compose up -d       # lokale Postgres/Supabase
-uv sync                    # Python-Dependencies (On-Prem-Kern)
-uv run uvicorn who2be_api.main:app --reload   # API auf :8000
+cp .env.example .env       # adjust the env template
+docker compose up -d       # local Postgres/Supabase
+uv sync                    # Python dependencies (on-prem core)
+uv run uvicorn who2be_api.main:app --reload   # API on :8000
 
-cd apps/web && npm ci && npm run dev          # Web-UI auf :5173
+cd apps/web && npm ci && npm run dev          # web UI on :5173
 ```
 
-MCP-Server starten: `uv run python -m who2be_mcp.server` — Anbindung an
-Claude Code/Claude.ai siehe [`docs/mcp-claude-code.md`](docs/mcp-claude-code.md).
-Cloud-Edition (inkl. Billing): `uv sync --group billing`.
+Start the MCP server: `uv run python -m who2be_mcp.server` — for connecting
+Claude Code/Claude.ai see [`docs/mcp-claude-code.md`](docs/mcp-claude-code.md).
+Cloud edition (including billing): `uv sync --group billing`.
 
-## Dokumentation
+## Documentation
 
-- [`docs/adr/`](docs/adr/) — Architecture Decision Records
-- [`docs/standards/`](docs/standards/) — Engineering-Standards
-  (Architektur, Coding, Testing, Security, Frontend, Compliance)
+- [`docs/README.md`](docs/README.md) — documentation index (all of `docs/`)
+- [`docs/reference/openapi.json`](docs/reference/openapi.json) — versioned
+  OpenAPI spec of the REST API (regenerate via
+  `uv run python scripts/export_openapi.py`); interactive docs at `/docs`
+  on a running API
+- [`docs/adr/`](docs/adr/) — architecture decision records
+- [`docs/standards/`](docs/standards/) — engineering standards
+  (architecture, coding, testing, security, frontend, compliance)
 - [`docs/frontend/design-language.md`](docs/frontend/design-language.md) —
-  Designsprache „Warm Citrus"
-- [`deploy/hetzner/README.md`](deploy/hetzner/README.md) — Produktions-Deploy
-  (Compose, Caddy, Backups, Runbook)
-- [`ROADMAP.md`](ROADMAP.md) — was erledigt ist und was kommt
+  the "Warm Citrus" design language
+- [`deploy/hetzner/README.md`](deploy/hetzner/README.md) — production
+  deployment (Compose, Caddy, backups, runbook)
+- [`ROADMAP.md`](ROADMAP.md) — what is done and what comes next
 
-## Entwicklung & Beitraege
+## Development & contributions
 
-Workflow, Konventionen und die Definition of Done (Lint, Typecheck, Tests mit
-Coverage-Ratchet, Lizenz-Gates) stehen in [`CONTRIBUTING.md`](CONTRIBUTING.md).
-Repo-Setup fuer Claude Code: `CLAUDE.md`, `.claude/` und
-`docs/CLAUDE-PROFILE.md`.
+Workflow, conventions, and the definition of done (lint, typecheck, tests
+with a coverage ratchet, license gates) are described in
+[`CONTRIBUTING.md`](CONTRIBUTING.md). Repo setup for Claude Code:
+`CLAUDE.md`, `.claude/`, and `docs/CLAUDE-PROFILE.md`.
 
-Sicherheitsluecken bitte nicht oeffentlich melden — siehe
+Please do not report security vulnerabilities publicly — see
 [`SECURITY.md`](SECURITY.md).
 
 ## License
 
-Lizenziert unter der [Functional Source License 1.1 (Apache 2.0 Future)](LICENSE)
-— frei fuer interne Nutzung, kein konkurrierendes Hosting; jedes Release wird
-zwei Jahre nach Veroeffentlichung automatisch Apache-2.0. Drittanbieter-Lizenzen:
-[`THIRD-PARTY-LICENSES.md`](THIRD-PARTY-LICENSES.md). Fuer eine kommerzielle
-Enterprise-Lizenz: <luetzey@gmail.com>.
+Licensed under the
+[Functional Source License 1.1 (Apache 2.0 Future)](LICENSE) — free for
+internal use, no competing hosting; every release automatically becomes
+Apache 2.0 two years after publication. Third-party licenses:
+[`THIRD-PARTY-LICENSES.md`](THIRD-PARTY-LICENSES.md). For a commercial
+enterprise license: <luetzey@gmail.com>.

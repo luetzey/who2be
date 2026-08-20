@@ -4,73 +4,58 @@ _Primäre Heimat für Outcome, Why, Acceptance Criteria, Constraints und
 Out of Scope des jeweils aktiven Vorhabens. Pro Vorhaben gepflegt; Historie
 liegt in `.claude/plan/` und `docs/adr/`._
 
-## Vorhaben: Externe Tools (MCP-Server-Bindings) + `tool-ref`-Placeholder
+## Vorhaben: Public-Switch & erstes Release (v0.1.0)
 
-Detail-Blueprint: `.claude/plan/2026-07-18-1315_external-tools-tool-ref.md`
+Getrackt in den Issues #338–#341; Stand und Belege in
+`.claude/context/STATE.md`.
 
 ### Outcome
 
-Externe MCP-Server/Tools sind als versionierte Workspace-Objekte
-(`external_tool`) mit stabilem Fähigkeits-Alias (z. B. `todo`) hinterlegt und
-per `tool-ref`-Pill in Playbooks, Personas, Resources und
-System-Prompt-Vorlagen referenzierbar. Ein Tool-Wechsel (z. B. Todoist →
-Things 3) ist genau EIN Edit am Tool-Objekt; alle gerenderten Prompts tragen
-ab dem nächsten Fetch die neue Bindung.
+Das Repository ist öffentlich, das erste Release `v0.1.0` ist getaggt und
+veröffentlicht, und externe Contributor können über CLA, Issue-Forms und
+CONTRIBUTING-Workflow beitragen.
 
 ### Why
 
-Tool-Anweisungen werden heute als Freitext dupliziert; ein Wechsel bedeutet
-N Edits mit Drift-Risiko. Die Fetch-Time-Placeholder-Architektur liefert die
-„einmal ändern, überall aktuell"-Semantik bereits — es fehlt die Ziel-Entität.
+Die Kern-App (Phasen 1–3), die Agenten-Achsen, MCP/OAuth, die
+WorkArea-/KB-Achse und die Publish-Artefakte sind fertig; das Secrets-Gate
+ist bestanden, die CI läuft seit 2026-08-16 wieder. Was fehlt, sind
+Owner-Schritte (Settings, CLA, Flip) und die Release-Mechanik — nicht
+Produktcode.
 
 ### Acceptance Criteria
 
-1. CRUD + Status-Workflow (draft→review→active→inactive) + Versionierung für
-   `external_tool` per REST und Web-UI; Alias pro Workspace eindeutig (409).
-2. `tool-ref`-Pill (target_id = Alias) ist in System-Prompt-, Playbook- und
-   Persona-Editor einfügbar und expandiert beim Agent-Rendering zur aktiven
-   Bindung; ohne aktives Tool → sauberer Miss (`unresolved_key`), kein Crash.
-   Resource-Editor rendiert bauartbedingt keine Pills (kein `render_template_
-   body`-Pfad).
-3. Bindungswechsel per Edit + Promote wird ohne Änderung an referenzierenden
-   Inhalten beim nächsten Fetch wirksam (Test belegt Ende-zu-Ende).
-4. MCP: `list_external_tools`/`get_external_tool` (read) + Builder-Writes
-   capability-gated; Einträge in `MCP_TOOL_REQUIREMENTS` (Drift-Guards grün);
-   `search` findet externe Tools.
-5. Policy: Read-Scope-Domain `external_tool` + Capability
-   `external_tool_write` inkl. `is_within`-Anti-Escalation und Policy-UI.
-6. DSGVO-Purge + Einzel-Export decken die neuen Tabellen ab.
-7. DoD beider Stacks grün (pytest ≥85 % Coverage, ruff, mypy strict; Web
-   lint/tsc/test:coverage ≥79 % Branches/build) — lokal = CI.
+1. **Owner-Schritte (#338):** Branch-Protection, Auto-delete head branches,
+   Merge-Strategie, Description/Topics gesetzt; CLA-Assistant aktiv;
+   Visibility Private → Public.
+2. **Release-Blocker (#339):** erledigt (npm-audit clean,
+   THIRD-PARTY-LICENSES.md, Pre-Publish-Nachweis dokumentiert).
+3. **Publish-Artefakte (#340):** vollständig und englisch (README mit
+   Badges, CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, SUPPORT, CHANGELOG,
+   ROADMAP, Issue-Forms, OpenAPI-Referenz, docs-Index).
+4. **Release-Mechanik (#341):** `v0.1.0`-Tag + GitHub-Release mit
+   CI-grünem Lauf auf dem Release-Commit; E2E-Journeys scharf (Soft-Gate-
+   Entscheidung beim Owner).
 
 ### Constraints
 
-- Rein beschreibende Daten: KEINE Server-URLs, KEINE Credentials/Secrets.
-- Bestehende Muster wiederverwenden (versioned_repository, Placeholder-
-  Registry, ListFilterBar/StatusBadge, shadcn-Primitives, Token-Design).
-- Additiv: keine Breaking Changes an bestehenden APIs/Policies
-  (JSONB-abwärtskompatible Policy-Erweiterung).
-- Arbeit über Branch + Pull Request, Conventional Commits.
+- Keine destruktiven GitHub-Aktionen ohne Owner (Visibility, Settings,
+  Branch-Löschung bleiben Owner-Schritte).
+- Lizenz bleibt FSL-1.1 (Apache 2.0 Future); CLA vor externen Beiträgen.
+- Lokal = CI (Coverage-Ratchet, DoD in CONTRIBUTING).
 
 ### Out of Scope
 
-- MCP-Gateway/Proxy (Who2Be routet keine Tool-Calls) — dokumentierter
-  späterer Ausbaupfad im ADR.
-- Credential-Store, Runtime-Verbindungsprüfung, Dashboard-KPIs,
-  Editionen-Gating, Builder-Playbook-Erweiterung (v1.1-Kandidaten).
+- Cloud-Edition produktiv (Mollie-Billing live), Deploy-Live-Verifikation
+  (`DEPLOY_HOST`), WP-14-Architektur-Backlog, OAuth-Phase 2 — siehe
+  ROADMAP §Mid-term/Long-term.
 
-### Status
+---
 
-**Umgesetzt via PR #316 (WP-1–5, 2026-07-18):** Backend-Fundament
-(Aggregat + Migration + Alias), Rendering + Katalog, Policy + MCP-Tools
-(54 Total), Web features/tools, Editor-Pills (System-Prompt/Playbook/Persona;
-Resource-Editor ausgenommen). Alle AC erfuellt; DoD beider Stacks gruen.
+## Abgeschlossen (zuletzt)
 
-**v1.1-Kandidaten (vertagt):**
-- `find_usages`-Support fuer external_tool ("Verwendet in"-Sektion)
-- FeedbackPanel / GiveFeedback auf Tool-Detail-Seite
-- Builder lernt `tool-ref` (MCP-basierte Tool-Verwaltung)
-- PlaceholderHelp-Popover-Eintrag fuer tool-ref
-- Dashboard-KPIs fuer Tool-Adoption
-- Editionen-Gating (Cloud vs. On-Prem Feature-Gating)
-- Seed-Beispiel-Tool im Onboarding
+- **Externe Tools (MCP-Server-Bindings) + `tool-ref`-Placeholder** —
+  umgesetzt mit PR #316 (ADR-0043); Blueprint
+  `.claude/plan/2026-07-18-1315_external-tools-tool-ref.md`.
+- **Agent WorkArea + Knowledge Base** (ADR-0047/0048/0049) — PR #367 ff.,
+  Plan `.claude/plan/2026-08-13-1200_agent-workarea-knowledge-base.md`.

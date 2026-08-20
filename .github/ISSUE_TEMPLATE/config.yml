@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/luetzey/who2be/security/advisories/new
+    about: Please report security vulnerabilities privately — never as a public issue (see SECURITY.md).
+  - name: Questions & support
+    url: https://github.com/luetzey/who2be/blob/main/SUPPORT.md
+    about: Where to ask questions — the issue tracker is for bugs and feature requests.

@@ -1,61 +1,73 @@
 # Roadmap
 
-Kuratierter Ueberblick — Details stehen in `.claude/context/STATE.md`
-(laufender Stand), `docs/adr/` (Entscheidungen) und den Plan-Dokumenten unter
-`.claude/plan/`. Reihenfolge und Inhalte koennen sich aendern.
+Curated overview — details live in `.claude/context/STATE.md` (running
+state), `docs/adr/` (decisions), and the plan documents under
+`.claude/plan/`. Order and contents may change.
 
-## Erledigt (Auszug)
+## Done (excerpt)
 
-- **Kern-AgentDB:** versionierte Personae, Playbooks (inkl. Composites,
-  ADR-0024), Resources mit BlockNote-Editor (ADR-0022), Agents,
-  System-Prompt-Templates (ADR-0040), Externe Tools + `tool-ref` (ADR-0043)
-- **Tenancy & RBAC:** Organisationen → Workspaces → Entities, Rollen
-  `admin > editor > viewer` (ADR-0023), Magic-Link-Invitations, MFA-Step-up
-- **MCP-Server:** Read-/Write-/Discovery-Tools, Search (ADR-0037),
-  Feedback-Flywheel (ADR-0038), Agent-Memory (ADR-0044), feinkoernige
-  Agent-Schreibrechte + Rate-Limit (ADR-0039), Policy-gefiltertes
-  `tools/list` (ADR-0042), OAuth-2.1-Remote-Connector (ADR-0036) auf
-  HTTP-Transport (ADR-0034)
-- **Editionen:** On-Prem vs. Cloud build-isoliert (ADR-0028/0029),
-  signierte On-Prem-Lizenzen, optionales Mollie-Billing-Paket
-- **Qualitaet & Compliance:** Coverage-Ratchets beide Stacks (ADR-0041),
-  OSS-Lizenz-Gates (ADR-0033), Security-Findings Phase 1+2 geschlossen,
-  FSL-1.1-Lizenzierung, Deploy-Stack fuer Hetzner (`deploy/hetzner/`)
+- **Core AgentDB:** versioned personae, playbooks (including composites,
+  ADR-0024), resources with the BlockNote editor (ADR-0022), agents,
+  system prompt templates (ADR-0040), external tools + `tool-ref`
+  (ADR-0043)
+- **Tenancy & RBAC:** organizations → workspaces → entities, roles
+  `admin > editor > viewer` (ADR-0023), magic-link invitations, MFA step-up
+- **MCP server:** read/write/discovery tools, search (ADR-0037), feedback
+  flywheel (ADR-0038), agent memory (ADR-0044), fine-grained agent write
+  permissions + rate limit (ADR-0039), policy-filtered `tools/list`
+  (ADR-0042), OAuth 2.1 remote connector (ADR-0036) on HTTP transport
+  (ADR-0034)
+- **Agent work area & knowledge base (ADR-0047/0048/0049):** unversioned
+  workspace per agent (documents, file/URL ingest with content-addressed
+  blob store, read-only SQL tables, timeline), evidence-backed knowledge
+  base with typed edges, promotion into curated resources, agent access
+  log; 81 MCP tools in total, table UI + CSV/XLSX/Markdown/HTML exports
+- **Semantic search & passage retrieval (ADR-0046):** content chunking,
+  `search_content` passages, optional local embeddings with hybrid RRF
+  ranking, semantic agent memory
+- **Language as a first-class concept (ADR-0045):** one element = one
+  language, locale badges + filters, English rollout package with
+  locale-aware seeding
+- **Editions:** on-prem vs. cloud, build-isolated (ADR-0028/0029), signed
+  on-prem licenses, optional Mollie billing package
+- **Quality & compliance:** coverage ratchets for both stacks (ADR-0041),
+  OSS license gates (ADR-0033), security findings phases 1+2 closed,
+  FSL 1.1 licensing, deploy stack for Hetzner (`deploy/hetzner/`)
 
-## Als Naechstes: Public-Switch & erstes Release
+## Next: public switch & first release
 
-Getrackt in den Issues #338–#341:
+Tracked in issues #338–#341:
 
-1. **Owner-Schritte** (#338): Branch-Protection + Repo-Settings,
-   CLA-Assistant, Visibility-Flip Private → Public. (Das CI-Gate war hier
-   mitgelistet — es laeuft seit 2026-08-16 wieder.)
-2. **Release-Blocker** (#339): npm-audit-Bereinigung,
-   `THIRD-PARTY-LICENSES.md`, dokumentierter Pre-Publish-Nachweis.
-3. **Publish-Artefakte** (#340): Code of Conduct, Roadmap, README-Ausbau,
-   Changelog, LICENSE-Datei.
-4. **Release-Mechanik** (#341): Version `v0.1.0` + GitHub-Release,
-   CI-gruener Lauf auf dem Release-Commit, E2E-Journeys scharf schalten.
+1. **Owner steps** (#338): branch protection + repo settings, CLA
+   Assistant, visibility flip private → public. (The CI gate used to be
+   listed here — it has been running again since 2026-08-16.)
+2. **Release blockers** (#339): npm audit cleanup,
+   `THIRD-PARTY-LICENSES.md`, documented pre-publish evidence.
+3. **Publish artifacts** (#340): code of conduct, roadmap, README
+   expansion, changelog, LICENSE file.
+4. **Release mechanics** (#341): version `v0.1.0` + GitHub release, a green
+   CI run on the release commit, activating the E2E journeys.
 
-## Mittelfristig
+## Mid-term
 
-- **E2E-Haertung:** Playwright-Journeys aktivieren, Soft-Gate
-  (`continue-on-error`) entfernen (TST-1)
-- **Deploy-Live-Verifikation:** `DEPLOY_HOST` provisionieren und die
-  Deploy-Pipeline einmal end-to-end fahren (C1/C4)
-- **Architektur-Refactorings** (WP-14-Backlog,
+- **E2E hardening:** activate the Playwright journeys, remove the soft gate
+  (`continue-on-error`) (TST-1)
+- **Deploy live verification:** provision `DEPLOY_HOST` and run the deploy
+  pipeline end-to-end once (C1/C4)
+- **Architecture refactorings** (WP-14 backlog,
   `docs/standards-review-2026-07-20.md`): `VersionedAggregateService`,
-  Repository-Vervollstaendigung, MCP-Modularisierung, `useApiData`,
-  A11y-Rest, SBOM (CycloneDX), pre-commit-Hooks
-- **OAuth-Connector Phase 2:** TTL-Cleanup, Audience-Trennung, aal2-Consent
+  repository completion, MCP modularization, `useApiData`, remaining a11y,
+  SBOM (CycloneDX), pre-commit hooks
+- **OAuth connector phase 2:** TTL cleanup, audience separation, aal2
+  consent
 
-## Langfristig / Ideen
+## Long-term / ideas
 
-- Cloud-Edition produktiv (Mollie-Billing, Entitlements ADR-0028/0029)
-- Erweiterte Agenten-Achsen (Persona-Modi, Resource-Tags —
-  `docs/agent-axes.md`)
-- `1.0.0`, sobald E2E hart, Deploy verifiziert und die API stabil ist
+- Cloud edition in production (Mollie billing, entitlements ADR-0028/0029)
+- Extended agent axes (persona modes, resource tags — `docs/agent-axes.md`)
+- `1.0.0` once E2E is hard, deploy is verified, and the API is stable
 
-## Mitmachen
+## Contributing
 
-Siehe [CONTRIBUTING.md](CONTRIBUTING.md) — externe Beitraege werden mit dem
-Public-Switch freigeschaltet.
+See [CONTRIBUTING.md](CONTRIBUTING.md) — external contributions open with
+the public switch.
