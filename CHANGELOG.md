@@ -3,15 +3,28 @@
 All notable changes to Who2Be are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-versioning follows [SemVer](https://semver.org/). Before the first release
-(`v0.1.0`), the "Unreleased" section collects the development so far as
-curated blocks; detailed history lives in the merged pull requests and the
-plan documents under `.claude/plan/`.
+versioning follows [SemVer](https://semver.org/). Detailed history lives in
+the merged pull requests and the plan documents under `.claude/plan/`.
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [0.1.0] - 2026-08-20
+
+First public release. This section collects the entire development up to
+the public switch as curated blocks.
+
 ### Added
 
+- Tag grouping for the playbook list and, for the first time, grouping on
+  the resource list (client-side, multi-tag membership with an "untagged"
+  group)
+- Policy presets in the agent editor ("Read only" / "Editor without
+  approval" / "Editor with approval"), derived from and applied to the
+  write-capability checkboxes; deviations show as "Custom"
+- `data-testid="branch-action-*"` anchors on the shared status action bar
+  (submit/publish/reject/reactivate), used by the end-to-end journeys
 - **Agent work area & knowledge base (ADR-0047/0048/0049):** an unversioned
   workspace per agent (private, plus shared areas via grants) with document
   artifacts, file/URL ingest (20 MB limit, SSRF protection, content-addressed
@@ -65,6 +78,14 @@ plan documents under `.claude/plan/`.
 
 ### Changed
 
+- Persona and playbook detail pages now use the shared status action bar
+  with a per-page label override — visible button and toast texts are
+  unchanged
+- MCP write-tool docstrings document the persona mode schema and the
+  canonical BlockNote body/pill format for playbooks and resources
+- Python minor/patch dependency updates (FastAPI 0.141.1, fastmcp 3.4.7,
+  pydantic-settings 2.15.0, redis 8.1.0, pypdf 6.16.1; dev tooling: pytest
+  9.1.1, mypy 2.3.1, ruff 0.16.3)
 - Public repository documents (README, CONTRIBUTING, SECURITY, CHANGELOG,
   ROADMAP) are now in English, following the documentation standards'
   audience rule; a versioned OpenAPI spec is checked in under
@@ -74,6 +95,9 @@ plan documents under `.claude/plan/`.
 
 ### Fixed
 
+- End-to-end journeys run for real now: session upgrade to AAL2 via an
+  actual TOTP enrollment, promote-ready seed data, and corrected selectors;
+  the e2e CI job is a hard gate (was soft)
 - `describe_table` returned 500 once a source convention had been set
   (double JSON encoding via a duplicate row mapper); stored values are
   unpacked by migration, and all three search paths now share one
@@ -96,6 +120,9 @@ plan documents under `.claude/plan/`.
 
 ### Security
 
+- All GitHub Actions in the CI/deploy workflows are pinned to full-length
+  commit SHAs (supply-chain hardening, satisfies the repository's actions
+  policy)
 - Phase-2 hardening of the agent work area: per-query time budgets and
   result-size caps for agent SQL, an SQL function allowlist, a
   forgery-proof access log (model config snapshotted at access time,
