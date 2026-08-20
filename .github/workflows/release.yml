@@ -18,13 +18,6 @@ on:
         description: "Ziel-Branch oder Commit-SHA"
         required: true
         default: "main"
-  # TEMPORAER (one-shot v0.1.0): der Dispatch-API-Endpunkt ist der
-  # Session-Integration verwehrt (403) — dieser Push-Trigger feuert den
-  # Release einmalig aus dem Arbeits-Branch und wird danach entfernt.
-  # Idempotenz-Guard unten: existiert das Release schon, passiert nichts.
-  push:
-    branches: [claude/autonomous-code-agent-role-7l66oo]
-    paths: [".github/workflows/release.yml"]
 
 permissions:
   contents: write
