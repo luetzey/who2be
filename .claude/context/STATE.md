@@ -1,6 +1,6 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-08-16_
+_Stand: 2026-08-20_
 
 Ist-Zustands-Snapshot, kein Changelog. Die Umsetzungs-Historie (per-Run-Details,
 Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
@@ -658,6 +658,33 @@ Plan: `.claude/plan/2026-08-19-2110_repo-pflege-branches-tests.md` (PR #387).
 - Lokale DoD auf dem PR-#387-Head (inkl. gemergtem #368): eslint 0 Errors,
   tsc + gezielter e2e-Typ-Check grün, 956 Vitest, Coverage
   86,50/80,61/82,44/87,50, Build grün.
+
+### Repo-Pflege: Doku & Struktur (2026-08-20)
+
+Playbook-Lauf über beide Tracks; Plan
+`.claude/plan/2026-08-20-0813_repo-pflege-doku-struktur.md`. Vier Weichen
+per User-Entscheidung (alle Empfehlungen bestätigt): Public-Artefakte jetzt
+komplett Englisch; OpenAPI-Export ohne CI-Gate; docs-Index statt
+Diataxis-Umbau; Community-Health Stufe 2.
+
+- **Public-Artefakte englisch + aktuell:** README (mit CI-/License-Badges,
+  WorkArea-Achse in Features/Architektur), CHANGELOG (August-Blöcke
+  nachgezogen: WorkArea/KB/Tabellen, semantische Suche, Exporte, Fixes,
+  Security-Härtung), CONTRIBUTING, SECURITY, ROADMAP — Übersetzung und
+  Inhalts-Update in einem Zug.
+- **Neu:** `.github/ISSUE_TEMPLATE/` (Bug/Feature als YAML-Forms +
+  config.yml mit Security-/Support-Kontaktlinks), `SUPPORT.md`,
+  `docs/README.md` (Index nach Diataxis-Typ + Zielgruppe),
+  `docs/reference/openapi.json` (140 Pfade) + `scripts/export_openapi.py`.
+- **`.github/PROJECT.md`** vom erledigten Externe-Tools-Vorhaben auf
+  „Public-Switch & erstes Release" (#338–#341) umgestellt.
+- **Negativ-Listen-Scan sauber** (Tree; History-Beleg gitleaks 2026-07-22).
+- **Verify:** Issue-Form-YAML validiert, Link-Check über alle geänderten
+  Dateien grün, CHANGELOG-Kategorien konform, ruff/format/mypy fürs neue
+  Skript grün, OpenAPI-Export tatsächlich ausgeführt.
+- **Owner-Punkte (nicht aus der Session setzbar):** Repo-Description +
+  Topics (Textvorschläge im PR), Screenshot/GIF als visueller Anker im
+  README, ggf. Discussions aktivieren, Social-Preview-Bild.
 
 ## Bekannte Probleme
 

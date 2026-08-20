@@ -2,35 +2,35 @@
 
 ## Reporting a Vulnerability
 
-Bitte melde Sicherheitslücken **nicht** über öffentliche GitHub-Issues,
-Pull-Requests oder Diskussionen.
+Please do **not** report security vulnerabilities through public GitHub
+issues, pull requests, or discussions.
 
-Sobald das Repository öffentlich ist, nutze die **GitHub Private Security
-Advisories** (Tab „Security" → „Report a vulnerability") für eine vertrauliche
-Meldung. Solange das Repository privat ist, melde direkt per E-Mail an
+Once the repository is public, use **GitHub Private Security Advisories**
+(tab "Security" → "Report a vulnerability") for a confidential report. While
+the repository is private, report directly by email to
 <luetzey@gmail.com>.
 
-Bitte gib in deiner Meldung möglichst an:
+Where possible, please include in your report:
 
-- betroffene Komponente (`apps/api`, `apps/mcp`, `apps/web`, `packages/models`,
-  Deployment/Infra) und Version/Commit,
-- eine Beschreibung der Schwachstelle und ihrer Auswirkung,
-- Schritte zur Reproduktion (sofern möglich),
-- ggf. einen Vorschlag zur Behebung.
+- the affected component (`apps/api`, `apps/mcp`, `apps/web`,
+  `packages/models`, deployment/infra) and version/commit,
+- a description of the vulnerability and its impact,
+- steps to reproduce (if possible),
+- a suggested fix, if you have one.
 
 ## Disclosure Policy
 
-- Wir bestätigen den Eingang einer Meldung in der Regel innerhalb von
-  **3 Werktagen**.
-- Wir arbeiten an einer Behebung und koordinieren die Veröffentlichung mit dir.
-- Es gilt eine **Coordinated-Disclosure-Frist von 90 Tagen** ab Eingang der
-  Meldung: Nach Ablauf dieser Frist bzw. nach Bereitstellung eines Fixes (je
-  nachdem, was früher eintritt) können Details öffentlich gemacht werden.
-- Wir bitten darum, gefundene Schwachstellen bis zur abgestimmten
-  Veröffentlichung nicht öffentlich zu teilen.
+- We usually confirm receipt of a report within **3 business days**.
+- We work on a fix and coordinate publication with you.
+- A **coordinated disclosure period of 90 days** applies from receipt of the
+  report: after this period, or once a fix is available (whichever comes
+  first), details may be made public.
+- We ask that you do not share discovered vulnerabilities publicly before
+  the coordinated publication.
 
 ## Scope
 
-Diese Policy gilt für den Code in diesem Repository (Backend-API, MCP-Server,
-Web-UI, geteilte Models und die Deployment-Konfiguration). Schwachstellen in
-Drittabhängigkeiten bitte zusätzlich beim jeweiligen Upstream-Projekt melden.
+This policy applies to the code in this repository (backend API, MCP server,
+web UI, shared models, and the deployment configuration). For
+vulnerabilities in third-party dependencies, please also report to the
+respective upstream project.

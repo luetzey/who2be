@@ -1,65 +1,64 @@
 # Contributing to Who2Be
 
-Danke fuer dein Interesse an Who2Be! Dieses Dokument beschreibt den
-Entwicklungs-Workflow und die Konventionen fuer Beitraege.
+Thank you for your interest in Who2Be! This document describes the
+development workflow and the conventions for contributions.
 
 ## Contributor License Agreement (CLA)
 
-> **Platzhalter — wird mit dem Public-Switch aktiv.**
+> **Placeholder — becomes active with the public switch.**
 
-Mit dem Einreichen eines Beitrags stimmst du den Bedingungen des Contributor
-License Agreements (CLA) zu, sobald dieses aktiv ist. Das CLA raeumt dem
-Copyright-Holder (heute **Yannick Lützenburg**, mit Recht zur Uebertragung an
-einen Rechtsnachfolger) die noetigen Rechte ein, deinen Beitrag unter der
-Projektlizenz zu veroeffentlichen und kuenftig relizenzieren zu koennen.
+By submitting a contribution you agree to the terms of the Contributor
+License Agreement (CLA) once it is active. The CLA grants the copyright
+holder (currently **Yannick Lützenburg**, with the right to transfer to a
+legal successor) the rights required to publish your contribution under the
+project license and to relicense it in the future.
 
-Der CLA-Link (CLA-Assistant) wird hier ergaenzt, sobald das Repository
-oeffentlich ist. Bis dahin sind externe Beitraege noch nicht freigeschaltet.
+The CLA link (CLA Assistant) will be added here as soon as the repository is
+public. Until then, external contributions are not yet open.
 
-## Lizenz
+## License
 
-Who2Be steht unter der
-[Functional Source License 1.1 (Apache 2.0 Future)](LICENSE). Beitraege
-werden unter derselben Lizenz aufgenommen.
+Who2Be is licensed under the
+[Functional Source License 1.1 (Apache 2.0 Future)](LICENSE). Contributions
+are accepted under the same license.
 
-## Branch-Konvention
+## Branch convention
 
-- Feature-Branches: `feat/<kurz>`
-- Bugfix-Branches: `fix/<kurz>`
-- Cloud-/Web-Sessions (Claude Code) nutzen automatisch das `claude/`-Praefix.
-- Branch immer von `main` abzweigen; nicht direkt auf `main` pushen.
+- Feature branches: `feat/<short>`
+- Bugfix branches: `fix/<short>`
+- Cloud/web sessions (Claude Code) automatically use the `claude/` prefix.
+- Always branch off `main`; never push directly to `main`.
 
-### Sandbox / Experimente
+### Sandbox / experiments
 
-Schnelle, unfertige Experimente laufen auf lokalen `sandbox/*`-Branches
-**ohne Remote-Tracking** — sie werden nicht gepusht und durchlaufen keine CI.
-Sobald etwas vorzeigbar ist, wandert es als sauberer `feat/`- bzw.
-`fix/`-Branch in den normalen PR-Pfad (oder per Cherry-Pick der relevanten
-Commits). So bleibt der oeffentliche Verlauf aufgeraeumt, ohne den
-Solo-Dev-Komfort zu verlieren.
+Quick, unfinished experiments live on local `sandbox/*` branches
+**without remote tracking** — they are not pushed and do not run through CI.
+As soon as something is presentable, it moves into the normal PR path as a
+clean `feat/` or `fix/` branch (or by cherry-picking the relevant commits).
+This keeps the public history tidy without losing solo-dev convenience.
 
-## Commit-Konvention
+## Commit convention
 
-- [Conventional Commits](https://www.conventionalcommits.org/) (z. B.
+- [Conventional Commits](https://www.conventionalcommits.org/) (e.g.
   `feat: …`, `fix: …`, `docs: …`, `chore: …`).
-- Aussagekraeftige Commit-Messages; ein PR pro abgeschlossener Einheit.
-- Jeder PR braucht mindestens **ein** Review.
+- Meaningful commit messages; one PR per completed unit of work.
+- Every PR needs at least **one** review.
 
 ## Definition of Done
 
-Vor jedem Push lokal gegenpruefen (beide Stacks gruen). Die Test-Schritte
-laufen bewusst mit denselben Coverage-Gates wie die CI (Coverage-Ratchet):
-**lokal gruen = CI gruen** — ein Testlauf ohne Coverage-Gate erfuellt die DoD
-nicht.
+Verify locally before every push (both stacks green). The test steps
+deliberately run with the same coverage gates as CI (coverage ratchet):
+**green locally = green in CI** — a test run without the coverage gate does
+not satisfy the DoD.
 
-**Python (uv-Workspace im Repo-Root):**
+**Python (uv workspace in the repo root):**
 
 ```bash
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy .
 uv run pytest --cov --cov-fail-under=85
-# OSS-Lizenz-Gate (ADR-0033) — fail-closed gegen Copyleft/AGPL:
+# OSS license gate (ADR-0033) — fail-closed against copyleft/AGPL:
 uv run --with pip-licenses python -m piplicenses --partial-match \
   --fail-on "GPL;AGPL;LGPL;SSPL;CDDL;EPL;EUPL;OSL;CPL;NPL;Sleepycat;UNKNOWN"
 ```
@@ -71,19 +70,18 @@ npm run lint
 npx tsc --noEmit
 npm run test:coverage
 npm run build
-npm run license:check   # OSS-Lizenz-Gate (ADR-0033)
+npm run license:check   # OSS license gate (ADR-0033)
 ```
 
-Neue Dependency? Vorher die Lizenz pruefen (Scan-Pflicht, ADR-0033). Erlaubt
-sind permissive Lizenzen (MIT, BSD, Apache-2.0, ISC, 0BSD) sowie MPL-2.0;
-GPL/AGPL/LGPL und sonstiges Copyleft brechen das Gate. Bewusste Ausnahmen
-brauchen einen ADR-Nachtrag.
+New dependency? Check its license first (mandatory scan, ADR-0033).
+Permissive licenses (MIT, BSD, Apache-2.0, ISC, 0BSD) and MPL-2.0 are
+allowed; GPL/AGPL/LGPL and other copyleft licenses break the gate.
+Deliberate exceptions require an ADR addendum.
 
-Bei Bugfixes zuerst einen reproduzierenden, fehlschlagenden Test schreiben,
-dann fixen. Ursache statt Symptom beheben; groessere Aenderungen zuerst als
-Plan skizzieren.
+For bugfixes, write a reproducing, failing test first, then fix. Fix the
+cause, not the symptom; sketch larger changes as a plan first.
 
 ## Security
 
-Sicherheitsrelevante Funde bitte nicht oeffentlich als Issue melden, sondern
-ueber den in [`SECURITY.md`](SECURITY.md) beschriebenen Weg.
+Please do not report security-relevant findings as public issues — use the
+process described in [`SECURITY.md`](SECURITY.md) instead.
