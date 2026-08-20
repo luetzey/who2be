@@ -29,7 +29,10 @@ export interface E2EUser {
  * (fullyParallel-Worker duerfen nicht kollidieren).
  */
 export async function createUser(request: APIRequestContext): Promise<E2EUser> {
-  const email = `e2e-${crypto.randomUUID()}@example.test`
+  // Kein Special-Use-TLD (.test/.example): GoTrue akzeptiert die zwar beim
+  // Signup, aber der pydantic-EmailStr-Validator der API (z. B. Invitations)
+  // lehnt Special-Use-Domains ab — erster echter CI-Lauf 2026-08-20.
+  const email = `e2e-${crypto.randomUUID()}@e2e.who2be.dev`
   const password = `pw-${crypto.randomUUID()}`
   const response = await request.post(`${AUTH_URL}/auth/v1/signup`, {
     data: { email, password },

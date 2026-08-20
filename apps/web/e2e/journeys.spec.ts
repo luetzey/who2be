@@ -33,6 +33,10 @@ test('Persona-Lifecycle: anlegen (Draft) -> Draft->Review->Active', async ({
   await page.goto(`/w/${workspaceId}/personas/new`)
   await page.getByTestId('persona-name-input').fill('E2E Lifecycle Persona')
   await page.getByTestId('persona-description-input').fill('Beschreibung v1')
+  // Promote-Validierung (draft->review) verlangt einen nicht-leeren Body
+  // (content.content.blocks) — ohne Profil-Text bleibt der Submit ein 409.
+  await page.getByTestId('persona-profile-editor').click()
+  await page.keyboard.type('E2E Profil-Body v1')
   await page.getByTestId('persona-new-submit').click()
 
   await page.waitForURL(/\/w\/[^/]+\/personas\/[^/]+$/)
@@ -64,11 +68,37 @@ test('Playbook->Resource-Block-Ref erzeugt Backlink in Resource-Detail', async (
 
   // Resource per API seeden (deterministische ID); die Editor-Interaktion —
   // der eigentliche Kern der Journey — laeuft danach durch die echte UI.
+  // Mit Heading-Block: der ResourcePicker rendert die Block-Optionen (inkl.
+  // "Gesamtes Dokument") nur, wenn die Resource Heading-Bloecke hat.
   const resource = await apiRequest<{ id: string }>(
     request,
     token,
     `/v1/workspaces/${workspaceId}/resources`,
-    { method: 'POST', data: { name: 'E2E Backlink Resource' } },
+    {
+      method: 'POST',
+      data: {
+        name: 'E2E Backlink Resource',
+        content: {
+          description: 'E2E Backlink-Ziel',
+          blocks: [
+            {
+              id: 'e2e-h1',
+              type: 'heading',
+              props: { level: 2 },
+              content: [{ type: 'text', text: 'Abschnitt A', styles: {} }],
+              children: [],
+            },
+            {
+              id: 'e2e-p1',
+              type: 'paragraph',
+              props: {},
+              content: [{ type: 'text', text: 'Inhalt A', styles: {} }],
+              children: [],
+            },
+          ],
+        },
+      },
+    },
   )
 
   await page.goto(`/w/${workspaceId}/playbooks/new`)
@@ -106,9 +136,25 @@ test('Agent-Read liefert nur die aktive Version (MCP-Aequivalent)', async ({ req
   const token = user.session.access_token
   const base = `/v1/workspaces/${workspaceId}`
 
+  // Body-Blocks noetig: die Promote-Validierung (draft->review/active)
+  // verlangt name + description + nicht-leere content.content.blocks.
+  const personaBody = (text: string) => ({
+    description: text,
+    content: {
+      blocks: [
+        {
+          id: 'e2e-body-p1',
+          type: 'paragraph',
+          props: {},
+          content: [{ type: 'text', text, styles: {} }],
+          children: [],
+        },
+      ],
+    },
+  })
   const persona = await apiRequest<PersonaRead>(request, token, `${base}/personas`, {
     method: 'POST',
-    data: { name: 'E2E Active-Read Persona', content: { description: 'X v1' } },
+    data: { name: 'E2E Active-Read Persona', content: personaBody('X v1') },
   })
   await apiRequest(request, token, `${base}/personas/${persona.id}/versions/1/transition`, {
     method: 'POST',
@@ -121,7 +167,7 @@ test('Agent-Read liefert nur die aktive Version (MCP-Aequivalent)', async ({ req
   // Draft v2 anlegen, aktive v1 bleibt unveraendert.
   await apiRequest(request, token, `${base}/personas/${persona.id}`, {
     method: 'PUT',
-    data: { name: 'E2E Active-Read Persona', content: { description: 'X v2' } },
+    data: { name: 'E2E Active-Read Persona', content: personaBody('X v2') },
   })
 
   const agent = await apiRequest<{ id: string }>(request, token, `${base}/agents`, {
