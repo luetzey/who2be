@@ -555,6 +555,10 @@ describe('PersonaDetailPage — Redirect & Status-Transitions', () => {
     expect(
       await screen.findByText('Aktuelle Version: v1 (Entwurf)'),
     ).toBeInTheDocument()
+    // E2E-Selektor-Fix (Issue #391): die zentrale StatusActionBar traegt das
+    // Testid-Schema aus components/data/BranchStatus.tsx, an das
+    // e2e/journeys.spec.ts bindet.
+    expect(screen.getByTestId('branch-action-submit')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Draft abschliessen' }))
 
@@ -585,6 +589,7 @@ describe('PersonaDetailPage — Redirect & Status-Transitions', () => {
 
     const publish = screen.getByRole('button', { name: 'Veroeffentlichen' })
     expect(publish).toBeEnabled()
+    expect(screen.getByTestId('branch-action-publish')).toBe(publish)
 
     fireEvent.click(publish)
 

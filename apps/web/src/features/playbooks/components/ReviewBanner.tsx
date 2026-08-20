@@ -1,16 +1,21 @@
 import { ChevronRight } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { VersionStatus } from '@/api/types'
-import { SaveIndicator, type BranchAction } from '@/components/data/BranchStatus'
-import { Button } from '@/components/ui/button'
+import { SaveIndicator } from '@/components/data/BranchStatus'
 import { cn } from '@/lib/utils'
 import type { AutoSaveState } from '@/hooks/useAutoSaveDraft'
 
 // Design-Handoff „Playbooks-Redesign" §Review-Banner: ersetzt den
 // BranchStatus-Block auf der Playbook-Detail-Seite. Links die
 // Branch-Zusammenfassung („Aktiv: v2 → v3 wartet auf Review", Dots aus den
-// --status-*-Tokens), rechts Save-Indikator + dieselben BranchActions.
+// --status-*-Tokens), rechts Save-Indikator + Aktionen.
+//
+// Bleibt reines Layout (Branch-Graph-Anzeige, Issue #391): die Aktionen
+// selbst kommen als fertiger Slot von aussen (die zentrale
+// `StatusActionBar` — sie bringt ihre eigene `role="toolbar"`-Leiste mit,
+// daher wird hier keine zweite Toolbar mehr um den Slot gelegt).
 
 interface BannerNode {
   status: VersionStatus
@@ -24,7 +29,7 @@ interface ReviewBannerProps {
   reviewVersion?: number
   inactiveVersion?: number
   saveState?: AutoSaveState
-  actions: BranchAction[]
+  actions?: ReactNode
 }
 
 export function ReviewBanner({
@@ -67,7 +72,7 @@ export function ReviewBanner({
     })
   }
 
-  if (nodes.length === 0 && actions.length === 0) {
+  if (nodes.length === 0 && actions === undefined) {
     return null
   }
 
@@ -103,27 +108,7 @@ export function ReviewBanner({
 
       <div className="flex flex-wrap items-center gap-2">
         {saveState !== undefined ? <SaveIndicator state={saveState} /> : null}
-        {actions.length > 0 ? (
-          <div
-            className="flex flex-wrap items-center gap-2"
-            role="toolbar"
-            aria-label={t('data:branch.actions')}
-          >
-            {actions.map((action) => (
-              <Button
-                key={action.key}
-                type="button"
-                size="sm"
-                variant={action.variant}
-                onClick={action.onClick}
-                disabled={action.disabled}
-                title={action.title}
-              >
-                {action.label}
-              </Button>
-            ))}
-          </div>
-        ) : null}
+        {actions}
       </div>
     </section>
   )

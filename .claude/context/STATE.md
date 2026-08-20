@@ -741,6 +741,38 @@ Owner-Schrittfolge Teil B):
   passed / 445 skipped** (DB-Integrationstests zentral geskippt);
   Coverage-Gate ist CI-Sache (Postgres-Service dort).
 
+### UX-Backlog-Welle mit Sub-Agents (2026-08-20, Issues #391–#394)
+
+Orchestrierter Lauf (Code-Task-Flow) über die Reste des Juni-UX-Backlogs
+(`2026-06-27-1200`) + den STATE-Refactor-Kandidaten; Plan
+`.claude/plan/2026-08-20-1115_ux-backlog-welle-subagents.md`. Inventur
+vorab: System-Prompt-MCP-Tools, Tool-Anker (→ ADR-0043) und
+Draft-on-Edit-Sichtbarkeit waren längst erledigt/überholt.
+
+- **#391 StatusActionBar-Refactor:** Personas-/Playbooks-Detailseiten auf
+  die zentrale Bar (neuer optionaler `labels`-Override, Testids
+  `branch-action-*`, Promote-Suffix historisch `publish`), Button-/Toast-
+  Texte unverändert (Neutralität via i18n-Textabgleich + unveränderte
+  Label-Assertions). Dabei den E2E-Defekt behoben: die scharfen Journeys
+  klickten Testids, die auf den Seiten nicht existierten. Befund:
+  `BranchStatus`-`actions`-Zweig ist jetzt toter Code (Folge-Kandidat).
+- **#392 MCP-Docstring-DX:** Modi-Schema (`create/update_persona`),
+  kanonisches BlockNote-Body-/Pill-Format (`create/update_playbook`,
+  `create/update_resource`), alles gegen die Pydantic-Modelle belegt;
+  `tools/list`-Payload 127 KB < 160-KB-Budget; 241 mcp-Tests grün.
+- **#393 Tag-Gruppierung:** Playbooks-Modus `tag` (Mehrfach-Tag-
+  Zugehörigkeit, „Ohne Tag"-Gruppe), Resources erstmals mit Gruppierung
+  (`features/resources/lib/grouping.ts`). Agent-/Persona-Gruppierung
+  bewusst NICHT gebaut: List-Payloads tragen keine Verknüpfung — braucht
+  Batch-Feld am List-Endpoint (sonst N+1), als Befund dokumentiert.
+- **Rest des Juni-Plans:** Draft-Discard = erste Python-Aufgabe nach
+  CI-Wiederbelebung (kein lokales Sicherheitsnetz ohne DB); Quick-Release
+  widerspricht `TRANSITION_RULE_DOC` → Owner-Weiche; proaktive
+  Pflichtfeld-Hinweise = Folgewelle.
+- **Konsolidierungs-DoD (Welle 1):** eslint 0 Errors, tsc grün, volle
+  Suite **972 Vitest passed** (Coverage 86,54/80,91/82,5/87,57, Floors
+  80/79/75/80), Build grün. #394 (Policy-Presets) läuft als Welle 2.
+
 ## Bekannte Probleme
 
 - **Tabellen-Store-Verzeichnisse überleben den Hard-Purge** (bewusst, WP20):

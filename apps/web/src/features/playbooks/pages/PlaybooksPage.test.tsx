@@ -256,6 +256,27 @@ describe('PlaybooksPage', () => {
     expect(screen.getByText('Brainstorming')).toBeInTheDocument()
   })
 
+  it('gruppiert via ?group=tag mit Sektions-Headern je Tag, Mehrfach-Tags in jeder Gruppe', async () => {
+    window.history.pushState({}, '', '/?group=tag')
+    renderWith([
+      playbook('pb1', 'Coaching', ['coach', 'brain'], null),
+      playbook('pb2', 'Brainstorming', ['brain'], null),
+      playbook('pb3', 'Ohne Tag', [], null),
+    ])
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Coaching').length).toBeGreaterThan(0)
+    })
+
+    const brainHeading = screen.getByRole('heading', { name: /brain\s?\(2\)/ })
+    expect(brainHeading).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /coach\s?\(1\)/ })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /Ohne Tag\s?\(1\)/ })).toBeInTheDocument()
+    // pb1 ('Coaching') traegt beide Tags und erscheint dadurch in beiden
+    // Tag-Gruppen — beide Vorkommen bleiben sichtbar.
+    expect(screen.getAllByText('Coaching')).toHaveLength(2)
+  })
+
   it('zeigt Header-Count-Pill und Onboarding-Hero bei leerem Workspace', async () => {
     renderWith([])
 

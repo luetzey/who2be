@@ -1176,12 +1176,14 @@
       "group": {
         "none": "Keine Gruppierung",
         "type": "Nach Typ",
-        "composite": "Composite / Standalone"
+        "composite": "Composite / Standalone",
+        "tag": "Nach Tag"
       },
       "groups": {
         "composite": "Composite",
         "standalone": "Standalone",
-        "untyped": "Ohne Typ"
+        "untyped": "Ohne Typ",
+        "untagged": "Ohne Tag"
       },
       "empty": {
         "title": "Noch keine Playbooks",
@@ -1370,7 +1372,14 @@
       "emptyTagTitle": "Keine Resources mit Tag „{{tag}}\"",
       "emptyTagDescription": "Entferne den Filter oder lege eine neue Resource mit diesem Tag an.",
       "emptyTitle": "Noch keine Resources",
-      "emptyDescription": "Lege deine erste Resource an, um Wissen in Blöcken zu erfassen."
+      "emptyDescription": "Lege deine erste Resource an, um Wissen in Blöcken zu erfassen.",
+      "group": {
+        "none": "Keine Gruppierung",
+        "tag": "Nach Tag"
+      },
+      "groups": {
+        "untagged": "Ohne Tag"
+      }
     },
     "new": {
       "title": "Neue Resource",

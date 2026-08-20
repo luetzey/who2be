@@ -3,12 +3,11 @@ import { useState } from 'react'
 import { Navigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
-import type { VersionStatus } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { useCurrentWorkspaceRole } from '@/auth/useCurrentWorkspaceRole'
 import { useWorkspacePath } from '@/auth/useWorkspacePath'
 import { AttentionBanner } from '@/components/data/AttentionBanner'
-import { SaveIndicator, type BranchAction } from '@/components/data/BranchStatus'
+import { SaveIndicator } from '@/components/data/BranchStatus'
 import { DataView } from '@/components/data/DataView'
 import { DetailHeader } from '@/components/data/DetailHeader'
 import { LocaleBadge } from '@/components/data/LocaleBadge'
@@ -19,11 +18,10 @@ import { GiveFeedbackDialog } from '@/components/feedback/GiveFeedbackDialog'
 import { Container } from '@/components/layout/Container'
 import { Stack } from '@/components/layout/Stack'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Form } from '@/components/ui/form'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { statusLabel, VersionHistory } from '@/components/version'
+import { StatusActionBar, statusLabel, VersionHistory } from '@/components/version'
 import { EntityDeleteButton, EntityDuplicateButton, EntityExportButton } from '@/components/entity'
 import { notify } from '@/lib/feedback'
 
@@ -41,7 +39,6 @@ export function PersonaDetailPage() {
   const wsPath = useWorkspacePath()
   const api = useApi()
   const role = useCurrentWorkspaceRole()
-  const [actionBusy, setActionBusy] = useState(false)
   // Kontrollierte Tabs — der Modi-Info-Pill im „Bearbeiten"-Tab wechselt
   // programmatisch in den „Modi"-Tab.
   const [tab, setTab] = useState('edit')
@@ -53,28 +50,18 @@ export function PersonaDetailPage() {
     return <Navigate to={wsPath('/personas')} replace />
   }
 
-  const runTransition = async (
-    version: number,
-    to: VersionStatus,
-    successMessage: string,
-  ) => {
-    if (persona === null) {
-      return
-    }
-    setActionBusy(true)
-    try {
-      // Vor jeder Branch-Aktion erst den Auto-Save flushen — sonst wuerden
-      // pending Edits verworfen, wenn der Server-Reload den Draft frisch
-      // liefert.
-      await autoSave.flush()
-      await api.transitionPersonaVersion(persona.id, version, to)
-      notify.success(successMessage)
-      reload()
-    } catch (cause) {
-      notify.error(cause instanceof Error ? cause.message : t('detail.toast.actionFailed'))
-    } finally {
-      setActionBusy(false)
-    }
+  // Zentrale StatusActionBar (Issue #391) ersetzt die frühere Inline-
+  // Transition-Logik (`runTransition` + manuelles `BranchAction[]`). Vor
+  // jeder Branch-Aktion erst den Auto-Save flushen — sonst wuerden pending
+  // Edits verworfen, wenn der Server-Reload den Draft frisch liefert.
+  // Toasts/Fehlerpfad/Admin-Gate uebernimmt die Bar (identische Texte in
+  // common:statusBar.* wie zuvor in personas:detail.toast.*); die sichtbaren
+  // Button-Texte bleiben ueber `labels` die bestehenden `detail.branch.*`-Keys.
+  const branchLabels = {
+    submit: t('detail.branch.submit'),
+    promote: t('detail.branch.publish'),
+    reject: t('detail.branch.reject'),
+    reactivate: t('detail.branch.reactivate'),
   }
 
   return (
@@ -107,52 +94,14 @@ export function PersonaDetailPage() {
                     status: statusLabel(persona.current_status ?? 'draft'),
                   })
 
-            const canPromote = role === 'admin'
             // `locked` (vom System verwaltet) → keine Status-Aktionen.
-            const actions: BranchAction[] = []
-            if (!locked && draftVersion !== undefined) {
-              actions.push({
-                key: 'submit',
-                label: t('detail.branch.submit'),
-                variant: 'brand',
-                disabled: actionBusy,
-                onClick: () =>
-                  void runTransition(draftVersion.version, 'review', t('detail.toast.submitted')),
-              })
-            }
-            if (!locked && reviewVersion !== undefined) {
-              actions.push({
-                key: 'publish',
-                label: t('detail.branch.publish'),
-                variant: 'brand',
-                disabled: actionBusy || !canPromote,
-                title: canPromote ? undefined : t('statusBar.adminOnly'),
-                onClick: () =>
-                  void runTransition(reviewVersion.version, 'active', t('detail.toast.activated')),
-              })
-              actions.push({
-                key: 'reject',
-                label: t('detail.branch.reject'),
-                variant: 'destructive',
-                disabled: actionBusy,
-                onClick: () =>
-                  void runTransition(reviewVersion.version, 'draft', t('detail.toast.rejected')),
-              })
-            }
-            if (!locked && inactiveCurrent !== undefined) {
-              actions.push({
-                key: 'reactivate',
-                label: t('detail.branch.reactivate'),
-                variant: 'outline',
-                disabled: actionBusy,
-                onClick: () =>
-                  void runTransition(
-                    inactiveCurrent.version,
-                    'draft',
-                    t('detail.toast.reactivated'),
-                  ),
-              })
-            }
+            // Promotable-Version wie in ResourceDetailPage/ToolDetailPage:
+            // das Backend garantiert, dass nie Draft UND Review gleichzeitig
+            // existieren (409-Guards in persona_service).
+            const promotableVersion = !locked ? (reviewVersion ?? draftVersion) : undefined
+            const inactiveTarget = !locked ? inactiveCurrent : undefined
+            const hasBranchActions =
+              promotableVersion !== undefined || inactiveTarget !== undefined
 
             const tags = persona.content.tags ?? []
 
@@ -215,24 +164,48 @@ export function PersonaDetailPage() {
                 {locked ? <ManagedNotice /> : null}
 
                 {/* Status-Handlungsbedarf als Brand-Callout (ersetzt die alte
-                    BranchStatus-Leiste, Design-Handoff „Persona-Detail"). */}
-                {actions.length > 0 ? (
+                    BranchStatus-Leiste, Design-Handoff „Persona-Detail").
+                    Die Aktion selbst kommt jetzt aus der zentralen
+                    StatusActionBar (Issue #391) statt aus Inline-Buttons. */}
+                {hasBranchActions ? (
                   <AttentionBanner
                     variant="brand"
                     icon={Clock}
                     title={description}
-                    actions={actions.map((action) => (
-                      <Button
-                        key={action.key}
-                        type="button"
-                        variant={action.variant}
-                        onClick={action.onClick}
-                        disabled={action.disabled}
-                        title={action.title}
-                      >
-                        {action.label}
-                      </Button>
-                    ))}
+                    actions={
+                      <>
+                        {promotableVersion !== undefined ? (
+                          <StatusActionBar
+                            status={promotableVersion.status ?? 'draft'}
+                            labels={branchLabels}
+                            onTransition={async (to) => {
+                              await autoSave.flush()
+                              return api.transitionPersonaVersion(
+                                persona.id,
+                                promotableVersion.version,
+                                to,
+                              )
+                            }}
+                            onTransitioned={reload}
+                          />
+                        ) : null}
+                        {inactiveTarget !== undefined ? (
+                          <StatusActionBar
+                            status="inactive"
+                            labels={branchLabels}
+                            onTransition={async (to) => {
+                              await autoSave.flush()
+                              return api.transitionPersonaVersion(
+                                persona.id,
+                                inactiveTarget.version,
+                                to,
+                              )
+                            }}
+                            onTransitioned={reload}
+                          />
+                        ) : null}
+                      </>
+                    }
                   />
                 ) : null}
 

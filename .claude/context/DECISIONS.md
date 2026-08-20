@@ -986,3 +986,26 @@ bleiben)._
   `DeleteAgentButton`/`DeleteFeedbackButton`/`DuplicateAgentButton`
   (abweichendes Verhalten), Python-Service-Duplikate (Sicherheitsnetz nur in
   CI — Folgelauf mit DB-Umgebung).
+
+## 2026-08-20 — Personas/Playbooks auf zentrale StatusActionBar via Label-Override (verhaltensneutral)
+- **Entscheidung:** Die Inline-Transition-Logik der Personas-/Playbooks-
+  Detailseiten ist durch die zentrale `components/version/StatusActionBar`
+  ersetzt; die Komponente bekam dafür einen optionalen `labels`-Override
+  (je Aktion) und `data-testid="branch-action-*"` (Suffix-Schema aus
+  `BranchStatus`/E2E: Promote heißt `publish`). Die historisch gewachsenen
+  Button-Texte („Veröffentlichen", „Draft abschließen", …) bleiben über die
+  bestehenden i18n-Keys erhalten — KEINE stille Wording-Vereinheitlichung.
+- **Begründung:** 1:1-Migration wäre sonst keine Struktur-Dedup, sondern
+  eine sichtbare UX-Änderung gewesen (zentrale Texte „Aktivieren"/„Zur
+  Review einreichen" weichen ab). Gleiche Linie wie das bewusste Auslassen
+  der `SystemPromptStatusActionBar` am 2026-08-19. Nebeneffekt behoben:
+  die scharfen E2E-Journeys klickten `branch-action-submit/-publish`, die
+  auf den Seiten gar nicht existierten (Buttons ohne testid).
+- **Verworfen:** Wording-Vereinheitlichung auf `common.statusBar.*`
+  (sichtbare UX-Änderung — bleibt explizite Owner-Option, Issue #391);
+  Status quo belassen (E2E-Defekt bliebe bestehen).
+- **Detail:** `.claude/plan/2026-08-20-1115_ux-backlog-welle-subagents.md`;
+  Befund für Folgearbeit: `BranchStatus.tsx`-`actions`-Zweig ist jetzt
+  toter Code (kein Aufrufer mit nicht-leerem Array); Agent-/Persona-
+  Gruppierung der Listen braucht ein Batch-Feld am List-Endpoint
+  (`linked_agent_ids` o. ä.), sonst N+1 — clientseitig bewusst nicht gebaut.
