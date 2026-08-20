@@ -103,6 +103,9 @@ test('Playbook->Resource-Block-Ref erzeugt Backlink in Resource-Detail', async (
 
   await page.goto(`/w/${workspaceId}/playbooks/new`)
   await page.getByTestId('playbook-name-input').fill('E2E Backlink Playbook')
+  // Description ist required (native HTML-Validierung) — ohne Wert blockt der
+  // Submit still und die waitForURL-Navigation kommt nie.
+  await page.getByTestId('playbook-description-input').fill('E2E Backlink Beschreibung')
 
   // BlockNote-Slash-Menue: Drittanbieter-UI ohne Testids — Tastatur-Simulation
   // (kein Text-Locator): Editor fokussieren, `/resource` tippen, Enter waehlt
