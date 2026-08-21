@@ -109,4 +109,5 @@ Kein Quellcode berührt → keine Test-Suite betroffen. Verifiziert wird:
 - [x] WP-2 STATE.md entdriftet
 - [x] WP-3 CONTRIBUTING §CLA
 - [x] WP-4 Owner-Zuarbeit an #338/#341
-- [x] WP-5 Verifikation + PR
+- [x] WP-5 Verifikation + PR #400 (Link-Check gruen, 0 tote Links);
+      CI-Lauf `32503459521` laeuft noch — das Haekchen gilt erst mit gruen
