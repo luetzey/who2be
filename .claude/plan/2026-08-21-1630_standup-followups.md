@@ -1,6 +1,6 @@
 # Standup-Folgearbeiten: Karteileiche #388, STATE-Drift, CLA-Vorbereitung
 
-**Status:** aktiv · **Branch:** `claude/reload-skills-s8bxpb` · **Datum:** 2026-08-21 16:30 UTC
+**Status:** abgeschlossen (wartet auf Merge) · **Branch:** `claude/reload-skills-s8bxpb` · **Datum:** 2026-08-21 16:30 UTC
 
 Ergebnis des Playbook-Laufs „Projekt-Standup" (read-only) vom selben Tag.
 Der Standup fand drei offene Issues und zwei Drift-Stellen; der User hat
@@ -109,5 +109,6 @@ Kein Quellcode berührt → keine Test-Suite betroffen. Verifiziert wird:
 - [x] WP-2 STATE.md entdriftet
 - [x] WP-3 CONTRIBUTING §CLA
 - [x] WP-4 Owner-Zuarbeit an #338/#341
-- [x] WP-5 Verifikation + PR #400 (Link-Check gruen, 0 tote Links);
-      CI-Lauf `32503459521` laeuft noch — das Haekchen gilt erst mit gruen
+- [x] WP-5 Verifikation + PR #400 — Link-Check gruen (0 tote Links),
+      CI-Lauf `32503577006` **komplett gruen**: python, web, e2e,
+      compose-smoke, audit; CodeQL-Suite ebenfalls gruen
