@@ -1,6 +1,17 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-08-20 (4. Lauf — Public-Day)_
+_Stand: 2026-08-21 (5. Lauf — Stale-Chunk-Fix)_
+
+## Stale-Chunk-Recovery (2026-08-21, PR #399 / Issue #398)
+
+User-Report „Unexpected error / Importing a module script failed" gefixt:
+Nach einem Deploy liefen alte `React.lazy`-Chunk-Hashes ins 404, die
+`RouteErrorBoundary` zeigte nur den Fehler. Jetzt: Stale-Chunk-Erkennung
+(`apps/web/src/app/stale-chunk.ts`) + genau EIN Auto-Reload
+(sessionStorage-Guard, 60 s-Fenster, Private-Mode-sicher) in Boundary und
+`vite:preloadError`-Listener; `nginx.conf` liefert `index.html` mit
+`Cache-Control: no-cache` (Assets bleiben `immutable`). DoD-Belege + Plan:
+`.claude/plan/2026-08-21-1216_stale-chunk-auto-reload.md`.
 
 ## Public-Switch vollzogen + CI wiederbelebt (2026-08-20)
 

@@ -1,6 +1,8 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 
+import { reloadOnStaleChunk } from './app/stale-chunk'
+
 // Mantine-Baseline fuer BlockNote-Insel (ADR-0022) — MUSS vor globals.css
 // stehen. Sonst fehlen Slash-Menu-Layout (Item-Body/Title/Subtitle/Section),
 // Group-Label und Block-Render-Defaults, und unsere scoped Overrides haben
@@ -12,6 +14,17 @@ import '@blocknote/mantine/style.css'
 import './i18n'
 import { App } from './App'
 import './styles/globals.css'
+
+// Vite feuert dieses Event, wenn ein dynamisches Import-Preload fehlschlaegt
+// (z. B. alter Chunk-Hash nach Deploy, ausserhalb der React-Error-Boundary,
+// etwa beim Route-Preload). Guard/Reload identisch zu RouteErrorBoundary —
+// `event.preventDefault()` unterdrueckt die sonst folgende unhandledrejection
+// nur, wenn tatsaechlich ein Reload ausgeloest wurde.
+window.addEventListener('vite:preloadError', (event) => {
+  if (reloadOnStaleChunk()) {
+    event.preventDefault()
+  }
+})
 
 const rootElement = document.getElementById('root')
 if (!rootElement) {
