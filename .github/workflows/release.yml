@@ -1,0 +1,73 @@
+name: Release
+
+# Manueller Release-Workflow (#341 WP-8): erzeugt Tag + GitHub-Release mit
+# den Notes aus dem CHANGELOG-Abschnitt der Version. Hintergrund: der
+# Git-Proxy der Cloud-Sessions darf keine Tags pushen — der Actions-Runner
+# (GITHUB_TOKEN, contents: write) darf; `gh release create --target` legt
+# den Tag serverseitig mit an. Keine Fremd-Actions außer dem SHA-gepinnten
+# Checkout (Actions-Policy: Full-Length-SHA-Pinning).
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release-Tag (z. B. v0.1.0)"
+        required: true
+        default: "v0.1.0"
+      target:
+        description: "Ziel-Branch oder Commit-SHA"
+        required: true
+        default: "main"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.target || 'main' }}
+
+      - name: Idempotenz-Guard — Release existiert schon?
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || 'v0.1.0' }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG existiert bereits — nichts zu tun."
+            echo "SKIP=true" >> "$GITHUB_ENV"
+          fi
+
+      - name: Release-Notes aus CHANGELOG extrahieren
+        if: env.SKIP != 'true'
+        env:
+          TAG: ${{ inputs.tag || 'v0.1.0' }}
+        run: |
+          VERSION="${TAG#v}"
+          # Abschnitt "## [<version>]" bis zur naechsten "## "-Ueberschrift.
+          awk -v ver="$VERSION" '
+            $0 ~ "^## \\[" ver "\\]" { hit = 1; next }
+            hit && /^## / { exit }
+            hit { print }
+          ' CHANGELOG.md > /tmp/notes.md
+          if ! [ -s /tmp/notes.md ]; then
+            echo "Kein CHANGELOG-Abschnitt fuer $VERSION gefunden." >&2
+            exit 1
+          fi
+          printf '\n---\nFull changelog: [CHANGELOG.md](https://github.com/%s/blob/%s/CHANGELOG.md)\n' \
+            "$GITHUB_REPOSITORY" "$TAG" >> /tmp/notes.md
+
+      - name: Tag + Release anlegen
+        if: env.SKIP != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || 'v0.1.0' }}
+          TARGET: ${{ inputs.target || 'main' }}
+        run: |
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$TARGET" \
+            --title "Who2Be $TAG" \
+            --notes-file /tmp/notes.md
