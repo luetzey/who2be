@@ -1,6 +1,30 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-08-21 (5. Lauf — Stale-Chunk-Fix)_
+_Stand: 2026-08-21 (6. Lauf — Standup-Folgearbeiten)_
+
+## Standup-Folgearbeiten (2026-08-21)
+
+Playbook „Projekt-Standup" gelaufen; Ergebnis war weniger offene Arbeit als
+gedacht, dafür Drift in diesem Dokument.
+
+- **Issue #388 (70 tote Branches löschen) war eine Karteileiche** und ist
+  geschlossen: `list_branches` liefert für das Repo genau einen Eintrag,
+  `main`. Die Löschung passierte am 2026-08-20 vor dem Flip, die im Issue
+  empfohlene Ursachen-Behebung (Auto-delete head branches) ist aktiv.
+- **Zwei Einträge dieses Dokuments widersprachen seinem eigenen Kopf:**
+  §Bekannte Probleme führte „E2E-Gate bleibt Soft" und „CI seit 2026-08-19
+  nicht gegeben", §Nächste Schritte forderte den `v0.1.0`-Tag — alles drei
+  war am 2026-08-20 erledigt. Bereinigt; die Historie oben bleibt.
+- **Neu gegengeprüft statt geglaubt:** `main` ist per API `protected:
+  false` (Branch-Protection real offen), Repo hat weder Description noch
+  Topics, Discussions sind an, 0 offene PRs, CI-Lauf `32483875971` grün.
+- `CONTRIBUTING.md` §CLA stand noch auf „becomes active with the public
+  switch" — auf den Ist-Zustand gezogen, Stelle für den CLA-Link markiert.
+- Offen aus #341 bleibt allein **WP-10** (Deploy-Verifikation): der Job ist
+  conditional auf `vars.DEPLOY_HOST` und überspringt sich still, solange
+  die Variable fehlt. Nie rot, nie verifiziert — vor 1.0 Pflicht.
+
+Plan: `.claude/plan/2026-08-21-1630_standup-followups.md`.
 
 ## Stale-Chunk-Recovery (2026-08-21, PR #399 / Issue #398)
 
@@ -854,11 +878,6 @@ Draft-on-Edit-Sichtbarkeit waren längst erledigt/überholt.
   `detail` per SQL (`->>`) auswertet, muss für Altzeilen mit einem
   JSON-*String* rechnen. Dass dieselbe Fehlerklasse woanders einen Endpunkt
   gekillt hat, steht oben (§`describe_table` antwortete mit 500).
-- E2E-Gate bleibt Soft, bis die CI-Infra dauerhaft stabil ist. Die
-  Voraussetzung — eine überhaupt laufende CI — ist seit 2026-08-19 ~16:37
-  wieder **nicht** gegeben (Regression, s. §Standards / CI); ob der
-  Soft-Gate-Status danach fällt, ist eine Owner-Entscheidung
-  (`coverage.all/E2E` im Standards-Review §4).
 - Offene Owner-Entscheidungen: `docs/standards-review-2026-07-20.md` §4
   (ADR-0002 enforce vs. amend, Branch-Protection/Merge-Strategie,
   On-Prem-RLS, Cloud-Image-Deploy, LIC-1-Mechanik, coverage.all/E2E/CLA).
@@ -869,11 +888,18 @@ Als Owner-Checkliste getrackt in Issue #338 (Welle 3 der Release-Mechanik
 in #341):
 
 1. ~~CI-Gate~~ ✅ (SHA-Pinning-Fix, s. o.) · ~~Public-Flip~~ ✅ 2026-08-20.
-2. **Tag `v0.1.0` pushen + GitHub-Release anlegen** (Kommando s. o.;
-   Notes = CHANGELOG-0.1.0-Block).
-3. GitHub-Settings-Rest: Branch-Protection für `main`, Auto-delete head
-   branches, Merge-Strategie, Description/Topics, Secret-/Push-Protection
-   + Private vulnerability reporting bestätigen, ggf. Discussions +
-   Social-Preview.
-4. CLA-Assistant aktivieren (vor den ersten externen PRs).
-5. Optional vor 1.0: Deploy-Verifikation (#341 WP-10, `DEPLOY_HOST`).
+2. ~~Tag `v0.1.0` + GitHub-Release~~ ✅ 2026-08-20 14:45 UTC (Tag auf
+   `main`, Notes aus dem CHANGELOG; künftige Releases per Actions →
+   Release → „Run workflow").
+3. GitHub-Settings-Rest: **Branch-Protection für `main`** (am 2026-08-21
+   per API als `protected: false` gegengeprüft — real offen) und
+   Merge-Strategie; **Description + Topics** setzen (Repo hat beides noch
+   nicht; fertiger Text in #338 und PR #389). ~~Auto-delete head
+   branches~~ ✅ aktiv, ~~Discussions~~ ✅ an; Secret-/Push-Protection und
+   Private vulnerability reporting noch bestätigen, ggf. Social-Preview.
+4. CLA-Assistant aktivieren (vor den ersten externen PRs) — #338 O3;
+   `CONTRIBUTING.md` §CLA hält die Stelle für den Link bereit.
+5. **Pflicht vor 1.0** (nicht mehr optional): Deploy-Verifikation
+   (#341 WP-10). Braucht `DEPLOY_HOST` als Variable plus `DEPLOY_USER`/
+   `DEPLOY_SSH_KEY`; solange sie fehlen, überspringt sich der Job still
+   (`deploy.yml:80`) — die Pipeline war nie rot, aber auch nie verifiziert.

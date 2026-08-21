@@ -5,16 +5,25 @@ development workflow and the conventions for contributions.
 
 ## Contributor License Agreement (CLA)
 
-> **Placeholder — becomes active with the public switch.**
+> **Not yet active.** The repository is public, but the CLA Assistant is
+> still being set up. Until the signing link below is live, we cannot
+> accept external pull requests — please open an issue instead, so your
+> idea is on record and we can pick it up once the CLA is in place.
 
 By submitting a contribution you agree to the terms of the Contributor
-License Agreement (CLA) once it is active. The CLA grants the copyright
-holder (currently **Yannick Lützenburg**, with the right to transfer to a
-legal successor) the rights required to publish your contribution under the
-project license and to relicense it in the future.
+License Agreement (CLA). The CLA grants the copyright holder (currently
+**Yannick Lützenburg**, with the right to transfer to a legal successor)
+the rights required to publish your contribution under the project license
+and to relicense it in the future.
 
-The CLA link (CLA Assistant) will be added here as soon as the repository is
-public. Until then, external contributions are not yet open.
+<!-- CLA-LINK: replace the line below with the cla-assistant.io signing
+     link once the app is installed (tracked in issue #338, O3). -->
+
+**Signing link:** _pending — see [issue #338](https://github.com/luetzey/who2be/issues/338)._
+
+Signing happens once, automatically, on your first pull request: the CLA
+Assistant bot comments on the PR with a link, and your PR is unblocked as
+soon as you accept.
 
 ## License
 
