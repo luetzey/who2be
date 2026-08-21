@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 
+import { isStaleChunkError, reloadOnStaleChunk } from '@/app/stale-chunk'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
 import { Container } from '@/components/layout/Container'
 import i18n from '@/i18n'
@@ -22,6 +23,13 @@ class ErrorBoundaryImpl extends Component<BoundaryProps, BoundaryState> {
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
     console.error('RouteErrorBoundary fing einen Fehler:', error, info)
+    // Stale-Chunk-Fehler (alter React.lazy-Chunk nach Deploy 404): statt der
+    // Fehlerseite genau einmal neu laden. Ist der Guard bereits verbraucht
+    // (oder sessionStorage nicht verfuegbar), faellt render() unten wie
+    // gehabt auf ErrorAlert zurueck.
+    if (isStaleChunkError(error)) {
+      reloadOnStaleChunk()
+    }
   }
 
   render(): ReactNode {

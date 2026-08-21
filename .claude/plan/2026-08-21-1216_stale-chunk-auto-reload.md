@@ -71,4 +71,30 @@ fehlgeschlagenen dynamischen Imports.
 
 ## Übergabe-Bericht (Phase 4.1)
 
-_(wird nach Implementierung ergänzt)_
+_Kalibrierung: kleiner Fix, 3 Quell-Dateien + 2 Tests + 1 nginx-Zeile —
+Kurzform._
+
+**Betroffene Elemente** (ripgrep-Rückwärtssuche, 2026-08-21):
+
+- DIREKT: `RouteErrorBoundary.tsx` und `main.tsx` importieren
+  `stale-chunk.ts`; `AppLayout.tsx` montiert die Boundary;
+  `index.html` lädt `main.tsx`.
+- TRANSITIV: alle Routen unter `AppLayout` (Fehlerpfad-Verhalten), sonst
+  nichts — `stale-chunk.ts` hat keine weiteren Importeure.
+- VERMUTET (unsicher): Browser-Verhalten bei `vite:preloadError` ist
+  Laufzeit-Verdrahtung durch Vite — nicht statisch nachweisbar.
+
+**Verifikation (Orchestrator-eigener Lauf, 2026-08-21):**
+
+- `npm run lint`: 0 Errors (64 Warnungen, alle in unberührten Alt-Dateien)
+- `npx tsc --noEmit`: grün
+- `npm run test:coverage`: 177 Dateien / 1000 Tests grün; Statements
+  86.73 %, Branches 81.13 % (Floor 79), Functions 82.68 %, Lines 87.75 %
+- `npm run build`: `✓ built in 2.35s` (nur vorbestehende
+  Chunk-Size-Warnung `blocknote-mantine`)
+
+**Rest-Test-Liste (manuell):** Der echte Deploy-Fall (alter Tab → neuer
+Build) ist lokal nicht automatisiert reproduzierbar — nach dem nächsten
+Deploy einmal mit offenem Tab navigieren und prüfen, dass die Seite sich
+selbst neu lädt statt „Unexpected error" zu zeigen. `sessionStorage`-
+Private-Mode-Pfad ist testabgedeckt (kein Reload, ErrorAlert).
