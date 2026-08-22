@@ -667,7 +667,10 @@
       "error": "Authorization failed. Please try again.",
       "missingRequest": "Invalid connection link — the authorization request is missing.",
       "lockedLabel": "Agent (set by the connection URL)",
-      "lockedHint": "This agent is fixed by the connector URL and can't be changed here."
+      "lockedHint": "This agent is fixed by the connector URL and can't be changed here.",
+      "lockedWorkspace": "Workspace: {{workspace}}",
+      "lockedUnresolvable": "This agent can't be resolved with this account. The connection URL points to an agent this account doesn't have access to — check the URL or ask the workspace owner.",
+      "invalidRequest": "This connection link is invalid or has expired. Request a new one."
     },
     "validation": {
       "emailInvalid": "Please enter a valid email address.",

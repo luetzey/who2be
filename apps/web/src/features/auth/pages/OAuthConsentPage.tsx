@@ -3,7 +3,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Navigate, useLocation, useSearchParams } from 'react-router-dom'
 
-import { createApi, oauthConsent } from '@/api/client'
+import { ApiError, createApi, oauthConsent, oauthConsentPreview } from '@/api/client'
+import type { OAuthConsentPreviewAgent } from '@/api/client'
 import type { Agent } from '@/api/types'
 import { useAuthToken } from '@/auth/useAuthToken'
 import { useSession } from '@/auth/session-context'
@@ -18,6 +19,19 @@ import { Select } from '@/components/ui/select'
 // Public-Route (ADR-0034-Folge): Consent-Screen des Who2Be-OAuth-Servers. Ein
 // eingeloggter User autorisiert einen LLM-Client (Claude/ChatGPT) fuer GENAU
 // einen Agenten — der ausgegebene Token erbt dessen Read-Scope + Tool-Policy.
+//
+// Hard-Lock (WP2/Issue #405): trug die Connector-URL `?agent=<uuid>`, ist der
+// Agent im signierten Blob festgelegt — keine Auswahl, der serverseitige
+// Consent bindet genau diesen Agenten. Ob ein Lock vorliegt und ob der
+// eingeloggte User den gebundenen Agenten aufloesen kann (er kann in JEDER
+// seiner Workspace-Memberships liegen, nicht nur im Default-Workspace), klaert
+// ausschliesslich `POST /oauth/consent/preview` — die Seite rät das nicht mehr
+// selbst aus dem Blob + der Default-Workspace-Agentenliste (das war Fehler 1:
+// Rohe UUID statt Name, wenn der Agent in einem anderen Workspace liegt).
+// `listAgents` (Dropdown) wird nur noch im ungesperrten Fall geladen — im
+// Lock-Fall ist sie unnoetig und war die Ursache von Fehler 2 (leerer
+// Default-Workspace blockierte den Consent, obwohl der gelockte Agent
+// anderswo existierte und der User berechtigt war).
 export function OAuthConsentPage() {
   const { t } = useTranslation('auth')
   const { session, me } = useSession()
@@ -26,33 +40,75 @@ export function OAuthConsentPage() {
   const [searchParams] = useSearchParams()
   const requestBlob = searchParams.get('request') ?? ''
 
-  // Trug die Connector-URL `?agent=<uuid>`, ist der Agent im signierten Blob
-  // festgelegt (Hard-Lock): keine Auswahl, der serverseitige Consent bindet
-  // genau diesen Agenten. Sonst waehlt der User aus der Liste.
-  const { clientName, redirectHost, agentId: lockedAgentId } = readBlobInfo(requestBlob)
+  const { clientName, redirectHost } = readBlobInfo(requestBlob)
 
   const [agents, setAgents] = useState<Agent[]>([])
   const [selectedAgentId, setSelectedAgentId] = useState<string>('')
-  const [loadingAgents, setLoadingAgents] = useState(true)
+  const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // `null` = Preview noch nicht beantwortet (oder fehlgeschlagen); danach
+  // autoritativ true/false laut Server.
+  const [locked, setLocked] = useState<boolean | null>(null)
+  const [lockedAgent, setLockedAgent] = useState<OAuthConsentPreviewAgent | null>(null)
 
   const workspaceId = me?.default_workspace_id ?? null
 
+  // Preview zuerst: klaert den Lock-Status autoritativ (ueber alle
+  // Memberships des Users), unabhaengig vom Default-Workspace.
   useEffect(() => {
-    if (session === null || workspaceId === null) {
+    if (session === null || requestBlob === '') {
+      setLoading(false)
       return
     }
     let cancelled = false
-    setLoadingAgents(true)
+    setLoading(true)
+    oauthConsentPreview(authToken, { request: requestBlob })
+      .then((result) => {
+        if (cancelled) return
+        // Streng auf `true` normalisieren (nicht nur truthy) — der zweite
+        // Effekt vergleicht `locked !== false` und muss sonst auf einem
+        // unerwarteten Response-Shape haengen bleiben statt sauber in den
+        // ungesperrten Pfad zu fallen.
+        const isLocked = result.locked === true
+        setLocked(isLocked)
+        setLockedAgent(isLocked ? (result.agent ?? null) : null)
+        if (isLocked) {
+          // Gesperrt: aufloesbar ⇒ dessen id vormerken, sonst bleibt Approve
+          // gesperrt (siehe Render). In beiden Faellen ist die Preview die
+          // letzte Anfrage — fertig geladen.
+          setSelectedAgentId(result.agent?.id ?? '')
+          setLoading(false)
+        }
+        // Ungesperrt: die Agentenliste (zweiter Effekt) laedt weiter — bis
+        // dahin bleibt `loading` true.
+      })
+      .catch((cause) => {
+        if (cancelled) return
+        setError(
+          cause instanceof ApiError && cause.status === 400
+            ? t('connector.invalidRequest')
+            : t('connector.error'),
+        )
+        setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [session, requestBlob, authToken, t])
+
+  // Nur im ungesperrten Fall: Dropdown-Kandidaten aus dem Default-Workspace.
+  useEffect(() => {
+    if (locked !== false || workspaceId === null) {
+      return
+    }
+    let cancelled = false
     createApi(authToken, workspaceId)
       .listAgents()
       .then((list) => {
         if (cancelled) return
         setAgents(list)
-        if (lockedAgentId !== null) {
-          setSelectedAgentId(lockedAgentId)
-        } else if (list.length > 0) {
+        if (list.length > 0) {
           setSelectedAgentId(list[0].id)
         }
       })
@@ -60,12 +116,12 @@ export function OAuthConsentPage() {
         if (!cancelled) setError(t('connector.error'))
       })
       .finally(() => {
-        if (!cancelled) setLoadingAgents(false)
+        if (!cancelled) setLoading(false)
       })
     return () => {
       cancelled = true
     }
-  }, [session, workspaceId, authToken, t, lockedAgentId])
+  }, [locked, workspaceId, authToken, t])
 
   const submit = useCallback(
     async (approve: boolean) => {
@@ -78,7 +134,11 @@ export function OAuthConsentPage() {
       try {
         const result = await oauthConsent(authToken, {
           request: requestBlob,
-          agent_id: selectedAgentId,
+          // Leere Auswahl (gelockt, aber nicht aufloesbar) ⇒ `null` statt `''`:
+          // ein Deny muss auch dann durchgehen, damit der User eine
+          // verdaechtige Connector-Anfrage aktiv ablehnen kann und der Client
+          // seinen `access_denied`-Redirect bekommt.
+          agent_id: selectedAgentId === '' ? null : selectedAgentId,
           approve,
         })
         // Zurueck zum LLM-Client (mit `code`+`state` bzw. `error`). Voller
@@ -99,8 +159,9 @@ export function OAuthConsentPage() {
     return <Navigate to={`/login?next=${next}`} replace />
   }
 
-  const lockedAgent =
-    lockedAgentId !== null ? (agents.find((agent) => agent.id === lockedAgentId) ?? null) : null
+  // Approve ist nur zulaessig, wenn ein Agent tatsaechlich feststeht: im
+  // Lock-Fall der aufgeloeste gelockte Agent, sonst die Dropdown-Auswahl.
+  const canApprove = locked === true ? lockedAgent !== null : selectedAgentId !== ''
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-10">
@@ -121,22 +182,25 @@ export function OAuthConsentPage() {
             {error !== null ? <ErrorAlert message={error} /> : null}
             {requestBlob === '' ? (
               <ErrorAlert message={t('connector.missingRequest')} />
-            ) : loadingAgents ? (
+            ) : loading ? (
               <LoadingState rows={2} />
-            ) : agents.length === 0 ? (
+            ) : locked === null ? null : locked === false && agents.length === 0 ? (
               <p className="text-sm text-muted-foreground">{t('connector.noAgents')}</p>
             ) : (
               <>
-                {lockedAgentId !== null ? (
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="oauth-agent-locked">{t('connector.lockedLabel')}</Label>
-                    <Input
-                      id="oauth-agent-locked"
-                      readOnly
-                      value={lockedAgent?.name ?? lockedAgentId}
-                    />
-                    <p className="text-xs text-muted-foreground">{t('connector.lockedHint')}</p>
-                  </div>
+                {locked === true ? (
+                  lockedAgent !== null ? (
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="oauth-agent-locked">{t('connector.lockedLabel')}</Label>
+                      <Input id="oauth-agent-locked" readOnly value={lockedAgent.name} />
+                      <p className="text-xs text-muted-foreground">
+                        {t('connector.lockedWorkspace', { workspace: lockedAgent.workspace_name })}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{t('connector.lockedHint')}</p>
+                    </div>
+                  ) : (
+                    <ErrorAlert message={t('connector.lockedUnresolvable')} />
+                  )
                 ) : (
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="oauth-agent">{t('connector.agentLabel')}</Label>
@@ -167,7 +231,7 @@ export function OAuthConsentPage() {
                     variant="brand"
                     className="w-full"
                     onClick={() => void submit(true)}
-                    disabled={submitting || selectedAgentId === ''}
+                    disabled={submitting || !canApprove}
                   >
                     <Link2 className="h-4 w-4" />
                     {t('connector.approve')}
@@ -194,32 +258,31 @@ export function OAuthConsentPage() {
 interface BlobInfo {
   clientName: string | null
   redirectHost: string | null
-  agentId: string | null
 }
 
-// Liest `client_name` + `redirect_uri` + optionalen `agent_id` aus dem signierten
-// Request-Blob (base64url(JSON).sig) — die Signaturpruefung passiert serverseitig.
-// Der `client_name` ist vom Client frei waehlbar (KEIN Vertrauensanker); die
+// Liest `client_name` + `redirect_uri` aus dem signierten Request-Blob
+// (base64url(JSON).sig) — die Signaturpruefung passiert serverseitig. Der
+// `client_name` ist vom Client frei waehlbar (KEIN Vertrauensanker); die
 // `redirect_uri` ist HMAC-signiert und damit der verlaessliche Anker dafuer,
-// WOHIN autorisiert wird. `agent_id` (aus `?agent=` der Connector-URL) steuert nur
-// die UI-Vorauswahl/Sperre — die echte Bindung erzwingt der Server aus demselben
-// signierten Blob. Parse-Fehler ⇒ generisch (kein Crash).
+// WOHIN autorisiert wird. Beides ist reine UI-Vorschau (Microcopy) — nichts
+// davon steuert mehr, ob/welcher Agent gesperrt ist: das entscheidet
+// ausschliesslich `POST /oauth/consent/preview` (siehe oben), nicht mehr ein
+// clientseitig aus dem Blob gelesenes `agent_id`. Parse-Fehler ⇒ generisch
+// (kein Crash) — der Blob geht trotzdem unveraendert an die Preview/den
+// Consent, deren Signaturpruefung entscheidet ueber Gueltigkeit.
 function readBlobInfo(blob: string): BlobInfo {
-  if (blob === '') return { clientName: null, redirectHost: null, agentId: null }
+  if (blob === '') return { clientName: null, redirectHost: null }
   try {
     const body = blob.split('.')[0]
     const json = atob(body.replace(/-/g, '+').replace(/_/g, '/'))
     const parsed = JSON.parse(json) as {
       client_name?: unknown
       redirect_uri?: unknown
-      agent_id?: unknown
     }
     const clientName =
       typeof parsed.client_name === 'string' && parsed.client_name !== ''
         ? parsed.client_name
         : null
-    const agentId =
-      typeof parsed.agent_id === 'string' && parsed.agent_id !== '' ? parsed.agent_id : null
     let redirectHost: string | null = null
     if (typeof parsed.redirect_uri === 'string' && parsed.redirect_uri !== '') {
       try {
@@ -228,8 +291,8 @@ function readBlobInfo(blob: string): BlobInfo {
         redirectHost = null
       }
     }
-    return { clientName, redirectHost, agentId }
+    return { clientName, redirectHost }
   } catch {
-    return { clientName: null, redirectHost: null, agentId: null }
+    return { clientName: null, redirectHost: null }
   }
 }

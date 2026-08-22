@@ -268,9 +268,13 @@ export function acceptInvitation(
 // autorisiert einen LLM-Client fuer GENAU einen Agenten. Nicht workspace-scoped
 // im Pfad — der signierte `request`-Blob traegt den Kontext, der Server leitet
 // den Workspace aus `agent_id` ab. Response = Redirect-URL zurueck zum Client.
+// `agent_id` ist optional (`null`): beim Ablehnen gibt es nichts zu binden,
+// und im Hard-Lock-Fall gewinnt ohnehin der signierte Blob. Als Pflichtfeld
+// scheiterte ein "Ablehnen" ohne aufloesbare Auswahl schon an der
+// Server-Validierung (422) — der Client saehe nie den `access_denied`-Redirect.
 export interface OAuthConsentInput {
   request: string
-  agent_id: string
+  agent_id: string | null
   approve: boolean
 }
 
@@ -283,6 +287,42 @@ export function oauthConsent(
   input: OAuthConsentInput,
 ): Promise<OAuthConsentResult> {
   return request<OAuthConsentResult>(token, '/oauth/consent', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+// Preview zum Hard-Lock (WP2/Issue #405): der signierte `request`-Blob KANN
+// eine `agent_id` binden (Connector-URL `?agent=<uuid>`); ob das zutrifft und
+// ob der eingeloggte User den gebundenen Agenten ueber IRGENDEINE seiner
+// Memberships sehen darf, weiss nur der Server — er sucht ueber alle
+// Workspaces, nicht nur `default_workspace_id`. Autoritative Quelle fuer
+// `locked`; die UI darf `agent_id` nicht mehr selbst aus dem Blob lesen und
+// gegen die Workspace-Agentenliste abgleichen (das war der Bug: UUID-Anzeige
+// bzw. blockierter Consent, wenn der Agent in einem anderen Workspace liegt).
+// `locked: true, agent: null` heisst: gebunden, aber fuer diesen User nicht
+// aufloesbar — Consent bleibt gesperrt.
+export interface OAuthConsentPreviewAgent {
+  id: string
+  name: string
+  workspace_id: string
+  workspace_name: string
+}
+
+export interface OAuthConsentPreviewInput {
+  request: string
+}
+
+export interface OAuthConsentPreviewResult {
+  locked: boolean
+  agent: OAuthConsentPreviewAgent | null
+}
+
+export function oauthConsentPreview(
+  token: string,
+  input: OAuthConsentPreviewInput,
+): Promise<OAuthConsentPreviewResult> {
+  return request<OAuthConsentPreviewResult>(token, '/oauth/consent/preview', {
     method: 'POST',
     body: JSON.stringify(input),
   })

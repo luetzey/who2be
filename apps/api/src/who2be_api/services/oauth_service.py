@@ -38,6 +38,8 @@ from who2be_api.services.audit_service import AuditService
 from who2be_models import (
     OAuthClientRegistered,
     OAuthClientRegistration,
+    OAuthConsentAgent,
+    OAuthConsentPreview,
     OAuthTokenResponse,
     WorkspaceRole,
 )
@@ -177,7 +179,16 @@ class OAuthService:
 
     # --- consent (User eingeloggt) → Auth-Code ----------------------------
 
-    async def consent(self, user_id: UUID, request_blob: str, agent_id: UUID, approve: bool) -> str:
+    async def consent(
+        self, user_id: UUID, request_blob: str, agent_id: UUID | None, approve: bool
+    ) -> str:
+        """Consent-Entscheidung des eingeloggten Users → Auth-Code-Redirect.
+
+        `agent_id` ist optional: das Ablehnen braucht keinen Agenten und
+        returnt vor jeder Verwendung; im Hard-Lock-Fall ueberschreibt der
+        signierte Blob den Wert ohnehin. Bleibt bei `approve=True` danach
+        KEIN Agent uebrig, ist der Request unvollstaendig (`invalid_request`).
+        """
         payload = self._verify_blob(request_blob)
         redirect_uri = str(payload["redirect_uri"])
         state = payload.get("state")
@@ -200,6 +211,11 @@ class OAuthService:
                 agent_id = UUID(str(blob_agent))
             except ValueError as exc:
                 raise OAuthError("invalid_request", "Ungueltiger Agent im Consent.") from exc
+        if agent_id is None:
+            # Weder Hard-Lock noch Auswahl: es gibt nichts zu binden. Erst HIER
+            # pruefen, damit der Hard-Lock oben auch dann greift, wenn der
+            # Client gar keinen `agent_id` geschickt hat.
+            raise OAuthError("invalid_request", "agent_id fehlt im Consent.")
 
         # Agent → Workspace + Rolle, NUR ueber die Memberships des Consent-Users.
         # DIES ist das autoritative Gate — egal ob `agent_id` aus dem signierten
@@ -230,6 +246,63 @@ class OAuthService:
             expires_at=datetime.now(UTC) + _CODE_TTL,
         )
         return _redirect_with(redirect_uri, {"code": code}, state_str)
+
+    # --- consent-preview (reine Anzeige, KEINE Autorisierung) -------------
+
+    async def consent_preview(self, user_id: UUID, request_blob: str) -> OAuthConsentPreview:
+        """Loest den per Hard-Lock gebundenen Agenten fuer die Consent-ANZEIGE auf.
+
+        Der Trust-Anker ist ausschliesslich der HMAC-signierte Request-Blob —
+        es gibt bewusst KEINEN Agent-ID-Parameter (das waere ein IDOR-Vektor).
+        Aufgeloest wird ueber exakt dieselbe Funktion, die spaeter im
+        `consent()` ueber Erfolg/403 entscheidet (`_resolve_agent_membership`),
+        damit Anzeige und Entscheidung nicht auseinanderlaufen koennen.
+
+        Bewusst KEIN 403, wenn der Agent nicht in einem Workspace des Users
+        liegt: der Consent wurde noch nicht abgeschickt, das hier ist eine
+        Anzeige und kein Autorisierungsversuch. Das 403 bleibt am
+        `POST /oauth/consent`. „Agent existiert nicht" und „Agent gehoert mir
+        nicht" liefern beide `locked=True, agent=None` und sind damit
+        ununterscheidbar — der Endpunkt ist kein Existenz-Orakel.
+        """
+        payload = self._verify_blob(request_blob)  # ungueltig/abgelaufen ⇒ OAuthError (400)
+        blob_agent = payload.get("agent_id")
+        if blob_agent is None:
+            return OAuthConsentPreview(locked=False, agent=None)
+        try:
+            agent_id = UUID(str(blob_agent))
+        except ValueError:
+            # Kann nur aus einem alten/kaputten Blob stammen (`authorize` signiert
+            # nur kanonische UUIDs). Nicht aufloesbar ⇒ derselbe stumme Fall.
+            return OAuthConsentPreview(locked=True, agent=None)
+        ws_id, _role = await self._resolve_agent_membership(user_id, agent_id)
+        if ws_id is None:
+            return OAuthConsentPreview(locked=True, agent=None)
+        display = await self._agent_display(agent_id, ws_id)
+        if display is None:
+            return OAuthConsentPreview(locked=True, agent=None)
+        agent_name, workspace_name = display
+        return OAuthConsentPreview(
+            locked=True,
+            agent=OAuthConsentAgent(
+                id=agent_id,
+                name=agent_name,
+                workspace_id=ws_id,
+                workspace_name=workspace_name,
+            ),
+        )
+
+    async def _agent_display(self, agent_id: UUID, workspace_id: UUID) -> tuple[str, str] | None:
+        """`(agent_name, workspace_name)` — NUR fuer einen bereits als eigenen
+        bestaetigten Workspace aufzurufen (`_resolve_agent_membership`).
+
+        `agent` ist RLS-isoliert (Migration 0037), `workspace` nicht — der
+        Service setzt daher denselben `tenant_scope` wie in
+        `_resolve_agent_membership`, das Repository fuehrt darunter nur noch
+        das SQL aus.
+        """
+        async with tenant_scope(workspace_id, None):
+            return await self._oauth.agent_display(agent_id, workspace_id)
 
     async def _resolve_agent_membership(
         self, user_id: UUID, agent_id: UUID

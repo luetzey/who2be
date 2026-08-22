@@ -667,7 +667,10 @@
       "error": "Autorisierung fehlgeschlagen. Bitte erneut versuchen.",
       "missingRequest": "Ungültiger Verbindungs-Link — der Autorisierungs-Request fehlt.",
       "lockedLabel": "Agent (über die Verbindungs-URL festgelegt)",
-      "lockedHint": "Dieser Agent ist durch die Connector-URL vorgegeben und kann hier nicht gewechselt werden."
+      "lockedHint": "Dieser Agent ist durch die Connector-URL vorgegeben und kann hier nicht gewechselt werden.",
+      "lockedWorkspace": "Workspace: {{workspace}}",
+      "lockedUnresolvable": "Dieser Agent lässt sich mit diesem Konto nicht auflösen. Die Connector-URL verweist auf einen Agenten, auf den dieses Konto keinen Zugriff hat — prüfe die URL oder wende dich an den Workspace-Owner.",
+      "invalidRequest": "Dieser Verbindungs-Link ist ungültig oder abgelaufen. Fordere einen neuen Link an."
     },
     "validation": {
       "emailInvalid": "Bitte gueltige E-Mail eingeben.",

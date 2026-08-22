@@ -3,7 +3,8 @@
 Drei Router:
 - `metadata_router` (`/.well-known`): RFC-8414-AS-Metadaten (anonym, statisch).
 - `router` (`/oauth`): `register` (DCR), `authorize` (→ Web-Consent),
-  `consent` (User-eingeloggt → Auth-Code), `token` (Code-/Refresh-Grant).
+  `consent` (User-eingeloggt → Auth-Code), `consent/preview` (reine Anzeige
+  des per Hard-Lock gebundenen Agenten), `token` (Code-/Refresh-Grant).
 
 Der `authorize`-Endpunkt ist der Open-Redirect-Choke-Point: ungueltiger Client /
 nicht registrierte redirect_uri ⇒ 400 OHNE Redirect. `token` ist form-encoded
@@ -29,6 +30,8 @@ from who2be_models import (
     OAuthClientRegistered,
     OAuthClientRegistration,
     OAuthConsentApprove,
+    OAuthConsentPreview,
+    OAuthConsentPreviewRequest,
     OAuthConsentResult,
     OAuthTokenResponse,
 )
@@ -51,7 +54,42 @@ def get_oauth_service(
 
 
 Service = Annotated[OAuthService, Depends(get_oauth_service)]
-Principal = Annotated[CurrentPrincipal, Depends(get_current_principal)]
+
+
+async def get_consent_principal(
+    principal: Annotated[CurrentPrincipal, Depends(get_current_principal)],
+) -> CurrentPrincipal:
+    """Consent-Principal: NUR der JWT-Pfad (eingeloggte Web-Session), nie ein Token.
+
+    Der Consent ist der interaktive Entscheidungspunkt eines MENSCHEN: hier
+    sagt ein eingeloggter User "ja, dieser LLM-Client darf als dieser Agent
+    handeln". Eine Maschine darf diesen Punkt nicht selbst passieren — sonst
+    laesst sich ein bereits ausgegebener Token dazu benutzen, sich einen
+    NEUEN, staerkeren Token ausstellen zu lassen (die Rolle des frischen
+    Tokens wird aus der aktuellen Membership abgeleitet, nicht aus der im
+    aufrufenden Token gepinnten Snapshot-Rolle; ausserdem haengt die neue
+    Refresh-Kette an keiner alten und ueberlebt deren Widerruf). Ein bewusst
+    auf `viewer` herabgestufter PAT — oder ein beim LLM-Client liegender
+    Connector-Token — koennte sich so selbst hochstufen und den
+    Workspace-/Tool-Policy-Pin verlassen.
+
+    `/oauth/*` laeuft ausserhalb des Workspace-Prefix, es greift also auch
+    kein `get_current_workspace`, das die Token-Pins durchsetzen wuerde.
+    Deshalb wird der Pfad hier hart geklemmt.
+
+    Diskriminator: `token_workspace_id is None` ⟺ JWT-Pfad. API-Tokens sind
+    laut `CurrentPrincipal`-Vertrag IMMER workspace-gepinnt.
+    """
+    if principal.token_workspace_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Consent erfordert eine eingeloggte Web-Session, keinen API-Token.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return principal
+
+
+ConsentPrincipal = Annotated[CurrentPrincipal, Depends(get_consent_principal)]
 
 
 def _error_response(exc: OAuthError) -> JSONResponse:
@@ -127,7 +165,7 @@ async def authorize(
 @router.post("/consent")
 @limiter.limit(write_limit)
 async def consent(
-    request: Request, data: OAuthConsentApprove, principal: Principal, service: Service
+    request: Request, data: OAuthConsentApprove, principal: ConsentPrincipal, service: Service
 ) -> OAuthConsentResult:
     """Consent-Submit der eingeloggten Web-Session → Redirect-URL zum Client."""
     try:
@@ -140,6 +178,30 @@ async def consent(
     except OAuthError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.error) from exc
     return OAuthConsentResult(redirect=redirect)
+
+
+@router.post("/consent/preview", response_model=OAuthConsentPreview)
+@limiter.limit(write_limit)
+async def consent_preview(
+    request: Request,
+    data: OAuthConsentPreviewRequest,
+    principal: ConsentPrincipal,
+    service: Service,
+) -> JSONResponse:
+    """Loest den per Hard-Lock gebundenen Agenten fuer die Consent-ANZEIGE auf.
+
+    Nimmt NUR den signierten Request-Blob (kein Agent-ID-Parameter — das waere
+    ein IDOR-Vektor) und antwortet mit `{locked, agent}`. `agent` ist `null`,
+    wenn der Blob keinen Hint traegt oder der Agent nicht in einem Workspace des
+    Users liegt; das autoritative 403 faellt weiterhin am `POST /oauth/consent`.
+    """
+    try:
+        preview: OAuthConsentPreview = await service.consent_preview(
+            user_id=principal.user_id, request_blob=data.request
+        )
+    except OAuthError as exc:
+        return _error_response(exc)
+    return JSONResponse(content=preview.model_dump(mode="json"), headers=_NO_STORE)
 
 
 @router.post("/token", response_model=None)

@@ -12,7 +12,9 @@ import asyncio
 import base64
 import hashlib
 import secrets
+import time
 from datetime import UTC, datetime, timedelta
+from typing import Any, cast
 from urllib.parse import parse_qs, urlparse
 from uuid import UUID, uuid4
 
@@ -24,7 +26,9 @@ from fastapi.testclient import TestClient
 from who2be_api.core import security
 from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.migrations import MIGRATIONS_DIR, apply_migrations
+from who2be_api.core.tenancy import current_tenant_context
 from who2be_api.main import app
+from who2be_api.repositories.oauth_repository import PgOAuthRepository
 from who2be_api.services import oauth_service
 from who2be_api.testing.workspace_setup import cleanup_workspaces, fresh_user_id, setup_workspace
 
@@ -685,3 +689,429 @@ def test_oauth_consent_rejects_non_member(monkeypatch: pytest.MonkeyPatch) -> No
         cleanup_workspaces([owner_id, stranger_id])
         # stranger_ws nur referenziert, Cleanup raeumt via user_ids.
         _ = stranger_ws
+
+
+# --- consent/preview (WP1, Issue #405) -------------------------------------
+#
+# Der Preview-Endpunkt weist den per Hard-Lock gebundenen Agenten LESBAR aus.
+# Er ist rein lesend und trifft KEINE Autorisierungs-Entscheidung — das 403
+# bleibt am `POST /oauth/consent`. Die Aufloesung laeuft ueber exakt dieselbe
+# Funktion (`_resolve_agent_membership`), die dort ueber Erfolg/403 entscheidet.
+
+
+class _FakePool:
+    """Minimaler asyncpg-Pool-Ersatz fuer die DB-freien Preview-Unit-Tests.
+
+    Kennt genau die Queries, die der Preview-Pfad absetzt (Memberships des
+    Users, Agent-Existenz je Kandidaten-Workspace, Anzeige-Namen) — und prueft
+    nebenbei die RLS-Invariante: die `agent`-Reads MUESSEN unter `tenant_scope`
+    laufen (Migration 0037).
+    """
+
+    def __init__(
+        self,
+        memberships: list[tuple[UUID, str]],
+        agents: dict[UUID, tuple[UUID, str, str]],
+    ) -> None:
+        self._memberships = memberships
+        self._agents = agents
+
+    async def fetch(self, query: str, *args: object) -> list[dict[str, object]]:
+        assert "FROM workspace_member" in query
+        return [{"workspace_id": ws, "role": role} for ws, role in self._memberships]
+
+    async def fetchval(self, query: str, *args: object) -> int | None:
+        assert "FROM agent" in query
+        assert current_tenant_context() is not None, "agent-Read ohne tenant_scope"
+        found = self._agents.get(cast(UUID, args[0]))
+        return 1 if found is not None and found[0] == args[1] else None
+
+    async def fetchrow(self, query: str, *args: object) -> dict[str, object] | None:
+        assert "JOIN workspace" in query
+        assert current_tenant_context() is not None, "agent-Read ohne tenant_scope"
+        found = self._agents.get(cast(UUID, args[0]))
+        if found is None or found[0] != args[1]:
+            return None
+        return {"agent_name": found[1], "workspace_name": found[2]}
+
+
+def _preview_service(
+    pool: _FakePool, monkeypatch: pytest.MonkeyPatch
+) -> oauth_service.OAuthService:
+    monkeypatch.setattr(oauth_service, "get_settings", lambda: _settings())
+    return oauth_service.OAuthService(
+        # Echtes Repository ueber den Fake-Pool: es haelt nur `self._pool` und
+        # setzt SQL ab — der Fake bildet `fetchrow` ab. So braucht der
+        # Produktions-Konstruktor keinen None-Fallback fuer Testzwecke.
+        oauth_repo=PgOAuthRepository(cast(Any, pool)),
+        token_repo=cast(Any, None),
+        pool=cast(Any, pool),
+        audit=None,
+    )
+
+
+def _blob(service: oauth_service.OAuthService, agent_id: UUID | None, ttl: float = 600.0) -> str:
+    """Signierter Request-Blob wie ihn `authorize` erzeugt (mit/ohne Agent-Hint)."""
+    return service._sign(
+        {
+            "client_id": "oac_test",
+            "client_name": "Claude",
+            "redirect_uri": _REDIRECT,
+            "code_challenge": "chal",
+            "state": "xyz",
+            "resource": _RESOURCE,
+            "agent_id": str(agent_id) if agent_id is not None else None,
+            "scope": None,
+            "exp": time.time() + ttl,
+        }
+    )
+
+
+def test_consent_preview_without_hint_is_unlocked(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ohne Agent-Hint im Blob: `locked=False`, kein Agent (DB-frei)."""
+    ws, user = uuid4(), uuid4()
+    service = _preview_service(_FakePool([(ws, "admin")], {}), monkeypatch)
+
+    result = asyncio.run(service.consent_preview(user, _blob(service, None)))
+
+    assert result.model_dump() == {"locked": False, "agent": None}
+
+
+def test_consent_preview_resolves_own_agent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Agent-Hint + Agent in einem Workspace des Users: lesbarer Agent (DB-frei)."""
+    ws, user, agent = uuid4(), uuid4(), uuid4()
+    service = _preview_service(
+        _FakePool([(ws, "admin")], {agent: (ws, "Coder", "Who2Be")}), monkeypatch
+    )
+
+    result = asyncio.run(service.consent_preview(user, _blob(service, agent)))
+
+    assert result.locked is True
+    assert result.agent is not None
+    assert result.agent.id == agent
+    assert result.agent.name == "Coder"
+    assert result.agent.workspace_id == ws
+    assert result.agent.workspace_name == "Who2Be"
+
+
+def test_consent_preview_non_default_workspace_agent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Der gelockte Agent liegt im ZWEITEN Workspace des Users (Kern von #405).
+
+    Genau dieser Fall zeigte im Web bisher nur die rohe UUID — die Consent-Seite
+    laedt die Agentenliste nur fuer den Default-Workspace, das serverseitige
+    Gate sucht ueber ALLE Memberships. Der Preview folgt dem Gate (DB-frei).
+    """
+    default_ws, other_ws, user, agent = uuid4(), uuid4(), uuid4(), uuid4()
+    service = _preview_service(
+        _FakePool(
+            [(default_ws, "admin"), (other_ws, "editor")],
+            {agent: (other_ws, "Kanal-Mentor", "Team-Workspace")},
+        ),
+        monkeypatch,
+    )
+
+    result = asyncio.run(service.consent_preview(user, _blob(service, agent)))
+
+    assert result.agent is not None
+    assert result.agent.workspace_id == other_ws
+    assert result.agent.workspace_name == "Team-Workspace"
+
+
+def test_consent_preview_is_no_existence_oracle(monkeypatch: pytest.MonkeyPatch) -> None:
+    """„Agent existiert nicht" und „Agent gehoert mir nicht" sind IDENTISCH.
+
+    Beide liefern `{locked: True, agent: None}` — kein 403, kein abweichender
+    Body, keine abweichende Fehlerform. Ein Angreifer kann ueber den Preview
+    also nicht herausfinden, ob eine Agent-UUID existiert (DB-frei).
+    """
+    own_ws, foreign_ws, user = uuid4(), uuid4(), uuid4()
+    foreign_agent, missing_agent = uuid4(), uuid4()
+    service = _preview_service(
+        _FakePool([(own_ws, "admin")], {foreign_agent: (foreign_ws, "Fremd", "Fremde WS")}),
+        monkeypatch,
+    )
+
+    foreign = asyncio.run(service.consent_preview(user, _blob(service, foreign_agent)))
+    missing = asyncio.run(service.consent_preview(user, _blob(service, missing_agent)))
+
+    assert foreign.model_dump() == {"locked": True, "agent": None}
+    assert foreign.model_dump() == missing.model_dump()
+
+
+def test_consent_preview_rejects_tampered_or_expired_blob(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Manipulierter oder abgelaufener Blob ⇒ `OAuthError` (400), keine Aufloesung."""
+    ws, user, agent = uuid4(), uuid4(), uuid4()
+    service = _preview_service(
+        _FakePool([(ws, "admin")], {agent: (ws, "Coder", "Who2Be")}), monkeypatch
+    )
+
+    valid = _blob(service, agent)
+    body, _, sig = valid.partition(".")
+    # Payload getauscht (fremder Agent untergeschoben), Signatur unveraendert.
+    forged_body = service._sign({"agent_id": str(uuid4()), "exp": time.time() + 600}).partition(
+        "."
+    )[0]
+    for bad in (f"{forged_body}.{sig}", f"{body}.{sig[:-1]}x", body, "", _blob(service, agent, -1)):
+        with pytest.raises(oauth_service.OAuthError) as exc:
+            asyncio.run(service.consent_preview(user, bad))
+        assert exc.value.error == "invalid_request"
+        assert exc.value.status_code == 400
+
+
+@pytest.mark.integration
+def test_oauth_consent_preview_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    """End-to-End ueber `POST /oauth/consent/preview` (Vertrag fuer das Web-Paket).
+
+    Vier Faelle: kein Hint ⇒ unlocked; eigener Agent ⇒ lesbar; fremder User auf
+    demselben Blob ⇒ `{locked: true, agent: null}` (200, KEIN 403); kaputte
+    Signatur ⇒ 400 in OAuthError-Form.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: _settings())
+    monkeypatch.setattr(oauth_service, "get_settings", lambda: _settings())
+
+    owner_id = fresh_user_id()
+    stranger_id = fresh_user_id()
+    ws = setup_workspace(owner_id)
+    setup_workspace(stranger_id)
+    agent_id = str(_agent_in(ws))
+    jwt_auth = {"Authorization": f"Bearer {_jwt(owner_id)}"}
+    stranger_auth = {"Authorization": f"Bearer {_jwt(stranger_id)}"}
+
+    try:
+        with TestClient(app) as client:
+            client_id = _register(client)
+            _verifier, challenge = _pkce()
+
+            # (1) Blob ohne Agent-Hint → unlocked.
+            plain_blob = _authorize_blob(client, client_id, challenge)
+            resp = client.post(
+                "/oauth/consent/preview", json={"request": plain_blob}, headers=jwt_auth
+            )
+            assert resp.status_code == 200, resp.text
+            assert resp.headers["cache-control"] == "no-store"
+            assert resp.json() == {"locked": False, "agent": None}
+
+            # (2) Hard-Lock-Blob → lesbarer Agent (Name + Workspace-Name).
+            locked_blob = _authorize_blob_resource(
+                client, client_id, challenge, f"{_RESOURCE}/a/{agent_id}"
+            )
+            resp = client.post(
+                "/oauth/consent/preview", json={"request": locked_blob}, headers=jwt_auth
+            )
+            assert resp.status_code == 200, resp.text
+            body = resp.json()
+            assert body["locked"] is True
+            assert body["agent"]["id"] == agent_id
+            assert body["agent"]["workspace_id"] == str(ws)
+            assert body["agent"]["name"]
+            assert body["agent"]["workspace_name"]
+
+            # (3) Fremder User auf demselben Blob: 200 + agent=None (KEIN 403,
+            #     kein Existenz-Orakel) — identisch zu einer nie existierenden
+            #     Agent-UUID.
+            foreign = client.post(
+                "/oauth/consent/preview", json={"request": locked_blob}, headers=stranger_auth
+            )
+            assert foreign.status_code == 200, foreign.text
+            assert foreign.json() == {"locked": True, "agent": None}
+            ghost_blob = _authorize_blob_resource(
+                client, client_id, challenge, f"{_RESOURCE}/a/{uuid4()}"
+            )
+            ghost = client.post(
+                "/oauth/consent/preview", json={"request": ghost_blob}, headers=jwt_auth
+            )
+            assert ghost.status_code == 200, ghost.text
+            assert ghost.json() == foreign.json()
+
+            # (4) Manipulierte Signatur → 400 in OAuthError-Form.
+            bad = client.post(
+                "/oauth/consent/preview",
+                json={"request": locked_blob[:-1] + ("x" if locked_blob[-1] != "x" else "y")},
+                headers=jwt_auth,
+            )
+            assert bad.status_code == 400
+            assert bad.json()["error"] == "invalid_request"
+
+            # (5) Ohne Login: kein Preview.
+            assert client.post(
+                "/oauth/consent/preview", json={"request": locked_blob}
+            ).status_code in (401, 403)
+
+            # Der autoritative Pfad bleibt unveraendert: derselbe fremde User
+            # bekommt am echten Consent weiterhin 403.
+            denied = client.post(
+                "/oauth/consent",
+                json={"request": locked_blob, "agent_id": agent_id, "approve": True},
+                headers=stranger_auth,
+            )
+            assert denied.status_code == 403
+    finally:
+        cleanup_workspaces([owner_id, stranger_id])
+
+
+# --- Consent-Zugang: NUR die eingeloggte Web-Session -------------------------
+#
+# `/oauth/consent` und `/oauth/consent/preview` sind der interaktive
+# Entscheidungspunkt eines MENSCHEN. Ein `w2b_`-API-Token darf sie nicht
+# passieren: sonst laesst sich ein bereits ausgegebener (womoeglich bewusst auf
+# `viewer` herabgestufter) Token dazu benutzen, sich ueber DCR → authorize →
+# consent → token einen NEUEN, staerkeren Token ausstellen zu lassen — die
+# Rolle des frischen Tokens kommt aus der aktuellen Membership, nicht aus der
+# im aufrufenden Token gepinnten Snapshot-Rolle. `/oauth/*` laeuft ausserhalb
+# des Workspace-Prefix, es greift also auch kein `get_current_workspace`.
+
+
+def _issue_api_token(
+    workspace_id: UUID, owner_id: UUID, agent_id: UUID, role: str = "viewer"
+) -> str:
+    """Legt einen echten `w2b_`-API-Token an und liefert ihn im Klartext.
+
+    Agent-gebunden (Migration 0048: `api_token_agent_bound_or_revoked`) — genau
+    die Form, die auch ein Connector-Token beim LLM-Client hat.
+    """
+    plain = security.new_token()
+
+    async def _run() -> None:
+        conn = await asyncpg.connect(get_settings().database_url)
+        try:
+            await conn.execute(
+                "INSERT INTO api_token "
+                "(workspace_id, owner_id, name, token_hash, role, agent_id) "
+                "VALUES ($1, $2, $3, $4, $5, $6)",
+                workspace_id,
+                owner_id,
+                "consent-escalation-test",
+                security.hash_token(plain),
+                role,
+                agent_id,
+            )
+        finally:
+            await conn.close()
+
+    asyncio.run(_run())
+    return plain
+
+
+@pytest.mark.integration
+def test_oauth_consent_rejects_api_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Privilege-Escalation-Regression: ein `w2b_`-Token kommt am Consent NICHT
+    durch (401) — weder am Submit noch an der Preview. Der JWT-Pfad des
+    gleichen Users bleibt unveraendert erfolgreich."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: _settings())
+    monkeypatch.setattr(oauth_service, "get_settings", lambda: _settings())
+
+    owner_id = fresh_user_id()
+    ws = setup_workspace(owner_id)
+    agent_id = str(_agent_in(ws))
+    jwt_auth = {"Authorization": f"Bearer {_jwt(owner_id)}"}
+    # Bewusst herabgestufter Token DESSELBEN Owners — genau der Fall, in dem
+    # der Consent-Pfad sonst wieder `admin` ausstellen wuerde.
+    api_token = _issue_api_token(ws, owner_id, UUID(agent_id), "viewer")
+    token_auth = {"Authorization": f"Bearer {api_token}"}
+
+    try:
+        with TestClient(app) as client:
+            client_id = _register(client)
+            _verifier, challenge = _pkce()
+            blob = _authorize_blob(client, client_id, challenge)
+
+            # (1) Consent-Submit mit API-Token ⇒ 401, KEIN Auth-Code.
+            escalation = client.post(
+                "/oauth/consent",
+                json={"request": blob, "agent_id": agent_id, "approve": True},
+                headers=token_auth,
+            )
+            assert escalation.status_code == 401, escalation.text
+            assert escalation.headers.get("www-authenticate") == "Bearer"
+            assert "redirect" not in escalation.json()
+
+            # (2) Preview mit API-Token ⇒ 401 (Workspace-Pin bleibt dicht).
+            preview = client.post(
+                "/oauth/consent/preview", json={"request": blob}, headers=token_auth
+            )
+            assert preview.status_code == 401, preview.text
+
+            # (3) Der JWT-Pfad desselben Users: unveraendert.
+            ok_preview = client.post(
+                "/oauth/consent/preview", json={"request": blob}, headers=jwt_auth
+            )
+            assert ok_preview.status_code == 200, ok_preview.text
+            assert ok_preview.json() == {"locked": False, "agent": None}
+            assert _consent_code(client, blob, agent_id, jwt_auth)
+    finally:
+        cleanup_workspaces([owner_id])
+
+
+@pytest.mark.integration
+def test_oauth_consent_agent_id_is_optional(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`agent_id` ist optional: Ablehnen geht immer durch (kein 422), Zustimmen
+    ohne Agent faellt als `invalid_request`, und ein Blob-Hard-Lock bindet auch
+    dann, wenn der Client gar keinen `agent_id` mitschickt."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: _settings())
+    monkeypatch.setattr(oauth_service, "get_settings", lambda: _settings())
+
+    owner_id = fresh_user_id()
+    ws = setup_workspace(owner_id)
+    agent_id = str(_agent_in(ws))
+    jwt_auth = {"Authorization": f"Bearer {_jwt(owner_id)}"}
+
+    try:
+        with TestClient(app) as client:
+            client_id = _register(client)
+            _verifier, challenge = _pkce()
+            blob = _authorize_blob(client, client_id, challenge)
+
+            # (1) Ablehnen OHNE agent_id ⇒ access_denied-Redirect. Genau der
+            #     Fall "gelockt, aber nicht aufloesbar" im Web: Approve ist
+            #     gesperrt, Deny muss trotzdem beim Client ankommen.
+            denied = client.post(
+                "/oauth/consent", json={"request": blob, "approve": False}, headers=jwt_auth
+            )
+            assert denied.status_code == 200, denied.text
+            denied_params = parse_qs(urlparse(denied.json()["redirect"]).query)
+            assert denied_params["error"] == ["access_denied"]
+            assert denied_params["state"] == ["xyz"]
+
+            # (2) Zustimmen ohne agent_id und ohne Blob-Hint ⇒ invalid_request.
+            incomplete = client.post(
+                "/oauth/consent", json={"request": blob, "approve": True}, headers=jwt_auth
+            )
+            assert incomplete.status_code == 400, incomplete.text
+            assert incomplete.json()["detail"] == "invalid_request"
+
+            # (3) Zustimmen ohne agent_id, aber MIT Blob-Hint ⇒ Hard-Lock greift
+            #     trotzdem und der Token haengt am Blob-Agenten.
+            verifier, locked_challenge = _pkce()
+            locked_blob = _authorize_blob_resource(
+                client, client_id, locked_challenge, f"{_RESOURCE}/a/{agent_id}"
+            )
+            approved = client.post(
+                "/oauth/consent", json={"request": locked_blob, "approve": True}, headers=jwt_auth
+            )
+            assert approved.status_code == 200, approved.text
+            code = parse_qs(urlparse(approved.json()["redirect"]).query)["code"][0]
+            access = client.post(
+                "/oauth/token",
+                data={
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "redirect_uri": _REDIRECT,
+                    "client_id": client_id,
+                    "code_verifier": verifier,
+                },
+            ).json()["access_token"]
+            assert _token_agent_id(security.hash_token(access)) == UUID(agent_id)
+    finally:
+        cleanup_workspaces([owner_id])

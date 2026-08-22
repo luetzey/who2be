@@ -192,3 +192,108 @@ inkl. Rückwärtskompatibilität des kanonischen Pfads),
 `test_oauth.py::test_resource_agent_hint_parses_path_form` (DB-frei) +
 `…::test_oauth_resource_agent_hint_hard_locks` (DB-gated, beide Hint-Formen).
 E2E gegen echten Claude-Client weiter offen.
+
+## Addendum 2026-08-22 (2) — Consent-Preview: den gelockten Agenten lesbar machen
+
+**Problem:** Der Consent lud die Agentenliste nur für `me.default_workspace_id`,
+während das autoritative Gate `_resolve_agent_membership` über **alle**
+Memberships des Users sucht. Zwei Folgen (Issue #405):
+
+1. Lag der gelockte Agent in einem Nicht-Default-Workspace, fiel die Anzeige auf
+   die rohe UUID zurück — der User bestätigte eine Bindung, die er nicht lesen
+   kann, ohne jede Angabe des Ziel-Workspace.
+2. War der Default-Workspace leer, griff die `agents.length === 0`-Sperre und der
+   Consent war gar **nicht durchführbar**, obwohl der Agent existierte und der
+   User berechtigt war.
+
+Vor der Pfad-Bindung (Addendum 1) kam der Agent-Hint praktisch nie am Consent an
+— der Hard-Lock war ein toter Pfad und die Lücke damit unsichtbar.
+
+**Entscheidung:** `POST /oauth/consent/preview` nimmt denselben HMAC-signierten
+Request-Blob und löst den Agenten über **exakt** `_resolve_agent_membership` auf.
+Antwort: `{locked: bool, agent: {id, name, workspace_id, workspace_name} | null}`.
+
+Vier Fälle: ungültiger/abgelaufener Blob ⇒ 400; kein Hint ⇒ `{locked: false}`
+(Dropdown wie bisher); Hint auflösbar ⇒ Name + Workspace, Approve aktiv; Hint
+nicht auflösbar ⇒ `{locked: true, agent: null}`, Approve gesperrt mit Begründung.
+
+**Warum dieser Zuschnitt — drei bewusste Entscheidungen:**
+
+- **Kein Agent-ID-Parameter.** Der Trust-Anker bleibt der signierte Blob. Ein
+  Endpunkt, der eine beliebige Agent-UUID auflöst, wäre ein IDOR-Vektor; so
+  verrät er ausschließlich, was der eingeloggte User ohnehin gerade autorisieren
+  soll.
+- **Kein Existenz-Orakel.** „Agent existiert nicht" und „Agent gehört dir nicht"
+  laufen durch denselben Rückgabepfad — identischer Status, identischer Body.
+  `_resolve_agent_membership` iteriert nur über die eigenen Workspaces, ein Agent
+  außerhalb dieser Menge ist schlicht „nicht gefunden"; der Namens-Read passiert
+  erst **nach** dem Gate.
+- **Kein 403 im Preview.** Der Consent wurde noch nicht abgeschickt — das ist
+  eine Anzeige, kein Autorisierungsversuch. Das 403 bleibt am
+  `POST /oauth/consent`, wo die Entscheidung tatsächlich fällt.
+
+Verworfen: `GET /v1/me/agents` (legt eine allgemeine workspace-übergreifende
+Lesefläche an, wo das Problem einen einzigen, bereits bekannten Agenten
+braucht); rein im Frontend über die `MeRead`-Workspaces (dupliziert die
+Auflösungslogik im Client — die Anzeige wäre eine Rekonstruktion neben dem
+echten Gate statt dessen Antwort).
+
+**Schichtung:** Der Read liegt als `PgOAuthRepository.agent_display` im
+Repository, den Mandanten setzt der Service per `tenant_scope` — `tenant_scope`
+ist reine ContextVar-Verwaltung, also eine Service-Entscheidung (Muster wie
+`gdpr_export_service`). Damit bleibt die Interims-Leitplanke aus `CLAUDE.md`
+(kein neues SQL in `services/`) gewahrt; das vorbestehende SQL in
+`_resolve_agent_membership` gehört in den späteren ADR-0002-Umzug.
+
+Verifizierung: `test_oauth.py` — alle vier Fälle DB-frei plus ein
+Integrationstest; `test_consent_preview_is_no_existence_oracle` vergleicht die
+Antworten für „fremd" und „nicht existent" byte-genau.
+
+## Addendum 2026-08-22 (3) — Consent ist ein Menschen-Endpunkt, kein Maschinen-Endpunkt
+
+**Befund (Security-Review zum Preview-Paket, vorbestehend):** `POST /oauth/consent`
+akzeptierte auch `w2b_`-API-Tokens. `get_current_principal` bedient JWT **und**
+Token-Pfad; `consent()` las ausschliesslich `principal.user_id` und ignorierte
+die Token-Pins (`token_workspace_id` / `token_role` / `token_agent_id`). Da
+`/oauth/*` ausserhalb von `_WORKSPACE_PREFIX` laeuft, griff auch kein
+`get_current_workspace`, das die Pins sonst durchsetzt.
+
+**Wirkung (am Code verifiziert):** `_issue` leitet die Rolle des frischen Tokens
+aus `_resolve_agent_membership` ab — der **aktuellen** Membership-Rolle des
+Owners, nicht der im aufrufenden Token gepinnten Snapshot-Rolle. Ein bewusst auf
+`viewer` herabgestufter PAT, oder ein beim LLM-Client liegender Connector-Token,
+konnte damit ueber DCR → `authorize` → `consent` → `token` einen `admin`-Token
+praegen; mit einer Agent-UUID aus einem anderen Workspace desselben Owners
+zusaetzlich den Workspace- und Tool-Policy-Pin verlassen. Die dabei entstehende
+Refresh-Kette traegt `rotated_from = NULL` und ueberlebt ein
+`revoke_refresh_chain` auf die Ursprungskette — aus einem 8-Stunden-Token wurde
+eine 30-Tage-Kette.
+
+**Entscheidung:** `get_consent_principal` klemmt `POST /oauth/consent` **und**
+`POST /oauth/consent/preview` hart auf den JWT-Pfad (401 fuer Token-Aufrufer).
+Diskriminator ist `token_workspace_id is None` — laut `CurrentPrincipal`-Vertrag
+sind API-Tokens immer workspace-gepinnt.
+
+Die Begruendung ist semantisch, nicht nur technisch: der Consent ist der
+interaktive Entscheidungspunkt eines **Menschen** („ja, dieser Client darf als
+dieser Agent handeln"). Eine Maschine darf ihn nicht selbst passieren, sonst
+laesst sich ein bereits ausgegebener Token dazu benutzen, sich einen neuen,
+staerkeren ausstellen zu lassen. `register`, `authorize` und `token` bleiben
+unveraendert (anonym bzw. PKCE-geschuetzt, ohne Principal).
+
+`_issue`s Rollen-Herleitung bleibt bewusst wie sie ist — sie ist Teil des
+Designs (der Connector-Token traegt die aktuelle Rolle des Consent-Users, nicht
+eine eingefrorene). Gefixt ist der **Zugang**, nicht die Ableitung.
+
+**Folgebefund am neuen Preview:** `OAuthConsentApprove.agent_id` ist jetzt
+optional. Ablehnen braucht keinen Agenten, und im Hard-Lock-Fall gewinnt ohnehin
+der signierte Blob. Als Pflichtfeld scheiterte ein „Ablehnen" auf einer
+Consent-Seite ohne aufloesbare Auswahl schon an der Pydantic-Validierung (422) —
+der Client bekam nie den `access_denied`-Redirect, der User sah nur einen
+generischen Fehler. `approve=true` ganz ohne Agent faellt serverseitig als
+`invalid_request`; die Pruefung steht **nach** dem Hard-Lock, damit der Blob auch
+dann bindet, wenn der Client gar keinen `agent_id` schickt.
+
+Verifizierung: `test_oauth_consent_rejects_api_token` (schlaegt gegen den alten
+Code fehl), dazu die Preview-Variante und die drei `agent_id`-Faelle
+(Ablehnen ohne Agent, Zustimmen ohne Agent, Zustimmen ohne Agent mit Blob-Hint).

@@ -16,6 +16,11 @@
   },
   {
     "method": "POST",
+    "path": "/oauth/consent/preview",
+    "operationId": "consent_preview_oauth_consent_preview_post"
+  },
+  {
+    "method": "POST",
     "path": "/oauth/register",
     "operationId": "register_client_oauth_register_post"
   },
