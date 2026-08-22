@@ -263,6 +263,32 @@ describe('OAuthConsentPage', () => {
     expect(calls.some((c) => c.url.includes('/agents'))).toBe(false)
   })
 
+  it('gelockt + nicht aufloesbar: Deny sendet agent_id null und laeuft durch', async () => {
+    // Regression: mit `agent_id: ''` scheiterte der Deny an der
+    // Server-Validierung (422) — der LLM-Client sah nie den
+    // `access_denied`-Redirect, der User nur "Autorisierung fehlgeschlagen".
+    const assign = stubAssign()
+    const calls = stubApi({
+      preview: { locked: true, agent: null },
+      consent: { redirect: 'https://claude.ai/cb?error=access_denied' },
+    })
+
+    renderConsent(authedSession, `?request=${blobOf({ agent_id: 'ghost-uuid' })}`)
+
+    const deny = await screen.findByRole('button', { name: 'Ablehnen' })
+    expect(deny).toBeEnabled()
+    fireEvent.click(deny)
+
+    await waitFor(() => {
+      expect(assign).toHaveBeenCalledWith('https://claude.ai/cb?error=access_denied')
+    })
+    const consentCall = calls.find(
+      (c) => c.url.includes('/oauth/consent') && !c.url.includes('/preview'),
+    )
+    expect(consentCall?.body).toMatchObject({ agent_id: null, approve: false })
+    expect(screen.queryByText(/fehlgeschlagen/i)).toBeNull()
+  })
+
   it('zeigt den Host der signierten redirect_uri an', async () => {
     stubApi({ agents: [builder] })
 

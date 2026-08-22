@@ -179,7 +179,16 @@ class OAuthService:
 
     # --- consent (User eingeloggt) → Auth-Code ----------------------------
 
-    async def consent(self, user_id: UUID, request_blob: str, agent_id: UUID, approve: bool) -> str:
+    async def consent(
+        self, user_id: UUID, request_blob: str, agent_id: UUID | None, approve: bool
+    ) -> str:
+        """Consent-Entscheidung des eingeloggten Users → Auth-Code-Redirect.
+
+        `agent_id` ist optional: das Ablehnen braucht keinen Agenten und
+        returnt vor jeder Verwendung; im Hard-Lock-Fall ueberschreibt der
+        signierte Blob den Wert ohnehin. Bleibt bei `approve=True` danach
+        KEIN Agent uebrig, ist der Request unvollstaendig (`invalid_request`).
+        """
         payload = self._verify_blob(request_blob)
         redirect_uri = str(payload["redirect_uri"])
         state = payload.get("state")
@@ -202,6 +211,11 @@ class OAuthService:
                 agent_id = UUID(str(blob_agent))
             except ValueError as exc:
                 raise OAuthError("invalid_request", "Ungueltiger Agent im Consent.") from exc
+        if agent_id is None:
+            # Weder Hard-Lock noch Auswahl: es gibt nichts zu binden. Erst HIER
+            # pruefen, damit der Hard-Lock oben auch dann greift, wenn der
+            # Client gar keinen `agent_id` geschickt hat.
+            raise OAuthError("invalid_request", "agent_id fehlt im Consent.")
 
         # Agent → Workspace + Rolle, NUR ueber die Memberships des Consent-Users.
         # DIES ist das autoritative Gate — egal ob `agent_id` aus dem signierten

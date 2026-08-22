@@ -268,9 +268,13 @@ export function acceptInvitation(
 // autorisiert einen LLM-Client fuer GENAU einen Agenten. Nicht workspace-scoped
 // im Pfad — der signierte `request`-Blob traegt den Kontext, der Server leitet
 // den Workspace aus `agent_id` ab. Response = Redirect-URL zurueck zum Client.
+// `agent_id` ist optional (`null`): beim Ablehnen gibt es nichts zu binden,
+// und im Hard-Lock-Fall gewinnt ohnehin der signierte Blob. Als Pflichtfeld
+// scheiterte ein "Ablehnen" ohne aufloesbare Auswahl schon an der
+// Server-Validierung (422) — der Client saehe nie den `access_denied`-Redirect.
 export interface OAuthConsentInput {
   request: string
-  agent_id: string
+  agent_id: string | null
   approve: boolean
 }
 

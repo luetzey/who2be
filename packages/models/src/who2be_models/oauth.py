@@ -46,12 +46,19 @@ class OAuthConsentApprove(BaseModel):
     `request` ist der signierte (HMAC) Authorize-Request-Blob, den
     `GET /oauth/authorize` erzeugt hat — er traegt client_id, redirect_uri,
     code_challenge, state, resource, scope manipulationssicher.
+
+    `agent_id` ist OPTIONAL: beim Ablehnen (`approve=false`) gibt es nichts zu
+    binden, und im Hard-Lock-Fall gewinnt ohnehin der signierte Blob. Waere das
+    Feld Pflicht, scheiterte ein "Ablehnen" auf einer Consent-Seite ohne
+    aufloesbare Agent-Auswahl schon an der Validierung (422) — der Client
+    bekaeme nie den `access_denied`-Redirect. Ein `approve=true` ohne Agent
+    (weder hier noch im Blob) faellt serverseitig als `invalid_request`.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     request: str
-    agent_id: UUID
+    agent_id: UUID | None = None
     approve: bool
 
 

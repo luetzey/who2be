@@ -134,7 +134,11 @@ export function OAuthConsentPage() {
       try {
         const result = await oauthConsent(authToken, {
           request: requestBlob,
-          agent_id: selectedAgentId,
+          // Leere Auswahl (gelockt, aber nicht aufloesbar) ⇒ `null` statt `''`:
+          // ein Deny muss auch dann durchgehen, damit der User eine
+          // verdaechtige Connector-Anfrage aktiv ablehnen kann und der Client
+          // seinen `access_denied`-Redirect bekommt.
+          agent_id: selectedAgentId === '' ? null : selectedAgentId,
           approve,
         })
         // Zurueck zum LLM-Client (mit `code`+`state` bzw. `error`). Voller

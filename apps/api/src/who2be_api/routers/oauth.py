@@ -54,7 +54,42 @@ def get_oauth_service(
 
 
 Service = Annotated[OAuthService, Depends(get_oauth_service)]
-Principal = Annotated[CurrentPrincipal, Depends(get_current_principal)]
+
+
+async def get_consent_principal(
+    principal: Annotated[CurrentPrincipal, Depends(get_current_principal)],
+) -> CurrentPrincipal:
+    """Consent-Principal: NUR der JWT-Pfad (eingeloggte Web-Session), nie ein Token.
+
+    Der Consent ist der interaktive Entscheidungspunkt eines MENSCHEN: hier
+    sagt ein eingeloggter User "ja, dieser LLM-Client darf als dieser Agent
+    handeln". Eine Maschine darf diesen Punkt nicht selbst passieren — sonst
+    laesst sich ein bereits ausgegebener Token dazu benutzen, sich einen
+    NEUEN, staerkeren Token ausstellen zu lassen (die Rolle des frischen
+    Tokens wird aus der aktuellen Membership abgeleitet, nicht aus der im
+    aufrufenden Token gepinnten Snapshot-Rolle; ausserdem haengt die neue
+    Refresh-Kette an keiner alten und ueberlebt deren Widerruf). Ein bewusst
+    auf `viewer` herabgestufter PAT — oder ein beim LLM-Client liegender
+    Connector-Token — koennte sich so selbst hochstufen und den
+    Workspace-/Tool-Policy-Pin verlassen.
+
+    `/oauth/*` laeuft ausserhalb des Workspace-Prefix, es greift also auch
+    kein `get_current_workspace`, das die Token-Pins durchsetzen wuerde.
+    Deshalb wird der Pfad hier hart geklemmt.
+
+    Diskriminator: `token_workspace_id is None` ⟺ JWT-Pfad. API-Tokens sind
+    laut `CurrentPrincipal`-Vertrag IMMER workspace-gepinnt.
+    """
+    if principal.token_workspace_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Consent erfordert eine eingeloggte Web-Session, keinen API-Token.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return principal
+
+
+ConsentPrincipal = Annotated[CurrentPrincipal, Depends(get_consent_principal)]
 
 
 def _error_response(exc: OAuthError) -> JSONResponse:
@@ -130,7 +165,7 @@ async def authorize(
 @router.post("/consent")
 @limiter.limit(write_limit)
 async def consent(
-    request: Request, data: OAuthConsentApprove, principal: Principal, service: Service
+    request: Request, data: OAuthConsentApprove, principal: ConsentPrincipal, service: Service
 ) -> OAuthConsentResult:
     """Consent-Submit der eingeloggten Web-Session → Redirect-URL zum Client."""
     try:
@@ -148,7 +183,10 @@ async def consent(
 @router.post("/consent/preview", response_model=OAuthConsentPreview)
 @limiter.limit(write_limit)
 async def consent_preview(
-    request: Request, data: OAuthConsentPreviewRequest, principal: Principal, service: Service
+    request: Request,
+    data: OAuthConsentPreviewRequest,
+    principal: ConsentPrincipal,
+    service: Service,
 ) -> JSONResponse:
     """Loest den per Hard-Lock gebundenen Agenten fuer die Consent-ANZEIGE auf.
 
