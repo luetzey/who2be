@@ -248,3 +248,52 @@ ist reine ContextVar-Verwaltung, also eine Service-Entscheidung (Muster wie
 Verifizierung: `test_oauth.py` — alle vier Fälle DB-frei plus ein
 Integrationstest; `test_consent_preview_is_no_existence_oracle` vergleicht die
 Antworten für „fremd" und „nicht existent" byte-genau.
+
+## Addendum 2026-08-22 (3) — Consent ist ein Menschen-Endpunkt, kein Maschinen-Endpunkt
+
+**Befund (Security-Review zum Preview-Paket, vorbestehend):** `POST /oauth/consent`
+akzeptierte auch `w2b_`-API-Tokens. `get_current_principal` bedient JWT **und**
+Token-Pfad; `consent()` las ausschliesslich `principal.user_id` und ignorierte
+die Token-Pins (`token_workspace_id` / `token_role` / `token_agent_id`). Da
+`/oauth/*` ausserhalb von `_WORKSPACE_PREFIX` laeuft, griff auch kein
+`get_current_workspace`, das die Pins sonst durchsetzt.
+
+**Wirkung (am Code verifiziert):** `_issue` leitet die Rolle des frischen Tokens
+aus `_resolve_agent_membership` ab — der **aktuellen** Membership-Rolle des
+Owners, nicht der im aufrufenden Token gepinnten Snapshot-Rolle. Ein bewusst auf
+`viewer` herabgestufter PAT, oder ein beim LLM-Client liegender Connector-Token,
+konnte damit ueber DCR → `authorize` → `consent` → `token` einen `admin`-Token
+praegen; mit einer Agent-UUID aus einem anderen Workspace desselben Owners
+zusaetzlich den Workspace- und Tool-Policy-Pin verlassen. Die dabei entstehende
+Refresh-Kette traegt `rotated_from = NULL` und ueberlebt ein
+`revoke_refresh_chain` auf die Ursprungskette — aus einem 8-Stunden-Token wurde
+eine 30-Tage-Kette.
+
+**Entscheidung:** `get_consent_principal` klemmt `POST /oauth/consent` **und**
+`POST /oauth/consent/preview` hart auf den JWT-Pfad (401 fuer Token-Aufrufer).
+Diskriminator ist `token_workspace_id is None` — laut `CurrentPrincipal`-Vertrag
+sind API-Tokens immer workspace-gepinnt.
+
+Die Begruendung ist semantisch, nicht nur technisch: der Consent ist der
+interaktive Entscheidungspunkt eines **Menschen** („ja, dieser Client darf als
+dieser Agent handeln"). Eine Maschine darf ihn nicht selbst passieren, sonst
+laesst sich ein bereits ausgegebener Token dazu benutzen, sich einen neuen,
+staerkeren ausstellen zu lassen. `register`, `authorize` und `token` bleiben
+unveraendert (anonym bzw. PKCE-geschuetzt, ohne Principal).
+
+`_issue`s Rollen-Herleitung bleibt bewusst wie sie ist — sie ist Teil des
+Designs (der Connector-Token traegt die aktuelle Rolle des Consent-Users, nicht
+eine eingefrorene). Gefixt ist der **Zugang**, nicht die Ableitung.
+
+**Folgebefund am neuen Preview:** `OAuthConsentApprove.agent_id` ist jetzt
+optional. Ablehnen braucht keinen Agenten, und im Hard-Lock-Fall gewinnt ohnehin
+der signierte Blob. Als Pflichtfeld scheiterte ein „Ablehnen" auf einer
+Consent-Seite ohne aufloesbare Auswahl schon an der Pydantic-Validierung (422) —
+der Client bekam nie den `access_denied`-Redirect, der User sah nur einen
+generischen Fehler. `approve=true` ganz ohne Agent faellt serverseitig als
+`invalid_request`; die Pruefung steht **nach** dem Hard-Lock, damit der Blob auch
+dann bindet, wenn der Client gar keinen `agent_id` schickt.
+
+Verifizierung: `test_oauth_consent_rejects_api_token` (schlaegt gegen den alten
+Code fehl), dazu die Preview-Variante und die drei `agent_id`-Faelle
+(Ablehnen ohne Agent, Zustimmen ohne Agent, Zustimmen ohne Agent mit Blob-Hint).

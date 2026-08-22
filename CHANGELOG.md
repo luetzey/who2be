@@ -10,6 +10,20 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Fixed
 
+- **Security:** the OAuth consent endpoint no longer accepts `w2b_` API tokens —
+  it now requires a signed-in web session. It read only the caller's user id and
+  ignored the token's workspace, role and agent pins, and because `/oauth/*` sits
+  outside the workspace-scoped prefix nothing else enforced them. Since the token
+  a consent mints derives its role from the user's current membership rather than
+  the calling token's pinned snapshot role, a deliberately downgraded `viewer`
+  token could register its own client and mint an `admin` one, escaping its
+  workspace and tool-policy pins along the way — and the resulting refresh chain
+  survived revocation of the original. Consent is a human decision point; a
+  machine must not pass it on its own behalf.
+- Declining an OAuth connection works again when no agent can be resolved. The
+  agent id was a required field, so "deny" failed validation before it reached the
+  server and the client never received its `access_denied` redirect.
+
 - The OAuth consent screen now names the agent it is about to bind, together
   with its workspace, instead of showing a bare UUID. It only ever listed agents
   from your default workspace, while the server resolves across every workspace

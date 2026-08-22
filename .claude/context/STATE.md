@@ -28,6 +28,14 @@ kaputt waren zwei Mechanik-Punkte und eine große untersetzte Fläche.
 
 Offen: die 78 deutschen `detail`-Strings der API (Issue #402, braucht ADR).
 
+**Test-Infrastruktur (2026-08-22):** In der Cloud-Session lässt sich PostgreSQL
+16 + `pgvector` lokal starten; damit laufen die `@pytest.mark.integration`-Tests
+wirklich statt sich zu überspringen — `1741 passed, 0 skipped`, Coverage
+**91,21 %** (Gate 85 % erreicht). Ohne DB sind es `1293 passed, 446 skipped` bei
+62 %, was das Gate reißen lässt und in mehreren PRs als „nur in CI belastbar"
+ausgewiesen werden musste. Wer lokal verifiziert: DB hochziehen, sonst rutschen
+genau die Tenancy-/RLS-Pfade durch, die am meisten wiegen.
+
 **Nachtrag 2026-08-22 (Issue #408):** Der Umschalter war auf den öffentlichen
 Seiten gar nicht erreichbar — er hing nur in `AppShell`, und alle Routen vor dem
 Login liegen außerhalb von `AppLayout`. Die Bestandsaufnahme hatte auf
@@ -180,6 +188,13 @@ Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
   Consent eine rohe UUID, sobald der Agent nicht im Default-Workspace lag —
   und war bei leerem Default-Workspace gar nicht durchführbar. Kein
   Agent-ID-Parameter (IDOR), kein Existenz-Orakel. ADR-0036-Addendum 2.
+- **Consent nur per Web-Session (2026-08-22, Security-Review zu #405):**
+  `POST /oauth/consent` akzeptierte auch `w2b_`-Tokens und ignorierte deren
+  Workspace-/Rollen-/Agent-Pins — ein herabgestufter PAT konnte sich darüber
+  einen `admin`-Token prägen (`_issue` nimmt die aktuelle Membership-Rolle,
+  nicht die gepinnte). `get_consent_principal` klemmt beide Consent-Endpunkte
+  auf den JWT-Pfad. ADR-0036-Addendum 3. **Vorbestehend, nicht durch #405
+  eingeführt** — gefunden, weil der neue Preview dieselbe Dependency erbte.
 - **81 Tools** (58 + 23 aus WorkArea/KB/Tabellen, ADR-0047): Read + Write
   (ADR-0030), `search` + `search_content`
   (ADR-0037/0046), Versions-/
