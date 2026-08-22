@@ -117,6 +117,11 @@ export function SystemPromptEditor({
   // `tools-overview`, `memory` und `persona-ref` sind parameterlos — kein
   // Picker noetig. Statt einen weiteren Dialog zu mounten, insertieren wir
   // direkt, wenn das Slash-Menue den Kind anfordert.
+  //
+  // Das `label` geht als BlockNote-Prop INS DOKUMENT und ist damit Inhalt: es
+  // gehoert zur Sprache des System-Prompts (ADR-0045), nicht zur UI-Sprache,
+  // und bleibt darum ein stabiles Literal. Uebersetzt wird die Slash-Menue-
+  // Beschriftung (`editor:slash.*`), nicht der gespeicherte Wert.
   function handleOpenPicker(kind: PlaceholderKind) {
     if (kind === 'tools-overview') {
       handlePickerConfirm({

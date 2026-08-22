@@ -4,6 +4,8 @@ import { ShieldCheck } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
+
+import i18n from '@/i18n'
 import { z } from 'zod'
 
 import { ErrorAlert } from '@/components/data/ErrorAlert'
@@ -35,7 +37,7 @@ const codeSchema = z.object({
   code: z
     .string()
     .trim()
-    .regex(/^\d{6}$/, 'Bitte einen 6-stelligen Code eingeben.'),
+    .regex(/^\d{6}$/, { error: () => i18n.t('auth:login.mfa.codeInvalid') }),
 })
 
 type CodeValues = z.infer<typeof codeSchema>

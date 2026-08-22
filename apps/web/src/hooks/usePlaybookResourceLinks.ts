@@ -3,9 +3,10 @@ import { useCallback, useEffect, useState } from 'react'
 import type { ResourceLink, ResourceLinkItemInput } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { notify } from '@/lib/feedback'
+import i18n from '@/i18n'
 
 function describeError(cause: unknown): string {
-  return cause instanceof Error ? cause.message : 'Unbekannter Fehler.'
+  return cause instanceof Error ? cause.message : i18n.t('common:errors.unknown')
 }
 
 export interface UsePlaybookResourceLinksResult {
@@ -53,7 +54,7 @@ export function usePlaybookResourceLinks(
       try {
         const updated = await api.setPlaybookResourceLinks(playbookId, items)
         setLinks(updated)
-        notify.success('Block-Verknuepfungen gespeichert.')
+        notify.success(i18n.t('common:toast.blockLinksSaved'))
       } catch (cause: unknown) {
         notify.error(describeError(cause))
       } finally {

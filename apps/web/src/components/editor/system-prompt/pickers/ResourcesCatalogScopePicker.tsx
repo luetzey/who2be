@@ -12,6 +12,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 
 import type { PlaceholderProps } from '../PlaceholderBlock'
 import { PickerPopover } from './PickerPopover'
+import { useTranslation } from 'react-i18next'
 
 type CatalogMode = 'all' | 'tag'
 
@@ -25,6 +26,9 @@ interface ResourcesCatalogScopePickerProps {
   initial?: PlaceholderProps
 }
 
+// Ergebnis geht als BlockNote-Prop INS DOKUMENT — Inhalt, also an die Sprache
+// des System-Prompts gebunden (ADR-0045) und bewusst stabil. Uebersetzt wird
+// die Picker-Oberflaeche, nicht der gespeicherte Wert.
 function labelFor(mode: CatalogMode, tag: string): string {
   if (mode === 'tag' && tag.trim() !== '') return `Resource-Katalog (Tag: ${tag.trim()})`
   return 'Resource-Katalog (alle)'
@@ -37,6 +41,7 @@ export function ResourcesCatalogScopePicker({
   anchorRef,
   initial,
 }: ResourcesCatalogScopePickerProps) {
+  const { t } = useTranslation('editor')
   const [mode, setMode] = useState<CatalogMode>('all')
   const [tag, setTag] = useState('')
 
@@ -73,14 +78,14 @@ export function ResourcesCatalogScopePicker({
       open={open}
       onCancel={onCancel}
       anchorRef={anchorRef}
-      title={isEdit ? 'Resource-Katalog ändern' : 'Resource-Katalog einfuegen'}
-      ariaLabel="Resource-Katalog einfuegen"
+      title={isEdit ? t('picker.resourcesCatalogScope.titleEdit') : t('picker.resourcesCatalogScope.titleNew')}
+      ariaLabel={t('picker.resourcesCatalogScope.ariaLabel')}
       testId="resources-catalog-scope-picker-dialog"
     >
       <RadioGroup
         value={mode}
         onValueChange={(value) => setMode(value as CatalogMode)}
-        aria-label="Resource-Auswahl für den Katalog"
+        aria-label={t('picker.resourcesCatalogScope.listLabel')}
       >
         <Label
           htmlFor="resources-catalog-mode-all"
@@ -93,7 +98,7 @@ export function ResourcesCatalogScopePicker({
             className="mt-0.5"
           />
           <span className="flex flex-col gap-0.5">
-            <span className="text-sm font-medium">Alle Resources</span>
+            <span className="text-sm font-medium">{t('picker.resourcesCatalogScope.all')}</span>
             <span className="text-xs text-muted-foreground">
               Listet alle aktiven Resources des Workspace.
             </span>
@@ -110,7 +115,7 @@ export function ResourcesCatalogScopePicker({
             className="mt-0.5"
           />
           <span className="flex flex-1 flex-col gap-1">
-            <span className="text-sm font-medium">Nach Tag</span>
+            <span className="text-sm font-medium">{t('picker.resourcesCatalogScope.byTag')}</span>
             <span className="text-xs text-muted-foreground">
               Listet nur Resources mit dem angegebenen Tag.
             </span>
@@ -121,7 +126,7 @@ export function ResourcesCatalogScopePicker({
                 setMode('tag')
               }}
               placeholder="z. B. billing"
-              aria-label="Tag für den Resource-Katalog"
+              aria-label={t('picker.resourcesCatalogScope.tagLabel')}
               data-testid="resources-catalog-tag-input"
               className="mt-1 h-8"
             />
@@ -130,14 +135,14 @@ export function ResourcesCatalogScopePicker({
       </RadioGroup>
       <div className="flex justify-end gap-2">
         <Button variant="outline" onClick={onCancel}>
-          Abbrechen
+          {t('picker.cancel')}
         </Button>
         <Button
           variant="brand"
           onClick={handleConfirm}
           data-testid="resources-catalog-scope-picker-confirm"
         >
-          {isEdit ? 'Aktualisieren' : 'Einfuegen'}
+          {isEdit ? t('picker.update') : t('picker.insert')}
         </Button>
       </div>
     </PickerPopover>

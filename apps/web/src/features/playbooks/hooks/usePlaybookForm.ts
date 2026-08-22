@@ -11,6 +11,7 @@ import {
 } from '@/hooks/useAutoSaveDraft'
 
 import { joinTriggers, splitTriggers } from '@/lib/triggers'
+import i18n from '@/i18n'
 
 const PLAYBOOK_TYPES = [
   'prompt',
@@ -24,9 +25,9 @@ const PLAYBOOK_TYPES = [
 // `bodyBlocks` und `tags` kommen als Passthrough-Felder ins Schema
 // — Zod ruft sie nur durch, validiert aber Name/Typ/Description.
 const editorSchema = z.object({
-  name: z.string().min(1, 'Name erforderlich.'),
+  name: z.string().min(1, { error: () => i18n.t('common:validation.nameRequired') }),
   type: z.enum(PLAYBOOK_TYPES),
-  description: z.string().min(1, 'Beschreibung erforderlich.'),
+  description: z.string().min(1, { error: () => i18n.t('common:validation.descriptionRequired') }),
   triggers: z.array(z.string()),
   // `bodyBlocks` traegt das BlockNote-Dokument mit Inline-Pills (Track B:
   // immer BlockNote). `toInput` serialisiert es via JSON.stringify.

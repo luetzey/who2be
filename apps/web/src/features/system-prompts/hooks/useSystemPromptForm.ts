@@ -6,19 +6,20 @@ import { z } from 'zod'
 import type { SystemPromptTemplate } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { notify } from '@/lib/feedback'
+import i18n from '@/i18n'
 
 const editorSchema = z.object({
-  name: z.string().min(1, 'Name erforderlich.'),
+  name: z.string().min(1, { error: () => i18n.t('common:validation.nameRequired') }),
   description: z.string(),
   // Track B (Nur-BlockNote): `body` ist immer ein stringifiziertes
   // BlockNote-JSON-Dokument.
-  body: z.string().min(1, 'Body erforderlich.'),
+  body: z.string().min(1, { error: () => i18n.t('common:validation.bodyRequired') }),
 })
 
 export type SystemPromptEditorValues = z.infer<typeof editorSchema>
 
 function describeError(cause: unknown): string {
-  return cause instanceof Error ? cause.message : 'Unbekannter Fehler.'
+  return cause instanceof Error ? cause.message : i18n.t('common:errors.unknown')
 }
 
 export interface UseSystemPromptFormResult {
@@ -65,7 +66,7 @@ export function useSystemPromptForm(
           body: values.body,
         },
       })
-      notify.success('Gespeichert — neue Version erstellt.')
+      notify.success(i18n.t('systemPrompts:toast.savedNewVersion'))
       onSaved()
     } catch (cause) {
       setSaveError(describeError(cause))

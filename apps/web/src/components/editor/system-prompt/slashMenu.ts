@@ -29,6 +29,7 @@ import type { DefaultReactSuggestionItem } from '@blocknote/react'
 import { getDefaultReactSlashMenuItems } from '@blocknote/react'
 
 import type { PlaceholderKind, PlaceholderProps } from './PlaceholderBlock'
+import i18n from '@/i18n'
 
 // Erlaubte Default-Item-Keys (Paragraph, Heading, Bulleted-List).
 const ALLOWED_KEYS = new Set(['paragraph', 'heading_1', 'heading_2', 'heading_3', 'bullet_list'])
@@ -45,6 +46,18 @@ export type PickerOpenFn = (kind: PlaceholderKind) => void
  * fuer direkte Zuweisung an den generischen BlockNoteEditor-Typ ist.
  * `getDefaultReactSlashMenuItems` akzeptiert intern `any`.
  */
+// Slash-Menu-Aliase sind SUCHEINGABEN — was der Nutzer tippt, um ein Item zu
+// finden. Sie muessen darum der UI-Sprache folgen (ein englischer Nutzer tippt
+// „memory", kein „gedaechtnis"). Im Locale-JSON stehen sie als
+// Komma-Liste, damit Uebersetzer keine JSON-Arrays pflegen muessen.
+function aliasesFor(key: string): string[] {
+  return i18n
+    .t(`editor:slash.aliases.${key}`)
+    .split(',')
+    .map((alias) => alias.trim())
+    .filter((alias) => alias !== '')
+}
+
 export function buildSlashMenuItems(
   editor: unknown,
   openPicker: PickerOpenFn,
@@ -79,113 +92,113 @@ export function buildSlashMenuItems(
   })[] = [
     {
       kind: 'playbook',
-      title: 'Playbook',
-      subtext: 'Playbook fest einbetten (immer geladen)',
-      group: 'Placeholder',
+      title: i18n.t('editor:slash.playbook.title'),
+      subtext: i18n.t('editor:slash.playbook.subtext'),
+      group: i18n.t('editor:slash.group'),
       icon: createElement(BookOpen, { size: 18 }),
       onItemClick: () => {
         openPicker('playbook')
       },
-      aliases: ['playbook', 'pb', 'standard'],
+      aliases: aliasesFor('playbook'),
     },
     {
       kind: 'resource',
-      title: 'Resource',
-      subtext: 'Verlinkt eine spezifische Resource',
-      group: 'Placeholder',
+      title: i18n.t('editor:slash.resource.title'),
+      subtext: i18n.t('editor:slash.resource.subtext'),
+      group: i18n.t('editor:slash.group'),
       icon: createElement(FileText, { size: 18 }),
       onItemClick: () => {
         openPicker('resource')
       },
-      aliases: ['resource', 'res', 'datei'],
+      aliases: aliasesFor('resource'),
     },
     {
       kind: 'persona-field',
-      title: 'Persona-Feld',
-      subtext: 'Persona: Name, Beschreibung, Profil, Modi',
-      group: 'Placeholder',
+      title: i18n.t('editor:slash.personaField.title'),
+      subtext: i18n.t('editor:slash.personaField.subtext'),
+      group: i18n.t('editor:slash.group'),
       icon: createElement(User, { size: 18 }),
       onItemClick: () => {
         openPicker('persona-field')
       },
-      aliases: ['persona', 'name', 'beschreibung', 'profil', 'profile', 'modi', 'modes'],
+      aliases: aliasesFor('personaField'),
     },
     {
       kind: 'persona-ref',
-      title: 'Persona laden (MCP)',
-      subtext: 'Persona zur Laufzeit per get_persona laden',
-      group: 'Placeholder',
+      title: i18n.t('editor:slash.personaRef.title'),
+      subtext: i18n.t('editor:slash.personaRef.subtext'),
+      group: i18n.t('editor:slash.group'),
       icon: createElement(UserCog, { size: 18 }),
       onItemClick: () => {
         openPicker('persona-ref')
       },
-      aliases: ['persona laden', 'get_persona', 'mcp persona', 'persona-ref', 'referenz'],
+      aliases: aliasesFor('personaRef'),
     },
     {
       kind: 'playbooks-catalog',
-      title: 'Playbook-Katalog',
-      subtext: 'Tabelle der zugeordneten Playbooks',
-      group: 'Placeholder',
+      title: i18n.t('editor:slash.playbooksCatalog.title'),
+      subtext: i18n.t('editor:slash.playbooksCatalog.subtext'),
+      group: i18n.t('editor:slash.group'),
       icon: createElement(Table, { size: 18 }),
       onItemClick: () => {
         openPicker('playbooks-catalog')
       },
-      aliases: ['katalog', 'playbooks', 'tabelle', 'uebersicht', 'catalog'],
+      aliases: aliasesFor('playbooksCatalog'),
     },
     {
       kind: 'resources-catalog',
-      title: 'Resource-Katalog',
-      subtext: 'Tabelle der Workspace-Resources (optional nach Tag)',
-      group: 'Placeholder',
+      title: i18n.t('editor:slash.resourcesCatalog.title'),
+      subtext: i18n.t('editor:slash.resourcesCatalog.subtext'),
+      group: i18n.t('editor:slash.group'),
       icon: createElement(Library, { size: 18 }),
       onItemClick: () => {
         openPicker('resources-catalog')
       },
-      aliases: ['resource-katalog', 'resources', 'wissen', 'tabelle', 'catalog', 'tag'],
+      aliases: aliasesFor('resourcesCatalog'),
     },
     {
       kind: 'date',
-      title: 'Datum',
-      subtext: 'Aktuelles Datum beim Rendern',
-      group: 'Placeholder',
+      title: i18n.t('editor:slash.date.title'),
+      subtext: i18n.t('editor:slash.date.subtext'),
+      group: i18n.t('editor:slash.group'),
       icon: createElement(Calendar, { size: 18 }),
       onItemClick: () => {
         openPicker('date')
       },
-      aliases: ['datum', 'date', 'heute'],
+      aliases: aliasesFor('date'),
     },
     {
       kind: 'tools-overview',
-      title: 'MCP-Tools',
-      subtext: 'Übersicht der MCP-Werkzeuge für den Agenten',
-      group: 'Placeholder',
+      title: i18n.t('editor:slash.toolsOverview.title'),
+      subtext: i18n.t('editor:slash.toolsOverview.subtext'),
+      group: i18n.t('editor:slash.group'),
       icon: createElement(Wrench, { size: 18 }),
       onItemClick: () => {
         openPicker('tools-overview')
       },
-      aliases: ['mcp', 'tools', 'werkzeuge', 'tools-overview'],
+      aliases: aliasesFor('toolsOverview'),
     },
     {
       kind: 'memory',
-      title: 'Gedächtnis',
-      subtext: 'Gedächtnis-Hinweis passend zum Memory-Modus des Agenten',
-      group: 'Placeholder',
+      title: i18n.t('editor:slash.memory.title'),
+      subtext: i18n.t('editor:slash.memory.subtext'),
+      group: i18n.t('editor:slash.group'),
       icon: createElement(Brain, { size: 18 }),
       onItemClick: () => {
         openPicker('memory')
       },
-      aliases: ['gedächtnis', 'gedaechtnis', 'memory', 'langzeitgedächtnis'],
+      aliases: aliasesFor('memory'),
     },
     {
       kind: 'tool-ref',
-      title: 'Externes Tool',
-      subtext: 'Bindung an ein externes MCP-Tool per Fähigkeits-Alias',
-      group: 'Placeholder',
+      title: i18n.t('editor:slash.toolRef.title'),
+      subtext: i18n.t('editor:slash.toolRef.subtext'),
+      group: i18n.t('editor:slash.group'),
       icon: createElement(Plug, { size: 18 }),
       onItemClick: () => {
         openPicker('tool-ref')
       },
-      aliases: ['tool', 'external', 'externes tool', 'mcp-server', 'alias', 'tool-ref'],
+      aliases: aliasesFor('toolRef'),
     },
   ]
 

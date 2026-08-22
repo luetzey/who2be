@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { ApiError } from '@/api/client'
 import type { PlaybookUsage } from '@/api/types'
 import { useApi } from '@/api/useApi'
+import i18n from '@/i18n'
 
 interface UsePlaybookUsagesResult {
   usages: PlaybookUsage[]
@@ -42,7 +43,7 @@ export function usePlaybookUsages(playbookId: string | undefined): UsePlaybookUs
           setUsages([])
           return
         }
-        setError(cause instanceof Error ? cause.message : 'Unbekannter Fehler.')
+        setError(cause instanceof Error ? cause.message : i18n.t('common:errors.unknown'))
       })
       .finally(() => {
         if (!cancelled) {

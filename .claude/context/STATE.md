@@ -2,6 +2,32 @@
 
 _Stand: 2026-08-21 (6. Lauf — Standup-Folgearbeiten)_
 
+## i18n-Lücken geschlossen (2026-08-22, Issue #403 / PR #401)
+
+Ausgangspunkt war „die Übersetzung auf dem Frontend funktioniert nicht".
+Bestandsaufnahme: `.claude/plan/2026-08-22-0900_i18n-bestandsaufnahme.md`,
+Umsetzungsplan `.claude/plan/2026-08-22-1000_i18n-luecken-schliessen.md`.
+
+Der Unterbau war intakt (Probe-Render mit `changeLanguage` schaltet korrekt);
+kaputt waren zwei Mechanik-Punkte und eine große untersetzte Fläche.
+
+- **Sprach-Persistenz gehärtet.** `preferred_locale` ist jetzt ein Startwert;
+  `markExplicitLocaleChoice()` / `shouldApplyStoredLocale()` in
+  `src/i18n/index.ts` geben der Wahl im laufenden Tab Vorrang, ein User-Wechsel
+  setzt zurück. Zwei Regressionstests in `useApplyStoredLocale.test.tsx`
+  brechen gegen den alten Code.
+- **Lazy statt eingefroren.** zod-Messages liefen über Modul-Level-`i18n.t()`
+  und froren die Sprache auf den ersten Chunk-Load ein — jetzt Zod-4-Lazy-Form.
+  Ein Test in `MembersPage.test.tsx` hatte den Bug als erwartetes Verhalten
+  festgeschrieben (englische Meldung in deutscher Suite) und wurde korrigiert.
+- **Abdeckung.** Harte deutsche Strings im Produktivcode: **117 → 11**
+  (Rest bewusst: persistierte Pill-Labels, Entity-Namen-Defaults,
+  `console.error`/Boot-Ausgaben). Neuer Namespace `editor` für den
+  System-Prompt-Editor inkl. übersetzter Slash-Menu-Suchaliase.
+  Locale-Keys: 1744 → **1902**, DE/EN weiterhin 0 Diff.
+
+Offen: die 78 deutschen `detail`-Strings der API (Issue #402, braucht ADR).
+
 ## Standup-Folgearbeiten (2026-08-21)
 
 Playbook „Projekt-Standup" gelaufen; Ergebnis war weniger offene Arbeit als

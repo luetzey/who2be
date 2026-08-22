@@ -10,9 +10,10 @@ import type {
   FeedbackUnused,
 } from '@/api/types'
 import { useApi } from '@/api/useApi'
+import i18n from '@/i18n'
 
 function describeError(cause: unknown): string {
-  return cause instanceof Error ? cause.message : 'Unbekannter Fehler.'
+  return cause instanceof Error ? cause.message : i18n.t('common:errors.unknown')
 }
 
 export interface UseFeedbackResult {

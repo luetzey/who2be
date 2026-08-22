@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
+import i18n from '@/i18n'
 
 // ---------------------- Typen ------------------------------------------------
 
@@ -79,42 +80,42 @@ const KIND_META: Record<PlaceholderKind, KindMeta> = {
   playbook: {
     icon: BookOpen,
     pillClass: 'bg-pill-playbook text-pill-playbook-fg border-pill-playbook-fg/25',
-    labelPrefix: 'Playbook',
+    labelPrefix: i18n.t('editor:pill.playbook'),
   },
   resource: {
     icon: FileText,
     pillClass: 'bg-pill-resource text-pill-resource-fg border-pill-resource-fg/25',
-    labelPrefix: 'Resource',
+    labelPrefix: i18n.t('editor:pill.resource'),
   },
   'persona-field': {
     icon: User,
     pillClass: 'bg-pill-persona text-pill-persona-fg border-pill-persona-fg/25',
-    labelPrefix: 'Persona',
+    labelPrefix: i18n.t('editor:pill.persona'),
   },
   'persona-ref': {
     icon: UserCog,
     pillClass: 'bg-pill-persona text-pill-persona-fg border-pill-persona-fg/25',
-    labelPrefix: 'Persona laden',
+    labelPrefix: i18n.t('editor:pill.personaRef'),
   },
   'playbooks-catalog': {
     icon: Table,
     pillClass: 'bg-pill-catalog text-pill-catalog-fg border-pill-catalog-fg/25',
-    labelPrefix: 'Playbook-Katalog',
+    labelPrefix: i18n.t('editor:pill.playbooksCatalog'),
   },
   'resources-catalog': {
     icon: Library,
     pillClass: 'bg-pill-catalog text-pill-catalog-fg border-pill-catalog-fg/25',
-    labelPrefix: 'Resource-Katalog',
+    labelPrefix: i18n.t('editor:pill.resourcesCatalog'),
   },
   date: {
     icon: Calendar,
     pillClass: 'bg-pill-date text-pill-date-fg border-pill-date-fg/25',
-    labelPrefix: 'Datum',
+    labelPrefix: i18n.t('editor:pill.date'),
   },
   'tools-overview': {
     icon: Wrench,
     pillClass: 'bg-pill-tools text-pill-tools-fg border-pill-tools-fg/25',
-    labelPrefix: 'MCP-Tools',
+    labelPrefix: i18n.t('editor:pill.toolsOverview'),
   },
   // Teilt die `pill-tools`-Tinte mit `tools-overview` (gleiche Domaene —
   // externe/MCP-Werkzeuge) statt einen neuen Token einzufuehren (Design-
@@ -123,7 +124,7 @@ const KIND_META: Record<PlaceholderKind, KindMeta> = {
   'tool-ref': {
     icon: Plug,
     pillClass: 'bg-pill-tools text-pill-tools-fg border-pill-tools-fg/25',
-    labelPrefix: 'Tool',
+    labelPrefix: i18n.t('editor:pill.toolRef'),
   },
   // Teilt ebenfalls die `pill-tools`-Tinte (gleiche Domaene — Agenten-
   // Faehigkeiten/Kontext). `Brain` grenzt den Gedaechtnis-Hinweis visuell von
@@ -131,7 +132,7 @@ const KIND_META: Record<PlaceholderKind, KindMeta> = {
   memory: {
     icon: Brain,
     pillClass: 'bg-pill-tools text-pill-tools-fg border-pill-tools-fg/25',
-    labelPrefix: 'Gedächtnis',
+    labelPrefix: i18n.t('editor:pill.memory'),
   },
 }
 

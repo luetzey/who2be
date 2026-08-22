@@ -6,12 +6,13 @@ import { z } from 'zod'
 import type { ResourceBlock } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { notify } from '@/lib/feedback'
+import i18n from '@/i18n'
 
 // Create ist immer erlaubt (kein Status-Gate). `name` ist die einzige
 // clientseitige Pflicht. Schema spiegelt `useToolForm`, damit
 // `ToolEditorForm` mit beiden Hooks funktioniert (Muster `useCreateResource`).
 const createSchema = z.object({
-  name: z.string().min(1, 'Name ist erforderlich.'),
+  name: z.string().min(1, { error: () => i18n.t('common:validation.nameRequiredLong') }),
   displayName: z.string(),
   mcpServerName: z.string(),
   toolNames: z.array(z.string()),
@@ -65,10 +66,10 @@ export function useCreateTool(
         },
         locale,
       })
-      notify.success('Externes Tool angelegt.')
+      notify.success(i18n.t('tools:toast.created'))
       onCreated(created.id)
     } catch (cause: unknown) {
-      setSaveError(cause instanceof Error ? cause.message : 'Anlegen fehlgeschlagen.')
+      setSaveError(cause instanceof Error ? cause.message : i18n.t('common:errors.createFailed'))
     }
   })
 

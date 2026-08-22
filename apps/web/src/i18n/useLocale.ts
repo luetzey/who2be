@@ -3,7 +3,13 @@ import { useTranslation } from 'react-i18next'
 
 import { supabase } from '@/lib/supabase'
 
-import { DEFAULT_LOCALE, isLocale, type Locale, SUPPORTED_LOCALES } from './index'
+import {
+  DEFAULT_LOCALE,
+  isLocale,
+  type Locale,
+  markExplicitLocaleChoice,
+  SUPPORTED_LOCALES,
+} from './index'
 
 interface UseLocaleResult {
   locale: Locale
@@ -24,6 +30,9 @@ export function useLocale(): UseLocaleResult {
 
   const setLocale = useCallback(
     (locale: Locale) => {
+      // Vor dem Umschalten markieren: ab jetzt hat die Wahl des Nutzers Vorrang
+      // vor der serverseitig gespeicherten Praeferenz (siehe useApplyStoredLocale).
+      markExplicitLocaleChoice()
       void i18n.changeLanguage(locale)
       void supabase.auth
         .updateUser({ data: { preferred_locale: locale } })

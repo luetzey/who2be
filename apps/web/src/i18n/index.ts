@@ -61,3 +61,51 @@ void i18n
   })
 
 export default i18n
+
+// --- Vorrang-Regel fuer die gespeicherte Sprachpraeferenz -------------------
+//
+// `user_metadata.preferred_locale` ist ein STARTWERT fuer ein Geraet ohne
+// eigene Wahl, keine laufende Quelle der Wahrheit. Zwei Zustaende entscheiden,
+// ob `useApplyStoredLocale` ihn anwenden darf — beide bewusst im Modul und
+// nicht in einem Hook-Ref: der Hook haengt an `AppLayout` und wird bei
+// Logout/Login neu gemountet, ein Ref waere dann leer und die Regel liefe ins
+// Leere. Ebenso bewusst nicht in localStorage: der Sprachdetektor cached dort
+// schon beim Init, ein Cache-Eintrag belegt also keine bewusste Entscheidung.
+let explicitLocaleChoice = false
+let lastLocaleUser: string | undefined
+
+/** Nur `useLocale().setLocale` ruft das — ab hier gewinnt die Wahl des Nutzers. */
+export function markExplicitLocaleChoice(): void {
+  explicitLocaleChoice = true
+}
+
+/**
+ * Darf die gespeicherte Praeferenz fuer `userId` jetzt angewandt werden?
+ *
+ * - Derselbe User wie beim letzten Mal → nein (einmal pro Person genuegt).
+ * - Ein ANDERER User (Logout → anderer Login) → ja; die Wahl der vorigen
+ *   Person gilt fuer die neue nicht, das Flag wird zurueckgesetzt.
+ * - Erste Person in diesem Tab → nur, wenn noch nichts gewaehlt wurde. Der
+ *   Session-Bootstrap ist asynchron, der Umschalter im Header ist also oft
+ *   schneller bedient als `session.user` eintrifft.
+ *
+ * Nicht idempotent: der Aufruf merkt sich `userId`.
+ */
+export function shouldApplyStoredLocale(userId: string): boolean {
+  if (lastLocaleUser === userId) {
+    return false
+  }
+  const isUserSwitch = lastLocaleUser !== undefined
+  lastLocaleUser = userId
+  if (isUserSwitch) {
+    explicitLocaleChoice = false
+    return true
+  }
+  return !explicitLocaleChoice
+}
+
+/** Nur fuer Tests: beide Zustaende auf den Startwert zuruecksetzen. */
+export function resetLocaleChoiceState(): void {
+  explicitLocaleChoice = false
+  lastLocaleUser = undefined
+}

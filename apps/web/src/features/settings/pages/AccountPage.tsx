@@ -29,7 +29,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
-import { LOCALE_LABELS } from '@/i18n'
+import i18n, { LOCALE_LABELS } from '@/i18n'
 import type { Locale } from '@/i18n'
 import { useLocale } from '@/i18n/useLocale'
 import { supabase } from '@/lib/supabase'
@@ -340,7 +340,11 @@ function DeleteAccountSection({ email }: { email: string }) {
 }
 
 const nameSchema = z.object({
-  display_name: z.string().trim().min(1, 'Bitte einen Namen eingeben.').max(120, 'Maximal 120 Zeichen.'),
+  display_name: z
+    .string()
+    .trim()
+    .min(1, { error: () => i18n.t('settings:account.validation.nameRequired') })
+    .max(120, { error: () => i18n.t('settings:account.validation.nameMaxLength') }),
 })
 
 function ProfileForm({ initialName }: { initialName: string }) {
@@ -397,7 +401,7 @@ function ProfileForm({ initialName }: { initialName: string }) {
 }
 
 const emailSchema = z.object({
-  email: z.string().email('Bitte gueltige E-Mail eingeben.'),
+  email: z.string().email({ error: () => i18n.t('auth:validation.emailInvalid') }),
 })
 
 function ChangeEmailForm({ currentEmail }: { currentEmail: string }) {
@@ -462,11 +466,11 @@ function ChangeEmailForm({ currentEmail }: { currentEmail: string }) {
 
 const passwordSchema = z
   .object({
-    password: z.string().min(8, 'Mindestens 8 Zeichen.'),
-    confirm: z.string().min(1, 'Bitte wiederholen.'),
+    password: z.string().min(8, { error: () => i18n.t('auth:validation.passwordMinLength') }),
+    confirm: z.string().min(1, { error: () => i18n.t('auth:validation.confirmRequired') }),
   })
   .refine((values) => values.password === values.confirm, {
-    message: 'Passwoerter stimmen nicht ueberein.',
+    error: () => i18n.t('auth:validation.passwordMismatch'),
     path: ['confirm'],
   })
 

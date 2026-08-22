@@ -16,6 +16,8 @@ import {
 
 import { usePlaceholderPreview } from './hooks/usePlaceholderPreview'
 import { type PlaceholderClickDetail, type PlaceholderKind } from './PlaceholderBlock'
+import i18n from '@/i18n'
+import { useTranslation } from 'react-i18next'
 
 interface PlaceholderPreviewPopoverProps {
   /** Ref auf den `bn-container`, an dem das `placeholder-click`-Event bubbelt. */
@@ -43,21 +45,15 @@ interface PlaceholderPreviewPopoverProps {
 // `persona-field`-Pills brauchen einen Persona-Kontext, den die Template-Editoren
 // nicht haben — der Resolver liefert dann einen Miss. Statt einer leeren Vorschau
 // erklaeren wir, dass die Aufloesung erst zur Agenten-Laufzeit passiert.
-const PERSONA_FIELD_HINT =
-  'Dieses Persona-Feld wird erst im Agenten-Kontext mit der zugewiesenen ' +
-  'Persona aufgeloest. In der Vorlage gibt es noch keinen Persona-Bezug.'
-
-// `persona-ref` und `playbooks-catalog` brauchen — wie `persona-field` — den
-// Agenten-Kontext (zugewiesene Persona), den die Template-Editoren nicht haben.
-const PERSONA_CONTEXT_HINT =
-  'Dies wird erst im Agenten-Kontext mit der zugewiesenen Persona aufgeloest. ' +
-  'In der Vorlage gibt es noch keinen Persona-Bezug.'
-
+// `persona-ref` und `playbooks-catalog` brauchen denselben Kontext.
+// Die Texte werden beim Aufruf aufgeloest, nicht beim Modul-Import — sonst
+// friert die Sprache auf den Stand des ersten Chunk-Ladens ein.
 function missHint(kind: PlaceholderKind): string {
-  if (kind === 'persona-field') return PERSONA_FIELD_HINT
-  if (kind === 'persona-ref' || kind === 'playbooks-catalog') return PERSONA_CONTEXT_HINT
-  return 'Der Platzhalter konnte nicht aufgeloest werden — Ziel nicht gefunden ' +
-    'oder (noch) nicht aktiv.'
+  if (kind === 'persona-field') return i18n.t('editor:preview.personaFieldUnresolved')
+  if (kind === 'persona-ref' || kind === 'playbooks-catalog') {
+    return i18n.t('editor:preview.personaUnresolved')
+  }
+  return i18n.t('editor:preview.targetMissing')
 }
 
 // `tools-overview`, `memory` und `persona-ref` sind parameterlos — nichts zu
@@ -73,6 +69,7 @@ export function PlaceholderPreviewPopover({
   onEdit,
   personaId,
 }: PlaceholderPreviewPopoverProps) {
+  const { t } = useTranslation('editor')
   const { active, setActive, state } = usePlaceholderPreview(containerRef, anchorRef, personaId)
 
   const open = active !== null
@@ -85,17 +82,17 @@ export function PlaceholderPreviewPopover({
       <PopoverContent
         align="start"
         className="w-96 max-w-[min(24rem,90vw)]"
-        aria-label="Platzhalter-Vorschau"
+        aria-label={t('preview.ariaLabel')}
         data-testid="placeholder-preview-popover"
       >
         <div className="flex flex-col gap-3">
           <div className="text-sm font-semibold tracking-tight">
-            {active?.label !== undefined && active.label !== '' ? active.label : 'Vorschau'}
+            {active?.label !== undefined && active.label !== '' ? active.label : t('preview.fallbackTitle')}
           </div>
           <div className="max-h-[60vh] overflow-y-auto">
             {state.status === 'loading' && <LoadingState rows={2} />}
             {state.status === 'error' && (
-              <ErrorAlert message={state.message} title="Vorschau fehlgeschlagen" />
+              <ErrorAlert message={state.message} title={t('preview.errorTitle')} />
             )}
             {state.status === 'ready' &&
               (state.preview.unresolved ? (
@@ -126,7 +123,7 @@ export function PlaceholderPreviewPopover({
                   onEdit?.(detail)
                 }}
               >
-                Bearbeiten
+                {t('common:actions.edit')}
               </Button>
             </div>
           )}

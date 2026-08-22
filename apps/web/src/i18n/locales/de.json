@@ -73,7 +73,10 @@
       "nameRequired": "Name erforderlich.",
       "slugRequired": "Slug erforderlich.",
       "slugInvalid": "Nur Kleinbuchstaben, Ziffern und Bindestriche.",
-      "emailInvalid": "Bitte gültige E-Mail eingeben."
+      "emailInvalid": "Bitte gültige E-Mail eingeben.",
+      "descriptionRequired": "Beschreibung erforderlich.",
+      "nameRequiredLong": "Name ist erforderlich.",
+      "bodyRequired": "Body erforderlich."
     },
     "managed": {
       "title": "Vom System verwaltet",
@@ -99,6 +102,31 @@
       "markdown": "Als Markdown",
       "success": "Export heruntergeladen.",
       "error": "Export fehlgeschlagen."
+    },
+    "errors": {
+      "unknown": "Unbekannter Fehler.",
+      "createFailed": "Anlegen fehlgeschlagen.",
+      "autoSaveFailed": "Auto-Save fehlgeschlagen.",
+      "apiUnreachable": "Who2Be-API nicht erreichbar.",
+      "apiError": "Who2Be-API-Fehler ({{status}}).",
+      "clipboardUnavailable": "Clipboard nicht verfuegbar.",
+      "cycleRejected": "Verknuepfung wurde abgelehnt: Zyklus wuerde entstehen."
+    },
+    "fieldLabels": {
+      "name": "Name",
+      "description": "Beschreibung",
+      "body": "Inhalt",
+      "persona_id": "Persona",
+      "system_prompt_template_id": "System-Prompt-Template",
+      "type": "Typ",
+      "tags": "Tags",
+      "triggers": "Trigger"
+    },
+    "toast": {
+      "linksSaved": "Verknüpfungen gespeichert.",
+      "blockLinksSaved": "Block-Verknuepfungen gespeichert.",
+      "compositionSaved": "Composition gespeichert.",
+      "subResourcesSaved": "Sub-Resources gespeichert."
     }
   },
   "layout": {
@@ -565,7 +593,9 @@
         "codePlaceholder": "123456",
         "codeInvalid": "Bitte einen 6-stelligen Code eingeben.",
         "submit": "Bestaetigen",
-        "failed": "Code konnte nicht verifiziert werden. Bitte erneut versuchen."
+        "failed": "Code konnte nicht verifiziert werden. Bitte erneut versuchen.",
+        "factorsFailed": "MFA-Faktoren konnten nicht geladen werden.",
+        "challengeFailed": "MFA-Challenge konnte nicht gestartet werden."
       }
     },
     "signup": {
@@ -701,6 +731,37 @@
       "ariaLabel": "Aktivitäten-Seiten",
       "pageOf": "Seite {{page}} von {{totalPages}}",
       "next": "Weiter"
+    },
+    "attention": {
+      "ariaLabel": "Braucht jetzt deine Aufmerksamkeit",
+      "eyebrow": "Braucht jetzt deine Aufmerksamkeit",
+      "reviews": {
+        "description": "Prüfe die offenen Entwürfe in Personae und Playbooks."
+      },
+      "memories": {
+        "title_one": "1 neuer Gedächtniseintrag wartet auf Freigabe",
+        "title_other": "{{count}} neue Gedächtniseinträge warten auf Freigabe",
+        "description": "Gib die Gedächtnis-Vorschläge deiner Agenten frei oder lehne sie ab.",
+        "action": "Agenten öffnen"
+      },
+      "systemPrompts": {
+        "title_one": "1 System-Prompt liegt zur Review",
+        "title_other": "{{count}} System-Prompts liegen zur Review",
+        "description": "Prüfe die eingereichten System-Prompt-Versionen.",
+        "action": "Zur Review"
+      },
+      "allClear": {
+        "title": "Alles erledigt",
+        "description": "Nichts wartet gerade auf dich — leg direkt los."
+      }
+    },
+    "quickStart": {
+      "ariaLabel": "Schnellstart",
+      "eyebrow": "Schnellstart",
+      "newPlaybook": "Neues Playbook",
+      "newPersona": "Neue Persona",
+      "newAgent": "Neuer Agent",
+      "viewFeedback": "Feedback ansehen"
     }
   },
   "legal": {
@@ -1050,7 +1111,8 @@
       "submit": "Anlegen",
       "toast": {
         "created": "Persona angelegt."
-      }
+      },
+      "created": "Persona angelegt."
     },
     "editor": {
       "identity": {
@@ -1625,6 +1687,10 @@
         "confirmButton": "Konto endgültig löschen",
         "successToast": "Konto zur Löschung vorgemerkt. Du wurdest abgemeldet.",
         "errorFallback": "Löschen fehlgeschlagen."
+      },
+      "validation": {
+        "nameRequired": "Bitte einen Namen eingeben.",
+        "nameMaxLength": "Maximal 120 Zeichen."
       }
     },
     "org": {
@@ -1920,6 +1986,10 @@
       "usedByAgents_one": "Verwendet von {{count}} Agent",
       "usedByAgents_other": "Verwendet von {{count}} Agents",
       "usedByNone": "Von keinem Agent verwendet"
+    },
+    "reviewNotice": "Prüfe die Änderungen und aktiviere die Version oder schicke sie zurück in den Entwurf.",
+    "toast": {
+      "savedNewVersion": "Gespeichert — neue Version erstellt."
     }
   },
   "tokens": {
@@ -1960,14 +2030,16 @@
       "roleLabel": "Rolle",
       "roleHint": "Der Token erhält höchstens deine eigene Rolle — höhere Rechte sind nicht wählbar.",
       "expiresLabel": "Ablauf (optional)",
-      "expiresHint": "Leer = kein Ablauf. Nach diesem Tag wird der Token serverseitig abgelehnt (401)."
+      "expiresHint": "Leer = kein Ablauf. Nach diesem Tag wird der Token serverseitig abgelehnt (401).",
+      "created": "Token „{{name}}\" angelegt. Klartext jetzt einmalig kopieren."
     },
     "rename": {
       "action": "Umbenennen",
       "ariaLabel": "Neuer Token-Name"
     },
     "rotate": {
-      "action": "Rotieren"
+      "action": "Rotieren",
+      "rotated": "Token rotiert. Neues Secret jetzt einmalig kopieren."
     },
     "reveal": {
       "title": "Neuer Token — jetzt kopieren",
@@ -2472,5 +2544,177 @@
       "loadError": "Aussage konnte nicht geladen werden."
     },
     "forbidden": "Für diesen Bereich fehlt dir die Berechtigung."
+  },
+  "editor": {
+    "slash": {
+      "group": "Placeholder",
+      "playbook": {
+        "title": "Playbook",
+        "subtext": "Playbook fest einbetten (immer geladen)"
+      },
+      "resource": {
+        "title": "Resource",
+        "subtext": "Verlinkt eine spezifische Resource"
+      },
+      "personaField": {
+        "title": "Persona-Feld",
+        "subtext": "Persona: Name, Beschreibung, Profil, Modi"
+      },
+      "personaRef": {
+        "title": "Persona laden (MCP)",
+        "subtext": "Persona zur Laufzeit per get_persona laden"
+      },
+      "playbooksCatalog": {
+        "title": "Playbook-Katalog",
+        "subtext": "Tabelle der zugeordneten Playbooks"
+      },
+      "resourcesCatalog": {
+        "title": "Resource-Katalog",
+        "subtext": "Tabelle der Workspace-Resources (optional nach Tag)"
+      },
+      "date": {
+        "title": "Datum",
+        "subtext": "Aktuelles Datum beim Rendern"
+      },
+      "toolsOverview": {
+        "title": "MCP-Tools",
+        "subtext": "Übersicht der MCP-Werkzeuge für den Agenten"
+      },
+      "memory": {
+        "title": "Gedächtnis",
+        "subtext": "Gedächtnis-Hinweis passend zum Memory-Modus des Agenten"
+      },
+      "toolRef": {
+        "title": "Externes Tool",
+        "subtext": "Bindung an ein externes MCP-Tool per Fähigkeits-Alias"
+      },
+      "aliases": {
+        "playbook": "playbook, pb, standard",
+        "resource": "resource, res, datei",
+        "personaField": "persona, name, beschreibung, profil, profile, modi, modes",
+        "personaRef": "persona laden, get_persona, mcp persona, persona-ref, referenz",
+        "playbooksCatalog": "katalog, playbooks, tabelle, uebersicht, catalog",
+        "resourcesCatalog": "resource-katalog, resources, wissen, tabelle, catalog, tag",
+        "date": "datum, date, heute",
+        "toolsOverview": "mcp, tools, werkzeuge, tools-overview",
+        "memory": "gedächtnis, gedaechtnis, memory, langzeitgedächtnis",
+        "toolRef": "tool, external, externes tool, mcp-server, alias, tool-ref"
+      }
+    },
+    "pill": {
+      "playbook": "Playbook",
+      "resource": "Resource",
+      "persona": "Persona",
+      "personaRef": "Persona laden",
+      "playbooksCatalog": "Playbook-Katalog",
+      "resourcesCatalog": "Resource-Katalog",
+      "date": "Datum",
+      "toolsOverview": "MCP-Tools",
+      "toolRef": "Tool",
+      "memory": "Gedächtnis"
+    },
+    "preview": {
+      "ariaLabel": "Platzhalter-Vorschau",
+      "fallbackTitle": "Vorschau",
+      "errorTitle": "Vorschau fehlgeschlagen",
+      "loadFailed": "Vorschau konnte nicht geladen werden.",
+      "personaFieldUnresolved": "Dieses Persona-Feld wird erst im Agenten-Kontext mit der zugewiesenen Persona aufgeloest. In der Vorlage gibt es noch keinen Persona-Bezug.",
+      "personaUnresolved": "Dies wird erst im Agenten-Kontext mit der zugewiesenen Persona aufgeloest. In der Vorlage gibt es noch keinen Persona-Bezug.",
+      "targetMissing": "Der Platzhalter konnte nicht aufgeloest werden — Ziel nicht gefunden oder (noch) nicht aktiv."
+    },
+    "picker": {
+      "cancel": "Abbrechen",
+      "insert": "Einfuegen",
+      "update": "Aktualisieren",
+      "searchPlaceholder": "Suchen…",
+      "loading": "Lade…",
+      "playbook": {
+        "titleEdit": "Playbook ändern",
+        "titleNew": "Playbook verlinken",
+        "ariaLabel": "Playbook verlinken",
+        "listLabel": "Playbook-Liste",
+        "empty": "Keine Playbooks gefunden."
+      },
+      "resource": {
+        "titleEdit": "Resource ändern",
+        "titleNew": "Resource verlinken",
+        "ariaLabel": "Resource verlinken",
+        "listLabel": "Resource-Liste",
+        "empty": "Keine Resources gefunden.",
+        "blocksLabel": "Heading-Bloecke",
+        "blocksLoading": "Lade Bloecke…",
+        "noBlocks": "Keine Heading-Bloecke — die ganze Resource wird verlinkt."
+      },
+      "tool": {
+        "titleEdit": "Tool ändern",
+        "titleNew": "Externes Tool verlinken",
+        "ariaLabel": "Externes Tool verlinken",
+        "listLabel": "Tool-Liste",
+        "empty": "Keine aktiven externen Tools gefunden."
+      },
+      "personaField": {
+        "titleEdit": "Persona-Feld ändern",
+        "titleNew": "Persona-Feld einfuegen",
+        "ariaLabel": "Persona-Feld einfuegen",
+        "listLabel": "Persona-Feld auswaehlen",
+        "name": {
+          "label": "Persona: Name",
+          "description": "Der Name der Persona"
+        },
+        "description": {
+          "label": "Persona: Beschreibung",
+          "description": "Die Beschreibung der Persona"
+        },
+        "profile": {
+          "label": "Persona: Profil (vollständig)",
+          "description": "Rendert die vollständige Persönlichkeit — Beschreibung, Profil-Body und Modi. Empfohlen für den System-Prompt-Bootstrap."
+        },
+        "profileBody": {
+          "label": "Persona: Profil-Inhalt",
+          "description": "Rendert nur den Profil-Body (BlockNote-Inhalt) — ohne Beschreibung, Traits oder Modi."
+        },
+        "modes": {
+          "label": "Persona: Modi",
+          "description": "Rendert nur die Modi-Sektion der Persona. Ohne Modi bleibt die Stelle leer."
+        }
+      },
+      "catalogScope": {
+        "titleEdit": "Playbook-Katalog ändern",
+        "titleNew": "Playbook-Katalog einfuegen",
+        "ariaLabel": "Playbook-Katalog einfuegen",
+        "listLabel": "Playbook-Auswahl für den Katalog",
+        "all": {
+          "label": "Alle verknüpften Playbooks",
+          "description": "Listet alle der Persona zugeordneten aktiven Playbooks — auch ohne Trigger."
+        },
+        "triggered": {
+          "label": "Nur getriggerte Playbooks",
+          "description": "Listet nur Playbooks mit einem nicht-leeren Trigger-Feld."
+        }
+      },
+      "resourcesCatalogScope": {
+        "titleEdit": "Resource-Katalog ändern",
+        "titleNew": "Resource-Katalog einfuegen",
+        "ariaLabel": "Resource-Katalog einfuegen",
+        "listLabel": "Resource-Auswahl für den Katalog",
+        "all": "Alle Resources",
+        "byTag": "Nach Tag",
+        "tagLabel": "Tag für den Resource-Katalog"
+      },
+      "date": {
+        "titleEdit": "Datum ändern",
+        "titleNew": "Datum einfuegen",
+        "ariaLabel": "Datum einfuegen",
+        "listLabel": "Datumsformat auswaehlen",
+        "readable": {
+          "label": "Datum (lesbar)",
+          "description": "Wird als \"31. Mai 2026\" ausgegeben"
+        },
+        "iso": {
+          "label": "Datum (ISO-8601)",
+          "description": "Wird als \"2026-05-31\" ausgegeben"
+        }
+      }
+    }
   }
 }

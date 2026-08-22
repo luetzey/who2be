@@ -29,7 +29,7 @@ import { PlaceholderHelp } from '../components/PlaceholderHelp'
 // Track B (Nur-BlockNote): Templates sind immer BlockNote.
 // body-Validierung: kein min(1) — ein leeres BlockNote-Dok ist valid.
 const createSchema = z.object({
-  name: z.string().min(1, i18n.t('common:validation.nameRequired')),
+  name: z.string().min(1, { error: () => i18n.t('common:validation.nameRequired') }),
   description: z.string(),
   body: z.string(),
 })

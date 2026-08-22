@@ -279,7 +279,7 @@ export function ResourceBlockLinkPicker({
                 >
                   {headingBlocks.length === 0 ? (
                     <li className="px-1 text-sm text-muted-foreground">
-                      Diese Resource hat keine Heading-Bloecke.
+                      {t('resourcePicker.noHeadings')}
                     </li>
                   ) : (
                     headingBlocks.map((block) => {
@@ -322,7 +322,7 @@ export function ResourceBlockLinkPicker({
 
         <DialogFooter>
           <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-            Abbrechen
+            {t('common:actions.cancel')}
           </Button>
           <Button type="button" variant="brand" onClick={() => void handleSave()} disabled={saving}>
             Speichern ({selected.length})

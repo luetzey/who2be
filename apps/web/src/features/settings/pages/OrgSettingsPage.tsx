@@ -58,12 +58,12 @@ const BillingPanel = __CLOUD_BUILD__
   : null
 
 const workspaceSchema = z.object({
-  name: z.string().min(1, i18n.t('common:validation.nameRequired')).max(200),
+  name: z.string().min(1, { error: () => i18n.t('common:validation.nameRequired') }).max(200),
   slug: z
     .string()
-    .min(1, i18n.t('common:validation.slugRequired'))
+    .min(1, { error: () => i18n.t('common:validation.slugRequired') })
     .max(64)
-    .regex(/^[a-z0-9-]+$/, i18n.t('common:validation.slugInvalid')),
+    .regex(/^[a-z0-9-]+$/, { error: () => i18n.t('common:validation.slugInvalid') }),
   content_locale: z.string().min(1),
 })
 

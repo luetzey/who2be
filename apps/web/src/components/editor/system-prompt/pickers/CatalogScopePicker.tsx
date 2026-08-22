@@ -10,6 +10,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 
 import type { PlaceholderProps } from '../PlaceholderBlock'
 import { PickerPopover } from './PickerPopover'
+import { useTranslation } from 'react-i18next'
 
 type CatalogScope = 'all' | 'triggered'
 
@@ -27,16 +28,26 @@ function isCatalogScope(value: string | undefined): value is CatalogScope {
   return value === 'all' || value === 'triggered'
 }
 
-const OPTIONS: { target_id: CatalogScope; label: string; description: string }[] = [
+// `label` geht als BlockNote-Prop INS DOKUMENT (Inhalt, Sprache des
+// System-Prompts nach ADR-0045) und bleibt darum stabil; `labelKey`/
+// `descriptionKey` sind die UI-Anzeige und folgen der Oberflaechensprache.
+const OPTIONS: {
+  target_id: CatalogScope
+  label: string
+  labelKey: string
+  descriptionKey: string
+}[] = [
   {
     target_id: 'all',
     label: 'Alle verknüpften Playbooks',
-    description: 'Listet alle der Persona zugeordneten aktiven Playbooks — auch ohne Trigger.',
+    labelKey: 'picker.catalogScope.all.label',
+    descriptionKey: 'picker.catalogScope.all.description',
   },
   {
     target_id: 'triggered',
     label: 'Nur getriggerte Playbooks',
-    description: 'Listet nur Playbooks mit einem nicht-leeren Trigger-Feld.',
+    labelKey: 'picker.catalogScope.triggered.label',
+    descriptionKey: 'picker.catalogScope.triggered.description',
   },
 ]
 
@@ -47,6 +58,7 @@ export function CatalogScopePicker({
   anchorRef,
   initial,
 }: CatalogScopePickerProps) {
+  const { t } = useTranslation('editor')
   const [selected, setSelected] = useState<CatalogScope>('all')
 
   const isEdit = initial !== undefined
@@ -74,14 +86,14 @@ export function CatalogScopePicker({
       open={open}
       onCancel={onCancel}
       anchorRef={anchorRef}
-      title={isEdit ? 'Playbook-Katalog ändern' : 'Playbook-Katalog einfuegen'}
-      ariaLabel="Playbook-Katalog einfuegen"
+      title={isEdit ? t('picker.catalogScope.titleEdit') : t('picker.catalogScope.titleNew')}
+      ariaLabel={t('picker.catalogScope.ariaLabel')}
       testId="catalog-scope-picker-dialog"
     >
       <RadioGroup
         value={selected}
         onValueChange={(value) => setSelected(value as CatalogScope)}
-        aria-label="Playbook-Auswahl für den Katalog"
+        aria-label={t('picker.catalogScope.listLabel')}
       >
         {OPTIONS.map((opt) => {
           const inputId = `catalog-scope-${opt.target_id}`
@@ -98,8 +110,8 @@ export function CatalogScopePicker({
                 className="mt-0.5"
               />
               <span className="flex flex-col gap-0.5">
-                <span className="text-sm font-medium">{opt.label}</span>
-                <span className="text-xs text-muted-foreground">{opt.description}</span>
+                <span className="text-sm font-medium">{t(opt.labelKey)}</span>
+                <span className="text-xs text-muted-foreground">{t(opt.descriptionKey)}</span>
               </span>
             </Label>
           )
@@ -107,10 +119,10 @@ export function CatalogScopePicker({
       </RadioGroup>
       <div className="flex justify-end gap-2">
         <Button variant="outline" onClick={onCancel}>
-          Abbrechen
+          {t('picker.cancel')}
         </Button>
         <Button variant="brand" onClick={handleConfirm} data-testid="catalog-scope-picker-confirm">
-          {isEdit ? 'Aktualisieren' : 'Einfuegen'}
+          {isEdit ? t('picker.update') : t('picker.insert')}
         </Button>
       </div>
     </PickerPopover>

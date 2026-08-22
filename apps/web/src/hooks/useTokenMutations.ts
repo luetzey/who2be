@@ -3,9 +3,10 @@ import { useState } from 'react'
 import type { TokenCreated, TokenInput } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { notify } from '@/lib/feedback'
+import i18n from '@/i18n'
 
 function describeError(cause: unknown): string {
-  return cause instanceof Error ? cause.message : 'Unbekannter Fehler.'
+  return cause instanceof Error ? cause.message : i18n.t('common:errors.unknown')
 }
 
 export interface UseTokenMutationsResult {
@@ -36,7 +37,7 @@ export function useTokenMutations(reload: () => void): UseTokenMutationsResult {
       const result = await api.createToken(input)
       setRevealed(result)
       reload()
-      notify.success(`Token „${input.name}" angelegt. Klartext jetzt einmalig kopieren.`)
+      notify.success(i18n.t('tokens:create.created', { name: input.name }))
       return result
     } catch (cause) {
       setCreateError(describeError(cause))
@@ -60,7 +61,7 @@ export function useTokenMutations(reload: () => void): UseTokenMutationsResult {
       const result = await api.rotateToken(id)
       setRevealed(result)
       reload()
-      notify.success('Token rotiert. Neues Secret jetzt einmalig kopieren.')
+      notify.success(i18n.t('tokens:rotate.rotated'))
       return result
     } catch (cause) {
       notify.error(describeError(cause))

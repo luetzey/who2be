@@ -14,6 +14,8 @@
  *  3. Sonst (z.B. Headless ohne Document): hard fail mit eindeutiger Message,
  *     damit Caller einen Error-Toast statt eines kryptischen Stacktraces zeigen.
  */
+import i18n from '@/i18n'
+
 export async function copyToClipboard(text: string): Promise<void> {
   if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
     try {
@@ -24,7 +26,7 @@ export async function copyToClipboard(text: string): Promise<void> {
     }
   }
   if (typeof document === 'undefined') {
-    throw new Error('Clipboard nicht verfuegbar.')
+    throw new Error(i18n.t('common:errors.clipboardUnavailable'))
   }
   const textarea = document.createElement('textarea')
   textarea.value = text
@@ -50,6 +52,6 @@ export async function copyToClipboard(text: string): Promise<void> {
     document.body.removeChild(textarea)
   }
   if (!ok) {
-    throw new Error('Clipboard nicht verfuegbar.')
+    throw new Error(i18n.t('common:errors.clipboardUnavailable'))
   }
 }

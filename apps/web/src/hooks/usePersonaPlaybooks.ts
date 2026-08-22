@@ -3,9 +3,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Playbook } from '../api/types'
 import { useApi } from '../api/useApi'
 import { notify } from '../lib/feedback'
+import i18n from '@/i18n'
 
 function describeError(cause: unknown): string {
-  return cause instanceof Error ? cause.message : 'Unbekannter Fehler.'
+  return cause instanceof Error ? cause.message : i18n.t('common:errors.unknown')
 }
 
 interface PersonaPlaybooksState {
@@ -70,7 +71,7 @@ export function usePersonaPlaybooks(personaId: string | undefined): PersonaPlayb
     try {
       await api.setPersonaPlaybooks(personaId, linkedIds)
       setSavedIds(linkedIds)
-      notify.success('Verknüpfungen gespeichert.')
+      notify.success(i18n.t('common:toast.linksSaved'))
       return true
     } catch (cause) {
       setError(describeError(cause))

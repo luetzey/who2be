@@ -45,7 +45,7 @@ import { MemoryGuardSection } from '../components/MemoryGuardSection'
 import { useCurrentOrg } from '../hooks/useCurrentOrg'
 
 const renameSchema = z.object({
-  name: z.string().min(1, i18n.t('common:validation.nameRequired')).max(200),
+  name: z.string().min(1, { error: () => i18n.t('common:validation.nameRequired') }).max(200),
 })
 
 type RenameValues = z.infer<typeof renameSchema>

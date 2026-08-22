@@ -9,6 +9,7 @@ import {
   useAutoSaveDraft,
   type UseAutoSaveDraftResult,
 } from '@/hooks/useAutoSaveDraft'
+import i18n from '@/i18n'
 
 // Phase 3 Runde 3 Track 3: `systemPrompt` ist deprecated — der Agent-Template
 // uebernimmt den System-Prompt. Schema haelt das Feld nicht mehr; beim Auto-
@@ -33,8 +34,8 @@ const skillSchema = z.object({
 })
 
 const editorSchema = z.object({
-  name: z.string().min(1, 'Name erforderlich.'),
-  description: z.string().min(1, 'Beschreibung erforderlich.'),
+  name: z.string().min(1, { error: () => i18n.t('common:validation.nameRequired') }),
+  description: z.string().min(1, { error: () => i18n.t('common:validation.descriptionRequired') }),
   profileBlocks: z.array(z.custom<ResourceBlock>()),
   tags: z.array(z.string()),
   modes: z.array(modeSchema),

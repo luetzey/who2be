@@ -10,12 +10,13 @@ import {
   useAutoSaveDraft,
   type UseAutoSaveDraftResult,
 } from '@/hooks/useAutoSaveDraft'
+import i18n from '@/i18n'
 
 // Welle 4: `bodyBlocks` in das Editor-Schema aufgenommen, damit
 // `ResourceEditorForm` nahtlos sowohl mit dem Auto-Save-Hook (Detail-Page)
 // als auch mit dem Create-Hook (New-Page) funktioniert.
 const schema = z.object({
-  name: z.string().min(1, 'Name ist erforderlich.'),
+  name: z.string().min(1, { error: () => i18n.t('common:validation.nameRequiredLong') }),
   description: z.string(),
   bodyBlocks: z.array(z.custom<ResourceBlock>()),
   // Track E3 — Tags (jsonb, keine Migration noetig).

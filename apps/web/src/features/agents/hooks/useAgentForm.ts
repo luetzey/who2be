@@ -19,7 +19,7 @@ const memoryDirective = z.enum(['required', 'recommended'])
 // Die Tool-Policy liegt flach im Formular (RHF-freundlich) und wird beim Submit
 // wieder zu einem AgentToolPolicy-Objekt zusammengesetzt.
 const editorSchema = z.object({
-  name: z.string().min(1, i18n.t('agents:form.nameRequired')),
+  name: z.string().min(1, { error: () => i18n.t('agents:form.nameRequired') }),
   description: z.string(),
   persona_id: z.string(),
   system_prompt_template_id: z.string(),

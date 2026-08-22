@@ -379,12 +379,10 @@ describe('MembersPage — Invitations', () => {
     // das submit-Event direkt am Formular feuern, damit der Zod-Resolver laeuft.
     fireEvent.submit(emailInput.closest('form') as HTMLFormElement)
 
-    // Die Zod-Message wird beim Modul-Import aufgeloest (i18n.t im Schema-
-    // Literal) — zu dem Zeitpunkt steht der jsdom-Sprachdetektor noch auf
-    // Englisch, erst das Test-Setup schaltet danach auf Deutsch um.
-    expect(
-      await screen.findByText('Please enter a valid email.'),
-    ).toBeInTheDocument()
+    // Die Zod-Message wird zur Validierungszeit aufgeloest (`{ error: () => … }`
+    // im Schema), nicht beim Modul-Import — sie folgt also der aktiven Sprache.
+    // Tests laufen auf Deutsch (`src/test/setup.ts`).
+    expect(await screen.findByText('Bitte gültige E-Mail eingeben.')).toBeInTheDocument()
     const postCalls = fetchMock.mock.calls.filter(
       (call) => (call[1] as RequestInit | undefined)?.method === 'POST',
     )
