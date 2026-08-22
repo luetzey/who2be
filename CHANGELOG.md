@@ -8,7 +8,30 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ## [Unreleased]
 
-_Nothing yet._
+### Fixed
+
+- The language switcher no longer loses the user's choice. The stored
+  cross-device preference (`user_metadata.preferred_locale`) is now a starting
+  value, not a running source of truth: an explicit choice in the current tab
+  wins, while a different user signing in on the same device still gets their
+  own preference. Two paths caused the revert — the asynchronous session
+  bootstrap (the header switcher is usable before `session.user` arrives), and
+  `supabase.auth.updateUser` keeping the existing `access_token`, which made the
+  session provider's token-based deduplication drop the `USER_UPDATED` event.
+- Translated strings are no longer frozen at module load. Zod validation
+  messages resolved `i18n.t(...)` in module-level schema literals, so they kept
+  whatever language happened to be active when the route chunk first loaded and
+  ignored later switches. They now use Zod 4's lazy `{ error: () => … }` form.
+
+### Added
+
+- English translations for the previously German-only parts of the web UI: the
+  complete system prompt editor (slash menu including its search aliases, all
+  seven pickers, placeholder preview), dashboard attention banners and quick
+  start, toast and error messages across hooks, `lib/` and the API client, and
+  the remaining validation messages. Placeholder labels that are written into
+  the document stay language-stable — they are content and follow the element's
+  language (ADR-0045), not the interface language.
 
 ## [0.1.0] - 2026-08-20
 

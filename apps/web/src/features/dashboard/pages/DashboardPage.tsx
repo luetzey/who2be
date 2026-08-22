@@ -75,33 +75,29 @@ export function DashboardPage() {
             {data !== null ? (
               <Stack gap="lg">
                 {/* Aufmerksamkeits-Band */}
-                <section className="flex flex-col gap-3" aria-label="Braucht jetzt deine Aufmerksamkeit">
+                <section className="flex flex-col gap-3" aria-label={t('attention.ariaLabel')}>
                   <span className={cn('flex items-center gap-2', EYEBROW)}>
                     <Bell className="size-3.5" aria-hidden="true" />
-                    Braucht jetzt deine Aufmerksamkeit
+                    {t('attention.eyebrow')}
                   </span>
                   {pendingReviews > 0 ? (
                     <AttentionBanner
                       variant="brand"
                       icon={ClipboardCheck}
                       title={`${pendingReviews} ${t('kpis.pendingReviewsDescription')}`}
-                      description="Prüfe die offenen Entwürfe in Personae und Playbooks."
+                      description={t('attention.reviews.description')}
                     />
                   ) : null}
                   {pendingMemories > 0 ? (
                     <AttentionBanner
                       variant="brand"
                       icon={Brain}
-                      title={
-                        pendingMemories === 1
-                          ? '1 neuer Gedächtniseintrag wartet auf Freigabe'
-                          : `${pendingMemories} neue Gedächtniseinträge warten auf Freigabe`
-                      }
-                      description="Gib die Gedächtnis-Vorschläge deiner Agenten frei oder lehne sie ab."
+                      title={t('attention.memories.title', { count: pendingMemories })}
+                      description={t('attention.memories.description')}
                       actions={
                         <Button asChild variant="outline" size="sm">
                           <Link to={wsPath('/agents')}>
-                            Agenten öffnen
+                            {t('attention.memories.action')}
                             <ArrowRight />
                           </Link>
                         </Button>
@@ -112,16 +108,12 @@ export function DashboardPage() {
                     <AttentionBanner
                       variant="brand"
                       icon={ScrollText}
-                      title={
-                        pendingSystemPrompts === 1
-                          ? '1 System-Prompt liegt zur Review'
-                          : `${pendingSystemPrompts} System-Prompts liegen zur Review`
-                      }
-                      description="Prüfe die eingereichten System-Prompt-Versionen."
+                      title={t('attention.systemPrompts.title', { count: pendingSystemPrompts })}
+                      description={t('attention.systemPrompts.description')}
                       actions={
                         <Button asChild variant="outline" size="sm">
                           <Link to={wsPath('/system-prompts?status=review')}>
-                            Zur Review
+                            {t('attention.systemPrompts.action')}
                             <ArrowRight />
                           </Link>
                         </Button>
@@ -132,38 +124,38 @@ export function DashboardPage() {
                     <AttentionBanner
                       variant="brand"
                       icon={CircleCheck}
-                      title="Alles erledigt"
-                      description="Nichts wartet gerade auf dich — leg direkt los."
+                      title={t('attention.allClear.title')}
+                      description={t('attention.allClear.description')}
                     />
                   ) : null}
                 </section>
 
                 {/* Schnellstart */}
                 {role !== 'viewer' ? (
-                  <section className="flex flex-col gap-3" aria-label="Schnellstart">
-                    <span className={EYEBROW}>Schnellstart</span>
+                  <section className="flex flex-col gap-3" aria-label={t('quickStart.ariaLabel')}>
+                    <span className={EYEBROW}>{t('quickStart.eyebrow')}</span>
                     <div className="flex flex-wrap items-center gap-2">
                       <Button asChild variant="brand">
                         <Link to={wsPath('/playbooks/new')}>
                           <Plus />
-                          Neues Playbook
+                          {t('quickStart.newPlaybook')}
                         </Link>
                       </Button>
                       <Button asChild variant="outline">
                         <Link to={wsPath('/personas/new')}>
                           <UserPlus />
-                          Neue Persona
+                          {t('quickStart.newPersona')}
                         </Link>
                       </Button>
                       <Button asChild variant="outline">
                         <Link to={wsPath('/agents')}>
                           <Bot />
-                          Neuer Agent
+                          {t('quickStart.newAgent')}
                         </Link>
                       </Button>
                       <Button asChild variant="ghost" className="ml-auto">
                         <Link to={wsPath('/feedback')}>
-                          Feedback ansehen
+                          {t('quickStart.viewFeedback')}
                           <ArrowRight />
                         </Link>
                       </Button>

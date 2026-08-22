@@ -46,7 +46,7 @@ import { useInvitations } from '../hooks/useInvitations'
 import { useMembers } from '../hooks/useMembers'
 
 const inviteSchema = z.object({
-  email: z.string().email(i18n.t('common:validation.emailInvalid')),
+  email: z.string().email({ error: () => i18n.t('common:validation.emailInvalid') }),
   role: z.enum(['admin', 'editor', 'viewer']),
 })
 

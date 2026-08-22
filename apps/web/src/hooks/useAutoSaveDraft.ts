@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import i18n from '@/i18n'
 
 // Auto-Save-Hook (Phase 3-Runde-3 Track 2). Wartet `debounceMs` nach dem
 // letzten Wertewechsel, ruft dann `patchFn(values)`. Flusht bei `unmount`,
@@ -38,7 +39,7 @@ export interface UseAutoSaveDraftResult extends AutoSaveState {
 const DEFAULT_DEBOUNCE_MS = 1500
 
 function describeError(cause: unknown): string {
-  return cause instanceof Error ? cause.message : 'Auto-Save fehlgeschlagen.'
+  return cause instanceof Error ? cause.message : i18n.t('common:errors.autoSaveFailed')
 }
 
 export function useAutoSaveDraft<T>({

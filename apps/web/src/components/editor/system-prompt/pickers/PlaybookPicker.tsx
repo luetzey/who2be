@@ -8,6 +8,7 @@ import { type AnchorRef } from '@/components/ui/popover'
 import { usePlaybookSearch } from '../hooks/usePlaybookSearch'
 import type { PlaceholderProps } from '../PlaceholderBlock'
 import { PickerPopover } from './PickerPopover'
+import { useTranslation } from 'react-i18next'
 
 interface PlaybookPickerProps {
   open: boolean
@@ -29,6 +30,7 @@ export function PlaybookPicker({
   anchorRef,
   initial,
 }: PlaybookPickerProps) {
+  const { t } = useTranslation('editor')
   const isEdit = initial !== undefined
   const { query, setQuery, selected, setSelected, loading, filtered } = usePlaybookSearch(
     open,
@@ -49,23 +51,23 @@ export function PlaybookPicker({
       open={open}
       onCancel={onCancel}
       anchorRef={anchorRef}
-      title={isEdit ? 'Playbook ändern' : 'Playbook verlinken'}
-      ariaLabel="Playbook verlinken"
+      title={isEdit ? t('picker.playbook.titleEdit') : t('picker.playbook.titleNew')}
+      ariaLabel={t('picker.playbook.ariaLabel')}
       testId="playbook-picker-dialog"
     >
       <Input
-        placeholder="Suchen…"
+        placeholder={t('picker.searchPlaceholder')}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         data-testid="playbook-picker-search"
       />
       <div className="max-h-64 overflow-y-auto rounded-md border">
         {loading ? (
-          <p className="p-3 text-sm text-muted-foreground">Lade…</p>
+          <p className="p-3 text-sm text-muted-foreground">{t('picker.loading')}</p>
         ) : filtered.length === 0 ? (
-          <p className="p-3 text-sm text-muted-foreground">Keine Playbooks gefunden.</p>
+          <p className="p-3 text-sm text-muted-foreground">{t('picker.playbook.empty')}</p>
         ) : (
-          <ul role="listbox" aria-label="Playbook-Liste">
+          <ul role="listbox" aria-label={t('picker.playbook.listLabel')}>
             {filtered.map((p) => (
               <li key={p.id} role="option" aria-selected={selected?.id === p.id}>
                 <Button
@@ -83,7 +85,7 @@ export function PlaybookPicker({
       </div>
       <div className="flex justify-end gap-2">
         <Button variant="outline" onClick={onCancel}>
-          Abbrechen
+          {t('picker.cancel')}
         </Button>
         <Button
           variant="brand"
@@ -91,7 +93,7 @@ export function PlaybookPicker({
           onClick={handleConfirm}
           data-testid="playbook-picker-confirm"
         >
-          {isEdit ? 'Aktualisieren' : 'Einfuegen'}
+          {isEdit ? t('picker.update') : t('picker.insert')}
         </Button>
       </div>
     </PickerPopover>

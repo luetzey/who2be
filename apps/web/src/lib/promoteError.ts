@@ -12,21 +12,22 @@
  */
 
 import { ApiError } from '@/api/client'
+import i18n from '@/i18n'
 
 /** Feldnamen-Uebersetzung DE (intern → lesbarer Label). */
-const FIELD_LABELS: Record<string, string> = {
-  name: 'Name',
-  description: 'Beschreibung',
-  body: 'Inhalt',
-  persona_id: 'Persona',
-  system_prompt_template_id: 'System-Prompt-Template',
-  type: 'Typ',
-  tags: 'Tags',
-  triggers: 'Trigger',
-}
+const KNOWN_FIELDS = new Set([
+  'name',
+  'description',
+  'body',
+  'persona_id',
+  'system_prompt_template_id',
+  'type',
+  'tags',
+  'triggers',
+])
 
 export function translateField(field: string): string {
-  return FIELD_LABELS[field] ?? field
+  return KNOWN_FIELDS.has(field) ? i18n.t(`common:fieldLabels.${field}`) : field
 }
 
 /**

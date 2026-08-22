@@ -9,15 +9,16 @@ import { notify } from '@/lib/feedback'
 
 import { joinTriggers } from '@/lib/triggers'
 import { PLAYBOOK_TYPES, type PlaybookEditorValues } from './usePlaybookForm'
+import i18n from '@/i18n'
 
 // Schema deckt sich bewusst mit `usePlaybookForm` — so kann
 // `PlaybookEditorForm` ohne Sonderbehandlung in der Neu-Page genutzt werden.
 // `bodyBlocks`/`tags`/`triggers` sind Passthrough; Track B (Nur-BlockNote):
 // der Body wird als stringifiziertes BlockNote-Dokument persistiert.
 const createSchema = z.object({
-  name: z.string().min(1, 'Name erforderlich.'),
+  name: z.string().min(1, { error: () => i18n.t('common:validation.nameRequired') }),
   type: z.enum(PLAYBOOK_TYPES),
-  description: z.string().min(1, 'Beschreibung erforderlich.'),
+  description: z.string().min(1, { error: () => i18n.t('common:validation.descriptionRequired') }),
   bodyBlocks: z.array(z.custom<ResourceBlock>()),
   tags: z.array(z.string()),
   triggers: z.array(z.string()),
@@ -26,7 +27,7 @@ const createSchema = z.object({
 export type PlaybookCreateValues = PlaybookEditorValues
 
 function describeError(cause: unknown): string {
-  return cause instanceof Error ? cause.message : 'Unbekannter Fehler.'
+  return cause instanceof Error ? cause.message : i18n.t('common:errors.unknown')
 }
 
 export interface UseCreatePlaybookResult {
@@ -70,7 +71,7 @@ export function useCreatePlaybook(
         },
         locale,
       })
-      notify.success('Playbook angelegt.')
+      notify.success(i18n.t('playbooks:toast.created'))
       onCreated(created.id)
     } catch (cause) {
       setSaveError(describeError(cause))

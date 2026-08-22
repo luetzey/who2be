@@ -9,6 +9,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 
 import type { PlaceholderProps } from '../PlaceholderBlock'
 import { PickerPopover } from './PickerPopover'
+import { useTranslation } from 'react-i18next'
 
 type DateFormatTarget = '' | 'human'
 
@@ -26,21 +27,24 @@ const OPTIONS: {
   target_id: DateFormatTarget
   inputId: string
   label: string
-  description: string
+  labelKey: string
+  descriptionKey: string
   example: string
 }[] = [
   {
     target_id: 'human',
     inputId: 'date-format-human',
     label: 'Datum (lesbar)',
-    description: 'Wird als "31. Mai 2026" ausgegeben',
+    labelKey: 'picker.date.readable.label',
+    descriptionKey: 'picker.date.readable.description',
     example: '31. Mai 2026',
   },
   {
     target_id: '',
     inputId: 'date-format-iso',
     label: 'Datum (ISO-8601)',
-    description: 'Wird als "2026-05-31" ausgegeben',
+    labelKey: 'picker.date.iso.label',
+    descriptionKey: 'picker.date.iso.description',
     example: '2026-05-31',
   },
 ]
@@ -52,6 +56,7 @@ export function DateFormatPicker({
   anchorRef,
   initial,
 }: DateFormatPickerProps) {
+  const { t } = useTranslation('editor')
   const [selected, setSelected] = useState<DateFormatTarget>('human')
 
   const isEdit = initial !== undefined
@@ -79,8 +84,8 @@ export function DateFormatPicker({
       open={open}
       onCancel={onCancel}
       anchorRef={anchorRef}
-      title={isEdit ? 'Datum ändern' : 'Datum einfuegen'}
-      ariaLabel="Datum einfuegen"
+      title={isEdit ? t('picker.date.titleEdit') : t('picker.date.titleNew')}
+      ariaLabel={t('picker.date.ariaLabel')}
       testId="date-format-picker-dialog"
     >
       {/* Radix behandelt den leeren String als „keine Auswahl"; ISO ('') wird
@@ -89,7 +94,7 @@ export function DateFormatPicker({
       <RadioGroup
         value={selected === '' ? 'iso' : 'human'}
         onValueChange={(value) => setSelected(value === 'iso' ? '' : 'human')}
-        aria-label="Datumsformat auswaehlen"
+        aria-label={t('picker.date.listLabel')}
       >
         {OPTIONS.map((opt) => {
           const radioValue = opt.target_id === '' ? 'iso' : opt.target_id
@@ -106,9 +111,9 @@ export function DateFormatPicker({
                 className="mt-0.5"
               />
               <span className="flex flex-col gap-0.5">
-                <span className="text-sm font-medium">{opt.label}</span>
+                <span className="text-sm font-medium">{t(opt.labelKey)}</span>
                 <span className="text-xs text-muted-foreground">
-                  {opt.description} — Beispiel:{' '}
+                  {t(opt.descriptionKey)} — Beispiel:{' '}
                   <code className="font-mono">{opt.example}</code>
                 </span>
               </span>
@@ -118,10 +123,10 @@ export function DateFormatPicker({
       </RadioGroup>
       <div className="flex justify-end gap-2">
         <Button variant="outline" onClick={onCancel}>
-          Abbrechen
+          {t('picker.cancel')}
         </Button>
         <Button variant="brand" onClick={handleConfirm} data-testid="date-format-picker-confirm">
-          {isEdit ? 'Aktualisieren' : 'Einfuegen'}
+          {isEdit ? t('picker.update') : t('picker.insert')}
         </Button>
       </div>
     </PickerPopover>

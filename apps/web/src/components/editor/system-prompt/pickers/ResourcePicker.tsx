@@ -15,6 +15,7 @@ import { type AnchorRef } from '@/components/ui/popover'
 import { useResourceSearch } from '../hooks/useResourceSearch'
 import type { PlaceholderProps } from '../PlaceholderBlock'
 import { PickerPopover } from './PickerPopover'
+import { useTranslation } from 'react-i18next'
 
 interface ResourcePickerProps {
   open: boolean
@@ -44,6 +45,7 @@ export function ResourcePicker({
   allowBlockAnchor = false,
   initial,
 }: ResourcePickerProps) {
+  const { t } = useTranslation('editor')
   const isEdit = initial !== undefined
   const {
     query,
@@ -83,23 +85,23 @@ export function ResourcePicker({
       open={open}
       onCancel={onCancel}
       anchorRef={anchorRef}
-      title={isEdit ? 'Resource ändern' : 'Resource verlinken'}
-      ariaLabel="Resource verlinken"
+      title={isEdit ? t('picker.resource.titleEdit') : t('picker.resource.titleNew')}
+      ariaLabel={t('picker.resource.ariaLabel')}
       testId="resource-picker-dialog"
     >
       <Input
-        placeholder="Suchen…"
+        placeholder={t('picker.searchPlaceholder')}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         data-testid="resource-picker-search"
       />
       <div className="max-h-64 overflow-y-auto rounded-md border">
         {loading ? (
-          <p className="p-3 text-sm text-muted-foreground">Lade…</p>
+          <p className="p-3 text-sm text-muted-foreground">{t('picker.loading')}</p>
         ) : filtered.length === 0 ? (
-          <p className="p-3 text-sm text-muted-foreground">Keine Resources gefunden.</p>
+          <p className="p-3 text-sm text-muted-foreground">{t('picker.resource.empty')}</p>
         ) : (
-          <ul role="listbox" aria-label="Resource-Liste">
+          <ul role="listbox" aria-label={t('picker.resource.listLabel')}>
             {filtered.map((r) => (
               <li key={r.id} role="option" aria-selected={selected?.id === r.id}>
                 <Button
@@ -124,13 +126,13 @@ export function ResourcePicker({
           </p>
           <div className="max-h-48 overflow-y-auto rounded-md border">
             {blocksLoading ? (
-              <p className="p-3 text-sm text-muted-foreground">Lade Bloecke…</p>
+              <p className="p-3 text-sm text-muted-foreground">{t('picker.resource.blocksLoading')}</p>
             ) : headingBlocks.length === 0 ? (
               <p className="p-3 text-sm text-muted-foreground">
-                Keine Heading-Bloecke — die ganze Resource wird verlinkt.
+                {t('picker.resource.noBlocks')}
               </p>
             ) : (
-              <ul role="listbox" aria-label="Heading-Bloecke">
+              <ul role="listbox" aria-label={t('picker.resource.blocksLabel')}>
                 <li role="option" aria-selected={selectedBlockId === null}>
                   <Button
                     variant={selectedBlockId === null ? 'secondary' : 'ghost'}
@@ -164,7 +166,7 @@ export function ResourcePicker({
       ) : null}
       <div className="flex justify-end gap-2">
         <Button variant="outline" onClick={onCancel}>
-          Abbrechen
+          {t('picker.cancel')}
         </Button>
         <Button
           variant="brand"
@@ -172,7 +174,7 @@ export function ResourcePicker({
           onClick={handleConfirm}
           data-testid="resource-picker-confirm"
         >
-          {isEdit ? 'Aktualisieren' : 'Einfuegen'}
+          {isEdit ? t('picker.update') : t('picker.insert')}
         </Button>
       </div>
     </PickerPopover>

@@ -88,7 +88,7 @@ export function SystemPromptDetailPage() {
                 variant="brand"
                 icon={Clock}
                 title={`Version ${template.current_version} liegt zur Review`}
-                description="Prüfe die Änderungen und aktiviere die Version oder schicke sie zurück in den Entwurf."
+                description={t('reviewNotice')}
                 actions={
                   <SystemPromptStatusActionBar
                     templateId={template.id}
@@ -111,7 +111,7 @@ export function SystemPromptDetailPage() {
               <TabsList aria-label="Detail-Ansicht">
                 <TabsTrigger value="edit">
                   <SquarePen aria-hidden="true" />
-                  Bearbeiten
+                  {t('common:actions.edit')}
                 </TabsTrigger>
                 <TabsTrigger value="versions">
                   <GitBranch aria-hidden="true" />

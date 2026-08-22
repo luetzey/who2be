@@ -4,9 +4,10 @@ import { ApiError } from '@/api/client'
 import type { ResourceRef, SubResource, SubResourceLinkInput } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { notify } from '@/lib/feedback'
+import i18n from '@/i18n'
 
 function describeError(cause: unknown): string {
-  return cause instanceof Error ? cause.message : 'Unbekannter Fehler.'
+  return cause instanceof Error ? cause.message : i18n.t('common:errors.unknown')
 }
 
 export interface UseResourceSubResourcesResult {
@@ -73,10 +74,10 @@ export function useResourceSubResources(
       try {
         const updated = await api.setResourceSubResources(resourceId, links)
         setChildren(updated)
-        notify.success('Sub-Resources gespeichert.')
+        notify.success(i18n.t('common:toast.subResourcesSaved'))
       } catch (cause: unknown) {
         if (cause instanceof ApiError && cause.status === 409) {
-          notify.error('Verknuepfung wurde abgelehnt: Zyklus wuerde entstehen.')
+          notify.error(i18n.t('common:errors.cycleRejected'))
         } else {
           notify.error(describeError(cause))
         }

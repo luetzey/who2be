@@ -4,6 +4,7 @@ import { ApiError } from '@/api/client'
 import type { DashboardData } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { useWorkspaceId } from '@/auth/useWorkspaceId'
+import i18n from '@/i18n'
 
 interface UseDashboardResult {
   data: DashboardData | null
@@ -21,7 +22,7 @@ interface UseDashboardResult {
 }
 
 function describeError(cause: unknown): string {
-  return cause instanceof Error ? cause.message : 'Unbekannter Fehler.'
+  return cause instanceof Error ? cause.message : i18n.t('common:errors.unknown')
 }
 
 /**

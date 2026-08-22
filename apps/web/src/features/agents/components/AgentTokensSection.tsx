@@ -25,7 +25,7 @@ import { cn } from '@/lib/utils'
 import { roleLabel, rolesAtMost } from '@/lib/roles'
 
 const tokenSchema = z.object({
-  name: z.string().min(1, i18n.t('common:validation.nameRequired')),
+  name: z.string().min(1, { error: () => i18n.t('common:validation.nameRequired') }),
 })
 
 type TokenValues = z.infer<typeof tokenSchema>

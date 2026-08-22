@@ -9,13 +9,14 @@ import {
   useAutoSaveDraft,
   type UseAutoSaveDraftResult,
 } from '@/hooks/useAutoSaveDraft'
+import i18n from '@/i18n'
 
 // `usageNotesBlocks` traegt das BlockNote-Dokument fuer `content.usage_notes`
 // (ein stringifiziertes BlockNote-JSON-Dokument, wie `PlaybookContent.body` —
 // siehe `ExternalToolContent` in packages/models). `toInput` serialisiert es
 // via JSON.stringify (Muster `usePlaybookForm.toInput`).
 const schema = z.object({
-  name: z.string().min(1, 'Name ist erforderlich.'),
+  name: z.string().min(1, { error: () => i18n.t('common:validation.nameRequiredLong') }),
   displayName: z.string(),
   mcpServerName: z.string(),
   toolNames: z.array(z.string()),

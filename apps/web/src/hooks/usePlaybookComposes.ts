@@ -4,9 +4,10 @@ import { ApiError } from '@/api/client'
 import type { Playbook, PlaybookRef } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { notify } from '@/lib/feedback'
+import i18n from '@/i18n'
 
 function describeError(cause: unknown): string {
-  return cause instanceof Error ? cause.message : 'Unbekannter Fehler.'
+  return cause instanceof Error ? cause.message : i18n.t('common:errors.unknown')
 }
 
 export interface UsePlaybookComposesResult {
@@ -73,10 +74,10 @@ export function usePlaybookComposes(
       try {
         const updated = await api.setPlaybookComposes(playbookId, childIds)
         setChildren(updated)
-        notify.success('Composition gespeichert.')
+        notify.success(i18n.t('common:toast.compositionSaved'))
       } catch (cause: unknown) {
         if (cause instanceof ApiError && cause.status === 409) {
-          notify.error('Verknuepfung wurde abgelehnt: Zyklus wuerde entstehen.')
+          notify.error(i18n.t('common:errors.cycleRejected'))
         } else {
           notify.error(describeError(cause))
         }

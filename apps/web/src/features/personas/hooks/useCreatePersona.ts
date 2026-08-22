@@ -6,6 +6,7 @@ import { z } from 'zod'
 import type { ResourceBlock } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { notify } from '@/lib/feedback'
+import i18n from '@/i18n'
 
 // Welle 4: Create ist immer erlaubt. `name` ist die einzige clientseitige
 // Pflicht (Spec: "Anlegen geht immer"). Body, Description duerfen leer sein.
@@ -30,7 +31,7 @@ const skillSchema = z.object({
 })
 
 const createSchema = z.object({
-  name: z.string().min(1, 'Name erforderlich.'),
+  name: z.string().min(1, { error: () => i18n.t('common:validation.nameRequired') }),
   description: z.string(),
   profileBlocks: z.array(z.custom<ResourceBlock>()),
   tags: z.array(z.string()),
@@ -41,7 +42,7 @@ const createSchema = z.object({
 export type PersonaCreateValues = z.infer<typeof createSchema>
 
 function describeError(cause: unknown): string {
-  return cause instanceof Error ? cause.message : 'Unbekannter Fehler.'
+  return cause instanceof Error ? cause.message : i18n.t('common:errors.unknown')
 }
 
 export interface UseCreatePersonaResult {
@@ -88,7 +89,7 @@ export function useCreatePersona(
         },
         locale,
       })
-      notify.success('Persona angelegt.')
+      notify.success(i18n.t('personas:new.created'))
       onCreated(created.id)
     } catch (cause) {
       setSaveError(describeError(cause))

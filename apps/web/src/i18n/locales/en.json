@@ -73,7 +73,10 @@
       "nameRequired": "Name is required.",
       "slugRequired": "Slug is required.",
       "slugInvalid": "Only lowercase letters, digits and hyphens.",
-      "emailInvalid": "Please enter a valid email."
+      "emailInvalid": "Please enter a valid email.",
+      "descriptionRequired": "Description is required.",
+      "nameRequiredLong": "Name is required.",
+      "bodyRequired": "Body is required."
     },
     "managed": {
       "title": "Managed by the system",
@@ -99,6 +102,31 @@
       "markdown": "As Markdown",
       "success": "Export downloaded.",
       "error": "Export failed."
+    },
+    "errors": {
+      "unknown": "Unknown error.",
+      "createFailed": "Could not create.",
+      "autoSaveFailed": "Auto-save failed.",
+      "apiUnreachable": "Who2Be API not reachable.",
+      "apiError": "Who2Be API error ({{status}}).",
+      "clipboardUnavailable": "Clipboard not available.",
+      "cycleRejected": "Link rejected: it would create a cycle."
+    },
+    "fieldLabels": {
+      "name": "Name",
+      "description": "Description",
+      "body": "Content",
+      "persona_id": "Persona",
+      "system_prompt_template_id": "System prompt template",
+      "type": "Type",
+      "tags": "Tags",
+      "triggers": "Triggers"
+    },
+    "toast": {
+      "linksSaved": "Links saved.",
+      "blockLinksSaved": "Block links saved.",
+      "compositionSaved": "Composition saved.",
+      "subResourcesSaved": "Sub-resources saved."
     }
   },
   "layout": {
@@ -565,7 +593,9 @@
         "codePlaceholder": "123456",
         "codeInvalid": "Please enter a 6-digit code.",
         "submit": "Verify",
-        "failed": "Could not verify the code. Please try again."
+        "failed": "Could not verify the code. Please try again.",
+        "factorsFailed": "MFA factors could not be loaded.",
+        "challengeFailed": "MFA challenge could not be started."
       }
     },
     "signup": {
@@ -701,6 +731,37 @@
       "ariaLabel": "Activity pages",
       "pageOf": "Page {{page}} of {{totalPages}}",
       "next": "Next"
+    },
+    "attention": {
+      "ariaLabel": "Needs your attention now",
+      "eyebrow": "Needs your attention now",
+      "reviews": {
+        "description": "Review the open drafts in personas and playbooks."
+      },
+      "memories": {
+        "title_one": "1 new memory entry is awaiting approval",
+        "title_other": "{{count}} new memory entries are awaiting approval",
+        "description": "Approve or reject the memory suggestions from your agents.",
+        "action": "Open agents"
+      },
+      "systemPrompts": {
+        "title_one": "1 system prompt is awaiting review",
+        "title_other": "{{count}} system prompts are awaiting review",
+        "description": "Review the submitted system prompt versions.",
+        "action": "Go to review"
+      },
+      "allClear": {
+        "title": "All clear",
+        "description": "Nothing is waiting on you — go ahead and start."
+      }
+    },
+    "quickStart": {
+      "ariaLabel": "Quick start",
+      "eyebrow": "Quick start",
+      "newPlaybook": "New playbook",
+      "newPersona": "New persona",
+      "newAgent": "New agent",
+      "viewFeedback": "View feedback"
     }
   },
   "legal": {
@@ -1050,7 +1111,8 @@
       "submit": "Create",
       "toast": {
         "created": "Persona created."
-      }
+      },
+      "created": "Persona created."
     },
     "editor": {
       "identity": {
@@ -1625,6 +1687,10 @@
         "confirmButton": "Permanently delete account",
         "successToast": "Account scheduled for deletion. You have been signed out.",
         "errorFallback": "Deletion failed."
+      },
+      "validation": {
+        "nameRequired": "Please enter a name.",
+        "nameMaxLength": "120 characters maximum."
       }
     },
     "org": {
@@ -1920,6 +1986,10 @@
       "usedByAgents_one": "Used by {{count}} agent",
       "usedByAgents_other": "Used by {{count}} agents",
       "usedByNone": "Not used by any agent"
+    },
+    "reviewNotice": "Review the changes and activate the version, or send it back to draft.",
+    "toast": {
+      "savedNewVersion": "Saved — new version created."
     }
   },
   "tokens": {
@@ -1960,14 +2030,16 @@
       "roleLabel": "Role",
       "roleHint": "The token inherits at most your own role — higher permissions cannot be selected.",
       "expiresLabel": "Expiry (optional)",
-      "expiresHint": "Empty = no expiry. After this day the token is rejected server-side (401)."
+      "expiresHint": "Empty = no expiry. After this day the token is rejected server-side (401).",
+      "created": "Token “{{name}}” created. Copy the plaintext now — it is shown only once."
     },
     "rename": {
       "action": "Rename",
       "ariaLabel": "New token name"
     },
     "rotate": {
-      "action": "Rotate"
+      "action": "Rotate",
+      "rotated": "Token rotated. Copy the new secret now — it is shown only once."
     },
     "reveal": {
       "title": "New token — copy now",
@@ -2472,5 +2544,177 @@
       "loadError": "Statement could not be loaded."
     },
     "forbidden": "You do not have permission for this area."
+  },
+  "editor": {
+    "slash": {
+      "group": "Placeholder",
+      "playbook": {
+        "title": "Playbook",
+        "subtext": "Embed a playbook permanently (always loaded)"
+      },
+      "resource": {
+        "title": "Resource",
+        "subtext": "Links a specific resource"
+      },
+      "personaField": {
+        "title": "Persona field",
+        "subtext": "Persona: name, description, profile, modes"
+      },
+      "personaRef": {
+        "title": "Load persona (MCP)",
+        "subtext": "Load the persona at runtime via get_persona"
+      },
+      "playbooksCatalog": {
+        "title": "Playbook catalog",
+        "subtext": "Table of the assigned playbooks"
+      },
+      "resourcesCatalog": {
+        "title": "Resource catalog",
+        "subtext": "Table of workspace resources (optionally by tag)"
+      },
+      "date": {
+        "title": "Date",
+        "subtext": "Current date at render time"
+      },
+      "toolsOverview": {
+        "title": "MCP tools",
+        "subtext": "Overview of the MCP tools available to the agent"
+      },
+      "memory": {
+        "title": "Memory",
+        "subtext": "Memory hint matching the agent's memory mode"
+      },
+      "toolRef": {
+        "title": "External tool",
+        "subtext": "Binding to an external MCP tool via capability alias"
+      },
+      "aliases": {
+        "playbook": "playbook, pb, standard",
+        "resource": "resource, res, file",
+        "personaField": "persona, name, description, profile, modes",
+        "personaRef": "load persona, get_persona, mcp persona, persona-ref, reference",
+        "playbooksCatalog": "catalog, playbooks, table, overview",
+        "resourcesCatalog": "resource catalog, resources, knowledge, table, catalog, tag",
+        "date": "date, today",
+        "toolsOverview": "mcp, tools, tools-overview",
+        "memory": "memory, long-term memory, recall",
+        "toolRef": "tool, external, external tool, mcp server, alias, tool-ref"
+      }
+    },
+    "pill": {
+      "playbook": "Playbook",
+      "resource": "Resource",
+      "persona": "Persona",
+      "personaRef": "Load persona",
+      "playbooksCatalog": "Playbook catalog",
+      "resourcesCatalog": "Resource catalog",
+      "date": "Date",
+      "toolsOverview": "MCP tools",
+      "toolRef": "Tool",
+      "memory": "Memory"
+    },
+    "preview": {
+      "ariaLabel": "Placeholder preview",
+      "fallbackTitle": "Preview",
+      "errorTitle": "Preview failed",
+      "loadFailed": "The preview could not be loaded.",
+      "personaFieldUnresolved": "This persona field is resolved only in agent context, with the assigned persona. The template itself has no persona reference yet.",
+      "personaUnresolved": "This is resolved only in agent context, with the assigned persona. The template itself has no persona reference yet.",
+      "targetMissing": "The placeholder could not be resolved — target not found or not (yet) active."
+    },
+    "picker": {
+      "cancel": "Cancel",
+      "insert": "Insert",
+      "update": "Update",
+      "searchPlaceholder": "Search…",
+      "loading": "Loading…",
+      "playbook": {
+        "titleEdit": "Change playbook",
+        "titleNew": "Link playbook",
+        "ariaLabel": "Link playbook",
+        "listLabel": "Playbook list",
+        "empty": "No playbooks found."
+      },
+      "resource": {
+        "titleEdit": "Change resource",
+        "titleNew": "Link resource",
+        "ariaLabel": "Link resource",
+        "listLabel": "Resource list",
+        "empty": "No resources found.",
+        "blocksLabel": "Heading blocks",
+        "blocksLoading": "Loading blocks…",
+        "noBlocks": "No heading blocks — the whole resource will be linked."
+      },
+      "tool": {
+        "titleEdit": "Change tool",
+        "titleNew": "Link external tool",
+        "ariaLabel": "Link external tool",
+        "listLabel": "Tool list",
+        "empty": "No active external tools found."
+      },
+      "personaField": {
+        "titleEdit": "Change persona field",
+        "titleNew": "Insert persona field",
+        "ariaLabel": "Insert persona field",
+        "listLabel": "Select persona field",
+        "name": {
+          "label": "Persona: name",
+          "description": "The name of the persona"
+        },
+        "description": {
+          "label": "Persona: description",
+          "description": "The description of the persona"
+        },
+        "profile": {
+          "label": "Persona: profile (complete)",
+          "description": "Renders the complete personality — description, profile body and modes. Recommended for the system prompt bootstrap."
+        },
+        "profileBody": {
+          "label": "Persona: profile content",
+          "description": "Renders only the profile body (BlockNote content) — without description, traits or modes."
+        },
+        "modes": {
+          "label": "Persona: modes",
+          "description": "Renders only the modes section of the persona. Without modes the spot stays empty."
+        }
+      },
+      "catalogScope": {
+        "titleEdit": "Change playbook catalog",
+        "titleNew": "Insert playbook catalog",
+        "ariaLabel": "Insert playbook catalog",
+        "listLabel": "Playbook selection for the catalog",
+        "all": {
+          "label": "All linked playbooks",
+          "description": "Lists every active playbook assigned to the persona — including those without a trigger."
+        },
+        "triggered": {
+          "label": "Triggered playbooks only",
+          "description": "Lists only playbooks with a non-empty trigger field."
+        }
+      },
+      "resourcesCatalogScope": {
+        "titleEdit": "Change resource catalog",
+        "titleNew": "Insert resource catalog",
+        "ariaLabel": "Insert resource catalog",
+        "listLabel": "Resource selection for the catalog",
+        "all": "All resources",
+        "byTag": "By tag",
+        "tagLabel": "Tag for the resource catalog"
+      },
+      "date": {
+        "titleEdit": "Change date",
+        "titleNew": "Insert date",
+        "ariaLabel": "Insert date",
+        "listLabel": "Select date format",
+        "readable": {
+          "label": "Date (readable)",
+          "description": "Rendered as \"31 May 2026\""
+        },
+        "iso": {
+          "label": "Date (ISO 8601)",
+          "description": "Rendered as \"2026-05-31\""
+        }
+      }
+    }
   }
 }

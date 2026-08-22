@@ -8,6 +8,7 @@ import { useApi } from '@/api/useApi'
 import { type AnchorRef } from '@/components/ui/popover'
 
 import { PLACEHOLDER_CLICK_EVENT, type PlaceholderClickDetail } from '../PlaceholderBlock'
+import i18n from '@/i18n'
 
 export type LoadState =
   | { status: 'loading' }
@@ -40,7 +41,7 @@ export function usePlaceholderPreview(
         })
         .then((preview) => setState({ status: 'ready', preview }))
         .catch(() =>
-          setState({ status: 'error', message: 'Vorschau konnte nicht geladen werden.' }),
+          setState({ status: 'error', message: i18n.t('editor:preview.loadFailed') }),
         )
     },
     [api, personaId],

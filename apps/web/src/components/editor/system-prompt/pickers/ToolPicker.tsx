@@ -12,6 +12,7 @@ import { type AnchorRef } from '@/components/ui/popover'
 import { useToolSearch } from '../hooks/useToolSearch'
 import type { PlaceholderProps } from '../PlaceholderBlock'
 import { PickerPopover } from './PickerPopover'
+import { useTranslation } from 'react-i18next'
 
 interface ToolPickerProps {
   open: boolean
@@ -28,6 +29,7 @@ interface ToolPickerProps {
 }
 
 export function ToolPicker({ open, onConfirm, onCancel, anchorRef, initial }: ToolPickerProps) {
+  const { t } = useTranslation('editor')
   const isEdit = initial !== undefined
   const { query, setQuery, selected, setSelected, loading, filtered } = useToolSearch(
     open,
@@ -49,25 +51,25 @@ export function ToolPicker({ open, onConfirm, onCancel, anchorRef, initial }: To
       open={open}
       onCancel={onCancel}
       anchorRef={anchorRef}
-      title={isEdit ? 'Tool ändern' : 'Externes Tool verlinken'}
-      ariaLabel="Externes Tool verlinken"
+      title={isEdit ? t('picker.tool.titleEdit') : t('picker.tool.titleNew')}
+      ariaLabel={t('picker.tool.ariaLabel')}
       testId="tool-picker-dialog"
     >
       <Input
-        placeholder="Suchen…"
+        placeholder={t('picker.searchPlaceholder')}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         data-testid="tool-picker-search"
       />
       <div className="max-h-64 overflow-y-auto rounded-md border">
         {loading ? (
-          <p className="p-3 text-sm text-muted-foreground">Lade…</p>
+          <p className="p-3 text-sm text-muted-foreground">{t('picker.loading')}</p>
         ) : filtered.length === 0 ? (
           <p className="p-3 text-sm text-muted-foreground">
-            Keine aktiven externen Tools gefunden.
+            {t('picker.tool.empty')}
           </p>
         ) : (
-          <ul role="listbox" aria-label="Tool-Liste">
+          <ul role="listbox" aria-label={t('picker.tool.listLabel')}>
             {filtered.map((tool) => (
               <li key={tool.id} role="option" aria-selected={selected?.alias === tool.alias}>
                 <Button
@@ -88,7 +90,7 @@ export function ToolPicker({ open, onConfirm, onCancel, anchorRef, initial }: To
       </div>
       <div className="flex justify-end gap-2">
         <Button variant="outline" onClick={onCancel}>
-          Abbrechen
+          {t('picker.cancel')}
         </Button>
         <Button
           variant="brand"
@@ -96,7 +98,7 @@ export function ToolPicker({ open, onConfirm, onCancel, anchorRef, initial }: To
           onClick={handleConfirm}
           data-testid="tool-picker-confirm"
         >
-          {isEdit ? 'Aktualisieren' : 'Einfuegen'}
+          {isEdit ? t('picker.update') : t('picker.insert')}
         </Button>
       </div>
     </PickerPopover>

@@ -10,6 +10,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 
 import type { PlaceholderProps } from '../PlaceholderBlock'
 import { PickerPopover } from './PickerPopover'
+import { useTranslation } from 'react-i18next'
 
 type PersonaFieldTarget = 'name' | 'description' | 'profile' | 'profile-body' | 'modes'
 
@@ -33,31 +34,46 @@ function isPersonaFieldTarget(value: string | undefined): value is PersonaFieldT
   )
 }
 
-const OPTIONS: { target_id: PersonaFieldTarget; label: string; description: string }[] = [
-  { target_id: 'name', label: 'Persona: Name', description: 'Der Name der Persona' },
+// `label` ist der Wert, der als BlockNote-Prop INS DOKUMENT geschrieben wird —
+// also Inhalt und damit an die Sprache des System-Prompts gebunden (ADR-0045),
+// nicht an die UI-Sprache. Er bleibt bewusst stabil, sonst traegt derselbe
+// Prompt je nach Bediener gemischtsprachige Pills. `labelKey`/`descriptionKey`
+// sind die UI-Anzeige und folgen der Oberflaechensprache.
+const OPTIONS: {
+  target_id: PersonaFieldTarget
+  label: string
+  labelKey: string
+  descriptionKey: string
+}[] = [
+  {
+    target_id: 'name',
+    label: 'Persona: Name',
+    labelKey: 'picker.personaField.name.label',
+    descriptionKey: 'picker.personaField.name.description',
+  },
   {
     target_id: 'description',
     label: 'Persona: Beschreibung',
-    description: 'Die Beschreibung der Persona',
+    labelKey: 'picker.personaField.description.label',
+    descriptionKey: 'picker.personaField.description.description',
   },
   {
     target_id: 'profile',
     label: 'Persona: Profil (vollständig)',
-    description:
-      'Rendert die vollständige Persönlichkeit — Beschreibung, Profil-Body und Modi. ' +
-      'Empfohlen für den System-Prompt-Bootstrap.',
+    labelKey: 'picker.personaField.profile.label',
+    descriptionKey: 'picker.personaField.profile.description',
   },
   {
     target_id: 'profile-body',
     label: 'Persona: Profil-Inhalt',
-    description:
-      'Rendert nur den Profil-Body (BlockNote-Inhalt) — ohne Beschreibung, Traits oder Modi.',
+    labelKey: 'picker.personaField.profileBody.label',
+    descriptionKey: 'picker.personaField.profileBody.description',
   },
   {
     target_id: 'modes',
     label: 'Persona: Modi',
-    description:
-      'Rendert nur die Modi-Sektion der Persona. Ohne Modi bleibt die Stelle leer.',
+    labelKey: 'picker.personaField.modes.label',
+    descriptionKey: 'picker.personaField.modes.description',
   },
 ]
 
@@ -68,6 +84,7 @@ export function PersonaFieldPicker({
   anchorRef,
   initial,
 }: PersonaFieldPickerProps) {
+  const { t } = useTranslation('editor')
   const [selected, setSelected] = useState<PersonaFieldTarget>('name')
 
   const isEdit = initial !== undefined
@@ -95,14 +112,14 @@ export function PersonaFieldPicker({
       open={open}
       onCancel={onCancel}
       anchorRef={anchorRef}
-      title={isEdit ? 'Persona-Feld ändern' : 'Persona-Feld einfuegen'}
-      ariaLabel="Persona-Feld einfuegen"
+      title={isEdit ? t('picker.personaField.titleEdit') : t('picker.personaField.titleNew')}
+      ariaLabel={t('picker.personaField.ariaLabel')}
       testId="persona-field-picker-dialog"
     >
       <RadioGroup
         value={selected}
         onValueChange={(value) => setSelected(value as PersonaFieldTarget)}
-        aria-label="Persona-Feld auswaehlen"
+        aria-label={t('picker.personaField.listLabel')}
       >
         {OPTIONS.map((opt) => {
           const inputId = `persona-field-${opt.target_id}`
@@ -119,8 +136,8 @@ export function PersonaFieldPicker({
                 className="mt-0.5"
               />
               <span className="flex flex-col gap-0.5">
-                <span className="text-sm font-medium">{opt.label}</span>
-                <span className="text-xs text-muted-foreground">{opt.description}</span>
+                <span className="text-sm font-medium">{t(opt.labelKey)}</span>
+                <span className="text-xs text-muted-foreground">{t(opt.descriptionKey)}</span>
               </span>
             </Label>
           )
@@ -128,10 +145,10 @@ export function PersonaFieldPicker({
       </RadioGroup>
       <div className="flex justify-end gap-2">
         <Button variant="outline" onClick={onCancel}>
-          Abbrechen
+          {t('picker.cancel')}
         </Button>
         <Button variant="brand" onClick={handleConfirm} data-testid="persona-field-picker-confirm">
-          {isEdit ? 'Aktualisieren' : 'Einfuegen'}
+          {isEdit ? t('picker.update') : t('picker.insert')}
         </Button>
       </div>
     </PickerPopover>

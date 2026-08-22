@@ -6,13 +6,14 @@ import { z } from 'zod'
 import type { ResourceBlock } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { notify } from '@/lib/feedback'
+import i18n from '@/i18n'
 
 // Welle 4: Create ist immer erlaubt. `name` ist die einzige clientseitige
 // Pflicht. Schema spiegelt `useResourceForm`, damit `ResourceEditorForm`
 // mit beiden Hooks funktioniert.
 // Track E3: Tags hinzugefuegt.
 const createSchema = z.object({
-  name: z.string().min(1, 'Name ist erforderlich.'),
+  name: z.string().min(1, { error: () => i18n.t('common:validation.nameRequiredLong') }),
   description: z.string(),
   bodyBlocks: z.array(z.custom<ResourceBlock>()),
   tags: z.array(z.string()),
@@ -48,10 +49,10 @@ export function useCreateResource(
         content: { description: values.description, blocks: values.bodyBlocks, tags: values.tags },
         locale,
       })
-      notify.success('Resource angelegt.')
+      notify.success(i18n.t('resources:toast.created'))
       onCreated(created.id)
     } catch (cause: unknown) {
-      setSaveError(cause instanceof Error ? cause.message : 'Anlegen fehlgeschlagen.')
+      setSaveError(cause instanceof Error ? cause.message : i18n.t('common:errors.createFailed'))
     }
   })
 

@@ -1009,3 +1009,31 @@ bleiben)._
   toter Code (kein Aufrufer mit nicht-leerem Array); Agent-/Persona-
   Gruppierung der Listen braucht ein Batch-Feld am List-Endpoint
   (`linked_agent_ids` o. ä.), sonst N+1 — clientseitig bewusst nicht gebaut.
+
+## 2026-08-22 — i18n: Auflösungszeitpunkt lazy, persistierte Labels sprachstabil
+- **Entscheidung:** (a) `i18n.t(...)` wird nie auf Modul-Ebene ausgewertet;
+  zod-Messages nutzen die Lazy-Form von Zod 4 (`{ error: () => i18n.t(…) }`),
+  Nicht-Komponenten rufen die Singleton-Instanz innerhalb der Funktion.
+  (b) Werte, die als BlockNote-Prop **ins Dokument** geschrieben werden
+  (Placeholder-`label` im System-Prompt-Editor) sowie Entity-Namen-Defaults
+  bleiben stabile Literale; übersetzt wird nur die Anzeige
+  (`labelKey`/`descriptionKey`). (c) Die gespeicherte
+  `preferred_locale` ist ein Startwert: eine explizite Wahl im laufenden Tab
+  gewinnt, ein User-Wechsel setzt den Vorrang zurück.
+- **Begründung:** (a) Modul-Level-`t()` friert die Sprache auf den Stand des
+  ersten Chunk-Ladens ein — ein Test hatte den Effekt bereits als erwartetes
+  Verhalten festgeschrieben (englische Meldung in einer deutschen Suite).
+  (b) Das Label ist Inhalt und folgt der Elementsprache (ADR-0045); an die
+  UI-Sprache gebunden trüge derselbe Prompt je nach Bediener gemischtsprachige
+  Pills. (c) Der Session-Bootstrap ist asynchron, und `supabase.auth.updateUser`
+  behält den `access_token`, weshalb `SessionProvider.apply()` das
+  `USER_UPDATED`-Event dedupliziert verwirft — der Session-State trägt dann
+  weiter die alte Präferenz und würde eine frische Wahl überschreiben.
+- **Verworfen:** Den Token-Dedupe im `SessionProvider` aufweichen (schützt den
+  teuren `fetchMe`-Pfad und soll nicht wegen einer Sprachpräferenz fallen);
+  den Vorrang über einen localStorage-Eintrag erkennen (der Sprachdetektor
+  cached dort bereits beim Init, ein Eintrag belegt also keine bewusste Wahl);
+  den Zustand in einem Hook-Ref halten (`AppLayout` wird bei Logout/Login neu
+  gemountet).
+- **Offen:** Server-`detail`-Texte (`apps/api`, 78 Vorkommen, deutsch,
+  `Accept-Language` wird nicht gelesen) — eigene Architektur-Weiche, Issue #402.

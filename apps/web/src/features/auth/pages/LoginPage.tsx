@@ -3,6 +3,8 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+
+import i18n from '@/i18n'
 import { z } from 'zod'
 
 import { ErrorAlert } from '@/components/data/ErrorAlert'
@@ -29,7 +31,7 @@ type MfaValues = { code: string }
 async function completeMfaChallenge(code: string): Promise<void> {
   const { data: factors, error: listError } = await supabase.auth.mfa.listFactors()
   if (listError || factors === null) {
-    throw new Error(listError?.message ?? 'MFA-Faktoren konnten nicht geladen werden.')
+    throw new Error(listError?.message ?? i18n.t('auth:login.mfa.factorsFailed'))
   }
   // `totp` enthaelt nur verifizierte Faktoren — der erste genuegt fuer die
   // Step-up-Challenge (Reihenfolge/Auswahl irrelevant, alle heben auf aal2).
@@ -39,7 +41,7 @@ async function completeMfaChallenge(code: string): Promise<void> {
   const factorId = factors.totp[0].id
   const { data: challenge, error: challengeError } = await supabase.auth.mfa.challenge({ factorId })
   if (challengeError || challenge === null) {
-    throw new Error(challengeError?.message ?? 'MFA-Challenge konnte nicht gestartet werden.')
+    throw new Error(challengeError?.message ?? i18n.t('auth:login.mfa.challengeFailed'))
   }
   const { error: verifyError } = await supabase.auth.mfa.verify({
     factorId,

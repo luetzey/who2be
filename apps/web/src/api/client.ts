@@ -139,7 +139,7 @@ async function request<T>(token: string, path: string, init?: RequestInit): Prom
     // geloggt — sonst ist „nicht erreichbar" im DevTools-Log nicht
     // diagnostizierbar.
     console.error(`Who2Be-API nicht erreichbar: ${init?.method ?? 'GET'} ${url}`, cause)
-    throw new ApiError(0, 'Who2Be-API nicht erreichbar.')
+    throw new ApiError(0, i18n.t('common:errors.apiUnreachable'))
   }
   if (!response.ok) {
     const { message, body } = await readErrorBody(response)
@@ -171,7 +171,7 @@ async function requestText(
     response = await fetch(url, { ...init, headers })
   } catch (cause) {
     console.error(`Who2Be-API nicht erreichbar: ${init?.method ?? 'GET'} ${url}`, cause)
-    throw new ApiError(0, 'Who2Be-API nicht erreichbar.')
+    throw new ApiError(0, i18n.t('common:errors.apiUnreachable'))
   }
   if (!response.ok) {
     const { message, body } = await readErrorBody(response)
@@ -199,7 +199,7 @@ async function requestBlob(token: string, path: string, init?: RequestInit): Pro
     response = await fetch(url, { ...init, headers })
   } catch (cause) {
     console.error(`Who2Be-API nicht erreichbar: ${init?.method ?? 'GET'} ${url}`, cause)
-    throw new ApiError(0, 'Who2Be-API nicht erreichbar.')
+    throw new ApiError(0, i18n.t('common:errors.apiUnreachable'))
   }
   if (!response.ok) {
     const { message, body } = await readErrorBody(response)
@@ -227,7 +227,7 @@ async function exportEntity(
 async function readErrorBody(
   response: Response,
 ): Promise<{ message: string; body: unknown }> {
-  const fallback = `Who2Be-API-Fehler (${response.status}).`
+  const fallback = i18n.t('common:errors.apiError', { status: response.status })
   const contentType = response.headers.get('content-type') ?? ''
   if (
     !contentType.includes('application/json') &&
