@@ -10,6 +10,14 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Fixed
 
+- The OAuth consent screen now names the agent it is about to bind, together
+  with its workspace, instead of showing a bare UUID. It only ever listed agents
+  from your default workspace, while the server resolves across every workspace
+  you belong to — so an agent living elsewhere showed up unreadable, and if your
+  default workspace happened to be empty the consent could not be completed at
+  all. When the agent cannot be resolved for your account, the approve button is
+  now disabled with a reason rather than failing with a generic error.
+
 - The language switcher is now reachable on the pages you see before signing
   in. It lived only in the app shell, while every public route — sign-in,
   sign-up, password reset, invitation onboarding, the OAuth consent screen and

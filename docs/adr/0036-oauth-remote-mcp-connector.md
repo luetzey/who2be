@@ -192,3 +192,59 @@ inkl. Rückwärtskompatibilität des kanonischen Pfads),
 `test_oauth.py::test_resource_agent_hint_parses_path_form` (DB-frei) +
 `…::test_oauth_resource_agent_hint_hard_locks` (DB-gated, beide Hint-Formen).
 E2E gegen echten Claude-Client weiter offen.
+
+## Addendum 2026-08-22 (2) — Consent-Preview: den gelockten Agenten lesbar machen
+
+**Problem:** Der Consent lud die Agentenliste nur für `me.default_workspace_id`,
+während das autoritative Gate `_resolve_agent_membership` über **alle**
+Memberships des Users sucht. Zwei Folgen (Issue #405):
+
+1. Lag der gelockte Agent in einem Nicht-Default-Workspace, fiel die Anzeige auf
+   die rohe UUID zurück — der User bestätigte eine Bindung, die er nicht lesen
+   kann, ohne jede Angabe des Ziel-Workspace.
+2. War der Default-Workspace leer, griff die `agents.length === 0`-Sperre und der
+   Consent war gar **nicht durchführbar**, obwohl der Agent existierte und der
+   User berechtigt war.
+
+Vor der Pfad-Bindung (Addendum 1) kam der Agent-Hint praktisch nie am Consent an
+— der Hard-Lock war ein toter Pfad und die Lücke damit unsichtbar.
+
+**Entscheidung:** `POST /oauth/consent/preview` nimmt denselben HMAC-signierten
+Request-Blob und löst den Agenten über **exakt** `_resolve_agent_membership` auf.
+Antwort: `{locked: bool, agent: {id, name, workspace_id, workspace_name} | null}`.
+
+Vier Fälle: ungültiger/abgelaufener Blob ⇒ 400; kein Hint ⇒ `{locked: false}`
+(Dropdown wie bisher); Hint auflösbar ⇒ Name + Workspace, Approve aktiv; Hint
+nicht auflösbar ⇒ `{locked: true, agent: null}`, Approve gesperrt mit Begründung.
+
+**Warum dieser Zuschnitt — drei bewusste Entscheidungen:**
+
+- **Kein Agent-ID-Parameter.** Der Trust-Anker bleibt der signierte Blob. Ein
+  Endpunkt, der eine beliebige Agent-UUID auflöst, wäre ein IDOR-Vektor; so
+  verrät er ausschließlich, was der eingeloggte User ohnehin gerade autorisieren
+  soll.
+- **Kein Existenz-Orakel.** „Agent existiert nicht" und „Agent gehört dir nicht"
+  laufen durch denselben Rückgabepfad — identischer Status, identischer Body.
+  `_resolve_agent_membership` iteriert nur über die eigenen Workspaces, ein Agent
+  außerhalb dieser Menge ist schlicht „nicht gefunden"; der Namens-Read passiert
+  erst **nach** dem Gate.
+- **Kein 403 im Preview.** Der Consent wurde noch nicht abgeschickt — das ist
+  eine Anzeige, kein Autorisierungsversuch. Das 403 bleibt am
+  `POST /oauth/consent`, wo die Entscheidung tatsächlich fällt.
+
+Verworfen: `GET /v1/me/agents` (legt eine allgemeine workspace-übergreifende
+Lesefläche an, wo das Problem einen einzigen, bereits bekannten Agenten
+braucht); rein im Frontend über die `MeRead`-Workspaces (dupliziert die
+Auflösungslogik im Client — die Anzeige wäre eine Rekonstruktion neben dem
+echten Gate statt dessen Antwort).
+
+**Schichtung:** Der Read liegt als `PgOAuthRepository.agent_display` im
+Repository, den Mandanten setzt der Service per `tenant_scope` — `tenant_scope`
+ist reine ContextVar-Verwaltung, also eine Service-Entscheidung (Muster wie
+`gdpr_export_service`). Damit bleibt die Interims-Leitplanke aus `CLAUDE.md`
+(kein neues SQL in `services/`) gewahrt; das vorbestehende SQL in
+`_resolve_agent_membership` gehört in den späteren ADR-0002-Umzug.
+
+Verifizierung: `test_oauth.py` — alle vier Fälle DB-frei plus ein
+Integrationstest; `test_consent_preview_is_no_existence_oracle` vergleicht die
+Antworten für „fremd" und „nicht existent" byte-genau.

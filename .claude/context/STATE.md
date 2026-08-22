@@ -174,6 +174,12 @@ Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
   griff praktisch nie, weil Clients die Query aus der PRM-Resource
   verwerfen); Refresh-Reuse reject-only statt
   Ketten-Revocation (DECISIONS 2026-07-05); OAuth-Smoke beide Editionen grün.
+- **Consent-Preview (2026-08-22, #405):** `POST /oauth/consent/preview` löst
+  den gelockten Agenten über dieselbe Funktion auf, die später über
+  Erfolg/403 entscheidet, und liefert Name + Workspace. Vorher zeigte der
+  Consent eine rohe UUID, sobald der Agent nicht im Default-Workspace lag —
+  und war bei leerem Default-Workspace gar nicht durchführbar. Kein
+  Agent-ID-Parameter (IDOR), kein Existenz-Orakel. ADR-0036-Addendum 2.
 - **81 Tools** (58 + 23 aus WorkArea/KB/Tabellen, ADR-0047): Read + Write
   (ADR-0030), `search` + `search_content`
   (ADR-0037/0046), Versions-/

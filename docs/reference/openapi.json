@@ -11777,6 +11777,53 @@
         ]
       }
     },
+    "/oauth/consent/preview": {
+      "post": {
+        "tags": [
+          "oauth"
+        ],
+        "summary": "Consent Preview",
+        "description": "Loest den per Hard-Lock gebundenen Agenten fuer die Consent-ANZEIGE auf.\n\nNimmt NUR den signierten Request-Blob (kein Agent-ID-Parameter — das waere\nein IDOR-Vektor) und antwortet mit `{locked, agent}`. `agent` ist `null`,\nwenn der Blob keinen Hint traegt oder der Agent nicht in einem Workspace des\nUsers liegt; das autoritative 403 faellt weiterhin am `POST /oauth/consent`.",
+        "operationId": "consent_preview_oauth_consent_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OAuthConsentPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthConsentPreview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/oauth/token": {
       "post": {
         "tags": [
@@ -15869,6 +15916,38 @@
         "title": "OAuthClientRegistration",
         "description": "Dynamic-Client-Registration-Request (RFC 7591). Public client (PKCE).\n\n`extra=\"ignore\"` (nicht `forbid`): echte DCR-Clients (Claude/ChatGPT) senden\nzusaetzliche Standard-Metadaten (`grant_types`, `response_types`, `scope`,\n`client_uri`, …). RFC 7591 schreibt vor, nicht unterstuetzte Metadaten zu\nIGNORIEREN — `forbid` wuerde die Registrierung mit 422 brechen."
       },
+      "OAuthConsentAgent": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "workspace_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Workspace Id"
+          },
+          "workspace_name": {
+            "type": "string",
+            "title": "Workspace Name"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "workspace_id",
+          "workspace_name"
+        ],
+        "title": "OAuthConsentAgent",
+        "description": "Lesbare Identitaet des gebundenen Agenten (Name + Workspace-Name)."
+      },
       "OAuthConsentApprove": {
         "properties": {
           "request": {
@@ -15894,6 +15973,46 @@
         ],
         "title": "OAuthConsentApprove",
         "description": "Consent-Submit der Web-Seite.\n\n`request` ist der signierte (HMAC) Authorize-Request-Blob, den\n`GET /oauth/authorize` erzeugt hat — er traegt client_id, redirect_uri,\ncode_challenge, state, resource, scope manipulationssicher."
+      },
+      "OAuthConsentPreview": {
+        "properties": {
+          "locked": {
+            "type": "boolean",
+            "title": "Locked"
+          },
+          "agent": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OAuthConsentAgent"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "locked"
+        ],
+        "title": "OAuthConsentPreview",
+        "description": "Reine Anzeige-Vorschau des Consent — trifft KEINE Autorisierungs-Entscheidung.\n\n`locked` sagt, ob der signierte Blob einen Agent-Hint traegt (Hard-Lock:\ngenau dieser Agent wird gebunden, die Auswahl des Users ist irrelevant).\n`agent` ist `null`, wenn der Agent nicht aufloesbar ist — bewusst\nununterscheidbar fuer „existiert nicht\" und „liegt in keinem Workspace des\nUsers\", damit der Endpunkt kein Existenz-Orakel wird. Das 403 faellt erst\nam `POST /oauth/consent`, wo die Entscheidung getroffen wird."
+      },
+      "OAuthConsentPreviewRequest": {
+        "properties": {
+          "request": {
+            "type": "string",
+            "title": "Request"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "request"
+        ],
+        "title": "OAuthConsentPreviewRequest",
+        "description": "Anfrage der Consent-Seite: welcher Agent haengt an diesem Request-Blob?\n\nTraegt ausschliesslich den signierten Authorize-Request-Blob — bewusst KEIN\nfreier `agent_id`-Parameter. Der Trust-Anker ist die HMAC-Signatur; ein\nEndpunkt, der eine beliebige Agent-UUID aufloest, waere ein IDOR-Vektor."
       },
       "OAuthConsentResult": {
         "properties": {
