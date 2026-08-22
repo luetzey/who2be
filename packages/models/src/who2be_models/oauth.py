@@ -63,6 +63,47 @@ class OAuthConsentResult(BaseModel):
     redirect: str
 
 
+class OAuthConsentPreviewRequest(BaseModel):
+    """Anfrage der Consent-Seite: welcher Agent haengt an diesem Request-Blob?
+
+    Traegt ausschliesslich den signierten Authorize-Request-Blob — bewusst KEIN
+    freier `agent_id`-Parameter. Der Trust-Anker ist die HMAC-Signatur; ein
+    Endpunkt, der eine beliebige Agent-UUID aufloest, waere ein IDOR-Vektor.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    request: str
+
+
+class OAuthConsentAgent(BaseModel):
+    """Lesbare Identitaet des gebundenen Agenten (Name + Workspace-Name)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID
+    name: str
+    workspace_id: UUID
+    workspace_name: str
+
+
+class OAuthConsentPreview(BaseModel):
+    """Reine Anzeige-Vorschau des Consent — trifft KEINE Autorisierungs-Entscheidung.
+
+    `locked` sagt, ob der signierte Blob einen Agent-Hint traegt (Hard-Lock:
+    genau dieser Agent wird gebunden, die Auswahl des Users ist irrelevant).
+    `agent` ist `null`, wenn der Agent nicht aufloesbar ist — bewusst
+    ununterscheidbar fuer „existiert nicht" und „liegt in keinem Workspace des
+    Users", damit der Endpunkt kein Existenz-Orakel wird. Das 403 faellt erst
+    am `POST /oauth/consent`, wo die Entscheidung getroffen wird.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    locked: bool
+    agent: OAuthConsentAgent | None = None
+
+
 class OAuthTokenResponse(BaseModel):
     """Token-Endpunkt-Antwort (OAuth 2.1). `expires_in` in Sekunden."""
 

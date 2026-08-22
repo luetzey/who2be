@@ -3,7 +3,8 @@
 Drei Router:
 - `metadata_router` (`/.well-known`): RFC-8414-AS-Metadaten (anonym, statisch).
 - `router` (`/oauth`): `register` (DCR), `authorize` (→ Web-Consent),
-  `consent` (User-eingeloggt → Auth-Code), `token` (Code-/Refresh-Grant).
+  `consent` (User-eingeloggt → Auth-Code), `consent/preview` (reine Anzeige
+  des per Hard-Lock gebundenen Agenten), `token` (Code-/Refresh-Grant).
 
 Der `authorize`-Endpunkt ist der Open-Redirect-Choke-Point: ungueltiger Client /
 nicht registrierte redirect_uri ⇒ 400 OHNE Redirect. `token` ist form-encoded
@@ -29,6 +30,8 @@ from who2be_models import (
     OAuthClientRegistered,
     OAuthClientRegistration,
     OAuthConsentApprove,
+    OAuthConsentPreview,
+    OAuthConsentPreviewRequest,
     OAuthConsentResult,
     OAuthTokenResponse,
 )
@@ -140,6 +143,27 @@ async def consent(
     except OAuthError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.error) from exc
     return OAuthConsentResult(redirect=redirect)
+
+
+@router.post("/consent/preview", response_model=OAuthConsentPreview)
+@limiter.limit(write_limit)
+async def consent_preview(
+    request: Request, data: OAuthConsentPreviewRequest, principal: Principal, service: Service
+) -> JSONResponse:
+    """Loest den per Hard-Lock gebundenen Agenten fuer die Consent-ANZEIGE auf.
+
+    Nimmt NUR den signierten Request-Blob (kein Agent-ID-Parameter — das waere
+    ein IDOR-Vektor) und antwortet mit `{locked, agent}`. `agent` ist `null`,
+    wenn der Blob keinen Hint traegt oder der Agent nicht in einem Workspace des
+    Users liegt; das autoritative 403 faellt weiterhin am `POST /oauth/consent`.
+    """
+    try:
+        preview: OAuthConsentPreview = await service.consent_preview(
+            user_id=principal.user_id, request_blob=data.request
+        )
+    except OAuthError as exc:
+        return _error_response(exc)
+    return JSONResponse(content=preview.model_dump(mode="json"), headers=_NO_STORE)
 
 
 @router.post("/token", response_model=None)

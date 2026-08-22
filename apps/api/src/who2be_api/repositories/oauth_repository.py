@@ -242,3 +242,21 @@ class PgOAuthRepository:
         if row is None or row["agent_id"] is None:
             return None
         return (row["workspace_id"], row["owner_id"], row["role"], row["agent_id"])
+
+    async def agent_display(self, agent_id: UUID, workspace_id: UUID) -> tuple[str, str] | None:
+        """`(agent_name, workspace_name)` fuer ein `(agent_id, workspace_id)`-Paar.
+
+        `None`, wenn kein Agent mit dieser ID in diesem Workspace existiert.
+        Muss unter `tenant_scope(workspace_id, ...)` aufgerufen werden — `agent`
+        ist RLS-isoliert (Migration 0037), der Aufrufer traegt den Mandanten.
+        """
+        row = await self._pool.fetchrow(
+            "SELECT a.name AS agent_name, w.name AS workspace_name "
+            "FROM agent a JOIN workspace w ON w.id = a.workspace_id "
+            "WHERE a.id = $1 AND a.workspace_id = $2",
+            agent_id,
+            workspace_id,
+        )
+        if row is None:
+            return None
+        return str(row["agent_name"]), str(row["workspace_name"])
