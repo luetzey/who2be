@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useSearchParams } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import type { OAuthConsentPreviewAgent } from '@/api/client'
 import type { Agent, Me } from '@/api/types'
 import { AuthTokenProvider } from '@/auth/AuthTokenProvider'
 import { SessionContext } from '@/auth/session-context'
@@ -34,9 +35,12 @@ function blobWith(clientName: string): string {
   return blobOf({ client_name: clientName })
 }
 
-// fetch-Stub: /agents liefert die Liste (oder einen Fehlerstatus), alles andere
-// geht an /oauth/consent. Aufgezeichnete Calls fuer Body-Assertions.
+// fetch-Stub: /oauth/consent/preview liefert den Lock-Status (Default:
+// ungelockt — passt zu Blobs ohne `agent_id`), /agents die Dropdown-Liste
+// (oder einen Fehlerstatus), alles andere geht an /oauth/consent.
+// Aufgezeichnete Calls fuer Body-Assertions.
 function stubApi(options: {
+  preview?: { locked: boolean; agent: OAuthConsentPreviewAgent | null } | { status: number }
   agents?: Agent[] | { status: number }
   consent?: { redirect: string } | { status: number }
 }): Array<{ url: string; method: string; body: unknown }> {
@@ -50,6 +54,13 @@ function stubApi(options: {
         method: init?.method ?? 'GET',
         body: init?.body ? JSON.parse(String(init.body)) : null,
       })
+      if (url.includes('/oauth/consent/preview')) {
+        const preview = options.preview ?? { locked: false, agent: null }
+        if ('status' in preview) {
+          return new Response('', { status: preview.status })
+        }
+        return new Response(JSON.stringify(preview), { status: 200 })
+      }
       if (url.includes('/agents')) {
         const agents = options.agents ?? []
         if (!Array.isArray(agents)) {
@@ -124,6 +135,9 @@ describe('OAuthConsentPage', () => {
           method: init?.method ?? 'GET',
           body: init?.body ? JSON.parse(String(init.body)) : null,
         })
+        if (url.includes('/oauth/consent/preview')) {
+          return new Response(JSON.stringify({ locked: false, agent: null }), { status: 200 })
+        }
         if (url.includes('/agents')) {
           return new Response(JSON.stringify([builder, writer]), { status: 200 })
         }
@@ -145,7 +159,9 @@ describe('OAuthConsentPage', () => {
     await waitFor(() => {
       expect(assign).toHaveBeenCalledWith('https://claude.ai/cb?code=xyz')
     })
-    const consentCall = calls.find((c) => c.url.includes('/oauth/consent'))
+    const consentCall = calls.find(
+      (c) => c.url.includes('/oauth/consent') && !c.url.includes('/preview'),
+    )
     expect(consentCall?.method).toBe('POST')
     expect(consentCall?.body).toMatchObject({ agent_id: 'a2', approve: true })
   })
@@ -157,6 +173,9 @@ describe('OAuthConsentPage', () => {
       'fetch',
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input)
+        if (url.includes('/oauth/consent/preview')) {
+          return new Response(JSON.stringify({ locked: false, agent: null }), { status: 200 })
+        }
         if (url.includes('/agents')) {
           return new Response(JSON.stringify([builder]), { status: 200 })
         }
@@ -188,10 +207,16 @@ describe('OAuthConsentPage', () => {
     expect(screen.queryByRole('button', { name: 'Verbinden' })).toBeNull()
   })
 
-  it('pinnt den Agenten aus dem Blob als readonly Feld und sendet dessen id', async () => {
+  it('gelockt + aufloesbar: zeigt Name und Workspace des Preview-Agenten und sendet dessen id', async () => {
     const assign = stubAssign()
+    const previewAgent: OAuthConsentPreviewAgent = {
+      id: 'a2',
+      name: 'Writer',
+      workspace_id: 'ws-2',
+      workspace_name: 'Anderer Workspace',
+    }
     const calls = stubApi({
-      agents: [builder, writer],
+      preview: { locked: true, agent: previewAgent },
       consent: { redirect: 'https://claude.ai/cb?code=abc' },
     })
 
@@ -200,10 +225,12 @@ describe('OAuthConsentPage', () => {
       `?request=${blobOf({ client_name: 'Claude', agent_id: 'a2' })}`,
     )
 
-    // Gepinnter Agent: readonly Input mit dem Namen statt Select.
+    // Gepinnter Agent: readonly Input mit Name + Workspace aus der Preview
+    // (nicht aus der — hier gar nicht geladenen — Workspace-Agentenliste).
     const locked = await screen.findByLabelText(/über die Verbindungs-URL festgelegt/)
     expect(locked).toHaveValue('Writer')
     expect(locked).toHaveAttribute('readonly')
+    expect(screen.getByText('Workspace: Anderer Workspace')).toBeInTheDocument()
     expect(screen.queryByLabelText('Agent')).toBeNull()
     expect(screen.getByText(/kann hier nicht gewechselt werden/)).toBeInTheDocument()
 
@@ -211,17 +238,29 @@ describe('OAuthConsentPage', () => {
     await waitFor(() => {
       expect(assign).toHaveBeenCalledWith('https://claude.ai/cb?code=abc')
     })
-    const consentCall = calls.find((c) => c.url.includes('/oauth/consent'))
+    const consentCall = calls.find(
+      (c) => c.url.includes('/oauth/consent') && !c.url.includes('/preview'),
+    )
     expect(consentCall?.body).toMatchObject({ agent_id: 'a2', approve: true })
+    // Lock-Fall: die Workspace-Agentenliste wird nicht mehr geladen (Fehler 2).
+    expect(calls.some((c) => c.url.includes('/agents'))).toBe(false)
   })
 
-  it('zeigt die rohe agent_id, wenn der gepinnte Agent nicht in der Liste ist', async () => {
-    stubApi({ agents: [builder] })
+  it('gelockt + nicht aufloesbar: sperrt Approve und nennt den Grund, ohne eine rohe UUID zu zeigen', async () => {
+    const calls = stubApi({ preview: { locked: true, agent: null } })
 
     renderConsent(authedSession, `?request=${blobOf({ agent_id: 'ghost-uuid' })}`)
 
-    const locked = await screen.findByLabelText(/über die Verbindungs-URL festgelegt/)
-    expect(locked).toHaveValue('ghost-uuid')
+    expect(await screen.findByText(/Connector-URL verweist auf einen Agenten/)).toBeInTheDocument()
+    expect(screen.queryByText('ghost-uuid')).toBeNull()
+    expect(screen.queryByLabelText(/über die Verbindungs-URL festgelegt/)).toBeNull()
+    expect(screen.queryByLabelText('Agent')).toBeNull()
+
+    // Approve gesperrt, Deny bleibt moeglich (User kann trotzdem ablehnen).
+    expect(screen.getByRole('button', { name: 'Verbinden' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Ablehnen' })).toBeEnabled()
+    // Lock-Fall: die Workspace-Agentenliste wird nicht geladen.
+    expect(calls.some((c) => c.url.includes('/agents'))).toBe(false)
   })
 
   it('zeigt den Host der signierten redirect_uri an', async () => {
@@ -310,7 +349,7 @@ describe('OAuthConsentPage', () => {
     expect(screen.getByRole('button', { name: 'Ablehnen' })).toBeEnabled()
   })
 
-  it('bleibt ohne default_workspace_id im Ladezustand und ruft die API nicht', async () => {
+  it('bleibt ohne default_workspace_id im Ladezustand, sobald die Preview ungelockt ist', async () => {
     const calls = stubApi({ agents: [builder] })
 
     renderConsent(authedSession, `?request=${blobWith('Claude')}`, {
@@ -318,8 +357,15 @@ describe('OAuthConsentPage', () => {
       default_workspace_id: null,
     })
 
-    // Effekt bricht ohne Workspace ab: Skeleton bleibt sichtbar, kein fetch.
+    // Die Preview braucht keinen Workspace (sie sucht ueber alle
+    // Memberships) und wird deshalb IMMER angefragt. Erst der zweite Effekt
+    // (Dropdown-Kandidaten aus dem Default-Workspace) haengt an
+    // `default_workspace_id` — ohne den bleibt die Seite im Ladezustand und
+    // `listAgents` wird nie aufgerufen.
+    await waitFor(() => {
+      expect(calls.some((c) => c.url.includes('/oauth/consent/preview'))).toBe(true)
+    })
     expect(await screen.findByText('Lädt…')).toBeInTheDocument()
-    expect(calls).toHaveLength(0)
+    expect(calls.some((c) => c.url.includes('/agents'))).toBe(false)
   })
 })

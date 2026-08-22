@@ -288,6 +288,42 @@ export function oauthConsent(
   })
 }
 
+// Preview zum Hard-Lock (WP2/Issue #405): der signierte `request`-Blob KANN
+// eine `agent_id` binden (Connector-URL `?agent=<uuid>`); ob das zutrifft und
+// ob der eingeloggte User den gebundenen Agenten ueber IRGENDEINE seiner
+// Memberships sehen darf, weiss nur der Server — er sucht ueber alle
+// Workspaces, nicht nur `default_workspace_id`. Autoritative Quelle fuer
+// `locked`; die UI darf `agent_id` nicht mehr selbst aus dem Blob lesen und
+// gegen die Workspace-Agentenliste abgleichen (das war der Bug: UUID-Anzeige
+// bzw. blockierter Consent, wenn der Agent in einem anderen Workspace liegt).
+// `locked: true, agent: null` heisst: gebunden, aber fuer diesen User nicht
+// aufloesbar — Consent bleibt gesperrt.
+export interface OAuthConsentPreviewAgent {
+  id: string
+  name: string
+  workspace_id: string
+  workspace_name: string
+}
+
+export interface OAuthConsentPreviewInput {
+  request: string
+}
+
+export interface OAuthConsentPreviewResult {
+  locked: boolean
+  agent: OAuthConsentPreviewAgent | null
+}
+
+export function oauthConsentPreview(
+  token: string,
+  input: OAuthConsentPreviewInput,
+): Promise<OAuthConsentPreviewResult> {
+  return request<OAuthConsentPreviewResult>(token, '/oauth/consent/preview', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
 export interface Api {
   // `agent` filtert serverseitig auf die Persona des Agenten (WP-B).
   // `locale` filtert serverseitig auf die Element-Sprache (ADR-0045).
