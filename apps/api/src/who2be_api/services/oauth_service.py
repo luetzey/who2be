@@ -394,19 +394,44 @@ class OAuthService:
 
 
 def _resource_agent_hint(resource: str, expected_base: str) -> UUID | None:
-    """Validiert `resource` und liefert den optionalen `?agent=<uuid>`-Hint.
+    """Validiert `resource` und liefert den optionalen Agent-Hint.
 
-    Erlaubt ist `expected_base` exakt ODER `expected_base?agent=<uuid>` — genau
-    der Schluessel `agent` mit gueltiger UUID, sonst `invalid_target`. So bekommt
-    jeder Agent eine EINDEUTIGE Connector-URL (Claude lehnt Duplikat-URLs ab),
-    waehrend die RFC-8707-Audience-Bindung an die KANONISCHE MCP-Resource
-    (`expected_base`, ohne Query) erhalten bleibt. `None`, wenn kein Hint da ist.
+    Erlaubt sind drei Formen (sonst `invalid_target`):
+
+    - `expected_base` exakt (ggf. mit leerem `?`) → kein Hint (`None`).
+    - `expected_base?agent=<uuid>` — genau der Schluessel `agent` mit gueltiger
+      UUID (Legacy-Query-Variante, muss fuer bereits eingetragene Connectoren
+      weiter funktionieren).
+    - `expected_base/a/<uuid>` (RFC-8707-Pfad-Variante) — ueberlebt LLM-Clients,
+      die fuer `resource` die kanonische PRM-Resource verwenden und eine Query
+      verwerfen; der Pfad bleibt erhalten. Optional zusaetzlich ein LEERER Query
+      (`?`); ein `?agent=...` zusaetzlich zur Pfad-Form ist eine widerspruechliche
+      Angabe und wird abgelehnt.
+
+    In allen Faellen bleibt die RFC-8707-Audience-Bindung an die KANONISCHE
+    MCP-Resource (`expected_base`, ohne Query/Pfad-Suffix) erhalten — der
+    Rueckgabewert ist nur der Hint, welcher Agent gemeint ist.
     """
     base, sep, query = resource.partition("?")
+    path_hint: UUID | None = None
     if base != expected_base:
-        raise OAuthError("invalid_target", "resource passt nicht zum MCP-Server.")
+        prefix = f"{expected_base}/a/"
+        if not base.startswith(prefix):
+            raise OAuthError("invalid_target", "resource passt nicht zum MCP-Server.")
+        suffix = base[len(prefix) :]
+        if not suffix or "/" in suffix:
+            raise OAuthError("invalid_target", "resource-Pfad erlaubt nur .../a/<uuid>.")
+        try:
+            path_hint = UUID(suffix)
+        except ValueError as exc:
+            raise OAuthError(
+                "invalid_target", "agent im resource-Pfad ist keine gueltige UUID."
+            ) from exc
+
     if not sep or query == "":
-        return None
+        return path_hint
+    if path_hint is not None:
+        raise OAuthError("invalid_target", "resource: Pfad-Hint und Query schliessen sich aus.")
     params = parse_qs(query, keep_blank_values=True)
     if set(params) != {"agent"} or len(params["agent"]) != 1:
         raise OAuthError("invalid_target", "resource-Query erlaubt nur ?agent=<uuid>.")
