@@ -1686,14 +1686,41 @@ def main() -> None:
         # Folge): FastMCP introspectiert jeden Bearer (`Who2BeTokenVerifier`) vor
         # dem Tool-Run und serviert RFC-9728-PRM + 401/`WWW-Authenticate`, sodass
         # Remote-MCP-Clients (Claude/ChatGPT) sich per OAuth-Login verbinden.
+        from starlette.middleware import Middleware
+
+        from who2be_mcp.agent_path import AgentPathMiddleware, build_agent_prm_route
         from who2be_mcp.auth import build_auth_provider
 
-        mcp.auth = build_auth_provider(settings)
+        provider = build_auth_provider(settings)
+        mcp.auth = provider
+        # Agent-spezifische Connector-URL `{http_path}/a/{uuid}` (Issue #404):
+        # die eigene PRM-Route dazu — FastMCP hat keinen oeffentlichen Hook fuer
+        # fertige Starlette-Routes (`custom_route` nimmt nur Handler-Funktionen
+        # und kann das ASGI-CORS des SDK nicht tragen), also dieselbe Liste, die
+        # der Decorator fuellt. Praezedenz ist unkritisch: der Pfad kollidiert
+        # mit keiner FastMCP-Route.
+        mcp._additional_http_routes.append(
+            build_agent_prm_route(
+                http_path=settings.http_path,
+                mcp_public_url=settings.mcp_public_url,
+                authorization_servers=provider.authorization_servers,
+                scopes_supported=provider.token_verifier.scopes_supported,
+            )
+        )
         mcp.run(
             transport="http",
             host=settings.http_host,
             port=settings.http_port,
             path=settings.http_path,
+            # Laeuft vor dem Routing: schreibt `{http_path}/a/{uuid}` auf den
+            # kanonischen Pfad um und zieht die 401-PRM-URL nach.
+            middleware=[
+                Middleware(
+                    AgentPathMiddleware,
+                    http_path=settings.http_path,
+                    mcp_public_url=settings.mcp_public_url,
+                )
+            ],
         )
         return
     mcp.run()

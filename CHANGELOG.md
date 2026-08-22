@@ -10,6 +10,20 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Fixed
 
+- Connecting a remote MCP connector no longer asks you to pick an agent again.
+  The per-agent connector URL now carries the agent in its path
+  (`.../mcp/a/<uuid>`) instead of a query (`?agent=<uuid>`). LLM clients take the
+  RFC 8707 `resource` parameter from the MCP server's RFC 9728 protected
+  resource metadata, which advertises the canonical URL and drops the query — so
+  the agent hint never reached the authorization server and the consent screen
+  fell back to its agent dropdown. A path is part of the resource identity and
+  survives. The MCP server advertises a per-agent metadata document and maps the
+  path onto its canonical endpoint; existing `?agent=` URLs keep working.
+- The authorization server now accepts an agent UUID only in canonical
+  8-4-4-4-12 form, matching the resource server. `uuid.UUID()` also accepts
+  `{...}`, `urn:uuid:...` and hyphen-less forms, which would have given one agent
+  several connector identities that the resource server never advertises.
+
 - The language switcher no longer loses the user's choice. The stored
   cross-device preference (`user_metadata.preferred_locale`) is now a starting
   value, not a running source of truth: an explicit choice in the current tab

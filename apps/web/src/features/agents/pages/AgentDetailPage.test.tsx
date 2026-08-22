@@ -175,10 +175,10 @@ describe('AgentDetailPage', () => {
     // Connector- + Token-Sektion liegen im Tab „Verbindung".
     fireEvent.click(screen.getByRole('tab', { name: 'Verbindung' }))
 
-    // Connector-Sektion mit agent-eindeutiger URL.
+    // Connector-Sektion mit agent-eindeutiger URL (Agent im Pfad, Issue #404).
     expect(screen.getByText('Claude-Connector')).toBeInTheDocument()
     const urlInput = screen.getByLabelText<HTMLInputElement>('Server-URL')
-    expect(urlInput.value).toContain('?agent=a1')
+    expect(urlInput.value).toContain('/a/a1')
 
     // Token-Sektion gerendert.
     expect(screen.getByText('API-Tokens')).toBeInTheDocument()

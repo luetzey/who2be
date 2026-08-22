@@ -1037,3 +1037,24 @@ bleiben)._
   gemountet).
 - **Offen:** Server-`detail`-Texte (`apps/api`, 78 Vorkommen, deutsch,
   `Accept-Language` wird nicht gelesen) — eigene Architektur-Weiche, Issue #402.
+
+## 2026-08-22 — Agent-Bindung des MCP-Connectors über den Resource-Pfad
+- **Entscheidung:** Die per-Agent-Connector-URL trägt den Agenten als Pfad
+  (`…/mcp/a/<uuid>`) statt als Query (`?agent=<uuid>`). Details + Grenzen im
+  ADR-0036-Addendum vom selben Tag; Issue #404.
+- **Begründung:** Der LLM-Client übernimmt den RFC-8707-`resource`-Parameter aus
+  der RFC-9728-PRM des MCP-Servers und verwirft dabei die Query — der Agent-Hint
+  erreichte `authorize` nie, der Hard-Lock war ein toter Pfad. Der Pfad ist Teil
+  der Resource-Identität und übersteht die Kanonisierung. Der 2026-06-25 als
+  Fail-safe notierte Fall („Client schickt die kanonische PRM-Resource") war
+  nicht die Ausnahme, sondern der Normalfall.
+- **Verworfen:** Letzte Agent-Wahl je Client merken (behebt die *erste*
+  Verbindung nicht — genau den beklagten Moment); Consent-Auswahl nur
+  überspringen, wenn der User genau einen Agenten hat (kosmetisch, bei mehreren
+  Agenten unverändert); Subdomain pro Agent (Infra-Overhead, 2026-06-25 bereits
+  verworfen).
+- **Nebenentscheidung:** Das kanonische UUID-Muster liegt einmal in
+  `who2be_models.agent_uuid` statt doppelt in API und MCP-Server — eine
+  Resource-URL *ist* die Resource-Identität, also muss beidseitig dieselbe
+  Strenge gelten (Security-Review-Befund N-1). `uuid.UUID()` allein akzeptiert
+  `{…}`, `urn:uuid:…` und Formen ohne Bindestriche.

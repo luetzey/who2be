@@ -261,13 +261,49 @@ def test_resource_agent_hint_parses_and_validates() -> None:
     # Gueltiger agent-Query → UUID.
     assert oauth_service._resource_agent_hint(f"{base}?agent={aid}", base) == aid
 
-    # Falsche Basis, fremder/zusaetzlicher Key, mehrfacher agent, kaputte UUID.
+    # Falsche Basis, fremder/zusaetzlicher Key, mehrfacher agent, kaputte UUID,
+    # sowie Alias-Schreibweisen derselben UUID (Issue #404 N-1): `UUID(...)`
+    # akzeptiert diese, die kanonische Pruefung bewusst nicht.
     for bad_resource in (
         "https://evil.example/mcp",
         f"{base}?foo=bar",
         f"{base}?agent={aid}&x=1",
         f"{base}?agent={aid}&agent={aid}",
         f"{base}?agent=not-a-uuid",
+        f"{base}?agent={str(aid).replace('-', '')}",
+        f"{base}?agent=urn:uuid:{aid}",
+        f"{base}?agent={{{aid}}}",
+    ):
+        with pytest.raises(oauth_service.OAuthError) as exc:
+            oauth_service._resource_agent_hint(bad_resource, base)
+        assert exc.value.error == "invalid_target"
+
+
+def test_resource_agent_hint_parses_path_form() -> None:
+    """`_resource_agent_hint` akzeptiert zusaetzlich die RFC-8707-Pfad-Variante
+    `{base}/a/<uuid>` (WP2/#404) — sie ueberlebt LLM-Clients, die fuer `resource`
+    die kanonische PRM-Resource verwenden und eine Query verwerfen (DB-frei)."""
+    base = "https://mcp.example.com/mcp"
+    aid = uuid4()
+
+    # Pfad-Form → UUID, optional mit leerem Query.
+    assert oauth_service._resource_agent_hint(f"{base}/a/{aid}", base) == aid
+    assert oauth_service._resource_agent_hint(f"{base}/a/{aid}?", base) == aid
+
+    # Fremde Basis, kaputte UUID, zusaetzliche Pfadsegmente, fehlende UUID,
+    # falsches Segment, widerspruechlicher `?agent=` zusaetzlich zur Pfad-Form,
+    # sowie Alias-Schreibweisen derselben UUID im Pfad (Issue #404 N-1).
+    for bad_resource in (
+        f"{base}/a/not-a-uuid",
+        f"{base}/a/{aid}/x",
+        f"{base}/a/",
+        f"{base}/b/{aid}",
+        f"{base}/a/{aid}?agent={aid}",
+        f"{base}/a/{aid}?agent={uuid4()}",
+        f"{base}/a/{aid}?foo=bar",
+        f"{base}/a/{str(aid).replace('-', '')}",
+        f"{base}/a/urn:uuid:{aid}",
+        f"{base}/a/{{{aid}}}",
     ):
         with pytest.raises(oauth_service.OAuthError) as exc:
             oauth_service._resource_agent_hint(bad_resource, base)
@@ -293,41 +329,48 @@ def test_oauth_resource_agent_hint_hard_locks(monkeypatch: pytest.MonkeyPatch) -
     try:
         with TestClient(app) as client:
             client_id = _register(client)
-            verifier, challenge = _pkce()
-            blob = _authorize_blob_resource(
-                client, client_id, challenge, f"{_RESOURCE}?agent={agent_id}"
-            )
-            # Web sendet absichtlich einen FREMDEN agent_id — der Seed-Agent aus
-            # dem Blob muss gewinnen: Consent gelingt (Seed ist Mitglied), und der
-            # ausgegebene Token ist an den Seed-Agenten gebunden.
-            code = _consent_code(client, blob, str(uuid4()), jwt_auth)
-            access = client.post(
-                "/oauth/token",
-                data={
-                    "grant_type": "authorization_code",
-                    "code": code,
-                    "redirect_uri": _REDIRECT,
-                    "client_id": client_id,
-                    "code_verifier": verifier,
-                },
-            ).json()["access_token"]
-            assert _token_agent_id(security.hash_token(access)) == UUID(agent_id)
 
-            # Ungueltige UUID in der resource → authorize 400 invalid_target.
-            bad = client.get(
-                "/oauth/authorize",
-                params={
-                    "response_type": "code",
-                    "client_id": client_id,
-                    "redirect_uri": _REDIRECT,
-                    "code_challenge": challenge,
-                    "code_challenge_method": "S256",
-                    "resource": f"{_RESOURCE}?agent=not-a-uuid",
-                },
-                follow_redirects=False,
-            )
-            assert bad.status_code == 400
-            assert bad.json()["error"] == "invalid_target"
+            # Beide Hint-Formen muessen denselben Hard-Lock liefern: die Legacy-
+            # Query-Variante (Rueckwaertskompatibilitaet fuer bereits eingetragene
+            # Connectoren) UND die neue RFC-8707-Pfad-Variante `{resource}/a/<uuid>`
+            # (WP2/#404 — ueberlebt LLM-Clients, die die Query verwerfen).
+            for resource, bad_resource in (
+                (f"{_RESOURCE}?agent={agent_id}", f"{_RESOURCE}?agent=not-a-uuid"),
+                (f"{_RESOURCE}/a/{agent_id}", f"{_RESOURCE}/a/not-a-uuid"),
+            ):
+                verifier, challenge = _pkce()
+                blob = _authorize_blob_resource(client, client_id, challenge, resource)
+                # Web sendet absichtlich einen FREMDEN agent_id — der Seed-Agent aus
+                # dem Blob muss gewinnen: Consent gelingt (Seed ist Mitglied), und der
+                # ausgegebene Token ist an den Seed-Agenten gebunden.
+                code = _consent_code(client, blob, str(uuid4()), jwt_auth)
+                access = client.post(
+                    "/oauth/token",
+                    data={
+                        "grant_type": "authorization_code",
+                        "code": code,
+                        "redirect_uri": _REDIRECT,
+                        "client_id": client_id,
+                        "code_verifier": verifier,
+                    },
+                ).json()["access_token"]
+                assert _token_agent_id(security.hash_token(access)) == UUID(agent_id)
+
+                # Ungueltige UUID in der resource → authorize 400 invalid_target.
+                bad = client.get(
+                    "/oauth/authorize",
+                    params={
+                        "response_type": "code",
+                        "client_id": client_id,
+                        "redirect_uri": _REDIRECT,
+                        "code_challenge": challenge,
+                        "code_challenge_method": "S256",
+                        "resource": bad_resource,
+                    },
+                    follow_redirects=False,
+                )
+                assert bad.status_code == 400
+                assert bad.json()["error"] == "invalid_target"
     finally:
         cleanup_workspaces([owner_id])
 

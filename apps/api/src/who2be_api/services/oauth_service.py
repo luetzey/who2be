@@ -41,6 +41,7 @@ from who2be_models import (
     OAuthTokenResponse,
     WorkspaceRole,
 )
+from who2be_models.agent_uuid import is_canonical_agent_uuid
 
 logger = logging.getLogger(__name__)
 
@@ -394,26 +395,56 @@ class OAuthService:
 
 
 def _resource_agent_hint(resource: str, expected_base: str) -> UUID | None:
-    """Validiert `resource` und liefert den optionalen `?agent=<uuid>`-Hint.
+    """Validiert `resource` und liefert den optionalen Agent-Hint.
 
-    Erlaubt ist `expected_base` exakt ODER `expected_base?agent=<uuid>` — genau
-    der Schluessel `agent` mit gueltiger UUID, sonst `invalid_target`. So bekommt
-    jeder Agent eine EINDEUTIGE Connector-URL (Claude lehnt Duplikat-URLs ab),
-    waehrend die RFC-8707-Audience-Bindung an die KANONISCHE MCP-Resource
-    (`expected_base`, ohne Query) erhalten bleibt. `None`, wenn kein Hint da ist.
+    Erlaubt sind drei Formen (sonst `invalid_target`):
+
+    - `expected_base` exakt (ggf. mit leerem `?`) → kein Hint (`None`).
+    - `expected_base?agent=<uuid>` — genau der Schluessel `agent` mit gueltiger
+      UUID (Legacy-Query-Variante, muss fuer bereits eingetragene Connectoren
+      weiter funktionieren).
+    - `expected_base/a/<uuid>` (RFC-8707-Pfad-Variante) — ueberlebt LLM-Clients,
+      die fuer `resource` die kanonische PRM-Resource verwenden und eine Query
+      verwerfen; der Pfad bleibt erhalten. Optional zusaetzlich ein LEERER Query
+      (`?`); ein `?agent=...` zusaetzlich zur Pfad-Form ist eine widerspruechliche
+      Angabe und wird abgelehnt.
+
+    In allen Faellen bleibt die RFC-8707-Audience-Bindung an die KANONISCHE
+    MCP-Resource (`expected_base`, ohne Query/Pfad-Suffix) erhalten — der
+    Rueckgabewert ist nur der Hint, welcher Agent gemeint ist.
+
+    Beide Formen pruefen VOR `UUID(...)` die kanonische 8-4-4-4-12-Hex-Form
+    (`who2be_models.agent_uuid.is_canonical_agent_uuid`) — dieselbe Strenge wie
+    im MCP-Resource-Server (`agent_path.is_agent_id`, Issue #404). `UUID(...)`
+    alleine akzeptiert zusaetzlich `{...}`, `urn:uuid:...` und Formen ohne
+    Bindestriche; mehrere Schreibweisen derselben UUID im `resource`-Parameter
+    waeren mehrere Connector-„Identitaeten" fuer denselben Agenten, die der
+    Resource-Server nie advertised.
     """
     base, sep, query = resource.partition("?")
+    path_hint: UUID | None = None
     if base != expected_base:
-        raise OAuthError("invalid_target", "resource passt nicht zum MCP-Server.")
+        prefix = f"{expected_base}/a/"
+        if not base.startswith(prefix):
+            raise OAuthError("invalid_target", "resource passt nicht zum MCP-Server.")
+        suffix = base[len(prefix) :]
+        if not suffix or "/" in suffix:
+            raise OAuthError("invalid_target", "resource-Pfad erlaubt nur .../a/<uuid>.")
+        if not is_canonical_agent_uuid(suffix):
+            raise OAuthError("invalid_target", "agent im resource-Pfad ist keine gueltige UUID.")
+        path_hint = UUID(suffix)
+
     if not sep or query == "":
-        return None
+        return path_hint
+    if path_hint is not None:
+        raise OAuthError("invalid_target", "resource: Pfad-Hint und Query schliessen sich aus.")
     params = parse_qs(query, keep_blank_values=True)
     if set(params) != {"agent"} or len(params["agent"]) != 1:
         raise OAuthError("invalid_target", "resource-Query erlaubt nur ?agent=<uuid>.")
-    try:
-        return UUID(params["agent"][0])
-    except ValueError as exc:
-        raise OAuthError("invalid_target", "agent in resource ist keine gueltige UUID.") from exc
+    agent_param = params["agent"][0]
+    if not is_canonical_agent_uuid(agent_param):
+        raise OAuthError("invalid_target", "agent in resource ist keine gueltige UUID.")
+    return UUID(agent_param)
 
 
 def _is_allowed_redirect(uri: str) -> bool:

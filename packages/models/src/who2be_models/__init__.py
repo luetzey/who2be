@@ -16,6 +16,7 @@ from who2be_models.agent import (
     AgentWithRenderedPrompt,
     RenderFormat,
 )
+from who2be_models.agent_uuid import AGENT_UUID_PATTERN, AGENT_UUID_RE, is_canonical_agent_uuid
 from who2be_models.dashboard import (
     ActivityPagination,
     DashboardActivity,
@@ -270,6 +271,8 @@ __all__ = [
     "AccountDeletionRead",
     "ActionableBy",
     "ActivityPagination",
+    "AGENT_UUID_PATTERN",
+    "AGENT_UUID_RE",
     "ApiProblem",
     "ArtifactAppend",
     "ArtifactCreate",
@@ -491,6 +494,7 @@ __all__ = [
     "decode_cursor",
     "encode_cursor",
     "is_allowed_transition",
+    "is_canonical_agent_uuid",
     "is_tool_visible",
     "is_tool_visible_for",
 ]
