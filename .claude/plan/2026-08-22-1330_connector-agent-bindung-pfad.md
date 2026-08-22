@@ -108,3 +108,88 @@ ADR-0036-Ergänzung (Pfad-Variante), `CHANGELOG` (Unreleased),
 - Kein Wegfall des Logins (OAuth-Consent braucht eine Session).
 - Keine Subdomain/Infra pro Agent.
 - Keine Änderung an der Audience-/Token-Bindung (Blob bleibt kanonisch).
+
+---
+
+# Übergabe-Bericht (2026-08-22, vor dem PR)
+
+## (a) Betroffene Software-Elemente
+
+Ermittelt mit `git diff c180801..HEAD --name-only` + ripgrep-Rückwärtssuche über
+`apps/` und `packages/` — nicht aus dem Kontextfenster.
+
+**DIREKT** (importiert / ruft auf):
+
+| Symbol | Aufrufer |
+| --- | --- |
+| `_resource_agent_hint` (API) | `oauth_service.authorize_to_consent_url:160` — einziger Produktiv-Aufrufer |
+| `AgentPathMiddleware`, `build_agent_prm_route` (MCP) | `server.main():1691,1703,1719` — nur im `transport == "http"`-Zweig |
+| `is_canonical_agent_uuid` / `AGENT_UUID_PATTERN` (models) | `oauth_service:44,433,445`; `agent_path:36,46,52` |
+| `is_agent_id`, `agent_resource_url`, `agent_prm_url`, `parse_agent_id` (MCP) | modul-intern + Tests |
+
+**TRANSITIV** (zweite Ebene): `GET /oauth/authorize` (`routers/oauth.py`) über
+`authorize_to_consent_url`; `OAuthConsentPage` über den `agent_id`-Wert im
+signierten Blob (Code unverändert, nur der Wert kommt jetzt regelmäßig an —
+vorher praktisch nie). `who2be_models.__init__` re-exportiert die drei neuen
+Symbole; `packages/models` ist Abhängigkeit von API **und** MCP, der Import ist
+aber additiv (keine Signatur geändert).
+
+**VERMUTET — ausdrücklich unsicher** (Laufzeit-Verdrahtung, nicht statisch
+belegbar):
+
+- Der ASGI-Stack von FastMCP: `AgentPathMiddleware` wird über
+  `mcp.run(middleware=[…])` einsortiert, die PRM-Route über die **private**
+  Liste `mcp._additional_http_routes`. Beides ist gegen die aktuell installierte
+  FastMCP-Version verifiziert (Middleware läuft vor dem Routing, Route wird von
+  `create_streamable_http_app` gelesen), aber ein Upgrade kann das brechen —
+  fail-open, siehe ADR-Addendum.
+- Deployment: `deploy/hetzner/Caddyfile` proxied `mcp.{$DOMAIN}` pfad-agnostisch,
+  der neue Well-Known-Pfad ist also ohne Infra-Änderung erreichbar. Nicht gegen
+  die laufende Umgebung getestet.
+- Bereits eingetragene Connectoren mit `?agent=`-URL: serverseitig weiter
+  akzeptiert, aber nicht gegen einen echten Client verifiziert.
+
+Der Diff ist klein, der Radius nicht: `_resource_agent_hint` sitzt im
+Authorize-Choke-Point jedes Connector-Logins.
+
+## (b) Rest-Test-Liste
+
+**Diff-Coverage:** Kein CI-Report verfügbar (kein Docker-Daemon → keine DB).
+Lokal gemessen: `agent_path.py` **99 %** (einziger Miss: Branch `134->136`),
+`agent_uuid.py` **100 %**, der geänderte Bereich in `oauth_service.py`
+(Zeilen 396–447) liegt außerhalb der Missing-Ranges. Gesamt-Coverage 62,68 % —
+das Gate `--cov-fail-under=85` reißt, aber **vorbestehend**: der unveränderte
+Baseline-Stand liegt bei 62,47 %, Ursache sind 445 übersprungene DB-Tests.
+
+**Von keinem ausgeführten Test abgedeckt:**
+
+- `test_oauth_resource_agent_hint_hard_locks` (beide Hint-Formen) — DB-gated,
+  hier übersprungen. **Manuell zu prüfen:** dass ein Consent über
+  `…/mcp/a/<uuid>` einen Token ausstellt, der an genau diesen Agenten gebunden
+  ist, und dass ein fremder Agent mit 403 durchfällt.
+- Der reale OAuth-Flow gegen einen echten Claude-Client. **Manuell zu prüfen —
+  das ist die eigentliche Annahme dieses Fixes:** ob der Client die
+  Pfad-Resource aus der PRM tatsächlich in den `resource`-Parameter übernimmt.
+  Tut er es nicht, greift der Fail-safe (Consent zeigt wie bisher das Dropdown),
+  aber der Bug wäre nicht behoben.
+- `main()` im `http`-Zweig läuft nur gegen ein gemocktes `mcp.run`
+  (`test_server_main.py`); ein echter Serverstart ist nicht getestet.
+
+Verhaltens-neutral und deshalb nicht gelistet: Docstring-/Kommentar-Änderungen,
+i18n-Strings, die Umstellung von `try/except UUID` auf Vorab-Prüfung (identische
+Fehlermeldung und `error`-Code).
+
+## (c) Security-Review
+
+`security-reviewer` über WP1+WP2 gelaufen: **keine kritischen, hohen oder
+mittleren Befunde**. Zwei niedrige:
+
+- **N-1** (Alias-UUID-Schreibweisen) — behoben, Commit `43e9005`, selbst
+  gegenverifiziert.
+- **N-2** (Consent zeigt bei Agent aus Nicht-Default-Workspace nur die rohe
+  UUID) — als Issue #405 ausgelagert; der saubere Fix braucht einen neuen
+  Lookup-Endpunkt und gehört nicht in einen Bugfix-PR.
+
+Vier Hinweise (Token-Audience RS-seitig nicht erzwungen, private FastMCP-API,
+String-Kopplung `MCP_RESOURCE_URL` ↔ PRM, zwei Hint-Formen parallel) stehen im
+ADR-0036-Addendum unter „Bekannte Grenzen".

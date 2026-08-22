@@ -122,3 +122,73 @@ fertige Per-Agent-URL auf der Agent-Detail-Seite (`AgentConnectorSection`).
 Verifizierung: `test_oauth.py::test_resource_agent_hint_parses_and_validates`
 (DB-frei, Grammatik) + `…::test_oauth_resource_agent_hint_hard_locks` (DB-gated,
 Hard-Lock + invalid-UUID-Reject). E2E gegen echten Claude-Client weiter offen.
+
+## Addendum 2026-08-22 — Agent-Bindung wandert in den Pfad (`…/mcp/a/<uuid>`)
+
+**Problem:** Das Addendum von 2026-06-25 setzte auf `…/mcp?agent=<uuid>` und
+nannte als Fail-safe: „Schickt der Client die kanonische PRM-Resource ohne
+Query, gilt unverändert die Consent-Auswahl." Genau das ist der Normalfall —
+nicht die Ausnahme. Der LLM-Client übernimmt den RFC-8707-`resource`-Parameter
+aus der RFC-9728-Protected-Resource-Metadata des MCP-Servers, und die trägt
+`{mcp_public_url}{http_path}` **ohne** Query (FastMCP
+`RemoteAuthProvider._get_resource_url`). Der Agent-Hint erreichte `authorize`
+also nie; der Hard-Lock war ein toter Pfad und der User musste den Agenten im
+Consent erneut wählen (Issue #404).
+
+**Entscheidung:** Der Agent wandert in den **Pfad**. RFC 8707 verbietet nur das
+Fragment, und RFC 9728 §3.1 leitet den PRM-Pfad aus dem Resource-Pfad ab — der
+Pfad ist damit Teil der Resource-Identität und übersteht die Kanonisierung des
+Clients. Die Connector-URL ist `{mcp_public_url}{http_path}/a/<uuid>`.
+
+- **MCP-Server** (`apps/mcp/src/who2be_mcp/agent_path.py`): eine eigene
+  PRM-Route unter `/.well-known/oauth-protected-resource{http_path}/a/{id}`
+  advertisiert `resource = {public}{http_path}/a/{id}`. `AgentPathMiddleware`
+  läuft vor dem Routing, schreibt den Pfad auf den kanonischen Endpoint um
+  (damit die bestehende, auth-geschützte Route greift) und korrigiert auf dem
+  Rückweg genau einen Wert: den `resource_metadata`-Parameter im
+  `WWW-Authenticate` einer 401 — FastMCP setzt dort fest die kanonische PRM-URL.
+- **API** (`_resource_agent_hint`): akzeptiert `{base}`, `{base}?agent=<uuid>`
+  (Legacy) und `{base}/a/<uuid>`. Pfad-Hint und Query zusammen sind
+  widersprüchlich und werden abgelehnt.
+- **Unverändert:** In den signierten Blob geht weiterhin die **kanonische**
+  Resource; `consent()` vergleicht dagegen. Der Hard-Lock nimmt den Agenten aus
+  dem Blob, nicht aus dem Web-Submit. Autoritatives Gate bleibt
+  `_resolve_agent_membership` unter `tenant_scope`.
+
+**Kanonische UUID-Form (Security-Review N-1):** Eine Resource-URL *ist* die
+Resource-Identität, also muss für dieselbe UUID auf beiden Seiten dieselbe
+Strenge gelten. `uuid.UUID()` akzeptiert zusätzlich `{…}`, `urn:uuid:…` und
+Formen ohne Bindestriche — das ergäbe mehrere Connector-Identitäten für einen
+Agenten. Das Muster liegt deshalb einmal in `who2be_models.agent_uuid`; API und
+MCP-Server ziehen es von dort, beide Hint-Formen prüfen es vor `UUID(…)`.
+
+**Bekannte Grenzen (aus dem Security-Review, bewusst offen):**
+
+- Der Resource-Server erzwingt die neue Per-Agent-Audience **nicht**:
+  `Who2BeTokenVerifier` prüft nur `GET /v1/me`, die Pfad-UUID wird nach dem
+  Rewrite verworfen. Ein Token für `…/a/A` funktioniert auch auf `…/a/B`. Heute
+  folgenlos — die effektive Identität kommt ausschließlich aus dem Token —, aber
+  die Resource-Granularität suggeriert eine Trennung, die RS-seitig nicht
+  existiert.
+- Die PRM-Route wird über `mcp._additional_http_routes` registriert: FastMCP hat
+  keinen öffentlichen Hook für fertige Starlette-Routes (`custom_route` nimmt nur
+  Handler-Funktionen und kann das ASGI-CORS des SDK nicht tragen). Fällt das
+  Attribut bei einem Upgrade weg, verschwindet die agent-spezifische PRM **still**
+  — fail-open in Richtung „mehr Nutzerinteraktion", also unkritisch, aber
+  unsichtbar. Ein Startup-Assert bzw. Smoke-Test würde den Bruch zeigen.
+- `MCP_RESOURCE_URL` (API) und die vom MCP-Server advertisierte Resource werden
+  byte-genau verglichen; jede Abweichung (Trailing-Slash, Host-Groß-/
+  Kleinschreibung, expliziter `:443`) ergibt `invalid_target` — fail-closed, aber
+  schwer zu diagnostizieren.
+- Die Legacy-Query bleibt vorerst parallel bestehen. Nach dem Migrationsfenster
+  sollte sie entfallen, damit ein Agent genau eine Resource-Identität hat.
+- Der Consent zeigt bei einem gelockten Agenten aus einem Nicht-Default-Workspace
+  nur die rohe UUID (Issue #405) — durch diese Änderung wird der Hard-Lock erstmals
+  regelmäßig durchlaufen und die Lücke damit sichtbar.
+
+Verifizierung: `apps/mcp/tests/test_agent_path.py` (Parser, Middleware,
+401-Header-Rewrite, PRM-Route, End-to-End gegen eine echte `mcp.http_app`
+inkl. Rückwärtskompatibilität des kanonischen Pfads),
+`test_oauth.py::test_resource_agent_hint_parses_path_form` (DB-frei) +
+`…::test_oauth_resource_agent_hint_hard_locks` (DB-gated, beide Hint-Formen).
+E2E gegen echten Claude-Client weiter offen.

@@ -158,7 +158,10 @@ Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
 ### MCP + OAuth
 
 - MCP-HTTP-Transport (ADR-0034) + OAuth-2.1-Remote-Connector (ADR-0036,
-  per-Agent-URL `?agent=<uuid>`); Refresh-Reuse reject-only statt
+  per-Agent-URL `.../mcp/a/<uuid>` — Agent im **Pfad**, seit 2026-08-22
+  (#404, ADR-0036-Addendum); `?agent=<uuid>` bleibt rückwärtskompatibel,
+  griff praktisch nie, weil Clients die Query aus der PRM-Resource
+  verwerfen); Refresh-Reuse reject-only statt
   Ketten-Revocation (DECISIONS 2026-07-05); OAuth-Smoke beide Editionen grün.
 - **81 Tools** (58 + 23 aus WorkArea/KB/Tabellen, ADR-0047): Read + Write
   (ADR-0030), `search` + `search_content`
