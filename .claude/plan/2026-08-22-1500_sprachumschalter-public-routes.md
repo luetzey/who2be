@@ -94,3 +94,62 @@ schlägt auf die gerenderten Strings durch, Karten-Zentrierung unverändert.
 - Keine Änderung an der Vorrang-Regel für `user_metadata.preferred_locale`
   (`shouldApplyStoredLocale`) — die ist frisch und bewusst so gebaut.
 - Kein Umbau der Detektor-Kette.
+
+---
+
+# Übergabe-Bericht (2026-08-22, vor dem PR)
+
+## (a) Betroffene Software-Elemente
+
+Ermittelt mit ripgrep über `apps/web/src` (Rückwärtssuche nach Aufrufern), nicht
+aus dem Kontextfenster.
+
+**DIREKT:**
+
+| Symbol | Aufrufer |
+| --- | --- |
+| `PublicLayout` (neu) | `app/routes.tsx` — einziger Aufrufer, ein Route-Element |
+| `LanguageSwitcher` | bisher nur `AppShell:107`, jetzt zusätzlich `PublicLayout` |
+| `syncHtmlLang` (neu, modul-lokal) | `i18n/index.ts` — `languageChanged`-Listener + `.then` nach Init |
+
+**TRANSITIV:** Alle sieben öffentlichen Routen erben die Insel über das
+Route-Element (`/login`, `/signup`, `/reset-password`, `/auth/callback`,
+`/invitations/:token/accept`, `/oauth/consent`, `/legal/*`). `useLocale`
+(unverändert) wird von der Insel nun auch ohne Session aufgerufen — der Pfad war
+schon vorgesehen (`.catch` um `supabase.auth.updateUser`, dokumentiert im
+Docstring), wird aber erstmals regelmäßig durchlaufen.
+
+**VERMUTET — unsicher:** Das Zusammenspiel von `markExplicitLocaleChoice()` auf
+der Login-Seite mit `shouldApplyStoredLocale()` nach dem Login ist aus dem Code
+belegt (erste Person im Tab ⇒ `!explicitLocaleChoice` ⇒ die eigene Wahl gewinnt),
+aber **nicht** als Test über die Route-Grenze hinweg festgenagelt: die
+bestehenden Regressionstests in `useApplyStoredLocale.test.tsx` decken den Hook
+ab, nicht den Ablauf „Sprache auf `/login` wählen → einloggen".
+
+## (b) Rest-Test-Liste
+
+**Diff-Coverage (Web-CI-Report):** Statements 86,50 %, Branches 81,16 % (Floor
+79), Functions 82,02 %, Lines 87,48 %. 180 Dateien / 1010 Tests grün
+(Referenz vor diesem Paket: 178 / 1005).
+
+Abgedeckt: `PublicLayout` (3 Tests — Umschalter auf `/login` und
+`/oauth/consent` im DOM, Sprachwechsel schlägt auf gerenderte Strings durch),
+`syncHtmlLang` (2 Tests — Wechsel nach `en` und zurück nach `de`).
+
+**Von keinem Test abgedeckt:**
+
+- Die Route-übergreifende Vorrang-Kette (Sprache auf `/login` wählen → Login →
+  greift `useApplyStoredLocale` die Server-Präferenz nicht mehr?).
+  **Manuell zu prüfen:** auf `/login` auf Englisch stellen, einloggen — die UI
+  muss englisch bleiben, auch wenn im Profil `preferred_locale: de` steht.
+- `SignupPage`, `ResetPasswordPage`, `AuthCallbackPage`, `InvitationAcceptPage`
+  haben keinen eigenen Sichtbarkeits-Test; sie hängen strukturell an derselben
+  Route und sind über `routes.tsx` mit abgedeckt, aber nicht einzeln belegt.
+- Kosmetik auf `/legal/*`: die `fixed`-Insel und das `legalLabel`-Badge des
+  `LegalLayout`-Headers beanspruchen beide die obere rechte Ecke. Kein
+  Funktionsverlust (die Insel liegt mit `z-50` deckend darüber), aber auf sehr
+  schmalen Viewports nicht abgestimmt. **Manuell zu prüfen** und ggf. als
+  eigener kleiner Fund nachzuziehen.
+
+Verhaltens-neutral und deshalb nicht gelistet: Kommentare, Doku, der
+`index.html`-Kommentar (kein Wertwechsel).
