@@ -147,3 +147,85 @@ abgeschickt, es ist eine Anzeige, kein Autorisierungsversuch. Das 403 bleibt am
 
 `client_name` und Redirect-Host liest das Frontend weiterhin selbst aus dem
 Blob (dokumentiert als reine UI-Vorschau) — die Preview dupliziert sie nicht.
+
+---
+
+# Übergabe-Bericht (2026-08-22, vor dem PR)
+
+## (a) Betroffene Software-Elemente
+
+Ripgrep-Rückwärtssuche über `apps/` und `packages/`, nicht aus dem Kontextfenster.
+
+**DIREKT:**
+
+| Symbol | Aufrufer |
+| --- | --- |
+| `consent_preview` (Service) | `routers/oauth.py:199` |
+| `get_consent_principal` / `ConsentPrincipal` | `routers/oauth.py:168` (`consent`) **und** `:188` (`consent/preview`) |
+| `PgOAuthRepository.agent_display` | `oauth_service._agent_display` — einziger Aufrufer |
+| `oauthConsentPreview` (Web) | `OAuthConsentPage.tsx:66` |
+| `OAuthConsentApprove.agent_id` (jetzt optional) | `routers/oauth.py:175` → `consent()` |
+
+**TRANSITIV:** Jeder Consent-Durchlauf — also jedes Verbinden eines
+MCP-Connectors. `OAuthConsentPage` hängt jetzt an zwei Effekten statt einem;
+`listAgents` wird im Lock-Fall nicht mehr aufgerufen.
+
+**VERMUTET — ausdrücklich unsicher:** Der Auth-Fix ändert das Verhalten eines
+**bestehenden** Endpunkts (`POST /oauth/consent` weist `w2b_`-Tokens jetzt mit
+401 ab). Statisch ist kein Aufrufer erkennbar, der das täte — der Consent ist
+eine Browser-Seite mit Supabase-JWT. Ein externes Skript oder ein Integrationsweg
+außerhalb dieses Repos, der maschinell consentet, würde brechen. Genau dieser
+Weg war die Lücke; der Bruch wäre gewollt, sollte aber bekannt sein.
+
+## (b) Rest-Test-Liste
+
+**Diff-Coverage:** Erstmals in dieser Session mit echter DB gemessen (PostgreSQL
+16 + pgvector im Container): **1741 passed, 0 skipped**, Gesamt-Coverage
+**91,21 %** — `Required test coverage of 85% reached`. Web: **1011 Tests / 180
+Dateien**, Branches 80,99 % (Floor 79).
+
+Abgedeckt: alle vier Preview-Fälle DB-frei, Existenz-Orakel-Vergleich
+byte-genau, manipulierter/abgelaufener Blob, `w2b_`-Token gegen beide
+Consent-Endpunkte (der Regressionstest schlägt gegen den alten Code fehl —
+mit entschärftem Guard liefert der alte Pfad weiterhin 200 + Auth-Code), die
+drei `agent_id`-Fälle, sowie die drei Web-Zustände (gelockt auflösbar, gelockt
+unauflösbar, ungelockt) inkl. „`listAgents` wird im Lock-Fall nicht gerufen".
+
+**Von keinem Test abgedeckt:**
+
+- Der reale Consent gegen einen echten LLM-Client mit einem Agenten aus einem
+  **Nicht-Default-Workspace**. **Manuell zu prüfen:** Connector-URL eines
+  Agenten aus einem zweiten Workspace verbinden — es muss Name + Workspace
+  erscheinen und der Consent durchlaufen, auch wenn der Default-Workspace leer
+  ist.
+- Der `access_denied`-Redirect beim Ablehnen im Fall „gelockt, nicht auflösbar"
+  ist serverseitig getestet, aber nicht end-to-end gegen einen echten Client.
+- Ob irgendwo außerhalb dieses Repos ein maschineller Consent existiert, der
+  jetzt 401 bekommt (siehe VERMUTET oben) — nur durch Betrieb feststellbar.
+
+Verhaltens-neutral und deshalb nicht gelistet: Docstrings, Kommentare, i18n,
+der Repository-Umzug von `_agent_display` (reiner Struktur-Umzug, identische
+Testzahlen).
+
+## (c) Security-Review
+
+`security-reviewer` über das Paket gelaufen. Kernansprüche bestätigt: kein
+Existenz-Orakel (auch nicht über Timing — identische Round-Trip-Zahl in beiden
+stummen Fällen, Rest-Unterschied bei SNR ~1:1000 nicht nutzbar), kein IDOR über
+selbst beschaffte Blobs, `tenant_scope` korrekt platziert und für die ganze
+Query wirksam, kein Leak über den `JOIN workspace`, kein XSS, Hard-Lock und
+Audience-Kette unverändert.
+
+Drei Befunde, alle behoben:
+
+- **HOCH, vorbestehend** — `/oauth/consent` akzeptierte `w2b_`-Tokens ⇒
+  Privilege Escalation (`viewer` → `admin`, plus Workspace-/Policy-Pin-Escape,
+  plus revocation-resistente Refresh-Kette). Selbst am Code verifiziert.
+- **MITTEL, neu** — der Preview ignorierte denselben Token-Pin. Gleicher Fix.
+- **NIEDRIG, neu** — „Ablehnen" scheiterte an 422, weil `agent_id` Pflicht war.
+
+Zwei Hinweise bewusst offengelassen: der Preview schreibt keinen Audit-Eintrag
+(reiner Read; ein `w2b_`-Token am Consent ist jetzt aber ein starker
+Missbrauchs-Indikator und wäre ein sinnvolles Signal), und zwei kleine
+Divergenzen zwischen Preview und autoritativem Pfad (nicht-kanonische UUID,
+`resource`-Prüfung) — beide folgenlos, im Docstring vermerkt.
