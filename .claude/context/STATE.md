@@ -28,6 +28,17 @@ kaputt waren zwei Mechanik-Punkte und eine große untersetzte Fläche.
 
 Offen: die 78 deutschen `detail`-Strings der API (Issue #402, braucht ADR).
 
+**Nachtrag 2026-08-22 (Issue #408):** Der Umschalter war auf den öffentlichen
+Seiten gar nicht erreichbar — er hing nur in `AppShell`, und alle Routen vor dem
+Login liegen außerhalb von `AppLayout`. Die Bestandsaufnahme hatte auf
+Key-Abdeckung gezählt und die Erreichbarkeit deshalb nicht gesehen; aufgefallen
+ist es erst am realen OAuth-Consent. Jetzt bündelt `app/PublicLayout.tsx` diese
+Routen und stellt die Sprach-Insel bereit (Login, Signup, Passwort-Reset,
+Invitation-Onboarding, Consent, Legal). Dazu folgt `<html lang>` der aktiven
+Sprache (`syncHtmlLang` in `src/i18n/index.ts`) — vorher statisch `de`, mit
+Folgen für Screenreader und das Übersetzungsangebot des Browsers.
+Plan: `.claude/plan/2026-08-22-1500_sprachumschalter-public-routes.md`.
+
 ## Standup-Folgearbeiten (2026-08-21)
 
 Playbook „Projekt-Standup" gelaufen; Ergebnis war weniger offene Arbeit als

@@ -10,6 +10,18 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Fixed
 
+- The language switcher is now reachable on the pages you see before signing
+  in. It lived only in the app shell, while every public route — sign-in,
+  sign-up, password reset, invitation onboarding, the OAuth consent screen and
+  the legal pages — sits outside that shell. The English strings were complete
+  all along; there was simply no way to switch to them, so the browser's
+  language decided. An invited user whose browser is set to German landed on a
+  German onboarding page with no recourse.
+- `<html lang>` now follows the active language. It was hard-coded to `de` and
+  never updated, so an English UI still declared itself a German document —
+  screen readers pick their pronunciation from it and browsers base their
+  translation offer on it.
+
 - Connecting a remote MCP connector no longer asks you to pick an agent again.
   The per-agent connector URL now carries the agent in its path
   (`.../mcp/a/<uuid>`) instead of a query (`?agent=<uuid>`). LLM clients take the
