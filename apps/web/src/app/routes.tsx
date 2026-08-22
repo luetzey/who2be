@@ -18,6 +18,7 @@ import {
 import { CookieConsentBanner, LegalLayout } from '@/features/legal/layout'
 
 import { AppLayout } from './AppLayout'
+import { PublicLayout } from './PublicLayout'
 
 // Eager: `LoginPage` ist die einzige Route ausserhalb `<AppLayout>`/`<Suspense>`
 // und muss synchron verfuegbar sein. Die Authenticated-Routes liegen unter
@@ -284,27 +285,31 @@ export function RouterRoot() {
       <SessionProvider>
         <AuthTokenProvider>
           <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/signup" element={<SignupPage />} />
-            <Route path="/reset-password" element={<ResetPasswordPage />} />
-            {/* OAuth-/E-Mail-Confirm-Landing: public, etabliert die Session
-                aus dem URL-Hash und leitet dann weiter. */}
-            <Route path="/auth/callback" element={<AuthCallbackPage />} />
-            <Route
-              path="/invitations/:token/accept"
-              element={<InvitationAcceptPage />}
-            />
-            {/* OAuth-Remote-MCP-Consent (ADR-0034-Folge): public Route, der
-                eingeloggte User autorisiert hier einen LLM-Client fuer genau
-                einen Agenten. Ohne Session springt die Page auf den Login. */}
-            <Route path="/oauth/consent" element={<OAuthConsentPage />} />
-            {/* Oeffentliche Pflichtseiten: auch ausgeloggt erreichbar. */}
-            <Route path="/legal" element={<LegalLayout />}>
-              <Route index element={<Navigate to="/legal/impressum" replace />} />
-              <Route path="impressum" element={<ImpressumPage />} />
-              <Route path="agb" element={<TermsPage />} />
-              <Route path="datenschutz" element={<PrivacyPage />} />
-              <Route path="dpa" element={<DpaPage />} />
+            {/* Oeffentliche Routen (WP1, Issue #408): gemeinsame Shell nur
+                fuer die Sprach-Insel — kein Auth-Gate, kein AppShell. */}
+            <Route element={<PublicLayout />}>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/signup" element={<SignupPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
+              {/* OAuth-/E-Mail-Confirm-Landing: public, etabliert die Session
+                  aus dem URL-Hash und leitet dann weiter. */}
+              <Route path="/auth/callback" element={<AuthCallbackPage />} />
+              <Route
+                path="/invitations/:token/accept"
+                element={<InvitationAcceptPage />}
+              />
+              {/* OAuth-Remote-MCP-Consent (ADR-0034-Folge): public Route, der
+                  eingeloggte User autorisiert hier einen LLM-Client fuer genau
+                  einen Agenten. Ohne Session springt die Page auf den Login. */}
+              <Route path="/oauth/consent" element={<OAuthConsentPage />} />
+              {/* Oeffentliche Pflichtseiten: auch ausgeloggt erreichbar. */}
+              <Route path="/legal" element={<LegalLayout />}>
+                <Route index element={<Navigate to="/legal/impressum" replace />} />
+                <Route path="impressum" element={<ImpressumPage />} />
+                <Route path="agb" element={<TermsPage />} />
+                <Route path="datenschutz" element={<PrivacyPage />} />
+                <Route path="dpa" element={<DpaPage />} />
+              </Route>
             </Route>
             <Route element={<RequireAuth />}>
               <Route path="/" element={<DefaultWorkspaceRedirect />} />

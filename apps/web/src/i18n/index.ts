@@ -32,6 +32,24 @@ export function isLocale(value: unknown): value is Locale {
 // das Hinzufuegen eines Namespaces nur die JSONs beruehrt.
 const resources = { de, en } as const
 
+// `documentElement.lang` an die aktive Sprache angleichen: Screenreader waehlen
+// darueber die Aussprache, Browser leiten daraus ihr Uebersetzungsangebot ab,
+// und `htmlTag` ist die letzte Stufe der Detektor-Kette oben — ohne Sync bliebe
+// das Attribut dauerhaft auf dem statischen Startwert aus `index.html` stehen.
+// Bewusst hier im Setup statt in einem React-Hook: eine Modul-Funktion greift
+// auch auf oeffentlichen Seiten ohne App-Shell, in der kein Hook gemountet ist.
+// `resolvedLanguage` liefert bereits den Basis-Sprachcode (`load:
+// 'languageOnly'`), also z. B. `en` statt `en-US`. Guard gegen `document`, falls
+// dieses Modul je in einer Umgebung ohne DOM ausgewertet wird (SSR/Node).
+function syncHtmlLang(): void {
+  if (typeof document === 'undefined') {
+    return
+  }
+  document.documentElement.lang = i18n.resolvedLanguage ?? DEFAULT_LOCALE
+}
+
+i18n.on('languageChanged', syncHtmlLang)
+
 void i18n
   .use(LanguageDetector)
   .use(initReactI18next)
@@ -59,6 +77,7 @@ void i18n
       useSuspense: false,
     },
   })
+  .then(syncHtmlLang)
 
 export default i18n
 
