@@ -478,7 +478,7 @@
       "nameLabel": "Connector name",
       "nameValue": "Who2Be – {{name}}",
       "urlLabel": "Server URL",
-      "urlHint": "Paste it as the URL when adding a connector in Claude. You confirm the agent in the consent dialog during login.",
+      "urlHint": "Paste it as the URL when adding a connector in Claude. The URL determines the agent, so you just confirm it during login.",
       "copyUrl": "Copy URL",
       "copyName": "Copy name",
       "copied": "Copied to clipboard.",

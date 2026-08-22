@@ -17,13 +17,18 @@ interface AgentConnectorSectionProps {
 
 /**
  * Kopierbare Verbindungsparameter fuer einen Remote-MCP-Connector (OAuth) dieses
- * Agenten. Die URL traegt `?agent=<id>`, damit sie pro Agent eindeutig ist
- * (Claude lehnt Duplikat-URLs ab) und den Agenten beim Consent bindet. Kein
- * Token — die Autorisierung laeuft ueber den OAuth-Login.
+ * Agenten. Die URL traegt den Agenten im Pfad (`/a/<id>`), damit sie pro Agent
+ * eindeutig ist (Claude lehnt Duplikat-URLs ab) und den Agenten beim Consent
+ * bindet. Der Pfad ist bewusst gewaehlt statt einer Query: Der LLM-Client nutzt
+ * fuer den OAuth-`resource`-Parameter die kanonische PRM-Resource des
+ * MCP-Servers und verwirft dabei die Query — mit `?agent=` kam der Hint nie
+ * beim Consent an und der User musste den Agenten erneut im Dropdown waehlen.
+ * Der Pfad ist Teil der Resource-Identitaet und ueberlebt. Kein Token — die
+ * Autorisierung laeuft ueber den OAuth-Login.
  */
 export function AgentConnectorSection({ agentId, agentName }: AgentConnectorSectionProps) {
   const { t } = useTranslation('agents')
-  const connectorUrl = `${config.mcpUrl}?agent=${agentId}`
+  const connectorUrl = `${config.mcpUrl.replace(/\/+$/, '')}/a/${agentId}`
   const connectorName = t('connector.nameValue', { name: agentName })
 
   function copy(value: string) {
