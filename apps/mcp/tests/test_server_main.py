@@ -8,6 +8,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from who2be_mcp.agent_path import AgentPathMiddleware
+
 
 @pytest.fixture(autouse=True)
 def _clear_settings_cache() -> Iterator[None]:
@@ -63,14 +65,20 @@ def test_main_uses_http_transport_when_env_says_http(
 
     server.main()
 
-    assert run_calls == [
-        {
-            "transport": "http",
-            "host": "1.2.3.4",
-            "port": 9999,
-            "path": "/custom-mcp",
-        }
-    ]
+    assert len(run_calls) == 1
+    call = run_calls[0]
+    assert call["transport"] == "http"
+    assert call["host"] == "1.2.3.4"
+    assert call["port"] == 9999
+    assert call["path"] == "/custom-mcp"
+    # Issue #404: die Pfad-Variante `{http_path}/a/{uuid}` haengt an einer
+    # ASGI-Middleware vor dem Routing plus einer eigenen PRM-Route.
+    assert [m.cls for m in call["middleware"]] == [AgentPathMiddleware]
+    assert any(
+        getattr(route, "path", "")
+        == "/.well-known/oauth-protected-resource/custom-mcp/a/{agent_id}"
+        for route in server.mcp._additional_http_routes
+    )
 
 
 def test_settings_default_transport_is_stdio() -> None:
