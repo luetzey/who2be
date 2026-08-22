@@ -33,21 +33,23 @@ from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from who2be_models.agent_uuid import AGENT_UUID_PATTERN, is_canonical_agent_uuid
+
 #: Pfad-Segment vor der Agent-UUID — kurz gehalten, weil die Connector-URL
 #: manuell in Client-UIs eingetragen wird.
 AGENT_SEGMENT = "a"
 
-# Kanonische 8-4-4-4-12-Hex-Form. Bewusst NICHT `uuid.UUID()`: das akzeptiert
-# auch `{...}`, `urn:uuid:...` und Formen ohne Bindestriche — mehrere Schreibungen
-# derselben UUID waeren mehrere Resource-Identitaeten.
-_UUID_PATTERN = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
-_UUID_RE = re.compile(rf"^{_UUID_PATTERN}$")
+# Kanonische 8-4-4-4-12-Hex-Form, geteilt mit der OAuth-Seite
+# (`who2be_models.agent_uuid`) — Begruendung fuer die Striktheit dort. `_UUID_PATTERN`
+# bleibt hier als Alias, weil `_agent_path_re` das rohe (unverankerte) Muster
+# zum Einbetten in den Pfad-Regex braucht.
+_UUID_PATTERN = AGENT_UUID_PATTERN
 _RESOURCE_METADATA_RE = re.compile(rb'resource_metadata="[^"]*"')
 
 
 def is_agent_id(value: str) -> bool:
     """`True`, wenn `value` eine UUID in kanonischer Schreibweise ist."""
-    return _UUID_RE.match(value) is not None
+    return is_canonical_agent_uuid(value)
 
 
 @lru_cache(maxsize=8)

@@ -261,13 +261,18 @@ def test_resource_agent_hint_parses_and_validates() -> None:
     # Gueltiger agent-Query → UUID.
     assert oauth_service._resource_agent_hint(f"{base}?agent={aid}", base) == aid
 
-    # Falsche Basis, fremder/zusaetzlicher Key, mehrfacher agent, kaputte UUID.
+    # Falsche Basis, fremder/zusaetzlicher Key, mehrfacher agent, kaputte UUID,
+    # sowie Alias-Schreibweisen derselben UUID (Issue #404 N-1): `UUID(...)`
+    # akzeptiert diese, die kanonische Pruefung bewusst nicht.
     for bad_resource in (
         "https://evil.example/mcp",
         f"{base}?foo=bar",
         f"{base}?agent={aid}&x=1",
         f"{base}?agent={aid}&agent={aid}",
         f"{base}?agent=not-a-uuid",
+        f"{base}?agent={str(aid).replace('-', '')}",
+        f"{base}?agent=urn:uuid:{aid}",
+        f"{base}?agent={{{aid}}}",
     ):
         with pytest.raises(oauth_service.OAuthError) as exc:
             oauth_service._resource_agent_hint(bad_resource, base)
@@ -286,7 +291,8 @@ def test_resource_agent_hint_parses_path_form() -> None:
     assert oauth_service._resource_agent_hint(f"{base}/a/{aid}?", base) == aid
 
     # Fremde Basis, kaputte UUID, zusaetzliche Pfadsegmente, fehlende UUID,
-    # falsches Segment, widerspruechlicher `?agent=` zusaetzlich zur Pfad-Form.
+    # falsches Segment, widerspruechlicher `?agent=` zusaetzlich zur Pfad-Form,
+    # sowie Alias-Schreibweisen derselben UUID im Pfad (Issue #404 N-1).
     for bad_resource in (
         f"{base}/a/not-a-uuid",
         f"{base}/a/{aid}/x",
@@ -295,6 +301,9 @@ def test_resource_agent_hint_parses_path_form() -> None:
         f"{base}/a/{aid}?agent={aid}",
         f"{base}/a/{aid}?agent={uuid4()}",
         f"{base}/a/{aid}?foo=bar",
+        f"{base}/a/{str(aid).replace('-', '')}",
+        f"{base}/a/urn:uuid:{aid}",
+        f"{base}/a/{{{aid}}}",
     ):
         with pytest.raises(oauth_service.OAuthError) as exc:
             oauth_service._resource_agent_hint(bad_resource, base)

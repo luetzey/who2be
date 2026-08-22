@@ -41,6 +41,7 @@ from who2be_models import (
     OAuthTokenResponse,
     WorkspaceRole,
 )
+from who2be_models.agent_uuid import is_canonical_agent_uuid
 
 logger = logging.getLogger(__name__)
 
@@ -411,6 +412,14 @@ def _resource_agent_hint(resource: str, expected_base: str) -> UUID | None:
     In allen Faellen bleibt die RFC-8707-Audience-Bindung an die KANONISCHE
     MCP-Resource (`expected_base`, ohne Query/Pfad-Suffix) erhalten — der
     Rueckgabewert ist nur der Hint, welcher Agent gemeint ist.
+
+    Beide Formen pruefen VOR `UUID(...)` die kanonische 8-4-4-4-12-Hex-Form
+    (`who2be_models.agent_uuid.is_canonical_agent_uuid`) — dieselbe Strenge wie
+    im MCP-Resource-Server (`agent_path.is_agent_id`, Issue #404). `UUID(...)`
+    alleine akzeptiert zusaetzlich `{...}`, `urn:uuid:...` und Formen ohne
+    Bindestriche; mehrere Schreibweisen derselben UUID im `resource`-Parameter
+    waeren mehrere Connector-„Identitaeten" fuer denselben Agenten, die der
+    Resource-Server nie advertised.
     """
     base, sep, query = resource.partition("?")
     path_hint: UUID | None = None
@@ -421,12 +430,9 @@ def _resource_agent_hint(resource: str, expected_base: str) -> UUID | None:
         suffix = base[len(prefix) :]
         if not suffix or "/" in suffix:
             raise OAuthError("invalid_target", "resource-Pfad erlaubt nur .../a/<uuid>.")
-        try:
-            path_hint = UUID(suffix)
-        except ValueError as exc:
-            raise OAuthError(
-                "invalid_target", "agent im resource-Pfad ist keine gueltige UUID."
-            ) from exc
+        if not is_canonical_agent_uuid(suffix):
+            raise OAuthError("invalid_target", "agent im resource-Pfad ist keine gueltige UUID.")
+        path_hint = UUID(suffix)
 
     if not sep or query == "":
         return path_hint
@@ -435,10 +441,10 @@ def _resource_agent_hint(resource: str, expected_base: str) -> UUID | None:
     params = parse_qs(query, keep_blank_values=True)
     if set(params) != {"agent"} or len(params["agent"]) != 1:
         raise OAuthError("invalid_target", "resource-Query erlaubt nur ?agent=<uuid>.")
-    try:
-        return UUID(params["agent"][0])
-    except ValueError as exc:
-        raise OAuthError("invalid_target", "agent in resource ist keine gueltige UUID.") from exc
+    agent_param = params["agent"][0]
+    if not is_canonical_agent_uuid(agent_param):
+        raise OAuthError("invalid_target", "agent in resource ist keine gueltige UUID.")
+    return UUID(agent_param)
 
 
 def _is_allowed_redirect(uri: str) -> bool:
