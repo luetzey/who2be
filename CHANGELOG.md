@@ -8,6 +8,33 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ## [Unreleased]
 
+### Changed
+
+- Running Who2Be locally now needs nothing but Docker: `docker compose up -d
+  --wait` brings up the whole stack, no `.env` file, no uv and no Node. The web
+  UI resolves its API and auth URLs at runtime (`/config.js`, written from the
+  container's environment) instead of having them compiled into the bundle, and
+  the web container forwards `/v1/` and `/auth/v1/` to the origin it was served
+  from. As a result the stack is reachable from another device on the network —
+  `WHO2BE_PUBLIC_URL=http://<host-ip>:5173 docker compose up -d --wait` — with
+  no rebuild; previously every browser was sent to its own `localhost` and the
+  app was dead outside the host machine. The published web image is host-neutral
+  for the same reason: deployments now pass `WHO2BE_API_BASE_URL`,
+  `WHO2BE_SUPABASE_URL` and `WHO2BE_SUPABASE_ANON_KEY` as container environment
+  rather than build arguments.
+
+### Added
+
+- The MCP server now runs as part of the local stack (`mcp` service, Streamable
+  HTTP on `localhost:8765/mcp`, also reachable behind the web origin at `/mcp`).
+  Until now the only local option was `uv run python -m who2be_mcp.server` — the
+  Python toolchain the one-command start removes — which left Who2Be's central
+  feature untestable for anyone who just wanted to try it. It authenticates with
+  an ordinary `w2b_` token, so no OAuth setup is involved.
+- `docker-compose.images.yml` — an overlay that pulls the prebuilt
+  `ghcr.io/luetzey/who2be-*` images instead of building from source, which skips
+  the multi-minute first build.
+
 ### Fixed
 
 - **Security:** the OAuth consent endpoint no longer accepts `w2b_` API tokens —

@@ -131,6 +131,16 @@ services:
         # Edition des Web-Bundles (ADR-0029): onprem (Default) shaked die
         # Billing-UI aus dem Bundle; das Cloud-Overlay pinnt hier `cloud`.
         VITE_WHO2BE_EDITION: ${VITE_WHO2BE_EDITION:-onprem}
+    # Runtime-Config (schlaegt die Build-Args oben): das von der CI gebaute
+    # Image ist bewusst host-neutral, hier bekommt es die echten Adressen. Ohne
+    # diesen Block spraeche die App Same-Origin — unter app.<domain> also gegen
+    # sich selbst statt gegen api.<domain>.
+    environment:
+      WHO2BE_API_BASE_URL: ${VITE_API_BASE_URL}
+      WHO2BE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+      WHO2BE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
+      WHO2BE_MCP_URL: ${VITE_MCP_URL:-}
+      WHO2BE_SIGNUP_DISABLED: ${VITE_WHO2BE_SIGNUP_DISABLED:-false}
     networks: [app-net]
     restart: unless-stopped
     healthcheck:

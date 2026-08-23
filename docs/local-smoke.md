@@ -27,9 +27,14 @@ noetig fuer den lokalen Smoke.
 ## 1 — Stack starten
 
 ```bash
-cp .env.example .env       # Defaults passen 1:1 zum Compose-Setup
 docker compose up -d --build --wait --wait-timeout 240
 ```
+
+`.env` ist dafuer **nicht** noetig (jeder Wert hat einen Compose-Default);
+`cp .env.example .env` nur, wenn du Defaults ueberschreiben willst. Laeuft der
+Smoke gegen eine LAN-IP statt localhost, den Stack mit
+`WHO2BE_PUBLIC_URL=http://<host-ip>:5173` starten und `WEB_URL`/`API_URL` beim
+Skript-Aufruf entsprechend setzen.
 
 `--wait` haelt an, bis jeder Service healthy ist (siehe `healthcheck:`-
 Bloecke in `docker-compose.yml`). Reihenfolge: `db` → `migrate` (einmalig,
@@ -50,6 +55,12 @@ Pruefen wird:
    gegen `JWT_SECRET` aus `.env` erzeugt) → 200
 4. MCP-Tool-Registrierung im `api`-Container → enthaelt `ping`,
    `get_persona`, `list_playbooks`, `fetch_playbook`
+5. Same-Origin-Pfad ueber den Web-Origin: `/config.js` (Runtime-Config),
+   `/v1/health` und `/auth/v1/health` — das ist der Weg, den der Browser geht,
+   und der einzige, der auch von einer LAN-IP aus traegt
+6. MCP-HTTP-Server: `401` + `WWW-Authenticate` direkt auf `:8765` und ueber den
+   Web-Origin (`/mcp`), plus die Protected-Resource-Metadata. Ein `200` mit HTML
+   hiesse: der SPA-Fallback greift statt des MCP-Proxys
 
 Wenn das Skript "alle Checks gruen" druckt, ist die Basis steht. Was es
 **nicht** ersetzt: das echte Web-Happy-Path-Klicken (siehe Schritt 3).

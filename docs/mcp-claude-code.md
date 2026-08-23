@@ -9,7 +9,33 @@ sie per Python-Subprocess oder externem MCP-Client zu starten.
 > Coder-Agent gegen seine eigenen Playbooks reden lassen). Fuer den reinen
 > Local-Smoke (`docs/local-smoke.md`) ist das nicht noetig.
 
-## 0 — Voraussetzungen
+## Zwei Wege — HTTP (Docker) oder stdio (Quellcode)
+
+Seit der MCP-Dienst im lokalen Compose mitlaeuft, gibt es einen Weg **ohne**
+Python-Toolchain. Der Rest dieses Dokuments beschreibt die stdio-Variante, die
+weiterhin gilt, wenn du am Server selbst entwickelst.
+
+| | HTTP (Compose-Dienst `mcp`) | stdio (`uv run …`) |
+|---|---|---|
+| Voraussetzung | nur Docker | Quellcode-Checkout + `uv` |
+| Endpoint | `http://localhost:8765/mcp` (auch ueber den Web-Origin: `/mcp`) | Subprocess, kein Port |
+| Auth | `Authorization: Bearer w2b_…` pro Request | `WHO2BE_API_TOKEN` als Env |
+| Code-Aenderung wirkt | nach `docker compose up -d --build mcp` | sofort beim naechsten Start |
+
+HTTP-Variante registrieren (Token vorher in der Web-UI unter
+`/settings/tokens` erzeugen — dort steht die fertige Config auch zum Kopieren):
+
+```bash
+claude mcp add --transport http who2be http://localhost:8765/mcp \
+  --header "Authorization: Bearer $W2B"
+```
+
+Gegenprobe ohne Client: `curl -i http://localhost:8765/mcp` muss **401** mit
+`WWW-Authenticate: Bearer` liefern — das prueft auch `scripts/smoke.sh` (§6).
+Kommt stattdessen HTML mit 200, sprichst du mit der Web-UI statt mit dem
+MCP-Server.
+
+## 0 — Voraussetzungen (stdio-Variante)
 
 - Der Compose-Stack laeuft (`docker compose up -d --wait`,
   `bash scripts/smoke.sh` ist gruen) — `docs/local-smoke.md` §1+§2.

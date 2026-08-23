@@ -6,12 +6,18 @@
 #   3) JWT-authentifizierter API-Aufruf (gen_test_jwt.py) → 200 fuer /v1/me
 #      (Top-Level-Endpunkt seit 2.1a-2; validiert Auth + DB ohne Workspace-Seed)
 #   4) MCP-Tools (in-process im api-Container) zaehlen die 4 Pflicht-Tools
+#   5) Same-Origin-Pfad: /config.js, /v1/health und /auth/v1/health ueber den
+#      Web-Origin — das ist der Weg, den der Browser tatsaechlich geht (und der
+#      einzige, der auch von einer LAN-IP aus funktioniert)
+#   6) MCP-HTTP-Server: 401 + WWW-Authenticate direkt auf :8765 und ueber den
+#      Web-Origin, plus die Protected-Resource-Metadata
 # Beendet mit Exit-Code 0 wenn alles gruen, sonst != 0.
 
 set -euo pipefail
 
 API_URL="${API_URL:-http://localhost:8000}"
 WEB_URL="${WEB_URL:-http://localhost:5173}"
+MCP_URL="${MCP_URL:-http://localhost:8765}"
 COMPOSE="${COMPOSE:-docker compose}"
 
 log() { printf "\033[1;34m[smoke]\033[0m %s\n" "$*"; }
@@ -61,5 +67,43 @@ for required in ping get_persona list_playbooks fetch_playbook; do
   echo "${TOOL_COUNT}" | tr ',' '\n' | grep -qx "${required}" \
     || fail "MCP-Tool fehlt: ${required} (got: ${TOOL_COUNT})"
 done
+
+# --- 5) Same-Origin-Pfad (Browser-Sicht) -------------------------------------
+# Der Browser laedt die App vom Web-Origin und spricht API + Auth ueber
+# denselben Origin an (apps/web/nginx.conf proxied /v1/ und /auth/v1/). Bricht
+# dieser Pfad, ist die App von jeder Adresse ausser localhost:8000 tot — ohne
+# dass Schritt 1-3 etwas merken.
+log "Same-Origin-Pfad ueber ${WEB_URL}"
+CONFIG_JS="$(curl -fsS "${WEB_URL}/config.js")" || fail "/config.js nicht ausgeliefert"
+echo "${CONFIG_JS}" | grep -q "__WHO2BE_CONFIG__" \
+  || fail "/config.js enthaelt keine Runtime-Config: ${CONFIG_JS}"
+
+PROXY_HEALTH="$(curl -fsS "${WEB_URL}/v1/health")" || fail "API nicht ueber den Web-Origin erreichbar"
+echo "${PROXY_HEALTH}" | grep -q '"db":"ok"' || fail "Proxy-Health nicht ok: ${PROXY_HEALTH}"
+
+curl -fsS -o /dev/null "${WEB_URL}/auth/v1/health" \
+  || fail "GoTrue nicht ueber den Web-Origin erreichbar (/auth/v1/health)"
+
+# --- 6) MCP-HTTP-Server ------------------------------------------------------
+# Der MCP-Server ist der eigentliche Zweck von Who2Be — er muss lokal ohne
+# Python-Toolchain laufen. Ohne Bearer antwortet der Streamable-HTTP-Endpunkt
+# mit 401 + `WWW-Authenticate` (verifiziert gegen apps/mcp/.../auth.py); genau
+# das pruefen wir. Ueber den Web-Origin ist der 401 zugleich der Beweis, dass
+# der `^~ /mcp`-Block greift und NICHT der SPA-Fallback (der lieferte 200+HTML).
+log "MCP-HTTP direkt (${MCP_URL}/mcp)"
+MCP_HEADERS="$(curl -s -D - -o /dev/null "${MCP_URL}/mcp")" || fail "MCP-Server nicht erreichbar"
+echo "${MCP_HEADERS}" | grep -q "401" || fail "MCP-Direktaufruf ohne Token lieferte keinen 401: ${MCP_HEADERS}"
+echo "${MCP_HEADERS}" | grep -qi "www-authenticate: Bearer" \
+  || fail "MCP-401 ohne WWW-Authenticate-Header: ${MCP_HEADERS}"
+
+log "MCP-HTTP ueber den Web-Origin (${WEB_URL}/mcp)"
+MCP_CODE="$(curl -s -o /tmp/smoke-mcp.txt -w '%{http_code}' "${WEB_URL}/mcp")"
+grep -qi "<title>" /tmp/smoke-mcp.txt \
+  && fail "SPA-Fallback statt MCP-Server unter ${WEB_URL}/mcp — der ^~ /mcp-Block fehlt"
+[[ "${MCP_CODE}" == "401" ]] || fail "${WEB_URL}/mcp lieferte ${MCP_CODE} statt 401"
+
+PRM="$(curl -fsS "${WEB_URL}/.well-known/oauth-protected-resource/mcp")" \
+  || fail "Protected-Resource-Metadata nicht erreichbar"
+echo "${PRM}" | grep -q "authorization_servers" || fail "PRM ohne authorization_servers: ${PRM}"
 
 log "alle Checks gruen ✓"

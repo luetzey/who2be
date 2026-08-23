@@ -1,6 +1,40 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-08-21 (6. Lauf — Standup-Folgearbeiten)_
+_Stand: 2026-08-23 (7. Lauf — Lokaler Ein-Befehl-Start)_
+
+## Lokaler Ein-Befehl-Start / Zugriff ueber LAN-IP (2026-08-23)
+
+Ausgangsfrage des Owners: „Kann das jeder, der das Repo downloadet, ohne Frust
+testen — auf localhost oder einer IP?" Plan:
+`.claude/plan/2026-08-23-0811_local-one-command-start.md` (Scope A von A/B/C;
+npm-CLI = Scope B bleibt offen).
+
+- **Same-Origin statt fester Hosts.** Der nginx im web-Container proxied
+  `/v1/` → `api:8000` und `/auth/v1/` → `auth-gateway:9999`. Der Browser spricht
+  nur noch mit dem Origin, von dem er geladen wurde — `localhost`, LAN-IP oder
+  Domain. CORS entfaellt fuer den lokalen Betrieb.
+- **Runtime-Config statt Compile-Time.** `apps/web/src/config.ts` loest in der
+  Reihenfolge `window.__WHO2BE_CONFIG__` (aus `/config.js`, vom nginx-Entrypoint
+  aus Env geschrieben) → `VITE_*` → Same-Origin auf. Damit ist EIN Web-Image
+  fuer Prod, localhost und LAN gueltig; der CI-Build backt keine URLs mehr ein,
+  Hetzner setzt sie als Container-Env.
+- **Kein `.env` mehr noetig.** Alle Compose-Werte haben Defaults;
+  `WHO2BE_PUBLIC_URL` ist der eine Schalter fuer CORS, GoTrue-Allowlist und
+  Invitation-Links.
+- **MCP-Server im lokalen Stack.** Neuer Compose-Dienst `mcp` (HTTP-Transport,
+  `:8765/mcp`) plus `^~ /mcp`- und PRM-Proxy im Web-nginx. Vorher war MCP lokal
+  nur per `uv run python -m who2be_mcp.server` erreichbar — also ausgerechnet
+  der Kern des Produkts nicht ohne Python-Toolchain testbar. Auth laeuft ueber
+  einen normalen `w2b_`-Token (Bearer, verifiziert per `GET /v1/me`).
+  Nebenbefund behoben: die Copy-Config der UI zeigte nach dem Same-Origin-Umbau
+  auf `<origin>/mcp` und damit auf den SPA-Fallback (200 + HTML statt 401).
+- **`docker-compose.images.yml`** zieht fertige GHCR-Images statt zu bauen.
+  **Owner-Aktion offen:** die Packages `who2be-api|web|mcp` sind aktuell privat
+  (anonymer Pull → 403) — public schalten, sonst bleibt der Build-Pfad Default.
+- **Abnahme offen (Host):** Sandbox hat keinen Docker-Daemon. Zu pruefen sind
+  `docker compose up -d --wait` ohne `.env`, Login/Bedienung ueber
+  `http://localhost:5173` und ueber `http://<host-ip>:5173`, plus
+  `bash scripts/smoke.sh`.
 
 ## i18n-Lücken geschlossen (2026-08-22, Issue #403 / PR #401)
 

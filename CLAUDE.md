@@ -223,8 +223,9 @@ AI-Agenten-Vertrag. **Bei jeder UI-Aenderung zuerst diese Datei lesen.**
 (HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy,
 Permissions-Policy) plus per-Subdomain CSP. Begruendung: F-12 (siehe
 `docs/security-findings.md`) — eine Quelle, nicht in jeder API-/Web-Antwort
-duplizieren. Der lokale `apps/web/nginx.conf` setzt bewusst **keine** Header
-(nur SPA-Fallback + Healthcheck). Neue Header → Caddyfile, nicht
+duplizieren. Der `apps/web/nginx.conf` setzt bewusst **keine** Header (er macht
+SPA-Fallback, Healthcheck und den Same-Origin-Proxy auf `/v1/` + `/auth/v1/`).
+Neue Header → Caddyfile, nicht
 `next.config`/`nginx.conf`/Response-Middleware.
 
 ### DoD (Frontend-Aenderung)
