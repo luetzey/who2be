@@ -1038,6 +1038,38 @@ bleiben)._
 - **Offen:** Server-`detail`-Texte (`apps/api`, 78 Vorkommen, deutsch,
   `Accept-Language` wird nicht gelesen) — eigene Architektur-Weiche, Issue #402.
 
+## 2026-08-23 — MCP-Workspace kommt aus der Token-Bindung, nicht aus `/v1/me`
+- **Entscheidung:** `GET /v1/me` weist zusätzlich `token_workspace_id` aus (die
+  Bindung der aufrufenden Credential, `None` bei JWT); der MCP-Server bildet
+  seinen `/v1/workspaces/{id}`-Pfad daraus und fällt nur für ungebundene
+  Credentials auf `default_workspace_id` zurück. Cross-Workspace-Token-Reuse
+  bekommt den eigenen Taxonomie-Code `workspace_mismatch` mit
+  `actionable_by="human"`. `WHO2BE_WORKSPACE_ID` ist unter `transport=http`
+  ein Startup-Fehler. Issue #413, Plan
+  `.claude/plan/2026-08-23-1304_mcp-workspace-aus-token.md`.
+- **Begründung:** `default_workspace_id` ist die *erste Membership des
+  Menschen* (`ORDER BY o.created_at ASC, …`) und trägt die Token-Bindung
+  nicht. Jeder User mit ≥ 2 Workspaces bekam für den Zweit-Connector
+  deterministisch 403 auf *jedem* Tool — auch auf `whoami`. Der Workspace ist
+  eine Eigenschaft der Credential, keine der Membership-Abfrage.
+  `forbidden_transition` meint die Version-State-Machine; die Taxonomie lädt
+  Agenten explizit ein, auf `reason` zu verzweigen, also darf derselbe Code
+  nicht zwei Dinge heißen.
+- **Verworfen:** `default_workspace_id` bei Token-Auth umbiegen (das Feld
+  trüge je nach Auth-Modus zwei Bedeutungen und speist zugleich den
+  Web-Redirect `/w/{id}` und den Workspace-Switcher — zwei Consumer, eine
+  Wahrheit weniger); den Workspace per `WHO2BE_WORKSPACE_ID` pinnen (in der
+  Cloud bedient ein Prozess alle Tenants, der Pin gewänne gegen jeden Bearer —
+  deshalb jetzt sogar aktiv verboten).
+- **Offen (Stufe 2, eigener ADR):** Der Principal soll aus der
+  Token-Introspektion kommen statt aus einem Lookup. Heute introspectiert
+  `apps/mcp/src/who2be_mcp/auth.py:36-49` **jeden** Request per `GET /v1/me` —
+  einem schreibfähigen Endpunkt mit Lazy-Seed-Provisioning — und verwirft die
+  Antwort bis auf den Statuscode; die Workspace-Auflösung ruft dasselbe
+  `/v1/me` ein zweites Mal. Dazu: prozess-lokaler `_WS_CACHE` (512/300 s, pro
+  Replica eigenes Revocation-Fenster) und ein frischer `httpx.AsyncClient` pro
+  Request (`client.py:198`, kein Connection-Pooling).
+
 ## 2026-08-22 — Agent-Bindung des MCP-Connectors über den Resource-Pfad
 - **Entscheidung:** Die per-Agent-Connector-URL trägt den Agenten als Pfad
   (`…/mcp/a/<uuid>`) statt als Query (`?agent=<uuid>`). Details + Grenzen im
