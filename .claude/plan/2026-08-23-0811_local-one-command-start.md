@@ -164,11 +164,26 @@ Zusaetzlich zum Plan:
 | `docker compose config` (Basis, `+images`-Overlay, Hetzner, Dokploy) | alle valide |
 | Entrypoint-Skript | `sh -n` + Trockenlauf gegen temporaeres Ziel |
 
+### CI-Gegenprobe (Run 32628391588, Head 8176a64)
+
+Alle 9 Checks gruen. Damit ist der **localhost-Pfad end-to-end belegt**, was in
+der Sandbox mangels Docker-Daemon nicht ging:
+
+- `compose-smoke` — `docker compose up -d --build --wait` plus
+  `scripts/smoke.sh`. Das Skript laeuft unter `set -euo pipefail`, jeder
+  fehlgeschlagene Check ruft `fail` (exit 1): gruen heisst, dass auch die neuen
+  Schritte (`/config.js`, `/v1/health`, `/auth/v1/health` ueber den Web-Origin)
+  durchliefen — also Runtime-Config und Proxy im gebauten Image funktionieren.
+- `e2e` — vier Playwright-Journeys gegen denselben Stack. Der Browser geht dabei
+  ueber den neuen Same-Origin-Pfad; die Test-Helper seeden weiterhin direkt
+  ueber `:9999`/`:8000`.
+- `python`, `web`, `audit`, CodeQL (3x) — gruen.
+
 ### Offen
 
-- **Host-Abnahme (User):** `docker compose up -d --wait` ohne `.env`, Bedienung
-  ueber `http://localhost:5173` und ueber `http://<host-ip>:5173`,
-  `bash scripts/smoke.sh`. Die Sandbox hat keinen Docker-Daemon.
+- **Host-Abnahme (User):** bleibt fuer den **LAN-IP-Fall** — CI prueft nur
+  `localhost`. Also: `WHO2BE_PUBLIC_URL=http://<host-ip>:5173 docker compose up
+  -d --wait`, dann vom zweiten Geraet einloggen und eine Persona anlegen.
 - **Owner-Aktion:** GHCR-Packages `who2be-api|web|mcp` public schalten, sonst
   bleibt `docker-compose.images.yml` auf `docker login ghcr.io` angewiesen.
 - **Scope B** (`npx who2be up`) und **Scope C** (Demo-Seed, Slim-Profil) offen.
