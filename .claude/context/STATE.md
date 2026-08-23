@@ -25,7 +25,11 @@ des Erst-Workspace lief im selben Moment sauber.
 - **Nebenbefund:** `docs/reference/openapi.json` war stale (zog neben dem neuen
   Feld auch `OAuthConsentApprove.agent_id` aus #404 nach) — kein CI-Gate prüft
   die eingecheckte Spec gegen die App. Kandidat für WP-14.
-- **Offen (Stufe 2):** ADR-Entwurf „Principal aus der Token-Introspektion" —
+- **Stufe 2 (ADR-0050, Entwurf — Entscheidung offen):** „MCP-Principal aus der
+  Token-Introspektion". Vorschlag: read-only Introspektions-Endpunkt, Principal
+  in den `AccessToken`-Claims, Wegfall von `_resolve_workspace_id`/`_WS_CACHE`,
+  geteilter HTTP-Connection-Pool. Drei offene Owner-Fragen am Ende des ADR
+  (Endpunkt-Name, Cache ja/nein, Zeitpunkt). Hintergrund:
   jeder MCP-Request introspectiert heute per `GET /v1/me` (schreibfähig, mit
   Lazy-Seed) und die Workspace-Auflösung ruft dasselbe `/v1/me` erneut; dazu
   prozess-lokaler Cache und kein HTTP-Connection-Pooling. Details in
