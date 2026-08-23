@@ -1,8 +1,41 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-08-23 (7. Lauf — Lokaler Ein-Befehl-Start)_
+_Stand: 2026-08-23 (8. Lauf — MCP-Workspace aus der Token-Bindung)_
 
-## Lokaler Ein-Befehl-Start / Zugriff ueber LAN-IP (2026-08-23)
+## MCP-Connector im Zweit-Workspace repariert (2026-08-23, Issue #413)
+
+Anlass des Owners: ein zweiter Builder-Connector (Workspace „YouTube") schlug
+bei **jedem** Tool mit `403 Token gehoert nicht zu diesem Workspace` fehl —
+`whoami` eingeschlossen. Reproduziert gegen den laufenden Stack; der Connector
+des Erst-Workspace lief im selben Moment sauber.
+
+- **Ursache:** Der MCP-Server nahm den Workspace für seinen
+  `/v1/workspaces/{id}`-Pfad aus `GET /v1/me` → `default_workspace_id`, also
+  aus der *ersten Membership des Menschen* (nach Org-Alter sortiert) statt aus
+  der Bindung des Tokens. Betraf deterministisch jeden User mit ≥ 2 Workspaces.
+- **Fix (Stufe 1, PR zu #413):** `/v1/me` weist `token_workspace_id` aus, der
+  MCP-Server bevorzugt es; eigener Taxonomie-Code `workspace_mismatch`
+  (`actionable_by="human"`) statt des fehlgemappten `forbidden_transition`;
+  `WHO2BE_WORKSPACE_ID` unter `transport=http` als Startup-Fehler abgelehnt
+  (Multi-Tenant-Schutz).
+- **Verifikation:** ruff/ruff-format/mypy grün, 1300 passed / 448 skipped.
+  **Das 85-%-Coverage-Gate ist lokal nicht prüfbar** — die Sandbox hat keinen
+  Docker-Daemon, alle DB-Integrationstests werden übersprungen (63,07 %). CI
+  muss es bestätigen.
+- **Nebenbefund:** `docs/reference/openapi.json` war stale (zog neben dem neuen
+  Feld auch `OAuthConsentApprove.agent_id` aus #404 nach) — kein CI-Gate prüft
+  die eingecheckte Spec gegen die App. Kandidat für WP-14.
+- **Stufe 2 (ADR-0050, Entwurf — Entscheidung offen):** „MCP-Principal aus der
+  Token-Introspektion". Vorschlag: read-only Introspektions-Endpunkt, Principal
+  in den `AccessToken`-Claims, Wegfall von `_resolve_workspace_id`/`_WS_CACHE`,
+  geteilter HTTP-Connection-Pool. Drei offene Owner-Fragen am Ende des ADR
+  (Endpunkt-Name, Cache ja/nein, Zeitpunkt). Hintergrund:
+  jeder MCP-Request introspectiert heute per `GET /v1/me` (schreibfähig, mit
+  Lazy-Seed) und die Workspace-Auflösung ruft dasselbe `/v1/me` erneut; dazu
+  prozess-lokaler Cache und kein HTTP-Connection-Pooling. Details in
+  DECISIONS.md.
+
+## Lokaler Ein-Befehl-Start (7. Lauf, 2026-08-23)
 
 Ausgangsfrage des Owners: „Kann das jeder, der das Repo downloadet, ohne Frust
 testen — auf localhost oder einer IP?" Plan:

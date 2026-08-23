@@ -40,6 +40,13 @@ class MeRead(BaseModel):
 
     user_id: UUID
     default_workspace_id: UUID | None
+    # Der Workspace, an den der *aufrufende Token* gepinnt ist (`api_token.
+    # workspace_id`), sonst `None`. Bewusst getrennt von `default_workspace_id`:
+    # letzteres ist die erste Membership des Menschen und traegt die Bindung des
+    # Tokens NICHT — wer beides gleichsetzt, schickt einen an Workspace B
+    # gebundenen Token nach Workspace A (Issue #413). Konsument ist der
+    # MCP-Server, der daraus seinen `/v1/workspaces/{id}`-Pfad bildet.
+    token_workspace_id: UUID | None = None
     organizations: list[MeOrganization]
     # `has_password` ist `False`, solange der User nur per Magic-Link
     # eingeloggt ist (GoTrue-`encrypted_password IS NULL`). Frontend leitet

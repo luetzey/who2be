@@ -10,6 +10,8 @@ Zwei Ebenen, beide ohne DB:
    inkl. Statuscode und `request_id`-Mirror aus `X-Request-ID`.
 """
 
+import asyncio
+from typing import get_args
 from uuid import uuid4
 
 import pytest
@@ -19,18 +21,21 @@ from fastapi.testclient import TestClient
 from who2be_api.core.errors import ApiGateError
 from who2be_api.core.middleware import RequestIDMiddleware
 from who2be_api.core.security import (
+    CurrentPrincipal,
     WorkspaceContext,
+    get_current_workspace,
     require_aal2,
     require_capability,
     require_role,
 )
-from who2be_api.main import _on_api_gate_error
+from who2be_api.main import _PROBLEM_TITLES, _on_api_gate_error
 from who2be_api.services.version_status import (
     _forbidden_transition,
     _invariant_violation,
     _require_transition_capability,
 )
 from who2be_models import AgentCapability, AgentToolPolicy, VersionStatus, WorkspaceRole
+from who2be_models.errors import ProblemReason
 
 
 def _ctx(
@@ -85,6 +90,42 @@ def test_forbidden_transition_none() -> None:
     assert err.status == 409
     assert err.reason == "forbidden_transition"
     assert err.actionable_by == "none"
+
+
+def test_cross_workspace_token_reuse_workspace_mismatch_human(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Issue #413: ein Token in einem fremden Workspace ist KEIN Status-Uebergang.
+
+    Der Fall trug frueher `forbidden_transition`/`none` — ein Code der
+    Version-State-Machine. Ein Agent, der laut Taxonomie deterministisch auf
+    `reason` verzweigt, wurde damit in die Irre gefuehrt; behebbar ist der
+    Fall ausserdem (falscher Connector/Token), also `human` statt `none`.
+    """
+    import who2be_api.core.security as security_module
+
+    monkeypatch.setattr(security_module, "get_pool", lambda: object())
+    principal = CurrentPrincipal(
+        user_id=uuid4(),
+        token_workspace_id=uuid4(),
+        token_role=WorkspaceRole.admin,
+    )
+
+    async def _call() -> None:
+        gen = get_current_workspace(workspace_id=uuid4(), principal=principal)
+        await anext(gen)
+
+    with pytest.raises(ApiGateError) as exc:
+        asyncio.run(_call())
+    assert exc.value.status == 403
+    assert exc.value.reason == "workspace_mismatch"
+    assert exc.value.actionable_by == "human"
+
+
+def test_every_problem_reason_has_a_title() -> None:
+    """Ein `reason` ohne Titel faellt sonst erst im RFC-7807-Body auf."""
+    reasons = set(get_args(ProblemReason))
+    assert reasons - set(_PROBLEM_TITLES) == set()
 
 
 def test_invariant_violation_concurrent_conflict_agent() -> None:

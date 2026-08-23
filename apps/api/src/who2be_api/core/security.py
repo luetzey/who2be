@@ -599,11 +599,15 @@ async def get_current_workspace(
     if principal.token_workspace_id is not None:
         if principal.token_workspace_id != workspace_id:
             # Cross-Workspace-Token-Reuse: der Token darf in diesem Workspace
-            # ueberhaupt nicht agieren — fuer den Aufrufer endgueltig (`none`).
+            # ueberhaupt nicht agieren. `human`, nicht `none` — der Aufrufer
+            # kann es nicht selbst beheben, ein Mensch schon (richtigen
+            # Connector/Token waehlen). Eigener `reason`, weil
+            # `forbidden_transition` die Version-State-Machine meint und ein
+            # Agent laut Taxonomie deterministisch darauf verzweigt (#413).
             raise ApiGateError(
                 status=status.HTTP_403_FORBIDDEN,
-                reason="forbidden_transition",
-                actionable_by="none",
+                reason="workspace_mismatch",
+                actionable_by="human",
                 detail="Token gehoert nicht zu diesem Workspace.",
             )
         if principal.token_role is None:

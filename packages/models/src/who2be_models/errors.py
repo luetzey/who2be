@@ -26,6 +26,7 @@ ProblemReason = Literal[
     "domain_disabled",
     "forbidden_transition",
     "insufficient_role",
+    "workspace_mismatch",
     "mfa_required",
     "concurrent_conflict",
     "composite_child_inactive",

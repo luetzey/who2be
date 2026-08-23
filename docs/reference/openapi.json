@@ -15388,6 +15388,18 @@
             ],
             "title": "Default Workspace Id"
           },
+          "token_workspace_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token Workspace Id"
+          },
           "organizations": {
             "items": {
               "$ref": "#/components/schemas/MeOrganization"
@@ -15955,8 +15967,15 @@
             "title": "Request"
           },
           "agent_id": {
-            "type": "string",
-            "format": "uuid",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Agent Id"
           },
           "approve": {
@@ -15968,11 +15987,10 @@
         "type": "object",
         "required": [
           "request",
-          "agent_id",
           "approve"
         ],
         "title": "OAuthConsentApprove",
-        "description": "Consent-Submit der Web-Seite.\n\n`request` ist der signierte (HMAC) Authorize-Request-Blob, den\n`GET /oauth/authorize` erzeugt hat — er traegt client_id, redirect_uri,\ncode_challenge, state, resource, scope manipulationssicher."
+        "description": "Consent-Submit der Web-Seite.\n\n`request` ist der signierte (HMAC) Authorize-Request-Blob, den\n`GET /oauth/authorize` erzeugt hat — er traegt client_id, redirect_uri,\ncode_challenge, state, resource, scope manipulationssicher.\n\n`agent_id` ist OPTIONAL: beim Ablehnen (`approve=false`) gibt es nichts zu\nbinden, und im Hard-Lock-Fall gewinnt ohnehin der signierte Blob. Waere das\nFeld Pflicht, scheiterte ein \"Ablehnen\" auf einer Consent-Seite ohne\naufloesbare Agent-Auswahl schon an der Validierung (422) — der Client\nbekaeme nie den `access_denied`-Redirect. Ein `approve=true` ohne Agent\n(weder hier noch im Blob) faellt serverseitig als `invalid_request`."
       },
       "OAuthConsentPreview": {
         "properties": {

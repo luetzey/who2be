@@ -13,10 +13,13 @@ gefiltert). Damit faellt ein Regress auf, der das `include` weglaesst.
 import asyncio
 import time
 from collections.abc import Callable, Iterable
+from typing import Any
 from uuid import UUID, uuid4
 
+import httpx
 import pytest
 from fastmcp.exceptions import ToolError
+from pydantic import ValidationError
 
 from who2be_mcp import server
 from who2be_mcp.config import Settings
@@ -92,10 +95,77 @@ def test_stdio_uses_env_token(monkeypatch: pytest.MonkeyPatch) -> None:
 # --- Workspace-Cache -------------------------------------------------------
 
 
+def _patch_httpx(
+    monkeypatch: pytest.MonkeyPatch,
+    handler: Callable[[httpx.Request], httpx.Response],
+) -> None:
+    real = httpx.AsyncClient
+
+    def factory(*args: Any, **kwargs: Any) -> httpx.AsyncClient:
+        kwargs.pop("transport", None)
+        return real(*args, transport=httpx.MockTransport(handler), **kwargs)
+
+    monkeypatch.setattr(httpx, "AsyncClient", factory)
+
+
 def test_resolve_honours_explicit_pin() -> None:
     ws = uuid4()
-    resolved = asyncio.run(server._resolve_workspace_id(_settings(workspace_id=str(ws)), "w2b_x"))
+    resolved = asyncio.run(
+        server._resolve_workspace_id(_settings(workspace_id=str(ws), transport="stdio"), "w2b_x")
+    )
     assert resolved == ws
+
+
+def test_workspace_pin_rejected_on_http_transport() -> None:
+    """Multi-Tenant-Schutz: ein Pin wuerde unter HTTP fuer jeden Bearer gelten."""
+    with pytest.raises(ValidationError, match="WHO2BE_TRANSPORT=http"):
+        _settings(workspace_id=str(uuid4()), transport="http")
+
+
+def test_resolve_prefers_token_workspace_over_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Issue #413: massgeblich ist die Bindung des Tokens, nicht die 1. Membership.
+
+    `default_workspace_id` ist der aelteste Workspace des Menschen. Wird er fuer
+    einen an einen anderen Workspace gepinnten Token genommen, antwortet die API
+    auf JEDES Tool mit `403 workspace_mismatch`.
+    """
+    token_ws, default_ws = uuid4(), uuid4()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v1/me"
+        return httpx.Response(
+            200,
+            json={
+                "user_id": str(uuid4()),
+                "default_workspace_id": str(default_ws),
+                "token_workspace_id": str(token_ws),
+            },
+        )
+
+    _patch_httpx(monkeypatch, handler)
+    resolved = asyncio.run(server._resolve_workspace_id(_settings(), "w2b_second_ws"))
+    assert resolved == token_ws
+
+
+def test_resolve_falls_back_to_default_for_unbound_credential(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ungebundene Credential (JWT): `token_workspace_id` ist `null`."""
+    default_ws = uuid4()
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "user_id": str(uuid4()),
+                "default_workspace_id": str(default_ws),
+                "token_workspace_id": None,
+            },
+        )
+
+    _patch_httpx(monkeypatch, handler)
+    resolved = asyncio.run(server._resolve_workspace_id(_settings(), "jwt_caller"))
+    assert resolved == default_ws
 
 
 def test_cache_hit_avoids_resolution() -> None:

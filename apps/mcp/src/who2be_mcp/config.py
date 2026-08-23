@@ -7,6 +7,7 @@ Die Variablen tragen den Prefix `WHO2BE_` (z. B. `WHO2BE_API_TOKEN`).
 from functools import lru_cache
 from typing import Literal
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,6 +22,7 @@ class Settings(BaseSettings):
     api_base_url: str = "http://localhost:8000"
     api_token: str = ""
     # Optional explizit gepinnter Workspace; sonst Bootstrap via `/v1/me`.
+    # NUR fuer stdio/Single-Tenant — s. `_reject_workspace_pin_on_http`.
     workspace_id: str = ""
     # `json` fuer Prod-Aggregation, `console` fuer lesbares Dev-Tail (ADR-0007).
     log_format: Literal["json", "console"] = "json"
@@ -39,6 +41,25 @@ class Settings(BaseSettings):
     # `{mcp_public_url}{http_path}` und muss `MCP_RESOURCE_URL` der API gleichen).
     oauth_issuer_url: str = "http://localhost:8000"
     mcp_public_url: str = "http://127.0.0.1:8765"
+
+    @model_validator(mode="after")
+    def _reject_workspace_pin_on_http(self) -> "Settings":
+        """`WHO2BE_WORKSPACE_ID` ist unter `transport=http` ein Konfig-Fehler.
+
+        Streamable-HTTP ist multi-tenant: ein Prozess bedient alle Bearer
+        (ADR-0034). Ein gepinnter Workspace gewinnt aber gegen *jeden* Token —
+        fremde Credentials wuerden in einen fremden Workspace geschickt. Der
+        Pin ist eine stdio-Bequemlichkeit, keine Server-Einstellung, deshalb
+        beim Start abbrechen statt die Tenant-Grenze still zu unterlaufen.
+        """
+        if self.transport == "http" and self.workspace_id:
+            raise ValueError(
+                "WHO2BE_WORKSPACE_ID ist mit WHO2BE_TRANSPORT=http nicht erlaubt: "
+                "der HTTP-Transport ist multi-tenant, ein gepinnter Workspace wuerde "
+                "fuer jeden Bearer gelten. Pin entfernen — der Workspace kommt aus "
+                "dem Token."
+            )
+        return self
 
 
 @lru_cache

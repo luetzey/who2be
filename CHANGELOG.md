@@ -37,6 +37,26 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Fixed
 
+- An MCP connector whose token belongs to a **second** workspace failed on every
+  single tool with `403 Token gehoert nicht zu diesem Workspace` — `whoami`
+  included. The MCP server took the workspace for its `/v1/workspaces/{id}/...`
+  path from `GET /v1/me` → `default_workspace_id`, which is the caller's *first*
+  membership (ordered by organization age) and carries no token binding at all,
+  so a token pinned to workspace B was sent to workspace A. `GET /v1/me` now also
+  reports `token_workspace_id` (the binding of the calling credential, `null` for
+  JWT auth), and the MCP server prefers it, falling back to
+  `default_workspace_id` only for unbound credentials. Anyone with more than one
+  workspace was affected deterministically.
+- Cross-workspace token reuse now answers with the taxonomy reason
+  `workspace_mismatch` and `actionable_by: "human"` instead of
+  `forbidden_transition` / `"none"`. The old code belongs to the version status
+  machine, so agents branching on `reason` — which the taxonomy invites them to
+  do — were told a status transition had been refused.
+- **Security:** setting `WHO2BE_WORKSPACE_ID` together with
+  `WHO2BE_TRANSPORT=http` is now rejected at startup. The HTTP transport is
+  multi-tenant (one process serves every bearer), where a pinned workspace would
+  override the binding of *every* incoming token. The pin remains available for
+  single-tenant stdio use.
 - **Security:** the OAuth consent endpoint no longer accepts `w2b_` API tokens —
   it now requires a signed-in web session. It read only the caller's user id and
   ignored the token's workspace, role and agent pins, and because `/oauth/*` sits
