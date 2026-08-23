@@ -1,8 +1,32 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-08-23 (8. Lauf — MCP-Workspace aus der Token-Bindung)_
+_Stand: 2026-08-23 (9. Lauf — Persona-Lookup per Name)_
 
-## MCP-Connector im Zweit-Workspace repariert (2026-08-23, Issue #413)
+## Persona-Lookup per Name: serverseitiger Filter (2026-08-23, Issue #415)
+
+Anlass: `get_persona("Builder")` brach im YouTube-Workspace mit einem
+nichtssagenden Tool-Fehler ab, waehrend dieselbe Persona per UUID sauber lud.
+
+- **Ursache:** Der Namens-Pfad (`client.py:295-302`) lud die GANZE Persona-Liste
+  und verglich im Client. Da `PersonaRead` den vollen Body traegt, wanderte der
+  ausgeschriebene Text jeder Persona ueber die Leitung, nur um einen String zu
+  vergleichen — eine einzelne Persona rendert über 119.000 Zeichen, bei
+  `_TIMEOUT = 10.0` und ohne Connection-Pooling ein Abbruch. Zusätzlich
+  ignorierte der Scan die Pagination (`DEFAULT_LIMIT = 100`) und hätte ab der
+  zweiten Seite „nicht gefunden" für eine existierende Persona gemeldet.
+- **Fix:** `GET .../personas?name=` (exakt, kein `ILIKE` — der Pfad ist eine
+  Auflösung, kein Suchfeld); der MCP-Client nutzt ihn, behält den
+  `==`-Vergleich aber als Sicherheitsnetz gegen Versions-Versatz zur API.
+- **Verifikation:** ruff/format/mypy grün, 1305 passed / 448 skipped.
+  Coverage-Gate wie beim letzten Lauf lokal nicht prüfbar (kein Docker-Daemon)
+  — CI bestätigt.
+- **Offen:** Ob wirklich der Timeout zuschlug, klärt nur das Server-Log zu
+  `request_id: req_011CeKm1LsS3nTPoKa4JjZvj`.
+- **Nicht angefasst:** `_resolve_external_tool_by_alias` (`client.py:542`) hat
+  dasselbe Scan-Muster, aber ohne grosse Bodies — eigener Befund, eigenes
+  Ticket.
+
+## MCP-Connector im Zweit-Workspace repariert (8. Lauf, 2026-08-23, Issue #413)
 
 Anlass des Owners: ein zweiter Builder-Connector (Workspace „YouTube") schlug
 bei **jedem** Tool mit `403 Token gehoert nicht zu diesem Workspace` fehl —
