@@ -21,6 +21,13 @@ npm-CLI = Scope B bleibt offen).
 - **Kein `.env` mehr noetig.** Alle Compose-Werte haben Defaults;
   `WHO2BE_PUBLIC_URL` ist der eine Schalter fuer CORS, GoTrue-Allowlist und
   Invitation-Links.
+- **MCP-Server im lokalen Stack.** Neuer Compose-Dienst `mcp` (HTTP-Transport,
+  `:8765/mcp`) plus `^~ /mcp`- und PRM-Proxy im Web-nginx. Vorher war MCP lokal
+  nur per `uv run python -m who2be_mcp.server` erreichbar — also ausgerechnet
+  der Kern des Produkts nicht ohne Python-Toolchain testbar. Auth laeuft ueber
+  einen normalen `w2b_`-Token (Bearer, verifiziert per `GET /v1/me`).
+  Nebenbefund behoben: die Copy-Config der UI zeigte nach dem Same-Origin-Umbau
+  auf `<origin>/mcp` und damit auf den SPA-Fallback (200 + HTML statt 401).
 - **`docker-compose.images.yml`** zieht fertige GHCR-Images statt zu bauen.
   **Owner-Aktion offen:** die Packages `who2be-api|web|mcp` sind aktuell privat
   (anonymer Pull → 403) — public schalten, sonst bleibt der Build-Pfad Default.

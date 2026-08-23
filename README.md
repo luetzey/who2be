@@ -82,6 +82,24 @@ minutes. To pull prebuilt images instead:
 docker compose -f docker-compose.yml -f docker-compose.images.yml up -d --wait
 ```
 
+### Connect an MCP client
+
+The MCP server runs in the stack as well, on `http://localhost:8765/mcp`
+(Streamable HTTP, ADR-0034) and behind the web origin at `/mcp`. It
+authenticates with an ordinary Who2Be token, so no OAuth setup is needed:
+
+1. In the web UI go to **Settings → Tokens**, create a token (`w2b_…`) and copy
+   the ready-made client configuration shown next to it.
+2. Or wire it up by hand, e.g. for Claude Code:
+
+   ```bash
+   claude mcp add --transport http who2be http://localhost:8765/mcp \
+     --header "Authorization: Bearer $W2B_TOKEN"
+   ```
+
+Running the server over stdio from a source checkout is still possible and is
+described in [`docs/mcp-claude-code.md`](docs/mcp-claude-code.md).
+
 ### Access from another device
 
 The web UI talks to whatever origin it was loaded from — the container's nginx
@@ -105,6 +123,7 @@ see [`deploy/hetzner/README.md`](deploy/hetzner/README.md).
 | Web loads, but "API unreachable" | The API container is unhealthy: `docker compose logs api`. |
 | Login fails from a LAN address | `WHO2BE_PUBLIC_URL` was not set to that address — see above. |
 | File upload returns 503 | The blob store is optional and off unless `WHO2BE_BLOBSTORE_*` is set (`.env.example`). Everything else works without it. |
+| MCP client reports 401 | Expected without a token — add `Authorization: Bearer w2b_…`. HTML instead of a 401 means you are hitting the SPA, not the MCP endpoint. |
 
 ### Development setup
 

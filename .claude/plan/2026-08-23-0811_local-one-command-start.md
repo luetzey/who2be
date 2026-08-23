@@ -130,6 +130,50 @@ Rueckwaertskompatibilitaet Dev/Tests) → **Same-Origin-Default**.
 | nginx cached die Upstream-IP nach `compose up` | Variablen-`proxy_pass` + `resolver … valid=10s` (Muster aus `supabase/gateway.conf`) |
 | End-to-End nicht in der Sandbox pruefbar | Host-Abnahme durch den User; `docker compose config` + Web-/Python-Gates laufen im Agenten |
 
+## Nachtrag WP-6 — MCP-Server lokal (2026-08-23, nach Rueckfrage)
+
+Auf die Frage „funktioniert das nun auch mit MCP- und API-Server?" ergab die
+Pruefung: **API ja, MCP nein.** Der lokale Compose hatte gar keinen MCP-Dienst
+(die Services `mcp`/`mcp-http` existierten nur im Hetzner-Deploy, beide hinter
+Profilen), die API mountet `/mcp` nicht selbst, und `docs/mcp-claude-code.md`
+dokumentierte ausschliesslich den stdio-Weg via `uv run --project …`. Damit war
+ausgerechnet der Kern des Produkts ohne Python-Toolchain nicht testbar.
+
+Zweiter Befund — **selbst verursacht**: `config.mcpUrl` leitet aus der
+API-Basis ab, die nach dem Umbau der Web-Origin ist. Die Copy-Config in der UI
+zeigte damit auf `<origin>/mcp`, wo der SPA-Fallback **200 + HTML** liefert
+statt eines sauberen 404/401 — fuer einen MCP-Client schlechter diagnostizierbar
+als vorher.
+
+Umgesetzt (Owner-Entscheidung: „MCP-Dienst + Proxy"):
+
+- Compose-Dienst `mcp` (HTTP-Transport, `0.0.0.0:8765`, Pfad `/mcp`), haengt an
+  `api: service_healthy`, TCP-Healthcheck (der Endpunkt antwortet ohne Token
+  mit 401, ohne Session-Id mit 400 — beides waere fuer einen curl-Check ein
+  Fehler).
+- `apps/web/nginx.conf`: `^~ /mcp` (schlaegt den SPA-Fallback, deckt auch
+  `/mcp/a/{uuid}` ab) mit `proxy_buffering off` + 1h-Timeouts fuer SSE, plus
+  `^~ /.well-known/oauth-protected-resource` — **die PRM liegt ausserhalb von
+  `/mcp`**, worauf der 401 per `WWW-Authenticate` verweist.
+- `WHO2BE_MCP_URL` default `http://localhost:8765/mcp` ⇒ die Copy-Config zeigt
+  wieder auf einen echten Endpunkt.
+- Smoke-Schritt 6 und Doku (README, `docs/mcp-claude-code.md` mit
+  HTTP-vs-stdio-Tabelle, `.env.example`, `docs/local-smoke.md`).
+
+**Experimentell verifiziert** (MCP-Server lokal mit `WHO2BE_TRANSPORT=http`
+gestartet, kein Raten): `GET /mcp` ohne Token ⇒ `401` +
+`www-authenticate: Bearer resource_metadata="…/.well-known/oauth-protected-resource/mcp"`;
+die PRM liefert `{"resource":"http://127.0.0.1:8765/mcp","authorization_servers":["http://localhost:8000/"],…}`.
+Genau diese Zusagen prueft der Smoke jetzt.
+
+**Grenze, bewusst so gelassen:** Der OAuth-Connector-Flow bleibt an die
+Adressen gebunden, die `WHO2BE_MCP_PUBLIC_URL` / `MCP_RESOURCE_URL` tragen
+(Default localhost). Ueber eine LAN-IP traegt der **Token-Weg** (Bearer); wer
+den OAuth-Flow ueber die IP will, stellt beide Werte gemeinsam um. Same-Origin
+fuer den OAuth-Flow haette `/oauth/*` aufteilen muessen — die SPA bedient dort
+`/oauth/consent`, die API `authorize`/`token`/`register`. Das ist ein eigener
+Schnitt, kein Nebenbei-Umbau.
+
 ## Umsetzung (2026-08-23)
 
 Alle fuenf Arbeitspakete umgesetzt; zwei Abweichungen vom Plan:

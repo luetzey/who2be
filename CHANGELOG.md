@@ -25,6 +25,12 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Added
 
+- The MCP server now runs as part of the local stack (`mcp` service, Streamable
+  HTTP on `localhost:8765/mcp`, also reachable behind the web origin at `/mcp`).
+  Until now the only local option was `uv run python -m who2be_mcp.server` — the
+  Python toolchain the one-command start removes — which left Who2Be's central
+  feature untestable for anyone who just wanted to try it. It authenticates with
+  an ordinary `w2b_` token, so no OAuth setup is involved.
 - `docker-compose.images.yml` — an overlay that pulls the prebuilt
   `ghcr.io/luetzey/who2be-*` images instead of building from source, which skips
   the multi-minute first build.

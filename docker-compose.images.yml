@@ -25,3 +25,7 @@ services:
   web:
     image: ghcr.io/luetzey/who2be-web:${WHO2BE_IMAGE_TAG:-latest}
     pull_policy: always
+
+  mcp:
+    image: ghcr.io/luetzey/who2be-mcp:${WHO2BE_IMAGE_TAG:-latest}
+    pull_policy: always

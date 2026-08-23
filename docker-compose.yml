@@ -177,9 +177,10 @@ services:
       WHO2BE_API_BASE_URL: ${WHO2BE_API_BASE_URL:-}
       WHO2BE_SUPABASE_URL: ${WHO2BE_SUPABASE_URL:-}
       WHO2BE_SUPABASE_ANON_KEY: ${WHO2BE_SUPABASE_ANON_KEY:-}
-      # Direkter MCP-HTTP-Endpoint fuer die Copy-Config in der UI. Leer ⇒ aus
-      # der API-URL abgeleitet (api.→mcp.).
-      WHO2BE_MCP_URL: ${WHO2BE_MCP_URL:-}
+      # MCP-Endpoint fuer die Copy-Config in der UI. Explizit gesetzt, weil die
+      # Ableitung aus der API-Basis (api.→mcp.) same-origin auf `/mcp` zeigen
+      # wuerde — und der SPA-Fallback dort HTML statt MCP liefert.
+      WHO2BE_MCP_URL: ${WHO2BE_MCP_URL:-http://localhost:8765/mcp}
       WHO2BE_SIGNUP_DISABLED: ${WHO2BE_SIGNUP_DISABLED:-false}
     ports:
       # Container hoert mit nginx auf 80; Host-Port bleibt 5173, damit
@@ -194,6 +195,48 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # MCP-Server im Streamable-HTTP-Transport (ADR-0034). Ohne ihn waere der
+  # Kern von Who2Be lokal nur ueber `uv run python -m who2be_mcp.server`
+  # erreichbar — also genau die Python-Toolchain, die der Ein-Befehl-Start
+  # abschafft. Auth: ein normaler `w2b_`-Token als Bearer, den der Server per
+  # GET /v1/me gegen die API verifiziert (apps/mcp/.../auth.py) — kein
+  # OAuth-Tanz noetig. Token in der Web-UI unter Einstellungen → Tokens.
+  mcp:
+    build:
+      context: .
+      dockerfile: apps/mcp/Dockerfile
+    environment:
+      WHO2BE_API_BASE_URL: http://api:8000
+      WHO2BE_TRANSPORT: http
+      WHO2BE_HTTP_HOST: 0.0.0.0
+      WHO2BE_HTTP_PORT: "8765"
+      WHO2BE_HTTP_PATH: /mcp
+      WHO2BE_LOG_FORMAT: ${WHO2BE_MCP_LOG_FORMAT:-console}
+      # Oeffentliche Adressen fuer die OAuth-Discovery (RFC 9728): der Server
+      # advertisiert `{MCP_PUBLIC_URL}{HTTP_PATH}` als Resource, und die muss
+      # mit MCP_RESOURCE_URL der API uebereinstimmen (Default dort:
+      # http://127.0.0.1:8765/mcp). Fuer den Token-Weg spielt das keine Rolle.
+      WHO2BE_OAUTH_ISSUER_URL: ${WHO2BE_OAUTH_ISSUER_URL:-http://localhost:8000}
+      WHO2BE_MCP_PUBLIC_URL: ${WHO2BE_MCP_PUBLIC_URL:-http://localhost:8765}
+    ports:
+      - "8765:8765"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      # TCP-Connect statt HTTP: der Streamable-HTTP-Endpunkt antwortet ohne
+      # Token mit 401 und ohne Session-Id mit 400 — beides waere fuer curl ein
+      # Fehler. Der Check im Dockerfile macht dasselbe; hier explizit, damit
+      # `--wait` ihn sicher nutzt.
+      test:
+        - CMD
+        - python
+        - -c
+        - "import socket; s=socket.socket(); s.settimeout(3); s.connect(('127.0.0.1',8765)); s.close()"
       interval: 5s
       timeout: 5s
       retries: 10

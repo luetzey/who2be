@@ -58,6 +58,9 @@ Pruefen wird:
 5. Same-Origin-Pfad ueber den Web-Origin: `/config.js` (Runtime-Config),
    `/v1/health` und `/auth/v1/health` — das ist der Weg, den der Browser geht,
    und der einzige, der auch von einer LAN-IP aus traegt
+6. MCP-HTTP-Server: `401` + `WWW-Authenticate` direkt auf `:8765` und ueber den
+   Web-Origin (`/mcp`), plus die Protected-Resource-Metadata. Ein `200` mit HTML
+   hiesse: der SPA-Fallback greift statt des MCP-Proxys
 
 Wenn das Skript "alle Checks gruen" druckt, ist die Basis steht. Was es
 **nicht** ersetzt: das echte Web-Happy-Path-Klicken (siehe Schritt 3).
