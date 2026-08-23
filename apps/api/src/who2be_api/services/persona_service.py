@@ -203,6 +203,7 @@ class PersonaService:
         cursor: tuple[datetime, UUID] | None,
         locale: str | None = None,
         agent: UUID | None = None,
+        name: str | None = None,
     ) -> tuple[list[PersonaRead], str | None]:
         require_read_flag(ctx, "persona_read", "Personas")
         # `?agent=`-Listenfilter (WP-B): genau die Persona des Agenten;
@@ -221,6 +222,7 @@ class PersonaService:
             active_only=not ctx.sees_drafts(AgentCapability.persona_write),
             locale=locale,
             restrict_ids=restrict_ids,
+            name=name,
         )
         next_cursor: str | None = None
         if len(rows) > limit:

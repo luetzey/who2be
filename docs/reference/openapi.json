@@ -340,7 +340,7 @@
           "personas"
         ],
         "summary": "List Personas",
-        "description": "Listet Personae; `?locale=` filtert auf die Element-Sprache (ADR-0045),\n`?agent=` filtert auf die Persona des Agenten (WP-B).",
+        "description": "Listet Personae; `?locale=` filtert auf die Element-Sprache (ADR-0045),\n`?agent=` filtert auf die Persona des Agenten (WP-B), `?name=` auf den\nexakten Namen (Issue #415 — damit die Aufloesung per Name nicht die ganze\nLibrary laedt, nur um einen String zu vergleichen).",
         "operationId": "list_personas_v1_workspaces__workspace_id__personas_get",
         "security": [
           {
@@ -373,6 +373,23 @@
                 }
               ],
               "title": "Agent"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Name"
             }
           },
           {

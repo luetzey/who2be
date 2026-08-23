@@ -142,6 +142,45 @@ def test_get_persona_by_name_resolves_via_list() -> None:
     assert persona.name == "QA"
 
 
+def test_get_persona_by_name_sends_server_side_name_filter() -> None:
+    """Issue #415: der Name geht als Query mit, statt im Client verglichen zu werden.
+
+    Vorher lud dieser Pfad die GANZE Persona-Liste — inklusive der vollen
+    Bodies jeder Persona — nur um einen String zu vergleichen.
+    """
+    pid = str(uuid4())
+    seen: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(dict(request.url.params))
+        return httpx.Response(200, json=[_persona_json(pid, "QA")])
+
+    persona = asyncio.run(_client(handler).get_persona("QA"))
+
+    assert seen["name"] == "QA"
+    assert persona.name == "QA"
+
+
+def test_get_persona_by_name_still_matches_when_server_ignores_filter() -> None:
+    """Sicherheitsnetz gegen Versions-Versatz MCP ↔ API.
+
+    Eine aeltere API kennt `?name=` nicht und ignoriert den Parameter — die
+    Antwort ist dann die volle Liste. Ohne den gebliebenen Client-Vergleich
+    kaeme die erstbeste Persona als Treffer zurueck, hier also die falsche.
+    """
+    wanted = str(uuid4())
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json=[_persona_json(str(uuid4()), "Other"), _persona_json(wanted, "QA")],
+        )
+
+    persona = asyncio.run(_client(handler).get_persona("QA"))
+
+    assert str(persona.id) == wanted
+
+
 def test_get_persona_unknown_name_raises_toolerror() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json=[])
