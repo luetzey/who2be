@@ -37,6 +37,23 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Fixed
 
+- Looking a persona up by name over MCP (`get_persona("Builder")`) could abort
+  with an opaque tool error, while the same persona resolved fine by UUID. The
+  name path fetched the *entire* persona list and compared names client-side —
+  and because a persona read carries its full body, that dragged every persona's
+  written-out text across the wire to match a single string. A single persona
+  can render past 119,000 characters, so the response outgrew the client's
+  10-second timeout. `GET /v1/workspaces/{id}/personas` now accepts an exact
+  `?name=` filter and the MCP client uses it, turning the lookup into one narrow
+  request. The client-side name check is deliberately kept as a safety net: an
+  older API ignores the unknown parameter and returns the full list, and without
+  that check the first persona in the list would be returned as a false match.
+- The same name lookup ignored the list endpoint's pagination — no `limit` was
+  sent and `X-Next-Cursor` was never followed — so beyond 100 personas it would
+  report "no persona named X" for a persona that exists. The server-side filter
+  removes the problem rather than papering over it: the filtered result is one
+  or two rows, far below the page limit.
+
 - An MCP connector whose token belongs to a **second** workspace failed on every
   single tool with `403 Token gehoert nicht zu diesem Workspace` — `whoami`
   included. The MCP server took the workspace for its `/v1/workspaces/{id}/...`

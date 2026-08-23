@@ -56,6 +56,7 @@ class FakePersonaRepository:
         self._personas: dict[UUID, PersonaRead] = {}
         self._versions: dict[UUID, list[PersonaVersionRead]] = {}
         self.last_active_only: bool | None = None
+        self.last_name_filter: str | None = None
         # Card-Pill-Zaehler pro Persona-ID (vom Test gesetzt); ohne Eintrag
         # bleibt das Read auf den Defaults (0).
         self.counts: dict[UUID, PersonaListCounts] = {}
@@ -94,8 +95,10 @@ class FakePersonaRepository:
         active_only: bool = False,
         locale: str | None = None,
         restrict_ids: list[UUID] | None = None,
+        name: str | None = None,
     ) -> list[PersonaRead]:
         self.last_active_only = active_only
+        self.last_name_filter = name
         own = sorted(
             (p for p in self._personas.values() if p.workspace_id == workspace_id),
             key=lambda p: (p.created_at, p.id),
@@ -105,6 +108,8 @@ class FakePersonaRepository:
             own = [p for p in own if p.current_status == VersionStatus.active]
         if restrict_ids is not None:
             own = [p for p in own if p.id in set(restrict_ids)]
+        if name is not None:
+            own = [p for p in own if p.name == name]
         if after is not None:
             own = [p for p in own if (p.created_at, p.id) < after]
         return own[:limit]
@@ -358,6 +363,43 @@ def test_list_returns_only_own_personas() -> None:
     own, next_cursor = asyncio.run(service.list_all(ctx, 100, None))
     assert [p.name for p in own] == ["A"]
     assert next_cursor is None
+
+
+def test_list_filters_by_exact_name() -> None:
+    """`?name=` (Issue #415): der Namens-Lookup wird serverseitig eingegrenzt.
+
+    Ohne den Filter musste der MCP-Client die ganze Library laden und im
+    Speicher vergleichen — bei vollen Persona-Bodies ein Timeout statt eines
+    Treffers.
+    """
+    service, ctx = _service()
+    for name in ("Builder", "Coder"):
+        asyncio.run(service.create(ctx, PersonaCreate(name=name, content=_content())))
+
+    hits, _ = asyncio.run(service.list_all(ctx, 100, None, name="Builder"))
+
+    assert [p.name for p in hits] == ["Builder"]
+
+
+def test_list_name_filter_is_exact_not_substring() -> None:
+    """Bewusst `=` statt `ILIKE`: der Filter bedient einen Aufloesungs-Pfad."""
+    service, ctx = _service()
+    for name in ("Builder", "Builder-Alt", "builder"):
+        asyncio.run(service.create(ctx, PersonaCreate(name=name, content=_content())))
+
+    hits, _ = asyncio.run(service.list_all(ctx, 100, None, name="Builder"))
+
+    assert [p.name for p in hits] == ["Builder"]
+
+
+def test_list_without_name_filter_is_unchanged() -> None:
+    service, ctx = _service()
+    for name in ("A", "B"):
+        asyncio.run(service.create(ctx, PersonaCreate(name=name, content=_content())))
+
+    hits, _ = asyncio.run(service.list_all(ctx, 100, None))
+
+    assert {p.name for p in hits} == {"A", "B"}
 
 
 def test_list_returns_next_cursor_when_more_items_available() -> None:

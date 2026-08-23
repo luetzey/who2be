@@ -293,7 +293,24 @@ class ApiClient:
         return PersonaRead.model_validate(data)
 
     async def _resolve_persona_by_name(self, name: str, locale: str | None = None) -> PersonaRead:
-        params = {"locale": locale} if locale is not None else None
+        """Loest eine Persona ueber den serverseitigen `?name=`-Filter auf.
+
+        Frueher lud dieser Pfad die GANZE Persona-Liste und verglich im Client
+        (Issue #415). Da `PersonaRead` den vollen Body traegt, wanderte damit
+        der ausgeschriebene Text jeder Persona des Workspace ueber die Leitung,
+        nur um einen String zu vergleichen — bei 10 s Timeout und ohne
+        Connection-Pooling ein Abbruch statt eines Treffers. Nebenbei ignorierte
+        der Scan die Pagination (`DEFAULT_LIMIT = 100`) und haette ab der
+        zweiten Seite „nicht gefunden" gemeldet, obwohl die Persona existiert.
+
+        Der `==`-Vergleich bleibt bewusst stehen: eine aeltere API ignoriert den
+        unbekannten Query-Parameter und liefert die volle Liste. Ohne diesen
+        Rest wuerde ein Versions-Versatz zwischen MCP und API stillschweigend
+        die erstbeste Persona als Treffer ausgeben.
+        """
+        params = {"name": name}
+        if locale is not None:
+            params["locale"] = locale
         data = await self._get(f"{self._workspace_prefix}/personas", params=params)
         for entry in data:
             persona = PersonaRead.model_validate(entry)

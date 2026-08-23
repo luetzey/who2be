@@ -80,11 +80,16 @@ async def list_personas(
     cursor: PageCursor,
     locale: LocaleFilterQuery,
     agent: Annotated[UUID | None, Query()] = None,
+    name: Annotated[str | None, Query(max_length=200)] = None,
     limit: PageLimit = DEFAULT_LIMIT,
 ) -> list[PersonaRead]:
     """Listet Personae; `?locale=` filtert auf die Element-Sprache (ADR-0045),
-    `?agent=` filtert auf die Persona des Agenten (WP-B)."""
-    items, next_cursor = await service.list_all(ctx, limit, cursor, locale=locale, agent=agent)
+    `?agent=` filtert auf die Persona des Agenten (WP-B), `?name=` auf den
+    exakten Namen (Issue #415 — damit die Aufloesung per Name nicht die ganze
+    Library laedt, nur um einen String zu vergleichen)."""
+    items, next_cursor = await service.list_all(
+        ctx, limit, cursor, locale=locale, agent=agent, name=name
+    )
     if next_cursor is not None:
         response.headers["X-Next-Cursor"] = next_cursor
     return items

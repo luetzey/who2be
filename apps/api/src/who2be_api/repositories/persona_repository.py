@@ -80,6 +80,7 @@ class PersonaRepository(Protocol):
         active_only: bool = False,
         locale: str | None = None,
         restrict_ids: list[UUID] | None = None,
+        name: str | None = None,
     ) -> list[PersonaRead]: ...
 
     async def fetch(
@@ -233,6 +234,7 @@ class PgPersonaRepository(VersionedAggregateRepository[PersonaRead, PersonaVersi
         active_only: bool = False,
         locale: str | None = None,
         restrict_ids: list[UUID] | None = None,
+        name: str | None = None,
     ) -> list[PersonaRead]:
         builder = self._select_active if active_only else self._select_current
         select = builder()
@@ -242,16 +244,24 @@ class PgPersonaRepository(VersionedAggregateRepository[PersonaRead, PersonaVersi
         # `restrict_ids` (z. B. `?agent=`-Listenfilter, WP-B): NULL ⇒ keine
         # Einschraenkung, leere Liste ⇒ keine Treffer — gleiche Mechanik wie
         # bei Playbook/Resource.
+        # `name` ist der EXAKTE Namensfilter (Issue #415). Bewusst kein
+        # `ILIKE`: der Filter bedient einen Aufloesungs-Pfad (`get_persona`
+        # per Name), und der verglich bisher mit `==` — unscharf zu matchen
+        # waere eine stille Verhaltensaenderung. Der Name ist NICHT unique
+        # (dieselbe Persona kann in `de` und `en` existieren, ADR-0045),
+        # deshalb bleibt die Sortierung massgeblich fuer den Treffer.
         if after is None:
             rows = await self._pool.fetch(
                 f"{select} WHERE e.workspace_id = $1 "
                 "AND ($3::text IS NULL OR e.locale = $3) "
                 "AND ($4::uuid[] IS NULL OR e.id = ANY($4)) "
+                "AND ($5::text IS NULL OR e.name = $5) "
                 "ORDER BY e.created_at DESC, e.id DESC LIMIT $2",
                 workspace_id,
                 limit,
                 locale,
                 restrict_ids,
+                name,
             )
         else:
             rows = await self._pool.fetch(
@@ -259,6 +269,7 @@ class PgPersonaRepository(VersionedAggregateRepository[PersonaRead, PersonaVersi
                 "AND (e.created_at, e.id) < ($2, $3) "
                 "AND ($5::text IS NULL OR e.locale = $5) "
                 "AND ($6::uuid[] IS NULL OR e.id = ANY($6)) "
+                "AND ($7::text IS NULL OR e.name = $7) "
                 "ORDER BY e.created_at DESC, e.id DESC LIMIT $4",
                 workspace_id,
                 after[0],
@@ -266,6 +277,7 @@ class PgPersonaRepository(VersionedAggregateRepository[PersonaRead, PersonaVersi
                 limit,
                 locale,
                 restrict_ids,
+                name,
             )
         return [PersonaRead.model_validate(dict(row)) for row in rows]
 
