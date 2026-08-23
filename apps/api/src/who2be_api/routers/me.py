@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, Request
 
 from who2be_api.core.db import get_pool
 from who2be_api.core.rate_limit import limiter, write_limit
-from who2be_api.core.security import get_current_user
+from who2be_api.core.security import CurrentPrincipal, get_current_principal, get_current_user
 from who2be_api.repositories.account_repository import PgAccountLifecycleRepository
 from who2be_api.repositories.audit_log_repository import PgAuditLogRepository
 from who2be_api.repositories.me_repository import PgMeRepository
@@ -43,13 +43,14 @@ def get_account_lifecycle_service(
 
 
 UserId = Annotated[UUID, Depends(get_current_user)]
+Principal = Annotated[CurrentPrincipal, Depends(get_current_principal)]
 Service = Annotated[MeService, Depends(get_me_service)]
 LifecycleService = Annotated[AccountLifecycleService, Depends(get_account_lifecycle_service)]
 
 
 @router.get("")
-async def get_me(user_id: UserId, service: Service) -> MeRead:
-    return await service.fetch(user_id)
+async def get_me(principal: Principal, service: Service) -> MeRead:
+    return await service.fetch(principal.user_id, token_workspace_id=principal.token_workspace_id)
 
 
 @router.delete("")

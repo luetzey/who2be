@@ -198,6 +198,7 @@ _PROBLEM_TITLES: dict[str, str] = {
     "domain_disabled": "Bereich deaktiviert",
     "forbidden_transition": "Unzulaessiger Status-Uebergang",
     "insufficient_role": "Aktion nicht erlaubt: Rolle zu niedrig",
+    "workspace_mismatch": "Token gehoert zu einem anderen Workspace",
     "mfa_required": "Zwei-Faktor-Authentifizierung erforderlich",
     "concurrent_conflict": "Konflikt durch parallele Aenderung",
     "composite_child_inactive": "Composite nicht aktivierbar: Sub-Playbook nicht aktiv",

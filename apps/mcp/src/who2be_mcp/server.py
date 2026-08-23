@@ -257,13 +257,22 @@ def _request_token(settings: Settings) -> str:
 
 
 async def _resolve_workspace_id(settings: Settings, token: str) -> UUID:
-    """Resolved die Default-Workspace-ID eines Tokens ueber `GET /v1/me`.
+    """Resolved den Workspace eines Tokens ueber `GET /v1/me`.
 
-    Pro Token gecacht (LRU + TTL) — die WS-Mitgliedschaft eines Tokens ist stabil
-    (Token sind workspace-gepinnt), die TTL deckt rotierte/revozierte Tokens ab.
-    Ein explizit gepinnter `WHO2BE_WORKSPACE_ID` ueberschreibt die Resolution
-    (stdio/Single-Tenant). Kein globaler Lock: paralleler Erst-Resolve desselben
-    Tokens fuehrt hoechstens zu einem doppelten, idempotenten `/v1/me`-Aufruf.
+    Massgeblich ist `token_workspace_id` — die Bindung des Tokens selbst
+    (`api_token.workspace_id`). `default_workspace_id` ist nur der Fallback fuer
+    ungebundene Credentials (JWT): es ist die *erste Membership des Menschen*,
+    nicht die Bindung des Tokens. Wer es fuer einen gepinnten Token nimmt,
+    schickt einen an Workspace B gebundenen Token nach Workspace A und laeuft in
+    jedem Tool in `403 workspace_mismatch` — genau der Fall aus Issue #413, der
+    jeden User mit mehr als einem Workspace trifft.
+
+    Pro Token gecacht (LRU + TTL) — die WS-Bindung eines Tokens ist stabil, die
+    TTL deckt rotierte/revozierte Tokens ab. Ein explizit gepinnter
+    `WHO2BE_WORKSPACE_ID` ueberschreibt die Resolution (nur stdio/Single-Tenant;
+    unter `transport=http` lehnt `Settings` den Pin ab). Kein globaler Lock:
+    paralleler Erst-Resolve desselben Tokens fuehrt hoechstens zu einem
+    doppelten, idempotenten `/v1/me`-Aufruf.
     """
     if settings.workspace_id:
         try:
@@ -291,7 +300,7 @@ async def _resolve_workspace_id(settings: Settings, token: str) -> UUID:
         # einem Tippfehler zu unterscheiden.
         raise ToolError(problem_message(response, f"Who2Be-API-Fehler ({response.status_code})."))
     data = response.json()
-    ws_id = data.get("default_workspace_id")
+    ws_id = data.get("token_workspace_id") or data.get("default_workspace_id")
     if not isinstance(ws_id, str):
         raise ToolError("Token hat keinen Default-Workspace.")
     resolved = UUID(ws_id)
