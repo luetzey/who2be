@@ -256,8 +256,10 @@ services:
     build:
       context: ../..
       dockerfile: apps/web/Dockerfile
-      # Vite verdrahtet die URLs zur BUILD-Zeit — deshalb als build args (nicht
-      # environment). Ohne diese zeigt die Consent-Seite auf localhost.
+      # Build-Args sind der Compile-Time-Weg (Vite) und bleiben gueltig; die
+      # Runtime-Env unten spiegelt sie und gewinnt zur Laufzeit — sie greift
+      # auch dann, wenn hier statt gebaut ein fertiges GHCR-Image laeuft
+      # (das ist bewusst host-neutral, siehe apps/web/src/config.ts).
       args:
         VITE_API_BASE_URL: https://api.${DOMAIN}
         VITE_SUPABASE_URL: https://supabase.${DOMAIN}
@@ -267,6 +269,12 @@ services:
         # Public-Signup in der UI ausblenden (true), gemeinsam mit dem
         # Backend-GOTRUE_DISABLE_SIGNUP setzen. Default false.
         VITE_WHO2BE_SIGNUP_DISABLED: ${VITE_WHO2BE_SIGNUP_DISABLED:-false}
+    environment:
+      WHO2BE_API_BASE_URL: https://api.${DOMAIN}
+      WHO2BE_SUPABASE_URL: https://supabase.${DOMAIN}
+      WHO2BE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
+      WHO2BE_MCP_URL: https://mcp.${DOMAIN}/mcp
+      WHO2BE_SIGNUP_DISABLED: ${VITE_WHO2BE_SIGNUP_DISABLED:-false}
     depends_on:
       api:
         condition: service_healthy

@@ -1,6 +1,13 @@
 # Lokale Entwicklungs-Infrastruktur fuer Who2Be.
 # `docker compose up -d --wait` faehrt den ganzen Stack hoch:
 #   db (Postgres) -> migrate (einmalig) -> auth (GoTrue) + api -> web.
+#
+# Laeuft OHNE `.env`: jeder Wert unten hat einen Compose-Default. Fuer den
+# Zugriff von einem anderen Geraet im Netz genuegt EINE Variable:
+#   WHO2BE_PUBLIC_URL=http://<host-ip>:5173 docker compose up -d --wait
+# Sie steuert CORS, die GoTrue-Redirect-Allowlist und die Invitation-Links.
+# Die Web-App selbst braucht sie nicht — ihr Bundle spricht Same-Origin
+# (apps/web/nginx.conf proxied /v1/ und /auth/v1/).
 # Gegenstueck: docs/local-smoke.md (1-Befehl-Variante) + scripts/smoke.sh.
 # Vorgriff auf MS-2 C1-C6: self-hosted GoTrue ersetzt die Supabase-Cloud-
 # Abhaengigkeit fuer den lokalen Smoke. Kong/Studio/PostgREST bleiben fuer
@@ -46,8 +53,11 @@ services:
       GOTRUE_API_PORT: "9999"
       GOTRUE_DB_DRIVER: postgres
       GOTRUE_DB_DATABASE_URL: postgres://postgres:postgres@db:5432/who2be?search_path=auth
-      GOTRUE_SITE_URL: http://localhost:5173
-      GOTRUE_URI_ALLOW_LIST: http://localhost:5173,http://localhost:5173/*
+      # Basis-URL der Web-App. WHO2BE_PUBLIC_URL setzen, wenn der Stack ueber
+      # eine LAN-IP oder einen Hostnamen aufgerufen wird — sonst weist GoTrue
+      # Magic-Link-/Invitation-/OAuth-Redirects auf diese Adresse ab.
+      GOTRUE_SITE_URL: ${WHO2BE_PUBLIC_URL:-http://localhost:5173}
+      GOTRUE_URI_ALLOW_LIST: ${WHO2BE_PUBLIC_URL:-http://localhost:5173},${WHO2BE_PUBLIC_URL:-http://localhost:5173}/*
       GOTRUE_DISABLE_SIGNUP: "false"
       GOTRUE_JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-me-32chars-min}
       GOTRUE_JWT_EXP: "3600"
@@ -114,7 +124,11 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/who2be
       JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-me-32chars-min}
-      CORS_ORIGINS: http://localhost:5173
+      # Same-Origin (Browser → web-nginx → api) braucht kein CORS; die Liste
+      # deckt den DIREKTEN Zugriff auf :8000 ab (curl, zweiter Dev-Server).
+      CORS_ORIGINS: ${WHO2BE_PUBLIC_URL:-http://localhost:5173}
+      # Basis fuer Invitation-Links ({WEB_BASE_URL}/invitations/{token}/accept).
+      WEB_BASE_URL: ${WHO2BE_PUBLIC_URL:-http://localhost:5173}
       # Edition + Mollie-Pull-Billing (Plan §3.2) — alle leer/onprem im lokalen
       # Stack; nur die Cloud-Edition mit gesetztem MOLLIE_API_KEY schaltet Billing scharf.
       WHO2BE_EDITION: ${WHO2BE_EDITION:-onprem}
@@ -148,23 +162,35 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
-      # Vite braucht die VITE_*-Werte zur Compile-Zeit; sie muessen
-      # daher Build-Args sein (apps/web/Dockerfile:14-21). Das frueher
-      # genutzte `environment:` wirkte zur Runtime und war fuer den
-      # nginx-Multi-Stage-Build wirkungslos.
       args:
-        VITE_API_BASE_URL: http://localhost:8000
-        VITE_SUPABASE_URL: http://localhost:9999
-        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:-dev-anon-key-not-used-by-gotrue}
+        # KEINE VITE_API_BASE_URL/VITE_SUPABASE_URL mehr: die waeren
+        # Compile-Time einbetoniert und haetten das Image an `localhost`
+        # gebunden. Die App loest ihre URLs zur Laufzeit auf (/config.js →
+        # Same-Origin, siehe apps/web/src/config.ts).
         # On-Prem (Default) → Billing-UI wird aus dem Bundle tree-shaked.
         # Cloud-Dev: VITE_WHO2BE_EDITION=cloud setzen.
         VITE_WHO2BE_EDITION: ${VITE_WHO2BE_EDITION:-onprem}
+    environment:
+      # Leer = Same-Origin (der nginx dieses Containers proxied /v1/ und
+      # /auth/v1/). Nur setzen, wenn API/Auth unter eigenen Hosts liegen —
+      # z. B. WHO2BE_API_BASE_URL=https://api.example.com.
+      WHO2BE_API_BASE_URL: ${WHO2BE_API_BASE_URL:-}
+      WHO2BE_SUPABASE_URL: ${WHO2BE_SUPABASE_URL:-}
+      WHO2BE_SUPABASE_ANON_KEY: ${WHO2BE_SUPABASE_ANON_KEY:-}
+      # Direkter MCP-HTTP-Endpoint fuer die Copy-Config in der UI. Leer ⇒ aus
+      # der API-URL abgeleitet (api.→mcp.).
+      WHO2BE_MCP_URL: ${WHO2BE_MCP_URL:-}
+      WHO2BE_SIGNUP_DISABLED: ${WHO2BE_SIGNUP_DISABLED:-false}
     ports:
       # Container hoert mit nginx auf 80; Host-Port bleibt 5173, damit
       # smoke.sh + CORS-Origin unveraendert bleiben.
       - "5173:80"
     depends_on:
       api:
+        condition: service_healthy
+      # Der /auth/v1-Proxy zeigt auf den Gateway — ohne ihn liefe der Login
+      # beim ersten Aufruf ins 502.
+      auth-gateway:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost/healthz"]

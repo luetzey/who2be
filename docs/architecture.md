@@ -307,8 +307,11 @@ Keine Geschaeftslogik im MCP-Server — er ist ein reiner Adapter.
 
 ### apps/web
 React/TypeScript (Vite): Login (Supabase-JS-SDK), Listen-Ansicht,
-Detail-Editor. API-Base-URL ueber `VITE_API_BASE_URL`. Auth-Token nicht im
-`localStorage` (siehe react-conventions). Funktion vor Schoenheit.
+Detail-Editor. API-Base-URL zur Laufzeit aus `/config.js`
+(`WHO2BE_API_BASE_URL` am Container) mit `VITE_API_BASE_URL` als Build-Zeit-
+Fallback und Same-Origin als Default — dadurch ist ein Web-Image fuer Prod,
+localhost und LAN-IP gueltig. Auth-Token nicht im `localStorage`
+(siehe react-conventions). Funktion vor Schoenheit.
 
 ```mermaid
 classDiagram

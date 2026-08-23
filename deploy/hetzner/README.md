@@ -284,11 +284,19 @@ manuell per `workflow_dispatch`):
 
 In **Settings → Secrets and variables → Actions → Variables** anlegen:
 
+> **Hinweis (Web-URLs):** Die drei `VITE_*`-Werte werden **nicht mehr ins
+> Image gebaut** — das CI-Image ist host-neutral. Der `web`-Service in
+> `deploy/hetzner/who2be/docker-compose.yml` reicht sie als
+> `WHO2BE_API_BASE_URL`/`WHO2BE_SUPABASE_URL`/`WHO2BE_SUPABASE_ANON_KEY` an den
+> Container, der daraus beim Start `/config.js` schreibt. Aus dem `.env` auf dem
+> Host heraus bleibt die Bedienung damit unveraendert; ohne diese Werte spraeche
+> die App Same-Origin (also `app.<domain>` statt `api.<domain>`).
+
 | Name                       | Beispiel                            | Zweck                                |
 | -------------------------- | ----------------------------------- | ------------------------------------ |
-| `VITE_API_BASE_URL`        | `https://api.example.com`           | Web-Build-Arg (Compile-Time)         |
-| `VITE_SUPABASE_URL`        | `https://supabase.example.com`      | Web-Build-Arg                        |
-| `VITE_SUPABASE_ANON_KEY`   | `<ANON_KEY aus supabase/.env>`      | Web-Build-Arg (oeffentlicher Key)    |
+| `VITE_API_BASE_URL`        | `https://api.example.com`           | Web-Runtime-Config (siehe Hinweis)   |
+| `VITE_SUPABASE_URL`        | `https://supabase.example.com`      | Web-Runtime-Config                   |
+| `VITE_SUPABASE_ANON_KEY`   | `<ANON_KEY aus supabase/.env>`      | Web-Runtime-Config (oeffentl. Key)   |
 | `DEPLOY_HOST`              | `who2be.example.com`                | SSH-Host fuer Deploy-Job             |
 | `DEPLOY_USER`              | `deploy`                            | SSH-User auf dem Host                |
 | `DEPLOY_PROJECT_DIR`       | `/opt/who2be`                       | Repo-Klon auf dem Host (Default)     |

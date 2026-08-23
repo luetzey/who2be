@@ -6,6 +6,9 @@
 #   3) JWT-authentifizierter API-Aufruf (gen_test_jwt.py) → 200 fuer /v1/me
 #      (Top-Level-Endpunkt seit 2.1a-2; validiert Auth + DB ohne Workspace-Seed)
 #   4) MCP-Tools (in-process im api-Container) zaehlen die 4 Pflicht-Tools
+#   5) Same-Origin-Pfad: /config.js, /v1/health und /auth/v1/health ueber den
+#      Web-Origin — das ist der Weg, den der Browser tatsaechlich geht (und der
+#      einzige, der auch von einer LAN-IP aus funktioniert)
 # Beendet mit Exit-Code 0 wenn alles gruen, sonst != 0.
 
 set -euo pipefail
@@ -61,5 +64,21 @@ for required in ping get_persona list_playbooks fetch_playbook; do
   echo "${TOOL_COUNT}" | tr ',' '\n' | grep -qx "${required}" \
     || fail "MCP-Tool fehlt: ${required} (got: ${TOOL_COUNT})"
 done
+
+# --- 5) Same-Origin-Pfad (Browser-Sicht) -------------------------------------
+# Der Browser laedt die App vom Web-Origin und spricht API + Auth ueber
+# denselben Origin an (apps/web/nginx.conf proxied /v1/ und /auth/v1/). Bricht
+# dieser Pfad, ist die App von jeder Adresse ausser localhost:8000 tot — ohne
+# dass Schritt 1-3 etwas merken.
+log "Same-Origin-Pfad ueber ${WEB_URL}"
+CONFIG_JS="$(curl -fsS "${WEB_URL}/config.js")" || fail "/config.js nicht ausgeliefert"
+echo "${CONFIG_JS}" | grep -q "__WHO2BE_CONFIG__" \
+  || fail "/config.js enthaelt keine Runtime-Config: ${CONFIG_JS}"
+
+PROXY_HEALTH="$(curl -fsS "${WEB_URL}/v1/health")" || fail "API nicht ueber den Web-Origin erreichbar"
+echo "${PROXY_HEALTH}" | grep -q '"db":"ok"' || fail "Proxy-Health nicht ok: ${PROXY_HEALTH}"
+
+curl -fsS -o /dev/null "${WEB_URL}/auth/v1/health" \
+  || fail "GoTrue nicht ueber den Web-Origin erreichbar (/auth/v1/health)"
 
 log "alle Checks gruen ✓"

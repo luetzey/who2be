@@ -22,13 +22,16 @@ jobs:
             dockerfile: apps/api/Dockerfile
             target: ""
             build_args: ""
+          # OHNE VITE_*-Build-Args: die URLs waeren sonst Compile-Time im
+          # Bundle einbetoniert und das Image nur fuer genau eine Domain
+          # brauchbar. Die App liest sie zur Laufzeit aus /config.js (Env am
+          # Container, siehe apps/web/docker/40-who2be-runtime-config.sh) und
+          # faellt sonst auf Same-Origin zurueck. Dasselbe Image laeuft damit
+          # in Prod, lokal auf localhost und ueber eine LAN-IP.
           - image: web
             dockerfile: apps/web/Dockerfile
             target: ""
-            build_args: |
-              VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL }}
-              VITE_SUPABASE_URL=${{ vars.VITE_SUPABASE_URL }}
-              VITE_SUPABASE_ANON_KEY=${{ vars.VITE_SUPABASE_ANON_KEY }}
+            build_args: ""
           - image: mcp
             dockerfile: apps/mcp/Dockerfile
             target: ""

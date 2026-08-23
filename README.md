@@ -56,15 +56,66 @@ documented as ADRs under [`docs/adr/`](docs/adr/).
 
 ## Quickstart (local)
 
-Prerequisites: Docker, [uv](https://docs.astral.sh/uv/), Node 22+.
+**Docker is the only prerequisite** — no Python, no Node, no `.env` file.
 
 ```bash
 git clone https://github.com/luetzey/who2be.git && cd who2be
-cp .env.example .env       # adjust the env template
-docker compose up -d       # local Postgres/Supabase
-uv sync                    # Python dependencies (on-prem core)
-uv run uvicorn who2be_api.main:app --reload   # API on :8000
+docker compose up -d --wait
+```
 
+Open <http://localhost:5173>, create an account (sign-ups are auto-confirmed
+locally, so no mail server is involved), and you land in a personal workspace
+that is created on first login.
+
+Useful follow-ups:
+
+```bash
+bash scripts/smoke.sh      # end-to-end check: API, web, auth, MCP tools
+docker compose logs -f api # what the backend is doing
+docker compose down        # stop; add -v to also drop the database volume
+```
+
+The first start builds the API and web images from source, which takes a few
+minutes. To pull prebuilt images instead:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.images.yml up -d --wait
+```
+
+### Access from another device
+
+The web UI talks to whatever origin it was loaded from — the container's nginx
+forwards `/v1/` and `/auth/v1/` internally — so a LAN address works without a
+rebuild. Point the backend at the same address so CORS, auth redirects, and
+invitation links match:
+
+```bash
+WHO2BE_PUBLIC_URL=http://192.168.1.42:5173 docker compose up -d --wait
+```
+
+Then open `http://192.168.1.42:5173` from any device on the network. Serving
+Who2Be beyond a trusted network needs the hardened setup with TLS —
+see [`deploy/hetzner/README.md`](deploy/hetzner/README.md).
+
+### Troubleshooting
+
+| Symptom | Cause and fix |
+|---|---|
+| `port is already allocated` | Something else uses 5173/8000/9999/5432. Stop it, or change the host port in `docker-compose.yml`. |
+| Web loads, but "API unreachable" | The API container is unhealthy: `docker compose logs api`. |
+| Login fails from a LAN address | `WHO2BE_PUBLIC_URL` was not set to that address — see above. |
+| File upload returns 503 | The blob store is optional and off unless `WHO2BE_BLOBSTORE_*` is set (`.env.example`). Everything else works without it. |
+
+### Development setup
+
+For working on the code you need [uv](https://docs.astral.sh/uv/) and Node 22+
+in addition to Docker:
+
+```bash
+cp .env.example .env                          # the defaults match Compose
+docker compose up -d db auth auth-gateway     # infrastructure only
+uv sync                                       # Python dependencies (on-prem core)
+uv run uvicorn who2be_api.main:app --reload   # API on :8000
 cd apps/web && npm ci && npm run dev          # web UI on :5173
 ```
 

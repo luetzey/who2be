@@ -10,6 +10,10 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Runtime-Konfiguration (src/config.ts): im Container vom
+         nginx-Entrypoint aus Env geschrieben, im Dev-Server der leere
+         Platzhalter aus public/. MUSS vor dem App-Bundle laden. -->
+    <script src="/config.js"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

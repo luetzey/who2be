@@ -1,0 +1,27 @@
+# Overlay: fertige Images aus der GitHub Container Registry statt lokalem Build.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.images.yml up -d --wait
+#
+# Spart den ersten Build (uv sync + npm ci + Vite) und damit die mit Abstand
+# laengste Wartezeit beim Ausprobieren. `pull_policy: always` ist noetig, weil
+# die Services im Basis-File ein `build:` tragen — ohne die Policy wuerde
+# Compose bei fehlendem Image bauen statt zu ziehen.
+#
+# Voraussetzung: die Packages ghcr.io/luetzey/who2be-* sind oeffentlich lesbar.
+# Solange sie privat sind, vorher `docker login ghcr.io` (PAT mit read:packages).
+# Ohne Overlay baut `docker compose up` weiterhin aus dem Quellcode.
+#
+# WHO2BE_IMAGE_TAG pinnt eine Version (Commit-SHA aus dem Deploy-Workflow);
+# Default ist `latest` vom main-Branch.
+services:
+  migrate:
+    image: ghcr.io/luetzey/who2be-api:${WHO2BE_IMAGE_TAG:-latest}
+    pull_policy: always
+
+  api:
+    image: ghcr.io/luetzey/who2be-api:${WHO2BE_IMAGE_TAG:-latest}
+    pull_policy: always
+
+  web:
+    image: ghcr.io/luetzey/who2be-web:${WHO2BE_IMAGE_TAG:-latest}
+    pull_policy: always
