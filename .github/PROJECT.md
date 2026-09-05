@@ -58,12 +58,22 @@ Danach oder parallel, nicht in der Nummerierung:
 ### Projects-Board
 
 Ein Board ist eine **Sicht** auf die Reihenfolge oben, nicht ihre Quelle: die
-Heimat von Outcome, Reihenfolge und Constraints bleibt dieses Repo. Das Board
-existiert noch nicht. Seine Einrichtung ist ein Owner-Schritt, weil das
-Toolset der Agenten-Sessions keine Projects-Werkzeuge trägt (geprüft
-2026-09-05: weder Projects-Tools noch Issue-Fields verfügbar). Sobald es
-steht, trägt `.claude/project.json` — gitignored, Vorlage in
-`.claude/project.example.json` — `github_repo` und `project_number`.
+Heimat von Outcome, Reihenfolge und Constraints bleibt dieses Repo.
+
+Board: <https://github.com/users/luetzey/projects/3> (nutzereigen,
+`project_number: 3`, angelegt 2026-09-05).
+
+Gepflegt wird es vom Owner. Das Toolset der Agenten-Sessions trägt **keine**
+Projects-Werkzeuge (geprüft 2026-09-05, auch nach der Board-Anlage: weder
+`projects_*`-Tools noch Issue-Fields verfügbar, `list_issue_fields` liefert
+`[]`). Ein Agent kann das Board also weder lesen noch schreiben und richtet
+sich nach der Reihenfolge oben. Wer den Board-Status nachzieht, tut das von
+Hand.
+
+`.claude/project.json` trägt `github_repo` und `project_number` (Vorlage:
+`.claude/project.example.json`), ist aber gitignored und existiert in einer
+frischen Cloud-Session deshalb nie. Für Agenten ist diese Datei hier die
+Quelle, nicht `project.json`.
 
 ### Acceptance Criteria
 

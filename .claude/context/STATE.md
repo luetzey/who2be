@@ -32,9 +32,13 @@ Umgesetzt wurde deshalb die repo-seitige Haelfte, die auch ohne Board traegt:
   ergaenzt, damit die spaetere (gitignorede) `project.json` das richtige Schema
   hat. Bisher trug die Vorlage nur Notion-Schluessel.
 
-Offen und Owner-Sache: Board anlegen (Status + Zahlenfeld „Reihenfolge"),
-danach `project.json` lokal fuellen. Das Board ist laut Norm eine Sicht auf die
-Liste, nicht ihre Quelle — PROJECT.md bleibt die Heimat.
+Board inzwischen vom Owner angelegt: https://github.com/users/luetzey/projects/3
+(`project_number: 3`), in PROJECT.md eingetragen. **Auch nach der Anlage bleibt
+es fuer Agenten unsichtbar** — erneut geprueft, weder Projects-Tools noch
+Issue-Fields; Pflege des Board-Status ist Handarbeit. Das Board ist laut Norm
+eine Sicht auf die Liste, nicht ihre Quelle — PROJECT.md bleibt die Heimat, und
+zwar zwingend, weil `project.json` gitignored ist und in einer Cloud-Session nie
+existiert.
 
 ## Backlog-Refinement (2026-09-05, 13. Lauf — nur GitHub, kein Code)
 
