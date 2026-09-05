@@ -1134,3 +1134,30 @@ bleiben)._
   einzige offene Punkt WP-10 (Deploy einmal end-to-end) ist wortgleich WP-4 in
   #428 und wird nur dort geführt.
 - **Begründung:** eine Wahrheit statt zwei; Owner-Entscheidung F6.
+
+## 2026-09-05 — CI-Doku-Gate: Gate-Job mit `if:` statt `paths-ignore` (#440)
+- **Entscheidung:** Reine Doku-PRs (`.claude/**`, `docs/**`, Root-Markdown)
+  überspringen `python`, `web`, `compose-smoke` und `e2e`. Umgesetzt als
+  vorgeschalteter Job `changes`, der per `git diff` klassifiziert, plus
+  `needs:`/`if:` an den vier Job-Köpfen — NICHT als `paths-ignore` am Trigger.
+  Der Gate greift nur für `pull_request`; ein Push auf `main` fährt immer den
+  vollen Satz. `audit` bleibt ungegated.
+- **Begründung:** Ein per `paths-ignore` gar nicht gestarteter Workflow meldet
+  KEINEN Check-Status — ein Required Check bliebe auf „Expected" stehen, und
+  Branch-Protection steht als #338 O2 direkt bevor. Ein per `if:`
+  übersprungener Job meldet „skipped", was GitHub bei Required Checks wie
+  Erfolg wertet. Zweiter Grund: `main` ist die Release-Basis, ein Tag soll auf
+  einem Commit sitzen, dessen Suite tatsächlich gelaufen ist (#341 WP-9).
+  `audit` fragt eine Live-CVE-Datenbank ab, sein Ergebnis kann sich ohne
+  Datei-Änderung ändern.
+- **Verworfen:** `paths-ignore` am Trigger (blockiert Required Checks, kein Lauf
+  auf Doku-Commits); `dorny/paths-filter` (zusätzliche Supply-Chain-Fläche und
+  ein weiterer SHA-Pin für fünf Zeilen Shell — alle 19 `uses:` sind gepinnt);
+  ein Shim-Workflow, der Status meldet (doppelte Check-Namensliste zu pflegen).
+- **Fail-safe:** jeder unklare Pfad (Nicht-PR-Event, fehlende Basis-SHA,
+  fehlgeschlagenes `merge-base`/`diff`, leerer Diff) ergibt `code=true`, also
+  vollen Lauf. Ein falsches „skip" wäre ein stilles falsches Grün.
+- **Offen / geerbte Annahme:** Dass GitHub „skipped" bei Required Checks wie
+  Erfolg wertet, ist dokumentiertes Verhalten, im Repo aber nicht nachweisbar,
+  solange Branch-Protection aus ist (`"protected": false`, GIT-1). Mit #338 O2
+  gegenzuprüfen; der Gate ist in beiden Zuständen korrekt.

@@ -14,7 +14,73 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  changes:
+    # Gate-Job (siehe Issue): klassifiziert den PR-Diff und steuert per `if:`,
+    # ob die vier schweren Jobs unten laufen. Bewusst `if:` statt
+    # `paths-ignore` am Trigger — ein per `paths-ignore` gar nicht gestarteter
+    # Workflow meldet KEINEN Check-Status (Required Checks blieben auf
+    # "Expected" stehen); ein per `if:` uebersprungener Job meldet "skipped",
+    # was GitHub bei Required Checks wie Erfolg wertet. Bewusst `git diff`
+    # statt einer Fremd-Action (z. B. dorny/paths-filter) — alle `uses:` in
+    # diesem Workflow sind SHA-gepinnt, eine weitere Action waere zusaetzliche
+    # Supply-Chain-Flaeche fuer fuenf Zeilen Shell. Gilt NUR fuer
+    # `pull_request`: ein Push auf `main` faehrt immer den vollen Satz, weil
+    # main die Release-Basis ist und ein Tag auf einem Commit sitzen soll,
+    # dessen Suite tatsaechlich gelaufen ist. `audit` haengt bewusst nicht an
+    # diesem Gate (fragt eine Live-CVE-Datenbank ab, kann sich ohne
+    # Datei-Aenderung aendern).
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.classify.outputs.code }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - id: classify
+        name: Classify diff (docs-only PRs skip the heavy jobs)
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -u
+          # Fail-safe durchgaengig: jeder Fehler-/Sonderpfad hier endet in
+          # code=true (voller Lauf). Ein faelschliches "skip" waere ein
+          # stilles falsches Gruen - der einzige teure Fehler dieser
+          # Klassifikation. Nur ein sauber bestimmter, ausschliesslich aus
+          # Doku bestehender Diff ergibt code=false.
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -z "${BASE_SHA:-}" ] || [ -z "${HEAD_SHA:-}" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          MERGE_BASE=$(git merge-base "$BASE_SHA" "$HEAD_SHA") || {
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+          DIFF=$(git diff --name-only "$MERGE_BASE" "$HEAD_SHA") || {
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+          if [ -z "$DIFF" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Allowlist "nur Doku": .claude/**, docs/** (inkl.
+          # docs/reference/openapi.json), Markdown im Repo-Root. Jede Zeile,
+          # die NICHT auf die Allowlist passt, kippt code auf true.
+          if echo "$DIFF" | grep -vqE '^(\.claude/|docs/|[A-Za-z0-9._-]+\.md$)'; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+
   python:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -75,6 +141,8 @@ jobs:
           if-no-files-found: ignore
 
   web:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -138,6 +206,8 @@ jobs:
           echo "OK: Billing-UI im Cloud-Bundle."
 
   compose-smoke:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -167,6 +237,8 @@ jobs:
     # die vier Journeys sind scharf und liefen gruen durch (Run 32377333096)
     # — das fruehere Soft-Gate (`continue-on-error`) ist damit entfernt
     # (#341 WP-9).
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

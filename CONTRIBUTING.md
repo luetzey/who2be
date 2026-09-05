@@ -87,6 +87,11 @@ Permissive licenses (MIT, BSD, Apache-2.0, ISC, 0BSD) and MPL-2.0 are
 allowed; GPL/AGPL/LGPL and other copyleft licenses break the gate.
 Deliberate exceptions require an ADR addendum.
 
+A pull request that touches only documentation (`.claude/**`, `docs/**`,
+root-level Markdown) skips the four heavy CI jobs (`python`, `web`,
+`compose-smoke`, `e2e`) — each still reports a check status ("skipped"), so
+required checks are unaffected.
+
 For bugfixes, write a reproducing, failing test first, then fix. Fix the
 cause, not the symptom; sketch larger changes as a plan first.
 
