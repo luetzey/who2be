@@ -1,6 +1,46 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-05 (14. Lauf — Reihenfolge des Backlogs in .github/PROJECT.md verankert)_
+_Stand: 2026-09-05 (15. Lauf — Backlog gegen die Norm geprueft, Reihenfolge-Tabelle angeglichen)_
+
+## Backlog gegen die Norm geprueft, Tabelle angeglichen (2026-09-05, 15. Lauf)
+
+Auftrag: jedes offene Issue ohne `agent-ready` startbar machen, dann die Queue
+neu ordnen. **Ergebnis: kein einziges Issue durfte `agent-ready` bekommen** —
+und das ist der richtige Zustand, kein Versaeumnis.
+
+- **#428, #402, #431, #435** sind inhaltlich vollstaendig veredelt (Ist-Zustand
+  mit datei:zeile-Belegen, vorentschiedene Weichen, Acceptance, Out-of-Scope,
+  exakte Verifikations-Kommandos), aber `size/M`. Nach der Norm
+  „Agent-ready Arbeitspaket" wird so etwas **nicht durch Nachtragen von Feldern**
+  startbar, sondern durch Zuschnitt. #428/#402/#431 haben ihr naechstes Kind
+  bereits herausgeloest (#434/#436/#438); **#435 als einziges noch nicht.**
+- **#338** traegt `human-only` (Refinement endet dort per Playbook-Schritt 1),
+  **#442** ist die Queue selbst, kein Arbeitspaket.
+- Die sieben `agent-ready`-Issues wurden gegen die vier Pflichtfelder
+  gegengeprueft — alle sieben tragen sie vollstaendig, inkl. Vorentschieden und
+  Eskalation. Keine Nachbesserung noetig.
+
+Reihenfolge unabhaengig gegen die fuenf Kriterien neu hergeleitet; sie kommt
+identisch zur Fassung von 12:41 heraus (#440, #434, #429, #436, #430, #427,
+#438), deshalb **keine Umsortierung**. Zwei Setzungen sind Praeferenz und jetzt
+als solche markiert: die Platzierung von #440 auf Platz 1 (folgt aus keinem der
+Kriterien — es blockiert nichts und oeffnet nichts) und #430 vor #427.
+
+Zwei echte Funde, beide behoben:
+
+1. **`.github/PROJECT.md` §Reihenfolge trug noch die Erstfassungs-Sortierung**,
+   waehrend die Datei anweist, ein fehlendes Queue-Issue „aus der Tabelle unten"
+   neu zu bauen — ein Wiederaufbau haette die veraltete Reihenfolge
+   zurueckgeholt. Tabelle steht jetzt in Queue-Reihenfolge.
+2. **Zwei Tabellenzeilen waren sachlich falsch:** #430 und #427 als
+   „Unabhaengig" bzw. „ohne Kopplung" beschrieben, obwohl beide eine
+   Datei-Kollision haben (#430 nach #429 wegen `config.ts`/`LoginPage`, #427
+   nach #436 wegen der OpenAPI-Artefakte). Gegen die Scope-Listen nachgeprueft.
+
+Nebenbei korrigiert: #442 nannte PR #441 als „offen, Draft" — er ist seit
+12:27 gemergt. Neuer Constraint in PROJECT.md: ein `size/M`-Issue wird nie
+durch Nachtragen von Feldern startbar.
+
 
 ## Backlog-Reihenfolge verankert, Board bleibt Owner-Schritt (2026-09-05, 14. Lauf)
 
