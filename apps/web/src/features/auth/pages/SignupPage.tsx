@@ -20,6 +20,7 @@ import { supabase } from '@/lib/supabase'
 import { OAuthButtons } from '../components/OAuthButtons'
 import { buildRedirectTo } from '../lib/redirect'
 import { sanitizeNext } from '../lib/sanitize-next'
+import { ComingSoonPage } from './ComingSoonPage'
 
 type SignupValues = { email: string; password: string; confirm: string; consent: boolean }
 
@@ -67,9 +68,15 @@ export function SignupPage() {
   // Gate fuer Submit UND OAuth: erst nach Zustimmung freigeschaltet (WP-I).
   const consentGiven = form.watch('consent')
 
-  // Self-Service-Registrierung deaktiviert (VITE_WHO2BE_SIGNUP_DISABLED, spiegelt
+  // "Wir arbeiten noch"-Modus (Issue #429, WHO2BE_LAUNCH_MODE=coming_soon):
+  // Hinweisseite statt Formular. Defense-in-Depth: GoTrue weist signUp
+  // ohnehin mit 422 ab (GOTRUE_DISABLE_SIGNUP).
+  if (config.launchMode === 'coming_soon') {
+    return <ComingSoonPage />
+  }
+
+  // Altschalter ohne Launch-Modus (VITE_WHO2BE_SIGNUP_DISABLED, spiegelt
   // GOTRUE_DISABLE_SIGNUP) → die Seite ist nicht erreichbar, zurueck zum Login.
-  // Defense-in-Depth: GoTrue weist signUp ohnehin mit 422 ab.
   if (config.signupDisabled) {
     return <Navigate to="/login" replace />
   }

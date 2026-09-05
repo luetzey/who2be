@@ -26,6 +26,8 @@ const { mockConfig } = vi.hoisted(() => ({
     supabaseUrl: 'http://localhost:54321',
     supabaseAnonKey: 'anon',
     signupDisabled: false,
+    launchMode: 'open' as 'open' | 'coming_soon',
+    launchContact: '',
   },
 }))
 
@@ -64,6 +66,8 @@ afterEach(() => {
   signUp.mockReset()
   signInWithOAuth.mockReset()
   mockConfig.signupDisabled = false
+  mockConfig.launchMode = 'open'
+  mockConfig.launchContact = ''
 })
 
 describe('SignupPage', () => {
@@ -106,6 +110,28 @@ describe('SignupPage', () => {
 
     expect(screen.getByText('LOGIN')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Konto erstellen' })).not.toBeInTheDocument()
+  })
+
+  it('zeigt im "coming_soon"-Launch-Modus die Hinweisseite statt des Formulars', () => {
+    mockConfig.launchMode = 'coming_soon'
+
+    renderPage()
+
+    expect(
+      screen.getByRole('heading', { name: 'Wir arbeiten noch an Who2Be — bald verfügbar.' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Konto erstellen' })).not.toBeInTheDocument()
+  })
+
+  it('zeigt die Hinweisseite auch, wenn der Altschalter zusaetzlich gesetzt ist', () => {
+    mockConfig.launchMode = 'coming_soon'
+    mockConfig.signupDisabled = true
+
+    renderPage()
+
+    expect(
+      screen.getByRole('heading', { name: 'Wir arbeiten noch an Who2Be — bald verfügbar.' }),
+    ).toBeInTheDocument()
   })
 
   it('blockt Signup ohne Consent (Submit + OAuth deaktiviert)', () => {

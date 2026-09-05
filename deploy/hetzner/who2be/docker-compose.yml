@@ -141,6 +141,11 @@ services:
       WHO2BE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
       WHO2BE_MCP_URL: ${VITE_MCP_URL:-}
       WHO2BE_SIGNUP_DISABLED: ${VITE_WHO2BE_SIGNUP_DISABLED:-false}
+      # "Wir arbeiten noch"-Modus (#429). Ohne dieses Durchreichen bleibt
+      # `/config.js` auf "open", egal was in der `.env` steht.
+      # GOTRUE_DISABLE_SIGNUP bleibt separat und wird gemeinsam gesetzt.
+      WHO2BE_LAUNCH_MODE: ${WHO2BE_LAUNCH_MODE:-open}
+      WHO2BE_LAUNCH_CONTACT: ${WHO2BE_LAUNCH_CONTACT:-}
     networks: [app-net]
     restart: unless-stopped
     healthcheck:

@@ -15,6 +15,7 @@ Aktive Sektionen:
 - [Verschluesselung at-Rest](#verschluesselung-at-rest-postgres-volume) — LUKS/verschl. Hetzner-Volume + Verifikation (Befund P4/S2)
 - [Standort & Auftragsverarbeiter](#standort--auftragsverarbeiter) — RZ-Standort + Sub-Processor-Liste (DSGVO/AVV)
 - [Backup & Restore](#backup--restore) — verschluesselter pg_dump + restic-Offsite (C5a/C5b)
+- [Launch-Modus: Public-Signup abschalten](#launch-modus-public-signup-abschalten) — WHO2BE_LAUNCH_MODE + GOTRUE_DISABLE_SIGNUP (Issue #429)
 - [Akzeptierte Vulnerabilities](#akzeptierte-vulnerabilities) — bewusste Risikoabnahmen
 
 ---
@@ -213,6 +214,27 @@ und der Abnahme. Reihenfolge einhalten:
       (Signup → Verify → Pro → MCP-Quota 429 → Downgrade 402 → RLS-Nachweis).
 
 ---
+
+## Launch-Modus: Public-Signup abschalten
+
+Ausfuehrliche Erklaerung (Konfiguration, keine Code-Aenderung):
+[`docs/signup-and-invites.md`](../../docs/signup-and-invites.md).
+
+Kurzfassung fuer den Operator-Fall "Instanz ist live, Registrierung soll noch
+nicht offen sein":
+
+1. **`GOTRUE_DISABLE_SIGNUP=true`** im `.env` — das ist die eigentliche Sperre
+   (GoTrue weist `signUp` mit `422` ab, auch gegen direkte API-Aufrufe).
+2. **`WHO2BE_LAUNCH_MODE=coming_soon`** (+ optional `WHO2BE_LAUNCH_CONTACT`)
+   fuer die Web-UI: `/signup` zeigt eine Hinweisseite (DE/EN) statt des
+   Formulars, der Login-Link "Registrieren" fuehrt dorthin.
+3. Beide Variablen sind Runtime (kein Rebuild) — ein `docker compose restart
+   web` (bzw. `up -d`) nach dem `.env`-Aendern genuegt, **vorausgesetzt** der
+   `web`-Service in `who2be/docker-compose.yml` reicht sie als Container-Env
+   durch (siehe Kommentar in `deploy/hetzner/.env.example`).
+
+Ist nur `GOTRUE_DISABLE_SIGNUP=true` gesetzt (ohne Launch-Modus), bleibt die
+Web-UI beim Altverhalten: `/signup` leitet auf `/login` um, kein Hinweistext.
 
 ## Notfallpfad: Registry nicht erreichbar
 

@@ -615,6 +615,11 @@
       },
       "consentRequiredHint": "Please accept the Terms and the Privacy Policy to continue."
     },
+    "comingSoon": {
+      "title": "We're still building Who2Be — coming soon.",
+      "body": "Sign-up is not open yet. Sign in with an existing account or check back later.",
+      "contact": "Questions? Email us:"
+    },
     "resetPassword": {
       "title": "Reset password",
       "description": "We will send you a link to set a new password.",
