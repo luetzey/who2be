@@ -96,7 +96,38 @@ nichts prüft, ist schlimmer als keines — es sieht nach Prüfung aus.
      `apps/api/tests/contract/openapi_surface.json`. `STATE.md:333` belegt, dass
      die Spec bereits einmal unbemerkt stale war.
 
-## 5. Was dieser Lauf nicht getan hat
+## 5. Abweichung vom Playbook — nachtraeglich festgestellt
+
+Der Who2Be-MCP war zu Sessionbeginn nicht verbunden (404 beim Verbindungsaufbau),
+die Boot-Sequenz lief deshalb aus dem eingebetteten Persona-Text. Nach
+Wiederverbindung nachgeholt — mit einem Befund:
+
+**„backlog aufbereiten" ist ein exakter Trigger des Playbooks *Issue-Refinement*
+(`290b0c4f-e623-4a00-a992-24bbb2f4a62a`), und dieses Playbook fehlt im
+Playbook-Katalog, den der Coder-System-Prompt einbettet.** Dort stehen zehn
+Playbooks, Issue-Refinement ist keines davon. Ein Lauf, der wie dieser mit
+„Backlog aufbereiten" startet, findet es also nur ueber `list_triggers()` —
+und bei nicht verbundenem MCP gar nicht. Das ist eine Verdrahtungsluecke in der
+Persona, kein Inhaltsfehler des Playbooks; sie gehoert vom Owner im Builder
+geschlossen.
+
+Der Lauf deckt sich inhaltlich mit den Schritten 1 bis 4 (human-only-Issues
+nicht angefasst, Belege als `datei:zeile`, Verifikations-Kommandos aus dem Repo
+statt erfunden, Weichen-Triage entlang der Beleg-Schwelle). Zwei Punkte weichen
+ab und werden hier benannt statt geglaettet:
+
+1. **Kein woertliches Archiv vor der Body-Aenderung** (Schritt 5, dort als
+   teuerster Fehler markiert). Die Regel zielt auf den *Ersatz* eines Bodys; hier
+   waren es vier chirurgische Ein-Stellen-Korrekturen, keine Neufassung. Die
+   Rueckfallebene ist trotzdem da: die Tabelle in §3.2 nennt jeden Vorher- und
+   Nachher-Wert, dazu fuehrt GitHub die Body-Historie. Beim naechsten Mal
+   trotzdem erst archivieren, wenn ein Body ersetzt wird.
+2. **Branch und PR geoeffnet**, was das Playbook fuer Refinement ausschliesst.
+   Betroffen ist ausschliesslich der zweite Auftragsteil (Warteschlange +
+   `.github/PROJECT.md` + Projekt-Gedaechtnis) — Repo-Pflege nach der Persona,
+   nicht Refinement. Kein Issue wurde geclaimt, kein Produktivcode angefasst.
+
+## 6. Was dieser Lauf nicht getan hat
 
 Kein Produktivcode, kein Branch für ein Issue, kein Issue geclaimt oder
 geschlossen, keine neuen Issues angelegt (Nr. 4.3 sind Vorschläge — ob sie vor
