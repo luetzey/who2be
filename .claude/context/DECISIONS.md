@@ -1161,3 +1161,47 @@ bleiben)._
   Erfolg wertet, ist dokumentiertes Verhalten, im Repo aber nicht nachweisbar,
   solange Branch-Protection aus ist (`"protected": false`, GIT-1). Mit #338 O2
   gegenzuprüfen; der Gate ist in beiden Zuständen korrekt.
+
+## 2026-09-05 — Cloud-Gating läuft über Quota, nicht über Feature-Codes
+- **Entscheidung:** Der Unterschied zwischen Free und Pro ist das Nutzungskontingent,
+  nicht ein Satz freigeschalteter Funktionen. Das Request-Limit
+  (`services/mcp_limit_service.py:71`) bleibt bewusst auf API-Token beschränkt
+  (`:75`); Web-UI-Sessions zählen nicht mit. `docs/licensing/plans.md` und
+  `BillingPanel.tsx:12` werden auf Requests/Monat, Rate/Minute und Entity-Limit
+  umgestellt. Die Feature-Codes bleiben als technisches Konstrukt im Entitlement
+  bestehen (ADR-0028 stützt den On-Prem-Lizenz-Flow darauf), verschwinden aber aus
+  dem Verkaufsversprechen. Beantwortet Weiche 1 des `needs-decision`-Kommentars auf
+  #428.
+- **Begründung:** Die Agenten-Last über MCP ist die Kostenquelle; die Web-UI ist
+  Verwaltung, ein Limit dort würde zahlende Nutzer beim Aufräumen bremsen. Das
+  Inventar zu #434 belegt zudem, dass die drei beworbenen Codes nirgends erzwungen
+  werden und für `audit_export` gar kein Endpunkt existiert — das Versprechen war
+  ungedeckt, während Quota und Entity-Limit real greifen.
+- **Verworfen:** alle drei Codes hart gaten (kostet ein WP über API, MCP-Tools,
+  Web-Badges und Tests plus eine Grandfathering-Regel für Bestands-Orgs — für ein
+  Modell, das gar nicht das gewollte ist); `audit_export` als Pilot gaten (baut ein
+  Durchsetzungs-Muster, das unter dem Quota-Modell niemand braucht); die Diskrepanz
+  stehen lassen (das Panel würde weiter mit Funktionen werben, die Free ebenfalls hat).
+- **Offen:** ob Pro das Limit anheben (heute 100.000/Monat, 240/min laut
+  `packages/billing/src/who2be_billing/plans.py:74`) oder ganz aufheben soll — beim
+  Owner erfragt, für WP-2 nicht blockierend.
+
+## 2026-09-05 — Cloud-Image per Registry-Pull, Host-Build als Notfallpfad
+- **Entscheidung:** Der Regelweg ist der Pull des in CI gebauten Images
+  (`ghcr.io/…/who2be-api-cloud:<sha>`, gebaut in `.github/workflows/deploy.yml:39`);
+  der heutige Host-Build wird zum dokumentierten Notfallpfad im
+  `deploy/hetzner/RUNBOOK.md`. Beantwortet Weiche 2 und damit
+  `docs/standards-review-2026-07-20.md` §4 Nr. 5 (DEP-7).
+- **Begründung:** Die Pipeline baut und pusht das Cloud-Image ohnehin; ein Host-Build
+  verschenkt diesen Job und lässt CI- und Prod-Artefakt auseinanderlaufen. Der
+  Notfallpfad beantwortet die einzige echte Sorge gegen reinen Pull (Registry-Ausfall
+  bei dringendem Deploy), ohne dessen Nachteil in den Normalbetrieb zu holen.
+- **Verworfen:** reiner Registry-Pull ohne Rückfallebene (bei Registry-Ausfall steht
+  der Deploy); Host-Build als Regelweg (Build-Zeit und -Abhängigkeiten auf der
+  Prod-Box, Artefakt-Drift).
+- **Offen:** Der Umbau ist größer als bei der Entscheidung angenommen. Registry-Pull
+  ist für die Cloud-API **nicht** implementiert:
+  `deploy/hetzner/who2be/docker-compose.cloud.yml:41` steht auf `pull_policy: build`,
+  `deploy/hetzner/scripts/deploy.sh:50` baut immer lokal. Overlay und Skript müssen
+  umgestellt werden — als WP-3 im Zuschnitt-Vorschlag zu #434 erfasst, nicht nur ein
+  Runbook-Abschnitt.

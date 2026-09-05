@@ -1,6 +1,50 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-05 (16. Lauf — CI-Doku-Gate #440)_
+_Stand: 2026-09-05 (17. Lauf — Cloud-Launch-Readiness-Inventar #434)_
+
+## Cloud-Launch-Readiness-Inventar liegt vor (2026-09-05, 17. Lauf, #434)
+
+Zweites Paket der Backlog-Warteschlange (#442) und WP-1 von #428. Read-only Walk
+ueber den kompletten Cloud-Pfad, Ergebnis als belegte Checkliste mit 58 Stationen
+in `.claude/plan/2026-09-05-1520_cloud-launch-readiness-inventar.md`. Recherche
+ueber vier parallele Explore-Subagents (Billing, Durchsetzung, Deploy/Web,
+Vorgaenger-Dokumente), Sicherheitsfrage separat ueber `security-reviewer`.
+
+**Zwei Annahmen aus #428/#434 korrigiert.** Erstens greift `FREE_ENTITY_QUOTA`
+sehr wohl: `enforce_entity_quota` haengt an sechs Create-Endpunkten
+(`routers/personas.py:101`, `agents.py:104`, `resources.py:96` u. a.) und wirkt
+— anders als das Request-Limit — auch fuer Web-UI-Sessions, weil
+`services/entity_quota_service.py:71` keinen `is_api_token`-Check hat. Zweitens
+ist Pro nicht unbegrenzt, sondern 100.000/Monat + 240/min (`plans.py:74`); `None`
+gilt nur fuer OSS/On-Prem. Die Quota-Zahlen in `docs/licensing/plans.md` stimmen
+1:1 mit dem Code.
+
+**Feature-Codes sind hohler als bekannt.** Repo-weit ruft keine Stelle
+`has_feature()` als Gate auf; fuer `audit_export` existiert nicht einmal ein
+Endpunkt — der einzige Export (`routers/gdpr.py:30`) ist fuer alle Tarife offen.
+
+**Entwarnung Stripe-Header:** `verify_webhook_signature` laeuft ausschliesslich
+im generischen Webhook (`router.py:161`), nie im Mollie-Pfad; dieser verifiziert
+korrekt per `payments.get()`-Pull (`mollie.py:320`).
+
+**Neuer Befund (Haertung, nicht ausnutzbar):** der generische Endpunkt
+`/v1/billing/webhook` ruft den Dedupe-Ledger nicht auf. Geprueft nach
+`SECURITY.md`: kein Anbieter sendet dorthin, und ohne gesetztes
+`billing_webhook_secret` (Default leer, `core/config.py:191`) antwortet er 400.
+Massnahmen in WP-4 des Zuschnitt-Vorschlags aufgenommen.
+
+**Owner-Weichen entschieden (beide `needs-decision` auf #428):** Gating laeuft
+ueber Quota statt Feature-Gates, Request-Limit bleibt auf API-Token beschraenkt,
+`plans.md` + `BillingPanel` werden auf das Quota-Modell umgestellt (WP-2);
+Cloud-Image-Deploy per Registry-Pull mit Host-Build als Runbook-Notfallpfad.
+Wichtig fuer die Planung: Registry-Pull ist fuer die Cloud-API **nicht**
+implementiert — `deploy/hetzner/who2be/docker-compose.cloud.yml:41` steht auf
+`pull_policy: build`. Die Entscheidung ist damit Umbauarbeit (WP-3), nicht nur
+ein Runbook-Abschnitt.
+
+Verifikation: die sieben Kommandos aus #434 laufen gruen (109 Tabellenzeilen,
+kein fremder Status, jede `fertig`-Zeile belegt, Negativ-Liste leer). Kein Code
+angefasst — Diff ist Plan-Datei + README-Zeile + dieser Eintrag.
 
 ## CI ueberspringt die schweren Jobs bei reinen Doku-PRs (2026-09-05, 16. Lauf, #440)
 
