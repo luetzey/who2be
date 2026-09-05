@@ -1222,3 +1222,21 @@ bleiben)._
 - **Offen:** Die Weiche selbst (ein Fehler-Vokabular oder zwei) ist nicht
   entschieden; drei Optionen stehen als Kommentar an #436. Solange sie offen ist,
   hat #402 keine startbare Welle.
+
+## 2026-09-05 — Ein Anbieter-Ereignis erzeugt nie ein unbefristetes Entitlement (#452)
+- **Entscheidung:** Der generische Billing-Webhook weist ein Grant-Ereignis ohne
+  Periodenangabe zurueck, statt `expires_at=None` zu schreiben. Ein Entitlement
+  ohne Ablauf darf ausschliesslich aus dem OSS-/On-Prem-Default stammen
+  (`licensing/entitlement.py:110`).
+- **Begruendung:** Ein Entitlement ohne Ablauf umgeht die Ablaufpruefung
+  vollstaendig (`entitlement.py:82`). Damit ist diese eine Massnahme die
+  wirksamste des Pakets: sie macht jede Wiedereinspielung selbstlimitierend,
+  unabhaengig davon, ob Dedupe oder Zeitfenster greifen. Zurueckweisen statt
+  Deckeln, weil jeder Ersatzwert eine willkuerliche Frist waere.
+- **Ebenfalls festgelegt:** Der generische Webhook wird nur bei gesetztem
+  `billing_webhook_secret` gemountet — ohne Secret existiert die Route nicht
+  (404), statt jede Anfrage mit 400 zu beantworten.
+- **Offen:** Monotonie (ein aelteres Ereignis ueberschreibt keinen neueren
+  Stand) ist geschnitten und liegt als #462 vor — `updated_at` ist die
+  Schreibzeit, nicht die Ereigniszeit, und eine Migration war fuer dieses Paket
+  ausgeschlossen.

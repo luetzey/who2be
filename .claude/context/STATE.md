@@ -1,6 +1,83 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-05 (23. Lauf — Tarife bewerben das Kontingent, #449)_
+_Stand: 2026-09-05 (24. Lauf — Billing-Webhook gehaertet, #452)_
+
+## Generischer Billing-Webhook gehaertet (2026-09-05, 24. Lauf, #452)
+
+WP-5 von #428. **Der Befund war vor der Umsetzung als nicht ausnutzbar
+eingestuft** und ist es weiterhin: kein Anbieter sendet auf diesen Pfad (das
+Repo haengt allein an `mollie-api-python`, Mollie signiert nicht und laeuft
+ueber den eigenen, bereits geschuetzten Pfad), und ohne gesetztes
+`billing_webhook_secret` antwortete der Endpunkt ohnehin mit 400. Vorsorge fuer
+den Tag, an dem ein signierender Anbieter dazukommt. Plan
+`.claude/plan/2026-09-05-2130_webhook-haertung.md`.
+
+Vier von fuenf Massnahmen umgesetzt, in der Reihenfolge absteigender Wirkung:
+
+1. **Ablauffrist** — ein Grant ohne Periodenangabe wird abgewiesen
+   (`WebhookError`) statt unbefristet geschrieben. Zurueckweisen statt Deckeln:
+   kein zu rechtfertigender Ersatzwert, und es entsteht ueberhaupt kein
+   Schreibvorgang. Ein Entitlement ohne Ablauf darf ausschliesslich aus dem
+   OSS-/On-Prem-Default stammen (`licensing/entitlement.py:110`).
+2. **Dedupe** — Claim ueber die **Envelope**-Event-ID (nicht die Objekt-ID, die
+   in mehreren Ereignissen vorkommt) vor dem Upsert, Release bei Fehler danach.
+   Vorlage war der Mollie-Pfad, **ohne** gemeinsame Abstraktion: eine Basisklasse
+   fuer zwei Faelle waere nicht belegt.
+3. **Zeitfenster** — der generische HMAC-Zweig hat, anders als der
+   Stripe-Zweig, keinen Zeitstempel im Header. Geloest ueber das `created`-Feld
+   des **HMAC-gedeckten** Payloads; das Header-Format bleibt unangetastet, weil
+   es ein Vertrag mit einem Anbieter waere, den es nicht gibt. Fehlt die Zeit:
+   fail closed.
+4. **Mount nur mit Secret** — ohne `billing_webhook_secret` existiert die Route
+   nicht mehr (404 statt 400).
+
+**Monotonie (AC 5) bewusst geschnitten**, Weiche 4 erlaubt das nach der zweiten
+Massnahme. `org_entitlement.updated_at` ist die Schreibzeit, nicht die
+Ereigniszeit des Anbieters — ein Vergleich dagegen ist in die falsche Richtung
+unsicher und wuerde ein legitimes, spaet zugestelltes Ereignis abweisen. Weiche
+6 schliesst eine Migration fuer dieses Paket aus. Als **#462** dokumentiert, mit
+drei Wegen und der Empfehlung, es bis zur Anbindung eines zweiten Anbieters
+offen zu lassen. `entitlement_repository.py` blieb unveraendert.
+
+**Der Security-Review hat einen Fehler in der Vorgabe gefunden — nicht in der
+Umsetzung.** Die Leitplanke „zieh die Frische aus dem `created`-Feld des
+signierten Bodys" traegt nicht: weil der Wert HMAC-gedeckt ist, kann ein
+Anbieter ihn bei einer Wiederzustellung **nicht neu stempeln**. Mit einem
+5-Minuten-Fenster waere jeder spaetere Retry dauerhaft an der Signaturpruefung
+gescheitert — und damit die Claim-Freigabe aus Massnahme 2 ein Versprechen ohne
+Deckung gewesen. Die gefaehrliche Richtung ist der **verlorene Revoke**: eine
+Kuendigung waere nie angewendet worden, der Zugriff geblieben. Die Haertung
+haette ein Loch gerissen, waehrend sie eines schliesst.
+
+Geloest durch Entkopplung der beiden Begriffe: der **Dedupe-Ledger ist der
+Replay-Schutz**, das Zeitfenster nur eine Plausibilitaetsschranke. Der
+generische Zweig bekommt dafuer eine eigene Konstante
+(`_GENERIC_EVENT_MAX_AGE_SECONDS`, 7 Tage), waehrend
+`_SIGNATURE_TOLERANCE_SECONDS` (5 Min) fuer den Stripe-Zweig richtig bleibt —
+dort ist `t=` ein Header-Wert, den der Absender pro Zustellung neu stempelt.
+Beide Konstanten tragen den Grund ihres Unterschieds als Kommentar.
+
+Drei weitere Befunde behoben: **Plausibilitaetsband** fuer das Periodenende
+(`_MAX_PERIOD_HORIZON`, ~13 Monate — Massnahme 1 erzwang bis dahin nur die
+*Existenz* eines Ablaufs, nicht seine Plausibilitaet: `expires_at` im Jahr 9999
+war faktisch unbefristet); ein gemeinsamer `_coerce_int`-Helfer gegen
+durchschlagende Ausnahmen bei missgebildeten Zahlenfeldern (500 statt
+fail-closed 400 — auf einem Webhook heisst 500 „bitte erneut zustellen");
+Hex-Validierung (`_HEX64_RE`) vor jedem `compare_digest`, weil ein
+Nicht-ASCII-Header sonst einen unauthentifizierten 500 samt Stacktrace erzeugt.
+
+**Fuenf Restbefunde als #463** (NIEDRIG, keine Regression): Konfigurations-Orakel
+durch 404-vs-400, `include_routers` ignoriert injizierte Settings,
+Dedupe-Namensraum nicht anbieterspezifisch, fehlende Sicherheitsprotokollierung,
+und derselbe Konversionsfehler im vorbestehenden `_parse_stripe_header`.
+
+**Verifikation:** 80 Billing-Tests gruen (Baseline 59) · ruff, format und mypy
+sauber · `git diff -- mollie.py` leer · keine Migration.
+
+**Nebenbefund am eigenen Werkzeug:** `ruff format` prueft Python-Code-Bloecke
+**in Markdown** mit. Ein zitiertes einzeiliges `if` in der Plan-Datei haette die
+CI rot gemacht. Kuenftige Plaene: zitierten Python-Code formatiert halten oder
+den Block nicht als `python` auszeichnen.
 
 ## Tarife bewerben das Kontingent statt Feature-Codes (2026-09-05, 23. Lauf, #449)
 
