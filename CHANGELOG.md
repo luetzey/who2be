@@ -10,6 +10,14 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Changed
 
+- Hetzner Cloud deploys now pull the `api` and `migrate` services as prebuilt
+  images from GHCR (`ghcr.io/luetzey/who2be-api-cloud:<sha>`, the same
+  `runtime-cloud` artifact CI already built and pushed) instead of building
+  them on the production host from source. `deploy.sh` pulls `api`, `migrate`
+  and `web` in the cloud branch (previously only `web`); `web` keeps its local
+  build because there is no `web-cloud` image (ADR-0029 tree-shakes the
+  billing UI at compile time). `deploy/hetzner/RUNBOOK.md` documents the
+  host-build fallback for when the registry is unreachable (#450).
 - Running Who2Be locally now needs nothing but Docker: `docker compose up -d
   --wait` brings up the whole stack, no `.env` file, no uv and no Node. The web
   UI resolves its API and auth URLs at runtime (`/config.js`, written from the

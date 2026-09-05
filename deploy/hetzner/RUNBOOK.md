@@ -9,6 +9,7 @@ Aktive Sektionen:
 
 - [Provisioning (Track S/C1)](#provisioning-track-sc1) — leere Hetzner-Box → laufender Stack (Box/Docker/Firewall/deploy-User/DNS/TLS)
 - [Erste Inbetriebnahme der Cloud-Edition](#erste-inbetriebnahme-der-cloud-edition) — Bring-up-Checkliste (Service-Key, Mailer, Deploy-Pipeline)
+- [Notfallpfad: Registry nicht erreichbar](#notfallpfad-registry-nicht-erreichbar) — Cloud-`api`/`migrate` von Hand bauen, wenn GHCR beim Deploy ausfaellt
 - [CVE-Response](#cve-response) — was tun, wenn der CI-`audit`-Job rot wird
 - [Secret-Rotation](#secret-rotation) — pro Secret: Trigger / Schritte / Verifikation
 - [Verschluesselung at-Rest](#verschluesselung-at-rest-postgres-volume) — LUKS/verschl. Hetzner-Volume + Verifikation (Befund P4/S2)
@@ -234,6 +235,69 @@ nicht offen sein":
 
 Ist nur `GOTRUE_DISABLE_SIGNUP=true` gesetzt (ohne Launch-Modus), bleibt die
 Web-UI beim Altverhalten: `/signup` leitet auf `/login` um, kein Hinweistext.
+
+## Notfallpfad: Registry nicht erreichbar
+
+Regelweg fuer die Cloud-Edition ist der Registry-Pull: `api`+`migrate` ziehen
+`ghcr.io/luetzey/who2be-api-cloud:<sha>` (Tag aus `API_IMAGE_TAG`, von
+`deploy.sh` gesetzt) statt lokal zu bauen — Prod laeuft damit auf demselben
+Artefakt, das CI gebaut und geprueft hat. Voraussetzung dafuer ist ein
+gueltiger GHCR-Login auf dem Host (`docker login ghcr.io -u <user> -p <PAT
+mit read:packages>`, einmalig fuer den `deploy`-User einzurichten). Diese
+Sektion beschreibt **nur** den Notfallweg, wenn der Pull trotzdem fehlschlaegt
+— GHCR selbst nicht erreichbar ist (Netzausfall, Registry-Incident) oder der
+Host-Login abgelaufen/widerrufen wurde und niemand ihn kurzfristig erneuern
+kann. Kein Schalter im Skript — bewusst Handarbeit, damit der Host-Build
+nicht versehentlich im Normalbetrieb greift und die Artefakt-Drift
+zurueckholt. Entscheidung:
+[`.claude/context/DECISIONS.md`](../../.claude/context/DECISIONS.md),
+2026-09-05 "Cloud-Image per Registry-Pull, Host-Build als Notfallpfad".
+
+- **Was:** `api`/`migrate` (Cloud-Edition) auf dem Hetzner-Host aus dem
+  ausgecheckten Quellcode bauen (`runtime-cloud`-Target), statt sie aus GHCR
+  zu ziehen.
+- **Trigger:** `deploy.sh` bricht im Cloud-Zweig beim `docker compose pull`
+  ab (GHCR nicht erreichbar, oder Host-Login fehlt/ist abgelaufen) **und**
+  der Deploy ist dringend (Hotfix, Rollback unter Zeitdruck, kein Warten auf
+  die Registry moeglich).
+
+**Schritte:**
+
+```bash
+cd /opt/who2be
+git checkout --quiet "$SHA"   # derselbe SHA wie im fehlgeschlagenen Deploy
+
+docker compose \
+  -f deploy/hetzner/who2be/docker-compose.yml \
+  -f deploy/hetzner/who2be/docker-compose.cloud.yml \
+  --env-file deploy/hetzner/.env \
+  build api migrate            # baut runtime-cloud lokal aus dem SHA-Checkout
+
+docker compose \
+  -f deploy/hetzner/who2be/docker-compose.yml \
+  -f deploy/hetzner/who2be/docker-compose.cloud.yml \
+  --env-file deploy/hetzner/.env \
+  up -d --wait --remove-orphans
+```
+
+**Verifikation:**
+
+```bash
+# Cloud-Edition aktiv, Container laufen mit dem lokal gebauten Image
+docker compose \
+  -f deploy/hetzner/who2be/docker-compose.yml \
+  -f deploy/hetzner/who2be/docker-compose.cloud.yml \
+  --env-file deploy/hetzner/.env \
+  exec api printenv WHO2BE_EDITION
+# → cloud
+
+curl -sf "https://api.${DOMAIN}/healthz"
+```
+
+**Nacharbeit:** Sobald GHCR wieder erreichbar ist, den naechsten regulaeren
+Deploy (`./deploy.sh <sha>` mit `WHO2BE_EDITION=cloud`) fahren — der zieht
+`api`/`migrate` wieder aus der Registry und ersetzt den Host-Build, damit
+Prod nicht dauerhaft auf einem Host-Artefakt statt dem CI-Artefakt laeuft.
 
 ---
 

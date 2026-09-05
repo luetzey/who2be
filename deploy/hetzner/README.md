@@ -265,13 +265,20 @@ manuell per `workflow_dispatch`):
    - **On-Prem** (`WHO2BE_EDITION` leer/`onprem`): ein Compose-File
      (`docker-compose.yml`), `docker compose pull api web migrate` + `up -d --wait`.
    - **Cloud** (`WHO2BE_EDITION=cloud`): **beide** `-f`-Files
-     (`docker-compose.yml` + `docker-compose.cloud.yml`). Das Overlay (PR #181)
-     pinnt `pull_policy: build` + `target: runtime-cloud` fuer `api`+`migrate`
-     sowie `pull_policy: build` + Build-Arg `VITE_WHO2BE_EDITION=cloud` fuer
-     `web` — Cloud-API **und** Cloud-Web-Bundle entstehen also auf dem Host aus
-     dem ausgecheckten SHA (das GHCR-`who2be-web` ist On-Prem, ohne Billing-UI).
-     Das in CI gepushte `who2be-api-cloud:<sha>` dient Paritaet/Verifikation
-     und ist die SSoT, falls das Overlay spaeter auf Pull umgestellt wird.
+     (`docker-compose.yml` + `docker-compose.cloud.yml`). Das Overlay zieht
+     `api`+`migrate` als fertiges Image aus GHCR
+     (`ghcr.io/luetzey/who2be-api-cloud:<sha>`, Target `runtime-cloud`,
+     Billing-Paket im Artefakt, im selben CI-Lauf gebaut und gepusht) — Prod
+     laeuft damit auf demselben Artefakt, das CI gebaut und geprueft hat
+     (Entscheidung 2026-09-05, siehe `.claude/context/DECISIONS.md`
+     "Cloud-Image per Registry-Pull, Host-Build als Notfallpfad"). Nur `web`
+     traegt weiterhin `pull_policy: build` + Build-Arg
+     `VITE_WHO2BE_EDITION=cloud` und entsteht auf dem Host aus dem
+     ausgecheckten SHA, weil es kein `web-cloud`-Image in der Build-Matrix
+     gibt (das GHCR-`who2be-web` ist On-Prem, ohne Billing-UI). Ist GHCR beim
+     Deploy nicht erreichbar, beschreibt
+     [RUNBOOK.md § Notfallpfad: Registry nicht erreichbar](./RUNBOOK.md#notfallpfad-registry-nicht-erreichbar)
+     den Host-Build von Hand fuer `api`+`migrate`.
      Reihenfolge intern (Overlay): `migrate` → `set-app-role-password` →
      `redis` → `api`.
 
