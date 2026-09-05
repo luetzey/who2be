@@ -1,6 +1,50 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-05 (22. Lauf — Billing-Kettentest belegt die Paywall, #451)_
+_Stand: 2026-09-05 (23. Lauf — Tarife bewerben das Kontingent, #449)_
+
+## Tarife bewerben das Kontingent statt Feature-Codes (2026-09-05, 23. Lauf, #449)
+
+WP-2 von #428. Das Billing-Panel warb mit `composite_playbooks`, `agents` und
+`audit_export` — Funktionen, die Free ebenfalls hat: repo-weit gatet keine
+Stelle mit `has_feature()`, und fuer `audit_export` existiert nicht einmal ein
+Endpunkt. Jetzt beschreiben Doku und Panel die vier Groessen, die der Code
+durchsetzt: Preis, MCP/Monat, MCP/min, Entity-Limit. Plan
+`.claude/plan/2026-09-05-2045_tarife-kontingent.md`.
+
+**Muster-Entscheidung: Tarif-Liste als Datensatz** (`TIERS` im Billing-Feature)
+statt zweier fester `if isPro`-Zweige. Beleg fuer die Variabilitaet: das Backend
+fuehrt die Mehrzahl bereits als Struktur (`PAID_PLANS` als Dict ueber Codes,
+`plans.py:92`). Ein dritter Tarif ist damit ein Eintrag, kein Umbau. Die Liste
+dupliziert Preis und Entity-Limit aus dem Backend — bewusst, mit Quellenverweis
+an der Konstante, weil `EntitlementInfo` beides nicht ausliefert.
+
+**Zwei Befunde am Issue:**
+
+1. **Weiche 3 nennt einen Plan-Code, den es nicht gibt.** `EntitlementInfo`
+   (`apps/web/src/api/types.ts:980-988`) traegt `mcp_monthly_quota` und
+   `mcp_rate_per_min`, aber **keinen** `plan_code` — `META_PLAN_CODE` lebt nur
+   in den Mollie-Metadaten. Kein Blocker, die Quota reicht.
+2. **Die Feature-Codes sind NICHT wirkungslos.** AC 1 erlaubte den Vermerk, sie
+   seien „Metadaten ohne Leistungsversprechen". `Entitlement.entity_limit()`
+   leitet aber genau aus ihnen ab (`paid_features = features - {CORE}` ⇒
+   unbegrenzt statt 50, `entitlement.py:105-107`). Wirksam ist, **ob** ein
+   Paid-Code vorliegt; nicht wirksam ist, **welcher**. Die Doku sagt jetzt das,
+   statt eine Unwahrheit durch die naechste zu ersetzen.
+
+**Eine Regression im ersten Wurf abgefangen.** Der Sub-Agent hatte die
+Tarif-Erkennung als exakten Quota-Match gebaut (`quota === 1_000 | 100_000`) und
+den Fall selbst nur als Randnotiz gemeldet: ein `manual_override`-Entitlement
+mit individueller Quota waere damit auf „nicht bezahlt" gefallen und haette den
+Upgrade-CTA gezeigt — schlechter als der alte Feature-Array-Code, und
+`manual_override` ist eine der vier benannten Entitlement-Quellen (CLAUDE.md).
+Nachgebessert: **zwei getrennte Fragen**. „Ist bezahlt?" ist ein Schwellwert
+(alles ueber der Free-Quota, `null` = unbegrenzt zaehlt mit) und steuert den
+CTA; „welcher Tarif?" bleibt exakter Match und steuert nur Name/Preis/
+Entity-Limit, ohne Treffer `panel.plan.unknown`. Ein Test haelt den Fall fest.
+
+**Verifikation:** lint 0 Errors · `tsc -b` Exit 0 · 1043 Tests gruen (Baseline
+1042) · Coverage 86,69 / 81,36 / 82,27 / 87,71 (Floors 80/79/75/80, Baseline
+86,52 / 81,12 / 82,05 / 87,55) · Build gruen · Panel-Suite 10 gruen.
 
 ## Kettentest belegt: bezahltes Abo schaltet das Limit frei (2026-09-05, 22. Lauf, #451)
 

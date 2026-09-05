@@ -14,10 +14,33 @@ Dokument und der Code wird nachgezogen.
 
 ## Tiers (final, 2 Stufen)
 
-| Tier | Preis        | Features                                                | MCP/Monat | MCP/min |
-|------|--------------|---------------------------------------------------------|-----------|---------|
-| Free | 0 € (kein Abo) | `core`                                                | 1.000     | 30      |
-| Pro  | 29 €/Monat   | `core`, `composite_playbooks`, `agents`, `audit_export` | 100.000   | 240     |
+Die einzigen Groessen, die der Code tatsaechlich durchsetzt, sind Preis
+(Mollie), MCP-Requests/Monat, MCP-Requests/Minute (beide `Entitlement`,
+App-seitiges Rate-Limiting) und das Entity-Limit je Workspace
+(`Entitlement.entity_limit()`). Das ist deshalb die verkaufsrelevante Tabelle:
+
+| Tier | Preis          | MCP-Requests/Monat | MCP-Requests/Minute | Entity-Limit je Workspace | Features (Metadaten, s. u.) |
+|------|----------------|---------------------|----------------------|----------------------------|------------------------------|
+| Free | 0 € (kein Abo) | 1.000               | 30                   | 50                         | `core` |
+| Pro  | 29 €/Monat     | 100.000             | 240                  | unbegrenzt                 | `core`, `composite_playbooks`, `agents`, `audit_export` |
+
+Quellen: Preis/MCP-Requests `packages/billing/src/who2be_billing/plans.py`
+(`FREE_PLAN`/`PRO_PLAN`: `price_eur`, `mcp_monthly_quota`,
+`mcp_rate_per_min`); Entity-Limit `licensing/entitlement.py`
+(`FREE_ENTITY_QUOTA = 50`, `Entitlement.entity_limit()`).
+
+**Zur Features-Spalte — praezise gelesen:** Die Feature-Codes sind Metadaten
+des Entitlements, kein Kaufargument. `Entitlement.entity_limit()` liest nur,
+**ob ueberhaupt** ein Paid-Feature-Code vorliegt (`self.features - {Feature.CORE}`)
+— diese Anwesenheit hebt das Entity-Limit von `FREE_ENTITY_QUOTA` auf
+unbegrenzt. Die **einzelnen** Codes (`composite_playbooks`, `agents`,
+`audit_export`) werden dagegen nirgends im Repo gegatet (keine
+`has_feature()`-Pruefung greift auf sie zu; fuer `audit_export` existiert
+nicht einmal ein Endpunkt) und sind deshalb **kein Leistungsversprechen** —
+nur `core` selbst und das daraus abgeleitete Entity-Limit sind wirksam. Sie
+tauchen weiterhin in `whoami`- und `entitlement`-Responses auf und bleiben
+Teil des Datenmodells (ADR-0028 baut den On-Prem-Lizenz-Flow darauf auf) —
+nur als Verkaufsversprechen zaehlen sie nicht.
 
 - **Free** ist der Default jeder frisch registrierten Cloud-Org (ohne Mollie-Abo).
   Entspricht 1:1 `CLOUD_FREE_ENTITLEMENT` in `licensing/entitlement.py`.
