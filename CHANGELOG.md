@@ -101,6 +101,17 @@ the merged pull requests and the plan documents under `.claude/plan/`.
   is edition-gated. The check needs neither `MOLLIE_API_KEY` nor a configured
   webhook secret — it only exercises the fail-closed signature check, never a
   real Mollie call — so it can't go red for reasons unrelated to routing.
+- Groundwork for the upcoming mobile UI waves (Issue #438), with no consumer
+  wired up yet: a "Responsive & Breakpoints" section in
+  `docs/frontend/design-language.md` (§4.4) documents the Tailwind-default
+  breakpoint scale, the mobile-first rule, and a review checklist for
+  multi-column grids and fixed widths; `hooks/useMediaQuery.ts` adds
+  `useMediaQuery(query)` and `useIsMobile()` (the `< md` threshold), guarded
+  the same way as `ThemeProvider`'s `matchMedia` check so it degrades to
+  `false` without a `matchMedia` implementation; and
+  `components/ui/sheet.tsx` adds a shadcn-style `Sheet` slide-in panel built
+  on the same `@radix-ui/react-dialog` primitive `dialog.tsx` already uses,
+  with `side: left | right | top | bottom` variants.
 
 ### Fixed
 
