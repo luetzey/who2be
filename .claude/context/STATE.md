@@ -1,6 +1,25 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-05 (11. Lauf — #427 per Issue-Refinement agent-ready)_
+_Stand: 2026-09-05 (12. Lauf — #427 agent-ready; #428 → size/M + needs-decision, WP-1 als #434 agent-ready)_
+
+## Issue-Refinement #428 → `size/M` + `needs-decision`, WP-1 als #434 (2026-09-05, nur GitHub)
+
+#428 ist ein Vorhaben (fünf WPs über API/Billing/Web/Deploy/Owner), kein
+Arbeitspaket → Body um „Refinement-Stand" ergänzt (Original archiviert),
+Labels `size/M` + `needs-decision`. Das erste startbare Paket WP-1 wurde nach
+Playbook „GitHub-Artefakt anlegen & pflegen" als Sub-Issue **#434** angelegt
+(`documentation`, `agent-ready`, `size/S`; Ausprägung A ohne Code: belegte
+Checkliste in `.claude/plan/<ts>_cloud-launch-readiness-inventar.md`,
+fortschreibend auf Juni-Plan + `docs/cloud-{local,prod}-smoke.md`).
+
+Neuer Befund (belegt): die Pro-Feature-Codes `composite_playbooks`/`agents`/
+`audit_export` werden nur ausgegeben (`routers/whoami.py:88`,
+`routers/entitlement.py:72`, `BillingPanel`) und nirgends erzwungen; einzige
+Durchsetzung ist `is_active()` in `services/mcp_limit_service.py:82`.
+Offene Owner-Weichen als Kommentar auf #428: (1) Feature-Gates informativ
+vs. hart (Empfehlung: hart, eigenes WP), (2) Cloud-Image-Deploy Registry-Pull
+vs. Host-Build (Empfehlung: Registry-Pull). Label `needs-decision` ebenfalls
+neu und ohne Description.
 
 ## Issue-Refinement #427 → `agent-ready` (2026-09-05, nur GitHub, kein Code)
 
