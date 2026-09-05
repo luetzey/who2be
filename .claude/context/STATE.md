@@ -1,8 +1,8 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-05 (11. Lauf — Backlog-Refinement: offene Issues gegen die Norm „Agent-ready Arbeitspaket“ geprüft)_
+_Stand: 2026-09-05 (13. Lauf — Backlog-Refinement aller offenen Issues gegen die Norm „Agent-ready Arbeitspaket“; 11./12. Lauf: #427, #428 s. u.)_
 
-## Backlog-Refinement (2026-09-05, 11. Lauf — nur GitHub, kein Code)
+## Backlog-Refinement (2026-09-05, 13. Lauf — nur GitHub, kein Code)
 
 Alle offenen Issues nach Playbook „Issue-Refinement" (Persona-Modus Refiner)
 gegen die Norm „Agent-ready Arbeitspaket" (vier Pflichtfelder + Weichen) und
@@ -16,8 +16,10 @@ im Gespräch eingeholt („Empfehlungen übernehmen").
   `localStorage` + absolute Obergrenze, opt-in — Owner), #436 W0 Fehlercodes
   (Sub-Issue zu #402), #438 W0 Responsive-Fundament (Sub-Issue zu #431,
   Reihenfolge: nach Cloud-Launch-Block — Owner), #434 WP-1 Readiness-Inventar
-  (aus dem Parallel-Lauf; mein #437 war ein Duplikat → geschlossen).
-- **size/M (Tracking, braucht Zerlegung):** #428, #431, #402 (Owner hat
+  (aus dem Parallel-Lauf, s. 12. Lauf; mein #437 war ein Duplikat → geschlossen).
+- **size/M (Tracking, braucht Zerlegung):** #428 (behält zusätzlich
+  `needs-decision` aus dem 12. Lauf — meine Label-Zuweisung hatte es kurz
+  überschrieben, wiederhergestellt), #431, #402 (Owner hat
   Option 1 „Fehler-Codes statt Prosa" entschieden; ADR-0051 folgt in #436),
   #435 Passkeys neu (aus #430 herausgelöst; GoTrue-WebAuthn braucht Image
   ≥ v2.163.0 — Repo pinnt v2.158.1; auth-js 2.112.3 kann es clientseitig).
@@ -37,6 +39,46 @@ Delegations-Achse (`agent-ready`, `needs-decision`, `human-only`, `size/S`,
 und `human-only`/`size/M` wurden durch Zuweisung ohne Description erzeugt) und
 zwei Milestones „Cloud-Launch" (#428, #429, #430, #434, #435) und „Mobile-fähige
 UI" (#431, #438). `.claude/project.json` fehlt weiterhin (kein Board).
+
+## Issue-Refinement #428 → `size/M` + `needs-decision`, WP-1 als #434 (2026-09-05, nur GitHub)
+
+#428 ist ein Vorhaben (fünf WPs über API/Billing/Web/Deploy/Owner), kein
+Arbeitspaket → Body um „Refinement-Stand" ergänzt (Original archiviert),
+Labels `size/M` + `needs-decision`. Das erste startbare Paket WP-1 wurde nach
+Playbook „GitHub-Artefakt anlegen & pflegen" als Sub-Issue **#434** angelegt
+(`documentation`, `agent-ready`, `size/S`; Ausprägung A ohne Code: belegte
+Checkliste in `.claude/plan/<ts>_cloud-launch-readiness-inventar.md`,
+fortschreibend auf Juni-Plan + `docs/cloud-{local,prod}-smoke.md`).
+
+Neuer Befund (belegt): die Pro-Feature-Codes `composite_playbooks`/`agents`/
+`audit_export` werden nur ausgegeben (`routers/whoami.py:88`,
+`routers/entitlement.py:72`, `BillingPanel`) und nirgends erzwungen; einzige
+Durchsetzung ist `is_active()` in `services/mcp_limit_service.py:82`.
+Offene Owner-Weichen als Kommentar auf #428: (1) Feature-Gates informativ
+vs. hart (Empfehlung: hart, eigenes WP), (2) Cloud-Image-Deploy Registry-Pull
+vs. Host-Build (Empfehlung: Registry-Pull). Label `needs-decision` ebenfalls
+neu und ohne Description.
+
+## Issue-Refinement #427 → `agent-ready` (2026-09-05, nur GitHub, kein Code)
+
+Erster Lauf des Playbooks „Issue-Refinement" (Coder-Modus Refiner, Norm
+„Agent-ready Arbeitspaket"). Body von #427 ersetzt (Original wörtlich als
+Archiv-Kommentar), Titel in den Ergebnis-Modus, Labels `agent-ready` +
+`size/S` (beide beim Setzen neu entstanden — grau, ohne Description; die
+Vergabe-Regel aus der Norm steht noch nicht in der Label-Description).
+
+Im Repo belegte Weichen (Auszug, vollständig im Issue): Datenmodell A
+(`agent_favorite` pro User — die Owner-AC „pro User"/„Server-persistiert"
+schließen B/C aus); **kein FK auf den User** (keine Tabelle referenziert
+GoTrue-User, vgl. `0007`/`0049`) → User-Bereinigung über
+`purge_account_data` statt CASCADE; RLS/Grants nach Muster 0066/0079;
+`is_favorite` nur im List-Enrichment (`list_meta` + `AgentListMeta`);
+PUT/DELETE `…/agents/{id}/favorite` → 204, human-only (403 für
+agent-gebundene Tokens), kein `require_role`; Filter-Chip „Nur Favoriten"
+raus (Review-Grenze). Befund am Rande: CLAUDE.md nennt `npx tsc --noEmit`,
+CI fährt `npx tsc -b`.
+
+Kein Milestone/Board (unverändert: `.claude/project.json` fehlt).
 
 ## Backlog-Issues aus dem Owner-Briefing (2026-09-05, nur GitHub, kein Code)
 
