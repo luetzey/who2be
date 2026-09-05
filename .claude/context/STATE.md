@@ -1,6 +1,32 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-05 (19. Lauf — Backlog-Aufbereitung, Reihenfolge + #435)_
+_Stand: 2026-09-05 (20. Lauf — #429 „Coming soon"-Modus umgesetzt)_
+
+## „Coming soon"-Modus steht (2026-09-05, 20. Lauf, #429, PR #457)
+
+Erstes Paket der Warteschlange nach der Aufbereitung; harte Vorbedingung fuer
+#454. `WHO2BE_LAUNCH_MODE=open|coming_soon` (Default `open`) schaltet `/signup`
+auf eine Hinweisseite, waehrend Login, Passwort-Reset, Einladungen und
+`/oauth/consent` unveraendert laufen. Der Wert kommt ausschliesslich aus
+`/config.js` — Umschalten braucht keinen Rebuild. Plan + Uebergabe-Bericht:
+`.claude/plan/2026-09-05-1849_launch-mode-coming-soon.md`.
+
+**Zuschnitt-Luecke, die erst die Konsolidierung fand:** beide Compose-Dateien
+reichten die neue Variable nicht an den `web`-Container durch
+(`docker-compose.yml:184` und `deploy/hetzner/who2be/docker-compose.yml:143`
+tun das fuer `WHO2BE_SIGNUP_DISABLED` seit jeher). `/config.js` haette immer
+`launchMode: "open"` geschrieben — das Feature waere im echten Stack wirkungslos
+gewesen, bei gruenen Tests. Die Scope-Liste des Issues nannte jeden Konsumenten
+der Variablen, aber nicht ihren Transportweg. Vom Orchestrator nachgezogen.
+
+**Verifikation (selbst gefahren):** lint 0 Errors, `tsc -b` sauber, 1038 Tests
+gruen, a11y 48 gruen, Build gruen; Coverage 86.52 / 81.12 / 82.05 / 87.55 gegen
+80 / 79 / 75 / 80. Dazu die Wahrheitstabelle des Entrypoints ueber alle sechs
+Env-Kombinationen — Shell-Logik faellt sonst durch jedes Unit-Test-Raster.
+
+**Offen (nicht automatisiert belegbar):** Akzeptanzkriterium 1 und 4 gegen einen
+laufenden Compose-Stack (Browser + `curl` gegen `/auth/v1/signup`, `smoke.sh` in
+beiden Modi) — im Uebergabe-Bericht als Rest-Test-Liste gefuehrt.
 
 ## Backlog aufbereitet, #438 vorgezogen (2026-09-05, 19. Lauf — nur GitHub + Doku)
 

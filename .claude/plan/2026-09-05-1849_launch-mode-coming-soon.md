@@ -107,8 +107,101 @@ vorgezogen** (Lesart der Owner-Vorgabe „nach dem Cloud-Block": direkt danach
 statt ans Listenende). Beide Lesarten sind vertretbar; seine Fassung bleibt
 stehen. Fuer #429 aendert das nichts — es steht in beiden Fassungen auf Platz 1.
 
-## 6. Offen / nachzutragen
+## 6. Konsolidierung (Phase 3.5)
 
-- Ergebnis des Verifikations-Laufs
-- Uebergabe-Bericht (betroffene Elemente, Diff-Coverage, Test-Gaps)
-- Nebenfunde
+Der Sub-Agent meldete alle fuenf Kommandos gruen. Geprueft wurde trotzdem der
+Diff, nicht die Zusammenfassung — mit einem Ergebnis, das die Meldung
+relativiert.
+
+### Der Fund, der das Paket sonst wirkungslos gelassen haette
+
+`docker-compose.yml` und `deploy/hetzner/who2be/docker-compose.yml` reichten
+`WHO2BE_LAUNCH_MODE`/`WHO2BE_LAUNCH_CONTACT` **nicht** an den `web`-Container
+durch. Das Muster daneben (`docker-compose.yml:184`,
+`deploy/hetzner/who2be/docker-compose.yml:143`) tut das fuer
+`WHO2BE_SIGNUP_DISABLED` seit jeher. Ohne die Zeilen haette der Entrypoint den
+Wert nie gesehen und `/config.js` immer `launchMode: "open"` geschrieben:
+Akzeptanzkriterium 3 („Env aendern + `docker compose up -d` genuegt") waere
+unerfuellbar gewesen, obwohl alle Tests gruen sind.
+
+Der Sub-Agent hat den Fund korrekt gemeldet und korrekt **nicht** selbst
+behoben — die Compose-Dateien standen nicht in seiner Datei-Liste. Die Luecke
+lag im Zuschnitt: das Issue listet unter Scope „In" jede Doku-Datei, aber nicht
+die Env-Weiterleitung, ohne die das Feature nicht wirkt. Vom Orchestrator
+nachgezogen (zwei Zeilen je Datei, dem Nachbarn nachgebildet; triviale
+Aenderung ohne Design-Entscheidung).
+
+**Lehre fuer kuenftige Zuschnitte:** eine Scope-Liste, die den Konsumenten einer
+neuen Env-Variablen nennt, aber nicht ihren Transportweg, ist unvollstaendig.
+
+### Verifikation — selbst gefahren
+
+| Kommando | Ergebnis |
+|---|---|
+| `npm run lint` | 0 Errors, 64 Warnings (alle vorbestehend, `react-hooks/set-state-in-effect` in `hooks/use*.ts`) — Exit 0 |
+| `npx tsc -b` | keine Ausgabe — Exit 0 |
+| `npm run test:coverage` | 183 Dateien, **1038 Tests passed** — Exit 0 |
+| `npm run test:a11y` | 48 passed, 990 skipped — Exit 0 |
+| `npm run build` | `built in 2.15s` (nur der bekannte Chunk-Size-Hinweis) — Exit 0 |
+
+Coverage: Statements 86.52 % · **Branches 81.12 %** · Functions 82.05 % ·
+Lines 87.55 % — gegen die Schwellen 80 / 79 / 75 / 80.
+
+Zusaetzlich selbst geprueft, weil Shell-Logik von Unit-Tests nicht erfasst wird
+— die Wahrheitstabelle des Entrypoints ueber alle sechs Env-Kombinationen:
+
+| `WHO2BE_LAUNCH_MODE` | `WHO2BE_SIGNUP_DISABLED` | `signupDisabled` | `launchMode` |
+|---|---|---|---|
+| `open` | true | `true` | `"open"` |
+| `open` | false | `false` | `"open"` |
+| `coming_soon` | true | `true` | `"coming_soon"` |
+| `coming_soon` | **false** | **`true`** | `"coming_soon"` |
+| _(leer)_ | true | `true` | `"open"` |
+| _(leer)_ | false | `false` | `"open"` |
+
+Zeile 4 ist der Beleg fuer Weiche 2a: der Modus zieht `signupDisabled` allein
+hoch. Beide Compose-Dateien wurden zusaetzlich per `yaml.safe_load` geparst.
+
+### Uebergabe-Bericht (Phase 4.1)
+
+**(a) Betroffene Elemente** — mit `ripgrep` rueckwaerts gesucht, nicht erzaehlt:
+
+- **DIREKT (4 Fundstellen in 3 Dateien):** `SignupPage.tsx:74` (`launchMode`),
+  `SignupPage.tsx:80` (`signupDisabled`), `LoginPage.tsx:280` (beide),
+  `ComingSoonPage.tsx:16` (`launchContact`).
+- **TRANSITIV:** keine. `config` ist zwar ein modulweites Singleton mit vielen
+  Importeuren, aber die **geweitete `signupDisabled`-Semantik** (jetzt auch wahr
+  bei `coming_soon`) erreicht ausschliesslich die zwei Stellen oben — beide sind
+  angepasst. Kein dritter Leser erbt sie still. Das war die eigentliche
+  Risikofrage dieses Diffs.
+- **VERMUTET (Laufzeit-Verdrahtung, statisch nicht sichtbar):** die Kette
+  Compose-Env → `40-who2be-runtime-config.sh` → `/config.js` →
+  `window.__WHO2BE_CONFIG__`, sowie `scripts/smoke.sh`, das
+  `WHO2BE_LAUNCH_MODE` aus der Host-Umgebung liest. Die Shell-Haelfte ist ueber
+  die Wahrheitstabelle oben belegt; die Container-Haelfte nicht — siehe
+  Rest-Test-Liste.
+
+**(b) Rest-Test-Liste:** In `config.ts`, `ComingSoonPage.tsx`, `SignupPage.tsx`
+und `LoginPage.tsx` ist **jede** Funktion von Tests ausgefuehrt (`f`-Map der
+v8-Coverage: 6/6, 1/1, 10/10, 10/10 — keine ungedeckte Funktion). Es bleibt
+keine namentliche Luecke auf Funktionsebene.
+
+Nicht automatisiert geprueft und deshalb manuell nachzuholen:
+
+1. **Akzeptanzkriterium 1 gegen einen echten Stack** — `docker compose up -d`
+   mit `WHO2BE_LAUNCH_MODE=coming_soon` + `GOTRUE_DISABLE_SIGNUP=true`, dann
+   `/signup` im Browser und `curl` gegen `/auth/v1/signup` (erwartet `422`).
+   Die Unit-Tests belegen die Logik, nicht die Verdrahtung durch den Container.
+2. **Akzeptanzkriterium 4** — `bash scripts/smoke.sh` einmal in beiden Modi:
+   im `open`-Modus darf die Probe nicht laufen, im `coming_soon`-Modus muss sie
+   bei fehlendem `GOTRUE_DISABLE_SIGNUP` abbrechen.
+3. **Darstellung der Hinweisseite bei 375 px** (Sichtpruefung; Mobile-E2E kommt
+   mit #431).
+
+### Nebenfunde (nicht gefixt)
+
+- `.env.example` beschrieb `VITE_WHO2BE_SIGNUP_DISABLED` als den aktuellen Weg,
+  obwohl die Runtime-Config-Migration laengst `WHO2BE_SIGNUP_DISABLED` nutzt.
+  Beim Neuschreiben der Sektion mit korrigiert (im Scope, da dieselbe Datei).
+- 64 vorbestehende Lint-Warnungen `react-hooks/set-state-in-effect` in
+  `apps/web/src/hooks/use*.ts` — unveraendert, ausserhalb des Scope.
