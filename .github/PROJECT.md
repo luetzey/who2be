@@ -70,15 +70,19 @@ Priorität. Die Kollisionsdetails stehen im Queue-Issue, nicht hier.
 | Issue | Rolle in der Reihenfolge |
 |---|---|
 | #429 Coming-soon-Modus | **Harte Abhängigkeit: blockiert #454.** Die Deploy-Verifikation braucht eine erreichbare URL, hinter der noch keine Fremden Konten anlegen können. |
-| #450 Registry-Pull als Regelweg | **Harte Abhängigkeit: blockiert #454.** Ohne den Umbau baut die Prod-Box ein anderes Artefakt, als die CI geprüft hat. |
+| #450 Registry-Pull als Regelweg | **Harte Abhängigkeit: blockiert #454.** Ohne den Umbau baut die Prod-Box ein anderes Artefakt, als die CI geprüft hat. Datei-disjunkt zu allem außer den Sammelpunkten. |
 | #451 Kettentest + Billing-Check im Smoke | **Harte Abhängigkeit: blockiert #454** — der Prod-Smoke braucht den Check. Reine Testarbeit, kein Produktivcode. |
 | #449 Tarife bewerben das Kontingent | Owner-Vorgabe (Cloud-Block). Vor #453 wegen der Datei-Kollision im Billing-Panel; stellt ein Produktversprechen richtig, das heute nicht zutrifft. |
 | #452 Webhook-Härtung | Owner-Vorgabe (Cloud-Block). Nach #451 — beide fassen `packages/billing/tests/` an. Geprüft und heute nicht ausnutzbar: Härtung, kein Notfall. |
 | #453 E2E-Journey „Upgrade auf Pro“ | Owner-Vorgabe (Cloud-Block), letztes Paket darin. Nach #449, sonst testet die Journey eine Oberfläche im Umbau. |
 | #438 Responsive-Fundament W0 | **Fundament vor Fläche:** öffnet #431 W1–W4. Die Owner-Vorgabe „nach dem Cloud-Launch-Block“ bindet es an den Block, nicht ans Listenende — innerhalb des Restes schlägt Fundament die Fläche. **Teils Präferenz:** wer „nach dem Block“ als „ganz hinten“ liest, schiebt es hinter #427. |
-| #430 Angemeldet bleiben (12 h) | Fläche, kein Blocker. Nach #429 (Datei-Kollision) und nach #453 (weiche Kollision an `LoginPage.tsx`). Vor #427 nur wegen AC 3 unten — teils Präferenz, umgekehrt vertretbar. Security-Review ist Pflicht. |
+| #430 Angemeldet bleiben (12 h) | Fläche, kein Blocker. Nach #429 (Datei-Kollision) und nach #453 (weiche Kollision an `LoginPage.tsx`). Vor #427 nur wegen AC 3 unten — teils Präferenz, umgekehrt vertretbar. Security-Review ist Pflicht; revidiert ADR-0035, braucht also eine ablösende ADR-0052. |
 | #427 Agent-Favoriten | Fläche, öffnet nichts. Stand ursprünglich nach #436; seit #436 blockiert ist, rückt es davor — ein blockiertes Paket hält kein startbares auf. |
 | #436 Fehlercodes W0 (ADR-0051) | **`needs-decision` — nicht starten.** Wäre nach „Fundament vor Fläche“ das stärkste Paket dieser Hälfte (öffnet die Router-Wellen W1–Wn von #402) und stünde vor #438. Es steht allein deshalb hinten, weil eine Architektur-Weiche offen ist: `packages/models/.../errors.py` trägt mit `ApiProblem`/`ProblemReason` bereits einen maschinenlesbaren Fehlerschlüssel, das Issue plant die Datei als Neuanlage. Offen ist damit, ob Who2Be zwei Fehler-Vokabulare nebeneinander bekommt. Drei Optionen stehen als Kommentar am Issue; nach der Entscheidung rückt #436 vor #438. |
+
+Erledigt und deshalb aus der Tabelle genommen: **#440** (CI überspringt
+Doku-Jobs, PR #445) und **#434** (Cloud-Readiness-Inventar, PR #448) — beide
+am 2026-09-05 gemergt. #434 hat den Zuschnitt von #449 bis #454 freigegeben.
 
 Danach oder parallel, außerhalb der Warteschlange:
 
@@ -89,8 +93,8 @@ Danach oder parallel, außerhalb der Warteschlange:
   haben je ihre nächste Welle herausgelöst.
 - **#435 Passkeys** (`size/M`) — nach #428, #429 und #430. Vorbedingung ist ein
   GoTrue-Image ≥ v2.163.0; das Repo pinnt v2.158.1 an **drei** Stellen
-  (`docker-compose.yml`, `deploy/hetzner/supabase/docker-compose.yml`,
-  `deploy/dokploy/docker-compose.yml`). Einziges der drei `size/M`-Issues
+  (`docker-compose.yml:50`, `deploy/hetzner/supabase/docker-compose.yml:63`,
+  `deploy/dokploy/docker-compose.yml:81`). Einziges der drei `size/M`-Issues
   ohne herausgelöstes Kind.
 - **#454 Cloud-Deploy und Testkauf** (`human-only`) — Owner-Schritte
   (Repo-Variablen, Host-Secrets, Mollie-Konto, DNS, ein Kauf im Browser).
