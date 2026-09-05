@@ -169,7 +169,11 @@ async def billing_webhook(request: Request) -> dict[str, bool]:
     Doppelzustellung ist No-Op, wird aber trotzdem mit Erfolg quittiert — sonst
     stellt der Provider in einer Retry-Schleife erneut zu. Schlaegt der Upsert
     NACH dem Claim fehl, wird der Claim wieder freigegeben, damit ein legitimer
-    Retry das Event nicht verliert.
+    Retry das Event nicht verliert — das setzt voraus, dass der Retry noch
+    innerhalb des generischen Plausibilitaetsfensters ankommt
+    (`_GENERIC_EVENT_MAX_AGE_SECONDS` in `webhook.py`, Groessenordnung Tage,
+    NICHT die knappe `_SIGNATURE_TOLERANCE_SECONDS` des Stripe-Zweigs); danach
+    scheitert bereits `verify_webhook_signature`, unabhaengig vom Dedupe-Ledger.
     """
     _require_cloud()
     settings = get_settings()
@@ -200,6 +204,11 @@ async def billing_webhook(request: Request) -> dict[str, bool]:
     try:
         pool = get_pool()
     except RuntimeError as exc:
+        # Ein Retry nach diesem 503 traegt weiterhin den urspruenglichen
+        # `created`-Wert (der steckt im HMAC-gedeckten Body, ein Absender kann
+        # ihn nicht auffrischen) — er bleibt aber gueltig annehmbar, solange er
+        # innerhalb von `_GENERIC_EVENT_MAX_AGE_SECONDS` (Tage, nicht Minuten)
+        # ankommt. Siehe Kommentar an dieser Konstante in `webhook.py`.
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Datenbank nicht verfuegbar.",
@@ -220,6 +229,11 @@ async def billing_webhook(request: Request) -> dict[str, bool]:
             external_ref=update.external_ref,
         )
     except Exception:
+        # Die Freigabe ermoeglicht einen erfolgreichen Retry nur, solange
+        # dieser noch innerhalb des generischen Plausibilitaetsfensters liegt
+        # (`_GENERIC_EVENT_MAX_AGE_SECONDS` in webhook.py, Groessenordnung
+        # Tage) — danach scheitert bereits die Signaturpruefung, unabhaengig
+        # vom Dedupe-Ledger.
         await processed.release(_GENERIC_PROVIDER, event_id)
         raise
     return {"received": True}
