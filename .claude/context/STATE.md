@@ -32,6 +32,35 @@ Umgesetzt wurde deshalb die repo-seitige Haelfte, die auch ohne Board traegt:
   ergaenzt, damit die spaetere (gitignorede) `project.json` das richtige Schema
   hat. Bisher trug die Vorlage nur Notion-Schluessel.
 
+## Reihenfolge lebt im `backlog-queue`-Issue #442 (2026-09-05, Variante A)
+
+Owner-Ziel: Agenten sollen die Reihenfolge **selbst** pflegen koennen. Das
+Board taugt dafuer nicht — es ist fuer Agenten weder lesbar noch schreibbar.
+Werkzeug-Inventar (gezaehlt, nicht geschaetzt): schreibbar sind Sub-Issue-
+Reihenfolge (`reprioritize`), Labels, Body/Titel/Status, Issue-Type und die
+Zuweisung bestehender Milestones; **nicht** schreibbar sind Projects-Board,
+Issue-Fields (leer, nicht anlegbar) und Issue-Dependencies (`blocked_by`/
+`blocking` sind im Payload sichtbar, es gibt kein Schreib-Tool).
+
+Gewaehlt wurde Variante A: **ein Queue-Issue mit geordneter Task-Liste**
+(#442, Label `backlog-queue`). Verworfen: Sub-Issues unter einem Queue-Parent
+(ein Issue hat nur einen Parent — #434/#436/#438 haetten ihre Epic-Zuordnung
+zu #428/#402/#431 verloren) und Queue-Labels (nur grobe Eimer, keine Sequenz,
+keine Begruendung).
+
+- **Stabiler Griff ist das Label, nicht die Nummer:**
+  `list_issues(state=OPEN, labels=["backlog-queue"])` liefert genau eines.
+  Fehlt es, baut der Agent es nach dem Muster in PROJECT.md §Reihenfolge neu.
+- **Arbeitsteilung:** #442 traegt die Reihenfolge (umsortieren = ein
+  `issue_write`, kein PR), PROJECT.md die Begruendung. Bei Widerspruch gilt
+  fuer die Reihenfolge das Issue. PROJECT.md fuehrt deshalb keine
+  Nummerierung mehr, sondern eine Tabelle „warum die Reihenfolge so aussieht".
+- **Verifiziertes Risiko ausgeraeumt:** die Task-Listen-Referenzen in #442
+  erzeugen KEINE Hierarchie — #434 haengt weiter unter #428, #438 unter #431,
+  #442 hat keine Sub-Issues (per `get_parent`/`get_sub_issues` geprueft).
+- Label `backlog-queue` entstand durch Zuweisung und hat wie die uebrigen
+  Delegations-Labels keine Description (Owner-Klick).
+
 Board inzwischen vom Owner angelegt: https://github.com/users/luetzey/projects/3
 (`project_number: 3`), in PROJECT.md eingetragen. **Auch nach der Anlage bleibt
 es fuer Agenten unsichtbar** — erneut geprueft, weder Projects-Tools noch

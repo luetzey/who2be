@@ -28,23 +28,48 @@ ist.
 
 ### Reihenfolge
 
-**Diese Liste ist die Quelle der Wahrheit für „welches Issue als Nächstes“.**
-Ein Agent, der den Auftrag „bearbeite ein Issue“ bekommt, nimmt den obersten
-offenen Eintrag, dessen Blocker erledigt sind. Neue `agent-ready`-Issues
-bekommen sofort einen Platz hier, sonst sind sie für einen unbeaufsichtigten
-Lauf unsichtbar.
+Die operative Warteschlange steht **nicht in dieser Datei**, sondern im offenen
+Issue mit dem Label **`backlog-queue`** (derzeit #442). Ein Agent, der den
+Auftrag „bearbeite ein Issue“ bekommt, holt es mit
 
-| # | Issue | Warum an dieser Stelle |
-|---|---|---|
-| 1 | #440 CI überspringt Doku-Jobs | Keine Abhängigkeit. Verkürzt jeden folgenden Lauf von 7:42 auf gut eine Minute, zahlt sich also ab dem zweiten Paket aus. |
-| 2 | #429 Coming-soon-Modus | **Blockiert #428 WP-4:** die Deploy-Verifikation braucht eine erreichbare URL, hinter der noch keine Fremden Konten anlegen können. |
-| 3 | #434 Cloud-Readiness-Inventar | **Blockiert den Zuschnitt von #428 WP-2 bis WP-5.** Read-only, kein Code. |
-| 4 | #430 Angemeldet bleiben (12 h) | Unabhängig. Vor dem Launch gewünscht, aber nicht blockierend. Security-Review ist Pflicht. |
-| 5 | #436 Fehlercodes W0 (ADR-0051) | Unabhängig. Öffnet die Router-Wellen von #402. |
-| 6 | #427 Agent-Favoriten | Unabhängig. Reine Produktverbesserung ohne Kopplung. |
-| 7 | #438 Responsive-Fundament W0 | Owner-Vorgabe: nach dem Cloud-Launch-Block. Öffnet #431 W1 bis W4. |
+```
+list_issues(owner, repo, state=OPEN, labels=["backlog-queue"])
+```
 
-Danach oder parallel, nicht in der Nummerierung:
+und nimmt den obersten offenen Eintrag seiner Task-Liste, dessen Blocker
+erledigt sind. Das Label ist der stabile Griff, die Issue-Nummer ist
+austauschbar.
+
+**Warum dort und nicht hier:** eine Umsortierung ist im Issue ein einziger
+`issue_write`-Aufruf, in dieser Datei wäre sie ein Branch, ein PR und ein
+Merge. Damit können Agenten die Reihenfolge selbst pflegen. Die Arbeitsteilung:
+**das Queue-Issue trägt die Reihenfolge, diese Datei die Begründung.** Bei
+Widerspruch gilt für die Reihenfolge das Issue.
+
+**Fehlt das Queue-Issue, wird es neu angelegt** — Titel „Backlog-Queue:
+Reihenfolge der Arbeitspakete (Einstiegspunkt für Agenten)“, Label
+`backlog-queue`, Body aus vier Teilen: die Warteschlange als Task-Liste im
+Format `- [ ] #NNN — kurze Begründung`, ein Abschnitt „Nicht in der
+Warteschlange“, die Pflege-Regeln und der Hinweis, dass das Projects-Board
+für Agenten unlesbar ist. Reihenfolge und Begründungen stammen aus der
+Tabelle unten und den offenen `agent-ready`-Issues.
+
+#### Warum die Reihenfolge so aussieht
+
+Echte Abhängigkeiten gibt es nur zwei, der Rest ist Priorität. Ohne diese
+Tabelle wäre die Sortierung im Queue-Issue nicht nachvollziehbar.
+
+| Issue | Rolle in der Reihenfolge |
+|---|---|
+| #440 CI überspringt Doku-Jobs | Keine Abhängigkeit, gehört aber weit nach vorn: verkürzt jeden folgenden Lauf von 7:42 auf gut eine Minute und zahlt sich ab dem zweiten Paket aus. |
+| #429 Coming-soon-Modus | **Harte Abhängigkeit: blockiert #428 WP-4.** Die Deploy-Verifikation braucht eine erreichbare URL, hinter der noch keine Fremden Konten anlegen können. |
+| #434 Cloud-Readiness-Inventar | **Harte Abhängigkeit: blockiert den Zuschnitt von #428 WP-2 bis WP-5.** Read-only, kein Code, kann parallel zu #429 laufen. |
+| #430 Angemeldet bleiben (12 h) | Unabhängig. Vor dem Launch gewünscht, aber nicht blockierend. Security-Review ist Pflicht. |
+| #436 Fehlercodes W0 (ADR-0051) | Unabhängig. Öffnet die Router-Wellen von #402. |
+| #427 Agent-Favoriten | Unabhängig. Reine Produktverbesserung ohne Kopplung. |
+| #438 Responsive-Fundament W0 | Owner-Vorgabe: nach dem Cloud-Launch-Block. Öffnet #431 W1 bis W4. |
+
+Danach oder parallel, außerhalb der Warteschlange:
 
 - **#428, #402, #431** — Tracking-Issues (`size/M`). Sie folgen ihren Kindern
   und werden erst nach deren Abschluss neu zugeschnitten. #428 trägt zusätzlich
@@ -57,8 +82,8 @@ Danach oder parallel, nicht in der Nummerierung:
 
 ### Projects-Board
 
-Ein Board ist eine **Sicht** auf die Reihenfolge oben, nicht ihre Quelle: die
-Heimat von Outcome, Reihenfolge und Constraints bleibt dieses Repo.
+Ein Board ist eine **Sicht** auf die Warteschlange, nicht ihre Quelle. Die
+Reihenfolge lebt im `backlog-queue`-Issue, ihre Begründung in dieser Datei.
 
 Board: <https://github.com/users/luetzey/projects/3> (nutzereigen,
 `project_number: 3`, angelegt 2026-09-05).
@@ -66,9 +91,14 @@ Board: <https://github.com/users/luetzey/projects/3> (nutzereigen,
 Gepflegt wird es vom Owner. Das Toolset der Agenten-Sessions trägt **keine**
 Projects-Werkzeuge (geprüft 2026-09-05, auch nach der Board-Anlage: weder
 `projects_*`-Tools noch Issue-Fields verfügbar, `list_issue_fields` liefert
-`[]`). Ein Agent kann das Board also weder lesen noch schreiben und richtet
-sich nach der Reihenfolge oben. Wer den Board-Status nachzieht, tut das von
-Hand.
+`[]`; für Issue-Dependencies gibt es kein Schreib-Werkzeug). Ein Agent kann
+das Board also weder lesen noch schreiben. Es ist deshalb **nie** die Quelle
+der Reihenfolge — das ist das `backlog-queue`-Issue. Wer den Board-Status
+nachzieht, tut das von Hand.
+
+Sollte in der MCP-Konfiguration später das Toolset `projects` aktiviert
+werden, kann das Board die Rolle des Queue-Issues übernehmen. Bis dahin gilt
+die Warteschlange im Issue.
 
 `.claude/project.json` trägt `github_repo` und `project_number` (Vorlage:
 `.claude/project.example.json`), ist aber gitignored und existiert in einer
@@ -84,9 +114,9 @@ Quelle, nicht `project.json`.
    `422`, während Login und Einladungen funktionieren.
 3. **Login-Komfort (#430):** mit gesetztem Haken überlebt die Sitzung neuen Tab
    und Browser-Neustart innerhalb der Obergrenze ohne erneuten 2FA-Prompt.
-4. **Backlog startbar:** jedes Issue der Reihenfolge ist geschlossen oder mit
+4. **Backlog startbar:** jedes Issue der Warteschlange ist geschlossen oder mit
    Begründung zurückgestellt; kein offenes `agent-ready`-Issue steht ohne Platz
-   in der Liste.
+   im `backlog-queue`-Issue.
 
 ### Constraints
 
@@ -97,6 +127,8 @@ Quelle, nicht `project.json`.
 - `agent-ready` ist eine Startfreigabe, keine Beschreibung: es wird nur
   vergeben, wenn Outcome, prüfbare Akzeptanzkriterien, Out-of-Scope und exakte
   Verifikations-Kommandos tatsächlich im Issue stehen. Sonst `needs-decision`.
+- Genau **ein** offenes Issue trägt `backlog-queue`. Wer ein zweites anlegt,
+  spaltet die Reihenfolge.
 
 ### Out of Scope
 
