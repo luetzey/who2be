@@ -1,6 +1,42 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-05 (10. Lauf — Backlog-Issues #427–#431 angelegt)_
+_Stand: 2026-09-05 (11. Lauf — Backlog-Refinement: offene Issues gegen die Norm „Agent-ready Arbeitspaket“ geprüft)_
+
+## Backlog-Refinement (2026-09-05, 11. Lauf — nur GitHub, kein Code)
+
+Alle offenen Issues nach Playbook „Issue-Refinement" (Persona-Modus Refiner)
+gegen die Norm „Agent-ready Arbeitspaket" (vier Pflichtfelder + Weichen) und
+die Form-Norm „GitHub-Artefakt-Standards" geprüft; Owner-Entscheidungen F1–F8
+im Gespräch eingeholt („Empfehlungen übernehmen").
+
+- **agent-ready / size/S (startbar):** #427 (war es schon), #429 Coming-soon-
+  Modus (Weg A entschieden — Runtime-Config-Muster; Compose kann keine Env
+  ableiten → `GOTRUE_DISABLE_SIGNUP` bleibt explizit, `smoke.sh` prüft die
+  Konsistenz), #430 auf WP-A „Angemeldet bleiben (12 h)" reduziert (Weg A
+  `localStorage` + absolute Obergrenze, opt-in — Owner), #436 W0 Fehlercodes
+  (Sub-Issue zu #402), #438 W0 Responsive-Fundament (Sub-Issue zu #431,
+  Reihenfolge: nach Cloud-Launch-Block — Owner), #434 WP-1 Readiness-Inventar
+  (aus dem Parallel-Lauf; mein #437 war ein Duplikat → geschlossen).
+- **size/M (Tracking, braucht Zerlegung):** #428, #431, #402 (Owner hat
+  Option 1 „Fehler-Codes statt Prosa" entschieden; ADR-0051 folgt in #436),
+  #435 Passkeys neu (aus #430 herausgelöst; GoTrue-WebAuthn braucht Image
+  ≥ v2.163.0 — Repo pinnt v2.158.1; auth-js 2.112.3 kann es clientseitig).
+- **human-only:** #338 (O2/O3 Owner-Klicks). **Geschlossen:** #341 (WP-10 lebt
+  in #428 WP-4 weiter).
+- Originalfassungen von #429/#430/#402 als Archiv-Kommentar gesichert, Bodies
+  ersetzt (Konvention aus dem Playbook).
+
+Befunde am Rande: der in #430 zitierte „Befund S1" existiert in
+`docs/security-findings-phase-2.md` nicht (dort F-Phase2-01…03) — im Issue als
+„zu verifizieren" markiert; `detail="`-Zählung ist 79, nicht 78 (#402);
+CLAUDE.md nennt `npx tsc --noEmit`, CI fährt `npx tsc -b` (bekannt aus #427).
+
+**Offene Owner-Klicks (kein Tool im GitHub-MCP):** Label-Descriptions für die
+Delegations-Achse (`agent-ready`, `needs-decision`, `human-only`, `size/S`,
+`size/M` — Vergabe-Regel laut Norm-Abschnitt Label-Semantik; `needs-decision`
+und `human-only`/`size/M` wurden durch Zuweisung ohne Description erzeugt) und
+zwei Milestones „Cloud-Launch" (#428, #429, #430, #434, #435) und „Mobile-fähige
+UI" (#431, #438). `.claude/project.json` fehlt weiterhin (kein Board).
 
 ## Backlog-Issues aus dem Owner-Briefing (2026-09-05, nur GitHub, kein Code)
 

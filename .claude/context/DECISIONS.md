@@ -1090,3 +1090,47 @@ bleiben)._
   Resource-URL *ist* die Resource-Identität, also muss beidseitig dieselbe
   Strenge gelten (Security-Review-Befund N-1). `uuid.UUID()` allein akzeptiert
   `{…}`, `urn:uuid:…` und Formen ohne Bindestriche.
+
+## 2026-09-05 — Session-Persistenz: `localStorage` + absolute Obergrenze, opt-in (#430)
+- **Entscheidung:** Die GoTrue-Session darf auf Wunsch des Nutzers („Angemeldet
+  bleiben (12 h)", Haken standardmäßig aus) in `localStorage` liegen; eine
+  clientseitige absolute Obergrenze (`WHO2BE_SESSION_MAX_AGE_HOURS`, Default 12,
+  1–24) erzwingt danach den vollen Login inkl. Step-up. Ohne Haken bleibt
+  `sessionStorage`. `GOTRUE_JWT_EXP` und Refresh-Rotation unverändert.
+- **Begründung:** Owner-Entscheidung (Refinement 2026-09-05): der 2FA-Prompt pro
+  Tab ist die größte Alltagsreibung; Ziel „ganzer Browser, 8–12 h".
+- **Verworfen:** `sessionStorage` + `BroadcastChannel` (löst den Browser-Neustart
+  nicht); HttpOnly-Cookie-Session über den `auth-gateway` (größter Umbau, Option
+  für später). Revidiert den Ansatz „Session nur im Tab" aus `lib/supabase.ts`
+  (vgl. Eintrag 2026-07-01 MFA-Step-up); Security-Review ist Pflicht im PR.
+
+## 2026-09-05 — API-Fehler: stabile Codes statt Prosa, additiv (#402, ADR-0051 folgt)
+- **Entscheidung:** Fehlerantworten bekommen `code` (StrEnum in
+  `packages/models`) + optional `params` **neben** `detail`; der Client
+  übersetzt bekannte Codes, unbekannte fallen auf `detail` zurück. Codes
+  entstehen an der Domain-Exception, das Mapping liegt im zentralen
+  Exception-Handler, nie im Router.
+- **Begründung:** `detail` wird von zwei Konsumenten (Web-UI, MCP) gelesen; ein
+  Code dient beiden; passt zur Interims-Leitplanke „Fehler als Domain-Exception"
+  (2026-07-20). Additiv, weil ein Breaking Change auf `detail` beide Konsumenten
+  träfe.
+- **Verworfen:** serverseitiges `Accept-Language` (verlagert Präsentation ins
+  Backend, Tests/Caching sprachabhängig).
+
+## 2026-09-05 — Delegations-Achse als Label-System + Refinement-Konvention
+- **Entscheidung:** Vier Labels steuern den unbeaufsichtigten Start:
+  `agent-ready` (alle Pflichtfelder + Weichen, startbar), `needs-decision`
+  (Weiche offen, nicht starten), `human-only` (bewusst nicht delegiert),
+  `size/S` / `size/M` (M braucht Zerlegung). Refinement ersetzt den Issue-Body
+  (vom Handy startbar) und archiviert die Originalfassung vorher wörtlich als
+  Kommentar. Tracking-Issues (`epic`) tragen `size/M`, nie `agent-ready`.
+- **Begründung:** Norm „Agent-ready Arbeitspaket" (Workspace-Resource); das
+  Label ist die Startfreigabe, nicht eine Beschreibung.
+- **Offen:** Label-Descriptions und Milestones sind Owner-Klicks (kein
+  Schreibtool im GitHub-MCP).
+
+## 2026-09-05 — #341 geschlossen, Deploy-Verifikation lebt in #428 WP-4
+- **Entscheidung:** Das Release-Mechanik-Issue wird als erledigt geschlossen; der
+  einzige offene Punkt WP-10 (Deploy einmal end-to-end) ist wortgleich WP-4 in
+  #428 und wird nur dort geführt.
+- **Begründung:** eine Wahrheit statt zwei; Owner-Entscheidung F6.
