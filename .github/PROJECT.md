@@ -56,18 +56,23 @@ Tabelle unten und den offenen `agent-ready`-Issues.
 
 #### Warum die Reihenfolge so aussieht
 
-Echte Abhängigkeiten gibt es nur zwei, der Rest ist Priorität. Ohne diese
-Tabelle wäre die Sortierung im Queue-Issue nicht nachvollziehbar.
+**Die Zeilen stehen in der Reihenfolge der Warteschlange** — wer das
+Queue-Issue nach dem Muster oben neu baut, übernimmt sie von oben nach unten.
+
+Harte Blocker gibt es nur zwei (#429, #434). Daneben erzwingen zwei
+Datei-Kollisionen eine Reihenfolge, ohne echte Blocker zu sein (#430 nach
+#429, #427 nach #436); der Rest ist Priorität. Die Kollisionsdetails stehen
+im Queue-Issue, nicht hier.
 
 | Issue | Rolle in der Reihenfolge |
 |---|---|
-| #440 CI überspringt Doku-Jobs | Keine Abhängigkeit, gehört aber weit nach vorn: verkürzt jeden folgenden Lauf von 7:42 auf gut eine Minute und zahlt sich ab dem zweiten Paket aus. |
+| #440 CI überspringt Doku-Jobs | **Präferenz, keine Ableitung.** Blockiert nichts, öffnet nichts — nach „Fundament vor Fläche“ gehörte es hinter #434/#429/#436. Steht vorn, weil die Ersparnis mit jedem Lauf anfällt statt einmal und das folgende Paket (#434, reines `.claude/**`) sie sofort realisiert. Wer den Cloud-Launch strikt zuerst will, schiebt es auf Platz 4. |
+| #434 Cloud-Readiness-Inventar | **Harte Abhängigkeit: blockiert den Zuschnitt von #428 WP-2 bis WP-5** — gibt vier Pakete frei. Inventar vor Zuschnitt; read-only, kein Code, und bei Gleichstand mit #429 das kleinere. |
 | #429 Coming-soon-Modus | **Harte Abhängigkeit: blockiert #428 WP-4.** Die Deploy-Verifikation braucht eine erreichbare URL, hinter der noch keine Fremden Konten anlegen können. |
-| #434 Cloud-Readiness-Inventar | **Harte Abhängigkeit: blockiert den Zuschnitt von #428 WP-2 bis WP-5.** Read-only, kein Code, kann parallel zu #429 laufen. |
-| #430 Angemeldet bleiben (12 h) | Unabhängig. Vor dem Launch gewünscht, aber nicht blockierend. Security-Review ist Pflicht. |
-| #436 Fehlercodes W0 (ADR-0051) | Unabhängig. Öffnet die Router-Wellen von #402. |
-| #427 Agent-Favoriten | Unabhängig. Reine Produktverbesserung ohne Kopplung. |
-| #438 Responsive-Fundament W0 | Owner-Vorgabe: nach dem Cloud-Launch-Block. Öffnet #431 W1 bis W4. |
+| #436 Fehlercodes W0 (ADR-0051) | Fundament vor Fläche: öffnet die Router-Wellen W1–Wn von #402. Kein Blocker, aber **vor #427** — beide regenerieren dieselben OpenAPI-Artefakte. |
+| #430 Angemeldet bleiben (12 h) | Fläche, kein Blocker. **Nach #429**, weil beide `config.ts` und die Login-Seite anfassen. Vor #427 nur wegen AC 3 oben — teils Präferenz, umgekehrt vertretbar. Security-Review ist Pflicht. |
+| #427 Agent-Favoriten | Fläche, öffnet nichts. **Nach #436** (Kollision in den OpenAPI-Artefakten) — nicht kopplungsfrei, anders als die Erstfassung dieser Tabelle behauptete. |
+| #438 Responsive-Fundament W0 | Owner-Vorgabe: nach dem Cloud-Launch-Block — schlägt hier „Fundament vor Fläche“, obwohl es #431 W1 bis W4 öffnet. |
 
 Danach oder parallel, außerhalb der Warteschlange:
 
@@ -127,6 +132,10 @@ Quelle, nicht `project.json`.
 - `agent-ready` ist eine Startfreigabe, keine Beschreibung: es wird nur
   vergeben, wenn Outcome, prüfbare Akzeptanzkriterien, Out-of-Scope und exakte
   Verifikations-Kommandos tatsächlich im Issue stehen. Sonst `needs-decision`.
+- Ein `size/M`-Issue wird **nie** durch Nachtragen von Feldern startbar. Fehlt
+  ihm nichts als die Größe, ist der nächste Schritt ein Zuschnitt, kein
+  Refinement — sonst entsteht ein Paket, das vollständig aussieht und trotzdem
+  nicht in einem Zug reviewbar ist. Betrifft aktuell #428, #402, #431 und #435.
 - Genau **ein** offenes Issue trägt `backlog-queue`. Wer ein zweites anlegt,
   spaltet die Reihenfolge.
 
