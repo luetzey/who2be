@@ -182,6 +182,12 @@ services:
       # wuerde — und der SPA-Fallback dort HTML statt MCP liefert.
       WHO2BE_MCP_URL: ${WHO2BE_MCP_URL:-http://localhost:8765/mcp}
       WHO2BE_SIGNUP_DISABLED: ${WHO2BE_SIGNUP_DISABLED:-false}
+      # "Wir arbeiten noch"-Modus (#429). Muss hier durchgereicht werden, sonst
+      # sieht der Entrypoint den Wert nie und `/config.js` bleibt auf "open".
+      # GOTRUE_DISABLE_SIGNUP wird davon NICHT abgeleitet (Compose kann keine
+      # Variable aus einer anderen berechnen) — beide gemeinsam setzen.
+      WHO2BE_LAUNCH_MODE: ${WHO2BE_LAUNCH_MODE:-open}
+      WHO2BE_LAUNCH_CONTACT: ${WHO2BE_LAUNCH_CONTACT:-}
     ports:
       # Container hoert mit nginx auf 80; Host-Port bleibt 5173, damit
       # smoke.sh + CORS-Origin unveraendert bleiben.

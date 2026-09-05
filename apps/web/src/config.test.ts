@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
-import { resolveConfig } from './config'
+import { resolveConfig, resolveLaunchMode } from './config'
 
 afterEach(() => {
   vi.unstubAllEnvs()
@@ -72,5 +72,82 @@ describe('resolveConfig — abgeleitete Werte', () => {
     window.__WHO2BE_CONFIG__ = { signupDisabled: true }
 
     expect(resolveConfig().signupDisabled).toBe(true)
+  })
+})
+
+describe('resolveLaunchMode', () => {
+  test('gueltige Werte werden 1:1 uebernommen', () => {
+    expect(resolveLaunchMode('open')).toBe('open')
+    expect(resolveLaunchMode('coming_soon')).toBe('coming_soon')
+  })
+
+  test('undefined/leer fallen ohne Warnung auf "open" zurueck', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    expect(resolveLaunchMode(undefined)).toBe('open')
+    expect(resolveLaunchMode('')).toBe('open')
+    expect(warn).not.toHaveBeenCalled()
+
+    warn.mockRestore()
+  })
+
+  test('unbekannte Werte fallen fail-open auf "open" zurueck und warnen', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    expect(resolveLaunchMode('maintenance')).toBe('open')
+    expect(warn).toHaveBeenCalledTimes(1)
+
+    warn.mockRestore()
+  })
+})
+
+describe('resolveConfig — launchMode/launchContact (Issue #429)', () => {
+  test('Default ohne Runtime-Config: "open", kein Kontakt', () => {
+    const resolved = resolveConfig()
+
+    expect(resolved.launchMode).toBe('open')
+    expect(resolved.launchContact).toBe('')
+  })
+
+  test('Runtime setzt launchMode und launchContact durch', () => {
+    window.__WHO2BE_CONFIG__ = {
+      launchMode: 'coming_soon',
+      launchContact: 'hello@who2be.dev',
+    }
+
+    const resolved = resolveConfig()
+
+    expect(resolved.launchMode).toBe('coming_soon')
+    expect(resolved.launchContact).toBe('hello@who2be.dev')
+  })
+
+  test('coming_soon zieht signupDisabled nach, wenn die Runtime es nicht explizit setzt', () => {
+    window.__WHO2BE_CONFIG__ = { launchMode: 'coming_soon' }
+
+    expect(resolveConfig().signupDisabled).toBe(true)
+  })
+
+  test('ein explizites rt.signupDisabled gewinnt gegen einen abweichenden launchMode', () => {
+    window.__WHO2BE_CONFIG__ = { launchMode: 'open', signupDisabled: true }
+
+    expect(resolveConfig().signupDisabled).toBe(true)
+  })
+
+  test('Altschalter (VITE_WHO2BE_SIGNUP_DISABLED) wirkt weiterhin ohne Runtime-Config', () => {
+    vi.stubEnv('VITE_WHO2BE_SIGNUP_DISABLED', 'true')
+
+    const resolved = resolveConfig()
+
+    expect(resolved.launchMode).toBe('open')
+    expect(resolved.signupDisabled).toBe(true)
+  })
+
+  test('unbekannter Runtime-launchMode faellt auf "open" zurueck', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    window.__WHO2BE_CONFIG__ = { launchMode: 'wat' }
+
+    expect(resolveConfig().launchMode).toBe('open')
+
+    warn.mockRestore()
   })
 })

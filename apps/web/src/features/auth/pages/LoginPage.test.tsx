@@ -87,6 +87,8 @@ const { mockConfig } = vi.hoisted(() => ({
     supabaseUrl: 'http://localhost:54321',
     supabaseAnonKey: 'anon',
     signupDisabled: false,
+    launchMode: 'open' as 'open' | 'coming_soon',
+    launchContact: '',
   },
 }))
 
@@ -99,9 +101,11 @@ import { LoginPage } from './LoginPage'
 describe('LoginPage', () => {
   afterEach(() => {
     mockConfig.signupDisabled = false
+    mockConfig.launchMode = 'open'
+    mockConfig.launchContact = ''
   })
 
-  it('versteckt den Registrieren-Link bei deaktiviertem Signup', () => {
+  it('versteckt den Registrieren-Link bei deaktiviertem Signup (Altschalter, kein Launch-Modus)', () => {
     mockConfig.signupDisabled = true
     render(
       <BrowserRouter>
@@ -112,6 +116,20 @@ describe('LoginPage', () => {
     )
 
     expect(document.querySelector('a[href*="/signup"]')).toBeNull()
+  })
+
+  it('zeigt den Registrieren-Link im "coming_soon"-Launch-Modus, auch wenn signupDisabled gesetzt ist', () => {
+    mockConfig.signupDisabled = true
+    mockConfig.launchMode = 'coming_soon'
+    render(
+      <BrowserRouter>
+        <SessionProvider>
+          <LoginPage />
+        </SessionProvider>
+      </BrowserRouter>,
+    )
+
+    expect(document.querySelector('a[href*="/signup"]')).not.toBeNull()
   })
 
   it('ruft signInWithPassword mit den eingegebenen Daten', async () => {

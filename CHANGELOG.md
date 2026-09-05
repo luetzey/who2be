@@ -34,6 +34,17 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 - `docker-compose.images.yml` — an overlay that pulls the prebuilt
   `ghcr.io/luetzey/who2be-*` images instead of building from source, which skips
   the multi-minute first build.
+- A `WHO2BE_LAUNCH_MODE=coming_soon` runtime switch (Issue #429) puts the app
+  into a "we're still building this" mode without a rebuild: `/signup` shows a
+  bilingual (DE/EN) notice page instead of the sign-up form, and the login
+  page's "Sign up" link points there instead of disappearing. An optional
+  `WHO2BE_LAUNCH_CONTACT` address is shown on the notice page. The real
+  enforcement stays `GOTRUE_DISABLE_SIGNUP` (unchanged) — this only controls
+  the web UI, and `scripts/smoke.sh` now fails loudly if the two disagree
+  (`coming_soon` set but GoTrue still accepts `signUp`). The older
+  `WHO2BE_SIGNUP_DISABLED` / `VITE_WHO2BE_SIGNUP_DISABLED` switches keep
+  working unchanged (now documented as deprecated) for anyone not ready to
+  move to the new variable.
 
 ### Fixed
 
