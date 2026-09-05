@@ -42,6 +42,31 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 - `docker-compose.images.yml` — an overlay that pulls the prebuilt
   `ghcr.io/luetzey/who2be-*` images instead of building from source, which skips
   the multi-minute first build.
+- A chain test (`packages/billing/tests/test_checkout_webhook_entitlement_limit_chain.py`)
+  now drives the whole paid path end-to-end: start a Mollie checkout, simulate
+  the webhook ping for the resulting first payment, and show that the same MCP
+  request which the Free-tier default (`CLOUD_FREE_ENTITLEMENT`) rejects with
+  429 goes through once the webhook has written the Pro entitlement — with a
+  negative control (no webhook ⇒ still rejected) right next to it. Checkout,
+  webhook mapping, the entitlement write path and the MCP rate/quota gate each
+  already had their own tests, but nothing showed that a paid subscription
+  actually unlocks a higher limit end-to-end. The test runs without a database
+  (no Docker in CI's non-integration jobs) by backing the real
+  `PgEntitlementRepository` and `PgMcpUsageRepository` with an in-memory stub
+  connection pool instead of mocking those repositories themselves — only the
+  DB connection and the Mollie API (`FakeMollieGateway`, as in
+  `test_mollie_adapter.py`) are faked; the entitlement decision logic
+  (`Entitlement.is_active()`, quota comparison, `increment_if_allowed`) runs
+  unmodified. The checkout endpoint also gets its first HTTP-level test
+  (`test_checkout_success_returns_201_with_mollie_metadata`): 201 plus the
+  metadata actually handed to the (fake) Mollie gateway, where previously only
+  its rejection paths were covered over HTTP.
+- `scripts/smoke.sh` gained a seventh check: the generic billing webhook route
+  (`POST /v1/billing/webhook`) answers 400 (fail-closed, no signature) against
+  a Cloud deployment and 404 against an On-Prem one, proving the route itself
+  is edition-gated. The check needs neither `MOLLIE_API_KEY` nor a configured
+  webhook secret — it only exercises the fail-closed signature check, never a
+  real Mollie call — so it can't go red for reasons unrelated to routing.
 
 ### Fixed
 

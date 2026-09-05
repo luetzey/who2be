@@ -9,7 +9,8 @@ Der Webhook-Service wird ueber `app.dependency_overrides` durch einen Fake erset
 from __future__ import annotations
 
 from collections.abc import Iterator
-from uuid import uuid4
+from typing import Any
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi import FastAPI
@@ -20,6 +21,7 @@ from test_mollie_adapter import (  # type: ignore[import-not-found]
     FakeProcessedEventRepository,
 )
 
+import who2be_billing.router as billing_router
 from who2be_api.core.config import get_settings
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.main import create_app
@@ -169,6 +171,70 @@ def test_checkout_rejects_unknown_plan(cloud_app: tuple[FastAPI, FakeMollieGatew
             headers={"Authorization": "Bearer w2b_dummy"},
         )
     assert resp.status_code == 422
+
+
+class _CheckoutPool:
+    """Minimaler `asyncpg.Pool`-Stub fuer `resolve_org_id` + `_fetch_billing_identity`.
+
+    `create_checkout` holt den Pool per `get_pool()` direkt (keine FastAPI-
+    Dependency, siehe `router.py:249`) — `app.dependency_overrides` greift hier
+    also nicht; stattdessen wird `billing_router.get_pool` gepatcht (AC3).
+    """
+
+    def __init__(self, *, workspace_id: UUID, org_id: UUID, org_name: str) -> None:
+        self._workspace_id = workspace_id
+        self._org_id = org_id
+        self._org_name = org_name
+
+    async def fetchval(self, query: str, *args: Any) -> Any:
+        normalized = " ".join(query.split())
+        if "FROM workspace WHERE id" in normalized:
+            assert args[0] == self._workspace_id
+            return self._org_id
+        if "FROM organization WHERE id" in normalized:
+            return self._org_name
+        if "FROM auth.users WHERE id" in normalized:
+            return None  # Email ist fuer Mollie optional (siehe router.py:143).
+        raise AssertionError(f"_CheckoutPool.fetchval: unerwartete Query: {query!r}")
+
+
+def test_checkout_success_returns_201_with_mollie_metadata(
+    cloud_app: tuple[FastAPI, FakeMollieGateway],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Checkout-Erfolgspfad einmal ueber HTTP (AC3): 201 + die an Mollie
+    uebergebene Metadata (Vorlage: `test_start_checkout_creates_customer_and_payment`
+    in `test_mollie_adapter.py`, dort nur am Service, nicht ueber den Endpoint)."""
+    app, gateway = cloud_app
+    workspace_id = uuid4()
+    org_id = uuid4()
+    admin_ctx = WorkspaceContext(
+        workspace_id=workspace_id,
+        user_id=uuid4(),
+        role=WorkspaceRole.admin,
+        is_api_token=False,
+        aal="aal2",
+    )
+    app.dependency_overrides[get_current_workspace] = lambda: admin_ctx
+    monkeypatch.setattr(
+        billing_router,
+        "get_pool",
+        lambda: _CheckoutPool(workspace_id=workspace_id, org_id=org_id, org_name="Acme GmbH"),
+    )
+    with TestClient(app) as client:
+        resp = client.post(
+            f"/v1/workspaces/{workspace_id}/billing/checkout",
+            json={"plan": "pro"},
+            headers={"Authorization": "Bearer w2b_dummy"},
+        )
+    assert resp.status_code == 201
+    assert resp.json() == {"checkout_url": gateway.checkout_url}
+    # Metadata, die tatsaechlich an das (Fake-)Mollie-Gateway ging.
+    assert gateway.created_customer_metadata["org_id"] == str(org_id)
+    assert gateway.first_payment_metadata["org_id"] == str(org_id)
+    assert gateway.first_payment_metadata["plan_code"] == "pro"
+    assert gateway.first_payment_metadata["license_policy"] == " ".join(sorted(PRO_PLAN.features))
+    assert gateway.first_payment_metadata["mcp_monthly_quota"] == str(PRO_PLAN.mcp_monthly_quota)
 
 
 def test_checkout_404_on_onprem(monkeypatch: pytest.MonkeyPatch) -> None:
