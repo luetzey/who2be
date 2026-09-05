@@ -1,6 +1,40 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-05 (13. Lauf — Backlog-Refinement aller offenen Issues gegen die Norm „Agent-ready Arbeitspaket“; 11./12. Lauf: #427, #428 s. u.)_
+_Stand: 2026-09-05 (14. Lauf — Reihenfolge des Backlogs in .github/PROJECT.md verankert)_
+
+## Backlog-Reihenfolge verankert, Board bleibt Owner-Schritt (2026-09-05, 14. Lauf)
+
+Anlass: die Frage, ob ein frisch gestarteter Agent bei „bearbeite ein Issue"
+die richtige Reihenfolge kennt. Antwort war nein — sieben `agent-ready`-Issues,
+alle `size/S`, kein Milestone (0 von 12), kein Board, keine Prioritaets-Achse,
+und `.github/PROJECT.md` beschrieb noch das abgeschlossene v0.1.0-Vorhaben
+(#338–#341). Die Reihenfolge stand nur als Prosa in einzelnen Issue-Bodies.
+
+Owner-Wahl war Weg C (Projects-Board + `project.json`). **Die Board-Haelfte ist
+mit dem Agenten-Toolset nicht baubar** (verifiziert): der GitHub-MCP-Server
+dieser Session stellt keine Projects-Tools bereit (`projects_list`/`_get`/
+`_write` fehlen, obwohl die Tool-Bindung sie nennt), `list_issue_fields`
+liefert `[]` und es gibt kein Anlege-Tool dafuer, `gh` ist nicht verfuegbar.
+Issue-*Types* existieren (Task/Bug/Feature), druecken aber Art aus, nicht
+Reihenfolge.
+
+Umgesetzt wurde deshalb die repo-seitige Haelfte, die auch ohne Board traegt:
+
+- **`.github/PROJECT.md` neu geschrieben:** aktives Vorhaben „Cloud-Launch &
+  Alltagstauglichkeit"; neuer Abschnitt **Reihenfolge** als erklaerte Quelle
+  der Wahrheit (1 #440, 2 #429, 3 #434, 4 #430, 5 #436, 6 #427, 7 #438) mit den
+  zwei harten Abhaengigkeiten (#429 blockiert #428 WP-4; #434 blockiert den
+  Zuschnitt von #428 WP-2..5); Tracking-Issues, #435 und #338 ausserhalb der
+  Nummerierung. Das alte v0.1.0-Vorhaben ist nach „Abgeschlossen" gewandert.
+- **Regel gegen das Veralten:** ein neues `agent-ready`-Issue ohne Platz in der
+  Liste gilt als unsichtbar; das steht als Acceptance-Kriterium in der Datei.
+- **`.claude/project.example.json`** um `github_repo` und `project_number`
+  ergaenzt, damit die spaetere (gitignorede) `project.json` das richtige Schema
+  hat. Bisher trug die Vorlage nur Notion-Schluessel.
+
+Offen und Owner-Sache: Board anlegen (Status + Zahlenfeld „Reihenfolge"),
+danach `project.json` lokal fuellen. Das Board ist laut Norm eine Sicht auf die
+Liste, nicht ihre Quelle — PROJECT.md bleibt die Heimat.
 
 ## Backlog-Refinement (2026-09-05, 13. Lauf — nur GitHub, kein Code)
 
