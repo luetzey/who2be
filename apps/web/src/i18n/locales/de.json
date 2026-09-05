@@ -615,6 +615,11 @@
       },
       "consentRequiredHint": "Bitte stimme den AGB und der Datenschutzerklaerung zu, um fortzufahren."
     },
+    "comingSoon": {
+      "title": "Wir arbeiten noch an Who2Be — bald verfügbar.",
+      "body": "Die Registrierung ist im Moment noch nicht offen. Melde dich mit einem bestehenden Konto an oder schau spaeter wieder vorbei.",
+      "contact": "Fragen? Schreib uns an:"
+    },
     "resetPassword": {
       "title": "Passwort zuruecksetzen",
       "description": "Wir senden dir einen Link, mit dem du ein neues Passwort setzen kannst.",

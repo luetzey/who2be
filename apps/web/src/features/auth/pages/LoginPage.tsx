@@ -273,9 +273,11 @@ export function LoginPage() {
               <span className="h-px flex-1 bg-border" />
             </div>
             <OAuthButtons next={next} />
-            {/* Self-Service-Registrierung nur zeigen, wenn nicht deaktiviert
+            {/* Registrieren-Link zeigen, wenn entweder der "Wir arbeiten
+                noch"-Modus aktiv ist (fuehrt zur Hinweisseite, Issue #429)
+                ODER Signup nicht per Altschalter deaktiviert ist
                 (VITE_WHO2BE_SIGNUP_DISABLED, spiegelt GOTRUE_DISABLE_SIGNUP). */}
-            {!config.signupDisabled && (
+            {(config.launchMode === 'coming_soon' || !config.signupDisabled) && (
               <p className="text-center text-sm text-muted-foreground">
                 {t('login.noAccount')}{' '}
                 <Link

@@ -11,7 +11,11 @@
 #      einzige, der auch von einer LAN-IP aus funktioniert)
 #   6) MCP-HTTP-Server: 401 + WWW-Authenticate direkt auf :8765 und ueber den
 #      Web-Origin, plus die Protected-Resource-Metadata
-#   7) Billing-Route existiert nur in der Cloud-Edition (Issue #451): dieselbe
+#   7) Launch-Modus-Konsistenz (Issue #429): mit WHO2BE_LAUNCH_MODE=coming_soon
+#      muss GoTrue POST /signup ohnehin mit 422 ablehnen (GOTRUE_DISABLE_SIGNUP)
+#      — sonst waere die Hinweisseite nur UI-Kosmetik ohne echte Sperre. Im
+#      "open"-Modus (Default) wird NICHT geprobt (kein Probe-User-Anlegen).
+#   8) Billing-Route existiert nur in der Cloud-Edition (Issue #451): dieselbe
 #      Route antwortet in Cloud, in On-Prem 404 — ohne DB-/Mollie-Kontakt, also
 #      auch ohne gesetzten MOLLIE_API_KEY nicht falsch rot
 # Beendet mit Exit-Code 0 wenn alles gruen, sonst != 0.
@@ -112,7 +116,26 @@ PRM="$(curl -fsS "${WEB_URL}/.well-known/oauth-protected-resource/mcp")" \
   || fail "Protected-Resource-Metadata nicht erreichbar"
 echo "${PRM}" | grep -q "authorization_servers" || fail "PRM ohne authorization_servers: ${PRM}"
 
-# --- 7) Billing-Route: existiert nur in der Cloud-Edition (Issue #451) -------
+# --- 7) Launch-Modus-Konsistenz (Issue #429) ---------------------------------
+# WHO2BE_LAUNCH_MODE=coming_soon schaltet nur die UI ab (/signup zeigt die
+# Hinweisseite). Die echte Sperre bleibt GOTRUE_DISABLE_SIGNUP — widersprechen
+# sich beide (Modus an, GoTrue-Schalter versehentlich aus), koennte ein
+# direkter API-Aufruf trotzdem ein Konto anlegen. Im "open"-Modus (Default)
+# wird bewusst uebersprungen: kein Probe-User in einer produktiv laufenden,
+# offenen Instanz.
+if [[ "${WHO2BE_LAUNCH_MODE:-open}" == "coming_soon" ]]; then
+  log "Launch-Modus-Konsistenz (coming_soon ⇒ GoTrue muss signUp mit 422 ablehnen)"
+  SIGNUP_HTTP_CODE="$(curl -sS -o /tmp/smoke-signup.json -w '%{http_code}' \
+    -X POST "${WEB_URL}/auth/v1/signup" \
+    -H "Content-Type: application/json" \
+    -d '{"email":"launch-mode-smoke@who2be.invalid","password":"launch-mode-smoke-pw"}')"
+  [[ "${SIGNUP_HTTP_CODE}" == "422" ]] \
+    || fail "Launch-Modus und GoTrue-Schalter widersprechen sich (POST /signup lieferte ${SIGNUP_HTTP_CODE} statt 422: $(cat /tmp/smoke-signup.json))"
+else
+  log "Launch-Modus 'open' — Signup-Konsistenz-Probe uebersprungen"
+fi
+
+# --- 8) Billing-Route: existiert nur in der Cloud-Edition (Issue #451) -------
 # Das optionale Cloud-Billing-Paket wird nur gemountet, wenn `WHO2BE_EDITION=
 # cloud` UND das Paket installiert ist (`_register_billing_if_present`,
 # apps/api/.../main.py) — On-Prem hat die Route schlicht nicht (404). Der

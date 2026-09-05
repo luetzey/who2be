@@ -42,6 +42,17 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 - `docker-compose.images.yml` — an overlay that pulls the prebuilt
   `ghcr.io/luetzey/who2be-*` images instead of building from source, which skips
   the multi-minute first build.
+- A `WHO2BE_LAUNCH_MODE=coming_soon` runtime switch (Issue #429) puts the app
+  into a "we're still building this" mode without a rebuild: `/signup` shows a
+  bilingual (DE/EN) notice page instead of the sign-up form, and the login
+  page's "Sign up" link points there instead of disappearing. An optional
+  `WHO2BE_LAUNCH_CONTACT` address is shown on the notice page. The real
+  enforcement stays `GOTRUE_DISABLE_SIGNUP` (unchanged) — this only controls
+  the web UI, and `scripts/smoke.sh` now fails loudly if the two disagree
+  (`coming_soon` set but GoTrue still accepts `signUp`). The older
+  `WHO2BE_SIGNUP_DISABLED` / `VITE_WHO2BE_SIGNUP_DISABLED` switches keep
+  working unchanged (now documented as deprecated) for anyone not ready to
+  move to the new variable.
 - A chain test (`packages/billing/tests/test_checkout_webhook_entitlement_limit_chain.py`)
   now drives the whole paid path end-to-end: start a Mollie checkout, simulate
   the webhook ping for the resulting first payment, and show that the same MCP
@@ -61,7 +72,7 @@ the merged pull requests and the plan documents under `.claude/plan/`.
   (`test_checkout_success_returns_201_with_mollie_metadata`): 201 plus the
   metadata actually handed to the (fake) Mollie gateway, where previously only
   its rejection paths were covered over HTTP.
-- `scripts/smoke.sh` gained a seventh check: the generic billing webhook route
+- `scripts/smoke.sh` gained an eighth check: the generic billing webhook route
   (`POST /v1/billing/webhook`) answers 400 (fail-closed, no signature) against
   a Cloud deployment and 404 against an On-Prem one, proving the route itself
   is edition-gated. The check needs neither `MOLLIE_API_KEY` nor a configured

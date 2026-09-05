@@ -18,6 +18,20 @@ sanitize() {
   printf '%s' "${1:-}" | tr -d '"\\'
 }
 
+# "Wir arbeiten noch"-Modus (Issue #429). Nur "open"/"coming_soon" sind
+# gueltig — src/config.ts validiert das ohnehin nochmal fail-open (unbekannte
+# Werte -> "open" + console.warn), hier landet der Rohwert unveraendert.
+LAUNCH_MODE="${WHO2BE_LAUNCH_MODE:-open}"
+
+# signupDisabled ist wahr, wenn ENTWEDER der neue Launch-Modus ODER der
+# Altschalter (WHO2BE_SIGNUP_DISABLED) es verlangt (Weiche 2a) — Compose kann
+# keine Variable aus einer anderen berechnen, das holt das hier nach.
+if [ "${LAUNCH_MODE}" = "coming_soon" ] || [ "${WHO2BE_SIGNUP_DISABLED:-false}" = "true" ]; then
+  SIGNUP_DISABLED_JS=true
+else
+  SIGNUP_DISABLED_JS=false
+fi
+
 cat > "${TARGET}" <<EOF
 // Generiert beim Container-Start (docker/40-who2be-runtime-config.sh).
 // Nicht editieren — Aenderungen ueberleben den naechsten Start nicht.
@@ -26,7 +40,9 @@ window.__WHO2BE_CONFIG__ = {
   mcpUrl: "$(sanitize "${WHO2BE_MCP_URL:-}")",
   supabaseUrl: "$(sanitize "${WHO2BE_SUPABASE_URL:-}")",
   supabaseAnonKey: "$(sanitize "${WHO2BE_SUPABASE_ANON_KEY:-}")",
-  signupDisabled: $([ "${WHO2BE_SIGNUP_DISABLED:-false}" = "true" ] && echo true || echo false),
+  signupDisabled: ${SIGNUP_DISABLED_JS},
+  launchMode: "$(sanitize "${LAUNCH_MODE}")",
+  launchContact: "$(sanitize "${WHO2BE_LAUNCH_CONTACT:-}")",
 }
 EOF
 
