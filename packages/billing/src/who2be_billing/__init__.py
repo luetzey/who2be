@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
+from who2be_api.core.config import get_settings
 from who2be_billing import router as _router
 
 __all__ = ["include_routers"]
@@ -25,7 +26,16 @@ def include_routers(app: FastAPI, *, workspace_prefix: str) -> None:
 
     - Top-Level (anonyme, signatur-/pull-gesicherte Webhooks): `/v1/billing/...`.
     - Workspace-scoped (Checkout/Override, admin): unter `workspace_prefix`.
+
+    Der generische HMAC-Webhook (`webhook_router`) wird **nur** gemountet, wenn
+    ein `billing_webhook_secret` konfiguriert ist (Issue #452, Massnahme 5):
+    ohne Secret waere jede Signatur ohnehin fail-closed ungueltig (400) — die
+    Route soll dann aber gar nicht erst existieren (404), statt als
+    unkonfigurierter Endpunkt discoverable zu sein. Der Mollie-Pull-Webhook
+    braucht kein Signatur-Secret (eigene Absicherung ueber den aktiven Fetch,
+    siehe `mollie.py`) und wird davon unabhaengig immer gemountet.
     """
-    app.include_router(_router.webhook_router)
+    if get_settings().billing_webhook_secret:
+        app.include_router(_router.webhook_router)
     app.include_router(_router.mollie_webhook_router)
     app.include_router(_router.router, prefix=workspace_prefix)

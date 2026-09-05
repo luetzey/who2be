@@ -212,6 +212,25 @@ the merged pull requests and the plan documents under `.claude/plan/`.
   the document stay language-stable — they are content and follow the element's
   language (ADR-0045), not the interface language.
 
+### Security
+
+- Hardened the generic `POST /v1/billing/webhook` path (Stripe-style HMAC
+  format; no configured provider sends to it today — the repo only wires up
+  `mollie-api-python`, and Mollie doesn't sign). A grant event without a
+  resolvable billing period is now rejected instead of silently producing an
+  entitlement with no expiry, which used to bypass the expiry check entirely;
+  an unlimited entitlement is now only reachable through the OSS/on-prem
+  default. The same envelope event id is now deduplicated through the
+  `ProcessedEventRepository` ledger the Mollie path already uses — claimed
+  before the entitlement upsert and released again if the upsert fails, so a
+  duplicate delivery is acknowledged as success without a second write or
+  journal row. The generic HMAC format now also enforces the signature replay
+  window (read from the event payload's `created` field, since — unlike the
+  Stripe format — its header carries no timestamp); the header format itself
+  is unchanged. The route is now only mounted when `billing_webhook_secret` is
+  configured, so a missing secret answers 404 instead of 400. The Mollie path
+  (`mollie.py`) is untouched (Issue #452).
+
 ## [0.1.0] - 2026-08-20
 
 First public release. This section collects the entire development up to

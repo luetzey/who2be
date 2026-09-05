@@ -49,6 +49,7 @@ from who2be_billing.plans import plan_by_code
 from who2be_billing.processed_event_repository import PgProcessedEventRepository
 from who2be_billing.webhook import (
     WebhookError,
+    extract_event_id,
     map_event_to_entitlement,
     parse_event,
     verify_webhook_signature,
@@ -65,6 +66,11 @@ Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]
 
 # Provider-Signatur-Header (Stripe: `Stripe-Signature`; generisch: `X-Webhook-Signature`).
 _SIGNATURE_HEADERS = ("stripe-signature", "x-webhook-signature")
+
+# Dedupe-Namespace fuer den generischen Webhook im `processed_webhook_event`-Ledger
+# (Issue #452, Massnahme 2) — getrennter Keyspace vom Mollie-Pfad (`"mollie"`),
+# passend zum bereits genutzten `source="cloud"` beim Entitlement-Upsert.
+_GENERIC_PROVIDER = "cloud"
 
 
 def _require_cloud() -> None:
@@ -152,7 +158,18 @@ async def billing_webhook(request: Request) -> dict[str, bool]:
 
     Der DB-Pool wird bewusst **lazy** geholt (nicht als Dependency): die 404-/400-
     Abweisungen — On-Prem bzw. fehlende/ungueltige Signatur — sollen ohne jeden
-    DB-Kontakt greifen.
+    DB-Kontakt greifen. Diese Route wird ausserdem nur gemountet, wenn ein
+    `billing_webhook_secret` konfiguriert ist (`__init__.include_routers`) —
+    fehlt es, existiert der Pfad gar nicht (404 statt 400, Issue #452 Massnahme 5).
+
+    Dedupe (Issue #452, Massnahme 2): analog zum Mollie-Pfad (`mollie.py:482,
+    500, 507-514`, nur gelesen, nicht veraendert) beansprucht ein relevantes
+    Event (`update is not None`) seine **Envelope**-ID im selben
+    `ProcessedEventRepository`-Ledger, bevor der Upsert laeuft. Eine
+    Doppelzustellung ist No-Op, wird aber trotzdem mit Erfolg quittiert — sonst
+    stellt der Provider in einer Retry-Schleife erneut zu. Schlaegt der Upsert
+    NACH dem Claim fehl, wird der Claim wieder freigegeben, damit ein legitimer
+    Retry das Event nicht verliert.
     """
     _require_cloud()
     settings = get_settings()
@@ -176,19 +193,35 @@ async def billing_webhook(request: Request) -> dict[str, bool]:
         return {"received": True}
 
     try:
+        event_id = extract_event_id(event)
+    except WebhookError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    try:
         pool = get_pool()
     except RuntimeError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Datenbank nicht verfuegbar.",
         ) from exc
+
+    processed = PgProcessedEventRepository(pool)
+    if not await processed.claim(_GENERIC_PROVIDER, event_id):
+        # Bereits verarbeitet (Dedupe-Ledger) — Erfolg quittieren, kein zweiter
+        # Effekt/Journal-Eintrag, sonst haengt sich der Provider in einen Retry.
+        return {"received": True}
+
     repo = PgEntitlementRepository(pool)
-    await repo.upsert(
-        update.org_id,
-        update.entitlement,
-        source="cloud",
-        external_ref=update.external_ref,
-    )
+    try:
+        await repo.upsert(
+            update.org_id,
+            update.entitlement,
+            source="cloud",
+            external_ref=update.external_ref,
+        )
+    except Exception:
+        await processed.release(_GENERIC_PROVIDER, event_id)
+        raise
     return {"received": True}
 
 

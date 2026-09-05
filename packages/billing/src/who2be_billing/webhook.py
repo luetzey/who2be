@@ -7,14 +7,20 @@ entscheidet.
 
 Signatur (Guardrail §3.6 "Webhooks ohne Signaturpruefung verarbeiten" verboten):
 - **Stripe-Schema** ``t=<ts>,v1=<hex>`` ⇒ HMAC-SHA256 ueber ``"<ts>.<body>"`` mit
-  Toleranz gegen Replays.
+  Toleranz gegen Replays (Zeitstempel aus dem Header).
 - **Generisches Schema** (Mollie u. a.): roher Hex-HMAC ueber den Body, optional mit
-  ``sha256=``-Praefix.
+  ``sha256=``-Praefix, dieselbe Replay-Toleranz — mangels Header-Zeitbezug gegen
+  das `created`-Feld im (HMAC-gedeckten) Payload.
 Beide Pfade vergleichen **konstant-zeitlich**; leeres Secret ⇒ fail closed.
 
 Feature-Mapping (Guardrail §3.6 "kein hartkodiertes Produkt→Feature-Mapping"):
 die freigeschalteten Codes kommen aus den Provider-**Metadaten**
 (`metadata.license_policy`), nicht aus einer Code-Tabelle.
+
+Haertung (Issue #452): ein Grant-Event ohne auflösbares Periodenende wird
+abgelehnt statt ein unbefristetes Entitlement zu erzeugen (`_parse_period_end`);
+`extract_event_id` liefert die Envelope-ID fuer das Dedupe-Ledger im Router
+(`router.py`, dasselbe `ProcessedEventRepository` wie der Mollie-Pfad).
 """
 
 from __future__ import annotations
@@ -52,6 +58,32 @@ def _parse_stripe_header(header: str) -> tuple[int, str] | None:
     return timestamp, signature
 
 
+def _extract_event_timestamp(payload: bytes) -> int | None:
+    """Liest den Ereignis-Zeitstempel (`created`, Stripe-Konvention) aus dem Body.
+
+    Nur fuer das **generische** Signaturschema gebraucht: anders als beim
+    Stripe-Schema (`t=…,v1=…`) traegt der Header hier keinen Zeitbezug. Statt
+    das Header-Format zu erweitern (das waere ein Vertrag mit einem Anbieter,
+    den es fuer dieses Schema nicht gibt), wird die Zeit aus dem Payload
+    gelesen, den die HMAC ohnehin komplett deckt. Fehlt/ist unlesbar ⇒ `None`
+    — der Aufrufer weist dann fail-closed ab, statt die Pruefung zu ueberspringen.
+    """
+    try:
+        data = json.loads(payload)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    raw = data.get("created")
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, int | float):
+        return int(raw)
+    if isinstance(raw, str) and raw.strip().lstrip("-").isdigit():
+        return int(raw)
+    return None
+
+
 def verify_webhook_signature(
     payload: bytes,
     header: str | None,
@@ -79,7 +111,17 @@ def verify_webhook_signature(
     if candidate.startswith("sha256="):
         candidate = candidate[len("sha256=") :]
     expected = hmac.new(secret_bytes, payload, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, candidate)
+    if not hmac.compare_digest(expected, candidate):
+        return False
+
+    # Replay-Toleranz auch im generischen Schema (Issue #452, Massnahme 3):
+    # der Zeitstempel kommt mangels Header-Zeitbezug aus dem Event-Payload
+    # selbst; fehlt er, wird fail-closed abgewiesen.
+    created = _extract_event_timestamp(payload)
+    if created is None:
+        return False
+    reference = now if now is not None else time.time()
+    return abs(reference - created) <= _SIGNATURE_TOLERANCE_SECONDS
 
 
 def parse_event(payload: bytes) -> dict[str, Any]:
@@ -159,10 +201,23 @@ def _parse_int_meta(metadata: dict[str, Any], key: str) -> int | None:
         raise WebhookError(f"Webhook-Metadatum '{key}' ist keine Ganzzahl.") from exc
 
 
-def _parse_period_end(obj: dict[str, Any], metadata: dict[str, Any]) -> datetime | None:
+def _parse_period_end(obj: dict[str, Any], metadata: dict[str, Any]) -> datetime:
+    """Liest das Periodenende eines Grant-Events. **Pflicht**, keine Ausnahme.
+
+    Issue #452, Massnahme 1: ein Grant-Event ohne auflösbares Periodenende darf
+    niemals ein unbefristetes Entitlement erzeugen (das wuerde die
+    Ablaufpruefung in `Entitlement.is_active()` folgenlos umgehen). Statt
+    stillschweigend `None` zurueckzugeben, wird fail-closed abgelehnt — ein
+    Entitlement ohne Ablauf bleibt exklusiv dem OSS-/On-Prem-Default vorbehalten
+    (`licensing/entitlement.py:OSS_ENTITLEMENT`).
+    """
     raw = obj.get("current_period_end") or metadata.get("expires_at")
     if raw is None:
-        return None
+        raise WebhookError(
+            "Grant-Event ohne Periodenende ('current_period_end'/'expires_at') "
+            "wird abgelehnt — ein Provider-Ereignis darf kein unbefristetes "
+            "Entitlement erzeugen."
+        )
     if isinstance(raw, int | float):
         return datetime.fromtimestamp(raw, tz=UTC)
     if isinstance(raw, str):
@@ -185,13 +240,29 @@ class EntitlementUpdate:
     external_ref: str | None
 
 
+def extract_event_id(event: dict[str, Any]) -> str:
+    """Liest die Ereignis-Kennung des **Umschlags** (Dedupe-Schluessel).
+
+    Issue #452, Massnahme 2: bewusst die Envelope-ID (top-level `id`, Stripe-
+    Konvention z. B. `evt_...`) und **nicht** die Objekt-ID (`data.object.id`),
+    die in mehreren Ereignissen wiederkehrt und darum als Dedupe-Schluessel
+    ungeeignet waere. Fehlt sie, wird das Ereignis abgelehnt — ohne Schluessel
+    kein Dedupe.
+    """
+    raw = event.get("id")
+    if not isinstance(raw, str) or not raw:
+        raise WebhookError("Webhook-Event hat keine Ereignis-Kennung ('id').")
+    return raw
+
+
 def map_event_to_entitlement(event: dict[str, Any]) -> EntitlementUpdate | None:
     """Bildet ein Provider-Event auf ein Org-Entitlement ab.
 
     `None` ⇒ Event ist fuer das Entitlement irrelevant (z. B. ein nicht
     abonnementbezogener Typ) und wird vom Router quittiert, aber ignoriert.
-    Grant-Events setzen `active` + Features/Limits aus den Metadaten; Revoke-Events
-    setzen `inactive` (Zugriff sofort entzogen).
+    Grant-Events setzen `active` + Features/Limits aus den Metadaten (das
+    Periodenende ist Pflicht, siehe `_parse_period_end`); Revoke-Events setzen
+    `inactive` (Zugriff sofort entzogen).
     """
     event_type = event.get("type")
     if not isinstance(event_type, str):

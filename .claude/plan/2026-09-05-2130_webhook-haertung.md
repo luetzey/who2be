@@ -26,7 +26,8 @@ Der Stripe-Zweig prüft das Fenster gegen den Zeitstempel **aus dem Header**
 ```python
 # webhook.py:77-82 — nur sha256= plus Hex-Digest, kein Zeitbezug
 candidate = header.strip()
-if candidate.startswith("sha256="): candidate = candidate[7:]
+if candidate.startswith("sha256="):
+    candidate = candidate[7:]
 expected = hmac.new(secret_bytes, payload, hashlib.sha256).hexdigest()
 ```
 

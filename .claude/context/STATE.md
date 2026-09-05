@@ -1,6 +1,52 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-05 (23. Lauf — Tarife bewerben das Kontingent, #449)_
+_Stand: 2026-09-05 (24. Lauf — Billing-Webhook gehaertet, #452)_
+
+## Generischer Billing-Webhook gehaertet (2026-09-05, 24. Lauf, #452)
+
+WP-5 von #428. **Der Befund war vor der Umsetzung als nicht ausnutzbar
+eingestuft** und ist es weiterhin: kein Anbieter sendet auf diesen Pfad (das
+Repo haengt allein an `mollie-api-python`, Mollie signiert nicht und laeuft
+ueber den eigenen, bereits geschuetzten Pfad), und ohne gesetztes
+`billing_webhook_secret` antwortete der Endpunkt ohnehin mit 400. Vorsorge fuer
+den Tag, an dem ein signierender Anbieter dazukommt. Plan
+`.claude/plan/2026-09-05-2130_webhook-haertung.md`.
+
+Vier von fuenf Massnahmen umgesetzt, in der Reihenfolge absteigender Wirkung:
+
+1. **Ablauffrist** — ein Grant ohne Periodenangabe wird abgewiesen
+   (`WebhookError`) statt unbefristet geschrieben. Zurueckweisen statt Deckeln:
+   kein zu rechtfertigender Ersatzwert, und es entsteht ueberhaupt kein
+   Schreibvorgang. Ein Entitlement ohne Ablauf darf ausschliesslich aus dem
+   OSS-/On-Prem-Default stammen (`licensing/entitlement.py:110`).
+2. **Dedupe** — Claim ueber die **Envelope**-Event-ID (nicht die Objekt-ID, die
+   in mehreren Ereignissen vorkommt) vor dem Upsert, Release bei Fehler danach.
+   Vorlage war der Mollie-Pfad, **ohne** gemeinsame Abstraktion: eine Basisklasse
+   fuer zwei Faelle waere nicht belegt.
+3. **Zeitfenster** — der generische HMAC-Zweig hat, anders als der
+   Stripe-Zweig, keinen Zeitstempel im Header. Geloest ueber das `created`-Feld
+   des **HMAC-gedeckten** Payloads; das Header-Format bleibt unangetastet, weil
+   es ein Vertrag mit einem Anbieter waere, den es nicht gibt. Fehlt die Zeit:
+   fail closed.
+4. **Mount nur mit Secret** — ohne `billing_webhook_secret` existiert die Route
+   nicht mehr (404 statt 400).
+
+**Monotonie (AC 5) bewusst geschnitten**, Weiche 4 erlaubt das nach der zweiten
+Massnahme. `org_entitlement.updated_at` ist die Schreibzeit, nicht die
+Ereigniszeit des Anbieters — ein Vergleich dagegen ist in die falsche Richtung
+unsicher und wuerde ein legitimes, spaet zugestelltes Ereignis abweisen. Weiche
+6 schliesst eine Migration fuer dieses Paket aus. Als **#462** dokumentiert, mit
+drei Wegen und der Empfehlung, es bis zur Anbindung eines zweiten Anbieters
+offen zu lassen. `entitlement_repository.py` blieb unveraendert.
+
+**Verifikation:** 67 Billing-Tests gruen (Baseline 59) · ruff und mypy sauber ·
+`git diff -- mollie.py` leer · keine Migration. Security-Review ueber den Diff
+gefahren (CLAUDE.md verlangt ihn fuer externe Inputs).
+
+**Nebenbefund am eigenen Werkzeug:** `ruff format` prueft Python-Code-Bloecke
+**in Markdown** mit. Ein zitiertes einzeiliges `if` in der Plan-Datei haette die
+CI rot gemacht. Kuenftige Plaene: zitierten Python-Code formatiert halten oder
+den Block nicht als `python` auszeichnen.
 
 ## Tarife bewerben das Kontingent statt Feature-Codes (2026-09-05, 23. Lauf, #449)
 
