@@ -10,6 +10,29 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Changed
 
+- `docs/licensing/plans.md` and the `BillingPanel` now describe Free and Pro
+  by what the code actually enforces — price, MCP requests/month, MCP
+  requests/minute and the per-workspace entity limit — instead of listing the
+  `composite_playbooks`, `agents` and `audit_export` feature codes as
+  purchasable Pro capabilities. No code path gates on those individual codes
+  (`audit_export` has no endpoint at all); the only thing `Entitlement.
+  entity_limit()` actually reads is whether *any* paid feature code is present
+  at all, which lifts the entity limit from 50 to unlimited. The docs now say
+  so explicitly, and the codes stay documented as entitlement metadata rather
+  than being silently dropped, since they still surface in the `whoami` and
+  `entitlement` MCP/API responses (Issue #449). In the panel, the removed
+  `PRO_FEATURES` array is replaced by two separate checks against a small
+  `TIERS` list (also the source for the newly shown price and entity-limit
+  fields), each with the robustness its job needs: whether the plan is paid at
+  all (gates the upgrade CTA) is a *threshold* on `mcp_monthly_quota` — above
+  the Free quota, or `null` (unlimited, as with a `manual_override` grant or
+  On-Prem) — so a support override with a one-off quota still reads as paid
+  instead of showing the upgrade button; which tier exactly (drives the shown
+  name/price/entity-limit) stays an *exact* match, falling back to "unknown"
+  display text when no tier fits. A future third tier is a new list entry
+  rather than a panel rewrite. No backend change: `licensing/entitlement.py`
+  and `packages/billing/.../plans.py` are untouched, and prices/limits are
+  unchanged.
 - Hetzner Cloud deploys now pull the `api` and `migrate` services as prebuilt
   images from GHCR (`ghcr.io/luetzey/who2be-api-cloud:<sha>`, the same
   `runtime-cloud` artifact CI already built and pushed) instead of building
