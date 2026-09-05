@@ -58,29 +58,47 @@ Tabelle unten und den offenen `agent-ready`-Issues.
 
 **Die Zeilen stehen in der Reihenfolge der Warteschlange** — wer das
 Queue-Issue nach dem Muster oben neu baut, übernimmt sie von oben nach unten.
+Stand 2026-09-05 nach dem Backlog-Aufbereitungslauf; #440 und #434 sind
+erledigt und stehen im Queue-Issue abgehakt.
 
-Harte Blocker gibt es nur zwei (#429, #434). Daneben erzwingen zwei
-Datei-Kollisionen eine Reihenfolge, ohne echte Blocker zu sein (#430 nach
-#429, #427 nach #436); der Rest ist Priorität. Die Kollisionsdetails stehen
-im Queue-Issue, nicht hier.
+Harte Blocker sind die drei Vorbedingungen des Cloud-Deploys (#429, #450,
+#451 → alle blockieren #454). Daneben erzwingen Datei-Kollisionen eine
+Reihenfolge, ohne echte Blocker zu sein (#453 nach #449, #452 nach #451, #430
+nach #429, #427 vor dem blockierten #436); der Rest ist Owner-Vorgabe und
+Priorität. Die Kollisionsdetails stehen im Queue-Issue, nicht hier.
 
 | Issue | Rolle in der Reihenfolge |
 |---|---|
-| #440 CI überspringt Doku-Jobs | **Präferenz, keine Ableitung.** Blockiert nichts, öffnet nichts — nach „Fundament vor Fläche“ gehörte es hinter #434/#429/#436. Steht vorn, weil die Ersparnis mit jedem Lauf anfällt statt einmal und das folgende Paket (#434, reines `.claude/**`) sie sofort realisiert. Wer den Cloud-Launch strikt zuerst will, schiebt es auf Platz 4. |
-| #434 Cloud-Readiness-Inventar | **Harte Abhängigkeit: blockiert den Zuschnitt von #428 WP-2 bis WP-5** — gibt vier Pakete frei. Inventar vor Zuschnitt; read-only, kein Code, und bei Gleichstand mit #429 das kleinere. |
-| #429 Coming-soon-Modus | **Harte Abhängigkeit: blockiert #428 WP-4.** Die Deploy-Verifikation braucht eine erreichbare URL, hinter der noch keine Fremden Konten anlegen können. |
-| #436 Fehlercodes W0 (ADR-0051) | Fundament vor Fläche: öffnet die Router-Wellen W1–Wn von #402. Kein Blocker, aber **vor #427** — beide regenerieren dieselben OpenAPI-Artefakte. |
-| #430 Angemeldet bleiben (12 h) | Fläche, kein Blocker. **Nach #429**, weil beide `config.ts` und die Login-Seite anfassen. Vor #427 nur wegen AC 3 oben — teils Präferenz, umgekehrt vertretbar. Security-Review ist Pflicht. |
-| #427 Agent-Favoriten | Fläche, öffnet nichts. **Nach #436** (Kollision in den OpenAPI-Artefakten) — nicht kopplungsfrei, anders als die Erstfassung dieser Tabelle behauptete. |
-| #438 Responsive-Fundament W0 | Owner-Vorgabe: nach dem Cloud-Launch-Block — schlägt hier „Fundament vor Fläche“, obwohl es #431 W1 bis W4 öffnet. |
+| #429 Coming-soon-Modus | **Harte Abhängigkeit: blockiert #454.** Die Deploy-Verifikation braucht eine erreichbare URL, hinter der noch keine Fremden Konten anlegen können. |
+| #450 Registry-Pull als Regelweg | **Harte Abhängigkeit: blockiert #454.** Ohne den Umbau baut die Prod-Box ein anderes Artefakt, als die CI geprüft hat. Datei-disjunkt zu allem außer den Sammelpunkten. |
+| #451 Kettentest + Billing-Check im Smoke | **Harte Abhängigkeit: blockiert #454** — der Prod-Smoke braucht den Check. Reine Testarbeit, kein Produktivcode. |
+| #449 Tarife bewerben das Kontingent | Owner-Vorgabe (Cloud-Block). Vor #453 wegen der Datei-Kollision im Billing-Panel; stellt ein Produktversprechen richtig, das heute nicht zutrifft. |
+| #452 Webhook-Härtung | Owner-Vorgabe (Cloud-Block). Nach #451 — beide fassen `packages/billing/tests/` an. Geprüft und heute nicht ausnutzbar: Härtung, kein Notfall. |
+| #453 E2E-Journey „Upgrade auf Pro“ | Owner-Vorgabe (Cloud-Block), letztes Paket darin. Nach #449, sonst testet die Journey eine Oberfläche im Umbau. |
+| #438 Responsive-Fundament W0 | **Fundament vor Fläche:** öffnet #431 W1–W4. Die Owner-Vorgabe „nach dem Cloud-Launch-Block“ bindet es an den Block, nicht ans Listenende — innerhalb des Restes schlägt Fundament die Fläche. **Teils Präferenz:** wer „nach dem Block“ als „ganz hinten“ liest, schiebt es hinter #427. |
+| #430 Angemeldet bleiben (12 h) | Fläche, kein Blocker. Nach #429 (Datei-Kollision) und nach #453 (weiche Kollision an `LoginPage.tsx`). Vor #427 nur wegen AC 3 unten — teils Präferenz, umgekehrt vertretbar. Security-Review ist Pflicht; revidiert ADR-0035, braucht also eine ablösende ADR-0052. |
+| #427 Agent-Favoriten | Fläche, öffnet nichts. Stand ursprünglich nach #436; seit #436 blockiert ist, rückt es davor — ein blockiertes Paket hält kein startbares auf. |
+| #436 Fehlercodes W0 (ADR-0051) | **`needs-decision` — nicht starten.** Wäre nach „Fundament vor Fläche“ das stärkste Paket dieser Hälfte (öffnet die Router-Wellen W1–Wn von #402) und stünde vor #438. Es steht allein deshalb hinten, weil eine Architektur-Weiche offen ist: `packages/models/.../errors.py` trägt mit `ApiProblem`/`ProblemReason` bereits einen maschinenlesbaren Fehlerschlüssel, das Issue plant die Datei als Neuanlage. Offen ist damit, ob Who2Be zwei Fehler-Vokabulare nebeneinander bekommt. Drei Optionen stehen als Kommentar am Issue; nach der Entscheidung rückt #436 vor #438. |
+
+Erledigt und deshalb aus der Tabelle genommen: **#440** (CI überspringt
+Doku-Jobs, PR #445) und **#434** (Cloud-Readiness-Inventar, PR #448) — beide
+am 2026-09-05 gemergt. #434 hat den Zuschnitt von #449 bis #454 freigegeben.
 
 Danach oder parallel, außerhalb der Warteschlange:
 
 - **#428, #402, #431** — Tracking-Issues (`size/M`). Sie folgen ihren Kindern
-  und werden erst nach deren Abschluss neu zugeschnitten. #428 trägt zusätzlich
-  `needs-decision` (zwei offene Owner-Weichen, siehe dort).
+  und werden erst nach deren Abschluss neu zugeschnitten. #428 ist am
+  2026-09-05 in sechs Kinder zerlegt (#449–#454), seine beiden
+  `needs-decision`-Weichen sind beantwortet. #402 → #436 und #431 → #438
+  haben je ihre nächste Welle herausgelöst.
 - **#435 Passkeys** (`size/M`) — nach #428, #429 und #430. Vorbedingung ist ein
-  GoTrue-Image ≥ v2.163.0; das Repo pinnt v2.158.1.
+  GoTrue-Image ≥ v2.163.0; das Repo pinnt v2.158.1 an **drei** Stellen
+  (`docker-compose.yml:50`, `deploy/hetzner/supabase/docker-compose.yml:63`,
+  `deploy/dokploy/docker-compose.yml:81`). Einziges der drei `size/M`-Issues
+  ohne herausgelöstes Kind.
+- **#454 Cloud-Deploy und Testkauf** (`human-only`) — Owner-Schritte
+  (Repo-Variablen, Host-Secrets, Mollie-Konto, DNS, ein Kauf im Browser).
+  Voraussetzungen: #429, #450, #451.
 - **#338 Owner-Checkliste** (`human-only`) — O2 (Branch-Protection,
   Merge-Strategie, Description, Topics) und O3 (CLA-Assistant). Jederzeit
   parallel, kein Agent claimt das.
@@ -112,8 +130,9 @@ Quelle, nicht `project.json`.
 
 ### Acceptance Criteria
 
-1. **Deploy real gelaufen (#428 WP-4):** der `deploy`-Job hat sich mindestens
-   einmal nicht übersprungen, Run-ID im Issue verlinkt.
+1. **Deploy real gelaufen (#454, WP-7 von #428):** der `deploy`-Job hat sich
+   mindestens einmal nicht übersprungen, Run-ID im Issue verlinkt. Setzt #429,
+   #450 und #451 voraus; die Schritte selbst sind `human-only`.
 2. **Registrierung kontrolliert (#429):** bei `WHO2BE_LAUNCH_MODE=coming_soon`
    zeigt `/signup` die Hinweisseite und ein direkter GoTrue-Request antwortet
    `422`, während Login und Einladungen funktionieren.

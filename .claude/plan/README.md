@@ -17,6 +17,7 @@ Bei Konflikt zwischen Plan-Header und dieser Übersicht **gewinnt die Übersicht
 | `2026-05-27-2028_public-switch-github-repo.md` | Repo privat → öffentlich; finaler Flip + GitHub-Settings beim Owner (siehe STATE.md §Nächste Schritte) |
 | `2026-05-28-0528_enterprise-license-management.md` | Code-Hooks-only; aktiviert bei erstem qualifizierten Lead |
 | `2026-09-05-1520_cloud-launch-readiness-inventar.md` | Cloud-Pfad als belegte Checkliste (WP-1 von #428, Issue #434); Zuschnitt WP-2…WP-6 vorgeschlagen, Deploy-Umbau + Live-Lauf offen (Owner) |
+| `2026-09-05-1625_backlog-vorbereitungslauf.md` | Norm-Audit aller offenen Issues (10 von 12 ohne Abstriche), vier falsche Zeiger korrigiert (#450 Verifikations-Grep wirkungslos, #453/#429/#430 Zeilenbelege), #436 auf `needs-decision` (`errors.py` existiert bereits — zwei Fehler-Vokabulare?), #442 + PROJECT.md §Reihenfolge nachgezogen. Offen beim Owner: Weiche auf #436, PR #443 schließen, zwei belegte Funde ohne Issue |
 
 ## Blöcke seit 2026-05-30 (nachgeführt 2026-07-20)
 

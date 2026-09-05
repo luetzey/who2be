@@ -1,6 +1,97 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-05 (17. Lauf — Cloud-Launch-Readiness-Inventar #434)_
+_Stand: 2026-09-05 (19. Lauf — Backlog-Aufbereitung, Reihenfolge + #435)_
+
+## Backlog aufbereitet, #438 vorgezogen (2026-09-05, 19. Lauf — nur GitHub + Doku)
+
+Alle acht offenen Issues ohne `agent-ready` gegen die Norm geprueft. Ergebnis:
+**kein einziges wurde neu startbar** — und das ist der richtige Befund, nicht
+ein zu duenner Lauf. Zwei sind `human-only` (#454, #338), eines ist das
+Queue-Issue selbst (#442), vier sind `size/M`-Tracking (#428, #402, #431,
+#435) und werden nach der Norm durch Zuschnitt startbar, nicht durch
+Nachtragen von Feldern; #436 haengt an einer offenen Architektur-Weiche.
+
+**Ein Beleg-Fehler in #435 korrigiert (Body ersetzt, Original archiviert).**
+Der GoTrue-Pin steht an drei Stellen, nicht an zwei: `docker-compose.yml:50`,
+`deploy/hetzner/supabase/docker-compose.yml:63` und
+`deploy/dokploy/docker-compose.yml:81`. Ist-Zustand, W1-Text, Scope-In-Liste
+und AC 1 nannten uebereinstimmend nur zwei. Ein Agent haette W1 danach
+geschnitten und die dritte stehen lassen — und weil `dokploy` in `.github/`
+und `scripts/` nicht vorkommt, meldet das kein Check, nur der Review. Das
+Issue traegt jetzt eine fuenfte vorentschiedene Weiche mit der uebertragbaren
+Regel: wer einen Image-Pin hebt, hebt alle Vorkommen oder begruendet die
+Abweichung im PR.
+
+**#438 von Platz 10 auf Platz 7.** Die Owner-Vorgabe lautet „nach dem
+Cloud-Launch-Block" — sie bindet #438 an den Block, nicht ans Listenende.
+#430 und #427 gehoeren nicht zum Block, sind Flaeche und oeffnen nichts;
+#438 ist Fundament und oeffnet #431 W1-W4. Datei-disjunkt zu beiden geprueft
+(`components/ui/sheet.tsx` + `@/hooks` + Design-Sprache gegen `config.ts`/
+`LoginPage.tsx` bzw. OpenAPI-Artefakte). Die Gegenlesart steht als
+Rueckfallregel im Queue-Issue — sie ist vertretbar, nur nicht die, die aus
+den fuenf Kriterien folgt.
+
+**PROJECT.md §Reihenfolge war gedriftet:** die Tabelle listete #440/#434 als
+offen und kannte die sechs Kinder von #428 nicht. Da die Arbeitsteilung
+„Queue-Issue traegt die Reihenfolge, PROJECT.md die Begruendung" lautet, war
+genau die Quelle veraltet, die den Widerspruchsfall aufloest. Zusaetzlich
+zeigte AC 1 auf „#428 WP-4"; der reale Deploy ist seit der Zerlegung #454
+(WP-7), WP-4 ist der Kettentest.
+
+**Offen und blockierend: #436.** Zwei maschinenlesbare Fehler-Vokabulare
+nebeneinander (`ApiProblem.reason` vs. neuer `ErrorCode`) — Owner-Weiche,
+drei Optionen stehen als Kommentar am Issue. Solange sie offen ist, hat #402
+keine startbare Welle.
+
+**Neue Pflege-Regel 9 im Queue-Issue:** eine Position, die nicht aus den fuenf
+Kriterien folgt, gehoert in den Praeferenz-Abschnitt. Wer sie dort nicht
+notiert, macht ein Urteil zu einer scheinbaren Ableitung.
+
+**Zwei Laeufe parallel — hier zusammengefuehrt.** Der 18. Lauf (unten, Session
+`012vSCkGuUtrf5TkckHUoU4i`, PR #455) und dieser hier haben denselben Auftrag
+unabhaengig bearbeitet und beide `.github/PROJECT.md` §Reihenfolge sowie diesen
+Snapshot angefasst — beide sauber gegen `main`, aber garantiert kollidierend
+beim zweiten Merge. Statt das dem Zweitmerger zu ueberlassen, ist der Branch
+von #455 hier hineingemergt: die Reihenfolge-Tabelle stammt aus diesem Lauf
+(sie traegt #438 auf Platz 7 und die Praeferenz-Ausweisung), die Zusaetze des
+18. Laufs (Disjunktheits-Hinweis #450, ADR-0035/0052 bei #430, Zeilennummern
+der GoTrue-Pins) sind uebernommen. **#455 kann damit geschlossen werden**, ohne
+dass Inhalt verloren geht. Beide Laeufe haben die drei GoTrue-Pin-Stellen
+unabhaengig voneinander gefunden — der Befund ist damit doppelt belegt.
+
+## Backlog gegen die Norm geprueft, #436 blockiert (2026-09-05, 18. Lauf)
+
+Vollstaendiger Vorbereitungslauf ueber alle offenen Issues; Plan-Datei
+`.claude/plan/2026-09-05-1625_backlog-vorbereitungslauf.md`. Audit ueber drei
+parallele Sub-Agents (Sonnet), jeder uebernommene Befund vor dem Schreiben
+selbst am Repo nachgeprueft; eine gemeldete „offene Weiche" (#429 ↔ #430)
+verworfen, weil #442 sie laengst traegt.
+
+**Zehn von zwoelf Issues erfuellen die Norm ohne Abstriche.** Der eine Fund mit
+Substanz: **#436** plant `packages/models/src/who2be_models/errors.py` als
+Neuanlage, obwohl die Datei seit WP-2/#254 existiert und mit `ApiProblem.reason`
+bereits einen stabilen maschinenlesbaren Fehlerschluessel traegt
+(`packages/models/src/who2be_models/__init__.py:29`). Dahinter steht die
+unbeantwortete Frage, ob Who2Be zwei Fehler-Vokabulare nebeneinander bekommt —
+gehoert in ADR-0051, also in genau das Dokument, das #436 schreiben soll.
+`agent-ready` abgenommen, `needs-decision` gesetzt, drei Optionen als Kommentar.
+Folge: **#402 hat derzeit keine startbare Welle.**
+
+**Vier falsche Zeiger korrigiert** (je selbst verifiziert): #450 greppte in der
+Verifikation auf `später`, die Datei ist durchgehend ASCII
+(`grep -c '[äöüÄÖÜß]' deploy/hetzner/README.md` → 0) — ein Kriterium, das nichts
+prueft; #453 `playwright.config.ts:23` → `:27`; #429 `.env.example:262-273` →
+`:266-273` (zwei Stellen); #430 `LoginPage.tsx:25-50` → `:83-128, 208-269`.
+
+**Reihenfolge:** #434 abgehakt (PR #448 gemergt), #427 vor das blockierte #436
+gezogen (Rueckfallregel im Queue-Issue notiert), Wellen neu geschnitten,
+`.github/PROJECT.md` §Reihenfolge kannte #449 bis #454 noch nicht — nachgezogen.
+
+**Offen beim Owner:** Weiche auf #436; PR #443 (Draft des Vorlaufs) ist
+inhaltlich ueberholt und kann geschlossen werden; zwei belegte Funde ohne Issue
+(Typecheck-Drift `tsc -b` vs. `tsc --noEmit` an elf Doku-Stellen, bekannt als
+FE-9 seit Juli; kein Drift-Waechter fuer `docs/reference/openapi.json`).
+
 
 ## Cloud-Launch-Readiness-Inventar liegt vor (2026-09-05, 17. Lauf, #434)
 
