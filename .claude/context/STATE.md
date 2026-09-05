@@ -1,6 +1,28 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-05 (15. Lauf — Backlog gegen die Norm geprueft, Reihenfolge-Tabelle angeglichen)_
+_Stand: 2026-09-05 (16. Lauf — CI-Doku-Gate #440)_
+
+## CI ueberspringt die schweren Jobs bei reinen Doku-PRs (2026-09-05, 16. Lauf, #440)
+
+Erstes Paket der Backlog-Warteschlange (#442). `ci.yml` hatte keinen
+Pfadfilter: eine Aenderung an zwei Markdown-Dateien fuhr Postgres,
+Compose-Stack und Playwright — 7:42 fuer einen Apparat, der daran nichts
+pruefen kann. Zehn der letzten zwanzig Commits sind reine Doku-/Memory-Commits,
+weil jeder Agenten-Lauf STATE.md fortschreibt.
+
+Neuer Job `changes` klassifiziert den PR-Diff per `git diff` (keine
+Fremd-Action, derselbe Checkout-Pin wie die uebrigen fuenf Stellen);
+`python`, `web`, `compose-smoke` und `e2e` haengen per `needs:`/`if:` daran.
+`audit` und CodeQL laufen immer. Begruendung der Gate-Job-Form statt
+`paths-ignore`: siehe DECISIONS 2026-09-05.
+
+Verifikation: YAML parst, Gating aus dem geparsten YAML gegengelesen,
+Klassifikation gegen sieben Faelle durchgespielt (inkl. gemischt und
+`nur ci.yml` — der Gate kann sich nicht selbst stilllegen). **Diff-Coverage
+ist hier nicht anwendbar** (kein Test fuehrt `ci.yml` aus); der Nachweis sind
+vier Beleg-Runs am PR. Plan + Uebergabe-Bericht:
+`.claude/plan/2026-09-05-1305_ci-doku-gate.md`.
+
 
 ## Backlog gegen die Norm geprueft, Tabelle angeglichen (2026-09-05, 15. Lauf)
 
