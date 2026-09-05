@@ -1,6 +1,73 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-05 (13. Lauf — Backlog-Refinement aller offenen Issues gegen die Norm „Agent-ready Arbeitspaket“; 11./12. Lauf: #427, #428 s. u.)_
+_Stand: 2026-09-05 (14. Lauf — Reihenfolge des Backlogs in .github/PROJECT.md verankert)_
+
+## Backlog-Reihenfolge verankert, Board bleibt Owner-Schritt (2026-09-05, 14. Lauf)
+
+Anlass: die Frage, ob ein frisch gestarteter Agent bei „bearbeite ein Issue"
+die richtige Reihenfolge kennt. Antwort war nein — sieben `agent-ready`-Issues,
+alle `size/S`, kein Milestone (0 von 12), kein Board, keine Prioritaets-Achse,
+und `.github/PROJECT.md` beschrieb noch das abgeschlossene v0.1.0-Vorhaben
+(#338–#341). Die Reihenfolge stand nur als Prosa in einzelnen Issue-Bodies.
+
+Owner-Wahl war Weg C (Projects-Board + `project.json`). **Die Board-Haelfte ist
+mit dem Agenten-Toolset nicht baubar** (verifiziert): der GitHub-MCP-Server
+dieser Session stellt keine Projects-Tools bereit (`projects_list`/`_get`/
+`_write` fehlen, obwohl die Tool-Bindung sie nennt), `list_issue_fields`
+liefert `[]` und es gibt kein Anlege-Tool dafuer, `gh` ist nicht verfuegbar.
+Issue-*Types* existieren (Task/Bug/Feature), druecken aber Art aus, nicht
+Reihenfolge.
+
+Umgesetzt wurde deshalb die repo-seitige Haelfte, die auch ohne Board traegt:
+
+- **`.github/PROJECT.md` neu geschrieben:** aktives Vorhaben „Cloud-Launch &
+  Alltagstauglichkeit"; neuer Abschnitt **Reihenfolge** als erklaerte Quelle
+  der Wahrheit (1 #440, 2 #429, 3 #434, 4 #430, 5 #436, 6 #427, 7 #438) mit den
+  zwei harten Abhaengigkeiten (#429 blockiert #428 WP-4; #434 blockiert den
+  Zuschnitt von #428 WP-2..5); Tracking-Issues, #435 und #338 ausserhalb der
+  Nummerierung. Das alte v0.1.0-Vorhaben ist nach „Abgeschlossen" gewandert.
+- **Regel gegen das Veralten:** ein neues `agent-ready`-Issue ohne Platz in der
+  Liste gilt als unsichtbar; das steht als Acceptance-Kriterium in der Datei.
+- **`.claude/project.example.json`** um `github_repo` und `project_number`
+  ergaenzt, damit die spaetere (gitignorede) `project.json` das richtige Schema
+  hat. Bisher trug die Vorlage nur Notion-Schluessel.
+
+## Reihenfolge lebt im `backlog-queue`-Issue #442 (2026-09-05, Variante A)
+
+Owner-Ziel: Agenten sollen die Reihenfolge **selbst** pflegen koennen. Das
+Board taugt dafuer nicht — es ist fuer Agenten weder lesbar noch schreibbar.
+Werkzeug-Inventar (gezaehlt, nicht geschaetzt): schreibbar sind Sub-Issue-
+Reihenfolge (`reprioritize`), Labels, Body/Titel/Status, Issue-Type und die
+Zuweisung bestehender Milestones; **nicht** schreibbar sind Projects-Board,
+Issue-Fields (leer, nicht anlegbar) und Issue-Dependencies (`blocked_by`/
+`blocking` sind im Payload sichtbar, es gibt kein Schreib-Tool).
+
+Gewaehlt wurde Variante A: **ein Queue-Issue mit geordneter Task-Liste**
+(#442, Label `backlog-queue`). Verworfen: Sub-Issues unter einem Queue-Parent
+(ein Issue hat nur einen Parent — #434/#436/#438 haetten ihre Epic-Zuordnung
+zu #428/#402/#431 verloren) und Queue-Labels (nur grobe Eimer, keine Sequenz,
+keine Begruendung).
+
+- **Stabiler Griff ist das Label, nicht die Nummer:**
+  `list_issues(state=OPEN, labels=["backlog-queue"])` liefert genau eines.
+  Fehlt es, baut der Agent es nach dem Muster in PROJECT.md §Reihenfolge neu.
+- **Arbeitsteilung:** #442 traegt die Reihenfolge (umsortieren = ein
+  `issue_write`, kein PR), PROJECT.md die Begruendung. Bei Widerspruch gilt
+  fuer die Reihenfolge das Issue. PROJECT.md fuehrt deshalb keine
+  Nummerierung mehr, sondern eine Tabelle „warum die Reihenfolge so aussieht".
+- **Verifiziertes Risiko ausgeraeumt:** die Task-Listen-Referenzen in #442
+  erzeugen KEINE Hierarchie — #434 haengt weiter unter #428, #438 unter #431,
+  #442 hat keine Sub-Issues (per `get_parent`/`get_sub_issues` geprueft).
+- Label `backlog-queue` entstand durch Zuweisung und hat wie die uebrigen
+  Delegations-Labels keine Description (Owner-Klick).
+
+Board inzwischen vom Owner angelegt: https://github.com/users/luetzey/projects/3
+(`project_number: 3`), in PROJECT.md eingetragen. **Auch nach der Anlage bleibt
+es fuer Agenten unsichtbar** — erneut geprueft, weder Projects-Tools noch
+Issue-Fields; Pflege des Board-Status ist Handarbeit. Das Board ist laut Norm
+eine Sicht auf die Liste, nicht ihre Quelle — PROJECT.md bleibt die Heimat, und
+zwar zwingend, weil `project.json` gitignored ist und in einer Cloud-Session nie
+existiert.
 
 ## Backlog-Refinement (2026-09-05, 13. Lauf — nur GitHub, kein Code)
 
