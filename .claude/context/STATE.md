@@ -1,6 +1,39 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-08-23 (9. Lauf — Persona-Lookup per Name)_
+_Stand: 2026-09-05 (10. Lauf — Backlog-Issues #427–#431 angelegt)_
+
+## Backlog-Issues aus dem Owner-Briefing (2026-09-05, nur GitHub, kein Code)
+
+Fünf Issues nach Playbook „GitHub-Artefakt anlegen & pflegen" (Recherche
+per Explore-Subagents, Fundstellen datei:zeile im Body, Duplikat-Suche
+offen+geschlossen: 0 Treffer):
+
+- **#427** Agents als Favoriten (Stern) — Design-Weiche A (per-User-Tabelle
+  `agent_favorite`, Migration 0083) / B (`is_pinned` workspace-weit) /
+  C (nur Client); Empfehlung A.
+- **#428** Cloud-Edition launchen (Tracking, `epic`): Code ist fertig und
+  ohne TODO, die Lücken sind operativ — Deploy-Job überspringt sich still
+  (`deploy.yml:83`, `DEPLOY_HOST` fehlt), `smoke.sh` ohne Billing-Checks,
+  Mollie-Keys leer. WP-1 Readiness-Inventar zuerst, WP-4 setzt #429 voraus.
+- **#429** „Coming soon"-Modus per `WHO2BE_LAUNCH_MODE` — heute drei
+  unabhängige Signup-Schalter (`GOTRUE_DISABLE_SIGNUP`,
+  `WHO2BE_SIGNUP_DISABLED`, `VITE_WHO2BE_SIGNUP_DISABLED`) und stilles
+  `Navigate` statt Hinweisseite (`SignupPage.tsx:73-75`).
+- **#430** Login-Komfort: Ursache des 2FA-Prompts pro Tab ist die
+  `sessionStorage`-Session (`lib/supabase.ts:5-39`, dokumentiert in
+  `docs/mfa-admin.md:91-105`); WP-A „Browser merken" (opt-in, 12 h Max-Age,
+  Security-Review Pflicht), WP-B Passkeys als GoTrue-WebAuthn-Zweitfaktor
+  (Support in `gotrue:v2.158.1` zu verifizieren).
+- **#431** Mobile-Tauglichkeit (Tracking, `epic`): 25/374 tsx-Dateien mit
+  Breakpoints, kein Sheet/Drawer, Nav unter `sm` als Inline-Liste
+  (`AppShell.tsx:63,90-105`), Playwright nur Desktop Chrome. Wellen W0–W4.
+
+Verdrahtung: Labels aus dem Bestand (`enhancement`, `web`, `backend`,
+`epic`); kein Milestone/Board gesetzt — `.claude/project.json` fehlt, kein
+Projekt-Board bekannt (Owner-Entscheidung). Playbook-Feedback abgesetzt:
+`fetch_resource(block_ids=[Heading])` liefert nur den Heading-Block, nicht
+die Section — Schritt 3 des Playbooks ist so nicht ausführbar.
+
 
 ## Persona-Lookup per Name: serverseitiger Filter (2026-08-23, Issue #415)
 
