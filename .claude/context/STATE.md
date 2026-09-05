@@ -1,6 +1,27 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-05 (10. Lauf — Backlog-Issues #427–#431 angelegt)_
+_Stand: 2026-09-05 (11. Lauf — #427 per Issue-Refinement agent-ready)_
+
+## Issue-Refinement #427 → `agent-ready` (2026-09-05, nur GitHub, kein Code)
+
+Erster Lauf des Playbooks „Issue-Refinement" (Coder-Modus Refiner, Norm
+„Agent-ready Arbeitspaket"). Body von #427 ersetzt (Original wörtlich als
+Archiv-Kommentar), Titel in den Ergebnis-Modus, Labels `agent-ready` +
+`size/S` (beide beim Setzen neu entstanden — grau, ohne Description; die
+Vergabe-Regel aus der Norm steht noch nicht in der Label-Description).
+
+Im Repo belegte Weichen (Auszug, vollständig im Issue): Datenmodell A
+(`agent_favorite` pro User — die Owner-AC „pro User"/„Server-persistiert"
+schließen B/C aus); **kein FK auf den User** (keine Tabelle referenziert
+GoTrue-User, vgl. `0007`/`0049`) → User-Bereinigung über
+`purge_account_data` statt CASCADE; RLS/Grants nach Muster 0066/0079;
+`is_favorite` nur im List-Enrichment (`list_meta` + `AgentListMeta`);
+PUT/DELETE `…/agents/{id}/favorite` → 204, human-only (403 für
+agent-gebundene Tokens), kein `require_role`; Filter-Chip „Nur Favoriten"
+raus (Review-Grenze). Befund am Rande: CLAUDE.md nennt `npx tsc --noEmit`,
+CI fährt `npx tsc -b`.
+
+Kein Milestone/Board (unverändert: `.claude/project.json` fehlt).
 
 ## Backlog-Issues aus dem Owner-Briefing (2026-09-05, nur GitHub, kein Code)
 
