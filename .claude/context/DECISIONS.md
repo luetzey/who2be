@@ -1205,3 +1205,20 @@ bleiben)._
   `deploy/hetzner/scripts/deploy.sh:50` baut immer lokal. Overlay und Skript müssen
   umgestellt werden — als WP-3 im Zuschnitt-Vorschlag zu #434 erfasst, nicht nur ein
   Runbook-Abschnitt.
+
+## 2026-09-05 — Blockiertes Paket haelt kein startbares auf (#427 vor #436)
+- **Entscheidung:** #436 verliert `agent-ready` und bekommt `needs-decision`, weil
+  Vorentschieden Nr. 2 `packages/models/src/who2be_models/errors.py` als Neuanlage
+  plant, obwohl die Datei seit WP-2/#254 existiert und mit `ApiProblem.reason`
+  bereits einen stabilen maschinenlesbaren Fehlerschluessel traegt. #427 rueckt in
+  der Warteschlange davor.
+- **Begruendung:** Die Kollision der beiden in den OpenAPI-Artefakten verlangt nur
+  Trennung, nicht eine Richtung. Solange #436 auf eine Owner-Entscheidung wartet,
+  waere die alte Reihenfolge eine Sperre ohne Gegenwert. Rueckfallregel steht im
+  Queue-Issue: wird #436 zuerst freigegeben, gilt wieder #436 → #427.
+- **Als Regel 8 im Queue-Issue verankert:** ein Paket, das auf eine
+  Owner-Entscheidung wartet, bleibt in der Liste stehen und wird markiert — es wird
+  nicht stillschweigend entfernt.
+- **Offen:** Die Weiche selbst (ein Fehler-Vokabular oder zwei) ist nicht
+  entschieden; drei Optionen stehen als Kommentar an #436. Solange sie offen ist,
+  hat #402 keine startbare Welle.
