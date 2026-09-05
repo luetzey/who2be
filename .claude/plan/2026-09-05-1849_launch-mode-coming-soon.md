@@ -186,15 +186,25 @@ und `LoginPage.tsx` ist **jede** Funktion von Tests ausgefuehrt (`f`-Map der
 v8-Coverage: 6/6, 1/1, 10/10, 10/10 — keine ungedeckte Funktion). Es bleibt
 keine namentliche Luecke auf Funktionsebene.
 
-Nicht automatisiert geprueft und deshalb manuell nachzuholen:
+**Nach dem CI-Lauf auf `d25ea27` eingekuerzt.** Der Job `compose-smoke` fuehrt
+laut `.github/workflows/ci.yml` `cp .env.example .env` → `docker compose up -d
+--build --wait` → `bash scripts/smoke.sh` aus und ist gruen. Damit ist
+maschinell belegt, was hier zuerst als „nur manuell pruefbar" stand:
 
-1. **Akzeptanzkriterium 1 gegen einen echten Stack** — `docker compose up -d`
-   mit `WHO2BE_LAUNCH_MODE=coming_soon` + `GOTRUE_DISABLE_SIGNUP=true`, dann
+- **Der neue Smoke-Schritt 7 laeuft und ueberspringt sich im `open`-Modus
+  sauber** — andernfalls waere der Job rot. Das ist die `open`-Haelfte von
+  Akzeptanzkriterium 4.
+- **Die Compose-Durchreichung bricht den Stack nicht** — er kam mit der neuen
+  Zeile healthy hoch (`--wait`), inklusive `web`-Container.
+
+Offen bleibt nur, was ohne Browser und ohne gesetzten Modus nicht geht:
+
+1. **Akzeptanzkriterium 1 gegen einen echten Stack im `coming_soon`-Modus** —
+   `WHO2BE_LAUNCH_MODE=coming_soon` + `GOTRUE_DISABLE_SIGNUP=true`, dann
    `/signup` im Browser und `curl` gegen `/auth/v1/signup` (erwartet `422`).
-   Die Unit-Tests belegen die Logik, nicht die Verdrahtung durch den Container.
-2. **Akzeptanzkriterium 4** — `bash scripts/smoke.sh` einmal in beiden Modi:
-   im `open`-Modus darf die Probe nicht laufen, im `coming_soon`-Modus muss sie
-   bei fehlendem `GOTRUE_DISABLE_SIGNUP` abbrechen.
+   CI faehrt den `open`-Modus, weil `.env.example` den Default traegt.
+2. **Der `coming_soon`-Zweig von Akzeptanzkriterium 4** — `smoke.sh` muss
+   abbrechen, wenn der Modus gesetzt ist, GoTrue aber nicht `422` liefert.
 3. **Darstellung der Hinweisseite bei 375 px** (Sichtpruefung; Mobile-E2E kommt
    mit #431).
 
