@@ -59,28 +59,42 @@ Tabelle unten und den offenen `agent-ready`-Issues.
 **Die Zeilen stehen in der Reihenfolge der Warteschlange** — wer das
 Queue-Issue nach dem Muster oben neu baut, übernimmt sie von oben nach unten.
 
-Harte Blocker gibt es nur zwei (#429, #434). Daneben erzwingen zwei
-Datei-Kollisionen eine Reihenfolge, ohne echte Blocker zu sein (#430 nach
-#429, #427 nach #436); der Rest ist Priorität. Die Kollisionsdetails stehen
-im Queue-Issue, nicht hier.
+Harte Blocker gibt es drei (#429, #450, #451 — alle drei sperren #454).
+Daneben erzwingen Datei-Kollisionen eine Reihenfolge, ohne echte Blocker zu
+sein (#430 nach #429, #453 nach #449, #452 nach #451); der Rest ist
+Priorität. Die Kollisionsdetails stehen im Queue-Issue, nicht hier.
 
 | Issue | Rolle in der Reihenfolge |
 |---|---|
-| #440 CI überspringt Doku-Jobs | **Präferenz, keine Ableitung.** Blockiert nichts, öffnet nichts — nach „Fundament vor Fläche“ gehörte es hinter #434/#429/#436. Steht vorn, weil die Ersparnis mit jedem Lauf anfällt statt einmal und das folgende Paket (#434, reines `.claude/**`) sie sofort realisiert. Wer den Cloud-Launch strikt zuerst will, schiebt es auf Platz 4. |
-| #434 Cloud-Readiness-Inventar | **Harte Abhängigkeit: blockiert den Zuschnitt von #428 WP-2 bis WP-5** — gibt vier Pakete frei. Inventar vor Zuschnitt; read-only, kein Code, und bei Gleichstand mit #429 das kleinere. |
-| #429 Coming-soon-Modus | **Harte Abhängigkeit: blockiert #428 WP-4.** Die Deploy-Verifikation braucht eine erreichbare URL, hinter der noch keine Fremden Konten anlegen können. |
-| #436 Fehlercodes W0 (ADR-0051) | Fundament vor Fläche: öffnet die Router-Wellen W1–Wn von #402. Kein Blocker, aber **vor #427** — beide regenerieren dieselben OpenAPI-Artefakte. |
-| #430 Angemeldet bleiben (12 h) | Fläche, kein Blocker. **Nach #429**, weil beide `config.ts` und die Login-Seite anfassen. Vor #427 nur wegen AC 3 oben — teils Präferenz, umgekehrt vertretbar. Security-Review ist Pflicht. |
-| #427 Agent-Favoriten | Fläche, öffnet nichts. **Nach #436** (Kollision in den OpenAPI-Artefakten) — nicht kopplungsfrei, anders als die Erstfassung dieser Tabelle behauptete. |
+| #429 Coming-soon-Modus | **Harte Abhängigkeit: blockiert #454.** Die Deploy-Verifikation braucht eine erreichbare URL, hinter der noch keine Fremden Konten anlegen können. |
+| #450 Registry-Pull als Regelweg | **Harte Abhängigkeit: blockiert #454.** Ohne den Umbau baut die Prod-Box ein anderes Artefakt, als die CI geprüft hat. Datei-disjunkt zu allem außer den Sammelpunkten. |
+| #451 Kettentest Checkout→Webhook→Entitlement→Limit | **Harte Abhängigkeit: blockiert #454** — der Prod-Smoke braucht den Billing-Check. Reine Testarbeit, kein Produktivcode. |
+| #449 Tarife bewerben das Kontingent | **Vor #453** (Datei-Kollision im Billing-Panel). Owner-Entscheidung vom 2026-09-05: Gating läuft über Quota, damit ist die heutige Feature-Werbung ungedeckt. |
+| #452 Webhook-Härtung | **Nach #451** (beide fassen `packages/billing/tests/` an). Der Befund ist geprüft und heute nicht ausnutzbar — Härtung, kein Notfall. |
+| #453 E2E-Journey „Upgrade auf Pro“ | **Nach #449**, sonst testet die Journey eine Oberfläche, die gerade umgebaut wird. |
+| #430 Angemeldet bleiben (12 h) | Fläche, kein Blocker. **Nach #429**, weil beide `config.ts` und die Login-Seite anfassen. Vor #427 wegen AC 3 oben — teils Präferenz, umgekehrt vertretbar. Security-Review ist Pflicht; revidiert ADR-0035, braucht also eine ablösende ADR-0052. |
+| #427 Agent-Favoriten | Fläche, öffnet nichts. Stand bis 2026-09-05 **nach #436** (Kollision in den OpenAPI-Artefakten); seit #436 auf `needs-decision` steht, rückt es davor — ein blockiertes Paket darf ein startbares nicht aufhalten. Wird #436 zuerst freigegeben, gilt wieder die alte Reihenfolge. |
+| #436 Fehlercodes W0 (ADR-0051) | **`needs-decision`, nicht starten.** Fundament vor Fläche — öffnet die Router-Wellen W1–Wn von #402, aber Weiche 2 des Issues plant `packages/models/src/who2be_models/errors.py` als Neuanlage, obwohl die Datei mit `ApiProblem`/`ProblemReason` bereits einen maschinenlesbaren Fehlerschlüssel trägt. Drei Optionen stehen als Kommentar am Issue. |
 | #438 Responsive-Fundament W0 | Owner-Vorgabe: nach dem Cloud-Launch-Block — schlägt hier „Fundament vor Fläche“, obwohl es #431 W1 bis W4 öffnet. |
+
+Erledigt und deshalb aus der Tabelle genommen: **#440** (CI überspringt
+Doku-Jobs, PR #445) und **#434** (Cloud-Readiness-Inventar, PR #448) — beide
+am 2026-09-05 gemergt. #434 hat den Zuschnitt von #449 bis #454 freigegeben.
 
 Danach oder parallel, außerhalb der Warteschlange:
 
 - **#428, #402, #431** — Tracking-Issues (`size/M`). Sie folgen ihren Kindern
-  und werden erst nach deren Abschluss neu zugeschnitten. #428 trägt zusätzlich
-  `needs-decision` (zwei offene Owner-Weichen, siehe dort).
+  und werden erst nach deren Abschluss neu zugeschnitten. #428 ist am
+  2026-09-05 in sechs Kinder (#449 bis #454) zerlegt worden; seine beiden
+  Owner-Weichen sind beantwortet und `needs-decision` ist entfernt.
+- **#454 Cloud-Deploy und Testkauf** (`human-only`) — WP-7 von #428, die
+  letzte Stufe: Repo-Variablen, Host-Secrets, Mollie-Konto, DNS, ein Kauf im
+  Browser. Kein Schritt davon ist delegierbar. Voraussetzungen: #429, #450,
+  #451.
 - **#435 Passkeys** (`size/M`) — nach #428, #429 und #430. Vorbedingung ist ein
-  GoTrue-Image ≥ v2.163.0; das Repo pinnt v2.158.1.
+  GoTrue-Image ≥ v2.163.0; das Repo pinnt v2.158.1 an drei Stellen
+  (`docker-compose.yml:50`, `deploy/hetzner/supabase/docker-compose.yml:63`,
+  `deploy/dokploy/docker-compose.yml:81`).
 - **#338 Owner-Checkliste** (`human-only`) — O2 (Branch-Protection,
   Merge-Strategie, Description, Topics) und O3 (CLA-Assistant). Jederzeit
   parallel, kein Agent claimt das.
