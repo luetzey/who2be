@@ -1,6 +1,42 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-05 (19. Lauf — Backlog-Aufbereitung, Reihenfolge + #435)_
+_Stand: 2026-09-05 (20. Lauf — Cloud-Deploy zieht aus der Registry, #450)_
+
+## Cloud-Deploy zieht das CI-Image aus der Registry (2026-09-05, 20. Lauf, #450)
+
+Erstes Paket der Warteschlange, das dieser Lauf abgearbeitet hat (#429 lag bei
+einer parallelen Session). WP-3 von #428. Umsetzung ueber einen Sonnet-Sub-Agent
+(klar umrissenes Paket, fuenf Weichen im Issue entschieden), Plan-Datei
+`.claude/plan/2026-09-05-1930_cloud-registry-pull.md`.
+
+`api` und `migrate` ziehen jetzt `ghcr.io/luetzey/who2be-api-cloud:${API_IMAGE_TAG}`
+statt auf der Prod-Box zu bauen; `deploy.sh` pullt im Cloud-Zweig `api migrate web`
+(vorher nur `web`); `RUNBOOK.md` traegt die Sektion „Notfallpfad: Registry nicht
+erreichbar" mit Handkommandos.
+
+**Zwei Befunde am Issue selbst, beide belegt:**
+
+1. **Ein Verifikations-Kommando war unerfuellbar.** Das Issue verlangte
+   `grep -c 'pull_policy: build'` → 0, seine eigenen Kriterien nennen aber nur
+   `api` und `migrate`. Das dritte Vorkommen gehoert `web` — und `web` kann
+   nicht auf Pull umgestellt werden: die Build-Matrix
+   (`.github/workflows/deploy.yml:17-44`) baut `api`, `web`, `mcp`, `api-cloud`,
+   aber **kein** `web-cloud`, und die Billing-UI wird zur Compile-Zeit
+   tree-geshaked (ADR-0029). Richtiger Wert ist 1.
+2. **AC 5 ist funktional, nicht woertlich erfuellt.** Es verlangt das
+   Registry-Image „statt eines Build-Kontexts"; der `build:`-Block bleibt bei
+   `api`/`migrate` stehen, weil der Runbook-Notfallpfad
+   (`docker compose build api migrate`) sonst die On-Prem-Stage ohne Billing
+   baute. Entscheidend ist, dass `pull_policy: build` weg ist — der Regelweg ist
+   damit der Pull. Ein stiller Lokal-Build bei Registry-Ausfall ist
+   ausgeschlossen, weil `deploy.sh:30` `set -euo pipefail` faehrt und der
+   explizite `pull`-Schritt den Lauf abbricht (Weiche 3 des Issues gewahrt).
+
+**Nebenfund, eigenes Issue:** `deploy/hetzner/.env.example` fehlt
+`MINIO_ROOT_PASSWORD`, das `docker-compose.yml:93` zwingend fordert (`:?`).
+`docker compose config` gegen diese Vorlage scheitert deshalb — unabhaengig von
+#450, aber es macht AC 5 in der gegebenen Form unpruefbar. Verifiziert wurde mit
+der Variable als Shell-Env, ohne die Datei zu aendern.
 
 ## Backlog aufbereitet, #438 vorgezogen (2026-09-05, 19. Lauf — nur GitHub + Doku)
 

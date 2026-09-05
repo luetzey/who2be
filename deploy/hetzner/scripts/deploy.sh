@@ -6,17 +6,22 @@
 #   - onprem: ein Compose-File (docker-compose.yml). Zieht who2be-{api,web,mcp}
 #     vom SHA und faehrt sie hoch.
 #   - cloud:  Basis + Overlay (docker-compose.yml + docker-compose.cloud.yml).
-#     Das Overlay (PR #181) pinnt `pull_policy: build` + `target: runtime-cloud`
-#     fuer api+migrate — der Cloud-API-Build entsteht also auf dem Host aus dem
-#     ausgecheckten SHA (das in CI gepushte `who2be-api-cloud:<sha>` dient der
-#     Paritaet/Verifikation; das On-Prem-`who2be-api` bleibt unangetastet). `web`
-#     hat keine Cloud-Variante und wird wie gewohnt aus GHCR gezogen.
+#     Das Overlay zieht api+migrate als fertiges Image aus GHCR
+#     (`ghcr.io/luetzey/who2be-api-cloud:<sha>`, Target `runtime-cloud`,
+#     Billing-Paket im Artefakt) statt sie auf dem Host zu bauen — Prod laeuft
+#     damit auf demselben Artefakt, das CI gebaut und geprueft hat
+#     (Entscheidung 2026-09-05, siehe .claude/context/DECISIONS.md). Nur `web`
+#     hat keine Cloud-Variante (kein `web-cloud`-Image in der Build-Matrix,
+#     ADR-0029) und baut weiterhin lokal (`pull_policy: build` im Overlay).
+#     Ist GHCR beim Deploy nicht erreichbar: RUNBOOK.md
+#     "Notfallpfad: Registry nicht erreichbar" (Host-Build von Hand).
 #
 # Schritte:
 #   1. Repo auf den uebergebenen SHA wechseln (damit Compose-Files und
 #      .env zu den gepullten/gebauten Images passen).
 #   2. Image-Tags in deploy/hetzner/.env auf den SHA setzen.
-#   3. docker compose pull (+ Cloud: lokaler runtime-cloud-Build) und up -d --wait.
+#   3. docker compose pull (Cloud: api+migrate aus GHCR, web weiterhin lokal
+#      gebaut) und up -d --wait.
 #   4. Status ausgeben.
 #
 # Lokal manuell aufrufbar fuer Rollback:
@@ -55,10 +60,13 @@ fi
 COMPOSE=(docker compose "${COMPOSE_FILES[@]}" --env-file "$ENV_FILE")
 
 if [ "$EDITION" = "cloud" ]; then
-    # api+migrate baut das Overlay lokal (pull_policy: build, runtime-cloud).
-    # Nur `web` aus GHCR ziehen — es hat keine Cloud-Variante.
-    echo "==> Pulling web (cloud)"
-    "${COMPOSE[@]}" pull web
+    # api+migrate ziehen jetzt who2be-api-cloud aus GHCR (Registry-Pull statt
+    # Host-Build). `web` hat weiterhin kein Cloud-Image und traegt
+    # `pull_policy: build` im Overlay — der Pull-Versuch dafuer wird von
+    # Compose uebersprungen/faellt weich auf den lokalen Build zurueck, der
+    # anschliessende `up` baut es wie gewohnt.
+    echo "==> Pulling api, migrate, web (cloud)"
+    "${COMPOSE[@]}" pull api migrate web
 else
     echo "==> Pulling images"
     "${COMPOSE[@]}" pull api web migrate

@@ -11,12 +11,12 @@
 #     -f deploy/hetzner/who2be/docker-compose.yml \
 #     -f deploy/hetzner/who2be/docker-compose.cloud.yml \
 #     --env-file deploy/hetzner/.env \
-#     build api migrate web        # Cloud-Image (runtime-cloud) lokal bauen
+#     build web                    # Cloud-Web-Bundle lokal bauen (kein GHCR-Image, s.u.)
 #   docker compose \
 #     -f deploy/hetzner/who2be/docker-compose.yml \
 #     -f deploy/hetzner/who2be/docker-compose.cloud.yml \
 #     --env-file deploy/hetzner/.env \
-#     up -d --wait
+#     up -d --wait                 # api+migrate zieht Compose automatisch aus GHCR
 #
 # Ohne Overlay laeuft der On-Prem-Kern unveraendert (kein Billing, RLS-Bypass,
 # In-Memory-Rate-Limit) — das Default-Verhalten bleibt also erhalten.
@@ -26,32 +26,44 @@
 #   + set-app-role-password — One-Shot, setzt das `who2be_app`-Passwort
 #                 (Rolle kommt aus Migration 0036) — danach verbindet die API
 #                 als nicht-privilegierte Rolle mit AKTIVER RLS.
-#   ~ migrate  — baut/zieht das runtime-cloud-Image (Billing-Paket im Artefakt).
+#   ~ migrate  — zieht das in CI gebaute runtime-cloud-Image aus GHCR
+#                (who2be-api-cloud, Billing-Paket im Artefakt) statt es auf
+#                dem Host zu bauen (Entscheidung 2026-09-05, siehe
+#                .claude/context/DECISIONS.md + RUNBOOK
+#                "Notfallpfad: Registry nicht erreichbar" fuer den
+#                Host-Build-Fallback).
 #   ~ api      — WHO2BE_EDITION=cloud, APP_DATABASE_URL (who2be_app, RLS aktiv),
 #                RATE_LIMIT_STORAGE_URI=redis://…, Mollie-Env, SUPABASE_SERVICE_KEY,
-#                WEB_BASE_URL; baut das runtime-cloud-Image.
+#                WEB_BASE_URL; zieht denselben who2be-api-cloud-Registry-Build
+#                wie `migrate` (analog).
 #   ~ web      — Build-Arg VITE_WHO2BE_EDITION=cloud: die Billing-UI ist
 #                Compile-Time tree-geshaked (ADR-0029), das GHCR-On-Prem-Image
-#                enthaelt sie nicht — die Cloud braucht ein eigenes Web-Bundle.
+#                enthaelt sie nicht — es gibt kein `web-cloud`-Image in der
+#                Build-Matrix (.github/workflows/deploy.yml), also bleibt web
+#                die einzige Ausnahme und baut weiterhin lokal.
 #
 # Supabase-seitig (separater Stack) fuer echte Cloud-Paritaet zusaetzlich setzen:
 #   GOTRUE_MAILER_AUTOCONFIRM=false + echter SMTP-Provider (siehe
 #   deploy/hetzner/supabase/.env.example). Fuer einen ersten Solo-Smoke darf
 #   autoconfirm voruebergehend `true` bleiben.
 services:
-  # runtime-cloud-Image: zieht das who2be-billing-Paket (Mollie-SDK) in den
-  # Build (ADR-0029). Ohne `target` baut der Dockerfile die On-Prem-Stage ohne
-  # Billing — dann liefern die /v1/billing-Pfade Fehler. pull_policy=build
-  # erzwingt den lokalen Cloud-Build statt eines (on-prem) GHCR-Pulls.
+  # who2be-api-cloud: eigenes GHCR-Image fuer das runtime-cloud-Target
+  # (zieht das who2be-billing-Paket/Mollie-SDK in den Build, ADR-0029; CI
+  # baut+pusht es aus genau diesem Target — .github/workflows/deploy.yml).
+  # Regelweg ist der Pull; `build:` bleibt hier NUR fuer den dokumentierten
+  # Notfall-Handbuild stehen (RUNBOOK "Notfallpfad: Registry nicht
+  # erreichbar") — ohne ein `pull_policy`-Override auf `build` wird also
+  # normal gezogen statt gebaut. Ohne `target` baut der Dockerfile die
+  # On-Prem-Stage ohne Billing — dann liefern die /v1/billing-Pfade Fehler.
   migrate:
+    image: ghcr.io/luetzey/who2be-api-cloud:${API_IMAGE_TAG:-latest}
     build:
       target: runtime-cloud
-    pull_policy: build
 
   api:
+    image: ghcr.io/luetzey/who2be-api-cloud:${API_IMAGE_TAG:-latest}
     build:
       target: runtime-cloud
-    pull_policy: build
     environment:
       # Cloud-Edition scharf: Limits + Billing-Adapter aktiv (config.py:edition).
       WHO2BE_EDITION: cloud
@@ -82,9 +94,10 @@ services:
         condition: service_healthy
 
   # Cloud-Web-Bundle: VITE_* wirkt zur Compile-Zeit (Vite) — das On-Prem-Image
-  # aus GHCR hat die Billing-UI tree-geshaked (ADR-0029). pull_policy=build
-  # erzwingt den lokalen Cloud-Build statt eines (on-prem) GHCR-Pulls, analog
-  # zu migrate/api oben.
+  # aus GHCR hat die Billing-UI tree-geshaked (ADR-0029) und es gibt kein
+  # `web-cloud`-Image in der Build-Matrix. pull_policy=build erzwingt deshalb
+  # (anders als bei migrate/api oben, die inzwischen aus GHCR ziehen) weiterhin
+  # den lokalen Cloud-Build statt eines (on-prem) GHCR-Pulls.
   web:
     build:
       args:
