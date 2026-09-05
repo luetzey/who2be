@@ -1,7 +1,43 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-05 (21. Lauf — #429 „Coming soon"-Modus; davor 20. Lauf #450 Registry-Pull)_
+_Stand: 2026-09-05 (22. Lauf — Billing-Kettentest belegt die Paywall, #451)_
 
+## Kettentest belegt: bezahltes Abo schaltet das Limit frei (2026-09-05, 22. Lauf, #451)
+
+WP-4 von #428. Die gravierendste Luecke des Cloud-Inventars geschlossen: Checkout,
+Webhook, Entitlement-Schreibpfad und Limit waren je einzeln geprueft, dass ein
+bezahltes Abo am Ende wirklich hoehere Limits freischaltet, war **nirgends**
+belegt. Plan `.claude/plan/2026-09-05-2000_billing-kettentest.md`, Umsetzung ueber
+einen Sonnet-Sub-Agent.
+
+Neu: `packages/billing/tests/test_checkout_webhook_entitlement_limit_chain.py`
+(Positivfall + Gegenfall), ein HTTP-Erfolgspfad fuer den Checkout in
+`test_mollie_endpoint.py`, und Check 7 in `scripts/smoke.sh`. **Kein
+Produktivcode angefasst** (`git diff --stat -- packages/billing/src apps/api/src`
+leer) — so verlangt es das Issue: der Test erbringt Beweise, er repariert nicht.
+
+**Die Gegenprobe ist der eigentliche Beleg.** Nimmt man den Webhook-Aufruf und
+seine Folge-Assertions aus dem Test, scheitert er nicht an einer kuenstlichen
+Zusicherung, sondern mit `429 Token-Ratenlimit ueberschritten` in
+`services/mcp_limit_service.py:90` — also im echten Produktivcode. Datei danach
+byte-identisch wiederhergestellt (`diff` leer), Suite wieder 59 gruen.
+
+**Zwei Befunde am Issue selbst:**
+
+1. **Weiche 4 war sachlich falsch.** Sie schlug den Entitlement-Lese-Pfad fuer
+   den Smoke-Check vor, „weil er die Editions-Frage genauso beantwortet". Tut er
+   nicht: `entitlement.router` wird in `main.py:391` **unconditional**
+   registriert, waehrend `_register_billing_if_present` (`:407`) nur die
+   Schreibrouten bindet — der Lese-Pfad existiert in beiden Editionen und
+   liefert nie 404. Stattdessen prueft Check 7 `POST /v1/billing/webhook`
+   (gegated), das ohne Signatur fail-closed 400 liefert und damit weder Mollie
+   noch DB beruehrt (AC 5 gewahrt).
+2. **Umgebungsgrenze, gemessen:** ohne Docker faellt die volle Suite auf
+   63,08 % Coverage (1305 passed, 448 skipped) — `--cov-fail-under=85` ist hier
+   fuer **jedes** Python-Paket unerreichbar, nicht nur fuer dieses. Deshalb
+   traegt der Kettentest bewusst keinen `integration`-Marker: er waere sonst nie
+   ein einziges Mal gelaufen. Der SQL-Schreibpfad in `org_entitlement` bleibt
+   damit ausserhalb dieses Belegs (er hat eigene Integrationstests).
 
 ## „Coming soon"-Modus steht (2026-09-05, 21. Lauf, #429, PR #457)
 
@@ -28,6 +64,7 @@ Env-Kombinationen — Shell-Logik faellt sonst durch jedes Unit-Test-Raster.
 **Offen (nicht automatisiert belegbar):** Akzeptanzkriterium 1 und 4 gegen einen
 laufenden Compose-Stack (Browser + `curl` gegen `/auth/v1/signup`, `smoke.sh` in
 beiden Modi) — im Uebergabe-Bericht als Rest-Test-Liste gefuehrt.
+
 
 ## Cloud-Deploy zieht das CI-Image aus der Registry (2026-09-05, 20. Lauf, #450)
 

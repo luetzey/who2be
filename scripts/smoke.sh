@@ -15,6 +15,9 @@
 #      muss GoTrue POST /signup ohnehin mit 422 ablehnen (GOTRUE_DISABLE_SIGNUP)
 #      — sonst waere die Hinweisseite nur UI-Kosmetik ohne echte Sperre. Im
 #      "open"-Modus (Default) wird NICHT geprobt (kein Probe-User-Anlegen).
+#   8) Billing-Route existiert nur in der Cloud-Edition (Issue #451): dieselbe
+#      Route antwortet in Cloud, in On-Prem 404 — ohne DB-/Mollie-Kontakt, also
+#      auch ohne gesetzten MOLLIE_API_KEY nicht falsch rot
 # Beendet mit Exit-Code 0 wenn alles gruen, sonst != 0.
 
 set -euo pipefail
@@ -23,6 +26,9 @@ API_URL="${API_URL:-http://localhost:8000}"
 WEB_URL="${WEB_URL:-http://localhost:5173}"
 MCP_URL="${MCP_URL:-http://localhost:8765}"
 COMPOSE="${COMPOSE:-docker compose}"
+# Steuert Check 7 (Billing-Route): welches Deployment laeuft gerade (spiegelt
+# den Compose-Default aus `docker-compose.yml`, WHO2BE_EDITION: ${...:-onprem}).
+WHO2BE_EDITION="${WHO2BE_EDITION:-onprem}"
 
 log() { printf "\033[1;34m[smoke]\033[0m %s\n" "$*"; }
 fail() { printf "\033[1;31m[smoke:FAIL]\033[0m %s\n" "$*" >&2; exit 1; }
@@ -127,6 +133,27 @@ if [[ "${WHO2BE_LAUNCH_MODE:-open}" == "coming_soon" ]]; then
     || fail "Launch-Modus und GoTrue-Schalter widersprechen sich (POST /signup lieferte ${SIGNUP_HTTP_CODE} statt 422: $(cat /tmp/smoke-signup.json))"
 else
   log "Launch-Modus 'open' — Signup-Konsistenz-Probe uebersprungen"
+fi
+
+# --- 8) Billing-Route: existiert nur in der Cloud-Edition (Issue #451) -------
+# Das optionale Cloud-Billing-Paket wird nur gemountet, wenn `WHO2BE_EDITION=
+# cloud` UND das Paket installiert ist (`_register_billing_if_present`,
+# apps/api/.../main.py) — On-Prem hat die Route schlicht nicht (404). Der
+# generische Provider-Webhook (`/v1/billing/webhook`, NICHT der Mollie-
+# spezifische Pull-Endpunkt) ist dafuer der richtige Check: ohne Signatur-
+# Header schlaegt die Verifikation *fail-closed* fehl, BEVOR ueberhaupt DB
+# oder Mollie beruehrt werden (`verify_webhook_signature` — leeres Secret oder
+# fehlender Header ⇒ False) — der Check prueft also ausschliesslich, ob die
+# Route existiert, nie ob Mollie erreichbar ist; er braucht dafuer weder einen
+# gesetzten MOLLIE_API_KEY noch WHO2BE_BILLING_WEBHOOK_SECRET (AC5).
+log "Billing-Route (Edition-Gate, WHO2BE_EDITION=${WHO2BE_EDITION})"
+BILLING_CODE="$(curl -s -o /dev/null -w '%{http_code}' -X POST "${API_URL}/v1/billing/webhook")"
+if [[ "${WHO2BE_EDITION}" == "cloud" ]]; then
+  [[ "${BILLING_CODE}" == "400" ]] \
+    || fail "Cloud: /v1/billing/webhook sollte 400 sein (fail-closed ohne Signatur), bekam ${BILLING_CODE}"
+else
+  [[ "${BILLING_CODE}" == "404" ]] \
+    || fail "On-Prem: /v1/billing/webhook sollte 404 sein (Billing-Paket nicht gemountet), bekam ${BILLING_CODE}"
 fi
 
 log "alle Checks gruen ✓"
