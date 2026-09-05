@@ -190,6 +190,48 @@ Use-Case (YAGNI).
 - Innerhalb einer Card: `gap="md"` (16px) oder `gap="sm"` (12px).
 - Marketing-Pages duerfen `gap="xl"` (32px) zwischen Hero-Bloecken.
 
+### 4.4 Responsive & Breakpoints
+
+**Skala:** Tailwind-v4-Defaults — `sm` 640px / `md` 768px / `lg` 1024px /
+`xl` 1280px / `2xl` 1536px. **Keine eigenen Breakpoint-Tokens**: die
+Defaults sind bereits repo-weit in Gebrauch, und `tailwind.config.*` ist
+verboten (siehe `CLAUDE.md` §Struktur). Zielviewports fuer manuelle
+Pruefung: **320 / 375 / 768 / 1024 / 1280px**.
+
+**Mobile-Schwelle:** unterhalb `md` (`max-width: 767px`) gilt als "mobile".
+Der Hook `useIsMobile()` (`hooks/useMediaQuery.ts`) kapselt genau diese
+Schwelle — neue Mobile-spezifische Logik nutzt den Hook, statt die
+Media-Query erneut zu inlinen.
+
+**Mobile-first:** Basis-Klassen (ohne Prefix) sind der Phone-Fall; Prefixe
+(`md:`, `lg:`, …) *erweitern* nach oben, sie schalten nichts fuer kleine
+Screens ab. Beispiel: `grid-cols-1 md:grid-cols-2 lg:grid-cols-3` — nicht
+`lg:grid-cols-3 md:grid-cols-1` (De-facto-Desktop-first waere ein
+Review-Reject).
+
+**Regel — Prefix ist Pflicht bei Mehrspalten/festen Breiten:**
+`grid-cols-*` (ab 2 Spalten) und feste Breiten (`w-64`, `max-w-md` u. ae.)
+auf Container-Ebene brauchen **immer** einen Breakpoint-Prefix oder einen
+responsiven Ersatz (`w-full md:w-64`, `grid-cols-1 sm:grid-cols-2`). Eine
+nackte `grid-cols-3` ohne Prefix bricht auf 320px fast immer das Layout.
+Keine ESLint-Regel dafuer (siehe §12) — das ist Teil der
+Review-Checkliste unten.
+
+**Review-Checkliste (neue/geaenderte Layouts):**
+
+1. Rendert die Aenderung bei 320px ohne horizontalen Scroll (ausser
+   bewusst gescrollten Containern wie Tabellen/Code-Bloecken)?
+2. Sind mehrspaltige Grids (`grid-cols-2` u. hoeher) an einen
+   Breakpoint-Prefix gebunden, nicht nackt?
+3. Sind feste Breiten (`w-*`, `max-w-*`) auf Container-Ebene responsiv
+   abgefedert (`w-full md:w-64` statt `w-64` durchgehend)?
+4. Sind Hit-Targets unterhalb `md` weiterhin ≥ 40px (§11 A11y-Minimum),
+   nicht durch `size="sm"`-Verdichtung unterschritten?
+5. Bleibt Text bei 320px lesbar (keine abgeschnittenen Labels, kein
+   Wortsalat durch zu schmale Flex-Kinder ohne `min-w-0`)?
+6. Wurde bei 768px (Tablet-Bruch `md`) und 1024px (`lg`) stichprobenartig
+   gegengeprueft, nicht nur bei 320px und Desktop-Default?
+
 ## 5. Radii
 
 `--radius: 0.5rem` (8px) Basis. Abgeleitet:
@@ -438,6 +480,8 @@ demselben Muster.
 | Feedback-Toast | `lib/feedback.ts` (`notify.*`). Sonner nie direkt importieren. |
 | Klassen-Merge | `lib/utils.ts` (`cn`). |
 | Theme-Override | `app/ThemeProvider.tsx` + `data-theme="light|dark"` auf `<html>`. |
+| Breakpoint/Responsive-Frage | §4.4 „Responsive & Breakpoints" — Skala ist Tailwind-Default, **kein** `tailwind.config.*`. |
+| Mobile-Erkennung in JS | `hooks/useMediaQuery.ts` (`useMediaQuery`, `useIsMobile`) — nicht erneut inlinen. |
 | Microcopy | Im Page/Component-File direkt. Pflicht: Volltext-Umlaute (`ü/ö/ä/ß`). |
 | Iconografie | `lucide-react`. Kein zweites Icon-Set. |
 
@@ -485,12 +529,18 @@ nachfragen, **nicht** stillschweigend umgehen.
 8. **A11y-Pflicht:** Jede neue klickbare/eingebbare Komponente bekommt
    einen `*.a11y.test.tsx` (`vitest-axe`). Pages, die echte
    Daten/Forms zeigen, sowieso. Focus-Ring nie wegklassen.
-9. **Verbindlichkeit:** Diese Guideline ist fuer die Web-UI die
+9. **Responsive (§4.4):** Neue/geaenderte Layouts gegen die
+   Review-Checkliste in §4.4 pruefen — mehrspaltige Grids und feste
+   Breiten brauchen einen Breakpoint-Prefix, Basis-Klassen bleiben
+   Mobile-first. Mobile-Erkennung in JS laeuft ueber `useIsMobile()`
+   (`hooks/useMediaQuery.ts`), nicht ueber eine neu inlineierte
+   Media-Query.
+10. **Verbindlichkeit:** Diese Guideline ist fuer die Web-UI die
    maßgebliche Quelle (Konsistenz mit `CLAUDE.md` §Frontend-Standards).
-10. **DoD pro Aenderung:** `npm run lint && npx tsc --noEmit &&
+11. **DoD pro Aenderung:** `npm run lint && npx tsc --noEmit &&
     npm test && npm run build` (in `apps/web/`) — alle vier gruen, lokal
     verifiziert, **vor** dem Push.
-11. **Bei Unsicherheit:** STOP, frag den User. Lieber eine Frage als
+12. **Bei Unsicherheit:** STOP, frag den User. Lieber eine Frage als
     ein UI-Inconsistency-PR.
 
 ---
@@ -503,3 +553,10 @@ nachfragen, **nicht** stillschweigend umgehen.
   Referenzen ersetzt, abgelaufene D2–D5-Marker entfernt, Spacing-Zusatzstufe
   10 fuer Page-Level-Vertikalabstand dokumentiert (§4.1 ↔ §10.2 aufgeloest),
   Feature-Barrel-Ausnahme fuer Layout-/Slot-Exports dokumentiert (§12).
+- 2026-09-05 — Mobile-Vorarbeit (Issue #438): neuer Abschnitt §4.4
+  „Responsive & Breakpoints" (Tailwind-Default-Skala, Mobile-first-Regel,
+  Review-Checkliste), §12/§13 verweisen darauf. Grundlage fuer
+  `hooks/useMediaQuery.ts` (`useMediaQuery`/`useIsMobile`) und
+  `components/ui/sheet.tsx` (Radix-Dialog-basiertes Slide-in-Panel,
+  `side: left|right|top|bottom`) — beide ohne Konsumenten, spaetere
+  Mobile-Wellen bauen darauf auf.

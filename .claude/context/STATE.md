@@ -1,6 +1,39 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-05 (24. Lauf — Billing-Webhook gehaertet, #452)_
+_Stand: 2026-09-05 (25. Lauf — Responsive-Fundament steht, #438)_
+
+## Responsive-Fundament steht (2026-09-05, 25. Lauf, #438)
+
+W0 von #431, erstes Paket nach dem Cloud-Launch-Block. Drei Bausteine, auf denen
+W1 bis W4 aufsetzen: Abschnitt „Responsive & Breakpoints" in
+`docs/frontend/design-language.md` (Skala, Zielviewports, Mobile-first-Regel,
+Prefix-Pflicht, 6-Punkte-Review-Checkliste, verlinkt aus §12 und §13),
+`hooks/useMediaQuery.ts` mit `useMediaQuery`/`useIsMobile`, und
+`components/ui/sheet.tsx` auf Radix Dialog. Plan
+`.claude/plan/2026-09-05-2220_responsive-fundament.md`.
+
+**Das Paket aendert bewusst kein sichtbares Verhalten.** Kein Konsument wurde
+umgestellt — das ist W1. `git status` zeigt ausser den fuenf neuen Dateien nur
+`components/ui/index.ts`, `design-language.md` und `CHANGELOG.md`; die Hauptgefahr
+war nicht ein Fehler, sondern Scope-Creep Richtung `AppShell`.
+
+Der matchMedia-Guard ist strukturgleich zu `app/ThemeProvider.tsx:22-23`
+uebernommen (`typeof window.matchMedia !== 'function'` ⇒ `false`), damit es im
+Repo genau ein Muster dafuer gibt und nicht zwei.
+
+**Nebenfund #465 (vorbestehend, groesser als gedacht):** `tailwindcss-animate`
+steht in `package.json:48`, ist aber nie geladen — Tailwind v4 braucht
+`@plugin` in `globals.css`, und das Repo hat bewusst keine `tailwind.config.*`.
+**Fuenf** Primitives (`dialog`, `dropdown-menu`, `popover`, `info-tooltip` und
+jetzt `sheet`) tragen damit Animations-Klassen, die kein CSS erzeugen. Tailwind
+ignoriert unbekannte Klassen stillschweigend: kein Build-, Lint- oder
+Testfehler. Nicht in #438 gefixt, weil die vier anderen Primitives ausserhalb
+des Scopes lagen.
+
+**Verifikation:** lint 0 Errors · `tsc -b` Exit 0 · **1063 Tests gruen**
+(Baseline 1043, +20 exakt die neuen) · Coverage 86,76 / 81,44 / 82,34 / 87,78
+(Baseline 86,69 / 81,36 / 82,27 / 87,71, Floors 80/79/75/80) · a11y 53 passed ·
+Build gruen.
 
 ## Generischer Billing-Webhook gehaertet (2026-09-05, 24. Lauf, #452)
 
