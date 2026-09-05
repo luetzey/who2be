@@ -579,6 +579,7 @@
       "title": "Sign in",
       "description": "Sign in to your Who2Be account.",
       "forgotPassword": "Forgot password?",
+      "rememberMe": "Stay signed in ({{hours}} h)",
       "submit": "Sign in",
       "noAccount": "No account yet?",
       "register": "Sign up",

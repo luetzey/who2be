@@ -10,8 +10,10 @@ import { z } from 'zod'
 import { ErrorAlert } from '@/components/data/ErrorAlert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { config } from '@/config'
 import { useSession } from '@/auth/session-context'
 import { supabase } from '@/lib/supabase'
@@ -21,7 +23,7 @@ import { OAuthButtons } from '../components/OAuthButtons'
 import { buildRedirectTo } from '../lib/redirect'
 import { sanitizeNext } from '../lib/sanitize-next'
 
-type LoginValues = { email: string; password: string }
+type LoginValues = { email: string; password: string; remember: boolean }
 type MfaValues = { code: string }
 
 // Step-up-Challenge (WP-F/S1): Hat der Account einen verifizierten TOTP-Faktor,
@@ -83,11 +85,15 @@ export function LoginPage() {
   const loginSchema = z.object({
     email: z.string().email(t('validation.emailInvalid')),
     password: z.string().min(1, t('validation.passwordRequired')),
+    // "Angemeldet bleiben" (Issue #430) — Default `false` ist bewusst hier
+    // UND in `defaultValues` unten verankert: ohne Haken bleibt das heutige
+    // Tab-Lifetime-Verhalten unveraendert (nie automatisch "an").
+    remember: z.boolean(),
   })
 
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: '', password: '' },
+    defaultValues: { email: '', password: '', remember: false },
   })
 
   const mfaSchema = z.object({
@@ -109,7 +115,7 @@ export function LoginPage() {
     setError(null)
     setUnconfirmed(false)
     try {
-      const { mfaRequired: needsMfa } = await signIn(values.email, values.password)
+      const { mfaRequired: needsMfa } = await signIn(values.email, values.password, values.remember)
       if (needsMfa) {
         // Session noch nicht committed — erst die Challenge, dann navigiert der
         // reaktive `session !== null`-Guard von selbst.
@@ -247,6 +253,31 @@ export function LoginPage() {
                           {...field}
                         />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="remember"
+                  render={({ field }) => (
+                    <FormItem>
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          id="login-remember"
+                          name={field.name}
+                          ref={field.ref}
+                          checked={field.value}
+                          onBlur={field.onBlur}
+                          onChange={(event) => field.onChange(event.target.checked)}
+                        />
+                        <Label
+                          htmlFor="login-remember"
+                          className="text-sm font-normal text-muted-foreground"
+                        >
+                          {t('login.rememberMe', { hours: config.sessionMaxAgeHours })}
+                        </Label>
+                      </div>
                       <FormMessage />
                     </FormItem>
                   )}

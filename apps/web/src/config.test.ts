@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
-import { resolveConfig, resolveLaunchMode } from './config'
+import { resolveConfig, resolveLaunchMode, resolveSessionMaxAgeHours } from './config'
 
 afterEach(() => {
   vi.unstubAllEnvs()
@@ -147,6 +147,54 @@ describe('resolveConfig — launchMode/launchContact (Issue #429)', () => {
     window.__WHO2BE_CONFIG__ = { launchMode: 'wat' }
 
     expect(resolveConfig().launchMode).toBe('open')
+
+    warn.mockRestore()
+  })
+})
+
+describe('resolveSessionMaxAgeHours (Issue #430)', () => {
+  test('gueltige Werte im Bereich 1-24 werden 1:1 uebernommen', () => {
+    expect(resolveSessionMaxAgeHours(1)).toBe(1)
+    expect(resolveSessionMaxAgeHours(2)).toBe(2)
+    expect(resolveSessionMaxAgeHours(24)).toBe(24)
+  })
+
+  test('undefined faellt ohne Warnung auf den Default (12) zurueck', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    expect(resolveSessionMaxAgeHours(undefined)).toBe(12)
+    expect(warn).not.toHaveBeenCalled()
+
+    warn.mockRestore()
+  })
+
+  test('Werte ausserhalb 1-24 fallen fail-closed auf den Default zurueck und warnen', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    expect(resolveSessionMaxAgeHours(0)).toBe(12)
+    expect(resolveSessionMaxAgeHours(25)).toBe(12)
+    expect(resolveSessionMaxAgeHours(-3)).toBe(12)
+    expect(resolveSessionMaxAgeHours(Number.NaN)).toBe(12)
+    expect(warn).toHaveBeenCalledTimes(4)
+
+    warn.mockRestore()
+  })
+
+  test('resolveConfig liest sessionMaxAgeHours aus der Runtime-Config', () => {
+    window.__WHO2BE_CONFIG__ = { sessionMaxAgeHours: 2 }
+
+    expect(resolveConfig().sessionMaxAgeHours).toBe(2)
+  })
+
+  test('resolveConfig faellt ohne Runtime-Config auf den Default (12) zurueck', () => {
+    expect(resolveConfig().sessionMaxAgeHours).toBe(12)
+  })
+
+  test('resolveConfig kappt einen zu hohen Runtime-Wert (z. B. > 24) auf den Default', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    window.__WHO2BE_CONFIG__ = { sessionMaxAgeHours: 999 }
+
+    expect(resolveConfig().sessionMaxAgeHours).toBe(12)
 
     warn.mockRestore()
   })
