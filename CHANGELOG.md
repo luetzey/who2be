@@ -176,6 +176,20 @@ the merged pull requests and the plan documents under `.claude/plan/`.
   hands out anyone else's.
 
 ### Fixed
+- `deploy/hetzner/.env.example` now carries `MINIO_ROOT_PASSWORD` (Issue #458).
+  It was the one value the template never had, and the `minio` service reads it
+  with no default on purpose — an object store with standard credentials on a
+  public machine is an open door, so the compose stack refuses to start without
+  it. The effect was that an operator following `deploy/hetzner/README.md`
+  copied the template to `.env` and got a stack that would not even resolve,
+  with an error naming the variable but not the fact that the template had
+  never carried it. All three documented overlay combinations (base, `+cloud`,
+  `+local`) now resolve against the template with nothing exported into the
+  shell. The `:?` guard is untouched and still aborts on an empty value;
+  `MINIO_ROOT_USER` is deliberately left out, since it has a default at all
+  three read sites and listing it would imply a requirement that does not
+  exist.
+
 
 - Looking a persona up by name over MCP (`get_persona("Builder")`) could abort
   with an opaque tool error, while the same persona resolved fine by UUID. The
