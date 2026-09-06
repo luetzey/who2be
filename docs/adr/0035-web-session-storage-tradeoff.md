@@ -1,6 +1,6 @@
 # ADR-0035 — Web-Session im `sessionStorage` (akzeptiertes Rest-Risiko)
 
-- Status: Akzeptiert
+- Status: Abgeloest durch ADR-0052
 - Datum: 2026-06-13
 - Kontext: Repo-Review-Remediation — Plan
   `.claude/plan/2026-06-13-1512_repo-review-remediation.md` (Welle 1, QW-4).

@@ -112,6 +112,43 @@ the merged pull requests and the plan documents under `.claude/plan/`.
   `components/ui/sheet.tsx` adds a shadcn-style `Sheet` slide-in panel built
   on the same `@radix-ui/react-dialog` primitive `dialog.tsx` already uses,
   with `side: left | right | top | bottom` variants.
+- An opt-in "Stay signed in ({{hours}} h)" checkbox on the login page (Issue
+  #430, default unchecked), so the TOTP prompt on every new tab — the app's
+  biggest everyday friction point — becomes a choice instead of a constant.
+  Checking it moves that one session from `sessionStorage` (today's
+  tab-lifetime behavior, unchanged when left unchecked) to `localStorage` via
+  a storage adapter in `lib/supabase.ts` that resolves the backend per access
+  from a `who2be.auth.remember` flag — one Supabase client, not two, since
+  `createClient` binds its storage once at module scope. A remembered session
+  survives a new tab and a full browser restart until an absolute cap
+  (`WHO2BE_SESSION_MAX_AGE_HOURS`, runtime-configurable, default 12,
+  clamped to 1-24 with a fail-closed default otherwise) that `SessionProvider`
+  enforces before ever committing the session at boot; past it, the refresh
+  token is invalidated server-side via `signOut()` and the next login goes
+  through the full flow again, including step-up. Signing out in one tab
+  signs out every other open tab for free — `@supabase/auth-js` already opens
+  a `BroadcastChannel` on the session's storage key once `persistSession` and
+  `storageKey` are set, which they already were, so no new listener code was
+  needed (a tab closed during the sign-out only catches up via the same
+  expiry check on its next open, since a `BroadcastChannel` only reaches tabs
+  open at the time). `GOTRUE_JWT_EXP` and refresh-token rotation are
+  untouched — the cap is a client-side ceiling under the resulting session's
+  actual lifetime, not a change to it, and every `aal2` gate on the API
+  stays exactly as it was. Replaces ADR-0035 (session storage) with
+  ADR-0052, which spells out why an opt-in, capped exception doesn't
+  undermine that ADR's XSS reasoning for the default path. The mandatory
+  security review found four ways the cap could be silently defeated, all
+  fixed here and recorded in the ADR: a login without the box left the
+  previous session's refresh token behind in `localStorage`, where — with the
+  marker gone — nothing would ever expire it; the marker and its timestamp
+  lived in two keys, so a missing or unparseable timestamp meant no cap at
+  all; a slow in-flight session commit could land after a forced expiry
+  logout and undo it; and a marker left over from an earlier session was
+  inherited by logins that never offered the checkbox. The marker is now a
+  single atomic value that counts as expired whenever no valid timestamp can
+  be read from it, the expiry check runs before every commit rather than only
+  at boot, the superseded backend's session copy is purged on every mode
+  switch, and any `SIGNED_OUT` — from any source — clears the marker.
 
 ### Fixed
 

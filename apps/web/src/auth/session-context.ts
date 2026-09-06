@@ -17,7 +17,11 @@ export interface SessionValue {
   // zweiter Faktor eine Step-up-Challenge braucht (nextLevel 'aal2' > current).
   // In dem Fall wird die aal1-Session NICHT committed — die LoginPage fuehrt
   // die TOTP-Challenge durch, erst danach committet `apply()` die aal2-Session.
-  signIn: (email: string, password: string) => Promise<{ mfaRequired: boolean }>
+  // `remember` (Issue #430, ADR-0052): mit `true` ueberlebt die Session neuen
+  // Tab + Browser-Neustart (localStorage) bis zur absoluten Obergrenze
+  // (`config.sessionMaxAgeHours`); mit `false` das heutige Tab-Lifetime-
+  // Verhalten (sessionStorage).
+  signIn: (email: string, password: string, remember: boolean) => Promise<{ mfaRequired: boolean }>
   signOut: () => Promise<void>
   // Expliziter Re-Fetch von `/v1/me` — wird von `DefaultWorkspaceRedirect`
   // genutzt, wenn der Lazy-Seed noch nicht abgeschlossen war (Fallback).
