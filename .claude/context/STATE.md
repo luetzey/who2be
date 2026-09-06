@@ -1,6 +1,30 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-06 (27. Lauf — Agent-Favoriten, #427)_
+_Stand: 2026-09-06 (28. Lauf — Deploy-Vorlage loest auf, #458)_
+
+## Deploy-Vorlage loest wieder auf (2026-09-06, 28. Lauf, #458)
+
+`deploy/hetzner/.env.example` trug `MINIO_ROOT_PASSWORD` nicht. Der
+`minio`-Service liest die Variable bewusst **ohne** Default (`:?`-Guard, der
+einzige der ganzen Compose-Datei) — ein Objekt-Store mit Standard-Credentials
+auf einer oeffentlich erreichbaren Maschine ist eine offene Tuer. Folge: wer
+`deploy/hetzner/README.md` folgte und die Vorlage nach `.env` kopierte, bekam
+einen Stack, der sich nicht einmal **aufloesen** liess; die Fehlermeldung nannte
+die Variable, aber nicht, dass die Vorlage sie nie hatte.
+
+**Ein Eintrag, vier Belege.** Alle drei dokumentierten Overlay-Kombinationen
+loesen jetzt gegen die Vorlage auf, ohne dass etwas in die Shell exportiert wird
+(`BASIS-OK` / `CLOUD-OK` / `LOCAL-OK`), und die Gegenprobe zeigt den Guard
+unveraendert scharf: ein leerer Wert bricht weiterhin mit derselben Meldung ab.
+`MINIO_ROOT_USER` bleibt bewusst draussen — er traegt an allen drei Lesestellen
+einen Default, ihn zu fuehren wuerde eine Pflicht suggerieren, die nicht besteht.
+
+**Umgebungs-Notiz, die den Zuschnitt gerettet hat:** in dieser Session laeuft
+kein Docker-Daemon, und die Eskalationsregel des Issues sah genau darin einen
+Abbruchgrund. `docker compose config` braucht aber gar keinen Daemon — es
+parst und interpoliert nur. Die Akzeptanzkriterien waren damit vollstaendig
+belegbar. Regel daraus: bevor man eine Umgebungsgrenze als Blocker meldet,
+prueft man, ob das konkrete Kommando sie ueberhaupt beruehrt.
 
 ## Agent-Favoriten stehen (2026-09-06, 27. Lauf, #427)
 
