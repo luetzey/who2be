@@ -154,6 +154,17 @@ class PgWorkspaceMemberRepository:
                 workspace_id,
                 user_id,
             )
+            # Persoenliche Agent-Favoriten des Mitglieds (#427) in derselben
+            # Transaktion. Die FKs von `agent_favorite` haengen an `workspace`
+            # und `agent` — beide bestehen weiter, wenn nur die Mitgliedschaft
+            # endet. Ohne diese Zeile ueberleben die Markierungen unbegrenzt in
+            # einem Workspace, zu dem der Mensch keinen Zugang mehr hat, und
+            # tauchten bei einer Re-Einladung wieder auf.
+            await conn.execute(
+                "DELETE FROM agent_favorite WHERE workspace_id = $1 AND user_id = $2",
+                workspace_id,
+                user_id,
+            )
             if self._audit_repo is not None and actor_id is not None:
                 await self._audit_repo.insert(
                     conn,

@@ -525,6 +525,11 @@ export interface Api {
   createAgent: (input: AgentInput) => Promise<Agent>
   updateAgent: (id: string, input: AgentUpdateInput) => Promise<Agent>
   deleteAgent: (id: string) => Promise<void>
+  // Persoenlicher Favoriten-Stern (Issue #427), beide Richtungen idempotent
+  // (204 auch, wenn der Stern schon/nicht mehr gesetzt war). Danach `reload()`
+  // aus `useAgents` — Optimistic-UI ist kein Muster in diesem Repo.
+  favoriteAgent: (id: string) => Promise<void>
+  unfavoriteAgent: (id: string) => Promise<void>
   copyAgent: (id: string, input?: AgentCopyInput) => Promise<Agent>
   // ADR-0044 — Agent-Memory (Mensch-Pfad, editor+ gated). `status` filtert
   // serverseitig; ohne Filter kommen alle Status (Triage-UI braucht pending +
@@ -1000,6 +1005,10 @@ export function createApi(token: string, workspaceId: string): Api {
       }),
     deleteAgent: (id) =>
       request<void>(token, `${ws}/agents/${id}`, { method: 'DELETE' }),
+    favoriteAgent: (id) =>
+      request<void>(token, `${ws}/agents/${id}/favorite`, { method: 'PUT' }),
+    unfavoriteAgent: (id) =>
+      request<void>(token, `${ws}/agents/${id}/favorite`, { method: 'DELETE' }),
     copyAgent: (id, input) =>
       request<Agent>(token, `${ws}/agents/${id}/copy`, {
         method: 'POST',

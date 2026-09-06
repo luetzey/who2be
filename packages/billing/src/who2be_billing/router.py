@@ -181,6 +181,12 @@ async def billing_webhook(request: Request) -> dict[str, bool]:
     signature = _signature_header(request)
     if not verify_webhook_signature(raw, signature, settings.billing_webhook_secret):
         # Fail closed: ungueltige/fehlende Signatur ODER fehlendes Secret.
+        # Bewusst OHNE Header-Wert und OHNE Payload (Issue #463 Punkt 4,
+        # Weiche 4): beide tragen Angreifer-kontrollierten Inhalt — ein Log mit
+        # Rohwerten macht aus dem Befund eine Datenlücke. Dass eine Ablehnung
+        # stattfand, ist die ganze Information, die der Betrieb braucht; eine
+        # Ereignis-ID gibt es hier noch nicht (der Body ist ungeprueft).
+        logger.warning("Generischer Billing-Webhook abgewiesen: Signatur ungueltig.")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Ungueltige Webhook-Signatur.",
@@ -218,6 +224,14 @@ async def billing_webhook(request: Request) -> dict[str, bool]:
     if not await processed.claim(_GENERIC_PROVIDER, event_id):
         # Bereits verarbeitet (Dedupe-Ledger) — Erfolg quittieren, kein zweiter
         # Effekt/Journal-Eintrag, sonst haengt sich der Provider in einen Retry.
+        # INFO statt WARNING: eine Doppelzustellung ist der Normalfall eines
+        # Provider-Retries, kein Fehlerzustand. Ereignis-ID und Anbieter
+        # genuegen zur Nachvollziehbarkeit.
+        logger.info(
+            "Billing-Webhook bereits verarbeitet (Dedupe): provider=%s event_id=%s",
+            _GENERIC_PROVIDER,
+            event_id,
+        )
         return {"received": True}
 
     repo = PgEntitlementRepository(pool)
@@ -234,6 +248,14 @@ async def billing_webhook(request: Request) -> dict[str, bool]:
         # (`_GENERIC_EVENT_MAX_AGE_SECONDS` in webhook.py, Groessenordnung
         # Tage) — danach scheitert bereits die Signaturpruefung, unabhaengig
         # vom Dedupe-Ledger.
+        # ERROR: das ist der einzige Zustand dieses Pfades, der einen Eingriff
+        # verlangen kann — der Claim ist zurueckgegeben, aber ob der Retry
+        # rechtzeitig kommt, entscheidet das Plausibilitaetsfenster.
+        logger.error(
+            "Billing-Webhook-Upsert fehlgeschlagen, Claim freigegeben: provider=%s event_id=%s",
+            _GENERIC_PROVIDER,
+            event_id,
+        )
         await processed.release(_GENERIC_PROVIDER, event_id)
         raise
     return {"received": True}

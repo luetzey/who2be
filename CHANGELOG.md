@@ -112,8 +112,104 @@ the merged pull requests and the plan documents under `.claude/plan/`.
   `components/ui/sheet.tsx` adds a shadcn-style `Sheet` slide-in panel built
   on the same `@radix-ui/react-dialog` primitive `dialog.tsx` already uses,
   with `side: left | right | top | bottom` variants.
+- An opt-in "Stay signed in ({{hours}} h)" checkbox on the login page (Issue
+  #430, default unchecked), so the TOTP prompt on every new tab — the app's
+  biggest everyday friction point — becomes a choice instead of a constant.
+  Checking it moves that one session from `sessionStorage` (today's
+  tab-lifetime behavior, unchanged when left unchecked) to `localStorage` via
+  a storage adapter in `lib/supabase.ts` that resolves the backend per access
+  from a `who2be.auth.remember` flag — one Supabase client, not two, since
+  `createClient` binds its storage once at module scope. A remembered session
+  survives a new tab and a full browser restart until an absolute cap
+  (`WHO2BE_SESSION_MAX_AGE_HOURS`, runtime-configurable, default 12,
+  clamped to 1-24 with a fail-closed default otherwise) that `SessionProvider`
+  enforces before ever committing the session at boot; past it, the refresh
+  token is invalidated server-side via `signOut()` and the next login goes
+  through the full flow again, including step-up. Signing out in one tab
+  signs out every other open tab for free — `@supabase/auth-js` already opens
+  a `BroadcastChannel` on the session's storage key once `persistSession` and
+  `storageKey` are set, which they already were, so no new listener code was
+  needed (a tab closed during the sign-out only catches up via the same
+  expiry check on its next open, since a `BroadcastChannel` only reaches tabs
+  open at the time). `GOTRUE_JWT_EXP` and refresh-token rotation are
+  untouched — the cap is a client-side ceiling under the resulting session's
+  actual lifetime, not a change to it, and every `aal2` gate on the API
+  stays exactly as it was. Replaces ADR-0035 (session storage) with
+  ADR-0052, which spells out why an opt-in, capped exception doesn't
+  undermine that ADR's XSS reasoning for the default path. The mandatory
+  security review found four ways the cap could be silently defeated, all
+  fixed here and recorded in the ADR: a login without the box left the
+  previous session's refresh token behind in `localStorage`, where — with the
+  marker gone — nothing would ever expire it; the marker and its timestamp
+  lived in two keys, so a missing or unparseable timestamp meant no cap at
+  all; a slow in-flight session commit could land after a forced expiry
+  logout and undo it; and a marker left over from an earlier session was
+  inherited by logins that never offered the checkbox. The marker is now a
+  single atomic value that counts as expired whenever no valid timestamp can
+  be read from it, the expiry check runs before every commit rather than only
+  at boot, the superseded backend's session copy is purged on every mode
+  switch, and any `SIGNED_OUT` — from any source — clears the marker.
+- A personal favorite star on every agent card (Issue #427), and a "Favorites"
+  group above the rest of the list. The state is per user and server-side, so
+  it survives a reload and follows the user to another browser — two members of
+  the same workspace see different stars. That ruled out the two cheaper
+  options: a column on `agent` would have been workspace-wide, `localStorage`
+  would not survive a device change. The new `agent_favorite` table carries
+  `workspace_id` denormalized so the tenant-isolation policy can read it off
+  the row without a join, and it has no foreign key on the user because no
+  table in the schema references the GoTrue user; account deletion therefore
+  clears the rows explicitly in `purge_account_data` rather than by cascade.
+  `GET .../agents` gained an `is_favorite` field, filled from the same single
+  batch roundtrip that already fills the card pills, so the list did not get a
+  second query. Setting and clearing it are `PUT` and `DELETE` on
+  `.../agents/{id}/favorite`, both idempotent and both open to every workspace
+  member including `viewer` — a favorite is a private note, not workspace
+  content — while agent-bound API tokens get a 403, since a token has no
+  favorites list of its own. MCP `list_agents` deliberately does not carry the
+  star: on a token path `ctx.user_id` is the *human who owns the token*, so
+  passing it through would have shown a remote LLM connector which agents that
+  person had marked, and made `list_agents` answer differently per token owner.
+  Machines get no favorites list at all, which is what the write path already
+  said by refusing agent-bound tokens. Removing a member from a workspace
+  clears their stars in the same transaction, and the Art. 15/20 export carries
+  them alongside the deletion path, filtered to the requesting user so it never
+  hands out anyone else's.
 
 ### Fixed
+- Three leftovers from the #452 security review on the generic billing webhook
+  (Issue #463). `include_routers` now decides whether to mount the webhook from
+  the `Settings` it is handed rather than from a `get_settings()` call of its
+  own — the caller already held that object and used it one line above, so the
+  self-call was the deviation; it meant a `create_app(settings=…)` carrying a
+  different `billing_webhook_secret` mounted according to the environment
+  instead. The generic path now logs a rejected signature (WARNING), a dedupe
+  no-op (INFO, a provider retry is normal, not an error) and a released claim
+  (ERROR, the one state that can need a human) — carrying the event id and the
+  provider, never the header value or the payload, since both are
+  attacker-controlled and a log with raw values turns the finding into a data
+  leak. And `_parse_stripe_header` converts the `t=` value through the existing
+  `_coerce_int` helper: the old `value.isdigit()` guard was both too permissive
+  and too naive, because `"²".isdigit()` is `True` while `int("²")` raises, and
+  a very long digit string trips CPython's ~4300-digit integer conversion
+  limit — either one propagated out as an unhandled exception. Negative values
+  stay rejected as before, so the endpoint's outward behaviour is unchanged.
+  Points 1 and 3 of the original finding remain open by design; they are
+  trade-offs awaiting an owner decision, not conventions to apply.
+
+- `deploy/hetzner/.env.example` now carries `MINIO_ROOT_PASSWORD` (Issue #458).
+  It was the one value the template never had, and the `minio` service reads it
+  with no default on purpose — an object store with standard credentials on a
+  public machine is an open door, so the compose stack refuses to start without
+  it. The effect was that an operator following `deploy/hetzner/README.md`
+  copied the template to `.env` and got a stack that would not even resolve,
+  with an error naming the variable but not the fact that the template had
+  never carried it. All three documented overlay combinations (base, `+cloud`,
+  `+local`) now resolve against the template with nothing exported into the
+  shell. The `:?` guard is untouched and still aborts on an empty value;
+  `MINIO_ROOT_USER` is deliberately left out, since it has a default at all
+  three read sites and listing it would imply a requirement that does not
+  exist.
+
 
 - Looking a persona up by name over MCP (`get_persona("Builder")`) could abort
   with an opaque tool error, while the same persona resolved fine by UUID. The

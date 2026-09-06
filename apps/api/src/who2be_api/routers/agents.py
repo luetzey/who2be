@@ -134,6 +134,29 @@ async def delete_agent(request: Request, agent_id: UUID, ctx: Ctx, service: Serv
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@router.put("/{agent_id}/favorite", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(write_limit)
+async def favorite_agent(request: Request, agent_id: UUID, ctx: Ctx, service: Service) -> Response:
+    """Markiert den Agenten als persoenlichen Favoriten des Aufrufers (#427).
+
+    Sub-Resource statt Feld in `AgentUpdate`: der Favorit gehoert dem User,
+    nicht dem Agenten (Muster `persona_playbooks`/`playbook_resources`).
+    Idempotent — ein erneuter PUT antwortet ebenfalls 204.
+    """
+    await service.set_favorite(ctx, agent_id, favorite=True)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.delete("/{agent_id}/favorite", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(write_limit)
+async def unfavorite_agent(
+    request: Request, agent_id: UUID, ctx: Ctx, service: Service
+) -> Response:
+    """Entfernt den Favoriten-Stern; idempotent (auch ohne gesetzten Stern 204)."""
+    await service.set_favorite(ctx, agent_id, favorite=False)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.post("/{agent_id}/copy", status_code=status.HTTP_201_CREATED)
 @limiter.limit(write_limit)
 async def copy_agent(

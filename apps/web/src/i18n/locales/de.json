@@ -260,7 +260,9 @@
       "empty": {
         "title": "Noch keine Agents",
         "description": "Lege deinen ersten Agent an, um Prompts mit einem Klick zu kopieren."
-      }
+      },
+      "favoritesSection": "Favoriten",
+      "othersSection": "Weitere Agents"
     },
     "status": {
       "enabled": "Aktiv",
@@ -288,7 +290,10 @@
       "pendingMemories_one": "{{count}} Gedächtniseintrag zur Freigabe",
       "pendingMemories_other": "{{count}} Gedächtniseinträge zur Freigabe",
       "pendingMemoriesAria_one": "{{count}} offenen Gedächtniseintrag von {{name}} prüfen",
-      "pendingMemoriesAria_other": "{{count}} offene Gedächtniseinträge von {{name}} prüfen"
+      "pendingMemoriesAria_other": "{{count}} offene Gedächtniseinträge von {{name}} prüfen",
+      "favorite": "Zu Favoriten hinzufügen: {{name}}",
+      "unfavorite": "Aus Favoriten entfernen: {{name}}",
+      "favoriteError": "Favorit konnte nicht gespeichert werden."
     },
     "form": {
       "identity": {
@@ -579,6 +584,7 @@
       "title": "Anmeldung",
       "description": "Melde dich mit deinem Who2Be-Konto an.",
       "forgotPassword": "Passwort vergessen?",
+      "rememberMe": "Angemeldet bleiben ({{hours}} h)",
       "submit": "Anmelden",
       "noAccount": "Noch kein Konto?",
       "register": "Registrieren",

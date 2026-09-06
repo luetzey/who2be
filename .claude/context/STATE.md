@@ -1,8 +1,225 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-06 (26. Lauf — Backlog aufbereitet, drei Issues agent-ready)_
+_Stand: 2026-09-06 (29. Lauf — Billing-Webhook-Restbefunde, #463)_
 
-## Backlog aufbereitet, drei Nebenfunde startbar (2026-09-06, 26. Lauf — nur GitHub + Doku)
+## Billing-Webhook: drei Restbefunde geschlossen (2026-09-06, 29. Lauf, #463)
+
+Drei Punkte aus dem Security-Review zu #452, die dort bewusst nicht mitgefixt
+wurden. Alle drei waren im Repo bereits durch eine Konvention beantwortet —
+umzusetzen ohne eine einzige neue Abwaegung.
+
+**Settings durchreichen statt selbst holen.** `include_routers` rief
+`get_settings()` selbst auf, obwohl der einzige Aufrufer das Objekt haelt und
+eine Zeile darueber `is_cloud(settings)` damit entscheidet. Folge: ein
+`create_app(settings=…)` mit abweichendem `billing_webhook_secret` mountete nach
+der UMGEBUNG statt nach dem uebergebenen Objekt. Zwei Tests setzen die Env
+bewusst **gegenlaeufig** zum Objekt — mit dem alten Selbstaufruf wuerden beide
+fehlschlagen.
+
+**Protokollierung ohne Preisgabe.** Abgewiesene Signatur (WARNING),
+Dedupe-No-Op (INFO — ein Provider-Retry ist der Normalfall, kein Fehler),
+freigegebener Claim (ERROR — der einzige Zustand, der einen Eingriff verlangen
+kann). Ereignis-ID und Anbieter, **nie** Header-Wert oder Payload: beide tragen
+Angreifer-kontrollierten Inhalt, ein Log mit Rohwerten macht aus dem Befund
+eine Datenluecke. Die Tests pruefen die Abwesenheit explizit, nicht nur die
+Anwesenheit der Zeile.
+
+**`_parse_stripe_header` ueber `_coerce_int`.** Der alte `value.isdigit()`-Test
+war zugleich zu freundlich und zu naiv: `"²".isdigit()` ist `True`, `int("²")`
+wirft; und ein sehr langer Ziffernstring reisst CPythons Konversionslimit
+(~4300 Stellen). Beides schlug als unbehandelte Exception durch. Der Helfer
+wurde ausweislich seines Kommentars fuer genau dieses Muster eingefuehrt — eine
+zweite Loesung daneben waere die Drift gewesen, die #452 gerade beseitigt hat.
+Negative Werte bleiben abgewiesen, damit sich das aeussere Verhalten nicht
+aendert (Gegenprobe als Test).
+
+**Punkte 1 und 3 bleiben offen** — sie sind Abwaegungen (404-/400-Orakel,
+Dedupe-Namensraum pro Anbieter) und warten auf eine Owner-Entscheidung. Sie
+gehen mit diesem Paket ausdruecklich **nicht** zu.
+
+**Nachweise:** `ruff check` / `ruff format --check` / `mypy` (456 Dateien)
+gruen; `WHO2BE_REQUIRE_DB=1 uv run pytest --cov --cov-fail-under=85` →
+**1851 passed, 0 skipped, 90.92 %** (vorher 1842); `uv run pytest
+packages/billing` → 89 passed.
+
+**Umgebungs-Falle, zweimal aufgetreten:** ein Session-Resume baut das venv ohne
+`--group billing` neu (dann meldet die Billing-Suite `ModuleNotFoundError`) und
+stoppt den lokalen Postgres. Beide Male hat der Skip-Guard aus ADR-0041 den
+Unterschied gemacht: ohne ihn waeren 452 Integrationstests still uebersprungen
+worden und der Lauf haette gruen gemeldet. `uv sync --group billing` und
+`pg_ctlcluster 16 main start` sind nach jedem Resume faellig.
+
+## Deploy-Vorlage loest wieder auf (2026-09-06, 28. Lauf, #458)
+
+`deploy/hetzner/.env.example` trug `MINIO_ROOT_PASSWORD` nicht. Der
+`minio`-Service liest die Variable bewusst **ohne** Default (`:?`-Guard, der
+einzige der ganzen Compose-Datei) — ein Objekt-Store mit Standard-Credentials
+auf einer oeffentlich erreichbaren Maschine ist eine offene Tuer. Folge: wer
+`deploy/hetzner/README.md` folgte und die Vorlage nach `.env` kopierte, bekam
+einen Stack, der sich nicht einmal **aufloesen** liess; die Fehlermeldung nannte
+die Variable, aber nicht, dass die Vorlage sie nie hatte.
+
+**Ein Eintrag, vier Belege.** Alle drei dokumentierten Overlay-Kombinationen
+loesen jetzt gegen die Vorlage auf, ohne dass etwas in die Shell exportiert wird
+(`BASIS-OK` / `CLOUD-OK` / `LOCAL-OK`), und die Gegenprobe zeigt den Guard
+unveraendert scharf: ein leerer Wert bricht weiterhin mit derselben Meldung ab.
+`MINIO_ROOT_USER` bleibt bewusst draussen — er traegt an allen drei Lesestellen
+einen Default, ihn zu fuehren wuerde eine Pflicht suggerieren, die nicht besteht.
+
+**Umgebungs-Notiz, die den Zuschnitt gerettet hat:** in dieser Session laeuft
+kein Docker-Daemon, und die Eskalationsregel des Issues sah genau darin einen
+Abbruchgrund. `docker compose config` braucht aber gar keinen Daemon — es
+parst und interpoliert nur. Die Akzeptanzkriterien waren damit vollstaendig
+belegbar. Regel daraus: bevor man eine Umgebungsgrenze als Blocker meldet,
+prueft man, ob das konkrete Kommando sie ueberhaupt beruehrt.
+
+## Agent-Favoriten stehen (2026-09-06, 27. Lauf, #427)
+
+Jedes Workspace-Mitglied kann einen Agent per Stern als **persoenlichen**
+Favoriten markieren; Favoriten stehen als eigene Gruppe oben auf der
+Agents-Seite. Serverseitig pro User gespeichert (`agent_favorite`, Migration
+0083), also ueberlebt der Zustand Reload und Geraetewechsel — zwei Mitglieder
+desselben Workspace sehen unterschiedliche Sterne.
+
+**Warum eine eigene Tabelle:** eine `is_pinned`-Spalte auf `agent` waere
+workspace-weit gewesen (widerspricht „pro User"), `localStorage` haette den
+Geraetewechsel nicht ueberlebt. `workspace_id` liegt denormalisiert auf der
+Zeile, weil die RLS-Policy sie dort braucht und sonst joinen muesste. **Keinen
+FK auf den User** — kein Schema referenziert den GoTrue-User; die Bereinigung
+bei Konto-Loeschung haengt deshalb an einer expliziten Zeile in
+`purge_account_data`, nicht an einem CASCADE.
+
+Der Stern kommt im **selben** Batch-Roundtrip wie die uebrigen List-Pills
+(`LEFT JOIN agent_favorite`) — ein zweiter Query haette das
+Ein-Roundtrip-Versprechen von `_enrich` gebrochen. Setzen/Entfernen sind zwei
+idempotente Sub-Resource-Routen (`PUT`/`DELETE .../agents/{id}/favorite`, je
+204), bewusst kein Feld in `AgentUpdate`: der Favorit gehoert dem User, nicht
+dem Agenten. Jedes Mitglied inkl. `viewer` darf markieren (ein Favorit ist ein
+privates Datum, kein Workspace-Inhalt); agent-gebundene Tokens bekommen 403.
+
+**Die Umgebung hat sich geaendert — das ist der wichtigere Teil dieses Laufs.**
+Bis hierher lief in dieser Session **kein** Docker, deshalb wurden alle
+Integrationstests still uebersprungen: `uv run pytest --cov` meldete
+`1305 passed, 448 skipped, 63.08 %` — das 85-%-Gate war schlicht unerreichbar
+und musste in jedem Python-Paket als „nicht verifiziert" offengelegt werden.
+Postgres 16 laesst sich hier aber **ohne** Docker installieren (`apt`, plus
+`pg_trgm` und `pgvector`); mit `DATABASE_URL` darauf laeuft die volle Suite:
+**1842 passed, 0 skipped, Coverage 90.92 %**. Die sieben neuen
+Integrationstests pruefen damit wirklich gegen eine DB, nicht gegen Mocks —
+insbesondere die Aufraeumpfade, die ein Mock nie widerlegt haette.
+
+**Der Security-Review (CLAUDE.md verlangt ihn fuer DB-Zugriff) fand einen
+Widerspruch im eigenen Entwurf.** Der Schreibpfad ist Menschen vorbehalten (403
+fuer agent-gebundene Tokens), weil ein Favorit „das private Datum eines
+Menschen" sei — die Leserichtung reichte ihn aber genau dorthin durch. Bei
+einem `w2b_`-Token ist `ctx.user_id` der MENSCH, dem der Token gehoert; ein
+Remote-Connector (fremder LLM-Anbieter) haette also gesehen, welche Agenten
+dieser Mensch markiert hat, und `list_agents` haette pro Token-Besitzer
+unterschiedlich geantwortet. Der Maschinen-Pfad uebergibt jetzt `None`
+(`fav.user_id = NULL` findet nie eine Zeile) — kein zweiter Query-Pfad noetig.
+
+Vier weitere Befunde, alle behoben: fehlendes `fav.workspace_id`-Praedikat im
+Join (heute kein Leak, aber genau die Argumentation, die F-Phase2-02 schon
+einmal verworfen hat); ein paralleler Agent-Delete zwischen Existenzpruefung
+und INSERT lief in einen 500 statt in den 404; die **DSGVO-Asymmetrie**
+(`purge_account_data` loeschte die Sterne, der Art.-15/20-Export lieferte sie
+nicht aus); und Sterne eines **entfernten Mitglieds**, die unbegrenzt in einem
+Workspace ohne Zugang ueberlebten und bei Re-Einladung wieder auftauchten. Die
+letzten beiden brauchten Dateien ausserhalb der Scope-Liste des Issues — vom
+Owner ausdruecklich freigegeben, statt sie zu vertagen.
+
+**Regel dahinter, uebertragbar:** wer eine Schreibsperre mit „das ist ein
+privates Datum" begruendet, muss die Leserichtung mitpruefen. Und: ein neuer
+personenbezogener Datensatz gehoert in **beide** DSGVO-Pfade (Loeschung UND
+Auskunft), nicht nur in den, an den man zuerst denkt.
+
+**Nachweise:** `uv run ruff check .` / `ruff format --check .` / `mypy .` (456
+Dateien) gruen; `WHO2BE_REQUIRE_DB=1 uv run pytest --cov --cov-fail-under=85`
+→ **1842 passed, 90.92 %**; `npm run lint` (0 errors), `npx tsc -b`,
+`npm run test:coverage` (**1110 Tests**, Branches 81.66 %), `npm run test:a11y`
+(53), `npm run build`; i18n-Paritaet `agents` in beide Richtungen leer;
+`openapi.json` + `openapi_surface.json` regeneriert mit **genau zwei** neuen
+Routen.
+
+**Zwei eigene Fehlgriffe, beide zurueckgenommen statt uebertuencht:** ein
+skriptgesteuertes Re-Indent von `AgentsPage.tsx` hat die Datei syntaktisch
+zerlegt; und `npx prettier --write` auf dieselbe Datei hat 500 Zeilen auf
+Prettier-Defaults umformatiert — das Repo hat **keine** Prettier-Config und
+benutzt Prettier nicht. Beide Male zurueckgesetzt und die Aenderung von Hand
+gemacht (94 statt 318 geaenderte Zeilen).
+
+## „Angemeldet bleiben" steht (2026-09-05, 26. Lauf, #430)
+
+Die Login-Seite traegt eine standardmaessig **nicht** gesetzte Checkbox. Mit
+Haken wandert genau diese Session von `sessionStorage` nach `localStorage` und
+ueberlebt neuen Tab + Browser-Neustart bis zu einer absoluten Obergrenze
+(`WHO2BE_SESSION_MAX_AGE_HOURS`, Runtime-Config, Default 12, Bereich 1-24,
+fail-closed auf 12). Ohne Haken bleibt das heutige Tab-Verhalten unveraendert.
+Plan `.claude/plan/2026-09-05-2255_login-remember-session.md`.
+
+**Cross-Tab-Logout war nicht zu bauen, sondern zu belegen.** `@supabase/auth-js`
+eroeffnet den `BroadcastChannel` bereits, sobald `persistSession` und
+`storageKey` gesetzt sind — beides gilt seit ADR-0035 unveraendert. Kein
+eigener Listener, kein eigener Kanal; `lib/supabase.test.ts` haelt die
+Vorbedingung fest, damit sie nicht unbemerkt wegkonfiguriert wird.
+
+**Der Security-Review (Pflicht laut Weiche 8) war der eigentliche Ertrag.** Er
+fand vier Wege, auf denen die Obergrenze — also genau das Argument, mit dem
+ADR-0052 die Lockerung von ADR-0035 rechtfertigt — wirkungslos blieb:
+
+1. Ein Login ohne Haken nach einem Login mit Haken liess den alten
+   Refresh-Token im `localStorage` liegen. Weil der Marker dabei verschwand,
+   fiel dieser Token zugleich aus der Ablaufpruefung — eine Datenleiche, die
+   **nie** abgelaufen waere.
+2. Marker und Zeitstempel standen in zwei Keys. Fehlte oder zerbrach der
+   zweite, galt die Session als unbegrenzt: ein `setItem` aus den DevTools
+   genuegte, um die Kappung dauerhaft abzuschalten (fail-open).
+3. `bootstrap()` und der `onAuthStateChange`-Handler teilen sich `apply()`. Ein
+   Lauf, der im Netzwerk-`fetchMe` haengt, konnte nach einem bereits erfolgten
+   Ablauf-Logout die Session zurueckschreiben und den Logout zuruecknehmen.
+4. „Ueberall abmelden" und die Account-Loeschung rufen `supabase.auth.signOut`
+   direkt auf; der Marker blieb stehen und der naechste Login ohne Checkbox
+   (OAuth, Magic-Link) landete ungefragt auf der Platte.
+
+Alle vier sind behoben: EIN atomarer Marker, der ohne lesbaren Zeitstempel als
+**abgelaufen** gilt (fail-closed statt fail-open); die Ablaufpruefung sitzt in
+`apply()` statt nur in `bootstrap()` und ist durch einen Generationszaehler
+gegen Ueberholmanoever geschuetzt; jeder Moduswechsel raeumt den Session-Blob
+des unzustaendigen Backends ab; ein zentraler `SIGNED_OUT`-Handler loescht den
+Marker unabhaengig von der Quelle. Der gesamte Marker-Zustand liegt jetzt in
+`apps/web/src/lib/remember-session.ts` — die vorherige Verdopplung der
+Key-Literale ueber zwei Dateien war die Ursache dafuer, dass drei der vier
+Befunde ueberhaupt entstehen konnten.
+
+**Nachweise:** `npm run lint` (0 errors), `npx tsc -b`, `npm run test:coverage`
+(188 Dateien, **1103 Tests gruen**; Statements 87.00 / Branches 81.63 /
+Functions 82.60 / Lines 88.03 — alle ueber den Schwellen 80/79/75/80),
+`npm run test:a11y` (53 gruen), `npm run build`, i18n-Paritaet `auth` in beide
+Richtungen leer. **Nicht verifiziert:** die beiden E2E-Journeys — in dieser
+Umgebung laeuft kein Docker, sie sind nur typgeprueft. Der CI-Job `e2e` faehrt sie.
+
+**Bewusst offen gelassen (als Folge-Issues erfasst, nicht still gefixt):**
+
+- Der Marker ist ein **globaler** Schalter im `localStorage`, kein Per-Tab-
+  Zustand. Ein Login in Tab B aendert das Storage-Routing eines parallel
+  laufenden Tab A. Eine Bindung des Markers an die Session-Identitaet ist ein
+  eigenes Paket.
+- `WHO2BE_SESSION_MAX_AGE_HOURS` ist in **keinem** Compose-`web`-Service
+  durchgereicht — der Entrypoint liest die Variable, aber kein Stack setzt sie.
+  Ein Betreiber, der auf 1 h haerten will, bekommt still 12 h. Weiche 7 des
+  Issues schliesst einen Compose-Diff in diesem Paket aus; beide
+  `.env.example` benennen die fehlende Verdrahtung.
+- Ein Befund **ausserhalb** des Pakets (`apps/api`, aal2-Gate bei der
+  API-Token-Ausstellung) ist getrennt gemeldet — nicht Teil dieser ADR.
+
+## Backlog aufbereitet, drei Nebenfunde startbar (2026-09-06, Vorbereitungslauf vor den Laeufen 26-29 — nur GitHub + Doku)
+
+> **Nachtrag beim Merge:** dieser Lauf lief VOR #430, #427, #458 und #463 und
+> hat sie startbar gemacht; alle vier sind inzwischen umgesetzt (Laeufe 26-29
+> oben). Der Eintrag traegt bewusst keine Ordnungszahl — #430 ist als „26. Lauf"
+> verzeichnet, und ein bereits gemergter Eintrag wird nicht nachtraeglich
+> umnummeriert. Von den drei hier als startbar gemeldeten Paketen ist **nur
+> #465 noch offen**.
 
 Vollstaendiger Vorbereitungslauf ueber alle 15 offenen Issues gegen die Norm
 „Agent-ready Arbeitspaket". Plan:
@@ -61,6 +278,7 @@ Warteschlange stehen zu bleiben.
 
 Kein Code an den Issues, keine neuen Issues, kein Claim. #454 und #338 tragen
 `human-only` — dort endet der Lauf nach Schritt 1 des Playbooks.
+
 
 ## Responsive-Fundament steht (2026-09-05, 25. Lauf, #438)
 

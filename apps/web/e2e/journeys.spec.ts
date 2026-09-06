@@ -1,6 +1,12 @@
 import { expect, test } from '@playwright/test'
 
-import { apiRequest, createUser, loginAs, seedWorkspace } from './helpers/auth'
+import {
+  apiRequest,
+  createUser,
+  loginAs,
+  seedWorkspace,
+  SESSION_STORAGE_KEY,
+} from './helpers/auth'
 
 /**
  * Kritische User-Journeys (ADR-0041, Phase 4 — duenne Spitze, 4 Pfade) gegen
@@ -227,4 +233,75 @@ test('Invitation-Accept inkl. Email-Mismatch-Guard', async ({ browser, request }
   await rightPage.getByTestId('invitation-accept-submit').click()
   await rightPage.waitForURL(/\/w\/.+/)
   await rightContext.close()
+})
+
+test('Angemeldet bleiben: neuer Tab bleibt eingeloggt (Issue #430 AC 1)', async ({
+  page,
+  context,
+  request,
+}) => {
+  const user = await createUser(request)
+  const { workspaceId } = await seedWorkspace(request, user)
+
+  // "Angemeldet bleiben"-Session direkt injizieren: derselbe Zustand, den ein
+  // echter Login MIT gesetztem Haken hinterlaesst (Session in `localStorage`
+  // statt `sessionStorage`, plus die beiden Flags aus `lib/supabase.ts` /
+  // `SessionProvider.tsx`). Passwort-Login + TOTP-Step-up haben eigene
+  // Vitest-Abdeckung (LoginPage.test.tsx) -- diese Journey testet
+  // ausschliesslich die Tab-/Neustart-Persistenz.
+  const signedInAt = Date.now() - 60_000 // 1 Minute alt, weit innerhalb der Default-Obergrenze (12 h)
+  await page.addInitScript(
+    ([sessionKey, sessionJson, rememberKey, marker]) => {
+      window.localStorage.setItem(sessionKey, sessionJson)
+      window.localStorage.setItem(rememberKey, marker)
+    },
+    [
+      SESSION_STORAGE_KEY,
+      JSON.stringify(user.session),
+      'who2be.auth.remember',
+      JSON.stringify({ signedInAt }),
+    ] as const,
+  )
+
+  await page.goto(`/w/${workspaceId}`)
+  // Eingeloggt: `WorkspaceIndexRedirect` landet auf dem Dashboard. Ohne
+  // erkannte Session wuerde `RequireAuth` stattdessen auf `/login` schicken.
+  await page.waitForURL(/\/w\/[^/]+\/dashboard$/)
+
+  // Neuer Tab IM SELBEN Browser-Context = dieselbe Storage-Partition wie
+  // echte Tabs eines Chrome-Profils: `localStorage` wird geteilt,
+  // `sessionStorage` nicht -- genau der Mechanismus, den AC 1 verlangt (kein
+  // erneuter Login, kein TOTP-Prompt).
+  const secondTab = await context.newPage()
+  await secondTab.goto(`/w/${workspaceId}`)
+  await secondTab.waitForURL(/\/w\/[^/]+\/dashboard$/)
+  await secondTab.close()
+})
+
+test('Angemeldet bleiben: abgelaufene Session verlangt vollen Login (Issue #430 AC 1)', async ({
+  page,
+  request,
+}) => {
+  const user = await createUser(request)
+  const { workspaceId } = await seedWorkspace(request, user)
+
+  // Zeitstempel weit VOR der Default-Obergrenze (12 h) -- `SessionProvider`
+  // muss das beim Boot erkennen, die Session verwerfen und auf `/login`
+  // schicken, statt sie zu committen.
+  const signedInAt = Date.now() - 13 * 60 * 60 * 1000
+  await page.addInitScript(
+    ([sessionKey, sessionJson, rememberKey, marker]) => {
+      window.localStorage.setItem(sessionKey, sessionJson)
+      window.localStorage.setItem(rememberKey, marker)
+    },
+    [
+      SESSION_STORAGE_KEY,
+      JSON.stringify(user.session),
+      'who2be.auth.remember',
+      JSON.stringify({ signedInAt }),
+    ] as const,
+  )
+
+  await page.goto(`/w/${workspaceId}`)
+  await page.waitForURL(/\/login/)
 })

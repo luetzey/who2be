@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
+import { clearRememberMarker } from '@/lib/remember-session'
 import { supabase } from '@/lib/supabase'
 import { notify } from '@/lib/feedback'
 
@@ -47,6 +48,11 @@ export function OAuthButtons({
 
   async function signInWith(provider: Provider) {
     setPending(provider)
+    // Nur die Login-Checkbox darf "angemeldet bleiben" einschalten. Ein aus
+    // einer frueheren Sitzung stehengebliebener Marker haette die
+    // OAuth-Session sonst ungefragt auf die Platte gelegt (Security-Review
+    // MEDIUM-6).
+    clearRememberMarker()
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: { redirectTo: buildRedirectTo('/auth/callback', next) },

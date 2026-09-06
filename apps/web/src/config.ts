@@ -42,6 +42,12 @@ interface Config {
   // Optionaler Kontakt (`WHO2BE_LAUNCH_CONTACT`, z. B. eine Mail-Adresse), der
   // auf der Hinweisseite angezeigt wird. Leerstring = kein Kontakt-Block.
   launchContact: string
+  // Absolute Obergrenze fuer "Angemeldet bleiben" auf der Login-Seite (Issue
+  // #430, ADR-0052): `WHO2BE_SESSION_MAX_AGE_HOURS`. Nur bei gesetztem Haken
+  // relevant — die heutige Tab-Lifetime-Session (kein Haken) ist davon
+  // unberuehrt. Default 12, gueltiger Bereich 1-24 (siehe
+  // `resolveSessionMaxAgeHours`).
+  sessionMaxAgeHours: number
 }
 
 /** Von `/config.js` gesetzte Runtime-Werte. Leerstring = „nicht gesetzt". */
@@ -53,6 +59,7 @@ export interface RuntimeConfig {
   signupDisabled?: boolean
   launchMode?: string
   launchContact?: string
+  sessionMaxAgeHours?: number
 }
 
 declare global {
@@ -96,6 +103,37 @@ function read(name: string, runtimeValue: string | undefined, devFallback: strin
 }
 
 const KNOWN_LAUNCH_MODES = new Set(['open', 'coming_soon'])
+
+const SESSION_MAX_AGE_HOURS_DEFAULT = 12
+const SESSION_MAX_AGE_HOURS_MIN = 1
+const SESSION_MAX_AGE_HOURS_MAX = 24
+
+/**
+ * Validiert `sessionMaxAgeHours` aus der Runtime-Config
+ * (`WHO2BE_SESSION_MAX_AGE_HOURS`, Issue #430). Gueltig ist nur 1-24 — das ist
+ * die absolute Obergrenze fuer "Angemeldet bleiben", sie darf weder durch
+ * einen fehlenden/falschen Env-Wert entfallen (Fail-Closed waere hier: Default
+ * statt "kein Limit") noch ueber 24 h hinauswachsen (harte Kappung). Fehlend
+ * ist der normale Fall (Dev-Server, `npm run dev`) und warnt bewusst nicht —
+ * ein gesetzter, aber ausserhalb des Bereichs liegender Wert deutet dagegen
+ * auf einen Konfigurationsfehler hin und warnt. Exportiert fuer die Tests.
+ */
+export function resolveSessionMaxAgeHours(value: number | undefined): number {
+  if (value === undefined) {
+    return SESSION_MAX_AGE_HOURS_DEFAULT
+  }
+  if (
+    !Number.isFinite(value) ||
+    value < SESSION_MAX_AGE_HOURS_MIN ||
+    value > SESSION_MAX_AGE_HOURS_MAX
+  ) {
+    console.warn(
+      `[who2be] Ungueltiger sessionMaxAgeHours "${value}" — falle zurueck auf ${SESSION_MAX_AGE_HOURS_DEFAULT}.`,
+    )
+    return SESSION_MAX_AGE_HOURS_DEFAULT
+  }
+  return value
+}
 
 /**
  * Validiert `launchMode` aus der Runtime-Config. Unbekannte/leere Werte
@@ -149,6 +187,7 @@ export function resolveConfig(): Config {
           'who2be-local-anon-key',
     launchMode,
     launchContact: rt.launchContact ?? '',
+    sessionMaxAgeHours: resolveSessionMaxAgeHours(rt.sessionMaxAgeHours),
     // Rueckwaerts-kompatibel (Issue #429, Weiche 2a): der Altschalter
     // (`VITE_WHO2BE_SIGNUP_DISABLED`) UND `launchMode === 'coming_soon'`
     // fuehren beide zu `signupDisabled`. `40-who2be-runtime-config.sh`

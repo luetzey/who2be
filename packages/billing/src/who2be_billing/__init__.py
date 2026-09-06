@@ -15,13 +15,13 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
-from who2be_api.core.config import get_settings
+from who2be_api.core.config import Settings
 from who2be_billing import router as _router
 
 __all__ = ["include_routers"]
 
 
-def include_routers(app: FastAPI, *, workspace_prefix: str) -> None:
+def include_routers(app: FastAPI, *, workspace_prefix: str, settings: Settings) -> None:
     """Registriert die Billing-Schreib-Routen an der Kern-App.
 
     - Top-Level (anonyme, signatur-/pull-gesicherte Webhooks): `/v1/billing/...`.
@@ -34,8 +34,16 @@ def include_routers(app: FastAPI, *, workspace_prefix: str) -> None:
     unkonfigurierter Endpunkt discoverable zu sein. Der Mollie-Pull-Webhook
     braucht kein Signatur-Secret (eigene Absicherung ueber den aktiven Fetch,
     siehe `mollie.py`) und wird davon unabhaengig immer gemountet.
+
+    `settings` wird uebergeben statt hier selbst geholt (Issue #463 Punkt 2):
+    der einzige Aufrufer (`who2be_api.main._register_billing_if_present`) haelt
+    das Objekt bereits und entscheidet eine Zeile darueber mit `is_cloud(settings)`
+    daran. Ein eigener `get_settings()`-Aufruf haette hier bedeutet, dass ein
+    `create_app(settings=…)` mit abweichendem `billing_webhook_secret` nach der
+    UMGEBUNG mountet statt nach dem uebergebenen Objekt — die Abweichung war der
+    Selbstaufruf, nicht das Durchreichen.
     """
-    if get_settings().billing_webhook_secret:
+    if settings.billing_webhook_secret:
         app.include_router(_router.webhook_router)
     app.include_router(_router.mollie_webhook_router)
     app.include_router(_router.router, prefix=workspace_prefix)

@@ -120,6 +120,38 @@ def _model_config_is_human_only() -> ApiGateError:
     )
 
 
+def _favorite_owner(ctx: WorkspaceContext) -> UUID | None:
+    """Wessen Sterne die Liste zeigt — `None` fuer Maschinen (#427).
+
+    Bei einem `w2b_`-Token ist `ctx.user_id` der MENSCH, dem der Token gehoert
+    (`core/security.py`, `resolve_principal`). Wuerden wir ihn hier
+    durchreichen, saehe der Agent — bei einem Remote-Connector ein fremder
+    LLM-Anbieter — die privaten Markierungen dieses Menschen, und `list_agents`
+    faenge an, pro Token-Besitzer unterschiedlich zu antworten. Genau mit dieser
+    Begruendung ist der Schreibpfad Menschen vorbehalten
+    (`_favorite_is_human_only`); die Leserichtung folgt ihr.
+    """
+    return None if ctx.is_api_token else ctx.user_id
+
+
+def _favorite_is_human_only() -> ApiGateError:
+    """403 fuer den Favoriten-Toggle durch einen agent-gebundenen Token (#427).
+
+    Ein Favorit ist das private Datum eines *Menschen*; ein Agent-Token hat
+    keine Oberflaeche, auf der ein Stern etwas bedeuten wuerde. Muster wie
+    `_delete_is_human_only`.
+    """
+    return ApiGateError(
+        status=status.HTTP_403_FORBIDDEN,
+        reason="missing_capability",
+        actionable_by="human",
+        detail=(
+            "Favoriten sind persoenliche Markierungen von Menschen — ein "
+            "agent-gebundener Token hat keine eigene Favoritenliste."
+        ),
+    )
+
+
 def _delete_is_human_only() -> ApiGateError:
     """403 fuer den Agent-Delete durch einen agent-gebundenen Token (H5)."""
     return ApiGateError(
@@ -259,16 +291,18 @@ class AgentService:
             # Self-Scope: hoechstens der eigene Agent, keine Pagination noetig.
             own = await self._repo.fetch(ctx.workspace_id, ctx.agent_id) if ctx.agent_id else None
             items = [own] if own is not None else []
-            return await self._enrich(ctx.workspace_id, items), None
+            return await self._enrich(ctx.workspace_id, items, _favorite_owner(ctx)), None
         rows = await self._repo.list_by_workspace(ctx.workspace_id, limit + 1, cursor)
         next_cursor: str | None = None
         if len(rows) > limit:
             rows = rows[:limit]
             tail = rows[-1]
             next_cursor = encode_cursor(tail.created_at, tail.id)
-        return await self._enrich(ctx.workspace_id, rows), next_cursor
+        return await self._enrich(ctx.workspace_id, rows, _favorite_owner(ctx)), next_cursor
 
-    async def _enrich(self, workspace_id: UUID, items: list[AgentRead]) -> list[AgentRead]:
+    async def _enrich(
+        self, workspace_id: UUID, items: list[AgentRead], user_id: UUID | None
+    ) -> list[AgentRead]:
         """Joint die List-Card-Pills (Batch-Aggregat) in die Reads (kein N+1).
 
         Ein einziger `list_meta`-Roundtrip fuer alle Agenten der Seite; fehlt ein
@@ -277,7 +311,7 @@ class AgentService:
         """
         if not items:
             return items
-        meta = await self._repo.list_meta(workspace_id, [a.id for a in items])
+        meta = await self._repo.list_meta(workspace_id, [a.id for a in items], user_id)
         enriched: list[AgentRead] = []
         for agent in items:
             found = meta.get(agent.id)
@@ -292,6 +326,7 @@ class AgentService:
                         "template_version": found.template_version,
                         "playbook_count": found.playbook_count,
                         "pending_memory_count": found.pending_memory_count,
+                        "is_favorite": found.is_favorite,
                     }
                 )
             )
@@ -486,6 +521,42 @@ class AgentService:
             raise _delete_blocked_by_access_log() from exc
         if not deleted:
             raise _not_found()
+
+    async def set_favorite(self, ctx: WorkspaceContext, agent_id: UUID, favorite: bool) -> None:
+        """Setzt oder entfernt den persoenlichen Stern (#427), idempotent.
+
+        Bewusst OHNE `require_role`: ein Favorit ist ein privates User-Datum
+        und veraendert kein Workspace-Aggregat. „viewer = lesen, nicht
+        schreiben" (ADR-0023) meint Inhalte — ein `viewer`, der sich seine
+        meistgenutzten Agenten markiert, schreibt nichts, was ein anderes
+        Mitglied je zu sehen bekaeme.
+
+        Agent-gebundene Tokens sind ausgeschlossen (403, s.
+        `_favorite_is_human_only`). Der Scope-Filter gilt trotzdem: ein
+        Aufrufer, der den Agenten nicht sehen darf, darf ihn auch nicht
+        markieren — sonst waere der Stern ein Existenz-Orakel.
+        """
+        if _is_agent_bound(ctx):
+            raise _favorite_is_human_only()
+        restrict = agent_read_restrict(ctx)
+        if restrict is not None and agent_id not in restrict:
+            raise _not_found()
+        # Fremder/unbekannter Agent => 404 (nicht 403): die Existenz eines
+        # Agenten aus einem anderen Workspace bleibt verborgen.
+        existing = await self._repo.fetch(ctx.workspace_id, agent_id)
+        if existing is None:
+            raise _not_found()
+        if favorite:
+            try:
+                await self._repo.add_favorite(ctx.workspace_id, agent_id, ctx.user_id)
+            except ForeignKeyViolationError as exc:
+                # Der Agent ist zwischen Existenzpruefung und INSERT geloescht
+                # worden (paralleler Delete, zweiter Tab). Ohne diesen Zweig
+                # kaeme der FK-Verstoss als 500 heraus — dieselbe Behandlung
+                # wie im Delete-Pfad oben.
+                raise _not_found() from exc
+        else:
+            await self._repo.remove_favorite(ctx.workspace_id, agent_id, ctx.user_id)
 
     @staticmethod
     def is_disabled(agent: AgentRead) -> bool:

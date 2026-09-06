@@ -158,8 +158,18 @@ def _parse_stripe_header(header: str) -> tuple[int, str] | None:
     signature: str | None = None
     for part in header.split(","):
         key, _, value = part.strip().partition("=")
-        if key == "t" and value.isdigit():
-            timestamp = int(value)
+        if key == "t":
+            # `_coerce_int` statt `value.isdigit()` (Issue #463 Punkt 5): der
+            # alte Test war zu freundlich UND zu naiv. `"²".isdigit()` ist
+            # `True`, `int("²")` wirft aber `ValueError`; und ein sehr langer
+            # Ziffernstring reisst CPythons Konversionslimit (~4300 Stellen,
+            # ebenfalls `ValueError`). Beides schlug bisher als unbehandelte
+            # Exception durch diese Funktion hindurch. Der Helfer wurde fuer
+            # genau dieses Muster eingefuehrt (s. Kommentar bei `_coerce_int`).
+            # Negative Werte bleiben abgewiesen wie zuvor — `isdigit()` liess
+            # sie nie zu, und das aeussere Verhalten soll sich nicht aendern.
+            parsed = _coerce_int(value)
+            timestamp = parsed if parsed is not None and parsed >= 0 else None
         elif key == "v1" and value:
             signature = value
     if timestamp is None or signature is None:

@@ -141,6 +141,16 @@
   },
   {
     "method": "DELETE",
+    "path": "/v1/workspaces/{workspace_id}/agents/{agent_id}/favorite",
+    "operationId": "unfavorite_agent_v1_workspaces__workspace_id__agents__agent_id__favorite_delete"
+  },
+  {
+    "method": "PUT",
+    "path": "/v1/workspaces/{workspace_id}/agents/{agent_id}/favorite",
+    "operationId": "favorite_agent_v1_workspaces__workspace_id__agents__agent_id__favorite_put"
+  },
+  {
+    "method": "DELETE",
     "path": "/v1/workspaces/{workspace_id}/agents/{agent_id}/memories",
     "operationId": "delete_all_memories_v1_workspaces__workspace_id__agents__agent_id__memories_delete"
   },

@@ -92,8 +92,10 @@ Admin-Aktionen wieder blockiert.
 
 Ein reiner Passwort-Login liefert bei einem Account mit verifiziertem TOTP-
 Faktor nur eine `aal1`-Sitzung (GoTrue meldet `nextLevel: 'aal2'`). Da die
-Sitzung in tab-lebensdauer-`sessionStorage` liegt, ist nach neuem Tab, Ablauf
-oder erneutem Login ein Step-up noetig — sonst blieben Admin-Aktionen blockiert.
+Sitzung per Default in tab-lebensdauer-`sessionStorage` liegt, ist nach neuem
+Tab, Ablauf oder erneutem Login ein Step-up noetig — sonst blieben
+Admin-Aktionen blockiert. (Die opt-in-Ausnahme dazu steht weiter unten:
+§"Angemeldet bleiben".)
 Der Login-Flow erledigt das automatisch (`apps/web/.../auth/pages/LoginPage.tsx`
 + `auth/SessionProvider.tsx`):
 
@@ -103,6 +105,45 @@ Der Login-Flow erledigt das automatisch (`apps/web/.../auth/pages/LoginPage.tsx`
 2. Die LoginPage zeigt ein TOTP-Code-Feld und fuehrt
    `mfa.challenge` + `mfa.verify` aus. Nach Erfolg traegt die Sitzung `aal2` und
    wird committed; der Nutzer landet an seinem urspruenglichen Ziel (`next`).
+
+## "Angemeldet bleiben" — opt-in Session-Persistenz (Issue #430, ADR-0052)
+
+Die Login-Seite traegt eine standardmaessig **nicht** gesetzte Checkbox
+„Angemeldet bleiben ({{stunden}} h)". Sie aendert NICHTS am Step-up oben —
+sie steuert nur, WO die (ggf. bereits `aal2`-gehobene) Session danach
+persistiert wird:
+
+- **Haken AUS (Default):** unveraendertes Verhalten. Die Session liegt in
+  `sessionStorage` (Tab-Lifetime) — jeder neue Tab und jeder Browser-Neustart
+  verlangt einen vollen Login inklusive TOTP-Step-up wie oben beschrieben.
+- **Haken AN:** die Session liegt stattdessen in `localStorage` und
+  ueberlebt neuen Tab + Browser-Neustart — **bis zu einer absoluten
+  Obergrenze** (`WHO2BE_SESSION_MAX_AGE_HOURS`, Default 12 h, Bereich 1-24).
+  Innerhalb dieser Frist entfaellt der Step-up in neuen Tabs (die Sitzung ist
+  ja bereits `aal2`, falls sie das beim Login war). **Nach Ablauf der
+  Obergrenze erzwingt `SessionProvider` beim naechsten Boot einen vollen
+  `supabase.auth.signOut()`** (Refresh-Token wird serverseitig ungueltig) —
+  der naechste Login durchlaeuft wieder den kompletten Flow oben, inklusive
+  Step-up.
+- **Reichweite der Obergrenze (wichtig fuer die Risiko-Einordnung):** Sie wird
+  **clientseitig** durchgesetzt — `SessionProvider` vergleicht vor jedem
+  Commit einer Session den Zeitstempel aus dem Marker `who2be.auth.remember`
+  (`localStorage`) und ruft daraufhin selbst `signOut()`. Ein Marker, aus dem
+  kein gueltiger Zeitstempel zu lesen ist, gilt dabei als abgelaufen
+  (fail-closed). Fuer einen normalen Nutzer ist die Grenze damit nicht
+  verlaengerbar. Sie ist aber **keine serverseitige Session-Lebensdauer**: wer
+  Schreibzugriff auf den `localStorage` hat (erfolgreicher XSS) oder das
+  Token-Paar aus dem Browser traegt, ist an diese Pruefung nicht gebunden — das
+  Refresh-Token bleibt bis zu seiner GoTrue-eigenen Lebensdauer gueltig.
+  `GOTRUE_JWT_EXP` und die Refresh-Rotation sind bewusst unveraendert
+  (ADR-0052 §Konsequenzen). Eine echte serverseitige Kappung braucht den dort
+  genannten Auth-BFF.
+- **Logout meldet alle offenen Tabs ab:** `@supabase/auth-js` broadcastet
+  `SIGNED_OUT` per `BroadcastChannel` an jeden gleichzeitig offenen Tab.
+  Ein waehrend des Logouts **geschlossener** Tab merkt das erst beim
+  naechsten Oeffnen — dort greift dann die Obergrenzen-Pruefung oben.
+- Details/Abwaegung (insb. warum das die XSS-Betrachtung aus ADR-0035 nicht
+  aufweicht): `docs/adr/0052-web-session-persistenz.md`.
 
 ## Betreiber-Empfehlung: Host-/Infra-Zugang
 
@@ -121,3 +162,11 @@ Der Login-Flow erledigt das automatisch (`apps/web/.../auth/pages/LoginPage.tsx`
   (Enroll/Verify/Liste) + `MfaSection.a11y.test.tsx` (axe). Login-Step-up:
   `apps/web/src/auth/SessionProvider.test.tsx` (aal1+pending → kein Commit) +
   `apps/web/src/features/auth/pages/LoginPage.test.tsx` (Code-Feld + verify).
+- "Angemeldet bleiben" (Issue #430): `SessionProvider.test.tsx` (Ablauf
+  erzwingt Logout, Session innerhalb der Obergrenze wird committed,
+  `signIn`/`signOut` setzen bzw. loeschen die Flags), `LoginPage.test.tsx`
+  (Checkbox-Default, Remember-Flag nur mit Haken), `config.test.ts`
+  (`resolveSessionMaxAgeHours`, Bereich 1-24, Fail-closed-Default) sowie
+  `lib/supabase.test.ts` (delegierender Storage-Adapter, Cross-Tab-Logout-
+  Vorbedingung). E2E-Journey (neuer Tab bleibt eingeloggt):
+  `apps/web/e2e/journeys.spec.ts`.

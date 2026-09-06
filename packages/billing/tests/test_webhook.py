@@ -19,6 +19,7 @@ import pytest
 
 from who2be_billing.webhook import (
     WebhookError,
+    _parse_stripe_header,
     extract_event_id,
     map_event_to_entitlement,
     parse_event,
@@ -317,3 +318,32 @@ def test_stripe_signature_rejects_non_ascii_v1_without_crashing() -> None:
     now = time.time()
     header = f"t={int(now)},v1={'é' * 64}"
     assert verify_webhook_signature(payload, header, _SECRET, now=now) is False
+
+
+# ---------------------------------------------------------------------------
+# Issue #463 Punkt 5: `_parse_stripe_header` wandelt den `t=`-Wert ueber
+# `_coerce_int`. Der alte `value.isdigit()`-Test war zu freundlich UND zu naiv.
+# ---------------------------------------------------------------------------
+def test_parse_stripe_header_survives_unicode_digit() -> None:
+    """`"²".isdigit()` ist True, `int("²")` wirft aber ValueError — der alte
+    Pfad liess die Exception durchschlagen."""
+    assert "²".isdigit() is True  # die Falle, schwarz auf weiss
+
+    assert _parse_stripe_header("t=²,v1=abc") is None
+
+
+def test_parse_stripe_header_survives_integer_conversion_limit() -> None:
+    """Ein sehr langer Ziffernstring reisst CPythons Konversionslimit
+    (~4300 Stellen, ValueError) — auch das schlug bisher durch."""
+    assert _parse_stripe_header(f"t={'1' * 5000},v1=abc") is None
+
+
+def test_parse_stripe_header_still_accepts_a_valid_timestamp() -> None:
+    """Gegenprobe: das bestehende Verhalten aendert sich nicht."""
+    assert _parse_stripe_header("t=1700000000,v1=abc") == (1700000000, "abc")
+
+
+def test_parse_stripe_header_still_rejects_negative_timestamp() -> None:
+    """`isdigit()` liess ein Minus nie zu; `_coerce_int` wuerde es akzeptieren.
+    Die zusaetzliche Bereichspruefung haelt das aeussere Verhalten gleich."""
+    assert _parse_stripe_header("t=-1700000000,v1=abc") is None

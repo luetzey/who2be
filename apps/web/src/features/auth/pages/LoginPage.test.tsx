@@ -89,6 +89,7 @@ const { mockConfig } = vi.hoisted(() => ({
     signupDisabled: false,
     launchMode: 'open' as 'open' | 'coming_soon',
     launchContact: '',
+    sessionMaxAgeHours: 12,
   },
 }))
 
@@ -103,6 +104,7 @@ describe('LoginPage', () => {
     mockConfig.signupDisabled = false
     mockConfig.launchMode = 'open'
     mockConfig.launchContact = ''
+    window.localStorage.clear()
   })
 
   it('versteckt den Registrieren-Link bei deaktiviertem Signup (Altschalter, kein Launch-Modus)', () => {
@@ -156,6 +158,74 @@ describe('LoginPage', () => {
         password: 'streng-geheim',
       })
     })
+  })
+
+  // Issue #430: Checkbox-Default ist AUS, Beschriftung interpoliert die
+  // konfigurierte Stundenzahl statt sie hart zu kodieren.
+  it('zeigt die Remember-Checkbox unangehakt mit der konfigurierten Stundenzahl', () => {
+    render(
+      <BrowserRouter>
+        <SessionProvider>
+          <LoginPage />
+        </SessionProvider>
+      </BrowserRouter>,
+    )
+
+    const checkbox = screen.getByLabelText('Angemeldet bleiben (12 h)')
+    expect(checkbox).not.toBeChecked()
+  })
+
+  it('setzt Remember-Flag + Login-Zeitstempel, wenn die Checkbox beim Login aktiviert ist (AC 1)', async () => {
+    signInWithPassword.mockResolvedValue({ data: { session: null }, error: null })
+    render(
+      <BrowserRouter>
+        <SessionProvider>
+          <LoginPage />
+        </SessionProvider>
+      </BrowserRouter>,
+    )
+
+    fireEvent.change(screen.getByLabelText('E-Mail'), {
+      target: { value: 'agent@who2be.dev' },
+    })
+    fireEvent.change(screen.getByLabelText('Passwort'), {
+      target: { value: 'streng-geheim' },
+    })
+    fireEvent.click(screen.getByLabelText('Angemeldet bleiben (12 h)'))
+    fireEvent.click(screen.getByRole('button', { name: 'Anmelden' }))
+
+    // Marker + Login-Zeitstempel stecken in EINEM Wert (ein `setItem`) —
+    // ein Marker ohne gueltigen Zeitstempel waere eine Session ohne
+    // Obergrenze und gilt deshalb als abgelaufen.
+    await waitFor(() => {
+      expect(window.localStorage.getItem('who2be.auth.remember')).not.toBeNull()
+    })
+    const marker = JSON.parse(window.localStorage.getItem('who2be.auth.remember') as string)
+    expect(typeof marker.signedInAt).toBe('number')
+  })
+
+  it('laesst ohne Haken das heutige Tab-Verhalten unveraendert — kein Remember-Flag (AC 2)', async () => {
+    signInWithPassword.mockResolvedValue({ data: { session: null }, error: null })
+    render(
+      <BrowserRouter>
+        <SessionProvider>
+          <LoginPage />
+        </SessionProvider>
+      </BrowserRouter>,
+    )
+
+    fireEvent.change(screen.getByLabelText('E-Mail'), {
+      target: { value: 'agent@who2be.dev' },
+    })
+    fireEvent.change(screen.getByLabelText('Passwort'), {
+      target: { value: 'streng-geheim' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Anmelden' }))
+
+    await waitFor(() => {
+      expect(signInWithPassword).toHaveBeenCalled()
+    })
+    expect(window.localStorage.getItem('who2be.auth.remember')).toBeNull()
   })
 
   it('fordert bei faelligem zweiten Faktor den TOTP-Code an und verifiziert ihn', async () => {

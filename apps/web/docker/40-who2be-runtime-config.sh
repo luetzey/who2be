@@ -32,6 +32,18 @@ else
   SIGNUP_DISABLED_JS=false
 fi
 
+# Absolute Obergrenze fuer "Angemeldet bleiben" (Issue #430, ADR-0052). Landet
+# unquoted als JS-Zahl-Literal — deshalb hier nur auf "ist eine nicht-leere
+# Ziffernfolge" pruefen (sonst zerlegt ein kaputter Wert die generierte
+# config.js syntaktisch). Die semantische Grenze (1-24) prueft `src/config.ts`
+# ohnehin nochmal fail-closed (Default 12 + `console.warn`) — ein hier
+# durchgelassener, aber ausserhalb des Bereichs liegender Wert (z. B. "0" oder
+# "999") faellt dort auf den Default zurueck.
+SESSION_MAX_AGE_HOURS="${WHO2BE_SESSION_MAX_AGE_HOURS:-12}"
+case "${SESSION_MAX_AGE_HOURS}" in
+  ''|*[!0-9]*) SESSION_MAX_AGE_HOURS=12 ;;
+esac
+
 cat > "${TARGET}" <<EOF
 // Generiert beim Container-Start (docker/40-who2be-runtime-config.sh).
 // Nicht editieren — Aenderungen ueberleben den naechsten Start nicht.
@@ -43,6 +55,7 @@ window.__WHO2BE_CONFIG__ = {
   signupDisabled: ${SIGNUP_DISABLED_JS},
   launchMode: "$(sanitize "${LAUNCH_MODE}")",
   launchContact: "$(sanitize "${WHO2BE_LAUNCH_CONTACT:-}")",
+  sessionMaxAgeHours: ${SESSION_MAX_AGE_HOURS},
 }
 EOF
 

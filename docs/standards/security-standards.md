@@ -2,7 +2,8 @@
 
 Sicherheit ist Teil des Designs, kein nachgelagerter Schritt. Repo-spezifische
 Befunde + Umsetzung: [`../security-findings.md`](../security-findings.md),
-[`../security-findings-phase-2.md`](../security-findings-phase-2.md), ADR-0035;
+[`../security-findings-phase-2.md`](../security-findings-phase-2.md), ADR-0052
+(loest ADR-0035 ab);
 Security-Header zentral im [`../../deploy/hetzner/Caddyfile`](../../deploy/hetzner/Caddyfile).
 Für Auth, DB-Zugriff, MCP-Tools und externe Inputs den Subagent
 **`security-reviewer`** nutzen.
@@ -20,7 +21,8 @@ Für Auth, DB-Zugriff, MCP-Tools und externe Inputs den Subagent
 - **Secrets bleiben server-seitig:** keine Keys/Tokens/Credentials im Client-Code
   oder im Bundle; nur bewusst Öffentliches wird exponiert.
 - **Tokens/Sessions in sicheren Cookies** (`httpOnly`/`Secure`/`SameSite`), nicht
-  im Web-Storage (dort per XSS auslesbar). *(Repo-Ausnahme + Begründung: ADR-0035.)*
+  im Web-Storage (dort per XSS auslesbar). *(Repo-Ausnahme + Begründung:
+  ADR-0052, die ADR-0035 ablöst.)*
 - **Untrusted HTML sanitisieren** vor dem Einfügen; XSS-Oberfläche minimieren.
 - **Security-Header auf genau einer Ebene** (Reverse-Proxy/Caddy), nicht doppelt:
   CSP, HSTS, X-Content-Type-Options, Referrer-Policy, Permissions-Policy,
