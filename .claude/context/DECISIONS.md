@@ -1303,3 +1303,25 @@ bleiben)._
 - **Offen:** die uebrigen ~76 `detail`-Stellen (#402 W1-Wn), die MCP-Client-
   Seite, die zwei Confinement-Raises in `routers/agents.py`, und die
   Content-Type-Vereinheitlichung (Weg C) als eigenes Vorhaben.
+
+## 2026-09-06 — aal2-Schwelle fuer Token-Ausstellung ist die *entstehende* Rolle
+- **Entscheidung:** `TokenService.create`/`.rotate` rufen `require_aal2` genau
+  dann, wenn die betroffene Token-Rolle `admin` ist — nicht bei jeder
+  Ausstellung, und nicht anhand der Rolle des Aufrufers. `rename`/`revoke`
+  bleiben ungegatet.
+- **Begruendung:** `require_role(ctx, admin)` setzt in `core/security.py`
+  bereits genau diese Schwelle fuer jede andere Admin-Aktion; fuer `editor`
+  gibt es im Repo keinen einzigen Fall eines aal2-Gates. Eine zweite,
+  strengere Schwelle waere eine neue Konvention statt der Anwendung der
+  bestehenden. Verallgemeinert gilt fuer jeden Pfad, der Rechte verteilt: die
+  Schwelle ist die Rolle, die dabei **entsteht**.
+- **`rotate` zaehlt mit:** es gibt ein neues, sofort gueltiges Secret fuer
+  dieselbe Rolle aus — ohne Gate waere `create` durch ein Rotate umgehbar. Die
+  Rolle wird dafuer VOR dem Rotate nachgeschlagen (`_current_role`), damit die
+  Pruefung feststeht, bevor ein Secret existiert.
+- **Verworfen:** ein eigenes Gate neben `require_aal2` (haette dessen zwei
+  Ausnahmen — Maschinen-Pfad und On-Prem-fail-open — nachbauen muessen und
+  waere beim naechsten Mal auseinandergelaufen); ein Uebergangs-Schalter fuer
+  die Migration (unnoetig: `require_aal2` kehrt bei `is_api_token` sofort
+  zurueck, bestehende Automatisierung bricht also nicht).
+- **Kontext:** Issue #469, aus dem Security-Review zu #430 (PR #468).

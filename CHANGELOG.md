@@ -8,6 +8,24 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ## [Unreleased]
 
+### Security
+
+- Issuing or rotating an API token with the `admin` role now requires an
+  MFA-verified (aal2) session. Until now the reach of the MFA requirement
+  depended on which path you took rather than on what you did: every other
+  admin action goes through `require_role(ctx, admin)`, which calls
+  `require_aal2` automatically — but *issuing a token that carries admin
+  rights* was gated on `editor` only, and the resulting token is itself exempt
+  from the MFA gate by design (machine path, like a GitHub PAT). `rotate` is
+  gated too and deliberately so: it hands out a new, immediately valid secret
+  for the same role, so without it the issuing threshold would have been
+  bypassable by rotating an existing admin token — the check runs *before* the
+  new secret exists. `rename` and `revoke` stay ungated because neither can
+  raise a role. Nothing changes for `editor` and `viewer` tokens, for calls
+  made through an existing API token, or for on-premise deployments without an
+  `aal` claim, since `require_aal2` already carries both exemptions
+  (Issue #469).
+
 ### Fixed
 
 - The `WHO2BE_SESSION_MAX_AGE_HOURS` runtime setting now reaches the web

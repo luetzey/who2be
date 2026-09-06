@@ -338,8 +338,15 @@ Umgebung laeuft kein Docker, sie sind nur typgeprueft. Der CI-Job `e2e` faehrt s
   docker-compose.yml`: dort reicht der `web`-Service **keine** der drei
   Runtime-Config-Variablen durch (`:272-277`, nur `WHO2BE_SIGNUP_DISABLED`);
   der Stack laeuft in keinem Check und ist als Nebenbefund an #470 notiert.
-- Ein Befund **ausserhalb** des Pakets (`apps/api`, aal2-Gate bei der
-  API-Token-Ausstellung) ist getrennt gemeldet — nicht Teil dieser ADR.
+- ~~Ein Befund **ausserhalb** des Pakets (`apps/api`, aal2-Gate bei der
+  API-Token-Ausstellung) ist getrennt gemeldet~~ — **behoben 2026-09-06
+  (#469).** `TokenService.create` und `.rotate` gaten auf `require_aal2`,
+  sobald die betroffene Token-Rolle `admin` ist; bei `rotate` wird die Rolle
+  vor dem Rotate nachgeschlagen, damit kein neues Secret entsteht, bevor die
+  Pruefung feststeht. Die im Issue vermutete Migrationswirkung war
+  gegenstandslos: `require_aal2` kehrt bei `ctx.is_api_token` sofort zurueck
+  und bleibt On-Prem ohne `aal`-Claim fail-open — beide Ausnahmen sind durch
+  eigene Tests belegt.
 
 ## Backlog aufbereitet, drei Nebenfunde startbar (2026-09-06, Vorbereitungslauf vor den Laeufen 26-29 — nur GitHub + Doku)
 

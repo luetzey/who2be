@@ -78,17 +78,19 @@ def _delete_agent(agent_id: UUID) -> None:
     asyncio.run(_run())
 
 
-def _jwt(owner_id: UUID) -> str:
-    return jwt.encode(
-        {
-            "sub": str(owner_id),
-            "aud": "authenticated",
-            "role": "authenticated",
-            "exp": datetime.now(UTC) + timedelta(hours=1),
-        },
-        _TEST_SECRET,
-        algorithm="HS256",
-    )
+def _jwt(owner_id: UUID, *, aal: str | None = None) -> str:
+    # `aal` (Authenticator Assurance Level, #469): unset by default, wie ein
+    # aelteres/handsigniertes Test-JWT ohne den GoTrue-Claim. Explizit gesetzt
+    # simuliert es eine aal1- bzw. aal2-Session fuer das Admin-MFA-Gate.
+    payload: dict[str, object] = {
+        "sub": str(owner_id),
+        "aud": "authenticated",
+        "role": "authenticated",
+        "exp": datetime.now(UTC) + timedelta(hours=1),
+    }
+    if aal is not None:
+        payload["aal"] = aal
+    return jwt.encode(payload, _TEST_SECRET, algorithm="HS256")
 
 
 def _add_member(ws: UUID, user_id: UUID, role: str) -> None:
@@ -370,5 +372,122 @@ def test_token_listing_pagination_and_validation(monkeypatch: pytest.MonkeyPatch
             assert client.get(f"{base}?limit=0", headers=jwt_auth).status_code == 422
             assert client.get(f"{base}?limit=201", headers=jwt_auth).status_code == 422
             assert client.get(f"{base}?cursor=!!!", headers=jwt_auth).status_code == 422
+    finally:
+        cleanup_workspaces([owner_id])
+
+
+@pytest.mark.integration
+def test_admin_token_create_requires_aal2(monkeypatch: pytest.MonkeyPatch) -> None:
+    """#469 AC1: ein `admin`-Token laesst sich nur aus einer aal2-Session anlegen.
+
+    Der Owner ist Workspace-`admin` (Seed) — ohne explizite `role` erbt der
+    Token also `admin` (Snapshot-Regel) und faellt unter das Admin-MFA-Gate.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner_id = fresh_user_id()
+    ws = setup_workspace(owner_id)
+    agent_id = str(_agent_in(ws))
+    base = f"/v1/workspaces/{ws}/tokens"
+
+    try:
+        with TestClient(app) as client:
+            aal1_auth = {"Authorization": f"Bearer {_jwt(owner_id, aal='aal1')}"}
+            blocked = client.post(
+                base, json={"name": "admin-token", "agent_id": agent_id}, headers=aal1_auth
+            )
+            assert blocked.status_code == 403
+            assert blocked.json()["reason"] == "mfa_required"
+
+            aal2_auth = {"Authorization": f"Bearer {_jwt(owner_id, aal='aal2')}"}
+            created = client.post(
+                base, json={"name": "admin-token", "agent_id": agent_id}, headers=aal2_auth
+            )
+            assert created.status_code == 201
+            assert created.json()["role"] == "admin"
+    finally:
+        cleanup_workspaces([owner_id])
+
+
+@pytest.mark.integration
+def test_admin_token_rotate_requires_aal2(monkeypatch: pytest.MonkeyPatch) -> None:
+    """#469 AC2: das Rotieren eines bestehenden `admin`-Tokens verlangt aal2.
+
+    Ohne das Gate koennte eine aal1-Session die Ausstellungs-Schwelle aus
+    `create` umgehen, indem sie einfach ein neues Secret fuer ein bestehendes
+    admin-Token anfordert.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner_id = fresh_user_id()
+    ws = setup_workspace(owner_id)
+    agent_id = str(_agent_in(ws))
+    base = f"/v1/workspaces/{ws}/tokens"
+
+    try:
+        with TestClient(app) as client:
+            aal2_auth = {"Authorization": f"Bearer {_jwt(owner_id, aal='aal2')}"}
+            created = client.post(
+                base, json={"name": "admin-token", "agent_id": agent_id}, headers=aal2_auth
+            )
+            assert created.status_code == 201
+            token_id = created.json()["id"]
+            old_plaintext = created.json()["token"]
+
+            aal1_auth = {"Authorization": f"Bearer {_jwt(owner_id, aal='aal1')}"}
+            blocked = client.post(f"{base}/{token_id}/rotate", headers=aal1_auth)
+            assert blocked.status_code == 403
+            assert blocked.json()["reason"] == "mfa_required"
+
+            # Das alte Secret ist durch den Block-Versuch nicht mutiert worden
+            # (Gate greift VOR dem Rotate) — es authentifiziert weiterhin.
+            assert (
+                client.get(
+                    "/v1/me", headers={"Authorization": f"Bearer {old_plaintext}"}
+                ).status_code
+                == 200
+            )
+
+            rotated = client.post(f"{base}/{token_id}/rotate", headers=aal2_auth)
+            assert rotated.status_code == 200
+    finally:
+        cleanup_workspaces([owner_id])
+
+
+@pytest.mark.integration
+def test_editor_token_create_and_rotate_unaffected_by_admin_mfa_gate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#469 AC3: `editor`-Tokens sind vom Admin-MFA-Gate nicht betroffen."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    owner_id = fresh_user_id()
+    ws = setup_workspace(owner_id)
+    agent_id = str(_agent_in(ws))
+    base = f"/v1/workspaces/{ws}/tokens"
+    aal1_auth = {"Authorization": f"Bearer {_jwt(owner_id, aal='aal1')}"}
+
+    try:
+        with TestClient(app) as client:
+            created = client.post(
+                base,
+                json={"name": "editor-token", "role": "editor", "agent_id": agent_id},
+                headers=aal1_auth,
+            )
+            assert created.status_code == 201
+            assert created.json()["role"] == "editor"
+            token_id = created.json()["id"]
+
+            rotated = client.post(f"{base}/{token_id}/rotate", headers=aal1_auth)
+            assert rotated.status_code == 200
     finally:
         cleanup_workspaces([owner_id])
