@@ -5,63 +5,27 @@ import { fetchMe } from '@/api/client'
 import type { Me } from '@/api/types'
 
 import { config } from '../config'
+import {
+  clearRememberMarker,
+  markRememberedLogin,
+  purgeStoredSessionFrom,
+  readRememberMarker,
+  rememberedSessionExpired,
+  restoreRememberMarker,
+} from '../lib/remember-session'
 import { supabase } from '../lib/supabase'
 import { SessionContext, type SessionValue } from './session-context'
 
-// "Angemeldet bleiben" (Issue #430, ADR-0052). Zwei localStorage-Keys, gesetzt
-// vom Login (`signIn`, s.u.) und gelesen von der Ablaufpruefung beim Boot
-// sowie vom delegierenden Storage-Adapter (`lib/supabase.ts`). Bewusst als
-// lokale String-Literale statt Import aus `lib/supabase.ts`: viele bestehende
-// Tests mocken `@/lib/supabase` minimal (nur `{ supabase: {...} }|`); ein
-// echter Cross-Import wuerde deren Mocks brechen, sobald SessionProvider eine
-// dort nicht gestubte Funktion aufruft. Beide Dateien muessen bei einer
-// Aenderung der Key-Namen synchron gehalten werden.
-const REMEMBER_ME_KEY = 'who2be.auth.remember'
-const SIGNED_IN_AT_KEY = 'who2be.auth.signed_in_at'
+// "Angemeldet bleiben" (Issue #430, ADR-0052). Der gesamte Marker-Zustand
+// liegt in `lib/remember-session.ts` — eine Quelle fuer den Storage-Adapter
+// (`lib/supabase.ts`), die Ablaufpruefung hier und den Logout in der
+// Account-Seite. Das Modul importiert nichts aus `lib/supabase.ts`, deshalb
+// bleiben die vielen `vi.mock('@/lib/supabase', …)`-Stubs der Bestandstests
+// davon unberuehrt.
 const SESSION_MAX_AGE_MS = config.sessionMaxAgeHours * 60 * 60 * 1000
 
-/** Setzt Remember-Flag + Login-Zeitstempel VOR `signInWithPassword` — der
- * Storage-Adapter liest das Flag live und muss die gleich folgende Session
- * direkt ins richtige Backend (`localStorage`) schreiben. */
-function markRememberedLogin(): void {
-  try {
-    window.localStorage.setItem(REMEMBER_ME_KEY, 'true')
-    window.localStorage.setItem(SIGNED_IN_AT_KEY, String(Date.now()))
-  } catch {
-    // Privacy-Mode/Quota — der Login funktioniert weiter, nur ohne Persistenz
-    // ueber den Tab hinaus (faellt effektiv auf Tab-Lifetime zurueck).
-  }
-}
-
-/** Loescht beide Keys — Logout (jeder Tab) und erzwungener Ablauf-Logout. */
-function clearRememberedSession(): void {
-  try {
-    window.localStorage.removeItem(REMEMBER_ME_KEY)
-    window.localStorage.removeItem(SIGNED_IN_AT_KEY)
-  } catch {
-    // s.o. — nichts zu tun, es war ohnehin nichts persistiert.
-  }
-}
-
-function readSignedInAt(): number | null {
-  try {
-    const raw = window.localStorage.getItem(SIGNED_IN_AT_KEY)
-    if (raw === null) return null
-    const parsed = Number(raw)
-    return Number.isFinite(parsed) ? parsed : null
-  } catch {
-    return null
-  }
-}
-
-// `signed_in_at` existiert NUR, wenn beim Login der Haken gesetzt war
-// (`markRememberedLogin`) — eine normale Tab-Lifetime-Session hat keinen
-// Zeitstempel und wird hier deshalb nie als abgelaufen erkannt (sie endet
-// ohnehin mit dem Tab, AC 2 bleibt unberuehrt).
-function rememberedSessionExpired(): boolean {
-  const signedInAt = readSignedInAt()
-  if (signedInAt === null) return false
-  return Date.now() - signedInAt > SESSION_MAX_AGE_MS
+function sessionOverMaxAge(): boolean {
+  return rememberedSessionExpired(SESSION_MAX_AGE_MS)
 }
 
 // Atomare me+session-Reihenfolge — Hintergrund:
@@ -120,8 +84,35 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // signOut, signIn aus einem anderen Tab/Reload).
   useEffect(() => {
     let cancelled = false
+    // Generationszaehler gegen ein Ueberholmanoever: `bootstrap()` und der
+    // `onAuthStateChange`-Handler laufen nebenlaeufig auf derselben `apply()`.
+    // auth-js stellt einem frisch registrierten Subscriber sofort ein
+    // `INITIAL_SESSION` zu (`GoTrueClient.js`), sodass zwei `apply()`-Laeufe
+    // fuer dieselbe Session starten koennen — einer davon mit einem
+    // Netzwerk-`fetchMe` dazwischen. Ohne Zaehler konnte der langsamere Lauf
+    // nach einem bereits erfolgten Ablauf-Logout `setSession(X)` schreiben und
+    // den Logout damit stillschweigend zuruecknehmen (Security-Review
+    // MEDIUM-3). Jetzt gewinnt immer der zuletzt gestartete Lauf.
+    let generation = 0
 
     async function apply(nextSession: Session | null) {
+      const current = ++generation
+      const stale = () => cancelled || current !== generation
+      // Ablaufpruefung vor JEDEM Commit, nicht nur beim Boot: eine ueber der
+      // Obergrenze liegende "angemeldet bleiben"-Session wird nie committed,
+      // egal ob sie aus `getSession()`, einem `TOKEN_REFRESHED` oder einem
+      // anderen Tab kommt. Erzwingt einen vollen Logout inkl. GoTrue-seitigem
+      // `signOut` — kein 2FA-Bypass beim naechsten Login.
+      if (nextSession !== null && sessionOverMaxAge()) {
+        await supabase.auth.signOut()
+        clearRememberMarker()
+        purgeStoredSessionFrom('local')
+        if (stale()) return
+        lastTokenRef.current = null
+        setMe(null)
+        setSession(null)
+        return
+      }
       const nextToken = nextSession?.access_token ?? null
       if (lastTokenRef.current === nextToken) {
         return
@@ -131,13 +122,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       // Event aus signIn, einem Reload oder einem Refresh stammt. Erst der
       // Challenge-Schritt der LoginPage hebt sie auf aal2 und committet dann.
       if (nextSession !== null && (await mfaStepUpPending())) {
-        if (cancelled) return
+        if (stale()) return
         setMe(null)
         setSession(null)
         return
       }
       const resolved = await resolveMe(nextSession?.access_token)
-      if (cancelled) return
+      if (stale()) return
       setMe(resolved)
       setSession(nextSession)
     }
@@ -145,26 +136,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     async function bootstrap() {
       const { data } = await supabase.auth.getSession()
       if (cancelled) return
-      // Ablaufpruefung VOR dem Commit (Issue #430, ADR-0052): ueberschreitet
-      // eine "angemeldet bleiben"-Session die absolute Obergrenze, erzwingt
-      // das einen vollen Logout inkl. GoTrue-seitigem `signOut` — kein
-      // Committen der (technisch noch gueltigen) Session, kein 2FA-Bypass
-      // beim naechsten Login. Betrifft nur neue Tabs/Browser-Neustart: ein
-      // bereits offener, laufender Tab wird hier nicht neu geprueft.
-      if (data.session !== null && rememberedSessionExpired()) {
-        await supabase.auth.signOut()
-        clearRememberedSession()
-        if (cancelled) return
-        await apply(null)
-      } else {
-        await apply(data.session)
-      }
+      await apply(data.session)
       if (cancelled) return
       setSessionLoaded(true)
     }
     void bootstrap()
 
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      // Ein Logout — egal aus welcher Quelle, auch „Ueberall abmelden" auf der
+      // Account-Seite oder der Broadcast aus einem anderen Tab — beendet auch
+      // den "angemeldet bleiben"-Modus. Ohne das erbte der naechste Login ohne
+      // Checkbox (OAuth, Magic-Link, Invitation) den stehengebliebenen Marker
+      // und landete ungefragt auf der Platte (Security-Review MEDIUM-6).
+      if (event === 'SIGNED_OUT') {
+        clearRememberMarker()
+      }
       void apply(nextSession)
     })
 
@@ -175,22 +161,30 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const signIn = useCallback(async (email: string, password: string, remember: boolean) => {
-    // VOR signInWithPassword setzen/loeschen: der delegierende Storage-
-    // Adapter (`lib/supabase.ts`) liest das Flag live und muss die gleich
+    // Marker VOR `signInWithPassword` setzen/loeschen: der delegierende
+    // Storage-Adapter (`lib/supabase.ts`) liest ihn live und muss die gleich
     // folgende Session direkt ins richtige Backend schreiben — kein
     // nachtraeglicher Storage-Wechsel.
+    const previousMarker = readRememberMarker()
     if (remember) {
       markRememberedLogin()
     } else {
-      clearRememberedSession()
+      clearRememberMarker()
     }
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
-      // Fehlgeschlagener Login: kein Datenrest eines evtl. gesetzten
-      // Remember-Flags ohne zugehoerige Session.
-      clearRememberedSession()
+      // Fehlversuch aendert den Modus nicht: den vorherigen Marker exakt
+      // wiederherstellen, statt pauschal zu loeschen. Ein Tippfehler im
+      // Passwort duerfte sonst eine laufende "angemeldet bleiben"-Session in
+      // einem anderen Tab ins falsche Backend umlenken.
+      restoreRememberMarker(previousMarker)
       throw new Error(error.message)
     }
+    // Der Moduswechsel laesst den Session-Blob des vorherigen Modus im nun
+    // unzustaendigen Backend liegen. Blieb er dort, war er eine Datenleiche
+    // ausserhalb jeder Ablaufpruefung — der Marker, an dem die Kappung haengt,
+    // wurde ja gerade umgestellt (Security-Review HIGH-1).
+    purgeStoredSessionFrom(remember ? 'session' : 'local')
     // Steht eine Step-up-Challenge aus, die aal1-Session NICHT committen — die
     // LoginPage fordert dann den TOTP-Code an. `apply()` (via onAuthStateChange)
     // haelt dieselbe Session ohnehin zurueck; hier signalisieren wir es nur an
@@ -207,11 +201,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     // Reihenfolge wichtig: `signOut()` entfernt den Session-Key ueber den
-    // delegierenden Adapter, der dafuer noch das AKTUELLE Remember-Flag
-    // braucht (sonst sucht er im falschen Backend und der Token bleibt als
-    // Datenleiche liegen). Das Flag selbst erst danach loeschen.
+    // delegierenden Adapter, der dafuer noch den AKTUELLEN Marker braucht
+    // (sonst sucht er im falschen Backend und der Token bleibt als Datenleiche
+    // liegen). Den Marker selbst raeumt der `SIGNED_OUT`-Handler oben ab.
     await supabase.auth.signOut()
-    clearRememberedSession()
+    clearRememberMarker()
+    purgeStoredSessionFrom('local')
     lastTokenRef.current = null
     setSession(null)
     setMe(null)

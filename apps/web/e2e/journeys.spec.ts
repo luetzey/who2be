@@ -235,7 +235,6 @@ test('Invitation-Accept inkl. Email-Mismatch-Guard', async ({ browser, request }
   await rightContext.close()
 })
 
-
 test('Angemeldet bleiben: neuer Tab bleibt eingeloggt (Issue #430 AC 1)', async ({
   page,
   context,
@@ -252,17 +251,15 @@ test('Angemeldet bleiben: neuer Tab bleibt eingeloggt (Issue #430 AC 1)', async 
   // ausschliesslich die Tab-/Neustart-Persistenz.
   const signedInAt = Date.now() - 60_000 // 1 Minute alt, weit innerhalb der Default-Obergrenze (12 h)
   await page.addInitScript(
-    ([sessionKey, sessionJson, rememberKey, signedInAtKey, signedInAtValue]) => {
+    ([sessionKey, sessionJson, rememberKey, marker]) => {
       window.localStorage.setItem(sessionKey, sessionJson)
-      window.localStorage.setItem(rememberKey, 'true')
-      window.localStorage.setItem(signedInAtKey, signedInAtValue)
+      window.localStorage.setItem(rememberKey, marker)
     },
     [
       SESSION_STORAGE_KEY,
       JSON.stringify(user.session),
       'who2be.auth.remember',
-      'who2be.auth.signed_in_at',
-      String(signedInAt),
+      JSON.stringify({ signedInAt }),
     ] as const,
   )
 
@@ -293,17 +290,15 @@ test('Angemeldet bleiben: abgelaufene Session verlangt vollen Login (Issue #430 
   // schicken, statt sie zu committen.
   const signedInAt = Date.now() - 13 * 60 * 60 * 1000
   await page.addInitScript(
-    ([sessionKey, sessionJson, rememberKey, signedInAtKey, signedInAtValue]) => {
+    ([sessionKey, sessionJson, rememberKey, marker]) => {
       window.localStorage.setItem(sessionKey, sessionJson)
-      window.localStorage.setItem(rememberKey, 'true')
-      window.localStorage.setItem(signedInAtKey, signedInAtValue)
+      window.localStorage.setItem(rememberKey, marker)
     },
     [
       SESSION_STORAGE_KEY,
       JSON.stringify(user.session),
       'who2be.auth.remember',
-      'who2be.auth.signed_in_at',
-      String(signedInAt),
+      JSON.stringify({ signedInAt }),
     ] as const,
   )
 

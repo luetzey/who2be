@@ -1240,3 +1240,29 @@ bleiben)._
   Stand) ist geschnitten und liegt als #462 vor — `updated_at` ist die
   Schreibzeit, nicht die Ereigniszeit, und eine Migration war fuer dieses Paket
   ausgeschlossen.
+
+## 2026-09-05 — `sessionStorage`-Zwang revidiert: opt-in Persistenz mit Kappung (#430)
+
+- **Entscheidung:** ADR-0035 („Web-Session ausschliesslich im `sessionStorage`")
+  wird durch **ADR-0052** abgeloest. Der Default bleibt Tab-Lifetime; wer die
+  Login-Checkbox setzt, bekommt `localStorage` mit einer absoluten Obergrenze
+  (`WHO2BE_SESSION_MAX_AGE_HOURS`, Default 12, Bereich 1-24).
+- **Begruendung:** ADR-0035s XSS-Abwaegung bleibt richtig — fuer den Default.
+  Der 2FA-Prompt pro Tab war die groesste Alltagsreibung; sie zu beseitigen,
+  ohne die Abwaegung fuer alle aufzugeben, geht nur ueber ein Opt-in mit
+  harter Kappung. Zwei widersprechende ADRs im Repo waeren der teuerste
+  Ausgang gewesen, deshalb Abloesung statt DECISIONS-Eintrag allein.
+- **Ebenfalls festgelegt (aus dem Security-Review):** Der Marker fuer
+  „angemeldet bleiben" ist EIN atomarer Wert, und ein Marker ohne lesbaren
+  Zeitstempel gilt als **abgelaufen**. Die vorherige Trennung in zwei Keys war
+  fail-open — ein fehlender Zeitstempel hiess „keine Obergrenze", also genau
+  der Zustand, den die ADR ausschliesst. Regel dahinter, uebertragbar: wer eine
+  Schranke an einen zweiten, separat geschriebenen Wert haengt, hat sie
+  abschaltbar gemacht.
+- **Ebenfalls festgelegt:** Jeder Wechsel des Storage-Backends raeumt den
+  Session-Blob des nicht mehr zustaendigen Backends ab. Ein Token, der ohne
+  seinen Marker liegenbleibt, faellt aus jeder Ablaufpruefung heraus.
+- **Offen:** Der Marker ist ein globaler Schalter, kein Per-Tab-Zustand
+  (Tab-uebergreifendes Umlenken moeglich); `WHO2BE_SESSION_MAX_AGE_HOURS` ist
+  in keinem Compose-`web`-Service verdrahtet (Weiche 7 schliesst den
+  Compose-Diff hier aus). Beides als Folge-Issue erfasst.

@@ -231,19 +231,22 @@ describe('SessionProvider', () => {
 // ---------------------------------------------------------------------------
 // "Angemeldet bleiben" (Issue #430, ADR-0052). Kein `@/config`-Mock in dieser
 // Datei -- es greift die echte `resolveConfig()` (Default `sessionMaxAgeHours
-// = 12`, kein `window.__WHO2BE_CONFIG__` in jsdom gesetzt). Beide
-// localStorage-Keys sind dieselben String-Literale wie in
-// `SessionProvider.tsx`/`lib/supabase.ts` (bewusst kein Cross-Import, siehe
-// Kommentar dort).
+// = 12`, kein `window.__WHO2BE_CONFIG__` in jsdom gesetzt). `lib/remember-
+// session.ts` ist ebenfalls NICHT gemockt: das Modul fasst nur `window`-
+// Storage an, die echte Implementierung ist hier der Pruefgegenstand.
 // ---------------------------------------------------------------------------
 const REMEMBER_KEY = 'who2be.auth.remember'
-const SIGNED_IN_AT_KEY = 'who2be.auth.signed_in_at'
+const SESSION_KEY = 'who2be.auth.session'
 const HOUR_MS = 60 * 60 * 1000
+
+function markerAgedHours(hours: number): string {
+  return JSON.stringify({ signedInAt: Date.now() - hours * HOUR_MS })
+}
 
 describe('SessionProvider -- Ablaufpruefung "angemeldet bleiben" (Issue #430 AC 1)', () => {
   it('erzwingt beim Boot einen vollen Logout, wenn die Obergrenze ueberschritten ist', async () => {
-    window.localStorage.setItem(REMEMBER_KEY, 'true')
-    window.localStorage.setItem(SIGNED_IN_AT_KEY, String(Date.now() - 13 * HOUR_MS))
+    window.localStorage.setItem(REMEMBER_KEY, markerAgedHours(13))
+    window.localStorage.setItem(SESSION_KEY, 'stale-blob')
 
     const staleSession = { access_token: 'stale-jwt' } as unknown as Session
     getSession.mockResolvedValueOnce({ data: { session: staleSession }, error: null })
@@ -263,13 +266,15 @@ describe('SessionProvider -- Ablaufpruefung "angemeldet bleiben" (Issue #430 AC 
     expect(screen.getByTestId('me').textContent).toBe('<none>')
     expect(signOut).toHaveBeenCalledTimes(1)
     expect(window.localStorage.getItem(REMEMBER_KEY)).toBeNull()
-    expect(window.localStorage.getItem(SIGNED_IN_AT_KEY)).toBeNull()
+    // Der Session-Blob darf nicht liegenbleiben: ohne Marker faellt er aus
+    // der Ablaufpruefung heraus und waere damit unbefristet gueltig.
+    expect(window.localStorage.getItem(SESSION_KEY)).toBeNull()
     expect(fetchMe).not.toHaveBeenCalled()
   })
 
   it('committet eine "angemeldet bleiben"-Session innerhalb der Obergrenze ohne erneuten Login', async () => {
-    window.localStorage.setItem(REMEMBER_KEY, 'true')
-    window.localStorage.setItem(SIGNED_IN_AT_KEY, String(Date.now() - 1 * HOUR_MS))
+    const marker = markerAgedHours(1)
+    window.localStorage.setItem(REMEMBER_KEY, marker)
 
     const freshSession = { access_token: 'remembered-jwt' } as unknown as Session
     getSession.mockResolvedValueOnce({ data: { session: freshSession }, error: null })
@@ -285,13 +290,13 @@ describe('SessionProvider -- Ablaufpruefung "angemeldet bleiben" (Issue #430 AC 
       expect(screen.getByTestId('me').textContent).toBe('u1')
     })
     expect(signOut).not.toHaveBeenCalled()
-    // Flags bleiben stehen -- der neue Tab/Neustart ist gerade der Zweck.
-    expect(window.localStorage.getItem(REMEMBER_KEY)).toBe('true')
+    // Marker bleibt stehen -- der neue Tab/Neustart ist gerade der Zweck.
+    expect(window.localStorage.getItem(REMEMBER_KEY)).toBe(marker)
   })
 
-  it('prueft eine Session ohne Remember-Flag (heutiges Tab-Verhalten) nie auf Ablauf', async () => {
-    // Kein `signed_in_at` gesetzt -- kann bei einer normalen Tab-Lifetime-
-    // Session auch gar nicht der Fall sein (AC 2 bleibt unberuehrt).
+  it('prueft eine Session ohne Marker (heutiges Tab-Verhalten) nie auf Ablauf', async () => {
+    // Kein Marker gesetzt -- kann bei einer normalen Tab-Lifetime-Session
+    // auch gar nicht der Fall sein (AC 2 bleibt unberuehrt).
     const tabSession = { access_token: 'tab-jwt' } as unknown as Session
     getSession.mockResolvedValueOnce({ data: { session: tabSession }, error: null })
 
@@ -307,7 +312,7 @@ describe('SessionProvider -- Ablaufpruefung "angemeldet bleiben" (Issue #430 AC 
     expect(signOut).not.toHaveBeenCalled()
   })
 
-  it('signIn(remember=true) setzt Remember-Flag + Login-Zeitstempel VOR signInWithPassword', async () => {
+  it('signIn(remember=true) setzt den Marker VOR signInWithPassword', async () => {
     signInWithPassword.mockResolvedValue({
       data: { session: { access_token: 'new-jwt' } },
       error: null,
@@ -333,10 +338,10 @@ describe('SessionProvider -- Ablaufpruefung "angemeldet bleiben" (Issue #430 AC 
     fireEvent.click(screen.getByRole('button', { name: 'signin' }))
 
     await waitFor(() => {
-      expect(window.localStorage.getItem(REMEMBER_KEY)).toBe('true')
+      expect(window.localStorage.getItem(REMEMBER_KEY)).not.toBeNull()
     })
-    const signedInAt = Number(window.localStorage.getItem(SIGNED_IN_AT_KEY))
-    expect(signedInAt).toBeGreaterThanOrEqual(before)
+    const marker = JSON.parse(window.localStorage.getItem(REMEMBER_KEY) as string)
+    expect(marker.signedInAt).toBeGreaterThanOrEqual(before)
   })
 
   it('signIn(remember=false) laesst kein Remember-Flag stehen (AC 2)', async () => {
@@ -367,12 +372,10 @@ describe('SessionProvider -- Ablaufpruefung "angemeldet bleiben" (Issue #430 AC 
       expect(signInWithPassword).toHaveBeenCalled()
     })
     expect(window.localStorage.getItem(REMEMBER_KEY)).toBeNull()
-    expect(window.localStorage.getItem(SIGNED_IN_AT_KEY)).toBeNull()
   })
 
-  it('signOut loescht Remember-Flag + Zeitstempel NACH dem GoTrue-Signout (kein verwaister Token)', async () => {
-    window.localStorage.setItem(REMEMBER_KEY, 'true')
-    window.localStorage.setItem(SIGNED_IN_AT_KEY, String(Date.now()))
+  it('signOut loescht den Marker NACH dem GoTrue-Signout (kein verwaister Token)', async () => {
+    window.localStorage.setItem(REMEMBER_KEY, markerAgedHours(0))
 
     function SignOutProbe() {
       const { signOut: doSignOut } = useSession()
@@ -396,6 +399,165 @@ describe('SessionProvider -- Ablaufpruefung "angemeldet bleiben" (Issue #430 AC 
       expect(signOut).toHaveBeenCalledTimes(1)
     })
     expect(window.localStorage.getItem(REMEMBER_KEY)).toBeNull()
-    expect(window.localStorage.getItem(SIGNED_IN_AT_KEY)).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Regressionen aus dem Security-Review zu Issue #430. Jeder Test haelt genau
+// einen Befund fest, der die absolute Obergrenze umgehbar machte.
+// ---------------------------------------------------------------------------
+describe('SessionProvider -- Security-Review-Regressionen (Issue #430)', () => {
+  function SignInProbe({ remember }: { remember: boolean }) {
+    const { signIn } = useSession()
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          void signIn('agent@who2be.dev', 'pw', remember).catch(() => {})
+        }}
+      >
+        signin
+      </button>
+    )
+  }
+
+  async function renderAndClickSignIn(remember: boolean) {
+    render(
+      <SessionProvider>
+        <SignInProbe remember={remember} />
+      </SessionProvider>,
+    )
+    await waitFor(() => expect(getSession).toHaveBeenCalled())
+    fireEvent.click(screen.getByRole('button', { name: 'signin' }))
+    await waitFor(() => expect(signInWithPassword).toHaveBeenCalled())
+  }
+
+  // HIGH-1: Der Wechsel "mit Haken" -> "ohne Haken" liess den alten
+  // Refresh-Token im localStorage liegen. Weil der Marker beim Wechsel
+  // verschwindet, fiel dieser Token zugleich aus der Ablaufpruefung heraus --
+  // eine Datenleiche, die nie abgelaufen waere.
+  it('signIn(remember=false) raeumt eine liegengebliebene localStorage-Session ab', async () => {
+    window.localStorage.setItem(REMEMBER_KEY, markerAgedHours(1))
+    window.localStorage.setItem(SESSION_KEY, 'alte-remembered-session')
+    signInWithPassword.mockResolvedValue({
+      data: { session: { access_token: 'neu' } },
+      error: null,
+    })
+
+    await renderAndClickSignIn(false)
+
+    await waitFor(() => {
+      expect(window.localStorage.getItem(SESSION_KEY)).toBeNull()
+    })
+    expect(window.localStorage.getItem(REMEMBER_KEY)).toBeNull()
+  })
+
+  it('signIn(remember=true) raeumt die vorherige Tab-Session im sessionStorage ab', async () => {
+    window.sessionStorage.setItem(SESSION_KEY, 'alte-tab-session')
+    signInWithPassword.mockResolvedValue({
+      data: { session: { access_token: 'neu' } },
+      error: null,
+    })
+
+    await renderAndClickSignIn(true)
+
+    await waitFor(() => {
+      expect(window.sessionStorage.getItem(SESSION_KEY)).toBeNull()
+    })
+  })
+
+  // Ein Tippfehler im Passwort darf den Modus nicht umstellen: sonst laufen
+  // parallel offene "angemeldet bleiben"-Tabs ins falsche Storage-Backend.
+  it('stellt bei fehlgeschlagenem Login den vorherigen Marker wieder her', async () => {
+    const before = markerAgedHours(2)
+    window.localStorage.setItem(REMEMBER_KEY, before)
+    signInWithPassword.mockResolvedValue({
+      data: { session: null },
+      error: { message: 'Invalid login credentials' },
+    })
+
+    await renderAndClickSignIn(false)
+
+    await waitFor(() => {
+      expect(window.localStorage.getItem(REMEMBER_KEY)).toBe(before)
+    })
+  })
+
+  // MEDIUM-5: fehlender/kaputter Zeitstempel hiess frueher "keine
+  // Obergrenze". Ein einziges setItem aus den DevTools genuegte, um die
+  // Kappung dauerhaft abzuschalten.
+  it('behandelt einen Marker ohne gueltigen Zeitstempel als abgelaufen (fail-closed)', async () => {
+    window.localStorage.setItem(REMEMBER_KEY, '{"signedInAt":"nie"}')
+    const staleSession = { access_token: 'manipuliert' } as unknown as Session
+    getSession.mockResolvedValueOnce({ data: { session: staleSession }, error: null })
+
+    render(
+      <SessionProvider>
+        <Probe />
+      </SessionProvider>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('loaded').textContent).toBe('yes')
+    })
+    expect(screen.getByTestId('session').textContent).toBe('<none>')
+    expect(signOut).toHaveBeenCalledTimes(1)
+    expect(window.localStorage.getItem(REMEMBER_KEY)).toBeNull()
+  })
+
+  // MEDIUM-6: "Ueberall abmelden" und die Account-Loeschung rufen
+  // `supabase.auth.signOut` direkt auf, nicht ueber `signOut()` hier. Ohne
+  // zentralen Handler blieb der Marker stehen und der naechste Login ohne
+  // Checkbox (OAuth/Magic-Link) landete ungefragt auf der Platte.
+  it('loescht den Marker bei JEDEM SIGNED_OUT, auch aus fremder Quelle', async () => {
+    window.localStorage.setItem(REMEMBER_KEY, markerAgedHours(1))
+
+    render(
+      <SessionProvider>
+        <Probe />
+      </SessionProvider>,
+    )
+    await waitFor(() => expect(listener).not.toBeNull())
+
+    await act(async () => {
+      listener?.('SIGNED_OUT', null)
+    })
+
+    expect(window.localStorage.getItem(REMEMBER_KEY)).toBeNull()
+  })
+
+  // MEDIUM-3: `bootstrap()` und der Listener laufen auf derselben `apply()`.
+  // Ein langsamer Lauf (fetchMe haengt) durfte einen spaeter gestarteten
+  // Ablauf-Logout nicht ueberholen und die Session zurueckschreiben.
+  it('laesst einen ueberholten apply()-Lauf die Session nicht nachtraeglich committen', async () => {
+    const live = { access_token: 'live-jwt' } as unknown as Session
+    let releaseFetchMe: (() => void) | null = null
+    fetchMe.mockImplementationOnce(async () => {
+      await new Promise<void>((resolve) => {
+        releaseFetchMe = resolve
+      })
+      return { user_id: 'u1', default_workspace_id: 'ws-1', organizations: [], has_password: true }
+    })
+    getSession.mockResolvedValueOnce({ data: { session: live }, error: null })
+
+    render(
+      <SessionProvider>
+        <Probe />
+      </SessionProvider>,
+    )
+    await waitFor(() => expect(releaseFetchMe).not.toBeNull())
+
+    // Waehrend der erste Lauf im fetchMe haengt, kommt ein Logout herein.
+    await act(async () => {
+      listener?.('SIGNED_OUT', null)
+    })
+    // Jetzt kehrt der alte Lauf zurueck -- er darf nichts mehr schreiben.
+    await act(async () => {
+      releaseFetchMe?.()
+      await Promise.resolve()
+    })
+
+    expect(screen.getByTestId('session').textContent).toBe('<none>')
+    expect(screen.getByTestId('me').textContent).toBe('<none>')
   })
 })

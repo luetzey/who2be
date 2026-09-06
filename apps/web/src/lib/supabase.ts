@@ -2,17 +2,19 @@ import { createClient } from '@supabase/supabase-js'
 
 import { config } from '../config'
 
+import { hasRememberMarker, SESSION_STORAGE_KEY } from './remember-session'
+
 // Delegierender Storage-Adapter (Issue #430, ADR-0052 — loest ADR-0035 ab).
 //
 // Frueher fest auf `sessionStorage` (Tab-Lifetime, ADR-0035). Jetzt opt-in:
-// die Login-Checkbox "Angemeldet bleiben" setzt VOR dem eigentlichen Login
-// das Flag `who2be.auth.remember` in `localStorage` (siehe
-// `auth/SessionProvider.tsx::signIn`). Dieser Adapter liest das Flag bei
+// die Login-Checkbox "Angemeldet bleiben" setzt vor dem eigentlichen Login
+// einen Marker (`lib/remember-session.ts`, geschrieben von
+// `auth/SessionProvider.tsx::signIn`). Dieser Adapter liest den Marker bei
 // JEDEM Storage-Zugriff neu und routet entsprechend:
-//   - Flag gesetzt  → `localStorage` (ueberlebt neuen Tab + Browser-Neustart,
-//     bis zur absoluten Obergrenze `config.sessionMaxAgeHours` — die
-//     Ablaufpruefung dafuer sitzt in `SessionProvider`, nicht hier).
-//   - Flag NICHT gesetzt (Default) → `sessionStorage`, exakt das bisherige
+//   - Marker gesetzt  → `localStorage` (ueberlebt neuen Tab + Browser-
+//     Neustart, bis zur absoluten Obergrenze `config.sessionMaxAgeHours` —
+//     die Ablaufpruefung dafuer sitzt in `SessionProvider`, nicht hier).
+//   - Marker NICHT gesetzt (Default) → `sessionStorage`, exakt das bisherige
 //     Tab-Lifetime-Verhalten.
 // Grund fuer EINEN Adapter statt zwei `createClient`-Instanzen:
 // `createClient` bindet den Storage einmalig auf Modulebene (siehe unten) —
@@ -27,20 +29,8 @@ import { config } from '../config'
 // erreicht nur GLEICHZEITIG offene Tabs — ein waehrend des Logouts
 // geschlossener Tab merkt beim naechsten Oeffnen nichts davon; dort greift
 // stattdessen die Ablaufpruefung in `SessionProvider`.
-const REMEMBER_ME_KEY = 'who2be.auth.remember'
-
-function isRemembered(): boolean {
-  if (typeof window === 'undefined') return false
-  try {
-    return window.localStorage.getItem(REMEMBER_ME_KEY) === 'true'
-  } catch {
-    // Privacy-Mode/deaktiviertes Storage — fail-closed auf Tab-Lifetime.
-    return false
-  }
-}
-
 function backingStorage(): Storage {
-  return isRemembered() ? window.localStorage : window.sessionStorage
+  return hasRememberMarker() ? window.localStorage : window.sessionStorage
 }
 
 const delegatingStorageAdapter = {
@@ -64,7 +54,7 @@ export const supabase = createClient(config.supabaseUrl, config.supabaseAnonKey,
     autoRefreshToken: true,
     detectSessionInUrl: true,
     storage: delegatingStorageAdapter,
-    storageKey: 'who2be.auth.session',
+    storageKey: SESSION_STORAGE_KEY,
     // GoTrue-Invite-/Magic-Link liefert die Tokens im URL-Hash (implicit
     // flow). PKCE wuerde einen anderen Callback-Aufbau erwarten.
     flowType: 'implicit',

@@ -17,6 +17,7 @@ import './supabase'
 
 const REMEMBER_KEY = 'who2be.auth.remember'
 const SESSION_KEY = 'who2be.auth.session'
+const MARKER = JSON.stringify({ signedInAt: Date.now() })
 
 interface CapturedAuthOptions {
   persistSession: boolean
@@ -78,7 +79,7 @@ describe('delegierender Storage-Adapter (Issue #430)', () => {
   })
 
   it('routet mit gesetztem Remember-Flag nach localStorage', () => {
-    window.localStorage.setItem(REMEMBER_KEY, 'true')
+    window.localStorage.setItem(REMEMBER_KEY, MARKER)
     const { storage } = capturedAuthOptions()
 
     storage.setItem(SESSION_KEY, 'remembered-session')
@@ -91,7 +92,21 @@ describe('delegierender Storage-Adapter (Issue #430)', () => {
     expect(window.localStorage.getItem(SESSION_KEY)).toBeNull()
   })
 
-  it('liest das Remember-Flag bei jedem Zugriff neu (kein einmaliges Binden beim Client-Aufbau)', () => {
+  it('routet auch bei kaputtem Marker nach localStorage — sonst findet signOut() den Token nicht', () => {
+    // Ein Marker, der sich nicht parsen laesst, heisst NICHT "keine
+    // Persistenz": die Session liegt trotzdem im localStorage. Der Adapter
+    // muss sie dort finden, damit `signOut()` sie loeschen kann; dass so eine
+    // Session als abgelaufen gilt, entscheidet `rememberedSessionExpired`.
+    window.localStorage.setItem(REMEMBER_KEY, 'kaputt')
+    const { storage } = capturedAuthOptions()
+
+    storage.setItem(SESSION_KEY, 'broken-marker-session')
+
+    expect(window.localStorage.getItem(SESSION_KEY)).toBe('broken-marker-session')
+    expect(window.sessionStorage.getItem(SESSION_KEY)).toBeNull()
+  })
+
+  it('liest den Marker bei jedem Zugriff neu (kein einmaliges Binden beim Client-Aufbau)', () => {
     const { storage } = capturedAuthOptions()
 
     // Ohne Flag: sessionStorage.
@@ -100,7 +115,7 @@ describe('delegierender Storage-Adapter (Issue #430)', () => {
 
     // Flag wird NACH dem Client-Aufbau gesetzt (Login mit Haken) — der
     // naechste Zugriff muss sofort nach localStorage routen.
-    window.localStorage.setItem(REMEMBER_KEY, 'true')
+    window.localStorage.setItem(REMEMBER_KEY, MARKER)
     storage.setItem(SESSION_KEY, 'v2')
     expect(window.localStorage.getItem(SESSION_KEY)).toBe('v2')
   })

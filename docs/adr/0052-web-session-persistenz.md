@@ -44,9 +44,11 @@ jeder Browser-Neustart verlangt einen vollen Login **inklusive** TOTP-Step-up
    siehe Konsequenzen). Fuer einen normalen Nutzer ist die Grenze damit nicht
    verlaengerbar; gegen einen Angreifer, der das Token-Paar bereits besitzt,
    ist sie **keine** Schranke (§Konsequenzen, Negativ).
-4. **Nach Ablauf: voller Login inklusive Step-up**, keine Ausnahme — die
-   abgelaufene Session wird per `supabase.auth.signOut()` serverseitig
-   invalidiert (Refresh-Token wird ungueltig), nicht nur lokal verworfen.
+4. **Nach Ablauf: voller Login inklusive Step-up.** Die abgelaufene Session
+   wird per `supabase.auth.signOut()` serverseitig invalidiert (Refresh-Token
+   wird ungueltig), nicht nur lokal verworfen. Geprueft wird bei jedem Commit
+   einer Session — Boot, Refresh, Event aus einem anderen Tab —, nicht nur
+   beim Start; die Reichweite dieser Pruefung bleibt die aus Punkt 3.
 5. **Logout meldet alle offenen Tabs ab.** `@supabase/auth-js` eroeffnet
    bereits heute einen `BroadcastChannel` auf dem `storageKey`, sobald
    `persistSession: true` UND `storageKey` gesetzt sind (beides gilt seit
@@ -99,8 +101,9 @@ opt-in**, statt sie fuer alle Sessions gleichermassen zu akzeptieren:
   zusaetzlicher Code, kein zusaetzlicher Zustand.
 - `GOTRUE_JWT_EXP` und die Refresh-Token-Rotation bleiben unangetastet; die
   serverseitigen aal2-Gates (`require_aal2`) sind von dieser ADR nicht
-  beruehrt — sie pruefen weiterhin jede Admin-Aktion unabhaengig davon, woher
-  die Session kam.
+  beruehrt — sie pruefen `aal2` fuer Admin-Aktionen unabhaengig davon, woher
+  die JWT-Session kam. (Unveraendert ausgenommen sind wie bisher
+  `w2b_`-API-Tokens, `core/security.py` — diese ADR aendert daran nichts.)
 
 **Negativ (bewusst akzeptiert)**
 
@@ -122,10 +125,58 @@ opt-in**, statt sie fuer alle Sessions gleichermassen zu akzeptieren:
 - Der Cross-Tab-Logout ueber `BroadcastChannel` erreicht nur gleichzeitig
   offene Tabs (s. o., Entscheidung Punkt 5) — kein vollstaendiger Ersatz fuer
   eine serverseitige Session-Revocation-Liste.
+- **Der Marker ist ein globaler Schalter, kein Per-Tab-Zustand.** Weil er im
+  `localStorage` liegt und pro Storage-Zugriff neu gelesen wird, aendert ein
+  Login in Tab B auch das Routing eines parallel laufenden Tab A. Wer in einem
+  Browser gleichzeitig mit und ohne Haken arbeitet, kann damit einen Tab in das
+  jeweils andere Backend umlenken. Bewusst nicht in diesem Paket geloest (es
+  braucht eine Bindung des Markers an die Session-Identitaet) — als Folge-Issue
+  erfasst.
+- **Magic-Link-/Invitation-Logins tragen keinen eigenen Haken.** Sie laufen
+  ueber `detectSessionInUrl` und erben einen noch stehenden Marker samt seinem
+  *alten* Zeitstempel. Die Kappung misst dann ab dem frueheren Login, laeuft
+  also frueher ab statt spaeter — die Richtung ist sicher, der fehlende
+  eigene Klick bleibt eine Ungenauigkeit. OAuth-Logins raeumen den Marker
+  explizit ab (`OAuthButtons.tsx`), ein `SIGNED_OUT` ebenfalls.
 - **Trigger fuer Re-Visit bleibt unveraendert von ADR-0035:** sobald ein
   Auth-BFF mit `httpOnly`-Cookies entsteht, ist das der Zielzustand fuer
   BEIDE Betriebsarten (Tab-Lifetime UND "angemeldet bleiben") — dann ersetzt
   eine weitere ADR sowohl ADR-0035 als auch diese.
+
+## Security-Review (Pflicht laut Issue #430, Weiche 8)
+
+Der Subagent `security-reviewer` hat den Diff gegen
+`docs/standards/security-standards.md` geprueft und vier Wege gefunden, auf
+denen die Obergrenze aus Punkt 3 wirkungslos blieb. Alle vier sind in diesem
+Paket behoben; sie sind hier festgehalten, weil sie erklaeren, warum der
+Zustand so aussieht, wie er aussieht:
+
+1. **Verwaister Refresh-Token beim Moduswechsel.** Ein Login ohne Haken nach
+   einem Login mit Haken liess den alten Session-Blob im `localStorage` liegen.
+   Da der Marker dabei verschwand, fiel dieser Blob zugleich aus der
+   Ablaufpruefung — eine Session ohne jede Obergrenze. Behoben: `signIn`
+   raeumt das nach dem Wechsel unzustaendige Backend explizit ab
+   (`purgeStoredSessionFrom`).
+2. **Marker ohne gueltigen Zeitstempel = keine Kappung.** Marker und
+   Zeitstempel standen in zwei Keys; fehlte oder zerbrach der zweite, galt die
+   Session als unbegrenzt. Behoben: EIN Key, EIN Schreibvorgang, und ein
+   Marker, aus dem kein gueltiger Zeitstempel zu lesen ist, gilt als
+   **abgelaufen** (fail-closed statt fail-open).
+3. **Nebenlaeufigkeit konnte den Ablauf-Logout zuruecknehmen.** `bootstrap()`
+   und der `onAuthStateChange`-Handler teilen sich `apply()`; ein langsamer
+   Lauf (Netzwerk-`fetchMe`) konnte nach einem bereits erfolgten Logout die
+   Session zurueckschreiben. Behoben: Generationszaehler, der zuletzt
+   gestartete Lauf gewinnt; die Ablaufpruefung sitzt jetzt in `apply()` statt
+   nur in `bootstrap()`.
+4. **Stehengebliebener Marker vererbte sich an fremde Login-Wege.** „Ueberall
+   abmelden" und die Account-Loeschung rufen `supabase.auth.signOut` direkt
+   auf; der Marker blieb stehen und der naechste Login ohne Checkbox landete
+   ungefragt auf der Platte. Behoben: ein zentraler `SIGNED_OUT`-Handler
+   raeumt ihn ab, unabhaengig von der Quelle.
+
+Der Review hat ausserdem einen Befund **ausserhalb** dieses Pakets gemeldet
+(`apps/api`, aal2-Gate bei der API-Token-Ausstellung). Er ist nicht Teil dieser
+ADR und wird getrennt behandelt.
 
 ## Verworfene Alternativen
 

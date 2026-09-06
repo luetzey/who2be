@@ -92,8 +92,10 @@ Admin-Aktionen wieder blockiert.
 
 Ein reiner Passwort-Login liefert bei einem Account mit verifiziertem TOTP-
 Faktor nur eine `aal1`-Sitzung (GoTrue meldet `nextLevel: 'aal2'`). Da die
-Sitzung in tab-lebensdauer-`sessionStorage` liegt, ist nach neuem Tab, Ablauf
-oder erneutem Login ein Step-up noetig — sonst blieben Admin-Aktionen blockiert.
+Sitzung per Default in tab-lebensdauer-`sessionStorage` liegt, ist nach neuem
+Tab, Ablauf oder erneutem Login ein Step-up noetig — sonst blieben
+Admin-Aktionen blockiert. (Die opt-in-Ausnahme dazu steht weiter unten:
+§"Angemeldet bleiben".)
 Der Login-Flow erledigt das automatisch (`apps/web/.../auth/pages/LoginPage.tsx`
 + `auth/SessionProvider.tsx`):
 
@@ -124,9 +126,11 @@ persistiert wird:
   der naechste Login durchlaeuft wieder den kompletten Flow oben, inklusive
   Step-up.
 - **Reichweite der Obergrenze (wichtig fuer die Risiko-Einordnung):** Sie wird
-  **clientseitig** durchgesetzt — `SessionProvider` vergleicht beim Boot einen
-  Zeitstempel aus dem `localStorage` (`who2be.auth.signed_in_at`) und ruft
-  daraufhin selbst `signOut()`. Fuer einen normalen Nutzer ist sie damit nicht
+  **clientseitig** durchgesetzt — `SessionProvider` vergleicht vor jedem
+  Commit einer Session den Zeitstempel aus dem Marker `who2be.auth.remember`
+  (`localStorage`) und ruft daraufhin selbst `signOut()`. Ein Marker, aus dem
+  kein gueltiger Zeitstempel zu lesen ist, gilt dabei als abgelaufen
+  (fail-closed). Fuer einen normalen Nutzer ist die Grenze damit nicht
   verlaengerbar. Sie ist aber **keine serverseitige Session-Lebensdauer**: wer
   Schreibzugriff auf den `localStorage` hat (erfolgreicher XSS) oder das
   Token-Paar aus dem Browser traegt, ist an diese Pruefung nicht gebunden — das

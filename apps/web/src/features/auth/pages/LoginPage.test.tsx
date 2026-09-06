@@ -194,10 +194,14 @@ describe('LoginPage', () => {
     fireEvent.click(screen.getByLabelText('Angemeldet bleiben (12 h)'))
     fireEvent.click(screen.getByRole('button', { name: 'Anmelden' }))
 
+    // Marker + Login-Zeitstempel stecken in EINEM Wert (ein `setItem`) —
+    // ein Marker ohne gueltigen Zeitstempel waere eine Session ohne
+    // Obergrenze und gilt deshalb als abgelaufen.
     await waitFor(() => {
-      expect(window.localStorage.getItem('who2be.auth.remember')).toBe('true')
+      expect(window.localStorage.getItem('who2be.auth.remember')).not.toBeNull()
     })
-    expect(window.localStorage.getItem('who2be.auth.signed_in_at')).not.toBeNull()
+    const marker = JSON.parse(window.localStorage.getItem('who2be.auth.remember') as string)
+    expect(typeof marker.signedInAt).toBe('number')
   })
 
   it('laesst ohne Haken das heutige Tab-Verhalten unveraendert — kein Remember-Flag (AC 2)', async () => {
@@ -222,7 +226,6 @@ describe('LoginPage', () => {
       expect(signInWithPassword).toHaveBeenCalled()
     })
     expect(window.localStorage.getItem('who2be.auth.remember')).toBeNull()
-    expect(window.localStorage.getItem('who2be.auth.signed_in_at')).toBeNull()
   })
 
   it('fordert bei faelligem zweiten Faktor den TOTP-Code an und verifiziert ihn', async () => {

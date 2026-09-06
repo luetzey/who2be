@@ -136,7 +136,19 @@ the merged pull requests and the plan documents under `.claude/plan/`.
   actual lifetime, not a change to it, and every `aal2` gate on the API
   stays exactly as it was. Replaces ADR-0035 (session storage) with
   ADR-0052, which spells out why an opt-in, capped exception doesn't
-  undermine that ADR's XSS reasoning for the default path.
+  undermine that ADR's XSS reasoning for the default path. The mandatory
+  security review found four ways the cap could be silently defeated, all
+  fixed here and recorded in the ADR: a login without the box left the
+  previous session's refresh token behind in `localStorage`, where — with the
+  marker gone — nothing would ever expire it; the marker and its timestamp
+  lived in two keys, so a missing or unparseable timestamp meant no cap at
+  all; a slow in-flight session commit could land after a forced expiry
+  logout and undo it; and a marker left over from an earlier session was
+  inherited by logins that never offered the checkbox. The marker is now a
+  single atomic value that counts as expired whenever no valid timestamp can
+  be read from it, the expiry check runs before every commit rather than only
+  at boot, the superseded backend's session copy is purged on every mode
+  switch, and any `SIGNED_OUT` — from any source — clears the marker.
 
 ### Fixed
 

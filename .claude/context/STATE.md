@@ -1,6 +1,70 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-05 (25. Lauf — Responsive-Fundament steht, #438)_
+_Stand: 2026-09-05 (26. Lauf — „Angemeldet bleiben" steht, #430)_
+
+## „Angemeldet bleiben" steht (2026-09-05, 26. Lauf, #430)
+
+Die Login-Seite traegt eine standardmaessig **nicht** gesetzte Checkbox. Mit
+Haken wandert genau diese Session von `sessionStorage` nach `localStorage` und
+ueberlebt neuen Tab + Browser-Neustart bis zu einer absoluten Obergrenze
+(`WHO2BE_SESSION_MAX_AGE_HOURS`, Runtime-Config, Default 12, Bereich 1-24,
+fail-closed auf 12). Ohne Haken bleibt das heutige Tab-Verhalten unveraendert.
+Plan `.claude/plan/2026-09-05-2255_login-remember-session.md`.
+
+**Cross-Tab-Logout war nicht zu bauen, sondern zu belegen.** `@supabase/auth-js`
+eroeffnet den `BroadcastChannel` bereits, sobald `persistSession` und
+`storageKey` gesetzt sind — beides gilt seit ADR-0035 unveraendert. Kein
+eigener Listener, kein eigener Kanal; `lib/supabase.test.ts` haelt die
+Vorbedingung fest, damit sie nicht unbemerkt wegkonfiguriert wird.
+
+**Der Security-Review (Pflicht laut Weiche 8) war der eigentliche Ertrag.** Er
+fand vier Wege, auf denen die Obergrenze — also genau das Argument, mit dem
+ADR-0052 die Lockerung von ADR-0035 rechtfertigt — wirkungslos blieb:
+
+1. Ein Login ohne Haken nach einem Login mit Haken liess den alten
+   Refresh-Token im `localStorage` liegen. Weil der Marker dabei verschwand,
+   fiel dieser Token zugleich aus der Ablaufpruefung — eine Datenleiche, die
+   **nie** abgelaufen waere.
+2. Marker und Zeitstempel standen in zwei Keys. Fehlte oder zerbrach der
+   zweite, galt die Session als unbegrenzt: ein `setItem` aus den DevTools
+   genuegte, um die Kappung dauerhaft abzuschalten (fail-open).
+3. `bootstrap()` und der `onAuthStateChange`-Handler teilen sich `apply()`. Ein
+   Lauf, der im Netzwerk-`fetchMe` haengt, konnte nach einem bereits erfolgten
+   Ablauf-Logout die Session zurueckschreiben und den Logout zuruecknehmen.
+4. „Ueberall abmelden" und die Account-Loeschung rufen `supabase.auth.signOut`
+   direkt auf; der Marker blieb stehen und der naechste Login ohne Checkbox
+   (OAuth, Magic-Link) landete ungefragt auf der Platte.
+
+Alle vier sind behoben: EIN atomarer Marker, der ohne lesbaren Zeitstempel als
+**abgelaufen** gilt (fail-closed statt fail-open); die Ablaufpruefung sitzt in
+`apply()` statt nur in `bootstrap()` und ist durch einen Generationszaehler
+gegen Ueberholmanoever geschuetzt; jeder Moduswechsel raeumt den Session-Blob
+des unzustaendigen Backends ab; ein zentraler `SIGNED_OUT`-Handler loescht den
+Marker unabhaengig von der Quelle. Der gesamte Marker-Zustand liegt jetzt in
+`apps/web/src/lib/remember-session.ts` — die vorherige Verdopplung der
+Key-Literale ueber zwei Dateien war die Ursache dafuer, dass drei der vier
+Befunde ueberhaupt entstehen konnten.
+
+**Nachweise:** `npm run lint` (0 errors), `npx tsc -b`, `npm run test:coverage`
+(188 Dateien, **1103 Tests gruen**; Statements 87.00 / Branches 81.63 /
+Functions 82.60 / Lines 88.03 — alle ueber den Schwellen 80/79/75/80),
+`npm run test:a11y` (53 gruen), `npm run build`, i18n-Paritaet `auth` in beide
+Richtungen leer. **Nicht verifiziert:** die beiden E2E-Journeys — in dieser
+Umgebung laeuft kein Docker, sie sind nur typgeprueft. Der CI-Job `e2e` faehrt sie.
+
+**Bewusst offen gelassen (als Folge-Issues erfasst, nicht still gefixt):**
+
+- Der Marker ist ein **globaler** Schalter im `localStorage`, kein Per-Tab-
+  Zustand. Ein Login in Tab B aendert das Storage-Routing eines parallel
+  laufenden Tab A. Eine Bindung des Markers an die Session-Identitaet ist ein
+  eigenes Paket.
+- `WHO2BE_SESSION_MAX_AGE_HOURS` ist in **keinem** Compose-`web`-Service
+  durchgereicht — der Entrypoint liest die Variable, aber kein Stack setzt sie.
+  Ein Betreiber, der auf 1 h haerten will, bekommt still 12 h. Weiche 7 des
+  Issues schliesst einen Compose-Diff in diesem Paket aus; beide
+  `.env.example` benennen die fehlende Verdrahtung.
+- Ein Befund **ausserhalb** des Pakets (`apps/api`, aal2-Gate bei der
+  API-Token-Ausstellung) ist getrennt gemeldet — nicht Teil dieser ADR.
 
 ## Responsive-Fundament steht (2026-09-05, 25. Lauf, #438)
 
