@@ -561,3 +561,66 @@ describe('SessionProvider -- Security-Review-Regressionen (Issue #430)', () => {
     expect(screen.getByTestId('me').textContent).toBe('<none>')
   })
 })
+
+// ---------------------------------------------------------------------------
+// Regression aus dem CI-Lauf zu PR #468: `@supabase/auth-js` stellt einem
+// frisch registrierten Subscriber sofort ein `INITIAL_SESSION` mit DERSELBEN
+// Session zu (`GoTrueClient.js`). Der Bestands-Mock oben tut das nicht — die
+// Luecke hat einen Generationszaehler durchgelassen, der jede eingeloggte
+// Session verworfen hat (drei bestehende E2E-Journeys rot). Dieser Mock bildet
+// das Verhalten von auth-js nach.
+// ---------------------------------------------------------------------------
+describe('SessionProvider -- doppeltes INITIAL_SESSION (auth-js-Verhalten)', () => {
+  it('committet die Session, obwohl derselbe Zustand zweimal ankommt', async () => {
+    const live = { access_token: 'live-jwt' } as unknown as Session
+    getSession.mockResolvedValue({ data: { session: live }, error: null })
+    // auth-js ruft den Callback beim Registrieren sofort mit der geladenen
+    // Session auf — waehrend `bootstrap()` noch im `await` haengt.
+    onAuthStateChange.mockImplementation(
+      (cb: (event: AuthChangeEvent, session: Session | null) => void) => {
+        listener = cb
+        cb('INITIAL_SESSION', live)
+        return { data: { subscription: { unsubscribe } as unknown as Subscription } }
+      },
+    )
+
+    render(
+      <SessionProvider>
+        <Probe />
+      </SessionProvider>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('loaded').textContent).toBe('yes')
+    })
+    expect(screen.getByTestId('session').textContent).toBe('live-jwt')
+    expect(screen.getByTestId('me').textContent).toBe('u1')
+  })
+
+  it('meldet bei abgelaufener Session genau EINMAL ab, nicht pro Event', async () => {
+    // Zwei signOut-Aufrufe fuer dieselbe Session: der zweite lief im CI in
+    // einen 403, weil der Refresh-Token schon widerrufen war.
+    window.localStorage.setItem(REMEMBER_KEY, markerAgedHours(13))
+    const stale = { access_token: 'stale-jwt' } as unknown as Session
+    getSession.mockResolvedValue({ data: { session: stale }, error: null })
+    onAuthStateChange.mockImplementation(
+      (cb: (event: AuthChangeEvent, session: Session | null) => void) => {
+        listener = cb
+        cb('INITIAL_SESSION', stale)
+        return { data: { subscription: { unsubscribe } as unknown as Subscription } }
+      },
+    )
+
+    render(
+      <SessionProvider>
+        <Probe />
+      </SessionProvider>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('loaded').textContent).toBe('yes')
+    })
+    expect(screen.getByTestId('session').textContent).toBe('<none>')
+    expect(signOut).toHaveBeenCalledTimes(1)
+  })
+})

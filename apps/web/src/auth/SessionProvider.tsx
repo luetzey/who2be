@@ -96,13 +96,28 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     let generation = 0
 
     async function apply(nextSession: Session | null) {
+      // Dedupe VOR dem Generationszaehler — die Reihenfolge ist der ganze
+      // Punkt. auth-js stellt einem frisch registrierten Subscriber sofort ein
+      // `INITIAL_SESSION` mit derselben Session zu, die `bootstrap()` gerade
+      // verarbeitet. Zaehlt dieser Zweitlauf mit, erklaert er den noch
+      // laufenden Erstlauf fuer ueberholt und kehrt selbst hier oben um —
+      // niemand committet, jede eingeloggte Session landet auf `/login`.
+      // Ein Lauf, der nichts tut, darf keinen Lauf entwerten, der etwas tut.
+      const nextToken = nextSession?.access_token ?? null
+      if (lastTokenRef.current === nextToken) {
+        return
+      }
+      lastTokenRef.current = nextToken
       const current = ++generation
       const stale = () => cancelled || current !== generation
       // Ablaufpruefung vor JEDEM Commit, nicht nur beim Boot: eine ueber der
       // Obergrenze liegende "angemeldet bleiben"-Session wird nie committed,
       // egal ob sie aus `getSession()`, einem `TOKEN_REFRESHED` oder einem
       // anderen Tab kommt. Erzwingt einen vollen Logout inkl. GoTrue-seitigem
-      // `signOut` — kein 2FA-Bypass beim naechsten Login.
+      // `signOut` — kein 2FA-Bypass beim naechsten Login. Der Dedupe oben
+      // sorgt dafuer, dass das pro Session genau einmal passiert: ein zweiter
+      // `signOut` fuer denselben Token laeuft in einen 403 (Refresh-Token
+      // bereits widerrufen).
       if (nextSession !== null && sessionOverMaxAge()) {
         await supabase.auth.signOut()
         clearRememberMarker()
@@ -113,11 +128,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setSession(null)
         return
       }
-      const nextToken = nextSession?.access_token ?? null
-      if (lastTokenRef.current === nextToken) {
-        return
-      }
-      lastTokenRef.current = nextToken
       // Aal1-Session mit faelligem zweiten Faktor zurueckhalten — egal ob der
       // Event aus signIn, einem Reload oder einem Refresh stammt. Erst der
       // Challenge-Schritt der LoginPage hebt sie auf aal2 und committet dann.
