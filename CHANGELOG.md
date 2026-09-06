@@ -123,6 +123,18 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Added
 
+- A Playwright journey now covers the billing upgrade in a browser: sign in,
+  open the billing view, see the current tier with its quotas, trigger the
+  upgrade, and assert the app actually starts the redirect to the payment
+  provider — with the checkout response intercepted, so the provider is never
+  called and no key is needed in CI. It runs in its own CI job against a cloud
+  build, because the existing `e2e` job builds the on-premise default where
+  the billing UI is tree-shaken out of the bundle entirely; putting it there
+  would have meant a test that is skipped forever while looking like coverage.
+  A second case asserts a failing checkout surfaces a visible error
+  (Issue #453).
+
+
 - The MCP server now runs as part of the local stack (`mcp` service, Streamable
   HTTP on `localhost:8765/mcp`, also reachable behind the web origin at `/mcp`).
   Until now the only local option was `uv run python -m who2be_mcp.server` — the

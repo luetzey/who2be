@@ -276,6 +276,65 @@ jobs:
         if: always()
         run: docker compose down -v
 
+  e2e-billing-cloud:
+    # Billing-Journey (Issue #453) — eigener, schmaler Job statt einer
+    # Erweiterung des `e2e`-Jobs oben (Owner-Entscheidung 2026-09-06): der
+    # `e2e`-Job baut den Stack im On-Prem-Default (`cp .env.example .env` +
+    # `docker compose up` ohne Overlay); die Billing-UI existiert dort
+    # physisch nicht (ADR-0029, Tree-Shaking), die Journey liefe dort
+    # dauerhaft in ihren Datei-Skip (`apps/web/e2e/billing.spec.ts`,
+    # `E2E_EDITION != cloud`). Dieser Job faehrt stattdessen NUR den Cloud-
+    # Overlay (`docker-compose.cloud.yml`, setzt WHO2BE_EDITION +
+    # VITE_WHO2BE_EDITION bereits auf `cloud`) hoch und NUR diese eine Spec —
+    # er steht NEBEN dem `e2e`-Job, ersetzt ihn nicht und macht ihn nicht
+    # langsamer. Der Checkout-Aufruf wird in der Spec per `page.route`
+    # abgefangen — kein Mollie-Key noetig, `.env.example` reicht wie im
+    # `compose-smoke`-/`e2e`-Job.
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Compose env
+        run: cp .env.example .env
+      - name: Compose up (cloud overlay, build + wait healthy)
+        run: >-
+          docker compose -f docker-compose.yml -f docker-compose.cloud.yml
+          up -d --build --wait --wait-timeout 240
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install web deps
+        working-directory: apps/web
+        run: npm ci
+      - name: Install Playwright browser
+        working-directory: apps/web
+        run: npm run e2e:install
+      - name: Run Billing E2E (cloud, scharf)
+        # E2E_EDITION=cloud ist das Signal, das die Datei-weite Skip-Guard in
+        # billing.spec.ts aufhebt (siehe Kommentar dort) — ohne dieses Signal
+        # (der normale `e2e`-Job oben) bleibt die Spec uebersprungen.
+        working-directory: apps/web
+        env:
+          E2E_BASE_URL: http://localhost:5173
+          E2E_EDITION: cloud
+        run: npx playwright test e2e/billing.spec.ts
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: playwright-report-billing-cloud
+          path: apps/web/playwright-report
+          if-no-files-found: ignore
+      - name: Compose logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.yml -f docker-compose.cloud.yml logs --no-color
+      - name: Compose down
+        if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.cloud.yml down -v
+
   audit:
     # Supply-Chain-Gate (MS-3 H6): pip-audit fuer den Python-Workspace und
     # npm audit fuer das Web-Frontend. Fail bei high/critical; moderates
