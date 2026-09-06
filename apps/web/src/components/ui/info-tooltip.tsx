@@ -47,7 +47,7 @@ export function InfoTooltip({
             sideOffset={6}
             collisionPadding={8}
             className={cn(
-              'data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=delayed-open]:animate-in data-[state=delayed-open]:fade-in-0 data-[state=delayed-open]:zoom-in-95 z-50 max-w-sm rounded-md border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-popover duration-[var(--duration-fast)] ease-standard',
+              'w2b-anim-pop z-50 max-w-sm rounded-md border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-popover',
             )}
           >
             {children}
