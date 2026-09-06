@@ -52,6 +52,12 @@ def _agent_payload(agent_id: UUID, name: str, status: str = "disabled") -> dict[
 def test_list_agents_returns_metadata_list(monkeypatch: pytest.MonkeyPatch) -> None:
     a1 = _agent_payload(uuid4(), "Frisch angelegt", status="disabled")
     a2 = _agent_payload(uuid4(), "Aktiv", status="enabled")
+    # Favoriten sind Menschen-Daten (#427, Security-Review M-1): die API
+    # unterdrueckt `is_favorite` auf dem Token-Pfad, ueber den MCP laeuft — ein
+    # Agent bekommt hier also nie `True` zu sehen. `AgentRead` faellt ohne das
+    # Feld auf den konservativen Default zurueck; genau das sichert dieser Test
+    # zu, damit ein spaeterer Umbau es nicht unbemerkt oeffnet.
+    assert "is_favorite" not in a1 and "is_favorite" not in a2
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path.endswith("/agents")
@@ -65,6 +71,7 @@ def test_list_agents_returns_metadata_list(monkeypatch: pytest.MonkeyPatch) -> N
     assert all(isinstance(a, AgentRead) for a in result)
     # Disabled-Agent ist enthalten — kein enabled-only-Filter.
     assert {"Frisch angelegt", "Aktiv"} == {a.name for a in result}
+    assert all(a.is_favorite is False for a in result)
 
 
 def test_get_agent_returns_single_config(monkeypatch: pytest.MonkeyPatch) -> None:

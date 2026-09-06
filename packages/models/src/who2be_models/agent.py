@@ -147,6 +147,13 @@ class AgentRead(BaseModel):
     template_version: int | None = None
     playbook_count: int = 0
     pending_memory_count: int = 0
+    # Persoenlicher Favoriten-Stern des ANFRAGENDEN Users (Issue #427) — pro
+    # User verschieden, deshalb kein Feld auf `agent` selbst. Wie die Pills
+    # oben nur vom List-Endpoint befuellt (derselbe Batch-Roundtrip); der
+    # Detail-Read laesst es bewusst auf `False`, weil die Detail-Seite keinen
+    # Stern zeigt. Gesetzt/entfernt wird es ueber die Sub-Resource
+    # `PUT|DELETE /agents/{id}/favorite`, nicht ueber `AgentUpdate`.
+    is_favorite: bool = False
     # Betreiber-gepflegte Modell-Config (User-Entscheidung 6, ADR-0047): welches
     # LLM diesen Agenten faehrt — gilt pro Agent-Konfiguration, nicht pro
     # Einzelaufruf (Who2Be ist kein Runtime-Host). None = nicht hinterlegt.

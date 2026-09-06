@@ -7,6 +7,7 @@ import {
   Plus,
   Search,
   SlidersHorizontal,
+  Star,
   Users,
   X,
 } from 'lucide-react'
@@ -114,7 +115,7 @@ function FilterChip({
 
 export function AgentsPage() {
   const { t } = useTranslation('agents')
-  const { agents, loading, error } = useAgents()
+  const { agents, loading, error, reload } = useAgents()
   const api = useApi()
   const navigate = useNavigate()
   const wsPath = useWorkspacePath()
@@ -137,6 +138,37 @@ export function AgentsPage() {
       return true
     })
   }, [agents, status, query])
+
+  // Favoriten oben, alles andere darunter — innerhalb jeder Gruppe bleibt die
+  // API-Reihenfolge (`created_at DESC`). Die Status-Zaehler oben bleiben
+  // bewusst ungruppiert: sie zaehlen den Bestand, nicht die Ansicht.
+  const groups = useMemo(() => {
+    const favorites = filtered.filter((agent) => agent.is_favorite === true)
+    const others = filtered.filter((agent) => agent.is_favorite !== true)
+    return [
+      { key: 'favorites', label: t('page.favoritesSection'), items: favorites },
+      { key: 'others', label: t('page.othersSection'), items: others },
+    ].filter((group) => group.items.length > 0)
+  }, [filtered, t])
+
+  // Ueberschriften erst, wenn es wirklich zwei Gruppen gibt.
+  const showGroupHeadings = groups.length > 1
+
+  // Kein Optimistic-UI (kein Muster im Repo): der Server entscheidet, danach
+  // laedt `reload()` dieselbe Quelle neu, die auch die Gruppierung speist. Ein
+  // fehlgeschlagener Toggle laesst die Liste unveraendert.
+  const toggleFavorite = async (agent: Agent) => {
+    try {
+      if (agent.is_favorite === true) {
+        await api.unfavoriteAgent(agent.id)
+      } else {
+        await api.favoriteAgent(agent.id)
+      }
+      reload()
+    } catch (cause) {
+      notify.error(cause instanceof Error ? cause.message : t('card.favoriteError'))
+    }
+  }
 
   const filterActive = status !== 'all' || query.trim() !== ''
 
@@ -279,91 +311,144 @@ export function AgentsPage() {
                   description={t('filter.emptyDescription')}
                 />
               ) : (
-                <div className="flex flex-col gap-3">
-                  {filtered.map((agent) => {
-                    const missesPersona = agent.missing.includes('persona')
-                    const missesTemplate = agent.missing.includes('template')
-                    return (
-                      <EntityCard
-                        key={agent.id}
-                        icon={Bot}
-                        iconTone="catalog"
-                        title={agent.name}
-                        href={wsPath(`/agents/${agent.id}`)}
-                        status={<AgentStatusPill agent={agent} />}
-                        description={agent.description || undefined}
-                        meta={
-                          <>
-                            {missesPersona ? (
-                              <MetaPill icon={AlertTriangle} tone="destructive">
-                                {t('card.personaMissing')}
-                              </MetaPill>
-                            ) : agent.persona_name ? (
-                              <MetaPill icon={Users} iconTone="persona">
-                                {agent.persona_name}
-                              </MetaPill>
-                            ) : null}
-                            {missesTemplate ? (
-                              <MetaPill icon={AlertTriangle} tone="destructive">
-                                {t('card.templateMissing')}
-                              </MetaPill>
-                            ) : agent.template_name ? (
-                              <MetaPill icon={FileText} iconTone="date">
-                                {agent.template_version != null
-                                  ? t('card.templateWithVersion', {
-                                      name: agent.template_name,
-                                      version: agent.template_version,
-                                    })
-                                  : agent.template_name}
-                              </MetaPill>
-                            ) : null}
-                            <MetaPill icon={GitBranch} iconTone="playbook">
-                              {t('card.playbookCount', { count: agent.playbook_count ?? 0 })}
-                            </MetaPill>
-                            {(agent.pending_memory_count ?? 0) > 0 ? (
-                              // Aufmerksamkeits-Pill (ADR-0044): liegt via z-10
-                              // ueber dem Stretched-Link der Karte und springt
-                              // direkt in die Gedaechtnis-Sektion des Agenten.
-                              <Link
-                                to={wsPath(`/agents/${agent.id}#memory`)}
-                                className="relative z-10 rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                                aria-label={t('card.pendingMemoriesAria', {
-                                  count: agent.pending_memory_count,
-                                  name: agent.name,
-                                })}
-                                data-testid="pending-memories-pill"
-                              >
-                                <MetaPill
-                                  icon={Brain}
-                                  tone="brand"
-                                  className="transition-colors duration-[var(--duration-fast)] hover:bg-brand/20"
-                                >
-                                  {t('card.pendingMemories', {
-                                    count: agent.pending_memory_count,
-                                  })}
+                <div className="flex flex-col gap-6">
+                  {groups.map((group) => (
+                    <section
+                      key={group.key}
+                      // Nur setzen, wenn die Ueberschrift wirklich gerendert
+                      // wird — sonst zeigt das Attribut ins Leere.
+                      aria-labelledby={
+                        showGroupHeadings ? `agents-${group.key}-heading` : undefined
+                      }
+                    >
+                      {/* Ueberschrift nur, wenn es zwei Gruppen gibt — eine
+                          einzelne Liste braucht keinen Namen (AC 2). */}
+                      {showGroupHeadings ? (
+                        <h2
+                          id={`agents-${group.key}-heading`}
+                          className="mb-3 text-sm font-medium text-muted-foreground"
+                        >
+                          {group.label}
+                        </h2>
+                      ) : null}
+                      <div className="flex flex-col gap-3">
+                        {group.items.map((agent) => {
+                        const missesPersona = agent.missing.includes('persona')
+                        const missesTemplate = agent.missing.includes('template')
+                        return (
+                          <EntityCard
+                            key={agent.id}
+                            icon={Bot}
+                            iconTone="catalog"
+                            title={agent.name}
+                            href={wsPath(`/agents/${agent.id}`)}
+                            status={<AgentStatusPill agent={agent} />}
+                            description={agent.description || undefined}
+                            meta={
+                              <>
+                                {missesPersona ? (
+                                  <MetaPill icon={AlertTriangle} tone="destructive">
+                                    {t('card.personaMissing')}
+                                  </MetaPill>
+                                ) : agent.persona_name ? (
+                                  <MetaPill icon={Users} iconTone="persona">
+                                    {agent.persona_name}
+                                  </MetaPill>
+                                ) : null}
+                                {missesTemplate ? (
+                                  <MetaPill icon={AlertTriangle} tone="destructive">
+                                    {t('card.templateMissing')}
+                                  </MetaPill>
+                                ) : agent.template_name ? (
+                                  <MetaPill icon={FileText} iconTone="date">
+                                    {agent.template_version != null
+                                      ? t('card.templateWithVersion', {
+                                          name: agent.template_name,
+                                          version: agent.template_version,
+                                        })
+                                      : agent.template_name}
+                                  </MetaPill>
+                                ) : null}
+                                <MetaPill icon={GitBranch} iconTone="playbook">
+                                  {t('card.playbookCount', { count: agent.playbook_count ?? 0 })}
                                 </MetaPill>
-                              </Link>
-                            ) : null}
-                          </>
-                        }
-                        actions={
-                          agent.activatable ? (
-                            <CopyPromptButton
-                              agentId={agent.id}
-                              disabled={agent.status !== 'enabled'}
-                            />
-                          ) : (
-                            <Button asChild variant="outline" size="sm">
-                              <Link to={wsPath(`/agents/${agent.id}`)}>
-                                <SlidersHorizontal className="h-4 w-4" />
-                                {t('card.setup')}
-                              </Link>
-                            </Button>
-                          )
-                        }
-                      />
-                    )
-                  })}
+                                {(agent.pending_memory_count ?? 0) > 0 ? (
+                                  // Aufmerksamkeits-Pill (ADR-0044): liegt via z-10
+                                  // ueber dem Stretched-Link der Karte und springt
+                                  // direkt in die Gedaechtnis-Sektion des Agenten.
+                                  <Link
+                                    to={wsPath(`/agents/${agent.id}#memory`)}
+                                    className="relative z-10 rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                    aria-label={t('card.pendingMemoriesAria', {
+                                      count: agent.pending_memory_count,
+                                      name: agent.name,
+                                    })}
+                                    data-testid="pending-memories-pill"
+                                  >
+                                    <MetaPill
+                                      icon={Brain}
+                                      tone="brand"
+                                      className="transition-colors duration-[var(--duration-fast)] hover:bg-brand/20"
+                                    >
+                                      {t('card.pendingMemories', {
+                                        count: agent.pending_memory_count,
+                                      })}
+                                    </MetaPill>
+                                  </Link>
+                                ) : null}
+                              </>
+                            }
+                            actions={
+                              <>
+                                {/* Liegt wie der Pending-Pill via z-10 ueber dem
+                                    Stretched-Link der Karte; ohne preventDefault +
+                                    stopPropagation wuerde der Klick zusaetzlich zur
+                                    Detail-Seite navigieren. */}
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="relative z-10"
+                                  aria-pressed={agent.is_favorite === true}
+                                  aria-label={
+                                    agent.is_favorite === true
+                                      ? t('card.unfavorite', { name: agent.name })
+                                      : t('card.favorite', { name: agent.name })
+                                  }
+                                  data-testid="favorite-toggle"
+                                  onClick={(event) => {
+                                    event.preventDefault()
+                                    event.stopPropagation()
+                                    void toggleFavorite(agent)
+                                  }}
+                                >
+                                  <Star
+                                    className={cn(
+                                      'h-4 w-4',
+                                      agent.is_favorite === true && 'fill-current text-brand',
+                                    )}
+                                  />
+                                </Button>
+                                {agent.activatable ? (
+                                  <CopyPromptButton
+                                    agentId={agent.id}
+                                    disabled={agent.status !== 'enabled'}
+                                  />
+                                ) : (
+                                  <Button asChild variant="outline" size="sm">
+                                    <Link to={wsPath(`/agents/${agent.id}`)}>
+                                      <SlidersHorizontal className="h-4 w-4" />
+                                      {t('card.setup')}
+                                    </Link>
+                                  </Button>
+                                )}
+                              </>
+                            }
+                          />
+                        )
+                        })}
+                      </div>
+                    </section>
+                  ))}
                 </div>
               )}
             </>

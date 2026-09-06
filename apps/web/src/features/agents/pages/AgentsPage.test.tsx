@@ -246,3 +246,123 @@ describe('AgentsPage', () => {
     expect(screen.getByTestId('new-agent-empty')).toBeEnabled()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Persoenliche Favoriten (Issue #427). Der Stern kommt als `is_favorite` aus
+// dem List-Enrichment; die Seite gruppiert danach und toggelt ueber die
+// Sub-Resource `PUT|DELETE /agents/{id}/favorite`.
+// ---------------------------------------------------------------------------
+describe('AgentsPage — Favoriten (#427)', () => {
+  function stubList(agents: Agent[], onCall?: (input: string, init?: RequestInit) => void) {
+    const fetchMock = vi.fn((input: string, init?: RequestInit) => {
+      onCall?.(input, init)
+      if (init?.method === 'PUT' || init?.method === 'DELETE') {
+        return Promise.resolve(new Response(null, { status: 204 }))
+      }
+      return Promise.resolve(new Response(JSON.stringify(agents), { status: 200 }))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    return fetchMock
+  }
+
+  it('stellt Favoriten als eigene Gruppe ueber die uebrigen Agents', async () => {
+    stubList([
+      agent({ id: 'a1', name: 'Ohne Stern', is_favorite: false }),
+      agent({ id: 'a2', name: 'Mit Stern', is_favorite: true }),
+    ])
+
+    renderPage()
+
+    expect(await screen.findByText('Mit Stern')).toBeInTheDocument()
+    const favSection = screen.getByRole('region', { name: 'Favoriten' })
+    const otherSection = screen.getByRole('region', { name: 'Weitere Agents' })
+    expect(within(favSection).getByText('Mit Stern')).toBeInTheDocument()
+    expect(within(favSection).queryByText('Ohne Stern')).not.toBeInTheDocument()
+    expect(within(otherSection).getByText('Ohne Stern')).toBeInTheDocument()
+    // Reihenfolge im DOM: Favoriten-Gruppe steht vor der uebrigen Gruppe.
+    expect(favSection.compareDocumentPosition(otherSection)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    )
+  })
+
+  it('rendert ohne Favoriten keine Gruppenueberschrift (AC 2)', async () => {
+    stubList([
+      agent({ id: 'a1', name: 'Ohne Stern', is_favorite: false }),
+      agent({ id: 'a2', name: 'Auch ohne', is_favorite: false }),
+    ])
+
+    renderPage()
+
+    expect(await screen.findByText('Ohne Stern')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Favoriten' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Weitere Agents' })).not.toBeInTheDocument()
+  })
+
+  it('spiegelt den Zustand in aria-pressed und setzt den Stern per PUT', async () => {
+    const calls: { url: string; method?: string }[] = []
+    stubList([agent({ id: 'a1', name: 'Carla Bot', is_favorite: false })], (input, init) =>
+      calls.push({ url: String(input), method: init?.method }),
+    )
+
+    renderPage()
+
+    const toggle = await screen.findByTestId('favorite-toggle')
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
+    expect(toggle).toHaveAccessibleName('Zu Favoriten hinzufügen: Carla Bot')
+
+    fireEvent.click(toggle)
+
+    await waitFor(() => {
+      expect(
+        calls.some((c) => c.method === 'PUT' && c.url.endsWith(`${WS_PREFIX}/agents/a1/favorite`)),
+      ).toBe(true)
+    })
+  })
+
+  it('entfernt einen gesetzten Stern per DELETE', async () => {
+    const calls: { url: string; method?: string }[] = []
+    stubList([agent({ id: 'a1', name: 'Carla Bot', is_favorite: true })], (input, init) =>
+      calls.push({ url: String(input), method: init?.method }),
+    )
+
+    renderPage()
+
+    const toggle = await screen.findByTestId('favorite-toggle')
+    expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    expect(toggle).toHaveAccessibleName('Aus Favoriten entfernen: Carla Bot')
+
+    fireEvent.click(toggle)
+
+    await waitFor(() => {
+      expect(
+        calls.some(
+          (c) => c.method === 'DELETE' && c.url.endsWith(`${WS_PREFIX}/agents/a1/favorite`),
+        ),
+      ).toBe(true)
+    })
+  })
+
+  it('meldet einen Fehler-Toast, wenn der Toggle scheitert, und bleibt auf der Liste', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_input: string, init?: RequestInit) => {
+        if (init?.method === 'PUT') {
+          return Promise.resolve(new Response(JSON.stringify({ detail: 'kaputt' }), { status: 500 }))
+        }
+        return Promise.resolve(
+          new Response(
+            JSON.stringify([agent({ id: 'a1', name: 'Carla Bot', is_favorite: false })]),
+            { status: 200 },
+          ),
+        )
+      }),
+    )
+
+    renderPage()
+
+    fireEvent.click(await screen.findByTestId('favorite-toggle'))
+
+    await waitFor(() => expect(notify.error).toHaveBeenCalled())
+    expect(screen.getByText('Carla Bot')).toBeInTheDocument()
+  })
+})

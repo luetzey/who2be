@@ -223,6 +223,12 @@ class PgAccountPurgeRepository:
             await self._conn.execute(
                 "DELETE FROM oauth_authorization_code WHERE user_id = $1", user_id
             )
+            # Agent-Favoriten des Users (#427): `agent_favorite.user_id` traegt
+            # wie `oauth_authorization_code` keinen FK auf den GoTrue-User
+            # (kein Schema tut das), CASCADE greift hier also nicht. Ohne diese
+            # Zeile ueberlebten die Sterne eines geloeschten Kontos in fremden
+            # Workspaces, in denen der User Mitglied war.
+            await self._conn.execute("DELETE FROM agent_favorite WHERE user_id = $1", user_id)
             await self._conn.execute("DELETE FROM org_member WHERE user_id = $1", user_id)
             await self._conn.execute("DELETE FROM workspace_member WHERE user_id = $1", user_id)
             sh_result = await self._conn.execute(
