@@ -98,6 +98,23 @@ der App über denselben Port. Die Taxonomie ist offen erweiterbar (neue `source`
   bleibt unverändert; die App-Read-Seite ändert sich nicht.
 - Audit/Compliance verbessern sich: jeder Nicht-Kauf-Grant ist befristet und
   einem Urheber + Grund zugeordnet.
+- **Offene Auflage (Issue #462, Owner-Entscheidung 2026-09-06, Weg C):**
+  `EntitlementRepository.upsert` schreibt bedingungslos (`ON CONFLICT ... DO
+  UPDATE` ohne Reihenfolge-Pruefung) — ein verspaetet zugestelltes
+  Anbieter-Ereignis kann einen bereits geschriebenen neueren Stand
+  zuruecksetzen. Heute tragbar: kein Anbieter sendet auf den generischen
+  Webhook-Pfad, `mollie` hat einen eigenen Dedupe-Schutz, und die
+  Ablauffrist aus #452 begrenzt den Schaden (kein wiedereingespieltes
+  Ereignis kann ein unbefristetes Entitlement erzeugen). Verworfen wurden
+  eine sofortige `event_at`-Spalte + Migration (kauft eine Migration fuer
+  ein heute nicht bestehendes Risiko) und eine Naeherung ueber `updated_at`
+  mit Toleranz (tauscht das theoretische Problem gegen praktisch
+  faelschlich abgewiesene, legitim verspaetete Ereignisse). **Sobald ein
+  signierender Anbieter an den generischen Pfad angebunden wird, ist die
+  `event_at`-Spalte + eine `WHERE`-Bedingung, die aeltere Ereignisse
+  verwirft, der richtige Weg** — das ist dann keine offene Frage mehr,
+  sondern umzusetzen. Ausfuehrlich an der UPSERT-Stelle in
+  `entitlement_repository.py`.
 
 ## Nachtrag 2026-07-20 (Q2)
 

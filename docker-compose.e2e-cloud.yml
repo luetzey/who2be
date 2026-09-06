@@ -1,0 +1,25 @@
+# E2E-Overlay fuer die Cloud-Journeys (Issue #453).
+#
+# Wird NUR vom CI-Job `e2e-billing-cloud` zusaetzlich zu
+# `docker-compose.cloud.yml` geladen. Grund: das Cloud-Overlay setzt
+# GOTRUE_MAILER_AUTOCONFIRM auf "false" und schickt Bestaetigungsmails ueber
+# mailpit — bewusst, weil es den echten Cloud-Mailflow abbildet. Der
+# Basis-Stack steht dagegen auf "true" (docker-compose.yml), und genau davon
+# haengt `apps/web/e2e/helpers/auth.ts` ab: `createUser` erwartet ein
+# `access_token` direkt aus der Signup-Antwort. Im Cloud-Stack gibt es das
+# nicht — der Nutzer muesste erst eine Mail bestaetigen.
+#
+# Die Billing-Journey testet die Billing-Oberflaeche der Cloud-Edition, nicht
+# den Mailversand; der hat seine eigene Abdeckung. Dieses Overlay stellt
+# deshalb nur den Autoconfirm des Basis-Stacks wieder her und laesst alles
+# andere am Cloud-Overlay unveraendert — insbesondere WHO2BE_EDITION und
+# VITE_WHO2BE_EDITION, die den eigentlichen Prueffall ausmachen.
+#
+# Bewusst eine eigene Datei statt einer Aenderung an docker-compose.cloud.yml:
+# jenes Overlay beschreibt ein Deployment-Profil und wird auch ausserhalb der
+# CI benutzt; ein dort abgeschalteter Mailflow waere eine stille Aenderung am
+# Produktionsbild.
+services:
+  auth:
+    environment:
+      GOTRUE_MAILER_AUTOCONFIRM: "true"

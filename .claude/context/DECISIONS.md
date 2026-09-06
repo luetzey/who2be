@@ -1303,3 +1303,95 @@ bleiben)._
 - **Offen:** die uebrigen ~76 `detail`-Stellen (#402 W1-Wn), die MCP-Client-
   Seite, die zwei Confinement-Raises in `routers/agents.py`, und die
   Content-Type-Vereinheitlichung (Weg C) als eigenes Vorhaben.
+
+## 2026-09-06 — aal2-Schwelle fuer Token-Ausstellung ist die *entstehende* Rolle
+- **Entscheidung:** `TokenService.create`/`.rotate` rufen `require_aal2` genau
+  dann, wenn die betroffene Token-Rolle `admin` ist — nicht bei jeder
+  Ausstellung, und nicht anhand der Rolle des Aufrufers. `rename`/`revoke`
+  bleiben ungegatet.
+- **Begruendung:** `require_role(ctx, admin)` setzt in `core/security.py`
+  bereits genau diese Schwelle fuer jede andere Admin-Aktion; fuer `editor`
+  gibt es im Repo keinen einzigen Fall eines aal2-Gates. Eine zweite,
+  strengere Schwelle waere eine neue Konvention statt der Anwendung der
+  bestehenden. Verallgemeinert gilt fuer jeden Pfad, der Rechte verteilt: die
+  Schwelle ist die Rolle, die dabei **entsteht**.
+- **`rotate` zaehlt mit:** es gibt ein neues, sofort gueltiges Secret fuer
+  dieselbe Rolle aus — ohne Gate waere `create` durch ein Rotate umgehbar. Die
+  Rolle wird dafuer VOR dem Rotate nachgeschlagen (`_current_role`), damit die
+  Pruefung feststeht, bevor ein Secret existiert.
+- **Verworfen:** ein eigenes Gate neben `require_aal2` (haette dessen zwei
+  Ausnahmen — Maschinen-Pfad und On-Prem-fail-open — nachbauen muessen und
+  waere beim naechsten Mal auseinandergelaufen); ein Uebergangs-Schalter fuer
+  die Migration (unnoetig: `require_aal2` kehrt bei `is_api_token` sofort
+  zurueck, bestehende Automatisierung bricht also nicht).
+- **Kontext:** Issue #469, aus dem Security-Review zu #430 (PR #468).
+
+## 2026-09-06 — Entitlement-Monotonie aufgeschoben, Auflage im Code verankert
+- **Entscheidung:** `EntitlementRepository.upsert` bleibt bedingungslos; die
+  Auflage, dass ein signierender Zweit-Anbieter eine Ereigniszeit-Spalte plus
+  eine verwerfende `WHERE`-Bedingung mitbringen muss, steht als Kommentar an
+  der Upsert-Stelle, in Kurzform am generischen Webhook-Pfad und in ADR-0028
+  §Konsequenzen. Kein Verhalten geaendert (Owner-Entscheidung, Weg C).
+- **Begruendung:** Die Luecke ist heute nicht ausloesbar — kein Anbieter sendet
+  auf den generischen Pfad, Mollie hat eigenen Dedupe, und die Ablauffrist aus
+  #452 begrenzt den Schaden. Was fehlte, war nicht Code, sondern die
+  Gewissheit, dass die Auflage beim Anbinden GEFUNDEN wird statt in einem
+  geschlossenen Issue zu verstauben. Deshalb an der ausloesenden Stelle
+  verankert, nicht im Ticket — das gilt allgemein fuer aufgeschobene Auflagen.
+- **Verworfen:** sofortige `event_at`-Spalte + Migration (kauft eine Migration
+  fuer ein Risiko, das nicht besteht); Naeherung ueber `updated_at` mit
+  Toleranz (`updated_at` ist die Schreib-, nicht die Ereigniszeit — die
+  Naeherung ist in die falsche Richtung unsicher und wiese legitim verspaetete
+  Ereignisse ab). Sobald ein signierender Anbieter dazukommt, ist die
+  `event_at`-Variante der richtige Weg.
+- **Kontext:** Issue #462, aus #452 (WP-5 von #428) herausgeloest.
+
+## 2026-09-06 — Storage-Backend wird pro Tab eingefroren, nicht live gelesen
+- **Entscheidung:** Der delegierende Storage-Adapter (`lib/supabase.ts`) liest
+  den `remember`-Marker nicht mehr bei jedem Zugriff, sondern haelt seinen
+  Modus im Modul-Zustand. Ein Login in DIESEM Tab aktualisiert ihn
+  (`syncStorageBackendForThisTab`, aufgerufen aus `signIn` — auch im
+  Fehlerpfad); ein Marker-Wechsel in einem fremden Tab nicht.
+- **Begruendung:** `localStorage` ist tab-uebergreifend, der Marker war damit
+  ein globaler Schalter, der laufende Tabs umlenkte. Weg B statt der
+  Alternative, den Marker an die Session-Identitaet zu binden: letztere
+  scheitert am Bootstrap-Fall (beim Laden ist noch keine Id committed, der
+  Adapter muss aber entscheiden, wo er liest). Die Folge — ein Tab behaelt
+  seinen Modus bis zum Reload — ist gewolltes Verhalten.
+- **Keine neue Abstraktion:** der Adapter bleibt, was er war; nur seine
+  Aufloesungs-Strategie wechselt von „live" auf „einmal pro Tab". Die
+  Aenderung ENTFERNT eine Indirektion.
+- **Nebenwirkung, bewusst anders geloest:** der neue Export liess mehrere
+  Bestandstests brechen, die `@/lib/supabase` unvollstaendig mocken (Vitests
+  Mock-Proxy wirft schon beim LESEN einer fehlenden Property; optional
+  chaining faengt das nicht ab). Ein Existenz-Check im Produktivcode waere ein
+  in Produktion toter Zweig gewesen, der einen echten fehlenden Export still
+  verschluckt — stattdessen tragen die betroffenen Mocks den Export jetzt.
+  Ein `vi.mock`-Factory-Objekt muss jeden Export fuehren, den der
+  Produktivcode aufruft.
+- **Kontext:** Issue #471, Security-Review zu #430 (PR #468, MEDIUM-4).
+
+## 2026-09-06 — Seed-Pfade scopen die Connection selbst auf den neuen Workspace
+- **Entscheidung:** `ensure_personal_workspace` und `PgWorkspaceRepository.create`
+  setzen `app.current_tenant`/`app.current_org` per `set_config(..., is_local =>
+  true)` auf den gerade angelegten Workspace, bevor sie seeden
+  (`_scope_to_new_workspace`). Die RLS-Policy aus Migration 0037 bleibt
+  unveraendert scharf.
+- **Begruendung:** Beide Pfade schreiben in `tenant_isolation`-Tabellen fuer
+  einen Workspace, auf den die GUC nicht zeigt — beim Lazy-Seed gibt es noch
+  gar keinen Tenant-Kontext, bei `create` zeigt er auf einen anderen
+  Workspace. Unter der Cloud-Rolle `who2be_app` (NOBYPASSRLS) scheitert dort
+  jeder Insert; on-prem faellt es nicht auf, weil die App als Owner verbindet.
+- **`is_local` ist der sicherheitskritische Teil:** die Setzung endet mit der
+  Transaktion. Ohne sie truege die gepoolte Connection einen fremden Mandanten
+  in ihr naechstes Checkout — aus dem Bugfix waere ein Tenancy-Leak geworden.
+  Beide Regressionstests pruefen das ausdruecklich nach dem COMMIT.
+- **Verworfen:** den Seed ueber eine privilegierte Owner-Connection fahren
+  (fuehrt einen zweiten Schreibpfad mit hoeheren Rechten ein — genau das, was
+  ADR-0037 vermeiden wollte); das `WITH CHECK` an den Seed-Tabellen lockern
+  (schwaecht die Isolation an den Tabellen, die sie tragen sollen).
+- **Muster:** die Setzung liegt in einer benannten Funktion statt zweimal
+  inline — Beleg nach der Muster-Disziplin ist der zweite echte Fall, nicht
+  ein vermuteter dritter. Eine vergessene Stelle waere hier ein Sicherheitsbug,
+  kein Schoenheitsfehler.
+- **Kontext:** Issue #479, gefunden vom CI-Job `e2e-billing-cloud` aus #453.

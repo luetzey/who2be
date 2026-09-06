@@ -82,6 +82,37 @@ class PgEntitlementRepository:
         # (`app.current_org` ist dann gesetzt — siehe 0037 RLS).
         features = sorted(entitlement.features)
         async with self._pool.acquire() as conn, conn.transaction():
+            # Der `ON CONFLICT (org_id) DO UPDATE` unten ist bedingungslos: er
+            # ueberschreibt jeden bestehenden Stand, unabhaengig davon, wann das
+            # zugrundeliegende Anbieter-Ereignis tatsaechlich passiert ist. Kommt
+            # ein Ereignis verspaetet an (Retry nach Netzproblem, Umsortierung
+            # beim Anbieter), kann es damit einen bereits geschriebenen
+            # **neueren** Stand zuruecksetzen — ein altes "aktiv" ueberschreibt
+            # ein neueres "inaktiv", oder umgekehrt (Issue #462).
+            #
+            # Heute ist das tragbar: kein Anbieter sendet auf den generischen
+            # Webhook-Pfad (`packages/billing/.../router.py:billing_webhook`,
+            # dort derselbe Hinweis in Kurzform) — die Route ist gebaut, aber
+            # ungenutzt, solange kein `WHO2BE_BILLING_WEBHOOK_SECRET` konfiguriert
+            # ist. Der einzige aktive Anbieter (Mollie) hat einen eigenen
+            # Dedupe-Schutz ueber sein aktives Nachfetchen (nicht ueber
+            # Reihenfolge-Garantien des Push-Pfads, siehe `router.py:mollie_webhook`
+            # + `mollie.py`). Und die mit #452 eingefuehrte Ablauffrist begrenzt
+            # den Schaden zusaetzlich: ein wiedereingespieltes Ereignis kann kein
+            # unbefristetes Entitlement mehr erzeugen.
+            #
+            # Sobald ein **signierender** Anbieter an diesen generischen Pfad
+            # angebunden wird, aendert sich das: Signatur belegt zwar Herkunft
+            # und Unverfaelschtheit, aber nicht Zustellreihenfolge. Dann braucht
+            # es hier eine Spalte fuer die Ereigniszeit des Anbieters (nicht
+            # `updated_at` — das ist die Schreibzeit, ein Vergleich dagegen waere
+            # nur eine Naeherung und in die falsche Richtung unsicher: ein
+            # legitimes, spaet zugestelltes Ereignis wuerde faelschlich
+            # abgewiesen) plus eine `WHERE`-Bedingung am UPDATE, die ein
+            # Ereignis mit aelterer Ereigniszeit als der bereits gespeicherten
+            # verwirft. Das ist bewusst NICHT vorgezogen (Owner-Entscheidung
+            # 2026-09-06, Issue #462, Weg C) — siehe ADR-0028, Abschnitt
+            # "Konsequenzen".
             await conn.execute(
                 "INSERT INTO org_entitlement "
                 "(org_id, status, features, expires_at, mcp_monthly_quota, "

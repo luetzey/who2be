@@ -324,17 +324,31 @@ Umgebung laeuft kein Docker, sie sind nur typgeprueft. Der CI-Job `e2e` faehrt s
 
 **Bewusst offen gelassen (als Folge-Issues erfasst, nicht still gefixt):**
 
-- Der Marker ist ein **globaler** Schalter im `localStorage`, kein Per-Tab-
-  Zustand. Ein Login in Tab B aendert das Storage-Routing eines parallel
-  laufenden Tab A. Eine Bindung des Markers an die Session-Identitaet ist ein
-  eigenes Paket.
-- `WHO2BE_SESSION_MAX_AGE_HOURS` ist in **keinem** Compose-`web`-Service
-  durchgereicht — der Entrypoint liest die Variable, aber kein Stack setzt sie.
-  Ein Betreiber, der auf 1 h haerten will, bekommt still 12 h. Weiche 7 des
-  Issues schliesst einen Compose-Diff in diesem Paket aus; beide
-  `.env.example` benennen die fehlende Verdrahtung.
-- Ein Befund **ausserhalb** des Pakets (`apps/api`, aal2-Gate bei der
-  API-Token-Ausstellung) ist getrennt gemeldet — nicht Teil dieser ADR.
+- ~~Der Marker ist ein **globaler** Schalter im `localStorage`~~ — **behoben
+  2026-09-06 (#471, Weg B).** Der Adapter friert seinen Modus pro Tab ein,
+  statt den Marker live zu lesen; ein Login in DIESEM Tab aktualisiert ihn,
+  ein fremder Marker-Wechsel nicht. Ein Tab behaelt seinen Modus bis zum
+  Reload — gewolltes Verhalten. `signOut` haengt nicht mehr davon ab, dass der
+  Marker im Moment des Aufraeumens noch steht.
+- ~~`WHO2BE_SESSION_MAX_AGE_HOURS` ist in **keinem** Compose-`web`-Service
+  durchgereicht~~ — **behoben 2026-09-06 (#470).** Beide `web`-Services
+  (`docker-compose.yml`, `deploy/hetzner/who2be/docker-compose.yml`) reichen
+  die Variable jetzt durch; die Wiring-Hinweise sind aus beiden `.env.example`
+  entfernt. Nebenbei fiel auf, dass `deploy/hetzner/.env.example` dieselbe
+  Behauptung auch fuer `WHO2BE_LAUNCH_MODE` trug, obwohl dessen Wiring seit
+  #429 existiert — ebenfalls korrigiert. Offen bleibt `deploy/dokploy/
+  docker-compose.yml`: dort reicht der `web`-Service **keine** der drei
+  Runtime-Config-Variablen durch (`:272-277`, nur `WHO2BE_SIGNUP_DISABLED`);
+  der Stack laeuft in keinem Check und ist als Nebenbefund an #470 notiert.
+- ~~Ein Befund **ausserhalb** des Pakets (`apps/api`, aal2-Gate bei der
+  API-Token-Ausstellung) ist getrennt gemeldet~~ — **behoben 2026-09-06
+  (#469).** `TokenService.create` und `.rotate` gaten auf `require_aal2`,
+  sobald die betroffene Token-Rolle `admin` ist; bei `rotate` wird die Rolle
+  vor dem Rotate nachgeschlagen, damit kein neues Secret entsteht, bevor die
+  Pruefung feststeht. Die im Issue vermutete Migrationswirkung war
+  gegenstandslos: `require_aal2` kehrt bei `ctx.is_api_token` sofort zurueck
+  und bleibt On-Prem ohne `aal`-Claim fail-open — beide Ausnahmen sind durch
+  eigene Tests belegt.
 
 ## Backlog aufbereitet, drei Nebenfunde startbar (2026-09-06, Vorbereitungslauf vor den Laeufen 26-29 — nur GitHub + Doku)
 
@@ -2042,6 +2056,16 @@ Draft-on-Edit-Sichtbarkeit waren längst erledigt/überholt.
   80/79/75/80), Build grün; mcp: 241 pytest grün.
 
 ## Bekannte Probleme
+
+- **Entitlement-Upsert prueft die Ereignisreihenfolge nicht** (bewusst
+  aufgeschoben, #462, Weg C — **nicht** offen im Sinne von unentschieden):
+  `EntitlementRepository.upsert` ueberschreibt bedingungslos, ein verspaetet
+  zugestelltes Anbieter-Ereignis kann also einen neueren Stand zuruecksetzen.
+  Heute nicht ausloesbar (kein Anbieter auf dem generischen Pfad, Mollie hat
+  eigenen Dedupe, Ablauffrist aus #452 begrenzt den Schaden). Die Auflage fuer
+  einen signierenden Zweit-Anbieter — Ereignniszeit-Spalte plus verwerfende
+  `WHERE`-Bedingung — steht an der Upsert-Stelle, am Webhook-Pfad und in
+  ADR-0028 §Konsequenzen.
 
 - **Tabellen-Store-Verzeichnisse überleben den Hard-Purge** (bewusst, WP20):
   `cleanup_deleted_area_stores` fasst nur Verzeichnisse an, deren Workspace

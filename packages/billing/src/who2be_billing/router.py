@@ -235,6 +235,11 @@ async def billing_webhook(request: Request) -> dict[str, bool]:
         return {"received": True}
 
     repo = PgEntitlementRepository(pool)
+    # Bedingungsloser Upsert, ohne die Ereigniszeit des Anbieters zu pruefen —
+    # verspaetet zugestellte Ereignisse koennen einen neueren Stand
+    # zuruecksetzen; ausfuehrlich (Tragbarkeit heute + Auflage fuer einen
+    # signierenden Anbieter) an der UPSERT-Stelle in `entitlement_repository.py`,
+    # Issue #462.
     try:
         await repo.upsert(
             update.org_id,
