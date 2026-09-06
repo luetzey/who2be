@@ -28,6 +28,18 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Fixed
 
+- The "stay signed in" marker no longer redirects tabs that are already
+  running. It lives in `localStorage`, which is shared across tabs, and the
+  storage adapter used to re-read it on *every* access — so signing in with
+  the box ticked in one tab silently rerouted an unrelated tab to that other
+  session, and clearing the marker logged a remembered tab out without a word.
+  The adapter now decides its backend once per tab and keeps it; a login in
+  *this* tab updates it, a marker change in a foreign tab does not. A tab
+  therefore keeps its mode until it reloads, which is both the fix and the
+  intended behaviour. Sign-out got more robust in passing: it no longer
+  depends on the marker still being present at the moment the adapter looks
+  for the session (Issue #471, ADR-0052 amended).
+
 - The `WHO2BE_SESSION_MAX_AGE_HOURS` runtime setting now reaches the web
   container. The entrypoint has always read it and written it into
   `/config.js`, but neither `web` service passed it in, so an operator who set

@@ -1345,3 +1345,28 @@ bleiben)._
   Ereignisse ab). Sobald ein signierender Anbieter dazukommt, ist die
   `event_at`-Variante der richtige Weg.
 - **Kontext:** Issue #462, aus #452 (WP-5 von #428) herausgeloest.
+
+## 2026-09-06 — Storage-Backend wird pro Tab eingefroren, nicht live gelesen
+- **Entscheidung:** Der delegierende Storage-Adapter (`lib/supabase.ts`) liest
+  den `remember`-Marker nicht mehr bei jedem Zugriff, sondern haelt seinen
+  Modus im Modul-Zustand. Ein Login in DIESEM Tab aktualisiert ihn
+  (`syncStorageBackendForThisTab`, aufgerufen aus `signIn` — auch im
+  Fehlerpfad); ein Marker-Wechsel in einem fremden Tab nicht.
+- **Begruendung:** `localStorage` ist tab-uebergreifend, der Marker war damit
+  ein globaler Schalter, der laufende Tabs umlenkte. Weg B statt der
+  Alternative, den Marker an die Session-Identitaet zu binden: letztere
+  scheitert am Bootstrap-Fall (beim Laden ist noch keine Id committed, der
+  Adapter muss aber entscheiden, wo er liest). Die Folge — ein Tab behaelt
+  seinen Modus bis zum Reload — ist gewolltes Verhalten.
+- **Keine neue Abstraktion:** der Adapter bleibt, was er war; nur seine
+  Aufloesungs-Strategie wechselt von „live" auf „einmal pro Tab". Die
+  Aenderung ENTFERNT eine Indirektion.
+- **Nebenwirkung, bewusst anders geloest:** der neue Export liess mehrere
+  Bestandstests brechen, die `@/lib/supabase` unvollstaendig mocken (Vitests
+  Mock-Proxy wirft schon beim LESEN einer fehlenden Property; optional
+  chaining faengt das nicht ab). Ein Existenz-Check im Produktivcode waere ein
+  in Produktion toter Zweig gewesen, der einen echten fehlenden Export still
+  verschluckt — stattdessen tragen die betroffenen Mocks den Export jetzt.
+  Ein `vi.mock`-Factory-Objekt muss jeden Export fuehren, den der
+  Produktivcode aufruft.
+- **Kontext:** Issue #471, Security-Review zu #430 (PR #468, MEDIUM-4).

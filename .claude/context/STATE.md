@@ -324,10 +324,12 @@ Umgebung laeuft kein Docker, sie sind nur typgeprueft. Der CI-Job `e2e` faehrt s
 
 **Bewusst offen gelassen (als Folge-Issues erfasst, nicht still gefixt):**
 
-- Der Marker ist ein **globaler** Schalter im `localStorage`, kein Per-Tab-
-  Zustand. Ein Login in Tab B aendert das Storage-Routing eines parallel
-  laufenden Tab A. Eine Bindung des Markers an die Session-Identitaet ist ein
-  eigenes Paket.
+- ~~Der Marker ist ein **globaler** Schalter im `localStorage`~~ — **behoben
+  2026-09-06 (#471, Weg B).** Der Adapter friert seinen Modus pro Tab ein,
+  statt den Marker live zu lesen; ein Login in DIESEM Tab aktualisiert ihn,
+  ein fremder Marker-Wechsel nicht. Ein Tab behaelt seinen Modus bis zum
+  Reload — gewolltes Verhalten. `signOut` haengt nicht mehr davon ab, dass der
+  Marker im Moment des Aufraeumens noch steht.
 - ~~`WHO2BE_SESSION_MAX_AGE_HOURS` ist in **keinem** Compose-`web`-Service
   durchgereicht~~ — **behoben 2026-09-06 (#470).** Beide `web`-Services
   (`docker-compose.yml`, `deploy/hetzner/who2be/docker-compose.yml`) reichen
