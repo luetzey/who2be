@@ -165,8 +165,15 @@ the merged pull requests and the plan documents under `.claude/plan/`.
   `.../agents/{id}/favorite`, both idempotent and both open to every workspace
   member including `viewer` — a favorite is a private note, not workspace
   content — while agent-bound API tokens get a 403, since a token has no
-  favorites list of its own. MCP `list_agents` passes the field through with no
-  code change.
+  favorites list of its own. MCP `list_agents` deliberately does not carry the
+  star: on a token path `ctx.user_id` is the *human who owns the token*, so
+  passing it through would have shown a remote LLM connector which agents that
+  person had marked, and made `list_agents` answer differently per token owner.
+  Machines get no favorites list at all, which is what the write path already
+  said by refusing agent-bound tokens. Removing a member from a workspace
+  clears their stars in the same transaction, and the Art. 15/20 export carries
+  them alongside the deletion path, filtered to the requesting user so it never
+  hands out anyone else's.
 
 ### Fixed
 

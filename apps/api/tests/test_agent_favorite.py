@@ -260,3 +260,86 @@ def test_purge_account_data_removes_favorites(make_auth_headers: AuthFactory) ->
         assert _favorite_row_count(user_id=guest) == 0
     finally:
         cleanup_workspaces([owner, guest])
+
+
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db")
+def test_removing_a_member_clears_their_favorites(make_auth_headers: AuthFactory) -> None:
+    """Wer aus dem Workspace fliegt, laesst keine Sterne zurueck.
+
+    Die FKs von `agent_favorite` haengen an `workspace` und `agent` — beide
+    bestehen weiter, wenn nur die Mitgliedschaft endet. Ohne den expliziten
+    DELETE ueberlebten die Markierungen unbegrenzt und taeuchten bei einer
+    Re-Einladung wieder auf.
+    """
+    owner, member = fresh_user_id(), fresh_user_id()
+    ws = setup_workspace(owner)
+    _add_member(ws, member, WorkspaceRole.editor)
+    try:
+        with TestClient(app) as client:
+            base = f"/v1/workspaces/{ws}"
+            agent = client.post(
+                f"{base}/agents", json={"name": "Geteilt"}, headers=make_auth_headers(owner)
+            ).json()
+            marked = client.put(
+                f"{base}/agents/{agent['id']}/favorite", headers=make_auth_headers(member)
+            )
+            assert marked.status_code == 204, marked.text
+            assert _favorite_row_count(agent_id=UUID(agent["id"]), user_id=member) == 1
+
+            removed = client.delete(f"{base}/members/{member}", headers=make_auth_headers(owner))
+            assert removed.status_code == 204, removed.text
+
+        assert _favorite_row_count(user_id=member) == 0
+        # Der Stern des Owners (falls vorhanden) bleibt unberuehrt.
+        assert _favorite_row_count(agent_id=UUID(agent["id"])) == 0
+    finally:
+        cleanup_workspaces([owner, member])
+
+
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db")
+def test_gdpr_export_contains_own_favorites_only(make_auth_headers: AuthFactory) -> None:
+    """Was der Purge loescht, muss die Auskunft auch liefern (Art. 15/20).
+
+    Und zwar nur die eigenen Sterne: der Export gehoert genau einem Menschen,
+    ein ungefiltertes SELECT lieferte ihm die Markierungen der uebrigen
+    Mitglieder mit aus.
+    """
+    owner, member = fresh_user_id(), fresh_user_id()
+    ws = setup_workspace(owner)
+    _add_member(ws, member, WorkspaceRole.editor)
+    try:
+        with TestClient(app) as client:
+            base = f"/v1/workspaces/{ws}"
+            mine = client.post(
+                f"{base}/agents", json={"name": "Meiner"}, headers=make_auth_headers(owner)
+            ).json()
+            theirs = client.post(
+                f"{base}/agents", json={"name": "Ihrer"}, headers=make_auth_headers(owner)
+            ).json()
+            assert (
+                client.put(
+                    f"{base}/agents/{mine['id']}/favorite", headers=make_auth_headers(owner)
+                ).status_code
+                == 204
+            )
+            assert (
+                client.put(
+                    f"{base}/agents/{theirs['id']}/favorite", headers=make_auth_headers(member)
+                ).status_code
+                == 204
+            )
+
+            # Ueber den echten Endpunkt statt am Service vorbei — so ist auch
+            # die Auth-Grenze mitgeprueft (der Export gehoert dem Aufrufer).
+            exported_resp = client.get("/v1/gdpr/export", headers=make_auth_headers(owner))
+            assert exported_resp.status_code == 200, exported_resp.text
+            bundle = exported_resp.json()
+
+        workspaces = [
+            w for org in bundle["organizations"] for w in org["workspaces"] if w["id"] == str(ws)
+        ]
+        assert len(workspaces) == 1, workspaces
+        exported = workspaces[0]["agent_favorites"]
+        assert [row["agent_id"] for row in exported] == [str(mine["id"])]
+    finally:
+        cleanup_workspaces([owner, member])

@@ -145,6 +145,7 @@ class GdprExportService:
                     name=row["workspace_name"],
                     slug=row["workspace_slug"],
                     role=row["workspace_role"],
+                    user_id=user_id,
                 )
             )
 
@@ -194,6 +195,7 @@ class GdprExportService:
         name: str,
         slug: str,
         role: str,
+        user_id: UUID,
     ) -> dict[str, Any]:
         # Pro Workspace in den Mandanten-Scope wechseln, damit RLS die Inhalte
         # sichtbar macht; jede Query zieht eine mandantengebundene Connection.
@@ -231,6 +233,20 @@ class GdprExportService:
                 "ORDER BY first_at ASC, id ASC",
                 workspace_id,
             )
+            # Agent-Favoriten (#427): personenbezogen — welcher Mensch wann
+            # welchen Agenten markiert hat. `purge_account_data` loescht die
+            # Zeilen, also gehoeren sie auch in die Auskunft; alles andere
+            # waere eine Asymmetrie zwischen Art. 17 und Art. 15/20.
+            # AUSDRUECKLICH auf `user_id` gefiltert: der Export gehoert genau
+            # einem Menschen — ein ungefiltertes SELECT lieferte ihm die Sterne
+            # der uebrigen Mitglieder mit aus.
+            favorites = await self._pool.fetch(
+                "SELECT agent_id, created_at FROM agent_favorite "
+                "WHERE workspace_id = $1 AND user_id = $2 "
+                "ORDER BY created_at ASC, agent_id ASC",
+                workspace_id,
+                user_id,
+            )
         return {
             "id": str(workspace_id),
             "name": name,
@@ -247,6 +263,7 @@ class GdprExportService:
             "wa_tables": tables,
             "knowledge_base": knowledge_base,
             "agent_access_log": [_clean(row) for row in access_log],
+            "agent_favorites": [_clean(row) for row in favorites],
         }
 
     async def _export_work_areas(self, workspace_id: UUID) -> list[dict[str, Any]]:
