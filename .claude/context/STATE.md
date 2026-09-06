@@ -33,13 +33,39 @@ Integrationstests still uebersprungen: `uv run pytest --cov` meldete
 und musste in jedem Python-Paket als „nicht verifiziert" offengelegt werden.
 Postgres 16 laesst sich hier aber **ohne** Docker installieren (`apt`, plus
 `pg_trgm` und `pgvector`); mit `DATABASE_URL` darauf laeuft die volle Suite:
-**1838 passed, 0 skipped, Coverage 90.93 %**. Die fuenf neuen
-Integrationstests pruefen damit wirklich gegen eine DB, nicht gegen Mocks.
+**1842 passed, 0 skipped, Coverage 90.92 %**. Die sieben neuen
+Integrationstests pruefen damit wirklich gegen eine DB, nicht gegen Mocks —
+insbesondere die Aufraeumpfade, die ein Mock nie widerlegt haette.
+
+**Der Security-Review (CLAUDE.md verlangt ihn fuer DB-Zugriff) fand einen
+Widerspruch im eigenen Entwurf.** Der Schreibpfad ist Menschen vorbehalten (403
+fuer agent-gebundene Tokens), weil ein Favorit „das private Datum eines
+Menschen" sei — die Leserichtung reichte ihn aber genau dorthin durch. Bei
+einem `w2b_`-Token ist `ctx.user_id` der MENSCH, dem der Token gehoert; ein
+Remote-Connector (fremder LLM-Anbieter) haette also gesehen, welche Agenten
+dieser Mensch markiert hat, und `list_agents` haette pro Token-Besitzer
+unterschiedlich geantwortet. Der Maschinen-Pfad uebergibt jetzt `None`
+(`fav.user_id = NULL` findet nie eine Zeile) — kein zweiter Query-Pfad noetig.
+
+Vier weitere Befunde, alle behoben: fehlendes `fav.workspace_id`-Praedikat im
+Join (heute kein Leak, aber genau die Argumentation, die F-Phase2-02 schon
+einmal verworfen hat); ein paralleler Agent-Delete zwischen Existenzpruefung
+und INSERT lief in einen 500 statt in den 404; die **DSGVO-Asymmetrie**
+(`purge_account_data` loeschte die Sterne, der Art.-15/20-Export lieferte sie
+nicht aus); und Sterne eines **entfernten Mitglieds**, die unbegrenzt in einem
+Workspace ohne Zugang ueberlebten und bei Re-Einladung wieder auftauchten. Die
+letzten beiden brauchten Dateien ausserhalb der Scope-Liste des Issues — vom
+Owner ausdruecklich freigegeben, statt sie zu vertagen.
+
+**Regel dahinter, uebertragbar:** wer eine Schreibsperre mit „das ist ein
+privates Datum" begruendet, muss die Leserichtung mitpruefen. Und: ein neuer
+personenbezogener Datensatz gehoert in **beide** DSGVO-Pfade (Loeschung UND
+Auskunft), nicht nur in den, an den man zuerst denkt.
 
 **Nachweise:** `uv run ruff check .` / `ruff format --check .` / `mypy .` (456
 Dateien) gruen; `WHO2BE_REQUIRE_DB=1 uv run pytest --cov --cov-fail-under=85`
-→ **1838 passed, 90.93 %**; `npm run lint` (0 errors), `npx tsc -b`,
-`npm run test:coverage` (**1110 Tests**, Branches 81.65 %), `npm run test:a11y`
+→ **1842 passed, 90.92 %**; `npm run lint` (0 errors), `npx tsc -b`,
+`npm run test:coverage` (**1110 Tests**, Branches 81.66 %), `npm run test:a11y`
 (53), `npm run build`; i18n-Paritaet `agents` in beide Richtungen leer;
 `openapi.json` + `openapi_surface.json` regeneriert mit **genau zwei** neuen
 Routen.
