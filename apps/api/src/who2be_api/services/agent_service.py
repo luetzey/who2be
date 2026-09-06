@@ -120,6 +120,20 @@ def _model_config_is_human_only() -> ApiGateError:
     )
 
 
+def _favorite_owner(ctx: WorkspaceContext) -> UUID | None:
+    """Wessen Sterne die Liste zeigt — `None` fuer Maschinen (#427).
+
+    Bei einem `w2b_`-Token ist `ctx.user_id` der MENSCH, dem der Token gehoert
+    (`core/security.py`, `resolve_principal`). Wuerden wir ihn hier
+    durchreichen, saehe der Agent — bei einem Remote-Connector ein fremder
+    LLM-Anbieter — die privaten Markierungen dieses Menschen, und `list_agents`
+    faenge an, pro Token-Besitzer unterschiedlich zu antworten. Genau mit dieser
+    Begruendung ist der Schreibpfad Menschen vorbehalten
+    (`_favorite_is_human_only`); die Leserichtung folgt ihr.
+    """
+    return None if ctx.is_api_token else ctx.user_id
+
+
 def _favorite_is_human_only() -> ApiGateError:
     """403 fuer den Favoriten-Toggle durch einen agent-gebundenen Token (#427).
 
@@ -277,17 +291,17 @@ class AgentService:
             # Self-Scope: hoechstens der eigene Agent, keine Pagination noetig.
             own = await self._repo.fetch(ctx.workspace_id, ctx.agent_id) if ctx.agent_id else None
             items = [own] if own is not None else []
-            return await self._enrich(ctx.workspace_id, items, ctx.user_id), None
+            return await self._enrich(ctx.workspace_id, items, _favorite_owner(ctx)), None
         rows = await self._repo.list_by_workspace(ctx.workspace_id, limit + 1, cursor)
         next_cursor: str | None = None
         if len(rows) > limit:
             rows = rows[:limit]
             tail = rows[-1]
             next_cursor = encode_cursor(tail.created_at, tail.id)
-        return await self._enrich(ctx.workspace_id, rows, ctx.user_id), next_cursor
+        return await self._enrich(ctx.workspace_id, rows, _favorite_owner(ctx)), next_cursor
 
     async def _enrich(
-        self, workspace_id: UUID, items: list[AgentRead], user_id: UUID
+        self, workspace_id: UUID, items: list[AgentRead], user_id: UUID | None
     ) -> list[AgentRead]:
         """Joint die List-Card-Pills (Batch-Aggregat) in die Reads (kein N+1).
 
@@ -533,7 +547,14 @@ class AgentService:
         if existing is None:
             raise _not_found()
         if favorite:
-            await self._repo.add_favorite(ctx.workspace_id, agent_id, ctx.user_id)
+            try:
+                await self._repo.add_favorite(ctx.workspace_id, agent_id, ctx.user_id)
+            except ForeignKeyViolationError as exc:
+                # Der Agent ist zwischen Existenzpruefung und INSERT geloescht
+                # worden (paralleler Delete, zweiter Tab). Ohne diesen Zweig
+                # kaeme der FK-Verstoss als 500 heraus — dieselbe Behandlung
+                # wie im Delete-Pfad oben.
+                raise _not_found() from exc
         else:
             await self._repo.remove_favorite(ctx.workspace_id, agent_id, ctx.user_id)
 

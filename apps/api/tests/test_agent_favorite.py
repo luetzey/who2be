@@ -63,13 +63,23 @@ def _favorite_flags(client: TestClient, ws: UUID, auth: dict[str, str]) -> dict[
     return {str(item["id"]): item["is_favorite"] for item in listed.json()}
 
 
-def _favorite_row_count(**where: object) -> int:
+def _favorite_row_count(*, agent_id: UUID | None = None, user_id: UUID | None = None) -> int:
+    """Zeilen in `agent_favorite`, gefiltert nach Agent und/oder User.
+
+    Beide Filter werden UND-verknuepft angewendet — eine fruehere Fassung nahm
+    nur das erste kwarg, womit ein Aufruf mit beiden Argumenten kommentarlos
+    die halbe Bedingung geprueft und faelschlich gruen werden koennte.
+    """
+
     async def _run() -> int:
         conn = await asyncpg.connect(get_settings().database_url)
         try:
-            column, value = next(iter(where.items()))
             count = await conn.fetchval(
-                f"SELECT COUNT(*) FROM agent_favorite WHERE {column} = $1", value
+                "SELECT COUNT(*) FROM agent_favorite "
+                "WHERE ($1::uuid IS NULL OR agent_id = $1) "
+                "  AND ($2::uuid IS NULL OR user_id = $2)",
+                agent_id,
+                user_id,
             )
             return int(count)
         finally:

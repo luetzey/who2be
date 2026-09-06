@@ -99,7 +99,7 @@ class AgentRepository(Protocol):
     async def fetch(self, workspace_id: UUID, agent_id: UUID) -> AgentRead | None: ...
 
     async def list_meta(
-        self, workspace_id: UUID, agent_ids: list[UUID], user_id: UUID
+        self, workspace_id: UUID, agent_ids: list[UUID], user_id: UUID | None
     ) -> dict[UUID, AgentListMeta]: ...
 
     async def add_favorite(self, workspace_id: UUID, agent_id: UUID, user_id: UUID) -> None: ...
@@ -326,7 +326,7 @@ class PgAgentRepository:
         return AgentRead.model_validate(dict(row)) if row is not None else None
 
     async def list_meta(
-        self, workspace_id: UUID, agent_ids: list[UUID], user_id: UUID
+        self, workspace_id: UUID, agent_ids: list[UUID], user_id: UUID | None
     ) -> dict[UUID, AgentListMeta]:
         """Batch-Aggregat fuer die List-Card-Pills (ein Roundtrip, kein N+1).
 
@@ -338,6 +338,11 @@ class PgAgentRepository:
         im SELBEN Roundtrip als `LEFT JOIN ... IS NOT NULL` mit — ein zweiter
         Query haette das Ein-Roundtrip-Versprechen dieses Aggregats gebrochen
         (`agent_service._enrich`).
+
+        `user_id=None` heisst „dieser Aufrufer hat keine Favoritenliste"
+        (Maschinen-Pfad, s. `agent_service.list_all`): `fav.user_id = NULL`
+        ergibt NULL statt TRUE, der LEFT JOIN findet also nie eine Zeile und
+        jedes `is_favorite` faellt auf `false` — ohne zweiten Query-Pfad.
         """
         if not agent_ids:
             return {}
@@ -360,8 +365,13 @@ class PgAgentRepository:
             "    SELECT agent_id, COUNT(*) AS cnt "
             "    FROM agent_memory WHERE status = 'pending' GROUP BY agent_id "
             ") pm ON pm.agent_id = a.id "
+            # `fav.workspace_id = $1` ist hier Defense-in-Depth: `a` haengt
+            # ohnehin am Workspace und `agent.id` ist PK. Der Einzelspalten-FK
+            # garantiert die Gleichheit aber nicht DB-seitig, und F-Phase2-02
+            # hat genau diese Argumentation schon einmal verworfen.
             "LEFT JOIN agent_favorite fav "
             "  ON fav.agent_id = a.id AND fav.user_id = $3 "
+            "  AND fav.workspace_id = $1 "
             "WHERE a.workspace_id = $1 AND a.id = ANY($2)",
             workspace_id,
             agent_ids,

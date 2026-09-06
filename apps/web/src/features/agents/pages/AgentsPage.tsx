@@ -313,7 +313,14 @@ export function AgentsPage() {
               ) : (
                 <div className="flex flex-col gap-6">
                   {groups.map((group) => (
-                    <section key={group.key} aria-labelledby={`agents-${group.key}-heading`}>
+                    <section
+                      key={group.key}
+                      // Nur setzen, wenn die Ueberschrift wirklich gerendert
+                      // wird — sonst zeigt das Attribut ins Leere.
+                      aria-labelledby={
+                        showGroupHeadings ? `agents-${group.key}-heading` : undefined
+                      }
+                    >
                       {/* Ueberschrift nur, wenn es zwei Gruppen gibt — eine
                           einzelne Liste braucht keinen Namen (AC 2). */}
                       {showGroupHeadings ? (

@@ -54,6 +54,7 @@ class _FakeAgentRepo:
         # Read auf den Feld-Defaults (None/0).
         self.meta: dict[UUID, AgentListMeta] = {}
         self.favorites: set[tuple[UUID, UUID]] = set()
+        self.last_meta_user_id: UUID | None = _OWNER
 
     async def list_by_workspace(
         self, workspace_id: UUID, limit: int, cursor: object
@@ -64,8 +65,9 @@ class _FakeAgentRepo:
         return next((a for a in self._agents if a.id == agent_id), None)
 
     async def list_meta(
-        self, workspace_id: UUID, agent_ids: list[UUID], user_id: UUID
+        self, workspace_id: UUID, agent_ids: list[UUID], user_id: UUID | None
     ) -> dict[UUID, AgentListMeta]:
+        self.last_meta_user_id = user_id
         return {aid: self.meta[aid] for aid in agent_ids if aid in self.meta}
 
     async def add_favorite(self, workspace_id: UUID, agent_id: UUID, user_id: UUID) -> None:
@@ -166,3 +168,44 @@ def test_scope_none_blocks_with_403() -> None:
     with pytest.raises(HTTPException) as exc_get:
         asyncio.run(_service().get(ctx, _OWN_ID))
     assert exc_get.value.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Favoriten sind Menschen-Daten — auch beim LESEN (#427, Security-Review M-1).
+# ---------------------------------------------------------------------------
+def test_human_list_resolves_own_favorites() -> None:
+    """Fuer einen Menschen fragt das Batch-Aggregat seine eigenen Sterne ab."""
+    repo = _FakeAgentRepo([_agent(_OWN_ID, "Eigener", AgentStatus.enabled)])
+    service = AgentService(repo)  # type: ignore[arg-type]
+
+    asyncio.run(service.list_all(_ctx(None), limit=50, cursor=None))
+
+    assert repo.last_meta_user_id == _OWNER
+
+
+def test_agent_bound_token_gets_no_favorites() -> None:
+    """Ein agent-gebundener Token bekommt KEINE Favoritenliste.
+
+    `ctx.user_id` ist dort der Mensch, dem der Token gehoert. Wuerde er
+    durchgereicht, saehe der Agent — bei einem Remote-Connector ein fremder
+    LLM-Anbieter — dessen private Markierungen, und `list_agents` antwortete
+    pro Token-Besitzer unterschiedlich. Der Schreibpfad ist aus demselben Grund
+    Menschen vorbehalten.
+    """
+    repo = _FakeAgentRepo([_agent(_OWN_ID, "Eigener", AgentStatus.enabled)])
+    repo.meta[_OWN_ID] = AgentListMeta(
+        persona_name=None,
+        template_name=None,
+        template_version=None,
+        playbook_count=0,
+        pending_memory_count=0,
+        is_favorite=True,
+    )
+    service = AgentService(repo)  # type: ignore[arg-type]
+
+    items, _cursor = asyncio.run(service.list_all(_ctx(ReadScope.assigned), limit=50, cursor=None))
+
+    assert repo.last_meta_user_id is None
+    # Selbst wenn das Aggregat `True` liefern wuerde: die Query fragt gar nicht
+    # erst nach den Sternen eines Menschen.
+    assert items != []
