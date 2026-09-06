@@ -1,6 +1,66 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-05 (25. Lauf — Responsive-Fundament steht, #438)_
+_Stand: 2026-09-06 (26. Lauf — Backlog aufbereitet, drei Issues agent-ready)_
+
+## Backlog aufbereitet, drei Nebenfunde startbar (2026-09-06, 26. Lauf — nur GitHub + Doku)
+
+Vollstaendiger Vorbereitungslauf ueber alle 15 offenen Issues gegen die Norm
+„Agent-ready Arbeitspaket". Plan:
+`.claude/plan/2026-09-06-0007_backlog-aufbereitungslauf.md`.
+
+**Ausgangslage:** die Warteschlange #442 war ueberholt. Sechs der zehn
+gelisteten Pakete waren gemergt (#429, #450, #451, #449, #452, #438), und die
+vier am selben Abend entstandenen Nebenfunde (#458, #462, #463, #465) fehlten
+darin **ganz** — sie waren fuer einen unbeaufsichtigten Lauf unsichtbar.
+
+**Drei Weichen selbst entschieden, weil das Repo sie belegt** (Playbook
+Schritt 4: „ist die Antwort im Repo belegt, ist es keine offene Weiche,
+sondern unerledigte Recherche"):
+
+- **#458** — Platzhalter statt Compose-Default. Vier weitere Pflicht-Secrets
+  derselben Vorlage tragen `CHANGE_ME_` (`:19, 89, 112, 127`), und der
+  `:?`-Guard auf `MINIO_ROOT_PASSWORD` ist der **einzige** im ganzen
+  Verzeichnis, waehrend `MINIO_ROOT_USER` daneben einen Default traegt. Ein
+  Compose-Default wuerde eine gesetzte Entscheidung zuruecknehmen.
+  Nachgeprueft: **alle drei** Overlay-Kombinationen (Basis, +cloud, +local)
+  brechen ohne die Variable ab und loesen mit ihr auf.
+- **#465** — Bewegung ja, ueber Motion-Tokens. `design-language.md` §7.3 fuehrt
+  „Dialog open/close", „Dropdown open" und „Toast slide-in" als gesetzte
+  Muster (die Uebergaenge sind gewollt → Weg „Klassen entfernen" faellt weg),
+  §7.2/§12 Nr. 6 verlangen Token statt hardcodierter `ms`. Das „Wie" (Plugin
+  vs. eigene Keyframes) bleibt bewusst offen — nach der Norm ist das genau
+  das, was der ausfuehrende Agent selbst herausfindet.
+  Der Befund war im Issue als „vermutet" markiert und ist jetzt **belegt**:
+  `npm run build` → keiner der vier Klassennamen steht im gebauten CSS,
+  einziges `@keyframes` ist Tailwinds `pulse`. 42 tote Vorkommen, fuenf Dateien.
+- **#463** — Punkte 2/4/5 sind Konvention, nicht Abwaegung: `main.py:302`
+  reicht `settings` eine Zeile vor dem Aufruf bereits durch; `_coerce_int`
+  existiert (`webhook.py:105`) und wurde laut Kommentar bei `:321` fuer genau
+  dieses Muster eingefuehrt; der Mollie-Pfad protokolliert bereits
+  (`router.py:276`, `:339` — das Issue nannte faelschlich `:262`, im Body
+  korrigiert). Das Issue wurde von fuenf auf drei Punkte zugeschnitten.
+
+**Vier Entscheidungen gehen an den Owner zurueck:** #463 Punkte 1 (404/400-
+Orakel — bestaetigt: `_require_cloud()` → 404 bei `:78`, Signaturfehler → 400
+bei `:184-188`; Empfehlung: Verhalten lassen, Docstring korrigieren) und 3
+(Dedupe-Namensraum an die Anbieter-Anbindung haengen); dazu die schon
+stehenden Weichen von #453, #462 und #436.
+
+**Neue Reihenfolge in #442:** #458 → #463 → #465 → #430 → #427, in zwei
+Wellen (1: #458 · #463 · #465, vollstaendig disjunkt; 2: #430 · #427).
+Blockiert und nicht einplanbar: #453, #462, #436.
+
+Zwei Kollisionen waren bisher nirgends notiert und sind jetzt in #442
+verankert: **#458 ↔ #430** an `deploy/hetzner/.env.example` (die alte Queue
+fuehrte die Datei nur unter „#429 ↔ #430" — mit dem Merge von #429 waere die
+Zeile ersatzlos verschwunden und die Kollision unsichtbar geworden) und
+**#465 ↔ #431 W1-W4** (die sechs Motion-Dateien gehoeren beim Zuschnitt
+freigehalten). Ergaenzt wurde ausserdem Pflege-Regel 10: erledigte Eintraege
+werden zusammengefasst, statt als zehn abgehakte Zeilen ueber der
+Warteschlange stehen zu bleiben.
+
+Kein Code an den Issues, keine neuen Issues, kein Claim. #454 und #338 tragen
+`human-only` — dort endet der Lauf nach Schritt 1 des Playbooks.
 
 ## Responsive-Fundament steht (2026-09-05, 25. Lauf, #438)
 
