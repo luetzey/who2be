@@ -1325,3 +1325,23 @@ bleiben)._
   die Migration (unnoetig: `require_aal2` kehrt bei `is_api_token` sofort
   zurueck, bestehende Automatisierung bricht also nicht).
 - **Kontext:** Issue #469, aus dem Security-Review zu #430 (PR #468).
+
+## 2026-09-06 — Entitlement-Monotonie aufgeschoben, Auflage im Code verankert
+- **Entscheidung:** `EntitlementRepository.upsert` bleibt bedingungslos; die
+  Auflage, dass ein signierender Zweit-Anbieter eine Ereigniszeit-Spalte plus
+  eine verwerfende `WHERE`-Bedingung mitbringen muss, steht als Kommentar an
+  der Upsert-Stelle, in Kurzform am generischen Webhook-Pfad und in ADR-0028
+  §Konsequenzen. Kein Verhalten geaendert (Owner-Entscheidung, Weg C).
+- **Begruendung:** Die Luecke ist heute nicht ausloesbar — kein Anbieter sendet
+  auf den generischen Pfad, Mollie hat eigenen Dedupe, und die Ablauffrist aus
+  #452 begrenzt den Schaden. Was fehlte, war nicht Code, sondern die
+  Gewissheit, dass die Auflage beim Anbinden GEFUNDEN wird statt in einem
+  geschlossenen Issue zu verstauben. Deshalb an der ausloesenden Stelle
+  verankert, nicht im Ticket — das gilt allgemein fuer aufgeschobene Auflagen.
+- **Verworfen:** sofortige `event_at`-Spalte + Migration (kauft eine Migration
+  fuer ein Risiko, das nicht besteht); Naeherung ueber `updated_at` mit
+  Toleranz (`updated_at` ist die Schreib-, nicht die Ereigniszeit — die
+  Naeherung ist in die falsche Richtung unsicher und wiese legitim verspaetete
+  Ereignisse ab). Sobald ein signierender Anbieter dazukommt, ist die
+  `event_at`-Variante der richtige Weg.
+- **Kontext:** Issue #462, aus #452 (WP-5 von #428) herausgeloest.

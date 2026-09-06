@@ -2055,6 +2055,16 @@ Draft-on-Edit-Sichtbarkeit waren längst erledigt/überholt.
 
 ## Bekannte Probleme
 
+- **Entitlement-Upsert prueft die Ereignisreihenfolge nicht** (bewusst
+  aufgeschoben, #462, Weg C — **nicht** offen im Sinne von unentschieden):
+  `EntitlementRepository.upsert` ueberschreibt bedingungslos, ein verspaetet
+  zugestelltes Anbieter-Ereignis kann also einen neueren Stand zuruecksetzen.
+  Heute nicht ausloesbar (kein Anbieter auf dem generischen Pfad, Mollie hat
+  eigenen Dedupe, Ablauffrist aus #452 begrenzt den Schaden). Die Auflage fuer
+  einen signierenden Zweit-Anbieter — Ereignniszeit-Spalte plus verwerfende
+  `WHERE`-Bedingung — steht an der Upsert-Stelle, am Webhook-Pfad und in
+  ADR-0028 §Konsequenzen.
+
 - **Tabellen-Store-Verzeichnisse überleben den Hard-Purge** (bewusst, WP20):
   `cleanup_deleted_area_stores` fasst nur Verzeichnisse an, deren Workspace
   noch existiert — Schutz gegen einen Purge-Lauf gegen die falsche/leere DB.
