@@ -41,7 +41,7 @@ export const PopoverContent = forwardRef<
         sideOffset={sideOffset}
         collisionPadding={collisionPadding}
         className={cn(
-          'data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 z-50 rounded-lg border bg-popover p-4 text-popover-foreground shadow-popover duration-[var(--duration-fast)] ease-standard outline-none',
+          'w2b-anim-pop z-50 rounded-lg border bg-popover p-4 text-popover-foreground shadow-popover outline-none',
           className,
         )}
         {...props}

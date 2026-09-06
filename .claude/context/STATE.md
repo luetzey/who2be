@@ -1,6 +1,67 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-06 (29. Lauf — Billing-Webhook-Restbefunde, #463)_
+_Stand: 2026-09-06 (30. Lauf — Motion der Overlay-Primitives, #465)_
+
+## Overlay-Primitives bewegen sich wieder (2026-09-06, 30. Lauf, #465)
+
+Dialog, Sheet, Dropdown, Popover und Tooltip trugen **42** Animations-Klassen,
+die im gebauten CSS nachweislich nichts erzeugten: `tailwindcss-animate` war
+deklariert, aber nie geladen — und Tailwind v4 hat keine Config-Datei, aus der
+es geladen wuerde (die anzulegen verbietet CLAUDE.md ausdruecklich).
+
+**Weiche 3 war bewusst offen; die Messung hat sie entschieden.** Ich habe den
+Plugin-Weg zuerst ausprobiert statt ihn wegzuargumentieren: `@plugin
+"tailwindcss-animate";` funktioniert in v4, die Klassen landen im Bundle. Zwei
+Messungen haben ihn trotzdem verworfen:
+
+1. Das Plugin schreibt `animation-duration: .15s` **in die Variant-Regel**
+   (`.data-[state=open]:animate-in[data-state=open]`). Die hat hoehere
+   Spezifitaet als eine flache `duration-[var(--duration-*)]`-Utility — der
+   Token kann nicht gewinnen, unabhaengig von der Reihenfolge. Genau das
+   verbietet §7.2 („Token oder nichts").
+2. Das Plugin definiert `duration-*` zusaetzlich als `animation-duration` um.
+   Das haette **alle 31** bestehenden Verwendungen im Repo beruehrt, die
+   Transition-Dauern meinen.
+
+Also eigene Keyframes in `globals.css`, ueber Radix' `data-state` gesteuert:
+eine Klasse pro Rolle im JSX statt sechs Varianten. Nebeneffekt zugunsten
+dieses Wegs: Tailwind v4 zentriert den Dialog ueber die eigenstaendige
+`translate`-Property, nicht ueber `transform` — eine `transform: scale()`-
+Animation komponiert damit, statt die Zentrierung zu ueberschreiben (der Grund
+fuer die `--tw-enter-translate-*`-Maschinerie des Plugins).
+
+**Sichtpruefung (Weiche 4) als Messung statt als Screenshot.** Die Primitives
+liegen hinter dem Login; statt mich einzuloggen habe ich das gebaute CSS direkt
+in Chromium gefahren und die *berechneten* Werte gelesen — das belegt, dass die
+Tokens zur Laufzeit aufloesen, nicht nur dass Text in der Datei steht:
+
+| Element | animation-name | duration | timing-function |
+|---|---|---|---|
+| Dialog | `w2b-pop-in` | 0.2s | `cubic-bezier(0.4, 0, 0.2, 1)` |
+| Sheet | `w2b-slide-in-right` | 0.32s | dito |
+| Dropdown/Popover/Tooltip | `w2b-pop-in` | 0.12s | `cubic-bezier(0.2, 0, 0, 1)` |
+| Dialog bei `reduced-motion` | — | **1e-05s** | — |
+
+Und die Bewegung findet wirklich statt: bei ~40 ms misst der Dialog
+`opacity 0.017` / `scale 0.951`, das Sheet steht 198.7 px versetzt; bei 400 ms
+sind beide auf dem Endzustand.
+
+**Widerspruch in der Designsprache gefunden und aufgeloest.** §7.1 nannte
+`slow` fuer Dialogs, §7.3 `medium` — und das AC des Issues zitierte §7.3, gab
+aber `slow` an. Der Code verwendete bereits `medium`. Zwei Quellen gegen eine:
+§7.3 gilt, §7.1 ist gekuerzt, die fehlenden Zeilen fuer Sheet, Popover und
+Tooltip sind ergaenzt. Das ist die einzige Abweichung vom AC-Wortlaut, im PR
+begruendet.
+
+**Nachweise:** `npm run lint` (0 Errors, 69 Warnings — eine weniger als die
+Baseline), `npx tsc -b`, `npm run test:coverage` (**1110 Tests**, Branches
+81.66 %), `npm run test:a11y` (53), `npm run build`. Im Bundle: 12 neue
+Keyframes statt vorher keiner (`@keyframes`-Vorkommen 8 → 20), alle vier
+Rollen-Klassen vorhanden. Die ungenutzte Abhaengigkeit ist entfernt.
+
+**Messhinweis:** die Verifikation des Issues nennt `grep -c "@keyframes"`. Das
+zaehlt *Zeilen*, und minifiziertes CSS ist eine einzige Zeile — der Wert ist
+immer 1, vorher wie nachher. Aussagekraeftig ist `grep -o … | wc -l`.
 
 ## Billing-Webhook: drei Restbefunde geschlossen (2026-09-06, 29. Lauf, #463)
 

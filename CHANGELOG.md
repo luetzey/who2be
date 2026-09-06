@@ -176,6 +176,27 @@ the merged pull requests and the plan documents under `.claude/plan/`.
   hands out anyone else's.
 
 ### Fixed
+- Dialogs, sheets, dropdowns, popovers and tooltips fade and slide again
+  (Issue #465). They carried 42 animation classes that produced no CSS at all:
+  `tailwindcss-animate` was declared as a dependency but never loaded, and
+  Tailwind v4 has no config file to load it from. Enabling the plugin turned
+  out to be the wrong fix, and measurably so — it writes its duration as
+  `animation-duration: .15s` directly into the variant rule
+  (`.data-[state=open]:animate-in[data-state=open]`), which has higher
+  specificity than a flat `duration-[var(--duration-*)]` utility, so the design
+  token could never win; and it redefines `duration-*` to also set
+  `animation-duration`, which would have reached all 31 existing uses that mean
+  transition duration. The motion is therefore built from own keyframes in
+  `globals.css`, driven by Radix's `data-state` so each component carries one
+  class instead of six variants, with duration and easing read straight from
+  the motion tokens. The unused dependency is gone. Measured in Chromium: 200 ms
+  emphasized for the dialog, 320 ms for the sheet, 120 ms standard for the
+  smaller overlays, and 0.01 ms under `prefers-reduced-motion: reduce`, so the
+  global safety net still holds. `docs/frontend/design-language.md` §7 said
+  `slow` for dialogs in one table and `medium` in the other; the code already
+  used `medium`, so §7.3 wins and §7.1 was corrected, with the previously
+  missing rows for sheet, popover and tooltip added.
+
 - Three leftovers from the #452 security review on the generic billing webhook
   (Issue #463). `include_routers` now decides whether to mount the webhook from
   the `Settings` it is handed rather than from a `get_settings()` call of its

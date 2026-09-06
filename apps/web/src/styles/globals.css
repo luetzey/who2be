@@ -613,6 +613,173 @@
 }
 
 /*
+ * Motion der Overlay-Primitives (Issue #465, design-language.md §7).
+ *
+ * Warum eigene Keyframes und nicht `tailwindcss-animate`: das Plugin schreibt
+ * seine Dauer als `animation-duration: .15s` DIREKT in die Variant-Regel
+ * (`.data-[state=open]:animate-in[data-state=open]`). Diese Regel hat hoehere
+ * Spezifitaet als eine flache `duration-[var(--duration-*)]`-Utility — der
+ * Token verliert also, egal in welcher Reihenfolge er steht. Genau das
+ * verbietet §7.2 ("Keine hardcoded ms-Werte. Token oder nichts."). Zweiter
+ * Grund: das Plugin definiert `duration-*` zusaetzlich als
+ * `animation-duration` um, was alle 31 bestehenden Verwendungen im Repo
+ * beruehrt, die Transition-Dauern meinen.
+ *
+ * Die Keyframes animieren bewusst nur `opacity` und `transform`. Die
+ * Zentrierung des Dialogs laeuft in Tailwind v4 ueber die eigenstaendige
+ * `translate`-Property (`.-translate-x-1/2` setzt `translate:`, nicht
+ * `transform:`) — beide komponieren daher, statt sich zu ueberschreiben.
+ *
+ * Die Zuordnung folgt §7.3: Dialog medium/emphasized, Sheet slow/emphasized,
+ * Dropdown/Popover/Tooltip fast/standard. Das globale Reduced-Motion-Netz
+ * unten kappt jede dieser Animationen auf 0.01ms — es steht bewusst NACH
+ * diesem Block.
+ */
+@keyframes w2b-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes w2b-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes w2b-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+@keyframes w2b-pop-out {
+  to {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+@keyframes w2b-slide-in-top {
+  from {
+    transform: translateY(-100%);
+  }
+}
+
+@keyframes w2b-slide-out-top {
+  to {
+    transform: translateY(-100%);
+  }
+}
+
+@keyframes w2b-slide-in-bottom {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes w2b-slide-out-bottom {
+  to {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes w2b-slide-in-left {
+  from {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes w2b-slide-out-left {
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes w2b-slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes w2b-slide-out-right {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/*
+ * Je eine Klasse pro Rolle; der Zustand kommt aus Radix' `data-state`, damit
+ * im JSX genau ein Klassenname steht statt sechs Varianten. `delayed-open` ist
+ * der Oeffnungszustand des Tooltips.
+ */
+.w2b-anim-overlay[data-state='open'] {
+  animation: w2b-fade-in var(--duration-medium) var(--ease-emphasized);
+}
+
+.w2b-anim-overlay[data-state='closed'] {
+  animation: w2b-fade-out var(--duration-medium) var(--ease-emphasized);
+}
+
+.w2b-anim-overlay-slow[data-state='open'] {
+  animation: w2b-fade-in var(--duration-slow) var(--ease-emphasized);
+}
+
+.w2b-anim-overlay-slow[data-state='closed'] {
+  animation: w2b-fade-out var(--duration-slow) var(--ease-emphasized);
+}
+
+.w2b-anim-dialog[data-state='open'] {
+  animation: w2b-pop-in var(--duration-medium) var(--ease-emphasized);
+}
+
+.w2b-anim-dialog[data-state='closed'] {
+  animation: w2b-pop-out var(--duration-medium) var(--ease-emphasized);
+}
+
+.w2b-anim-pop[data-state='open'],
+.w2b-anim-pop[data-state='delayed-open'] {
+  animation: w2b-pop-in var(--duration-fast) var(--ease-standard);
+}
+
+.w2b-anim-pop[data-state='closed'] {
+  animation: w2b-pop-out var(--duration-fast) var(--ease-standard);
+}
+
+.w2b-anim-sheet-top[data-state='open'] {
+  animation: w2b-slide-in-top var(--duration-slow) var(--ease-emphasized);
+}
+
+.w2b-anim-sheet-top[data-state='closed'] {
+  animation: w2b-slide-out-top var(--duration-slow) var(--ease-emphasized);
+}
+
+.w2b-anim-sheet-bottom[data-state='open'] {
+  animation: w2b-slide-in-bottom var(--duration-slow) var(--ease-emphasized);
+}
+
+.w2b-anim-sheet-bottom[data-state='closed'] {
+  animation: w2b-slide-out-bottom var(--duration-slow) var(--ease-emphasized);
+}
+
+.w2b-anim-sheet-left[data-state='open'] {
+  animation: w2b-slide-in-left var(--duration-slow) var(--ease-emphasized);
+}
+
+.w2b-anim-sheet-left[data-state='closed'] {
+  animation: w2b-slide-out-left var(--duration-slow) var(--ease-emphasized);
+}
+
+.w2b-anim-sheet-right[data-state='open'] {
+  animation: w2b-slide-in-right var(--duration-slow) var(--ease-emphasized);
+}
+
+.w2b-anim-sheet-right[data-state='closed'] {
+  animation: w2b-slide-out-right var(--duration-slow) var(--ease-emphasized);
+}
+
+/*
  * Reduced-Motion-Safety-Net (design-language.md §7.2). Global, damit
  * keine Komponente die User-Praeferenz vergessen kann. Aushebeln in
  * Komponenten ist ein Review-Reject.

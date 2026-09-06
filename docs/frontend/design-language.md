@@ -268,13 +268,24 @@ Admin-UI. Reserviert fuer spaeter, falls Brand-Pages dazukommen.
 |---|---|---|
 | `--duration-fast` | 120ms | Buttons, Toggles, Hover, Focus |
 | `--duration-medium` | 200ms | Dropdowns, Tabs, Inputs (Border-Glow) |
-| `--duration-slow` | 320ms | Dialogs, Sheets, Page-Transitions |
+| `--duration-slow` | 320ms | Sheets, Page-Transitions |
 | `--ease-standard` | `cubic-bezier(0.2, 0, 0, 1)` | Default fuer alle Property-Transitionen |
 | `--ease-emphasized` | `cubic-bezier(0.4, 0, 0.2, 1)` | Akzent-Bewegung (Dialog-Open) |
 | `--ease-spring` | `cubic-bezier(0.34, 1.56, 0.64, 1)` | Sanftes Overshoot fuer Lift/Pop |
 
 Tailwind-Klassen: `ease-standard`, `ease-emphasized`, `ease-spring`.
-Durations werden via Arbitrary-Value verwendet (`duration-[var(--duration-fast)]`).
+Durations werden via Arbitrary-Value verwendet (`duration-[var(--duration-fast)]`)
+— das gilt fuer **Transitionen**. Ein-/Ausblend-**Animationen** der
+Overlay-Primitives laufen dagegen ueber die `w2b-anim-*`-Klassen in
+`globals.css`, die Dauer und Easing direkt aus denselben Tokens ziehen
+(Issue #465). Grund: eine Utility kann die Dauer einer Animation nicht
+zuverlaessig ueberschreiben, wenn diese aus einer Variant-Regel mit hoeherer
+Spezifitaet kommt.
+
+_Praezisiert 2026-09-06 (#465):_ §7.1 nannte `slow` zuvor auch fuer Dialogs und
+widersprach damit der Tabelle in §7.3 (`medium`). Der Code verwendete bereits
+`medium`; §7.3 gilt, §7.1 ist entsprechend gekuerzt. Sheet, Popover und Tooltip
+hatten keine Zeile in §7.3 und haben jetzt eine.
 
 ### 7.2 Anwendungsregeln
 
@@ -293,7 +304,10 @@ Durations werden via Arbitrary-Value verwendet (`duration-[var(--duration-fast)]
 | Button hover | `background-color` | fast | standard |
 | Card hover-lift | `box-shadow, transform` | fast | spring |
 | Dialog open/close | `opacity, transform` | medium | emphasized |
+| Sheet open/close | `transform` | slow | emphasized |
 | Dropdown open | `opacity, transform` | fast | standard |
+| Popover open | `opacity, transform` | fast | standard |
+| Tooltip open | `opacity, transform` | fast | standard |
 | Toast slide-in | `transform` | medium | spring |
 | Skeleton pulse | `opacity` | n/a (Tailwind `animate-pulse`) | n/a |
 
