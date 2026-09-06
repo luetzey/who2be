@@ -117,7 +117,16 @@ test('Billing: aktueller Tarif sichtbar, Upgrade stoesst abgefangene Weiterleitu
   await expect(billingSlot.getByText('0 / 1000')).toBeVisible()
   await expect(billingSlot.getByText('30/min')).toBeVisible()
   await expect(billingSlot.getByText('core', { exact: true })).toBeVisible()
-  await expect(billingSlot.getByRole('progressbar')).toBeVisible()
+  // Die Quota-Leiste per Rolle + Semantik pruefen, NICHT per Sichtbarkeit:
+  // bei einer frischen Org steht die Nutzung auf 0, der Balken hat damit
+  // Breite 0 — und ein Element ohne Bounding-Box gilt Playwright als
+  // unsichtbar. `toBeVisible()` waere hier also eine Assertion ueber die
+  // Pixelbreite des Fuellstands, nicht ueber das, was gemeint ist: dass das
+  // Kontingent ueberhaupt ausgewiesen wird. Genau das pruefen die Attribute.
+  const quotaBar = billingSlot.getByRole('progressbar')
+  await expect(quotaBar).toBeAttached()
+  await expect(quotaBar).toHaveAttribute('aria-valuemax', '1000')
+  await expect(quotaBar).toHaveAttribute('aria-valuenow', '0')
 
   // AC 2: Upgrade ausloesen. Im Free-Tier ist der Upgrade-CTA der einzige
   // Button im Billing-Slot.
