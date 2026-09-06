@@ -19,6 +19,7 @@ import asyncpg
 from fastapi import HTTPException, status
 from markdown_it import MarkdownIt
 
+from who2be_api.core.errors import ApiError
 from who2be_api.repositories.agent_repository import AgentRepository
 from who2be_api.repositories.system_prompt_template_repository import (
     SystemPromptTemplateRepository,
@@ -74,8 +75,10 @@ class AgentRenderService:
     ) -> AgentRenderResponse:
         agent = await self._agent_repo.fetch(workspace_id, agent_id)
         if agent is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Agent nicht gefunden."
+            raise ApiError(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Agent nicht gefunden.",
+                reason="agent_not_found",
             )
         if AgentService.is_disabled(agent):
             raise _agent_render_inactive()

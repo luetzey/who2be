@@ -26,7 +26,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from who2be_api.core.config import get_settings
 from who2be_api.core.db import get_pool
-from who2be_api.core.errors import ApiGateError
+from who2be_api.core.errors import ApiError, ApiGateError
 from who2be_api.core.tenancy import tenant_scope
 from who2be_api.licensing.edition import is_onprem
 from who2be_api.repositories.token_repository import PgTokenRepository, TokenRepository
@@ -524,9 +524,10 @@ async def get_current_principal(
     try:
         pool = get_pool()
     except RuntimeError as exc:
-        raise HTTPException(
+        raise ApiError(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Datenbank nicht verfuegbar.",
+            reason="db_unavailable",
         ) from exc
     return await resolve_principal(token, PgTokenRepository(pool))
 
@@ -591,9 +592,10 @@ async def get_current_workspace(
     try:
         pool = get_pool()
     except RuntimeError as exc:
-        raise HTTPException(
+        raise ApiError(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Datenbank nicht verfuegbar.",
+            reason="db_unavailable",
         ) from exc
 
     if principal.token_workspace_id is not None:

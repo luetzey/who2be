@@ -25,7 +25,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 
-from who2be_api.core.errors import ApiGateError
+from who2be_api.core.errors import ApiError, ApiGateError
 from who2be_api.core.security import (
     WorkspaceContext,
     require_memory_mode,
@@ -139,8 +139,12 @@ def _memory_not_found() -> HTTPException:
     return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Memory nicht gefunden.")
 
 
-def _agent_not_found() -> HTTPException:
-    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent nicht gefunden.")
+def _agent_not_found() -> ApiError:
+    return ApiError(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Agent nicht gefunden.",
+        reason="agent_not_found",
+    )
 
 
 class MemoryService:

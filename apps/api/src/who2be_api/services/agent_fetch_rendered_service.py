@@ -24,6 +24,7 @@ from uuid import UUID
 import asyncpg
 from fastapi import HTTPException, status
 
+from who2be_api.core.errors import ApiError
 from who2be_api.repositories.agent_repository import AgentRepository
 from who2be_api.repositories.persona_repository import PersonaRepository
 from who2be_api.repositories.system_prompt_template_repository import (
@@ -85,9 +86,10 @@ class AgentFetchRenderedService:
         """Hauptpfad: Agent holen, validieren, System-Prompt expandieren."""
         agent = await self._agent_repo.fetch(workspace_id, agent_id)
         if agent is None:
-            raise HTTPException(
+            raise ApiError(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Agent nicht gefunden.",
+                reason="agent_not_found",
             )
         if AgentService.is_disabled(agent):
             raise _agent_disabled()

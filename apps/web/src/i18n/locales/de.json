@@ -110,7 +110,10 @@
       "apiUnreachable": "Who2Be-API nicht erreichbar.",
       "apiError": "Who2Be-API-Fehler ({{status}}).",
       "clipboardUnavailable": "Clipboard nicht verfuegbar.",
-      "cycleRejected": "Verknuepfung wurde abgelehnt: Zyklus wuerde entstehen."
+      "cycleRejected": "Verknuepfung wurde abgelehnt: Zyklus wuerde entstehen.",
+      "agent_not_found": "Agent nicht gefunden.",
+      "db_unavailable": "Datenbank nicht verfuegbar.",
+      "last_workspace_undeletable": "Der letzte Workspace einer Organization kann nicht geloescht werden."
     },
     "fieldLabels": {
       "name": "Name",

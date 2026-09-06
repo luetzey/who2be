@@ -26,7 +26,7 @@ from who2be_models.dashboard import (
     DashboardStatusDistribution,
     EntityStatusDistribution,
 )
-from who2be_models.errors import ActionableBy, ApiProblem, ProblemReason
+from who2be_models.errors import ActionableBy, ApiErrorBody, ApiProblem, ProblemReason
 from who2be_models.external_tool import (
     ExternalToolContent,
     ExternalToolCreate,
@@ -276,6 +276,7 @@ __all__ = [
     "ActivityPagination",
     "AGENT_UUID_PATTERN",
     "AGENT_UUID_RE",
+    "ApiErrorBody",
     "ApiProblem",
     "ArtifactAppend",
     "ArtifactCreate",

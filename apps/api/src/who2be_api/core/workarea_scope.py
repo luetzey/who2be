@@ -42,7 +42,7 @@ from uuid import UUID
 import asyncpg
 from fastapi import Depends, HTTPException, status
 
-from who2be_api.core.errors import ApiGateError
+from who2be_api.core.errors import ApiError, ApiGateError
 from who2be_api.core.security import WorkspaceContext, get_current_workspace, role_satisfies
 from who2be_models import WorkAreaGrantLevel, WorkspaceRole
 
@@ -77,9 +77,13 @@ def artifact_not_found() -> HTTPException:
     return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artifact nicht gefunden.")
 
 
-def agent_not_found() -> HTTPException:
+def agent_not_found() -> ApiError:
     """404 fuer unbekannte/workspace-fremde Agenten (Grant-Ziele)."""
-    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent nicht gefunden.")
+    return ApiError(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Agent nicht gefunden.",
+        reason="agent_not_found",
+    )
 
 
 def is_agent_bound(ctx: WorkspaceContext) -> bool:

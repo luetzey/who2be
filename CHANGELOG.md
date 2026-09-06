@@ -10,6 +10,30 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Changed
 
+- API error responses can now carry a stable, machine-readable `reason`
+  alongside the German `detail` string, and the web client translates it into
+  the UI language (ADR-0051, wave 0 of #402). The addition is strictly
+  additive: `detail` is unchanged word for word, the content type stays
+  `application/json`, and every call site not migrated in this wave returns a
+  byte-identical body — a regression test pins that. The reason vocabulary is
+  the *existing* `ProblemReason` literal in `packages/models`, extended by the
+  three pilot reasons `agent_not_found` (404), `db_unavailable` (503) and
+  `last_workspace_undeletable` (409), rather than a second parallel enum: that
+  literal already carried 24 values covering work areas, the knowledge base,
+  ingest and blob storage, so it had long stopped being a gate-only vocabulary
+  and a second list would have drifted from it. Two *serializations* remain —
+  RFC 7807 `ApiProblem` (`application/problem+json`) at the 52 authorization
+  and state-machine gates, and the lean `ApiErrorBody` everywhere else —
+  because unifying the content type would be a breaking change to the whole
+  error contract; since both bodies carry the same `reason`, the client still
+  has exactly one translation path,
+  `i18n.t('common:errors.' + reason, { ...params, defaultValue: detail })`,
+  where an unknown reason falls back to the server text instead of showing a
+  raw key. Reasons are raised in the domain services, never assembled in
+  routers; `ApiError` subclasses `HTTPException` so status, detail and headers
+  behave exactly as before for every caller. `ApiErrorBody` is declared on the
+  two pilot routes so the schema appears in `docs/reference/openapi.json`; the
+  frozen API surface is unchanged (Issue #436).
 - `docs/licensing/plans.md` and the `BillingPanel` now describe Free and Pro
   by what the code actually enforces — price, MCP requests/month, MCP
   requests/minute and the per-workspace entity limit — instead of listing the

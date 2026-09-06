@@ -236,13 +236,46 @@ async function readErrorBody(
     return { message: fallback, body: null }
   }
   try {
-    const body = (await response.json()) as { detail?: unknown }
-    const message =
+    const body = (await response.json()) as {
+      detail?: unknown
+      reason?: unknown
+      params?: unknown
+    }
+    const detail =
       typeof body.detail === 'string' && body.detail.length > 0 ? body.detail : fallback
-    return { message, body }
+    return { message: translateServerError(detail, body.reason, body.params), body }
   } catch {
     return { message: fallback, body: null }
   }
+}
+
+/**
+ * Uebersetzt einen Server-Fehler in die UI-Sprache (ADR-0051, #436).
+ *
+ * Der Server liefert `detail` weiterhin auf Deutsch — das war vor dieser
+ * Welle die einzige Quelle und ist jetzt der Fallback. Traegt die Antwort
+ * zusaetzlich einen stabilen `reason`, gewinnt der uebersetzte Text unter
+ * `common:errors.<reason>`.
+ *
+ * `defaultValue: detail` ist der Grund, warum die Migration in Wellen laufen
+ * kann: ein Grund ohne Locale-Key faellt lautlos auf den Servertext zurueck,
+ * statt einen rohen Key anzuzeigen. Derselbe Pfad gilt fuer beide
+ * Serialisierungen — `ApiProblem` (problem+json) und `ApiErrorBody` tragen
+ * denselben `reason`.
+ */
+function translateServerError(detail: string, reason: unknown, params: unknown): string {
+  if (typeof reason !== 'string' || reason.length === 0) return detail
+  // `params` kommt vom Server; nur flache Primitive interpolieren, damit ein
+  // unerwartetes Shape nicht die Meldung zerlegt.
+  const values: Record<string, string | number> = {}
+  if (params !== null && typeof params === 'object' && !Array.isArray(params)) {
+    for (const [key, value] of Object.entries(params as Record<string, unknown>)) {
+      if (typeof value === 'string' || typeof value === 'number') values[key] = value
+    }
+  }
+  // `defaultValue` NACH den Werten: ein `params.defaultValue` darf den
+  // Fallback nicht ueberschreiben.
+  return i18n.t(`common:errors.${reason}`, { ...values, defaultValue: detail })
 }
 
 // Tenant-weiter Read — Workspace-Resolution beim Bootstrap, vor `createApi`.

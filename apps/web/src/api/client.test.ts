@@ -1,3 +1,4 @@
+import i18n from 'i18next'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, createApi, fetchMe } from './client'
@@ -52,6 +53,79 @@ describe('createApi', () => {
     await expect(createApi('tok', WS).getPersona('x')).rejects.toMatchObject({
       status: 404,
       message: 'Persona nicht gefunden.',
+    })
+  })
+
+  // --- Server-Fehlercodes (ADR-0051, #436) ---------------------------------
+
+  const errorResponse = (payload: Record<string, unknown>) =>
+    vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(payload), {
+        status: 404,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+  it('zeigt bei UI-Sprache EN den englischen Text zu einem bekannten reason', async () => {
+    await i18n.changeLanguage('en')
+    vi.stubGlobal(
+      'fetch',
+      errorResponse({ detail: 'Agent nicht gefunden.', reason: 'agent_not_found' }),
+    )
+
+    await expect(createApi('tok', WS).getAgent('x')).rejects.toMatchObject({
+      status: 404,
+      message: 'Agent not found.',
+    })
+
+    await i18n.changeLanguage('de')
+  })
+
+  it('faellt bei unbekanntem reason auf das Server-detail zurueck', async () => {
+    // Das ist die Zusage, die die Wellen-Migration ueberhaupt erlaubt: ein
+    // Grund ohne Locale-Key zeigt den Servertext, nie einen rohen Key.
+    await i18n.changeLanguage('en')
+    vi.stubGlobal(
+      'fetch',
+      errorResponse({ detail: 'Etwas ganz Neues ging schief.', reason: 'brandneuer_grund' }),
+    )
+
+    await expect(createApi('tok', WS).getAgent('x')).rejects.toMatchObject({
+      message: 'Etwas ganz Neues ging schief.',
+    })
+
+    await i18n.changeLanguage('de')
+  })
+
+  it('interpoliert params in die Meldung', async () => {
+    vi.stubGlobal(
+      'fetch',
+      errorResponse({
+        detail: 'Datei zu gross (max. {{limit}}).',
+        reason: 'noch_kein_key',
+        params: { limit: '10 MB' },
+      }),
+    )
+
+    await expect(createApi('tok', WS).getAgent('x')).rejects.toMatchObject({
+      message: 'Datei zu gross (max. 10 MB).',
+    })
+  })
+
+  it('laesst params den defaultValue nicht ueberschreiben', async () => {
+    // Der Server ist vertrauenswuerdig, aber `defaultValue` ist ein
+    // i18next-Steuerfeld — es darf nicht aus einem Datenfeld kommen.
+    vi.stubGlobal(
+      'fetch',
+      errorResponse({
+        detail: 'Echtes Server-detail.',
+        reason: 'noch_kein_key',
+        params: { defaultValue: 'gekapert' },
+      }),
+    )
+
+    await expect(createApi('tok', WS).getAgent('x')).rejects.toMatchObject({
+      message: 'Echtes Server-detail.',
     })
   })
 

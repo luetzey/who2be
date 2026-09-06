@@ -10259,6 +10259,16 @@
               }
             }
           },
+          "404": {
+            "description": "reason: agent_not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -11599,6 +11609,16 @@
           "204": {
             "description": "Successful Response"
           },
+          "409": {
+            "description": "reason: last_workspace_undeletable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -12766,6 +12786,76 @@
         ],
         "title": "AgentWithRenderedPrompt",
         "description": "Antwort des MCP-Tools `fetch_agent` (und des API-Endpoints `GET .../rendered`).\n\nLiefert den Agent zusammen mit seiner Persona und dem bereits expandierten\nSystem-Prompt als Plain-Text — alle Placeholder wurden bereits aufgeloest,\nsodass MCP-Konsumenten den fertigen Prompt direkt einsetzen koennen.\n\nHinweis: `persona` ist direkt inline (kein Wrapper-Objekt), damit der\nFrontend-Agent und der MCP-Konsument ohne zusaetzlichen Fetch auskommen.\n\n`unresolved_placeholders` enthaelt jeden Placeholder-Key, der beim Render\nnicht aufgeloest werden konnte (z. B. `\"playbook:abc-uuid\"` bei fehlender\naktiver Version). Default leere Liste fuer Backward-Compat.\n\n`locale` (WP5, „Ein Element, eine Sprache\"): die Sprache des System-Prompt-\nTemplates, MIT der `system_prompt_rendered` erzeugt wurde (inkl. der vom\nRenderer angehaengten Sprachanweisung, siehe `agent_language.py`). Default\n`DEFAULT_LOCALE` deckt Alt-Clients/Fixtures ohne das Feld ab."
+      },
+      "ApiErrorBody": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "missing_capability",
+              "approval_pending",
+              "domain_disabled",
+              "forbidden_transition",
+              "insufficient_role",
+              "workspace_mismatch",
+              "mfa_required",
+              "concurrent_conflict",
+              "composite_child_inactive",
+              "managed_aggregate",
+              "rev_conflict",
+              "evidence_missing",
+              "anchor_unresolvable",
+              "tier_upgrade_forbidden",
+              "correlation_underpowered",
+              "area_forbidden",
+              "query_not_readonly",
+              "convention_missing",
+              "rule_required",
+              "ingest_unsupported",
+              "ingest_too_large",
+              "url_forbidden",
+              "blobstore_unconfigured",
+              "tablestore_unavailable",
+              "agent_not_found",
+              "db_unavailable",
+              "last_workspace_undeletable"
+            ],
+            "title": "Reason"
+          },
+          "params": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "integer"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Params"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "detail",
+          "reason"
+        ],
+        "title": "ApiErrorBody",
+        "description": "Schlanker Fehler-Body fuer Nicht-Gate-Antworten (ADR-0051, #436).\n\nZweite **Serialisierung** desselben Vokabulars — nicht ein zweites\nVokabular: `reason` kommt aus derselben `ProblemReason`-Liste wie in\n`ApiProblem`. Unterschiedlich ist nur die Huelle. `ApiProblem` traegt\nRFC-7807-Ballast (`type`, `title`, `actionable_by`, `request_id`) und geht\nals ``application/problem+json`` raus; hier bleibt es bei ``application/\njson`` und dem `detail`, das die Clients heute schon lesen — deshalb ist\ndie Ergaenzung an rund 79 Bestands-Stellen additiv und kein Breaking\nChange. Die Vereinheitlichung der beiden Huellen ist ein eigenes Vorhaben\n(#402, Weg C); der Client braucht sie nicht, weil er nur `reason` liest.\n\n`params` traegt die Werte, die in den uebersetzten Text interpoliert\nwerden (i18next-Platzhalter). Fehlt es, wird das Feld weggelassen — eine\nAntwort ohne Platzhalter sieht aus wie vorher plus `reason`."
       },
       "ArtifactAppend": {
         "properties": {

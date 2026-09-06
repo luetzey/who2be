@@ -22,7 +22,7 @@ from who2be_api.core.security import (
 from who2be_api.repositories.organization_repository import PgOrganizationRepository
 from who2be_api.repositories.workspace_repository import PgWorkspaceRepository
 from who2be_api.services.workspace_service import WorkspaceService
-from who2be_models import WorkspaceRead, WorkspaceRole, WorkspaceUpdate
+from who2be_models import ApiErrorBody, WorkspaceRead, WorkspaceRole, WorkspaceUpdate
 
 router = APIRouter(prefix="/v1/workspaces", tags=["workspaces"])
 
@@ -53,7 +53,14 @@ async def update_workspace(
     return await service.update(workspace_id, data)
 
 
-@router.delete("/{workspace_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{workspace_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    # ADR-0051: der Fehler-Body ist Teil des Vertrags, also steht er im
+    # Schema. Nur deklarativ — den `reason` setzt die Service-Stelle, nie
+    # der Router.
+    responses={409: {"model": ApiErrorBody, "description": "reason: last_workspace_undeletable"}},
+)
 @limiter.limit(write_limit)
 async def delete_workspace(
     request: Request, workspace_id: UUID, ctx: Ctx, service: Service
