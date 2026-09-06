@@ -306,7 +306,7 @@ def _register_billing_if_present(app: FastAPI, settings: Settings) -> None:
     except ImportError:
         logger.info("who2be-billing nicht installiert — Billing-Schreibrouten ausgelassen.")
         return
-    billing.include_routers(app, workspace_prefix=_WORKSPACE_PREFIX)
+    billing.include_routers(app, workspace_prefix=_WORKSPACE_PREFIX, settings=settings)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:

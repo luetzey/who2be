@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
 import time
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -23,7 +24,7 @@ from test_mollie_adapter import (  # type: ignore[import-not-found]
 )
 
 import who2be_billing.router as billing_router
-from who2be_api.core.config import get_settings
+from who2be_api.core.config import Settings, get_settings
 from who2be_api.licensing.entitlement import Entitlement
 from who2be_api.main import create_app
 
@@ -224,3 +225,130 @@ def test_webhook_release_dedupe_claim_on_failure(
     assert retry.status_code == 200
     assert retry.json() == {"received": True}
     assert len(entitlement_repo.calls) == 1
+
+
+# ---------------------------------------------------------------------------
+# Issue #463 Punkt 2: `include_routers` entscheidet anhand der UEBERGEBENEN
+# Settings, nicht anhand der Umgebung. Beide Tests setzen die Env bewusst
+# GEGENLAEUFIG zum uebergebenen Objekt — genau das trennt „durchgereicht" von
+# „selbst geholt": mit dem alten `get_settings()`-Aufruf im Paket wuerden beide
+# fehlschlagen, weil die Env gewinnen wuerde.
+# ---------------------------------------------------------------------------
+def test_webhook_mounted_from_passed_settings_despite_empty_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("WHO2BE_EDITION", "cloud")
+    monkeypatch.setenv("WHO2BE_BILLING_WEBHOOK_SECRET", "")
+    get_settings.cache_clear()
+    try:
+        settings = Settings(edition="cloud", billing_webhook_secret=_SECRET)
+        with TestClient(create_app(settings)) as client:
+            # Gemountet ⇒ die fehlende Signatur wird fail-closed mit 400
+            # abgewiesen, nicht mit 404 („Route existiert nicht").
+            resp = client.post("/v1/billing/webhook", content=b"{}")
+    finally:
+        get_settings.cache_clear()
+    assert resp.status_code == 400
+
+
+def test_webhook_not_mounted_from_passed_settings_despite_env_secret(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("WHO2BE_EDITION", "cloud")
+    monkeypatch.setenv("WHO2BE_BILLING_WEBHOOK_SECRET", _SECRET)
+    get_settings.cache_clear()
+    try:
+        settings = Settings(edition="cloud", billing_webhook_secret="")
+        with TestClient(create_app(settings)) as client:
+            resp = client.post("/v1/billing/webhook", content=b"{}")
+    finally:
+        get_settings.cache_clear()
+    assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Issue #463 Punkt 4: der generische Pfad protokolliert — ohne Header-Wert und
+# ohne Payload.
+# ---------------------------------------------------------------------------
+def test_invalid_signature_is_logged_without_header_or_payload(
+    cloud_client: TestClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    header = "deadbeefdeadbeef"
+    payload = b'{"type":"x","secret_in_body":"hunter2"}'
+    with caplog.at_level(logging.WARNING, logger="who2be_billing.router"):
+        resp = cloud_client.post(
+            "/v1/billing/webhook",
+            content=payload,
+            headers={"X-Webhook-Signature": header},
+        )
+
+    assert resp.status_code == 400
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert warnings, "Eine abgewiesene Signatur muss eine WARNING erzeugen."
+    logged = " ".join(r.getMessage() for r in warnings)
+    # Der Kern der Zusage: das Log benennt das Ereignis, nicht seinen Inhalt.
+    assert header not in logged
+    assert "hunter2" not in logged
+    assert payload.decode() not in logged
+
+
+def test_duplicate_event_is_logged_at_info(
+    cloud_client: TestClient, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Ein Dedupe-Treffer ist der Normalfall eines Provider-Retries — INFO, nicht
+    WARNING. Ereignis-ID und Anbieter genuegen zur Nachvollziehbarkeit."""
+    entitlement_repo = FakeEntitlementRepository()
+    processed_repo = FakeProcessedEventRepository()
+    monkeypatch.setattr(billing_router, "get_pool", lambda: object())
+    monkeypatch.setattr(billing_router, "PgEntitlementRepository", lambda pool: entitlement_repo)
+    monkeypatch.setattr(billing_router, "PgProcessedEventRepository", lambda pool: processed_repo)
+
+    payload = _grant_event(
+        event_id="evt_dup_logged", org_id=str(uuid4()), period_end=int(time.time()) + 3600
+    )
+    signature = _sign(payload)
+    headers = {"X-Webhook-Signature": signature}
+
+    cloud_client.post("/v1/billing/webhook", content=payload, headers=headers)
+    with caplog.at_level(logging.INFO, logger="who2be_billing.router"):
+        second = cloud_client.post("/v1/billing/webhook", content=payload, headers=headers)
+
+    assert second.status_code == 200
+    infos = [r for r in caplog.records if r.levelno == logging.INFO]
+    logged = " ".join(r.getMessage() for r in infos)
+    assert "evt_dup_logged" in logged
+    # Nur der erste Durchlauf hat geschrieben — das Log ersetzt die Zusage nicht.
+    assert len(entitlement_repo.calls) == 1
+
+
+def test_released_claim_is_logged_at_error(
+    cloud_client: TestClient, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Ein freigegebener Claim ist der einzige Zustand dieses Pfades, der einen
+    Eingriff verlangen kann — deshalb ERROR."""
+    processed_repo = FakeProcessedEventRepository()
+    entitlement_repo = _FlakyEntitlementRepository()
+    monkeypatch.setattr(billing_router, "get_pool", lambda: object())
+    monkeypatch.setattr(billing_router, "PgEntitlementRepository", lambda pool: entitlement_repo)
+    monkeypatch.setattr(billing_router, "PgProcessedEventRepository", lambda pool: processed_repo)
+
+    payload = _grant_event(
+        event_id="evt_released", org_id=str(uuid4()), period_end=int(time.time()) + 3600
+    )
+    signature = _sign(payload)
+
+    with caplog.at_level(logging.ERROR, logger="who2be_billing.router"):
+        with pytest.raises(RuntimeError, match="transienter DB-Fehler"):
+            cloud_client.post(
+                "/v1/billing/webhook",
+                content=payload,
+                headers={"X-Webhook-Signature": signature},
+            )
+
+    errors = [r for r in caplog.records if r.levelno == logging.ERROR]
+    assert errors, "Ein freigegebener Claim muss eine ERROR-Zeile erzeugen."
+    logged = " ".join(r.getMessage() for r in errors)
+    assert "evt_released" in logged
+    # Weder Signatur noch Payload duerfen im Log stehen.
+    assert signature not in logged
+    assert payload.decode() not in logged
