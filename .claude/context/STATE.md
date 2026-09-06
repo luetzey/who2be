@@ -1,6 +1,53 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-06 (28. Lauf — Deploy-Vorlage loest auf, #458)_
+_Stand: 2026-09-06 (29. Lauf — Billing-Webhook-Restbefunde, #463)_
+
+## Billing-Webhook: drei Restbefunde geschlossen (2026-09-06, 29. Lauf, #463)
+
+Drei Punkte aus dem Security-Review zu #452, die dort bewusst nicht mitgefixt
+wurden. Alle drei waren im Repo bereits durch eine Konvention beantwortet —
+umzusetzen ohne eine einzige neue Abwaegung.
+
+**Settings durchreichen statt selbst holen.** `include_routers` rief
+`get_settings()` selbst auf, obwohl der einzige Aufrufer das Objekt haelt und
+eine Zeile darueber `is_cloud(settings)` damit entscheidet. Folge: ein
+`create_app(settings=…)` mit abweichendem `billing_webhook_secret` mountete nach
+der UMGEBUNG statt nach dem uebergebenen Objekt. Zwei Tests setzen die Env
+bewusst **gegenlaeufig** zum Objekt — mit dem alten Selbstaufruf wuerden beide
+fehlschlagen.
+
+**Protokollierung ohne Preisgabe.** Abgewiesene Signatur (WARNING),
+Dedupe-No-Op (INFO — ein Provider-Retry ist der Normalfall, kein Fehler),
+freigegebener Claim (ERROR — der einzige Zustand, der einen Eingriff verlangen
+kann). Ereignis-ID und Anbieter, **nie** Header-Wert oder Payload: beide tragen
+Angreifer-kontrollierten Inhalt, ein Log mit Rohwerten macht aus dem Befund
+eine Datenluecke. Die Tests pruefen die Abwesenheit explizit, nicht nur die
+Anwesenheit der Zeile.
+
+**`_parse_stripe_header` ueber `_coerce_int`.** Der alte `value.isdigit()`-Test
+war zugleich zu freundlich und zu naiv: `"²".isdigit()` ist `True`, `int("²")`
+wirft; und ein sehr langer Ziffernstring reisst CPythons Konversionslimit
+(~4300 Stellen). Beides schlug als unbehandelte Exception durch. Der Helfer
+wurde ausweislich seines Kommentars fuer genau dieses Muster eingefuehrt — eine
+zweite Loesung daneben waere die Drift gewesen, die #452 gerade beseitigt hat.
+Negative Werte bleiben abgewiesen, damit sich das aeussere Verhalten nicht
+aendert (Gegenprobe als Test).
+
+**Punkte 1 und 3 bleiben offen** — sie sind Abwaegungen (404-/400-Orakel,
+Dedupe-Namensraum pro Anbieter) und warten auf eine Owner-Entscheidung. Sie
+gehen mit diesem Paket ausdruecklich **nicht** zu.
+
+**Nachweise:** `ruff check` / `ruff format --check` / `mypy` (456 Dateien)
+gruen; `WHO2BE_REQUIRE_DB=1 uv run pytest --cov --cov-fail-under=85` →
+**1851 passed, 0 skipped, 90.92 %** (vorher 1842); `uv run pytest
+packages/billing` → 89 passed.
+
+**Umgebungs-Falle, zweimal aufgetreten:** ein Session-Resume baut das venv ohne
+`--group billing` neu (dann meldet die Billing-Suite `ModuleNotFoundError`) und
+stoppt den lokalen Postgres. Beide Male hat der Skip-Guard aus ADR-0041 den
+Unterschied gemacht: ohne ihn waeren 452 Integrationstests still uebersprungen
+worden und der Lauf haette gruen gemeldet. `uv sync --group billing` und
+`pg_ctlcluster 16 main start` sind nach jedem Resume faellig.
 
 ## Deploy-Vorlage loest wieder auf (2026-09-06, 28. Lauf, #458)
 

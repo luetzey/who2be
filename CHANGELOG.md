@@ -176,6 +176,26 @@ the merged pull requests and the plan documents under `.claude/plan/`.
   hands out anyone else's.
 
 ### Fixed
+- Three leftovers from the #452 security review on the generic billing webhook
+  (Issue #463). `include_routers` now decides whether to mount the webhook from
+  the `Settings` it is handed rather than from a `get_settings()` call of its
+  own — the caller already held that object and used it one line above, so the
+  self-call was the deviation; it meant a `create_app(settings=…)` carrying a
+  different `billing_webhook_secret` mounted according to the environment
+  instead. The generic path now logs a rejected signature (WARNING), a dedupe
+  no-op (INFO, a provider retry is normal, not an error) and a released claim
+  (ERROR, the one state that can need a human) — carrying the event id and the
+  provider, never the header value or the payload, since both are
+  attacker-controlled and a log with raw values turns the finding into a data
+  leak. And `_parse_stripe_header` converts the `t=` value through the existing
+  `_coerce_int` helper: the old `value.isdigit()` guard was both too permissive
+  and too naive, because `"²".isdigit()` is `True` while `int("²")` raises, and
+  a very long digit string trips CPython's ~4300-digit integer conversion
+  limit — either one propagated out as an unhandled exception. Negative values
+  stay rejected as before, so the endpoint's outward behaviour is unchanged.
+  Points 1 and 3 of the original finding remain open by design; they are
+  trade-offs awaiting an owner decision, not conventions to apply.
+
 - `deploy/hetzner/.env.example` now carries `MINIO_ROOT_PASSWORD` (Issue #458).
   It was the one value the template never had, and the `minio` service reads it
   with no default on purpose — an object store with standard credentials on a
