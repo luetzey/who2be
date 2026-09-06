@@ -10387,6 +10387,108 @@
         }
       }
     },
+    "/v1/workspaces/{workspace_id}/agents/{agent_id}/favorite": {
+      "put": {
+        "tags": [
+          "agents"
+        ],
+        "summary": "Favorite Agent",
+        "description": "Markiert den Agenten als persoenlichen Favoriten des Aufrufers (#427).\n\nSub-Resource statt Feld in `AgentUpdate`: der Favorit gehoert dem User,\nnicht dem Agenten (Muster `persona_playbooks`/`playbook_resources`).\nIdempotent — ein erneuter PUT antwortet ebenfalls 204.",
+        "operationId": "favorite_agent_v1_workspaces__workspace_id__agents__agent_id__favorite_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Agent Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "agents"
+        ],
+        "summary": "Unfavorite Agent",
+        "description": "Entfernt den Favoriten-Stern; idempotent (auch ohne gesetzten Stern 204).",
+        "operationId": "unfavorite_agent_v1_workspaces__workspace_id__agents__agent_id__favorite_delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Agent Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/workspaces/{workspace_id}/agents/{agent_id}/copy": {
       "post": {
         "tags": [
@@ -12274,6 +12376,11 @@
             "type": "integer",
             "title": "Pending Memory Count",
             "default": 0
+          },
+          "is_favorite": {
+            "type": "boolean",
+            "title": "Is Favorite",
+            "default": false
           },
           "model_provider": {
             "anyOf": [

@@ -1,6 +1,55 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-05 (26. Lauf — „Angemeldet bleiben" steht, #430)_
+_Stand: 2026-09-06 (27. Lauf — Agent-Favoriten, #427)_
+
+## Agent-Favoriten stehen (2026-09-06, 27. Lauf, #427)
+
+Jedes Workspace-Mitglied kann einen Agent per Stern als **persoenlichen**
+Favoriten markieren; Favoriten stehen als eigene Gruppe oben auf der
+Agents-Seite. Serverseitig pro User gespeichert (`agent_favorite`, Migration
+0083), also ueberlebt der Zustand Reload und Geraetewechsel — zwei Mitglieder
+desselben Workspace sehen unterschiedliche Sterne.
+
+**Warum eine eigene Tabelle:** eine `is_pinned`-Spalte auf `agent` waere
+workspace-weit gewesen (widerspricht „pro User"), `localStorage` haette den
+Geraetewechsel nicht ueberlebt. `workspace_id` liegt denormalisiert auf der
+Zeile, weil die RLS-Policy sie dort braucht und sonst joinen muesste. **Keinen
+FK auf den User** — kein Schema referenziert den GoTrue-User; die Bereinigung
+bei Konto-Loeschung haengt deshalb an einer expliziten Zeile in
+`purge_account_data`, nicht an einem CASCADE.
+
+Der Stern kommt im **selben** Batch-Roundtrip wie die uebrigen List-Pills
+(`LEFT JOIN agent_favorite`) — ein zweiter Query haette das
+Ein-Roundtrip-Versprechen von `_enrich` gebrochen. Setzen/Entfernen sind zwei
+idempotente Sub-Resource-Routen (`PUT`/`DELETE .../agents/{id}/favorite`, je
+204), bewusst kein Feld in `AgentUpdate`: der Favorit gehoert dem User, nicht
+dem Agenten. Jedes Mitglied inkl. `viewer` darf markieren (ein Favorit ist ein
+privates Datum, kein Workspace-Inhalt); agent-gebundene Tokens bekommen 403.
+
+**Die Umgebung hat sich geaendert — das ist der wichtigere Teil dieses Laufs.**
+Bis hierher lief in dieser Session **kein** Docker, deshalb wurden alle
+Integrationstests still uebersprungen: `uv run pytest --cov` meldete
+`1305 passed, 448 skipped, 63.08 %` — das 85-%-Gate war schlicht unerreichbar
+und musste in jedem Python-Paket als „nicht verifiziert" offengelegt werden.
+Postgres 16 laesst sich hier aber **ohne** Docker installieren (`apt`, plus
+`pg_trgm` und `pgvector`); mit `DATABASE_URL` darauf laeuft die volle Suite:
+**1838 passed, 0 skipped, Coverage 90.93 %**. Die fuenf neuen
+Integrationstests pruefen damit wirklich gegen eine DB, nicht gegen Mocks.
+
+**Nachweise:** `uv run ruff check .` / `ruff format --check .` / `mypy .` (456
+Dateien) gruen; `WHO2BE_REQUIRE_DB=1 uv run pytest --cov --cov-fail-under=85`
+→ **1838 passed, 90.93 %**; `npm run lint` (0 errors), `npx tsc -b`,
+`npm run test:coverage` (**1110 Tests**, Branches 81.65 %), `npm run test:a11y`
+(53), `npm run build`; i18n-Paritaet `agents` in beide Richtungen leer;
+`openapi.json` + `openapi_surface.json` regeneriert mit **genau zwei** neuen
+Routen.
+
+**Zwei eigene Fehlgriffe, beide zurueckgenommen statt uebertuencht:** ein
+skriptgesteuertes Re-Indent von `AgentsPage.tsx` hat die Datei syntaktisch
+zerlegt; und `npx prettier --write` auf dieselbe Datei hat 500 Zeilen auf
+Prettier-Defaults umformatiert — das Repo hat **keine** Prettier-Config und
+benutzt Prettier nicht. Beide Male zurueckgesetzt und die Aenderung von Hand
+gemacht (94 statt 318 geaenderte Zeilen).
 
 ## „Angemeldet bleiben" steht (2026-09-05, 26. Lauf, #430)
 

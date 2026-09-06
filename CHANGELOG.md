@@ -149,6 +149,24 @@ the merged pull requests and the plan documents under `.claude/plan/`.
   be read from it, the expiry check runs before every commit rather than only
   at boot, the superseded backend's session copy is purged on every mode
   switch, and any `SIGNED_OUT` — from any source — clears the marker.
+- A personal favorite star on every agent card (Issue #427), and a "Favorites"
+  group above the rest of the list. The state is per user and server-side, so
+  it survives a reload and follows the user to another browser — two members of
+  the same workspace see different stars. That ruled out the two cheaper
+  options: a column on `agent` would have been workspace-wide, `localStorage`
+  would not survive a device change. The new `agent_favorite` table carries
+  `workspace_id` denormalized so the tenant-isolation policy can read it off
+  the row without a join, and it has no foreign key on the user because no
+  table in the schema references the GoTrue user; account deletion therefore
+  clears the rows explicitly in `purge_account_data` rather than by cascade.
+  `GET .../agents` gained an `is_favorite` field, filled from the same single
+  batch roundtrip that already fills the card pills, so the list did not get a
+  second query. Setting and clearing it are `PUT` and `DELETE` on
+  `.../agents/{id}/favorite`, both idempotent and both open to every workspace
+  member including `viewer` — a favorite is a private note, not workspace
+  content — while agent-bound API tokens get a 403, since a token has no
+  favorites list of its own. MCP `list_agents` passes the field through with no
+  code change.
 
 ### Fixed
 

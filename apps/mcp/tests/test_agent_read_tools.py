@@ -52,6 +52,9 @@ def _agent_payload(agent_id: UUID, name: str, status: str = "disabled") -> dict[
 def test_list_agents_returns_metadata_list(monkeypatch: pytest.MonkeyPatch) -> None:
     a1 = _agent_payload(uuid4(), "Frisch angelegt", status="disabled")
     a2 = _agent_payload(uuid4(), "Aktiv", status="enabled")
+    # Der Favoriten-Stern (#427) kommt aus dem List-Enrichment der API; das
+    # MCP-Tool reicht ihn ohne eigenen Code durch (AgentRead-Validierung).
+    a2["is_favorite"] = True
 
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path.endswith("/agents")
@@ -65,6 +68,10 @@ def test_list_agents_returns_metadata_list(monkeypatch: pytest.MonkeyPatch) -> N
     assert all(isinstance(a, AgentRead) for a in result)
     # Disabled-Agent ist enthalten — kein enabled-only-Filter.
     assert {"Frisch angelegt", "Aktiv"} == {a.name for a in result}
+    by_name = {a.name: a for a in result}
+    assert by_name["Aktiv"].is_favorite is True
+    # Fehlt das Feld im Payload (aeltere API), bleibt der konservative Default.
+    assert by_name["Frisch angelegt"].is_favorite is False
 
 
 def test_get_agent_returns_single_config(monkeypatch: pytest.MonkeyPatch) -> None:

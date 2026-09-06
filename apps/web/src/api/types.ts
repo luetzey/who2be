@@ -863,6 +863,11 @@ export interface Agent {
   template_version?: number | null
   playbook_count?: number
   pending_memory_count?: number
+  // Persoenlicher Favoriten-Stern des angemeldeten Users (Issue #427). Wie die
+  // Pills darueber nur vom List-Endpoint befuellt; die Detail-Seite zeigt
+  // keinen Stern und laesst das Feld deshalb auf `undefined`. Gesetzt/entfernt
+  // ueber `favoriteAgent`/`unfavoriteAgent`, nicht ueber `updateAgent`.
+  is_favorite?: boolean
   // ADR-0047 — betreiber-gepflegte Modell-Config: welches LLM diesen Agenten
   // faehrt. Sie gilt pro Agent-KONFIGURATION, nicht pro Einzelaufruf (Who2Be
   // ist kein Runtime-Host) und ist zusammen mit `agent_access_log` die

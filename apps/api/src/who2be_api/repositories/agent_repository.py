@@ -30,7 +30,9 @@ class AgentListMeta:
     Version (None ohne aktive Version). `playbook_count` zaehlt die Playbooks
     der verknuepften Persona (`persona_playbook`); `pending_memory_count` die
     Gedaechtnis-Vorschlaege in der Freigabe-Schleuse (`agent_memory.status=
-    'pending'`, ADR-0044).
+    'pending'`, ADR-0044). `is_favorite` traegt den persoenlichen Stern des
+    anfragenden Users (Issue #427) — als einziges Feld hier user-abhaengig,
+    deshalb nimmt `list_meta` eine `user_id` entgegen.
     """
 
     persona_name: str | None
@@ -38,6 +40,7 @@ class AgentListMeta:
     template_version: int | None
     playbook_count: int
     pending_memory_count: int
+    is_favorite: bool
 
 
 # `persona_active` wird per EXISTS-Subquery auf `persona_version.status='active'`
@@ -96,8 +99,12 @@ class AgentRepository(Protocol):
     async def fetch(self, workspace_id: UUID, agent_id: UUID) -> AgentRead | None: ...
 
     async def list_meta(
-        self, workspace_id: UUID, agent_ids: list[UUID]
+        self, workspace_id: UUID, agent_ids: list[UUID], user_id: UUID
     ) -> dict[UUID, AgentListMeta]: ...
+
+    async def add_favorite(self, workspace_id: UUID, agent_id: UUID, user_id: UUID) -> None: ...
+
+    async def remove_favorite(self, workspace_id: UUID, agent_id: UUID, user_id: UUID) -> None: ...
 
     async def deep_copy(
         self,
@@ -319,13 +326,18 @@ class PgAgentRepository:
         return AgentRead.model_validate(dict(row)) if row is not None else None
 
     async def list_meta(
-        self, workspace_id: UUID, agent_ids: list[UUID]
+        self, workspace_id: UUID, agent_ids: list[UUID], user_id: UUID
     ) -> dict[UUID, AgentListMeta]:
         """Batch-Aggregat fuer die List-Card-Pills (ein Roundtrip, kein N+1).
 
         Ein Set-basierter Join ueber `= ANY($2)` liefert Persona-/Template-Name,
         die aktive Template-Version und die Playbook-Anzahl der verknuepften
         Persona fuer alle uebergebenen Agenten auf einmal. Leere ID-Liste => {}.
+
+        Der Favoriten-Stern (Issue #427) haengt am `user_id`-Parameter und kommt
+        im SELBEN Roundtrip als `LEFT JOIN ... IS NOT NULL` mit — ein zweiter
+        Query haette das Ein-Roundtrip-Versprechen dieses Aggregats gebrochen
+        (`agent_service._enrich`).
         """
         if not agent_ids:
             return {}
@@ -333,7 +345,8 @@ class PgAgentRepository:
             "SELECT a.id AS agent_id, p.name AS persona_name, "
             "       t.name AS template_name, tv.version AS template_version, "
             "       COALESCE(pc.cnt, 0)::int AS playbook_count, "
-            "       COALESCE(pm.cnt, 0)::int AS pending_memory_count "
+            "       COALESCE(pm.cnt, 0)::int AS pending_memory_count, "
+            "       (fav.agent_id IS NOT NULL) AS is_favorite "
             "FROM agent a "
             "LEFT JOIN persona p ON p.id = a.persona_id "
             "LEFT JOIN system_prompt_template t ON t.id = a.system_prompt_template_id "
@@ -347,9 +360,12 @@ class PgAgentRepository:
             "    SELECT agent_id, COUNT(*) AS cnt "
             "    FROM agent_memory WHERE status = 'pending' GROUP BY agent_id "
             ") pm ON pm.agent_id = a.id "
+            "LEFT JOIN agent_favorite fav "
+            "  ON fav.agent_id = a.id AND fav.user_id = $3 "
             "WHERE a.workspace_id = $1 AND a.id = ANY($2)",
             workspace_id,
             agent_ids,
+            user_id,
         )
         return {
             row["agent_id"]: AgentListMeta(
@@ -358,9 +374,29 @@ class PgAgentRepository:
                 template_version=row["template_version"],
                 playbook_count=row["playbook_count"],
                 pending_memory_count=row["pending_memory_count"],
+                is_favorite=row["is_favorite"],
             )
             for row in rows
         }
+
+    async def add_favorite(self, workspace_id: UUID, agent_id: UUID, user_id: UUID) -> None:
+        """Setzt den Stern; ein bereits gesetzter bleibt unveraendert (idempotent)."""
+        await self._pool.execute(
+            "INSERT INTO agent_favorite (workspace_id, agent_id, user_id) "
+            "VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+            workspace_id,
+            agent_id,
+            user_id,
+        )
+
+    async def remove_favorite(self, workspace_id: UUID, agent_id: UUID, user_id: UUID) -> None:
+        """Entfernt den Stern; 0 betroffene Zeilen sind kein Fehler (idempotent)."""
+        await self._pool.execute(
+            "DELETE FROM agent_favorite WHERE workspace_id = $1 AND agent_id = $2 AND user_id = $3",
+            workspace_id,
+            agent_id,
+            user_id,
+        )
 
     async def update(
         self,

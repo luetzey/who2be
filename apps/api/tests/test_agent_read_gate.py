@@ -53,6 +53,7 @@ class _FakeAgentRepo:
         # Card-Pill-Meta pro Agent-ID (vom Test gesetzt); ohne Eintrag bleibt das
         # Read auf den Feld-Defaults (None/0).
         self.meta: dict[UUID, AgentListMeta] = {}
+        self.favorites: set[tuple[UUID, UUID]] = set()
 
     async def list_by_workspace(
         self, workspace_id: UUID, limit: int, cursor: object
@@ -63,9 +64,15 @@ class _FakeAgentRepo:
         return next((a for a in self._agents if a.id == agent_id), None)
 
     async def list_meta(
-        self, workspace_id: UUID, agent_ids: list[UUID]
+        self, workspace_id: UUID, agent_ids: list[UUID], user_id: UUID
     ) -> dict[UUID, AgentListMeta]:
         return {aid: self.meta[aid] for aid in agent_ids if aid in self.meta}
+
+    async def add_favorite(self, workspace_id: UUID, agent_id: UUID, user_id: UUID) -> None:
+        self.favorites.add((agent_id, user_id))
+
+    async def remove_favorite(self, workspace_id: UUID, agent_id: UUID, user_id: UUID) -> None:
+        self.favorites.discard((agent_id, user_id))
 
 
 # Zwei Agenten im Workspace: der "eigene" (= ctx.agent_id) ist disabled (frisch
@@ -131,6 +138,7 @@ def test_list_enriches_card_pills() -> None:
         template_version=2,
         playbook_count=3,
         pending_memory_count=2,
+        is_favorite=True,
     )
     service = AgentService(repo)  # type: ignore[arg-type]
     items, _cursor = asyncio.run(service.list_all(_ctx(None), limit=50, cursor=None))
@@ -140,6 +148,10 @@ def test_list_enriches_card_pills() -> None:
     assert by_id[_OWN_ID].template_version == 2
     assert by_id[_OWN_ID].playbook_count == 3
     assert by_id[_OWN_ID].pending_memory_count == 2
+    # Der Stern kommt aus demselben Batch-Aggregat wie die Pills (#427).
+    assert by_id[_OWN_ID].is_favorite is True
+    # Ohne Meta-Eintrag bleibt das Read auf dem konservativen Default.
+    assert by_id[_OTHER_ID].is_favorite is False
     # Ohne Meta-Eintrag bleibt der fremde Agent auf den Defaults.
     assert by_id[_OTHER_ID].persona_name is None
     assert by_id[_OTHER_ID].playbook_count == 0
