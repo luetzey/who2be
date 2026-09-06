@@ -28,6 +28,20 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Fixed
 
+- A newly registered user could not get their personal workspace in the cloud
+  edition: the first `GET /v1/me` lazily seeds one, and every seed insert was
+  rejected with `new row violates row-level security policy`. The seed writes
+  into tenant-isolated tables whose `WITH CHECK` requires `app.current_tenant`,
+  but it runs before any tenant scope exists — the user has no workspace yet,
+  so the pool's setup callback never set the GUC. It only ever surfaced in the
+  cloud: on-premise the app connects as the table owner, for whom row-level
+  security is not enforced, and the cloud stack had never run under a check
+  until the billing journey started exercising it. Both seeding paths now bind
+  the connection to the freshly created workspace for the remainder of their
+  transaction — `is_local`, so the setting disappears at commit and no tenant
+  leaks into the connection's next checkout. The policy itself is unchanged
+  (Issue #479).
+
 - The "stay signed in" marker no longer redirects tabs that are already
   running. It lives in `localStorage`, which is shared across tabs, and the
   storage adapter used to re-read it on *every* access — so signing in with

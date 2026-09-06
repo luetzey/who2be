@@ -1370,3 +1370,28 @@ bleiben)._
   Ein `vi.mock`-Factory-Objekt muss jeden Export fuehren, den der
   Produktivcode aufruft.
 - **Kontext:** Issue #471, Security-Review zu #430 (PR #468, MEDIUM-4).
+
+## 2026-09-06 — Seed-Pfade scopen die Connection selbst auf den neuen Workspace
+- **Entscheidung:** `ensure_personal_workspace` und `PgWorkspaceRepository.create`
+  setzen `app.current_tenant`/`app.current_org` per `set_config(..., is_local =>
+  true)` auf den gerade angelegten Workspace, bevor sie seeden
+  (`_scope_to_new_workspace`). Die RLS-Policy aus Migration 0037 bleibt
+  unveraendert scharf.
+- **Begruendung:** Beide Pfade schreiben in `tenant_isolation`-Tabellen fuer
+  einen Workspace, auf den die GUC nicht zeigt — beim Lazy-Seed gibt es noch
+  gar keinen Tenant-Kontext, bei `create` zeigt er auf einen anderen
+  Workspace. Unter der Cloud-Rolle `who2be_app` (NOBYPASSRLS) scheitert dort
+  jeder Insert; on-prem faellt es nicht auf, weil die App als Owner verbindet.
+- **`is_local` ist der sicherheitskritische Teil:** die Setzung endet mit der
+  Transaktion. Ohne sie truege die gepoolte Connection einen fremden Mandanten
+  in ihr naechstes Checkout — aus dem Bugfix waere ein Tenancy-Leak geworden.
+  Beide Regressionstests pruefen das ausdruecklich nach dem COMMIT.
+- **Verworfen:** den Seed ueber eine privilegierte Owner-Connection fahren
+  (fuehrt einen zweiten Schreibpfad mit hoeheren Rechten ein — genau das, was
+  ADR-0037 vermeiden wollte); das `WITH CHECK` an den Seed-Tabellen lockern
+  (schwaecht die Isolation an den Tabellen, die sie tragen sollen).
+- **Muster:** die Setzung liegt in einer benannten Funktion statt zweimal
+  inline — Beleg nach der Muster-Disziplin ist der zweite echte Fall, nicht
+  ein vermuteter dritter. Eine vergessene Stelle waere hier ein Sicherheitsbug,
+  kein Schoenheitsfehler.
+- **Kontext:** Issue #479, gefunden vom CI-Job `e2e-billing-cloud` aus #453.
