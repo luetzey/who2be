@@ -297,9 +297,17 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Compose env
         run: cp .env.example .env
-      - name: Compose up (cloud overlay, build + wait healthy)
+      - name: Compose up (cloud overlay + e2e overlay, build + wait healthy)
+        # Drittes Overlay: docker-compose.e2e-cloud.yml stellt nur
+        # GOTRUE_MAILER_AUTOCONFIRM="true" wieder her. Das Cloud-Overlay setzt
+        # es bewusst auf "false" (echter Mailflow ueber mailpit), aber
+        # `e2e/helpers/auth.ts::createUser` erwartet ein access_token direkt
+        # aus der Signup-Antwort — ohne Autoconfirm gibt es das nicht, und der
+        # erste Lauf dieses Jobs scheiterte genau daran (500 "Error sending
+        # confirmation mail"). Editions-Konfiguration bleibt unberuehrt.
         run: >-
           docker compose -f docker-compose.yml -f docker-compose.cloud.yml
+          -f docker-compose.e2e-cloud.yml
           up -d --build --wait --wait-timeout 240
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
@@ -330,10 +338,14 @@ jobs:
           if-no-files-found: ignore
       - name: Compose logs on failure
         if: failure()
-        run: docker compose -f docker-compose.yml -f docker-compose.cloud.yml logs --no-color
+        run: >-
+          docker compose -f docker-compose.yml -f docker-compose.cloud.yml
+          -f docker-compose.e2e-cloud.yml logs --no-color
       - name: Compose down
         if: always()
-        run: docker compose -f docker-compose.yml -f docker-compose.cloud.yml down -v
+        run: >-
+          docker compose -f docker-compose.yml -f docker-compose.cloud.yml
+          -f docker-compose.e2e-cloud.yml down -v
 
   audit:
     # Supply-Chain-Gate (MS-3 H6): pip-audit fuer den Python-Workspace und
