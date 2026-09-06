@@ -8,6 +8,19 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ## [Unreleased]
 
+### Fixed
+
+- The `WHO2BE_SESSION_MAX_AGE_HOURS` runtime setting now reaches the web
+  container. The entrypoint has always read it and written it into
+  `/config.js`, but neither `web` service passed it in, so an operator who set
+  it in `.env` silently got the 12-hour default — no error, no warning. Both
+  `docker-compose.yml` and `deploy/hetzner/who2be/docker-compose.yml` now
+  forward it exactly the way they already forward `WHO2BE_LAUNCH_MODE`, and
+  the notes in both `.env.example` files that described the missing wiring as
+  an operator's task are gone. This makes good on what ADR-0052 promised:
+  operators can change the absolute session cap without rebuilding the image
+  (Issue #470).
+
 ### Changed
 
 - API error responses can now carry a stable, machine-readable `reason`

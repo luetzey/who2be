@@ -328,11 +328,16 @@ Umgebung laeuft kein Docker, sie sind nur typgeprueft. Der CI-Job `e2e` faehrt s
   Zustand. Ein Login in Tab B aendert das Storage-Routing eines parallel
   laufenden Tab A. Eine Bindung des Markers an die Session-Identitaet ist ein
   eigenes Paket.
-- `WHO2BE_SESSION_MAX_AGE_HOURS` ist in **keinem** Compose-`web`-Service
-  durchgereicht — der Entrypoint liest die Variable, aber kein Stack setzt sie.
-  Ein Betreiber, der auf 1 h haerten will, bekommt still 12 h. Weiche 7 des
-  Issues schliesst einen Compose-Diff in diesem Paket aus; beide
-  `.env.example` benennen die fehlende Verdrahtung.
+- ~~`WHO2BE_SESSION_MAX_AGE_HOURS` ist in **keinem** Compose-`web`-Service
+  durchgereicht~~ — **behoben 2026-09-06 (#470).** Beide `web`-Services
+  (`docker-compose.yml`, `deploy/hetzner/who2be/docker-compose.yml`) reichen
+  die Variable jetzt durch; die Wiring-Hinweise sind aus beiden `.env.example`
+  entfernt. Nebenbei fiel auf, dass `deploy/hetzner/.env.example` dieselbe
+  Behauptung auch fuer `WHO2BE_LAUNCH_MODE` trug, obwohl dessen Wiring seit
+  #429 existiert — ebenfalls korrigiert. Offen bleibt `deploy/dokploy/
+  docker-compose.yml`: dort reicht der `web`-Service **keine** der drei
+  Runtime-Config-Variablen durch (`:272-277`, nur `WHO2BE_SIGNUP_DISABLED`);
+  der Stack laeuft in keinem Check und ist als Nebenbefund an #470 notiert.
 - Ein Befund **ausserhalb** des Pakets (`apps/api`, aal2-Gate bei der
   API-Token-Ausstellung) ist getrennt gemeldet — nicht Teil dieser ADR.
 
