@@ -357,6 +357,7 @@ def test_ensure_personal_workspace_seeds_under_enforced_rls() -> None:
     asyncio.run(_run())
 
 
+@pytest.mark.integration
 def test_workspace_create_seeds_under_enforced_rls() -> None:
     """Regressionstest Issue #479, zweiter Aufrufer: `PgWorkspaceRepository.create`.
 
