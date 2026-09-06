@@ -25,6 +25,7 @@ from uuid import UUID
 import asyncpg
 from fastapi import HTTPException, status
 
+from who2be_api.core.errors import ApiError
 from who2be_api.core.security import WorkspaceContext
 from who2be_models import AgentCapability, ReadScope
 
@@ -85,8 +86,12 @@ _Fetcher: TypeAlias = asyncpg.Pool | asyncpg.Connection
 _AGENT_PERSONA_SQL = "SELECT persona_id FROM agent WHERE id = $1 AND workspace_id = $2"
 
 
-def _agent_not_found() -> HTTPException:
-    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent nicht gefunden.")
+def _agent_not_found() -> ApiError:
+    return ApiError(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Agent nicht gefunden.",
+        reason="agent_not_found",
+    )
 
 
 async def _require_agent_persona(pool: _Fetcher, workspace_id: UUID, agent_id: UUID) -> UUID | None:

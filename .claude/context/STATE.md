@@ -1,6 +1,69 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-06 (30. Lauf — Motion der Overlay-Primitives, #465)_
+_Stand: 2026-09-06 (31. Lauf — Fehlercode-Vertrag ADR-0051, #436)_
+
+## Fehlercodes stehen als Vertrag (2026-09-06, 31. Lauf, #436 = W0 von #402)
+
+API-Fehlerantworten koennen jetzt neben dem deutschen `detail` einen stabilen
+`reason` tragen; der Web-Client uebersetzt ihn in die UI-Sprache. Damit hat
+#402 endlich den Vertrag, gegen den die Router-Wellen W1-Wn unabhaengig
+mergen koennen.
+
+**Die Weiche war entschieden — auf einer falschen Praemisse.** Mein eigener
+frueherer Kommentar an #436 behauptete, `ProblemReason` sei „ein bewusst
+geschlossenes Literal mit fuenf Werten", und empfahl daraus einen zweiten
+Enum daneben (Weg A). Nachgeprueft — auch per `git show` zum Zeitpunkt jenes
+Kommentars — sind es **24** Werte, darunter `ingest_too_large`,
+`blobstore_unconfigured`, `url_forbidden`, `tablestore_unavailable`. Die Liste
+ist laengst kein Gate-Vokabular, sondern das Fehler-Vokabular der API. Owner
+hat daraufhin **Weg B** entschieden: ein Vokabular, `ProblemReason` wird
+erweitert. Korrektur oeffentlich an #436 nachgetragen, bevor Code entstand.
+
+**Uebertragbare Regel:** eine Architektur-Empfehlung, die auf einer Zahl
+steht, muss die Zahl belegen. Fuenf gegen 24 kehrt hier die Entscheidung um.
+
+**Was steht:**
+
+- `ProblemReason` +3 Pilot-Gruende (`agent_not_found` 404, `db_unavailable`
+  503, `last_workspace_undeletable` 409) — die 24 bestehenden Werte und die 52
+  `ApiGateError`-Stellen unveraendert.
+- `ApiError(HTTPException)` in `core/errors.py` + zentraler Handler
+  `_on_api_error` in `main.py`. Die Vererbung ist der Trick: Starlette waehlt
+  den Handler entlang der MRO, also greift der neue Handler nur fuer migrierte
+  Stellen und alle anderen laufen weiter in den FastAPI-Default —
+  byte-identisch. `test_unmigrated_error_body_is_unchanged` haelt das fest.
+- Gruende entstehen in den Services, nie im Router (CLAUDE.md-Leitplanke).
+- Client: `i18n.t('common:errors.' + reason, { ...params, defaultValue: detail })`.
+  Der Locale-Key IST der `reason`, wortgleich — kein driftendes Mapping. Ein
+  unbekannter Grund zeigt den Servertext, nie einen rohen Key; genau das macht
+  die Wellen-Migration moeglich.
+- ADR-0051 „Akzeptiert", inkl. der Pflicht-Begruendung, **warum zwei
+  Serialisierungen bleiben** (`ApiProblem`/problem+json an den Gates,
+  `ApiErrorBody`/json ueberall sonst): Vereinheitlichung waere ein Breaking
+  Change am gesamten Fehler-Contract, und der Client sieht die Huelle gar
+  nicht — er liest `reason`.
+
+**Belege (lokal = CI):** `1860 passed, 0 skipped`, Coverage 90.94 % (Gate 85);
+Web `188 Dateien / 1114 Tests`, Statements 87.06 / Branches 81.67 / Functions
+82.69 / Lines 88.08; ruff, ruff format, mypy, ESLint (0 errors), `tsc -b`,
+`npm run build` gruen. Die zwei Client-Tests, die an der Aenderung haengen,
+habe ich gegengeprueft: ohne `translateServerError` fallen sie (2 failed).
+
+**OpenAPI:** `docs/reference/openapi.json` +90 Zeilen — `ApiErrorBody` plus
+die zwei Response-Deklarationen an den Pilot-Routen, sonst nichts.
+`openapi_surface.json` friert nur Methode/Pfad/`operationId` ein und bleibt
+unveraendert (das ist kein Versaeumnis, sondern die Bauart des Golden).
+
+**Bewusst nicht in W0:** die uebrigen ~76 `detail`-Stellen, die MCP-Client-
+Seite, die zwei Inline-`HTTPException`-Raises in `routers/agents.py`
+(Confinement-Guards — sie brauchen eine Welle, die sie zugleich in die
+Domaene zieht), die Content-Type-Vereinheitlichung (Weg C).
+
+**Scope-Notiz:** zwei Router tragen jetzt eine `responses=`-Deklaration
+(`GET .../agents/{id}`, `DELETE /v1/workspaces/{id}`). Der Issue-Scope nennt
+Router nicht — ohne sie stuende `ApiErrorBody` aber in keinem
+Contract-Artefakt, und das AC verlangt genau das. Es ist eine Deklaration,
+kein von Hand gesetzter Grund; das „nie" des Issues bleibt gewahrt.
 
 ## Overlay-Primitives bewegen sich wieder (2026-09-06, 30. Lauf, #465)
 

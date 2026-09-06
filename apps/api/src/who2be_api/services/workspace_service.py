@@ -10,6 +10,7 @@ from uuid import UUID
 import asyncpg
 from fastapi import HTTPException, status
 
+from who2be_api.core.errors import ApiError
 from who2be_api.repositories.organization_repository import OrganizationRepository
 from who2be_api.repositories.workspace_repository import (
     LastWorkspaceError,
@@ -78,9 +79,10 @@ class WorkspaceService:
         try:
             deleted = await self._workspaces.delete(workspace_id)
         except LastWorkspaceError as exc:
-            raise HTTPException(
+            raise ApiError(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Der letzte Workspace einer Organization kann nicht geloescht werden.",
+                reason="last_workspace_undeletable",
             ) from exc
         if not deleted:
             raise _not_found()

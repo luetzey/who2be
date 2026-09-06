@@ -110,7 +110,10 @@
       "apiUnreachable": "Who2Be API not reachable.",
       "apiError": "Who2Be API error ({{status}}).",
       "clipboardUnavailable": "Clipboard not available.",
-      "cycleRejected": "Link rejected: it would create a cycle."
+      "cycleRejected": "Link rejected: it would create a cycle.",
+      "agent_not_found": "Agent not found.",
+      "db_unavailable": "Database unavailable.",
+      "last_workspace_undeletable": "The last workspace of an organization cannot be deleted."
     },
     "fieldLabels": {
       "name": "Name",

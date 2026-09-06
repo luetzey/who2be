@@ -30,7 +30,7 @@ from who2be_api.core.chunk_backfill import backfill_chunks
 from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.db import database
 from who2be_api.core.db import lifespan as db_lifespan
-from who2be_api.core.errors import ApiGateError
+from who2be_api.core.errors import ApiError, ApiGateError
 from who2be_api.core.logging import configure_logging
 from who2be_api.core.middleware import AccessLogMiddleware, RequestIDMiddleware
 from who2be_api.core.rate_limit import (
@@ -78,7 +78,7 @@ from who2be_api.routers import (
 )
 from who2be_api.services.bootstrap_service import bootstrap_admin_if_needed
 from who2be_api.services.promote_validation import PromoteValidationError
-from who2be_models import ApiProblem
+from who2be_models import ApiErrorBody, ApiProblem
 
 logger = logging.getLogger(__name__)
 
@@ -218,6 +218,14 @@ _PROBLEM_TITLES: dict[str, str] = {
     "url_forbidden": "URL nicht erlaubt",
     "blobstore_unconfigured": "Blob-Storage nicht konfiguriert",
     "tablestore_unavailable": "Tabellen-Store nicht beschreibbar",
+    # Allgemeine API-Fehlergruende (ADR-0051). Sie fliessen heute ueber
+    # `_on_api_error` (schlanker Body ohne `title`) — der Titel steht hier
+    # trotzdem, weil das Vokabular EINES ist: wandert ein Grund spaeter an ein
+    # Gate, ist er sofort RFC-7807-faehig, und der Taxonomie-Test haelt die
+    # Tabelle vollstaendig.
+    "agent_not_found": "Agent nicht gefunden",
+    "db_unavailable": "Datenbank nicht verfuegbar",
+    "last_workspace_undeletable": "Letzter Workspace nicht loeschbar",
 }
 
 
@@ -292,6 +300,35 @@ def _on_api_gate_error(request: Request, exc: Exception) -> Response:
     )
 
 
+def _on_api_error(request: Request, exc: Exception) -> Response:
+    """Schlanker Fehler-Body fuer `ApiError` (ADR-0051 / #436, W0 von #402).
+
+    Additiv zum FastAPI-Default: `detail` bleibt Wort fuer Wort stehen, dazu
+    kommt der stabile `reason` (und, wenn gesetzt, `params` fuer die
+    Platzhalter der uebersetzten Client-Meldung). Content-Type bleibt
+    ``application/json`` — Clients, die heute nur `detail` lesen, merken
+    nichts.
+
+    Der Grund kommt ausschliesslich von der Exception; hier wird keiner
+    hergeleitet. Nicht migrierte `HTTPException`-Stellen landen weiterhin beim
+    FastAPI-Default-Handler (Starlette waehlt entlang der MRO) und bleiben
+    damit byte-identisch.
+    """
+    err = cast(ApiError, exc)
+    body = ApiErrorBody(
+        detail=str(err.detail),
+        reason=err.reason,
+        params=err.params,
+    )
+    return JSONResponse(
+        status_code=err.status_code,
+        # `exclude_none` haelt `params` aus dem Body, wenn es keine gibt — sonst
+        # traegt jede migrierte Antwort ein leeres Feld mit.
+        content=body.model_dump(exclude_none=True),
+        headers=err.headers,
+    )
+
+
 def _register_billing_if_present(app: FastAPI, settings: Settings) -> None:
     """Bindet das optionale Cloud-Billing-Paket ein — nur Cloud UND installiert.
 
@@ -335,6 +372,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_exception_handler(RateLimitExceeded, _on_rate_limit)
     app.add_exception_handler(PromoteValidationError, _on_promote_validation_error)
     app.add_exception_handler(ApiGateError, _on_api_gate_error)
+    # Vor dem FastAPI-Default fuer `HTTPException`: Starlette sucht den
+    # Handler entlang der MRO, `ApiError` steht darin zuerst.
+    app.add_exception_handler(ApiError, _on_api_error)
     # SlowAPIMiddleware vor CORSMiddleware adden: Starlette stacked LIFO, dann liegt
     # CORS aussen und Preflight-OPTIONS triggert das Limit nicht.
     app.add_middleware(SlowAPIMiddleware)

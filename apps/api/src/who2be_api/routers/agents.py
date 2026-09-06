@@ -37,6 +37,7 @@ from who2be_models import (
     AgentRenderResponse,
     AgentUpdate,
     AgentWithRenderedPrompt,
+    ApiErrorBody,
     RenderFormat,
 )
 
@@ -110,7 +111,13 @@ async def create_agent(
     return await service.create(ctx, data)
 
 
-@router.get("/{agent_id}")
+@router.get(
+    "/{agent_id}",
+    # ADR-0051: der Fehler-Body ist Teil des Vertrags, also steht er im
+    # Schema. Nur deklarativ — den `reason` setzt die Service-Stelle, nie
+    # der Router.
+    responses={404: {"model": ApiErrorBody, "description": "reason: agent_not_found"}},
+)
 async def get_agent(agent_id: UUID, ctx: Ctx, service: Service) -> AgentRead:
     return await service.get(ctx, agent_id)
 

@@ -35,7 +35,7 @@ from asyncpg.exceptions import ForeignKeyViolationError
 from fastapi import HTTPException, status
 
 from who2be_api.core.agent_scope import agent_read_restrict
-from who2be_api.core.errors import ApiGateError
+from who2be_api.core.errors import ApiError, ApiGateError
 from who2be_api.core.security import (
     WorkspaceContext,
     require_capability,
@@ -57,8 +57,13 @@ from who2be_models import (
 )
 
 
-def _not_found() -> HTTPException:
-    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent nicht gefunden.")
+def _not_found() -> ApiError:
+    # ADR-0051-Pilot: `detail` unveraendert, `reason` kommt additiv dazu.
+    return ApiError(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Agent nicht gefunden.",
+        reason="agent_not_found",
+    )
 
 
 _MISSING_LABELS = {

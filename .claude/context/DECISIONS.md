@@ -1266,3 +1266,40 @@ bleiben)._
   (Tab-uebergreifendes Umlenken moeglich); `WHO2BE_SESSION_MAX_AGE_HOURS` ist
   in keinem Compose-`web`-Service verdrahtet (Weiche 7 schliesst den
   Compose-Diff hier aus). Beides als Folge-Issue erfasst.
+
+## 2026-09-06 — Ein Fehler-Vokabular, zwei Serialisierungen (#436, ADR-0051)
+
+- **Entscheidung:** API-Fehlerantworten tragen additiv einen stabilen `reason`
+  (+ optional `params`) neben dem unveraenderten deutschen `detail`. Der Grund
+  kommt aus dem **bestehenden** `ProblemReason`
+  (`packages/models/src/who2be_models/errors.py`), das damit vom
+  „Gate-Vokabular" zum Fehler-Vokabular der ganzen API wird — **kein zweiter
+  Enum daneben** (Owner-Entscheidung, Weg B).
+- **Begruendung:** Die urspruengliche Empfehlung (Weg A, zweiter Enum) stand
+  auf der Annahme, `ProblemReason` sei ein enges Literal mit fuenf Werten. Es
+  hat 24, davon die Haelfte ausserhalb der Gates (`ingest_too_large`,
+  `blobstore_unconfigured`, `url_forbidden`, `tablestore_unavailable`). Zwei
+  Listen mit derselben Aufgabe laufen auseinander, und der Client haette zwei
+  Uebersetzungspfade gebraucht.
+- **Ebenfalls festgelegt:** Zwei **Serialisierungen** bleiben nebeneinander —
+  `ApiProblem` (RFC 7807, `application/problem+json`) an den 52 Gate-Stellen,
+  `ApiErrorBody` (`detail`/`reason`/`params`, `application/json`) ueberall
+  sonst. Vereinheitlichen waere ein Breaking Change am gesamten
+  Fehler-Contract; der Client sieht die Huelle ohnehin nicht, er liest
+  `reason`. Die ADR muss diese Koexistenz ausdruecklich begruenden, sonst wird
+  sie beim naechsten Router erneut als Fund gemeldet.
+- **Ebenfalls festgelegt:** `ApiError` erbt von `HTTPException`, und der
+  Handler wird auf die Unterklasse registriert. Starlette waehlt entlang der
+  MRO — nicht migrierte Stellen laufen unveraendert in den FastAPI-Default.
+  Regel dahinter, uebertragbar: eine wellenweise Migration braucht einen
+  Mechanismus, der die *nicht* migrierten Stellen beweisbar unberuehrt laesst,
+  nicht bloss absichtlich.
+- **Ebenfalls festgelegt:** Der Locale-Key ist der `reason` wortgleich
+  (`common:errors.agent_not_found`), und `defaultValue: detail` faengt jeden
+  noch nicht uebersetzten Grund auf. Kein Mapping, das driften kann; nie ein
+  roher Key in der UI.
+- **Uebertragbar:** Eine Architektur-Empfehlung, die auf einer Zahl steht, muss
+  die Zahl belegen. Hier kehrte fuenf gegen 24 die Entscheidung um.
+- **Offen:** die uebrigen ~76 `detail`-Stellen (#402 W1-Wn), die MCP-Client-
+  Seite, die zwei Confinement-Raises in `routers/agents.py`, und die
+  Content-Type-Vereinheitlichung (Weg C) als eigenes Vorhaben.
