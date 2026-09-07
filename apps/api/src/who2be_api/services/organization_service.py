@@ -8,8 +8,9 @@ bedienbar ist.
 from uuid import UUID
 
 import asyncpg
-from fastapi import HTTPException, status
+from fastapi import status
 
+from who2be_api.core.errors import ApiError
 from who2be_api.repositories.organization_repository import OrganizationRepository
 from who2be_models import OrganizationCreate, OrganizationRead
 
@@ -29,8 +30,9 @@ class OrganizationService:
                 user_id, data.name, data.slug, default_workspace_name="Default"
             )
         except asyncpg.UniqueViolationError as exc:
-            raise HTTPException(
+            raise ApiError(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Organization-Slug ist bereits vergeben.",
+                reason="organization_slug_conflict",
             ) from exc
         return org

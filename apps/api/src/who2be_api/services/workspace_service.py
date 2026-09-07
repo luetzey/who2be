@@ -8,7 +8,7 @@ fremden Org Workspaces erzeugt.
 from uuid import UUID
 
 import asyncpg
-from fastapi import HTTPException, status
+from fastapi import status
 
 from who2be_api.core.errors import ApiError
 from who2be_api.repositories.organization_repository import OrganizationRepository
@@ -19,8 +19,25 @@ from who2be_api.repositories.workspace_repository import (
 from who2be_models import WorkspaceCreate, WorkspaceRead, WorkspaceUpdate
 
 
-def _not_found() -> HTTPException:
-    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace nicht gefunden.")
+def _not_found() -> ApiError:
+    return ApiError(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Workspace nicht gefunden.",
+        reason="workspace_not_found",
+    )
+
+
+def _org_not_found() -> ApiError:
+    """Org unbekannt **oder** ohne Mitgliedschaft — bewusst derselbe Fehler.
+
+    Die Unterscheidung waere ein Enumerations-Kanal (existiert die Org?);
+    deshalb tragen beide Faelle denselben Grund wie schon denselben `detail`.
+    """
+    return ApiError(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Organization nicht gefunden.",
+        reason="organization_not_found",
+    )
 
 
 class WorkspaceService:
@@ -36,26 +53,21 @@ class WorkspaceService:
 
     async def list_for_org(self, org_id: UUID, user_id: UUID) -> list[WorkspaceRead]:
         if await self._orgs.fetch(user_id, org_id) is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Organization nicht gefunden.",
-            )
+            raise _org_not_found()
         return await self._workspaces.list_by_org_for_user(org_id, user_id)
 
     async def create(self, org_id: UUID, user_id: UUID, data: WorkspaceCreate) -> WorkspaceRead:
         if await self._orgs.fetch(user_id, org_id) is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Organization nicht gefunden.",
-            )
+            raise _org_not_found()
         try:
             return await self._workspaces.create(
                 org_id, user_id, data.name, data.slug, data.content_locale
             )
         except asyncpg.UniqueViolationError as exc:
-            raise HTTPException(
+            raise ApiError(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Workspace-Slug ist in dieser Organization vergeben.",
+                reason="workspace_slug_conflict",
             ) from exc
 
     async def update(self, workspace_id: UUID, data: WorkspaceUpdate) -> WorkspaceRead:

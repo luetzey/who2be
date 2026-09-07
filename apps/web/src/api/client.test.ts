@@ -1,7 +1,7 @@
 import i18n from 'i18next'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ApiError, createApi, fetchMe } from './client'
+import { acceptInvitation, ApiError, createApi, fetchMe } from './client'
 
 const WS = 'ws-123'
 
@@ -134,6 +134,52 @@ describe('createApi', () => {
     await expect(createApi('tok', WS).getPlaybookUsages('x')).rejects.toMatchObject({
       status: 404,
       message: 'Playbook not found.',
+    })
+
+    await i18n.changeLanguage('de')
+  })
+
+  it('uebersetzt invitation_no_longer_valid (W3) in die UI-Sprache', async () => {
+    // Onboarding-Pfad: der abgelaufene Einladungslink ist oft die erste
+    // Server-Meldung, die ein neuer Nutzer ueberhaupt sieht — sie darf nicht
+    // deutsch in einer englischen Oberflaeche stehen.
+    await i18n.changeLanguage('en')
+    vi.stubGlobal(
+      'fetch',
+      errorResponse(
+        { detail: 'Einladung ist nicht mehr gueltig.', reason: 'invitation_no_longer_valid' },
+        410,
+      ),
+    )
+    await expect(acceptInvitation('tok', 'abc')).rejects.toMatchObject({
+      status: 410,
+      message: 'This invitation is no longer valid.',
+    })
+
+    await i18n.changeLanguage('de')
+  })
+
+  it('interpoliert das Limit in entity_quota_exceeded (W3)', async () => {
+    // AK 4: die erreichte Grenze kommt als `params` und wird in den
+    // uebersetzten Text interpoliert — ein Key fuer jede Grenze.
+    await i18n.changeLanguage('en')
+    vi.stubGlobal(
+      'fetch',
+      errorResponse(
+        {
+          detail: 'Free-Tarif erreicht das Limit von 50 Eintraegen je Workspace. '
+            + 'Upgrade auf Pro hebt die Grenze auf — Bestehendes bleibt nutzbar.',
+          reason: 'entity_quota_exceeded',
+          params: { limit: 50 },
+        },
+        402,
+      ),
+    )
+    await expect(createApi('tok', WS).listPersonas()).rejects.toMatchObject({
+      status: 402,
+      message:
+        'The free plan is limited to 50 entries per workspace. '
+        + 'Upgrading to Pro lifts the limit — existing entries stay usable.',
     })
 
     await i18n.changeLanguage('de')

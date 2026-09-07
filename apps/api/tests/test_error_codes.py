@@ -370,6 +370,95 @@ def test_invalid_against_param_422_carries_reason(
     }
 
 
+@pytest.mark.integration
+def test_unknown_invitation_accept_404_carries_reason(
+    patched_jwt_secret: str, migrated_db: None, make_auth_headers: AuthFactory
+) -> None:
+    """W3 (#486): unbekannter Einladungs-Token => 404 + `invitation_not_found`.
+
+    Der Einladungs-Pfad aus AK 5. Gleichheit statt Teilmenge: sie belegt
+    zugleich, dass `detail` WOERTLICH steht und ausser `reason` kein Feld
+    dazugekommen ist.
+    """
+    user_id = fresh_user_id()
+    setup_workspace(user_id)
+    try:
+        with TestClient(app) as client:
+            resp = client.post(
+                "/v1/invitations/gibt-es-nicht/accept",
+                headers=make_auth_headers(user_id),
+            )
+    finally:
+        cleanup_workspaces([user_id])
+
+    assert resp.status_code == 404
+    assert resp.headers["content-type"].startswith("application/json")
+    assert resp.json() == {"detail": "Einladung nicht gefunden.", "reason": "invitation_not_found"}
+
+
+@pytest.mark.integration
+def test_workspace_create_unknown_org_404_carries_reason(
+    patched_jwt_secret: str, migrated_db: None, make_auth_headers: AuthFactory
+) -> None:
+    """W3 (#486): Workspace-Anlage in fremder/unbekannter Org => 404.
+
+    Unbekannt und "nicht Mitglied" fallen bewusst auf denselben Grund
+    zusammen — die Trennung waere ein Enumerations-Kanal auf fremde Orgs.
+    """
+    user_id = fresh_user_id()
+    setup_workspace(user_id)
+    try:
+        with TestClient(app) as client:
+            resp = client.post(
+                f"/v1/organizations/{uuid4()}/workspaces",
+                json={"name": "Zweitraum", "slug": "zweitraum"},
+                headers=make_auth_headers(user_id),
+            )
+    finally:
+        cleanup_workspaces([user_id])
+
+    assert resp.status_code == 404
+    assert resp.json() == {
+        "detail": "Organization nicht gefunden.",
+        "reason": "organization_not_found",
+    }
+
+
+@pytest.mark.integration
+def test_duplicate_workspace_slug_409_carries_reason(
+    patched_jwt_secret: str, migrated_db: None, make_auth_headers: AuthFactory
+) -> None:
+    """W3 (#486): belegter Workspace-Slug => 409 + `workspace_slug_conflict`.
+
+    Der zweite Workspace-Pfad aus AK 5, und der interessantere: 409 statt 404,
+    und der Grund trennt die Slug-Kollision von `organization_slug_conflict`
+    aus demselben Onboarding-Fluss.
+    """
+    user_id = fresh_user_id()
+    setup_workspace(user_id)
+    try:
+        with TestClient(app) as client:
+            headers = make_auth_headers(user_id)
+            orgs = client.get("/v1/organizations", headers=headers)
+            assert orgs.status_code == 200, orgs.text
+            org_id = orgs.json()[0]["id"]
+            # `ensure_personal_workspace` seedet den Slug `personal` — ein
+            # zweiter mit demselben Slug verletzt `(org_id, slug)`.
+            resp = client.post(
+                f"/v1/organizations/{org_id}/workspaces",
+                json={"name": "Nochmal Personal", "slug": "personal"},
+                headers=headers,
+            )
+    finally:
+        cleanup_workspaces([user_id])
+
+    assert resp.status_code == 409
+    assert resp.json() == {
+        "detail": "Workspace-Slug ist in dieser Organization vergeben.",
+        "reason": "workspace_slug_conflict",
+    }
+
+
 def test_missing_db_pool_503_carries_reason(
     patched_jwt_secret: str, make_auth_headers: AuthFactory, monkeypatch: pytest.MonkeyPatch
 ) -> None:

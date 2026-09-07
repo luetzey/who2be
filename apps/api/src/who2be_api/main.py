@@ -242,6 +242,17 @@ _PROBLEM_TITLES: dict[str, str] = {
     "system_prompt_template_slug_conflict": "Slug bereits vergeben",
     "feedback_element_not_found": "Element nicht gefunden",
     "invalid_against_param": "Ungueltiger 'against'-Parameter",
+    "workspace_not_found": "Workspace nicht gefunden",
+    "organization_not_found": "Organisation nicht gefunden",
+    "workspace_slug_conflict": "Workspace-Slug bereits vergeben",
+    "organization_slug_conflict": "Organisation-Slug bereits vergeben",
+    "invitation_not_found": "Einladung nicht gefunden",
+    "invitation_no_longer_valid": "Einladung nicht mehr gueltig",
+    "invitation_email_mismatch": "Einladung fuer eine andere Email-Adresse",
+    "personal_organization_undeletable": "Persoenliche Organisation nicht loeschbar",
+    "organization_owner_required": "Aktion nur fuer den Org-Owner",
+    "workspace_org_missing": "Workspace ohne Organisation",
+    "entity_quota_exceeded": "Entity-Kontingent erreicht",
 }
 
 

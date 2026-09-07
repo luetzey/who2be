@@ -129,7 +129,18 @@
       "system_prompt_template_not_found": "System-Prompt-Template nicht gefunden.",
       "system_prompt_template_slug_conflict": "Ein Template mit diesem Slug existiert bereits.",
       "feedback_element_not_found": "Element nicht gefunden.",
-      "invalid_against_param": "Ungueltiger 'against'-Parameter; erwartet 'active' oder eine Versions-Nummer."
+      "invalid_against_param": "Ungueltiger 'against'-Parameter; erwartet 'active' oder eine Versions-Nummer.",
+      "workspace_not_found": "Workspace nicht gefunden.",
+      "organization_not_found": "Organisation nicht gefunden.",
+      "workspace_slug_conflict": "Workspace-Slug ist in dieser Organisation vergeben.",
+      "organization_slug_conflict": "Organisation-Slug ist bereits vergeben.",
+      "invitation_not_found": "Einladung nicht gefunden.",
+      "invitation_no_longer_valid": "Einladung ist nicht mehr gueltig.",
+      "invitation_email_mismatch": "Diese Einladung ist fuer eine andere Email-Adresse.",
+      "personal_organization_undeletable": "Persoenliche Organisationen werden ueber die Konto-Loeschung entfernt.",
+      "organization_owner_required": "Nur der Owner kann diese Organisation loeschen.",
+      "workspace_org_missing": "Workspace ohne Organisation.",
+      "entity_quota_exceeded": "Free-Tarif erreicht das Limit von {{limit}} Eintraegen je Workspace. Upgrade auf Pro hebt die Grenze auf — Bestehendes bleibt nutzbar."
     },
     "fieldLabels": {
       "name": "Name",

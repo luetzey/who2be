@@ -21,10 +21,11 @@ from typing import Annotated, cast
 from uuid import UUID
 
 import asyncpg
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, status
 
 from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.db import get_pool
+from who2be_api.core.errors import ApiError
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.licensing.edition import is_cloud
 from who2be_api.licensing.entitlement import Entitlement
@@ -59,9 +60,10 @@ class EntityQuotaService:
         )
         if org_id is None:
             # Sollte nie passieren — die Workspace-Membership ist bereits geprueft.
-            raise HTTPException(
+            raise ApiError(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Workspace ohne Organisation.",
+                reason="workspace_org_missing",
             )
         return cast(UUID, org_id)
 
@@ -83,12 +85,17 @@ class EntityQuotaService:
 
         current = await self._count_entities(ctx.workspace_id)
         if current >= limit:
-            raise HTTPException(
+            # `params` statt eines Grundes je Grenze: die erreichte Zahl gehoert
+            # in die Daten, nicht in den Locale-Key (ADR-0051). Steigt das
+            # Free-Kontingent, aendert sich hier nichts und keine Uebersetzung.
+            raise ApiError(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
                 detail=(
                     f"Free-Tarif erreicht das Limit von {limit} Eintraegen je Workspace. "
                     "Upgrade auf Pro hebt die Grenze auf — Bestehendes bleibt nutzbar."
                 ),
+                reason="entity_quota_exceeded",
+                params={"limit": limit},
             )
 
 

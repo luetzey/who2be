@@ -76,6 +76,17 @@ ProblemReason = Literal[
     "system_prompt_template_slug_conflict",  # 409 — Slug im Workspace bereits vergeben
     "feedback_element_not_found",  # 404 — Feedback-Ziel oder -Eintrag nicht gefunden
     "invalid_against_param",  # 422 — `against` ist weder "active" noch eine Versions-Nummer
+    "workspace_not_found",  # 404 — Workspace unbekannt oder nicht sichtbar
+    "organization_not_found",  # 404 — Organisation unbekannt oder ohne Mitgliedschaft
+    "workspace_slug_conflict",  # 409 — Workspace-Slug in dieser Organisation vergeben
+    "organization_slug_conflict",  # 409 — Organisation-Slug global vergeben
+    "invitation_not_found",  # 404 — Einladung unbekannt (Token oder ID)
+    "invitation_no_longer_valid",  # 410 — Einladung akzeptiert, widerrufen oder abgelaufen
+    "invitation_email_mismatch",  # 403 — Einladung gehoert zu einer anderen Email-Adresse
+    "personal_organization_undeletable",  # 400 — Personal-Org nur ueber Konto-Loeschung
+    "organization_owner_required",  # 403 — Aktion ist dem Org-Owner vorbehalten
+    "workspace_org_missing",  # 403 — Workspace ohne Organisation (inkonsistenter Zustand)
+    "entity_quota_exceeded",  # 402 — Entity-Kontingent erreicht (params: limit)
 ]
 
 # Wer den Fehler beheben kann: `agent` = der aufrufende Agent kann es selbst

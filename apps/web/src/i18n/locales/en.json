@@ -129,7 +129,18 @@
       "system_prompt_template_not_found": "System prompt template not found.",
       "system_prompt_template_slug_conflict": "A template with this slug already exists.",
       "feedback_element_not_found": "Element not found.",
-      "invalid_against_param": "Invalid 'against' parameter; expected 'active' or a version number."
+      "invalid_against_param": "Invalid 'against' parameter; expected 'active' or a version number.",
+      "workspace_not_found": "Workspace not found.",
+      "organization_not_found": "Organization not found.",
+      "workspace_slug_conflict": "That workspace slug is already taken in this organization.",
+      "organization_slug_conflict": "That organization slug is already taken.",
+      "invitation_not_found": "Invitation not found.",
+      "invitation_no_longer_valid": "This invitation is no longer valid.",
+      "invitation_email_mismatch": "This invitation is for a different email address.",
+      "personal_organization_undeletable": "Personal organizations are removed through account deletion.",
+      "organization_owner_required": "Only the owner can delete this organization.",
+      "workspace_org_missing": "Workspace without an organization.",
+      "entity_quota_exceeded": "The free plan is limited to {{limit}} entries per workspace. Upgrading to Pro lifts the limit — existing entries stay usable."
     },
     "fieldLabels": {
       "name": "Name",
