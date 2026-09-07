@@ -216,6 +216,43 @@ describe('createApi', () => {
     await i18n.changeLanguage('de')
   })
 
+  it('uebersetzt invalid_credentials und interpoliert das Rate-Limit (W6)', async () => {
+    // Beide Zusagen der letzten Welle in einem Fall: der 401-Sammelgrund
+    // (bewusst grobkoernig — ein feinerer waere ein Enumerations-Orakel) und
+    // die Grenze als `params`, damit nicht jede konfigurierte Rate ihren
+    // eigenen Locale-Key braucht.
+    await i18n.changeLanguage('en')
+    vi.stubGlobal(
+      'fetch',
+      errorResponse(
+        { detail: 'Ungueltige oder fehlende Anmeldedaten.', reason: 'invalid_credentials' },
+        401,
+      ),
+    )
+    await expect(createApi('tok', WS).listPersonas()).rejects.toMatchObject({
+      status: 401,
+      message: 'Invalid or missing credentials.',
+    })
+
+    vi.stubGlobal(
+      'fetch',
+      errorResponse(
+        {
+          detail: 'Token-Ratenlimit ueberschritten.',
+          reason: 'mcp_rate_limited',
+          params: { limit: 30 },
+        },
+        429,
+      ),
+    )
+    await expect(createApi('tok', WS).listPersonas()).rejects.toMatchObject({
+      status: 429,
+      message: 'Token rate limit exceeded (30/min).',
+    })
+
+    await i18n.changeLanguage('de')
+  })
+
   it('interpoliert params in die Meldung', async () => {
     vi.stubGlobal(
       'fetch',

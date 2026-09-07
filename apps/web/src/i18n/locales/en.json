@@ -148,7 +148,18 @@
       "linked_playbook_not_found": "At least one playbook does not exist or belongs to a different workspace.",
       "linked_resource_not_found": "At least one resource does not exist or belongs to a different workspace.",
       "composition_cycle": "Linking would create a cycle.",
-      "heading_anchor_required": "Only heading blocks are allowed as anchors."
+      "heading_anchor_required": "Only heading blocks are allowed as anchors.",
+      "invalid_credentials": "Invalid or missing credentials.",
+      "write_rate_limited": "Write rate limit for this agent reached ({{limit}}/min) — please try again later.",
+      "token_management_forbidden": "Agent-bound tokens cannot manage API tokens.",
+      "bound_agent_not_found": "The agent to bind does not exist in this workspace.",
+      "token_role_escalation": "A token cannot have a higher role than its creator.",
+      "token_not_found": "Token not found.",
+      "subscription_inactive": "No active subscription for this organization.",
+      "mcp_rate_limited": "Token rate limit exceeded ({{limit}}/min).",
+      "mcp_quota_exceeded": "Monthly MCP quota exhausted ({{limit}}/month).",
+      "consent_requires_session": "Consent requires a signed-in web session, not an API token.",
+      "invalid_cursor": "Invalid cursor."
     },
     "fieldLabels": {
       "name": "Name",

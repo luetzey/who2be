@@ -19,6 +19,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 
 from who2be_api.core.config import get_settings
 from who2be_api.core.db import get_pool
+from who2be_api.core.errors import ApiError
 from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import CurrentPrincipal, get_current_principal
 from who2be_api.repositories.audit_log_repository import PgAuditLogRepository
@@ -81,9 +82,13 @@ async def get_consent_principal(
     laut `CurrentPrincipal`-Vertrag IMMER workspace-gepinnt.
     """
     if principal.token_workspace_id is not None:
-        raise HTTPException(
+        # Eigener Grund, NICHT `invalid_credentials`: die Anmeldedaten sind
+        # gueltig, nur der falsche Typ. Genau das sagt `detail` heute schon —
+        # der Grund loest also nicht feiner auf als der Text (#487, AK 4).
+        raise ApiError(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Consent erfordert eine eingeloggte Web-Session, keinen API-Token.",
+            reason="consent_requires_session",
             headers={"WWW-Authenticate": "Bearer"},
         )
     return principal

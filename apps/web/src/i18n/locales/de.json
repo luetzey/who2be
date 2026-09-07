@@ -148,7 +148,18 @@
       "linked_playbook_not_found": "Mindestens ein Playbook existiert nicht oder gehoert einem anderen Workspace.",
       "linked_resource_not_found": "Mindestens eine Resource existiert nicht oder gehoert einem anderen Workspace.",
       "composition_cycle": "Verknuepfung wuerde einen Zyklus erzeugen.",
-      "heading_anchor_required": "Nur Heading-Bloecke sind als Anker erlaubt."
+      "heading_anchor_required": "Nur Heading-Bloecke sind als Anker erlaubt.",
+      "invalid_credentials": "Ungueltige oder fehlende Anmeldedaten.",
+      "write_rate_limited": "Schreib-Rate-Limit dieses Agenten erreicht ({{limit}}/min) — bitte spaeter erneut versuchen.",
+      "token_management_forbidden": "Agent-gebundene Tokens duerfen keine API-Tokens verwalten.",
+      "bound_agent_not_found": "Der zu bindende Agent existiert nicht in diesem Workspace.",
+      "token_role_escalation": "Ein Token darf keine hoehere Rolle als sein Ersteller haben.",
+      "token_not_found": "Token nicht gefunden.",
+      "subscription_inactive": "Kein aktives Abonnement fuer diese Organisation.",
+      "mcp_rate_limited": "Token-Ratenlimit ueberschritten ({{limit}}/min).",
+      "mcp_quota_exceeded": "Monatliches MCP-Kontingent erschoepft ({{limit}}/Monat).",
+      "consent_requires_session": "Consent erfordert eine eingeloggte Web-Session, keinen API-Token.",
+      "invalid_cursor": "Ungueltiger Cursor."
     },
     "fieldLabels": {
       "name": "Name",

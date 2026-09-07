@@ -20,16 +20,20 @@ Welle die Gate-Antworten nicht angefasst hat.
 """
 
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import asyncpg
+import jwt
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from who2be_api.core.errors import ApiError, ApiGateError
+from who2be_api.core.security import WorkspaceContext, require_write_rate
 from who2be_api.main import _on_api_error, _on_api_gate_error, app
 from who2be_api.testing.workspace_setup import cleanup_workspaces, fresh_user_id, setup_workspace
+from who2be_models import AgentToolPolicy, WorkspaceRole
 
 AuthFactory = Callable[[UUID], dict[str, str]]
 
@@ -635,6 +639,149 @@ def test_missing_db_pool_503_carries_reason(
 
     assert resp.status_code == 503
     assert resp.json() == {"detail": "Datenbank nicht verfuegbar.", "reason": "db_unavailable"}
+
+
+# --- 1b. Auth, Token, OAuth, Limits (W6, #487) ------------------------------
+#
+# Die einzige Welle mit Sicherheitsbezug. Der `reason` darf hier NICHT feiner
+# aufloesen als der bestehende `detail`-Text — sonst wird aus einem stabilen
+# Fehlercode ein Enumerations-Orakel.
+
+_CREDENTIALS_BODY = {
+    "detail": "Ungueltige oder fehlende Anmeldedaten.",
+    "reason": "invalid_credentials",
+}
+
+
+def _jwt_with(secret: str, **claims: object) -> str:
+    payload: dict[str, object] = {
+        "sub": str(uuid4()),
+        "aud": "authenticated",
+        "role": "authenticated",
+        "exp": datetime.now(UTC) + timedelta(hours=1),
+    }
+    payload.update(claims)
+    return jwt.encode(payload, secret, algorithm="HS256")
+
+
+def test_all_authentication_failures_share_one_reason(patched_jwt_secret: str) -> None:
+    """AK 4: fuenf verschiedene Ursachen, EIN Grund — kein Enumerations-Orakel.
+
+    Fehlender Header, kaputter Bearer, falsch signiertes JWT, nicht erlaubte
+    `role` und ein unbrauchbares `sub` liefern heute denselben Status, denselben
+    Text und denselben `WWW-Authenticate`-Header. Genau deshalb teilen sie sich
+    auch den `reason`: waere er feiner, koennte ein Angreifer aus dem Code
+    ablesen, WORAN die Anmeldung gescheitert ist. Der Test faellt, sobald eine
+    Call-Site anfaengt, ihren eigenen Grund zu setzen.
+    """
+    path = f"/v1/workspaces/{uuid4()}/agents"
+    fremd = _jwt_with("ein-ganz-anderes-secret-0123456789")
+    service_role = _jwt_with(patched_jwt_secret, role="service_role")
+    kaputtes_sub = _jwt_with(patched_jwt_secret, sub="keine-uuid")
+    cases = {
+        "kein Header": {},
+        "kein JWT": {"Authorization": "Bearer nicht-mal-ein-jwt"},
+        "falsches Secret": {"Authorization": f"Bearer {fremd}"},
+        "verbotene role": {"Authorization": f"Bearer {service_role}"},
+        "kaputtes sub": {"Authorization": f"Bearer {kaputtes_sub}"},
+    }
+
+    with TestClient(app) as client:
+        responses = {name: client.get(path, headers=headers) for name, headers in cases.items()}
+
+    for name, resp in responses.items():
+        assert resp.status_code == 401, f"{name}: {resp.text}"
+        assert resp.json() == _CREDENTIALS_BODY, name
+        assert resp.headers["www-authenticate"] == "Bearer", name
+
+
+@pytest.mark.integration
+def test_unknown_api_token_is_indistinguishable_from_a_missing_one(
+    patched_jwt_secret: str, migrated_db: None
+) -> None:
+    """Der Token-Pfad braucht die DB — und muss trotzdem gleich antworten.
+
+    Ein unbekannter (oder widerrufener) `w2b_`-Token laeuft durch den
+    Repository-Lookup, ein fehlender Header nicht. Beide enden bei demselben
+    Body: sonst verriete der Grund, ob ein Token-Hash existiert.
+    """
+    path = f"/v1/workspaces/{uuid4()}/agents"
+    with TestClient(app) as client:
+        unknown = client.get(path, headers={"Authorization": "Bearer w2b_gibt-es-nicht"})
+        missing = client.get(path)
+
+    assert unknown.status_code == missing.status_code == 401
+    assert unknown.json() == missing.json() == _CREDENTIALS_BODY
+    assert unknown.headers["www-authenticate"] == "Bearer"
+
+
+def test_write_rate_limit_429_carries_reason_and_params() -> None:
+    """AK 6: `reason` **und** das Limit als `params`; `detail` woertlich wie vorher.
+
+    Die erreichte Grenze gehoert in die Daten, nicht in den Locale-Key — sonst
+    braucht jede konfigurierte Rate ihre eigene Uebersetzung. Kein DB-Bedarf:
+    das Sliding-Window ist In-Memory und wird ueber eine frische `agent_id`
+    isoliert.
+    """
+    ctx = WorkspaceContext(
+        workspace_id=uuid4(),
+        user_id=uuid4(),
+        role=WorkspaceRole.editor,
+        is_api_token=True,
+        agent_id=uuid4(),
+        tool_policy=AgentToolPolicy(write_rate_limit=1),
+    )
+    mini = FastAPI()
+    mini.add_exception_handler(ApiError, _on_api_error)
+
+    @mini.post("/write")
+    def write() -> dict[str, bool]:
+        require_write_rate(ctx)
+        return {"ok": True}
+
+    with TestClient(mini, raise_server_exceptions=False) as client:
+        assert client.post("/write").status_code == 200
+        blocked = client.post("/write")
+
+    assert blocked.status_code == 429
+    assert blocked.json() == {
+        "detail": "Schreib-Rate-Limit dieses Agenten erreicht — bitte spaeter erneut versuchen.",
+        "reason": "write_rate_limited",
+        "params": {"limit": 1},
+    }
+
+
+@pytest.mark.integration
+def test_unknown_token_404_and_invalid_cursor_422_carry_reason(
+    patched_jwt_secret: str, migrated_db: None, make_auth_headers: AuthFactory
+) -> None:
+    """Die beiden Bestands-Pfade der Welle, die die Web-UI wirklich sieht.
+
+    Der Keyset-Cursor sass bis W2 unter dem Waechter fuer *nicht* migrierte
+    Stellen (`test_unmigrated_error_body_is_unchanged`); der ist in W2 auf den
+    `locale`-Filter umgezogen, weil der Cursor zu dieser Welle gehoert.
+    """
+    user_id = fresh_user_id()
+    workspace_id = setup_workspace(user_id)
+    auth = make_auth_headers(user_id)
+    try:
+        with TestClient(app) as client:
+            renamed = client.patch(
+                f"/v1/workspaces/{workspace_id}/tokens/{uuid4()}",
+                json={"name": "neu"},
+                headers=auth,
+            )
+            cursor = client.get(
+                f"/v1/workspaces/{workspace_id}/personas?cursor=kein-gueltiger-cursor",
+                headers=auth,
+            )
+    finally:
+        cleanup_workspaces([user_id])
+
+    assert renamed.status_code == 404, renamed.text
+    assert renamed.json() == {"detail": "Token nicht gefunden.", "reason": "token_not_found"}
+    assert cursor.status_code == 422, cursor.text
+    assert cursor.json() == {"detail": "Ungueltiger Cursor.", "reason": "invalid_cursor"}
 
 
 # --- 2. Nicht migrierte Stellen: byte-identisch zu vorher -------------------

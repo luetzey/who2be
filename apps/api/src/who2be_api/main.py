@@ -261,6 +261,17 @@ _PROBLEM_TITLES: dict[str, str] = {
     "linked_resource_not_found": "Verknuepfte Resource nicht gefunden",
     "composition_cycle": "Verknuepfung wuerde einen Zyklus erzeugen",
     "heading_anchor_required": "Anker muss ein Heading-Block sein",
+    "invalid_credentials": "Anmeldedaten ungueltig oder fehlend",
+    "write_rate_limited": "Schreib-Rate-Limit erreicht",
+    "token_management_forbidden": "Token-Verwaltung nicht erlaubt",
+    "bound_agent_not_found": "Zu bindender Agent nicht gefunden",
+    "token_role_escalation": "Token-Rolle hoeher als die des Erstellers",
+    "token_not_found": "Token nicht gefunden",
+    "subscription_inactive": "Kein aktives Abonnement",
+    "mcp_rate_limited": "Token-Ratenlimit erreicht",
+    "mcp_quota_exceeded": "MCP-Kontingent erschoepft",
+    "consent_requires_session": "Consent erfordert eine Web-Session",
+    "invalid_cursor": "Ungueltiger Cursor",
 }
 
 
