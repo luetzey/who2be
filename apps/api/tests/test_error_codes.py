@@ -122,6 +122,59 @@ def test_disabled_agent_render_409_carries_reason(
     assert resp.json() == {"detail": "Agent ist deaktiviert.", "reason": "agent_disabled"}
 
 
+@pytest.mark.integration
+def test_unknown_kb_node_404_carries_reason(
+    patched_jwt_secret: str, migrated_db: None, make_auth_headers: AuthFactory
+) -> None:
+    """W4 (#484): unbekannter KB-Node => 404 + `kb_node_not_found`.
+
+    Der 404 ist hier bewusst ein Nicht-Existenz-Orakel-Schutz: unbekannt und
+    unsichtbar sehen fuer den Aufrufer gleich aus. Genau deshalb braucht der
+    MCP-Client den `reason` — der deutsche Prosa-Text sagt ihm nichts.
+    """
+    user_id = fresh_user_id()
+    workspace_id = setup_workspace(user_id)
+    try:
+        with TestClient(app) as client:
+            resp = client.get(
+                f"/v1/workspaces/{workspace_id}/kb/nodes/{uuid4()}",
+                headers=make_auth_headers(user_id),
+            )
+    finally:
+        cleanup_workspaces([user_id])
+
+    assert resp.status_code == 404
+    # Gleichheit statt Teilmenge: sie belegt `detail` WOERTLICH unveraendert
+    # und zugleich, dass ausser `reason` kein Feld dazugekommen ist.
+    assert resp.headers["content-type"].startswith("application/json")
+    assert resp.json() == {"detail": "KB-Node nicht gefunden.", "reason": "kb_node_not_found"}
+
+
+@pytest.mark.integration
+def test_unknown_work_area_404_carries_reason(
+    patched_jwt_secret: str, migrated_db: None, make_auth_headers: AuthFactory
+) -> None:
+    """W4 (#484): unbekannte Area => 404 + `area_not_found`.
+
+    Zweite Stelle derselben Welle, aber ein anderer Weg durch den Code: der
+    Grund entsteht im Service (`_require_shared_area`), nicht im Router — die
+    Welle deckt beide Schichten ab.
+    """
+    user_id = fresh_user_id()
+    workspace_id = setup_workspace(user_id)
+    try:
+        with TestClient(app) as client:
+            resp = client.get(
+                f"/v1/workspaces/{workspace_id}/work-areas/{uuid4()}/grants",
+                headers=make_auth_headers(user_id),
+            )
+    finally:
+        cleanup_workspaces([user_id])
+
+    assert resp.status_code == 404
+    assert resp.json() == {"detail": "Area nicht gefunden.", "reason": "area_not_found"}
+
+
 def test_missing_db_pool_503_carries_reason(
     patched_jwt_secret: str, make_auth_headers: AuthFactory, monkeypatch: pytest.MonkeyPatch
 ) -> None:

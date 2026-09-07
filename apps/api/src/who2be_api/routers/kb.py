@@ -20,9 +20,10 @@ from typing import Annotated
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 
 from who2be_api.core.db import get_pool
+from who2be_api.core.errors import ApiError
 from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.repositories.kb_repository import PgKbRepository
@@ -57,9 +58,13 @@ Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]
 Service = Annotated[KbService, Depends(get_kb_service)]
 
 
-def _node_not_found() -> HTTPException:
+def _node_not_found() -> ApiError:
     """404 fuer unbekannte ODER nicht sichtbare Nodes (kein Existenz-Leak)."""
-    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="KB-Node nicht gefunden.")
+    return ApiError(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="KB-Node nicht gefunden.",
+        reason="kb_node_not_found",
+    )
 
 
 @router.post("/kb/nodes", status_code=status.HTTP_201_CREATED)

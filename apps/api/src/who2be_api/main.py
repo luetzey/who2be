@@ -228,6 +228,12 @@ _PROBLEM_TITLES: dict[str, str] = {
     "last_workspace_undeletable": "Letzter Workspace nicht loeschbar",
     "agent_disabled": "Agent ist deaktiviert",
     "agent_persona_missing": "Persona des Agenten nicht gefunden",
+    "memory_not_found": "Memory nicht gefunden",
+    "memory_not_pending": "Memory nicht mehr offen",
+    "area_not_found": "Area nicht gefunden",
+    "artifact_not_found": "Artifact nicht gefunden",
+    "kb_node_not_found": "KB-Node nicht gefunden",
+    "table_not_found": "Tabelle nicht gefunden",
 }
 
 

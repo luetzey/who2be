@@ -115,7 +115,13 @@
       "db_unavailable": "Datenbank nicht verfuegbar.",
       "last_workspace_undeletable": "Der letzte Workspace einer Organization kann nicht geloescht werden.",
       "agent_disabled": "Agent ist deaktiviert.",
-      "agent_persona_missing": "Agent-Persona nicht gefunden (FK-Konsistenzproblem)."
+      "agent_persona_missing": "Agent-Persona nicht gefunden (FK-Konsistenzproblem).",
+      "memory_not_found": "Memory nicht gefunden.",
+      "memory_not_pending": "Nur offene Vorschlaege (pending) koennen triagiert werden.",
+      "area_not_found": "Area nicht gefunden.",
+      "artifact_not_found": "Artifact nicht gefunden.",
+      "kb_node_not_found": "KB-Node nicht gefunden.",
+      "table_not_found": "Tabelle nicht gefunden."
     },
     "fieldLabels": {
       "name": "Name",

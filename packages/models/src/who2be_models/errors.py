@@ -62,6 +62,12 @@ ProblemReason = Literal[
     "last_workspace_undeletable",  # 409 — letzter Workspace einer Organization
     "agent_disabled",  # 409 — Agent ist deaktiviert (Render-/Rendered-Pfade)
     "agent_persona_missing",  # 422 — verlinkte Persona des Agenten nicht auffindbar
+    "memory_not_found",  # 404 — Memory existiert nicht (oder nicht sichtbar)
+    "memory_not_pending",  # 409 — Triage nur auf offenen Vorschlaegen moeglich
+    "area_not_found",  # 404 — WorkArea unbekannt oder nicht lesbar
+    "artifact_not_found",  # 404 — WorkArea-Artifact unbekannt oder nicht lesbar
+    "kb_node_not_found",  # 404 — KB-Node unbekannt oder nicht sichtbar
+    "table_not_found",  # 404 — WorkArea-Tabelle unbekannt oder nicht lesbar
 ]
 
 # Wer den Fehler beheben kann: `agent` = der aufrufende Agent kann es selbst

@@ -115,7 +115,13 @@
       "db_unavailable": "Database unavailable.",
       "last_workspace_undeletable": "The last workspace of an organization cannot be deleted.",
       "agent_disabled": "Agent is disabled.",
-      "agent_persona_missing": "Agent persona not found (foreign key inconsistency)."
+      "agent_persona_missing": "Agent persona not found (foreign key inconsistency).",
+      "memory_not_found": "Memory not found.",
+      "memory_not_pending": "Only open suggestions (pending) can be triaged.",
+      "area_not_found": "Area not found.",
+      "artifact_not_found": "Artifact not found.",
+      "kb_node_not_found": "KB node not found.",
+      "table_not_found": "Table not found."
     },
     "fieldLabels": {
       "name": "Name",

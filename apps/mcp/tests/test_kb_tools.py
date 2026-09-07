@@ -26,7 +26,7 @@ from who2be_mcp.tools.kb import (
     search_kb,
     update_node,
 )
-from who2be_models import EdgeType, NodeTier
+from who2be_models import ApiErrorBody, EdgeType, NodeTier
 
 _WORKSPACE_ID = uuid4()
 _PREFIX = f"/v1/workspaces/{_WORKSPACE_ID}"
@@ -158,6 +158,34 @@ def test_update_node_rejects_bad_uuid(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(server, "build_client", _factory(lambda _r: httpx.Response(500)))
     with pytest.raises(ToolError):
         asyncio.run(update_node("keine-uuid", content="x"))
+
+
+def test_kb_node_404_reaches_the_agent_with_its_reason(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """W4 (#484): der `reason` eines KB-Fehlers kommt beim Agenten an.
+
+    Der Konsument dieser Welle ist der MCP-Client, nicht die Web-UI: fuer ihn
+    ist „KB-Node nicht gefunden." unauswertbarer deutscher Freitext, waehrend
+    `kb_node_not_found` ein stabiler Schluessel ist, auf dem er verzweigen
+    kann. `problem_message` haengt ihn an — dieser Test haelt die Kette
+    API-Body → ToolError-Meldung fest.
+
+    Der Body wird aus `ApiErrorBody` erzeugt statt handgeschrieben: bricht die
+    API-seitige Serialisierung, faellt es hier auf und nicht erst im Betrieb.
+    """
+    body = ApiErrorBody(detail="KB-Node nicht gefunden.", reason="kb_node_not_found").model_dump(
+        exclude_none=True
+    )
+
+    monkeypatch.setattr(server, "build_client", _factory(lambda _r: httpx.Response(404, json=body)))
+    with pytest.raises(ToolError) as exc:
+        asyncio.run(update_node(str(uuid4()), content="x"))
+
+    message = str(exc.value)
+    # Beide Haelften der Zusage: `detail` woertlich (additiv) UND der Grund.
+    assert "KB-Node nicht gefunden." in message
+    assert "reason=kb_node_not_found" in message
 
 
 def test_create_edge_posts_co_fields(monkeypatch: pytest.MonkeyPatch) -> None:
