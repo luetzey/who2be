@@ -137,6 +137,36 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Added
 
+- Every API error response now carries a stable, machine-readable `reason`
+  alongside its German `detail`, and the web UI shows the message in the
+  interface language rather than always in German. This completes the six
+  waves of #402 against the contract established by ADR-0051: all 61 error
+  sites that spelled their message as a single-line literal were moved from
+  `HTTPException` to `ApiError`, which is a subclass of it — so status codes,
+  `detail` texts and headers are byte-for-byte what they were, and callers
+  that never look at `reason` cannot tell the difference. 46 reasons were
+  added to the one shared vocabulary (`ProblemReason`, now 73 values), each
+  with a title in the taxonomy table and a key in both locale files; the
+  locale key *is* the wire value, so there is no mapping that can drift
+  (Issues #482, #483, #484, #485, #486, #487).
+
+- Authentication failures deliberately keep the resolution they have today.
+  Eight distinct causes — missing header, expired or wrongly signed JWT,
+  disallowed `role`, unusable `sub`, unknown or revoked API token, and an
+  inconsistent principal — answer with the same status, the same text and the
+  same `WWW-Authenticate` header, and now also with the same
+  `invalid_credentials`. The reason is set inside the shared helper rather
+  than at the eight call sites, so no future change can make one of them
+  diverge and turn the field into an enumeration oracle. Two tests hold this
+  down, one of them comparing the full response bodies of "unknown token" and
+  "no header" for equality (Issue #487).
+
+- Rate limits and quotas report the limit they hit as `params`, which the
+  client interpolates into the translated message. Only configured limits
+  travel this way — never a counter, an identifier or an internal threshold —
+  and each of them is already readable by the same principal through
+  `/whoami` or the entitlement endpoint (Issues #486, #487).
+
 - A Playwright journey now covers the billing upgrade in a browser: sign in,
   open the billing view, see the current tier with its quotas, trigger the
   upgrade, and assert the app actually starts the redirect to the payment

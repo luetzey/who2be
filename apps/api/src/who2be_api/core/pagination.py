@@ -10,8 +10,9 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, Query, status
+from fastapi import Depends, Query, status
 
+from who2be_api.core.errors import ApiError
 from who2be_models import DEFAULT_LIMIT, MAX_LIMIT, decode_cursor
 
 __all__ = [
@@ -31,9 +32,10 @@ def parse_cursor(
         return None
     decoded = decode_cursor(cursor)
     if decoded is None:
-        raise HTTPException(
+        raise ApiError(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Ungueltiger Cursor.",
+            reason="invalid_cursor",
         )
     return decoded
 

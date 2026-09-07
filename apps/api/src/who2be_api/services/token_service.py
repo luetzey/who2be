@@ -9,8 +9,9 @@ from datetime import datetime
 from uuid import UUID
 
 import asyncpg
-from fastapi import HTTPException, status
+from fastapi import status
 
+from who2be_api.core.errors import ApiError
 from who2be_api.core.security import (
     WorkspaceContext,
     hash_token,
@@ -50,9 +51,10 @@ class TokenService:
         und nicht-gebundenen Tokens vorbehalten.
         """
         if ctx.tool_policy is not None:
-            raise HTTPException(
+            raise ApiError(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Agent-gebundene Tokens duerfen keine API-Tokens verwalten.",
+                reason="token_management_forbidden",
             )
 
     async def _assert_agent_in_workspace(self, workspace_id: UUID, agent_id: UUID) -> None:
@@ -67,9 +69,14 @@ class TokenService:
             workspace_id,
         )
         if exists is None:
-            raise HTTPException(
+            # Eigener Grund statt `agent_not_found`: dort steht „Agent nicht
+            # gefunden.", hier geht es um den zu BINDENDEN Agenten in genau
+            # diesem Workspace. Unterschiedlicher Text ⇒ unterschiedlicher
+            # Grund (#487, Vorentscheidung 4) — Muster `linked_playbook_not_found`.
+            raise ApiError(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Der zu bindende Agent existiert nicht in diesem Workspace.",
+                reason="bound_agent_not_found",
             )
 
     async def _current_role(self, workspace_id: UUID, token_id: UUID) -> WorkspaceRole | None:
@@ -107,9 +114,14 @@ class TokenService:
         self._deny_agent_bound(ctx)
         role = data.role if data.role is not None else ctx.role
         if not role_satisfies(ctx.role, role):
-            raise HTTPException(
+            # NICHT `insufficient_role`: das ist der Grund des Rollen-Gates
+            # („Diese Aktion erfordert mindestens die Rolle X."). Hier reicht die
+            # Rolle des Aufrufers fuer die Aktion, nur die GEWUENSCHTE
+            # Token-Rolle liegt darueber.
+            raise ApiError(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Ein Token darf keine hoehere Rolle als sein Ersteller haben.",
+                reason="token_role_escalation",
             )
         if role == WorkspaceRole.admin:
             require_aal2(ctx)
@@ -184,9 +196,10 @@ class TokenService:
         self._deny_agent_bound(ctx)
         renamed = await self._repo.rename(ctx.workspace_id, token_id, name)
         if renamed is None:
-            raise HTTPException(
+            raise ApiError(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Token nicht gefunden.",
+                reason="token_not_found",
             )
         if self._audit is not None and self._pool is not None:
             await self._audit.record(
@@ -219,9 +232,10 @@ class TokenService:
         plaintext = new_token()
         stored = await self._repo.rotate(ctx.workspace_id, token_id, hash_token(plaintext))
         if stored is None:
-            raise HTTPException(
+            raise ApiError(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Token nicht gefunden.",
+                reason="token_not_found",
             )
         if self._audit is not None and self._pool is not None:
             await self._audit.record(
@@ -239,9 +253,10 @@ class TokenService:
         self._deny_agent_bound(ctx)
         revoked = await self._repo.revoke(ctx.workspace_id, token_id)
         if not revoked:
-            raise HTTPException(
+            raise ApiError(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Token nicht gefunden.",
+                reason="token_not_found",
             )
         if self._audit is not None and self._pool is not None:
             await self._audit.record(

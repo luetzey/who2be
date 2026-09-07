@@ -33,10 +33,11 @@ from who2be_api.services.placeholders import render_template_body
 from who2be_models import AgentRenderResponse, RenderFormat
 
 
-def _agent_render_inactive() -> HTTPException:
-    return HTTPException(
+def _agent_render_inactive() -> ApiError:
+    return ApiError(
         status_code=status.HTTP_409_CONFLICT,
         detail="Agent ist deaktiviert.",
+        reason="agent_disabled",
     )
 
 

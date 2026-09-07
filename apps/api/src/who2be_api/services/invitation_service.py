@@ -11,8 +11,9 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import asyncpg
-from fastapi import HTTPException, status
+from fastapi import status
 
+from who2be_api.core.errors import ApiError
 from who2be_api.core.security import WorkspaceContext, hash_token
 from who2be_api.integrations.gotrue_mailer import send_invitation_email
 from who2be_api.repositories.invitation_repository import InvitationRepository
@@ -72,9 +73,10 @@ class InvitationService:
     async def revoke(self, ctx: WorkspaceContext, invitation_id: UUID) -> None:
         revoked = await self._repo.revoke(ctx.workspace_id, invitation_id)
         if not revoked:
-            raise HTTPException(
+            raise ApiError(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Einladung nicht gefunden.",
+                reason="invitation_not_found",
             )
         if self._audit is not None and self._pool is not None:
             await self._audit.record(
@@ -95,19 +97,26 @@ class InvitationService:
         """
         result = await self._repo.accept(hash_token(token), user_id, jwt_email)
         if result.status == "not_found":
-            raise HTTPException(
+            raise ApiError(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Einladung nicht gefunden.",
+                reason="invitation_not_found",
             )
         if result.status == "gone":
-            raise HTTPException(
+            # Ein Grund fuer alle drei Endzustaende (akzeptiert/widerrufen/
+            # abgelaufen) — genau wie `detail`, das sie schon heute nicht
+            # unterscheidet: welcher es war, ist fuer den Eingeladenen
+            # gleichbedeutend und fuer einen Fremden eine Information zu viel.
+            raise ApiError(
                 status_code=status.HTTP_410_GONE,
                 detail="Einladung ist nicht mehr gueltig.",
+                reason="invitation_no_longer_valid",
             )
         if result.status == "email_mismatch":
-            raise HTTPException(
+            raise ApiError(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Diese Einladung ist fuer eine andere Email-Adresse.",
+                reason="invitation_email_mismatch",
             )
         assert result.workspace_id is not None
         return result.workspace_id

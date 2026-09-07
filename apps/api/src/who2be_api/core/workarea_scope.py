@@ -40,7 +40,7 @@ from typing import Annotated, TypeAlias
 from uuid import UUID
 
 import asyncpg
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, status
 
 from who2be_api.core.errors import ApiError, ApiGateError
 from who2be_api.core.security import WorkspaceContext, get_current_workspace, role_satisfies
@@ -67,14 +67,22 @@ _GRANTED_WRITE_AREA_IDS_SQL = (
 _AREA_EXISTS_SQL = "SELECT 1 FROM work_area WHERE id = $1 AND workspace_id = $2"
 
 
-def area_not_found() -> HTTPException:
+def area_not_found() -> ApiError:
     """404 fuer unbekannte ODER nicht lesbare Areas (kein Existenz-Leak)."""
-    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Area nicht gefunden.")
+    return ApiError(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Area nicht gefunden.",
+        reason="area_not_found",
+    )
 
 
-def artifact_not_found() -> HTTPException:
+def artifact_not_found() -> ApiError:
     """404 fuer unbekannte ODER nicht lesbare Artifacts (kein Existenz-Leak)."""
-    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artifact nicht gefunden.")
+    return ApiError(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Artifact nicht gefunden.",
+        reason="artifact_not_found",
+    )
 
 
 def agent_not_found() -> ApiError:

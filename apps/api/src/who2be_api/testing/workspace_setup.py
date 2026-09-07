@@ -55,13 +55,24 @@ async def _ensure_workspace(
     Stellt den `auth.users`-Stub bereit (nur in Test-DBs noetig) und
     delegiert die eigentliche Seed-Logik an das Prod-Modul.
     ``content_locale`` bestimmt die Sprache der geseedeten Inhalte (ADR-0045).
+
+    Die ``conn.transaction()``-Klammer ist keine Test-Eigenheit und kein
+    RLS-Workaround, sondern dasselbe, was der einzige Produktiv-Aufrufer
+    (`PgMeRepository.fetch`) mit derselben Begruendung tut: der Seed besteht
+    aus mehreren Inserts (Org, Member, Workspace, Default-Templates, Agenten,
+    Chunks) und gehoert deshalb atomar — bricht er in der Mitte ab, darf er
+    keinen Teilzustand hinterlassen (keine Org ohne Workspace, kein Workspace
+    ohne Membership). Die ON-CONFLICT-Klauseln in `ensure_personal_workspace`
+    machen den Re-Lauf idempotent. Der Stub bleibt bewusst ausserhalb: er ist
+    Schema-Vorbedingung, nicht Teil des Seeds.
     """
     await _ensure_auth_users_stub(conn)
     from who2be_api.repositories.workspace_repository import ensure_personal_workspace
 
-    return await ensure_personal_workspace(
-        conn, user_id, user_email=None, content_locale=content_locale
-    )
+    async with conn.transaction():
+        return await ensure_personal_workspace(
+            conn, user_id, user_email=None, content_locale=content_locale
+        )
 
 
 async def _connect_with_codec() -> asyncpg.Connection:

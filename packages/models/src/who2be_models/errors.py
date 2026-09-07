@@ -60,6 +60,59 @@ ProblemReason = Literal[
     "agent_not_found",  # 404 — Agent existiert nicht (oder nicht sichtbar)
     "db_unavailable",  # 503 — Datenbank-Pool nicht initialisiert
     "last_workspace_undeletable",  # 409 — letzter Workspace einer Organization
+    "agent_disabled",  # 409 — Agent ist deaktiviert (Render-/Rendered-Pfade)
+    "agent_persona_missing",  # 422 — verlinkte Persona des Agenten nicht auffindbar
+    "memory_not_found",  # 404 — Memory existiert nicht (oder nicht sichtbar)
+    "memory_not_pending",  # 409 — Triage nur auf offenen Vorschlaegen moeglich
+    "area_not_found",  # 404 — WorkArea unbekannt oder nicht lesbar
+    "artifact_not_found",  # 404 — WorkArea-Artifact unbekannt oder nicht lesbar
+    "kb_node_not_found",  # 404 — KB-Node unbekannt oder nicht sichtbar
+    "table_not_found",  # 404 — WorkArea-Tabelle unbekannt oder nicht lesbar
+    "playbook_not_found",  # 404 — Playbook unbekannt oder nicht sichtbar
+    "resource_not_found",  # 404 — Resource unbekannt oder nicht sichtbar
+    "external_tool_not_found",  # 404 — externes Tool unbekannt oder nicht sichtbar
+    "external_tool_alias_conflict",  # 409 — Alias im Workspace bereits vergeben
+    "system_prompt_template_not_found",  # 404 — Template unbekannt oder nicht sichtbar
+    "system_prompt_template_slug_conflict",  # 409 — Slug im Workspace bereits vergeben
+    "feedback_element_not_found",  # 404 — Feedback-Ziel oder -Eintrag nicht gefunden
+    "invalid_against_param",  # 422 — `against` ist weder "active" noch eine Versions-Nummer
+    "workspace_not_found",  # 404 — Workspace unbekannt oder nicht sichtbar
+    "organization_not_found",  # 404 — Organisation unbekannt oder ohne Mitgliedschaft
+    "workspace_slug_conflict",  # 409 — Workspace-Slug in dieser Organisation vergeben
+    "organization_slug_conflict",  # 409 — Organisation-Slug global vergeben
+    "invitation_not_found",  # 404 — Einladung unbekannt (Token oder ID)
+    "invitation_no_longer_valid",  # 410 — Einladung akzeptiert, widerrufen oder abgelaufen
+    "invitation_email_mismatch",  # 403 — Einladung gehoert zu einer anderen Email-Adresse
+    "personal_organization_undeletable",  # 400 — Personal-Org nur ueber Konto-Loeschung
+    "organization_owner_required",  # 403 — Aktion ist dem Org-Owner vorbehalten
+    "workspace_org_missing",  # 403 — Workspace ohne Organisation (inkonsistenter Zustand)
+    "entity_quota_exceeded",  # 402 — Entity-Kontingent erreicht (params: limit)
+    "persona_not_found",  # 404 — Persona unbekannt oder nicht sichtbar
+    "resource_slug_conflict",  # 409 — Resource-Slug im Workspace bereits vergeben
+    "sub_playbook_not_found",  # 404 — Sub-Playbook der Composition unbekannt/fremd
+    "sub_resource_not_found",  # 404 — Sub-Resource der Composition unbekannt/fremd
+    "linked_playbook_not_found",  # 404 — zu verknuepfendes Playbook unbekannt/fremd
+    "linked_resource_not_found",  # 404 — zu verknuepfende Resource unbekannt/fremd
+    "composition_cycle",  # 409 — Verknuepfung wuerde einen Zyklus erzeugen
+    "heading_anchor_required",  # 422 — Block-Ref-Anker ist kein Heading-Block
+    # Auth-, Token-, OAuth- und Limit-Pfade (W6 von #402). `invalid_credentials`
+    # ist bewusst GROBKOERNIG: fehlender Header, abgelaufenes JWT, unbekannter
+    # oder widerrufener API-Token und ein inkonsistenter Principal liefern heute
+    # denselben Status, denselben Text und denselben `WWW-Authenticate`-Header.
+    # Sie teilen sich deshalb EINEN Grund — ein feiner aufgeloester waere ein
+    # Enumerations-Orakel und die einzige Art, wie diese Welle die Sicherheit
+    # verschlechtern koennte.
+    "invalid_credentials",  # 401 — Anmeldedaten fehlen oder sind ungueltig
+    "write_rate_limited",  # 429 — Schreibrate des Agenten erreicht (params: limit)
+    "token_management_forbidden",  # 403 — agent-gebundener Token verwaltet keine Tokens
+    "bound_agent_not_found",  # 404 — zu bindender Agent nicht in diesem Workspace
+    "token_role_escalation",  # 403 — Token-Rolle hoeher als die des Erstellers
+    "token_not_found",  # 404 — API-Token unbekannt oder bereits widerrufen
+    "subscription_inactive",  # 402 — kein aktives Abonnement der Organisation
+    "mcp_rate_limited",  # 429 — Per-Token-MCP-Rate erreicht (params: limit)
+    "mcp_quota_exceeded",  # 429 — Monats-MCP-Kontingent erschoepft (params: limit)
+    "consent_requires_session",  # 401 — OAuth-Consent nur mit eingeloggter Web-Session
+    "invalid_cursor",  # 422 — Keyset-Cursor nicht dekodierbar
 ]
 
 # Wer den Fehler beheben kann: `agent` = der aufrufende Agent kann es selbst

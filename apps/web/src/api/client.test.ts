@@ -1,7 +1,7 @@
 import i18n from 'i18next'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ApiError, createApi, fetchMe } from './client'
+import { acceptInvitation, ApiError, createApi, fetchMe } from './client'
 
 const WS = 'ws-123'
 
@@ -58,10 +58,10 @@ describe('createApi', () => {
 
   // --- Server-Fehlercodes (ADR-0051, #436) ---------------------------------
 
-  const errorResponse = (payload: Record<string, unknown>) =>
+  const errorResponse = (payload: Record<string, unknown>, status = 404) =>
     vi.fn().mockResolvedValue(
       new Response(JSON.stringify(payload), {
-        status: 404,
+        status,
         headers: { 'content-type': 'application/json' },
       }),
     )
@@ -92,6 +92,162 @@ describe('createApi', () => {
 
     await expect(createApi('tok', WS).getAgent('x')).rejects.toMatchObject({
       message: 'Etwas ganz Neues ging schief.',
+    })
+
+    await i18n.changeLanguage('de')
+  })
+
+  it('uebersetzt agent_disabled (W1) und faellt bei unbekanntem Grund auf detail zurueck', async () => {
+    // Beide Haelften der Zusage in einem Fall: der Grund dieser Welle traegt
+    // englischen Text, ein Grund ohne Locale-Key den deutschen Servertext.
+    await i18n.changeLanguage('en')
+    vi.stubGlobal(
+      'fetch',
+      errorResponse({ detail: 'Agent ist deaktiviert.', reason: 'agent_disabled' }, 409),
+    )
+    await expect(createApi('tok', WS).renderAgentPrompt('x')).rejects.toMatchObject({
+      status: 409,
+      message: 'Agent is disabled.',
+    })
+
+    vi.stubGlobal(
+      'fetch',
+      errorResponse({ detail: 'Agent ist deaktiviert.', reason: 'agent_deaktiviert' }, 409),
+    )
+    await expect(createApi('tok', WS).renderAgentPrompt('x')).rejects.toMatchObject({
+      status: 409,
+      message: 'Agent ist deaktiviert.',
+    })
+
+    await i18n.changeLanguage('de')
+  })
+
+  it('uebersetzt playbook_not_found (W5) in die UI-Sprache', async () => {
+    // Der Backlink-404 ist der Fall, der die Welle traegt: derselbe deutsche
+    // Servertext steht heute in mehreren Services, der `reason` trennt ihn
+    // sauber vom Resource-Pendant.
+    await i18n.changeLanguage('en')
+    vi.stubGlobal(
+      'fetch',
+      errorResponse({ detail: 'Playbook nicht gefunden.', reason: 'playbook_not_found' }),
+    )
+    await expect(createApi('tok', WS).getPlaybookUsages('x')).rejects.toMatchObject({
+      status: 404,
+      message: 'Playbook not found.',
+    })
+
+    await i18n.changeLanguage('de')
+  })
+
+  it('uebersetzt invitation_no_longer_valid (W3) in die UI-Sprache', async () => {
+    // Onboarding-Pfad: der abgelaufene Einladungslink ist oft die erste
+    // Server-Meldung, die ein neuer Nutzer ueberhaupt sieht — sie darf nicht
+    // deutsch in einer englischen Oberflaeche stehen.
+    await i18n.changeLanguage('en')
+    vi.stubGlobal(
+      'fetch',
+      errorResponse(
+        { detail: 'Einladung ist nicht mehr gueltig.', reason: 'invitation_no_longer_valid' },
+        410,
+      ),
+    )
+    await expect(acceptInvitation('tok', 'abc')).rejects.toMatchObject({
+      status: 410,
+      message: 'This invitation is no longer valid.',
+    })
+
+    await i18n.changeLanguage('de')
+  })
+
+  it('uebersetzt persona_not_found und composition_cycle (W2) in die UI-Sprache', async () => {
+    // Die beiden Enden der Welle: der haeufigste Editor-404 und der
+    // Zyklus-Guard der Kompositionen. Letzterer traegt einen eigenen
+    // snake_case-Grund NEBEN dem clientseitigen `errors.cycleRejected` — beide
+    // Schreibweisen koexistieren bewusst (Wire-Wert vom Server vs. Meldung,
+    // die die Hooks selbst setzen).
+    await i18n.changeLanguage('en')
+    vi.stubGlobal(
+      'fetch',
+      errorResponse({ detail: 'Persona nicht gefunden.', reason: 'persona_not_found' }),
+    )
+    await expect(createApi('tok', WS).getPersona('x')).rejects.toMatchObject({
+      status: 404,
+      message: 'Persona not found.',
+    })
+
+    vi.stubGlobal(
+      'fetch',
+      errorResponse(
+        { detail: 'Verknuepfung wuerde einen Zyklus erzeugen.', reason: 'composition_cycle' },
+        409,
+      ),
+    )
+    await expect(createApi('tok', WS).setPlaybookComposes('x', ['y'])).rejects.toMatchObject({
+      status: 409,
+      message: 'Linking would create a cycle.',
+    })
+
+    await i18n.changeLanguage('de')
+  })
+
+  it('interpoliert das Limit in entity_quota_exceeded (W3)', async () => {
+    // AK 4: die erreichte Grenze kommt als `params` und wird in den
+    // uebersetzten Text interpoliert — ein Key fuer jede Grenze.
+    await i18n.changeLanguage('en')
+    vi.stubGlobal(
+      'fetch',
+      errorResponse(
+        {
+          detail: 'Free-Tarif erreicht das Limit von 50 Eintraegen je Workspace. '
+            + 'Upgrade auf Pro hebt die Grenze auf — Bestehendes bleibt nutzbar.',
+          reason: 'entity_quota_exceeded',
+          params: { limit: 50 },
+        },
+        402,
+      ),
+    )
+    await expect(createApi('tok', WS).listPersonas()).rejects.toMatchObject({
+      status: 402,
+      message:
+        'The free plan is limited to 50 entries per workspace. '
+        + 'Upgrading to Pro lifts the limit — existing entries stay usable.',
+    })
+
+    await i18n.changeLanguage('de')
+  })
+
+  it('uebersetzt invalid_credentials und interpoliert das Rate-Limit (W6)', async () => {
+    // Beide Zusagen der letzten Welle in einem Fall: der 401-Sammelgrund
+    // (bewusst grobkoernig — ein feinerer waere ein Enumerations-Orakel) und
+    // die Grenze als `params`, damit nicht jede konfigurierte Rate ihren
+    // eigenen Locale-Key braucht.
+    await i18n.changeLanguage('en')
+    vi.stubGlobal(
+      'fetch',
+      errorResponse(
+        { detail: 'Ungueltige oder fehlende Anmeldedaten.', reason: 'invalid_credentials' },
+        401,
+      ),
+    )
+    await expect(createApi('tok', WS).listPersonas()).rejects.toMatchObject({
+      status: 401,
+      message: 'Invalid or missing credentials.',
+    })
+
+    vi.stubGlobal(
+      'fetch',
+      errorResponse(
+        {
+          detail: 'Token-Ratenlimit ueberschritten.',
+          reason: 'mcp_rate_limited',
+          params: { limit: 30 },
+        },
+        429,
+      ),
+    )
+    await expect(createApi('tok', WS).listPersonas()).rejects.toMatchObject({
+      status: 429,
+      message: 'Token rate limit exceeded (30/min).',
     })
 
     await i18n.changeLanguage('de')

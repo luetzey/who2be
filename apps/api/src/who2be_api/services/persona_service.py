@@ -20,6 +20,7 @@ from fastapi import HTTPException, status
 from pydantic import BaseModel
 
 from who2be_api.core.agent_scope import agent_filter_persona_ids, require_read_flag
+from who2be_api.core.errors import ApiError
 from who2be_api.core.security import (
     WorkspaceContext,
     require_capability,
@@ -79,8 +80,12 @@ class PersonaRenderResponse(BaseModel):
     mode: str | None = None
 
 
-def _not_found() -> HTTPException:
-    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Persona nicht gefunden.")
+def _not_found() -> ApiError:
+    return ApiError(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Persona nicht gefunden.",
+        reason="persona_not_found",
+    )
 
 
 def _delete_blocked(usages: list[PersonaUsage]) -> HTTPException:
@@ -117,10 +122,11 @@ def _unknown_mode(mode: str, available: list[str]) -> HTTPException:
     )
 
 
-def _invalid_against() -> HTTPException:
-    return HTTPException(
+def _invalid_against() -> ApiError:
+    return ApiError(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         detail="Ungueltiger 'against'-Parameter; erwartet 'active' oder eine Versions-Nummer.",
+        reason="invalid_against_param",
     )
 
 

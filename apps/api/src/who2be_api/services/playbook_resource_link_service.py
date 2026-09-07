@@ -14,9 +14,10 @@ Heading-Block ist. Non-Heading-Anker werden mit 422 abgelehnt.
 from uuid import UUID
 
 import asyncpg
-from fastapi import HTTPException, status
+from fastapi import status
 
 from who2be_api.core.agent_scope import visible_playbook_ids
+from who2be_api.core.errors import ApiError
 from who2be_api.core.security import WorkspaceContext, require_capability, require_role
 from who2be_api.repositories.playbook_resource_link_repository import (
     PlaybookResourceLinkRepository,
@@ -31,8 +32,12 @@ from who2be_models import (
 )
 
 
-def _playbook_not_found() -> HTTPException:
-    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Playbook nicht gefunden.")
+def _playbook_not_found() -> ApiError:
+    return ApiError(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Playbook nicht gefunden.",
+        reason="playbook_not_found",
+    )
 
 
 class PlaybookResourceLinkService:
@@ -78,10 +83,11 @@ class PlaybookResourceLinkService:
         if not result.playbook_found:
             raise _playbook_not_found()
         if result.missing_resource_ids:
-            raise HTTPException(
+            raise ApiError(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Mindestens eine Resource existiert nicht oder "
                 "gehoert einem anderen Workspace.",
+                reason="linked_resource_not_found",
             )
         links = await self._repo.list_links(ctx.workspace_id, playbook_id)
         return links if links is not None else []
@@ -111,7 +117,8 @@ class PlaybookResourceLinkService:
                 None,
             )
             if anchor is not None and not is_heading_block(anchor):
-                raise HTTPException(
+                raise ApiError(
                     status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail="Nur Heading-Bloecke sind als Anker erlaubt.",
+                    reason="heading_anchor_required",
                 )

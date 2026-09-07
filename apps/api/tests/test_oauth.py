@@ -1032,6 +1032,13 @@ def test_oauth_consent_rejects_api_token(monkeypatch: pytest.MonkeyPatch) -> Non
             assert escalation.status_code == 401, escalation.text
             assert escalation.headers.get("www-authenticate") == "Bearer"
             assert "redirect" not in escalation.json()
+            # W6 (#487): stabiler Grund, `detail` woertlich unveraendert. Eigener
+            # Grund statt `invalid_credentials` — die Anmeldedaten sind gueltig,
+            # nur der falsche Typ; genau das sagt `detail` heute schon.
+            assert escalation.json() == {
+                "detail": "Consent erfordert eine eingeloggte Web-Session, keinen API-Token.",
+                "reason": "consent_requires_session",
+            }
 
             # (2) Preview mit API-Token ⇒ 401 (Workspace-Pin bleibt dicht).
             preview = client.post(

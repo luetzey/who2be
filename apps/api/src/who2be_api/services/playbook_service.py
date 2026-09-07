@@ -18,6 +18,7 @@ from fastapi import HTTPException, status
 from pydantic import BaseModel
 
 from who2be_api.core.agent_scope import agent_filter_playbook_ids, playbook_read_restrict
+from who2be_api.core.errors import ApiError
 from who2be_api.core.security import (
     WorkspaceContext,
     require_capability,
@@ -69,8 +70,12 @@ class PlaybookRenderResponse(BaseModel):
     unresolved: list[str]
 
 
-def _not_found() -> HTTPException:
-    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Playbook nicht gefunden.")
+def _not_found() -> ApiError:
+    return ApiError(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Playbook nicht gefunden.",
+        reason="playbook_not_found",
+    )
 
 
 def _delete_blocked(personas: list[PlaybookUsage], composites: list[PlaybookRef]) -> HTTPException:
@@ -121,10 +126,11 @@ def _review_conflict() -> HTTPException:
     )
 
 
-def _invalid_against() -> HTTPException:
-    return HTTPException(
+def _invalid_against() -> ApiError:
+    return ApiError(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         detail="Ungueltiger 'against'-Parameter; erwartet 'active' oder eine Versions-Nummer.",
+        reason="invalid_against_param",
     )
 
 

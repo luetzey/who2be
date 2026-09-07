@@ -1,6 +1,74 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-06 (31. Lauf — Fehlercode-Vertrag ADR-0051, #436)_
+_Stand: 2026-09-07 (32. Lauf — #402 vollstaendig, sechs Wellen + #480)_
+
+## #402 ist durch — jede einzeilige Fehlerstelle traegt ihren Grund (2026-09-07, 32. Lauf, W1-W6 + #480)
+
+Die sechs Wellen von #402 sind umgesetzt, dazu #480. **Gemessen nach dem
+letzten Commit: null offene `detail="`-Stellen.** `ApiError` steht bei 73
+Wurfstellen (vorher 12), `ApiGateError` unveraendert bei 52, `HTTPException`
+bei 45 — und diese 45 tragen ihr `detail` samt und sonders in einer anderen
+Schreibweise.
+
+**Der wichtigste Befund des Laufs ist eine Zahl, die nie gestimmt hat.** Der
+gesamte Wellen-Zuschnitt stand auf „79 Stellen", und diese Zahl kommt aus
+einem Grep nach `detail="`. Der sieht nur einzeilige String-Literale.
+Tatsaechlich standen zu Beginn **107** offene `HTTPException`-Wuerfe im Code;
+61 davon zaehlten die Wellen, 46 keine. Nach dem Lauf sind die 61 migriert
+und 45 bleiben (eine faellt weg, weil W3 zwei identische Inline-Wuerfe zu
+einem Helfer zusammengezogen hat). Betroffen sind auch sechs Dateien, die in
+**keiner** Bestandstabelle vorkommen: `core/locale.py`, `routers/agents.py`,
+`routers/wa_artifacts.py`, `routers/wa_ingest.py`,
+`services/placeholder_preview_service.py`, `services/workspace_member_service.py`.
+Ohne Nachtragswelle waere #402 abhakbar gewesen, ohne sein Ziel zu erreichen.
+Gemeldet an #402 samt reproduzierbarer Messung.
+
+**Zwei Akzeptanzkriterien liessen sich nicht erfuellen — sie widersprachen
+ihrem eigenen Scope.** #485 verlangt `params` an den Status-Uebergangsfehlern.
+`version_status.py` hat aber genau eine Nicht-Gate-Fehlerstelle, und der
+einzige Status-Uebergangsfehler ist `_forbidden_transition`, ein
+`ApiGateError` — den dasselbe Issue unter „Out" fuehrt. Dazu hat
+`ApiGateError` kein `params`-Feld und `ApiProblem` steht auf
+`extra="forbid"`; `params` sitzt in `ApiErrorBody`, der anderen Huelle. #485
+traegt deshalb `Refs` statt `Closes` und steht auf `needs-decision`.
+
+**Die Lehre, die sich durch alle Wellen zieht: Wiederverwendung eines Grundes
+ist nicht automatisch die sparsamere Wahl.** Der Web-Client uebersetzt
+`common:errors.<reason>` mit `defaultValue: detail` — der uebersetzte Text
+**gewinnt** gegen `detail`. Legt eine Welle einen Locale-Key fuer einen Grund
+an, den es schon gibt, ersetzt ihr generischer Text ab sofort die
+spezifischen Meldungen aller bestehenden Stellen mit diesem Grund. W4 hat
+deshalb `forbidden_transition` verworfen, W3 `insufficient_role`, W6
+`agent_not_found` — jedes Mal nach Wortlaut-Vergleich, nicht nach Gefuehl.
+Kein Gate-Grund hat einen Locale-Key bekommen; nachgeprueft.
+
+**W6 im Besonderen: die Ununterscheidbarkeit bleibt, wo sie war.** Acht
+Auth-Fehlerursachen liefern denselben 401, denselben Text und denselben
+`WWW-Authenticate`-Header — und jetzt denselben `invalid_credentials`. Der
+Grund sitzt im Helfer `_credentials_error()`, nicht an den acht
+Aufrufstellen: damit *kann* keine Stelle spaeter abweichen. Ein
+`security-reviewer`-Durchgang hat das per AST-Scan bestaetigt (alle
+Fehler-Konstruktionen nach `(status, detail, headers)` gruppiert, kein Tupel
+bildet auf mehr als einen Grund ab) — **keine Befunde**.
+
+**Ein Waechter-Test ist umgezogen, und der erste Umzug war falsch.**
+`test_unmigrated_error_body_is_unchanged` sass auf dem Persona-404, den W2
+migriert. Der Umsetzungs-Agent haengte ihn auf den Keyset-Cursor um, mit der
+Begruendung, den beanspruche keine Welle — er steht aber in der
+Bestandstabelle von W6 und waere eine Welle spaeter erneut umgezogen. Er
+zeigt jetzt auf `core/locale.py`, eine der sechs nirgends erfassten Dateien.
+Er muss end-to-end gegen `app` laufen: er warnt davor, dass jemand den
+Handler in `main.py` zu breit registriert, und diese Registrierung sieht eine
+selbstgebaute Mini-App nicht.
+
+`docs/reference/openapi.json` war vier Wellen lang stale und ist einmal am
+Ende regeneriert: 47 Zeilen, ausschliesslich die Enum-Werte. Es gibt dafuer
+**kein CI-Drift-Gate** — `docs/**` steht sogar auf der „nur Doku"-Allowlist
+aus #440.
+
+DoD: ruff/format/mypy gruen (458 Dateien); volle Python-Suite 1899 passed,
+Coverage 91 %; Web 1125 Tests, Branches 81,69 %, Build gruen;
+Locale-Paritaet 56/56 in beiden Sprachen. PR #490.
 
 ## Fehlercodes stehen als Vertrag (2026-09-06, 31. Lauf, #436 = W0 von #402)
 
