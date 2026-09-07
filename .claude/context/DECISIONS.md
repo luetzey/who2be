@@ -1456,3 +1456,37 @@ bleiben)._
   vier bis sechs `.venv`/`node_modules`-Baeume gebraucht — Plattenplatz ist
   in dieser Umgebung ein festes Kontingent).
 - **Kontext:** #402, Plan `.claude/plan/2026-09-07-0400_402-wellen-w1-w6.md`.
+
+## 2026-09-07 — Parallele Sub-Agents brauchen getrennte Worktrees nur im selben Stack
+- **Entscheidung:** Zwei Pakete duerfen gleichzeitig von je einem Sub-Agent im
+  **selben** Arbeitsbaum laufen, wenn sie in verschiedenen Stacks liegen
+  (einer nur `apps/api/**` + `packages/**`, einer nur `apps/web/**`). Im
+  gleichen Stack bleibt es bei getrennten git-Worktrees.
+- **Begruendung:** Der Befund vom Fuenf-Pakete-Lauf war nie „geteilte Dateien",
+  sondern „geteilter Testlauf": `pytest` sammelt den ganzen Baum ein und sieht
+  den halbfertigen Stand des Nachbarn. Ueber Stack-Grenzen hinweg passiert das
+  nicht — `pytest` sammelt keine `.test.ts`-Dateien, Vitest kein Python.
+- **Bedingungen, ohne die es nicht gilt:** jeder Agent faehrt **nur** die Gates
+  seines Stacks; kein Agent setzt einen git-Schreibbefehl ab (`add`, `commit`,
+  `checkout`, `stash`, `restore`, `reset`) — der Index ist geteilt; der
+  Orchestrator trennt beim Stagen nach Pfad und committet je Paket einzeln.
+  Fremde Aenderungen im `git status` sind fuer den Agenten Rauschen, kein
+  Fehler und kein Auftrag.
+- **Verworfen:** immer Worktrees (kostet je Baum ein `.venv` bzw.
+  `node_modules`; Plattenplatz ist in der Cloud-Session ein festes Kontingent);
+  immer sequenziell (verschenkt die Haelfte der Zeit, wenn die Stacks sich
+  ohnehin nicht sehen).
+- **Kontext:** #492 (Python) und #493 (Web), parallel gefahren, PR #494.
+
+## 2026-09-07 — Eine Testzahl ist ein Messwert, kein Nebensatz
+- **Entscheidung:** Wer eine volle Suite faehrt, vergleicht die **Testzahl**
+  mit dem letzten bekannten Stand, nicht nur den Exit-Code. Weicht sie ab,
+  ist das ein Befund, bis die Ursache benannt ist.
+- **Begruendung:** Nach einem Container-Neustart meldete die Suite 1812 statt
+  1899 passed — gruen, ohne Fehler, ohne Skip, ohne Warnung. Ursache war der
+  SessionStart-Hook, der `uv sync` ohne `--group billing` faehrt; 89 Tests
+  wurden schlicht nicht eingesammelt. Die Coverage **stieg** dabei (91,47 %
+  gegen 91,08 %), der Lauf sah also besser aus als der vollstaendige.
+- **Konsequenz:** „Gruen" ohne Testzahl ist keine Aussage. Ein Bericht, der
+  nur `EXIT=0` nennt, belegt nichts ueber den Umfang des Gelaufenen.
+- **Kontext:** #495, gefunden beim Verifizieren von #492.
