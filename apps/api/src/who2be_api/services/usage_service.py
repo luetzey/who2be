@@ -9,20 +9,29 @@ sehen Backlinks aber nur fuer ihnen zugewiesene Entitaeten (sonst 404).
 from uuid import UUID
 
 import asyncpg
-from fastapi import HTTPException, status
+from fastapi import status
 
 from who2be_api.core.agent_scope import visible_playbook_ids, visible_resource_ids
+from who2be_api.core.errors import ApiError
 from who2be_api.core.security import WorkspaceContext
 from who2be_api.repositories.usage_repository import UsageRepository
 from who2be_models import PlaybookUsage, ResourceUsage
 
 
-def _playbook_not_found() -> HTTPException:
-    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Playbook nicht gefunden.")
+def _playbook_not_found() -> ApiError:
+    return ApiError(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Playbook nicht gefunden.",
+        reason="playbook_not_found",
+    )
 
 
-def _resource_not_found() -> HTTPException:
-    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource nicht gefunden.")
+def _resource_not_found() -> ApiError:
+    return ApiError(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Resource nicht gefunden.",
+        reason="resource_not_found",
+    )
 
 
 class UsageService:

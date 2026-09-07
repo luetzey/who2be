@@ -15,6 +15,7 @@ import asyncpg
 from fastapi import HTTPException, status
 
 from who2be_api.core.agent_scope import require_external_tool_read
+from who2be_api.core.errors import ApiError
 from who2be_api.core.security import (
     WorkspaceContext,
     require_capability,
@@ -41,16 +42,19 @@ _ALIAS_FALLBACK = "tool"
 _WRITE_DOMAIN = "external_tool"
 
 
-def _not_found() -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND, detail="Externes Tool nicht gefunden."
+def _not_found() -> ApiError:
+    return ApiError(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Externes Tool nicht gefunden.",
+        reason="external_tool_not_found",
     )
 
 
-def _alias_conflict() -> HTTPException:
-    return HTTPException(
+def _alias_conflict() -> ApiError:
+    return ApiError(
         status_code=status.HTTP_409_CONFLICT,
         detail="Ein externes Tool mit diesem Alias existiert bereits.",
+        reason="external_tool_alias_conflict",
     )
 
 

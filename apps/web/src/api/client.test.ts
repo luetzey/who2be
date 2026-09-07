@@ -122,6 +122,23 @@ describe('createApi', () => {
     await i18n.changeLanguage('de')
   })
 
+  it('uebersetzt playbook_not_found (W5) in die UI-Sprache', async () => {
+    // Der Backlink-404 ist der Fall, der die Welle traegt: derselbe deutsche
+    // Servertext steht heute in mehreren Services, der `reason` trennt ihn
+    // sauber vom Resource-Pendant.
+    await i18n.changeLanguage('en')
+    vi.stubGlobal(
+      'fetch',
+      errorResponse({ detail: 'Playbook nicht gefunden.', reason: 'playbook_not_found' }),
+    )
+    await expect(createApi('tok', WS).getPlaybookUsages('x')).rejects.toMatchObject({
+      status: 404,
+      message: 'Playbook not found.',
+    })
+
+    await i18n.changeLanguage('de')
+  })
+
   it('interpoliert params in die Meldung', async () => {
     vi.stubGlobal(
       'fetch',

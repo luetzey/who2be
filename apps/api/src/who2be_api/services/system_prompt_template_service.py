@@ -12,6 +12,7 @@ from uuid import UUID, uuid4
 import asyncpg
 from fastapi import HTTPException, status
 
+from who2be_api.core.errors import ApiError
 from who2be_api.core.security import (
     WorkspaceContext,
     require_capability,
@@ -40,10 +41,11 @@ from who2be_models import (
 )
 
 
-def _not_found() -> HTTPException:
-    return HTTPException(
+def _not_found() -> ApiError:
+    return ApiError(
         status_code=status.HTTP_404_NOT_FOUND,
         detail="System-Prompt-Template nicht gefunden.",
+        reason="system_prompt_template_not_found",
     )
 
 
@@ -57,17 +59,19 @@ def _draft_conflict() -> HTTPException:
     )
 
 
-def _slug_conflict() -> HTTPException:
-    return HTTPException(
+def _slug_conflict() -> ApiError:
+    return ApiError(
         status_code=status.HTTP_409_CONFLICT,
         detail="Ein Template mit diesem Slug existiert bereits.",
+        reason="system_prompt_template_slug_conflict",
     )
 
 
-def _invalid_against() -> HTTPException:
-    return HTTPException(
+def _invalid_against() -> ApiError:
+    return ApiError(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         detail="Ungueltiger 'against'-Parameter; erwartet 'active' oder eine Versions-Nummer.",
+        reason="invalid_against_param",
     )
 
 

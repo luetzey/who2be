@@ -175,6 +175,201 @@ def test_unknown_work_area_404_carries_reason(
     assert resp.json() == {"detail": "Area nicht gefunden.", "reason": "area_not_found"}
 
 
+@pytest.mark.integration
+def test_unknown_external_tool_404_carries_reason(
+    patched_jwt_secret: str, migrated_db: None, make_auth_headers: AuthFactory
+) -> None:
+    """W5 (#485): unbekanntes externes Tool => 404 + `external_tool_not_found`.
+
+    Gleichheit statt Teilmenge — sie belegt `detail` WOERTLICH unveraendert und
+    zugleich, dass ausser `reason` kein Feld dazugekommen ist.
+    """
+    user_id = fresh_user_id()
+    workspace_id = setup_workspace(user_id)
+    try:
+        with TestClient(app) as client:
+            resp = client.get(
+                f"/v1/workspaces/{workspace_id}/external_tools/{uuid4()}",
+                headers=make_auth_headers(user_id),
+            )
+    finally:
+        cleanup_workspaces([user_id])
+
+    assert resp.status_code == 404
+    assert resp.headers["content-type"].startswith("application/json")
+    assert resp.json() == {
+        "detail": "Externes Tool nicht gefunden.",
+        "reason": "external_tool_not_found",
+    }
+
+
+@pytest.mark.integration
+def test_unknown_system_prompt_template_404_carries_reason(
+    patched_jwt_secret: str, migrated_db: None, make_auth_headers: AuthFactory
+) -> None:
+    """W5 (#485): unbekanntes Template => 404 + `system_prompt_template_not_found`."""
+    user_id = fresh_user_id()
+    workspace_id = setup_workspace(user_id)
+    try:
+        with TestClient(app) as client:
+            resp = client.get(
+                f"/v1/workspaces/{workspace_id}/system-prompts/{uuid4()}",
+                headers=make_auth_headers(user_id),
+            )
+    finally:
+        cleanup_workspaces([user_id])
+
+    assert resp.status_code == 404
+    assert resp.json() == {
+        "detail": "System-Prompt-Template nicht gefunden.",
+        "reason": "system_prompt_template_not_found",
+    }
+
+
+@pytest.mark.integration
+def test_unknown_playbook_and_resource_usages_404_carry_reason(
+    patched_jwt_secret: str, migrated_db: None, make_auth_headers: AuthFactory
+) -> None:
+    """W5 (#485): die beiden Backlink-Pfade => 404 + `playbook_not_found`/`resource_not_found`.
+
+    Zwei Gruende in einem Setup: der Reverse-Lookup ist derselbe Service, die
+    Fehler trennen aber sauber nach Achse — genau das soll ein MCP-Client
+    unterscheiden koennen, ohne den deutschen Prosa-Text zu parsen.
+    """
+    user_id = fresh_user_id()
+    workspace_id = setup_workspace(user_id)
+    try:
+        with TestClient(app) as client:
+            headers = make_auth_headers(user_id)
+            playbook = client.get(
+                f"/v1/workspaces/{workspace_id}/playbooks/{uuid4()}/usages", headers=headers
+            )
+            resource = client.get(
+                f"/v1/workspaces/{workspace_id}/resources/{uuid4()}/usages", headers=headers
+            )
+    finally:
+        cleanup_workspaces([user_id])
+
+    assert playbook.status_code == 404
+    assert playbook.json() == {
+        "detail": "Playbook nicht gefunden.",
+        "reason": "playbook_not_found",
+    }
+    assert resource.status_code == 404
+    assert resource.json() == {
+        "detail": "Resource nicht gefunden.",
+        "reason": "resource_not_found",
+    }
+
+
+@pytest.mark.integration
+def test_unknown_feedback_target_404_carries_reason(
+    patched_jwt_secret: str, migrated_db: None, make_auth_headers: AuthFactory
+) -> None:
+    """W5 (#485): Feedback zu einem unbekannten Element => 404 + `feedback_element_not_found`.
+
+    Der Grund heisst bewusst `element` und nicht `target`: dieselbe Stelle
+    deckt auch den unbekannten Feedback-EINTRAG ab (Triage, Detailsicht) —
+    ein `feedback_target_not_found` waere dort gelogen.
+    """
+    user_id = fresh_user_id()
+    workspace_id = setup_workspace(user_id)
+    try:
+        with TestClient(app) as client:
+            resp = client.get(
+                f"/v1/workspaces/{workspace_id}/feedback/persona/{uuid4()}",
+                headers=make_auth_headers(user_id),
+            )
+    finally:
+        cleanup_workspaces([user_id])
+
+    assert resp.status_code == 404
+    assert resp.json() == {
+        "detail": "Element nicht gefunden.",
+        "reason": "feedback_element_not_found",
+    }
+
+
+@pytest.mark.integration
+def test_duplicate_alias_and_slug_409_carry_reason(
+    patched_jwt_secret: str, migrated_db: None, make_auth_headers: AuthFactory
+) -> None:
+    """W5 (#485): die beiden Namensraum-Konflikte => 409 + je eigener `reason`.
+
+    Alias (externes Tool) und Slug (Template) sind zwei Namensraeume, nicht
+    einer — deshalb zwei Gruende statt eines geteilten `slug_conflict`, dessen
+    generischer Locale-Text beide Meldungen verwaessert haette.
+    """
+    user_id = fresh_user_id()
+    workspace_id = setup_workspace(user_id)
+    base = f"/v1/workspaces/{workspace_id}"
+    try:
+        with TestClient(app) as client:
+            headers = make_auth_headers(user_id)
+            first = client.post(
+                f"{base}/external_tools", json={"name": "Kalender"}, headers=headers
+            )
+            assert first.status_code == 201, first.text
+            alias = client.post(
+                f"{base}/external_tools", json={"name": "Kalender"}, headers=headers
+            )
+
+            body = {"name": "Mein Template", "content": {"description": "", "body": "Hi"}}
+            created = client.post(f"{base}/system-prompts", json=body, headers=headers)
+            assert created.status_code == 201, created.text
+            slug = client.post(f"{base}/system-prompts", json=body, headers=headers)
+    finally:
+        cleanup_workspaces([user_id])
+
+    assert alias.status_code == 409
+    assert alias.json() == {
+        "detail": "Ein externes Tool mit diesem Alias existiert bereits.",
+        "reason": "external_tool_alias_conflict",
+    }
+    assert slug.status_code == 409
+    assert slug.json() == {
+        "detail": "Ein Template mit diesem Slug existiert bereits.",
+        "reason": "system_prompt_template_slug_conflict",
+    }
+
+
+@pytest.mark.integration
+def test_invalid_against_param_422_carries_reason(
+    patched_jwt_secret: str, migrated_db: None, make_auth_headers: AuthFactory
+) -> None:
+    """W5 (#485): kaputter `against`-Parameter => 422 + `invalid_against_param`.
+
+    Der Grund ist bewusst domaenenfrei benannt: derselbe Wortlaut steht heute
+    in vier Services (Persona/Playbook/Resource/Template). Spaetere Wellen
+    koennen ihn verlustfrei wiederverwenden — der Locale-Text ist wortgleich
+    zum `detail`.
+    """
+    user_id = fresh_user_id()
+    workspace_id = setup_workspace(user_id)
+    base = f"/v1/workspaces/{workspace_id}/system-prompts"
+    try:
+        with TestClient(app) as client:
+            headers = make_auth_headers(user_id)
+            created = client.post(
+                base,
+                json={"name": "Diff-Ziel", "content": {"description": "", "body": "Hi"}},
+                headers=headers,
+            )
+            assert created.status_code == 201, created.text
+            resp = client.get(
+                f"{base}/{created.json()['id']}/versions/1/diff?against=uebermorgen",
+                headers=headers,
+            )
+    finally:
+        cleanup_workspaces([user_id])
+
+    assert resp.status_code == 422
+    assert resp.json() == {
+        "detail": "Ungueltiger 'against'-Parameter; erwartet 'active' oder eine Versions-Nummer.",
+        "reason": "invalid_against_param",
+    }
+
+
 def test_missing_db_pool_503_carries_reason(
     patched_jwt_secret: str, make_auth_headers: AuthFactory, monkeypatch: pytest.MonkeyPatch
 ) -> None:

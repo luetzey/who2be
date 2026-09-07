@@ -68,6 +68,14 @@ ProblemReason = Literal[
     "artifact_not_found",  # 404 — WorkArea-Artifact unbekannt oder nicht lesbar
     "kb_node_not_found",  # 404 — KB-Node unbekannt oder nicht sichtbar
     "table_not_found",  # 404 — WorkArea-Tabelle unbekannt oder nicht lesbar
+    "playbook_not_found",  # 404 — Playbook unbekannt oder nicht sichtbar
+    "resource_not_found",  # 404 — Resource unbekannt oder nicht sichtbar
+    "external_tool_not_found",  # 404 — externes Tool unbekannt oder nicht sichtbar
+    "external_tool_alias_conflict",  # 409 — Alias im Workspace bereits vergeben
+    "system_prompt_template_not_found",  # 404 — Template unbekannt oder nicht sichtbar
+    "system_prompt_template_slug_conflict",  # 409 — Slug im Workspace bereits vergeben
+    "feedback_element_not_found",  # 404 — Feedback-Ziel oder -Eintrag nicht gefunden
+    "invalid_against_param",  # 422 — `against` ist weder "active" noch eine Versions-Nummer
 ]
 
 # Wer den Fehler beheben kann: `agent` = der aufrufende Agent kann es selbst

@@ -234,6 +234,14 @@ _PROBLEM_TITLES: dict[str, str] = {
     "artifact_not_found": "Artifact nicht gefunden",
     "kb_node_not_found": "KB-Node nicht gefunden",
     "table_not_found": "Tabelle nicht gefunden",
+    "playbook_not_found": "Playbook nicht gefunden",
+    "resource_not_found": "Resource nicht gefunden",
+    "external_tool_not_found": "Externes Tool nicht gefunden",
+    "external_tool_alias_conflict": "Alias bereits vergeben",
+    "system_prompt_template_not_found": "System-Prompt-Template nicht gefunden",
+    "system_prompt_template_slug_conflict": "Slug bereits vergeben",
+    "feedback_element_not_found": "Element nicht gefunden",
+    "invalid_against_param": "Ungueltiger 'against'-Parameter",
 }
 
 

@@ -121,7 +121,15 @@
       "area_not_found": "Area not found.",
       "artifact_not_found": "Artifact not found.",
       "kb_node_not_found": "KB node not found.",
-      "table_not_found": "Table not found."
+      "table_not_found": "Table not found.",
+      "playbook_not_found": "Playbook not found.",
+      "resource_not_found": "Resource not found.",
+      "external_tool_not_found": "External tool not found.",
+      "external_tool_alias_conflict": "An external tool with this alias already exists.",
+      "system_prompt_template_not_found": "System prompt template not found.",
+      "system_prompt_template_slug_conflict": "A template with this slug already exists.",
+      "feedback_element_not_found": "Element not found.",
+      "invalid_against_param": "Invalid 'against' parameter; expected 'active' or a version number."
     },
     "fieldLabels": {
       "name": "Name",
