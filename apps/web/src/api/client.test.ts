@@ -58,10 +58,10 @@ describe('createApi', () => {
 
   // --- Server-Fehlercodes (ADR-0051, #436) ---------------------------------
 
-  const errorResponse = (payload: Record<string, unknown>) =>
+  const errorResponse = (payload: Record<string, unknown>, status = 404) =>
     vi.fn().mockResolvedValue(
       new Response(JSON.stringify(payload), {
-        status: 404,
+        status,
         headers: { 'content-type': 'application/json' },
       }),
     )
@@ -92,6 +92,31 @@ describe('createApi', () => {
 
     await expect(createApi('tok', WS).getAgent('x')).rejects.toMatchObject({
       message: 'Etwas ganz Neues ging schief.',
+    })
+
+    await i18n.changeLanguage('de')
+  })
+
+  it('uebersetzt agent_disabled (W1) und faellt bei unbekanntem Grund auf detail zurueck', async () => {
+    // Beide Haelften der Zusage in einem Fall: der Grund dieser Welle traegt
+    // englischen Text, ein Grund ohne Locale-Key den deutschen Servertext.
+    await i18n.changeLanguage('en')
+    vi.stubGlobal(
+      'fetch',
+      errorResponse({ detail: 'Agent ist deaktiviert.', reason: 'agent_disabled' }, 409),
+    )
+    await expect(createApi('tok', WS).renderAgentPrompt('x')).rejects.toMatchObject({
+      status: 409,
+      message: 'Agent is disabled.',
+    })
+
+    vi.stubGlobal(
+      'fetch',
+      errorResponse({ detail: 'Agent ist deaktiviert.', reason: 'agent_deaktiviert' }, 409),
+    )
+    await expect(createApi('tok', WS).renderAgentPrompt('x')).rejects.toMatchObject({
+      status: 409,
+      message: 'Agent ist deaktiviert.',
     })
 
     await i18n.changeLanguage('de')

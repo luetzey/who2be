@@ -113,7 +113,9 @@
       "cycleRejected": "Link rejected: it would create a cycle.",
       "agent_not_found": "Agent not found.",
       "db_unavailable": "Database unavailable.",
-      "last_workspace_undeletable": "The last workspace of an organization cannot be deleted."
+      "last_workspace_undeletable": "The last workspace of an organization cannot be deleted.",
+      "agent_disabled": "Agent is disabled.",
+      "agent_persona_missing": "Agent persona not found (foreign key inconsistency)."
     },
     "fieldLabels": {
       "name": "Name",

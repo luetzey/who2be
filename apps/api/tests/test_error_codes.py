@@ -87,6 +87,41 @@ def test_last_workspace_delete_409_carries_reason(
     )
 
 
+@pytest.mark.integration
+def test_disabled_agent_render_409_carries_reason(
+    patched_jwt_secret: str, migrated_db: None, make_auth_headers: AuthFactory
+) -> None:
+    """W1 (#482): Render eines deaktivierten Agenten => 409 + `agent_disabled`.
+
+    Ein frisch angelegter Agent ist eine Huelle im Status `disabled` — der Fall
+    ist damit ohne Zusatz-Setup erreichbar. Der Test haelt beides fest: den
+    neuen `reason` UND das WOERTLICH unveraenderte `detail`. Genau das ist die
+    Zusage der Welle — sie ergaenzt ein Feld, sie formuliert nichts um.
+    """
+    user_id = fresh_user_id()
+    workspace_id = setup_workspace(user_id)
+    try:
+        with TestClient(app) as client:
+            headers = make_auth_headers(user_id)
+            created = client.post(
+                f"/v1/workspaces/{workspace_id}/agents",
+                json={"name": "Deaktivierte Huelle"},
+                headers=headers,
+            )
+            assert created.status_code == 201, created.text
+            agent_id = created.json()["id"]
+            resp = client.get(
+                f"/v1/workspaces/{workspace_id}/agents/{agent_id}/render",
+                headers=headers,
+            )
+    finally:
+        cleanup_workspaces([user_id])
+
+    assert resp.status_code == 409
+    assert resp.headers["content-type"].startswith("application/json")
+    assert resp.json() == {"detail": "Agent ist deaktiviert.", "reason": "agent_disabled"}
+
+
 def test_missing_db_pool_503_carries_reason(
     patched_jwt_secret: str, make_auth_headers: AuthFactory, monkeypatch: pytest.MonkeyPatch
 ) -> None:

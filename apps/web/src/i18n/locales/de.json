@@ -113,7 +113,9 @@
       "cycleRejected": "Verknuepfung wurde abgelehnt: Zyklus wuerde entstehen.",
       "agent_not_found": "Agent nicht gefunden.",
       "db_unavailable": "Datenbank nicht verfuegbar.",
-      "last_workspace_undeletable": "Der letzte Workspace einer Organization kann nicht geloescht werden."
+      "last_workspace_undeletable": "Der letzte Workspace einer Organization kann nicht geloescht werden.",
+      "agent_disabled": "Agent ist deaktiviert.",
+      "agent_persona_missing": "Agent-Persona nicht gefunden (FK-Konsistenzproblem)."
     },
     "fieldLabels": {
       "name": "Name",

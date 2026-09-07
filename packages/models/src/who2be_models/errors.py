@@ -60,6 +60,8 @@ ProblemReason = Literal[
     "agent_not_found",  # 404 — Agent existiert nicht (oder nicht sichtbar)
     "db_unavailable",  # 503 — Datenbank-Pool nicht initialisiert
     "last_workspace_undeletable",  # 409 — letzter Workspace einer Organization
+    "agent_disabled",  # 409 — Agent ist deaktiviert (Render-/Rendered-Pfade)
+    "agent_persona_missing",  # 422 — verlinkte Persona des Agenten nicht auffindbar
 ]
 
 # Wer den Fehler beheben kann: `agent` = der aufrufende Agent kann es selbst

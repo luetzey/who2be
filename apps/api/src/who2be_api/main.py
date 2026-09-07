@@ -226,6 +226,8 @@ _PROBLEM_TITLES: dict[str, str] = {
     "agent_not_found": "Agent nicht gefunden",
     "db_unavailable": "Datenbank nicht verfuegbar",
     "last_workspace_undeletable": "Letzter Workspace nicht loeschbar",
+    "agent_disabled": "Agent ist deaktiviert",
+    "agent_persona_missing": "Persona des Agenten nicht gefunden",
 }
 
 

@@ -36,10 +36,11 @@ from who2be_api.services.placeholders import RenderContext, render_template_body
 from who2be_models import DEFAULT_LOCALE, AgentWithRenderedPrompt
 
 
-def _agent_disabled() -> HTTPException:
-    return HTTPException(
+def _agent_disabled() -> ApiError:
+    return ApiError(
         status_code=status.HTTP_409_CONFLICT,
         detail="Agent ist deaktiviert.",
+        reason="agent_disabled",
     )
 
 
@@ -102,9 +103,10 @@ class AgentFetchRenderedService:
         persona = await self._persona_repo.fetch(workspace_id, agent.persona_id)
         if persona is None:
             # Defensive: sollte durch FK nicht eintreten, aber kein 500.
-            raise HTTPException(
+            raise ApiError(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Agent-Persona nicht gefunden (FK-Konsistenzproblem).",
+                reason="agent_persona_missing",
             )
 
         # Template-Active-Content laden (Track B: Body ist immer BlockNote).
