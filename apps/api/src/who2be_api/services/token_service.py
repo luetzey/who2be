@@ -15,6 +15,7 @@ from who2be_api.core.security import (
     WorkspaceContext,
     hash_token,
     new_token,
+    require_aal2,
     require_role,
     role_satisfies,
 )
@@ -71,13 +72,36 @@ class TokenService:
                 detail="Der zu bindende Agent existiert nicht in diesem Workspace.",
             )
 
+    async def _current_role(self, workspace_id: UUID, token_id: UUID) -> WorkspaceRole | None:
+        """Rolle eines bestehenden Tokens VOR einer Mutation (fuer `rotate`, #469).
+
+        `rotate` gibt sofort ein neues, gueltiges Secret aus — das Admin-MFA-
+        Gate muss also greifen, BEVOR das neue Secret existiert, nicht erst am
+        (dann schon mutierten) Rueckgabewert von `repo.rotate`. `None`, wenn
+        der Token nicht existiert/bereits widerrufen ist (dann greift weder
+        das Gate noch spaeter der 404-Pfad anders als heute), oder ohne Pool
+        (aeltere Test-Fakes, analog `_assert_agent_in_workspace`).
+        """
+        if self._pool is None:
+            return None
+        value = await self._pool.fetchval(
+            "SELECT role FROM api_token WHERE id = $1 AND workspace_id = $2 AND revoked_at IS NULL",
+            token_id,
+            workspace_id,
+        )
+        return WorkspaceRole(value) if value is not None else None
+
     async def create(self, ctx: WorkspaceContext, data: TokenCreate) -> TokenCreated:
         """Legt einen Token an; der Klartext wird genau einmal zurueckgegeben.
 
         Token-CRUD verlangt mindestens `editor` (ADR-0023). Die Token-Rolle ist
         ein Snapshot: ohne explizite Angabe erbt der Token die aktuelle Rolle
         des Erstellers; eine explizit hoehere Rolle als die des Erstellers ist
-        verboten (ein editor kann kein admin-Token erzeugen).
+        verboten (ein editor kann kein admin-Token erzeugen). Ist die effektive
+        Rolle `admin`, verlangt die Ausstellung zusaetzlich eine aal2-Session
+        (#469) — dieselbe Schwelle, die `require_role(ctx, admin)` fuer jede
+        andere Admin-Aktion setzt (`require_aal2` traegt die API-Token- und
+        On-Prem-Ausnahmen bereits, siehe `core/security.py`).
         """
         require_role(ctx, WorkspaceRole.editor)
         self._deny_agent_bound(ctx)
@@ -87,6 +111,8 @@ class TokenService:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Ein Token darf keine hoehere Rolle als sein Ersteller haben.",
             )
+        if role == WorkspaceRole.admin:
+            require_aal2(ctx)
         # Pflicht-Agent-Bindung: der Agent muss im selben Workspace leben. Der
         # Single-Column-FK auf `agent.id` garantiert nur Existenz, nicht die
         # Workspace-Zugehoerigkeit — die pruefen wir hier vor dem INSERT.
@@ -178,10 +204,18 @@ class TokenService:
 
         Das alte Secret wird sofort ungueltig; Name/Rolle/Agent-Bindung bleiben.
         404, wenn der Token nicht existiert oder bereits widerrufen ist. Der neue
-        Klartext wird genau einmal zurueckgegeben.
+        Klartext wird genau einmal zurueckgegeben. Ist die Rolle des Tokens
+        `admin`, verlangt das Rotieren zusaetzlich eine aal2-Session (#469) —
+        sonst waere die Ausstellungs-Schwelle in `create` durch ein Rotate auf
+        einem bestehenden admin-Token umgehbar. Das Gate wird VOR dem Rotate
+        geprueft (`_current_role`), damit kein neues Secret entsteht, bevor
+        die Pruefung feststeht.
         """
         require_role(ctx, WorkspaceRole.editor)
         self._deny_agent_bound(ctx)
+        current_role = await self._current_role(ctx.workspace_id, token_id)
+        if current_role == WorkspaceRole.admin:
+            require_aal2(ctx)
         plaintext = new_token()
         stored = await self._repo.rotate(ctx.workspace_id, token_id, hash_token(plaintext))
         if stored is None:

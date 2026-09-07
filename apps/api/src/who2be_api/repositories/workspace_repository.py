@@ -14,6 +14,7 @@ import asyncpg
 
 from who2be_api.core.chunk_backfill import backfill_chunks
 from who2be_api.core.errors import ApiGateError
+from who2be_api.core.tenancy import ORG_SETTING, TENANT_SETTING
 from who2be_api.repositories.builder_content import (
     SUPPORTED_LOCALES,
     ContentPack,
@@ -91,6 +92,41 @@ class LastWorkspaceError(Exception):
     """
 
 
+async def _scope_to_new_workspace(
+    conn: asyncpg.Connection, workspace_id: UUID, org_id: UUID
+) -> None:
+    """Bindet die Connection fuer den Rest der Transaktion an einen frisch
+    angelegten Workspace — Vorbedingung fuer jeden Seed-Schritt.
+
+    Die Seed-Funktionen schreiben in `tenant_isolation`-Tabellen (Migration
+    0037/0070), deren `WITH CHECK` `app.current_tenant` verlangt. Beide
+    Aufrufer legen ihren Workspace aber gerade erst an: `ensure_personal_
+    workspace` laeuft als control-plane-Request (der User hat noch gar keinen
+    Workspace), `WorkspaceRepository.create` schreibt in einen anderen als den
+    des Requests. In beiden Faellen hat der Pool-`setup`-Callback
+    (`core/tenancy.py`) die GUC nicht auf diesen Workspace gesetzt — ohne
+    diesen Aufruf wird jeder Seed-Insert unter erzwungener RLS (Cloud-Rolle
+    `who2be_app`) mit `InsufficientPrivilegeError` abgewiesen. On-Prem faellt
+    es nicht auf, weil die App dort als Owner verbindet und RLS umgeht
+    (Issue #479).
+
+    `is_local => true` ist der sicherheitskritische Teil: die Setzung gilt NUR
+    fuer die laufende Transaktion und faellt bei COMMIT/ROLLBACK automatisch
+    weg. Die gepoolte Connection traegt danach keinen fremden Mandanten in
+    ihr naechstes Checkout. **Der Aufruf setzt eine umgebende Transaktion
+    voraus** — ohne sie liefe jedes Statement als eigene implizite
+    Autocommit-Transaktion, und die Setzung waere verflogen, bevor der erste
+    Seed-Insert kommt. Gesamtbild: Modul-Docstring von `core/tenancy.py`.
+    """
+    await conn.execute(
+        "SELECT set_config($1, $3, true), set_config($2, $4, true)",
+        TENANT_SETTING,
+        ORG_SETTING,
+        str(workspace_id),
+        str(org_id),
+    )
+
+
 async def ensure_personal_workspace(
     conn: asyncpg.Connection,
     user_id: UUID,
@@ -142,6 +178,7 @@ async def ensure_personal_workspace(
         workspace_id,
         user_id,
     )
+    await _scope_to_new_workspace(conn, workspace_id, org_id)
     await _seed_default_templates(conn, workspace_id, user_id, content_locale)
     await _seed_default_agents(conn, workspace_id, user_id, content_locale)
     await _publish_seeded_chunks(conn, workspace_id)
@@ -231,6 +268,9 @@ class PgWorkspaceRepository:
                 row["id"],
                 user_id,
             )
+            # Wie in `ensure_personal_workspace`: der neue Workspace ist nicht
+            # der des Requests, die GUC zeigt also woanders hin (Issue #479).
+            await _scope_to_new_workspace(conn, row["id"], org_id)
             await _seed_default_templates(conn, row["id"], user_id, content_locale)
             await _seed_default_agents(conn, row["id"], user_id, content_locale)
             await _publish_seeded_chunks(conn, row["id"])

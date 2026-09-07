@@ -29,6 +29,10 @@ const {
 }))
 
 vi.mock('@/lib/supabase', () => ({
+  // Muss jeden Export von `lib/supabase` fuehren, den der Produktivcode
+  // aufruft: Vitests Mock-Proxy wirft schon beim LESEN einer hier
+  // fehlenden Property, optional chaining faengt das nicht ab.
+  syncStorageBackendForThisTab: vi.fn(),
   supabase: {
     auth: {
       signInWithPassword,

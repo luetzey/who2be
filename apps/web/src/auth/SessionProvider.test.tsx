@@ -10,6 +10,7 @@ const {
   unsubscribe,
   fetchMe,
   getAuthenticatorAssuranceLevel,
+  syncStorageBackendForThisTab,
 } = vi.hoisted(() => ({
   getSession: vi.fn(),
   signInWithPassword: vi.fn(),
@@ -27,6 +28,10 @@ const {
     data: { currentLevel: 'aal1', nextLevel: 'aal1' },
     error: null,
   })),
+  // Issue #471: `SessionProvider::signIn` ruft das nach jedem Marker-Schreiben
+  // auf. Hier nur als Spy relevant (die eigentliche Frozen-Backend-Logik ist
+  // Gegenstand von `lib/supabase.test.ts`, nicht dieser Datei).
+  syncStorageBackendForThisTab: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase', () => ({
@@ -39,6 +44,7 @@ vi.mock('@/lib/supabase', () => ({
       mfa: { getAuthenticatorAssuranceLevel },
     },
   },
+  syncStorageBackendForThisTab,
 }))
 
 vi.mock('@/api/client', () => ({
@@ -372,6 +378,84 @@ describe('SessionProvider -- Ablaufpruefung "angemeldet bleiben" (Issue #430 AC 
       expect(signInWithPassword).toHaveBeenCalled()
     })
     expect(window.localStorage.getItem(REMEMBER_KEY)).toBeNull()
+  })
+
+  // Issue #471: der delegierende Storage-Adapter liest den Marker nicht mehr
+  // live, sondern haelt seinen Modus im eingefrorenen Modul-Zustand von
+  // `lib/supabase.ts`. Ohne diesen Aufruf waere ein Moduswechsel IN DIESEM
+  // TAB wirkungslos (AC 3) -- die eigentliche Backend-Wahl testet
+  // `lib/supabase.test.ts`, hier geht es nur um die Verdrahtung.
+  it('signIn synchronisiert den eingefrorenen Storage-Modus nach jedem Marker-Schreiben (Issue #471, AC 3)', async () => {
+    signInWithPassword.mockResolvedValue({
+      data: { session: { access_token: 'new-jwt' } },
+      error: null,
+    })
+
+    function SignInProbe() {
+      const { signIn } = useSession()
+      return (
+        <button type="button" onClick={() => void signIn('agent@who2be.dev', 'pw', true)}>
+          signin
+        </button>
+      )
+    }
+
+    render(
+      <SessionProvider>
+        <SignInProbe />
+      </SessionProvider>,
+    )
+    await waitFor(() => expect(getSession).toHaveBeenCalled())
+
+    fireEvent.click(screen.getByRole('button', { name: 'signin' }))
+
+    await waitFor(() => {
+      expect(signInWithPassword).toHaveBeenCalled()
+    })
+    expect(syncStorageBackendForThisTab).toHaveBeenCalled()
+    // Reihenfolge: der Marker steht bereits im localStorage, BEVOR die
+    // Synchronisierung laeuft -- sonst friert sie den falschen Modus ein.
+    const markerAtSyncTime = window.localStorage.getItem(REMEMBER_KEY)
+    expect(markerAtSyncTime).not.toBeNull()
+  })
+
+  it('signIn synchronisiert den eingefrorenen Storage-Modus auch nach einem fehlgeschlagenen Login (Marker-Restore)', async () => {
+    signInWithPassword.mockResolvedValue({
+      data: { session: null },
+      error: { message: 'Invalid login credentials' },
+    })
+
+    function SignInProbe() {
+      const { signIn } = useSession()
+      return (
+        <button
+          type="button"
+          onClick={() => {
+            void signIn('agent@who2be.dev', 'pw', true).catch(() => {})
+          }}
+        >
+          signin
+        </button>
+      )
+    }
+
+    render(
+      <SessionProvider>
+        <SignInProbe />
+      </SessionProvider>,
+    )
+    await waitFor(() => expect(getSession).toHaveBeenCalled())
+    syncStorageBackendForThisTab.mockClear()
+
+    fireEvent.click(screen.getByRole('button', { name: 'signin' }))
+
+    await waitFor(() => {
+      expect(signInWithPassword).toHaveBeenCalled()
+    })
+    // Zweimal: einmal vor `signInWithPassword` (Marker gesetzt), einmal nach
+    // dem Fehlschlag (Marker zurueckgestellt) -- der eingefrorene Wert muss
+    // in beiden Faellen mit dem Marker-Stand uebereinstimmen.
+    expect(syncStorageBackendForThisTab).toHaveBeenCalledTimes(2)
   })
 
   it('signOut loescht den Marker NACH dem GoTrue-Signout (kein verwaister Token)', async () => {

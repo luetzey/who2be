@@ -202,3 +202,48 @@ ADR und wird getrennt behandelt.
 - **Keine absolute Obergrenze (Session laeuft, solange sie benutzt wird).**
   Das waere ADR-0035s explizit verworfene Alternative B ohne Einschraenkung —
   genau das Ergebnis, das die XSS-Abwaegung unehrlich gemacht haette.
+
+## Nachtrag 2026-09-06 — Storage-Backend wird EINMAL PRO TAB eingefroren (Issue #471)
+
+Die in §Konsequenzen/Negativ benannte Grenze **"Der Marker ist ein globaler
+Schalter, kein Per-Tab-Zustand"** besteht nicht mehr. Reproduzierter Ablauf,
+der sie ausgeloest hat:
+
+1. Tab A: Login OHNE Haken → Session A liegt im `sessionStorage` von Tab A.
+2. Tab B: Login MIT Haken → Marker global gesetzt, Session B im `localStorage`.
+3. Der naechste Storage-Zugriff in Tab A (Auto-Refresh-Tick,
+   `visibilitychange`) las den Marker live neu, routete ploetzlich nach
+   `localStorage` und fand dort Session B statt Session A. Umgekehrt loggte
+   ein aus einem anderen Tab geloeschter Marker eine laufende "angemeldet
+   bleiben"-Session still aus (leeres `sessionStorage`).
+
+**Fix (Weg B, Owner-Entscheidung 2026-09-06):** der delegierende
+Storage-Adapter (`lib/supabase.ts`) liest den Marker nicht mehr bei jedem
+Zugriff, sondern haelt das Ergebnis in einem Modul-Zustand
+(`useLocalStorage`). Neu gesetzt wird dieser Wert ausschliesslich:
+
+- beim Modul-Laden (Bootstrap dieses Tabs), und
+- bei jedem Login IN DIESEM TAB — `signIn` (`SessionProvider.tsx`) ruft die
+  neu exportierte `syncStorageBackendForThisTab()` direkt nach dem
+  Schreiben/Loeschen des Markers auf, noch VOR `signInWithPassword`
+  (dieselbe Stelle, die den Marker ohnehin schon davor setzt).
+
+Ein Marker-Wechsel aus einem FREMDEN Tab lenkt einen laufenden Tab damit
+nicht mehr um; erst ein Reload uebernimmt den neuen Modus — das ist ab jetzt
+gewolltes Verhalten, kein Rest-Risiko mehr. `signOut()` (Reihenfolge:
+`supabase.auth.signOut()` vor `clearRememberMarker()`, unveraendert) wird
+durch den eingefrorenen Wert sogar robuster: der Adapter muss den Marker beim
+Aufraeumen nicht mehr vorfinden, weil er sich nicht mehr auf ihn stuetzt.
+
+**Verworfen: Weg A (User-/Session-Id im Marker fuehren).** Scheitert am
+Bootstrap-Fall — beim Modul-Laden ist noch keine User-Id committed, der
+Adapter haette in diesem Moment nichts, woran er den Marker binden koennte.
+
+Der eingefrorene Wert lebt bewusst in `lib/supabase.ts`, nicht in
+`lib/remember-session.ts` — Letzteres bleibt frei von Supabase-Bezug (siehe
+dessen Kopfkommentar), Ersteres ist bereits der einzige Konsument, der einen
+Storage-Modus braucht. Keine neue Abstraktion: der delegierende Adapter
+bleibt ein Adapter, nur seine Aufloesungs-Strategie wechselt von "live" auf
+"einmal pro Tab bestimmt" — das entfernt eine Indirektion, statt eine
+hinzuzufuegen. Die Grundaussage dieser ADR ("opt-in, sonst Tab-Lifetime")
+bleibt unveraendert; dieser Nachtrag ergaenzt sie, loest sie nicht ab.

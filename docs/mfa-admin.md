@@ -53,6 +53,25 @@ Betroffene Admin-Aktionen (alle `require_role(ctx, admin)`):
 - `workspaces`: Workspace umbenennen/loeschen,
 - `billing` (Cloud): Checkout/Override (im JWT-Pfad).
 
+**API-Token mit Rolle `admin`** (Issue #469) haengen NICHT an
+`require_role(ctx, admin)` — Token-CRUD verlangt generell nur `editor`
+(`require_role(ctx, WorkspaceRole.editor)`, ADR-0023), denn `editor`/`viewer`-
+Tokens sind unveraendert kein Admin-Vorgang. `TokenService.create`/`.rotate`
+rufen `require_aal2(ctx)` stattdessen **bedingt** auf, sobald die *betroffene
+Token-Rolle* (nicht zwingend die Rolle des Aufrufers) `admin` ist:
+
+- `create`: die effektive Rolle steht synchron fest (explizite `role` oder,
+  ohne Angabe, die geerbte Rolle des Erstellers) — das Gate greift, bevor der
+  Token angelegt wird.
+- `rotate`: die Rolle des bestehenden Tokens wird vor dem eigentlichen Rotate
+  nachgeschlagen (`TokenService._current_role`) und **vor** dem Erzeugen des
+  neuen Secrets geprueft — sonst waere die Ausstellungs-Schwelle durch ein
+  Rotate auf ein bestehendes admin-Token umgehbar. `rename`/`revoke` aendern
+  die Rolle nicht bzw. nehmen nur Rechte weg und bleiben ungegatet.
+
+Die beiden Ausnahmen von `require_aal2` (API-Token-Maschinenpfad,
+On-Prem-fail-open) gelten hier unveraendert mit.
+
 ## GoTrue-Konfiguration (TOTP aktivieren)
 
 GoTrue **v2.158.1** kennt **kein** Top-Level `GOTRUE_MFA_ENABLED`; Faktoren
@@ -158,6 +177,13 @@ persistiert wird:
 - Backend: `apps/api/tests/test_mfa_aal2.py` — Admin-Aktion mit `aal1` → 403,
   mit `aal2` → ok, fehlender Claim/Token → exempt; Rollen-Check hat Vorrang.
   `apps/api/tests/test_security.py::test_verify_jwt_reads_aal_claim`.
+- API-Token mit Rolle `admin` (#469): `apps/api/tests/test_token_service.py`
+  (DB-frei — `create`/`rotate` mit `aal1`/`aal2`/API-Token/On-Prem-fail-open,
+  inkl. Beleg, dass das Rotate-Gate vor dem neuen Secret greift) sowie
+  `apps/api/tests/test_tokens.py` (End-to-end ueber
+  `/v1/workspaces/{ws}/tokens`: `test_admin_token_create_requires_aal2`,
+  `test_admin_token_rotate_requires_aal2`,
+  `test_editor_token_create_and_rotate_unaffected_by_admin_mfa_gate`).
 - Frontend: `apps/web/src/features/settings/components/MfaSection.test.tsx`
   (Enroll/Verify/Liste) + `MfaSection.a11y.test.tsx` (axe). Login-Step-up:
   `apps/web/src/auth/SessionProvider.test.tsx` (aal1+pending → kein Commit) +
