@@ -109,31 +109,49 @@ def cleanup_workspaces(user_ids: list[UUID]) -> None:
     Security-Review H5: sonst raeumt ein Agent-Delete das Compliance-Log ab).
     Das Test-Cleanup ist — wie `core/purge.py` — ein OWNER-Pfad und loescht
     die Zeilen deshalb selbst, bevor die Org-CASCADE die Agenten erreicht.
+
+    Die ``conn.transaction()``-Klammer liegt aus demselben Grund um die vier
+    `DELETE`s wie die in `_ensure_workspace` (#480): der Abbau ist mehrstufig
+    und gehoert deshalb atomar. Ohne sie laeuft jedes `DELETE` in einer
+    eigenen impliziten Autocommit-Transaktion — bricht der Lauf nach dem
+    ersten ab (Timeout, Ctrl-C, gekappte Verbindung), ist das Compliance-Log
+    geloescht, seine Organisation steht aber noch. Das ist ein Zwischenzustand,
+    den kein Produktivpfad erzeugen kann und den der naechste Testlauf vorfaende.
+    Die Klammer umfasst bewusst alle vier: die Abhaengigkeit laeuft ueber alle
+    vier, eine Teilklammer wuerde den Zwischenzustand nur verschieben. Die
+    Reihenfolge bleibt unveraendert (`agent_access_log` vor der Org-CASCADE) —
+    die Klammer entscheidet nur, ob ein halber Abbau sichtbar werden kann.
+
+    Der `auth.users`-Teil bleibt bewusst ausserhalb, wie der Stub in
+    `_ensure_workspace`: das `CREATE TABLE IF NOT EXISTS` ist idempotente
+    Schema-Vorbedingung (DDL) und die Stub-Zeile gehoert zu keiner der vier
+    abhaengigen Tabellen.
     """
 
     async def _run() -> None:
         conn = await asyncpg.connect(get_settings().database_url)
         try:
             slugs = [str(uid) for uid in user_ids]
-            await conn.execute(
-                "DELETE FROM agent_access_log WHERE workspace_id IN ("
-                "  SELECT w.id FROM workspace w"
-                "  JOIN organization o ON o.id = w.org_id"
-                "  WHERE o.kind = 'personal' AND o.slug = ANY($1::text[]))",
-                slugs,
-            )
-            await conn.execute(
-                "DELETE FROM organization WHERE kind = 'personal' AND slug = ANY($1::text[])",
-                slugs,
-            )
-            await conn.execute(
-                "DELETE FROM org_member WHERE user_id = ANY($1::uuid[])",
-                user_ids,
-            )
-            await conn.execute(
-                "DELETE FROM workspace_member WHERE user_id = ANY($1::uuid[])",
-                user_ids,
-            )
+            async with conn.transaction():
+                await conn.execute(
+                    "DELETE FROM agent_access_log WHERE workspace_id IN ("
+                    "  SELECT w.id FROM workspace w"
+                    "  JOIN organization o ON o.id = w.org_id"
+                    "  WHERE o.kind = 'personal' AND o.slug = ANY($1::text[]))",
+                    slugs,
+                )
+                await conn.execute(
+                    "DELETE FROM organization WHERE kind = 'personal' AND slug = ANY($1::text[])",
+                    slugs,
+                )
+                await conn.execute(
+                    "DELETE FROM org_member WHERE user_id = ANY($1::uuid[])",
+                    user_ids,
+                )
+                await conn.execute(
+                    "DELETE FROM workspace_member WHERE user_id = ANY($1::uuid[])",
+                    user_ids,
+                )
             # Stub-Tabelle existiert nur, wenn ein vorheriger Test sie angelegt
             # hat; vor dem DELETE absichern, damit das Cleanup robust bleibt.
             await _ensure_auth_users_stub(conn)

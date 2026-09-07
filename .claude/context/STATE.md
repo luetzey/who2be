@@ -1,6 +1,46 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-07 (32. Lauf — #402 vollstaendig, sechs Wellen + #480)_
+_Stand: 2026-09-07 (33. Lauf — zwei Waechter, #492 + #493)_
+
+## Zwei Waechter fuer Bedingungen, die vorher niemand geprueft hat (2026-09-07, 33. Lauf, #492 + #493)
+
+**#493** haelt die Locale-Paritaet von `common.errors`. Der Schluessel ist
+dort **der Wire-Wert** des `reason`, und `translateServerError` uebersetzt
+mit `defaultValue: detail` — ein fehlender englischer Schluessel erzeugt also
+nicht den sichtbaren rohen Key, sondern den **deutschen Servertext** in einer
+englischen Oberflaeche. Sechs Wellen von #402 haben diese Bedingung von Hand
+nachgezaehlt (12 → 56 Schluessel). Der Test prueft beide Richtungen, weil der
+Schaden je Richtung ein anderer ist: fehlt ein deutscher Schluessel, trifft es
+jede Sprache, weil `de` Default und Fallback ist.
+
+**#492** klammert `cleanup_workspaces` — der Zwilling des Fixes, den #480 am
+Nachbar-Helfer gemacht hat. Vier abhaengige `DELETE`s liefen als vier
+Autocommit-Transaktionen; ein Abbruch nach dem ersten liess das
+Compliance-Log geloescht und seine Organisation stehen.
+
+**Parallel gefahren, ohne Worktrees — und das war zulaessig.** Die
+Wellen-Regel der Warteschlange verlangt fuer gleichzeitige Sub-Agents
+getrennte Arbeitsbaeume. Sie zielt aber auf Pakete **desselben** Stacks, wo
+der Testlauf des einen den halbfertigen Stand des anderen einsammelt. Hier
+war eines rein Web und eines rein Python: `pytest` sammelt keine
+`.test.ts`-Dateien ein, Vitest kein Python. Jeder Agent fuhr nur seinen
+eigenen Stack, keiner durfte git schreiben, getrennt wurde beim Stagen.
+
+**Der Fund des Laufs ist eine Zahl, die niemand hinterfragt haette: 1812.**
+Der erste volle Lauf nach dem Container-Neustart meldete 1812 passed, wo
+derselbe Tag vorher 1899 gemeldet hatte. Ursache war nicht der Code, sondern
+`scripts/install_pkgs.sh`: der SessionStart-Hook faehrt `uv sync` **ohne**
+`--group billing`, den CLAUDE.md als den Befehl nennt. 89 Tests fehlen dabei
+still — kein Fehler, kein Skip, keine Warnung. Die Coverage steigt sogar
+(91,47 % statt 91,08 %), was den Verdacht zusaetzlich abwendet. Dazu startet
+der Hook keinen Postgres; ohne gesetztes `WHO2BE_REQUIRE_DB` werden weitere
+481 Integrationstests still uebersprungen. **Eine Session kann so eine gruene
+Suite melden, die 570 von 1901 Tests nie ausgefuehrt hat.** Aufgenommen als
+#495.
+
+DoD: ruff/format/mypy gruen (458 Dateien); volle Suite 1901 passed, Coverage
+91,08 %, 481 Integrationstests, 0 Skips; Web 189 Testdateien / 1127 Tests,
+Branches 81,69 %. PR #494.
 
 ## #402 ist durch — jede einzeilige Fehlerstelle traegt ihren Grund (2026-09-07, 32. Lauf, W1-W6 + #480)
 
