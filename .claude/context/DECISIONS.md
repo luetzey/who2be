@@ -1395,3 +1395,64 @@ bleiben)._
   ein vermuteter dritter. Eine vergessene Stelle waere hier ein Sicherheitsbug,
   kein Schoenheitsfehler.
 - **Kontext:** Issue #479, gefunden vom CI-Job `e2e-billing-cloud` aus #453.
+
+## 2026-09-07 — Ein Grund wird nur wiederverwendet, wenn kein bestehendes `detail` dabei verliert
+- **Entscheidung:** Bevor eine #402-Welle einen vorhandenen `ProblemReason`
+  wiederverwendet, vergleicht sie den Wortlaut: traegt heute irgendeine
+  Stelle mit diesem Grund ein `detail`, das spezifischer ist als der neue
+  Locale-Text, wird ein eigener, engerer Grund angelegt statt
+  wiederverwendet.
+- **Begruendung:** Der Locale-Key **ist** der Wire-Wert (ADR-0051), und
+  `translateServerError` (`apps/web/src/api/client.ts`) uebersetzt
+  `common:errors.<reason>` mit `defaultValue: detail` — der uebersetzte Text
+  gewinnt. Ein neu angelegter Key wirkt damit rueckwirkend auf **alle**
+  bestehenden Stellen mit diesem Grund. Wiederverwendung ist also nicht die
+  sparsamere Wahl, sondern kann bestehende, spezifischere Meldungen
+  ueberschreiben.
+- **Drei Faelle im Lauf:** W4 verwarf `forbidden_transition` fuer die
+  Triage-409 (haette die Meldung aller Version-Status-Gates ersetzt), W3
+  verwarf `insufficient_role` (haette die drei RBAC-Gates aus ADR-0023
+  getroffen — der Grund hat bis heute bewusst keinen Locale-Key), W6 verwarf
+  `agent_not_found` fuer die Token-Bindung („existiert nicht in diesem
+  Workspace" ist spezifischer als „Agent nicht gefunden."). Wiederverwendet
+  wurde dort, wo die Texte zeichengleich sind: `invalid_against_param`
+  (vier Vorkommen), `playbook_not_found` (vier), `resource_not_found` (drei),
+  `workspace_org_missing` (zwei).
+- **Konsequenz:** Kein Gate-Grund traegt einen Locale-Key. Das ist kein
+  Versaeumnis, sondern die Bedingung dafuer, dass die RFC-7807-Huelle ihre
+  spezifischen Meldungen behaelt.
+- **Kontext:** Issues #483-#487, W1-W6 von #402.
+
+## 2026-09-07 — Der Bestandszaehler von #402 zaehlt Wuerfe, nicht Schreibweisen
+- **Entscheidung:** Wer eine weitere Fehlercode-Welle zuschneidet, misst
+  `raise`/`return HTTPException(` — nicht `detail="`.
+- **Begruendung:** Der urspruengliche Zuschnitt stand auf „79 Stellen" aus
+  einem `detail="`-Grep. Der sieht nur einzeilige String-Literale. Gemessen
+  waren es 107 offene Wuerfe: 61 mit einzeiligem Literal (von den Wellen
+  erfasst), 46 mit mehrzeiligem `detail=(`, f-String oder berechnetem Wert
+  (von keiner Welle erfasst). Sechs Dateien kamen in keiner Bestandstabelle
+  vor, obwohl sie Fehler werfen.
+- **Zweite Folge:** die Tabellen ueberzaehlen zusaetzlich, weil sie bereits
+  migrierte Stellen mitzaehlen — W1 nannte eine, es waren vier; W4 10/8;
+  W5 10/8; W3 15/13; W6 19/14. Nur W2 stimmte exakt.
+- **Nach dem Lauf offen:** 45 Wuerfe, alle in nicht-literaler Schreibweise.
+  Darunter drei, die mit dem heutigen Vertrag gar nicht migrierbar sind:
+  `detail=DeleteBlocked(...).model_dump()` liefert ein **Objekt**, waehrend
+  `ApiErrorBody.detail` ein `str` ist.
+- **Kontext:** #402, gemessen am 2026-09-07 auf `6c49f6b` und nach `2b168fa`.
+
+## 2026-09-07 — Die sechs Wellen laufen in einem Branch und einem PR
+- **Entscheidung:** Statt sechs PRs sammelt PR #490 alle Wellen, ein Commit
+  je Welle. Die Weiche „Sammelpunkte als letzten Commit" aus den Issues wird
+  damit gegenstandslos und ist nicht angewandt.
+- **Begruendung:** Der Wellen-Schnitt sollte *Parallelitaet* ermoeglichen;
+  gefahren wurden sie sequenziell in einer Sitzung. Sechs PRs waeren sechs
+  Merge-Zyklen, von denen jeder die vier Sammelpunkte des naechsten anfasst
+  (`ProblemReason`, die Titel-Tabelle, beide Locale-JSONs) — der Konflikt,
+  den der Schnitt vermeiden wollte, entstuende dann garantiert statt nur
+  moeglicherweise. Pro Welle mitgefuehrt bleibt jeder Commit fuer sich gruen
+  und bisect-tauglich.
+- **Verworfen:** echte Parallelitaet ueber getrennte git-Worktrees (haette
+  vier bis sechs `.venv`/`node_modules`-Baeume gebraucht — Plattenplatz ist
+  in dieser Umgebung ein festes Kontingent).
+- **Kontext:** #402, Plan `.claude/plan/2026-09-07-0400_402-wellen-w1-w6.md`.
