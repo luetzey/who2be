@@ -9,9 +9,10 @@ Zyklus-Guard erfolgen atomar im Repository — Aufbau analog
 from uuid import UUID
 
 import asyncpg
-from fastapi import HTTPException, status
+from fastapi import status
 
 from who2be_api.core.agent_scope import visible_resource_ids
+from who2be_api.core.errors import ApiError
 from who2be_api.core.security import WorkspaceContext, require_capability, require_role
 from who2be_api.repositories.resource_composition_repository import (
     ResourceCompositionRepository,
@@ -26,10 +27,11 @@ from who2be_models import (
 )
 
 
-def _resource_not_found() -> HTTPException:
-    return HTTPException(
+def _resource_not_found() -> ApiError:
+    return ApiError(
         status_code=status.HTTP_404_NOT_FOUND,
         detail="Resource nicht gefunden.",
+        reason="resource_not_found",
     )
 
 
@@ -112,15 +114,17 @@ class ResourceCompositionService:
         if not result.parent_found:
             raise _resource_not_found()
         if result.missing_child_ids:
-            raise HTTPException(
+            raise ApiError(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Mindestens eine Sub-Resource existiert nicht oder "
                 "gehoert einem anderen Workspace.",
+                reason="sub_resource_not_found",
             )
         if result.cycle:
-            raise HTTPException(
+            raise ApiError(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Verknuepfung wuerde einen Zyklus erzeugen.",
+                reason="composition_cycle",
             )
 
         return await self._repo.list_children(

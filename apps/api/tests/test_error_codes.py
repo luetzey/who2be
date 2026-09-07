@@ -459,6 +459,158 @@ def test_duplicate_workspace_slug_409_carries_reason(
     }
 
 
+@pytest.mark.integration
+def test_unknown_persona_playbook_and_resource_404_carry_reason(
+    patched_jwt_secret: str, migrated_db: None, make_auth_headers: AuthFactory
+) -> None:
+    """W2 (#483): je ein Lesepfad pro Entitaet => 404 + eigener `reason`.
+
+    Die drei inhaltstragenden Aggregate in einem Setup — genau die Pfade, die
+    ein Nutzer im Editor am haeufigsten trifft. Gleichheit statt Teilmenge:
+    sie belegt `detail` WOERTLICH unveraendert und zugleich, dass ausser
+    `reason` kein Feld dazugekommen ist.
+
+    `playbook_not_found`/`resource_not_found` sind hier WIEDERVERWENDET (seit
+    W5, damals die Backlink-Pfade): der Wortlaut ist identisch, also gehoert
+    beides auf denselben Grund. Ein Zwilling haette zwei Locale-Keys fuer
+    denselben Satz erzeugt — und der uebersetzte Text gewinnt gegen `detail`.
+    """
+    user_id = fresh_user_id()
+    workspace_id = setup_workspace(user_id)
+    base = f"/v1/workspaces/{workspace_id}"
+    try:
+        with TestClient(app) as client:
+            headers = make_auth_headers(user_id)
+            persona = client.get(f"{base}/personas/{uuid4()}", headers=headers)
+            playbook = client.get(f"{base}/playbooks/{uuid4()}", headers=headers)
+            resource = client.get(f"{base}/resources/{uuid4()}", headers=headers)
+    finally:
+        cleanup_workspaces([user_id])
+
+    assert persona.status_code == 404
+    assert persona.headers["content-type"].startswith("application/json")
+    assert persona.json() == {"detail": "Persona nicht gefunden.", "reason": "persona_not_found"}
+    assert playbook.status_code == 404
+    assert playbook.json() == {
+        "detail": "Playbook nicht gefunden.",
+        "reason": "playbook_not_found",
+    }
+    assert resource.status_code == 404
+    assert resource.json() == {
+        "detail": "Resource nicht gefunden.",
+        "reason": "resource_not_found",
+    }
+
+
+@pytest.mark.integration
+def test_duplicate_resource_slug_409_carries_reason(
+    patched_jwt_secret: str, migrated_db: None, make_auth_headers: AuthFactory
+) -> None:
+    """W2 (#483): belegter Resource-Slug => 409 + `resource_slug_conflict`.
+
+    Ein eigener Grund statt eines geteilten `slug_conflict`: der Slug-Konflikt
+    hat in Workspace, Organisation, Template und Resource jeweils einen eigenen
+    Wortlaut. Ein Sammelgrund haette alle vier auf einen generischen
+    Locale-Text gezogen.
+    """
+    user_id = fresh_user_id()
+    workspace_id = setup_workspace(user_id)
+    base = f"/v1/workspaces/{workspace_id}/resources"
+    body = {"name": "Runbook", "content": {"description": "", "blocks": [], "tags": []}}
+    try:
+        with TestClient(app) as client:
+            headers = make_auth_headers(user_id)
+            first = client.post(base, json=body, headers=headers)
+            assert first.status_code == 201, first.text
+            resp = client.post(base, json=body, headers=headers)
+    finally:
+        cleanup_workspaces([user_id])
+
+    assert resp.status_code == 409
+    assert resp.json() == {
+        "detail": "Eine Resource mit diesem Slug existiert bereits.",
+        "reason": "resource_slug_conflict",
+    }
+
+
+@pytest.mark.integration
+def test_composition_cycles_409_carry_reason(
+    patched_jwt_secret: str, migrated_db: None, make_auth_headers: AuthFactory
+) -> None:
+    """W2 (#483, AK 5): beide Zyklus-Guards => 409 + `composition_cycle`.
+
+    Playbook- und Resource-Composition teilen sich den Grund, weil sie sich
+    schon das `detail` teilen — zwei Gruende waeren zwei Locale-Keys fuer
+    denselben Satz. Der bestehende Client-Key `common.errors.cycleRejected`
+    bleibt unangetastet: die UI verzweigt dort auf den Status 409, nicht auf
+    den `reason`, und wuerde von einer Umbenennung still gebrochen.
+    """
+    user_id = fresh_user_id()
+    workspace_id = setup_workspace(user_id)
+    base = f"/v1/workspaces/{workspace_id}"
+    pb_body = {
+        "name": "Zyklus-Playbook",
+        "content": {"description": "d", "body": "1. Step.", "type": "workflow", "tags": []},
+    }
+    res_body = {"name": "Zyklus-Resource", "content": {"description": "", "blocks": [], "tags": []}}
+    try:
+        with TestClient(app) as client:
+            headers = make_auth_headers(user_id)
+
+            pb_a = client.post(
+                f"{base}/playbooks", json={**pb_body, "name": "PB-A"}, headers=headers
+            )
+            pb_b = client.post(
+                f"{base}/playbooks", json={**pb_body, "name": "PB-B"}, headers=headers
+            )
+            assert pb_a.status_code == 201, pb_a.text
+            assert pb_b.status_code == 201, pb_b.text
+            a_id, b_id = pb_a.json()["id"], pb_b.json()["id"]
+            forward = client.put(
+                f"{base}/playbooks/{a_id}/composes",
+                json={"child_ids": [b_id]},
+                headers=headers,
+            )
+            assert forward.status_code == 200, forward.text
+            playbook_cycle = client.put(
+                f"{base}/playbooks/{b_id}/composes",
+                json={"child_ids": [a_id]},
+                headers=headers,
+            )
+
+            res_a = client.post(
+                f"{base}/resources", json={**res_body, "name": "Res-A"}, headers=headers
+            )
+            res_b = client.post(
+                f"{base}/resources", json={**res_body, "name": "Res-B"}, headers=headers
+            )
+            assert res_a.status_code == 201, res_a.text
+            assert res_b.status_code == 201, res_b.text
+            ra_id, rb_id = res_a.json()["id"], res_b.json()["id"]
+            res_forward = client.put(
+                f"{base}/resources/{ra_id}/sub_resources",
+                json={"links": [{"child_id": rb_id, "position": 0, "link_scope": "resource"}]},
+                headers=headers,
+            )
+            assert res_forward.status_code == 200, res_forward.text
+            resource_cycle = client.put(
+                f"{base}/resources/{rb_id}/sub_resources",
+                json={"links": [{"child_id": ra_id, "position": 0, "link_scope": "resource"}]},
+                headers=headers,
+            )
+    finally:
+        cleanup_workspaces([user_id])
+
+    expected = {
+        "detail": "Verknuepfung wuerde einen Zyklus erzeugen.",
+        "reason": "composition_cycle",
+    }
+    assert playbook_cycle.status_code == 409, playbook_cycle.text
+    assert playbook_cycle.json() == expected
+    assert resource_cycle.status_code == 409, resource_cycle.text
+    assert resource_cycle.json() == expected
+
+
 def test_missing_db_pool_503_carries_reason(
     patched_jwt_secret: str, make_auth_headers: AuthFactory, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -492,25 +644,41 @@ def test_missing_db_pool_503_carries_reason(
 def test_unmigrated_error_body_is_unchanged(
     patched_jwt_secret: str, migrated_db: None, make_auth_headers: AuthFactory
 ) -> None:
-    """Eine Stelle, die diese Welle NICHT angefasst hat, traegt kein `reason`.
+    """Eine Stelle, die noch KEINE Welle angefasst hat, traegt kein `reason`.
 
-    Die Zusage der Welle ist Additivitaet an drei Pilot-Stellen — nicht ein
-    neues Feld ueberall. Faellt dieser Test, hat jemand entweder den Handler zu
-    breit registriert oder `HTTPException` global ersetzt.
+    Die Zusage jeder Welle ist Additivitaet an ihren Stellen — nicht ein neues
+    Feld ueberall. Faellt dieser Test, hat jemand entweder den Handler zu breit
+    registriert oder `HTTPException` global ersetzt.
+
+    Der Waechter sass bis W2 (#483) auf dem Persona-404; seit dieser Welle
+    traegt der einen `reason`. Er zeigt jetzt auf den `locale`-Filter
+    (`core/locale.py`) — eine Datei, die in **keiner** Bestandstabelle der
+    sechs Wellen steht. Der naheliegende Ersatz waere der Keyset-Cursor
+    gewesen; der gehoert aber zu W6 (#487) und haette denselben Umzug in der
+    naechsten Welle noch einmal erzwungen.
+
+    Der Test muss end-to-end gegen `app` laufen, nicht gegen eine Mini-App:
+    er warnt davor, dass jemand den Handler in `main.py` zu breit registriert
+    — und genau diese Registrierung sieht eine selbstgebaute App nicht.
+
+    Wenn #402 vollstaendig ist, gibt es keine unmigrierte Stelle mehr. Dann
+    wird dieser Test entweder synthetisch (eigene Route, die eine nackte
+    `HTTPException` wirft) oder er faellt weg — er hat dann seinen Zweck
+    ueberlebt.
     """
     user_id = fresh_user_id()
     workspace_id = setup_workspace(user_id)
     try:
         with TestClient(app) as client:
             resp = client.get(
-                f"/v1/workspaces/{workspace_id}/personas/{uuid4()}",
+                f"/v1/workspaces/{workspace_id}/personas?locale=123",
                 headers=make_auth_headers(user_id),
             )
     finally:
         cleanup_workspaces([user_id])
 
-    assert resp.status_code == 404
-    assert resp.json() == {"detail": "Persona nicht gefunden."}
+    assert resp.status_code == 422
+    assert resp.json() == {"detail": "Ungueltiger locale-Parameter: '123'."}
 
 
 # --- 3. Handler-Ebene: params, Header, Abgrenzung zu RFC 7807 --------------

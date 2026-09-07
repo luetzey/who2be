@@ -87,6 +87,14 @@ ProblemReason = Literal[
     "organization_owner_required",  # 403 — Aktion ist dem Org-Owner vorbehalten
     "workspace_org_missing",  # 403 — Workspace ohne Organisation (inkonsistenter Zustand)
     "entity_quota_exceeded",  # 402 — Entity-Kontingent erreicht (params: limit)
+    "persona_not_found",  # 404 — Persona unbekannt oder nicht sichtbar
+    "resource_slug_conflict",  # 409 — Resource-Slug im Workspace bereits vergeben
+    "sub_playbook_not_found",  # 404 — Sub-Playbook der Composition unbekannt/fremd
+    "sub_resource_not_found",  # 404 — Sub-Resource der Composition unbekannt/fremd
+    "linked_playbook_not_found",  # 404 — zu verknuepfendes Playbook unbekannt/fremd
+    "linked_resource_not_found",  # 404 — zu verknuepfende Resource unbekannt/fremd
+    "composition_cycle",  # 409 — Verknuepfung wuerde einen Zyklus erzeugen
+    "heading_anchor_required",  # 422 — Block-Ref-Anker ist kein Heading-Block
 ]
 
 # Wer den Fehler beheben kann: `agent` = der aufrufende Agent kann es selbst

@@ -159,6 +159,37 @@ describe('createApi', () => {
     await i18n.changeLanguage('de')
   })
 
+  it('uebersetzt persona_not_found und composition_cycle (W2) in die UI-Sprache', async () => {
+    // Die beiden Enden der Welle: der haeufigste Editor-404 und der
+    // Zyklus-Guard der Kompositionen. Letzterer traegt einen eigenen
+    // snake_case-Grund NEBEN dem clientseitigen `errors.cycleRejected` — beide
+    // Schreibweisen koexistieren bewusst (Wire-Wert vom Server vs. Meldung,
+    // die die Hooks selbst setzen).
+    await i18n.changeLanguage('en')
+    vi.stubGlobal(
+      'fetch',
+      errorResponse({ detail: 'Persona nicht gefunden.', reason: 'persona_not_found' }),
+    )
+    await expect(createApi('tok', WS).getPersona('x')).rejects.toMatchObject({
+      status: 404,
+      message: 'Persona not found.',
+    })
+
+    vi.stubGlobal(
+      'fetch',
+      errorResponse(
+        { detail: 'Verknuepfung wuerde einen Zyklus erzeugen.', reason: 'composition_cycle' },
+        409,
+      ),
+    )
+    await expect(createApi('tok', WS).setPlaybookComposes('x', ['y'])).rejects.toMatchObject({
+      status: 409,
+      message: 'Linking would create a cycle.',
+    })
+
+    await i18n.changeLanguage('de')
+  })
+
   it('interpoliert das Limit in entity_quota_exceeded (W3)', async () => {
     // AK 4: die erreichte Grenze kommt als `params` und wird in den
     // uebersetzten Text interpoliert — ein Key fuer jede Grenze.

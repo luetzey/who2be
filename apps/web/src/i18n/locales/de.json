@@ -140,7 +140,15 @@
       "personal_organization_undeletable": "Persoenliche Organisationen werden ueber die Konto-Loeschung entfernt.",
       "organization_owner_required": "Nur der Owner kann diese Organisation loeschen.",
       "workspace_org_missing": "Workspace ohne Organisation.",
-      "entity_quota_exceeded": "Free-Tarif erreicht das Limit von {{limit}} Eintraegen je Workspace. Upgrade auf Pro hebt die Grenze auf — Bestehendes bleibt nutzbar."
+      "entity_quota_exceeded": "Free-Tarif erreicht das Limit von {{limit}} Eintraegen je Workspace. Upgrade auf Pro hebt die Grenze auf — Bestehendes bleibt nutzbar.",
+      "persona_not_found": "Persona nicht gefunden.",
+      "resource_slug_conflict": "Eine Resource mit diesem Slug existiert bereits.",
+      "sub_playbook_not_found": "Mindestens ein Sub-Playbook existiert nicht oder gehoert einem anderen Workspace.",
+      "sub_resource_not_found": "Mindestens eine Sub-Resource existiert nicht oder gehoert einem anderen Workspace.",
+      "linked_playbook_not_found": "Mindestens ein Playbook existiert nicht oder gehoert einem anderen Workspace.",
+      "linked_resource_not_found": "Mindestens eine Resource existiert nicht oder gehoert einem anderen Workspace.",
+      "composition_cycle": "Verknuepfung wuerde einen Zyklus erzeugen.",
+      "heading_anchor_required": "Nur Heading-Bloecke sind als Anker erlaubt."
     },
     "fieldLabels": {
       "name": "Name",

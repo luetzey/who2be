@@ -253,6 +253,14 @@ _PROBLEM_TITLES: dict[str, str] = {
     "organization_owner_required": "Aktion nur fuer den Org-Owner",
     "workspace_org_missing": "Workspace ohne Organisation",
     "entity_quota_exceeded": "Entity-Kontingent erreicht",
+    "persona_not_found": "Persona nicht gefunden",
+    "resource_slug_conflict": "Resource-Slug bereits vergeben",
+    "sub_playbook_not_found": "Sub-Playbook nicht gefunden",
+    "sub_resource_not_found": "Sub-Resource nicht gefunden",
+    "linked_playbook_not_found": "Verknuepftes Playbook nicht gefunden",
+    "linked_resource_not_found": "Verknuepfte Resource nicht gefunden",
+    "composition_cycle": "Verknuepfung wuerde einen Zyklus erzeugen",
+    "heading_anchor_required": "Anker muss ein Heading-Block sein",
 }
 
 

@@ -140,7 +140,15 @@
       "personal_organization_undeletable": "Personal organizations are removed through account deletion.",
       "organization_owner_required": "Only the owner can delete this organization.",
       "workspace_org_missing": "Workspace without an organization.",
-      "entity_quota_exceeded": "The free plan is limited to {{limit}} entries per workspace. Upgrading to Pro lifts the limit — existing entries stay usable."
+      "entity_quota_exceeded": "The free plan is limited to {{limit}} entries per workspace. Upgrading to Pro lifts the limit — existing entries stay usable.",
+      "persona_not_found": "Persona not found.",
+      "resource_slug_conflict": "A resource with this slug already exists.",
+      "sub_playbook_not_found": "At least one sub-playbook does not exist or belongs to a different workspace.",
+      "sub_resource_not_found": "At least one sub-resource does not exist or belongs to a different workspace.",
+      "linked_playbook_not_found": "At least one playbook does not exist or belongs to a different workspace.",
+      "linked_resource_not_found": "At least one resource does not exist or belongs to a different workspace.",
+      "composition_cycle": "Linking would create a cycle.",
+      "heading_anchor_required": "Only heading blocks are allowed as anchors."
     },
     "fieldLabels": {
       "name": "Name",
