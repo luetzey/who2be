@@ -49,6 +49,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Res
 from pydantic import BaseModel
 
 from who2be_api.core.db import get_pool
+from who2be_api.core.errors import ApiError
 from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.repositories.audit_log_repository import PgAuditLogRepository
@@ -134,9 +135,13 @@ SourceName = Annotated[str, Path(min_length=1, max_length=100)]
 ExportFormat = Annotated[TableExportFormat, Query()]
 
 
-def _table_not_found() -> HTTPException:
+def _table_not_found() -> ApiError:
     """404 fuer unbekannte ODER nicht lesbare Tabellen (kein Existenz-Leak)."""
-    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tabelle nicht gefunden.")
+    return ApiError(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Tabelle nicht gefunden.",
+        reason="table_not_found",
+    )
 
 
 def _rows_invalid(exc: TableRowsInvalid) -> HTTPException:

@@ -33,6 +33,7 @@ import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from who2be_api.core.db import get_pool
+from who2be_api.core.errors import ApiError
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.repositories.timeline_repository import PgTimelineRepository
 from who2be_api.services.mcp_limit_service import enforce_mcp_read_limit
@@ -159,8 +160,10 @@ async def timeline(
             table_ids=table_ids,
         )
     except TimelineTableNotFound as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Tabelle nicht gefunden."
+        raise ApiError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tabelle nicht gefunden.",
+            reason="table_not_found",
         ) from exc
     except QueryTimeout as exc:
         raise HTTPException(

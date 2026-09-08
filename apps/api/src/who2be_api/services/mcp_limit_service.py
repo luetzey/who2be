@@ -22,10 +22,11 @@ from typing import Annotated, cast
 from uuid import UUID
 
 import asyncpg
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, Request, status
 
 from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.db import get_pool
+from who2be_api.core.errors import ApiError
 from who2be_api.core.rate_limit import rate_limit_key, token_rate_limiter
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.licensing.edition import is_cloud
@@ -62,9 +63,12 @@ class McpLimitService:
         )
         if org_id is None:
             # Sollte nie passieren — die Workspace-Membership ist bereits geprueft.
-            raise HTTPException(
+            # Wortgleich zum Zwilling in `entity_quota_service._resolve_org_id`
+            # (gleicher Status, gleicher Text) ⇒ derselbe Grund.
+            raise ApiError(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Workspace ohne Organisation.",
+                reason="workspace_org_missing",
             )
         return cast(UUID, org_id)
 
@@ -80,16 +84,24 @@ class McpLimitService:
         entitlement: Entitlement = await port.resolve(org_id)
 
         if not entitlement.is_active():
-            raise HTTPException(
+            raise ApiError(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
                 detail="Kein aktives Abonnement fuer diese Organisation.",
+                reason="subscription_inactive",
             )
 
         # 1) Per-Token-Rate zuerst — abgewiesene Reads verbrauchen kein Kontingent.
-        if not token_rate_limiter.allow(rate_limit_key(request), entitlement.mcp_rate_per_min):
-            raise HTTPException(
+        rate = entitlement.mcp_rate_per_min
+        if not token_rate_limiter.allow(rate_limit_key(request), rate):
+            # Die Grenze gehoert in `params`, nicht in den Locale-Key (ADR-0051)
+            # — sonst braucht jeder Tarif seine eigene Uebersetzung. `rate` ist
+            # hier faktisch nie `None` (ein `None`-Limit laesst der Limiter
+            # durch); der Guard haelt mypy strict, ohne den Pfad zu aendern.
+            raise ApiError(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Token-Ratenlimit ueberschritten.",
+                reason="mcp_rate_limited",
+                params={"limit": rate} if rate is not None else None,
                 headers={"Retry-After": "60"},
             )
 
@@ -104,9 +116,11 @@ class McpLimitService:
         else:
             allowed = await self._usage_repo.increment_if_allowed(org_id, current_period(), quota)
         if allowed is None:
-            raise HTTPException(
+            raise ApiError(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Monatliches MCP-Kontingent erschoepft.",
+                reason="mcp_quota_exceeded",
+                params={"limit": quota},
                 headers={"Retry-After": "3600"},
             )
 

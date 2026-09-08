@@ -1303,3 +1303,190 @@ bleiben)._
 - **Offen:** die uebrigen ~76 `detail`-Stellen (#402 W1-Wn), die MCP-Client-
   Seite, die zwei Confinement-Raises in `routers/agents.py`, und die
   Content-Type-Vereinheitlichung (Weg C) als eigenes Vorhaben.
+
+## 2026-09-06 — aal2-Schwelle fuer Token-Ausstellung ist die *entstehende* Rolle
+- **Entscheidung:** `TokenService.create`/`.rotate` rufen `require_aal2` genau
+  dann, wenn die betroffene Token-Rolle `admin` ist — nicht bei jeder
+  Ausstellung, und nicht anhand der Rolle des Aufrufers. `rename`/`revoke`
+  bleiben ungegatet.
+- **Begruendung:** `require_role(ctx, admin)` setzt in `core/security.py`
+  bereits genau diese Schwelle fuer jede andere Admin-Aktion; fuer `editor`
+  gibt es im Repo keinen einzigen Fall eines aal2-Gates. Eine zweite,
+  strengere Schwelle waere eine neue Konvention statt der Anwendung der
+  bestehenden. Verallgemeinert gilt fuer jeden Pfad, der Rechte verteilt: die
+  Schwelle ist die Rolle, die dabei **entsteht**.
+- **`rotate` zaehlt mit:** es gibt ein neues, sofort gueltiges Secret fuer
+  dieselbe Rolle aus — ohne Gate waere `create` durch ein Rotate umgehbar. Die
+  Rolle wird dafuer VOR dem Rotate nachgeschlagen (`_current_role`), damit die
+  Pruefung feststeht, bevor ein Secret existiert.
+- **Verworfen:** ein eigenes Gate neben `require_aal2` (haette dessen zwei
+  Ausnahmen — Maschinen-Pfad und On-Prem-fail-open — nachbauen muessen und
+  waere beim naechsten Mal auseinandergelaufen); ein Uebergangs-Schalter fuer
+  die Migration (unnoetig: `require_aal2` kehrt bei `is_api_token` sofort
+  zurueck, bestehende Automatisierung bricht also nicht).
+- **Kontext:** Issue #469, aus dem Security-Review zu #430 (PR #468).
+
+## 2026-09-06 — Entitlement-Monotonie aufgeschoben, Auflage im Code verankert
+- **Entscheidung:** `EntitlementRepository.upsert` bleibt bedingungslos; die
+  Auflage, dass ein signierender Zweit-Anbieter eine Ereigniszeit-Spalte plus
+  eine verwerfende `WHERE`-Bedingung mitbringen muss, steht als Kommentar an
+  der Upsert-Stelle, in Kurzform am generischen Webhook-Pfad und in ADR-0028
+  §Konsequenzen. Kein Verhalten geaendert (Owner-Entscheidung, Weg C).
+- **Begruendung:** Die Luecke ist heute nicht ausloesbar — kein Anbieter sendet
+  auf den generischen Pfad, Mollie hat eigenen Dedupe, und die Ablauffrist aus
+  #452 begrenzt den Schaden. Was fehlte, war nicht Code, sondern die
+  Gewissheit, dass die Auflage beim Anbinden GEFUNDEN wird statt in einem
+  geschlossenen Issue zu verstauben. Deshalb an der ausloesenden Stelle
+  verankert, nicht im Ticket — das gilt allgemein fuer aufgeschobene Auflagen.
+- **Verworfen:** sofortige `event_at`-Spalte + Migration (kauft eine Migration
+  fuer ein Risiko, das nicht besteht); Naeherung ueber `updated_at` mit
+  Toleranz (`updated_at` ist die Schreib-, nicht die Ereigniszeit — die
+  Naeherung ist in die falsche Richtung unsicher und wiese legitim verspaetete
+  Ereignisse ab). Sobald ein signierender Anbieter dazukommt, ist die
+  `event_at`-Variante der richtige Weg.
+- **Kontext:** Issue #462, aus #452 (WP-5 von #428) herausgeloest.
+
+## 2026-09-06 — Storage-Backend wird pro Tab eingefroren, nicht live gelesen
+- **Entscheidung:** Der delegierende Storage-Adapter (`lib/supabase.ts`) liest
+  den `remember`-Marker nicht mehr bei jedem Zugriff, sondern haelt seinen
+  Modus im Modul-Zustand. Ein Login in DIESEM Tab aktualisiert ihn
+  (`syncStorageBackendForThisTab`, aufgerufen aus `signIn` — auch im
+  Fehlerpfad); ein Marker-Wechsel in einem fremden Tab nicht.
+- **Begruendung:** `localStorage` ist tab-uebergreifend, der Marker war damit
+  ein globaler Schalter, der laufende Tabs umlenkte. Weg B statt der
+  Alternative, den Marker an die Session-Identitaet zu binden: letztere
+  scheitert am Bootstrap-Fall (beim Laden ist noch keine Id committed, der
+  Adapter muss aber entscheiden, wo er liest). Die Folge — ein Tab behaelt
+  seinen Modus bis zum Reload — ist gewolltes Verhalten.
+- **Keine neue Abstraktion:** der Adapter bleibt, was er war; nur seine
+  Aufloesungs-Strategie wechselt von „live" auf „einmal pro Tab". Die
+  Aenderung ENTFERNT eine Indirektion.
+- **Nebenwirkung, bewusst anders geloest:** der neue Export liess mehrere
+  Bestandstests brechen, die `@/lib/supabase` unvollstaendig mocken (Vitests
+  Mock-Proxy wirft schon beim LESEN einer fehlenden Property; optional
+  chaining faengt das nicht ab). Ein Existenz-Check im Produktivcode waere ein
+  in Produktion toter Zweig gewesen, der einen echten fehlenden Export still
+  verschluckt — stattdessen tragen die betroffenen Mocks den Export jetzt.
+  Ein `vi.mock`-Factory-Objekt muss jeden Export fuehren, den der
+  Produktivcode aufruft.
+- **Kontext:** Issue #471, Security-Review zu #430 (PR #468, MEDIUM-4).
+
+## 2026-09-06 — Seed-Pfade scopen die Connection selbst auf den neuen Workspace
+- **Entscheidung:** `ensure_personal_workspace` und `PgWorkspaceRepository.create`
+  setzen `app.current_tenant`/`app.current_org` per `set_config(..., is_local =>
+  true)` auf den gerade angelegten Workspace, bevor sie seeden
+  (`_scope_to_new_workspace`). Die RLS-Policy aus Migration 0037 bleibt
+  unveraendert scharf.
+- **Begruendung:** Beide Pfade schreiben in `tenant_isolation`-Tabellen fuer
+  einen Workspace, auf den die GUC nicht zeigt — beim Lazy-Seed gibt es noch
+  gar keinen Tenant-Kontext, bei `create` zeigt er auf einen anderen
+  Workspace. Unter der Cloud-Rolle `who2be_app` (NOBYPASSRLS) scheitert dort
+  jeder Insert; on-prem faellt es nicht auf, weil die App als Owner verbindet.
+- **`is_local` ist der sicherheitskritische Teil:** die Setzung endet mit der
+  Transaktion. Ohne sie truege die gepoolte Connection einen fremden Mandanten
+  in ihr naechstes Checkout — aus dem Bugfix waere ein Tenancy-Leak geworden.
+  Beide Regressionstests pruefen das ausdruecklich nach dem COMMIT.
+- **Verworfen:** den Seed ueber eine privilegierte Owner-Connection fahren
+  (fuehrt einen zweiten Schreibpfad mit hoeheren Rechten ein — genau das, was
+  ADR-0037 vermeiden wollte); das `WITH CHECK` an den Seed-Tabellen lockern
+  (schwaecht die Isolation an den Tabellen, die sie tragen sollen).
+- **Muster:** die Setzung liegt in einer benannten Funktion statt zweimal
+  inline — Beleg nach der Muster-Disziplin ist der zweite echte Fall, nicht
+  ein vermuteter dritter. Eine vergessene Stelle waere hier ein Sicherheitsbug,
+  kein Schoenheitsfehler.
+- **Kontext:** Issue #479, gefunden vom CI-Job `e2e-billing-cloud` aus #453.
+
+## 2026-09-07 — Ein Grund wird nur wiederverwendet, wenn kein bestehendes `detail` dabei verliert
+- **Entscheidung:** Bevor eine #402-Welle einen vorhandenen `ProblemReason`
+  wiederverwendet, vergleicht sie den Wortlaut: traegt heute irgendeine
+  Stelle mit diesem Grund ein `detail`, das spezifischer ist als der neue
+  Locale-Text, wird ein eigener, engerer Grund angelegt statt
+  wiederverwendet.
+- **Begruendung:** Der Locale-Key **ist** der Wire-Wert (ADR-0051), und
+  `translateServerError` (`apps/web/src/api/client.ts`) uebersetzt
+  `common:errors.<reason>` mit `defaultValue: detail` — der uebersetzte Text
+  gewinnt. Ein neu angelegter Key wirkt damit rueckwirkend auf **alle**
+  bestehenden Stellen mit diesem Grund. Wiederverwendung ist also nicht die
+  sparsamere Wahl, sondern kann bestehende, spezifischere Meldungen
+  ueberschreiben.
+- **Drei Faelle im Lauf:** W4 verwarf `forbidden_transition` fuer die
+  Triage-409 (haette die Meldung aller Version-Status-Gates ersetzt), W3
+  verwarf `insufficient_role` (haette die drei RBAC-Gates aus ADR-0023
+  getroffen — der Grund hat bis heute bewusst keinen Locale-Key), W6 verwarf
+  `agent_not_found` fuer die Token-Bindung („existiert nicht in diesem
+  Workspace" ist spezifischer als „Agent nicht gefunden."). Wiederverwendet
+  wurde dort, wo die Texte zeichengleich sind: `invalid_against_param`
+  (vier Vorkommen), `playbook_not_found` (vier), `resource_not_found` (drei),
+  `workspace_org_missing` (zwei).
+- **Konsequenz:** Kein Gate-Grund traegt einen Locale-Key. Das ist kein
+  Versaeumnis, sondern die Bedingung dafuer, dass die RFC-7807-Huelle ihre
+  spezifischen Meldungen behaelt.
+- **Kontext:** Issues #483-#487, W1-W6 von #402.
+
+## 2026-09-07 — Der Bestandszaehler von #402 zaehlt Wuerfe, nicht Schreibweisen
+- **Entscheidung:** Wer eine weitere Fehlercode-Welle zuschneidet, misst
+  `raise`/`return HTTPException(` — nicht `detail="`.
+- **Begruendung:** Der urspruengliche Zuschnitt stand auf „79 Stellen" aus
+  einem `detail="`-Grep. Der sieht nur einzeilige String-Literale. Gemessen
+  waren es 107 offene Wuerfe: 61 mit einzeiligem Literal (von den Wellen
+  erfasst), 46 mit mehrzeiligem `detail=(`, f-String oder berechnetem Wert
+  (von keiner Welle erfasst). Sechs Dateien kamen in keiner Bestandstabelle
+  vor, obwohl sie Fehler werfen.
+- **Zweite Folge:** die Tabellen ueberzaehlen zusaetzlich, weil sie bereits
+  migrierte Stellen mitzaehlen — W1 nannte eine, es waren vier; W4 10/8;
+  W5 10/8; W3 15/13; W6 19/14. Nur W2 stimmte exakt.
+- **Nach dem Lauf offen:** 45 Wuerfe, alle in nicht-literaler Schreibweise.
+  Darunter drei, die mit dem heutigen Vertrag gar nicht migrierbar sind:
+  `detail=DeleteBlocked(...).model_dump()` liefert ein **Objekt**, waehrend
+  `ApiErrorBody.detail` ein `str` ist.
+- **Kontext:** #402, gemessen am 2026-09-07 auf `6c49f6b` und nach `2b168fa`.
+
+## 2026-09-07 — Die sechs Wellen laufen in einem Branch und einem PR
+- **Entscheidung:** Statt sechs PRs sammelt PR #490 alle Wellen, ein Commit
+  je Welle. Die Weiche „Sammelpunkte als letzten Commit" aus den Issues wird
+  damit gegenstandslos und ist nicht angewandt.
+- **Begruendung:** Der Wellen-Schnitt sollte *Parallelitaet* ermoeglichen;
+  gefahren wurden sie sequenziell in einer Sitzung. Sechs PRs waeren sechs
+  Merge-Zyklen, von denen jeder die vier Sammelpunkte des naechsten anfasst
+  (`ProblemReason`, die Titel-Tabelle, beide Locale-JSONs) — der Konflikt,
+  den der Schnitt vermeiden wollte, entstuende dann garantiert statt nur
+  moeglicherweise. Pro Welle mitgefuehrt bleibt jeder Commit fuer sich gruen
+  und bisect-tauglich.
+- **Verworfen:** echte Parallelitaet ueber getrennte git-Worktrees (haette
+  vier bis sechs `.venv`/`node_modules`-Baeume gebraucht — Plattenplatz ist
+  in dieser Umgebung ein festes Kontingent).
+- **Kontext:** #402, Plan `.claude/plan/2026-09-07-0400_402-wellen-w1-w6.md`.
+
+## 2026-09-07 — Parallele Sub-Agents brauchen getrennte Worktrees nur im selben Stack
+- **Entscheidung:** Zwei Pakete duerfen gleichzeitig von je einem Sub-Agent im
+  **selben** Arbeitsbaum laufen, wenn sie in verschiedenen Stacks liegen
+  (einer nur `apps/api/**` + `packages/**`, einer nur `apps/web/**`). Im
+  gleichen Stack bleibt es bei getrennten git-Worktrees.
+- **Begruendung:** Der Befund vom Fuenf-Pakete-Lauf war nie „geteilte Dateien",
+  sondern „geteilter Testlauf": `pytest` sammelt den ganzen Baum ein und sieht
+  den halbfertigen Stand des Nachbarn. Ueber Stack-Grenzen hinweg passiert das
+  nicht — `pytest` sammelt keine `.test.ts`-Dateien, Vitest kein Python.
+- **Bedingungen, ohne die es nicht gilt:** jeder Agent faehrt **nur** die Gates
+  seines Stacks; kein Agent setzt einen git-Schreibbefehl ab (`add`, `commit`,
+  `checkout`, `stash`, `restore`, `reset`) — der Index ist geteilt; der
+  Orchestrator trennt beim Stagen nach Pfad und committet je Paket einzeln.
+  Fremde Aenderungen im `git status` sind fuer den Agenten Rauschen, kein
+  Fehler und kein Auftrag.
+- **Verworfen:** immer Worktrees (kostet je Baum ein `.venv` bzw.
+  `node_modules`; Plattenplatz ist in der Cloud-Session ein festes Kontingent);
+  immer sequenziell (verschenkt die Haelfte der Zeit, wenn die Stacks sich
+  ohnehin nicht sehen).
+- **Kontext:** #492 (Python) und #493 (Web), parallel gefahren, PR #494.
+
+## 2026-09-07 — Eine Testzahl ist ein Messwert, kein Nebensatz
+- **Entscheidung:** Wer eine volle Suite faehrt, vergleicht die **Testzahl**
+  mit dem letzten bekannten Stand, nicht nur den Exit-Code. Weicht sie ab,
+  ist das ein Befund, bis die Ursache benannt ist.
+- **Begruendung:** Nach einem Container-Neustart meldete die Suite 1812 statt
+  1899 passed — gruen, ohne Fehler, ohne Skip, ohne Warnung. Ursache war der
+  SessionStart-Hook, der `uv sync` ohne `--group billing` faehrt; 89 Tests
+  wurden schlicht nicht eingesammelt. Die Coverage **stieg** dabei (91,47 %
+  gegen 91,08 %), der Lauf sah also besser aus als der vollstaendige.
+- **Konsequenz:** „Gruen" ohne Testzahl ist keine Aussage. Ein Bericht, der
+  nur `EXIT=0` nennt, belegt nichts ueber den Umfang des Gelaufenen.
+- **Kontext:** #495, gefunden beim Verifizieren von #492.

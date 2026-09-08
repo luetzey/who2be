@@ -21,7 +21,7 @@ from uuid import UUID
 import asyncpg
 import jwt
 import structlog
-from fastapi import Depends, HTTPException, Path, status
+from fastapi import Depends, Path, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from who2be_api.core.config import get_settings
@@ -65,10 +65,25 @@ def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def _credentials_error() -> HTTPException:
-    return HTTPException(
+def _credentials_error() -> ApiError:
+    """401 fuer JEDEN gescheiterten Authentifizierungs-Versuch (ADR-0051, W6).
+
+    Der Grund ist bewusst **grobkoernig** und sitzt genau hier, im Helfer:
+    fehlender Header, abgelaufenes/falsch signiertes JWT, nicht erlaubte
+    `role`, unbrauchbares `sub`, unbekannter oder widerrufener API-Token und
+    ein inkonsistenter Principal liefern heute alle denselben Status,
+    denselben Text und denselben `WWW-Authenticate`-Header. Sie teilen sich
+    deshalb auch denselben `reason` — ein feiner aufgeloester waere ein
+    Enumerations-Orakel (#487, AK 4). Weil keine Call-Site den Grund selbst
+    setzt, kann keine spaeter versehentlich davon abweichen.
+
+    `ApiError` statt `HTTPException`: Status, `detail` und Header bleiben Wort
+    fuer Wort, es kommt nur `reason` in den Body (additiv).
+    """
+    return ApiError(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Ungueltige oder fehlende Anmeldedaten.",
+        reason="invalid_credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
 
@@ -416,8 +431,6 @@ def peek_write_rate(ctx: WorkspaceContext) -> None:
 
 def _enforce_write_rate(ctx: WorkspaceContext, *, consume: bool) -> None:
     """Gemeinsamer Kern von `require_write_rate`/`peek_write_rate`."""
-    from fastapi import HTTPException
-
     from who2be_api.core.rate_limit import token_rate_limiter
 
     policy = ctx.tool_policy
@@ -427,9 +440,14 @@ def _enforce_write_rate(ctx: WorkspaceContext, *, consume: bool) -> None:
         return
     check = token_rate_limiter.allow if consume else token_rate_limiter.peek
     if not check(f"write:{ctx.agent_id}", policy.write_rate_limit):
-        raise HTTPException(
+        # Die erreichte Grenze gehoert in `params`, nicht in den Locale-Key:
+        # sonst braeuchte jede konfigurierte Rate ihre eigene Uebersetzung
+        # (ADR-0051, Muster `entity_quota_exceeded`).
+        raise ApiError(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Schreib-Rate-Limit dieses Agenten erreicht — bitte spaeter erneut versuchen.",
+            reason="write_rate_limited",
+            params={"limit": policy.write_rate_limit},
         )
 
 

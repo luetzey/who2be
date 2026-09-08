@@ -16,6 +16,7 @@ from uuid import UUID
 import asyncpg
 from fastapi import HTTPException, status
 
+from who2be_api.core.errors import ApiError
 from who2be_api.repositories.account_repository import AccountLifecycleRepository
 from who2be_api.services.audit_service import AuditService
 from who2be_models import AccountDeletionRead, OrganizationDeletionRead
@@ -75,19 +76,25 @@ class AccountLifecycleService:
         """
         kind = await self._repo.org_kind(org_id)
         if kind is None:
-            raise HTTPException(
+            raise ApiError(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Organisation nicht gefunden.",
+                reason="organization_not_found",
             )
         if kind == "personal":
-            raise HTTPException(
+            raise ApiError(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Persoenliche Organisationen werden ueber die Konto-Loeschung entfernt.",
+                reason="personal_organization_undeletable",
             )
         if not await self._repo.is_org_owner(org_id, user_id):
-            raise HTTPException(
+            # Eigenstaendiger Grund statt `insufficient_role`: geprueft wird
+            # die Org-Owner-Rolle, nicht die Workspace-Rolle der RBAC-Gates
+            # (ADR-0023) — und die Stelle ist bewusst kein `ApiGateError`.
+            raise ApiError(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Nur der Owner kann diese Organisation loeschen.",
+                reason="organization_owner_required",
             )
         requested = datetime.now(UTC) + GRACE_PERIOD
         effective = await self._repo.soft_delete_organization(org_id, requested)

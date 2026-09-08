@@ -188,6 +188,12 @@ services:
       # Variable aus einer anderen berechnen) — beide gemeinsam setzen.
       WHO2BE_LAUNCH_MODE: ${WHO2BE_LAUNCH_MODE:-open}
       WHO2BE_LAUNCH_CONTACT: ${WHO2BE_LAUNCH_CONTACT:-}
+      # Absolute Obergrenze der "Angemeldet bleiben"-Sitzung in Stunden
+      # (#430/#470, ADR-0052). Gueltig ist 1-24; die Web-App faellt bei
+      # fehlendem/ungueltigem Wert fail-closed auf 12 zurueck. Muss wie
+      # WHO2BE_LAUNCH_MODE durchgereicht werden, sonst sieht der Entrypoint
+      # den Wert nie und /config.js bleibt still auf dem Default.
+      WHO2BE_SESSION_MAX_AGE_HOURS: ${WHO2BE_SESSION_MAX_AGE_HOURS:-12}
     ports:
       # Container hoert mit nginx auf 80; Host-Port bleibt 5173, damit
       # smoke.sh + CORS-Origin unveraendert bleiben.

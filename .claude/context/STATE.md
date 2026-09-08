@@ -1,43 +1,114 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-07 (Backlog-Aufbereitungslauf — nur GitHub + Doku)_
+_Stand: 2026-09-07 (33. Lauf — zwei Waechter, #492 + #493)_
 
-## Backlog aufbereitet, #480 entblockt (2026-09-07, Aufbereitungslauf — nur GitHub + Doku)
+## Zwei Waechter fuer Bedingungen, die vorher niemand geprueft hat (2026-09-07, 33. Lauf, #492 + #493)
 
-Die drei Nebenfunde aus PR #478 (#477, #480, #481) waren nie gegen die Norm
-„Agent-ready Arbeitspaket" geprueft — die Vorgaenger-Liste fuehrte sie pauschal
-als „blockiert, keiner dringend". Dieser Lauf hat das nachgeholt.
+**#493** haelt die Locale-Paritaet von `common.errors`. Der Schluessel ist
+dort **der Wire-Wert** des `reason`, und `translateServerError` uebersetzt
+mit `defaultValue: detail` — ein fehlender englischer Schluessel erzeugt also
+nicht den sichtbaren rohen Key, sondern den **deutschen Servertext** in einer
+englischen Oberflaeche. Sechs Wellen von #402 haben diese Bedingung von Hand
+nachgezaehlt (12 → 56 Schluessel). Der Test prueft beide Richtungen, weil der
+Schaden je Richtung ein anderer ist: fehlt ein deutscher Schluessel, trifft es
+jede Sprache, weil `de` Default und Fallback ist.
 
-- **#480 ist entblockt** und steht auf Platz 1 der Warteschlange
-  (`agent-ready`, `size/S`). Die vermeintlich offene Weiche war belegt: der
-  einzige Produktiv-Aufrufer (`me_repository.py:81-84`) wrappt
-  `ensure_personal_workspace` in eine Transaktion und begruendet das
-  schriftlich bei `:76-80` — RLS-unabhaengig. Der Test-Helper
-  (`workspace_setup.py:50-65`) tut es als einziger nicht.
-- **#477 bleibt `needs-decision`, aber die Frage ist geschrumpft** — von
-  „A/B/C: wie weit angleichen?" auf eine Ja/Nein-Frage (bleibt dokploy ein
-  unterstuetzter Pfad?). Drei Belege der Fassung hielten der Nachmessung nicht
-  stand, darunter der, der Option B trug: der GoTrue-Pin ist in **allen drei**
-  Stacks identisch `v2.158.1` — keine dokploy-Divergenz. Die vergleichbare
-  Flaeche (`web`-`environment`) divergiert um genau zwei Variablen; der Rest
-  ist gewollte Topologie (all-in-one + Build vs. geteilt + GHCR-Pull).
-- **#481 bleibt `needs-decision`** — alle vier Fundstellen bestaetigt, aber die
-  Frage ist eine Produktentscheidung zur Org-Rollenabstufung.
+**#492** klammert `cleanup_workspaces` — der Zwilling des Fixes, den #480 am
+Nachbar-Helfer gemacht hat. Vier abhaengige `DELETE`s liefen als vier
+Autocommit-Transaktionen; ein Abbruch nach dem ersten liess das
+Compliance-Log geloescht und seine Organisation stehen.
 
-**Regel 16 (neu, in #442):** ein Beleg gilt gegen `main`, nicht gegen einen
-offenen PR. Beide Issues argumentierten mit Code, den es auf `main` nicht gibt
-(`_scope_to_new_workspace` bzw. das Durchreichen von
-`WHO2BE_SESSION_MAX_AGE_HOURS`) — er kommt erst mit #478. Die Befunde blieben
-richtig, ihre Belege zeigten ins Leere.
+**Parallel gefahren, ohne Worktrees — und das war zulaessig.** Die
+Wellen-Regel der Warteschlange verlangt fuer gleichzeitige Sub-Agents
+getrennte Arbeitsbaeume. Sie zielt aber auf Pakete **desselben** Stacks, wo
+der Testlauf des einen den halbfertigen Stand des anderen einsammelt. Hier
+war eines rein Web und eines rein Python: `pytest` sammelt keine
+`.test.ts`-Dateien ein, Vitest kein Python. Jeder Agent fuhr nur seinen
+eigenen Stack, keiner durfte git schreiben, getrennt wurde beim Stagen.
 
-**Engpass:** PR #478 ist offen, `mergeable_state: clean`, alle sieben CI-Jobs
-gruen auf `a846753`, und wartet seit 2026-09-06 20:09 auf Owner-Review. Er
-schliesst sechs Issues (#470, #469, #471, #462, #453, #479) und blockiert die
-#402-Wellen W3 (#486) und W6 (#487). Der einzige Blocker im Backlog, der nicht
-an Kapazitaet haengt.
+**Der Fund des Laufs ist eine Zahl, die niemand hinterfragt haette: 1812.**
+Der erste volle Lauf nach dem Container-Neustart meldete 1812 passed, wo
+derselbe Tag vorher 1899 gemeldet hatte. Ursache war nicht der Code, sondern
+`scripts/install_pkgs.sh`: der SessionStart-Hook faehrt `uv sync` **ohne**
+`--group billing`, den CLAUDE.md als den Befehl nennt. 89 Tests fehlen dabei
+still — kein Fehler, kein Skip, keine Warnung. Die Coverage steigt sogar
+(91,47 % statt 91,08 %), was den Verdacht zusaetzlich abwendet. Dazu startet
+der Hook keinen Postgres; ohne gesetztes `WHO2BE_REQUIRE_DB` werden weitere
+481 Integrationstests still uebersprungen. **Eine Session kann so eine gruene
+Suite melden, die 570 von 1901 Tests nie ausgefuehrt hat.** Aufgenommen als
+#495.
 
-Startbar danach: **#480 · #482 · #484 · #485 · #483** (Wellen A/B, siehe #442).
-Plan: `.claude/plan/2026-09-07-0800_backlog-aufbereitungslauf.md`.
+DoD: ruff/format/mypy gruen (458 Dateien); volle Suite 1901 passed, Coverage
+91,08 %, 481 Integrationstests, 0 Skips; Web 189 Testdateien / 1127 Tests,
+Branches 81,69 %. PR #494.
+
+## #402 ist durch — jede einzeilige Fehlerstelle traegt ihren Grund (2026-09-07, 32. Lauf, W1-W6 + #480)
+
+Die sechs Wellen von #402 sind umgesetzt, dazu #480. **Gemessen nach dem
+letzten Commit: null offene `detail="`-Stellen.** `ApiError` steht bei 73
+Wurfstellen (vorher 12), `ApiGateError` unveraendert bei 52, `HTTPException`
+bei 45 — und diese 45 tragen ihr `detail` samt und sonders in einer anderen
+Schreibweise.
+
+**Der wichtigste Befund des Laufs ist eine Zahl, die nie gestimmt hat.** Der
+gesamte Wellen-Zuschnitt stand auf „79 Stellen", und diese Zahl kommt aus
+einem Grep nach `detail="`. Der sieht nur einzeilige String-Literale.
+Tatsaechlich standen zu Beginn **107** offene `HTTPException`-Wuerfe im Code;
+61 davon zaehlten die Wellen, 46 keine. Nach dem Lauf sind die 61 migriert
+und 45 bleiben (eine faellt weg, weil W3 zwei identische Inline-Wuerfe zu
+einem Helfer zusammengezogen hat). Betroffen sind auch sechs Dateien, die in
+**keiner** Bestandstabelle vorkommen: `core/locale.py`, `routers/agents.py`,
+`routers/wa_artifacts.py`, `routers/wa_ingest.py`,
+`services/placeholder_preview_service.py`, `services/workspace_member_service.py`.
+Ohne Nachtragswelle waere #402 abhakbar gewesen, ohne sein Ziel zu erreichen.
+Gemeldet an #402 samt reproduzierbarer Messung.
+
+**Zwei Akzeptanzkriterien liessen sich nicht erfuellen — sie widersprachen
+ihrem eigenen Scope.** #485 verlangt `params` an den Status-Uebergangsfehlern.
+`version_status.py` hat aber genau eine Nicht-Gate-Fehlerstelle, und der
+einzige Status-Uebergangsfehler ist `_forbidden_transition`, ein
+`ApiGateError` — den dasselbe Issue unter „Out" fuehrt. Dazu hat
+`ApiGateError` kein `params`-Feld und `ApiProblem` steht auf
+`extra="forbid"`; `params` sitzt in `ApiErrorBody`, der anderen Huelle. #485
+traegt deshalb `Refs` statt `Closes` und steht auf `needs-decision`.
+
+**Die Lehre, die sich durch alle Wellen zieht: Wiederverwendung eines Grundes
+ist nicht automatisch die sparsamere Wahl.** Der Web-Client uebersetzt
+`common:errors.<reason>` mit `defaultValue: detail` — der uebersetzte Text
+**gewinnt** gegen `detail`. Legt eine Welle einen Locale-Key fuer einen Grund
+an, den es schon gibt, ersetzt ihr generischer Text ab sofort die
+spezifischen Meldungen aller bestehenden Stellen mit diesem Grund. W4 hat
+deshalb `forbidden_transition` verworfen, W3 `insufficient_role`, W6
+`agent_not_found` — jedes Mal nach Wortlaut-Vergleich, nicht nach Gefuehl.
+Kein Gate-Grund hat einen Locale-Key bekommen; nachgeprueft.
+
+**W6 im Besonderen: die Ununterscheidbarkeit bleibt, wo sie war.** Acht
+Auth-Fehlerursachen liefern denselben 401, denselben Text und denselben
+`WWW-Authenticate`-Header — und jetzt denselben `invalid_credentials`. Der
+Grund sitzt im Helfer `_credentials_error()`, nicht an den acht
+Aufrufstellen: damit *kann* keine Stelle spaeter abweichen. Ein
+`security-reviewer`-Durchgang hat das per AST-Scan bestaetigt (alle
+Fehler-Konstruktionen nach `(status, detail, headers)` gruppiert, kein Tupel
+bildet auf mehr als einen Grund ab) — **keine Befunde**.
+
+**Ein Waechter-Test ist umgezogen, und der erste Umzug war falsch.**
+`test_unmigrated_error_body_is_unchanged` sass auf dem Persona-404, den W2
+migriert. Der Umsetzungs-Agent haengte ihn auf den Keyset-Cursor um, mit der
+Begruendung, den beanspruche keine Welle — er steht aber in der
+Bestandstabelle von W6 und waere eine Welle spaeter erneut umgezogen. Er
+zeigt jetzt auf `core/locale.py`, eine der sechs nirgends erfassten Dateien.
+Er muss end-to-end gegen `app` laufen: er warnt davor, dass jemand den
+Handler in `main.py` zu breit registriert, und diese Registrierung sieht eine
+selbstgebaute Mini-App nicht.
+
+`docs/reference/openapi.json` war vier Wellen lang stale und ist einmal am
+Ende regeneriert: 47 Zeilen, ausschliesslich die Enum-Werte. Es gibt dafuer
+**kein CI-Drift-Gate** — `docs/**` steht sogar auf der „nur Doku"-Allowlist
+aus #440.
+
+DoD: ruff/format/mypy gruen (458 Dateien); volle Python-Suite 1899 passed,
+Coverage 91 %; Web 1125 Tests, Branches 81,69 %, Build gruen;
+Locale-Paritaet 56/56 in beiden Sprachen. PR #490.
 
 ## Fehlercodes stehen als Vertrag (2026-09-06, 31. Lauf, #436 = W0 von #402)
 
@@ -361,17 +432,31 @@ Umgebung laeuft kein Docker, sie sind nur typgeprueft. Der CI-Job `e2e` faehrt s
 
 **Bewusst offen gelassen (als Folge-Issues erfasst, nicht still gefixt):**
 
-- Der Marker ist ein **globaler** Schalter im `localStorage`, kein Per-Tab-
-  Zustand. Ein Login in Tab B aendert das Storage-Routing eines parallel
-  laufenden Tab A. Eine Bindung des Markers an die Session-Identitaet ist ein
-  eigenes Paket.
-- `WHO2BE_SESSION_MAX_AGE_HOURS` ist in **keinem** Compose-`web`-Service
-  durchgereicht — der Entrypoint liest die Variable, aber kein Stack setzt sie.
-  Ein Betreiber, der auf 1 h haerten will, bekommt still 12 h. Weiche 7 des
-  Issues schliesst einen Compose-Diff in diesem Paket aus; beide
-  `.env.example` benennen die fehlende Verdrahtung.
-- Ein Befund **ausserhalb** des Pakets (`apps/api`, aal2-Gate bei der
-  API-Token-Ausstellung) ist getrennt gemeldet — nicht Teil dieser ADR.
+- ~~Der Marker ist ein **globaler** Schalter im `localStorage`~~ — **behoben
+  2026-09-06 (#471, Weg B).** Der Adapter friert seinen Modus pro Tab ein,
+  statt den Marker live zu lesen; ein Login in DIESEM Tab aktualisiert ihn,
+  ein fremder Marker-Wechsel nicht. Ein Tab behaelt seinen Modus bis zum
+  Reload — gewolltes Verhalten. `signOut` haengt nicht mehr davon ab, dass der
+  Marker im Moment des Aufraeumens noch steht.
+- ~~`WHO2BE_SESSION_MAX_AGE_HOURS` ist in **keinem** Compose-`web`-Service
+  durchgereicht~~ — **behoben 2026-09-06 (#470).** Beide `web`-Services
+  (`docker-compose.yml`, `deploy/hetzner/who2be/docker-compose.yml`) reichen
+  die Variable jetzt durch; die Wiring-Hinweise sind aus beiden `.env.example`
+  entfernt. Nebenbei fiel auf, dass `deploy/hetzner/.env.example` dieselbe
+  Behauptung auch fuer `WHO2BE_LAUNCH_MODE` trug, obwohl dessen Wiring seit
+  #429 existiert — ebenfalls korrigiert. Offen bleibt `deploy/dokploy/
+  docker-compose.yml`: dort reicht der `web`-Service **keine** der drei
+  Runtime-Config-Variablen durch (`:272-277`, nur `WHO2BE_SIGNUP_DISABLED`);
+  der Stack laeuft in keinem Check und ist als Nebenbefund an #470 notiert.
+- ~~Ein Befund **ausserhalb** des Pakets (`apps/api`, aal2-Gate bei der
+  API-Token-Ausstellung) ist getrennt gemeldet~~ — **behoben 2026-09-06
+  (#469).** `TokenService.create` und `.rotate` gaten auf `require_aal2`,
+  sobald die betroffene Token-Rolle `admin` ist; bei `rotate` wird die Rolle
+  vor dem Rotate nachgeschlagen, damit kein neues Secret entsteht, bevor die
+  Pruefung feststeht. Die im Issue vermutete Migrationswirkung war
+  gegenstandslos: `require_aal2` kehrt bei `ctx.is_api_token` sofort zurueck
+  und bleibt On-Prem ohne `aal`-Claim fail-open — beide Ausnahmen sind durch
+  eigene Tests belegt.
 
 ## Backlog aufbereitet, drei Nebenfunde startbar (2026-09-06, Vorbereitungslauf vor den Laeufen 26-29 — nur GitHub + Doku)
 
@@ -2079,6 +2164,16 @@ Draft-on-Edit-Sichtbarkeit waren längst erledigt/überholt.
   80/79/75/80), Build grün; mcp: 241 pytest grün.
 
 ## Bekannte Probleme
+
+- **Entitlement-Upsert prueft die Ereignisreihenfolge nicht** (bewusst
+  aufgeschoben, #462, Weg C — **nicht** offen im Sinne von unentschieden):
+  `EntitlementRepository.upsert` ueberschreibt bedingungslos, ein verspaetet
+  zugestelltes Anbieter-Ereignis kann also einen neueren Stand zuruecksetzen.
+  Heute nicht ausloesbar (kein Anbieter auf dem generischen Pfad, Mollie hat
+  eigenen Dedupe, Ablauffrist aus #452 begrenzt den Schaden). Die Auflage fuer
+  einen signierenden Zweit-Anbieter — Ereignniszeit-Spalte plus verwerfende
+  `WHERE`-Bedingung — steht an der Upsert-Stelle, am Webhook-Pfad und in
+  ADR-0028 §Konsequenzen.
 
 - **Tabellen-Store-Verzeichnisse überleben den Hard-Purge** (bewusst, WP20):
   `cleanup_deleted_area_stores` fasst nur Verzeichnisse an, deren Workspace

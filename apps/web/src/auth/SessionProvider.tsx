@@ -13,7 +13,7 @@ import {
   rememberedSessionExpired,
   restoreRememberMarker,
 } from '../lib/remember-session'
-import { supabase } from '../lib/supabase'
+import { supabase, syncStorageBackendForThisTab } from '../lib/supabase'
 import { SessionContext, type SessionValue } from './session-context'
 
 // "Angemeldet bleiben" (Issue #430, ADR-0052). Der gesamte Marker-Zustand
@@ -171,23 +171,30 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const signIn = useCallback(async (email: string, password: string, remember: boolean) => {
-    // Marker VOR `signInWithPassword` setzen/loeschen: der delegierende
-    // Storage-Adapter (`lib/supabase.ts`) liest ihn live und muss die gleich
-    // folgende Session direkt ins richtige Backend schreiben — kein
-    // nachtraeglicher Storage-Wechsel.
+    // Marker + eingefrorenen Storage-Modus VOR `signInWithPassword`
+    // setzen/synchronisieren (Issue #430/#471): der delegierende
+    // Storage-Adapter (`lib/supabase.ts`) entscheidet seinen Modus nur EINMAL
+    // PRO TAB (Modul-Zustand, kein Live-Read des Markers mehr) —
+    // `syncStorageBackendForThisTab()` aktualisiert genau diesen
+    // eingefrorenen Wert fuer DIESEN Tab, damit die gleich folgende Session
+    // direkt ins richtige Backend geschrieben wird.
     const previousMarker = readRememberMarker()
     if (remember) {
       markRememberedLogin()
     } else {
       clearRememberMarker()
     }
+    syncStorageBackendForThisTab()
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
-      // Fehlversuch aendert den Modus nicht: den vorherigen Marker exakt
-      // wiederherstellen, statt pauschal zu loeschen. Ein Tippfehler im
-      // Passwort duerfte sonst eine laufende "angemeldet bleiben"-Session in
-      // einem anderen Tab ins falsche Backend umlenken.
+      // Fehlversuch aendert den Modus nicht: Marker UND eingefrorenen
+      // Storage-Modus exakt auf den Vorzustand zurueckstellen, statt
+      // pauschal zu loeschen. Ein Tippfehler im Passwort duerfte sonst eine
+      // laufende "angemeldet bleiben"-Session in einem anderen Tab ins
+      // falsche Backend umlenken (und dieser Tab hier bliebe sonst auf dem
+      // fehlgeschlagenen Modus eingefroren).
       restoreRememberMarker(previousMarker)
+      syncStorageBackendForThisTab()
       throw new Error(error.message)
     }
     // Der Moduswechsel laesst den Session-Blob des vorherigen Modus im nun
@@ -211,9 +218,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     // Reihenfolge wichtig: `signOut()` entfernt den Session-Key ueber den
-    // delegierenden Adapter, der dafuer noch den AKTUELLEN Marker braucht
-    // (sonst sucht er im falschen Backend und der Token bleibt als Datenleiche
-    // liegen). Den Marker selbst raeumt der `SIGNED_OUT`-Handler oben ab.
+    // delegierenden Adapter — dessen fuer DIESEN Tab eingefrorener Modus
+    // (Issue #471, `syncStorageBackendForThisTab`) zeigt weiterhin auf das
+    // Backend, in dem die Session tatsaechlich liegt, unabhaengig davon, ob
+    // der Marker in diesem Moment noch steht (robuster als der fruehere
+    // Live-Read, der genau davon abhing). Den Marker selbst raeumt der
+    // `SIGNED_OUT`-Handler oben ab — er wird bewusst NICHT vor diesem Aufruf
+    // geloescht.
     await supabase.auth.signOut()
     clearRememberMarker()
     purgeStoredSessionFrom('local')

@@ -3,7 +3,8 @@
 Ohne DB: ein Fake-Pool liefert die Org-Aufloesung + den Entity-Zaehler, ein
 Fake-Entitlement-Port das aufgeloeste Entitlement. Belegt: greift nur Cloud;
 Free am Limit ⇒ 402; Free unter Limit ⇒ frei; Paid/unbegrenzt ⇒ frei (ohne
-Zaehl-Roundtrip); On-Prem ⇒ no-op.
+Zaehl-Roundtrip); On-Prem ⇒ no-op. Seit W3 von #402 zusaetzlich: der 402
+traegt `reason` + `params` (ADR-0051).
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ import pytest
 from fastapi import HTTPException
 
 from who2be_api.core.config import Settings
+from who2be_api.core.errors import ApiError
 from who2be_api.core.security import WorkspaceContext
 from who2be_api.licensing.entitlement import (
     CLOUD_FREE_ENTITLEMENT,
@@ -109,6 +111,26 @@ def test_free_at_limit_blocks_402(monkeypatch: pytest.MonkeyPatch) -> None:
         _run(service)
     assert exc.value.status_code == 402
     assert "Upgrade" in exc.value.detail
+
+
+def test_free_at_limit_carries_reason_and_limit_param(monkeypatch: pytest.MonkeyPatch) -> None:
+    """W3 (#486): der 402 traegt `entity_quota_exceeded` **und** das Limit als `params`.
+
+    Die Zahl gehoert in die Daten, nicht in den Locale-Key: sonst braeuchte
+    jede Grenze (Free heute, morgen eine andere) einen eigenen Key. `detail`
+    bleibt woertlich — der Client interpoliert `{{limit}}` in den uebersetzten
+    Text, der deutsche Fallback ist derselbe Satz wie bisher.
+    """
+    pool = FakePool(count=FREE_ENTITY_QUOTA)
+    service = _service(monkeypatch, CLOUD_FREE_ENTITLEMENT, pool)
+    with pytest.raises(ApiError) as exc:
+        _run(service)
+    assert exc.value.reason == "entity_quota_exceeded"
+    assert exc.value.params == {"limit": FREE_ENTITY_QUOTA}
+    assert exc.value.detail == (
+        f"Free-Tarif erreicht das Limit von {FREE_ENTITY_QUOTA} Eintraegen je Workspace. "
+        "Upgrade auf Pro hebt die Grenze auf — Bestehendes bleibt nutzbar."
+    )
 
 
 def test_inactive_entitlement_uses_free_limit(monkeypatch: pytest.MonkeyPatch) -> None:

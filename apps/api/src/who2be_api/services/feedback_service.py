@@ -11,8 +11,9 @@ Telemetrie fliesst NIE in einen gerenderten System-Prompt (kein Injection-Vektor
 
 from uuid import UUID
 
-from fastapi import HTTPException, status
+from fastapi import status
 
+from who2be_api.core.errors import ApiError
 from who2be_api.core.security import WorkspaceContext, require_capability, require_role
 from who2be_api.repositories.feedback_repository import FeedbackRepository
 from who2be_models import (
@@ -40,8 +41,12 @@ _EVENTS_LIMIT = 50
 _ITEMS_LIMIT = 500
 
 
-def _entity_not_found() -> HTTPException:
-    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Element nicht gefunden.")
+def _entity_not_found() -> ApiError:
+    return ApiError(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Element nicht gefunden.",
+        reason="feedback_element_not_found",
+    )
 
 
 class FeedbackService:

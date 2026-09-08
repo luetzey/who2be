@@ -8,6 +8,63 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ## [Unreleased]
 
+### Security
+
+- Issuing or rotating an API token with the `admin` role now requires an
+  MFA-verified (aal2) session. Until now the reach of the MFA requirement
+  depended on which path you took rather than on what you did: every other
+  admin action goes through `require_role(ctx, admin)`, which calls
+  `require_aal2` automatically — but *issuing a token that carries admin
+  rights* was gated on `editor` only, and the resulting token is itself exempt
+  from the MFA gate by design (machine path, like a GitHub PAT). `rotate` is
+  gated too and deliberately so: it hands out a new, immediately valid secret
+  for the same role, so without it the issuing threshold would have been
+  bypassable by rotating an existing admin token — the check runs *before* the
+  new secret exists. `rename` and `revoke` stay ungated because neither can
+  raise a role. Nothing changes for `editor` and `viewer` tokens, for calls
+  made through an existing API token, or for on-premise deployments without an
+  `aal` claim, since `require_aal2` already carries both exemptions
+  (Issue #469).
+
+### Fixed
+
+- A newly registered user could not get their personal workspace in the cloud
+  edition: the first `GET /v1/me` lazily seeds one, and every seed insert was
+  rejected with `new row violates row-level security policy`. The seed writes
+  into tenant-isolated tables whose `WITH CHECK` requires `app.current_tenant`,
+  but it runs before any tenant scope exists — the user has no workspace yet,
+  so the pool's setup callback never set the GUC. It only ever surfaced in the
+  cloud: on-premise the app connects as the table owner, for whom row-level
+  security is not enforced, and the cloud stack had never run under a check
+  until the billing journey started exercising it. Both seeding paths now bind
+  the connection to the freshly created workspace for the remainder of their
+  transaction — `is_local`, so the setting disappears at commit and no tenant
+  leaks into the connection's next checkout. The policy itself is unchanged
+  (Issue #479).
+
+- The "stay signed in" marker no longer redirects tabs that are already
+  running. It lives in `localStorage`, which is shared across tabs, and the
+  storage adapter used to re-read it on *every* access — so signing in with
+  the box ticked in one tab silently rerouted an unrelated tab to that other
+  session, and clearing the marker logged a remembered tab out without a word.
+  The adapter now decides its backend once per tab and keeps it; a login in
+  *this* tab updates it, a marker change in a foreign tab does not. A tab
+  therefore keeps its mode until it reloads, which is both the fix and the
+  intended behaviour. Sign-out got more robust in passing: it no longer
+  depends on the marker still being present at the moment the adapter looks
+  for the session (Issue #471, ADR-0052 amended).
+
+- The `WHO2BE_SESSION_MAX_AGE_HOURS` runtime setting now reaches the web
+  container. The entrypoint has always read it and written it into
+  `/config.js`, but neither `web` service passed it in, so an operator who set
+  it in `.env` silently got the 12-hour default — no error, no warning. Both
+  `docker-compose.yml` and `deploy/hetzner/who2be/docker-compose.yml` now
+  forward it exactly the way they already forward `WHO2BE_LAUNCH_MODE`, and
+  the notes in both `.env.example` files that described the missing wiring as
+  an operator's task are gone. This makes good on what ADR-0052 promised:
+  operators can change the absolute session cap without rebuilding the image
+  (Issue #470).
+
 ### Changed
 
 - API error responses can now carry a stable, machine-readable `reason`
@@ -79,6 +136,48 @@ the merged pull requests and the plan documents under `.claude/plan/`.
   rather than build arguments.
 
 ### Added
+
+- Every API error response now carries a stable, machine-readable `reason`
+  alongside its German `detail`, and the web UI shows the message in the
+  interface language rather than always in German. This completes the six
+  waves of #402 against the contract established by ADR-0051: all 61 error
+  sites that spelled their message as a single-line literal were moved from
+  `HTTPException` to `ApiError`, which is a subclass of it — so status codes,
+  `detail` texts and headers are byte-for-byte what they were, and callers
+  that never look at `reason` cannot tell the difference. 46 reasons were
+  added to the one shared vocabulary (`ProblemReason`, now 73 values), each
+  with a title in the taxonomy table and a key in both locale files; the
+  locale key *is* the wire value, so there is no mapping that can drift
+  (Issues #482, #483, #484, #485, #486, #487).
+
+- Authentication failures deliberately keep the resolution they have today.
+  Eight distinct causes — missing header, expired or wrongly signed JWT,
+  disallowed `role`, unusable `sub`, unknown or revoked API token, and an
+  inconsistent principal — answer with the same status, the same text and the
+  same `WWW-Authenticate` header, and now also with the same
+  `invalid_credentials`. The reason is set inside the shared helper rather
+  than at the eight call sites, so no future change can make one of them
+  diverge and turn the field into an enumeration oracle. Two tests hold this
+  down, one of them comparing the full response bodies of "unknown token" and
+  "no header" for equality (Issue #487).
+
+- Rate limits and quotas report the limit they hit as `params`, which the
+  client interpolates into the translated message. Only configured limits
+  travel this way — never a counter, an identifier or an internal threshold —
+  and each of them is already readable by the same principal through
+  `/whoami` or the entitlement endpoint (Issues #486, #487).
+
+- A Playwright journey now covers the billing upgrade in a browser: sign in,
+  open the billing view, see the current tier with its quotas, trigger the
+  upgrade, and assert the app actually starts the redirect to the payment
+  provider — with the checkout response intercepted, so the provider is never
+  called and no key is needed in CI. It runs in its own CI job against a cloud
+  build, because the existing `e2e` job builds the on-premise default where
+  the billing UI is tree-shaken out of the bundle entirely; putting it there
+  would have meant a test that is skipped forever while looking like coverage.
+  A second case asserts a failing checkout surfaces a visible error
+  (Issue #453).
+
 
 - The MCP server now runs as part of the local stack (`mcp` service, Streamable
   HTTP on `localhost:8765/mcp`, also reachable behind the web origin at `/mcp`).

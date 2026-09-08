@@ -135,8 +135,12 @@ def _guard_rejection(config: MemoryGuardConfig, text: str) -> str | None:
     return None
 
 
-def _memory_not_found() -> HTTPException:
-    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Memory nicht gefunden.")
+def _memory_not_found() -> ApiError:
+    return ApiError(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Memory nicht gefunden.",
+        reason="memory_not_found",
+    )
 
 
 def _agent_not_found() -> ApiError:
@@ -343,9 +347,10 @@ class MemoryService:
         if existing is None:
             raise _memory_not_found()
         if existing.status != MemoryStatus.pending:
-            raise HTTPException(
+            raise ApiError(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Nur offene Vorschlaege (pending) koennen triagiert werden.",
+                reason="memory_not_pending",
             )
         new_status = (
             MemoryStatus.active
@@ -359,9 +364,10 @@ class MemoryService:
             ctx.workspace_id, agent_id, memory_id, new_status, fact, data.note
         )
         if updated is None:  # Race: parallel triagiert
-            raise HTTPException(
+            raise ApiError(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Nur offene Vorschlaege (pending) koennen triagiert werden.",
+                reason="memory_not_pending",
             )
         return updated
 
