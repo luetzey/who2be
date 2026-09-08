@@ -1,6 +1,22 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-08 (35. Lauf — Warteschlange: #498, #481)_
+_Stand: 2026-09-08 (35. Lauf — Warteschlange: #498, #481, #500)_
+
+## Die Navigation ist auf dem Phone erreichbar (2026-09-08, 35. Lauf, #500)
+
+Off-Canvas-`Sheet` unter `md`, erster Konsument der W0-Bausteine (#438). Der
+schwerwiegendere der beiden Befunde war nicht der fehlende Hamburger, sondern
+dass der **`WorkspaceSwitcher` unterhalb `sm` gar nicht existierte** — in einer
+App, deren gesamte API auf `/v1/workspaces/{ws_id}/...` haengt.
+
+**Die Schwelle ist jetzt einheitlich `md`.** Die `<aside>` stand auf `sm:flex`
+(640px), `useIsMobile()` auf `max-width: 767px` — dazwischen widersprachen sich
+Hook und Layout. Gilt fuer alle weiteren Wellen von #431.
+
+**Muster fuer die Folgewellen:** Zustand, der von der Breakpoint-Schwelle
+abhaengt, wird als Render-Zeit-Vergleich gegen den zuletzt gesehenen Wert
+geloest, nicht per `useEffect` — letzteres loest `react-hooks/set-state-in-effect`
+aus und ist der von react.dev ausdruecklich verworfene Weg.
 
 ## Die Org-Rolle ist jetzt eine benannte Absicht (2026-09-08, 35. Lauf, #481)
 

@@ -1512,3 +1512,20 @@ ergaenzend, nicht ersetzend.
 verlangt, wird nicht durch die technisch „strengere" Variante aufgeloest. Die
 Frage ist zuerst, welche Option am wenigsten kostet, wenn man sich spaeter
 anders entscheidet.
+
+## 2026-09-08 — Breakpoint-abhaengiger State ohne `useEffect` (Issue #500)
+
+**Entscheidung:** Zustand, der auf einen Wechsel der Breakpoint-Schwelle
+reagieren muss (Beispiel: das Off-Canvas-Sheet schliessen, sobald das Viewport
+ueber `md` waechst), wird als **Render-Zeit-Vergleich gegen den zuletzt
+gesehenen Wert** geloest, nicht in einem `useEffect`.
+
+**Warum:** Die Effect-Variante ist "Adjusting state when a prop changes"
+(react.dev) und loest die ESLint-Regel `react-hooks/set-state-in-effect` aus —
+zu Recht, denn sie rendert zweimal und flackert. Der Render-Zeit-Vergleich ist
+der von React empfohlene Weg und haelt die Lint-Baseline bei 0 Errors.
+
+**Reichweite:** gilt fuer die Folgewellen W2–W4 von #431, die weitere
+Mobile-Zustaende einfuehren werden. Ebenfalls festgelegt: die Mobile-Schwelle
+ist **`md`** (768px), passend zu `useIsMobile()` und Designsprache §4.4 — nicht
+`sm`, wie die AppShell-Sidebar es bis hierher hatte.

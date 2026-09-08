@@ -182,7 +182,8 @@
     "brand": "Who2Be",
     "nav": {
       "primary": "Main navigation",
-      "primaryMobile": "Main navigation (mobile)",
+      "openMenu": "Open menu",
+      "menuDescription": "Full navigation and workspace switcher.",
       "dashboard": "Dashboard",
       "agents": "Agents",
       "systemPrompts": "System prompts",

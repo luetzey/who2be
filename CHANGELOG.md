@@ -137,6 +137,16 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Changed
 
+- On phones and small tablets the navigation now opens as an off-canvas panel
+  behind a hamburger button instead of being crammed into the header as an
+  inline list. Below the `md` breakpoint the panel holds all ten navigation
+  targets **and** the workspace switcher — the latter had no mobile
+  representation at all until now, which made switching workspaces impossible
+  on a phone in an application whose entire API is scoped per workspace. From
+  `md` upwards the sidebar is unchanged. The sidebar's breakpoint moved from
+  `sm` to `md` so that it matches the `useIsMobile()` threshold; between 640px
+  and 767px the two used to disagree (Issue #500, wave 1 of #431).
+
 - Documented that an organization's `org_member.role` deliberately carries no
   permission for creating workspaces: any member of an organization may create
   them, and the role hierarchy applies one level down, inside a workspace.
