@@ -113,6 +113,32 @@ ProblemReason = Literal[
     "mcp_quota_exceeded",  # 429 — Monats-MCP-Kontingent erschoepft (params: limit)
     "consent_requires_session",  # 401 — OAuth-Consent nur mit eingeloggter Web-Session
     "invalid_cursor",  # 422 — Keyset-Cursor nicht dekodierbar
+    # Mehrzeilige Fehler-Literale ohne Interpolation (W7a von #491, #501):
+    # reiner Konstruktortausch `HTTPException` → `ApiError`, `detail`
+    # unveraendert, `reason` additiv.
+    "draft_conflict",  # 409 — Draft existiert bereits, Edit blockiert
+    "review_conflict",  # 409 — Version in Review, Auto-Save deaktiviert
+    "area_id_required_for_human",  # 422 — ohne area_id nur agent-gebunden schreib-/ingestfaehig
+    "template_version_inactive",  # 409 — verlinktes Template ohne aktive Version
+    "agent_incomplete",  # 409 — Huelle ohne Persona/Template, nichts zu rendern
+    "agent_reference_not_found",  # 404 — Persona oder Template existiert nicht im Workspace
+    "agent_privilege_escalation",  # 403 — Agent versucht Policy ueber die eigene hinaus zu vererben
+    # f-String- und Modulkonstanten-Stellen ohne mehrfache Verwendung sowie
+    # Modulkonstanten mit zwei Aufrufstellen (W7b von #491, #502): reiner
+    # Konstruktortausch `HTTPException` -> `ApiError`, `detail` unveraendert;
+    # bei den f-Strings kommt `params` additiv fuer die interpolierten Werte.
+    "last_admin_undeletable",  # 409 — letzter Admin eines Workspace nicht entfernbar
+    "workspace_member_not_found",  # 404 — Workspace-Mitglied unbekannt
+    "read_scope_forbidden",  # 403 — Read-Scope "none" (params: domain)
+    "invalid_locale",  # 422 — `?locale=` nicht normalisierbar (params: locale)
+    "sole_owner_deletion_blocked",  # 409 — alleiniger Owner von Orgs (params: organizations)
+    "agent_not_activatable",  # 409 — Persona/Template fehlt (params: missing)
+    "memory_importance_too_low",  # 422 — unter Mindestschwelle (params: importance, minimum)
+    "memory_duplicate",  # 409 — zu aehnlich (params: duplicate_id, duplicate_fact)
+    "memory_cap_reached",  # 409 — Obergrenze des Agenten erreicht (params: maximum)
+    "persona_mode_unknown",  # 422 — Persona-Modus existiert nicht (params: mode, available)
+    "placeholder_kind_unknown",  # 422 — unbekannter Placeholder-Typ (params: kind)
+    "entity_version_not_found",  # 404 — Version einer Entitaet unbekannt (params: label)
 ]
 
 # Wer den Fehler beheben kann: `agent` = der aufrufende Agent kann es selbst

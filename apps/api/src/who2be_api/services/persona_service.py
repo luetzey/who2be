@@ -108,7 +108,7 @@ def _delete_blocked(usages: list[PersonaUsage]) -> HTTPException:
     )
 
 
-def _unknown_mode(mode: str, available: list[str]) -> HTTPException:
+def _unknown_mode(mode: str, available: list[str]) -> ApiError:
     """422: der angefragte Persona-Modus existiert nicht (WP-F).
 
     Die Fehlermeldung listet die verfuegbaren Modi — der MCP-Client reicht das
@@ -116,9 +116,11 @@ def _unknown_mode(mode: str, available: list[str]) -> HTTPException:
     korrigieren kann.
     """
     names = ", ".join(available) if available else "keine"
-    return HTTPException(
+    return ApiError(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         detail=f"Unbekannter Modus '{mode}'. Verfuegbare Modi: {names}.",
+        reason="persona_mode_unknown",
+        params={"mode": mode, "available": names},
     )
 
 
@@ -130,23 +132,25 @@ def _invalid_against() -> ApiError:
     )
 
 
-def _draft_conflict() -> HTTPException:
-    return HTTPException(
+def _draft_conflict() -> ApiError:
+    return ApiError(
         status_code=status.HTTP_409_CONFLICT,
         detail=(
             "Es existiert bereits ein Draft. Promote oder verwirf den "
             "bestehenden Draft, bevor du erneut editierst."
         ),
+        reason="draft_conflict",
     )
 
 
-def _review_conflict() -> HTTPException:
-    return HTTPException(
+def _review_conflict() -> ApiError:
+    return ApiError(
         status_code=status.HTTP_409_CONFLICT,
         detail=(
             "Diese Version steht in der Review — Auto-Save ist deaktiviert. "
             "Lehne die Review erst ab, bevor du weiter editierst."
         ),
+        reason="review_conflict",
     )
 
 

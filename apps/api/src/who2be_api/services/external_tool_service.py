@@ -12,7 +12,7 @@ from datetime import datetime
 from uuid import UUID
 
 import asyncpg
-from fastapi import HTTPException, status
+from fastapi import status
 
 from who2be_api.core.agent_scope import require_external_tool_read
 from who2be_api.core.errors import ApiError
@@ -58,23 +58,25 @@ def _alias_conflict() -> ApiError:
     )
 
 
-def _draft_conflict() -> HTTPException:
-    return HTTPException(
+def _draft_conflict() -> ApiError:
+    return ApiError(
         status_code=status.HTTP_409_CONFLICT,
         detail=(
             "Es existiert bereits ein Draft. Promote oder verwirf den "
             "bestehenden Draft, bevor du erneut editierst."
         ),
+        reason="draft_conflict",
     )
 
 
-def _review_conflict() -> HTTPException:
-    return HTTPException(
+def _review_conflict() -> ApiError:
+    return ApiError(
         status_code=status.HTTP_409_CONFLICT,
         detail=(
             "Diese Version steht in der Review — Auto-Save ist deaktiviert. "
             "Lehne die Review erst ab, bevor du weiter editierst."
         ),
+        reason="review_conflict",
     )
 
 

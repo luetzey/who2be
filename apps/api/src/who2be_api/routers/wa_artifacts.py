@@ -28,6 +28,7 @@ import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
 from who2be_api.core.db import get_pool
+from who2be_api.core.errors import ApiError
 from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.repositories.resource_repository import PgResourceRepository
@@ -118,13 +119,14 @@ async def create_artifact_in_private_area(
     if ctx.tool_policy is None and ctx.agent_id is None:
         # Menschen (JWT/ungebundener Token) haben KEINE private Area — der
         # Aufruf ist semantisch unvollstaendig, kein Autorisierungsproblem.
-        raise HTTPException(
+        raise ApiError(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=(
                 "Ohne area_id schreibt nur ein agent-gebundener Token (private "
                 "Area). Menschen legen Artifacts ueber "
                 "POST /work-areas/{area_id}/artifacts an."
             ),
+            reason="area_id_required_for_human",
         )
     return await service.create(ctx, None, data)
 

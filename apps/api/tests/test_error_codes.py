@@ -797,12 +797,13 @@ def test_unmigrated_error_body_is_unchanged(
     Feld ueberall. Faellt dieser Test, hat jemand entweder den Handler zu breit
     registriert oder `HTTPException` global ersetzt.
 
-    Der Waechter sass bis W2 (#483) auf dem Persona-404; seit dieser Welle
-    traegt der einen `reason`. Er zeigt jetzt auf den `locale`-Filter
-    (`core/locale.py`) — eine Datei, die in **keiner** Bestandstabelle der
-    sechs Wellen steht. Der naheliegende Ersatz waere der Keyset-Cursor
-    gewesen; der gehoert aber zu W6 (#487) und haette denselben Umzug in der
-    naechsten Welle noch einmal erzwungen.
+    Der Waechter sass seit W2 (#483) auf dem `locale`-Filter (`core/locale.py`)
+    — der naheliegende Keyset-Cursor gehoerte damals noch zu einer kuenftigen
+    Welle (W6, #487) und ist inzwischen migriert. W7b (#502) migriert jetzt
+    genau die Stelle, auf der dieser Waechter sass (`invalid_locale`) — er
+    zeigt darum auf den Einzel-Export (`routers/_export.py:export_entity`,
+    hier ueber `personas.py`), eine Stelle, die in keiner Bestandstabelle von
+    #402/#491 steht und noch aussteht.
 
     Der Test muss end-to-end gegen `app` laufen, nicht gegen eine Mini-App:
     er warnt davor, dass jemand den Handler in `main.py` zu breit registriert
@@ -818,14 +819,14 @@ def test_unmigrated_error_body_is_unchanged(
     try:
         with TestClient(app) as client:
             resp = client.get(
-                f"/v1/workspaces/{workspace_id}/personas?locale=123",
+                f"/v1/workspaces/{workspace_id}/personas/{uuid4()}/export",
                 headers=make_auth_headers(user_id),
             )
     finally:
         cleanup_workspaces([user_id])
 
-    assert resp.status_code == 422
-    assert resp.json() == {"detail": "Ungueltiger locale-Parameter: '123'."}
+    assert resp.status_code == 404
+    assert resp.json() == {"detail": "Persona nicht gefunden."}
 
 
 # --- 3. Handler-Ebene: params, Header, Abgrenzung zu RFC 7807 --------------

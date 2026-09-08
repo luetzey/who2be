@@ -10,7 +10,7 @@ from datetime import datetime
 from uuid import UUID, uuid4
 
 import asyncpg
-from fastapi import HTTPException, status
+from fastapi import status
 
 from who2be_api.core.errors import ApiError
 from who2be_api.core.security import (
@@ -49,13 +49,14 @@ def _not_found() -> ApiError:
     )
 
 
-def _draft_conflict() -> HTTPException:
-    return HTTPException(
+def _draft_conflict() -> ApiError:
+    return ApiError(
         status_code=status.HTTP_409_CONFLICT,
         detail=(
             "Es existiert bereits ein Draft. Promote oder verwirf den "
             "bestehenden Draft, bevor du erneut editierst."
         ),
+        reason="draft_conflict",
     )
 
 

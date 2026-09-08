@@ -32,7 +32,7 @@ from uuid import UUID, uuid4
 
 import asyncpg
 from asyncpg.exceptions import ForeignKeyViolationError
-from fastapi import HTTPException, status
+from fastapi import status
 
 from who2be_api.core.agent_scope import agent_read_restrict
 from who2be_api.core.errors import ApiError, ApiGateError
@@ -73,23 +73,26 @@ _MISSING_LABELS = {
 }
 
 
-def _not_activatable(missing: list[str]) -> HTTPException:
+def _not_activatable(missing: list[str]) -> ApiError:
     """409 mit Klartext, was dem Agenten zur Aktivierbarkeit fehlt."""
     todo = ", ".join(_MISSING_LABELS.get(item, item) for item in missing)
-    return HTTPException(
+    return ApiError(
         status_code=status.HTTP_409_CONFLICT,
         detail=(
             f"Agent ist noch nicht vollstaendig — fehlt: {todo}. "
             "Aktivieren und Kopieren sind erst moeglich, wenn Persona und Template "
             "gesetzt sind und die Persona eine aktive Version hat."
         ),
+        reason="agent_not_activatable",
+        params={"missing": todo},
     )
 
 
-def _invalid_reference() -> HTTPException:
-    return HTTPException(
+def _invalid_reference() -> ApiError:
+    return ApiError(
         status_code=status.HTTP_404_NOT_FOUND,
         detail=("Persona oder Template existiert nicht in diesem Workspace."),
+        reason="agent_reference_not_found",
     )
 
 
@@ -204,12 +207,13 @@ def _guard_policy_escalation(ctx: WorkspaceContext, target: AgentToolPolicy) -> 
     if ctx.tool_policy is None:
         return
     if not target.is_within(ctx.tool_policy):
-        raise HTTPException(
+        raise ApiError(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=(
                 "Ein Agent darf keinen Agenten mit mehr Rechten als seinen eigenen "
                 "anlegen oder aendern."
             ),
+            reason="agent_privilege_escalation",
         )
 
 

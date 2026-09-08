@@ -1,6 +1,141 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-08 (34. Lauf — Backlog-Aufbereitung + #495 + #477)_
+_Stand: 2026-09-08 (36. Lauf — Zuschnitt W7c/#506; 35. Lauf: #498, #481, #500, #501, #502 in PR #505)_
+
+## W7c geschnitten — #491 hatte kein startbares Kind mehr (2026-09-08, 36. Lauf, #506)
+
+Die Backlog-Queue fuehrte #491 als „vollstaendig zerlegt". **Das stimmte
+nicht:** W7c stand nur als Halbsatz in der Queue selbst, ohne eigenes Issue.
+Nach dem Merge von PR #505 haette das Tracking kein startbares Kind mehr
+gehabt. Nachgeholt als **#506** (`agent-ready`, `size/S`, Startsperre bis zum
+Merge von #505): sieben Stellen, sechs neue Gruende.
+
+**Der Fund, der das Paket beinahe verhindert haette.** Der Modul-Kopf von
+`routers/wa_tables.py:36-45` traegt eine Gegenentscheidung aus dem
+Security-Review Phase 2 (H1): die `ProblemReason`-Taxonomie sei „geschlossen
+und beschreibt Berechtigungs-/Zustands-Gruende", ein Timeout gehoere nicht
+dazu. Sie ist **datierbar ueberholt** — `885a363` vom 2026-08-16 gegen
+ADR-0051 vom 2026-09-06, die genau diese Praemisse ausdruecklich als falsch
+benennt („Diese Annahme war falsch […] laengst kein Gate-Vokabular mehr").
+Zwei Aufrufe klaeren den Vorrang: `git log -S` auf den Absatz, Datum der ADR.
+**Das Korrigieren des Absatzes ist Akzeptanzkriterium 4 von #506** — eine
+veraltete Begruendung, die stehen bleibt, liest sich fuer den Naechsten wie
+eine gueltige.
+
+Das inhaltliche Teilargument gilt weiter und ist eingearbeitet:
+`query_not_readonly` waere fuer einen Timeout sachlich falsch, deshalb ein
+eigener Grund statt eines wiederverwendeten (Regel 20).
+
+**Blindfleck des eigenen Messfilters.** Der Filter „`detail` enthaelt einen
+Call oder ein Attribute" uebersah `wa_timeline.py:169`, weil `f"{exc} …"`
+beides nicht ist. Erst die Zaehlung **aller** `HTTPException`-Konstruktionen
+(13 auf dem PR-Stand) ergab die vollstaendige Restflaeche. Regel 18 in
+fuenfter Auflage — diesmal traf sie den AST-Filter, nicht den Regex.
+
+## W7b abgeschlossen — #491 ist bis auf die zwei offenen Fragen erledigt (2026-09-08, 35. Lauf, #502)
+
+Vierzehn weitere Stellen migriert: vier Modulkonstanten und zehn f-Strings,
+letztere mit **`params`** statt Werten im Locale-Key. Offene nicht-literale
+Stellen **26 -> 12** — und diese zwoelf sind genau die, die ausgenommen
+bleiben: 9x mit dynamischem `detail` (#503 plus W7c/#506) und 3x Objekt-
+`detail` (in ADR-0051 als bewusste Ausnahme dokumentiert).
+
+**Korrektur (36. Lauf):** hier stand zuerst „9x Fremd-Exception-Text (#503,
+Sicherheitsfrage)". Beides ist falsch. Die neun Stellen fangen ausnahmslos
+**eigene** Domain-Exceptions — es gibt keinen Fremdtext, und das
+`security`-Label an #503 ist gefallen. #503 ist auf die **zwei**
+OAuth-Stellen neu geschnitten; die restlichen sieben sind ein normales
+Migrationspaket (W7c, #506).
+
+`ProblemReason` **80 -> 92**, `common.errors` **63 -> 75** je Locale.
+
+**Zwei Zaehl-Blindflecken, die dieser Lauf gefunden hat:**
+
+1. **Ein Regex zaehlt Kommentare mit.** Die `ProblemReason`-Zahl war zweimal
+   um eins zu hoch, weil ein zitierter String im Docstring mitgezaehlt wurde.
+   Wer ein Vokabular zaehlt, parst es (`ast`, `typing.get_args`) — nicht grep.
+2. **`raise HTTPException(...)` ist nicht die einzige Schreibweise.**
+   `routers/_export.py:54` weist die Exception erst einer Variablen zu und
+   wirft sie dann (`not_found = HTTPException(...)` / `raise not_found`). Sie
+   ist von **keiner** der sieben Messungen dieses Vorhabens erfasst worden —
+   der Bestand von #491 war also 46, nicht 45. Sie ist jetzt der Zeuge des
+   Regressionstests `test_unmigrated_error_body_is_unchanged` und bleibt
+   bewusst unmigriert.
+
+## Neunzehn Fehlerstellen mehr tragen einen `reason` (2026-09-08, 35. Lauf, #501)
+
+W7a von #491: die mehrzeiligen Literale sind migriert. Offene nicht-literale
+`HTTPException`-Stellen **45 -> 26**; `ProblemReason` **73 -> 80**;
+`common.errors` **56 -> 63** je Locale, deckungsgleich.
+
+**Korrektur (36. Lauf):** hier stand zuerst „74 -> 81". Die Zahl kam aus
+einer Regex-Zaehlung, die einen im Docstring zitierten String mitzaehlte;
+per AST-Parse sind es **73 -> 80** (und mit W7b **-> 92**). Der Commit
+`56abc70` traegt die falsche Zahl in seiner Message — History bleibt stehen,
+die Korrektur steht hier. **Der Body von PR #505 behauptete, diese Korrektur
+sei bereits in STATE nachgetragen; sie war es nicht.** Auch das ist
+korrigiert.
+
+**Zwei Stellen brauchten keinen neuen Grund:** `routers/agents.py:201/230`
+tragen woertlich "Agent nicht gefunden." und bekamen den bestehenden
+`agent_not_found`. Sie waren die einzigen zwei Stellen im Baum, die `detail`
+**positional** uebergeben — deshalb hat sie kein `detail=`-Grep je gefunden.
+
+**Drei Paare mit gleicher Semantik, aber leicht abweichendem Wortlaut** teilen
+sich je einen Grund (`area_id_required_for_human`, `template_version_inactive`,
+`agent_incomplete`). Begruendung: `reason` ist ein Maschinenvokabular, kein
+Textschluessel — zwei Gruende fuer dieselbe Sachlage zwingen jeden Client,
+beide zu kennen. Die `detail`-Texte bleiben an beiden Stellen woertlich.
+
+**#498 hat zum ersten Mal gewirkt:** die Aenderung beruehrt Fehler-Schemas,
+also musste `docs/reference/openapi.json` mitregeneriert werden. Ohne das neue
+Gate waere die Referenz erneut still veraltet — exakt das Muster der sechs
+#402-Wellen.
+
+## Die Navigation ist auf dem Phone erreichbar (2026-09-08, 35. Lauf, #500)
+
+Off-Canvas-`Sheet` unter `md`, erster Konsument der W0-Bausteine (#438). Der
+schwerwiegendere der beiden Befunde war nicht der fehlende Hamburger, sondern
+dass der **`WorkspaceSwitcher` unterhalb `sm` gar nicht existierte** — in einer
+App, deren gesamte API auf `/v1/workspaces/{ws_id}/...` haengt.
+
+**Die Schwelle ist jetzt einheitlich `md`.** Die `<aside>` stand auf `sm:flex`
+(640px), `useIsMobile()` auf `max-width: 767px` — dazwischen widersprachen sich
+Hook und Layout. Gilt fuer alle weiteren Wellen von #431.
+
+**Muster fuer die Folgewellen:** Zustand, der von der Breakpoint-Schwelle
+abhaengt, wird als Render-Zeit-Vergleich gegen den zuletzt gesehenen Wert
+geloest, nicht per `useEffect` — letzteres loest `react-hooks/set-state-in-effect`
+aus und ist der von react.dev ausdruecklich verworfene Weg.
+
+## Die Org-Rolle ist jetzt eine benannte Absicht (2026-09-08, 35. Lauf, #481)
+
+Dass jedes Org-Mitglied Workspaces anlegen darf, war seit dem Security-Review
+zu #479 dreimal neu belegt worden, ohne dass sich etwas aenderte. Der Owner hat
+am 2026-09-08 entschieden: **akzeptieren und dokumentieren** (ADR-0023
+§Abgrenzung, F-Phase2-04 in `security-findings-phase-2.md` §9). Kein Code
+geaendert — das war das Ergebnis, nicht sein Ausbleiben.
+
+**Warum nicht die Mindestrolle:** sie waere ein Breaking Change fuer Betreiber,
+deren `member` heute Workspaces anlegt. Die Doku-Variante schliesst keine Tuer.
+
+## Die OpenAPI-Referenz kann nicht mehr still veralten (2026-09-08, 35. Lauf, #498)
+
+`docs/reference/openapi.json` hatte bis jetzt **kein CI-Gate** — `openapi` kam
+in `.github/workflows/ci.yml` nur in einem Kommentar vor. Der `python`-Job
+regeneriert die Spec jetzt und vergleicht sie; bei Abweichung nennt die
+Fehlermeldung das Kommando zur Behebung.
+
+**Warum der vorhandene Contract-Test nicht reichte — lokal belegt.**
+`test_openapi_contract.py` friert nur die *Oberflaeche* ein (Methode, Pfad,
+`operationId`). Zum Nachweis wurde eine reine Schema-Aenderung eingebaut (eine
+Feld-Beschreibung an `AgentRenderResponse.content`, keine neue Route): der
+Contract-Test meldete weiterhin `2 passed`, das neue Gate wurde rot. Genau
+diese Sorte Drift lief waehrend der sechs #402-Wellen unbemerkt durch.
+
+**Merke fuer kuenftige Wellen:** #501 und #502 aendern Fehler-Schemas und
+loesen damit genau dieses Gate aus — wer dort migriert, regeneriert die Spec
+mit. Das ist der Grund, warum #498 in der Warteschlange vor beiden steht.
 
 ## Der dokploy-Stack reicht wieder alles durch (2026-09-08, 34. Lauf, #477)
 

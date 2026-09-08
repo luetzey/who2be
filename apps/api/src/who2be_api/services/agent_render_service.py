@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 import asyncpg
-from fastapi import HTTPException, status
+from fastapi import status
 from markdown_it import MarkdownIt
 
 from who2be_api.core.errors import ApiError
@@ -41,17 +41,19 @@ def _agent_render_inactive() -> ApiError:
     )
 
 
-def _template_inactive() -> HTTPException:
-    return HTTPException(
+def _template_inactive() -> ApiError:
+    return ApiError(
         status_code=status.HTTP_409_CONFLICT,
         detail=("Das verlinkte Template hat keine aktive Version — bitte erst veroeffentlichen."),
+        reason="template_version_inactive",
     )
 
 
-def _agent_incomplete() -> HTTPException:
-    return HTTPException(
+def _agent_incomplete() -> ApiError:
+    return ApiError(
         status_code=status.HTTP_409_CONFLICT,
         detail=("Agent ist eine unvollstaendige Huelle ohne Template — nichts zu rendern."),
+        reason="agent_incomplete",
     )
 
 

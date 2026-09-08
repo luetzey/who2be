@@ -187,13 +187,15 @@ class MemoryService:
         assert ctx.agent_id is not None and ctx.tool_policy is not None  # via Gate garantiert
 
         if data.importance < MEMORY_MIN_IMPORTANCE:
-            raise HTTPException(
+            raise ApiError(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=(
                     f"Nicht gespeichert — importance {data.importance} liegt unter der "
                     f"Schwelle {MEMORY_MIN_IMPORTANCE}. Nur dauerhaft relevante Fakten "
                     "vorschlagen (waere er in 3 Monaten noch nuetzlich?)."
                 ),
+                reason="memory_importance_too_low",
+                params={"importance": data.importance, "minimum": MEMORY_MIN_IMPORTANCE},
             )
         # Injection-Verdikt gemaess Workspace-Konfiguration (ADR-0044-Addendum):
         # standard = Built-in, custom = Built-in mit Allow-Suppression +
@@ -216,13 +218,16 @@ class MemoryService:
         )
         if duplicate is not None:
             dup_id, dup_fact = duplicate
-            raise HTTPException(
+            duplicate_id = str(dup_id)[:8]
+            raise ApiError(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=(
                     f"Nicht gespeichert — zu aehnlich zu vorhandenem Memory "
-                    f"[{str(dup_id)[:8]}]: „{dup_fact}“. Duplikate (auch bereits "
+                    f"[{duplicate_id}]: „{dup_fact}“. Duplikate (auch bereits "
                     "abgelehnte Vorschlaege) werden nicht erneut aufgenommen."
                 ),
+                reason="memory_duplicate",
+                params={"duplicate_id": duplicate_id, "duplicate_fact": dup_fact},
             )
         # Cap zaehlt bewusst ALLE Status inkl. rejected (Security-Review N-3):
         # harte Obergrenze pro Agent statt unbegrenzt wachsender rejected-Menge.
@@ -230,13 +235,15 @@ class MemoryService:
         # ist in der Triage-UI sichtbar und vom Menschen aufraeumbar.
         count = await self._repo.count_for_agent(ctx.workspace_id, ctx.agent_id)
         if count >= MEMORY_MAX_PER_AGENT:
-            raise HTTPException(
+            raise ApiError(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=(
                     f"Nicht gespeichert — das Gedaechtnis dieses Agenten ist voll "
                     f"({MEMORY_MAX_PER_AGENT} Eintraege). Der Workspace-Besitzer muss "
                     "zuerst aufraeumen (Agent-Detailseite → Gedaechtnis)."
                 ),
+                reason="memory_cap_reached",
+                params={"maximum": MEMORY_MAX_PER_AGENT},
             )
         new_status = (
             MemoryStatus.active

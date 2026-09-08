@@ -185,3 +185,30 @@ Migrationsweg, und Logs/Support verlieren den Klartext.
 Verworfen: die UI-Sprache ist eine Client-Eigenschaft (Umschalter ohne
 Reload), der Server muesste jede Sprache kennen, und MCP-Clients wollen gar
 keinen Text, sondern den Code.
+
+## Ausnahme (2026-09-08, W7b von #491/#502): drei Objekt-`detail`-Stellen bleiben aussen vor
+
+Drei Stellen wandern bewusst **nicht** in dieses Schema, obwohl sie
+`HTTPException` mit dynamischem Inhalt werfen:
+
+- `services/persona_service.py:107` (`_delete_blocked`)
+- `services/playbook_service.py:105` (`_delete_blocked`)
+- `services/resource_service.py:97` (`_delete_blocked`)
+
+Alle drei liefern `detail=<Model>.model_dump(mode="json")` — ein **Objekt**
+(`{"detail": "...", "blocked_by": {...}}`), keinen String. `ApiErrorBody.detail`
+ist als `str` deklariert (siehe oben, Abschnitt 3): die Struktur ist an diesen
+drei Stellen die **Nutzlast** selbst (der Client braucht `blocked_by`, um die
+blockierenden IDs anzuzeigen), nicht eine Fehlermeldung mit Beiwerk. Sie in
+`ApiError`/`ApiErrorBody` zu pressen hiesse entweder, `blocked_by` zu verlieren,
+oder `ApiErrorBody.detail` auf `str | dict` zu erweitern — beides eine
+Vertragsaenderung am bestehenden Fehler-Contract, keine additive Migration.
+Eine Erweiterung des Vertrags ist als eigenes Vorhaben denkbar (#504), aber
+nicht Teil dieser Welle.
+
+Das ist eine **Owner-Entscheidung vom 2026-09-08** (Option C zu #491:
+dokumentieren statt erzwingen), kein Uebersehen — der Fall war beim Zuschnitt
+von #491 bekannt und ist bereits einmal aufgetaucht:
+`.claude/context/DECISIONS.md:1432-1440` (Eintrag „Der Bestandszaehler von
+#402 zaehlt Wuerfe, nicht Schreibweisen", 2026-09-07) haelt exakt dieselben
+drei Stellen als „mit dem heutigen Vertrag gar nicht migrierbar" fest.

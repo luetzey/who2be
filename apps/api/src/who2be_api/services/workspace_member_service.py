@@ -7,8 +7,9 @@ gemappt, fehlende Mitglieder auf 404.
 
 from uuid import UUID
 
-from fastapi import HTTPException, status
+from fastapi import status
 
+from who2be_api.core.errors import ApiError
 from who2be_api.repositories.token_repository import TokenRepository
 from who2be_api.repositories.workspace_member_repository import (
     LastAdminError,
@@ -50,11 +51,17 @@ class WorkspaceMemberService:
                 workspace_id, user_id, new_role, actor_id=actor_id
             )
         except LastAdminError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT, detail=_LAST_ADMIN_DETAIL
+            raise ApiError(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=_LAST_ADMIN_DETAIL,
+                reason="last_admin_undeletable",
             ) from exc
         if member is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND_DETAIL)
+            raise ApiError(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=_NOT_FOUND_DETAIL,
+                reason="workspace_member_not_found",
+            )
         # Rollenwechsel invalidiert die gepinnte Snapshot-Rolle bestehender
         # Tokens des Mitglieds — daher alle mit-widerrufen (Neu-Ausstellung mit
         # der neuen Rolle bleibt moeglich).
@@ -71,11 +78,17 @@ class WorkspaceMemberService:
         try:
             removed = await self._repo.remove(workspace_id, user_id, actor_id=actor_id)
         except LastAdminError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT, detail=_LAST_ADMIN_DETAIL
+            raise ApiError(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=_LAST_ADMIN_DETAIL,
+                reason="last_admin_undeletable",
             ) from exc
         if not removed:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND_DETAIL)
+            raise ApiError(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=_NOT_FOUND_DETAIL,
+                reason="workspace_member_not_found",
+            )
         # Entferntes Mitglied: seine aktiven Tokens in diesem Workspace sofort
         # widerrufen — sonst behielte ein Ex-Admin lebende Credentials.
         await self._tokens.revoke_by_owner(workspace_id, user_id)

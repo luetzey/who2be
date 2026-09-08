@@ -135,7 +135,57 @@ the merged pull requests and the plan documents under `.claude/plan/`.
   `WHO2BE_SUPABASE_URL` and `WHO2BE_SUPABASE_ANON_KEY` as container environment
   rather than build arguments.
 
+### Changed
+
+- On phones and small tablets the navigation now opens as an off-canvas panel
+  behind a hamburger button instead of being crammed into the header as an
+  inline list. Below the `md` breakpoint the panel holds all ten navigation
+  targets **and** the workspace switcher — the latter had no mobile
+  representation at all until now, which made switching workspaces impossible
+  on a phone in an application whose entire API is scoped per workspace. From
+  `md` upwards the sidebar is unchanged. The sidebar's breakpoint moved from
+  `sm` to `md` so that it matches the `useIsMobile()` threshold; between 640px
+  and 767px the two used to disagree (Issue #500, wave 1 of #431).
+
+- Documented that an organization's `org_member.role` deliberately carries no
+  permission for creating workspaces: any member of an organization may create
+  them, and the role hierarchy applies one level down, inside a workspace.
+  Nothing changes in behaviour — this records an existing state that three
+  separate security reviews had re-discovered. Requiring a minimum role would
+  be a breaking change for operators whose `member` accounts create workspaces
+  today, so it stays a separate, deliberate decision. See ADR-0023
+  ("Abgrenzung: Org-Rolle vs. Workspace-Rolle") and finding F-Phase2-04
+  (Issue #481).
+
 ### Added
+
+- Fourteen further API error sites now carry a stable `reason`, and the ten
+  that interpolate a value into their message now pass that value as
+  structured `params` rather than baking it into the translation key — one key
+  with placeholders instead of one key per value combination. The German text
+  a user sees is unchanged. Three sites are deliberately left out and the
+  reason is now recorded in ADR-0051: they pass an object as `detail` (the
+  blocking references a client needs to render), which the `str`-typed
+  `ApiErrorBody.detail` cannot carry without changing the contract
+  (Issue #502, wave 7b of #491).
+
+- Nineteen more API error sites now carry a stable, machine-readable `reason`
+  alongside their German `detail` — the ones whose message is written as a
+  multi-line literal, which the original `detail="` inventory of #402 never
+  saw. Seven new reasons cover them; two sites reuse the existing
+  `agent_not_found` because their wording is identical to an already-migrated
+  site. Nothing a client sees changes: every `detail` string is preserved
+  verbatim, and each German locale text matches it word for word (Issue #501,
+  wave 7a of #491).
+
+- CI now fails when the checked-in OpenAPI reference
+  `docs/reference/openapi.json` drifts from the application. The `python` job
+  regenerates the spec via `scripts/export_openapi.py` and compares it against
+  the committed file; on a mismatch the error message names the command that
+  fixes it. This closes a gap the existing contract test could not: that test
+  freezes only the API *surface* (method, path, `operationId`), so any change
+  to a request or response schema left it green — which is how the reference
+  went stale for four release waves without anything turning red (Issue #498).
 
 - Every API error response now carries a stable, machine-readable `reason`
   alongside its German `detail`, and the web UI shows the message in the
