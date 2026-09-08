@@ -23,7 +23,7 @@ from typing import TypeAlias
 from uuid import UUID
 
 import asyncpg
-from fastapi import HTTPException, status
+from fastapi import status
 
 from who2be_api.core.errors import ApiError
 from who2be_api.core.security import WorkspaceContext
@@ -182,13 +182,15 @@ def agent_read_restrict(ctx: WorkspaceContext) -> set[UUID] | None:
     return {ctx.agent_id}
 
 
-def _tool_unavailable(domain: str) -> HTTPException:
-    return HTTPException(
+def _tool_unavailable(domain: str) -> ApiError:
+    return ApiError(
         status_code=status.HTTP_403_FORBIDDEN,
         detail=(
             f"Dieser Agent darf keine {domain} lesen. "
             "Der Workspace-Besitzer kann den Lesezugriff in der Agent-Konfiguration freischalten."
         ),
+        reason="read_scope_forbidden",
+        params={"domain": domain},
     )
 
 

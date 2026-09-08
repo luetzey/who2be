@@ -13,9 +13,10 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 import asyncpg
-from fastapi import HTTPException, status
+from fastapi import status
 from pydantic import BaseModel
 
+from who2be_api.core.errors import ApiError
 from who2be_api.core.security import WorkspaceContext
 from who2be_api.services.placeholders import RenderContext
 from who2be_api.services.placeholders.registry import REGISTRY
@@ -56,9 +57,11 @@ class PlaceholderPreviewService:
         """
         resolver = REGISTRY.get(kind)
         if resolver is None:
-            raise HTTPException(
+            raise ApiError(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=f"Unbekannter Placeholder-Typ: {kind}",
+                reason="placeholder_kind_unknown",
+                params={"kind": kind},
             )
 
         render_ctx = RenderContext(

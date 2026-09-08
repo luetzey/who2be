@@ -166,7 +166,19 @@
       "template_version_inactive": "The linked system prompt template has no active version — please publish it first.",
       "agent_incomplete": "Agent is an incomplete shell (persona or template missing) — there is nothing to render.",
       "agent_reference_not_found": "Persona or template does not exist in this workspace.",
-      "agent_privilege_escalation": "An agent may not create or modify an agent with more privileges than its own."
+      "agent_privilege_escalation": "An agent may not create or modify an agent with more privileges than its own.",
+      "last_admin_undeletable": "The last admin cannot be demoted or removed.",
+      "workspace_member_not_found": "Member not found.",
+      "read_scope_forbidden": "This agent may not read {{domain}}. The workspace owner can enable read access in the agent configuration.",
+      "invalid_locale": "Invalid locale parameter: {{locale}}.",
+      "sole_owner_deletion_blocked": "You are the sole owner of the following organizations: {{organizations}}. Transfer them to another member or delete them first before deleting your account.",
+      "agent_not_activatable": "Agent is not yet complete — missing: {{missing}}. Activating and copying are only possible once persona and template are set and the persona has an active version.",
+      "memory_importance_too_low": "Not saved — importance {{importance}} is below the threshold {{minimum}}. Only suggest facts that stay relevant long-term (would it still be useful in 3 months?).",
+      "memory_duplicate": "Not saved — too similar to an existing memory [{{duplicate_id}}]: “{{duplicate_fact}}”. Duplicates (including already rejected suggestions) are not accepted again.",
+      "memory_cap_reached": "Not saved — this agent's memory is full ({{maximum}} entries). The workspace owner must clean up first (agent detail page → Memory).",
+      "persona_mode_unknown": "Unknown mode '{{mode}}'. Available modes: {{available}}.",
+      "placeholder_kind_unknown": "Unknown placeholder type: {{kind}}",
+      "entity_version_not_found": "{{label}} version not found."
     },
     "fieldLabels": {
       "name": "Name",

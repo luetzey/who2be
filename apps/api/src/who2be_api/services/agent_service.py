@@ -32,7 +32,7 @@ from uuid import UUID, uuid4
 
 import asyncpg
 from asyncpg.exceptions import ForeignKeyViolationError
-from fastapi import HTTPException, status
+from fastapi import status
 
 from who2be_api.core.agent_scope import agent_read_restrict
 from who2be_api.core.errors import ApiError, ApiGateError
@@ -73,16 +73,18 @@ _MISSING_LABELS = {
 }
 
 
-def _not_activatable(missing: list[str]) -> HTTPException:
+def _not_activatable(missing: list[str]) -> ApiError:
     """409 mit Klartext, was dem Agenten zur Aktivierbarkeit fehlt."""
     todo = ", ".join(_MISSING_LABELS.get(item, item) for item in missing)
-    return HTTPException(
+    return ApiError(
         status_code=status.HTTP_409_CONFLICT,
         detail=(
             f"Agent ist noch nicht vollstaendig — fehlt: {todo}. "
             "Aktivieren und Kopieren sind erst moeglich, wenn Persona und Template "
             "gesetzt sind und die Persona eine aktive Version hat."
         ),
+        reason="agent_not_activatable",
+        params={"missing": todo},
     )
 
 

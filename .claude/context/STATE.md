@@ -1,6 +1,29 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-08 (35. Lauf — Warteschlange: #498, #481, #500, #501)_
+_Stand: 2026-09-08 (35. Lauf — Warteschlange: #498, #481, #500, #501, #502)_
+
+## W7b abgeschlossen — #491 ist bis auf die zwei offenen Fragen erledigt (2026-09-08, 35. Lauf, #502)
+
+Vierzehn weitere Stellen migriert: vier Modulkonstanten und zehn f-Strings,
+letztere mit **`params`** statt Werten im Locale-Key. Offene nicht-literale
+Stellen **26 -> 12** — und diese zwoelf sind genau die, die ausgenommen
+bleiben: 9x Fremd-Exception-Text (#503, Sicherheitsfrage) und 3x Objekt-
+`detail` (in ADR-0051 als bewusste Ausnahme dokumentiert).
+
+`ProblemReason` **80 -> 92**, `common.errors` **63 -> 75** je Locale.
+
+**Zwei Zaehl-Blindflecken, die dieser Lauf gefunden hat:**
+
+1. **Ein Regex zaehlt Kommentare mit.** Die `ProblemReason`-Zahl war zweimal
+   um eins zu hoch, weil ein zitierter String im Docstring mitgezaehlt wurde.
+   Wer ein Vokabular zaehlt, parst es (`ast`, `typing.get_args`) — nicht grep.
+2. **`raise HTTPException(...)` ist nicht die einzige Schreibweise.**
+   `routers/_export.py:54` weist die Exception erst einer Variablen zu und
+   wirft sie dann (`not_found = HTTPException(...)` / `raise not_found`). Sie
+   ist von **keiner** der sieben Messungen dieses Vorhabens erfasst worden —
+   der Bestand von #491 war also 46, nicht 45. Sie ist jetzt der Zeuge des
+   Regressionstests `test_unmigrated_error_body_is_unchanged` und bleibt
+   bewusst unmigriert.
 
 ## Neunzehn Fehlerstellen mehr tragen einen `reason` (2026-09-08, 35. Lauf, #501)
 

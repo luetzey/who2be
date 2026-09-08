@@ -159,6 +159,16 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Added
 
+- Fourteen further API error sites now carry a stable `reason`, and the ten
+  that interpolate a value into their message now pass that value as
+  structured `params` rather than baking it into the translation key — one key
+  with placeholders instead of one key per value combination. The German text
+  a user sees is unchanged. Three sites are deliberately left out and the
+  reason is now recorded in ADR-0051: they pass an object as `detail` (the
+  blocking references a client needs to render), which the `str`-typed
+  `ApiErrorBody.detail` cannot carry without changing the contract
+  (Issue #502, wave 7b of #491).
+
 - Nineteen more API error sites now carry a stable, machine-readable `reason`
   alongside their German `detail` — the ones whose message is written as a
   multi-line literal, which the original `detail="` inventory of #402 never

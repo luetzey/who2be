@@ -25,9 +25,9 @@ from typing import Any
 from uuid import UUID
 
 import asyncpg
-from fastapi import HTTPException, status
+from fastapi import status
 
-from who2be_api.core.errors import ApiGateError
+from who2be_api.core.errors import ApiError, ApiGateError
 from who2be_api.core.security import (
     WorkspaceContext,
     require_capability,
@@ -60,7 +60,7 @@ from who2be_models import (
 logger = logging.getLogger(__name__)
 
 
-def _not_found(entity_type: EntityType) -> HTTPException:
+def _not_found(entity_type: EntityType) -> ApiError:
     label = {
         "persona": "Persona",
         "playbook": "Playbook",
@@ -68,9 +68,11 @@ def _not_found(entity_type: EntityType) -> HTTPException:
         "system_prompt_template": "System-Prompt-Template",
         "external_tool": "Externes Tool",
     }[entity_type]
-    return HTTPException(
+    return ApiError(
         status_code=status.HTTP_404_NOT_FOUND,
         detail=f"{label}-Version nicht gefunden.",
+        reason="entity_version_not_found",
+        params={"label": label},
     )
 
 

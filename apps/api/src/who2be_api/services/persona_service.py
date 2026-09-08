@@ -108,7 +108,7 @@ def _delete_blocked(usages: list[PersonaUsage]) -> HTTPException:
     )
 
 
-def _unknown_mode(mode: str, available: list[str]) -> HTTPException:
+def _unknown_mode(mode: str, available: list[str]) -> ApiError:
     """422: der angefragte Persona-Modus existiert nicht (WP-F).
 
     Die Fehlermeldung listet die verfuegbaren Modi — der MCP-Client reicht das
@@ -116,9 +116,11 @@ def _unknown_mode(mode: str, available: list[str]) -> HTTPException:
     korrigieren kann.
     """
     names = ", ".join(available) if available else "keine"
-    return HTTPException(
+    return ApiError(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         detail=f"Unbekannter Modus '{mode}'. Verfuegbare Modi: {names}.",
+        reason="persona_mode_unknown",
+        params={"mode": mode, "available": names},
     )
 
 

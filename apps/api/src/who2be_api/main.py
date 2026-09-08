@@ -280,6 +280,19 @@ _PROBLEM_TITLES: dict[str, str] = {
     "agent_incomplete": "Agent unvollstaendig",
     "agent_reference_not_found": "Persona oder Template nicht gefunden",
     "agent_privilege_escalation": "Rechte-Eskalation nicht erlaubt",
+    # f-String- und Modulkonstanten-Stellen (W7b von #491, #502):
+    "last_admin_undeletable": "Letzter Admin nicht entfernbar",
+    "workspace_member_not_found": "Mitglied nicht gefunden",
+    "read_scope_forbidden": "Lesezugriff nicht erlaubt",
+    "invalid_locale": "Ungueltiger locale-Parameter",
+    "sole_owner_deletion_blocked": "Account-Loeschung blockiert (alleiniger Owner)",
+    "agent_not_activatable": "Agent nicht aktivierbar",
+    "memory_importance_too_low": "Importance zu niedrig",
+    "memory_duplicate": "Memory bereits vorhanden",
+    "memory_cap_reached": "Memory-Kontingent erreicht",
+    "persona_mode_unknown": "Unbekannter Persona-Modus",
+    "placeholder_kind_unknown": "Unbekannter Placeholder-Typ",
+    "entity_version_not_found": "Version nicht gefunden",
 }
 
 

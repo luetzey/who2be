@@ -14,7 +14,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import asyncpg
-from fastapi import HTTPException, status
+from fastapi import status
 
 from who2be_api.core.errors import ApiError
 from who2be_api.repositories.account_repository import AccountLifecycleRepository
@@ -47,13 +47,15 @@ class AccountLifecycleService:
         orphaned = await self._repo.sole_owner_company_orgs(user_id)
         if orphaned:
             joined = ", ".join(orphaned)
-            raise HTTPException(
+            raise ApiError(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=(
                     "Du bist alleiniger Owner folgender Organisationen: "
                     f"{joined}. Uebertrage sie an ein anderes Mitglied oder loesche "
                     "sie zuerst, bevor du dein Konto loeschst."
                 ),
+                reason="sole_owner_deletion_blocked",
+                params={"organizations": joined},
             )
         purge_after = datetime.now(UTC) + GRACE_PERIOD
         await self._repo.request_account_deletion(user_id, purge_after)

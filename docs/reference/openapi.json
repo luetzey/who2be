@@ -12875,7 +12875,19 @@
               "template_version_inactive",
               "agent_incomplete",
               "agent_reference_not_found",
-              "agent_privilege_escalation"
+              "agent_privilege_escalation",
+              "last_admin_undeletable",
+              "workspace_member_not_found",
+              "read_scope_forbidden",
+              "invalid_locale",
+              "sole_owner_deletion_blocked",
+              "agent_not_activatable",
+              "memory_importance_too_low",
+              "memory_duplicate",
+              "memory_cap_reached",
+              "persona_mode_unknown",
+              "placeholder_kind_unknown",
+              "entity_version_not_found"
             ],
             "title": "Reason"
           },

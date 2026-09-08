@@ -9,8 +9,9 @@ Detail-Routen kennen den Parameter nicht mehr. Ungueltige Kuerzel → 422.
 
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, Query, status
+from fastapi import Depends, Query, status
 
+from who2be_api.core.errors import ApiError
 from who2be_models.locale import normalize_locale
 
 
@@ -31,9 +32,11 @@ def locale_filter_param(
     try:
         return normalize_locale(locale)
     except ValueError as exc:
-        raise HTTPException(
+        raise ApiError(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Ungueltiger locale-Parameter: {locale!r}.",
+            reason="invalid_locale",
+            params={"locale": locale},
         ) from exc
 
 
