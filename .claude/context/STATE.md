@@ -1,6 +1,43 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-06 (31. Lauf — Fehlercode-Vertrag ADR-0051, #436)_
+_Stand: 2026-09-07 (Backlog-Aufbereitungslauf — nur GitHub + Doku)_
+
+## Backlog aufbereitet, #480 entblockt (2026-09-07, Aufbereitungslauf — nur GitHub + Doku)
+
+Die drei Nebenfunde aus PR #478 (#477, #480, #481) waren nie gegen die Norm
+„Agent-ready Arbeitspaket" geprueft — die Vorgaenger-Liste fuehrte sie pauschal
+als „blockiert, keiner dringend". Dieser Lauf hat das nachgeholt.
+
+- **#480 ist entblockt** und steht auf Platz 1 der Warteschlange
+  (`agent-ready`, `size/S`). Die vermeintlich offene Weiche war belegt: der
+  einzige Produktiv-Aufrufer (`me_repository.py:81-84`) wrappt
+  `ensure_personal_workspace` in eine Transaktion und begruendet das
+  schriftlich bei `:76-80` — RLS-unabhaengig. Der Test-Helper
+  (`workspace_setup.py:50-65`) tut es als einziger nicht.
+- **#477 bleibt `needs-decision`, aber die Frage ist geschrumpft** — von
+  „A/B/C: wie weit angleichen?" auf eine Ja/Nein-Frage (bleibt dokploy ein
+  unterstuetzter Pfad?). Drei Belege der Fassung hielten der Nachmessung nicht
+  stand, darunter der, der Option B trug: der GoTrue-Pin ist in **allen drei**
+  Stacks identisch `v2.158.1` — keine dokploy-Divergenz. Die vergleichbare
+  Flaeche (`web`-`environment`) divergiert um genau zwei Variablen; der Rest
+  ist gewollte Topologie (all-in-one + Build vs. geteilt + GHCR-Pull).
+- **#481 bleibt `needs-decision`** — alle vier Fundstellen bestaetigt, aber die
+  Frage ist eine Produktentscheidung zur Org-Rollenabstufung.
+
+**Regel 16 (neu, in #442):** ein Beleg gilt gegen `main`, nicht gegen einen
+offenen PR. Beide Issues argumentierten mit Code, den es auf `main` nicht gibt
+(`_scope_to_new_workspace` bzw. das Durchreichen von
+`WHO2BE_SESSION_MAX_AGE_HOURS`) — er kommt erst mit #478. Die Befunde blieben
+richtig, ihre Belege zeigten ins Leere.
+
+**Engpass:** PR #478 ist offen, `mergeable_state: clean`, alle sieben CI-Jobs
+gruen auf `a846753`, und wartet seit 2026-09-06 20:09 auf Owner-Review. Er
+schliesst sechs Issues (#470, #469, #471, #462, #453, #479) und blockiert die
+#402-Wellen W3 (#486) und W6 (#487). Der einzige Blocker im Backlog, der nicht
+an Kapazitaet haengt.
+
+Startbar danach: **#480 · #482 · #484 · #485 · #483** (Wellen A/B, siehe #442).
+Plan: `.claude/plan/2026-09-07-0800_backlog-aufbereitungslauf.md`.
 
 ## Fehlercodes stehen als Vertrag (2026-09-06, 31. Lauf, #436 = W0 von #402)
 
