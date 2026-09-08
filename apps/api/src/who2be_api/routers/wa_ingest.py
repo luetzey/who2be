@@ -22,9 +22,10 @@ from typing import Annotated
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, Request, Response, status
 
 from who2be_api.core.db import get_pool
+from who2be_api.core.errors import ApiError
 from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.repositories.wa_blob_repository import PgWaBlobRepository
@@ -88,11 +89,12 @@ async def ingest_into_private_area(
         # Menschen (JWT/ungebundener Token) haben KEINE private Area — der
         # Aufruf ist semantisch unvollstaendig, kein Autorisierungsproblem
         # (Muster `wa_artifacts.create_artifact_in_private_area`).
-        raise HTTPException(
+        raise ApiError(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=(
                 "Ohne area_id ingestiert nur ein agent-gebundener Token (private "
                 "Area). Menschen nutzen POST /work-areas/{area_id}/ingest."
             ),
+            reason="area_id_required_for_human",
         )
     return _with_dedup_status(await service.ingest(ctx, None, data), response)

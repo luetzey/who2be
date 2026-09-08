@@ -12868,7 +12868,14 @@
               "mcp_rate_limited",
               "mcp_quota_exceeded",
               "consent_requires_session",
-              "invalid_cursor"
+              "invalid_cursor",
+              "draft_conflict",
+              "review_conflict",
+              "area_id_required_for_human",
+              "template_version_inactive",
+              "agent_incomplete",
+              "agent_reference_not_found",
+              "agent_privilege_escalation"
             ],
             "title": "Reason"
           },

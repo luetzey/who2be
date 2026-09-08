@@ -130,23 +130,25 @@ def _invalid_against() -> ApiError:
     )
 
 
-def _draft_conflict() -> HTTPException:
-    return HTTPException(
+def _draft_conflict() -> ApiError:
+    return ApiError(
         status_code=status.HTTP_409_CONFLICT,
         detail=(
             "Es existiert bereits ein Draft. Promote oder verwirf den "
             "bestehenden Draft, bevor du erneut editierst."
         ),
+        reason="draft_conflict",
     )
 
 
-def _review_conflict() -> HTTPException:
-    return HTTPException(
+def _review_conflict() -> ApiError:
+    return ApiError(
         status_code=status.HTTP_409_CONFLICT,
         detail=(
             "Diese Version steht in der Review — Auto-Save ist deaktiviert. "
             "Lehne die Review erst ab, bevor du weiter editierst."
         ),
+        reason="review_conflict",
     )
 
 

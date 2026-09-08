@@ -113,6 +113,16 @@ ProblemReason = Literal[
     "mcp_quota_exceeded",  # 429 — Monats-MCP-Kontingent erschoepft (params: limit)
     "consent_requires_session",  # 401 — OAuth-Consent nur mit eingeloggter Web-Session
     "invalid_cursor",  # 422 — Keyset-Cursor nicht dekodierbar
+    # Mehrzeilige Fehler-Literale ohne Interpolation (W7a von #491, #501):
+    # reiner Konstruktortausch `HTTPException` → `ApiError`, `detail`
+    # unveraendert, `reason` additiv.
+    "draft_conflict",  # 409 — Draft existiert bereits, Edit blockiert
+    "review_conflict",  # 409 — Version in Review, Auto-Save deaktiviert
+    "area_id_required_for_human",  # 422 — ohne area_id nur agent-gebunden schreib-/ingestfaehig
+    "template_version_inactive",  # 409 — verlinktes Template ohne aktive Version
+    "agent_incomplete",  # 409 — Huelle ohne Persona/Template, nichts zu rendern
+    "agent_reference_not_found",  # 404 — Persona oder Template existiert nicht im Workspace
+    "agent_privilege_escalation",  # 403 — Agent versucht Policy ueber die eigene hinaus zu vererben
 ]
 
 # Wer den Fehler beheben kann: `agent` = der aufrufende Agent kann es selbst

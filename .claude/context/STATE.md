@@ -1,6 +1,28 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-08 (35. Lauf — Warteschlange: #498, #481, #500)_
+_Stand: 2026-09-08 (35. Lauf — Warteschlange: #498, #481, #500, #501)_
+
+## Neunzehn Fehlerstellen mehr tragen einen `reason` (2026-09-08, 35. Lauf, #501)
+
+W7a von #491: die mehrzeiligen Literale sind migriert. Offene nicht-literale
+`HTTPException`-Stellen **45 -> 26**; `ProblemReason` **74 -> 81**;
+`common.errors` **56 -> 63** je Locale, deckungsgleich.
+
+**Zwei Stellen brauchten keinen neuen Grund:** `routers/agents.py:201/230`
+tragen woertlich "Agent nicht gefunden." und bekamen den bestehenden
+`agent_not_found`. Sie waren die einzigen zwei Stellen im Baum, die `detail`
+**positional** uebergeben — deshalb hat sie kein `detail=`-Grep je gefunden.
+
+**Drei Paare mit gleicher Semantik, aber leicht abweichendem Wortlaut** teilen
+sich je einen Grund (`area_id_required_for_human`, `template_version_inactive`,
+`agent_incomplete`). Begruendung: `reason` ist ein Maschinenvokabular, kein
+Textschluessel — zwei Gruende fuer dieselbe Sachlage zwingen jeden Client,
+beide zu kennen. Die `detail`-Texte bleiben an beiden Stellen woertlich.
+
+**#498 hat zum ersten Mal gewirkt:** die Aenderung beruehrt Fehler-Schemas,
+also musste `docs/reference/openapi.json` mitregeneriert werden. Ohne das neue
+Gate waere die Referenz erneut still veraltet — exakt das Muster der sechs
+#402-Wellen.
 
 ## Die Navigation ist auf dem Phone erreichbar (2026-09-08, 35. Lauf, #500)
 

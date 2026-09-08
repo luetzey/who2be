@@ -159,7 +159,14 @@
       "mcp_rate_limited": "Token rate limit exceeded ({{limit}}/min).",
       "mcp_quota_exceeded": "Monthly MCP quota exhausted ({{limit}}/month).",
       "consent_requires_session": "Consent requires a signed-in web session, not an API token.",
-      "invalid_cursor": "Invalid cursor."
+      "invalid_cursor": "Invalid cursor.",
+      "draft_conflict": "A draft already exists. Promote or discard the existing draft before editing again.",
+      "review_conflict": "This version is in review — auto-save is disabled. Reject the review before continuing to edit.",
+      "area_id_required_for_human": "Without area_id, only an agent-bound token can write or ingest (private area). Humans use the area-specific endpoint (POST /work-areas/{area_id}/...).",
+      "template_version_inactive": "The linked system prompt template has no active version — please publish it first.",
+      "agent_incomplete": "Agent is an incomplete shell (persona or template missing) — there is nothing to render.",
+      "agent_reference_not_found": "Persona or template does not exist in this workspace.",
+      "agent_privilege_escalation": "An agent may not create or modify an agent with more privileges than its own."
     },
     "fieldLabels": {
       "name": "Name",

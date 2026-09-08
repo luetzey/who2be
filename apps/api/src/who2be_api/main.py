@@ -272,6 +272,14 @@ _PROBLEM_TITLES: dict[str, str] = {
     "mcp_quota_exceeded": "MCP-Kontingent erschoepft",
     "consent_requires_session": "Consent erfordert eine Web-Session",
     "invalid_cursor": "Ungueltiger Cursor",
+    # Mehrzeilige Fehler-Literale ohne Interpolation (W7a von #491, #501):
+    "draft_conflict": "Draft existiert bereits",
+    "review_conflict": "Version steht in Review",
+    "area_id_required_for_human": "area_id erforderlich",
+    "template_version_inactive": "Template ohne aktive Version",
+    "agent_incomplete": "Agent unvollstaendig",
+    "agent_reference_not_found": "Persona oder Template nicht gefunden",
+    "agent_privilege_escalation": "Rechte-Eskalation nicht erlaubt",
 }
 
 

@@ -159,6 +159,15 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Added
 
+- Nineteen more API error sites now carry a stable, machine-readable `reason`
+  alongside their German `detail` — the ones whose message is written as a
+  multi-line literal, which the original `detail="` inventory of #402 never
+  saw. Seven new reasons cover them; two sites reuse the existing
+  `agent_not_found` because their wording is identical to an already-migrated
+  site. Nothing a client sees changes: every `detail` string is preserved
+  verbatim, and each German locale text matches it word for word (Issue #501,
+  wave 7a of #491).
+
 - CI now fails when the checked-in OpenAPI reference
   `docs/reference/openapi.json` drifts from the application. The `python` job
   regenerates the spec via `scripts/export_openapi.py` and compares it against

@@ -22,7 +22,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 import asyncpg
-from fastapi import HTTPException, status
+from fastapi import status
 
 from who2be_api.core.errors import ApiError
 from who2be_api.repositories.agent_repository import AgentRepository
@@ -44,23 +44,25 @@ def _agent_disabled() -> ApiError:
     )
 
 
-def _template_not_active() -> HTTPException:
-    return HTTPException(
+def _template_not_active() -> ApiError:
+    return ApiError(
         status_code=status.HTTP_409_CONFLICT,
         detail=(
             "Das verlinkte System-Prompt-Template hat keine aktive Version — "
             "bitte erst veroeffentlichen."
         ),
+        reason="template_version_inactive",
     )
 
 
-def _agent_incomplete() -> HTTPException:
-    return HTTPException(
+def _agent_incomplete() -> ApiError:
+    return ApiError(
         status_code=status.HTTP_409_CONFLICT,
         detail=(
             "Agent ist eine unvollstaendige Huelle (Persona oder Template fehlt) — "
             "der System-Prompt kann nicht gerendert werden."
         ),
+        reason="agent_incomplete",
     )
 
 

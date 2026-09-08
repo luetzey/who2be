@@ -86,10 +86,11 @@ def _not_activatable(missing: list[str]) -> HTTPException:
     )
 
 
-def _invalid_reference() -> HTTPException:
-    return HTTPException(
+def _invalid_reference() -> ApiError:
+    return ApiError(
         status_code=status.HTTP_404_NOT_FOUND,
         detail=("Persona oder Template existiert nicht in diesem Workspace."),
+        reason="agent_reference_not_found",
     )
 
 
@@ -204,12 +205,13 @@ def _guard_policy_escalation(ctx: WorkspaceContext, target: AgentToolPolicy) -> 
     if ctx.tool_policy is None:
         return
     if not target.is_within(ctx.tool_policy):
-        raise HTTPException(
+        raise ApiError(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=(
                 "Ein Agent darf keinen Agenten mit mehr Rechten als seinen eigenen "
                 "anlegen oder aendern."
             ),
+            reason="agent_privilege_escalation",
         )
 
 

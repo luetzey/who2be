@@ -11,10 +11,11 @@ from typing import Annotated
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 
 from who2be_api.core.agent_scope import agent_read_restrict
 from who2be_api.core.db import get_pool
+from who2be_api.core.errors import ApiError
 from who2be_api.core.pagination import DEFAULT_LIMIT, PageCursor, PageLimit
 from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import WorkspaceContext, get_current_workspace
@@ -198,7 +199,11 @@ async def render_agent(
     # None) behalten die Workspace-weite Sicht (UI-Copy-Button).
     agent_read_restrict(ctx)
     if ctx.tool_policy is not None and agent_id != ctx.agent_id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Agent nicht gefunden.")
+        raise ApiError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agent nicht gefunden.",
+            reason="agent_not_found",
+        )
     return await render_service.render(ctx.workspace_id, agent_id, output_format)
 
 
@@ -227,5 +232,9 @@ async def fetch_agent_rendered(
     # des eigenen Read-Scopes. Menschen/JWT (tool_policy is None) behalten die
     # Workspace-weite Sicht (UI-Inspektion/Copy-Button).
     if ctx.tool_policy is not None and agent_id != ctx.agent_id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Agent nicht gefunden.")
+        raise ApiError(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agent nicht gefunden.",
+            reason="agent_not_found",
+        )
     return await fetch_rendered_service.fetch_rendered(ctx.workspace_id, agent_id)

@@ -159,7 +159,14 @@
       "mcp_rate_limited": "Token-Ratenlimit ueberschritten ({{limit}}/min).",
       "mcp_quota_exceeded": "Monatliches MCP-Kontingent erschoepft ({{limit}}/Monat).",
       "consent_requires_session": "Consent erfordert eine eingeloggte Web-Session, keinen API-Token.",
-      "invalid_cursor": "Ungueltiger Cursor."
+      "invalid_cursor": "Ungueltiger Cursor.",
+      "draft_conflict": "Es existiert bereits ein Draft. Promote oder verwirf den bestehenden Draft, bevor du erneut editierst.",
+      "review_conflict": "Diese Version steht in der Review — Auto-Save ist deaktiviert. Lehne die Review erst ab, bevor du weiter editierst.",
+      "area_id_required_for_human": "Ohne area_id kann nur ein agent-gebundener Token schreiben oder ingestieren (private Area). Menschen nutzen den area-spezifischen Endpunkt (POST /work-areas/{area_id}/...).",
+      "template_version_inactive": "Das verlinkte System-Prompt-Template hat keine aktive Version — bitte erst veroeffentlichen.",
+      "agent_incomplete": "Agent ist eine unvollstaendige Huelle (Persona oder Template fehlt) — es gibt nichts zu rendern.",
+      "agent_reference_not_found": "Persona oder Template existiert nicht in diesem Workspace.",
+      "agent_privilege_escalation": "Ein Agent darf keinen Agenten mit mehr Rechten als seinen eigenen anlegen oder aendern."
     },
     "fieldLabels": {
       "name": "Name",
