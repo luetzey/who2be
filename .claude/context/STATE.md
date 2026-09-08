@@ -1,6 +1,36 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-08 (34. Lauf — Backlog-Aufbereitung + #495)_
+_Stand: 2026-09-08 (34. Lauf — Backlog-Aufbereitung + #495 + #477)_
+
+## Der dokploy-Stack reicht wieder alles durch (2026-09-08, 34. Lauf, #477)
+
+Der `web`-Service fuehrte fuenf Runtime-Config-Variablen, die beiden anderen
+Stacks acht. **Jetzt alle drei bei 8, deckungsgleich gemessen.**
+`WHO2BE_LAUNCH_MODE`, `WHO2BE_LAUNCH_CONTACT` und
+`WHO2BE_SESSION_MAX_AGE_HOURS` kamen dazu, samt der erklaerenden Kommentare
+aus den beiden Referenz-Stacks.
+
+**Das Issue war zwei Laeufe lang `needs-decision` — zu Unrecht.** Die offene
+Weiche lautete "bleibt dokploy ein unterstuetzter Deployment-Pfad?" und galt
+als Produktentscheidung *mit Aussenwirkung auf Betreiber*. Genau diese
+Praemisse traegt nicht: `README.md:52` fuehrt als Deployment ausschliesslich
+`deploy/hetzner/`, `docs/README.md:56` listet `oauth-e2e-dokploy.md` unter
+"Smoke-/Verifikations-Runbooks (intern)", und `deploy/dokploy/` hat weder
+README noch RUNBOOK, Backup oder Tests. dokploy ist ein **internes
+Pruefmittel**. Damit war die Weiche belegbar statt urteilsgebunden — die
+Frage "behalten wir dokploy?" bleibt offen und blockierte den Fix nie.
+Daraus wurde Regel 24 der Warteschlange.
+
+**Nebenbefund: das Verifikations-Kommando des Issues lief nicht.**
+`docker compose -f deploy/dokploy/docker-compose.yml config` bricht ohne
+`MINIO_ROOT_PASSWORD` ab (Pflichtvariable ohne Default, in `.env.example`
+bewusst leer — ein Passwort gehoert nicht in eine Beispieldatei). Es stand so
+seit dem ersten Refinement im Body und wurde nie ausgefuehrt. Korrigiert:
+die Variable muss fuer den Lauf gesetzt sein.
+
+DoD: `docker compose config` Exit 0; `WHO2BE_LAUNCH_MODE=coming_soon` und
+`WHO2BE_SESSION_MAX_AGE_HOURS=6` loesen im `web`-Service auf, ohne gesetzte
+Werte stehen `open` und `12`; Diff 11 Zeilen, nur der `environment`-Block.
 
 ## Der Hook stellt jetzt die Umgebung her, die CLAUDE.md verlangt (2026-09-08, 34. Lauf, #495)
 

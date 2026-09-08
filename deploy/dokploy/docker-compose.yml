@@ -275,6 +275,17 @@ services:
       WHO2BE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
       WHO2BE_MCP_URL: https://mcp.${DOMAIN}/mcp
       WHO2BE_SIGNUP_DISABLED: ${VITE_WHO2BE_SIGNUP_DISABLED:-false}
+      # "Wir arbeiten noch"-Modus (#429). Ohne dieses Durchreichen bleibt
+      # `/config.js` auf "open", egal was in der `.env` steht.
+      # GOTRUE_DISABLE_SIGNUP bleibt separat und wird gemeinsam gesetzt.
+      WHO2BE_LAUNCH_MODE: ${WHO2BE_LAUNCH_MODE:-open}
+      WHO2BE_LAUNCH_CONTACT: ${WHO2BE_LAUNCH_CONTACT:-}
+      # Absolute Obergrenze der "Angemeldet bleiben"-Sitzung in Stunden
+      # (#430/#470, ADR-0052). Gueltig ist 1-24; die Web-App faellt bei
+      # fehlendem/ungueltigem Wert fail-closed auf 12 zurueck. Muss wie
+      # WHO2BE_LAUNCH_MODE durchgereicht werden, sonst sieht der Entrypoint
+      # den Wert nie und /config.js bleibt still auf dem Default.
+      WHO2BE_SESSION_MAX_AGE_HOURS: ${WHO2BE_SESSION_MAX_AGE_HOURS:-12}
     depends_on:
       api:
         condition: service_healthy
