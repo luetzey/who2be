@@ -113,6 +113,22 @@ jobs:
         run: uv run ruff format --check .
       - name: Typecheck
         run: uv run mypy .
+      - name: OpenAPI-Referenz aktuell (Drift-Gate)
+        # `docs/reference/openapi.json` ist die eingecheckte API-Referenz
+        # (spec-first, Dokumentations-Standards). Der Contract-Test
+        # `test_openapi_contract.py` friert nur die OBERFLAECHE ein (Methode,
+        # Pfad, operationId) — Schema-Aenderungen lassen ihn gruen. Genau so
+        # ist die Referenz waehrend der sechs #402-Wellen veraltet, ohne dass
+        # etwas rot wurde (#498). Dieser Schritt schliesst die Luecke: er
+        # regeneriert und vergleicht. Er steht VOR dem Test-Schritt, weil er
+        # Sekunden braucht und die Suite Minuten — ein schneller Fehlschlag
+        # spart den teuren Lauf. Braucht keine DB (reiner Schema-Aufbau).
+        run: |
+          uv run python scripts/export_openapi.py
+          if ! git diff --exit-code docs/reference/openapi.json; then
+            echo "::error file=docs/reference/openapi.json::Die eingecheckte OpenAPI-Referenz weicht von der App ab. Behebung: 'uv run python scripts/export_openapi.py' ausfuehren und die Datei mitcommitten."
+            exit 1
+          fi
       - name: License check (Python · Deny-Liste)
         # OSS-License-Compliance (ADR-0033): fail-closed gegen Copyleft/AGPL.
         # Deny-Liste statt Allow-Liste — geringe False-Positive-Rate, wartungsarm

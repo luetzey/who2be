@@ -137,6 +137,15 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Added
 
+- CI now fails when the checked-in OpenAPI reference
+  `docs/reference/openapi.json` drifts from the application. The `python` job
+  regenerates the spec via `scripts/export_openapi.py` and compares it against
+  the committed file; on a mismatch the error message names the command that
+  fixes it. This closes a gap the existing contract test could not: that test
+  freezes only the API *surface* (method, path, `operationId`), so any change
+  to a request or response schema left it green — which is how the reference
+  went stale for four release waves without anything turning red (Issue #498).
+
 - Every API error response now carries a stable, machine-readable `reason`
   alongside its German `detail`, and the web UI shows the message in the
   interface language rather than always in German. This completes the six

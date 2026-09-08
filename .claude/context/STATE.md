@@ -1,6 +1,24 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-08 (34. Lauf — Backlog-Aufbereitung + #495 + #477)_
+_Stand: 2026-09-08 (35. Lauf — Warteschlange: #498 openapi-Drift-Gate)_
+
+## Die OpenAPI-Referenz kann nicht mehr still veralten (2026-09-08, 35. Lauf, #498)
+
+`docs/reference/openapi.json` hatte bis jetzt **kein CI-Gate** — `openapi` kam
+in `.github/workflows/ci.yml` nur in einem Kommentar vor. Der `python`-Job
+regeneriert die Spec jetzt und vergleicht sie; bei Abweichung nennt die
+Fehlermeldung das Kommando zur Behebung.
+
+**Warum der vorhandene Contract-Test nicht reichte — lokal belegt.**
+`test_openapi_contract.py` friert nur die *Oberflaeche* ein (Methode, Pfad,
+`operationId`). Zum Nachweis wurde eine reine Schema-Aenderung eingebaut (eine
+Feld-Beschreibung an `AgentRenderResponse.content`, keine neue Route): der
+Contract-Test meldete weiterhin `2 passed`, das neue Gate wurde rot. Genau
+diese Sorte Drift lief waehrend der sechs #402-Wellen unbemerkt durch.
+
+**Merke fuer kuenftige Wellen:** #501 und #502 aendern Fehler-Schemas und
+loesen damit genau dieses Gate aus — wer dort migriert, regeneriert die Spec
+mit. Das ist der Grund, warum #498 in der Warteschlange vor beiden steht.
 
 ## Der dokploy-Stack reicht wieder alles durch (2026-09-08, 34. Lauf, #477)
 
