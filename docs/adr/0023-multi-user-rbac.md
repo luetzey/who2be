@@ -89,6 +89,29 @@ Leitlinien hinter der Matrix:
 Freigabe-Entscheidung und bleibt deshalb admin-only, konsistent mit
 Promote-to-Active.
 
+### Abgrenzung: Org-Rolle vs. Workspace-Rolle
+
+**Die Matrix oben gilt fuer Workspace-Rollen.** `org_member.role`
+(`owner` / `admin` / `member`, eingefuehrt in ADR-0019) traegt **keine** Rechte
+bei der Anlage eines Workspace: `POST /v1/organizations/{id}/workspaces` prueft
+die Mitgliedschaft in der Organisation, aber keine Mindestrolle — jedes
+Org-Mitglied darf Workspaces anlegen.
+
+Das ist **Absicht**, nachgetragen am 2026-09-08 (Issue #481, Befund
+F-Phase2-04 in `docs/security-findings-phase-2.md` §9). Eine Organisation ist
+als kollaborativer Raum gedacht; wer darin ist, darf darin arbeiten. Die
+Strenge sitzt eine Ebene tiefer, dort wo Inhalte entstehen und freigegeben
+werden — genau die Ebene, die diese Matrix beschreibt.
+
+Die Asymmetrie ist damit benannt statt versehentlich: *innerhalb* eines
+Workspace ist die Rollenpruefung streng (`require_role`, seit #469 mit
+aal2-Gate fuer admin-Token), auf Org-Ebene beim Anlegen gibt es sie nicht.
+
+**Wer das aendern will, aendert einen Vertrag, keinen Bug.** Eine Mindestrolle
+auf Org-Ebene waere ein **Breaking Change** fuer Betreiber, deren `member`
+heute Workspaces anlegt, und braucht deshalb eine eigene Entscheidung mit
+Migrationshinweis — nicht den Nebeneffekt eines Review-Funds.
+
 ### Promote-to-Active = admin-only
 
 Der `transition`-Endpoint pro Entity-Typ prueft die Zielstufe gegen die

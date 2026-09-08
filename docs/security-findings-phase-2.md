@@ -26,6 +26,10 @@ PUT `persona_playbooks`/PATCH `workspaces`. `persona_playbook.list_linked`
 filtert nicht explizit auf `workspace_id` (Defense-in-Depth, kein
 realer Leak — Composite-FK + vorheriger Membership-Check decken ab).
 
+**Nachtrag 2026-09-08:** ein vierter Finding (**F-Phase2-04**, Low, Accepted)
+kam ausserhalb dieses Reviews dazu — er betrifft die **Org-Ebene**, die von den
+acht Bereichen unten gar nicht abgedeckt war. Siehe §9.
+
 ## Findings-Tabelle
 
 | ID            | Severity | Bereich            | Titel                                                          | Status |
@@ -33,6 +37,7 @@ realer Leak — Composite-FK + vorheriger Membership-Check decken ab).
 | F-Phase2-01   | Medium   | Rate-Limit         | Fehlende `@limiter.limit(write_limit)` auf Member/Link-Mutating | Closed |
 | F-Phase2-02   | Low      | Cross-Workspace    | `list_linked` ohne expliziten `workspace_id`-Filter (Defense)  | Closed |
 | F-Phase2-03   | Low      | Cross-Workspace    | `workspace_repository.fetch/update_name` ohne `workspace_id`-Re-Bind | Closed |
+| F-Phase2-04   | Low      | Org-Rollen         | Workspace-Anlage ohne Org-Mindestrolle (Nachtrag 2026-09-08)    | Accepted |
 
 ## 1. Cross-Workspace-Read — CLOSED (war REVIEW)
 
@@ -255,6 +260,50 @@ Geprueft: alle `routers/*.py`. Erfasst (PASS):
   nach Limit-Ueberschreitung (parametriert, skippt ohne DB wie die uebrigen
   Integrationstests). **Status: Closed.**
 
+## 9. Workspace-Anlage auf Org-Ebene — ACCEPTED (Nachtrag 2026-09-08)
+
+> **Nicht Teil des urspruenglichen Phase-2-Reviews vom 2026-05-29.** Die acht
+> Bereiche oben pruefen die Workspace-Ebene; die Org-Ebene kam darin nicht vor.
+> Dieser Abschnitt traegt einen Befund nach, der beim Security-Review zum
+> RLS-Fix (#479, PR #478) am selben Trust-Boundary auffiel und ueber Issue #481
+> zur Owner-Entscheidung gestellt wurde.
+
+### F-Phase2-04 — Workspace-Anlage ohne Org-Mindestrolle (Low, Accepted)
+
+- **Bereich:** `apps/api/src/who2be_api/routers/organizations.py:94-103`,
+  `apps/api/src/who2be_api/services/workspace_service.py:45-48`,
+  `apps/api/src/who2be_api/repositories/organization_repository.py:45-54`,
+  `apps/api/src/who2be_api/migrations/0005_organization.sql:19`
+- **Beschreibung:** `POST /v1/organizations/{organization_id}/workspaces` prueft
+  ueber `WorkspaceService.create` -> `OrganizationRepository.fetch` nur die
+  **Mitgliedschaft** in der Organisation, aber **keine Mindestrolle**. `fetch`
+  joint `org_member m ON m.org_id = o.id` und filtert auf `o.id`, `m.user_id`
+  und `o.deleted_at IS NULL` — `m.role` kommt in der Query nicht vor. Die
+  Migration kennt drei Rollen (`owner` / `admin` / `member`); jede davon darf
+  damit beliebig viele Workspaces anlegen.
+- **Was es nicht ist:** **kein Cross-Tenant-Leak.** Die Org-Zugehoerigkeit wird
+  echt geprueft, bevor irgendetwas geschrieben wird; ein Fremder kommt nicht
+  hinein, und die Workspace-ID ist server-generiert. Es geht ausschliesslich um
+  die Rollenabstufung *innerhalb* einer Organisation.
+- **Risiko:** Jeder neue Workspace zieht den vollen Seed nach sich (Templates,
+  Agenten, Chunks) und zaehlt gegen das Entity-Kontingent der Organisation. Ein
+  `member` kann damit Ressourcen der Organisation binden, ohne dass eine Rolle
+  das autorisiert. Bemerkenswert ist die Asymmetrie: *innerhalb* eines
+  Workspace ist die Rollenpruefung streng (`require_role`, ADR-0023, seit #469
+  mit aal2-Gate fuer admin-Token), auf Org-Ebene beim Anlegen gibt es sie gar
+  nicht.
+- **Entscheidung (Owner, 2026-09-08): akzeptiert und dokumentiert.** Jedes
+  Org-Mitglied darf Workspaces anlegen; das ist Absicht, nicht Versehen.
+  Begruendung ist die Kollaborativitaet einer Organisation — und die
+  Reversibilitaet: eine Mindestrolle nachzuruesten waere ein **Breaking Change**
+  fuer Betreiber, deren `member` heute Workspaces anlegt, waehrend die
+  Dokumentation des Ist-Zustands keine Tuer schliesst. Festgehalten in
+  ADR-0023 (Abschnitt „Abgrenzung: Org-Rolle vs. Workspace-Rolle").
+- **Wenn sich das aendern soll:** eine Mindestrolle ist eine eigene
+  Entscheidung mit Migrationshinweis, kein Nebeneffekt eines Review-Funds. Ein
+  Kontingent statt einer Rolle loest ein anderes Problem (Ressourcenverbrauch
+  statt fehlender Autorisierung) und waere ergaenzend, nicht ersetzend.
+
 ## Akzeptanz / Ampel
 
 **Gesamt-Ampel:** Grün. Keine Critical/High. **Alle Phase-2-Findings
@@ -263,6 +312,11 @@ F-Phase2-02 `list_linked`-Filter (2026-06-14), F-Phase2-03 Role-Gate +
 Re-Bind (Track C, bestaetigt), Last-Admin-Advisory-Lock (umgesetzt) sowie der
 CSP/Header-Pass (F-12, 2026-06-03). Keine offenen Public-Switch-Blocker mehr
 aus dieser Datei.
+
+**Nachtrag 2026-09-08:** **F-Phase2-04** (Org-Mindestrolle, §9) ist **Accepted**,
+nicht Closed — der Zustand bleibt bestehen und ist bewusst dokumentiert. Kein
+Public-Switch-Blocker: kein Cross-Tenant-Leak, Wirkung auf den
+Ressourcenverbrauch innerhalb der eigenen Organisation begrenzt.
 
 ### TODO vor Public-Switch
 

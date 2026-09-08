@@ -135,6 +135,18 @@ the merged pull requests and the plan documents under `.claude/plan/`.
   `WHO2BE_SUPABASE_URL` and `WHO2BE_SUPABASE_ANON_KEY` as container environment
   rather than build arguments.
 
+### Changed
+
+- Documented that an organization's `org_member.role` deliberately carries no
+  permission for creating workspaces: any member of an organization may create
+  them, and the role hierarchy applies one level down, inside a workspace.
+  Nothing changes in behaviour — this records an existing state that three
+  separate security reviews had re-discovered. Requiring a minimum role would
+  be a breaking change for operators whose `member` accounts create workspaces
+  today, so it stays a separate, deliberate decision. See ADR-0023
+  ("Abgrenzung: Org-Rolle vs. Workspace-Rolle") and finding F-Phase2-04
+  (Issue #481).
+
 ### Added
 
 - CI now fails when the checked-in OpenAPI reference

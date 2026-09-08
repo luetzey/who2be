@@ -1490,3 +1490,25 @@ bleiben)._
 - **Konsequenz:** „Gruen" ohne Testzahl ist keine Aussage. Ein Bericht, der
   nur `EXIT=0` nennt, belegt nichts ueber den Umfang des Gelaufenen.
 - **Kontext:** #495, gefunden beim Verifizieren von #492.
+
+## 2026-09-08 — Org-Rolle traegt keine Rechte bei der Workspace-Anlage (Issue #481)
+
+**Entscheidung (Owner):** Der heutige Zustand bleibt — jedes Mitglied einer
+Organisation darf Workspaces anlegen, unabhaengig von `org_member.role`. Er
+wird dokumentiert statt geaendert: ADR-0023 bekommt den Abschnitt „Abgrenzung:
+Org-Rolle vs. Workspace-Rolle", `docs/security-findings-phase-2.md` den Befund
+**F-Phase2-04 (Low, Accepted)**.
+
+**Warum nicht die Mindestrolle (Option B):** nicht weil sie falsch waere,
+sondern weil sie ein **Breaking Change** fuer Betreiber ist, deren `member`
+heute Workspaces anlegt — und ein Rueckbau waere ein zweiter. Die Doku-Variante
+ist die einzige, die den Ist-Zustand festschreibt, ohne eine Tuer zu
+schliessen: B bleibt danach unveraendert moeglich, sobald feststeht, dass die
+Org-Rolle etwas bedeuten soll. Ein Kontingent (Option C) loest ein anderes
+Problem — Ressourcenverbrauch statt fehlender Autorisierung — und waere
+ergaenzend, nicht ersetzend.
+
+**Wert fuer kuenftige Faelle:** ein Review-Fund, der eine Produktentscheidung
+verlangt, wird nicht durch die technisch „strengere" Variante aufgeloest. Die
+Frage ist zuerst, welche Option am wenigsten kostet, wenn man sich spaeter
+anders entscheidet.

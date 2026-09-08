@@ -1,6 +1,17 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-08 (35. Lauf — Warteschlange: #498 openapi-Drift-Gate)_
+_Stand: 2026-09-08 (35. Lauf — Warteschlange: #498, #481)_
+
+## Die Org-Rolle ist jetzt eine benannte Absicht (2026-09-08, 35. Lauf, #481)
+
+Dass jedes Org-Mitglied Workspaces anlegen darf, war seit dem Security-Review
+zu #479 dreimal neu belegt worden, ohne dass sich etwas aenderte. Der Owner hat
+am 2026-09-08 entschieden: **akzeptieren und dokumentieren** (ADR-0023
+§Abgrenzung, F-Phase2-04 in `security-findings-phase-2.md` §9). Kein Code
+geaendert — das war das Ergebnis, nicht sein Ausbleiben.
+
+**Warum nicht die Mindestrolle:** sie waere ein Breaking Change fuer Betreiber,
+deren `member` heute Workspaces anlegt. Die Doku-Variante schliesst keine Tuer.
 
 ## Die OpenAPI-Referenz kann nicht mehr still veralten (2026-09-08, 35. Lauf, #498)
 
