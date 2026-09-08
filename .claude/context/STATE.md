@@ -1,6 +1,82 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-07 (33. Lauf — zwei Waechter, #492 + #493)_
+_Stand: 2026-09-08 (34. Lauf — Backlog-Aufbereitung + #495 + #477)_
+
+## Der dokploy-Stack reicht wieder alles durch (2026-09-08, 34. Lauf, #477)
+
+Der `web`-Service fuehrte fuenf Runtime-Config-Variablen, die beiden anderen
+Stacks acht. **Jetzt alle drei bei 8, deckungsgleich gemessen.**
+`WHO2BE_LAUNCH_MODE`, `WHO2BE_LAUNCH_CONTACT` und
+`WHO2BE_SESSION_MAX_AGE_HOURS` kamen dazu, samt der erklaerenden Kommentare
+aus den beiden Referenz-Stacks.
+
+**Das Issue war zwei Laeufe lang `needs-decision` — zu Unrecht.** Die offene
+Weiche lautete "bleibt dokploy ein unterstuetzter Deployment-Pfad?" und galt
+als Produktentscheidung *mit Aussenwirkung auf Betreiber*. Genau diese
+Praemisse traegt nicht: `README.md:52` fuehrt als Deployment ausschliesslich
+`deploy/hetzner/`, `docs/README.md:56` listet `oauth-e2e-dokploy.md` unter
+"Smoke-/Verifikations-Runbooks (intern)", und `deploy/dokploy/` hat weder
+README noch RUNBOOK, Backup oder Tests. dokploy ist ein **internes
+Pruefmittel**. Damit war die Weiche belegbar statt urteilsgebunden — die
+Frage "behalten wir dokploy?" bleibt offen und blockierte den Fix nie.
+Daraus wurde Regel 24 der Warteschlange.
+
+**Nebenbefund: das Verifikations-Kommando des Issues lief nicht.**
+`docker compose -f deploy/dokploy/docker-compose.yml config` bricht ohne
+`MINIO_ROOT_PASSWORD` ab (Pflichtvariable ohne Default, in `.env.example`
+bewusst leer — ein Passwort gehoert nicht in eine Beispieldatei). Es stand so
+seit dem ersten Refinement im Body und wurde nie ausgefuehrt. Korrigiert:
+die Variable muss fuer den Lauf gesetzt sein.
+
+DoD: `docker compose config` Exit 0; `WHO2BE_LAUNCH_MODE=coming_soon` und
+`WHO2BE_SESSION_MAX_AGE_HOURS=6` loesen im `web`-Service auf, ohne gesetzte
+Werte stehen `open` und `12`; Diff 11 Zeilen, nur der `environment`-Block.
+
+## Der Hook stellt jetzt die Umgebung her, die CLAUDE.md verlangt (2026-09-08, 34. Lauf, #495)
+
+**Die 1812 aus dem 33. Lauf sind erledigt.** `scripts/install_pkgs.sh` synct
+mit `--group billing` wie CI (`ci.yml:104`) und CLAUDE.md §Befehle. Belegt
+durch Gegenprobe: **1901 Tests ohne** den neuen Guard, 1902 mit ihm — exakt
+die Zielzahl des Issues, statt der 1812 der Baseline. `who2be_billing` ist
+wieder importierbar.
+
+**Ein Guard haelt die Bedingung**: `apps/api/tests/test_session_hook_env.py`
+prueft statisch, dass jeder `uv sync` im Hook `--group billing` traegt — nach
+dem Muster der vier vorhandenen Repo-Guards (`test_no_billing_in_core.py`
+u. a.), ohne neue Abstraktion. Er ist noetig, weil die Abweichung **nichts rot
+macht**: sie senkt nur still die Testzahl und hebt dabei sogar die Coverage.
+
+**Die 481 Integrationstests bleiben uebersprungen — jetzt aber angekuendigt.**
+Weiche 2 des Issues liess offen, ob der Hook die DB startet, warnt oder
+`WHO2BE_REQUIRE_DB` setzt ("Warnung ist das Minimum, Starten die Kuer").
+Gemessen ist in der Cloud-Session **kein** DB-Weg gangbar, und das ist der
+eigentliche Fund dieses Laufs:
+
+- `pg_ctlcluster 16 main start` — das Issue empfiehlt es, aber dem lokalen
+  Cluster fehlt die `vector`-Extension. Migration 0071 (ADR-0046) braucht
+  sie; CI zieht deshalb `pgvector/pgvector:pg16`. Ein gestarteter Cluster
+  braeche also **an der Migration** statt an der Verbindung — das stille
+  Scheitern wandert nur eine Ebene weiter.
+- Testcontainers — der Opt-in steht fertig in `conftest.py:44-70` und zieht
+  das richtige Image, aber der **Docker-Daemon laeuft nicht**.
+- `WHO2BE_REQUIRE_DB=1` im Hook exportieren — wirkungslos: der Hook laeuft in
+  einer Subshell, spaetere Tool-Calls starten eine neue Shell.
+
+Deshalb: sichtbare Warnung, die den Docker-Status zur Laufzeit prueft und den
+**richtigen** naechsten Schritt nennt. Das ist hier nicht das Minimum, sondern
+das einzig Ehrliche. Ein vollstaendiges "lokal = CI" ist es nicht — der
+Unterschied ist ab jetzt angekuendigt statt still, was das erklaerte Ziel des
+Issues war.
+
+Kein CHANGELOG-Eintrag: `scripts/install_pkgs.sh` ist Agenten-Session-Infra
+ohne Produktverhalten. Praezedenzfall ist #440 (CI ueberspringt Doku-Jobs) —
+ebenfalls ohne Eintrag; `scripts/`-Zeilen stehen im CHANGELOG nur dort, wo sie
+Produktverhalten absichern (`smoke.sh`, Z. 197/221).
+
+DoD: neuer Guard gruen; Sammlung 1902 (ohne Guard 1901, Baseline 1812);
+`import who2be_billing` ok; Hook-Lauf Exit 0 mit sichtbarer Warnung;
+ruff/format/mypy gruen (459 Dateien). Plan:
+`.claude/plan/2026-09-08-0600_issue-495-sessionstart-hook.md`.
 
 ## Zwei Waechter fuer Bedingungen, die vorher niemand geprueft hat (2026-09-07, 33. Lauf, #492 + #493)
 
