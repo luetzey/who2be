@@ -1,14 +1,51 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-08 (35. Lauf — Warteschlange: #498, #481, #500, #501, #502)_
+_Stand: 2026-09-08 (36. Lauf — Zuschnitt W7c/#506; 35. Lauf: #498, #481, #500, #501, #502 in PR #505)_
+
+## W7c geschnitten — #491 hatte kein startbares Kind mehr (2026-09-08, 36. Lauf, #506)
+
+Die Backlog-Queue fuehrte #491 als „vollstaendig zerlegt". **Das stimmte
+nicht:** W7c stand nur als Halbsatz in der Queue selbst, ohne eigenes Issue.
+Nach dem Merge von PR #505 haette das Tracking kein startbares Kind mehr
+gehabt. Nachgeholt als **#506** (`agent-ready`, `size/S`, Startsperre bis zum
+Merge von #505): sieben Stellen, sechs neue Gruende.
+
+**Der Fund, der das Paket beinahe verhindert haette.** Der Modul-Kopf von
+`routers/wa_tables.py:36-45` traegt eine Gegenentscheidung aus dem
+Security-Review Phase 2 (H1): die `ProblemReason`-Taxonomie sei „geschlossen
+und beschreibt Berechtigungs-/Zustands-Gruende", ein Timeout gehoere nicht
+dazu. Sie ist **datierbar ueberholt** — `885a363` vom 2026-08-16 gegen
+ADR-0051 vom 2026-09-06, die genau diese Praemisse ausdruecklich als falsch
+benennt („Diese Annahme war falsch […] laengst kein Gate-Vokabular mehr").
+Zwei Aufrufe klaeren den Vorrang: `git log -S` auf den Absatz, Datum der ADR.
+**Das Korrigieren des Absatzes ist Akzeptanzkriterium 4 von #506** — eine
+veraltete Begruendung, die stehen bleibt, liest sich fuer den Naechsten wie
+eine gueltige.
+
+Das inhaltliche Teilargument gilt weiter und ist eingearbeitet:
+`query_not_readonly` waere fuer einen Timeout sachlich falsch, deshalb ein
+eigener Grund statt eines wiederverwendeten (Regel 20).
+
+**Blindfleck des eigenen Messfilters.** Der Filter „`detail` enthaelt einen
+Call oder ein Attribute" uebersah `wa_timeline.py:169`, weil `f"{exc} …"`
+beides nicht ist. Erst die Zaehlung **aller** `HTTPException`-Konstruktionen
+(13 auf dem PR-Stand) ergab die vollstaendige Restflaeche. Regel 18 in
+fuenfter Auflage — diesmal traf sie den AST-Filter, nicht den Regex.
 
 ## W7b abgeschlossen — #491 ist bis auf die zwei offenen Fragen erledigt (2026-09-08, 35. Lauf, #502)
 
 Vierzehn weitere Stellen migriert: vier Modulkonstanten und zehn f-Strings,
 letztere mit **`params`** statt Werten im Locale-Key. Offene nicht-literale
 Stellen **26 -> 12** — und diese zwoelf sind genau die, die ausgenommen
-bleiben: 9x Fremd-Exception-Text (#503, Sicherheitsfrage) und 3x Objekt-
+bleiben: 9x mit dynamischem `detail` (#503 plus W7c/#506) und 3x Objekt-
 `detail` (in ADR-0051 als bewusste Ausnahme dokumentiert).
+
+**Korrektur (36. Lauf):** hier stand zuerst „9x Fremd-Exception-Text (#503,
+Sicherheitsfrage)". Beides ist falsch. Die neun Stellen fangen ausnahmslos
+**eigene** Domain-Exceptions — es gibt keinen Fremdtext, und das
+`security`-Label an #503 ist gefallen. #503 ist auf die **zwei**
+OAuth-Stellen neu geschnitten; die restlichen sieben sind ein normales
+Migrationspaket (W7c, #506).
 
 `ProblemReason` **80 -> 92**, `common.errors` **63 -> 75** je Locale.
 
@@ -28,8 +65,16 @@ bleiben: 9x Fremd-Exception-Text (#503, Sicherheitsfrage) und 3x Objekt-
 ## Neunzehn Fehlerstellen mehr tragen einen `reason` (2026-09-08, 35. Lauf, #501)
 
 W7a von #491: die mehrzeiligen Literale sind migriert. Offene nicht-literale
-`HTTPException`-Stellen **45 -> 26**; `ProblemReason` **74 -> 81**;
+`HTTPException`-Stellen **45 -> 26**; `ProblemReason` **73 -> 80**;
 `common.errors` **56 -> 63** je Locale, deckungsgleich.
+
+**Korrektur (36. Lauf):** hier stand zuerst „74 -> 81". Die Zahl kam aus
+einer Regex-Zaehlung, die einen im Docstring zitierten String mitzaehlte;
+per AST-Parse sind es **73 -> 80** (und mit W7b **-> 92**). Der Commit
+`56abc70` traegt die falsche Zahl in seiner Message — History bleibt stehen,
+die Korrektur steht hier. **Der Body von PR #505 behauptete, diese Korrektur
+sei bereits in STATE nachgetragen; sie war es nicht.** Auch das ist
+korrigiert.
 
 **Zwei Stellen brauchten keinen neuen Grund:** `routers/agents.py:201/230`
 tragen woertlich "Agent nicht gefunden." und bekamen den bestehenden
