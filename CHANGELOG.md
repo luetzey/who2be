@@ -10,6 +10,18 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Security
 
+- Bumped the pinned `@tiptap/core` in the web lockfile from 3.30.1 to 3.31.3,
+  clearing two high-severity advisories that the CI supply-chain gate started
+  reporting on 2026-09-09: prototype pollution via `mergeAttributes()`
+  (GHSA-cp6q-959q-f8rh) and quadratic ReDoS in Markdown attribute parsing
+  (GHSA-j95f-988m-3j2f). The package reaches us transitively through
+  `@blocknote/core`, whose declared range `^3.29.2` already permits the fixed
+  version — so this is a lockfile refresh, not a dependency change, and
+  `package.json` is untouched. No repository change caused the failure: the
+  same tree passed on 2026-09-08, and the `audit` job deliberately runs even
+  for documentation-only pull requests because it queries a live advisory
+  database (`ci.yml:29-31`).
+
 - Issuing or rotating an API token with the `admin` role now requires an
   MFA-verified (aal2) session. Until now the reach of the MFA requirement
   depended on which path you took rather than on what you did: every other
