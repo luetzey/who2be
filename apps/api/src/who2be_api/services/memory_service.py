@@ -23,7 +23,7 @@ import logging
 import re
 from uuid import UUID
 
-from fastapi import HTTPException, status
+from fastapi import status
 
 from who2be_api.core.errors import ApiError, ApiGateError
 from who2be_api.core.security import (
@@ -208,9 +208,10 @@ class MemoryService:
                 continue
             rejection = _guard_rejection(guard, text)
             if rejection is not None:
-                raise HTTPException(
+                raise ApiError(
                     status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail=rejection,
+                    reason="memory_guard_rejected",
                 )
         fact_vector = await self._embed(data.fact)
         duplicate = await self._repo.find_similar(

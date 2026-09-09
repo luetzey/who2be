@@ -30,22 +30,24 @@ Domain-Exceptions (`TableRowsInvalid` → 422, `TableQueryInvalid` → 400,
 `QueryTimeout` → 408) und `None` → 404 (kein Existenz-Leak, Muster
 `routers/kb.py`).
 
-Warum `QueryTimeout` (Security-Review Phase 2, H1) OHNE `ApiGateError` laeuft:
-die `ProblemReason`-Taxonomie ist geschlossen und beschreibt
-Berechtigungs-/Zustands-Gruende. Ein ueberschrittenes ZEITBUDGET ist keiner
-davon — `query_not_readonly` waere sachlich falsch (die Query war erlaubt),
-`ingest_too_large` waere eine Groessen- statt Kostenaussage. Statt die
-Taxonomie um Vokabular zu erweitern, das kein Agent verzweigen muss, geht der
-Fall den generischen Domain-Exception-Weg des Repos (Muster
-`TableQueryInvalid`): 408 + sprechendes `detail`, RFC-9110-konform
-selbsterklaerend.
+Warum `QueryTimeout` (Security-Review Phase 2, H1) mit der schlanken
+`ApiError`-Huelle statt `ApiGateError` laeuft: keine der drei Domain-Exceptions
+hier ist ein Gate — weder eine Autorisierungs- noch eine Status-Uebergangs-
+Entscheidung, die `ApiGateError` vorbehalten sind. `query_not_readonly` waere
+trotzdem der falsche Grund fuer den Timeout: er sagt "die Query war nicht
+read-only", nicht "sie war zu teuer" — die Query war erlaubt, sie hat nur das
+Zeitbudget gerissen. Der eigene Grund `query_timeout` traegt diese
+Kostenaussage; ADR-0051 (2026-09-06, #436/#506) hat die fruehere Annahme
+dieses Abschnitts ausdruecklich aufgehoben, die `ProblemReason`-Taxonomie sei
+ein geschlossenes Gate-Vokabular fuer Berechtigungs-/Zustands-Gruende — sie
+ist seither das Fehler-Vokabular der ganzen API (Details: ADR-0051).
 """
 
 from typing import Annotated
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response, status
+from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
 from pydantic import BaseModel
 
 from who2be_api.core.db import get_pool
@@ -144,22 +146,31 @@ def _table_not_found() -> ApiError:
     )
 
 
-def _rows_invalid(exc: TableRowsInvalid) -> HTTPException:
-    return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc))
+def _rows_invalid(exc: TableRowsInvalid) -> ApiError:
+    return ApiError(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        detail=str(exc),
+        reason="table_rows_invalid",
+    )
 
 
-def _query_invalid(exc: TableQueryInvalid) -> HTTPException:
-    return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"SQL-Fehler: {exc}")
+def _query_invalid(exc: TableQueryInvalid) -> ApiError:
+    return ApiError(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=f"SQL-Fehler: {exc}",
+        reason="query_invalid",
+    )
 
 
-def _query_timeout(exc: QueryTimeout) -> HTTPException:
+def _query_timeout(exc: QueryTimeout) -> ApiError:
     """408 fuer eine abgebrochene Query (H1) — s. Modul-Kopf zur Reason-Wahl."""
-    return HTTPException(
+    return ApiError(
         status_code=status.HTTP_408_REQUEST_TIMEOUT,
         detail=(
             f"{exc} Die Anfrage muss guenstiger werden: Fenster einschraenken, "
             "aggregieren oder auf rekursive CTEs ohne Abbruchbedingung verzichten."
         ),
+        reason="query_timeout",
     )
 
 

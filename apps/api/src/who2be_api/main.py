@@ -293,6 +293,13 @@ _PROBLEM_TITLES: dict[str, str] = {
     "persona_mode_unknown": "Unbekannter Persona-Modus",
     "placeholder_kind_unknown": "Unbekannter Placeholder-Typ",
     "entity_version_not_found": "Version nicht gefunden",
+    # Letzte migrierbare Fehlerflaeche der Router-/Service-Ebene (ADR-0051, #506):
+    "promote_unsupported": "Artifact-Typ nicht promotebar",
+    "table_rows_invalid": "Zeilen-Import passt nicht zum Schema",
+    "query_invalid": "SQL-Fehler in der Tabellen-Query",
+    "query_timeout": "Zeitbudget der Tabellen-Query ueberschritten",
+    "timeline_request_invalid": "Timeline-Anfrage ungueltig",
+    "memory_guard_rejected": "Memory vom Injection-Guard abgelehnt",
 }
 
 
