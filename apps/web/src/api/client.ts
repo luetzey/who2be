@@ -257,14 +257,22 @@ async function readErrorBody(
  * zusaetzlich einen stabilen `reason`, gewinnt der uebersetzte Text unter
  * `common:errors.<reason>`.
  *
- * `defaultValue: detail` ist der Grund, warum die Migration in Wellen laufen
- * kann: ein Grund ohne Locale-Key faellt lautlos auf den Servertext zurueck,
- * statt einen rohen Key anzuzeigen. Derselbe Pfad gilt fuer beide
- * Serialisierungen — `ApiProblem` (problem+json) und `ApiErrorBody` tragen
- * denselben `reason`.
+ * Ein Grund ohne Locale-Key faellt auf den Servertext zurueck — und zwar
+ * ungefiltert: `detail` wird dann direkt zurueckgegeben, OHNE `i18n.t()`
+ * ueberhaupt aufzurufen (#509). Wuerde `detail` stattdessen als
+ * `defaultValue` durchlaufen, wertet i18next darin seine eigene Syntax aus
+ * (`{{...}}`-Interpolation, `$t(...)`-Nesting) — bei zwei der sechs seit W7c
+ * (#506) keyfreien Gruende (`query_invalid`, `timeline_request_invalid`)
+ * steckt in `detail` ein vom Aufrufer beeinflusster Text (SQL-Fehlerecho
+ * bzw. rohes Token). Der explizite `i18n.exists()`-Check ersetzt diesen
+ * impliziten Pfad, ohne das Verhalten bei vorhandenem Key zu aendern.
+ * Derselbe Pfad gilt fuer beide Serialisierungen — `ApiProblem`
+ * (problem+json) und `ApiErrorBody` tragen denselben `reason`.
  */
 function translateServerError(detail: string, reason: unknown, params: unknown): string {
   if (typeof reason !== 'string' || reason.length === 0) return detail
+  const key = `common:errors.${reason}`
+  if (!i18n.exists(key)) return detail
   // `params` kommt vom Server; nur flache Primitive interpolieren, damit ein
   // unerwartetes Shape nicht die Meldung zerlegt.
   const values: Record<string, string | number> = {}
@@ -273,9 +281,7 @@ function translateServerError(detail: string, reason: unknown, params: unknown):
       if (typeof value === 'string' || typeof value === 'number') values[key] = value
     }
   }
-  // `defaultValue` NACH den Werten: ein `params.defaultValue` darf den
-  // Fallback nicht ueberschreiben.
-  return i18n.t(`common:errors.${reason}`, { ...values, defaultValue: detail })
+  return i18n.t(key, values)
 }
 
 // Tenant-weiter Read — Workspace-Resolution beim Bootstrap, vor `createApi`.
