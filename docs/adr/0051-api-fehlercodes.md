@@ -263,3 +263,51 @@ Das ist eine **Owner-Entscheidung vom 2026-09-09** (Option A von drei zu
 gemessen, bevor er entschieden wurde. Dieselbe Argumentationslinie liegt
 offen fuer die 52 Gate-Stellen, deren 23 Gruende ebenfalls keinen Locale-Key
 tragen (#504).
+
+## Ausnahme (2026-09-09, #504): die RFC-7807-Huelle bekommt kein `params`
+
+`ApiErrorBody` traegt ein optionales `params`, `ApiProblem` nicht. Die Frage,
+ob die RFC-Huelle es ebenfalls bekommen soll, ist mit **nein** entschieden —
+vorerst.
+
+Gemessen am 2026-09-09 (`.claude/plan/scripts/measure_gate_reasons.py`):
+
+- **52** Gate-Stellen (`ApiGateError(...)`), darunter **23** distinkte Gruende
+- davon **23 von 23 ohne Locale-Key** unter `common.errors`
+- ohne `params` waeren nur **7** Gruende (10 der 52 Stellen) allein durch
+  Locale-Keys uebersetzbar; die uebrigen 16 Gruende / 42 Stellen brauchen
+  entweder `params` oder je Fall einen eigenen Key
+
+**Die Zahl, die den Ausschlag gibt, ist nicht 52, sondern 23 von 23.** Dass
+kein einziger Gate-Grund je einen Locale-Key bekommen hat, belegt nicht nur
+die Luecke, sondern auch, dass sie in der gesamten Geschichte des Projekts
+niemanden gestoert hat. Ueber `defaultValue: detail` (Abschnitt 5) erscheint
+an jeder der 52 Stellen ein spezifischer, korrekter Satz — er ist nur deutsch.
+
+Dazu kommt eine Eigenschaft, die beim Zuschnitt leicht uebersehen wird:
+**`params` allein aendert nichts, was ein Nutzer sieht.** Das Feld uebersetzt
+keine Meldung; es ermoeglicht eine Folgewelle, die fuer 23 Gruende Locale-Keys
+in DE und EN anlegt und an 42 Stellen die interpolierten Werte herauszieht.
+Der Preis von „ja" ist also nicht eine Vertragsaenderung, sondern **eine
+Vertragsaenderung plus eine Welle ueber 52 Stellen** — und die Aenderung
+traefe eine Huelle mit `model_config = ConfigDict(extra="forbid")`, die jeder
+streng validierende Client kennen muesste.
+
+**Der Ausloeser, der diese Entscheidung umdreht**, ist einer von zweien:
+
+1. der erste externe Konsument, fuer den eine deutsche Fehlermeldung ein
+   Mangel ist (ein Kunde, ein Cloud-Nutzer, ein MCP-Client mit englischer
+   Oberflaeche), oder
+2. der erste Fall, in dem ein Client auf einem Gate-Wert **verzweigen** soll
+   statt ihn nur anzuzeigen — dann ist `params` kein i18n-Thema mehr, sondern
+   Vertrag.
+
+Tritt einer davon ein, ist die Erweiterung faellig, und dann als ein
+Zuschnitt: Feld **plus** Welle, nicht das Feld allein. **`nein` ist jederzeit
+nach `ja` revidierbar; `ja` nach `nein` nur mit einem zweiten Vertragsbruch** —
+das ist der eigentliche Grund fuer die Reihenfolge.
+
+Das ist eine **Owner-Entscheidung vom 2026-09-09** (Option A von drei zu
+#504), getroffen nach fuenf unabhaengigen Messungen derselben Flaeche. Sie
+folgt derselben Linie wie die Ausnahme zu W7c oben: **bevor eine Flaeche
+uebersetzbar gemacht wird, wird gezaehlt, wer sie liest.**
