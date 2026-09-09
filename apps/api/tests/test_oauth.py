@@ -1091,12 +1091,17 @@ def test_oauth_consent_agent_id_is_optional(monkeypatch: pytest.MonkeyPatch) -> 
             assert denied_params["error"] == ["access_denied"]
             assert denied_params["state"] == ["xyz"]
 
-            # (2) Zustimmen ohne agent_id und ohne Blob-Hint ⇒ invalid_request.
+            # (2) Zustimmen ohne agent_id und ohne Blob-Hint ⇒ invalid_request,
+            #     im RFC-6749-Fehlerformat (#503): `error` + `error_description`,
+            #     nicht `detail` (Issue #503, Option A).
             incomplete = client.post(
                 "/oauth/consent", json={"request": blob, "approve": True}, headers=jwt_auth
             )
             assert incomplete.status_code == 400, incomplete.text
-            assert incomplete.json()["detail"] == "invalid_request"
+            assert incomplete.json() == {
+                "error": "invalid_request",
+                "error_description": "agent_id fehlt im Consent.",
+            }
 
             # (3) Zustimmen ohne agent_id, aber MIT Blob-Hint ⇒ Hard-Lock greift
             #     trotzdem und der Token haengt am Blob-Agenten.
@@ -1120,5 +1125,73 @@ def test_oauth_consent_agent_id_is_optional(monkeypatch: pytest.MonkeyPatch) -> 
                 },
             ).json()["access_token"]
             assert _token_agent_id(security.hash_token(access)) == UUID(agent_id)
+    finally:
+        cleanup_workspaces([owner_id])
+
+
+# --- RFC-6749-Fehlerform fuer ALLE fuenf Handler (Issue #503, Option A) ------
+#
+# `register_client` und `consent` warfen bisher `HTTPException(detail=...)`
+# statt ueber `_error_response` zu antworten wie die drei anderen Handler —
+# das RFC-6749-`error`-Feld fehlte und `OAuthError.description` ging verloren.
+# Dieser Test belegt fuer BEIDE umgestellten Pfade: `error` + `error_description`
+# kommen an, und der Statuscode bleibt der von `OAuthError` unveraendert (400).
+
+
+@pytest.mark.integration
+def test_oauth_register_and_consent_errors_are_rfc6749(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`/oauth/register` und `/oauth/consent` antworten bei einer `OAuthError`
+    wie `/oauth/authorize`, `/oauth/consent/preview` und `/oauth/token` bereits
+    taten: `{"error": ..., "error_description": ...}`, kein `detail`."""
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: _settings())
+    monkeypatch.setattr(oauth_service, "get_settings", lambda: _settings())
+
+    owner_id = fresh_user_id()
+    jwt_auth = {"Authorization": f"Bearer {_jwt(owner_id)}"}
+
+    try:
+        with TestClient(app) as client:
+            # --- register_client: redirect_uri weder https noch Loopback ⇒
+            # `invalid_redirect_uri` VOR jedem DB-Write (Service-Validierung
+            # laeuft vor `insert_client`).
+            bad_register = client.post(
+                "/oauth/register",
+                json={"redirect_uris": ["http://evil.example/cb"], "client_name": "Evil"},
+            )
+            assert bad_register.status_code == 400, bad_register.text
+            assert bad_register.json() == {
+                "error": "invalid_redirect_uri",
+                "error_description": "Unzulaessige redirect_uri: http://evil.example/cb",
+            }
+            assert bad_register.headers["cache-control"] == "no-store"
+
+            # --- consent: Zustimmen ohne agent_id und ohne Blob-Hint ⇒
+            # `invalid_request` mit der `description` aus dem Service.
+            client_id = _register(client)
+            _verifier, challenge = _pkce()
+            blob = _authorize_blob(client, client_id, challenge)
+            bad_consent = client.post(
+                "/oauth/consent", json={"request": blob, "approve": True}, headers=jwt_auth
+            )
+            assert bad_consent.status_code == 400, bad_consent.text
+            assert bad_consent.json() == {
+                "error": "invalid_request",
+                "error_description": "agent_id fehlt im Consent.",
+            }
+            assert bad_consent.headers["cache-control"] == "no-store"
+
+            # --- Gegenprobe: der Erfolgspfad beider Endpunkte bleibt unveraendert
+            # (weiterhin das jeweilige Pydantic-Modell, kein `error`-Feld).
+            good_register = client.post(
+                "/oauth/register",
+                json={"redirect_uris": [_REDIRECT], "client_name": "Claude"},
+            )
+            assert good_register.status_code == 201, good_register.text
+            assert "error" not in good_register.json()
+            assert good_register.json()["client_id"].startswith("oac_")
     finally:
         cleanup_workspaces([owner_id])
