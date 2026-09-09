@@ -212,3 +212,54 @@ von #491 bekannt und ist bereits einmal aufgetaucht:
 `.claude/context/DECISIONS.md:1432-1440` (Eintrag „Der Bestandszaehler von
 #402 zaehlt Wuerfe, nicht Schreibweisen", 2026-09-07) haelt exakt dieselben
 drei Stellen als „mit dem heutigen Vertrag gar nicht migrierbar" fest.
+
+## Ausnahme (2026-09-09, W7c von #491/#506): sechs WorkArea-Gruende bleiben ohne Locale-Key
+
+Sechs Gruende tragen bewusst **keinen** Eintrag unter `common.errors`, obwohl
+sie nach Abschnitt 5 einen bekommen koennten:
+
+- `promote_unsupported` (`routers/wa_artifacts.py`)
+- `table_rows_invalid`, `query_invalid`, `query_timeout` (`routers/wa_tables.py`)
+- `timeline_request_invalid`, `query_timeout` (`routers/wa_timeline.py`)
+- `memory_guard_rejected` (`services/memory_service.py`)
+
+**Ein Locale-Key uebersetzt fuer einen menschlichen Leser. Diese sechs haben
+keinen.** Ihre Endpunkte sind ausschliesslich ueber MCP erreichbar; die
+Web-Anwendung ruft keinen von ihnen auf (`apps/web/src/api/client.ts`,
+gegengezaehlt am 2026-09-09: null Aufrufe fuer `insert_rows`, `query_table`,
+`timeline`, `promote_artifact`; bei `save_memory` nutzt das Web nur
+list/triage/update/delete). Das ist keine Luecke, sondern eine
+Architekturentscheidung — `apps/web/src/features/workarea/pages/TableDetailPage.tsx:46-48`
+haelt sie fest: die Tabellen-Ansicht ist „bewusst read-only … geschrieben wird
+ueber MCP (`create_table`/`insert_rows`); die Web-Ansicht ist der Nachvollzug
+fuer den Menschen, nicht ein zweiter Schreibpfad" (ADR-0049).
+
+Der Konsument dieser Fehler ist also ein Agent — und der liest den `reason`,
+nicht den Text. Abschnitt 5 beschreibt bereits, was ohne Key passiert
+(`defaultValue: detail` zeigt den deutschen Servertext, nie einen rohen Key).
+Fuer diese sechs ist das der **Endzustand**, nicht ein Zwischenstand einer
+noch laufenden Welle.
+
+**Der Ausloeser, der diese Ausnahme umdreht:** wird einer der fuenf Endpunkte
+schreibend an die Web-UI angebunden — also ADR-0049 an dieser Stelle revidiert
+—, ist der Locale-Key fuer die betroffenen Gruende faellig. Dann aber **mit
+`params`**: das `detail` ist an allen sechs Stellen zur Laufzeit
+uneindeutig (fuenf Wurfstellen bei `TableRowsInvalid` mit Zeile, Spalte und
+Limit; fuenf Call-Sites bei der Timeline-Validierung; der `sqlite3`-Fehlertext
+bei `query_invalid`; zwei Router-Suffixe bei `query_timeout`). Ein statischer
+Key wuerde den spezifischen Text nicht ergaenzen, sondern **ersetzen** — aus
+„Zeile 3: unbekannte Spalten foo, bar — das Schema kennt nur: id, name."
+wuerde „Zeilen-Import passt nicht zum Tabellen-Schema." Das Muster fuer den
+richtigen Weg steht in W7b (`316e1e9`): `ApiError(reason=…, params={…})`,
+Platzhalter im Locale-Key.
+
+Nicht Teil dieser Entscheidung ist, ob `table_rows_invalid` und
+`timeline_request_invalid` in feinere Gruende zerfallen sollten — beide decken
+je fuenf Fehlerarten ab. Heute verzweigt kein Client darauf; eine feinere
+Taxonomie braucht einen eigenen Nutzen-Nachweis.
+
+Das ist eine **Owner-Entscheidung vom 2026-09-09** (Option A von drei zu
+#510), kein Uebersehen: der Fall war beim Zuschnitt bekannt und wurde
+gemessen, bevor er entschieden wurde. Dieselbe Argumentationslinie liegt
+offen fuer die 52 Gate-Stellen, deren 23 Gruende ebenfalls keinen Locale-Key
+tragen (#504).

@@ -79,6 +79,19 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Changed
 
+- Documented in ADR-0051 that six WorkArea error reasons deliberately carry no
+  locale key, so their messages stay German. Nothing changes at runtime — the
+  entry records a decision rather than a change. The reasons belong to
+  endpoints reachable only through MCP (`insert_rows`, `query_table`,
+  `timeline`, `promote_artifact`, `save_memory`); the web application calls
+  none of them, because the table view is deliberately read-only and writing
+  goes through MCP (ADR-0049). A locale key translates for a human reader, and
+  these six have none: their consumer is an agent, which reads the machine
+  value `reason` rather than the text. The entry also names the trigger that
+  reverses it — if one of those endpoints ever gains a writing path in the web
+  UI, the keys become due, and then with `params`, because the message varies
+  at runtime (Issue #510, closing #506 and #491).
+
 - Seven more API error responses now carry a stable `reason` from
   `ProblemReason` instead of a bare `HTTPException`: unsupported artifact
   promotion, invalid table rows, invalid table queries, query timeouts (both

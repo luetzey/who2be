@@ -1,6 +1,36 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-09 (39. Lauf — Umsetzung: #508 CI-Blocker + W7c/#506; 38. Lauf: Backlog-Aufbereitung 11)_
+_Stand: 2026-09-09 (40. Lauf — ADR-Ausnahme #510, schliesst #506 + #491; 39. Lauf: #508 + W7c in PR #507, gemergt `f8f4dd7`)_
+
+## Das bestellte Paket war das falsche — gezaehlt statt vermutet (2026-09-09, 40. Lauf, #510)
+
+Der Auftrag lautete, den `params`-Zuschnitt aus AK 5 von #506 zu schneiden.
+Beim Zuschnitt ist dessen Praemisse gefallen, und das entscheidende Kommando
+war ein `grep`:
+
+    insertRows 0 · queryTable 0 · waTimeline 0 · promoteArtifact 0
+
+**Alle fuenf Endpunkte der sechs Gruende sind MCP-only.** Die Web-Anwendung
+ruft keinen davon auf — nicht aus Versehen, sondern weil
+`TableDetailPage.tsx:46-48` die Tabellen-Ansicht ausdruecklich als read-only
+festhaelt (ADR-0049: „geschrieben wird ueber MCP … der Nachvollzug fuer den
+Menschen, nicht ein zweiter Schreibpfad").
+
+Ein Locale-Key uebersetzt fuer einen menschlichen Leser. Hier gibt es keinen:
+der Konsument ist ein Agent, und der liest den `reason` — genau das Feld, das
+W7c geliefert hat. **Ein Paket ueber ~15 Wurfstellen haette null heutige Leser
+bedient**, und es haette zusaetzlich eine Taxonomie-Frage aufgeworfen
+(`table_rows_invalid` und `timeline_request_invalid` decken je fuenf
+Fehlerarten ab, ~12 Gruende statt 6).
+
+Owner-Entscheidung: **ADR-Absatz statt Code** (Option A von drei). Der Absatz
+nennt den Ausloeser, der ihn umdreht — wird einer der Endpunkte schreibend an
+die UI angebunden, sind die Keys faellig, und dann mit `params`. Damit ist AK 5
+nicht offen, sondern entschieden; **#506 und #491 schliessen mit**.
+
+**Die Lehre ist billiger als das Paket:** bevor eine Flaeche uebersetzbar
+gemacht wird, wird gezaehlt, wer sie liest. Die Antwort stand in `client.ts`,
+nicht in der Intuition — vier `grep`-Aufrufe gegen ein `size/M`-Vorhaben.
 
 ## Ein generischer Locale-Key haette die Weiche unterlaufen, die er befolgen sollte (2026-09-09, 39. Lauf, #506)
 
