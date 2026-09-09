@@ -30,7 +30,7 @@ from typing import Annotated, Final
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 
 from who2be_api.core.db import get_pool
 from who2be_api.core.errors import ApiError
@@ -68,8 +68,12 @@ Ctx = Annotated[WorkspaceContext, Depends(get_current_workspace)]
 Service = Annotated[WaTimelineService, Depends(get_wa_timeline_service)]
 
 
-def _invalid(detail: str) -> HTTPException:
-    return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail)
+def _invalid(detail: str) -> ApiError:
+    return ApiError(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        detail=detail,
+        reason="timeline_request_invalid",
+    )
 
 
 def _ensure_utc(value: datetime) -> datetime:
@@ -166,10 +170,11 @@ async def timeline(
             reason="table_not_found",
         ) from exc
     except QueryTimeout as exc:
-        raise HTTPException(
+        raise ApiError(
             status_code=status.HTTP_408_REQUEST_TIMEOUT,
             detail=(
                 f"{exc} Das Zeitfenster verkleinern oder weniger `table:`-Quellen "
                 "in einem Aufruf kombinieren."
             ),
+            reason="query_timeout",
         ) from exc

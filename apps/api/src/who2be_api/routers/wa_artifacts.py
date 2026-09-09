@@ -25,7 +25,7 @@ from typing import Annotated
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 
 from who2be_api.core.db import get_pool
 from who2be_api.core.errors import ApiError
@@ -243,6 +243,8 @@ async def promote_artifact(
     try:
         return await promote_service.promote_artifact(ctx, artifact_id, target_resource_id)
     except PromoteUnsupportedArtifact as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        raise ApiError(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+            reason="promote_unsupported",
         ) from exc

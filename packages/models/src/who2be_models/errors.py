@@ -139,6 +139,14 @@ ProblemReason = Literal[
     "persona_mode_unknown",  # 422 — Persona-Modus existiert nicht (params: mode, available)
     "placeholder_kind_unknown",  # 422 — unbekannter Placeholder-Typ (params: kind)
     "entity_version_not_found",  # 404 — Version einer Entitaet unbekannt (params: label)
+    # Letzte migrierbare Fehlerflaeche der Router-/Service-Ebene (ADR-0051, #506):
+    # reiner Konstruktortausch `HTTPException` -> `ApiError`, `detail` unveraendert.
+    "promote_unsupported",  # 422 — Artifact-Typ nicht promotebar (nur doc-Artifacts)
+    "table_rows_invalid",  # 422 — Zeilen-Import passt nicht zum Tabellen-Schema
+    "query_invalid",  # 400 — SQL-Fehler im Agenten-SQL (Tabellen-Query)
+    "query_timeout",  # 408 — Tabellen-Query hat das Zeitbudget ueberschritten
+    "timeline_request_invalid",  # 422 — Timeline-Request-Validierung (Fenster/Quellen)
+    "memory_guard_rejected",  # 422 — Memory vom Injection-Guard abgelehnt
 ]
 
 # Wer den Fehler beheben kann: `agent` = der aufrufende Agent kann es selbst

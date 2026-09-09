@@ -12887,7 +12887,13 @@
               "memory_cap_reached",
               "persona_mode_unknown",
               "placeholder_kind_unknown",
-              "entity_version_not_found"
+              "entity_version_not_found",
+              "promote_unsupported",
+              "table_rows_invalid",
+              "query_invalid",
+              "query_timeout",
+              "timeline_request_invalid",
+              "memory_guard_rejected"
             ],
             "title": "Reason"
           },
