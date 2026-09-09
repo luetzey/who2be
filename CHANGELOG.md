@@ -79,6 +79,20 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Changed
 
+- Seven more API error responses now carry a stable `reason` from
+  `ProblemReason` instead of a bare `HTTPException`: unsupported artifact
+  promotion, invalid table rows, invalid table queries, query timeouts (both
+  the table and the timeline route), invalid timeline requests, and content
+  rejected by the memory injection guard. Six new reasons in total — the two
+  timeout sites share one, because "timeout" is one thing a client branches on
+  regardless of which route produced it. The change is purely additive: every
+  `detail` text and every status code stays exactly as it was, so a client
+  that ignores `reason` sees no difference. This leaves six raw
+  `HTTPException` sites, and those are the intended ones: three with an object
+  `detail` (documented exception in ADR-0051), two OAuth sites awaiting a
+  decision (Issue #503), and one deliberate witness for the regression test
+  `test_unmigrated_error_body_is_unchanged` (Issue #506).
+
 - API error responses can now carry a stable, machine-readable `reason`
   alongside the German `detail` string, and the web client translates it into
   the UI language (ADR-0051, wave 0 of #402). The addition is strictly

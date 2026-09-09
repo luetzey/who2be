@@ -1,6 +1,60 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-09 (38. Lauf — Backlog-Aufbereitung 11; 37. Lauf: Aufbereitung 10, nur in #442 dokumentiert; 36. Lauf: Zuschnitt W7c/#506)_
+_Stand: 2026-09-09 (39. Lauf — Umsetzung: #508 CI-Blocker + W7c/#506; 38. Lauf: Backlog-Aufbereitung 11)_
+
+## Ein generischer Locale-Key haette die Weiche unterlaufen, die er befolgen sollte (2026-09-09, 39. Lauf, #506)
+
+W7c ist umgesetzt: sieben Stellen tragen `reason`, offene rohe
+`HTTPException`-Stellen **13 -> 6**, und die sechs sind genau die gewollten
+(3x Objekt-`detail`, 2x OAuth/#503, 1x Test-Zeuge). `ProblemReason` **92 -> 98**.
+
+**Der Fund steckte nicht im Code, sondern in den Locale-Keys.** Das Paket kam
+mit sechs neuen Eintraegen unter `common.errors` zurueck — formal AK 5, und im
+Ergebnis ein Rueckschritt. Der Grund ist die Aufloesungsreihenfolge im Client:
+`i18n.t(key, { defaultValue: detail })` **bevorzugt einen vorhandenen Key**.
+Ein statischer Key ergaenzt den Servertext also nicht, er ersetzt ihn. Aus
+
+    Zeile 3: unbekannte Spalten foo, bar - das Schema kennt nur: id, name.
+
+waere geworden:
+
+    Zeilen-Import passt nicht zum Tabellen-Schema.
+
+Genau der Rueckschritt, den die vorentschiedene Weiche von #506 ausschliesst
+("`str(exc)` bleibt ... sie durch generische Saetze zu ersetzen waere ein
+Rueckschritt"). Der Code befolgte die Weiche — `detail=str(exc)` steht
+unveraendert da —, der Locale-Key hat sie zur Laufzeit ausgehebelt. **Eine
+Weiche kann im Buchstaben befolgt und im Ergebnis unterlaufen werden; geprueft
+wird die Wirkung, nicht der Diff.**
+
+Die sechs Keys sind wieder entfernt; `defaultValue` greift, der spezifische
+Text erreicht den Nutzer wie bisher. **AK 5 bleibt offen** — deshalb `Refs`
+statt `Closes` (Queue-Regel 19). Bei allen sechs Gruenden ist `detail` zur
+Laufzeit nicht eindeutig (5 Wurfstellen bei `TableRowsInvalid`, 5 Call-Sites
+bei der Timeline-Validierung, der SQLite-Text bei `query_invalid`, zwei
+Router-Suffixe bei `query_timeout`). Der saubere Weg ist `params` — das Muster
+steht seit W7b (`316e1e9`, 15 der 81 Keys tragen Platzhalter) —, aber die Werte
+muessten strukturiert aus dem Service kommen, ausserhalb der Dateiliste des
+Pakets. Die Begruendung des Sub-Agents, `params` falle unter die
+zurueckgestellte Frage #504, traegt nicht: **#504 betrifft nur die
+RFC-7807-Huelle** (`ApiProblem`/`ApiGateError`); `ApiError` traegt `params`
+laengst.
+
+## Der CI-Blocker kam ohne Repo-Aenderung (2026-09-09, 39. Lauf, #508)
+
+Der Job `audit` wurde rot, waehrend der Code unveraendert blieb: zwei neue
+Advisories gegen `@tiptap/core <=3.30.4` (Prototype-Pollution ueber
+`mergeAttributes()`, quadratisches ReDoS). Der letzte main-Lauf auf demselben
+Commit war gruen — **derselbe Baum, neue Datenbank**. `ci.yml:29-31` nimmt
+`audit` genau deshalb vom Doku-Skip-Gate aus; das Gate hat getan, wofuer es
+gebaut wurde.
+
+Der Fix ist ein reines Lockfile-Update (3.30.1 -> 3.31.3): `@blocknote/core`
+deklariert `^3.29.2`, die gefixte Version liegt bereits in der Range. Kein
+`overrides` (waere eine dauerhafte Sonderregel fuer ein Problem, das die
+deklarierte Range zulaesst), kein BlockNote-Bump (0.54.0 ist `latest`),
+`package.json` unveraendert. Verifiziert mit 191 Dateien / 1138 Tests und
+11/11 gruenen CI-Checks.
 
 ## Zwei Issue-Bodys widersprachen ihren eigenen Kommentaren (2026-09-09, 38. Lauf, Aufbereitung 11)
 
