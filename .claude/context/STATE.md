@@ -1,6 +1,46 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-09 (40. Lauf — ADR-Ausnahme #510, schliesst #506 + #491; 39. Lauf: #508 + W7c in PR #507, gemergt `f8f4dd7`)_
+_Stand: 2026-09-09 (41. Lauf — #503, #504, #509 + #510: der Backlog ist bis auf #499 und die human-only-Pakete leer)_
+
+## Ein Test kann das Verhalten schuetzen, das ein Paket abschafft (2026-09-09, 41. Lauf, #509)
+
+Drei Pakete in einem Zug: **#503** (alle fuenf OAuth-Handler antworten
+RFC-6749-konform), **#504** und **#510** (zwei ADR-Absaetze statt Code) und
+**#509** (ein `detail` ohne Locale-Key erreicht die UI unverarbeitet).
+
+**Der Fund steckte in einem bestehenden Test.** #509 schafft ab, dass `detail`
+als `defaultValue` durch `i18n.t()` laeuft — i18next wertet darin seine eigene
+Syntax aus. Genau dieses Verhalten hielt `client.test.ts:256-269` fest: der
+Test „interpoliert params in die Meldung" schickte `detail:
+'Datei zu gross (max. {{limit}}).'` mit einem `reason` **ohne** Locale-Key und
+erwartete, dass `{{limit}}` ersetzt wird. Der Sub-Agent hat den Konflikt
+gemeldet statt die Datei anzufassen — sie stand nicht auf seiner Liste.
+
+**Die Messung hat entschieden, nicht die Intuition.** Schickt der Server
+`detail` je als Template? Nein: an allen `params`-Stellen ist `detail` ein
+fertiger Satz, meist ein f-String mit bereits eingesetztem Wert
+(`detail="Token-Ratenlimit ueberschritten."` + `params={"limit": rate}`;
+`detail=f"Unbekannter Modus '{mode}' …"` + `params={"mode": mode}`). **Die
+`params` gehoeren zum Locale-Key, nicht zum `detail`.** Der Test beschrieb
+damit einen Fall, den der Server nie erzeugt — und der zugleich die
+Schwachstelle ist.
+
+Der Test wurde **umgeschrieben, nicht geloescht**: er prueft jetzt die
+Kehrseite (ein `detail` mit `{{…}}` und ohne Key bleibt unveraendert) und ist
+damit der Regressionsschutz fuer #509 an genau der Stelle, wo vorher das
+Gegenteil stand. Die Interpolation MIT Key deckt der Test darueber ab
+(`mcp_rate_limited` -> „Token rate limit exceeded (30/min)."), sie bleibt gruen.
+
+**Daraus die Lehre:** ein gruener Test belegt nicht, dass das Verhalten
+gewollt ist — er belegt, dass es jemand einmal aufgeschrieben hat. Wer ein
+Verhalten bewusst aendert, liest die Tests, die es festhalten, und
+entscheidet je Test: schuetzt er ein Feature oder zementiert er den Fehler?
+
+**Nachgemessen nach allen drei Paketen:** offene rohe `HTTPException`-Stellen
+**6 -> 4** (die vier gewollten: 3x Objekt-`detail`, 1x Test-Zeuge; die zwei
+OAuth-Stellen sind weg). `pytest apps/api/tests` **802 passed, 485 skipped**;
+ruff/format/mypy sauber; kein openapi-Drift (beide Routen behalten ihr
+`response_model`); Web **191 Dateien / 1141 Tests**, Branches **81,68 %**.
 
 ## Das bestellte Paket war das falsche — gezaehlt statt vermutet (2026-09-09, 40. Lauf, #510)
 
