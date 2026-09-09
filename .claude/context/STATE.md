@@ -1,6 +1,60 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-08 (36. Lauf — Zuschnitt W7c/#506; 35. Lauf: #498, #481, #500, #501, #502 in PR #505)_
+_Stand: 2026-09-09 (38. Lauf — Backlog-Aufbereitung 11; 37. Lauf: Aufbereitung 10, nur in #442 dokumentiert; 36. Lauf: Zuschnitt W7c/#506)_
+
+## Zwei Issue-Bodys widersprachen ihren eigenen Kommentaren (2026-09-09, 38. Lauf, Aufbereitung 11)
+
+Der Auftrag war Routine — jedes offene Issue ohne `agent-ready` gegen die Norm
+pruefen, danach die Queue neu ordnen. Die Laeufe 4 und 10 hatten darauf beide
+„kein Issue durch Refinement startbar" berichtet. **Diesmal war an zwei Issues
+Arbeit, und zwar an derselben Stelle: im Body.**
+
+**#504 sagte drei Laeufe lang „Keine Empfehlung"** — waehrend drei Kommentare
+darunter eine enthielten und Lauf 10 in der Queue meldete, das Issue trage
+jetzt eine. Es trug sie im Kommentar. Dazu stand im selben Body eine Praemisse,
+die Kommentar 1 widerlegt hatte („die Gate-`detail`s bleiben deutsch" — der
+Client uebersetzt `problem+json` laengst, es fehlen nur die Locale-Keys), und
+ein Out-of-Scope, das #501/#502 als offen fuehrte, obwohl beide gemergt sind.
+**Daraus Queue-Regel 38:** der Body ist, was ein Agent laedt und was ein Mensch
+vom Handy liest; ein Kommentar ist die Herleitung, nicht das Ergebnis.
+
+**#503 hielt seine eigene Empfehlung mit einem ungeprueften Gegenargument auf.**
+Der Body machte Option A davon abhaengig, „wer die beiden Endpunkte
+konsumiert", und behauptete, der eigene Web-Client sei betroffen, weil er ueber
+`translateServerError` gehe und `detail` lese. Die Pruefung war zwei `grep`
+weit: `/oauth/register` hat **null** Web-Aufrufer, `/oauth/consent` genau einen
+(`client.ts:322`) — und dessen Konsument faengt den Fehler mit
+`catch { setError(t('connector.error')) }` (`OAuthConsentPage.tsx:147-148`), er
+**verwirft** die Servermeldung. Die einzige Fehler-Verzweigung der Seite laeuft
+ueber `cause.status === 400`, nicht ueber `detail`. Zusatzbeleg: der
+Geschwister-Endpunkt `/oauth/consent/preview` antwortet schon heute im
+Zielformat. **Daraus Queue-Regel 39:** ein „Dagegen" ist eine Behauptung ueber
+Code und wird belegt wie eine Zahl — dieselbe Klassifikation nach Muster wie in
+Regel 29, nur eine Ebene hoeher.
+
+**Reihenfolge korrigiert: #499 vor #506.** Kriterium 3 (Fundament vor Flaeche)
+entscheidet — der GoTrue-Bump ist das, wogegen #435 W2 gebaut wird, #506
+eroeffnet nichts. Lauf 10 hatte das hergeleitet und #506 trotzdem vorn
+gelassen, weil #499 einen Docker-Daemon braucht. Das ist ein sechstes,
+nie beschlossenes Kriterium (Regel 9): die Umgebung der ausfuehrenden Session
+ist keine Eigenschaft des Pakets. Die Daemon-Frage steht jetzt im
+Praeferenz-Abschnitt der Queue — **ohne Daemon wird #506 zuerst gezogen**, und
+das ist ausdruecklich Praeferenz.
+
+**Nachgemessen auf `main` @ `597a76a`** (Regel 26, alle Kommandos ausgefuehrt):
+`HTTPException` **13** per AST (Aufteilung 7/2/3/1 exakt wie in #491),
+`test_error_taxonomy.py` `11 passed`, `test_oauth.py` `7 passed, 7 skipped`,
+kein openapi-Drift, `ProblemReason` **92**, `common.errors` **75** je Sprache,
+drei GoTrue-Pins auf `v2.158.1`, kein Docker-Daemon. Die Gate-Zahlen von #504
+zum fuenften Mal bestaetigt: 52 Stellen, 23 `reason`s, **23 von 23 ohne
+Locale-Key**.
+
+**Eine Praezisierung an #431:** die Breakpoint-Abdeckung **28/383** ist
+reproduzierbar, ihr Nenner enthaelt aber **167 Testdateien** (und ihr Zaehler
+zwei). Ohne sie: **26/216**. Kein Fehler, aber als Fortschrittsmass irrefuehrend.
+
+**Kein Code geaendert** — das Ergebnis dieses Laufs sind die Issue-Bodys.
+Originalfassungen von #503 und #504 sind als Archiv-Kommentare abgelegt.
 
 ## W7c geschnitten — #491 hatte kein startbares Kind mehr (2026-09-08, 36. Lauf, #506)
 
