@@ -1,6 +1,49 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-09 (41. Lauf — #503, #504, #509 + #510: der Backlog ist bis auf #499 und die human-only-Pakete leer)_
+_Stand: 2026-09-10 (42. Lauf — PR #512 gemergt, sieben Issues zu; startbar sind nur noch #513 und #499)_
+
+## Eine Wellen-Liste ist eine Absichtserklaerung von damals (2026-09-10, 42. Lauf, #513)
+
+PR #512 ist gemergt (`d14973d`, 11/11 gruen). Damit sind **sieben Issues zu**:
+#503, #504, #506, #509, #510, #491 ueber die `Closes`-Zeilen — und **#402**,
+das Tracking-Issue des ganzen Fehlercode-Vorhabens. Von **107** urspruenglichen
+Wurfstellen bleiben **4** gewollte (`_export.py:54` als Regressions-Zeuge, drei
+Objekt-`detail`-Ausnahmen aus ADR-0051).
+
+**Der Lauf davor hat W2 von #431 zugeschnitten — und dabei mehr weggeschnitten
+als hinzugefuegt.** Die W2-Liste im Tracking nannte sieben Punkte. Einzeln
+nachgemessen waren **drei bereits erfuellt** (`PageHeader.tsx:37` und
+`EntityCard.tsx:97/:112` tragen laengst `flex-wrap`; der `overflow`-Wrapper
+sitzt im `Table`-Primitive) und **einer war nie ein Defekt** (`StatusActionBar`
+umbricht bereits — eine Bottom-Bar ist eine Layout-Aufwertung). Uebrig blieben
+drei: Dialog-Inset, Popover-/Dropdown-Cap, zwei nackte `grid-cols-2`. Das ist
+#513.
+
+**Der `TableDetailPage`-Punkt war nicht veraltet, sondern falsch gemessen.**
+Gesucht wurde `overflow-x-auto`, geschrieben steht `overflow-auto` — und zwar
+im Primitive, nicht in der Seite, mit einem erklaerenden Kommentar an der
+Aufrufstelle. Der Zaehler traf die Schreibweise statt die Sache.
+
+**Und derselbe Fehler ist im selben Lauf ein zweites Mal passiert, waehrend die
+Regel dagegen formuliert wurde.** Der Zuschnitt schrieb „zwei von fuenf
+`PopoverContent`-Aufrufstellen" — es sind vier. Der Zaehler war
+`git grep -l 'PopoverContent'`, der **Dateien mit dem Bezeichner** zaehlt und
+damit die Definitionsdatei des Primitives mitnimmt. Wer Aufrufstellen zaehlt,
+sucht die oeffnende Klammer (`grep -rn '<PopoverContent'`), nicht den Namen.
+Ein paralleler Aufbereitungslauf hat das gefunden.
+
+**Daraus die Lehre:** eine Wellen-Liste in einem Tracking-Issue ist eine
+Absichtserklaerung von damals, kein Ist-Zustand von heute. Wer sie in ein
+Arbeitspaket uebernimmt, misst **jeden Punkt und jede Zahl** einzeln nach —
+den Status rettet das eine, die Zahl das andere. Vier von sieben Punkten
+haetten ein Paket gefuellt, das nichts aendert.
+
+**Nachgemessen auf `main` @ `d14973d`:** `ApiError` **113**, `ApiGateError`
+**52**, rohe `HTTPException` **4**; `ProblemReason` **98** Werte,
+`common.errors` **75** Keys in DE und EN; Web-Breakpoint-Abdeckung **26 von
+216** `.tsx` ohne Testdateien; nackte Mehrspalten-Grids **2**;
+`PopoverContent`-Aufrufstellen **4**, davon **2** mit Cap; GoTrue-Pins **3**,
+alle `v2.158.1`.
 
 ## Ein Test kann das Verhalten schuetzen, das ein Paket abschafft (2026-09-09, 41. Lauf, #509)
 
