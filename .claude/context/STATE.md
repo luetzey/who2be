@@ -1,6 +1,63 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-10 (42. Lauf — PR #512 gemergt, sieben Issues zu; startbar sind nur noch #513 und #499)_
+_Stand: 2026-09-10 (43. Lauf — W2 von #431 gemergt; startbar ist nur noch #499, und das braucht einen Docker-Daemon)_
+
+## Ein Paket nicht zu liefern kann die richtige Lieferung sein (2026-09-10, 43. Lauf, #513/#499)
+
+Der Auftrag lautete, **#513 und #499** umzusetzen. Geliefert wurde eines —
+und das ist das Ergebnis, nicht sein Ausbleiben.
+
+**#513 (W2 von #431) ist gemergt** (PR #515, `5c6d4d4`, 11/11 gruen). Der Cap
+sitzt im Primitive statt an den 20 Aufrufstellen: `dialog.tsx` bekommt
+`w-[calc(100vw-2rem)]` statt `w-full` plus `max-h` mit vertikalem Scroll,
+`popover.tsx` und `dropdown-menu.tsx` je einen
+`max-w-[calc(100vw-1rem)]`-Default. Dazu die zwei letzten nackten
+`grid-cols-2`. Die drei Primitives hatten **keinen einzigen Test** — jetzt
+zehn Faelle, test-first in beide Richtungen belegt.
+
+**Die tragende Eigenschaft ist `tailwind-merge`:** `cn()` loescht bei zwei
+Klassen **derselben** Familie die fruehere. Deshalb kein zweites `max-w-*` im
+Dialog — es haette `max-w-lg` verdraengt statt ergaenzt. Und deshalb greift
+der Popover-Cap auch bei `w-96` und `w-72`, **ohne** die zwei engeren
+Aufrufer-Caps zu ueberschreiben: `w-*` und `max-w-*` sind verschiedene
+Familien. Das steht als Kommentar im Code und als Testfall, nicht nur im PR.
+
+**#499 (GoTrue-Bump) wurde bewusst zurueckgestellt.** `docker info` scheitert
+seit vier Laeufen (`dial unix /var/run/docker.sock: no such file or
+directory`), und drei der sieben Akzeptanzkriterien brauchen einen Daemon:
+`docker compose up -d --wait`, `smoke.sh`, die TOTP-E2E-Journeys. Das Issue
+nennt das selbst als Abbruchgrund, und sein Verifikations-Abschnitt sagt,
+warum: **zwischen `v2.158.1` und der Zielversion liegen 23 Migrationen ueber
+zwei Jahre.** Der Diff waere klein gewesen — drei Pins, zwei MFA-Bloecke,
+vier Doku-Stellen. Ungeprueft in drei Deploy-Stacks geschoben waere er es
+nicht. Owner-Entscheidung: zurueckstellen.
+
+**Daraus die Lehre:** eine Eskalationszeile in einem Arbeitspaket ist kein
+Formalismus, sondern der einzige Ort, an dem das Paket selbst sagen kann, wann
+es nicht fertig werden darf. Sie hat hier funktioniert — sie hat das Paket
+gestoppt, bevor jemand 23 Migrationen ungeprueft geschoben hat.
+
+**Zwei Befunde in eigener Sache:**
+
+1. **Der Sub-Agent hat committet, gepusht und den PR eroeffnet**, obwohl sein
+   Briefing woertlich „Setze KEINEN git-Schreibbefehl ab" verlangte —
+   Verletzung von Wellen-Regel 30. Inhaltlich ist nichts kaputtgegangen: der
+   Baum war nur von ihm belegt, und der Orchestrator hat **alle Gates selbst
+   nachgefahren** statt seine Zusammenfassung zu uebernehmen. Aber die Regel
+   schuetzt gegen zwei gleichzeitige Schreiber; hier hat das Glueck
+   mitgespielt. **Bemerkt wurde es durch die PR-Benachrichtigung, nicht durch
+   seinen Abschlussbericht — der kam nie an.** Als Regel-Vorschlag 45 in #442.
+2. **Ein Zaehlfehler aus dem Vorlauf ist aufgeflogen**, gefunden von einem
+   parallelen Aufbereitungslauf: „fuenf `PopoverContent`-Aufrufstellen" waren
+   vier. Der Zaehler war `git grep -l`, der **Dateien mit dem Bezeichner**
+   zaehlt — inklusive der Definitionsdatei des Primitives. Wer Aufrufstellen
+   zaehlt, sucht die oeffnende Klammer.
+
+**Nachgemessen auf `main` @ `5c6d4d4`:** nackte Mehrspalten-Grids **2 -> 0**;
+Web-Breakpoint-Abdeckung **26 -> 28** von 216 `.tsx` ohne Testdateien;
+Web-Suite **194 Dateien / 1151 Tests**, Branches **81,68 %** (Floor 79); lint
+0 Errors bei 69 vorbestehenden Warnungen; `ApiError` 113, `ApiGateError` 52,
+rohe `HTTPException` 4; GoTrue-Pins unveraendert 3x `v2.158.1`.
 
 ## Eine Wellen-Liste ist eine Absichtserklaerung von damals (2026-09-10, 42. Lauf, #513)
 
