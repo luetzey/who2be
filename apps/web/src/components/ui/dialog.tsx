@@ -41,7 +41,14 @@ export const DialogContent = forwardRef<
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
-          'w2b-anim-dialog fixed top-1/2 left-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 border bg-background p-6 shadow-modal sm:rounded-lg',
+          // Viewport-Inset statt `w-full`: effektiv `min(100vw - 2rem, 32rem)`,
+          // damit auf 320px links/rechts 16px sichtbar bleiben. Bewusst KEIN
+          // zweites `max-w-*` — `cn()` laeuft ueber tailwind-merge, zwei
+          // `max-w-*` im selben String loeschen einander aus, `w-*` und
+          // `max-w-*` nicht. `max-h` + `overflow-y-auto` laesst zu hohen
+          // Inhalt in sich scrollen statt ueber den Rand zu laufen
+          // (Designsprache §4.4).
+          'w2b-anim-dialog fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto border bg-background p-6 shadow-modal sm:rounded-lg',
           className,
         )}
         {...props}

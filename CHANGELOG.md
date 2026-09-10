@@ -92,6 +92,22 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Changed
 
+- Dialogs, popovers and dropdown menus can no longer overflow a narrow
+  viewport. The three primitives got the cap instead of their 20 call sites:
+  `DialogContent` trades `w-full` for `w-[calc(100vw-2rem)]` — effectively
+  `min(100vw - 2rem, 32rem)`, so a 320px screen keeps 16px of visible margin
+  on each side — plus `max-h-[calc(100vh-2rem)]` with `overflow-y-auto`, so a
+  dialog taller than the window scrolls inside itself rather than past the
+  edge. `PopoverContent` and `DropdownMenuContent` cap at
+  `max-w-[calc(100vw-1rem)]`, matching the popover's `collisionPadding={8}`;
+  this fixes the placeholder help panel, whose `w-96` (384px) used to run off
+  a 320px screen. Deliberately no fullscreen switch below `sm`: the inset is
+  enough, and `sm:rounded-lg`, the close-button position and the centering are
+  untouched. The two narrower per-call-site caps
+  (`max-w-[min(24rem,90vw)]`, `max-w-[min(20rem,90vw)]`) keep winning through
+  `tailwind-merge` and are unchanged. The last two bare `grid-cols-2` (billing
+  panel, resource block link picker) are now `grid-cols-1 sm:grid-cols-2` per
+  the mobile-first rule in the design language §4.4 (Issue #513).
 - All five OAuth error handlers now answer in the RFC 6749 format. Two of them
   — Dynamic Client Registration and the consent submit — used to return
   `{"detail": "invalid_grant"}` while the other three already returned
