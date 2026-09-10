@@ -41,7 +41,11 @@ export const PopoverContent = forwardRef<
         sideOffset={sideOffset}
         collisionPadding={collisionPadding}
         className={cn(
-          'w2b-anim-pop z-50 rounded-lg border bg-popover p-4 text-popover-foreground shadow-popover outline-none',
+          // Breiten-Cap passend zum Default `collisionPadding={8}`: der Panel
+          // bleibt auf schmalen Viewports innerhalb der Fensterbreite, auch
+          // wenn ein Aufrufer eine feste `w-*` setzt. Engere Aufrufer-Caps
+          // stehen im `className` dahinter und gewinnen ueber tailwind-merge.
+          'w2b-anim-pop z-50 max-w-[calc(100vw-1rem)] rounded-lg border bg-popover p-4 text-popover-foreground shadow-popover outline-none',
           className,
         )}
         {...props}

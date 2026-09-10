@@ -141,7 +141,7 @@ export function BillingPanel() {
       <CardContent className="space-y-4">
         <QuotaBar count={data.usage.count} quota={data.mcp_monthly_quota} />
 
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+        <dl className="grid grid-cols-1 gap-x-4 gap-y-2 text-sm sm:grid-cols-2">
           <dt className="text-muted-foreground">{t('panel.plan.label')}</dt>
           <dd className="text-right font-medium">{tier?.name ?? t('panel.plan.unknown')}</dd>
           <dt className="text-muted-foreground">{t('panel.plan.priceLabel')}</dt>

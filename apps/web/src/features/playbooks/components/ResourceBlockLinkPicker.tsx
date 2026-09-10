@@ -189,7 +189,7 @@ export function ResourceBlockLinkPicker({
           <p className="text-sm text-destructive">{loadError}</p>
         ) : null}
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <ul className="flex max-h-80 flex-col gap-1 overflow-auto" aria-label="Resources">
             {resources.map((resource) => (
               <li key={resource.id}>

@@ -26,7 +26,10 @@ export const DropdownMenuContent = forwardRef<
         ref={ref}
         sideOffset={sideOffset}
         className={cn(
-          'w2b-anim-pop z-50 min-w-32 overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-popover',
+          // Breiten-Cap wie im Popover-Primitive: das Menue bleibt auf
+          // schmalen Viewports innerhalb der Fensterbreite. `min-w-*` der
+          // Aufrufer bleibt davon unberuehrt (andere tailwind-merge-Gruppe).
+          'w2b-anim-pop z-50 max-w-[calc(100vw-1rem)] min-w-32 overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-popover',
           className,
         )}
         {...props}
