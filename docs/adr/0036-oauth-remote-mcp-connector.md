@@ -297,3 +297,33 @@ dann bindet, wenn der Client gar keinen `agent_id` schickt.
 Verifizierung: `test_oauth_consent_rejects_api_token` (schlaegt gegen den alten
 Code fehl), dazu die Preview-Variante und die drei `agent_id`-Faelle
 (Ablehnen ohne Agent, Zustimmen ohne Agent, Zustimmen ohne Agent mit Blob-Hint).
+
+## Addendum 2026-09-09 — Alle `/oauth/*`-Fehler im RFC-6749-Format
+
+**Befund (Issue #503):** Von den fuenf `except OAuthError`-Handlern in
+`routers/oauth.py` antworteten nur drei ueber `_error_response`
+(`{"error": ..., "error_description": ...}`, RFC 6749 §5.2). `register_client`
+(DCR) und `consent` warfen stattdessen `HTTPException(status_code=exc.status_code,
+detail=exc.error)` — ein zweites, nicht standardkonformes Fehlerformat, und
+`OAuthError.description` (bei jedem Aufruf gesetzt, z. B. „Ungueltige
+Consent-Signatur.", „PKCE S256 erforderlich.", „redirect_uri nicht
+registriert.") ging auf diesen beiden Pfaden ersatzlos verloren — ein
+OAuth-Client bekam `invalid_request` ohne jeden Hinweis, was genau ungueltig war.
+
+**Wirkung:** kein Sicherheitsproblem, aber ein Standard- und
+Diagnostizierbarkeits-Mangel. Der eigene Web-Client ist nicht betroffen: er
+ruft `/oauth/register` gar nicht auf und liest bei `/oauth/consent` nur den
+HTTP-Status (400), nie `detail`/`error`.
+
+**Entscheidung:** beide Handler auf `return _error_response(exc)` umgestellt —
+dieselbe Form wie `authorize`, `consent/preview` und `token`. Die
+Erfolgs-Rueckgabetypen (`OAuthClientRegistered`, `OAuthConsentResult`) bleiben
+als `response_model` fuer die OpenAPI-Doku erhalten; beide Handler geben jetzt
+`JSONResponse` zurueck (Erfolg wie Fehler), wie es FastAPI verlangt, sobald ein
+Zweig einen Response direkt zurueckgibt statt zu werfen. Statuscode und
+`OAuthError` selbst bleiben unveraendert — es aendert sich nur die Form der
+Antwort, nicht wann oder womit sie ausgeloest wird.
+
+Verifizierung: `test_oauth_register_and_consent_errors_are_rfc6749` (beide
+Pfade, `error` + `error_description` + unveraenderter 400er-Status), dazu die
+angepasste Pruefung in `test_oauth_consent_agent_id_is_optional` (Fall 2).

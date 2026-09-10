@@ -163,6 +163,48 @@ describe('request — Non-OK-Responses', () => {
   })
 })
 
+describe('translateServerError — reason ohne Locale-Key (#509)', () => {
+  it('gibt detail zeichengetreu zurueck, wenn der reason keinen Locale-Key hat — i18next-Syntax bleibt unaufgeloest', async () => {
+    // `query_invalid` (wa_tables.py) hat bewusst keinen Locale-Key (#510).
+    // Das SQL-Echo im detail enthaelt hier die i18next-Nesting-Syntax, wie im
+    // Angriffsszenario aus #509 beschrieben — ohne den Fix wuerde `detail` als
+    // `defaultValue` durch `i18n.t()` laufen und `$t(...)` aufloesen.
+    const detail = 'SQL-Fehler: near "$t(common:errors.forbidden)": syntax error'
+    stubFetch(() => jsonResponse({ detail, reason: 'query_invalid' }, 400))
+    await expect(createApi('tok', WS).listPersonas()).rejects.toMatchObject({
+      status: 400,
+      message: detail,
+    })
+  })
+
+  it('uebersetzt weiterhin ueber den Locale-Key inkl. params, wenn der reason einen Key hat (Regressionsfall entity_quota_exceeded)', async () => {
+    stubFetch(() =>
+      jsonResponse(
+        {
+          detail: 'Free-Tarif erreicht das Limit.',
+          reason: 'entity_quota_exceeded',
+          params: { limit: 500 },
+        },
+        403,
+      ),
+    )
+    await expect(createApi('tok', WS).listPersonas()).rejects.toMatchObject({
+      status: 403,
+      message:
+        'Free-Tarif erreicht das Limit von 500 Eintraegen je Workspace. Upgrade auf Pro hebt die Grenze auf — Bestehendes bleibt nutzbar.',
+    })
+  })
+
+  it('verhaelt sich ohne reason unveraendert (frueher Rueckgabepfad)', async () => {
+    const detail = 'SQL-Fehler: near "$t(common:errors.forbidden)": syntax error'
+    stubFetch(() => jsonResponse({ detail }, 400))
+    await expect(createApi('tok', WS).listPersonas()).rejects.toMatchObject({
+      status: 400,
+      message: detail,
+    })
+  })
+})
+
 describe('request — Netzwerkfehler', () => {
   it('mappt einen fetch-Reject auf ApiError(0) und loggt die GET-Ursache', async () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})

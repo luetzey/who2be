@@ -253,7 +253,17 @@ describe('createApi', () => {
     await i18n.changeLanguage('de')
   })
 
-  it('interpoliert params in die Meldung', async () => {
+  it('laesst ein detail ohne Locale-Key unveraendert — auch mit {{...}} darin', async () => {
+    // Umgekehrt seit #509: fehlt der Locale-Key, wird `detail` direkt
+    // zurueckgegeben, ohne `i18n.t()` ueberhaupt aufzurufen. Frueher lief es
+    // als `defaultValue` durch i18next, das darin seine eigene Syntax
+    // auswertete — bei `query_invalid` und `timeline_request_invalid` steckt
+    // in `detail` ein vom Aufrufer beeinflusster Text.
+    //
+    // Der Fall ist konstruiert: der Server schickt `detail` nie als Template.
+    // Es ist immer ein fertiger Satz (f-String), `params` gehoeren zum
+    // Locale-Key. Die Interpolation MIT Key prueft der Test
+    // `uebersetzt reason ueber common:errors` weiter oben.
     vi.stubGlobal(
       'fetch',
       errorResponse({
@@ -264,7 +274,7 @@ describe('createApi', () => {
     )
 
     await expect(createApi('tok', WS).getAgent('x')).rejects.toMatchObject({
-      message: 'Datei zu gross (max. 10 MB).',
+      message: 'Datei zu gross (max. {{limit}}).',
     })
   })
 

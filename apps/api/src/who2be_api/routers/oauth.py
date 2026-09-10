@@ -14,7 +14,7 @@ nicht registrierte redirect_uri ⇒ 400 OHNE Redirect. `token` ist form-encoded
 from typing import Annotated
 
 import asyncpg
-from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, Form, Query, Request, status
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from who2be_api.core.config import get_settings
@@ -121,16 +121,19 @@ async def authorization_server_metadata() -> dict[str, object]:
     }
 
 
-@router.post("/register", status_code=status.HTTP_201_CREATED)
+@router.post("/register", status_code=status.HTTP_201_CREATED, response_model=OAuthClientRegistered)
 @limiter.limit(write_limit)
 async def register_client(
     request: Request, data: OAuthClientRegistration, service: Service
-) -> OAuthClientRegistered:
+) -> JSONResponse:
     """Dynamic Client Registration (RFC 7591) — public client (PKCE)."""
     try:
-        return await service.register_client(data)
+        registered = await service.register_client(data)
     except OAuthError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.error) from exc
+        return _error_response(exc)
+    return JSONResponse(
+        status_code=status.HTTP_201_CREATED, content=registered.model_dump(mode="json")
+    )
 
 
 @router.get("/authorize", response_model=None)
@@ -167,11 +170,11 @@ async def authorize(
     return RedirectResponse(consent_url, status_code=status.HTTP_302_FOUND)
 
 
-@router.post("/consent")
+@router.post("/consent", response_model=OAuthConsentResult)
 @limiter.limit(write_limit)
 async def consent(
     request: Request, data: OAuthConsentApprove, principal: ConsentPrincipal, service: Service
-) -> OAuthConsentResult:
+) -> JSONResponse:
     """Consent-Submit der eingeloggten Web-Session → Redirect-URL zum Client."""
     try:
         redirect = await service.consent(
@@ -181,8 +184,8 @@ async def consent(
             approve=data.approve,
         )
     except OAuthError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.error) from exc
-    return OAuthConsentResult(redirect=redirect)
+        return _error_response(exc)
+    return JSONResponse(content=OAuthConsentResult(redirect=redirect).model_dump(mode="json"))
 
 
 @router.post("/consent/preview", response_model=OAuthConsentPreview)

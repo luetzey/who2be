@@ -10,6 +10,19 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Security
 
+- A server `detail` whose `reason` has no locale key now reaches the UI
+  verbatim: the client returns it directly instead of passing it through
+  i18next as a `defaultValue`. i18next evaluates its own syntax inside a
+  `defaultValue` — both `{{...}}` interpolation and `$t(...)` nesting — and
+  since the W7c migration six reasons have no key, two of which echo text the
+  caller controls (a SQLite error fragment for `query_invalid`, the raw
+  `sources` token for `timeline_request_invalid`). A crafted query could
+  therefore render a resolved locale string in place of the echo. No XSS was
+  possible: React escapes the text and the app uses no `dangerouslySetInnerHTML`,
+  so the effect was plaintext spoofing visible only to whoever triggered it.
+  Behaviour with a locale key present is unchanged, including `params`
+  interpolation (Issue #509).
+
 - Bumped the pinned `@tiptap/core` in the web lockfile from 3.30.1 to 3.31.3,
   clearing two high-severity advisories that the CI supply-chain gate started
   reporting on 2026-09-09: prototype pollution via `mergeAttributes()`
@@ -78,6 +91,39 @@ the merged pull requests and the plan documents under `.claude/plan/`.
   (Issue #470).
 
 ### Changed
+
+- All five OAuth error handlers now answer in the RFC 6749 format. Two of them
+  — Dynamic Client Registration and the consent submit — used to return
+  `{"detail": "invalid_grant"}` while the other three already returned
+  `{"error": ..., "error_description": ...}`, so a client had to understand two
+  error shapes. The `OAuthError.description` those endpoints carry (`PKCE S256
+  erforderlich.`, `redirect_uri nicht registriert.`, …) was discarded on both
+  paths and now reaches the caller. Status codes are unchanged, and the
+  OpenAPI document is unchanged because both routes keep their explicit
+  `response_model`. No known consumer is affected: the web client calls
+  `/oauth/register` never and `/oauth/consent` once, and that caller discards
+  the server message and shows its own text (Issue #503).
+- Recorded in ADR-0051 that the RFC 7807 envelope deliberately gets no `params`
+  field. All 23 gate reasons across 52 sites still have no locale key, which
+  shows the gap has never bothered anyone: every one of those responses shows a
+  specific, correct sentence — only in German. Adding the field would change
+  nothing a user sees on its own; it would merely enable a follow-up wave
+  across all 52 sites, so the real price is a contract change on an
+  `extra="forbid"` model plus that wave. The entry names the two triggers that
+  would reverse the decision (Issue #504).
+
+- Documented in ADR-0051 that six WorkArea error reasons deliberately carry no
+  locale key, so their messages stay German. Nothing changes at runtime — the
+  entry records a decision rather than a change. The reasons belong to
+  endpoints reachable only through MCP (`insert_rows`, `query_table`,
+  `timeline`, `promote_artifact`, `save_memory`); the web application calls
+  none of them, because the table view is deliberately read-only and writing
+  goes through MCP (ADR-0049). A locale key translates for a human reader, and
+  these six have none: their consumer is an agent, which reads the machine
+  value `reason` rather than the text. The entry also names the trigger that
+  reverses it — if one of those endpoints ever gains a writing path in the web
+  UI, the keys become due, and then with `params`, because the message varies
+  at runtime (Issue #510, closing #506 and #491).
 
 - Seven more API error responses now carry a stable `reason` from
   `ProblemReason` instead of a bare `HTTPException`: unsupported artifact
