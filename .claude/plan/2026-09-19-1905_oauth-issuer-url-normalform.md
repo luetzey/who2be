@@ -91,6 +91,44 @@ und traegt nicht: Python behandelt Pfad `/` wie keinen Pfad
 - `uv run pytest -q`: 1499 passed, 485 skipped (DB-Integrationstests, bekannte
   Lokal-/CI-Differenz), `ruff check`/`ruff format --check`/`mypy .` sauber.
 
+## Security-Review (Pflicht laut CLAUDE.md) — kein hoher/kritischer Befund
+
+Die Audience-Bindung bleibt unberuehrt (`canonical_resource` byte-identisch,
+`oauth_service.py` ohne Diff), Issuer und Endpunkte kommen ausschliesslich aus
+`get_settings()` — kein Request-Wert, insbesondere kein Host-Header, laeuft in
+`issuer_identifier()`. Drei Low-Befunde, alle in der neuen Funktion, alle
+nachgezogen:
+
+- **Steuerzeichen-Riegel fehlte.** `urlsplit` wirft `\t`/`\r`/`\n` still aus der
+  GANZEN URL (bpo-43882) — `https://api.example.de\t.evil.com` kollabierte auf
+  den Host `api.example.de.evil.com`, also auf einen **anderen Server** als den
+  konfigurierten. `canonical_resource` hatte den Riegel, mein Docstring
+  behauptete ihn ("fail-closed wie `canonical_resource`"), der Code hatte ihn
+  nicht. Jetzt teilen sich beide Funktionen `_has_invisible_chars()`.
+- **`rstrip("/")` lief auf dem Rohstring** und frass Slashes aus Query und
+  Fragment (`…?redirect=https://x/` → `…/x`), waehrend der Docstring
+  "Query und Fragment bleiben stehen" versprach. Gekuerzt wird jetzt nur der
+  geparste Pfad.
+- **`/auth//` wurde mit `/auth` gleichgemacht** — mehr, als irgendein Parser
+  einebnet. Jetzt faellt genau ein Slash, wie in `canonical_resource`.
+
+Der Review ordnete die letzten beiden als Fixpunkt-Bruch ein; nachgemessen
+stimmt das nicht (die Ausgaben *waren* Fixpunkte, der Login waere nicht
+gebrochen). Der echte Defekt war ein anderer: **drei Zusagen im Docstring, die
+der Code nicht hielt** — und beim ersten davon mit Host-Wirkung. Dieselbe Lehre
+wie im 46. Lauf, eine Funktion weiter.
+
+Bewusste Nicht-Aenderung: `https://api.example.de//` kollabiert nicht mehr auf
+einen Slash. Das ist ein anderer Pfad, und die Discovery-Logik des Clients
+verzweigt darauf (`if parsed.path and parsed.path != "/"`). Eine getippte
+`//`-ENV faellt damit auf, statt still etwas anderes zu bedeuten.
+
+Offen gelassen (Info-Befund, eigener Zuschnitt): eine degenerierte
+`OAUTH_ISSUER_URL` (`//evil.com`, `https://`, `/`) erzeugt ueber den
+Fail-closed-Zweig relative Endpunkte. Die saubere Loesung ist eine
+Settings-Validierung, die den Start scheitern laesst — eine Verhaltensaenderung
+beim Hochfahren jedes Deployments und damit nicht Teil dieses Fixes.
+
 ## Offen / nicht von hier pruefbar
 
 Der Proxy dieser Session blockt `luetzenburg-cloud.de` (403 auf CONNECT) — die

@@ -41,6 +41,19 @@ vergleichen — der Vergleich, der in #523 gruen war, waehrend der Login brach.
 Dieselbe Gegenprobe liegt in `scripts/oauth_smoke.py` (live) und als
 Copy-Paste-Kommando in `docs/oauth-e2e-staging.md`.
 
+**Security-Review (Pflicht laut CLAUDE.md) — kein hoher/kritischer Befund.**
+Die Audience-Bindung bleibt unberuehrt. Drei Low-Befunde, alle in meiner neuen
+Funktion, alle nachgezogen — und alle vom selben Typ: **eine Zusage im
+Docstring, die der Code nicht hielt.** Der teuerste: mein "fail-closed wie
+`canonical_resource`" stimmte nicht fuer Steuerzeichen, und
+`https://api.example.de\t.evil.com` kollabierte deshalb still auf den Host
+`api.example.de.evil.com` (bpo-43882). Beide Funktionen teilen sich den Riegel
+jetzt. Dazu: `rstrip("/")` lief auf dem Rohstring und frass Slashes aus Query
+und Fragment; `/auth//` wurde mit `/auth` gleichgemacht. Der Review ordnete die
+letzten beiden als Fixpunkt-Bruch ein — nachgemessen stimmt das nicht, der
+Login waere nicht gebrochen. Der Befund war trotzdem richtig, nur die
+Begruendung eine andere.
+
 **Die Lehre (teuer erkauft, zweimal):** Eine Fehlermeldung mit zwei Werten
 nennt nicht, woher sie stammen. Wo ein Dritter zwei unserer Werte
 gegeneinander haelt, ist **seine** Normalform der Vertrag — und der Beleg

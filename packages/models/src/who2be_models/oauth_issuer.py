@@ -52,6 +52,18 @@ from urllib.parse import urlsplit, urlunsplit
 _DEFAULT_PORTS = {"http": 80, "https": 443}
 
 
+def _has_invisible_chars(url: str) -> bool:
+    """Steuerzeichen oder inneres Whitespace — beides muss VOR `urlsplit` raus.
+
+    `urlsplit` entfernt `\t`, `\r` und `\n` still aus der GESAMTEN URL
+    (CPython bpo-43882). Danach sind sie unsichtbar weg, und zwei verschiedene
+    Strings — auch zwei verschiedene **Hosts** — sehen gleich aus. Beide
+    Funktionen dieses Moduls fahren denselben Riegel, damit sie nicht
+    auseinanderlaufen; die Raender hat `strip()` beim Aufrufer schon geputzt.
+    """
+    return any(char.isspace() or ord(char) < 0x20 or ord(char) == 0x7F for char in url)
+
+
 def issuer_identifier(url: str) -> str:
     """Der Issuer-Identifier, wie ihn BEIDE Metadaten-Dokumente tragen.
 
@@ -64,22 +76,31 @@ def issuer_identifier(url: str) -> str:
        case-sensitiv.
     3. Default-Port (`:443` bei https, `:80` bei http) faellt weg
        (RFC 3986 §6.2.3).
-    4. Abschliessende Slashes fallen weg; ein leerer Pfad wird zu `/`. Der
-       Pfad selbst bleibt erhalten — RFC 8414 §3.1 erlaubt Issuer mit Pfad, und
-       die Discovery-URL beider SDKs kommt damit zurecht
-       (`…/.well-known/oauth-authorization-server/<pfad>`).
+    4. **Genau ein** abschliessender Slash faellt vom **Pfad** weg, und ein
+       leerer Pfad wird zu `/`. Der Pfad selbst bleibt erhalten —
+       RFC 8414 §3.1 erlaubt Issuer mit Pfad, und die Discovery-URL beider SDKs
+       kommt damit zurecht. `/auth//` bleibt verschieden von `/auth`, wie in
+       `canonical_resource`: kein URL-Parser ebnet das ein.
 
-    Query und Fragment bleiben stehen. Ein Issuer mit beidem ist nach
-    RFC 8414 §2 ungueltig; das ist ein Konfigurationsfehler und wird hier nicht
-    stillschweigend weggeschrieben.
+    Query und Fragment bleiben unangetastet — auch ein Slash am Ende davon. Ein
+    Issuer mit beidem ist nach RFC 8414 §2 ungueltig; das ist ein
+    Konfigurationsfehler und wird hier nicht stillschweigend weggeschrieben.
 
-    Fail-closed wie `canonical_resource`: was nicht sicher zerlegbar ist
-    (fremdes Schema, ohne Host, kaputter Port, Userinfo), kommt nur getrimmt
-    zurueck.
+    Fail-closed wie `canonical_resource`, mit derselben Liste: nicht parsebar,
+    fremdes Schema, ohne Host, kaputter Port, Userinfo und
+    Steuerzeichen/inneres Whitespace kommen nur getrimmt zurueck. Letzteres ist
+    nicht kosmetisch — ohne den Riegel wuerde `https://api.example.de\t.evil.com`
+    auf den Host `api.example.de.evil.com` kollabieren, also auf einen anderen
+    Server als den konfigurierten (`_has_invisible_chars`).
     Die Funktion ist idempotent.
     """
     trimmed = url.strip()
-    parsed = urlsplit(trimmed.rstrip("/"))
+    if _has_invisible_chars(trimmed):
+        return trimmed
+    try:
+        parsed = urlsplit(trimmed)
+    except ValueError:
+        return trimmed
     # `urlsplit` senkt das Schema bereits auf Kleinschreibung.
     if parsed.scheme not in _DEFAULT_PORTS or parsed.username or parsed.password:
         return trimmed
@@ -94,7 +115,14 @@ def issuer_identifier(url: str) -> str:
     netloc = f"[{host}]" if ":" in host else host
     if port is not None and port != _DEFAULT_PORTS[parsed.scheme]:
         netloc = f"{netloc}:{port}"
-    return urlunsplit((parsed.scheme, netloc, parsed.path or "/", parsed.query, parsed.fragment))
+    # Nur der PFAD wird gekuerzt, und wie in `canonical_resource` genau um einen
+    # Slash. Auf dem Rohstring wuerde `rstrip("/")` auch Slashes aus Query und
+    # Fragment fressen und `/auth//` mit `/auth` gleichmachen — beides
+    # Schreibweisen, die kein URL-Parser einebnet.
+    path = parsed.path
+    if path.endswith("/") and not path.endswith("//"):
+        path = path[:-1]
+    return urlunsplit((parsed.scheme, netloc, path or "/", parsed.query, parsed.fragment))
 
 
 def issuer_base(url: str) -> str:
@@ -154,8 +182,8 @@ def canonical_resource(url: str) -> str:
     """
     trimmed = url.strip()
     # Steuerzeichen und inneres Whitespace vor `urlsplit` abfangen — danach sind
-    # sie unsichtbar weg (s. Docstring). Die Raender hat `strip()` schon geputzt.
-    if any(char.isspace() or ord(char) < 0x20 or ord(char) == 0x7F for char in trimmed):
+    # sie unsichtbar weg (s. Docstring, geteilt mit `issuer_identifier`).
+    if _has_invisible_chars(trimmed):
         return trimmed
     try:
         parsed = urlsplit(trimmed)

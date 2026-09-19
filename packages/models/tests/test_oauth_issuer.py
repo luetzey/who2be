@@ -20,7 +20,7 @@ _ORIGIN = "https://api.example.de/"
     [
         "https://api.example.de",
         "https://api.example.de/",
-        "  https://api.example.de//  ",
+        "  https://api.example.de  ",
         "https://API.Example.DE",
         "https://api.example.de:443",
         "HTTPS://api.example.de",
@@ -28,6 +28,30 @@ _ORIGIN = "https://api.example.de/"
 )
 def test_origin_spellings_collapse_to_the_url_normal_form(spelling: str) -> None:
     assert issuer_identifier(spelling) == _ORIGIN
+
+
+def test_doubled_slashes_are_NOT_collapsed() -> None:
+    """`//` ist ein anderer Pfad — und der Client handelt danach.
+
+    Kein URL-Parser ebnet das ein, und die Discovery-Logik des MCP-SDK
+    verzweigt auf dem Pfad (`if parsed.path and parsed.path != "/"`). Wer hier
+    zusammenzieht, advertisiert einen Identifier, den niemand konfiguriert hat
+    — dieselbe Sorte stiller Umschreibung, die den Connector zweimal gekostet
+    hat. Eine getippte `//`-ENV faellt damit auf, statt still etwas anderes zu
+    bedeuten.
+    """
+    assert issuer_identifier("https://api.example.de//") == "https://api.example.de//"
+    assert issuer_identifier("https://example.de/auth//") == "https://example.de/auth//"
+
+
+def test_query_and_fragment_keep_their_trailing_slash() -> None:
+    # Gekuerzt wird der PFAD, nicht der Rohstring — sonst faellt ein Slash aus
+    # Query oder Fragment weg, den jeder Parser stehen laesst.
+    assert (
+        issuer_identifier("https://api.example.de/?redirect=https://x/")
+        == "https://api.example.de/?redirect=https://x/"
+    )
+    assert issuer_identifier("https://api.example.de/#/app/") == "https://api.example.de/#/app/"
 
 
 def test_path_survives_without_its_trailing_slash() -> None:
@@ -51,6 +75,10 @@ def test_is_idempotent() -> None:
         "http://localhost:8000",
         "http://127.0.0.1:8765",
         "https://[::1]:8443",
+        "https://api.example.de//",
+        "https://example.de/auth/",
+        "https://api.example.de/?redirect=https://x/",
+        "https://api.example.de/#/app/",
     ],
 )
 def test_identifier_is_a_fixed_point_of_the_client_parser(configured: str) -> None:
@@ -76,6 +104,11 @@ def test_identifier_is_a_fixed_point_of_the_client_parser(configured: str) -> No
         "https://evil@api.example.de",
         "https://api.example.de:99999",
         "https:///kein-host",
+        # Steuerzeichen: `urlsplit` wirft \t/\r/\n still aus der GANZEN URL
+        # (bpo-43882). Ohne Riegel waere das hier der Host
+        # `api.example.de.evil.com` — ein anderer Server als der konfigurierte.
+        "https://api.example.de\t.evil.com",
+        "https://api.exa\tmple.de",
     ],
 )
 def test_unusable_config_comes_back_only_trimmed(broken: str) -> None:
