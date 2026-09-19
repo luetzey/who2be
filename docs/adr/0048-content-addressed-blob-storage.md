@@ -86,3 +86,46 @@ Python-Dependencies. Das minio-**SDK** ist Apache-2.0 und damit zulässig.
   bewusst nicht Teil dieses ADR.
 - **Lifecycle-Policies/Tiering** im Store selbst — Retention läuft im MVP
   über `retention_days` + `who2be-purge`, nicht über MinIO-Lifecycle-Regeln.
+
+## Addendum 2026-09-19 — Der Bucket-Bootstrap braucht kein CLI-Image
+
+**Anlass.** Das Image `minio/mc`, das der One-Shot `minio-bootstrap` zog, ist
+von Docker Hub verschwunden (`object not found`, #525). Der Pull-Fehler riss
+`compose-smoke`, `e2e` und `e2e-billing-cloud` repo-weit ab — vor jedem
+Testkörper.
+
+**Entscheidung.** Der One-Shot fährt jetzt das **API-Image** und ein kleines
+Skript (`scripts/minio-bootstrap.py`) statt eines eigenen CLI-Images. Das
+Apache-2.0-SDK `minio` ist ohnehin Kern-Dependency der API — die Lizenz-Grenze
+oben (AGPL-**Server** nur als Container, im Code nur das SDK) bleibt davon
+unberührt, weil der Bootstrap nichts anderes tut als die API auch: er spricht
+S3 über das SDK.
+
+**Was ausdrücklich NICHT geändert wurde:** die Trennung „Den Bucket legt der
+Compose-One-Shot an — nie die App." Sie war der naheliegende Ort, um beim
+Umbau Aufwand zu sparen (ein `make_bucket` im API-Start hätte den Service ganz
+erspart), und genau deshalb steht sie hier: der Bootstrap bleibt ein eigener,
+terminierender Service, `api` hängt weiter per
+`service_completed_successfully` daran. Gewechselt hat nur das Image.
+
+**Idempotenz.** `mc mb --ignore-existing` erledigte das in einem Flag. Mit dem
+SDK sind es zwei Schritte (`bucket_exists`, dann `make_bucket`), und die sind
+**nicht atomar**: Deshalb fängt das Skript zusätzlich
+`BucketAlreadyOwnedByYou`/`BucketAlreadyExists` ab. Jeder andere `S3Error`
+propagiert und lässt den One-Shot scheitern — er ist das Gate vor dem
+API-Start, ein stiller Erfolg wäre dort das Schlimmste.
+
+**Compose-Anchor.** `api` und `minio-bootstrap` teilen den Build über
+`x-api-build`. Zwei gleich aussehende `build:`-Blöcke wären kompakter zu
+schreiben gewesen, würden aber beim nächsten Wechsel von
+`${API_BUILD_TARGET}` auseinanderlaufen.
+
+**Nicht behoben.** Das Image des `minio`-**Servers** ist genauso verschwunden;
+dieser Schritt macht die CI deshalb noch nicht grün. Offen in #525. Ebenfalls
+unberührt: der Healthcheck `mc ready local` — dieses `mc` stammt aus dem
+Server-Image selbst und ist kein eigener Pull.
+
+**Verifizierung:** `apps/api/tests/test_minio_bootstrap.py` — Idempotenz
+(zweiter Lauf, verlorenes Rennen), Propagierung echter S3-Fehler, und die
+Compose-Verdrahtung (kein eigenes Image am One-Shot; `api` wartet weiter auf
+ihn). Ein echter Compose-Lauf steht aus, solange das Server-Image fehlt.

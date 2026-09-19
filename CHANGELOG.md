@@ -8,6 +8,18 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ## [Unreleased]
 
+### Changed
+
+- The MinIO bucket bootstrap no longer pulls a separate CLI image. `minio/mc`
+  vanished from Docker Hub, which broke the `compose-smoke`, `e2e` and
+  `e2e-billing-cloud` jobs for every branch at the image-pull step. The
+  one-shot now runs the API image, which already carries the Apache-2.0
+  `minio` SDK as a core dependency, and a small script in place of two `mc`
+  calls. The architectural split stays exactly as ADR-0048 put it — the bucket
+  is created by a dedicated, terminating service, never by the application
+  itself. Note that this does not yet make CI green: the `minio` **server**
+  image is gone from Docker Hub as well, which is tracked separately.
+
 ### Security
 
 - A server `detail` whose `reason` has no locale key now reaches the UI

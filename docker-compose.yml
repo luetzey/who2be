@@ -12,6 +12,18 @@
 # Vorgriff auf MS-2 C1-C6: self-hosted GoTrue ersetzt die Supabase-Cloud-
 # Abhaengigkeit fuer den lokalen Smoke. Kong/Studio/PostgREST bleiben fuer
 # MS-2 separat (siehe `## Offene Punkte` im Plan).
+
+# Ein Build, zwei Verwender: der API-Service und der One-Shot
+# `minio-bootstrap` fahren dasselbe Artefakt (letzterer nur wegen des darin
+# enthaltenen Apache-2.0-SDKs `minio`). Bewusst ein Anchor statt zweier
+# gleich aussehender `build:`-Bloecke — `target` ist variabel, und zwei
+# Kopien wuerden beim naechsten Target-Wechsel auseinanderlaufen.
+x-api-build: &api-build
+  context: .
+  dockerfile: apps/api/Dockerfile
+  # On-Prem (Default, ohne Billing). Cloud-Dev: API_BUILD_TARGET=runtime-cloud.
+  target: ${API_BUILD_TARGET:-runtime}
+
 services:
   db:
     # pgvector-Variante statt `postgres:16` (ADR-0046): die semantische Suche
@@ -116,11 +128,7 @@ services:
       retries: 10
 
   api:
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
-      # On-Prem (Default, ohne Billing). Cloud-Dev: API_BUILD_TARGET=runtime-cloud.
-      target: ${API_BUILD_TARGET:-runtime}
+    build: *api-build
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/who2be
       JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-me-32chars-min}
@@ -284,17 +292,25 @@ services:
 
   # One-Shot (Muster `set-app-role-password`, docker-compose.cloud.yml): legt
   # den Bucket `who2be-blobs` idempotent an und terminiert. Die App erstellt
-  # Buckets bewusst nie selbst (ADR-0048).
+  # Buckets bewusst nie selbst (ADR-0048) — diese Trennung bleibt, es hat sich
+  # nur das Image geaendert.
+  #
+  # Faehrt das API-Image statt eines eigenen CLI-Images: das Apache-2.0-SDK
+  # `minio` ist dort ohnehin Kern-Dependency (ADR-0048), also braucht der
+  # Bucket-Anlage kein zweites Image in der Lieferkette. Das frueher benutzte
+  # `minio/mc` ist von Docker Hub verschwunden (#525) und zog ein komplettes
+  # CLI-Image fuer genau einen Aufruf.
   minio-bootstrap:
-    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}" &&
-        mc mb --ignore-existing local/who2be-blobs
+    build: *api-build
+    entrypoint: ["python", "/scripts/minio-bootstrap.py"]
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      BLOBSTORE_ENDPOINT: minio:9000
+      BLOBSTORE_BUCKET: who2be-blobs
+    volumes:
+      # Skript per Mount statt im Image — Muster `set-app-role-password`.
+      - ./scripts/minio-bootstrap.py:/scripts/minio-bootstrap.py:ro
     depends_on:
       minio:
         condition: service_healthy

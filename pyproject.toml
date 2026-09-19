@@ -35,6 +35,11 @@ dev = [
     "httpx>=0.27",
     "mypy>=1.10",
     "ruff>=0.15.17",
+    # Nur fuer Tests, die eine Compose-Datei lesen (test_minio_bootstrap.py).
+    # PyYAML liegt ohnehin transitiv im Lock; hier steht es explizit, damit der
+    # Test nicht still bricht, sobald der bisherige Parent es fallen laesst.
+    "pyyaml>=6.0",
+    "types-PyYAML>=6.0",
 ]
 billing = [
     "who2be-billing",
