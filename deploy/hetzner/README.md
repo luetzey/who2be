@@ -187,7 +187,7 @@ docker compose \
 ### Streamable-HTTP (Remote-Clients hinter Caddy)
 
 Profile `mcp-http`. Long-Running, lauscht auf `0.0.0.0:8765/mcp`, Caddy
-proxy'iert `mcp.${DOMAIN}` darauf. Aktivieren beim Bringup:
+proxy'iert `mcp.${DOMAIN}` darauf. Einmalig aktivieren beim Bringup:
 
 ```bash
 docker compose \
@@ -196,11 +196,25 @@ docker compose \
   --profile mcp-http up -d --wait
 ```
 
+Danach haelt `scripts/deploy.sh` den Service selbst aktuell: es erkennt die
+Profile, deren Container auf dem Host laufen, und zieht sie in `pull`/`up`
+hinein. Das ist nicht kosmetisch — ohne aktives Profil fasst Compose den
+Service gar nicht an, und `mcp-http` lief auf dem Image vom Bringup weiter,
+waehrend jeder Deploy `MCP_IMAGE_TAG` hochzaehlte: gruener Deploy, unveraenderter
+MCP-Server. Erzwingen bzw. abschalten laesst sich das ueber
+`WHO2BE_COMPOSE_PROFILES` (siehe Kopfkommentar in `scripts/deploy.sh`).
+
 Verifizieren (Streamable-HTTP-Endpunkt antwortet auf GET mit Accept-Header):
 
 ```bash
 curl -fsS -H 'Accept: text/event-stream' \
   https://mcp.${DOMAIN}/mcp/ -m 5 | head
+```
+
+Welches Image der MCP-Server gerade faehrt (nach einem Deploy pruefen):
+
+```bash
+docker inspect --format '{{.Config.Image}}' who2be-mcp-http-1
 ```
 
 Auth: **per-Request-Bearer** (ADR-0034 Multi-Tenant). Caddy reicht

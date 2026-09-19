@@ -1,6 +1,66 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-19 (45. Lauf — MinIO durch SeaweedFS ersetzt, nachdem der Hersteller die Community Edition eingestellt hat; im selben Lauf der OAuth-Connector-Fix, #523)_
+_Stand: 2026-09-19 (46. Lauf — der Issuer-Fix aus #523 war gemergt und deployed, wirkte aber nie: `deploy.sh` fasste den profilgebundenen `mcp-http`-Service nie an. Deploy-Skript korrigiert, `resource`-Vergleich zusaetzlich tolerant gemacht)_
+
+## Der Fix war gemergt, deployed — und lief nie (2026-09-19, 46. Lauf, Issuer-Mismatch)
+
+**Symptom:** Nach #523 (Issuer-Kanonisierung) und einem gruenen Deploy-Lauf
+meldete der Nutzer denselben `issuer mismatch` wie vorher, wortgleich.
+
+**Zwei falsche Faehrten zuerst**, beide von mir: (1) „der Deploy ist nicht
+gelaufen" — Lauf #355 war nachweislich `success`, das musste ich
+zuruecknehmen; (2) „es gibt eine Rest-`AnyHttpUrl`-Stelle" — `agent_path.py`
+und `server.py` waren beim Nachsehen korrekt.
+
+**Der Befund:** `mcp-http` steht in `deploy/hetzner/who2be/docker-compose.yml`
+hinter `profiles: ["mcp-http"]`. `deploy/hetzner/scripts/deploy.sh` hat nie ein
+Profil aktiviert — also hat Compose den Service bei `pull` und `up` **gar nicht
+angefasst**. Der Container lief seit dem haendischen Bringup (README) auf
+seinem damaligen Image weiter (`restart: unless-stopped`), waehrend das Skript
+in der `.env` brav `MCP_IMAGE_TAG` auf jeden neuen SHA setzte. Der
+MCP-Server in Produktion hat nie einen CI-Build gesehen. Der Fix aus #523 ist
+korrekt — er war nur nie dort, wo er haette wirken sollen.
+
+**Warum das teuer war:** Das Skript *behauptete* einen Versionsstand, den es
+nicht herstellte. Ein Deploy, der ehrlich scheitert, schickt die Suche an die
+richtige Stelle; einer, der gruen luegt, schickt sie in den Anwendungscode.
+Genau dort haben wir zuerst gesucht — und nichts gefunden, weil dort nichts
+war. Die Lehre ist nicht „Flag vergessen", sondern: **ein gruener Deploy ist
+kein Beleg dafuer, dass sich etwas geaendert hat.** Erste Frage bei „Fix wirkt
+nicht" ist ab jetzt `docker inspect --format '{{.Config.Image}}' <container>`,
+nicht der Diff.
+
+**Behoben (2 Aenderungen, ein PR):**
+
+- `deploy.sh` bestimmt die aktiven Compose-Profile selbst — per Default die,
+  deren Container laufen (`config --profiles` + `config --services` je Profil,
+  geschnitten mit `ps --services --status running`) — und zieht sie in `pull`
+  und `up` hinein. Bewusst **ohne** `--profile '*'`: das kann erst Compose
+  >= 2.21 und waere auf einer aelteren Box ein stiller Rueckfall. Schlaegt die
+  Erkennung fehl, bleibt die Liste leer = bisheriges Verhalten (fail-safe).
+  Ueberschreibbar via `WHO2BE_COMPOSE_PROFILES`.
+- `canonical_resource()` (neu in `who2be_models.oauth_issuer`) macht den
+  RFC-8707-`resource`-Vergleich tolerant gegen genau drei Schreibweisen:
+  Trailing-Slash, Host-Case, expliziter `:443`. ADR-0036 hatte diesen Fall als
+  Risiko notiert. **Die Audience-Bindung bleibt strikt** — in den signierten
+  Blob wandert weiter die konfigurierte `MCP_RESOURCE_URL`, nie die
+  Schreibweise des Clients.
+
+**Belege:** 1460 Tests gruen, `ruff`/`mypy` sauber. 18 Gegenproben zur
+Normalisierung als Tests festgehalten — fremder Host, Userinfo
+(`https://evil@host/…`), anderes Schema, anderer Port, Pfad-Case, `//`,
+Punkt-Segmente fallen weiterhin mit `invalid_target` durch. Das Coverage-Gate
+(85%) laeuft lokal ins Leere (64%), weil ohne erreichbare DB 485
+Integrationstests zentral uebersprungen werden — das ist die bekannte
+Lokal-/CI-Differenz, nicht diese Aenderung; CI faehrt sie mit DB.
+
+**Noch offen / nicht verifizierbar von hier:** Ob der Produktions-Container
+nach dem naechsten Deploy tatsaechlich auf dem neuen Image steht, ist erst auf
+der Box pruefbar (`docker inspect`, Kommando steht jetzt im README). Der Proxy
+dieser Session blockt `luetzenburg-cloud.de` (403), die Live-Endpunkte konnten
+also nie direkt geprueft werden — alle Aussagen oben stammen aus Code,
+Compose-Dateien und CI-Laeufen.
+
 
 ## Eine Abhaengigkeit kann verschwinden, ohne dass jemand etwas falsch gemacht hat (2026-09-19, 45. Lauf, #525/#532)
 

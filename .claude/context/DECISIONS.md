@@ -1580,3 +1580,67 @@ Sonderfall — Docker substituiert dort nichts. Dev mountet eine statische
 `s3.json`, Prod rendert sie beim Start aus ENV (`:?`-Guard, fail-closed).
 Und der Healthcheck liegt auf dem Master-Port `9333/cluster/status`, weil
 `8333/healthz` vom S3-Handler als Bucket-Name gelesen wird (seaweedfs#8243).
+
+## 2026-09-19 — Ein gruener Deploy ist kein Beleg dafuer, dass sich etwas geaendert hat
+
+**Entscheidung:** `deploy/hetzner/scripts/deploy.sh` bestimmt die aktiven
+Compose-Profile selbst — per Default die, deren Container auf dem Host
+laufen — und zieht sie in `pull` und `up` hinein. Ueberschreibbar mit
+`WHO2BE_COMPOSE_PROFILES` (gesetzt gewinnt, auch leer).
+
+**Warum:** Der Issuer-Mismatch-Fix (#523) war gemergt, der Deploy-Lauf
+gruen, der Fehler beim Nutzer unveraendert. Grund: `mcp-http` steht hinter
+einem Compose-`profiles:`, und ohne aktives Profil fasst Compose den
+Service bei `pull`/`up` gar nicht an. Der Container lief seit dem Bringup
+unveraendert weiter (`restart: unless-stopped`), waehrend das Skript brav
+`MCP_IMAGE_TAG` in der `.env` hochzaehlte. Der MCP-Server in Produktion
+hat also nie einen CI-Build gesehen.
+
+**Der eigentliche Befund** ist nicht das fehlende Flag, sondern die
+*stille* Diskrepanz: Das Skript schrieb einen Tag, den kein Container je
+verwendete. Ein Deploy, der einen Versionsstand *behauptet*, den er nicht
+herstellt, ist schlimmer als einer, der scheitert — er verlegt die
+Fehlersuche in den Anwendungscode, wo nichts zu finden ist. Genau da haben
+wir zuerst gesucht (und der Code war korrekt).
+
+**Regel daraus:** Was ein Deploy-Skript als aktualisiert ausweist, muss es
+auch anfassen. Bei Compose heisst das: Profile sind Teil des Deploy-Scopes,
+nicht des Bringups. Und beim Debuggen eines „Fix wirkt nicht" gilt erst die
+Frage *laeuft der Fix ueberhaupt dort*, bevor der Fix selbst in Zweifel
+gezogen wird — pruefbar mit
+`docker inspect --format '{{.Config.Image}}' <container>`.
+
+**Fail-safe, nicht fail-open:** Schlaegt die Erkennung fehl (kein Daemon,
+alte Compose-Version), bleibt die Profilliste leer — also exakt das
+bisherige Verhalten. Bewusst ohne `--profile '*'`: das kann erst Compose
+>= 2.21 und waere auf einer aelteren Box ein stiller Rueckfall.
+
+## 2026-09-19 — RFC-8707-`resource`: Vergleich tolerant, Audience-Bindung strikt
+
+**Entscheidung:** `who2be_models.oauth_issuer.canonical_resource()` bringt
+beide Seiten des `resource`-Vergleichs auf eine Vergleichsform. Eingeebnet
+werden genau drei Unterschiede: ein einzelner Trailing-Slash, die
+Gross-/Kleinschreibung von Schema und Host, ein expliziter Default-Port.
+Sonst nichts.
+
+**Warum:** Der Vergleich war byte-exakt. ADR-0036 hatte die Folge schon
+notiert — „jede Abweichung ergibt `invalid_target` — fail-closed, aber
+schwer zu diagnostizieren" — und genau so kam es: wer die Connector-URL
+mit Slash eintrug, bekam einen Fehler, der weder sagt, welcher Wert
+erwartet wurde, noch dass es um die Schreibweise geht.
+
+**Die Trennlinie** ist der Punkt: Toleranz gilt dem **Vergleich**, nie der
+**Bindung**. In den signierten Request-Blob wandert unveraendert die
+konfigurierte `MCP_RESOURCE_URL`, nie die Schreibweise des Clients — die
+Audience-Kette bleibt damit an genau eine Resource gebunden, egal wie der
+Client sie buchstabiert. Ein Normalisierer, der auch die Bindung lockert,
+waere eine Luecke; einer, der nur den Vergleich lockert, ist reine
+Bedienbarkeit.
+
+**Bewusst nicht normalisiert,** weil es echte Unterschiede verwischt oder
+ein Umschreiben erfordert, das selbst zur Luecke wird: Prozent-Kodierung,
+Punkt-Segmente, Query-Reihenfolge, Pfad-Gross-/Kleinschreibung, IDN.
+Userinfo faellt ausdruecklich **nicht** weg — sonst waere
+`https://evil@host/x` dasselbe wie `https://host/x` und die Host-Pruefung
+ausgehebelt; solche URLs kommen unveraendert zurueck und fallen im
+Vergleich durch (fail-closed).

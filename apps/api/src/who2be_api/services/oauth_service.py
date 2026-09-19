@@ -44,6 +44,7 @@ from who2be_models import (
     WorkspaceRole,
 )
 from who2be_models.agent_uuid import is_canonical_agent_uuid
+from who2be_models.oauth_issuer import canonical_resource
 
 logger = logging.getLogger(__name__)
 
@@ -198,7 +199,9 @@ class OAuthService:
 
         # Defense-in-depth: die `resource` im (signierten) Blob muss weiterhin zum
         # MCP-Server passen — die RFC-8707-Audience-Kette bleibt geschlossen.
-        if str(payload["resource"]) != self._settings.mcp_resource_url:
+        if canonical_resource(str(payload["resource"])) != canonical_resource(
+            self._settings.mcp_resource_url
+        ):
             raise OAuthError("invalid_target", "resource passt nicht zum MCP-Server.")
 
         # Hard-Lock: trug die Connector-URL einen `?agent=<uuid>`, bindet GENAU
@@ -482,9 +485,19 @@ def _resource_agent_hint(resource: str, expected_base: str) -> UUID | None:
       (`?`); ein `?agent=...` zusaetzlich zur Pfad-Form ist eine widerspruechliche
       Angabe und wird abgelehnt.
 
+    Der Abgleich laeuft auf der Vergleichsform beider Seiten
+    (`who2be_models.oauth_issuer.canonical_resource`): ein abschliessender
+    Slash, die Gross-/Kleinschreibung des Hosts und ein explizites `:443` sind
+    dieselbe Resource. Vorher war der Vergleich byte-exakt, und jede dieser drei
+    Schreibweisen ergab ein `invalid_target`, das der Nutzer nicht deuten kann —
+    ADR-0036 hatte genau das als Risiko notiert. Alles darueber hinaus bleibt
+    verschieden: ein fremder Host faellt weiterhin durch.
+
     In allen Faellen bleibt die RFC-8707-Audience-Bindung an die KANONISCHE
     MCP-Resource (`expected_base`, ohne Query/Pfad-Suffix) erhalten — der
-    Rueckgabewert ist nur der Hint, welcher Agent gemeint ist.
+    Rueckgabewert ist nur der Hint, welcher Agent gemeint ist. Die Toleranz gilt
+    dem Vergleich, nicht der Audience: in den signierten Blob schreibt
+    `authorize` unveraendert die konfigurierte Resource.
 
     Beide Formen pruefen VOR `UUID(...)` die kanonische 8-4-4-4-12-Hex-Form
     (`who2be_models.agent_uuid.is_canonical_agent_uuid`) — dieselbe Strenge wie
@@ -494,10 +507,17 @@ def _resource_agent_hint(resource: str, expected_base: str) -> UUID | None:
     waeren mehrere Connector-„Identitaeten" fuer denselben Agenten, die der
     Resource-Server nie advertised.
     """
-    base, sep, query = resource.partition("?")
+    raw_base, sep, query = resource.partition("?")
+    # Vergleich auf der Vergleichsform BEIDER Seiten (`canonical_resource`):
+    # Trailing-Slash, Host-Gross-/Kleinschreibung und expliziter `:443` sind
+    # dieselbe Resource. Die Audience-Bindung bleibt davon unberuehrt — in den
+    # Blob wandert unveraendert die KONFIGURIERTE Resource, nie die Schreibweise
+    # des Clients (siehe `authorize`).
+    base = canonical_resource(raw_base)
+    expected = canonical_resource(expected_base)
     path_hint: UUID | None = None
-    if base != expected_base:
-        prefix = f"{expected_base}/a/"
+    if base != expected:
+        prefix = f"{expected}/a/"
         if not base.startswith(prefix):
             raise OAuthError("invalid_target", "resource passt nicht zum MCP-Server.")
         suffix = base[len(prefix) :]
