@@ -1552,6 +1552,36 @@ Pydantic-URL-Feld laeuft, ist danach nicht mehr der konfigurierte String. Wo
 ein Vertrag auf Zeichengleichheit beruht, muss der Test das **ausgelieferte
 Dokument** pruefen, nicht das Attribut davor.
 
+> **Teilweise ueberholt** vom Eintrag unten (2026-09-19, URL-Normalform): die
+> geteilte Quelle bleibt, die slash-freie Form war falsch. `canonical_issuer()`
+> heisst jetzt `issuer_identifier()`.
+
+## 2026-09-19 — Der Issuer-Identifier ist die URL-Normalform (mit Trailing Slash)
+
+**Entscheidung:** Beide Dokumente advertisieren den Issuer in der Form, die ein
+URL-Parser aus sich selbst wieder erzeugt — fuer eine reine Origin also **mit**
+Trailing Slash (`issuer_identifier()`). Die Endpunkt-URLs der AS-Metadaten
+haengen an derselben Normalform ohne Slash (`issuer_base()`).
+
+**Warum:** Welche Schreibweise gilt, entscheidet nicht dieses Repo. Der Client
+legt den PRM-Wert in seinem eigenen URL-Typ ab, bevor er vergleicht
+(`mcp/client/auth/oauth2.py`: `str(metadata.authorization_servers[0])`,
+Feldtyp `AnyHttpUrl`; im TS-SDK `new URL(...)`), und beide Parser haengen einer
+URL ohne Pfad ein `/` an. Der slash-freie Identifier aus dem Eintrag darueber
+war deshalb kein Fixpunkt: der Client hielt seine geparste Form gegen den rohen
+`issuer` und fand einen Unterschied, den unsere beiden Dokumente nie hatten.
+Die URL-Normalform haelt in allen vier Vergleichsvarianten (Client parst PRM /
+`issuer` / beides / nichts).
+
+**Reichweite / Lehre:** Wo ein Dritter zwei unserer Werte gegeneinander haelt,
+ist **seine** Normalform der Vertrag — nicht unsere. Ein Test, der unsere
+beiden Dokumente miteinander vergleicht, beweist davon nichts; er muss durch
+die Modelle des Clients laufen (`test_identifier_is_a_fixed_point_of_the_client_parser`,
+`test_client_reads_the_prm_back_as_the_advertised_string`). Und: eine
+Fehlermeldung mit zwei Werten sagt nicht, woher sie stammen — wer einen davon
+ohne Beleg dem eigenen Code zuordnet, fixt die falsche Seite und sieht es gruen
+durchlaufen.
+
 ## 2026-09-19 — S3-Backend: SeaweedFS statt MinIO (Apache-2.0 statt AGPL)
 
 **Entscheidung:** Der Objekt-Store ist SeaweedFS (Apache-2.0), nicht mehr

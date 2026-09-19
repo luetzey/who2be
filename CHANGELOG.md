@@ -11,16 +11,28 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 ### Fixed
 
 - Remote MCP connectors can log in again when the OAuth issuer is a bare
-  origin. The MCP server's protected-resource metadata (RFC 9728) advertised
-  `authorization_servers` with a trailing slash, while the API's authorization
-  server metadata (RFC 8414) reported `issuer` without one. Clients compare the
-  two by string equality (RFC 8414 §3.3), so the connection failed with
-  `Authorization server metadata issuer mismatch: https://api.example.de !=
-  https://api.example.de/`. The slash came from Pydantic's `AnyHttpUrl`, the
-  field type of the SDK metadata model, which appends one to any URL without a
-  path — so every deployment whose issuer is a bare origin was affected,
-  regardless of how the environment variable was spelled. Both documents now
-  take the identifier from a single shared `canonical_issuer()`.
+  origin. Clients hold the `authorization_servers` entry of the MCP server's
+  protected-resource metadata (RFC 9728) against the `issuer` of the API's
+  authorization server metadata (RFC 8414) by string equality (RFC 8414 §3.3),
+  and the connection failed with `Authorization server metadata issuer
+  mismatch: https://api.example.de != https://api.example.de/`.
+
+  The trailing slash is added by the **client**, not by either document: it
+  parses the metadata value into a URL type before comparing
+  (`str(metadata.authorization_servers[0])` over a Pydantic `AnyHttpUrl` field
+  in the Python SDK, `new URL(...)` in the TypeScript one), and both parsers
+  normalise a URL without a path to `https://host/`. An earlier attempt at this
+  bug canonicalised both documents *without* the slash, which could not help —
+  the raw `issuer` then differed from the client's parsed form no matter what
+  the metadata said.
+
+  Both documents now advertise the URL normal form (`issuer_identifier()`,
+  i.e. **with** the trailing slash for a bare origin), which every URL parser
+  leaves untouched; the endpoint URLs in the authorization server metadata hang
+  off the same value without it (`issuer_base()`), so no double slash appears.
+  Tests now hold the served documents against the client's own models instead
+  of against each other, and `scripts/oauth_smoke.py` does the same against a
+  live stack.
 
 ### Security
 

@@ -35,7 +35,8 @@ from who2be_models import (
     OAuthConsentPreviewRequest,
     OAuthConsentResult,
     OAuthTokenResponse,
-    canonical_issuer,
+    issuer_base,
+    issuer_identifier,
 )
 
 router = APIRouter(prefix="/oauth", tags=["oauth"])
@@ -109,17 +110,19 @@ def _error_response(exc: OAuthError) -> JSONResponse:
 async def authorization_server_metadata() -> dict[str, object]:
     """RFC-8414-Metadaten — der LLM-Client entdeckt darueber alle Endpunkte."""
     settings = get_settings()
-    # `canonical_issuer` statt eines lokalen `rstrip`: der MCP-Server fuehrt
-    # denselben String in seiner PRM (`authorization_servers`), und der Client
-    # haelt beide per String-Gleichheit gegeneinander (RFC 8414 §3.3). Eine
-    # gemeinsame Quelle erzwingt die Uebereinstimmung, zwei `rstrip` stellen
-    # sie nur zufaellig her.
-    issuer = canonical_issuer(settings.oauth_issuer_url)
+    # Der MCP-Server fuehrt denselben String in seiner PRM
+    # (`authorization_servers`), und der Client haelt beide per
+    # String-Gleichheit gegeneinander (RFC 8414 §3.3). Beide Seiten ziehen ihn
+    # deshalb aus `issuer_identifier` — der URL-Normalform, die der Client beim
+    # Parsen nicht mehr veraendert (Begruendung in `who2be_models.oauth_issuer`).
+    # Die Endpunkte haengen an `issuer_base`, sonst stuende hier ein Doppel-Slash.
+    issuer = issuer_identifier(settings.oauth_issuer_url)
+    base = issuer_base(settings.oauth_issuer_url)
     return {
         "issuer": issuer,
-        "authorization_endpoint": f"{issuer}/oauth/authorize",
-        "token_endpoint": f"{issuer}/oauth/token",
-        "registration_endpoint": f"{issuer}/oauth/register",
+        "authorization_endpoint": f"{base}/oauth/authorize",
+        "token_endpoint": f"{base}/oauth/token",
+        "registration_endpoint": f"{base}/oauth/register",
         "response_types_supported": ["code"],
         "grant_types_supported": ["authorization_code", "refresh_token"],
         "code_challenge_methods_supported": ["S256"],

@@ -376,9 +376,81 @@ für `MCP_RESOURCE_URL`. Die Klasse war also bekannt, nur die Issuer-Achse
 vor dem ersten Request, beim Discovery.
 
 **Verifizierung:** `packages/models/tests/test_oauth_issuer.py`,
-`apps/mcp/tests/test_auth.py::test_prm_advertises_issuer_without_trailing_slash`
-(prüft das ausgelieferte JSON, nicht das Attribut),
-`…::test_prm_issuer_is_canonical_even_if_env_has_a_slash`,
-`apps/mcp/tests/test_agent_path.py::test_agent_prm_issuer_has_no_trailing_slash`,
+`apps/mcp/tests/test_auth.py` (prüft das ausgelieferte JSON, nicht das
+Attribut), `apps/mcp/tests/test_agent_path.py`,
 `apps/api/tests/test_oauth.py::test_issuer_is_canonical_regardless_of_env_spelling`
 (DB-frei).
+
+> **Korrigiert vom Addendum vom 2026-09-19 (II).** Die Richtung der
+> Kanonisierung war falsch: slash-frei ist keine Form, die der Client
+> stehen lässt. `canonical_issuer()` heißt seither `issuer_identifier()` und
+> liefert die URL-Normalform.
+
+
+## Addendum 2026-09-19 (II) — Der Slash entsteht im Client, nicht bei uns
+
+**Befund.** Nach dem Addendum oben (#523) und einem Deploy, der den
+MCP-Container diesmal wirklich erneuerte, meldete der Betreiber **dieselbe**
+Fehlermeldung, wortgleich:
+
+```
+Authorization server metadata issuer mismatch:
+https://api.<DOMAIN> != https://api.<DOMAIN>/
+```
+
+**Der Denkfehler.** Aus den zwei Strings der Meldung wurde geschlossen, die
+beiden Dokumente widersprächen sich — der geslashte Wert komme aus der PRM
+(Pydantic), der slash-freie aus der API. Die erste Hälfte stimmte, die zweite
+nicht: der geslashte Wert kommt aus dem **Client**. Nachgemessen am echten
+Client-Code (`mcp/client/auth/oauth2.py`):
+
+```python
+self.context.auth_server_url = str(metadata.authorization_servers[0])
+#                              ^^^ ProtectedResourceMetadata, Feldtyp AnyHttpUrl
+```
+
+Der Client legt den PRM-Wert also in **seinem eigenen** URL-Typ ab, bevor er
+vergleicht — und hängt dabei selbst den Slash an. Das TypeScript-SDK tut
+dasselbe mit `new URL(...)`; beide Parser normalisieren eine URL ohne Pfad auf
+`https://host/`. Was in der PRM steht, ist für diesen Vergleich damit egal: die
+rechte Seite der Meldung trägt den Slash, ganz gleich was wir advertisieren.
+Die linke Seite ist der **rohe** `issuer` aus dem JSON der API — und der war
+nach #523 slash-frei. Der Fix hat die falsche Seite angefasst.
+
+Reproduziert wurde das mit den Modellen des echten Clients gegen den Code
+**nach** #523: `MISMATCH? True -> https://api.<DOMAIN> != https://api.<DOMAIN>/`
+— byte-gleich mit dem, was der Betreiber sah.
+
+**Entscheidung.** Advertisiert wird die **URL-Normalform**: genau der String,
+den ein URL-Parser aus sich selbst wieder erzeugt (`issuer_identifier()`, für
+eine reine Origin also **mit** Trailing Slash). Sie ist als einzige Form ein
+Fixpunkt: sie hält, ob der Client die PRM parst, den `issuer` parst, beide
+parst oder keinen. Die Endpunkt-URLs der AS-Metadaten hängen an
+`issuer_base()` — derselben Normalform ohne Slash —, damit dort kein
+Doppel-Slash entsteht. Beide Funktionen rechnen aus einer Quelle.
+
+Das Gegenargument aus #523 gegen genau diese Variante („ein Client leitet
+daraus `…/.well-known/oauth-authorization-server/` ab") wurde an beiden SDKs
+nachgemessen und trägt nicht: das Python-SDK behandelt Pfad `/` wie keinen Pfad
+(`if parsed.path and parsed.path != "/"`), das TypeScript-SDK schneidet den
+Slash in `buildWellKnownPath()` ab. Beide landen auf
+`https://api.<DOMAIN>/.well-known/oauth-authorization-server`.
+
+**Warum es wieder kein Test gefangen hat.** Die Tests aus #523 hielten unsere
+beiden Dokumente gegeneinander — und die waren einig. Niemand hielt sie gegen
+**den Client**. Genau das tun sie jetzt:
+`test_identifier_is_a_fixed_point_of_the_client_parser` (die Eigenschaft),
+`test_client_reads_the_prm_back_as_the_advertised_string` (die PRM durch
+`ProtectedResourceMetadata` gedreht) und
+`test_issuer_survives_the_clients_url_parser` (der ausgelieferte `issuer`
+durch `AnyHttpUrl`). Fällt einer davon, hat ein Parser seine Normalform
+geändert — dann ist `issuer_identifier()` nachzuziehen, nicht der Test.
+Dieselbe Prüfung liegt als Live-Gegenprobe in `scripts/oauth_smoke.py` und als
+Copy-Paste-Kommando in `docs/oauth-e2e-staging.md`; beide bauen den
+Client-Parser nach, statt unsere zwei Strings zu vergleichen.
+
+**Die Lehre.** Eine Fehlermeldung mit zwei Werten nennt nicht, woher sie
+stammen. Wer einen davon dem eigenen Code zuordnet, ohne es zu belegen, baut
+den Fix auf eine Vermutung — und sieht ihn grün durchlaufen, während der Fehler
+bleibt. Den Vertrag hält hier nicht dieses Repo, sondern der Client; gegen ihn
+ist zu messen.

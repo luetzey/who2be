@@ -1,31 +1,134 @@
-"""Kanonische Issuer-Identifier-Form — geteilt zwischen API und MCP-Server."""
+"""Issuer-Identifier — geteilt zwischen API und MCP-Server."""
 
 import pytest
+from pydantic import AnyHttpUrl
 
-from who2be_models import canonical_issuer, canonical_resource
+from who2be_models import canonical_resource, issuer_base, issuer_identifier
+
+# --- issuer_identifier -------------------------------------------------------
+# Der Fall aus der Praxis: eine reine Origin. Jeder URL-Parser haengt ihr beim
+# Parsen ein "/" an — der Client tut das mit dem Wert aus der PRM, bevor er ihn
+# gegen den rohen `issuer` der AS-Metadaten haelt. Der advertisierte Identifier
+# muss den Slash deshalb SELBST tragen; ohne ihn bricht der Login mit
+# "issuer mismatch" ab (s. Modul-Docstring von `who2be_models.oauth_issuer`).
+
+_ORIGIN = "https://api.example.de/"
 
 
-def test_trailing_slash_is_stripped() -> None:
-    # Der Fall aus der Praxis: eine reine Origin. Pydantics `AnyHttpUrl` haengt
-    # ihr beim Validieren ein "/" an — der Issuer-Identifier darf das nicht.
-    assert canonical_issuer("https://api.example.de/") == "https://api.example.de"
-    assert canonical_issuer("https://api.example.de") == "https://api.example.de"
+@pytest.mark.parametrize(
+    "spelling",
+    [
+        "https://api.example.de",
+        "https://api.example.de/",
+        "  https://api.example.de  ",
+        "https://API.Example.DE",
+        "https://api.example.de:443",
+        "HTTPS://api.example.de",
+    ],
+)
+def test_origin_spellings_collapse_to_the_url_normal_form(spelling: str) -> None:
+    assert issuer_identifier(spelling) == _ORIGIN
+
+
+def test_doubled_slashes_are_NOT_collapsed() -> None:
+    """`//` ist ein anderer Pfad — und der Client handelt danach.
+
+    Kein URL-Parser ebnet das ein, und die Discovery-Logik des MCP-SDK
+    verzweigt auf dem Pfad (`if parsed.path and parsed.path != "/"`). Wer hier
+    zusammenzieht, advertisiert einen Identifier, den niemand konfiguriert hat
+    — dieselbe Sorte stiller Umschreibung, die den Connector zweimal gekostet
+    hat. Eine getippte `//`-ENV faellt damit auf, statt still etwas anderes zu
+    bedeuten.
+    """
+    assert issuer_identifier("https://api.example.de//") == "https://api.example.de//"
+    assert issuer_identifier("https://example.de/auth//") == "https://example.de/auth//"
+
+
+def test_query_and_fragment_keep_their_trailing_slash() -> None:
+    # Gekuerzt wird der PFAD, nicht der Rohstring — sonst faellt ein Slash aus
+    # Query oder Fragment weg, den jeder Parser stehen laesst.
+    assert (
+        issuer_identifier("https://api.example.de/?redirect=https://x/")
+        == "https://api.example.de/?redirect=https://x/"
+    )
+    assert issuer_identifier("https://api.example.de/#/app/") == "https://api.example.de/#/app/"
 
 
 def test_path_survives_without_its_trailing_slash() -> None:
-    # Ein Issuer MIT Pfad ist erlaubt (RFC 8414 §3.1) — nur der Slash faellt.
-    assert canonical_issuer("https://example.de/auth/") == "https://example.de/auth"
-    assert canonical_issuer("https://example.de/auth") == "https://example.de/auth"
-
-
-def test_repeated_slashes_and_whitespace_collapse() -> None:
-    # Aus `.env`-Dateien kommen gern Leerzeichen und doppelte Slashes.
-    assert canonical_issuer("  https://api.example.de//  ") == "https://api.example.de"
+    # Ein Issuer MIT Pfad ist erlaubt (RFC 8414 §3.1) und bekommt von keinem
+    # Parser einen Slash angehaengt — hier bleibt es bei der slash-freien Form.
+    assert issuer_identifier("https://example.de/auth/") == "https://example.de/auth"
+    assert issuer_identifier("https://example.de/auth") == "https://example.de/auth"
 
 
 def test_is_idempotent() -> None:
-    once = canonical_issuer("https://api.example.de/")
-    assert canonical_issuer(once) == once
+    once = issuer_identifier("https://api.example.de")
+    assert issuer_identifier(once) == once
+
+
+@pytest.mark.parametrize(
+    "configured",
+    [
+        "https://api.example.de",
+        "https://api.example.de/",
+        "https://example.de/auth",
+        "http://localhost:8000",
+        "http://127.0.0.1:8765",
+        "https://[::1]:8443",
+        "https://api.example.de//",
+        "https://example.de/auth/",
+        "https://api.example.de/?redirect=https://x/",
+        "https://api.example.de/#/app/",
+    ],
+)
+def test_identifier_is_a_fixed_point_of_the_client_parser(configured: str) -> None:
+    """Die Eigenschaft, an der der Fix aus #523 gescheitert ist.
+
+    Der Client legt den PRM-Wert in einem URL-Typ ab, bevor er vergleicht
+    (`mcp/client/auth/oauth2.py`: `str(metadata.authorization_servers[0])`,
+    Feldtyp `AnyHttpUrl`). Was wir advertisieren, muss diesen Parser also
+    unveraendert ueberstehen — sonst vergleicht der Client unsere Form mit
+    seiner und findet einen Unterschied, den die beiden Dokumente nie hatten.
+    Faellt dieser Test, hat ein Parser seine Normalform geaendert: dann ist
+    `issuer_identifier` nachzuziehen, nicht der Test.
+    """
+    identifier = issuer_identifier(configured)
+    assert str(AnyHttpUrl(identifier)) == identifier
+
+
+@pytest.mark.parametrize(
+    "broken",
+    [
+        "nicht-parsebar",
+        "ftp://api.example.de",
+        "https://evil@api.example.de",
+        "https://api.example.de:99999",
+        "https:///kein-host",
+        # Steuerzeichen: `urlsplit` wirft \t/\r/\n still aus der GANZEN URL
+        # (bpo-43882). Ohne Riegel waere das hier der Host
+        # `api.example.de.evil.com` — ein anderer Server als der konfigurierte.
+        "https://api.example.de\t.evil.com",
+        "https://api.exa\tmple.de",
+    ],
+)
+def test_unusable_config_comes_back_only_trimmed(broken: str) -> None:
+    # Fail-closed: nichts umschreiben, was wir nicht sicher zerlegen koennen.
+    # Ein so konfigurierter Issuer ist kaputt — das soll er auch bleiben,
+    # statt zu einer zweiten, stillschweigend erfundenen Identitaet zu werden.
+    assert issuer_identifier(f"  {broken}  ") == broken
+
+
+# --- issuer_base -------------------------------------------------------------
+
+
+def test_base_is_the_identifier_without_the_trailing_slash() -> None:
+    assert issuer_base("https://api.example.de/") == "https://api.example.de"
+    assert issuer_base("https://example.de/auth/") == "https://example.de/auth"
+
+
+@pytest.mark.parametrize("spelling", ["https://api.example.de", "https://api.example.de/"])
+def test_endpoints_built_on_the_base_have_exactly_one_slash(spelling: str) -> None:
+    assert f"{issuer_base(spelling)}/oauth/token" == "https://api.example.de/oauth/token"
 
 
 # --- canonical_resource ------------------------------------------------------

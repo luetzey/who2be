@@ -25,7 +25,7 @@ from starlette.routing import Route
 
 from who2be_mcp.config import Settings
 from who2be_mcp.prm import PRM_PREFIX, build_prm_route
-from who2be_models import canonical_issuer
+from who2be_models import issuer_identifier
 
 logger = logging.getLogger(__name__)
 
@@ -97,9 +97,9 @@ def build_auth_provider(settings: Settings) -> Who2BeRemoteAuthProvider:
     return Who2BeRemoteAuthProvider(
         token_verifier=Who2BeTokenVerifier(settings),
         # Kanonisch: exakt der String, den die API als `issuer` ihrer
-        # AS-Metadaten fuehrt. Beide Seiten ziehen ihn aus `canonical_issuer`,
+        # AS-Metadaten fuehrt. Beide Seiten ziehen ihn aus `issuer_identifier`,
         # damit der String-Vergleich des Clients nicht an einer Schreibweise
         # scheitert.
-        authorization_servers=[canonical_issuer(settings.oauth_issuer_url)],  # type: ignore[list-item]
+        authorization_servers=[issuer_identifier(settings.oauth_issuer_url)],  # type: ignore[list-item]
         base_url=settings.mcp_public_url,
     )

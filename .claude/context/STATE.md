@@ -1,6 +1,70 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-19 (46. Lauf — der Issuer-Fix aus #523 war gemergt und deployed, wirkte aber nie: `deploy.sh` fasste den profilgebundenen `mcp-http`-Service nie an. Deploy-Skript korrigiert, `resource`-Vergleich zusaetzlich tolerant gemacht)_
+_Stand: 2026-09-19 (47. Lauf — der Issuer-Fix war zweimal die falsche Seite: der Trailing Slash entsteht im CLIENT, nicht in unseren Dokumenten. Advertisiert wird jetzt die URL-Normalform)_
+
+## Der Slash kam nie von uns (2026-09-19, 47. Lauf, Issuer-Mismatch, dritter Anlauf)
+
+**Symptom:** Nach #523 (Kanonisierung) und #543/#544 (Deploy fasst `mcp-http`
+endlich an) meldete der Nutzer **wieder** dieselbe Meldung, wortgleich:
+`Authorization server metadata issuer mismatch: https://api.… != https://api.…/`.
+
+**Der Befund — diesmal gemessen statt geschlossen.** Ich habe das SDK des
+echten Clients gezogen und den Vergleich nachgebaut. `mcp/client/auth/oauth2.py`
+macht aus der PRM-Antwort `str(metadata.authorization_servers[0])` — Feldtyp
+`AnyHttpUrl` — und haelt **das** gegen den rohen `issuer` aus dem JSON der API.
+Pydantic haengt dabei einer URL ohne Pfad ein `/` an, `new URL(...)` im
+TS-SDK genauso. Der Slash der rechten Seite entsteht also im Client, und zwar
+unabhaengig davon, was unsere PRM sagt. Gegen den Code **nach #523**
+reproduziert das byte-gleich die Meldung des Nutzers.
+
+**Was das ueber die beiden Vorlaeufer sagt:** #523 hat aus zwei Strings in
+einer Fehlermeldung geschlossen, welcher aus welchem Dokument stammt — und die
+falsche Seite angefasst. #543/#544 waren trotzdem richtig (der Container lief
+tatsaechlich auf altem Image), hat den eigentlichen Fehler aber verdeckt: als
+der neue Build endlich lief, sah alles nach „Fix wirkt immer noch nicht" aus.
+**Zwei getrennte Fehler hintereinander, beide real.**
+
+**Fix:** Advertisiert wird die **URL-Normalform** — der String, den ein
+URL-Parser aus sich selbst wieder erzeugt, fuer eine reine Origin also MIT
+Trailing Slash (`issuer_identifier()`). Sie ist die einzige Form, die in allen
+vier Vergleichsvarianten haelt. Die Endpunkt-URLs der AS-Metadaten haengen an
+`issuer_base()` (dieselbe Normalform ohne Slash), damit dort kein Doppel-Slash
+steht. Das Gegenargument aus #523 gegen genau diese Variante ("ein strikter
+Client leitet `…/oauth-authorization-server/` ab") habe ich an beiden SDKs
+nachgemessen: es traegt nicht, beide schneiden den Slash ab.
+
+**Belege:** Repro vorher `MISMATCH? True`, nachher `False`;
+1499 Tests gruen (485 DB-Integrationstests uebersprungen, bekannte Lokal-/
+CI-Differenz), `ruff`/`mypy` sauber. Neu sind drei Tests, die gegen die
+Modelle des Clients laufen statt unsere zwei Dokumente miteinander zu
+vergleichen — der Vergleich, der in #523 gruen war, waehrend der Login brach.
+Dieselbe Gegenprobe liegt in `scripts/oauth_smoke.py` (live) und als
+Copy-Paste-Kommando in `docs/oauth-e2e-staging.md`.
+
+**Security-Review (Pflicht laut CLAUDE.md) — kein hoher/kritischer Befund.**
+Die Audience-Bindung bleibt unberuehrt. Drei Low-Befunde, alle in meiner neuen
+Funktion, alle nachgezogen — und alle vom selben Typ: **eine Zusage im
+Docstring, die der Code nicht hielt.** Der teuerste: mein "fail-closed wie
+`canonical_resource`" stimmte nicht fuer Steuerzeichen, und
+`https://api.example.de\t.evil.com` kollabierte deshalb still auf den Host
+`api.example.de.evil.com` (bpo-43882). Beide Funktionen teilen sich den Riegel
+jetzt. Dazu: `rstrip("/")` lief auf dem Rohstring und frass Slashes aus Query
+und Fragment; `/auth//` wurde mit `/auth` gleichgemacht. Der Review ordnete die
+letzten beiden als Fixpunkt-Bruch ein — nachgemessen stimmt das nicht, der
+Login waere nicht gebrochen. Der Befund war trotzdem richtig, nur die
+Begruendung eine andere.
+
+**Die Lehre (teuer erkauft, zweimal):** Eine Fehlermeldung mit zwei Werten
+nennt nicht, woher sie stammen. Wo ein Dritter zwei unserer Werte
+gegeneinander haelt, ist **seine** Normalform der Vertrag — und der Beleg
+dafuer ist sein Code, nicht unsere Lesart seiner Fehlermeldung.
+
+**Noch offen / nicht von hier pruefbar:** Der Proxy dieser Session blockt
+`luetzenburg-cloud.de` weiterhin mit 403 — die Live-Endpunkte konnten nicht
+abgefragt werden. Abnahme nach dem Deploy: erst
+`docker inspect --format '{{.Config.Image}}' who2be-mcp-http-1` gegen den
+erwarteten SHA (Lehre aus #543/#544), dann die Gegenprobe aus
+`docs/oauth-e2e-staging.md` §Troubleshooting.
 
 ## Der Fix war gemergt, deployed — und lief nie (2026-09-19, 46. Lauf, Issuer-Mismatch)
 

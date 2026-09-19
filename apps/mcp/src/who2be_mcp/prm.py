@@ -1,22 +1,23 @@
-"""RFC-9728-Protected-Resource-Metadata mit unveraendertem Issuer-Identifier.
+"""RFC-9728-Protected-Resource-Metadata mit dem kanonischen Issuer-Identifier.
 
 Beide PRM-Wege dieses Servers — die kanonische Resource (`auth.py`) und die
 agent-spezifische (`agent_path.py`) — rendern ihren Body hier, damit sie
-denselben Issuer-String advertisieren.
+denselben Issuer-String advertisieren wie die AS-Metadaten der API.
 
 Warum nicht direkt der SDK-Handler: `ProtectedResourceMetadata.authorization_
-servers` ist `list[AnyHttpUrl]`, und Pydantic haengt einer URL OHNE Pfad beim
-Validieren ein `/` an. Der Issuer-Identifier wird aber vom LLM-Client per
-String-Gleichheit gegen den `issuer` der AS-Metadaten der API gehalten
-(RFC 8414 §3.3). Aus `https://api.example.de` wird so `https://api.example.de/`
-— und der Connector-Login bricht ab mit:
-
-    Authorization server metadata issuer mismatch:
-    https://api.example.de != https://api.example.de/
+servers` ist `list[AnyHttpUrl]`, und was Pydantic beim Validieren mit der URL
+macht (Trailing Slash bei leerem Pfad, Kleinschreibung, Default-Port), ist
+nicht unsere Entscheidung. Massgeblich ist `issuer_identifier()` — der eine
+String, den auch die API fuehrt. Ueber die Leitung geht deshalb genau der,
+nicht seine durch das SDK-Modell gelaufene Form.
 
 Das SDK-Modell bleibt trotzdem die Quelle des Bodys (Felder, Defaults und
 kuenftige Ergaenzungen kommen von dort); zurechtgerueckt wird danach genau
 ein Feld.
+
+Warum der Identifier so aussieht, wie er aussieht — und warum eine
+slash-freie Variante den Login NICHT rettet — steht in
+`who2be_models.oauth_issuer`.
 """
 
 from __future__ import annotations
@@ -31,7 +32,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
-from who2be_models import canonical_issuer
+from who2be_models import issuer_identifier
 
 #: Pfad-Praefix aller PRM-Routen (RFC 9728 §3.1).
 PRM_PREFIX = "/.well-known/oauth-protected-resource"
@@ -55,10 +56,11 @@ def prm_body(
     # `exclude_none` wie `PydanticJSONResponse` des SDK — sonst saehe der Body
     # anders aus als bisher.
     body: dict[str, Any] = metadata.model_dump(mode="json", exclude_none=True)
-    # Das eine Feld zurechtruecken (s. Modul-Docstring): massgeblich ist die
-    # Eingabe, nicht ihre durch `AnyHttpUrl` gelaufene Form.
+    # Das eine Feld zurechtruecken (s. Modul-Docstring): massgeblich ist
+    # `issuer_identifier`, nicht die durch `AnyHttpUrl` gelaufene Form. Die
+    # Funktion ist idempotent — der Aufrufer darf sie schon angewandt haben.
     body["authorization_servers"] = [
-        canonical_issuer(str(server)) for server in authorization_servers
+        issuer_identifier(str(server)) for server in authorization_servers
     ]
     return body
 
