@@ -45,6 +45,15 @@ Vertrauens-Vorteile von Public-from-day-one werden eingeloest.
    Workspace-Existenz public).
 3. Git-History enthaelt `luetzey@gmail.com` in 121 Commits (auch auf
    GitHub-Profil sichtbar).
+4. **Nachgetragen 2026-09-19:** Die Domain der Live-Installation stand in drei
+   `.claude/`-Dateien (Plan- und Kontextdoku der OAuth-Issuer-Laeufe). Im Tree
+   durch `<DOMAIN>` ersetzt, ebenso in den PR-Beschreibungen von #543 und #545.
+   **In der History bleibt sie** — in den Commits `e1ca9a5`, `d478a01`,
+   `563cee9`, auffindbar per `git log -S`. Das ist derselbe Fall wie Punkt 3
+   und faellt unter dieselbe Entscheidung (kein History-Rewrite), solange der
+   Owner nicht anders entscheidet. Kein Secret: die Domain ist oeffentlich
+   aufloesbar; was sie preisgibt, ist die Verknuepfung Repo ↔ Live-Instanz.
+   Vorbeugung fuer kuenftige Laeufe steht in `CLAUDE.md` §Security.
 
 ## Schritte
 

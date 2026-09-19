@@ -7,7 +7,7 @@ _Status: umgesetzt, lokal verifiziert; Live-Gegenprobe steht beim Betreiber aus.
 
 ```
 Authorization server metadata issuer mismatch:
-https://api.luetzenburg-cloud.de != https://api.luetzenburg-cloud.de/
+https://api.<DOMAIN> != https://api.<DOMAIN>/
 ```
 
 Zweiter Anlauf. #523 hat kanonisiert, #543/#544 haben dafuer gesorgt, dass der
@@ -40,10 +40,10 @@ dasselbe mit `new URL(...)`. Verglichen wird diese geparste Form dann mit dem
 (`scratchpad/repro_client.py`):
 
 ```
-PRM  authorization_servers[0] (JSON) : https://api.luetzenburg-cloud.de
-ASM  issuer                   (JSON) : https://api.luetzenburg-cloud.de
-Client auth_server_url               : https://api.luetzenburg-cloud.de/
-MISMATCH? True -> https://api.luetzenburg-cloud.de != https://api.luetzenburg-cloud.de/
+PRM  authorization_servers[0] (JSON) : https://api.<DOMAIN>
+ASM  issuer                   (JSON) : https://api.<DOMAIN>
+Client auth_server_url               : https://api.<DOMAIN>/
+MISMATCH? True -> https://api.<DOMAIN> != https://api.<DOMAIN>/
 ```
 
 Byte-gleich mit der Meldung des Betreibers. Eine slash-freie Kanonisierung
@@ -87,7 +87,7 @@ und traegt nicht: Python behandelt Pfad `/` wie keinen Pfad
 ## Belege
 
 - Repro vorher (Code nach #523): `MISMATCH? True` — s. oben.
-- Repro nachher: `MISMATCH? False -> https://api.luetzenburg-cloud.de/ != https://api.luetzenburg-cloud.de/`
+- Repro nachher: `MISMATCH? False -> https://api.<DOMAIN>/ != https://api.<DOMAIN>/`
 - `uv run pytest -q`: 1499 passed, 485 skipped (DB-Integrationstests, bekannte
   Lokal-/CI-Differenz), `ruff check`/`ruff format --check`/`mypy .` sauber.
 
@@ -131,7 +131,7 @@ beim Hochfahren jedes Deployments und damit nicht Teil dieses Fixes.
 
 ## Offen / nicht von hier pruefbar
 
-Der Proxy dieser Session blockt `luetzenburg-cloud.de` (403 auf CONNECT) — die
+Der Proxy dieser Session blockt `<DOMAIN>` (403 auf CONNECT) — die
 Live-Endpunkte konnten wieder nicht abgefragt werden. Nach dem Deploy gilt die
 Gegenprobe aus `docs/oauth-e2e-staging.md` (Troubleshooting) als Abnahme;
 davor `docker inspect --format '{{.Config.Image}}' who2be-mcp-http-1` gegen den

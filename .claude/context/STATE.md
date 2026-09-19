@@ -2,6 +2,26 @@
 
 _Stand: 2026-09-19 (47. Lauf — der Issuer-Fix war zweimal die falsche Seite: der Trailing Slash entsteht im CLIENT, nicht in unseren Dokumenten. Advertisiert wird jetzt die URL-Normalform)_
 
+## Betreiber-Domain aus dem Repo entfernt (2026-09-19, 47. Lauf, Nachlauf)
+
+Die Domain der Live-Installation war ueber die OAuth-Issuer-Laeufe in drei
+`.claude`-Dateien gewandert — 14 Stellen, alle in Plan-/Kontextdoku, **kein
+Code, keine Deploy-Config**. Im Tree jetzt `<DOMAIN>`, ebenso in den
+PR-Beschreibungen #543 und #545.
+
+**In der History bleibt sie** (`e1ca9a5`, `d478a01`, `563cee9`, per `git log -S`
+auffindbar). Das ist derselbe Fall wie `luetzey@gmail.com` in 121 Commits und
+faellt unter dieselbe Entscheidung im Public-Switch-Plan: **kein
+History-Rewrite**, solange der Owner nicht anders entscheidet. Kein Secret —
+die Domain ist oeffentlich aufloesbar; preisgegeben wird die Verknuepfung
+Repo ↔ Live-Instanz. Als Punkt 4 in
+`.claude/plan/2026-05-27-2028_public-switch-github-repo.md` nachgetragen, damit
+die Entscheidung vor dem Switch bewusst faellt statt vergessen zu werden.
+
+Vorbeugung: `CLAUDE.md` §Security verbietet reale Betreiber-Hosts in
+eingecheckten Dateien jetzt ausdruecklich — auch in kopierten Fehlerausgaben
+und Repro-Bloecken, wo sie zweimal unbemerkt hereingerutscht sind.
+
 ## Der Slash kam nie von uns (2026-09-19, 47. Lauf, Issuer-Mismatch, dritter Anlauf)
 
 **Symptom:** Nach #523 (Kanonisierung) und #543/#544 (Deploy fasst `mcp-http`
@@ -60,7 +80,7 @@ gegeneinander haelt, ist **seine** Normalform der Vertrag — und der Beleg
 dafuer ist sein Code, nicht unsere Lesart seiner Fehlermeldung.
 
 **Noch offen / nicht von hier pruefbar:** Der Proxy dieser Session blockt
-`luetzenburg-cloud.de` weiterhin mit 403 — die Live-Endpunkte konnten nicht
+`<DOMAIN>` weiterhin mit 403 — die Live-Endpunkte konnten nicht
 abgefragt werden. Abnahme nach dem Deploy: erst
 `docker inspect --format '{{.Config.Image}}' who2be-mcp-http-1` gegen den
 erwarteten SHA (Lehre aus #543/#544), dann die Gegenprobe aus
@@ -146,7 +166,7 @@ wo die Lockerung richtig ist.
 **Noch offen / nicht verifizierbar von hier:** Ob der Produktions-Container
 nach dem naechsten Deploy tatsaechlich auf dem neuen Image steht, ist erst auf
 der Box pruefbar (`docker inspect`, Kommando steht jetzt im README). Der Proxy
-dieser Session blockt `luetzenburg-cloud.de` (403), die Live-Endpunkte konnten
+dieser Session blockt `<DOMAIN>` (403), die Live-Endpunkte konnten
 also nie direkt geprueft werden — alle Aussagen oben stammen aus Code,
 Compose-Dateien und CI-Laeufen.
 
