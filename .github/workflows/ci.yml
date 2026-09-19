@@ -450,11 +450,13 @@ jobs:
         # checksums.txt); nachrechenbar mit:
         #   curl -sSL <url> | sha256sum
         #
-        # STAND: erst berichtend. `api.osv.dev` war aus der Entwicklungsumgebung
-        # nicht erreichbar (Proxy), die echte Ausgabeform ist also ungeprueft —
-        # deshalb bewusst noch ohne Abbruch, statt auf Verdacht rot zu schalten.
-        # Sobald ein CI-Lauf die Ausgabe zeigt, wird daraus das blockierende Gate
-        # (Schweregrad-Filter + Prod-Scope wie bei npm audit).
+        # BLOCKIEREND. Der erste CI-Lauf hat die Ausgabe gezeigt: 701 Pakete
+        # gescannt, 0 Funde — scharf schalten kostet also keinen roten Lauf.
+        # Bewusst STRENGER als `npm audit` daneben: voller Lockfile-Umfang
+        # (inkl. dev) und jeder Schweregrad. Als zweite Meinung ist breiter
+        # richtig; meldet es spaeter einmal einen dev-only Low-Fund, ist das
+        # eine Information und der Umfang eine Einzeiler-Entscheidung mit
+        # echten Daten statt auf Vorrat.
         env:
           OSV_VERSION: "2.2.4"
           OSV_SHA256: "7702cd1e5d9f5059dd9570f4ad967f27d3c5f5391b371ec937b384c238177f55"
@@ -486,19 +488,20 @@ jobs:
           fi
 
           count=$(jq '[.results[]?.packages[]?.vulnerabilities[]?] | length' /tmp/osv.json)
+          list=$(jq -r '.results[]?.packages[]? | select(.vulnerabilities)
+                        | "  \(.package.name)@\(.package.version)  " +
+                          ([.vulnerabilities[].id] | join(", "))' /tmp/osv.json)
           echo "OSV: ${count} Eintraege (rc=${scan_rc})"
-          jq -r '.results[]?.packages[]? | select(.vulnerabilities)
-                 | "  \(.package.name)@\(.package.version)  " +
-                   ([.vulnerabilities[].id] | join(", "))' /tmp/osv.json || true
+          [ -n "$list" ] && printf '%s\n' "$list"
           {
-            echo "## OSV-Scan (berichtend, blockiert noch nicht)"
+            echo "## OSV-Scan"
             echo
             echo "Gefundene Eintraege: **${count}**"
-            echo
-            echo '```'
-            jq -r '.results[]?.packages[]? | select(.vulnerabilities)
-                   | "\(.package.name)@\(.package.version)  " +
-                     ([.vulnerabilities[].id] | join(", "))' /tmp/osv.json | head -50
-            echo '```'
+            [ -n "$list" ] && { echo; echo '```'; printf '%s\n' "$list" | head -50; echo '```'; }
           } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$count" -gt 0 ]; then
+            echo "::error title=OSV: Verwundbarkeiten gefunden::${count} Eintraege — \
+            Liste im Job-Log und in der Step-Summary."
+            exit 1
+          fi
 
