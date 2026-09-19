@@ -389,7 +389,44 @@ jobs:
         run: npm ci
       - name: npm audit (Web, prod-only, high+)
         working-directory: apps/web
-        run: npm audit --omit=dev --audit-level=high
+        # `npm audit` liefert Exit 1 SOWOHL bei echten Funden ALS AUCH, wenn der
+        # Audit-Dienst nicht antwortet. Ein rotes Gate sagte damit nicht, was es
+        # meint — 2026-09-19 stand CI rot, weil npm den alten `audits/quick`-
+        # Endpunkt abschaltete (400) und der neue `advisories/bulk` gleichzeitig
+        # in Wartung war (503). Kein Fund, keine Verwundbarkeit, nur ein
+        # Fremddienst. Unterschieden wird an der JSON-Form: ein echtes Ergebnis
+        # traegt `.metadata.vulnerabilities`, eine Dienststoerung nur `.error`.
+        #
+        # Wiederholt wird NUR die Dienststoerung. Ein echter Fund faellt sofort
+        # durch — ein Retry darf ein Security-Gate nie weichspuelen. Und ist der
+        # Dienst dauerhaft weg, bleibt der Lauf rot: ein Gate, das gruen wird,
+        # weil es nicht pruefen konnte, ist schlimmer als gar keins.
+        run: |
+          set -uo pipefail
+          for attempt in 1 2 3; do
+            if out="$(npm audit --omit=dev --audit-level=high --json 2>audit.err)"; then
+              echo "npm audit: keine Funde ab Stufe high."
+              exit 0
+            fi
+            if printf '%s' "$out" | jq -e '.metadata.vulnerabilities' >/dev/null 2>&1; then
+              echo "::error title=npm audit: Verwundbarkeiten gefunden::Siehe Job-Log."
+              printf '%s' "$out" | jq '.metadata.vulnerabilities'
+              printf '%s' "$out" | jq -r '
+                .vulnerabilities // {} | to_entries[]
+                | select(.value.severity == "high" or .value.severity == "critical")
+                | "  \(.key)  \(.value.severity)"'
+              exit 1
+            fi
+            echo "Audit-Dienst antwortet nicht (Versuch ${attempt}/3):"
+            cat audit.err || true
+            printf '%s' "$out" | jq -r '"  HTTP \(.statusCode // "?"): \(.error // .message // "unbekannt")"' 2>/dev/null || true
+            [ "$attempt" -lt 3 ] && sleep $((attempt * 15))
+          done
+          echo "::error title=npm-Audit-Dienst nicht erreichbar::Nach 3 Versuchen \
+          keine Antwort von der npm-Registry. Das ist KEIN Verwundbarkeitsfund — \
+          siehe https://status.npmjs.org . Der Lauf bleibt bewusst rot, weil das \
+          Gate nicht pruefen konnte."
+          exit 1
       - name: License check (Web · Deny-Liste)
         # OSS-License-Compliance (ADR-0033): fail-closed gegen Copyleft/AGPL in
         # den Produktions-Deps. Eigenes (privates) Paket ausgeschlossen; MPL-2.0

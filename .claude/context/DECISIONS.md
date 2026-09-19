@@ -1677,3 +1677,32 @@ wirkt nicht" wird die Job-Liste geoeffnet, nicht die Run-Zusammenfassung.
 ("ueberspringt sich still, solange sie fehlen"). Dokumentiert zu sein hat
 nicht gereicht — eine Notiz in einer Datei ersetzt kein Signal an der
 Stelle, an der man hinsieht.
+
+## 2026-09-19 — Ein Security-Gate muss sagen, ob es gepruefte oder gar nicht pruefen konnte
+
+**Entscheidung:** Der `npm audit`-Schritt unterscheidet echten Fund von
+Dienststoerung an der JSON-Form (`.metadata.vulnerabilities` vs. `.error`).
+Wiederholt wird NUR die Stoerung (3x, Backoff). Ein echter Fund faellt
+sofort durch. Bleibt der Dienst weg, bleibt der Lauf rot — mit einer
+Meldung, die sagt, dass es kein Fund war.
+
+**Warum:** `npm audit` liefert Exit 1 fuer beides. Am 2026-09-19 stand CI
+rot, weil npm den alten `security/audits/quick` abschaltete (400) und der
+neue `security/advisories/bulk` gleichzeitig in Wartung war (503). Beide
+Endpunkte tot, kein einziger Fund — und das Gate meldete dasselbe Rot wie
+bei einer kritischen Luecke.
+
+**Der Fehler, den ich dabei selbst gemacht habe:** Ich habe das zuerst
+"Flake" genannt, weil derselbe Job Minuten vorher gruen war, und einen
+Retry vorgeschlagen. Lokal reproduziert war es deterministisch — ein
+Retry auf den 400 haette nie geholfen. Erst der Test mit npm 11 zeigte
+den zweiten, entscheidenden Teil: der neue Endpunkt ist in Wartung. Zwei
+Messungen, zwei verschiedene Fehler, eine gemeinsame Ursache. "Vorher war
+es gruen" ist eine Beobachtung, keine Diagnose.
+
+**Regel daraus, Gegenstueck zum Deploy-Skip von heute:** Dort war ein
+gruenes Signal wertlos, weil nichts geschah. Hier war ein rotes Signal
+irrefuehrend, weil es zwei Dinge gleich faerbte. Beide Male galt: Ein
+Signal ist nur so viel wert wie die Frage, die es beantwortet. Wer ein
+Gate baut, muss "bestanden", "durchgefallen" und "konnte nicht pruefen"
+auseinanderhalten — und darf das dritte niemals ins erste kippen lassen.
