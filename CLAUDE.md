@@ -250,3 +250,10 @@ lokal verifiziert vor jedem Push. Stack-uebergreifend siehe auch
 
 - Fuer Auth, DB-Zugriff, MCP-Tools und externe Inputs den Subagent
   `security-reviewer` nutzen.
+- **Keine realen Betreiber-Hosts im Repo.** Domains, Hostnamen und IPs der
+  laufenden Installation gehoeren nicht in eingecheckte Dateien — auch nicht in
+  Plan-/Kontextdateien unter `.claude/` und nicht in kopierte Fehlerausgaben
+  oder Repro-Bloecke. Platzhalter ist `<DOMAIN>` (`https://api.<DOMAIN>`), wie
+  in `docs/` und den Compose-Dateien. Gleiches gilt fuer PR-Beschreibungen.
+  Grund: das Repo geht oeffentlich, und die History vergisst nichts —
+  einmal committed ist die Verknuepfung Repo ↔ Live-Instanz dauerhaft.

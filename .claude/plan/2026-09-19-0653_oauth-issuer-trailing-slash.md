@@ -4,12 +4,11 @@ _Angelegt: 2026-09-19 06:53 UTC — Branch `claude/wonderful-ptolemy-p912db`_
 
 ## Symptom
 
-Beim Verbinden des Remote-MCP-Connectors (`luetzenburg-cloud`) bricht der
-Client ab:
+Beim Verbinden des Remote-MCP-Connectors bricht der Client ab:
 
 ```
 Authorization server metadata issuer mismatch:
-https://api.luetzenburg-cloud.de != https://api.luetzenburg-cloud.de/
+https://api.<DOMAIN> != https://api.<DOMAIN>/
 ```
 
 ## Befund (reproduziert, nicht vermutet)
@@ -34,7 +33,7 @@ in `RemoteAuthProvider(authorization_servers=[...])`. Das MCP-SDK-Modell
 Validieren einen `/` an**:
 
 ```
-AnyHttpUrl('https://api.luetzenburg-cloud.de') -> 'https://api.luetzenburg-cloud.de/'
+AnyHttpUrl('https://api.<DOMAIN>') -> 'https://api.<DOMAIN>/'
 ```
 
 Die API dagegen liefert den Issuer via `rstrip("/")` slash-frei
@@ -53,7 +52,7 @@ gemerkt hat es niemand, weil bisher kein Test die beiden Dokumente
 gegeneinander haelt.
 
 Reproduktion (in-process, ohne Server):
-`scratchpad/repro.py` → `MISMATCH? True -> https://api.luetzenburg-cloud.de != https://api.luetzenburg-cloud.de/`
+`scratchpad/repro.py` → `MISMATCH? True -> https://api.<DOMAIN> != https://api.<DOMAIN>/`
 
 ## Design-Weiche: welcher String ist der kanonische Issuer?
 
@@ -151,7 +150,7 @@ haelt (beide gleich falsch ⇒ gruen). Die neuen Tests prufen deshalb das
 
 **Verifikation (lokal, transkript-belegt)**
 
-- Repro vorher: `MISMATCH? True -> https://api.luetzenburg-cloud.de != https://api.luetzenburg-cloud.de/`
+- Repro vorher: `MISMATCH? True -> https://api.<DOMAIN> != https://api.<DOMAIN>/`
 - Repro nachher: `MISMATCH? False`
 - `uv run ruff check .` → All checks passed
 - `uv run ruff format --check .` → 744 files already formatted
