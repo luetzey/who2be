@@ -1195,3 +1195,33 @@ def test_oauth_register_and_consent_errors_are_rfc6749(monkeypatch: pytest.Monke
             assert good_register.json()["client_id"].startswith("oac_")
     finally:
         cleanup_workspaces([owner_id])
+
+
+# ---------------------------------------------------------------------------
+# Issuer-Identifier (RFC 8414 §3.3): der Wert, den die PRM des MCP-Servers als
+# `authorization_servers` fuehrt, und der `issuer` hier sind derselbe String —
+# der Client vergleicht sie per String-Gleichheit. Beide Seiten ziehen ihn
+# deshalb aus `canonical_issuer`. DB-frei.
+# ---------------------------------------------------------------------------
+
+
+def test_issuer_is_canonical_regardless_of_env_spelling(monkeypatch: pytest.MonkeyPatch) -> None:
+    from who2be_api.routers import oauth as oauth_router
+
+    for configured in ("https://api.example.de", "https://api.example.de/"):
+        monkeypatch.setattr(
+            oauth_router,
+            "get_settings",
+            lambda url=configured: Settings(
+                jwt_secret=_TEST_SECRET,
+                mcp_resource_url=_RESOURCE,
+                oauth_consent_url="http://localhost:5173/oauth/consent",
+                oauth_issuer_url=url,
+            ),
+        )
+        meta = asyncio.run(oauth_router.authorization_server_metadata())
+        assert meta["issuer"] == "https://api.example.de", configured
+        # Die Endpunkt-URLs haengen am selben Praefix — kein Doppel-Slash.
+        assert meta["token_endpoint"] == "https://api.example.de/oauth/token"
+        assert meta["authorization_endpoint"] == "https://api.example.de/oauth/authorize"
+        assert meta["registration_endpoint"] == "https://api.example.de/oauth/register"

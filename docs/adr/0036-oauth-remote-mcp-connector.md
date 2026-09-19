@@ -327,3 +327,58 @@ Antwort, nicht wann oder womit sie ausgeloest wird.
 Verifizierung: `test_oauth_register_and_consent_errors_are_rfc6749` (beide
 Pfade, `error` + `error_description` + unveraenderter 400er-Status), dazu die
 angepasste Pruefung in `test_oauth_consent_agent_id_is_optional` (Fall 2).
+
+## Addendum 2026-09-19 — Der Issuer-Identifier ist ein String, kein URL-Objekt
+
+**Befund.** Der Connector-Login brach in jedem Produktiv-Deployment ab:
+
+```
+Authorization server metadata issuer mismatch:
+https://api.<DOMAIN> != https://api.<DOMAIN>/
+```
+
+Die PRM des MCP-Servers (RFC 9728, `authorization_servers`) und die
+AS-Metadaten der API (RFC 8414, `issuer`) nannten denselben Server in zwei
+Schreibweisen. Der Client liest den ersten Wert, holt damit das zweite
+Dokument und vergleicht dessen `issuer` per **String-Gleichheit** (RFC 8414
+§3.3) — zwei Schreibweisen sind damit zwei Issuer.
+
+**Ursache.** `ProtectedResourceMetadata.authorization_servers` des MCP-SDK ist
+`list[AnyHttpUrl]`, und Pydantic hängt einer URL **ohne Pfad** beim Validieren
+ein `/` an. Der Issuer verließ das Modell also anders, als er hineinging. Die
+API kürzte ihn gleichzeitig per `rstrip("/")`. Betroffen war jede Installation
+mit einer reinen Origin als Issuer — unabhängig davon, wie
+`OAUTH_ISSUER_URL` / `WHO2BE_OAUTH_ISSUER_URL` geschrieben war. Die
+Verifikations-Schritte in `docs/oauth-e2e-staging.md` beschrieben den
+korrekten Wert (`["https://api.<DOMAIN>"]`) bereits; nur hielt ihn niemand
+gegen die tatsächliche Antwort.
+
+**Warum es kein Test gefangen hat.** `test_auth.py` prüfte
+`provider.authorization_servers` — die **Eingabe**-Liste, nicht das
+ausgelieferte JSON. Die Verfälschung entsteht aber erst beim Serialisieren.
+Und `test_agent_path.py` verglich die agent-spezifische PRM mit der
+kanonischen: beide waren gleich falsch, der Vergleich also grün. Ein Test, der
+ein Dokument nur gegen sich selbst hält, prüft keinen Vertrag.
+
+**Entscheidung.** Die Kanonisierung liegt als `canonical_issuer()` in
+`who2be_models.oauth_issuer` und wird von beiden Seiten importiert — dasselbe
+Muster und derselbe Grund wie `who2be_models.agent_uuid`: eine Stringform, auf
+die sich API und MCP einigen müssen, weil ein Dritter sie gegeneinander hält.
+Die PRM rendert `who2be_mcp.prm`: das SDK-Modell bleibt die Quelle des Bodys
+(Felder, Defaults, künftige Ergänzungen), zurechtgerückt wird danach genau
+`authorization_servers`. Beide PRM-Wege — kanonisch (`Who2BeRemoteAuthProvider`)
+und agent-spezifisch (`build_agent_prm_route`) — gehen durch diesen einen
+Renderer.
+
+**Eingeordnet.** Die Trailing-Slash-Falle stand in „Negative / Tradeoffs" schon
+für `MCP_RESOURCE_URL`. Die Klasse war also bekannt, nur die Issuer-Achse
+übersehen — und dort fällt sie nicht als `invalid_target` auf, sondern lange
+vor dem ersten Request, beim Discovery.
+
+**Verifizierung:** `packages/models/tests/test_oauth_issuer.py`,
+`apps/mcp/tests/test_auth.py::test_prm_advertises_issuer_without_trailing_slash`
+(prüft das ausgelieferte JSON, nicht das Attribut),
+`…::test_prm_issuer_is_canonical_even_if_env_has_a_slash`,
+`apps/mcp/tests/test_agent_path.py::test_agent_prm_issuer_has_no_trailing_slash`,
+`apps/api/tests/test_oauth.py::test_issuer_is_canonical_regardless_of_env_spelling`
+(DB-frei).

@@ -24,15 +24,14 @@ from __future__ import annotations
 import re
 from functools import lru_cache
 
-from mcp.server.auth.handlers.metadata import ProtectedResourceMetadataHandler
 from mcp.server.auth.routes import build_resource_metadata_url, cors_middleware
-from mcp.shared.auth import ProtectedResourceMetadata
 from pydantic import AnyHttpUrl
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from who2be_mcp.prm import prm_response
 from who2be_models.agent_uuid import AGENT_UUID_PATTERN, is_canonical_agent_uuid
 
 #: Pfad-Segment vor der Agent-UUID — kurz gehalten, weil die Connector-URL
@@ -152,11 +151,13 @@ def build_agent_prm_route(
 ) -> Route:
     """Agent-spezifische PRM unter `/.well-known/oauth-protected-resource{http_path}/a/{id}`.
 
-    Body und CORS kommen aus dem MCP-SDK (`ProtectedResourceMetadata`,
-    `ProtectedResourceMetadataHandler`, `cors_middleware`) — identisch zur
-    kanonischen PRM, nur mit agent-spezifischer `resource`. Eine ungueltige
-    UUID im Pfad ergibt 404, damit hier keine beliebige Fremdeingabe in eine
-    advertisierte Resource-URL wandert.
+    Body und CORS kommen aus demselben Renderer wie die kanonische PRM
+    (`prm.prm_response`, der seinerseits auf dem SDK-Modell sitzt) — identisch
+    bis auf die agent-spezifische `resource`. Dass beide Wege denselben
+    Renderer benutzen, ist der Punkt: der Issuer-Identifier muss in BEIDEN
+    Dokumenten derselbe String sein. Eine ungueltige UUID im Pfad ergibt 404,
+    damit hier keine beliebige Fremdeingabe in eine advertisierte Resource-URL
+    wandert.
     """
     path = (
         f"/.well-known/oauth-protected-resource{http_path.rstrip('/')}/{AGENT_SEGMENT}/{{agent_id}}"
@@ -166,12 +167,11 @@ def build_agent_prm_route(
         agent_id = str(request.path_params.get("agent_id", ""))
         if not is_agent_id(agent_id):
             return JSONResponse({"error": "not_found"}, status_code=404)
-        metadata = ProtectedResourceMetadata(
-            resource=AnyHttpUrl(agent_resource_url(mcp_public_url, http_path, agent_id)),
+        return prm_response(
+            resource=agent_resource_url(mcp_public_url, http_path, agent_id),
             authorization_servers=authorization_servers,
             scopes_supported=scopes_supported,
         )
-        return await ProtectedResourceMetadataHandler(metadata).handle(request)
 
     return Route(
         path,

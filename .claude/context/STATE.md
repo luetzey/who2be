@@ -1,6 +1,6 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-19 (45. Lauf — MinIO durch SeaweedFS ersetzt, nachdem der Hersteller die Community Edition eingestellt hat; parallel der OAuth-Connector-Fix in #523)_
+_Stand: 2026-09-19 (45. Lauf — MinIO durch SeaweedFS ersetzt, nachdem der Hersteller die Community Edition eingestellt hat; im selben Lauf der OAuth-Connector-Fix, #523)_
 
 ## Eine Abhaengigkeit kann verschwinden, ohne dass jemand etwas falsch gemacht hat (2026-09-19, 45. Lauf, #525/#532)
 
@@ -48,6 +48,42 @@ existierte — der Agent hat die Vorbedingung geprueft, statt ins Leere zu
 laufen. (2) Die Blob-Backup-Kommandos im RUNBOOK liefen ueber `mc` aus
 dem alten Container; der Ersatz steht, ist aber ungetestet und im RUNBOOK
 als offen markiert.
+
+## Ein Test, der ein Dokument gegen sich selbst haelt, prueft keinen Vertrag (2026-09-19, 44. Lauf, OAuth-Connector)
+
+Der Remote-MCP-Connector liess sich **in keinem Produktiv-Deployment**
+verbinden. Der Client brach ab mit `Authorization server metadata issuer
+mismatch: https://api.<DOMAIN> != https://api.<DOMAIN>/` — ein Trailing Slash.
+
+**Nicht die ENV war schuld.** `WHO2BE_OAUTH_ISSUER_URL` steht in beiden
+Deploy-Stacks korrekt slash-frei. Den Slash haengte Pydantic an:
+`ProtectedResourceMetadata.authorization_servers` des MCP-SDK ist
+`list[AnyHttpUrl]`, und `AnyHttpUrl` ergaenzt einer URL **ohne Pfad** beim
+Validieren ein `/`. Die API kuerzte den Issuer gleichzeitig per `rstrip("/")`.
+Zwei Dokumente, zwei Schreibweisen, ein String-Vergleich (RFC 8414 §3.3) —
+fail-closed, und zwar vor dem ersten Request, beim Discovery.
+
+**Warum es kein Test gefangen hat — der eigentliche Befund.** Es gab Tests fuer
+beide PRM-Wege. `test_auth.py` prueft `provider.authorization_servers`, also
+die **Eingabe**; die Verfaelschung entsteht erst beim Serialisieren.
+`test_agent_path.py` verglich die agent-spezifische PRM mit der kanonischen —
+beide waren gleich falsch, der Vergleich also gruen. Ein Dokument gegen sich
+selbst zu halten belegt Konsistenz, nicht Korrektheit. Der Vertrag lag
+zwischen zwei Systemen, geprueft wurde innerhalb eines.
+
+**Die Doku hatte recht, niemand hielt sie dagegen.** `docs/oauth-e2e-staging.md`
+nennt als erwartete Antwort seit jeher `["https://api.<DOMAIN>"]` — ohne Slash.
+Der Verifikationsschritt existierte, nur verglich ihn niemand mit dem, was der
+Server wirklich schickt.
+
+**Fix:** `canonical_issuer()` in `who2be_models.oauth_issuer`, importiert von
+beiden Seiten (DECISIONS 2026-09-19); die PRM rendert `who2be_mcp.prm`, wo das
+SDK-Modell die Quelle des Bodys bleibt und danach genau ein Feld
+zurechtgerueckt wird. Beide PRM-Wege gehen durch diesen einen Renderer.
+Fuenf Regressionstests, davon zwei auf dem **ausgelieferten JSON**.
+Details: ADR-0036 Addendum 2026-09-19,
+`.claude/plan/2026-09-19-0653_oauth-issuer-trailing-slash.md`.
+
 
 ## Ein Paket nicht zu liefern kann die richtige Lieferung sein (2026-09-10, 43. Lauf, #513/#499)
 
