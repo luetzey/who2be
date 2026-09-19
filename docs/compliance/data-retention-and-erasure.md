@@ -130,7 +130,7 @@ Abschnitt „WorkArea-/KB-Retention"), zusaetzlich zu den Loeschpfaden aus §1.
 | `wa_artifact` (doc-Blockliste, Metadaten) | Postgres | CASCADE ueber `work_area` | `cleanup_expired_artifacts` (s. u.) |
 | `wa_chunk` (Such-Passagen) | Postgres | CASCADE ueber `wa_artifact` | mit dem Artifact |
 | `wa_blob` (Katalog: sha256/Groesse/Media-Type/Storage-Key) | Postgres | **kein** FK auf `workspace` → bleibt stehen, faellt ueber `cleanup_orphan_blobs` | `cleanup_orphan_blobs` (>24 h, unreferenziert) |
-| Blob-**Objekte** (Binaerinhalte) | MinIO/S3 (`blobs/{workspace_id}/{sha256}`) | nicht vom DB-CASCADE erfasst → `cleanup_orphan_blobs` | s. „Blob-Sweep" |
+| Blob-**Objekte** (Binaerinhalte) | SeaweedFS/S3, selbst gehostet (`blobs/{workspace_id}/{sha256}`) | nicht vom DB-CASCADE erfasst → `cleanup_orphan_blobs` | s. „Blob-Sweep" |
 | `wa_table` / `wa_category_rule` / `wa_source_convention` (Katalog) | Postgres | CASCADE ueber `work_area` | — |
 | Tabellen-**Zeilen** | SQLite-Datei je Area (`WHO2BE_TABLESTORE_DIR/{workspace_id}/{area_id}.sqlite`) | nicht vom DB-CASCADE erfasst → `cleanup_deleted_area_stores` bzw. Betreiber-Schritt | s. „SQLite-Dateien" |
 | `kb_node` / `kb_edge` / `kb_edge_evidence` / `kb_node_source_area` / `kb_conflict` | Postgres | `kb_node_source_area` CASCADE ueber `work_area`; die KB-Kerntabellen tragen **keinen** FK auf `workspace` und sind beim Workspace-Purge explizit zu loeschen | — |
@@ -234,7 +234,7 @@ Retention (z. B. 7–30 Tage) + Rotationsverfahren>`.
 | OAuth-Authorization-Codes (`oauth_authorization_code`, 0049) | 60 s TTL, single-use | laufender Cleanup (`cleanup_expired_oauth`: abgelaufen ODER konsumiert) + Loeschung der User-Zeilen beim Account-Purge |
 | OAuth-Refresh-Tokens (`oauth_refresh_token`, 0049) | 30 Tage TTL, rotierend | laufender Cleanup (`cleanup_expired_oauth`: abgelaufen) + CASCADE-Loeschung beim Account-Purge (`api_token`) |
 | WorkArea-Artifacts + Chunks (`wa_artifact`/`wa_chunk`) | Area-Frist `retention_days`; **Default `NULL` = unbegrenzt** (auch privat) | `cleanup_expired_artifacts` (Loeschung, keine Anonymisierung) |
-| Blob-Katalog + Objekte (`wa_blob`, MinIO/S3) | bis unreferenziert + 24 h | `cleanup_orphan_blobs` (Zeile → Objekt; Objekt-Sweep nur mit Storage-Zeitstempel) |
+| Blob-Katalog + Objekte (`wa_blob`, SeaweedFS/S3) | bis unreferenziert + 24 h | `cleanup_orphan_blobs` (Zeile → Objekt; Objekt-Sweep nur mit Storage-Zeitstempel) |
 | Tabellen-Zeilen (SQLite je Area) | bis Area geloescht | `cleanup_deleted_area_stores`; nach Workspace-Hard-Purge **manueller** Betreiber-Schritt |
 | Knowledge Base (`kb_node`/`kb_edge`/…) | bis Loeschung des Workspace | Loeschung (kein `workspace`-FK → explizit) |
 | `agent_access_log` | Eintrag dauerhaft (Compliance-Nachweis) | beim Purge **geloescht** (expliziter DELETE vor der Org-CASCADE) |

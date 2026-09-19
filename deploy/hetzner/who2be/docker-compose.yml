@@ -44,9 +44,10 @@ services:
       # app-net unverschluesselt (SECURE=false) — der Verkehr verlaesst das
       # interne Netz nicht. Ohne diese Werte liefern NUR Ingest und
       # Blob-Reads 503 `blobstore_unconfigured`; alles andere laeuft.
-      WHO2BE_BLOBSTORE_ENDPOINT: minio:9000
-      WHO2BE_BLOBSTORE_ACCESS_KEY: ${MINIO_ROOT_USER:-who2be}
-      WHO2BE_BLOBSTORE_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      # SeaweedFS statt MinIO (#525/#529, WP2) — S3-Port ist 8333 (MinIO: 9000).
+      WHO2BE_BLOBSTORE_ENDPOINT: seaweedfs:8333
+      WHO2BE_BLOBSTORE_ACCESS_KEY: ${SEAWEEDFS_S3_ACCESS_KEY:-who2be}
+      WHO2BE_BLOBSTORE_SECRET_KEY: ${SEAWEEDFS_S3_SECRET_KEY}
       WHO2BE_BLOBSTORE_BUCKET: ${WHO2BE_BLOBSTORE_BUCKET:-who2be-blobs}
       WHO2BE_BLOBSTORE_SECURE: "false"
       # Tabellen-Store (ADR-0049): eine SQLite-Datei je WorkArea. MUSS auf ein
@@ -66,7 +67,7 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-      minio-bootstrap:
+      blobstore-bootstrap:
         condition: service_completed_successfully
     networks: [supabase-net, app-net]
     restart: unless-stopped
@@ -80,37 +81,83 @@ services:
       start_period: 10s
 
   # Content-addressed Blob-Storage fuer den WorkArea-Ingest (ADR-0048).
+  # SeaweedFS (Apache-2.0) statt MinIO (#525/#529, WP1/WP2) — Begruendung siehe
+  # docker-compose.yml (Repo-Root) und den Umstiegsplan unter `.claude/plan/`.
   # Bewusst NUR im app-net und OHNE ports: — der Objekt-Store ist ein internes
-  # Backend; Caddy routet ihn nicht. Console-Zugriff per SSH-Tunnel (RUNBOOK).
-  minio:
-    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
-    command: server /data --console-address ":9001"
+  # Backend; Caddy routet ihn nicht. Master-UI (9333) bei Bedarf per
+  # SSH-Tunnel (RUNBOOK).
+  seaweedfs:
+    # Digest-gepinnt statt nur Tag — Objekt-Storage-Daten sollen nicht an einem
+    # impliziten Image-Sprung haengen (identisch zum lokalen Stack, WP1).
+    image: chrislusf/seaweedfs:4.22@sha256:84429e5f21fad82246f5cfae7b39e9a17da18afb62f2b79c25ccd364ab02793b
+    # Credential-Datei s3.json: SeaweedFS erlaubt OHNE `-s3.config` anonymen
+    # Zugriff auf alle S3-Operationen (Doku woertlich) — die Datei ist ein
+    # Sicherheits-Gate, keine Kuer. Der lokale Stack mountet dafuer eine
+    # statische scripts/seaweedfs-s3.json — das geht hier NICHT: Docker
+    # substituiert in gemounteten Dateien keine Variablen, also stuenden dort
+    # entweder Dev-Credentials (scripts/seaweedfs-s3.json) oder wir muessten
+    # ein zweites, git-fremdes Secret-Artefakt auf dem Host pflegen (eine
+    # JSON-Datei NEBEN der etablierten `deploy/hetzner/.env`, Mode 600, RUNBOOK
+    # §Secret-Rotation) — ein zusaetzlicher Rotationsweg fuer denselben Zweck.
+    # Stattdessen wird s3.json beim Container-Start AUS
+    # SEAWEEDFS_S3_ACCESS_KEY/_SECRET_KEY gerendert: dieselbe Compose-Datei-
+    # Interpolation (`${VAR}` aus `--env-file deploy/hetzner/.env`), die der
+    # bisherige Bootstrap-Service (`mc alias set ...`) hier bereits genutzt hat
+    # — kein neuer Mechanismus, nur ein Ziel mehr fuer dasselbe `.env`-Secret.
+    # `entrypoint`/`command` bewusst als YAML-Listen (statt eines
+    # String-Blocks): Compose reicht jedes Listenelement unveraendert als
+    # eigenes argv-Element durch, ohne es selbst nochmal shell-zu parsen — die
+    # JSON-Anfuehrungszeichen im `printf`-Format muessen dadurch nicht
+    # gegen eine aeussere Shell-Quotierung escaped werden. `set -eu` + `exec`
+    # am Ende: bricht bei Fehlern hart ab statt mit leerer/kaputter s3.json
+    # weiterzulaufen, und weed erbt PID 1 (sauberes Signal-Handling).
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        mkdir -p /etc/seaweedfs
+        printf '{"identities":[{"name":"who2be","credentials":[{"accessKey":"%s","secretKey":"%s"}],"actions":["Admin","Read","List","Tagging","Write"]}]}' "${SEAWEEDFS_S3_ACCESS_KEY:-who2be}" "${SEAWEEDFS_S3_SECRET_KEY}" > /etc/seaweedfs/s3.json
+        exec weed server -s3 -s3.config=/etc/seaweedfs/s3.json -dir=/data -ip.bind=0.0.0.0
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-who2be}
-      # KEIN Default — ein Objekt-Store mit Standard-Credentials auf einer
-      # Internet-Maschine ist eine offene Tuer. Fehlt die Variable, bricht der
-      # Compose-Up mit dieser Meldung ab (fail closed).
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD setzen (Objekt-Store-Passwort)}
+      # Guard fuer SEAWEEDFS_S3_SECRET_KEY (fail closed, s. `entrypoint` oben,
+      # wo der Wert tatsaechlich verwendet wird — dieser Eintrag existiert nur
+      # wegen des `:?`). KEIN Default: ein Objekt-Store mit vorhersagbaren
+      # Credentials auf einer oeffentlich erreichbaren Maschine ist eine offene
+      # Tuer. Fehlt die Variable, bricht der Compose-Up hier ab (fail closed) —
+      # analog zu MINIO_ROOT_PASSWORD vorher.
+      SEAWEEDFS_S3_SECRET_KEY: ${SEAWEEDFS_S3_SECRET_KEY:?SEAWEEDFS_S3_SECRET_KEY setzen (Objekt-Store-Secret-Key)}
     volumes:
-      - minio-data:/data
+      - seaweedfs-data:/data
     networks: [app-net]
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      # NICHT `8333/healthz` (seaweedfs#8243, s. lokaler Stack) — Master-Port
+      # hat den echten Status-Endpunkt.
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9333/cluster/status"]
       interval: 5s
       timeout: 5s
       retries: 20
 
-  # Einmal-Service: legt den Bucket an (idempotent bei jedem Deploy).
-  minio-bootstrap:
-    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
-    entrypoint: >
-      /bin/sh -c "
-      mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-who2be} ${MINIO_ROOT_PASSWORD} &&
-      mc mb --ignore-existing local/${WHO2BE_BLOBSTORE_BUCKET:-who2be-blobs} &&
-      echo 'Bucket bereit.'"
+  # Einmal-Service: legt den Bucket an (idempotent bei jedem Deploy). Faehrt
+  # das API-Image statt eines eigenen CLI-Images (das S3-SDK aus dem API-Code,
+  # Apache-2.0, ist dort ohnehin Kern-Dependency, ADR-0048) — identisches
+  # Muster zum lokalen Stack (WP1: `scripts/blobstore-bootstrap.py`).
+  blobstore-bootstrap:
+    image: ghcr.io/luetzey/who2be-api:${API_IMAGE_TAG:-latest}
+    build:
+      context: ../../..
+      dockerfile: apps/api/Dockerfile
+    entrypoint: ["python", "/scripts/blobstore-bootstrap.py"]
+    environment:
+      BLOBSTORE_ENDPOINT: seaweedfs:8333
+      BLOBSTORE_BUCKET: ${WHO2BE_BLOBSTORE_BUCKET:-who2be-blobs}
+      # Muessen zu den SEAWEEDFS_S3_*-Werten oben passen (dieselben Variablen).
+      BLOBSTORE_ACCESS_KEY: ${SEAWEEDFS_S3_ACCESS_KEY:-who2be}
+      BLOBSTORE_SECRET_KEY: ${SEAWEEDFS_S3_SECRET_KEY}
+    volumes:
+      - ../../../scripts/blobstore-bootstrap.py:/scripts/blobstore-bootstrap.py:ro
     depends_on:
-      minio:
+      seaweedfs:
         condition: service_healthy
     networks: [app-net]
     restart: "no"
@@ -276,5 +323,5 @@ volumes:
   # Objekt-Store (ADR-0048) und Tabellen-Store (ADR-0049) sind Nutzdaten wie
   # die DB — beide MUESSEN persistent sein, sonst verliert jeder Redeploy
   # Blobs bzw. Area-Tabellen. Backup-Pfade: RUNBOOK.
-  minio-data:
+  seaweedfs-data:
   tablestore-data:

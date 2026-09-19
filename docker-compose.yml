@@ -12,6 +12,19 @@
 # Vorgriff auf MS-2 C1-C6: self-hosted GoTrue ersetzt die Supabase-Cloud-
 # Abhaengigkeit fuer den lokalen Smoke. Kong/Studio/PostgREST bleiben fuer
 # MS-2 separat (siehe `## Offene Punkte` im Plan).
+
+# Ein Build, zwei Verwender: der API-Service und der One-Shot
+# `blobstore-bootstrap` fahren dasselbe Artefakt (letzterer nur wegen des
+# darin enthaltenen Apache-2.0-SDKs `minio`, das S3 spricht). Bewusst ein
+# Anchor statt zweier gleich aussehender `build:`-Bloecke — `target` ist
+# variabel, und zwei Kopien wuerden beim naechsten Target-Wechsel
+# auseinanderlaufen.
+x-api-build: &api-build
+  context: .
+  dockerfile: apps/api/Dockerfile
+  # On-Prem (Default, ohne Billing). Cloud-Dev: API_BUILD_TARGET=runtime-cloud.
+  target: ${API_BUILD_TARGET:-runtime}
+
 services:
   db:
     # pgvector-Variante statt `postgres:16` (ADR-0046): die semantische Suche
@@ -116,11 +129,7 @@ services:
       retries: 10
 
   api:
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
-      # On-Prem (Default, ohne Billing). Cloud-Dev: API_BUILD_TARGET=runtime-cloud.
-      target: ${API_BUILD_TARGET:-runtime}
+    build: *api-build
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/who2be
       JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-me-32chars-min}
@@ -150,7 +159,7 @@ services:
       # `docker compose up --wait` toleriert beendete One-Shots nur, wenn ein
       # Dienst per service_completed_successfully von ihnen abhaengt (sonst
       # Exit 1 trotz erfolgreichem Lauf) — gleiches Muster wie bei `migrate`.
-      minio-bootstrap:
+      blobstore-bootstrap:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/v1/health"]
@@ -254,54 +263,82 @@ services:
       retries: 10
 
   # Content-addressed Blob-Storage fuer den WorkArea-Ingest (ADR-0048).
-  # MinIO ist AGPL und laeuft — wie Postgres — NUR als Container; die App
-  # spricht S3 ueber das Apache-2.0-SDK `minio`. Keys: blobs/{workspace}/{sha256}.
+  # SeaweedFS (Apache-2.0) statt MinIO (#525): MinIOs Community-Edition ist
+  # eingestellt, das Image von Docker Hub verschwunden, und AGPL faellt unter
+  # die Deny-Liste aus ADR-0033. Der Anwendungscode bleibt unberuehrt — die App
+  # spricht S3 ueber das Apache-2.0-SDK `minio`, nicht MinIO-Protokoll, und der
+  # BlobStore-Port (ADR-0048) wurde genau fuer diesen Tausch eingefuehrt.
+  # Keys: blobs/{workspace}/{sha256}.
   # Ohne WHO2BE_BLOBSTORE_*-Env in der API bleibt der Dienst ungenutzt —
   # nur Ingest/Blob-Reads liefern dann 503, alles andere laeuft.
-  minio:
-    # Gepinnte Release statt `latest` — Objekt-Storage-Daten sollen nicht an
-    # einem impliziten Image-Sprung haengen (Stand 2026-08: aktuell-stabil).
-    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+  seaweedfs:
+    # Digest-gepinnt statt nur Tag — Objekt-Storage-Daten sollen nicht an einem
+    # impliziten Image-Sprung haengen.
+    image: chrislusf/seaweedfs:4.22@sha256:84429e5f21fad82246f5cfae7b39e9a17da18afb62f2b79c25ccd364ab02793b
+    # All-in-One (`server`) statt des Vier-Service-Stacks master/volume/filer/s3
+    # aus SeaweedFS' eigener Compose-Vorlage: fuer EINEN Bucket waeren vier
+    # Container ein schlechter Tausch gegen den einen MinIO-Container.
+    #
+    # `-s3.config` ist ein Sicherheits-Gate, keine Kuer. Doku woertlich: „By
+    # default, if no credentials are configured, SeaweedFS allows anonymous
+    # access to all S3 operations." Ohne die Datei staende der Store offen.
+    command: server -s3 -s3.config=/etc/seaweedfs/s3.json -dir=/data -ip.bind=0.0.0.0
     ports:
       # Nur Loopback binden (Security-Review 2026-08-13 L3): der Dev-Store
-      # laeuft mit Default-Credentials — er darf nie im LAN erreichbar sein.
-      # Prod setzt MINIO_ROOT_PASSWORD und exponiert nur ueber Caddy/Netz.
-      - "127.0.0.1:9000:9000"  # S3-API (WHO2BE_BLOBSTORE_ENDPOINT=localhost:9000)
-      - "127.0.0.1:9001:9001"  # Web-Console (Login: minioadmin/minioadmin)
+      # laeuft mit den Default-Credentials aus scripts/seaweedfs-s3.json — er
+      # darf nie im LAN erreichbar sein. Prod setzt eigene Keys (s3.json +
+      # SEAWEEDFS_S3_*) und exponiert nur ueber Caddy/internes Netz.
+      - "127.0.0.1:8333:8333"  # S3-API (WHO2BE_BLOBSTORE_ENDPOINT=localhost:8333)
+      - "127.0.0.1:9333:9333"  # Master-HTTP (Status-Seite + Healthcheck)
+      # Volume (8080) und Filer (8888) startet `server` mit, bleiben aber
+      # bewusst unveroeffentlicht — die App braucht nur S3.
     volumes:
-      - minio-data:/data
+      - seaweedfs-data:/data
+      # Statische Identitaet per Mount, Muster `set-app-role-password`
+      # (docker-compose.cloud.yml). Docker substituiert in gemounteten Dateien
+      # NICHTS: wer die Keys aendert, muss scripts/seaweedfs-s3.json UND
+      # SEAWEEDFS_S3_ACCESS_KEY/-SECRET_KEY aendern, sonst laeuft der Bootstrap
+      # in ein 403.
+      - ./scripts/seaweedfs-s3.json:/etc/seaweedfs/s3.json:ro
     healthcheck:
-      # `mc ready local` ist der von MinIO dokumentierte Compose-Check; das
-      # Server-Image bringt mc samt vorkonfiguriertem `local`-Alias mit.
-      test: ["CMD", "mc", "ready", "local"]
+      # NICHT `8333/healthz`: der S3-Handler liest den Pfad als Bucket-Namen
+      # und antwortet 404 (seaweedfs#8243) — der Stack bliebe ewig unhealthy.
+      # Der Master-Port hat einen echten Status-Endpunkt.
+      # `wget` statt `curl`: das Image ist alpine-basiert, busybox bringt wget
+      # immer mit, curl nicht zwingend. 127.0.0.1 statt `localhost` aus dem
+      # gleichen Grund wie beim auth-gateway oben (IPv6-::1 ohne Listener).
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9333/cluster/status"]
       interval: 5s
       timeout: 5s
       retries: 10
 
   # One-Shot (Muster `set-app-role-password`, docker-compose.cloud.yml): legt
   # den Bucket `who2be-blobs` idempotent an und terminiert. Die App erstellt
-  # Buckets bewusst nie selbst (ADR-0048).
-  minio-bootstrap:
-    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}" &&
-        mc mb --ignore-existing local/who2be-blobs
+  # Buckets bewusst nie selbst (ADR-0048) — diese Trennung bleibt, gewechselt
+  # hat nur der Server dahinter.
+  #
+  # Faehrt das API-Image statt eines eigenen CLI-Images: das Apache-2.0-SDK
+  # `minio` ist dort ohnehin Kern-Dependency (ADR-0048) und spricht S3, also
+  # braucht die Bucket-Anlage kein zweites Image in der Lieferkette.
+  blobstore-bootstrap:
+    build: *api-build
+    entrypoint: ["python", "/scripts/blobstore-bootstrap.py"]
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      BLOBSTORE_ENDPOINT: seaweedfs:8333
+      BLOBSTORE_BUCKET: who2be-blobs
+      # Muessen zu scripts/seaweedfs-s3.json passen (s. Mount-Kommentar oben).
+      BLOBSTORE_ACCESS_KEY: ${SEAWEEDFS_S3_ACCESS_KEY:-who2be-dev}
+      BLOBSTORE_SECRET_KEY: ${SEAWEEDFS_S3_SECRET_KEY:-who2be-dev-secret}
+    volumes:
+      # Skript per Mount statt im Image — Muster `set-app-role-password`.
+      - ./scripts/blobstore-bootstrap.py:/scripts/blobstore-bootstrap.py:ro
     depends_on:
-      minio:
+      seaweedfs:
         condition: service_healthy
     restart: "no"
 
 volumes:
   db-data:
-  minio-data:
+  seaweedfs-data:
   # SQLite-Dateien des Tabellen-Stores (ADR-0049), eine pro WorkArea.
   tablestore-data:

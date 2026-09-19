@@ -46,7 +46,7 @@ and serves them to agents at runtime through an **MCP server**.
 | Web UI | `apps/web/` | Vite + React 18 + TypeScript, Tailwind v4, shadcn |
 | Shared models | `packages/models/` | Pydantic |
 | Cloud billing (optional) | `packages/billing/` | Mollie; cloud build only |
-| Blob store | `apps/api/.../blobstore/` | MinIO / in-memory adapter, content-addressed (ADR-0048) |
+| Blob store | `apps/api/.../blobstore/` | SeaweedFS (S3-compatible, Apache-2.0) / in-memory adapter, content-addressed (ADR-0048) |
 | Table store | `apps/api/.../tablestore/` | SQLite per work area, read-only query engine (ADR-0049) |
 | Database | — | Supabase (Postgres), locally via Docker Compose |
 | Deployment | `deploy/hetzner/` | Docker Compose + Caddy (auto-HTTPS) |
