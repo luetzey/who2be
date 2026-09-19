@@ -119,6 +119,7 @@ from who2be_models.oauth import (
     OAuthError,
     OAuthTokenResponse,
 )
+from who2be_models.oauth_issuer import canonical_issuer
 from who2be_models.organization import OrganizationCreate, OrganizationRead
 from who2be_models.pagination import DEFAULT_LIMIT, MAX_LIMIT, decode_cursor, encode_cursor
 from who2be_models.persona import (
@@ -498,6 +499,7 @@ __all__ = [
     "WorkspaceRole",
     "WorkspaceUpdate",
     "__version__",
+    "canonical_issuer",
     "decode_cursor",
     "encode_cursor",
     "is_allowed_transition",

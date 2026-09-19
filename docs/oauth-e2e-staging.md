@@ -170,3 +170,17 @@ liefert beim nächsten Tool-Call 401, Claude meldet „nicht mehr autorisiert".
   On-Prem (Owner-DB) sollte das nicht treffen. `docker compose … logs api`.
 - **`mcp.<DOMAIN>` 502** → `--profile mcp-http` vergessen; der MCP-Container läuft
   dann nicht.
+- **Client bricht mit „issuer mismatch" ab** → die beiden Metadaten-Dokumente
+  müssen denselben Issuer-**String** tragen; der Client vergleicht sie zeichen-
+  genau (RFC 8414 §3.3). Gegenprobe:
+
+  ```bash
+  curl -fsS https://mcp.$D/.well-known/oauth-protected-resource/mcp \
+    | jq -r '.authorization_servers[0]'
+  curl -fsS https://api.$D/.well-known/oauth-authorization-server | jq -r .issuer
+  #   → beide Zeilen müssen identisch sein, insbesondere ohne Trailing Slash
+  ```
+
+  Weichen sie ab, läuft eine Version vor dem Fix für diesen Slash (beide Werte
+  kommen seither aus `who2be_models.canonical_issuer`) — `OAUTH_ISSUER_URL` /
+  `WHO2BE_OAUTH_ISSUER_URL` umzuschreiben hilft dagegen nicht.

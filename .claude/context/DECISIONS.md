@@ -1529,3 +1529,25 @@ der von React empfohlene Weg und haelt die Lint-Baseline bei 0 Errors.
 Mobile-Zustaende einfuehren werden. Ebenfalls festgelegt: die Mobile-Schwelle
 ist **`md`** (768px), passend zu `useIsMobile()` und Designsprache §4.4 — nicht
 `sm`, wie die AppShell-Sidebar es bis hierher hatte.
+
+## 2026-09-19 — Issuer-Identifier als geteilter Normalisierer, nicht als lokales `rstrip`
+
+**Entscheidung:** Die kanonische Form des OAuth-Issuers lebt als
+`canonical_issuer()` in `who2be_models.oauth_issuer` und wird von der API
+(AS-Metadaten, RFC 8414) **und** vom MCP-Server (PRM, RFC 9728) importiert.
+Ein lokales `rstrip("/")` je Seite ist nicht mehr zulaessig.
+
+**Warum:** Genau diese Doppelung hat den Remote-Connector unbenutzbar gemacht.
+Der Client vergleicht beide Werte per String-Gleichheit (RFC 8414 §3.3); zwei
+unabhaengige Normalisierungen stellen die Uebereinstimmung bestenfalls zufaellig
+her. Hier tat es die eine Seite (`rstrip`), die andere bekam von Pydantics
+`AnyHttpUrl` einen Trailing Slash angehaengt — Ergebnis: „issuer mismatch" in
+jedem Deployment mit einer reinen Origin als Issuer.
+
+**Reichweite:** gilt fuer jede Stringform, auf die sich API und MCP einigen
+muessen, weil ein Dritter sie gegeneinander haelt. Zweiter Fall dieser Art
+neben `who2be_models.agent_uuid` (Resource-Identitaet) — das Muster ist damit
+belegt, nicht geraten. Praktische Folge: Ein Wert, der durch ein
+Pydantic-URL-Feld laeuft, ist danach nicht mehr der konfigurierte String. Wo
+ein Vertrag auf Zeichengleichheit beruht, muss der Test das **ausgelieferte
+Dokument** pruefen, nicht das Attribut davor.

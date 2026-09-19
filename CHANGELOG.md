@@ -8,6 +8,20 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ## [Unreleased]
 
+### Fixed
+
+- Remote MCP connectors can log in again when the OAuth issuer is a bare
+  origin. The MCP server's protected-resource metadata (RFC 9728) advertised
+  `authorization_servers` with a trailing slash, while the API's authorization
+  server metadata (RFC 8414) reported `issuer` without one. Clients compare the
+  two by string equality (RFC 8414 §3.3), so the connection failed with
+  `Authorization server metadata issuer mismatch: https://api.example.de !=
+  https://api.example.de/`. The slash came from Pydantic's `AnyHttpUrl`, the
+  field type of the SDK metadata model, which appends one to any URL without a
+  path — so every deployment whose issuer is a bare origin was affected,
+  regardless of how the environment variable was spelled. Both documents now
+  take the identifier from a single shared `canonical_issuer()`.
+
 ### Security
 
 - A server `detail` whose `reason` has no locale key now reaches the UI

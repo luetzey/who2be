@@ -79,3 +79,47 @@ def test_verify_token_handles_unreachable_api(monkeypatch: pytest.MonkeyPatch) -
 def test_auth_provider_exposes_prm_and_authorization_server() -> None:
     provider = auth.build_auth_provider(_settings())
     assert provider.authorization_servers == ["http://api.test"]
+
+
+# ---------------------------------------------------------------------------
+# Issuer-Identifier (RFC 8414 §3.3 / RFC 9728 §2)
+#
+# Der Client liest `authorization_servers` aus der PRM, holt damit die
+# AS-Metadaten der API und vergleicht deren `issuer` per STRING-Gleichheit.
+# `provider.authorization_servers` oben prueft nur die Eingabe — entscheidend
+# ist, was ueber die Leitung geht: Pydantics `AnyHttpUrl` haengt einer Origin
+# ohne Pfad beim Validieren ein "/" an, und genau dieser Slash hat den
+# Connector-Login mit "issuer mismatch" abbrechen lassen.
+# ---------------------------------------------------------------------------
+
+
+def _prm_body(issuer: str) -> dict[str, Any]:
+    from starlette.applications import Starlette
+    from starlette.testclient import TestClient
+
+    settings = Settings(
+        api_base_url="https://api.example.de",
+        transport="http",
+        oauth_issuer_url=issuer,
+        mcp_public_url="https://mcp.example.de",
+        http_path="/mcp",
+    )
+    provider = auth.build_auth_provider(settings)
+    with TestClient(Starlette(routes=provider.get_routes(mcp_path="/mcp"))) as client:
+        response = client.get("/.well-known/oauth-protected-resource/mcp")
+    assert response.status_code == 200, response.text
+    return dict(response.json())
+
+
+def test_prm_advertises_issuer_without_trailing_slash() -> None:
+    body = _prm_body("https://api.example.de")
+    assert body["authorization_servers"] == ["https://api.example.de"]
+    assert body["resource"] == "https://mcp.example.de/mcp"
+    # Die uebrigen SDK-Felder bleiben unangetastet.
+    assert body["bearer_methods_supported"] == ["header"]
+
+
+def test_prm_issuer_is_canonical_even_if_env_has_a_slash() -> None:
+    # Ein Betreiber, der die ENV mit Slash setzt, darf den Connector nicht
+    # kippen — beide Schreibweisen ergeben denselben Identifier.
+    assert _prm_body("https://api.example.de/") == _prm_body("https://api.example.de")

@@ -35,6 +35,7 @@ from who2be_models import (
     OAuthConsentPreviewRequest,
     OAuthConsentResult,
     OAuthTokenResponse,
+    canonical_issuer,
 )
 
 router = APIRouter(prefix="/oauth", tags=["oauth"])
@@ -108,7 +109,12 @@ def _error_response(exc: OAuthError) -> JSONResponse:
 async def authorization_server_metadata() -> dict[str, object]:
     """RFC-8414-Metadaten — der LLM-Client entdeckt darueber alle Endpunkte."""
     settings = get_settings()
-    issuer = settings.oauth_issuer_url.rstrip("/")
+    # `canonical_issuer` statt eines lokalen `rstrip`: der MCP-Server fuehrt
+    # denselben String in seiner PRM (`authorization_servers`), und der Client
+    # haelt beide per String-Gleichheit gegeneinander (RFC 8414 §3.3). Eine
+    # gemeinsame Quelle erzwingt die Uebereinstimmung, zwei `rstrip` stellen
+    # sie nur zufaellig her.
+    issuer = canonical_issuer(settings.oauth_issuer_url)
     return {
         "issuer": issuer,
         "authorization_endpoint": f"{issuer}/oauth/authorize",
