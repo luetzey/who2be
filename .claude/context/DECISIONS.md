@@ -1644,3 +1644,65 @@ Userinfo faellt ausdruecklich **nicht** weg — sonst waere
 `https://evil@host/x` dasselbe wie `https://host/x` und die Host-Pruefung
 ausgehebelt; solche URLs kommen unveraendert zurueck und fallen im
 Vergleich durch (fail-closed).
+
+## 2026-09-19 — Ein uebersprungener Job faerbt den Lauf nicht rot
+
+**Entscheidung:** `deploy.yml` bekommt einen Gegen-Job
+`deploy-not-configured` (`if: vars.DEPLOY_HOST == ''`), der per
+`::warning` und Step-Summary sagt, dass NICHT deployed wurde. Er faellt
+bewusst nicht durch — auf einem Repo ohne Host ist "nicht deployen"
+richtig; falsch war nur, es stillschweigend zu tun.
+
+**Warum:** Der `deploy`-Job haengt an `if: vars.DEPLOY_HOST != ''`. Die
+Variable ist nicht gesetzt, der Job wurde also bei JEDEM Lauf
+uebersprungen — und GitHub faerbt einen Lauf wegen eines uebersprungenen
+Jobs nicht rot. Der Workflow hiess "Deploy", stand auf gruen, und auf die
+Box kam nie etwas. Ueber Monate.
+
+**Was es gekostet hat:** Ein gemergter, laut Actions-Seite "deployter"
+Issuer-Fix wirkte nicht. Die Suche lief daraufhin in den Anwendungscode
+(der korrekt war), dann in die Compose-Profile (dort lag tatsaechlich ein
+zweiter, echter Bug) — und erst danach in die Pipeline selbst. Ich habe
+`conclusion: success` auf RUN-Ebene gelesen; `skipped` stand auf
+JOB-Ebene. Zwei Klicks tiefer, drei Stunden frueher.
+
+**Regel daraus:** Ein gruenes Signal ist nur so viel wert wie die Frage,
+die es beantwortet. "Der Lauf ist gruen" heisst nicht "der Lauf hat etwas
+getan". Bei jedem Workflow, dessen Job sich konditional ueberspringen
+kann, gehoert der Skip-Fall ebenso sichtbar gemacht wie der Fehlerfall —
+sonst ist er ein Erfolg, der nichts bedeutet. Und beim Debuggen von "Fix
+wirkt nicht" wird die Job-Liste geoeffnet, nicht die Run-Zusammenfassung.
+
+**Nebenbefund:** STATE.md fuehrte den Zustand seit Wochen korrekt
+("ueberspringt sich still, solange sie fehlen"). Dokumentiert zu sein hat
+nicht gereicht — eine Notiz in einer Datei ersetzt kein Signal an der
+Stelle, an der man hinsieht.
+
+## 2026-09-19 — Ein Security-Gate muss sagen, ob es gepruefte oder gar nicht pruefen konnte
+
+**Entscheidung:** Der `npm audit`-Schritt unterscheidet echten Fund von
+Dienststoerung an der JSON-Form (`.metadata.vulnerabilities` vs. `.error`).
+Wiederholt wird NUR die Stoerung (3x, Backoff). Ein echter Fund faellt
+sofort durch. Bleibt der Dienst weg, bleibt der Lauf rot — mit einer
+Meldung, die sagt, dass es kein Fund war.
+
+**Warum:** `npm audit` liefert Exit 1 fuer beides. Am 2026-09-19 stand CI
+rot, weil npm den alten `security/audits/quick` abschaltete (400) und der
+neue `security/advisories/bulk` gleichzeitig in Wartung war (503). Beide
+Endpunkte tot, kein einziger Fund — und das Gate meldete dasselbe Rot wie
+bei einer kritischen Luecke.
+
+**Der Fehler, den ich dabei selbst gemacht habe:** Ich habe das zuerst
+"Flake" genannt, weil derselbe Job Minuten vorher gruen war, und einen
+Retry vorgeschlagen. Lokal reproduziert war es deterministisch — ein
+Retry auf den 400 haette nie geholfen. Erst der Test mit npm 11 zeigte
+den zweiten, entscheidenden Teil: der neue Endpunkt ist in Wartung. Zwei
+Messungen, zwei verschiedene Fehler, eine gemeinsame Ursache. "Vorher war
+es gruen" ist eine Beobachtung, keine Diagnose.
+
+**Regel daraus, Gegenstueck zum Deploy-Skip von heute:** Dort war ein
+gruenes Signal wertlos, weil nichts geschah. Hier war ein rotes Signal
+irrefuehrend, weil es zwei Dinge gleich faerbte. Beide Male galt: Ein
+Signal ist nur so viel wert wie die Frage, die es beantwortet. Wer ein
+Gate baut, muss "bestanden", "durchgefallen" und "konnte nicht pruefen"
+auseinanderhalten — und darf das dritte niemals ins erste kippen lassen.

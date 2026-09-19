@@ -75,11 +75,42 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
           build-args: ${{ matrix.build_args }}
 
+  # Der `deploy`-Job unten haengt an `vars.DEPLOY_HOST`. Fehlt die Variable,
+  # wird er uebersprungen — und ein uebersprungener Job macht den Run NICHT rot.
+  # Der Lauf hiess dann "Deploy" und war gruen, ohne dass je etwas auf der Box
+  # ankam. Das hat real Stunden gekostet: ein gemergter, "deployter" Fix wirkte
+  # nicht, und die Suche ging in den Anwendungscode statt in die Pipeline.
+  # Dieser Job macht den Zustand sichtbar, statt ihn zu verschweigen. Er soll
+  # NICHT fehlschlagen — auf einem Repo ohne Host ist "nicht deployen" korrekt;
+  # falsch war nur, es stillschweigend zu tun.
+  deploy-not-configured:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: vars.DEPLOY_HOST == ''
+    steps:
+      - name: Kein Deploy ausgefuehrt (DEPLOY_HOST fehlt)
+        run: |
+          echo "::warning title=KEIN DEPLOY::Images liegen auf GHCR, aber es \
+          wurde NICHT deployed: die Repo-Variable DEPLOY_HOST ist nicht gesetzt."
+          {
+            echo "## Kein Deploy ausgefuehrt"
+            echo
+            echo "Die Images zu \`${GITHUB_SHA}\` sind gebaut und liegen auf GHCR."
+            echo "Auf einen Host gebracht wurde **nichts** — \`vars.DEPLOY_HOST\`"
+            echo "ist leer, deshalb wurde der \`deploy\`-Job uebersprungen."
+            echo
+            echo "**Dieser gruene Lauf bedeutet nicht, dass die Aenderung live ist.**"
+            echo
+            echo "Damit automatisch deployed wird: Repo-Variablen \`DEPLOY_HOST\`"
+            echo "und \`DEPLOY_USER\` setzen, dazu das Secret \`DEPLOY_SSH_KEY\`."
+            echo "Bis dahin laeuft der Deploy von Hand — siehe RUNBOOK."
+          } >> "$GITHUB_STEP_SUMMARY"
+
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
-    # Ueberspringt sauber, solange der Operator den Host noch nicht
-    # konfiguriert hat (C1 nicht fertig). Build-and-Push laeuft trotzdem.
+    # Laeuft NUR mit konfiguriertem Host. Der Gegenpart `deploy-not-configured`
+    # oben meldet den anderen Fall sichtbar — nie wieder stumm.
     if: vars.DEPLOY_HOST != ''
     steps:
       - uses: webfactory/ssh-agent@e83874834305fe9a4a2997156cb26c5de65a8555 # v0.10.0

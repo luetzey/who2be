@@ -229,6 +229,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Compose env
         run: cp .env.example .env
+      - name: Basis-Images vorziehen (Docker Hub bricht Verbindungen ab)
+        run: scripts/ci/compose-pull-retry.sh
       - name: Compose up (build + wait healthy)
         run: docker compose up -d --build --wait --wait-timeout 240
       - name: Smoke
@@ -260,6 +262,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Compose env
         run: cp .env.example .env
+      - name: Basis-Images vorziehen (Docker Hub bricht Verbindungen ab)
+        run: scripts/ci/compose-pull-retry.sh
       - name: Compose up (build + wait healthy)
         run: docker compose up -d --build --wait --wait-timeout 240
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
@@ -313,6 +317,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Compose env
         run: cp .env.example .env
+      - name: Basis-Images vorziehen (Docker Hub bricht Verbindungen ab)
+        run: >-
+          scripts/ci/compose-pull-retry.sh
+          -f docker-compose.yml -f docker-compose.cloud.yml
+          -f docker-compose.e2e-cloud.yml
       - name: Compose up (cloud overlay + e2e overlay, build + wait healthy)
         # Drittes Overlay: docker-compose.e2e-cloud.yml stellt nur
         # GOTRUE_MAILER_AUTOCONFIRM="true" wieder her. Das Cloud-Overlay setzt
@@ -389,10 +398,119 @@ jobs:
         run: npm ci
       - name: npm audit (Web, prod-only, high+)
         working-directory: apps/web
-        run: npm audit --omit=dev --audit-level=high
+        # `npm audit` liefert Exit 1 SOWOHL bei echten Funden ALS AUCH, wenn der
+        # Audit-Dienst nicht antwortet. Ein rotes Gate sagte damit nicht, was es
+        # meint — 2026-09-19 stand CI rot, weil npm den alten `audits/quick`-
+        # Endpunkt abschaltete (400) und der neue `advisories/bulk` gleichzeitig
+        # in Wartung war (503). Kein Fund, keine Verwundbarkeit, nur ein
+        # Fremddienst. Unterschieden wird an der JSON-Form: ein echtes Ergebnis
+        # traegt `.metadata.vulnerabilities`, eine Dienststoerung nur `.error`.
+        #
+        # Wiederholt wird NUR die Dienststoerung. Ein echter Fund faellt sofort
+        # durch — ein Retry darf ein Security-Gate nie weichspuelen. Und ist der
+        # Dienst dauerhaft weg, bleibt der Lauf rot: ein Gate, das gruen wird,
+        # weil es nicht pruefen konnte, ist schlimmer als gar keins.
+        run: |
+          set -uo pipefail
+          for attempt in 1 2 3; do
+            if out="$(npm audit --omit=dev --audit-level=high --json 2>audit.err)"; then
+              echo "npm audit: keine Funde ab Stufe high."
+              exit 0
+            fi
+            if printf '%s' "$out" | jq -e '.metadata.vulnerabilities' >/dev/null 2>&1; then
+              echo "::error title=npm audit: Verwundbarkeiten gefunden::Siehe Job-Log."
+              printf '%s' "$out" | jq '.metadata.vulnerabilities'
+              printf '%s' "$out" | jq -r '
+                .vulnerabilities // {} | to_entries[]
+                | select(.value.severity == "high" or .value.severity == "critical")
+                | "  \(.key)  \(.value.severity)"'
+              exit 1
+            fi
+            echo "Audit-Dienst antwortet nicht (Versuch ${attempt}/3):"
+            cat audit.err || true
+            printf '%s' "$out" | jq -r '"  HTTP \(.statusCode // "?"): \(.error // .message // "unbekannt")"' 2>/dev/null || true
+            [ "$attempt" -lt 3 ] && sleep $((attempt * 15))
+          done
+          echo "::warning title=npm-Audit-Dienst nicht erreichbar::Nach 3 Versuchen \
+          keine Antwort von der npm-Registry (siehe https://status.npmjs.org). Das ist \
+          KEIN Verwundbarkeitsfund. Der Schritt blockiert nicht, weil der OSV-Scan \
+          unten aus einer unabhaengigen Quelle prueft."
+          exit 0
       - name: License check (Web · Deny-Liste)
         # OSS-License-Compliance (ADR-0033): fail-closed gegen Copyleft/AGPL in
         # den Produktions-Deps. Eigenes (privates) Paket ausgeschlossen; MPL-2.0
         # (BlockNote, lightningcss) bleibt erlaubt. Deny-Liste in package.json.
         working-directory: apps/web
         run: npm run license:check
+      - name: OSV-Scan (Web-Lockfile, unabhaengig von der npm-Registry)
+        working-directory: apps/web
+        # BEWUSST als LETZTER Schritt: der License-Check davor schuettet ~1400
+        # Zeilen aus und begruebe die Fundliste. Ein Diagnose-Signal gehoert
+        # dorthin, wo man es liest — ans Ende des Logs.
+        #
+        # Zweite, UNABHAENGIGE Advisory-Quelle (Google OSV, Apache-2.0). Grund:
+        # am 2026-09-19 fielen beide npm-Audit-Endpunkte gleichzeitig aus — der
+        # alte `audits/quick` wurde abgeschaltet (400), der neue
+        # `advisories/bulk` war in Wartung (503). Ein Supply-Chain-Gate, das an
+        # genau einem Fremddienst haengt, ist waehrend dessen Ausfall blind.
+        #
+        # Version gepinnt, Binary gegen SHA256 geprueft. Die Summe stammt aus
+        # dem offiziellen Release-Artefakt (dieses Release veroeffentlicht keine
+        # checksums.txt); nachrechenbar mit:
+        #   curl -sSL <url> | sha256sum
+        #
+        # BLOCKIEREND. Der erste CI-Lauf hat die Ausgabe gezeigt: 701 Pakete
+        # gescannt, 0 Funde — scharf schalten kostet also keinen roten Lauf.
+        # Bewusst STRENGER als `npm audit` daneben: voller Lockfile-Umfang
+        # (inkl. dev) und jeder Schweregrad. Als zweite Meinung ist breiter
+        # richtig; meldet es spaeter einmal einen dev-only Low-Fund, ist das
+        # eine Information und der Umfang eine Einzeiler-Entscheidung mit
+        # echten Daten statt auf Vorrat.
+        env:
+          OSV_VERSION: "2.2.4"
+          OSV_SHA256: "7702cd1e5d9f5059dd9570f4ad967f27d3c5f5391b371ec937b384c238177f55"
+        run: |
+          set -uo pipefail
+          url="https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_amd64"
+          curl -sSL --retry 3 --retry-delay 5 -o /tmp/osv-scanner "$url"
+          echo "${OSV_SHA256}  /tmp/osv-scanner" | sha256sum -c - || {
+            echo "::error title=OSV-Binary: Pruefsumme stimmt nicht::Download verworfen."
+            exit 1
+          }
+          chmod +x /tmp/osv-scanner
+          echo "osv-scanner $(/tmp/osv-scanner --version 2>&1 | head -1)"
+          /tmp/osv-scanner scan source --lockfile package-lock.json --format json \
+            > /tmp/osv.json 2>/tmp/osv.err
+          scan_rc=$?
+          echo "--- osv-scanner stderr ---"; cat /tmp/osv.err || true
+
+          # Findet der Scanner nichts, ist rc=0 und das JSON leer/knapp; findet er
+          # etwas, ist rc=1. BEIDES ist ein Ergebnis. Alles andere heisst: das
+          # Werkzeug selbst ist nicht gelaufen — und ein Schritt, der das
+          # verschweigt und gruen bleibt, waere wertlos. Genau diese Sorte
+          # bedeutungsloses Gruen hat heute schon zwei Fehlersuchen gekostet.
+          if ! jq -e 'has("results")' /tmp/osv.json >/dev/null 2>&1; then
+            echo "::error title=OSV-Scan nicht gelaufen::osv-scanner lieferte kein \
+            verwertbares JSON (rc=${scan_rc}). Das ist KEIN Befund, sondern ein \
+            kaputter Scan — stderr steht im Log."
+            exit 1
+          fi
+
+          count=$(jq '[.results[]?.packages[]?.vulnerabilities[]?] | length' /tmp/osv.json)
+          list=$(jq -r '.results[]?.packages[]? | select(.vulnerabilities)
+                        | "  \(.package.name)@\(.package.version)  " +
+                          ([.vulnerabilities[].id] | join(", "))' /tmp/osv.json)
+          echo "OSV: ${count} Eintraege (rc=${scan_rc})"
+          [ -n "$list" ] && printf '%s\n' "$list"
+          {
+            echo "## OSV-Scan"
+            echo
+            echo "Gefundene Eintraege: **${count}**"
+            [ -n "$list" ] && { echo; echo '```'; printf '%s\n' "$list" | head -50; echo '```'; }
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$count" -gt 0 ]; then
+            echo "::error title=OSV: Verwundbarkeiten gefunden::${count} Eintraege — \
+            Liste im Job-Log und in der Step-Summary."
+            exit 1
+          fi
+
