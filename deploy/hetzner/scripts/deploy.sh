@@ -55,6 +55,11 @@ if ! [[ "$SHA" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
     echo "FEHLER: SHA muss ein Commit-Hash sein (7-40 Hex), war: ${SHA}" >&2
     exit 2
 fi
+# Eigener Pfad, absolut und VOR jedem `cd` aufgeloest — das Re-exec unten
+# braucht ihn. `$0` taugt dafuer nicht: bei `./deploy.sh` ist er relativ zum
+# damaligen Arbeitsverzeichnis, und `exec` sucht einen Namen ohne Slash ausserdem
+# im PATH statt im aktuellen Verzeichnis.
+SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 PROJECT_DIR="${PROJECT_DIR:-/opt/who2be}"
 EDITION="${WHO2BE_EDITION:-onprem}"
 ENV_FILE="${PROJECT_DIR}/deploy/hetzner/.env"
@@ -67,6 +72,18 @@ cd "$PROJECT_DIR"
 echo "==> Checkout ${SHA} (edition=${EDITION})"
 git fetch --quiet origin main
 git checkout --quiet "$SHA"
+
+# Der Checkout hat gerade DIESES Skript ueberschrieben. Bash liest ein Skript
+# aber haeppchenweise weiter und haelt den alten Dateiinhalt offen (git ersetzt
+# die Datei, statt in sie hineinzuschreiben) — ohne das Folgende liefe der Rest
+# des Deploys also in der ALTEN Fassung. Das ist kein Schoenheitsfehler: genau
+# deshalb haette der erste Deploy nach dem mcp-http-Profil-Fix noch einmal
+# nichts getan, und der Fix waere exakt ein Mal unwirksam gewesen — wieder.
+# Darum einmalig neu starten, sobald der Zielstand auf der Platte liegt.
+if [ "${WHO2BE_DEPLOY_REEXEC:-}" != "1" ]; then
+    echo "==> Re-exec mit dem deploy.sh aus ${SHA}"
+    WHO2BE_DEPLOY_REEXEC=1 exec "$SCRIPT_PATH" "$@"
+fi
 
 echo "==> Update image tags in ${ENV_FILE}"
 for var in API_IMAGE_TAG WEB_IMAGE_TAG MCP_IMAGE_TAG; do
