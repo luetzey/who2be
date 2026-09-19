@@ -229,6 +229,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Compose env
         run: cp .env.example .env
+      - name: Basis-Images vorziehen (Docker Hub bricht Verbindungen ab)
+        run: scripts/ci/compose-pull-retry.sh
       - name: Compose up (build + wait healthy)
         run: docker compose up -d --build --wait --wait-timeout 240
       - name: Smoke
@@ -260,6 +262,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Compose env
         run: cp .env.example .env
+      - name: Basis-Images vorziehen (Docker Hub bricht Verbindungen ab)
+        run: scripts/ci/compose-pull-retry.sh
       - name: Compose up (build + wait healthy)
         run: docker compose up -d --build --wait --wait-timeout 240
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
@@ -313,6 +317,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Compose env
         run: cp .env.example .env
+      - name: Basis-Images vorziehen (Docker Hub bricht Verbindungen ab)
+        run: >-
+          scripts/ci/compose-pull-retry.sh
+          -f docker-compose.yml -f docker-compose.cloud.yml
+          -f docker-compose.e2e-cloud.yml
       - name: Compose up (cloud overlay + e2e overlay, build + wait healthy)
         # Drittes Overlay: docker-compose.e2e-cloud.yml stellt nur
         # GOTRUE_MAILER_AUTOCONFIRM="true" wieder her. Das Cloud-Overlay setzt
