@@ -86,3 +86,85 @@ Python-Dependencies. Das minio-**SDK** ist Apache-2.0 und damit zulässig.
   bewusst nicht Teil dieses ADR.
 - **Lifecycle-Policies/Tiering** im Store selbst — Retention läuft im MVP
   über `retention_days` + `who2be-purge`, nicht über MinIO-Lifecycle-Regeln.
+
+## Addendum 2026-09-19 — SeaweedFS statt MinIO (Community Edition eingestellt)
+
+MinIO hat seine Community Edition eingestellt. README wörtlich: „The MinIO
+community edition is now distributed as source code only. We will no longer
+provide pre-compiled binary releases for the community version." Zeitstrahl:
+letzter Community-Push 2025-09-07 (exakt unser bisheriger Image-Pin) ·
+source-only ab Okt 2025 (letztes Release `RELEASE.2025-10-15T17-29-55Z`) ·
+Repository **archiviert** Apr 2026 · Docker Hub entfernt den `minio`-Namespace
+~10.–13.09.2026 → CI repo-weit rot. Gegengeprüft an der Registry-API:
+`minio/minio` und `minio/mc` liefern beide `object not found`, Kontrolle
+`library/postgres` meldet `active`.
+
+Drei Gründe lösten den Wechsel gemeinsam aus:
+
+1. **Verfügbarkeit** — `compose-smoke`, `e2e`, `e2e-billing-cloud` sterben am
+   Image-Pull, vor jedem Testkörper; trifft jeden PR und `main`.
+2. **Sicherheit** — `RELEASE.2025-09-07` trägt **CVE-2025-62506** (CVSS 8.1,
+   Privilege Escalation via Session-Policy-Bypass), gefixt erst in
+   `RELEASE.2025-10-15`; MinIO patcht Container nicht mehr. Einzuordnen, nicht
+   zu dramatisieren: für unsere Nutzung ist die Lücke **nicht erreichbar** —
+   sie setzt ein bereits vorhandenes, eingeschränktes Service-Account- oder
+   STS-Credential voraus, und wir nutzen weder Service Accounts noch STS (im
+   Code geprüft), sondern ein einziges Root-Credential-Paar.
+3. **Lizenz** — MinIO ist AGPLv3. Dieser ADR zieht in Entscheidungspunkt 4 die
+   Randbedingung aus ADR-0033 heran, deren Deny-Liste „mit besonderem Fokus
+   auf die AGPL-Netzwerkfalle" gilt, weil Who2Be als Cloud-SaaS **und**
+   On-Prem verteilt wird.
+
+**Ersetzt durch SeaweedFS**, Apache-2.0 — an der LICENSE-Datei verifiziert:
+kein Copyleft, keine Netzwerk-Klausel. Dieselbe Lizenz, in die Who2Be selbst
+per `FSL-1.1-Apache-2.0` übergeht. Damit **entfällt die Begründungslast**, die
+Entscheidungspunkt 4 oben für AGPL trug („MinIO läuft ausschließlich als
+eigenständiger Dienst im Container — wie Postgres — und wird nicht gelinkt;
+lizenzrechtlich unkritisch"): es gibt schlicht kein Copyleft mehr, das
+eingeordnet werden müsste. Siehe auch das Addendum in ADR-0033.
+
+**Was gleich bleibt** (Muster-Entscheidung, s. Plan
+`.claude/plan/2026-09-19-0758_seaweedfs-statt-minio.md`):
+
+- **Port + Adapter aus Entscheidungspunkt 1 sind unverändert.** Die App
+  spricht S3 über das Apache-2.0-SDK `minio` (Python-Paket), nicht das
+  MinIO-Protokoll — `MinioBlobStore` funktioniert unverändert gegen
+  SeaweedFS, kein neuer Adapter, keine App-Code-Änderung.
+- **Die Bucket-Trennung aus Entscheidungspunkt 4 bleibt bestehen: den Bucket
+  legt weiterhin der Compose-One-Shot an, nie die App** — gewechselt hat nur
+  der Server dahinter (Dienst `seaweedfs` statt `minio`, One-Shot
+  `blobstore-bootstrap` statt `minio-bootstrap`).
+
+**Was sich ändert:**
+
+- **All-in-One statt Vier-Service-Stack.** SeaweedFS' eigene Compose-Vorlage
+  fährt `master`+`volume`+`filer`+`s3` als vier Container; für einen Bucket
+  wäre das ein schlechter Tausch gegen den einen bisherigen MinIO-Container.
+  Stattdessen ein Prozess: `server -s3 -s3.config=... -dir=/data`.
+- **Ports.** S3 auf **8333** (vorher MinIO: 9000), Master-HTTP auf **9333**.
+- **Healthcheck NICHT auf `8333/healthz`.** Bekannter Fallstrick
+  (seaweedfs#8243): der S3-Handler interpretiert `/healthz` als Bucket-Namen
+  und antwortet 404. Funktionierend ist der Master-Port:
+  `http://.../9333/cluster/status`.
+- **Credentials sind ein Sicherheits-Gate, keine Kür.** SeaweedFS-Doku
+  wörtlich: „By default, if no credentials are configured, SeaweedFS allows
+  anonymous access to all S3 operations." Ohne `-s3.config` stünde der Store
+  offen — es gibt kein einfaches `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD`-
+  Env-Paar wie bei MinIO mehr, nur noch eine `s3.json`
+  (`identities[].credentials[].accessKey/secretKey`, `actions: [...]`). Lokal
+  (WP1) ist das eine statische, eingecheckte
+  `scripts/seaweedfs-s3.json`, per Volume gemountet; Prod rendert dieselbe
+  Datei stattdessen bei jedem Container-Start aus den Env-Variablen (Docker
+  substituiert in gemounteten Dateien nichts). Beide Wege speisen sich aus
+  denselben zwei Variablen: `SEAWEEDFS_S3_ACCESS_KEY`/`SEAWEEDFS_S3_SECRET_KEY`
+  (Dev-Default `who2be-dev`/`who2be-dev-secret` — in Prod niemals diese
+  Defaults verwenden; Details siehe RUNBOOK).
+
+**Migration bestehender Daten ist bewusst NICHT Teil dieses Wechsels.**
+Vorhandene Blobs im `minio-data`-Volume eines laufenden Hetzner-Hosts wandern
+nicht automatisch in den neuen `seaweedfs`-Bucket — das ist ein eigener,
+manueller Schritt, siehe `deploy/hetzner/RUNBOOK.md`
+§„SeaweedFS-/BlobStore-Backup" und §„Betrieb der Compose-Dienste".
+
+Bezug: Issue #525 (Entscheidung), #528 (WP1 — Compose/Credentials/Bootstrap),
+#531 (diese Dokumentation).

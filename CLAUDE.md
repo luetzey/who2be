@@ -71,9 +71,10 @@ Owner-Entscheidungen, WP-14-Backlog).
   `wa_promote` (WorkArea → Resource, nie direkt `active`), `wa_chunks`
   (eigener Suchindex `wa_chunk` — `content_chunk` wird NICHT erweitert) und
   `access_log` (Auto-Protokoll `agent_access_log`, Modell-Snapshot)
-- `apps/api/src/who2be_api/blobstore/` — BlobStore-Port + Adapter (MinIO,
-  In-Memory) fuer die Binaer-Originale; Keys `blobs/{workspace_id}/{sha256}`,
-  content-addressed, Workspace-Praefix = Tenancy-Grenze (ADR-0048). Ohne
+- `apps/api/src/who2be_api/blobstore/` — BlobStore-Port + Adapter
+  (SeaweedFS/S3, In-Memory) fuer die Binaer-Originale; Keys
+  `blobs/{workspace_id}/{sha256}`, content-addressed, Workspace-Praefix =
+  Tenancy-Grenze (ADR-0048). Ohne
   `WHO2BE_BLOBSTORE_*` liefert nur Ingest/Blob-Read 503 — kein Fehlerzustand
 - `apps/api/src/who2be_api/tablestore/` — SQLite je WorkArea
   (`{WHO2BE_TABLESTORE_DIR}/{workspace_id}/{area_id}.sqlite`, ADR-0049); die

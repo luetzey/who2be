@@ -92,6 +92,30 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Changed
 
+- Replaced the object-store service `minio` with `seaweedfs` (Apache-2.0).
+  MinIO discontinued its community edition (binary releases stopped, the
+  `minio/minio` repository was archived, and Docker Hub drops the `minio`
+  namespace around 2026-09-10/13 — verified against the registry API, where
+  `minio/minio` and `minio/mc` both return "object not found"), which was
+  about to turn every PR and `main` red at the image-pull step
+  (`compose-smoke`, `e2e`, `e2e-billing-cloud`). The last community release
+  also carries CVE-2025-62506 (CVSS 8.1, privilege escalation via session
+  policy bypass), fixed only in a source-only release MinIO will not
+  back-port to a container image; our deployment uses a single root
+  credential pair, never service accounts or STS, so the gap itself was not
+  reachable, but staying on a frozen, unpatched image was not a good place to
+  be. MinIO is also AGPLv3, which ADR-0033's license gate treats as a
+  deny-listed risk for a project distributed both as SaaS and on-prem;
+  SeaweedFS is Apache-2.0 — the same license Who2Be itself converts to.
+  Application code is untouched: it talks plain S3 through the Apache-2.0
+  `minio` SDK, not the MinIO server protocol, so the swap is confined to the
+  compose layer (service `seaweedfs` + one-shot `blobstore-bootstrap`,
+  S3 on port 8333 instead of 9000, healthcheck on the master port's
+  `9333/cluster/status` instead of the S3 port, since the S3 handler there
+  reads `/healthz` as a bucket name and 404s). Existing blobs on a running
+  deployment do not migrate automatically — see the RUNBOOK's SeaweedFS
+  backup section (ADR-0048 addendum, Issue #525).
+
 - Dialogs, popovers and dropdown menus can no longer overflow a narrow
   viewport. The three primitives got the cap instead of their 20 call sites:
   `DialogContent` trades `w-full` for `w-[calc(100vw-2rem)]` — effectively

@@ -29,3 +29,13 @@ services:
   mcp:
     image: ghcr.io/luetzey/who2be-mcp:${WHO2BE_IMAGE_TAG:-latest}
     pull_policy: always
+
+  # Selbes Image wie `api`/`migrate` (docker-compose.yml: `build: *api-build`
+  # ohne eigenes `image:`) — ohne diesen Eintrag wuerde der Bootstrap-One-Shot
+  # trotz Overlay lokal gebaut statt gezogen (Nebenbefund WP2/#529: hatte vor
+  # dem SeaweedFS-Umstieg noch ein eigenes Drittanbieter-Image `minio/mc`,
+  # `blobstore-bootstrap` faehrt jetzt bewusst das API-Image, s. dortiger
+  # Kommentar in docker-compose.yml).
+  blobstore-bootstrap:
+    image: ghcr.io/luetzey/who2be-api:${WHO2BE_IMAGE_TAG:-latest}
+    pull_policy: always
