@@ -46,13 +46,38 @@ nicht der Diff.
   Blob wandert weiter die konfigurierte `MCP_RESOURCE_URL`, nie die
   Schreibweise des Clients.
 
-**Belege:** 1460 Tests gruen, `ruff`/`mypy` sauber. 18 Gegenproben zur
+**Belege:** 1478 Tests gruen, `ruff`/`mypy` sauber. 18 Gegenproben zur
 Normalisierung als Tests festgehalten — fremder Host, Userinfo
 (`https://evil@host/…`), anderes Schema, anderer Port, Pfad-Case, `//`,
 Punkt-Segmente fallen weiterhin mit `invalid_target` durch. Das Coverage-Gate
 (85%) laeuft lokal ins Leere (64%), weil ohne erreichbare DB 485
 Integrationstests zentral uebersprungen werden — das ist die bekannte
 Lokal-/CI-Differenz, nicht diese Aenderung; CI faehrt sie mit DB.
+
+**Security-Review (Pflicht laut CLAUDE.md) — kein hoher/kritischer Befund.**
+Die Audience-Bindung haelt, und es gibt keine Eingabe, die zwei tatsaechlich
+verschiedene, angreiferkontrollierte Resources gleichmacht. Vier Befunde
+nachgezogen, alle vorab selbst reproduziert. Zwei davon waren meine:
+
+- `ps --status running` uebersah `restarting`/`exited` — also genau den
+  Zustand, fuer den die Erkennung gebaut ist. Ein crash-loopendes `mcp-http`
+  waere unsichtbar geblieben und der Deploy still wieder wirkungslos: **das
+  #523-Muster eine Ebene tiefer**, von mir frisch eingebaut.
+- Die Mitglieder-Berechnung war bei leerem `BASE_SERVICES` **fail-open** (jeder
+  Service galt als Profil-Mitglied ⇒ jedes Profil aktiv ⇒ `up` startet
+  `backup` mit Volume-Zugriff), waehrend mein eigener Kopfkommentar fail-safe
+  behauptete. Eine Behauptung im Kommentar ersetzt keine Pruefung im Code.
+- `urlsplit` entfernt `\t`/`\r`/`\n` still aus der GANZEN URL (bpo-43882) —
+  `…/a/11111111<TAB>-2222-…` war ein gueltiger Agent-Hint, also eine zweite
+  Schreibweise derselben UUID, die der Resource-Server nie advertised.
+- IPv6-Literale verloren ihre Klammern (`https://::1/mcp`).
+
+Nebenbei: mein Docstring behauptete „genau drei" Aequivalenzen und stimmte
+nicht (Rand-Whitespace, `:0443`, leerer Port, leeres Fragment kamen dazu). Die
+Liste nennt jetzt vollstaendig, was gilt — **eine praezise Zusage im Docstring
+ist eine Zusage; wer sie nicht haelt, streicht entweder die Zusage oder macht
+sie wahr.** Hier: wahr gemacht, wo es sicherheitsrelevant war, ehrlich benannt,
+wo die Lockerung richtig ist.
 
 **Noch offen / nicht verifizierbar von hier:** Ob der Produktions-Container
 nach dem naechsten Deploy tatsaechlich auf dem neuen Image steht, ist erst auf
