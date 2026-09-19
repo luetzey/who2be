@@ -427,8 +427,18 @@ jobs:
           KEIN Verwundbarkeitsfund. Der Schritt blockiert nicht, weil der OSV-Scan \
           unten aus einer unabhaengigen Quelle prueft."
           exit 0
+      - name: License check (Web · Deny-Liste)
+        # OSS-License-Compliance (ADR-0033): fail-closed gegen Copyleft/AGPL in
+        # den Produktions-Deps. Eigenes (privates) Paket ausgeschlossen; MPL-2.0
+        # (BlockNote, lightningcss) bleibt erlaubt. Deny-Liste in package.json.
+        working-directory: apps/web
+        run: npm run license:check
       - name: OSV-Scan (Web-Lockfile, unabhaengig von der npm-Registry)
         working-directory: apps/web
+        # BEWUSST als LETZTER Schritt: der License-Check davor schuettet ~1400
+        # Zeilen aus und begruebe die Fundliste. Ein Diagnose-Signal gehoert
+        # dorthin, wo man es liest — ans Ende des Logs.
+        #
         # Zweite, UNABHAENGIGE Advisory-Quelle (Google OSV, Apache-2.0). Grund:
         # am 2026-09-19 fielen beide npm-Audit-Endpunkte gleichzeitig aus — der
         # alte `audits/quick` wurde abgeschaltet (400), der neue
@@ -492,9 +502,3 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: License check (Web · Deny-Liste)
-        # OSS-License-Compliance (ADR-0033): fail-closed gegen Copyleft/AGPL in
-        # den Produktions-Deps. Eigenes (privates) Paket ausgeschlossen; MPL-2.0
-        # (BlockNote, lightningcss) bleibt erlaubt. Deny-Liste in package.json.
-        working-directory: apps/web
-        run: npm run license:check
