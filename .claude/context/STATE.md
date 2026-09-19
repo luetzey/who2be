@@ -1,6 +1,53 @@
 # STATE — Wo stehen wir (Snapshot, pro Run überschrieben)
 
-_Stand: 2026-09-10 (43. Lauf — W2 von #431 gemergt; startbar ist nur noch #499, und das braucht einen Docker-Daemon)_
+_Stand: 2026-09-19 (45. Lauf — MinIO durch SeaweedFS ersetzt, nachdem der Hersteller die Community Edition eingestellt hat; parallel der OAuth-Connector-Fix in #523)_
+
+## Eine Abhaengigkeit kann verschwinden, ohne dass jemand etwas falsch gemacht hat (2026-09-19, 45. Lauf, #525/#532)
+
+Zwischen dem 10. und 13. September hat Docker Hub den `minio`-Namespace
+entfernt. Seither war die CI **repo-weit** rot: `compose-smoke`, `e2e` und
+`e2e-billing-cloud` starben am Image-Pull, nach vier Sekunden, vor jedem
+Testkoerper — auf jedem PR und auf `main`.
+
+**Die erste Diagnose war zu eng, und das war ein echter Fehler.** Im
+CI-Log stand nur `pull access denied for minio/mc`; die anderen Pulls
+brachen mit `Interrupted` ab, bevor sie ihren eigenen Fehler zeigen
+konnten. Daraus wurde „das mc-Image ist weg" — und darauf basierend eine
+Owner-Entscheidung („mc rauswerfen, SDK ist eh drin"). Die Nachmessung an
+der Registry-API zeigte dann: `minio/minio` und `minio/mc` liefern BEIDE
+`object not found`, Kontrolle `library/postgres` meldet `active`. Die
+ganze Organisation war weg, nicht ein Image. Die Lehre ist nicht „genauer
+lesen", sondern: **wenn mehrere Dinge gleichzeitig abbrechen, ist die
+erste sichtbare Fehlermeldung nur die schnellste — nicht die
+vollstaendige.**
+
+**Der Grund dahinter war keine Stoerung, sondern eine
+Herstellerentscheidung:** MinIO hat die Community Edition eingestellt
+(source-only seit Okt 2025, Repo archiviert Apr 2026). Das aendert die
+Frage von „wie kriegen wir das Image zurueck" zu „auf welchem Fundament
+stehen wir". Dazu kamen eine ungepatchte CVE (CVSS 8.1, fuer uns nicht
+erreichbar — kein Service-Account-/STS-Gebrauch) und die AGPL-Frage fuer
+eine Cloud-Distribution.
+
+**Ergebnis:** SeaweedFS (Apache-2.0), umgesetzt in vier datei-disjunkten
+Paketen (#528-#531) mit right-sized Agenten — das Fundament auf dem
+starken Modell, die drei Folgepakete parallel eine Stufe darunter.
+`compose-smoke` ist in der CI **gruen**, und damit ist bewiesen, was
+lokal nicht pruefbar war (kein Docker-Daemon): Digest, Healthcheck-Pfad,
+`-s3.config` und der Bootstrap mit Credentials.
+
+**Der eigentliche Gewinn steckt woanders:** Der Anwendungscode wurde
+nicht angefasst. `git diff origin/main -- blobstore/` ist leer. ADR-0048
+hat 2026-08 einen Port mit austauschbaren Adaptern eingezogen, und genau
+dieser Fall war der Grund. Eine Architekturentscheidung zahlt sich an dem
+Tag aus, an dem ein Hersteller aufhoert.
+
+**Zwei Befunde in eigener Sache:** (1) Der Branch fuer #532 ging von
+`main` aus, wo der Bootstrap aus dem ungemergten #527 gar nicht
+existierte — der Agent hat die Vorbedingung geprueft, statt ins Leere zu
+laufen. (2) Die Blob-Backup-Kommandos im RUNBOOK liefen ueber `mc` aus
+dem alten Container; der Ersatz steht, ist aber ungetestet und im RUNBOOK
+als offen markiert.
 
 ## Ein Paket nicht zu liefern kann die richtige Lieferung sein (2026-09-10, 43. Lauf, #513/#499)
 
