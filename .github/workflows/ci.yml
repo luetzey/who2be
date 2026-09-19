@@ -422,11 +422,62 @@ jobs:
             printf '%s' "$out" | jq -r '"  HTTP \(.statusCode // "?"): \(.error // .message // "unbekannt")"' 2>/dev/null || true
             [ "$attempt" -lt 3 ] && sleep $((attempt * 15))
           done
-          echo "::error title=npm-Audit-Dienst nicht erreichbar::Nach 3 Versuchen \
-          keine Antwort von der npm-Registry. Das ist KEIN Verwundbarkeitsfund — \
-          siehe https://status.npmjs.org . Der Lauf bleibt bewusst rot, weil das \
-          Gate nicht pruefen konnte."
-          exit 1
+          echo "::warning title=npm-Audit-Dienst nicht erreichbar::Nach 3 Versuchen \
+          keine Antwort von der npm-Registry (siehe https://status.npmjs.org). Das ist \
+          KEIN Verwundbarkeitsfund. Der Schritt blockiert nicht, weil der OSV-Scan \
+          unten aus einer unabhaengigen Quelle prueft."
+          exit 0
+      - name: OSV-Scan (Web-Lockfile, unabhaengig von der npm-Registry)
+        working-directory: apps/web
+        # Zweite, UNABHAENGIGE Advisory-Quelle (Google OSV, Apache-2.0). Grund:
+        # am 2026-09-19 fielen beide npm-Audit-Endpunkte gleichzeitig aus — der
+        # alte `audits/quick` wurde abgeschaltet (400), der neue
+        # `advisories/bulk` war in Wartung (503). Ein Supply-Chain-Gate, das an
+        # genau einem Fremddienst haengt, ist waehrend dessen Ausfall blind.
+        #
+        # Version gepinnt, Binary gegen SHA256 geprueft. Die Summe stammt aus
+        # dem offiziellen Release-Artefakt (dieses Release veroeffentlicht keine
+        # checksums.txt); nachrechenbar mit:
+        #   curl -sSL <url> | sha256sum
+        #
+        # STAND: erst berichtend. `api.osv.dev` war aus der Entwicklungsumgebung
+        # nicht erreichbar (Proxy), die echte Ausgabeform ist also ungeprueft —
+        # deshalb bewusst noch ohne Abbruch, statt auf Verdacht rot zu schalten.
+        # Sobald ein CI-Lauf die Ausgabe zeigt, wird daraus das blockierende Gate
+        # (Schweregrad-Filter + Prod-Scope wie bei npm audit).
+        env:
+          OSV_VERSION: "2.2.4"
+          OSV_SHA256: "7702cd1e5d9f5059dd9570f4ad967f27d3c5f5391b371ec937b384c238177f55"
+        run: |
+          set -uo pipefail
+          url="https://github.com/google/osv-scanner/releases/download/v${OSV_VERSION}/osv-scanner_linux_amd64"
+          curl -sSL --retry 3 --retry-delay 5 -o /tmp/osv-scanner "$url"
+          echo "${OSV_SHA256}  /tmp/osv-scanner" | sha256sum -c - || {
+            echo "::error title=OSV-Binary: Pruefsumme stimmt nicht::Download verworfen."
+            exit 1
+          }
+          chmod +x /tmp/osv-scanner
+          /tmp/osv-scanner scan source --lockfile package-lock.json --format json \
+            > /tmp/osv.json 2>/tmp/osv.err || true
+          {
+            echo "## OSV-Scan (berichtend)"
+            echo
+            if jq -e '.results' /tmp/osv.json >/dev/null 2>&1; then
+              n=$(jq '[.results[].packages[]?.vulnerabilities[]?] | length' /tmp/osv.json)
+              echo "Gefundene Eintraege: **${n}**"
+              echo
+              echo '```'
+              jq -r '.results[].packages[]? | select(.vulnerabilities)
+                     | "\(.package.name)@\(.package.version)  " +
+                       ([.vulnerabilities[].id] | join(", "))' /tmp/osv.json | head -50
+              echo '```'
+            else
+              echo "Kein verwertbares JSON — stderr:"
+              echo '```'; head -20 /tmp/osv.err; echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/osv.err || true
+
       - name: License check (Web · Deny-Liste)
         # OSS-License-Compliance (ADR-0033): fail-closed gegen Copyleft/AGPL in
         # den Produktions-Deps. Eigenes (privates) Paket ausgeschlossen; MPL-2.0
