@@ -457,26 +457,40 @@ jobs:
             exit 1
           }
           chmod +x /tmp/osv-scanner
+          echo "osv-scanner $(/tmp/osv-scanner --version 2>&1 | head -1)"
           /tmp/osv-scanner scan source --lockfile package-lock.json --format json \
-            > /tmp/osv.json 2>/tmp/osv.err || true
+            > /tmp/osv.json 2>/tmp/osv.err
+          scan_rc=$?
+          echo "--- osv-scanner stderr ---"; cat /tmp/osv.err || true
+
+          # Findet der Scanner nichts, ist rc=0 und das JSON leer/knapp; findet er
+          # etwas, ist rc=1. BEIDES ist ein Ergebnis. Alles andere heisst: das
+          # Werkzeug selbst ist nicht gelaufen — und ein Schritt, der das
+          # verschweigt und gruen bleibt, waere wertlos. Genau diese Sorte
+          # bedeutungsloses Gruen hat heute schon zwei Fehlersuchen gekostet.
+          if ! jq -e 'has("results")' /tmp/osv.json >/dev/null 2>&1; then
+            echo "::error title=OSV-Scan nicht gelaufen::osv-scanner lieferte kein \
+            verwertbares JSON (rc=${scan_rc}). Das ist KEIN Befund, sondern ein \
+            kaputter Scan — stderr steht im Log."
+            exit 1
+          fi
+
+          count=$(jq '[.results[]?.packages[]?.vulnerabilities[]?] | length' /tmp/osv.json)
+          echo "OSV: ${count} Eintraege (rc=${scan_rc})"
+          jq -r '.results[]?.packages[]? | select(.vulnerabilities)
+                 | "  \(.package.name)@\(.package.version)  " +
+                   ([.vulnerabilities[].id] | join(", "))' /tmp/osv.json || true
           {
-            echo "## OSV-Scan (berichtend)"
+            echo "## OSV-Scan (berichtend, blockiert noch nicht)"
             echo
-            if jq -e '.results' /tmp/osv.json >/dev/null 2>&1; then
-              n=$(jq '[.results[].packages[]?.vulnerabilities[]?] | length' /tmp/osv.json)
-              echo "Gefundene Eintraege: **${n}**"
-              echo
-              echo '```'
-              jq -r '.results[].packages[]? | select(.vulnerabilities)
-                     | "\(.package.name)@\(.package.version)  " +
-                       ([.vulnerabilities[].id] | join(", "))' /tmp/osv.json | head -50
-              echo '```'
-            else
-              echo "Kein verwertbares JSON — stderr:"
-              echo '```'; head -20 /tmp/osv.err; echo '```'
-            fi
+            echo "Gefundene Eintraege: **${count}**"
+            echo
+            echo '```'
+            jq -r '.results[]?.packages[]? | select(.vulnerabilities)
+                   | "\(.package.name)@\(.package.version)  " +
+                     ([.vulnerabilities[].id] | join(", "))' /tmp/osv.json | head -50
+            echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          cat /tmp/osv.err || true
 
       - name: License check (Web · Deny-Liste)
         # OSS-License-Compliance (ADR-0033): fail-closed gegen Copyleft/AGPL in
