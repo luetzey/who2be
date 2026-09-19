@@ -55,6 +55,10 @@ bzw. Dokumentations-Standards).
   [`oauth-e2e-staging.md`](oauth-e2e-staging.md),
   [`oauth-e2e-dokploy.md`](oauth-e2e-dokploy.md),
   [`frontend/smoke-checklist.md`](frontend/smoke-checklist.md)
+- [`cloud-hosting-owner-guide.md`](cloud-hosting-owner-guide.md) —
+  Owner-Leitfaden Cloud-Hosting bei Hetzner: Schritt-fuer-Schritt von der
+  leeren Box zum Launch, Tarif-/Limit-Diskussion, Missbrauchsschutz,
+  Datenhaltung, Backup-Strategie (Betreiber)
 - Deployment: [`../deploy/hetzner/README.md`](../deploy/hetzner/README.md)
   — Produktions-Deploy inkl. Runbook (Betreiber)
 
