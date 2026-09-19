@@ -99,3 +99,66 @@ def test_query_survives_untouched() -> None:
 def test_canonical_resource_is_idempotent() -> None:
     once = canonical_resource("HTTPS://MCP.EXAMPLE.DE:443/mcp/")
     assert canonical_resource(once) == once
+
+
+@pytest.mark.parametrize(
+    "hidden",
+    [
+        "https://mcp.example.de/m\tcp",  # urlsplit wuerde das TAB still entfernen
+        "ht\ttps://mcp.example.de/mcp",  # auch im Schema
+        "https://mcp.example.de/m\ncp",
+        "https://mcp.example.de/m\rcp",
+        "https://mcp.exa\tmple.de/mcp",  # und im Host
+        "https://mcp.example.de/m\xa0cp",  # NBSP im Inneren
+        "https://mcp.example.de/m\x00cp",  # NUL
+        "https://mcp.example.de/m\x7fcp",  # DEL
+    ],
+)
+def test_interior_control_characters_fail_closed(hidden: str) -> None:
+    """`urlsplit` entfernt `\\t`/`\\r`/`\\n` still aus der GANZEN URL (bpo-43882).
+
+    Ohne Riegel waere `…/a/1111\\t1111-…` ein gueltiger Agent-Hint — eine zweite
+    Schreibweise derselben UUID, die `who2be_models.agent_uuid` gerade
+    verhindern soll und die der Resource-Server nie advertised.
+    """
+    assert canonical_resource(hidden) != canonical_resource(_RESOURCE)
+    assert canonical_resource(hidden) == hidden.strip()
+
+
+def test_edge_whitespace_stays_tolerated() -> None:
+    # Gegenstueck: an den RAENDERN ist Whitespace ein Copy-Paste-Artefakt und
+    # wird bewusst geschluckt (Regel 1) — nur das Innere faellt fail-closed.
+    assert canonical_resource("\xa0 https://mcp.example.de/mcp \r\n") == _RESOURCE
+
+
+@pytest.mark.parametrize(
+    ("literal", "expected"),
+    [
+        ("https://[::1]/mcp", "https://[::1]/mcp"),
+        ("https://[::1]:443/mcp", "https://[::1]/mcp"),
+        ("https://[::1]:8443/mcp", "https://[::1]:8443/mcp"),
+        ("https://[2001:DB8::1]/mcp", "https://[2001:db8::1]/mcp"),
+    ],
+)
+def test_ipv6_literals_keep_their_brackets(literal: str, expected: str) -> None:
+    # `parsed.hostname` gibt IPv6 ohne Klammern zurueck — ohne Korrektur waere
+    # das Ergebnis `https://::1/mcp`, also keine round-trippbare URL mehr.
+    assert canonical_resource(literal) == expected
+
+
+@pytest.mark.parametrize(
+    "port_spelling",
+    [
+        "https://mcp.example.de:443/mcp",
+        "https://mcp.example.de:0443/mcp",
+        "https://mcp.example.de:/mcp",
+    ],
+)
+def test_default_port_spellings_collapse(port_spelling: str) -> None:
+    # Fuehrende Null und leerer Port sind dieselbe Angabe (Docstring-Regel 3).
+    assert canonical_resource(port_spelling) == _RESOURCE
+
+
+def test_empty_fragment_collapses_but_real_one_does_not() -> None:
+    assert canonical_resource(f"{_RESOURCE}#") == _RESOURCE
+    assert canonical_resource(f"{_RESOURCE}#frag") != _RESOURCE

@@ -369,6 +369,32 @@ def test_resource_agent_hint_still_rejects_foreign_targets() -> None:
         assert exc.value.error == "invalid_target"
 
 
+def test_resource_agent_hint_rejects_hidden_control_characters() -> None:
+    """Ein TAB in der Agent-UUID darf keinen gueltigen Hint ergeben.
+
+    `urlsplit` entfernt `\t`/`\r`/`\n` still aus der ganzen URL (bpo-43882).
+    Ohne den Riegel in `canonical_resource` waere `…/a/1111\t1111-…` eine ZWEITE
+    Schreibweise derselben Agent-UUID — genau die Zweit-Identitaet, die
+    `who2be_models.agent_uuid` verhindert und die der Resource-Server
+    (`agent_path.parse_agent_id`, Regex auf dem ROHEN Pfad) nie advertised.
+    AS und RS wuerden denselben String sonst unterschiedlich lesen (DB-frei).
+    """
+    base = "https://mcp.example.com/mcp"
+    aid = uuid4()
+    smuggled_tab = str(aid).replace("-", "\t-", 1)
+    smuggled_cr = str(aid).replace("-", "\r-", 1)
+
+    for hidden in (
+        f"{base}/a/{smuggled_tab}",
+        f"{base}/a/{smuggled_cr}",
+        f"{base}\t/a/{aid}",
+        "https://mcp.exam\tple.com/mcp",
+    ):
+        with pytest.raises(oauth_service.OAuthError) as exc:
+            oauth_service._resource_agent_hint(hidden, base)
+        assert exc.value.error == "invalid_target"
+
+
 @pytest.mark.integration
 def test_oauth_resource_agent_hint_hard_locks(monkeypatch: pytest.MonkeyPatch) -> None:
     """Traegt die Connector-URL `?agent=<uuid>`, bindet der SIGNIERTE Blob-Agent —

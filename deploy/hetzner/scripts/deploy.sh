@@ -46,6 +46,15 @@
 set -euo pipefail
 
 SHA="${1:?Usage: deploy.sh <commit-sha>}"
+# Der SHA wandert gleich in `git checkout` und in einen `sed`-Ersetzungsteil.
+# Ein `|` oder Newline braeche dort aus dem s-Ausdruck aus (sed `w` = beliebiger
+# Dateischreibzugriff als Deploy-User), ein fuehrendes `-` waere fuer
+# `git checkout` eine Option. Ueber CI kann das nicht passieren
+# (`${{ github.sha }}`), aber der Kopf hier bewirbt den manuellen Rollback-Aufruf.
+if ! [[ "$SHA" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
+    echo "FEHLER: SHA muss ein Commit-Hash sein (7-40 Hex), war: ${SHA}" >&2
+    exit 2
+fi
 PROJECT_DIR="${PROJECT_DIR:-/opt/who2be}"
 EDITION="${WHO2BE_EDITION:-onprem}"
 ENV_FILE="${PROJECT_DIR}/deploy/hetzner/.env"
@@ -76,7 +85,7 @@ fi
 BASE_COMPOSE_CMD=(docker compose "${COMPOSE_FILES[@]}" --env-file "$ENV_FILE")
 
 # Profile bestimmen. Gesetzte Variable gewinnt (auch leer = bewusst keine);
-# ungesetzt heisst AUTO: Profile, deren Container auf dem Host laufen.
+# ungesetzt heisst AUTO: Profile, zu denen es auf dem Host einen Container gibt.
 #
 # Bewusst OHNE `--profile '*'` (das kann erst Compose >= 2.21 und waere auf
 # einer aelteren Box ein stiller Rueckfall auf "kein Profil"): die Profile
@@ -85,55 +94,81 @@ BASE_COMPOSE_CMD=(docker compose "${COMPOSE_FILES[@]}" --env-file "$ENV_FILE")
 mapfile -t ALL_PROFILES < <("${BASE_COMPOSE_CMD[@]}" config --profiles 2>/dev/null || true)
 mapfile -t BASE_SERVICES < <("${BASE_COMPOSE_CMD[@]}" config --services 2>/dev/null || true)
 
+# Ohne Basis-Liste ist die Mengendifferenz unten sinnlos: JEDER Service — auch
+# `api`/`web`/`caddy` — gaelte als Profil-Mitglied, also waere JEDES Profil
+# aktiv. Ein `up` wuerde dann den `backup`-Service (Volume-Zugriff) und den
+# stdio-`mcp` mitstarten, und `--wait` haenge an One-Shot-Containern. Erkennung
+# ohne Grundlage heisst deshalb: gar keine Profile (= Verhalten vor dieser
+# Aenderung). Fail-safe, nicht fail-open.
+if [ "${#BASE_SERVICES[@]}" -eq 0 ]; then
+    echo "==> WARNUNG: 'config --services' lieferte nichts — Profil-Erkennung uebersprungen" >&2
+    ALL_PROFILES=()
+fi
+
 # Mitglieder eines Profils = seine Services minus die profillosen Basis-Services.
+# Ohne Pipe: `printf ... | grep -q` gaebe bei fruehem grep-Exit ein EPIPE, das
+# unter `set -o pipefail` als "kein Treffer" durchschlaege.
+is_base_service() {
+    local candidate="$1" svc
+    for svc in ${BASE_SERVICES[@]+"${BASE_SERVICES[@]}"}; do
+        [ "$svc" = "$candidate" ] && return 0
+    done
+    return 1
+}
+
 profile_members() {
     local profile="$1" svc
     while IFS= read -r svc; do
         [ -n "$svc" ] || continue
-        printf '%s\n' "${BASE_SERVICES[@]}" | grep -qxF "$svc" || printf '%s\n' "$svc"
+        is_base_service "$svc" || printf '%s\n' "$svc"
     done < <("${BASE_COMPOSE_CMD[@]}" --profile "$profile" config --services 2>/dev/null || true)
 }
 
 PROFILE_ARGS=()
+PROFILE_PULL=()
 SELECTED_PROFILES=""
 if [ "${WHO2BE_COMPOSE_PROFILES+set}" = "set" ]; then
     SELECTED_PROFILES="$WHO2BE_COMPOSE_PROFILES"
     echo "==> Profiles (explizit): ${SELECTED_PROFILES:-<keine>}"
 else
-    # Alle Profile aktivieren, nur um zu SEHEN was laeuft — `ps` startet nichts.
+    # Alle Profile aktivieren, nur um zu SEHEN was da ist — `ps` startet nichts.
+    # `-a`, nicht `--status running`: ein `mcp-http`, das wegen eines kaputten
+    # Images crash-loopt, steht auf `restarting`, ein nach Host-Reboot
+    # haengengebliebener auf `exited`. Genau die Faelle, in denen der naechste
+    # Deploy den Fix bringen SOLL — mit `--status running` waere er fuer sie
+    # unsichtbar geblieben und haette still wieder nichts getan.
     probe_args=()
-    for profile in "${ALL_PROFILES[@]}"; do
+    for profile in ${ALL_PROFILES[@]+"${ALL_PROFILES[@]}"}; do
         [ -n "$profile" ] && probe_args+=(--profile "$profile")
     done
-    running="$("${BASE_COMPOSE_CMD[@]}" "${probe_args[@]+"${probe_args[@]}"}" \
-        ps --services --status running 2>/dev/null || true)"
-    for profile in "${ALL_PROFILES[@]}"; do
+    known="$("${BASE_COMPOSE_CMD[@]}" ${probe_args[@]+"${probe_args[@]}"} \
+        ps -a --services 2>/dev/null || true)"
+    for profile in ${ALL_PROFILES[@]+"${ALL_PROFILES[@]}"}; do
         [ -n "$profile" ] || continue
         while IFS= read -r member; do
             [ -n "$member" ] || continue
-            if printf '%s\n' "$running" | grep -qxF "$member"; then
+            if printf '%s\n' "$known" | grep -qxF "$member"; then
                 SELECTED_PROFILES="${SELECTED_PROFILES:+${SELECTED_PROFILES},}${profile}"
                 break
             fi
         done < <(profile_members "$profile")
     done
-    # One-Shot-Services (`backup`, stdio-`mcp`: restart "no") laufen nie
-    # dauerhaft und koennen so nicht erkannt werden — das ist richtig so, sie
-    # brauchen auch kein `up`.
     echo "==> Profiles (erkannt): ${SELECTED_PROFILES:-<keine>}"
 fi
 
-# Profil-Services mit eigenem SHA-Image explizit mitziehen.
-PROFILE_PULL=()
+# Profil-Services mit eigenem SHA-Image vorab ziehen. Die Liste wird aus den
+# Profil-Mitgliedern ABGELEITET, nicht benannt: ein spaeter hinzugefuegtes
+# Profil-Image soll nicht stillschweigend ungezogen bleiben — das waere
+# dieselbe Klasse stiller Wirkungslosigkeit, nur eine Iteration spaeter.
 if [ -n "$SELECTED_PROFILES" ]; then
     IFS=',' read -r -a _profiles <<< "$SELECTED_PROFILES"
     for profile in "${_profiles[@]}"; do
         [ -n "$profile" ] || continue
         PROFILE_ARGS+=(--profile "$profile")
+        while IFS= read -r member; do
+            [ -n "$member" ] && PROFILE_PULL+=("$member")
+        done < <(profile_members "$profile")
     done
-    if [[ ",${SELECTED_PROFILES}," == *",mcp-http,"* ]]; then
-        PROFILE_PULL+=(mcp-http)
-    fi
 fi
 
 COMPOSE=("${BASE_COMPOSE_CMD[@]}" "${PROFILE_ARGS[@]+"${PROFILE_ARGS[@]}"}")
@@ -144,11 +179,21 @@ if [ "$EDITION" = "cloud" ]; then
     # `pull_policy: build` im Overlay — der Pull-Versuch dafuer wird von
     # Compose uebersprungen/faellt weich auf den lokalen Build zurueck, der
     # anschliessende `up` baut es wie gewohnt.
-    echo "==> Pulling api, migrate, web (cloud) ${PROFILE_PULL[*]:-}"
-    "${COMPOSE[@]}" pull api migrate web ${PROFILE_PULL[@]+"${PROFILE_PULL[@]}"}
+    echo "==> Pulling api, migrate, web (cloud)"
+    "${COMPOSE[@]}" pull api migrate web
 else
-    echo "==> Pulling images ${PROFILE_PULL[*]:-}"
-    "${COMPOSE[@]}" pull api web migrate ${PROFILE_PULL[@]+"${PROFILE_PULL[@]}"}
+    echo "==> Pulling images"
+    "${COMPOSE[@]}" pull api web migrate
+fi
+
+# Profil-Services getrennt und NICHT fatal: darunter koennen Services ohne
+# `image:` sein (`backup` wird gebaut, nicht gezogen). `up` holt fehlende
+# Images ohnehin selbst — der Vorab-Pull ist nur das frueher sichtbare
+# Scheitern, kein Muss.
+if [ "${#PROFILE_PULL[@]}" -gt 0 ]; then
+    echo "==> Pulling profile services: ${PROFILE_PULL[*]}"
+    "${COMPOSE[@]}" pull "${PROFILE_PULL[@]}" \
+        || echo "==> Vorab-Pull unvollstaendig — 'up' holt fehlende Images selbst"
 fi
 
 echo "==> Restart stack"

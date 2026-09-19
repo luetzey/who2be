@@ -51,35 +51,51 @@ def canonical_resource(url: str) -> str:
     mehreren Schreibweisen nennen. Diese Funktion bringt **beide Seiten** auf
     eine Form, bevor verglichen wird. Sie ist idempotent.
 
-    Eingeebnet werden genau drei Unterschiede:
+    Eingeebnet wird genau das Folgende — die Liste ist abschliessend, und die
+    Tests in `test_oauth_issuer.py` halten sie fest:
 
-    1. **Schema und Host in Kleinschreibung** — RFC 3986 §3.2.2: Host und Schema
+    1. **Whitespace an den Raendern** (`strip()`), inklusive Unicode-Whitespace:
+       reines Copy-Paste-Artefakt.
+    2. **Schema und Host in Kleinschreibung** — RFC 3986 §3.2.2: Host und Schema
        sind case-insensitiv. Der **Pfad bleibt** case-sensitiv.
-    2. **Expliziter Default-Port faellt weg** (`:443` bei https, `:80` bei http)
-       — RFC 3986 §6.2.3.
-    3. **Ein einzelner abschliessender Slash faellt weg.** Das ist bewusst
+    3. **Default-Port** (`:443` bei https, `:80` bei http) faellt weg, ebenso ein
+       leerer (`host:`) und ein fuehrend genullter (`:0443`) — RFC 3986 §6.2.3.
+    4. **Ein einzelner abschliessender Slash** faellt weg. Das ist bewusst
        *keine* RFC-Aequivalenz (`/mcp` und `/mcp/` sind verschiedene URIs),
        sondern eine begruendete Lockerung: MCP-Clients senden beide Formen fuer
        denselben Endpunkt, und ein `invalid_target` dafuer ist fuer den Nutzer
        nicht diagnostizierbar. Es faellt **genau einer** weg — `/mcp//` bleibt
        verschieden von `/mcp`.
+    5. **Ein leeres Fragment** (`…/mcp#`) faellt weg; ein nicht-leeres bleibt.
 
     Bewusst NICHT eingeebnet, weil es echte Unterschiede verwischen oder ein
     Umschreiben erfordern wuerde, das selbst zur Luecke wird: Prozent-Kodierung,
     Punkt-Segmente (`/..`), Query-Reihenfolge, Pfad-Gross-/Kleinschreibung,
     IDN/Punycode.
 
-    Fail-closed: Was nicht sicher zerlegbar ist — nicht parsebar, ohne Host,
-    oder mit Userinfo (`https://evil@host/…` wuerde sonst auf `https://host/…`
-    kollabieren und die Host-Pruefung aushebeln) — kommt nur getrimmt zurueck
-    und faellt damit im Vergleich durch.
+    Fail-closed: Was nicht sicher zerlegbar ist, kommt nur getrimmt zurueck und
+    faellt damit im Vergleich durch — nicht parsebar, fremdes Schema, ohne Host,
+    kaputter Port, **Userinfo** (`https://evil@host/…` wuerde sonst auf
+    `https://host/…` kollabieren und die Host-Pruefung aushebeln) und
+    **Steuerzeichen/Whitespace im Inneren**. Letzteres ist keine Theorie:
+    `urlsplit` entfernt `\t`, `\r` und `\n` still aus der GESAMTEN URL
+    (CPython bpo-43882). Ohne diesen Riegel waere `…/a/11111111\t-2222-…` ein
+    gueltiger Agent-Hint — also eine zweite Schreibweise derselben Agent-UUID,
+    genau die Sorte Zweit-Identitaet, die `who2be_models.agent_uuid` verhindern
+    soll und die der Resource-Server (`agent_path.parse_agent_id`, Regex auf dem
+    ROHEN Pfad) nie advertised. AS und RS wuerden denselben String
+    unterschiedlich lesen.
     """
     trimmed = url.strip()
+    # Steuerzeichen und inneres Whitespace vor `urlsplit` abfangen — danach sind
+    # sie unsichtbar weg (s. Docstring). Die Raender hat `strip()` schon geputzt.
+    if any(char.isspace() or ord(char) < 0x20 or ord(char) == 0x7F for char in trimmed):
+        return trimmed
     try:
         parsed = urlsplit(trimmed)
     except ValueError:
         return trimmed
-    if parsed.scheme not in ("http", "https") or parsed.username or parsed.password:
+    if parsed.scheme not in _DEFAULT_PORTS or parsed.username or parsed.password:
         return trimmed
     try:
         host = parsed.hostname
@@ -88,10 +104,11 @@ def canonical_resource(url: str) -> str:
         return trimmed
     if not host:
         return trimmed
+    # IPv6-Literale brauchen ihre Klammern zurueck — `parsed.hostname` gibt sie
+    # ohne aus, und `https://::1/mcp` waere keine round-trippbare URL mehr.
+    netloc = f"[{host}]" if ":" in host else host
     if port is not None and port != _DEFAULT_PORTS[parsed.scheme]:
-        netloc = f"{host}:{port}"
-    else:
-        netloc = host
+        netloc = f"{netloc}:{port}"
     path = parsed.path
     if path.endswith("/") and not path.endswith("//"):
         path = path[:-1]
