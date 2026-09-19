@@ -35,6 +35,11 @@ dev = [
     "httpx>=0.27",
     "mypy>=1.10",
     "ruff>=0.15.17",
+    # test_blobstore_bootstrap.py liest docker-compose.yml (Compose-Verdrahtung,
+    # #530). PyYAML lag bisher nur transitiv im Lock — hier explizit, statt
+    # still zu brechen, sobald sich das aendert.
+    "pyyaml>=6.0",
+    "types-PyYAML>=6.0",
 ]
 billing = [
     "who2be-billing",

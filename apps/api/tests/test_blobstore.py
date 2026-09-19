@@ -157,8 +157,8 @@ def test_build_without_config_returns_none() -> None:
 
 def test_build_with_partial_config_returns_none() -> None:
     settings = _settings(
-        blobstore_endpoint="localhost:9000",
-        blobstore_access_key="minioadmin",
+        blobstore_endpoint="localhost:8333",
+        blobstore_access_key="ak",
         # secret fehlt → Kern-Config unvollstaendig.
     )
     assert build_blob_store(settings) is None
@@ -166,21 +166,23 @@ def test_build_with_partial_config_returns_none() -> None:
 
 def test_build_with_config_returns_minio_adapter(monkeypatch: pytest.MonkeyPatch) -> None:
     # Ueber echte Env-Vars, damit auch das pydantic-Parsing (inkl. secure-Bool)
-    # mitgeprueft ist — nicht nur die Feld-Zuweisung.
-    monkeypatch.setenv("WHO2BE_BLOBSTORE_ENDPOINT", "minio.example:9000")
+    # mitgeprueft ist — nicht nur die Feld-Zuweisung. Endpoint/Port sind die
+    # SeaweedFS-Defaults (#525); der Adapter selbst heisst weiter `Minio*`, weil
+    # er ueber das S3-SDK `minio` spricht, nicht weil er MinIO voraussetzt.
+    monkeypatch.setenv("WHO2BE_BLOBSTORE_ENDPOINT", "seaweedfs.example:8333")
     monkeypatch.setenv("WHO2BE_BLOBSTORE_ACCESS_KEY", "ak")
     monkeypatch.setenv("WHO2BE_BLOBSTORE_SECRET_KEY", "sk")
     monkeypatch.setenv("WHO2BE_BLOBSTORE_SECURE", "true")
     store = build_blob_store(_settings())
     assert isinstance(store, MinioBlobStore)
-    assert store.endpoint == "minio.example:9000"
+    assert store.endpoint == "seaweedfs.example:8333"
     # Bucket-Default passt zum Compose-Bootstrap (`who2be-blobs`).
     assert store.bucket == "who2be-blobs"
     assert store.secure is True
 
 
 def test_build_secure_flag_parses_false(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("WHO2BE_BLOBSTORE_ENDPOINT", "localhost:9000")
+    monkeypatch.setenv("WHO2BE_BLOBSTORE_ENDPOINT", "localhost:8333")
     monkeypatch.setenv("WHO2BE_BLOBSTORE_ACCESS_KEY", "ak")
     monkeypatch.setenv("WHO2BE_BLOBSTORE_SECRET_KEY", "sk")
     monkeypatch.setenv("WHO2BE_BLOBSTORE_BUCKET", "eigener-bucket")
@@ -193,7 +195,7 @@ def test_build_secure_flag_parses_false(monkeypatch: pytest.MonkeyPatch) -> None
 
 def test_build_caches_store_per_process() -> None:
     settings = _settings(
-        blobstore_endpoint="localhost:9000",
+        blobstore_endpoint="localhost:8333",
         blobstore_access_key="ak",
         blobstore_secret_key="sk",
     )
