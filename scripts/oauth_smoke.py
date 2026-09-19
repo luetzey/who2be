@@ -256,6 +256,8 @@ def smoke_rs(access: str) -> None:
             assert "authorization_servers" in prm.json(), prm.text
             ok("MCP-PRM: authorization_servers vorhanden")
 
+            _check_issuer_matches(prm.json())
+
             init = {
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -282,6 +284,36 @@ def smoke_rs(access: str) -> None:
             ok(f"MCP mit Token → {with_tok.status_code} (Auth-Gate passiert)")
     except httpx.HTTPError as exc:
         print(f"  · MCP-RS nicht erreichbar ({type(exc).__name__}) — übersprungen.")
+
+
+def _check_issuer_matches(prm_body: dict[str, object]) -> None:
+    """Hält die beiden Metadaten-Dokumente so gegeneinander, wie der Client es tut.
+
+    Der entscheidende Schritt ist nicht der Vergleich, sondern was davor
+    passiert: der Client legt den PRM-Wert in `ProtectedResourceMetadata` ab
+    (Feldtyp `AnyHttpUrl`) und vergleicht die daraus serialisierte Form mit dem
+    ROHEN `issuer` aus dem JSON der API. Deshalb laufen hier die Modelle und
+    die Discovery-URL-Logik des echten MCP-Clients — ein Vergleich unserer
+    beiden Strings miteinander würde den Fehler aus #523 wieder übersehen.
+    """
+    from mcp.client.auth.utils import (
+        build_oauth_authorization_server_metadata_discovery_urls,
+    )
+    from mcp.shared.auth import ProtectedResourceMetadata
+
+    parsed = ProtectedResourceMetadata.model_validate(prm_body)
+    auth_server_url = str(parsed.authorization_servers[0])  # wie oauth2.py
+    discovery = build_oauth_authorization_server_metadata_discovery_urls(
+        auth_server_url, f"{MCP}/mcp"
+    )[0]
+    with httpx.Client(timeout=10.0) as c:
+        meta = c.get(discovery)
+    if meta.status_code != 200:
+        die(f"AS-Metadaten unter {discovery} → {meta.status_code}")
+    issuer = meta.json().get("issuer")
+    if issuer != auth_server_url:
+        die(f"Authorization server metadata issuer mismatch: {issuer} != {auth_server_url}")
+    ok(f"Issuer-Identifier stimmt überein ({issuer})")
 
 
 if __name__ == "__main__":

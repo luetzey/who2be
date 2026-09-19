@@ -119,7 +119,7 @@ from who2be_models.oauth import (
     OAuthError,
     OAuthTokenResponse,
 )
-from who2be_models.oauth_issuer import canonical_issuer, canonical_resource
+from who2be_models.oauth_issuer import canonical_resource, issuer_base, issuer_identifier
 from who2be_models.organization import OrganizationCreate, OrganizationRead
 from who2be_models.pagination import DEFAULT_LIMIT, MAX_LIMIT, decode_cursor, encode_cursor
 from who2be_models.persona import (
@@ -499,7 +499,6 @@ __all__ = [
     "WorkspaceRole",
     "WorkspaceUpdate",
     "__version__",
-    "canonical_issuer",
     "canonical_resource",
     "decode_cursor",
     "encode_cursor",
@@ -507,4 +506,6 @@ __all__ = [
     "is_canonical_agent_uuid",
     "is_tool_visible",
     "is_tool_visible_for",
+    "issuer_base",
+    "issuer_identifier",
 ]

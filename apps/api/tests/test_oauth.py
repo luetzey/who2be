@@ -1282,27 +1282,50 @@ def test_oauth_register_and_consent_errors_are_rfc6749(monkeypatch: pytest.Monke
 # Issuer-Identifier (RFC 8414 §3.3): der Wert, den die PRM des MCP-Servers als
 # `authorization_servers` fuehrt, und der `issuer` hier sind derselbe String —
 # der Client vergleicht sie per String-Gleichheit. Beide Seiten ziehen ihn
-# deshalb aus `canonical_issuer`. DB-frei.
+# deshalb aus `issuer_identifier`. DB-frei.
 # ---------------------------------------------------------------------------
 
 
-def test_issuer_is_canonical_regardless_of_env_spelling(monkeypatch: pytest.MonkeyPatch) -> None:
+def _metadata(monkeypatch: pytest.MonkeyPatch, configured: str) -> dict[str, object]:
     from who2be_api.routers import oauth as oauth_router
 
-    for configured in ("https://api.example.de", "https://api.example.de/"):
-        monkeypatch.setattr(
-            oauth_router,
-            "get_settings",
-            lambda url=configured: Settings(
-                jwt_secret=_TEST_SECRET,
-                mcp_resource_url=_RESOURCE,
-                oauth_consent_url="http://localhost:5173/oauth/consent",
-                oauth_issuer_url=url,
-            ),
-        )
-        meta = asyncio.run(oauth_router.authorization_server_metadata())
-        assert meta["issuer"] == "https://api.example.de", configured
-        # Die Endpunkt-URLs haengen am selben Praefix — kein Doppel-Slash.
-        assert meta["token_endpoint"] == "https://api.example.de/oauth/token"
-        assert meta["authorization_endpoint"] == "https://api.example.de/oauth/authorize"
-        assert meta["registration_endpoint"] == "https://api.example.de/oauth/register"
+    monkeypatch.setattr(
+        oauth_router,
+        "get_settings",
+        lambda: Settings(
+            jwt_secret=_TEST_SECRET,
+            mcp_resource_url=_RESOURCE,
+            oauth_consent_url="http://localhost:5173/oauth/consent",
+            oauth_issuer_url=configured,
+        ),
+    )
+    return asyncio.run(oauth_router.authorization_server_metadata())
+
+
+@pytest.mark.parametrize("configured", ["https://api.example.de", "https://api.example.de/"])
+def test_issuer_is_canonical_regardless_of_env_spelling(
+    monkeypatch: pytest.MonkeyPatch, configured: str
+) -> None:
+    meta = _metadata(monkeypatch, configured)
+    # MIT Trailing Slash: das ist die Form, die der Client beim Parsen der PRM
+    # erzeugt und gegen genau diesen String haelt (s. `who2be_models.oauth_issuer`).
+    assert meta["issuer"] == "https://api.example.de/", configured
+    # Die Endpunkt-URLs haengen an `issuer_base` — kein Doppel-Slash.
+    assert meta["token_endpoint"] == "https://api.example.de/oauth/token"
+    assert meta["authorization_endpoint"] == "https://api.example.de/oauth/authorize"
+    assert meta["registration_endpoint"] == "https://api.example.de/oauth/register"
+
+
+def test_issuer_survives_the_clients_url_parser(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Der advertisierte `issuer` ist ein Fixpunkt des Client-Parsers.
+
+    Der Client haelt seine geparste Form des PRM-Werts gegen diesen ROHEN
+    String. Wird er beim Parsen veraendert, koennen beide Dokumente denselben
+    Issuer nennen und der Login trotzdem mit "issuer mismatch" abbrechen —
+    genau das war #523.
+    """
+    from pydantic import AnyHttpUrl
+
+    issuer = _metadata(monkeypatch, "https://api.example.de")["issuer"]
+    assert isinstance(issuer, str)
+    assert str(AnyHttpUrl(issuer)) == issuer

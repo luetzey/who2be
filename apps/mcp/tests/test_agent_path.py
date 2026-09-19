@@ -283,12 +283,12 @@ def test_agent_path_reaches_mcp_endpoint_and_advertises_agent_prm() -> None:
     assert unknown.status_code == 404
 
 
-def test_agent_prm_issuer_has_no_trailing_slash() -> None:
+def test_agent_prm_carries_the_same_issuer_identifier() -> None:
     """Die agent-spezifische PRM traegt denselben Issuer-Identifier wie die
-    kanonische — slash-frei, sonst bricht der Connector-Login mit
+    kanonische — in der URL-Normalform, sonst bricht der Connector-Login mit
     "issuer mismatch" ab (RFC 8414 §3.3, String-Vergleich)."""
     client = _prm_client()
     canonical = json.loads(client.get("/.well-known/oauth-protected-resource/mcp").text)
     agent = json.loads(client.get(f"/.well-known/oauth-protected-resource/mcp/a/{AGENT_ID}").text)
-    assert canonical["authorization_servers"] == ["http://api.test"]
-    assert agent["authorization_servers"] == ["http://api.test"]
+    assert canonical["authorization_servers"] == ["http://api.test/"]
+    assert agent["authorization_servers"] == ["http://api.test/"]

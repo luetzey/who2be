@@ -78,7 +78,7 @@ def test_verify_token_handles_unreachable_api(monkeypatch: pytest.MonkeyPatch) -
 
 def test_auth_provider_exposes_prm_and_authorization_server() -> None:
     provider = auth.build_auth_provider(_settings())
-    assert provider.authorization_servers == ["http://api.test"]
+    assert provider.authorization_servers == ["http://api.test/"]
 
 
 # ---------------------------------------------------------------------------
@@ -87,9 +87,9 @@ def test_auth_provider_exposes_prm_and_authorization_server() -> None:
 # Der Client liest `authorization_servers` aus der PRM, holt damit die
 # AS-Metadaten der API und vergleicht deren `issuer` per STRING-Gleichheit.
 # `provider.authorization_servers` oben prueft nur die Eingabe — entscheidend
-# ist, was ueber die Leitung geht: Pydantics `AnyHttpUrl` haengt einer Origin
-# ohne Pfad beim Validieren ein "/" an, und genau dieser Slash hat den
-# Connector-Login mit "issuer mismatch" abbrechen lassen.
+# ist, was ueber die Leitung geht UND was der Client daraus macht: er legt den
+# Wert in einem URL-Typ ab, bevor er vergleicht. Advertisiert wird deshalb die
+# URL-Normalform (Begruendung in `who2be_models.oauth_issuer`).
 # ---------------------------------------------------------------------------
 
 
@@ -111,9 +111,9 @@ def _prm_body(issuer: str) -> dict[str, Any]:
     return dict(response.json())
 
 
-def test_prm_advertises_issuer_without_trailing_slash() -> None:
+def test_prm_advertises_the_url_normal_form_of_the_issuer() -> None:
     body = _prm_body("https://api.example.de")
-    assert body["authorization_servers"] == ["https://api.example.de"]
+    assert body["authorization_servers"] == ["https://api.example.de/"]
     assert body["resource"] == "https://mcp.example.de/mcp"
     # Die uebrigen SDK-Felder bleiben unangetastet.
     assert body["bearer_methods_supported"] == ["header"]
@@ -123,3 +123,19 @@ def test_prm_issuer_is_canonical_even_if_env_has_a_slash() -> None:
     # Ein Betreiber, der die ENV mit Slash setzt, darf den Connector nicht
     # kippen — beide Schreibweisen ergeben denselben Identifier.
     assert _prm_body("https://api.example.de/") == _prm_body("https://api.example.de")
+
+
+def test_client_reads_the_prm_back_as_the_advertised_string() -> None:
+    """Die PRM durch das Modell des ECHTEN Clients gedreht.
+
+    `mcp/client/auth/oauth2.py` macht aus der Antwort
+    `str(ProtectedResourceMetadata(...).authorization_servers[0])` und haelt
+    das Ergebnis gegen den rohen `issuer` der API. Dieser Test ist die eine
+    Gegenprobe, die in #523 gefehlt hat: nicht was wir senden, sondern was der
+    Client daraus liest, muss der Identifier sein.
+    """
+    from mcp.shared.auth import ProtectedResourceMetadata
+
+    body = _prm_body("https://api.example.de")
+    parsed = ProtectedResourceMetadata.model_validate(body)
+    assert str(parsed.authorization_servers[0]) == body["authorization_servers"][0]

@@ -91,7 +91,8 @@ curl -fsS https://api.$D/.well-known/oauth-authorization-server | jq
 
 # Protected-Resource-Metadata des MCP-Servers (RFC 9728) — zeigt auf den AS
 curl -fsS https://mcp.$D/.well-known/oauth-protected-resource/mcp | jq
-#   → "authorization_servers": ["https://api.<DOMAIN>"]
+#   → "authorization_servers": ["https://api.<DOMAIN>/"]  — Slash gehört dazu,
+#     identisch zum `issuer` oben (s. Troubleshooting)
 
 # MCP ohne Token → 401 + WWW-Authenticate (das ist der OAuth-Trigger)
 curl -fsS -i -X POST https://mcp.$D/mcp \
@@ -172,15 +173,27 @@ liefert beim nächsten Tool-Call 401, Claude meldet „nicht mehr autorisiert".
   dann nicht.
 - **Client bricht mit „issuer mismatch" ab** → die beiden Metadaten-Dokumente
   müssen denselben Issuer-**String** tragen; der Client vergleicht sie zeichen-
-  genau (RFC 8414 §3.3). Gegenprobe:
+  genau (RFC 8414 §3.3).
+
+  **Die beiden Werte miteinander zu vergleichen reicht nicht** — genau das sah
+  nach #523 gut aus, während der Login weiter abbrach. Der Client parst den
+  PRM-Wert erst in einen URL-Typ (`AnyHttpUrl` bzw. `new URL(...)`) und hält
+  DESSEN Form gegen den rohen `issuer`. Die Gegenprobe muss das nachbauen:
 
   ```bash
-  curl -fsS https://mcp.$D/.well-known/oauth-protected-resource/mcp \
-    | jq -r '.authorization_servers[0]'
-  curl -fsS https://api.$D/.well-known/oauth-authorization-server | jq -r .issuer
-  #   → beide Zeilen müssen identisch sein, insbesondere ohne Trailing Slash
+  AS=$(curl -fsS https://mcp.$D/.well-known/oauth-protected-resource/mcp \
+        | jq -r '.authorization_servers[0]')
+  IS=$(curl -fsS "${AS%/}/.well-known/oauth-authorization-server" | jq -r .issuer)
+  # `AS` durch denselben Parser drehen wie der Client, dann vergleichen:
+  python3 -c 'import sys; from urllib.parse import urlsplit as s, urlunsplit as j; \
+  p = (lambda u: j((u.scheme, u.netloc, u.path or "/", "", "")))(s(sys.argv[1])); \
+  print("OK" if p == sys.argv[2] else f"MISMATCH: {sys.argv[2]} != {p}")' "$AS" "$IS"
   ```
 
-  Weichen sie ab, läuft eine Version vor dem Fix für diesen Slash (beide Werte
-  kommen seither aus `who2be_models.canonical_issuer`) — `OAUTH_ISSUER_URL` /
-  `WHO2BE_OAUTH_ISSUER_URL` umzuschreiben hilft dagegen nicht.
+  Eine reine Origin trägt dabei **einen** Trailing Slash
+  (`https://api.<DOMAIN>/`) — in beiden Dokumenten. Weicht etwas ab, läuft eine
+  Version vor diesem Fix; `OAUTH_ISSUER_URL` / `WHO2BE_OAUTH_ISSUER_URL`
+  umzuschreiben hilft dagegen nicht (beide Werte kommen aus
+  `who2be_models.issuer_identifier`). Erst prüfen, ob der Container überhaupt
+  auf dem neuen Image steht:
+  `docker inspect --format '{{.Config.Image}}' who2be-mcp-http-1`.
