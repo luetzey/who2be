@@ -1644,3 +1644,36 @@ Userinfo faellt ausdruecklich **nicht** weg — sonst waere
 `https://evil@host/x` dasselbe wie `https://host/x` und die Host-Pruefung
 ausgehebelt; solche URLs kommen unveraendert zurueck und fallen im
 Vergleich durch (fail-closed).
+
+## 2026-09-19 — Ein uebersprungener Job faerbt den Lauf nicht rot
+
+**Entscheidung:** `deploy.yml` bekommt einen Gegen-Job
+`deploy-not-configured` (`if: vars.DEPLOY_HOST == ''`), der per
+`::warning` und Step-Summary sagt, dass NICHT deployed wurde. Er faellt
+bewusst nicht durch — auf einem Repo ohne Host ist "nicht deployen"
+richtig; falsch war nur, es stillschweigend zu tun.
+
+**Warum:** Der `deploy`-Job haengt an `if: vars.DEPLOY_HOST != ''`. Die
+Variable ist nicht gesetzt, der Job wurde also bei JEDEM Lauf
+uebersprungen — und GitHub faerbt einen Lauf wegen eines uebersprungenen
+Jobs nicht rot. Der Workflow hiess "Deploy", stand auf gruen, und auf die
+Box kam nie etwas. Ueber Monate.
+
+**Was es gekostet hat:** Ein gemergter, laut Actions-Seite "deployter"
+Issuer-Fix wirkte nicht. Die Suche lief daraufhin in den Anwendungscode
+(der korrekt war), dann in die Compose-Profile (dort lag tatsaechlich ein
+zweiter, echter Bug) — und erst danach in die Pipeline selbst. Ich habe
+`conclusion: success` auf RUN-Ebene gelesen; `skipped` stand auf
+JOB-Ebene. Zwei Klicks tiefer, drei Stunden frueher.
+
+**Regel daraus:** Ein gruenes Signal ist nur so viel wert wie die Frage,
+die es beantwortet. "Der Lauf ist gruen" heisst nicht "der Lauf hat etwas
+getan". Bei jedem Workflow, dessen Job sich konditional ueberspringen
+kann, gehoert der Skip-Fall ebenso sichtbar gemacht wie der Fehlerfall —
+sonst ist er ein Erfolg, der nichts bedeutet. Und beim Debuggen von "Fix
+wirkt nicht" wird die Job-Liste geoeffnet, nicht die Run-Zusammenfassung.
+
+**Nebenbefund:** STATE.md fuehrte den Zustand seit Wochen korrekt
+("ueberspringt sich still, solange sie fehlen"). Dokumentiert zu sein hat
+nicht gereicht — eine Notiz in einer Datei ersetzt kein Signal an der
+Stelle, an der man hinsieht.
