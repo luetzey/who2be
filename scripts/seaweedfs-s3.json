@@ -1,0 +1,14 @@
+{
+  "identities": [
+    {
+      "name": "who2be-dev",
+      "credentials": [
+        {
+          "accessKey": "who2be-dev",
+          "secretKey": "who2be-dev-secret"
+        }
+      ],
+      "actions": ["Admin", "Read", "List", "Tagging", "Write"]
+    }
+  ]
+}

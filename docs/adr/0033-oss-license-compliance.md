@@ -93,3 +93,30 @@ nimmt das eigene (private, `UNLICENSED`) `who2be-web` heraus.
   **Fremd**-Lizenzen der Dependencies, nicht die eigene Feature-Freischaltung.
 - Offen (optional, WP-1.3): SBOM-Artefakt (`cyclonedx`) im CI als formale
   Bill-of-Materials — nicht Teil dieses ADR.
+
+## Addendum 2026-09-19 — Scope-Klarstellung anhand eines konkreten Falls (SeaweedFS statt MinIO)
+
+Der Objekt-Store-Dienst des BlobStore (ADR-0048) lief bis 2026-09 als
+Compose-Container `minio` — AGPLv3, genau das Copyleft, gegen das die
+Deny-Liste oben „mit besonderem Fokus auf die AGPL-Netzwerkfalle" fail-closed
+greifen soll. Trotzdem war er **nie ein Treffer dieses Gates**: Das Gate
+prüft ausschließlich **gelinkte** Python-/Web-Dependencies
+(`pip-licenses`/`license-checker-rseidelsohn`), und die einzige gelinkte
+Abhängigkeit war stets das Apache-2.0-SDK `minio` — der AGPL-Server selbst lief
+nur als eigenständiger Container, den kein Dependency-Scanner sieht. Diese
+Lücke im Gate-Scope war zum Zeitpunkt von ADR-0048 bewusst in Kauf genommen
+(dortige Begründung: „läuft ausschließlich als eigenständiger Dienst im
+Container — wie Postgres — und wird nicht gelinkt; lizenzrechtlich
+unkritisch").
+
+Mit MinIOs eingestellter Community Edition und dem Wegfall des
+`minio`-Namespace auf Docker Hub (~10.–13.09.2026) wurde der Dienst ersetzt
+durch **SeaweedFS (Apache-2.0)** — siehe ADR-0048-Addendum 2026-09-19 für die
+volle Begründung (Verfügbarkeit, CVE-2025-62506, Lizenz). Damit ist der
+einzige AGPL-Container, den das Repo je betrieben hat, weg, und die von der
+Deny-Liste oben unbeantwortete Frage — greift sie auch bei Container-Services,
+nicht nur bei gelinkten Dependencies? — bleibt vorerst theoretisch: es gibt
+aktuell keinen Copyleft-Container mehr, an dem sie sich stellen würde. Sollte
+künftig wieder ein AGPL-/Copyleft-Service als Compose-Dienst in Betracht
+kommen, braucht diese Scope-Lücke eine bewusste Entscheidung, nicht nur einen
+CI-Gate-Pass.

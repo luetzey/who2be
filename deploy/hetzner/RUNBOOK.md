@@ -793,25 +793,63 @@ einmal durchziehen und Datum hier protokollieren:
 |---|---|---|---|---|
 | — | — | — | — | — |
 
-## MinIO-/BlobStore-Backup (ADR-0048)
+## SeaweedFS-/BlobStore-Backup (ADR-0048)
 
 Der `pg_dump`-Pfad oben sichert **nur Postgres**. Die Binaerinhalte der
-WorkArea (PDFs, Textdateien, abgerufene Seiten) liegen als Objekte im MinIO-
-Bucket `who2be-blobs` unter `blobs/{workspace_id}/{sha256}`. Postgres kennt
-davon nur den Katalog (`wa_blob`): **ein Restore ohne Objekte ergibt eine DB,
-deren Blob-Referenzen ins Leere zeigen.** Beide Stufen gehoeren zusammen.
+WorkArea (PDFs, Textdateien, abgerufene Seiten) liegen als Objekte im
+SeaweedFS-Bucket `who2be-blobs` unter `blobs/{workspace_id}/{sha256}`.
+Postgres kennt davon nur den Katalog (`wa_blob`): **ein Restore ohne Objekte
+ergibt eine DB, deren Blob-Referenzen ins Leere zeigen.** Beide Stufen
+gehoeren zusammen.
 
-Der Dienst laeuft als Container `minio` (+ One-Shot `minio-bootstrap`, der den
-Bucket idempotent anlegt und terminiert); Daten liegen im Volume `minio-data`.
+Der Dienst laeuft als Container `seaweedfs` (All-in-One `server -s3`,
+Apache-2.0 — Nachfolger von `minio`, #525/#528) + One-Shot
+`blobstore-bootstrap` (legt den Bucket idempotent an und terminiert,
+Nachfolger von `minio-bootstrap`); Daten liegen im Volume `seaweedfs-data`.
+S3-API intern auf **8333** (vorher MinIO: 9000), Master-/Health-Port auf
+**9333**. Credentials sind eine gemountete `s3.json`-Identitaetsdatei
+(Env `SEAWEEDFS_S3_ACCESS_KEY`/`SEAWEEDFS_S3_SECRET_KEY`) statt eines
+MinIO-Root-User/-Passworts — Details siehe „Betrieb der Compose-Dienste"
+unten.
+
+> ⚠️ **Bestehende Blobs migrieren NICHT automatisch.** Der Wechsel tauscht
+> nur den Server hinter dem `BlobStorePort` (ADR-0048) aus — ein frisch
+> aufgesetztes `seaweedfs`-Volume ist leer. Objekte, die vorher im
+> `minio-data`-Volume lagen, muessen **einmalig manuell** in den neuen Bucket
+> kopiert werden, bevor der alte Dienst/das alte Volume entfernt wird. Das ist
+> bewusst kein Teil dieses Umbaus (siehe Plan
+> `.claude/plan/2026-09-19-0758_seaweedfs-statt-minio.md` §„Ausdruecklich
+> NICHT in diesem Umbau") — solange beide Dienste parallel erreichbar sind
+> (altes `minio`-Volume noch vorhanden, `seaweedfs` bereits healthy), z. B.
+> mit einem generischen S3-Client wie dem offiziellen `amazon/aws-cli`-Image
+> spiegeln (**nicht** `minio/mc` — dessen Docker-Hub-Image ist derselbe
+> verschwundene Namespace, den dieser Wechsel gerade verlaesst):
+>
+> ```bash
+> docker run --rm --network app-net \
+>   -e AWS_ACCESS_KEY_ID="$MINIO_ROOT_USER" -e AWS_SECRET_ACCESS_KEY="$MINIO_ROOT_PASSWORD" \
+>   -v /tmp/blob-migration:/data amazon/aws-cli \
+>   --endpoint-url http://minio:9000 s3 sync s3://who2be-blobs /data
+>
+> docker run --rm --network app-net \
+>   -e AWS_ACCESS_KEY_ID="$SEAWEEDFS_S3_ACCESS_KEY" -e AWS_SECRET_ACCESS_KEY="$SEAWEEDFS_S3_SECRET_KEY" \
+>   -v /tmp/blob-migration:/data amazon/aws-cli \
+>   --endpoint-url http://seaweedfs:8333 s3 sync /data s3://who2be-blobs
+>
+> # Verifikation: Objekt-Zahl muss zur Katalog-Zeile passen (s. Hinweis unten)
+> docker compose exec db psql -U supabase_admin who2be -tAc "SELECT count(*) FROM wa_blob"
+> ```
+>
+> Erst nach verifizierter Uebertragung `minio`/`minio-data` aus der
+> Prod-Compose entfernen — ein separater, bewusster Schritt, kein Teil dieses
+> PRs.
 
 ```bash
-# 1) Bucket in das Backup-Verzeichnis spiegeln (mc mirror ist inkrementell)
-docker compose run --rm --entrypoint /bin/sh minio-bootstrap -c '
-  mc alias set local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" &&
-  mc mirror --overwrite --remove local/who2be-blobs /backup/blobs
-'
-# Dafuer /var/backups/who2be als /backup in den One-Shot mounten
-# (deploy/hetzner/docker-compose.yml, gleiches Muster wie der backup-Service).
+# 1) Bucket in das Backup-Verzeichnis spiegeln (aws s3 sync ist inkrementell)
+docker run --rm --network app-net \
+  -e AWS_ACCESS_KEY_ID="$SEAWEEDFS_S3_ACCESS_KEY" -e AWS_SECRET_ACCESS_KEY="$SEAWEEDFS_S3_SECRET_KEY" \
+  -v /var/backups/who2be/blobs:/data amazon/aws-cli \
+  --endpoint-url http://seaweedfs:8333 s3 sync --delete s3://who2be-blobs /data
 
 # 2) restic nimmt das Verzeichnis mit — es liegt unter /var/backups/who2be,
 #    das der bestehende C5b-Lauf ohnehin sichert. Kein zweites Repo noetig.
@@ -819,7 +857,7 @@ docker compose run --rm --entrypoint /bin/sh minio-bootstrap -c '
 
 - **Retention:** faellt mit dem restic-Repo zusammen (`keep-daily 7 /
   keep-weekly 4 / keep-monthly 6`).
-- **`--remove`** loescht im Spiegel, was im Bucket nicht mehr existiert —
+- **`--delete`** raeumt im Spiegel, was im Bucket nicht mehr existiert —
   gewollt, damit ein GDPR-Purge nicht ueber das Backup wieder auflebt.
   Die Snapshot-Historie haelt die Objekte dennoch bis zum Retention-Ablauf;
   es gilt „Restore-only-Re-Deletion" wie fuer die DB (Loeschkonzept §4).
@@ -831,23 +869,30 @@ solange beide aus demselben Snapshot stammen).
 
 ```bash
 restic -r "${RESTIC_REPOSITORY}" restore latest --target /tmp/restore
-docker compose run --rm --entrypoint /bin/sh minio-bootstrap -c '
-  mc alias set local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" &&
-  mc mb --ignore-existing local/who2be-blobs &&
-  mc mirror --overwrite /backup/blobs local/who2be-blobs
-'
+docker run --rm --network app-net \
+  -e AWS_ACCESS_KEY_ID="$SEAWEEDFS_S3_ACCESS_KEY" -e AWS_SECRET_ACCESS_KEY="$SEAWEEDFS_S3_SECRET_KEY" \
+  -v /tmp/restore/var/backups/who2be/blobs:/data amazon/aws-cli \
+  --endpoint-url http://seaweedfs:8333 s3 sync /data s3://who2be-blobs
+
 # Konsistenz-Check: jede wa_blob-Zeile muss ein Objekt haben
 docker compose exec db psql -U supabase_admin who2be -tAc \
   "SELECT count(*) FROM wa_blob"
-docker compose run --rm --entrypoint /bin/sh minio-bootstrap -c '
-  mc alias set local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" &&
-  mc ls --recursive local/who2be-blobs | wc -l
-'
+docker run --rm --network app-net \
+  -e AWS_ACCESS_KEY_ID="$SEAWEEDFS_S3_ACCESS_KEY" -e AWS_SECRET_ACCESS_KEY="$SEAWEEDFS_S3_SECRET_KEY" \
+  amazon/aws-cli --endpoint-url http://seaweedfs:8333 s3 ls --recursive s3://who2be-blobs | wc -l
 ```
 
 > Die Objekt-Zahl darf **groesser** sein als die Zeilen-Zahl (Rueckstaende
 > gescheiterter Ingests, die der Purge-Sweep noch nicht geholt hat) — aber nie
 > kleiner. Ist sie kleiner, fehlen Blobs.
+>
+> **Hinweis zum Tooling:** Die fruehere Variante nutzte `mc` aus dem
+> `minio-bootstrap`-Container mit; `blobstore-bootstrap` faehrt jetzt das
+> API-Image (Python, kein `mc` an Bord) — deshalb hier ein eigenstaendiger
+> S3-Client-Container. Ob `amazon/aws-cli` das dauerhafte Werkzeug der Wahl
+> bleibt oder ein Skript im Repo (analog `scripts/blobstore-bootstrap.py`)
+> das sinnvoller loest, ist eine offene, bewusst nicht in dieser
+> Dokumentations-Aenderung getroffene Entscheidung.
 
 ---
 
@@ -953,24 +998,59 @@ Worauf im Log zu achten ist:
 | `(kein BlobStore konfiguriert)` | `WHO2BE_BLOBSTORE_*` fehlt im Purge-Kontext | Env pruefen — sonst bleiben Objekte dauerhaft liegen |
 | `… unbekannte(s) Store-Verzeichnis(se) gemeldet` | Tabellen-Store-Verzeichnis ohne Workspace | manuelle Bereinigung (s. o.) |
 | `Objekt-Sweep bei 500 Loeschungen gedeckelt` | Deckel erreicht | normal nach grossem Purge; naechster Lauf macht weiter |
-| `liefert kein Objekt-Alter` | Store ohne `last_modified` | nur bei Fremd-Adaptern; MinIO kann es |
+| `liefert kein Objekt-Alter` | Store ohne `last_modified` | nur bei Fremd-Adaptern; SeaweedFS (S3-kompatibel) liefert es |
 
 ---
 
-## Betrieb der Compose-Dienste `minio` / `minio-bootstrap`
+## Betrieb der Compose-Dienste `seaweedfs` / `blobstore-bootstrap`
 
-- **`minio`** — S3-API auf `9000`, Web-Console auf `9001`, beide bewusst nur
-  auf `127.0.0.1` gebunden (Dev laeuft mit Default-Credentials und darf nie im
-  LAN haengen). In Prod `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD` setzen und den
-  Zugriff ueber das Docker-Netz bzw. Caddy fuehren, nicht ueber den Host-Port.
-  Image ist **gepinnt** (kein `latest`) — Objekt-Storage soll nicht an einem
-  impliziten Image-Sprung haengen.
-- **`minio-bootstrap`** — One-Shot: legt `who2be-blobs` idempotent an und
-  terminiert (`restart: "no"`). Die App legt **nie** selbst Buckets an. Der
+Nachfolger von `minio`/`minio-bootstrap` (#525/#528) — SeaweedFS (Apache-2.0)
+statt MinIO (Community Edition eingestellt, Docker-Hub-Namespace `minio`
+verschwindet ~10.–13.09.2026; Details/Begruendung: ADR-0048-Addendum
+2026-09-19). Der Anwendungscode ist unveraendert: die API spricht S3 ueber
+das Apache-2.0-SDK `minio` (Python-Paket, **nicht** das MinIO-Protokoll)
+gegen jeden S3-kompatiblen Endpoint.
+
+- **`seaweedfs`** — All-in-One-Prozess (`server -s3 -s3.config=... -dir=/data`),
+  kein Vier-Service-Stack (master/volume/filer/s3). S3-API intern auf
+  **`8333`** (vorher MinIO: `9000`), Master-/Status-Port auf **`9333`**;
+  SeaweedFS hat **keine** MinIO-artige Web-Console. In Prod bewusst kein
+  Host-Port-Publish — Zugriff nur ueber das Docker-Netz bzw. Caddy, wie
+  zuvor bei `minio`.
+  Image ist **digest-gepinnt** (nicht nur ein Tag) — Objekt-Storage soll
+  nicht an einem impliziten Image-Sprung haengen.
+- **Credentials sind ein Sicherheits-Gate, keine Kuer.** SeaweedFS-Doku
+  woertlich: „By default, if no credentials are configured, SeaweedFS allows
+  anonymous access to all S3 operations." Ohne `-s3.config` staende der
+  Store offen — **kein** einfaches `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD`-
+  Env-Paar mehr wie bei MinIO. Die Pflicht-Variable ist
+  `SEAWEEDFS_S3_SECRET_KEY` (`.env`, `:?`-Guard — Compose-Up bricht ohne sie
+  ab), `SEAWEEDFS_S3_ACCESS_KEY` hat einen Default (`who2be`). Anders als im
+  lokalen Dev-Stack (dort mountet `docker-compose.yml` eine statische,
+  eingecheckte `scripts/seaweedfs-s3.json`) gibt es in Prod **keine**
+  gemountete Datei: der `seaweedfs`-Entrypoint **rendert** die
+  `s3.json` (`identities[].credentials[].accessKey/secretKey`,
+  `actions: [...]`) bei jedem Container-Start neu aus
+  `SEAWEEDFS_S3_ACCESS_KEY`/`_SECRET_KEY` — Docker substituiert in einer
+  gemounteten Datei nichts, deshalb dieser Umweg statt einer zweiten,
+  git-fremden Secret-Datei auf dem Host. Dieselben zwei Variablen fuettern
+  auch den Bootstrap und die API (`WHO2BE_BLOBSTORE_ACCESS_KEY`/
+  `_SECRET_KEY`) — ein einziger Satz Werte, eine einzige Stelle zum Rotieren
+  (`.env` aendern + `docker compose up -d seaweedfs blobstore-bootstrap api`).
+  **In Prod niemals** die Dev-Defaults aus `scripts/seaweedfs-s3.json`
+  (`who2be-dev`/`who2be-dev-secret`) verwenden.
+- **`blobstore-bootstrap`** — One-Shot: legt `who2be-blobs` idempotent an und
+  terminiert (`restart: "no"`), faehrt dasselbe API-Image wie der `api`-Dienst
+  (das Apache-2.0-SDK `minio` ist dort ohnehin Kern-Dependency — kein
+  zweites CLI-Image noetig). Die App legt **nie** selbst Buckets an — diese
+  Trennung bleibt bestehen, gewechselt hat nur der Server dahinter. Der
   `api`-Dienst haengt per `service_completed_successfully` daran; ein
   fehlgeschlagener Bootstrap haelt also den Start auf — das ist Absicht.
-- **Healthcheck:** `mc ready local`. Rot? → `docker compose logs minio`,
-  meist ein Volume-/Rechteproblem auf `minio-data`.
+- **Healthcheck:** `http://127.0.0.1:9333/cluster/status` (Master-Port) —
+  **bewusst NICHT** `8333/healthz`: der S3-Handler liest den Pfad als
+  Bucket-Namen und antwortet 404 (bekannter Fallstrick, seaweedfs#8243), der
+  Stack bliebe damit dauerhaft unhealthy. Rot? → `docker compose logs
+  seaweedfs`, meist ein Volume-/Rechteproblem auf `seaweedfs-data`.
 - **Degradation:** ohne `WHO2BE_BLOBSTORE_*` in der API laeuft der Stack
   vollstaendig weiter; nur Ingest und Blob-Reads antworten 503
   `blobstore_unconfigured` (ADR-0048). Das ist ein gueltiger Betriebsmodus,
@@ -982,10 +1062,11 @@ Worauf im Log zu achten ist:
 
 ```bash
 # Smoke nach dem Deploy
-docker compose ps minio minio-bootstrap        # minio healthy, bootstrap exited 0
+docker compose ps seaweedfs blobstore-bootstrap   # seaweedfs healthy, bootstrap exited 0
 docker compose exec api python -c \
   "from who2be_api.blobstore import build_blob_store; print(build_blob_store())"
-# -> MinioBlobStore-Instanz (nicht None), sonst fehlt WHO2BE_BLOBSTORE_*
+# -> MinioBlobStore-Instanz (nicht None; der Adapter/Klassenname kommt vom
+#    Apache-2.0-SDK und bleibt unveraendert), sonst fehlt WHO2BE_BLOBSTORE_*
 ```
 
 ---

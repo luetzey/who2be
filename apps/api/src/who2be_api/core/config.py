@@ -141,14 +141,14 @@ class Settings(BaseSettings):
         default="",
         validation_alias=AliasChoices("WHO2BE_BLOBSTORE_SECRET_KEY", "blobstore_secret_key"),
     )
-    # Default passt zum Compose-One-Shot `minio-bootstrap`, der genau diesen
-    # Bucket anlegt — die App erstellt Buckets nie selbst.
+    # Default passt zum Compose-One-Shot `blobstore-bootstrap`, der genau
+    # diesen Bucket anlegt — die App erstellt Buckets nie selbst.
     blobstore_bucket: str = Field(
         default="who2be-blobs",
         validation_alias=AliasChoices("WHO2BE_BLOBSTORE_BUCKET", "blobstore_bucket"),
     )
-    # TLS zum Storage-Endpoint. Dev-MinIO im Compose-Netz spricht http (false);
-    # jede Anbindung ausserhalb davon gehoert auf true.
+    # TLS zum Storage-Endpoint. Der Dev-S3-Dienst (SeaweedFS) im Compose-Netz
+    # spricht http (false); jede Anbindung ausserhalb davon gehoert auf true.
     blobstore_secure: bool = Field(
         default=False,
         validation_alias=AliasChoices("WHO2BE_BLOBSTORE_SECURE", "blobstore_secure"),

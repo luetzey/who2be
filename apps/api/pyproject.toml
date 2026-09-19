@@ -21,8 +21,10 @@ dependencies = [
     "limits>=3.0",
     "markdown-it-py>=3.0",
     # BlobStore (ADR-0048): S3-kompatibler Objekt-Storage fuer den WorkArea-Ingest.
-    # Das SDK ist Apache-2.0 und Kern-Dependency; der AGPL-MinIO-SERVER laeuft nur
-    # als Container (docker-compose: `minio`), wie Postgres.
+    # Das SDK ist Apache-2.0 und spricht S3, nicht ein bestimmtes Backend — es
+    # bleibt Kern-Dependency ueber den Wechsel von MinIO auf SeaweedFS (#525)
+    # hinweg unveraendert. Der Server dahinter (Apache-2.0, ebenfalls) laeuft
+    # nur als eigenstaendiger Container (docker-compose: `seaweedfs`), wie Postgres.
     "minio>=7.2",
     # XLSX-Export der WorkArea-Tabellen (ADR-0049): openpyxl schreibt die
     # Arbeitsmappe rein in memory. MIT-Lizenz (wie et-xmlfile, die einzige

@@ -1551,3 +1551,32 @@ belegt, nicht geraten. Praktische Folge: Ein Wert, der durch ein
 Pydantic-URL-Feld laeuft, ist danach nicht mehr der konfigurierte String. Wo
 ein Vertrag auf Zeichengleichheit beruht, muss der Test das **ausgelieferte
 Dokument** pruefen, nicht das Attribut davor.
+
+## 2026-09-19 — S3-Backend: SeaweedFS statt MinIO (Apache-2.0 statt AGPL)
+
+**Entscheidung:** Der Objekt-Store ist SeaweedFS (Apache-2.0), nicht mehr
+MinIO. Der Wechsel findet ausschliesslich in der Compose-/Config-Schicht
+statt — `blobstore/port.py` und die Adapter bleiben unveraendert.
+
+**Warum:** MinIO hat die Community Edition eingestellt (source-only seit
+Okt 2025, Repository archiviert Apr 2026, Docker-Hub-Namespace entfernt
+Mitte Sep 2026). Drei Dinge fielen damit zusammen: die CI war repo-weit
+rot, das letzte verfuegbare Image traegt eine ungepatchte CVE (CVSS 8.1,
+fuer unsere Nutzung nicht erreichbar — wir nutzen weder Service Accounts
+noch STS), und AGPLv3 ist fuer eine Cloud-SaaS-Distribution genau das
+Risiko, das ADR-0033 als „AGPL-Netzwerkfalle" fuehrt. Apache-2.0 ist die
+Lizenz, in die Who2Be per FSL-1.1 selbst uebergeht.
+
+**Reichweite:** Dass der Umbau den Anwendungscode nicht beruehrt hat, ist
+keine Nebensaechlichkeit — es ist die Einloesung von ADR-0048. Wer dort
+einen Port mit austauschbaren Adaptern einzieht, kauft genau diesen Fall:
+`git diff origin/main -- blobstore/` war nach dem Backend-Wechsel leer.
+Fuer kuenftige Infrastruktur-Abhaengigkeiten heisst das: die Frage ist
+nicht nur „laeuft es", sondern „was kostet es, wenn der Hersteller
+aufhoert".
+
+**Praktische Folgen:** Credentials in einer gemounteten Datei sind ein
+Sonderfall — Docker substituiert dort nichts. Dev mountet eine statische
+`s3.json`, Prod rendert sie beim Start aus ENV (`:?`-Guard, fail-closed).
+Und der Healthcheck liegt auf dem Master-Port `9333/cluster/status`, weil
+`8333/healthz` vom S3-Handler als Bucket-Name gelesen wird (seaweedfs#8243).
