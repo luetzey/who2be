@@ -36,8 +36,8 @@ def main() -> int:
     bucket = os.environ.get("BLOBSTORE_BUCKET", "who2be-blobs")
     # Muessen zur gemounteten Identitaet in scripts/seaweedfs-s3.json passen —
     # ohne gueltige Credentials weist SeaweedFS den Aufruf mit 403 ab.
-    access_key = os.environ.get("BLOBSTORE_ACCESS_KEY", "minioadmin")
-    secret_key = os.environ.get("BLOBSTORE_SECRET_KEY", "minioadmin")
+    access_key = os.environ.get("BLOBSTORE_ACCESS_KEY", "who2be-dev")
+    secret_key = os.environ.get("BLOBSTORE_SECRET_KEY", "who2be-dev-secret")
     secure = os.environ.get("BLOBSTORE_SECURE", "false").lower() == "true"
 
     client = Minio(endpoint, access_key=access_key, secret_key=secret_key, secure=secure)

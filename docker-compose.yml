@@ -327,8 +327,8 @@ services:
       BLOBSTORE_ENDPOINT: seaweedfs:8333
       BLOBSTORE_BUCKET: who2be-blobs
       # Muessen zu scripts/seaweedfs-s3.json passen (s. Mount-Kommentar oben).
-      BLOBSTORE_ACCESS_KEY: ${SEAWEEDFS_S3_ACCESS_KEY:-minioadmin}
-      BLOBSTORE_SECRET_KEY: ${SEAWEEDFS_S3_SECRET_KEY:-minioadmin}
+      BLOBSTORE_ACCESS_KEY: ${SEAWEEDFS_S3_ACCESS_KEY:-who2be-dev}
+      BLOBSTORE_SECRET_KEY: ${SEAWEEDFS_S3_SECRET_KEY:-who2be-dev-secret}
     volumes:
       # Skript per Mount statt im Image — Muster `set-app-role-password`.
       - ./scripts/blobstore-bootstrap.py:/scripts/blobstore-bootstrap.py:ro

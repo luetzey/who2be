@@ -4,8 +4,8 @@
       "name": "who2be-dev",
       "credentials": [
         {
-          "accessKey": "minioadmin",
-          "secretKey": "minioadmin"
+          "accessKey": "who2be-dev",
+          "secretKey": "who2be-dev-secret"
         }
       ],
       "actions": ["Admin", "Read", "List", "Tagging", "Write"]
