@@ -13,6 +13,14 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 - `npm run lint` in `apps/web` no longer reports a different warning count
   depending on whether `npm run test:coverage` ran before it: the generated
   `coverage/` report directory is now on the ESLint ignore list.
+- Die dokumentierte Verifikations-Schleife fuer `apps/web` prueft wieder etwas:
+  `npx tsc --noEmit` hatte gegen das Solution-`tsconfig.json` (`"files": []`)
+  null Eingabedateien und endete immer mit Exit 0. Alle normativen Stellen
+  nennen jetzt `npx tsc -b` (1658 gepruefte Dateien), so wie CI es faehrt.
+- Das dokumentierte Testgate fuer `apps/web` nennt statt `npm test` jetzt
+  `npm run test:coverage` — die Coverage-Thresholds aus `vite.config.ts`
+  greifen nur mit `--coverage`, CI faehrt ebenfalls `test:coverage`.
+
 - Remote MCP connectors can log in again when the OAuth issuer is a bare
   origin. Clients hold the `authorization_servers` entry of the MCP server's
   protected-resource metadata (RFC 9728) against the `issuer` of the API's
