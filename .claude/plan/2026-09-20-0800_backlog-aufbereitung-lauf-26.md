@@ -92,3 +92,95 @@ Die Triage (entscheidbar vs. needs-decision) bleibt beim Orchestrator.
 - Kein `agent-ready` ohne einzeln abgehakte Pflichtfelder.
 - Keine Weiche entscheiden, die Urteil braucht (Produktzahlen der Tarife).
 - Kein Zuschnitt von `size/M` (Regel 7 — das waere Projekt-Blueprint).
+
+---
+
+# Ergebnis des Laufs (2026-09-20)
+
+## Korrektur der eigenen Eingangsthese
+
+Der Plan oben sagt: "jede zitierte `ci.yml`-Zeilennummer ist unbelegt".
+Als Vorsichtsannahme richtig, als Befund zu stark. Nachgemessen:
+
+| Anker | fd53b01 | 69bfeda |
+|---|---|---|
+| changes / python / web | 17 / 81 / 159 | unveraendert |
+| lint / tsc -b / test:coverage / a11y / build | 176/178/182/194/196 | unveraendert |
+| Doku-Allowlist | 72-76 | unveraendert |
+| compose-smoke | 224 | unveraendert |
+| openapi-Gate | 126-131 | 127-128 |
+| Python-Testlauf | 147-150 | unveraendert (byte-identisch) |
+| **e2e** | 250 | **252** |
+| **e2e-billing-cloud** | 295 | **299** |
+| **audit** | 366 | **375** |
+
+Die +120 Zeilen sind fast vollstaendig ans Ende gewandert (OSV-Scan,
+npm-audit-Haertung). Drei Anker haben sich bewegt, nicht alle.
+
+## Eigener Verfahrensfehler
+
+WP-1 und WP-4 wurden gleichzeitig im selben Arbeitsbaum gestartet und
+fuhren beide Web-Gates. WP-1 brach ab mit
+`Something removed the coverage directory ... Vitest created earlier`.
+Das ist Regel 31 des Repos, angewandt auf die Pruefung statt auf die
+Umsetzung — und die Wellen-Regel verlangt fuer zwei Pakete im selben
+Stack getrennte Worktrees. Der Fehler liegt beim Orchestrator, nicht bei
+den Agenten (Regel 30: die Wellen-Bedingungen gelten auch fuer ihn).
+
+Entlastung: WP-4 hat seine 66/69/66-Messungen **vor** dem Nebenlauf
+erfasst und sie sind reproduzierbar; die Python-Zahlen habe ich selbst
+seriell nachgemessen. Die Befunde stehen, die Lehre bleibt.
+
+Konsequenz fuer die Liste: die Wellen-Bedingung gilt ausdruecklich auch
+fuer Lese-Agenten, die Gates fahren. Steht so im neuen Body von #442.
+
+## Zeiger-Bilanz — elf gewanderte Zeiger an sieben Issues
+
+Ursache in zwei Commits desselben Tages:
+- `8f13481` (SeaweedFS statt MinIO, 2026-09-19 08:09): +13 ab `auth:` in
+  docker-compose.yml
+- `960520a` (Blobstore-Absatz): +1 ab ~Zeile 74 in CLAUDE.md
+- die ci.yml-Haertung: +2/+4/+9 bei drei Jobs
+
+| Issue | Zeiger | alt | neu |
+|---|---|---|---|
+| #517 | CLAUDE.md (4 Stellen) | 135/148/151/233 | 136/149/152/234 |
+| #499 | docker-compose.yml Pin | 50 | 63 |
+| #499 | docker-compose.yml MFA | 70-74 | 83-87 |
+| #499 | ci.yml e2e | 250 | 252 |
+| #499 | ci.yml Billing-Guard | 340-342 | 349-351 |
+| #539 | docker-compose.yml Pin | 50 | 63 |
+| #536 | entity_quota_service.py is_cloud | 71 | 75 |
+| #536 | entity_quota_service.py Datenverlust | 12-15 | 7-10 |
+| #537 | mcp_limit_service.py Kommentar | 94 | 93 |
+| #537 | core/rate_limit.py | 39-47 | 40-47 |
+| #538 | entity_quota_service.py is_cloud | 71 | 75 |
+| #538 | routers/tokens.py rotate_token | 72 | 73 |
+| #428 | ci.yml e2e-billing-cloud | 295 | 299 |
+
+Dazu zwei Fehler, die keine Zeilenverschiebung sind:
+- #536 verortet `CLOUD_FREE_ENTITLEMENT` in `plans.py`; es liegt in
+  `licensing/entitlement.py:122` — falsches Paket, nicht nur falsche Zeile.
+- #538 nennt `POST /v1/tokens`; real `/v1/workspaces/{workspace_id}/tokens`.
+
+**Der schaerfste Fall:** #539 wurde am 2026-09-19 11:09 angelegt — drei
+Stunden NACH dem SeaweedFS-Commit. Der Zeiger `:50` war beim Anlegen
+bereits falsch und wurde ungeprueft aus #499 uebernommen. Das ist der
+Beleg fuer Regel-Vorschlag 58 aus Lauf 24.
+
+## Zahlen, die nicht mehr halten
+
+- Python-Suite: 1903/1418/485 -> **1992/1507/485** (+89 OAuth-Tests).
+  Die 89 ist exakt die Billing-Testzahl — ohne die `collected`-Zahl waere
+  Wachstum nicht von der Billing-Luecke unterscheidbar gewesen.
+- #428 Option-B-Kosten: 17 Zeilen/8 Dateien -> **20/9**
+  (docs/cloud-hosting-owner-guide.md aus PR #534).
+- Offene PRs: 9 -> **11**; #489 weg, #533/#526/#527 neu.
+- **#526 und #527 sind gegenstandslos** (anyio 4.15.1 ist in uv.lock;
+  minio/mc existiert nicht mehr).
+
+## Kapazitaets-Blockade aufgeloest
+
+Schritt 5 des Playbooks (woertlich archivieren vor dem Ersetzen) macht
+aus der Verdichtung einen Umzug. Body 65.178 -> 55.456 Zeichen,
+10.080 frei. Die Dauerform bleibt Owner-Urteil.
