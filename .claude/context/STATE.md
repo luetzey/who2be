@@ -2,6 +2,22 @@
 
 _Stand: 2026-09-19 (47. Lauf — der Issuer-Fix war zweimal die falsche Seite: der Trailing Slash entsteht im CLIENT, nicht in unseren Dokumenten. Advertisiert wird jetzt die URL-Normalform)_
 
+## ESLint zaehlt `coverage/` nicht mehr mit (2026-09-20, Issue #520)
+
+`apps/web/package.json` lintet mit `eslint .`; die Ignore-Liste in
+`eslint.config.js` kannte `dist`, `e2e`, `playwright-report` und
+`test-results`, aber nicht `coverage`. Nach einem `npm run test:coverage`
+wurden die generierten v8-Reports mitgelintet — die Warnungszahl haengt davon
+ab, ob vorher getestet wurde. Kein rotes Gate (Warnungen kippen es nicht, CI
+lintet auf frischem Checkout), aber die Zahl **66** ist der Beleg, mit dem
+#517, #431 und #435 arbeiten, und war damit nicht mehr vergleichbar.
+
+`coverage` steht jetzt auf der Ignore-Liste. Belegt lokal: mit vorhandenem
+`coverage/` **66 warnings / 0 errors**, ohne ebenfalls **66 / 0**; der
+Verzeichnis-Check ueber die Fundstellen gibt nur noch `src` aus.
+Nicht angefasst: die 66 Warnungen in `src/**` (eigene Pakete), die Schwere
+der Regeln, `.gitignore`.
+
 ## Betreiber-Domain aus dem Repo entfernt (2026-09-19, 47. Lauf, Nachlauf)
 
 Die Domain der Live-Installation war ueber die OAuth-Issuer-Laeufe in drei
