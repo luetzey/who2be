@@ -8,6 +8,25 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ## [Unreleased]
 
+### Added
+
+- Optional captcha in front of self-service sign-up, using **Cloudflare
+  Turnstile**. Off by default: with no keys configured no widget renders, no
+  script is fetched from Cloudflare, and the sign-up call is unchanged — so
+  there is no third-country data transfer until an operator turns it on.
+
+  Enabling it takes four variables and no rebuild: three on GoTrue
+  (`GOTRUE_SECURITY_CAPTCHA_ENABLED` / `_PROVIDER` / `_SECRET`) and the public
+  site key on the web app (`WHO2BE_TURNSTILE_SITE_KEY`, delivered via
+  `/config.js`). The names are verified against the pinned GoTrue v2.158.1 —
+  note the env var is `..._CAPTCHA_SECRET`, not `..._CAPTCHA_PROVIDER_SECRET`.
+
+  Worth knowing before switching it on: GoTrue applies the captcha to every
+  unauthenticated auth endpoint, including password login and "resend
+  confirmation", which the web app does not yet supply a token for. Invitation
+  flows are unaffected — invite sending is an admin call and magic-link
+  redemption never carried the middleware. See `docs/signup-and-invites.md` §3.
+
 ### Fixed
 
 - Remote MCP connectors can log in again when the OAuth issuer is a bare
