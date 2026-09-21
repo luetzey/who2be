@@ -156,4 +156,40 @@ else
     || fail "On-Prem: /v1/billing/webhook sollte 404 sein (Billing-Paket nicht gemountet), bekam ${BILLING_CODE}"
 fi
 
+# --- 9) GoTrue-Pin + Migrationen (Issue #499, AK 4) --------------------------
+# Der Sprung von v2.158.1 auf v2.196.0 zieht 18 Migrationen nach. `compose up
+# --wait` scheitert nur, wenn der Stack GAR NICHT hochkommt — eine Migration,
+# die warnt statt zu brechen, kaeme durch, und seit v2.190.0 warnt GoTrue auch
+# bei unvollstaendiger WebAuthn-Konfiguration, statt abzubrechen. Dieser Check
+# macht daraus eine Assertion: das LAUFENDE auth-Image traegt exakt den Tag aus
+# `docker-compose.yml`, das Log zeigt den Start und keinen Fatal-/Migrations-
+# Fehler. Ohne ihn waere AK 4 ein Log-Blick, den niemand wiederholt.
+log "GoTrue-Pin + Migrations-Log"
+PINNED_TAG="$(grep -oE 'supabase/gotrue:v[0-9]+\.[0-9]+\.[0-9]+' docker-compose.yml 2>/dev/null | head -n1 || true)"
+AUTH_CID="$(${COMPOSE} ps -q auth | head -n1)"
+[[ -n "${AUTH_CID}" ]] || fail "Kein laufender auth-Container (docker compose ps -q auth war leer)"
+# `docker inspect --format` statt `compose ps --format`: die Go-Template-
+# Unterstuetzung von `compose ps` hat sich zwischen Compose-Versionen bewegt,
+# `docker inspect` ist stabil.
+RUNNING_IMAGE="$(docker inspect --format '{{.Config.Image}}' "${AUTH_CID}")"
+echo "  auth-Image: ${RUNNING_IMAGE}"
+if [[ -n "${PINNED_TAG}" ]]; then
+  [[ "${RUNNING_IMAGE}" == "${PINNED_TAG}" ]] \
+    || fail "auth laeuft auf '${RUNNING_IMAGE}', gepinnt ist '${PINNED_TAG}'"
+else
+  # Kein Root-Compose im aktuellen Verzeichnis (z.B. Smoke gegen einen
+  # Deploy-Stack): dann gibt es nichts gegenzuhalten, das Log genuegt.
+  log "  kein docker-compose.yml im CWD — Pin-Vergleich uebersprungen"
+fi
+
+AUTH_LOG="$(${COMPOSE} logs --no-color auth 2>&1)"
+echo "${AUTH_LOG}" | grep -q "GoTrue API started on" \
+  || fail "auth-Log zeigt keinen erfolgreichen Start (GoTrue API started on): ${AUTH_LOG}"
+# `fatal` ist GoTrues Abbruch-Level; "error running migrations" ist die
+# Meldung des Migrations-Runners. Beides darf im Log nicht vorkommen.
+if echo "${AUTH_LOG}" | grep -qiE '"level":"fatal"|error running migrations|migration failed'; then
+  fail "auth-Log enthaelt einen Fatal-/Migrationsfehler:
+$(echo "${AUTH_LOG}" | grep -iE '"level":"fatal"|error running migrations|migration failed')"
+fi
+
 log "alle Checks gruen ✓"

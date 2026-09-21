@@ -10,6 +10,7 @@ Aktive Sektionen:
 - [Provisioning (Track S/C1)](#provisioning-track-sc1) — leere Hetzner-Box → laufender Stack (Box/Docker/Firewall/deploy-User/DNS/TLS)
 - [Erste Inbetriebnahme der Cloud-Edition](#erste-inbetriebnahme-der-cloud-edition) — Bring-up-Checkliste (Service-Key, Mailer, Deploy-Pipeline)
 - [Notfallpfad: Registry nicht erreichbar](#notfallpfad-registry-nicht-erreichbar) — Cloud-`api`/`migrate` von Hand bauen, wenn GHCR beim Deploy ausfaellt
+- [GoTrue-Version anheben](#gotrue-version-anheben-auth-stack-update) — Auth-Image-Update inkl. Schema-Migrationen + Rollback-Weg (Issue #499)
 - [CVE-Response](#cve-response) — was tun, wenn der CI-`audit`-Job rot wird
 - [Secret-Rotation](#secret-rotation) — pro Secret: Trigger / Schritte / Verifikation
 - [Verschluesselung at-Rest](#verschluesselung-at-rest-postgres-volume) — LUKS/verschl. Hetzner-Volume + Verifikation (Befund P4/S2)
@@ -298,6 +299,80 @@ curl -sf "https://api.${DOMAIN}/healthz"
 Deploy (`./deploy.sh <sha>` mit `WHO2BE_EDITION=cloud`) fahren — der zieht
 `api`/`migrate` wieder aus der Registry und ersetzt den Host-Build, damit
 Prod nicht dauerhaft auf einem Host-Artefakt statt dem CI-Artefakt laeuft.
+
+---
+
+## GoTrue-Version anheben (Auth-Stack-Update)
+
+**Trigger:** der Pin `supabase/gotrue:<tag>` in
+`deploy/hetzner/supabase/docker-compose.yml` wird im Repo gehoben (zuletzt
+`v2.158.1` → `v2.196.0`, Issue #499) und soll auf den Host.
+
+**Warum eine eigene Prozedur:** GoTrue faehrt seine Schema-Migrationen beim
+Start selbst gegen `auth.*` — es gibt keinen separaten Migrations-Container,
+kein Dry-Run und **kein automatisches Down**. Der Sprung v2.158.1 → v2.196.0
+zieht 18 Migrationen nach (darunter `add_web_authn`,
+`add_last_webauthn_challenge_data`, `add_passkeys`). Ein Rueckweg auf die alte
+Version nach erfolgreicher Migration ist **nicht** vorgesehen; die
+Rueckfallebene ist der Datenbank-Dump.
+
+```bash
+cd /opt/who2be
+
+# 1) Backup ZUERST — das ist der einzige Rueckweg. Nicht ueberspringen.
+bash deploy/hetzner/scripts/backup.sh
+ls -la /var/backups/who2be/   # frischer *.sql.gpg von heute muss da sein
+
+# 2) Neuen Stand holen (traegt den neuen Pin)
+git pull --ff-only
+
+# 3) Nur das auth-Image ziehen (kein Stack-Restart)
+docker compose -f deploy/hetzner/supabase/docker-compose.yml \
+  --env-file deploy/hetzner/supabase/.env pull auth
+
+# 4) auth neu starten — die Migrationen laufen im Startvorgang
+docker compose -f deploy/hetzner/supabase/docker-compose.yml \
+  --env-file deploy/hetzner/supabase/.env up -d auth
+```
+
+**Verifikation** (in dieser Reihenfolge, Abbruch beim ersten Fehlschlag):
+
+```bash
+COMPOSE="docker compose -f deploy/hetzner/supabase/docker-compose.yml \
+  --env-file deploy/hetzner/supabase/.env"
+
+# a) Das LAUFENDE Image traegt den neuen Tag (nicht nur das gezogene)
+docker inspect --format '{{.Config.Image}}' "$($COMPOSE ps -q auth)"
+# → supabase/gotrue:v2.196.0
+
+# b) Start sauber, keine Migration abgebrochen
+$COMPOSE logs --no-color auth | grep -iE '"level":"fatal"|error running migrations'
+# → KEINE Ausgabe. Umgekehrt muss die Startzeile da sein:
+$COMPOSE logs --no-color auth | grep "GoTrue API started on"
+
+# c) Der Dienst antwortet
+curl -sf "https://supabase.${DOMAIN}/auth/v1/health"
+
+# d) Ein bestehender Admin kann sich mit seinem TOTP-Faktor anmelden.
+#    Das ist der einzige Check, der beweist, dass die Migration die
+#    vorhandenen MFA-Faktoren mitgenommen hat — von Hand im Browser.
+```
+
+**Wenn b) oder d) fehlschlaegt:** den Pin in der Compose-Datei auf die alte
+Version zuruecksetzen, `up -d auth` fahren, und falls das Schema bereits
+migriert wurde, die `auth`-Daten aus dem Dump aus Schritt 1 zuruecksichern
+(→ [Backup & Restore](#backup--restore)). Ein blosser Image-Downgrade ohne
+Restore laeuft auf ein Schema, das die alte Version nicht kennt.
+
+**WebAuthn-Konfiguration:** ab v2.190.0 **warnt** GoTrue bei unvollstaendiger
+Relying-Party-Konfiguration, statt den Start abzubrechen — ein fehlendes
+`GOTRUE_WEBAUTHN_RP_ID`/`_RP_DISPLAY_NAME`/`_RP_ORIGINS` kostet also still den
+Faktor, nicht den Stack. Nach dem Update im Log gegenpruefen:
+
+```bash
+$COMPOSE logs --no-color auth | grep -i "WebAuthn configuration is invalid"
+# → KEINE Ausgabe
+```
 
 ---
 

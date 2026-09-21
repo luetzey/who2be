@@ -78,7 +78,7 @@ services:
     restart: "no"
 
   auth:
-    image: supabase/gotrue:v2.158.1
+    image: supabase/gotrue:v2.196.0
     environment:
       GOTRUE_API_HOST: 0.0.0.0
       GOTRUE_API_PORT: "9999"
