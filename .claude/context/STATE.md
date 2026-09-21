@@ -6,17 +6,34 @@ _Stand: 2026-09-19 (47. Lauf — der Issuer-Fix war zweimal die falsche Seite: d
 
 `apps/web/package.json` lintet mit `eslint .`; die Ignore-Liste in
 `eslint.config.js` kannte `dist`, `e2e`, `playwright-report` und
-`test-results`, aber nicht `coverage`. Nach einem `npm run test:coverage`
-wurden die generierten v8-Reports mitgelintet — die Warnungszahl haengt davon
-ab, ob vorher getestet wurde. Kein rotes Gate (Warnungen kippen es nicht, CI
-lintet auf frischem Checkout), aber die Zahl **66** ist der Beleg, mit dem
-#517, #431 und #435 arbeiten, und war damit nicht mehr vergleichbar.
+`test-results`, aber nicht `coverage`. `coverage` steht jetzt ebenfalls
+darauf.
 
-`coverage` steht jetzt auf der Ignore-Liste. Belegt lokal: mit vorhandenem
-`coverage/` **66 warnings / 0 errors**, ohne ebenfalls **66 / 0**; der
-Verzeichnis-Check ueber die Fundstellen gibt nur noch `src` aus.
-Nicht angefasst: die 66 Warnungen in `src/**` (eigene Pakete), die Schwere
-der Regeln, `.gitignore`.
+**Die Aenderung ist praeventiv, nicht die Reaktion auf eine beobachtete
+Schwankung** — die urspruengliche Begruendung (die Zahl **66** habe je nach
+vorangegangenem `npm run test:coverage` geschwankt) traegt nicht, und sie ist
+mit dieser Notiz richtiggestellt. In der aktuellen Konfiguration *konnte* das
+nicht eintreten, aus zwei unabhaengigen Gruenden: `vite.config.ts:37` stellt
+die Coverage-Reporter auf `text-summary` / `json` / `html`, also landet keine
+`.ts`/`.tsx`-Datei in `coverage/`; und in `eslint.config.js` traegt **jeder**
+Regel-Block ein `files: ['**/*.{ts,tsx}']` — kein Block matcht `.js`, die
+mitgelieferten HTML-Report-Skripte werden also ohne Regeln besucht.
+Kontrollbeleg aus dem #520-Review (A/B, ohne den Fix): mit zwei realistischen
+istanbul-Report-Dateien (`coverage/lcov-report/block-navigation.js`,
+`prettify.js`, jeweils mit absichtlichen Lint-Verstoessen) blieb es bei exakt
+**66 problems / 0 errors**; erst eine kuenstlich abgelegte `coverage/bait.ts`
+erzeugte **67 problems / 1 error**. Einschraenkung: `npm run test:coverage`
+laeuft in dieser Umgebung rot (135 Testfehler, `window.localStorage`
+undefined unter jsdom) und erzeugt gar kein `coverage/` — die Aussage ist aus
+der Reporter-Konfiguration abgeleitet und an nachgestellten Report-Dateien
+geprueft, nicht an einem echt erzeugten Artefakt gemessen.
+
+Der Fix bleibt richtig — als Defense in Depth: sobald ein Reporter
+(`lcov`-Nachbarn, Instrumentierungs-Artefakte) oder ein kuenftiger
+`.js`-Regel-Block hinzukommt, waere die Zahl tatsaechlich abhaengig davon, ob
+vorher getestet wurde. Genau das ist jetzt ausgeschlossen. Nicht angefasst:
+die 66 Warnungen in `src/**` (eigene Pakete), die Schwere der Regeln,
+`.gitignore`.
 
 ## Dokumentierter Typecheck prueft wieder eine Flaeche (2026-09-20, Issue #517)
 
