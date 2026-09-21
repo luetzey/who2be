@@ -10,9 +10,14 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Fixed
 
-- `npm run lint` in `apps/web` no longer reports a different warning count
-  depending on whether `npm run test:coverage` ran before it: the generated
-  `coverage/` report directory is now on the ESLint ignore list.
+- `apps/web`: the generated `coverage/` report directory is now on the ESLint
+  ignore list. Preventive hardening, not a fix for an observed symptom: with
+  the reporters configured in `vite.config.ts:37` (`text-summary`, `json`,
+  `html`) no `.ts`/`.tsx` file is written to `coverage/`, and every rule block
+  in `eslint.config.js` is scoped to `**/*.{ts,tsx}`, so the emitted report
+  scripts carried no rules. The ignore entry keeps `eslint .` independent of
+  whether `npm run test:coverage` ran before it should a future reporter or
+  rule-block change make that matter.
 - Die dokumentierte Verifikations-Schleife fuer `apps/web` prueft wieder etwas:
   `npx tsc --noEmit` hatte gegen das Solution-`tsconfig.json` (`"files": []`)
   null Eingabedateien und endete immer mit Exit 0. Alle normativen Stellen
