@@ -32,9 +32,9 @@ the merged pull requests and the plan documents under `.claude/plan/`.
   against the limit.
 
   Three deliberate boundaries, documented rather than glossed over: the quota
-  is counted and enforced **per work area, not per organisation**, so an
-  organisation that creates several work areas multiplies its allowance as
-  long as the number of work areas is uncapped (a follow-up card caps it); the
+  is counted and enforced **per workspace, not per organisation**, so an
+  organisation that creates several workspaces multiplies its allowance as
+  long as the number of workspaces is uncapped (a follow-up card caps it); the
   **table store is not counted** (per-work-area SQLite files live on the
   filesystem, ADR-0049); and the gate checks `used >= limit` *before* the
   ingest runs, so a single ingest may overshoot by at most
