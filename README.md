@@ -127,8 +127,9 @@ see [`deploy/hetzner/README.md`](deploy/hetzner/README.md).
 
 ### Development setup
 
-For working on the code you need [uv](https://docs.astral.sh/uv/) and Node 22+
-in addition to Docker:
+For working on the code you need [uv](https://docs.astral.sh/uv/) and Node 22
+(pinned in `.nvmrc` / `mise.toml`, see
+[`CONTRIBUTING.md`](CONTRIBUTING.md#definition-of-done)) in addition to Docker:
 
 ```bash
 cp .env.example .env                          # the defaults match Compose

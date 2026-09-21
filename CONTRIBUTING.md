@@ -76,11 +76,22 @@ uv run --with pip-licenses python -m piplicenses --partial-match \
 
 ```bash
 npm run lint
-npx tsc --noEmit
+npx tsc -b
 npm run test:coverage
 npm run build
 npm run license:check   # OSS license gate (ADR-0033)
 ```
+
+**Node 22 is mandatory, not a recommendation.** The repo pins the major in
+`.nvmrc`, `mise.toml` and `apps/web/package.json` (`engines.node`), matching
+`node-version: 22` in `.github/workflows/ci.yml`. Run `mise install` (or
+`nvm use` / `fnm use`) in the repo root before touching the web stack. On Node
+25+ `npm run test:coverage` fails with ~135 red tests and writes no `coverage/`,
+because Node enables Web Storage by default there and Vitest 4 then filters
+jsdom's `window.localStorage` away (upstream
+[vitest#8757](https://github.com/vitest-dev/vitest/issues/8757), fixed only in
+Vitest 5 — no 4.1.x backport). CI stays green because it runs Node 22, so a
+local failure on a newer Node is a toolchain mismatch, not a code defect.
 
 New dependency? Check its license first (mandatory scan, ADR-0033).
 Permissive licenses (MIT, BSD, Apache-2.0, ISC, 0BSD) and MPL-2.0 are
