@@ -97,6 +97,11 @@ services:
       # RP_ID ist die registrierbare Domain OHNE Schema und Port (lokal
       # `localhost`); RP_ORIGINS ist der vollstaendige Origin MIT Schema/Port
       # und folgt derselben Quelle wie GOTRUE_SITE_URL oben.
+      # ACHTUNG, die beiden muessen zusammenpassen: RP_ORIGINS kommt aus
+      # WHO2BE_PUBLIC_URL, RP_ID faellt unabhaengig davon auf `localhost`
+      # zurueck. Wer den Stack ueber eine LAN-IP oder einen Hostnamen faehrt,
+      # setzt GOTRUE_WEBAUTHN_RP_ID in .env passend dazu — sonst lehnt der
+      # Browser die Registrierung ab (siehe .env.example).
       GOTRUE_WEBAUTHN_RP_ID: ${GOTRUE_WEBAUTHN_RP_ID:-localhost}
       GOTRUE_WEBAUTHN_RP_DISPLAY_NAME: ${GOTRUE_WEBAUTHN_RP_DISPLAY_NAME:-Who2Be}
       GOTRUE_WEBAUTHN_RP_ORIGINS: ${WHO2BE_PUBLIC_URL:-http://localhost:5173}

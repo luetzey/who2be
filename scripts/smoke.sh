@@ -191,5 +191,16 @@ if echo "${AUTH_LOG}" | grep -qiE '"level":"fatal"|error running migrations|migr
   fail "auth-Log enthaelt einen Fatal-/Migrationsfehler:
 $(echo "${AUTH_LOG}" | grep -iE '"level":"fatal"|error running migrations|migration failed')"
 fi
+# Seit v2.190.0 warnt GoTrue bei unvollstaendiger WebAuthn-RP-Konfiguration nur,
+# statt den Start abzubrechen (internal/conf/configuration.go:1328-1331). Der
+# Stack kaeme dann healthy und korrekt gepinnt hoch — und der WebAuthn-Faktor
+# waere still weg. Kein anderer Job faengt das: `compose up --wait` nicht
+# (Container ist gesund), e2e nicht (faehrt TOTP). Deshalb hier.
+if echo "${AUTH_LOG}" | grep -qi 'WebAuthn configuration is invalid'; then
+  fail "auth-Log meldet eine ungueltige WebAuthn-Konfiguration — der Faktor ist
+serverseitig nicht verfuegbar (GOTRUE_WEBAUTHN_RP_ID / _RP_DISPLAY_NAME /
+_RP_ORIGINS pruefen):
+$(echo "${AUTH_LOG}" | grep -i 'WebAuthn configuration is invalid')"
+fi
 
 log "alle Checks gruen ✓"

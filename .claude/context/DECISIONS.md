@@ -1749,8 +1749,11 @@ bringt fuenf Migrationen, die nach diesem Stand liegen (SCIM-Users,
 SCIM-Tokens, Recovery-Codes-Faktor, Recovery-Codes-Tabellen,
 One-Time-Token-Expiry) — sie sind schlicht nicht geprueft. `v2.196.0` ist die
 hoechste Version, die der Check traegt: der Tag ist vom 2026-08-18, der
-gepruefte Commit vom 2026-09-03, `git compare` meldet `behind_by: 38,
-ahead_by: 0`. Der Check hat also einen Stand *nach* der Zielversion gelesen.
+gepruefte Commit vom 2026-09-03, `gh api compare v2.196.0...0907af9` meldet
+`ahead_by: 38, behind_by: 0` — der geprüfte Commit liegt also 38 Commits *vor*
+der Zielversion. Der Check hat damit einen Stand *nach* v2.196.0 gelesen und
+traegt die Zielversion vollstaendig (Gegenprobe: `v2.197.0...0907af9` →
+`behind_by: 1`, v2.197.0 traegt er gerade nicht mehr).
 
 **Die Untergrenze ist v2.190.0, nicht v2.163.0.** v2.163.0 ist die Version,
 in der der WebAuthn-Faktor erscheint — aber erst v2.190.0 macht die
