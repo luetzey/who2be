@@ -10,6 +10,23 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Fixed
 
+- The MCP requests-per-minute limit advertised in `docs/licensing/plans.md`
+  (Free 30, Pro 240) is now enforced **per organisation**, not per token. The
+  rate window was keyed on a hash of the bearer token, so an organisation with
+  N agent tokens got N × the advertised rate — twenty tokens on the Pro tier
+  meant 4,800 req/min against a plan that promises 240. The monthly quota
+  already capped the total consumption per organisation, but not the burst.
+
+  `McpLimitService.enforce()` now checks a second window keyed on the
+  organisation, with the same ceiling (`mcp_rate_per_min`), so the effective
+  limit is the minimum of both: a single-token caller is unaffected, a
+  many-token caller is pulled back to the advertised rate. Both windows are
+  probed with the non-consuming `peek()` before either is consumed, so a
+  request rejected by one window burns neither the other window nor the
+  monthly quota. No new entitlement field, no migration, no change to the
+  plans table — this is what the table already claimed. On-premises
+  installations and tiers without a configured limit are unchanged.
+
 - Remote MCP connectors can log in again when the OAuth issuer is a bare
   origin. Clients hold the `authorization_servers` entry of the MCP server's
   protected-resource metadata (RFC 9728) against the `issuer` of the API's
