@@ -8,6 +8,26 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ## [Unreleased]
 
+### Added
+
+- Cloud organisations now have a storage quota: **100 MB on Free, 10 GB on
+  Pro** (`Entitlement.storage_quota_bytes`, `None` = unlimited and the
+  on-premise default). An ingest that would push a workspace past its tier's
+  limit is rejected with `402` and `reason: storage_quota_exceeded`, carrying
+  the limit and current usage in `params` rather than in the locale key.
+
+  Nothing is lost: the gate hangs off the two ingest routes only, so existing
+  blobs stay readable, listable and downloadable above the limit — the same
+  contract the entity quota already makes. The billing panel shows used bytes
+  against the limit.
+
+  Two deliberate boundaries, documented rather than glossed over: the
+  **table store is not counted** (per-work-area SQLite files live on the
+  filesystem, ADR-0049), and the gate checks `used >= limit` *before* the
+  ingest runs, so a single ingest may overshoot by at most
+  `WHO2BE_INGEST_MAX_BYTES`. A raised limit takes effect at the next
+  checkout, because the entitlement carries the metadata of its purchase.
+
 ### Fixed
 
 - Remote MCP connectors can log in again when the OAuth issuer is a bare

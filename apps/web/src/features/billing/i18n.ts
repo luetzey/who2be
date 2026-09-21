@@ -19,6 +19,11 @@ const de = {
       monthlyLabel: 'MCP-Reads diesen Monat',
       ariaLabel: 'MCP-Kontingent-Verbrauch',
     },
+    storage: {
+      unlimited: 'Speicher: unbegrenzt',
+      label: 'Belegter Speicher',
+      ariaLabel: 'Speicher-Verbrauch',
+    },
     rateLimit: 'Rate-Limit',
     validUntil: 'Gueltig bis',
     unlimited: 'unbegrenzt',
@@ -58,6 +63,11 @@ const en = {
       unlimited: 'MCP quota: unlimited',
       monthlyLabel: 'MCP reads this month',
       ariaLabel: 'MCP quota usage',
+    },
+    storage: {
+      unlimited: 'Storage: unlimited',
+      label: 'Storage used',
+      ariaLabel: 'Storage usage',
     },
     rateLimit: 'Rate limit',
     validUntil: 'Valid until',
