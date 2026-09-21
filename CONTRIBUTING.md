@@ -76,7 +76,7 @@ uv run --with pip-licenses python -m piplicenses --partial-match \
 
 ```bash
 npm run lint
-npx tsc --noEmit
+npx tsc -b
 npm run test:coverage
 npm run build
 npm run license:check   # OSS license gate (ADR-0033)

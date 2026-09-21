@@ -18,6 +18,25 @@ Verzeichnis-Check ueber die Fundstellen gibt nur noch `src` aus.
 Nicht angefasst: die 66 Warnungen in `src/**` (eigene Pakete), die Schwere
 der Regeln, `.gitignore`.
 
+## Dokumentierter Typecheck prueft wieder eine Flaeche (2026-09-20, Issue #517)
+
+`apps/web/tsconfig.json` ist ein reines Solution-File (`"files": []` + zwei
+`references`). `npx tsc --noEmit` hatte damit **null** Eingabedateien und
+endete immer mit Exit 0 — an 12 normativen Stellen in 9 Dateien stand also ein
+Gate, das nichts pruefte. Ersetzt durch `npx tsc -b` (gemessen 1658 Dateien,
+davon 539 aus `apps/web/src`), also das Kommando, das CI ohnehin faehrt
+(`ci.yml:178`).
+
+Zweiter Defekt derselben Klasse, im selben PR korrigiert (Owner-Entscheidung
+Option A vom 2026-09-20): 7 Stellen nannten als Testgate `npm test`
+(= `vitest run` ohne `--coverage`). Die Thresholds in `vite.config.ts`
+greifen nur mit `--coverage`; dokumentiert ist jetzt `npm run test:coverage`,
+wie in `ci.yml:182`.
+
+Nicht angefasst: `uv run pytest -q` in `docs/CLAUDE-PROFILE.md` (die
+CI-Variante braucht eine laufende DB — eigene Owner-Weiche), die datierten
+Rueckblicke und `.claude/plan/**`, sowie `apps/web/tsconfig*.json` selbst.
+
 ## Betreiber-Domain aus dem Repo entfernt (2026-09-19, 47. Lauf, Nachlauf)
 
 Die Domain der Live-Installation war ueber die OAuth-Issuer-Laeufe in drei
