@@ -63,7 +63,17 @@ leitet daraus das Org-Entitlement ab.
 | `org_id`            | UUID   | Ziel-Organisation des Entitlements (Pflicht).                    |
 | `license_policy`    | String | Whitespace-/komma-separierte Liste der Feature-Codes (Pflicht).  |
 | `mcp_monthly_quota` | Int    | Monats-Kontingent agent-facing MCP-Reads.                        |
-| `mcp_rate_per_min`  | Int    | Per-Token-Rate-Ceiling (req/min).                                |
+| `mcp_rate_per_min`  | Int    | Rate-Ceiling (req/min) — zwei Fenster, siehe unten.              |
+
+**Zu `mcp_rate_per_min` — zwei Fenster, ein Wert:** Seit #537 deckelt derselbe
+Wert **zwei** Sliding-Windows mit jeweils demselben Ceiling — eines pro **Token**
+und eines pro **Organisation**; effektiv gilt das **Minimum** der beiden. Ein
+Aufrufer mit einem einzigen Token merkt davon nichts; N Tokens derselben Org
+ergeben aber nicht mehr N × die beworbene Rate. Die Tarif-Tabelle oben (Free 30,
+Pro 240) bleibt dadurch unveraendert gueltig — sie ist jetzt auch als
+Org-Gesamtrate wahr. Durchgesetzt in
+`apps/api/src/who2be_api/services/mcp_limit_service.py`
+(`McpLimitService.enforce()`, Schritt 1).
 
 Beispiel-Metadata für **Pro**:
 
