@@ -6,8 +6,8 @@ greift nur Cloud; Free am Limit ⇒ 402 mit `storage_quota_exceeded` + `params`;
 Free unter Limit ⇒ frei; unbegrenzt (`storage_quota_bytes is None`) ⇒ frei
 OHNE Summen-Roundtrip; On-Prem ⇒ no-op.
 
-Der „kein Datenverlust\"-Vertrag hat einen eigenen Test (`test_wa_ingest.py`
-bzw. `test_storage_quota_routes.py`): das Gate haengt an den Ingest-Routen und
+Der „kein Datenverlust\"-Vertrag hat einen eigenen Test (`test_wa_ingest.py`):
+das Gate haengt an den Ingest-Routen und
 NICHT an Read-/Export-Routen — Bestand bleibt ueber der Grenze lesbar.
 """
 

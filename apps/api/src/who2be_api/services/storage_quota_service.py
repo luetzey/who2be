@@ -12,24 +12,30 @@ les- und herunterladbar — das Gate haengt nur an den Ingest-Routen, nicht an
 Read-, Export- oder Download-Pfaden. Nur NEUE Ingests oberhalb der Grenze
 werden mit `402` + Upgrade-Hinweis abgewiesen.
 
-Zwei bewusste Grenzen der Zaehlung, beide sichtbar statt stillschweigend:
+Drei bewusste Grenzen der Zaehlung, alle sichtbar statt stillschweigend:
 
-1. **Der Tabellen-Store zaehlt NICHT mit.** Die SQLite-Dateien je WorkArea
+1. **Gezaehlt wird je Workspace, nicht je Org.** `STORAGE_USED_SQL` summiert
+   die Blobs *eines* Workspace; das Gate laeuft im `tenant_scope` des
+   Requests, unter dem RLS nur den aktuellen Workspace sichtbar macht. Anders
+   als beim Entity-Zwilling (dort ist Pro unbegrenzt) ist die Grenze hier
+   auch fuer Pro endlich — eine Org mit n Workspaces hat also n-mal das
+   Kontingent, solange die Zahl der Workspaces nicht gedeckelt ist
+   (`POST /organizations/{id}/workspaces` kennt heute kein Limit). Das ist
+   eine Owner-Entscheidung: gedeckelt wird stattdessen die **Zahl** der
+   Workspaces, als eigene Karte. Org-weites Zaehlen (Summe ueber alle
+   Workspaces samt RLS-Frage) ist bewusst nicht Teil dieser Stufe. Fuer den
+   Free-Tier (Personal-Org mit genau einem Workspace) faellt beides zusammen.
+2. **Der Tabellen-Store zaehlt NICHT mit.** Die SQLite-Dateien je WorkArea
    (`{WHO2BE_TABLESTORE_DIR}/{workspace_id}/{area_id}.sqlite`, ADR-0049)
    liegen im Dateisystem, nicht in Postgres; ihre Groesse waere nur ueber
    einen `stat()`-Aufruf je Datei bekannt. Dieses Gate deckelt `wa_blob`.
-2. **Vorab-Check, keine Nachkalkulation.** Als FastAPI-Dependency kennt das
+3. **Vorab-Check, keine Nachkalkulation.** Als FastAPI-Dependency kennt das
    Gate den Request-Body nicht; es prueft `summe >= limit`, nicht
    `summe + neue_bytes > limit`. Ein einzelner Ingest kann die Grenze also um
    bis zu `WHO2BE_INGEST_MAX_BYTES` (Default 20 MiB, `core/config.py`)
    ueberschreiten — der naechste wird abgewiesen. Dieselbe Toleranz hat der
    Entity-Zwilling; sie ist der Preis dafuer, dass das Gate vor der teuren
    Pipeline (Download/Extraktion) laeuft statt danach.
-
-Zaehl-Granularitaet ist **pro Workspace** (wortgleiche Begruendung wie beim
-Zwilling): das Gate laeuft im `tenant_scope` des Requests, unter dem RLS nur
-den aktuellen Workspace sichtbar macht. Fuer den Free-Tier (Personal-Org mit
-genau einem Workspace) ist das deckungsgleich mit „pro Org".
 """
 
 from __future__ import annotations
@@ -58,7 +64,7 @@ STORAGE_USED_SQL = "SELECT coalesce(sum(size_bytes), 0) FROM wa_blob WHERE works
 
 
 class StorageQuotaService:
-    """Setzt die Speichergrenze des Org-Entitlements an den Ingest-Routen durch."""
+    """Setzt die Speichergrenze des Entitlements je Workspace an den Ingest-Routen durch."""
 
     def __init__(self, pool: asyncpg.Pool, settings: Settings | None = None) -> None:
         self._pool = pool
