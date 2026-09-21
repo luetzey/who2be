@@ -8,6 +8,19 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ## [Unreleased]
 
+### Added
+
+- The Node major the CI enforces is now pinned in the repo: `.nvmrc`,
+  `mise.toml` (`[tools] node = "22"`) and `apps/web/package.json`
+  (`engines.node`) all name major **22**, matching the four `node-version: 22`
+  entries in `.github/workflows/ci.yml`. A fresh clone with `mise`, `nvm` or
+  `fnm` therefore lands on the same Node the CI uses, instead of on whatever
+  the machine happens to default to. On Node 25+ `npm run test:coverage` failed
+  locally with ~135 red tests and no `coverage/` output while CI stayed green —
+  Node enables Web Storage by default there and Vitest 4 filters jsdom's
+  `window.localStorage` away (upstream vitest#8757, fixed only in Vitest 5).
+  The reason is documented once, in `CONTRIBUTING.md` under Definition of Done.
+
 ### Fixed
 
 - `apps/web`: the generated `coverage/` report directory is now on the ESLint
