@@ -89,8 +89,17 @@ Beispiel-Metadata für **Pro**:
 ```
 
 `license_policy` akzeptiert sowohl Komma- als auch Whitespace-Trenner; unbekannte
-Codes werden ignoriert (Forward-Compatibility). Fehlen `mcp_monthly_quota`/
-`mcp_rate_per_min`/`token_quota`, gilt das jeweilige Limit als unbegrenzt (`None`).
+Codes werden ignoriert (Forward-Compatibility). Fehlen `mcp_monthly_quota` oder
+`mcp_rate_per_min`, gilt das jeweilige Limit als unbegrenzt (`None`).
+
+Für `token_quota` gilt das **nur außerhalb der Cloud** (On-Prem/OSS). Fehlt der
+Schlüssel in einer Cloud-Subscription — etwa weil sie vor Einführung des Feldes
+angelegt wurde, oder weil es sich um ein Downgrade-Entitlement handelt, das der
+Webhook ohne dieses Feld schreibt —, bedeutet das nicht „unbegrenzt", sondern
+„nicht gesetzt": `Entitlement.effective_token_quota` fällt dann auf den
+Tarifwert zurück (gekündigt/zahlungssäumig oder Free ⇒ Free-Wert, aktiver
+Paid-Plan ⇒ Pro-Wert). Sonst hätte eine Kündigung die Grenze aufgehoben, statt
+sie durchzusetzen.
 
 Zusätzlich schreibt der Checkout einen **operativen** Schlüssel `plan_code`
 (z. B. `"pro"`) in die Metadata. Er ist *nicht* Teil der entitlement-ableitenden

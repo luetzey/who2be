@@ -21,20 +21,30 @@ the merged pull requests and the plan documents under `.claude/plan/`.
   `window.localStorage` away (upstream vitest#8757, fixed only in Vitest 5).
   The reason is documented once, in `CONTRIBUTING.md` under Definition of Done.
 - Cloud workspaces now have a cap on the number of agent tokens: **3 on Free,
-  25 on Pro** (`Entitlement.token_quota`, `None` = unlimited and the
-  on-premise default). Creating a token beyond the tier's limit is rejected
-  with `402` and `reason: token_quota_exceeded`, carrying the limit in
-  `params` rather than in the locale key. Until now the only brake was the
-  write rate limit — 30 creations per minute, for an unlimited number of
+  25 on Pro** (`Entitlement.token_quota`). Creating a token beyond the tier's
+  limit is rejected with `402` and `reason: token_quota_exceeded`, carrying the
+  limit in `params` rather than in the locale key. Until now the only brake was
+  the write rate limit — 30 creations per minute, for an unlimited number of
   minutes.
+
+  An empty `token_quota` means *unlimited* only outside the cloud (the
+  on-premise default). Inside the cloud it means *not set*, and the tier value
+  applies: `Entitlement.effective_token_quota` falls back to the Free number for
+  a cancelled or unpaid organisation and to the Pro number for a paying one.
+  Without that fallback the cap would have been lifted by the very event it is
+  meant to survive — the billing webhook writes the downgrade entitlement
+  without knowing the new field, and every row predating the migration carries
+  no value either.
 
   Nothing is taken away: the gate sits on token *creation* only, so existing
   tokens keep authenticating above the limit, and **rotation keeps working** —
   rotation replaces a secret, it does not create a token, so a tightened quota
   can never lock an operator out of the secret rotation described in the
-  runbook. Only usable tokens count: revoked ones and expired ones do not
-  occupy a slot, matching the condition under which a token can authenticate
-  at all.
+  runbook. The OAuth connector's mint path is likewise ungated on purpose: a
+  sign-in must not fail on a billing limit. The tokens it issues do count
+  towards the quota, they are just never refused. Only usable tokens count:
+  revoked ones and expired ones do not occupy a slot, matching the condition
+  under which a token can authenticate at all.
 
   Two deliberate boundaries: the cap is counted **per workspace, not per
   organisation** (the same granularity the entity limit already uses), so an

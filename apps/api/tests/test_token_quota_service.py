@@ -3,7 +3,8 @@
 Ohne DB: ein Fake-Pool liefert die Org-Aufloesung + den Token-Zaehler, ein
 Fake-Entitlement-Port das aufgeloeste Entitlement. Belegt: greift nur Cloud;
 am Limit ⇒ 402 mit `reason` + `params` (ADR-0051); unter dem Limit frei;
-`token_quota=None` (unbegrenzt) ⇒ frei ohne Zaehl-Roundtrip; On-Prem ⇒ no-op.
+`token_quota=None` in der Cloud ⇒ Rueckfall auf den Tarifwert (der Webhook
+schreibt beim Downgrade NULL); On-Prem ⇒ no-op.
 Dazu die Zaehl-Bedingung selbst (Issue #538, AK4): widerrufene und abgelaufene
 Tokens duerfen keinen Slot belegen.
 """
@@ -94,12 +95,18 @@ def test_onprem_is_noop(monkeypatch: pytest.MonkeyPatch) -> None:
     assert pool.count_calls == 0
 
 
-def test_unlimited_quota_skips_count(monkeypatch: pytest.MonkeyPatch) -> None:
-    """`token_quota=None` (On-Prem-Lizenz, Bestand vor 0085) ⇒ kein Roundtrip."""
+def test_onprem_license_without_quota_is_unlimited(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`token_quota=None` heisst NUR ausserhalb der Cloud „unbegrenzt".
+
+    In der Cloud bedeutet dasselbe `None` „kein Wert gesetzt" und faellt auf den
+    Tarifwert zurueck (siehe `test_inactive_without_quota_falls_back_to_free`) —
+    sonst haette ein Downgrade die Grenze aufgehoben statt sie durchzusetzen.
+    """
     pool = FakePool(count=10_000)
-    service = _service(monkeypatch, OSS_ENTITLEMENT, pool)
+    service = _service(monkeypatch, OSS_ENTITLEMENT, pool, edition="onprem")
     _run(service)
     assert pool.count_calls == 0
+    assert OSS_ENTITLEMENT.effective_token_quota(cloud=False) is None
 
 
 def test_free_under_limit_passes(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -146,20 +153,57 @@ def test_pro_limit_is_its_own_number(monkeypatch: pytest.MonkeyPatch) -> None:
     assert exc.value.params == {"limit": PRO_TOKEN_QUOTA}
 
 
-def test_inactive_entitlement_still_enforces_its_quota(
+def test_inactive_entitlement_with_persisted_quota_keeps_it(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Gekuendigt/Fehlzahlung: der persistierte Deckel gilt weiter.
+    """Gekuendigt/Fehlzahlung mit gesetztem Feld: der persistierte Deckel gilt.
 
-    Anders als `entity_limit()` faellt hier nichts auf einen Free-Wert zurueck —
-    `token_quota` ist ein Feld, kein abgeleiteter Wert. Der Webhook setzt beim
-    Downgrade den Free-Wert; bis dahin gilt, was in der Zeile steht.
+    Das ist der einfache Fall. Den gefaehrlichen — Feld NICHT gesetzt, weil der
+    Revoke-Pfad des Webhooks es gar nicht schreibt — deckt
+    `test_inactive_without_quota_falls_back_to_free` ab, und Ende-zu-Ende gegen
+    das echte `map_event_to_entitlement`
+    `packages/billing/tests/test_token_quota_downgrade_chain.py`.
     """
     entitlement = Entitlement(status="inactive", token_quota=FREE_TOKEN_QUOTA)
     pool = FakePool(count=FREE_TOKEN_QUOTA)
     with pytest.raises(ApiError) as exc:
         _run(_service(monkeypatch, entitlement, pool))
     assert exc.value.reason == "token_quota_exceeded"
+
+
+def test_inactive_without_quota_falls_back_to_free(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Der Kern des Rueckfalls: `None` heisst in der Cloud NICHT „unbegrenzt".
+
+    Genau diese Zeile schreibt der Webhook beim Revoke (`webhook.py:441`:
+    `Entitlement(status="inactive", features=frozenset())`) und genau so steht
+    jede Bestands-Zeile vor Migration 0085 da. Ohne Rueckfall liefe das Gate
+    hier ohne Zaehl-Roundtrip durch.
+    """
+    entitlement = Entitlement(status="inactive", features=frozenset())
+    assert entitlement.token_quota is None  # Ausgangslage, nicht Annahme
+    pool = FakePool(count=FREE_TOKEN_QUOTA)
+    with pytest.raises(ApiError) as exc:
+        _run(_service(monkeypatch, entitlement, pool))
+    assert exc.value.params == {"limit": FREE_TOKEN_QUOTA}
+    assert pool.count_calls == 1
+
+
+def test_active_paid_without_quota_falls_back_to_pro(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Zahlender Bestandskunde ohne das neue Metadatum: Pro-Wert, nicht Free.
+
+    Ein Rueckfall, der jede leere Zeile auf 3 deckelt, wuerde Pro-Kunden bis zum
+    naechsten Checkout aussperren — deshalb entscheidet dasselbe Signal wie bei
+    `entity_limit()`: Paid-Features vorhanden ⇒ Pro-Wert.
+    """
+    entitlement = Entitlement(status="active", features=frozenset({"core", "agents"}))
+    assert entitlement.token_quota is None
+    pool = FakePool(count=PRO_TOKEN_QUOTA - 1)
+    _run(_service(monkeypatch, entitlement, pool))
+
+    pool_at_limit = FakePool(count=PRO_TOKEN_QUOTA)
+    with pytest.raises(ApiError) as exc:
+        _run(_service(monkeypatch, entitlement, pool_at_limit))
+    assert exc.value.params == {"limit": PRO_TOKEN_QUOTA}
 
 
 def test_count_query_excludes_revoked_and_expired(monkeypatch: pytest.MonkeyPatch) -> None:

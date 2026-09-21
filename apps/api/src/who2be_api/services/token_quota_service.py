@@ -25,6 +25,36 @@ Anders als `Entitlement.entity_limit()` ist die Grenze hier ein echtes
 Entitlement-**Feld** (`token_quota`) und keine Ableitung: die Ableitung kann nur
 „Free-Zahl oder unbegrenzt" ausdruecken, Pro hat hier aber eine eigene endliche
 Zahl (25).
+
+Genau deshalb braucht das Feld einen **Cloud-Rueckfall** (`effective_token_quota`):
+`None` heisst nur ausserhalb der Cloud „unbegrenzt". Innerhalb der Cloud heisst
+es „kein Wert gesetzt" — und den Zustand stellt der Billing-Pfad selbst her:
+`webhook.map_event_to_entitlement` schreibt beim Revoke
+(`customer.subscription.deleted`, `invoice.payment_failed`) ein
+`Entitlement(status="inactive", features=frozenset())` **ohne** `token_quota`,
+der Upsert persistiert das als NULL. Ohne Rueckfall waere eine gekuendigte Org
+unbegrenzt — das Gegenteil des Zwecks und laxer als der Entity-Zwilling, der in
+derselben Lage bewusst auf `FREE_ENTITY_QUOTA` faellt
+(`entitlement.py:108-124`). Dasselbe gilt fuer jede Bestands-Zeile ohne Backfill
+und fuer jede vor #538 angelegte Mollie-Subscription, deren Metadata den Key
+nicht traegt.
+
+**Nicht gegatete Anlagepfade** (bewusst, nicht vergessen):
+
+* `TokenService.rotate` — Rotation ersetzt, sie legt nicht an (s. o.).
+* `OAuthTokenService._issue` (`oauth_service.py:425-447`) mintet ueber
+  `new_token()` + `TokenRepository.insert` direkt und umgeht `TokenService.create`
+  laut ADR-0036 (Entscheidung 5) bewusst. Das bleibt so: `_issue` ist der
+  **Anmeldepfad** eines OAuth-Connectors; ein Login, das an einer
+  Abrechnungsgrenze mit `402` bricht, ist der teurere Fehler als ein
+  ueberzaehliger Connector-Token. Die so ausgegebenen Tokens **zaehlen** aber im
+  Kontingent mit (`revoked_at IS NULL`, TTL in der Zukunft) — sie verbrauchen
+  Slots, nur ihre Ausgabe wird nicht abgewiesen. Beide Zusagen haelt je ein Test
+  fest (`test_oauth_issue_is_not_gated_but_counts`).
+
+Bekannte Grenze: `count` und `insert` laufen nicht in einer Transaktion — zwei
+zeitgleiche Creates am Limit kommen beide durch. Identisch beim Entity-Zwilling;
+die Grenze ist eine Tarif-Obergrenze, kein Sicherheits-Gate.
 """
 
 from __future__ import annotations
@@ -88,9 +118,9 @@ class TokenQuotaService:
         port = build_entitlement_port(self._pool, self._settings)
         entitlement: Entitlement = await port.resolve(org_id)
 
-        limit = entitlement.token_quota
-        if limit is None:
-            return  # Unbegrenzt (On-Prem-Lizenz, Bestand vor 0085) — kein Roundtrip.
+        limit = entitlement.effective_token_quota(cloud=True)
+        if limit is None:  # pragma: no cover - in der Cloud liefert der Rueckfall immer eine Zahl
+            return
 
         current = await self._count_tokens(ctx.workspace_id)
         if current >= limit:

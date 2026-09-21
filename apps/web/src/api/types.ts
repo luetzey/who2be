@@ -989,7 +989,11 @@ export interface EntitlementInfo {
   expires_at: string | null
   mcp_monthly_quota: number | null
   mcp_rate_per_min: number | null
-  /** `null` = unbegrenzt (On-Prem/OSS sowie Bestands-Entitlements vor 0085). */
+  /**
+   * Die tatsaechlich geltende Grenze (`Entitlement.effective_token_quota`),
+   * nicht das rohe Entitlement-Feld: in der Cloud faellt ein leeres Feld auf
+   * den Tarifwert zurueck. `null` = wirklich unbegrenzt (On-Prem/OSS).
+   */
   token_quota: number | null
   usage: EntitlementUsage
 }

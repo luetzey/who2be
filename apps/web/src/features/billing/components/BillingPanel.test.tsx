@@ -117,7 +117,11 @@ describe('BillingPanel', () => {
     expect(screen.getByText('API-Tokens je Workspace').nextElementSibling).toHaveTextContent('9')
   })
 
-  it('zeigt "unbegrenzt" bei token_quota=null (On-Prem-Lizenz, Bestand vor 0085)', async () => {
+  it('zeigt "unbegrenzt" bei token_quota=null (On-Prem-Lizenz)', async () => {
+    // Der Endpoint liefert die TATSAECHLICH geltende Grenze
+    // (`Entitlement.effective_token_quota`), nicht das rohe Feld: in der Cloud
+    // faellt ein leeres Feld auf den Tarifwert zurueck. `null` kommt daher nur
+    // noch aus einer On-Prem-Lizenz — und heisst dann wirklich unbegrenzt.
     vi.stubGlobal('fetch', jsonFetch({ ...cloudActive, token_quota: null }))
     renderPanel()
 

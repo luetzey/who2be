@@ -122,6 +122,36 @@ class Entitlement(BaseModel):
         paid_features = self.features - {Feature.CORE}
         return None if paid_features else FREE_ENTITY_QUOTA
 
+    def effective_token_quota(self, *, cloud: bool, now: datetime | None = None) -> int | None:
+        """Tatsaechlich geltende Token-Obergrenze (None = unbegrenzt, Issue #538).
+
+        `token_quota` ist ein **Feld**, weil Pro eine eigene endliche Zahl
+        braucht. Ein Feld hat aber die Schwaeche, die `entity_limit()` bewusst
+        vermeidet: wer es nicht kennt, schreibt `NULL` — und `NULL` hiesse
+        unbegrenzt. Genau das tut der Billing-Pfad beim Downgrade
+        (`webhook.map_event_to_entitlement` schreibt beim Revoke ein
+        `Entitlement(status="inactive", features=frozenset())` ohne dieses
+        Feld), und genau das steht in jeder Bestands-Zeile vor Migration 0085
+        sowie in jeder vor #538 angelegten Mollie-Subscription.
+
+        Deshalb gilt `None` nur **ausserhalb** der Cloud als „unbegrenzt"
+        (On-Prem/OSS-Lizenz). In der Cloud heisst `None` „kein Wert gesetzt"
+        und wird aus demselben Signal abgeleitet wie `entity_limit()`:
+          * **inaktiv** (Kuendigung/Fehlzahlung) oder **Free** (nur `core`)
+            ⇒ `FREE_TOKEN_QUOTA`.
+          * aktiver Plan mit Paid-Features ⇒ `PRO_TOKEN_QUOTA` — ein zahlender
+            Bestandskunde ohne das neue Metadatum wird nicht still auf den
+            Free-Wert heruntergedeckelt.
+        """
+        if self.token_quota is not None:
+            return self.token_quota
+        if not cloud:
+            return None
+        if not self.is_active(now):
+            return FREE_TOKEN_QUOTA
+        paid_features = self.features - {Feature.CORE}
+        return PRO_TOKEN_QUOTA if paid_features else FREE_TOKEN_QUOTA
+
 
 # On-Prem/OSS-Default: alle Features, unbegrenzt, kein Ablauf (Plan §3.5).
 OSS_ENTITLEMENT = Entitlement(
