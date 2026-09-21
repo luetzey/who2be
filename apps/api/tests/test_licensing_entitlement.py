@@ -10,7 +10,9 @@ from who2be_api.licensing.entitlement import (
     ALL_FEATURES,
     CLOUD_FREE_ENTITLEMENT,
     FREE_ENTITY_QUOTA,
+    FREE_TOKEN_QUOTA,
     OSS_ENTITLEMENT,
+    PRO_TOKEN_QUOTA,
     Entitlement,
     Feature,
 )
@@ -65,6 +67,37 @@ def test_cloud_free_entitlement_has_quota() -> None:
     assert CLOUD_FREE_ENTITLEMENT.is_active()
     assert CLOUD_FREE_ENTITLEMENT.mcp_monthly_quota is not None
     assert CLOUD_FREE_ENTITLEMENT.mcp_rate_per_min is not None
+
+
+def test_oss_entitlement_has_unlimited_token_quota() -> None:
+    """Issue #538: On-Prem/OSS ist unbegrenzt — `None`, nicht eine grosse Zahl."""
+    assert OSS_ENTITLEMENT.token_quota is None
+
+
+def test_cloud_free_entitlement_carries_free_token_quota() -> None:
+    assert CLOUD_FREE_ENTITLEMENT.token_quota == FREE_TOKEN_QUOTA == 3
+
+
+def test_token_quota_defaults_to_unlimited() -> None:
+    """Bestandszeilen vor Migration 0085 tragen `NULL`; das Modell liest sie als
+    unbegrenzt. Das ist die Zusage „kein stiller Deckel auf Bestand"."""
+    assert Entitlement().token_quota is None
+
+
+def test_token_quota_is_a_field_not_a_derivation() -> None:
+    """Der Unterschied zum Entity-Zwilling, festgehalten statt kommentiert.
+
+    `entity_limit()` leitet aus den Feature-Codes ab und kennt nur „Free-Zahl
+    oder unbegrenzt". Pro braucht beim Token-Kontingent aber eine eigene
+    endliche Zahl — Paid-Features duerfen den Wert deshalb NICHT anheben.
+    """
+    paid = Entitlement(
+        status="active",
+        features=frozenset({Feature.CORE, Feature.AGENTS}),
+        token_quota=PRO_TOKEN_QUOTA,
+    )
+    assert paid.entity_limit() is None  # Ableitung: Paid ⇒ unbegrenzt
+    assert paid.token_quota == PRO_TOKEN_QUOTA == 25  # Feld: bleibt endlich
 
 
 def test_edition_flags() -> None:

@@ -52,6 +52,8 @@ class EntitlementInfo(BaseModel):
     expires_at: str | None
     mcp_monthly_quota: int | None
     mcp_rate_per_min: int | None
+    # `None` = unbegrenzt (On-Prem/OSS sowie Bestands-Entitlements vor 0085).
+    token_quota: int | None
     # Dunning-Signal: gesetzt, solange eine fehlgeschlagene Zahlung in der
     # Grace-Period nachgeholt werden kann (Banner in der Web-UI).
     grace_until: str | None
@@ -73,6 +75,7 @@ async def get_entitlement(ctx: Ctx, pool: Pool) -> EntitlementInfo:
         expires_at=entitlement.expires_at.isoformat() if entitlement.expires_at else None,
         mcp_monthly_quota=entitlement.mcp_monthly_quota,
         mcp_rate_per_min=entitlement.mcp_rate_per_min,
+        token_quota=entitlement.token_quota,
         grace_until=entitlement.grace_until.isoformat() if entitlement.grace_until else None,
         usage=EntitlementUsage(period=period, count=count),
     )

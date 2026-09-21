@@ -51,11 +51,22 @@ ALL_FEATURES: frozenset[str] = frozenset(
 # unbegrenzt (siehe `Entitlement.entity_limit`).
 FREE_ENTITY_QUOTA = 50
 
+# Obergrenze fuer die Anzahl **nutzbarer** Agent-Tokens je Workspace
+# (Issue #538, Owner-Entscheidung Option A). Anders als `entity_limit()` ist
+# das KEINE abgeleitete Groesse, sondern ein eigenes Entitlement-Feld: die
+# Ableitung kann nur „Free-Zahl oder unbegrenzt" ausdruecken (sie liest bloss,
+# OB ein Paid-Feature vorliegt), hier braucht Pro aber eine eigene endliche
+# Zahl. Der gebuchte Tier traegt den Wert deshalb als Provider-Metadatum
+# (`token_quota`) — dasselbe Muster wie `storage_quota_bytes` (#536).
+FREE_TOKEN_QUOTA = 3
+PRO_TOKEN_QUOTA = 25
+
 
 class Entitlement(BaseModel):
     """Aufgeloeste Nutzungsrechte einer Org.
 
-    `mcp_monthly_quota` / `mcp_rate_per_min` sind `None` = unbegrenzt. `status`
+    `mcp_monthly_quota` / `mcp_rate_per_min` / `token_quota` sind
+    `None` = unbegrenzt (On-Prem/OSS-Default). `status`
     plus `expires_at` bestimmen `is_active()`; nur ein aktives Entitlement laesst
     gated Reads durch.
 
@@ -73,6 +84,11 @@ class Entitlement(BaseModel):
     expires_at: datetime | None = None
     mcp_monthly_quota: int | None = None
     mcp_rate_per_min: int | None = None
+    # Max. Anzahl nutzbarer (nicht widerrufener, nicht abgelaufener) API-Tokens
+    # je Workspace (Issue #538). `None` = unbegrenzt — der On-Prem/OSS-Default
+    # und der Zustand jeder Bestands-Zeile in `org_entitlement`, die vor
+    # Migration 0085 geschrieben wurde.
+    token_quota: int | None = None
     grace_until: datetime | None = None
 
     def is_active(self, now: datetime | None = None) -> bool:
@@ -114,6 +130,7 @@ OSS_ENTITLEMENT = Entitlement(
     expires_at=None,
     mcp_monthly_quota=None,
     mcp_rate_per_min=None,
+    token_quota=None,
 )
 
 # Cloud-Default fuer Orgs ohne aktiven Plan (z. B. frisch registriert, vor dem
@@ -125,4 +142,5 @@ CLOUD_FREE_ENTITLEMENT = Entitlement(
     expires_at=None,
     mcp_monthly_quota=1_000,
     mcp_rate_per_min=30,
+    token_quota=FREE_TOKEN_QUOTA,
 )

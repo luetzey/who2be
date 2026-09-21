@@ -82,6 +82,7 @@ class _StubConnection:
                 expires_at,
                 mcp_monthly_quota,
                 mcp_rate_per_min,
+                token_quota,
                 grace_until,
                 *_rest,
             ) = args
@@ -91,6 +92,7 @@ class _StubConnection:
                 "expires_at": expires_at,
                 "mcp_monthly_quota": mcp_monthly_quota,
                 "mcp_rate_per_min": mcp_rate_per_min,
+                "token_quota": token_quota,
                 "grace_until": grace_until,
             }
         elif normalized.startswith("INSERT INTO entitlement_history"):

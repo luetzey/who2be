@@ -16,18 +16,28 @@ Dokument und der Code wird nachgezogen.
 
 Die einzigen Groessen, die der Code tatsaechlich durchsetzt, sind Preis
 (Mollie), MCP-Requests/Monat, MCP-Requests/Minute (beide `Entitlement`,
-App-seitiges Rate-Limiting) und das Entity-Limit je Workspace
-(`Entitlement.entity_limit()`). Das ist deshalb die verkaufsrelevante Tabelle:
+App-seitiges Rate-Limiting), das Entity-Limit je Workspace
+(`Entitlement.entity_limit()`) und die Anzahl aktiver API-Tokens je Workspace
+(`Entitlement.token_quota`). Das ist deshalb die verkaufsrelevante Tabelle:
 
-| Tier | Preis          | MCP-Requests/Monat | MCP-Requests/Minute | Entity-Limit je Workspace | Features (Metadaten, s. u.) |
-|------|----------------|---------------------|----------------------|----------------------------|------------------------------|
-| Free | 0 € (kein Abo) | 1.000               | 30                   | 50                         | `core` |
-| Pro  | 29 €/Monat     | 100.000             | 240                  | unbegrenzt                 | `core`, `composite_playbooks`, `agents`, `audit_export` |
+| Tier | Preis          | MCP-Requests/Monat | MCP-Requests/Minute | Entity-Limit je Workspace | API-Tokens je Workspace | Features (Metadaten, s. u.) |
+|------|----------------|---------------------|----------------------|----------------------------|--------------------------|------------------------------|
+| Free | 0 € (kein Abo) | 1.000               | 30                   | 50                         | 3                        | `core` |
+| Pro  | 29 €/Monat     | 100.000             | 240                  | unbegrenzt                 | 25                       | `core`, `composite_playbooks`, `agents`, `audit_export` |
 
 Quellen: Preis/MCP-Requests `packages/billing/src/who2be_billing/plans.py`
 (`FREE_PLAN`/`PRO_PLAN`: `price_eur`, `mcp_monthly_quota`,
 `mcp_rate_per_min`); Entity-Limit `licensing/entitlement.py`
-(`FREE_ENTITY_QUOTA = 50`, `Entitlement.entity_limit()`).
+(`FREE_ENTITY_QUOTA = 50`, `Entitlement.entity_limit()`); Token-Grenze
+ebenfalls `licensing/entitlement.py` (`FREE_TOKEN_QUOTA = 3`,
+`PRO_TOKEN_QUOTA = 25`) — `plans.py` importiert die beiden Zahlen, statt sie
+zu wiederholen.
+
+**Zur Token-Spalte:** gezaehlt werden nur **nutzbare** Tokens — widerrufene und
+abgelaufene zaehlen nicht mit. Die Grenze greift ausschliesslich bei der
+**Anlage**: bestehende Tokens bleiben ueber der Grenze nutzbar **und
+rotierbar** (Secret-Rotation, RUNBOOK §Secret-Rotation), ein Downgrade sperrt
+also keine laufenden Agenten aus. On-Prem/OSS ist unbegrenzt.
 
 **Zur Features-Spalte — praezise gelesen:** Die Feature-Codes sind Metadaten
 des Entitlements, kein Kaufargument. `Entitlement.entity_limit()` liest nur,
@@ -64,6 +74,7 @@ leitet daraus das Org-Entitlement ab.
 | `license_policy`    | String | Whitespace-/komma-separierte Liste der Feature-Codes (Pflicht).  |
 | `mcp_monthly_quota` | Int    | Monats-Kontingent agent-facing MCP-Reads.                        |
 | `mcp_rate_per_min`  | Int    | Per-Token-Rate-Ceiling (req/min).                                |
+| `token_quota`       | Int    | Max. Anzahl aktiver API-Tokens je Workspace.                     |
 
 Beispiel-Metadata für **Pro**:
 
@@ -72,13 +83,14 @@ Beispiel-Metadata für **Pro**:
   "org_id": "11111111-1111-1111-1111-111111111111",
   "license_policy": "agents audit_export composite_playbooks core",
   "mcp_monthly_quota": "100000",
-  "mcp_rate_per_min": "240"
+  "mcp_rate_per_min": "240",
+  "token_quota": "25"
 }
 ```
 
 `license_policy` akzeptiert sowohl Komma- als auch Whitespace-Trenner; unbekannte
 Codes werden ignoriert (Forward-Compatibility). Fehlen `mcp_monthly_quota`/
-`mcp_rate_per_min`, gilt das jeweilige Limit als unbegrenzt (`None`).
+`mcp_rate_per_min`/`token_quota`, gilt das jeweilige Limit als unbegrenzt (`None`).
 
 Zusätzlich schreibt der Checkout einen **operativen** Schlüssel `plan_code`
 (z. B. `"pro"`) in die Metadata. Er ist *nicht* Teil der entitlement-ableitenden

@@ -989,6 +989,8 @@ export interface EntitlementInfo {
   expires_at: string | null
   mcp_monthly_quota: number | null
   mcp_rate_per_min: number | null
+  /** `null` = unbegrenzt (On-Prem/OSS sowie Bestands-Entitlements vor 0085). */
+  token_quota: number | null
   usage: EntitlementUsage
 }
 

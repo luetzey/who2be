@@ -20,6 +20,28 @@ the merged pull requests and the plan documents under `.claude/plan/`.
   Node enables Web Storage by default there and Vitest 4 filters jsdom's
   `window.localStorage` away (upstream vitest#8757, fixed only in Vitest 5).
   The reason is documented once, in `CONTRIBUTING.md` under Definition of Done.
+- Cloud workspaces now have a cap on the number of agent tokens: **3 on Free,
+  25 on Pro** (`Entitlement.token_quota`, `None` = unlimited and the
+  on-premise default). Creating a token beyond the tier's limit is rejected
+  with `402` and `reason: token_quota_exceeded`, carrying the limit in
+  `params` rather than in the locale key. Until now the only brake was the
+  write rate limit — 30 creations per minute, for an unlimited number of
+  minutes.
+
+  Nothing is taken away: the gate sits on token *creation* only, so existing
+  tokens keep authenticating above the limit, and **rotation keeps working** —
+  rotation replaces a secret, it does not create a token, so a tightened quota
+  can never lock an operator out of the secret rotation described in the
+  runbook. Only usable tokens count: revoked ones and expired ones do not
+  occupy a slot, matching the condition under which a token can authenticate
+  at all.
+
+  Two deliberate boundaries: the cap is counted **per workspace, not per
+  organisation** (the same granularity the entity limit already uses), so an
+  organisation that creates several workspaces multiplies its allowance as
+  long as the number of workspaces is uncapped; and a raised limit takes
+  effect at the next checkout, because the entitlement carries the metadata of
+  its purchase.
 
 ### Fixed
 

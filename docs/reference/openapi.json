@@ -12864,6 +12864,7 @@
               "bound_agent_not_found",
               "token_role_escalation",
               "token_not_found",
+              "token_quota_exceeded",
               "subscription_inactive",
               "mcp_rate_limited",
               "mcp_quota_exceeded",
@@ -13782,6 +13783,17 @@
             ],
             "title": "Mcp Rate Per Min"
           },
+          "token_quota": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token Quota"
+          },
           "grace_until": {
             "anyOf": [
               {
@@ -13805,6 +13817,7 @@
           "expires_at",
           "mcp_monthly_quota",
           "mcp_rate_per_min",
+          "token_quota",
           "grace_until",
           "usage"
         ],

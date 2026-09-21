@@ -27,6 +27,7 @@ const cloudActive: EntitlementInfo = {
   expires_at: null,
   mcp_monthly_quota: 1000,
   mcp_rate_per_min: 30,
+  token_quota: 3,
   usage: { period: '202606', count: 250 },
 }
 
@@ -98,6 +99,32 @@ describe('BillingPanel', () => {
     // Entity-Limit — deshalb ueber den zugehoerigen dt-Nachbarn pruefen statt
     // ueber den (zweifach vorkommenden) Text allein.
     expect(screen.getByText('Entity-Limit je Workspace').nextElementSibling).toHaveTextContent(
+      'unbegrenzt',
+    )
+  })
+
+  it('zeigt die Token-Grenze aus dem Entitlement, nicht aus der TIERS-Liste', async () => {
+    // Issue #538: `token_quota` ist ein echtes Backend-Feld (anders als Preis
+    // und Entity-Limit, die das Panel aus `TIERS` dupliziert). Deshalb kommt
+    // die Zahl hier direkt aus der Response — ein manual_override mit
+    // individueller Grenze wird korrekt angezeigt, ohne Tier-Treffer.
+    vi.stubGlobal('fetch', jsonFetch({ ...cloudActive, mcp_monthly_quota: 50000, token_quota: 9 }))
+    renderPanel()
+
+    await waitFor(() => {
+      expect(screen.getByText('Aktiv')).toBeInTheDocument()
+    })
+    expect(screen.getByText('API-Tokens je Workspace').nextElementSibling).toHaveTextContent('9')
+  })
+
+  it('zeigt "unbegrenzt" bei token_quota=null (On-Prem-Lizenz, Bestand vor 0085)', async () => {
+    vi.stubGlobal('fetch', jsonFetch({ ...cloudActive, token_quota: null }))
+    renderPanel()
+
+    await waitFor(() => {
+      expect(screen.getByText('Aktiv')).toBeInTheDocument()
+    })
+    expect(screen.getByText('API-Tokens je Workspace').nextElementSibling).toHaveTextContent(
       'unbegrenzt',
     )
   })

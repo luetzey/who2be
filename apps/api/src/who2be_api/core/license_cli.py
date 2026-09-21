@@ -34,7 +34,8 @@ def _format(entitlement: Entitlement) -> str:
         f"  features:          {features}\n"
         f"  expires_at:        {expires}\n"
         f"  mcp_monthly_quota: {entitlement.mcp_monthly_quota}\n"
-        f"  mcp_rate_per_min:  {entitlement.mcp_rate_per_min}"
+        f"  mcp_rate_per_min:  {entitlement.mcp_rate_per_min}\n"
+        f"  token_quota:       {entitlement.token_quota}"
     )
 
 
