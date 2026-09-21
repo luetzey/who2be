@@ -149,7 +149,7 @@ Web (in `apps/web/`):
 - Tests: `npm run test:coverage` (Vitest mit Coverage-Gate wie in CI — lokal =
   CI, Coverage-Ratchet); Einzeldatei: `npm test -- src/App.test.tsx`
 - Lint: `npm run lint`
-- Typecheck: `npx tsc --noEmit`
+- Typecheck: `npx tsc -b`
 - Build: `npm run build`
 
 Lokale Infrastruktur: `docker compose up -d` (Postgres-Stub; wird in Phase 0/T1
@@ -231,7 +231,7 @@ Neue Header → Caddyfile, nicht
 
 ### DoD (Frontend-Aenderung)
 
-`npm run lint`, `npx tsc --noEmit`, `npm run test:coverage`, `npm run build` — alle gruen,
+`npm run lint`, `npx tsc -b`, `npm run test:coverage`, `npm run build` — alle gruen,
 lokal verifiziert vor jedem Push. Stack-uebergreifend siehe auch
 `docs/CLAUDE-PROFILE.md`.
 

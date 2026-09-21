@@ -10,7 +10,17 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Added
 
-- Cloud organisations now have a storage quota: **100 MB on Free, 10 GB on
+- The Node major the CI enforces is now pinned in the repo: `.nvmrc`,
+  `mise.toml` (`[tools] node = "22"`) and `apps/web/package.json`
+  (`engines.node`) all name major **22**, matching the four `node-version: 22`
+  entries in `.github/workflows/ci.yml`. A fresh clone with `mise`, `nvm` or
+  `fnm` therefore lands on the same Node the CI uses, instead of on whatever
+  the machine happens to default to. On Node 25+ `npm run test:coverage` failed
+  locally with ~135 red tests and no `coverage/` output while CI stayed green —
+  Node enables Web Storage by default there and Vitest 4 filters jsdom's
+  `window.localStorage` away (upstream vitest#8757, fixed only in Vitest 5).
+  The reason is documented once, in `CONTRIBUTING.md` under Definition of Done.
+- Cloud workspaces now have a storage quota: **100 MB on Free, 10 GB on
   Pro** (`Entitlement.storage_quota_bytes`, `None` = unlimited and the
   on-premise default). An ingest that would push a workspace past its tier's
   limit is rejected with `402` and `reason: storage_quota_exceeded`, carrying
@@ -21,14 +31,33 @@ the merged pull requests and the plan documents under `.claude/plan/`.
   contract the entity quota already makes. The billing panel shows used bytes
   against the limit.
 
-  Two deliberate boundaries, documented rather than glossed over: the
+  Three deliberate boundaries, documented rather than glossed over: the quota
+  is counted and enforced **per work area, not per organisation**, so an
+  organisation that creates several work areas multiplies its allowance as
+  long as the number of work areas is uncapped (a follow-up card caps it); the
   **table store is not counted** (per-work-area SQLite files live on the
-  filesystem, ADR-0049), and the gate checks `used >= limit` *before* the
+  filesystem, ADR-0049); and the gate checks `used >= limit` *before* the
   ingest runs, so a single ingest may overshoot by at most
   `WHO2BE_INGEST_MAX_BYTES`. A raised limit takes effect at the next
   checkout, because the entitlement carries the metadata of its purchase.
 
 ### Fixed
+
+- `apps/web`: the generated `coverage/` report directory is now on the ESLint
+  ignore list. Preventive hardening, not a fix for an observed symptom: with
+  the reporters configured in `vite.config.ts:37` (`text-summary`, `json`,
+  `html`) no `.ts`/`.tsx` file is written to `coverage/`, and every rule block
+  in `eslint.config.js` is scoped to `**/*.{ts,tsx}`, so the emitted report
+  scripts carried no rules. The ignore entry keeps `eslint .` independent of
+  whether `npm run test:coverage` ran before it should a future reporter or
+  rule-block change make that matter.
+- Die dokumentierte Verifikations-Schleife fuer `apps/web` prueft wieder etwas:
+  `npx tsc --noEmit` hatte gegen das Solution-`tsconfig.json` (`"files": []`)
+  null Eingabedateien und endete immer mit Exit 0. Alle normativen Stellen
+  nennen jetzt `npx tsc -b` (1658 gepruefte Dateien), so wie CI es faehrt.
+- Das dokumentierte Testgate fuer `apps/web` nennt statt `npm test` jetzt
+  `npm run test:coverage` — die Coverage-Thresholds aus `vite.config.ts`
+  greifen nur mit `--coverage`, CI faehrt ebenfalls `test:coverage`.
 
 - Remote MCP connectors can log in again when the OAuth issuer is a bare
   origin. Clients hold the `authorization_servers` entry of the MCP server's

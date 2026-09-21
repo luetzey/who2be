@@ -551,8 +551,8 @@ nachfragen, **nicht** stillschweigend umgehen.
    Media-Query.
 10. **Verbindlichkeit:** Diese Guideline ist fuer die Web-UI die
    maßgebliche Quelle (Konsistenz mit `CLAUDE.md` §Frontend-Standards).
-11. **DoD pro Aenderung:** `npm run lint && npx tsc --noEmit &&
-    npm test && npm run build` (in `apps/web/`) — alle vier gruen, lokal
+11. **DoD pro Aenderung:** `npm run lint && npx tsc -b &&
+    npm run test:coverage && npm run build` (in `apps/web/`) — alle vier gruen, lokal
     verifiziert, **vor** dem Push.
 12. **Bei Unsicherheit:** STOP, frag den User. Lieber eine Frage als
     ein UI-Inconsistency-PR.
