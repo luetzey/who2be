@@ -299,6 +299,8 @@ services:
       RESTIC_REPOSITORY: ${RESTIC_REPOSITORY:-}
       RESTIC_PASSWORD: ${RESTIC_PASSWORD:-}
       RESTIC_SSH_KEY: /secrets/storage_box_ed25519
+      # Dead-Man's-Switch (#541). Leer = aus, Verhalten wie bisher.
+      BACKUP_HEARTBEAT_URL: ${BACKUP_HEARTBEAT_URL:-}
     volumes:
       - backups:/var/backups/who2be
       - ${BACKUP_GPG_HOME:-/opt/who2be/secrets/gpg}:/root/.gnupg:ro
