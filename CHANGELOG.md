@@ -10,6 +10,28 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Fixed
 
+- A failed offsite backup no longer reports success. `restic backup` and
+  `restic forget` were deliberately non-fatal, so a full storage box, an expired
+  SSH key or a network outage ended the cron run with exit 0 — nobody found out
+  there had been no offsite backup for weeks until a restore was attempted. Both
+  steps now end the run with a non-zero exit code. The promise they were written
+  for holds unchanged: the **local GPG dump is never touched** — it is already on
+  disk at that point, and only the false success report is gone. This revises the
+  counter-decision recorded in ADR-0011, which predates any operational alerting;
+  the revision is dated in the ADR and at the call site rather than silently
+  dropped.
+
+  In addition, an optional dead man's switch: with `BACKUP_HEARTBEAT_URL` set
+  (empty by default — without it behaviour is unchanged), the script pings that
+  URL only on a fully successful run, so the *absence* of the ping raises the
+  alarm. That also catches what an exit code structurally cannot: cron disabled,
+  container gone, host down. The receiver is deliberately **self-hosted** — a
+  hosted service would be a processor for operational metadata and would require
+  a record-of-processing entry. `deploy/hetzner/RUNBOOK.md` documents the
+  receiver and how to trigger the alarm on purpose; a stub-based test
+  (`deploy/hetzner/tests/test_backup_alarm.sh`) proves that a failed sync leaves
+  the local dump in place.
+
 - Remote MCP connectors can log in again when the OAuth issuer is a bare
   origin. Clients hold the `authorization_servers` entry of the MCP server's
   protected-resource metadata (RFC 9728) against the `issuer` of the API's

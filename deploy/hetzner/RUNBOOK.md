@@ -750,6 +750,82 @@ cd /opt/who2be && docker compose --profile backup run --rm backup
 
 Bewusst Host-Cron, nicht Compose-Sidecar — spart den Dauerlauf eines Backup-Containers.
 
+### Alarmweg (Dead-Man's-Switch)
+
+Bis 2026-09-21 war ein fehlgeschlagener Offsite-Sync **still**: das Skript beendete
+sich mit Exit 0, der Cron-Lauf galt als erfolgreich. Storage Box voll, SSH-Key
+abgelaufen, Netzwerk weg — in allen drei Fällen lief der lokale Dump weiter und
+niemand erfuhr, dass es seit Wochen kein Offsite-Backup mehr gab. Seit Issue #541
+gilt (Owner-Entscheidung, Nachtrag in ADR-0011):
+
+1. **Ehrlicher Exit-Code.** Scheitert `restic backup` oder `restic forget`, endet der
+   Lauf mit Exit != 0. Der **lokale GPG-Dump bleibt dabei unangetastet** — er ist zu
+   diesem Zeitpunkt längst geschrieben; weggefallen ist nur die Erfolgsmeldung.
+2. **Dead-Man's-Switch.** Ist `BACKUP_HEARTBEAT_URL` gesetzt, pingt das Skript diese
+   URL **nur bei vollständigem Erfolg**, als letzte Aktion. Alarmiert wird durch das
+   *Ausbleiben* des Pings. Das fängt zusätzlich die Fälle, die ein Exit-Code
+   prinzipiell nicht fangen kann: Cron deaktiviert, Container weg, Host aus.
+
+`BACKUP_HEARTBEAT_URL` leer (Default) ⇒ kein Ping, Verhalten wie zuvor — On-Prem-
+Betreiber ohne Alarmweg merken von der Änderung nichts außer dem ehrlichen Exit-Code.
+
+**Der Empfänger ist self-hosted.** Kein healthchecks.io, kein anderer gehosteter
+Dienst: der wäre Auftragsverarbeiter für Betriebsmetadaten und bräuchte einen
+VVT-Eintrag (`docs/compliance/vvt.md` §5). Minimal genügt ein Endpunkt auf einer
+zweiten, unabhängigen Maschine (**nicht** auf dem Backup-Host — stirbt der Host,
+stirbt sonst auch der Wächter), der den Zeitpunkt des letzten Pings festhält und
+Alarm schlägt, wenn er älter als ~26 h ist:
+
+```bash
+# Empfänger (zweite Maschine): Caddy/nginx schreibt nur den Zeitstempel.
+#   Caddyfile:
+#     status.example.com {
+#       handle /ping/who2be-backup { respond 204 }
+#       log { output file /var/log/who2be-heartbeat.log }
+#     }
+
+# Wächter-Cron auf derselben zweiten Maschine, stündlich:
+0 * * * * find /var/log/who2be-heartbeat.log -mmin +1560 \
+  -exec mail -s "who2be: Backup-Heartbeat ausgeblieben" ops@example.com \
+  /var/log/who2be-heartbeat.log \;
+```
+
+Jeder andere selbst betriebene Wächter (Uptime-Kuma-Push-Monitor, Prometheus
+Pushgateway + `time() - push_time_seconds > 93600`) erfüllt denselben Zweck.
+
+#### Alarmweg testen — Pflicht vor dem Verlassen auf ihn
+
+Ein Alarmweg, der nie ausgelöst wurde, ist so viel wert wie ein ungetestetes Backup.
+
+```bash
+# 1) Erfolgsfall: Ping muss ankommen, Lauf muss gruen sein.
+cd /opt/who2be && docker compose --profile backup run --rm backup; echo "exit=$?"
+#    -> exit=0, und beim Empfaenger ist ein frischer Ping protokolliert.
+
+# 2) Fehlerfall erzwingen: Offsite-Ziel unerreichbar machen.
+RESTIC_REPOSITORY="sftp:nobody@127.0.0.1:/nonexistent" \
+  docker compose --profile backup run --rm \
+  -e RESTIC_REPOSITORY backup; echo "exit=$?"
+#    -> exit!=0, KEIN neuer Ping beim Empfaenger,
+#    -> und der lokale Dump liegt trotzdem da:
+ls -la /var/backups/who2be/dump-*.pgc.gpg | tail -2
+
+# 3) Alarm abwarten: der Waechter muss nach Ablauf seines Fensters melden.
+#    Zum Proben das Fenster einmalig verkuerzen (z. B. -mmin +5 statt +1560),
+#    statt einen Tag zu warten.
+```
+
+Ohne Docker-Daemon lässt sich dieselbe Logik direkt gegen das Skript prüfen — der
+Test fährt `backup.sh` gegen Stubs für `pg_dump`/`gpg`/`restic`/`curl` und belegt
+unter anderem, dass bei gescheitertem Sync der lokale Dump liegen bleibt:
+
+```bash
+bash deploy/hetzner/tests/test_backup_alarm.sh
+```
+
+Der Container-Handlauf oben bleibt davon unberührt; er gehört in den Prod-Smoke
+(#454).
+
 ### Verifikation
 
 ```bash
