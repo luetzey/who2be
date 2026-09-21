@@ -10,6 +10,9 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Fixed
 
+- `npm run lint` in `apps/web` no longer reports a different warning count
+  depending on whether `npm run test:coverage` ran before it: the generated
+  `coverage/` report directory is now on the ESLint ignore list.
 - Remote MCP connectors can log in again when the OAuth issuer is a bare
   origin. Clients hold the `authorization_servers` entry of the MCP server's
   protected-resource metadata (RFC 9728) against the `issuer` of the API's
