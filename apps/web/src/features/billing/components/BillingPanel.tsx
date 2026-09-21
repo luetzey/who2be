@@ -108,6 +108,7 @@ function StorageBar({ usedBytes, quotaBytes }: { usedBytes: number; quotaBytes: 
           aria-valuemin={0}
           aria-valuemax={quotaBytes}
           aria-label={t('panel.storage.ariaLabel')}
+          data-testid="storage-bar"
         />
       </div>
     </div>
@@ -139,6 +140,7 @@ function QuotaBar({ count, quota }: { count: number; quota: number | null }) {
           aria-valuemin={0}
           aria-valuemax={quota}
           aria-label={t('panel.quota.ariaLabel')}
+          data-testid="mcp-quota-bar"
         />
       </div>
     </div>
