@@ -84,6 +84,7 @@ class _StubConnection:
                 mcp_rate_per_min,
                 token_quota,
                 storage_quota_bytes,
+                workspace_quota,
                 grace_until,
                 *_rest,
             ) = args
@@ -95,6 +96,7 @@ class _StubConnection:
                 "mcp_rate_per_min": mcp_rate_per_min,
                 "token_quota": token_quota,
                 "storage_quota_bytes": storage_quota_bytes,
+                "workspace_quota": workspace_quota,
                 "grace_until": grace_until,
             }
         elif normalized.startswith("INSERT INTO entitlement_history"):
@@ -246,6 +248,10 @@ def test_paid_checkout_unlocks_mcp_limit_that_free_tier_denies(
     # Metadata → Webhook → Entitlement-Zeile. Ohne diese Zusicherung koennte
     # `storage_quota_bytes` still auf `None` (= unbegrenzt) fallen.
     assert written["storage_quota_bytes"] == PRO_PLAN.storage_quota_bytes
+    # Issue #576: derselbe Weg, dritte Grenze. Der Test haelt hier fest, dass
+    # die Kette Plan → Metadata → Webhook → Zeile fuer JEDE Grenze traegt und
+    # nicht pro Feld eine eigene Sonderbehandlung braucht.
+    assert written["workspace_quota"] == PRO_PLAN.workspace_quota
 
     # --- Limit-Pruefung: derselbe Aufruf, eben abgewiesen, geht jetzt durch ---
     token_rate_limiter.reset()

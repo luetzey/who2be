@@ -59,4 +59,5 @@ def entitlement_from_license(payload: dict[str, Any]) -> Entitlement:
         storage_quota_bytes=_parse_optional_int(
             payload.get("storage_quota_bytes"), "storage_quota_bytes"
         ),
+        workspace_quota=_parse_optional_int(payload.get("workspace_quota"), "workspace_quota"),
     )

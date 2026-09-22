@@ -36,7 +36,8 @@ def _format(entitlement: Entitlement) -> str:
         f"  mcp_monthly_quota: {entitlement.mcp_monthly_quota}\n"
         f"  mcp_rate_per_min:  {entitlement.mcp_rate_per_min}\n"
         f"  token_quota:       {entitlement.token_quota}\n"
-        f"  storage_quota_bytes: {entitlement.storage_quota_bytes}"
+        f"  storage_quota_bytes: {entitlement.storage_quota_bytes}\n"
+        f"  workspace_quota:   {entitlement.workspace_quota}"
     )
 
 

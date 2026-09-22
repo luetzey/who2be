@@ -32,6 +32,7 @@ const de = {
       priceLabel: 'Preis',
       entityLimitLabel: 'Entity-Limit je Workspace',
       tokenQuotaLabel: 'API-Tokens je Workspace',
+      workspaceQuotaLabel: 'Workspaces je Organisation',
       unknown: 'unbekannt',
     },
     price: {
@@ -78,6 +79,7 @@ const en = {
       priceLabel: 'Price',
       entityLimitLabel: 'Entity limit per workspace',
       tokenQuotaLabel: 'API tokens per workspace',
+      workspaceQuotaLabel: 'Workspaces per organization',
       unknown: 'unknown',
     },
     price: {

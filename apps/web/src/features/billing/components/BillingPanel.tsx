@@ -211,6 +211,10 @@ export function BillingPanel() {
           <dd className="text-right font-medium tabular-nums">
             {data.token_quota === null ? t('panel.unlimited') : String(data.token_quota)}
           </dd>
+          <dt className="text-muted-foreground">{t('panel.plan.workspaceQuotaLabel')}</dt>
+          <dd className="text-right font-medium tabular-nums">
+            {data.workspace_quota === null ? t('panel.unlimited') : String(data.workspace_quota)}
+          </dd>
           <dt className="text-muted-foreground">{t('panel.validUntil')}</dt>
           <dd className="text-right font-medium">{formatExpiry(data.expires_at, t('expiry.unlimited'))}</dd>
         </dl>

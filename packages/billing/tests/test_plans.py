@@ -14,8 +14,10 @@ from who2be_api.licensing.entitlement import (
     CLOUD_FREE_ENTITLEMENT,
     FREE_STORAGE_QUOTA_BYTES,
     FREE_TOKEN_QUOTA,
+    FREE_WORKSPACE_QUOTA,
     PRO_STORAGE_QUOTA_BYTES,
     PRO_TOKEN_QUOTA,
+    PRO_WORKSPACE_QUOTA,
     Feature,
 )
 from who2be_billing.plans import (
@@ -38,6 +40,9 @@ def test_free_tier_matches_cloud_free_entitlement() -> None:
     # Issue #536: Free 100 MB — dieselbe Zahl wie `CLOUD_FREE_ENTITLEMENT`.
     assert FREE_PLAN.storage_quota_bytes == FREE_STORAGE_QUOTA_BYTES
     assert FREE_PLAN.storage_quota_bytes == 100 * 1024 * 1024
+    # Issue #576: Free 1 Workspace je Org — dieselbe Zahl wie der Cloud-Default.
+    assert FREE_PLAN.workspace_quota == FREE_WORKSPACE_QUOTA == 1
+    assert CLOUD_FREE_ENTITLEMENT.workspace_quota == FREE_WORKSPACE_QUOTA
 
 
 def test_pro_tier_is_superset_of_free() -> None:
@@ -52,6 +57,12 @@ def test_pro_tier_is_superset_of_free() -> None:
     # Issue #536: Pro 10 GB.
     assert PRO_PLAN.storage_quota_bytes == PRO_STORAGE_QUOTA_BYTES
     assert PRO_PLAN.storage_quota_bytes == 10 * 1024 * 1024 * 1024
+    # Issue #576: Pro 5 Workspaces je Org. Die Zahl, die zaehlt, ist ihr
+    # Produkt mit der Speichergrenze — 5 x 10 GiB = 50 GiB maximale
+    # Speicherzusage einer Pro-Org. Genau darauf beruht die Owner-Entscheidung.
+    assert PRO_PLAN.workspace_quota == PRO_WORKSPACE_QUOTA == 5
+    assert PRO_PLAN.workspace_quota > FREE_PLAN.workspace_quota
+    assert PRO_PLAN.workspace_quota * PRO_PLAN.storage_quota_bytes == 50 * 1024**3
 
 
 def test_plan_metadata_follows_convention() -> None:
@@ -65,6 +76,8 @@ def test_plan_metadata_follows_convention() -> None:
     assert meta["token_quota"] == "25"
     # Issue #536: der Pull-Adapter liest diesen Key ohne Sonderfall zurueck.
     assert meta["storage_quota_bytes"] == str(PRO_STORAGE_QUOTA_BYTES)
+    # Issue #576: einziger Key der Konvention, der je ORG gilt, nicht je Workspace.
+    assert meta["workspace_quota"] == "5"
     assert meta["plan_code"] == "pro"
 
 
@@ -87,5 +100,6 @@ def test_plan_is_frozen() -> None:
         mcp_rate_per_min=1,
         token_quota=1,
         storage_quota_bytes=1,
+        workspace_quota=1,
     )
     assert plan.code == "x"

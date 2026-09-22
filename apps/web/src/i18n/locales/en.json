@@ -142,6 +142,7 @@
       "workspace_org_missing": "Workspace without an organization.",
       "entity_quota_exceeded": "The free plan is limited to {{limit}} entries per workspace. Upgrading to Pro lifts the limit — existing entries stay usable.",
       "storage_quota_exceeded": "Storage limit of {{limit}} bytes reached. Upgrading to Pro raises the limit — what you stored stays readable and downloadable.",
+      "workspace_quota_exceeded": "Your plan allows {{limit}} workspaces per organization. Change plans or delete an existing workspace — your existing workspaces stay fully usable.",
       "persona_not_found": "Persona not found.",
       "resource_slug_conflict": "A resource with this slug already exists.",
       "sub_playbook_not_found": "At least one sub-playbook does not exist or belongs to a different workspace.",

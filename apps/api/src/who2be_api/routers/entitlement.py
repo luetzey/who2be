@@ -67,6 +67,11 @@ class EntitlementInfo(BaseModel):
     token_quota: int | None
     # `None` = unbegrenzt (On-Prem/OSS sowie Bestands-Entitlements vor 0084).
     storage_quota_bytes: int | None
+    # Die **tatsaechlich geltende** Grenze (`Entitlement.effective_workspace_quota`),
+    # aus demselben Grund wie bei `token_quota`: in der Cloud heisst ein leeres
+    # Feld „nicht gesetzt" und faellt auf den Tarifwert zurueck (Issue #576).
+    # `None` = wirklich unbegrenzt (On-Prem/OSS).
+    workspace_quota: int | None
     # Dunning-Signal: gesetzt, solange eine fehlgeschlagene Zahlung in der
     # Grace-Period nachgeholt werden kann (Banner in der Web-UI).
     grace_until: str | None
@@ -95,6 +100,7 @@ async def get_entitlement(ctx: Ctx, pool: Pool) -> EntitlementInfo:
         mcp_rate_per_min=entitlement.mcp_rate_per_min,
         token_quota=entitlement.effective_token_quota(cloud=is_cloud(settings)),
         storage_quota_bytes=entitlement.storage_quota_bytes,
+        workspace_quota=entitlement.effective_workspace_quota(cloud=is_cloud(settings)),
         grace_until=entitlement.grace_until.isoformat() if entitlement.grace_until else None,
         usage=EntitlementUsage(period=period, count=count, storage_bytes=int(used_storage or 0)),
     )

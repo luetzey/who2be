@@ -16,8 +16,10 @@ from uuid import UUID
 from who2be_api.licensing.entitlement import (
     FREE_STORAGE_QUOTA_BYTES,
     FREE_TOKEN_QUOTA,
+    FREE_WORKSPACE_QUOTA,
     PRO_STORAGE_QUOTA_BYTES,
     PRO_TOKEN_QUOTA,
+    PRO_WORKSPACE_QUOTA,
     Feature,
 )
 
@@ -29,9 +31,13 @@ META_MCP_RATE_PER_MIN = "mcp_rate_per_min"
 # Anzahl nutzbarer API-Tokens je Workspace (Issue #538). Wie die beiden
 # MCP-Keys ein entitlement-ableitendes Metadatum, kein operativer Zusatz.
 META_TOKEN_QUOTA = "token_quota"
-# Speicher-Obergrenze je Org in Bytes (Issue #536). Wie die MCP-Keys ein
+# Speicher-Obergrenze je Workspace in Bytes (Issue #536). Wie die MCP-Keys ein
 # entitlement-ableitendes Metadatum: der Pull-Adapter liest ihn ohne Sonderfall.
 META_STORAGE_QUOTA_BYTES = "storage_quota_bytes"
+# Anzahl der Workspaces je Organisation (Issue #576). Einziger Key der
+# Konvention, der NICHT je Workspace gilt, sondern je Org — er deckelt genau die
+# Vervielfachbarkeit der beiden Keys darueber.
+META_WORKSPACE_QUOTA = "workspace_quota"
 # Operativer Zusatz-Key: erlaubt dem Webhook, beim Anlegen der Folge-Subscription
 # Preis/Intervall des gebuchten Tiers wiederzufinden (nicht Teil der
 # entitlement-ableitenden Konvention oben).
@@ -56,8 +62,10 @@ class Plan:
     mcp_monthly_quota: int
     mcp_rate_per_min: int
     token_quota: int
-    # Summe der ablegbaren Blob-Bytes je Org (Issue #536).
+    # Summe der ablegbaren Blob-Bytes je Workspace (Issue #536).
     storage_quota_bytes: int
+    # Anzahl der Workspaces je Organisation (Issue #576).
+    workspace_quota: int
 
     def metadata(self, org_id: UUID) -> dict[str, str]:
         """Baut die Mollie-Metadata fuer diesen Plan + Org (Konvention §3.2).
@@ -72,6 +80,7 @@ class Plan:
             META_MCP_RATE_PER_MIN: str(self.mcp_rate_per_min),
             META_TOKEN_QUOTA: str(self.token_quota),
             META_STORAGE_QUOTA_BYTES: str(self.storage_quota_bytes),
+            META_WORKSPACE_QUOTA: str(self.workspace_quota),
             META_PLAN_CODE: self.code,
         }
 
@@ -89,6 +98,7 @@ FREE_PLAN = Plan(
     # `CLOUD_FREE_ENTITLEMENT` traegt denselben Wert (Issue #538).
     token_quota=FREE_TOKEN_QUOTA,
     storage_quota_bytes=FREE_STORAGE_QUOTA_BYTES,
+    workspace_quota=FREE_WORKSPACE_QUOTA,
 )
 
 # Pro = einzelne monatliche Mollie-Subscription; Superset von Free.
@@ -109,6 +119,7 @@ PRO_PLAN = Plan(
     mcp_rate_per_min=240,
     token_quota=PRO_TOKEN_QUOTA,
     storage_quota_bytes=PRO_STORAGE_QUOTA_BYTES,
+    workspace_quota=PRO_WORKSPACE_QUOTA,
 )
 
 # Nur Free ist abo-frei; jeder andere Tier ist ueber Checkout buchbar.

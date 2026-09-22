@@ -999,6 +999,12 @@ export interface EntitlementInfo {
   token_quota: number | null
   /** `null` = unbegrenzt (On-Prem/OSS). */
   storage_quota_bytes: number | null
+  /**
+   * Die tatsaechlich geltende Grenze (`Entitlement.effective_workspace_quota`),
+   * nicht das rohe Entitlement-Feld — wie bei `token_quota`. `null` =
+   * unbegrenzt (On-Prem/OSS).
+   */
+  workspace_quota: number | null
   usage: EntitlementUsage
 }
 
