@@ -61,6 +61,10 @@ bzw. Dokumentations-Standards).
   Datenhaltung, Backup-Strategie (Betreiber)
 - Deployment: [`../deploy/hetzner/README.md`](../deploy/hetzner/README.md)
   — Produktions-Deploy inkl. Runbook (Betreiber)
+- [`branch-protection-main.md`](branch-protection-main.md) —
+  **Vorschlag** fuer die Branch-Protection auf `main`: `all-green` als
+  einziger Required Check, je Regel Nutzen/Kosten/Wirkung auf Agenten
+  (Owner; nicht angewendet)
 
 ## Arbeits- und Pruefstaende (intern, historisch)
 
