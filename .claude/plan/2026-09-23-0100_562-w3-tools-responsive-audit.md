@@ -103,6 +103,19 @@ grep -rnE '(^|[^:a-z-])grid-cols-[2-9]' --include='*.tsx' \
 Fragment unter `changelog.d/` (Verfahren seit PR #587), **nicht** direkt in
 `CHANGELOG.md` — der CI-Guard `changelog-guard` weist das sonst ab.
 
+## Ergebnis (gemessen, Commit `HEAD`)
+
+- RED vor dem Fix: `Test Files 2 failed | Tests 4 failed | 22 passed (26)`.
+- GREEN nach dem Fix, Domäne: `Test Files 5 passed | Tests 30 passed`.
+- `npm run lint` → Exit 0 (67 Warnungen, alle vorbestehend, keine in `features/tools`).
+- `npx tsc -b` → Exit 0.
+- `npm run test:coverage` → Exit 0, **197 Dateien / 1223 Tests, 0 skipped**.
+  Statements 87.25 · Branches 82.01 · Functions 82.77 · Lines 88.28 — alle
+  Floors (80/79/75/80) halten.
+- `npm run build` → Exit 0.
+- `npm run i18n:check` → Exit 0 (keine neuen Schlüssel eingeführt).
+- Grid-Gate aus AK 2: 0 Zeilen.
+
 ## Grenzen
 
 Nur `apps/web/src/features/tools/**` + Testnachbarn + `changelog.d/`.
