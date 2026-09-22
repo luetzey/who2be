@@ -21,6 +21,47 @@ the merged pull requests and the plan documents under `.claude/plan/`.
   `window.localStorage` away (upstream vitest#8757, fixed only in Vitest 5).
   The reason is documented once, in `CONTRIBUTING.md` under Definition of Done.
 
+### Changed
+
+- All three Compose stacks now pin `supabase/gotrue:v2.196.0` instead of
+  `v2.158.1`, and WebAuthn is available as a second factor on the server side.
+
+  The version floor is **v2.190.0**, not v2.163.0 where the WebAuthn factor
+  first appeared: only v2.190.0 made the relying-party configuration settable
+  through environment variables at all, and only from that release does GoTrue
+  *warn* about an invalid WebAuthn configuration instead of refusing to start.
+  On anything between v2.163.0 and v2.189.0 a single missing RP variable is a
+  dead stack, which makes those releases unusable for an env-configured Compose
+  deployment.
+
+  The two stacks that carry an MFA block (local and Hetzner) set both WebAuthn
+  factor switches explicitly, because they default to `false` — only TOTP,
+  which has its own configuration type upstream, defaults to `true`. Without
+  the explicit switches the bump would raise the version while leaving the
+  factor unavailable. They also gain the three mandatory relying-party
+  variables `GOTRUE_WEBAUTHN_RP_ID`, `_RP_DISPLAY_NAME` and `_RP_ORIGINS` —
+  note the prefix differs from the factor switches (`GOTRUE_WEBAUTHN_` vs.
+  `GOTRUE_MFA_WEB_AUTHN_`); writing the MFA prefix there sets variables GoTrue
+  never reads.
+
+  The Dokploy stack carries no `GOTRUE_MFA` entries at all and runs TOTP off
+  the defaults; it gets the pin and nothing else. What matters across the three
+  files is pin symmetry, not configuration symmetry — a pin left behind would
+  be a silent version divergence between documented deployment paths that no
+  check reports.
+
+  No TOTP variable was removed or renamed, and the passkey UI is deliberately
+  not part of this change.
+
+- `scripts/smoke.sh` gained a ninth check that holds the *running* `auth`
+  image against the pin in `docker-compose.yml` and asserts the container log
+  shows a clean start without a migration or fatal error. `docker compose up
+  --wait` only fails when a service never becomes healthy, so a migration that
+  warns rather than breaks would have passed unnoticed — and since v2.190.0 an
+  incomplete WebAuthn configuration warns too. The jump from v2.158.1 pulls in
+  18 migrations, which is more than a version check should be asked to take on
+  trust.
+
 ### Fixed
 
 - A failed offsite backup no longer reports success. `restic backup` and

@@ -1736,3 +1736,34 @@ irrefuehrend, weil es zwei Dinge gleich faerbte. Beide Male galt: Ein
 Signal ist nur so viel wert wie die Frage, die es beantwortet. Wer ein
 Gate baut, muss "bestanden", "durchgefallen" und "konnte nicht pruefen"
 auseinanderhalten — und darf das dritte niemals ins erste kippen lassen.
+
+## 2026-09-21 — GoTrue-Zielversion ist v2.196.0, nicht die neueste stabile
+
+**Entscheidung:** Alle drei Compose-Stacks werden auf
+`supabase/gotrue:v2.196.0` gepinnt (Issue #499), obwohl zum Zeitpunkt der
+Umsetzung `v2.197.0` stabil verfuegbar war.
+
+**Warum nicht die neueste:** Der Breaking-Change-Check fuer diesen Sprung ist
+am 2026-09-08 gegen `supabase/auth` @ `0907af9` gemacht worden. `v2.197.0`
+bringt fuenf Migrationen, die nach diesem Stand liegen (SCIM-Users,
+SCIM-Tokens, Recovery-Codes-Faktor, Recovery-Codes-Tabellen,
+One-Time-Token-Expiry) — sie sind schlicht nicht geprueft. `v2.196.0` ist die
+hoechste Version, die der Check traegt: der Tag ist vom 2026-08-18, der
+gepruefte Commit vom 2026-09-03, `gh api compare v2.196.0...0907af9` meldet
+`ahead_by: 38, behind_by: 0` — der geprüfte Commit liegt also 38 Commits *vor*
+der Zielversion. Der Check hat damit einen Stand *nach* v2.196.0 gelesen und
+traegt die Zielversion vollstaendig (Gegenprobe: `v2.197.0...0907af9` →
+`behind_by: 1`, v2.197.0 traegt er gerade nicht mehr).
+
+**Die Untergrenze ist v2.190.0, nicht v2.163.0.** v2.163.0 ist die Version,
+in der der WebAuthn-Faktor erscheint — aber erst v2.190.0 macht die
+Relying-Party-Konfiguration ueber Environment setzbar und warnt bei
+unvollstaendiger Konfiguration, statt den Start abzubrechen. Dazwischen ist
+eine fehlende RP-Variable ein toter Stack. Die Grenze eines Features und die
+Grenze seines Betriebs sind nicht dieselbe Zahl.
+
+**Regel daraus:** Ein Versionssprung ueber Migrationen hinweg darf nur so weit
+gehen, wie die Pruefung reicht, die ihn traegt. „Die neueste stabile" ist
+kein Argument gegen „die hoechste geprueft". Wer weiter will, prueft weiter —
+er verschiebt nicht die Grenze und behaelt den Beleg.
+
