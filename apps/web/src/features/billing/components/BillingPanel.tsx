@@ -93,9 +93,9 @@ function StorageBar({ usedBytes, quotaBytes }: { usedBytes: number; quotaBytes: 
   const exhausted = usedBytes >= quotaBytes
   return (
     <div className="space-y-1">
-      <div className="flex items-center justify-between text-sm">
-        <span className="text-muted-foreground">{t('panel.storage.label')}</span>
-        <span className="font-medium tabular-nums">
+      <div className="flex items-center justify-between gap-2 text-sm">
+        <span className="min-w-0 truncate text-muted-foreground">{t('panel.storage.label')}</span>
+        <span className="shrink-0 font-medium tabular-nums">
           {formatBytes(usedBytes)} / {formatBytes(quotaBytes)}
         </span>
       </div>
@@ -125,9 +125,11 @@ function QuotaBar({ count, quota }: { count: number; quota: number | null }) {
   const exhausted = count >= quota
   return (
     <div className="space-y-1">
-      <div className="flex items-center justify-between text-sm">
-        <span className="text-muted-foreground">{t('panel.quota.monthlyLabel')}</span>
-        <span className="font-medium tabular-nums">
+      <div className="flex items-center justify-between gap-2 text-sm">
+        <span className="min-w-0 truncate text-muted-foreground">
+          {t('panel.quota.monthlyLabel')}
+        </span>
+        <span className="shrink-0 font-medium tabular-nums">
           {count} / {quota}
         </span>
       </div>
@@ -183,8 +185,8 @@ export function BillingPanel() {
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between gap-2">
-          <CardTitle>{t('panel.title')}</CardTitle>
-          <Badge variant={active ? 'default' : 'destructive'}>
+          <CardTitle className="min-w-0 truncate">{t('panel.title')}</CardTitle>
+          <Badge className="shrink-0" variant={active ? 'default' : 'destructive'}>
             {active ? t('panel.statusActive') : t('panel.statusInactive')}
           </Badge>
         </div>
