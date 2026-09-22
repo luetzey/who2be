@@ -82,22 +82,23 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        # pgvector-Variante (ADR-0046) — Migration 0071 legt die
-        # `vector`-Extension an, die `postgres:16` nicht mitbringt.
-        image: pgvector/pgvector:pg16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: who2be
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+    # BELEG-COMMIT (P4, AK2) — wird nicht gemergt: der Postgres-Service ist
+    # absichtlich auskommentiert, um zu zeigen, dass entfernte Infrastruktur
+    # zu einem ROTEN Job fuehrt und nicht zu einem gruenen mit Skips.
+    # services:
+    #   postgres:
+    #     image: pgvector/pgvector:pg16
+    #     env:
+    #       POSTGRES_USER: postgres
+    #       POSTGRES_PASSWORD: postgres
+    #       POSTGRES_DB: who2be
+    #     ports:
+    #       - 5432:5432
+    #     options: >-
+    #       --health-cmd pg_isready
+    #       --health-interval 10s
+    #       --health-timeout 5s
+    #       --health-retries 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Install uv
