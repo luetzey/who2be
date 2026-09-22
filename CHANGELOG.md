@@ -20,6 +20,26 @@ the merged pull requests and the plan documents under `.claude/plan/`.
   Node enables Web Storage by default there and Vitest 4 filters jsdom's
   `window.localStorage` away (upstream vitest#8757, fixed only in Vitest 5).
   The reason is documented once, in `CONTRIBUTING.md` under Definition of Done.
+- Cloud workspaces now have a storage quota: **100 MB on Free, 10 GB on
+  Pro** (`Entitlement.storage_quota_bytes`, `None` = unlimited and the
+  on-premise default). An ingest that would push a workspace past its tier's
+  limit is rejected with `402` and `reason: storage_quota_exceeded`, carrying
+  the limit and current usage in `params` rather than in the locale key.
+
+  Nothing is lost: the gate hangs off the two ingest routes only, so existing
+  blobs stay readable, listable and downloadable above the limit — the same
+  contract the entity quota already makes. The billing panel shows used bytes
+  against the limit.
+
+  Three deliberate boundaries, documented rather than glossed over: the quota
+  is counted and enforced **per workspace, not per organisation**, so an
+  organisation that creates several workspaces multiplies its allowance as
+  long as the number of workspaces is uncapped (a follow-up card caps it); the
+  **table store is not counted** (per-work-area SQLite files live on the
+  filesystem, ADR-0049); and the gate checks `used >= limit` *before* the
+  ingest runs, so a single ingest may overshoot by at most
+  `WHO2BE_INGEST_MAX_BYTES`. A raised limit takes effect at the next
+  checkout, because the entitlement carries the metadata of its purchase.
 
 ### Changed
 

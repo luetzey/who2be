@@ -82,6 +82,7 @@ class _StubConnection:
                 expires_at,
                 mcp_monthly_quota,
                 mcp_rate_per_min,
+                storage_quota_bytes,
                 grace_until,
                 *_rest,
             ) = args
@@ -91,6 +92,7 @@ class _StubConnection:
                 "expires_at": expires_at,
                 "mcp_monthly_quota": mcp_monthly_quota,
                 "mcp_rate_per_min": mcp_rate_per_min,
+                "storage_quota_bytes": storage_quota_bytes,
                 "grace_until": grace_until,
             }
         elif normalized.startswith("INSERT INTO entitlement_history"):
@@ -238,6 +240,10 @@ def test_paid_checkout_unlocks_mcp_limit_that_free_tier_denies(
     assert written["status"] == "active"
     assert written["mcp_rate_per_min"] == PRO_PLAN.mcp_rate_per_min
     assert written["mcp_rate_per_min"] > _FREE_RATE_PER_MIN
+    # Issue #536: die Speichergrenze reist auf demselben Weg mit — Plan-
+    # Metadata → Webhook → Entitlement-Zeile. Ohne diese Zusicherung koennte
+    # `storage_quota_bytes` still auf `None` (= unbegrenzt) fallen.
+    assert written["storage_quota_bytes"] == PRO_PLAN.storage_quota_bytes
 
     # --- Limit-Pruefung: derselbe Aufruf, eben abgewiesen, geht jetzt durch ---
     token_rate_limiter.reset()
