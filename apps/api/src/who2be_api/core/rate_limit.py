@@ -1,7 +1,7 @@
 """Rate-Limiting fuer schreibende Endpoints (slowapi).
 
 Storage ist pluggable (Plan CL2 / §3.1): `RATE_LIMIT_STORAGE_URI` steuert sowohl
-den slowapi-`Limiter` als auch das Per-Token-Ceiling. Default `memory://` ⇒
+den slowapi-`Limiter` als auch das MCP-Rate-Ceiling. Default `memory://` ⇒
 Single-Process / In-Memory, ausreichend fuer den Single-Container-Lauf. Ein
 `redis://...`-URI aktiviert ein geteiltes Backend, sodass mehrere API-Replicas
 dasselbe Fenster sehen — ohne Verhaltensaenderung im Default.
@@ -60,7 +60,11 @@ limiter = Limiter(key_func=rate_limit_key, storage_uri=get_settings().rate_limit
 
 
 class TokenRateLimiterPort(Protocol):
-    """Vertrag des Per-Token-Ceilings — In-Memory und Redis erfuellen ihn gleich."""
+    """Vertrag des MCP-Rate-Ceilings — In-Memory und Redis erfuellen ihn gleich.
+
+    Der Key entscheidet, *welches* Fenster gezaehlt wird: das MCP-Limit-Gate
+    uebergibt seit #537 sowohl einen Token- als auch einen Org-Key.
+    """
 
     def allow(self, key: str, limit_per_min: int | None, now: float | None = None) -> bool: ...
 
@@ -70,13 +74,16 @@ class TokenRateLimiterPort(Protocol):
 
 
 class TokenRateLimiter:
-    """In-Memory Sliding-Window-Limiter fuer das per-Token-Rate-Ceiling (Track D).
+    """In-Memory Sliding-Window-Limiter fuer das MCP-Rate-Ceiling (Track D).
 
     Das MCP-Limit-Gate liest das `mcp_rate_per_min` aus dem Org-Entitlement und
-    nutzt diesen Limiter, um agent-facing Reads pro Token (req/min) zu deckeln —
-    ergaenzend zum Monats-Kontingent. Single-Process/In-Memory, konsistent mit
-    dem slowapi-Hinweis oben; mehrere Replicas erfordern spaeter ein geteiltes
-    Backend (Redis). `limit <= 0` bzw. `None` ⇒ unbegrenzt (durchlassen).
+    nutzt diesen Limiter, um agent-facing Reads zu deckeln — seit #537 gegen
+    **zwei** Keys mit demselben Ceiling (pro Token *und* pro Organisation,
+    effektiv gilt das Minimum), ergaenzend zum Monats-Kontingent. Der Limiter
+    selbst kennt diese Unterscheidung nicht: er zaehlt je uebergebenem Key.
+    Single-Process/In-Memory, konsistent mit dem slowapi-Hinweis oben; mehrere
+    Replicas erfordern spaeter ein geteiltes Backend (Redis). `limit <= 0` bzw.
+    `None` ⇒ unbegrenzt (durchlassen).
     """
 
     _WINDOW_SECONDS = 60.0
@@ -124,7 +131,7 @@ class TokenRateLimiter:
 
 
 class RedisTokenRateLimiter:
-    """Redis-backed Per-Token-Ceiling via `limits` (Moving-Window-Strategie).
+    """Redis-backed MCP-Rate-Ceiling via `limits` (Moving-Window-Strategie).
 
     Semantik-gleich zum In-Memory `TokenRateLimiter` (60s-Sliding-Window pro Key),
     aber prozessuebergreifend: mehrere API-Replicas teilen sich denselben Bucket
@@ -180,7 +187,7 @@ class RedisTokenRateLimiter:
 
 
 def build_token_rate_limiter(settings: Settings | None = None) -> TokenRateLimiterPort:
-    """Waehlt das Per-Token-Backend anhand der Storage-URI (Default: In-Memory)."""
+    """Waehlt das Rate-Limiter-Backend anhand der Storage-URI (Default: In-Memory)."""
     resolved = settings or get_settings()
     uri = resolved.rate_limit_storage_uri
     if uri.startswith("redis"):

@@ -303,7 +303,9 @@ curl -s http://localhost:8000/v1/workspaces/<ws-id>/billing/entitlement \
 
 Das MCP-Limit-Gate greift **nur** in der Cloud-Edition und **nur** fuer
 API-Token-Aufrufer (der MCP-Server) — Web-/JWT-Reads passieren ungehindert.
-Zwei Schranken: **Per-Token-Rate/min** (schnell zu treffen) und das
+Zwei Schranken: die **MCP-Rate/min** (schnell zu treffen; seit #537 deckelt
+`mcp_rate_per_min` zwei Fenster — pro Token *und* pro Organisation, gleicher
+Wert, effektiv das Minimum, Details in `docs/licensing/plans.md`) und das
 **Monats-Kontingent** (beide → **429**); ein `inactive` Entitlement → 402.
 
 Am schnellsten in Sekunden via SQL-Override aus §4 Variante A: kurz vor

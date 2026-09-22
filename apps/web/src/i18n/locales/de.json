@@ -690,11 +690,11 @@
         "privacyLink": "Datenschutzerklaerung",
         "after": "."
       },
-      "consentRequiredHint": "Bitte stimme den AGB und der Datenschutzerklaerung zu, um fortzufahren.",
-      "captcha": {
-        "pending": "Bitte bestaetige kurz, dass du kein Bot bist.",
-        "failed": "Die Bot-Pruefung ist fehlgeschlagen. Bitte versuche es noch einmal."
-      }
+      "consentRequiredHint": "Bitte stimme den AGB und der Datenschutzerklaerung zu, um fortzufahren."
+    },
+    "captcha": {
+      "pending": "Bitte bestaetige kurz, dass du kein Bot bist.",
+      "failed": "Die Bot-Pruefung ist fehlgeschlagen. Bitte versuche es noch einmal."
     },
     "comingSoon": {
       "title": "Wir arbeiten noch an Who2Be — bald verfügbar.",
@@ -1059,20 +1059,24 @@
           "heading": "7. Zahlungsabwicklung",
           "body": "Zahlungsdienstleister (Mollie), uebermittelte Daten, eigene Datenschutzerklaerung des Anbieters, Rechtsgrundlage"
         },
+        "captcha": {
+          "heading": "8. Bot-Schutz bei der Registrierung",
+          "body": "nur falls aktiviert: Cloudflare Turnstile, verarbeitete Daten (IP-Adresse, Browser-Signale), Zweck (Missbrauchs-/Bot-Abwehr, Art. 6 Abs. 1 lit. f), Drittlandtransfer USA + Garantien (SCC/DPF), Cloudflare-Datenschutzhinweis"
+        },
         "email": {
-          "heading": "8. E-Mail-Versand (Transaktionsmails)",
+          "heading": "9. E-Mail-Versand (Transaktionsmails)",
           "body": "SMTP-/Mail-Provider, Anlaesse (Verify/Invite/Reset), Rechtsgrundlage"
         },
         "processors": {
-          "heading": "9. Empfaenger & Auftragsverarbeiter",
+          "heading": "10. Empfaenger & Auftragsverarbeiter",
           "body": "Liste der Auftragsverarbeiter, Drittlandtransfers + Garantien (SCC) sofern einschlaegig"
         },
         "retention": {
-          "heading": "10. Speicherdauer",
+          "heading": "11. Speicherdauer",
           "body": "allgemeine Loeschkonzepte, gesetzliche Aufbewahrungsfristen"
         },
         "rights": {
-          "heading": "11. Deine Rechte",
+          "heading": "12. Deine Rechte",
           "text1": "Du hast das Recht auf Auskunft (Art. 15), Berichtigung (Art. 16), Loeschung (Art. 17), Einschraenkung (Art. 18), Datenuebertragbarkeit (Art. 20) und Widerspruch (Art. 21) sowie das Recht auf Beschwerde bei einer Aufsichtsbehoerde (Art. 77).",
           "authorityLabel": "Zustaendige Aufsichtsbehoerde:",
           "authorityPlaceholder": "zustaendige Datenschutzbehoerde"

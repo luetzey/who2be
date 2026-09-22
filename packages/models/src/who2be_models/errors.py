@@ -111,7 +111,7 @@ ProblemReason = Literal[
     "token_not_found",  # 404 — API-Token unbekannt oder bereits widerrufen
     "token_quota_exceeded",  # 402 — Token-Kontingent des Workspaces erreicht (params: limit)
     "subscription_inactive",  # 402 — kein aktives Abonnement der Organisation
-    "mcp_rate_limited",  # 429 — Per-Token-MCP-Rate erreicht (params: limit)
+    "mcp_rate_limited",  # 429 — MCP-Rate erreicht, Token- ODER Org-Fenster (params: limit)
     "mcp_quota_exceeded",  # 429 — Monats-MCP-Kontingent erschoepft (params: limit)
     "consent_requires_session",  # 401 — OAuth-Consent nur mit eingeloggter Web-Session
     "invalid_cursor",  # 422 — Keyset-Cursor nicht dekodierbar

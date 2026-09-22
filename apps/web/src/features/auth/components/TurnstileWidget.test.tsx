@@ -37,8 +37,8 @@ describe('TurnstileWidget', () => {
   it('fuegt das Cloudflare-Script genau einmal ein, auch bei zwei Instanzen', async () => {
     render(
       <>
-        <TurnstileWidget siteKey="k" onToken={vi.fn()} onExpire={vi.fn()} />
-        <TurnstileWidget siteKey="k" onToken={vi.fn()} onExpire={vi.fn()} />
+        <TurnstileWidget siteKey="k" action="signup" onToken={vi.fn()} onExpire={vi.fn()} />
+        <TurnstileWidget siteKey="k" action="signup" onToken={vi.fn()} onExpire={vi.fn()} />
       </>,
     )
 
@@ -54,7 +54,9 @@ describe('TurnstileWidget', () => {
   it('rendert das Widget, sobald das Script geladen ist', async () => {
     const api = stubApi()
 
-    render(<TurnstileWidget siteKey="site-key-1" onToken={vi.fn()} onExpire={vi.fn()} />)
+    render(
+      <TurnstileWidget siteKey="site-key-1" action="login" onToken={vi.fn()} onExpire={vi.fn()} />,
+    )
     await waitFor(() => {
       expect(scriptEl()).not.toBeNull()
     })
@@ -68,14 +70,16 @@ describe('TurnstileWidget', () => {
     })
     expect(api.render.mock.calls[0][1]).toMatchObject({
       sitekey: 'site-key-1',
-      action: 'signup',
+      // `action` kommt jetzt vom Aufrufer — vier Masken teilen sich einen
+      // Site-Key, ohne sie waere die Turnstile-Auswertung eine Sammelspalte.
+      action: 'login',
     })
   })
 
   it('meldet onExpire, wenn das Script nicht laedt (Adblocker, Netz, CSP)', async () => {
     const onExpire = vi.fn()
 
-    render(<TurnstileWidget siteKey="k" onToken={vi.fn()} onExpire={onExpire} />)
+    render(<TurnstileWidget siteKey="k" action="signup" onToken={vi.fn()} onExpire={onExpire} />)
     await waitFor(() => {
       expect(scriptEl()).not.toBeNull()
     })
@@ -92,7 +96,7 @@ describe('TurnstileWidget', () => {
   it('raeumt das Widget beim Unmount ab', async () => {
     const api = stubApi()
     const { unmount } = render(
-      <TurnstileWidget siteKey="k" onToken={vi.fn()} onExpire={vi.fn()} />,
+      <TurnstileWidget siteKey="k" action="signup" onToken={vi.fn()} onExpire={vi.fn()} />,
     )
     await waitFor(() => {
       expect(scriptEl()).not.toBeNull()
@@ -111,7 +115,7 @@ describe('TurnstileWidget', () => {
   it('rendert nicht mehr, wenn vor dem load-Event unmountet wurde', async () => {
     const api = stubApi()
     const { unmount } = render(
-      <TurnstileWidget siteKey="k" onToken={vi.fn()} onExpire={vi.fn()} />,
+      <TurnstileWidget siteKey="k" action="signup" onToken={vi.fn()} onExpire={vi.fn()} />,
     )
     await waitFor(() => {
       expect(scriptEl()).not.toBeNull()
@@ -129,11 +133,12 @@ describe('TurnstileWidget', () => {
     const api = stubApi()
     ;(window as { turnstile?: unknown }).turnstile = api
 
-    render(<TurnstileWidget siteKey="k" onToken={vi.fn()} onExpire={vi.fn()} />)
+    render(<TurnstileWidget siteKey="k" action="resend" onToken={vi.fn()} onExpire={vi.fn()} />)
 
     await waitFor(() => {
       expect(api.render).toHaveBeenCalledTimes(1)
     })
+    expect(api.render.mock.calls[0][1]).toMatchObject({ action: 'resend' })
     expect(scriptEl()).toBeNull()
     expect(screen.getByTestId('turnstile-widget')).toBeInTheDocument()
   })
