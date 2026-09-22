@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { BrowserRouter, MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -94,6 +94,10 @@ const { mockConfig } = vi.hoisted(() => ({
     launchMode: 'open' as 'open' | 'coming_soon',
     launchContact: '',
     sessionMaxAgeHours: 12,
+    // Default in den Tests: KEIN Captcha (Leerstring) — die Bestandstests
+    // bilden damit exakt den Zustand vor #539 ab. Der Captcha-Block unten
+    // setzt den Key pro Fall und raeumt ihn wieder ab.
+    turnstileSiteKey: '',
   },
 }))
 
@@ -572,5 +576,185 @@ describe('LoginPage — next-Param-Handling', () => {
 
     expect(await screen.findByText('DASHBOARD')).toBeInTheDocument()
     expect(signInWithPassword).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Captcha / Cloudflare Turnstile (Issue #539, Folgebefund t_c007ed1d)
+//
+// GoTrue haengt `verifyCaptcha` auch an `/token` mit `grant_type=password`
+// (middleware.go:190-196 nimmt nur die ANDEREN Grant-Types aus) und an
+// `/resend` (api.go:186). Beide Aktionen leben auf dieser Maske und teilen
+// sich EIN Widget. `window.turnstile` wird vorab gestubbt — dann nimmt
+// `loadTurnstileScript` den Kurzschluss und es geht kein Request raus.
+// ---------------------------------------------------------------------------
+
+function stubTurnstile() {
+  let solve: ((token: string) => void) | null = null
+  let expire: (() => void) | null = null
+  const turnstileRender = vi.fn((_el: HTMLElement, options: Record<string, unknown>) => {
+    solve = options.callback as (token: string) => void
+    expire = options['expired-callback'] as () => void
+    return 'widget-1'
+  })
+  const api = { render: turnstileRender, reset: vi.fn(), remove: vi.fn() }
+  ;(window as { turnstile?: unknown }).turnstile = api
+  return {
+    api,
+    solve: (token: string) => solve?.(token),
+    expire: () => expire?.(),
+  }
+}
+
+describe('LoginPage — Captcha', () => {
+  beforeEach(() => {
+    primeAuthMocks()
+  })
+
+  afterEach(() => {
+    mockConfig.turnstileSiteKey = ''
+    delete (window as { turnstile?: unknown }).turnstile
+    document.getElementById('cf-turnstile-script')?.remove()
+  })
+
+  it('rendert ohne Site-Key kein Widget und ruft signInWithPassword unveraendert auf', async () => {
+    renderLoginAt('/login')
+
+    fillAndSubmitLogin()
+
+    await waitFor(() => {
+      // Kein `options`-Feld, nicht einmal ein leeres: der Aufruf ist
+      // byte-identisch zum Zustand vor #539.
+      expect(signInWithPassword).toHaveBeenCalledWith({
+        email: 'agent@who2be.dev',
+        password: 'streng-geheim',
+      })
+    })
+    expect(screen.queryByTestId('turnstile-widget')).not.toBeInTheDocument()
+  })
+
+  it('sperrt den Submit bei gesetztem Site-Key, bis das Captcha geloest ist', async () => {
+    mockConfig.turnstileSiteKey = '0x4AAAAAAA-test'
+    const turnstile = stubTurnstile()
+    renderLoginAt('/login')
+
+    await waitFor(() => {
+      expect(turnstile.api.render).toHaveBeenCalledTimes(1)
+    })
+    expect(turnstile.api.render.mock.calls[0][1]).toMatchObject({ action: 'login' })
+    expect(screen.getByRole('button', { name: 'Anmelden' })).toBeDisabled()
+    expect(screen.getByText(/kein Bot bist/i)).toBeInTheDocument()
+
+    fillAndSubmitLogin()
+    expect(signInWithPassword).not.toHaveBeenCalled()
+  })
+
+  it('schickt das Token am Passwort-Login mit', async () => {
+    mockConfig.turnstileSiteKey = '0x4AAAAAAA-test'
+    const turnstile = stubTurnstile()
+    renderLoginAt('/login')
+    await waitFor(() => {
+      expect(turnstile.api.render).toHaveBeenCalled()
+    })
+
+    act(() => turnstile.solve('token-login'))
+    fillAndSubmitLogin()
+
+    await waitFor(() => {
+      expect(signInWithPassword).toHaveBeenCalledWith({
+        email: 'agent@who2be.dev',
+        password: 'streng-geheim',
+        options: { captchaToken: 'token-login' },
+      })
+    })
+  })
+
+  it('stellt die Challenge nach einem Fehlschlag neu und zeigt die Captcha-Meldung', async () => {
+    mockConfig.turnstileSiteKey = '0x4AAAAAAA-test'
+    const turnstile = stubTurnstile()
+    // Wortlaut + Code aus GoTrue v2.158.1 (middleware.go:184, errorcodes.go:44).
+    signInWithPassword.mockResolvedValue({
+      data: { session: null },
+      error: Object.assign(
+        new Error('captcha protection: request disallowed (invalid-input-response)'),
+        { code: 'captcha_failed' },
+      ),
+    })
+    renderLoginAt('/login')
+    await waitFor(() => {
+      expect(turnstile.api.render).toHaveBeenCalled()
+    })
+
+    act(() => turnstile.solve('token-tot'))
+    fillAndSubmitLogin()
+
+    expect(
+      await screen.findByText('Die Bot-Pruefung ist fehlgeschlagen. Bitte versuche es noch einmal.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/request disallowed/i)).not.toBeInTheDocument()
+    // Verbrauchtes Token verworfen → Submit gesperrt, Widget neu gestellt.
+    expect(screen.getByRole('button', { name: 'Anmelden' })).toBeDisabled()
+    await waitFor(() => {
+      expect(turnstile.api.render).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  it('schickt das Token beim erneuten Versand der Bestaetigungs-Mail mit', async () => {
+    mockConfig.turnstileSiteKey = '0x4AAAAAAA-test'
+    const turnstile = stubTurnstile()
+    signInWithPassword.mockResolvedValue({
+      data: { session: null },
+      error: { message: 'Email not confirmed' },
+    })
+    resend.mockResolvedValue({ error: null })
+    renderLoginAt('/login')
+    await waitFor(() => {
+      expect(turnstile.api.render).toHaveBeenCalled()
+    })
+
+    act(() => turnstile.solve('token-eins'))
+    fillAndSubmitLogin()
+    // Der Login hat das erste Token verbraucht — der Resend-CTA ist gesperrt,
+    // bis eine frische Challenge geloest ist.
+    const resendButton = await screen.findByRole('button', {
+      name: 'Bestaetigungs-Mail erneut senden',
+    })
+    expect(resendButton).toBeDisabled()
+
+    act(() => turnstile.solve('token-zwei'))
+    await waitFor(() => {
+      expect(resendButton).toBeEnabled()
+    })
+    fireEvent.click(resendButton)
+
+    await waitFor(() => {
+      expect(resend).toHaveBeenCalledWith({
+        type: 'signup',
+        email: 'agent@who2be.dev',
+        options: {
+          emailRedirectTo: expect.stringContaining('/auth/callback'),
+          captchaToken: 'token-zwei',
+        },
+      })
+    })
+  })
+
+  it('laesst den Resend-Aufruf ohne Site-Key unveraendert (kein captchaToken)', async () => {
+    signInWithPassword.mockResolvedValue({
+      data: { session: null },
+      error: { message: 'Email not confirmed' },
+    })
+    resend.mockResolvedValue({ error: null })
+    renderLoginAt('/login')
+
+    fillAndSubmitLogin()
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Bestaetigungs-Mail erneut senden' }),
+    )
+
+    await waitFor(() => {
+      expect(resend).toHaveBeenCalled()
+    })
+    expect(resend.mock.calls[0][0].options).not.toHaveProperty('captchaToken')
   })
 })

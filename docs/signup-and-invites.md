@@ -104,7 +104,7 @@ Token niemand prüft.
 | `GOTRUE_SECURITY_CAPTCHA_ENABLED=true` | Backend (GoTrue, Runtime) | **Echte Durchsetzung** — ohne gültiges Token `400 captcha_failed`, auch bei direktem API-Aufruf. |
 | `GOTRUE_SECURITY_CAPTCHA_PROVIDER=turnstile` | Backend | Anbieter. Erlaubt sind `turnstile` und `hcaptcha`; der Compose-Default ist `turnstile`. |
 | `GOTRUE_SECURITY_CAPTCHA_SECRET=…` | Backend | Secret Key. Bei `ENABLED=true` **Pflicht** — fehlt er, startet GoTrue nicht. |
-| `WHO2BE_TURNSTILE_SITE_KEY=…` | Web (Runtime, `/config.js`) | Rendert das Widget auf `/signup` und schickt das Token am Signup mit. Leer = kein Widget. |
+| `WHO2BE_TURNSTILE_SITE_KEY=…` | Web (Runtime, `/config.js`) | Rendert das Widget auf Registrierung, Login und „Passwort vergessen" und schickt das Token mit. Leer = kein Widget. |
 
 Die Namen sind gegen die im Compose gepinnte GoTrue-Version **v2.158.1**
 verifiziert (`internal/conf/configuration.go`, `CaptchaConfiguration` +
@@ -117,18 +117,19 @@ Die Web-Variable wirkt über `/config.js`
 (`apps/web/docker/40-who2be-runtime-config.sh`) — Umschalten braucht **keinen
 Rebuild**, nur Env ändern + Container neu starten.
 
-### Was das Captcha sonst noch trifft — vor dem Einschalten lesen
+### Was das Captcha sonst noch trifft
 
 GoTrue hängt die Prüfung nicht nur an `/signup`, sondern an **alle**
 unauthentifizierten Auth-Endpunkte: `/recover` (Passwort vergessen),
 `/resend` (Bestätigungs-Mail erneut senden), `/magiclink`, `/otp`, `/sso` und
 den Passwort-Login (`/token` mit `grant_type=password`).
 
-Die Web-App schickt heute **nur beim Signup** ein Token. Mit aktiviertem
-Captcha brechen deshalb der Passwort-Login und „Bestätigungs-Mail erneut
-senden" — das ist eine Eigenschaft von GoTrue, keine Konfigurationsfrage.
-Wer das Captcha einschaltet, sollte die Wirkung auf diese beiden Pfade
-vorher am Staging-Stack prüfen.
+Die Web-App liefert an **allen Pfaden, die sie selbst anbietet**, ein Token:
+Registrierung, Passwort-Login, „Bestätigungs-Mail erneut senden" und
+„Passwort vergessen". Login und Resend teilen sich dabei das eine Widget der
+Login-Maske — ein Turnstile-Token ist einmalig gültig, die Challenge wird
+deshalb nach jedem Request neu gestellt. `/magiclink`, `/otp` und `/sso` ruft
+die App nicht auf.
 
 **Nicht betroffen** (und das ist der wichtige Teil für das
 Einladungs-Onboarding):

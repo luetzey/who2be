@@ -354,7 +354,8 @@ unattraktiv, aber jeder Versuch kostet dich eine SMTP-Zustellung und kann
 deine Absender-Reputation beschädigen.
 
 Der Stack bringt **Cloudflare Turnstile** verdrahtet mit — Widget auf
-`/signup`, Token am Signup-Call, verständliche Fehlermeldung. Ab Werk **aus**;
+Registrierung, Login und „Passwort vergessen", Token an jedem
+captcha-pflichtigen Call, verständliche Fehlermeldung. Ab Werk **aus**;
 zum Einschalten brauchst du ein Turnstile-Schlüsselpaar und vier Variablen:
 
 ```
@@ -367,9 +368,9 @@ GOTRUE_SECURITY_CAPTCHA_SECRET=<Secret Key>
 WHO2BE_TURNSTILE_SITE_KEY=<Site Key>
 ```
 
-**Vorher lesen:** GoTrue wendet das Captcha auch auf Passwort-Login und
-„Mail erneut senden" an, und Cloudflare ist ein Drittland-Empfänger. Beides
-inkl. der nicht betroffenen Invite-Pfade steht in
+**Vorher lesen:** Cloudflare ist ein Drittland-Empfänger. Welche Auth-Pfade
+das Captcha trifft, welche die App bedient und welche Invite-Pfade unberührt
+bleiben, steht in
 [`signup-and-invites.md` §3](signup-and-invites.md).
 
 ### L5 — Kein Rate-Limit an der Kante

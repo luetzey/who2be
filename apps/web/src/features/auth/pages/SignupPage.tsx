@@ -19,8 +19,10 @@ import { supabase } from '@/lib/supabase'
 
 import { OAuthButtons } from '../components/OAuthButtons'
 import { TurnstileWidget } from '../components/TurnstileWidget'
+import { translateAuthError } from '../lib/captcha'
 import { buildRedirectTo } from '../lib/redirect'
 import { sanitizeNext } from '../lib/sanitize-next'
+import { useCaptcha } from '../lib/use-captcha'
 import { ComingSoonPage } from './ComingSoonPage'
 
 type SignupValues = { email: string; password: string; confirm: string; consent: boolean }
@@ -43,33 +45,9 @@ function makeSignupSchema(t: (key: string) => string) {
     })
 }
 
-// GoTrue meldet ein fehlgeschlagenes Captcha mit `code: "captcha_failed"` und
-// der Meldung „captcha protection: request disallowed (…)" (v2.158.1,
-// internal/api/errorcodes.go:44, middleware.go:184-186). Das ist eine
-// Server-Diagnose, keine Nutzer-Nachricht — sie wuerde dem Registrierenden
-// roh nichts sagen. Der Code wird bevorzugt, weil er stabil ist; die
-// Regex faengt aeltere/abweichende Antworten und den Fall ab, dass der
-// Client-Typ das Feld nicht traegt.
-function isCaptchaError(cause: unknown): boolean {
-  if (typeof cause !== 'object' || cause === null) return false
-  const code = (cause as { code?: unknown }).code
-  if (code === 'captcha_failed') return true
-  const message = (cause as { message?: unknown }).message
-  return typeof message === 'string' && /captcha/i.test(message)
-}
-
-/**
- * Uebersetzt den GoTrue-Fehler in eine Meldung, die ein Mensch versteht.
- * Alles ausser dem Captcha-Fall bleibt bewusst unveraendert beim
- * Original-Text — eine pauschale „Es ist ein Fehler aufgetreten"-Huelle
- * wuerde hier mehr Information vernichten als sie an Klarheit bringt.
- */
-function translateSignupError(cause: unknown, t: (key: string) => string): string {
-  if (isCaptchaError(cause)) {
-    return t('signup.captcha.failed')
-  }
-  return cause instanceof Error ? cause.message : String(cause)
-}
+// GoTrue meldet ein fehlgeschlagenes Captcha mit `code: "captcha_failed"` —
+// erkannt und uebersetzt in `../lib/captcha`, gemeinsam mit Login, Resend und
+// Passwort-vergessen (alle vier haengen an derselben GoTrue-Middleware).
 
 // Registrierung (Track K). Zwei GoTrue-Ausgaenge:
 //   - Dev (`GOTRUE_MAILER_AUTOCONFIRM=true`): `signUp` liefert sofort eine
@@ -84,18 +62,9 @@ export function SignupPage() {
   const [searchParams] = useSearchParams()
   const [error, setError] = useState<string | null>(null)
   const [confirmationPending, setConfirmationPending] = useState(false)
-  // Turnstile-Token (Issue #539). `null` = noch nicht geloest bzw. abgelaufen.
-  // Nur relevant, wenn ein Site-Key konfiguriert ist — sonst bleibt das Feld
-  // dauerhaft `null` und wird nirgends gelesen.
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
-  // Remount-Zaehler fuer das Widget. Turnstile-Tokens sind einmalig gueltig;
-  // nach einem fehlgeschlagenen Submit muss die Challenge neu gestellt
-  // werden. Ein `key`-Wechsel ist dafuer der ehrlichste Weg — er zwingt den
-  // Cleanup (`turnstile.remove`) und einen frischen `render`, statt auf eine
-  // imperative Handle-API zu bauen, die nur fuer diesen einen Fall existiert.
-  const [captchaNonce, setCaptchaNonce] = useState(0)
-
-  const captchaRequired = config.turnstileSiteKey !== ''
+  // Turnstile (Issue #539). Ohne konfigurierten Site-Key bleibt der Hook
+  // vollstaendig passiv: kein Widget, kein Token, kein veraenderter Aufruf.
+  const captcha = useCaptcha()
 
   const next = sanitizeNext(searchParams.get('next'))
 
@@ -138,19 +107,16 @@ export function SignupPage() {
       password: values.password,
       options: {
         emailRedirectTo: buildRedirectTo('/auth/callback', next),
-        ...(captchaToken !== null ? { captchaToken } : {}),
+        ...captcha.option(),
       },
     })
     if (signUpError) {
-      setError(translateSignupError(signUpError, t))
+      setError(translateAuthError(signUpError, t))
       // Ein Turnstile-Token ist EINMALIG gueltig — nach jedem Fehlschlag ist
       // es verbraucht. Ohne diesen Reset wuerde ein zweiter Versuch dasselbe
       // tote Token schicken und mit derselben Meldung scheitern; der Nutzer
       // saehe eine Sackgasse ohne sichtbaren Ausweg.
-      if (captchaRequired) {
-        setCaptchaToken(null)
-        setCaptchaNonce((value) => value + 1)
-      }
+      captcha.reset()
       return
     }
     if (data.session !== null) {
@@ -286,12 +252,13 @@ export function SignupPage() {
                     )}
                   />
                   {error !== null ? <ErrorAlert message={error} /> : null}
-                  {captchaRequired ? (
+                  {captcha.required ? (
                     <TurnstileWidget
-                      key={captchaNonce}
+                      key={captcha.nonce}
                       siteKey={config.turnstileSiteKey}
-                      onToken={setCaptchaToken}
-                      onExpire={() => setCaptchaToken(null)}
+                      action="signup"
+                      onToken={captcha.setToken}
+                      onExpire={captcha.clearToken}
                       className="flex justify-center"
                     />
                   ) : null}
@@ -302,14 +269,14 @@ export function SignupPage() {
                     disabled={
                       form.formState.isSubmitting ||
                       !consentGiven ||
-                      (captchaRequired && captchaToken === null)
+                      captcha.blocked
                     }
                   >
                     {t('signup.submit')}
                   </Button>
-                  {captchaRequired && captchaToken === null ? (
+                  {captcha.blocked ? (
                     <p className="text-center text-xs text-muted-foreground">
-                      {t('signup.captcha.pending')}
+                      {t('captcha.pending')}
                     </p>
                   ) : null}
                 </form>

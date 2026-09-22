@@ -203,8 +203,8 @@ services:
       # WHO2BE_LAUNCH_MODE durchgereicht werden, sonst sieht der Entrypoint
       # den Wert nie und /config.js bleibt still auf dem Default.
       WHO2BE_SESSION_MAX_AGE_HOURS: ${WHO2BE_SESSION_MAX_AGE_HOURS:-12}
-      # Turnstile-Site-Key fuer das Captcha auf /signup (#539). LEER = kein
-      # Widget, Signup laeuft exakt wie bisher. Gehoert paarweise zu
+      # Turnstile-Site-Key fuer das Captcha an den Auth-Masken (#539). LEER =
+      # kein Widget, Auth laeuft exakt wie bisher. Gehoert paarweise zu
       # GOTRUE_SECURITY_CAPTCHA_* am auth-Service: Site-Key hier (oeffentlich,
       # steht im HTML), Secret dort (nie in die Web-App). Nur eine der beiden
       # Seiten zu setzen bricht den Signup — entweder beide oder keine.
