@@ -59,16 +59,47 @@ Gedächtnis.
 Stand, der nach der Freigabe noch dazukam. Das ist die einzige Stelle, an der das
 Review-Gate sonst leckt.
 
-## Schritt 3 — Beleg an einem echten PR, in beide Richtungen
+## Schritt 3 — Beleg an einem echten PR, in beide Richtungen — **erbracht**
 
-Testgegenstand ist der PR dieser Karte selbst (reiner Doku-PR, unkritisch).
+Testgegenstand war der PR dieser Karte selbst: **PR #593**, reiner Doku-PR,
+Head `562fc5d20226adf0f478f03701761ee85242d98b`.
 
-1. PR öffnen, Auto-Merge per GraphQL anfordern, während `all-green` noch läuft.
-   Beleg: `autoMergeRequest` ist gesetzt, `state: OPEN`.
-2. **Negativrichtung:** solange `all-green` nicht `SUCCESS` ist, bleibt der PR offen.
-   Beleg: `mergeStateStatus: BLOCKED` bei gesetztem `autoMergeRequest`, PR ungemergt.
-3. **Positivrichtung:** sobald `all-green` grün ist, mergt GitHub selbsttätig.
-   Beleg: `state: MERGED`, `mergedBy` und `mergeCommit` aus der API.
+**1. Anforderung wirkt.** Mutation aufgerufen, während die CI noch lief:
+
+```
+{"data":{"enablePullRequestAutoMerge":{"clientMutationId":null}}}
+```
+
+`gh pr view 593 --json autoMergeRequest` direkt danach:
+
+```json
+{"enabledAt": "2026-09-22T20:41:55Z",
+ "enabledBy": {"login": "luetzey"},
+ "mergeMethod": "SQUASH"}
+```
+
+**2. Negativrichtung — kein Merge ohne grünen Check.** Von 20:41:55Z bis
+20:50:17Z stand die Anforderung, und der PR wurde **nicht** gemergt:
+`state: OPEN`, `mergeStateStatus: BLOCKED` bei gesetztem `autoMergeRequest`.
+Rund **achteinhalb Minuten** aktiver Auto-Merge ohne Merge — genau der
+Wartezustand, den Gate 2 herstellen soll. Vor der Anforderung war der PR
+ebenfalls schon `BLOCKED`, der Required Check greift also unabhängig davon.
+
+**3. Positivrichtung — Merge, sobald der Check grün ist.**
+
+| Zeitpunkt | Ereignis |
+|---|---|
+| 2026-09-22T20:41:55Z | Auto-Merge angefordert, `mergeStateStatus: BLOCKED` |
+| 2026-09-22T20:50:17Z | `all-green` meldet `conclusion: success` |
+| 2026-09-22T20:50:29Z | GitHub mergt: `state: MERGED`, `mergeCommit b28c2ebd` |
+
+Zwölf Sekunden zwischen grünem Check und Merge; kein Kommando dazwischen.
+`git branch -r --contains b28c2ebd` bestätigt den Commit auf `origin/main`.
+
+Der Merge steht als Actor auf `luetzey`, weil Agent und Owner denselben Token
+benutzen — Auto-Merge löst die Identitätsfrage nicht und soll es hier auch
+nicht. Was er löst, ist die Reihenfolge: der Merge kann nicht vor dem grünen
+Check passieren.
 
 ## Schritt 4 — Dokumentation
 
