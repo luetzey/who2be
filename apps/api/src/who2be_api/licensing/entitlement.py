@@ -61,11 +61,21 @@ FREE_ENTITY_QUOTA = 50
 FREE_TOKEN_QUOTA = 3
 PRO_TOKEN_QUOTA = 25
 
+# Speicher-Obergrenze je Org (Issue #536, Owner-Entscheidung Option A):
+# Summe der abgelegten Blob-Bytes (`wa_blob.size_bytes`). Anders als
+# `entity_limit()` ist das KEINE abgeleitete Groesse, sondern ein eigenes
+# Entitlement-Feld — der gebuchte Tier traegt den Wert als Provider-Metadatum
+# (`storage_quota_bytes`), damit ein spaeterer dritter Tarif eine eigene Zahl
+# bekommen kann, ohne dass die Ableitung „Paid ⇒ unbegrenzt" im Weg steht.
+FREE_STORAGE_QUOTA_BYTES = 100 * 1024 * 1024  # 100 MiB
+PRO_STORAGE_QUOTA_BYTES = 10 * 1024 * 1024 * 1024  # 10 GiB
+
 
 class Entitlement(BaseModel):
     """Aufgeloeste Nutzungsrechte einer Org.
 
-    `mcp_monthly_quota` / `mcp_rate_per_min` / `token_quota` sind
+    `mcp_monthly_quota` / `mcp_rate_per_min` / `token_quota` /
+    `storage_quota_bytes` sind
     `None` = unbegrenzt (On-Prem/OSS-Default). `status`
     plus `expires_at` bestimmen `is_active()`; nur ein aktives Entitlement laesst
     gated Reads durch.
@@ -89,6 +99,10 @@ class Entitlement(BaseModel):
     # und der Zustand jeder Bestands-Zeile in `org_entitlement`, die vor
     # Migration 0085 geschrieben wurde.
     token_quota: int | None = None
+    # Summe der abgelegten Blob-Bytes je Workspace (Issue #536). `None` =
+    # unbegrenzt — der On-Prem/OSS-Default und der Zustand jeder Bestands-Zeile
+    # in `org_entitlement`, die vor Migration 0084 geschrieben wurde.
+    storage_quota_bytes: int | None = None
     grace_until: datetime | None = None
 
     def is_active(self, now: datetime | None = None) -> bool:
@@ -161,6 +175,7 @@ OSS_ENTITLEMENT = Entitlement(
     mcp_monthly_quota=None,
     mcp_rate_per_min=None,
     token_quota=None,
+    storage_quota_bytes=None,
 )
 
 # Cloud-Default fuer Orgs ohne aktiven Plan (z. B. frisch registriert, vor dem
@@ -173,4 +188,5 @@ CLOUD_FREE_ENTITLEMENT = Entitlement(
     mcp_monthly_quota=1_000,
     mcp_rate_per_min=30,
     token_quota=FREE_TOKEN_QUOTA,
+    storage_quota_bytes=FREE_STORAGE_QUOTA_BYTES,
 )

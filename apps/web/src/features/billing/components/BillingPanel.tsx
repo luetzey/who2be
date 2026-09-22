@@ -65,6 +65,56 @@ function formatExpiry(iso: string | null, unlimited: string): string {
   return Number.isNaN(date.getTime()) ? iso : date.toLocaleDateString()
 }
 
+/**
+ * Bytes in eine lesbare Groesse (Issue #536). Binaere Einheiten, weil die
+ * Konstanten binaer sind (`FREE_STORAGE_QUOTA_BYTES = 100 * 1024 * 1024`) —
+ * eine dezimale Anzeige wuerde „100 MB" als „104,9 MB" zeigen.
+ */
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  const units = ['KB', 'MB', 'GB', 'TB']
+  let value = bytes / 1024
+  let unit = 0
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024
+    unit += 1
+  }
+  const rounded = value >= 10 || Number.isInteger(value) ? Math.round(value) : Math.round(value * 10) / 10
+  return `${rounded} ${units[unit]}`
+}
+
+function StorageBar({ usedBytes, quotaBytes }: { usedBytes: number; quotaBytes: number | null }) {
+  const { t } = useTranslation('billing')
+  if (quotaBytes === null) {
+    return <p className="text-sm text-muted-foreground">{t('panel.storage.unlimited')}</p>
+  }
+  const ratio = quotaBytes > 0 ? Math.min(1, usedBytes / quotaBytes) : 1
+  const percent = Math.round(ratio * 100)
+  const exhausted = usedBytes >= quotaBytes
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-muted-foreground">{t('panel.storage.label')}</span>
+        <span className="font-medium tabular-nums">
+          {formatBytes(usedBytes)} / {formatBytes(quotaBytes)}
+        </span>
+      </div>
+      <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+        <div
+          className={exhausted ? 'h-full bg-destructive' : 'h-full bg-primary'}
+          style={{ width: `${percent}%` }}
+          role="progressbar"
+          aria-valuenow={usedBytes}
+          aria-valuemin={0}
+          aria-valuemax={quotaBytes}
+          aria-label={t('panel.storage.ariaLabel')}
+          data-testid="storage-bar"
+        />
+      </div>
+    </div>
+  )
+}
+
 function QuotaBar({ count, quota }: { count: number; quota: number | null }) {
   const { t } = useTranslation('billing')
   if (quota === null) {
@@ -90,6 +140,7 @@ function QuotaBar({ count, quota }: { count: number; quota: number | null }) {
           aria-valuemin={0}
           aria-valuemax={quota}
           aria-label={t('panel.quota.ariaLabel')}
+          data-testid="mcp-quota-bar"
         />
       </div>
     </div>
@@ -140,6 +191,10 @@ export function BillingPanel() {
       </CardHeader>
       <CardContent className="space-y-4">
         <QuotaBar count={data.usage.count} quota={data.mcp_monthly_quota} />
+        <StorageBar
+          usedBytes={data.usage.storage_bytes}
+          quotaBytes={data.storage_quota_bytes}
+        />
 
         <dl className="grid grid-cols-1 gap-x-4 gap-y-2 text-sm sm:grid-cols-2">
           <dt className="text-muted-foreground">{t('panel.plan.label')}</dt>

@@ -980,6 +980,8 @@ export interface ProvenanceEntry {
 export interface EntitlementUsage {
   period: string
   count: number
+  /** Summe der abgelegten Blob-Bytes dieses Workspaces (Issue #536). */
+  storage_bytes: number
 }
 
 export interface EntitlementInfo {
@@ -995,6 +997,8 @@ export interface EntitlementInfo {
    * den Tarifwert zurueck. `null` = wirklich unbegrenzt (On-Prem/OSS).
    */
   token_quota: number | null
+  /** `null` = unbegrenzt (On-Prem/OSS). */
+  storage_quota_bytes: number | null
   usage: EntitlementUsage
 }
 

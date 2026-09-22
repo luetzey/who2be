@@ -80,9 +80,12 @@ const crossFeatureOverrides = FEATURES.map((name) => ({
 export default tseslint.config(
   // `e2e/` faehrt unter Playwright (eigener Runner/Globals), nicht unter dem
   // App-/Vitest-ESLint-Profil — daher hier ignoriert (ADR-0041, Phase 4).
-  // `coverage/` enthaelt generierte Vitest-/v8-Reports (gitignoriert). Ohne
-  // diesen Ausschluss haengt die Warnungszahl von `eslint .` davon ab, ob
-  // `npm run test:coverage` vorher lief (Issue #520).
+  // `coverage/` enthaelt generierte Vitest-/v8-Reports (gitignoriert).
+  // Praeventiv: mit den aktuellen Reportern (vite.config.ts:37 —
+  // text-summary/json/html) landet dort keine .ts/.tsx-Datei, und kein
+  // Regel-Block hier matcht .js — der Ausschluss haelt `eslint .` davon
+  // unabhaengig, falls sich das kuenftig aendert (Issue #520,
+  // Richtigstellung in .claude/context/STATE.md).
   { ignores: ['coverage', 'dist', 'e2e', 'playwright-report', 'test-results'] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],

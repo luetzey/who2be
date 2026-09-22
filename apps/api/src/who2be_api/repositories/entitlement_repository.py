@@ -24,6 +24,7 @@ def _row_to_entitlement(row: asyncpg.Record) -> Entitlement:
         mcp_monthly_quota=row["mcp_monthly_quota"],
         mcp_rate_per_min=row["mcp_rate_per_min"],
         token_quota=row["token_quota"],
+        storage_quota_bytes=row["storage_quota_bytes"],
         grace_until=row["grace_until"],
     )
 
@@ -53,7 +54,7 @@ class PgEntitlementRepository:
     async def fetch(self, org_id: UUID) -> Entitlement | None:
         row = await self._pool.fetchrow(
             "SELECT status, features, expires_at, mcp_monthly_quota, mcp_rate_per_min, "
-            "       token_quota, grace_until "
+            "       token_quota, storage_quota_bytes, grace_until "
             "FROM org_entitlement WHERE org_id = $1",
             org_id,
         )
@@ -117,9 +118,9 @@ class PgEntitlementRepository:
             await conn.execute(
                 "INSERT INTO org_entitlement "
                 "(org_id, status, features, expires_at, mcp_monthly_quota, "
-                " mcp_rate_per_min, token_quota, grace_until, source, "
+                " mcp_rate_per_min, token_quota, storage_quota_bytes, grace_until, source, "
                 " external_ref, created_by, reason, updated_at) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now()) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, now()) "
                 "ON CONFLICT (org_id) DO UPDATE SET "
                 "  status = EXCLUDED.status, "
                 "  features = EXCLUDED.features, "
@@ -127,6 +128,7 @@ class PgEntitlementRepository:
                 "  mcp_monthly_quota = EXCLUDED.mcp_monthly_quota, "
                 "  mcp_rate_per_min = EXCLUDED.mcp_rate_per_min, "
                 "  token_quota = EXCLUDED.token_quota, "
+                "  storage_quota_bytes = EXCLUDED.storage_quota_bytes, "
                 "  grace_until = EXCLUDED.grace_until, "
                 "  source = EXCLUDED.source, "
                 "  external_ref = EXCLUDED.external_ref, "
@@ -140,6 +142,7 @@ class PgEntitlementRepository:
                 entitlement.mcp_monthly_quota,
                 entitlement.mcp_rate_per_min,
                 entitlement.token_quota,
+                entitlement.storage_quota_bytes,
                 entitlement.grace_until,
                 source,
                 external_ref,
@@ -149,9 +152,9 @@ class PgEntitlementRepository:
             await conn.execute(
                 "INSERT INTO entitlement_history "
                 "(org_id, status, features, expires_at, mcp_monthly_quota, "
-                " mcp_rate_per_min, token_quota, grace_until, source, "
+                " mcp_rate_per_min, token_quota, storage_quota_bytes, grace_until, source, "
                 " external_ref, created_by, reason) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
                 org_id,
                 entitlement.status,
                 features,
@@ -159,6 +162,7 @@ class PgEntitlementRepository:
                 entitlement.mcp_monthly_quota,
                 entitlement.mcp_rate_per_min,
                 entitlement.token_quota,
+                entitlement.storage_quota_bytes,
                 entitlement.grace_until,
                 source,
                 external_ref,

@@ -17,27 +17,59 @@ Dokument und der Code wird nachgezogen.
 Die einzigen Groessen, die der Code tatsaechlich durchsetzt, sind Preis
 (Mollie), MCP-Requests/Monat, MCP-Requests/Minute (beide `Entitlement`,
 App-seitiges Rate-Limiting), das Entity-Limit je Workspace
-(`Entitlement.entity_limit()`) und die Anzahl aktiver API-Tokens je Workspace
-(`Entitlement.token_quota`). Das ist deshalb die verkaufsrelevante Tabelle:
+(`Entitlement.entity_limit()`), die Anzahl aktiver API-Tokens je Workspace
+(`Entitlement.token_quota`) und die Speichergrenze je Workspace
+(`Entitlement.storage_quota_bytes`). Das ist deshalb die verkaufsrelevante
+Tabelle:
 
-| Tier | Preis          | MCP-Requests/Monat | MCP-Requests/Minute | Entity-Limit je Workspace | API-Tokens je Workspace | Features (Metadaten, s. u.) |
-|------|----------------|---------------------|----------------------|----------------------------|--------------------------|------------------------------|
-| Free | 0 € (kein Abo) | 1.000               | 30                   | 50                         | 3                        | `core` |
-| Pro  | 29 €/Monat     | 100.000             | 240                  | unbegrenzt                 | 25                       | `core`, `composite_playbooks`, `agents`, `audit_export` |
+| Tier | Preis          | MCP-Requests/Monat | MCP-Requests/Minute | Entity-Limit je Workspace | API-Tokens je Workspace | Speicher je Workspace | Features (Metadaten, s. u.) |
+|------|----------------|---------------------|----------------------|----------------------------|--------------------------|-----------------------|------------------------------|
+| Free | 0 € (kein Abo) | 1.000               | 30                   | 50                         | 3                        | 100 MB                | `core` |
+| Pro  | 29 €/Monat     | 100.000             | 240                  | unbegrenzt                 | 25                       | 10 GB                 | `core`, `composite_playbooks`, `agents`, `audit_export` |
 
 Quellen: Preis/MCP-Requests `packages/billing/src/who2be_billing/plans.py`
 (`FREE_PLAN`/`PRO_PLAN`: `price_eur`, `mcp_monthly_quota`,
-`mcp_rate_per_min`); Entity-Limit `licensing/entitlement.py`
-(`FREE_ENTITY_QUOTA = 50`, `Entitlement.entity_limit()`); Token-Grenze
-ebenfalls `licensing/entitlement.py` (`FREE_TOKEN_QUOTA = 3`,
-`PRO_TOKEN_QUOTA = 25`) — `plans.py` importiert die beiden Zahlen, statt sie
-zu wiederholen.
+`mcp_rate_per_min`, `token_quota`, `storage_quota_bytes`); Entity-Limit, die
+Token-Grenze und die Speicher-Konstanten `licensing/entitlement.py`
+(`FREE_ENTITY_QUOTA = 50`, `Entitlement.entity_limit()`,
+`FREE_TOKEN_QUOTA = 3`, `PRO_TOKEN_QUOTA = 25`,
+`FREE_STORAGE_QUOTA_BYTES = 100 MiB`, `PRO_STORAGE_QUOTA_BYTES = 10 GiB`) —
+`plans.py` importiert die Zahlen, statt sie zu wiederholen.
 
 **Zur Token-Spalte:** gezaehlt werden nur **nutzbare** Tokens — widerrufene und
 abgelaufene zaehlen nicht mit. Die Grenze greift ausschliesslich bei der
 **Anlage**: bestehende Tokens bleiben ueber der Grenze nutzbar **und
 rotierbar** (Secret-Rotation, RUNBOOK §Secret-Rotation), ein Downgrade sperrt
 also keine laufenden Agenten aus. On-Prem/OSS ist unbegrenzt.
+
+**Zur Speicher-Spalte — was gezaehlt wird und was nicht.** Die Grenze gilt
+fuer die Summe der abgelegten **Blob-Bytes** (`wa_blob.size_bytes`, also
+Datei- und URL-Ingest der WorkArea) und wird an den Ingest-Routen
+durchgesetzt (`services/storage_quota_service.py`).
+
+**Bekannte Grenze 1 — gezaehlt wird je Workspace, nicht je Org.** Die Summe
+laeuft ueber die Blobs *eines* Workspace (`STORAGE_USED_SQL` filtert auf
+`workspace_id`); jeder weitere Workspace derselben Org bekommt dasselbe
+Kontingent erneut. Solange die **Zahl** der Workspaces nicht gedeckelt ist,
+vervielfacht eine Org ihr Kontingent also durch Anlegen weiterer Workspaces
+(`POST /organizations/{id}/workspaces` kennt heute kein Limit). Genau das
+loest die Folgekarte „Workspace-Deckel"; org-weites Zaehlen ist bewusst
+*nicht* Teil dieser Stufe.
+
+**Bekannte Grenze 2 — der Tabellen-Store zaehlt NICHT mit.** Die
+SQLite-Dateien je WorkArea
+(`{WHO2BE_TABLESTORE_DIR}/{workspace_id}/{area_id}.sqlite`, ADR-0049) liegen
+im Dateisystem statt in Postgres und sind ohne `stat()` je Datei nicht
+bekannt. Das ist eine bewusste Grenze dieser Stufe, kein Versehen.
+
+**Bekannte Grenze 3 — Vorab-Check-Toleranz.** Das Gate prueft **vor** dem
+Ingest `summe >= limit`, ein einzelner Vorgang kann die Grenze also um bis zu
+`WHO2BE_INGEST_MAX_BYTES` (Default 20 MiB) ueberschreiten; der naechste wird
+abgewiesen.
+
+**Kein Datenverlust.** Wie beim Entity-Limit bleibt Bestehendes ueber der
+Grenze les- und herunterladbar — abgewiesen werden ausschliesslich **neue**
+Ingests (`402`, `reason: storage_quota_exceeded`, Grenze in `params`).
 
 **Zur Features-Spalte — praezise gelesen:** Die Feature-Codes sind Metadaten
 des Entitlements, kein Kaufargument. `Entitlement.entity_limit()` liest nur,
@@ -75,6 +107,7 @@ leitet daraus das Org-Entitlement ab.
 | `mcp_monthly_quota` | Int    | Monats-Kontingent agent-facing MCP-Reads.                        |
 | `mcp_rate_per_min`  | Int    | Per-Token-Rate-Ceiling (req/min).                                |
 | `token_quota`       | Int    | Max. Anzahl aktiver API-Tokens je Workspace.                     |
+| `storage_quota_bytes` | Int  | Speichergrenze **je Workspace** in Bytes (Summe `wa_blob.size_bytes`). |
 
 Beispiel-Metadata für **Pro**:
 
@@ -84,13 +117,15 @@ Beispiel-Metadata für **Pro**:
   "license_policy": "agents audit_export composite_playbooks core",
   "mcp_monthly_quota": "100000",
   "mcp_rate_per_min": "240",
-  "token_quota": "25"
+  "token_quota": "25",
+  "storage_quota_bytes": "10737418240"
 }
 ```
 
 `license_policy` akzeptiert sowohl Komma- als auch Whitespace-Trenner; unbekannte
-Codes werden ignoriert (Forward-Compatibility). Fehlen `mcp_monthly_quota` oder
-`mcp_rate_per_min`, gilt das jeweilige Limit als unbegrenzt (`None`).
+Codes werden ignoriert (Forward-Compatibility). Fehlen `mcp_monthly_quota`/
+`mcp_rate_per_min`/`storage_quota_bytes`, gilt das jeweilige Limit als
+unbegrenzt (`None`).
 
 Für `token_quota` gilt das **nur außerhalb der Cloud** (On-Prem/OSS). Fehlt der
 Schlüssel in einer Cloud-Subscription — etwa weil sie vor Einführung des Feldes

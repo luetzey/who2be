@@ -141,6 +141,7 @@
       "organization_owner_required": "Nur der Owner kann diese Organisation loeschen.",
       "workspace_org_missing": "Workspace ohne Organisation.",
       "entity_quota_exceeded": "Free-Tarif erreicht das Limit von {{limit}} Eintraegen je Workspace. Upgrade auf Pro hebt die Grenze auf — Bestehendes bleibt nutzbar.",
+      "storage_quota_exceeded": "Speichergrenze von {{limit}} Bytes erreicht. Upgrade auf Pro hebt die Grenze an — Abgelegtes bleibt les- und herunterladbar.",
       "persona_not_found": "Persona nicht gefunden.",
       "resource_slug_conflict": "Eine Resource mit diesem Slug existiert bereits.",
       "sub_playbook_not_found": "Mindestens ein Sub-Playbook existiert nicht oder gehoert einem anderen Workspace.",
@@ -689,7 +690,11 @@
         "privacyLink": "Datenschutzerklaerung",
         "after": "."
       },
-      "consentRequiredHint": "Bitte stimme den AGB und der Datenschutzerklaerung zu, um fortzufahren."
+      "consentRequiredHint": "Bitte stimme den AGB und der Datenschutzerklaerung zu, um fortzufahren.",
+      "captcha": {
+        "pending": "Bitte bestaetige kurz, dass du kein Bot bist.",
+        "failed": "Die Bot-Pruefung ist fehlgeschlagen. Bitte versuche es noch einmal."
+      }
     },
     "comingSoon": {
       "title": "Wir arbeiten noch an Who2Be — bald verfügbar.",

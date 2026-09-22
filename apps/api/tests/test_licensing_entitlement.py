@@ -10,8 +10,10 @@ from who2be_api.licensing.entitlement import (
     ALL_FEATURES,
     CLOUD_FREE_ENTITLEMENT,
     FREE_ENTITY_QUOTA,
+    FREE_STORAGE_QUOTA_BYTES,
     FREE_TOKEN_QUOTA,
     OSS_ENTITLEMENT,
+    PRO_STORAGE_QUOTA_BYTES,
     PRO_TOKEN_QUOTA,
     Entitlement,
     Feature,
@@ -98,6 +100,33 @@ def test_token_quota_is_a_field_not_a_derivation() -> None:
     )
     assert paid.entity_limit() is None  # Ableitung: Paid ⇒ unbegrenzt
     assert paid.token_quota == PRO_TOKEN_QUOTA == 25  # Feld: bleibt endlich
+
+
+# --- Speicher-Quota (Issue #536) --------------------------------------------
+
+
+def test_free_storage_quota_is_100_mib() -> None:
+    """Owner-Entscheidung Option A — die Zahl steht auch in docs/licensing/plans.md."""
+    assert FREE_STORAGE_QUOTA_BYTES == 100 * 1024 * 1024
+
+
+def test_pro_storage_quota_is_10_gib() -> None:
+    assert PRO_STORAGE_QUOTA_BYTES == 10 * 1024 * 1024 * 1024
+
+
+def test_oss_entitlement_storage_is_unlimited() -> None:
+    """AK 1: `None` = unbegrenzt und ist der On-Prem-Default."""
+    assert OSS_ENTITLEMENT.storage_quota_bytes is None
+
+
+def test_cloud_free_entitlement_carries_free_storage_quota() -> None:
+    assert CLOUD_FREE_ENTITLEMENT.storage_quota_bytes == FREE_STORAGE_QUOTA_BYTES
+
+
+def test_storage_quota_defaults_to_unlimited() -> None:
+    """Ein Entitlement ohne das Feld (Bestandszeile vor Migration 0084) ist
+    unbegrenzt — dieselbe Semantik wie bei den beiden MCP-Feldern."""
+    assert Entitlement().storage_quota_bytes is None
 
 
 def test_edition_flags() -> None:
