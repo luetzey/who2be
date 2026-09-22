@@ -37,7 +37,7 @@ GATED_JOBS = ("python", "web", "compose-smoke", "e2e", "e2e-billing-cloud")
 
 
 class Case(NamedTuple):
-    """Ein Ergebnis-Szenario der sieben Vorgaenger-Jobs."""
+    """Ein Ergebnis-Szenario der Vorgaenger-Jobs."""
 
     name: str
     changes: str
@@ -45,6 +45,7 @@ class Case(NamedTuple):
     gated: tuple[str, str, str, str, str]
     audit: str
     expected_exit: int
+    changelog_guard: str = OK
 
     def env(self) -> dict[str, str]:
         python, web, compose_smoke, e2e, e2e_billing_cloud = self.gated
@@ -57,6 +58,7 @@ class Case(NamedTuple):
             "E2E_RESULT": e2e,
             "E2E_BILLING_CLOUD_RESULT": e2e_billing_cloud,
             "AUDIT_RESULT": self.audit,
+            "CHANGELOG_GUARD_RESULT": self.changelog_guard,
         }
 
 
@@ -83,6 +85,17 @@ CASES: tuple[Case, ...] = (
     # --- unbekannte Klassifikation: fail-closed ---
     Case("code unbekannt: fail-closed", OK, "weird", ALL_OK, OK, 1),
     Case("code leer: fail-closed", OK, "", ALL_OK, OK, 1),
+    # --- `changelog-guard` haengt wie `audit` an keinem Pfadfilter ---
+    Case("changelog-guard rot bei Doku-PR", OK, "false", ALL_SKIP, OK, 1, changelog_guard=RED),
+    Case(
+        "changelog-guard uebersprungen (darf nie passieren)",
+        OK,
+        "true",
+        ALL_OK,
+        OK,
+        1,
+        changelog_guard=SKIP,
+    ),
 )
 
 
