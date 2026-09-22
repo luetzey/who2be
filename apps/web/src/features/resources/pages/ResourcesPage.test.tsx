@@ -100,7 +100,13 @@ describe('ResourcesPage — Umbruch bei 320px (#564)', () => {
   it('laesst lange Tags an Wortgrenzen brechen', async () => {
     renderWithLongIdentifiers()
 
-    const classes = (await screen.findByText(LONG_TAG)).className.split(/\s+/)
+    // `findByText` allein traefe auch die <option> der Tag-Facette in der
+    // ListFilterBar — gesucht ist der Badge in der Karte.
+    await screen.findByText(LONG_SLUG)
+    const badge = screen
+      .getAllByText(LONG_TAG)
+      .find((el) => el.tagName !== 'OPTION')
+    const classes = (badge as HTMLElement).className.split(/\s+/)
     expect(classes).toContain('break-words')
     expect(classes).toContain('max-w-full')
   })
