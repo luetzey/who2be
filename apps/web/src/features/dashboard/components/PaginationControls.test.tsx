@@ -20,13 +20,14 @@ describe('PaginationControls', () => {
     expect(screen.getByRole('navigation')).toHaveClass('flex-wrap')
   })
 
-  // §4.4 Checklistenpunkt 4 / §11 A11y-Minimum: Hit-Targets unterhalb `md`
-  // bleiben >= 40px. `size="sm"` liefert `h-9` (36px) — unterhalb `md` wird
-  // das auf `h-10` (40px) angehoben und erst ab `md` verdichtet.
-  it('haelt die Buttons unterhalb md auf 40px Hit-Target', () => {
+  // §11 A11y-Minimum: der verbindliche Floor ist >= 32px ("Buttons
+  // size="default" = 40px (HIG-konform >= 32px)"). `size="sm"` liefert h-9
+  // (36px) und liegt damit darueber — kein Defekt, keine lokale Abfederung.
+  // Der Test haelt fest, dass hier bewusst nicht aufgeblasen wird.
+  it('laesst die Buttons auf size="sm" (h-9 = 36px, ueber dem 32px-Floor)', () => {
     render(<PaginationControls page={2} totalPages={5} onPageChange={vi.fn()} />)
     for (const button of screen.getAllByRole('button')) {
-      expect(button).toHaveClass('h-10', 'md:h-9')
+      expect(button).toHaveClass('h-9')
     }
   })
 })

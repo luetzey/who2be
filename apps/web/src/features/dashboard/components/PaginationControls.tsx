@@ -30,10 +30,6 @@ export function PaginationControls({
       <Button
         variant="outline"
         size="sm"
-        // §11 A11y-Minimum: `size="sm"` liefert h-9 (36px). Unterhalb der
-        // Mobile-Schwelle `md` bleibt das Hit-Target auf 40px und verdichtet
-        // sich erst auf dem Desktop (§4.4 Checklistenpunkt 4).
-        className="h-10 md:h-9"
         onClick={() => onPageChange(page - 1)}
         disabled={busy || page <= 1}
       >
@@ -46,7 +42,6 @@ export function PaginationControls({
       <Button
         variant="outline"
         size="sm"
-        className="h-10 md:h-9"
         onClick={() => onPageChange(page + 1)}
         disabled={busy || page >= totalPages}
       >
