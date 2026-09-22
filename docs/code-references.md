@@ -86,6 +86,8 @@ pbpaste | uv run python scripts/check_code_refs.py -
 Geprueft wird: **gibt es die genannte Datei** (im Arbeitsbaum bzw. an dem
 genannten Commit) und **gibt es das genannte Symbol dort** (Python exakt via
 `ast`, TypeScript/JavaScript/Shell/SQL/YAML ueber Definitions-Muster).
+Symbolnamen duerfen Bindestriche tragen — CI-Jobs und npm-Skripte heissen
+`compose-smoke` oder `e2e-billing-cloud`, und ein Anker darauf loest auf.
 
 ### Befund-Stufen
 

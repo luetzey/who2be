@@ -58,7 +58,13 @@ from pathlib import Path
 # ``foo:1`` in Prosa als Referenz gelten.
 _PATH = r"[A-Za-z0-9_./-]+\.[A-Za-z0-9_]+"
 _SHA = r"[0-9a-fA-F]{7,40}"
-_SYMBOL = r"[A-Za-z_][A-Za-z0-9_.]*"
+# Symbolnamen duerfen Bindestriche tragen: YAML-Jobs und npm-Skripte heissen
+# ``compose-smoke`` oder ``e2e-billing-cloud``. Ohne den Bindestrich schneidet
+# die Grammatik mitten im Namen ab und meldet ausgerechnet eine
+# konventionskonforme Referenz als Fehler. Das letzte Zeichen ist bewusst auf
+# Wortzeichen begrenzt, damit Satzzeichen hinter der Referenz (``…#helper.``)
+# nicht in den Symbolnamen wandern.
+_SYMBOL = r"[A-Za-z_](?:[A-Za-z0-9_.-]*[A-Za-z0-9_])?"
 
 _REFERENCE_RE = re.compile(
     rf"(?P<path>{_PATH})"
@@ -92,6 +98,14 @@ _SKIP_DIRS = {
 # URL-Rest als nicht aufloesbaren Pfad — der Pruefer wuerde ausgerechnet die
 # empfohlene Referenzform als Fehler melden.
 _URL_RE = re.compile(r"(?:[a-z][a-z0-9+.-]*:)?//[^\s)>\]]+", re.IGNORECASE)
+
+# Inline-Code nach CommonMark: der schliessende Backtick-Run muss genauso lang
+# sein wie der oeffnende, und der Inhalt darf kuerzere Runs enthalten. Genau das
+# ist die Markdown-Form fuer „Backticks im Code\" (`` `x` ``) — unsere
+# Konventionstabelle in ``docs/code-references.md`` setzt ihre Beispiele so.
+# Eine Grammatik mit ``[^`\n]+`` sieht diese Referenzen gar nicht und laesst
+# ausgerechnet das vorbildliche Dokument ungeprueft.
+_CODE_SPAN_RE = re.compile(r"(?P<fence>`+)(?P<body>.+?)(?P=fence)(?!`)")
 
 
 @dataclass
@@ -142,8 +156,8 @@ def _iter_code_spans(text: str) -> Iterator[tuple[int, str]]:
         if in_fence:
             yield lineno, raw
             continue
-        for match in re.finditer(r"`{1,3}([^`\n]+)`{1,3}", raw):
-            yield lineno, match.group(1)
+        for match in _CODE_SPAN_RE.finditer(raw):
+            yield lineno, match.group("body")
 
 
 # --- Symbolaufloesung ---------------------------------------------------------

@@ -70,6 +70,12 @@ def repo(tmp_path: Path) -> Path:
         "export function mount(): void {}\nconst other = mount;\n",
         encoding="utf-8",
     )
+    # Kebab-Case-Keys sind in YAML der Normalfall (CI-Jobs, npm-Skripte) —
+    # die Grammatik muss sie als Symbolnamen tragen koennen.
+    (tmp_path / "ci.yml").write_text(
+        "jobs:\n  compose-smoke:\n    runs-on: ubuntu-latest\n",
+        encoding="utf-8",
+    )
     subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
     subprocess.run(["git", "-C", str(tmp_path), "commit", "-qm", "init"], check=True)
     return tmp_path
@@ -145,6 +151,41 @@ def test_urls_are_not_torn_apart(repo: Path) -> None:
     url = "https://github.com/luetzey/who2be/blob/39dcdf4/apps/api/main.py#L20-L28"
     assert _scan(repo, f"Siehe `{url}`.") == []
     assert _scan(repo, f"Siehe {url} im Browser.") == []
+
+
+def test_kebab_case_symbol_is_not_truncated(repo: Path) -> None:
+    """Ein YAML-Job heisst `compose-smoke` — der Bindestrich gehoert zum Namen.
+
+    Ohne ihn schneidet die Grammatik nach `compose` ab und meldet eine
+    **konventionskonforme** Referenz als `error`. Das faerbt den DoD-Lauf rot,
+    der laut CONTRIBUTING.md gruen sein muss — und zwar genau fuer den ersten,
+    der die neue Konvention benutzt.
+    """
+    findings = _scan(repo, "Siehe `ci.yml#compose-smoke`.")
+    assert [f.symbol for f in findings] == ["compose-smoke"]
+    assert [f.severity for f in findings] == ["ok"]
+
+
+def test_trailing_punctuation_stays_out_of_the_symbol(repo: Path) -> None:
+    """Ein Punkt oder Bindestrich am Ende ist Satzzeichen, nicht Teil des Namens."""
+    findings = _scan(repo, "Siehe `mod.py#helper`, dann `ci.yml#compose-smoke`.")
+    assert [f.symbol for f in findings] == ["helper", "compose-smoke"]
+    assert [f.severity for f in findings] == ["ok", "ok"]
+
+
+def test_reference_inside_double_backticks_is_scanned(repo: Path) -> None:
+    """`` `x` `` ist die Markdown-Form fuer „Backticks im Code\".
+
+    Genau so setzt `docs/code-references.md` seine Konventionsbeispiele. Eine
+    Grammatik mit ``[^`\\n]+`` sieht sie nicht — dann bleibt ausgerechnet das
+    vorbildliche Dokument vom eigenen Pruefer ungedeckt, und ein gebrochenes
+    Beispiel dort fiele niemandem auf.
+    """
+    findings = _scan(repo, "| Symbolanker | `` `mod.py#helper` `` | Standardfall. |")
+    assert [f.severity for f in findings] == ["ok"]
+
+    broken = _scan(repo, "| Beispiel | `` `mod.py#gibtsNicht` `` | kaputt |")
+    assert [f.severity for f in broken] == ["error"]
 
 
 # --- 2. Symbolaufloesung ------------------------------------------------------
