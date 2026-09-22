@@ -12,9 +12,11 @@ from who2be_api.licensing.entitlement import (
     FREE_ENTITY_QUOTA,
     FREE_STORAGE_QUOTA_BYTES,
     FREE_TOKEN_QUOTA,
+    FREE_WORKSPACE_QUOTA,
     OSS_ENTITLEMENT,
     PRO_STORAGE_QUOTA_BYTES,
     PRO_TOKEN_QUOTA,
+    PRO_WORKSPACE_QUOTA,
     Entitlement,
     Feature,
 )
@@ -127,6 +129,68 @@ def test_storage_quota_defaults_to_unlimited() -> None:
     """Ein Entitlement ohne das Feld (Bestandszeile vor Migration 0084) ist
     unbegrenzt — dieselbe Semantik wie bei den beiden MCP-Feldern."""
     assert Entitlement().storage_quota_bytes is None
+
+
+# --- Workspace-Deckel je Org (Issue #576) -----------------------------------
+
+
+def test_free_workspace_quota_is_one() -> None:
+    """Owner-Entscheidung Option A. 0 waere zum Bestand inkonsistent: jede
+    Org-Anlage erzeugt atomar einen Default-Workspace, und der letzte Workspace
+    einer Org ist unloeschbar (`LastWorkspaceError`)."""
+    assert FREE_WORKSPACE_QUOTA == 1
+
+
+def test_pro_workspace_quota_is_five() -> None:
+    """5 x `PRO_STORAGE_QUOTA_BYTES` = 50 GiB maximale Speicherzusage je
+    Pro-Org — die Zahl, auf der die Entscheidung beruht."""
+    assert PRO_WORKSPACE_QUOTA == 5
+    assert PRO_WORKSPACE_QUOTA * PRO_STORAGE_QUOTA_BYTES == 50 * 1024**3
+
+
+def test_oss_entitlement_workspace_quota_is_unlimited() -> None:
+    assert OSS_ENTITLEMENT.workspace_quota is None
+    assert OSS_ENTITLEMENT.effective_workspace_quota(cloud=False) is None
+
+
+def test_cloud_free_entitlement_carries_free_workspace_quota() -> None:
+    assert CLOUD_FREE_ENTITLEMENT.workspace_quota == FREE_WORKSPACE_QUOTA
+    assert CLOUD_FREE_ENTITLEMENT.effective_workspace_quota(cloud=True) == FREE_WORKSPACE_QUOTA
+
+
+def test_workspace_quota_defaults_to_unlimited() -> None:
+    """Bestandszeilen vor Migration 0086 tragen `NULL` — auf Modell-Ebene
+    unbegrenzt. Dass die Cloud daraus trotzdem eine Zahl macht, ist die Aufgabe
+    von `effective_workspace_quota` (siehe unten)."""
+    assert Entitlement().workspace_quota is None
+
+
+def test_effective_workspace_quota_falls_back_in_cloud() -> None:
+    """Der Rueckfall, den `storage_quota_bytes` NICHT hat und `token_quota`
+    nachtraeglich bekommen musste: `None` heisst in der Cloud „nicht gesetzt".
+
+    Ohne ihn duerfte ausgerechnet eine gekuendigte Org (der Revoke-Pfad des
+    Webhooks schreibt das Feld gar nicht) unbegrenzt Workspaces anlegen.
+    """
+    revoked = Entitlement(status="inactive", features=frozenset())
+    assert revoked.workspace_quota is None
+    assert revoked.effective_workspace_quota(cloud=True) == FREE_WORKSPACE_QUOTA
+    # Ausserhalb der Cloud bleibt `None` unbegrenzt (On-Prem-Lizenz).
+    assert revoked.effective_workspace_quota(cloud=False) is None
+
+    paid = Entitlement(status="active", features=frozenset({Feature.CORE, Feature.AGENTS}))
+    assert paid.effective_workspace_quota(cloud=True) == PRO_WORKSPACE_QUOTA
+
+    free = Entitlement(status="active", features=frozenset({Feature.CORE}))
+    assert free.effective_workspace_quota(cloud=True) == FREE_WORKSPACE_QUOTA
+
+
+def test_persisted_workspace_quota_wins_over_fallback() -> None:
+    """Ein gesetztes Feld schlaegt die Ableitung — sonst koennte ein
+    `manual_override` mit individueller Zahl (ADR-0028) nicht wirken."""
+    ent = Entitlement(status="active", features=frozenset({Feature.CORE}), workspace_quota=42)
+    assert ent.effective_workspace_quota(cloud=True) == 42
+    assert ent.effective_workspace_quota(cloud=False) == 42
 
 
 def test_edition_flags() -> None:

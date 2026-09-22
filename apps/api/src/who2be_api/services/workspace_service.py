@@ -2,7 +2,8 @@
 
 Anlage + Update fuer Workspaces innerhalb einer Organization. Membership/
 Org-Pruefung laufen ueber das Organization-Repo, damit kein User in einer
-fremden Org Workspaces erzeugt.
+fremden Org Workspaces erzeugt. Die Anlage traegt zusaetzlich den Tarif-Deckel
+fuer die Zahl der Workspaces je Org (Issue #576, `workspace_quota_service`).
 """
 
 from uuid import UUID
@@ -16,6 +17,7 @@ from who2be_api.repositories.workspace_repository import (
     LastWorkspaceError,
     WorkspaceRepository,
 )
+from who2be_api.services.workspace_quota_service import WorkspaceQuotaService
 from who2be_models import WorkspaceCreate, WorkspaceRead, WorkspaceUpdate
 
 
@@ -47,9 +49,31 @@ class WorkspaceService:
         self,
         workspace_repo: WorkspaceRepository,
         organization_repo: OrganizationRepository,
+        pool: asyncpg.Pool | None = None,
     ) -> None:
+        # `pool` ist der Executor des Workspace-Deckels (Issue #576). Optional,
+        # damit aeltere Tests/Fakes ohne Pool-Wiring weiterlaufen — dieselbe
+        # Konvention wie bei `TokenService._enforce_token_quota`.
         self._workspaces = workspace_repo
         self._orgs = organization_repo
+        self._pool = pool
+
+    async def _enforce_workspace_quota(self, org_id: UUID) -> None:
+        """Tarif-Deckel fuer die Anzahl der Workspaces einer Org (Issue #576).
+
+        Im Service und nicht als Router-Dependency, weil die Grenze org-scoped
+        ist: die Anlage laeuft ueber `POST /organizations/{id}/workspaces`, es
+        gibt zu diesem Zeitpunkt noch keinen `WorkspaceContext`, an dem eine
+        Dependency haengen koennte. Ohne Pool (aeltere Test-Fakes) ein No-Op.
+
+        Bewusst NUR hier: der Default-Workspace der Org-Anlage
+        (`OrganizationRepository.create`) und das On-Prem-Bootstrap laufen nicht
+        ueber diesen Service und bleiben ungegatet — sonst wuerde bei Free-Limit
+        1 jede Org-Anlage scheitern.
+        """
+        if self._pool is None:
+            return
+        await WorkspaceQuotaService(self._pool).enforce(org_id)
 
     async def list_for_org(self, org_id: UUID, user_id: UUID) -> list[WorkspaceRead]:
         if await self._orgs.fetch(user_id, org_id) is None:
@@ -59,6 +83,9 @@ class WorkspaceService:
     async def create(self, org_id: UUID, user_id: UUID, data: WorkspaceCreate) -> WorkspaceRead:
         if await self._orgs.fetch(user_id, org_id) is None:
             raise _org_not_found()
+        # Nach dem Membership-Gate: wer die Org nicht kennt, darf auch nichts
+        # ueber ihren Tarif erfahren (der 404 kommt zuerst).
+        await self._enforce_workspace_quota(org_id)
         try:
             return await self._workspaces.create(
                 org_id, user_id, data.name, data.slug, data.content_locale

@@ -255,6 +255,7 @@ _PROBLEM_TITLES: dict[str, str] = {
     "entity_quota_exceeded": "Entity-Kontingent erreicht",
     "token_quota_exceeded": "Token-Kontingent erreicht",
     "storage_quota_exceeded": "Speichergrenze erreicht",
+    "workspace_quota_exceeded": "Workspace-Deckel erreicht",
     "persona_not_found": "Persona nicht gefunden",
     "resource_slug_conflict": "Resource-Slug bereits vergeben",
     "sub_playbook_not_found": "Sub-Playbook nicht gefunden",

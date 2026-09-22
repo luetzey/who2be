@@ -11466,6 +11466,16 @@
               }
             }
           },
+          "402": {
+            "description": "reason: workspace_quota_exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorBody"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -12851,6 +12861,7 @@
               "workspace_org_missing",
               "entity_quota_exceeded",
               "storage_quota_exceeded",
+              "workspace_quota_exceeded",
               "persona_not_found",
               "resource_slug_conflict",
               "sub_playbook_not_found",
@@ -13806,6 +13817,17 @@
             ],
             "title": "Storage Quota Bytes"
           },
+          "workspace_quota": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspace Quota"
+          },
           "grace_until": {
             "anyOf": [
               {
@@ -13831,6 +13853,7 @@
           "mcp_rate_per_min",
           "token_quota",
           "storage_quota_bytes",
+          "workspace_quota",
           "grace_until",
           "usage"
         ],

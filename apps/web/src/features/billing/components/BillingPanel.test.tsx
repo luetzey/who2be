@@ -29,6 +29,7 @@ const cloudActive: EntitlementInfo = {
   mcp_rate_per_min: 30,
   token_quota: 3,
   storage_quota_bytes: 100 * 1024 * 1024,
+  workspace_quota: 1,
   usage: { period: '202606', count: 250, storage_bytes: 25 * 1024 * 1024 },
 }
 
@@ -54,6 +55,31 @@ describe('BillingPanel', () => {
     expect(
       screen.getByRole('progressbar', { name: /MCP-Kontingent/ }),
     ).toBeInTheDocument()
+  })
+
+  // --- Workspace-Deckel je Org (Issue #576) ---------------------------------
+
+  it('zeigt den Workspace-Deckel des Tarifs als Zahl', async () => {
+    vi.stubGlobal('fetch', jsonFetch({ ...cloudActive, workspace_quota: 5 }))
+    renderPanel()
+
+    await waitFor(() => {
+      expect(screen.getByText('Workspaces je Organisation')).toBeInTheDocument()
+    })
+    expect(screen.getByText('5')).toBeInTheDocument()
+  })
+
+  it('zeigt "unbegrenzt", wenn kein Workspace-Deckel gilt (On-Prem/OSS)', async () => {
+    vi.stubGlobal('fetch', jsonFetch({ ...cloudActive, workspace_quota: null }))
+    renderPanel()
+
+    await waitFor(() => {
+      expect(screen.getByText('Workspaces je Organisation')).toBeInTheDocument()
+    })
+    // Die Zeile steht direkt nach ihrem Label — sonst faenden wir das
+    // "unbegrenzt" einer anderen Zeile.
+    const label = screen.getByText('Workspaces je Organisation')
+    expect(label.nextElementSibling).toHaveTextContent('unbegrenzt')
   })
 
   // --- Speicher-Quota (Issue #536, AK 5) ------------------------------------

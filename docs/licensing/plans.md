@@ -18,23 +18,25 @@ Die einzigen Groessen, die der Code tatsaechlich durchsetzt, sind Preis
 (Mollie), MCP-Requests/Monat, MCP-Requests/Minute (beide `Entitlement`,
 App-seitiges Rate-Limiting), das Entity-Limit je Workspace
 (`Entitlement.entity_limit()`), die Anzahl aktiver API-Tokens je Workspace
-(`Entitlement.token_quota`) und die Speichergrenze je Workspace
-(`Entitlement.storage_quota_bytes`). Das ist deshalb die verkaufsrelevante
-Tabelle:
+(`Entitlement.token_quota`), die Speichergrenze je Workspace
+(`Entitlement.storage_quota_bytes`) und die Zahl der Workspaces je
+Organisation (`Entitlement.workspace_quota`). Das ist deshalb die
+verkaufsrelevante Tabelle:
 
-| Tier | Preis          | MCP-Requests/Monat | MCP-Requests/Minute | Entity-Limit je Workspace | API-Tokens je Workspace | Speicher je Workspace | Features (Metadaten, s. u.) |
-|------|----------------|---------------------|----------------------|----------------------------|--------------------------|-----------------------|------------------------------|
-| Free | 0 € (kein Abo) | 1.000               | 30                   | 50                         | 3                        | 100 MB                | `core` |
-| Pro  | 29 €/Monat     | 100.000             | 240                  | unbegrenzt                 | 25                       | 10 GB                 | `core`, `composite_playbooks`, `agents`, `audit_export` |
+| Tier | Preis          | MCP-Requests/Monat | MCP-Requests/Minute | Entity-Limit je Workspace | API-Tokens je Workspace | Speicher je Workspace | Workspaces je Org | Features (Metadaten, s. u.) |
+|------|----------------|---------------------|----------------------|----------------------------|--------------------------|-----------------------|-------------------|------------------------------|
+| Free | 0 € (kein Abo) | 1.000               | 30                   | 50                         | 3                        | 100 MB                | 1                 | `core` |
+| Pro  | 29 €/Monat     | 100.000             | 240                  | unbegrenzt                 | 25                       | 10 GB                 | 5                 | `core`, `composite_playbooks`, `agents`, `audit_export` |
 
 Quellen: Preis/MCP-Requests `packages/billing/src/who2be_billing/plans.py`
 (`FREE_PLAN`/`PRO_PLAN`: `price_eur`, `mcp_monthly_quota`,
-`mcp_rate_per_min`, `token_quota`, `storage_quota_bytes`); Entity-Limit, die
-Token-Grenze und die Speicher-Konstanten `licensing/entitlement.py`
-(`FREE_ENTITY_QUOTA = 50`, `Entitlement.entity_limit()`,
-`FREE_TOKEN_QUOTA = 3`, `PRO_TOKEN_QUOTA = 25`,
-`FREE_STORAGE_QUOTA_BYTES = 100 MiB`, `PRO_STORAGE_QUOTA_BYTES = 10 GiB`) —
-`plans.py` importiert die Zahlen, statt sie zu wiederholen.
+`mcp_rate_per_min`, `token_quota`, `storage_quota_bytes`,
+`workspace_quota`); Entity-Limit, Token-, Speicher- und Workspace-Konstanten
+`licensing/entitlement.py` (`FREE_ENTITY_QUOTA = 50`,
+`Entitlement.entity_limit()`, `FREE_TOKEN_QUOTA = 3`, `PRO_TOKEN_QUOTA = 25`,
+`FREE_STORAGE_QUOTA_BYTES = 100 MiB`, `PRO_STORAGE_QUOTA_BYTES = 10 GiB`,
+`FREE_WORKSPACE_QUOTA = 1`, `PRO_WORKSPACE_QUOTA = 5`) — `plans.py` importiert
+die Zahlen, statt sie zu wiederholen.
 
 **Zur Token-Spalte:** gezaehlt werden nur **nutzbare** Tokens — widerrufene und
 abgelaufene zaehlen nicht mit. Die Grenze greift ausschliesslich bei der
@@ -47,29 +49,65 @@ fuer die Summe der abgelegten **Blob-Bytes** (`wa_blob.size_bytes`, also
 Datei- und URL-Ingest der WorkArea) und wird an den Ingest-Routen
 durchgesetzt (`services/storage_quota_service.py`).
 
-**Bekannte Grenze 1 — gezaehlt wird je Workspace, nicht je Org.** Die Summe
-laeuft ueber die Blobs *eines* Workspace (`STORAGE_USED_SQL` filtert auf
-`workspace_id`); jeder weitere Workspace derselben Org bekommt dasselbe
-Kontingent erneut. Solange die **Zahl** der Workspaces nicht gedeckelt ist,
-vervielfacht eine Org ihr Kontingent also durch Anlegen weiterer Workspaces
-(`POST /organizations/{id}/workspaces` kennt heute kein Limit). Genau das
-loest die Folgekarte „Workspace-Deckel"; org-weites Zaehlen ist bewusst
-*nicht* Teil dieser Stufe.
+**Zur Spalte „Workspaces je Org" — warum es sie gibt.** Die Speichergrenze
+zaehlt je Workspace (`STORAGE_USED_SQL` filtert auf `workspace_id`), jeder
+weitere Workspace derselben Org bekaeme also dasselbe Kontingent erneut. Ohne
+Deckel auf die **Zahl** der Workspaces vervielfacht eine Org ihr Kontingent
+damit durch blosses Anlegen. Der Deckel schliesst genau diese Luecke
+(`services/workspace_quota_service.py`, durchgesetzt an
+`POST /organizations/{id}/workspaces`): erst beide Grenzen zusammen ergeben
+eine endliche Speicherzusage — Free 1 x 100 MiB, Pro 5 x 10 GiB = 50 GiB.
 
-**Bekannte Grenze 2 — der Tabellen-Store zaehlt NICHT mit.** Die
+Free steht auf **1**, nicht auf 0: jede Org-Anlage erzeugt atomar einen
+Default-Workspace, und der letzte Workspace einer Org ist unloeschbar
+(`reason: last_workspace_undeletable`). 0 waere zu diesem Bestand
+inkonsistent. Org-weites **Speicher**-Zaehlen bleibt bewusst ausserhalb dieser
+Stufe — der Deckel begrenzt die Zahl, nicht die Zaehlweise.
+
+**Bekannte Grenze 1 — der Tabellen-Store zaehlt NICHT mit.** Die
 SQLite-Dateien je WorkArea
 (`{WHO2BE_TABLESTORE_DIR}/{workspace_id}/{area_id}.sqlite`, ADR-0049) liegen
 im Dateisystem statt in Postgres und sind ohne `stat()` je Datei nicht
 bekannt. Das ist eine bewusste Grenze dieser Stufe, kein Versehen.
 
-**Bekannte Grenze 3 — Vorab-Check-Toleranz.** Das Gate prueft **vor** dem
+**Bekannte Grenze 2 — Vorab-Check-Toleranz.** Das Gate prueft **vor** dem
 Ingest `summe >= limit`, ein einzelner Vorgang kann die Grenze also um bis zu
 `WHO2BE_INGEST_MAX_BYTES` (Default 20 MiB) ueberschreiten; der naechste wird
 abgewiesen.
 
+**Bekannte Grenze 3 — der Workspace-Deckel verschiebt den Multiplikator, er
+schliesst ihn nicht.** `POST /organizations` hat selbst keine Obergrenze, und
+jede neue Org bringt atomar einen Default-Workspace mit. Wer mehr Speicher
+will, als sein Tarif zusagt, kann also weitere **Organisationen** anlegen statt
+weiterer Workspaces. **Das ist eine bewusste Owner-Entscheidung vom
+2026-09-22, keine uebersehene Luecke** — bitte nicht als offener Befund wieder
+aufmachen. Zwei Gruende tragen sie:
+
+* **Der Umgehungspfad ist um Faktor 100 teurer.** Eine frisch angelegte Org hat
+  kein Mollie-Abo und faellt auf `CLOUD_FREE_ENTITLEMENT`, also 100 MiB statt
+  10 GiB je Workspace. Fuer die 50 GiB, die ein einzelnes Pro-Abo zusagt,
+  braeuchte es rund **500 Orgs** — jede mit bestaetigter Mailadresse und,
+  sobald das Captcha scharf geschaltet ist, je einem geloesten Captcha.
+* **Ein Org-Deckel traefe zuerst den ehrlichen Nutzer.** Organisationen sind
+  das Mandanten-Modell dieses Produkts; eine Agentur mit acht Kunden legt
+  berechtigt acht Orgs an. Speicher- und Token-Quote treffen, wer viel
+  *verbraucht*; ein Org-Deckel traefe, wer viel *strukturiert* — und zwar beim
+  Onboarding, an der teuersten Stelle der Kundenbeziehung.
+
+**Gueltigkeitsbereich dieser Entscheidung.** Sie traegt, solange eine Free-Org
+nichts bekommt, was echtes Geld kostet. Kaemen LLM-Aufrufe, Mailversand in
+Menge oder Rechenzeit ins Free-Kontingent, ist die Rechnung neu zu machen: der
+Faktor 100 oben ist dann nicht mehr der richtige Massstab. Das ist kein offenes
+TODO, sondern die Bedingung, unter der die Entscheidung gilt.
+
 **Kein Datenverlust.** Wie beim Entity-Limit bleibt Bestehendes ueber der
 Grenze les- und herunterladbar — abgewiesen werden ausschliesslich **neue**
 Ingests (`402`, `reason: storage_quota_exceeded`, Grenze in `params`).
+Dasselbe gilt fuer den Workspace-Deckel: liegt eine Org nach einem Downgrade
+ueber ihrer Grenze, bleiben **alle** Workspaces vollstaendig nutzbar (lesen,
+schreiben, loeschen); nur die **Anlage** antwortet mit `402`,
+`reason: workspace_quota_exceeded` und der Grenze in `params`. Eine Loeschung
+gibt den Platz sofort wieder frei.
 
 **Zur Features-Spalte — praezise gelesen:** Die Feature-Codes sind Metadaten
 des Entitlements, kein Kaufargument. `Entitlement.entity_limit()` liest nur,

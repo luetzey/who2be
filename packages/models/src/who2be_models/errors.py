@@ -88,6 +88,7 @@ ProblemReason = Literal[
     "workspace_org_missing",  # 403 — Workspace ohne Organisation (inkonsistenter Zustand)
     "entity_quota_exceeded",  # 402 — Entity-Kontingent erreicht (params: limit)
     "storage_quota_exceeded",  # 402 — Speichergrenze erreicht (params: limit, used)
+    "workspace_quota_exceeded",  # 402 — Workspace-Deckel der Organisation erreicht (params: limit)
     "persona_not_found",  # 404 — Persona unbekannt oder nicht sichtbar
     "resource_slug_conflict",  # 409 — Resource-Slug im Workspace bereits vergeben
     "sub_playbook_not_found",  # 404 — Sub-Playbook der Composition unbekannt/fremd

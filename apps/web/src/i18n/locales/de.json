@@ -142,6 +142,7 @@
       "workspace_org_missing": "Workspace ohne Organisation.",
       "entity_quota_exceeded": "Free-Tarif erreicht das Limit von {{limit}} Eintraegen je Workspace. Upgrade auf Pro hebt die Grenze auf — Bestehendes bleibt nutzbar.",
       "storage_quota_exceeded": "Speichergrenze von {{limit}} Bytes erreicht. Upgrade auf Pro hebt die Grenze an — Abgelegtes bleibt les- und herunterladbar.",
+      "workspace_quota_exceeded": "Der Tarif erlaubt {{limit}} Workspaces je Organisation. Wechsle den Tarif oder loesche einen bestehenden Workspace — vorhandene Workspaces bleiben vollstaendig nutzbar.",
       "persona_not_found": "Persona nicht gefunden.",
       "resource_slug_conflict": "Eine Resource mit diesem Slug existiert bereits.",
       "sub_playbook_not_found": "Mindestens ein Sub-Playbook existiert nicht oder gehoert einem anderen Workspace.",
