@@ -7,6 +7,12 @@
 >
 > Stand: 2026-09-19. Quellen sind im Repo belegt (`datei:zeile`); wo eine
 > Aussage nur ein Live-Lauf beweisen kann, steht das dabei.
+>
+> **Charakter:** Analyse- und Vorschlagspapier, Stand 2026-09-19 — Teile davon
+> sind Empfehlungen, nicht der aktuelle Zustand (z. B. der vorgeschlagene
+> Team-Tarif für 99 €, den es nicht gibt). Verbindlich für Tarife und Limits
+> sind `docs/licensing/plans.md` und der Code. Einzelne hier beschriebene
+> Lücken sind inzwischen geschlossen und unten entsprechend markiert.
 
 Dieses Dokument beantwortet vier Fragen an einem Stück: **Brauche ich einen
 Server? Wie schütze ich die App gegen Last-Missbrauch? Wie kassiere ich
@@ -83,7 +89,10 @@ Kunde dich real Geld kosten kann.
 
 Siehe [§4](#4--missbrauchsschutz-die-fünf-offenen-lücken) und
 [§5](#5--bezahlung-was-fehlt-für-echtes-geld). Kurz: Speicher-Quota,
-Org-weites Rate-Ceiling, Token-Anzahl-Cap, Signup-Captcha, Rechnung.
+Token-Anzahl-Cap, Signup-Captcha, Rechnung — plus das Org-weite
+Rate-Ceiling, das als L2 beschrieben, inzwischen aber geschlossen ist
+(#537, PR #555). Es bleiben also die fünf Lücken der Analyse, von denen
+eine erledigt ist.
 
 ---
 
@@ -255,6 +264,10 @@ fängt den Gesamtverbrauch ab, aber **nicht die Spitze**: 4.800 req/min gegen
 die Datenbank reichen, um allen anderen Kunden die Antwortzeit zu ruinieren,
 bis das Kontingent leer ist. Es gibt keinen Cap auf die Anzahl der Tokens.
 
+*Nachtrag: seit #537 (PR #555) deckelt `mcp_rate_per_min` zwei
+Sliding-Windows mit demselben Ceiling — pro Token und pro Org; effektiv gilt
+das Minimum. Die hier beschriebene Token-Multiplikation existiert nicht mehr.*
+
 **3. Das Request-Limit gilt nur für API-Tokens.** `enforce()` steigt bei
 Web-Sessions früh aus (`mcp_limit_service.py:79`) — bewusst so entschieden
 (2026-09-05: „die Agenten-Last ist die Kostenquelle, die UI ist
@@ -322,7 +335,9 @@ Ingest-Vorgänge pro Tag und Org.
 ## 4 · Missbrauchsschutz: die fünf offenen Lücken
 
 Nach Priorität. Jede ist im Repo belegt, keine ist heute katastrophal —
-aber alle fünf werden es mit echten Nutzern.
+aber alle fünf werden es mit echten Nutzern. **Hinweis:** L2 ist seit
+Erstellung dieser Analyse geschlossen (#537, PR #555); die Überschrift
+bleibt aus Anker-Gründen unverändert.
 
 ### L1 — Keine Speicher-Quota (Kostenrisiko)
 
@@ -332,6 +347,10 @@ Treffer. Ingest begrenzt nur die Einzeldatei auf 20 MiB
 Entitlement-Feld, 402 beim Überschreiten, Anzeige im BillingPanel.
 
 ### L2 — Kein Org-weites Rate-Ceiling (Verfügbarkeitsrisiko)
+
+**Status: geschlossen durch #537 (PR #555).** Der beschriebene zweite
+Limiter-Aufruf existiert; `mcp_rate_per_min` gilt pro Token *und* pro Org.
+Der folgende Text beschreibt den damaligen Zustand.
 
 Siehe §3. **Nötig:** ein zweiter Limiter-Aufruf in
 `mcp_limit_service.enforce()` mit `org_id` als Key, zusätzlich zum
@@ -517,14 +536,22 @@ WAL-Archivierung dazu (pgBackRest oder WAL-G gegen dieselbe Storage Box)
 — damit sinkt der RPO auf Minuten. Alternative für den Anfang: den
 Backup-Cron auf alle 6 Stunden stellen, das kostet nichts außer Platz.
 
-**2. Backup-Fehler sind still.** `restic backup` und `restic forget` sind im
-Skript bewusst **nicht-fatal** (`backup.sh:94`) — schlägt der Offsite-Sync
-fehl, bleibt der lokale Dump erhalten und das Skript beendet sich mit
-Erfolg. Richtig gedacht, aber: **wenn niemand die Logs liest, merkst du
-monatelang nicht, dass es kein Offsite-Backup mehr gibt.** Das ist das
-klassische Muster, an dem Backups scheitern. Nimm einen Dead-Man's-Switch
-(healthchecks.io o. ä.): Das Skript pingt am Ende eine URL, und *das
-Ausbleiben* des Pings alarmiert dich.
+**2. Backup-Fehler sind nicht mehr still** (seit 2026-09-21, Issue #541).
+Früher waren `restic backup` und `restic forget` bewusst nicht-fatal: schlug der
+Offsite-Sync fehl, blieb der lokale Dump erhalten **und das Skript meldete
+Erfolg**. Damit hättest du monatelang nicht gemerkt, dass es kein Offsite-Backup
+mehr gibt. Heute gilt beides gleichzeitig: der **lokale Dump bleibt unverändert
+erhalten**, aber ein gescheiterter Sync beendet den Lauf mit **Exit != 0**.
+
+Zusätzlich gibt es einen Dead-Man's-Switch: setzt du `BACKUP_HEARTBEAT_URL`
+(leer = aus), pingt das Skript diese URL nur bei vollständigem Erfolg — und *das
+Ausbleiben* des Pings alarmiert dich. Das fängt auch die Fälle, die ein Exit-Code
+nicht fangen kann: Cron deaktiviert, Container weg, Host aus. **Der Empfänger ist
+bewusst self-hosted** (kein healthchecks.io o. ä.) — ein gehosteter Dienst wäre
+Auftragsverarbeiter für deine Betriebsmetadaten und bräuchte einen VVT-Eintrag.
+Einrichtung und **Testanleitung** stehen im RUNBOOK unter „Backup & Restore“ →
+„Alarmweg (Dead-Man's-Switch)“. **Richte ihn ein und löse ihn einmal absichtlich
+aus** — ein nie ausgelöster Alarm ist so viel wert wie ein ungetestetes Backup.
 
 **3. Die Blob-Backup-Kommandos sind ungetestet.** Beim SeaweedFS-Umstieg am
 2026-09-19 wurden die alten `mc`-Kommandos ersetzt; der Ersatz ist im

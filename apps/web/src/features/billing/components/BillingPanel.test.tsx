@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { EntitlementInfo } from '@/api/types'
 import { renderInRoutes } from '@/test/render'
 
-import { BillingPanel } from './BillingPanel'
+import { BillingPanel, formatBytes } from './BillingPanel'
 
 const originalLocation = window.location
 
@@ -27,7 +27,8 @@ const cloudActive: EntitlementInfo = {
   expires_at: null,
   mcp_monthly_quota: 1000,
   mcp_rate_per_min: 30,
-  usage: { period: '202606', count: 250 },
+  storage_quota_bytes: 100 * 1024 * 1024,
+  usage: { period: '202606', count: 250, storage_bytes: 25 * 1024 * 1024 },
 }
 
 function renderPanel() {
@@ -52,6 +53,61 @@ describe('BillingPanel', () => {
     expect(
       screen.getByRole('progressbar', { name: /MCP-Kontingent/ }),
     ).toBeInTheDocument()
+  })
+
+  // --- Speicher-Quota (Issue #536, AK 5) ------------------------------------
+
+  it('zeigt belegten Speicher gegen die Grenze des Tarifs', async () => {
+    vi.stubGlobal('fetch', jsonFetch(cloudActive))
+    renderPanel()
+
+    await waitFor(() => {
+      expect(screen.getByText('Aktiv')).toBeInTheDocument()
+    })
+    // Binaere Einheiten — 100 MB Free sind 100 * 1024 * 1024 Bytes.
+    expect(screen.getByText('25 MB / 100 MB')).toBeInTheDocument()
+    const bar = screen.getByRole('progressbar', { name: 'Speicher-Verbrauch' })
+    expect(bar).toHaveAttribute('aria-valuenow', String(25 * 1024 * 1024))
+    expect(bar).toHaveAttribute('aria-valuemax', String(100 * 1024 * 1024))
+  })
+
+  it('zeigt "unbegrenzt", wenn keine Speichergrenze gesetzt ist', async () => {
+    vi.stubGlobal('fetch', jsonFetch({ ...cloudActive, storage_quota_bytes: null }))
+    renderPanel()
+
+    await waitFor(() => {
+      expect(screen.getByText('Speicher: unbegrenzt')).toBeInTheDocument()
+    })
+    expect(
+      screen.queryByRole('progressbar', { name: 'Speicher-Verbrauch' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('markiert eine erschoepfte Speichergrenze', async () => {
+    vi.stubGlobal(
+      'fetch',
+      jsonFetch({
+        ...cloudActive,
+        usage: { ...cloudActive.usage, storage_bytes: 100 * 1024 * 1024 },
+      }),
+    )
+    renderPanel()
+
+    await waitFor(() => {
+      expect(screen.getByText('100 MB / 100 MB')).toBeInTheDocument()
+    })
+    expect(screen.getByRole('progressbar', { name: 'Speicher-Verbrauch' })).toHaveClass(
+      'bg-destructive',
+    )
+  })
+
+  it('formatiert Bytes binaer und rundet erst ab zweistelligen Werten', () => {
+    expect(formatBytes(0)).toBe('0 B')
+    expect(formatBytes(512)).toBe('512 B')
+    expect(formatBytes(1024)).toBe('1 KB')
+    expect(formatBytes(1536)).toBe('1.5 KB')
+    expect(formatBytes(100 * 1024 * 1024)).toBe('100 MB')
+    expect(formatBytes(10 * 1024 * 1024 * 1024)).toBe('10 GB')
   })
 
   it('rendert nichts in der On-Prem-Edition', async () => {

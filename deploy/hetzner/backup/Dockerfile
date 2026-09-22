@@ -2,6 +2,7 @@
 # - postgresql16-client liefert `pg_dump`/`pg_restore`
 # - gnupg verschluesselt den Dump mit dem Recipient-Public-Key (ADR-0011)
 # - restic + openssh-client sind der Offsite-Pfad (SFTP zur Hetzner-Storage-Box)
+# - curl pingt den self-hosted Heartbeat-Empfaenger (BACKUP_HEARTBEAT_URL, #541)
 # Build-Context ist `deploy/hetzner/` (siehe who2be/docker-compose.yml).
 
 FROM alpine:3.24
@@ -9,6 +10,7 @@ FROM alpine:3.24
 RUN apk add --no-cache \
       bash \
       coreutils \
+      curl \
       findutils \
       gnupg \
       openssh-client \
