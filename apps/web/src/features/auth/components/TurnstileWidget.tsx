@@ -84,6 +84,13 @@ function loadTurnstileScript(): Promise<void> {
 interface TurnstileWidgetProps {
   /** Site-Key aus `config.turnstileSiteKey`. Nicht-leer vorausgesetzt. */
   siteKey: string
+  /**
+   * Cloudflare-`action` — taucht in der Turnstile-Analytics und in
+   * Rate-Limiting-Regeln auf. Bewusst OHNE Default: mit vier Masken am selben
+   * Site-Key (Signup, Login, Resend, Passwort-vergessen) waere ein stiller
+   * Default genau die Vermischung, die die Auswertung wertlos macht.
+   */
+  action: 'signup' | 'login' | 'resend' | 'recover'
   /** Erfolgreich geloestes Captcha — liefert das einmalig gueltige Token. */
   onToken: (token: string) => void
   /**
@@ -104,6 +111,7 @@ interface TurnstileWidgetProps {
  */
 export function TurnstileWidget({
   siteKey,
+  action,
   onToken,
   onExpire,
   className,
@@ -135,7 +143,7 @@ export function TurnstileWidget({
         }
         widgetId = window.turnstile.render(containerRef.current, {
           sitekey: siteKey,
-          action: 'signup',
+          action,
           callback: (token: string) => onTokenRef.current(token),
           'expired-callback': () => onExpireRef.current(),
           'error-callback': () => onExpireRef.current(),
@@ -158,7 +166,7 @@ export function TurnstileWidget({
         window.turnstile.remove(widgetId)
       }
     }
-  }, [siteKey])
+  }, [siteKey, action])
 
   return <div ref={containerRef} className={className} data-testid="turnstile-widget" />
 }
