@@ -366,12 +366,30 @@ Entitlement.
 
 ### L4 — Kein Captcha bei der Registrierung
 
-GoTrue bringt hCaptcha/Turnstile mit (`GOTRUE_SECURITY_CAPTCHA_*`), in
-`deploy/hetzner/supabase/.env.example` ist davon nichts gesetzt. Mit
-Confirm-Pflicht (`GOTRUE_MAILER_AUTOCONFIRM=false`) ist Massen-Signup
+*Status: vorbereitet (Issue #539) — reine Konfiguration, kein Code mehr nötig.*
+
+Mit Confirm-Pflicht (`GOTRUE_MAILER_AUTOCONFIRM=false`) ist Massen-Signup
 unattraktiv, aber jeder Versuch kostet dich eine SMTP-Zustellung und kann
-deine Absender-Reputation beschädigen. **Nötig:** Turnstile aktivieren —
-reine Konfiguration, kein Code.
+deine Absender-Reputation beschädigen.
+
+Der Stack bringt **Cloudflare Turnstile** verdrahtet mit — Widget auf
+`/signup`, Token am Signup-Call, verständliche Fehlermeldung. Ab Werk **aus**;
+zum Einschalten brauchst du ein Turnstile-Schlüsselpaar und vier Variablen:
+
+```
+# Supabase-Stack (deploy/hetzner/supabase/.env)
+GOTRUE_SECURITY_CAPTCHA_ENABLED=true
+GOTRUE_SECURITY_CAPTCHA_PROVIDER=turnstile
+GOTRUE_SECURITY_CAPTCHA_SECRET=<Secret Key>
+
+# App-Stack (deploy/hetzner/.env)
+WHO2BE_TURNSTILE_SITE_KEY=<Site Key>
+```
+
+**Vorher lesen:** GoTrue wendet das Captcha auch auf Passwort-Login und
+„Mail erneut senden" an, und Cloudflare ist ein Drittland-Empfänger. Beides
+inkl. der nicht betroffenen Invite-Pfade steht in
+[`signup-and-invites.md` §3](signup-and-invites.md).
 
 ### L5 — Kein Rate-Limit an der Kante
 

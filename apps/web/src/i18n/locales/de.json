@@ -689,7 +689,11 @@
         "privacyLink": "Datenschutzerklaerung",
         "after": "."
       },
-      "consentRequiredHint": "Bitte stimme den AGB und der Datenschutzerklaerung zu, um fortzufahren."
+      "consentRequiredHint": "Bitte stimme den AGB und der Datenschutzerklaerung zu, um fortzufahren.",
+      "captcha": {
+        "pending": "Bitte bestaetige kurz, dass du kein Bot bist.",
+        "failed": "Die Bot-Pruefung ist fehlgeschlagen. Bitte versuche es noch einmal."
+      }
     },
     "comingSoon": {
       "title": "Wir arbeiten noch an Who2Be — bald verfügbar.",

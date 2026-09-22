@@ -72,6 +72,25 @@ services:
       # ab, ohne fremde Origins zuzulassen (Open-Redirect-Schutz, Track K).
       GOTRUE_URI_ALLOW_LIST: ${SITE_URL},${SITE_URL}/*
       GOTRUE_DISABLE_SIGNUP: ${GOTRUE_DISABLE_SIGNUP:-false}
+      # Captcha vor der Registrierung (Issue #539). Anbieter ist Cloudflare
+      # Turnstile. Die drei Namen sind gegen die gepinnte Version v2.158.1
+      # verifiziert (internal/conf/configuration.go:423-427 + :495 + :257,
+      # envconfig-Praefix "gotrue" in :653) — `..._CAPTCHA_SECRET`, NICHT
+      # `..._CAPTCHA_PROVIDER_SECRET` (envconfig nutzt den Go-Feldnamen
+      # `Secret`, nicht das JSON-Tag `provider_secret`).
+      #
+      # ENABLED=false (Default) ueberspringt die Validierung komplett
+      # (configuration.go:429-432) ⇒ leer gelassen bleibt alles wie bisher.
+      # Bei `true` MUSS das Secret gesetzt sein, sonst startet GoTrue nicht.
+      #
+      # Wirkt nicht nur auf /signup: das Middleware haengt auch an /recover,
+      # /resend, /magiclink, /otp, /sso und /token?grant_type=password
+      # (api.go:138-267). Admin-Calls mit Service-Role-Key (= der
+      # Invite-Versand) und die Magic-Link-Einloesung sind ausgenommen
+      # (middleware.go:171-177). Details: docs/signup-and-invites.md §3.
+      GOTRUE_SECURITY_CAPTCHA_ENABLED: ${GOTRUE_SECURITY_CAPTCHA_ENABLED:-false}
+      GOTRUE_SECURITY_CAPTCHA_PROVIDER: ${GOTRUE_SECURITY_CAPTCHA_PROVIDER:-turnstile}
+      GOTRUE_SECURITY_CAPTCHA_SECRET: ${GOTRUE_SECURITY_CAPTCHA_SECRET:-}
       GOTRUE_JWT_SECRET: ${JWT_SECRET}
       GOTRUE_JWT_EXP: ${JWT_EXP:-3600}
       GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
