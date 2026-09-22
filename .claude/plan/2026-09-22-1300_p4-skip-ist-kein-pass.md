@@ -93,3 +93,17 @@ Statisch: `uv run ruff check .` · `uv run ruff format --check .` · `uv run myp
 
 Nicht lokal verifizierbar: der gruene Vollzug mit DB (kein Docker/Postgres auf dieser Maschine,
 `docker info` schlaegt fehl). Den liefert der CI-Lauf des PR — er ist der eigentliche AK2-Beleg.
+
+### CI-Belege (AK2), zwei Laeufe mit gegensaetzlichem Ausgang
+
+| Lauf | Infrastruktur | Job `python` | Ausgabe |
+|---|---|---|---|
+| [35718903202](https://github.com/luetzey/who2be/actions/runs/35718903202/job/106716929196) (PR #581) | steht | **pass**, 8m24s | `2012 passed` · Gate: `2012 Testfaelle, 0 uebersprungen` · `OK` |
+| [35719930468](https://github.com/luetzey/who2be/actions/runs/35719930468/job/106720580754) (Beleg-PR #582) | Postgres-Service auskommentiert | **fail**, 57s | `WHO2BE_REQUIRE_DB gesetzt, aber keine DB erreichbar — 484 Integrationstests koennen nicht laufen` (exit 4) **und** `junit-python.xml enthaelt keinen einzigen Testfall` (exit 2) |
+
+Kein gruener Job mit Skips — ein roter Job, zweifach begruendet. Der zweite Fehler ist der Beleg
+dafuer, dass die Null-Testfaelle-Pruefung noetig war: ein reiner Skip-Zaehler haette hier `0 skipped`
+gesehen und gruen gemeldet.
+
+PR #582 ist geschlossen; der Branch `p4-beleg-infra-entfernt` muss vom Owner geloescht werden
+(Remote-Branch-Loeschung ist fuer Agenten gesperrt).
