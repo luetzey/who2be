@@ -31,6 +31,7 @@ const de = {
       label: 'Plan',
       priceLabel: 'Preis',
       entityLimitLabel: 'Entity-Limit je Workspace',
+      tokenQuotaLabel: 'API-Tokens je Workspace',
       unknown: 'unbekannt',
     },
     price: {
@@ -76,6 +77,7 @@ const en = {
       label: 'Plan',
       priceLabel: 'Price',
       entityLimitLabel: 'Entity limit per workspace',
+      tokenQuotaLabel: 'API tokens per workspace',
       unknown: 'unknown',
     },
     price: {

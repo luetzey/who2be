@@ -109,6 +109,7 @@ ProblemReason = Literal[
     "bound_agent_not_found",  # 404 — zu bindender Agent nicht in diesem Workspace
     "token_role_escalation",  # 403 — Token-Rolle hoeher als die des Erstellers
     "token_not_found",  # 404 — API-Token unbekannt oder bereits widerrufen
+    "token_quota_exceeded",  # 402 — Token-Kontingent des Workspaces erreicht (params: limit)
     "subscription_inactive",  # 402 — kein aktives Abonnement der Organisation
     "mcp_rate_limited",  # 429 — MCP-Rate erreicht, Token- ODER Org-Fenster (params: limit)
     "mcp_quota_exceeded",  # 429 — Monats-MCP-Kontingent erschoepft (params: limit)

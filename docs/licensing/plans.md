@@ -17,21 +17,30 @@ Dokument und der Code wird nachgezogen.
 Die einzigen Groessen, die der Code tatsaechlich durchsetzt, sind Preis
 (Mollie), MCP-Requests/Monat, MCP-Requests/Minute (beide `Entitlement`,
 App-seitiges Rate-Limiting), das Entity-Limit je Workspace
-(`Entitlement.entity_limit()`) und die Speichergrenze je Workspace
+(`Entitlement.entity_limit()`), die Anzahl aktiver API-Tokens je Workspace
+(`Entitlement.token_quota`) und die Speichergrenze je Workspace
 (`Entitlement.storage_quota_bytes`). Das ist deshalb die verkaufsrelevante
 Tabelle:
 
-| Tier | Preis          | MCP-Requests/Monat | MCP-Requests/Minute | Entity-Limit je Workspace | Speicher je Workspace | Features (Metadaten, s. u.) |
-|------|----------------|---------------------|----------------------|----------------------------|-----------------------|------------------------------|
-| Free | 0 € (kein Abo) | 1.000               | 30                   | 50                         | 100 MB                | `core` |
-| Pro  | 29 €/Monat     | 100.000             | 240                  | unbegrenzt                 | 10 GB                 | `core`, `composite_playbooks`, `agents`, `audit_export` |
+| Tier | Preis          | MCP-Requests/Monat | MCP-Requests/Minute | Entity-Limit je Workspace | API-Tokens je Workspace | Speicher je Workspace | Features (Metadaten, s. u.) |
+|------|----------------|---------------------|----------------------|----------------------------|--------------------------|-----------------------|------------------------------|
+| Free | 0 € (kein Abo) | 1.000               | 30                   | 50                         | 3                        | 100 MB                | `core` |
+| Pro  | 29 €/Monat     | 100.000             | 240                  | unbegrenzt                 | 25                       | 10 GB                 | `core`, `composite_playbooks`, `agents`, `audit_export` |
 
 Quellen: Preis/MCP-Requests `packages/billing/src/who2be_billing/plans.py`
 (`FREE_PLAN`/`PRO_PLAN`: `price_eur`, `mcp_monthly_quota`,
-`mcp_rate_per_min`, `storage_quota_bytes`); Entity-Limit und die
-Speicher-Konstanten `licensing/entitlement.py` (`FREE_ENTITY_QUOTA = 50`,
-`Entitlement.entity_limit()`, `FREE_STORAGE_QUOTA_BYTES = 100 MiB`,
-`PRO_STORAGE_QUOTA_BYTES = 10 GiB`).
+`mcp_rate_per_min`, `token_quota`, `storage_quota_bytes`); Entity-Limit, die
+Token-Grenze und die Speicher-Konstanten `licensing/entitlement.py`
+(`FREE_ENTITY_QUOTA = 50`, `Entitlement.entity_limit()`,
+`FREE_TOKEN_QUOTA = 3`, `PRO_TOKEN_QUOTA = 25`,
+`FREE_STORAGE_QUOTA_BYTES = 100 MiB`, `PRO_STORAGE_QUOTA_BYTES = 10 GiB`) —
+`plans.py` importiert die Zahlen, statt sie zu wiederholen.
+
+**Zur Token-Spalte:** gezaehlt werden nur **nutzbare** Tokens — widerrufene und
+abgelaufene zaehlen nicht mit. Die Grenze greift ausschliesslich bei der
+**Anlage**: bestehende Tokens bleiben ueber der Grenze nutzbar **und
+rotierbar** (Secret-Rotation, RUNBOOK §Secret-Rotation), ein Downgrade sperrt
+also keine laufenden Agenten aus. On-Prem/OSS ist unbegrenzt.
 
 **Zur Speicher-Spalte — was gezaehlt wird und was nicht.** Die Grenze gilt
 fuer die Summe der abgelegten **Blob-Bytes** (`wa_blob.size_bytes`, also
@@ -97,6 +106,7 @@ leitet daraus das Org-Entitlement ab.
 | `license_policy`    | String | Whitespace-/komma-separierte Liste der Feature-Codes (Pflicht).  |
 | `mcp_monthly_quota` | Int    | Monats-Kontingent agent-facing MCP-Reads.                        |
 | `mcp_rate_per_min`  | Int    | Rate-Ceiling (req/min) — zwei Fenster, siehe unten.              |
+| `token_quota`       | Int    | Max. Anzahl aktiver API-Tokens je Workspace.                     |
 | `storage_quota_bytes` | Int  | Speichergrenze **je Workspace** in Bytes (Summe `wa_blob.size_bytes`). |
 
 **Zu `mcp_rate_per_min` — zwei Fenster, ein Wert:** Seit #537 deckelt derselbe
@@ -117,6 +127,7 @@ Beispiel-Metadata für **Pro**:
   "license_policy": "agents audit_export composite_playbooks core",
   "mcp_monthly_quota": "100000",
   "mcp_rate_per_min": "240",
+  "token_quota": "25",
   "storage_quota_bytes": "10737418240"
 }
 ```
@@ -125,6 +136,15 @@ Beispiel-Metadata für **Pro**:
 Codes werden ignoriert (Forward-Compatibility). Fehlen `mcp_monthly_quota`/
 `mcp_rate_per_min`/`storage_quota_bytes`, gilt das jeweilige Limit als
 unbegrenzt (`None`).
+
+Für `token_quota` gilt das **nur außerhalb der Cloud** (On-Prem/OSS). Fehlt der
+Schlüssel in einer Cloud-Subscription — etwa weil sie vor Einführung des Feldes
+angelegt wurde, oder weil es sich um ein Downgrade-Entitlement handelt, das der
+Webhook ohne dieses Feld schreibt —, bedeutet das nicht „unbegrenzt", sondern
+„nicht gesetzt": `Entitlement.effective_token_quota` fällt dann auf den
+Tarifwert zurück (gekündigt/zahlungssäumig oder Free ⇒ Free-Wert, aktiver
+Paid-Plan ⇒ Pro-Wert). Sonst hätte eine Kündigung die Grenze aufgehoben, statt
+sie durchzusetzen.
 
 Zusätzlich schreibt der Checkout einen **operativen** Schlüssel `plan_code`
 (z. B. `"pro"`) in die Metadata. Er ist *nicht* Teil der entitlement-ableitenden

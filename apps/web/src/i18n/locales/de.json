@@ -156,6 +156,7 @@
       "bound_agent_not_found": "Der zu bindende Agent existiert nicht in diesem Workspace.",
       "token_role_escalation": "Ein Token darf keine hoehere Rolle als sein Ersteller haben.",
       "token_not_found": "Token nicht gefunden.",
+      "token_quota_exceeded": "Der Tarif erlaubt {{limit}} aktive API-Tokens je Workspace. Widerrufe einen bestehenden Token oder wechsle den Tarif — bestehende Tokens bleiben nutzbar und rotierbar.",
       "subscription_inactive": "Kein aktives Abonnement fuer diese Organisation.",
       "mcp_rate_limited": "Token-Ratenlimit ueberschritten ({{limit}}/min).",
       "mcp_quota_exceeded": "Monatliches MCP-Kontingent erschoepft ({{limit}}/Monat).",
