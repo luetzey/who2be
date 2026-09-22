@@ -218,10 +218,19 @@ core never executed gets accepted.
 ```bash
 npm run lint
 npx tsc -b
-npm run test:coverage
+npm run test:coverage -- --reporter=default --reporter=junit \
+  --outputFile.junit=junit-web.xml
+python3 ../../scripts/ci/assert_skips_within_budget.py junit-web.xml
 npm run build
 npm run license:check   # OSS license gate (ADR-0033)
 ```
+
+The skip budget applies to **both** stacks. On the web side it is attached to
+the coverage step only — never to `npm run test:a11y`. That step runs the full
+suite with `--testNamePattern a11y` and Vitest reports every filtered-out test
+as `skipped`, so it structurally shows four-digit skip counts while those same
+tests pass in the coverage run a minute earlier. A gate there would be
+permanently red for no reason.
 
 **Node 22 is mandatory, not a recommendation.** The repo pins the major in
 `.nvmrc`, `mise.toml` and `apps/web/package.json` (`engines.node`), matching
