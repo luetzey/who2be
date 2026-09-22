@@ -241,6 +241,39 @@ def test_unknown_sha_is_error(repo: Path) -> None:
     assert findings[0].severity == "error"
 
 
+def test_unverifiable_sha_in_shallow_clone_is_not_an_error(tmp_path: Path) -> None:
+    """Ein shallow clone kennt alte Commits nicht — das macht sie nicht falsch.
+
+    Der CI-Job `python` checkt ohne `fetch-depth: 0` aus, also mit
+    abgeschnittener Historie. Dort ist jeder aeltere SHA schlicht nicht
+    vorhanden, und `cat-file -e` kann „kenne ich nicht\" nicht von „gibt es
+    nicht\" unterscheiden. Ohne diese Unterscheidung meldet der Pruefer
+    ausgerechnet die empfohlene Referenzform als `error` und faerbt CI rot —
+    genau das ist im ersten CI-Lauf dieses PRs passiert.
+    """
+    origin = tmp_path / "origin"
+    subprocess.run(["git", "init", "-q", str(origin)], check=True)
+    subprocess.run(["git", "-C", str(origin), "config", "user.email", "t@t"], check=True)
+    subprocess.run(["git", "-C", str(origin), "config", "user.name", "t"], check=True)
+    (origin / "mod.py").write_text("def helper() -> int:\n    return 1\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(origin), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(origin), "commit", "-qm", "erster"], check=True)
+    alter_sha = _head(origin)
+    (origin / "mod.py").write_text("def helper() -> int:\n    return 2\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(origin), "commit", "-qam", "zweiter"], check=True)
+
+    shallow = tmp_path / "shallow"
+    subprocess.run(
+        ["git", "clone", "-q", "--depth", "1", f"file://{origin}", str(shallow)],
+        check=True,
+    )
+    assert not checker._git_has_commit(shallow, alter_sha), "Setup: SHA muss dort fehlen"
+
+    findings = checker.scan_text(shallow, f"Siehe `mod.py@{alter_sha}`.", "card.md", False)
+    assert [f.status for f in findings] == ["unverifiable-sha"]
+    assert [f.severity for f in findings] == ["unsupported"]
+
+
 def test_file_absent_at_that_commit_is_error(repo: Path) -> None:
     (repo / "spaeter.py").write_text("x = 1\n", encoding="utf-8")
     findings = _scan(repo, f"Siehe `spaeter.py@{_head(repo)}`.")

@@ -95,10 +95,20 @@ Symbolnamen duerfen Bindestriche tragen — CI-Jobs und npm-Skripte heissen
 |---|---|---|
 | `ok` | Referenz loest auf. | — |
 | `legacy` | Nackter `datei:zeile`-Zeiger, kein Anker. | nein (mit `--strict` ja) |
-| `unsupported` | Symbolanker in einer Dateiart ohne Aufloesung. | nein |
+| `unsupported` | Symbolanker in einer Dateiart ohne Aufloesung, oder ein SHA, den ein shallow clone nicht enthaelt. | nein |
 | `error` | Referenz **in Konventionsform** loest nicht auf: Datei fehlt, Symbol fehlt, SHA unbekannt. | **ja** (Exit 1) |
 
 Exit-Codes: `0` sauber, `1` mindestens ein `error`, `2` Aufrufsfehler.
+
+**Warum ein nicht pruefbarer SHA kein Fehler ist:** `actions/checkout` klont
+per Default mit `fetch-depth: 1`. In so einem shallow clone ist ein aelterer
+Commit schlicht *nicht vorhanden*, und `git cat-file -e` kann „kenne ich
+nicht" nicht von „gibt es nicht" unterscheiden. Ein Pruefer, der dort auf
+`error` geht, verurteilt ausgerechnet die Referenzform, zu der diese
+Konvention raet. Deshalb meldet er `unsupported` und sagt in der Meldung, dass
+der SHA ungeprueft blieb — falsche Sicherheit waere schlimmer als eine
+ehrliche Luecke. Wer SHAs wirklich verifizieren will, klont mit
+`fetch-depth: 0`.
 
 ### Das Skript aendert nichts
 

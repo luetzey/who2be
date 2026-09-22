@@ -36,6 +36,9 @@ Severity-Modell:
   gemeldet, faerbt den Lauf aber NICHT rot: die Bestandskorrektur alter
   Zeiger ist ausdruecklich nicht Ziel dieses Schritts. ``--strict`` hebt
   ``legacy`` auf ``error`` — fuer den Tag, an dem die Altlast abgebaut ist.
+- ``unsupported`` — nicht pruefbar, nicht falsch: Symbolanker in einer
+  Dateiart ohne Aufloesung, oder ein SHA, den ein shallow clone
+  (``fetch-depth: 1``, der CI-Default) nicht enthaelt.
 
 Exit-Codes: 0 = keine Fehler, 1 = mindestens ein ``error``, 2 = Aufrufsfehler.
 """
@@ -238,6 +241,25 @@ def _git_has_commit(repo_root: Path, sha: str) -> bool:
     return result.returncode == 0
 
 
+def _is_shallow(repo_root: Path) -> bool:
+    """Ist das Repo ein shallow clone (abgeschnittene Historie)?
+
+    Das entscheidet ueber Wahrheit oder Falsch-Rot: in einem shallow clone ist
+    ein alter Commit schlicht *nicht vorhanden*, und ``cat-file -e`` kann
+    „kenne ich nicht\" nicht von „gibt es nicht\" unterscheiden. ``actions/
+    checkout`` klont per Default mit ``fetch-depth: 1``; ein Pruefer, der dort
+    jeden SHA-Permalink als Fehler meldet, verurteilt ausgerechnet die
+    Referenzform, zu der die Konvention raet.
+    """
+    result = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", "--is-shallow-repository"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.stdout.strip() == "true"
+
+
 # --- Pruefung einer Referenz --------------------------------------------------
 
 
@@ -250,6 +272,15 @@ def check_reference(
     """Prueft eine Referenz und liefert ``(status, meldung)``."""
     if sha is not None:
         if not _git_has_commit(repo_root, sha):
+            if _is_shallow(repo_root):
+                # Nicht pruefbar ist nicht dasselbe wie falsch. Der Pruefer sagt
+                # das hier ausdruecklich, statt eine gueltige Referenz zu
+                # verurteilen, weil ihm die Historie fehlt.
+                return (
+                    "unverifiable-sha",
+                    f"Commit {sha} liegt nicht im shallow clone — "
+                    "SHA ungeprueft (voller Klon: fetch-depth 0).",
+                )
             return "unknown-sha", f"Commit {sha} ist in diesem Repo nicht bekannt."
         source = _git_show(repo_root, sha, path)
         if source is None:
@@ -283,7 +314,7 @@ def check_reference(
 def _severity(status: str, has_anchor: bool, strict: bool) -> str:
     if status in {"missing-file", "missing-symbol", "unknown-sha"}:
         return "error"
-    if status == "unsupported":
+    if status in {"unsupported", "unverifiable-sha"}:
         return "unsupported"
     if not has_anchor:
         return "error" if strict else "legacy"
