@@ -1058,20 +1058,24 @@
           "heading": "7. Payment processing",
           "body": "Payment service provider (Mollie), transmitted data, provider's own privacy policy, legal basis"
         },
+        "captcha": {
+          "heading": "8. Bot protection during registration",
+          "body": "only if enabled: Cloudflare Turnstile, processed data (IP address, browser signals), purpose (abuse/bot prevention, Art. 6 para. 1 lit. f), third-country transfer to the USA and safeguards (SCCs/DPF), Cloudflare privacy notice"
+        },
         "email": {
-          "heading": "8. E-mail delivery (transactional mails)",
+          "heading": "9. E-mail delivery (transactional mails)",
           "body": "SMTP/mail provider, occasions (Verify/Invite/Reset), legal basis"
         },
         "processors": {
-          "heading": "9. Recipients & processors",
+          "heading": "10. Recipients & processors",
           "body": "List of processors, third-country transfers and safeguards (SCCs) where applicable"
         },
         "retention": {
-          "heading": "10. Retention periods",
+          "heading": "11. Retention periods",
           "body": "General deletion concepts, statutory retention obligations"
         },
         "rights": {
-          "heading": "11. Your rights",
+          "heading": "12. Your rights",
           "text1": "You have the right to access (Art. 15), rectification (Art. 16), erasure (Art. 17), restriction (Art. 18), data portability (Art. 20), and objection (Art. 21), as well as the right to lodge a complaint with a supervisory authority (Art. 77).",
           "authorityLabel": "Competent supervisory authority:",
           "authorityPlaceholder": "competent data protection authority"
