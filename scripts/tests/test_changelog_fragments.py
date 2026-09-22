@@ -293,7 +293,9 @@ def _init_repo(repo: Path) -> None:
 class TestDiffAgainst:
     """Der git-Teil: aus einem echten Diff die zwei Listen gewinnen."""
 
-    def test_trennt_geaenderte_von_geloeschten_pfaden(self, tmp_path: Path, monkeypatch) -> None:
+    def test_trennt_geaenderte_von_geloeschten_pfaden(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         _init_repo(tmp_path)
         monkeypatch.chdir(tmp_path)
         _git(tmp_path, "checkout", "-q", "-b", "release")
@@ -309,7 +311,9 @@ class TestDiffAgainst:
         assert set(changed) == {"CHANGELOG.md", "changelog.d/alt.fixed.md"}
         assert deleted == ["changelog.d/alt.fixed.md"]
 
-    def test_unbekannter_ref_meldet_git_stderr(self, tmp_path: Path, monkeypatch) -> None:
+    def test_unbekannter_ref_meldet_git_stderr(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         _init_repo(tmp_path)
         monkeypatch.chdir(tmp_path)
 
@@ -319,7 +323,7 @@ class TestDiffAgainst:
 
 class TestGuardCli:
     def test_normaler_pr_mit_changelog_hunk_liefert_exit_1(
-        self, tmp_path: Path, monkeypatch, capsys: pytest.CaptureFixture[str]
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ) -> None:
         _init_repo(tmp_path)
         monkeypatch.chdir(tmp_path)
@@ -334,7 +338,9 @@ class TestGuardCli:
         assert code == 1
         assert "wird nicht direkt bearbeitet" in capsys.readouterr().err
 
-    def test_release_lauf_liefert_exit_0(self, tmp_path: Path, monkeypatch) -> None:
+    def test_release_lauf_liefert_exit_0(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         _init_repo(tmp_path)
         monkeypatch.chdir(tmp_path)
         _git(tmp_path, "checkout", "-q", "-b", "release")
@@ -347,7 +353,9 @@ class TestGuardCli:
 
         assert main(["guard", "--base", "main"]) == 0
 
-    def test_pr_ohne_changelog_hunk_liefert_exit_0(self, tmp_path: Path, monkeypatch) -> None:
+    def test_pr_ohne_changelog_hunk_liefert_exit_0(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         _init_repo(tmp_path)
         monkeypatch.chdir(tmp_path)
         _git(tmp_path, "checkout", "-q", "-b", "feature")
