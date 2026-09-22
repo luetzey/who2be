@@ -460,6 +460,7 @@ def _agent_in(ws: UUID) -> str:
     return asyncio.run(_run())
 
 
+@pytest.mark.integration
 def test_playbook_active_filter_for_api_token(monkeypatch: pytest.MonkeyPatch) -> None:
     if not _db_reachable():
         pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
