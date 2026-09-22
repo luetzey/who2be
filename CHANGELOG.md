@@ -10,6 +10,28 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Added
 
+- CI aggregates all jobs into a single `all-green` job, intended to become the
+  only required status check on `main`. Requiring the individual jobs would be
+  wrong in both directions: five of them are gated by the docs allowlist and
+  report `skipped` on documentation-only pull requests, which GitHub counts as
+  success, while a required check that never starts leaves a pull request stuck
+  on "Waiting for status to be reported" forever.
+
+  The job runs with `if: always()` — without it GitHub marks the aggregator
+  itself as `skipped` as soon as a dependency fails — and evaluates each
+  dependency against its *expected* result rather than against a list of
+  tolerated ones: the gate job `changes` must have succeeded, `audit` is not
+  path-filtered and must have run, and the five gated jobs must be `skipped`
+  exactly when the diff was classified as documentation-only and `success`
+  otherwise. This is what separates a legitimate skip from the dangerous case
+  where `changes` itself failed and every gated job was skipped without
+  anything being tested.
+
+  `scripts/ci/test_all_green_matrix.py` runs that logic — read straight out of
+  `ci.yml`, not copied — against all twelve outcome combinations locally.
+  A proposal for the matching `main` ruleset is in
+  `docs/branch-protection-main.md`; it is **not** applied.
+
 - Privacy documentation now covers Cloudflare Turnstile as a **conditional**
   third-country recipient, so the compliance trail no longer dead-ends. The
   processing record `docs/compliance/vvt.md` gains a Cloudflare row in §5
