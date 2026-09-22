@@ -311,6 +311,21 @@ class TestDiffAgainst:
         assert set(changed) == {"CHANGELOG.md", "changelog.d/alt.fixed.md"}
         assert deleted == ["changelog.d/alt.fixed.md"]
 
+    def test_umbenanntes_fragment_zaehlt_nicht_als_geloescht(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Ein ``git mv`` laesst das Fragment bestehen — es ist kein ``collect``."""
+        _init_repo(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        _git(tmp_path, "checkout", "-q", "-b", "feature")
+        _git(tmp_path, "mv", "changelog.d/alt.fixed.md", "changelog.d/neu.fixed.md")
+        _git(tmp_path, "commit", "-qm", "slug korrigiert")
+
+        changed, deleted = diff_against("main")
+
+        assert set(changed) == {"changelog.d/alt.fixed.md", "changelog.d/neu.fixed.md"}
+        assert deleted == []
+
     def test_unbekannter_ref_meldet_git_stderr(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -352,6 +367,24 @@ class TestGuardCli:
         _git(tmp_path, "commit", "-qm", "release")
 
         assert main(["guard", "--base", "main"]) == 0
+
+    def test_umbenanntes_fragment_rettet_den_changelog_hunk_nicht(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Slug-Korrektur per ``git mv`` ist keine Freigabe fuer die Sammeldatei."""
+        _init_repo(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        _git(tmp_path, "checkout", "-q", "-b", "feature")
+        _git(tmp_path, "mv", "changelog.d/alt.fixed.md", "changelog.d/neu.fixed.md")
+        (tmp_path / "CHANGELOG.md").write_text(
+            "# Changelog\n\n## [Unreleased]\n\n- Eintrag per Rename-Trick.\n", encoding="utf-8"
+        )
+        _git(tmp_path, "commit", "-qam", "rename plus changelog")
+
+        code = main(["guard", "--base", "main"])
+
+        assert code == 1
+        assert "wird nicht direkt bearbeitet" in capsys.readouterr().err
 
     def test_pr_ohne_changelog_hunk_liefert_exit_0(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

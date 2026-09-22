@@ -362,10 +362,14 @@ def diff_against(base: str, head: str = "HEAD") -> tuple[list[str], list[str]]:
     while i < len(fields):
         status = fields[i]
         # Rename/Copy tragen ZWEI Pfade (alt, neu); alle uebrigen genau einen.
+        # Der alte Pfad zaehlt dabei NICHT als geloescht: ein Rename laesst die
+        # Datei unter neuem Namen bestehen, ist also keine ``collect``-Signatur.
+        # Sonst genuegte ein ``git mv`` eines Fragments, um einen direkten
+        # CHANGELOG-Hunk am Gate vorbeizuschleusen. Ein echter ``collect``-Lauf
+        # loescht Fragmente ersatzlos und erzeugt nie ein Rename.
         if status.startswith(("R", "C")):
             old, new = fields[i + 1], fields[i + 2]
             changed.extend((old, new))
-            deleted.append(old)
             i += 3
             continue
         path = fields[i + 1]
