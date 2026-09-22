@@ -44,6 +44,10 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -u
+          # BELEG-LAUF (Karte t_b0233031, AK2) — absichtlicher Fehlschlag.
+          # Dieser Commit lebt nur auf dem Beweis-Branch und wird nie gemergt.
+          echo "::error::Absichtlicher Fehlschlag fuer den Beleg-Lauf."
+          exit 1
           # Fail-safe durchgaengig: jeder Fehler-/Sonderpfad hier endet in
           # code=true (voller Lauf). Ein faelschliches "skip" waere ein
           # stilles falsches Gruen - der einzige teure Fehler dieser
