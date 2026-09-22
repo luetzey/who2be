@@ -40,8 +40,38 @@ Gesucht wurde repo-weit nach `per[- ]token`, `pro token`, `je token`,
 - Klassennamen `TokenRateLimiter*` und `token_rate_limiter` — oeffentliche
   Symbole; Umbenennung waere eine Code-Aenderung, hier Out of Scope.
 - `docs/standards/` — keine Fundstelle zum MCP-Rate-Ceiling.
-- `docs/cloud-*-smoke.md`, ADR-0031, GoBD-Doku, OpenAPI, Web-Locales — nennen
-  nur Werte bzw. Feldnamen, keine "pro Token"-Semantik.
+- ADR-0031, GoBD-Doku, OpenAPI, Web-Locales — nennen nur Werte bzw. Feldnamen,
+  keine "pro Token"-Semantik.
+
+### Nachtrag Runde 2 (Review, 2026-09-22)
+
+Die erste Gegenprobe hatte `docs/cloud-*-smoke.md` faelschlich als unbetroffen
+abgehakt. Diese Aussage war **falsch** und wird ersetzt, nicht praezisiert.
+Tatsaechlich betroffen und in derselben Aenderung mitgezogen:
+
+- `docs/cloud-local-smoke.md:306` — "Zwei Schranken: **Per-Token-Rate/min**"
+  → "MCP-Rate/min" plus Ein-Satz-Hinweis auf die zwei Fenster und `plans.md`.
+- `docs/cloud-prod-smoke.md:193` — dieselbe Aussage, analog nachgezogen.
+- `docs/cloud-prod-smoke.md:198` — "Ueber das Per-Token-Rate-Ceiling bursten"
+  → "MCP-Rate-Ceiling"; das Burst-Verfahren bleibt gueltig (ein einzelner Token
+  trifft dieselbe Zahl, weil beide Fenster denselben Wert tragen).
+- `packages/models/src/who2be_models/errors.py:112` — "429 — Per-Token-MCP-Rate
+  erreicht" → "MCP-Rate erreicht, Token- ODER Org-Fenster". Der `reason`
+  `mcp_rate_limited` wird seit #537 von **beiden** Fenstern geworfen; PR #555
+  sagt das im eigenen Helper-Docstring ausdruecklich. Dieselbe Klasse wie der
+  bereits mitgezogene Kommentar in `core/config.py:86`.
+
+Weiterhin bewusst **unveraendert**:
+
+- `docs/cloud-hosting-owner-guide.md:250-255/278` beschreibt die von #537
+  geschlossene Luecke als offen. Das Dokument ist erkennbar ein Diskussions-
+  und Vorschlagspapier (es fuehrt u. a. einen Team-Tarif ein, den es nicht
+  gibt) — eine Momentaufnahme der Analyse, keine Zustandsbeschreibung. Eine
+  Richtigstellung dort waere eine inhaltliche Ueberarbeitung des Papiers und
+  gehoert in eine eigene Karte.
+- `apps/api/tests/test_token_rate_limiter.py:1` und weitere Vorkommen von
+  "pro Token" in Test-/MCP-Modulen: dort geht es um Token-Caches bzw. um das
+  Token-Fenster selbst — die Aussagen sind korrekt.
 
 ## CHANGELOG
 
