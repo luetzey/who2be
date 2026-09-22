@@ -58,7 +58,9 @@ bzw. Dokumentations-Standards).
 - [`cloud-hosting-owner-guide.md`](cloud-hosting-owner-guide.md) —
   Owner-Leitfaden Cloud-Hosting bei Hetzner: Schritt-fuer-Schritt von der
   leeren Box zum Launch, Tarif-/Limit-Diskussion, Missbrauchsschutz,
-  Datenhaltung, Backup-Strategie (Betreiber)
+  Datenhaltung, Backup-Strategie (Betreiber) — Analyse-/Vorschlagspapier,
+  Stand 2026-09-19; verbindlich fuer Tarife/Limits ist
+  [`licensing/plans.md`](licensing/plans.md)
 - Deployment: [`../deploy/hetzner/README.md`](../deploy/hetzner/README.md)
   — Produktions-Deploy inkl. Runbook (Betreiber)
 - [`branch-protection-main.md`](branch-protection-main.md) —

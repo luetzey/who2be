@@ -123,10 +123,20 @@ test('Billing: aktueller Tarif sichtbar, Upgrade stoesst abgefangene Weiterleitu
   // unsichtbar. `toBeVisible()` waere hier also eine Assertion ueber die
   // Pixelbreite des Fuellstands, nicht ueber das, was gemeint ist: dass das
   // Kontingent ueberhaupt ausgewiesen wird. Genau das pruefen die Attribute.
-  const quotaBar = billingSlot.getByRole('progressbar')
+  //
+  // Der Slot zeigt seit Issue #536 ZWEI Balken (MCP-Kontingent und Speicher),
+  // beide mit `role="progressbar"` — ein Locator allein auf die Rolle waere
+  // mehrdeutig. Adressiert wird deshalb ueber die stabile Testid.
+  const quotaBar = billingSlot.getByTestId('mcp-quota-bar')
   await expect(quotaBar).toBeAttached()
   await expect(quotaBar).toHaveAttribute('aria-valuemax', '1000')
   await expect(quotaBar).toHaveAttribute('aria-valuenow', '0')
+
+  // Speicher-Quota (Issue #536): frische Free-Org -> 100 MiB Grenze, 0 belegt.
+  const storageBar = billingSlot.getByTestId('storage-bar')
+  await expect(storageBar).toBeAttached()
+  await expect(storageBar).toHaveAttribute('aria-valuemax', String(104857600))
+  await expect(storageBar).toHaveAttribute('aria-valuenow', '0')
 
   // AC 2: Upgrade ausloesen. Im Free-Tier ist der Upgrade-CTA der einzige
   // Button im Billing-Slot.

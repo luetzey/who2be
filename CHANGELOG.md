@@ -32,7 +32,167 @@ the merged pull requests and the plan documents under `.claude/plan/`.
   A proposal for the matching `main` ruleset is in
   `docs/branch-protection-main.md`; it is **not** applied.
 
+- Privacy documentation now covers Cloudflare Turnstile as a **conditional**
+  third-country recipient, so the compliance trail no longer dead-ends. The
+  processing record `docs/compliance/vvt.md` gains a Cloudflare row in §5
+  (role: bot prevention; data: IP + browser signals; location: USA; DPA
+  placeholder) and a matching third-country caveat in §6 — both carrying the
+  "only if enabled" reservation, because the captcha is off by default and
+  without a site key the Turnstile script is never loaded, so no transfer
+  occurs. The privacy policy gains the section the checklist already pointed
+  at: `legal.privacy.sections.captcha` ("Bot-Schutz bei der Registrierung" /
+  "Bot protection during registration") is now a real `LegalSection` with a
+  `Placeholder` in `PrivacyPage.tsx`, present in both `de.json` and `en.json`;
+  the following section numbers shifted by one. Placeholder work only — no
+  legal advice, the operator fills in the content.
+
+- The Node major the CI enforces is now pinned in the repo: `.nvmrc`,
+  `mise.toml` (`[tools] node = "22"`) and `apps/web/package.json`
+  (`engines.node`) all name major **22**, matching the four `node-version: 22`
+  entries in `.github/workflows/ci.yml`. A fresh clone with `mise`, `nvm` or
+  `fnm` therefore lands on the same Node the CI uses, instead of on whatever
+  the machine happens to default to. On Node 25+ `npm run test:coverage` failed
+  locally with ~135 red tests and no `coverage/` output while CI stayed green —
+  Node enables Web Storage by default there and Vitest 4 filters jsdom's
+  `window.localStorage` away (upstream vitest#8757, fixed only in Vitest 5).
+  The reason is documented once, in `CONTRIBUTING.md` under Definition of Done.
+- Cloud workspaces now have a storage quota: **100 MB on Free, 10 GB on
+  Pro** (`Entitlement.storage_quota_bytes`, `None` = unlimited and the
+  on-premise default). An ingest that would push a workspace past its tier's
+  limit is rejected with `402` and `reason: storage_quota_exceeded`, carrying
+  the limit and current usage in `params` rather than in the locale key.
+
+  Nothing is lost: the gate hangs off the two ingest routes only, so existing
+  blobs stay readable, listable and downloadable above the limit — the same
+  contract the entity quota already makes. The billing panel shows used bytes
+  against the limit.
+
+  Three deliberate boundaries, documented rather than glossed over: the quota
+  is counted and enforced **per workspace, not per organisation**, so an
+  organisation that creates several workspaces multiplies its allowance as
+  long as the number of workspaces is uncapped (a follow-up card caps it); the
+  **table store is not counted** (per-work-area SQLite files live on the
+  filesystem, ADR-0049); and the gate checks `used >= limit` *before* the
+  ingest runs, so a single ingest may overshoot by at most
+  `WHO2BE_INGEST_MAX_BYTES`. A raised limit takes effect at the next
+  checkout, because the entitlement carries the metadata of its purchase.
+
+### Changed
+
+- All three Compose stacks now pin `supabase/gotrue:v2.196.0` instead of
+  `v2.158.1`, and WebAuthn is available as a second factor on the server side.
+
+  The version floor is **v2.190.0**, not v2.163.0 where the WebAuthn factor
+  first appeared: only v2.190.0 made the relying-party configuration settable
+  through environment variables at all, and only from that release does GoTrue
+  *warn* about an invalid WebAuthn configuration instead of refusing to start.
+  On anything between v2.163.0 and v2.189.0 a single missing RP variable is a
+  dead stack, which makes those releases unusable for an env-configured Compose
+  deployment.
+
+  The two stacks that carry an MFA block (local and Hetzner) set both WebAuthn
+  factor switches explicitly, because they default to `false` — only TOTP,
+  which has its own configuration type upstream, defaults to `true`. Without
+  the explicit switches the bump would raise the version while leaving the
+  factor unavailable. They also gain the three mandatory relying-party
+  variables `GOTRUE_WEBAUTHN_RP_ID`, `_RP_DISPLAY_NAME` and `_RP_ORIGINS` —
+  note the prefix differs from the factor switches (`GOTRUE_WEBAUTHN_` vs.
+  `GOTRUE_MFA_WEB_AUTHN_`); writing the MFA prefix there sets variables GoTrue
+  never reads.
+
+  The Dokploy stack carries no `GOTRUE_MFA` entries at all and runs TOTP off
+  the defaults; it gets the pin and nothing else. What matters across the three
+  files is pin symmetry, not configuration symmetry — a pin left behind would
+  be a silent version divergence between documented deployment paths that no
+  check reports.
+
+  No TOTP variable was removed or renamed, and the passkey UI is deliberately
+  not part of this change.
+
+- `scripts/smoke.sh` gained a ninth check that holds the *running* `auth`
+  image against the pin in `docker-compose.yml` and asserts the container log
+  shows a clean start without a migration or fatal error. `docker compose up
+  --wait` only fails when a service never becomes healthy, so a migration that
+  warns rather than breaks would have passed unnoticed — and since v2.190.0 an
+  incomplete WebAuthn configuration warns too. The jump from v2.158.1 pulls in
+  18 migrations, which is more than a version check should be asked to take on
+  trust.
+
+- Optional captcha in front of self-service sign-up, using **Cloudflare
+  Turnstile**. Off by default: with no keys configured no widget renders, no
+  script is fetched from Cloudflare, and the auth calls are unchanged — so
+  there is no third-country data transfer until an operator turns it on.
+
+  Enabling it takes four variables and no rebuild: three on GoTrue
+  (`GOTRUE_SECURITY_CAPTCHA_ENABLED` / `_PROVIDER` / `_SECRET`) and the public
+  site key on the web app (`WHO2BE_TURNSTILE_SITE_KEY`, delivered via
+  `/config.js`). The names are verified against the pinned GoTrue v2.158.1 —
+  note the env var is `..._CAPTCHA_SECRET`, not `..._CAPTCHA_PROVIDER_SECRET`.
+
+  GoTrue applies the captcha to every unauthenticated auth endpoint, not just
+  `/signup`. The web app therefore supplies a token on every such path it
+  offers: sign-up, password login, "resend confirmation" and "forgot
+  password". Login and resend share the single widget on the login form,
+  because a Turnstile token is single-use and the challenge is re-issued after
+  each request. Invitation flows are unaffected — invite sending is an admin
+  call and magic-link redemption never carried the middleware. See
+  `docs/signup-and-invites.md` §3.
+
 ### Fixed
+
+- A failed offsite backup no longer reports success. `restic backup` and
+  `restic forget` were deliberately non-fatal, so a full storage box, an expired
+  SSH key or a network outage ended the cron run with exit 0 — nobody found out
+  there had been no offsite backup for weeks until a restore was attempted. Both
+  steps now end the run with a non-zero exit code. The promise they were written
+  for holds unchanged: the **local GPG dump is never touched** — it is already on
+  disk at that point, and only the false success report is gone. This revises the
+  counter-decision recorded in ADR-0011, which predates any operational alerting;
+  the revision is dated in the ADR and at the call site rather than silently
+  dropped.
+
+  In addition, an optional dead man's switch: with `BACKUP_HEARTBEAT_URL` set
+  (empty by default — without it behaviour is unchanged), the script pings that
+  URL only on a fully successful run, so the *absence* of the ping raises the
+  alarm. That also catches what an exit code structurally cannot: cron disabled,
+  container gone, host down. The receiver is deliberately **self-hosted** — a
+  hosted service would be a processor for operational metadata and would require
+  a record-of-processing entry. `deploy/hetzner/RUNBOOK.md` documents the
+  receiver and how to trigger the alarm on purpose; a stub-based test
+  (`deploy/hetzner/tests/test_backup_alarm.sh`) proves that a failed sync leaves
+  the local dump in place.
+
+- `apps/web`: the generated `coverage/` report directory is now on the ESLint
+  ignore list. Preventive hardening, not a fix for an observed symptom: with
+  the reporters configured in `vite.config.ts:37` (`text-summary`, `json`,
+  `html`) no `.ts`/`.tsx` file is written to `coverage/`, and every rule block
+  in `eslint.config.js` is scoped to `**/*.{ts,tsx}`, so the emitted report
+  scripts carried no rules. The ignore entry keeps `eslint .` independent of
+  whether `npm run test:coverage` ran before it should a future reporter or
+  rule-block change make that matter.
+- Die dokumentierte Verifikations-Schleife fuer `apps/web` prueft wieder etwas:
+  `npx tsc --noEmit` hatte gegen das Solution-`tsconfig.json` (`"files": []`)
+  null Eingabedateien und endete immer mit Exit 0. Alle normativen Stellen
+  nennen jetzt `npx tsc -b` (1658 gepruefte Dateien), so wie CI es faehrt.
+- Das dokumentierte Testgate fuer `apps/web` nennt statt `npm test` jetzt
+  `npm run test:coverage` — die Coverage-Thresholds aus `vite.config.ts`
+  greifen nur mit `--coverage`, CI faehrt ebenfalls `test:coverage`.
+- The MCP requests-per-minute limit advertised in `docs/licensing/plans.md`
+  (Free 30, Pro 240) is now enforced **per organisation**, not per token. The
+  rate window was keyed on a hash of the bearer token, so an organisation with
+  N agent tokens got N × the advertised rate — twenty tokens on the Pro tier
+  meant 4,800 req/min against a plan that promises 240. The monthly quota
+  already capped the total consumption per organisation, but not the burst.
+
+  `McpLimitService.enforce()` now checks a second window keyed on the
+  organisation, with the same ceiling (`mcp_rate_per_min`), so the effective
+  limit is the minimum of both: a single-token caller is unaffected, a
+  many-token caller is pulled back to the advertised rate. Both windows are
+  probed with the non-consuming `peek()` before either is consumed, so a
+  request rejected by one window burns neither the other window nor the
+  monthly quota. No new entitlement field, no migration, no change to the
+  plans table — this is what the table already claimed. On-premises
+  installations and tiers without a configured limit are unchanged.
 
 - Remote MCP connectors can log in again when the OAuth issuer is a bare
   origin. Clients hold the `authorization_servers` entry of the MCP server's

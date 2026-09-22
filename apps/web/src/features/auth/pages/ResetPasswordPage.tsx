@@ -11,9 +11,13 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { config } from '@/config'
 import { supabase } from '@/lib/supabase'
 
+import { TurnstileWidget } from '../components/TurnstileWidget'
+import { translateAuthError } from '../lib/captcha'
 import { buildRedirectTo } from '../lib/redirect'
+import { useCaptcha } from '../lib/use-captcha'
 
 type ResetValues = { email: string }
 
@@ -30,6 +34,9 @@ export function ResetPasswordPage() {
   const [searchParams] = useSearchParams()
   const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Turnstile (Issue #539 / Folgebefund): GoTrue haengt `/recover` an dieselbe
+  // Captcha-Middleware wie `/signup` (api.go:179). Ohne Site-Key passiv.
+  const captcha = useCaptcha()
 
   const resetSchema = z.object({
     email: z.string().email(t('validation.emailInvalid')),
@@ -44,9 +51,13 @@ export function ResetPasswordPage() {
     setError(null)
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(values.email, {
       redirectTo: buildRedirectTo('/onboarding/set-password', searchParams.get('next')),
+      ...captcha.option(),
     })
     if (resetError) {
-      setError(resetError.message)
+      setError(translateAuthError(resetError, t))
+      // Token ist verbraucht — ohne frische Challenge liefe der zweite Versuch
+      // in dieselbe Abweisung.
+      captcha.reset()
       return
     }
     setSent(true)
@@ -94,14 +105,29 @@ export function ResetPasswordPage() {
                   )}
                 />
                 {error !== null ? <ErrorAlert message={error} /> : null}
+                {captcha.required ? (
+                  <TurnstileWidget
+                    key={captcha.nonce}
+                    siteKey={config.turnstileSiteKey}
+                    action="recover"
+                    onToken={captcha.setToken}
+                    onExpire={captcha.clearToken}
+                    className="flex justify-center"
+                  />
+                ) : null}
                 <Button
                   type="submit"
                   variant="brand"
                   className="w-full"
-                  disabled={form.formState.isSubmitting}
+                  disabled={form.formState.isSubmitting || captcha.blocked}
                 >
                   {t('resetPassword.submit')}
                 </Button>
+                {captcha.blocked ? (
+                  <p className="text-center text-xs text-muted-foreground">
+                    {t('captcha.pending')}
+                  </p>
+                ) : null}
                 <Button asChild variant="ghost" size="sm" className="w-full">
                   <Link to="/login">{t('backToLogin')}</Link>
                 </Button>

@@ -9,7 +9,11 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-from who2be_api.licensing.entitlement import Feature
+from who2be_api.licensing.entitlement import (
+    FREE_STORAGE_QUOTA_BYTES,
+    PRO_STORAGE_QUOTA_BYTES,
+    Feature,
+)
 from who2be_billing.plans import (
     FREE_PLAN,
     PRO_PLAN,
@@ -22,6 +26,9 @@ def test_free_tier_matches_cloud_free_entitlement() -> None:
     assert FREE_PLAN.features == frozenset({Feature.CORE})
     assert FREE_PLAN.mcp_monthly_quota == 1_000
     assert FREE_PLAN.mcp_rate_per_min == 30
+    # Issue #536: Free 100 MB — dieselbe Zahl wie `CLOUD_FREE_ENTITLEMENT`.
+    assert FREE_PLAN.storage_quota_bytes == FREE_STORAGE_QUOTA_BYTES
+    assert FREE_PLAN.storage_quota_bytes == 100 * 1024 * 1024
 
 
 def test_pro_tier_is_superset_of_free() -> None:
@@ -29,6 +36,9 @@ def test_pro_tier_is_superset_of_free() -> None:
     assert {Feature.COMPOSITE_PLAYBOOKS, Feature.AGENTS, Feature.AUDIT_EXPORT} <= PRO_PLAN.features
     assert PRO_PLAN.mcp_monthly_quota == 100_000
     assert PRO_PLAN.mcp_rate_per_min == 240
+    # Issue #536: Pro 10 GB.
+    assert PRO_PLAN.storage_quota_bytes == PRO_STORAGE_QUOTA_BYTES
+    assert PRO_PLAN.storage_quota_bytes == 10 * 1024 * 1024 * 1024
 
 
 def test_plan_metadata_follows_convention() -> None:
@@ -39,6 +49,8 @@ def test_plan_metadata_follows_convention() -> None:
     assert meta["license_policy"] == " ".join(sorted(PRO_PLAN.features))
     assert meta["mcp_monthly_quota"] == "100000"
     assert meta["mcp_rate_per_min"] == "240"
+    # Issue #536: der Pull-Adapter liest diesen Key ohne Sonderfall zurueck.
+    assert meta["storage_quota_bytes"] == str(PRO_STORAGE_QUOTA_BYTES)
     assert meta["plan_code"] == "pro"
 
 
@@ -59,5 +71,6 @@ def test_plan_is_frozen() -> None:
         features=frozenset(),
         mcp_monthly_quota=1,
         mcp_rate_per_min=1,
+        storage_quota_bytes=1,
     )
     assert plan.code == "x"
