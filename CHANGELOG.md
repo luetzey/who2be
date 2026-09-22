@@ -10,6 +10,20 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Added
 
+- Privacy documentation now covers Cloudflare Turnstile as a **conditional**
+  third-country recipient, so the compliance trail no longer dead-ends. The
+  processing record `docs/compliance/vvt.md` gains a Cloudflare row in §5
+  (role: bot prevention; data: IP + browser signals; location: USA; DPA
+  placeholder) and a matching third-country caveat in §6 — both carrying the
+  "only if enabled" reservation, because the captcha is off by default and
+  without a site key the Turnstile script is never loaded, so no transfer
+  occurs. The privacy policy gains the section the checklist already pointed
+  at: `legal.privacy.sections.captcha` ("Bot-Schutz bei der Registrierung" /
+  "Bot protection during registration") is now a real `LegalSection` with a
+  `Placeholder` in `PrivacyPage.tsx`, present in both `de.json` and `en.json`;
+  the following section numbers shifted by one. Placeholder work only — no
+  legal advice, the operator fills in the content.
+
 - The Node major the CI enforces is now pinned in the repo: `.nvmrc`,
   `mise.toml` (`[tools] node = "22"`) and `apps/web/package.json`
   (`engines.node`) all name major **22**, matching the four `node-version: 22`
