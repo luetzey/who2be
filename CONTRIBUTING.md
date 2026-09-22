@@ -53,6 +53,30 @@ This keeps the public history tidy without losing solo-dev convenience.
 - Meaningful commit messages; one PR per completed unit of work.
 - Every PR needs at least **one** review.
 
+## Referencing code
+
+Never point at a code location with a bare `file.py:441`. Line numbers drift as
+files grow, and a drifted pointer silently names the wrong code while still
+looking valid. Every code reference carries a stable anchor — a commit SHA, a
+symbol name, or both; a line number may be added but never counts as the
+reference itself:
+
+```text
+conftest.py#_db_reachable            symbol anchor (the common case)
+conftest.py@1a8f63b#_db_reachable    symbol + the commit it was measured at
+apps/api/src/who2be_api/main.py@39dcdf4   SHA permalink (unnamed location)
+```
+
+Check references mechanically instead of by hand:
+
+```bash
+uv run python scripts/check_code_refs.py .          # whole repo
+uv run python scripts/check_code_refs.py docs/ --json
+```
+
+Full convention, the stages the checker reports, and why old pointers are
+deliberately left alone: [`docs/code-references.md`](docs/code-references.md).
+
 ## Definition of Done
 
 Verify locally before every push (both stacks green). The test steps
@@ -86,6 +110,18 @@ New dependency? Check its license first (mandatory scan, ADR-0033).
 Permissive licenses (MIT, BSD, Apache-2.0, ISC, 0BSD) and MPL-2.0 are
 allowed; GPL/AGPL/LGPL and other copyleft licenses break the gate.
 Deliberate exceptions require an ADR addendum.
+
+**Did you touch documentation, plans, issues or cards that cite code?** Then
+the code references are verified by the checker, not by hand — a run that
+re-measures pointers manually is not a DoD run:
+
+```bash
+uv run python scripts/check_code_refs.py .   # must exit 0
+```
+
+`legacy` findings (pre-existing bare `file:line` pointers) are reported but do
+not fail the run; an `error` does. See
+[`docs/code-references.md`](docs/code-references.md).
 
 A pull request that touches only documentation (`.claude/**`, `docs/**`,
 root-level Markdown) skips the four heavy CI jobs (`python`, `web`,
