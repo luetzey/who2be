@@ -22,6 +22,7 @@ from who2be_api.core.security import (
 )
 from who2be_api.repositories.token_repository import TokenRepository
 from who2be_api.services.audit_service import AuditService
+from who2be_api.services.token_quota_service import TokenQuotaService
 from who2be_models import TokenCreate, TokenCreated, TokenRead, WorkspaceRole, encode_cursor
 
 
@@ -98,6 +99,20 @@ class TokenService:
         )
         return WorkspaceRole(value) if value is not None else None
 
+    async def _enforce_token_quota(self, ctx: WorkspaceContext) -> None:
+        """Tarif-Deckel fuer die Anzahl aktiver Tokens (Issue #538).
+
+        Im Service und nicht als Router-Dependency, weil hier bereits die
+        uebrigen Anlage-Gates sitzen (Rolle, MFA, Agent-Bindung) und der Service
+        auch ausserhalb des Routers aufrufbar bleiben soll. Ohne Pool (aeltere
+        Test-Fakes) ein No-Op — dieselbe Konvention wie
+        `_assert_agent_in_workspace`. Bewusst NUR hier und nicht in `rotate`:
+        Rotation ersetzt ein Secret, sie legt keinen Token an.
+        """
+        if self._pool is None:
+            return
+        await TokenQuotaService(self._pool).enforce(ctx)
+
     async def create(self, ctx: WorkspaceContext, data: TokenCreate) -> TokenCreated:
         """Legt einen Token an; der Klartext wird genau einmal zurueckgegeben.
 
@@ -109,6 +124,11 @@ class TokenService:
         (#469) — dieselbe Schwelle, die `require_role(ctx, admin)` fuer jede
         andere Admin-Aktion setzt (`require_aal2` traegt die API-Token- und
         On-Prem-Ausnahmen bereits, siehe `core/security.py`).
+
+        In der Cloud-Edition gilt zusaetzlich der Tarif-Deckel fuer die Anzahl
+        aktiver Tokens des Workspaces (Issue #538): ueber der Grenze `402` mit
+        `token_quota_exceeded`. Bestehende Tokens bleiben davon unberuehrt —
+        nutzbar und rotierbar.
         """
         require_role(ctx, WorkspaceRole.editor)
         self._deny_agent_bound(ctx)
@@ -129,6 +149,9 @@ class TokenService:
         # Single-Column-FK auf `agent.id` garantiert nur Existenz, nicht die
         # Workspace-Zugehoerigkeit — die pruefen wir hier vor dem INSERT.
         await self._assert_agent_in_workspace(ctx.workspace_id, data.agent_id)
+        # Tarif-Deckel erst hier: nach allen Berechtigungs-Gates, aber VOR
+        # `new_token()`, damit ueber der Grenze kein Secret entsteht.
+        await self._enforce_token_quota(ctx)
         plaintext = new_token()
         stored = await self._repo.insert(
             ctx.workspace_id,
@@ -223,6 +246,10 @@ class TokenService:
         einem bestehenden admin-Token umgehbar. Das Gate wird VOR dem Rotate
         geprueft (`_current_role`), damit kein neues Secret entsteht, bevor
         die Pruefung feststeht.
+
+        **Kein** Token-Quota-Gate (Issue #538): Rotation ersetzt ein Secret, sie
+        legt keinen Token an. Ein Gate hier wuerde die Secret-Rotation (RUNBOOK
+        §Secret-Rotation) ueber der Grenze aussperren.
         """
         require_role(ctx, WorkspaceRole.editor)
         self._deny_agent_bound(ctx)

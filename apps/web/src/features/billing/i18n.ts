@@ -19,6 +19,11 @@ const de = {
       monthlyLabel: 'MCP-Reads diesen Monat',
       ariaLabel: 'MCP-Kontingent-Verbrauch',
     },
+    storage: {
+      unlimited: 'Speicher: unbegrenzt',
+      label: 'Belegter Speicher',
+      ariaLabel: 'Speicher-Verbrauch',
+    },
     rateLimit: 'Rate-Limit',
     validUntil: 'Gueltig bis',
     unlimited: 'unbegrenzt',
@@ -26,6 +31,7 @@ const de = {
       label: 'Plan',
       priceLabel: 'Preis',
       entityLimitLabel: 'Entity-Limit je Workspace',
+      tokenQuotaLabel: 'API-Tokens je Workspace',
       unknown: 'unbekannt',
     },
     price: {
@@ -59,6 +65,11 @@ const en = {
       monthlyLabel: 'MCP reads this month',
       ariaLabel: 'MCP quota usage',
     },
+    storage: {
+      unlimited: 'Storage: unlimited',
+      label: 'Storage used',
+      ariaLabel: 'Storage usage',
+    },
     rateLimit: 'Rate limit',
     validUntil: 'Valid until',
     unlimited: 'unlimited',
@@ -66,6 +77,7 @@ const en = {
       label: 'Plan',
       priceLabel: 'Price',
       entityLimitLabel: 'Entity limit per workspace',
+      tokenQuotaLabel: 'API tokens per workspace',
       unknown: 'unknown',
     },
     price: {

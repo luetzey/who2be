@@ -15,6 +15,7 @@
     "test": "vitest run",
     "test:a11y": "vitest run --testNamePattern a11y",
     "test:coverage": "vitest run --coverage",
+    "i18n:check": "vite-node scripts/check-i18n.ts",
     "license:check": "license-checker-rseidelsohn --production --excludePrivatePackages --failOn \"GPL;LGPL;AGPL;SSPL;CDDL;EPL;EUPL;OSL;CPAL;CPL;NPL;Sleepycat;UNKNOWN\"",
     "e2e": "playwright test",
     "e2e:install": "playwright install --with-deps chromium"
@@ -56,7 +57,7 @@
     "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
-    "@types/node": "^25.9.3",
+    "@types/node": "^26.6.2",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^6.1.1",

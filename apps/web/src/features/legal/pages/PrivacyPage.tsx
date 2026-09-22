@@ -64,6 +64,12 @@ export function PrivacyPage() {
         </p>
       </LegalSection>
 
+      <LegalSection heading={t('privacy.sections.captcha.heading')}>
+        <p>
+          <Placeholder>{t('privacy.sections.captcha.body')}</Placeholder>
+        </p>
+      </LegalSection>
+
       <LegalSection heading={t('privacy.sections.email.heading')}>
         <p>
           <Placeholder>{t('privacy.sections.email.body')}</Placeholder>

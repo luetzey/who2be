@@ -447,5 +447,7 @@ def map_event_to_entitlement(event: dict[str, Any]) -> EntitlementUpdate | None:
         expires_at=_parse_period_end(obj, metadata),
         mcp_monthly_quota=_parse_int_meta(metadata, "mcp_monthly_quota"),
         mcp_rate_per_min=_parse_int_meta(metadata, "mcp_rate_per_min"),
+        token_quota=_parse_int_meta(metadata, "token_quota"),
+        storage_quota_bytes=_parse_int_meta(metadata, "storage_quota_bytes"),
     )
     return EntitlementUpdate(org_id=org_id, entitlement=entitlement, external_ref=external_ref)

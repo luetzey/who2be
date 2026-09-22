@@ -51,11 +51,32 @@ ALL_FEATURES: frozenset[str] = frozenset(
 # unbegrenzt (siehe `Entitlement.entity_limit`).
 FREE_ENTITY_QUOTA = 50
 
+# Obergrenze fuer die Anzahl **nutzbarer** Agent-Tokens je Workspace
+# (Issue #538, Owner-Entscheidung Option A). Anders als `entity_limit()` ist
+# das KEINE abgeleitete Groesse, sondern ein eigenes Entitlement-Feld: die
+# Ableitung kann nur „Free-Zahl oder unbegrenzt" ausdruecken (sie liest bloss,
+# OB ein Paid-Feature vorliegt), hier braucht Pro aber eine eigene endliche
+# Zahl. Der gebuchte Tier traegt den Wert deshalb als Provider-Metadatum
+# (`token_quota`) — dasselbe Muster wie `storage_quota_bytes` (#536).
+FREE_TOKEN_QUOTA = 3
+PRO_TOKEN_QUOTA = 25
+
+# Speicher-Obergrenze je Org (Issue #536, Owner-Entscheidung Option A):
+# Summe der abgelegten Blob-Bytes (`wa_blob.size_bytes`). Anders als
+# `entity_limit()` ist das KEINE abgeleitete Groesse, sondern ein eigenes
+# Entitlement-Feld — der gebuchte Tier traegt den Wert als Provider-Metadatum
+# (`storage_quota_bytes`), damit ein spaeterer dritter Tarif eine eigene Zahl
+# bekommen kann, ohne dass die Ableitung „Paid ⇒ unbegrenzt" im Weg steht.
+FREE_STORAGE_QUOTA_BYTES = 100 * 1024 * 1024  # 100 MiB
+PRO_STORAGE_QUOTA_BYTES = 10 * 1024 * 1024 * 1024  # 10 GiB
+
 
 class Entitlement(BaseModel):
     """Aufgeloeste Nutzungsrechte einer Org.
 
-    `mcp_monthly_quota` / `mcp_rate_per_min` sind `None` = unbegrenzt. `status`
+    `mcp_monthly_quota` / `mcp_rate_per_min` / `token_quota` /
+    `storage_quota_bytes` sind
+    `None` = unbegrenzt (On-Prem/OSS-Default). `status`
     plus `expires_at` bestimmen `is_active()`; nur ein aktives Entitlement laesst
     gated Reads durch.
 
@@ -73,6 +94,15 @@ class Entitlement(BaseModel):
     expires_at: datetime | None = None
     mcp_monthly_quota: int | None = None
     mcp_rate_per_min: int | None = None
+    # Max. Anzahl nutzbarer (nicht widerrufener, nicht abgelaufener) API-Tokens
+    # je Workspace (Issue #538). `None` = unbegrenzt — der On-Prem/OSS-Default
+    # und der Zustand jeder Bestands-Zeile in `org_entitlement`, die vor
+    # Migration 0085 geschrieben wurde.
+    token_quota: int | None = None
+    # Summe der abgelegten Blob-Bytes je Workspace (Issue #536). `None` =
+    # unbegrenzt — der On-Prem/OSS-Default und der Zustand jeder Bestands-Zeile
+    # in `org_entitlement`, die vor Migration 0084 geschrieben wurde.
+    storage_quota_bytes: int | None = None
     grace_until: datetime | None = None
 
     def is_active(self, now: datetime | None = None) -> bool:
@@ -106,6 +136,36 @@ class Entitlement(BaseModel):
         paid_features = self.features - {Feature.CORE}
         return None if paid_features else FREE_ENTITY_QUOTA
 
+    def effective_token_quota(self, *, cloud: bool, now: datetime | None = None) -> int | None:
+        """Tatsaechlich geltende Token-Obergrenze (None = unbegrenzt, Issue #538).
+
+        `token_quota` ist ein **Feld**, weil Pro eine eigene endliche Zahl
+        braucht. Ein Feld hat aber die Schwaeche, die `entity_limit()` bewusst
+        vermeidet: wer es nicht kennt, schreibt `NULL` — und `NULL` hiesse
+        unbegrenzt. Genau das tut der Billing-Pfad beim Downgrade
+        (`webhook.map_event_to_entitlement` schreibt beim Revoke ein
+        `Entitlement(status="inactive", features=frozenset())` ohne dieses
+        Feld), und genau das steht in jeder Bestands-Zeile vor Migration 0085
+        sowie in jeder vor #538 angelegten Mollie-Subscription.
+
+        Deshalb gilt `None` nur **ausserhalb** der Cloud als „unbegrenzt"
+        (On-Prem/OSS-Lizenz). In der Cloud heisst `None` „kein Wert gesetzt"
+        und wird aus demselben Signal abgeleitet wie `entity_limit()`:
+          * **inaktiv** (Kuendigung/Fehlzahlung) oder **Free** (nur `core`)
+            ⇒ `FREE_TOKEN_QUOTA`.
+          * aktiver Plan mit Paid-Features ⇒ `PRO_TOKEN_QUOTA` — ein zahlender
+            Bestandskunde ohne das neue Metadatum wird nicht still auf den
+            Free-Wert heruntergedeckelt.
+        """
+        if self.token_quota is not None:
+            return self.token_quota
+        if not cloud:
+            return None
+        if not self.is_active(now):
+            return FREE_TOKEN_QUOTA
+        paid_features = self.features - {Feature.CORE}
+        return PRO_TOKEN_QUOTA if paid_features else FREE_TOKEN_QUOTA
+
 
 # On-Prem/OSS-Default: alle Features, unbegrenzt, kein Ablauf (Plan §3.5).
 OSS_ENTITLEMENT = Entitlement(
@@ -114,6 +174,8 @@ OSS_ENTITLEMENT = Entitlement(
     expires_at=None,
     mcp_monthly_quota=None,
     mcp_rate_per_min=None,
+    token_quota=None,
+    storage_quota_bytes=None,
 )
 
 # Cloud-Default fuer Orgs ohne aktiven Plan (z. B. frisch registriert, vor dem
@@ -125,4 +187,6 @@ CLOUD_FREE_ENTITLEMENT = Entitlement(
     expires_at=None,
     mcp_monthly_quota=1_000,
     mcp_rate_per_min=30,
+    token_quota=FREE_TOKEN_QUOTA,
+    storage_quota_bytes=FREE_STORAGE_QUOTA_BYTES,
 )

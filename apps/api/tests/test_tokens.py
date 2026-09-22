@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient
 from who2be_api.core import security
 from who2be_api.core.config import Settings, get_settings
 from who2be_api.core.migrations import MIGRATIONS_DIR, apply_migrations
+from who2be_api.licensing.entitlement import Entitlement
 from who2be_api.main import app
 from who2be_api.testing.workspace_setup import cleanup_workspaces, fresh_user_id, setup_workspace
 
@@ -489,5 +490,103 @@ def test_editor_token_create_and_rotate_unaffected_by_admin_mfa_gate(
 
             rotated = client.post(f"{base}/{token_id}/rotate", headers=aal1_auth)
             assert rotated.status_code == 200
+    finally:
+        cleanup_workspaces([owner_id])
+
+
+@pytest.mark.integration
+def test_token_quota_blocks_create_but_never_existing_tokens_or_rotation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#538 AK1-AK4 gegen die echte DB — die vier Zusagen in einem Ablauf.
+
+    Der Zaehler ist der interessante Teil und laeuft deshalb gegen echte
+    `api_token`-Zeilen; gefakt ist nur, was diese Umgebung nicht hat: die
+    Cloud-Edition und ein Entitlement mit einer kleinen Grenze.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    monkeypatch.setattr("who2be_api.services.token_quota_service.is_cloud", lambda _s: True)
+
+    class _Port:
+        async def resolve(self, _org_id: UUID) -> Entitlement:
+            return Entitlement(status="active", features=frozenset({"core"}), token_quota=2)
+
+    monkeypatch.setattr(
+        "who2be_api.services.token_quota_service.build_entitlement_port",
+        lambda _pool, _settings: _Port(),
+    )
+
+    owner_id = fresh_user_id()
+    ws = setup_workspace(owner_id)
+    agent_id = str(_agent_in(ws))
+    jwt_auth = {"Authorization": f"Bearer {_jwt(owner_id)}"}
+    base = f"/v1/workspaces/{ws}/tokens"
+    payload = {"name": "agent", "agent_id": agent_id}
+
+    try:
+        with TestClient(app) as client:
+            first = client.post(base, json=payload, headers=jwt_auth)
+            assert first.status_code == 201
+            first_id = first.json()["id"]
+            first_plaintext = first.json()["token"]
+            assert client.post(base, json=payload, headers=jwt_auth).status_code == 201
+
+            # AK1: der dritte Create ueber der Grenze => 402, stabiler Grund,
+            # Grenze in `params` (ADR-0051).
+            blocked = client.post(base, json=payload, headers=jwt_auth)
+            assert blocked.status_code == 402
+            body = blocked.json()
+            assert body["reason"] == "token_quota_exceeded"
+            assert body["params"] == {"limit": 2}
+
+            # AK2: der bestehende Token authentifiziert unveraendert weiter.
+            first_auth = {"Authorization": f"Bearer {first_plaintext}"}
+            assert client.get("/v1/me", headers=first_auth).status_code == 200
+
+            # AK3: und er laesst sich rotieren — Rotation ersetzt, sie legt
+            # nicht an. Waere das gegatet, sperrte die Grenze die
+            # Secret-Rotation aus (RUNBOOK §Secret-Rotation).
+            rotated = client.post(f"{base}/{first_id}/rotate", headers=jwt_auth)
+            assert rotated.status_code == 200
+            rotated_auth = {"Authorization": f"Bearer {rotated.json()['token']}"}
+            assert client.get("/v1/me", headers=rotated_auth).status_code == 200
+
+            # AK4: ein widerrufener Token belegt keinen Slot mehr — danach
+            # geht der zuvor abgewiesene Create wieder durch.
+            assert client.delete(f"{base}/{first_id}", headers=jwt_auth).status_code == 204
+            assert client.post(base, json=payload, headers=jwt_auth).status_code == 201
+    finally:
+        cleanup_workspaces([owner_id])
+
+
+@pytest.mark.integration
+def test_token_quota_does_not_apply_onprem(monkeypatch: pytest.MonkeyPatch) -> None:
+    """#538 AK4, zweite Haelfte: On-Prem/OSS bleibt unbegrenzt.
+
+    Identischer Aufbau wie oben, nur ohne die Cloud-Wache: dieselbe kleine
+    Grenze im Entitlement bleibt folgenlos.
+    """
+    if not _db_reachable():
+        pytest.skip("Keine erreichbare Datenbank — Integrationstest uebersprungen.")
+    _prepare_db()
+
+    monkeypatch.setattr(security, "get_settings", lambda: Settings(jwt_secret=_TEST_SECRET))
+    monkeypatch.setattr("who2be_api.services.token_quota_service.is_cloud", lambda _s: False)
+
+    owner_id = fresh_user_id()
+    ws = setup_workspace(owner_id)
+    agent_id = str(_agent_in(ws))
+    jwt_auth = {"Authorization": f"Bearer {_jwt(owner_id)}"}
+    base = f"/v1/workspaces/{ws}/tokens"
+    payload = {"name": "agent", "agent_id": agent_id}
+
+    try:
+        with TestClient(app) as client:
+            for _ in range(3):
+                assert client.post(base, json=payload, headers=jwt_auth).status_code == 201
     finally:
         cleanup_workspaces([owner_id])

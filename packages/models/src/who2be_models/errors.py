@@ -87,6 +87,7 @@ ProblemReason = Literal[
     "organization_owner_required",  # 403 — Aktion ist dem Org-Owner vorbehalten
     "workspace_org_missing",  # 403 — Workspace ohne Organisation (inkonsistenter Zustand)
     "entity_quota_exceeded",  # 402 — Entity-Kontingent erreicht (params: limit)
+    "storage_quota_exceeded",  # 402 — Speichergrenze erreicht (params: limit, used)
     "persona_not_found",  # 404 — Persona unbekannt oder nicht sichtbar
     "resource_slug_conflict",  # 409 — Resource-Slug im Workspace bereits vergeben
     "sub_playbook_not_found",  # 404 — Sub-Playbook der Composition unbekannt/fremd
@@ -108,8 +109,9 @@ ProblemReason = Literal[
     "bound_agent_not_found",  # 404 — zu bindender Agent nicht in diesem Workspace
     "token_role_escalation",  # 403 — Token-Rolle hoeher als die des Erstellers
     "token_not_found",  # 404 — API-Token unbekannt oder bereits widerrufen
+    "token_quota_exceeded",  # 402 — Token-Kontingent des Workspaces erreicht (params: limit)
     "subscription_inactive",  # 402 — kein aktives Abonnement der Organisation
-    "mcp_rate_limited",  # 429 — Per-Token-MCP-Rate erreicht (params: limit)
+    "mcp_rate_limited",  # 429 — MCP-Rate erreicht, Token- ODER Org-Fenster (params: limit)
     "mcp_quota_exceeded",  # 429 — Monats-MCP-Kontingent erschoepft (params: limit)
     "consent_requires_session",  # 401 — OAuth-Consent nur mit eingeloggter Web-Session
     "invalid_cursor",  # 422 — Keyset-Cursor nicht dekodierbar
