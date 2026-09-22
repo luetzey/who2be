@@ -26,6 +26,10 @@ bzw. Dokumentations-Standards).
   Komponenten-Landkarte der Web-UI (intern)
 - [`licensing/plans.md`](licensing/plans.md) — Editionen/Tarif-Logik
   (intern)
+- [`code-references.md`](code-references.md) — Konvention fuer Code-Zeiger
+  in Issues, Karten, Plaenen und Reviews: SHA-Permalink und Symbolanker
+  statt `datei:zeile`, plus der Pruefer
+  `scripts/check_code_refs.py` (intern + Contributor)
 
 ## Konzept
 
