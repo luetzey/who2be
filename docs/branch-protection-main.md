@@ -161,6 +161,18 @@ Nach dem Anwenden prüfen: ein offener PR muss `all-green` in seiner Checks-List
 zeigen. Steht dort stattdessen „Expected — Waiting for status to be reported", ist der Name
 falsch geschrieben oder der Job auf dem Ziel-SHA nie gelaufen.
 
+### Ein Fall, der genau diese Meldung erzeugt und nichts mit dem Ruleset zu tun hat
+
+Ein **konfliktbehafteter** PR löst gar keinen `pull_request`-Lauf aus: GitHub baut solche Läufe
+auf dem Merge-Commit aus PR-Branch und Zielzweig, und den kann es bei einem Konflikt nicht
+bilden. Beobachtet bei PR #584 — die Checks-Liste zeigte ausschließlich CodeQL (das auf `push`
+läuft), die gesamte CI fehlte. Nach dem Nachziehen von `main` liefen alle Jobs.
+
+Mit aktivem Required Check heißt das: ein Konflikt-PR hängt auf „Waiting for status to be
+reported", bis jemand `main` nachzieht. Das ist **erwünscht** — ein Konflikt-PR soll nicht
+mergebar sein —, aber die Meldung legt eine falsche Fährte (sie klingt nach Ruleset-Fehler). Wer
+sie sieht, prüft zuerst `gh pr view <n> --json mergeable`.
+
 ## Was das für den Karten-Contract des Boards heißt
 
 Der Abschlussmechanismus für PR-gebundene Karten verlangt grüne, **repository-required** Checks
