@@ -50,11 +50,15 @@ Kommandos
 ``check``    prueft alle Fragmente auf Namensform, bekannten Typ und Inhalt.
 ``collect``  fuehrt sie in die ``## [Unreleased]``-Sektion ein und loescht sie.
              ``--dry-run`` schreibt nichts und gibt das Ergebnis auf stdout aus.
+``guard``    weist einen direkten ``CHANGELOG.md``-Hunk in einem normalen PR ab.
+             ``--base <ref>`` nennt die Vergleichsbasis (in CI der Base-SHA des
+             PRs). Laeuft in ``.github/workflows/ci.yml``, Job ``changelog-guard``.
 """
 
 from __future__ import annotations
 
 import argparse
+import subprocess
 import sys
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
@@ -262,6 +266,137 @@ def render(changelog_text: str, fragments: Sequence[Fragment]) -> str:
     return "\n".join(lines[:start] + section + lines[end:])
 
 
+#: Pfad (repo-relativ) der Sammeldatei, die dieses Verfahren ersetzt.
+CHANGELOG_PATH = "CHANGELOG.md"
+
+#: Verzeichnis-Praefix der Fragmente, repo-relativ mit Schraegstrich.
+FRAGMENT_DIR_PREFIX = "changelog.d/"
+
+#: Meldung fuer den Verstossfall. Sie muss den Weg heraus nennen, nicht nur das
+#: Verbot — sie ist das Einzige, was ein Beitragender vom Gate zu sehen bekommt.
+GUARD_MESSAGE = (
+    f"{CHANGELOG_PATH} wird nicht direkt bearbeitet.\n"
+    "\n"
+    "Dieser Diff aendert die Sammeldatei, ohne ein einziges Fragment unter\n"
+    f"{FRAGMENT_DIR_PREFIX} zu loeschen — er ist also kein Release-Lauf von\n"
+    "'collect', sondern ein direkter Eintrag. Genau daran merged git still\n"
+    "falsch (siehe CONTRIBUTING.md, Abschnitt 'Changelog: ein Fragment, keine\n"
+    "Sammeldatei').\n"
+    "\n"
+    "Weg heraus (gilt auch fuer Alt-PRs aus der Zeit vor #587):\n"
+    f"  1. den {CHANGELOG_PATH}-Hunk verwerfen,\n"
+    "  2. denselben Text WORTGLEICH als Fragment ablegen:\n"
+    f"     {FRAGMENT_DIR_PREFIX}<slug>.<typ>.md  (Typ: " + ", ".join(CATEGORIES) + ")\n"
+    "  3. pruefen mit: uv run python scripts/changelog_fragments.py check"
+)
+
+
+def _is_fragment(path: str) -> bool:
+    """Ist ``path`` ein Fragment — also eine Datei, die ``collect`` loescht?
+
+    ``changelog.d/README.md`` und die uebrigen :data:`IGNORED_NAMES` zaehlen
+    bewusst nicht: sonst liesse sich das Gate durch das Loeschen der Anleitung
+    aushebeln.
+    """
+    if not path.startswith(FRAGMENT_DIR_PREFIX):
+        return False
+    name = path[len(FRAGMENT_DIR_PREFIX) :]
+    if "/" in name:  # Unterverzeichnisse sind keine Fragmente.
+        return False
+    return name not in IGNORED_NAMES
+
+
+def guard_violation(changed: Iterable[str], deleted: Iterable[str]) -> str | None:
+    """Die Verstoss-Meldung fuer einen Diff — oder ``None``, wenn er in Ordnung ist.
+
+    Rein funktional ueber zwei Dateilisten (alle geaenderten Pfade, davon die
+    geloeschten), damit die Entscheidung ohne git unter pytest steht.
+
+    Zulaessig ist eine ``CHANGELOG.md``-Aenderung nur als Signatur eines
+    ``collect``-Laufs: derselbe Diff loescht mindestens ein Fragment. Bewusst
+    kein Label und kein Branch-Praefix — beide haengen an menschlicher
+    Disziplin und waeren damit so weich wie die Konvention, die das Gate
+    ersetzen soll.
+    """
+    if CHANGELOG_PATH not in set(changed):
+        return None
+    if any(_is_fragment(path) for path in deleted):
+        return None
+    return GUARD_MESSAGE
+
+
+def _git(args: Sequence[str]) -> str:
+    """``git`` aufrufen und stdout zurueckgeben.
+
+    :raises FragmentError: wenn git fehlschlaegt — mit dem Kommando und stderr,
+        damit ein CI-Fehlschlag ohne Nachstellen lesbar ist.
+    """
+    try:
+        proc = subprocess.run(  # noqa: S603 - festes Argv, keine Shell
+            ["git", *args],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except FileNotFoundError:  # pragma: no cover - ohne git laeuft hier nichts
+        raise FragmentError("git ist nicht verfuegbar") from None
+    except subprocess.CalledProcessError as exc:
+        raise FragmentError(f"git {' '.join(args)} fehlgeschlagen: {exc.stderr.strip()}") from None
+    return proc.stdout
+
+
+def diff_against(base: str, head: str = "HEAD") -> tuple[list[str], list[str]]:
+    """Geaenderte und geloeschte Pfade zwischen Merge-Base und ``head``.
+
+    Verglichen wird gegen die *Merge-Base*, nicht gegen die Basis-Spitze: sonst
+    zaehlten Aenderungen, die inzwischen auf main gelandet sind, als Teil dieses
+    PRs — und ein fremder CHANGELOG-Eintrag auf main brechte jeden offenen PR.
+    """
+    merge_base = _git(["merge-base", base, head]).strip()
+    raw = _git(["diff", "--name-status", "-z", merge_base, head])
+
+    changed: list[str] = []
+    deleted: list[str] = []
+    fields = [f for f in raw.split("\0") if f]
+    i = 0
+    while i < len(fields):
+        status = fields[i]
+        # Rename/Copy tragen ZWEI Pfade (alt, neu); alle uebrigen genau einen.
+        # Der alte Pfad zaehlt dabei NICHT als geloescht: ein Rename laesst die
+        # Datei unter neuem Namen bestehen, ist also keine ``collect``-Signatur.
+        # Sonst genuegte ein ``git mv`` eines Fragments, um einen direkten
+        # CHANGELOG-Hunk am Gate vorbeizuschleusen. Ein echter ``collect``-Lauf
+        # loescht Fragmente ersatzlos und erzeugt nie ein Rename.
+        if status.startswith(("R", "C")):
+            old, new = fields[i + 1], fields[i + 2]
+            changed.extend((old, new))
+            i += 3
+            continue
+        path = fields[i + 1]
+        changed.append(path)
+        if status.startswith("D"):
+            deleted.append(path)
+        i += 2
+
+    return changed, deleted
+
+
+def cmd_guard(base: str) -> int:
+    try:
+        changed, deleted = diff_against(base)
+    except FragmentError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    violation = guard_violation(changed, deleted)
+    if violation is None:
+        print(f"changelog-guard: in Ordnung ({len(changed)} Datei(en) gegen {base}).")
+        return 0
+
+    print(violation, file=sys.stderr)
+    return 1
+
+
 def cmd_check(directory: Path) -> int:
     try:
         fragments = collect_fragments(directory)
@@ -335,10 +470,25 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="Ergebnis auf stdout ausgeben, nichts schreiben und nichts loeschen",
     )
+    guard = sub.add_parser(
+        "guard",
+        help="einen direkten CHANGELOG.md-Hunk abweisen (CI-Gate)",
+    )
+    guard.add_argument(
+        "--base",
+        required=True,
+        help=(
+            "Vergleichsbasis, z. B. 'origin/main' lokal oder der Base-SHA des PRs "
+            "in CI. Bewusst ohne Default: ein geratener Basis-Ref waere ein Gate, "
+            "das mal prueft und mal nicht."
+        ),
+    )
 
     args = parser.parse_args(argv)
     if args.command == "check":
         return cmd_check(args.dir)
+    if args.command == "guard":
+        return cmd_guard(args.base)
     return cmd_collect(args.dir, args.changelog, dry_run=args.dry_run)
 
 

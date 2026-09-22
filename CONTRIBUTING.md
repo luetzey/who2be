@@ -123,6 +123,22 @@ uv run python scripts/changelog_fragments.py collect              # übernehmen
 sie — das passiert **beim Release**, nicht in jedem PR. Bestehende
 CHANGELOG-Einträge bleiben unberührt; das Verfahren gilt ab jetzt.
 
+### Alt-PRs aus der Zeit vor dem Verfahren
+
+Ein offener PR, der noch direkt in `CHANGELOG.md` schreibt, **verwirft seinen
+CHANGELOG-Hunk und legt denselben Text wortgleich als Fragment ab** — nicht
+umformuliert, nicht gekürzt, damit beim Release derselbe Eintrag entsteht, den
+der PR gemeint hat.
+
+CI erzwingt das: der Job `changelog-guard` in
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) weist jeden PR ab, der
+`CHANGELOG.md` ändert, ohne dabei mindestens ein Fragment unter `changelog.d/`
+zu löschen — die Signatur eines `collect`-Laufs beim Release. Lokal nachprüfen:
+
+```bash
+uv run python scripts/changelog_fragments.py guard --base origin/main
+```
+
 ## i18n: die Locale-Dateien prüfen lassen
 
 `de.json` und `en.json` sind aus demselben Grund gefährdet wie der CHANGELOG,
@@ -137,9 +153,17 @@ cd apps/web && npm run i18n:check
 
 Sie prüft Schlüsselgleichheit zwischen beiden Locales, doppelt vergebene
 Schlüssel im Rohtext (`JSON.parse` behält still den letzten) und Schlüssel, auf
-die kein Code verweist. Die Prüfungen laufen ohnehin in der Vitest-Suite mit
-(`src/i18n/audit.test.ts`); das Kommando ist für den schnellen Blick nach einer
-Konfliktauflösung da. Der Altbestand verwaister Schlüssel steht in
+die kein Code verweist.
+
+**Das CI-Gate ist nicht dieses Kommando**, sondern `src/i18n/audit.test.ts`: die
+Prüfungen laufen als Teil der Vitest-Suite unter `npm run test:coverage` im
+CI-Job `web` und decken dort Parität, Duplikate, neue Waisen und das
+Schrumpfen der Baseline ab. `npm run i18n:check` ist das lokale
+Komfort-Kommando für den schnellen Blick nach einer Konfliktauflösung — es
+zeigt zusätzlich die Baseline-Waisen, läuft aber ohne Suite. Ein zweiter
+CI-Schritt dafür wäre redundante Laufzeit ohne zusätzliche Aussage.
+
+Der Altbestand verwaister Schlüssel steht in
 `src/i18n/orphan-baseline.json` — das Gate bricht nur bei **neuen** Waisen
 (Ratchet, wie beim Coverage-Floor).
 

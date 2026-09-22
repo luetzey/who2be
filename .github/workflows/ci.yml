@@ -395,6 +395,54 @@ jobs:
           docker compose -f docker-compose.yml -f docker-compose.cloud.yml
           -f docker-compose.e2e-cloud.yml down -v
 
+  changelog-guard:
+    # Erzwingt das Fragment-Verfahren aus CONTRIBUTING.md (#587): ein normaler
+    # PR darf `CHANGELOG.md` nicht direkt anfassen, er legt ein Fragment unter
+    # `changelog.d/` an.
+    #
+    # BEWUSST ohne `needs: changes` und ohne `if:` — anders als die fuenf
+    # schweren Jobs. Gemessener Grund: `CHANGELOG.md` passt auf die
+    # Doku-Allowlist des `changes`-Jobs oben (`[A-Za-z0-9._-]+\.md$`). Ein PR,
+    # der NUR den CHANGELOG anfasst — also genau der Fall, den dieses Gate
+    # abweisen soll — bekommt `code=false`, und die gegateten Jobs laufen gar
+    # nicht. Ein Step innerhalb von `python` oder `web` verfehlte den Zielfall
+    # also strukturell und nicht nur gelegentlich.
+    #
+    # Die Entscheidungslogik steht in `scripts/changelog_fragments.py`
+    # (Unterkommando `guard`) und nicht hier: Workflow-Shell laeuft unter
+    # keinem Test, die Funktion `guard_violation` schon
+    # (`scripts/tests/test_changelog_fragments.py`).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Der Guard bildet die Merge-Base zwischen Basis und HEAD — dafuer
+          # muss beide Historie da sein, ein flacher Checkout reicht nicht.
+          fetch-depth: 0
+      - name: Install uv
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+      - name: CHANGELOG.md nicht direkt bearbeiten (Fragment-Verfahren)
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          # Push auf main hat keinen PR-Kontext und damit keine Vergleichsbasis.
+          # Dort ist auch nichts zu verhindern: was auf main liegt, ist bereits
+          # durch dieses Gate gegangen. Sauber ueberspringen, nicht scheitern.
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "Kein PR-Kontext (${EVENT_NAME}) — uebersprungen."
+            exit 0
+          fi
+          if [ -z "${BASE_SHA:-}" ]; then
+            echo "::error title=changelog-guard::Kein Base-SHA im PR-Kontext — \
+          die Vergleichsbasis fehlt. Fail-closed statt stiller Durchlauf."
+            exit 1
+          fi
+          # `--no-project`: das Skript braucht nur die Standardbibliothek; ein
+          # `uv sync` des Workspaces waere Minuten fuer nichts.
+          uv run --no-project python scripts/changelog_fragments.py guard --base "$BASE_SHA"
+
   audit:
     # Supply-Chain-Gate (MS-3 H6): pip-audit fuer den Python-Workspace und
     # npm audit fuer das Web-Frontend. Fail bei high/critical; moderates
@@ -568,6 +616,7 @@ jobs:
       - e2e
       - e2e-billing-cloud
       - audit
+      - changelog-guard
     runs-on: ubuntu-latest
     steps:
       - name: Jeden Vorgaenger gegen sein ERWARTETES Ergebnis pruefen
@@ -580,6 +629,7 @@ jobs:
           E2E_RESULT: ${{ needs.e2e.result }}
           E2E_BILLING_CLOUD_RESULT: ${{ needs['e2e-billing-cloud'].result }}
           AUDIT_RESULT: ${{ needs.audit.result }}
+          CHANGELOG_GUARD_RESULT: ${{ needs['changelog-guard'].result }}
         run: |
           set -uo pipefail
           # Warum nicht einfach "kein Vorgaenger ist rot"?
@@ -647,6 +697,11 @@ jobs:
           # `audit` haengt bewusst an keinem Pfadfilter (fragt eine Live-CVE-
           # Datenbank ab) und muss deshalb immer wirklich gelaufen sein.
           expect audit "$AUDIT_RESULT" success
+
+          # `changelog-guard` ebenso: er haengt an keinem Gate, weil ein reiner
+          # CHANGELOG-PR vom `changes`-Job als Doku eingestuft wird — genau der
+          # Fall, den er abweisen soll. Er muss also immer gelaufen sein.
+          expect changelog-guard "$CHANGELOG_GUARD_RESULT" success
 
           if [ "$rc" -ne 0 ]; then
             echo "all-green: FEHLGESCHLAGEN."

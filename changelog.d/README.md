@@ -39,5 +39,19 @@ uv run python scripts/changelog_fragments.py collect              # übernehmen
 `collect` trägt die Fragmente in die `## [Unreleased]`-Sektion ein und löscht
 sie — das passiert **beim Release**, nicht in jedem PR.
 
+## Alt-PRs und das CI-Gate
+
+Ein offener PR, der noch direkt in `CHANGELOG.md` schreibt, verwirft seinen
+CHANGELOG-Hunk und legt denselben Text **wortgleich** als Fragment hier ab.
+
+Der CI-Job `changelog-guard` erzwingt das: er weist jeden PR ab, der
+`CHANGELOG.md` ändert, ohne dabei mindestens ein Fragment aus diesem
+Verzeichnis zu **löschen** — das ist die Signatur eines `collect`-Laufs beim
+Release. Diese README zählt dabei nicht als Fragment. Lokal nachprüfen:
+
+```bash
+uv run python scripts/changelog_fragments.py guard --base origin/main
+```
+
 Ausführliche Begründung inklusive der Abwägung gegen towncrier und gegen
 `merge=union`: siehe Modul-Docstring in `scripts/changelog_fragments.py`.

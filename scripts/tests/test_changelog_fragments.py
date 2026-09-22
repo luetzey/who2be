@@ -7,6 +7,7 @@ nachgebautes Repo.
 
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -19,6 +20,8 @@ from changelog_fragments import (  # noqa: E402
     Fragment,
     FragmentError,
     collect_fragments,
+    diff_against,
+    guard_violation,
     main,
     parse_fragment,
     render,
@@ -231,6 +234,169 @@ class TestCli:
         assert "- Frisch repariert." in capsys.readouterr().out
         assert changelog.read_text(encoding="utf-8") == CHANGELOG_MIT_FIXED
         assert (fragments / "a.fixed.md").exists()
+
+
+class TestGuardViolation:
+    """Die reine Entscheidung ueber zwei Dateilisten (E2).
+
+    Zulaessig ist ein CHANGELOG-Hunk nur als Signatur eines ``collect``-Laufs:
+    derselbe Diff loescht mindestens ein Fragment.
+    """
+
+    def test_normaler_pr_mit_changelog_hunk_faellt_durch(self) -> None:
+        violation = guard_violation(["CHANGELOG.md", "apps/api/src/x.py"], [])
+
+        assert violation is not None
+        assert "changelog.d/<slug>.<typ>.md" in violation
+
+    def test_release_diff_ist_erlaubt(self) -> None:
+        changed = ["CHANGELOG.md", "changelog.d/p5-sammeldateien.changed.md"]
+        deleted = ["changelog.d/p5-sammeldateien.changed.md"]
+
+        assert guard_violation(changed, deleted) is None
+
+    def test_pr_ohne_changelog_hunk_ist_erlaubt(self) -> None:
+        assert guard_violation(["apps/api/src/x.py", "changelog.d/neu.fixed.md"], []) is None
+
+    def test_nur_geloeschte_readme_zaehlt_nicht_als_collect(self) -> None:
+        """Sonst liesse sich das Gate durch Loeschen der Anleitung aushebeln."""
+        violation = guard_violation(
+            ["CHANGELOG.md", "changelog.d/README.md"], ["changelog.d/README.md"]
+        )
+
+        assert violation is not None
+
+    def test_geloeschte_datei_ausserhalb_des_verzeichnisses_zaehlt_nicht(self) -> None:
+        assert guard_violation(["CHANGELOG.md", "docs/alt.md"], ["docs/alt.md"]) is not None
+
+    def test_leerer_diff_ist_erlaubt(self) -> None:
+        assert guard_violation([], []) is None
+
+
+def _git(repo: Path, *args: str) -> None:
+    subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, text=True)
+
+
+def _init_repo(repo: Path) -> None:
+    """Ein winziges Repo mit einem CHANGELOG und einem Fragment auf ``main``."""
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.email", "test@example.invalid")
+    _git(repo, "config", "user.name", "Test")
+    (repo / "CHANGELOG.md").write_text("# Changelog\n\n## [Unreleased]\n", encoding="utf-8")
+    (repo / "changelog.d").mkdir()
+    (repo / "changelog.d" / "README.md").write_text("Anleitung.\n", encoding="utf-8")
+    (repo / "changelog.d" / "alt.fixed.md").write_text("- Alt.\n", encoding="utf-8")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "init")
+
+
+class TestDiffAgainst:
+    """Der git-Teil: aus einem echten Diff die zwei Listen gewinnen."""
+
+    def test_trennt_geaenderte_von_geloeschten_pfaden(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _init_repo(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        _git(tmp_path, "checkout", "-q", "-b", "release")
+        (tmp_path / "CHANGELOG.md").write_text(
+            "# Changelog\n\n## [Unreleased]\n\n### Fixed\n\n- Alt.\n", encoding="utf-8"
+        )
+        (tmp_path / "changelog.d" / "alt.fixed.md").unlink()
+        _git(tmp_path, "add", "-A")
+        _git(tmp_path, "commit", "-qm", "release")
+
+        changed, deleted = diff_against("main")
+
+        assert set(changed) == {"CHANGELOG.md", "changelog.d/alt.fixed.md"}
+        assert deleted == ["changelog.d/alt.fixed.md"]
+
+    def test_umbenanntes_fragment_zaehlt_nicht_als_geloescht(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Ein ``git mv`` laesst das Fragment bestehen — es ist kein ``collect``."""
+        _init_repo(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        _git(tmp_path, "checkout", "-q", "-b", "feature")
+        _git(tmp_path, "mv", "changelog.d/alt.fixed.md", "changelog.d/neu.fixed.md")
+        _git(tmp_path, "commit", "-qm", "slug korrigiert")
+
+        changed, deleted = diff_against("main")
+
+        assert set(changed) == {"changelog.d/alt.fixed.md", "changelog.d/neu.fixed.md"}
+        assert deleted == []
+
+    def test_unbekannter_ref_meldet_git_stderr(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _init_repo(tmp_path)
+        monkeypatch.chdir(tmp_path)
+
+        with pytest.raises(FragmentError, match="fehlgeschlagen"):
+            diff_against("gibt-es-nicht")
+
+
+class TestGuardCli:
+    def test_normaler_pr_mit_changelog_hunk_liefert_exit_1(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        _init_repo(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        _git(tmp_path, "checkout", "-q", "-b", "feature")
+        (tmp_path / "CHANGELOG.md").write_text(
+            "# Changelog\n\n## [Unreleased]\n\n- Direkt eingetragen.\n", encoding="utf-8"
+        )
+        _git(tmp_path, "commit", "-qam", "changelog direkt")
+
+        code = main(["guard", "--base", "main"])
+
+        assert code == 1
+        assert "wird nicht direkt bearbeitet" in capsys.readouterr().err
+
+    def test_release_lauf_liefert_exit_0(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _init_repo(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        _git(tmp_path, "checkout", "-q", "-b", "release")
+        (tmp_path / "CHANGELOG.md").write_text(
+            "# Changelog\n\n## [Unreleased]\n\n### Fixed\n\n- Alt.\n", encoding="utf-8"
+        )
+        (tmp_path / "changelog.d" / "alt.fixed.md").unlink()
+        _git(tmp_path, "add", "-A")
+        _git(tmp_path, "commit", "-qm", "release")
+
+        assert main(["guard", "--base", "main"]) == 0
+
+    def test_umbenanntes_fragment_rettet_den_changelog_hunk_nicht(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Slug-Korrektur per ``git mv`` ist keine Freigabe fuer die Sammeldatei."""
+        _init_repo(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        _git(tmp_path, "checkout", "-q", "-b", "feature")
+        _git(tmp_path, "mv", "changelog.d/alt.fixed.md", "changelog.d/neu.fixed.md")
+        (tmp_path / "CHANGELOG.md").write_text(
+            "# Changelog\n\n## [Unreleased]\n\n- Eintrag per Rename-Trick.\n", encoding="utf-8"
+        )
+        _git(tmp_path, "commit", "-qam", "rename plus changelog")
+
+        code = main(["guard", "--base", "main"])
+
+        assert code == 1
+        assert "wird nicht direkt bearbeitet" in capsys.readouterr().err
+
+    def test_pr_ohne_changelog_hunk_liefert_exit_0(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _init_repo(tmp_path)
+        monkeypatch.chdir(tmp_path)
+        _git(tmp_path, "checkout", "-q", "-b", "feature")
+        (tmp_path / "changelog.d" / "neu.fixed.md").write_text("- Neu.\n", encoding="utf-8")
+        _git(tmp_path, "add", "-A")
+        _git(tmp_path, "commit", "-qm", "fragment statt sammeldatei")
+
+        assert main(["guard", "--base", "main"]) == 0
 
 
 def test_der_echte_changelog_traegt_die_unreleased_sektion() -> None:
