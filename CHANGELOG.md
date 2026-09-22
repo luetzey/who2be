@@ -116,6 +116,24 @@ the merged pull requests and the plan documents under `.claude/plan/`.
   call and magic-link redemption never carried the middleware. See
   `docs/signup-and-invites.md` §3.
 
+- CI fails when tests were skipped instead of executed. The `python` job now
+  writes a JUnit XML and runs `scripts/ci/assert_skips_within_budget.py` over
+  it: skips whose reason points at missing infrastructure (database, Docker,
+  service container) have a hard budget of 0, every other skip is measured
+  against `--max-other-skips` (default 0, currently the measured state). The
+  gate reads the XML rather than parsing pytest's summary line, and a run that
+  produced no test cases at all — an aborted collection, e.g. the
+  `WHO2BE_REQUIRE_DB` guard firing — is a failure too.
+
+  Background: without Postgres/Docker the suite reports *1507 passed, 485
+  skipped* and exits 0. `WHO2BE_REQUIRE_DB=1` (already set in CI) only covers
+  tests carrying `@pytest.mark.integration`; every other skip path stayed
+  silent. pytest has no built-in switch for this
+  ([pytest-dev/pytest#1364](https://github.com/pytest-dev/pytest/issues/1364)).
+
+  `CONTRIBUTING.md` documents the switch in the Definition of Done and now
+  requires any reported test run to state **passed and skipped**.
+
 ### Fixed
 
 - A failed offsite backup no longer reports success. `restic backup` and

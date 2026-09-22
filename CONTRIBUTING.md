@@ -66,11 +66,38 @@ not satisfy the DoD.
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy .
-uv run pytest --cov --cov-fail-under=85
+WHO2BE_REQUIRE_DB=1 uv run pytest --cov --cov-fail-under=85 \
+  --junitxml=junit-python.xml
+python3 scripts/ci/assert_skips_within_budget.py junit-python.xml
 # OSS license gate (ADR-0033) — fail-closed against copyleft/AGPL:
 uv run --with pip-licenses python -m piplicenses --partial-match \
   --fail-on "GPL;AGPL;LGPL;SSPL;CDDL;EPL;EUPL;OSL;CPL;NPL;Sleepycat;UNKNOWN"
 ```
+
+### A skipped test is not a passing test
+
+`WHO2BE_REQUIRE_DB=1` turns a missing database into a **hard failure** instead
+of a silent skip (`conftest.py`, ADR-0041). Without it, a machine with no
+Postgres/Docker reports roughly *1507 passed, 485 skipped* and exits 0 — the
+integration suite never ran. CI sets the variable in the `python` job, so a
+local run without it is **not** equivalent to CI and does not satisfy the DoD.
+
+Need a database locally? Either start the compose stack
+(see [`docs/local-smoke.md`](docs/local-smoke.md)) or run with
+`WHO2BE_TEST_TESTCONTAINERS=1` (requires Docker) to get an ephemeral Postgres.
+
+`scripts/ci/assert_skips_within_budget.py` is the second line of defence: it
+reads the JUnit XML and fails when tests were skipped for infrastructure
+reasons (budget: **0** — in CI the database is a service container, so a skip
+there means the setup is broken) or when other skips exceed
+`--max-other-skips` (default **0**; raising it belongs in the PR with a
+reason). Platform-conditional skips are the only category the budget is meant
+to accommodate.
+
+**Reporting test results:** any handoff, PR description, or review note that
+quotes a test run must state **both** numbers — passed *and* skipped. "Tests
+green" without the skip count is not evidence; it is exactly how a run whose
+core never executed gets accepted.
 
 **Web (in `apps/web/`):**
 

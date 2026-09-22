@@ -148,6 +148,29 @@ jobs:
         run: >-
           uv run pytest -q --cov --cov-report=term-missing
           --cov-report=xml --cov-fail-under=85
+          --junitxml=junit-python.xml
+      - name: Skip-Budget-Gate (uebersprungen != bestanden)
+        # Zweite Verteidigungslinie hinter WHO2BE_REQUIRE_DB. Der Guard in
+        # conftest.py deckt nur `@pytest.mark.integration` ab; jeder andere
+        # Skip-Pfad (inline `pytest.skip`, fehlender Marker, importorskip)
+        # rutscht an ihm vorbei und macht den Lauf still gruen. Dieser Step
+        # wertet die JUnit-XML aus — sie nennt je Test den Skip-GRUND, die
+        # `-q`-Zusammenfassung nur eine Zahl; Textparsing waere ausserdem an
+        # das Ausgabeformat gekoppelt. `if: always()`, damit ein roter
+        # Test-Step das Gate nicht verschluckt: beide Befunde sollen im selben
+        # Lauf sichtbar sein. Der Step haengt bewusst im `python`-Job und
+        # nicht in einem eigenen Job daneben — `python` ist Vorgaenger des
+        # kuenftigen Aggregat-Jobs, ein Verstoss faerbt also das Tor rot, und
+        # die XML muesste sonst als Artefakt herumgereicht werden.
+        if: always()
+        run: python3 scripts/ci/assert_skips_within_budget.py junit-python.xml
+      - name: Upload Python JUnit-XML
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: junit-python
+          path: junit-python.xml
+          if-no-files-found: ignore
       - name: Upload Python coverage
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
