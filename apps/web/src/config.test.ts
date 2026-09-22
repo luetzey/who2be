@@ -8,7 +8,9 @@ afterEach(() => {
 })
 
 describe('resolveConfig — Aufloesungsreihenfolge', () => {
-  test('Runtime-Config schlaegt die Build-Zeit-Env', () => {
+  // BEWEIS-COMMIT t_d6e98b5e (AK5) — wird NICHT gemergt: ein absichtlich
+  // deaktivierter Test muss das neue Skip-Budget-Gate im web-Job rot faerben.
+  test.skip('Runtime-Config schlaegt die Build-Zeit-Env', () => {
     vi.stubEnv('VITE_API_BASE_URL', 'https://gebacken.example.com')
     window.__WHO2BE_CONFIG__ = { apiBaseUrl: 'https://runtime.example.com' }
 
