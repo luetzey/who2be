@@ -13,13 +13,25 @@ from __future__ import annotations
 from dataclasses import dataclass
 from uuid import UUID
 
-from who2be_api.licensing.entitlement import Feature
+from who2be_api.licensing.entitlement import (
+    FREE_STORAGE_QUOTA_BYTES,
+    FREE_TOKEN_QUOTA,
+    PRO_STORAGE_QUOTA_BYTES,
+    PRO_TOKEN_QUOTA,
+    Feature,
+)
 
 # Metadaten-Schluessel (Konvention, identisch zu docs/licensing/plans.md).
 META_ORG_ID = "org_id"
 META_LICENSE_POLICY = "license_policy"
 META_MCP_MONTHLY_QUOTA = "mcp_monthly_quota"
 META_MCP_RATE_PER_MIN = "mcp_rate_per_min"
+# Anzahl nutzbarer API-Tokens je Workspace (Issue #538). Wie die beiden
+# MCP-Keys ein entitlement-ableitendes Metadatum, kein operativer Zusatz.
+META_TOKEN_QUOTA = "token_quota"
+# Speicher-Obergrenze je Org in Bytes (Issue #536). Wie die MCP-Keys ein
+# entitlement-ableitendes Metadatum: der Pull-Adapter liest ihn ohne Sonderfall.
+META_STORAGE_QUOTA_BYTES = "storage_quota_bytes"
 # Operativer Zusatz-Key: erlaubt dem Webhook, beim Anlegen der Folge-Subscription
 # Preis/Intervall des gebuchten Tiers wiederzufinden (nicht Teil der
 # entitlement-ableitenden Konvention oben).
@@ -43,6 +55,9 @@ class Plan:
     features: frozenset[str]
     mcp_monthly_quota: int
     mcp_rate_per_min: int
+    token_quota: int
+    # Summe der ablegbaren Blob-Bytes je Org (Issue #536).
+    storage_quota_bytes: int
 
     def metadata(self, org_id: UUID) -> dict[str, str]:
         """Baut die Mollie-Metadata fuer diesen Plan + Org (Konvention §3.2).
@@ -55,6 +70,8 @@ class Plan:
             META_LICENSE_POLICY: " ".join(sorted(self.features)),
             META_MCP_MONTHLY_QUOTA: str(self.mcp_monthly_quota),
             META_MCP_RATE_PER_MIN: str(self.mcp_rate_per_min),
+            META_TOKEN_QUOTA: str(self.token_quota),
+            META_STORAGE_QUOTA_BYTES: str(self.storage_quota_bytes),
             META_PLAN_CODE: self.code,
         }
 
@@ -68,6 +85,10 @@ FREE_PLAN = Plan(
     features=frozenset({Feature.CORE}),
     mcp_monthly_quota=1_000,
     mcp_rate_per_min=30,
+    # Importiert statt wiederholt: `entitlement.py` ist die Quelle der Zahl,
+    # `CLOUD_FREE_ENTITLEMENT` traegt denselben Wert (Issue #538).
+    token_quota=FREE_TOKEN_QUOTA,
+    storage_quota_bytes=FREE_STORAGE_QUOTA_BYTES,
 )
 
 # Pro = einzelne monatliche Mollie-Subscription; Superset von Free.
@@ -86,6 +107,8 @@ PRO_PLAN = Plan(
     ),
     mcp_monthly_quota=100_000,
     mcp_rate_per_min=240,
+    token_quota=PRO_TOKEN_QUOTA,
+    storage_quota_bytes=PRO_STORAGE_QUOTA_BYTES,
 )
 
 # Nur Free ist abo-frei; jeder andere Tier ist ueber Checkout buchbar.

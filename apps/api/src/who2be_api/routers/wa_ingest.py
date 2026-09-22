@@ -16,6 +16,11 @@ Rate-Limit-Paritaet (Muster `wa_artifacts`): Mutationen
 `@limiter.limit(write_limit)` + `request` als erster Parameter; zusaetzlich
 drosselt `require_write_rate` im Service pro Agent. Autorisierung (Capability/
 Rolle/Area-Grant), SSRF-Guard und Groessenlimit liegen im Service.
+
+Speicher-Quota (Issue #536): beide Routen tragen `enforce_storage_quota` —
+das Byte-Gate der Org. Es haengt hier und NICHT an Read-/Export-Routen: Bestand
+bleibt ueber der Grenze les- und herunterladbar, nur neue Ingests werden mit
+`402` `storage_quota_exceeded` abgewiesen.
 """
 
 from typing import Annotated
@@ -31,6 +36,7 @@ from who2be_api.core.security import WorkspaceContext, get_current_workspace
 from who2be_api.repositories.wa_blob_repository import PgWaBlobRepository
 from who2be_api.repositories.work_area_repository import PgWorkAreaRepository
 from who2be_api.repositories.workspace_repository import PgWorkspaceRepository
+from who2be_api.services.storage_quota_service import enforce_storage_quota
 from who2be_api.services.wa_ingest import WaIngestService
 from who2be_models import IngestRequest, IngestResult
 
@@ -59,7 +65,13 @@ def _with_dedup_status(result: IngestResult, response: Response) -> IngestResult
     return result
 
 
-@router.post("/work-areas/{area_id}/ingest", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/work-areas/{area_id}/ingest",
+    status_code=status.HTTP_201_CREATED,
+    # Speicher-Quota-Gate (Issue #536): Bytes entstehen genau hier. Cloud-only,
+    # On-Prem No-op; Bestand bleibt ueber der Grenze les- und herunterladbar.
+    dependencies=[Depends(enforce_storage_quota)],
+)
 @limiter.limit(write_limit)
 async def ingest_into_area(
     request: Request,
@@ -74,7 +86,11 @@ async def ingest_into_area(
     return _with_dedup_status(await service.ingest(ctx, area_id, data), response)
 
 
-@router.post("/ingest", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/ingest",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(enforce_storage_quota)],
+)
 @limiter.limit(write_limit)
 async def ingest_into_private_area(
     request: Request,

@@ -141,6 +141,7 @@
       "organization_owner_required": "Only the owner can delete this organization.",
       "workspace_org_missing": "Workspace without an organization.",
       "entity_quota_exceeded": "The free plan is limited to {{limit}} entries per workspace. Upgrading to Pro lifts the limit — existing entries stay usable.",
+      "storage_quota_exceeded": "Storage limit of {{limit}} bytes reached. Upgrading to Pro raises the limit — what you stored stays readable and downloadable.",
       "persona_not_found": "Persona not found.",
       "resource_slug_conflict": "A resource with this slug already exists.",
       "sub_playbook_not_found": "At least one sub-playbook does not exist or belongs to a different workspace.",
@@ -155,6 +156,7 @@
       "bound_agent_not_found": "The agent to bind does not exist in this workspace.",
       "token_role_escalation": "A token cannot have a higher role than its creator.",
       "token_not_found": "Token not found.",
+      "token_quota_exceeded": "Your plan allows {{limit}} active API tokens per workspace. Revoke an existing token or change plans — existing tokens stay usable and rotatable.",
       "subscription_inactive": "No active subscription for this organization.",
       "mcp_rate_limited": "Token rate limit exceeded ({{limit}}/min).",
       "mcp_quota_exceeded": "Monthly MCP quota exhausted ({{limit}}/month).",
@@ -690,6 +692,10 @@
       },
       "consentRequiredHint": "Please accept the Terms and the Privacy Policy to continue."
     },
+    "captcha": {
+      "pending": "Please confirm you're not a bot.",
+      "failed": "The bot check failed. Please try again."
+    },
     "comingSoon": {
       "title": "We're still building Who2Be — coming soon.",
       "body": "Sign-up is not open yet. Sign in with an existing account or check back later.",
@@ -1053,20 +1059,24 @@
           "heading": "7. Payment processing",
           "body": "Payment service provider (Mollie), transmitted data, provider's own privacy policy, legal basis"
         },
+        "captcha": {
+          "heading": "8. Bot protection during registration",
+          "body": "only if enabled: Cloudflare Turnstile, processed data (IP address, browser signals), purpose (abuse/bot prevention, Art. 6 para. 1 lit. f), third-country transfer to the USA and safeguards (SCCs/DPF), Cloudflare privacy notice"
+        },
         "email": {
-          "heading": "8. E-mail delivery (transactional mails)",
+          "heading": "9. E-mail delivery (transactional mails)",
           "body": "SMTP/mail provider, occasions (Verify/Invite/Reset), legal basis"
         },
         "processors": {
-          "heading": "9. Recipients & processors",
+          "heading": "10. Recipients & processors",
           "body": "List of processors, third-country transfers and safeguards (SCCs) where applicable"
         },
         "retention": {
-          "heading": "10. Retention periods",
+          "heading": "11. Retention periods",
           "body": "General deletion concepts, statutory retention obligations"
         },
         "rights": {
-          "heading": "11. Your rights",
+          "heading": "12. Your rights",
           "text1": "You have the right to access (Art. 15), rectification (Art. 16), erasure (Art. 17), restriction (Art. 18), data portability (Art. 20), and objection (Art. 21), as well as the right to lodge a complaint with a supervisory authority (Art. 77).",
           "authorityLabel": "Competent supervisory authority:",
           "authorityPlaceholder": "competent data protection authority"

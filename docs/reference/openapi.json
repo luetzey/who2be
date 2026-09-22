@@ -12850,6 +12850,7 @@
               "organization_owner_required",
               "workspace_org_missing",
               "entity_quota_exceeded",
+              "storage_quota_exceeded",
               "persona_not_found",
               "resource_slug_conflict",
               "sub_playbook_not_found",
@@ -12864,6 +12865,7 @@
               "bound_agent_not_found",
               "token_role_escalation",
               "token_not_found",
+              "token_quota_exceeded",
               "subscription_inactive",
               "mcp_rate_limited",
               "mcp_quota_exceeded",
@@ -13782,6 +13784,28 @@
             ],
             "title": "Mcp Rate Per Min"
           },
+          "token_quota": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token Quota"
+          },
+          "storage_quota_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Quota Bytes"
+          },
           "grace_until": {
             "anyOf": [
               {
@@ -13805,6 +13829,8 @@
           "expires_at",
           "mcp_monthly_quota",
           "mcp_rate_per_min",
+          "token_quota",
+          "storage_quota_bytes",
           "grace_until",
           "usage"
         ],
@@ -13820,6 +13846,11 @@
           "count": {
             "type": "integer",
             "title": "Count"
+          },
+          "storage_bytes": {
+            "type": "integer",
+            "title": "Storage Bytes",
+            "default": 0
           }
         },
         "type": "object",
@@ -13828,7 +13859,7 @@
           "count"
         ],
         "title": "EntitlementUsage",
-        "description": "Aktueller MCP-Verbrauch der laufenden Periode."
+        "description": "Aktueller MCP-Verbrauch der laufenden Periode + belegter Speicher."
       },
       "EntityStatusDistribution": {
         "properties": {

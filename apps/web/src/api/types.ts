@@ -980,6 +980,8 @@ export interface ProvenanceEntry {
 export interface EntitlementUsage {
   period: string
   count: number
+  /** Summe der abgelegten Blob-Bytes dieses Workspaces (Issue #536). */
+  storage_bytes: number
 }
 
 export interface EntitlementInfo {
@@ -989,6 +991,14 @@ export interface EntitlementInfo {
   expires_at: string | null
   mcp_monthly_quota: number | null
   mcp_rate_per_min: number | null
+  /**
+   * Die tatsaechlich geltende Grenze (`Entitlement.effective_token_quota`),
+   * nicht das rohe Entitlement-Feld: in der Cloud faellt ein leeres Feld auf
+   * den Tarifwert zurueck. `null` = wirklich unbegrenzt (On-Prem/OSS).
+   */
+  token_quota: number | null
+  /** `null` = unbegrenzt (On-Prem/OSS). */
+  storage_quota_bytes: number | null
   usage: EntitlementUsage
 }
 
