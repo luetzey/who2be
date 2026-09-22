@@ -169,6 +169,70 @@ Fragment unter `changelog.d/` (Verfahren seit PR #587), **nicht** in
 `CHANGELOG.md` — der `changelog-guard` weist das sonst ab. Die
 Issue-Anweisung „§Unreleased, als letzter Commit" ist überholt.
 
+## Ergebnis (gemessen, Commit `67ad0511`)
+
+### Test-first
+
+- RED vor dem Fix: `Test Files 3 failed | 4 passed (7)` ·
+  `Tests 8 failed | 44 passed (52)` — genau die acht neuen Fälle.
+  Gegenprobe nach dem Fix per `git stash` der drei Produktivdateien
+  wiederholt: dieselben 8 rot.
+- GREEN nach dem Fix, Domäne: `Test Files 7 passed (7)` ·
+  `Tests 52 passed (52)`.
+
+### Gerendert nachgemessen (nach dem Fix, gegen die Tabelle oben)
+
+| Messpunkt @ 320 px | vorher | nachher |
+|---|---|---|
+| Slug-Badge Liste | 554 px | im Viewport, bricht |
+| Slug-Badge Detail | 541 px | im Viewport, bricht |
+| Link in der Block-Anker-Zeile | **0 px** | 204 px, Badge umgebrochen |
+| Anker-Pill `SubResourcePicker` | 463 px | im Viewport, bricht |
+| Zeilen-Aktionen | 19 × 32 px | **40 × 40 px** |
+| Segment-Gruppe | 54 px bei 86 px Inhalt (abgeschnitten) | 104 px bei 102 px — vollständig, als Einheit |
+| Editor-Textfläche | 128 px (Rinne 54 px) | **212 px** (Rinne 12 px) |
+| Editor-Textfläche @ 1024 px | 801 px (Rinne 54 px) | **unverändert** 801 px |
+
+Überläufer je Route nach dem Fix — was bleibt, ist ausschließlich Primitive:
+
+| Route | 320 | 375 | 768 | 1024 |
+|---|---|---|---|---|
+| `/resources` | 1 (EntityCard-Titel) | 1 | 0 ✓ | 0 ✓ |
+| `/resources/r1` | 3 (h1 + 2 Tabs) | 2 | 1 (h1) | 0 ✓ |
+| `/resources/new` | 0 ✓ | 0 ✓ | 0 ✓ | 0 ✓ |
+
+Kein einziger Überläufer stammt noch aus einer der sechs Dateien.
+
+### BlockNote-Insel — AK 2, am gerenderten Editor (nicht an Klassen)
+
+Bei 320 px im Touch-Emulationsmodus durchgeführt:
+
+- **Basis-Editing Text:** getippt, im Dokument angekommen (`typed: true`).
+- **Slash-Menü:** per `/` ausgelöst, 288 px breit, `left 32 → right 320` —
+  **vollständig im Viewport**, 23 Einträge, Heading- und List-Blöcke vorhanden.
+- **Basis-Editing Überschrift:** „Heading 1" aus dem Menü angewendet, der
+  Editor rendert danach ein `<h1>` (170 px, im Viewport).
+- **Basis-Editing Liste:** „Bullet List" / „Numbered List" im Menü vorhanden
+  und auswählbar.
+- **Formatting-Toolbar:** über Textselektion erreichbar, 12 Aktionen, liegt im
+  Viewport und scrollt bei Bedarf horizontal (`overflow-x: auto`, 375 px
+  Inhalt) — bewusst scrollender Container nach §4.4 Punkt 1.
+
+### DoD-Kommandos (Node 22.23.2 aus `.nvmrc`)
+
+- `npm run lint` → 0 (67 Warnungen, alle vorbestehend)
+- `npx tsc -b` → 0
+- `npm run test:coverage` → 0, **197 Dateien / 1227 Tests, 0 skipped**;
+  Statements 87.30 · Branches 82.08 · Functions 82.91 · Lines 88.33 —
+  alle Floors (80/79/75/80) halten
+- `npm run test:a11y` → 0 (55 passed)
+- `npm run build` → 0
+- `npm run i18n:check` → 0 (keine neuen Schlüssel eingeführt)
+- `npm run license:check` → 0
+- `uv run python scripts/check_code_refs.py .` → 0 (951 legacy, 0 error)
+- `uv run python scripts/changelog_fragments.py check` → 0
+- Grid-Gate aus AK 4 → 0 Zeilen
+
 ## Grenzen
 
 Nur `apps/web/src/features/resources/**` + Testnachbarn, der scoped
