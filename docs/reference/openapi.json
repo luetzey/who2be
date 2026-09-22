@@ -12850,6 +12850,7 @@
               "organization_owner_required",
               "workspace_org_missing",
               "entity_quota_exceeded",
+              "storage_quota_exceeded",
               "persona_not_found",
               "resource_slug_conflict",
               "sub_playbook_not_found",
@@ -13782,6 +13783,17 @@
             ],
             "title": "Mcp Rate Per Min"
           },
+          "storage_quota_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Quota Bytes"
+          },
           "grace_until": {
             "anyOf": [
               {
@@ -13805,6 +13817,7 @@
           "expires_at",
           "mcp_monthly_quota",
           "mcp_rate_per_min",
+          "storage_quota_bytes",
           "grace_until",
           "usage"
         ],
@@ -13820,6 +13833,11 @@
           "count": {
             "type": "integer",
             "title": "Count"
+          },
+          "storage_bytes": {
+            "type": "integer",
+            "title": "Storage Bytes",
+            "default": 0
           }
         },
         "type": "object",
@@ -13828,7 +13846,7 @@
           "count"
         ],
         "title": "EntitlementUsage",
-        "description": "Aktueller MCP-Verbrauch der laufenden Periode."
+        "description": "Aktueller MCP-Verbrauch der laufenden Periode + belegter Speicher."
       },
       "EntityStatusDistribution": {
         "properties": {

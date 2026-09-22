@@ -20,8 +20,11 @@ import { supabase } from '@/lib/supabase'
 import { notify } from '@/lib/feedback'
 
 import { OAuthButtons } from '../components/OAuthButtons'
+import { TurnstileWidget } from '../components/TurnstileWidget'
+import { translateAuthError } from '../lib/captcha'
 import { buildRedirectTo } from '../lib/redirect'
 import { sanitizeNext } from '../lib/sanitize-next'
+import { useCaptcha } from '../lib/use-captcha'
 
 type LoginValues = { email: string; password: string; remember: boolean }
 type MfaValues = { code: string }
@@ -75,6 +78,13 @@ export function LoginPage() {
   // Zweite Login-Stufe: Passwort war korrekt, aber der Account braucht eine
   // TOTP-Challenge (Step-up auf aal2), bevor die Session in die App darf.
   const [mfaRequired, setMfaRequired] = useState(false)
+  // Turnstile (Issue #539 / Folgebefund). Diese Maske traegt ZWEI
+  // captcha-pflichtige Aktionen — den Passwort-Login (`/token`) und „Mail
+  // erneut senden" (`/resend`). Sie teilen sich EIN Widget: zwei Challenges
+  // untereinander waeren fuer den Nutzer ein doppeltes Raetsel fuer dieselbe
+  // Seite. Weil ein Token einmalig gueltig ist, stellt `captcha.reset()` es
+  // nach jedem verbrauchenden Request neu.
+  const captcha = useCaptcha()
 
   // `next` bringt den User nach dem Login dorthin zurück, wo ihn ein
   // Auth-Gate abgefangen hat (z. B. /invitations/:token/accept). Nur relative
@@ -115,7 +125,16 @@ export function LoginPage() {
     setError(null)
     setUnconfirmed(false)
     try {
-      const { mfaRequired: needsMfa } = await signIn(values.email, values.password, values.remember)
+      const { mfaRequired: needsMfa } = await signIn(
+        values.email,
+        values.password,
+        values.remember,
+        captcha.token ?? undefined,
+      )
+      // Token ist mit dem Request verbraucht — GoTrue loest es serverseitig
+      // ein. Steht gleich die TOTP-Stufe an oder klickt der Nutzer danach auf
+      // „Mail erneut senden", braucht es eine frische Challenge.
+      captcha.reset()
       if (needsMfa) {
         // Session noch nicht committed — erst die Challenge, dann navigiert der
         // reaktive `session !== null`-Guard von selbst.
@@ -124,12 +143,16 @@ export function LoginPage() {
       }
       navigate(next)
     } catch (cause) {
+      captcha.reset()
       if (isUnconfirmedEmail(cause)) {
         setUnconfirmed(true)
         setError(t('login.unconfirmedEmail'))
         return
       }
-      setError(cause instanceof Error ? cause.message : t('login.loginFailed'))
+      // `translateAuthError` faengt die GoTrue-Captcha-Abweisung ab; alle
+      // anderen Meldungen bleiben im Wortlaut. Der letzte Fallback greift,
+      // wenn gar keine Error-Instanz ankommt.
+      setError(cause instanceof Error ? translateAuthError(cause, t) : t('login.loginFailed'))
     }
   }
 
@@ -154,10 +177,15 @@ export function LoginPage() {
     const { error: resendError } = await supabase.auth.resend({
       type: 'signup',
       email,
-      options: { emailRedirectTo: buildRedirectTo('/auth/callback', next) },
+      options: {
+        emailRedirectTo: buildRedirectTo('/auth/callback', next),
+        ...captcha.option(),
+      },
     })
+    // Auch nach Erfolg: das Token hat den Request bezahlt und ist tot.
+    captcha.reset()
     if (resendError) {
-      notify.error(resendError.message)
+      notify.error(translateAuthError(resendError, t))
       return
     }
     notify.success(t('login.confirmationResent'))
@@ -283,8 +311,24 @@ export function LoginPage() {
                   )}
                 />
                 {error !== null ? <ErrorAlert message={error} /> : null}
+                {captcha.required ? (
+                  <TurnstileWidget
+                    key={captcha.nonce}
+                    siteKey={config.turnstileSiteKey}
+                    action="login"
+                    onToken={captcha.setToken}
+                    onExpire={captcha.clearToken}
+                    className="flex justify-center"
+                  />
+                ) : null}
                 {unconfirmed ? (
-                  <Button type="button" variant="outline" size="sm" onClick={() => void resendConfirmation()}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={captcha.blocked}
+                    onClick={() => void resendConfirmation()}
+                  >
                     {t('login.resendConfirmation')}
                   </Button>
                 ) : null}
@@ -292,10 +336,15 @@ export function LoginPage() {
                   type="submit"
                   variant="brand"
                   className="w-full"
-                  disabled={form.formState.isSubmitting}
+                  disabled={form.formState.isSubmitting || captcha.blocked}
                 >
                   {t('login.submit')}
                 </Button>
+                {captcha.blocked ? (
+                  <p className="text-center text-xs text-muted-foreground">
+                    {t('captcha.pending')}
+                  </p>
+                ) : null}
               </form>
             </Form>
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
