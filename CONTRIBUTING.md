@@ -53,6 +53,72 @@ This keeps the public history tidy without losing solo-dev convenience.
 - Meaningful commit messages; one PR per completed unit of work.
 - Every PR needs at least **one** review.
 
+## Changelog: ein Fragment, keine Sammeldatei
+
+`CHANGELOG.md` wird **nicht** direkt bearbeitet. Jeder PR legt stattdessen
+eine eigene kleine Datei unter [`changelog.d/`](changelog.d/) an.
+
+**Warum:** Eine Sammeldatei, in die jeder PR an derselben Stelle schreibt, ist
+genau die Datei, an der git still falsch zusammenführt — ohne Konfliktmarker,
+ohne Warnung. In einer Welle dieses Repos stand danach ein Warnabsatz doppelt
+im CHANGELOG. Schreibt jeder PR in eine eigene Datei, kann der Konflikt
+strukturell nicht entstehen. Das Muster stammt von
+[towncrier](https://github.com/twisted/towncrier) und ist bei Twisted, pytest,
+pip und attrs in Produktion.
+
+Ausdrücklich **nicht** verwendet wird `merge=union` in `.gitattributes`: die
+git-Dokumentation warnt selbst davor, und es tauscht einen sichtbaren Konflikt
+gegen einen stillen Fehler — die falsche Richtung.
+
+### So geht es
+
+Dateiname `changelog.d/<slug>.<typ>.md`; `<slug>` ist frei (sinnvoll: Branch-
+oder PR-Bezug), `<typ>` eine Kategorie aus
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/): `added`, `changed`,
+`deprecated`, `removed`, `fixed`, `security`.
+
+Inhalt ist der Markdown-Listenpunkt, genau so wie er im CHANGELOG stehen soll —
+mit führendem `- `, Folgeabsätze um zwei Leerzeichen eingerückt:
+
+```markdown
+<!-- changelog.d/oauth-issuer.fixed.md -->
+- Remote-MCP-Connectors können sich wieder anmelden, wenn der OAuth-Issuer ein
+  blanker Origin ist.
+
+  Beide Dokumente führen jetzt die URL-Normalform mit Schrägstrich, die jeder
+  URL-Parser unangetastet lässt.
+```
+
+```bash
+uv run python scripts/changelog_fragments.py check                # Form prüfen
+uv run python scripts/changelog_fragments.py collect --dry-run    # Vorschau
+uv run python scripts/changelog_fragments.py collect              # übernehmen
+```
+
+`collect` trägt die Fragmente in die `## [Unreleased]`-Sektion ein und löscht
+sie — das passiert **beim Release**, nicht in jedem PR. Bestehende
+CHANGELOG-Einträge bleiben unberührt; das Verfahren gilt ab jetzt.
+
+## i18n: die Locale-Dateien prüfen lassen
+
+`de.json` und `en.json` sind aus demselben Grund gefährdet wie der CHANGELOG,
+nur lässt sich der Namensraum nicht auf Fragmente aufteilen. Nach demselben
+Fehlmerge standen dort `auth.signup.captcha` und `auth.captcha` nebeneinander —
+zwei konkurrierende Schlüssel, einer davon tot. Statt einer Umstrukturierung
+gibt es deshalb eine Prüfung:
+
+```bash
+cd apps/web && npm run i18n:check
+```
+
+Sie prüft Schlüsselgleichheit zwischen beiden Locales, doppelt vergebene
+Schlüssel im Rohtext (`JSON.parse` behält still den letzten) und Schlüssel, auf
+die kein Code verweist. Die Prüfungen laufen ohnehin in der Vitest-Suite mit
+(`src/i18n/audit.test.ts`); das Kommando ist für den schnellen Blick nach einer
+Konfliktauflösung da. Der Altbestand verwaister Schlüssel steht in
+`src/i18n/orphan-baseline.json` — das Gate bricht nur bei **neuen** Waisen
+(Ratchet, wie beim Coverage-Floor).
+
 ## Definition of Done
 
 Verify locally before every push (both stacks green). The test steps
@@ -76,7 +142,7 @@ uv run --with pip-licenses python -m piplicenses --partial-match \
 
 ```bash
 npm run lint
-npx tsc --noEmit
+npx tsc -b
 npm run test:coverage
 npm run build
 npm run license:check   # OSS license gate (ADR-0033)
@@ -94,6 +160,45 @@ required checks are unaffected.
 
 For bugfixes, write a reproducing, failing test first, then fix. Fix the
 cause, not the symptom; sketch larger changes as a plan first.
+
+### After resolving a conflict: read the net diff
+
+Nach **jeder** Konfliktauflösung — Merge, Rebase oder Cherry-pick — wird der
+Nettodiff des Ergebnisses gelesen. Das Ausbleiben von Konfliktmarkern ist
+**kein** Beleg dafür, dass das Ergebnis stimmt: git führt messbar oft still
+falsch zusammen, ohne Marker und ohne Warnung (die gemessene Grundrate liegt
+bei rund 3 %, ASE 2024, 6045 Merge-Szenarien). Die drei Fehlmerges dieses Repos
+— ein doppelter Warnabsatz im CHANGELOG und zwei konkurrierende i18n-Schlüssel
+— trugen alle keinen einzigen Konfliktmarker.
+
+**Das Verfahren, das sie tatsächlich gefunden hat, war der
+Cherry-pick-Vergleich:** dieselbe Änderung unabhängig auf den Zielstand
+cherry-gepickt und die beiden Bäume gegeneinander gehalten. Weichen sie ab, hat
+der Merge etwas anderes getan als die Änderung selbst.
+
+```bash
+# 1. Der Nettodiff des Ergebnisses gegen den Zielstand — was ist WIRKLICH neu?
+git diff origin/main...HEAD
+
+# 2. Gegenprobe über einen unabhängig erzeugten Baum:
+git switch --detach origin/main
+git cherry-pick <commit>…            # dieselben Änderungen, anderer Weg
+git diff HEAD <merge-ergebnis>       # leer = identisch, sonst hinsehen
+
+# Mechanische Vorabprobe, ob überhaupt ein Konflikt entstünde
+# (Exit 0 = sauber, 1 = Konflikt), ohne Working Tree und Index anzufassen:
+git merge-tree --write-tree origin/main HEAD
+```
+
+Sammeldateien verdienen dabei besondere Aufmerksamkeit: `CHANGELOG.md` (siehe
+Fragment-Verfahren oben) sowie `de.json`/`en.json` — für letztere ist
+`npm run i18n:check` die schnelle Gegenprobe.
+
+Nicht verwendet werden **`merge=union`** (verwandelt einen sichtbaren Konflikt
+in einen stillen Fehler) und **`--ignore-space-change` / `-Xignore-all-space`**
+im Merge-Pfad (senkt die Konfliktzahl um 5 %, erhöht die stillen Fehlmerges um
+10 % — in Python und YAML mit bedeutungstragender Einrückung besonders
+gefährlich).
 
 ## Security
 
