@@ -156,6 +156,7 @@
       "bound_agent_not_found": "The agent to bind does not exist in this workspace.",
       "token_role_escalation": "A token cannot have a higher role than its creator.",
       "token_not_found": "Token not found.",
+      "token_quota_exceeded": "Your plan allows {{limit}} active API tokens per workspace. Revoke an existing token or change plans — existing tokens stay usable and rotatable.",
       "subscription_inactive": "No active subscription for this organization.",
       "mcp_rate_limited": "Token rate limit exceeded ({{limit}}/min).",
       "mcp_quota_exceeded": "Monthly MCP quota exhausted ({{limit}}/month).",

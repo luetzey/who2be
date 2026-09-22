@@ -10,15 +10,27 @@ the merged pull requests and the plan documents under `.claude/plan/`.
 
 ### Added
 
-- Code references in issues, cards, plans and reviews now follow a binding
-  convention: a stable anchor — commit SHA, symbol name, or both — instead of a
-  bare `file.py:441`, whose line number drifts as the file grows and then
-  silently names the wrong code. `scripts/check_code_refs.py` verifies those
-  references mechanically (does the file exist, is the symbol defined there),
-  reports in text or JSON, and changes nothing. Pre-existing bare pointers are
-  reported as `legacy` and deliberately left alone; `--strict` promotes them to
-  errors once the backlog is gone. Convention and usage:
-  `docs/code-references.md`.
+- CI aggregates all jobs into a single `all-green` job, intended to become the
+  only required status check on `main`. Requiring the individual jobs would be
+  wrong in both directions: five of them are gated by the docs allowlist and
+  report `skipped` on documentation-only pull requests, which GitHub counts as
+  success, while a required check that never starts leaves a pull request stuck
+  on "Waiting for status to be reported" forever.
+
+  The job runs with `if: always()` — without it GitHub marks the aggregator
+  itself as `skipped` as soon as a dependency fails — and evaluates each
+  dependency against its *expected* result rather than against a list of
+  tolerated ones: the gate job `changes` must have succeeded, `audit` is not
+  path-filtered and must have run, and the five gated jobs must be `skipped`
+  exactly when the diff was classified as documentation-only and `success`
+  otherwise. This is what separates a legitimate skip from the dangerous case
+  where `changes` itself failed and every gated job was skipped without
+  anything being tested.
+
+  `scripts/ci/test_all_green_matrix.py` runs that logic — read straight out of
+  `ci.yml`, not copied — against all twelve outcome combinations locally.
+  A proposal for the matching `main` ruleset is in
+  `docs/branch-protection-main.md`; it is **not** applied.
 
 - Privacy documentation now covers Cloudflare Turnstile as a **conditional**
   third-country recipient, so the compliance trail no longer dead-ends. The
@@ -44,6 +56,38 @@ the merged pull requests and the plan documents under `.claude/plan/`.
   Node enables Web Storage by default there and Vitest 4 filters jsdom's
   `window.localStorage` away (upstream vitest#8757, fixed only in Vitest 5).
   The reason is documented once, in `CONTRIBUTING.md` under Definition of Done.
+- Cloud workspaces now have a cap on the number of agent tokens: **3 on Free,
+  25 on Pro** (`Entitlement.token_quota`). Creating a token beyond the tier's
+  limit is rejected with `402` and `reason: token_quota_exceeded`, carrying the
+  limit in `params` rather than in the locale key. Until now the only brake was
+  the write rate limit — 30 creations per minute, for an unlimited number of
+  minutes.
+
+  An empty `token_quota` means *unlimited* only outside the cloud (the
+  on-premise default). Inside the cloud it means *not set*, and the tier value
+  applies: `Entitlement.effective_token_quota` falls back to the Free number for
+  a cancelled or unpaid organisation and to the Pro number for a paying one.
+  Without that fallback the cap would have been lifted by the very event it is
+  meant to survive — the billing webhook writes the downgrade entitlement
+  without knowing the new field, and every row predating the migration carries
+  no value either.
+
+  Nothing is taken away: the gate sits on token *creation* only, so existing
+  tokens keep authenticating above the limit, and **rotation keeps working** —
+  rotation replaces a secret, it does not create a token, so a tightened quota
+  can never lock an operator out of the secret rotation described in the
+  runbook. The OAuth connector's mint path is likewise ungated on purpose: a
+  sign-in must not fail on a billing limit. The tokens it issues do count
+  towards the quota, they are just never refused. Only usable tokens count:
+  revoked ones and expired ones do not occupy a slot, matching the condition
+  under which a token can authenticate at all.
+
+  Two deliberate boundaries: the cap is counted **per workspace, not per
+  organisation** (the same granularity the entity limit already uses), so an
+  organisation that creates several workspaces multiplies its allowance as
+  long as the number of workspaces is uncapped; and a raised limit takes
+  effect at the next checkout, because the entitlement carries the metadata of
+  its purchase.
 - Cloud workspaces now have a storage quota: **100 MB on Free, 10 GB on
   Pro** (`Entitlement.storage_quota_bytes`, `None` = unlimited and the
   on-premise default). An ingest that would push a workspace past its tier's
@@ -125,6 +169,24 @@ the merged pull requests and the plan documents under `.claude/plan/`.
   each request. Invitation flows are unaffected — invite sending is an admin
   call and magic-link redemption never carried the middleware. See
   `docs/signup-and-invites.md` §3.
+
+- CI fails when tests were skipped instead of executed. The `python` job now
+  writes a JUnit XML and runs `scripts/ci/assert_skips_within_budget.py` over
+  it: skips whose reason points at missing infrastructure (database, Docker,
+  service container) have a hard budget of 0, every other skip is measured
+  against `--max-other-skips` (default 0, currently the measured state). The
+  gate reads the XML rather than parsing pytest's summary line, and a run that
+  produced no test cases at all — an aborted collection, e.g. the
+  `WHO2BE_REQUIRE_DB` guard firing — is a failure too.
+
+  Background: without Postgres/Docker the suite reports *1507 passed, 485
+  skipped* and exits 0. `WHO2BE_REQUIRE_DB=1` (already set in CI) only covers
+  tests carrying `@pytest.mark.integration`; every other skip path stayed
+  silent. pytest has no built-in switch for this
+  ([pytest-dev/pytest#1364](https://github.com/pytest-dev/pytest/issues/1364)).
+
+  `CONTRIBUTING.md` documents the switch in the Definition of Done and now
+  requires any reported test run to state **passed and skipped**.
 
 ### Fixed
 

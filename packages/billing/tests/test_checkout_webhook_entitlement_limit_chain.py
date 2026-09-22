@@ -82,6 +82,7 @@ class _StubConnection:
                 expires_at,
                 mcp_monthly_quota,
                 mcp_rate_per_min,
+                token_quota,
                 storage_quota_bytes,
                 grace_until,
                 *_rest,
@@ -92,6 +93,7 @@ class _StubConnection:
                 "expires_at": expires_at,
                 "mcp_monthly_quota": mcp_monthly_quota,
                 "mcp_rate_per_min": mcp_rate_per_min,
+                "token_quota": token_quota,
                 "storage_quota_bytes": storage_quota_bytes,
                 "grace_until": grace_until,
             }

@@ -148,6 +148,29 @@ jobs:
         run: >-
           uv run pytest -q --cov --cov-report=term-missing
           --cov-report=xml --cov-fail-under=85
+          --junitxml=junit-python.xml
+      - name: Skip-Budget-Gate (uebersprungen != bestanden)
+        # Zweite Verteidigungslinie hinter WHO2BE_REQUIRE_DB. Der Guard in
+        # conftest.py deckt nur `@pytest.mark.integration` ab; jeder andere
+        # Skip-Pfad (inline `pytest.skip`, fehlender Marker, importorskip)
+        # rutscht an ihm vorbei und macht den Lauf still gruen. Dieser Step
+        # wertet die JUnit-XML aus — sie nennt je Test den Skip-GRUND, die
+        # `-q`-Zusammenfassung nur eine Zahl; Textparsing waere ausserdem an
+        # das Ausgabeformat gekoppelt. `if: always()`, damit ein roter
+        # Test-Step das Gate nicht verschluckt: beide Befunde sollen im selben
+        # Lauf sichtbar sein. Der Step haengt bewusst im `python`-Job und
+        # nicht in einem eigenen Job daneben — `python` ist Vorgaenger des
+        # kuenftigen Aggregat-Jobs, ein Verstoss faerbt also das Tor rot, und
+        # die XML muesste sonst als Artefakt herumgereicht werden.
+        if: always()
+        run: python3 scripts/ci/assert_skips_within_budget.py junit-python.xml
+      - name: Upload Python JUnit-XML
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: junit-python
+          path: junit-python.xml
+          if-no-files-found: ignore
       - name: Upload Python coverage
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -513,4 +536,121 @@ jobs:
             Liste im Job-Log und in der Step-Summary."
             exit 1
           fi
+
+  all-green:
+    # Aggregat-Job (P3). Er ist dazu bestimmt, der EINZIGE Required Check auf
+    # `main` zu werden — die Einzeljobs duerfen es nicht sein: fuenf von ihnen
+    # haengen an der Doku-Allowlist des `changes`-Jobs und melden bei einem
+    # Doku-PR "skipped", was GitHub bei Required Checks wie Erfolg wertet;
+    # umgekehrt bliebe ein Required Check, der gar nicht erst startet, dauerhaft
+    # auf "Waiting for status to be reported" stehen und der PR nie mergebar.
+    # Ein einziger, immer laufender Job hat beide Probleme nicht.
+    #
+    # Der Job-NAME ist Teil der Repo-Konfiguration: Required Checks binden per
+    # exakter Namensgleichheit. `name:` ist deshalb bewusst identisch zur Job-Id
+    # gesetzt (sonst zeigt die Checks-Liste die Id, hier waere das zufaellig
+    # dasselbe — explizit ist es nachlesbar). Ein Rename bricht jeden offenen
+    # PR und muss zusammen mit dem Ruleset passieren, nie allein.
+    #
+    # `if: always()` ist nicht optional: ohne ihn setzt GitHub diesen Job auf
+    # "skipped", sobald irgendein Vorgaenger fehlschlaegt — und skipped gilt an
+    # genau den Stellen als Erfolg, an denen es hier darauf ankommt. Der Job
+    # muss laufen und selbst urteilen.
+    name: all-green
+    if: always()
+    # Bewusst ALLE Jobs, `changes` eingeschlossen. Ohne ihn waere der wichtigste
+    # Fehlerfall unsichtbar — siehe Begruendung im Auswertungs-Step.
+    needs:
+      - changes
+      - python
+      - web
+      - compose-smoke
+      - e2e
+      - e2e-billing-cloud
+      - audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Jeden Vorgaenger gegen sein ERWARTETES Ergebnis pruefen
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          CODE: ${{ needs.changes.outputs.code }}
+          PYTHON_RESULT: ${{ needs.python.result }}
+          WEB_RESULT: ${{ needs.web.result }}
+          COMPOSE_SMOKE_RESULT: ${{ needs['compose-smoke'].result }}
+          E2E_RESULT: ${{ needs.e2e.result }}
+          E2E_BILLING_CLOUD_RESULT: ${{ needs['e2e-billing-cloud'].result }}
+          AUDIT_RESULT: ${{ needs.audit.result }}
+        run: |
+          set -uo pipefail
+          # Warum nicht einfach "kein Vorgaenger ist rot"?
+          #
+          # Weil `skipped` in diesem Workflow ZWEI gegensaetzliche Dinge heisst
+          # und beide in `needs.*.result` identisch aussehen:
+          #
+          #   (1) LEGITIM: der `changes`-Job hat den Diff als reine Doku
+          #       klassifiziert (code=false) und die fuenf schweren Jobs
+          #       bewusst uebersprungen. Das ist der haeufigste PR-Typ hier und
+          #       muss gruen durchgehen.
+          #   (2) GEFAEHRLICH: der `changes`-Job selbst ist rot oder abgebrochen.
+          #       Dann werden dieselben fuenf Jobs ebenfalls uebersprungen —
+          #       nicht weil sie ueberfluessig waren, sondern weil das Tor
+          #       kaputt ist. Eine Pruefung, die `skipped` pauschal durchwinkt,
+          #       meldet hier GRUEN, obwohl nichts geprueft wurde.
+          #
+          # Unterscheidbar sind die Faelle nur ueber den `changes`-Job selbst.
+          # Deshalb wird nicht gegen eine Liste ERLAUBTER Ergebnisse geprueft,
+          # sondern gegen das je Lage ERWARTETE: eine Erlaubnisliste waechst
+          # still mit jedem neuen Conclusion-Wert, eine Erwartung nicht.
+          # `failure` und `cancelled` fallen dadurch ueberall durch, ohne eigens
+          # aufgezaehlt zu sein.
+          rc=0
+          fail() { echo "::error title=all-green::$1"; rc=1; }
+
+          expect() { # $1=Jobname $2=Ist $3=Soll
+            if [ "$2" = "$3" ]; then
+              echo "  OK       ${1}: ${2} (erwartet: ${3})"
+            else
+              fail "${1}: '${2}', erwartet '${3}'."
+            fi
+          }
+
+          echo "changes=${CHANGES_RESULT} code=${CODE:-<leer>}"
+
+          # Das Tor zuerst — ohne verlaessliches `changes` ist jede Aussage
+          # ueber die gegateten Jobs wertlos, also gar nicht erst treffen.
+          if [ "$CHANGES_RESULT" != "success" ]; then
+            fail "Der Gate-Job 'changes' ist '${CHANGES_RESULT}'. Die davon \
+          abhaengigen Jobs sind damit uebersprungen, OHNE dass der Diff \
+          klassifiziert wurde — das ist kein Doku-PR, sondern ein kaputtes Tor."
+            exit 1
+          fi
+
+          # Erwartung fuer die fuenf gegateten Jobs aus der Klassifikation
+          # ableiten. Unbekannter Wert: fail-closed, also vollen Lauf verlangen.
+          case "${CODE:-}" in
+            true)  gated_expected=success ;;
+            false) gated_expected=skipped ;;
+            *)
+              fail "Unerwarteter Wert fuer changes.outputs.code: '${CODE:-<leer>}'. \
+          Es wird fail-closed ein vollstaendiger Lauf verlangt."
+              gated_expected=success
+              ;;
+          esac
+          echo "Erwartung fuer die gegateten Jobs: ${gated_expected}"
+
+          expect python            "$PYTHON_RESULT"            "$gated_expected"
+          expect web               "$WEB_RESULT"               "$gated_expected"
+          expect compose-smoke     "$COMPOSE_SMOKE_RESULT"     "$gated_expected"
+          expect e2e               "$E2E_RESULT"               "$gated_expected"
+          expect e2e-billing-cloud "$E2E_BILLING_CLOUD_RESULT" "$gated_expected"
+
+          # `audit` haengt bewusst an keinem Pfadfilter (fragt eine Live-CVE-
+          # Datenbank ab) und muss deshalb immer wirklich gelaufen sein.
+          expect audit "$AUDIT_RESULT" success
+
+          if [ "$rc" -ne 0 ]; then
+            echo "all-green: FEHLGESCHLAGEN."
+            exit 1
+          fi
+          echo "all-green: alle Vorgaenger wie erwartet."
 
