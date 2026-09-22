@@ -53,6 +53,22 @@ This keeps the public history tidy without losing solo-dev convenience.
 - Meaningful commit messages; one PR per completed unit of work.
 - Every PR needs at least **one** review.
 
+## Merging: agents request, they do not merge
+
+Agents never merge. After a review has been **approved**, auto-merge may be
+requested — GitHub then merges by itself, but only once every required check is
+green. Requesting before the approval is not a shortcut, it bypasses the only
+gate that is not enforced server-side.
+
+The single permitted command, the preconditions, the error cases and what stays
+blocked: [`docs/auto-merge-agenten.md`](docs/auto-merge-agenten.md). Every
+merge-executing command (`gh pr merge`, the REST merge endpoints, the GraphQL
+merge mutation) stays denied and is not to be rephrased or worked around —
+hitting one of those denials means the rule fired, not that a bug was found.
+
+If the checks stay red the pull request simply is not merged. That is the
+mechanism working, not a stuck state: fix the build, do not remove the check.
+
 ## Referencing code
 
 Never point at a code location with a bare `file.py:441`. Line numbers drift as
