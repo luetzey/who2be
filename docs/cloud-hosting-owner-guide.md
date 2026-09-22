@@ -498,14 +498,22 @@ WAL-Archivierung dazu (pgBackRest oder WAL-G gegen dieselbe Storage Box)
 — damit sinkt der RPO auf Minuten. Alternative für den Anfang: den
 Backup-Cron auf alle 6 Stunden stellen, das kostet nichts außer Platz.
 
-**2. Backup-Fehler sind still.** `restic backup` und `restic forget` sind im
-Skript bewusst **nicht-fatal** (`backup.sh:94`) — schlägt der Offsite-Sync
-fehl, bleibt der lokale Dump erhalten und das Skript beendet sich mit
-Erfolg. Richtig gedacht, aber: **wenn niemand die Logs liest, merkst du
-monatelang nicht, dass es kein Offsite-Backup mehr gibt.** Das ist das
-klassische Muster, an dem Backups scheitern. Nimm einen Dead-Man's-Switch
-(healthchecks.io o. ä.): Das Skript pingt am Ende eine URL, und *das
-Ausbleiben* des Pings alarmiert dich.
+**2. Backup-Fehler sind nicht mehr still** (seit 2026-09-21, Issue #541).
+Früher waren `restic backup` und `restic forget` bewusst nicht-fatal: schlug der
+Offsite-Sync fehl, blieb der lokale Dump erhalten **und das Skript meldete
+Erfolg**. Damit hättest du monatelang nicht gemerkt, dass es kein Offsite-Backup
+mehr gibt. Heute gilt beides gleichzeitig: der **lokale Dump bleibt unverändert
+erhalten**, aber ein gescheiterter Sync beendet den Lauf mit **Exit != 0**.
+
+Zusätzlich gibt es einen Dead-Man's-Switch: setzt du `BACKUP_HEARTBEAT_URL`
+(leer = aus), pingt das Skript diese URL nur bei vollständigem Erfolg — und *das
+Ausbleiben* des Pings alarmiert dich. Das fängt auch die Fälle, die ein Exit-Code
+nicht fangen kann: Cron deaktiviert, Container weg, Host aus. **Der Empfänger ist
+bewusst self-hosted** (kein healthchecks.io o. ä.) — ein gehosteter Dienst wäre
+Auftragsverarbeiter für deine Betriebsmetadaten und bräuchte einen VVT-Eintrag.
+Einrichtung und **Testanleitung** stehen im RUNBOOK unter „Backup & Restore“ →
+„Alarmweg (Dead-Man's-Switch)“. **Richte ihn ein und löse ihn einmal absichtlich
+aus** — ein nie ausgelöster Alarm ist so viel wert wie ein ungetestetes Backup.
 
 **3. Die Blob-Backup-Kommandos sind ungetestet.** Beim SeaweedFS-Umstieg am
 2026-09-19 wurden die alten `mc`-Kommandos ersetzt; der Ersatz ist im
