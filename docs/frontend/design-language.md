@@ -452,7 +452,7 @@ Beispiele: `PersonasPage`, `PlaybooksPage`, `MembersPage`,
 
 ```
 <main class="flex min-h-screen items-center justify-center
-             bg-muted/30 px-4 py-10">
+             bg-muted/30 px-4 py-10 break-words">
   <Card class="w-full max-w-md shadow-modal border-transparent">
     <CardHeader>
       <span class="text-xs uppercase tracking-wide text-muted-foreground">Who2Be</span>
@@ -468,8 +468,27 @@ Beispiele: `PersonasPage`, `PlaybooksPage`, `MembersPage`,
 </main>
 ```
 
-Heute nur `LoginPage`; weitere Brand-Pages (Onboarding, Welcome) folgen
-demselben Muster.
+`break-words` am `<main>` ist **Pflicht**, nicht Geschmack: Marketing-Pages
+zeigen fremdbestimmte Zeichenketten (GoTrue-Fehlerbezeichner wie
+`unverified_email_address_requires_confirmation`, Redirect-Hosts,
+Workspace- und Agentennamen). Ein ungebrochenes Token blaeht die
+min-content-Breite der Karte auf, `w-full max-w-md` kann dann nicht mehr
+schrumpfen, und die Seite scrollt bei 320px horizontal. Die Klasse vererbt an
+alle Nachkommen und deckt damit auch Zustaende ab, die erst zur Laufzeit
+entstehen. Gemessen im Rahmen von #569.
+
+**Werte anzeigen statt Feld faelschen:** Ein nicht editierbarer Wert in
+Feld-Optik gehoert nicht in einen `readOnly`-`<Input>` — der kuerzt auf
+schmalen Viewports still (`<input>` kennt keinen Umbruch). Stattdessen ein
+umbrechendes Element (z. B. `<output>`) in derselben Optik:
+`flex min-h-10 w-full rounded-md border border-input bg-muted/50 px-3 py-2
+text-sm break-words text-muted-foreground`. Wo der Wert eine Einwilligung
+beschreibt (OAuth-Consent), ist das bindend: ein abgeschnittener Agentenname
+stellt den Gegenstand der Freigabe unvollstaendig dar.
+
+Muster in Gebrauch auf allen Auth-Pages (`LoginPage`, `SignupPage`,
+`ResetPasswordPage`, `SetPasswordPage`, `OAuthConsentPage`,
+`InvitationAcceptPage`, `AuthCallbackPage`, `ComingSoonPage`).
 
 ## 11. A11y-Minimum
 
@@ -486,6 +505,12 @@ demselben Muster.
   Andere Abschnitte, Issues, Plandateien und Reviews **zitieren** diesen
   Floor, sie setzen keine eigene Zahl. Weicht eine Angabe anderswo ab, gilt
   diese hier und die andere Stelle wird korrigiert.
+  *Technik, falls eine Stelle von `size="sm"` auf den 40px-Regelfall gehoben
+  werden soll:* `className="h-10 md:h-9"` an den Button — `tailwind-merge`
+  loest das `h-9` der Variante zugunsten der expliziten Klasse auf, der
+  Phone-Fall erreicht 40px und die Verdichtung ab `md` bleibt erhalten. Das
+  ist ein Rezept, keine Pflicht; den Floor setzt allein der Absatz oben.
+  Angewandt im Rahmen von #569.
 - **Fokus:** Focus-Ring bleibt `--ring` (neutral), **nicht** auf
   `--brand` umstellen. Sonst Doppelsignal (Brand-Fill + Brand-Ring).
 - **Brand-Farbe nie alleinige Information:** Statt nur "rotes

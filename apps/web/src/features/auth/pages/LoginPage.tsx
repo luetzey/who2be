@@ -192,7 +192,7 @@ export function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-10">
+    <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-10 break-words">
       <Card className="w-full max-w-md border-transparent shadow-modal">
         <CardHeader className="gap-2">
           <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
@@ -260,7 +260,7 @@ export function LoginPage() {
                   name="password"
                   render={({ field }) => (
                     <FormItem>
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-wrap items-center justify-between">
                         <FormLabel>{t('fields.password')}</FormLabel>
                         <Link
                           to={
@@ -326,6 +326,12 @@ export function LoginPage() {
                     type="button"
                     variant="outline"
                     size="sm"
+                    // Weiche 4 aus #569: unterhalb `md` auf den 40px-Regelfall
+                    // heben. `size="sm"` liefert 36px (gemessen) — das haelt
+                    // den verbindlichen Floor (§11: >= 32px) bereits, ist hier
+                    // aber nicht dicht genug gewollt. Ab `md` bleibt die
+                    // Verdichtung.
+                    className="h-10 md:h-9"
                     disabled={captcha.blocked}
                     onClick={() => void resendConfirmation()}
                   >

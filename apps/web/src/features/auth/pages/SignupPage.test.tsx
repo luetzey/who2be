@@ -314,4 +314,13 @@ describe('SignupPage', () => {
       expect(screen.getByText('User already registered')).toBeInTheDocument()
     })
   })
+
+  // Responsive-Audit (#569): der Signup-Fehlerpfad teilt sich den ErrorAlert
+  // mit Login und Callback — lange GoTrue-Bezeichner duerfen die Karte auf
+  // 320px nicht aufblaehen (§4.4 Checklistenpunkt 1 und 5).
+  it('laesst lange Bezeichner in der ganzen Karte umbrechen (#569)', () => {
+    renderPage()
+
+    expect(document.querySelector('main')?.className).toContain('break-words')
+  })
 })

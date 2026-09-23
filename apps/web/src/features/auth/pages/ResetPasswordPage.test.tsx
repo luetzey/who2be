@@ -129,6 +129,25 @@ describe('ResetPasswordPage', () => {
     )
   }
 
+  // Responsive-Audit (#569), Weiche 4: unterhalb `md` auf den 40px-Regelfall
+  // heben. Gemessen lieferte `size="sm"` hier 36px — oberhalb des
+  // verbindlichen Floors (§11: >= 32px), aber nicht gewollt. `h-10 md:h-9`
+  // hebt den Phone-Fall auf 40px und behaelt die Verdichtung ab `md`.
+  it('haelt den Zurueck-Link unterhalb md auf 40px Hit-Target (#569)', () => {
+    renderResetPage()
+
+    const back = screen.getByRole('link', { name: 'Zurueck zur Anmeldung' })
+    expect(back.className).toContain('h-10')
+    expect(back.className).toContain('md:h-9')
+  })
+
+  // Lange GoTrue-Bezeichner im ErrorAlert duerfen die Karte nicht aufblaehen.
+  it('laesst lange Bezeichner in der ganzen Karte umbrechen (#569)', () => {
+    renderResetPage()
+
+    expect(document.querySelector('main')?.className).toContain('break-words')
+  })
+
   it('schickt ohne Site-Key kein captchaToken (Verhalten wie vor #539)', async () => {
     resetPasswordForEmail.mockResolvedValue({ data: {}, error: null })
     renderResetPage()

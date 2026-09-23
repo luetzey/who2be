@@ -64,7 +64,7 @@ export function ResetPasswordPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-10">
+    <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-10 break-words">
       <Card className="w-full max-w-md border-transparent shadow-modal">
         <CardHeader className="gap-2">
           <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
@@ -128,7 +128,10 @@ export function ResetPasswordPage() {
                     {t('captcha.pending')}
                   </p>
                 ) : null}
-                <Button asChild variant="ghost" size="sm" className="w-full">
+                {/* Weiche 4 aus #569: `size="sm"` liefert 36px (gemessen) —
+                    oberhalb des verbindlichen Floors (§11: >= 32px), hier aber
+                    auf den 40px-Regelfall gehoben, ab `md` verdichtet. */}
+                <Button asChild variant="ghost" size="sm" className="h-10 w-full md:h-9">
                   <Link to="/login">{t('backToLogin')}</Link>
                 </Button>
               </form>
