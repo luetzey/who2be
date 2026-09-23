@@ -28,6 +28,13 @@ Nutzung::
 
     python scripts/ci/assert_skips_within_budget.py junit-python.xml
     python scripts/ci/assert_skips_within_budget.py junit-python.xml --max-other-skips 3
+    python scripts/ci/assert_skips_within_budget.py apps/web/junit-web.xml
+
+Der dritte Aufruf ist der Vitest-Pfad (P4b): dieselbe Logik, dieselben Budgets.
+``INFRA_SKIP_PATTERN`` greift dort erwartbar nie — die Web-Suite laeuft in jsdom
+ohne DB, Docker oder Service-Container. Der Schutz kommt auf der Web-Seite allein
+aus dem Rest-Budget 0; das Muster bleibt ein wirkungsloser, aber harmloser
+Durchlaufposten und wird bewusst nicht web-spezifisch aufgebohrt.
 """
 
 from __future__ import annotations
@@ -63,6 +70,14 @@ def _parse(xml_path: Path) -> tuple[int, list[str]]:
     """Zahl der Testfaelle und alle Skip-Gruende aus einer JUnit-XML.
 
     Ein Eintrag in der Liste je uebersprungenem Test.
+
+    Produzenten-Unterschied, der hier abgefangen wird: pytest schreibt den Grund
+    als ``<skipped message="...">``, Vitest schreibt ein nacktes ``<skipped/>``
+    ohne jedes Attribut. Ohne Fallback meldete der Report dann N-mal denselben
+    Platzhalter und waere zum Debuggen wertlos. Fehlt der Grund, tritt der
+    Testname an seine Stelle — er identifiziert den uebersprungenen Fall
+    wenigstens eindeutig. Der pytest-Pfad ist davon unberuehrt: dort gewinnt
+    ``message`` weiterhin, und nur wenn beide Attribute fehlen, greift der Name.
     """
     root = ET.parse(xml_path).getroot()  # noqa: S314 — eigene CI-Artefakte, kein Fremdinput
     cases = list(root.iter("testcase"))
@@ -70,7 +85,10 @@ def _parse(xml_path: Path) -> tuple[int, list[str]]:
     for case in cases:
         for skipped in case.findall("skipped"):
             reason = (skipped.get("message") or skipped.get("type") or "").strip()
-            reasons.append(reason or "<ohne Grund>")
+            if not reason:
+                name = (case.get("name") or "").strip()
+                reason = f"<ohne Grund> {name}" if name else "<ohne Grund>"
+            reasons.append(reason)
     return len(cases), reasons
 
 
