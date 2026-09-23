@@ -125,7 +125,7 @@ export function AgentTokensSection({ agentId }: AgentTokensSectionProps) {
     const isEditing = editingId === token.id
     return (
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Stack gap="xs">
+        <Stack gap="xs" className="min-w-0">
           {isEditing ? (
             <div className="flex flex-wrap items-center gap-2">
               <Input
@@ -137,6 +137,7 @@ export function AgentTokensSection({ agentId }: AgentTokensSectionProps) {
                 type="button"
                 size="sm"
                 variant="brand"
+                className="min-h-10 md:min-h-0"
                 onClick={() => void saveRename(token.id)}
               >
                 {t('common:actions.save')}
@@ -145,15 +146,20 @@ export function AgentTokensSection({ agentId }: AgentTokensSectionProps) {
                 type="button"
                 size="sm"
                 variant="outline"
+                className="min-h-10 md:min-h-0"
                 onClick={() => setEditingId(null)}
               >
                 {t('common:actions.cancel')}
               </Button>
             </div>
           ) : (
-            <div className="font-medium">{token.name}</div>
+            // `break-all`: Token-Namen tragen ein `w2b_`-Praefix und sind
+            // strukturell trennstellenfrei. Gemessen bei 320 px zog der Name den
+            // umgebenden Stack auf 335,5 px in einer 254 px breiten Zeile
+            // (+81 px Ueberlauf, Inhalt zusaetzlich abgeschnitten) — #570 AK 2.
+            <div className="font-medium break-all">{token.name}</div>
           )}
-          <div className="text-xs text-muted-foreground">
+          <div className="text-xs break-words text-muted-foreground">
             {t('list.createdAt', { date: token.created_at })}
             {token.last_used_at !== null ? t('list.lastUsed', { date: token.last_used_at }) : ''}
             {isRevoked ? t('list.revoked', { date: token.revoked_at ?? '' }) : ''}
@@ -166,6 +172,7 @@ export function AgentTokensSection({ agentId }: AgentTokensSectionProps) {
               type="button"
               variant="outline"
               size="sm"
+              className="min-h-10 md:min-h-0"
               disabled={isRevoked}
               onClick={() => {
                 setEditingId(token.id)
@@ -178,6 +185,7 @@ export function AgentTokensSection({ agentId }: AgentTokensSectionProps) {
               type="button"
               variant="outline"
               size="sm"
+              className="min-h-10 md:min-h-0"
               disabled={isRevoked}
               onClick={() => void rotateToken(token.id)}
             >
@@ -187,6 +195,7 @@ export function AgentTokensSection({ agentId }: AgentTokensSectionProps) {
               type="button"
               variant="outline"
               size="sm"
+              className="min-h-10 md:min-h-0"
               disabled={isRevoked}
               onClick={() => void revokeToken(token.id)}
             >
@@ -230,7 +239,17 @@ export function AgentTokensSection({ agentId }: AgentTokensSectionProps) {
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="self-start"
+                // Gemessen bei 320 px lief die Zeile mit 282 px in einer 238 px
+                // breiten Spalte ueber (+44 px): das kombinierte Label trifft
+                // auf das `whitespace-nowrap` des Button-Primitives. Also
+                // Umbruch an der Aufrufstelle erlauben — und mit umbrechendem
+                // Text muss die feste `h-9` der `sm`-Variante zu `h-auto`
+                // werden, sonst schneidet sie die zweite Zeile ab. `min-h-10`
+                // haelt dabei das Hit-Target aus AK 4 von #570 (die Zahl kommt
+                // aus dem Akzeptanzkriterium, nicht aus der Norm — §11 setzt
+                // den Floor auf >= 32 px), `md:h-9 md:min-h-0` stellt ab `md`
+                // den unveraenderten Desktop-Zustand wieder her.
+                className="h-auto min-h-10 items-start self-start py-2 text-left whitespace-normal md:h-9 md:min-h-0 md:items-center md:py-0"
                 aria-expanded={showInactive}
                 onClick={() => setShowInactive((value) => !value)}
               >

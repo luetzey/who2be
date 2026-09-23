@@ -106,7 +106,18 @@ function ConfirmDeleteButton({
           variant={variant}
           size="sm"
           aria-label={ariaLabel}
-          className={variant === 'ghost' ? 'h-8 text-xs text-destructive hover:text-destructive' : undefined}
+          // `min-h-10 md:min-h-0` haelt das Hit-Target aus AK 4 von #570
+          // unterhalb `md` (die Zahl stammt aus dem Akzeptanzkriterium, nicht
+          // aus der Norm — design-language.md §11 setzt den Floor auf >= 32 px
+          // und erlaubt `size="sm"` ausdruecklich) und gibt ab `md` die
+          // gewollte Zeilen-Dichte frei. Gemessen bei 320 px: 32 px in der
+          // `ghost`-Variante (`h-8` gewinnt in `tailwind-merge` gegen `h-9`),
+          // 36 px als `outline`. Der Trigger ist geteilt — die Klasse deckt
+          // Einzel-Loeschen, Abgelehnt-Loeschen und „Alle loeschen" zugleich.
+          className={cn(
+            'min-h-10 md:min-h-0',
+            variant === 'ghost' && 'h-8 text-xs text-destructive hover:text-destructive',
+          )}
         >
           <Trash2 className="h-4 w-4" aria-hidden="true" />
           {triggerLabel}
@@ -160,7 +171,7 @@ function RejectMemoryDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button type="button" variant="outline" size="sm">
+        <Button type="button" variant="outline" size="sm" className="min-h-10 md:min-h-0">
           {t('memory.triage.reject')}
         </Button>
       </DialogTrigger>
@@ -248,7 +259,12 @@ function PendingMemoryRow({ memory, canWrite, onApprove, onReject }: PendingMemo
         />
       </div>
       {memory.context !== null && memory.context !== '' ? (
-        <p className="text-sm text-muted-foreground italic">
+        // `break-words`: `context` ist ein Freitextfeld aus dem Ingest, eine
+        // Artefakt-URL darin ist der Regelfall. Gemessen bei 320 px: 218 px
+        // Inhalt in 204 px sichtbar, die URL wurde abgeschnitten (#570 AK 2).
+        // `break-words` statt `break-all`, weil der Absatz Fliesstext ist — es
+        // bricht nur, wenn ein einzelnes Wort allein nicht passt.
+        <p className="text-sm break-words text-muted-foreground italic">
           <span className="font-medium not-italic">{t('memory.triage.contextLabel')}: </span>
           {memory.context}
         </p>
@@ -257,7 +273,7 @@ function PendingMemoryRow({ memory, canWrite, onApprove, onReject }: PendingMemo
       {canWrite ? (
         <div className="flex flex-wrap justify-end gap-2">
           <RejectMemoryDialog onReject={handleReject} />
-          <Button type="button" variant="brand" size="sm" disabled={busy} onClick={() => void handleApprove()}>
+          <Button type="button" variant="brand" size="sm" className="min-h-10 md:min-h-0" disabled={busy} onClick={() => void handleApprove()}>
             {t('memory.triage.approve')}
           </Button>
         </div>
@@ -343,10 +359,10 @@ function ActiveMemoryRow({ memory, canWrite, onUpdate, onDelete }: ActiveMemoryR
           </Select>
         </div>
         <div className="flex justify-end gap-2">
-          <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => setEditing(false)}>
+          <Button type="button" variant="outline" size="sm" className="min-h-10 md:min-h-0" disabled={busy} onClick={() => setEditing(false)}>
             {t('memory.active.cancel')}
           </Button>
-          <Button type="button" variant="brand" size="sm" disabled={busy} onClick={() => void saveEdit()}>
+          <Button type="button" variant="brand" size="sm" className="min-h-10 md:min-h-0" disabled={busy} onClick={() => void saveEdit()}>
             {t('memory.active.save')}
           </Button>
         </div>
@@ -356,14 +372,25 @@ function ActiveMemoryRow({ memory, canWrite, onUpdate, onDelete }: ActiveMemoryR
 
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <Stack gap="xs">
-        <p className="text-sm font-medium">{memory.fact}</p>
+      {/* `min-w-0`: das Text tragende Flex-Kind muss unter seine Inhaltsbreite
+          schrumpfen duerfen. Gemessen bei 320 px zog der Stack sonst auf
+          298,9 px in einer 254 px breiten Zeile (+45 px Ueberlauf, Inhalt
+          zusaetzlich abgeschnitten) — #570 AK 2, Muster AgentHierarchyView:59. */}
+      <Stack gap="xs" className="min-w-0">
+        {/* `break-words` zusaetzlich zum `min-w-0` am Stack: gemessen loeste
+            `min-w-0` allein zwar den Ueberlauf, liess den Fakt aber
+            abgeschnitten (299 px Inhalt in 204 px sichtbar) — §4.4 Punkt 5.
+            `break-words` und nicht `break-all`, weil der Fakt Fliesstext ist:
+            gemessen bricht es den trennstellenfreien Bezeichner am Ende
+            trotzdem um (60 px hoch, nichts abgeschnitten) und zerhackt
+            gewoehnliche Saetze nicht. */}
+        <p className="text-sm font-medium break-words">{memory.fact}</p>
         <MemoryPills memory={memory} />
         <p className="text-xs text-muted-foreground">{usage}</p>
       </Stack>
       {canWrite ? (
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={startEdit}>
+          <Button type="button" variant="outline" size="sm" className="min-h-10 md:min-h-0" onClick={startEdit}>
             {t('memory.active.edit')}
           </Button>
           <ConfirmDeleteButton
@@ -392,10 +419,12 @@ function RejectedMemoryRow({ memory, canWrite, onDelete }: RejectedMemoryRowProp
   const { t } = useTranslation('agents')
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <Stack gap="xs">
-        <p className="text-sm">{memory.fact}</p>
+      {/* Gleiche Ursache wie in der Aktiv-Zeile, gemessen 340,9 px in 254 px
+          (+87 px) — der schwerere der beiden Stacks. */}
+      <Stack gap="xs" className="min-w-0">
+        <p className="text-sm break-words">{memory.fact}</p>
         <MemoryPills memory={memory} />
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs break-words text-muted-foreground">
           {memory.triage_note !== null && memory.triage_note !== ''
             ? `${t('memory.rejected.noteLabel')}: ${memory.triage_note}`
             : t('memory.rejected.noNote')}
@@ -562,7 +591,7 @@ export function AgentMemorySection({ agentId }: AgentMemorySectionProps) {
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="self-start"
+                  className="min-h-10 self-start md:min-h-0"
                   aria-expanded={showRejected}
                   onClick={() => setShowRejected((value) => !value)}
                 >
