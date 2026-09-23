@@ -82,7 +82,11 @@ function CardBody({
   return (
     <article
       className={cn(
-        'relative flex items-center gap-4 p-4',
+        // `flex-wrap`: traegt die Karte Zeilen-Actions, kollabiert die
+        // Textspalte bei 320px sonst auf 0px — der Titel bricht dann nach
+        // jedem Zeichen um. Mit Umbruch rutschen die Actions in die naechste
+        // Zeile, statt die Spalte zu erdruecken.
+        'relative flex flex-wrap items-center gap-4 p-4',
         interactiveSurface &&
           'rounded-xl border bg-card shadow-card transition-[box-shadow,border-color] duration-[var(--duration-fast)] ease-spring hover:shadow-popover',
       )}
@@ -93,11 +97,14 @@ function CardBody({
         <EntityIcon icon={icon} tone={iconTone} size="md" />
       )}
 
-      <div className="flex min-w-0 flex-1 flex-col gap-2">
+      {/* `min-w-32`: Untergrenze gegen den Kollaps der Spalte, wenn die Karte
+          Zeilen-Actions traegt. `flex-1` gewinnt darueber, sobald Platz da ist
+          — ab `md` bleibt die Spalte unveraendert breit. */}
+      <div className="flex min-w-32 flex-1 flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <Link
             to={href}
-            className="rounded-sm text-sm font-semibold text-foreground after:absolute after:inset-0 after:rounded-xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className="rounded-sm text-sm font-semibold wrap-anywhere text-foreground after:absolute after:inset-0 after:rounded-xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
             {title}
           </Link>
