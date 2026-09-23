@@ -49,8 +49,11 @@ Ursache: `flex gap-1 border-b` (`:50`) ohne `flex-wrap` — drei Tabs mit
 DE-Labels messen zusammen 379,8 px + 8 px Gaps gegen 288 px Innenraum.
 
 Fix: `flex-wrap` an der `tablist`-Zeile. AK 6 nennt Umbruch als eine der
-beiden zulässigen Auflösungen; §4.4 Checklistenpunkt 5 nennt Umbruch als
-Mittel der Wahl. Hit-Target der Tabs: 44 px hoch (gemessen) — unverändert.
+beiden zulässigen Auflösungen; „umbrechen statt Scroll-Container" ist die
+Festlegung von #573 (Vorentscheidung 1) — §4.4 Checklistenpunkt 1 verlangt
+lediglich, dass bei 320 px kein horizontaler Body-Scroll entsteht, und
+schreibt kein Mittel vor. Hit-Target der Tabs: 44 px hoch (gemessen) —
+unverändert.
 
 ### 2. `ComposedByList.tsx` — **DEFEKT, behoben**
 
