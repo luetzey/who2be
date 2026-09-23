@@ -15,7 +15,9 @@
   steht jetzt in einem umbrechenden `<output>` in derselben Feld-Optik.
 
   Der Resend-CTA auf der Anmeldung und der Zurueck-Link auf der
-  Passwort-Zuruecksetzung lagen mit `size="sm"` bei 36px unter dem
-  A11y-Minimum; unterhalb `md` sind es jetzt 40px, ab `md` bleibt die
-  Verdichtung. `docs/frontend/design-language.md` §10.2 und §11 halten beide
-  Muster fest.
+  Passwort-Zuruecksetzung standen mit `size="sm"` bei 36px — oberhalb des
+  verbindlichen Floors (§11: ≥ 32px), aber unterhalb des 40px-Regelfalls an
+  zwei Stellen, an denen keine Dichte gewollt ist: beide sind der einzige
+  Ausweg aus einem fehlgeschlagenen Login. Unterhalb `md` sind es jetzt
+  40px, ab `md` bleibt die Verdichtung.
+  `docs/frontend/design-language.md` §10.2 und §11 halten beide Muster fest.

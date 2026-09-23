@@ -1,5 +1,5 @@
 import type { Session } from '@supabase/supabase-js'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -151,5 +151,56 @@ describe('ToolsPage', () => {
     fireEvent.change(screen.getByLabelText('Tag'), { target: { value: 'produktivitaet' } })
     expect(await screen.findByText('Todoist')).toBeInTheDocument()
     expect(screen.queryByText('Things 3')).not.toBeInTheDocument()
+  })
+})
+
+// Responsive-Audit #562 (W3, Epic #431): jsdom hat kein Layout, geprueft wird
+// deshalb der Klassen-Vertrag — Muster components/ui/dialog.test.tsx, das die
+// 320px-Eigenschaft des Dialogs ebenfalls ueber Klassen belegt.
+describe('ToolsPage — Umbruch bei 320px (#562)', () => {
+  function renderWithLongIdentifiers() {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify([
+            tool({
+              alias: 'todoist_workspace_produktivitaets_integration',
+              content: {
+                display_name: 'Todoist App',
+                mcp_server_name: 'Todoist MCP',
+                tool_names: ['add_task'],
+                usage_notes: '[]',
+                fallback_note: null,
+                tags: ['produktivitaets-automatisierung-langer-tag'],
+              },
+            }),
+          ]),
+          { status: 200 },
+        ),
+      ),
+    )
+    renderPage()
+  }
+
+  it('laesst den umbruchfeindlichen Alias mitten im Wort brechen', async () => {
+    renderWithLongIdentifiers()
+
+    const alias = await screen.findByText('todoist_workspace_produktivitaets_integration')
+    const classes = alias.className.split(/\s+/)
+    expect(classes).toContain('break-all')
+    expect(classes).toContain('max-w-full')
+  })
+
+  it('laesst lange Tags an Wortgrenzen brechen', async () => {
+    renderWithLongIdentifiers()
+
+    // Der Tag-Text steht zweimal im Dokument: als <option> der Filterleiste und
+    // als Badge in der Karte. Geprueft wird die Badge in der Liste.
+    const card = within(await screen.findByRole('listitem'))
+    const tag = card.getByText('produktivitaets-automatisierung-langer-tag')
+    const classes = tag.className.split(/\s+/)
+    expect(classes).toContain('break-words')
+    expect(classes).toContain('max-w-full')
   })
 })

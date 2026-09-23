@@ -178,9 +178,12 @@ export function SubResourcePicker({
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <span className="flex flex-wrap items-center gap-2">
                     <span className="truncate text-sm font-medium">{sub.name}</span>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-pill-resource px-2 py-0.5 text-xs font-semibold text-pill-resource-fg">
+                    <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-pill-resource px-2 py-0.5 text-xs font-semibold break-all text-pill-resource-fg">
                       {/* size-3 bewusst (funktionaler Sonderfall §8): Icon in
-                          der kompakten text-xs-Pill. */}
+                          der kompakten text-xs-Pill.
+                          #564: `max-w-full break-all` — die Block-ID traegt ein
+                          `blk_`-Praefix ohne Trennstellen und misst bei 320px
+                          Viewport gemessen 463px. */}
                       <Pencil className="size-3" aria-hidden="true" />
                       {sub.block_id
                         ? t('subInline.inTextAnchor', { blockId: sub.block_id })
@@ -204,76 +207,92 @@ export function SubResourcePicker({
               return (
                 <li
                   key={id}
-                  className="flex items-center gap-2 rounded-md border px-3 py-2"
+                  // #564 (§4.4 Punkt 4 + 5): unterhalb `md` brechen die
+                  // Aktionen in eine eigene Zeile. Gemessen bei 320px waren
+                  // ohne Umbruch die Textspalte auf Breite 0 gequetscht, die
+                  // Icon-Buttons 19x32px und die Segment-Gruppe auf 54px bei
+                  // 86px Inhalt abgeschnitten — alle unter dem 40px-Floor.
+                  className="flex flex-wrap items-center gap-2 rounded-md border px-3 py-2"
                 >
                   <span className="w-5 shrink-0 text-right text-xs text-muted-foreground tabular-nums">
                     {index + 1}.
                   </span>
                   <EntityIcon icon={FileText} tone="resource" size="sm" />
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                  <span className="min-w-0 flex-1 basis-[8rem] truncate text-sm font-medium">
                     {nameOf(id)}
                   </span>
-                  <span
-                    className="inline-flex overflow-hidden rounded-md border"
-                    role="group"
-                    aria-label={t('subInline.embedModeFor', { name: nameOf(id) })}
-                  >
+                  {/* Aktionsblock: unterhalb `md` bekommt er mit `basis-full`
+                      eine eigene volle Zeile und darf INNERHALB umbrechen —
+                      sein Platzbedarf ist fix 248px (104 Segment-Gruppe +
+                      3x40 Icons + 4x8 gap), die Zeile bietet bei 320px aber nur
+                      214px Innenraum; `shrink-0` hatte den Block dort 35px ueber
+                      die Zeilenkante geschoben (Review-Runde 1). Die
+                      Segment-Gruppe bleibt dabei eine visuelle Einheit
+                      (Weiche 3 des Issues — kein Umbruch INNERHALB der Gruppe).
+                      Ab `md` gilt wieder die kompakte, nicht umbrechende Fassung. */}
+                  <span className="flex basis-full flex-wrap items-center justify-end gap-2 md:ml-auto md:shrink-0 md:basis-auto md:flex-nowrap">
+                    <span
+                      className="inline-flex shrink-0 overflow-hidden rounded-md border"
+                      role="group"
+                      aria-label={t('subInline.embedModeFor', { name: nameOf(id) })}
+                    >
+                      <Button
+                        type="button"
+                        variant={mode === 'lazy' ? 'brand' : 'ghost'}
+                        size="sm"
+                        className="h-10 rounded-none px-3 text-xs md:h-8 md:px-2"
+                        onClick={() => changeMode(id, 'lazy')}
+                        aria-pressed={mode === 'lazy'}
+                        disabled={saving}
+                      >
+                        {t('subInline.modeLazy')}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={mode === 'inline' ? 'brand' : 'ghost'}
+                        size="sm"
+                        className="h-10 rounded-none px-3 text-xs md:h-8 md:px-2"
+                        onClick={() => changeMode(id, 'inline')}
+                        aria-pressed={mode === 'inline'}
+                        disabled={saving}
+                      >
+                        {t('subInline.modeInline')}
+                      </Button>
+                    </span>
                     <Button
                       type="button"
-                      variant={mode === 'lazy' ? 'brand' : 'ghost'}
+                      variant="ghost"
                       size="sm"
-                      className="h-8 rounded-none px-2 text-xs"
-                      onClick={() => changeMode(id, 'lazy')}
-                      aria-pressed={mode === 'lazy'}
-                      disabled={saving}
+                      className="size-10 p-0 md:size-8"
+                      onClick={() => move(id, 'up')}
+                      disabled={saving || index === 0}
+                      aria-label={t('picker.moveUp', { name: nameOf(id) })}
                     >
-                      {t('subInline.modeLazy')}
+                      <ChevronUp className="size-4" aria-hidden="true" />
                     </Button>
                     <Button
                       type="button"
-                      variant={mode === 'inline' ? 'brand' : 'ghost'}
+                      variant="ghost"
                       size="sm"
-                      className="h-8 rounded-none px-2 text-xs"
-                      onClick={() => changeMode(id, 'inline')}
-                      aria-pressed={mode === 'inline'}
-                      disabled={saving}
+                      className="size-10 p-0 md:size-8"
+                      onClick={() => move(id, 'down')}
+                      disabled={saving || index === selected.length - 1}
+                      aria-label={t('picker.moveDown', { name: nameOf(id) })}
                     >
-                      {t('subInline.modeInline')}
+                      <ChevronDown className="size-4" aria-hidden="true" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="size-10 p-0 text-destructive md:size-8"
+                      onClick={() => removeResource(id)}
+                      disabled={saving}
+                      aria-label={t('subInline.removeAria', { name: nameOf(id) })}
+                    >
+                      <X className="size-4" aria-hidden="true" />
                     </Button>
                   </span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="size-8 p-0"
-                    onClick={() => move(id, 'up')}
-                    disabled={saving || index === 0}
-                    aria-label={t('picker.moveUp', { name: nameOf(id) })}
-                  >
-                    <ChevronUp className="size-4" aria-hidden="true" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="size-8 p-0"
-                    onClick={() => move(id, 'down')}
-                    disabled={saving || index === selected.length - 1}
-                    aria-label={t('picker.moveDown', { name: nameOf(id) })}
-                  >
-                    <ChevronDown className="size-4" aria-hidden="true" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="size-8 p-0 text-destructive"
-                    onClick={() => removeResource(id)}
-                    disabled={saving}
-                    aria-label={t('subInline.removeAria', { name: nameOf(id) })}
-                  >
-                    <X className="size-4" aria-hidden="true" />
-                  </Button>
                 </li>
               )
             })}

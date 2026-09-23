@@ -27,7 +27,7 @@ sondern **diese drei Gates** die Sicherung:
    jeder PR sofort mergebar, und Auto-Merge würde nicht verzögern, sondern sofort
    durchgreifen.
 
-Gate 1 ist das schwächste, weil es kein Server es erzwingt. Deshalb die Regel unten:
+Gate 1 ist das schwächste, weil es kein Server erzwingt. Deshalb die Regel unten:
 anfordern **erst nach** freigegebenem Review, nie vorher, nie „damit es schon mal
 läuft".
 
@@ -52,7 +52,7 @@ inhaltlich nichts widerspricht. Wer anfordert, bestimmt damit die Merge-Reihenfo
 
 - [ ] Das Review ist **freigegeben**, nicht nur angefordert.
 - [ ] Der PR ist offen und hat keine ungelösten Konflikte.
-- [ ] `all-green` läuft oder ist grün (`gh pr checks <PR> `).
+- [ ] `all-green` läuft oder ist grün (`gh pr checks <PR>`).
 - [ ] Das Ruleset auf dem Hauptzweig ist aktiv und führt `all-green`
       (`gh api repos/luetzey/who2be/rulesets`).
 - [ ] `allow_auto_merge` ist `true`
@@ -204,7 +204,18 @@ scheitert jede Anforderung, bevor irgendein Gate greift.
 
 ## Belegt, nicht behauptet
 
-Der Weg wurde an einem echten PR in beide Richtungen gezeigt: Anforderung sichtbar
-als `autoMergeRequest`, kein Merge solange `all-green` nicht grün war, Merge durch
-GitHub sobald er grün war. Die Belege stehen in
-`.claude/plan/2026-09-23-0030_auto-merge-mechanik.md`.
+Der Weg wurde an einem echten PR in beide Richtungen gezeigt — **PR #593**, dem
+PR, mit dem dieses Dokument selbst ins Repo kam:
+
+| Zeitpunkt | Ereignis |
+|---|---|
+| 2026-09-22T20:41:55Z | Auto-Merge angefordert; `mergeStateStatus: BLOCKED`, `state: OPEN` |
+| 2026-09-22T20:50:17Z | `all-green` meldet `conclusion: success` |
+| 2026-09-22T20:50:29Z | GitHub mergt selbsttätig; `state: MERGED`, `mergeCommit b28c2ebd` |
+
+Achteinhalb Minuten lang stand die Anforderung, ohne dass gemergt wurde — das
+ist die Negativrichtung: ein PR mit noch nicht grünem `all-green` wird nicht
+gemergt, egal wer den Auto-Merge angefordert hat. Zwölf Sekunden nach dem grünen
+Check lag der Merge vor, ohne dass ein Kommando dazwischen lief.
+
+Vollständige Messwerte: `.claude/plan/2026-09-23-0030_auto-merge-mechanik.md`.

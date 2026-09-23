@@ -225,8 +225,12 @@ Review-Checkliste unten.
    Breakpoint-Prefix gebunden, nicht nackt?
 3. Sind feste Breiten (`w-*`, `max-w-*`) auf Container-Ebene responsiv
    abgefedert (`w-full md:w-64` statt `w-64` durchgehend)?
-4. Sind Hit-Targets unterhalb `md` weiterhin ≥ 40px (§11 A11y-Minimum),
-   nicht durch `size="sm"`-Verdichtung unterschritten?
+4. Halten interaktive Elemente unterhalb `md` den Hit-Target-Floor aus
+   §11 ein (≥ 32px, dort verbindlich festgelegt)? `size="sm"` (36px) ist
+   dabei zulaessig — es unterschreitet den Floor nicht, ist aber nicht der
+   Default; `size="default"` (40px) bleibt der Regelfall, Mobile-Hits
+   bevorzugt 44px. Diese Checkliste setzt **keinen eigenen Wert**: die
+   Zahl steht ausschliesslich in §11.
 5. Bleibt Text bei 320px lesbar (keine abgeschnittenen Labels, kein
    Wortsalat durch zu schmale Flex-Kinder ohne `min-w-0`)?
 6. Wurde bei 768px (Tablet-Bruch `md`) und 1024px (`lg`) stichprobenartig
@@ -491,12 +495,22 @@ Muster in Gebrauch auf allen Auth-Pages (`LoginPage`, `SignupPage`,
 - **Kontrast:** Brand-Tinte (`--brand` ↔ `--brand-foreground`) muss
   WCAG-AA-tauglich sein (>= 4.5:1). Werte aus §2.2 sind verifiziert
   (siehe Plan-Anhang).
-- **Hit-Targets:** Buttons `size="default"` = 40px (HIG-konform ≥ 32px),
-  Mobile-Hits bevorzugt 44px (`size="lg"`). **`size="sm"` (36px) ist
-  unterhalb `md` zu klein** — dort `className="h-10 md:h-9"` setzen, damit
-  der Phone-Fall 40px erreicht und die Verdichtung ab `md` erhalten bleibt
-  (`tailwind-merge` loest `h-9` aus der Variante zugunsten der expliziten
-  Klasse auf). Gemessen im Rahmen von #569.
+- **Hit-Targets — diese Stelle ist die einzige Quelle des Floors:**
+  Verbindlich ist ein **Floor von ≥ 32px** (HIG). Kein interaktives Element
+  darf darunter liegen, auf keinem Breakpoint. Alles darueber sind
+  Praeferenzen, keine Mindestwerte: `size="default"` (40px) ist der
+  Regelfall, Mobile-Hits bevorzugt 44px (`size="lg"`), und `size="sm"`
+  (36px) bleibt zulaessig, wo Dichte gewollt ist (Zeilen-Aktionen,
+  Zurueck-Links) — es ist aber nicht der Default.
+  Andere Abschnitte, Issues, Plandateien und Reviews **zitieren** diesen
+  Floor, sie setzen keine eigene Zahl. Weicht eine Angabe anderswo ab, gilt
+  diese hier und die andere Stelle wird korrigiert.
+  *Technik, falls eine Stelle von `size="sm"` auf den 40px-Regelfall gehoben
+  werden soll:* `className="h-10 md:h-9"` an den Button — `tailwind-merge`
+  loest das `h-9` der Variante zugunsten der expliziten Klasse auf, der
+  Phone-Fall erreicht 40px und die Verdichtung ab `md` bleibt erhalten. Das
+  ist ein Rezept, keine Pflicht; den Floor setzt allein der Absatz oben.
+  Angewandt im Rahmen von #569.
 - **Fokus:** Focus-Ring bleibt `--ring` (neutral), **nicht** auf
   `--brand` umstellen. Sonst Doppelsignal (Brand-Fill + Brand-Ring).
 - **Brand-Farbe nie alleinige Information:** Statt nur "rotes
