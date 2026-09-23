@@ -139,7 +139,9 @@ export function SystemPromptNewPage() {
                     name="body"
                     render={() => (
                       <FormItem>
-                        <div className="flex items-center justify-between">
+                        {/* #566 Weiche 2: siehe SystemPromptEditorForm — dieselbe
+                            Zeile, zweite Fundstelle. */}
+                        <div className="flex flex-wrap items-center justify-between gap-2">
                           <FormLabel>{t('form.promptBody.label')}</FormLabel>
                           <PlaceholderHelp />
                         </div>
