@@ -281,6 +281,72 @@ describe('BillingPanel', () => {
     expect(screen.queryByText('Plan & Nutzung')).not.toBeInTheDocument()
   })
 
+  // --- Responsive-Audit (Issue #561, design-language.md §4.4) ---------------
+  //
+  // Zwei Flex-Kinder ohne `min-w-0` sind nicht unter ihre Inhaltsbreite
+  // schrumpfbar (`min-width: auto` ist der Default) — auf 320px laeuft die
+  // Zeile ueber, statt kontrolliert zu kuerzen. Geprueft wird die Klassen-
+  // Zusage, nicht die Pixelbreite: jsdom layoutet nicht. Gleiches Muster wie
+  // `components/ui/dialog.test.tsx`.
+
+  async function renderCloudPanel(overrides: Partial<EntitlementInfo> = {}) {
+    vi.stubGlobal('fetch', jsonFetch({ ...cloudActive, ...overrides }))
+    renderPanel()
+    // Auf den Kartentitel warten, nicht auf „Aktiv" — der Status-Text haengt
+    // vom Override ab, der Titel nicht.
+    await waitFor(() => {
+      expect(screen.getByText('Plan & Nutzung')).toBeInTheDocument()
+    })
+  }
+
+  it('kuerzt das MCP-Kontingent-Label statt die Zeile ueberlaufen zu lassen', async () => {
+    await renderCloudPanel()
+
+    const label = screen.getByText('MCP-Reads diesen Monat')
+    const value = screen.getByText('250 / 1000')
+    expect(label.className.split(/\s+/)).toEqual(expect.arrayContaining(['min-w-0', 'truncate']))
+    expect(value.className.split(/\s+/)).toContain('shrink-0')
+  })
+
+  it('kuerzt das Speicher-Label statt die Zeile ueberlaufen zu lassen', async () => {
+    await renderCloudPanel()
+
+    const label = screen.getByText('Belegter Speicher')
+    const value = screen.getByText('25 MB / 100 MB')
+    expect(label.className.split(/\s+/)).toEqual(expect.arrayContaining(['min-w-0', 'truncate']))
+    expect(value.className.split(/\s+/)).toContain('shrink-0')
+  })
+
+  it('haelt das Status-Badge neben dem Kartentitel ungeschrumpft', async () => {
+    await renderCloudPanel()
+
+    const title = screen.getByText('Plan & Nutzung')
+    const badge = screen.getByText('Aktiv')
+    expect(title.className.split(/\s+/)).toEqual(expect.arrayContaining(['min-w-0', 'truncate']))
+    expect(badge.className.split(/\s+/)).toContain('shrink-0')
+  })
+
+  it('bindet die zweispaltige Plan-Liste an einen Breakpoint (mobile-first)', async () => {
+    await renderCloudPanel()
+
+    const list = screen.getByText('Plan').closest('dl')
+    expect(list).not.toBeNull()
+    const classes = list!.className.split(/\s+/)
+    expect(classes).toContain('grid-cols-1')
+    expect(classes).toContain('sm:grid-cols-2')
+    // Keine nackte Mehrspaltigkeit ohne Prefix (§4.4 „Prefix ist Pflicht").
+    expect(classes).not.toContain('grid-cols-2')
+  })
+
+  it('haelt den CTA auf dem 40px-Hit-Target (§11 A11y-Minimum)', async () => {
+    await renderCloudPanel({ status: 'inactive', features: [] })
+
+    // `size="default"` = `h-10` = 40px; eine Verdichtung auf `size="sm"`
+    // (`h-9` = 36px) wuerde das A11y-Minimum unterhalb `md` unterschreiten.
+    const cta = screen.getByRole('button', { name: 'Jetzt upgraden' })
+    expect(cta.className.split(/\s+/)).toContain('h-10')
+  })
+
   it('startet den Mollie-Checkout beim Upgrade-Klick', async () => {
     const fetchMock = vi
       .fn()
