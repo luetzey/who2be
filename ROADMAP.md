@@ -21,7 +21,7 @@ state), `docs/adr/` (decisions), and the plan documents under
   workspace per agent (documents, file/URL ingest with content-addressed
   blob store, read-only SQL tables, timeline), evidence-backed knowledge
   base with typed edges, promotion into curated resources, agent access
-  log; 81 MCP tools in total, table UI + CSV/XLSX/Markdown/HTML exports
+  log; 83 MCP tools in total, table UI + CSV/XLSX/Markdown/HTML exports
 - **Semantic search & passage retrieval (ADR-0046):** content chunking,
   `search_content` passages, optional local embeddings with hybrid RRF
   ranking, semantic agent memory
