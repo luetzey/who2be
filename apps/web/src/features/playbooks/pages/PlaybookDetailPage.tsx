@@ -115,7 +115,7 @@ export function PlaybookDetailPage() {
   return (
     <Container>
       <Stack gap="md">
-        <Button asChild variant="ghost" size="sm" className="self-start">
+        <Button asChild variant="ghost" size="sm" className="min-h-10 self-start md:min-h-0">
           <Link to={wsPath('/playbooks')}>
             <ArrowLeft className="h-4 w-4" />
             {t('detail.back')}
@@ -129,7 +129,7 @@ export function PlaybookDetailPage() {
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-3">
                     <PlaybookTypeIcon type={playbook.type} />
-                    <h1 className="text-2xl font-semibold tracking-tight">
+                    <h1 className="min-w-0 text-2xl font-semibold tracking-tight break-words">
                       {playbook.name}
                     </h1>
                     {playbook.current_status !== undefined ? (
@@ -282,7 +282,7 @@ export function PlaybookDetailPage() {
 
               <div {...tabPanelProps('relations')}>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Card className="sm:col-span-2">
+                  <Card className="min-w-0 sm:col-span-2">
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <Users className="size-4 text-muted-foreground" aria-hidden="true" />
@@ -322,7 +322,7 @@ export function PlaybookDetailPage() {
                     </CardContent>
                   </Card>
 
-                  <Card className="sm:col-span-2">
+                  <Card className="min-w-0 sm:col-span-2">
                     <CardHeader>
                       <CardTitle>{t('detail.subPlaybooksTitle')}</CardTitle>
                     </CardHeader>
@@ -343,7 +343,7 @@ export function PlaybookDetailPage() {
                     </CardContent>
                   </Card>
 
-                  <Card>
+                  <Card className="min-w-0">
                     <CardHeader>
                       <CardTitle>{t('detail.composedByTitle')}</CardTitle>
                     </CardHeader>
@@ -352,7 +352,7 @@ export function PlaybookDetailPage() {
                     </CardContent>
                   </Card>
 
-                  <Card>
+                  <Card className="min-w-0">
                     <CardHeader>
                       <CardTitle>{t('detail.resourceLinksTitle')}</CardTitle>
                     </CardHeader>
