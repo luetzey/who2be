@@ -325,3 +325,47 @@ Testanpassung fuer B5 (gehoert zu K2).
 2. `.github/workflows/ci.yml` — Job `e2e-mobile`
 3. `scripts/ci/test_all_green_matrix.py` — `UNGATED_BY_DESIGN` + Selbstpruefung
 4. `changelog.d/w7k1-playwright-mobile-profile.added.md`
+
+## Nachtrag Review-Runde 1 (2026-09-24) — B8: zweites ungefiltertes Gate
+
+Der Review hat einen zweiten Fall derselben Fehlerklasse wie B6 gefunden, den
+ich uebersehen hatte. `e2e-billing-cloud` rief `npx playwright test
+e2e/billing.spec.ts` ohne `--project` auf. Meine Annahme, ein benannter
+Spec-Pfad sei als Auswahl eindeutig, war schlicht falsch: der Pfad waehlt
+**Dateien**, Playwright kreuzt sie weiterhin mit **allen** Projekten. Beleg aus
+Run 35924699929: `Running 8 tests` statt 2, mit Zeilen fuer alle drei
+Mobile-Profile. Und `e2e-billing-cloud` steht in `all-green.needs` — fuer
+`billing.spec.ts` waren die Mobile-Profile damit scharf. Dass der PR trotzdem
+gruen war, lag am Inhalt der zwei Billing-Tests, nicht an der Konstruktion.
+
+Schwerer wiegt, dass genau diese falsche Annahme als Ausnahme in der Zusicherung
+stand, die den Fehler verhindern sollte (`check_playwright_projects`:
+`if "--project" in run or ".spec.ts" in run`). Die Funktion meldete 0 Probleme
+und uebersah den einzigen noch offenen Fall. Eine Zusicherung, deren Ausnahme
+auf die Stelle gemuenzt ist, die sie pruefen soll, prueft nichts.
+
+Korrektur in dieser Reihenfolge, damit die Negativprobe Beweiswert hat:
+
+1. Zuerst den `.spec.ts`-Zweig samt Kommentar entfernt. Lauf **vor** dem
+   ci.yml-Fix — die Zusicherung schlaegt an:
+
+   ```
+   FAIL  Struktur: Job 'e2e-billing-cloud': Playwright wird ohne `--project`
+         aufgerufen ('npx playwright test e2e/billing.spec.ts'). ...
+   1 Abweichung(en) — der Aggregat-Job urteilt nicht wie spezifiziert.
+   EXIT=1
+   ```
+
+2. Dann `ci.yml:420` auf `--project=chromium` gepinnt, analog zum `e2e`-Job,
+   mit der Begruendung im Kommentar. Danach: `Alle 14 Faelle und die
+   Struktur-Zusicherungen wie erwartet. EXIT=0`.
+
+3. Lokal gegengeprueft, dass die Auswahl jetzt stimmt:
+   `--project=chromium --list` → **Total: 2 tests in 1 file** (beide
+   `[chromium]`); ohne Filter weiterhin **8** mit `[mobile-320]` usw. Der
+   Unterschied liegt also am Filter, nicht an der Umgebung.
+
+Ueber die Mobile-Abdeckung von `billing.spec.ts` ist damit **nichts**
+entschieden — Billing auf Mobile bleibt eine eigene Karte. Diese Karte stellt
+nur den Zustand her, den sie zugesagt hat: die neuen Profile melden und
+blockieren nicht.

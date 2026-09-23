@@ -413,11 +413,19 @@ jobs:
         # E2E_EDITION=cloud ist das Signal, das die Datei-weite Skip-Guard in
         # billing.spec.ts aufhebt (siehe Kommentar dort) — ohne dieses Signal
         # (der normale `e2e`-Job oben) bleibt die Spec uebersprungen.
+        #
+        # `--project=chromium` ist auch hier Pflicht: der Spec-Pfad waehlt nur
+        # die DATEI, Playwright kreuzt sie weiterhin mit allen vier Projekten
+        # (belegt in Run 35924699929: 8 statt 2 Tests). Dieser Job steht in
+        # `all-green.needs` und ist scharf — ohne Filter waeren die noch
+        # meldenden Mobile-Profile fuer billing.spec.ts blockierend, also
+        # faktisch K3 an `e2e-mobile` vorbei. Ob Billing auf Mobile laufen
+        # soll, ist eine eigene Karte.
         working-directory: apps/web
         env:
           E2E_BASE_URL: http://localhost:5173
           E2E_EDITION: cloud
-        run: npx playwright test e2e/billing.spec.ts
+        run: npx playwright test e2e/billing.spec.ts --project=chromium
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

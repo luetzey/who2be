@@ -151,8 +151,9 @@ def check_playwright_projects(jobs: dict[str, Any]) -> list[str]:
             # `e2e:install` laedt nur Browser-Binaries, fuehrt keine Tests aus.
             if "e2e:install" in run:
                 continue
-            # Ein direkt benannter Spec-Pfad ist ebenfalls eindeutig.
-            if "--project" in run or ".spec.ts" in run:
+            # Ein benannter Spec-Pfad zaehlt NICHT als Filter: er waehlt
+            # Dateien, Playwright kreuzt sie weiterhin mit allen Projekten.
+            if "--project" in run:
                 continue
             problems.append(
                 f"Job '{job_name}': Playwright wird ohne `--project` aufgerufen "
