@@ -182,6 +182,25 @@ inzwischen vor — siehe naechstes Kapitel.
 
 ## Laufprotokoll (CI-Run 35921243967, PR #615, Head `f951802f`)
 
+### Bestaetigungslauf nach der Korrektur (Run 35923328598, Head `e486298a`)
+
+Der zweite Lauf belegt beide Haelften der Akzeptanz zugleich:
+
+| Job | Ergebnis | Dauer |
+|---|---|---|
+| `e2e` (Desktop-Gate) | **success** | 2:36 |
+| `e2e-mobile (mobile-iphone-13)` | failure | 5:24 |
+| `e2e-mobile (tablet-ipad-gen-7)` | failure | 5:04 |
+| `e2e-mobile (mobile-320)` | failure | 6:46 |
+| **`all-green`** | **success** | — |
+
+`all-green` ist **gruen, obwohl alle drei Mobile-Jobs rot sind**. Damit ist
+nicht bloss behauptet, sondern am laufenden System bewiesen, dass die neuen
+Profile melden und keinen PR blockieren.
+
+`e2e` liegt mit 2:36 wieder auf Baseline-Niveau (3 min) — die Regression aus
+B6 ist nachweislich weg, nicht nur im Diff korrigiert.
+
 ### Ergebniszahlen je Profil
 
 | Profil | passed | failed | skipped | Dauer |
