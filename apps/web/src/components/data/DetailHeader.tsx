@@ -57,7 +57,7 @@ export function DetailHeader({
           <EntityIcon icon={icon} tone={iconTone} size="lg" />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-semibold tracking-tight break-words">{title}</h1>
+              <h1 className="min-w-0 text-2xl font-semibold tracking-tight break-words">{title}</h1>
               {badges}
             </div>
             {description !== undefined && description !== '' ? (

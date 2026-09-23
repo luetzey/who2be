@@ -81,3 +81,56 @@ Basis: `origin/main` @ 9a05a4e8 · Node 22.23.2 (Pflicht nach CONTRIBUTING.md)
   apps/web/src/features CHANGELOG.md` ist leer. Diff gesamt: 4 Dateien,
   32 insertions / 2 deletions — davon je eine Klasse Produktivcode.
 
+## Runde 2 — Nachbesserung nach Review (Blocker 1)
+
+Der Reviewer hat nachgemessen: `break-words` allein loest das Kartenziel fuer
+`DetailHeader` **nicht**. Die H1 ist direktes Kind der Flex-Zeile
+(`DetailHeader.tsx:59`) und hat als Flex-Item `min-width: auto`; sie blaeht sich
+auf die ungebrochene Wortbreite auf, bevor `overflow-wrap` greifen kann. Das
+`min-w-0` auf Zeile 58 sitzt eine Ebene **ueber** dem Flex-Container.
+
+### Eigene Messung (Chromium, 320 px Viewport, Nachbau der exakten Klassenkette)
+
+Titel `supercalifragilisticexpialidocious-mcp-server-produktion`, H1-Breite:
+
+| Variante | Breite | Ueberlauf ueber den Rahmen |
+|---|---|---|
+| `break-words` (Stand Runde 1) | 365,8 px | **+134,8 px** |
+| `break-words` + `min-w-0` **an der H1** | 206,0 px | kein Ueberlauf (−25,0 px) |
+| `break-words` + `min-w-0` an der **Flex-Zeile** (Z. 59) | 365,8 px | **+134,8 px** |
+| `min-w-0` an der H1, Titel ganz ohne Trennstelle | 206,0 px | kein Ueberlauf |
+
+Damit ist die Stellenwahl **gemessen, nicht angenommen**: `min-w-0` an der
+Flex-Zeile wirkt nicht — nur `min-w-0` an der H1 selbst. Die vom Reviewer
+angebotene Alternative faellt damit aus; die Badges bleiben durch ihre eigenen
+Klassen (`max-w-full break-all` aus #566) geschuetzt.
+
+### Umsetzung
+
+- **RED** @ `6bc7f845`: `DetailHeader.test.tsx` prueft jetzt **beide** tragenden
+  Klassen (`toHaveClass('break-words', 'min-w-0')`) → 1 failed | 2 passed,
+  received `text-2xl font-semibold tracking-tight break-words`. jsdom rechnet
+  kein Layout; die Klassen-Assertion ueber beide Klassen ist die verfuegbare
+  Grenze, der Layout-Nachweis steht in der Tabelle oben.
+- **GREEN**: `min-w-0` an `DetailHeader.tsx:60` ergaenzt — eine Klasse am
+  bestehenden Element, kein Strukturumbau, keine neuen Props (AK 2).
+  `vitest run src/components/data/` → 62 passed (17 files).
+- DoD Runde 2 komplett neu gefahren (Node 22.23.2): `lint` exit 0 / 0 errors
+  (keine `classnames-order`-Warnung an der neuen Klassenreihenfolge
+  `min-w-0 text-2xl font-semibold tracking-tight break-words`) · `tsc -b` exit 0 ·
+  `test:coverage` exit 0, **1254 passed | 0 skipped**, 200 Files, 87,33 % stmts ·
+  `build` exit 0 · `license:check` exit 0 · `i18n:check` exit 0 ·
+  `check_code_refs.py` exit 0 · `changelog_fragments.py check` exit 0.
+- Scope-Guard gegen `origin/main...HEAD`: `components/ui`, `features/`,
+  `CHANGELOG.md` unberuehrt.
+
+### Fuer @pm — Vorab-Analyse im Kartentext war teilweise falsch
+
+Der Kartenabsatz „Kontext, schon nachgemessen" behauptet, die Elternketten
+beider Primitives seien korrekt und es fehle „nur die Umbruch-Regel am
+Textknoten". Fuer `EntityCard` stimmt das (`flex min-w-0 flex-1 flex-col` sitzt
+direkt ueber dem `<p>`, das `<p>` ist Block-Kind, kein Flex-Item). Fuer
+`DetailHeader` ist es messbar falsch: das `min-w-0` liegt eine Ebene zu hoch.
+Der Befund stammt aus dem Review von t_1ca8a551 (#562/PR #595) und wird sonst
+in weitere Karten weitergereicht.
+
