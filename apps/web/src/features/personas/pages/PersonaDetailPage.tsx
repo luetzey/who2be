@@ -216,7 +216,11 @@ export function PersonaDetailPage() {
                     inaktiven Tab-Inhalt unmountet. */}
                 <Form {...form}>
                   <Tabs value={tab} onValueChange={setTab}>
-                    <TabsList>
+                    {/* `flex-wrap`: vier Trigger messen zusammen 461px und
+                        laufen bei 320/375px aus der Leiste (gemessen am
+                        gebauten CSS, #571). Umbruch statt Scroll — §4.4
+                        Checklistenpunkt 5 nennt Umbruch als Mittel der Wahl. */}
+                    <TabsList className="flex-wrap">
                       <TabsTrigger value="edit">
                         <SquarePen aria-hidden="true" />
                         {t('common:actions.edit')}
