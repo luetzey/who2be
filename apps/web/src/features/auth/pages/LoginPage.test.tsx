@@ -758,3 +758,56 @@ describe('LoginPage — Captcha', () => {
     expect(resend.mock.calls[0][0].options).not.toHaveProperty('captchaToken')
   })
 })
+
+// Responsive-Audit (#569, W3). Gemessen wurde im echten Chromium gegen das
+// gebaute CSS; diese Tests halten die daraus folgenden Klassen-Entscheidungen
+// fest, damit ein spaeterer Umbau sie nicht still zuruecknimmt.
+describe('LoginPage — Responsive (#569)', () => {
+  beforeEach(() => {
+    primeAuthMocks()
+  })
+
+  // Fund: ein langer GoTrue-Bezeichner im ErrorAlert (z. B.
+  // `unverified_email_address_requires_confirmation_before_first_sign_in`) ist
+  // ein ungebrochenes Token. Es blaeht die min-content-Breite der Karte auf,
+  // `w-full max-w-md` kann nicht mehr schrumpfen und die Seite scrollt bei
+  // 320px horizontal (gemessen 522px gegen 320px Viewport). `break-words`
+  // vererbt an alle Nachkommen und deckt damit auch Fehlerzustaende ab, die
+  // erst zur Laufzeit entstehen.
+  it('laesst lange Bezeichner in der ganzen Karte umbrechen (kein Body-Scroll bei 320px)', () => {
+    renderLoginAt('/login')
+
+    const main = document.querySelector('main')
+    expect(main?.className).toContain('break-words')
+  })
+
+  // §11 A11y-Minimum: Hit-Targets unterhalb `md` >= 40px. `size="sm"` liefert
+  // 36px (gemessen). `h-10 md:h-9` hebt den Phone-Fall auf 40px und behaelt
+  // die Verdichtung ab `md`.
+  it('haelt den Resend-CTA unterhalb md auf 40px Hit-Target', async () => {
+    signInWithPassword.mockResolvedValue({
+      data: { session: null },
+      error: { message: 'Email not confirmed' },
+    })
+    renderLoginAt('/login')
+    fillAndSubmitLogin()
+
+    const resendButton = await screen.findByRole('button', {
+      name: 'Bestaetigungs-Mail erneut senden',
+    })
+    expect(resendButton.className).toContain('h-10')
+    expect(resendButton.className).toContain('md:h-9')
+  })
+
+  // Weiche 3 (#569, verbindlich): die Zeile passt heute, darf aber bei
+  // laengeren Uebersetzungen oder vergroesserter Schrift nicht den einzigen
+  // Ausweg aus einem vergessenen Passwort abschneiden. Muster: PageHeader.
+  it('laesst die Passwort-Zeile umbrechen, damit der Reset-Link erreichbar bleibt', () => {
+    renderLoginAt('/login')
+
+    const link = screen.getByRole('link', { name: 'Passwort vergessen?' })
+    const row = link.parentElement
+    expect(row?.className).toContain('justify-between')
+    expect(row?.className).toContain('flex-wrap')
+  })
+})

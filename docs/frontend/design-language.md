@@ -448,7 +448,7 @@ Beispiele: `PersonasPage`, `PlaybooksPage`, `MembersPage`,
 
 ```
 <main class="flex min-h-screen items-center justify-center
-             bg-muted/30 px-4 py-10">
+             bg-muted/30 px-4 py-10 break-words">
   <Card class="w-full max-w-md shadow-modal border-transparent">
     <CardHeader>
       <span class="text-xs uppercase tracking-wide text-muted-foreground">Who2Be</span>
@@ -464,8 +464,27 @@ Beispiele: `PersonasPage`, `PlaybooksPage`, `MembersPage`,
 </main>
 ```
 
-Heute nur `LoginPage`; weitere Brand-Pages (Onboarding, Welcome) folgen
-demselben Muster.
+`break-words` am `<main>` ist **Pflicht**, nicht Geschmack: Marketing-Pages
+zeigen fremdbestimmte Zeichenketten (GoTrue-Fehlerbezeichner wie
+`unverified_email_address_requires_confirmation`, Redirect-Hosts,
+Workspace- und Agentennamen). Ein ungebrochenes Token blaeht die
+min-content-Breite der Karte auf, `w-full max-w-md` kann dann nicht mehr
+schrumpfen, und die Seite scrollt bei 320px horizontal. Die Klasse vererbt an
+alle Nachkommen und deckt damit auch Zustaende ab, die erst zur Laufzeit
+entstehen. Gemessen im Rahmen von #569.
+
+**Werte anzeigen statt Feld faelschen:** Ein nicht editierbarer Wert in
+Feld-Optik gehoert nicht in einen `readOnly`-`<Input>` — der kuerzt auf
+schmalen Viewports still (`<input>` kennt keinen Umbruch). Stattdessen ein
+umbrechendes Element (z. B. `<output>`) in derselben Optik:
+`flex min-h-10 w-full rounded-md border border-input bg-muted/50 px-3 py-2
+text-sm break-words text-muted-foreground`. Wo der Wert eine Einwilligung
+beschreibt (OAuth-Consent), ist das bindend: ein abgeschnittener Agentenname
+stellt den Gegenstand der Freigabe unvollstaendig dar.
+
+Muster in Gebrauch auf allen Auth-Pages (`LoginPage`, `SignupPage`,
+`ResetPasswordPage`, `SetPasswordPage`, `OAuthConsentPage`,
+`InvitationAcceptPage`, `AuthCallbackPage`, `ComingSoonPage`).
 
 ## 11. A11y-Minimum
 
@@ -473,7 +492,11 @@ demselben Muster.
   WCAG-AA-tauglich sein (>= 4.5:1). Werte aus §2.2 sind verifiziert
   (siehe Plan-Anhang).
 - **Hit-Targets:** Buttons `size="default"` = 40px (HIG-konform ≥ 32px),
-  Mobile-Hits bevorzugt 44px (`size="lg"`).
+  Mobile-Hits bevorzugt 44px (`size="lg"`). **`size="sm"` (36px) ist
+  unterhalb `md` zu klein** — dort `className="h-10 md:h-9"` setzen, damit
+  der Phone-Fall 40px erreicht und die Verdichtung ab `md` erhalten bleibt
+  (`tailwind-merge` loest `h-9` aus der Variante zugunsten der expliziten
+  Klasse auf). Gemessen im Rahmen von #569.
 - **Fokus:** Focus-Ring bleibt `--ring` (neutral), **nicht** auf
   `--brand` umstellen. Sonst Doppelsignal (Brand-Fill + Brand-Ring).
 - **Brand-Farbe nie alleinige Information:** Statt nur "rotes
