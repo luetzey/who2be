@@ -275,4 +275,41 @@ describe('SubResourcePicker — 320px (#564)', () => {
     const group = screen.getByRole('group', { name: 'Einbettungs-Modus für Glossar A' })
     expect(group.className.split(/\s+/)).toContain('shrink-0')
   })
+
+  // Review-Runde 1: der Aktionsblock war mit `shrink-0` auf seine max-content-
+  // Breite genagelt (104px Segment-Gruppe + 3x40px Icons + 4x8px gap = 248px).
+  // Gemessen gegen die ZEILEN-Innenkante (nicht den Viewport) blieben bei 320px
+  // nur 214px — der Entfernen-Button lag 35px ausserhalb der Zeilenumrandung.
+  // Vertrag: unterhalb `md` bekommt der Block eine eigene volle Zeile
+  // (`basis-full`) und darf INNERHALB umbrechen (`flex-wrap`); ab `md` gilt
+  // wieder die kompakte, nicht umbrechende Fassung.
+  it('laesst den Aktionsblock unterhalb md selbst umbrechen, statt die Zeile zu ueberlaufen', async () => {
+    listResourcesMock.mockResolvedValue([rA])
+
+    render(
+      <SubResourcePicker
+        currentResourceId={currentId}
+        existing={[makeSub('r-a', 'Glossar A')]}
+        saving={false}
+        onSave={vi.fn()}
+      />,
+    )
+
+    const remove = await screen.findByRole('button', { name: 'Glossar A entfernen' })
+    const actions = remove.parentElement as HTMLElement
+    const classes = actions.className.split(/\s+/)
+
+    expect(classes).toContain('basis-full')
+    expect(classes).toContain('flex-wrap')
+    expect(classes).toContain('justify-end')
+    // Kein unbedingtes shrink-0 mehr: das war die Ursache des Ueberlaufs.
+    expect(classes).not.toContain('shrink-0')
+    expect(classes).toContain('md:basis-auto')
+    expect(classes).toContain('md:flex-nowrap')
+    expect(classes).toContain('md:shrink-0')
+
+    // Weiche 3 bleibt gewahrt: die Segment-Gruppe selbst bricht nicht.
+    const group = screen.getByRole('group', { name: 'Einbettungs-Modus für Glossar A' })
+    expect(group.className.split(/\s+/)).toContain('shrink-0')
+  })
 })

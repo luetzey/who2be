@@ -221,10 +221,16 @@ export function SubResourcePicker({
                   <span className="min-w-0 flex-1 basis-[8rem] truncate text-sm font-medium">
                     {nameOf(id)}
                   </span>
-                  {/* Aktionsblock: wandert als Ganzes in die zweite Zeile, die
+                  {/* Aktionsblock: unterhalb `md` bekommt er mit `basis-full`
+                      eine eigene volle Zeile und darf INNERHALB umbrechen —
+                      sein Platzbedarf ist fix 248px (104 Segment-Gruppe +
+                      3x40 Icons + 4x8 gap), die Zeile bietet bei 320px aber nur
+                      214px Innenraum; `shrink-0` hatte den Block dort 35px ueber
+                      die Zeilenkante geschoben (Review-Runde 1). Die
                       Segment-Gruppe bleibt dabei eine visuelle Einheit
-                      (Weiche 3 des Issues — kein Umbruch INNERHALB der Gruppe). */}
-                  <span className="ml-auto flex shrink-0 items-center gap-2">
+                      (Weiche 3 des Issues — kein Umbruch INNERHALB der Gruppe).
+                      Ab `md` gilt wieder die kompakte, nicht umbrechende Fassung. */}
+                  <span className="flex basis-full flex-wrap items-center justify-end gap-2 md:ml-auto md:shrink-0 md:basis-auto md:flex-nowrap">
                     <span
                       className="inline-flex shrink-0 overflow-hidden rounded-md border"
                       role="group"

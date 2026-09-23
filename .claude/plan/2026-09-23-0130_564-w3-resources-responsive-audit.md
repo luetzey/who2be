@@ -239,3 +239,100 @@ Nur `apps/web/src/features/resources/**` + Testnachbarn, der scoped
 BlockNote-Block in `apps/web/src/styles/globals.css`, `changelog.d/` und diese
 Plandatei. Kein `components/ui/*`, kein `components/data/*`, kein
 `components/layout/*`, kein BlockNote-Upgrade. Kein Merge, kein Push auf `main`.
+
+---
+
+## Nachtrag Review-Runde 2 — Aktionsblock des `SubResourcePicker`
+
+### Befund des Reviewers (bestätigt, nicht bestritten)
+
+Der Aktionsblock der Resource-Link-Zeile trug `ml-auto flex shrink-0
+items-center gap-2`. `shrink-0` nagelt ihn auf seine `max-content`-Breite von
+fix **248 px** (104 Segment-Gruppe + 3 × 40 Icons + 4 × 8 gap). Bei 320 px
+Viewport bietet die `<li>` aber nur **214 px** Innenraum — der Block endete bei
+`x = 302` gegen eine Innenkante bei `x = 267`, also **35 px Überlauf**. Der
+Entfernen-Button lag vollständig außerhalb der Zeilenumrandung. Das `flex-wrap`
+an der `<li>` half nur der ersten Umbruchebene (Text ↔ Aktionen), nicht
+*innerhalb* des Aktionsblocks.
+
+Mein Messfehler in Runde 1: die Harness sammelte nur
+`getBoundingClientRect().right > clientWidth`, also Überläufe gegen den
+**Viewport**. Dieser Überlauf bleibt im Viewport und tritt nur gegen den
+**Zeilencontainer** auf — durch genau diese Lücke ist er gerutscht.
+
+### Fix
+
+`SubResourcePicker` → `selected.map(…)`-`<li>`, Aktionsblock:
+
+```
+flex basis-full flex-wrap items-center justify-end gap-2
+md:ml-auto md:shrink-0 md:basis-auto md:flex-nowrap
+```
+
+Unterhalb `md` bekommt der Block mit `basis-full` eine eigene volle Zeile und
+darf `flex-wrap`-bedingt innerhalb umbrechen; `ml-auto` entfällt dort (bei
+voller Breite wirkungslos) und weicht `justify-end`, damit die Aktionen rechts
+ausgerichtet bleiben. Ab `md` gilt die vorige kompakte Fassung unverändert.
+
+**Weiche 3 bleibt gewahrt:** die Segment-Gruppe trägt weiterhin selbst
+`shrink-0` und bricht nicht — sie wandert als Einheit. Gemessen 104 px bei
+320/375 px, 88 px ab 768 px.
+
+### Messung gegen die ZEILEN-Innenkante (nicht den Viewport)
+
+Statische Probe gegen das *gebaute* CSS `dist/assets/index-DVHIVvHY.css` aus
+dem eigenen `npm run build`, mit der echten Elternkette
+`Container(mx-auto max-w-5xl px-4) > Card > CardContent(p-6 pt-0) > ul > li(px-3)`.
+Erfassungskriterium diesmal **`child.right > parent.contentRight`** je Element
+(Hinweis 2 des Reviewers übernommen), nicht mehr gegen `clientWidth`:
+
+| Viewport | `li` innen | `#actions` Breite / Höhe | `#actions.right` | Zeilen-Innenkante | Überläufer |
+|---|---|---|---|---|---|
+| **320** | 212 px | 212 px / **90 px** (zwei Ebenen) | 266 | 266 | **0** |
+| 375 | 267 px | 267 px / 42 px (eine Ebene) | 321 | 321 | **0** |
+| 768 | 644 px | 208 px / 34 px | 706 | 706 | **0** |
+| 1024 | 900 px | 208 px / 34 px | 962 | 962 | **0** |
+
+Die Überlauf-Liste ist auf **allen vier Viewports leer**. Bei 320 px bildet der
+Block wie vorgesehen eine zweite Ebene (Höhe 90 px): Segment-Gruppe + `^`/`v`
+in Ebene 1, `x` in Ebene 2 — alle drei Icon-Buttons weiterhin gemessen
+**40 × 40 px**, die Segment-Buttons 42 px hoch. Ab 768 px zurück auf 32 px
+bzw. 34 px. AK 5 damit in Breite *und* Höhe erfüllt.
+
+Visueller Beleg (320 px, DPR 2):
+`/home/luetzey/.hermes/profiles/coder/cache/scratch/t_b071837f-r2-subresource-row-320px.png`
+— das „x" steht innerhalb des Rahmens.
+
+Die Utilities existieren im gebauten CSS: `.basis-full{flex-basis:100%}`,
+`.md\:basis-auto{flex-basis:auto}`, `.md\:flex-nowrap{flex-wrap:nowrap}`,
+`.md\:ml-auto{margin-left:auto}`, `.md\:shrink-0{flex-shrink:0}`,
+`.justify-end{justify-content:flex-end}`.
+
+### Test-first für Runde 2
+
+Neuer Vitest-Fall `laesst den Aktionsblock unterhalb md selbst umbrechen, statt
+die Zeile zu ueberlaufen` in `SubResourcePicker.test.tsx`, VOR dem Fix
+geschrieben und rot gesehen:
+`Tests 1 failed | 8 passed (9)` — `expected [ 'ml-auto', 'flex', 'shrink-0', …(2) ] to include 'basis-full'`.
+Nach dem Fix grün. Er hält auch die *Abwesenheit* von `shrink-0` fest
+(die Ursache) und prüft weiterhin, dass die Segment-Gruppe ihr `shrink-0`
+behält — damit Weiche 3 nicht still kippt.
+
+### DoD-Kommandos Runde 2 (Node 22.23.2 aus `.nvmrc`)
+
+- `npm run lint` → 0, **67 Warnungen — exakt der vorbestehende Stand**. Der
+  erste Fix-Versuch hatte eine 68. Warnung erzeugt
+  (`tailwindcss/classnames-order`); per `eslint --fix` auf der Datei
+  korrigiert, Differenz gegen `git stash` gegengeprüft.
+- `npx tsc -b` → 0
+- `npm run test:coverage` → 0, **197 Dateien / 1228 Tests, 0 skipped**;
+  Statements 87.30 · Branches 82.08 · Functions 82.91 · Lines 88.33
+- `npm run test:a11y` → 0
+- `npm run build` → 0
+- `npm run i18n:check` → 0 · `npm run license:check` → 0
+- `uv run python scripts/check_code_refs.py .` → 0 (951 legacy, 0 error)
+- `uv run python scripts/changelog_fragments.py check` → 0
+
+Scope unverändert: nur `SubResourcePicker.tsx` + sein Testnachbar und diese
+Plandatei. Die Probe-Datei wurde nach der Messung gelöscht, der Arbeitsbaum ist
+sauber. Der `TabsList`-Primitive-Fund bleibt gemeldet und unrepariert.
