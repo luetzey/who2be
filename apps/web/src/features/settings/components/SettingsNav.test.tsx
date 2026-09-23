@@ -45,16 +45,20 @@ function renderNav() {
   )
 }
 
-// Responsive-Vertrag #568 (AK 2): die Nav-Eintraege halten unterhalb `md` den
-// 40-px-Hit-Target aus design-language.md §11. Gemessen liegen sie mit
-// `px-3 py-2` bei `text-sm` auf 36 px — `min-h-10` hebt sie unterhalb `md` auf
-// 40 px, ab `md` faellt die Polsterung auf die Desktop-Dichte zurueck.
+// Responsive-Vertrag #568 (AK 2): die Nav-Eintraege halten unterhalb `md`
+// 40 px Hit-Target. Die Zahl kommt aus AK 2 dieses Issues, nicht aus der Norm:
+// design-language.md §11 ist die einzige Quelle des Floors und setzt ihn auf
+// >= 32 px — die gemessenen 36 px waren danach zulaessig, 40 px ist dort die
+// Praeferenz `size="default"`, die dieses Paket unterhalb `md` verbindlich
+// macht. Gemessen liegen die Eintraege mit `px-3 py-2` bei `text-sm` auf
+// 36 px — `min-h-10` hebt sie unterhalb `md` auf 40 px, ab `md` faellt die
+// Polsterung auf die Desktop-Dichte zurueck.
 // jsdom hat kein Layout, deshalb ist das hier ein Klassen-Vertrag; die
 // Layout-Aussage selbst ist in
 // .claude/plan/2026-09-23-0830_568-w3-settings-responsive-audit.md gerendert
 // belegt (36 px -> 40 px bei 320 px Viewport).
 describe('SettingsNav — Responsive (#568)', () => {
-  it('haelt den 40-px-Hit-Target unterhalb md und gibt ihn ab md wieder frei', () => {
+  it('haelt den 40-px-Hit-Target aus AK 2 unterhalb md und gibt ihn ab md wieder frei', () => {
     renderNav()
 
     const link = screen.getByRole('link', { name: 'Konto' })
