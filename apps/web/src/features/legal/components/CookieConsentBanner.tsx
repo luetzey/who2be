@@ -44,11 +44,26 @@ export function CookieConsentBanner() {
             .
           </p>
         </div>
-        <div className="flex shrink-0 gap-2">
-          <Button variant="outline" size="sm" onClick={reject}>
+        {/* #567 (§4.4 Punkt 4): die beiden `size="sm"`-Buttons massen gerendert
+            36px — §11 (Floor 32px) eingehalten, das 40px-Kriterium dieses
+            Issues nicht. Unterhalb `md` daher `h-10`; unterhalb `sm`, wo der
+            Banner stapelt, teilen sie sich die volle Kartenbreite (die Reihe
+            mass mit `shrink-0` 256px bei 254px Innenraum). */}
+        <div className="flex gap-2 sm:shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-10 flex-1 sm:flex-none md:h-9"
+            onClick={reject}
+          >
             {t('cookie.rejectButton')}
           </Button>
-          <Button variant="brand" size="sm" onClick={accept}>
+          <Button
+            variant="brand"
+            size="sm"
+            className="h-10 flex-1 sm:flex-none md:h-9"
+            onClick={accept}
+          >
             {t('cookie.acceptButton')}
           </Button>
         </div>
