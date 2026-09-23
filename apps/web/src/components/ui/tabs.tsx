@@ -65,9 +65,21 @@ interface TabsListProps {
   'aria-label'?: string
 }
 
+// Die Trigger tragen `whitespace-nowrap` und brechen nicht; die Leiste darf
+// aus Design-Gruenden auch nicht umbrechen (die `border-b` ist eine
+// durchgehende Kante, der aktive Unterstrich liegt auf ihr). Sie scrollt
+// stattdessen horizontal — §4.4 Punkt 1 nimmt bewusst gescrollte Container
+// vom 320px-Kriterium aus. `pb-px` haelt dabei den 1px-Ueberstand des
+// `-bottom-px`-Unterstrichs innerhalb der Box: `overflow-x: auto` zieht
+// `overflow-y` sonst auf `auto` nach und macht aus diesem Pixel echten
+// vertikalen Scroll-Inhalt.
 export function TabsList({ children, className, ...props }: TabsListProps) {
   return (
-    <div role="tablist" className={cn('flex gap-1 border-b', className)} {...props}>
+    <div
+      role="tablist"
+      className={cn('flex gap-1 overflow-x-auto border-b pb-px', className)}
+      {...props}
+    >
       {children}
     </div>
   )
