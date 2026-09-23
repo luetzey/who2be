@@ -129,9 +129,10 @@ describe('ResetPasswordPage', () => {
     )
   }
 
-  // Responsive-Audit (#569): Hit-Targets unterhalb `md` >= 40px (§11).
-  // Gemessen lieferte `size="sm"` hier 36px. `h-10 md:h-9` hebt den
-  // Phone-Fall auf 40px und behaelt die Verdichtung ab `md`.
+  // Responsive-Audit (#569), Weiche 4: unterhalb `md` auf den 40px-Regelfall
+  // heben. Gemessen lieferte `size="sm"` hier 36px — oberhalb des
+  // verbindlichen Floors (§11: >= 32px), aber nicht gewollt. `h-10 md:h-9`
+  // hebt den Phone-Fall auf 40px und behaelt die Verdichtung ab `md`.
   it('haelt den Zurueck-Link unterhalb md auf 40px Hit-Target (#569)', () => {
     renderResetPage()
 

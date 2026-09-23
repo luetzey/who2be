@@ -326,9 +326,11 @@ export function LoginPage() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    // §11 A11y-Minimum: Hit-Targets unterhalb `md` >= 40px.
-                    // `size="sm"` liefert 36px (gemessen) — unterhalb `md`
-                    // wird auf 40px gehoben, ab `md` bleibt die Verdichtung.
+                    // Weiche 4 aus #569: unterhalb `md` auf den 40px-Regelfall
+                    // heben. `size="sm"` liefert 36px (gemessen) — das haelt
+                    // den verbindlichen Floor (§11: >= 32px) bereits, ist hier
+                    // aber nicht dicht genug gewollt. Ab `md` bleibt die
+                    // Verdichtung.
                     className="h-10 md:h-9"
                     disabled={captcha.blocked}
                     onClick={() => void resendConfirmation()}

@@ -781,9 +781,10 @@ describe('LoginPage — Responsive (#569)', () => {
     expect(main?.className).toContain('break-words')
   })
 
-  // §11 A11y-Minimum: Hit-Targets unterhalb `md` >= 40px. `size="sm"` liefert
-  // 36px (gemessen). `h-10 md:h-9` hebt den Phone-Fall auf 40px und behaelt
-  // die Verdichtung ab `md`.
+  // Weiche 4 aus #569: unterhalb `md` auf den 40px-Regelfall heben.
+  // `size="sm"` liefert 36px (gemessen) — oberhalb des verbindlichen Floors
+  // (§11: >= 32px), aber hier nicht gewollt. `h-10 md:h-9` hebt den
+  // Phone-Fall auf 40px und behaelt die Verdichtung ab `md`.
   it('haelt den Resend-CTA unterhalb md auf 40px Hit-Target', async () => {
     signInWithPassword.mockResolvedValue({
       data: { session: null },

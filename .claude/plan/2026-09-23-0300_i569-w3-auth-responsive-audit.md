@@ -67,11 +67,13 @@ erst zur Laufzeit entstehen. Das ändert das §10.2-Muster, also wird
 `docs/frontend/design-language.md` §10.2 **im selben PR** nachgezogen (AK 9,
 Weiche 2: Änderung am Muster-Ort).
 
-### Fix 2 — Hit-Targets ≥ 40 px unterhalb `md` (AK 4, Weiche 4)
+### Fix 2 — Hebung auf den 40px-Regelfall unterhalb `md` (AK 4, Weiche 4)
 
 `LoginPage` Resend-Button und `ResetPasswordPage` „Zurueck zur Anmeldung":
-`size="sm"` liefert 36 px. Beide bekommen `h-10 md:h-9` — unterhalb `md` 40 px
-(§11), ab `md` bleibt die Verdichtung. `tailwind-merge` löst `h-9` aus der
+`size="sm"` liefert 36 px — oberhalb des verbindlichen Floors (§11: ≥ 32 px),
+aber an diesen zwei Stellen ohne Dichtebedarf nicht gewollt. Beide bekommen
+`h-10 md:h-9` — unterhalb `md` der 40px-Regelfall, ab `md` bleibt die
+Verdichtung. `tailwind-merge` löst `h-9` aus der
 Variante zugunsten der expliziten Klasse auf (gegengeprüft an der installierten
 Version).
 
