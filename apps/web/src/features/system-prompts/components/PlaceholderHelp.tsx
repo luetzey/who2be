@@ -86,9 +86,16 @@ export function PlaceholderHelpContent() {
                 key={row.command}
                 className="grid grid-cols-1 gap-1 sm:grid-cols-[10rem_1fr]"
               >
-                <dt className="flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
-                  <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-                  {row.command}
+                <dt className="flex min-w-0 items-center gap-1.5 font-mono text-xs text-muted-foreground">
+                  <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  {/* #566 Weiche 3: lange Platzhalternamen kuerzen kontrolliert,
+                      statt umzubrechen — ein umgebrochenes `/Playbook-Katalog`
+                      waere nicht mehr als ein Token lesbar. `min-w-0` ist
+                      Voraussetzung dafuer, dass `truncate` im Flex-Kind greift;
+                      der Volltext bleibt ueber `title` erreichbar. */}
+                  <span className="min-w-0 truncate" title={row.command}>
+                    {row.command}
+                  </span>
                 </dt>
                 <dd className="text-sm text-foreground">{t(row.descriptionKey)}</dd>
               </div>
