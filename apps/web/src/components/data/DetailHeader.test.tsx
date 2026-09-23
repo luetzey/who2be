@@ -27,6 +27,19 @@ describe('DetailHeader', () => {
     expect(screen.getByRole('button', { name: 'Duplizieren' })).toBeInTheDocument()
   })
 
+  it('bricht einen langen Titel ohne Trennstellen in der H1 um', () => {
+    // 320px: ein Bezeichner ohne Trennstelle liefe sonst ueber den Rand; die
+    // Elternkette (min-w-0) allein reicht dafuer nicht.
+    renderHeader(
+      <DetailHeader
+        icon={FileText}
+        iconTone="tools"
+        title="supercalifragilisticexpialidocious-mcp-server-produktion"
+      />,
+    )
+    expect(screen.getByRole('heading', { level: 1 })).toHaveClass('break-words')
+  })
+
   it('rendert den Zurueck-Link nur mit backHref', () => {
     const { rerender } = renderHeader(
       <DetailHeader icon={FileText} iconTone="tools" title="Ohne Back" />,
