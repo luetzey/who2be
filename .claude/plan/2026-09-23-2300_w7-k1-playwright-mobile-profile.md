@@ -106,12 +106,18 @@ sondern baut seine Seiten selbst ueber `browser.newContext()` /
 `use`-Optionen des Projekts an — ein selbst erzeugter Context bekommt sie nicht
 automatisch.
 
-**Bewusst als Vermutung markiert:** das ist aus dem Code gelesen, nicht durch
-einen Lauf belegt (siehe "Was NICHT lokal ging"). Wenn es zutrifft, laeuft
-dieser Test auf allen vier Profilen im Default-Viewport und sagt ueber
-Responsive nichts — er waere also **nicht** mitgezaehlt, wenn K2 die
-Mobile-Abdeckung bewertet. Der PR-Lauf kann das entscheiden. Nicht behoben:
-Testanpassung gehoert zu K2, nicht hierher.
+**Nachtrag aus dem CI-Lauf — die Vermutung ist widerlegt.** Der Test faellt auf
+`mobile-320` mit derselben `intercepts pointer events`-Meldung wie die
+`page`-basierten Journeys (siehe B7). Ein selbst erzeugter Context uebernimmt
+die Projekt-`use`-Optionen also sehr wohl — sonst haette er im Default-Viewport
+gelaufen und das Banner haette nichts verdeckt. Auf `mobile-iphone-13` und
+`tablet-ipad-gen-7` besteht er, weil dort mehr Platz ist. Er ist damit
+viewport-**abhaengig** und zaehlt fuer K2 mit.
+
+Die urspruengliche Vermutung steht hier bewusst stehen: sie war aus dem Code
+plausibel und hat sich an der Messung als falsch erwiesen. Wer sie ungeprueft
+weitergereicht haette, haette einen aussagekraeftigen Test faelschlich als
+"sagt nichts ueber Responsive" abgeschrieben.
 
 ## Umsetzung
 
@@ -171,18 +177,92 @@ Compose-Stack. Auf dem Arbeitshost ist Docker nicht vorhanden:
 `docker: command not found`, `systemctl is-active docker` = `inactive` (nur
 `podman` liegt unter `/usr/sbin/podman`, ohne laufenden Dienst).
 
-Die Ergebniszahlen je Profil kommen deshalb aus dem **CI-Lauf dieses PRs** —
-dem einzigen Ort, an dem der Stack real existiert. Der Job ist genau dafuer als
-Matrix gebaut. **Diese Zahlen liegen zum Zeitpunkt der Uebergabe noch nicht
-vor**; sie sind aus dem PR-Lauf abzulesen und gehoeren hier nachgetragen, bevor
-K3 das Gate scharfstellt. Das ist die ehrliche Luecke dieser Karte.
+Die Ergebniszahlen je Profil kommen deshalb aus dem CI-Lauf des PRs. Sie liegen
+inzwischen vor — siehe naechstes Kapitel.
 
-Erwartungswert, ausdruecklich als Erwartung markiert und nicht als Messung: von
-den 12 gelisteten Tests je Profil sind **2** uebersprungen (billing, ohne
-`E2E_EDITION=cloud`), **2** ohne `page`-Fixture (siehe B5) und damit
-viewport-unabhaengig — bleiben **8** mit echter Responsive-Aussage. Die Zahl
-"12 Tests je Profil" ist also groesser als der Erkenntnisgewinn; wer sie
-weiterreicht, sollte diese Aufschluesselung mitreichen.
+## Laufprotokoll (CI-Run 35921243967, PR #615, Head `f951802f`)
+
+### Ergebniszahlen je Profil
+
+| Profil | passed | failed | skipped | Dauer |
+|---|---|---|---|---|
+| `chromium` (Job `e2e`) | — | — | — | siehe B6 |
+| `mobile-iphone-13` | 8 | 2 | 2 | 3.2 min (Job 5:09) |
+| `tablet-ipad-gen-7` | 8 | 2 | 2 | 3.2 min (Job 5:21) |
+| `mobile-320` | 7 | 3 | 2 | 4.6 min (Job 6:31) |
+
+Die 2 `skipped` sind je Profil `billing.spec.ts` ohne `E2E_EDITION=cloud` —
+wie erwartet. Damit ist die Erwartung aus der Vorab-Schaetzung bestaetigt: von
+12 gelisteten Tests sind 10 wirklich gelaufen.
+
+### B6 — Regression am scharfen Gate, gefunden und behoben
+
+Der `e2e`-Job meldete **33 passed / 7 failed = 40 Tests** statt der erwarteten
+12. Ursache: `npm run e2e` ruft `playwright test` **ohne** `--project` auf —
+das faehrt ALLE Projekte der Config. Solange es ein Projekt gab, war das
+harmlos; mit vieren zog das scharfe Desktop-Gate die noch meldenden
+Mobile-Profile in eine blockierende Rolle. Der Job heisst weiterhin `e2e` und
+sieht unveraendert aus — der Fehler war lautlos.
+
+Das ist genau das, was diese Karte NICHT tun darf (das waere faktisch K3, an
+`e2e-mobile` vorbei). Behoben: der `e2e`-Job ruft jetzt explizit
+`--project=chromium`.
+
+Damit es nicht wiederkommt, steht es als Zusicherung statt als Kommentar:
+`check_playwright_projects` in `scripts/ci/test_all_green_matrix.py` weist
+jeden Workflow-Step zurueck, der Playwright ohne `--project` (und ohne
+konkreten Spec-Pfad) aufruft. Per Negativprobe belegt: Filter entfernt → `FAIL
+Struktur: Job 'e2e': Playwright wird ohne --project aufgerufen`; zurueckgesetzt
+→ gruen.
+
+### B7 — Echter Responsive-Defekt: Cookie-Banner deckt Formular-Aktionen ab
+
+Auf **allen drei** neuen Profilen scheitern dieselben Journeys mit
+`Test timeout of 30000ms exceeded` beim Klick auf Submit-Buttons. Playwright
+nennt den Grund woertlich:
+
+> `<div role="region" aria-label="Cookie consent" …> from
+> <div class="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center p-4">…</div>
+> subtree intercepts pointer events`
+
+Das Consent-Banner liegt fix am unteren Rand und ueberdeckt auf schmalen
+Viewports die Aktionsleiste der Formulare. Auf Desktop (1280x720) ist genug
+Platz, deshalb faellt es dort nie auf. Betroffen: `Persona-Lifecycle`,
+`Playbook->Resource-Block-Ref`, zusaetzlich auf `mobile-320` noch
+`Invitation-Accept`.
+
+**Ist das ein Anwendungs- oder ein Testdefekt?** Beides ist vertretbar
+begruendbar, und die Karte verlangt ausdruecklich, das zu unterscheiden statt
+zu fixen:
+
+- **Anwendungsseite:** Ein Consent-Banner, das auf einem 390-px-Geraet den
+  primaeren Button eines Formulars unerreichbar macht, ist ein echter
+  Bedienbarkeits-Defekt — ein Nutzer ohne Consent-Klick kaeme dort nicht
+  weiter. Das spricht dafuer, dass hier die Anwendung falsch liegt.
+- **Testseite:** Kein E2E-Test dismisst das Banner vorab. Auf Desktop war das
+  folgenlos, also fiel die Luecke nie auf.
+
+Meine Einschaetzung: **primaer Anwendung, sekundaer Test.** Beides **gemeldet,
+nicht behoben** — Anwendungsdefekte sind ausdruecklich out of scope, und die
+Testanpassung (Banner dismissen) gehoert zu K2.
+
+### Laufzeit gegen die Baseline
+
+Baseline (Run `35913678865`): `e2e` 3 min, `python` 8 min, `web` 7 min,
+Wall-Clock ~9 min.
+
+Gemessen: die drei `e2e-mobile`-Jobs starten gleichzeitig (alle 21:15:09/10) und
+enden nach 5:09 / 5:21 / 6:31. Die **Wall-Clock-Kosten des neuen Jobs betragen
+also 6:31**, nicht die Summe von 17 min — die Parallelitaets-Erwartung ist
+bestaetigt. Sie liegen damit unter der von der Karte gesetzten Obergrenze von
+etwa 7 min und ueber der `e2e`-Baseline von 3 min; der Aufschlag kommt aus dem
+zusaetzlichen Compose-Build je Matrix-Job, nicht aus der Testdauer selbst
+(3.2–4.6 min).
+
+Der kritische Pfad bleibt `python`/`web`. **Eine Staffelung ist nach dieser
+Messung nicht noetig** — die Vorschlaege unten bleiben als Reserve stehen,
+falls die Runner-Minuten (3x Compose-Build) stoeren. Entscheidung liegt beim
+Owner.
 
 ## Laufzeit
 

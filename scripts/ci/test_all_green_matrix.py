@@ -129,6 +129,40 @@ CASES: tuple[Case, ...] = (
 )
 
 
+def check_playwright_projects(jobs: dict[str, Any]) -> list[str]:
+    """Jeder Playwright-Job muss sein Projekt explizit waehlen.
+
+    `playwright test` ohne `--project` faehrt ALLE Projekte der Config. Solange
+    es genau ein Projekt gab, war das harmlos; seit die Config vier fuehrt
+    (Welle 7 / K1), zieht ein ungefilterter Aufruf im scharfen `e2e`-Gate die
+    noch meldenden Mobile-Profile in eine blockierende Rolle — lautlos, denn
+    der Job heisst weiterhin `e2e` und sieht unveraendert aus.
+
+    Der Fehler ist in genau dieser Form schon einmal passiert (Run 35921243967:
+    `e2e` meldete 40 statt 12 Tests). Deshalb steht er hier als Zusicherung und
+    nicht als Kommentar.
+    """
+    problems: list[str] = []
+    for job_name, job in jobs.items():
+        for step in job.get("steps") or []:
+            run = step.get("run") or ""
+            if "playwright test" not in run and "npm run e2e" not in run:
+                continue
+            # `e2e:install` laedt nur Browser-Binaries, fuehrt keine Tests aus.
+            if "e2e:install" in run:
+                continue
+            # Ein direkt benannter Spec-Pfad ist ebenfalls eindeutig.
+            if "--project" in run or ".spec.ts" in run:
+                continue
+            problems.append(
+                f"Job '{job_name}': Playwright wird ohne `--project` aufgerufen "
+                f"({run.strip().splitlines()[-1]!r}). Ohne Filter laufen ALLE Projekte der "
+                "Config — ein Gate-Job wuerde damit still auch die noch meldenden "
+                "Mobile-Profile erzwingen."
+            )
+    return problems
+
+
 def check_structure(jobs: dict[str, Any]) -> list[str]:
     """Zusicherungen, die der Job unabhaengig von seiner Shell-Logik braucht."""
     job = jobs["all-green"]
@@ -185,7 +219,7 @@ def main() -> int:
     workflow: dict[str, Any] = yaml.safe_load(CI_YML.read_text(encoding="utf-8"))
     jobs: dict[str, Any] = workflow["jobs"]
 
-    problems = check_structure(jobs)
+    problems = check_structure(jobs) + check_playwright_projects(jobs)
     for problem in problems:
         print(f"FAIL  Struktur: {problem}")
 
