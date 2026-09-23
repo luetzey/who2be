@@ -66,7 +66,12 @@ export function AreasPage() {
                     meta={
                       <>
                         {area.owner_agent_id !== null ? (
-                          <MetaPill tone="persona">
+                          // #572 (AK 5): ein langer Agentenname lief in der
+                          // `inline-flex`-Pille ueber die Innenkante der
+                          // Meta-Zeile. `break-all`, weil Agentennamen
+                          // zusammengeschrieben sein koennen (Muster
+                          // `ResourcesPage` aus #564).
+                          <MetaPill tone="persona" className="max-w-full break-all">
                             {owner !== null
                               ? t('list.ownerAgent', { name: owner })
                               : t('list.ownerUnknown')}

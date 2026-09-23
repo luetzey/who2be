@@ -49,7 +49,10 @@ export function WorkAreaSearchPage() {
           <CardContent className="flex flex-wrap items-end gap-3 pt-6">
             <Label
               htmlFor="workarea-search"
-              className="flex min-w-64 flex-1 flex-col items-start gap-1 text-sm font-normal"
+              // #572 (AK 2): `min-w-64` (256 px) lief bei 320 px Viewport ueber
+              // die Innenkante des 238 px breiten CardContent. Die Mindestbreite
+              // dient dem Desktop-Raster, nicht dem Phone.
+              className="flex min-w-0 flex-1 flex-col items-start gap-1 text-sm font-normal sm:min-w-64"
             >
               <span className="font-medium">{t('search.label')}</span>
               <span className="relative w-full">
@@ -116,7 +119,11 @@ export function WorkAreaSearchPage() {
                           >
                             {hit.title}
                           </Link>
-                          <p className="text-sm text-muted-foreground">{hit.snippet}</p>
+                          {/* #572 (AK 5): Snippets tragen Beleg-Token ohne
+                              Trennstelle (`sha256:…`, Anker) — `break-words`
+                              bricht nur dann, wenn ein Wort allein nicht passt,
+                              und zerhackt gewoehnliche Saetze nicht. */}
+                          <p className="text-sm break-words text-muted-foreground">{hit.snippet}</p>
                           <span>
                             <MetaPill tone="muted">{hit.anchor}</MetaPill>
                           </span>
