@@ -50,7 +50,7 @@ function ResolutionChip({
 // Eine Zeile der „Bezug"-Definitionsliste (Label links, Wert rechts).
 function DefRow({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex items-start justify-between gap-3">
+    <div className="flex flex-wrap items-start justify-between gap-3">
       <dt className="flex-none text-muted-foreground">{label}</dt>
       <dd className="min-w-0 text-right font-medium">{children}</dd>
     </div>
@@ -202,7 +202,7 @@ export function FeedbackItemDetailPage() {
                   <CardTitle>{t('itemDetail.signalTitle')}</CardTitle>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-3">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
                       {t('itemDetail.signalLabel')}
                     </span>
