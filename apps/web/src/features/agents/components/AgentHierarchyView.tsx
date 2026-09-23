@@ -79,6 +79,14 @@ function PrimaryRow({
 }
 
 // Kompakte Chip-/Link-Zeile fuer ein verknuepftes Playbook (Icon + Name + v).
+//
+// `min-h-10 md:min-h-0` an der Zeile: die Playbook-Zeilen sind die primaeren
+// Navigationsziele der Karte. `px-2 py-1.5` bei `text-sm` ergibt gemessen
+// 32 px Zeilenhoehe — das haelt den Floor aus
+// `docs/frontend/design-language.md` §11 (>= 32 px, dort die einzige Quelle),
+// erreicht aber nicht die 40 px, die AK 4 von #570 unterhalb `md` verlangt.
+// `min-h-*` kollidiert in `tailwind-merge` nicht mit der Polsterung; ab `md`
+// faellt die Zeile auf die Desktop-Dichte zurueck.
 function PlaybookRow({
   name,
   href,
@@ -92,7 +100,7 @@ function PlaybookRow({
     <Link
       to={href}
       data-testid="agent-hierarchy-playbook"
-      className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-[background-color] duration-[var(--duration-fast)] ease-standard hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      className="flex min-h-10 items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-[background-color] duration-[var(--duration-fast)] ease-standard hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none md:min-h-0"
     >
       <GitBranch className="size-4 flex-none text-pill-playbook-fg" aria-hidden="true" />
       <span className="min-w-0 flex-1 truncate font-medium text-foreground">{name}</span>
