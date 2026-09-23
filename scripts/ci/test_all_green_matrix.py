@@ -11,6 +11,12 @@ Das Shell-Skript wird direkt aus ``ci.yml`` gelesen, nicht kopiert: eine Kopie
 wuerde von der CI wegdriften und genau dann gruen bleiben, wenn es darauf
 ankommt.
 
+Die Struktur-Zusicherung kennt eine benannte Ausnahme: ``UNGATED_BY_DESIGN``
+listet Jobs, die waehrend ihrer Einfuehrung absichtlich noch nicht an
+``all-green`` haengen. Die Liste ist selbst geprueft (Job muss existieren, darf
+nicht verdrahtet sein und muss ``continue-on-error: true`` fuehren) — ein
+vergessener Job faellt dadurch weiterhin auf.
+
 Aufruf aus dem Repo-Root: ``uv run python scripts/ci/test_all_green_matrix.py``
 """
 
@@ -34,6 +40,30 @@ STOP = "cancelled"
 
 # Reihenfolge der fuenf pfadgefilterten Jobs in `gated`.
 GATED_JOBS = ("python", "web", "compose-smoke", "e2e", "e2e-billing-cloud")
+
+# Jobs, die ABSICHTLICH nicht in `all-green.needs` stehen.
+#
+# Die Struktur-Zusicherung unten verlangt sonst jeden Job der Datei in `needs`.
+# Das ist die richtige Vorgabe: ein Vorgaenger, den der Aggregat-Job nicht
+# kennt, kann rot sein, ohne ihn rot zu faerben. Genau diese Wirkung wird
+# waehrend der Einfuehrung eines neuen Profils aber gebraucht — ein frisch
+# eingefuehrter Job soll melden, nicht sofort jeden PR blockieren.
+#
+# Damit das eine benannte Ausnahme bleibt und kein stilles Schlupfloch:
+#   * Der Eintrag steht hier als Einzelfall MIT Begruendung, nicht als Muster.
+#   * Er wird nicht blind durchgewunken — der Job muss zusaetzlich
+#     `continue-on-error: true` fuehren (siehe `check_structure`). Ein
+#     versehentlich vergessener Job faellt dadurch weiterhin auf: ihm fehlt
+#     diese Markierung.
+#   * Jeder Eintrag ist Schulden auf Zeit. Wird der Job scharfgestellt, muss er
+#     in `all-green.needs` UND in den Auswertungs-Step aufgenommen und hier
+#     entfernt werden.
+UNGATED_BY_DESIGN: dict[str, str] = {
+    "e2e-mobile": (
+        "Welle 7 / K1: die drei Mobile-/Tablet-Playwright-Profile laufen, "
+        "melden aber nur. Scharfstellen ist K3 — dann faellt dieser Eintrag weg."
+    ),
+}
 
 
 class Case(NamedTuple):
@@ -114,12 +144,37 @@ def check_structure(jobs: dict[str, Any]) -> list[str]:
             f"exakter Namensgleichheit) — `name:` muss 'all-green' sein, ist {job.get('name')!r}."
         )
     needs = job.get("needs", [])
-    missing = [name for name in jobs if name != "all-green" and name not in needs]
+    missing = [
+        name
+        for name in jobs
+        if name != "all-green" and name not in needs and name not in UNGATED_BY_DESIGN
+    ]
     if missing:
         problems.append(
             f"Diese Jobs fehlen in `needs:`: {missing}. Ein Vorgaenger, den der Aggregat-Job "
             "nicht kennt, kann rot sein, ohne ihn rot zu faerben."
         )
+    # Die Ausnahmeliste selbst gegenpruefen, sonst waere sie ein Freifahrtschein:
+    # ein Eintrag gilt nur, solange der Job existiert, wirklich nicht verdrahtet
+    # ist und sich als nicht-blockierend zu erkennen gibt.
+    for name, why in UNGATED_BY_DESIGN.items():
+        if name not in jobs:
+            problems.append(
+                f"`UNGATED_BY_DESIGN` nennt '{name}', aber diesen Job gibt es in ci.yml nicht "
+                "(mehr). Eintrag entfernen."
+            )
+        elif name in needs:
+            problems.append(
+                f"'{name}' steht in `all-green.needs` und gleichzeitig in "
+                "`UNGATED_BY_DESIGN`. Wurde der Job scharfgestellt, gehoert der Eintrag hier "
+                f"geloescht. Begruendung war: {why}"
+            )
+        elif jobs[name].get("continue-on-error") is not True:
+            problems.append(
+                f"'{name}' ist als bewusst nicht-blockierend gelistet, fuehrt aber kein "
+                "`continue-on-error: true`. Ohne diese Markierung ist ein fehlender "
+                "`needs`-Eintrag von einem Versehen nicht zu unterscheiden."
+            )
     unknown = [name for name in needs if name not in jobs]
     if unknown:
         problems.append(f"`needs:` nennt Jobs, die es nicht gibt: {unknown}")
