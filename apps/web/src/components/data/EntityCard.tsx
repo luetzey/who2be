@@ -106,7 +106,7 @@ function CardBody({
         </div>
 
         {description !== undefined && description !== '' ? (
-          <p className="text-sm text-muted-foreground">{description}</p>
+          <p className="text-sm break-words text-muted-foreground">{description}</p>
         ) : null}
 
         {meta ? <div className="flex flex-wrap items-center gap-2">{meta}</div> : null}
