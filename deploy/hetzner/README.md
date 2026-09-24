@@ -267,7 +267,14 @@ manuell per `workflow_dispatch`):
    `cancel-in-progress: true` geschuetzt: **jeder weitere Push auf `main`
    bricht den wartenden Lauf ab und startet sein eigenes Fenster.** Nach dem
    letzten Merge einer Serie ueberlebt genau ein Lauf und deployt den neuesten
-   Stand. Praktische Folgen:
+   Stand. Die Breite ist eine **Latenz-Entscheidung**: ueber die letzten 100
+   push-Laeufe (2026-08-22…2026-09-24) gemessen ergibt ein 10-min-Fenster
+   59 Deploys, ein 30-min-Fenster 49 — 30 Minuten wuerden ueber einen Monat
+   also zehn weitere Laeufe sparen (~17 %), kosteten dafuer aber auf *jedem*
+   Merge bis zu 30 statt 10 Minuten bis Live. Die dichten Serien, um die es
+   ging, faengt das 10-min-Fenster vollstaendig (groesster Abstand innerhalb
+   einer Serie: 3 min 47 s). Der Wert ist eine Zeile im Workflow und
+   jederzeit aenderbar. Praktische Folgen:
    - Ein Merge ist erst **bis zu 10 Minuten spaeter** live. Wer schneller will,
      nimmt `workflow_dispatch` — der wartet nicht (eigene concurrency-Gruppe,
      Sleep-Step nur bei `push`).

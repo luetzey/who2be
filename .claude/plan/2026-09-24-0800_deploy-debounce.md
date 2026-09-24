@@ -19,9 +19,33 @@ Jeder dieser Laeufe baut vier Images und wuerde (bei gesetztem `DEPLOY_HOST`)
 die Services neu starten. In der Welle-5-Serie waren **acht von neun** Neustarts
 wertlos.
 
-Groesster Abstand *innerhalb* einer Serie: **3 min 35 s**
-(35956582714 → 35956848991). Das ist die Zahl, an der sich die Fensterbreite
-bemessen muss — nicht die Serienlaenge.
+Groesster Abstand *innerhalb* dieser vier Serien: **3 min 47 s**
+(35956582714 @04:39:36Z → 35956848991 @04:43:23Z).
+
+**Wichtig — diese vier Serien sind eine Stichprobe von ~1,5 Tagen und taugen
+nicht zur Bestimmung der Fensterbreite.** Ueber die letzten 100 push-Laeufe
+(2026-08-22 … 2026-09-24) gemessen:
+
+| Fenster | resultierende Deploys |
+|---|---|
+| 300 s (5 min) | 60 |
+| **600 s (10 min)** | **59** |
+| 900 s (15 min) | 57 |
+| 1200 s (20 min) | 55 |
+| **1800 s (30 min)** | **49** |
+| 2700 s (45 min) | 45 |
+
+Zehn Abstaende liegen im Bereich (600 s, 1800 s] — ein 30-min-Fenster zieht sie
+zusammen, ein 10-min-Fenster trennt sie. Die groessten:
+
+    1592 s = 26,53 min   33986784452 → 33988114659  @2026-09-05T19:46:25Z
+    1527 s = 25,45 min   33963038718 → 33964174826  @2026-09-05T11:45:21Z
+    1465 s = 24,42 min   32642360570 → 32643610443  @2026-08-23T13:51:05Z
+    1450 s = 24,17 min   34026917378 → 34028044392  @2026-09-06T10:39:40Z
+     944 s = 15,73 min   35465831665 → 35466623645  @2026-09-19T20:11:29Z
+
+30 Minuten buendeln also sehr wohl mehr (10 Deploys ueber einen Monat, ~17 %).
+Die Wahl ist damit eine Abwaegung, keine Ableitung — §4.
 
 ## 2. Kontingent-Folgen — geprueft, Ergebnis: null Kosten
 
@@ -134,13 +158,27 @@ Drei Bausteine, jeder mit einem eigenen Zweck:
 
 ### Fensterbreite: 10 Minuten statt 30
 
-Der groesste Abstand innerhalb einer gemessenen Serie ist 3 min 35 s (§1).
-10 Minuten decken alle vier gemessenen Serien mit Faktor ~2,8 Puffer und halten
-die Zeit bis Live kurz. Weil das Fenster ein *Debounce* ist (jeder Push setzt es
-zurueck), bestimmt nicht die Serienlaenge die Breite, sondern der groesste
-Abstand *zwischen* zwei Merges — 30 Minuten wuerden nichts zusaetzlich buendeln,
-nur jeden Deploy um 20 Minuten verspaeten. Da Wartezeit hier nichts kostet (§2),
-ist die Wahl rein eine Latenz-Entscheidung.
+Die Fensterbreite ist eine **Latenz-Entscheidung**, keine Ableitung aus der
+Buendelungs-Wirkung: ein breiteres Fenster buendelt messbar mehr (§1).
+
+| | 10 min | 30 min |
+|---|---|---|
+| Deploys / Monat (gemessen, §1) | 59 | 49 |
+| Zeit bis Live, pro Merge | bis 10 min | bis 30 min |
+| Kosten | 0 (§2) | 0 (§2) |
+
+30 Minuten sparen ueber einen Monat zehn weitere Laeufe (~17 %). Dafuer wartet
+*jeder* einzelne Merge bis zu dreimal so lange auf seine Auslieferung — auch
+der einzelne Merge, der auf keine Serie trifft, und das ist der Regelfall
+(die zehn zusammenziehbaren Abstaende stehen 99 Abstaenden gegenueber).
+Die dichten Serien, die den Anlass gaben (neun Laeufe in 36 s), faengt das
+10-min-Fenster vollstaendig: der groesste Abstand innerhalb einer Serie war
+3 min 47 s. Der Zusatznutzen von 30 min liegt ausserhalb dieses Anlasses.
+
+Deshalb 10 — als Abwaegung, nicht weil 30 wirkungslos waere. Da Wartezeit hier
+nichts kostet (§2), ist es eine reine Latenz-gegen-Lauf-Anzahl-Frage, und die
+Zahl steht als eine Zeile im Workflow: wer die Gewichtung anders setzt, setzt
+`DEPLOY_DEBOUNCE_SECONDS` auf `1800`.
 
 Der Wert steht als benannte `env`-Konstante im Workflow, nicht als Repo-Variable:
 Repo-Variablen sind im Repo unsichtbar, und genau diese Unsichtbarkeit hat bei
@@ -185,6 +223,15 @@ abgebrochen: weil ein *neuerer* Lauf fuer denselben Branch existiert. Dieser
 neuere Lauf traegt einen Commit, der den abgebrochenen enthaelt. Ein Abbruch ohne
 Nachfolger ist im Entwurf nicht moeglich — deshalb auch kein harter HEAD-Abbruch
 (§3 C).
+
+**Ein Vorbehalt, unveraendert gegenueber vorher.** Die Aussage gilt fuer die
+Buendelung, nicht fuer die Trigger-Ebene darueber: ein Commit mit `[skip ci]`
+in der Nachricht startet ueberhaupt keinen Workflow-Lauf, also auch keinen
+Deploy — dieser Stand geht erst mit dem naechsten regulaeren Push live. Das
+war vor dieser Aenderung genauso und ist keine Regression; die Debounce fuehrt
+den Fall weder ein noch verschaerft sie ihn. Sie ist aber der Grund, warum der
+HEAD-Vergleich nur berichtet statt abzubrechen (§3 C) — ein harter Abbruch
+wuerde aus diesem Vorbehalt einen dauerhaft unausgelieferten Stand machen.
 
 ## 6. Manueller Weg bleibt sofort
 
