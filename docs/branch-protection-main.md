@@ -208,8 +208,7 @@ Zeitpunkt der Anwendung erfüllt.)
 
 Nach dem Anwenden geprüft — und heute noch gültig: ein offener PR zeigt `all-green` in seiner
 Checks-Liste als **Required**. Steht dort stattdessen „Expected — Waiting for status to be
-reported", ist der Name
-falsch geschrieben oder der Job auf dem Ziel-SHA nie gelaufen.
+reported", ist der Name falsch geschrieben oder der Job auf dem Ziel-SHA nie gelaufen.
 
 ### Ein Fall, der genau diese Meldung erzeugt und nichts mit dem Ruleset zu tun hat
 
