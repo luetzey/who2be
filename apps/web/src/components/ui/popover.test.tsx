@@ -6,6 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from './popover'
 // Wie in `dialog.test.tsx`: JSDOM rechnet kein Tailwind, geprueft wird die
 // durch `cn()`/tailwind-merge aufgeloeste Klassenliste des Content-Knotens.
 const DEFAULT_CAP = 'max-w-[calc(100vw-1rem)]'
+const HEIGHT_CAP = 'max-h-[var(--radix-popover-content-available-height)]'
 
 function Harness({ className }: { className?: string }) {
   return (
@@ -35,10 +36,33 @@ describe('PopoverContent — Viewport-Beschraenkung', () => {
   it('haelt eine feste Aufrufer-Breite innerhalb der Fensterbreite', () => {
     // Belegter Defektfall: PlaceholderHelp.tsx setzt `w-96` (384px) und lief
     // damit auf einem 320px-Viewport ueber den Rand.
-    const classes = contentClasses('max-h-[70vh] w-96 overflow-auto')
+    const classes = contentClasses('w-96')
 
     expect(classes).toContain('w-96')
     expect(classes).toContain(DEFAULT_CAP)
+  })
+
+  it('begrenzt die Hoehe auf den verfuegbaren Platz und scrollt in sich', () => {
+    // Befund B8: der Content-Knoten trug bisher keine Hoehenbegrenzung. Der
+    // Footer des ResourcePickers (Bestaetigen-Button) fiel dadurch auf 320px
+    // und 390px unter die Viewport-Unterkante — der Wrapper ist
+    // `position: fixed`, also half auch Scrollen nicht.
+    const classes = contentClasses()
+
+    expect(classes).toContain(HEIGHT_CAP)
+    expect(classes).toContain('overflow-y-auto')
+  })
+
+  it('laesst einen engeren Aufrufer-Cap die Hoehe verdraengen', () => {
+    // Gleiche tailwind-merge-Gruppe (`max-h`) — der spaetere Eintrag gewinnt.
+    // Dokumentiert die Konsequenz: wer selbst kappt, uebernimmt die
+    // Verantwortung fuer den verfuegbaren Platz.
+    const classes = contentClasses('max-h-[70vh]')
+
+    expect(classes).toContain('max-h-[70vh]')
+    expect(classes).not.toContain(HEIGHT_CAP)
+    // `overflow-y-auto` gehoert einer anderen Gruppe an und bleibt.
+    expect(classes).toContain('overflow-y-auto')
   })
 
   it.each([

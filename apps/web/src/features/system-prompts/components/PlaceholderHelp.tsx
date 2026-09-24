@@ -123,11 +123,7 @@ export function PlaceholderHelp() {
           {t('placeholderHelp.triggerLabel')}
         </Button>
       </PopoverTrigger>
-      <PopoverContent
-        align="end"
-        className="max-h-[70vh] w-96 overflow-auto"
-        data-testid="placeholder-help"
-      >
+      <PopoverContent align="end" className="w-96" data-testid="placeholder-help">
         <PlaceholderHelpContent />
         <div className="mt-3 border-t border-border pt-3">
           <Link
