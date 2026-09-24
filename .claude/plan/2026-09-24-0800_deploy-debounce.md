@@ -225,13 +225,22 @@ Nachfolger ist im Entwurf nicht moeglich — deshalb auch kein harter HEAD-Abbru
 (§3 C).
 
 **Ein Vorbehalt, unveraendert gegenueber vorher.** Die Aussage gilt fuer die
-Buendelung, nicht fuer die Trigger-Ebene darueber: ein Commit mit `[skip ci]`
-in der Nachricht startet ueberhaupt keinen Workflow-Lauf, also auch keinen
-Deploy — dieser Stand geht erst mit dem naechsten regulaeren Push live. Das
-war vor dieser Aenderung genauso und ist keine Regression; die Debounce fuehrt
-den Fall weder ein noch verschaerft sie ihn. Sie ist aber der Grund, warum der
-HEAD-Vergleich nur berichtet statt abzubrechen (§3 C) — ein harter Abbruch
-wuerde aus diesem Vorbehalt einen dauerhaft unausgelieferten Stand machen.
+Buendelung, nicht fuer die Trigger-Ebene darueber: ein Commit, dessen Nachricht
+den CI-Ueberspringen-Marker enthaelt (GitHub: *Skipping workflow runs*), startet
+ueberhaupt keinen Workflow-Lauf, also auch keinen Deploy — dieser Stand geht
+erst mit dem naechsten regulaeren Push live. Das war vor dieser Aenderung
+genauso und ist keine Regression; die Debounce fuehrt den Fall weder ein noch
+verschaerft sie ihn. Sie ist aber der Grund, warum der HEAD-Vergleich nur
+berichtet statt abzubrechen (§3 C) — ein harter Abbruch wuerde aus diesem
+Vorbehalt einen dauerhaft unausgelieferten Stand machen.
+
+*Unfreiwillig belegt:* Commit `c3558d9c` dieses Branches zitierte den Marker
+woertlich in seiner Nachricht und hat damit den eigenen CI-Lauf uebersprungen —
+CodeQL lief (eigener Trigger), `all-green` blieb aus, der PR war `BLOCKED`. Der
+Mechanismus greift also genau so, wie hier beschrieben, und zwar auch dann,
+wenn der Marker gar nicht als Anweisung gemeint ist. Behoben durch einen
+Folge-Commit statt durch Force-Push; die Nachricht umschreibt den Marker
+seitdem.
 
 ## 6. Manueller Weg bleibt sofort
 
