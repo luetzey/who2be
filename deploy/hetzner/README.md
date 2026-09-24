@@ -258,6 +258,24 @@ docker run --rm \
 Workflow `.github/workflows/deploy.yml` triggert auf `push: main` (oder
 manuell per `workflow_dispatch`):
 
+0. **`debounce`** buendelt eine Merge-Serie zu **einem** Deploy. Vorher loeste
+   jeder Push einen eigenen Lauf aus — am 2026-09-23 um 20:05 Uhr neun Laeufe
+   in 36 Sekunden, also neun Image-Build-Runden und neun Service-Neustarts, von
+   denen acht wertlos waren. Der Job wartet bei einem Push
+   `DEPLOY_DEBOUNCE_SECONDS` (aktuell **10 Minuten**, als Konstante im Workflow
+   sichtbar) und ist dabei von einer concurrency-Gruppe mit
+   `cancel-in-progress: true` geschuetzt: **jeder weitere Push auf `main`
+   bricht den wartenden Lauf ab und startet sein eigenes Fenster.** Nach dem
+   letzten Merge einer Serie ueberlebt genau ein Lauf und deployt den neuesten
+   Stand. Praktische Folgen:
+   - Ein Merge ist erst **bis zu 10 Minuten spaeter** live. Wer schneller will,
+     nimmt `workflow_dispatch` — der wartet nicht (eigene concurrency-Gruppe,
+     Sleep-Step nur bei `push`).
+   - Die uebersprungenen Zwischen-Commits werden **nicht gebaut**; auf GHCR
+     liegt kein Image fuer sie. Ein Rollback geht auf den letzten *deployten*
+     SHA, oder man loest den Build fuer ein Ref per `workflow_dispatch` aus.
+   - Superseded Laeufe erscheinen in der Historie als `cancelled`. Das ist
+     **kein** Fehler, sondern der Mechanismus; der Grund steht im Step-Summary.
 1. **`build-and-push`** baut die Images parallel (Matrix) und pushed sie ans
    GitHub Container Registry (Login per `GITHUB_TOKEN`, `packages: write`):
    - On-Prem (Default-Target `runtime`, OHNE Billing):
@@ -269,9 +287,16 @@ manuell per `workflow_dispatch`):
      `VITE_WHO2BE_EDITION=cloud`, Billing-UI im Bundle — ADR-0029) wird nicht
      als GHCR-Image gepusht, sondern vom Cloud-Overlay auf dem Host gebaut
      (siehe unten).
-2. **`deploy`** ist conditional (`if: vars.DEPLOY_HOST != ''`): solange
+2. **`deploy`** ist conditional
+   (`if: vars.DEPLOY_HOST != '' && github.ref == 'refs/heads/main'`): solange
    die Host-Konfig im Repo fehlt (C1 nicht fertig), ueberspringt der
-   Job sich sauber. Sobald `DEPLOY_HOST` gesetzt ist, ruft er via SSH
+   Job sich sauber, und ein `workflow_dispatch` von einem anderen Ref als `main`
+   kann die Produktivumgebung nicht anfassen (der Build oben bleibt
+   ref-unabhaengig). Der Job ist ausserdem **serialisiert**
+   (`concurrency: deploy-main`, `cancel-in-progress: false`): ein laufender
+   Deploy wird nie abgebrochen — kommt waehrenddessen ein Merge, wird sein Lauf
+   `pending` und faehrt danach. Beide Staende gehen live, in Reihenfolge.
+   Sobald `DEPLOY_HOST` gesetzt ist, ruft er via SSH
    `WHO2BE_EDITION=<edition> deploy/hetzner/scripts/deploy.sh <commit-sha>`
    auf dem Host auf — dieses Skript checkt den SHA aus, setzt die
    `*_IMAGE_TAG`-Variablen in `.env` und faehrt den Stack hoch. Die Edition
