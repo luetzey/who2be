@@ -360,6 +360,42 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
   }
+
+  /*
+   * Cookie-Consent-Banner: Platz reservieren statt ueberlagern (Befund B7,
+   * Welle 7 / K2b). Der Wert kommt gemessen aus `CookieConsentBanner.tsx`
+   * (`--cookie-banner-height`, ResizeObserver); solange keine Entscheidung
+   * aussteht ist die Variable nicht gesetzt und beide Regeln fallen auf `0px`.
+   *
+   * Zwei Verbraucher, weil einer allein nicht reicht:
+   *
+   *   `padding-bottom` reserviert die Flaeche — der Seiteninhalt endet nicht
+   *   mehr unter dem Banner, der Nutzer kann das Formularende erreichen.
+   *
+   *   `scroll-padding-bottom` sagt dem Scrollport, dass die unteren N Pixel
+   *   nicht zur sichtbaren Region zaehlen. Das ist noetig, weil
+   *   `scrollIntoView`/`scrollIntoViewIfNeeded` ein Ziel *minimal* in den
+   *   Viewport scrollt, also genau an dessen Unterkante — und damit unter das
+   *   `fixed` Banner. CSS Scroll Snap Module Level 1, §4.2 ("Scroll Snapport:
+   *   the scroll-padding property"), woertlich: "This property specifies (for
+   *   all scroll containers, not just scroll snap containers) offsets that
+   *   define the optimal viewing region of a scrollport: the region used as
+   *   the target region for placing things in view of the user. This allows
+   *   the author to exclude regions of the scrollport that are obscured by
+   *   other content (such as fixed-positioned toolbars or sidebars)".
+   *   Genau dieser Fall liegt hier vor. Ohne diese Zeile klickt ein Nutzer
+   *   (und Playwright) nach dem Scrollen weiterhin ins Banner.
+   *
+   * Auf `html`, nicht auf `body`: Scrollport des Dokuments ist das
+   * Wurzelelement, `scroll-padding` auf einem Nicht-Scrollcontainer bliebe
+   * wirkungslos.
+   */
+  body {
+    padding-bottom: var(--cookie-banner-height, 0px);
+  }
+  html {
+    scroll-padding-bottom: var(--cookie-banner-height, 0px);
+  }
 }
 
 /*
