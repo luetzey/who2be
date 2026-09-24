@@ -1,13 +1,16 @@
 # Branch-Protection für `main` — Vorschlag
 
-**Status: Vorschlag. Nicht angewendet.** Das Einschalten ist Owner-Sache (Karte P3b,
-`t_61c8d42c`); dieses Dokument liefert die Entscheidungsgrundlage und die fertige
-API-Nutzlast.
+**Status: umgesetzt am 2026-09-22.** Das Ruleset `16707501` fuehrt seither
+`pull_request` und `required_status_checks` mit `all-green` als einzigem
+Required Check, `enforcement: active`, `bypass_actors` leer (gemessen
+2026-09-23). Dieses Dokument bleibt als Entscheidungsgrundlage stehen: es
+begruendet, warum genau ein Required Check und welcher. Die Nutzlast in
+§„Fertige Nutzlast fuer P3b" ist Beleg, kein offener Auftrag.
 
 Grundlage: Recherchebericht `workflow-idee-code-review-2026-09-22.md`, Abschnitt P3, sowie die
 dort zitierte GitHub-Dokumentation zu Rulesets. Gemessener Repo-Zustand: 2026-09-22.
 
-## Ausgangslage
+## Ausgangslage (Zustand vor dem Einschalten, 2026-09-22)
 
 | Fakt | Wert |
 |---|---|
