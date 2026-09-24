@@ -1,0 +1,53 @@
+name: _Debounce-Beweis (temporaer)
+
+# TEMPORAER — wird vor dem Merge wieder geloescht.
+#
+# Zweck: die concurrency-Semantik aus deploy.yml am echten Actions-Backend
+# belegen, statt sie in der YAML zu lesen. Identische Gruppen-Ausdruecke und
+# identische `if:`-Bedingung, aber KEIN Image-Build und KEIN SSH:
+#   - ein Build wuerde vier Images mit dem Tag `latest` nach GHCR schieben,
+#     und `latest` zeigte dann auf einen Testbranch-Stand;
+#   - SSH faellt ohnehin aus (vars.DEPLOY_HOST ist leer).
+# Das Fenster ist auf 90 s verkuerzt, damit der Beweis in Minuten laeuft.
+
+on:
+  push:
+    branches: ["proof/**"]
+  # Stellvertreter fuer `workflow_dispatch`: der laesst sich nur vom
+  # Default-Branch aus ausloesen, und dieser Workflow steht bewusst nicht auf
+  # `main`. `pull_request` ist wie `workflow_dispatch` ein Nicht-push-Event und
+  # durchlaeuft damit exakt dieselben zwei Weichen, auf die es ankommt:
+  # die `if: github.event_name == 'push'` am Sleep-Step und den event_name im
+  # concurrency-Gruppennamen.
+  pull_request:
+
+env:
+  DEPLOY_DEBOUNCE_SECONDS: "90"
+
+jobs:
+  debounce:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: proof-debounce-${{ github.event_name }}-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - name: Merge-Serie sammeln
+        if: github.event_name == 'push'
+        run: |
+          echo "event=${GITHUB_EVENT_NAME} sha=${GITHUB_SHA}"
+          echo "Warte ${DEPLOY_DEBOUNCE_SECONDS}s."
+          sleep "${DEPLOY_DEBOUNCE_SECONDS}"
+
+      - name: Fenster ueberlebt
+        run: |
+          echo "event=${GITHUB_EVENT_NAME} sha=${GITHUB_SHA}"
+
+  deploy:
+    needs: debounce
+    runs-on: ubuntu-latest
+    concurrency:
+      group: proof-deploy-main
+      cancel-in-progress: false
+    steps:
+      - name: Dummy-Deploy
+        run: echo "DEPLOY ${GITHUB_SHA} (event=${GITHUB_EVENT_NAME})"
