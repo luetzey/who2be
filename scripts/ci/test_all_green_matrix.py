@@ -38,8 +38,8 @@ SKIP = "skipped"
 RED = "failure"
 STOP = "cancelled"
 
-# Reihenfolge der fuenf pfadgefilterten Jobs in `gated`.
-GATED_JOBS = ("python", "web", "compose-smoke", "e2e", "e2e-billing-cloud")
+# Reihenfolge der sechs pfadgefilterten Jobs in `gated`.
+GATED_JOBS = ("python", "web", "compose-smoke", "e2e", "e2e-billing-cloud", "e2e-mobile")
 
 # Jobs, die ABSICHTLICH nicht in `all-green.needs` stehen.
 #
@@ -58,12 +58,13 @@ GATED_JOBS = ("python", "web", "compose-smoke", "e2e", "e2e-billing-cloud")
 #   * Jeder Eintrag ist Schulden auf Zeit. Wird der Job scharfgestellt, muss er
 #     in `all-green.needs` UND in den Auswertungs-Step aufgenommen und hier
 #     entfernt werden.
-UNGATED_BY_DESIGN: dict[str, str] = {
-    "e2e-mobile": (
-        "Welle 7 / K1: die drei Mobile-/Tablet-Playwright-Profile laufen, "
-        "melden aber nur. Scharfstellen ist K3 — dann faellt dieser Eintrag weg."
-    ),
-}
+#
+# Die Liste ist derzeit LEER. Der einzige Eintrag war `e2e-mobile` waehrend
+# Welle 7 / K1-K2c; K3 hat den Job an beiden Stellen verdrahtet und den Eintrag
+# damit eingeloest. Die Mechanik bleibt stehen, weil die naechste Einfuehrung
+# sie wieder braucht — ein leeres Dict ist hier die staerkere Aussage als eine
+# geloeschte Funktion.
+UNGATED_BY_DESIGN: dict[str, str] = {}
 
 
 class Case(NamedTuple):
@@ -72,13 +73,13 @@ class Case(NamedTuple):
     name: str
     changes: str
     code: str
-    gated: tuple[str, str, str, str, str]
+    gated: tuple[str, str, str, str, str, str]
     audit: str
     expected_exit: int
     changelog_guard: str = OK
 
     def env(self) -> dict[str, str]:
-        python, web, compose_smoke, e2e, e2e_billing_cloud = self.gated
+        python, web, compose_smoke, e2e, e2e_billing_cloud, e2e_mobile = self.gated
         return {
             "CHANGES_RESULT": self.changes,
             "CODE": self.code,
@@ -87,21 +88,35 @@ class Case(NamedTuple):
             "COMPOSE_SMOKE_RESULT": compose_smoke,
             "E2E_RESULT": e2e,
             "E2E_BILLING_CLOUD_RESULT": e2e_billing_cloud,
+            "E2E_MOBILE_RESULT": e2e_mobile,
             "AUDIT_RESULT": self.audit,
             "CHANGELOG_GUARD_RESULT": self.changelog_guard,
         }
 
 
-ALL_OK: tuple[str, str, str, str, str] = (OK, OK, OK, OK, OK)
-ALL_SKIP: tuple[str, str, str, str, str] = (SKIP, SKIP, SKIP, SKIP, SKIP)
+Gated = tuple[str, str, str, str, str, str]
+
+ALL_OK: Gated = (OK, OK, OK, OK, OK, OK)
+ALL_SKIP: Gated = (SKIP, SKIP, SKIP, SKIP, SKIP, SKIP)
 
 CASES: tuple[Case, ...] = (
     # --- die zwei Faelle, die auch in CI belegt werden ---
     Case("Voller Lauf, alles gruen", OK, "true", ALL_OK, OK, 0),
     Case("Doku-PR: gegatete Jobs uebersprungen", OK, "false", ALL_SKIP, OK, 0),
     # --- gewoehnliche Fehlschlaege ---
-    Case("Ein Job rot (python)", OK, "true", (RED, OK, OK, OK, OK), OK, 1),
-    Case("Ein Job abgebrochen (e2e)", OK, "true", (OK, OK, OK, STOP, OK), OK, 1),
+    Case("Ein Job rot (python)", OK, "true", (RED, OK, OK, OK, OK, OK), OK, 1),
+    Case("Ein Job abgebrochen (e2e)", OK, "true", (OK, OK, OK, STOP, OK, OK), OK, 1),
+    # --- Welle 7 / K3: das Mobile-Gate ist scharf. Vor K3 war dieser Fall
+    #     gruen — der Job stand weder in `needs` noch im Auswertungs-Step. ---
+    Case("Mobile-Profil rot (e2e-mobile)", OK, "true", (OK, OK, OK, OK, OK, RED), OK, 1),
+    Case(
+        "Mobile-Job uebersprungen trotz code=true",
+        OK,
+        "true",
+        (OK, OK, OK, OK, OK, SKIP),
+        OK,
+        1,
+    ),
     # --- der Kern-Fall: ein naiver Aggregat-Job ("kein Vorgaenger ist rot")
     #     waere hier GRUEN, obwohl kein einziger Test gelaufen ist ---
     Case("GEFAEHRLICH: changes rot, alle gegateten uebersprungen", RED, "", ALL_SKIP, OK, 1),
@@ -110,8 +125,15 @@ CASES: tuple[Case, ...] = (
     Case("audit rot bei Doku-PR", OK, "false", ALL_SKIP, RED, 1),
     Case("audit uebersprungen (darf nie passieren)", OK, "true", ALL_OK, SKIP, 1),
     # --- Ergebnis passt nicht zur Klassifikation ---
-    Case("code=true, aber Job uebersprungen", OK, "true", (SKIP, OK, OK, OK, OK), OK, 1),
-    Case("code=false, aber Job gelaufen", OK, "false", (OK, SKIP, SKIP, SKIP, SKIP), OK, 1),
+    Case("code=true, aber Job uebersprungen", OK, "true", (SKIP, OK, OK, OK, OK, OK), OK, 1),
+    Case(
+        "code=false, aber Job gelaufen",
+        OK,
+        "false",
+        (OK, SKIP, SKIP, SKIP, SKIP, SKIP),
+        OK,
+        1,
+    ),
     # --- unbekannte Klassifikation: fail-closed ---
     Case("code unbekannt: fail-closed", OK, "weird", ALL_OK, OK, 1),
     Case("code leer: fail-closed", OK, "", ALL_OK, OK, 1),
@@ -213,6 +235,21 @@ def check_structure(jobs: dict[str, Any]) -> list[str]:
     unknown = [name for name in needs if name not in jobs]
     if unknown:
         problems.append(f"`needs:` nennt Jobs, die es nicht gibt: {unknown}")
+    # Ein verdrahteter Job mit `continue-on-error: true` ist ein Gate, das
+    # vollstaendig aussieht und nichts durchsetzt: GitHub meldet den Job dann
+    # als `success`, auch wenn seine Steps fallen — `needs.<job>.result` traegt
+    # diesen `success` in den Auswertungs-Step, und die `expect`-Zeile winkt ihn
+    # durch. Die beiden anderen Stellen (`needs`, `expect`) sind oben bewacht;
+    # ohne diese dritte waere die Verdrahtung durch eine einzige zurueckgelassene
+    # Zeile lautlos wirkungslos. (Aufgefallen bei der Mutationsprobe zu Welle 7
+    # / K3: die Probe rutschte hier als einzige durch.)
+    soft = [name for name in needs if jobs.get(name, {}).get("continue-on-error") is True]
+    if soft:
+        problems.append(
+            f"Diese Jobs stehen in `all-green.needs`, fuehren aber `continue-on-error: true`: "
+            f"{soft}. GitHub meldet sie dann als 'success', auch wenn ihre Steps fallen — der "
+            "Aggregat-Job prueft einen Wert, der nie 'failure' werden kann."
+        )
     return problems
 
 
