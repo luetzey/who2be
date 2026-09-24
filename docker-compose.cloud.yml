@@ -68,6 +68,15 @@ services:
       # `environment`-Maps, daher gilt das Admin-MFA-Gate auch im Cloud-Stack —
       # hier bewusst nicht dupliziert, um Drift zu vermeiden.
       #
+      # Cloud-Auth: NUR externe Provider (Google, GitHub) — Owner-Entscheidung
+      # 2026-09-24. E-Mail/Passwort ist hier abgeschaltet, im Self-Hosting
+      # bleibt es an. Das ist die harte Durchsetzung zur UI-Seite
+      # (VITE_WHO2BE_EDITION=cloud, s. `web` unten): GoTrue weist damit
+      # `POST /signup` (400) und `POST /token?grant_type=password` (422
+      # `email_provider_disabled`) ab. Team-Einladungen sind NICHT betroffen —
+      # `POST /invite` und `POST /verify` kennen in v2.158.1 keinen
+      # `External.Email`-Check, die Einladungsmail geht weiter raus.
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "false"
       # Cloud-Paritaet: E-Mail-Verifikation PFLICHT (dev nutzt autoconfirm=true).
       GOTRUE_MAILER_AUTOCONFIRM: "false"
       # SMTP → mailpit. Auth/Insecure egal, mailpit nimmt im Dev-Modus alles an.

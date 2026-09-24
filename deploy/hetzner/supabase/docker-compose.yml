@@ -86,7 +86,16 @@ services:
       GOTRUE_MFA_TOTP_ENROLL_ENABLED: ${GOTRUE_MFA_TOTP_ENROLL_ENABLED:-true}
       GOTRUE_MFA_TOTP_VERIFY_ENABLED: ${GOTRUE_MFA_TOTP_VERIFY_ENABLED:-true}
       GOTRUE_MFA_MAX_ENROLLED_FACTORS: ${GOTRUE_MFA_MAX_ENROLLED_FACTORS:-10}
-      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      # E-Mail/Passwort als Auth-Provider. Self-Hosting: `true` (Default,
+      # unveraendert). Cloud: das Overlay setzt `false` — dort meldet man sich
+      # ausschliesslich ueber externe Provider an (Owner-Entscheidung
+      # 2026-09-24). GoTrue v2.158.1 prueft dieses Flag NUR in `POST /signup`,
+      # `POST /token?grant_type=password` und `POST /magiclink`; `POST /invite`,
+      # `POST /verify`, `POST /recover` und `PUT /user` haben keinen solchen
+      # Check — Team-Einladungen laufen also unveraendert weiter. Das Web-Pendant
+      # ist das Build-Arg `VITE_WHO2BE_EDITION` (ADR-0029), beide werden im
+      # Deploy gemeinsam gesetzt.
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: ${GOTRUE_EXTERNAL_EMAIL_ENABLED:-true}
       # Prod: E-Mail-Verifikation AN (default false = Confirm Pflicht). Mit
       # GOTRUE_MAILER_AUTOCONFIRM=true im .env laesst sich das fuer einen
       # frischen Staging-Stack ohne SMTP voruebergehend umgehen.

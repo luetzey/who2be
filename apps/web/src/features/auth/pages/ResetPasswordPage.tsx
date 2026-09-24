@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { MailCheck } from 'lucide-react'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, Navigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 
@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { supabase } from '@/lib/supabase'
 
 import { buildRedirectTo } from '../lib/redirect'
+import { isPasswordAuthEnabled } from '../lib/password-auth'
 
 type ResetValues = { email: string }
 
@@ -39,6 +40,18 @@ export function ResetPasswordPage() {
     resolver: zodResolver(resetSchema),
     defaultValues: { email: '' },
   })
+
+  // Cloud: kein Passwort-Login, also auch kein Passwort-Reset — die Seite ist
+  // dort NICHT per Direktlink erreichbar (Owner-Entscheidung 2026-09-24).
+  // Nicht bloss versteckt: ohne diesen Guard bliebe `/reset-password` ein
+  // offener Pfad zu einem Formular, dessen GoTrue-Gegenstueck zwar noch Mails
+  // verschickt (`POST /recover` prueft `External.Email` nicht), die aber auf
+  // ein Passwort zielen, mit dem man sich in der Cloud nicht anmelden kann.
+  // `/onboarding/set-password` bleibt dagegen bestehen — der
+  // Einladungs-Magic-Link braucht sie (`InvitationAcceptPage`).
+  if (!isPasswordAuthEnabled()) {
+    return <Navigate to="/login" replace />
+  }
 
   async function onSubmit(values: ResetValues) {
     setError(null)

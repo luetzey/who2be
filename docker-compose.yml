@@ -85,7 +85,11 @@ services:
       GOTRUE_MFA_TOTP_ENROLL_ENABLED: ${GOTRUE_MFA_TOTP_ENROLL_ENABLED:-true}
       GOTRUE_MFA_TOTP_VERIFY_ENABLED: ${GOTRUE_MFA_TOTP_VERIFY_ENABLED:-true}
       GOTRUE_MFA_MAX_ENROLLED_FACTORS: ${GOTRUE_MFA_MAX_ENROLLED_FACTORS:-10}
-      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      # E-Mail/Passwort als Auth-Provider — dev/On-Prem: an. Das Cloud-Overlay
+      # (docker-compose.cloud.yml) setzt `false`: dort meldet man sich nur ueber
+      # externe Provider an (Owner-Entscheidung 2026-09-24). Web-Pendant ist das
+      # Build-Arg VITE_WHO2BE_EDITION (ADR-0029).
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: ${GOTRUE_EXTERNAL_EMAIL_ENABLED:-true}
       # Dev bleibt autoconfirm: kein SMTP noetig, Signups sind sofort nutzbar.
       # Prod (deploy/hetzner) schaltet das auf false + echten Mailer um.
       GOTRUE_MAILER_AUTOCONFIRM: "true"
