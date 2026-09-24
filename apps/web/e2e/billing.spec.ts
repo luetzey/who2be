@@ -1,6 +1,7 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 
 import { createUser, loginAs, seedWorkspace } from './helpers/auth'
+import { decideCookieConsent } from './helpers/consent'
 
 /**
  * Billing-Journey (Issue #453): Login -> Billing-Ansicht -> aktueller Tarif
@@ -52,35 +53,6 @@ const FAKE_CHECKOUT_URL = 'https://mollie-checkout.e2e.invalid/session/e2e-test'
 
 const UPGRADE_BUTTON_NAME = /Jetzt upgraden|Upgrade now/
 
-/**
- * Cookie-Consent vorab entscheiden — sonst liegt das Banner ueber dem
- * Upgrade-Button und der Klick laeuft in den Timeout.
- *
- * Das Banner (`features/legal/components/CookieConsentBanner.tsx`) rendert,
- * solange unter diesem Key keine Entscheidung im `localStorage` steht, und es
- * traegt `pointer-events-auto` — es faengt den Klick also tatsaechlich ab,
- * statt nur darueber zu liegen. Die bestehenden Journeys stolpern nicht
- * darueber, weil ihre Ziele ausserhalb des Banners liegen; hier nicht.
- *
- * `rejected` statt `accepted`: der Test braucht keine Analytics, und die
- * datensparsame Variante ist der ehrlichere Ausgangszustand.
- *
- * Key als Literal, nicht importiert — dieselbe Konvention wie
- * `SESSION_STORAGE_KEY` in `helpers/auth.ts` (E2E laeuft ausserhalb des
- * Vite-Bundles). Quelle: `CONSENT_STORAGE_KEY` in
- * `apps/web/src/features/legal/hooks/useCookieConsent.ts`.
- */
-const CONSENT_STORAGE_KEY = 'who2be:cookie-consent'
-
-async function decideCookieConsent(page: Page): Promise<void> {
-  await page.addInitScript(
-    (key) => {
-      window.localStorage.setItem(key, 'rejected')
-    },
-    CONSENT_STORAGE_KEY,
-  )
-}
-
 test('Billing: aktueller Tarif sichtbar, Upgrade stoesst abgefangene Weiterleitung an', async ({
   page,
   request,
@@ -123,10 +95,20 @@ test('Billing: aktueller Tarif sichtbar, Upgrade stoesst abgefangene Weiterleitu
   // unsichtbar. `toBeVisible()` waere hier also eine Assertion ueber die
   // Pixelbreite des Fuellstands, nicht ueber das, was gemeint ist: dass das
   // Kontingent ueberhaupt ausgewiesen wird. Genau das pruefen die Attribute.
-  const quotaBar = billingSlot.getByRole('progressbar')
+  //
+  // Der Slot zeigt seit Issue #536 ZWEI Balken (MCP-Kontingent und Speicher),
+  // beide mit `role="progressbar"` — ein Locator allein auf die Rolle waere
+  // mehrdeutig. Adressiert wird deshalb ueber die stabile Testid.
+  const quotaBar = billingSlot.getByTestId('mcp-quota-bar')
   await expect(quotaBar).toBeAttached()
   await expect(quotaBar).toHaveAttribute('aria-valuemax', '1000')
   await expect(quotaBar).toHaveAttribute('aria-valuenow', '0')
+
+  // Speicher-Quota (Issue #536): frische Free-Org -> 100 MiB Grenze, 0 belegt.
+  const storageBar = billingSlot.getByTestId('storage-bar')
+  await expect(storageBar).toBeAttached()
+  await expect(storageBar).toHaveAttribute('aria-valuemax', String(104857600))
+  await expect(storageBar).toHaveAttribute('aria-valuenow', '0')
 
   // AC 2: Upgrade ausloesen. Im Free-Tier ist der Upgrade-CTA der einzige
   // Button im Billing-Slot.

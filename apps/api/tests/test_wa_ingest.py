@@ -21,7 +21,7 @@ import base64
 import socket
 from collections.abc import Callable, Iterator
 from io import BytesIO
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 import httpx
@@ -623,5 +623,112 @@ def test_gates_area_capability_und_private_area(make_auth_headers: AuthFactory) 
             # Mensch ohne area_id: 422 — Menschen haben keine private Area.
             human = _ingest(client, prefix, auth, None, file_b64=payload, filename="n.txt")
             assert human.status_code == 422, human.text
+    finally:
+        cleanup_workspaces([owner])
+
+
+# --- Integration: Speicher-Quota (Issue #536) ---------------------------------
+
+
+def _patch_storage_quota(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    limit_bytes: int | None,
+    edition: Literal["cloud", "onprem"],
+) -> None:
+    """Haengt ein Entitlement mit `limit_bytes` an das Gate (ohne Billing-DB)."""
+    from who2be_api.core.config import Settings
+    from who2be_api.licensing.entitlement import Entitlement
+    from who2be_api.services import storage_quota_service
+
+    class _FakePort:
+        async def resolve(self, _org_id: UUID) -> Entitlement:
+            return Entitlement(
+                status="active",
+                features=frozenset({"core"}),
+                storage_quota_bytes=limit_bytes,
+            )
+
+    monkeypatch.setattr(storage_quota_service, "get_settings", lambda: Settings(edition=edition))
+    monkeypatch.setattr(
+        storage_quota_service, "build_entitlement_port", lambda _pool, _settings: _FakePort()
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db", "memory_store")
+def test_storage_quota_blockt_neuen_ingest_und_laesst_bestand_lesbar(
+    monkeypatch: pytest.MonkeyPatch, make_auth_headers: AuthFactory
+) -> None:
+    """Issue #536, AK 2 + AK 3: ueber der Grenze antwortet der Ingest 402 mit
+    `storage_quota_exceeded` + `params.limit` — und der BESTAND bleibt
+    unveraendert les- und herunterladbar (kein Datenverlust)."""
+    _patch_storage_quota(monkeypatch, limit_bytes=16, edition="cloud")
+
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    prefix = f"/v1/workspaces/{ws}"
+    try:
+        with TestClient(app) as client:
+            area_id = shared_area(client, prefix, auth, "Quota-Area")
+
+            # Erster Ingest: Summe ist noch 0 < 16 ⇒ er passiert und legt
+            # 32 Bytes ab (der Vorab-Check toleriert den Ueberschuss bewusst).
+            first = _ingest(
+                client, prefix, auth, area_id, file_b64=_b64(b"x" * 32), filename="a.txt"
+            )
+            assert first.status_code == 201, first.text
+            doc_id = first.json()["doc_artifact_id"]
+
+            # Zweiter Ingest: Summe (32) >= Limit (16) ⇒ 402, nichts kommt dazu.
+            before = _workspace_counts(ws)
+            blocked = _ingest(
+                client, prefix, auth, area_id, file_b64=_b64(b"y" * 32), filename="b.txt"
+            )
+            assert blocked.status_code == 402, blocked.text
+            body = blocked.json()
+            assert body["reason"] == "storage_quota_exceeded"
+            assert body["params"]["limit"] == 16
+            assert _workspace_counts(ws) == before
+
+            # AK 3 — kein Datenverlust: Bestand bleibt lesbar UND exportierbar.
+            read = client.get(f"{prefix}/wa-artifacts/{doc_id}", headers=auth)
+            assert read.status_code == 200, read.text
+            assert "x" * 32 in read.json()["markdown"]
+            export = client.get(f"{prefix}/wa-artifacts/{doc_id}/export", headers=auth)
+            assert export.status_code == 200, export.text
+            listed = client.get(f"{prefix}/work-areas/{area_id}/artifacts", headers=auth)
+            assert listed.status_code == 200
+            assert len(listed.json()) == 2
+    finally:
+        cleanup_workspaces([owner])
+
+
+@pytest.mark.integration
+@pytest.mark.usefixtures("patched_jwt_secret", "migrated_db", "memory_store")
+def test_storage_quota_greift_in_onprem_nicht(
+    monkeypatch: pytest.MonkeyPatch, make_auth_headers: AuthFactory
+) -> None:
+    """Issue #536, AK 4: On-Prem/OSS ist unbegrenzt — derselbe Aufbau wie oben
+    laeuft mit `WHO2BE_EDITION=onprem` ueber die Grenze hinweg durch."""
+    _patch_storage_quota(monkeypatch, limit_bytes=16, edition="onprem")
+
+    owner = fresh_user_id()
+    ws = setup_workspace(owner)
+    auth = make_auth_headers(owner)
+    prefix = f"/v1/workspaces/{ws}"
+    try:
+        with TestClient(app) as client:
+            area_id = shared_area(client, prefix, auth, "Onprem-Area")
+            first = _ingest(
+                client, prefix, auth, area_id, file_b64=_b64(b"x" * 32), filename="a.txt"
+            )
+            assert first.status_code == 201, first.text
+            # Summe (32) liegt ueber der Grenze (16) — On-Prem ignoriert sie.
+            second = _ingest(
+                client, prefix, auth, area_id, file_b64=_b64(b"y" * 32), filename="b.txt"
+            )
+            assert second.status_code == 201, second.text
     finally:
         cleanup_workspaces([owner])

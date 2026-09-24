@@ -933,3 +933,54 @@ describe('PlaybookDetailPage — Delete-Flow', () => {
     expect(notify.success).not.toHaveBeenCalled()
   })
 })
+
+// Responsive-Vertrag #573 (Haelfte A). Die Zahl 40 px stammt aus AK 5 dieses
+// Issues, NICHT aus der Norm: `docs/frontend/design-language.md` §11 ist die
+// einzige Quelle des Hit-Target-Floors und setzt ihn auf >= 32 px; 40 px ist
+// dort die Praeferenz `size="default"`, `size="sm"` (36 px) bleibt zulaessig.
+// Der gemessene Zurueck-Button liegt mit 36 px also im Rahmen der Norm und
+// wird allein wegen AK 5 angehoben.
+//
+// jsdom hat kein Layout, deshalb sind das Klassen-Vertraege; die
+// Layout-Aussagen selbst sind in
+// .claude/plan/2026-09-23-1700_573-w3-playbooks-haelfte-a-responsive.md
+// gegen das gebaute Stylesheet in Chromium belegt.
+describe('PlaybookDetailPage — Responsive (#573)', () => {
+  it('laesst den Playbook-Titel umbrechen', async () => {
+    renderPlaybookDetail(playbookHandlers())
+
+    // Gemessen: ein trennstellenfreier Name lief bei 320 px 404,8 px breit in
+    // einen 288 px Innenraum (+116,8 px). Das `min-w-0` am Elternteil erlaubt
+    // das Schrumpfen, ein unbrechbares Wort laeuft trotzdem ueber (§4.4 P5).
+    const title = await screen.findByRole('heading', { level: 1, name: 'Coach' })
+    expect(title).toHaveClass('break-words')
+  })
+
+  it('laesst die Karten des Relations-Grids schrumpfen', async () => {
+    renderPlaybookDetail(playbookHandlers())
+
+    // Gemessen: die vier Karten massen 421,3 px in 288 px (+133,3 px).
+    // Ursache ist nicht die Spaltenzahl — das Grid ist mobile-first an `sm`
+    // gebunden —, sondern die Default-`min-width:auto` von Grid-Items: der
+    // `truncate`-Persona-Name traegt `whitespace-nowrap` und setzt damit die
+    // min-content-Breite der Spur. `truncate` greift erst, wenn das Item
+    // schrumpfen darf.
+    const grid = (await screen.findByText('Verwendet in')).closest('.grid')
+    expect(grid).not.toBeNull()
+    const cards = grid!.querySelectorAll(':scope > div')
+    expect(cards.length).toBe(4)
+    for (const card of cards) {
+      expect(card).toHaveClass('min-w-0')
+    }
+  })
+
+  it('haelt den Zurueck-Link auf dem 40-px-Hit-Target aus AK 5', async () => {
+    renderPlaybookDetail(playbookHandlers())
+
+    // Gemessen 36 px (`size="sm"`) — nach §11 zulaessig, nach AK 5 dieses
+    // Issues unterhalb `md` anzuheben.
+    const back = await screen.findByRole('link', { name: 'Playbooks' })
+    expect(back).toHaveClass('min-h-10')
+    expect(back).toHaveClass('md:min-h-0')
+  })
+})

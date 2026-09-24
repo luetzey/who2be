@@ -74,3 +74,40 @@ describe('ResourcesPage', () => {
     expect(screen.getByText('Onboarding-Guide')).toBeInTheDocument()
   })
 })
+
+// Responsive-Audit #564 (W3, Epic #431): jsdom hat kein Layout, geprueft wird
+// deshalb der Klassen-Vertrag. Die Layout-Aussage selbst ist am gerenderten
+// Baum belegt (Plandatei .claude/plan/2026-09-23-0130_564-…): der Slug-Badge
+// misst dort bei 320px Viewport 554px und ist der einzige Ueberlaeufer der
+// Liste. Muster: components/ui/dialog.test.tsx / features/tools (#562).
+describe('ResourcesPage — Umbruch bei 320px (#564)', () => {
+  const LONG_SLUG = 'kundenonboarding_wissensbasis_vertriebsteam_langbezeichner_q4'
+  const LONG_TAG = 'produktivitaets-automatisierung-langer-tag-fuer-messung'
+
+  function renderWithLongIdentifiers() {
+    const entry = resource('r1', 'Onboarding', [LONG_TAG])
+    return renderWith([{ ...entry, slug: LONG_SLUG }], ['/w/ws-1/resources'])
+  }
+
+  it('laesst den umbruchfeindlichen Slug mitten im Wort brechen', async () => {
+    renderWithLongIdentifiers()
+
+    const classes = (await screen.findByText(LONG_SLUG)).className.split(/\s+/)
+    expect(classes).toContain('break-all')
+    expect(classes).toContain('max-w-full')
+  })
+
+  it('laesst lange Tags an Wortgrenzen brechen', async () => {
+    renderWithLongIdentifiers()
+
+    // `findByText` allein traefe auch die <option> der Tag-Facette in der
+    // ListFilterBar — gesucht ist der Badge in der Karte.
+    await screen.findByText(LONG_SLUG)
+    const badge = screen
+      .getAllByText(LONG_TAG)
+      .find((el) => el.tagName !== 'OPTION')
+    const classes = (badge as HTMLElement).className.split(/\s+/)
+    expect(classes).toContain('break-words')
+    expect(classes).toContain('max-w-full')
+  })
+})

@@ -60,7 +60,7 @@ export function AuthCallbackPage() {
 
   if (hashError !== null || timedOut) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-10">
+      <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-10 break-words">
         <Card className="w-full max-w-md border-transparent shadow-modal">
           <CardHeader className="gap-2">
             <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
@@ -85,7 +85,7 @@ export function AuthCallbackPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-10">
+    <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-10 break-words">
       <Card className="w-full max-w-md border-transparent shadow-modal">
         <CardHeader className="gap-2">
           <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">

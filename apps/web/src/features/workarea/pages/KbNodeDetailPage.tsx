@@ -88,7 +88,8 @@ export function KbNodeDetailPage() {
             />
             <Card>
               <CardContent className="flex flex-col gap-4 pt-6">
-                <p className="text-sm">{node.content}</p>
+                {/* #572 (AK 5): Aussagen zitieren Belege ohne Trennstelle. */}
+                <p className="text-sm break-words">{node.content}</p>
                 <div className="flex flex-wrap gap-2">
                   <MetaPill tone="date">
                     {t('node.occurred', {
@@ -121,7 +122,10 @@ export function KbNodeDetailPage() {
                 ) : null}
                 <p className="text-sm break-all text-muted-foreground">{node.source_ref}</p>
                 {node.content_ref !== null ? (
-                  <p className="text-xs text-muted-foreground">
+                  // #572 (AK 5): `sha256:<64 Hex>` hat keine Stelle, an der
+                  // `break-words` umbrechen duerfte — dieselbe Wahl wie am
+                  // `source_ref` direkt darueber.
+                  <p className="text-xs break-all text-muted-foreground">
                     {t('node.contentRef', { ref: node.content_ref })}
                   </p>
                 ) : null}
@@ -164,7 +168,7 @@ export function KbNodeDetailPage() {
                         </span>
                         <Link
                           to={wsPath(`/workarea/kb/${neighbor.node.id}`)}
-                          className="text-sm hover:underline"
+                          className="text-sm break-words hover:underline"
                         >
                           {neighbor.node.content}
                         </Link>

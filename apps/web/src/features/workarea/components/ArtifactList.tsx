@@ -64,7 +64,11 @@ export function ArtifactList({ areaId }: ArtifactListProps) {
                 <>
                   <MetaPill tone="date">{formatOccurred(artifact)}</MetaPill>
                   {artifact.source_system !== null || artifact.source_url !== null ? (
-                    <MetaPill tone="muted">
+                    // #572 (AK 5): eine Quell-URL ist hier der Regelfall
+                    // (`source_url` aus dem Ingest) und lief bei 320 und 375 px
+                    // weit ueber die Innenkante. URLs haben keine Trennstelle,
+                    // an der `break-words` umbrechen duerfte.
+                    <MetaPill tone="muted" className="max-w-full break-all">
                       {t('artifacts.source', {
                         source: artifact.source_system ?? artifact.source_url,
                       })}

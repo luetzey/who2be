@@ -54,7 +54,11 @@ function PersonaModesDisclosure({ control, disabled }: PersonaModesDisclosurePro
           {t('editor.modes.disclosure.subtitle')}
         </span>
       </summary>
-      <div className="border-t px-4 py-4">
+      {/* Responsive-Audit #571: zwei geschachtelte Polsterungen (Card +
+          Disclosure) nahmen dem Modi-Editor bei 320 px 52 px Breite gegenueber
+          dem Modi-Tab der Detail-Page. Unterhalb `sm` schmaler, ab `sm`
+          Bestand. */}
+      <div className="border-t px-2 py-4 sm:px-4">
         <PersonaModesEditor control={control} disabled={disabled} />
       </div>
     </details>
@@ -123,7 +127,10 @@ export function PersonaEditorForm({
   const isViewer = useCurrentWorkspaceRole() === 'viewer' || locked
   return (
     <Card>
-      <CardContent className="pt-6">
+      {/* Responsive-Audit #571: Card-Polsterung unterhalb `sm` schmaler,
+          damit der geschachtelte Modi-Editor bei 320 px nicht auf 268 px
+          zusammenfaellt (Detail-Page-Tab: 318 px). Ab `sm` Bestand. */}
+      <CardContent className="px-3 pt-6 sm:px-6">
         <Form {...form}>
           <form
             className="flex flex-col gap-6"

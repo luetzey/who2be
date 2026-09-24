@@ -7,7 +7,9 @@ Greift **ausschliesslich**:
 
 Zwei Schranken, beide aus dem **Org-Entitlement** (SSoT, nie aus dem rohen
 Zahlungsstatus):
-1. **Per-Token-Rate** (`mcp_rate_per_min`) — In-Memory-Sliding-Window pro Token.
+1. **Rate** (`mcp_rate_per_min`) — Sliding-Window, **zwei** Fenster mit demselben
+   Ceiling: pro Token *und* pro Organisation (#537). Effektiv gilt das Minimum,
+   damit N Tokens nicht N × die beworbene Rate ergeben.
 2. **Monats-Kontingent** (`mcp_monthly_quota`) — `mcp_usage(org_id, period)`.
 
 Die Reihenfolge ist bewusst Rate-vor-Kontingent: ein vom Rate-Limit abgewiesener
@@ -18,7 +20,7 @@ Read soll das Monatskontingent nicht verbrauchen. Ein inaktives Entitlement
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Annotated, cast
+from typing import Annotated, NoReturn, cast
 from uuid import UUID
 
 import asyncpg
@@ -72,6 +74,23 @@ class McpLimitService:
             )
         return cast(UUID, org_id)
 
+    @staticmethod
+    def _raise_rate_limited(rate: int | None) -> NoReturn:
+        """429 fuer beide Rate-Fenster (Token und Org) — identische Antwort.
+
+        Die Grenze gehoert in `params`, nicht in den Locale-Key (ADR-0051)
+        — sonst braucht jeder Tarif seine eigene Uebersetzung. `rate` ist
+        hier faktisch nie `None` (ein `None`-Limit laesst der Limiter
+        durch); der Guard haelt mypy strict, ohne den Pfad zu aendern.
+        """
+        raise ApiError(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Token-Ratenlimit ueberschritten.",
+            reason="mcp_rate_limited",
+            params={"limit": rate} if rate is not None else None,
+            headers={"Retry-After": "60"},
+        )
+
     async def enforce(self, request: Request, ctx: WorkspaceContext) -> None:
         """Prueft das Org-Entitlement und verbucht den Read; wirft bei Verletzung."""
         if not is_cloud(self._settings):
@@ -90,20 +109,27 @@ class McpLimitService:
                 reason="subscription_inactive",
             )
 
-        # 1) Per-Token-Rate zuerst — abgewiesene Reads verbrauchen kein Kontingent.
+        # 1) Rate zuerst — abgewiesene Reads verbrauchen kein Kontingent.
+        #    Zwei Fenster mit demselben Ceiling (#537, Option A): pro Token UND
+        #    pro Organisation. Effektiv gilt das Minimum — ein Einzel-Token-Kunde
+        #    merkt nichts, N Tokens ergeben nicht mehr N × Rate.
         rate = entitlement.mcp_rate_per_min
-        if not token_rate_limiter.allow(rate_limit_key(request), rate):
-            # Die Grenze gehoert in `params`, nicht in den Locale-Key (ADR-0051)
-            # — sonst braucht jeder Tarif seine eigene Uebersetzung. `rate` ist
-            # hier faktisch nie `None` (ein `None`-Limit laesst der Limiter
-            # durch); der Guard haelt mypy strict, ohne den Pfad zu aendern.
-            raise ApiError(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Token-Ratenlimit ueberschritten.",
-                reason="mcp_rate_limited",
-                params={"limit": rate} if rate is not None else None,
-                headers={"Retry-After": "60"},
-            )
+        token_key = rate_limit_key(request)
+        org_key = f"org:{org_id}"
+        # Erst beide `peek()` (nicht-konsumierend), dann beide `allow()`: sonst
+        # verbraucht ein vom Org-Fenster abgelehnter Request das Token-Fenster
+        # (und umgekehrt). Genau dafuer existiert `peek()`.
+        if not token_rate_limiter.peek(token_key, rate) or not token_rate_limiter.peek(
+            org_key, rate
+        ):
+            self._raise_rate_limited(rate)
+        # Beide zaehlen (kein Short-Circuit — die Fenster bleiben symmetrisch).
+        token_ok = token_rate_limiter.allow(token_key, rate)
+        org_ok = token_rate_limiter.allow(org_key, rate)
+        if not token_ok or not org_ok:
+            # Nur unter Nebenlauf erreichbar: zwischen `peek` und `allow` hat ein
+            # paralleler Read das Fenster gefuellt.
+            self._raise_rate_limited(rate)
 
         # 2) Monats-Kontingent (None ⇒ unbegrenzt, dann nicht mitzaehlen).
         quota = entitlement.mcp_monthly_quota

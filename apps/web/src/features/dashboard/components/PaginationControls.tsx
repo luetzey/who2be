@@ -23,7 +23,10 @@ export function PaginationControls({
   if (totalPages <= 1) return null
 
   return (
-    <nav className="flex items-center justify-between gap-3" aria-label={t('pagination.ariaLabel')}>
+    <nav
+      className="flex flex-wrap items-center justify-between gap-3"
+      aria-label={t('pagination.ariaLabel')}
+    >
       <Button
         variant="outline"
         size="sm"
