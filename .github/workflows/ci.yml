@@ -447,48 +447,46 @@ jobs:
           -f docker-compose.e2e-cloud.yml down -v
 
   e2e-mobile:
-    # UEBERGANGSZUSTAND (Welle 7 / K1, Issue #431). Dieser Job faehrt dieselbe
-    # E2E-Suite wie `e2e` auf den drei neuen Playwright-Profilen aus
+    # HARTES GATE seit Welle 7 / K3 (Issue #431). Dieser Job faehrt dieselbe
+    # E2E-Suite wie `e2e` auf den drei Playwright-Profilen aus
     # `apps/web/playwright.config.ts` (`mobile-iphone-13`, `tablet-ipad-gen-7`,
     # `mobile-320`).
     #
-    # Er ist BEWUSST kein Gate — an ZWEI Stellen sichtbar gemacht, weil eine
-    # allein nicht traegt:
+    # Scharf ist er an DREI Stellen, die nur zusammen wirken — jede einzelne
+    # allein laesst das Gate vollstaendig aussehen und nichts durchsetzen:
     #
-    #   1. Er steht NICHT in `needs:` des `all-green`-Jobs. Das ist die
-    #      wirksame Stelle: `all-green` urteilt ausschliesslich ueber die Jobs
-    #      seiner `needs`-Liste, ein unbekannter Vorgaenger kann ihn nicht rot
-    #      faerben. `all-green` ist der einzige Required Check auf `main`
-    #      (Ruleset 16707501, `required_status_checks` enthaelt genau
-    #      `{"context": "all-green"}` — am 2026-09-23 per
-    #      `gh api repos/luetzey/who2be/rulesets/16707501` gegengeprueft, nicht
-    #      aus `docs/branch-protection-main.md` uebernommen: das Papier traegt
-    #      noch den Stand "Required Checks: keine" von 2026-09-22 und ist
-    #      inzwischen ueberholt). Also blockiert dieser Job keinen PR.
-    #   2. `continue-on-error: true` als ausdrueckliche Absicht. Fuer sich
-    #      genommen wuerde das nichts aendern (der Job ist ohnehin nicht
-    #      verdrahtet); es steht hier, damit die Absicht "meldet, blockiert
-    #      nicht" auch am Job selbst ablesbar ist und nicht nur aus einer
-    #      Abwesenheit erschlossen werden muss.
+    #   1. Er steht in `needs:` des `all-green`-Jobs. `all-green` urteilt
+    #      ausschliesslich ueber die Jobs seiner `needs`-Liste; ein unbekannter
+    #      Vorgaenger kann ihn nicht rot faerben.
+    #   2. Er hat im Auswertungs-Step von `all-green` eine eigene
+    #      `env`-Variable (`E2E_MOBILE_RESULT`) UND eine eigene `expect`-Zeile.
+    #      Nur `needs` ohne `expect` prueft nichts — der Wert wird nie gelesen.
+    #      Nur `expect` ohne `needs` liest einen leeren Wert.
+    #   3. Kein `continue-on-error` mehr. Mit ihm meldete der Job `success`,
+    #      auch wenn Tests fielen — Punkt 1 und 2 liefen dann ins Leere.
     #
-    # Das Scharfstellen — Aufnahme in `needs:` UND einen eigenen `expect`-Aufruf
-    # im Auswertungs-Step von `all-green` — ist ausdruecklich NICHT Teil dieser
-    # Karte, sondern K3. Beide Stellen gehoeren zusammen: nur `needs` ohne
-    # `expect` prueft nichts, nur `expect` ohne `needs` liest einen leeren Wert.
+    # `all-green` ist der einzige Required Check auf `main` (Ruleset 16707501,
+    # `required_status_checks` enthaelt genau `{"context": "all-green"}`, am
+    # 2026-09-24 per `gh api repos/luetzey/who2be/rules/branches/main`
+    # gegengeprueft). Dieser Job wird also NICHT selbst Required Check; er wird
+    # scharf, indem er an `all-green` haengt. Das Ruleset bleibt unberuehrt.
     #
-    # Bekannte Folge, die hier in Kauf genommen wird: das lokale Werkzeug
-    # `scripts/ci/test_all_green_matrix.py` (Funktion `check_structure`)
-    # verlangt, dass JEDER Job in dieser Datei in `all-green.needs` steht, und
-    # meldet diesen Job deshalb als fehlend. Das ist kein CI-Gate — kein
-    # Workflow-Step ruft das Skript auf, und `pyproject.toml` sammelt unter
-    # `testpaths` nur `scripts/tests`, nicht `scripts/ci`. Der Befund ist
-    # korrekt und beabsichtigt: er verschwindet, wenn K3 den Job verdrahtet.
+    # Belegt wurde die Wirkung mit einem echten roten Lauf, nicht durch Lesen
+    # dieser Datei: ein gezielt gebrochener Mobile-Test faerbte `e2e-mobile` rot
+    # und `all-green` mit — der Bruch wurde danach zurueckgenommen. Run-IDs
+    # stehen in `.claude/plan/2026-09-24-0430_w7-k3-mobile-gate-scharfstellen.md`.
+    #
+    # Er haengt wie die fuenf anderen schweren Jobs an `needs.changes` und faellt
+    # damit unter `gated_expected` im Auswertungs-Step: bei einem Doku-PR wird
+    # `skipped` erwartet, bei einem Code-PR `success`.
     #
     # Matrix statt eines Laufs ueber alle drei Profile: so sind Ergebniszahl
-    # UND Laufzeit je Profil einzeln ablesbar — genau das, was diese Karte
-    # liefern soll. Die drei Profile laufen parallel; die Wall-Clock-Kosten
-    # dieses Jobs entsprechen damit dem langsamsten Profil, nicht der Summe.
-    continue-on-error: true
+    # UND Laufzeit je Profil einzeln ablesbar. Die drei Profile laufen parallel;
+    # die Wall-Clock-Kosten dieses Jobs entsprechen dem langsamsten Profil, nicht
+    # der Summe — gemessen rund 2,5 min und damit weit unter `python` (8 min)
+    # und `web` (7 min). Der kritische Pfad bleibt Python; eine Staffelung
+    # (volle Matrix nur auf `main`) wuerde deshalb keine Minute PR-Rueckmeldung
+    # sparen und ist in K3 ausdruecklich abgelehnt worden.
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
@@ -763,6 +761,7 @@ jobs:
       - compose-smoke
       - e2e
       - e2e-billing-cloud
+      - e2e-mobile
       - audit
       - changelog-guard
     runs-on: ubuntu-latest
@@ -776,6 +775,7 @@ jobs:
           COMPOSE_SMOKE_RESULT: ${{ needs['compose-smoke'].result }}
           E2E_RESULT: ${{ needs.e2e.result }}
           E2E_BILLING_CLOUD_RESULT: ${{ needs['e2e-billing-cloud'].result }}
+          E2E_MOBILE_RESULT: ${{ needs['e2e-mobile'].result }}
           AUDIT_RESULT: ${{ needs.audit.result }}
           CHANGELOG_GUARD_RESULT: ${{ needs['changelog-guard'].result }}
         run: |
@@ -841,6 +841,10 @@ jobs:
           expect compose-smoke     "$COMPOSE_SMOKE_RESULT"     "$gated_expected"
           expect e2e               "$E2E_RESULT"               "$gated_expected"
           expect e2e-billing-cloud "$E2E_BILLING_CLOUD_RESULT" "$gated_expected"
+          # Seit Welle 7 / K3 scharf. Gehoert in dieselbe Gruppe: der Job haengt
+          # am selben `if: needs.changes.outputs.code == 'true'` und meldet bei
+          # einem Doku-PR legitim `skipped`.
+          expect e2e-mobile        "$E2E_MOBILE_RESULT"        "$gated_expected"
 
           # `audit` haengt bewusst an keinem Pfadfilter (fragt eine Live-CVE-
           # Datenbank ab) und muss deshalb immer wirklich gelaufen sein.
