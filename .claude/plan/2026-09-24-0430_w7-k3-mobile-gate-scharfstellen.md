@@ -23,18 +23,25 @@ Gemessen wurde deshalb je Lauf ueber `gh run view <id> --json jobs`:
 | 35939748484 (K2b) | `129b7d6e` | failure | failure | success |
 | 35944363069 att. 1 (K2c) | `e0f646c2` | **success** | **success** | **success** |
 | 35944363069 att. 2 (rerun) | `e0f646c2` | **success** | **success** | **success** |
-| 35944363069 att. 3 (rerun) | `e0f646c2` | **success** | **success** | **success** |
+| 35947202043 (dieser PR) | `4de9aa90` | **success** | **success** | **success** |
 
 Die Zaehlung beginnt wie vom PM verlangt **nach K2c**: B7 (Consent-Banner) und
 B8 (Popover-Hoehe) sind zwei verschiedene Defekte, und erst K2c schliesst beide.
 Vor `e0f646c2` war kein einziger Lauf auf allen drei Profilen gruen.
 
-**Ehrliche Einschraenkung, die nicht kaschiert wird:** die drei gruenen Laeufe
-sind drei *Attempts desselben Commits*, keine drei verschiedenen SHAs — mehr gibt
-die Historie nicht her, weil K2c der erste gruene Stand ueberhaupt ist. Was sie
-belegen, ist Reproduzierbarkeit (keine Flake), nicht Stabilitaet ueber
-Codeaenderungen hinweg. Der erste CI-Lauf dieses PRs ist der vierte Beleg, dann
-auf einem anderen SHA.
+Run 35944363069 hat **genau zwei** Attempts (`gh api …/runs/35944363069 --jq
+.run_attempt` → `2`; `…/attempts/3` → 404), und auf `e0f646c2` existiert nur
+dieser eine Lauf. Der dritte Beleg ist deshalb Run 35947202043 auf `4de9aa90`.
+
+**Ehrliche Einschraenkung, die nicht kaschiert wird:** die drei gruenen Belege
+verteilen sich auf *zwei* SHAs, nicht auf drei unabhaengige Codestaende. `4de9aa90`
+aendert gegenueber `e0f646c2` keinen App- und keinen Testcode (`git diff
+--name-only e0f646c2 4de9aa90` → nur `ci.yml`, `scripts/ci/`, `changelog.d/`,
+`.claude/plan/`), der Teststand ist also identisch; der Lauf belegt
+Reproduzierbarkeit (keine Flake), nicht Stabilitaet ueber Codeaenderungen hinweg.
+Mehr gibt die Historie nicht her, weil K2c der erste gruene Stand ueberhaupt ist.
+Vierter Beleg auf einem weiteren SHA: Run 35949020892 auf `1c401202`, ebenfalls
+3× `success`.
 
 **Gegenprobe zur PM-Warnung (Gate bewacht keinen kaschierten Defekt):**
 `apps/web/e2e/consent-overlay.spec.ts` existiert, ruft `decideCookieConsent`
@@ -44,11 +51,11 @@ gruen.
 
 ## 2. Die drei Stellen
 
-`all-green` (`ci.yml:736`) urteilt an voneinander unabhaengigen Stellen, die nur
+`all-green` (`ci.yml:734`) urteilt an voneinander unabhaengigen Stellen, die nur
 zusammen ein Gate ergeben. Ein Job nur in `needs` faerbt den Aggregat-Job
 **nicht** rot — die Pruefzeile fehlt, also wird der Wert nie gelesen.
 
-1. `needs:` um `e2e-mobile` ergaenzen (`ci.yml:759`).
+1. `needs:` um `e2e-mobile` ergaenzen (`ci.yml:764`).
 2. `env: E2E_MOBILE_RESULT` + `expect e2e-mobile … "$gated_expected"` im
    Auswertungs-Step.
 3. `continue-on-error: true` am Job entfernen — ohne das meldet der Job
