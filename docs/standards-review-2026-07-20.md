@@ -160,7 +160,7 @@ Scans (real, exakt CI): Python-Gate ✅ (105 Pakete, 2× MPL-2.0) · Web-Gate �
 
 Statistik: 100 Commits → 0 Conventional-Verstöße; first-parent 0 Direkt-Commits ohne PR; 64 Remote-Branches (~55 gemergt/verwaist); CI: 10/10 letzte Failures ≤6 s seit 2026-07-19, `runner_id: 0`, keine Logs; Dependabot-Runs grün → **Actions-Billing-These bestätigt**.
 
-- **GIT-1 ❌ offen (Owner):** Keine Branch-Protection auf `main` (`"protected": false`). Fix: Required Checks + 1 Review + Force-Push-Verbot.
+- **GIT-1 ❌ offen (Owner):** Keine Branch-Protection auf `main` (`"protected": false`). Fix: Required Checks + 1 Review + Force-Push-Verbot. — **Erledigt am 2026-09-22:** Ruleset `16707501` ist scharf, `all-green` ist einziger Required Check, `bypass_actors` leer; Reviews bleiben bewusst auf 0. Siehe [`branch-protection-main.md`](branch-protection-main.md).
 - **GIT-2 ❌ offen (Owner):** CI-Gate seit 2026-07-19 vollständig ausgefallen (Actions-Billing). Fix: Spending-Limit/Zahlung, dann Re-Runs.
 - **GIT-3 ❌:** Merges trotz rotem CI (#328, #329) — mitigiert durch lokale DoD, aber unbelegt im PR. Fix: bis Billing-Fix DoD-Nachweis im PR (operationalisiert durch PR-Template, s. WP).
 - **GIT-4 ⚠:** ~55 gemergte Remote-Branches. Fix: „Auto-delete head branches" (Owner) + Aufräumaktion.
