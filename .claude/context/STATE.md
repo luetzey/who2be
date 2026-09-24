@@ -2987,8 +2987,11 @@ Draft-on-Edit-Sichtbarkeit waren längst erledigt/überholt.
   JSON-*String* rechnen. Dass dieselbe Fehlerklasse woanders einen Endpunkt
   gekillt hat, steht oben (§`describe_table` antwortete mit 500).
 - Offene Owner-Entscheidungen: `docs/standards-review-2026-07-20.md` §4
-  (ADR-0002 enforce vs. amend, Branch-Protection/Merge-Strategie,
-  On-Prem-RLS, Cloud-Image-Deploy, LIC-1-Mechanik, coverage.all/E2E/CLA).
+  (ADR-0002 enforce vs. amend, Merge-Strategie, On-Prem-RLS,
+  Cloud-Image-Deploy, LIC-1-Mechanik, coverage.all/E2E/CLA). Die
+  **Branch-Protection** gehört nicht mehr dazu: entschieden und angewendet am
+  2026-09-22 (Ruleset `16707501`), siehe unten §„Nächste Schritte" Punkt 3.
+  Offen ist aus diesem Paar nur noch die Merge-Strategie.
 
 ## Nächste Schritte (nicht-Code, manuell beim Owner)
 

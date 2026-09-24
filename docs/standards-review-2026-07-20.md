@@ -214,6 +214,10 @@ Repo-Umsetzung bei der Substanz. **Owner-Entscheidungen werden nicht autonom get
 1. **ADR-0002 enforce vs. amend** (ARC-1/2, DSN-8) — seit 07-08 offen, Bestand wächst; Interims-Leitplanke in WP-9 ergänzt.
 2. **Actions-Billing** (GIT-2) — CI-Gate seit 2026-07-19 tot; ohne Fix bleiben alle CI-Runs rot.
 3. **Branch-Protection + Auto-delete + Merge-Strategie** (GIT-1/4/6) — Repo-Settings.
+   — **Branch-Protection erledigt am 2026-09-22** (Ruleset `16707501`, `all-green`
+   als einziger Required Check, siehe GIT-1 in §2.11 und
+   [`branch-protection-main.md`](branch-protection-main.md)). Offen bleiben
+   Auto-delete (GIT-4) und Merge-Strategie (GIT-6).
 4. **On-Prem-RLS** (DEP-3) — `who2be_app` auch On-Prem oder ADR für Owner-Bypass.
 5. **Cloud-Image-Deploy** (DEP-7) — Registry-Pull statt Host-Build.
 6. **LIC-1-Mechanik** — das Gate wird in WP-3 fail-closed gehärtet; die endgültige Ops-Identitäts-Mechanik bitte im PR-Review bestätigen.

@@ -22,7 +22,30 @@
   Die Ausgangslage-Tabelle bleibt als Historie stehen, ist aber je Zeile als
   Stand *vor* dem Einschalten gekennzeichnet — die Zeile „Required Checks |
   keine" nennt jetzt den heutigen Wert mit. Der Verweis auf die Karte P3b ist
-  als geschlossen markiert statt als offener Auftrag. Mitgezogen:
-  `docs/standards-review-2026-07-20.md` fuehrte GIT-1 („Keine
-  Branch-Protection auf `main`") unverandert als offenen Owner-Befund; dort
-  steht jetzt der Erledigungsvermerk mit Verweis auf das Doku-Dokument.
+  als geschlossen markiert statt als offener Auftrag.
+
+  Mitgezogen wurde daraufhin jede weitere Stelle im Repo, die den
+  Branch-Protection-Status als offen fuehrte — gesucht ueber den Begriff selbst
+  statt ueber einzelne Wortlaute, deutsch wie englisch:
+  `docs/standards-review-2026-07-20.md` (GIT-1 in §2.11 und die
+  Owner-Entscheidungsliste in §4), `.claude/context/STATE.md` (Owner-Checkliste
+  und §Bekannte Probleme), `.claude/context/DECISIONS.md` (die offene geerbte
+  Annahme des CI-Doku-Gates, per datiertem Nachtrag aufgeloest),
+  `.github/PROJECT.md` (#338 O2) und `ROADMAP.md` (Owner steps). Offen bleiben
+  dort ueberall korrekt die uebrigen Punkte — Auto-delete, Merge-Strategie,
+  Description + Topics, CLA-Assistant.
+
+  Ebenfalls ueberholt, aber bewusst nicht direkt korrigiert: der Satz in
+  `CHANGELOG.md` zur `[Unreleased]`-Sektion, ein Vorschlag fuer das Ruleset
+  liege in `docs/branch-protection-main.md` und sei *not applied*. Die Datei
+  wird laut `CONTRIBUTING.md` nicht direkt bearbeitet, und der CI-Job
+  `changelog-guard` weist jeden PR ab, der es doch tut. Der Widerruf steht
+  deshalb hier: **das Ruleset ist seit 2026-09-22 angewendet** — beim naechsten
+  `collect` landet diese Richtigstellung in derselben `[Unreleased]`-Sektion
+  wie die ueberholte Aussage.
+
+  Datierte Rueckblicke bleiben unangetastet: die Laufberichte in
+  `.claude/context/STATE.md` (Messung 2026-08-21), die Planarchive unter
+  `.claude/plan/`, die Score-Tabelle des Audits vom 2026-07-20 und der
+  Migrations-Rueckblick in `docs/frontend/migration-plan.md` beschreiben den
+  Stand ihres jeweiligen Zeitpunkts und waren damals richtig.
