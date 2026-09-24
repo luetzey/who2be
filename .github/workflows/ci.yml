@@ -342,9 +342,11 @@ jobs:
         # `--project=chromium` ist NICHT optional, seit die Config vier Projekte
         # fuehrt (Welle 7 / K1): `playwright test` ohne Projektfilter faehrt
         # ALLE Projekte. Dieser Job ist das scharfe Desktop-Gate und darf genau
-        # die 12 Desktop-Tests fahren — ohne den Filter zoege er die noch
+        # die Desktop-Ausfuehrung fahren — ohne den Filter zoege er die noch
         # meldenden Mobile-Profile in ein blockierendes Gate hinein und waere
-        # damit faktisch K3, an `e2e-mobile` vorbei.
+        # damit faktisch K3, an `e2e-mobile` vorbei. (Keine feste Testzahl
+        # mehr im Kommentar: sie aenderte sich mit jedem neuen Spec und war
+        # zuletzt ueberholt — der Filter ist der Punkt, nicht die Anzahl.)
         run: npm run e2e -- --project=chromium
       - name: Upload Playwright report
         if: always()

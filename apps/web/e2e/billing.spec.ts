@@ -1,6 +1,7 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 
 import { createUser, loginAs, seedWorkspace } from './helpers/auth'
+import { decideCookieConsent } from './helpers/consent'
 
 /**
  * Billing-Journey (Issue #453): Login -> Billing-Ansicht -> aktueller Tarif
@@ -51,35 +52,6 @@ test.skip(
 const FAKE_CHECKOUT_URL = 'https://mollie-checkout.e2e.invalid/session/e2e-test'
 
 const UPGRADE_BUTTON_NAME = /Jetzt upgraden|Upgrade now/
-
-/**
- * Cookie-Consent vorab entscheiden — sonst liegt das Banner ueber dem
- * Upgrade-Button und der Klick laeuft in den Timeout.
- *
- * Das Banner (`features/legal/components/CookieConsentBanner.tsx`) rendert,
- * solange unter diesem Key keine Entscheidung im `localStorage` steht, und es
- * traegt `pointer-events-auto` — es faengt den Klick also tatsaechlich ab,
- * statt nur darueber zu liegen. Die bestehenden Journeys stolpern nicht
- * darueber, weil ihre Ziele ausserhalb des Banners liegen; hier nicht.
- *
- * `rejected` statt `accepted`: der Test braucht keine Analytics, und die
- * datensparsame Variante ist der ehrlichere Ausgangszustand.
- *
- * Key als Literal, nicht importiert — dieselbe Konvention wie
- * `SESSION_STORAGE_KEY` in `helpers/auth.ts` (E2E laeuft ausserhalb des
- * Vite-Bundles). Quelle: `CONSENT_STORAGE_KEY` in
- * `apps/web/src/features/legal/hooks/useCookieConsent.ts`.
- */
-const CONSENT_STORAGE_KEY = 'who2be:cookie-consent'
-
-async function decideCookieConsent(page: Page): Promise<void> {
-  await page.addInitScript(
-    (key) => {
-      window.localStorage.setItem(key, 'rejected')
-    },
-    CONSENT_STORAGE_KEY,
-  )
-}
 
 test('Billing: aktueller Tarif sichtbar, Upgrade stoesst abgefangene Weiterleitung an', async ({
   page,
