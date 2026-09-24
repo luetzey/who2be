@@ -2232,7 +2232,7 @@ Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
   nicht die gepinnte). `get_consent_principal` klemmt beide Consent-Endpunkte
   auf den JWT-Pfad. ADR-0036-Addendum 3. **Vorbestehend, nicht durch #405
   eingeführt** — gefunden, weil der neue Preview dieselbe Dependency erbte.
-- **81 Tools** (58 + 23 aus WorkArea/KB/Tabellen, ADR-0047): Read + Write
+- **83 Tools** (58 + 25 aus WorkArea/KB/Tabellen, ADR-0047): Read + Write
   (ADR-0030), `search` + `search_content`
   (ADR-0037/0046), Versions-/
   Discovery-Tools, System-Prompt-Tools (ADR-0040), feinkörnige
@@ -2417,7 +2417,7 @@ Arbeitsbereich** für Agenten plus **belegpflichtige Knowledge Base**. Plan
   Storage-Zeitstempel) und `cleanup_deleted_area_stores` (SQLite-Dateien
   gelöschter Areas). GDPR-Export trägt Areas/Artifacts/Blob-Metadaten/
   Tabellen-Zeilen (Cap 10 000 + `truncated`)/KB/Zugriffslog.
-- **MCP:** 58 → **81 Tools** (`tools/workarea.py`, `tools/tables.py`,
+- **MCP:** 58 → **83 Tools** (`tools/workarea.py`, `tools/tables.py`,
   `tools/kb.py`), policy-gefiltert, Payload-Budget grün.
 - **Security-Reviews:** nach Welle 2 und Welle 5 je ein Durchlauf; Phase 2
   siehe eigener Abschnitt unten.
