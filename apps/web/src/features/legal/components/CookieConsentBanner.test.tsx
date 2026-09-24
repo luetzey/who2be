@@ -1,9 +1,9 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { CONSENT_STORAGE_KEY } from '../hooks/useCookieConsent'
-import { CookieConsentBanner } from './CookieConsentBanner'
+import { BANNER_HEIGHT_VAR, CookieConsentBanner } from './CookieConsentBanner'
 
 function renderBanner() {
   return render(
@@ -89,5 +89,79 @@ describe('CookieConsentBanner — 320px (#567)', () => {
     const rowClasses = row.className.split(/\s+/)
     expect(rowClasses).not.toContain('shrink-0')
     expect(rowClasses).toContain('sm:shrink-0')
+  })
+})
+
+// Befund B7 (Welle 7 / K2b): das Banner reserviert den Platz, den es belegt,
+// statt ihn zu ueberlagern. Es meldet dazu seine gemessene Hoehe als
+// `--cookie-banner-height` an `document.documentElement`; `globals.css`
+// verbraucht den Wert in `body { padding-bottom }` und
+// `html { scroll-padding-bottom }`.
+//
+// jsdom hat weder Layout noch `ResizeObserver` — gemessen wird die Wirkung
+// deshalb im E2E-Spec `apps/web/e2e/consent-overlay.spec.ts` (bei
+// ungetroffener Entscheidung, auf allen vier Playwright-Profilen). Hier
+// geprueft wird das, was jsdom tragen kann und was beim Refactoring am
+// leichtesten stillschweigend verlorengeht: dass die Variable ueberhaupt
+// gesetzt wird, solange das Banner steht — und dass sie **verschwindet**,
+// sobald es das nicht mehr tut. Bliebe sie stehen, haette jede Seite fuer
+// immer einen toten Rand unten.
+describe('CookieConsentBanner — Platzreservierung (B7)', () => {
+  class StubResizeObserver {
+    constructor(private readonly callback: () => void) {}
+    observe() {
+      this.callback()
+    }
+    disconnect() {}
+    unobserve() {}
+  }
+
+  const MEASURED_HEIGHT = 190
+
+  beforeEach(() => {
+    // Eigenes Clear: das `beforeEach` weiter oben gehoert zum ersten
+    // `describe`-Block und gilt hier nicht — ohne das leckt der
+    // 'accepted'-Wert aus dem vorherigen Test herein.
+    window.localStorage.clear()
+    vi.stubGlobal('ResizeObserver', StubResizeObserver)
+    // jsdom gibt fuer jedes Element eine Nullbox zurueck; die Hoehe wird hier
+    // vorgegeben, damit die Rechnung im Effekt ueberhaupt eine Zahl sieht.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      height: MEASURED_HEIGHT,
+    } as unknown as DOMRect)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+    document.documentElement.style.removeProperty(BANNER_HEIGHT_VAR)
+  })
+
+  it('meldet die gemessene Hoehe samt Wrapper-Abstand, solange das Banner steht', () => {
+    renderBanner()
+    // `p-4` am Wrapper = 16px oben und unten; die Karte sitzt entsprechend
+    // ueber der Viewport-Unterkante.
+    expect(document.documentElement.style.getPropertyValue(BANNER_HEIGHT_VAR)).toBe(
+      `${MEASURED_HEIGHT + 32}px`,
+    )
+  })
+
+  it('nimmt die Reservierung nach der Entscheidung zurueck', () => {
+    renderBanner()
+    expect(document.documentElement.style.getPropertyValue(BANNER_HEIGHT_VAR)).not.toBe('')
+    fireEvent.click(screen.getByRole('button', { name: /Nur notwendige/i }))
+    expect(document.documentElement.style.getPropertyValue(BANNER_HEIGHT_VAR)).toBe('')
+  })
+
+  it('reserviert nichts, wenn bereits eine Entscheidung vorliegt', () => {
+    window.localStorage.setItem(CONSENT_STORAGE_KEY, 'accepted')
+    renderBanner()
+    expect(document.documentElement.style.getPropertyValue(BANNER_HEIGHT_VAR)).toBe('')
+  })
+
+  it('laesst die Consent-Semantik unberuehrt: kein Storage-Schreiben beim Messen', () => {
+    renderBanner()
+    expect(window.localStorage.getItem(CONSENT_STORAGE_KEY)).toBeNull()
+    expect(screen.getByRole('region', region)).toBeInTheDocument()
   })
 })
