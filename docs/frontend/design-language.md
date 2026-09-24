@@ -1,8 +1,7 @@
 # Frontend Designsprache — "Warm Citrus"
 
 > Living document. Stand: 2026-07-08 · Tokens, Primitives, Pages und Motion
-> sind etabliert. Plan-Ablage:
-> [`.claude/plans/erarbeite-eine-konkrete-designsprache-shiny-lollipop.md`](/.claude/plans/erarbeite-eine-konkrete-designsprache-shiny-lollipop.md).
+> sind etabliert.
 
 Diese Datei ist die **verbindliche Designsprache** der Who2Be-Web-UI
 (`apps/web/`). Sie konkretisiert, wie die in [`architecture.md`](./architecture.md)
@@ -598,8 +597,7 @@ nachfragen, **nicht** stillschweigend umgehen.
 
 ### Versionierung
 
-- 2026-05-27 — Initial (Phase D1 Tokens etabliert). Plan:
-  [`.claude/plans/erarbeite-eine-konkrete-designsprache-shiny-lollipop.md`](/.claude/plans/erarbeite-eine-konkrete-designsprache-shiny-lollipop.md).
+- 2026-05-27 — Initial (Phase D1 Tokens etabliert).
 - 2026-07-08 — Konsistenz-Pass (Standards-Review WP-5): `tokens`-Feature-
   Referenzen ersetzt, abgelaufene D2–D5-Marker entfernt, Spacing-Zusatzstufe
   10 fuer Page-Level-Vertikalabstand dokumentiert (§4.1 ↔ §10.2 aufgeloest),

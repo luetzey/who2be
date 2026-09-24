@@ -146,6 +146,7 @@ leitet daraus das Org-Entitlement ab.
 | `mcp_rate_per_min`  | Int    | Rate-Ceiling (req/min) — zwei Fenster, siehe unten.              |
 | `token_quota`       | Int    | Max. Anzahl aktiver API-Tokens je Workspace.                     |
 | `storage_quota_bytes` | Int  | Speichergrenze **je Workspace** in Bytes (Summe `wa_blob.size_bytes`). |
+| `workspace_quota`   | Int    | Max. Anzahl Workspaces je **Organisation** (einziger Key der Konvention, der nicht je Workspace gilt). |
 
 **Zu `mcp_rate_per_min` — zwei Fenster, ein Wert:** Seit #537 deckelt derselbe
 Wert **zwei** Sliding-Windows mit jeweils demselben Ceiling — eines pro **Token**
@@ -166,7 +167,8 @@ Beispiel-Metadata für **Pro**:
   "mcp_monthly_quota": "100000",
   "mcp_rate_per_min": "240",
   "token_quota": "25",
-  "storage_quota_bytes": "10737418240"
+  "storage_quota_bytes": "10737418240",
+  "workspace_quota": "5"
 }
 ```
 
@@ -175,11 +177,13 @@ Codes werden ignoriert (Forward-Compatibility). Fehlen `mcp_monthly_quota`/
 `mcp_rate_per_min`/`storage_quota_bytes`, gilt das jeweilige Limit als
 unbegrenzt (`None`).
 
-Für `token_quota` gilt das **nur außerhalb der Cloud** (On-Prem/OSS). Fehlt der
+Für `token_quota` **und `workspace_quota`** gilt das **nur außerhalb der Cloud**
+(On-Prem/OSS). Fehlt der
 Schlüssel in einer Cloud-Subscription — etwa weil sie vor Einführung des Feldes
 angelegt wurde, oder weil es sich um ein Downgrade-Entitlement handelt, das der
 Webhook ohne dieses Feld schreibt —, bedeutet das nicht „unbegrenzt", sondern
-„nicht gesetzt": `Entitlement.effective_token_quota` fällt dann auf den
+„nicht gesetzt": `Entitlement.effective_token_quota` bzw.
+`effective_workspace_quota` fällt dann auf den
 Tarifwert zurück (gekündigt/zahlungssäumig oder Free ⇒ Free-Wert, aktiver
 Paid-Plan ⇒ Pro-Wert). Sonst hätte eine Kündigung die Grenze aufgehoben, statt
 sie durchzusetzen.
