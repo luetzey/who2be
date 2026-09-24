@@ -14,7 +14,9 @@
   yields 59 deployments and a 30-minute window 49 — ten fewer over a month
   (~17 %), at the price of up to 30 instead of 10 minutes to live on *every*
   merge. The dense series that prompted this change are already fully covered
-  at 10 minutes (largest gap within a series: 3 min 47 s).
+  at 10 minutes: the largest gap between *consecutive* runs of the four series
+  on 2026-09-23/24 was 3 min 35 s, and across all 100 measured runs the largest
+  gap below the threshold is 6.5 minutes.
   Waiting is free here: the repository is public and runs standard runners, for
   which GitHub bills no Actions minutes.
 

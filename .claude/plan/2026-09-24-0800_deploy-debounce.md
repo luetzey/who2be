@@ -19,8 +19,16 @@ Jeder dieser Laeufe baut vier Images und wuerde (bei gesetztem `DEPLOY_HOST`)
 die Services neu starten. In der Welle-5-Serie waren **acht von neun** Neustarts
 wertlos.
 
-Groesster Abstand *innerhalb* dieser vier Serien: **3 min 47 s**
-(35956582714 @04:39:36Z → 35956848991 @04:43:23Z).
+Groesster Abstand zwischen *aufeinanderfolgenden* Laeufen dieser vier Serien:
+**3 min 35 s = 215 s** (35956597187 @04:39:48Z → 35956848991 @04:43:23Z).
+Zu paaren sind nur Nachbarn: zwischen 35956582714 @04:39:36Z und 35956848991
+liegt 35956597187, ein Vergleich der beiden aeusseren Laeufe ergaebe 227 s und
+waere kein Abstand zwischen Nachbarn.
+
+Robuster als die Serien-Innensicht ist derselbe Wert ueber alle 100 push-Laeufe:
+groesster Abstand *unterhalb* der 600-s-Schwelle **390 s = 6,5 min**
+(35707161164 → 35707756898 @2026-09-22T08:52:13Z). Auch dieser Wert liegt unter
+10 min, ein 10-min-Fenster zieht also jede bisher beobachtete Serie zusammen.
 
 **Wichtig — diese vier Serien sind eine Stichprobe von ~1,5 Tagen und taugen
 nicht zur Bestimmung der Fensterbreite.** Ueber die letzten 100 push-Laeufe
@@ -172,8 +180,10 @@ Buendelungs-Wirkung: ein breiteres Fenster buendelt messbar mehr (§1).
 der einzelne Merge, der auf keine Serie trifft, und das ist der Regelfall
 (die zehn zusammenziehbaren Abstaende stehen 99 Abstaenden gegenueber).
 Die dichten Serien, die den Anlass gaben (neun Laeufe in 36 s), faengt das
-10-min-Fenster vollstaendig: der groesste Abstand innerhalb einer Serie war
-3 min 47 s. Der Zusatznutzen von 30 min liegt ausserhalb dieses Anlasses.
+10-min-Fenster vollstaendig: der groesste Abstand zwischen aufeinanderfolgenden
+Laeufen einer dieser Serien war 3 min 35 s, und ueber alle 100 push-Laeufe liegt
+der groesste Abstand unterhalb der Schwelle bei 6,5 min. Der Zusatznutzen von
+30 min liegt ausserhalb dieses Anlasses.
 
 Deshalb 10 — als Abwaegung, nicht weil 30 wirkungslos waere. Da Wartezeit hier
 nichts kostet (§2), ist es eine reine Latenz-gegen-Lauf-Anzahl-Frage, und die

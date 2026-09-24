@@ -272,9 +272,11 @@ manuell per `workflow_dispatch`):
    59 Deploys, ein 30-min-Fenster 49 — 30 Minuten wuerden ueber einen Monat
    also zehn weitere Laeufe sparen (~17 %), kosteten dafuer aber auf *jedem*
    Merge bis zu 30 statt 10 Minuten bis Live. Die dichten Serien, um die es
-   ging, faengt das 10-min-Fenster vollstaendig (groesster Abstand innerhalb
-   einer Serie: 3 min 47 s). Der Wert ist eine Zeile im Workflow und
-   jederzeit aenderbar. Praktische Folgen:
+   ging, faengt das 10-min-Fenster vollstaendig: der groesste Abstand zwischen
+   aufeinanderfolgenden Laeufen der vier Serien vom 2026-09-23/24 betrug
+   3 min 35 s, und ueber alle 100 gemessenen Laeufe liegt der groesste Abstand
+   unterhalb der Schwelle bei 6,5 Minuten. Der Wert ist eine Zeile im Workflow
+   und jederzeit aenderbar. Praktische Folgen:
    - Ein Merge ist erst **bis zu 10 Minuten spaeter** live. Wer schneller will,
      nimmt `workflow_dispatch` — der wartet nicht (eigene concurrency-Gruppe,
      Sleep-Step nur bei `push`).
