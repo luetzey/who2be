@@ -42,11 +42,11 @@ nicht auf (K2bs gezielter Test ohne weggeraeumtes Banner) und laeuft in allen
 drei Mobile-Profilen mit. Die Profile sind also nicht allein durch K2s Helfer
 gruen.
 
-## 2. Die zwei Stellen
+## 2. Die drei Stellen
 
-`all-green` (`ci.yml:736`) urteilt an zwei voneinander unabhaengigen Stellen.
-Ein Job nur in `needs` faerbt den Aggregat-Job **nicht** rot — die Pruefzeile
-fehlt, also wird der Wert nie gelesen.
+`all-green` (`ci.yml:736`) urteilt an voneinander unabhaengigen Stellen, die nur
+zusammen ein Gate ergeben. Ein Job nur in `needs` faerbt den Aggregat-Job
+**nicht** rot — die Pruefzeile fehlt, also wird der Wert nie gelesen.
 
 1. `needs:` um `e2e-mobile` ergaenzen (`ci.yml:759`).
 2. `env: E2E_MOBILE_RESULT` + `expect e2e-mobile … "$gated_expected"` im
@@ -66,18 +66,52 @@ scharfgestellt, muss er in `all-green.needs` UND in den Auswertungs-Step
 aufgenommen und hier entfernt werden." Genau das passiert hier. `GATED_JOBS` und
 `Case.gated` wachsen von fuenf auf sechs Eintraege.
 
-## 4. Roter Beleglauf (Punkt 2 der Karte)
+## 4. Roter Beleglauf (Punkt 2 der Karte) — ausgefuehrt
 
 Nicht aus der YAML gelesen, sondern gefahren:
 
-1. Scharfstellen committen, pushen, PR oeffnen → Lauf muss gruen sein.
-2. Einen Mobile-Test gezielt brechen, pushen → `e2e-mobile` rot **und**
-   `all-green` rot, mit der Zeile `e2e-mobile: 'failure', erwartet 'success'`
-   im Log.
-3. Bruch zuruecknehmen, pushen → wieder gruen. Der Bruch darf im Enddiff nicht
-   stehen.
+| Schritt | Commit | Run | Ergebnis |
+|---|---|---|---|
+| Scharfstellen | `4de9aa90` | **35947202043** | alle 16 Checks SUCCESS, `all-green` SUCCESS |
+| Rot-Probe (`scroll-guard.spec.ts` bricht nur bei Viewport <= 834px) | `fd8ed4a4` | **35948036476** | `e2e-mobile` 3x FAILURE, **`all-green` FAILURE** |
+| Revert der Rot-Probe | `cce5422a` | s. PR | Enddiff identisch zu `4de9aa90` |
 
-## 5. Laufzeit (Punkt 3 der Karte)
+Wortlaut aus dem `all-green`-Log von Run 35948036476:
+
+```
+changes=success code=true
+Erwartung fuer die gegateten Jobs: success
+  OK       python: success (erwartet: success)
+  OK       web: success (erwartet: success)
+  OK       compose-smoke: success (erwartet: success)
+  OK       e2e: success (erwartet: success)
+  OK       e2e-billing-cloud: success (erwartet: success)
+  OK       audit: success (erwartet: success)
+  OK       changelog-guard: success (erwartet: success)
+##[error]e2e-mobile: 'failure', erwartet 'success'.
+all-green: FEHLGESCHLAGEN.
+```
+
+Der Bruch war bewusst **trennscharf** konstruiert (nur Viewports <= 834px):
+`e2e` (chromium, Desktop) blieb SUCCESS, alle uebrigen zwoelf Checks ebenfalls.
+`all-green` faellt also nachweislich **an `e2e-mobile` und an nichts anderem**.
+`git diff 4de9aa90 HEAD` ist leer — die Probe ist vollstaendig zurueckgenommen.
+
+## 5. Ein dritter Befund aus der Mutationsprobe
+
+Die Probe gegen `scripts/ci/test_all_green_matrix.py` deckte auf, dass die
+dritte Stelle (`continue-on-error`) bislang **unbewacht** war: eine einzige
+zurueckgelassene Zeile haette die ganze Verdrahtung lautlos wirkungslos gemacht,
+weil GitHub den Job dann als `success` meldet, auch wenn seine Steps fallen.
+`check_structure` faengt das jetzt ab.
+
+| Mutation | vorher | jetzt |
+|---|---|---|
+| `needs`-Eintrag entfernt | gefangen | gefangen |
+| `expect`-Zeile entfernt | gefangen | gefangen |
+| `continue-on-error` wieder gesetzt | **durchgerutscht** | gefangen |
+
+## 6. Laufzeit (Punkt 3 der Karte)
 
 Baseline aus der Karte (Run 35913678865, gruen auf `main`): `python` 8 min,
 `web` 7 min, `e2e` 3 min, `e2e-billing-cloud` 2 min. Kritischer Pfad ist
@@ -96,7 +130,7 @@ dauerhafte Sonderregel kosten, bei der auf PRs zwei Profile ungeprueft blieben.
 Der Vorschlag wird damit ausdruecklich **nicht** zur Entscheidung vorgelegt,
 sondern begruendet abgelehnt; die Zahl steht oben zum Nachmessen.
 
-## 6. `docs/branch-protection-main.md`
+## 7. `docs/branch-protection-main.md`
 
 Wird **nicht** angefasst. Die Required-Checks-Lage aendert sich durch diese
 Karte nicht: Ruleset 16707501 fuehrt weiterhin genau einen Kontext `all-green`,
