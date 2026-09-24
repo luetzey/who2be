@@ -60,7 +60,7 @@ services:
     restart: "no"
 
   auth:
-    image: supabase/gotrue:v2.158.1
+    image: supabase/gotrue:v2.196.0
     environment:
       GOTRUE_API_HOST: 0.0.0.0
       GOTRUE_API_PORT: "9999"
@@ -77,14 +77,34 @@ services:
       GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
       GOTRUE_JWT_ADMIN_ROLES: service_role
       GOTRUE_JWT_AUD: authenticated
-      # MFA / TOTP (WP-F, Befund S1): Zwei-Faktor per TOTP. Nach einer
-      # verifizierten Challenge setzt GoTrue den JWT-Claim `aal=aal2`; die API
-      # erzwingt aal2 fuer Admin-Aktionen (core/security.require_aal2). GoTrue
-      # v2.158.1 kennt KEIN Top-Level GOTRUE_MFA_ENABLED — Faktoren werden pro
-      # Typ geschaltet (TOTP default an; hier explizit + via .env overridebar).
+      # MFA (WP-F, Befund S1; WebAuthn seit #499): Zwei-Faktor per TOTP oder
+      # WebAuthn. Nach einer verifizierten Challenge setzt GoTrue den JWT-Claim
+      # `aal=aal2`; die API erzwingt aal2 fuer Admin-Aktionen
+      # (core/security.require_aal2). GoTrue kennt KEIN Top-Level
+      # GOTRUE_MFA_ENABLED — Faktoren werden pro Typ geschaltet. TOTP ist per
+      # Default an, WebAuthn per Default AUS (MFAFactorTypeConfiguration traegt
+      # `default:"false"` fuer beide Schalter, TOTP hat einen eigenen Typ mit
+      # `default:"true"`) — deshalb stehen beide WebAuthn-Schalter explizit hier.
       GOTRUE_MFA_TOTP_ENROLL_ENABLED: ${GOTRUE_MFA_TOTP_ENROLL_ENABLED:-true}
       GOTRUE_MFA_TOTP_VERIFY_ENABLED: ${GOTRUE_MFA_TOTP_VERIFY_ENABLED:-true}
+      GOTRUE_MFA_WEB_AUTHN_ENROLL_ENABLED: ${GOTRUE_MFA_WEB_AUTHN_ENROLL_ENABLED:-true}
+      GOTRUE_MFA_WEB_AUTHN_VERIFY_ENABLED: ${GOTRUE_MFA_WEB_AUTHN_VERIFY_ENABLED:-true}
       GOTRUE_MFA_MAX_ENROLLED_FACTORS: ${GOTRUE_MFA_MAX_ENROLLED_FACTORS:-10}
+      # WebAuthn-Relying-Party (ANDERES Praefix als die Faktor-Schalter oben:
+      # GOTRUE_WEBAUTHN_*, nicht GOTRUE_MFA_WEB_AUTHN_*). Alle drei sind
+      # Pflicht, sobald ein WebAuthn-Schalter an ist; seit v2.190.0 warnt GoTrue
+      # bei unvollstaendiger Konfiguration, statt den Start abzubrechen.
+      # RP_ID ist die registrierbare Domain OHNE Schema und Port (lokal
+      # `localhost`); RP_ORIGINS ist der vollstaendige Origin MIT Schema/Port
+      # und folgt derselben Quelle wie GOTRUE_SITE_URL oben.
+      # ACHTUNG, die beiden muessen zusammenpassen: RP_ORIGINS kommt aus
+      # WHO2BE_PUBLIC_URL, RP_ID faellt unabhaengig davon auf `localhost`
+      # zurueck. Wer den Stack ueber eine LAN-IP oder einen Hostnamen faehrt,
+      # setzt GOTRUE_WEBAUTHN_RP_ID in .env passend dazu — sonst lehnt der
+      # Browser die Registrierung ab (siehe .env.example).
+      GOTRUE_WEBAUTHN_RP_ID: ${GOTRUE_WEBAUTHN_RP_ID:-localhost}
+      GOTRUE_WEBAUTHN_RP_DISPLAY_NAME: ${GOTRUE_WEBAUTHN_RP_DISPLAY_NAME:-Who2Be}
+      GOTRUE_WEBAUTHN_RP_ORIGINS: ${WHO2BE_PUBLIC_URL:-http://localhost:5173}
       GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
       # Dev bleibt autoconfirm: kein SMTP noetig, Signups sind sofort nutzbar.
       # Prod (deploy/hetzner) schaltet das auf false + echten Mailer um.
@@ -203,6 +223,12 @@ services:
       # WHO2BE_LAUNCH_MODE durchgereicht werden, sonst sieht der Entrypoint
       # den Wert nie und /config.js bleibt still auf dem Default.
       WHO2BE_SESSION_MAX_AGE_HOURS: ${WHO2BE_SESSION_MAX_AGE_HOURS:-12}
+      # Turnstile-Site-Key fuer das Captcha an den Auth-Masken (#539). LEER =
+      # kein Widget, Auth laeuft exakt wie bisher. Gehoert paarweise zu
+      # GOTRUE_SECURITY_CAPTCHA_* am auth-Service: Site-Key hier (oeffentlich,
+      # steht im HTML), Secret dort (nie in die Web-App). Nur eine der beiden
+      # Seiten zu setzen bricht den Signup — entweder beide oder keine.
+      WHO2BE_TURNSTILE_SITE_KEY: ${WHO2BE_TURNSTILE_SITE_KEY:-}
     ports:
       # Container hoert mit nginx auf 80; Host-Port bleibt 5173, damit
       # smoke.sh + CORS-Origin unveraendert bleiben.

@@ -26,6 +26,10 @@ bzw. Dokumentations-Standards).
   Komponenten-Landkarte der Web-UI (intern)
 - [`licensing/plans.md`](licensing/plans.md) — Editionen/Tarif-Logik
   (intern)
+- [`code-references.md`](code-references.md) — Konvention fuer Code-Zeiger
+  in Issues, Karten, Plaenen und Reviews: SHA-Permalink und Symbolanker
+  statt `datei:zeile`, plus der Pruefer
+  `scripts/check_code_refs.py` (intern + Contributor)
 
 ## Konzept
 
@@ -58,9 +62,15 @@ bzw. Dokumentations-Standards).
 - [`cloud-hosting-owner-guide.md`](cloud-hosting-owner-guide.md) —
   Owner-Leitfaden Cloud-Hosting bei Hetzner: Schritt-fuer-Schritt von der
   leeren Box zum Launch, Tarif-/Limit-Diskussion, Missbrauchsschutz,
-  Datenhaltung, Backup-Strategie (Betreiber)
+  Datenhaltung, Backup-Strategie (Betreiber) — Analyse-/Vorschlagspapier,
+  Stand 2026-09-19; verbindlich fuer Tarife/Limits ist
+  [`licensing/plans.md`](licensing/plans.md)
 - Deployment: [`../deploy/hetzner/README.md`](../deploy/hetzner/README.md)
   — Produktions-Deploy inkl. Runbook (Betreiber)
+- [`branch-protection-main.md`](branch-protection-main.md) —
+  **Vorschlag** fuer die Branch-Protection auf `main`: `all-green` als
+  einziger Required Check, je Regel Nutzen/Kosten/Wirkung auf Agenten
+  (Owner; nicht angewendet)
 
 ## Arbeits- und Pruefstaende (intern, historisch)
 

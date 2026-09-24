@@ -106,3 +106,44 @@ describe('KbNodeDetailPage', () => {
     expect(screen.getByText('Diese Aussage ist mit keiner anderen verknüpft.')).toBeInTheDocument()
   })
 })
+
+// Responsive-Vertrag #572 (AK 5): umbruchfeindliche Bezeichner (`node:<id>`,
+// `sha256:<hash>`, Anker) brechen um oder kuerzen kontrolliert. jsdom hat kein
+// Layout — Klassen-Vertrag zu den gerenderten Messungen in
+// .claude/plan/2026-09-23-1100_572-w3-workarea-responsive-audit.md. Gemessen
+// schnitten Inhalt, Inhalts-Referenz und Nachbar-Link bei 320 UND 375 px ab.
+// `:122` `source_ref` trug `break-all` bereits — das Muster existierte in der
+// Datei, es fehlte nur an den drei Geschwistern.
+describe('KbNodeDetailPage — Responsive (#572)', () => {
+  it('laesst Aussage und Nachbar-Link umbrechen', async () => {
+    const belegter = 'Beleg sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b'
+    stubFetch([
+      ['/kb/neighbors', [neighbor({ node: kbNode({ id: 'node-2', content: belegter }) })]],
+      ['/kb/nodes/node-1', kbNode({ content: belegter })],
+    ])
+    renderAt(<KbNodeDetailPage />, PATH, ENTRY)
+
+    await waitFor(() => {
+      expect(screen.getAllByText(belegter).length).toBeGreaterThan(0)
+    })
+    for (const el of screen.getAllByText(belegter)) {
+      expect(el).toHaveClass('break-words')
+    }
+  })
+
+  it('bricht die Inhalts-Referenz hart, weil sie keine Trennstelle hat', async () => {
+    // `sha256:<64 Hex>` enthaelt keine Stelle, an der `break-words` umbrechen
+    // duerfte — dieselbe Wahl wie am `source_ref` direkt daneben.
+    stubFetch([
+      ['/kb/neighbors', []],
+      ['/kb/nodes/node-1', kbNode({ content_ref: 'sha256:9f86d081884c7d659a2feaa0c55ad015' })],
+    ])
+    renderAt(<KbNodeDetailPage />, PATH, ENTRY)
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/sha256:9f86d081884c7d659a2feaa0c55ad015/),
+      ).toHaveClass('break-all')
+    })
+  })
+})

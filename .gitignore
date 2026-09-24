@@ -13,6 +13,10 @@ coverage.xml
 htmlcov/
 coverage/
 
+# JUnit-XML aus `pytest --junitxml` (Grundlage des Skip-Budget-Gates,
+# scripts/ci/assert_skips_within_budget.py) — Lauf-Artefakt, kein Quelltext.
+junit-*.xml
+
 # Node / React
 node_modules/
 dist/

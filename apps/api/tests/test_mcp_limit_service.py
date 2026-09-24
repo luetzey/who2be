@@ -3,7 +3,9 @@
 Ohne DB: ein Fake-Pool liefert die Org-Aufloesung, ein Fake-Entitlement-Port das
 aufgeloeste Entitlement, ein Fake-Usage-Repo das Monatskontingent. Belegt: greift
 nur Cloud + API-Token; inaktiv ⇒ 402; Rate ⇒ 429 (ohne Kontingentverbrauch);
-Kontingent ⇒ 429; On-Prem/Operator passieren.
+Kontingent ⇒ 429; On-Prem/Operator passieren. Ab #537 zusaetzlich: das Rate-Ceiling
+gilt auch **pro Organisation** (zweites Fenster, gleicher Wert) — inklusive
+Org-Trennung, Nicht-Verbrauch bei Ablehnung und Redis-Pfad.
 """
 
 from __future__ import annotations
@@ -16,7 +18,11 @@ import pytest
 from fastapi import HTTPException, Request
 
 from who2be_api.core.config import Settings
-from who2be_api.core.rate_limit import token_rate_limiter
+from who2be_api.core.rate_limit import (
+    RedisTokenRateLimiter,
+    rate_limit_key,
+    token_rate_limiter,
+)
 from who2be_api.core.security import WorkspaceContext
 from who2be_api.licensing.entitlement import Entitlement
 from who2be_api.services import mcp_limit_service
@@ -34,8 +40,13 @@ class FakeRequest:
 
 
 class FakePool:
+    """Loest jede Workspace-ID auf dieselbe Org auf — oder auf eine gesetzte."""
+
+    def __init__(self, org_id: UUID = _ORG_ID) -> None:
+        self._org_id = org_id
+
     async def fetchval(self, _query: str, *_args: object) -> UUID:
-        return _ORG_ID
+        return self._org_id
 
 
 class FakeUsageRepo:
@@ -76,13 +87,14 @@ def _service(
     entitlement: Entitlement,
     usage: FakeUsageRepo,
     edition: Literal["cloud", "onprem"] = "cloud",
+    org_id: UUID = _ORG_ID,
 ) -> McpLimitService:
     monkeypatch.setattr(
         mcp_limit_service,
         "build_entitlement_port",
         lambda _pool, _settings: FakePort(entitlement),
     )
-    return McpLimitService(FakePool(), usage, Settings(edition=edition))
+    return McpLimitService(FakePool(org_id), usage, Settings(edition=edition))
 
 
 def _run(service: McpLimitService, ctx: WorkspaceContext, token: str = "w2b_unit") -> None:
@@ -173,4 +185,125 @@ def test_rate_limit_returns_429_without_consuming_quota(monkeypatch: pytest.Monk
         _run(service, ctx, token="w2b_same")
     assert exc.value.status_code == 429
     # Das Kontingent wurde durch den abgewiesenen Read NICHT weiter belastet.
+    assert usage.count == 1
+
+
+# --- Org-weites Rate-Fenster (#537, Option A) ---------------------------------
+#
+# Dasselbe Ceiling gilt zusaetzlich pro Organisation: mehrere Agent-Tokens
+# derselben Org teilen sich ein Fenster, N Tokens ergeben nicht N × Rate.
+
+
+def _key(token: str) -> str:
+    """Der Token-Bucket-Schluessel, den der Service fuer diesen Token bildet."""
+    return rate_limit_key(cast(Request, FakeRequest(token)))
+
+
+def _ent(rate: int | None, quota: int | None = 1000) -> Entitlement:
+    return Entitlement(
+        status="active",
+        features=frozenset({"core"}),
+        mcp_monthly_quota=quota,
+        mcp_rate_per_min=rate,
+    )
+
+
+def test_two_tokens_of_same_org_share_the_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Jedes Token unter seinem eigenen Ceiling, zusammen darueber ⇒ 429 (AK 1)."""
+    usage = FakeUsageRepo()
+    service = _service(monkeypatch, _ent(rate=1), usage)
+    ctx = _ctx(is_api_token=True)
+    _run(service, ctx, token="w2b_token_a")
+    # Token B hat sein eigenes Fenster noch frei — das Org-Fenster ist voll.
+    with pytest.raises(HTTPException) as exc:
+        _run(service, ctx, token="w2b_token_b")
+    assert exc.value.status_code == 429
+    assert exc.value.headers == {"Retry-After": "60"}
+    assert getattr(exc.value, "reason", None) == "mcp_rate_limited"
+
+
+def test_tokens_of_different_orgs_do_not_interfere(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Trennung, nicht nur die Ablehnung (AK 2)."""
+    other_org = uuid4()
+    usage_a = FakeUsageRepo()
+    usage_b = FakeUsageRepo()
+    service_a = _service(monkeypatch, _ent(rate=1), usage_a)
+    service_b = _service(monkeypatch, _ent(rate=1), usage_b, org_id=other_org)
+    ctx = _ctx(is_api_token=True)
+
+    _run(service_a, ctx, token="w2b_org_a")
+    # Org A ist am Limit …
+    with pytest.raises(HTTPException):
+        _run(service_a, ctx, token="w2b_org_a2")
+    # … Org B ist davon unberuehrt.
+    _run(service_b, ctx, token="w2b_org_b")
+    assert usage_b.count == 1
+
+
+def test_org_rejection_consumes_neither_quota_nor_token_window(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der abgewiesene Read belastet weder Kontingent noch Token-Fenster (AK 3)."""
+    usage = FakeUsageRepo()
+    service = _service(monkeypatch, _ent(rate=2), usage)
+    ctx = _ctx(is_api_token=True)
+    # Ein Token fuellt das Org-Fenster (2/min) alleine aus.
+    _run(service, ctx, token="w2b_hot")
+    _run(service, ctx, token="w2b_hot")
+    assert usage.count == 2
+
+    with pytest.raises(HTTPException) as exc:
+        _run(service, ctx, token="w2b_cold")
+    assert exc.value.status_code == 429
+    # Kontingent: unveraendert.
+    assert usage.count == 2
+    assert usage.increments == 2
+    # Token-Fenster von `w2b_cold`: unangetastet — beide Slots sind noch frei.
+    cold = _key("w2b_cold")
+    assert token_rate_limiter.allow(cold, 2)
+    assert token_rate_limiter.allow(cold, 2)
+    assert not token_rate_limiter.allow(cold, 2)
+
+
+def test_unlimited_rate_passes_both_buckets(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`mcp_rate_per_min is None` ⇒ beide Fenster lassen durch (AK 4)."""
+    usage = FakeUsageRepo()
+    service = _service(monkeypatch, _ent(rate=None), usage)
+    ctx = _ctx(is_api_token=True)
+    for i in range(50):
+        _run(service, ctx, token=f"w2b_unlimited_{i % 3}")
+    assert usage.count == 50
+
+
+def test_onprem_ignores_org_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    """On-Prem/OSS steigt vor jedem Fenster aus — unveraendert."""
+    usage = FakeUsageRepo()
+    service = _service(monkeypatch, _ent(rate=1), usage, edition="onprem")
+    ctx = _ctx(is_api_token=True)
+    for _ in range(5):
+        _run(service, ctx, token="w2b_onprem")
+    assert usage.increments == 0
+
+
+def test_org_window_works_on_redis_backend(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Cloud-Edition faehrt `RedisTokenRateLimiter` — der Pfad wird belegt (AK 5).
+
+    `limits` kennt `memory://` als voll funktionsfaehiges Storage mit derselben
+    Moving-Window-Strategie; der Redis-URI unterscheidet nur die Verbindung.
+    Damit wird die Redis-Klasse (nicht ihr In-Memory-Zwilling) ausgefuehrt, ohne
+    dass ein Server laufen muss.
+    """
+    redis_like = RedisTokenRateLimiter("redis://unused:6379")
+    monkeypatch.setattr(redis_like, "storage_uri", "memory://")
+    monkeypatch.setattr(mcp_limit_service, "token_rate_limiter", redis_like)
+
+    usage = FakeUsageRepo()
+    service = _service(monkeypatch, _ent(rate=1), usage)
+    ctx = _ctx(is_api_token=True)
+    _run(service, ctx, token="w2b_redis_a")
+    with pytest.raises(HTTPException) as exc:
+        _run(service, ctx, token="w2b_redis_b")
+    assert exc.value.status_code == 429
+    assert getattr(exc.value, "reason", None) == "mcp_rate_limited"
+    # Und der abgewiesene Read hat das Kontingent nicht belastet.
     assert usage.count == 1

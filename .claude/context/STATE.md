@@ -13,6 +13,58 @@ zwoelf PRs keine `Closes`-Zeile, neun erledigte Issues blieben offen.
 und Doku-PRs falsch anschlagen. Erst messen, ob Template + CONTRIBUTING
 reichen.
 
+## ESLint zaehlt `coverage/` nicht mehr mit (2026-09-20, Issue #520)
+
+`apps/web/package.json` lintet mit `eslint .`; die Ignore-Liste in
+`eslint.config.js` kannte `dist`, `e2e`, `playwright-report` und
+`test-results`, aber nicht `coverage`. `coverage` steht jetzt ebenfalls
+darauf.
+
+**Die Aenderung ist praeventiv, nicht die Reaktion auf eine beobachtete
+Schwankung** — die urspruengliche Begruendung (die Zahl **66** habe je nach
+vorangegangenem `npm run test:coverage` geschwankt) traegt nicht, und sie ist
+mit dieser Notiz richtiggestellt. In der aktuellen Konfiguration *konnte* das
+nicht eintreten, aus zwei unabhaengigen Gruenden: `vite.config.ts:37` stellt
+die Coverage-Reporter auf `text-summary` / `json` / `html`, also landet keine
+`.ts`/`.tsx`-Datei in `coverage/`; und in `eslint.config.js` traegt **jeder**
+Regel-Block ein `files: ['**/*.{ts,tsx}']` — kein Block matcht `.js`, die
+mitgelieferten HTML-Report-Skripte werden also ohne Regeln besucht.
+Kontrollbeleg aus dem #520-Review (A/B, ohne den Fix): mit zwei realistischen
+istanbul-Report-Dateien (`coverage/lcov-report/block-navigation.js`,
+`prettify.js`, jeweils mit absichtlichen Lint-Verstoessen) blieb es bei exakt
+**66 problems / 0 errors**; erst eine kuenstlich abgelegte `coverage/bait.ts`
+erzeugte **67 problems / 1 error**. Einschraenkung: `npm run test:coverage`
+laeuft in dieser Umgebung rot (135 Testfehler, `window.localStorage`
+undefined unter jsdom) und erzeugt gar kein `coverage/` — die Aussage ist aus
+der Reporter-Konfiguration abgeleitet und an nachgestellten Report-Dateien
+geprueft, nicht an einem echt erzeugten Artefakt gemessen.
+
+Der Fix bleibt richtig — als Defense in Depth: sobald ein Reporter
+(`lcov`-Nachbarn, Instrumentierungs-Artefakte) oder ein kuenftiger
+`.js`-Regel-Block hinzukommt, waere die Zahl tatsaechlich abhaengig davon, ob
+vorher getestet wurde. Genau das ist jetzt ausgeschlossen. Nicht angefasst:
+die 66 Warnungen in `src/**` (eigene Pakete), die Schwere der Regeln,
+`.gitignore`.
+
+## Dokumentierter Typecheck prueft wieder eine Flaeche (2026-09-20, Issue #517)
+
+`apps/web/tsconfig.json` ist ein reines Solution-File (`"files": []` + zwei
+`references`). `npx tsc --noEmit` hatte damit **null** Eingabedateien und
+endete immer mit Exit 0 — an 12 normativen Stellen in 9 Dateien stand also ein
+Gate, das nichts pruefte. Ersetzt durch `npx tsc -b` (gemessen 1658 Dateien,
+davon 539 aus `apps/web/src`), also das Kommando, das CI ohnehin faehrt
+(`ci.yml:178`).
+
+Zweiter Defekt derselben Klasse, im selben PR korrigiert (Owner-Entscheidung
+Option A vom 2026-09-20): 7 Stellen nannten als Testgate `npm test`
+(= `vitest run` ohne `--coverage`). Die Thresholds in `vite.config.ts`
+greifen nur mit `--coverage`; dokumentiert ist jetzt `npm run test:coverage`,
+wie in `ci.yml:182`.
+
+Nicht angefasst: `uv run pytest -q` in `docs/CLAUDE-PROFILE.md` (die
+CI-Variante braucht eine laufende DB — eigene Owner-Weiche), die datierten
+Rueckblicke und `.claude/plan/**`, sowie `apps/web/tsconfig*.json` selbst.
+
 ## Betreiber-Domain aus dem Repo entfernt (2026-09-19, 47. Lauf, Nachlauf)
 
 Die Domain der Live-Installation war ueber die OAuth-Issuer-Laeufe in drei

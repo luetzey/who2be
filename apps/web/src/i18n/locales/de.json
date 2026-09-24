@@ -141,6 +141,8 @@
       "organization_owner_required": "Nur der Owner kann diese Organisation loeschen.",
       "workspace_org_missing": "Workspace ohne Organisation.",
       "entity_quota_exceeded": "Free-Tarif erreicht das Limit von {{limit}} Eintraegen je Workspace. Upgrade auf Pro hebt die Grenze auf — Bestehendes bleibt nutzbar.",
+      "storage_quota_exceeded": "Speichergrenze von {{limit}} Bytes erreicht. Upgrade auf Pro hebt die Grenze an — Abgelegtes bleibt les- und herunterladbar.",
+      "workspace_quota_exceeded": "Der Tarif erlaubt {{limit}} Workspaces je Organisation. Wechsle den Tarif oder loesche einen bestehenden Workspace — vorhandene Workspaces bleiben vollstaendig nutzbar.",
       "persona_not_found": "Persona nicht gefunden.",
       "resource_slug_conflict": "Eine Resource mit diesem Slug existiert bereits.",
       "sub_playbook_not_found": "Mindestens ein Sub-Playbook existiert nicht oder gehoert einem anderen Workspace.",
@@ -155,6 +157,7 @@
       "bound_agent_not_found": "Der zu bindende Agent existiert nicht in diesem Workspace.",
       "token_role_escalation": "Ein Token darf keine hoehere Rolle als sein Ersteller haben.",
       "token_not_found": "Token nicht gefunden.",
+      "token_quota_exceeded": "Der Tarif erlaubt {{limit}} aktive API-Tokens je Workspace. Widerrufe einen bestehenden Token oder wechsle den Tarif — bestehende Tokens bleiben nutzbar und rotierbar.",
       "subscription_inactive": "Kein aktives Abonnement fuer diese Organisation.",
       "mcp_rate_limited": "Token-Ratenlimit ueberschritten ({{limit}}/min).",
       "mcp_quota_exceeded": "Monatliches MCP-Kontingent erschoepft ({{limit}}/Monat).",
@@ -690,6 +693,10 @@
       },
       "consentRequiredHint": "Bitte stimme den AGB und der Datenschutzerklaerung zu, um fortzufahren."
     },
+    "captcha": {
+      "pending": "Bitte bestaetige kurz, dass du kein Bot bist.",
+      "failed": "Die Bot-Pruefung ist fehlgeschlagen. Bitte versuche es noch einmal."
+    },
     "comingSoon": {
       "title": "Wir arbeiten noch an Who2Be — bald verfügbar.",
       "body": "Die Registrierung ist im Moment noch nicht offen. Melde dich mit einem bestehenden Konto an oder schau spaeter wieder vorbei.",
@@ -1053,20 +1060,24 @@
           "heading": "7. Zahlungsabwicklung",
           "body": "Zahlungsdienstleister (Mollie), uebermittelte Daten, eigene Datenschutzerklaerung des Anbieters, Rechtsgrundlage"
         },
+        "captcha": {
+          "heading": "8. Bot-Schutz bei der Registrierung",
+          "body": "nur falls aktiviert: Cloudflare Turnstile, verarbeitete Daten (IP-Adresse, Browser-Signale), Zweck (Missbrauchs-/Bot-Abwehr, Art. 6 Abs. 1 lit. f), Drittlandtransfer USA + Garantien (SCC/DPF), Cloudflare-Datenschutzhinweis"
+        },
         "email": {
-          "heading": "8. E-Mail-Versand (Transaktionsmails)",
+          "heading": "9. E-Mail-Versand (Transaktionsmails)",
           "body": "SMTP-/Mail-Provider, Anlaesse (Verify/Invite/Reset), Rechtsgrundlage"
         },
         "processors": {
-          "heading": "9. Empfaenger & Auftragsverarbeiter",
+          "heading": "10. Empfaenger & Auftragsverarbeiter",
           "body": "Liste der Auftragsverarbeiter, Drittlandtransfers + Garantien (SCC) sofern einschlaegig"
         },
         "retention": {
-          "heading": "10. Speicherdauer",
+          "heading": "11. Speicherdauer",
           "body": "allgemeine Loeschkonzepte, gesetzliche Aufbewahrungsfristen"
         },
         "rights": {
-          "heading": "11. Deine Rechte",
+          "heading": "12. Deine Rechte",
           "text1": "Du hast das Recht auf Auskunft (Art. 15), Berichtigung (Art. 16), Loeschung (Art. 17), Einschraenkung (Art. 18), Datenuebertragbarkeit (Art. 20) und Widerspruch (Art. 21) sowie das Recht auf Beschwerde bei einer Aufsichtsbehoerde (Art. 77).",
           "authorityLabel": "Zustaendige Aufsichtsbehoerde:",
           "authorityPlaceholder": "zustaendige Datenschutzbehoerde"

@@ -73,3 +73,79 @@ teilen.
 
 > Lokal nimmt **Mailpit** (UI `http://localhost:8025`) jede Mail an — die
 > `GOTRUE_SMTP_*`-Defaults in `.env.example` reichen für den Smoke.
+
+## 3. Captcha vor der Registrierung (Cloudflare Turnstile)
+
+Gegen Massen-Signups steht optional ein Captcha vor der Selbstregistrierung.
+Anbieter ist **Cloudflare Turnstile** (kein Bilderrätsel, datensparsam, AVV
+verfügbar). Der Schalter ist **standardmäßig aus** — ohne gesetzte Schlüssel
+verhält sich die Registrierung exakt wie vorher, es wird kein Widget
+gerendert und kein Request an Cloudflare gesendet.
+
+### Schlüssel anlegen
+
+Cloudflare-Dashboard → **Turnstile** → *Add Site*, Widget-Modus „Managed",
+Domain = die App-Domain. Du erhältst ein Paar:
+
+| Schlüssel | Gehört wohin | Sichtbarkeit |
+|---|---|---|
+| **Site Key** | Web-App (`WHO2BE_TURNSTILE_SITE_KEY`) | öffentlich — steht im ausgelieferten HTML |
+| **Secret Key** | GoTrue (`GOTRUE_SECURITY_CAPTCHA_SECRET`) | geheim — verlässt den Server nie |
+
+### Einschalten
+
+Beide Hälften gehören zusammen. Nur eine zu setzen **bricht die
+Registrierung**: mit Secret ohne Site-Key schickt die Web-App kein Token und
+GoTrue lehnt ab; mit Site-Key ohne Secret zeigt die App ein Widget, dessen
+Token niemand prüft.
+
+| Variable | Ebene | Wirkung |
+|---|---|---|
+| `GOTRUE_SECURITY_CAPTCHA_ENABLED=true` | Backend (GoTrue, Runtime) | **Echte Durchsetzung** — ohne gültiges Token `400 captcha_failed`, auch bei direktem API-Aufruf. |
+| `GOTRUE_SECURITY_CAPTCHA_PROVIDER=turnstile` | Backend | Anbieter. Erlaubt sind `turnstile` und `hcaptcha`; der Compose-Default ist `turnstile`. |
+| `GOTRUE_SECURITY_CAPTCHA_SECRET=…` | Backend | Secret Key. Bei `ENABLED=true` **Pflicht** — fehlt er, startet GoTrue nicht. |
+| `WHO2BE_TURNSTILE_SITE_KEY=…` | Web (Runtime, `/config.js`) | Rendert das Widget auf Registrierung, Login und „Passwort vergessen" und schickt das Token mit. Leer = kein Widget. |
+
+Die Namen sind gegen die im Compose gepinnte GoTrue-Version **v2.158.1**
+verifiziert (`internal/conf/configuration.go`, `CaptchaConfiguration` +
+`SecurityConfiguration`, envconfig-Präfix `gotrue`). Achtung, hier lauert ein
+naheliegender Fehler: das Secret heißt per Env **`..._CAPTCHA_SECRET`**, nicht
+`..._CAPTCHA_PROVIDER_SECRET` — `envconfig` bildet den Go-Feldnamen `Secret`
+ab, nicht das JSON-Tag `provider_secret`.
+
+Die Web-Variable wirkt über `/config.js`
+(`apps/web/docker/40-who2be-runtime-config.sh`) — Umschalten braucht **keinen
+Rebuild**, nur Env ändern + Container neu starten.
+
+### Was das Captcha sonst noch trifft
+
+GoTrue hängt die Prüfung nicht nur an `/signup`, sondern an **alle**
+unauthentifizierten Auth-Endpunkte: `/recover` (Passwort vergessen),
+`/resend` (Bestätigungs-Mail erneut senden), `/magiclink`, `/otp`, `/sso` und
+den Passwort-Login (`/token` mit `grant_type=password`).
+
+Die Web-App liefert an **allen Pfaden, die sie selbst anbietet**, ein Token:
+Registrierung, Passwort-Login, „Bestätigungs-Mail erneut senden" und
+„Passwort vergessen". Login und Resend teilen sich dabei das eine Widget der
+Login-Maske — ein Turnstile-Token ist einmalig gültig, die Challenge wird
+deshalb nach jedem Request neu gestellt. `/magiclink`, `/otp` und `/sso` ruft
+die App nicht auf.
+
+**Nicht betroffen** (und das ist der wichtige Teil für das
+Einladungs-Onboarding):
+
+- **Invite-Versand** — läuft als Admin-Call mit dem Service-Role-Key; GoTrue
+  überspringt die Captcha-Prüfung für Admin-Credentials.
+- **Magic-Link-Einlösung** (`/verify`) — trägt die Captcha-Middleware gar
+  nicht erst.
+
+Eingeladene Nutzer kommen also unverändert durch, auch mit aktivem Captcha.
+
+### Datenschutz
+
+Turnstile ist ein **Drittland-Empfänger** (Cloudflare, USA). Solange kein
+Site-Key gesetzt ist, wird das Script nicht geladen und es entsteht kein
+Transfer. Wer einschaltet, trägt Cloudflare in die Datenschutzerklärung und
+das Verarbeitungsverzeichnis ein — Checkliste:
+[`compliance/legal-texts-checklist.md` §2](compliance/legal-texts-checklist.md).
+

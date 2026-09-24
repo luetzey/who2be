@@ -18,8 +18,11 @@ import { config } from '@/config'
 import { supabase } from '@/lib/supabase'
 
 import { OAuthButtons } from '../components/OAuthButtons'
+import { TurnstileWidget } from '../components/TurnstileWidget'
+import { translateAuthError } from '../lib/captcha'
 import { buildRedirectTo } from '../lib/redirect'
 import { sanitizeNext } from '../lib/sanitize-next'
+import { useCaptcha } from '../lib/use-captcha'
 import { ComingSoonPage } from './ComingSoonPage'
 
 type SignupValues = { email: string; password: string; confirm: string; consent: boolean }
@@ -42,6 +45,10 @@ function makeSignupSchema(t: (key: string) => string) {
     })
 }
 
+// GoTrue meldet ein fehlgeschlagenes Captcha mit `code: "captcha_failed"` —
+// erkannt und uebersetzt in `../lib/captcha`, gemeinsam mit Login, Resend und
+// Passwort-vergessen (alle vier haengen an derselben GoTrue-Middleware).
+
 // Registrierung (Track K). Zwei GoTrue-Ausgaenge:
 //   - Dev (`GOTRUE_MAILER_AUTOCONFIRM=true`): `signUp` liefert sofort eine
 //     Session → der User ist eingeloggt, wir navigieren auf `next`.
@@ -55,6 +62,9 @@ export function SignupPage() {
   const [searchParams] = useSearchParams()
   const [error, setError] = useState<string | null>(null)
   const [confirmationPending, setConfirmationPending] = useState(false)
+  // Turnstile (Issue #539). Ohne konfigurierten Site-Key bleibt der Hook
+  // vollstaendig passiv: kein Widget, kein Token, kein veraenderter Aufruf.
+  const captcha = useCaptcha()
 
   const next = sanitizeNext(searchParams.get('next'))
 
@@ -88,13 +98,25 @@ export function SignupPage() {
 
   async function onSubmit(values: SignupValues) {
     setError(null)
+    // `captchaToken` nur mitschicken, wenn wirklich eines da ist: das Feld
+    // im signUp-Aufruf explizit auf `undefined` zu setzen ist derselbe
+    // Zustand wie "nicht gesetzt" und haelt den Aufruf bei deaktiviertem
+    // Captcha byte-identisch zu vorher.
     const { data, error: signUpError } = await supabase.auth.signUp({
       email: values.email,
       password: values.password,
-      options: { emailRedirectTo: buildRedirectTo('/auth/callback', next) },
+      options: {
+        emailRedirectTo: buildRedirectTo('/auth/callback', next),
+        ...captcha.option(),
+      },
     })
     if (signUpError) {
-      setError(signUpError.message)
+      setError(translateAuthError(signUpError, t))
+      // Ein Turnstile-Token ist EINMALIG gueltig — nach jedem Fehlschlag ist
+      // es verbraucht. Ohne diesen Reset wuerde ein zweiter Versuch dasselbe
+      // tote Token schicken und mit derselben Meldung scheitern; der Nutzer
+      // saehe eine Sackgasse ohne sichtbaren Ausweg.
+      captcha.reset()
       return
     }
     if (data.session !== null) {
@@ -107,7 +129,7 @@ export function SignupPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-10">
+    <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-10 break-words">
       <Card className="w-full max-w-md border-transparent shadow-modal">
         <CardHeader className="gap-2">
           <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
@@ -230,14 +252,33 @@ export function SignupPage() {
                     )}
                   />
                   {error !== null ? <ErrorAlert message={error} /> : null}
+                  {captcha.required ? (
+                    <TurnstileWidget
+                      key={captcha.nonce}
+                      siteKey={config.turnstileSiteKey}
+                      action="signup"
+                      onToken={captcha.setToken}
+                      onExpire={captcha.clearToken}
+                      className="flex justify-center"
+                    />
+                  ) : null}
                   <Button
                     type="submit"
                     variant="brand"
                     className="w-full"
-                    disabled={form.formState.isSubmitting || !consentGiven}
+                    disabled={
+                      form.formState.isSubmitting ||
+                      !consentGiven ||
+                      captcha.blocked
+                    }
                   >
                     {t('signup.submit')}
                   </Button>
+                  {captcha.blocked ? (
+                    <p className="text-center text-xs text-muted-foreground">
+                      {t('captcha.pending')}
+                    </p>
+                  ) : null}
                 </form>
               </Form>
               <div className="flex items-center gap-3 text-xs text-muted-foreground">

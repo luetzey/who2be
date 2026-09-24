@@ -16,18 +16,98 @@ Dokument und der Code wird nachgezogen.
 
 Die einzigen Groessen, die der Code tatsaechlich durchsetzt, sind Preis
 (Mollie), MCP-Requests/Monat, MCP-Requests/Minute (beide `Entitlement`,
-App-seitiges Rate-Limiting) und das Entity-Limit je Workspace
-(`Entitlement.entity_limit()`). Das ist deshalb die verkaufsrelevante Tabelle:
+App-seitiges Rate-Limiting), das Entity-Limit je Workspace
+(`Entitlement.entity_limit()`), die Anzahl aktiver API-Tokens je Workspace
+(`Entitlement.token_quota`), die Speichergrenze je Workspace
+(`Entitlement.storage_quota_bytes`) und die Zahl der Workspaces je
+Organisation (`Entitlement.workspace_quota`). Das ist deshalb die
+verkaufsrelevante Tabelle:
 
-| Tier | Preis          | MCP-Requests/Monat | MCP-Requests/Minute | Entity-Limit je Workspace | Features (Metadaten, s. u.) |
-|------|----------------|---------------------|----------------------|----------------------------|------------------------------|
-| Free | 0 € (kein Abo) | 1.000               | 30                   | 50                         | `core` |
-| Pro  | 29 €/Monat     | 100.000             | 240                  | unbegrenzt                 | `core`, `composite_playbooks`, `agents`, `audit_export` |
+| Tier | Preis          | MCP-Requests/Monat | MCP-Requests/Minute | Entity-Limit je Workspace | API-Tokens je Workspace | Speicher je Workspace | Workspaces je Org | Features (Metadaten, s. u.) |
+|------|----------------|---------------------|----------------------|----------------------------|--------------------------|-----------------------|-------------------|------------------------------|
+| Free | 0 € (kein Abo) | 1.000               | 30                   | 50                         | 3                        | 100 MB                | 1                 | `core` |
+| Pro  | 29 €/Monat     | 100.000             | 240                  | unbegrenzt                 | 25                       | 10 GB                 | 5                 | `core`, `composite_playbooks`, `agents`, `audit_export` |
 
 Quellen: Preis/MCP-Requests `packages/billing/src/who2be_billing/plans.py`
 (`FREE_PLAN`/`PRO_PLAN`: `price_eur`, `mcp_monthly_quota`,
-`mcp_rate_per_min`); Entity-Limit `licensing/entitlement.py`
-(`FREE_ENTITY_QUOTA = 50`, `Entitlement.entity_limit()`).
+`mcp_rate_per_min`, `token_quota`, `storage_quota_bytes`,
+`workspace_quota`); Entity-Limit, Token-, Speicher- und Workspace-Konstanten
+`licensing/entitlement.py` (`FREE_ENTITY_QUOTA = 50`,
+`Entitlement.entity_limit()`, `FREE_TOKEN_QUOTA = 3`, `PRO_TOKEN_QUOTA = 25`,
+`FREE_STORAGE_QUOTA_BYTES = 100 MiB`, `PRO_STORAGE_QUOTA_BYTES = 10 GiB`,
+`FREE_WORKSPACE_QUOTA = 1`, `PRO_WORKSPACE_QUOTA = 5`) — `plans.py` importiert
+die Zahlen, statt sie zu wiederholen.
+
+**Zur Token-Spalte:** gezaehlt werden nur **nutzbare** Tokens — widerrufene und
+abgelaufene zaehlen nicht mit. Die Grenze greift ausschliesslich bei der
+**Anlage**: bestehende Tokens bleiben ueber der Grenze nutzbar **und
+rotierbar** (Secret-Rotation, RUNBOOK §Secret-Rotation), ein Downgrade sperrt
+also keine laufenden Agenten aus. On-Prem/OSS ist unbegrenzt.
+
+**Zur Speicher-Spalte — was gezaehlt wird und was nicht.** Die Grenze gilt
+fuer die Summe der abgelegten **Blob-Bytes** (`wa_blob.size_bytes`, also
+Datei- und URL-Ingest der WorkArea) und wird an den Ingest-Routen
+durchgesetzt (`services/storage_quota_service.py`).
+
+**Zur Spalte „Workspaces je Org" — warum es sie gibt.** Die Speichergrenze
+zaehlt je Workspace (`STORAGE_USED_SQL` filtert auf `workspace_id`), jeder
+weitere Workspace derselben Org bekaeme also dasselbe Kontingent erneut. Ohne
+Deckel auf die **Zahl** der Workspaces vervielfacht eine Org ihr Kontingent
+damit durch blosses Anlegen. Der Deckel schliesst genau diese Luecke
+(`services/workspace_quota_service.py`, durchgesetzt an
+`POST /organizations/{id}/workspaces`): erst beide Grenzen zusammen ergeben
+eine endliche Speicherzusage — Free 1 x 100 MiB, Pro 5 x 10 GiB = 50 GiB.
+
+Free steht auf **1**, nicht auf 0: jede Org-Anlage erzeugt atomar einen
+Default-Workspace, und der letzte Workspace einer Org ist unloeschbar
+(`reason: last_workspace_undeletable`). 0 waere zu diesem Bestand
+inkonsistent. Org-weites **Speicher**-Zaehlen bleibt bewusst ausserhalb dieser
+Stufe — der Deckel begrenzt die Zahl, nicht die Zaehlweise.
+
+**Bekannte Grenze 1 — der Tabellen-Store zaehlt NICHT mit.** Die
+SQLite-Dateien je WorkArea
+(`{WHO2BE_TABLESTORE_DIR}/{workspace_id}/{area_id}.sqlite`, ADR-0049) liegen
+im Dateisystem statt in Postgres und sind ohne `stat()` je Datei nicht
+bekannt. Das ist eine bewusste Grenze dieser Stufe, kein Versehen.
+
+**Bekannte Grenze 2 — Vorab-Check-Toleranz.** Das Gate prueft **vor** dem
+Ingest `summe >= limit`, ein einzelner Vorgang kann die Grenze also um bis zu
+`WHO2BE_INGEST_MAX_BYTES` (Default 20 MiB) ueberschreiten; der naechste wird
+abgewiesen.
+
+**Bekannte Grenze 3 — der Workspace-Deckel verschiebt den Multiplikator, er
+schliesst ihn nicht.** `POST /organizations` hat selbst keine Obergrenze, und
+jede neue Org bringt atomar einen Default-Workspace mit. Wer mehr Speicher
+will, als sein Tarif zusagt, kann also weitere **Organisationen** anlegen statt
+weiterer Workspaces. **Das ist eine bewusste Owner-Entscheidung vom
+2026-09-22, keine uebersehene Luecke** — bitte nicht als offener Befund wieder
+aufmachen. Zwei Gruende tragen sie:
+
+* **Der Umgehungspfad ist um Faktor 100 teurer.** Eine frisch angelegte Org hat
+  kein Mollie-Abo und faellt auf `CLOUD_FREE_ENTITLEMENT`, also 100 MiB statt
+  10 GiB je Workspace. Fuer die 50 GiB, die ein einzelnes Pro-Abo zusagt,
+  braeuchte es rund **500 Orgs** — jede mit bestaetigter Mailadresse und,
+  sobald das Captcha scharf geschaltet ist, je einem geloesten Captcha.
+* **Ein Org-Deckel traefe zuerst den ehrlichen Nutzer.** Organisationen sind
+  das Mandanten-Modell dieses Produkts; eine Agentur mit acht Kunden legt
+  berechtigt acht Orgs an. Speicher- und Token-Quote treffen, wer viel
+  *verbraucht*; ein Org-Deckel traefe, wer viel *strukturiert* — und zwar beim
+  Onboarding, an der teuersten Stelle der Kundenbeziehung.
+
+**Gueltigkeitsbereich dieser Entscheidung.** Sie traegt, solange eine Free-Org
+nichts bekommt, was echtes Geld kostet. Kaemen LLM-Aufrufe, Mailversand in
+Menge oder Rechenzeit ins Free-Kontingent, ist die Rechnung neu zu machen: der
+Faktor 100 oben ist dann nicht mehr der richtige Massstab. Das ist kein offenes
+TODO, sondern die Bedingung, unter der die Entscheidung gilt.
+
+**Kein Datenverlust.** Wie beim Entity-Limit bleibt Bestehendes ueber der
+Grenze les- und herunterladbar — abgewiesen werden ausschliesslich **neue**
+Ingests (`402`, `reason: storage_quota_exceeded`, Grenze in `params`).
+Dasselbe gilt fuer den Workspace-Deckel: liegt eine Org nach einem Downgrade
+ueber ihrer Grenze, bleiben **alle** Workspaces vollstaendig nutzbar (lesen,
+schreiben, loeschen); nur die **Anlage** antwortet mit `402`,
+`reason: workspace_quota_exceeded` und der Grenze in `params`. Eine Loeschung
+gibt den Platz sofort wieder frei.
 
 **Zur Features-Spalte — praezise gelesen:** Die Feature-Codes sind Metadaten
 des Entitlements, kein Kaufargument. `Entitlement.entity_limit()` liest nur,
@@ -63,7 +143,19 @@ leitet daraus das Org-Entitlement ab.
 | `org_id`            | UUID   | Ziel-Organisation des Entitlements (Pflicht).                    |
 | `license_policy`    | String | Whitespace-/komma-separierte Liste der Feature-Codes (Pflicht).  |
 | `mcp_monthly_quota` | Int    | Monats-Kontingent agent-facing MCP-Reads.                        |
-| `mcp_rate_per_min`  | Int    | Per-Token-Rate-Ceiling (req/min).                                |
+| `mcp_rate_per_min`  | Int    | Rate-Ceiling (req/min) — zwei Fenster, siehe unten.              |
+| `token_quota`       | Int    | Max. Anzahl aktiver API-Tokens je Workspace.                     |
+| `storage_quota_bytes` | Int  | Speichergrenze **je Workspace** in Bytes (Summe `wa_blob.size_bytes`). |
+
+**Zu `mcp_rate_per_min` — zwei Fenster, ein Wert:** Seit #537 deckelt derselbe
+Wert **zwei** Sliding-Windows mit jeweils demselben Ceiling — eines pro **Token**
+und eines pro **Organisation**; effektiv gilt das **Minimum** der beiden. Ein
+Aufrufer mit einem einzigen Token merkt davon nichts; N Tokens derselben Org
+ergeben aber nicht mehr N × die beworbene Rate. Die Tarif-Tabelle oben (Free 30,
+Pro 240) bleibt dadurch unveraendert gueltig — sie ist jetzt auch als
+Org-Gesamtrate wahr. Durchgesetzt in
+`apps/api/src/who2be_api/services/mcp_limit_service.py`
+(`McpLimitService.enforce()`, Schritt 1).
 
 Beispiel-Metadata für **Pro**:
 
@@ -72,13 +164,25 @@ Beispiel-Metadata für **Pro**:
   "org_id": "11111111-1111-1111-1111-111111111111",
   "license_policy": "agents audit_export composite_playbooks core",
   "mcp_monthly_quota": "100000",
-  "mcp_rate_per_min": "240"
+  "mcp_rate_per_min": "240",
+  "token_quota": "25",
+  "storage_quota_bytes": "10737418240"
 }
 ```
 
 `license_policy` akzeptiert sowohl Komma- als auch Whitespace-Trenner; unbekannte
 Codes werden ignoriert (Forward-Compatibility). Fehlen `mcp_monthly_quota`/
-`mcp_rate_per_min`, gilt das jeweilige Limit als unbegrenzt (`None`).
+`mcp_rate_per_min`/`storage_quota_bytes`, gilt das jeweilige Limit als
+unbegrenzt (`None`).
+
+Für `token_quota` gilt das **nur außerhalb der Cloud** (On-Prem/OSS). Fehlt der
+Schlüssel in einer Cloud-Subscription — etwa weil sie vor Einführung des Feldes
+angelegt wurde, oder weil es sich um ein Downgrade-Entitlement handelt, das der
+Webhook ohne dieses Feld schreibt —, bedeutet das nicht „unbegrenzt", sondern
+„nicht gesetzt": `Entitlement.effective_token_quota` fällt dann auf den
+Tarifwert zurück (gekündigt/zahlungssäumig oder Free ⇒ Free-Wert, aktiver
+Paid-Plan ⇒ Pro-Wert). Sonst hätte eine Kündigung die Grenze aufgehoben, statt
+sie durchzusetzen.
 
 Zusätzlich schreibt der Checkout einen **operativen** Schlüssel `plan_code`
 (z. B. `"pro"`) in die Metadata. Er ist *nicht* Teil der entitlement-ableitenden

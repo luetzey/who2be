@@ -109,7 +109,7 @@ export function ToolDetailPage() {
                 title={tool.name}
                 badges={
                   <>
-                    <Badge variant="outline" className="font-mono text-xs">
+                    <Badge variant="outline" className="max-w-full font-mono text-xs break-all">
                       {tool.alias}
                     </Badge>
                     <StatusBadge
@@ -118,7 +118,11 @@ export function ToolDetailPage() {
                     />
                     <LocaleBadge locale={tool.locale} />
                     {tags.map((tag) => (
-                      <Badge key={tag} variant="secondary" className="text-xs">
+                      <Badge
+                        key={tag}
+                        variant="secondary"
+                        className="max-w-full text-xs break-words"
+                      >
                         {tag}
                       </Badge>
                     ))}
