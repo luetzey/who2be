@@ -53,6 +53,17 @@ This keeps the public history tidy without losing solo-dev convenience.
 - Meaningful commit messages; one PR per completed unit of work.
 - Every PR needs at least **one** review.
 
+## Issue reference
+
+Every pull request states its issue reference in the body — `Closes #NNN`
+when the merge finishes the issue, `Refs #NNN` when it is partial work on a
+tracking/epic issue that must stay open (Queue rule 19, [#442](https://github.com/luetzey/who2be/issues/442)),
+or an explicit `n/a (kein Issue)` with a reason — because GitHub only closes
+an issue automatically on a `Closes`/`Fixes`/`Resolves` line, and without it
+finished issues stay open and have to be closed by hand afterwards (eleven of
+twelve PRs in wave 3 missed the line, leaving nine issues open;
+[#625](https://github.com/luetzey/who2be/issues/625)).
+
 ## Definition of Done
 
 Verify locally before every push (both stacks green). The test steps

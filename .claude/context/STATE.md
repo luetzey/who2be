@@ -2,6 +2,17 @@
 
 _Stand: 2026-09-19 (47. Lauf — der Issuer-Fix war zweimal die falsche Seite: der Trailing Slash entsteht im CLIENT, nicht in unseren Dokumenten. Advertisiert wird jetzt die URL-Normalform)_
 
+## Der Issue-Bezug im PR ist jetzt Norm, nicht Gewohnheit (2026-09-24, #625)
+
+`.github/pull_request_template.md` fragt ihn als erste Sektion mit drei
+benannten Faellen ab (`Closes` / `Refs` / `n/a` mit Begruendung),
+`CONTRIBUTING.md` §Issue reference traegt die Regel. Vorher stand sie nur in
+einer Plandatei — eine Momentaufnahme, keine Norm: in Welle 3 trugen elf von
+zwoelf PRs keine `Closes`-Zeile, neun erledigte Issues blieben offen.
+**Kein CI-Check** (bewusst, DECISIONS 2026-09-24): er wuerde bei Dependabot-
+und Doku-PRs falsch anschlagen. Erst messen, ob Template + CONTRIBUTING
+reichen.
+
 ## Betreiber-Domain aus dem Repo entfernt (2026-09-19, 47. Lauf, Nachlauf)
 
 Die Domain der Live-Installation war ueber die OAuth-Issuer-Laeufe in drei

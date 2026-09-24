@@ -1736,3 +1736,17 @@ irrefuehrend, weil es zwei Dinge gleich faerbte. Beide Male galt: Ein
 Signal ist nur so viel wert wie die Frage, die es beantwortet. Wer ein
 Gate baut, muss "bestanden", "durchgefallen" und "konnte nicht pruefen"
 auseinanderhalten — und darf das dritte niemals ins erste kippen lassen.
+
+## 2026-09-24 — Issue-Bezug im PR verbindlich, aber (noch) ohne CI-Check
+- **Entscheidung:** `.github/pull_request_template.md` fragt den Issue-Bezug mit
+  drei benannten Faellen ab (`Closes #___` / `Refs #___` / `n/a (kein Issue)` mit
+  Begruendung); `CONTRIBUTING.md` §Issue reference traegt die Regel als Norm.
+  Kein erzwingender CI-Check in diesem Schritt.
+- **Begruendung:** GitHub schliesst ein Issue nur bei `Closes`/`Fixes`/`Resolves`.
+  In Welle 3 trugen elf von zwoelf PRs keine solche Zeile — neun erledigte Issues
+  blieben offen und mussten von Hand nachgeschlossen werden (#625). `Refs` ist der
+  bewusste Gegenfall: Teilarbeit an einem Tracking-/Epic-Issue darf es nicht
+  vorzeitig schliessen (Queue-Regel 19, #442).
+- **Verworfen:** CI-Check jetzt — er schlaegt bei Dependabot- und reinen
+  Doku-PRs falsch an und braucht eine Ausnahmeliste. Erst messen, ob Template +
+  CONTRIBUTING reichen; wenn nicht, eigene Karte.
