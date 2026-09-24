@@ -1,7 +1,10 @@
 # Frontend-Komponenten-Karte
 
 > Living document. Stand: 2026-05-27 · Phasen 0–7 abgeschlossen.
-> Alle hier gelisteten Bausteine existieren im Repo.
+> Alle hier gelisteten Bausteine existieren im Repo. **Die Karte ist seit
+> 2026-05-27 nicht nachgezogen und damit unvollstaendig** (u. a. fehlen die
+> seither entstandenen `components/data/`- und `components/layout/`-Bausteine).
+> Autoritativ ist das Verzeichnis, nicht diese Tabelle.
 
 Eine Zeile pro Komponente. Eintraege folgen der Schichtung aus
 [architecture.md](./architecture.md). Spalte **Tokens** nennt die
