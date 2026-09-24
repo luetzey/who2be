@@ -1161,6 +1161,12 @@ bleiben)._
   Erfolg wertet, ist dokumentiertes Verhalten, im Repo aber nicht nachweisbar,
   solange Branch-Protection aus ist (`"protected": false`, GIT-1). Mit #338 O2
   gegenzuprüfen; der Gate ist in beiden Zuständen korrekt.
+- **Nachtrag 2026-09-22:** Die Annahme ist nicht mehr offen. Branch-Protection
+  ist seit diesem Tag scharf — Ruleset `16707501` führt `all-green` als
+  einzigen Required Check (`enforcement: active`, siehe
+  [`docs/branch-protection-main.md`](../../docs/branch-protection-main.md)).
+  Der Satz oben beschreibt den Stand vom 2026-09-05 und bleibt als
+  Entscheidungsgrund stehen.
 
 ## 2026-09-05 — Cloud-Gating läuft über Quota, nicht über Feature-Codes
 - **Entscheidung:** Der Unterschied zwischen Free und Pro ist das Nutzungskontingent,

@@ -1,27 +1,66 @@
-# Branch-Protection für `main` — Vorschlag
+# Branch-Protection für `main`
 
-**Status: umgesetzt am 2026-09-22.** Das Ruleset `16707501` fuehrt seither
-`pull_request` und `required_status_checks` mit `all-green` als einzigem
-Required Check, `enforcement: active`, `bypass_actors` leer (gemessen
-2026-09-23). Dieses Dokument bleibt als Entscheidungsgrundlage stehen: es
-begruendet, warum genau ein Required Check und welcher. Die Nutzlast in
-§„Fertige Nutzlast fuer P3b" ist Beleg, kein offener Auftrag.
+**Status: umgesetzt am 2026-09-22, serverseitig nachgemessen am 2026-09-24.** Dieses
+Dokument war ursprünglich ein Vorschlag; er ist angenommen und angewendet. Es bleibt als
+Entscheidungsgrundlage stehen — es begründet, warum genau ein Required Check und welcher.
+Die Nutzlast in §„Nutzlast, die angewendet wurde" ist Beleg, kein offener Auftrag; die
+Karte P3b, die das Einschalten beauftragte, ist geschlossen (als Dublette archiviert,
+gültig waren `t_b0233031` / `t_25a1e9f2`). Es gibt zu diesem Ruleset keine offene Aufgabe.
+
+Gemessener Ist-Zustand, `gh api repos/luetzey/who2be/rulesets/16707501` am **2026-09-24**
+(gekürzt auf die entscheidenden Felder):
+
+```json
+{
+  "id": 16707501, "name": "rule 1", "target": "branch",
+  "enforcement": "active",
+  "conditions": { "ref_name": { "include": ["~DEFAULT_BRANCH"], "exclude": [] } },
+  "rules": [
+    { "type": "deletion" },
+    { "type": "non_fast_forward" },
+    { "type": "pull_request", "parameters": {
+        "required_approving_review_count": 0,
+        "allowed_merge_methods": ["merge", "squash", "rebase"] } },
+    { "type": "required_status_checks", "parameters": {
+        "strict_required_status_checks_policy": false,
+        "required_status_checks": [{ "context": "all-green" }] } }
+  ],
+  "bypass_actors": [], "current_user_can_bypass": "never",
+  "updated_at": "2026-09-22T22:04:14+02:00"
+}
+```
+
+Vier Regeln also, nicht zwei; `all-green` ist der **einzige** Required Check, Modus „loose"
+(`strict_… : false`), und das Ruleset greift ausschließlich auf dem Default-Branch
+(`~DEFAULT_BRANCH`). `required_linear_history` ist bewusst **nicht** enthalten (§4).
+
+> **Was das Ruleset nicht tut: Review erzwingen.** `required_approving_review_count: 0` —
+> die `pull_request`-Regel verlangt einen PR, aber **keine** Approval. Wer wissen will, was
+> serverseitig gilt, darf das nicht mit der Review-Pflicht im Team verwechseln: die ist
+> Disziplin (Board-Rolle `@reviewer`), keine Servereinstellung. Ein Agent könnte seinen
+> eigenen PR technisch durchbekommen, wenn `all-green` grün ist; dass er es nicht tut, ist
+> Arbeitsregel, nicht Mechanik. Begründung für die 0 siehe §3.
 
 Grundlage: Recherchebericht `workflow-idee-code-review-2026-09-22.md`, Abschnitt P3, sowie die
-dort zitierte GitHub-Dokumentation zu Rulesets. Gemessener Repo-Zustand: 2026-09-22.
+dort zitierte GitHub-Dokumentation zu Rulesets.
 
 ## Ausgangslage (Zustand vor dem Einschalten, 2026-09-22)
 
-| Fakt | Wert |
+Diese Tabelle ist **Historie** — sie beschreibt den Stand *vor* der Änderung vom
+2026-09-22. Der heutige Stand steht im Ruleset-Auszug oben.
+
+| Fakt | Wert damals (2026-09-22, vor dem Einschalten) |
 |---|---|
-| Ruleset `16707501` ("rule 1"), `enforcement: active` | genau zwei Regeln: `deletion`, `non_fast_forward` |
-| Required Checks | **keine** |
-| `bypass_actors` | **leer** — das Ruleset gilt auch für den Owner |
-| Erlaubte Merge-Methoden | Merge-Commit, Squash und Rebase, alle drei aktiv |
+| Ruleset `16707501` ("rule 1"), `enforcement: active` | genau zwei Regeln: `deletion`, `non_fast_forward` (heute: vier, zusätzlich `pull_request` und `required_status_checks`) |
+| Required Checks | **damals keine** — heute `all-green`, siehe Auszug oben |
+| `bypass_actors` | **leer** — das Ruleset gilt auch für den Owner (heute unverändert leer) |
+| Erlaubte Merge-Methoden | Merge-Commit, Squash und Rebase, alle drei aktiv (heute unverändert) |
 | Branch nach Merge löschen | aktiv |
 
-Force-Push und Löschen von `main` sind damit bereits gesperrt. Was fehlt, ist die Verbindung
-zwischen „CI ist grün" und „darf gemergt werden": **CI ist heute formal nirgends verpflichtend.**
+Force-Push und Löschen von `main` waren damit bereits gesperrt. Was damals fehlte, war die
+Verbindung zwischen „CI ist grün" und „darf gemergt werden": **CI war bis zum 2026-09-22
+formal nirgends verpflichtend.** Seither ist sie es — `all-green` ist Required Check auf
+`main`, und ohne grünen Lauf auf dem exakten Head-SHA ist kein PR mergebar.
 
 ## Warum genau ein Required Check, und welcher
 
@@ -56,7 +95,8 @@ pfadfilter-fest und muss beim Umbau der CI nicht in den Repo-Einstellungen nachg
   Die dokumentierte Kehrseite: ein Check kann nach dem Merge fehlschlagen, wenn `main`
   inzwischen inkompatibel geändert wurde.
 * **Warum trotzdem „loose":** „Strict" („Require branches to be up to date") erzwingt, dass jeder
-  offene PR nach *jedem* fremden Merge neu gebaut wird. Bei aktuell **11 offenen PRs** ist das
+  offene PR nach *jedem* fremden Merge neu gebaut wird. Bei **11 offenen PRs** (Stand
+  2026-09-22) ist das
   eine Tretmühle, die Actions-Minuten verbrennt und Agenten in Endlos-Nachzieh-Schleifen
   schickt. Auf „strict" umstellen, wenn die Zahl offener PRs einstellig und stabil ist.
 * **Für Agenten:** spürbar nur indirekt — ein Handoff „CI grün" wird überprüfbar, statt geglaubt
@@ -89,10 +129,13 @@ pfadfilter-fest und muss beim Umbau der CI nicht in den Repo-Einstellungen nachg
   nicht, und ein Agent kann nicht sinnvoll approven. Die Review-Qualität kommt in diesem Team
   aus dem Board (`@reviewer`), nicht aus der GitHub-Mechanik. Eine Pflicht-Approval-Regel wäre
   eine Sperre, die der Owner täglich selbst umgehen müsste — und eine Regel, die routinemäßig
-  umgangen wird, ist schlimmer als keine.
+  umgangen wird, ist schlimmer als keine. **Konsequenz, die man kennen muss:** das Ruleset
+  erzwingt damit serverseitig **kein** Review (`required_approving_review_count: 0`, gemessen
+  2026-09-24). Serverseitig verpflichtend ist ausschließlich: PR statt Direkt-Push, und
+  `all-green` grün. Alles, was darüber hinaus an Review passiert, ist Team-Disziplin.
 * **Für Agenten:** keine Änderung. Sie arbeiten bereits ausschließlich über Branch + PR.
 
-### 4. Require linear history — **nicht empfohlen**, Begründung unten
+### 4. Require linear history — **nicht empfohlen**, nicht eingeschaltet; Begründung unten
 
 ## Der Widerspruch bei „Require linear history" — und warum die Auflösung ihren Preis nicht wert ist
 
@@ -131,11 +174,14 @@ einen eingespielten Arbeitsweg gegen Aufgeräumtheit. Wenn der Owner die lineare
 trotzdem will, ist der Weg dorthin: erst Rebase-Merge deaktivieren, Squash als einzige Methode
 lassen, das eine Release-Zyklus lang fahren — und dann erst die Regel scharf schalten.
 
-## Fertige Nutzlast für P3b
+## Nutzlast, die angewendet wurde
 
-Ergänzt das bestehende Ruleset `16707501` um zwei Regeln; `deletion` und `non_fast_forward`
-bleiben unverändert. **Erst ausführen, wenn der `all-green`-Job einmal auf `main` gelaufen ist**
-— sonst kennt GitHub den Check-Namen noch nicht und jeder offene PR hängt sofort auf „Expected".
+Diese zwei Regeln wurden am 2026-09-22 zum bestehenden Ruleset `16707501` **ergänzt**;
+`deletion` und `non_fast_forward` blieben unverändert. Der Block ist **Beleg und Historie**,
+kein offener Auftrag — siehe den gemessenen Ist-Zustand am Kopf des Dokuments. (Die damalige
+Vorbedingung — „erst ausführen, wenn der `all-green`-Job einmal auf `main` gelaufen ist",
+sonst kennt GitHub den Check-Namen nicht und jeder offene PR hängt auf „Expected" — war zum
+Zeitpunkt der Anwendung erfüllt.)
 
 ```jsonc
 // Anzuwenden auf die bestehenden Regeln, nicht als Ersatz:
@@ -160,9 +206,9 @@ bleiben unverändert. **Erst ausführen, wenn der `all-green`-Job einmal auf `ma
 }
 ```
 
-Nach dem Anwenden prüfen: ein offener PR muss `all-green` in seiner Checks-Liste als **Required**
-zeigen. Steht dort stattdessen „Expected — Waiting for status to be reported", ist der Name
-falsch geschrieben oder der Job auf dem Ziel-SHA nie gelaufen.
+Nach dem Anwenden geprüft — und heute noch gültig: ein offener PR zeigt `all-green` in seiner
+Checks-Liste als **Required**. Steht dort stattdessen „Expected — Waiting for status to be
+reported", ist der Name falsch geschrieben oder der Job auf dem Ziel-SHA nie gelaufen.
 
 ### Ein Fall, der genau diese Meldung erzeugt und nichts mit dem Ruleset zu tun hat
 
@@ -179,28 +225,35 @@ sie sieht, prüft zuerst `gh pr view <n> --json mergeable`.
 ## Was das für den Karten-Contract des Boards heißt
 
 Der Abschlussmechanismus für PR-gebundene Karten verlangt grüne, **repository-required** Checks
-auf dem exakten Head-SHA. Heute findet er keine konfigurierten Required Checks und verweigert
-deshalb den Abschluss — in dieser Welle musste der PM **zweimal** den Karten-Contract per Hand
-auf `local-only` umstellen, um weiterarbeiten zu können.
+auf dem exakten Head-SHA. Vor dem 2026-09-22 fand er keine konfigurierten Required Checks und
+verweigerte deshalb den Abschluss — in jener Welle musste der PM **zweimal** den Karten-Contract
+per Hand auf `local-only` umstellen, um weiterarbeiten zu können.
 
-Sobald dieses Ruleset aktiv ist, greift der Mechanismus wieder und funktioniert wie gedacht:
+Seit das Ruleset aktiv ist, greift der Mechanismus wieder und funktioniert wie gedacht:
 `all-green` ist required, meldet auf jedem PR einen Status und ist für einen Doku-PR genauso grün
 wie für einen Code-PR. Der Handgriff entfällt. Drei Dinge sind dabei zu beachten:
 
 1. **Contract wieder auf PR-gebunden umstellen.** Die zwei per Hand auf `local-only` gesetzten
-   Karten sind Altlast, kein Dauerzustand. Neue PR-Karten können ab dann wieder mit
-   `completion_contract: OWNER/REPO` laufen.
+   Karten sind Altlast, kein Dauerzustand. Neue PR-Karten laufen seither wieder mit
+   `completion_contract: OWNER/REPO`.
 2. **Exact-Head ist streng.** Ein Push nach dem grünen Lauf entwertet den Check. Eine Karte, die
    nach dem CI-Lauf noch einen Commit nachschiebt, muss den Lauf abwarten — nicht den alten
    zitieren.
 3. **Sieben-Tage-Fenster.** Ein PR, der länger als eine Woche liegt, braucht vor dem Abschluss
    einen frischen Lauf, auch wenn sich nichts geändert hat.
 
-## Ausdrücklich nicht Teil dieses Vorschlags
+## Ausdrücklich nicht eingeschaltet
+
+Diese Punkte waren nicht Teil des Vorschlags und sind entsprechend auch heute im Ruleset
+nicht enthalten (Stand 2026-09-24):
 
 * **Merge Queue** — löst ein Problem (gleichzeitige Merges entwerten sich gegenseitig), das bei
   einem mergenden Menschen nicht auftritt.
-* **„Strict" Required Checks** — siehe Regel 1, erst bei einstelliger PR-Zahl sinnvoll.
-* **CODEOWNERS / Pflicht-Reviews** — es gibt keinen zweiten menschlichen Reviewer.
-* **Einzelne CI-Jobs als Required Checks** — der dokumentierte Fehler, den dieser ganze Vorschlag
-  vermeidet.
+* **„Strict" Required Checks** — siehe Regel 1, erst bei einstelliger PR-Zahl sinnvoll; das
+  Ruleset führt `strict_required_status_checks_policy: false`.
+* **CODEOWNERS / Pflicht-Reviews** — es gibt keinen zweiten menschlichen Reviewer; das Ruleset
+  führt `required_approving_review_count: 0`.
+* **Einzelne CI-Jobs als Required Checks** — der dokumentierte Fehler, den diese Konfiguration
+  vermeidet; required ist ausschließlich `all-green`.
+* **`required_linear_history`** — bewusst nicht, Begründung in §„Der Widerspruch bei
+  ‚Require linear history'".

@@ -2987,8 +2987,11 @@ Draft-on-Edit-Sichtbarkeit waren längst erledigt/überholt.
   JSON-*String* rechnen. Dass dieselbe Fehlerklasse woanders einen Endpunkt
   gekillt hat, steht oben (§`describe_table` antwortete mit 500).
 - Offene Owner-Entscheidungen: `docs/standards-review-2026-07-20.md` §4
-  (ADR-0002 enforce vs. amend, Branch-Protection/Merge-Strategie,
-  On-Prem-RLS, Cloud-Image-Deploy, LIC-1-Mechanik, coverage.all/E2E/CLA).
+  (ADR-0002 enforce vs. amend, Merge-Strategie, On-Prem-RLS,
+  Cloud-Image-Deploy, LIC-1-Mechanik, coverage.all/E2E/CLA). Die
+  **Branch-Protection** gehört nicht mehr dazu: entschieden und angewendet am
+  2026-09-22 (Ruleset `16707501`), siehe unten §„Nächste Schritte" Punkt 3.
+  Offen ist aus diesem Paar nur noch die Merge-Strategie.
 
 ## Nächste Schritte (nicht-Code, manuell beim Owner)
 
@@ -2999,8 +3002,11 @@ in #341):
 2. ~~Tag `v0.1.0` + GitHub-Release~~ ✅ 2026-08-20 14:45 UTC (Tag auf
    `main`, Notes aus dem CHANGELOG; künftige Releases per Actions →
    Release → „Run workflow").
-3. GitHub-Settings-Rest: **Branch-Protection für `main`** (am 2026-08-21
-   per API als `protected: false` gegengeprüft — real offen) und
+3. GitHub-Settings-Rest: ~~**Branch-Protection für `main`**~~ ✅ 2026-09-22
+   (Ruleset `16707501` `enforcement: active` auf `~DEFAULT_BRANCH`, Required
+   Check `all-green`, PR-Pflicht, `bypass_actors` leer — Belege und Grenzen
+   in `docs/branch-protection-main.md`; die ältere Messung „am 2026-08-21 per
+   API `protected: false`" ist damit überholt). Offen bleibt die
    Merge-Strategie; **Description + Topics** setzen (Repo hat beides noch
    nicht; fertiger Text in #338 und PR #389). ~~Auto-delete head
    branches~~ ✅ aktiv, ~~Discussions~~ ✅ an; Secret-/Push-Protection und

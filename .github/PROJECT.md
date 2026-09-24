@@ -99,9 +99,11 @@ Danach oder parallel, außerhalb der Warteschlange:
 - **#454 Cloud-Deploy und Testkauf** (`human-only`) — Owner-Schritte
   (Repo-Variablen, Host-Secrets, Mollie-Konto, DNS, ein Kauf im Browser).
   Voraussetzungen: #429, #450, #451.
-- **#338 Owner-Checkliste** (`human-only`) — O2 (Branch-Protection,
-  Merge-Strategie, Description, Topics) und O3 (CLA-Assistant). Jederzeit
-  parallel, kein Agent claimt das.
+- **#338 Owner-Checkliste** (`human-only`) — O2 (Merge-Strategie, Description,
+  Topics) und O3 (CLA-Assistant). Jederzeit parallel, kein Agent claimt das.
+  Die **Branch-Protection** aus O2 ist seit 2026-09-22 erledigt (Ruleset
+  `16707501`, `all-green` als einziger Required Check —
+  [`docs/branch-protection-main.md`](../docs/branch-protection-main.md)).
 
 ### Projects-Board
 
