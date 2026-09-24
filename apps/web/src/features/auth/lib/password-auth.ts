@@ -10,9 +10,9 @@
 // `VITE_WHO2BE_EDITION` → `vite.config.ts` `define` → `__CLOUD_BUILD__`.
 // Bewusst **kein zweiter Schalter** — dasselbe Flag, das heute schon die
 // Billing-UI aus dem On-Prem-Bundle tree-shaked. Das Backend-Pendant ist
-// `GOTRUE_EXTERNAL_EMAIL_ENABLED` (in den Cloud-Overlays `false`); beide
-// werden im Deploy gemeinsam gesetzt, analog zum Paar
-// `VITE_WHO2BE_SIGNUP_DISABLED`/`GOTRUE_DISABLE_SIGNUP`.
+// `GOTRUE_EXTERNAL_EMAIL_ENABLED` (in den Deploy-`.env` der Cloud auf `false`,
+// Compose-Default ueberall `true`); beide werden im Deploy gemeinsam gesetzt,
+// analog zum Paar `VITE_WHO2BE_SIGNUP_DISABLED`/`GOTRUE_DISABLE_SIGNUP`.
 //
 // Warum eine Funktion und keine exportierte Konstante: `__CLOUD_BUILD__` ist
 // ein Literal-Replacement — in Vitest laesst es sich nicht stubben. Ueber

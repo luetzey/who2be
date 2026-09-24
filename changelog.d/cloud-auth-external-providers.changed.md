@@ -4,7 +4,11 @@
   password", and `/reset-password` redirects to the login page rather than
   offering a form that leads nowhere. GoTrue backs this up with
   `GOTRUE_EXTERNAL_EMAIL_ENABLED=false`, which rejects `POST /signup` and
-  `POST /token?grant_type=password`.
+  `POST /token?grant_type=password`. That variable is set in the deployment's
+  `.env`, not hard-coded in a compose overlay: every compose file keeps the
+  default `true`, so a stack brought up without OAuth credentials still has a
+  way in. Turning it off before a provider is live would lock out every sign-in
+  path, including your own.
 
   **Self-hosting is untouched.** The switch is the edition flag that already
   exists (`VITE_WHO2BE_EDITION` → `__CLOUD_BUILD__`, ADR-0029) plus a GoTrue

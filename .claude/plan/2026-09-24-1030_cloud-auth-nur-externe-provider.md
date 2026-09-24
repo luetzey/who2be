@@ -76,10 +76,10 @@ bleiben, der Registrieren-Link auf der Login-Seite bleibt.
 
 ### 5.1 Team-Einladungen (Aufgabe 3) — intakt
 
-GoTrue v2.158.1 (`image: supabase/gotrue:v2.158.1`), gegen den Quellstand
+GoTrue v2.196.0 (`image: supabase/gotrue:v2.196.0`), gegen den Quellstand
 gelesen:
 
-| Pfad | Datei/Zeile (GoTrue v2.158.1) | `External.Email.Enabled`-Check? |
+| Pfad | Datei/Zeile (GoTrue v2.196.0) | `External.Email.Enabled`-Check? |
 |---|---|---|
 | `POST /invite` (Einladung) | `internal/api/invite.go` | **nein** — kein Check im gesamten Handler |
 | `POST /verify` (Link-Einloesung) | `internal/api/verify.go` | **nein** |
@@ -123,3 +123,43 @@ cd apps/web && npm run lint && npm run typecheck && npm test
 ```
 plus die beiden CI-Bundle-Asserts (`ci.yml:197,207`), die durch den Umbau
 nicht beruehrt werden.
+
+## 7. Nachtrag Review-Runde 1 (2026-09-24) — wo der Schalter steht
+
+Der Review hat einen echten Fehler in der ersten Fassung gefunden: die
+Cloud-Overlays (`docker-compose.cloud.yml`, `deploy/dokploy/docker-compose.cloud.yml`)
+setzten `GOTRUE_EXTERNAL_EMAIL_ENABLED` **hart** auf `"false"`. Dieselben Stacks
+bringen aber keine OAuth-Credentials mit — die Basis defaultet
+`GOTRUE_EXTERNAL_{GOOGLE,GITHUB}_ENABLED` auf `false`. Ergebnis waere gewesen:
+Signup 400, Passwort-Login 422, OAuth „provider is not enabled" — also **kein**
+Anmeldeweg. Exakt die Reihenfolge-Sperre, vor der der neu geschriebene
+README-Abschnitt selbst warnt.
+
+**Entschieden: Variante (a) — der Schalter gehoert in die `.env`, nicht ins
+Overlay.** Begruendung, warum das keine Owner-Weiche ist:
+
+- Der PR macht es fuer Hetzner bereits so (`${GOTRUE_EXTERNAL_EMAIL_ENABLED:-true}`,
+  plus die dokumentierte Reihenfolge „erst Provider, dann abschalten"). Ein
+  hartes `false` daneben waere eine zweite, widersprechende Regel fuer dieselbe
+  Sache.
+- `false` ist nur sinnvoll, wo Credentials existieren. Die gibt es
+  ausschliesslich in der jeweiligen Deploy-`.env` — nie im eingecheckten
+  Overlay.
+- Variante (b) haette den Owner gezwungen, vor jedem lokalen Cloud-Smoke einen
+  Google-OAuth-Client anzulegen. Das ist eine Huerde fuer einen Test, der den
+  Anmeldeweg gar nicht prueft (er prueft Billing, Quota, Downgrade, RLS).
+
+Daraus folgend geaendert:
+
+| Datei | Aenderung |
+|---|---|
+| `docker-compose.cloud.yml` | hart `"false"` → `${GOTRUE_EXTERNAL_EMAIL_ENABLED:-true}` |
+| `deploy/dokploy/docker-compose.cloud.yml` | dito |
+| `deploy/dokploy/docker-compose.yml` | `GOTRUE_EXTERNAL_{GOOGLE,GITHUB}_*` ergaenzt (fehlten komplett — dort waere ein Abschalten sonst gar nicht kompensierbar gewesen) |
+| `docs/cloud-local-smoke.md` | §3 mit Abgrenzung Anmeldeweg/Produkt-Test + 400-Hinweis; §3b von „Optional" auf Voraussetzung fuer den Cloud-Anmeldeweg gehoben |
+| `docs/cloud-prod-smoke.md` | §2 mit Vorbehalt; neues §2b „Login ueber Google/GitHub" als Abnahme-Schritt |
+| drei Belegstellen | GoTrue-Version `v2.158.1` → `v2.196.0` (Compose pinnt v2.196.0) |
+
+Das E2E-Overlay (`docker-compose.e2e-cloud.yml`) behaelt sein explizites `"true"`:
+die CI-Journey legt ihren User ueber `POST /signup` an und darf nicht davon
+abhaengen, was in einer Umgebungs-`.env` steht.

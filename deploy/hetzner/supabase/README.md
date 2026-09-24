@@ -201,7 +201,7 @@ Ohne SMTP kaeme keine Einladung mehr an: die Einladung selbst bliebe zwar
 gueltig (der Versand ist best-effort, der Token laesst sich manuell teilen),
 aber das ist ein Notbehelf, kein Betriebsmodus.
 
-**Team-Einladungen brechen durch den Schalter nicht.** GoTrue v2.158.1 prueft
+**Team-Einladungen brechen durch den Schalter nicht.** GoTrue v2.196.0 prueft
 `External.Email` nur in `POST /signup`, `POST /token?grant_type=password` und
 `POST /magiclink`. `POST /invite`, `POST /verify`, `POST /recover` und
 `PUT /user` haben keinen solchen Check — der Einladungsweg der App
