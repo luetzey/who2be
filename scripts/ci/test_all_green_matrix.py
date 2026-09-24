@@ -66,30 +66,6 @@ GATED_JOBS = ("python", "web", "compose-smoke", "e2e", "e2e-billing-cloud", "e2e
 # geloeschte Funktion.
 UNGATED_BY_DESIGN: dict[str, str] = {}
 
-# Jobs, die ABSICHTLICH nicht in `all-green.needs` stehen.
-#
-# Die Struktur-Zusicherung unten verlangt sonst jeden Job der Datei in `needs`.
-# Das ist die richtige Vorgabe: ein Vorgaenger, den der Aggregat-Job nicht
-# kennt, kann rot sein, ohne ihn rot zu faerben. Genau diese Wirkung wird
-# waehrend der Einfuehrung eines neuen Profils aber gebraucht — ein frisch
-# eingefuehrter Job soll melden, nicht sofort jeden PR blockieren.
-#
-# Damit das eine benannte Ausnahme bleibt und kein stilles Schlupfloch:
-#   * Der Eintrag steht hier als Einzelfall MIT Begruendung, nicht als Muster.
-#   * Er wird nicht blind durchgewunken — der Job muss zusaetzlich
-#     `continue-on-error: true` fuehren (siehe `check_structure`). Ein
-#     versehentlich vergessener Job faellt dadurch weiterhin auf: ihm fehlt
-#     diese Markierung.
-#   * Jeder Eintrag ist Schulden auf Zeit. Wird der Job scharfgestellt, muss er
-#     in `all-green.needs` UND in den Auswertungs-Step aufgenommen und hier
-#     entfernt werden.
-UNGATED_BY_DESIGN: dict[str, str] = {
-    "e2e-mobile": (
-        "Welle 7 / K1: die drei Mobile-/Tablet-Playwright-Profile laufen, "
-        "melden aber nur. Scharfstellen ist K3 — dann faellt dieser Eintrag weg."
-    ),
-}
-
 
 class Case(NamedTuple):
     """Ein Ergebnis-Szenario der Vorgaenger-Jobs."""
