@@ -134,3 +134,58 @@ describe('BlockNote-Theme-Integration', () => {
     expect(GLOBALS_CSS).toMatch(/\.bn-mantine \.bn-suggestion-menu\s*\{[\s\S]*?max-height:/)
   })
 })
+
+/*
+ * BlockNote auf Tablet/Phone (#431 K4) — CSS-Vertrag.
+ *
+ * Gleiches Muster wie der Block darueber und aus demselben Grund: jsdom hat
+ * kein Layout, und `@blocknote/mantine` ist in dieser Datei global gemockt.
+ * Die Layout-Aussagen selbst sind gerendert belegt (Chromium ueber CDP bei
+ * 320 / 390 / 810px, Protokoll in
+ * .claude/plan/2026-09-24-0530_431-k4-blocknote-tablet-phone.md). Hier steht
+ * nur, was ein spaeterer Eingriff in globals.css nicht unbemerkt entfernen
+ * darf.
+ */
+describe('BlockNote Tablet/Phone (#431 K4)', () => {
+  // Der Rinnen-Override aus #564 (54px -> 12px) schiebt das Side-Menu aus dem
+  // Viewport: BlockNote setzt es per Inline-Transform mit festem Offset nach
+  // links, gemessen `x = -21` bei 320/390/767px gegen `x = 21` ab 768px.
+  // Beides haengt am selben Media-Query-Block — wer die Rinne aendert, muss
+  // auch diese Regel ansehen, deshalb wird die Kopplung hier gepinnt.
+  it('blendet das Side-Menu im selben Media-Query wie die Rinne aus', () => {
+    const phoneBlock = GLOBALS_CSS.match(
+      /@media \(max-width: 767px\) \{[\s\S]*?\n\}\n/,
+    )?.[0]
+    expect(phoneBlock, 'Phone-Media-Query der BlockNote-Insel nicht gefunden').toBeTruthy()
+    expect(phoneBlock).toMatch(/\.bn-container \.bn-editor\s*\{[\s\S]*?padding-inline:/)
+    expect(phoneBlock).toMatch(/\.bn-side-menu\s*\{\s*display:\s*none/)
+  })
+
+  // Der Floor steht in docs/frontend/design-language.md §11: ">= 32px",
+  // "kein interaktives Element darf darunter liegen, auf keinem Breakpoint".
+  // 32px = `calc(var(--spacing) * 8)` bei `--spacing: 0.25rem`.
+  // Gemessen vor dem Fix: Toolbar-Buttons 30x30, Side-Menu-Buttons 24x24,
+  // Drag-Handle-Menue-Eintraege 94x30 — alle drei unter dem Floor.
+  const HIT_TARGET_RULES: Array<[string, RegExp]> = [
+    ['Toolbar-Buttons', /\.bn-toolbar \.bn-button,\s*\n\.bn-toolbar button\s*\{[\s\S]*?\}/],
+    ['Side-Menu-Buttons', /\.bn-side-menu \.bn-button\s*\{[\s\S]*?\}/],
+    ['Drag-Handle-Menue-Eintraege', /\.bn-drag-handle-menu \.mantine-Menu-item\s*\{[\s\S]*?\}/],
+  ]
+
+  it.each(HIT_TARGET_RULES)('hebt %s auf den 32px-Floor aus §11', (_label, pattern) => {
+    const rule = GLOBALS_CSS.match(pattern)?.[0]
+    expect(rule, 'Regel fehlt in globals.css').toBeTruthy()
+    expect(rule).toMatch(/min-height:\s*calc\(var\(--spacing\) \* 8\)/)
+  })
+
+  // Der Block-Typ-Button der Toolbar (Mantine-`Button` mit Text) trug
+  // `flex-shrink: 1` bei `min-width: auto` und mass bei 320px nur 18,7px
+  // Breite. Ohne `flex-shrink: 0` bringt die `min-width` allein nichts.
+  it('laesst Toolbar-Buttons nicht schrumpfen statt zu scrollen', () => {
+    const rule = GLOBALS_CSS.match(
+      /\.bn-toolbar \.bn-button,\s*\n\.bn-toolbar button\s*\{[\s\S]*?\}/,
+    )?.[0]
+    expect(rule).toMatch(/min-width:\s*calc\(var\(--spacing\) \* 8\)/)
+    expect(rule).toMatch(/flex-shrink:\s*0/)
+  })
+})

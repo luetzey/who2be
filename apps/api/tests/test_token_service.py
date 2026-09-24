@@ -22,8 +22,9 @@ from fastapi import HTTPException
 from structlog.testing import capture_logs
 
 from who2be_api.core.config import Settings
-from who2be_api.core.errors import ApiGateError
+from who2be_api.core.errors import ApiError, ApiGateError
 from who2be_api.core.security import WorkspaceContext
+from who2be_api.licensing.entitlement import Entitlement
 from who2be_api.services.token_service import TokenService
 from who2be_models import AgentToolPolicy, TokenCreate, TokenRead, WorkspaceRole
 
@@ -278,3 +279,106 @@ def test_rotate_missing_token_skips_mfa_gate_and_still_raises_404() -> None:
     with pytest.raises(HTTPException) as exc:
         _run(_svc(_FakeRepo(), _FakePool(None)).rotate(ctx, uuid4()))
     assert exc.value.status_code == 404
+
+
+# --- Token-Quota-Gate (#538): `create` gegatet, `rotate` NICHT --------------
+
+
+class _QuotaPool:
+    """Pool-Stub fuer das Quota-Gate: Org-Aufloesung, Token-Count, Token-Rolle.
+
+    Der schmale `_FakePool` oben beantwortet jedes `fetchval` mit einer Rolle;
+    das Gate stellt drei verschiedene Fragen, deshalb hier eine Query-Weiche.
+    """
+
+    def __init__(self, token_count: int, role: WorkspaceRole | None = None) -> None:
+        self._token_count = token_count
+        self._role = role
+        self.count_calls = 0
+
+    async def fetchval(self, query: str, *_args: object) -> object:
+        if "FROM workspace WHERE" in query:
+            return uuid4()
+        if "FROM agent WHERE" in query:
+            return 1  # `_assert_agent_in_workspace`: Agent existiert hier.
+        if "FROM api_token" in query and "count(*)" in query:
+            self.count_calls += 1
+            return self._token_count
+        # `_current_role`
+        return self._role.value if self._role is not None else None
+
+
+def _cloud_quota(monkeypatch: pytest.MonkeyPatch, limit: int | None) -> None:
+    """Schaltet das Gate auf Cloud und laesst es `limit` aufloesen."""
+    monkeypatch.setattr("who2be_api.services.token_quota_service.is_cloud", lambda _s: True)
+    entitlement = Entitlement(status="active", token_quota=limit)
+
+    class _Port:
+        async def resolve(self, _org_id: UUID) -> Entitlement:
+            return entitlement
+
+    monkeypatch.setattr(
+        "who2be_api.services.token_quota_service.build_entitlement_port",
+        lambda _pool, _settings: _Port(),
+    )
+
+
+def test_create_over_quota_raises_402_before_a_secret_exists(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """AK1: der Create ueber der Grenze wird mit 402 + stabilem Grund abgewiesen."""
+    _cloud_quota(monkeypatch, limit=3)
+    repo = _FakeRepo()
+    pool = _QuotaPool(token_count=3)
+    with pytest.raises(ApiError) as exc:
+        _run(
+            _svc(repo, cast(Any, pool)).create(
+                _human_ctx(), TokenCreate(name="x", agent_id=uuid4())
+            )
+        )
+    assert exc.value.status_code == 402
+    assert exc.value.reason == "token_quota_exceeded"
+    assert exc.value.params == {"limit": 3}
+
+
+def test_create_under_quota_passes(monkeypatch: pytest.MonkeyPatch) -> None:
+    _cloud_quota(monkeypatch, limit=3)
+    pool = _QuotaPool(token_count=2)
+    result = _run(
+        _svc(_FakeRepo(), cast(Any, pool)).create(
+            _human_ctx(), TokenCreate(name="x", agent_id=uuid4())
+        )
+    )
+    assert result.token.startswith("w2b_")
+    assert pool.count_calls == 1
+
+
+def test_rotate_runs_through_above_the_quota(monkeypatch: pytest.MonkeyPatch) -> None:
+    """AK3 — der teuerste Fallstrick des Issues.
+
+    Rotation ERSETZT ein Secret, sie legt keinen Token an. Griffe das Gate auch
+    hier, sperrte die Grenze genau die Secret-Rotation aus (RUNBOOK
+    §Secret-Rotation) — also die Massnahme, die nach einem Leak sofort laufen
+    muss. Der Zaehler wird deshalb nicht einmal abgefragt.
+    """
+    _cloud_quota(monkeypatch, limit=3)
+    repo = _FakeRepo(rotate_ret=_token(role=WorkspaceRole.editor))
+    # Weit ueber der Grenze — und trotzdem laeuft die Rotation durch.
+    pool = _QuotaPool(token_count=99, role=WorkspaceRole.editor)
+    result = _run(_svc(repo, cast(Any, pool)).rotate(_human_ctx(), uuid4()))
+    assert result.token.startswith("w2b_")
+    assert repo.rotated_hash is not None
+    assert pool.count_calls == 0
+
+
+def test_create_is_not_gated_onprem(monkeypatch: pytest.MonkeyPatch) -> None:
+    """On-Prem/OSS bleibt unbegrenzt — auch weit ueber jeder Cloud-Grenze."""
+    monkeypatch.setattr("who2be_api.services.token_quota_service.is_cloud", lambda _s: False)
+    pool = _QuotaPool(token_count=10_000)
+    result = _run(
+        _svc(_FakeRepo(), cast(Any, pool)).create(
+            _human_ctx(), TokenCreate(name="x", agent_id=uuid4())
+        )
+    )
+    assert result.token.startswith("w2b_")
+    assert pool.count_calls == 0

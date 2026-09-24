@@ -93,12 +93,18 @@ function SubPlaybookList({
           <li key={child.id}>
             <Link
               to={wsPath(`/playbooks/${child.id}`)}
-              className="flex items-center gap-3 rounded-lg border border-pill-catalog-fg/20 bg-card px-3 py-2 text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              // `flex-wrap` + `min-w-40`: bei 320px blieben dem Namen sonst
+              // gemessene 81px von 329px Textbreite (truncate schneidet nach
+              // ~8 Zeichen ab). Mit der Flex-Mindestbreite bricht der
+              // Status-Badge in die zweite Zeile, der Name behaelt 178px —
+              // AK 5 aus #571. `min-h-10` unterhalb `md`: die Zeile ist
+              // klickbar und misst gerendert 36px (AK 3).
+              className="flex min-h-10 flex-wrap items-center gap-3 rounded-lg border border-pill-catalog-fg/20 bg-card px-3 py-2 text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none md:min-h-0"
             >
               <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-pill-catalog text-xs font-bold text-pill-catalog-fg">
                 {index + 1}
               </span>
-              <span className="min-w-0 flex-1 truncate text-sm font-medium">{child.name}</span>
+              <span className="min-w-40 flex-1 truncate text-sm font-medium">{child.name}</span>
               {detail !== undefined ? (
                 <StatusBadge status={detail.current_status} />
               ) : null}
@@ -262,8 +268,11 @@ export function PersonaPlaybooksCard({ personaId, canEdit }: PersonaPlaybooksCar
 
   return (
     <Card>
-      <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
-        <CardTitle className="flex items-center gap-2">
+      {/* `flex-wrap` am CardHeader und `min-w-0 flex-wrap` am Titel: bei 320px
+          misst der Kopf 365px in 286px verfuegbarer Breite, der Bearbeiten-
+          Button lief 104px ueber (gemessen am gebauten CSS, #571). */}
+      <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
+        <CardTitle className="flex min-w-0 flex-wrap items-center gap-2">
           {t('personas:detail.playbooks.title')}
           {links.linked.length > 0 ? (
             <Badge variant="secondary">{links.linked.length}</Badge>
@@ -276,6 +285,10 @@ export function PersonaPlaybooksCard({ personaId, canEdit }: PersonaPlaybooksCar
             size="sm"
             onClick={startEditing}
             disabled={links.loading}
+            // Gemessen 36px hoch. AK 3 aus #571 setzt die Schwelle dieses
+            // Pakets auf 40px unterhalb `md`; die Norm (§11) laesst
+            // size="sm" zu.
+            className="min-h-10 md:min-h-0"
           >
             {t('personas:detail.playbooks.edit')}
           </Button>

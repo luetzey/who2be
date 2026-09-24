@@ -197,7 +197,13 @@ export function ResourceBlockLinkPicker({
                   type="button"
                   variant="ghost"
                   className={cn(
-                    'w-full justify-start',
+                    // Lange Resource-Namen: `whitespace-nowrap` aus der
+                    // Button-Basis schnitt sie gemessen bei 320, 375 UND
+                    // 768 px ab (344 px Inhalt in 238 px). Deshalb umbrechend
+                    // und ohne `md:`-Rueckfall — der Defekt tritt auch
+                    // oberhalb der Mobile-Schwelle auf. `min-h-10` haelt das
+                    // 40-px-Hit-Target aus AK 5 des Issues.
+                    'h-auto min-h-10 w-full justify-start py-2 text-left whitespace-normal break-words',
                     activeResource?.id === resource.id && 'bg-accent text-accent-foreground',
                   )}
                   onClick={() => openResource(resource)}
@@ -248,7 +254,7 @@ export function ResourceBlockLinkPicker({
                             (modes[activeResource.id] ?? 'lazy') === 'lazy' ? 'brand' : 'ghost'
                           }
                           size="sm"
-                          className="h-6 rounded-none px-2 text-xs"
+                          className="h-10 rounded-none px-2 text-xs md:h-6"
                           onClick={() => setMode(activeResource.id, 'lazy')}
                           aria-pressed={(modes[activeResource.id] ?? 'lazy') === 'lazy'}
                         >
@@ -260,7 +266,7 @@ export function ResourceBlockLinkPicker({
                             (modes[activeResource.id] ?? 'lazy') === 'inline' ? 'brand' : 'ghost'
                           }
                           size="sm"
-                          className="h-6 rounded-none px-2 text-xs"
+                          className="h-10 rounded-none px-2 text-xs md:h-6"
                           onClick={() => setMode(activeResource.id, 'inline')}
                           aria-pressed={(modes[activeResource.id] ?? 'lazy') === 'inline'}
                         >

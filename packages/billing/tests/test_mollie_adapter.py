@@ -147,6 +147,8 @@ def test_metadata_to_entitlement_parses_features_and_limits() -> None:
     assert Feature.AGENTS in ent.features
     assert ent.mcp_monthly_quota == 100_000
     assert ent.mcp_rate_per_min == 240
+    # Issue #538: die Token-Grenze reist ueber dieselbe Metadata-Konvention mit.
+    assert ent.token_quota == PRO_PLAN.token_quota == 25
 
 
 def test_metadata_org_id_missing_raises() -> None:

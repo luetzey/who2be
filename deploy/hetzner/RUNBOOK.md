@@ -10,6 +10,7 @@ Aktive Sektionen:
 - [Provisioning (Track S/C1)](#provisioning-track-sc1) — leere Hetzner-Box → laufender Stack (Box/Docker/Firewall/deploy-User/DNS/TLS)
 - [Erste Inbetriebnahme der Cloud-Edition](#erste-inbetriebnahme-der-cloud-edition) — Bring-up-Checkliste (Service-Key, Mailer, Deploy-Pipeline)
 - [Notfallpfad: Registry nicht erreichbar](#notfallpfad-registry-nicht-erreichbar) — Cloud-`api`/`migrate` von Hand bauen, wenn GHCR beim Deploy ausfaellt
+- [GoTrue-Version anheben](#gotrue-version-anheben-auth-stack-update) — Auth-Image-Update inkl. Schema-Migrationen + Rollback-Weg (Issue #499)
 - [CVE-Response](#cve-response) — was tun, wenn der CI-`audit`-Job rot wird
 - [Secret-Rotation](#secret-rotation) — pro Secret: Trigger / Schritte / Verifikation
 - [Verschluesselung at-Rest](#verschluesselung-at-rest-postgres-volume) — LUKS/verschl. Hetzner-Volume + Verifikation (Befund P4/S2)
@@ -298,6 +299,80 @@ curl -sf "https://api.${DOMAIN}/healthz"
 Deploy (`./deploy.sh <sha>` mit `WHO2BE_EDITION=cloud`) fahren — der zieht
 `api`/`migrate` wieder aus der Registry und ersetzt den Host-Build, damit
 Prod nicht dauerhaft auf einem Host-Artefakt statt dem CI-Artefakt laeuft.
+
+---
+
+## GoTrue-Version anheben (Auth-Stack-Update)
+
+**Trigger:** der Pin `supabase/gotrue:<tag>` in
+`deploy/hetzner/supabase/docker-compose.yml` wird im Repo gehoben (zuletzt
+`v2.158.1` → `v2.196.0`, Issue #499) und soll auf den Host.
+
+**Warum eine eigene Prozedur:** GoTrue faehrt seine Schema-Migrationen beim
+Start selbst gegen `auth.*` — es gibt keinen separaten Migrations-Container,
+kein Dry-Run und **kein automatisches Down**. Der Sprung v2.158.1 → v2.196.0
+zieht 18 Migrationen nach (darunter `add_web_authn`,
+`add_last_webauthn_challenge_data`, `add_passkeys`). Ein Rueckweg auf die alte
+Version nach erfolgreicher Migration ist **nicht** vorgesehen; die
+Rueckfallebene ist der Datenbank-Dump.
+
+```bash
+cd /opt/who2be
+
+# 1) Backup ZUERST — das ist der einzige Rueckweg. Nicht ueberspringen.
+bash deploy/hetzner/scripts/backup.sh
+ls -la /var/backups/who2be/   # frischer *.sql.gpg von heute muss da sein
+
+# 2) Neuen Stand holen (traegt den neuen Pin)
+git pull --ff-only
+
+# 3) Nur das auth-Image ziehen (kein Stack-Restart)
+docker compose -f deploy/hetzner/supabase/docker-compose.yml \
+  --env-file deploy/hetzner/supabase/.env pull auth
+
+# 4) auth neu starten — die Migrationen laufen im Startvorgang
+docker compose -f deploy/hetzner/supabase/docker-compose.yml \
+  --env-file deploy/hetzner/supabase/.env up -d auth
+```
+
+**Verifikation** (in dieser Reihenfolge, Abbruch beim ersten Fehlschlag):
+
+```bash
+COMPOSE="docker compose -f deploy/hetzner/supabase/docker-compose.yml \
+  --env-file deploy/hetzner/supabase/.env"
+
+# a) Das LAUFENDE Image traegt den neuen Tag (nicht nur das gezogene)
+docker inspect --format '{{.Config.Image}}' "$($COMPOSE ps -q auth)"
+# → supabase/gotrue:v2.196.0
+
+# b) Start sauber, keine Migration abgebrochen
+$COMPOSE logs --no-color auth | grep -iE '"level":"fatal"|error running migrations'
+# → KEINE Ausgabe. Umgekehrt muss die Startzeile da sein:
+$COMPOSE logs --no-color auth | grep "GoTrue API started on"
+
+# c) Der Dienst antwortet
+curl -sf "https://supabase.${DOMAIN}/auth/v1/health"
+
+# d) Ein bestehender Admin kann sich mit seinem TOTP-Faktor anmelden.
+#    Das ist der einzige Check, der beweist, dass die Migration die
+#    vorhandenen MFA-Faktoren mitgenommen hat — von Hand im Browser.
+```
+
+**Wenn b) oder d) fehlschlaegt:** den Pin in der Compose-Datei auf die alte
+Version zuruecksetzen, `up -d auth` fahren, und falls das Schema bereits
+migriert wurde, die `auth`-Daten aus dem Dump aus Schritt 1 zuruecksichern
+(→ [Backup & Restore](#backup--restore)). Ein blosser Image-Downgrade ohne
+Restore laeuft auf ein Schema, das die alte Version nicht kennt.
+
+**WebAuthn-Konfiguration:** ab v2.190.0 **warnt** GoTrue bei unvollstaendiger
+Relying-Party-Konfiguration, statt den Start abzubrechen — ein fehlendes
+`GOTRUE_WEBAUTHN_RP_ID`/`_RP_DISPLAY_NAME`/`_RP_ORIGINS` kostet also still den
+Faktor, nicht den Stack. Nach dem Update im Log gegenpruefen:
+
+```bash
+$COMPOSE logs --no-color auth | grep -i "WebAuthn configuration is invalid"
+# → KEINE Ausgabe
+```
 
 ---
 
@@ -749,6 +824,82 @@ cd /opt/who2be && docker compose --profile backup run --rm backup
 ```
 
 Bewusst Host-Cron, nicht Compose-Sidecar — spart den Dauerlauf eines Backup-Containers.
+
+### Alarmweg (Dead-Man's-Switch)
+
+Bis 2026-09-21 war ein fehlgeschlagener Offsite-Sync **still**: das Skript beendete
+sich mit Exit 0, der Cron-Lauf galt als erfolgreich. Storage Box voll, SSH-Key
+abgelaufen, Netzwerk weg — in allen drei Fällen lief der lokale Dump weiter und
+niemand erfuhr, dass es seit Wochen kein Offsite-Backup mehr gab. Seit Issue #541
+gilt (Owner-Entscheidung, Nachtrag in ADR-0011):
+
+1. **Ehrlicher Exit-Code.** Scheitert `restic backup` oder `restic forget`, endet der
+   Lauf mit Exit != 0. Der **lokale GPG-Dump bleibt dabei unangetastet** — er ist zu
+   diesem Zeitpunkt längst geschrieben; weggefallen ist nur die Erfolgsmeldung.
+2. **Dead-Man's-Switch.** Ist `BACKUP_HEARTBEAT_URL` gesetzt, pingt das Skript diese
+   URL **nur bei vollständigem Erfolg**, als letzte Aktion. Alarmiert wird durch das
+   *Ausbleiben* des Pings. Das fängt zusätzlich die Fälle, die ein Exit-Code
+   prinzipiell nicht fangen kann: Cron deaktiviert, Container weg, Host aus.
+
+`BACKUP_HEARTBEAT_URL` leer (Default) ⇒ kein Ping, Verhalten wie zuvor — On-Prem-
+Betreiber ohne Alarmweg merken von der Änderung nichts außer dem ehrlichen Exit-Code.
+
+**Der Empfänger ist self-hosted.** Kein healthchecks.io, kein anderer gehosteter
+Dienst: der wäre Auftragsverarbeiter für Betriebsmetadaten und bräuchte einen
+VVT-Eintrag (`docs/compliance/vvt.md` §5). Minimal genügt ein Endpunkt auf einer
+zweiten, unabhängigen Maschine (**nicht** auf dem Backup-Host — stirbt der Host,
+stirbt sonst auch der Wächter), der den Zeitpunkt des letzten Pings festhält und
+Alarm schlägt, wenn er älter als ~26 h ist:
+
+```bash
+# Empfänger (zweite Maschine): Caddy/nginx schreibt nur den Zeitstempel.
+#   Caddyfile:
+#     status.example.com {
+#       handle /ping/who2be-backup { respond 204 }
+#       log { output file /var/log/who2be-heartbeat.log }
+#     }
+
+# Wächter-Cron auf derselben zweiten Maschine, stündlich:
+0 * * * * find /var/log/who2be-heartbeat.log -mmin +1560 \
+  -exec mail -s "who2be: Backup-Heartbeat ausgeblieben" ops@example.com \
+  /var/log/who2be-heartbeat.log \;
+```
+
+Jeder andere selbst betriebene Wächter (Uptime-Kuma-Push-Monitor, Prometheus
+Pushgateway + `time() - push_time_seconds > 93600`) erfüllt denselben Zweck.
+
+#### Alarmweg testen — Pflicht vor dem Verlassen auf ihn
+
+Ein Alarmweg, der nie ausgelöst wurde, ist so viel wert wie ein ungetestetes Backup.
+
+```bash
+# 1) Erfolgsfall: Ping muss ankommen, Lauf muss gruen sein.
+cd /opt/who2be && docker compose --profile backup run --rm backup; echo "exit=$?"
+#    -> exit=0, und beim Empfaenger ist ein frischer Ping protokolliert.
+
+# 2) Fehlerfall erzwingen: Offsite-Ziel unerreichbar machen.
+RESTIC_REPOSITORY="sftp:nobody@127.0.0.1:/nonexistent" \
+  docker compose --profile backup run --rm \
+  -e RESTIC_REPOSITORY backup; echo "exit=$?"
+#    -> exit!=0, KEIN neuer Ping beim Empfaenger,
+#    -> und der lokale Dump liegt trotzdem da:
+ls -la /var/backups/who2be/dump-*.pgc.gpg | tail -2
+
+# 3) Alarm abwarten: der Waechter muss nach Ablauf seines Fensters melden.
+#    Zum Proben das Fenster einmalig verkuerzen (z. B. -mmin +5 statt +1560),
+#    statt einen Tag zu warten.
+```
+
+Ohne Docker-Daemon lässt sich dieselbe Logik direkt gegen das Skript prüfen — der
+Test fährt `backup.sh` gegen Stubs für `pg_dump`/`gpg`/`restic`/`curl` und belegt
+unter anderem, dass bei gescheitertem Sync der lokale Dump liegen bleibt:
+
+```bash
+bash deploy/hetzner/tests/test_backup_alarm.sh
+```
+
+Der Container-Handlauf oben bleibt davon unberührt; er gehört in den Prod-Smoke
+(#454).
 
 ### Verifikation
 

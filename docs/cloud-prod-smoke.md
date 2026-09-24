@@ -190,12 +190,15 @@ curl -s https://api.${DOMAIN}/v1/workspaces/<WS_ID>/billing/entitlement \
 
 Das MCP-Limit-Gate greift **nur** in der Cloud-Edition und **nur** fuer
 API-Token-Aufrufer (`w2b_…`) — Web-/JWT-Reads passieren ungehindert. Zwei
-Schranken: **Per-Token-Rate/min** und das **Monats-Kontingent** (beide → **429**);
-ein `inactive` Entitlement → 402.
+Schranken: die **MCP-Rate/min** und das **Monats-Kontingent** (beide → **429**);
+ein `inactive` Entitlement → 402. Seit #537 deckelt `mcp_rate_per_min` zwei
+Fenster — pro Token *und* pro Organisation, gleicher Wert, effektiv das
+Minimum (Details in `docs/licensing/plans.md`).
 
 Auf Pro ist die **Per-Minute-Rate (240/min)** die in Sekunden erreichbare
 Schranke (das 100k-Monatskontingent von Hand auszuschoepfen ist unpraktikabel).
-Ueber das Per-Token-Rate-Ceiling bursten:
+Ueber das MCP-Rate-Ceiling bursten (ein einzelner Token trifft dieselbe Zahl,
+weil beide Fenster denselben Wert tragen):
 
 ```bash
 for i in $(seq 1 260); do

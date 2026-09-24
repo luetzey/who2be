@@ -119,3 +119,43 @@ describe('WorkAreaSearchPage', () => {
     })
   })
 })
+
+// Responsive-Vertrag #572 (AK 2 und AK 5). jsdom hat kein Layout — das hier ist
+// ein Klassen-Vertrag zu den gerenderten Messungen in
+// .claude/plan/2026-09-23-1100_572-w3-workarea-responsive-audit.md.
+describe('WorkAreaSearchPage — Responsive (#572)', () => {
+  it('bindet die Mindestbreite des Suchfelds an den Breakpoint (AK 2)', async () => {
+    // Gemessen: `min-w-64` (256 px) lief bei 320 px Viewport um 18 px ueber die
+    // Innenkante des 238 px breiten CardContent. Die Mindestbreite dient dem
+    // Desktop-Raster, nicht dem Phone — woertlich Vorentscheidung 2 des Issues.
+    stubFetch([
+      ['/workarea-search', [hit()]],
+      ['/work-areas', [area()]],
+    ])
+    renderAt(<WorkAreaSearchPage />, PATH, ['/w/ws-1/workarea/search?q=preis'])
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Suchbegriff')).toBeInTheDocument()
+    })
+    const label = screen.getByText('Suchbegriff').closest('label')
+    expect(label).toHaveClass('min-w-0')
+    expect(label).toHaveClass('sm:min-w-64')
+    expect(label).not.toHaveClass('min-w-64')
+  })
+
+  it('laesst den Treffer-Snippet umbrechen statt abschneiden (AK 5)', async () => {
+    // Snippets tragen Beleg-Token ohne Trennstelle (`sha256:…`, Anker).
+    // Gemessen schnitt der Absatz bei 320 px ab (297 px Inhalt in 238 px).
+    stubFetch([
+      ['/workarea-search', [hit({ snippet: 'Beleg sha256:9f86d081884c7d659a2feaa0c55ad015' })]],
+      ['/work-areas', [area()]],
+    ])
+    renderAt(<WorkAreaSearchPage />, PATH, ['/w/ws-1/workarea/search?q=preis'])
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Beleg sha256:9f86d081884c7d659a2feaa0c55ad015'),
+      ).toHaveClass('break-words')
+    })
+  })
+})

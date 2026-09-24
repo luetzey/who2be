@@ -410,8 +410,10 @@ Acceptance Criteria → Tests:
 - **AC4** (Brainstormer auf Who2Be): E2E-Smoke in Phase 4 — Brainstormer-Stack migrieren und im Claude-Chat verifizieren.
 
 TDD-Disziplin: bei Bugfixes zuerst ein reproduzierender, fehlschlagender Test.
-DoD pro Stack: `pytest` gruen, `ruff`/`mypy` ohne Findings — bzw. `vitest`,
-`eslint`, `tsc` fuer die Web-UI.
+Definition of Done: die Kommandos aus [`../CONTRIBUTING.md`](../CONTRIBUTING.md)
+§Definition of Done — dort steht die einzige DoD-Kommandoliste (inkl.
+Coverage-, Skip-Budget- und Lizenz-Gates, identisch zur CI); hier bewusst
+keine Kopie.
 
 ## 8. Umsetzungs-Roadmap
 

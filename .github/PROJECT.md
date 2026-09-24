@@ -91,17 +91,19 @@ Danach oder parallel, außerhalb der Warteschlange:
   2026-09-05 in sechs Kinder zerlegt (#449–#454), seine beiden
   `needs-decision`-Weichen sind beantwortet. #402 → #436 und #431 → #438
   haben je ihre nächste Welle herausgelöst.
-- **#435 Passkeys** (`size/M`) — nach #428, #429 und #430. Vorbedingung ist ein
-  GoTrue-Image ≥ v2.163.0; das Repo pinnt v2.158.1 an **drei** Stellen
-  (`docker-compose.yml:50`, `deploy/hetzner/supabase/docker-compose.yml:63`,
-  `deploy/dokploy/docker-compose.yml:81`). Einziges der drei `size/M`-Issues
-  ohne herausgelöstes Kind.
+- **#435 Passkeys** (`size/M`) — nach #428, #429 und #430. Die Vorbedingung
+  ist mit W1 (#499) erfüllt: alle drei Stacks pinnen `supabase/gotrue:v2.196.0`
+  (`docker-compose.yml:63`, `deploy/hetzner/supabase/docker-compose.yml:63`,
+  `deploy/dokploy/docker-compose.yml:81`), der WebAuthn-Faktor ist
+  serverseitig verfügbar. Offen ist W2, die Passkey-UI.
 - **#454 Cloud-Deploy und Testkauf** (`human-only`) — Owner-Schritte
   (Repo-Variablen, Host-Secrets, Mollie-Konto, DNS, ein Kauf im Browser).
   Voraussetzungen: #429, #450, #451.
-- **#338 Owner-Checkliste** (`human-only`) — O2 (Branch-Protection,
-  Merge-Strategie, Description, Topics) und O3 (CLA-Assistant). Jederzeit
-  parallel, kein Agent claimt das.
+- **#338 Owner-Checkliste** (`human-only`) — O2 (Merge-Strategie, Description,
+  Topics) und O3 (CLA-Assistant). Jederzeit parallel, kein Agent claimt das.
+  Die **Branch-Protection** aus O2 ist seit 2026-09-22 erledigt (Ruleset
+  `16707501`, `all-green` als einziger Required Check —
+  [`docs/branch-protection-main.md`](../docs/branch-protection-main.md)).
 
 ### Projects-Board
 
