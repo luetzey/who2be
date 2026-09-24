@@ -74,8 +74,10 @@ Kunde dich real Geld kosten kann.
 1. Hetzner-Box bestellen, DNS setzen, At-Rest-Verschlüsselung wählen.
 2. Repo-Variablen `DEPLOY_HOST` / `DEPLOY_USER` / `DEPLOY_PROJECT_DIR` und
    das Secret `DEPLOY_SSH_KEY` setzen. **Solange `DEPLOY_HOST` fehlt,
-   überspringt sich der Deploy-Job still** (`.github/workflows/deploy.yml:201`)
-   — die Pipeline war nie rot, aber auch nie verifiziert.
+   überspringt sich der Deploy-Job still** — die `if:`-Bedingung des Jobs
+   `deploy` in `.github/workflows/deploy.yml#deploy`
+   (`vars.DEPLOY_HOST != '' && github.ref == 'refs/heads/main'`).
+   Die Pipeline war nie rot, aber auch nie verifiziert.
 3. Alle `CHANGE_ME` in `deploy/hetzner/.env` und
    `deploy/hetzner/supabase/.env` ersetzen.
 4. `WHO2BE_BILLING_OVERRIDE_OPERATORS` mit der eigenen User-UUID füllen —
