@@ -13,7 +13,7 @@ bzw. Dokumentations-Standards).
   OpenAPI-Spec der REST-API (Integratoren; Export:
   `uv run python scripts/export_openapi.py`, interaktiv unter `/docs`
   einer laufenden API)
-- [`adr/`](adr/) — Architecture Decision Records (intern; 49 ADRs,
+- [`adr/`](adr/) — Architecture Decision Records (intern; 52 ADRs,
   nummeriert, je Entscheidung eine Datei)
 - [`standards/`](standards/) — stehende Engineering-Standards (intern +
   Contributor): [`engineering-method.md`](standards/engineering-method.md)
@@ -67,10 +67,13 @@ bzw. Dokumentations-Standards).
   [`licensing/plans.md`](licensing/plans.md)
 - Deployment: [`../deploy/hetzner/README.md`](../deploy/hetzner/README.md)
   — Produktions-Deploy inkl. Runbook (Betreiber)
+- [`auto-merge-agenten.md`](auto-merge-agenten.md) — der eine erlaubte Weg,
+  Auto-Merge anzufordern: die drei Gates, das Kommando im Wortlaut,
+  Fehlerbilder, was gesperrt bleibt (intern + Agenten)
 - [`branch-protection-main.md`](branch-protection-main.md) —
-  **Vorschlag** fuer die Branch-Protection auf `main`: `all-green` als
+  Entscheidungsgrundlage der Branch-Protection auf `main`: `all-green` als
   einziger Required Check, je Regel Nutzen/Kosten/Wirkung auf Agenten
-  (Owner; nicht angewendet)
+  (Owner; **umgesetzt am 2026-09-22**, Ruleset `16707501`)
 
 ## Arbeits- und Pruefstaende (intern, historisch)
 
