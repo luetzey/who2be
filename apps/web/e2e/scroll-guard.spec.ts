@@ -24,13 +24,8 @@ const PAGE_SHELL = (body: string) => `<!doctype html>
 <body>${body}</body></html>`
 
 test('Helfer meldet ein sauberes Dokument als gruen', async ({ page }) => {
-  // K3 ROT-PROBE — wird nach dem Beleglauf zurueckgenommen.
-  // Bricht absichtlich NUR auf schmalen Viewports, damit der Beleg trennscharf
-  // ist: `e2e` (chromium, 1280px) bleibt gruen, nur `e2e-mobile` faellt.
-  const width = page.viewportSize()?.width ?? 1280
-  const extra = width <= 834 ? ';width:calc(100% + 200px)' : ''
   await page.setContent(
-    PAGE_SHELL(`<div style="width:100%;height:200px${extra}" data-testid="ok-block">Inhalt</div>`),
+    PAGE_SHELL('<div style="width:100%;height:200px" data-testid="ok-block">Inhalt</div>'),
   )
   await expectNoHorizontalScroll(page, 'Selbsttest: sauberes Dokument')
 })
