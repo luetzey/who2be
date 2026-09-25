@@ -17,8 +17,9 @@ laufender Container. `docker compose config` braeuchte einen Daemon und liefe in
 CI nicht — die YAML-Ebene traegt die Aussage vollstaendig, weil `environment`
 genau die Liste ist, die Compose an den Container weitergibt.
 
-Beide Cloud-Overlays gelten, nicht nur das gemeldete: der Root-Stack (lokale
-Cloud-Paritaet) hatte dieselbe Luecke (Befund S6).
+Alle Cloud-Overlays gelten, nicht nur das gemeldete: der Root-Stack (lokale
+Cloud-Paritaet, Befund S6) und das Dokploy-Overlay hatten dieselbe Luecke.
+Gesucht wird deshalb ueber jedes Overlay, das `WHO2BE_EDITION: cloud` setzt.
 """
 
 from __future__ import annotations
@@ -32,10 +33,17 @@ import yaml
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _OPERATORS_ENV = "WHO2BE_BILLING_OVERRIDE_OPERATORS"
 
-# Beide Cloud-Overlays: Hetzner-Prod-Split-Stack und lokale Cloud-Paritaet.
+# Alle drei Cloud-Overlays: Hetzner-Prod-Split-Stack, lokale Cloud-Paritaet
+# und Dokploy. Kriterium ist nicht „wurde gemeldet", sondern „setzt
+# WHO2BE_EDITION: cloud und baut target runtime-cloud" — damit ist der
+# Billing-Router aktiv und der Override-Endpoint erreichbar. Nach dieser Regel
+# gegengesucht (`grep -l WHO2BE_EDITION` ueber alle Compose-Dateien): genau
+# diese drei; `docker-compose.e2e-cloud.yml` ist ein Zusatz-Overlay zum
+# Root-Stack und setzt nur den GoTrue-Autoconfirm, keine `api`-Umgebung.
 _CLOUD_OVERLAYS = (
     _REPO_ROOT / "deploy" / "hetzner" / "who2be" / "docker-compose.cloud.yml",
     _REPO_ROOT / "docker-compose.cloud.yml",
+    _REPO_ROOT / "deploy" / "dokploy" / "docker-compose.cloud.yml",
 )
 
 

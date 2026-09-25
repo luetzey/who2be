@@ -2,10 +2,11 @@
   `api`-Container an, und die Cloud-Smoke-Anleitungen fuehren nicht mehr in
   einen garantierten 403.
 
-  Die Variable stand in keinem der beiden Cloud-Overlays unter
+  Die Variable stand in keinem der drei Cloud-Overlays unter
   `api.environment` — der Override-Endpoint ist fail-closed, also antwortete
   der als Default beworbene Weg „Pro ohne Mollie setzen" zwangslaeufig mit
-  `403`, egal was in der `.env` stand. Beide Overlays reichen sie nun als
+  `403`, egal was in der `.env` stand. Alle drei Overlays (Hetzner, Root-Stack,
+  Dokploy) reichen sie nun als
   `${WHO2BE_BILLING_OVERRIDE_OPERATORS:-}` durch (leerer Default, fail-closed
   bleibt), `deploy/hetzner/.env.example` erklaert Format und Wirkung, und ein
   daemonfreier Test haelt die Verdrahtung fest.

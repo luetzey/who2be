@@ -30,10 +30,16 @@
 #                           oeffentliche TLS-Domain (anders als lokal/localhost).
 #   MOLLIE_WEBHOOK_SECRET — optionaler ?token=-Gate auf dem Mollie-Webhook.
 #   SUPABASE_SERVICE_KEY  — service_role-JWT fuer Invitation-/Account-Mails.
+#   WHO2BE_BILLING_OVERRIDE_OPERATORS — kommaseparierte User-UUIDs, die den
+#                           Override-Endpoint aufrufen duerfen. Leer/ungesetzt
+#                           ⇒ niemand (fail-closed, 403).
 #
 # Ein Pro-Entitlement OHNE Mollie setzen (fuer Limit-Tests): per Direkt-SQL gegen
 # `org_entitlement` (source='cloud') oder ueber den auditierten Override-Endpoint
-# `POST /v1/workspaces/{ws}/billing/override` — siehe docs/cloud-prod-smoke.md.
+# `POST /v1/workspaces/{ws}/billing/override`. Letzterer verlangt Rolle `admin`,
+# ein Web-JWT mit `aal2` (TOTP-Step-up vorab — API-Tokens `w2b_…` sind
+# ausgeschlossen) UND einen Eintrag in WHO2BE_BILLING_OVERRIDE_OPERATORS;
+# Schrittfolge in docs/cloud-prod-smoke.md.
 #
 # Fuer echte Cloud-Mail-Paritaet zusaetzlich in der Basis-`auth` setzen:
 #   GOTRUE_MAILER_AUTOCONFIRM=false + GOTRUE_SMTP_* (echter Provider). Fuer einen
@@ -70,6 +76,14 @@ services:
       MOLLIE_WEBHOOK_URL: ${MOLLIE_WEBHOOK_URL:-}
       # Invitation-/Account-Delete-Mails via GoTrue-Admin (service_role-JWT).
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
+      # Betreiber-Allowlist des Override-Endpoints (ADR-0028) — dieselbe Zeile
+      # wie in den beiden anderen Cloud-Overlays, und aus demselben Grund: der
+      # Header dieser Datei bewirbt `POST /v1/workspaces/{ws}/billing/override`,
+      # und ohne diese Zeile kommt die Variable nie im Container an — das Gate
+      # ist fail-closed und antwortet 403
+      # (`packages/billing/src/who2be_billing/router.py#_require_override_operator`).
+      # Kommaseparierte User-UUIDs; leer ⇒ niemand darf schreiben.
+      WHO2BE_BILLING_OVERRIDE_OPERATORS: ${WHO2BE_BILLING_OVERRIDE_OPERATORS:-}
       # Basis-URL der Web-App fuer Mail-/Redirect-Links.
       WEB_BASE_URL: ${WEB_BASE_URL:-https://app.${DOMAIN}}
     depends_on:

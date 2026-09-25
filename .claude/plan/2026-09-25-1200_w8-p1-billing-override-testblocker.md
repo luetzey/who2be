@@ -36,3 +36,30 @@ fail-closed (niemand darf schreiben).
 ## Out of Scope
 
 Override-Mechanismus, MFA-Pflicht, Mollie.
+
+## Nachtrag — Review-Runde 1 (Changes requested)
+
+Zwei Blocker, beide bestaetigt und behoben:
+
+**B1 — Speicher-Quota-Block liefert 201, nicht 402.** Das Gate prueft
+`summe(wa_blob.size_bytes) >= limit`
+(`apps/api/src/who2be_api/services/storage_quota_service.py#StorageQuotaService.enforce`),
+und der Workspace hat an dieser Stelle der Reise null Blobs — bei `limit=1` ist
+`0 >= 1` falsch, der erste Ingest laeuft durch. Vorbereitungs-`UPDATE` in §5b
+auf `storage_quota_bytes=0` (Constraint `org_entitlement_storage_quota_bytes_check`,
+Migration 0084, erlaubt `>= 0`), plus Callout, das die Begruendung und die
+Abgrenzung zum Free-Weg festhaelt (Free traegt nur fuer Token/Workspaces).
+
+**B2 — Es sind drei Cloud-Overlays, nicht zwei.**
+`deploy/dokploy/docker-compose.cloud.yml` setzt `WHO2BE_EDITION: cloud` und baut
+`target: runtime-cloud`, sein Header bewirbt den Override-Endpoint — und ihm
+fehlte dieselbe Zeile. Ergaenzt; `_CLOUD_OVERLAYS` im Test erweitert.
+Damit die Drei-Dateien-Sicht nicht dieselbe Falle wird, steht das **Kriterium**
+jetzt im Test statt einer Aufzaehlung: „setzt `WHO2BE_EDITION: cloud`".
+Danach gegengesucht (`grep -l WHO2BE_EDITION` ueber alle Compose-Dateien) —
+genau diese drei; `docker-compose.e2e-cloud.yml` ist ein Zusatz-Overlay zum
+Root-Stack und setzt nur den GoTrue-Autoconfirm, keine `api`-Umgebung.
+
+Nits mitgenommen: der Free-Weg ist in §5b jetzt sauber vom Speicher-Fall
+getrennt, und `docs/cloud-local-smoke.md` nennt die Web-JWT-vs.-API-Token-
+Unterscheidung selbst, statt sie nur zu verlinken.

@@ -288,14 +288,26 @@ nutzbar) und antworten `402` mit stabilem `reason` (ADR-0051). Pro-Grenzen aus
 10 GiB, `PRO_TOKEN_QUOTA` 25, `PRO_WORKSPACE_QUOTA` 5); Free entsprechend
 100 MiB / 3 / 1.
 
-Am schnellsten reproduzierbar auf **Free** — dazu die Entitlement-Zeile loeschen
-(wie §6) oder den Deckel direkt runterdruecken:
+Am schnellsten reproduzierbar, indem die Deckel direkt runtergedrueckt werden:
 
 ```bash
 dsb exec db psql -U supabase_admin -d postgres -c \
-  "UPDATE org_entitlement SET storage_quota_bytes=1, token_quota=1, workspace_quota=1
+  "UPDATE org_entitlement SET storage_quota_bytes=0, token_quota=1, workspace_quota=1
      WHERE org_id = '<ORG_ID>';"
 ```
+
+> **Warum `storage_quota_bytes=0` und nicht `1`?** Das Speicher-Gate prueft
+> `summe(wa_blob.size_bytes) >= limit` **vor** dem Ingest
+> (`apps/api/src/who2be_api/services/storage_quota_service.py#StorageQuotaService.enforce`).
+> An dieser Stelle der Reise hat der Workspace noch **null** Blobs — bei
+> `limit=1` waere `0 >= 1` falsch, der erste Aufruf liefe auf `201` durch und
+> erst der zweite auf `402`. Mit `0` greift der Deckel unabhaengig vom Bestand.
+> Der Constraint `org_entitlement_storage_quota_bytes_check` (Migration 0084)
+> erlaubt `>= 0`.
+>
+> Der Weg ueber **Free** (Entitlement-Zeile loeschen wie §6) traegt nur fuer
+> Token (3) und Workspaces (1); fuer Speicher muesste man erst 100 MiB per
+> Einzel-Ingest fuellen — kein Smoke-Schritt.
 
 **a) Speicher-Quota (#536)** — Gate `enforce_storage_quota` an beiden
 Ingest-Routen (`apps/api/src/who2be_api/routers/wa_ingest.py#ingest_into_private_area`):
