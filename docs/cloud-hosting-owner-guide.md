@@ -63,7 +63,7 @@ Kunde dich real Geld kosten kann.
 | RLS in der Cloud-Edition (Rolle `who2be_app`) | `deploy/hetzner/who2be/docker-compose.cloud.yml` |
 | Redis als geteilter Rate-Limit-Storage | `apps/api/src/who2be_api/core/rate_limit.py` |
 | Caddy: TLS, Security-Header, 32-MB-Body-Cap, `/v1/internal/*` geblockt | `deploy/hetzner/Caddyfile` |
-| Backup: GPG-pg_dump + restic-Offsite | `deploy/hetzner/scripts/backup.sh` |
+| Backup: GPG-pg_dump + Objekt-/Tabellen-Store + restic-Offsite | `deploy/hetzner/scripts/backup.sh` |
 | Lösch-Lebenszyklus Soft-Delete → 30 Tage → Hard-Purge | `docs/compliance/data-retention-and-erasure.md` |
 | DSGVO-Datenexport (Art. 20) | `apps/api/src/who2be_api/routers/gdpr.py:32` |
 | Coming-Soon-Modus (Registrierung zu, Login offen) | `apps/web/src/features/auth/pages/SignupPage.tsx:74` |
@@ -523,11 +523,16 @@ Architektur — aber du musst sie kennen und behandeln:
 
 ### Was läuft
 
-Täglich um 03:15 UTC: `pg_dump -Fc` → GPG → lokal unter
-`/var/backups/who2be`, dann restic nach Hetzner Storage Box. Retention
-lokal 7 Tage, offsite 7 täglich / 4 wöchentlich / 6 monatlich. Dazu
-dokumentierte Pfade für den Blob-Store (SeaweedFS) und die
-SQLite-Tabellenspeicher.
+Täglich um 03:15 UTC sichert ein Lauf **alle drei Datenbestände**: `pg_dump -Fc`
+→ GPG, den Blob-Store (SeaweedFS) per inkrementellem `s3 sync` und die
+SQLite-Tabellenspeicher per `VACUUM INTO`-Snapshot — alles lokal unter
+`/var/backups/who2be`, dann restic in **einem** Snapshot nach Hetzner Storage
+Box. Retention lokal 7 Tage (nur die Dumps; Spiegel und Snapshots sind je eine
+Kopie), offsite 7 täglich / 4 wöchentlich / 6 monatlich.
+
+Scheitert eine der drei Stufen, endet der Lauf rot, der Heartbeat bleibt aus,
+und der Snapshot wird als `incomplete` markiert — ein halbes Backup meldet nie
+„alles gut".
 
 ### Vier Dinge, die du wissen musst
 

@@ -93,5 +93,47 @@ stillschweigend geloescht, sondern datiert ersetzt:
 Nicht Teil dieser Revision und weiterhin offen: RPO-Senkung / WAL-Archivierung, die
 ungetesteten SeaweedFS-Blob-Kommandos (#532), der Restore-Drill (MS-3 H4 / #454).
 
+## Nachtrag 2026-09-25 — Der Backup-Lauf umfasst alle drei Datenbestaende (W8/M3)
+
+Diese ADR und `backup.sh` kannten bis hierher nur Postgres. Seit ADR-0048
+(Objekt-Store) und ADR-0049 (Tabellen-Store je WorkArea) liegen zwei weitere
+Nutzdaten-Bestaende ausserhalb der Datenbank: Postgres fuehrt von beiden nur den
+Katalog (`wa_blob`, `wa_table`). Ein `pg_dump`-Restore allein ergibt damit eine
+DB, deren Blob-Referenzen ins Leere zeigen, und leere Agenten-Tabellen.
+
+Beschrieben war das im RUNBOOK laengst — als **Handarbeit**. Zwischen Doku und
+Automatisierung klaffte eine Luecke, die im Ernstfall zwei Drittel der Nutzdaten
+gekostet haette. Sie wird geschlossen:
+
+- **`backup.sh` sichert drei Bestaende**, alle nach `${BACKUP_DIR}` und damit in
+  **einen** restic-Snapshot: `pg_dump | gpg`, `aws s3 sync --delete` des
+  Objekt-Store-Buckets, `VACUUM INTO`-Snapshots aller Area-SQLites.
+- **Teilerfolg ist kein Erfolg.** Scheitert eine Stufe, endet der Lauf mit
+  Exit != 0 und der Dead-Man's-Switch aus dem Nachtrag 2026-09-21 bleibt stumm.
+  Ein gruener Lauf ist die Zusage „dieser Snapshot traegt den vollstaendigen
+  Zustand"; ein halb gesichertes Backup darf sie nicht abgeben. Die Stufen
+  brechen dabei nicht beim ersten Fehler ab — der Operator soll alle Baustellen
+  eines Laufs kennen.
+- **Unvollstaendige Snapshots sind als solche markiert:** `--tag incomplete`
+  statt `--tag dump`. Die Daten gehen trotzdem offsite (ein Ausfall des
+  Objekt-Stores soll den Dump nicht am Boden halten), koennen sich beim Restore
+  aber nicht als vollstaendiger Stand ausgeben; die RUNBOOK-Restore-Pfade
+  filtern auf `--tag dump`.
+- **Fehlende Store-Konfiguration ist FATAL**, nicht „still uebersprungen" —
+  stilles Ueberspringen ist genau der Fehlermodus, den dieser Nachtrag behebt.
+  Abwahl nur ausdruecklich per `BACKUP_BLOBS=off` / `BACKUP_TABLESTORE=off`
+  (On-Prem-Installationen ohne den jeweiligen Store).
+- **Konsistenz-Grenze des Tabellen-Store-Snapshots:** `VACUUM INTO` liefert
+  einen in sich konsistenten SQLite-Stand, haelt aber nicht den prozesslokalen
+  Area-Write-Lock der API — ein fachlicher Vorgang ueber mehrere Transaktionen
+  kann mittendrin erwischt werden (technisch intakte Datei, fachlich halber
+  Import). Dokumentiert im RUNBOOK unter „Tabellen-Store-Backup".
+- Belegt durch `deploy/hetzner/tests/test_backup_alarm.sh` (11 Faelle,
+  stub-basiert, kein Docker-Daemon noetig) — insbesondere Fall 7–9:
+  Teilerfolg ⇒ Exit != 0, kein Heartbeat, `--tag incomplete`.
+
+Weiterhin offen: der Restore-Drill (M2 / #454) — er ist der Beleg, dass die drei
+Bestaende zusammen auch wirklich zurueckkommen.
+
 </content>
 </invoke>

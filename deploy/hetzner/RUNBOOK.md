@@ -811,16 +811,44 @@ ergaenzen. Querverweis: `docs/compliance/vvt.md`, `docs/compliance/c5-mapping.md
 
 ## Backup & Restore
 
-Zwei-Stufen-Backup pro ADR-0011:
+Drei-Bestaende-Backup pro ADR-0011 (Nachtrag 2026-09-25, W8/M3). Ein Restore
+braucht **alle drei** zusammen — Postgres allein ergibt eine DB mit toten
+Blob-Referenzen und leeren Tabellen:
 
-- **C5a — lokal:** `pg_dump -Fc | gpg --encrypt -r $BACKUP_GPG_RECIPIENT` ablegen unter
-  `/var/backups/who2be/dump-<ts>.pgc.gpg`. Retention 7 Tage.
-- **C5b — offsite:** `restic` schiebt das ganze Backup-Verzeichnis via SFTP auf eine
-  Hetzner-Storage-Box. Retention `keep-daily 7 / keep-weekly 4 / keep-monthly 6` + Prune.
+- **C5a — lokal:**
+  1. `pg_dump -Fc | gpg --encrypt -r $BACKUP_GPG_RECIPIENT` nach
+     `/var/backups/who2be/dump-<ts>.pgc.gpg`. Retention 7 Tage.
+  2. **Objekt-Store** (ADR-0048): `aws s3 sync --delete` spiegelt den
+     SeaweedFS-Bucket nach `/var/backups/who2be/blobs`.
+  3. **Tabellen-Store** (ADR-0049): `VACUUM INTO`-Snapshots aller Area-SQLites
+     nach `/var/backups/who2be/tablestore`.
+- **C5b — offsite:** `restic` schiebt das ganze Backup-Verzeichnis — und damit
+  alle drei Bestaende in **einem** Snapshot — via SFTP auf eine
+  Hetzner-Storage-Box. Retention `keep-daily 7 / keep-weekly 4 / keep-monthly 6`
+  + Prune.
 
-Beide Schritte fahren im selben Container (`backup`-Service, `--profile backup`).
-Wenn `RESTIC_REPOSITORY` leer ist, laeuft nur Schritt 1 — Lokal-only-Modus fuer
+Alle Schritte fahren im selben Container (`backup`-Service, `--profile backup`),
+automatisiert in `deploy/hetzner/scripts/backup.sh` — **kein Handbetrieb**.
+Wenn `RESTIC_REPOSITORY` leer ist, laeuft nur C5a — Lokal-only-Modus fuer
 Probelaeufe ohne Storage Box.
+
+**Teilerfolg ist kein Erfolg.** Scheitert eine der drei Stufen, endet der Lauf
+mit Exit != 0, der Dead-Man's-Switch bleibt **stumm**, und der restic-Snapshot
+traegt `--tag incomplete` statt `--tag dump` — er kann sich beim Restore also
+nicht als vollstaendiger Stand ausgeben. Begruendung: ein gruener Lauf ist die
+Zusage „dieser Snapshot traegt den vollstaendigen Zustand"; sie waere genau dann
+falsch, wenn sie gebraucht wird. Belegt durch
+`deploy/hetzner/tests/test_backup_alarm.sh` (Faelle 7–9).
+
+**Lokaler Platzbedarf:** `7 × Dump + 1 × Bucket-Spiegel + 1 × Tabellen-Store`.
+Die 7-Tage-Retention betrifft ausschliesslich `dump-*.pgc.gpg`; Blob-Spiegel und
+Tabellen-Snapshots sind je genau **eine** Kopie, die in place ueberschrieben
+wird — sie vervielfachen sich nicht. Die Historie traegt restic (dedupliziert).
+Der `s3 sync` ist inkrementell, uebertragen wird nur die Differenz zum Vorlauf.
+
+**Abwahl fuer On-Prem ohne diese Stores:** `BACKUP_BLOBS=off` bzw.
+`BACKUP_TABLESTORE=off`. Nur diese ausdrueckliche Abwahl ueberspringt eine Stufe
+— fehlende Konfiguration ist FATAL, nicht „still uebersprungen".
 
 ### Initial-Setup (einmalig nach C1-Hetzner-Provisioning)
 
@@ -937,19 +965,31 @@ Der Container-Handlauf oben bleibt davon unberührt; er gehört in den Prod-Smok
 # Lokaler Dump vom heutigen Tag muss da sein
 ls -la /var/backups/who2be/dump-*.pgc.gpg | tail -3
 
-# Offsite-Snapshot juenger als 26h
+# Objekt-Spiegel und Tabellen-Snapshots ebenfalls frisch (W8/M3)
+ls -la /var/backups/who2be/blobs /var/backups/who2be/tablestore
+du -sh /var/backups/who2be/*
+
+# Offsite-Snapshot juenger als 26h — und mit --tag dump, nicht incomplete
 restic -r "${RESTIC_REPOSITORY}" \
   -o "sftp.args=-i ${BACKUP_SSH_HOME}/storage_box_ed25519 -o StrictHostKeyChecking=accept-new" \
   snapshots --last 3
 ```
 
+> Ein Snapshot mit `--tag incomplete` bedeutet: der Lauf hat mindestens einen
+> der drei Bestaende nicht gesichert. Er ist als Restore-Quelle untauglich —
+> Ursache im Cron-Log (`/var/log/who2be-backup.log`, Zeile
+> „Backup UNVOLLSTAENDIG") nachsehen und den Lauf wiederholen.
+
 ### Restore (Recovery)
 
-Vollwiederherstellung gegen eine leere Test-DB:
+Vollwiederherstellung gegen eine leere Test-DB. **Alle drei Bestaende** kommen
+aus demselben Snapshot — Postgres allein ergibt eine DB mit toten
+Blob-Referenzen und leeren Tabellen:
 
 ```bash
-# 1) Optional offsite holen, sonst direkt /var/backups/who2be nutzen
-restic -r "${RESTIC_REPOSITORY}" restore latest --target /tmp/restore
+# 1) Optional offsite holen, sonst direkt /var/backups/who2be nutzen.
+#    --tag dump ist Pflicht: nur so markierte Snapshots sind vollstaendig.
+restic -r "${RESTIC_REPOSITORY}" restore latest --tag dump --target /tmp/restore
 
 # 2) GPG-entschluesseln (Recipient-Private-Key muss verfuegbar sein)
 LATEST=$(ls -1t /tmp/restore/var/backups/who2be/dump-*.pgc.gpg | head -1)
@@ -961,27 +1001,31 @@ docker compose exec db psql -U supabase_admin postgres \
 docker compose exec -T db pg_restore -U supabase_admin -d who2be_restore \
   --clean --if-exists < /tmp/dump.pgc
 
-# 4) Verifizieren: Persona-Count entspricht der prod-DB
+# 4) Objekt-Store zurueckspielen  -> §SeaweedFS-/BlobStore-Backup, Abschnitt Restore
+# 5) Tabellen-Store zurueckspielen -> §Tabellen-Store-Backup, Abschnitt Restore
+
+# 6) Verifizieren: Persona-Count entspricht der prod-DB
 docker compose exec db psql -U supabase_admin who2be_restore \
   -c "SELECT count(*) FROM persona"
 ```
 
-**H4-Restore-Drill** ist ein vollstaendiger Probelauf der obigen Schritte (lokaler
-Dump + Restore in `who2be_restore` + Count-Vergleich), nach jedem prod-Cutover
+**H4-Restore-Drill** ist ein vollstaendiger Probelauf der obigen Schritte
+(Dump + Objekte + Tabellen-Snapshots, Restore in `who2be_restore`,
+Count-Vergleich und Blob-/Tabellen-Konsistenzcheck), nach jedem prod-Cutover
 einmal durchziehen und Datum hier protokollieren:
 
-| Datum | Backup-Quelle | Restore-Ziel | Persona-Count match | Ausgefuehrt von |
-|---|---|---|---|---|
-| — | — | — | — | — |
+| Datum | Backup-Quelle | Restore-Ziel | Persona-Count match | Blobs + Tabellen geprueft | Ausgefuehrt von |
+|---|---|---|---|---|---|
+| — | — | — | — | — | — |
 
 ## SeaweedFS-/BlobStore-Backup (ADR-0048)
 
-Der `pg_dump`-Pfad oben sichert **nur Postgres**. Die Binaerinhalte der
-WorkArea (PDFs, Textdateien, abgerufene Seiten) liegen als Objekte im
-SeaweedFS-Bucket `who2be-blobs` unter `blobs/{workspace_id}/{sha256}`.
+Die Binaerinhalte der WorkArea (PDFs, Textdateien, abgerufene Seiten) liegen als
+Objekte im SeaweedFS-Bucket `who2be-blobs` unter `blobs/{workspace_id}/{sha256}`.
 Postgres kennt davon nur den Katalog (`wa_blob`): **ein Restore ohne Objekte
 ergibt eine DB, deren Blob-Referenzen ins Leere zeigen.** Beide Stufen
-gehoeren zusammen.
+gehoeren zusammen — seit 2026-09-25 erledigt das der naechtliche Lauf selbst
+(siehe unten).
 
 Der Dienst laeuft als Container `seaweedfs` (All-in-One `server -s3`,
 Apache-2.0 — Nachfolger von `minio`, #525/#528) + One-Shot
@@ -1025,19 +1069,29 @@ unten.
 > Prod-Compose entfernen — ein separater, bewusster Schritt, kein Teil dieses
 > PRs.
 
-```bash
-# 1) Bucket in das Backup-Verzeichnis spiegeln (aws s3 sync ist inkrementell)
-docker run --rm --network app-net \
-  -e AWS_ACCESS_KEY_ID="$SEAWEEDFS_S3_ACCESS_KEY" -e AWS_SECRET_ACCESS_KEY="$SEAWEEDFS_S3_SECRET_KEY" \
-  -v /var/backups/who2be/blobs:/data amazon/aws-cli \
-  --endpoint-url http://seaweedfs:8333 s3 sync --delete s3://who2be-blobs /data
+**Automatisiert seit 2026-09-25 (W8/M3).** Der naechtliche Backup-Lauf macht das
+selbst — die folgenden Kommandos sind die Referenz dessen, was `backup.sh`
+ausfuehrt, kein Handbetrieb mehr:
 
-# 2) restic nimmt das Verzeichnis mit — es liegt unter /var/backups/who2be,
-#    das der bestehende C5b-Lauf ohnehin sichert. Kein zweites Repo noetig.
+```bash
+# Stufe 2 aus backup.sh — Bucket in das Backup-Verzeichnis spiegeln
+# (aws s3 sync ist inkrementell; aws-cli liegt im Backup-Image)
+aws --endpoint-url "http://${WHO2BE_BLOBSTORE_ENDPOINT}" \
+  s3 sync --delete "s3://${WHO2BE_BLOBSTORE_BUCKET}" /var/backups/who2be/blobs
+
+# restic nimmt das Verzeichnis mit — es liegt unter /var/backups/who2be,
+# das der C5b-Lauf ohnehin sichert. Kein zweites Repo noetig.
 ```
 
+- **Von Hand ausloesen** (Diagnose, Erstbefuellung) laeuft ueber den ganzen Lauf:
+  `cd /opt/who2be && docker compose --profile backup run --rm backup`.
+- **Netz:** der `backup`-Service haengt dafuer an `app-net` **und**
+  `supabase-net` — ohne `app-net` sieht er den Bucket nicht.
+- **Fehlschlag:** ein gescheiterter Sync macht den ganzen Lauf rot und
+  unterdrueckt den Heartbeat (s. o., „Teilerfolg ist kein Erfolg").
 - **Retention:** faellt mit dem restic-Repo zusammen (`keep-daily 7 /
-  keep-weekly 4 / keep-monthly 6`).
+  keep-weekly 4 / keep-monthly 6`). Der lokale Spiegel ist genau **eine** Kopie
+  und waechst nicht mit der 7-Tage-Dump-Retention.
 - **`--delete`** raeumt im Spiegel, was im Bucket nicht mehr existiert —
   gewollt, damit ein GDPR-Purge nicht ueber das Backup wieder auflebt.
   Die Snapshot-Historie haelt die Objekte dennoch bis zum Retention-Ablauf;
@@ -1046,10 +1100,12 @@ docker run --rm --network app-net \
   verschluesselt das Repo selbst.
 
 **Restore:** erst Objekte, dann DB (oder umgekehrt — die Reihenfolge ist egal,
-solange beide aus demselben Snapshot stammen).
+solange beide aus demselben Snapshot stammen). **`--tag dump` ist Pflicht:** nur
+so markierte Snapshots stammen aus einem vollstaendigen Lauf; `incomplete`
+bedeutet, dass mindestens ein Bestand fehlt.
 
 ```bash
-restic -r "${RESTIC_REPOSITORY}" restore latest --target /tmp/restore
+restic -r "${RESTIC_REPOSITORY}" restore latest --tag dump --target /tmp/restore
 docker run --rm --network app-net \
   -e AWS_ACCESS_KEY_ID="$SEAWEEDFS_S3_ACCESS_KEY" -e AWS_SECRET_ACCESS_KEY="$SEAWEEDFS_S3_SECRET_KEY" \
   -v /tmp/restore/var/backups/who2be/blobs:/data amazon/aws-cli \
@@ -1091,38 +1147,42 @@ In Postgres steht nur der Katalog (`wa_table`, Schema + Name). **Ein
 `pg_dump`-Restore liefert also leere Tabellen**, wenn dieses Verzeichnis fehlt.
 
 **Nicht einfach kopieren:** eine SQLite-Datei im WAL-Modus ist waehrend eines
-laufenden Imports kein konsistenter Stand. Der Store bringt deshalb
-`VACUUM INTO` mit (`TableStore.snapshot_to`) — das erzeugt unter dem
-Area-Write-Lock eine kompaktierte, eigenstaendig lesbare Kopie.
+laufenden Imports kein konsistenter Stand. Gesichert wird deshalb mit
+`VACUUM INTO` — das laeuft als Leser in einer Transaktion und erzeugt eine
+kompaktierte, eigenstaendig lesbare Kopie.
+
+**Automatisiert seit 2026-09-25 (W8/M3).** Der naechtliche Backup-Lauf erzeugt
+die Snapshots selbst; der `backup`-Service mountet dafuer `tablestore-data` und
+bringt `sqlite3` mit. Referenz dessen, was `backup.sh` je Area-Datei tut:
 
 ```bash
-# Konsistente Snapshots aller Area-Dateien in das Backup-Verzeichnis
-docker compose exec api python - <<'PY'
-import asyncio, pathlib
-from who2be_api.services.tablestore_provider import get_table_store
-
-async def main() -> None:
-    store = get_table_store()
-    target_root = pathlib.Path("/backup/tablestore")
-    for workspace_dir in store.base_dir.iterdir():
-        if not workspace_dir.is_dir():
-            continue
-        for path in workspace_dir.glob("*.sqlite"):
-            target = target_root / workspace_dir.name / path.name
-            target.unlink(missing_ok=True)   # VACUUM INTO lehnt ein existierendes Ziel ab
-            await store.snapshot_to(
-                __import__("uuid").UUID(workspace_dir.name),
-                __import__("uuid").UUID(path.stem),
-                target,
-            )
-            print("snapshot", target)
-
-asyncio.run(main())
-PY
+# Stufe 3 aus backup.sh, sinngemaess je ${WHO2BE_TABLESTORE_DIR}/**/*.sqlite:
+sqlite3 "file:${src}?mode=ro" "VACUUM INTO '${target}.tmp'"
+sqlite3 "${target}.tmp" 'PRAGMA quick_check'   # muss 'ok' liefern
+mv -f "${target}.tmp" "${target}"              # atomar ueber den Vorlauf
 ```
 
-- `/backup/tablestore` liegt unter `/var/backups/who2be` und faellt damit in
-  denselben restic-Lauf wie Dump und Blob-Spiegel.
+- **Konsistenz und ihre Grenze.** `VACUUM INTO` garantiert einen in sich
+  konsistenten Punkt-in-der-Zeit-Stand: ein gleichzeitig schreibender Prozess
+  kann den Snapshot nicht halb-geschrieben sehen, die Zieldatei ist nie korrupt,
+  WAL-/SHM-Seitendateien werden nicht gebraucht. **Nicht** gehalten wird dabei
+  der API-interne Area-Write-Lock (`TableStore.snapshot_to`) — der wirkt
+  prozesslokal, und das Backup laeuft in einem eigenen Container. Ein
+  *fachlicher* Vorgang ueber mehrere SQLite-Transaktionen (z. B. ein
+  Tabellen-Import in Bloecken) kann deshalb mittendrin erwischt werden: das
+  Ergebnis ist eine technisch intakte Datei mit einem fachlich halben Import.
+  Dieselbe Eigenschaft hat `pg_dump` gegenueber laufenden Mehr-Schritt-Vorgaengen.
+  Der Lauf um 03:15 UTC trifft den Fall praktisch selten.
+- **Zwischendatei + `mv`:** `VACUUM INTO` lehnt ein existierendes Ziel ab, und
+  ein abgebrochener Schreibvorgang soll den letzten guten Snapshot nicht
+  zerstoeren. Scheitert eine Area, bleibt ihr Vorlauf-Snapshot stehen — der Lauf
+  wird trotzdem rot.
+- **`quick_check`** statt `integrity_check`: gleiche Aussagekraft fuer
+  Strukturfehler bei deutlich kuerzerer Laufzeit auf grossen Dateien.
+- `/var/backups/who2be/tablestore` faellt in denselben restic-Lauf wie Dump und
+  Blob-Spiegel — genau ein Snapshot je Area, keine Vervielfachung.
+- **Verwaiste Snapshots** (Area geloescht) raeumt der Lauf mit, gleiche
+  Begruendung wie `--delete` beim Blob-Sync.
 - **Restore:** Snapshot-Dateien zurueck nach
   `${WHO2BE_TABLESTORE_DIR}/{workspace_id}/{area_id}.sqlite` kopieren
   (WAL-/SHM-Seitendateien werden **nicht** mitgesichert und sind nicht noetig —
