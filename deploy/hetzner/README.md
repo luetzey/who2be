@@ -265,9 +265,12 @@ docker run --rm \
   -v $(pwd)/deploy/hetzner/Caddyfile:/etc/caddy/Caddyfile:ro \
   -e DOMAIN=localhost.test -e ACME_EMAIL=test@example.com \
   -e VITE_SUPABASE_URL=http://localhost:9999 \
-  caddy:2.8-alpine caddy validate \
+  caddy:2.11.4-alpine caddy validate \
     --config /etc/caddy/Caddyfile --adapter caddyfile
 ```
+
+Der Tag muss zu `who2be/docker-compose.yml` passen — wer gegen eine andere
+Version validiert, prueft eine Konfiguration, die so nicht laeuft.
 
 ## CI/CD (MS-2 C4)
 
