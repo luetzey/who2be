@@ -6,7 +6,8 @@ gleiche Reise, aber gegen `https://api.<DOMAIN>` statt `localhost` und mit einem
 **echten Posteingang** statt Mailpit.
 
 Reise: **Signup → Verify-Mail (echte Inbox) → Login → Pro-Entitlement
-(Admin-Override **oder** Mollie-Test) → MCP-Quota bis 429 → Downgrade (402) →
+(Betreiber-Override **oder** Mollie-Test) → MCP-Quota bis 429 →
+Tarif-Quoten (Speicher/Token/Workspaces, 402) → Downgrade (402) →
 RLS-Nachweis (`who2be_app`)**.
 
 > **Voraussetzung:** Provisioning + erste Cloud-Inbetriebnahme sind durch —
@@ -26,9 +27,14 @@ RLS-Nachweis (`who2be_app`)**.
 - Ein **API-Token** (`w2b_…`) eines **Admin**-Users im Ziel-Workspace
   (Web-UI → `/settings/tokens`). Der erste registrierte User ist Admin seiner
   Org — sein Token traegt die Admin-Rolle (Snapshot, ADR-0023).
+- **Fuer §4 Variante A (Betreiber-Override):** ein **verifizierter TOTP-Faktor**
+  am Admin-Account und die eigene User-UUID in
+  `WHO2BE_BILLING_OVERRIDE_OPERATORS` (`deploy/hetzner/.env`). Der Endpunkt
+  verlangt ein **Web-JWT mit `aal2`** und weist API-Tokens kategorisch ab —
+  Details und Vorbereitung in §4 Variante A.
 - **Optional (nur Variante B, §4):** ein **Mollie-Test-Key** (`test_…`) in
   `deploy/hetzner/.env` (`MOLLIE_API_KEY`). Ohne Key faehrt der Stack genauso —
-  Variante A (Admin-Override) deckt die Reise vollstaendig ab.
+  Variante A (Betreiber-Override) deckt die Reise vollstaendig ab.
 
 Auf dem Host bietet sich fuer die langen Compose-Aufrufe je ein Alias an — die
 DB liegt im **Supabase**-Stack, der App-Stack im **who2be**-Cloud-Overlay:
@@ -120,23 +126,79 @@ Frisch registrierte Cloud-Orgs starten auf **Free** (`mcp_monthly_quota=1000`,
 Composite/Agents/Audit-Export, `100_000` / `240`) geht auf zwei aequivalenten
 Wegen.
 
-### 4 — Variante A (Default, OHNE Mollie): Admin-Override
+### 4 — Variante A (Default, OHNE Mollie): Betreiber-Override
 
-Der **admin-only Cloud-Endpunkt** `POST …/billing/override` schreibt ein
+Der **Betreiber-Endpunkt** `POST …/billing/override` schreibt ein
 **befristetes** `manual_override` direkt in `org_entitlement` (auditiert via
 `reason`/`created_by`, ADR-0028) — der Tier-Default (Features + Quota/Rate) kommt
 aus `plans.py` (Single Source of Truth). Kein Mollie noetig.
 
-```bash
-curl -s -X POST https://api.${DOMAIN}/v1/workspaces/<WS_ID>/billing/override \
-  -H "Authorization: Bearer $TOK" -H "Content-Type: application/json" \
-  -d '{"plan":"pro","days":30,"reason":"Solo-Smoke Prod-Abnahme"}' \
-  | python3 -m json.tool
-# → {"plan":"pro","expires_at":"…","features":["agents","audit_export","composite_playbooks","core"]}
-```
+> **Drei Vorbedingungen, sonst garantiert 403.** Das Gate ist fail-closed
+> (`packages/billing/src/who2be_billing/router.py#_require_override_operator`
+> + `#create_override`) und prueft:
+>
+> 1. **Workspace-Rolle `admin`.**
+> 2. **Web-JWT mit `aal2`** — ein API-Token `w2b_…` (`$TOK` aus §3) wird
+>    **kategorisch** abgelehnt, auch fuer einen gelisteten Operator. Dieser
+>    Endpunkt ist der einzige Pfad ohne Maschinen-Ausnahme.
+> 3. **Eigene User-UUID in `WHO2BE_BILLING_OVERRIDE_OPERATORS`** (kommasepariert,
+>    in `deploy/hetzner/.env`). Leer oder nicht gesetzt ⇒ niemand darf schreiben.
+
+**Vorbereitung (einmalig):**
+
+1. **TOTP-Faktor anlegen**, falls der Account noch keinen hat: Web-UI →
+   Konto-Einstellungen → Sicherheit → Zwei-Faktor (MFA) → Authenticator
+   hinzufuegen (Details: [`docs/mfa-admin.md`](./mfa-admin.md#enrollment-nutzer-flow)).
+   Ohne verifizierten Faktor kommt keine Sitzung je auf `aal2`.
+
+2. **Eigene User-UUID ermitteln** (sie steht im JWT-Claim `sub`):
+
+   ```bash
+   dsb exec db psql -U supabase_admin -d postgres \
+     -c "SELECT id, email FROM auth.users ORDER BY created_at;"
+   ```
+
+3. **Allowlist setzen** — in `deploy/hetzner/.env`:
+
+   ```bash
+   WHO2BE_BILLING_OVERRIDE_OPERATORS=<deine-user-uuid>   # mehrere: kommasepariert
+   ```
+
+   Danach die API neu starten, damit die Variable im Container ankommt:
+
+   ```bash
+   dcc up -d --force-recreate api
+   dcc exec api printenv WHO2BE_BILLING_OVERRIDE_OPERATORS
+   # → <deine-user-uuid>   (leere Ausgabe ⇒ .env oder Neustart fehlt — der Aufruf unten waere 403)
+   ```
+
+**Aufruf (mit `aal2`-Web-JWT, NICHT mit `$TOK`):**
+
+4. Im Browser auf <https://app.${DOMAIN}/login> einloggen und die
+   **TOTP-Abfrage beantworten** — der Login-Flow hebt die Sitzung erst dadurch
+   auf `aal2` (`docs/mfa-admin.md#login-step-up-challenge-bei-der-anmeldung`).
+   Danach das Access-Token der Sitzung aus den DevTools holen
+   (Application → Session Storage → `sb-…-auth-token` → `access_token`) und
+   exportieren:
+
+   ```bash
+   export JWT=<access_token-der-aal2-sitzung>   # Web-JWT, KEIN w2b_…-Token
+   ```
+
+5. Override setzen:
+
+   ```bash
+   curl -s -X POST https://api.${DOMAIN}/v1/workspaces/<WS_ID>/billing/override \
+     -H "Authorization: Bearer $JWT" -H "Content-Type: application/json" \
+     -d '{"plan":"pro","days":30,"reason":"Solo-Smoke Prod-Abnahme"}' \
+     | python3 -m json.tool
+   # → {"plan":"pro","expires_at":"…","features":["agents","audit_export","composite_playbooks","core"]}
+   ```
+
+- [ ] Antwort ist `201` mit `plan":"pro"` — kein `403`.
 
 > **Hinweis:** Das fruehere rohe CLI `who2be-set-entitlement` ist entfernt (G-3);
-> es gibt keinen Tabellen-Write per CLI mehr. Der Admin-Override oben ist der
+> es gibt keinen Tabellen-Write per CLI mehr. Der Betreiber-Override oben ist der
 > kontrollierte, auditierte Ersatz — `pro` ist der einzige buchbare Tier
 > (`plan_by_code`), `free` wird **nicht** ueber diesen Pfad gesetzt (Downgrade
 > siehe §6). Der Override ist pflicht-befristet (`days` 1–365); fuer einen Test
@@ -216,6 +278,66 @@ done | sort | uniq -c
 > Der echte MCP-Pfad laeuft identisch — der Streamable-HTTP-Server hinter
 > `mcp.${DOMAIN}` (`--profile mcp-http`) bzw. `dcc run --rm mcp …` nutzt dieselbe
 > API; das Gate sitzt server-seitig in der API, nicht im MCP-Prozess.
+
+## 5b — Tarif-Quoten: Speicher, Tokens, Workspaces (je 402)
+
+Drei Tarif-Deckel neben dem MCP-Gate. Alle drei greifen **nur** in der
+Cloud-Edition, weisen ausschliesslich die **Neuanlage** ab (Bestand bleibt
+nutzbar) und antworten `402` mit stabilem `reason` (ADR-0051). Pro-Grenzen aus
+`apps/api/src/who2be_api/licensing/entitlement.py` (`PRO_STORAGE_QUOTA_BYTES`
+10 GiB, `PRO_TOKEN_QUOTA` 25, `PRO_WORKSPACE_QUOTA` 5); Free entsprechend
+100 MiB / 3 / 1.
+
+Am schnellsten reproduzierbar auf **Free** — dazu die Entitlement-Zeile loeschen
+(wie §6) oder den Deckel direkt runterdruecken:
+
+```bash
+dsb exec db psql -U supabase_admin -d postgres -c \
+  "UPDATE org_entitlement SET storage_quota_bytes=1, token_quota=1, workspace_quota=1
+     WHERE org_id = '<ORG_ID>';"
+```
+
+**a) Speicher-Quota (#536)** — Gate `enforce_storage_quota` an beiden
+Ingest-Routen (`apps/api/src/who2be_api/routers/wa_ingest.py#ingest_into_private_area`):
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" \
+  -X POST https://api.${DOMAIN}/v1/workspaces/<WS_ID>/ingest \
+  -H "Authorization: Bearer $TOK" -H "Content-Type: application/json" \
+  -d '{"file_b64":"'"$(printf 'quota smoke' | base64 -w0)"'","filename":"smoke.txt"}'
+# → 402   Body: "reason":"storage_quota_exceeded", params.limit/params.used
+```
+
+**b) Token-Quota (#538)** — Gate in
+`apps/api/src/who2be_api/services/token_service.py#_enforce_token_quota`, geprueft
+**vor** der Secret-Erzeugung (ueber der Grenze entsteht kein Token). Der Aufruf
+laeuft ueber die **Web-Session** (`$JWT` aus §4A): Token-Verwaltung ist fuer
+agent-gebundene Tokens gesperrt (`#_deny_agent_bound`), und `agent_id` ist
+Pflicht — eine vorhandene Agent-Id nehmen (`GET …/agents`):
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" \
+  -X POST https://api.${DOMAIN}/v1/workspaces/<WS_ID>/tokens \
+  -H "Authorization: Bearer $JWT" -H "Content-Type: application/json" \
+  -d '{"name":"quota-smoke","agent_id":"<AGENT_ID>"}'
+# → 402   Body: "reason":"token_quota_exceeded", params.limit
+```
+
+**c) Workspace-Quota (#576)** — Gate in
+`apps/api/src/who2be_api/services/workspace_service.py#_enforce_workspace_quota`,
+Org-scoped (`<ORG_ID>` aus §3):
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" \
+  -X POST https://api.${DOMAIN}/v1/organizations/<ORG_ID>/workspaces \
+  -H "Authorization: Bearer $JWT" -H "Content-Type: application/json" \
+  -d '{"name":"Quota Smoke","slug":"quota-smoke"}'
+# → 402   Body: "reason":"workspace_quota_exceeded", params.limit
+```
+
+- [ ] Alle drei Aufrufe liefern `402` mit dem jeweiligen `reason`.
+- [ ] Nach dem Zuruecksetzen der Grenzen (bzw. auf Pro) laufen dieselben Aufrufe
+      wieder auf `201` — der Deckel blockt nur die Neuanlage.
 
 ## 6 — Downgrade-Enforcement (402)
 
@@ -297,6 +419,7 @@ Docs-Toggle (`/docs` → 404 bei `WHO2BE_DOCS_PUBLIC=false`).
 | 2 — Signup + Verify (echte Inbox)    |             |       |
 | 4 — Pro-Entitlement (Variante A oder B) |          |       |
 | 5 — MCP-Quota 429                    |             |       |
+| 5b — Quoten Speicher/Token/Workspaces (402) | |       |
 | 6 — Downgrade-Enforcement (402)      |             |       |
 | 7 — RLS aktiv (`who2be_app`)         |             |       |
 | 8 — Header-Check gruen               |             |       |
@@ -327,13 +450,23 @@ protokollieren.
   Pfad nicht) oder das `runtime-cloud`-Image fehlt. `dcc exec api printenv WHO2BE_EDITION`
   pruefen, ggf. mit beiden `-f`-Files neu bauen/hochfahren (README §Cloud-Edition).
 
-- **Override liefert 403** → der Token ist kein **Admin**. Override/Checkout sind
-  admin-only. Ein Admin-Token unter `/settings/tokens` erzeugen (erster Org-User
-  ist Admin).
+- **Override liefert 403** → einer der drei Vorbedingungen aus §4A fehlt. In
+  dieser Reihenfolge pruefen:
+  1. **API-Token statt Web-JWT** — der haeufigste Fall. `Bearer w2b_…` wird
+     kategorisch abgelehnt (`who2be_billing/router.py#_require_override_operator`).
+     Mit dem `aal2`-Web-JWT (`$JWT`) wiederholen.
+  2. **Allowlist leer/fehlt im Container** —
+     `dcc exec api printenv WHO2BE_BILLING_OVERRIDE_OPERATORS`. Leere Ausgabe ⇒
+     Variable in `deploy/hetzner/.env` setzen und `dcc up -d --force-recreate api`.
+     Steht die eigene User-UUID wirklich drin (nicht die Org- oder Workspace-Id)?
+  3. **Sitzung ist nur `aal1`** — TOTP-Step-up beim Login nicht gemacht oder
+     Session abgelaufen. Neu einloggen inkl. Code
+     (`docs/mfa-admin.md#login-step-up-challenge-bei-der-anmeldung`).
+  4. **Rolle ist nicht `admin`** im Ziel-Workspace.
 
 - **Checkout liefert 503** (nur Variante B) → `MOLLIE_API_KEY` fehlt/leer in
   `deploy/hetzner/.env`. Test-Key setzen und `dcc up -d api`. Oder Variante A
-  (Admin-Override) nutzen — sie kommt ohne Mollie aus.
+  (Betreiber-Override) nutzen — sie kommt ohne Mollie aus.
 
 - **Keine `429` im 429-Check** → Edition pruefen (`dcc exec api printenv WHO2BE_EDITION`
   muss `cloud` sein) und dass ein **API-Token** (`w2b_…`), nicht ein Web-JWT,

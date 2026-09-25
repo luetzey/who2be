@@ -131,14 +131,18 @@ docker compose \
 # → cloud / postgresql://who2be_app:***@db:5432/postgres / redis://redis:6379
 ```
 
-Abnahme-Reise (Signup → Verify → Pro-Entitlement → MCP-Quota 429 → Downgrade →
-RLS-Nachweis): `docs/cloud-prod-smoke.md` gegen `https://api.${DOMAIN}` fahren.
-Pro-Entitlement ohne Mollie ueber den auditierten Override-Endpoint (Admin +
-aal2/MFA + `WHO2BE_BILLING_OVERRIDE_OPERATORS`):
+Abnahme-Reise (Signup → Verify → Pro-Entitlement → MCP-Quota 429 → Tarif-Quoten
+402 → Downgrade → RLS-Nachweis): `docs/cloud-prod-smoke.md` gegen
+`https://api.${DOMAIN}` fahren. Pro-Entitlement ohne Mollie ueber den
+auditierten Override-Endpoint. Der verlangt dreierlei, sonst garantiert `403`:
+Rolle `admin`, ein **Web-JWT mit `aal2`** (TOTP-Step-up; ein API-Token `w2b_…`
+wird kategorisch abgelehnt) und die eigene User-UUID in
+`WHO2BE_BILLING_OVERRIDE_OPERATORS` (`deploy/hetzner/.env`, kommasepariert,
+leer ⇒ niemand). Vorbereitung Schritt fuer Schritt: RUNBOOK-Checkliste §6b.
 
 ```bash
 curl -s -X POST https://api.${DOMAIN}/v1/workspaces/<WS_ID>/billing/override \
-  -H "Authorization: Bearer $TOK" -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $JWT" -H "Content-Type: application/json" \
   -d '{"plan":"pro","days":30,"reason":"cloud smoke"}'
 ```
 
