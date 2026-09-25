@@ -3,8 +3,8 @@
 `MCP_TOOL_REQUIREMENTS` ist die durchgesetzte Quelle der registrierten
 MCP-Werkzeuge — `test_tool_requirements.py` haelt die Laenge fest, der
 Paritaetstest in `apps/mcp/tests/test_policy_filter.py` erzwingt Gleichheit
-gegen den Server. Die nach aussen sichtbaren Zahlen in `README.md` und
-`ROADMAP.md` hingen bisher an keiner Pruefung und sind genau deshalb
+gegen den Server. Die Zahlen in der Prosa (`README.md`, `ROADMAP.md`,
+`CLAUDE.md`) hingen bisher an keiner Pruefung und sind genau deshalb
 gedriftet (Befund 2026-09-25: Prosa nannte 81, die Registry hatte 83).
 
 Dieser Guard schliesst die Luecke in der Richtung, in der sie aufgetreten
@@ -28,6 +28,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 _DOC_CLAIMS = (
     ("README.md", re.compile(r"\*\*MCP server\*\*\s+—\s+(\d+)\s+tools")),
     ("ROADMAP.md", re.compile(r"(\d+)\s+MCP tools in total")),
+    ("CLAUDE.md", re.compile(r"\*\*(\d+) Tools gesamt\*\*")),
 )
 
 
