@@ -39,6 +39,22 @@
 #   GOTRUE_MAILER_AUTOCONFIRM=false + GOTRUE_SMTP_* (echter Provider). Fuer einen
 #   ersten Solo-Smoke darf autoconfirm (Basis-Default) `true` bleiben.
 services:
+  auth:
+    environment:
+      # Cloud-Auth: NUR externe Provider (Google, GitHub) — Owner-Entscheidung
+      # 2026-09-24. Gegenstueck zum Build-Arg VITE_WHO2BE_EDITION=cloud bei
+      # `web` unten: GoTrue weist Signup/Passwort-Login ab, die UI zeigt das
+      # Formular gar nicht erst. Team-Einladungen laufen weiter (`POST /invite`
+      # kennt in v2.196.0 keinen `External.Email`-Check).
+      #
+      # Env-gesteuert mit Default `true`, nicht hart `false`: erst wenn in der
+      # `.env` GOTRUE_EXTERNAL_{GOOGLE,GITHUB}_ENABLED=true samt CLIENT_ID/SECRET
+      # stehen (Basis-Compose fuehrt die Variablen), darf hier `false` gesetzt
+      # werden. Andernfalls waere jeder Anmeldeweg gesperrt — siehe die
+      # Reihenfolge-Sperre in deploy/hetzner/supabase/README.md,
+      # "Cloud-Edition: nur externe Provider".
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: ${GOTRUE_EXTERNAL_EMAIL_ENABLED:-true}
+
   # runtime-cloud-Image: zieht das who2be-billing-Paket (Mollie-SDK) in den Build
   # (ADR-0029). Ohne `target` baut der Dockerfile die On-Prem-Stage ohne Billing —
   # dann liefern die /v1/billing-Pfade Fehler. pull_policy=build erzwingt den

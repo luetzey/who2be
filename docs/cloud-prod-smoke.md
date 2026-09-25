@@ -67,6 +67,15 @@ dcc exec api printenv WHO2BE_EDITION APP_DATABASE_URL RATE_LIMIT_STORAGE_URI
 
 ## 2 — Signup → Verify-Mail (echte Inbox) → Login
 
+> **Nur gueltig, solange E-Mail/Passwort in deiner `.env` aktiv ist.** Hast du
+> nach `deploy/hetzner/supabase/README.md`, „Cloud-Edition: nur externe
+> Provider", bereits `GOTRUE_EXTERNAL_EMAIL_ENABLED=false` gesetzt (der
+> vorgesehene Cloud-Betrieb), antwortet GoTrue auf `POST /signup` mit **400
+> `email_provider_disabled`** und das Web zeigt gar kein Passwortformular mehr.
+> Dann ist dieser Schritt durch **§2b** zu ersetzen: Login ueber Google bzw.
+> GitHub. Alles Nachfolgende (Entitlement, Quota, Downgrade, RLS) bleibt
+> unveraendert — es haengt am Konto, nicht am Anmeldeweg.
+
 In Prod ist `GOTRUE_MAILER_AUTOCONFIRM=false` und ein echter SMTP-Mailer aktiv
 (siehe RUNBOOK-Checkliste §3) — Signups muessen die E-Mail **bestaetigen**, und
 die Verify-Mail landet im **realen Postfach** der genutzten Adresse (kein Mailpit).
@@ -95,6 +104,33 @@ die Verify-Mail landet im **realen Postfach** der genutzten Adresse (kein Mailpi
 > Ohne Confirm bleibt der User **un-bestaetigt** und der Login schlaegt fehl —
 > genau das belegt, dass die Mail-Pflicht in Prod greift. Kommt keine Mail an:
 > `dsb logs auth` auf SMTP-Fehler pruefen (`GOTRUE_SMTP_*`).
+
+## 2b — Login ueber Google/GitHub (Cloud-Anmeldeweg)
+
+Der vorgesehene Cloud-Betrieb: `GOTRUE_EXTERNAL_EMAIL_ENABLED=false` plus je
+eine aktive OAuth-App bei Google und GitHub. Aufsetzen (OAuth-Apps,
+Redirect-URI zeichengenau, Reihenfolge der `.env`-Zeilen) steht vollstaendig in
+`deploy/hetzner/supabase/README.md`, Abschnitt „Cloud-Edition: nur externe
+Provider (Google, GitHub)" — hier nur die Abnahme:
+
+1. <https://app.${DOMAIN}/login> oeffnen.
+   - [ ] **Kein** Feld fuer E-Mail/Passwort, nur die Provider-Schaltflaechen.
+2. **Mit Google anmelden** → Consent → Redirect auf
+   `https://app.${DOMAIN}/auth/callback#access_token=…`.
+   - [ ] Landet eingeloggt auf dem Default-Workspace-Dashboard.
+3. Dasselbe mit **GitHub** (zweites Konto oder nach Logout).
+   - [ ] Beide Provider fuehren zu einer Session.
+
+> Scheitert der Redirect mit `redirect_uri_mismatch`, weicht die in der Provider-
+> Console eingetragene URI von `https://supabase.${DOMAIN}/auth/v1/callback` ab
+> (ein Zeichen genuegt). Meldet GoTrue „Unsupported provider: provider is not
+> enabled", fehlt `GOTRUE_EXTERNAL_{GOOGLE,GITHUB}_ENABLED=true` in der `.env`
+> oder der `auth`-Container wurde danach nicht neu gestartet.
+
+**Team-Einladungen bleiben davon unberuehrt** und laufen weiter per Mail
+(`POST /auth/v1/invite`) — der SMTP-Zugang wird also auch in diesem Modus
+gebraucht. Details: derselbe README-Abschnitt, Tabelle „Braucht die Cloud dann
+noch SMTP?".
 
 ## 3 — IDs ermitteln (Token / Org / Workspace)
 

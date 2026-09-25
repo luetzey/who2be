@@ -124,6 +124,17 @@ docker compose -f docker-compose.yml -f docker-compose.cloud.yml \
 Im Cloud-Overlay ist `GOTRUE_MAILER_AUTOCONFIRM=false` — Signups muessen die
 E-Mail **bestaetigen** (echte Cloud-Reise). Die Mail landet in Mailpit.
 
+> **Anmeldeweg vs. Produkt-Test (Owner-Entscheidung 2026-09-24).** In der
+> **echten** Cloud meldet man sich nur ueber Google/GitHub an; E-Mail/Passwort
+> ist dort per `.env`-Zeile `GOTRUE_EXTERNAL_EMAIL_ENABLED=false` abgeschaltet
+> und das Web-Bundle zeigt das Formular gar nicht erst. Das Cloud-Overlay
+> **erzwingt** das hier bewusst nicht (`${GOTRUE_EXTERNAL_EMAIL_ENABLED:-true}`),
+> damit dieser lokale Stack ohne OAuth-Credentials ueberhaupt anmeldbar bleibt.
+> Fuer den Produkt-Test unten reicht darum weiterhin E-Mail/Passwort. Wer den
+> **Anmeldeweg selbst** wie in der Cloud nachstellen will: erst §3b abarbeiten
+> (Provider aktivieren), dann `GOTRUE_EXTERNAL_EMAIL_ENABLED=false` in die `.env`
+> und `dcc up -d auth` — in dieser Reihenfolge, sonst sperrst du dich aus.
+
 1. **Signup** im Browser auf <http://localhost:5173/signup> (E-Mail +
    Passwort, ≥ 6 Zeichen). Alternativ per API:
 
@@ -133,6 +144,10 @@ E-Mail **bestaetigen** (echte Cloud-Reise). Die Mail landet in Mailpit.
      -H "Content-Type: application/json" \
      -d '{"email":"pro@who2be.local","password":"streng-geheim"}'
    ```
+
+   > Antwortet GoTrue hier mit **400 `email_provider_disabled`**, steht in
+   > deiner `.env` bereits `GOTRUE_EXTERNAL_EMAIL_ENABLED=false` — dann fuehrt
+   > der Weg ueber §3b (Google/GitHub), nicht ueber dieses `curl`.
 
 2. **Verify-Mail oeffnen:** Mailpit-UI auf <http://localhost:8025>. Die
    „Confirm your signup"-Mail anklicken → **Confirm**-Link folgen. Der Link
@@ -147,12 +162,16 @@ E-Mail **bestaetigen** (echte Cloud-Reise). Die Mail landet in Mailpit.
 > Ohne Confirm bleibt der User **un-bestaetigt** und der Login schlaegt fehl —
 > genau das verifiziert, dass die Mail-Pflicht lokal greift.
 
-## 3b — Optional: Google/GitHub-Login aktivieren
+## 3b — Google/GitHub-Login aktivieren (Pflicht fuer den echten Cloud-Anmeldeweg)
 
-Social-Login ist nur eine **Login-Methode** — fuer den Produkt-Test reicht
-E-Mail/Passwort (Schritt 3). Wer Google/GitHub lokal testen will: Wir nutzen
-**selbst-gehostetes GoTrue** (kein Supabase-Cloud-Projekt), also gibt es **keine
-Dashboard-UI** — Provider werden ueber **Env-Variablen** aktiviert.
+Fuer den **Produkt-Test** (Billing, Quota, Downgrade, RLS) reicht Schritt 3 —
+der Anmeldeweg ist dort nur Mittel zum Zweck. Willst du dagegen pruefen, wie
+sich die **Cloud-Edition** anmeldet, ist dieser Schritt **Voraussetzung**: dort
+ist E-Mail/Passwort abgeschaltet, und ohne aktiven Provider gibt es dann keinen
+Weg hinein.
+
+Wir nutzen **selbst-gehostetes GoTrue** (kein Supabase-Cloud-Projekt), also gibt
+es **keine Dashboard-UI** — Provider werden ueber **Env-Variablen** aktiviert.
 
 1. **OAuth-Client anlegen** (Google Cloud Console → Credentials → OAuth client ID,
    Typ *Web application*; Consent-Screen *External* + eigene Mail als Test-User).

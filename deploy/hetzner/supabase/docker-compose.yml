@@ -122,7 +122,17 @@ services:
       GOTRUE_WEBAUTHN_RP_ID: app.${DOMAIN}
       GOTRUE_WEBAUTHN_RP_DISPLAY_NAME: ${WEBAUTHN_RP_DISPLAY_NAME:-Who2Be}
       GOTRUE_WEBAUTHN_RP_ORIGINS: ${SITE_URL}
-      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      # E-Mail/Passwort als Auth-Provider. Self-Hosting: `true` (Default,
+      # unveraendert). Cloud: hier auf `false` setzen — dort meldet man sich
+      # ausschliesslich ueber externe Provider an (Owner-Entscheidung
+      # 2026-09-24). GoTrue prueft dieses Flag NUR in `POST /signup`,
+      # `POST /token?grant_type=password` und `POST /magiclink`; `POST /invite`,
+      # `POST /verify`, `POST /recover` und `PUT /user` haben keinen solchen
+      # Check — Team-Einladungen laufen also unveraendert weiter (gegen den
+      # Quellstand von v2.196.0 geprueft). Das Web-Pendant ist das Build-Arg
+      # `VITE_WHO2BE_EDITION` (ADR-0029), beide werden im Deploy gemeinsam
+      # gesetzt. Anleitung: README.md, "Cloud-Edition: nur externe Provider".
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: ${GOTRUE_EXTERNAL_EMAIL_ENABLED:-true}
       # Prod: E-Mail-Verifikation AN (default false = Confirm Pflicht). Mit
       # GOTRUE_MAILER_AUTOCONFIRM=true im .env laesst sich das fuer einen
       # frischen Staging-Stack ohne SMTP voruebergehend umgehen.
