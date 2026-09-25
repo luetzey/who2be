@@ -3,8 +3,11 @@
 Ohne DB: ein Fake-Pool liefert die Org-Aufloesung + die Byte-Summe, ein
 Fake-Entitlement-Port das aufgeloeste Entitlement. Belegt (Issue #536):
 greift nur Cloud; Free am Limit ⇒ 402 mit `storage_quota_exceeded` + `params`;
-Free unter Limit ⇒ frei; unbegrenzt (`storage_quota_bytes is None`) ⇒ frei
-OHNE Summen-Roundtrip; On-Prem ⇒ no-op.
+Free unter Limit ⇒ frei; unbegrenzt (On-Prem/OSS, `cloud=False`) ⇒ frei
+OHNE Summen-Roundtrip; On-Prem ⇒ no-op. Seit W8/P2 zusaetzlich der
+**Cloud-Rueckfall** (`effective_storage_quota_bytes`): ein leeres Feld heisst in
+der Cloud „nicht gesetzt", nicht „unbegrenzt" — gekuendigt ⇒ Free-Wert, aktives
+Paid-Abo ⇒ Pro-Wert.
 
 Der „kein Datenverlust\"-Vertrag hat einen eigenen Test (`test_wa_ingest.py`):
 das Gate haengt an den Ingest-Routen und
@@ -95,13 +98,19 @@ def test_onprem_is_noop(monkeypatch: pytest.MonkeyPatch) -> None:
     assert pool.sum_calls == 0
 
 
-def test_unlimited_entitlement_skips_sum(monkeypatch: pytest.MonkeyPatch) -> None:
-    # OSS_ENTITLEMENT traegt `storage_quota_bytes=None` ⇒ keine Summe noetig.
-    assert OSS_ENTITLEMENT.storage_quota_bytes is None
+def test_onprem_license_without_quota_is_unlimited(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`storage_quota_bytes=None` heisst NUR ausserhalb der Cloud „unbegrenzt".
+
+    In der Cloud bedeutet dasselbe `None` „kein Wert gesetzt" und faellt auf den
+    Tarifwert zurueck (siehe `test_inactive_without_quota_falls_back_to_free`).
+    Wortgleich zum Test gleichen Namens bei beiden Zwillingen.
+    """
+    assert OSS_ENTITLEMENT.storage_quota_bytes is None  # Ausgangslage, nicht Annahme
     pool = FakePool(used_bytes=PRO_STORAGE_QUOTA_BYTES * 10)
-    service = _service(monkeypatch, OSS_ENTITLEMENT, pool)
+    service = _service(monkeypatch, OSS_ENTITLEMENT, pool, edition="onprem")
     _run(service)
     assert pool.sum_calls == 0
+    assert OSS_ENTITLEMENT.effective_storage_quota_bytes(cloud=False) is None
 
 
 def test_free_under_limit_passes(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -170,3 +179,42 @@ def test_inactive_entitlement_keeps_its_limit(monkeypatch: pytest.MonkeyPatch) -
     with pytest.raises(HTTPException) as exc:
         _run(_service(monkeypatch, inactive, pool))
     assert exc.value.status_code == 402
+
+
+def test_inactive_without_quota_falls_back_to_free(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Der Kern des Rueckfalls: `None` heisst in der Cloud NICHT „unbegrenzt".
+
+    Genau diese Zeile schreibt der Webhook beim Revoke
+    (`Entitlement(status="inactive", features=frozenset())`) und genau so steht
+    jede Bestands-Zeile vor Migration 0084 da. Ohne Rueckfall duerfte
+    ausgerechnet eine gekuendigte Org unbegrenzt Bytes ablegen — und das Gate
+    wuerde die Summe nicht einmal abfragen (`sum_calls == 0`).
+    """
+    entitlement = Entitlement(status="inactive", features=frozenset())
+    assert entitlement.storage_quota_bytes is None  # Ausgangslage, nicht Annahme
+    pool = FakePool(used_bytes=FREE_STORAGE_QUOTA_BYTES)
+    with pytest.raises(ApiError) as exc:
+        _run(_service(monkeypatch, entitlement, pool))
+    assert exc.value.params == {
+        "limit": FREE_STORAGE_QUOTA_BYTES,
+        "used": FREE_STORAGE_QUOTA_BYTES,
+    }
+    assert pool.sum_calls == 1
+
+
+def test_active_paid_without_quota_falls_back_to_pro(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Zahlender Bestandskunde ohne das Metadatum: Pro-Wert, nicht Free.
+
+    Ein Rueckfall, der jede leere Zeile auf 100 MiB deckelt, wuerde Pro-Kunden
+    bis zum naechsten Checkout an ihrem naechsten Ingest aussperren.
+    """
+    entitlement = Entitlement(status="active", features=frozenset({Feature.CORE, Feature.AGENTS}))
+    assert entitlement.storage_quota_bytes is None
+    _run(_service(monkeypatch, entitlement, FakePool(used_bytes=PRO_STORAGE_QUOTA_BYTES - 1)))
+
+    with pytest.raises(ApiError) as exc:
+        _run(_service(monkeypatch, entitlement, FakePool(used_bytes=PRO_STORAGE_QUOTA_BYTES)))
+    assert exc.value.params == {
+        "limit": PRO_STORAGE_QUOTA_BYTES,
+        "used": PRO_STORAGE_QUOTA_BYTES,
+    }

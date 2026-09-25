@@ -65,7 +65,10 @@ class EntitlementInfo(BaseModel):
     # (Issue #538). Anzeige und Gate duerfen nicht divergieren. `None` = wirklich
     # unbegrenzt (On-Prem/OSS).
     token_quota: int | None
-    # `None` = unbegrenzt (On-Prem/OSS sowie Bestands-Entitlements vor 0084).
+    # Die **tatsaechlich geltende** Grenze (`Entitlement.effective_storage_quota_bytes`),
+    # aus demselben Grund wie bei `token_quota`: in der Cloud heisst ein leeres
+    # Feld „nicht gesetzt" und faellt auf den Tarifwert zurueck (Issue #536).
+    # `None` = wirklich unbegrenzt (On-Prem/OSS).
     storage_quota_bytes: int | None
     # Die **tatsaechlich geltende** Grenze (`Entitlement.effective_workspace_quota`),
     # aus demselben Grund wie bei `token_quota`: in der Cloud heisst ein leeres
@@ -99,7 +102,7 @@ async def get_entitlement(ctx: Ctx, pool: Pool) -> EntitlementInfo:
         mcp_monthly_quota=entitlement.mcp_monthly_quota,
         mcp_rate_per_min=entitlement.mcp_rate_per_min,
         token_quota=entitlement.effective_token_quota(cloud=is_cloud(settings)),
-        storage_quota_bytes=entitlement.storage_quota_bytes,
+        storage_quota_bytes=entitlement.effective_storage_quota_bytes(cloud=is_cloud(settings)),
         workspace_quota=entitlement.effective_workspace_quota(cloud=is_cloud(settings)),
         grace_until=entitlement.grace_until.isoformat() if entitlement.grace_until else None,
         usage=EntitlementUsage(period=period, count=count, storage_bytes=int(used_storage or 0)),

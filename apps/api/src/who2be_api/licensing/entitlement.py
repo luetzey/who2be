@@ -114,7 +114,9 @@ class Entitlement(BaseModel):
     token_quota: int | None = None
     # Summe der abgelegten Blob-Bytes je Workspace (Issue #536). `None` =
     # unbegrenzt — der On-Prem/OSS-Default und der Zustand jeder Bestands-Zeile
-    # in `org_entitlement`, die vor Migration 0084 geschrieben wurde.
+    # in `org_entitlement`, die vor Migration 0084 geschrieben wurde. In der
+    # Cloud bedeutet `None` dagegen „nicht gesetzt" und faellt auf den Tarifwert
+    # zurueck (`effective_storage_quota_bytes`).
     storage_quota_bytes: int | None = None
     # Max. Anzahl Workspaces je **Organisation** (Issue #576). `None` =
     # unbegrenzt — der On-Prem/OSS-Default und der Zustand jeder Bestands-Zeile
@@ -184,6 +186,45 @@ class Entitlement(BaseModel):
             return FREE_TOKEN_QUOTA
         paid_features = self.features - {Feature.CORE}
         return PRO_TOKEN_QUOTA if paid_features else FREE_TOKEN_QUOTA
+
+    def effective_storage_quota_bytes(
+        self, *, cloud: bool, now: datetime | None = None
+    ) -> int | None:
+        """Tatsaechlich geltende Speichergrenze je Workspace (None = unbegrenzt, Issue #536).
+
+        Wortgleiche Konstruktion zu `effective_token_quota` und
+        `effective_workspace_quota` und aus demselben Grund:
+        `storage_quota_bytes` ist ein **Feld**, weil Pro eine eigene endliche
+        Zahl braucht (10 GiB), und ein Feld hat die Schwaeche, die
+        `entity_limit()` vermeidet — wer es nicht kennt, schreibt `NULL`, und
+        `NULL` hiesse unbegrenzt. Genau das tut der Billing-Pfad beim Downgrade
+        (`webhook.map_event_to_entitlement` schreibt beim Revoke ein
+        `Entitlement(status="inactive", features=frozenset())` ohne dieses
+        Feld), und genau das steht in jeder Bestands-Zeile vor Migration 0084
+        sowie in jeder vor #536 angelegten Mollie-Subscription. Ohne Rueckfall
+        duerfte ausgerechnet eine gekuendigte Org unbegrenzt Bytes ablegen — das
+        Gegenteil des Zwecks.
+
+        Der Rueckfall war bei `token_quota` (#538) gefunden und bei
+        `workspace_quota` (#576) praeventiv mitgebaut worden, aber nicht auf
+        #536 zurueckportiert; diese Methode holt das nach.
+
+        Deshalb gilt `None` nur **ausserhalb** der Cloud als „unbegrenzt"
+        (On-Prem/OSS-Lizenz). In der Cloud:
+          * **inaktiv** (Kuendigung/Fehlzahlung) oder **Free** (nur `core`)
+            ⇒ `FREE_STORAGE_QUOTA_BYTES`.
+          * aktiver Plan mit Paid-Features ⇒ `PRO_STORAGE_QUOTA_BYTES` — ein
+            zahlender Bestandskunde ohne das Metadatum wird nicht still auf den
+            Free-Wert heruntergedeckelt.
+        """
+        if self.storage_quota_bytes is not None:
+            return self.storage_quota_bytes
+        if not cloud:
+            return None
+        if not self.is_active(now):
+            return FREE_STORAGE_QUOTA_BYTES
+        paid_features = self.features - {Feature.CORE}
+        return PRO_STORAGE_QUOTA_BYTES if paid_features else FREE_STORAGE_QUOTA_BYTES
 
     def effective_workspace_quota(self, *, cloud: bool, now: datetime | None = None) -> int | None:
         """Tatsaechlich geltende Workspace-Obergrenze je Org (None = unbegrenzt, Issue #576).

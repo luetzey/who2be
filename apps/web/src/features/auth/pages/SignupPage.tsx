@@ -20,6 +20,7 @@ import { supabase } from '@/lib/supabase'
 import { OAuthButtons } from '../components/OAuthButtons'
 import { TurnstileWidget } from '../components/TurnstileWidget'
 import { translateAuthError } from '../lib/captcha'
+import { isPasswordAuthEnabled } from '../lib/password-auth'
 import { buildRedirectTo } from '../lib/redirect'
 import { sanitizeNext } from '../lib/sanitize-next'
 import { useCaptcha } from '../lib/use-captcha'
@@ -67,6 +68,13 @@ export function SignupPage() {
   const captcha = useCaptcha()
 
   const next = sanitizeNext(searchParams.get('next'))
+
+  // Cloud: Registrierung nur ueber externe Provider (Owner-Entscheidung
+  // 2026-09-24). Die Seite bleibt bewusst erreichbar statt auf /login
+  // umzuleiten — sie traegt die Pflicht-Einwilligung zu AGB und Datenschutz,
+  // die die OAuth-Buttons bis zur Zustimmung `disabled` haelt. Ein Redirect
+  // haette den einzigen Consent-Gate der Registrierung entfernt.
+  const passwordAuth = isPasswordAuthEnabled()
 
   const signupSchema = makeSignupSchema(t)
 
@@ -157,6 +165,8 @@ export function SignupPage() {
             <div className="flex flex-col gap-4">
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
+                  {passwordAuth ? (
+                  <>
                   <FormField
                     control={form.control}
                     name="email"
@@ -206,6 +216,8 @@ export function SignupPage() {
                       </FormItem>
                     )}
                   />
+                  </>
+                  ) : null}
                   <FormField
                     control={form.control}
                     name="consent"
@@ -252,40 +264,46 @@ export function SignupPage() {
                     )}
                   />
                   {error !== null ? <ErrorAlert message={error} /> : null}
-                  {captcha.required ? (
-                    <TurnstileWidget
-                      key={captcha.nonce}
-                      siteKey={config.turnstileSiteKey}
-                      action="signup"
-                      onToken={captcha.setToken}
-                      onExpire={captcha.clearToken}
-                      className="flex justify-center"
-                    />
-                  ) : null}
-                  <Button
-                    type="submit"
-                    variant="brand"
-                    className="w-full"
-                    disabled={
-                      form.formState.isSubmitting ||
-                      !consentGiven ||
-                      captcha.blocked
-                    }
-                  >
-                    {t('signup.submit')}
-                  </Button>
-                  {captcha.blocked ? (
-                    <p className="text-center text-xs text-muted-foreground">
-                      {t('captcha.pending')}
-                    </p>
+                  {passwordAuth ? (
+                    <>
+                      {captcha.required ? (
+                        <TurnstileWidget
+                          key={captcha.nonce}
+                          siteKey={config.turnstileSiteKey}
+                          action="signup"
+                          onToken={captcha.setToken}
+                          onExpire={captcha.clearToken}
+                          className="flex justify-center"
+                        />
+                      ) : null}
+                      <Button
+                        type="submit"
+                        variant="brand"
+                        className="w-full"
+                        disabled={
+                          form.formState.isSubmitting ||
+                          !consentGiven ||
+                          captcha.blocked
+                        }
+                      >
+                        {t('signup.submit')}
+                      </Button>
+                      {captcha.blocked ? (
+                        <p className="text-center text-xs text-muted-foreground">
+                          {t('captcha.pending')}
+                        </p>
+                      ) : null}
+                    </>
                   ) : null}
                 </form>
               </Form>
+              {passwordAuth ? (
               <div className="flex items-center gap-3 text-xs text-muted-foreground">
                 <span className="h-px flex-1 bg-border" />
                 {t('or')}
                 <span className="h-px flex-1 bg-border" />
               </div>
+              ) : null}
               {!consentGiven ? (
                 <p className="text-center text-xs text-muted-foreground">
                   {t('signup.consentRequiredHint')}

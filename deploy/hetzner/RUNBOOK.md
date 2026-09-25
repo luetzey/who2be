@@ -212,6 +212,30 @@ und der Abnahme. Reihenfolge einhalten:
       ```
 - [ ] **6 — TLS + Header gruen:** [Provisioning §7](#provisioning-track-sc1) inkl.
       `bash deploy/hetzner/tests/test_headers.sh https://api.${DOMAIN}`.
+- [ ] **6b — Betreiber-Override startklar** (Voraussetzung fuer „Pro ohne
+      Mollie setzen", §4 Variante A des Prod-Smokes — ohne diesen Schritt
+      antwortet der Endpunkt garantiert `403`, das Gate ist fail-closed):
+      1. Am Admin-Account einen **TOTP-Faktor** anlegen und verifizieren
+         ([`docs/mfa-admin.md`](../../docs/mfa-admin.md#enrollment-nutzer-flow)) —
+         der Endpunkt verlangt ein **Web-JWT mit `aal2`** und weist API-Tokens
+         (`w2b_…`) kategorisch ab.
+      2. Die eigene **User-UUID** in `deploy/hetzner/.env` eintragen:
+         `WHO2BE_BILLING_OVERRIDE_OPERATORS=<user-uuid>` (mehrere kommasepariert;
+         leer ⇒ niemand darf schreiben).
+      3. API neu erzeugen und belegen, dass die Variable **im Container** ankommt:
+         ```bash
+         docker compose \
+           -f deploy/hetzner/who2be/docker-compose.yml \
+           -f deploy/hetzner/who2be/docker-compose.cloud.yml \
+           --env-file deploy/hetzner/.env \
+           up -d --force-recreate api
+         docker compose \
+           -f deploy/hetzner/who2be/docker-compose.yml \
+           -f deploy/hetzner/who2be/docker-compose.cloud.yml \
+           --env-file deploy/hetzner/.env \
+           exec api printenv WHO2BE_BILLING_OVERRIDE_OPERATORS
+         # → <user-uuid>   (leere Ausgabe ⇒ Override waere 403)
+         ```
 - [ ] **7 — Deploy-Pipeline (optional, fuer kuenftige Rollouts):** Repository-
       Variables/Secrets (`DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, …) gemaess
       [README §CI/CD](./README.md#cicd-ms-2-c4) hinterlegen. Danach deployt jeder
