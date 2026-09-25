@@ -45,9 +45,28 @@ rotierbar** (Secret-Rotation, RUNBOOK §Secret-Rotation), ein Downgrade sperrt
 also keine laufenden Agenten aus. On-Prem/OSS ist unbegrenzt.
 
 **Zur Speicher-Spalte — was gezaehlt wird und was nicht.** Die Grenze gilt
-fuer die Summe der abgelegten **Blob-Bytes** (`wa_blob.size_bytes`, also
-Datei- und URL-Ingest der WorkArea) und wird an den Ingest-Routen
-durchgesetzt (`services/storage_quota_service.py`).
+fuer die Summe aus abgelegten **Blob-Bytes** (`wa_blob.size_bytes`, also Datei-
+und URL-Ingest der WorkArea) **und Artifact-Text**
+(`wa_artifact.content_bytes` — die UTF-8-Groesse der gespeicherten
+Block-Liste). Ein Limit fuer alles: Artifact-Text zaehlt wie eine Datei, es gibt
+kein zweites Kontingent fuer Artifacts. Durchgesetzt wird die Grenze an allen
+Routen, die Speicher entstehen lassen — den beiden Ingest-Routen und den fuenf
+Artifact-Schreibpfaden (`POST /work-areas/{id}/artifacts`, `POST /artifacts`,
+`POST /wa-artifacts/{id}/append`, `PATCH /wa-artifacts/{id}`,
+`POST /wa-tables/{id}/save-result`), samtlich ueber
+`services/storage_quota_service.py`.
+
+Gezaehlt werden **Bytes, nicht Zeichen**: ein Zeichen belegt in UTF-8 1 bis 4
+Bytes, wer Zeichen zaehlte, gaebe je nach Sprache des Kunden ein- bis viermal so
+viel Platz. Bei `append` zaehlt der **Zuwachs** (die Spalte traegt die
+Gesamtgroesse der Zeile, die Summe waechst um das Angehaengte); ein Loeschen
+oder ein schrumpfender Patch gibt Platz wieder frei. **Nicht** mitgezaehlt wird
+der SQLite-Tabellen-Store je WorkArea (Dateisystem statt Postgres, ADR-0049).
+
+Die Grenze greift ausschliesslich bei NEUEN Schreibzugriffen: Bestand bleibt
+les-, export- und loeschbar, auch oberhalb der Grenze — Loeschen ist der Weg
+zurueck darunter. Abgewiesen wird mit `402` und `reason:
+storage_quota_exceeded`, die Grenze steht in `params`.
 
 **Zur Spalte „Workspaces je Org" — warum es sie gibt.** Die Speichergrenze
 zaehlt je Workspace (`STORAGE_USED_SQL` filtert auf `workspace_id`), jeder
@@ -148,7 +167,7 @@ leitet daraus das Org-Entitlement ab.
 | `mcp_monthly_quota` | Int    | Monats-Kontingent agent-facing MCP-Reads.                        |
 | `mcp_rate_per_min`  | Int    | Rate-Ceiling (req/min) — zwei Fenster, siehe unten.              |
 | `token_quota`       | Int    | Max. Anzahl aktiver API-Tokens je Workspace.                     |
-| `storage_quota_bytes` | Int  | Speichergrenze **je Workspace** in Bytes (Summe `wa_blob.size_bytes`). |
+| `storage_quota_bytes` | Int  | Speichergrenze **je Workspace** in Bytes (Summe `wa_blob.size_bytes` + `wa_artifact.content_bytes`). |
 | `workspace_quota`   | Int    | Max. Anzahl Workspaces je **Organisation** (einziger Key der Konvention, der nicht je Workspace gilt). |
 
 **Zu `mcp_rate_per_min` — zwei Fenster, ein Wert:** Seit #537 deckelt derselbe
