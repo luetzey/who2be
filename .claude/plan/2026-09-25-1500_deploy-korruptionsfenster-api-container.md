@@ -104,6 +104,19 @@ zuverlaessig faengt, sind **dauerhafte** Zweitinstanzen: ein verwaister
 Container aus einem frueheren Bringup, eine von Hand gestartete zweite Instanz,
 ein gar nicht gestarteter api-Container.
 
+Die Messung zaehlt ausschliesslich Container-IDs aus **stdout**; `compose ps`
+schreibt seine Diagnose in eine getrennte Datei. `--quiet` garantiert nur die
+Reinheit von stdout, und Compose meldet im `--env-file`-Pfad regelmaessig nicht
+gesetzte Variablen auf stderr — landeten diese Zeilen in derselben Variable,
+zaehlte jede als „Container": ein gesunder Deploy braeche ab, und bei **null**
+laufenden Containern plus einer Hinweiszeile ergaebe die Zaehlung `1` und der
+Deploy liefe durch. Genau deshalb ist dieser Block **ausfuehrbar** getestet
+(`test_deploy_zaehlt_nur_container_ids_kein_stderr`): der Messblock wird aus
+`deploy.sh` ausgeschnitten und gegen ein `compose ps`-Stub laufen gelassen, das
+IDs auf stdout und Rauschen auf stderr schreibt — fuenf Faelle, kein
+Docker-Daemon noetig. Die Negativ-Probe (stderr wieder in die gezaehlte
+Variable) macht vier davon rot, darunter den Durchwink-Fall.
+
 ### 2. Dateibasierte Sperre (`flock`) — geprueft, verworfen
 
 Gefragt war, ob ein Lockfile auf dem gemeinsamen Volume der robustere zweite
@@ -185,3 +198,10 @@ bash -n deploy/hetzner/scripts/deploy.sh
 Nicht moeglich (kein Docker-Daemon auf dieser Maschine): ein echter
 `deploy.sh`-Lauf, `docker compose up`, oder eine Messung der Container-Anzahl
 waehrend eines Recreate.
+
+**Was seit der ersten Fassung dazugekommen ist:** die Zaehl-Logik selbst laeuft
+jetzt im Test wirklich (Stub statt Daemon), inklusive des Fehlerpfads, wenn
+`compose ps` selbst scheitert. Die frueher hier benannte Grenze „der neue
+`if`-Zweig ist nur `bash -n`-geprueft" gilt damit nicht mehr; dass Compose sich
+gegenueber dem Stub genau so verhaelt (IDs auf stdout, Meldungen auf stderr),
+bleibt Ableitung aus der Compose-Dokumentation zu `--quiet`.

@@ -25,5 +25,7 @@
   The drift tests now cover every Compose file that defines an `api` service
   (previously two of eight — the cloud overlays were unguarded) and reject
   `update_config`/`start-first` alongside `replicas`, `scale` and `--workers`.
-  The operating limit is documented in the Hetzner runbook, including the
-  recovery path when the assertion fires.
+  The count check itself is exercised against a stubbed `compose ps`, so it is
+  verified — not merely asserted in prose — that only container IDs are counted
+  and diagnostic output on stderr is not. The operating limit is documented in
+  the Hetzner runbook, including the recovery path when the assertion fires.

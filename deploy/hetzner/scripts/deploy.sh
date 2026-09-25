@@ -255,11 +255,21 @@ echo "==> Restart stack"
 # Zweitinstanzen: ein verwaister Container aus einem frueheren Bringup, eine von
 # Hand gestartete zweite Instanz, ein nicht gestarteter api-Container.
 echo "==> Betriebsgrenze pruefen: genau ein laufender api-Container"
-if ! API_IDS="$("${COMPOSE[@]}" ps --status running --quiet api 2>&1)"; then
+# stderr NICHT in dieselbe Variable wie die gezaehlten IDs: `--quiet` garantiert
+# nur, dass STDOUT ausschliesslich Container-IDs enthaelt. Compose schreibt
+# Hinweise (etwa zu nicht gesetzten Variablen) auf stderr — landeten sie in
+# $API_IDS, wuerde jede solche Zeile unten als "Container" mitgezaehlt und die
+# Pruefung meldete etwas anderes, als sie messen soll. Also getrennt: stdout wird
+# gezaehlt, stderr dient nur der Diagnose im Fehlerpfad (der Exit-Code des
+# Aufrufs unterscheidet weiterhin "Aufruf fehlgeschlagen" von "0 Container").
+API_PS_ERR="$(mktemp)"
+trap 'rm -f "$API_PS_ERR"' EXIT
+if ! API_IDS="$("${COMPOSE[@]}" ps --status running --quiet api 2>"$API_PS_ERR")"; then
     echo "FEHLER: 'compose ps api' ist selbst fehlgeschlagen — die Zahl der" >&2
     echo "laufenden api-Container ist damit UNBEKANNT, nicht 0. Abbruch statt" >&2
     echo "Durchwinken. Ausgabe:" >&2
-    printf '%s\n' "$API_IDS" >&2
+    cat "$API_PS_ERR" >&2
+    if [ -n "$API_IDS" ]; then printf '%s\n' "$API_IDS" >&2; fi
     echo "Siehe RUNBOOK 'Betriebsgrenze: genau EIN API-Container'." >&2
     exit 3
 fi

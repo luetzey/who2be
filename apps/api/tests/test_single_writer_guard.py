@@ -34,6 +34,7 @@ niemanden auf.
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -260,3 +261,86 @@ def test_deploy_skript_skaliert_nicht() -> None:
     """Kein `--scale` im Deploy-Pfad — sonst waere die Messung sinnlos."""
     code = _deploy_script_code()
     assert "--scale" not in code, code
+
+
+def _extract_container_count_check() -> str:
+    """Den Messblock aus `deploy.sh` ausschneiden, damit er testbar laeuft.
+
+    Von `echo "==> Betriebsgrenze pruefen` bis zum Ende des zweiten `fi` — das
+    ist genau der Block, der zaehlt und abbricht. Schneidet die Struktur
+    kuenftig anders, schlaegt die Extraktion fehl statt lautlos das Falsche zu
+    pruefen.
+    """
+    lines = _DEPLOY_SCRIPT.read_text(encoding="utf-8").splitlines()
+    start = next(
+        i for i, line in enumerate(lines) if line.startswith('echo "==> Betriebsgrenze pruefen')
+    )
+    seen_fi = 0
+    for end, line in enumerate(lines[start:], start=start):
+        if line == "fi":
+            seen_fi += 1
+            if seen_fi == 2:
+                return "\n".join(lines[start : end + 1])
+    raise AssertionError("Messblock in deploy.sh nicht auffindbar (Struktur geaendert?)")
+
+
+@pytest.mark.parametrize(
+    ("running_containers", "stderr_lines", "expected_exit"),
+    [
+        pytest.param(1, 0, 0, id="ein-container-ohne-rauschen"),
+        pytest.param(1, 1, 0, id="ein-container-mit-stderr-warnung"),
+        pytest.param(1, 3, 0, id="ein-container-mit-viel-stderr"),
+        pytest.param(0, 1, 3, id="kein-container-mit-stderr-warnung"),
+        pytest.param(2, 1, 3, id="zwei-container-mit-stderr-warnung"),
+    ],
+)
+def test_deploy_zaehlt_nur_container_ids_kein_stderr(
+    tmp_path: Path,
+    running_containers: int,
+    stderr_lines: int,
+    expected_exit: int,
+) -> None:
+    """Die Messung zaehlt Container-IDs — Compose-Meldungen auf stderr nicht.
+
+    `--quiet` garantiert nur, dass STDOUT reine IDs enthaelt. Landete stderr in
+    derselben Variable, zaehlte jede Hinweiszeile als Container: ein gesunder
+    Deploy braeche ab, und — gefaehrlicher — bei NULL laufenden Containern plus
+    einer Hinweiszeile ergaebe die Zaehlung `1` und der Deploy liefe durch,
+    obwohl keine API laeuft. Compose schreibt solche Hinweise regelmaessig
+    (nicht gesetzte Variablen im `--env-file`-Pfad), deshalb wird das hier
+    ausfuehrbar geprueft und nicht nur als Textform behauptet.
+
+    Kein Docker-Daemon noetig: `docker compose` wird durch ein Stub-Skript
+    ersetzt, das Rauschen auf stderr und IDs auf stdout schreibt.
+    """
+    stub = tmp_path / "compose-stub"
+    warn = 'WARN[0000] The "SUPABASE_URL" variable is not set. Defaulting to a blank string.'
+    stub.write_text(
+        "#!/usr/bin/env bash\n"
+        + "".join(f"echo {warn!r} >&2\n" for _ in range(stderr_lines))
+        + "".join(f'echo "9f1c0aa7b3de{i}"\n' for i in range(running_containers)),
+        encoding="utf-8",
+    )
+    stub.chmod(0o755)
+
+    script = tmp_path / "check.sh"
+    script.write_text(
+        f'set -uo pipefail\nCOMPOSE=("{stub}")\n{_extract_container_count_check()}\n',
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(  # noqa: S603 - festes Kommando, Pfade aus tmp_path
+        ["bash", str(script)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == expected_exit, (
+        f"erwartet Exit {expected_exit}, war {result.returncode}\n"
+        f"stdout: {result.stdout}\nstderr: {result.stderr}"
+    )
+    if expected_exit != 0:
+        assert f"{running_containers} laufende api-Container" in result.stderr, (
+            "Die Fehlermeldung nennt nicht die tatsaechliche Container-Anzahl — "
+            f"gezaehlt wurde offenbar etwas anderes als IDs:\n{result.stderr}"
+        )
