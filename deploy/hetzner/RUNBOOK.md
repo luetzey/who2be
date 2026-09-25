@@ -7,13 +7,13 @@ CVE-Triage und Secret-Rotation. Setup-Anleitungen liegen in
 
 Aktive Sektionen:
 
-- [Provisioning (Track S/C1)](#provisioning-track-sc1) — leere Hetzner-Box → laufender Stack (Box/Docker/Firewall/deploy-User/DNS/TLS)
+- [Provisioning (Track S/C1)](#provisioning-track-sc1) — leere Hetzner-Box → laufender Stack (Box/Docker/LUKS/Firewall/deploy-User/DNS/TLS)
 - [Erste Inbetriebnahme der Cloud-Edition](#erste-inbetriebnahme-der-cloud-edition) — Bring-up-Checkliste (Service-Key, Mailer, Deploy-Pipeline)
 - [Notfallpfad: Registry nicht erreichbar](#notfallpfad-registry-nicht-erreichbar) — Cloud-`api`/`migrate` von Hand bauen, wenn GHCR beim Deploy ausfaellt
 - [GoTrue-Version anheben](#gotrue-version-anheben-auth-stack-update) — Auth-Image-Update inkl. Schema-Migrationen + Rollback-Weg (Issue #499)
 - [CVE-Response](#cve-response) — was tun, wenn der CI-`audit`-Job rot wird
 - [Secret-Rotation](#secret-rotation) — pro Secret: Trigger / Schritte / Verifikation
-- [Verschluesselung at-Rest](#verschluesselung-at-rest-postgres-volume) — LUKS/verschl. Hetzner-Volume + Verifikation (Befund P4/S2)
+- [Verschluesselung at-Rest](#verschluesselung-at-rest-postgres-volume) — LUKS auf dem Host (Hetzner verschluesselt **nicht** serverseitig) + Verifikation (Befund P4/S2)
 - [Standort & Auftragsverarbeiter](#standort--auftragsverarbeiter) — RZ-Standort + Sub-Processor-Liste (DSGVO/AVV)
 - [Backup & Restore](#backup--restore) — verschluesselter pg_dump + restic-Offsite (C5a/C5b)
 - [Launch-Modus: Public-Signup abschalten](#launch-modus-public-signup-abschalten) — WHO2BE_LAUNCH_MODE + GOTRUE_DISABLE_SIGNUP (Issue #429)
@@ -41,10 +41,11 @@ Cloud-Abnahme in [`docs/cloud-prod-smoke.md`](../../docs/cloud-prod-smoke.md).
   Protokoll-Tabelle unter [Standort & Auftragsverarbeiter](#standort--auftragsverarbeiter).
 - **OS:** Ubuntu 24.04 LTS. Beim Anlegen den eigenen **SSH-Public-Key**
   hinterlegen (kein Passwort-Login).
-- **At-Rest-Verschluesselung** des Daten-Volumes ist Pflicht und wird beim
-  Provisioning entschieden — Variante + Verifikation siehe
-  [Verschluesselung at-Rest](#verschluesselung-at-rest-postgres-volume). Bei
-  Variante B (LUKS) **vor** dem ersten `docker compose up` einrichten.
+- **At-Rest-Verschluesselung** des Daten-Volumes ist Pflicht. Hetzner
+  verschluesselt **nicht** fuer dich — das ist laut Hetzners eigenen TOMs
+  Kundenpflicht. Sie wird deshalb selbst per LUKS eingerichtet, und zwar in
+  [Schritt 3b](#3b--at-rest-verschluesselung-luks-vor-dem-ersten-bring-up)
+  **vor** dem ersten `docker compose up`.
 
 ### 2 — deploy-User + Grund-Hardening
 
@@ -72,6 +73,20 @@ usermod -aG docker deploy
 sudo -iu deploy docker compose version   # → Docker Compose version v2.x
 ```
 
+### 3b — At-Rest-Verschluesselung (LUKS), VOR dem ersten Bring-up
+
+> ⛔ **Jetzt, nicht spaeter.** Das Daten-Volume wird als LUKS-Container
+> angelegt, **bevor** Postgres das erste Mal startet. Danach ist es nur noch
+> mit Downtime und Restore-Risiko nachholbar, weil die Daten dafuer umziehen
+> muessen. Hetzner uebernimmt das **nicht** — At-Rest-Verschluesselung ist
+> laut Hetzners eigenen TOMs Kundenpflicht (woertliches Zitat + Quelle in
+> [Verschluesselung at-Rest](#verschluesselung-at-rest-postgres-volume)).
+
+Kommandos, Keyfile-Verwahrung und der reproduzierbare Verifikationsschritt
+stehen in [Verschluesselung at-Rest](#verschluesselung-at-rest-postgres-volume)
+(Variante B). Das Ergebnis gehoert in die Protokoll-Tabelle desselben
+Abschnitts. Erst danach weiter mit Schritt 4.
+
 ### 4 — Firewall (Ports 80/443, SSH 22)
 
 Caddy braucht **80** (ACME-HTTP-Challenge + Redirect) und **443** (HTTPS)
@@ -79,16 +94,33 @@ eingehend; **22** fuer SSH/Deploy. Alles andere bleibt zu — die API-, Web-,
 Redis- und DB-Container haben bewusst **kein** `ports:` und sind nur im internen
 Docker-Netz erreichbar.
 
-```bash
-# Variante a) UFW auf dem Host
-ufw default deny incoming && ufw default allow outgoing
-ufw allow 22/tcp && ufw allow 80/tcp && ufw allow 443/tcp
-ufw enable && ufw status verbose
-```
+**Die wirksame Ebene ist die Hetzner-Cloud-Firewall, nicht `ufw`.** Grund:
+Docker haengt seine Regeln in die `nat`-Tabelle und leitet Pakete an
+veroeffentlichte Container-Ports damit **vor** den Ketten `INPUT`/`OUTPUT`
+um, die `ufw` benutzt — die `ufw`-Regel greift also gar nicht mehr. Docker
+dokumentiert das woertlich:
 
-> Bei Hetzner Cloud zusaetzlich/alternativ eine **Cloud-Firewall** in der
-> Console anlegen (Inbound nur 22/80/443) und der Box zuweisen — sie wirkt vor
-> der VM und ist die robustere Schranke.
+> When you publish a container's ports using Docker, traffic to and from that
+> container gets diverted before it goes through the ufw firewall settings.
+> […] Packets are routed before the firewall rules can be applied, effectively
+> ignoring your firewall configuration.
+
+— Docker Docs, *Packet filtering and firewalls*, Abschnitt „Docker and ufw",
+<https://docs.docker.com/engine/network/packet-filtering-firewalls/>, abgerufen
+**2026-09-25**.
+
+1. **Pflicht — Hetzner-Cloud-Firewall** in der Console anlegen (Inbound nur
+   22/80/443) und der Box zuweisen. Sie filtert **vor** der VM, kann von Docker
+   nicht umgangen werden und ueberlebt einen Konfigurationsfehler auf dem Host.
+2. **Ergaenzend — `ufw` auf dem Host.** Schuetzt Dienste, die direkt auf dem
+   Host lauschen (SSH), **nicht** aber veroeffentlichte Container-Ports. Kein
+   Ersatz fuer Punkt 1:
+
+   ```bash
+   ufw default deny incoming && ufw default allow outgoing
+   ufw allow 22/tcp && ufw allow 80/tcp && ufw allow 443/tcp
+   ufw enable && ufw status verbose
+   ```
 
 ### 5 — DNS-A-Records (manuell, DNS-Anbieter)
 
@@ -174,8 +206,10 @@ Kompakte Bring-up-Checkliste fuer die **erste** Cloud-Inbetriebnahme nach dem
 **Service-Key**, **Mailer** und **Deploy-Pipeline** — mit dem Compose-Bring-up
 und der Abnahme. Reihenfolge einhalten:
 
-- [ ] **0 — Provisioning steht:** Box, Docker, Firewall (80/443/22), deploy-User,
-      DNS-A-Records aufgeloest, At-Rest-Verschluesselung verifiziert
+- [ ] **0 — Provisioning steht:** Box, Docker, **LUKS-Verschluesselung des
+      Daten-Volumes verifiziert** (`cryptsetup status` = `is active`, Schritt 3b
+      — muss vor dem ersten Bring-up passiert sein), Cloud-Firewall (80/443/22),
+      deploy-User, DNS-A-Records aufgeloest
       ([Provisioning](#provisioning-track-sc1)).
 - [ ] **1 — Secrets in `deploy/hetzner/.env` (Mode 600):** `DOMAIN`, `ACME_EMAIL`,
       `JWT_SECRET` (≥ 32 Zeichen, **identisch** zu `supabase/.env`), `DATABASE_URL`,
@@ -694,38 +728,45 @@ preis. Anwendungs-/Transport-Verschluesselung (TLS via Caddy) und Backup-
 Verschluesselung (GPG + restic, siehe unten) sind **separat** und ersetzen das
 nicht.
 
-Es gibt zwei betrieblich uebliche Wege auf Hetzner — **genau einen** waehlen und
-die Wahl in der Protokoll-Tabelle unten festhalten:
+Es gibt **genau einen** gueltigen Weg: selbst verwaltetes LUKS auf dem Host
+(unten „Variante B"). Die frueher hier beschriebene „Variante A" (Hetzner
+verschluesselt das Volume fuer dich) beruhte auf einer falschen Annahme und ist
+**untauglich** — Begruendung direkt darunter. Die Einrichtung in der
+Protokoll-Tabelle am Ende des Abschnitts festhalten.
 
-### Variante A — verschluesseltes Hetzner Cloud Volume / Storage
+### Variante A — verschluesseltes Hetzner Cloud Volume / Storage · ⛔ NICHT VERWENDEN
 
-Hetzner Cloud Volumes werden serverseitig at-Rest verschluesselt (LUKS auf der
-Plattform-Ebene). Wenn das `db-data`-Volume auf einem Cloud-Volume liegt:
+> ⛔ **Diese Variante gibt es nicht.** Hetzner verschluesselt Cloud Volumes
+> **nicht** serverseitig at-Rest. Frueher stand hier das Gegenteil; die Aussage
+> war falsch.
 
-1. Bestaetigen, dass das Datenverzeichnis auf dem Cloud-Volume-Mount liegt
-   (nicht auf der lokalen Boot-Disk):
+Hetzner benennt das in den eigenen Technisch-organisatorischen Massnahmen
+(TOM) woertlich als Kundenpflicht:
 
-   ```bash
-   # Wo liegt der Docker-Volume-Mountpoint physisch?
-   docker volume inspect who2be_db-data --format '{{ .Mountpoint }}'
-   # Den Pfad gegen die Mounts halten — muss auf dem Cloud-Volume-Device sitzen:
-   findmnt -no SOURCE,TARGET --target "$(docker volume inspect who2be_db-data --format '{{ .Mountpoint }}')"
-   lsblk -o NAME,FSTYPE,MOUNTPOINT,SIZE
-   ```
+> | Encryption of Data (at rest) | Client's responsibility |
 
-2. **Nachweis** ist die Hetzner-Console/-API-Eigenschaft des Volumes
-   (Encryption „aktiv") plus ein Screenshot/Export in der Betreiber-Doku.
-   `<PLATZHALTER: Volume-ID + Hetzner-Console-Beleg>`.
+— Hetzner Docs, *Technical and Organizational Measures*, Abschnitt
+„Confidentiality" (ID `GE-68A66`, „Last change on 2025-03-31"),
+<https://docs.hetzner.com/general/security-and-identify/technical-and-organizational-measures/>,
+abgerufen **2026-09-25**. Dieselbe Seite stellt Cloud- und Dedicated-Server
+ausdruecklich in die Kundenverantwortung („You/the Client are completely
+responsible for the management, maintenance and security of the server"); die
+einzige serverseitige Ausnahme in der Tabelle betrifft **Backups bei Managed
+Servers** — nicht Cloud Volumes.
 
-> Hinweis: Bei reiner Plattform-Verschluesselung ist auf OS-Ebene **kein**
-> `crypt`-Device sichtbar (`lsblk` zeigt das Volume als normales `ext4`/`xfs`),
-> weil die Verschluesselung unterhalb der VM passiert. Der Beleg kommt dann aus
-> der Hetzner-Console, nicht aus `cryptsetup`.
+Praktische Folge: Es gibt **keine** Encryption-Eigenschaft eines Cloud Volumes,
+die man in der Console als Nachweis abhaken koennte. Wer diesen Weg waehlt,
+faehrt die Datenbank unverschluesselt und haelt sie faelschlich fuer geschuetzt.
+Der Abschnitt bleibt nur als Warnung stehen, weil aeltere Staende und
+Querverweise die Variante noch kennen.
 
-### Variante B — LUKS-Full-Disk-Encryption auf dem Host (selbst verwaltet)
+⇒ Weiter mit **Variante B**.
 
-Wenn das Volume auf einem dedizierten/Root-Server liegt, wird LUKS selbst
-eingerichtet (einmalig bei Provisioning, **vor** dem ersten `docker compose up`):
+### Variante B — LUKS-Full-Disk-Encryption auf dem Host (selbst verwaltet) · der gueltige Weg
+
+LUKS wird selbst eingerichtet — einmalig beim Provisioning, **vor** dem ersten
+`docker compose up`. Danach ist es nur noch mit Downtime und Restore-Risiko
+nachholbar, weil die Daten dafuer umziehen muessen:
 
 1. Block-Device als LUKS-Container initialisieren (Beispiel-Device — am realen
    Setup anpassen, **keine** Passphrase ins Repo):
@@ -751,25 +792,26 @@ Nach jedem (Re-)Provisioning bzw. Host-Wechsel ausfuehren und das Ergebnis in de
 Tabelle unten protokollieren:
 
 ```bash
-# Variante B (LUKS sichtbar auf OS-Ebene): Datentyp muss "crypto_LUKS" sein,
+# LUKS muss auf OS-Ebene sichtbar sein: Datentyp "crypto_LUKS",
 # das Mapper-Device aktiv.
 lsblk -o NAME,FSTYPE,MOUNTPOINT,SIZE
 sudo cryptsetup status cryptdata     # erwartet: "is active", cipher/keysize sichtbar
 
-# Variante A (Plattform-Volume): Mount auf dem Cloud-Volume-Device nachweisen
-findmnt --target /opt/who2be/data    # bzw. der reale Daten-Mount
-# Encryption-Beleg = Hetzner-Console-Eigenschaft des Volumes (siehe oben).
+# Und der Daten-Mount muss wirklich auf dem Mapper-Device liegen:
+findmnt --target /opt/who2be/data    # SOURCE → /dev/mapper/cryptdata
 ```
 
-**Akzeptanzkriterium:** Bei Variante B zeigt `cryptsetup status cryptdata`
-`is active` und `lsblk` `crypto_LUKS` fuer das Daten-Device; bei Variante A liegt
-der Daten-Mount nachweislich auf dem verschluesselten Hetzner-Volume + Console-
-Beleg. **Keine** Passphrase/kein Keyfile-Inhalt wird je ins Repo, in Logs oder in
+**Akzeptanzkriterium:** `cryptsetup status cryptdata` zeigt `is active`, `lsblk`
+zeigt `crypto_LUKS` fuer das Daten-Device, und `findmnt` weist den Daten-Mount
+auf `/dev/mapper/cryptdata` nach. Zeigt `lsblk` fuer das Daten-Device ein nacktes
+`ext4`/`xfs` ohne `crypto_LUKS` darunter, liegt die Datenbank **unverschluesselt**
+— unabhaengig davon, was die Hetzner-Console anzeigt (siehe Variante A oben).
+**Keine** Passphrase/kein Keyfile-Inhalt wird je ins Repo, in Logs oder in
 Klartext-Backups geschrieben.
 
-| Datum | Variante (A/B) | Host/Volume | Verifikations-Output abgelegt | Ausgefuehrt von |
-|---|---|---|---|---|
-| — | — | — | — | — |
+| Datum | Host/Volume | Verifikations-Output abgelegt | Ausgefuehrt von |
+|---|---|---|---|
+| — | — | — | — |
 
 ---
 

@@ -71,7 +71,8 @@ Kunde dich real Geld kosten kann.
 
 ### Fehlt — Owner-Schritte (kann nur der Owner)
 
-1. Hetzner-Box bestellen, DNS setzen, At-Rest-Verschlüsselung wählen.
+1. Hetzner-Box bestellen, DNS setzen, LUKS-Verschlüsselung des Daten-Volumes
+   einrichten (vor dem ersten Start).
 2. Repo-Variablen `DEPLOY_HOST` / `DEPLOY_USER` / `DEPLOY_PROJECT_DIR` und
    das Secret `DEPLOY_SSH_KEY` setzen. **Solange `DEPLOY_HOST` fehlt,
    überspringt sich der Deploy-Job still** — die `if:`-Bedingung des Jobs
@@ -125,15 +126,19 @@ Hier die Reihenfolge mit den Entscheidungen, die *dabei* fallen.
 
 ### Schritt 2 — At-Rest-Verschlüsselung (VOR dem ersten `docker compose up`)
 
-Zwei Varianten, beide im
+Es gibt nur **einen** gültigen Weg, beschrieben im
 [RUNBOOK §Verschlüsselung at-Rest](../deploy/hetzner/RUNBOOK.md#verschluesselung-at-rest-postgres-volume):
+**selbst verwaltetes LUKS auf dem Host.**
 
-- **Variante A:** verschlüsseltes Hetzner-Cloud-Volume (Plattform-LUKS).
-  Einfach, der Nachweis ist eine Eigenschaft in der Hetzner-Konsole.
-- **Variante B:** selbst verwaltetes LUKS auf dem Host. Mehr Kontrolle,
-  aber: **Der Passphrase-Prompt beim Boot bedeutet, dass ein Neustart
-  manuelle Arbeit ist.** Wer nachts nicht aufstehen will, nimmt A oder legt
-  sich ein Key-File plus dokumentiertes Risiko zurecht.
+Die früher hier genannte „Variante A" (verschlüsseltes Hetzner-Cloud-Volume,
+Plattform-LUKS) **existiert nicht** — Hetzner verschlüsselt Cloud Volumes nicht
+serverseitig, die eigenen TOMs führen „Encryption of Data (at rest)" als
+*Client's responsibility*. Es gibt also auch keine Console-Eigenschaft, die man
+als Nachweis abhaken könnte.
+
+Praktisch heißt das: Der Boot braucht ein **Key-File** (Mode 600, nicht im Repo,
+nicht im Klartext-Backup) in `/etc/crypttab`, sonst ist jeder Neustart manuelle
+Arbeit am Passphrase-Prompt. Verwahrung des Key-Files dokumentieren.
 
 Nachträglich lässt sich das nur mit Downtime und Datenumzug nachholen —
 deshalb jetzt.
@@ -152,9 +157,13 @@ sudo systemctl reload ssh
 sudo apt-get install -y unattended-upgrades fail2ban
 ```
 
-**Zusätzlich die Hetzner-Cloud-Firewall** (nicht nur UFW auf dem Host)
-aktivieren: sie filtert, bevor Pakete die VM erreichen, und überlebt einen
-Konfigurationsfehler im Host.
+**Die Hetzner-Cloud-Firewall ist Pflicht, nicht Kür** — und nicht durch UFW
+ersetzbar. Docker leitet Pakete an veröffentlichte Container-Ports in der
+`nat`-Tabelle um, *bevor* sie die `INPUT`-Kette erreichen, die UFW benutzt; die
+UFW-Regel greift dann gar nicht mehr (Docker Docs, „Docker and ufw"). Die
+Cloud-Firewall filtert dagegen vor der VM und überlebt einen
+Konfigurationsfehler im Host. UFW bleibt sinnvoll für Dienste, die direkt auf
+dem Host lauschen (SSH) — als zweite Schicht, nicht als die erste.
 
 ### Schritt 4 — DNS
 
