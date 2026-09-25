@@ -118,7 +118,13 @@ async def get_persona(persona_id: UUID, ctx: Ctx, service: Service) -> PersonaRe
     return await service.get(ctx, persona_id)
 
 
-@router.post("/{persona_id}/duplicate", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{persona_id}/duplicate",
+    status_code=status.HTTP_201_CREATED,
+    # Dasselbe Gate wie `POST /personas`: die Kopie ist eine echte neue
+    # persona-Zeile und zaehlt in `entity_quota_service._COUNT_QUERY` mit.
+    dependencies=[Depends(enforce_entity_quota)],
+)
 @limiter.limit(write_limit)
 async def duplicate_persona(
     request: Request,

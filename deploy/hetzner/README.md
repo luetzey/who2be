@@ -398,9 +398,11 @@ Build lokal aus dem ausgecheckten SHA).
 ## Datenschutz / Compliance (At-Rest + Standort)
 
 - **Verschluesselung at-Rest:** Das Postgres-Volume (`db-data`) muss at-Rest
-  verschluesselt liegen — entweder ueber ein verschluesseltes Hetzner-Volume
-  (Plattform-LUKS) oder selbst verwaltetes LUKS auf dem Host. Einrichtung +
-  reproduzierbarer Verifikationsschritt (`lsblk` / `cryptsetup status`) und die
+  verschluesselt liegen — **selbst verwaltetes LUKS auf dem Host**. Hetzner
+  verschluesselt Cloud Volumes **nicht** serverseitig; das ist laut Hetzners
+  eigenen TOMs Kundenpflicht (woertliches Zitat + Quelle im RUNBOOK).
+  Einrichtung **vor** dem ersten `docker compose up`, reproduzierbarer
+  Verifikationsschritt (`lsblk` / `cryptsetup status`) und die
   Protokoll-Tabelle stehen im RUNBOOK unter
   [Verschluesselung at-Rest](./RUNBOOK.md#verschluesselung-at-rest-postgres-volume).
   Adressiert die Audit-Befunde P4/S2. **Keine** Schluessel/Passphrasen ins Repo.

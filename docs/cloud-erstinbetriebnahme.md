@@ -108,8 +108,8 @@ auf sie.
       nicht aufgeloeste Domain laesst die ACME-Challenge scheitern, und
       wiederholte Fehlversuche laufen in Let's-Encrypt-Ratelimits.
 
-- [ ] **3 · Hetzner-Box bestellen — und die At-Rest-Verschluesselung JETZT
-      entscheiden.**
+- [ ] **3 · Hetzner-Box bestellen — und die At-Rest-Verschluesselung (LUKS)
+      JETZT einplanen.**
       *Wer: nur du · Dauer: 15 min bestellen, 1–2 h Grundeinrichtung ·
       Danach anders: du hast eine IP fuer Punkt 2.*
       EU/EWR-Region, bei Datenresidenz-Erwartung eine DE-Region (`nbg1`/`fsn1`).
@@ -118,10 +118,13 @@ auf sie.
       2026-09-25. Das RUNBOOK nennt an dieser Stelle noch CPX31/CPX41 als
       Beispiel; fuer den Testlauf gilt CX32.
       **Der Punkt, der hier wirklich zaehlt:** die Verschluesselung des
-      Daten-Volumes wird **beim Provisioning** entschieden, nicht spaeter.
-      Nachtraeglich ist es ein Daten-Umzug, kein Schalter. Varianten und
-      Verifikation: RUNBOOK „Verschluesselung at-Rest", einzurichten **vor**
-      dem ersten `docker compose up`.
+      Daten-Volumes wird **beim Provisioning** eingerichtet, nicht spaeter.
+      Nachtraeglich ist es ein Daten-Umzug, kein Schalter. Es gibt dabei
+      **nichts zu entscheiden**: Hetzner verschluesselt Volumes **nicht**
+      serverseitig (laut eigener TOM Kundenpflicht), also ist selbst
+      verwaltetes **LUKS** der einzige gueltige Weg. Kommandos und
+      Verifikation: RUNBOOK-Abschnitt Verschluesselung at-Rest, einzurichten
+      **vor** dem ersten `docker compose up`.
 
 - [ ] **4 · OAuth-Apps bei Google und GitHub anlegen.**
       *Wer: nur du · Dauer: 20–30 min je Provider, Google-Consent-Screen ggf.

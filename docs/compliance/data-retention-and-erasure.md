@@ -97,8 +97,13 @@ Backups (siehe `deploy/hetzner/scripts/backup.sh`,
 
 | Pfad | Verfahren | Retention |
 |---|---|---|
-| Lokal (C5a) | `pg_dump -Fc \| gpg --encrypt` | Dumps aelter als **7 Tage** geloescht |
-| Offsite (C5b) | `restic` via SFTP (Hetzner Storage-Box) | `keep-daily 7 / keep-weekly 4 / keep-monthly 6` + Prune |
+| Lokal (C5a) — Postgres | `pg_dump -Fc \| gpg --encrypt` | Dumps aelter als **7 Tage** geloescht |
+| Lokal (C5a) — Objekt-Store | `aws s3 sync --delete` des Buckets (ADR-0048) | genau **ein** Spiegel, in place ueberschrieben |
+| Lokal (C5a) — Tabellen-Store | `VACUUM INTO`-Snapshot je Area-SQLite (ADR-0049) | genau **ein** Snapshot je Area |
+| Offsite (C5b) | `restic` via SFTP (Hetzner Storage-Box), alle drei in einem Snapshot | `keep-daily 7 / keep-weekly 4 / keep-monthly 6` + Prune |
+
+Das `--delete` im Objekt-Sync und die Bereinigung verwaister Area-Snapshots
+sorgen dafuer, dass geloeschte Daten nicht ueber den lokalen Spiegel weiterleben.
 
 **Problem:** Ein zwischen Loeschung und Backup-Ablauf gezogenes Backup enthaelt
 noch die geloeschten Daten. Eine selektive Loeschung **innerhalb** verschluesselter,

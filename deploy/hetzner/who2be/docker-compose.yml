@@ -391,19 +391,47 @@ services:
       RESTIC_SSH_KEY: /secrets/storage_box_ed25519
       # Dead-Man's-Switch (#541). Leer = aus, Verhalten wie bisher.
       BACKUP_HEARTBEAT_URL: ${BACKUP_HEARTBEAT_URL:-}
+      # Objekt- und Tabellen-Store gehoeren in denselben Lauf (W8/M3): ohne sie
+      # ergibt ein Restore eine DB mit toten Blob-Referenzen und leeren
+      # Tabellen. Beide Stufen sind PFLICHT — abwaehlbar nur ausdruecklich per
+      # BACKUP_BLOBS=off / BACKUP_TABLESTORE=off (On-Prem ohne diese Stores).
+      BACKUP_BLOBS: ${BACKUP_BLOBS:-on}
+      BACKUP_TABLESTORE: ${BACKUP_TABLESTORE:-on}
+      # Identisch zum api-Service oben — derselbe Bucket, dieselben Credentials.
+      WHO2BE_BLOBSTORE_ENDPOINT: seaweedfs:8333
+      WHO2BE_BLOBSTORE_ACCESS_KEY: ${SEAWEEDFS_S3_ACCESS_KEY:-who2be}
+      WHO2BE_BLOBSTORE_SECRET_KEY: ${SEAWEEDFS_S3_SECRET_KEY}
+      WHO2BE_BLOBSTORE_BUCKET: ${WHO2BE_BLOBSTORE_BUCKET:-who2be-blobs}
+      WHO2BE_BLOBSTORE_SECURE: "false"
+      WHO2BE_TABLESTORE_DIR: /data/tablestore
     volumes:
       - backups:/var/backups/who2be
+      # BEWUSST NICHT `:ro`. Eine SQLite-Datei im WAL-Modus laesst sich nur
+      # lesen, wenn der WAL-Index (`<db>-shm`) gemappt werden kann — auf einem
+      # read-only Mount scheitert genau das, und das Backup koennte den
+      # Tabellen-Store gar nicht erst oeffnen. Der Schreibschutz sitzt statt
+      # dessen eine Ebene tiefer: backup.sh oeffnet jede Datei als
+      # `file:<pfad>?mode=ro`, SQLite lehnt damit jeden Schreibzugriff auf die
+      # Datenbank ab. Die WAL-Seitendateien, die beim Oeffnen entstehen, legt
+      # backup.sh unter der Kennung des Datei-Eigentuemers an (su-exec) und
+      # prueft das nach — sonst koennte die API die Area danach nicht mehr
+      # schreiben (Begruendung in backup.sh, Stufe 3).
+      - tablestore-data:/data/tablestore
       - ${BACKUP_GPG_HOME:-/opt/who2be/secrets/gpg}:/root/.gnupg:ro
       - ${BACKUP_SSH_HOME:-/opt/who2be/secrets/ssh}:/secrets:ro
-    networks: [supabase-net]
+    # app-net zusaetzlich zu supabase-net: der Objekt-Store (seaweedfs) haengt
+    # dort. Ohne dieses Netz kann der Backup-Container den Bucket nicht sehen.
+    networks: [supabase-net, app-net]
     profiles: ["backup"]
     restart: "no"
     <<: *hardening
-    # Groesster One-Shot: restic haelt beim Sichern den Repository-Index und
-    # Pack-Puffer im Speicher, deutlich mehr als `pg_dump | gpg` (die
-    # streamen). Laeuft nachts um 03:15 allein, konkurriert also nicht mit
-    # einer Nutzungsspitze — der Deckel schuetzt hier vor dem Fall, dass ein
-    # wachsendes Repo den Index unbemerkt aufblaeht.
+    # Groesster One-Shot, und seit W8/M3 (#645) in drei Stufen: `pg_dump | gpg`
+    # streamt, `aws s3 sync` (Objekt-Store) haelt Objektlisten und
+    # Multipart-Puffer (~8 MiB je paralleler Teil), und restic haelt zum
+    # Schluss Repository-Index und Pack-Puffer. Letzteres bleibt der groesste
+    # Posten. Laeuft nachts um 03:15 allein, konkurriert also nicht mit einer
+    # Nutzungsspitze — der Deckel schuetzt vor dem Fall, dass ein wachsendes
+    # Repo oder ein wachsender Bucket den Bedarf unbemerkt aufblaeht.
     mem_limit: 1g
 
 networks:
