@@ -81,6 +81,25 @@ def _content_bytes(artifact_id: str) -> int:
     )
 
 
+def _tatsaechliche_bytes(artifact_id: str) -> int:
+    """Die WIRKLICHE Groesse der Zeile, aus dem Content selbst berechnet.
+
+    Unabhaengige Referenz gegen `content_bytes`: nur so kann ein Test merken,
+    dass die Spalte etwas ANDERES traegt als die Gesamtgroesse (z. B. bloss den
+    letzten Zuwachs). Ein Vergleich `content_bytes` gegen Differenzen von
+    `content_bytes` kann das nicht — er ist wahr, was auch drinsteht.
+
+    Teuer (detoastet die Zeile) und deshalb bewusst nur im Test: genau aus
+    diesem Grund fuehrt die Produktion die materialisierte Spalte.
+    """
+    return int(
+        db_fetchval(
+            "SELECT octet_length(content::text) FROM wa_artifact WHERE id = $1::uuid", artifact_id
+        )
+        or 0
+    )
+
+
 def _used(workspace_id: UUID) -> int:
     """Der Verbrauch, wie das Gate ihn sieht — dieselbe Konstante, echtes SQL."""
     return int(db_fetchval(STORAGE_USED_SQL, workspace_id) or 0)
@@ -110,32 +129,56 @@ def test_content_bytes_traegt_gesamtgroesse_und_append_zaehlt_zuwachs(
             # als der rohe Markdown. Genau deshalb zaehlt die Quota die
             # gespeicherte Groesse und nicht `len(content_md)`.
             assert after_create > len("Erster Absatz.")
+            assert after_create == _tatsaechliche_bytes(artifact_id)
             assert _used(ws) == after_create, (
                 "Die Verbrauchssumme muss den Artifact-Text enthalten — ohne einen einzigen Blob."
             )
 
-            appended = client.post(
-                f"{prefix}/wa-artifacts/{artifact_id}/append",
-                json={"content_md": "Angehaengter Absatz."},
-                headers=auth,
-            )
-            assert appended.status_code == 200, appended.text
-            after_append = _content_bytes(artifact_id)
-            zuwachs = after_append - after_create
-            assert zuwachs > 0
-            # AK „append zaehlt den Zuwachs": die Spalte traegt die neue
-            # Gesamtgroesse, die Summe ist genau um den Zuwachs gestiegen —
-            # nicht um die Gesamtgroesse (das waere Doppelzaehlung).
-            assert _used(ws) == after_create + zuwachs
-            assert _used(ws) == after_append
+            # ZWEI Appends, jeder deutlich groesser als der Ursprungstext. Zwei,
+            # weil sich „Gesamtgroesse" und „letzter Zuwachs" erst ab dem
+            # zweiten unuebersehbar unterscheiden; deutlich groesser, damit kein
+            # Assert daran haengt, dass der angehaengte Text zufaellig laenger
+            # ist als der erste Absatz.
+            gemessen = [after_create]
+            letzte = created
+            for i in range(2):
+                letzte = client.post(
+                    f"{prefix}/wa-artifacts/{artifact_id}/append",
+                    json={"content_md": f"Angehaengter Absatz {i}. " + "x" * 500},
+                    headers=auth,
+                )
+                assert letzte.status_code == 200, letzte.text
+                jetzt = _content_bytes(artifact_id)
+
+                # AK „append zaehlt den Zuwachs", gegen eine UNABHAENGIGE
+                # Referenz: die Spalte muss die tatsaechliche Gesamtgroesse der
+                # Zeile tragen. Traegt sie stattdessen nur den angehaengten
+                # Block, faellt genau hier — und zwar beim ersten Append schon.
+                assert jetzt == _tatsaechliche_bytes(artifact_id), (
+                    f"content_bytes ({jetzt}) muss die Gesamtgroesse der Zeile "
+                    f"({_tatsaechliche_bytes(artifact_id)}) tragen, nicht den Zuwachs — "
+                    f"sonst zaehlt die Quota nach n Appends nur den letzten."
+                )
+                # Die SUMME waechst um den Zuwachs, nicht um die Gesamtgroesse
+                # (das waere Doppelzaehlung).
+                zuwachs = jetzt - gemessen[-1]
+                assert zuwachs > 500, f"Append {i}: Zuwachs {zuwachs} B, erwartet > 500 B"
+                assert _used(ws) == jetzt
+                gemessen.append(jetzt)
+
+            after_append = gemessen[-1]
+            # Monoton gewachsen und jeder Schritt vollstaendig erhalten: der
+            # erste Append ist nicht vom zweiten ueberschrieben worden.
+            assert gemessen == sorted(gemessen) and len(set(gemessen)) == 3
+            assert after_append > 2 * 500
 
             # Patch, der SCHRUMPFT: gibt Platz frei. Ein additiver Zaehler
             # koennte das nicht — er stiege monoton.
-            blocks = appended.json()["blocks"]
+            blocks = letzte.json()["blocks"]
             deleted = client.patch(
                 f"{prefix}/wa-artifacts/{artifact_id}",
                 json={
-                    "expected_rev": appended.json()["rev"],
+                    "expected_rev": letzte.json()["rev"],
                     "anchor": blocks[-1]["block_id"],
                     "op": "delete",
                 },
@@ -143,6 +186,7 @@ def test_content_bytes_traegt_gesamtgroesse_und_append_zaehlt_zuwachs(
             )
             assert deleted.status_code == 200, deleted.text
             assert _content_bytes(artifact_id) < after_append
+            assert _content_bytes(artifact_id) == _tatsaechliche_bytes(artifact_id)
             assert _used(ws) == _content_bytes(artifact_id)
     finally:
         cleanup_workspaces([owner])
