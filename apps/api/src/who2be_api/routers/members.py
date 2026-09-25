@@ -13,7 +13,12 @@ from fastapi import APIRouter, Depends, Request, status
 
 from who2be_api.core.db import get_pool
 from who2be_api.core.rate_limit import limiter, write_limit
-from who2be_api.core.security import WorkspaceContext, get_current_workspace, require_role
+from who2be_api.core.security import (
+    WorkspaceContext,
+    deny_agent_bound_workspace_admin,
+    get_current_workspace,
+    require_role,
+)
 from who2be_api.repositories.audit_log_repository import PgAuditLogRepository
 from who2be_api.repositories.token_repository import PgTokenRepository
 from who2be_api.repositories.workspace_member_repository import (
@@ -49,6 +54,9 @@ async def update_member_role(
     request: Request, user_id: UUID, data: WorkspaceMemberUpdate, ctx: Ctx, service: Service
 ) -> WorkspaceMemberRead:
     require_role(ctx, WorkspaceRole.admin)
+    # Rollenvergabe ist der direkteste Weg zur Rechte-Eskalation — ein
+    # agent-gebundener Token bleibt davon ausgeschlossen (siehe Gate-Docstring).
+    deny_agent_bound_workspace_admin(ctx)
     return await service.update_role(ctx.workspace_id, user_id, data.role, actor_id=ctx.user_id)
 
 
@@ -56,4 +64,5 @@ async def update_member_role(
 @limiter.limit(write_limit)
 async def remove_member(request: Request, user_id: UUID, ctx: Ctx, service: Service) -> None:
     require_role(ctx, WorkspaceRole.admin)
+    deny_agent_bound_workspace_admin(ctx)
     await service.remove(ctx.workspace_id, user_id, actor_id=ctx.user_id)

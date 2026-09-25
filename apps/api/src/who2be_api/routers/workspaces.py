@@ -16,6 +16,7 @@ from who2be_api.core.db import get_pool
 from who2be_api.core.rate_limit import limiter, write_limit
 from who2be_api.core.security import (
     WorkspaceContext,
+    deny_agent_bound_workspace_admin,
     get_current_workspace,
     require_role,
 )
@@ -50,6 +51,7 @@ async def update_workspace(
     request: Request, workspace_id: UUID, data: WorkspaceUpdate, ctx: Ctx, service: Service
 ) -> WorkspaceRead:
     require_role(ctx, WorkspaceRole.admin)
+    deny_agent_bound_workspace_admin(ctx)
     return await service.update(workspace_id, data)
 
 
@@ -68,4 +70,5 @@ async def delete_workspace(
     # Danger-Zone (Track C): nur Admins; der letzte Workspace einer Org ist
     # geschuetzt (Service → 409). `ctx` erzwingt Membership im Ziel-Workspace.
     require_role(ctx, WorkspaceRole.admin)
+    deny_agent_bound_workspace_admin(ctx)
     await service.delete(workspace_id)
