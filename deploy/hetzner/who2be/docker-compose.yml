@@ -25,7 +25,11 @@
 #    Kernel-Flag: ein Prozess im Container kann seine Rechte ueber setuid-/
 #    setgid-Binaries oder Datei-Capabilities nicht mehr erhoehen. Keine
 #    Verhaltensaenderung fuer Dienste, die nicht ohnehin eskalieren wollen.
-#    (BSI SYS.1.6.A17 — SOLLTE.)
+#    Das ist ein TEILBEITRAG zu BSI SYS.1.6.A17 (SOLLTE), nicht dessen
+#    Erfuellung: A17 verlangt zusaetzlich, dass Runtime und Container unter
+#    einem nicht-privilegierten System-Account laufen und die Runtime
+#    gekapselt ist. `no-new-privileges` deckt nur den Halbsatz „oder diese
+#    Rechte erlangen kann" ab.
 # 3. `mem_limit` — Obergrenze, KEINE Reservierung. Zweck ist nicht, Speicher
 #    zuzuteilen, sondern zu verhindern, dass ein ausreissender Container den
 #    Host-OOM-Killer ausloest, der sich sein Opfer selbst sucht — potenziell

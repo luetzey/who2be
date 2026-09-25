@@ -17,8 +17,11 @@
   OAuth-bearing query parameters on the API subdomain are replaced before a
   line reaches disk.
 
-  Every service in both stacks additionally gained `no-new-privileges`
-  (SYS.1.6.A17), Docker-side log rotation, and a memory ceiling sized for the
-  target host (SYS.1.6.A15; the runbook documents what happens when a ceiling
-  is hit, as the requirement asks). A test holds all three across every
-  service so a newly added one cannot slip through without them.
+  Every service in both stacks additionally gained `no-new-privileges`, which
+  blocks privilege gain through setuid binaries and file capabilities — a
+  partial contribution to SYS.1.6.A17 rather than full conformance, as that
+  requirement also covers the account the runtime itself runs under.
+  Docker-side log rotation and a memory ceiling sized for the target host came
+  with it (SYS.1.6.A15; the runbook documents what happens when a ceiling is
+  hit, as the requirement asks). A test holds all three across every service so
+  a newly added one cannot slip through without them.

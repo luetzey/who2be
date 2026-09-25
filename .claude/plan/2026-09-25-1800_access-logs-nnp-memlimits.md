@@ -30,12 +30,35 @@ BSI IT-Grundschutz-Kompendium, Baustein **SYS.1.6 Containerisierung**:
   dieser Limitierungen reagiert."
   → Deckt `mem_limit` **und** verlangt die Dokumentation des
   Ueberschreitungsverhaltens (RUNBOOK).
-- **SYS.1.6.A17 Ausfuehrung von Containern ohne Privilegien (S)** — SOLLTE,
-  passt zu `no-new-privileges`. `cap_drop`/`read_only` liegen unter A21/A23 (H)
-  und sind laut Karte out of scope.
+- **SYS.1.6.A17 Ausfuehrung von Containern ohne Privilegien (S)** — SOLLTE:
+  „Die Container-Runtime und alle instanziierten Container SOLLTEN nur von
+  einem nicht-privilegierten System-Account ausgefuehrt werden, der ueber keine
+  erweiterten Rechte fuer den Container-Dienst und das Betriebssystem des
+  Host-Systems verfuegt **oder diese Rechte erlangen kann**."
+  → `no-new-privileges` adressiert genau den zweiten Halbsatz („erlangen
+  kann"): es sperrt den Rechtezuwachs ueber setuid-/setgid-Binaries und
+  Datei-Capabilities. Es erfuellt A17 damit **nicht vollstaendig** — der erste
+  Halbsatz (Runtime und Container laufen unter einem nicht-privilegierten
+  Account) und die geforderte Kapselung der Runtime sind eigene Themen und
+  bleiben offen. Diese Karte traegt einen Teilbeitrag, keine A17-Konformitaet.
+  `cap_drop`/`read_only` liegen unter A21/A23 (H) und sind laut Karte out of
+  scope.
 
-Quelle: it-grundschutzkompendium.de/sys_it-systeme/sys.1.6_containerisierung
-(Edition 2023, Abschnitte Basis- bzw. Standard-Anforderungen).
+Quelle, selbst aufgeschlagen und woertlich abgeglichen: BSI
+IT-Grundschutz-Kompendium, Baustein SYS.1.6 Containerisierung, **Edition
+2023**, Einzel-PDF `SYS_1_6_Containerisierung_Edition_2023.pdf`
+(bsi.bund.de), A7 im Abschnitt Basis-Anforderungen, A15/A17 im Abschnitt
+Standard-Anforderungen. Die Edition 2022 traegt bei A7 und A15 denselben
+Wortlaut; bei A17 weicht sie nur sprachlich ab („für … bzw. das
+Betriebssystem" statt „und das Betriebssystem").
+
+**Was die Karte annahm und was davon bleibt:** Die Karte stuft Access-Logs als
+A7-MUSS ein. Das ist nach dem gepruefen Wortlaut **nicht haltbar** — A7 sagt
+nichts darueber, dass Access-Logs existieren muessen, sondern nur, wo
+Protokollierungsdaten liegen muessen, wenn es sie gibt. Der Access-Log wird
+hier also nicht wegen einer MUSS-Pflicht eingefuehrt, sondern wegen des
+fachlichen Befunds aus `t_3f8f7a69`; A7 bestimmt lediglich die Ablage (Volume
+statt Container-Dateisystem).
 
 ## Datenschutz (Aufgabe 1, zweiter Teil)
 
