@@ -87,7 +87,7 @@ Identitaetsdaten liegen in der von GoTrue verwalteten `auth.users` (PostgreSQL-
 | Knowledge-Base-Aussagen | `content` (die Aussage, Freitext), `source_ref` (Beleganker), `tier`, `sensitivity`, `created_by` (UUID), `occurred_at` | `kb_node`, `kb_edge`, `kb_edge_evidence`, `kb_conflict` | `migrations/0077` |
 | Agenten-Zugriffslog | `agent_id`, `ref_kind`/`ref_id`, `operation`, `sensitivity_at_access`, `model_provider_at_access`, `model_name_at_access`, `access_date` | `agent_access_log` | `migrations/0079`, `0080` |
 | Loesch-Lifecycle | `user_id`, `requested_at`, `purge_after`, `purged_at`; `organization.deleted_at/purge_after` | `account_deletion`, `organization` | `migrations/0038` |
-| Server-Logs/Zugriffsdaten | IP, User-Agent, Zeitstempel (Reverse-Proxy/App) | Caddy/App-Logs (nicht in der DB) | `deploy/hetzner/Caddyfile` |
+| Server-Logs/Zugriffsdaten | IP, User-Agent, Zeitstempel (Reverse-Proxy/App) | Caddy-Access-Log auf dem `caddy-logs`-Volume (nicht in der DB) | `deploy/hetzner/Caddyfile` |
 | Backup-Daten | verschluesselter Voll-Dump plus Objekt-Store-Spiegel und Tabellen-Store-Snapshots (enthaelt alle obigen Kategorien) | `*.pgc.gpg`, `blobs/`, `tablestore/` + restic-Repo | `deploy/hetzner/scripts/backup.sh` |
 
 > **Keine besonderen Kategorien (Art. 9 DSGVO)** werden bewusst verarbeitet.
@@ -180,7 +180,7 @@ Kurzfassung:
 | Agenten-Zugriffslog (`agent_access_log`) | Eintrag dauerhaft als Nachweis; beim Hard-Purge **geloescht** (expliziter DELETE vor der Org-CASCADE, FK `NO ACTION` seit 0080) |
 | Backups | lokal 7 Tage; Offsite restic `keep-daily 7 / keep-weekly 4 / keep-monthly 6` |
 | Entitlement-/Tarifdaten (`entitlement_history`) | **Aufbewahrung** trotz Erasure: §14b UStG/§147 AO (gesetzliche Ausnahme, ADR-0031) |
-| Server-Logs | `<PLATZHALTER: konkrete Log-Retention (z. B. 7–30 Tage)>` |
+| Server-Logs (Caddy-Access-Log) | **14 Tage**, durchgesetzt von einem Host-Cron (taegliche Rotation + Loeschung aelterer Generationen, `deploy/hetzner/RUNBOOK.md` §Access-Logs); `roll_keep_for 336h` in `deploy/hetzner/Caddyfile` wirkt als zweite Grenze, zusaetzlich groessenbegrenzt (`roll_size`/`roll_keep`). Container-Logs (stdout/stderr) je Dienst auf 3 x 10 MB gedeckelt (`logging:` in beiden Hetzner-Compose-Dateien) |
 
 ---
 

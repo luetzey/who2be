@@ -10,6 +10,7 @@ Aktive Sektionen:
 - [Provisioning (Track S/C1)](#provisioning-track-sc1) — leere Hetzner-Box → laufender Stack (Box/Docker/LUKS/Firewall/deploy-User/DNS/TLS)
 - [Erste Inbetriebnahme der Cloud-Edition](#erste-inbetriebnahme-der-cloud-edition) — Bring-up-Checkliste (Service-Key, Mailer, Deploy-Pipeline)
 - [Notfallpfad: Registry nicht erreichbar](#notfallpfad-registry-nicht-erreichbar) — Cloud-`api`/`migrate` von Hand bauen, wenn GHCR beim Deploy ausfaellt
+- [Access-Logs & Ressourcen-Limits](#access-logs--ressourcen-limits) — Zugriffe nachvollziehen, `mem_limit` pruefen und anheben (W8/S1-S3)
 - [GoTrue-Version anheben](#gotrue-version-anheben-auth-stack-update) — Auth-Image-Update inkl. Schema-Migrationen + Rollback-Weg (Issue #499)
 - [CVE-Response](#cve-response) — was tun, wenn der CI-`audit`-Job rot wird
 - [Secret-Rotation](#secret-rotation) — pro Secret: Trigger / Schritte / Verifikation
@@ -363,6 +364,122 @@ curl -sf "https://api.${DOMAIN}/healthz"
 Deploy (`./deploy.sh <sha>` mit `WHO2BE_EDITION=cloud`) fahren — der zieht
 `api`/`migrate` wieder aus der Registry und ersetzt den Host-Build, damit
 Prod nicht dauerhaft auf einem Host-Artefakt statt dem CI-Artefakt laeuft.
+
+---
+
+## Access-Logs & Ressourcen-Limits
+
+### Access-Logs lesen
+
+Caddy protokolliert jede Anfrage an alle vier Subdomains nach
+`/var/log/caddy/access.log`. Die Datei liegt im Volume `caddy-logs`, nicht im
+Container-Dateisystem — sie ueberlebt also jeden Redeploy (BSI SYS.1.6.A7
+verlangt die Speicherung „ausserhalb des Containers, mindestens auf dem
+Container-Host").
+
+```bash
+# Laufend mitlesen
+docker compose -f deploy/hetzner/who2be/docker-compose.yml exec caddy \
+  tail -f /var/log/caddy/access.log
+
+# Alle 4xx/5xx der aktuellen Datei, lesbar
+docker compose -f deploy/hetzner/who2be/docker-compose.yml exec caddy \
+  sh -c 'cat /var/log/caddy/access.log' \
+  | jq -c 'select(.status >= 400) | {ts, status, req: .request.uri, ip: .request.remote_ip}'
+
+# Rotierte Generationen (gzip) mitnehmen
+docker compose -f deploy/hetzner/who2be/docker-compose.yml exec caddy \
+  sh -c 'zcat -f /var/log/caddy/access*.log*'
+```
+
+**Aufbewahrung: 14 Tage.** Sie wird von einem Host-Cron durchgesetzt, nicht von
+der Caddy-Konfiguration allein: `roll_size`/`roll_keep` deckeln die **Groesse**,
+und `roll_keep_for 336h` greift erst, wenn ueberhaupt rotiert wurde. Bei dem
+Anfrageaufkommen eines Solo-Betriebs vergehen bis zur ersten groessenbedingten
+Rotation Wochen — ohne den Cron waere die Frist eine Zusage ohne Mechanismus.
+
+Der Cron gehoert zur Erstinbetriebnahme und wird wie Backup und Retention-Purge
+auf dem Host eingerichtet:
+
+```bash
+# Host-Crontab des Deploy-Users (crontab -e):
+30 4 * * * cd /opt/who2be && docker compose -f deploy/hetzner/who2be/docker-compose.yml exec -T caddy sh -c 'mv /var/log/caddy/access.log /var/log/caddy/access.log.$(date +\%Y\%m\%d) && find /var/log/caddy -name "access.log.*" -mtime +14 -delete' && docker compose -f deploy/hetzner/who2be/docker-compose.yml restart caddy >> /var/log/who2be-logrotate.log 2>&1
+```
+
+**Warum der Neustart und nicht ein Signal:** Caddy haelt die Logdatei offen und
+schreibt nach einem `mv` in den alten Inode weiter — die neue `access.log`
+entsteht erst beim Neu-Oeffnen. Nachgemessen gegen `caddy:2.8-alpine` (v2.8.4):
+weder `USR1` noch `HUP` noch `caddy reload` legen die Datei neu an, `copytruncate`
+(kopieren + `truncate`) fuehrt zu einer Datei voller Nullbytes, weil der Writer
+am alten Offset weiterschreibt. Der Neustart tut es; gemessene Unterbrechung
+**0,7 s**. Deshalb nachts, und deshalb `mv` statt `truncate`.
+
+Faellt der Cron aus, bleibt `roll_keep_for 336h` als zweite, unabhaengige
+Grenze: sie raeumt die Generationen bei der naechsten groessenbedingten
+Rotation auf. Die aktive Datei erfasst sie nicht — **ein stiller Cron-Ausfall
+ist damit der Fall, in dem die Frist ueberschritten wird.** Pruefung im
+Quartals-Check:
+
+```bash
+# Aelteste Generation — darf nicht aelter als 14 Tage sein
+docker compose -f deploy/hetzner/who2be/docker-compose.yml exec caddy \
+  find /var/log/caddy -name 'access.log.*' -mtime +14
+
+# Wann wurde zuletzt rotiert? (Datum im Namen der juengsten Generation)
+docker compose -f deploy/hetzner/who2be/docker-compose.yml exec caddy \
+  ls -lt /var/log/caddy
+```
+
+Wer die Frist aendert, aendert sie an vier Stellen gemeinsam: dieser
+Cron-Eintrag, `deploy/hetzner/Caddyfile`, `docs/compliance/vvt.md` §7 und
+`docs/compliance/data-retention-and-erasure.md` §5.
+
+**Was nicht im Log steht:** Cookie-, Authorization- und
+Proxy-Authorization-Header sind `REDACTED` (Caddy-Default), und die
+Query-Parameter `code`/`token`/`access_token`/`refresh_token` werden ersetzt,
+bevor die Zeile geschrieben wird — der OAuth-Endpunkt liegt auf
+`api.<DOMAIN>`. Wer beim Debuggen einen dieser Werte vermisst: das ist Absicht,
+nicht ein Fehler.
+
+Container-Logs (stdout/stderr) liest wie gewohnt `docker compose logs <dienst>`;
+sie sind je Dienst auf 3 x 10 MB gedeckelt.
+
+### Ressourcen-Limits und was bei Ueberschreitung passiert
+
+Jeder Container beider Stacks hat ein `mem_limit` (BSI SYS.1.6.A15). Die Werte
+sind auf die Zielmaschine geeicht — **Hetzner CX32, 8 GB, beide Stacks auf
+derselben Maschine** — und je Dienst im Compose-File begruendet; die Herleitung
+steht in `.claude/plan/2026-09-25-1800_access-logs-nnp-memlimits.md`.
+
+Die Deckel sind Obergrenzen, **keine Reservierungen**: die Summe aller Deckel
+darf das RAM ueberschreiten, solange die Summe der typischen Nutzung deutlich
+darunter liegt. Die dauerhaft laufenden Dienste summieren sich auf rund
+6,2 GiB von 8 GB; `apps/api/tests/test_compose_hardening.py` haelt diese Summe
+im Rahmen, damit ein neuer Dienst das Budget nicht unbemerkt sprengt.
+
+**Verhalten bei Ueberschreitung** (A15 Satz 2 verlangt, dass es dokumentiert
+ist): Reisst ein Container sein Limit, beendet der Kernel-OOM-Killer einen
+Prozess **innerhalb dieses Containers**. Host und uebrige Container bleiben
+unberuehrt — genau das ist der Zweck der Deckel. Vorher gab es keine, und der
+OOM-Killer suchte sich sein Opfer nach Speicherverbrauch selbst aus, also mit
+hoher Wahrscheinlichkeit Postgres. Dienste mit `restart: unless-stopped`
+starten anschliessend selbst neu.
+
+Diagnose:
+
+```bash
+# Hat ein Container OOM gesehen?
+docker inspect --format '{{.Name}} OOMKilled={{.State.OOMKilled}} RestartCount={{.RestartCount}}' \
+  $(docker ps -aq)
+
+# Aktueller Verbrauch gegen das Limit
+docker stats --no-stream --format 'table {{.Name}}\t{{.MemUsage}}\t{{.MemPerc}}'
+```
+
+Sitzt ein Dienst im Normalbetrieb dauerhaft ueber ~80 % seines Limits, ist der
+Deckel zu knapp gewaehlt und nicht der Dienst kaputt: Wert im Compose-File
+anheben, Begruendung im Kommentar nachziehen, Budget-Test laufen lassen. Ein
+OOM im Normalbetrieb waere schlechter als gar kein Limit.
 
 ---
 
