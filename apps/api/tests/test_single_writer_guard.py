@@ -239,11 +239,13 @@ def _deploy_script_code() -> str:
 def test_deploy_skript_prueft_die_container_anzahl() -> None:
     """`deploy.sh` misst nach dem `up`, dass genau EIN api-Container laeuft.
 
-    Die Messung ist der versionsunabhaengige Teil des Schutzes: dass Compose
-    beim Recreate erst stoppt und dann startet, gilt fuer die geprueften
-    Versionen, aber die Box installiert per `get.docker.com` das jeweils
-    aktuelle Release. Diese Pruefung faengt eine kuenftige
-    Verhaltensaenderung, bevor sie zu stiller Korruption fuehrt — und faellt
+    Die Messung prueft den Endzustand, nicht das Recreate-Fenster: sie laeuft
+    nach `--wait`, eine transiente Ueberlappung waere zum Messzeitpunkt vorbei.
+    Was sie faengt, sind DAUERHAFTE Zweitinstanzen — ein verwaister Container
+    aus einem frueheren Bringup, eine von Hand gestartete zweite Instanz, ein
+    gar nicht gestarteter api-Container. Gegen ein Recreate-Fenster schuetzt der
+    Drift-Test auf `update_config`/`start-first` (s. o.); die Abwaegung gegen
+    einen Vorab-`stop` ist in `deploy.sh` begruendet. Diese Pruefung faellt
     still weg, wenn jemand sie beim Aufraeumen entfernt. Deshalb dieser Test.
     """
     code = _deploy_script_code()

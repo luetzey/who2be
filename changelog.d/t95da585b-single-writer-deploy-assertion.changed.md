@@ -10,10 +10,17 @@
   the new container, *then* stops the old one, and only starts the new one in
   the following phase (verified in Compose v2.20, v2.29 and v2.39); an overlap
   would require `deploy.update_config.order: start-first`, whose default is
-  `stop-first`. The assertion covers what the analysis cannot: the Compose
-  version installed on the host is not pinned. No explicit `stop` before `up`
-  was added — it would lengthen downtime by a full start plus health-check
-  grace period without addressing that remaining assumption.
+  `stop-first`. What the analysis cannot cover is that the Compose version
+  installed on the host is not pinned. An explicit `stop` before `up` would
+  close that remaining assumption completely — with the old container already
+  stopped, no recreate order can produce two running ones — but it costs a full
+  start plus health-check grace period of downtime on every deploy, so it was
+  deliberately not added: the sequence is verified across v2.20–v2.39 and the
+  drift tests reject `update_config`/`start-first`. The assertion is not a
+  substitute for it: running after `--wait`, it measures the end state, so it
+  guards against *persistent* second instances (an orphan from an earlier
+  bringup, a manually started one, an `api` container that never came up)
+  rather than a transient recreate window.
 
   The drift tests now cover every Compose file that defines an `api` service
   (previously two of eight — the cloud overlays were unguarded) and reject

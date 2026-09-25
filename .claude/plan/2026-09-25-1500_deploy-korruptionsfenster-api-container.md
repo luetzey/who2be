@@ -80,18 +80,29 @@ Genau diese Ableitungs-Luecke schliesst Punkt 2.
 
 ### 1. Nach-Deploy-Assertion in `deploy.sh` (statt `stop` vor `up`)
 
-**Kein** explizites `stop api` vor dem `up`. Begruendung:
+**Kein** explizites `stop api` vor dem `up`. Das ist eine **Abwaegung**, keine
+Wirkungslosigkeit — und die Reihenfolge der beiden Argumente ist wichtig:
 
-- Es wuerde die Downtime verlaengern (heute: Stop-Dauer des alten Containers;
-  mit Vorab-Stop zusaetzlich Image-Start + Healthcheck-`start_period`), und
-- es wuerde ein Risiko absichern, das im belegten Pfad nicht existiert. Was
-  ungeprueft bliebe, waere die **Annahme** ueber die installierte Version — und
-  die faengt ein Vorab-`stop` nicht, weil sie sich auf `up` selbst bezieht.
+- Ein Vorab-`stop api` **wuerde** die verbleibende Versions-Annahme
+  vollstaendig schliessen. Ist der alte Container vor dem `up` gestoppt, kann
+  **keine** Recreate-Reihenfolge zwei laufende API-Container erzeugen, auch
+  `start-first` nicht: es gibt keinen laufenden Task, mit dem der neue
+  ueberlappen koennte. Es ist der einzige der beiden Mechanismen, der
+  versionsunabhaengig **das Fenster** schliesst.
+- Er kostet dafuer bei **jedem** Deploy Downtime in Hoehe eines vollen Starts
+  samt Healthcheck-`start_period`. Dem steht ein kleines Restrisiko gegenueber:
+  die Recreate-Sequenz ist ueber v2.20 – v2.39 im Quellcode belegt, und der
+  Drift-Test verbietet `update_config`/`start-first` in allen acht
+  Compose-Dateien mit `api`-Dienst. Deshalb: verworfen.
 
-Stattdessen prueft das Skript **nach** dem `up`, dass genau ein `api`-Container
-laeuft, und bricht sonst mit Exit-Code ab. Diese Pruefung ist
-versionsunabhaengig: sie misst das Ergebnis statt es vorherzusagen. Sie laeuft
-nach `--wait`, also zu einem Zeitpunkt, an dem der Stack konvergiert ist.
+Zusaetzlich prueft das Skript **nach** dem `up`, dass genau ein `api`-Container
+laeuft, und bricht sonst mit Exit-Code 3 ab. Diese Pruefung ist **kein Ersatz**
+fuer den Vorab-Stop: sie laeuft nach `--wait`, misst also den **Endzustand** und
+nicht das Recreate-Fenster — eine durch eine kuenftige Compose-Version
+verursachte Ueberlappung waere transient und zum Messzeitpunkt vorbei. Was sie
+zuverlaessig faengt, sind **dauerhafte** Zweitinstanzen: ein verwaister
+Container aus einem frueheren Bringup, eine von Hand gestartete zweite Instanz,
+ein gar nicht gestarteter api-Container.
 
 ### 2. Dateibasierte Sperre (`flock`) — geprueft, verworfen
 

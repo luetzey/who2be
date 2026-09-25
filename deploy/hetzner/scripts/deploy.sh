@@ -234,14 +234,36 @@ echo "==> Restart stack"
 # Default ist `stop-first`). Nach dieser Kette erwarten wir also genau einen
 # laufenden api-Container.
 #
-# Bewusst KEIN `stop api` vor dem `up`: das verlaengerte die Downtime um einen
-# vollen Start samt Healthcheck-`start_period` und sicherte ein Fenster ab, das
-# im belegten Pfad nicht existiert. Was oben Annahme bleibt, ist die auf DIESER
-# Box installierte Compose-Version (RUNBOOK fixiert nur "v2.x") — und die faengt
-# ein Vorab-Stop gerade nicht, weil sie sich auf `up` selbst bezieht. Diese
-# Messung dagegen ist versionsunabhaengig: sie prueft das Ergebnis.
+# Was dabei Annahme bleibt, ist die auf DIESER Box installierte Compose-Version
+# (RUNBOOK fixiert nur "v2.x"; Installation per `get.docker.com`, also das
+# jeweils aktuelle Release).
+#
+# Bewusst KEIN `stop api` vor dem `up` — das ist eine Abwaegung, keine
+# Wirkungslosigkeit: Ein Vorab-Stop WUERDE diese Rest-Annahme vollstaendig
+# schliessen (ist der alte Container vor dem `up` gestoppt, kann keine
+# Recreate-Reihenfolge zwei laufende erzeugen, auch `start-first` nicht). Er
+# kostet aber bei JEDEM Deploy Downtime in Hoehe eines vollen Starts samt
+# Healthcheck-`start_period`, waehrend das Restrisiko klein ist: die Sequenz ist
+# ueber v2.20–v2.39 belegt und der Drift-Test in
+# apps/api/tests/test_single_writer_guard.py verbietet `update_config`/
+# `start-first` in allen Compose-Dateien mit `api`-Dienst.
+#
+# Die Pruefung unten ersetzt den Vorab-Stop deshalb NICHT: sie laeuft nach
+# `--wait`, misst also den Endzustand und nicht das Recreate-Fenster. Eine durch
+# eine kuenftige Compose-Version verursachte Ueberlappung waere transient und
+# zum Messzeitpunkt vorbei. Was sie zuverlaessig faengt, sind DAUERHAFTE
+# Zweitinstanzen: ein verwaister Container aus einem frueheren Bringup, eine von
+# Hand gestartete zweite Instanz, ein nicht gestarteter api-Container.
 echo "==> Betriebsgrenze pruefen: genau ein laufender api-Container"
-API_RUNNING="$("${COMPOSE[@]}" ps --status running --quiet api 2>/dev/null | grep -c . || true)"
+if ! API_IDS="$("${COMPOSE[@]}" ps --status running --quiet api 2>&1)"; then
+    echo "FEHLER: 'compose ps api' ist selbst fehlgeschlagen — die Zahl der" >&2
+    echo "laufenden api-Container ist damit UNBEKANNT, nicht 0. Abbruch statt" >&2
+    echo "Durchwinken. Ausgabe:" >&2
+    printf '%s\n' "$API_IDS" >&2
+    echo "Siehe RUNBOOK 'Betriebsgrenze: genau EIN API-Container'." >&2
+    exit 3
+fi
+API_RUNNING="$(printf '%s\n' "$API_IDS" | grep -c . || true)"
 if [ "$API_RUNNING" != "1" ]; then
     echo "FEHLER: ${API_RUNNING} laufende api-Container — erwartet: genau 1." >&2
     echo "Der Tabellen-Store (ADR-0049) vertraegt genau einen Schreib-Prozess je" >&2

@@ -64,14 +64,26 @@ Compose Deploy Specification) — der Default ist `stop-first`, und keine
 Compose-Datei dieses Repos setzt `update_config`. Ein Drift-Test haelt das fest.
 
 Weil die auf der Box installierte Compose-Version nicht gepinnt ist
-(`get.docker.com` installiert das jeweils aktuelle Release), verlaesst sich
-`deploy.sh` nicht auf diese Analyse, sondern **misst** nach dem `up`:
+(`get.docker.com` installiert das jeweils aktuelle Release), bleibt ein
+Restrisiko. `deploy.sh` setzt dagegen **keinen** Vorab-`stop api` — das waere der
+einzige Mechanismus, der das Recreate-Fenster versionsunabhaengig schliesst
+(ohne laufenden alten Container kann keine Reihenfolge zwei laufende erzeugen),
+kostet aber bei jedem Deploy einen vollen Start samt Healthcheck-`start_period`
+an Downtime. Die Abwaegung faellt gegen ihn aus, weil die Sequenz ueber
+v2.20 – v2.39 belegt ist und der Drift-Test `start-first` verbietet.
+
+Zusaetzlich **misst** `deploy.sh` nach dem `up`:
 
 ```bash
 docker compose … ps --status running --quiet api | grep -c .   # muss 1 sein
 ```
 
-Ist das Ergebnis nicht `1`, bricht der Deploy mit Exit-Code 3 ab.
+Ist das Ergebnis nicht `1`, bricht der Deploy mit Exit-Code 3 ab. Wichtig fuer
+die Einordnung: diese Messung laeuft **nach** `--wait`, prueft also den
+**Endzustand**. Eine transiente Ueberlappung waehrend des Recreate waere zum
+Messzeitpunkt vorbei — sie faengt **dauerhafte** Zweitinstanzen (verwaister
+Container aus einem frueheren Bringup, von Hand gestartete Instanz, gar nicht
+gestarteter Container), nicht das Fenster selbst.
 
 ### Wenn der Deploy mit Exit 3 abbricht
 
@@ -94,6 +106,11 @@ docker compose … exec api sh -c \
 # 4) Bei NULL laufenden Containern: der Start ist gescheitert, nicht die
 #    Grenze verletzt. Logs lesen, dann normal neu deployen.
 docker compose … logs --tail 100 api
+
+# 5) Meldet das Skript stattdessen "'compose ps api' ist selbst
+#    fehlgeschlagen": die Zahl ist unbekannt, nicht 0. Ursache ist meist ein
+#    nicht laufender Docker-Daemon oder ein Projekt-/Env-Fehler.
+systemctl status docker
 ```
 
 Liefert Schritt 3 irgendwo etwas anderes als `ok`: Restore der betroffenen Area
