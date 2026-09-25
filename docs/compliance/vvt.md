@@ -88,7 +88,7 @@ Identitaetsdaten liegen in der von GoTrue verwalteten `auth.users` (PostgreSQL-
 | Agenten-Zugriffslog | `agent_id`, `ref_kind`/`ref_id`, `operation`, `sensitivity_at_access`, `model_provider_at_access`, `model_name_at_access`, `access_date` | `agent_access_log` | `migrations/0079`, `0080` |
 | Loesch-Lifecycle | `user_id`, `requested_at`, `purge_after`, `purged_at`; `organization.deleted_at/purge_after` | `account_deletion`, `organization` | `migrations/0038` |
 | Server-Logs/Zugriffsdaten | IP, User-Agent, Zeitstempel (Reverse-Proxy/App) | Caddy/App-Logs (nicht in der DB) | `deploy/hetzner/Caddyfile` |
-| Backup-Daten | verschluesselter Voll-Dump (enthaelt alle obigen Kategorien) | `*.pgc.gpg` + restic-Repo | `deploy/hetzner/scripts/backup.sh` |
+| Backup-Daten | verschluesselter Voll-Dump plus Objekt-Store-Spiegel und Tabellen-Store-Snapshots (enthaelt alle obigen Kategorien) | `*.pgc.gpg`, `blobs/`, `tablestore/` + restic-Repo | `deploy/hetzner/scripts/backup.sh` |
 
 > **Keine besonderen Kategorien (Art. 9 DSGVO)** werden bewusst verarbeitet.
 > Frei eingebbare Inhaltsfelder (Personas/Playbooks/Resources) koennen jedoch
