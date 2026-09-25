@@ -23,7 +23,9 @@
 #   3. Profile bestimmen (siehe unten) und in die Compose-Aufrufe geben.
 #   4. docker compose pull (Cloud: api+migrate aus GHCR, web weiterhin lokal
 #      gebaut) und up -d --wait.
-#   5. Status ausgeben.
+#   5. Betriebsgrenze pruefen: genau EIN laufender api-Container (ADR-0049,
+#      siehe die Begruendung an der Pruefung selbst) — sonst Abbruch mit 3.
+#   6. Status ausgeben.
 #
 # Profile (WHO2BE_COMPOSE_PROFILES, kommagetrennt):
 #   Services hinter einem Compose-`profiles:` werden von `pull`/`up` NUR
@@ -215,6 +217,39 @@ fi
 
 echo "==> Restart stack"
 "${COMPOSE[@]}" up -d --wait --remove-orphans
+
+# Betriebsgrenze pruefen, NICHT vorhersagen: der Tabellen-Store (ADR-0049)
+# vertraegt genau EINEN schreibenden Prozess je Area-Datei, und zwei laufende
+# API-Container waeren stille Korruption — kein Fehler, kein Alarm, der Schaden
+# faellt erst beim Lesen auf. Der In-Process-Guard (apps/api/.../main.py) sieht
+# nur den eigenen Prozessbaum und kann einen zweiten Container prinzipiell nicht
+# erkennen.
+#
+# Der `up` oben laeuft ohne `--scale`, die Compose-Dateien tragen kein
+# `replicas`/`update_config` (Drift-Tests in
+# apps/api/tests/test_single_writer_guard.py), und Compose recreated einen
+# Service, indem es den neuen Container ERZEUGT, dann den alten STOPPT und erst
+# danach startet (`recreateContainer` in pkg/compose/convergence.go, gleich in
+# v2.20 bis v2.39; ein Overlap braeuchte `update_config.order: start-first`,
+# Default ist `stop-first`). Nach dieser Kette erwarten wir also genau einen
+# laufenden api-Container.
+#
+# Bewusst KEIN `stop api` vor dem `up`: das verlaengerte die Downtime um einen
+# vollen Start samt Healthcheck-`start_period` und sicherte ein Fenster ab, das
+# im belegten Pfad nicht existiert. Was oben Annahme bleibt, ist die auf DIESER
+# Box installierte Compose-Version (RUNBOOK fixiert nur "v2.x") — und die faengt
+# ein Vorab-Stop gerade nicht, weil sie sich auf `up` selbst bezieht. Diese
+# Messung dagegen ist versionsunabhaengig: sie prueft das Ergebnis.
+echo "==> Betriebsgrenze pruefen: genau ein laufender api-Container"
+API_RUNNING="$("${COMPOSE[@]}" ps --status running --quiet api 2>/dev/null | grep -c . || true)"
+if [ "$API_RUNNING" != "1" ]; then
+    echo "FEHLER: ${API_RUNNING} laufende api-Container — erwartet: genau 1." >&2
+    echo "Der Tabellen-Store (ADR-0049) vertraegt genau einen Schreib-Prozess je" >&2
+    echo "Area-Datei; mehrere Container fuehren zu stiller Datenkorruption." >&2
+    echo "Siehe RUNBOOK 'Betriebsgrenze: genau EIN API-Container'." >&2
+    "${COMPOSE[@]}" ps api >&2 || true
+    exit 3
+fi
 
 echo "==> Status"
 "${COMPOSE[@]}" ps
