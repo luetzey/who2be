@@ -121,6 +121,94 @@ bleibt nur ein harmloser Default. Wichtig ist, dass `SITE_URL` dem App-Origin
 (`WEB_BASE_URL`, Default `https://app.<DOMAIN>`) entspricht, damit das
 `redirect_to`-Ziel die GoTrue-Allowlist (`${SITE_URL},${SITE_URL}/*`) passiert.
 
+## Cloud-Edition: nur externe Provider (Google, GitHub)
+
+In der **Cloud-Edition** meldet man sich ausschliesslich ueber externe Provider
+an — E-Mail/Passwort ist dort abgeschaltet (Owner-Entscheidung 2026-09-24). Im
+**Self-Hosting aendert sich nichts**: der Compose-Default bleibt
+`GOTRUE_EXTERNAL_EMAIL_ENABLED=true`, Passwort-Login und Registrierung
+funktionieren wie bisher. Es wurde nichts entfernt — das ist ein Schalter, kein
+Rueckbau, und jederzeit umkehrbar.
+
+Dafuer sind **drei** Dinge noetig, alle drei gehoeren zusammen:
+
+**1. Eine OAuth-App bei Google und eine bei GitHub anlegen.** Die Redirect-URI
+(bei Google „Authorized redirect URI", bei GitHub „Authorization callback URL")
+muss **exakt** so lauten, mit `<DOMAIN>` durch die eigene Domain ersetzt — ein
+Zeichen daneben und der Login scheitert mit `redirect_uri_mismatch`:
+
+```
+https://supabase.<DOMAIN>/auth/v1/callback
+```
+
+Also z. B. fuer `DOMAIN=example.com` genau `https://supabase.example.com/auth/v1/callback`.
+Kein abschliessender Schraegstrich, kein `/callback` ohne `/auth/v1`, und
+`https` (nicht `http`). Dieselbe URI gilt fuer **beide** Provider; sie kommt im
+Compose aus `GOTRUE_EXTERNAL_{GOOGLE,GITHUB}_REDIRECT_URI` und hat genau diesen
+Default — wer sie nicht ueberschreibt, muss nur den Wert oben eintragen.
+
+Wo genau einzutragen:
+
+| Provider | Console | Feld |
+|---|---|---|
+| Google | console.cloud.google.com → APIs & Services → Credentials → OAuth 2.0 Client ID (Typ „Web application") | **Authorized redirect URIs** |
+| GitHub | github.com → Settings → Developer settings → OAuth Apps → New OAuth App | **Authorization callback URL** |
+
+Bei GitHub ist zusaetzlich die „Homepage URL" Pflicht — dort `https://app.<DOMAIN>`
+eintragen. Google verlangt fuer eine oeffentliche App einen konfigurierten
+OAuth-Consent-Screen inklusive Links auf Datenschutz und Nutzungsbedingungen;
+die liegen unter `https://app.<DOMAIN>/legal/datenschutz` bzw.
+`https://app.<DOMAIN>/legal/agb`.
+
+**2. Die Credentials in `deploy/hetzner/supabase/.env` eintragen:**
+
+```dotenv
+GOTRUE_EXTERNAL_GOOGLE_ENABLED=true
+GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID=<aus der Google Console>
+GOTRUE_EXTERNAL_GOOGLE_SECRET=<aus der Google Console>
+GOTRUE_EXTERNAL_GITHUB_ENABLED=true
+GOTRUE_EXTERNAL_GITHUB_CLIENT_ID=<aus GitHub>
+GOTRUE_EXTERNAL_GITHUB_SECRET=<aus GitHub>
+
+# Erst setzen, wenn die sechs Zeilen darueber wirklich stehen:
+GOTRUE_EXTERNAL_EMAIL_ENABLED=false
+```
+
+Die Reihenfolge ist kein Stil, sondern eine Sperre: `GOTRUE_EXTERNAL_EMAIL_ENABLED=false`
+zuerst zu setzen, ohne dass ein Provider laeuft, sperrt **jeden** Anmeldeweg
+aus — auch den eigenen.
+
+**3. Das Web-Bundle im Cloud-Profil bauen**, damit die UI das Passwortformular
+gar nicht erst zeigt: `VITE_WHO2BE_EDITION=cloud`, gesetzt vom App-Overlay
+`deploy/hetzner/who2be/docker-compose.cloud.yml`. Ohne Schritt 3 blieben die
+Felder sichtbar und liefen ins Leere (GoTrue antwortet dann mit 422
+`email_provider_disabled`); ohne Schritt 2 waere der Login serverseitig offen,
+obwohl die UI ihn versteckt. Beide zusammen, nie nur eines.
+
+**Braucht die Cloud dann noch SMTP? Ja.** Es entfallen nur die
+Bestaetigungsmail der Registrierung und die Passwort-Reset-Mail. Weiter per
+Mail laufen:
+
+| Mailpfad | Ausgeloest von | Noch aktiv? |
+|---|---|---|
+| **Team-Einladung** | API → `POST /auth/v1/invite` (`gotrue_mailer.py`) | **ja** — Kernfunktion |
+| **E-Mail-Adresse aendern** | Konto-Einstellungen → `updateUser({ email })` | **ja** |
+| Registrierungs-Bestaetigung | `POST /signup` | nein (Signup gesperrt) |
+| Passwort-Reset | `POST /recover` | nein (Seite nicht erreichbar) |
+
+Der Mailversand-Account wird also weiter gebraucht, nur mit kleinerem Volumen.
+Ohne SMTP kaeme keine Einladung mehr an: die Einladung selbst bliebe zwar
+gueltig (der Versand ist best-effort, der Token laesst sich manuell teilen),
+aber das ist ein Notbehelf, kein Betriebsmodus.
+
+**Team-Einladungen brechen durch den Schalter nicht.** GoTrue v2.196.0 prueft
+`External.Email` nur in `POST /signup`, `POST /token?grant_type=password` und
+`POST /magiclink`. `POST /invite`, `POST /verify`, `POST /recover` und
+`PUT /user` haben keinen solchen Check — der Einladungsweg der App
+(`POST /auth/v1/invite` mit `service_role`-Key) ist davon unberuehrt. Ein
+eingeladener Nutzer, der noch kein Konto hat, landet ueber den Magic-Link
+eingeloggt auf `/invitations/:token/accept`.
+
 ## Studio (Profil `studio`)
 
 ```bash

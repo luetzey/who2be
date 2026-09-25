@@ -60,7 +60,7 @@ services:
     restart: "no"
 
   auth:
-    image: supabase/gotrue:v2.158.1
+    image: supabase/gotrue:v2.196.0
     environment:
       GOTRUE_API_HOST: 0.0.0.0
       GOTRUE_API_PORT: "9999"
@@ -72,21 +72,67 @@ services:
       # ab, ohne fremde Origins zuzulassen (Open-Redirect-Schutz, Track K).
       GOTRUE_URI_ALLOW_LIST: ${SITE_URL},${SITE_URL}/*
       GOTRUE_DISABLE_SIGNUP: ${GOTRUE_DISABLE_SIGNUP:-false}
+      # Captcha vor der Registrierung (Issue #539). Anbieter ist Cloudflare
+      # Turnstile. Die drei Namen sind gegen die gepinnte Version v2.158.1
+      # verifiziert (internal/conf/configuration.go:423-427 + :495 + :257,
+      # envconfig-Praefix "gotrue" in :653) — `..._CAPTCHA_SECRET`, NICHT
+      # `..._CAPTCHA_PROVIDER_SECRET` (envconfig nutzt den Go-Feldnamen
+      # `Secret`, nicht das JSON-Tag `provider_secret`).
+      #
+      # ENABLED=false (Default) ueberspringt die Validierung komplett
+      # (configuration.go:429-432) ⇒ leer gelassen bleibt alles wie bisher.
+      # Bei `true` MUSS das Secret gesetzt sein, sonst startet GoTrue nicht.
+      #
+      # Wirkt nicht nur auf /signup: das Middleware haengt auch an /recover,
+      # /resend, /magiclink, /otp, /sso und /token?grant_type=password
+      # (api.go:138-267). Admin-Calls mit Service-Role-Key (= der
+      # Invite-Versand) und die Magic-Link-Einloesung sind ausgenommen
+      # (middleware.go:171-177). Details: docs/signup-and-invites.md §3.
+      GOTRUE_SECURITY_CAPTCHA_ENABLED: ${GOTRUE_SECURITY_CAPTCHA_ENABLED:-false}
+      GOTRUE_SECURITY_CAPTCHA_PROVIDER: ${GOTRUE_SECURITY_CAPTCHA_PROVIDER:-turnstile}
+      GOTRUE_SECURITY_CAPTCHA_SECRET: ${GOTRUE_SECURITY_CAPTCHA_SECRET:-}
       GOTRUE_JWT_SECRET: ${JWT_SECRET}
       GOTRUE_JWT_EXP: ${JWT_EXP:-3600}
       GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
       GOTRUE_JWT_ADMIN_ROLES: service_role
       GOTRUE_JWT_AUD: authenticated
       GOTRUE_JWT_ISSUER: https://supabase.${DOMAIN}/auth/v1
-      # MFA / TOTP (WP-F, Befund S1): Zwei-Faktor per TOTP. Nach verifizierter
-      # Challenge setzt GoTrue `aal=aal2` im JWT; die Who2Be-API erzwingt aal2
-      # fuer Admin-Aktionen (core/security.require_aal2). Admins MUESSEN einen
-      # TOTP-Faktor einrichten (docs/mfa-admin.md). v2.158.1 hat KEIN
-      # Top-Level GOTRUE_MFA_ENABLED — TOTP wird pro Faktor geschaltet.
+      # MFA (WP-F, Befund S1; WebAuthn seit #499): Zwei-Faktor per TOTP oder
+      # WebAuthn. Nach verifizierter Challenge setzt GoTrue `aal=aal2` im JWT;
+      # die Who2Be-API erzwingt aal2 fuer Admin-Aktionen
+      # (core/security.require_aal2). Admins MUESSEN einen zweiten Faktor
+      # einrichten (docs/mfa-admin.md). GoTrue hat KEIN Top-Level
+      # GOTRUE_MFA_ENABLED — Faktoren werden pro Typ geschaltet. TOTP ist per
+      # Default an, WebAuthn per Default AUS (MFAFactorTypeConfiguration traegt
+      # `default:"false"` fuer beide Schalter, TOTP hat einen eigenen Typ mit
+      # `default:"true"`) — deshalb stehen beide WebAuthn-Schalter explizit hier.
       GOTRUE_MFA_TOTP_ENROLL_ENABLED: ${GOTRUE_MFA_TOTP_ENROLL_ENABLED:-true}
       GOTRUE_MFA_TOTP_VERIFY_ENABLED: ${GOTRUE_MFA_TOTP_VERIFY_ENABLED:-true}
+      GOTRUE_MFA_WEB_AUTHN_ENROLL_ENABLED: ${GOTRUE_MFA_WEB_AUTHN_ENROLL_ENABLED:-true}
+      GOTRUE_MFA_WEB_AUTHN_VERIFY_ENABLED: ${GOTRUE_MFA_WEB_AUTHN_VERIFY_ENABLED:-true}
       GOTRUE_MFA_MAX_ENROLLED_FACTORS: ${GOTRUE_MFA_MAX_ENROLLED_FACTORS:-10}
-      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      # WebAuthn-Relying-Party (ANDERES Praefix als die Faktor-Schalter oben:
+      # GOTRUE_WEBAUTHN_*, nicht GOTRUE_MFA_WEB_AUTHN_*). Alle drei sind
+      # Pflicht, sobald ein WebAuthn-Schalter an ist; seit v2.190.0 warnt GoTrue
+      # bei unvollstaendiger Konfiguration, statt den Start abzubrechen —
+      # ein fehlender Wert kostet also den Faktor, nicht den Stack.
+      # RP_ID ist die registrierbare Domain OHNE Schema/Port und muss zum
+      # Origin der App passen; RP_ORIGINS ist der vollstaendige Origin
+      # (= SITE_URL, derselbe, den GOTRUE_URI_ALLOW_LIST oben fuehrt).
+      GOTRUE_WEBAUTHN_RP_ID: app.${DOMAIN}
+      GOTRUE_WEBAUTHN_RP_DISPLAY_NAME: ${WEBAUTHN_RP_DISPLAY_NAME:-Who2Be}
+      GOTRUE_WEBAUTHN_RP_ORIGINS: ${SITE_URL}
+      # E-Mail/Passwort als Auth-Provider. Self-Hosting: `true` (Default,
+      # unveraendert). Cloud: hier auf `false` setzen — dort meldet man sich
+      # ausschliesslich ueber externe Provider an (Owner-Entscheidung
+      # 2026-09-24). GoTrue prueft dieses Flag NUR in `POST /signup`,
+      # `POST /token?grant_type=password` und `POST /magiclink`; `POST /invite`,
+      # `POST /verify`, `POST /recover` und `PUT /user` haben keinen solchen
+      # Check — Team-Einladungen laufen also unveraendert weiter (gegen den
+      # Quellstand von v2.196.0 geprueft). Das Web-Pendant ist das Build-Arg
+      # `VITE_WHO2BE_EDITION` (ADR-0029), beide werden im Deploy gemeinsam
+      # gesetzt. Anleitung: README.md, "Cloud-Edition: nur externe Provider".
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: ${GOTRUE_EXTERNAL_EMAIL_ENABLED:-true}
       # Prod: E-Mail-Verifikation AN (default false = Confirm Pflicht). Mit
       # GOTRUE_MAILER_AUTOCONFIRM=true im .env laesst sich das fuer einen
       # frischen Staging-Stack ohne SMTP voruebergehend umgehen.

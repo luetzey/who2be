@@ -64,7 +64,16 @@ select = ["E", "F", "I", "UP", "B"]
 python_version = "3.11"
 strict = true
 explicit_package_bases = true
-mypy_path = ["apps/api/src", "apps/mcp/src", "packages/models/src", "packages/billing/src"]
+# `scripts` traegt Repo-Werkzeuge (kein ausgeliefertes Paket, kein `src/`-Layout).
+# Ohne diesen Eintrag findet mypy `changelog_fragments` nicht, obwohl pytest es
+# ueber den sys.path-Eintrag in `scripts/tests/` importieren kann.
+mypy_path = [
+    "apps/api/src",
+    "apps/mcp/src",
+    "packages/models/src",
+    "packages/billing/src",
+    "scripts",
+]
 
 # asyncpg + die Mollie-SDK liefern keine vollstaendigen Typ-Stubs — bewusste, eng
 # begrenzte Ausnahme; unser eigener Code bleibt strict.
@@ -76,7 +85,17 @@ module = ["asyncpg.*", "mollie.*", "testcontainers.*", "fastembed.*", "minio.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-testpaths = ["apps/api/tests", "apps/mcp/tests", "packages/models/tests", "packages/billing/tests"]
+testpaths = [
+    "apps/api/tests",
+    "apps/mcp/tests",
+    "packages/models/tests",
+    "packages/billing/tests",
+    # Repo-Werkzeuge unter `scripts/` (z. B. `changelog_fragments.py`). Sie sind
+    # kein ausgeliefertes Paket und zaehlen deshalb nicht in `coverage.source`,
+    # laufen aber in derselben Suite mit — ein kaputtes Werkzeug soll im
+    # normalen `pytest`-Lauf auffallen, nicht erst beim Release.
+    "scripts/tests",
+]
 # `--strict-markers`: ein vertippter/unbekannter Marker (z. B. `@pytest.mark.integraton`)
 # bricht statt still zu rutschen — Voraussetzung fuer den zentralen Integration-Skip
 # in `conftest.py` und den CI-Skip-Guard (`WHO2BE_REQUIRE_DB`).

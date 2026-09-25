@@ -525,3 +525,45 @@ describe('ToolDetailPage — Export-Aktionen', () => {
     expect(notify.success).not.toHaveBeenCalled()
   })
 })
+
+// Responsive-Audit #562 (W3, Epic #431): jsdom hat kein Layout, geprueft wird
+// deshalb der Klassen-Vertrag — Muster components/ui/dialog.test.tsx, das die
+// 320px-Eigenschaft des Dialogs ebenfalls ueber Klassen belegt.
+describe('ToolDetailPage — Umbruch bei 320px (#562)', () => {
+  const LONG_ALIAS = 'todoist_workspace_produktivitaets_integration'
+  const LONG_TAG = 'produktivitaets-automatisierung-langer-tag'
+
+  function renderWithLongIdentifiers() {
+    renderDetailPage(
+      detailHandlers({
+        tool: tool({
+          alias: LONG_ALIAS,
+          content: {
+            display_name: 'Todoist App',
+            mcp_server_name: 'Todoist MCP',
+            tool_names: ['add_task'],
+            usage_notes: '[]',
+            fallback_note: null,
+            tags: [LONG_TAG],
+          },
+        }),
+      }),
+    )
+  }
+
+  it('laesst den umbruchfeindlichen Alias mitten im Wort brechen', async () => {
+    renderWithLongIdentifiers()
+
+    const classes = (await screen.findByText(LONG_ALIAS)).className.split(/\s+/)
+    expect(classes).toContain('break-all')
+    expect(classes).toContain('max-w-full')
+  })
+
+  it('laesst lange Tags an Wortgrenzen brechen', async () => {
+    renderWithLongIdentifiers()
+
+    const classes = (await screen.findByText(LONG_TAG)).className.split(/\s+/)
+    expect(classes).toContain('break-words')
+    expect(classes).toContain('max-w-full')
+  })
+})

@@ -179,4 +179,17 @@ describe('InvitationAcceptPage', () => {
       expect(screen.getByText(/andere Email-Adresse/i)).toBeInTheDocument()
     })
   })
+
+  // Responsive-Audit (#569): Workspace-Name und Einladender-E-Mail sind
+  // fremdbestimmt und koennen ungebrochene Tokens enthalten. Beide
+  // §10.2-Karten der Seite (Ladezustand und Annahme) tragen den Umbruch.
+  it('laesst fremdbestimmte Bezeichner in beiden Karten umbrechen (#569)', () => {
+    renderAccept(authedSession)
+
+    const mains = document.querySelectorAll('main')
+    expect(mains.length).toBeGreaterThan(0)
+    for (const main of mains) {
+      expect(main.className).toContain('break-words')
+    }
+  })
 })

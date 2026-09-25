@@ -1,8 +1,7 @@
 # Frontend Designsprache — "Warm Citrus"
 
 > Living document. Stand: 2026-07-08 · Tokens, Primitives, Pages und Motion
-> sind etabliert. Plan-Ablage:
-> [`.claude/plans/erarbeite-eine-konkrete-designsprache-shiny-lollipop.md`](/.claude/plans/erarbeite-eine-konkrete-designsprache-shiny-lollipop.md).
+> sind etabliert.
 
 Diese Datei ist die **verbindliche Designsprache** der Who2Be-Web-UI
 (`apps/web/`). Sie konkretisiert, wie die in [`architecture.md`](./architecture.md)
@@ -225,8 +224,12 @@ Review-Checkliste unten.
    Breakpoint-Prefix gebunden, nicht nackt?
 3. Sind feste Breiten (`w-*`, `max-w-*`) auf Container-Ebene responsiv
    abgefedert (`w-full md:w-64` statt `w-64` durchgehend)?
-4. Sind Hit-Targets unterhalb `md` weiterhin ≥ 40px (§11 A11y-Minimum),
-   nicht durch `size="sm"`-Verdichtung unterschritten?
+4. Halten interaktive Elemente unterhalb `md` den Hit-Target-Floor aus
+   §11 ein (≥ 32px, dort verbindlich festgelegt)? `size="sm"` (36px) ist
+   dabei zulaessig — es unterschreitet den Floor nicht, ist aber nicht der
+   Default; `size="default"` (40px) bleibt der Regelfall, Mobile-Hits
+   bevorzugt 44px. Diese Checkliste setzt **keinen eigenen Wert**: die
+   Zahl steht ausschliesslich in §11.
 5. Bleibt Text bei 320px lesbar (keine abgeschnittenen Labels, kein
    Wortsalat durch zu schmale Flex-Kinder ohne `min-w-0`)?
 6. Wurde bei 768px (Tablet-Bruch `md`) und 1024px (`lg`) stichprobenartig
@@ -448,7 +451,7 @@ Beispiele: `PersonasPage`, `PlaybooksPage`, `MembersPage`,
 
 ```
 <main class="flex min-h-screen items-center justify-center
-             bg-muted/30 px-4 py-10">
+             bg-muted/30 px-4 py-10 break-words">
   <Card class="w-full max-w-md shadow-modal border-transparent">
     <CardHeader>
       <span class="text-xs uppercase tracking-wide text-muted-foreground">Who2Be</span>
@@ -464,16 +467,49 @@ Beispiele: `PersonasPage`, `PlaybooksPage`, `MembersPage`,
 </main>
 ```
 
-Heute nur `LoginPage`; weitere Brand-Pages (Onboarding, Welcome) folgen
-demselben Muster.
+`break-words` am `<main>` ist **Pflicht**, nicht Geschmack: Marketing-Pages
+zeigen fremdbestimmte Zeichenketten (GoTrue-Fehlerbezeichner wie
+`unverified_email_address_requires_confirmation`, Redirect-Hosts,
+Workspace- und Agentennamen). Ein ungebrochenes Token blaeht die
+min-content-Breite der Karte auf, `w-full max-w-md` kann dann nicht mehr
+schrumpfen, und die Seite scrollt bei 320px horizontal. Die Klasse vererbt an
+alle Nachkommen und deckt damit auch Zustaende ab, die erst zur Laufzeit
+entstehen. Gemessen im Rahmen von #569.
+
+**Werte anzeigen statt Feld faelschen:** Ein nicht editierbarer Wert in
+Feld-Optik gehoert nicht in einen `readOnly`-`<Input>` — der kuerzt auf
+schmalen Viewports still (`<input>` kennt keinen Umbruch). Stattdessen ein
+umbrechendes Element (z. B. `<output>`) in derselben Optik:
+`flex min-h-10 w-full rounded-md border border-input bg-muted/50 px-3 py-2
+text-sm break-words text-muted-foreground`. Wo der Wert eine Einwilligung
+beschreibt (OAuth-Consent), ist das bindend: ein abgeschnittener Agentenname
+stellt den Gegenstand der Freigabe unvollstaendig dar.
+
+Muster in Gebrauch auf allen Auth-Pages (`LoginPage`, `SignupPage`,
+`ResetPasswordPage`, `SetPasswordPage`, `OAuthConsentPage`,
+`InvitationAcceptPage`, `AuthCallbackPage`, `ComingSoonPage`).
 
 ## 11. A11y-Minimum
 
 - **Kontrast:** Brand-Tinte (`--brand` ↔ `--brand-foreground`) muss
   WCAG-AA-tauglich sein (>= 4.5:1). Werte aus §2.2 sind verifiziert
   (siehe Plan-Anhang).
-- **Hit-Targets:** Buttons `size="default"` = 40px (HIG-konform ≥ 32px),
-  Mobile-Hits bevorzugt 44px (`size="lg"`).
+- **Hit-Targets — diese Stelle ist die einzige Quelle des Floors:**
+  Verbindlich ist ein **Floor von ≥ 32px** (HIG). Kein interaktives Element
+  darf darunter liegen, auf keinem Breakpoint. Alles darueber sind
+  Praeferenzen, keine Mindestwerte: `size="default"` (40px) ist der
+  Regelfall, Mobile-Hits bevorzugt 44px (`size="lg"`), und `size="sm"`
+  (36px) bleibt zulaessig, wo Dichte gewollt ist (Zeilen-Aktionen,
+  Zurueck-Links) — es ist aber nicht der Default.
+  Andere Abschnitte, Issues, Plandateien und Reviews **zitieren** diesen
+  Floor, sie setzen keine eigene Zahl. Weicht eine Angabe anderswo ab, gilt
+  diese hier und die andere Stelle wird korrigiert.
+  *Technik, falls eine Stelle von `size="sm"` auf den 40px-Regelfall gehoben
+  werden soll:* `className="h-10 md:h-9"` an den Button — `tailwind-merge`
+  loest das `h-9` der Variante zugunsten der expliziten Klasse auf, der
+  Phone-Fall erreicht 40px und die Verdichtung ab `md` bleibt erhalten. Das
+  ist ein Rezept, keine Pflicht; den Floor setzt allein der Absatz oben.
+  Angewandt im Rahmen von #569.
 - **Fokus:** Focus-Ring bleibt `--ring` (neutral), **nicht** auf
   `--brand` umstellen. Sonst Doppelsignal (Brand-Fill + Brand-Ring).
 - **Brand-Farbe nie alleinige Information:** Statt nur "rotes
@@ -551,8 +587,8 @@ nachfragen, **nicht** stillschweigend umgehen.
    Media-Query.
 10. **Verbindlichkeit:** Diese Guideline ist fuer die Web-UI die
    maßgebliche Quelle (Konsistenz mit `CLAUDE.md` §Frontend-Standards).
-11. **DoD pro Aenderung:** `npm run lint && npx tsc --noEmit &&
-    npm test && npm run build` (in `apps/web/`) — alle vier gruen, lokal
+11. **DoD pro Aenderung:** `npm run lint && npx tsc -b &&
+    npm run test:coverage && npm run build` (in `apps/web/`) — alle vier gruen, lokal
     verifiziert, **vor** dem Push.
 12. **Bei Unsicherheit:** STOP, frag den User. Lieber eine Frage als
     ein UI-Inconsistency-PR.
@@ -561,8 +597,7 @@ nachfragen, **nicht** stillschweigend umgehen.
 
 ### Versionierung
 
-- 2026-05-27 — Initial (Phase D1 Tokens etabliert). Plan:
-  [`.claude/plans/erarbeite-eine-konkrete-designsprache-shiny-lollipop.md`](/.claude/plans/erarbeite-eine-konkrete-designsprache-shiny-lollipop.md).
+- 2026-05-27 — Initial (Phase D1 Tokens etabliert).
 - 2026-07-08 — Konsistenz-Pass (Standards-Review WP-5): `tokens`-Feature-
   Referenzen ersetzt, abgelaufene D2–D5-Marker entfernt, Spacing-Zusatzstufe
   10 fuer Page-Level-Vertikalabstand dokumentiert (§4.1 ↔ §10.2 aufgeloest),

@@ -2,6 +2,69 @@
 
 _Stand: 2026-09-19 (47. Lauf — der Issuer-Fix war zweimal die falsche Seite: der Trailing Slash entsteht im CLIENT, nicht in unseren Dokumenten. Advertisiert wird jetzt die URL-Normalform)_
 
+## Der Issue-Bezug im PR ist jetzt Norm, nicht Gewohnheit (2026-09-24, #625)
+
+`.github/pull_request_template.md` fragt ihn als erste Sektion mit drei
+benannten Faellen ab (`Closes` / `Refs` / `n/a` mit Begruendung),
+`CONTRIBUTING.md` §Issue reference traegt die Regel. Vorher stand sie nur in
+einer Plandatei — eine Momentaufnahme, keine Norm: in Welle 3 trugen elf von
+zwoelf PRs keine `Closes`-Zeile, neun erledigte Issues blieben offen.
+**Kein CI-Check** (bewusst, DECISIONS 2026-09-24): er wuerde bei Dependabot-
+und Doku-PRs falsch anschlagen. Erst messen, ob Template + CONTRIBUTING
+reichen.
+
+## ESLint zaehlt `coverage/` nicht mehr mit (2026-09-20, Issue #520)
+
+`apps/web/package.json` lintet mit `eslint .`; die Ignore-Liste in
+`eslint.config.js` kannte `dist`, `e2e`, `playwright-report` und
+`test-results`, aber nicht `coverage`. `coverage` steht jetzt ebenfalls
+darauf.
+
+**Die Aenderung ist praeventiv, nicht die Reaktion auf eine beobachtete
+Schwankung** — die urspruengliche Begruendung (die Zahl **66** habe je nach
+vorangegangenem `npm run test:coverage` geschwankt) traegt nicht, und sie ist
+mit dieser Notiz richtiggestellt. In der aktuellen Konfiguration *konnte* das
+nicht eintreten, aus zwei unabhaengigen Gruenden: `vite.config.ts:37` stellt
+die Coverage-Reporter auf `text-summary` / `json` / `html`, also landet keine
+`.ts`/`.tsx`-Datei in `coverage/`; und in `eslint.config.js` traegt **jeder**
+Regel-Block ein `files: ['**/*.{ts,tsx}']` — kein Block matcht `.js`, die
+mitgelieferten HTML-Report-Skripte werden also ohne Regeln besucht.
+Kontrollbeleg aus dem #520-Review (A/B, ohne den Fix): mit zwei realistischen
+istanbul-Report-Dateien (`coverage/lcov-report/block-navigation.js`,
+`prettify.js`, jeweils mit absichtlichen Lint-Verstoessen) blieb es bei exakt
+**66 problems / 0 errors**; erst eine kuenstlich abgelegte `coverage/bait.ts`
+erzeugte **67 problems / 1 error**. Einschraenkung: `npm run test:coverage`
+laeuft in dieser Umgebung rot (135 Testfehler, `window.localStorage`
+undefined unter jsdom) und erzeugt gar kein `coverage/` — die Aussage ist aus
+der Reporter-Konfiguration abgeleitet und an nachgestellten Report-Dateien
+geprueft, nicht an einem echt erzeugten Artefakt gemessen.
+
+Der Fix bleibt richtig — als Defense in Depth: sobald ein Reporter
+(`lcov`-Nachbarn, Instrumentierungs-Artefakte) oder ein kuenftiger
+`.js`-Regel-Block hinzukommt, waere die Zahl tatsaechlich abhaengig davon, ob
+vorher getestet wurde. Genau das ist jetzt ausgeschlossen. Nicht angefasst:
+die 66 Warnungen in `src/**` (eigene Pakete), die Schwere der Regeln,
+`.gitignore`.
+
+## Dokumentierter Typecheck prueft wieder eine Flaeche (2026-09-20, Issue #517)
+
+`apps/web/tsconfig.json` ist ein reines Solution-File (`"files": []` + zwei
+`references`). `npx tsc --noEmit` hatte damit **null** Eingabedateien und
+endete immer mit Exit 0 — an 12 normativen Stellen in 9 Dateien stand also ein
+Gate, das nichts pruefte. Ersetzt durch `npx tsc -b` (gemessen 1658 Dateien,
+davon 539 aus `apps/web/src`), also das Kommando, das CI ohnehin faehrt
+(`ci.yml:178`).
+
+Zweiter Defekt derselben Klasse, im selben PR korrigiert (Owner-Entscheidung
+Option A vom 2026-09-20): 7 Stellen nannten als Testgate `npm test`
+(= `vitest run` ohne `--coverage`). Die Thresholds in `vite.config.ts`
+greifen nur mit `--coverage`; dokumentiert ist jetzt `npm run test:coverage`,
+wie in `ci.yml:182`.
+
+Nicht angefasst: `uv run pytest -q` in `docs/CLAUDE-PROFILE.md` (die
+CI-Variante braucht eine laufende DB — eigene Owner-Weiche), die datierten
+Rueckblicke und `.claude/plan/**`, sowie `apps/web/tsconfig*.json` selbst.
+
 ## Betreiber-Domain aus dem Repo entfernt (2026-09-19, 47. Lauf, Nachlauf)
 
 Die Domain der Live-Installation war ueber die OAuth-Issuer-Laeufe in drei
@@ -2180,7 +2243,7 @@ Branch-Namen, DoD-Belege) lebt in `.claude/plan/*` (Status-Übersicht:
   nicht die gepinnte). `get_consent_principal` klemmt beide Consent-Endpunkte
   auf den JWT-Pfad. ADR-0036-Addendum 3. **Vorbestehend, nicht durch #405
   eingeführt** — gefunden, weil der neue Preview dieselbe Dependency erbte.
-- **81 Tools** (58 + 23 aus WorkArea/KB/Tabellen, ADR-0047): Read + Write
+- **83 Tools** (58 + 25 aus WorkArea/KB/Tabellen, ADR-0047): Read + Write
   (ADR-0030), `search` + `search_content`
   (ADR-0037/0046), Versions-/
   Discovery-Tools, System-Prompt-Tools (ADR-0040), feinkörnige
@@ -2365,7 +2428,7 @@ Arbeitsbereich** für Agenten plus **belegpflichtige Knowledge Base**. Plan
   Storage-Zeitstempel) und `cleanup_deleted_area_stores` (SQLite-Dateien
   gelöschter Areas). GDPR-Export trägt Areas/Artifacts/Blob-Metadaten/
   Tabellen-Zeilen (Cap 10 000 + `truncated`)/KB/Zugriffslog.
-- **MCP:** 58 → **81 Tools** (`tools/workarea.py`, `tools/tables.py`,
+- **MCP:** 58 → **83 Tools** (`tools/workarea.py`, `tools/tables.py`,
   `tools/kb.py`), policy-gefiltert, Payload-Budget grün.
 - **Security-Reviews:** nach Welle 2 und Welle 5 je ein Durchlauf; Phase 2
   siehe eigener Abschnitt unten.
@@ -2935,8 +2998,11 @@ Draft-on-Edit-Sichtbarkeit waren längst erledigt/überholt.
   JSON-*String* rechnen. Dass dieselbe Fehlerklasse woanders einen Endpunkt
   gekillt hat, steht oben (§`describe_table` antwortete mit 500).
 - Offene Owner-Entscheidungen: `docs/standards-review-2026-07-20.md` §4
-  (ADR-0002 enforce vs. amend, Branch-Protection/Merge-Strategie,
-  On-Prem-RLS, Cloud-Image-Deploy, LIC-1-Mechanik, coverage.all/E2E/CLA).
+  (ADR-0002 enforce vs. amend, Merge-Strategie, On-Prem-RLS,
+  Cloud-Image-Deploy, LIC-1-Mechanik, coverage.all/E2E/CLA). Die
+  **Branch-Protection** gehört nicht mehr dazu: entschieden und angewendet am
+  2026-09-22 (Ruleset `16707501`), siehe unten §„Nächste Schritte" Punkt 3.
+  Offen ist aus diesem Paar nur noch die Merge-Strategie.
 
 ## Nächste Schritte (nicht-Code, manuell beim Owner)
 
@@ -2947,8 +3013,11 @@ in #341):
 2. ~~Tag `v0.1.0` + GitHub-Release~~ ✅ 2026-08-20 14:45 UTC (Tag auf
    `main`, Notes aus dem CHANGELOG; künftige Releases per Actions →
    Release → „Run workflow").
-3. GitHub-Settings-Rest: **Branch-Protection für `main`** (am 2026-08-21
-   per API als `protected: false` gegengeprüft — real offen) und
+3. GitHub-Settings-Rest: ~~**Branch-Protection für `main`**~~ ✅ 2026-09-22
+   (Ruleset `16707501` `enforcement: active` auf `~DEFAULT_BRANCH`, Required
+   Check `all-green`, PR-Pflicht, `bypass_actors` leer — Belege und Grenzen
+   in `docs/branch-protection-main.md`; die ältere Messung „am 2026-08-21 per
+   API `protected: false`" ist damit überholt). Offen bleibt die
    Merge-Strategie; **Description + Topics** setzen (Repo hat beides noch
    nicht; fertiger Text in #338 und PR #389). ~~Auto-delete head
    branches~~ ✅ aktiv, ~~Discussions~~ ✅ an; Secret-/Push-Protection und

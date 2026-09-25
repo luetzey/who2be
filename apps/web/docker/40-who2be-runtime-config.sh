@@ -56,6 +56,7 @@ window.__WHO2BE_CONFIG__ = {
   launchMode: "$(sanitize "${LAUNCH_MODE}")",
   launchContact: "$(sanitize "${WHO2BE_LAUNCH_CONTACT:-}")",
   sessionMaxAgeHours: ${SESSION_MAX_AGE_HOURS},
+  turnstileSiteKey: "$(sanitize "${WHO2BE_TURNSTILE_SITE_KEY:-}")",
 }
 EOF
 

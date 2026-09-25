@@ -360,6 +360,42 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
   }
+
+  /*
+   * Cookie-Consent-Banner: Platz reservieren statt ueberlagern (Befund B7,
+   * Welle 7 / K2b). Der Wert kommt gemessen aus `CookieConsentBanner.tsx`
+   * (`--cookie-banner-height`, ResizeObserver); solange keine Entscheidung
+   * aussteht ist die Variable nicht gesetzt und beide Regeln fallen auf `0px`.
+   *
+   * Zwei Verbraucher, weil einer allein nicht reicht:
+   *
+   *   `padding-bottom` reserviert die Flaeche — der Seiteninhalt endet nicht
+   *   mehr unter dem Banner, der Nutzer kann das Formularende erreichen.
+   *
+   *   `scroll-padding-bottom` sagt dem Scrollport, dass die unteren N Pixel
+   *   nicht zur sichtbaren Region zaehlen. Das ist noetig, weil
+   *   `scrollIntoView`/`scrollIntoViewIfNeeded` ein Ziel *minimal* in den
+   *   Viewport scrollt, also genau an dessen Unterkante — und damit unter das
+   *   `fixed` Banner. CSS Scroll Snap Module Level 1, §4.2 ("Scroll Snapport:
+   *   the scroll-padding property"), woertlich: "This property specifies (for
+   *   all scroll containers, not just scroll snap containers) offsets that
+   *   define the optimal viewing region of a scrollport: the region used as
+   *   the target region for placing things in view of the user. This allows
+   *   the author to exclude regions of the scrollport that are obscured by
+   *   other content (such as fixed-positioned toolbars or sidebars)".
+   *   Genau dieser Fall liegt hier vor. Ohne diese Zeile klickt ein Nutzer
+   *   (und Playwright) nach dem Scrollen weiterhin ins Banner.
+   *
+   * Auf `html`, nicht auf `body`: Scrollport des Dokuments ist das
+   * Wurzelelement, `scroll-padding` auf einem Nicht-Scrollcontainer bliebe
+   * wirkungslos.
+   */
+  body {
+    padding-bottom: var(--cookie-banner-height, 0px);
+  }
+  html {
+    scroll-padding-bottom: var(--cookie-banner-height, 0px);
+  }
 }
 
 /*
@@ -400,6 +436,97 @@
   letter-spacing: var(--tracking-tight);
   margin-top: calc(var(--spacing) * 2);
   margin-bottom: calc(var(--spacing) * 2);
+}
+
+/*
+ * Editor-Rinne auf dem Phone (#564, W3 Resources).
+ *
+ * BlockNote setzt `.bn-editor { padding-inline: 54px }` als Rinne fuer das
+ * Side-Menu (Drag-Handle + „+"). Gemessen bei 320px Viewport bleiben von
+ * 236px Editorbreite nur 128px Textflaeche — ≈16 Zeichen je Zeile. §4.4
+ * Checklistenpunkt 5 („Bleibt Text bei 320px lesbar?") ist damit verletzt,
+ * und #431 verlangt fuer das Phone ausdruecklich „mindestens lesbar".
+ *
+ * Die Rinne ist unterhalb `md` zusaetzlich funktionslos: das Side-Menu
+ * erscheint per Hover, den es auf Touch nicht gibt.
+ *
+ * Warum ein Override und nicht der Container (Weiche 2 des Issues): ein
+ * Elternteil kann das Padding seines Kindes nicht zuruecknehmen. Der Bedarf
+ * ist gemessen, nicht vermutet — genau der Fall, den Weiche 2 zulaesst. Der
+ * Selektor ist auf `.bn-container` gescoped und auf unterhalb `md` begrenzt;
+ * ab `md` gilt unveraendert das BlockNote-Default.
+ */
+@media (max-width: 767px) {
+  .bn-container .bn-editor {
+    padding-inline: calc(var(--spacing) * 3);
+  }
+
+  /*
+   * Side-Menu (Drag-Handle + „+") unterhalb `md` ausblenden (#431 K4).
+   *
+   * Direkte Folge des Rinnen-Overrides darueber, gemessen bei 320 / 390 /
+   * 767px: BlockNote positioniert den Side-Menu-Wrapper per Inline-Transform
+   * mit festem Offset links neben die Block-Content-Spalte
+   * (`transform: translate(-21px, …)`). Mit der 54px-Rinne sitzt es bei
+   * `x = 21` im Viewport; mit den 12px hier bei `x = -21` — die beiden
+   * Buttons (je 24x24) liegen ab `x = -20` teilweise ausserhalb des
+   * Viewports und sind nicht mehr vollstaendig antippbar. Gegenprobe: die
+   * gleiche Messung bei 390px mit erzwungenen 54px liefert wieder `x = 21`.
+   *
+   * Die Annahme im Kommentar oben, das Side-Menu erscheine unterhalb `md`
+   * ohnehin nicht, weil es Hover braucht, hat die Messung nicht bestaetigt:
+   * nach einem reinen touchStart/touchEnd-Tap ist `.bn-side-menu` im DOM und
+   * sichtbar (Chromium feuert die Compatibility-Mouse-Events, BlockNotes
+   * `mousemove`-Handler greift darauf an). Es ist also nicht abwesend,
+   * sondern halb ausserhalb des Bildes.
+   *
+   * Warum ausblenden statt die Rinne zurueckzunehmen: die Rinne zurueckholen
+   * wuerde den gemessenen Lesbarkeits-Fix aus #564 rueckgaengig machen
+   * (262px Textflaeche zurueck auf 128px). #431 verlangt fuer das Phone
+   * „lesbar + Basis-Editing" — Basis-Editing bleibt vollstaendig erhalten
+   * (Enter fuer neue Bloecke, Slash-Menue fuer Blocktypen, Backspace zum
+   * Loeschen, Formatting-Toolbar); es entfaellt allein das Komfort-Menue.
+   * Ab `md` bleibt alles unveraendert.
+   */
+  .bn-side-menu {
+    display: none;
+  }
+}
+
+/*
+ * Hit-Targets der BlockNote-Bedienelemente (#431 K4).
+ *
+ * `docs/frontend/design-language.md` §11: „Verbindlich ist ein Floor von
+ * >= 32px (HIG). Kein interaktives Element darf darunter liegen, auf keinem
+ * Breakpoint." Die 44px aus dem Epic-Body von #431 sind dort ausdruecklich
+ * „Praeferenz", kein Mindestwert — gemessen und geurteilt wurde gegen 32px.
+ *
+ * Gemessen auf 320 / 390 (iPhone 13) / 810px (iPad gen 7): Toolbar-Buttons
+ * durchgehend 30x30, Drag-Handle-Menue-Eintraege 94x30, Side-Menu-Buttons
+ * 24x24. Ursache ist der Default der Mantine-`ActionIcon` in
+ * `@blocknote/mantine` 0.54.2 — ein Bibliotheks-Default, den wir hier
+ * kompensieren statt die Bibliothek zu patchen (Out of Scope der Karte).
+ *
+ * Der Block-Typ-Button der Toolbar (Mantine-`Button` mit Text) trug
+ * zusaetzlich `flex-shrink: 1` bei `min-width: auto` und wurde bei 320px auf
+ * 18,7px zusammengedrueckt. `flex-shrink: 0` laesst die Toolbar stattdessen
+ * weiter scrollen — sie ist ausweislich ihres eigenen `overflow-x: auto` ein
+ * bewusster Scroll-Container und nach §4.4 Checklistenpunkt 1 zulaessig.
+ */
+.bn-toolbar .bn-button,
+.bn-toolbar button {
+  min-height: calc(var(--spacing) * 8);
+  min-width: calc(var(--spacing) * 8);
+  flex-shrink: 0;
+}
+
+.bn-side-menu .bn-button {
+  min-height: calc(var(--spacing) * 8);
+  min-width: calc(var(--spacing) * 8);
+}
+
+.bn-drag-handle-menu .mantine-Menu-item {
+  min-height: calc(var(--spacing) * 8);
 }
 
 /*

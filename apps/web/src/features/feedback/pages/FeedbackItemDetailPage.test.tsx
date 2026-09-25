@@ -105,4 +105,28 @@ describe('FeedbackItemDetailPage', () => {
 
     expect(await screen.findByText('Noch nicht bearbeitet.')).toBeInTheDocument()
   })
+
+  // §4.4 Checklistenpunkt 1 (#565): `justify-between` erzwingt Label und Wert
+  // auf einer Zeile. Auf 320px bleibt der „Bezug"-Liste nach Page-Padding und
+  // Card-Padding kaum Breite — lange Element-Namen und der ausgeschriebene
+  // Zeitstempel laufen sonst ineinander. Weiche 3: umbrechen lassen.
+  it('laesst die Bezug-Zeilen umbrechen, statt Label und Wert auf eine Zeile zu zwingen', async () => {
+    renderPage()
+    const elementLink = await screen.findByRole('link', { name: 'Onboarding' })
+
+    // Die `DefRow` um den Element-Link: `<dd>` → `<div>`.
+    const defRow = elementLink.closest('dd')!.parentElement!
+    expect(defRow).toHaveClass('flex-wrap')
+    // Der Wert bleibt schrumpffaehig (Punkt 5) — das war schon erfuellt.
+    expect(elementLink.closest('dd')).toHaveClass('min-w-0')
+  })
+
+  it('laesst die Signal-Zeile umbrechen', async () => {
+    renderPage()
+    await screen.findByRole('link', { name: 'Onboarding' })
+
+    // Label „Signal" + Badge in der Karte „Signal & Notiz".
+    const signalRow = screen.getByText('Signal', { selector: 'span' }).parentElement!
+    expect(signalRow).toHaveClass('flex-wrap')
+  })
 })

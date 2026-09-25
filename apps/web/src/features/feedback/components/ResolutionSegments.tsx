@@ -37,7 +37,7 @@ export function ResolutionSegments({ value, onChange, name, disabled }: Resoluti
     <span
       role="group"
       aria-label={`${t('resolution.label')} — ${name}`}
-      className="inline-flex gap-0.5 rounded-lg bg-muted p-0.5"
+      className="inline-flex flex-wrap gap-0.5 rounded-lg bg-muted p-0.5"
     >
       {SEGMENTS.map((segment) => {
         const active = segment === current
@@ -54,7 +54,10 @@ export function ResolutionSegments({ value, onChange, name, disabled }: Resoluti
             disabled={disabled || isOpen}
             onClick={isOpen ? undefined : () => onChange(segment)}
             className={cn(
-              'h-7 rounded-md px-2.5 text-xs font-medium',
+              // Hit-Target: h-7 (28px) liegt unter dem A11y-Floor (§11, >= 32px,
+              // mobil bevorzugt 40px). Unterhalb der Mobile-Schwelle `md` greifen
+              // die Segmente daher auf 40px; darueber bleibt die kompakte Optik.
+              'h-10 rounded-md px-2.5 text-xs font-medium md:h-7',
               // Aktives Segment hebt sich neutral (Surface + Shadow), nicht per
               // Brand-Fill — Brand-Tinte bleibt CTAs vorbehalten (§2.2/§9.1).
               active

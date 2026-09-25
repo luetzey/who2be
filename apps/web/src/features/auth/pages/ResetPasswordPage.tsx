@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { MailCheck } from 'lucide-react'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, Navigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
 
@@ -11,9 +11,14 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { config } from '@/config'
 import { supabase } from '@/lib/supabase'
 
+import { TurnstileWidget } from '../components/TurnstileWidget'
+import { translateAuthError } from '../lib/captcha'
+import { isPasswordAuthEnabled } from '../lib/password-auth'
 import { buildRedirectTo } from '../lib/redirect'
+import { useCaptcha } from '../lib/use-captcha'
 
 type ResetValues = { email: string }
 
@@ -30,6 +35,9 @@ export function ResetPasswordPage() {
   const [searchParams] = useSearchParams()
   const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Turnstile (Issue #539 / Folgebefund): GoTrue haengt `/recover` an dieselbe
+  // Captcha-Middleware wie `/signup` (api.go:179). Ohne Site-Key passiv.
+  const captcha = useCaptcha()
 
   const resetSchema = z.object({
     email: z.string().email(t('validation.emailInvalid')),
@@ -40,20 +48,36 @@ export function ResetPasswordPage() {
     defaultValues: { email: '' },
   })
 
+  // Cloud: kein Passwort-Login, also auch kein Passwort-Reset — die Seite ist
+  // dort NICHT per Direktlink erreichbar (Owner-Entscheidung 2026-09-24).
+  // Nicht bloss versteckt: ohne diesen Guard bliebe `/reset-password` ein
+  // offener Pfad zu einem Formular, dessen GoTrue-Gegenstueck zwar noch Mails
+  // verschickt (`POST /recover` prueft `External.Email` nicht), die aber auf
+  // ein Passwort zielen, mit dem man sich in der Cloud nicht anmelden kann.
+  // `/onboarding/set-password` bleibt dagegen bestehen — der
+  // Einladungs-Magic-Link braucht sie (`InvitationAcceptPage`).
+  if (!isPasswordAuthEnabled()) {
+    return <Navigate to="/login" replace />
+  }
+
   async function onSubmit(values: ResetValues) {
     setError(null)
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(values.email, {
       redirectTo: buildRedirectTo('/onboarding/set-password', searchParams.get('next')),
+      ...captcha.option(),
     })
     if (resetError) {
-      setError(resetError.message)
+      setError(translateAuthError(resetError, t))
+      // Token ist verbraucht — ohne frische Challenge liefe der zweite Versuch
+      // in dieselbe Abweisung.
+      captcha.reset()
       return
     }
     setSent(true)
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-10">
+    <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-10 break-words">
       <Card className="w-full max-w-md border-transparent shadow-modal">
         <CardHeader className="gap-2">
           <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
@@ -94,15 +118,33 @@ export function ResetPasswordPage() {
                   )}
                 />
                 {error !== null ? <ErrorAlert message={error} /> : null}
+                {captcha.required ? (
+                  <TurnstileWidget
+                    key={captcha.nonce}
+                    siteKey={config.turnstileSiteKey}
+                    action="recover"
+                    onToken={captcha.setToken}
+                    onExpire={captcha.clearToken}
+                    className="flex justify-center"
+                  />
+                ) : null}
                 <Button
                   type="submit"
                   variant="brand"
                   className="w-full"
-                  disabled={form.formState.isSubmitting}
+                  disabled={form.formState.isSubmitting || captcha.blocked}
                 >
                   {t('resetPassword.submit')}
                 </Button>
-                <Button asChild variant="ghost" size="sm" className="w-full">
+                {captcha.blocked ? (
+                  <p className="text-center text-xs text-muted-foreground">
+                    {t('captcha.pending')}
+                  </p>
+                ) : null}
+                {/* Weiche 4 aus #569: `size="sm"` liefert 36px (gemessen) —
+                    oberhalb des verbindlichen Floors (§11: >= 32px), hier aber
+                    auf den 40px-Regelfall gehoben, ab `md` verdichtet. */}
+                <Button asChild variant="ghost" size="sm" className="h-10 w-full md:h-9">
                   <Link to="/login">{t('backToLogin')}</Link>
                 </Button>
               </form>

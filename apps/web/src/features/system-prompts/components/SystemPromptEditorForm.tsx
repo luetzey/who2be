@@ -120,7 +120,10 @@ export function SystemPromptEditorForm({
                     name="body"
                     render={() => (
                       <FormItem>
-                        <div className="flex items-center justify-between">
+                        {/* #566 Weiche 2: die Zeile darf umbrechen, statt den
+                            Trigger aus dem Viewport zu schieben — Repo-Muster
+                            aus `components/layout/PageHeader.tsx`. */}
+                        <div className="flex flex-wrap items-center justify-between gap-2">
                           <FormLabel>{t('form.promptBody.label')}</FormLabel>
                           <PlaceholderHelp />
                         </div>
