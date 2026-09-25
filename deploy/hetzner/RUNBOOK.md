@@ -838,7 +838,10 @@ traegt `--tag incomplete` statt `--tag dump` — er kann sich beim Restore also
 nicht als vollstaendiger Stand ausgeben. Begruendung: ein gruener Lauf ist die
 Zusage „dieser Snapshot traegt den vollstaendigen Zustand"; sie waere genau dann
 falsch, wenn sie gebraucht wird. Belegt durch
-`deploy/hetzner/tests/test_backup_alarm.sh` (Faelle 7–9).
+`deploy/hetzner/tests/test_backup_alarm.sh` (Faelle 7–9). Dass der Lauf den
+Schreibpfad der API nicht verbiegt, belegen die Faelle 12–13 desselben Tests
+(Backup und Store unter verschiedenen Kennungen; Details unter
+„Tabellen-Store-Backup").
 
 **Lokaler Platzbedarf:** `7 × Dump + 1 × Bucket-Spiegel + 1 × Tabellen-Store`.
 Die 7-Tage-Retention betrifft ausschliesslich `dump-*.pgc.gpg`; Blob-Spiegel und
@@ -1156,11 +1159,27 @@ die Snapshots selbst; der `backup`-Service mountet dafuer `tablestore-data` und
 bringt `sqlite3` mit. Referenz dessen, was `backup.sh` je Area-Datei tut:
 
 ```bash
-# Stufe 3 aus backup.sh, sinngemaess je ${WHO2BE_TABLESTORE_DIR}/**/*.sqlite:
-sqlite3 "file:${src}?mode=ro" "VACUUM INTO '${target}.tmp'"
-sqlite3 "${target}.tmp" 'PRAGMA quick_check'   # muss 'ok' liefern
-mv -f "${target}.tmp" "${target}"              # atomar ueber den Vorlauf
+# Stufe 3 aus backup.sh, sinngemaess je ${WHO2BE_TABLESTORE_DIR}/**/*.sqlite.
+# Das `su-exec <uid>:<gid>` ist kein Beiwerk — Begruendung direkt darunter.
+su-exec "$(stat -c '%u:%g' "${src}")" \
+  sqlite3 "file:${src}?mode=ro" "VACUUM INTO '${tmp}'"
+sqlite3 "${tmp}" 'PRAGMA quick_check'         # muss 'ok' liefern
+mv -f "${tmp}" "${target}"                    # atomar ueber den Vorlauf
 ```
+
+- **Der Lauf laeuft unter der Kennung des Datei-Eigentuemers.** Eine
+  WAL-Datenbank legt ihre Seitendateien (`-wal`, `-shm`) **beim Oeffnen** an —
+  auch bei einem reinen Leser und auch bei `mode=ro`. Nachts ist genau das der
+  Regelfall: die API oeffnet je Query eine Verbindung und schliesst sie wieder,
+  um 03:15 UTC existieren die Seitendateien also in aller Regel nicht. Legte sie
+  der Backup-Lauf unter seiner eigenen Kennung an, koennte die API die
+  betroffene Area danach nur noch **lesen**, nicht mehr schreiben — ein stiller
+  Fehlermodus, der erst auffiele, wenn ein Nutzer eine Tabelle aendern will.
+  Deshalb `su-exec`. Nach jedem Snapshot prueft der Lauf die Kennung der
+  Seitendateien und macht die Area zum Fehlschlag, wenn sie nicht stimmt: die
+  Zusage wird gemessen, nicht angenommen. (Geloescht werden die Seitendateien
+  bewusst **nicht** — ein paralleler Leser der API koennte den WAL-Index gerade
+  gemappt haben.)
 
 - **Konsistenz und ihre Grenze.** `VACUUM INTO` garantiert einen in sich
   konsistenten Punkt-in-der-Zeit-Stand: ein gleichzeitig schreibender Prozess

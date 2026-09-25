@@ -13,7 +13,13 @@
 #   5) ein unvollstaendiger Lauf markiert seinen restic-Snapshot als
 #      `--tag incomplete`, damit er sich beim Restore nicht als vollstaendiger
 #      Stand ausgeben kann;
-#   6) fehlende Store-Konfiguration ist FATAL, nicht "still uebersprungen".
+#   6) fehlende Store-Konfiguration ist FATAL, nicht "still uebersprungen";
+#   7) der Lauf VERBIEGT DEN SCHREIBPFAD DER API NICHT: ein `mode=ro`-Leser
+#      legt die WAL-Seitendateien an, wenn sie fehlen — gehoeren sie danach dem
+#      Backup-Nutzer statt der API, kann die API die Area still nicht mehr
+#      schreiben. Fall 12 stellt das cross-uid nach (Backup als root, Store
+#      unter fremder uid), was die Faelle 1–11 prinzipbedingt nicht messen
+#      koennen: dort ist die Kennung beider Seiten dieselbe.
 #
 # Methode: pg_dump / gpg / restic / curl / aws werden durch PATH-Stubs ersetzt,
 # die sich per Env-Schalter zum Scheitern bringen lassen. `sqlite3` ist echt —
@@ -194,6 +200,29 @@ assert_tablestore_snapshot() {
   ok "$1: Tabellen-Snapshot lesbar, quick_check ok, 2 Zeilen"
 }
 
+# Der Lauf darf im QUELLVERZEICHNIS nichts hinterlassen, das der API gehoeren
+# muesste und ihr nicht gehoert. Ein `mode=ro`-Leser LEGT die WAL-Seitendateien
+# an, wenn sie fehlen — nachts ist das der Regelfall, weil die API je Query
+# oeffnet und schliesst. Gehoeren sie danach dem Backup-Nutzer statt der API,
+# kann die API diese Area still nicht mehr schreiben.
+assert_no_foreign_sidecars() {
+  local dir="${2:-${TABLESTORE_SRC}}" db want owner side f bad=0
+  while IFS= read -r db; do
+    want="$(stat -c '%u' "${db}")"
+    for side in '-wal' '-shm'; do
+      f="${db}${side}"
+      [[ -e "${f}" ]] || continue
+      owner="$(stat -c '%u' "${f}")"
+      if [[ "${owner}" != "${want}" ]]; then
+        printf '    fremd: %s (uid %s, DB gehoert uid %s)\n' "${f##*/}" "${owner}" "${want}" >&2
+        bad=1
+      fi
+    done
+  done < <(find "${dir}" -type f -name '*.sqlite' | sort)
+  (( bad == 0 )) || fail "$1: Backup-Lauf hinterlaesst fremde WAL-Seitendateien im Quellverzeichnis"
+  ok "$1: keine fremden WAL-Seitendateien im Quellverzeichnis"
+}
+
 assert_restic_tag() {
   local expected="$1" what="$2"
   grep -q -- "backup .* --tag ${expected} " "${RUN_DIR}/restic.log" \
@@ -209,7 +238,7 @@ assert_no_restic_backup() {
 }
 
 # --- 1) Erfolgsfall: alle drei Bestaende + Offsite + Alarmweg ------------
-log "1/11 Erfolgsfall (drei Bestaende, Offsite, Heartbeat)"
+log "1/12 Erfolgsfall (drei Bestaende, Offsite, Heartbeat)"
 RESTIC_REPOSITORY="local:${ROOT}/repo" RESTIC_PASSWORD=x \
 BACKUP_HEARTBEAT_URL="${HEARTBEAT_URL}" \
   run success
@@ -217,11 +246,12 @@ assert_exit zero "Erfolgsfall"
 assert_dump_present "Erfolgsfall"
 assert_blob_mirror "Erfolgsfall"
 assert_tablestore_snapshot "Erfolgsfall"
+assert_no_foreign_sidecars "Erfolgsfall"
 assert_pings 1 "Erfolgsfall"
 assert_restic_tag dump "Erfolgsfall"
 
 # --- 2) restic backup scheitert (Kernfall #541) --------------------------
-log "2/11 restic backup scheitert — rot, Dump bleibt, kein Ping"
+log "2/12 restic backup scheitert — rot, Dump bleibt, kein Ping"
 STUB_RESTIC_FAIL="backup" \
 RESTIC_REPOSITORY="local:${ROOT}/repo" RESTIC_PASSWORD=x \
 BACKUP_HEARTBEAT_URL="${HEARTBEAT_URL}" \
@@ -237,7 +267,7 @@ grep -q 'forget uebersprungen' "${RUN_DIR}/stdout.log" \
 ok "Sync-Fehlschlag: restic forget uebersprungen"
 
 # --- 3) restic forget scheitert ------------------------------------------
-log "3/11 restic forget scheitert — rot, Dump bleibt, kein Ping"
+log "3/12 restic forget scheitert — rot, Dump bleibt, kein Ping"
 STUB_RESTIC_FAIL="forget" \
 RESTIC_REPOSITORY="local:${ROOT}/repo" RESTIC_PASSWORD=x \
 BACKUP_HEARTBEAT_URL="${HEARTBEAT_URL}" \
@@ -247,7 +277,7 @@ assert_dump_present "Forget-Fehlschlag"
 assert_pings 0 "Forget-Fehlschlag"
 
 # --- 4) Ohne neue Variablen: Verhalten unveraendert ----------------------
-log "4/11 Offsite-Erfolg ohne BACKUP_HEARTBEAT_URL — unveraendert"
+log "4/12 Offsite-Erfolg ohne BACKUP_HEARTBEAT_URL — unveraendert"
 RESTIC_REPOSITORY="local:${ROOT}/repo" RESTIC_PASSWORD=x \
   run no-heartbeat
 assert_exit zero "Ohne Alarmweg"
@@ -255,7 +285,7 @@ assert_dump_present "Ohne Alarmweg"
 assert_pings 0 "Ohne Alarmweg"
 
 # --- 5) Lokal-only (RESTIC_REPOSITORY leer) ------------------------------
-log "5/11 Lokal-only mit Alarmweg — Erfolg, Ping, alle drei Bestaende lokal"
+log "5/12 Lokal-only mit Alarmweg — Erfolg, Ping, alle drei Bestaende lokal"
 BACKUP_HEARTBEAT_URL="${HEARTBEAT_URL}" run local-only
 assert_exit zero "Lokal-only"
 assert_dump_present "Lokal-only"
@@ -264,7 +294,7 @@ assert_tablestore_snapshot "Lokal-only"
 assert_pings 1 "Lokal-only"
 
 # --- 6) Stummer Alarmweg ist selbst ein Fehlschlag -----------------------
-log "6/11 Heartbeat-Ping scheitert — Lauf ist rot, Dump bleibt"
+log "6/12 Heartbeat-Ping scheitert — Lauf ist rot, Dump bleibt"
 STUB_CURL_FAIL=1 \
 RESTIC_REPOSITORY="local:${ROOT}/repo" RESTIC_PASSWORD=x \
 BACKUP_HEARTBEAT_URL="${HEARTBEAT_URL}" \
@@ -275,7 +305,7 @@ assert_dump_present "Stummer Alarmweg"
 # --- 7) TEILERFOLG: Blob-Sync scheitert — die Kernzusage dieser Karte ----
 # pg_dump lief, restic lief, nur der Objekt-Store fehlt. Genau hier haette die
 # alte Fassung "alles gut" gemeldet, waehrend ein Drittel fehlt.
-log "7/11 Blob-Sync scheitert bei sonst gruenem Lauf — KEIN gruener Heartbeat"
+log "7/12 Blob-Sync scheitert bei sonst gruenem Lauf — KEIN gruener Heartbeat"
 STUB_AWS_FAIL=1 \
 RESTIC_REPOSITORY="local:${ROOT}/repo" RESTIC_PASSWORD=x \
 BACKUP_HEARTBEAT_URL="${HEARTBEAT_URL}" \
@@ -292,7 +322,7 @@ ok "Blob-Teilerfolg: Log meldet 'Backup UNVOLLSTAENDIG'"
 # --- 8) TEILERFOLG: Tabellen-Snapshot scheitert --------------------------
 # Eine kaputte Datei im Store: VACUUM INTO bzw. quick_check muss sie ablehnen,
 # und der Lauf darf nicht gruen enden.
-log "8/11 Tabellen-Snapshot scheitert — KEIN gruener Heartbeat"
+log "8/12 Tabellen-Snapshot scheitert — KEIN gruener Heartbeat"
 BROKEN_STORE="${ROOT}/tablestore-broken"
 rm -rf "${BROKEN_STORE}"
 mkdir -p "${BROKEN_STORE}/33333333-3333-3333-3333-333333333333"
@@ -309,7 +339,7 @@ assert_blob_mirror "Tabellen-Teilerfolg"       # Stufe 2 lief trotz Stufe-3-Fehl
 assert_restic_tag incomplete "Tabellen-Teilerfolg"
 
 # --- 9) Beide Zusatz-Stufen scheitern gleichzeitig -----------------------
-log "9/11 Blob UND Tabellen-Store scheitern — beide Fehler im Log, kein Ping"
+log "9/12 Blob UND Tabellen-Store scheitern — beide Fehler im Log, kein Ping"
 STUB_AWS_FAIL=1 \
 WHO2BE_TABLESTORE_DIR="${BROKEN_STORE}" \
 RESTIC_REPOSITORY="local:${ROOT}/repo" RESTIC_PASSWORD=x \
@@ -322,7 +352,7 @@ grep -q '2 Stufe(n) fehlgeschlagen' "${RUN_DIR}/stdout.log" \
 ok "Doppel-Teilerfolg: beide Stufen im Abschlussbericht"
 
 # --- 10) Fehlende Konfiguration ist FATAL, nicht "uebersprungen" ---------
-log "10/11 Store-Konfiguration fehlt — FATAL statt stillem Ueberspringen"
+log "10/12 Store-Konfiguration fehlt — FATAL statt stillem Ueberspringen"
 WHO2BE_BLOBSTORE_ENDPOINT="" \
 RESTIC_REPOSITORY="local:${ROOT}/repo" RESTIC_PASSWORD=x \
 BACKUP_HEARTBEAT_URL="${HEARTBEAT_URL}" \
@@ -334,7 +364,7 @@ grep -q 'WHO2BE_BLOBSTORE_ENDPOINT' "${RUN_DIR}/stdout.log" \
 ok "Unkonfiguriert: Log nennt die fehlende Variable beim Namen"
 
 # --- 11) Ausdrueckliche Abwahl ist erlaubt und gruen ---------------------
-log "11/11 BACKUP_BLOBS=off / BACKUP_TABLESTORE=off — bewusste Abwahl, gruen"
+log "11/12 BACKUP_BLOBS=off / BACKUP_TABLESTORE=off — bewusste Abwahl, gruen"
 BACKUP_BLOBS=off BACKUP_TABLESTORE=off \
 WHO2BE_BLOBSTORE_ENDPOINT="" WHO2BE_TABLESTORE_DIR="/nonexistent" \
 RESTIC_REPOSITORY="local:${ROOT}/repo" RESTIC_PASSWORD=x \
@@ -344,5 +374,130 @@ assert_exit zero "Abwahl"
 assert_dump_present "Abwahl"
 assert_pings 1 "Abwahl"
 assert_restic_tag dump "Abwahl"
+
+printf '\033[1;32m[backup-alarm]\033[0m Faelle 1–11 gruen\n'
+
+# --- 12) Der Lauf darf den Schreibpfad der API nicht verbiegen -----------
+# Der Betriebsfall, den die Faelle 1–11 strukturell NICHT messen koennen: dort
+# laeuft das Backup unter derselben Kennung wie die Fixture. Auf dem Server
+# laeuft der Backup-Container als root, die API unter einer eigenen uid —
+# und ein `mode=ro`-Leser LEGT die WAL-Seitendateien an, wenn sie fehlen
+# (nachts der Regelfall, weil die API je Query oeffnet und schliesst).
+# Gehoeren sie danach dem Backup-Nutzer, kann die API die Area still nicht
+# mehr schreiben: lesen geht weiter, schreiben nicht.
+#
+# Nachgestellt in einem User-Namespace: der Lauf sieht sich als uid 0, die
+# Store-Dateien gehoeren uid 1000. Fehlen unprivilegierte Namespaces (manche
+# gehaerteten CI-Images), wird der Fall ausdruecklich uebersprungen statt
+# stillschweigend als gruen gezaehlt.
+#
+# ZWEIMAL, und das ist der Punkt: SQLite zieht die Seitendateien selbst auf den
+# Eigentuemer der Datenbank nach — aber nur MIT CAP_CHOWN. Faellt die Capability
+# weg (`cap_drop`, `no-new-privileges`, userns-remap), bleiben sie beim
+# Backup-Nutzer haengen. Fall 12 misst den bequemen Fall, Fall 13 den, der die
+# Zusage wirklich traegt: ohne ihn waere dieser Test gegen die Vorfassung gruen
+# (selbst gemessen) und damit kein Regressionsschutz.
+log "12/13 Cross-UID mit CAP_CHOWN: Backup als root, Store gehoert der API"
+
+if ! command -v unshare >/dev/null 2>&1 \
+   || ! command -v setpriv >/dev/null 2>&1 \
+   || ! unshare -rm --map-auto true 2>/dev/null; then
+  printf '  ⚠ 12+13 uebersprungen: unprivilegierte User-Namespaces (unshare --map-auto) nicht verfuegbar\n'
+  printf '\033[1;32m[backup-alarm]\033[0m alle lauffaehigen Faelle gruen\n'
+  exit 0
+fi
+
+# Das Innere laeuft als uid 0 im Namespace. Alles, was der su-exec'te sqlite3
+# (uid 1000) anfassen muss, liegt unter /tmp — der Testbaum selbst kann in
+# einem Home liegen, das uid 1000 nicht durchqueren darf.
+cat >"${ROOT}/case12-inner.sh" <<'INNER'
+#!/usr/bin/env bash
+set -uo pipefail
+BACKUP_SH="$1"; BIN="$2"; DROP_CHOWN="${3:-}"
+API_UID=1000
+
+W="$(TMPDIR=/tmp mktemp -d)"; chmod 755 "${W}"
+STORE="${W}/tablestore"; BACKUPS="${W}/backups"
+mkdir -p "${STORE}/11111111-1111-1111-1111-111111111111" "${BACKUPS}"
+sqlite3 "${STORE}/11111111-1111-1111-1111-111111111111/22222222-2222-2222-2222-222222222222.sqlite" \
+  "PRAGMA journal_mode=WAL; CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT); INSERT INTO t (v) VALUES ('a'),('b');" \
+  >/dev/null
+chown -R "${API_UID}:${API_UID}" "${STORE}"
+
+# su-exec-Stub: im Image liefert das Alpine-Paket den echten Befehl, hier
+# genuegt setpriv mit derselben Aufrufform `su-exec uid:gid cmd...`.
+cat >"${BIN}/su-exec" <<'STUB'
+#!/usr/bin/env bash
+spec="$1"; shift
+exec setpriv --reuid "${spec%%:*}" --regid "${spec##*:}" --clear-groups "$@"
+STUB
+chmod +x "${BIN}/su-exec"
+
+export HEARTBEAT_LOG="${W}/heartbeat.log" RESTIC_LOG="${W}/restic.log" AWS_LOG="${W}/aws.log"
+: >"${HEARTBEAT_LOG}"; : >"${RESTIC_LOG}"; : >"${AWS_LOG}"
+
+TMPDIR=/tmp PATH="${BIN}:${PATH}" \
+POSTGRES_HOST=db POSTGRES_USER=u POSTGRES_DB=d PGPASSWORD=p \
+BACKUP_GPG_RECIPIENT=backup@example.org \
+BACKUP_DIR="${BACKUPS}" BACKUP_BLOBS=off \
+WHO2BE_TABLESTORE_DIR="${STORE}" \
+  ${DROP_CHOWN:+setpriv --bounding-set -chown} \
+  bash "${BACKUP_SH}" >"${W}/stdout.log" 2>&1
+rc=$?
+
+db="${STORE}/11111111-1111-1111-1111-111111111111/22222222-2222-2222-2222-222222222222.sqlite"
+echo "EXIT=${rc}"
+echo "--- Quellverzeichnis nach dem Lauf ---"
+ls -ln "$(dirname "${db}")" | tail -n +2 | awk '{printf "    %-46s uid=%s\n", $9, $3}'
+for s in -wal -shm; do
+  [[ -e "${db}${s}" ]] || continue
+  [[ "$(stat -c '%u' "${db}${s}")" == "${API_UID}" ]] || echo "FOREIGN_SIDECAR=${db##*/}${s}"
+done
+snap="${BACKUPS}/tablestore/11111111-1111-1111-1111-111111111111/22222222-2222-2222-2222-222222222222.sqlite"
+[[ -s "${snap}" ]] && [[ "$(sqlite3 "${snap}" 'SELECT count(*) FROM t')" == "2" ]] && echo "SNAPSHOT_OK"
+printf -- '--- API (uid %s) schreibt danach: ' "${API_UID}"
+if setpriv --reuid "${API_UID}" --regid "${API_UID}" --clear-groups \
+     sqlite3 "${db}" "INSERT INTO t (v) VALUES ('c');" 2>/dev/null; then
+  echo "OK"; echo "API_WRITE_OK"
+else
+  echo "FEHLGESCHLAGEN"
+fi
+rm -rf "${W}"
+INNER
+
+CASE12_OUT="${ROOT}/case12.log"
+unshare -rm --map-auto bash "${ROOT}/case12-inner.sh" "${BACKUP_SH}" "${BIN}" >"${CASE12_OUT}" 2>&1 || true
+
+assert_crossuid() {
+  local out="$1" what="$2"
+  sed 's/^/  /' "${out}"
+  grep -q '^EXIT=0' "${out}" \
+    || fail "${what}: Lauf endete nicht mit Exit 0"
+  ok "${what}: Lauf endet mit Exit 0"
+  grep -q '^SNAPSHOT_OK' "${out}" \
+    || fail "${what}: Tabellen-Snapshot fehlt oder hat nicht die erwarteten Zeilen"
+  ok "${what}: Tabellen-Snapshot lesbar mit den erwarteten Zeilen"
+  if grep -q '^FOREIGN_SIDECAR=' "${out}"; then
+    fail "${what}: Backup-Lauf hinterlaesst WAL-Seitendateien, die der API NICHT gehoeren"
+  fi
+  ok "${what}: alle WAL-Seitendateien gehoeren der API"
+  grep -q '^API_WRITE_OK' "${out}" \
+    || fail "${what}: die API kann nach dem Backup-Lauf nicht mehr schreiben"
+  ok "${what}: die API kann nach dem Backup-Lauf weiterhin schreiben"
+}
+
+assert_crossuid "${CASE12_OUT}" "Cross-UID (mit CAP_CHOWN)"
+
+# --- 13) Dasselbe OHNE CAP_CHOWN — der Fall, der die Zusage traegt -------
+# Ohne die Capability kann SQLite die Seitendateien nicht mehr selbst auf den
+# Eigentuemer der Datenbank ziehen. Genau hier scheitert die Vorfassung (selbst
+# gemessen: root-eigene -wal/-shm, danach "attempt to write a readonly
+# database"), und genau hier muss der Umbau tragen: der Lesevorgang laeuft
+# unter der Kennung des Eigentuemers, und das Ergebnis wird geprueft statt
+# geglaubt.
+log "13/13 Cross-UID OHNE CAP_CHOWN — Zusage haengt nicht an einer Capability"
+CASE13_OUT="${ROOT}/case13.log"
+unshare -rm --map-auto bash "${ROOT}/case12-inner.sh" "${BACKUP_SH}" "${BIN}" drop-chown >"${CASE13_OUT}" 2>&1 || true
+assert_crossuid "${CASE13_OUT}" "Cross-UID (ohne CAP_CHOWN)"
 
 printf '\033[1;32m[backup-alarm]\033[0m alle Faelle gruen\n'

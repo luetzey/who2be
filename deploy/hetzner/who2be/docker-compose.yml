@@ -328,7 +328,10 @@ services:
       # Tabellen-Store gar nicht erst oeffnen. Der Schreibschutz sitzt statt
       # dessen eine Ebene tiefer: backup.sh oeffnet jede Datei als
       # `file:<pfad>?mode=ro`, SQLite lehnt damit jeden Schreibzugriff auf die
-      # Datenbank ab.
+      # Datenbank ab. Die WAL-Seitendateien, die beim Oeffnen entstehen, legt
+      # backup.sh unter der Kennung des Datei-Eigentuemers an (su-exec) und
+      # prueft das nach — sonst koennte die API die Area danach nicht mehr
+      # schreiben (Begruendung in backup.sh, Stufe 3).
       - tablestore-data:/data/tablestore
       - ${BACKUP_GPG_HOME:-/opt/who2be/secrets/gpg}:/root/.gnupg:ro
       - ${BACKUP_SSH_HOME:-/opt/who2be/secrets/ssh}:/secrets:ro

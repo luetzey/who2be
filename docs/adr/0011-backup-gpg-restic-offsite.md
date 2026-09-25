@@ -128,9 +128,24 @@ gekostet haette. Sie wird geschlossen:
   Area-Write-Lock der API — ein fachlicher Vorgang ueber mehrere Transaktionen
   kann mittendrin erwischt werden (technisch intakte Datei, fachlich halber
   Import). Dokumentiert im RUNBOOK unter „Tabellen-Store-Backup".
-- Belegt durch `deploy/hetzner/tests/test_backup_alarm.sh` (11 Faelle,
+- **Der Lauf darf den Schreibpfad der API nicht beruehren.** Eine WAL-Datenbank
+  legt ihre Seitendateien (`-wal`, `-shm`) beim Oeffnen an — auch bei einem
+  reinen Leser, und nachts ist genau das der Regelfall, weil die API je Query
+  oeffnet und schliesst. Entstuenden sie unter der Kennung des Backup-Laufs,
+  koennte die API die betroffene Area anschliessend nur noch lesen, nicht mehr
+  schreiben: ein stiller Fehlermodus, der erst beim naechsten Tabellen-Schreiben
+  auffiele. Deshalb laeuft der Lesevorgang je Datei unter der Kennung ihres
+  Eigentuemers (`su-exec`) — und das Ergebnis wird **gemessen**, nicht
+  angenommen: eine Seitendatei mit fremder Kennung macht die Area zum
+  Fehlschlag. Bewusst nicht gewaehlt: sich darauf zu verlassen, dass SQLite die
+  Kennung selbst nachzieht (das gelingt nur mit `CAP_CHOWN` und faellt still um,
+  wenn die Capability entzogen wird), und die Seitendateien nachtraeglich zu
+  loeschen (ein paralleler Leser der API koennte den WAL-Index gemappt haben).
+- Belegt durch `deploy/hetzner/tests/test_backup_alarm.sh` (13 Faelle,
   stub-basiert, kein Docker-Daemon noetig) — insbesondere Fall 7–9:
-  Teilerfolg ⇒ Exit != 0, kein Heartbeat, `--tag incomplete`.
+  Teilerfolg ⇒ Exit != 0, kein Heartbeat, `--tag incomplete`; Fall 12–13:
+  Backup-Lauf und Store unter verschiedenen Kennungen, mit und ohne
+  `CAP_CHOWN`.
 
 Weiterhin offen: der Restore-Drill (M2 / #454) — er ist der Beleg, dass die drei
 Bestaende zusammen auch wirklich zurueckkommen.

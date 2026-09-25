@@ -30,7 +30,12 @@
 #                               WAL-SQLite laesst sich nur lesen, wenn ihr
 #                               WAL-Index (<db>-shm) gemappt werden kann. Der
 #                               Schreibschutz sitzt stattdessen in der
-#                               Verbindung (file:<pfad>?mode=ro).
+#                               Verbindung (file:<pfad>?mode=ro). Der Lesevorgang
+#                               laeuft zudem unter der Kennung des Datei-
+#                               Eigentuemers (su-exec), damit erzeugte
+#                               WAL-Seitendateien nicht dem Backup-Nutzer
+#                               gehoeren und der Schreibpfad der API unberuehrt
+#                               bleibt — geprueft wird das je Area, siehe Stufe 3.
 #
 # Optional:
 #   BACKUP_DIR                — Default /var/backups/who2be (Volume-Mount im Compose)
@@ -238,6 +243,64 @@ backup_blobs() {
 # fachlicher Vorgang ueber mehrere SQLite-Transaktionen kann deshalb mittendrin
 # erwischt werden — das Ergebnis ist eine technisch intakte Datei mit einem
 # fachlich halben Import, nie eine korrupte Datei.
+#
+# ZWEITE GRENZE — der Lauf darf den Schreibpfad der API nicht beruehren:
+# Die Seitendateien einer WAL-Datenbank (<db>-wal, <db>-shm) entstehen BEIM
+# OEFFNEN, auch bei einem reinen Leser und auch bei `mode=ro`. Die API oeffnet
+# je Query eine kurzlebige Verbindung (tablestore/engine.py); nachts liegt der
+# Store still, die Seitendateien existieren also in aller Regel NICHT — und
+# damit legt sie der Backup-Prozess an, unter SEINER Kennung. Der Backup-
+# Container laeuft als root, die API unter einer eigenen uid: danach stuenden
+# fremde Seitendateien neben der Datenbank. Die API koennte weiter lesen, aber
+# nicht mehr schreiben — ein stiller Fehlermodus, der erst auffiele, wenn ein
+# Nutzer eine Tabelle aendern will.
+#
+# Gegenmittel, zwei Lagen:
+#
+# (a) Der Lesevorgang laeuft unter der Kennung des DATEI-EIGENTUEMERS (su-exec),
+#     nicht unter der des Containers. Dann gehoeren erzeugte Seitendateien von
+#     vornherein der API. Geloescht werden sie NICHT — ein paralleler Leser der
+#     API koennte den WAL-Index gerade gemappt haben.
+#
+#     Warum nicht auf SQLite verlassen: SQLite zieht die Seitendateien zwar
+#     selbst auf den Eigentuemer der Datenbank nach — aber nur, solange der
+#     Prozess CAP_CHOWN besitzt (selbst gemessen: ohne die Capability bleiben
+#     sie beim Backup-Nutzer haengen, und der naechste Schreibzugriff der API
+#     scheitert). Diese Zusage darf nicht an einer Capability haengen, die
+#     jemand berechtigterweise entzieht.
+#
+#     Warum nicht die Datei vorher kopieren: `cp` einer WAL-Datenbank waehrend
+#     eines Schreibvorgangs liefert genau den zerrissenen Stand, den
+#     `VACUUM INTO` vermeiden soll.
+#
+# (b) Danach wird GEMESSEN statt geglaubt: gehoeren die Seitendateien nach dem
+#     Lauf nicht der Datenbank, ist diese Area ein Fehlschlag. Das faengt jede
+#     Restkonstellation (su-exec fehlt, CAP_SETUID entzogen, fremde Kennung im
+#     Volume) laut auf, statt den Schreibpfad der API still zu verbiegen.
+tablestore_runas() {
+  # Setzt RUNAS als Kommando-Praefix fuer sqlite3 — leer, wenn der laufende
+  # Prozess ohnehin die Kennung des Eigentuemers traegt.
+  RUNAS=()
+  local db="$1" owner_uid owner_gid
+  owner_uid="$(stat -c '%u' "${db}" 2>/dev/null)" || return 0
+  owner_gid="$(stat -c '%g' "${db}" 2>/dev/null)" || return 0
+  [[ "${owner_uid}" == "$(id -u)" ]] && return 0
+  command -v su-exec >/dev/null 2>&1 || return 0
+  RUNAS=(su-exec "${owner_uid}:${owner_gid}")
+}
+
+# Messung zu (b): nennt die Seitendateien, die NICHT der Datenbank gehoeren.
+tablestore_foreign_sidecars() {
+  local db="$1" want side f owner
+  want="$(stat -c '%u' "${db}" 2>/dev/null)" || return 0
+  for side in '-wal' '-shm'; do
+    f="${db}${side}"
+    [[ -e "${f}" ]] || continue
+    owner="$(stat -c '%u' "${f}" 2>/dev/null)" || continue
+    [[ "${owner}" == "${want}" ]] || printf '%s ' "$(basename "${f}")"
+  done
+}
+
 backup_tablestore() {
   if [[ "${BACKUP_TABLESTORE}" == "off" ]]; then
     log "BACKUP_TABLESTORE=off — Tabellen-Store bewusst abgewaehlt"
@@ -257,33 +320,55 @@ backup_tablestore() {
   mkdir -p "${TABLESTORE_SNAPSHOT_DIR}"
   log "VACUUM INTO-Snapshots ${src} → ${TABLESTORE_SNAPSHOT_DIR}"
 
-  local snapshots=0 errors=0 seen="${BACKUP_DIR}/.tablestore-seen.$$"
-  : >"${seen}"
+  # Die Merkliste liegt BEWUSST ausserhalb von ${BACKUP_DIR}: dort wuerde ein
+  # harter Abbruch zwischen Anlage und Aufraeumen sie in den restic-Snapshot
+  # tragen. Dasselbe gilt fuer das Scratch-Verzeichnis, in das VACUUM INTO
+  # schreibt: es traegt 1777, damit auch der Eigentuemer der Datenbank
+  # hineinschreiben kann, wenn der Lesevorgang unter dessen Kennung laeuft.
+  # Der trap raeumt beides auch bei hartem Abbruch.
+  local snapshots=0 errors=0 seen scratch
+  seen="$(mktemp "${TMPDIR:-/tmp}/who2be-tablestore-seen.XXXXXX")"
+  scratch="$(mktemp -d "${TMPDIR:-/tmp}/who2be-tablestore-scratch.XXXXXX")"
+  chmod 1777 "${scratch}"
+  trap 'rm -rf "${seen}" "${scratch}"' RETURN
 
-  local db rel target
+  local db rel target tmp foreign
   while IFS= read -r db; do
     rel="${db#"${src}"/}"
     target="${TABLESTORE_SNAPSHOT_DIR}/${rel}"
+    tmp="${scratch}/snap.sqlite"
     mkdir -p "$(dirname "${target}")"
-    # VACUUM INTO lehnt ein existierendes Ziel ab — erst in eine temporaere
-    # Datei, dann atomar ueber den Vorlauf schieben. So bleibt der letzte gute
-    # Snapshot stehen, wenn dieser Lauf fuer diese Area scheitert.
-    rm -f "${target}.tmp"
-    if ! sqlite3 "file:${db}?mode=ro" "VACUUM INTO '${target}.tmp'" 2>&1; then
+    rm -f "${tmp}"
+    # Unter der Kennung des Datei-Eigentuemers lesen (s. o.), damit etwaige
+    # WAL-Seitendateien nicht dem Backup-Nutzer gehoeren.
+    tablestore_runas "${db}"
+    if ! "${RUNAS[@]}" sqlite3 "file:${db}?mode=ro" "VACUUM INTO '${tmp}'" 2>&1; then
       log "  ✗ ${rel}: VACUUM INTO fehlgeschlagen"
-      rm -f "${target}.tmp"
+      rm -f "${tmp}"
+      errors=$((errors + 1))
+      continue
+    fi
+    # Gemessener Nachweis, dass der Lauf den Schreibpfad der API nicht
+    # verbogen hat. Schlaegt das fehl, ist die Area ein Fehlschlag — lieber ein
+    # roter Lauf als eine API, die diese Tabelle still nicht mehr schreiben kann.
+    foreign="$(tablestore_foreign_sidecars "${db}")"
+    if [[ -n "${foreign}" ]]; then
+      log "  ✗ ${rel}: fremde WAL-Seitendateien nach dem Lauf (${foreign% })"
+      rm -f "${tmp}"
       errors=$((errors + 1))
       continue
     fi
     # quick_check statt integrity_check: gleiche Aussagekraft fuer
     # Strukturfehler, deutlich kuerzere Laufzeit auf grossen Dateien.
-    if [[ "$(sqlite3 "${target}.tmp" 'PRAGMA quick_check' 2>&1)" != "ok" ]]; then
+    if [[ "$(sqlite3 "${tmp}" 'PRAGMA quick_check' 2>&1)" != "ok" ]]; then
       log "  ✗ ${rel}: quick_check nicht ok"
-      rm -f "${target}.tmp"
+      rm -f "${tmp}"
       errors=$((errors + 1))
       continue
     fi
-    mv -f "${target}.tmp" "${target}"
+    # Erst nach bestandener Pruefung ueber den Vorlauf schieben: so bleibt der
+    # letzte gute Snapshot stehen, wenn dieser Lauf fuer diese Area scheitert.
+    mv -f "${tmp}" "${target}"
     printf '%s\n' "${rel}" >>"${seen}"
     snapshots=$((snapshots + 1))
   done < <(find "${src}" -type f -name '*.sqlite' | sort)
@@ -299,7 +384,8 @@ backup_tablestore() {
     fi
   done < <(find "${TABLESTORE_SNAPSHOT_DIR}" -type f -name '*.sqlite' 2>/dev/null | sort)
   find "${TABLESTORE_SNAPSHOT_DIR}" -type d -empty -delete 2>/dev/null || true
-  rm -f "${seen}"
+  rm -rf "${seen}" "${scratch}"
+  trap - RETURN
 
   if (( errors > 0 )); then
     fail_stage "Tabellen-Store: ${errors} von $((snapshots + errors)) Area-Snapshots fehlgeschlagen"

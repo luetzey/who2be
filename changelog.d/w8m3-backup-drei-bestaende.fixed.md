@@ -15,5 +15,14 @@
   Store-Konfiguration ist ein Fehler, kein stilles Ueberspringen; abwaehlbar nur
   ausdruecklich per `BACKUP_BLOBS=off` / `BACKUP_TABLESTORE=off`.
 
-  Belegt durch `deploy/hetzner/tests/test_backup_alarm.sh` (11 Faelle,
-  stub-basiert, ohne Docker-Daemon lauffaehig). RUNBOOK und ADR-0011 nachgezogen.
+  Der Tabellen-Store-Lesevorgang laeuft unter der Kennung des Datei-
+  Eigentuemers: eine WAL-Datenbank legt beim Oeffnen Seitendateien an, auch als
+  reiner Leser. Gehoerten sie dem Backup-Nutzer statt der API, koennte die API
+  die betroffene Tabelle anschliessend still nicht mehr schreiben. Das Ergebnis
+  wird je Area geprueft, nicht angenommen — eine fremde Seitendatei macht den
+  Lauf rot.
+
+  Belegt durch `deploy/hetzner/tests/test_backup_alarm.sh` (13 Faelle,
+  stub-basiert, ohne Docker-Daemon lauffaehig; die Faelle 12–13 stellen den
+  Kennungswechsel in einem User-Namespace nach). RUNBOOK und ADR-0011
+  nachgezogen.
