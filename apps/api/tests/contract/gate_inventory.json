@@ -8,6 +8,13 @@
       ]
     },
     {
+      "path": "/artifacts",
+      "name": "create_artifact_in_private_area",
+      "gates": [
+        "enforce_storage_quota"
+      ]
+    },
+    {
       "path": "/external_tools",
       "name": "create_external_tool",
       "gates": [
@@ -43,6 +50,13 @@
       ]
     },
     {
+      "path": "/wa-artifacts/{artifact_id}/append",
+      "name": "append_artifact",
+      "gates": [
+        "enforce_storage_quota"
+      ]
+    },
+    {
       "path": "/wa-artifacts/{artifact_id}/promote",
       "name": "promote_artifact",
       "gates": [
@@ -54,6 +68,20 @@
       "name": "query_table",
       "gates": [
         "enforce_mcp_read_limit"
+      ]
+    },
+    {
+      "path": "/wa-tables/{table_id}/save-result",
+      "name": "save_query_result",
+      "gates": [
+        "enforce_storage_quota"
+      ]
+    },
+    {
+      "path": "/work-areas/{area_id}/artifacts",
+      "name": "create_artifact",
+      "gates": [
+        "enforce_storage_quota"
       ]
     },
     {
@@ -79,11 +107,6 @@
       "path": "/agents/{agent_id}/memories/{memory_id}/triage",
       "name": "triage_memory",
       "reason": "Statuswechsel an einem bestehenden Memory (approve/reject), legt nichts Neues an."
-    },
-    {
-      "path": "/artifacts",
-      "name": "create_artifact_in_private_area",
-      "reason": "Befund B3 des Berichts W8/P3 (eigene Karte): Artifact-Text liegt nicht in wa_blob und zaehlt daher weder im Speicher- noch im Entity-Kontingent."
     },
     {
       "path": "/external_tools/{tool_id}/versions/{version}/restore",
@@ -236,29 +259,14 @@
       "reason": "GRENZE DER METHODE, kein Befund: die Route IST gedeckelt (workspace_quota, Issue #576), aber ihr Gate sitzt als WorkspaceService._enforce_workspace_quota im Service und nicht als FastAPI-Dependency — ueber route.dependant also nicht sichtbar. Verschwindet dieses Gate, faengt dieser Test es nicht."
     },
     {
-      "path": "/wa-artifacts/{artifact_id}/append",
-      "name": "append_artifact",
-      "reason": "Befund B3 des Berichts W8/P3 (eigene Karte): Artifact-Text liegt nicht in wa_blob und zaehlt daher in keinem Kontingent."
-    },
-    {
       "path": "/wa-tables/{table_id}/rows",
       "name": "insert_rows",
       "reason": "Zeilen des Tabellen-Stores. Der Store zaehlt bewusst in keinem Speicherkontingent (ADR-0049, derselbe Vorbehalt steht in storage_quota_service)."
     },
     {
-      "path": "/wa-tables/{table_id}/save-result",
-      "name": "save_query_result",
-      "reason": "Schreibt ein Query-Ergebnis in den Tabellen-Store; wie insert_rows bewusst ausserhalb des Speicherkontingents (ADR-0049)."
-    },
-    {
       "path": "/work-areas",
       "name": "create_work_area",
       "reason": "WorkArea ist ein Container, keine Inhalts-Entity und steht nicht in _COUNT_QUERY. Gedeckelt wird der Inhalt (Ingest via enforce_storage_quota), nicht die Huelle."
-    },
-    {
-      "path": "/work-areas/{area_id}/artifacts",
-      "name": "create_artifact",
-      "reason": "Befund B3 des Berichts W8/P3 (eigene Karte): Artifact-Text liegt nicht in wa_blob und zaehlt daher in keinem Kontingent."
     },
     {
       "path": "/work-areas/{area_id}/category-rules",
