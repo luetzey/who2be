@@ -1786,3 +1786,28 @@ er verschiebt nicht die Grenze und behaelt den Beleg.
 - **Verworfen:** CI-Check jetzt — er schlaegt bei Dependabot- und reinen
   Doku-PRs falsch an und braucht eine Ausnahmeliste. Erst messen, ob Template +
   CONTRIBUTING reichen; wenn nicht, eigene Karte.
+
+## 2026-09-25 — Sign in with Apple haengt an der Edition, Google/GitHub nicht
+- **Entscheidung:** `isAppleAuthEnabled()` gated den Apple-Button ueber das
+  bestehende `__CLOUD_BUILD__` (ADR-0029) im schon vorhandenen Modul
+  `features/auth/lib/password-auth.ts` — **kein zweiter Schalter**, keine neue
+  Datei. Google und GitHub bleiben in beiden Editionen ungegatet.
+- **Begruendung:** Apple verlangt ein zahlungspflichtiges Developer-Konto *und*
+  eine bei Apple registrierte HTTPS-Domain (kein `localhost`, keine IP). Im
+  Self-Hosting hat niemand beides, die Schaltflaeche waere dort garantiert tote
+  Flaeche. Google/GitHub kann jeder Betreiber selbst konfigurieren — die
+  Asymmetrie kommt von Apples Anforderungen, nicht von einer Produktmeinung.
+  Funktion statt Konstante, weil `__CLOUD_BUILD__` ein Literal-Replacement ist
+  und in Vitest nicht stubbar — dieselbe Begruendung wie bei
+  `isPasswordAuthEnabled` (2026-09-24).
+- **Betriebsfolge, die kein Code abfangen kann:** Das Apple-Client-Secret ist
+  ein ES256-JWT mit max. sechs Monaten Laufzeit (15 777 000 s). GoTrue liest es
+  als opaken String, erneuert es nicht und warnt nicht; nach Ablauf antwortet
+  Apple `invalid_client` und GoTrue macht daraus eine generische 500. **Nur
+  Apple faellt aus, Google/GitHub laufen weiter** — der Ausfall ist darum leicht
+  zu uebersehen. Gegenmittel ist bewusst Doku plus Werkzeug, nicht Automatik:
+  `scripts/gen_apple_client_secret.py` nennt das Ablaufdatum in seiner Ausgabe,
+  `deploy/hetzner/supabase/README.md` traegt es in Tabelle und Gotchas.
+- **Verworfen:** Runtime-Env-Flag fuer Apple (zweite Konfigurationsquelle neben
+  der Edition, ohne Gewinn); Secret-Rotation im Code (braucht den `.p8`-Key im
+  laufenden Stack — mehr Angriffsflaeche als der Kalendereintrag kostet).
